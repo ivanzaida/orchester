@@ -658,7 +658,8 @@
       "failure": {
         "gitMissing": "git was not found. Install git or add it to the PATH, then try again. The run is not affected.",
         "git": "git could not compare the run’s revisions. The run is not affected; the runner log may say more.",
-        "worktreeMissing": "The run's worktree is missing, though the run has not ended. What it holds beyond its checkpoint cannot be read; the runner log may say more."
+        "worktreeMissing": "The run's worktree is missing, though the run has not ended. What it holds beyond its checkpoint cannot be read; the runner log may say more.",
+        "runner": "The project's runner could not be reached, so what the run's worktree holds beyond its checkpoint cannot be read. The run is not affected; the runner log may say more."
       }
     },
     "plan": {
@@ -910,7 +911,8 @@
       "unreadable": "{{path}} cannot be read.",
       "gitMissing": "git was not found. Install git or add it to the PATH, then try again.",
       "git": "git could not read this version of the files.",
-      "store": "The project's database cannot be read, so the run this page was opened from cannot be named."
+      "store": "The project's database cannot be read, so the run this page was opened from cannot be named.",
+      "runner": "The project's runner did not answer, so the run's worktree cannot be read. Try again."
     }
   },
   "pullRequests": {
@@ -1624,6 +1626,8 @@
       "foldersNeedWrite": "Extra writable folders apply only with write access to the repository.",
       "browserNeedsNetwork": "The browser needs network access: turn network on, or leave the browser off.",
       "nativeNoSwitches": "On a connection whose agents Orchester runs itself, the approval switches and MCP servers are not offered in this version.",
+      "codexSandboxNotCodex": "Only a Codex connection has a sandbox to turn off: leave codex_sandbox out, or on.",
+      "codexSandboxShared": "A shared project's profiles keep the Codex sandbox on in this version: leave codex_sandbox out, or on.",
       "mcpServerMissing": "MCP server {{server}} is no longer available. Remove it from the selection and try again.",
       "mcpServerOff": "MCP server {{server}} is turned off. Turn it on in Connections before adding it to this profile.",
       "mcpServersInvalid": "Name each MCP server once, at most {{max}}.",
@@ -1745,6 +1749,7 @@
       "browser": "The browser, which the latest version does not give.",
       "browserSite": "Allowed sites of the browser that the latest version does not list.",
       "autopilot": "Autopilot, which approves the agents' tool requests in the worktree without asking, where the latest version is Manual.",
+      "codexSandboxOff": "The Codex sandbox off, where the latest version keeps it on: Codex would enforce neither repository access, network nor writable folders.",
       "mcpServers": "MCP servers the latest version does not give its agents.",
       "reviewer": "Another reviewer would approve requests in every Manual run in your place.",
       "reviewerAccount": "The reviewer would run on another account: another sign-in, and possibly another organisation's provider, would read the runs' requests.",

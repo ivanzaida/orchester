@@ -29,6 +29,7 @@ use orchester_workspace::{
     integration::{IntegrationProblem, leftovers_in, remove_in},
     integration_jobs::{IntegrationJobs, RemoveArgs, Remover},
     worktree_left::not_removed,
+    worktree_removal::WorktreeRemover,
   },
   workspace::OpenProject,
 };
@@ -47,8 +48,7 @@ fn worktree_removal_is_refused_for_a_run_continued_since_the_page_read_it() {
   fixture.record(&run, &events);
 
   let refused = remove_in(
-    fixture.repo.path(),
-    &Programs::processes(),
+    &here(fixture.repo.path(), &Programs::processes()),
     &read,
     &Leftovers::default(),
   );
@@ -77,8 +77,7 @@ fn worktree_removal_is_refused_for_a_run_that_worked_again_in_another_worktree_s
   fixture.record(&run, &events);
 
   let refused = remove_in(
-    fixture.repo.path(),
-    &Programs::processes(),
+    &here(fixture.repo.path(), &Programs::processes()),
     &read,
     &Leftovers::default(),
   );
@@ -132,7 +131,7 @@ fn worktree_removal_automation_asked_for_tells_it_the_run_changed() {
     number: run.number().get(),
     run: read,
     confirmed: Leftovers::default(),
-    programs: Programs::processes(),
+    worktrees: here(fixture.repo.path(), &Programs::processes()),
     activity: Activity::new(),
     separator: ", ".into(),
     changed: Arc::new(|| {}),
@@ -202,6 +201,12 @@ fn left(root: &Path, programs: &Programs, run: &Run) -> Leftovers {
     .1
 }
 
+/// The runs' worktrees in the repository at `root`, which the project's runner would remove, removed in the test's
+/// process with `programs` instead, through the messages the runner reads and answers.
+fn here(root: &Path, programs: &Programs) -> WorktreeRemover {
+  WorktreeRemover::here_for_test(root, programs.clone())
+}
+
 /// Git as on Windows when it stops part way: `git worktree remove` forgets the worktree, then stops at its build
 /// output with "Directory not empty", which stays on disk.
 struct StopsAtBuildOutput(ProcessRunner);
@@ -240,7 +245,7 @@ fn worktree_removal_deletes_the_build_output_git_leaves_behind() {
   let seen = left(&root, &programs, &run);
   assert!(!seen.loses_files(), "ignored build output is not work: {seen:?}");
 
-  remove_in(&root, &programs, &run, &seen).expect("removed");
+  remove_in(&here(&root, &programs), &run, &seen).expect("removed");
 
   assert!(!folder.exists(), "the folder is gone, build output and .tmp included");
   assert!(
@@ -307,7 +312,7 @@ fn worktree_removal_of_a_held_folder_is_recorded_as_not_removed_with_why() {
   let programs = Programs::processes();
   let seen = left(&root, &programs, &run);
 
-  let refused = remove_in(&root, &programs, &run, &seen);
+  let refused = remove_in(&here(&root, &programs), &run, &seen);
 
   let Err(IntegrationProblem::NotRemoved { path, detail }) = refused else {
     panic!("the held folder stays: {refused:?}");
@@ -329,7 +334,7 @@ fn worktree_removal_of_a_held_folder_is_recorded_as_not_removed_with_why() {
   // Once nothing holds it, Remove worktree finishes the removal.
   drop(hold);
   let seen = left(&root, &programs, &run);
-  remove_in(&root, &programs, &run, &seen).expect("removed");
+  remove_in(&here(&root, &programs), &run, &seen).expect("removed");
   assert!(!folder.exists());
   assert_eq!(not_removed(&db, &root, run.id()).expect("read"), None);
 }
@@ -363,7 +368,7 @@ fn worktree_removal_sweeps_folders_no_run_uses_and_never_a_running_runs() {
   let programs = Programs::processes();
 
   let seen = left(&root, &programs, &removed);
-  remove_in(&root, &programs, &removed, &seen).expect("removed");
+  remove_in(&here(&root, &programs), &removed, &seen).expect("removed");
 
   assert!(!folder.exists(), "the removed worktree is gone");
   // The sweep runs on a thread of its own: the removal does not wait for it.

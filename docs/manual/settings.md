@@ -254,5 +254,6 @@ on or off). See [user-guide.md › Connections](user-guide.md#connections-projec
 *Profile* tab: **Project connection** (Claude Code or Codex; an API-provider connection works), **Model** (or *Other
 model id…*), **Reasoning effort** (*CLI default*, Minimal … Max as the model lists). **Save draft**, **Publish vN** (a
 project's first version publishes straight from the form); a reply already under way finishes on the version it
-started with. The same choices are in the chat composer's runs-on picker. The *Actions*, *Context* and *Conversations*
-tabs are not built yet.
+started with. The same choices are in the chat composer's runs-on picker, where choosing a connection, model or
+effort publishes the next version at once (replacing a saved draft, as the picker says). The *Actions*, *Context* and
+*Conversations* tabs are not built yet.

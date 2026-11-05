@@ -91,7 +91,11 @@ fn checkpoint(wal: &Wal, pages: c_int) -> rusqlite::Result<()> {
 fn traced(event: TraceEvent<'_>) {
   match event {
     // A trigger's program starting is reported as `-- <trigger>`; its statement goes on.
-    TraceEvent::Stmt(_, sql) if !sql.trim_start().starts_with("--") => started(sql),
+    TraceEvent::Stmt(_, sql) if !sql.trim_start().starts_with("--") => {
+      #[cfg(feature = "test-support")]
+      statements::count();
+      started(sql);
+    }
     TraceEvent::Profile(statement, took) => finished(&statement.sql(), took),
     _ => {}
   }
@@ -272,6 +276,26 @@ pub(crate) fn gave_up(waited: Duration) {
 
 fn thread_name() -> String {
   std::thread::current().name().unwrap_or("unnamed").to_owned()
+}
+
+/// How many statements this thread's connections ran, for the tests that keep a reading's statements from growing
+/// with what it reads.
+#[cfg(feature = "test-support")]
+pub mod statements {
+  use std::cell::Cell;
+
+  thread_local! {
+    static RUN: Cell<u64> = const { Cell::new(0) };
+  }
+
+  pub(super) fn count() {
+    RUN.set(RUN.get() + 1);
+  }
+
+  /// The statements this thread's connections ran since it started; a test compares two of these.
+  pub fn statements_run() -> u64 {
+    RUN.get()
+  }
 }
 
 /// The write-lock holds of the process, for the contention tests.

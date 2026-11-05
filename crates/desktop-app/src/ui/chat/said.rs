@@ -5,12 +5,16 @@
 //! files are in (the project's checkout, a run's worktree). A message without mentions is its words as written; one
 //! with mentions is lurq's Markdown, the person's words escaped so that they show as written, line by line. What a
 //! search found in it is filled behind its words ([`super::found`]). A message sent with a skill (ORC-634) shows the
-//! skill's chip, without its `x`, 6 over its words (`r78GAg` in `OKzZ6`, `07c` `f0b717`), instead of the skill's block.
+//! skill's chip, without its `x`, 8 over its words (`Skill chip` `jmI0O` in `07` `QnPRC`), instead of the skill's
+//! block.
 
 use std::sync::Arc;
 
 use lurq::{
-  app::{ctx::Ctx, theme::TypographyStyle},
+  app::{
+    ctx::Ctx,
+    theme::{SpacingSize, TypographyStyle},
+  },
   components::{Column, Text},
   layout::Alignment,
   node::Element,
@@ -25,7 +29,6 @@ use orchester_workspace::{
 use super::{Said, agent_text, found, links::APP_SCHEME, marked_words, names::ProjectNames};
 use crate::{
   routes::{FilesView, ProjectPage, Route, TaskView},
-  theme::ExtraSpacing,
   ui::slash::sent_skill_chip,
 };
 
@@ -46,7 +49,7 @@ pub fn said(
     (None, None) => return None,
     (None, Some(shown)) => shown,
     (Some(chip), shown) => Column::new()
-      .spacing(ExtraSpacing::Snug.role())
+      .spacing(SpacingSize::Sm)
       .align_items(Alignment::Start)
       .child(chip)
       .with_children(shown)

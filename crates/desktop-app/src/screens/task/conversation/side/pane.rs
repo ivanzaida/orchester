@@ -26,7 +26,7 @@ use orchester_workspace::{background, messages, tasks::side_question};
 
 use super::{SideQuestions, thread};
 use crate::{
-  project::ShownProject,
+  project::{ShownProject, run_changes, settled_read::settled_read},
   theme::{ExtraSpacing, IconSize, SideSpacing, SideText},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -130,14 +130,18 @@ fn read_questions(ctx: &mut Ctx, props: &PaneProps, state: &SideQuestions) -> Ve
     .collect()
 }
 
-/// Whether the run has a transcript to read yet; while that is not known, it is taken to have one.
+/// Whether the run has a transcript to read yet; while that is not known, it is taken to have one. Read again as the
+/// project's runs change state and, while the run runs, as it changes; another run's lines do not.
 fn read_transcript(ctx: &mut Ctx, props: &PaneProps) -> bool {
   let root: PathBuf = props.project.open.repo_root.clone();
-  let changes = props.project.feed.run_changes(props.running);
-  let read = ctx.future((root, props.run, changes), move |(root, run, _)| async move {
-    background::run(move || side_question::has_transcript_in(&root, run)).await?
-  });
-  read.state().get().data.unwrap_or(true)
+  let changes = run_changes::of_shown_run(ctx, &props.project, Some(props.run), props.running);
+  let read = settled_read(
+    ctx,
+    "side question transcript",
+    (root, props.run, changes),
+    move |(root, run, _)| async move { background::run(move || side_question::has_transcript_in(&root, run)).await? },
+  );
+  read.data.unwrap_or(true)
 }
 
 /// The head: the icon, *Side question*, the task and run, and the close button (`U91Ex`).

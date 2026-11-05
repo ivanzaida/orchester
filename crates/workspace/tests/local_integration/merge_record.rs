@@ -21,7 +21,7 @@ use super::support::{Fixture, git};
 fn merge_record_records_the_merge_git_made_once() {
   let fixture = Fixture::new(false);
   let programs = Programs::processes();
-  let refused = record_merge(fixture.root(), &programs, fixture.run).expect_err("no merge Git made yet");
+  let refused = record_merge(&fixture.worktrees(), &programs, fixture.run).expect_err("no merge Git made yet");
   assert!(
     matches!(&refused, IntegrationProblem::Store(message) if message.key == "runs.merge.failure.nothingToRecord"),
     "{refused:?}"
@@ -44,7 +44,7 @@ fn merge_record_records_the_merge_git_made_once() {
   );
   db.record_merge_attempt(&attempt).expect("the attempt");
 
-  let merge = record_merge(fixture.root(), &programs, fixture.run).expect("recorded");
+  let merge = record_merge(&fixture.worktrees(), &programs, fixture.run).expect("recorded");
   assert_eq!(merge.revision, revision);
   assert_eq!(merge.kind, MergeKind::MergeCommit);
   assert_eq!(Some(&merge.into), run.base_branch());
@@ -55,7 +55,7 @@ fn merge_record_records_the_merge_git_made_once() {
     "nothing was merged again"
   );
   assert_eq!(
-    record_merge(fixture.root(), &programs, fixture.run).expect_err("recorded already"),
+    record_merge(&fixture.worktrees(), &programs, fixture.run).expect_err("recorded already"),
     IntegrationProblem::AlreadyMerged
   );
 }

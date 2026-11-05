@@ -1,7 +1,7 @@
 //! What the tools work with: the same workspace, runners, servers and programs the screens use, so a
 //! tool goes through the paths a person's action goes through, with the same rules and records.
 
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use orchester_core::{id::ResourceId, resource::ResourceBody, store::ResourceStore, time::Timestamp};
 use orchester_exec::programs::Programs;
@@ -18,7 +18,10 @@ use crate::{
   runner::Runners,
   secrets::Vault,
   sharing::Servers,
-  tasks::{estimate::Estimates, integration_jobs::ProjectJobs, outside::OutsideChanges},
+  tasks::{
+    estimate::Estimates, integration_jobs::ProjectJobs, outside::OutsideChanges, resolve::RunWorktrees,
+    worktree_removal::WorktreeRemover,
+  },
   workspace::{OpenProject, Workspace},
 };
 
@@ -145,9 +148,24 @@ impl Services {
     &self.programs
   }
 
+  /// The run worktrees of the project at `root`, named `name`, reached through its runner.
+  pub(crate) fn run_worktrees(&self, root: &Path, name: &str) -> RunWorktrees {
+    RunWorktrees::through_runner(&self.runners, (root, name))
+  }
+
+  /// The chat's git in the runs' worktrees of the project at `root`, which its runner runs.
+  pub(crate) fn run_git(&self, root: std::path::PathBuf) -> crate::runner::ThroughRunner {
+    self.runners.run_git(root)
+  }
+
   /// The projects' merge and removal operations, shared with the task pages.
   pub(crate) const fn jobs(&self) -> &ProjectJobs {
     &self.jobs
+  }
+
+  /// The run worktrees of `project`, which its runner removes.
+  pub(crate) fn worktree_remover(&self, project: &OpenProject) -> WorktreeRemover {
+    WorktreeRemover::through_runner(&self.runners, (&project.repo_root, project.project.name().as_str()))
   }
 
   /// Orchester's story-point estimates of saved tasks.

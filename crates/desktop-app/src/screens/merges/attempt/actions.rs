@@ -17,7 +17,7 @@ use orchester_exec::programs::Programs;
 use orchester_workspace::{
   merge_queue,
   messages::{self, Message},
-  tasks::{merge_left, merge_record, merge_retry},
+  tasks::{merge_left, merge_record, merge_retry, worktree_removal::WorktreeRemover},
 };
 
 /// The page's own work under way, if any.
@@ -32,10 +32,11 @@ pub(crate) enum Busy {
 
 impl DevtoolsInspectable for Busy {}
 
-/// The buttons' work for run `run` of the project at `root`.
+/// The buttons' work for run `run` of the project at `root`, whose run worktrees are `worktrees`.
 #[derive(Clone)]
 pub(crate) struct Actions {
   root: Arc<PathBuf>,
+  worktrees: WorktreeRemover,
   programs: Programs,
   run: RunId,
   /// How a list of a failure's causes is joined.
@@ -49,12 +50,13 @@ pub(crate) struct Actions {
 
 impl Actions {
   pub(crate) fn new(
-    (root, programs, run): (&Path, Programs, RunId),
+    (worktrees, programs, run): (WorktreeRemover, Programs, RunId),
     separator: Arc<str>,
     (failed, busy, again): (Signal<Option<Message>>, Signal<Busy>, Signal<u64>),
   ) -> Self {
     Self {
-      root: Arc::new(root.to_path_buf()),
+      root: Arc::new(worktrees.root().to_path_buf()),
+      worktrees,
       programs,
       run,
       separator,
@@ -93,12 +95,12 @@ impl Actions {
 
   /// *Record merge*: the merge Git made is recorded; nothing is merged again.
   pub(crate) fn record_merge(&self) {
-    let run = self.run;
+    let (run, worktrees) = (self.run, self.worktrees.clone());
     self.work(
       Busy::Recording,
       "merge-attempt-record",
-      move |root, programs, separator| {
-        merge_record::record_merge(root, programs, run)
+      move |_, programs, separator| {
+        merge_record::record_merge(&worktrees, programs, run)
           .map(drop)
           .map_err(|problem| problem.message(separator))
       },

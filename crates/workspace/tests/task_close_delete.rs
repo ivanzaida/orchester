@@ -50,11 +50,18 @@ use orchester_workspace::{
     cancel_run::{Stop, StopRefused},
     close::{Closing, close_in, reopen_in},
     delete::{delete_in, preview_in},
+    worktree_removal::WorktreeRemover,
   },
   workspace::{OpenProject, Workspace},
 };
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
+
+/// The runs' worktrees in the repository at `root`, which the project's runner would remove, removed in the test's
+/// process with `programs` instead, through the messages the runner reads and answers.
+fn here(root: &Path, programs: &Programs) -> WorktreeRemover {
+  WorktreeRemover::here_for_test(root, programs.clone())
+}
 
 fn git(root: &Path, args: &[&str]) -> String {
   let output = Command::new("git").args(args).current_dir(root).output().expect("git");
@@ -466,7 +473,7 @@ fn task_delete_removes_the_task_with_its_runs_and_records_and_keeps_unmerged_wor
   assert_eq!((preview.changed_worktrees, preview.unmerged_branches), (1, 1));
   assert!(preview.has_unmerged_work());
 
-  delete_in(repo.root(), &programs, task.id(), false).expect("deleted");
+  delete_in(&here(repo.root(), &programs), task.id(), false).expect("deleted");
   let db = ProjectDb::open(repo.root()).expect("open");
   assert!(db.task(task.id()).expect("read").is_none(), "the task is gone");
   assert!(db.run(run.id()).expect("read").is_none(), "its run is gone");
@@ -498,7 +505,7 @@ fn task_delete_with_unmerged_work_removes_its_worktrees_and_branches() {
   let run = repo.failed(&task, true);
   let main = git(repo.root(), &["rev-parse", "main"]);
 
-  delete_in(repo.root(), &Programs::processes(), task.id(), true).expect("deleted");
+  delete_in(&here(repo.root(), &Programs::processes()), task.id(), true).expect("deleted");
   assert!(!repo.worktree(&run).exists(), "the worktree went");
   assert!(!repo.branch_exists(&run), "the unmerged branch went");
   assert_eq!(git(repo.root(), &["rev-parse", "main"]), main, "main is untouched");
@@ -513,7 +520,7 @@ fn task_delete_is_refused_while_a_run_has_not_ended() {
 
   let refused = preview_in(repo.root(), &programs, task.id()).expect_err("not deletable");
   assert_eq!(refused.key, "tasks.delete.stopRunFirst");
-  let refused = delete_in(repo.root(), &programs, task.id(), true).expect_err("not deleted");
+  let refused = delete_in(&here(repo.root(), &programs), task.id(), true).expect_err("not deleted");
   assert_eq!(refused.key, "tasks.delete.stopRunFirst");
   let db = ProjectDb::open(repo.root()).expect("open");
   assert!(db.task(task.id()).expect("read").is_some(), "the task stays");

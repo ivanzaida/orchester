@@ -10,6 +10,7 @@
 use orchester_api::TaskChanges;
 use orchester_core::{
   id::TaskId,
+  store::TaskStore,
   task::{TaskUpdate, organization::ChangeActor},
 };
 use orchester_store::{AutomaticStatus, NotSent, ProjectDb};
@@ -144,6 +145,13 @@ fn send_each(store: &mut RemoteTaskStore, waiting: Vec<AutomaticStatus>) -> Resu
 
 fn send_one(store: &mut RemoteTaskStore, pending: &AutomaticStatus) -> Result<(), SharingError> {
   store.server.writable()?;
+  // The server, just read, has the status already: nothing goes, whoever holds the task. A merge recorded after its
+  // claim's end sent the Done git told of finds it so (ORC-750).
+  let has = store.db.task(pending.task)?;
+  if has.is_some_and(|task| task.organization().status() == pending.status) {
+    store.db.clear_automatic_status(pending.task, pending.at)?;
+    return Ok(());
+  }
   let me = store.server.me();
   let holder = store
     .db

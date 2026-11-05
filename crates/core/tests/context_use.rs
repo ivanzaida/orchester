@@ -61,6 +61,46 @@ fn claude_context_leaves_out_a_subagents_messages() {
   assert_eq!(stream.context().map(|reading| reading.used()), Some(100));
 }
 
+/// A message of the main conversation on `model` that took in 72,500 tokens, as Claude Code prints it before its
+/// result.
+fn opus_message(model: &str) -> String {
+  format!(
+    r#"{{"type":"assistant","message":{{"id":"msg_1","model":"{model}","content":[{{"type":"text","text":"Thinking."}}],"usage":{{"input_tokens":500,"output_tokens":3,"cache_read_input_tokens":72000}}}},"parent_tool_use_id":null}}"#
+  )
+}
+
+#[test]
+fn claude_context_carries_the_window_an_earlier_cli_of_the_session_reported_until_its_own_result() {
+  // ORC-704: the turn before reported a 1M window for claude-opus-5-5, which the table puts at 200k.
+  let mut stream = ClaudeStream::chat().carrying(Some(1_000_000));
+  assert_eq!(stream.context(), None, "no reading before a message");
+  stream.parse(OutputStream::Stdout, &opus_message("claude-opus-5-5"));
+  assert_eq!(
+    stream.context(),
+    Some(ContextUse::reported(72_500, 1_000_000)),
+    "a mid-turn reading uses the carried window, not marked as an estimate"
+  );
+  let result = r#"{"type":"result","subtype":"success","is_error":false,"result":"Done.","usage":{"input_tokens":500,"output_tokens":3,"cache_read_input_tokens":72000},"modelUsage":{"claude-opus-5-5":{"contextWindow":400000}},"permission_denials":[]}"#;
+  stream.parse(OutputStream::Stdout, result);
+  assert_eq!(
+    stream.context(),
+    Some(ContextUse::reported(72_500, 400_000)),
+    "this CLI's own result wins over the carried window"
+  );
+}
+
+#[test]
+fn claude_context_without_a_carried_window_estimates_it_from_the_table() {
+  let mut stream = ClaudeStream::chat().carrying(None);
+  stream.parse(OutputStream::Stdout, &opus_message("claude-opus-5-5"));
+  let reading = stream.context().expect("a reading");
+  assert_eq!(reading, ContextUse::of_model(72_500, "claude-opus-5-5"));
+  assert!(
+    reading.estimated(),
+    "a session whose CLI never reported a window shows the estimate, marked as one"
+  );
+}
+
 #[test]
 fn a_claude_cli_without_numbers_gives_unknown() {
   let readings = claude_readings(include_str!("fixtures/claude/not-signed-in-clean-env.jsonl"));

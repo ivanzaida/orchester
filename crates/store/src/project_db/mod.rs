@@ -2,6 +2,7 @@ mod activity;
 mod agent_files;
 mod always_allow;
 mod approval_modes;
+mod approval_records;
 mod approval_rules;
 mod archive_stops;
 mod attachments;
@@ -33,6 +34,7 @@ mod invocation_accounts;
 mod invocation_connections;
 mod invocation_prompts;
 mod invocation_providers;
+mod invocation_records;
 mod joining;
 mod limits;
 mod local_integration;
@@ -41,9 +43,11 @@ mod memory;
 mod merge_attempts;
 mod merge_queue;
 mod merges;
+mod message_records;
 mod messages;
 mod modules;
 mod native;
+mod notice_records;
 mod orchestrator;
 mod orchestrator_compactions;
 mod orchestrator_fork;
@@ -59,6 +63,7 @@ mod orchestrator_usage;
 mod orchestrator_waits;
 mod organization;
 mod organized_drafts;
+mod owned_records;
 mod permission_events;
 mod plan_limits;
 mod plans;
@@ -66,11 +71,13 @@ mod project_rules;
 mod pull_request_attempts;
 mod pull_request_diffs;
 mod pull_requests;
+mod question_records;
 mod questions;
 mod queue_holds;
 mod read_only;
 mod rebases;
 mod reference_bindings;
+mod removal_records;
 mod removals;
 mod repository;
 mod repository_import;
@@ -101,7 +108,9 @@ mod side_questions;
 mod sources;
 mod step_outputs;
 mod step_progress;
+mod step_records;
 mod tags;
+mod task_children;
 mod task_deletion;
 mod task_effort;
 mod task_groups;
@@ -116,6 +125,7 @@ mod todo_lists;
 mod tool_approvals;
 mod usage;
 mod used_versions;
+mod workspace_records;
 mod workspaces;
 mod worktree_removals;
 mod write_transaction;
@@ -132,6 +142,7 @@ use orchester_core::{
 use rusqlite::{Connection, params};
 
 pub use self::{
+  approval_records::ApprovalRecord,
   approval_rules::DecisionCounts,
   archive_stops::ArchiveStop,
   attachments::{AttachmentOwner, attachment_file},
@@ -140,7 +151,10 @@ pub use self::{
   chat_decisions::KeptAction,
   decision_test_history::RecordedDecisionReview,
   estimates::AutomationPoints,
+  invocation_records::{ActivityRecord, InvocationRecord, InvocationStart},
   joining::{JoinedKey, ReturnedTask},
+  message_records::MessageRecord,
+  notice_records::NoticeRecord,
   orchestrator::{ChatListing, ChatTurn},
   orchestrator_fork::ChatFork,
   orchestrator_plans::ApprovedPlan,
@@ -150,13 +164,18 @@ pub use self::{
   orchestrator_switches::OrchestratorSwitch,
   orchestrator_titles::ChatDeletion,
   orchestrator_waits::KeptWait,
+  owned_records::{
+    AlwaysAllowAnswer, AlwaysAllowRecord, MemoryAnswer, MemoryRecord, ModelRequirement, RuleAnswer, RuleRecord,
+  },
+  question_records::QuestionRecord,
   read_only::ReadOnlyProjectDb,
   reference_bindings::{Bound, BoundBy, BoundReference, ReferenceBinding},
+  removal_records::RemovalRecord,
   resolutions::ResolutionStart,
   resources::ResourceUpdate,
   run_ends::EndedRun,
   run_inputs::AcceptedInputs,
-  runs::RunBranch,
+  runs::{RunBranch, RunLogRecord},
   shared_events::{SharedEvent, SharedSnapshot},
   shared_members::{ServerAdmin, SharedMember},
   shared_modules::{CachedModule, CachedModuleChange},
@@ -165,11 +184,13 @@ pub use self::{
   shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},
   shared_versions::{CachedVersion, NamingVersion, ReferenceTarget, ResourceSharing, VersionReference},
   sharing::SharingLink,
+  step_records::StepRecord,
   task_deletion::TaskDeletionFacts,
   team_deliveries::{DeliveryMerge, DeliveryReport, TeamDelivery, TeamDeliveryStage},
   team_operations::{NewTeamOperation, TeamOperation, TeamOperationState, TeamSettlement},
   team_runs::{AcceptedWork, NewWorkReport, TeamFence, TeamRun, WorkReportEntry, WorkReportState},
   team_starts::{TeamStart, TeamStartStage},
+  workspace_records::{WarmWorkspaceRecord, WorkspaceWritten},
 };
 use crate::{
   StoreError, git_exclude, migrate,

@@ -101,6 +101,10 @@ name = "chat_compact"
 required-features = ["test-agent"]
 
 [[test]]
+name = "chat_context_window"
+required-features = ["test-agent"]
+
+[[test]]
 name = "chat_rewind"
 required-features = ["test-agent"]
 
@@ -221,6 +225,10 @@ name = "writable_folders"
 required-features = ["test-agent"]
 
 [[test]]
+name = "codex_sandbox"
+required-features = ["test-agent"]
+
+[[test]]
 name = "missing_worktree"
 required-features = ["test-agent"]
 
@@ -246,6 +254,10 @@ required-features = ["test-agent"]
 
 [[test]]
 name = "returned"
+required-features = ["test-agent"]
+
+[[test]]
+name = "resolve"
 required-features = ["test-agent"]
 
 [[test]]
@@ -380,6 +392,18 @@ name = "disk_guard"
 required-features = ["test-agent"]
 
 [[test]]
+name = "worktree_removal"
+required-features = ["test-agent"]
+
+[[test]]
+name = "run_git"
+required-features = ["test-agent"]
+
+[[test]]
+name = "serialized_boundary"
+required-features = ["test-agent"]
+
+[[test]]
 name = "decision_review"
 required-features = ["test-agent"]
 
@@ -411,6 +435,7 @@ orchester-store.workspace = true
 # Reads the values of the secrets MCP servers use from the OS keychain when an agent starts.
 orchester-vault.workspace = true
 parking_lot.workspace = true
+# The requests and answers of the coordinator link (`execution::link`), plain values that serialize.
 serde.workspace = true
 serde_json.workspace = true
 # The run app relay uses a bounded loopback HTTP client and decodes/re-encodes PNGs without metadata.

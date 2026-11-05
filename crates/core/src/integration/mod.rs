@@ -22,6 +22,7 @@ mod merge;
 mod merged;
 mod preflight;
 mod recorded;
+pub mod removal;
 pub mod resolve;
 pub mod retry;
 mod sweep;
@@ -39,7 +40,7 @@ pub use self::{
   drift::{Drift, MAX_LANDED, branch_head, commit_subject, drift},
   forgotten::{FOLDER_ENTRIES_READ, FolderListing},
   fork::{Ancestry, RunFork, fork_point, made_on_branch, own_base, parse_log},
-  held::{NotRemoved, finish_removal, retry_held},
+  held::{NotRemoved, finish_removal, record_what_stayed, retry_held},
   log::{LoggedCommit, MAX_LISTED, own_commits},
   made::merge_made,
   merge::{
@@ -50,8 +51,8 @@ pub use self::{
   merged::{Branches, Delivered, RunWork},
   preflight::{GitCause, IoCause, PreflightCause, PreflightStage},
   recorded::{
-    RecordedCleanupError, RemovalStart, clean_up_recorded, clean_up_recorded_as_seen,
-    clean_up_recorded_worktrees_as_seen,
+    RecordedCleanupError, RemovalStart, clean_up_recorded, clean_up_recorded_as_seen, record_removal_as_seen,
+    settle_removal,
   },
   sweep::{SweepError, Swept, sweep},
 };

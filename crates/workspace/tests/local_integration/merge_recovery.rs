@@ -45,9 +45,9 @@ type Merging = thread::JoinHandle<Result<orchester_workspace::tasks::integration
 
 /// The person's merge of the fixture's run, on a thread of its own as the task page merges.
 fn merging(fixture: &Fixture) -> Merging {
-  let root = fixture.root().to_owned();
+  let worktrees = fixture.worktrees();
   let run = fixture.run;
-  thread::spawn(move || merge_retrying(&root, &Programs::processes(), (run, None, None), PERSON))
+  thread::spawn(move || merge_retrying(&worktrees, &Programs::processes(), (run, None, None), PERSON))
 }
 
 /// Waits until Orchester waits to try the fixture's merge again, or the merge ended; whether it waits.
@@ -196,8 +196,8 @@ fn merge_retry_a_try_under_way_shows_due_and_stop_retrying_ends_it_after() {
       ))
     })
   });
-  let (root, run) = (fixture.root().to_owned(), fixture.run);
-  let merge = thread::spawn(move || retried(&root, &programs, (run, None, None), PERSON, Err(held_lease())));
+  let (worktrees, run) = (fixture.worktrees(), fixture.run);
+  let merge = thread::spawn(move || retried(&worktrees, &programs, (run, None, None), PERSON, Err(held_lease())));
   assert!(until_waiting(&fixture, &merge));
   assert!(try_now(run), "Try now ends the wait");
   let deadline = Instant::now() + Duration::from_secs(60);
@@ -218,7 +218,7 @@ fn merge_retry_a_try_under_way_shows_due_and_stop_retrying_ends_it_after() {
 fn merge_watchdog_git_that_stops_answering_is_recorded_with_its_command_and_wait_and_not_retried() {
   let fixture = Fixture::new(false);
   let programs = faked(|args| has(args, "--ff-only").then_some(Err(CommandError::Silent { after: SILENCE })));
-  let ended = merge_retrying(fixture.root(), &programs, (fixture.run, None, None), PERSON);
+  let ended = merge_retrying(&fixture.worktrees(), &programs, (fixture.run, None, None), PERSON);
   let Err(IntegrationProblem::Merge(MergeError::Unanswered { step, .. })) = &ended else {
     panic!("git stopped answering: {ended:?}");
   };
@@ -262,7 +262,7 @@ fn merge_put_back_restores_the_files_and_try_again_is_refused_until_then() {
   let fixture = Fixture::new(false);
   let processes = Programs::processes();
   let refused = merge_in(
-    fixture.root(),
+    &fixture.worktrees(),
     &stops_part_way(fixture.root().to_owned()),
     (fixture.run, None),
   )
@@ -276,7 +276,7 @@ fn merge_put_back_restores_the_files_and_try_again_is_refused_until_then() {
     ["task.txt"],
     "the run is Stopped while bringing the merge in, with its files"
   );
-  let again = merge_in(fixture.root(), &processes, (fixture.run, None)).expect_err("refused");
+  let again = merge_in(&fixture.worktrees(), &processes, (fixture.run, None)).expect_err("refused");
   assert_eq!(again.message(", ").key, "runs.merge.failure.notPutBack");
 
   put_files_back(fixture.root(), &processes, fixture.run).expect("put back");
@@ -289,7 +289,7 @@ fn merge_put_back_restores_the_files_and_try_again_is_refused_until_then() {
       .expect("read")
       .is_empty()
   );
-  merge_in(fixture.root(), &processes, (fixture.run, None)).expect("merged once put back");
+  merge_in(&fixture.worktrees(), &processes, (fixture.run, None)).expect("merged once put back");
 }
 
 #[test]
@@ -355,5 +355,5 @@ fn merge_interrupted_is_found_on_the_next_start_recorded_and_its_leftovers_clear
     ["task.txt"]
   );
   put_files_back(fixture.root(), &programs, fixture.run).expect("put back");
-  merge_in(fixture.root(), &programs, (fixture.run, None)).expect("merged after it");
+  merge_in(&fixture.worktrees(), &programs, (fixture.run, None)).expect("merged after it");
 }

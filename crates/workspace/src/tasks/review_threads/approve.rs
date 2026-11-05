@@ -18,6 +18,7 @@ use crate::{
   tasks::{
     changes::GIT,
     integration::{IntegrationProblem, Merged, merge_in},
+    worktree_removal::WorktreeRemover,
   },
 };
 
@@ -30,14 +31,16 @@ pub enum Approved {
   Queued,
 }
 
-/// The person approves `run` of the project at `root` at `reviewed`, the head they reviewed, at `now`, and it merges
-/// there. `programs` read the run's branch and merge it.
+/// The person approves `run` of the project whose run worktrees are `worktrees` at `reviewed`, the head they reviewed,
+/// at `now`, and it merges there. `programs` read the run's branch and merge it; the project's runner removes what
+/// the run left.
 pub fn approve_and_merge(
-  root: &Path,
+  worktrees: &WorktreeRemover,
   programs: &Programs,
   (run, reviewed): (RunId, &Revision),
   now: Timestamp,
 ) -> Result<Approved, ReviewRefusal> {
+  let root = worktrees.root();
   let mut db = ProjectDb::open(root)?;
   let threads = recover::threads(&mut db, run)?;
   let stored = match waiting(&db, run) {
@@ -64,7 +67,7 @@ pub fn approve_and_merge(
     return Ok(Approved::Queued);
   }
   Ok(Approved::Merged(Box::new(merge_in(
-    root,
+    worktrees,
     programs,
     (run, Some(reviewed)),
   )?)))

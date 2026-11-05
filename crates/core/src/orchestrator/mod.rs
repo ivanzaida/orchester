@@ -19,6 +19,7 @@ pub mod proposal;
 pub mod report;
 pub mod resume;
 pub mod rewind;
+pub mod run_git;
 pub mod sent;
 pub mod settings;
 pub mod wait;

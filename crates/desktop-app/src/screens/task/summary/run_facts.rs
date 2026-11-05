@@ -335,6 +335,9 @@ fn worktree(ctx: &mut Ctx, run: &RunView, root: &Path) -> Element {
       value("task-fact-worktree", &text, Look::Secondary),
     );
   }
+  // Remote runners (`docs/architecture/remote-runners.md`, "Not part of the preparation"): *Copy path* copies where
+  // the worktree lies on this computer, beside the project. A run on another computer has no such path here and will
+  // need something else (that computer's path, named as such); nothing of that is built yet.
   let path = run_worktree(root, run.id()).display().to_string();
   let clipboard = ctx.use_context::<Clipboard>().unwrap_or_default();
   let copied = path.clone();

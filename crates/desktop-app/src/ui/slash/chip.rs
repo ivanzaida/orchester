@@ -1,11 +1,12 @@
-//! The skill chip a composer holds before its message (ORC-325, ORC-634; `Skill chip` `dBGRj` in `06d` `lXQi1`, `07c`
-//! `f0b717`, `06c` `DunaJ`): a `graduation-cap` 12 in `text_secondary`, the skill's name in Geist Mono 11
-//! `text_secondary` and a 12 `x` in `text_muted` that removes it, 4 apart, on a `surface_raised` pill in a `border`
-//! stroke, 2 over and under them and 8 at their sides, 6 before the message's first line. Under the pointer a tooltip
-//! names the skill and its published version (`FKUJD`) and says how it reaches the agent ([`SkillReach`]). The skill
-//! goes with the message; a sent message shows the same chip without its `x` over its words ([`sent_skill_chip`],
-//! `r78GAg` in `OKzZ6`). A plan's changes carry no skill: while the chip holds one there, a quiet line under the box
-//! says so ([`plan_held`]).
+//! The skill chip a composer holds before its message (ORC-325, ORC-634, ORC-663; `Skill chip · hover` `GWWGb` and
+//! `Skill chip` `jmI0O` in `07` `QnPRC`, the tooltips in `07b` `z1VcW9`): an 11 `graduation-cap` in `text_secondary`,
+//! the skill's name in Geist Mono 11 `text_secondary` and an 11 `x` in `text_muted` that removes it, 4 apart, on a
+//! `surface_raised` pill in a `border` stroke (`border_strong` under the pointer), 2 over and under them and 8 at their
+//! sides, 6 before the message's first line. Under the pointer a tooltip opens over it, 6 clear of the composer's top
+//! edge, wraps at 360 ([`SKILL_TIP_WIDTH`]), names the skill and its published version and says how it reaches the
+//! agent ([`SkillReach`]). The skill goes with the message; a sent message shows the same chip without its `x`, 8 over
+//! its words ([`sent_skill_chip`]). A plan's changes carry no skill: while the chip holds one there, a quiet line under
+//! the box says so ([`plan_held`]).
 
 use lurq::{
   app::{
@@ -14,9 +15,9 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
   components::{Button, Row, Text},
-  core::Signal,
+  core::{ElementRef, Signal},
   layout::Alignment,
-  node::{CursorIcon, Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{CursorIcon, Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::connection::AgentProvider;
 use orchester_workspace::skills::offered::OfferedSkill;
@@ -29,13 +30,13 @@ use crate::{
   },
 };
 
-/// How a chosen skill reaches the agent the message goes to (ORC-634), as the chip's tooltip says it.
+/// How a chosen skill reaches the agent the message goes to (ORC-634, ORC-663), as the chip's tooltip says it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum SkillReach {
   /// The Orchestrator on Claude Code loads it as the CLI's own skill for a turn of its own.
   ClaudeOwn,
-  /// The Orchestrator on Codex gets its text in a marked block: Codex's `$skill` is not used yet.
-  CodexText,
+  /// The Orchestrator on Codex loads it as Codex's own skill (`$<slug>`) for a turn of its own.
+  CodexOwn,
   /// A run's agent, of any engine, gets its text in a marked block.
   Text,
 }
@@ -45,7 +46,7 @@ impl SkillReach {
   pub const fn orchestrator(provider: Option<AgentProvider>) -> Self {
     match provider {
       Some(AgentProvider::ClaudeCodeCli) => Self::ClaudeOwn,
-      Some(AgentProvider::CodexCli) => Self::CodexText,
+      Some(AgentProvider::CodexCli) => Self::CodexOwn,
       _ => Self::Text,
     }
   }
@@ -53,22 +54,25 @@ impl SkillReach {
   const fn key(self) -> &'static str {
     match self {
       Self::ClaudeOwn => "composer.skill.reach.claude",
-      Self::CodexText => "composer.skill.reach.codex",
+      Self::CodexOwn => "composer.skill.reach.codex",
       Self::Text => "composer.skill.reach.text",
     }
   }
 }
 
+/// The widest the composer chip's tooltip runs before it wraps (`Label` `xuZ4N` in `mhanX`, `07` `QnPRC`).
+const SKILL_TIP_WIDTH: f32 = 360.0;
+
 /// `field`, the composer's message field, after the chip of the skill `skill` holds while it holds one, in the
-/// composer named `id`, whose message reaches its agent as `reach` says. The field keeps its place in the tree either
-/// way, and with it its focus.
+/// composer named `id`, whose message reaches its agent as `reach` says; the chip's tooltip keeps clear of `frame`, the
+/// composer's box. The field keeps its place in the tree either way, and with it its focus.
 pub fn with_skill_chip(
   ctx: &mut Ctx,
-  (id, reach): (&str, SkillReach),
+  (id, reach, frame): (&str, SkillReach, &ElementRef),
   skill: &Signal<Option<OfferedSkill>>,
   field: Element,
 ) -> Element {
-  let chip = skill_chip(ctx, (id, reach), skill);
+  let chip = skill_chip(ctx, (id, reach, frame), skill);
   Row::new()
     .id(format!("{id}-skill-line"))
     .width(Dimension::Pct(100.0))
@@ -103,8 +107,13 @@ pub fn sent_skill_chip(ctx: &mut Ctx, id: &str, skill: &OfferedSkill) -> Element
   Tooltip::new(chip_id, tip).wrap(ctx, chip)
 }
 
-/// The chip of the skill `skill` holds, in the composer named `id`, while it holds one; its `x` empties it.
-fn skill_chip(ctx: &mut Ctx, (id, reach): (&str, SkillReach), skill: &Signal<Option<OfferedSkill>>) -> Option<Element> {
+/// The chip of the skill `skill` holds, in the composer named `id`, while it holds one; its `x` empties it, and its
+/// tooltip opens over it, clear of `frame`, the composer's box.
+fn skill_chip(
+  ctx: &mut Ctx,
+  (id, reach, frame): (&str, SkillReach, &ElementRef),
+  skill: &Signal<Option<OfferedSkill>>,
+) -> Option<Element> {
   let chosen = skill.get()?;
   let chip_id = format!("{id}-skill-chip");
   let remove_label = ctx.t_args("composer.skill.remove", [("name", &*chosen.slug)]);
@@ -119,10 +128,18 @@ fn skill_chip(ctx: &mut Ctx, (id, reach): (&str, SkillReach), skill: &Signal<Opt
       event.stop_propagation();
       held.set(None);
     })
-    .child(icon(Icon::X, IconSize::Sm, PaletteColor::TextMuted));
-  let chip = pill(&chip_id, &chosen).describe("reach", reach.key()).child(remove);
+    .child(icon(Icon::X, IconSize::Xs, PaletteColor::TextMuted));
+  let chip = pill(&chip_id, &chosen)
+    .describe("reach", reach.key())
+    .hovered_style(Style::new().border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong)))
+    .child(remove);
   let tip = tooltip(ctx, reach.key(), &chosen);
-  Some(Tooltip::new(chip_id, tip).wrap(ctx, chip))
+  Some(
+    Tooltip::new(chip_id, tip)
+      .over(frame)
+      .wrap_at(SKILL_TIP_WIDTH)
+      .wrap(ctx, chip),
+  )
 }
 
 /// The pill of `skill` named `chip_id`: its glyph and its name.
@@ -138,7 +155,7 @@ fn pill(chip_id: &str, skill: &OfferedSkill) -> Row {
     .background(PaletteColor::SurfaceRaised)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(ExtraRadius::Full.role())
-    .child(icon(Icon::GraduationCap, IconSize::Sm, PaletteColor::TextSecondary))
+    .child(icon(Icon::GraduationCap, IconSize::Xs, PaletteColor::TextSecondary))
     .child(
       Text::new(&skill.slug)
         .id(format!("{chip_id}-name"))

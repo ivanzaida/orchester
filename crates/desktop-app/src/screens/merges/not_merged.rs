@@ -151,6 +151,7 @@ pub(super) fn try_again(
     number: run.number.get(),
     branch: branch.as_str().to_owned(),
     run: run.run,
+    worktrees: services.worktree_remover(&project.open),
     programs: services.programs,
     activity: services.activity,
     separator: ctx.t("task.listSeparator"),

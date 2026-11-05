@@ -10,7 +10,6 @@
 use std::{
   collections::HashMap,
   num::NonZeroU32,
-  path::Path,
   sync::{Arc, LazyLock},
   time::{Duration, Instant},
 };
@@ -31,6 +30,7 @@ use parking_lot::{Condvar, Mutex};
 use super::{
   integration::{IntegrationProblem, Merged, merge_in_as},
   merge_attempts::Asked,
+  worktree_removal::WorktreeRemover,
 };
 
 /// The runs whose merge waits to be tried again, in every project.
@@ -60,22 +60,22 @@ struct Wait {
   began: Mutex<Option<Timestamp>>,
 }
 
-/// Merges run `run` of the project at `root` as [`merge_in_as`] does, `asked` asking, and tries it again by itself
-/// while it does not land for a cause that passes. How the last try went.
+/// Merges run `run` whose run worktrees are `worktrees` as [`merge_in_as`] does, `asked` asking, and tries it again by
+/// itself while it does not land for a cause that passes. How the last try went.
 pub fn merge_retrying(
-  root: &Path,
+  worktrees: &WorktreeRemover,
   programs: &Programs,
   (run, expected, delivering): (RunId, Option<&Revision>, Option<Delivering<'_>>),
   asked: Asked,
 ) -> Result<Merged, IntegrationProblem> {
-  let first = merge_in_as(root, programs, (run, expected, delivering), asked);
-  retried(root, programs, (run, expected, delivering), asked, first)
+  let first = merge_in_as(worktrees, programs, (run, expected, delivering), asked);
+  retried(worktrees, programs, (run, expected, delivering), asked, first)
 }
 
 /// Orchester's tries of the merge [`merge_retrying`] makes after `first`, the try `asked` asked for, while it does not
 /// land for a cause that passes. How the last try went.
 pub fn retried(
-  root: &Path,
+  worktrees: &WorktreeRemover,
   programs: &Programs,
   (run, expected, delivering): (RunId, Option<&Revision>, Option<Delivering<'_>>),
   asked: Asked,
@@ -93,7 +93,7 @@ pub fn retried(
     }
     tracing::info!(%run, retry = number.get(), "Orchester tries the merge again");
     let retry = (MergeAsker::Retry { number }, asked.1);
-    merged = merge_in_as(root, programs, (run, expected, delivering), retry);
+    merged = merge_in_as(worktrees, programs, (run, expected, delivering), retry);
     if tried(run) {
       tracing::info!(%run, "a person stopped Orchester's retries of the merge while it tried");
       break;

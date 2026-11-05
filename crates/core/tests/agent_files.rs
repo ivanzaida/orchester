@@ -24,6 +24,7 @@ fn codex(agent_files: CodexAgentFiles<'_>) -> CodexInvocation<'_> {
     platform: Platform::MacOs,
     mcp: None,
     agent_files,
+    sandbox: orchester_core::permission::CodexSandbox::On,
   }
 }
 

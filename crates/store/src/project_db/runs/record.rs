@@ -1,150 +1,370 @@
-//! Recording a new run: a local task's, which must be queued, ready and still have its definition; and a run with the
-//! execution inputs it is created with ([`ProjectDb::create_run_with_inputs`]), kept in the same transaction. A team
-//! run needs its task's identity only: the server accepted its start, and its inputs carry the task as it was then.
+//! What the runner records in a run's log, as values that can be sent (`docs/architecture/remote-runners.md`, rule
+//! 2): events, the change they make to the run's rows and what is kept with them. The change is the one
+//! [`ProjectDb::write_run_log`] applies, column by column, not the run's whole record: `runs` updated in place, the
+//! `run_step_budgets` and `run_permissions` it upserts, and every attempt and step execution upserted with the
+//! `ON CONFLICT` updates the tables allow.
 
 use orchester_core::{
-  id::{IdempotencyKey, RunId},
-  run::{
-    NewRun, Run,
-    inputs::{InputsOrigin, RunInputs},
-  },
-  sharing::TaskRevision,
-  task::identity::TaskOwner,
-  time::Timestamp,
+  id::{RunId, TaskId},
+  run::{EventSequence, InterruptCause, Plan, Run, RunEvent, RunEventKind, RunnerFailure, StepExecutor},
 };
-use rusqlite::Transaction;
+use rusqlite::{Transaction, params};
+use serde::{Deserialize, Serialize};
 
-use super::{insert_event, insert_run, load::load_runs, run_number};
+use super::{
+  PERMISSIONS_SCHEMA,
+  columns::{
+    attempt_conflicts_column, attempt_reason_columns, attempt_status_text, run_status_columns, step_failure_text,
+    step_status_columns,
+  },
+  sequence_column,
+};
 use crate::{
   RunStoreError, StoreError,
-  project_db::{
-    ProjectDb, organization, run_inputs, shared_tasks, task_identities,
-    tasks::{has_revision, is_queued, snapshot_new_run},
-  },
+  rows::{encode_json, optional_budget_column, optional_millis_column, tokens_column},
 };
 
-impl ProjectDb {
-  /// [`orchester_core::store::RunStore::create_run`] for a task the caller found queued: the task must still be
-  /// queued when the run is recorded, in the same transaction. A person may have taken it back to the drafts since the
-  /// caller checked it (a held group's task), and a draft never has a run. With `revision`, the task must also still
-  /// be at that revision, read in the same transaction: a task edited since a person confirmed its run is refused
-  /// ([`RunStoreError::TaskChangedMeanwhile`]).
-  pub fn create_run_of_queued_task(
-    &mut self,
-    key: IdempotencyKey,
-    new: NewRun,
-    now: Timestamp,
-    revision: Option<TaskRevision>,
-  ) -> Result<Run, RunStoreError> {
-    self.record_run(key, new, now, Some(revision), None)
+/// Events of one run, the change they make to its rows, and what is kept with them: written in one transaction, or
+/// not at all. The events must directly follow the stored log and end in the state the change stores.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RunLogRecord {
+  change: RunChange,
+  events: Vec<RunEvent>,
+  with: KeptWith,
+}
+
+/// What is kept with a record's events, in their transaction.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "kind")]
+enum KeptWith {
+  Nothing,
+  /// The plan the events propose, or the decision on a stored one.
+  Plan {
+    plan: Box<Plan>,
+  },
+  /// Why the runner failed, kept with its interruption: the last of the events.
+  RunnerFailure {
+    failure: RunnerFailure,
+  },
+}
+
+impl RunLogRecord {
+  /// `events`, which produced `run`'s current state ([`orchester_core::store::RunStore::append_events`]).
+  pub fn events(run: &Run, events: &[RunEvent]) -> Result<Self, RunStoreError> {
+    Self::new(run, events, KeptWith::Nothing)
   }
 
-  /// Records the run with the `inputs` it executes with, in one transaction; nothing is recorded when the inputs do
-  /// not match it. The run's snapshot must pin exactly the versions the inputs carry. Local inputs are a local task's,
-  /// recorded as [`Self::create_run_of_queued_task`] records it. Team inputs are a team task's whose identity
-  /// [`Self::record_team_task`] recorded, and need no definition of it here; their operation starts one run only, so
-  /// a retry with another key is refused.
-  pub fn create_run_with_inputs(
-    &mut self,
-    key: IdempotencyKey,
-    new: NewRun,
-    inputs: &RunInputs,
-    (now, revision): (Timestamp, Option<TaskRevision>),
-  ) -> Result<Run, RunStoreError> {
-    if !inputs.pinned_by(&new.snapshot) {
-      return Err(RunStoreError::InputsMismatch {
-        task: new.task,
-        reason: "the run's snapshot does not pin the inputs' versions",
-      });
-    }
-    match inputs.bundle().origin() {
-      InputsOrigin::Local => self.record_run(key, new, now, Some(revision), Some(inputs)),
-      InputsOrigin::Team(_) => self.record_team_run(key, new, now, inputs),
-    }
+  /// `events` with `plan`, the plan they propose or the decision on a stored one
+  /// ([`orchester_core::store::RunStore::append_events_with_plan`]).
+  pub fn with_plan(run: &Run, events: &[RunEvent], plan: &Plan) -> Result<Self, RunStoreError> {
+    Self::new(
+      run,
+      events,
+      KeptWith::Plan {
+        plan: Box::new(plan.clone()),
+      },
+    )
   }
 
-  /// Records a local task's run; `queued` checks the task is still queued and, with a revision, still at it.
-  pub(super) fn record_run(
-    &mut self,
-    key: IdempotencyKey,
-    new: NewRun,
-    now: Timestamp,
-    queued: Option<Option<TaskRevision>>,
-    inputs: Option<&RunInputs>,
-  ) -> Result<Run, RunStoreError> {
-    let key = key.to_string();
-    let project = self.project.key().clone();
-    let transaction = self.connection.transaction()?;
-    if let Some(existing) = load_runs(&transaction, "WHERE idempotency_key = ?1", [&key])?.pop() {
-      return existing.map_err(|unreadable| unreadable.error);
+  /// `events` that end in the runner's interruption of the run after its own failure, with why
+  /// ([`ProjectDb::append_runner_failure`](crate::ProjectDb::append_runner_failure)).
+  pub fn runner_failure(run: &Run, events: &[RunEvent], failure: RunnerFailure) -> Result<Self, RunStoreError> {
+    Self::new(run, events, KeptWith::RunnerFailure { failure })
+  }
+
+  fn new(run: &Run, events: &[RunEvent], with: KeptWith) -> Result<Self, RunStoreError> {
+    Ok(Self {
+      change: RunChange::of(run)?,
+      events: events.to_vec(),
+      with,
+    })
+  }
+
+  pub(super) const fn run(&self) -> RunId {
+    self.change.run
+  }
+
+  pub(super) const fn task(&self) -> TaskId {
+    self.change.task
+  }
+
+  pub(super) fn appended(&self) -> &[RunEvent] {
+    &self.events
+  }
+
+  /// The record's rules that hold before anything is read: the events are consecutive events of its run that end in
+  /// the state it stores, and what is kept with them belongs to them.
+  pub(super) fn check(&self) -> Result<(), RunStoreError> {
+    let last = self
+      .events
+      .last()
+      .ok_or(RunStoreError::EventsMismatch("there are no events to append"))?;
+    if self.events.iter().any(|event| event.run() != self.change.run) {
+      return Err(RunStoreError::EventsMismatch("an event belongs to another run"));
     }
-    if let Some(revision) = queued {
-      if !is_queued(&transaction, new.task)? {
-        return Err(RunStoreError::TaskNotQueued(new.task));
+    let consecutive = self
+      .events
+      .windows(2)
+      .all(|pair| pair[0].sequence().next() == pair[1].sequence());
+    if !consecutive {
+      return Err(RunStoreError::EventsMismatch("the events are not consecutive"));
+    }
+    if last.sequence() != self.change.last_sequence {
+      return Err(RunStoreError::EventsMismatch(
+        "the last event does not produce the stored state",
+      ));
+    }
+    match &self.with {
+      KeptWith::Plan { plan } if plan.run != self.change.run => {
+        Err(RunStoreError::EventsMismatch("the plan belongs to another run"))
       }
-      if let Some(revision) = revision
-        && !has_revision(&transaction, new.task, revision)?
-      {
-        return Err(RunStoreError::TaskChangedMeanwhile(new.task));
-      }
+      KeptWith::RunnerFailure { .. } if !interrupts_after_runner_failure(last) => Err(RunStoreError::EventsMismatch(
+        "the runner's failure is kept only with its interruption",
+      )),
+      _ => Ok(()),
     }
-    if shared_tasks::is_not_shared(&transaction, new.task)? {
-      return Err(StoreError::NotSharedTask(new.task).into());
-    }
-    organization::check_readiness(&transaction, new.task)?;
-    let run = insert_new_run(&transaction, &key, new, now)?;
-    snapshot_new_run(&transaction, run.id(), run.task(), &project)?;
-    if let Some(inputs) = inputs {
-      run_inputs::insert(&transaction, run.id(), inputs)?;
-    }
-    transaction.commit()?;
-    Ok(run)
   }
 
-  fn record_team_run(
-    &mut self,
-    key: IdempotencyKey,
-    new: NewRun,
-    now: Timestamp,
-    inputs: &RunInputs,
-  ) -> Result<Run, RunStoreError> {
-    let key = key.to_string();
-    let transaction = self.connection.transaction()?;
-    if let Some(existing) = load_runs(&transaction, "WHERE idempotency_key = ?1", [&key])?.pop() {
-      return existing.map_err(|unreadable| unreadable.error);
+  /// Stores the run's change and what is kept with the events, in `transaction`; the events themselves are the
+  /// caller's.
+  pub(super) fn store_change(&self, transaction: &Transaction<'_>) -> Result<(), StoreError> {
+    self.change.update_run(transaction)?;
+    self.change.write_attempts(transaction)
+  }
+
+  pub(super) fn store_kept(&self, transaction: &Transaction<'_>) -> Result<(), StoreError> {
+    match &self.with {
+      KeptWith::Nothing => Ok(()),
+      KeptWith::Plan { plan } => super::plans::save(transaction, plan),
+      KeptWith::RunnerFailure { failure } => {
+        let interruption = self.events.last().expect("a checked record has events").sequence();
+        super::super::runner_failures::insert(transaction, self.change.run, interruption, *failure)
+      }
     }
-    let InputsOrigin::Team(accepted) = inputs.bundle().origin() else {
-      return Err(RunStoreError::InputsMismatch {
-        task: new.task,
-        reason: "the inputs are not a team's",
-      });
-    };
-    let identity = task_identities::load(&transaction, new.task)?.ok_or(StoreError::TaskNotFound(new.task))?;
-    if !matches!(identity.owner, TaskOwner::Team { task, .. } if task == accepted.task) {
-      return Err(RunStoreError::InputsMismatch {
-        task: new.task,
-        reason: "the task is not the team task the inputs were accepted for",
-      });
-    }
-    if run_inputs::run_of_operation(&transaction, accepted.operation)?.is_some() {
-      return Err(RunStoreError::InputsMismatch {
-        task: new.task,
-        reason: "the operation that accepted the inputs started another run",
-      });
-    }
-    let run = insert_new_run(&transaction, &key, new, now)?;
-    run_inputs::insert(&transaction, run.id(), inputs)?;
-    transaction.commit()?;
-    Ok(run)
   }
 }
 
-/// Numbers and stores the new run `new` with its creation event.
-fn insert_new_run(transaction: &Transaction<'_>, key: &str, new: NewRun, now: Timestamp) -> Result<Run, RunStoreError> {
-  let number: i64 = transaction.query_row("SELECT next FROM counters WHERE name = 'run'", [], |row| row.get(0))?;
-  let (run, created) = Run::create(RunId::generate(), run_number(number)?, new, now)?;
-  insert_run(transaction, &run, key)?;
-  insert_event(transaction, &created)?;
-  transaction.execute("UPDATE counters SET next = ?1 WHERE name = 'run'", [number + 1])?;
-  Ok(run)
+fn interrupts_after_runner_failure(event: &RunEvent) -> bool {
+  matches!(
+    event.kind(),
+    RunEventKind::Interrupted {
+      cause: InterruptCause::RunnerFailed
+    }
+  )
+}
+
+/// The columns appending events writes of a run's rows, as the store writes them.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+struct RunChange {
+  run: RunId,
+  task: TaskId,
+  status: String,
+  status_reason: Option<String>,
+  failed_step: Option<String>,
+  limit_execution: Option<String>,
+  failure_reason: Option<String>,
+  budget_tokens: Option<i64>,
+  max_duration_ms: Option<i64>,
+  used_tokens: i64,
+  pause_requested: bool,
+  last_sequence: EventSequence,
+  branch: String,
+  /// `(step_key, budget_tokens)` of each step budget raised for the run.
+  step_budgets: Vec<(String, Option<i64>)>,
+  /// `(profile_id, body)` of each profile whose permissions were changed for the run.
+  permissions: Vec<(String, String)>,
+  attempts: Vec<AttemptRow>,
+}
+
+/// An `attempts` row; an existing one only takes the new `status`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+struct AttemptRow {
+  id: String,
+  number: u32,
+  reason: String,
+  failed_step: Option<String>,
+  return_to: Option<String>,
+  note: Option<String>,
+  status: String,
+  conflicts: Option<String>,
+  executions: Vec<ExecutionRow>,
+}
+
+/// A `step_executions` row; an existing one only takes the new `status`, `wait_reason`, `failure` and
+/// `judged_revision`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+struct ExecutionRow {
+  id: String,
+  step_key: String,
+  profile_version: Option<String>,
+  model: Option<String>,
+  status: String,
+  wait_reason: Option<String>,
+  failure: Option<String>,
+  judged_revision: Option<String>,
+}
+
+impl RunChange {
+  fn of(run: &Run) -> Result<Self, StoreError> {
+    let columns = run_status_columns(run.status());
+    let step_budgets = run
+      .raised_step_budgets()
+      .iter()
+      .map(|(step, budget)| {
+        Ok((
+          step.as_str().to_owned(),
+          optional_budget_column("step budget", *budget)?,
+        ))
+      })
+      .collect::<Result<_, StoreError>>()?;
+    let permissions = run
+      .all_changed_permissions()
+      .iter()
+      .map(|(profile, changed)| {
+        Ok((
+          profile.to_string(),
+          encode_json("run permissions", PERMISSIONS_SCHEMA, changed)?,
+        ))
+      })
+      .collect::<Result<_, StoreError>>()?;
+    Ok(Self {
+      run: run.id(),
+      task: run.task(),
+      status: columns.status.to_owned(),
+      status_reason: columns.reason.map(str::to_owned),
+      failed_step: columns.failed_step.map(str::to_owned),
+      limit_execution: columns.limit_execution,
+      failure_reason: columns.failure_reason,
+      budget_tokens: optional_budget_column("run budget", run.budget())?,
+      max_duration_ms: optional_millis_column("run time limit", run.max_duration())?,
+      used_tokens: tokens_column("run usage", run.used().get())?,
+      pause_requested: run.pause_requested(),
+      last_sequence: run.last_sequence(),
+      branch: run.branch().as_str().to_owned(),
+      step_budgets,
+      permissions,
+      attempts: attempt_rows(run)?,
+    })
+  }
+
+  fn update_run(&self, transaction: &Transaction<'_>) -> Result<(), StoreError> {
+    transaction.execute(
+      "UPDATE runs SET status = ?2, status_reason = ?3, failed_step = ?4, limit_execution = ?5, budget_tokens = ?6, \
+       max_duration_ms = ?7, used_tokens = ?8, pause_requested = ?9, last_sequence = ?10, branch = ?11, \
+       failure_reason = ?12 WHERE id = ?1",
+      params![
+        self.run.to_string(),
+        self.status,
+        self.status_reason,
+        self.failed_step,
+        self.limit_execution,
+        self.budget_tokens,
+        self.max_duration_ms,
+        self.used_tokens,
+        self.pause_requested,
+        sequence_column(self.last_sequence.get())?,
+        self.branch,
+        self.failure_reason,
+      ],
+    )?;
+    let mut step_budget = transaction.prepare_cached(
+      "INSERT INTO run_step_budgets (run_id, step_key, budget_tokens) VALUES (?1, ?2, ?3) \
+       ON CONFLICT (run_id, step_key) DO UPDATE SET budget_tokens = excluded.budget_tokens",
+    )?;
+    for (step, budget) in &self.step_budgets {
+      step_budget.execute(params![self.run.to_string(), step, budget])?;
+    }
+    let mut permissions = transaction.prepare_cached(
+      "INSERT INTO run_permissions (run_id, profile_id, body) VALUES (?1, ?2, ?3)      ON CONFLICT (run_id, profile_id) DO UPDATE SET body = excluded.body",
+    )?;
+    for (profile, body) in &self.permissions {
+      permissions.execute(params![self.run.to_string(), profile, body])?;
+    }
+    Ok(())
+  }
+
+  /// Inserts new attempts and executions and updates the status of existing ones.
+  fn write_attempts(&self, transaction: &Transaction<'_>) -> Result<(), StoreError> {
+    let mut attempt_statement = transaction.prepare_cached(
+      "INSERT INTO attempts (id, run_id, number, reason, failed_step, return_to, note, status, conflicts) \
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) ON CONFLICT (id) DO UPDATE SET status = excluded.status",
+    )?;
+    let mut execution_statement = transaction.prepare_cached(
+      "INSERT INTO step_executions (id, attempt_id, step_key, profile_version_id, model, status, wait_reason, \
+       failure, judged_revision) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) \
+       ON CONFLICT (id) DO UPDATE SET status = excluded.status, wait_reason = excluded.wait_reason, \
+       failure = excluded.failure, judged_revision = excluded.judged_revision",
+    )?;
+    for attempt in &self.attempts {
+      attempt_statement.execute(params![
+        attempt.id,
+        self.run.to_string(),
+        attempt.number,
+        attempt.reason,
+        attempt.failed_step,
+        attempt.return_to,
+        attempt.note,
+        attempt.status,
+        attempt.conflicts,
+      ])?;
+      for execution in &attempt.executions {
+        execution_statement.execute(params![
+          execution.id,
+          attempt.id,
+          execution.step_key,
+          execution.profile_version,
+          execution.model,
+          execution.status,
+          execution.wait_reason,
+          execution.failure,
+          execution.judged_revision,
+        ])?;
+      }
+    }
+    Ok(())
+  }
+}
+
+fn attempt_rows(run: &Run) -> Result<Vec<AttemptRow>, StoreError> {
+  run
+    .attempts()
+    .iter()
+    .map(|attempt| {
+      let reason = attempt_reason_columns(attempt.reason());
+      let executions = attempt
+        .executions()
+        .iter()
+        .map(|execution| {
+          let (profile_version, model) = match run.snapshot().step(execution.step()).map(|step| step.executor()) {
+            Some(StepExecutor::Agent { profile, model, .. }) => {
+              (Some(profile.version.to_string()), Some(model.as_str().to_owned()))
+            }
+            _ => (None, None),
+          };
+          let (status, wait_reason) = step_status_columns(execution.status());
+          ExecutionRow {
+            id: execution.id().to_string(),
+            step_key: execution.step().as_str().to_owned(),
+            profile_version,
+            model,
+            status: status.to_owned(),
+            wait_reason: wait_reason.map(str::to_owned),
+            failure: execution.failure().map(|failure| step_failure_text(failure).to_owned()),
+            judged_revision: execution.judged().map(|revision| revision.as_str().to_owned()),
+          }
+        })
+        .collect();
+      Ok(AttemptRow {
+        id: attempt.id().to_string(),
+        number: attempt.number().get(),
+        reason: reason.reason.to_owned(),
+        failed_step: reason.failed_step.map(str::to_owned),
+        return_to: reason.return_to.map(str::to_owned),
+        note: reason.note.map(str::to_owned),
+        status: attempt_status_text(attempt.status()).to_owned(),
+        conflicts: attempt_conflicts_column(attempt.reason())?,
+        executions,
+      })
+    })
+    .collect()
 }

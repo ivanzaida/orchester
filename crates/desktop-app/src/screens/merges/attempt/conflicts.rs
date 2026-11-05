@@ -107,10 +107,10 @@ pub(super) fn read(
   let root = project.open.repo_root.clone();
   let idle = wanted.is_none_or(|(_, run)| !project.feed.job_state.get().run(run).resolving());
   let services = Services::of(ctx);
-  let (programs, hold) = (services.programs, services.hold);
+  let (worktrees, hold) = (services.run_worktrees(&project.open), services.hold);
   ctx
     .future((root, wanted, idle, changes), move |(root, wanted, idle, _)| {
-      let (programs, hold) = (programs.clone(), hold.clone());
+      let (worktrees, hold) = (worktrees.clone(), hold.clone());
       async move {
         let Some((task, run)) = wanted else {
           return Ok::<_, Message>(None);
@@ -118,7 +118,7 @@ pub(super) fn read(
         hold.released().await;
         background::run(move || -> Result<Option<Resolving>, Message> {
           let detail = TaskDetail::load_in(&root, task).map_err(|error| messages::store_error(&error))?;
-          let worktree = resolve::read(&programs, &root, (run, idle))?;
+          let worktree = resolve::read(&worktrees, &root, (run, idle))?;
           Ok(Some(Resolving {
             detail: Arc::new(detail),
             worktree,
@@ -186,7 +186,7 @@ pub(super) fn editor_button(
   let args = ResolveArgs {
     open: project.open.clone(),
     run,
-    programs: services.programs,
+    worktrees: services.run_worktrees(&project.open),
     editor: Err(EditorOpened::NoEditor),
     changed: Arc::new(move || feed.saved()),
   };

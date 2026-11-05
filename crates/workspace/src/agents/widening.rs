@@ -66,6 +66,7 @@ pub fn message(widening: Widening) -> Message {
     Widening::Browser => "appMcp.widens.browser",
     Widening::BrowserSite => "appMcp.widens.browserSite",
     Widening::Autopilot => "appMcp.widens.autopilot",
+    Widening::CodexSandboxOff => "appMcp.widens.codexSandboxOff",
   })
 }
 

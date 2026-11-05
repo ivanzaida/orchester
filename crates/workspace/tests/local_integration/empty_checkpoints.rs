@@ -107,7 +107,7 @@ fn empty_checkpoints_a_run_that_merged_main_after_one_merges_with_one_click() {
   );
   assert_eq!(delivery(&fixture), Delivery::Waiting);
   let tip = git(fixture.root(), &["rev-parse", "task"]);
-  merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).expect("merged");
+  merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).expect("merged");
   assert_eq!(git(fixture.root(), &["merge-base", "--is-ancestor", &tip, "main"]), "");
   assert_eq!(git(fixture.root(), &["show", "main:task.txt"]), "delivered task");
   assert_eq!(git(fixture.root(), &["show", "main:later.txt"]), "later main work");
@@ -129,7 +129,7 @@ fn empty_checkpoints_a_run_that_merged_main_twice_merges() {
     external_integration(fixture.root(), fixture.run).expect("evidence"),
     None
   );
-  merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).expect("merged");
+  merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).expect("merged");
   assert_eq!(git(fixture.root(), &["show", "main:task.txt"]), "delivered task");
   assert_eq!(git(fixture.root(), &["show", "main:more.txt"]), "more task work");
 }
@@ -158,7 +158,7 @@ fn empty_checkpoints_a_cherry_picked_own_commit_still_needs_local_integration() 
     .expect("part of the run is in main");
   assert_eq!(evidence.kind, ResultEvidenceKind::EquivalentPatches);
   let before = git(fixture.root(), &["rev-parse", "main"]);
-  assert!(merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).is_err());
+  assert!(merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).is_err());
   assert_eq!(git(fixture.root(), &["rev-parse", "main"]), before, "nothing merged");
 }
 
@@ -171,7 +171,7 @@ fn empty_checkpoints_an_own_commit_merged_into_main_still_needs_local_integratio
     .expect("part of the run is in main");
   assert_eq!(evidence.kind, ResultEvidenceKind::PartialAncestry);
   let before = git(fixture.root(), &["rev-parse", "main"]);
-  assert!(merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).is_err());
+  assert!(merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).is_err());
   assert_eq!(git(fixture.root(), &["rev-parse", "main"]), before, "nothing merged");
 }
 
@@ -190,6 +190,6 @@ fn empty_checkpoints_a_commit_not_made_on_the_branch_is_still_unknown() {
     .expect("the branch no longer stands for the checkpoint");
   assert_eq!(evidence.kind, ResultEvidenceKind::UnknownSource);
   let before = git(fixture.root(), &["rev-parse", "main"]);
-  assert!(merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).is_err());
+  assert!(merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).is_err());
   assert_eq!(git(fixture.root(), &["rev-parse", "main"]), before, "nothing merged");
 }

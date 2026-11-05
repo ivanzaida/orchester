@@ -4,7 +4,7 @@
 //! into the page's signal, set only when it changed, so the top card, the header and ⌘↵ share one read: the action
 //! that merges waits while a merge waits there. Renders nothing.
 
-use std::{path::PathBuf, time::Duration};
+use std::time::Duration;
 
 use lurq::{
   app::{
@@ -19,6 +19,7 @@ use orchester_core::id::RunId;
 use orchester_workspace::{
   background,
   tasks::resolve::{self, Worktree},
+  workspace::OpenProject,
 };
 
 use crate::{screens::task::TaskContext, services::Services};
@@ -48,7 +49,7 @@ pub fn mount(ctx: &mut Ctx, task: &TaskContext, into: &Signal<InWorktree>) -> Op
   let run = task.detail.run.as_ref()?.id();
   let job = task.jobs.run(run);
   let props = ReaderProps {
-    root: task.project.open.repo_root.clone(),
+    open: task.project.open.clone(),
     run,
     idle: !job.resolving(),
     again: (task.project.feed.revision.get(), job.resolve.ended),
@@ -59,7 +60,7 @@ pub fn mount(ctx: &mut Ctx, task: &TaskContext, into: &Signal<InWorktree>) -> Op
 
 #[derive(Clone)]
 pub struct ReaderProps {
-  root: PathBuf,
+  open: OpenProject,
   run: RunId,
   /// No resolving of the run is under way.
   idle: bool,
@@ -71,7 +72,7 @@ pub struct ReaderProps {
 /// The page's own signal is the same for its life: it is compared by its id.
 impl PartialEq for ReaderProps {
   fn eq(&self, other: &Self) -> bool {
-    self.root == other.root
+    self.open.repo_root == other.open.repo_root
       && self.run == other.run
       && self.idle == other.idle
       && self.again == other.again
@@ -102,7 +103,7 @@ impl Component for WorktreeReader {
     let props = ctx.props::<ReaderProps>().clone();
     let read = read(
       ctx,
-      props.root.clone(),
+      &props.open,
       (props.run, props.idle),
       (props.again, self.look.get()),
     );
@@ -127,24 +128,32 @@ struct Read(Worktree);
 
 impl DevtoolsInspectable for Read {}
 
-/// `run`'s worktree under `root` and the merge waiting in it, read again when `again` (the project's saves and the
-/// run's resolvings ended, and a look) changes; `idle`: no resolving of the run is under way. `None` while it is first
-/// read, or when it cannot be read.
-pub fn read(ctx: &mut Ctx, root: PathBuf, (run, idle): (RunId, bool), again: ((u64, u64), u64)) -> Option<Worktree> {
-  let programs = Services::of(ctx).programs;
+/// `run`'s worktree in project `open` and the merge waiting in it, as the project's runner reads them, read again when
+/// `again` (the project's saves and the run's resolvings ended, and a look) changes; `idle`: no resolving of the run
+/// is under way. `None` while it is first read, or when it cannot be read.
+pub fn read(
+  ctx: &mut Ctx,
+  open: &OpenProject,
+  (run, idle): (RunId, bool),
+  again: ((u64, u64), u64),
+) -> Option<Worktree> {
+  let worktrees = Services::of(ctx).run_worktrees(open);
   ctx
-    .future((root, (run, idle), again), move |(root, (run, idle), _)| {
-      let programs = programs.clone();
-      async move {
-        background::run(move || resolve::read(&programs, &root, (run, idle)))
-          .await
-          .map_err(|_| ())?
-          .map(Read)
-          .map_err(|message| {
-            tracing::warn!(?message, "cannot read whether a merge waits in the run's worktree");
-          })
-      }
-    })
+    .future(
+      (open.repo_root.clone(), (run, idle), again),
+      move |(root, (run, idle), _)| {
+        let worktrees = worktrees.clone();
+        async move {
+          background::run(move || resolve::read(&worktrees, &root, (run, idle)))
+            .await
+            .map_err(|_| ())?
+            .map(Read)
+            .map_err(|message| {
+              tracing::warn!(?message, "cannot read whether a merge waits in the run's worktree");
+            })
+        }
+      },
+    )
     .state()
     .get()
     .data

@@ -43,7 +43,7 @@ fn local_integration_a_run_rebased_onto_newer_main_is_not_integrated_and_merges(
     (rewritten.replaces.as_str(), rewritten.tip.as_str()),
     (checkpoint.as_str(), tip.as_str())
   );
-  let merged = merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).expect("merged");
+  let merged = merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).expect("merged");
   assert_eq!(merged.merge.revision.as_str(), tip);
   assert_eq!(git(fixture.root(), &["rev-parse", "main"]), tip);
 }

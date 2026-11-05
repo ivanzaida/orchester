@@ -13,10 +13,13 @@ use orchester_exec::programs::Programs;
 use orchester_ipc::{Command, WorkReturn};
 use orchester_workspace::{
   runner::{RequestError, RunRequestError},
-  tasks::review_threads::{
-    self, ReviewRefusal,
-    read::{Review, review_of},
-    send,
+  tasks::{
+    resolve::RunWorktrees,
+    review_threads::{
+      self, ReviewRefusal,
+      read::{Review, review_of},
+      send,
+    },
   },
 };
 
@@ -72,7 +75,12 @@ fn review_threads_send_to_implement_sends_every_comment_and_no_question_in_one_q
   let question =
     review_threads::ask::start(repo.root(), repo.run, repo.anchor(2, 2), &body("Why two?"), at(22)).expect("asked");
 
-  let sending = send::begin(repo.root(), &Programs::processes(), repo.run).expect("sending");
+  let sending = send::begin(
+    repo.root(),
+    &RunWorktrees::here_for_test(repo.root(), Programs::processes()),
+    repo.run,
+  )
+  .expect("sending");
   assert_eq!(sending.comments.len(), 2, "questions never go with the comments");
   let Command::ReturnRun(WorkReturn { step, note, by, .. }) = &sending.command else {
     panic!("the run's work returns to Implement: {:?}", sending.command);
@@ -133,7 +141,12 @@ fn review_threads_a_send_the_runner_does_not_take_keeps_every_comment_unsent_wit
   let repo = Repo::new();
   review_threads::comment(repo.root(), repo.run, repo.anchor(1, 1), &body("Rename one."), at(20)).expect("kept");
   review_threads::comment(repo.root(), repo.run, repo.anchor(2, 2), &body("Rename two."), at(21)).expect("kept");
-  let sending = send::begin(repo.root(), &Programs::processes(), repo.run).expect("sending");
+  let sending = send::begin(
+    repo.root(),
+    &RunWorktrees::here_for_test(repo.root(), Programs::processes()),
+    repo.run,
+  )
+  .expect("sending");
   let refused = send::sent(
     repo.root(),
     &sending,
@@ -154,10 +167,14 @@ fn review_threads_a_send_the_runner_does_not_take_keeps_every_comment_unsent_wit
   assert_eq!(read.unsent(), 2, "nothing is lost: both wait to be sent again");
   assert!(!read.implement_at_work);
   assert_eq!(
-    send::begin(repo.root(), &Programs::processes(), repo.run)
-      .expect("sent again")
-      .comments
-      .len(),
+    send::begin(
+      repo.root(),
+      &RunWorktrees::here_for_test(repo.root(), Programs::processes()),
+      repo.run
+    )
+    .expect("sent again")
+    .comments
+    .len(),
     2
   );
 }
@@ -188,9 +205,13 @@ fn review_threads_a_send_cut_off_before_the_runner_took_it_waits_unsent_again() 
   assert!(!read.implement_at_work, "approval is open again");
   review_threads::edit(repo.root(), comment.latest_ask().id(), &body("Rename one to first.")).expect("editable");
   assert_eq!(
-    send::begin(repo.root(), &Programs::processes(), repo.run)
-      .expect("sent again")
-      .comments,
+    send::begin(
+      repo.root(),
+      &RunWorktrees::here_for_test(repo.root(), Programs::processes()),
+      repo.run
+    )
+    .expect("sent again")
+    .comments,
     vec![comment.latest_ask().id()]
   );
   assert_eq!(
@@ -242,12 +263,22 @@ fn review_threads_resolved_threads_fold_and_a_later_head_outdates_changed_lines(
 fn review_threads_nothing_to_send_and_only_unsent_comments_change() {
   let repo = Repo::new();
   assert_eq!(
-    send::begin(repo.root(), &Programs::processes(), repo.run).map(|sending| sending.comments),
+    send::begin(
+      repo.root(),
+      &RunWorktrees::here_for_test(repo.root(), Programs::processes()),
+      repo.run
+    )
+    .map(|sending| sending.comments),
     Err(ReviewRefusal::NothingToSend)
   );
   let comment =
     review_threads::comment(repo.root(), repo.run, repo.anchor(1, 1), &body("Rename one."), at(20)).expect("kept");
-  let sending = send::begin(repo.root(), &Programs::processes(), repo.run).expect("sending");
+  let sending = send::begin(
+    repo.root(),
+    &RunWorktrees::here_for_test(repo.root(), Programs::processes()),
+    repo.run,
+  )
+  .expect("sending");
   assert_eq!(
     review_threads::edit(repo.root(), comment.latest_ask().id(), &body("Changed")),
     Err(ReviewRefusal::Review(orchester_core::review::ReviewError::NotEditable))

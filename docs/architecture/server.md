@@ -517,7 +517,12 @@ work on this computer asked for after the run ended (Run again, before the runne
 remembers when, for the session, and forgets it when that work does not start). Claims that were never ended
 before (ORC-281) end this way on the first sync of a fixed desktop. A server without `PUT …/run` answers `404` or
 `405`: the report fails as *not supported* and is logged, and the next sync tries it again; meanwhile the heartbeat
-no longer names the task, so the claim goes stale instead of staying fresh.
+no longer names the task, so the claim goes stale instead of staying fresh. A merged run's Done is sent before its
+claim is completed (ORC-545); when git finds the run merged before Orchester's merge has written its record, or with
+none (merged outside Orchester), the claim's end records that Done first (ORC-750), changed from the In review the
+passed run left rather than from the status the cache has by then, so a teammate's status set since still wins. Once
+that Done is not sent, it stays so: a claim's end tried again (its report failed) and Orchester's merge record written
+after it leave it. A Done recorded later that the server already has is dropped instead of being marked not sent.
 
 **Offline (row 28).** Without the server, work may start on a task only when the cached claim is the person's and is
 not stale by the person's own last answered heartbeat. Core decides it with one function over explicit times:

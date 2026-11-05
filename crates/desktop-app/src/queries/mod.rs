@@ -124,4 +124,20 @@ impl Again {
     *seen = Some(asked);
     again
   }
+
+  /// [`Self::follow`] for a query that follows counts which move faster than it reads, as `project::settled_read`
+  /// does for a future: an invalidation drops the read under way and starts another, so while `handle` reads, a later
+  /// ask waits, and the first render after that read invalidates it once for the asks made meanwhile. On the first
+  /// render a read under way is the one the visit started (live state goes stale at once), which is the read asked for.
+  pub fn follow_settled<T, E>(&self, asked: u64, handle: &QueryHandle<T, E>) -> bool {
+    if !handle.fetching() {
+      return self.follow(asked, handle);
+    }
+    let mut seen = self.seen.lock();
+    if seen.is_some() {
+      return false;
+    }
+    *seen = Some(asked);
+    self.live
+  }
 }

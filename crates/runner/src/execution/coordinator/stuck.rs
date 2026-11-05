@@ -1,0 +1,109 @@
+//! A person's decision on a run that waits for them after its retries ran out, its step broke again, reported
+//! unverified or was not run again on an unchanged revision ([`orchester_core::run::StuckDecision`]). Its task ended
+//! when it began to wait, so the decision is carried out on the stored run: one more retry, the work returned to an
+//! agent step, or an accepted step continues the run in a new task as any continued run does — the accepted step
+//! passes there as a step passes (`step::accepted`); a stop fails it, which closes its browser tabs.
+
+use orchester_core::{
+  id::RunId,
+  run::{Answerer, EventSequence, Run, RunStatus, StuckDecision},
+  time::Timestamp,
+};
+use orchester_ipc::{Event, Rejection};
+use orchester_store::ProjectDb;
+
+use super::{Scheduler, idle};
+
+impl Scheduler {
+  /// Carries out `decision` on `run`, which waits for a person. A run its task executes does not
+  /// wait for one: a second decision while the first one's attempt runs is refused as such.
+  pub async fn decide_stuck(&self, run: RunId, decision: StuckDecision) -> Result<(), Rejection> {
+    let by = match &decision {
+      StuckDecision::Accept { by } => *by,
+      _ => orchester_core::run::Answerer::Person,
+    };
+    self.decide_stuck_seen(run, decision, by, None).await
+  }
+
+  /// The current window and MCP tools supply who decided and the state they read at input delivery.
+  pub async fn decide_stuck_as(
+    &self,
+    run: RunId,
+    decision: StuckDecision,
+    by: Answerer,
+    expected: EventSequence,
+  ) -> Result<(), Rejection> {
+    self.decide_stuck_seen(run, decision, by, Some(expected)).await
+  }
+
+  async fn decide_stuck_seen(
+    &self,
+    run: RunId,
+    decision: StuckDecision,
+    by: Answerer,
+    expected: Option<EventSequence>,
+  ) -> Result<(), Rejection> {
+    let executing = |rejection| match rejection {
+      Rejection::RunNotPaused => Rejection::RunNotWaiting,
+      other => other,
+    };
+    if decision != StuckDecision::Stop {
+      return self
+        .continue_settled(run, |db, root| {
+          let mut stored = waiting(db, run, expected)?;
+          if matches!(decision, StuckDecision::Accept { .. }) {
+            acceptable(root, &stored)?;
+          }
+          let events = stored
+            .decide_stuck_as(&decision, by, Timestamp::now())
+            .map_err(idle::rejection)?;
+          idle::store_continuation(db, root, stored, &events)
+        })
+        .await
+        .map_err(executing);
+    }
+    self.settled(run).await.map_err(executing)?;
+    let _one_at_a_time = self.inner.continuing.lock().await;
+    let mut db = self.open()?;
+    let mut stored = waiting(&db, run, expected)?;
+    let events = stored
+      .decide_stuck_as(&decision, by, Timestamp::now())
+      .map_err(idle::rejection)?;
+    idle::store(&mut db, &stored, &events)?;
+    self.inner.notifier.send(Event::RunChanged {
+      run,
+      task: stored.task(),
+    });
+    self.inner.browser.end_run(run);
+    Ok(())
+  }
+}
+
+/// Refuses accepting `run`'s waiting step when the work that would pass with it is not the work its result was for
+/// (`Workspace::accepted_work`): the person reads why.
+fn acceptable(root: &std::path::Path, run: &Run) -> Result<(), Rejection> {
+  let accepted = run.acceptable().ok_or(Rejection::RunNotWaiting)?;
+  let run_worktree =
+    crate::execution::executor::start::worktree_path(root, run.id()).map_err(|error| Rejection::Failed {
+      detail: error.to_string(),
+    })?;
+  match crate::execution::executor::workspace::Workspace::accepted_work(root, (run, &run_worktree), accepted) {
+    Ok(Ok(_)) => Ok(()),
+    Ok(Err(why)) => Err(Rejection::NotAcceptable { why }),
+    Err(error) => Err(Rejection::Failed {
+      detail: error.to_string(),
+    }),
+  }
+}
+
+/// The stored run, if the wait the caller read still waits for a decision.
+fn waiting(db: &ProjectDb, run: RunId, expected: Option<EventSequence>) -> Result<Run, Rejection> {
+  let stored = idle::load(db, run)?;
+  if matches!(stored.status(), RunStatus::WaitingForPerson(_))
+    && expected.is_none_or(|seen| seen == stored.last_sequence())
+  {
+    Ok(stored)
+  } else {
+    Err(Rejection::RunNotWaiting)
+  }
+}

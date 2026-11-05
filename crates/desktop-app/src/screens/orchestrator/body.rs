@@ -17,11 +17,7 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{
-  attachment::{NewAttachment, names_text},
-  id::ChatId,
-  orchestrator::{Queued, TurnState},
-};
+use orchester_core::id::ChatId;
 use orchester_workspace::{
   messages::Message,
   orchestrator::{chat::ChatView, queue::WhileAnswering, send::SendError, settings::Readiness},
@@ -32,11 +28,12 @@ use super::{
   composer::{ComposerBox, Sending, composer},
   data::{Read, Reads, Shown},
   env::env,
+  pending::{Pending, all_turns},
   runs_on::{RunsOnPicker, RunsOnProps},
   send_menu::Ways,
   start::start,
   timeline::{TurnRow, list},
-  turns::{Arrival, Turn, row_of, turns},
+  turns::{Arrival, row_of},
 };
 use crate::{
   navigation::Navigation,
@@ -81,18 +78,13 @@ pub(super) fn main(ctx: &mut Ctx, view: &View, (project, reads): (&ShownProject,
     Read::Failed(error) => Some(setup_failed(ctx, project, error)),
     _ => None,
   };
-  // The message being sent, by its words, or its files' names when it has none.
+  // The message being sent; a new conversation's first, sent, while that conversation is read for the first time.
   let pending = sending
     .is_pending()
     .then(|| view.outgoing.get())
     .flatten()
-    .map(|outgoing| {
-      if outgoing.text.trim().is_empty() {
-        names_text(outgoing.attachments.iter().map(NewAttachment::name))
-      } else {
-        outgoing.text
-      }
-    });
+    .or_else(|| view.started_read(reads))
+    .map(Pending::of);
   let foot = Foot {
     state: &state,
     readiness: readiness.as_ref(),
@@ -106,7 +98,7 @@ pub(super) fn main(ctx: &mut Ctx, view: &View, (project, reads): (&ShownProject,
     Shown::New => conversation(
       ctx,
       view,
-      (project, None, pending.as_deref()),
+      (project, None, pending.as_ref()),
       (&foot, [problem, None, unread]),
     ),
     Shown::Chat(shown) => {
@@ -116,8 +108,22 @@ pub(super) fn main(ctx: &mut Ctx, view: &View, (project, reads): (&ShownProject,
       conversation(
         ctx,
         view,
-        (project, Some(&**shown), pending.as_deref()),
+        (project, Some(&**shown), pending.as_ref()),
         (&foot, [problem, queued, unread]),
+      )
+    }
+    // The conversation the first message started goes on showing it while it is read, in the same list: no bones
+    // between the message sent and the message kept.
+    Shown::Loading
+      if pending
+        .as_ref()
+        .is_some_and(|pending| Some(pending.chat) == reads.target) =>
+    {
+      conversation(
+        ctx,
+        view,
+        (project, None, pending.as_ref()),
+        (&foot, [problem, None, unread]),
       )
     }
     Shown::Loading => loading(ctx, view, project, reads),
@@ -321,38 +327,22 @@ fn sending_state(
   }))
 }
 
-/// The turns of `shown` (none for a new conversation), and the message being sent (`pending`) until the conversation
-/// holds it: as a turn of its own, or as it will wait while the Orchestrator answers.
-fn all_turns(view: &View, shown: Option<&ChatView>, pending: Option<&str>) -> Vec<Turn> {
-  let mut all = shown.map(turns).unwrap_or_default();
-  let kept = view.outgoing.get().map(|outgoing| outgoing.message);
-  if let Some(text) = pending
-    && !all.iter().any(|turn| turn.message.is_some() && turn.message == kept)
-  {
-    let waits = view.how.get().map(|how| match how {
-      WhileAnswering::AfterAnswer => TurnState::Queued(Queued::AfterAnswer),
-      WhileAnswering::Now => TurnState::Steering,
-      WhileAnswering::StopAndSend => TurnState::Queued(Queued::Next),
-    });
-    all.push(Turn::sending(text, waits.unwrap_or(TurnState::Thinking)));
-  }
-  all
-}
-
 /// The turns of `shown` (none for a new conversation) and the one being sent, over the composer's area.
 fn conversation(
   ctx: &mut Ctx,
   view: &View,
-  (project, shown, pending): (&ShownProject, Option<&ChatView>, Option<&str>),
+  (project, shown, pending): (&ShownProject, Option<&ChatView>, Option<&Pending>),
   (foot, notices): (&Foot<'_>, [Option<Element>; 3]),
 ) -> Element {
   let all = all_turns(view, shown, pending);
   let chat = shown.map(|shown| shown.chat.id());
   let answering = shown.is_some_and(ChatView::thinking);
-  // Another conversation opens at its own end, or at the match History's search opened it at.
+  // Another conversation opens at its own end, or at the match History's search opened it at. A new one's first
+  // message names the conversation it starts, so the list follows on as that conversation is kept and read.
+  let follows = chat.or_else(|| pending.map(|pending| pending.chat));
   view
     .follow
-    .shows(&chat.map_or_else(|| "new".to_owned(), |chat| chat.to_string()));
+    .shows(&follows.map_or_else(|| "new".to_owned(), |chat| chat.to_string()));
   let found = (view.listing.opened_at.get())
     .filter(|at| Some(at.chat) == chat)
     .and_then(|at| row_of(&all, at.seq));

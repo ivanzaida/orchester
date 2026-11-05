@@ -23,7 +23,8 @@ pub const DEFAULT_FILTER: &str = "info,lurq=warn";
 /// The name of the app's log files before their date, apart from the deprecated desktop's `orchester-`.
 pub const LOG_PREFIX: &str = "orchester-app-";
 /// The target of the TRACE lines that say a screen started reading project data, each with what it reads
-/// (`read`): what a change costs in reads (`RUST_LOG=info,orchester_app::read=trace`).
+/// (`read`): what a change costs in reads (`RUST_LOG=info,orchester_app::read=trace`). A read that settles before it
+/// is read again (`project::settled_read`) also says when it ended, with what it read (`ended`) and how long it took.
 pub const READ_LOG: &str = "orchester_app::read";
 /// The target of the ERROR line a panic writes ([`log_panics`]). It makes no report of its own: the client's
 /// panic integration reports the panic already, with its stack trace.

@@ -13,11 +13,12 @@ use orchester_core::{
   store::ConversationStore,
   time::Timestamp,
 };
-use rusqlite::{Connection, OptionalExtension, Row, params};
+use rusqlite::{OptionalExtension, Row};
 
 use super::{
   ProjectDb,
   attachments::{self, AttachmentOwner},
+  message_records::{MessageRecord, insert},
   orchestrator_sent::OrchestratorColumns,
 };
 use crate::{
@@ -25,8 +26,8 @@ use crate::{
   rows::{corrupt, parse},
 };
 
-const PERSON: &str = "person";
-const AGENT: &str = "agent";
+pub(super) const PERSON: &str = "person";
+pub(super) const AGENT: &str = "agent";
 const COLUMNS: &str = "id, task_id, run_id, author, kind, recipient_profile, step_execution_id, invocation_id, body, \
                        created_at, delivered_at, acknowledged_at, recovery_sequence, timing, arrival, \
                        undelivered_execution, undelivered_at, undelivered_reason, by_orchestrator, by_automation, \
@@ -76,73 +77,15 @@ impl ConversationStore for ProjectDb {
   }
 
   fn add_agent_message(&mut self, message: &Message) -> Result<(), StoreError> {
-    insert(&self.connection, message, None)
+    self.write_message(&MessageRecord::added(message)).map(drop)
   }
 
   fn save_deliveries(&mut self, messages: &[Message]) -> Result<(), StoreError> {
-    let transaction = self.connection.transaction()?;
-    for message in messages {
-      let Some(delivery) = message.delivery() else {
-        return Err(StoreError::Unrepresentable("an agent's message as delivered"));
-      };
-      let columns = DeliveryColumns::of(delivery);
-      let updated = transaction.execute(
-        "UPDATE messages SET run_id = ?2, step_execution_id = ?3, invocation_id = ?4, delivered_at = ?5, \
-         acknowledged_at = ?6, arrival = ?7, undelivered_execution = ?8, undelivered_at = ?9, \
-         undelivered_reason = ?10, timing = ?11 WHERE id = ?1",
-        params![
-          message.id().to_string(),
-          message.run().map(|run| run.to_string()),
-          columns.execution,
-          columns.invocation,
-          columns.delivered_at,
-          columns.acknowledged_at,
-          columns.arrival,
-          columns.undelivered_execution,
-          columns.undelivered_at,
-          columns.undelivered_reason,
-          timing_text(message.timing()),
-        ],
-      )?;
-      if updated != 1 {
-        return Err(corrupt("message", format!("{} is not stored", message.id())));
-      }
-    }
-    transaction.commit()?;
-    Ok(())
+    self.write_message(&MessageRecord::deliveries(messages)?).map(drop)
   }
 
   fn change_delivery(&mut self, before: &Message, changed: &Message) -> Result<bool, StoreError> {
-    let (Some(was), Some(delivery)) = (before.delivery(), changed.delivery()) else {
-      return Err(StoreError::Unrepresentable("an agent's message as delivered"));
-    };
-    let (was, columns) = (DeliveryColumns::of(was), DeliveryColumns::of(delivery));
-    // Automation that sends a message again is recorded as its sender, as for one it wrote.
-    let updated = self.connection.execute(
-      "UPDATE messages SET run_id = ?2, step_execution_id = ?3, invocation_id = ?4, delivered_at = ?5, \
-       acknowledged_at = ?6, arrival = ?7, undelivered_execution = ?8, undelivered_at = ?9, \
-       undelivered_reason = ?10, timing = ?11, by_automation = by_automation OR ?16 WHERE id = ?1 \
-       AND delivered_at IS ?12 AND acknowledged_at IS ?13 AND undelivered_at IS ?14 AND timing = ?15",
-      params![
-        changed.id().to_string(),
-        changed.run().map(|run| run.to_string()),
-        columns.execution,
-        columns.invocation,
-        columns.delivered_at,
-        columns.acknowledged_at,
-        columns.arrival,
-        columns.undelivered_execution,
-        columns.undelivered_at,
-        columns.undelivered_reason,
-        timing_text(changed.timing()),
-        was.delivered_at,
-        was.acknowledged_at,
-        was.undelivered_at,
-        timing_text(before.timing()),
-        changed.answerer() == Some(orchester_core::run::Answerer::Automation),
-      ],
-    )?;
-    Ok(updated == 1)
+    self.write_message(&MessageRecord::delivery_change(before, changed)?)
   }
 
   fn messages(&self, task: TaskId) -> Result<Vec<Message>, StoreError> {
@@ -164,152 +107,6 @@ impl ConversationStore for ProjectDb {
       .query_map([PERSON], |row| row.get::<_, String>(0))?
       .collect::<Result<Vec<_>, _>>()?;
     runs.iter().map(|run| parse("run id", run)).collect()
-  }
-}
-
-pub(super) fn insert(
-  connection: &Connection,
-  message: &Message,
-  key: Option<IdempotencyKey>,
-) -> Result<(), StoreError> {
-  let (author, kind, recipient, columns) = match *message.sender() {
-    Sender::Person { recipient, delivery } => {
-      let recipient = match recipient {
-        Recipient::Orchestrator => None,
-        Recipient::Agent(profile) => Some(profile.to_string()),
-      };
-      (PERSON, None, recipient, DeliveryColumns::of(delivery))
-    }
-    Sender::Agent {
-      execution,
-      invocation,
-      kind,
-    } => (
-      AGENT,
-      Some(kind_text(kind)),
-      None,
-      DeliveryColumns {
-        execution: Some(execution.to_string()),
-        invocation: Some(invocation.to_string()),
-        ..DeliveryColumns::default()
-      },
-    ),
-  };
-  connection.execute(
-    "INSERT INTO messages (id, task_id, run_id, idempotency_key, author, kind, recipient_profile, step_execution_id, \
-     invocation_id, body, created_at, delivered_at, acknowledged_at, recovery_sequence, timing, arrival, \
-     undelivered_execution, undelivered_at, undelivered_reason, by_orchestrator, by_automation, orchestrator_chat) \
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22)",
-    params![
-      message.id().to_string(),
-      message.task().to_string(),
-      message.run().map(|run| run.to_string()),
-      key.map(|key| key.to_string()),
-      author,
-      kind,
-      recipient,
-      columns.execution,
-      columns.invocation,
-      message.body().as_str(),
-      message.created_at().unix_millis(),
-      columns.delivered_at,
-      columns.acknowledged_at,
-      message
-        .recovery_after()
-        .map(|sequence| i64::try_from(sequence.get()))
-        .transpose()
-        .map_err(|error| corrupt("message recovery sequence", error))?,
-      timing_text(message.timing()),
-      columns.arrival,
-      columns.undelivered_execution,
-      columns.undelivered_at,
-      columns.undelivered_reason,
-      message.by_orchestrator(),
-      message.answerer() == Some(orchester_core::run::Answerer::Automation),
-      message
-        .from_orchestrator()
-        .and_then(|from| from.chat)
-        .map(|chat| chat.to_string()),
-    ],
-  )?;
-  Ok(())
-}
-
-/// How a delivery is stored.
-#[derive(Default)]
-struct DeliveryColumns {
-  execution: Option<String>,
-  invocation: Option<String>,
-  delivered_at: Option<i64>,
-  acknowledged_at: Option<i64>,
-  arrival: Option<&'static str>,
-  undelivered_execution: Option<String>,
-  undelivered_at: Option<i64>,
-  undelivered_reason: Option<&'static str>,
-}
-
-impl DeliveryColumns {
-  fn of(delivery: Delivery) -> Self {
-    match delivery {
-      Delivery::Queued => Self::default(),
-      Delivery::Delivered {
-        execution,
-        invocation,
-        at,
-        arrival,
-      } => Self {
-        execution: Some(execution.to_string()),
-        invocation: Some(invocation.to_string()),
-        delivered_at: Some(at.unix_millis()),
-        arrival: Some(arrival_text(arrival)),
-        ..Self::default()
-      },
-      Delivery::Acknowledged {
-        execution,
-        invocation,
-        delivered_at,
-        at,
-        arrival,
-      } => Self {
-        execution: Some(execution.to_string()),
-        invocation: Some(invocation.to_string()),
-        delivered_at: Some(delivered_at.unix_millis()),
-        acknowledged_at: Some(at.unix_millis()),
-        arrival: Some(arrival_text(arrival)),
-        ..Self::default()
-      },
-      Delivery::NotDelivered { execution, at, reason } => Self {
-        undelivered_execution: Some(execution.to_string()),
-        undelivered_at: Some(at.unix_millis()),
-        undelivered_reason: Some(match reason {
-          Undelivered::Refused => "refused",
-          Undelivered::Unwritable => "unwritable",
-        }),
-        ..Self::default()
-      },
-    }
-  }
-}
-
-const fn timing_text(timing: Timing) -> &'static str {
-  match timing {
-    Timing::AfterTurn => "after_turn",
-    Timing::Now => "now",
-  }
-}
-
-const fn arrival_text(arrival: Arrival) -> &'static str {
-  match arrival {
-    Arrival::Prompt => "prompt",
-    Arrival::MidTurn => "mid_turn",
-    Arrival::TurnEnd => "turn_end",
-  }
-}
-
-const fn kind_text(kind: AgentMessage) -> &'static str {
-  match kind {
-    AgentMessage::Reply => "reply",
-    AgentMessage::Question => "question",
   }
 }
 

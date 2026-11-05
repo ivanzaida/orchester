@@ -14,7 +14,6 @@ use orchester_core::{
   run::Answerer,
   time::Timestamp,
 };
-use orchester_exec::programs::Programs;
 use orchester_ipc::Command;
 use orchester_store::ProjectDb;
 
@@ -25,7 +24,11 @@ use super::{
 };
 use crate::{
   runner::{RequestError, RunRequestError, Runners},
-  tasks::{detail::TaskDetail, resolve, return_work},
+  tasks::{
+    detail::TaskDetail,
+    resolve::{self, RunWorktrees},
+    return_work,
+  },
   workspace::OpenProject,
 };
 
@@ -39,8 +42,8 @@ pub struct Sending {
 
 /// Keeps every comment waiting unsent on `run` of the project at `root` sending, and gives the command that returns the
 /// run's work to its implementing step with them, to be handed to the runner with [`send`]. Refused while no comment
-/// waits, and as a return of the run's work is refused. `programs` read the run's worktree.
-pub fn begin(root: &Path, programs: &Programs, run: RunId) -> Result<Sending, ReviewRefusal> {
+/// waits, and as a return of the run's work is refused. The run's worktree is read through `worktrees`.
+pub fn begin(root: &Path, worktrees: &RunWorktrees, run: RunId) -> Result<Sending, ReviewRefusal> {
   let mut db = ProjectDb::open(root)?;
   let stored = waiting(&db, run)?;
   let threads = recover::threads(&mut db, run)?;
@@ -57,7 +60,7 @@ pub fn begin(root: &Path, programs: &Programs, run: RunId) -> Result<Sending, Re
     .filter(|view| view.id() == run)
     .ok_or(ReviewRefusal::NotWaiting)?;
   let step = return_work::implementing_step(view).ok_or(ReviewRefusal::NoImplementingStep)?;
-  let worktree = resolve::read(programs, root, (run, false)).map_err(ReviewRefusal::Store)?;
+  let worktree = resolve::read(worktrees, root, (run, false)).map_err(ReviewRefusal::Store)?;
   if let Some(refusal) = return_work::refusal(&detail, view, &worktree) {
     return Err(ReviewRefusal::Returned(refusal));
   }

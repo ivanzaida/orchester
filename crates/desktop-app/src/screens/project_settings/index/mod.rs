@@ -6,7 +6,6 @@ mod list;
 mod search;
 
 use std::{
-  path::PathBuf,
   sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -25,7 +24,6 @@ use lurq::{
 };
 use orchester_core::revision::Revision;
 use orchester_workspace::{
-  background,
   code_index::{self, IndexList, RipgrepCheck},
   messages::Message,
   tasks::outside::Outside,
@@ -38,6 +36,7 @@ use super::{
 };
 use crate::{
   queries::{self, Again, Kept, Session, project},
+  services::Services,
   theme::ExtraTypography,
   ui::{
     field::field_error,
@@ -60,7 +59,8 @@ impl DevtoolsInspectable for Listed {}
 #[derive(Clone, PartialEq)]
 struct Checked(RipgrepCheck);
 impl DevtoolsInspectable for Checked {}
-type Rebuild = FutureAction<(PathBuf, Revision), (), Message>;
+/// *Rebuild* or *Retry* of the index of a revision, which the project's runner carries out.
+type Rebuild = FutureAction<Revision, (), Message>;
 
 pub(super) struct CodeIndex {
   save: Save,
@@ -128,14 +128,12 @@ impl Component for CodeIndex {
             .variant(ExtraTypography::Note.role()),
         );
       }
-      group = group
-        .rows(list::rows(ctx, &list, &rebuild, &props.project.open.repo_root))
-        .rows(search::rows(
-          ctx,
-          &check,
-          code_index::install_state().as_ref(),
-          (&self.check_revision, &self.tick, &self.after_install),
-        ));
+      group = group.rows(list::rows(ctx, &list, &rebuild)).rows(search::rows(
+        ctx,
+        &check,
+        code_index::install_state().as_ref(),
+        (&self.check_revision, &self.tick, &self.after_install),
+      ));
     } else {
       group = group.row(EmptyRow::new(
         "settings-index-off",
@@ -188,21 +186,22 @@ impl CodeIndex {
       .start();
   }
   /// The index's builds through their query, its last read at once and read again behind it when the tab opens; read
-  /// again at the tab's poll, a rebuild, the project's screens' saves, a change of the setting and the runs' state,
-  /// and, while a run runs and no build is followed, each of the runs' changes (a transcript line may be the runner
-  /// starting one). The project's loader reads them again on the runs' state too (`queries::changes::RUNS`). Each read
-  /// the tab asks for is logged on the window's thread, as it asks.
+  /// again at the tab's poll, a rebuild, the project's screens' saves, a change of the setting and the runs' state. A
+  /// transcript's lines do not read them: the runner builds a run's index before its agents start, and the build it
+  /// runs is followed by the poll. The project's loader reads them again on the runs' state too
+  /// (`queries::changes::RUNS`). An ask while they are read waits for that read's end ([`Again::follow_settled`]). Each
+  /// read the tab asks for is logged on the window's thread, as it asks.
   fn list(&self, ctx: &mut Ctx, props: &TabProps) -> FutureState<Listed, Message> {
     let feed = &props.project.feed;
     let asked = queries::asked(&(
       self.list_revision.get(),
-      feed.run_changes(feed.running.get() && !self.watching.load(Ordering::Relaxed)),
+      feed.states.get(),
       feed.revision.get(),
       feed.outside.get().of(Outside::CodeIndex),
     ));
     let session = Session::of(ctx);
     let query = ctx.query(project::index_builds(session, props.project.open.repo_root.clone()));
-    if self.list_again.follow(asked, &query) {
+    if self.list_again.follow_settled(asked, &query) {
       tracing::trace!(target: crate::app_log::READ_LOG, read = "code index");
     }
     let FutureState { status, data, error } = queries::state(&query);
@@ -281,8 +280,11 @@ fn setting(ctx: &mut Ctx, props: &TabProps, on: bool, save: &Save) -> Element {
     .control(toggle)
     .render(ctx)
 }
+/// *Rebuild* and *Retry*, which the project's runner carries out.
 fn rebuild_action(ctx: &mut Ctx) -> Rebuild {
-  ctx.future_action(|(root, revision): (PathBuf, Revision)| async move {
-    background::run(move || code_index::rebuild_in(&root, &revision)).await?
+  let (runners, open) = (Services::of(ctx).runners, ctx.props::<TabProps>().project.open.clone());
+  ctx.future_action(move |revision: Revision| {
+    let (runners, open) = (runners.clone(), open.clone());
+    async move { code_index::rebuild(&runners, &open, revision).await }
   })
 }

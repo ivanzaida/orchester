@@ -18,11 +18,8 @@ use std::{
 
 use orchester_core::{
   id::RunId,
-  integration::{
-    branch_head,
-    delivery::{self, Synced},
-  },
-  merge_queue::{CheckedOn, Left, MAX_RESYNCS, QueueEntry, QueueEvent, QueueState, lanes},
+  integration::{branch_head, delivery::Synced},
+  merge_queue::{CheckedOn, Left, MAX_RESYNCS, QueueEntry, QueueEvent, QueueState, lanes, recheck::Rechecked},
   resource::{DeliverMode, DeliverStep},
   revision::Revision,
   run::{BranchName, Run, RunStatus},
@@ -30,13 +27,17 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
-use orchester_ipc::Command;
+use orchester_ipc::{
+  Command,
+  merge_queue::{MergeQueueCommand, MergeQueueReply},
+};
 use orchester_store::{ProjectDb, StoreError};
 use parking_lot::Mutex;
 
 use super::{
+  RunWorktrees,
   approve::approval_holds,
-  check::{Checked, check},
+  check::recheck_tools,
   integrate::{integrate, integrate_step},
   join::join,
   land::{Landed, land},
@@ -44,10 +45,7 @@ use super::{
 };
 use crate::{
   messages::{self, Message},
-  tasks::{
-    changes::{GIT, run_worktree},
-    detail::run_store_error,
-  },
+  tasks::{changes::GIT, detail::run_store_error, worktree_removal::WorktreeRemover},
 };
 
 /// What [`advance`] did.
@@ -62,6 +60,23 @@ pub enum Advance {
   /// with [`integrate_sent`].
   Integrate { run: RunId, command: Command },
 }
+
+/// Why the queue could not move on: its records could not be read or written, or the project's runner could not be
+/// asked to work in a run's worktree. Either way it stays as it is and tries again later.
+#[derive(Debug)]
+enum Stuck {
+  Store(StoreError),
+  Runner(Message),
+}
+
+impl From<StoreError> for Stuck {
+  fn from(error: StoreError) -> Self {
+    Self::Store(error)
+  }
+}
+
+/// What one step of the queue did.
+type Moved = Result<Advance, Stuck>;
 
 /// The projects whose queue moves on now: one step at a time per project, whoever asks.
 static DRIVING: LazyLock<Mutex<HashSet<PathBuf>>> = LazyLock::new(Default::default);
@@ -87,15 +102,26 @@ impl Drop for Driving {
   }
 }
 
-/// Moves the queue of the project at `root` on by one step, with `programs` running git and the checks. While
-/// another caller moves it on, this does nothing. Blocks on SQLite, git and the checks.
-pub fn advance(root: &Path, programs: &Programs) -> Result<Advance, Message> {
+/// Moves the queue of the project at `root` on by one step, with `programs` running git in the person's checkout,
+/// `worktrees` syncing and checking the runs' worktrees and `remover` removing what a landed run left. While another
+/// caller moves it on, this does nothing. Blocks on SQLite, git and the runner.
+pub fn advance(
+  root: &Path,
+  programs: &Programs,
+  (worktrees, remover): (&dyn RunWorktrees, &WorktreeRemover),
+) -> Result<Advance, Message> {
   let Some(_driving) = Driving::take(root) else {
     return Ok(Advance::Idle { poll: false });
   };
-  let advanced = step(root, programs).map_err(|error| {
-    tracing::warn!(%error, "the merge queue cannot move on");
-    messages::store_error(&error)
+  let advanced = step(root, programs, (worktrees, remover)).map_err(|stuck| match stuck {
+    Stuck::Store(error) => {
+      tracing::warn!(%error, "the merge queue cannot move on");
+      messages::store_error(&error)
+    }
+    Stuck::Runner(message) => {
+      tracing::warn!(key = message.key, "the merge queue cannot reach the run's worktree");
+      message
+    }
   })?;
   if !matches!(advanced, Advance::Idle { .. }) {
     wake(root);
@@ -105,7 +131,7 @@ pub fn advance(root: &Path, programs: &Programs) -> Result<Advance, Message> {
 
 /// Moves the first lane that has something to do on by one step, the lanes taking turns; idle, polling, when no lane
 /// moved and one of them waits for the checkout.
-fn step(root: &Path, programs: &Programs) -> Result<Advance, StoreError> {
+fn step(root: &Path, programs: &Programs, (worktrees, remover): (&dyn RunWorktrees, &WorktreeRemover)) -> Moved {
   let mut db = ProjectDb::open(root)?;
   if join(&mut db, (root, programs), Timestamp::now())? {
     return Ok(Advance::Changed);
@@ -116,6 +142,8 @@ fn step(root: &Path, programs: &Programs) -> Result<Advance, StoreError> {
       db: &mut db,
       root,
       programs,
+      worktrees,
+      remover,
     })
     .step(entry, run)?
     {
@@ -169,10 +197,13 @@ struct Driver<'a> {
   db: &'a mut ProjectDb,
   root: &'a Path,
   programs: &'a Programs,
+  worktrees: &'a dyn RunWorktrees,
+  /// The project's run worktrees, which its runner removes once a run landed.
+  remover: &'a WorktreeRemover,
 }
 
 impl Driver<'_> {
-  fn step(self, entry: QueueEntry, run: Option<Run>) -> Result<Advance, StoreError> {
+  fn step(self, entry: QueueEntry, run: Option<Run>) -> Moved {
     let Some(run) = run else {
       return self.leave(entry, stopped("the run cannot be read"), Vec::new());
     };
@@ -204,16 +235,20 @@ impl Driver<'_> {
     }))
   }
 
-  fn sync(self, entry: QueueEntry, run: &Run, deliver: &DeliverStep) -> Result<Advance, StoreError> {
+  fn sync(self, entry: QueueEntry, run: &Run, deliver: &DeliverStep) -> Moved {
     let Some(base) = run.base_branch() else {
       return self.leave(entry, stopped("the run did not record its base branch"), Vec::new());
     };
-    let worktree = run_worktree(self.root, run.id());
-    let synced = delivery::sync(
-      &self.programs.git_work(),
-      Path::new(GIT),
-      (&worktree, base, run.branch()),
-    );
+    let synced = match self.worktrees.carry_out(MergeQueueCommand::SyncBase {
+      run: run.id(),
+      base: base.clone(),
+      branch: run.branch().clone(),
+    }) {
+      Ok(MergeQueueReply::Synced(synced)) => Ok(synced),
+      Ok(MergeQueueReply::SyncFailed { detail }) => Err(detail),
+      Ok(MergeQueueReply::Rechecked(_)) => return Err(unexpected("SyncBase")),
+      Err(message) => return Err(Stuck::Runner(message)),
+    };
     match synced {
       Ok(Synced::Clean { base, tip }) => {
         let events = vec![QueueEvent::Synced {
@@ -232,7 +267,7 @@ impl Driver<'_> {
         self.save(entry, QueueState::Rechecking { base, tip }, &events)
       }
       Ok(Synced::Conflicts { base, files }) => self.conflicts(entry, run, deliver, (base, files)),
-      Err(error) => self.leave(entry, stopped(&error.to_string()), Vec::new()),
+      Err(detail) => self.leave(entry, stopped(&detail), Vec::new()),
     }
   }
 
@@ -244,7 +279,7 @@ impl Driver<'_> {
     run: &Run,
     deliver: &DeliverStep,
     (base, files): (Revision, Vec<String>),
-  ) -> Result<Advance, StoreError> {
+  ) -> Moved {
     let events = vec![QueueEvent::Synced {
       base: base.clone(),
       files: files.clone(),
@@ -260,24 +295,40 @@ impl Driver<'_> {
     }
   }
 
+  /// Check on the merged result, run by the project's runner in the run's worktree; nothing to run when the pipeline
+  /// has no checking command tool.
+  fn rechecked(&self, run: &Run) -> Result<Rechecked, Stuck> {
+    let tools = recheck_tools(self.db, run)?;
+    if tools.is_empty() {
+      return Ok(Rechecked::NothingToRun);
+    }
+    match self
+      .worktrees
+      .carry_out(MergeQueueCommand::Recheck { run: run.id(), tools })
+      .map_err(Stuck::Runner)?
+    {
+      MergeQueueReply::Rechecked(rechecked) => Ok(rechecked),
+      MergeQueueReply::Synced(_) | MergeQueueReply::SyncFailed { .. } => Err(unexpected("Recheck")),
+    }
+  }
+
   fn recheck(
     self,
     mut entry: QueueEntry,
     run: &Run,
     (base, tip): (Revision, Revision),
     deliver: &DeliverStep,
-  ) -> Result<Advance, StoreError> {
-    let worktree = run_worktree(self.root, run.id());
-    let tools = match check(self.db, self.programs, (self.root, &worktree), run)? {
-      Checked::Failed { tool, detail } => {
+  ) -> Moved {
+    let tools = match self.rechecked(run)? {
+      Rechecked::Failed { tool, detail } => {
         let events = vec![QueueEvent::CheckFailed {
           base,
           tool: tool.clone(),
         }];
         return self.leave(entry, Left::CheckFailed { tool, detail }, events);
       }
-      Checked::Passed { tools } => tools,
-      Checked::NothingToRun => String::new(),
+      Rechecked::Passed { tools } => tools,
+      Rechecked::NothingToRun => String::new(),
     };
     let mut events = vec![QueueEvent::CheckPassed {
       base: base.clone(),
@@ -306,7 +357,7 @@ impl Driver<'_> {
   }
 
   /// The base moved while Check ran: the run syncs again, or leaves once it did so [`MAX_RESYNCS`] times in a row.
-  fn superseded(self, mut entry: QueueEntry, run: &Run, events: Vec<QueueEvent>) -> Result<Advance, StoreError> {
+  fn superseded(self, mut entry: QueueEntry, run: &Run, events: Vec<QueueEvent>) -> Moved {
     if entry.resyncs >= MAX_RESYNCS {
       let mut heads = superseded_heads(self.db, run.id())?;
       heads.extend(events.iter().filter_map(|event| match event {
@@ -325,12 +376,7 @@ impl Driver<'_> {
 
   /// Checked on the base as it is (or not checked again, as the pipeline says): it waits for a person's approval
   /// unless it has one for the run's work as it is now, or merges on its own.
-  fn checked(
-    self,
-    mut entry: QueueEntry,
-    run: &Run,
-    (deliver, events): (&DeliverStep, Vec<QueueEvent>),
-  ) -> Result<Advance, StoreError> {
+  fn checked(self, mut entry: QueueEntry, run: &Run, (deliver, events): (&DeliverStep, Vec<QueueEvent>)) -> Moved {
     if deliver.mode() == DeliverMode::ApproveToMerge && !approval_holds(self.db, &entry, run)? {
       entry.approved_at = None;
       return self.save(entry, QueueState::WaitingForApproval, &events);
@@ -338,17 +384,12 @@ impl Driver<'_> {
     self.land(entry, run, (deliver, events))
   }
 
-  fn land(
-    self,
-    entry: QueueEntry,
-    run: &Run,
-    (deliver, mut events): (&DeliverStep, Vec<QueueEvent>),
-  ) -> Result<Advance, StoreError> {
+  fn land(self, entry: QueueEntry, run: &Run, (deliver, mut events): (&DeliverStep, Vec<QueueEvent>)) -> Moved {
     let Some(task) = self.db.task(run.task())? else {
       return self.leave(entry, stopped("the run's task cannot be read"), events);
     };
     match land(
-      (self.root, self.programs),
+      (self.remover, self.programs),
       (run, &task),
       (deliver, entry.checked.as_ref()),
     ) {
@@ -376,12 +417,7 @@ impl Driver<'_> {
   }
 
   /// The Integrate step works on `files`; the run's events since it went were `after`.
-  fn integrating(
-    self,
-    entry: QueueEntry,
-    run: &Run,
-    (after, files): (u64, Vec<String>),
-  ) -> Result<Advance, StoreError> {
+  fn integrating(self, entry: QueueEntry, run: &Run, (after, files): (u64, Vec<String>)) -> Moved {
     if run.last_sequence().get() <= after {
       return Ok(Advance::Idle { poll: false });
     }
@@ -392,13 +428,13 @@ impl Driver<'_> {
     }
   }
 
-  fn leave(self, entry: QueueEntry, left: Left, mut events: Vec<QueueEvent>) -> Result<Advance, StoreError> {
+  fn leave(self, entry: QueueEntry, left: Left, mut events: Vec<QueueEvent>) -> Moved {
     events.push(QueueEvent::Left(left.clone()));
     self.save(entry, QueueState::Left(left), &events)
   }
 
   /// Saves `entry` in `state` with `events`, unless it moved on meanwhile: either way the queue changed.
-  fn save(self, mut entry: QueueEntry, state: QueueState, events: &[QueueEvent]) -> Result<Advance, StoreError> {
+  fn save(self, mut entry: QueueEntry, state: QueueState, events: &[QueueEvent]) -> Moved {
     let expected = std::mem::replace(&mut entry.state, state);
     let now = Timestamp::now();
     if entry.state != expected {
@@ -415,6 +451,15 @@ fn stopped(detail: &str) -> Left {
   Left::Stopped {
     detail: detail.to_owned(),
   }
+}
+
+/// The runner answered `request` with a reply to another: its outcome is unknown, as for a lost reply.
+fn unexpected(request: &str) -> Stuck {
+  tracing::error!(
+    request,
+    "unexpected reply to the merge queue's work in a run's worktree"
+  );
+  Stuck::Runner(Message::new("runs.control.lost"))
 }
 
 /// The heads the base moved to during the run's checks since it last passed one on the base as it was.

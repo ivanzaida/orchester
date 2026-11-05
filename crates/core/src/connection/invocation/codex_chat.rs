@@ -15,7 +15,9 @@
 //! `shell` or `shell_command` was answered `unsupported call` and ran nothing, even in a `danger-full-access` sandbox;
 //! `apply_patch` was refused by Codex's own approval check before any sandbox ran ("writing is blocked by read-only
 //! sandbox; rejected by user approval settings"), as the runner's approval policy leaves nothing beyond the sandbox to
-//! a person. What the agent reads of the project, it reads through the chat's git tools.
+//! a person. What the agent reads of the project, it reads through the chat's git tools. The shell is gone because of
+//! `features.shell_tool=false`, not the sandbox: a step keeps its shell, so with its Codex sandbox off
+//! ([`crate::permission::CodexSandbox::Off`]) its commands run, outside any sandbox.
 //!
 //! - Its only MCP server is the chat's domain tools (`orchester`), their bearer token in the process environment only
 //!   ([`super::CodexMcp`]); the user's own servers, plugins and apps are turned off as for a step.
@@ -23,20 +25,67 @@
 //!   files: the folder is untrusted, `project_doc_max_bytes=0` keeps `AGENTS.md` out, and every skill of its
 //!   `.agents/skills` and `.codex/skills`, which Codex loads even from an untrusted folder, is disabled by its paths
 //!   ([`CodexChat::skills`]). The runner finds them as for a step and starts no turn when that search could miss one.
+//! - The person's own skills (`$CODEX_HOME/skills`, `~/.agents/skills`, an administrator's) are disabled by their paths
+//!   too (ORC-663): the runner lists them with `skills/list` of the App Server that reads Codex's configuration before
+//!   the turn (`crate::connection::app_server_config::read_chat_configuration`). Only Codex's bundled skills
+//!   (`$CODEX_HOME/skills/.system`) stay, as Claude Code's bundled ones do for its turns.
 //! - The system prompt is App Server's `baseInstructions`, in place of Codex's own, on every turn: the runner gives it
 //!   with the thread's start or resume (`orchester-runner`'s `chat::codex`).
+//! - A message that carries a skill the person chose ([`crate::conversation::skill`]) starts its turn with that skill's
+//!   folder registered (`skills/extraRoots/set`, [`CodexChatSkill`]) and gives Codex `$<slug> <words>` with the skill
+//!   named as an input item. Checked with Codex 0.166.0 and model turns (2026-11-05,
+//!   `docs/evidence/orc-663-codex-skill-2026-11-05.md`): the registered skill ran, one named by path in no registered
+//!   folder was not found, and the registration is App Server's alone: no configuration file changes, and the next App
+//!   Server has none.
 
 use std::{
   ffi::OsString,
+  io,
   path::{Path, PathBuf},
 };
 
+use serde_json::{Value, json};
+
 use super::{CodexAgentFiles, CodexInvocation, CodexMcp, InvocationError, Platform};
 use crate::{
+  attachment::input::{AttachedFile, codex_items},
   command::Command,
-  permission::NetworkAccess,
-  resource::{CommandEnvironment, RepositoryAccess},
+  conversation::skill::codex_prompt,
+  permission::{CodexSandbox, NetworkAccess},
+  resource::{CommandEnvironment, RepositoryAccess, SKILL_FILE, Slug},
 };
+
+/// App Server's request that registers a folder of skills for the process (Codex 0.166.0).
+pub const EXTRA_ROOTS_METHOD: &str = "skills/extraRoots/set";
+
+/// A skill the person chose for a message, as a turn of the Orchestrator on Codex loads it: the folder that holds it
+/// alone (`<root>/<slug>/SKILL.md`, with its reference files), registered for the turn's App Server.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CodexChatSkill {
+  /// The folder registered with App Server; the skill is its only one.
+  pub root: PathBuf,
+  pub slug: Slug,
+}
+
+impl CodexChatSkill {
+  /// Where the skill's `SKILL.md` is: `<root>/<slug>/SKILL.md`.
+  pub fn file(&self) -> PathBuf {
+    self.root.join(self.slug.as_str()).join(SKILL_FILE)
+  }
+
+  /// The parameters of [`EXTRA_ROOTS_METHOD`] that register [`Self::root`] alone.
+  pub fn extra_roots(&self) -> Value {
+    json!({"extraRoots": [self.root.to_string_lossy()]})
+  }
+
+  /// The input items of the turn that answers `words` (the person's words without the skill's block) with `attached`:
+  /// `$<slug> <words>`, the attached files, then the skill named by its `SKILL.md`.
+  pub fn input(&self, words: &str, attached: &[AttachedFile]) -> io::Result<Vec<Value>> {
+    let mut items = codex_items(&codex_prompt(&self.slug, words), attached)?;
+    items.push(json!({"type": "skill", "name": self.slug.as_str(), "path": self.file().to_string_lossy()}));
+    Ok(items)
+  }
+}
 
 /// The overrides that leave Codex no tool of its own that reads files, runs a program, looks at an image, searches the
 /// web or works beside the turn, each a feature or setting of Codex 0.159.2. `shell_tool=false` is what takes its
@@ -69,9 +118,10 @@ pub struct CodexChat<'a> {
   pub platform: Platform,
   /// The chat's domain tools.
   pub mcp: &'a CodexMcp,
-  /// Every skill of the project folder, each to be disabled: the paths of
-  /// [`RepositorySkills::codex_paths`](crate::agent_files::skills::RepositorySkills::codex_paths). Codex loads a
-  /// folder's skills even when the folder is untrusted, and the chat loads none.
+  /// Every skill to disable: those of the project folder, the paths of
+  /// [`RepositorySkills::codex_paths`](crate::agent_files::skills::RepositorySkills::codex_paths), which Codex loads
+  /// even when the folder is untrusted, and the person's own, which Codex listed
+  /// ([`crate::connection::app_server_config::ChatConfiguration::own_skills`]). The chat loads none of them.
   pub skills: &'a [PathBuf],
 }
 
@@ -94,7 +144,7 @@ impl CodexChat<'_> {
     Ok(command.with_args(confinement()))
   }
 
-  /// A read-only step's invocation in the project folder, which the confinement adds to.
+  /// A read-only step's invocation in the project folder, its sandbox on, which the confinement adds to.
   const fn invocation(&self) -> CodexInvocation<'_> {
     CodexInvocation {
       executable: self.executable,
@@ -106,6 +156,7 @@ impl CodexChat<'_> {
       platform: self.platform,
       mcp: Some(self.mcp),
       agent_files: CodexAgentFiles::LeftOut { skills: self.skills },
+      sandbox: CodexSandbox::On,
     }
   }
 }

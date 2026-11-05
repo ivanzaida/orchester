@@ -32,6 +32,7 @@ use crate::tasks::{
   local_integration::CheckoutHolder,
   merge_attempts::{self, Asked},
   merge_retry::retried,
+  worktree_removal::WorktreeRemover,
 };
 
 /// Characters of the task's brief the squash commit's body keeps.
@@ -50,14 +51,15 @@ pub(super) enum Landed {
 }
 
 /// Merges `run`, of `task`, which was synced and checked on `checked` (`None`: its pipeline does not check the merged
-/// result again), into its base branch in the checkout at `root`, or beside it when the run's base branch was set and
-/// the checkout has another branch, as `deliver` says. Every attempt is recorded but one the checkout blocks before the
-/// merge, which the queue polls until the checkout changes.
+/// result again), into its base branch in the checkout of the project whose run worktrees are `worktrees`, or beside
+/// it when the run's base branch was set and the checkout has another branch, as `deliver` says. Every attempt is
+/// recorded but one the checkout blocks before the merge, which the queue polls until the checkout changes.
 pub(super) fn land(
-  (root, programs): (&Path, &Programs),
+  (worktrees, programs): (&WorktreeRemover, &Programs),
   (run, task): (&Run, &Task),
   (deliver, checked): (&DeliverStep, Option<&CheckedOn>),
 ) -> Landed {
+  let root = worktrees.root();
   let (base_head, tip) = match heads_to_land((root, programs), run, checked) {
     Ok(heads) => heads,
     Err(landed) => {
@@ -89,13 +91,13 @@ pub(super) fn land(
     base: &base_head,
   };
   let landing = (run.id(), Some(&tip), Some(delivering));
-  let first = merge_in_as(root, programs, landing, BY_QUEUE);
+  let first = merge_in_as(worktrees, programs, landing, BY_QUEUE);
   // The queue waits for a lease another operation holds itself, for as long as that holds it ([`not_landed`]);
   // Orchester tries again any other cause that passes.
   let merged = if matches!(&first, Err(problem) if lease_held(problem)) {
     first
   } else {
-    retried(root, programs, landing, BY_QUEUE, first)
+    retried(worktrees, programs, landing, BY_QUEUE, first)
   };
   match merged {
     Ok(merged) => Landed::Merged(cleared(programs, (root, run), &merged)),

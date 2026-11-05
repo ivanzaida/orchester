@@ -10,7 +10,7 @@ use std::{path::Path, sync::LazyLock};
 
 use orchester_core::{
   id::{RunId, SideQuestionId, TaskId},
-  run::side_question::{QuestionError, SideFailure, SideOutcome, SideQuestion, SideQuestionText, SideState},
+  run::side_question::{QuestionError, SideFailure, SideInput, SideOutcome, SideQuestion, SideQuestionText, SideState},
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
@@ -18,7 +18,7 @@ use orchester_ipc::Rejection;
 use orchester_store::{ProjectDb, StoreError};
 
 pub use self::{
-  read::{has_transcript_in, side_input_in, transcript_lines, unified_text},
+  read::{has_transcript_in, run_stage_in, side_input_in, transcript_lines, unified_text},
   send::{SentOn, send_on, send_on_as, send_on_in, send_way},
 };
 use crate::{
@@ -89,7 +89,8 @@ pub fn end_in(root: &Path, id: SideQuestionId, outcome: &SideOutcome) -> Result<
 }
 
 /// Asks the question `asking` says about a run of `project`: keeps it, reads what the side agent answers from (git
-/// runs through `programs`) and has the project's runner answer it, then keeps how that ended. Nothing reaches the
+/// runs through `programs`, the run's worktree is read by the project's runner) and has the project's runner answer
+/// it, then keeps how that ended. Nothing reaches the
 /// run's agent. A question that cannot be kept is not asked; once kept, it always ends, answered or with why not.
 pub async fn ask(
   (runners, programs): (&Runners, &Programs),
@@ -99,10 +100,8 @@ pub async fn ask(
   let root = project.repo_root.clone();
   let kept = asking.clone();
   let question = background::run(move || keep_in(&root, &kept)).await??;
-  let (root, programs) = (project.repo_root.clone(), programs.clone());
   let (task, run, text) = (asking.task, asking.run, question.question.clone());
-  let input = background::run(move || side_input_in(&root, &programs, (task, run), &text)).await;
-  let outcome = match input.and_then(|input| input) {
+  let outcome = match side_input(runners, (project, programs), (task, run), text).await {
     Ok(input) => runners
       .answer_side_question_in(project, asking.id, input)
       .await
@@ -120,6 +119,21 @@ pub async fn ask(
   };
   let (root, id) = (project.repo_root.clone(), asking.id);
   background::run(move || end_in(&root, id, &outcome)).await?
+}
+
+/// What the side agent reads about `run` of `task` in `project` to answer `question`: the run's worktree read by the
+/// project's runner, the rest off the async runtime ([`side_input_in`]).
+async fn side_input(
+  runners: &Runners,
+  (project, programs): (&OpenProject, &Programs),
+  (task, run): (TaskId, RunId),
+  question: SideQuestionText,
+) -> Result<SideInput, Message> {
+  let root = project.repo_root.clone();
+  let stage = background::run(move || run_stage_in(&root, run)).await??;
+  let worktree = crate::tasks::changes::not_checkpointed_in(runners, project, (run, stage)).await;
+  let (root, programs) = (project.repo_root.clone(), programs.clone());
+  background::run(move || side_input_in(&root, &programs, (task, run), (&question, &worktree))).await?
 }
 
 /// Asks `project`'s runner to stop the side agent answering `id`.

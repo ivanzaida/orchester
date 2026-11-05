@@ -9,13 +9,15 @@
 
 use std::path::Path;
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::{Cleanup, CleanupError, KeepReason, Leftovers, clean_up};
-use crate::{command::CommandRunner, run::Run, store::WorktreeStore, time::Timestamp};
+use super::{Cleanup, CleanupError, Leftovers, clean_up};
+use crate::{command::CommandRunner, id::RunId, run::Run, store::WorktreeStore, time::Timestamp};
 
 /// What recording a removal found.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum RemovalStart {
   /// Recorded now; it is taken back if git removes nothing.
   Recorded,
@@ -61,30 +63,25 @@ pub fn clean_up_recorded_as_seen<S: WorktreeStore>(
   confirmed: Option<&Leftovers>,
   (at, unchanged): (Timestamp, impl FnOnce(&S) -> Result<bool, S::Error>),
 ) -> Result<Cleanup, RecordedCleanupError<S::Error>> {
-  clean_recorded(store, (runner, git, repo), run, confirmed, (at, unchanged), false)
+  let start = record_removal_as_seen(store, run.id(), (at, unchanged))?;
+  let cleanup = clean_up(runner, git, repo, run, confirmed);
+  // A clean-up fails only before it removes anything (`clean_up`): nothing was touched.
+  settle_removal(store, (run.id(), start, at), cleanup.as_ref().ok()).map_err(RecordedCleanupError::Store)?;
+  Ok(cleanup?)
 }
 
-/// Recorded removal for Storage: every branch stays, including merged branches.
-pub fn clean_up_recorded_worktrees_as_seen<S: WorktreeStore>(
+/// Records in `store` at `at` the removal of `run`'s worktrees before anything is removed, only while `unchanged` says
+/// the run is still as the one asking saw it, read once the removal is recorded, so the run cannot change after the
+/// answer: otherwise a record made now is taken back ([`RecordedCleanupError::RunChanged`]). Refused, with nothing
+/// recorded, for a run with live work or one local integration holds. Whoever removed then ends it with
+/// [`settle_removal`]; the removal itself may happen elsewhere (the runner, [`super::removal`]).
+pub fn record_removal_as_seen<S: WorktreeStore>(
   store: &mut S,
-  git: (&impl CommandRunner, &Path, &Path),
-  run: &Run,
-  confirmed: Option<&Leftovers>,
-  seen: (Timestamp, impl FnOnce(&S) -> Result<bool, S::Error>),
-) -> Result<Cleanup, RecordedCleanupError<S::Error>> {
-  clean_recorded(store, git, run, confirmed, seen, true)
-}
-
-fn clean_recorded<S: WorktreeStore>(
-  store: &mut S,
-  (runner, git, repo): (&impl CommandRunner, &Path, &Path),
-  run: &Run,
-  confirmed: Option<&Leftovers>,
+  run: RunId,
   (at, unchanged): (Timestamp, impl FnOnce(&S) -> Result<bool, S::Error>),
-  preserve_branches: bool,
-) -> Result<Cleanup, RecordedCleanupError<S::Error>> {
+) -> Result<RemovalStart, RecordedCleanupError<S::Error>> {
   let start = store
-    .begin_worktree_removal(run.id(), at)
+    .begin_worktree_removal(run, at)
     .map_err(RecordedCleanupError::Store)?;
   if start == RemovalStart::LiveWork {
     return Err(CleanupError::LiveWork.into());
@@ -95,28 +92,23 @@ fn clean_recorded<S: WorktreeStore>(
   if !unchanged(store).map_err(RecordedCleanupError::Store)? {
     if start == RemovalStart::Recorded {
       store
-        .undo_worktree_removal(run.id(), at)
+        .undo_worktree_removal(run, at)
         .map_err(RecordedCleanupError::Store)?;
     }
     return Err(RecordedCleanupError::RunChanged);
   }
-  let cleanup = if preserve_branches {
-    super::clean_up_worktrees(runner, git, repo, run, confirmed)
-  } else {
-    clean_up(runner, git, repo, run, confirmed)
-  };
-  // A clean-up fails only before it removes anything (`clean_up`): nothing was touched.
-  let untouched = cleanup.as_ref().map_or(true, |cleanup| {
-    cleanup.removed.is_empty()
-      && cleanup
-        .kept_worktrees
-        .iter()
-        .all(|(_, reason)| !matches!(reason, KeepReason::Failed(_)))
-  });
-  if start == RemovalStart::Recorded && untouched {
-    store
-      .undo_worktree_removal(run.id(), at)
-      .map_err(RecordedCleanupError::Store)?;
+  Ok(start)
+}
+
+/// Takes back the removal of `run`'s worktrees recorded now (`start` at `at`, [`record_removal_as_seen`]) when what
+/// removing did, `cleanup` (`None`: it failed before it removed anything), touched nothing ([`Cleanup::untouched`]).
+pub fn settle_removal<S: WorktreeStore>(
+  store: &mut S,
+  (run, start, at): (RunId, RemovalStart, Timestamp),
+  cleanup: Option<&Cleanup>,
+) -> Result<(), S::Error> {
+  if start == RemovalStart::Recorded && cleanup.is_none_or(Cleanup::untouched) {
+    store.undo_worktree_removal(run, at)?;
   }
-  Ok(cleanup?)
+  Ok(())
 }

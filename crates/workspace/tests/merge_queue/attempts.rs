@@ -73,7 +73,7 @@ fn merge_attempts_a_base_that_moved_under_the_merge_is_told_at_the_merge() {
     base: &checked,
   };
   merge_in_as(
-    repo.root(),
+    &repo.remover(),
     &repo.programs(),
     (run.id(), Some(&tip), Some(delivering)),
     BY_QUEUE,

@@ -178,4 +178,6 @@ pub enum Rejection {
   },
   /// The project's browser has no such tab (any more).
   NoSuchTab,
+  /// The code index of the revision to rebuild is in use (protocol 40): a run's agents read it, or it is being built.
+  CodeIndexInUse,
 }

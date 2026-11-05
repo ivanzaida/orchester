@@ -2,17 +2,24 @@
 //! server's tools allowed and the folders that hold secrets denied by rule; a turn that loads the skill its message
 //! carries (ORC-634); and what its system prompt tells it about links.
 
-use std::path::{Path, PathBuf};
+use std::{
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
 use orchester_core::{
   command::Command,
-  connection::invocation::{ChatSkill, ClaudeChat, ClaudeSession},
-  id::ProjectId,
+  connection::{
+    AgentProvider, ApiProvider, BaseUrl,
+    invocation::{ChatSkill, ClaudeChat, ClaudeSession, OnProvider},
+  },
+  id::{ProjectId, SecretId},
   orchestrator::{
     MAX_TURNS,
     instructions::{ProjectReads, system_prompt},
   },
-  resource::{CommandEnvironment, Slug},
+  resource::{CommandEnvironment, ModelId, Slug},
+  secret::SecretValue,
 };
 
 use super::SESSION;
@@ -230,4 +237,29 @@ fn orchestrator_prompt_applies_what_the_person_approves_in_the_chat() {
       assert!(prompt.contains(rule), "{rule}: {prompt}");
     }
   }
+}
+
+/// ORC-709: on an API provider, which lists no efforts, the effort the person typed in the runs-on picker reaches the
+/// CLI as it is, and starting it on the provider keeps it.
+#[test]
+fn orchestrator_chat_on_an_api_provider_passes_a_typed_effort() {
+  let mut typed = chat(&[], &[], None);
+  typed.effort = Some("think-hard");
+  let command = typed
+    .command(("plan", &[]), Vec::new(), &CommandEnvironment::default())
+    .expect("a command");
+  let provider = ApiProvider::new(
+    BaseUrl::new("https://api.deepseek.com/anthropic").expect("a URL"),
+    SecretId::generate(),
+    vec![ModelId::new("deepseek-v4-pro").expect("a model")],
+  )
+  .expect("a provider");
+  let model = ModelId::new("deepseek-v4-pro").expect("a model");
+  let on = OnProvider {
+    provider: &provider,
+    model: &model,
+    key: Arc::new(SecretValue::new("sk-test-provider".to_owned()).expect("not blank")),
+  };
+  let started = on.apply(command, AgentProvider::ClaudeCodeCli);
+  assert_eq!(after(started.args(), "--effort"), ["think-hard"]);
 }

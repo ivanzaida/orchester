@@ -1,6 +1,8 @@
 //! One time an agent asked: the questions of one request (Codex may ask several at once, the others ask
-//! one), who asked in which run, step execution and invocation, and where it stands.
+//! one), who asked in which run, step execution and invocation, and where it stands. Each is read back from its
+//! serialized form only as a stored one is ([`super::wire`]).
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::{Answer, AnswerError, GivenAnswer, Question};
@@ -12,7 +14,8 @@ use crate::{
 };
 
 /// How the asking agent waits for the answer.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum QuestionTurn {
   /// Its turn waits: the answer goes back to the call or request that asked (Claude Code's
   /// `ask_question`, Codex's `requestUserInput`), and the agent goes on in the same turn.
@@ -42,7 +45,8 @@ impl QuestionTurn {
 pub struct NoQuestions;
 
 /// The questions of one request and who asked them.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "super::wire::RequestFields")]
 pub struct QuestionRequest {
   id: String,
   run: RunId,
@@ -128,8 +132,9 @@ impl QuestionRequest {
   }
 }
 
-/// Where a request stands.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// Where a request stands. It is read back only with its request, which its answers are checked against
+/// ([`AskedQuestions`]).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub enum QuestionState {
   Waiting,
   /// `by` answered each question at `at`.
@@ -145,7 +150,8 @@ pub enum QuestionState {
 }
 
 /// A request as stored, with where it stands.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "super::wire::AskedFields")]
 pub struct AskedQuestions {
   pub request: QuestionRequest,
   pub state: QuestionState,

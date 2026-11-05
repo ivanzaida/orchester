@@ -253,7 +253,7 @@ impl Command {
 }
 
 /// Output of a finished command.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct CommandOutput {
   /// The exit code; `None` for a program ended by a signal (macOS). Some programs answer a
   /// question with it (git's `--quiet` queries: 1 is "no", anything else a failure).
@@ -269,7 +269,10 @@ impl CommandOutput {
   }
 }
 
-#[derive(Clone, Debug, Error, PartialEq, Eq)]
+/// Serializable: the runner answers with it for git it ran for the desktop in a run's worktree
+/// (`crate::orchestrator::run_git`).
+#[derive(Clone, Debug, Error, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind", content = "detail", rename_all = "snake_case")]
 pub enum CommandError {
   #[error("the program does not exist")]
   NotFound,

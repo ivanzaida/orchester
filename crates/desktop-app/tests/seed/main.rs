@@ -28,6 +28,8 @@ mod plan_only;
 #[path = "../../examples/qa_app/team/mod.rs"]
 mod qa_team;
 mod refusals;
+#[path = "../../../workspace/tests/support/runner_programs.rs"]
+mod runner_programs;
 mod scenario_names;
 mod settings;
 mod shared_config;

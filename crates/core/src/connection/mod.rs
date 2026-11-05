@@ -35,6 +35,7 @@ pub mod plan_limits;
 mod provider;
 pub mod reviewer;
 pub mod stream;
+mod wire;
 
 use std::path::{Path, PathBuf};
 
@@ -229,8 +230,10 @@ impl LastCheck {
 }
 
 /// A project connection. [`AgentConnection`] and [`GitHubConnection`] are the typed views that
-/// code needing one kind works with.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// code needing one kind works with. Its serialized form (`wire`) is read back through the same checks as a stored
+/// connection.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(try_from = "wire::ConnectionWire", into = "wire::ConnectionWire")]
 pub struct Connection {
   id: ConnectionId,
   name: Name,

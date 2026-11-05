@@ -106,7 +106,9 @@ pub use self::{
   modules::ModulesSpacing,
   needs_you::{NeedsYouRadius, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
   orchester::{OrchesterSpacing, OrchesterText},
-  orchestrator::{OrchestratorShadow, OrchestratorSpacing, OrchestratorText, beside_chat_lane, chat_scrollbar},
+  orchestrator::{
+    OrchestratorShadow, OrchestratorSpacing, OrchestratorText, beside_chat_lane, chat_scrollbar, picker_scrollbar,
+  },
   overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
   permissions::{PermissionsSpacing, PermissionsText},

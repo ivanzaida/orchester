@@ -16,7 +16,7 @@ use orchester_workspace::{
   usage::{Dashboard, Scope, UsageData, UsageQuery},
 };
 
-use crate::services::Services;
+use crate::{project::settled_read::settled_read, services::Services};
 
 /// The usage read.
 #[derive(Clone)]
@@ -62,35 +62,32 @@ impl From<Message> for ReadFailure {
 }
 
 /// The usage from `since` on of the project at `root`, or of every project without one, read off the UI
-/// thread again whenever `deps` change.
+/// thread again whenever `deps` change, one read at a time (`project::settled_read`).
 pub fn read<D>(ctx: &mut Ctx, root: Option<PathBuf>, since: Timestamp, deps: D) -> FutureState<Read, ReadFailure>
 where
   D: Clone + PartialEq + Send + Sync + 'static,
 {
   let services = Services::of(ctx);
   let (workspace, hold) = (services.workspace.clone(), services.hold);
-  ctx
-    .future((root, since, deps), move |(root, since, _)| {
-      let (workspace, hold) = (workspace.clone(), hold.clone());
-      async move {
-        hold.released().await;
-        background::run(move || {
-          let scope = root.as_deref().map_or(Scope::All, Scope::Project);
-          UsageData::read(&workspace, scope, since, Timestamp::now())
-        })
-        .await?
-        .map(|data| Read(Arc::new(data)))
-        .map_err(|error| {
-          tracing::error!(%error, "cannot read the usage");
-          ReadFailure {
-            message: messages::store_error(&error),
-            reported: Some(error.to_string().into()),
-          }
-        })
-      }
-    })
-    .state()
-    .get()
+  settled_read(ctx, "usage", (root, since, deps), move |(root, since, _)| {
+    let (workspace, hold) = (workspace.clone(), hold.clone());
+    async move {
+      hold.released().await;
+      background::run(move || {
+        let scope = root.as_deref().map_or(Scope::All, Scope::Project);
+        UsageData::read(&workspace, scope, since, Timestamp::now())
+      })
+      .await?
+      .map(|data| Read(Arc::new(data)))
+      .map_err(|error| {
+        tracing::error!(%error, "cannot read the usage");
+        ReadFailure {
+          message: messages::store_error(&error),
+          reported: Some(error.to_string().into()),
+        }
+      })
+    }
+  })
 }
 
 /// The dashboard of the project named `name`, or of every project, for `query` over the usage `read`; none

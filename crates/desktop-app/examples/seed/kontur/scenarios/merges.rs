@@ -38,7 +38,10 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_exec::{ProcessRunner, programs::Programs};
-use orchester_workspace::tasks::integration::{IntegrationProblem, merge_in};
+use orchester_workspace::tasks::{
+  integration::{IntegrationProblem, merge_in},
+  worktree_removal::WorktreeRemover,
+};
 
 use super::delivery::{Work, checked_events, enter, passed};
 use crate::kontur::{Kontur, SeedError, catalogue::Published, files, git, run::Drive};
@@ -379,7 +382,8 @@ pub(super) fn left_changed(kontur: &mut Kontur, quick: &Published) -> Result<(),
     file: (kontur.repo.join(README), readme),
     git: ProcessRunner::new(Duration::from_secs(60)),
   }));
-  match merge_in(&kontur.repo, &programs, (run.id(), None)) {
+  let worktrees = WorktreeRemover::here_for_test(&kontur.repo, programs.clone());
+  match merge_in(&worktrees, &programs, (run.id(), None)) {
     Err(IntegrationProblem::Merge(MergeError::LeftChanged { .. })) => Ok(()),
     Err(problem) => Err(SeedError::Invalid(format!(
       "the merge did not stop part way: {problem:?}"

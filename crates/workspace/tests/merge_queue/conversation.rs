@@ -187,9 +187,9 @@ fn merge_queue_resolved_by_hand_names_the_files_with_conflict_markers_left() {
   );
   Repo::commit_on_main(repo.root(), ("shared.txt", "main's line\n"));
   repo.drive();
-  merge_queue::resolve_myself(repo.root(), &repo.programs(), run.id()).expect("merged in");
+  merge_queue::resolve_myself(repo.root(), &repo.worktrees(), run.id()).expect("merged in");
 
-  let refused = merge_queue::resolved(repo.root(), &repo.programs(), run.id());
+  let refused = merge_queue::resolved(repo.root(), &repo.worktrees(), run.id());
 
   assert_eq!(refused, Err(QueueRefusal::MarkersLeft(vec!["shared.txt".to_owned()])));
   let markers = refused

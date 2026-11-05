@@ -213,6 +213,7 @@ fn merge_args(ctx: &mut Ctx, task: &TaskContext, run: &RunView, branch: &str) ->
     number: run.run.number().get(),
     branch: branch.to_owned(),
     run: run.id(),
+    worktrees: services.worktree_remover(&task.project.open),
     programs: services.programs,
     activity: services.activity,
     separator: ctx.t("task.listSeparator"),

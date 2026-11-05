@@ -81,6 +81,9 @@ fn domain_ask_an_agent_returns_the_conflicting_run_to_its_writing_step() {
   // The real runner, which records the return and starts the step's attempt.
   let runner = super::runner_programs::programs().runner.clone();
   let mut served = Served::start_with(folder, &seeded.app_database, runner, true);
+  // The project lives in the system's temporary folder: whatever that disk has free, the runner's disk guard must not
+  // hold the returned step back, so the project keeps the least free space the rule allows.
+  served.ok("set_keep_free", &json!({ "project": "Kontur", "gigabytes": 1 }));
   served.ok(
     "navigate",
     &json!({ "route": "task", "project": seeded.project.to_string(), "key": key, "tab": "summary" }),

@@ -104,8 +104,7 @@ pub fn pull_request_rows(ctx: &mut Ctx, task: &TaskContext, menu: &Signal<bool>)
 /// `run`'s worktree and the merge waiting in it for the person to resolve it, read again when the task or its
 /// resolving changes and at each `look` while one waits; `None` while it is first read.
 pub(super) fn in_worktree(ctx: &mut Ctx, task: &TaskContext, (run, look): (RunId, u64)) -> Option<Worktree> {
-  let root = task.project.open.repo_root.clone();
   let job = task.jobs.run(run);
   let again = ((task.project.feed.revision.get(), job.resolve.ended), look);
-  merge::worktree::read(ctx, root, (run, !job.resolving()), again)
+  merge::worktree::read(ctx, &task.project.open, (run, !job.resolving()), again)
 }

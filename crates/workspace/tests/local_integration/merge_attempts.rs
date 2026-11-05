@@ -40,7 +40,7 @@ fn result_of(stages: &[(AttemptStage, StageResult)], stage: AttemptStage) -> Sta
 #[test]
 fn merge_attempts_task_page_merge_records_who_where_and_every_stage_passed() {
   let fixture = Fixture::new(false);
-  let merged = merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).expect("merged");
+  let merged = merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).expect("merged");
   let recorded = attempts(&fixture);
   assert_eq!(recorded.len(), 1);
   let attempt = &recorded[0].attempt;
@@ -86,7 +86,7 @@ fn merge_attempts_task_page_merge_records_who_where_and_every_stage_passed() {
 fn merge_attempts_refused_at_a_preflight_stage_keep_the_cause_until_a_merge_lands() {
   let fixture = Fixture::new(false);
   let held = IntegrationLease::acquire(fixture.root()).expect("another operation's lease");
-  merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).expect_err("held");
+  merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).expect_err("held");
   let refused = &attempts(&fixture)[0].attempt;
   assert_eq!(
     refused.outcome(),
@@ -105,7 +105,7 @@ fn merge_attempts_refused_at_a_preflight_stage_keep_the_cause_until_a_merge_land
   assert_eq!(not_merged[0].attempt.attempt.run(), fixture.run);
   assert_eq!(not_merged[0].retrying, None, "a person merges it again");
   drop(held);
-  merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).expect("merged");
+  merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).expect("merged");
   assert_eq!(attempts(&fixture).len(), 2);
   assert!(
     read::not_merged(fixture.root()).expect("read").is_empty(),
@@ -118,7 +118,7 @@ fn merge_attempts_conflicts_keep_the_files_both_sides_changed() {
   let fixture = Fixture::new(false);
   fs::write(fixture.root().join("task.txt"), "main's task\n").expect("main's edit");
   git(fixture.root(), &["commit", "-am", "main changes the task file"]);
-  let refused = merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).expect_err("conflicts");
+  let refused = merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).expect_err("conflicts");
   assert!(
     matches!(refused, IntegrationProblem::Merge(MergeError::Conflict { .. })),
     "{refused:?}"
@@ -154,7 +154,7 @@ impl CommandRunner for Silent {
 fn merge_attempts_git_that_stops_answering_is_told_at_its_stage() {
   let fixture = Fixture::new(false);
   let programs = Programs::with_runner(Arc::new(Silent));
-  merge_in(fixture.root(), &programs, (fixture.run, None)).expect_err("git did not answer");
+  merge_in(&fixture.worktrees(), &programs, (fixture.run, None)).expect_err("git did not answer");
   let attempt = &attempts(&fixture)[0].attempt;
   assert_eq!(
     attempt.outcome(),
@@ -185,7 +185,7 @@ impl CommandRunner for Quiet {
 fn merge_attempts_git_that_wrote_nothing_keeps_how_long_it_was_given() {
   let fixture = Fixture::new(false);
   let programs = Programs::with_runner(Arc::new(Quiet));
-  merge_in(fixture.root(), &programs, (fixture.run, None)).expect_err("git wrote nothing");
+  merge_in(&fixture.worktrees(), &programs, (fixture.run, None)).expect_err("git wrote nothing");
   let attempt = &attempts(&fixture)[0].attempt;
   assert!(
     matches!(attempt.outcome(), AttemptOutcome::GitStopped { .. }),
@@ -229,7 +229,7 @@ fn merge_attempts_stopped_while_bringing_the_merge_in_name_the_files_left_change
     checkout: fixture.root().to_owned(),
     git: ProcessRunner::new(Duration::from_secs(60)),
   }));
-  let refused = merge_in(fixture.root(), &programs, (fixture.run, None)).expect_err("left changed");
+  let refused = merge_in(&fixture.worktrees(), &programs, (fixture.run, None)).expect_err("left changed");
   assert!(
     matches!(refused, IntegrationProblem::Merge(MergeError::LeftChanged { .. })),
     "{refused:?}"
@@ -256,7 +256,7 @@ fn merge_attempts_an_attempt_the_app_left_open_is_recorded_interrupted_by_the_ne
     stage: AttemptStage::Merge,
   })
   .expect("an attempt the app left");
-  merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).expect("merged");
+  merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).expect("merged");
   let recorded = attempts(&fixture);
   assert_eq!(recorded.len(), 2);
   assert!(recorded[0].attempt.outcome().landed());
@@ -285,7 +285,7 @@ fn merge_attempts_orchesters_own_retry_is_recorded_with_its_number() {
     number: NonZeroU32::new(3).expect("three"),
   };
   merge_in_as(
-    fixture.root(),
+    &fixture.worktrees(),
     &Programs::processes(),
     (fixture.run, None, None),
     (retry, MergeVia::TaskPage),
@@ -305,7 +305,7 @@ fn merge_attempts_a_record_that_cannot_be_written_never_fails_a_landed_merge() {
       "CREATE TRIGGER refuse_attempts BEFORE INSERT ON merge_attempts BEGIN SELECT RAISE(ABORT, 'refused'); END;",
     )
     .expect("attempts cannot be written");
-  let merged = merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).expect("the merge stands");
+  let merged = merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).expect("the merge stands");
   let db = ProjectDb::open(fixture.root()).expect("db");
   assert_eq!(db.run_merge(fixture.run).expect("read"), Some(merged.merge));
   assert!(attempts(&fixture).is_empty());

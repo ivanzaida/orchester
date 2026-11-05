@@ -20,6 +20,7 @@ pub mod priority;
 pub mod process_group;
 pub mod programs;
 pub mod ripgrep;
+pub mod run_git;
 pub mod run_processes;
 pub mod search_path;
 pub mod sign_in_terminal;

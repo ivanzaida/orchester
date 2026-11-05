@@ -89,6 +89,12 @@ pub enum SharingError {
   /// refused and nothing changed.
   #[error("only a person does this; nothing was changed")]
   PersonOnly,
+  /// The chosen local connection cannot run a reference of the required kind.
+  #[error("the connection kind {actual:?} does not match the reference kind {expected:?}")]
+  ConnectionKindMismatch {
+    expected: Option<String>,
+    actual: orchester_core::sharing::ConnectionRole,
+  },
 }
 
 impl From<Message> for SharingError {
@@ -118,7 +124,7 @@ impl SharingError {
       Self::Offline => Message::new("sharing.errors.offline").with("server", address.host().to_owned()),
       Self::NotMember => Message::new("sharing.errors.notMember"),
       Self::ServerMissing => Message::new("sharing.errors.serverMissing"),
-      Self::InvalidAnswer(_) => Message::new("sharing.errors.invalidAnswer"),
+      Self::InvalidAnswer(_) | Self::ConnectionKindMismatch { .. } => Message::new("sharing.errors.invalidAnswer"),
       Self::KeptChanging => Message::new("sharing.errors.keptChanging"),
       Self::ShareInProgress => Message::new("sharing.errors.shareInProgress"),
       Self::NoPasswords => Message::new("servers.errors.noPasswords"),

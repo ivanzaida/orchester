@@ -13,7 +13,7 @@ use super::support::{Fixture, git};
 /// Merges the fixture's run, which must be refused; the refusal, after checking the checkout's branch did not move.
 fn refused(fixture: &Fixture) -> IntegrationProblem {
   let before = git(fixture.root(), &["rev-parse", "HEAD"]);
-  let refusal = merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).expect_err("refused");
+  let refusal = merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).expect_err("refused");
   assert_eq!(
     git(fixture.root(), &["rev-parse", "HEAD"]),
     before,
@@ -40,7 +40,7 @@ fn preflight_stage_integration_lock_held_by_another_operation_is_told_as_held() 
     "localIntegration.preflight.integrationLockHeld"
   );
   drop(held);
-  merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).expect("merged once the lease is free");
+  merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).expect("merged once the lease is free");
 }
 
 #[test]
@@ -139,7 +139,7 @@ fn preflight_stage_checkout_identity_keeps_gits_exit_and_its_last_words() {
     format!("gitdir: {}\n", path_text(&missing)),
   )
   .expect("a Git file naming nothing");
-  let refusal = merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).expect_err("refused");
+  let refusal = merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).expect_err("refused");
   fs::remove_file(fixture.root().join(".git")).expect("the Git file");
   fs::rename(fixture.root().join("moved-git"), fixture.root().join(".git")).expect("the Git directory back");
   assert_eq!(

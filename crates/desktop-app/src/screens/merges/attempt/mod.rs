@@ -242,7 +242,11 @@ impl AttemptScreen {
   fn body(&self, ctx: &mut Ctx, shown: &Shown<'_>, standing: Option<Standing>) -> Vec<Element> {
     let page = shown.page;
     let actions = Actions::new(
-      (&shown.project.open.repo_root, Services::of(ctx).programs, page.run.run),
+      (
+        Services::of(ctx).worktree_remover(&shown.project.open),
+        Services::of(ctx).programs,
+        page.run.run,
+      ),
       ctx.t("task.listSeparator"),
       (self.failed.clone(), self.busy.clone(), self.again.clone()),
     );

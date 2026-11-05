@@ -6,12 +6,13 @@
 //! person here: no prompt for credentials (`auth_failed` at once), ssh in batch mode, no editor; network work is
 //! stopped after [`Timeouts::STANDARD`]'s network time and local writes after its local time (`timed_out`). A write
 //! holds Orchester's claim on the checkout while it runs and is refused while local integration or a resolution holds
-//! it (`checkout_reserved`, [`place::claim`]).
+//! it (`checkout_reserved`, [`place::claim`]). In a run's worktree the project's runner runs git ([`RunGit`]).
 
 mod args;
 pub(super) mod chat;
 mod command;
 mod describe;
+mod host;
 mod names;
 mod place;
 mod propose;
@@ -21,7 +22,10 @@ mod write;
 
 use std::{path::Path, sync::Arc, time::Duration};
 
-use orchester_core::orchestrator::git::{GitChange, GitOperation, GitWrite};
+use orchester_core::orchestrator::{
+  git::{GitChange, GitOperation, GitWrite},
+  run_git::GitAccess,
+};
 use orchester_exec::programs::Programs;
 use rmcp::{
   handler::server::common::schema_for_type,
@@ -30,14 +34,21 @@ use rmcp::{
 };
 use serde_json::Value;
 
-pub use self::ssh::{batch_ssh_command, batch_ssh_program};
 use self::{
   args::{Nothing, parse},
-  command::{Git, refused},
-  place::{Place, Use},
+  command::{Git, READ_TIMEOUT, refused},
+  place::Place,
   write::Ran,
 };
+pub use self::{
+  host::RunGit,
+  ssh::{batch_ssh_command, batch_ssh_program},
+};
 use crate::{app_mcp::ToolError, messages::Message};
+
+/// What the chat's git runs with: the desktop's programs in the person's checkout, and the runner in the runs'
+/// worktrees.
+pub type Gits<'a> = (&'a Programs, &'a dyn RunGit);
 
 /// How long git may take before it is stopped (`timed_out`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -191,11 +202,11 @@ pub enum Called {
 }
 
 /// Calls git tool `name` with `arguments` (their `project` the chat's own, already checked) in the project at `root`,
-/// with `programs`; `writes` is the person's switch. Refused before git runs for a write while the switch is off, a
+/// with `gits`; `writes` is the person's switch. Refused before git runs for a write while the switch is off, a
 /// write in a run's worktree before the run ended, a folder that is not a repository, and arguments git would not
-/// take. Blocks on git and SQLite.
+/// take. Blocks on git, the runner and SQLite.
 pub fn call(
-  programs: &Programs,
+  gits: Gits<'_>,
   root: &Path,
   (name, arguments): (&str, &JsonObject),
   (writes, timeouts): (bool, Timeouts),
@@ -215,35 +226,39 @@ pub fn call(
       )));
     }
   };
-  let using = if kind == Kind::Read { Use::Read } else { Use::Write };
+  let using = if kind == Kind::Read {
+    GitAccess::Read
+  } else {
+    GitAccess::Write
+  };
   let place = place::resolve(root, run.as_deref(), using)?;
-  let quick = Git::new(programs.runner(), &place.dir);
+  let quick = Git::new(place.host(gits, using), READ_TIMEOUT);
   repository(&quick)?;
   match kind {
-    Kind::Read => read_tool((programs, &quick), name, &arguments).map(Called::Read),
+    Kind::Read => read_tool(&quick, name, &arguments).map(Called::Read),
     Kind::Propose => {
       let asked: args::Propose = parse(&arguments)?;
       propose::propose(&quick, asked.operation, place.at).map(Called::Proposed)
     }
     Kind::Write(write) => {
       let _claim = place::claim(root, &place, changes_checkout(write))?;
-      write_tool((programs, timeouts), &place, write, &arguments)
+      write_tool((gits, timeouts), &place, write, &arguments)
     }
   }
 }
 
 /// Applies the proposal `change`, a person's decision, in the project at `root`: its place is checked again (a run
 /// that went on since is refused), it is claimed as a write ([`place::claim`]), then what it stands on is checked.
-/// Blocks on git and SQLite.
-pub fn apply(programs: &Programs, root: &Path, change: &GitChange, timeouts: Timeouts) -> Result<Value, ToolError> {
+/// Blocks on git, the runner and SQLite.
+pub fn apply(gits: Gits<'_>, root: &Path, change: &GitChange, timeouts: Timeouts) -> Result<Value, ToolError> {
   let place = place::again(root, change.place)?;
-  repository(&Git::new(programs.runner(), &place.dir))?;
+  repository(&Git::new(place.host(gits, GitAccess::Write), READ_TIMEOUT))?;
   let lease = match &change.operation {
     GitOperation::Propose(proposal) => propose::changes_checkout(proposal),
     GitOperation::Write(write) => changes_checkout(*write),
   };
   let _claim = place::claim(root, &place, lease)?;
-  let (result, _) = ran_at((programs, timeouts), &place, |ran| propose::apply(ran, change))?;
+  let (result, _) = ran_at((gits, timeouts), &place, |ran| propose::apply(ran, change))?;
   result
 }
 
@@ -260,13 +275,13 @@ type WhatRan = (Vec<String>, Option<String>);
 /// Runs `work` with the git of `place`: local work stopped after `timeouts.local`, network work after
 /// `timeouts.network` with ssh in batch mode; its result and what ran.
 fn ran_at<T>(
-  (programs, timeouts): (&Programs, Timeouts),
+  (gits, timeouts): (Gits<'_>, Timeouts),
   place: &Place,
   work: impl FnOnce(&mut Ran) -> T,
 ) -> Result<(T, WhatRan), ToolError> {
-  let (local_runner, network_runner) = (programs.timed(timeouts.local), programs.timed(timeouts.network));
-  let local = Git::new(&*local_runner, &place.dir);
-  let mut network = Git::new(&*network_runner, &place.dir);
+  let host = place.host(gits, GitAccess::Write);
+  let local = Git::new(host, timeouts.local);
+  let mut network = Git::new(host, timeouts.network);
   network.ssh = Some(ssh::batch_ssh(&local)?);
   let mut ran = Ran {
     local: &local,
@@ -290,26 +305,26 @@ fn repository(git: &Git) -> Result<(), ToolError> {
   ))
 }
 
-fn read_tool((programs, git): (&Programs, &Git), name: &str, arguments: &JsonObject) -> Result<Value, ToolError> {
+fn read_tool(git: &Git, name: &str, arguments: &JsonObject) -> Result<Value, ToolError> {
   match name {
     "git_status" => read::status(git, &parse(arguments)?),
-    "git_log" => read::log((programs, git), &parse(arguments)?),
-    "git_diff" => read::diff((programs, git), &parse(arguments)?),
-    "git_show" => read::show((programs, git), &parse(arguments)?),
+    "git_log" => read::log(git, &parse(arguments)?),
+    "git_diff" => read::diff(git, &parse(arguments)?),
+    "git_show" => read::show(git, &parse(arguments)?),
     "git_branches" => read::branches(git, &parse(arguments)?),
-    "git_blame" => read::blame((programs, git), &parse(arguments)?),
+    "git_blame" => read::blame(git, &parse(arguments)?),
     _ => read::remotes(git, &parse(arguments)?),
   }
 }
 
 /// Runs the write `write` at `place`: what it answered or why git refused, and every command it ran.
 fn write_tool(
-  (programs, timeouts): (&Programs, Timeouts),
+  (gits, timeouts): (Gits<'_>, Timeouts),
   place: &Place,
   write: GitWrite,
   arguments: &JsonObject,
 ) -> Result<Called, ToolError> {
-  let (result, (commands, said)) = ran_at((programs, timeouts), place, |ran| match write {
+  let (result, (commands, said)) = ran_at((gits, timeouts), place, |ran| match write {
     GitWrite::Commit => parse(arguments).and_then(|asked| write::commit(ran, &asked)),
     GitWrite::CreateBranch => parse(arguments).and_then(|asked| write::create_branch(ran, &asked)),
     GitWrite::Switch => parse(arguments).and_then(|asked| write::switch(ran, &asked)),

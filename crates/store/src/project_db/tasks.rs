@@ -350,6 +350,8 @@ pub(super) fn write_criteria(
   Ok(())
 }
 
+/// The tasks `clause` selects with `params`, with their criteria, organizations and story points, read for every
+/// selected task at once ([`TaskChildren`](super::task_children::TaskChildren)).
 pub(super) fn load_tasks(
   connection: &Connection,
   project: &ProjectKey,
@@ -360,24 +362,20 @@ pub(super) fn load_tasks(
   let rows = statement
     .query_map(params, TaskRow::read)?
     .collect::<Result<Vec<_>, _>>()?;
+  if rows.is_empty() {
+    return Ok(Vec::new());
+  }
+  let mut children = super::task_children::TaskChildren::read(connection, rows.iter().map(|row| row.id.as_str()))?;
   rows
     .into_iter()
     .map(|row| {
-      let criteria = load_criteria(connection, &row.id)?;
+      let criteria = children.criteria(&row.id);
+      let value = children.organization(&row.id)?;
+      let estimate = children.estimate(&row.id)?;
       let task = row.into_task(project, criteria)?;
-      let value = super::organization::load(connection, task.id())?;
-      let estimate = super::estimates::load(connection, task.id())?;
       Ok(task.with_organization(value).with_estimate(estimate))
     })
     .collect()
-}
-
-fn load_criteria(connection: &Connection, task: &str) -> Result<Vec<String>, StoreError> {
-  let mut statement = connection.prepare("SELECT text FROM task_criteria WHERE task_id = ?1 ORDER BY position")?;
-  let criteria = statement
-    .query_map([task], |row| row.get(0))?
-    .collect::<Result<Vec<String>, _>>()?;
-  Ok(criteria)
 }
 
 struct TaskRow {

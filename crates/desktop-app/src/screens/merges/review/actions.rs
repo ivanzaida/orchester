@@ -23,7 +23,11 @@ use orchester_workspace::{
   background,
   messages::Message,
   runner::Runners,
-  tasks::review_threads::{self, ReviewRefusal, approve::approve_and_merge, ask, send},
+  tasks::{
+    resolve::RunWorktrees,
+    review_threads::{self, ReviewRefusal, approve::approve_and_merge, ask, send},
+    worktree_removal::WorktreeRemover,
+  },
   workspace::OpenProject,
 };
 use parking_lot::Mutex;
@@ -194,8 +198,8 @@ async fn apply(reach: &Reach, write: Write) -> Result<Landed, ReviewRefusal> {
       handed(ask::ask(&reach.runners, &reach.open, &asking).await)
     }
     Write::Send => {
-      let programs = reach.programs.clone();
-      let sending = blocking(move || send::begin(&root, &programs, run)).await?;
+      let worktrees = RunWorktrees::through_runner(&reach.runners, (&reach.root, reach.open.project.name().as_str()));
+      let sending = blocking(move || send::begin(&root, &worktrees, run)).await?;
       shown(reach).await;
       handed(send::send(&reach.runners, &reach.open, &sending).await)
     }
@@ -207,7 +211,9 @@ async fn apply(reach: &Reach, write: Write) -> Result<Landed, ReviewRefusal> {
     }
     Write::Approve(reviewed) => {
       let programs = reach.programs.clone();
-      blocking(move || approve_and_merge(&root, &programs, (run, &reviewed), now)).await?;
+      let worktrees =
+        WorktreeRemover::through_runner(&reach.runners, (&reach.root, reach.open.project.name().as_str()));
+      blocking(move || approve_and_merge(&worktrees, &programs, (run, &reviewed), now)).await?;
       Ok(Landed::Approved)
     }
   }

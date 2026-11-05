@@ -39,6 +39,7 @@ mod run_permissions;
 mod schedule;
 pub mod side_question;
 mod snapshot;
+mod start_order;
 mod state;
 mod status;
 mod step;
@@ -56,10 +57,11 @@ pub use self::{
   answer::{
     AlwaysAllowError, AlwaysUnavailable, AnswerKind, AnswerRecord, Answerer, ApprovalAnswer, ApprovalRule,
     ApprovalRuleId, ApprovalSubject, AutoAsk, AutoVerdict, AutomationAnswerError, CameToPerson, DecidedBy, DenialNote,
-    DenialNoteError, ModeStep, PersonReason, ProjectRule, ProjectRuleId, ProjectScope, RequestAnswer, ReviewQuestion,
-    RuleScope, SimilarUnavailable, ToolDecision, ToolReach, UnknownAnswer, after_review, allowing_command,
-    allowing_tool, always_prefixes, answering, answering_in_project, auto_approves, auto_verdict, autopilot_check,
-    autopilot_step, codex_denial, denial_message, denial_with_message, listing, permitted, without_reviewer,
+    DenialNoteError, ModeStep, NotAProjectScope, PersonReason, ProjectRule, ProjectRuleId, ProjectScope, RequestAnswer,
+    ReviewQuestion, RuleScope, SimilarUnavailable, ToolDecision, ToolReach, UnknownAnswer, after_review,
+    allowing_command, allowing_tool, always_prefixes, answering, answering_in_project, auto_approves, auto_verdict,
+    autopilot_check, autopilot_step, codex_denial, denial_message, denial_with_message, listing, permitted,
+    without_reviewer,
   },
   approval_mode::{AllowAutopilot, AutopilotPersonOnly, EffectiveMode, ManualBecause, ManualSwitch},
   attempt::{Attempt, Checkpoint, StepExecution},
@@ -92,6 +94,7 @@ pub use self::{
   run_model::{ModelChoice, ModelEvent, ModelEventKind, ModelScope, StepBefore},
   run_permissions::{PermissionEvent, PermissionEventKind, RunPermissionChange, WideningPersonOnly},
   snapshot::{PinnedVersion, PublishedVersions, RunSnapshot, SnapshotError, StepExecutor, StepSnapshot},
+  start_order::StartOrder,
   state::{NewRun, Run, StoredRun},
   status::{
     AttemptReason, AttemptStatus, ContinueTrigger, InterruptCause, MergeConflicts, PauseReason, RunFailure, RunLimit,

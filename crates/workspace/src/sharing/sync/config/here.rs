@@ -99,6 +99,7 @@ impl Here {
       .reference_bindings()?
       .into_iter()
       .map(|binding| {
+        let binding = super::bindings::current(binding, &connections);
         let needed_by = needers(&db, &binding)?;
         let standing = standing(&binding, (&connections, &mcp_servers, &secrets));
         Ok(HereReference {

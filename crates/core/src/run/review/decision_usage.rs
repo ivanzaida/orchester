@@ -1,4 +1,6 @@
 //! Usage of a decision review, kept distinct from agent providers and CLI accounts.
+use serde::{Deserialize, Serialize};
+
 use super::ReviewEnd;
 use crate::{
   id::{DecisionConnectionId, InvocationId, RunId, StepExecutionId},
@@ -7,7 +9,7 @@ use crate::{
 };
 
 /// One decision review linked to the request it judged. Unknown input usage is never zero.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct DecisionReviewRecord {
   pub run: RunId,
   pub execution: StepExecutionId,

@@ -6,7 +6,7 @@
 use serde::Deserialize;
 
 use super::{
-  AgentPermissions, ApprovalMode, BrowserPermission, CommandPermission, NetworkAccess, RepositoryAccess,
+  AgentPermissions, ApprovalMode, BrowserPermission, CodexSandbox, CommandPermission, NetworkAccess, RepositoryAccess,
   WritableFolders,
 };
 
@@ -27,6 +27,8 @@ pub(super) struct StoredPermissions {
   browser: BrowserPermission,
   #[serde(default)]
   approval_mode: ApprovalMode,
+  #[serde(default)]
+  codex_sandbox: CodexSandbox,
 }
 
 impl From<StoredPermissions> for AgentPermissions {
@@ -43,6 +45,7 @@ impl From<StoredPermissions> for AgentPermissions {
       } else {
         stored.approval_mode
       },
+      codex_sandbox: stored.codex_sandbox,
     }
   }
 }

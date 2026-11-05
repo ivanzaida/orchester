@@ -70,8 +70,9 @@ pub fn decision_reviewer_person_only(connection: &DecisionConnection) -> bool {
 }
 
 /// The reviewer Manual asks before the person; none means the default language reviewer.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AutoModeSettings {
+  #[serde(default, skip_serializing_if = "Option::is_none")]
   pub reviewer: Option<ReviewerChoice>,
 }
 

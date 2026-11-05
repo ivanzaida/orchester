@@ -65,9 +65,18 @@ pub fn launch_signed_in(database: &Path, runner: PathBuf, runtime: &Handle, clou
   launch
 }
 
-/// [`launch_signed_in`] without signing in: this computer's projects only, as on a first run.
+/// [`launch_signed_in`] without signing in: this computer's projects only, as on a first run. Where the runner program
+/// does not exist, what the desktop asks of a run's worktrees (removing them, resolving a merge by hand) is carried out
+/// in this process with the session's programs, through the messages the runner would read and answer.
 pub fn launch(database: &Path, runner: PathBuf, runtime: &Handle) -> Launch {
-  Launch::begin_with_vault(database, runner, runtime, (None, keychain()))
+  let no_runner = !runner.exists();
+  let launch = Launch::begin_with_vault(database, runner, runtime, (None, keychain()));
+  if let Some(services) = launch.services().filter(|_| no_runner) {
+    services
+      .runners
+      .serve_worktrees_here_for_test(services.programs.clone());
+  }
+  launch
 }
 
 /// The stand-in `cloud` as its web and its API address, the API at `/v1` there as the public cloud's is

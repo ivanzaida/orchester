@@ -5,7 +5,8 @@
 //! an older base; conflicts go to the Integrate step, and when it fails nothing reaches `main`; a dirty checkout
 //! blocks the queue until it is clean; a run waiting for approval does not hold later runs; a pipeline without a
 //! Deliver step keeps its runs out of the queue. The check is a command tool whose program the tests answer for
-//! (`harness`). `cargo test -p orchester-workspace --test merge_queue merge_queue`.
+//! (`harness`); syncing and checking a run's worktree is the runner's, done here in the test's process with every
+//! message crossing as JSON (`runner_side`). `cargo test -p orchester-workspace --test merge_queue merge_queue`.
 
 mod attempts;
 mod conversation;
@@ -13,6 +14,7 @@ mod decisions;
 mod harness;
 mod lanes;
 mod preflight;
+mod runner_side;
 
 use std::{fs, sync::Arc};
 
@@ -288,7 +290,7 @@ fn merge_queue_blocks_on_a_dirty_checkout_and_goes_on_once_it_is_clean() {
     })
   );
   assert_eq!(
-    merge_queue::advance(repo.root(), &repo.programs()).expect("advanced"),
+    repo.advance(),
     Advance::Idle { poll: true },
     "it looks again later, by itself"
   );

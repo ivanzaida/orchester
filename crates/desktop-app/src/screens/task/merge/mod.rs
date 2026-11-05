@@ -118,7 +118,11 @@ impl MergeWork {
   /// The work for `run` of `task`'s project.
   fn actions(&self, ctx: &mut Ctx, task: &TaskContext, run: RunId) -> Actions {
     Actions::new(
-      (&task.project.open.repo_root, Services::of(ctx).programs, run),
+      (
+        Services::of(ctx).worktree_remover(&task.project.open),
+        Services::of(ctx).programs,
+        run,
+      ),
       ctx.t("task.listSeparator"),
       (self.failed.clone(), self.busy.clone(), self.again.clone()),
     )

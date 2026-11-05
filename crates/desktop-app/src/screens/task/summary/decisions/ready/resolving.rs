@@ -108,7 +108,7 @@ fn resolve_args(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> ResolveArgs
   ResolveArgs {
     open: task.project.open.clone(),
     run: run.id(),
-    programs: services.programs,
+    worktrees: services.run_worktrees(&task.project.open),
     editor: Err(EditorOpened::NoEditor),
     changed: Arc::new(move || feed.saved()),
   }

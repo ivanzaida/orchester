@@ -72,6 +72,7 @@ mod questions;
 mod queue_holds;
 mod recovery;
 mod removed_resources;
+mod reported_windows;
 mod request_answers;
 mod returned_after_end;
 mod review_threads;

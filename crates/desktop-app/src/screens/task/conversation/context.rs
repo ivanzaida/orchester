@@ -26,7 +26,7 @@ use orchester_workspace::{
 };
 
 use crate::{
-  project::ShownProject,
+  project::{ShownProject, run_changes, settled_read::settled_read},
   services::Services,
   ui::context_meter::{Compact, ContextMeterProps, MeterPlace, MeterReading, Over, context_meter},
 };
@@ -105,25 +105,24 @@ impl Component for StepContext {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<StepContextProps>().clone();
-    // Every change of the project's runs while one runs, its transcript's lines too: a turn's reading comes with them.
-    let changes = props.project.feed.run_changes(true);
+    // Every change of the run, its transcript's lines too: a turn's reading comes with them. Other runs' do not.
+    let changes = run_changes::of_run(ctx, &props.project, Some(props.run));
     let root: PathBuf = props.project.open.repo_root.clone();
     let hold = Services::of(ctx).hold;
-    let state = ctx
-      .future(
-        (root, props.run, props.execution, changes),
-        move |(root, run, execution, _)| {
-          let hold = hold.clone();
-          async move {
-            hold.released().await;
-            background::run(move || of_execution_in(&root, run, execution).map(MeterReading))
-              .await
-              .and_then(|read| read)
-          }
-        },
-      )
-      .state()
-      .get();
+    let state = settled_read(
+      ctx,
+      "context use",
+      (root, props.run, props.execution, changes),
+      move |(root, run, execution, _)| {
+        let hold = hold.clone();
+        async move {
+          hold.released().await;
+          background::run(move || of_execution_in(&root, run, execution).map(MeterReading))
+            .await
+            .and_then(|read| read)
+        }
+      },
+    );
     // A read that failed keeps the reading last shown: the transcript's own read says when the run cannot be read.
     let reading: Option<ContextUse> = state.data.map_or(props.meter.reading, |MeterReading(reading)| reading);
     context_meter(ctx, ContextMeterProps { reading, ..props.meter })

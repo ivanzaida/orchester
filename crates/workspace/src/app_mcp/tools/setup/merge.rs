@@ -50,29 +50,36 @@ use crate::{
 };
 
 pub async fn get_changes(services: &Services, args: InRun) -> Result<Value, ToolError> {
-  let services = services.clone();
   let unreadable = |error: ChangesError| ToolError::refused("cannot_read_changes", vec![error.message()]);
-  blocking(move || {
-    let open = services.project(&args.project)?;
-    let db = ProjectDb::open(&open.repo_root)?;
-    let run = find_run(&db, &args.run)?;
-    // The changes are read without their task; only the link needs it, so a task that cannot be read costs the
-    // link alone.
-    let link = match db.task(run.task()) {
-      Ok(task) => task.map(|task| Link::Task(open.project.id(), task.key().clone(), TaskPage::Changes).path()),
-      Err(_) => None,
-    };
-    let checkpointed = run_changes_in(&open.repo_root, &services.programs, &RunRange::of(&run)).map_err(unreadable)?;
-    let stage = RunStage::of(run.status());
-    let worktree = not_checkpointed_in(&open.repo_root, &services.programs, (run.id(), stage)).map_err(unreadable)?;
-    Ok(json!({
-      "run": { "id": run.id().to_string(), "number": run.number().get() },
-      "checkpointed": checkpointed_json(&checkpointed),
-      "not_checkpointed": not_checkpointed_json(&worktree),
-      "link": link,
-    }))
-  })
-  .await
+  let (open, run, link, checkpointed) = {
+    let services = services.clone();
+    blocking(move || {
+      let open = services.project(&args.project)?;
+      let db = ProjectDb::open(&open.repo_root)?;
+      let run = find_run(&db, &args.run)?;
+      // The changes are read without their task; only the link needs it, so a task that cannot be read costs the
+      // link alone.
+      let link = match db.task(run.task()) {
+        Ok(task) => task.map(|task| Link::Task(open.project.id(), task.key().clone(), TaskPage::Changes).path()),
+        Err(_) => None,
+      };
+      let checkpointed =
+        run_changes_in(&open.repo_root, &services.programs, &RunRange::of(&run)).map_err(unreadable)?;
+      Ok((open, run, link, checkpointed))
+    })
+    .await?
+  };
+  // What the run's worktree holds is read by the project's runner, as the task page's Changes reads it.
+  let stage = RunStage::of(run.status());
+  let worktree = not_checkpointed_in(&services.runners, &open, (run.id(), stage))
+    .await
+    .map_err(unreadable)?;
+  Ok(json!({
+    "run": { "id": run.id().to_string(), "number": run.number().get() },
+    "checkpointed": checkpointed_json(&checkpointed),
+    "not_checkpointed": not_checkpointed_json(&worktree),
+    "link": link,
+  }))
 }
 
 fn checkpointed_json(changes: &Checkpointed) -> Value {
@@ -299,6 +306,7 @@ fn start(
     branch,
     run: run.id(),
     programs: services.programs.clone(),
+    worktrees: services.worktree_remover(&open),
     activity: services.activity.clone(),
     separator,
     changed: Arc::new(move || {

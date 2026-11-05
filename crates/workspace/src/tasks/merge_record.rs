@@ -17,13 +17,20 @@ use super::{
   changes::GIT,
   detail::run_store_error,
   integration::{IntegrationProblem, clear, hold},
+  worktree_removal::WorktreeRemover,
 };
 use crate::messages::Message;
 
-/// Records the merge Git made of `run` in the project at `root`, as its last attempt names it; the merge recorded. A
+/// Records the merge Git made of `run` in the project whose run worktrees are `worktrees`, as its last attempt names
+/// it; the merge recorded, and what the run left removed by the project's runner. A
 /// run merged already, one whose last attempt was not merged by Git, and a merge its base branch no longer holds are
 /// refused.
-pub fn record_merge(root: &Path, programs: &Programs, run: RunId) -> Result<RunMerge, IntegrationProblem> {
+pub fn record_merge(
+  worktrees: &WorktreeRemover,
+  programs: &Programs,
+  run: RunId,
+) -> Result<RunMerge, IntegrationProblem> {
+  let root = worktrees.root();
   let _held = hold(root)?;
   let mut db = ProjectDb::open(root)?;
   if db.run_merge(run)?.is_some() {
@@ -65,7 +72,7 @@ pub fn record_merge(root: &Path, programs: &Programs, run: RunId) -> Result<RunM
   db.save_run_merge(&merge)?;
   super::local_integration::settle_review(&mut db, &merge);
   crate::base_moved::after_merge(root, programs);
-  if let Err(problem) = clear(&mut db, programs, root, &stored, None, false) {
+  if let Err(problem) = clear(&mut db, worktrees, &stored, None, false) {
     tracing::warn!(?problem, %run, "the merge was recorded, but what the run left could not be cleared");
   }
   Ok(merge)

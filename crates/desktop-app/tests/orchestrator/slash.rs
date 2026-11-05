@@ -3,11 +3,18 @@
 //! control does (*New conversation* as the header's *New*, *History* as its toggle), and the typed `/` goes; a command
 //! that cannot run is greyed with why; Esc closes the menu and keeps the text; a `/` inside text is just text. Compact
 //! and Model and effort are not offered until their controls exist. The project's published skills follow the commands
-//! (ORC-325), a chosen one becomes the composer's chip, and it goes with the message (ORC-634).
+//! (ORC-325), a chosen one becomes the composer's chip, and it goes with the message as the CLI's own (ORC-634 on
+//! Claude Code, ORC-663 on Codex).
 
-use std::fs;
+use std::{
+  fs,
+  time::{Duration, Instant},
+};
 
-use orchester_app::routes::{OrchestratorChat, ProjectPage, Route};
+use orchester_app::{
+  routes::{OrchestratorChat, ProjectPage, Route},
+  ui::tooltip::TOOLTIP_DELAY,
+};
 use orchester_core::{
   orchestrator::EntryKind,
   resource::{InstructionScope, Skill},
@@ -276,6 +283,57 @@ fn orchestrator_sends_a_chosen_skill_as_claude_codes_own_and_shows_its_chip_on_t
   let sent = format!("orchestrator-message-{}-skill-chip", message.0);
   screen.until("the sent message's chip", |screen| screen.exists(&sent));
   assert!(screen.text(&sent).contains("release-notes"));
+  let shown = screen.text("orchestrator-conversation");
+  assert!(!shown.contains("orchester-skill"), "the block never shows: {shown}");
+}
+
+/// ORC-663: on Codex the chosen skill is Codex's own too: the chip's tooltip says so, and the runner registers the
+/// skill's folder for the turn's App Server and gives it `$<slug>` with the words after it and the skill named (the
+/// fake answers `Noted: <prompt>` and logs whether the skill it was given is one it registered).
+#[test]
+fn orchestrator_sends_a_chosen_skill_as_codexs_own_and_its_chip_says_so() {
+  let mut screen = Orchestrator::new(Setup::Codex);
+  screen.go(OrchestratorChat::New);
+  publish_skills(&screen);
+  write(&mut screen, "/rel");
+  screen.until("the skill", |screen| screen.exists(NOTES));
+  screen.key(("Enter", "Enter"), false);
+  screen.until("the chip", |screen| screen.exists(CHIP));
+  screen.window.hover(CHIP);
+  screen
+    .window
+    .tree
+    .tick_timers_at(Instant::now() + TOOLTIP_DELAY + Duration::from_millis(50));
+  let tooltip = format!("{CHIP}-tooltip");
+  screen.until("the chip's tooltip", |screen| screen.exists(&tooltip));
+  let said = screen.text(&tooltip);
+  assert!(
+    said.contains("release-notes · Published v1") && said.contains("Codex loads it as its own skill ($release-notes)"),
+    "{said}"
+  );
+  // Over the chip, its left edge at the chip's, 6 clear of the composer's top edge, its words wrapping at 360
+  // (`mhanX` in `07` `QnPRC`).
+  screen.window.pass();
+  let (tip, chip, boxed) = (
+    screen.bounds(&tooltip),
+    screen.bounds(CHIP),
+    screen.bounds("orchestrator-composer"),
+  );
+  assert!((tip.x - chip.x).abs() < 0.5, "{tip:?} {chip:?}");
+  assert!((boxed.y - (tip.y + tip.height) - 6.0).abs() < 0.5, "{tip:?} {boxed:?}");
+  assert!(tip.width <= 360.0 + 16.0 + 0.5, "it wraps at 360: {tip:?}");
+  assert!(tip.height > 30.0, "its words wrap: {tip:?}");
+
+  write(&mut screen, "for v0.4");
+  screen.key(("Enter", "Enter"), true);
+  screen.until("the answer", |screen| {
+    screen
+      .text("orchestrator-conversation")
+      .contains("Noted: $release-notes for v0.4")
+  });
+  screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
+  let log = fs::read_to_string(screen.root.join(".orchester").join("fake-chat.log")).expect("the agent's log");
+  assert!(log.contains("skill: release-notes loaded"), "{log}");
   let shown = screen.text("orchestrator-conversation");
   assert!(!shown.contains("orchester-skill"), "the block never shows: {shown}");
 }

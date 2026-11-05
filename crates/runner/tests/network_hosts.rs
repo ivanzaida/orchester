@@ -49,6 +49,7 @@ fn codex_args(access: RepositoryAccess, network: NetworkAccess) -> Vec<String> {
     platform: Platform::MacOs,
     mcp: None,
     agent_files: CodexAgentFiles::Loaded,
+    sandbox: orchester_core::permission::CodexSandbox::On,
   }
   .args()
   .expect("unicode paths")

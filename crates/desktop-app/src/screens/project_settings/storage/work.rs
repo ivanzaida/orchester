@@ -1,6 +1,6 @@
 //! Prepare exactly what the modal lists; removing uses the task/MCP job locks and rechecks the run.
 use std::{
-  path::PathBuf,
+  path::Path,
   sync::{Arc, mpsc},
 };
 
@@ -18,6 +18,7 @@ use orchester_store::ProjectDb;
 use orchester_workspace::{
   background,
   messages::{self, Message},
+  runner::ExecutorFolders,
   storage,
   tasks::{
     detail::run_store_error,
@@ -47,10 +48,12 @@ impl DevtoolsInspectable for Removed {}
 pub type Prepare = FutureAction<Vec<RunId>, Plan, Message>;
 pub type Remove = FutureAction<Plan, Removed, Message>;
 
-pub fn prepare(ctx: &mut Ctx, root: PathBuf) -> Prepare {
-  let programs = Services::of(ctx).programs;
+pub fn prepare(ctx: &mut Ctx, open: OpenProject) -> Prepare {
+  let services = Services::of(ctx);
+  let (programs, runners) = (services.programs, services.runners);
   ctx.future_action(move |runs: Vec<RunId>| {
-    let (root, programs) = (root.clone(), programs.clone());
+    let (root, programs) = (open.repo_root.clone(), programs.clone());
+    let folders = ExecutorFolders::new(runners.clone(), open.clone());
     async move {
       background::run(move || {
         let db = ProjectDb::open_read_only(&root).map_err(|e| messages::store_error(&e))?;
@@ -74,15 +77,12 @@ pub fn prepare(ctx: &mut Ctx, root: PathBuf) -> Prepare {
             .next()
             .map(|(_, left)| left)
             .ok_or_else(messages::interrupted)?;
-          // A sizing error is logged and stays visibly unknown; it must not prevent reviewing the real paths.
+          // The runner sizes each worktree; a sizing error is logged and stays visibly unknown, as it must not prevent
+          // reviewing the real paths.
           let sizes = left
             .worktrees
             .iter()
-            .map(|tree| {
-              orchester_exec::disk_space::folder_size(std::path::Path::new(&tree.path))
-                .inspect_err(|e| tracing::warn!(%e, "cannot size cleanup candidate"))
-                .ok()
-            })
+            .map(|tree| storage::measure_worktree(&folders, Path::new(&tree.path)))
             .collect();
           let finishing = db
             .worktree_removal(id)
@@ -175,7 +175,7 @@ fn remove_one(
     number: candidate.run.number().get(),
     run: candidate.run,
     confirmed: candidate.left,
-    programs: services.programs.clone(),
+    worktrees: services.worktree_remover(open),
     activity: services.activity.clone(),
     separator,
     changed: Arc::new(move || {

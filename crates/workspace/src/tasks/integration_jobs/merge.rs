@@ -27,6 +27,7 @@ use crate::{
     local_integration::LegacyPolicy,
     merge_attempts::{self, Asked},
     merge_retry::merge_retrying,
+    worktree_removal::WorktreeRemover,
   },
   workspace::OpenProject,
 };
@@ -86,6 +87,7 @@ impl RunJobs {
       branch,
       run,
       programs,
+      worktrees,
       activity,
       separator,
       changed,
@@ -107,7 +109,7 @@ impl RunJobs {
         merge_attempts::record_refused(&open.repo_root, run, asked, (AttemptStage::Policy, &problem));
         return Err(problem);
       }
-      merge_retrying(&open.repo_root, &programs, (run, expected, None), asked)
+      merge_retrying(&worktrees, &programs, (run, expected, None), asked)
     }));
     let policy = made_policy.ok().flatten();
     let continues_locally = matches!(&result, Ok(Err(problem)) if problem.continues_locally());
@@ -210,6 +212,8 @@ pub struct MergeArgs {
   pub branch: String,
   pub run: RunId,
   pub programs: Programs,
+  /// The project's run worktrees, which its runner removes once the run merged.
+  pub worktrees: WorktreeRemover,
   pub activity: Activity,
   pub separator: Arc<str>,
   pub changed: Arc<dyn Fn() + Send + Sync>,

@@ -11,8 +11,7 @@ use lurq::{
     ctx::Ctx,
     theme::{PaletteColor, SpacingSize},
   },
-  components::{Column, Row},
-  layout::Alignment,
+  components::Row,
   node::Element,
 };
 use orchester_core::orchestrator::{Queued, TurnMode, TurnState};
@@ -27,8 +26,9 @@ use crate::ui::{
 };
 
 /// The person's message that opens `row`'s turn, keyed `key`, with the files attached to it and where it stands; the
-/// delivery line under it says when. A message that reached the Orchestrator has *Edit*, Copy and `…` at that line's
-/// start (`super::rewind::toolbar`); while it is edited, the field takes its place (`super::rewind::editing`).
+/// delivery line under it says when, after its actions. A message that reached the Orchestrator has *Edit*, Copy,
+/// *Rewind to here* and *Fork from here* there (`super::rewind::toolbar`), any other Copy alone; while it is edited,
+/// the field takes its place (`super::rewind::editing`). One that waits has *Edit* and *Remove* under that line.
 pub(super) fn opening_message(ctx: &mut Ctx, row: &TurnRow, key: &str) -> Element {
   let id = format!("orchestrator-message-{key}");
   if let Some((_, after)) = row
@@ -45,14 +45,11 @@ pub(super) fn opening_message(ctx: &mut Ctx, row: &TurnRow, key: &str) -> Elemen
   // they mention are the project's checkout's.
   let said = said(ctx, &id, (&row.turn.text, None), (row.env.project, &Version::Checkout));
   if let Some(extras) = row.env.rewind.on_message(ctx, &row.turn) {
-    return own_bubble_with(ctx, &id, said, (attached, delivery), extras);
+    return own_bubble_with(ctx, &id, said, (attached, delivery), extras).into();
   }
-  let under = Column::new()
-    .spacing(SpacingSize::Xs)
-    .align_items(Alignment::End)
-    .child(delivery)
-    .with_children(queued_actions(ctx, row));
-  own_bubble(ctx, &id, said, (attached, Some(under.into()))).into()
+  own_bubble(ctx, &id, said, (attached, Some(delivery)))
+    .with_children(queued_actions(ctx, row))
+    .into()
 }
 
 /// Where the message stands: its glyph, its color and its words.

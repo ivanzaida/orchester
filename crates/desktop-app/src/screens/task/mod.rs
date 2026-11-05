@@ -10,8 +10,9 @@
 //! latest run's merge while it waits for review (`merge`, ORC-731): its attempts as read, and ⌘↵ (Ctrl+Enter
 //! elsewhere), which presses the merge's action from anywhere on the page but a text field.
 //!
-//! The task is read off the UI thread (`read`) and again whenever the runner changes one of the
-//! project's runs, tasks are saved, or the person tries again after a failed reading. A failed reread shows
+//! The task is read off the UI thread (`read`) and again whenever the runner changes the state of one of the
+//! project's runs or, while the task's run runs, that run (another run's lines do not), tasks are saved, or the person
+//! tries again after a failed reading; never restarted while it reads (`project::settled_read`). A failed reread shows
 //! the error until fresh data succeeds, so retained data cannot offer decisions. What the task's ended runs
 //! left in the repository is read beside it, for *Remove worktree* and Run again.
 
@@ -61,7 +62,7 @@ use self::{
 };
 use crate::{
   navigation::Navigation,
-  project::{ShownProject, TasksState},
+  project::{ShownProject, TasksState, run_changes},
   routes::{ProjectPage, Route, TaskList, TaskView},
   screens::task_close::Closer,
   services::Services,
@@ -346,6 +347,12 @@ impl PageState {
   }
 }
 
+/// The task's latest run while it ran when the task was last read (none: no run of it runs).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct LiveRun(Option<RunId>);
+
+impl lurq::app::component::DevtoolsInspectable for LiveRun {}
+
 /// One task's frame and its current tab.
 struct TaskFrame {
   retries: Signal<u64>,
@@ -358,9 +365,9 @@ struct TaskFrame {
   requested: Signal<Option<header::controls::Requested>>,
   /// The composer's draft and sends, kept across the page's tabs and the task's runs.
   composer: conversation::ComposerState,
-  /// Whether the task's latest run ran when the task was last read: only then do its transcript's lines
-  /// change the task.
-  live: Signal<bool>,
+  /// The task's latest run while it ran when the task was last read: only then do its transcript's lines
+  /// change the task, and only that run's.
+  live: Signal<LiveRun>,
   /// The latest run's pull request and its CI as last read, and what Fix CI and its switch do (`ci`).
   ci: Signal<ci::reader::Found>,
   ci_actions: ci::actions::CiActions,
@@ -407,7 +414,7 @@ impl Component for TaskFrame {
         pull_request: summary::PullRequestState::new(ctx),
       },
       requested: ctx.signal(None),
-      live: ctx.signal(false),
+      live: ctx.signal(LiveRun(None)),
       ci: ctx.signal(ci::reader::Found::default()),
       ci_actions: ci::actions::CiActions::new(ctx, &props.project.feed),
       attempts: ctx.signal(merge::reader::Attempts::default()),
@@ -432,17 +439,14 @@ impl Component for TaskFrame {
     // A run switched to Manual by an MCP client changes its mode chip and its Conversation.
     let outside = feed.outside.get();
     let saves = feed.revision.get() + outside.tasks + outside.runs + queue;
+    let LiveRun(live) = self.live.get();
     let again = ReadAgain {
-      changes: feed.run_changes(self.live.get()),
+      changes: run_changes::of_shown_run(ctx, &props.project, live, live.is_some()),
       saves,
       retries: self.retries.get(),
     };
     let root = props.project.open.repo_root.clone();
-    let team = props
-      .team
-      .as_ref()
-      .map(|team| (team.task.task.clone(), team.task.missing_pipeline.clone()));
-    let (detail, stale) = match read::task(ctx, root.clone(), (props.task, team), again) {
+    let (detail, stale) = match read::task(ctx, root.clone(), (props.task, team_read(&props)), again) {
       TaskRead::Loading => return reading_page(ctx, &props),
       TaskRead::Failed(reason) => return read_failed(ctx, &reason, Some(self.retries.clone())),
       TaskRead::Ready(detail, stale, pending) => (detail, self.stale(stale, pending)),
@@ -451,8 +455,8 @@ impl Component for TaskFrame {
     if let Some(reason) = &stale {
       return read_failed(ctx, reason, Some(self.retries.clone()));
     }
-    // Set only when it changes: the frame then renders again, following the transcript's lines or not.
-    let live = read::runs(&detail);
+    // Set only when it changes: the frame then renders again, following the transcript's lines of that run or not.
+    let live = LiveRun(read::running(&detail));
     if self.live.get_untracked() != live {
       self.live.set(live);
     }
@@ -469,7 +473,7 @@ impl Component for TaskFrame {
       .get()
       .is_some_and(|status| status.state_for(&root) == RunnerState::Online);
     let follow = Follow::of(&detail, online, &props.view);
-    self.changes.read(ctx, &root, &detail, follow);
+    self.changes.read(ctx, &props.project.open, &detail, follow);
     let (reader, ci) = self.ci(ctx, (&props.project, &detail), (saves, online));
     let (attempt, worktree) = self.merge_reads(&detail);
     let task = TaskContext {
@@ -568,4 +572,12 @@ pub fn changes_count(ctx: &mut Ctx, _task: &TaskContext) -> Option<FileCount> {
 /// is read.
 pub fn memory_count(ctx: &mut Ctx, task: &TaskContext) -> Option<usize> {
   memory::active_count(ctx, task)
+}
+
+/// The page's team task as its server read it; `None` for a task of this computer's.
+fn team_read(props: &FrameProps) -> read::TeamRead {
+  props
+    .team
+    .as_ref()
+    .map(|team| (team.task.task.clone(), team.task.missing_pipeline.clone()))
 }

@@ -1,4 +1,4 @@
-use std::num::NonZeroU32;
+use std::{num::NonZeroU32, path::PathBuf};
 
 use orchester_core::{
   connection::AgentProvider,
@@ -13,10 +13,10 @@ use orchester_core::{
   tokens::TokenBudget,
 };
 use orchester_ipc::{
-  AttachSession, Command, ErrorReports, Event, FrameError, Handshake, IpcError, PROTOCOL_VERSION, RefusedRun,
-  Rejection, Reply, Request, RequestId, RunWork, SessionEnd, ShutdownMode, SlotWait, WorkState, WorkSummary,
+  AttachSession, Command, ErrorReports, Event, FrameError, RefusedRun, Rejection, Reply, Request, RequestId, RunWork,
+  SessionEnd, ShutdownMode, SlotWait, WorkState, WorkSummary,
+  browser::ComputerBrowser,
   frame::{FrameReader, FrameWriter, MAX_FRAME_LEN},
-  handshake,
 };
 use tokio::io::{AsyncWriteExt, DuplexStream, ReadHalf, WriteHalf};
 
@@ -33,88 +33,101 @@ fn connection() -> ((Reader, Writer), (Reader, Writer)) {
   (framed(left), framed(right))
 }
 
-/// One request of every command.
-fn requests(run: RunId, task: TaskId) -> Vec<Request> {
+/// Attaching fresh with the browser installed, and again after a reconnect with a program chosen and no profiles'
+/// folder (protocol 47).
+fn attach_commands() -> [Command; 2] {
   [
     Command::Attach {
       session: AttachSession::Fresh {
         previous_end: SessionEnd::QuitNow,
       },
       agent_slots: NonZeroU32::new(4).expect("above zero"),
+      browser: ComputerBrowser::installed(PathBuf::from("data").join("browser")),
     },
     Command::Attach {
       session: AttachSession::Reconnect,
       agent_slots: NonZeroU32::new(1).expect("above zero"),
-    },
-    Command::SetAgentSlots {
-      agent_slots: NonZeroU32::new(16).expect("above zero"),
-    },
-    Command::ContinueRuns { runs: vec![run] },
-    Command::Ping { nonce: 42 },
-    Command::StartRun {
-      key: IdempotencyKey::generate(),
-      task,
-    },
-    Command::PauseRun { run },
-    Command::ResumeRun { run },
-    Command::CancelRun { run },
-    Command::RaiseLimit {
-      run,
-      budget: Some(TokenBudget::new(2_000_000).expect("above zero")),
-      max_duration_ms: Some(1_800_000),
-    },
-    Command::RaiseLimit {
-      run,
-      budget: None,
-      max_duration_ms: None,
-    },
-    Command::RaiseStepBudget {
-      run,
-      budget: Some(TokenBudget::new(600_000).expect("above zero")),
-    },
-    Command::RaiseStepBudget { run, budget: None },
-    Command::ChangeRunPermissions {
-      run,
-      profile: ResourceId::generate(),
-      permissions: AgentPermissions::new(
-        RepositoryAccess::Write,
-        CommandPermission::Allowed(
-          AllowedCommands::new(vec![
-            CommandPrefix::new("pnpm test").expect("command"),
-            CommandPrefix::new("pnpm build").expect("command"),
-          ])
-          .expect("list"),
-        ),
-        NetworkAccess::Off,
-      ),
-      apply: PermissionsApply::Now,
-    },
-    Command::ChangeRunPermissions {
-      run,
-      profile: ResourceId::generate(),
-      permissions: AgentPermissions::before_permissions(),
-      apply: PermissionsApply::NextInvocation,
-    },
-    Command::KeepPermissionsForNextInvocation {
-      run,
-      profile: ResourceId::generate(),
-    },
-    Command::Shutdown {
-      mode: ShutdownMode::FinishAtCheckpoints,
-    },
-    Command::Shutdown {
-      mode: ShutdownMode::Immediate,
+      browser: ComputerBrowser {
+        program: Ok(Some(PathBuf::from("Chromium").join("chrome.exe"))),
+        profiles: Err("the application database has no folder".to_owned()),
+      },
     },
   ]
-  .into_iter()
-  .chain(decision_commands(run))
-  .chain([Command::DeliverMessages { run }])
-  .enumerate()
-  .map(|(index, command)| Request {
-    id: RequestId::new(index as u64 + 1),
-    command,
-  })
-  .collect()
+}
+
+/// One request of every command.
+fn requests(run: RunId, task: TaskId) -> Vec<Request> {
+  attach_commands()
+    .into_iter()
+    .chain([
+      Command::SetAgentSlots {
+        agent_slots: NonZeroU32::new(16).expect("above zero"),
+      },
+      Command::ContinueRuns { runs: vec![run] },
+      Command::Ping { nonce: 42 },
+      Command::StartRun {
+        key: IdempotencyKey::generate(),
+        task,
+      },
+      Command::PauseRun { run },
+      Command::ResumeRun { run },
+      Command::CancelRun { run },
+      Command::RaiseLimit {
+        run,
+        budget: Some(TokenBudget::new(2_000_000).expect("above zero")),
+        max_duration_ms: Some(1_800_000),
+      },
+      Command::RaiseLimit {
+        run,
+        budget: None,
+        max_duration_ms: None,
+      },
+      Command::RaiseStepBudget {
+        run,
+        budget: Some(TokenBudget::new(600_000).expect("above zero")),
+      },
+      Command::RaiseStepBudget { run, budget: None },
+      Command::ChangeRunPermissions {
+        run,
+        profile: ResourceId::generate(),
+        permissions: AgentPermissions::new(
+          RepositoryAccess::Write,
+          CommandPermission::Allowed(
+            AllowedCommands::new(vec![
+              CommandPrefix::new("pnpm test").expect("command"),
+              CommandPrefix::new("pnpm build").expect("command"),
+            ])
+            .expect("list"),
+          ),
+          NetworkAccess::Off,
+        ),
+        apply: PermissionsApply::Now,
+      },
+      Command::ChangeRunPermissions {
+        run,
+        profile: ResourceId::generate(),
+        permissions: AgentPermissions::before_permissions(),
+        apply: PermissionsApply::NextInvocation,
+      },
+      Command::KeepPermissionsForNextInvocation {
+        run,
+        profile: ResourceId::generate(),
+      },
+      Command::Shutdown {
+        mode: ShutdownMode::FinishAtCheckpoints,
+      },
+      Command::Shutdown {
+        mode: ShutdownMode::Immediate,
+      },
+    ])
+    .chain(decision_commands(run))
+    .chain([Command::DeliverMessages { run }, Command::RunFolderState { run }])
+    .enumerate()
+    .map(|(index, command)| Request {
+      id: RequestId::new(index as u64 + 1),
+      command,
+    })
+    .collect()
 }
 
 /// Decisions on plans: automation's approval, and a person's request for changes with a note (protocol 20);
@@ -548,48 +561,4 @@ async fn frames_reject_oversized_and_truncated_input() {
   raw.write_all(b"{\"ty").await.expect("write partial body");
   drop(raw);
   assert!(matches!(reader.read::<Request>().await, Err(FrameError::Truncated)));
-}
-
-#[tokio::test]
-async fn handshake_succeeds_between_equal_versions() {
-  let ((mut left_reader, mut left_writer), (mut right_reader, mut right_writer)) = connection();
-  let (left, right) = tokio::join!(
-    handshake(&mut left_reader, &mut left_writer),
-    handshake(&mut right_reader, &mut right_writer),
-  );
-  left.expect("left handshake");
-  right.expect("right handshake");
-}
-
-#[tokio::test]
-async fn handshake_reports_a_version_mismatch() {
-  let ((mut reader, mut writer), (mut peer_reader, mut peer_writer)) = connection();
-  let peer_version = PROTOCOL_VERSION + 1;
-  let peer = async {
-    peer_writer
-      .write(&Handshake::new(peer_version))
-      .await
-      .expect("peer writes its version");
-    peer_reader.read::<Handshake>().await.expect("peer reads the version")
-  };
-  let (result, received) = tokio::join!(handshake(&mut reader, &mut writer), peer);
-
-  assert_eq!(received, Some(Handshake::new(PROTOCOL_VERSION)));
-  match result {
-    Err(IpcError::VersionMismatch { local, remote }) => {
-      assert_eq!(local, PROTOCOL_VERSION);
-      assert_eq!(remote, peer_version);
-    }
-    other => panic!("expected a version mismatch, got {other:?}"),
-  }
-}
-
-#[tokio::test]
-async fn handshake_reports_a_peer_that_closes() {
-  let ((mut reader, mut writer), peer) = connection();
-  drop(peer);
-  assert!(matches!(
-    handshake(&mut reader, &mut writer).await,
-    Err(IpcError::ClosedDuringHandshake | IpcError::Frame(FrameError::Io(_)))
-  ));
 }
