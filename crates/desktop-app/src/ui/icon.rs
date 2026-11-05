@@ -158,6 +158,7 @@ icons! {
   GitPullRequestDraft => '\u{e35b}',
   Globe => '\u{e0e8}',
   GraduationCap => '\u{e234}',
+  GripVertical => '\u{e0eb}',
   Hammer => '\u{e0ec}',
   Hand => '\u{e1d7}',
   HardDrive => '\u{e0ed}',

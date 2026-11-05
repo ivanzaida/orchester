@@ -19,7 +19,7 @@ fn name(value: &str) -> ServiceName {
 }
 
 /// This test program, which a start finds at its absolute path on every machine.
-fn program() -> String {
+pub(super) fn program() -> String {
   std::env::current_exe()
     .expect("the test program")
     .to_str()
@@ -56,7 +56,7 @@ fn seed(settings: &Settings) {
 }
 
 /// The page of `cloud-web`, opened from its row.
-fn open_web() -> Settings {
+pub(super) fn open_web() -> Settings {
   let mut settings = Settings::new(false);
   seed(&settings);
   settings.tab("services", "settings-service-cloud-web-row");
@@ -66,7 +66,7 @@ fn open_web() -> Settings {
 }
 
 /// The service `value` as stored now: its draft if it has one, otherwise its latest version.
-fn stored(settings: &Settings, value: &str) -> Option<Service> {
+pub(super) fn stored(settings: &Settings, value: &str) -> Option<Service> {
   entries::<Service, _>(&settings.db())
     .expect("services")
     .into_iter()
@@ -75,7 +75,7 @@ fn stored(settings: &Settings, value: &str) -> Option<Service> {
 }
 
 /// Types `text` into the field `id` and leaves it for `next`, as clicking into the next field does.
-fn type_and_leave(settings: &mut Settings, (id, text): (&str, &str), next: &str) {
+pub(super) fn type_and_leave(settings: &mut Settings, (id, text): (&str, &str), next: &str) {
   settings.set(id, text);
   settings
     .window
