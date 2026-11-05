@@ -2,7 +2,9 @@
 //! (`support::services`): `start_service` starts what a service needs first, in order, each once what it needs is
 //! ready, and fills `{{services.<name>.url|port}}` with the URLs and ports of the services started before it;
 //! `start_stack` starts a stack's services and their needs, each once. A service the step runs already is reused, not
-//! started twice. When a service a start needs fails, nothing after it starts and the error names it. Needs `git`.
+//! started twice. When a service a start needs fails, nothing after it starts and the error names it, its exit code
+//! and its last lines. When a ready service crashes, the services that need it stop, the agent's next tool answer
+//! carries a notice and the conversation records it. Needs `git`.
 //! Run with `cargo test -p orchester-runner --features test-agent --test service_needs service`.
 
 mod support;
@@ -10,18 +12,21 @@ mod support;
 use std::{fs, path::Path};
 
 use orchester_core::{
+  connection::stream::{AgentEvent, RunnerProblem},
   id::{IdempotencyKey, RunId},
   run::{Answerer, ApprovalAnswer, RunStatus},
-  service::{ReadyCheck, Service, ServiceName},
+  service::{LogPattern, ReadyCheck, Service, ServiceCrash, ServiceName},
+  store::ActivityStore,
 };
 use orchester_ipc::Event;
 use orchester_runner::execution::Scheduler;
+use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
 use self::support::{
   PATIENCE, StepSpec, is_running, pending_approval,
   qa::{approve, calls, gone},
-  scheduler,
+  reported, scheduler,
   services::{
     accepts, answered, publish, publish_stack, report_file, report_folder, reported_pid, service, service_project,
     started_port,
@@ -248,7 +253,7 @@ async fn service_failing_need_stops_the_chain_and_is_named() {
   assert!(
     answer.starts_with(
       "start_service error: the service `db` did not start, so nothing after it was started (`api`, `web`): the \
-       service `db` exited before it was ready"
+       service `db` exited with code 3 before it was ready"
     ),
     "{answer}"
   );
@@ -261,4 +266,134 @@ async fn service_failing_need_stops_the_chain_and_is_named() {
       "{name} was not started after db failed"
     );
   }
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn service_failing_middle_need_is_the_root_cause_with_its_last_lines() {
+  let project = service_project(implement("Start the service web."), Vec::new());
+  let root = project.repo.path();
+  let failing = service(
+    "api",
+    &[
+      "pid-file".to_owned(),
+      report_file(root, "api.pid"),
+      "stderr".to_owned(),
+      "the schema is missing".to_owned(),
+      "exit".to_owned(),
+      "4".to_owned(),
+    ],
+    ReadyCheck::PortOpen,
+    20,
+  )
+  .with_needs(vec![ServiceName::new("db").expect("a name")])
+  .expect("needs");
+  publish(
+    root,
+    &[chained(root, "db", &[]), failing, chained(root, "web", &["api"])],
+  );
+  let (scheduler, mut events) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("run");
+  approve(&scheduler, root, &mut events, id).await;
+  let answer = answered(root, &mut events, id, "start_service").await;
+  // `db` became ready; `api`, which needs it, is the root cause, with its exit code; `web` is not started.
+  assert!(
+    answer.starts_with(
+      "start_service error: the service `api` did not start, so nothing after it was started (`web`): the service \
+       `api` exited with code 4 before it was ready"
+    ),
+    "{answer}"
+  );
+  let lines = reported(&ProjectDb::open(root).expect("open"), id, "orchester-answer| ");
+  assert!(
+    lines.iter().any(|line| line.ends_with("err| the schema is missing")),
+    "the error shows the root cause's last lines: {lines:?}"
+  );
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  assert!(report_folder(root).join("db.pid").exists(), "db was started");
+  assert!(
+    !report_folder(root).join("web.pid").exists(),
+    "web was not started after api failed"
+  );
+}
+
+/// The service `name` that needs `needs`, reports its pid in `<name>.pid` and runs `then`, ready as `check` says.
+fn needing(root: &Path, name: &str, needs: &[&str], (then, check): (&[&str], ReadyCheck)) -> Service {
+  let mut arguments = vec!["pid-file".to_owned(), report_file(root, &format!("{name}.pid"))];
+  arguments.extend(then.iter().map(|argument| (*argument).to_owned()));
+  let needs = needs
+    .iter()
+    .map(|need| ServiceName::new(need).expect("a name"))
+    .collect();
+  service(name, &arguments, check, 20).with_needs(needs).expect("needs")
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn service_crash_after_ready_notifies_the_agent_and_the_conversation() {
+  let project = service_project(
+    implement("Start the service web. Then wait for a crash notice."),
+    Vec::new(),
+  );
+  let root = project.repo.path();
+  let ready = ReadyCheck::LogLine(LogPattern::new("^ready$").expect("a pattern"));
+  let crashing = ["say", "ready", "sleep", "4", "stderr", "lost the disk", "exit", "7"];
+  let listen = ["listen", "{{port}}"];
+  // `web` needs `api`, which needs `db`: when `db` crashes, both are stopped because of it.
+  publish(
+    root,
+    &[
+      needing(root, "db", &[], (&crashing, ready)),
+      needing(root, "api", &["db"], (&listen, ReadyCheck::PortOpen)),
+      needing(root, "web", &["api"], (&listen, ReadyCheck::PortOpen)),
+    ],
+  );
+  let (scheduler, mut events) = scheduler(root);
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("run");
+  approve(&scheduler, root, &mut events, id).await;
+  started_port(&answered(root, &mut events, id, "start_service").await);
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+
+  let db = ProjectDb::open(root).expect("open");
+  let notice = reported(&db, id, "orchester-notice| ");
+  assert!(
+    notice.first().is_some_and(|line| line
+      .starts_with("Orchester notice: the service `db` crashed: it exited with code 7, ")
+      && line
+        .ends_with("s after it started. Orchester stopped the services that need it: `api`, `web`. Its last lines:")),
+    "{notice:?}"
+  );
+  assert!(
+    notice.iter().any(|line| line.ends_with("err| lost the disk")),
+    "{notice:?}"
+  );
+
+  let crashes: Vec<ServiceCrash> = db
+    .activity(id, 0)
+    .expect("activity")
+    .into_iter()
+    .filter_map(|entry| match entry.event {
+      AgentEvent::RunnerProblem {
+        problem: RunnerProblem::ServiceCrashed(crash),
+      } => Some(crash),
+      _ => None,
+    })
+    .collect();
+  let [crash] = crashes.as_slice() else {
+    panic!("one crash is in the conversation: {crashes:?}");
+  };
+  assert_eq!(crash.service, "db");
+  assert_eq!(crash.exit_code, Some(7));
+  assert_eq!(crash.stopped, ["api", "web"]);
+  assert!(crash.uptime_ms >= 4000, "{crash:?}");
+  assert!(
+    crash.lines.iter().any(|line| line.ends_with("err| lost the disk")),
+    "{crash:?}"
+  );
 }

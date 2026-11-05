@@ -1,6 +1,8 @@
 //! Services and stacks: the invariants their constructors keep, how needs resolve into start steps, how
-//! placeholders are checked and filled, the process a service starts as, its per-run data, its log and its status.
+//! placeholders are checked and filled, the process a service starts as, its per-run data, its log, its status and its
+//! crash.
 
+mod crash;
 mod definition;
 mod launch;
 mod log;

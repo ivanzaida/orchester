@@ -94,15 +94,20 @@ impl StepServices {
         exit: None,
       },
     );
-    let ready = readiness::wait(&mut tree, (service, &values), port, (&log, ended))
-      .and_then(|()| self.seed(service, &mut values, (&headers, &secrets), (&log, ended)));
+    let ready = readiness::wait(&mut tree, (service, &values), port, (&log, ended)).and_then(|output| {
+      self
+        .seed(service, &mut values, (&headers, &secrets), (&log, ended))
+        .map(|captured| (output, captured))
+    });
     match ready {
-      Ok(captured) => Ok(Running {
+      Ok((output, captured)) => Ok(Running {
         tree,
         _container: container,
         url,
         lease,
         captured,
+        needs: service.needs().to_vec(),
+        output,
       }),
       Err(why) => {
         // A program that cannot be watched any more is stopped all the same; its status then says stopped.

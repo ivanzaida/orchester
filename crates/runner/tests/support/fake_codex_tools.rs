@@ -193,7 +193,8 @@ fn named_after<'a>(prompt: &'a str, lead: &str) -> Option<&'a str> {
 /// service <other>." it then calls `start_service` of that one; with "Then drive its UI" it then calls the `ui_*` tools
 /// on it ([`drive_ui`]); with "Then read outside" it then reads
 /// `deps-a/notes.txt` of the repository, which asks; with "Then wait for it to end" it calls `service_status` until the
-/// service is no longer ready; with "Then look at the service" it calls `service_status` and `service_logs`; and with
+/// service is no longer ready; with "Then wait for a crash notice" it calls `service_status` until an answer carries a
+/// notice ([`crash_notice`]); with "Then look at the service" it calls `service_status` and `service_logs`; and with
 /// "Then stop the service" it calls `stop_service`, then `service_status` again when it also looks.
 fn services(server: &mut Prompt, worktree: &Path, prompt: &str) {
   let stack = named_after(prompt, "Start the stack ");
@@ -223,6 +224,9 @@ fn services(server: &mut Prompt, worktree: &Path, prompt: &str) {
       }
       thread::sleep(Duration::from_millis(250));
     }
+  }
+  if prompt.contains("Then wait for a crash notice") {
+    crash_notice(server, &named);
   }
   if look {
     report_call(server, "service_status", &named);
@@ -269,6 +273,32 @@ fn drive_ui(server: &mut Prompt, name: &str) {
   report_call(server, "service_logs", &json!({"name": name}));
 }
 
+/// Calls `service_status` of `named` until its answer carries Orchester's notices after it, as text blocks after the
+/// first, and reports each notice's lines as `orchester-notice| <line>`; `orchester-notice: none` when none came.
+fn crash_notice(server: &mut Prompt, named: &Value) {
+  for _ in 0..120 {
+    let notices: Vec<String> = server
+      .call_result("service_status", named)
+      .map(|result| {
+        result["content"]
+          .as_array()
+          .into_iter()
+          .flatten()
+          .skip(1)
+          .filter_map(|block| block["text"].as_str().map(str::to_owned))
+          .collect()
+      })
+      .unwrap_or_default();
+    if !notices.is_empty() {
+      for line in notices.iter().flat_map(|notice| notice.lines()) {
+        eprintln!("orchester-notice| {line}");
+      }
+      return;
+    }
+    thread::sleep(Duration::from_millis(250));
+  }
+  eprintln!("orchester-notice: none");
+}
 /// Reads `deps-a/notes.txt` of the repository, outside the worktree, which asks.
 fn read_outside(server: &mut Prompt, worktree: &Path) {
   let notes = fake_tool_calls::repository_folder(worktree, "deps-a").join("notes.txt");

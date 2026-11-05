@@ -14,7 +14,7 @@ use std::{
   time::{Duration, Instant},
 };
 
-use orchester_core::service::{LogStream, MAX_LINE_BYTES, ReadyCheck, RunValues, Service, ServiceLog};
+use orchester_core::service::{LogStream, MAX_LINE_BYTES, ReadyCheck, RunValues, Service, ServiceLog, exited};
 use orchester_exec::process_tree::ProcessTree;
 use parking_lot::Mutex;
 use regex::Regex;
@@ -54,14 +54,15 @@ impl Probe {
   }
 }
 
-/// Waits until `service`, started as `tree` with `values` on `port`, is ready, its output kept in `log`; why not,
-/// when it exits first, its timeout passes, or `ended` says the invocation ended.
+/// Waits until `service`, started as `tree` with `values` on `port`, is ready, its output kept in `log`, and hands
+/// back the readers of its output; why not, when it exits first, its timeout passes, or `ended` says the invocation
+/// ended.
 pub(super) fn wait(
   tree: &mut ProcessTree,
   (service, values): (&Service, &RunValues),
   port: u16,
   (log, ended): (&SharedLog, &dyn Fn() -> bool),
-) -> Result<(), String> {
+) -> Result<Output, String> {
   let check = service.readiness().check();
   let pattern = match check {
     ReadyCheck::LogLine(pattern) => {
@@ -93,13 +94,13 @@ pub(super) fn wait(
     match tree.exited() {
       Ok(Some(status)) => {
         output.settle();
-        return Err(format!("exited before it was ready ({status})"));
+        return Err(format!("{} before it was ready", exited(status.code())));
       }
       Ok(None) => {}
       Err(error) => return Err(format!("cannot be watched: {error}")),
     }
     if probe.ready() {
-      return Ok(());
+      return Ok(output);
     }
     if Instant::now() >= deadline {
       return Err(format!(

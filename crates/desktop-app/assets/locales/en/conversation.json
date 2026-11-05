@@ -552,6 +552,9 @@
       "runnerFailedDetail": "Nothing after the last checkpoint counts as done. Continue the run from it, or cancel it.",
       "secretQuestion": "Asked for a secret: {{question}}",
       "secretQuestionDetail": "Orchester never passes secret values through questions, so the question was declined and the agent was told why. Store the value in Project settings › Environment and grant it to this run; the agent can then use it without seeing it in the chat.",
+      "serviceCrashed": "{{service}} crashed: exit code {{code}}, {{seconds}} s after it started",
+      "serviceCrashedBySignal": "{{service}} crashed: ended by a signal, {{seconds}} s after it started",
+      "serviceCrashedStopped": "Orchester stopped {{services}}, which need it.",
       "stderrLeftOut": {
         "one": "{{count}} more line of the agent’s standard error left out",
         "other": "{{count}} more lines of the agent’s standard error left out"

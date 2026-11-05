@@ -1,4 +1,5 @@
-//! The service tools a run's invocation gets.
+//! The service tools a run's invocation gets, and where they record a crash: in the invocation's transcript, as a
+//! runner note the run's conversation shows.
 
 use std::{path::Path, sync::Arc};
 
@@ -13,7 +14,10 @@ use super::{
   StepServices,
   launch::{published, published_stacks},
 };
-use crate::execution::{run::RunTask, step::start::problem};
+use crate::execution::{
+  run::RunTask,
+  step::{runner_note, start::problem},
+};
 
 impl RunTask {
   /// The names of the project's published services, which the step's service tools take.
@@ -37,6 +41,7 @@ impl RunTask {
     worktree: &Path,
     environment: &CommandEnvironment,
   ) -> StepServices {
+    let (root, run, notifier) = (self.root.clone(), self.run.id(), self.notifier.clone());
     StepServices {
       services: Arc::clone(&self.services),
       state: self.services.register(invocation),
@@ -47,6 +52,10 @@ impl RunTask {
       vault: Arc::clone(&self.vault),
       inherited: std::env::vars_os().collect(),
       project: environment.clone(),
+      crashed: Arc::new(move |crash| {
+        let problem = RunnerProblem::ServiceCrashed(crash.clone());
+        runner_note::note(&root, (run, invocation), problem, &notifier);
+      }),
     }
   }
 }

@@ -55,6 +55,13 @@ it when the step ends, when the run pauses or fails, and while the run waits for
 releases its slot. A crash is reported to the agent as an event with the exit code and the last log lines, and to the
 person in the Conversation.
 
+Built (ORC-274): a start that fails names the first service that failed (the root cause), its exit code or its
+readiness timeout and its last 20 lines, and the services not started because of it. A ready service whose program
+exits on its own crashed: the services the step runs that need it, also through others, are stopped; the answer of
+the agent's next Orchester tool call carries a notice after it, as a text block of its own (service, exit code, how
+long it ran, the services stopped, its last 20 lines); and the run's Conversation records a `service_crashed` runner
+note with the same facts (`orchester_core::service::ServiceCrash`). The crash card's look is ORC-265.
+
 #### Per-run data
 
 Built (ORC-251; the person chose the shape, 2026-11-05):

@@ -60,6 +60,11 @@ impl LogLine {
   pub fn text(&self) -> &str {
     &self.text
   }
+
+  /// The line as an excerpt shows it: `<number> <out|err>| <text>`.
+  pub fn row(&self) -> String {
+    format!("{} {}| {}", self.number, self.stream.label(), self.text)
+  }
 }
 
 /// The bounded log of one started service.
@@ -138,13 +143,19 @@ impl ServiceLog {
     self.last
   }
 
+  /// The last `count` kept lines, oldest first, each as its [`LogLine::row`].
+  pub fn last_rows(&self, count: usize) -> Vec<String> {
+    let skipped = self.lines.len().saturating_sub(count);
+    self.lines.iter().skip(skipped).map(LogLine::row).collect()
+  }
+
   /// The last `tail` kept lines after line `since`, within [`MAX_EXCERPT_BYTES`], one per row as
   /// `<number> <out|err>| <text>`, with a first row that says which lines they are and what is not kept any more.
   pub fn excerpt(&self, tail: u32, since: u64) -> String {
     let mut rows = Vec::new();
     let mut bytes = 0;
     for line in self.lines.iter().rev().take_while(|line| line.number > since) {
-      let row = format!("\n{} {}| {}", line.number, line.stream.label(), line.text);
+      let row = format!("\n{}", line.row());
       if rows.len() == tail as usize || bytes + row.len() > MAX_EXCERPT_BYTES {
         break;
       }

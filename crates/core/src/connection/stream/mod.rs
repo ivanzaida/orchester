@@ -308,6 +308,8 @@ pub enum RunnerProblem {
     #[serde(default)]
     holders: Vec<QaSlotHolder>,
   },
+  /// A service the agent started crashed after it was ready; the agent got the same facts as a notice.
+  ServiceCrashed(crate::service::ServiceCrash),
 }
 
 /// A run whose QA app holds a QA slot: its task's key (`ORC-62`) and its number (39), as its slot file names them.

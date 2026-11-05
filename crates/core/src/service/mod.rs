@@ -7,6 +7,7 @@
 //! checks their needs against the published services ([`PublishNeeds`]).
 
 mod approval;
+mod crash;
 mod definition;
 mod error;
 mod folder;
@@ -26,6 +27,7 @@ mod value;
 
 pub use self::{
   approval::{ServiceApproval, start_target, started_by},
+  crash::{CRASH_LINES, ServiceCrash, exited},
   definition::{RunData, Service, UiDriver, UiStart},
   error::ServiceError,
   folder::{OwnedPath, RelativeFolder, RunFolder},

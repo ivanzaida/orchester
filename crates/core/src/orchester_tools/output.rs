@@ -73,6 +73,8 @@ pub struct ToolResult {
   is_error: bool,
   app: Option<Value>,
   image: Option<AnswerImage>,
+  /// Orchester's notices for the agent that came with this answer, each shown after it as a text block of its own.
+  notices: Vec<String>,
 }
 
 impl ToolResult {
@@ -83,6 +85,7 @@ impl ToolResult {
       is_error: false,
       app: None,
       image: None,
+      notices: Vec::new(),
     }
   }
 
@@ -93,6 +96,7 @@ impl ToolResult {
       is_error: true,
       app: None,
       image: None,
+      notices: Vec::new(),
     }
   }
 
@@ -103,6 +107,7 @@ impl ToolResult {
       is_error,
       app: None,
       image: None,
+      notices: Vec::new(),
     }
   }
 
@@ -114,6 +119,7 @@ impl ToolResult {
       is_error: false,
       app: None,
       image: Some(image),
+      notices: Vec::new(),
     }
   }
 
@@ -124,6 +130,7 @@ impl ToolResult {
       is_error: true,
       app: None,
       image: None,
+      notices: Vec::new(),
     }
   }
 
@@ -173,6 +180,7 @@ impl ToolResult {
       is_error: !output.code.is_some_and(|code| expected.contains(i64::from(code))),
       app: None,
       image: None,
+      notices: Vec::new(),
     }
   }
 
@@ -199,6 +207,7 @@ impl ToolResult {
       is_error: result["isError"].as_bool().unwrap_or(false),
       app: Some(result),
       image: None,
+      notices: Vec::new(),
     }
   }
 
@@ -215,12 +224,29 @@ impl ToolResult {
     self.image.as_ref()
   }
 
+  /// The notices this answer carries after it.
+  pub fn notices(&self) -> &[String] {
+    &self.notices
+  }
+
+  /// This answer carrying `notices` after it, Orchester's own news for the agent, such as a service that crashed.
+  #[must_use]
+  pub fn with_notices(mut self, notices: Vec<String>) -> Self {
+    self.notices.extend(notices);
+    self
+  }
+
   /// This answer with the values of `secrets` removed.
   #[must_use]
   pub fn redacted(self, secrets: &[SecretVariable]) -> Self {
+    let notices = self
+      .notices
+      .iter()
+      .map(|notice| redact_secrets(notice, secrets))
+      .collect();
     if let Some(app) = self.app {
       // Reapply the cap: redacting a short secret may expand text or structured content.
-      return Self::from_app(redact_value(app, secrets));
+      return Self::from_app(redact_value(app, secrets)).with_notices(notices);
     }
     Self {
       text: redact_secrets(&self.text, secrets),
@@ -229,20 +255,29 @@ impl ToolResult {
       // The image's data is left as it is: it is base64 of pixels re-encoded without metadata, so it holds no secret
       // as text, and replacing a run of it that happened to match a short secret would corrupt the image.
       image: self.image,
+      notices,
     }
   }
 
   /// The MCP `tools/call` result, its text within [`MAX_ANSWER_BYTES`] whatever the tool's own limit; an image goes
-  /// after the text as an MCP image block.
+  /// after the text as an MCP image block, and each notice after both as a text block of its own.
   pub fn mcp(&self) -> Value {
+    let notices = self
+      .notices
+      .iter()
+      .map(|notice| json!({"type": "text", "text": answer_text(notice)}));
     if let Some(app) = &self.app {
-      return app.clone();
+      let mut result = app.clone();
+      if let Some(content) = result.get_mut("content").and_then(Value::as_array_mut) {
+        content.extend(notices);
+      }
+      return result;
     }
-    let text = json!({"type": "text", "text": answer_text(&self.text)});
-    let content = match &self.image {
-      Some(image) => json!([text, {"type": "image", "data": image.data(), "mimeType": "image/png"}]),
-      None => json!([text]),
-    };
+    let mut content = vec![json!({"type": "text", "text": answer_text(&self.text)})];
+    if let Some(image) = &self.image {
+      content.push(json!({"type": "image", "data": image.data(), "mimeType": "image/png"}));
+    }
+    content.extend(notices);
     json!({"content": content, "isError": self.is_error})
   }
 }

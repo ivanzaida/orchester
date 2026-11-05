@@ -109,6 +109,7 @@ impl RunnerProblem {
         }
       }
       Self::MemoryNotSaved { reason } => reason.redact(redact),
+      Self::ServiceCrashed(crash) => crash.redact(redact),
       Self::DecisionInterrupted { server, action, .. } => {
         *server = redact(server);
         *action = redact(action);

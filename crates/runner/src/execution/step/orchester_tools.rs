@@ -265,12 +265,16 @@ impl ToolHost {
     true
   }
 
-  /// Runs `call`, approved or not needing an approval, off the async workers.
+  /// Runs `call`, approved or not needing an approval, off the async workers. Its answer carries the notices of the
+  /// invocation's services that crashed since the last answer ([`StepServices::take_notices`]).
   pub(super) async fn run(self: &Arc<Self>, call: ToolCall) -> ToolResult {
     let host = Arc::clone(self);
     let tool = call.tool();
     match tokio::task::spawn_blocking(move || host.run_blocking(&call)).await {
-      Ok(result) => result.redacted(&self.secrets),
+      Ok(result) => {
+        let notices = self.services.as_ref().map_or_else(Vec::new, StepServices::take_notices);
+        result.with_notices(notices).redacted(&self.secrets)
+      }
       Err(error) => {
         tracing::warn!(%error, tool = tool.as_str(), "an Orchester tool call ended without an answer");
         ToolResult::unavailable("the call ended without an answer")

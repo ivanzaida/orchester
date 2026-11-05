@@ -2,13 +2,14 @@
 //! it; and a denied command as a problem row (`Problem row` `IxIMv`: *Command denied · cargo publish
 //! --dry-run*, *Builder was told: “Denied by the person reviewing this run. Continue without it.”*).
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use lurq::app::ctx::Ctx;
 use orchester_core::{
   code_index::RipgrepFallback,
   connection::stream::{CommandStatus, MemoryNotSavedReason, QaSlotHolder, QuestionRefusal, RunnerProblem},
   run::DecidedBy,
+  service::ServiceCrash,
   tokens::compact_tokens,
 };
 use orchester_workspace::tasks::transcript::{CommandEntry, CommandMark, Entry, EntryKind, command_preview};
@@ -142,11 +143,43 @@ pub(super) fn text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<
       "conversation.problem.stderrLeftOutDetail",
     ),
     RunnerProblem::QuestionRefused { question, reason } => question_refused(ctx, question, *reason),
+    RunnerProblem::ServiceCrashed(crash) => service_crashed(ctx, crash),
     RunnerProblem::ContextCompacted { .. }
     | RunnerProblem::ModelRetrying { .. }
     | RunnerProblem::ThinkingStripped
     | RunnerProblem::WaitingForQaSlot { .. } => note(ctx, problem),
   }
+}
+
+/// A service that crashed after it was ready: how it ended and how long it had run, then the services Orchester
+/// stopped with it and its last lines. The crash card's own look is ORC-265's.
+fn service_crashed(ctx: &Ctx, crash: &ServiceCrash) -> (Arc<str>, Option<Arc<str>>) {
+  let seconds = format!("{:.1}", Duration::from_millis(crash.uptime_ms).as_secs_f64());
+  let service = crash.service.as_str();
+  let title = match crash.exit_code {
+    Some(code) => ctx.t_args(
+      "conversation.problem.serviceCrashed",
+      [
+        ("service", service),
+        ("code", code.to_string().as_str()),
+        ("seconds", seconds.as_str()),
+      ],
+    ),
+    None => ctx.t_args(
+      "conversation.problem.serviceCrashedBySignal",
+      [("service", service), ("seconds", seconds.as_str())],
+    ),
+  };
+  let mut body: Vec<Arc<str>> = Vec::new();
+  if !crash.stopped.is_empty() {
+    let stopped = crash.stopped.join(&*ctx.t("conversation.list.separator"));
+    body.push(ctx.t_args(
+      "conversation.problem.serviceCrashedStopped",
+      [("services", stopped.as_str())],
+    ));
+  }
+  body.extend(crash.lines.iter().map(|line| Arc::from(line.as_str())));
+  (title, (!body.is_empty()).then(|| body.join("\n").into()))
 }
 
 /// Codex's sandbox that could not be set up: Codex's `message`, which names the stage, and its `code`, then where

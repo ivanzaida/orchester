@@ -18,9 +18,13 @@
 //! A service's per-run data is prepared before it starts ([`data`]): its run folder in the run's storage, kept until
 //! the run ends (`crate::execution::run_data`), or a fresh database container that lives as long as the service.
 //!
+//! A ready service that exits on its own crashed ([`crash`]): the services that need it stop with it, the agent reads a
+//! notice with its next Orchester tool answer, and the run's conversation records it.
+//!
 //! A start asks a person once for everything it runs, unless the project's rules approve every service of it
-//! ([`order`], `orchester_core::run::ProjectScope`). Not here yet: crash events and the computer's service slots.
+//! ([`order`], `orchester_core::run::ProjectScope`). Not here yet: the computer's service slots.
 
+mod crash;
 mod data;
 mod launch;
 mod order;
@@ -69,15 +73,19 @@ pub(in crate::execution) struct Services {
 }
 
 /// One invocation's services: its starts one at a time, the services it keeps, what it knows of each service it
-/// started, and whether it ended or waits for a person. Its tools hold it as long as they live; the runner forgets it
-/// once the invocation ended. Whoever takes both locks takes `running` first.
+/// started, whether it ended or waits for a person, and the crash notices its agent has not read yet. Its tools hold
+/// it as long as they live; the runner forgets it once the invocation ended. Whoever takes both locks takes `running`
+/// first.
 #[derive(Default)]
 pub(in crate::execution::step) struct InvocationServices {
   ended: AtomicBool,
   waiting: AtomicBool,
+  /// Set once the watcher of its crashes started ([`crash`]).
+  watching: AtomicBool,
   starting: Mutex<()>,
   running: Mutex<BTreeMap<ServiceName, Running>>,
   watched: Mutex<BTreeMap<ServiceName, Watch>>,
+  notices: Mutex<Vec<String>>,
 }
 
 impl InvocationServices {
@@ -110,6 +118,10 @@ struct Running {
   lease: PortLease,
   /// What its seed's requests captured, their secret values replaced.
   captured: seed::Captured,
+  /// The services it needs, which a crash of one of them stops it with ([`crash`]).
+  needs: Vec<ServiceName>,
+  /// The readers of its output, which a crash waits for so that its log holds the last lines.
+  output: readiness::Output,
 }
 
 impl Running {
@@ -218,6 +230,8 @@ pub(in crate::execution::step) struct StepServices {
   /// The environment the runner runs in, whose agent part every service gets, and what the project adds.
   inherited: Vec<(OsString, OsString)>,
   project: CommandEnvironment,
+  /// Records a crash in the run's conversation.
+  crashed: crash::CrashReport,
 }
 
 impl StepServices {
@@ -295,7 +309,14 @@ impl StepServices {
     }
     self.state.note(name, ServicePhase::Ready, None);
     kept.insert(name.clone(), running);
+    drop(kept);
+    self.watch_crashes();
     Ok(())
+  }
+
+  /// The crash notices the agent has not read yet, which the answer of its next Orchester tool call carries.
+  pub(in crate::execution::step) fn take_notices(&self) -> Vec<String> {
+    std::mem::take(&mut *self.state.notices.lock())
   }
 }
 
