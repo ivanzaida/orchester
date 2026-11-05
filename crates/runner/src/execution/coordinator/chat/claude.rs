@@ -29,7 +29,7 @@ use orchester_core::{
 use tokio::sync::{mpsc, oneshot};
 
 use super::{
-  skill::SkillPlugin,
+  skill::{SkillLayout, SkillPlugin},
   steer::Steering,
   turn::{Prepared, Seen, Turn, cannot},
 };
@@ -40,11 +40,13 @@ use crate::{
 };
 
 /// The CLI's command and the files it reads, which must outlive it (the skill's plugin, when the message carries one),
-/// the account it runs on and the secrets kept out of what the turn keeps: the API provider's key.
+/// the account it runs on, the secrets kept out of what the turn keeps (the API provider's key) and the window its
+/// stream carries from the session's earlier turns ([`Prepared::carried_window`]).
 pub(super) struct Started {
   pub(super) command: Command,
   account: AgentAccountId,
   pub(super) secrets: Vec<SecretVariable>,
+  pub(super) carried_window: Option<u64>,
   _files: [PrivateFile; 2],
   _skill: Option<SkillPlugin>,
 }
@@ -122,7 +124,11 @@ impl Turn {
         key,
       });
     // A skill the message carries is the CLI's own for this turn; a compaction takes none.
-    let placed = if compaction { None } else { self.place_skill() };
+    let placed = if compaction {
+      None
+    } else {
+      self.place_skill(SkillLayout::ClaudePlugin)
+    };
     let (skill, words) = match placed {
       Some((plugin, words)) => (Some(plugin), words),
       None => (None, self.text.as_str()),
@@ -161,6 +167,7 @@ impl Turn {
         .iter()
         .map(|on| on.key_variable(AgentProvider::ClaudeCodeCli))
         .collect(),
+      carried_window: prepared.carried_window,
       _files: [prompt, mcp],
       _skill: skill,
     })
@@ -193,7 +200,7 @@ impl Turn {
       Err(error) => return TurnState::Failed(cannot(error.to_string())),
     };
     let mut seen = Seen::default();
-    let mut stream = ClaudeStream::chat();
+    let mut stream = ClaudeStream::chat().carrying(started.carried_window);
     let mut steering = Steering::default();
     let limit = tokio::time::sleep(self.time_limit);
     tokio::pin!(limit);

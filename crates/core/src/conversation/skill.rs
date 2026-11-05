@@ -1,17 +1,19 @@
-//! A skill a person chose in a composer's slash menu for one message (ORC-325, ORC-634): the message is kept with a
-//! block before the person's words, between an opening tag that names the skill (its slug, published version and
-//! resource) and [`CLOSE`], which holds the skill's `SKILL.md` as that version has it. Every agent reads the message
-//! so, as kept: a step's agent of any engine and the Orchestrator's on Codex get the skill's text with the message. A
-//! new turn of the Orchestrator on Claude Code takes the block out and loads the skill as the CLI's own instead
-//! (`crate::connection::invocation::ClaudeChat`). A conversation shows the person's words with the skill's chip
-//! ([`carried`]). The block's words are the agent's, in English, as every prompt Orchester writes.
+//! A skill a person chose in a composer's slash menu for one message (ORC-325, ORC-634, ORC-663): the message is kept
+//! with a block before the person's words, between an opening tag that names the skill (its slug, published version
+//! and resource) and [`CLOSE`], which holds the skill's `SKILL.md` as that version has it. Every agent reads the
+//! message so, as kept: a step's agent of any engine gets the skill's text with the message. A new turn of the
+//! Orchestrator takes the block out and loads the skill as its CLI's own instead: Claude Code from a session-only
+//! plugin (`crate::connection::invocation::ClaudeChat`), Codex from a skills folder App Server registers for that
+//! process alone (`crate::connection::invocation::CodexChatSkill`). A conversation shows the person's words with the
+//! skill's chip ([`carried`]). The block's words are the agent's, in English, as every prompt Orchester writes.
 //!
 //! How Claude Code takes it, checked 2026-11-03 with Claude Code 2.1.316 on Windows 11 and a model turn
 //! (`docs/evidence/orc-634-claude-skill-2026-11-03.md`): a skill in a session-only plugin (`--plugin-dir`) loads with
 //! `--setting-sources ""` kept, and the person's own skills, the repository's `.claude/skills`, the person's plugins
 //! and their hooks stay out; `--disable-slash-commands` turns that skill off too, so a turn that carries one leaves it
-//! out, as the `/compact` turn does. Codex's own `$skill` was not checked (no Codex on that computer): it gets the
-//! block.
+//! out, as the `/compact` turn does. How Codex takes it, checked 2026-11-05 with Codex 0.166.0 and model turns
+//! (`docs/evidence/orc-663-codex-skill-2026-11-05.md`): `$<slug>` runs a skill of a folder App Server's
+//! `skills/extraRoots/set` registered, which no file keeps; a skill of no registered folder is not found.
 
 use std::{fmt::Write, num::NonZeroU32};
 
@@ -94,6 +96,11 @@ pub fn without_skill(stored: &str) -> &str {
 /// as its arguments.
 pub fn claude_prompt(slug: &Slug, words: &str) -> String {
   format!("/{CLAUDE_PLUGIN}:{} {words}", slug.as_str())
+}
+
+/// `words` as Codex takes them with the skill `slug`: its mention, `$<slug>`, then the words.
+pub fn codex_prompt(slug: &Slug, words: &str) -> String {
+  format!("${} {words}", slug.as_str())
 }
 
 /// The value of `name="…"` at the start of `tag`, and the rest of it.

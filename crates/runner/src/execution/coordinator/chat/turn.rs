@@ -62,6 +62,9 @@ pub(super) struct Prepared {
   /// The API provider's key, read from the keychain for this turn; `None` on the CLI's own sign-in.
   pub(super) key: Option<Arc<SecretValue>>,
   pub(super) resumed: Option<String>,
+  /// The context window the CLI last reported for the resumed session on the turn's model, which its readings use
+  /// until this turn's result reports one; `None` for a new session, or one no CLI on that model reported a window of.
+  pub(super) carried_window: Option<u64>,
   pub(super) environment: CommandEnvironment,
   pub(super) project_name: String,
 }
@@ -134,6 +137,13 @@ impl Turn {
         .map_err(|error| cannot(error.to_string()))?;
       self.notifier.send(Event::ChatChanged { chat: self.chat.id() });
     }
+    // A window reported on another model, or for a session this turn does not resume, is never carried.
+    let carried_window = match resumed {
+      Some(_) => db
+        .chat_reported_window(self.chat.id(), self.settings.model())
+        .map_err(|error| cannot(error.to_string()))?,
+      None => None,
+    };
     let environment = db.project_environment().map_err(|error| cannot(error.to_string()))?;
     Ok(Prepared {
       connection,
@@ -141,6 +151,7 @@ impl Turn {
       account,
       key,
       resumed,
+      carried_window,
       environment,
       project_name: db.project().name().as_str().to_owned(),
     })
@@ -186,13 +197,21 @@ impl Turn {
     self.notifier.send(Event::ChatChanged { chat: self.chat.id() });
   }
 
-  /// Keeps how full the session's context is, as the CLI's output said so far, when it changed since it was kept.
+  /// Keeps how full the session's context is, as the CLI's output said so far, when it changed since it was kept; a
+  /// window the CLI reported, not the table's estimate, is kept for the next turn on the same model.
   pub(super) fn keep_context(&self, context: Option<ContextUse>, seen: &mut Seen) {
     let Some(reading) = context.filter(|reading| seen.context != Some(*reading)) else {
       return;
     };
     seen.context = Some(reading);
-    self.record(|db| db.set_chat_context(self.chat.id(), &reading));
+    let reported = reading.window().filter(|_| !reading.estimated());
+    self.record(|db| {
+      db.set_chat_context(self.chat.id(), &reading)?;
+      match reported {
+        Some(window) => db.set_chat_reported_window(self.chat.id(), self.settings.model(), window),
+        None => Ok(()),
+      }
+    });
   }
 }
 

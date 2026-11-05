@@ -13,6 +13,18 @@ use crate::{id::ProjectId, run::RunLimit};
 /// The name the Orchestrator's agent knows Orchester's domain tools by (`mcp__orchester__<tool>`).
 pub const SERVER: &str = "orchester";
 
+/// What the system prompt adds when Codex gets the domain tools' server by `name` instead of [`SERVER`]: the person's
+/// own Codex configuration has a server named [`SERVER`] (Settings › Automation › Connect an agent registers the app's
+/// MCP server so), turned off for the session, and the chat's got a name apart
+/// (`crate::connection::invocation::CodexMcp::named_apart`).
+pub fn renamed_server(name: &str) -> String {
+  format!(
+    "- In this Codex session the `{SERVER}` MCP server is called `{name}`, because Codex's own configuration has \
+     another server named `{SERVER}`, which is turned off for you: wherever this prompt names the tools of the \
+     `{SERVER}` MCP server, use `{name}`'s tools."
+  )
+}
+
 /// What the system prompt says of `init_repository`, the chat's own tool (ORC-72).
 const REPOSITORY: &str = "- When the project's folder is not a git repository yet, or its repository has no commit, \
   runs cannot start. init_repository proposes making it one: git init on git's default branch, a .gitignore you may \

@@ -156,7 +156,7 @@ impl Turn {
       Err(error) => return failed_with(cannot(error.to_string())),
     };
     let mut seen = Seen::default();
-    let mut stream = ClaudeStream::chat();
+    let mut stream = ClaudeStream::chat().carrying(started.carried_window);
     let mut boundary = false;
     let limit = tokio::time::sleep(self.time_limit);
     tokio::pin!(limit);
@@ -196,7 +196,7 @@ impl Turn {
 
   /// Codex App Server's `thread/compact/start` on the thread it resumes.
   async fn compact_codex(&self, prepared: Prepared, before: Option<u64>) -> Compacted {
-    let mut started = match self.start_codex(prepared) {
+    let mut started = match self.start_codex(prepared, true).await {
       Ok(started) => started,
       Err(reason) => return failed_with(reason),
     };

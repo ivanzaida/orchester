@@ -1,9 +1,11 @@
 //! The Orchestrator chat's turn on Codex (`CodexChat`): App Server read-only in the project folder, with the chat's
 //! domain tools as its only MCP server, their token only in the process environment, and every tool of Codex's own
-//! that reads, runs or fetches anything turned off, the same on Windows and macOS; and what its system prompt says of
-//! reading the project. `cargo test -p orchester-core --test codex_chat codex_chat`.
+//! that reads, runs or fetches anything turned off, the same on Windows and macOS; the server named apart when the
+//! person's own Codex configuration has an `orchester`; and what its system prompt says of reading the project and of
+//! the name apart. `cargo test -p orchester-core --test codex_chat codex_chat`.
 
 use std::{
+  collections::BTreeSet,
   ffi::OsString,
   path::{Path, PathBuf},
   sync::Arc,
@@ -20,7 +22,7 @@ use orchester_core::{
     mcp::{McpServerName, McpUrl},
   },
   id::ProjectId,
-  orchestrator::instructions::{ProjectReads, SERVER, system_prompt},
+  orchestrator::instructions::{ProjectReads, SERVER, renamed_server, system_prompt},
   resource::CommandEnvironment,
   secret::SecretValue,
 };
@@ -223,4 +225,64 @@ fn codex_chat_prompt_reads_the_project_through_the_git_tools() {
   assert!(!git.contains("You may read and search it"), "{git}");
   let files = system_prompt("Kontur", project, ProjectReads::FileTools);
   assert!(files.contains("You may read and search it"), "{files}");
+}
+
+/// The names a person's Codex configuration has once Settings › Automation › Connect an agent registered the app's MCP
+/// server (`[mcp_servers.orchester]` with its `url`), next to a server of their own.
+fn connected(more: &[&str]) -> BTreeSet<String> {
+  ["orchester", "user-notes"]
+    .iter()
+    .chain(more)
+    .map(|name| (*name).to_owned())
+    .collect()
+}
+
+#[test]
+fn codex_chat_names_its_server_apart_when_the_users_configuration_has_an_orchester() {
+  let mcp = tools().named_apart(&connected(&[]));
+  let server = McpServerName::new(SERVER).expect("valid name");
+  assert_eq!(mcp.codex_name(&server), "orchester-orchester");
+  let args = chat(Path::new("/Users/me/Kontur"), &mcp, Platform::MacOs)
+    .args()
+    .expect("a Unicode folder");
+  let overrides = overrides(&args);
+  assert!(
+    overrides.contains(&r#"mcp_servers.orchester-orchester.url="http://127.0.0.1:9/mcp""#),
+    "{overrides:?}"
+  );
+  assert!(
+    overrides.contains(&r#"mcp_servers.orchester-orchester.bearer_token_env_var="ORCHESTER_MCP_TOKEN_ORCHESTER""#),
+    "its token goes the same way under the name apart: {overrides:?}"
+  );
+  assert!(
+    !overrides
+      .iter()
+      .any(|setting| setting.starts_with("mcp_servers.orchester.")),
+    "nothing merges into the user's own `orchester`: {overrides:?}"
+  );
+
+  let numbered = tools().named_apart(&connected(&["orchester-orchester"]));
+  assert_eq!(
+    numbered.codex_name(&server),
+    "orchester-orchester-2",
+    "numbered on while the name apart is taken too"
+  );
+  let untouched = tools().named_apart(&BTreeSet::from(["user-notes".to_owned()]));
+  assert_eq!(untouched.codex_name(&server), SERVER, "its own name while it is free");
+}
+
+#[test]
+fn codex_chat_prompt_names_the_server_apart() {
+  let told = renamed_server("orchester-orchester");
+  assert!(
+    told.starts_with("- In this Codex session the `orchester` MCP server is called `orchester-orchester`"),
+    "{told}"
+  );
+  assert!(told.contains("turned off for you"), "{told}");
+  assert!(told.contains("use `orchester-orchester`'s tools"), "{told}");
+  let prompt = system_prompt("Kontur", ProjectId::generate(), ProjectReads::GitTools);
+  assert!(
+    prompt.contains(&format!("the tools of the `{SERVER}` MCP server")),
+    "the line it adds speaks of what the prompt says: {prompt}"
+  );
 }

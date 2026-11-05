@@ -4,14 +4,19 @@
 //! of Codex's own), each reply kept as it comes, a call of a chat tool made with the turn's token, the next turn
 //! resuming the thread, a stopped or timed-out turn keeping what it said and spent, a failed one saying why, and what
 //! a turn spent kept on the connection's account; a command and another server's tool declined, the chat's own
-//! approved; every skill of the project disabled, and no turn when a skill could be missed.
+//! approved, also under a name apart from a server of the user's own named `orchester`; every skill of the project
+//! disabled, and no turn when a skill could be missed.
 //! Run with `cargo test -p orchester-runner --features test-agent --test chat_codex chat_codex`.
 
 #[path = "chat_codex/readiness.rs"]
 mod readiness;
+#[path = "chat_codex/skill.rs"]
+mod skill;
 mod support;
+#[path = "chat_codex/tool_server.rs"]
+mod tool_server;
 
-use std::{fs, path::Path, sync::Arc, time::Duration};
+use std::{fs, path::Path, time::Duration};
 
 use orchester_core::{
   connection::{AgentProvider, ConnectionAccount},
@@ -26,15 +31,13 @@ use orchester_core::{
 };
 use orchester_ipc::{ChatToken, ChatTools, Event};
 use orchester_store::ProjectDb;
-use parking_lot::Mutex;
-use serde_json::{Value, json};
-use tokio::{
-  io::{AsyncReadExt, AsyncWriteExt},
-  net::TcpListener,
-  sync::mpsc,
-};
+use serde_json::json;
+use tokio::sync::mpsc;
 
-use self::support::{PATIENCE, Setup, TestProject, project, scheduler};
+use self::{
+  support::{PATIENCE, Setup, TestProject, project, scheduler},
+  tool_server::ToolServer,
+};
 
 const TOKEN: &str = "chat-token-7f3a9c";
 
@@ -371,6 +374,86 @@ async fn chat_codex_never_lets_a_command_run_and_approves_only_its_own_tools() {
   );
 }
 
+/// What Settings › Automation › Connect an agent adds to `~/.codex/config.toml`: the app's MCP server as `orchester`,
+/// an HTTP server (`[mcp_servers.orchester]` with `url`), here as the fake's user configuration (`fake_codex_user`).
+const CONNECTED: &str = "orchester http://127.0.0.1:47821/mcp\n";
+
+#[tokio::test(flavor = "multi_thread")]
+async fn chat_codex_names_its_server_apart_from_the_users_orchester_and_still_approves_its_tools() {
+  let project = codex();
+  let root = project.repo.path();
+  fs::write(root.join("fake-user-servers"), CONNECTED).expect("the user's own servers");
+  let (scheduler, mut events) = scheduler(root);
+  let server = ToolServer::start().await;
+  let chat = ChatId::generate();
+  let call = keep(
+    root,
+    chat,
+    r#"Call create_task {"project":"Kontur","title":"Record every delivery attempt"}"#,
+  );
+  scheduler
+    .answer_in_chat(call, tools_at(&server.url))
+    .await
+    .expect("the turn starts");
+  assert_eq!(
+    ended(root, &mut events, call).await,
+    TurnState::Answered,
+    "the turn starts though the user's configuration has a server named `orchester`"
+  );
+  assert_eq!(replies(root, chat), ["Tool said: Created KON-1 as a draft."]);
+  assert_eq!(
+    server.calls(),
+    [(
+      format!("Bearer {TOKEN}"),
+      "create_task".to_owned(),
+      json!({"project": "Kontur", "title": "Record every delivery attempt"})
+    )],
+    "the domain tools work under the name apart, with the turn's token"
+  );
+  let started = log(root);
+  assert!(
+    started.contains(&format!(
+      "mcp-server: orchester-orchester\nmcp-url: {}\nmcp-token: present",
+      server.url
+    )),
+    "the chat's server is named apart: {started}"
+  );
+  let argv = started
+    .lines()
+    .find_map(|line| line.strip_prefix("codex-argv: "))
+    .expect("logged");
+  assert!(
+    !argv.contains(" mcp_servers.orchester."),
+    "nothing is set on the user's own `orchester`, which would merge with it: {argv}"
+  );
+  assert!(
+    started.contains(
+      "system-prompt-end: - In this Codex session the `orchester` MCP server is called `orchester-orchester`, \
+       because Codex's own configuration has another server named `orchester`, which is turned off for you"
+    ),
+    "the system prompt tells the agent the name its server has: {started}"
+  );
+
+  let asked = keep(root, chat, "Ask for tools.");
+  scheduler.answer_in_chat(asked, tools()).await.expect("the turn starts");
+  assert_eq!(ended(root, &mut events, asked).await, TurnState::Answered);
+  let answers = answers(root);
+  assert_eq!(answers.len(), 2, "{answers:?}");
+  assert!(
+    answers[0].starts_with("pencil: ") && answers[0].contains(r#""action":"decline""#),
+    "another server's tool is declined: {answers:?}"
+  );
+  assert!(
+    answers[1].starts_with("orchester: ") && answers[1].contains(r#""action":"accept""#),
+    "the chat's own tool, asked under its name apart, is approved: {answers:?}"
+  );
+  assert_eq!(
+    fs::read_to_string(root.join("fake-user-servers")).expect("read"),
+    CONNECTED,
+    "the user's configuration is only read"
+  );
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn chat_codex_disables_every_skill_of_the_project() {
   let project = codex();
@@ -455,90 +538,4 @@ fn link_folder(target: &Path, link: &Path) {
   }
   #[cfg(unix)]
   std::os::unix::fs::symlink(target, link).expect("a link");
-}
-
-/// The chat's domain tools as a stand-in on loopback: it answers MCP's `initialize` and every call, as the app's
-/// server for a turn does, and keeps each call's `Authorization` header, tool and arguments.
-struct ToolServer {
-  url: String,
-  calls: Arc<Mutex<Vec<(String, String, Value)>>>,
-}
-
-impl ToolServer {
-  async fn start() -> Self {
-    let listener = TcpListener::bind("127.0.0.1:0").await.expect("a loopback port");
-    let url = format!("http://{}/mcp", listener.local_addr().expect("its address"));
-    let calls = Arc::new(Mutex::new(Vec::new()));
-    let kept = calls.clone();
-    tokio::spawn(async move {
-      while let Ok((mut stream, _)) = listener.accept().await {
-        let kept = kept.clone();
-        tokio::spawn(async move {
-          let (authorization, request) = read_request(&mut stream).await;
-          let response = answer(&request, &authorization, &kept);
-          let written = stream.write_all(response.as_bytes()).await;
-          assert!(written.is_ok(), "the fake CLI reads the answer");
-        });
-      }
-    });
-    Self { url, calls }
-  }
-
-  fn calls(&self) -> Vec<(String, String, Value)> {
-    self.calls.lock().clone()
-  }
-}
-
-/// One HTTP request: its `Authorization` header and its JSON body.
-async fn read_request(stream: &mut tokio::net::TcpStream) -> (String, Value) {
-  let mut read = Vec::new();
-  let mut buffer = [0_u8; 4096];
-  let (head, body_start) = loop {
-    let count = stream.read(&mut buffer).await.expect("the request");
-    assert!(count > 0, "the request ended early");
-    read.extend_from_slice(&buffer[..count]);
-    if let Some(at) = read.windows(4).position(|window| window == b"\r\n\r\n") {
-      break (String::from_utf8_lossy(&read[..at]).into_owned(), at + 4);
-    }
-  };
-  let header = |name: &str| {
-    head
-      .lines()
-      .find_map(|line| {
-        let (key, value) = line.split_once(':')?;
-        key.trim().eq_ignore_ascii_case(name).then(|| value.trim().to_owned())
-      })
-      .unwrap_or_default()
-  };
-  let length: usize = header("content-length").parse().unwrap_or(0);
-  while read.len() < body_start + length {
-    let count = stream.read(&mut buffer).await.expect("the body");
-    assert!(count > 0, "the body ended early");
-    read.extend_from_slice(&buffer[..count]);
-  }
-  let body = serde_json::from_slice(&read[body_start..body_start + length]).unwrap_or(Value::Null);
-  (header("authorization"), body)
-}
-
-/// The HTTP answer to `request`: `initialize`'s with a session, a call's with its result, a notification's empty.
-fn answer(request: &Value, authorization: &str, calls: &Mutex<Vec<(String, String, Value)>>) -> String {
-  let result = match request["method"].as_str() {
-    Some("initialize") => {
-      json!({"protocolVersion": "2025-03-26", "capabilities": {"tools": {}}, "serverInfo": {"name": "orchester-orchestrator", "version": "1"}})
-    }
-    Some("tools/call") => {
-      let name = request["params"]["name"].as_str().unwrap_or_default().to_owned();
-      calls
-        .lock()
-        .push((authorization.to_owned(), name, request["params"]["arguments"].clone()));
-      json!({"content": [{"type": "text", "text": "Created KON-1 as a draft."}]})
-    }
-    _ => return "HTTP/1.1 202 Accepted\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".to_owned(),
-  };
-  let body = json!({"jsonrpc": "2.0", "id": request["id"], "result": result}).to_string();
-  format!(
-    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nMcp-Session-Id: chat-session\r\nContent-Length: {}\r\n\
-     Connection: close\r\n\r\n{body}",
-    body.len()
-  )
 }

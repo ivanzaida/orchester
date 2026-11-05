@@ -101,6 +101,10 @@ name = "chat_compact"
 required-features = ["test-agent"]
 
 [[test]]
+name = "chat_context_window"
+required-features = ["test-agent"]
+
+[[test]]
 name = "chat_rewind"
 required-features = ["test-agent"]
 

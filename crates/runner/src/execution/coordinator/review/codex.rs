@@ -157,6 +157,8 @@ impl ReviewTurn {
       renamed: BTreeMap::new(),
       exemptions: InvocationExemptions::default(),
       output_schema: None,
+      // A review answer loads no skill of its own.
+      skill: None,
       secrets: on_provider
         .iter()
         .map(|on| on.key_variable(AgentProvider::CodexCli))

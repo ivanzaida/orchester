@@ -1,7 +1,8 @@
 //! A stand-in for `codex app-server --stdio` in the runner's execution tests, the way Orchester starts
 //! Codex agents; started with `exec`, it is auto mode's reviewer instead (`fake_codex_review`). It speaks the part of
 //! the JSON-RPC protocol the runner uses (`initialize`, `account/read`, `config/read`, `thread/start` or
-//! `thread/resume`, `mcpServerStatus/list`, `turn/start`) and answers the way Codex 0.159 did in the probes
+//! `thread/resume`, `mcpServerStatus/list`, `turn/start`, and the skills' requests, `fake_codex_skills`) and answers
+//! the way Codex 0.159 did in the probes
 //! (`.tmp/agent-runtime/`), without a model. What a turn does depends on its prompt (`fake_codex_work`), or, started
 //! with the Orchestrator chat's server, on the person's message (`fake_codex_chat`); the requests a person decides are
 //! in `fake_app_server`.
@@ -77,6 +78,8 @@ mod fake_codex_readiness;
 mod fake_codex_relay;
 #[path = "fake_codex_review.rs"]
 mod fake_codex_review;
+#[path = "fake_codex_skills.rs"]
+mod fake_codex_skills;
 #[path = "fake_codex_tools.rs"]
 mod fake_codex_tools;
 #[path = "fake_codex_user.rs"]
@@ -251,6 +254,8 @@ impl Session {
         let cwd = PathBuf::from(params["cwd"].as_str().unwrap_or_default());
         emit(&json!({"id": 6, "result": {"config": self.configuration(), "layers": self.layers(&cwd)}}));
       }
+      Some("skills/list") => fake_codex_skills::list(&self.args, &message["id"], params),
+      Some("skills/extraRoots/set") => fake_codex_skills::set_roots(&message["id"], params),
       Some("mcpServerStatus/list") => {
         fake_codex_readiness::status(self, message);
         if self.argument_servers && self.probe == fake_codex_relay::Probe::LateRelay {
@@ -363,7 +368,9 @@ impl Session {
       .map(|name| (name.to_owned(), json!({"enabled": true})))
       .collect();
     for name in &self.user_servers {
-      servers.insert(name.clone(), json!({"enabled": true, "command": "user-tool"}));
+      let mut table = fake_codex_user::table(name);
+      table["enabled"] = json!(true);
+      servers.insert(name.clone(), table);
     }
     let hooks = json!({
       "PreToolUse": [], "PermissionRequest": [], "PostToolUse": [], "SessionStart": [], "UserPromptSubmit": [],
@@ -386,7 +393,7 @@ impl Session {
     let servers: serde_json::Map<String, Value> = self
       .user_servers
       .iter()
-      .map(|name| (name.clone(), json!({"command": "user-tool"})))
+      .map(|name| (name.clone(), fake_codex_user::table(name)))
       .collect();
     let mut user = json!({"mcp_servers": servers});
     if fake_provider::clashes(&self.args) {
@@ -472,6 +479,7 @@ impl Session {
     shown["input"] = Value::Null;
     eprintln!("turn: {shown}");
     eprintln!("input-blocks: {}", input_blocks(&params["input"]));
+    fake_codex_skills::took(&params["input"]);
     eprintln!("prompt: {}", prompt.lines().next().unwrap_or_default());
     for line in prompt.lines() {
       eprintln!("prompt| {line}");

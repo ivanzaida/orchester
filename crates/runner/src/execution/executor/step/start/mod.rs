@@ -127,12 +127,15 @@ impl Launch {
           claude_approvals,
           tool_relay,
           claude_exemptions,
+          carried_window,
         } = *cli;
         let process = Supervised::start(&command)?;
         let interactive = app_server.is_some() || claude_approvals.is_some();
         let transport = match app_server {
           Some(setup) => Transport::AppServer(Box::new(AppServerSession::new(setup))),
-          None => Transport::Claude(Box::new(ClaudeStream::with_exemptions(claude_exemptions))),
+          None => Transport::Claude(Box::new(
+            ClaudeStream::with_exemptions(claude_exemptions).carrying(carried_window),
+          )),
         };
         Ok(Driven {
           driver: Driver::Process { transport, process },
@@ -167,6 +170,8 @@ pub(super) struct CliLaunch {
   pub(super) tool_relay: Option<Listening>,
   /// The tools of Claude Code's MCP servers that run without asking, when the step asks before MCP actions.
   pub(super) claude_exemptions: InvocationExemptions,
+  /// The context window Claude Code reported for the session it resumes, on its model ([`ClaudeStream::carrying`]).
+  pub(super) carried_window: Option<u64>,
 }
 
 /// The agent step an invocation runs: its step, the profile version that runs it, the model and effort, and the
@@ -391,6 +396,7 @@ fn cli_launch(
     claude_approvals,
     tool_relay: started.tool_relay,
     claude_exemptions,
+    carried_window: started.carried_window,
   }))
 }
 
