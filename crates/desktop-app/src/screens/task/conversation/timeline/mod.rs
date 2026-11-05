@@ -275,7 +275,7 @@ impl Toggles {
 
   /// A press opens or folds the row; one the search opened becomes the person's to fold.
   fn flip(&self, key: &Arc<str>, default: bool) {
-    self.follow.hold_in_place();
+    self.follow.let_row_change();
     let key = key.clone();
     self.rows.update(move |rows| {
       let open = rows.is_open(&key, default);

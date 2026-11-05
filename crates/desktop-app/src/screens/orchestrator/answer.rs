@@ -39,8 +39,9 @@ use crate::{
 /// The answer under `row`'s opening, with the Orchestrator's avatar and name; `None` before its first part. Once it
 /// ended, the todo list its agent kept folds into its name line as a chip, which opens the list under that line
 /// (09 g `OoT5k`); while it answers, the list is pinned over the composer instead (`super::body`). An answer that
-/// wrote something has Copy at the end of its name line, which copies what it wrote (ORC-323), and `…` after it,
-/// whose menu rewinds to just after it (ORC-333, `super::rewind::toolbar`).
+/// wrote something has a line of actions under it (`06 · Message actions` `XPDAX`): Copy, which copies what it wrote
+/// (ORC-323), *Rewind to here*, which rewinds to just after it (ORC-333), and *Fork from here*
+/// (`super::rewind::toolbar`).
 pub(super) fn answer(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
   let first = row.turn.answer.first()?;
   let time = display::clock(first.at());

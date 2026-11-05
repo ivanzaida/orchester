@@ -141,7 +141,6 @@
     },
     "message": {
       "edit": "Edit",
-      "more": "More actions",
       "rewind": "Rewind to here",
       "fork": "Fork from here",
       "busy": "Stop the answer to edit or rewind",

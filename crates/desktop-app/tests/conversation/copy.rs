@@ -1,7 +1,8 @@
-//! Copy in a run's Conversation (ORC-323, 09 `w7TIt`, 09b `JB0f0`, 09e `Ezec2`): an agent's message shows Copy at the
-//! end of its name line while the pointer is on it, which puts its Markdown on the clipboard as it was kept and says
-//! *Copied*; a fenced code block has Copy in its head, which puts its code without the fence. A secret the runner
-//! redacted stays redacted in what is copied. How a message is split at its code blocks is `fences::pieces`'.
+//! Copy in a run's Conversation (ORC-323, ORC-706, `06 · Message actions` `XPDAX`): an agent's message shows Copy in a
+//! line under its text while the pointer is on it, which puts its Markdown on the clipboard as it was kept and says
+//! *Copied*; the person's message has Copy under its bubble, before where it stands; a fenced code block has Copy in
+//! its head, which puts its code without the fence. A secret the runner redacted stays redacted in what is copied. How
+//! a message is split at its code blocks is `fences::pieces`'.
 
 use std::sync::Arc;
 
@@ -83,6 +84,76 @@ fn conversation_copy_shows_on_hover_and_puts_the_messages_markdown() {
   );
   assert!(has_class(&mut window, &actions, COPIED_CLASS));
   assert_eq!(window.text(&format!("{row}-copy-tooltip")), "Copied");
+}
+
+fn bounds(window: &mut Window, id: &str) -> lurq::core::ElementRect {
+  window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"))
+}
+
+/// Whether `id` is laid out inside the chat's viewport, where the pointer reaches it.
+fn in_view(window: &mut Window, id: &str) -> bool {
+  let chat = bounds(window, "conversation-chat");
+  window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .is_some_and(|element| element.y >= chat.y && element.y + element.height <= chat.y + chat.height)
+}
+
+#[test]
+fn conversation_copy_of_an_agents_message_stands_under_its_text() {
+  let (mut window, row, _) = says(&message(), true);
+  window.hover(&row);
+  let message = bounds(&mut window, &format!("{row}-message"));
+  let copy = bounds(&mut window, &format!("{row}-copy"));
+  assert!(
+    copy.y >= message.y + message.height,
+    "under its text: {copy:?} {message:?}"
+  );
+  assert!(copy.x < message.x + message.width / 2.0, "at its start: {copy:?}");
+}
+
+#[test]
+fn conversation_copy_of_your_message_comes_before_where_it_stands() {
+  let (mut window, _) = super::retry_webhooks();
+  let message = super::with_text(
+    &mut window,
+    "conversation-message-",
+    "Please keep the retry budget configurable",
+  );
+  let (bubble, line) = (format!("{message}-bubble"), format!("{message}-meta"));
+  for _ in 0..200 {
+    if in_view(&mut window, &bubble) && in_view(&mut window, &line) {
+      break;
+    }
+    super::wheel(&mut window, 120.0);
+  }
+  window.hover(&bubble);
+  assert!(has_class(&mut window, &format!("{message}-actions"), SHOWN_CLASS));
+  for gone in ["edit", "rewind", "fork", "more"] {
+    assert!(
+      window.tree.get_element_by_id(&format!("{message}-{gone}")).is_none(),
+      "a run's Conversation offers no {gone}"
+    );
+  }
+  let bubble = bounds(&mut window, &format!("{message}-bubble"));
+  let line = bounds(&mut window, &format!("{message}-meta"));
+  let copy = bounds(&mut window, &format!("{message}-copy"));
+  assert!(copy.y >= bubble.y + bubble.height, "under the bubble");
+  assert!(
+    copy.x + copy.width < line.x + line.width - copy.width,
+    "where it stands comes after Copy"
+  );
+  assert!(
+    window
+      .texts(&format!("{message}-meta"))
+      .is_some_and(|texts| texts.iter().any(|text| text.starts_with("Delivered"))),
+    "the line ends with where it stands"
+  );
 }
 
 #[test]

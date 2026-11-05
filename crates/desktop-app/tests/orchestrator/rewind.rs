@@ -1,6 +1,7 @@
 //! Edit and *Rewind to here* on an earlier message (ORC-333; ORC-330's 09 `GYAPg`, 09b `QJb0b`, 09c `z7sgJ`, 10
 //! `Zm7kq`), end to end with the real runner and `orchester-fake-claude`, which answers `Noted: <prompt>`: the
-//! person's message's toolbar offers *Edit*, Copy and `…`, whose menu rewinds to before it after the drawn question;
+//! person's message's actions (icons under its bubble, ORC-706) offer *Edit*, Copy and *Rewind to here*, which rewinds
+//! to before it after the drawn question;
 //! the conversation then says where it went back to, the message's words are back in the composer, and the next answer
 //! shows the agent no longer knows what was dropped. An edit asks before it drops what follows, then sends the edited
 //! words in the message's place. Neither works while the Orchestrator answers.
@@ -102,9 +103,8 @@ fn orchestrator_rewind_to_before_a_message_drops_it_and_the_next_answer_does_not
   let mut screen = two_turns();
   let id = format!("orchestrator-message-{}", message(&screen, SECOND));
   hover(&mut screen, &id);
-  screen.press(&format!("{id}-more"));
-  assert!(screen.exists(&format!("{id}-menu")), "… opens the message's menu");
   screen.press(&format!("{id}-rewind"));
+  screen.until("the question", |screen| screen.exists("orchestrator-rewind-confirm"));
   assert!(
     screen
       .text("orchestrator-rewind-title")
@@ -202,7 +202,6 @@ fn orchestrator_rewind_is_a_persons_alone() {
   let id = format!("orchestrator-message-{}", message(&screen, SECOND));
   let before = entries(&screen);
   hover(&mut screen, &id);
-  screen.press(&format!("{id}-more"));
   screen.press(&format!("{id}-rewind"));
   screen.until("the question", |screen| screen.exists("orchestrator-rewind-confirm"));
   assert!(!screen.exists("orchestrator-rewind-person-only"));
@@ -229,7 +228,6 @@ fn orchestrator_rewind_that_failed_changes_nothing_and_says_why() {
   let mut screen = two_turns();
   let id = format!("orchestrator-message-{}", message(&screen, SECOND));
   hover(&mut screen, &id);
-  screen.press(&format!("{id}-more"));
   screen.press(&format!("{id}-rewind"));
   screen.until("the question", |screen| screen.exists("orchestrator-rewind-confirm"));
   let chat = screen.db().chats().expect("chats")[0].chat.id();
@@ -266,22 +264,32 @@ fn orchestrator_edit_and_rewind_wait_while_the_orchestrator_answers() {
       .is_some_and(|element| element.has_class(HELD_CLASS))
   };
   assert!(held(&mut screen, "edit"), "Edit waits for the answer");
+  assert!(held(&mut screen, "rewind"), "Rewind to here waits for the answer");
   assert!(
-    !held(&mut screen, "more"),
-    "… still opens, for Fork from here (ORC-334)"
+    !held(&mut screen, "fork") && !held(&mut screen, "copy"),
+    "Fork from here (ORC-334) and Copy still work"
   );
+  for part in ["edit", "rewind"] {
+    screen.window.hover(&format!("{id}-{part}"));
+    assert_eq!(
+      screen.text(&format!("{id}-{part}-tooltip")),
+      "Stop the answer to edit or rewind",
+      "{part} says why"
+    );
+  }
   screen.press(&format!("{id}-edit"));
   assert!(!screen.exists(&format!("{id}-input")), "a press edits nothing");
-  screen.press(&format!("{id}-more"));
-  assert!(screen.exists(&format!("{id}-menu")));
-  assert_eq!(
-    screen.text(&format!("{id}-rewind-detail")),
-    "Stop the answer to edit or rewind",
-    "Rewind to here waits for the answer"
-  );
   let before = entries(&screen);
   screen.press(&format!("{id}-rewind"));
   assert!(!screen.exists("orchestrator-rewind"), "and asks nothing");
-  assert_eq!(entries(&screen), before);
+  // The answer goes on meanwhile: what was kept stays, and nothing was rewound.
+  let after = entries(&screen);
+  assert!(after.starts_with(&before), "{before:?} then {after:?}");
+  assert!(
+    !after
+      .iter()
+      .any(|kind| matches!(kind, EntryKind::Event(ChatEvent::Rewound { .. }))),
+    "{after:?}"
+  );
   screen.click("orchestrator-stop");
 }
