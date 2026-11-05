@@ -44,7 +44,7 @@ mod last;
 
 pub use last::{LastMerges, ReviewCounts};
 
-use super::{Projects, hold::ReadHold};
+use super::{Projects, hold::ReadHold, settled_read::settled_read};
 use crate::services::Services;
 
 /// One project's data, shared by every tab and screen that shows it.
@@ -528,8 +528,7 @@ struct Read {
 /// no page or form showing them is replaced; only a failed first reading leaves no tasks to show.
 fn tasks(ctx: &mut Ctx, deps: (PathBuf, u64, u64, u64), (hold, programs): (&ReadHold, &Programs)) -> Read {
   let (hold, programs) = (hold.clone(), programs.clone());
-  let load = ctx.future(deps, move |(repo_root, _, _, settled)| {
-    tracing::trace!(target: crate::app_log::READ_LOG, read = "project tasks");
+  let state = settled_read(ctx, "project tasks", deps, move |(repo_root, _, _, settled)| {
     let (hold, programs) = (hold.clone(), programs.clone());
     async move {
       hold.released().await;
@@ -542,7 +541,6 @@ fn tasks(ctx: &mut Ctx, deps: (PathBuf, u64, u64, u64), (hold, programs): (&Read
         })
     }
   });
-  let state = load.state().get();
   let reading = state.is_pending();
   let settled = state.data.as_ref().map(|read| read.settled);
   let (tasks, stale) = match (state.data, state.error) {
@@ -576,8 +574,7 @@ fn answers(ctx: &mut Ctx, deps: (Runners, PathBuf)) -> PendingAnswers {
 /// read; a failed reading is logged and leaves the last one.
 fn usage(ctx: &mut Ctx, deps: (PathBuf, u64, u64, Timestamp), hold: &ReadHold) -> Option<ProjectUsage> {
   let hold = hold.clone();
-  let load = ctx.future(deps, move |(repo_root, _, _, day_start)| {
-    tracing::trace!(target: crate::app_log::READ_LOG, read = "project usage");
+  settled_read(ctx, "project usage", deps, move |(repo_root, _, _, day_start)| {
     let hold = hold.clone();
     async move {
       hold.released().await;
@@ -588,6 +585,6 @@ fn usage(ctx: &mut Ctx, deps: (PathBuf, u64, u64, Timestamp), hold: &ReadHold) -
           messages::store_error(&error)
         })
     }
-  });
-  load.state().get().data
+  })
+  .data
 }

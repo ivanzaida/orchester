@@ -18,6 +18,7 @@ mod host;
 mod known;
 pub(crate) mod merge_queue;
 pub mod own;
+pub mod settled_read;
 mod state;
 mod team;
 mod waits;
