@@ -356,6 +356,10 @@ name = "qa_app_slots"
 required-features = ["test-agent"]
 
 [[test]]
+name = "qa_service"
+required-features = ["test-agent"]
+
+[[test]]
 name = "services"
 required-features = ["test-agent"]
 

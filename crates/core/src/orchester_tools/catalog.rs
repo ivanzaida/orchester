@@ -69,10 +69,10 @@ const CREATE_FILE: &str = r#"{"type":"object","properties":{
 },"required":["filename","content"],"additionalProperties":false}"#;
 
 /// What `start_qa_app` does.
-const STARTS_QA_APP: &str = "Build and start a QA copy of the app from this worktree on a seeded scenario (tools/qa-app.ps1), off-screen and without focus, and make it the app call_run_app calls when you leave out its pid. As many QA apps run on this computer at once as the project's setting QA apps at once allows: while other runs' QA apps hold every slot, the call waits until one is free. Starting again replaces this step's QA app; Orchester stops it when your turn ends or waits for a person. A person may be asked first. Never start tools/qa-app.ps1 yourself.";
+const STARTS_QA_APP: &str = "The desktop-qa service on a seeded scenario of your choice: start_service(\"desktop-qa\") starts it on the tasks scenario, this alias on scenario. Builds and starts a QA copy of the app from this worktree (tools/qa-app.ps1), off-screen and without focus; see and use it with ui_open(\"desktop-qa\"), ui_snapshot, ui_act, ui_screenshot, ui_logs and ui_wait, or call one of its MCP tools with call_run_app without pid. Each QA app takes one of this computer's service slots for QA apps, as many as the project's setting QA apps at once allows: while other runs' QA apps hold every slot, the call waits until one is free. Starting again replaces this step's QA app; Orchester stops it when your turn ends or waits for a person. A person may be asked first. Never start tools/qa-app.ps1 yourself.";
 
 /// What `start_service` does.
-const STARTS_SERVICE: &str = "Start one of the project's services by name in this run's worktree, on a free loopback port of this run, and wait until it is ready as the service defines (its port open, an HTTP answer, or a log line). The services it needs start first, in order, each once what it needs is ready; their URLs and ports fill its {{services.<name>.url}} and {{services.<name>.port}}. Once ready, a service's seed runs once: its HTTP requests or its command; a seed that fails fails the start. Returns {url, port}, with seed: {<name>: <value>} when its seed requests captured values. A service already running in this step is reused as it is, not started twice. When a service it needs fails, nothing after it starts and the error names it. Orchester stops them with everything they started when your turn ends or waits for a person. A person may be asked first. Use this instead of starting servers by shell.";
+const STARTS_SERVICE: &str = "Start one of the project's services by name in this run's worktree, on a free loopback port of this run, and wait until it is ready as the service defines (its port open, an HTTP answer, or a log line). The services it needs start first, in order, each once what it needs is ready; their URLs and ports fill its {{services.<name>.url}} and {{services.<name>.port}}. Once ready, a service's seed runs once: its HTTP requests or its command; a seed that fails fails the start. Returns {url, port}, with seed: {<name>: <value>} when its seed requests captured values. A service already running in this step is reused as it is, not started twice. When a service it needs fails, nothing after it starts and the error names it. desktop-qa, when offered, is the built-in QA copy of the app on the tasks scenario (start_qa_app for another scenario): it returns {service, pid, driver, scenario}, takes a service slot for QA apps and is driven with the ui_* tools. Orchester stops them with everything they started when your turn ends or waits for a person. A person may be asked first. Use this instead of starting servers by shell.";
 
 /// What `start_stack` does.
 const STARTS_STACK: &str = "Start one of the project's stacks by name: every service of it and the services they need, in order, as start_service starts one, those that need none of each other together. Returns {services: {<name>: {url, port}}} for every service it started or found running. A service already running in this step is reused, not started twice. When a service fails, nothing after it starts and the error names it. A person may be asked first. Use this instead of starting servers by shell.";
@@ -113,7 +113,7 @@ impl OrchesterTool {
       Self::RunTests => RUNS_TESTS,
       Self::TestOutput => TEST_OUTPUT,
       Self::CallRunApp => {
-        "Call one embedded MCP tool of an app started inside this run's worktree, without asking. Leave out pid to call the QA app start_qa_app started in this step. Other executables and mismatched discovery files are refused. The relay keeps the token private; PNG images are saved in the run's own storage (.orchester/runs/<run>/screenshots/, kept with the run and listed on its task page under Artifacts) and returned as absolute paths: open one with read_file to see it. Use this instead of tools/lurq-mcp-client.py."
+        "Call one embedded MCP tool of an app started inside this run's worktree, without asking: the raw MCP under the ui_* tools, which see and use the desktop-qa service in one shape (ui_open, ui_snapshot, ui_act, ui_screenshot, ui_logs, ui_wait); prefer those. Leave out pid to call the QA app this step started (start_service(\"desktop-qa\") or start_qa_app). Other executables and mismatched discovery files are refused. The relay keeps the token private; PNG images are saved in the run's own storage (.orchester/runs/<run>/screenshots/, kept with the run and listed on its task page under Artifacts) and returned as absolute paths: open one with read_file to see it. Use this instead of tools/lurq-mcp-client.py."
       }
       Self::ReadFile => {
         "Read a text file of the worktree as numbered lines. Read a file before you edit it: edit_file needs this \
@@ -178,6 +178,8 @@ impl OrchesterTool {
         "Read a skill's SKILL.md, or one of its reference files, by the skill's name. Use this instead of a path to \
          read a skill."
       }
+      // The `ui_*` tools, which say it themselves.
+      _ => super::ui::description(self),
     }
   }
 
@@ -195,6 +197,7 @@ impl OrchesterTool {
         | Self::StartService
         | Self::StartStack
         | Self::StopService
+        | Self::UiAct
         | Self::RunTests
         | Self::RunCheck
         | Self::SaveMemory
@@ -219,8 +222,8 @@ const TEST_OUTPUT_INPUT: &str = r#"{"type":"object","properties":{
 },"required":["run","test"],"additionalProperties":false}"#;
 
 /// The input schema of `tool`; `projects` are the names and descriptions of the checks `run_check` may run, `services`
-/// the names of the services the service tools take, `stacks` those of the stacks `start_stack` takes and `suites`
-/// those of the test suites `run_tests` runs.
+/// the names of the services the service tools and `ui_open` take, `stacks` those of the stacks `start_stack` takes and
+/// `suites` those of the test suites `run_tests` runs. The `ui_*` tools' schemas live with them (`super::ui`).
 pub(super) fn input_schema(
   tool: OrchesterTool,
   projects: &[(String, String, bool)],
@@ -255,14 +258,14 @@ pub(super) fn input_schema(
     OrchesterTool::DeleteFile => fixed(DELETE_FILE),
     OrchesterTool::MoveFile => fixed(MOVE_FILE),
     OrchesterTool::FindReferences => fixed(FIND_REFERENCES),
-    OrchesterTool::GetTask | OrchesterTool::ListRunProcesses => fixed(NO_INPUT),
+    OrchesterTool::GetTask | OrchesterTool::ListRunProcesses | OrchesterTool::ListSkills => fixed(NO_INPUT),
     OrchesterTool::StopRunProcess => json!({"type":"object","properties":{
       "pid":{"type":"integer","minimum":1,"maximum":u32::MAX,
         "description":"The process id from list_run_processes. Only this run's executable paths may be stopped."}
     },"required":["pid"],"additionalProperties":false}),
     OrchesterTool::CallRunApp => json!({"type":"object","properties":{
       "pid":{"type":["integer","null"],"minimum":1,"maximum":u32::MAX,
-        "description":"The pid of the app this run started; null for the QA app start_qa_app started in this step."},
+        "description":"The pid of the app this run started; null for the QA app (desktop-qa) started in this step."},
       "tool":{"type":"string","minLength":1,"maxLength":200,"description":"The embedded MCP tool name, e.g. lurq_windows, navigate or lurq_screenshot."},
       "arguments":{"type":"object","description":"That tool's arguments; use {} for none. Never a discovery token."}
     },"required":["tool","arguments"],"additionalProperties":false}),
@@ -290,7 +293,6 @@ pub(super) fn input_schema(
       "term":term
     },"required":["base_directory","term"],"additionalProperties":false}),
     OrchesterTool::ReadExternalFile => read_lines("Absolute path of the file."),
-    OrchesterTool::ListSkills => fixed(NO_INPUT),
     OrchesterTool::ReadSkill => json!({"type":"object","properties":{
       "name":{"type":"string","description":"The skill's name, as list_skills or the prompt names it."},
       "file":{"type":["string","null"],"description":"A reference file, relative to the skill's folder with / \
@@ -305,6 +307,7 @@ pub(super) fn input_schema(
         "name":{"type":"string","enum":names,"description":project_list(projects)}
       },"required":["name"],"additionalProperties":false})
     }
+    _ => super::ui::input_schema(tool, services),
   }
 }
 

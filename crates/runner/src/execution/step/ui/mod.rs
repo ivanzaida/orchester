@@ -1,0 +1,161 @@
+//! The `ui_*` tools of one invocation (`orchester_core::orchester_tools::ui`): `ui_open(service)` picks a service the
+//! step started, and the other calls reach its UI through the service's driver until another is opened. Only the
+//! `mcp` driver is built here: the built-in `desktop-qa` service, the invocation's QA app ([`super::qa_app`]), is
+//! reached over the run's relay to the app (`super::run_app`), as `call_run_app` without a pid reaches it, so the same
+//! rules hold: only the app this run started, through its exact discovery file, its token kept private and its PNGs
+//! saved in the run's own storage. A project's service with another driver, or none, answers why it cannot be opened.
+
+use std::{
+  path::Path,
+  thread,
+  time::{Duration, Instant},
+};
+
+use orchester_core::{
+  orchester_tools::{
+    AppCall, QA_SERVICE, QA_SERVICE_DRIVER, ToolResult, UiCall, is_qa_service,
+    ui::{
+      UiCondition,
+      mcp::{self, UiAnswer, WAIT_POLL_MS},
+    },
+  },
+  service::{ServiceName, UiDriver},
+};
+use orchester_exec::run_processes::RunProcesses;
+use parking_lot::Mutex;
+use serde_json::{Value, json};
+
+use super::{qa_app::StepQa, run_app, service::published_services};
+
+/// What the `ui_*` calls of one invocation reach.
+pub(in crate::execution::step) struct StepUi<'a> {
+  pub(in crate::execution::step) processes: &'a RunProcesses,
+  /// The worktree, and the run's own storage the screenshots go to.
+  pub(in crate::execution::step) folders: (&'a Path, &'a Path),
+  /// The invocation's QA app, the `desktop-qa` service.
+  pub(in crate::execution::step) qa: Option<&'a StepQa>,
+  /// The project's repository, whose published services say their drivers.
+  pub(in crate::execution::step) root: &'a Path,
+  /// The service `ui_open` opened last.
+  pub(in crate::execution::step) opened: &'a Mutex<Option<ServiceName>>,
+}
+
+impl StepUi<'_> {
+  /// The answer to `call`.
+  pub(in crate::execution::step) fn run(&self, call: &UiCall) -> ToolResult {
+    let answered = match call {
+      UiCall::Open(name) => self.open(name, call),
+      _ => self.on_opened(call),
+    };
+    match answered {
+      Ok(answer) => ToolResult::shown(answer.to_string()),
+      Err(why) => ToolResult::unavailable(&why),
+    }
+  }
+
+  /// The latest `lines` log lines of the QA app, as `service_logs("desktop-qa")` answers them.
+  pub(in crate::execution::step) fn qa_logs(&self, lines: u32) -> ToolResult {
+    let call = UiCall::Logs { lines, filter: None };
+    match self.once(&call) {
+      Ok(UiAnswer::Done(answer)) => ToolResult::shown(answer.to_string()),
+      Ok(UiAnswer::NotYet) => ToolResult::shown(json!({"lines": []}).to_string()),
+      Err(why) => ToolResult::unavailable(&why),
+    }
+  }
+
+  /// `ui_open(name)`: the service's windows once it is the one the later calls reach.
+  fn open(&self, name: &ServiceName, call: &UiCall) -> Result<Value, String> {
+    if !is_qa_service(name) {
+      return Err(self.not_driven(name));
+    }
+    let pid = self
+      .qa
+      .ok_or_else(|| "this step cannot start a QA app".to_owned())?
+      .target(None)
+      .map_err(|_| {
+        format!(
+          "the service `{QA_SERVICE}` is not running in this step: start it with start_service(\"{QA_SERVICE}\") first"
+        )
+      })?
+      .map(|target| target.pid);
+    let UiAnswer::Done(mut answer) = self.once(call)? else {
+      return Err("the app answered no windows".to_owned());
+    };
+    *self.opened.lock() = Some(name.clone());
+    answer["service"] = json!(name.as_str());
+    answer["driver"] = json!(driver_name(QA_SERVICE_DRIVER));
+    answer["pid"] = json!(pid);
+    Ok(answer)
+  }
+
+  /// A call on the service `ui_open` opened; refused before one was.
+  fn on_opened(&self, call: &UiCall) -> Result<Value, String> {
+    if self.opened.lock().is_none() {
+      return Err(format!(
+        "no service's UI is open in this step: call ui_open(\"{QA_SERVICE}\") after starting it"
+      ));
+    }
+    match call {
+      UiCall::Wait {
+        condition: UiCondition::Element(query),
+        timeout_ms,
+      } => self.wait_for(call, query, *timeout_ms),
+      _ => match self.once(call)? {
+        UiAnswer::Done(answer) => Ok(answer),
+        UiAnswer::NotYet => Err("the app's answer says nothing yet".to_owned()),
+      },
+    }
+  }
+
+  /// Looks at the UI until the element `query` names is shown, at most `timeout_ms`.
+  fn wait_for(&self, call: &UiCall, query: &str, timeout_ms: u32) -> Result<Value, String> {
+    let deadline = Instant::now() + Duration::from_millis(u64::from(timeout_ms));
+    loop {
+      if let UiAnswer::Done(answer) = self.once(call)? {
+        return Ok(answer);
+      }
+      if Instant::now() >= deadline {
+        return Err(format!("no element holding `{query}` was shown within {timeout_ms} ms"));
+      }
+      thread::sleep(Duration::from_millis(WAIT_POLL_MS));
+    }
+  }
+
+  /// One request of `call` to the QA app through the `mcp` driver, and what its answer comes to.
+  fn once(&self, call: &UiCall) -> Result<UiAnswer, String> {
+    let request = mcp::request(call);
+    let app = AppCall::of_qa_app(request.tool, request.arguments);
+    let result = run_app::result(self.processes, self.folders, &app, self.qa)?;
+    mcp::answer(call, &result)
+  }
+
+  /// Why the service `name` cannot be opened here: it has no UI, its driver is not built yet, or it is not one the
+  /// step can reach.
+  fn not_driven(&self, name: &ServiceName) -> String {
+    let services = match published_services(self.root) {
+      Ok(services) => services,
+      Err(error) => return format!("the project's services cannot be read: {error}"),
+    };
+    match services
+      .iter()
+      .find(|service| service.name() == name)
+      .map(|service| service.ui_driver())
+    {
+      None => format!("the project publishes no service named `{name}`"),
+      Some(UiDriver::None) => format!("the service `{name}` has no UI driver: read it with service_logs and its URL"),
+      Some(UiDriver::Native) => format!("the service `{name}` uses the native UI driver, which is not built yet"),
+      Some(UiDriver::Mcp) => format!(
+        "the mcp driver reaches only the built-in `{QA_SERVICE}` service yet, not the project's service `{name}`"
+      ),
+    }
+  }
+}
+
+/// A driver's name, as the answers and the project's services say it.
+const fn driver_name(driver: UiDriver) -> &'static str {
+  match driver {
+    UiDriver::None => "none",
+    UiDriver::Native => "native",
+    UiDriver::Mcp => "mcp",
+  }
+}

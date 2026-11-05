@@ -7,7 +7,7 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use super::{
-  AppCall, FileCall, FindSymbol, OrchesterTool, ProcessCall, QaAppStart, SkillCall, StepTools, ToolCallError,
+  AppCall, FileCall, FindSymbol, OrchesterTool, ProcessCall, QaAppStart, SkillCall, StepTools, ToolCallError, UiCall,
   files::term,
 };
 use crate::{
@@ -81,7 +81,9 @@ pub enum ToolCall {
   Processes(ProcessCall),
   App(AppCall),
   StartQaApp(QaAppStart),
-  /// `start_service`: one of the project's published services, started for the step.
+  /// A call of a `ui_*` tool.
+  Ui(UiCall),
+  /// `start_service`: one of the project's published services, or the built-in `desktop-qa`, started for the step.
   StartService(ServiceName),
   /// `start_stack`: one of the project's published stacks, its services started for the step.
   StartStack(StackName),
@@ -210,6 +212,9 @@ impl ToolCall {
       {
         Err(ToolCallError::UnknownService(name.to_string()))
       }
+      Self::Ui(ui) if ui.opened().is_some_and(|name| !step.offers_service(name)) => Err(ToolCallError::UnknownService(
+        ui.opened().map(ToString::to_string).unwrap_or_default(),
+      )),
       Self::StartStack(name) if !step.offers_stack(name) => Err(ToolCallError::UnknownStack(name.to_string())),
       Self::RunTests { suite, .. } if !step.offers_suite(suite) => {
         Err(ToolCallError::UnknownSuite(suite.as_str().to_owned()))
@@ -233,6 +238,7 @@ impl ToolCall {
       Self::Processes(ProcessCall::Stop { .. }) => OrchesterTool::StopRunProcess,
       Self::App(_) => OrchesterTool::CallRunApp,
       Self::StartQaApp(_) => OrchesterTool::StartQaApp,
+      Self::Ui(call) => call.tool(),
       Self::StartService(_) => OrchesterTool::StartService,
       Self::StartStack(_) => OrchesterTool::StartStack,
       Self::StopService(_) => OrchesterTool::StopService,
@@ -372,6 +378,8 @@ fn read(tool: OrchesterTool, arguments: Value) -> Result<ToolCall, String> {
         .unwrap_or_else(|| Err(format!("{} has no file input Orchester reads", tool.as_str())))?;
       ToolCall::File(Box::new(file))
     }
+    // The `ui_*` tools, whose input lives with them.
+    _ => ToolCall::Ui(UiCall::parse(tool, arguments)?),
   })
 }
 

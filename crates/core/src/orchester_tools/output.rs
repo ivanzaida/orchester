@@ -247,6 +247,12 @@ impl ToolResult {
   }
 }
 
+/// An app's MCP result `value` with the values of `secrets` removed from every text and key, as
+/// [`ToolResult::redacted`] removes them from an app's answer: for a caller that reads the result before it answers.
+pub fn redacted_value(value: Value, secrets: &[SecretVariable]) -> Value {
+  redact_value(value, secrets)
+}
+
 fn redact_value(value: Value, secrets: &[SecretVariable]) -> Value {
   match value {
     Value::String(text) => Value::String(redact_secrets(&text, secrets)),

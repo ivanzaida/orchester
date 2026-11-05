@@ -13,6 +13,7 @@
 //! | a QA copy of the app, network off | not offered | not offered |
 //! | one of the project's published services (`start_service`) or stacks (`start_stack`, with the service tools), network on | asks | asks |
 //! | stopping or looking at a service the step started (`stop_service`, `service_status`, `service_logs`), with `start_service` | runs | runs |
+//! | the built-in `desktop-qa` service (the QA app) and the `ui_*` tools that drive it, with `start_qa_app` | asks to start; the `ui_*` tools run | not offered |
 //! | the service tools, network off or no published service | not offered | not offered |
 //! | one of the project's published test suites (`run_tests`), network on | asks at every call (no rules of their own yet) | the same |
 //! | a stored test's output (`test_output`), with `run_tests` | runs | runs |
@@ -35,7 +36,7 @@
 use serde_json::{Value, json};
 
 use super::{
-  AccessClass, OrchesterTool, ProjectTool, SERVER, ToolCall,
+  AccessClass, OrchesterTool, ProjectTool, QA_SERVICE, SERVER, ToolCall,
   browser::{self, BrowserTool},
   catalog::input_schema,
 };
@@ -125,19 +126,20 @@ impl StepTools {
       .into_iter()
       .filter(|tool| *tool != OrchesterTool::RunCheck || !checks.is_empty())
       .filter(|tool| {
-        !matches!(
-          tool,
-          OrchesterTool::FindSymbol
-            | OrchesterTool::ListSkills
-            | OrchesterTool::ReadSkill
-            | OrchesterTool::StartService
-            | OrchesterTool::StartStack
-            | OrchesterTool::StopService
-            | OrchesterTool::ServiceStatus
-            | OrchesterTool::ServiceLogs
-            | OrchesterTool::RunTests
-            | OrchesterTool::TestOutput
-        )
+        !tool.is_ui_tool()
+          && !matches!(
+            tool,
+            OrchesterTool::FindSymbol
+              | OrchesterTool::ListSkills
+              | OrchesterTool::ReadSkill
+              | OrchesterTool::StartService
+              | OrchesterTool::StartStack
+              | OrchesterTool::StopService
+              | OrchesterTool::ServiceStatus
+              | OrchesterTool::ServiceLogs
+              | OrchesterTool::RunTests
+              | OrchesterTool::TestOutput
+          )
       })
       .filter_map(|tool| decide(tool, permissions).map(|policy| (tool, policy)))
       .map(|(tool, policy)| match tool {
@@ -191,10 +193,18 @@ impl StepTools {
 
   /// These tools and the service tools (`start_service`, `stop_service`, `service_status`, `service_logs`), for a step
   /// with `permissions` of a project that publishes `services`: none without a service, or when the step may not start
-  /// one ([`decide`]). A start asks; stopping or looking at what the step started never does.
+  /// one ([`decide`]). A step that may start a QA app (`start_qa_app`) is also offered the built-in [`QA_SERVICE`],
+  /// which takes the place of a published service of that name, and the `ui_*` tools that drive it. A start asks;
+  /// stopping or looking at what the step started, and the `ui_*` tools, never do.
   #[must_use]
   pub fn with_services(mut self, permissions: &AgentPermissions, services: &[ServiceName]) -> Self {
-    let Some(policy) = decide(OrchesterTool::StartService, permissions).filter(|_| !services.is_empty()) else {
+    let qa = self.policy(OrchesterTool::StartQaApp).is_some();
+    let mut names: Vec<String> = services.iter().map(|name| name.as_str().to_owned()).collect();
+    if qa {
+      names.retain(|name| name != QA_SERVICE);
+      names.push(QA_SERVICE.to_owned());
+    }
+    let Some(policy) = decide(OrchesterTool::StartService, permissions).filter(|_| !names.is_empty()) else {
       return self;
     };
     // Beside the other tools that run programs, before the run's records.
@@ -203,17 +213,27 @@ impl StepTools {
       .iter()
       .position(|(tool, _)| matches!(tool, OrchesterTool::ListSkills | OrchesterTool::GetTask))
       .unwrap_or(self.offered.len());
-    self.offered.splice(
-      at..at,
-      [
-        (OrchesterTool::StartService, policy),
-        (OrchesterTool::StopService, ToolPolicy::Runs),
-        (OrchesterTool::ServiceStatus, ToolPolicy::Runs),
-        (OrchesterTool::ServiceLogs, ToolPolicy::Runs),
-      ],
-    );
-    self.services = services.iter().map(|name| name.as_str().to_owned()).collect();
+    let ui = OrchesterTool::UI
+      .into_iter()
+      .filter(|_| qa)
+      .map(|tool| (tool, ToolPolicy::Runs));
+    let tools: Vec<(OrchesterTool, ToolPolicy)> = [
+      (OrchesterTool::StartService, policy),
+      (OrchesterTool::StopService, ToolPolicy::Runs),
+      (OrchesterTool::ServiceStatus, ToolPolicy::Runs),
+      (OrchesterTool::ServiceLogs, ToolPolicy::Runs),
+    ]
+    .into_iter()
+    .chain(ui)
+    .collect();
+    self.offered.splice(at..at, tools);
+    self.services = names;
     self
+  }
+
+  /// Whether the step is offered the built-in [`QA_SERVICE`] beside the project's services.
+  pub fn offers_qa_service(&self) -> bool {
+    self.policy(OrchesterTool::StartQaApp).is_some() && self.services.iter().any(|name| name == QA_SERVICE)
   }
 
   /// These tools and `start_stack`, right before `start_service` with its policy, for a project that publishes
@@ -414,6 +434,20 @@ impl StepTools {
          it, and Orchester stops it when your turn ends or waits for a person.",
         OrchesterTool::StartQaApp.called(claude),
         OrchesterTool::CallRunApp.called(claude),
+      ));
+    }
+    if self.offers_qa_service() {
+      text.push_str(&format!(
+        " The QA copy is also the service {QA_SERVICE}: {}(\"{QA_SERVICE}\") starts it on the tasks scenario. See \
+         and use it with {}(\"{QA_SERVICE}\"), then {} (elements with refs, roles and names), {}(ref, action), {} \
+         (a PNG path to open with read_file), {} and {}(condition).",
+        OrchesterTool::StartService.called(claude),
+        OrchesterTool::UiOpen.called(claude),
+        OrchesterTool::UiSnapshot.called(claude),
+        OrchesterTool::UiAct.called(claude),
+        OrchesterTool::UiScreenshot.called(claude),
+        OrchesterTool::UiLogs.called(claude),
+        OrchesterTool::UiWait.called(claude),
       ));
     }
     text.push_str(&self.service_lines(claude));

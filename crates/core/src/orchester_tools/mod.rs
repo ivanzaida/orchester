@@ -36,6 +36,7 @@ mod processes;
 mod qa;
 mod skills;
 mod task_view;
+pub mod ui;
 mod work;
 
 use serde_json::Value;
@@ -48,13 +49,17 @@ pub use self::{
   index::{CodeIndex, FindSymbol, MAX_HITS, SymbolHit, plain_relative, shown_hits},
   input::{Revision, ToolCall},
   lines::{LineEditError, range_now, replace_lines},
-  output::{AnswerImage, MAX_ANSWER_BYTES, OutputKept, ProgramOutput, ToolResult},
+  output::{AnswerImage, MAX_ANSWER_BYTES, OutputKept, ProgramOutput, ToolResult, redacted_value},
   outside::{MAX_LINE_BYTES, MAX_READ_BYTES, OutsideReadError, OutsideReads},
   policy::{StepTools, ToolPolicy, auto_approvable, decide},
   processes::{ProcessCall, ProcessScopeError, RunProcessScope},
-  qa::{QA_APP_SCRIPT, QaAppStart, QaApproval, StartedQaApp, qa_name},
+  qa::{
+    QA_APP_SCRIPT, QA_SERVICE, QA_SERVICE_DRIVER, QA_SERVICE_SCENARIO, QaAppStart, QaApproval, StartedQaApp,
+    is_qa_service, qa_name,
+  },
   skills::{SkillCall, SkillOfferError, SkillReadError, SkillSource, StepSkills},
   task_view::TaskView,
+  ui::UiCall,
   work::{ExternalReach, ProjectTool, ToolContext, ToolProgram, ToolWork},
 };
 use crate::connection::stream::{FileChange, FileChangeKind, NativeCall};
@@ -86,6 +91,12 @@ pub enum OrchesterTool {
   StopService,
   ServiceStatus,
   ServiceLogs,
+  UiOpen,
+  UiSnapshot,
+  UiAct,
+  UiScreenshot,
+  UiLogs,
+  UiWait,
   RunTests,
   TestOutput,
   ListSkills,
@@ -112,7 +123,7 @@ pub enum AccessClass {
 }
 
 impl OrchesterTool {
-  pub const ALL: [Self; 28] = [
+  pub const ALL: [Self; 34] = [
     Self::ReadFile,
     Self::ListFiles,
     Self::SearchFile,
@@ -134,6 +145,12 @@ impl OrchesterTool {
     Self::StopService,
     Self::ServiceStatus,
     Self::ServiceLogs,
+    Self::UiOpen,
+    Self::UiSnapshot,
+    Self::UiAct,
+    Self::UiScreenshot,
+    Self::UiLogs,
+    Self::UiWait,
     Self::RunTests,
     Self::TestOutput,
     Self::ListSkills,
@@ -141,6 +158,16 @@ impl OrchesterTool {
     Self::GetTask,
     Self::SaveMemory,
     Self::ReportProgress,
+  ];
+
+  /// The `ui_*` tools, in the order they are offered.
+  pub const UI: [Self; 6] = [
+    Self::UiOpen,
+    Self::UiSnapshot,
+    Self::UiAct,
+    Self::UiScreenshot,
+    Self::UiLogs,
+    Self::UiWait,
   ];
 
   /// The name the agent calls the tool by.
@@ -167,6 +194,12 @@ impl OrchesterTool {
       Self::StopService => "stop_service",
       Self::ServiceStatus => "service_status",
       Self::ServiceLogs => "service_logs",
+      Self::UiOpen => "ui_open",
+      Self::UiSnapshot => "ui_snapshot",
+      Self::UiAct => "ui_act",
+      Self::UiScreenshot => "ui_screenshot",
+      Self::UiLogs => "ui_logs",
+      Self::UiWait => "ui_wait",
       Self::RunTests => "run_tests",
       Self::TestOutput => "test_output",
       Self::ListSkills => "list_skills",
@@ -175,6 +208,14 @@ impl OrchesterTool {
       Self::SaveMemory => "save_memory",
       Self::ReportProgress => "report_progress",
     }
+  }
+
+  /// Whether the tool is one of the `ui_*` tools ([`ui`]).
+  pub const fn is_ui_tool(self) -> bool {
+    matches!(
+      self,
+      Self::UiOpen | Self::UiSnapshot | Self::UiAct | Self::UiScreenshot | Self::UiLogs | Self::UiWait
+    )
   }
 
   pub fn from_name(name: &str) -> Option<Self> {
@@ -274,12 +315,19 @@ impl OrchesterTool {
       | Self::StartStack
       | Self::RunTests => AccessClass::Outside,
       Self::SaveMemory | Self::ReportProgress => AccessClass::Records,
+      // The `ui_*` tools reach only an app the step started, through its own MCP, as `call_run_app` does.
       Self::ListRunProcesses
       | Self::StopRunProcess
       | Self::CallRunApp
       | Self::StopService
       | Self::ServiceStatus
-      | Self::ServiceLogs => AccessClass::RunProcesses,
+      | Self::ServiceLogs
+      | Self::UiOpen
+      | Self::UiSnapshot
+      | Self::UiAct
+      | Self::UiScreenshot
+      | Self::UiLogs
+      | Self::UiWait => AccessClass::RunProcesses,
     }
   }
 }
