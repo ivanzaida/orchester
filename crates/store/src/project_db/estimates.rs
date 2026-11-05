@@ -252,7 +252,7 @@ fn usage([input, cached_input, output]: [i64; 3]) -> Result<TokenUsage, StoreErr
 }
 
 /// A `task_estimates` row: points, source, reason, basis and when they were set.
-type EstimateRow = (i64, String, Option<String>, Option<String>, i64);
+pub(super) type EstimateRow = (i64, String, Option<String>, Option<String>, i64);
 
 /// The story points of `task` read in `connection`.
 pub(super) fn load(connection: &Connection, task: TaskId) -> Result<Option<StoryEstimate>, StoreError> {
@@ -263,16 +263,17 @@ pub(super) fn load(connection: &Connection, task: TaskId) -> Result<Option<Story
       |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
     )
     .optional()?;
-  row
-    .map(|(points, source, reason, basis, at)| {
-      Ok(StoryEstimate::restored(
-        (points_value(points)?, parse_source(&source)?),
-        reason,
-        basis.map(EstimateBasis::restored),
-        Timestamp::from_unix_millis(at),
-      ))
-    })
-    .transpose()
+  row.map(restored).transpose()
+}
+
+/// The story points a `task_estimates` row records.
+pub(super) fn restored((points, source, reason, basis, at): EstimateRow) -> Result<StoryEstimate, StoreError> {
+  Ok(StoryEstimate::restored(
+    (points_value(points)?, parse_source(&source)?),
+    reason,
+    basis.map(EstimateBasis::restored),
+    Timestamp::from_unix_millis(at),
+  ))
 }
 
 pub(super) fn points_value(points: i64) -> Result<StoryPoints, StoreError> {

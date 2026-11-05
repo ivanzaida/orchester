@@ -94,6 +94,7 @@ mod sources;
 mod step_outputs;
 mod step_progress;
 mod tags;
+mod task_children;
 mod task_deletion;
 mod task_effort;
 mod task_groups;

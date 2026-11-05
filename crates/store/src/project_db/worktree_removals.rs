@@ -1,7 +1,10 @@
 //! `run_worktree_removals`: when runs' own worktrees were removed, one row per run; `run_worktrees_not_removed`: the
 //! folder a removal that could not finish left, and why (ORC-418).
 
-use std::{collections::HashMap, path::Path};
+use std::{
+  collections::{HashMap, HashSet},
+  path::Path,
+};
 
 use orchester_core::{
   command::CommandRunner,
@@ -69,6 +72,15 @@ impl ProjectDb {
       .into_iter()
       .map(|(name, run)| Ok((name, parse("run id", &run)?)))
       .collect()
+  }
+
+  /// The runs whose worktree was removed, in one statement: whose [`WorktreeStore::worktree_removal`] is some.
+  pub fn runs_with_worktree_removed(&self) -> Result<HashSet<RunId>, StoreError> {
+    let mut statement = self.connection.prepare("SELECT run_id FROM run_worktree_removals")?;
+    let runs = statement
+      .query_map([], |row| row.get::<_, String>(0))?
+      .collect::<Result<Vec<_>, _>>()?;
+    runs.iter().map(|run| parse("run id", run)).collect()
   }
 
   /// Sweeps the worktree folders of the repository at `repo` ([`sweep`]) that no git worktree, as the `git` program

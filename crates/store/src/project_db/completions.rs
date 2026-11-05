@@ -1,6 +1,8 @@
 //! `run_completions` and `run_artifacts`: runs completed without a merge (ORC-93), one row per run, and the texts a
 //! run keeps by name, a completed run's report.
 
+use std::collections::HashSet;
+
 use orchester_core::{
   id::{RunId, TaskId},
   resource::StepKey,
@@ -108,6 +110,15 @@ impl ProjectDb {
         .map_err(|error| corrupt("run completer", error))?,
       completed_at: Timestamp::from_unix_millis(at),
     }))
+  }
+
+  /// The runs completed without a merge, in one statement: whose [`Self::run_completion`] is some.
+  pub fn completed_runs(&self) -> Result<HashSet<RunId>, StoreError> {
+    let mut statement = self.connection.prepare("SELECT run_id FROM run_completions")?;
+    let runs = statement
+      .query_map([], |row| row.get::<_, String>(0))?
+      .collect::<Result<Vec<_>, _>>()?;
+    runs.iter().map(|run| parse("run id", run)).collect()
   }
 
   /// The texts `run` keeps, by name.

@@ -17,7 +17,7 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, RunStoreError, StoreError};
 
-use super::{changes::run_work_present, data::latest_run, detail::run_store_error, unreadable::Unreadable};
+use super::{changes::run_work_present, detail::run_store_error, latest_runs::latest_run, unreadable::Unreadable};
 use crate::messages::Message;
 
 /// One run of the task, as its row shows it.

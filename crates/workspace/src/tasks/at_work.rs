@@ -3,12 +3,15 @@
 //! runs on. Read with the project's tasks ([`super::data`]) for the runs that run only, so the page never reads a run
 //! of its own.
 
-use std::{collections::BTreeMap, sync::Arc};
+use std::{
+  collections::{BTreeMap, HashMap},
+  sync::Arc,
+};
 
 use orchester_core::{
   connection::{AgentProvider, Connection, ConnectionKind},
-  id::{AgentAccountId, RunId, TaskId},
-  resource::AgentProfile,
+  id::{AgentAccountId, ConnectionId, ResourceId, RunId, TaskId},
+  resource::{AgentProfile, VersionNumber},
   run::{Run, StepExecutor},
   store::{ActivityStore, ConnectionStore, ResourceStore},
   time::Timestamp,
@@ -91,9 +94,10 @@ pub(super) fn read(db: &ProjectDb, run: &Run, found: Option<FoundAgent>) -> Resu
 }
 
 /// The agent that runs `step` of `run`, as its pinned profile names it; `None` for a tool step, or a profile or
-/// connection no longer found.
+/// connection no longer found. Profiles and connections `agents` looked up already are not read again.
 pub(super) fn step_agent(
   db: &ProjectDb,
+  agents: &mut Agents,
   run: &Run,
   step: Option<&CurrentStep>,
 ) -> Result<Option<FoundAgent>, StoreError> {
@@ -103,21 +107,56 @@ pub(super) fn step_agent(
   else {
     return Ok(None);
   };
-  let Some(version) = db.version::<AgentProfile>(profile.resource, profile.number)? else {
+  let Some(profile) = agents.profile(db, (profile.resource, profile.number))? else {
     return Ok(None);
   };
-  let profile = version.body().clone();
   Ok(
-    ConnectionStore::connection(db, profile.connection())?.and_then(|connection| match connection.kind() {
-      ConnectionKind::Agent(provider) => {
-        let provider = *provider;
-        Some(FoundAgent {
-          profile,
-          connection,
-          provider,
-        })
-      }
-      ConnectionKind::GitHub { .. } => None,
-    }),
+    agents
+      .connection(db, profile.connection())?
+      .and_then(|connection| match connection.kind() {
+        ConnectionKind::Agent(provider) => {
+          let provider = *provider;
+          Some(FoundAgent {
+            profile,
+            connection,
+            provider,
+          })
+        }
+        ConnectionKind::GitHub { .. } => None,
+      }),
   )
+}
+
+/// The pinned agent profiles and the connections one reading of the tasks looked up, each read once however many
+/// runs use it; `None` for one not found.
+#[derive(Default)]
+pub(super) struct Agents {
+  profiles: HashMap<(ResourceId, VersionNumber), Option<AgentProfile>>,
+  connections: HashMap<ConnectionId, Option<Connection>>,
+}
+
+impl Agents {
+  fn profile(
+    &mut self,
+    db: &ProjectDb,
+    (resource, number): (ResourceId, VersionNumber),
+  ) -> Result<Option<AgentProfile>, StoreError> {
+    if let Some(found) = self.profiles.get(&(resource, number)) {
+      return Ok(found.clone());
+    }
+    let found = db
+      .version::<AgentProfile>(resource, number)?
+      .map(|version| version.body().clone());
+    self.profiles.insert((resource, number), found.clone());
+    Ok(found)
+  }
+
+  fn connection(&mut self, db: &ProjectDb, id: ConnectionId) -> Result<Option<Connection>, StoreError> {
+    if let Some(found) = self.connections.get(&id) {
+      return Ok(found.clone());
+    }
+    let found = ConnectionStore::connection(db, id)?;
+    self.connections.insert(id, found.clone());
+    Ok(found)
+  }
 }
