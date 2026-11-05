@@ -213,6 +213,7 @@ fn summaries((project, key): (&str, &str), state: &State) -> Vec<Value> {
     module["work"] = Value::Null;
     module["effective_claim"] = Value::Null;
     module["capabilities"] = capabilities();
+    module["pending_delivery"] = Value::Null;
     let (progress, count, remaining) = progress(&tasks, first_download::MODULE);
     let forecast = json!({"remaining": remaining, "history_days": 0, "history_delivered": 0,
       "outlook": {"kind": "not_enough_history"}});

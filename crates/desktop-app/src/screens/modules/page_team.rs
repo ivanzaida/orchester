@@ -225,7 +225,7 @@ fn unavailable_header(
     TeamFailure::Unavailable { since } => {
       ctx.t_args("modules.team.page.unavailableSince", [("time", moment(ctx, *since))])
     }
-    TeamFailure::SignedOut | TeamFailure::NotMember | TeamFailure::Unsupported | TeamFailure::Refused => {
+    TeamFailure::SignedOut | TeamFailure::NotMember | TeamFailure::Unsupported { .. } | TeamFailure::Refused => {
       ctx.t("tasks.team.unavailable.title")
     }
   };

@@ -216,8 +216,10 @@ fn team_qa_work_an_admin_authorizes_the_delivery_that_waits_and_it_is_delivered(
     "Delivery to main waits for your authorization",
   );
 
-  with_synthetic_input(|| window.press("module-team-authorize"));
+  // The server's read can show the waiting delivery while this ask still settles here, its Authorize under way: the
+  // client presses until the button takes the press.
   window.until("the press to be refused", |window| {
+    with_synthetic_input(|| window.press("module-team-authorize"));
     window.texts("module-team-authorize-person-only").is_some()
   });
   assert_eq!(
@@ -233,6 +235,37 @@ fn team_qa_work_an_admin_authorizes_the_delivery_that_waits_and_it_is_delivered(
   let requested = commands.iter().rposition(|kind| kind == "delivery.request");
   assert!(authorized < requested, "{commands:?}");
   assert_eq!(asked(&server, "delivery.report"), 1);
+}
+
+/// olha's request waits for an Admin (04e `GujCo`): the Admin reads who asked and when, and Authorize authorizes
+/// exactly those commits; olha's own computer asks for the merge then, so nothing is requested here.
+#[test]
+fn team_qa_work_an_admin_reads_who_asked_and_authorizes_that_delivery() {
+  let (mut window, server) = on(State::AdminWork, module_route(WEBHOOKS), "module-team-authorize");
+  let title = says(&mut window, "module-team-delivery-title", "Delivery to main waits");
+  assert_eq!(title, "Delivery to main waits for your authorization");
+  // The branch it lands on is read from this checkout after the server's read shows the line.
+  window.until("the base branch", |window| {
+    window.text("module-team-delivery-detail").contains(" into main at ")
+  });
+  let detail = window.text("module-team-delivery-detail");
+  assert!(detail.starts_with("olha asked at "), "{detail}");
+  assert!(
+    detail.contains("to merge module/webhooks-v2 at 4be19c2 into main at 91d0a7e."),
+    "{detail}"
+  );
+  window.press("module-team-authorize");
+  says(
+    &mut window,
+    "module-team-delivery-title",
+    "An Admin authorized the delivery",
+  );
+  assert_eq!(asked(&server, "delivery.authorize"), 1);
+  assert_eq!(asked(&server, "delivery.request"), 0, "olha asks for the merge herself");
+  assert!(
+    window.texts("module-team-delivery-again").is_none(),
+    "not this computer's to merge"
+  );
 }
 
 #[test]

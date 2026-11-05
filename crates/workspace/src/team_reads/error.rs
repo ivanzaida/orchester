@@ -1,12 +1,14 @@
 //! Why a team project's read or subscription failed, typed so callers tell a server that cannot be reached from a
 //! membership that ended or a session that changed. No variant carries a request, a response body or a token. The
 //! team server answers `401` and `404` in the `/api/v1` `{error, message}` form and what is new to the reads
-//! (`422 invalid`, `410 cursor_expired`) as an `AuthorityError`; both forms are read.
+//! (`422 invalid`, `410 cursor_expired`, `426 unsupported_contract` with the version it needs) as an `AuthorityError`;
+//! both forms are read.
 
 use orchester_api::{
   ErrorCode,
   client::{AuthorityCallError, ClientError, SubscriptionEnd},
-  v2::AuthorityErrorCode,
+  releases::ReleaseVersion,
+  v2::{AuthorityErrorCode, ErrorDetails},
 };
 use thiserror::Error;
 
@@ -37,6 +39,10 @@ pub enum TeamReadError {
   /// Every attempt at the read was invalidated while it was in flight: the data changed faster than it was read.
   #[error("the data kept changing while it was read")]
   KeptChanging,
+  /// `426 unsupported_contract`: the server accepts desktops of `required` and later only, so this one needs an
+  /// update before it reads the workspace again.
+  #[error("the team server needs Orchester {required}")]
+  NeedsVersion { required: ReleaseVersion },
   /// The server refused the read with another code.
   #[error("the team server refused the read: {0:?}")]
   Refused(AuthorityErrorCode),
@@ -61,13 +67,16 @@ impl From<AuthorityCallError> for TeamReadError {
     match error {
       AuthorityCallError::Client(error) if error.is_connection() => Self::Unavailable { retry_after: None },
       AuthorityCallError::Client(error) => common(error),
-      AuthorityCallError::Refused { error, retry_after, .. } => match error.code() {
-        AuthorityErrorCode::Unauthenticated => Self::SignedOut,
-        AuthorityErrorCode::MembershipRevoked => Self::MembershipRevoked,
-        AuthorityErrorCode::NotFound => Self::NotFound,
-        AuthorityErrorCode::CursorExpired => Self::CursorExpired,
-        AuthorityErrorCode::Unavailable | AuthorityErrorCode::RateLimited => Self::Unavailable { retry_after },
-        code => Self::Refused(code),
+      AuthorityCallError::Refused { error, retry_after, .. } => match (error.code(), error.details()) {
+        (_, ErrorDetails::UnsupportedContract { required_version }) => Self::NeedsVersion {
+          required: required_version.clone(),
+        },
+        (AuthorityErrorCode::Unauthenticated, _) => Self::SignedOut,
+        (AuthorityErrorCode::MembershipRevoked, _) => Self::MembershipRevoked,
+        (AuthorityErrorCode::NotFound, _) => Self::NotFound,
+        (AuthorityErrorCode::CursorExpired, _) => Self::CursorExpired,
+        (AuthorityErrorCode::Unavailable | AuthorityErrorCode::RateLimited, _) => Self::Unavailable { retry_after },
+        (code, _) => Self::Refused(code),
       },
     }
   }

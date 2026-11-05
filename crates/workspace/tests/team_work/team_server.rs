@@ -67,7 +67,9 @@ pub struct Work {
 }
 
 /// A delivery of the module's branch, as the server keeps it (`deliveries`): bound to the module's claim, its branch
-/// and both commits, with the Admin's authorization or none (the automatic merge).
+/// and both commits, with the Admin's authorization or none (the automatic merge, or a request that waits for the
+/// Admin); `waits` is whom a requested one waits for, as the server's schema 27 keeps it: `admin` for the Admin's
+/// authorization, `holder` once the Admin authorized it and until the holder's next request takes the merge.
 #[derive(Clone)]
 pub struct Delivery {
   pub authorization: Option<String>,
@@ -78,6 +80,7 @@ pub struct Delivery {
   pub state: String,
   pub revision: u64,
   pub merge_commit: Option<String>,
+  pub waits: Option<&'static str>,
 }
 
 pub struct State {

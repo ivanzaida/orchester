@@ -10,7 +10,7 @@
 use serde_json::{Value, json};
 
 use super::{
-  Authority, AuthorityClaim, Person, Standing, execution,
+  Authority, AuthorityClaim, Person, Standing, delivery, execution,
   listing::task_id,
   work::{BranchChange, module_id, module_number},
 };
@@ -125,7 +125,9 @@ fn carry_out(authority: &mut Authority, (project, operation): (&str, &str), comm
     "module.branch.set" => branch(authority, project, command),
     "work.start" => execution::start(authority, command),
     "work.report" => execution::report(authority, command),
-    "delivery.authorize" | "delivery.request" | "delivery.report" => deliver(authority, (operation, kind), command),
+    "delivery.authorize" | "delivery.request" | "delivery.report" => {
+      delivery::deliver(authority, (operation, kind), command)
+    }
     _ => Err((422, "invalid")),
   }
 }
@@ -222,54 +224,6 @@ fn branch(authority: &mut Authority, project: &str, command: &Value) -> Result<V
   );
   let module = module_read(authority, project, index);
   Ok(json!({"kind": "module", "module": module, "effects": []}))
-}
-
-/// The delivery commands of a module: an Admin's authorization, its holder's request on it or on the automatic merge,
-/// and the holder's report of the merge.
-fn deliver(authority: &mut Authority, (operation, kind): (&str, &str), command: &Value) -> Result<Value, Refused> {
-  let subject = match kind {
-    "delivery.authorize" => command["subject"].clone(),
-    _ => command["authority"]["subject"].clone(),
-  };
-  let index = module_index(authority, &subject["id"]).ok_or((404, "not_found"))?;
-  let held = module_holder(authority, &json!({"kind": "module", "id": subject["id"]}));
-  let (state, authorization, effects) = match kind {
-    "delivery.authorize" if authority.standing == Standing::Member => return Err((403, "forbidden")),
-    "delivery.authorize" => ("authorized", json!(operation), json!([])),
-    _ if held != Some(Person::You) => return Err((409, "claim_lost")),
-    "delivery.request" => {
-      let cited = &command["authorization_operation_id"];
-      if cited.is_null() && !authority.policy.1 {
-        return Err((403, "delivery_not_authorized"));
-      }
-      let effect = json!({"kind": "deliver_module", "module_id": subject["id"], "branch": command["branch"],
-        "source_commit": command["source_commit"], "base_commit": command["base_commit"]});
-      ("requested", cited.clone(), json!([effect]))
-    }
-    _ => match command["outcome"]["kind"].as_str() {
-      Some("delivered") => ("delivered", Value::Null, json!([])),
-      _ => ("failed", Value::Null, json!([])),
-    },
-  };
-  let claim = authority
-    .modules
-    .as_ref()
-    .and_then(|modules| modules.get(index)?.claim)
-    .map(|claim| claim.id(module_number(index)));
-  let branch = authority.branches.get(&index).map_or_else(
-    || {
-      authority
-        .modules
-        .as_ref()
-        .map_or("", |modules| modules[index].branch)
-        .to_owned()
-    },
-    |changed| changed.branch.clone(),
-  );
-  let delivery = json!({"subject": {"kind": "module", "id": module_id(index)}, "claim_id": claim,
-    "authorization_operation_id": authorization, "branch": branch, "source_commit": command["source_commit"],
-    "base_commit": command["base_commit"], "state": state, "revision": 1});
-  Ok(json!({"kind": "delivery", "delivery": delivery, "effects": effects}))
 }
 
 /// The module at `index` of `project` as a `ModuleRead`, with its branch as an Admin left it.
@@ -378,7 +332,7 @@ fn subject_number(authority: &Authority, subject: &Value) -> Option<u32> {
 }
 
 /// Who holds the module claim that covers `subject`: the module's, or the module the task is in.
-fn module_holder(authority: &Authority, subject: &Value) -> Option<Person> {
+pub(super) fn module_holder(authority: &Authority, subject: &Value) -> Option<Person> {
   let modules = authority.modules.as_ref()?;
   let index = if subject["kind"] == "module" {
     module_index(authority, &subject["id"])?
@@ -389,7 +343,7 @@ fn module_holder(authority: &Authority, subject: &Value) -> Option<Person> {
   modules.get(index)?.claim.map(|claim| claim.holder)
 }
 
-fn module_index(authority: &Authority, id: &Value) -> Option<usize> {
+pub(super) fn module_index(authority: &Authority, id: &Value) -> Option<usize> {
   let count = authority.modules.as_ref()?.len();
   (0..count).find(|index| *id == module_id(*index))
 }

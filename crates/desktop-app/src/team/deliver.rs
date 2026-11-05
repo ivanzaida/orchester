@@ -1,10 +1,10 @@
 //! A team module's delivery to its base from its page (`04e` `GujCo`, `04f · Module delivery by state` `Wd4G1`,
 //! `docs/design/team-authority.md` §4), as `merge_run` asks for it
 //! (`orchester_workspace::team_work::ModuleDeliveries`): the module's holder on this computer asks, citing an Admin's
-//! authorization or the workspace's Automatic merge; this computer merges only what the server's receipt allows, and
-//! reports it. An Admin authorizes exactly the commits of a delivery that waits for it. What a delivery stands at is
-//! read from this computer's records of it ([`deliveries`]): the server keeps no read of a module's deliveries yet, so
-//! another member's request is not seen here.
+//! authorization or the workspace's Automatic merge, and without either the request waits for an Admin; this computer
+//! merges only what the server's receipt allows, and reports it. An Admin authorizes exactly the commits of the
+//! delivery that waits for it, as the module's read names them (`ModuleRead.pending_delivery`). How the merge and its
+//! report went here is read from this computer's records ([`deliveries`]).
 
 use std::path::{Path, PathBuf};
 
@@ -130,17 +130,24 @@ pub async fn authorize(
   }
 }
 
+/// The branch the checkout at `root` has checked out, which a delivery asked for here lands on; `None` on a detached
+/// head, or when it cannot be read, which is logged. Blocks on git.
+pub fn checked_out(programs: &Programs, root: &Path) -> Option<BranchName> {
+  match checked_out_branch(&programs.runner(), Path::new(GIT), root) {
+    Ok(branch) => branch,
+    Err(error) => {
+      tracing::warn!(%error, "cannot read the branch a team delivery lands on");
+      None
+    }
+  }
+}
+
 /// The module's `branch` and the branch checked out at `root`, each with its tip.
 fn tips(programs: &Programs, root: &Path, branch: &str) -> Result<Tips, Asked> {
   let runner = programs.runner();
   let source_commit =
     team_work::branch_tip(runner, root, branch).map_err(|_| Asked::BranchNotFound(branch.to_owned()))?;
-  let base_branch = checked_out_branch(&runner, Path::new(GIT), root)
-    .map_err(|error| {
-      tracing::warn!(%error, "cannot read the branch a team delivery lands on");
-      Asked::NoBase
-    })?
-    .ok_or(Asked::NoBase)?;
+  let base_branch = checked_out(programs, root).ok_or(Asked::NoBase)?;
   if base_branch.as_str() == branch {
     return Err(Asked::NoBase);
   }

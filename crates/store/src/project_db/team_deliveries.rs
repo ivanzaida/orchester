@@ -20,6 +20,9 @@ pub enum TeamDeliveryStage {
   Requested,
   /// The server refused the request; nothing is merged.
   Refused,
+  /// The server took the request without an effect: it waits for an Admin's authorization, and nothing is merged
+  /// under this operation. Once an Admin authorized it, the holder's next request takes the merge.
+  Waiting,
   /// The server took the request with its `deliver_module` effect: the merge is this computer's to make.
   Accepted,
   /// The merge began: git may have made it before the computer stopped.
@@ -37,6 +40,7 @@ impl TeamDeliveryStage {
     match self {
       Self::Requested => "requested",
       Self::Refused => "refused",
+      Self::Waiting => "waiting",
       Self::Accepted => "accepted",
       Self::Merging => "merging",
       Self::Reporting => "reporting",
@@ -49,6 +53,7 @@ impl TeamDeliveryStage {
     Ok(match text {
       "requested" => Self::Requested,
       "refused" => Self::Refused,
+      "waiting" => Self::Waiting,
       "accepted" => Self::Accepted,
       "merging" => Self::Merging,
       "reporting" => Self::Reporting,
@@ -58,9 +63,12 @@ impl TeamDeliveryStage {
     })
   }
 
-  /// Whether the delivery goes no further.
+  /// Whether the delivery goes no further under its operation.
   pub const fn settled(self) -> bool {
-    matches!(self, Self::Refused | Self::Reported | Self::ReportRefused)
+    matches!(
+      self,
+      Self::Refused | Self::Waiting | Self::Reported | Self::ReportRefused
+    )
   }
 }
 
@@ -150,6 +158,22 @@ impl ProjectDb {
     ensure_updated(&self.connection, operation, updated)
   }
 
+  /// Keeps the `delivery` the receipt of `operation` answered with when it allowed no merge: the request waits for an
+  /// Admin's authorization.
+  pub fn wait_team_delivery(
+    &mut self,
+    operation: OperationId,
+    delivery: &str,
+    at: Timestamp,
+  ) -> Result<(), StoreError> {
+    let updated = self.connection.execute(
+      "UPDATE team_deliveries SET stage = 'waiting', delivery = ?2, updated_at = ?3 WHERE operation_id = ?1 \
+       AND stage = 'requested'",
+      params![operation.to_string(), delivery, at.unix_millis()],
+    )?;
+    ensure_updated(&self.connection, operation, updated)
+  }
+
   /// Keeps the `delivery` the receipt of `operation` answered with, whose effect lets this computer merge. A delivery
   /// accepted already stays as it is.
   pub fn accept_team_delivery(
@@ -167,7 +191,7 @@ impl ProjectDb {
           params![operation.to_string(), delivery, at.unix_millis()],
         )?;
       }
-      TeamDeliveryStage::Refused => return Err(out_of_order(&known)),
+      TeamDeliveryStage::Refused | TeamDeliveryStage::Waiting => return Err(out_of_order(&known)),
       _ => return Ok(known),
     }
     let accepted = load(&transaction, operation)?.ok_or(StoreError::TeamDeliveryNotFound(operation))?;

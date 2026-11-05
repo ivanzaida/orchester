@@ -1,13 +1,16 @@
-//! What the ORC-732 states change of Kontur's tasks and modules on the stand-in team server, what it meets first, and
-//! what this computer holds once it joined (`Team authority · redesign` `BZc66` rows 2–5 and 7): the claims it took
-//! here, taken through the dispatcher as the Task page takes them; the team run of `team-running`, whose work starts
-//! through the dispatcher's `work.start` as the Task page's Run starts it; the team runs the server fenced, as this
-//! computer keeps them; and the module branch a delivery takes. Fixture data for QA, never shipped.
+//! What the ORC-732 and ORC-735 states change of Kontur's tasks and modules on the stand-in team server, what it meets
+//! first, and what this computer holds once it joined (`Team authority · redesign` `BZc66` rows 2–5 and 7): the claims
+//! it took here, taken through the dispatcher as the Task page takes them; the team run of `team-running`, whose work
+//! starts through the dispatcher's `work.start` as the Task page's Run starts it; the team runs the server fenced, as
+//! this computer keeps them; the module branch a delivery takes; olha's delivery request that waits for the Admin
+//! (04e); and the version the server needs. Fixture data for QA, never shipped.
 
 use std::{collections::HashMap, error::Error, path::Path, process::Command};
 
 use orchester_api::{
-  test_support::team_server::{AuthorityClaim, AuthorityModule, AuthorityTask, Person, Plan, TeamServer},
+  test_support::team_server::{
+    AuthorityClaim, AuthorityModule, AuthorityTask, PendingDelivery, Person, Plan, TeamServer,
+  },
   v2::{AuthorityRef, Subject, TeamCommandValue},
 };
 use orchester_app::services::Services;
@@ -67,6 +70,19 @@ const BILLING: usize = 1;
 /// stand-in takes as it takes any commit.
 const NO_HEAD: &str = "0000000000000000000000000000000000000000";
 
+/// The oldest desktop the server accepts in `team-version-refused`: the team server's minimum, above this app's own.
+pub const REQUIRED_VERSION: &str = "0.5.0";
+
+/// The delivery of Webhooks v2 olha asked for in `team-admin-work` (04e `GujCo`): how long ago, and the module
+/// branch's commit onto the base's.
+const OLHA_ASKED: (i64, (&str, &str)) = (
+  7,
+  (
+    "4be19c2a8d1f3e5b7c9a0d2f4e6b8c1a3d5f7e90",
+    "91d0a7e3c5b7d9f1a3c5e7b9d1f3a5c7e9b1d3f5",
+  ),
+);
+
 /// What a team run records of the start that made it: its operation, and the claim and work it reports under.
 type Authorized = (OperationId, ClaimId, WorkId);
 
@@ -86,12 +102,19 @@ pub fn task(state: State, task: &mut AuthorityTask) {
   }
 }
 
-/// `modules` as `state` has them on the server.
+/// `modules` as `state` has them on the server: olha's claim of Webhooks v2 stale, or her request to deliver it waiting
+/// for an Admin.
 pub fn modules(state: State, modules: &mut [AuthorityModule]) {
-  if matches!(state, State::ModuleWork | State::Claims)
-    && let Some(webhooks) = modules.first_mut()
-  {
-    webhooks.claim = claim(OLHA, 41, true);
+  let Some(webhooks) = modules.get_mut(WEBHOOKS) else {
+    return;
+  };
+  match state {
+    State::ModuleWork | State::Claims => webhooks.claim = claim(OLHA, 41, true),
+    State::AdminWork => {
+      let (minutes, commits) = OLHA_ASKED;
+      webhooks.pending = Some(PendingDelivery::awaiting_admin(OLHA, minutes, commits));
+    }
+    _ => {}
   }
 }
 

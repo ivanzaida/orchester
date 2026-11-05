@@ -123,5 +123,5 @@ fn serve(server: &TeamServer, (state, standing): (State, Standing), unavailable:
       .collect(),
   );
   server.authority_unavailable(unavailable);
-  server.refuse_this_version(state == State::VersionRefused);
+  server.require_version((state == State::VersionRefused).then_some(work::REQUIRED_VERSION));
 }

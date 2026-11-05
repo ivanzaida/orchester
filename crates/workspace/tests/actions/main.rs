@@ -92,7 +92,8 @@ impl Checkout {
       .tempdir_in(&scratch)
       .expect("data");
     let workspace = Workspace::new(AppDb::open(&data.path().join("orchester.db")).expect("database"));
-    let servers = Servers::new(workspace, Vault::with(Arc::new(NoVault)));
+    let version = orchester_api::releases::ReleaseVersion::parse("0.5.0").expect("a release version");
+    let servers = Servers::new(workspace, Vault::with(Arc::new(NoVault)), version);
     Self {
       dir,
       servers,

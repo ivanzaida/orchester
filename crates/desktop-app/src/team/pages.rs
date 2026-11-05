@@ -10,7 +10,7 @@ use orchester_api::{
   UserRef,
   v2::{
     Action, Capabilities, ClaimRead, ExecutionState, MAX_PAGE_LIMIT, ModuleListRequest, ModuleSummary, PageRequest,
-    SearchText, Subject, TaskFilters, TaskListRequest, TaskRead,
+    PendingAuthorization, SearchText, Subject, TaskFilters, TaskListRequest, TaskRead,
   },
 };
 use orchester_core::{
@@ -18,6 +18,7 @@ use orchester_core::{
   id::{ClaimId, ModuleId, RunId, UserId},
   module::{Module, progress::Progress},
   project::TaskKey,
+  run::CommitId,
   sharing::TaskRevision,
   task::Task,
   time::Timestamp,
@@ -60,14 +61,6 @@ pub struct TeamClaim {
   pub here: bool,
 }
 
-impl TeamClaim {
-  /// The server's stale threshold as this claim shows it, in whole minutes: from its last renewal to when it goes
-  /// stale. The server tells the threshold itself to its admins only.
-  pub fn threshold(&self) -> String {
-    minutes(self.renewed, self.stale_at)
-  }
-}
-
 /// Whole minutes from `from` to `to`, none below zero.
 pub fn minutes(from: Timestamp, to: Timestamp) -> String {
   ((to.unix_millis() - from.unix_millis()) / 60_000).max(0).to_string()
@@ -104,8 +97,8 @@ pub struct TeamTask {
 }
 
 /// A team module as its row and its page show it: the module, its revision, its progress and forecast as the server
-/// counts them, how many tasks it has (Canceled ones too), its branch, its assignee, its claim and what the person may
-/// do with it.
+/// counts them, how many tasks it has (Canceled ones too), its branch, its assignee, its claim, what the person may do
+/// with it, and its delivery to base that is requested and not yet delivered or failed.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TeamModule {
   pub module: Module,
@@ -118,6 +111,18 @@ pub struct TeamModule {
   pub assignee: Option<TeamPerson>,
   pub claim: Option<TeamClaim>,
   pub abilities: Abilities,
+  pub pending: Option<TeamDelivery>,
+}
+
+/// A module's open delivery to base as the server reads it: who asked for it and when, the module branch's commit it
+/// takes onto the base commit, and how it is authorized.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TeamDelivery {
+  pub asked_by: TeamPerson,
+  pub asked_at: Timestamp,
+  pub source_commit: CommitId,
+  pub base_commit: CommitId,
+  pub authorization: PendingAuthorization,
 }
 
 /// The task `key`, found by the server's search for it; `None` when the project has no such task.
@@ -273,5 +278,12 @@ fn team_module_of(summary: &ModuleSummary, who: &Who) -> Result<TeamModule, Team
     assignee: read.assignee.as_ref().map(|user| person(user, who.you)),
     claim: read.effective_claim.as_ref().map(|read| claim(read, who)),
     abilities: abilities(&read.capabilities, Subject::Module { id: read.module.id }),
+    pending: read.pending_delivery.as_ref().map(|pending| TeamDelivery {
+      asked_by: person(pending.requested_by(), who.you),
+      asked_at: Timestamp::from_unix_millis(pending.requested_at()),
+      source_commit: pending.source_commit().clone(),
+      base_commit: pending.base_commit().clone(),
+      authorization: pending.authorization(),
+    }),
   })
 }

@@ -15,6 +15,7 @@ use std::{future::Future, time::Duration};
 
 use orchester_api::{
   client::{Client, PlainHttp, ServerAddress},
+  releases::ReleaseVersion,
   v2::{ModuleListRequest, PageRequest, QueryScope, SearchText, TaskFilters, TaskListRequest, TaskSort},
 };
 use orchester_core::{
@@ -31,6 +32,12 @@ use tokio::{sync::watch, task::JoinHandle};
 
 const ALICE: &str = "alice-token";
 const BOB: &str = "bob-token";
+/// The desktop's version the readers name to the server.
+const DESKTOP: &str = "0.4.0";
+
+fn version(text: &str) -> ReleaseVersion {
+  ReleaseVersion::parse(text).expect("a release version")
+}
 
 /// The project's tasks: title, workflow status and priority. The first three are in its module.
 const TASKS: &[(&str, &str, &str)] = &[
@@ -64,7 +71,9 @@ struct Reader {
 
 impl Reader {
   fn start(url: &str, token: &str, server: &TeamServer) -> Self {
-    let client = Client::new(ServerAddress::parse(url).expect("address"), PlainHttp::NotAllowed).expect("client");
+    let client = Client::new(ServerAddress::parse(url).expect("address"), PlainHttp::NotAllowed)
+      .expect("client")
+      .with_client_version(version(DESKTOP));
     let token = SecretValue::new(token.to_owned()).expect("token");
     let generation = watch::channel(0).0;
     let session = TeamSession::new(
@@ -254,4 +263,28 @@ async fn team_reads_an_unknown_token_signs_out_and_an_unreachable_server_fails_r
   let read = within(unreachable.project.metadata()).await;
   assert_eq!(read.err(), Some(TeamReadError::Unavailable { retry_after: None }));
   unreachable.follow.abort();
+}
+
+/// A server that accepts only newer desktops refuses this one's reads `426 unsupported_contract`, read as the version
+/// it needs; one that accepts this desktop's version answers them.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn team_reads_a_server_that_needs_a_newer_orchester_names_the_version() {
+  let server = TeamServer::start(&[ALICE], TASKS);
+  server.require_version("0.5.0");
+  let refused = Reader::of(&server, ALICE);
+  let read = within(refused.project.capabilities()).await;
+  assert_eq!(
+    read.err(),
+    Some(TeamReadError::NeedsVersion {
+      required: version("0.5.0")
+    })
+  );
+  refused.follow.abort();
+
+  server.require_version(DESKTOP);
+  let accepted = Reader::of(&server, ALICE);
+  within(accepted.project.board_counts(TaskFilters::default()))
+    .await
+    .expect("answered");
+  accepted.follow.abort();
 }

@@ -30,6 +30,7 @@ use orchester_workspace::{
 use super::super::shared::Shared;
 use crate::{
   screens::settings::orchester::moment,
+  services::updates,
   team::TeamFailure,
   theme::{ExtraSpacing, ExtraTypography, HubText, IconSize, TasksSpacing},
   ui::{
@@ -67,9 +68,16 @@ pub(in crate::screens::tasks) fn outage(
       ctx.t("tasks.team.unavailable.title"),
       ctx.t_args("tasks.team.notMember", [("server", server), ("project", project)]),
     ),
-    TeamFailure::Unsupported => (
-      ctx.t("tasks.team.unsupported.title"),
-      ctx.t_args("tasks.team.unsupported.body", [("server", server)]),
+    TeamFailure::Unsupported { required } => (
+      ctx.t_args("tasks.team.unsupported.title", [("version", required.as_str())]),
+      ctx.t_args(
+        "tasks.team.unsupported.body",
+        [
+          ("server", server),
+          ("version", required.as_str()),
+          ("current", updates::version().as_str()),
+        ],
+      ),
     ),
     TeamFailure::Refused => (
       ctx.t("tasks.team.refused.title"),

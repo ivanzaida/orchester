@@ -21,7 +21,7 @@ impl Servers {
       .ok_or(SharingError::ServerMissing)?;
     // Taken before the token: a sign-out while it is read ends the session at once.
     let generation = self.inner.sessions.subscribe();
-    let (client, _) = Self::client(&entry)?;
+    let client = self.team_client(&entry)?;
     let token = match self.token(server).await {
       Ok(token) => token,
       Err(SharingError::SignedOut) => {

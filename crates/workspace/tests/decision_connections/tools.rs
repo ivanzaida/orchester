@@ -151,7 +151,11 @@ fn services(root: &std::path::Path) -> app_mcp::Services {
       Activity::new(),
       orchester_ipc::SessionEnd::Clean,
     ),
-    Servers::new(workspace, vault.clone()),
+    Servers::new(
+      workspace,
+      vault.clone(),
+      orchester_api::releases::ReleaseVersion::parse("0.5.0").expect("a release version"),
+    ),
     Programs::processes(),
     (OutsideChanges::default(), Activity::new(), ProjectJobs::default()),
   )

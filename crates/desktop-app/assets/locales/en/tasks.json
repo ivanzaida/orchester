@@ -371,8 +371,8 @@
         "body": "{{server}} refused to send the tasks, or sent what this Orchester can't read. Try again; Orchester keeps no copy of them."
       },
       "unsupported": {
-        "title": "This team's tasks need another version of Orchester",
-        "body": "{{server}} refuses this version of Orchester: a team server and a desktop of different versions don't talk to each other. Update Orchester, or ask the server's admin to update the server; runs on this computer keep their worktrees."
+        "title": "This team server needs Orchester {{version}}",
+        "body": "{{server}} needs Orchester {{version}} and refuses {{current}}: a team server and a desktop of different versions don't talk to each other. Update Orchester to see and run the team's tasks again; runs on this computer keep their worktrees."
       },
       "running": "Running on this computer",
       "run": "Run {{number}}",

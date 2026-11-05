@@ -188,7 +188,7 @@ impl Component for Linked {
       .facts
       .references
       .then(|| super::bindings::section(ctx, &props.project));
-    let version = policy::refusal(ctx, &part, &server);
+    let version = policy::refusal(ctx, &part, (&server, &shared));
     let team_policy = (link.removed_at.is_none() && part.policy.is_some())
       .then(|| ctx.mount_keyed::<policy::Policy>("sharing-policy", policy::Props { part }));
     Column::new()

@@ -15,7 +15,7 @@ use lurq::{
 use orchester_api::v2::AuthorityErrorCode;
 use orchester_core::time::Timestamp;
 
-use super::team_work::{ModuleAnswer, ModuleAsk, ShownDelivery, WorkControl, WorkProps};
+use super::team_work::{ModuleAnswer, ModuleAsk, Recorded, WorkControl, WorkProps};
 use crate::{
   screens::settings::orchester::{PersonOnly, moment},
   team::{
@@ -43,7 +43,8 @@ pub const AGAIN: &str = "module-team-refused-again";
 pub struct View<'a> {
   pub props: &'a WorkProps,
   pub action: &'a WorkControl,
-  pub delivery: Option<&'a ShownDelivery>,
+  /// What this computer recorded of the module's deliveries.
+  pub recorded: &'a Recorded,
   /// Change branch's question is open, and the name typed in it.
   pub changing: &'a Signal<bool>,
   pub branch: &'a Signal<String>,
@@ -68,11 +69,20 @@ impl View<'_> {
     self.action.state().get().is_pending()
   }
 
-  /// A strip's button that asks `ask`, under way while an ask is.
-  pub(super) fn ask(&self, ctx: &Ctx, (id, label, glyph): (&str, &str, Icon), ask: ModuleAsk) -> ActionButton {
-    let button = ActionButton::new(id.to_owned(), ButtonKind::Secondary, ctx.t(label))
-      .icon(glyph)
-      .small();
+  /// A strip's secondary button that asks `ask`, under way while an ask is.
+  pub(super) fn ask(&self, ctx: &Ctx, button: (&str, &str, Icon), ask: ModuleAsk) -> ActionButton {
+    self.ask_as(ctx, ButtonKind::Secondary, button, ask)
+  }
+
+  /// A strip's button of `kind` that asks `ask`, under way while an ask is.
+  pub(super) fn ask_as(
+    &self,
+    ctx: &Ctx,
+    kind: ButtonKind,
+    (id, label, glyph): (&str, &str, Icon),
+    ask: ModuleAsk,
+  ) -> ActionButton {
+    let button = ActionButton::new(id.to_owned(), kind, ctx.t(label)).icon(glyph).small();
     if self.pending() {
       return button.loading();
     }
@@ -254,7 +264,7 @@ pub fn refusal(ctx: &Ctx, view: &View<'_>) -> Option<Element> {
     ModuleAsk::TakeOver => "modules.team.work.refused.takeOverTitle",
     ModuleAsk::Release => "modules.team.work.refused.releaseTitle",
     ModuleAsk::Branch(_) => "modules.team.work.refused.branchTitle",
-    ModuleAsk::Deliver(_) | ModuleAsk::Authorize => "modules.team.work.refused.deliverTitle",
+    ModuleAsk::Deliver(_) | ModuleAsk::Authorize | ModuleAsk::Merge => "modules.team.work.refused.deliverTitle",
   };
   let run = view.runs(AGAIN);
   let again = ActionButton::new(AGAIN, ButtonKind::Secondary, ctx.t("common.tryAgain"))
@@ -396,6 +406,12 @@ fn acted_words(ctx: &Ctx, acted: &Acted) -> Option<Arc<str>> {
   let key = match acted {
     Acted::Done => return None,
     Acted::Refused(code) => return Some(refused_words(ctx, *code)),
+    Acted::NeedsVersion(required) => {
+      return Some(ctx.t_args(
+        "modules.team.work.refused.needsVersion",
+        [("version", required.as_str())],
+      ));
+    }
     Acted::Changed(_) => "modules.team.work.refused.changed",
     Acted::Unavailable => "modules.team.work.refused.unavailable",
     Acted::SignedOut => "modules.team.work.refused.signedOut",

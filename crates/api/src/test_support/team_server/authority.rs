@@ -11,6 +11,7 @@
 //! server admins [`TeamServer::members_named`] gives.
 
 mod commands;
+mod delivery;
 mod execution;
 mod listing;
 mod work;
@@ -28,9 +29,11 @@ use serde_json::{Value, json};
 
 pub use self::{
   commands::Plan,
+  delivery::{Authorized as DeliveryAuthorized, PendingDelivery},
   work::{AuthorityClaim, AuthorityModule, Person, STALE_AFTER_MINUTES},
 };
 use super::{State, TasksAnswer, TeamServer, USER, first_download};
+use crate::{client::CLIENT_VERSION_HEADER, releases::ReleaseVersion};
 
 /// The cursor before the first change the stand-in commits.
 const FIRST_CURSOR: u64 = 7;
@@ -95,8 +98,8 @@ pub(super) struct Authority {
   tasks: Option<Vec<AuthorityTask>>,
   modules: Option<Vec<AuthorityModule>>,
   unavailable: bool,
-  /// Every request is refused as of another version of the protocol.
-  unsupported: bool,
+  /// The oldest desktop version the server accepts; any while `None`.
+  required: Option<ReleaseVersion>,
   /// Each committed change: its cursor and the scopes it invalidates.
   batches: Vec<(u64, Vec<Value>)>,
   /// Streams opened before this generation end.
@@ -118,6 +121,8 @@ pub(super) struct Authority {
   planned: Vec<(&'static str, Plan)>,
   /// The modules' branches as Admins changed them, by the module's index.
   branches: HashMap<usize, work::BranchChange>,
+  /// Admins' delivery authorizations no request cited yet.
+  authorizations: Vec<delivery::KeptAuthorization>,
   /// How many claims were acquired anew here.
   issued: u8,
 }
@@ -268,11 +273,11 @@ impl TeamServer {
     state.authority.commit(vec![json!({"kind": "task_list"})]);
   }
 
-  /// Every `/api/v2` request is refused `426 unsupported_contract` while `refused`: the server and this desktop speak
-  /// different versions of the team protocol.
-  pub fn refuse_this_version(&self, refused: bool) {
+  /// The server accepts desktops of `required` and later only, `None` any: a `/api/v2` request that names an older
+  /// version in `Orchester-Client-Version`, or none, is refused `426 unsupported_contract` with `required_version`.
+  pub fn require_version(&self, required: Option<&str>) {
     let mut state = self.state.lock();
-    state.authority.unsupported = refused;
+    state.authority.required = required.map(|version| ReleaseVersion::parse(version).expect("a release version"));
     state.authority.streams += 1;
   }
 
@@ -350,6 +355,15 @@ pub(super) fn serve(stream: &mut TcpStream, (line, headers, body): (&str, &str, 
   let (Some(method), Some(path)) = (target.first(), target.get(1)) else {
     return;
   };
+  let required = state.lock().authority.required.clone();
+  if let Some(required) = required.filter(|required| !named_at_least(headers, required)) {
+    let details = json!({"required_version": required.as_str()});
+    return respond(
+      stream,
+      426,
+      &json!({"code": "unsupported_contract", "details": details}),
+    );
+  }
   if !headers.contains(&format!("authorization: bearer {}", super::TOKEN)) {
     return respond(stream, 401, &super::error("unauthorized"));
   }
@@ -362,9 +376,6 @@ pub(super) fn serve(stream: &mut TcpStream, (line, headers, body): (&str, &str, 
   let Some(key) = project_key(state, project) else {
     return respond(stream, 404, &super::error("not_found"));
   };
-  if state.lock().authority.unsupported {
-    return refusal(stream, 426, "unsupported_contract");
-  }
   if state.lock().authority.unavailable {
     return refusal(stream, 503, "unavailable");
   }
@@ -416,6 +427,16 @@ fn project_key(state: &Mutex<State>, id: &str) -> Option<String> {
   let state = state.lock();
   let project = state.projects.iter().find(|project| project["id"] == id)?;
   project["key"].as_str().map(str::to_owned)
+}
+
+/// Whether `headers` (lowercase) name a desktop version of `required` or later in `Orchester-Client-Version`.
+fn named_at_least(headers: &str, required: &ReleaseVersion) -> bool {
+  let name = format!("{}:", CLIENT_VERSION_HEADER.to_ascii_lowercase());
+  headers
+    .lines()
+    .find_map(|line| line.strip_prefix(name.as_str()))
+    .and_then(|named| ReleaseVersion::parse(named.trim()).ok())
+    .is_some_and(|named| named >= *required)
 }
 
 /// A task list, count or task read, held while the project's tasks are and refused while they are.
@@ -485,6 +506,7 @@ fn workspace((id, key): (&str, &str), state: &Mutex<State>) -> Value {
     "policy": commands::policy_wire(&state.authority),
     "capabilities": capabilities(id, standing),
     "cursor": state.authority.cursor().to_string(),
+    "claim_staleness_seconds": STALE_AFTER_MINUTES * 60,
   })
 }
 

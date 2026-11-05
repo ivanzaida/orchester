@@ -556,21 +556,28 @@ effects}`, and refusals are `AuthorityError`s.
 | `command.kind` | Payload | Effects | Who |
 | --- | --- | --- | --- |
 | `delivery.authorize` | `{subject,claim_id,branch,source_commit,base_commit}` | `[]` | Workspace Admin |
-| `delivery.request` | `{authority:AuthorityRef,authorization_operation_id:OperationId?,branch,source_commit,base_commit}` | `[{kind:"deliver_module",module_id,branch,source_commit,base_commit}]` | The module's holder, in its session |
+| `delivery.request` | `{authority:AuthorityRef,authorization_operation_id:OperationId?,branch,source_commit,base_commit}` | `[{kind:"deliver_module",module_id,branch,source_commit,base_commit}]`, or `[]` while it waits for the Admin | The module's holder, in its session |
 | `delivery.report` | `{authority:AuthorityRef,source_commit,base_commit,outcome}` | `[]` | The module's holder, in its session |
 
 `authority` is the module's claim with `work_id` `null`. `authorization_operation_id` is always sent: the Admin's
-`delivery.authorize` operation, or `null` for the workspace's automatic merge (D7); without either the request is
-`403 delivery_not_authorized`. `outcome` (`v2::DeliveryOutcome`) is `{kind:"delivered",merge_commit}` or
-`{kind:"failed"}`; only a `delivered` report makes the delivery delivered.
+`delivery.authorize` operation, or `null` for the workspace's automatic merge (D7). With `null` and the automatic
+merge off, the request is no longer refused (the server's S12, ORC-735): it is kept `requested` as the module's
+`pending_delivery` with `authorization:"awaiting_admin"` and answered with `effects:[]`. The Admin's
+`delivery.authorize` of exactly that binding turns it to `admin`, and the holder's next `delivery.request` of it, under
+an operation of its own, gets the `deliver_module` effect; an Admin may still authorize first, for a request to cite.
+A cited authorization that is not of exactly this delivery is `403 delivery_not_authorized`. `outcome`
+(`v2::DeliveryOutcome`) is `{kind:"delivered",merge_commit}` or `{kind:"failed"}`; only a `delivered` report makes the
+delivery delivered.
 
 The desktop's module delivery (`orchester_workspace::team_work::ModuleDeliveries`) uses them so:
 
 - **Request.** The delivery is recorded in the project database (`team_deliveries`) with the module, its claim and
   branch, both commits, the cited authorization and the branch of this repository the base commit was read from,
   then `delivery.request` goes through the dispatcher under the delivery's operation (a lost answer is looked up, not
-  sent again). It is not sent while a team run of the module still works on this computer. A refusal is kept;
-  `delivery_not_authorized` reads as awaiting an Admin's authorization.
+  sent again). It is not sent while a team run of the module still works on this computer. A refusal is kept; a
+  receipt without an effect is kept as `waiting`, awaiting an Admin's authorization, and goes no further under its
+  operation. The Module page shows the server's `pending_delivery` with who asked and when, offers an Admin
+  *Authorize* of exactly its commits, and offers its holder on this computer *Ask again* once an Admin authorized it.
 - **Merge.** Only a receipt whose effects carry `deliver_module` for exactly the requested branch and commits lets this
   computer merge, by the merge a run takes into its base branch (core's `merge_module`, under the merge hold that
   keeps local integration and other merges out), always as a merge commit and only while the module branch and the

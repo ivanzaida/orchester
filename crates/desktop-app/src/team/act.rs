@@ -5,7 +5,10 @@
 //! runtime. Once the server took an action, the session's reads of the project are read again at once; the
 //! subscription says so too, a little later.
 
-use orchester_api::v2::{AuthorityErrorCode, TeamCommandValue, WorkspacePolicy};
+use orchester_api::{
+  releases::ReleaseVersion,
+  v2::{AuthorityErrorCode, TeamCommandValue, WorkspacePolicy},
+};
 use orchester_core::id::ClaimId;
 use orchester_workspace::{
   actions::{Accepted, Action, ActionError, ActionOutcome, Current, Dispatcher, Intent, Refusal, TeamOutcome},
@@ -29,6 +32,9 @@ pub enum Acted {
   /// The server cannot be reached or refused for now, or its answer was lost: nothing is known to have changed, and
   /// asking again is safe.
   Unavailable,
+  /// The server accepts desktops of this version and later only: nothing changed, and asking again after the update
+  /// is safe.
+  NeedsVersion(ReleaseVersion),
   /// This computer is not signed in to the server.
   SignedOut,
   /// It could not be carried out here.
@@ -131,6 +137,10 @@ fn acted(outcome: Result<ActionOutcome, ActionError>) -> (Acted, Option<ClaimId>
       (Acted::Done, claim)
     }
     TeamOutcome::Completed(Accepted::Definition(_)) => (Acted::Done, None),
+    TeamOutcome::Rejected {
+      refusal: Refusal::NeedsVersion { required },
+      ..
+    } => (Acted::NeedsVersion(required), None),
     TeamOutcome::Rejected { retryable: true, .. } | TeamOutcome::AcceptanceUnknown { .. } => (Acted::Unavailable, None),
     TeamOutcome::Rejected { refusal, current, .. } => (refused(&refusal, current), None),
   }
@@ -143,6 +153,7 @@ fn refused(refusal: &Refusal, current: Option<Current>) -> Acted {
       Acted::Changed(current.and_then(holds))
     }
     Refusal::Command(error) => Acted::Refused(error.code()),
+    Refusal::NeedsVersion { required } => Acted::NeedsVersion(required.clone()),
     Refusal::PolicyRevisionConflict | Refusal::Superseded => Acted::Changed(current.and_then(holds)),
     Refusal::Route { code, .. } if *code == orchester_api::ErrorCode::RevisionConflict => {
       Acted::Changed(current.and_then(holds))

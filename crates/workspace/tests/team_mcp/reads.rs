@@ -123,7 +123,8 @@ fn route(
       "module": {
         "id": module, "name": "Webhooks", "description": "", "start": null, "target": null, "state": "open",
         "revision": 1, "created": attribution(), "updated": attribution(), "branch": MODULE_BRANCH,
-        "assignee": null, "work": null, "effective_claim": null, "capabilities": capabilities(project)
+        "assignee": null, "work": null, "effective_claim": null, "capabilities": capabilities(project),
+        "pending_delivery": null
       },
       "progress": {"unit": "tasks", "scope": 1, "done": 0}, "tasks": 1,
       "forecast": {"remaining": 1, "history_days": 0, "history_delivered": 0, "outlook": {"kind": "not_enough_history"}}

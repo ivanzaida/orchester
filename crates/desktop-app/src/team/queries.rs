@@ -14,6 +14,7 @@ use orchester_api::v2::{
 use orchester_core::{
   id::{ModuleId, ResourceId, TagId, TaskId},
   module::Module,
+  sharing::ClaimStalenessThreshold,
   task::{
     Task,
     organization::{Priority, WorkflowStatus},
@@ -138,11 +139,13 @@ pub async fn team_capabilities(source: TeamSource) -> Result<Capabilities, TeamF
 }
 
 /// The workspace's policy, and whether the person changes it: an Admin or a server admin, as the server's capabilities
-/// say, never a role kept on this computer.
+/// say, never a role kept on this computer; and the server's claim staleness threshold, which only a server admin
+/// changes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TeamPolicy {
   pub policy: WorkspacePolicy,
   pub changes: bool,
+  pub stale_after: ClaimStalenessThreshold,
 }
 
 #[lurq::query(stale_time = "1m", gc_time = "10m")]
@@ -152,6 +155,7 @@ pub async fn team_policy(source: TeamSource) -> Result<TeamPolicy, TeamFailure> 
   Ok(TeamPolicy {
     policy: metadata.policy,
     changes: metadata.capabilities.role != CallerRole::Member,
+    stale_after: metadata.claim_staleness_seconds,
   })
 }
 

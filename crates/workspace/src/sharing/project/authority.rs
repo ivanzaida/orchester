@@ -9,10 +9,7 @@ use orchester_core::id::{ProjectId, ServerId};
 use tokio::sync::watch;
 
 use super::ProjectServer;
-use crate::{
-  sharing::{Servers, SharingError},
-  team_reads::TeamSession,
-};
+use crate::{sharing::SharingError, team_reads::TeamSession};
 
 /// Who changes a team project's tasks, modules and tags, by their username there: its Admins, then the server's admins
 /// who are not among them.
@@ -35,7 +32,7 @@ impl ProjectServer {
   /// The session the project's authority reads run in, in the generation `generation` holds: the server's client with
   /// the trust stored with it, and the person's token from the keychain ([`SharingError::SignedOut`] without one).
   pub async fn team_session(&self, generation: watch::Receiver<u64>) -> Result<TeamSession, SharingError> {
-    let (client, _) = Servers::client(&self.entry)?;
+    let client = self.servers.team_client(&self.entry)?;
     let token = self.servers.token(self.link.server).await?;
     Ok(TeamSession::new(
       (client, token),

@@ -1,12 +1,15 @@
-//! A team module's delivery to base (team authority P4c, the server's `docs/module-branches.md`, S7c): the module's
-//! holder asks for it, this computer merges only what the server's receipt allows, and reports how the merge went.
+//! A team module's delivery to base (team authority P4c, the server's `docs/module-branches.md`, S7c and S12): the
+//! module's holder asks for it, this computer merges only what the server's receipt allows, and reports how the merge
+//! went.
 //!
 //! - **Request.** The delivery is recorded in the project database (`team_deliveries`) with what its caller read here,
 //!   including the branch of this repository the base commit was read from, then `delivery.request` goes through the
 //!   dispatcher under the delivery's operation. An Admin's `delivery.authorize` (cited by its operation) or the
-//!   workspace's automatic merge authorizes it; without either the server refuses it as not authorized, which is kept
-//!   as awaiting an Admin's authorization. It is not sent while a team run of the module still works here: what the
-//!   module branch would deliver is not done yet.
+//!   workspace's automatic merge authorizes it; without either the server keeps it waiting for an Admin and answers it
+//!   without an effect, which is kept as waiting (no refusal). An Admin's authorization of exactly that request then
+//!   lets the holder's next request, under an operation of its own, take the merge; an Admin may also authorize first.
+//!   It is not sent while a team run of the module still works here: what the module branch would deliver is not done
+//!   yet.
 //! - **Merge.** Only a receipt whose effects carry `deliver_module` for exactly the requested branch and commits lets
 //!   this computer merge, by the merge a run takes into its base branch ([`crate::tasks::module_delivery`]), only while
 //!   the module branch and the base are still at those commits. The merge is marked begun before git is asked, and a
@@ -52,7 +55,10 @@ pub struct TeamDeliveryRequest {
 pub enum DeliveryProgress {
   /// Team runs of the module still work here: nothing was recorded or sent.
   WorkRunning(Vec<RunId>),
-  /// The server refused the request: for want of an authorization, or for good. Nothing was merged.
+  /// The server took the request without an effect, as it keeps it: it waits for an Admin's authorization, with the
+  /// automatic merge off. Nothing was merged; the holder's next request, once an Admin authorized it, takes the merge.
+  AwaitingAdmin(ModuleDeliveryRead),
+  /// The server refused the request, e.g. citing an authorization that is not of this delivery. Nothing was merged.
   Refused(AuthorityError),
   /// The server cannot be reached, or refused for now: the delivery waits at this stage and goes on from it.
   Waiting(TeamDeliveryStage),

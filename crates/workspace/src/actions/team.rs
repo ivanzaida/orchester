@@ -10,7 +10,7 @@ use std::fmt::Write as _;
 
 use orchester_api::{
   client::AuthorityCallError,
-  v2::{AuthorityError, AuthorityErrorCode, CommandRequest, OperationRead, Subject, TeamCommand},
+  v2::{AuthorityError, AuthorityErrorCode, CommandRequest, ErrorDetails, OperationRead, Subject, TeamCommand},
 };
 use orchester_core::{
   blob::ContentHash,
@@ -87,7 +87,8 @@ impl Operations<'_> {
   }
 
   /// What the server made of an operation sent before; sent again when the server has no outcome of it. A lookup the
-  /// server refuses for good, e.g. for a caller who may no longer see the operation's outcome, is its refusal.
+  /// server refuses for good, e.g. for a caller who may no longer see the operation's outcome, is its refusal, and so
+  /// is one refused as of a desktop older than it accepts.
   async fn look_up(&mut self, record: &TeamOperation) -> Result<TeamOutcome, ActionError> {
     self.ensure_session()?;
     let body: CommandRequest<TeamCommand> = read(record.id, &record.request)?;
@@ -97,7 +98,9 @@ impl Operations<'_> {
       Err(AuthorityCallError::Refused { error, .. }) if error.code() == AuthorityErrorCode::NotFound => {
         self.send(&body).await
       }
-      Err(AuthorityCallError::Refused { error, .. }) if !retryable(error.code()) => {
+      Err(AuthorityCallError::Refused { error, .. })
+        if !retryable(error.code()) || error.code() == AuthorityErrorCode::UnsupportedContract =>
+      {
         self.refused(record.id, &body, error).await
       }
       Err(_) => Ok(TeamOutcome::AcceptanceUnknown { operation: record.id }),
@@ -160,7 +163,8 @@ impl Operations<'_> {
     Ok(TeamOutcome::Completed(Accepted::Command(Box::new(receipt))))
   }
 
-  /// The server's refusal of `body`: kept unless retryable, with the subject as it is now after a revision conflict.
+  /// The server's refusal of `body`: kept unless retryable, with the subject as it is now after a revision conflict,
+  /// and the version the server needs when it refused this desktop's.
   async fn refused(
     &mut self,
     operation: OperationId,
@@ -178,9 +182,15 @@ impl Operations<'_> {
       (AuthorityErrorCode::RevisionConflict, Some(subject)) => Some(self.current(subject).await),
       _ => None,
     };
+    let refusal = match error.details() {
+      ErrorDetails::UnsupportedContract { required_version } => Refusal::NeedsVersion {
+        required: required_version.clone(),
+      },
+      ErrorDetails::None | ErrorDetails::DecisionRequired { .. } => Refusal::Command(error),
+    };
     Ok(TeamOutcome::Rejected {
       operation,
-      refusal: Refusal::Command(error),
+      refusal,
       retryable,
       current,
     })

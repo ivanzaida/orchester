@@ -134,7 +134,8 @@ impl Checkout {
     workspace.open(root).expect("register the project");
     let runtime = Runtime::new().expect("runtime");
     let vault = Arc::new(MemoryVault::default());
-    let servers = Servers::new(workspace.clone(), Vault::with(vault.clone()));
+    let version = orchester_api::releases::ReleaseVersion::parse("0.5.0").expect("a release version");
+    let servers = Servers::new(workspace.clone(), Vault::with(vault.clone()), version);
     if let Some(server) = server {
       let id = runtime.block_on(add_server(&servers, server));
       let token = SecretValue::new(team_server::MEMBER.to_owned()).expect("token");

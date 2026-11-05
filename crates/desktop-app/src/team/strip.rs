@@ -2,8 +2,8 @@
 //! claim line, the module's Work and delivery lines and the authority-lost lines are one strip pattern; `LR58S` in 01c,
 //! `hv1Lu` in 02d, `DDQVE` in 02h `xUwYS`, `H1zbi` in 04 `MvniR`): a 14 glyph, 10 from a title in 12.5 `text_primary`
 //! over its detail in 12 `text_secondary`, 2 apart, and an action at its end; 10 over and under it and 12 at its sides,
-//! radius 6. A plain strip has a 1 `border` outline; a warning one is on `warning_muted` and a danger one on
-//! `danger_muted`, without an outline.
+//! radius 6. A plain strip has a 1 `border` outline; an info, success, warning or danger one is on that tone's muted
+//! fill, without an outline (`04f` `Wd4G1`).
 
 use std::sync::Arc;
 
@@ -22,10 +22,15 @@ use crate::{
 /// How a strip stands out.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum StripTone {
-  /// A `border` outline: a healthy claim, a branch, a delivery that waits.
+  /// A `border` outline: a healthy claim, a branch, a delivery not asked for.
   #[default]
   Plain,
-  /// On `warning_muted`: a claim that is stale or not renewed.
+  /// On `info_muted`: a delivery the person asked for that waits for an Admin (`Q8rdf` in 04f).
+  Info,
+  /// On `success_muted`: a delivery an Admin or Automatic merge authorized (`GObEK`, `p0f3TI` in 04f).
+  Success,
+  /// On `warning_muted`: a claim that is stale or not renewed; a delivery that waits for the person's authorization
+  /// (`L3ve0` in 04f).
   Warning,
   /// On `danger_muted`: authority lost.
   Danger,
@@ -77,11 +82,15 @@ impl From<Strip> for Element {
       .rounded(RadiusSize::Md);
     let row = match strip.tone {
       StripTone::Plain => row.border_inside(BorderSize::Sm, PaletteColor::Border),
+      StripTone::Info => row.background(PaletteColor::InfoMuted),
+      StripTone::Success => row.background(PaletteColor::SuccessMuted),
       StripTone::Warning => row.background(PaletteColor::WarningMuted),
       StripTone::Danger => row.background(PaletteColor::DangerMuted),
     };
     let tone = match strip.tone {
       StripTone::Plain => "plain",
+      StripTone::Info => "info",
+      StripTone::Success => "success",
       StripTone::Warning => "warning",
       StripTone::Danger => "danger",
     };

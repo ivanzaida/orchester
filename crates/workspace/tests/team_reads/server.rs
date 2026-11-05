@@ -14,6 +14,7 @@ use std::{
   time::{Duration, Instant},
 };
 
+use orchester_api::releases::ReleaseVersion;
 use orchester_core::id::{ModuleId, ProjectId, TaskId};
 use serde_json::{Value, json};
 
@@ -65,6 +66,8 @@ struct State {
   hold: bool,
   held: usize,
   task_reads: usize,
+  /// The oldest desktop version the server accepts; any while `None`.
+  required: Option<ReleaseVersion>,
 }
 
 impl State {
@@ -122,6 +125,7 @@ impl TeamServer {
         hold: false,
         held: 0,
         task_reads: 0,
+        required: None,
       }),
       changed: Condvar::new(),
     });
@@ -224,6 +228,11 @@ impl TeamServer {
     self.changed();
   }
 
+  /// The server accepts desktops of `required` and later only, as `Orchester-Client-Version` names them.
+  pub fn require_version(&self, required: &str) {
+    self.state().required = Some(ReleaseVersion::parse(required).expect("a release version"));
+  }
+
   fn until(&self, done: impl Fn(&State) -> bool) {
     let deadline = Instant::now() + Duration::from_secs(5);
     let mut state = self.state();
@@ -257,12 +266,31 @@ fn caller(state: &State, request: &Request) -> Caller {
   Caller::Unknown
 }
 
-/// One request on the team server's `/api/v2` routes. As there, a token it does not accept is `401 unauthorized` and
-/// anyone who may not read the workspace, a removed member too, `404 not_found`, both in the `/api/v1` form.
+/// Whether `request` names a desktop of `required` or later in `Orchester-Client-Version`.
+fn named_at_least(request: &Request, required: &ReleaseVersion) -> bool {
+  request
+    .header("orchester-client-version")
+    .and_then(|named| ReleaseVersion::parse(named).ok())
+    .is_some_and(|named| named >= *required)
+}
+
+/// One request on the team server's `/api/v2` routes. As there, a desktop older than the server accepts is `426
+/// unsupported_contract` with the version it needs, before its sign-in is read; a token it does not accept is `401
+/// unauthorized` and anyone who may not read the workspace, a removed member too, `404 not_found`, both in the
+/// `/api/v1` form.
 fn answer(shared: &Shared, project: ProjectId, mut stream: TcpStream) {
   let Some(request) = Request::read(&stream) else {
     return;
   };
+  let required = shared.state.lock().expect("state").required.clone();
+  if let Some(required) = required.filter(|required| !named_at_least(&request, required)) {
+    let details = json!({"required_version": required.as_str()});
+    return respond(
+      &mut stream,
+      426,
+      &json!({"code": "unsupported_contract", "details": details}),
+    );
+  }
   let prefix = format!("/api/v2/projects/{project}");
   let token = match caller(&shared.state.lock().expect("state"), &request) {
     Caller::Member(token) => token,

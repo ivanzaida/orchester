@@ -130,7 +130,7 @@ impl Services {
       session.interrupted_since(),
       &runtime,
     );
-    let servers = Servers::new(workspace.clone(), vault.clone());
+    let servers = Servers::new(workspace.clone(), vault.clone(), updates::version());
     let cloud = Cloud::new(workspace.clone(), vault.clone(), servers.clone());
     let database = workspace
       .database_path()

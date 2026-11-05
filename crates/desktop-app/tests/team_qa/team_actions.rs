@@ -230,11 +230,10 @@ fn team_qa_actions_a_member_reads_automatic_merge_with_a_lock() {
 }
 
 #[test]
-fn team_qa_actions_a_server_that_refuses_this_version_says_so() {
+fn team_qa_actions_a_server_that_refuses_this_version_names_the_version_it_needs() {
   let (mut window, _server) = on(State::VersionRefused, sharing(), "sharing-version-refused");
-  assert!(
-    window
-      .text("sharing-version-refused")
-      .contains("This team server needs another version of Orchester")
-  );
+  let said = window.text("sharing-version-refused");
+  assert!(said.contains("This team server needs Orchester 0.5.0"), "{said}");
+  let current = format!("refuses Orchester {}", env!("CARGO_PKG_VERSION"));
+  assert!(said.contains(&current), "{said}");
 }

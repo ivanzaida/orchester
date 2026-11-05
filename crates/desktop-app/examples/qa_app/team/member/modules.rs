@@ -26,6 +26,7 @@ pub fn modules() -> Vec<AuthorityModule> {
         generation: 0,
       }),
       likely: Some(("2026-10-30", "2026-11-02")),
+      pending: None,
     },
     AuthorityModule {
       name: "Billing exports",
@@ -41,6 +42,7 @@ pub fn modules() -> Vec<AuthorityModule> {
         generation: 0,
       }),
       likely: Some(("2026-11-12", "2026-11-16")),
+      pending: None,
     },
     AuthorityModule {
       name: "API rate limits",
@@ -51,6 +53,7 @@ pub fn modules() -> Vec<AuthorityModule> {
       assignee: None,
       claim: None,
       likely: None,
+      pending: None,
     },
   ]
 }

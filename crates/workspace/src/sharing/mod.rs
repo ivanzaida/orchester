@@ -40,7 +40,10 @@ use std::{
   time::{Duration, Instant},
 };
 
-use orchester_api::client::{Client, ClientError, PlainHttp, ServerAddress};
+use orchester_api::{
+  client::{Client, ClientError, PlainHttp, ServerAddress},
+  releases::ReleaseVersion,
+};
 use orchester_core::{
   id::ServerId,
   secret::{SecretValue, VaultError, VaultKey},
@@ -99,6 +102,8 @@ pub struct Servers {
 struct Inner {
   workspace: Workspace,
   vault: Vault,
+  /// This desktop's own version, which its team sessions name on every `/api/v2` request.
+  version: ReleaseVersion,
   schedule: Schedule,
   watched: Mutex<HashMap<ServerId, Watched>>,
   /// Counts changes of the list and of connections, for the monitor and the screens.
@@ -140,16 +145,18 @@ impl PartialEq for Servers {
 }
 
 impl Servers {
-  pub fn new(workspace: Workspace, vault: Vault) -> Self {
-    Self::with_schedule(workspace, vault, Schedule::DEFAULT)
+  /// The servers of this desktop, whose own version is `version`: its team sessions name it to their servers.
+  pub fn new(workspace: Workspace, vault: Vault, version: ReleaseVersion) -> Self {
+    Self::with_schedule((workspace, vault, version), Schedule::DEFAULT)
   }
 
   /// Servers asked on `schedule`, e.g. a short one in tests.
-  pub fn with_schedule(workspace: Workspace, vault: Vault, schedule: Schedule) -> Self {
+  pub fn with_schedule((workspace, vault, version): (Workspace, Vault, ReleaseVersion), schedule: Schedule) -> Self {
     Self {
       inner: Arc::new(Inner {
         workspace,
         vault,
+        version,
         schedule,
         watched: Mutex::new(HashMap::new()),
         changes: watch::channel(0).0,
@@ -298,6 +305,12 @@ impl Servers {
   fn client(server: &ServerEntry) -> Result<(Client, Trust), SharingError> {
     let trust = Trust::stored(&server.stored)?;
     Ok((trust.client(server.address.clone())?, trust))
+  }
+
+  /// The client a team session of `server` calls its `/api/v2` with: [`Self::client`], naming this desktop's version.
+  fn team_client(&self, server: &ServerEntry) -> Result<Client, SharingError> {
+    let (client, _) = Self::client(server)?;
+    Ok(client.with_client_version(self.inner.version.clone()))
   }
 
   /// The token of `server` from the keychain; signed out when there is none.

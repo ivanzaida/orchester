@@ -387,6 +387,9 @@ fn acted_words(ctx: &Ctx, task: &TaskContext, ask: TeamAsk, acted: &Acted) -> Op
       ));
     }
     Acted::Refused(code) => return Some(refused_words(ctx, *code)),
+    Acted::NeedsVersion(required) => {
+      return Some(ctx.t_args("summary.team.refused.needsVersion", [("version", required.as_str())]));
+    }
     Acted::Changed(_) => "summary.team.refused.changed",
     Acted::Unavailable => "summary.team.refused.unavailable",
     Acted::SignedOut => "summary.team.refused.signedOut",

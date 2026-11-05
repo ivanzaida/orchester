@@ -139,6 +139,7 @@
         "removed": "You're no longer a member of the team.",
         "changed": "The task changed on the team server meanwhile; nothing was changed.",
         "unavailable": "The team server can't be reached now; nothing was changed. Try again.",
+        "needsVersion": "The team server needs Orchester {{version}}; nothing was changed. Update Orchester, then try again.",
         "signedOut": "This computer isn't signed in to the team server.",
         "failed": "It could not be carried out on this computer.",
         "other": "The team server refused it.",

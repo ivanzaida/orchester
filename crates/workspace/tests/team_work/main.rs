@@ -135,7 +135,11 @@ impl Checkout {
     let workspace = Workspace::new(AppDb::open(&data.path().join("orchester.db")).expect("database"));
     Self {
       dir,
-      servers: Servers::new(workspace, Vault::with(Arc::new(NoVault))),
+      servers: Servers::new(
+        workspace,
+        Vault::with(Arc::new(NoVault)),
+        orchester_api::releases::ReleaseVersion::parse("0.5.0").expect("a release version"),
+      ),
       connection: codex.id(),
       _data: data,
     }

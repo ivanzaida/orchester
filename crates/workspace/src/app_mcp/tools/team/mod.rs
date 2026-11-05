@@ -104,6 +104,7 @@ where
 /// A team read's failure as the tool's refusal; a caller names what was not found itself.
 pub(super) fn read_refused(error: &TeamReadError) -> ToolError {
   let (code, key) = match error {
+    TeamReadError::NeedsVersion { required } => return outcome::needs_version(required),
     TeamReadError::Unavailable { .. } | TeamReadError::KeptChanging => {
       ("team_unavailable", "appMcp.errors.teamUnavailable")
     }

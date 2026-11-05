@@ -2,9 +2,10 @@
 //! `04e`; `docs/design/team-authority.md` §4–5): under the description, its heading in 13/600, then the module's claim,
 //! its branch and its delivery to the base, each one strip ([`crate::team::strip`]), 10 apart, with what the last
 //! action did not do over them. Taking, releasing and taking over the module's claim, changing its branch (an
-//! Admin's, asked in `04b` `InYp8`) and asking for or authorizing its delivery each go through the dispatcher, as the
-//! server's capabilities allow them; a branch someone else changed first shows what it is now, to reapply or keep
-//! (`05b` `H7MBjm`). The lines' words are in [`super::team_work_lines`].
+//! Admin's, asked in `04b` `InYp8`), asking for its delivery and authorizing the one that waits for an Admin, as the
+//! module's read names it, each go through the dispatcher, as the server's capabilities allow them; a branch someone
+//! else changed first shows what it is now, to reapply or keep (`05b` `H7MBjm`). The lines' words are in
+//! [`super::team_work_lines`] and [`super::team_work_delivery`].
 
 use std::sync::Arc;
 
@@ -20,7 +21,7 @@ use lurq::{
 };
 use orchester_api::v2::{AuthorityErrorCode, AuthorityRef, Subject};
 use orchester_core::{
-  id::{OperationId, ProjectId},
+  id::{ClaimId, OperationId, ProjectId},
   run::{BranchName, CommitId},
 };
 use orchester_exec::programs::Programs;
@@ -38,7 +39,7 @@ use crate::{
     TeamSource,
     act::{Acted, Acting},
     deliver::{self, Asked},
-    pages::TeamModule,
+    pages::{TeamDelivery, TeamModule},
     view::Standing,
   },
   theme::{ExtraSpacing, TaskText},
@@ -64,8 +65,12 @@ pub enum ModuleAsk {
   Branch(String),
   /// Ask for its delivery, on this authorization or on Automatic merge.
   Deliver(Option<OperationId>),
-  /// Authorize the delivery that waits for it, then ask for it on that authorization.
+  /// Authorize the delivery that waits for an Admin, of exactly the commits the module's read names; then, when this
+  /// computer holds the module, ask for it on that authorization.
   Authorize,
+  /// Ask again for the delivery an Admin authorized while it waited, of exactly its commits: this request takes the
+  /// merge.
+  Merge,
 }
 
 /// What came of it.
@@ -104,6 +109,45 @@ impl From<&TeamDeliveryState> for ShownDelivery {
   }
 }
 
+impl ShownDelivery {
+  /// Whether it is of exactly the commits of the server's open delivery `pending`.
+  pub fn binds(&self, pending: &TeamDelivery) -> bool {
+    self.source_commit == pending.source_commit && self.base_commit == pending.base_commit
+  }
+
+  /// Whether the server let it merge here: its merge or report is under way here, or ended.
+  pub const fn merged_here(&self) -> bool {
+    matches!(
+      self.status,
+      DeliveryStatus::Authorized { .. }
+        | DeliveryStatus::AuthorizedAutomatically
+        | DeliveryStatus::Delivered
+        | DeliveryStatus::Failed
+    )
+  }
+}
+
+/// What this computer knows of the module's deliveries: the newest it recorded, and the branch its checkout has checked
+/// out now, which a delivery asked for here lands on.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Recorded {
+  pub newest: Option<ShownDelivery>,
+  pub checked_out: Option<BranchName>,
+}
+
+impl lurq::app::component::DevtoolsInspectable for Recorded {}
+
+impl Recorded {
+  /// The branch the server's open delivery `pending` lands on here: the one the delivery recorded here of its commits
+  /// names, else the one the checkout has checked out.
+  pub fn base_of(&self, pending: &TeamDelivery) -> Option<BranchName> {
+    let recorded = self.newest.as_ref().filter(|newest| newest.binds(pending));
+    recorded
+      .map(|newest| newest.base_branch.clone())
+      .or_else(|| self.checked_out.clone())
+  }
+}
+
 /// The section's state across renders.
 pub struct ModuleWork {
   /// Change branch's question is open, and the name typed in it.
@@ -134,12 +178,12 @@ impl Component for ModuleWork {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<WorkProps>().clone();
-    let delivery = self.delivery(ctx, &props);
-    let action = self.action(ctx, &props, delivery.clone());
+    let recorded = self.recorded(ctx, &props);
+    let action = self.action(ctx, &props, recorded.clone());
     let view = lines::View {
       props: &props,
       action: &action,
-      delivery: delivery.as_ref(),
+      recorded: &recorded,
       changing: &self.changing,
       branch: &self.branch,
       kept: &self.kept,
@@ -167,8 +211,9 @@ impl Component for ModuleWork {
 }
 
 impl ModuleWork {
-  /// The newest delivery of the module recorded here, read again after every ask.
-  fn delivery(&self, ctx: &mut Ctx, props: &WorkProps) -> Option<ShownDelivery> {
+  /// The newest delivery of the module recorded here and the branch the checkout has checked out, read again after
+  /// every ask.
+  fn recorded(&self, ctx: &mut Ctx, props: &WorkProps) -> Recorded {
     let services = Services::of(ctx);
     let root = props.source.root().to_owned();
     let module = props.module.module.id();
@@ -177,30 +222,36 @@ impl ModuleWork {
       .future(deps, move |(root, module, _)| {
         let (servers, programs) = (services.servers.clone(), services.programs.clone());
         async move {
-          let read = background::run(move || deliver::deliveries(root, (servers, programs), module)).await;
-          read.map(|all| all.last().map(ShownDelivery::from)).map_err(|_| ())
+          let read = background::run(move || {
+            let all = deliver::deliveries(root.clone(), (servers, programs.clone()), module);
+            Recorded {
+              newest: all.last().map(ShownDelivery::from),
+              checked_out: deliver::checked_out(&programs, &root),
+            }
+          });
+          read.await.map_err(|_| ())
         }
       })
       .state()
       .get()
       .data
-      .flatten()
+      .unwrap_or_default()
   }
 
   /// The section's action on the module as the page shows it; made on every render. A branch change closes the
   /// question once the server answered it, but for a branch it refused as taken, which the question says under its
   /// field: the page says the rest.
-  fn action(&self, ctx: &mut Ctx, props: &WorkProps, delivery: Option<ShownDelivery>) -> WorkControl {
+  fn action(&self, ctx: &mut Ctx, props: &WorkProps, recorded: Recorded) -> WorkControl {
     let services = Services::of(ctx);
     let (acting, programs) = (Acting::of(&services), services.programs.clone());
     let (props, answered) = (props.clone(), self.answered.clone());
     let (changing, kept) = (self.changing.clone(), self.kept.clone());
     ctx.future_action(move |ask: ModuleAsk| {
-      let (acting, programs, props, delivery) = (acting.clone(), programs.clone(), props.clone(), delivery.clone());
+      let (acting, programs, props, recorded) = (acting.clone(), programs.clone(), props.clone(), recorded.clone());
       let (answered, changing) = (answered.clone(), changing.clone());
       kept.set(false);
       async move {
-        let answer = carry_out(ask, (&acting, programs), &props, delivery).await;
+        let answer = carry_out(ask, (&acting, programs), &props, &recorded).await;
         let taken = matches!(
           answer,
           ModuleAnswer::Acted(_, Acted::Refused(AuthorityErrorCode::Invalid))
@@ -219,7 +270,7 @@ async fn carry_out(
   ask: ModuleAsk,
   (acting, programs): (&Acting, Programs),
   props: &WorkProps,
-  delivery: Option<ShownDelivery>,
+  recorded: &Recorded,
 ) -> ModuleAnswer {
   let module = &props.module;
   let (source, id) = (&props.source, module.module.id());
@@ -252,38 +303,63 @@ async fn carry_out(
         deliver::request(acting, source, programs, target, authorization).await,
       );
     }
-    (ModuleAsk::Authorize, Some(claim)) => return authorize(ask, (acting, programs), props, (delivery, claim)).await,
-    (ModuleAsk::TakeOver | ModuleAsk::Release | ModuleAsk::Deliver(_) | ModuleAsk::Authorize, None) => {
+    (ModuleAsk::Authorize, Some(claim)) => return authorize(ask, (acting, programs), props, (recorded, claim)).await,
+    (ModuleAsk::Merge, Some(claim)) => return merge(ask, (acting, programs), props, (recorded, claim), None).await,
+    (
+      ModuleAsk::TakeOver | ModuleAsk::Release | ModuleAsk::Deliver(_) | ModuleAsk::Authorize | ModuleAsk::Merge,
+      None,
+    ) => {
       return ModuleAnswer::Acted(ask, Acted::Failed);
     }
   };
   ModuleAnswer::Acted(ask, act(action).await)
 }
 
-/// An Admin who holds the module here authorizes the delivery that waits for it, then asks for exactly that delivery on
-/// that authorization: the commits the page showed, not the branches' tips now.
+/// An Admin authorizes the delivery that waits for one, of exactly the commits the module's read names, under the
+/// module's claim and on its branch; one who holds the module here then asks for that delivery on the authorization.
 async fn authorize(
   ask: ModuleAsk,
   (acting, programs): (&Acting, Programs),
   props: &WorkProps,
-  (delivery, claim): (Option<ShownDelivery>, orchester_core::id::ClaimId),
+  (recorded, claim): (&Recorded, ClaimId),
 ) -> ModuleAnswer {
-  let Some(delivery) = delivery else {
+  let module = &props.module;
+  let (Some(pending), Ok(branch)) = (module.pending.as_ref(), BranchName::new(&module.branch)) else {
     return ModuleAnswer::Acted(ask, Acted::Failed);
   };
-  let id = props.module.module.id();
-  let commits = (delivery.source_commit.clone(), delivery.base_commit.clone());
-  match deliver::authorize(acting, &props.source, (id, claim, delivery.branch.clone()), commits).await {
-    Ok(authorization) => {
-      let tips = (
-        delivery.branch,
-        delivery.source_commit,
-        delivery.base_branch,
-        delivery.base_commit,
-      );
-      let asked = deliver::request_tips(acting, &props.source, programs, (id, claim, tips), Some(authorization)).await;
-      ModuleAnswer::Asked(ask, asked)
+  let commits = (pending.source_commit.clone(), pending.base_commit.clone());
+  let id = module.module.id();
+  match deliver::authorize(acting, &props.source, (id, claim, branch), commits).await {
+    Ok(authorization) if module.claim.as_ref().is_some_and(|claim| claim.here) => {
+      merge(ask, (acting, programs), props, (recorded, claim), Some(authorization)).await
     }
+    Ok(_) => ModuleAnswer::Acted(ask, Acted::Done),
     Err(acted) => ModuleAnswer::Acted(ask, acted),
   }
+}
+
+/// The holder here asks for exactly the delivery the module's read names, citing `authorization` when it has one:
+/// once an Admin authorized it, this request takes the merge. It lands on the branch the delivery recorded here names,
+/// or the one the checkout has checked out.
+async fn merge(
+  ask: ModuleAsk,
+  (acting, programs): (&Acting, Programs),
+  props: &WorkProps,
+  (recorded, claim): (&Recorded, ClaimId),
+  authorization: Option<OperationId>,
+) -> ModuleAnswer {
+  let module = &props.module;
+  let Some(pending) = module.pending.as_ref() else {
+    return ModuleAnswer::Acted(ask, Acted::Failed);
+  };
+  let Ok(branch) = BranchName::new(&module.branch) else {
+    return ModuleAnswer::Asked(ask, Asked::BranchNotFound(module.branch.clone()));
+  };
+  let Some(base) = recorded.base_of(pending) else {
+    return ModuleAnswer::Asked(ask, Asked::NoBase);
+  };
+  let tips = (branch, pending.source_commit.clone(), base, pending.base_commit.clone());
+  let target = (module.module.id(), claim, tips);
+  let asked = deliver::request_tips(acting, &props.source, programs, target, authorization).await;
+  ModuleAnswer::Asked(ask, asked)
 }

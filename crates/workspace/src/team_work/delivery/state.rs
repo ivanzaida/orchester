@@ -16,8 +16,8 @@ use crate::team_work::TeamWorkError;
 pub enum DeliveryStatus {
   /// Recorded, and sent or about to be: the server's answer is not known yet.
   Requested,
-  /// Refused for want of an authorization (`delivery_not_authorized`): it needs an Admin's `delivery.authorize`, or
-  /// the workspace's automatic merge.
+  /// The server keeps it waiting for an Admin's `delivery.authorize`, with the automatic merge off; the holder asks
+  /// again once it is authorized.
   AwaitingAuthorization,
   /// Requested on an Admin's authorization; its merge or its report is under way here.
   Authorized { by: OperationId },
@@ -118,13 +118,10 @@ fn status(
   server: Option<&ModuleDeliveryRead>,
   refusal: Option<AuthorityError>,
 ) -> Option<DeliveryStatus> {
-  let refused = |error: AuthorityError| match error.code() {
-    AuthorityErrorCode::DeliveryNotAuthorized => DeliveryStatus::AwaitingAuthorization,
-    _ => DeliveryStatus::Refused(error),
-  };
   Some(match record.stage {
     TeamDeliveryStage::Requested => DeliveryStatus::Requested,
-    TeamDeliveryStage::Refused => refused(refusal?),
+    TeamDeliveryStage::Refused => DeliveryStatus::Refused(refusal?),
+    TeamDeliveryStage::Waiting => server.map(|_| DeliveryStatus::AwaitingAuthorization)?,
     // A report refused as not authorized is of a delivery the automatic merge's withdrawal failed.
     TeamDeliveryStage::ReportRefused => match refusal? {
       error if error.code() == AuthorityErrorCode::DeliveryNotAuthorized => DeliveryStatus::Failed,

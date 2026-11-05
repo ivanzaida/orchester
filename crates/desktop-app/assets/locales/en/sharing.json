@@ -557,7 +557,7 @@
       "stale": "Stale claim after",
       "staleHint": "A claim not renewed for this long can be taken over. The team server's Server admin sets it for every workspace (5 min to 24 h).",
       "minutes": "{{minutes}} min",
-      "unknown": "—",
+      "seconds": "{{seconds}} s",
       "conflictTitle": "Automatic merge was changed first",
       "conflictOn": "It's On now; you turned it off. The team server keeps one version, so nothing of yours was saved.",
       "conflictOff": "It's Off now; you turned it on. The team server keeps one version, so nothing of yours was saved.",
@@ -565,8 +565,8 @@
       "turnOnAgain": "Turn it on again",
       "keepOn": "Keep it on",
       "keepOff": "Keep it off",
-      "versionTitle": "This team server needs another version of Orchester",
-      "versionBody": "{{server}} refuses this version of Orchester: a team server and a desktop of different versions don't talk to each other. Update Orchester to see and run the team's tasks again, or ask the server's admin to update it; your local projects work as before, and runs here keep their worktrees.",
+      "versionTitle": "This team server needs Orchester {{version}}",
+      "versionBody": "{{server}} refuses Orchester {{current}}: a team server and a desktop of different versions don't talk to each other. Update Orchester to see and run {{project}}'s tasks again; your local projects work as before, and runs here keep their worktrees.",
       "checkUpdates": "Check for updates"
     },
     "bindings": {

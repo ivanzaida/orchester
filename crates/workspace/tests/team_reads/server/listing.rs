@@ -120,7 +120,8 @@ pub fn modules(shared: &Shared, project: ProjectId, request: &Request, stream: &
   let module = json!({
     "id": state.module, "name": "Sign-in", "description": "", "start": null, "target": null, "state": "open",
     "revision": 1, "created": attribution(), "updated": attribution(), "branch": "module/sign-in",
-    "assignee": null, "work": null, "effective_claim": null, "capabilities": capabilities(project)
+    "assignee": null, "work": null, "effective_claim": null, "capabilities": capabilities(project),
+    "pending_delivery": null
   });
   let summary = json!({
     "module": module, "progress": {"unit": "tasks", "scope": scope, "done": done}, "tasks": tasks,

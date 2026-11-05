@@ -5,6 +5,7 @@
 use orchester_api::{
   ErrorCode, SharedModule, SharedTag, SharedTask,
   client::AuthorityCallError,
+  releases::ReleaseVersion,
   v2::{AuthorityError, CommandResult, LocalEffect, ModuleRead, TaskRead, TeamCommandValue, WorkspacePolicy},
 };
 use orchester_core::{
@@ -94,6 +95,9 @@ pub enum Definition {
 pub enum Refusal {
   /// A command's refusal, as the server keeps it under the operation.
   Command(AuthorityError),
+  /// `426 unsupported_contract`: the server accepts desktops of `required` and later only. Nothing was kept, and the
+  /// same command after the update is safe.
+  NeedsVersion { required: ReleaseVersion },
   /// A definition route's refusal: its HTTP status and code, e.g. `403 not_admin` for a member, or
   /// `409 revision_conflict`.
   Route { status: u16, code: ErrorCode },

@@ -5,7 +5,8 @@
 
 use orchester_api::{
   ErrorCode,
-  v2::{AuthorityError, AuthorityErrorCode},
+  releases::ReleaseVersion,
+  v2::{AuthorityError, AuthorityErrorCode, ErrorDetails},
 };
 use orchester_store::StoreError;
 
@@ -33,11 +34,15 @@ pub(super) fn accepted(outcome: TeamOutcome) -> Result<Accepted, ToolError> {
 
 /// The server's refusal of a team action.
 fn refused(refusal: &Refusal, retryable: bool) -> ToolError {
+  if let Refusal::NeedsVersion { required } = refusal {
+    return needs_version(required);
+  }
   if retryable {
     return ToolError::refused("team_unavailable", vec![Message::new("appMcp.errors.teamUnavailable")]);
   }
   match refusal {
     Refusal::Command(error) => authority_refused(error),
+    Refusal::NeedsVersion { required } => needs_version(required),
     Refusal::Route {
       code: ErrorCode::NotAdmin | ErrorCode::Forbidden,
       ..
@@ -54,11 +59,20 @@ fn refused(refusal: &Refusal, retryable: bool) -> ToolError {
 
 /// A team command's refusal: `forbidden` for a member is `not_admin`, as a definition route says it.
 pub(super) fn authority_refused(error: &AuthorityError) -> ToolError {
-  match error.code() {
-    AuthorityErrorCode::Forbidden => StoreError::NotAdmin.into(),
-    AuthorityErrorCode::RevisionConflict => changed(),
-    code => coded(serde_json::to_value(code)),
+  match (error.code(), error.details()) {
+    (_, ErrorDetails::UnsupportedContract { required_version }) => needs_version(required_version),
+    (AuthorityErrorCode::Forbidden, _) => StoreError::NotAdmin.into(),
+    (AuthorityErrorCode::RevisionConflict, _) => changed(),
+    (code, _) => coded(serde_json::to_value(code)),
   }
+}
+
+/// The server accepts desktops of `required` and later only: `unsupported_contract`, naming the version.
+pub(super) fn needs_version(required: &ReleaseVersion) -> ToolError {
+  ToolError::refused(
+    "unsupported_contract",
+    vec![Message::new("appMcp.errors.teamNeedsVersion").with("version", required.to_string())],
+  )
 }
 
 /// A team command's refusal code by its snake_case name, as the server sends it.

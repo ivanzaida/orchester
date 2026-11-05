@@ -1,9 +1,10 @@
-//! Module delivery (team authority P4c) against the fake server's delivery commands, in a real repository whose
-//! checkout is on `main` and whose module branch is one commit ahead of it: a request without an authorization waits
-//! for the Admin's, and with it the merge lands and is reported; the automatic merge authorizes on its own, and its
-//! report waits across an outage; nothing is sent while the module's work runs here, and the server refuses a second
-//! request while one is not reported; a lost answer is looked up, not sent again; and a merge made before the computer
-//! stopped is found on recovery, reported once, never made twice.
+//! Module delivery (team authority P4c, S12) against the fake server's delivery commands, in a real repository whose
+//! checkout is on `main` and whose module branch is one commit ahead of it: a request without an authorization is kept
+//! waiting for the Admin, with no refusal, and once the Admin authorized it the holder's next request takes the merge,
+//! which lands and is reported; an Admin may authorize first; the automatic merge authorizes on its own, and its report
+//! waits across an outage; nothing is sent while the module's work runs here, and the server refuses a second request
+//! while one is not reported; a lost answer is looked up, not sent again; and a merge made before the computer stopped
+//! is found on recovery, reported once, never made twice.
 
 use std::{fs, path::Path, process::Command};
 
@@ -114,7 +115,8 @@ pub(crate) fn request(
   }
 }
 
-/// An Admin authorizes the delivery from their own computer; the operation the holder cites.
+/// An Admin authorizes the delivery from their own computer; the operation the holder cites. A request of exactly it
+/// that waits for the Admin stays `requested` under this authorization; otherwise the authorization is kept on its own.
 async fn authorize(server: &TeamServer, claim: ClaimId, commits: (&CommitId, &CommitId)) -> OperationId {
   let admin = Checkout::linked(server);
   let (dispatcher, _generation) = admin.dispatcher(server, ADMIN);
@@ -131,7 +133,11 @@ async fn authorize(server: &TeamServer, claim: ClaimId, commits: (&CommitId, &Co
   let TeamCommandValue::Delivery { delivery, effects } = receipt.result else {
     panic!("not a delivery: {receipt:?}");
   };
-  assert_eq!(delivery.state, DeliveryState::Authorized);
+  assert!(
+    matches!(delivery.state, DeliveryState::Authorized | DeliveryState::Requested),
+    "{delivery:?}"
+  );
+  assert_eq!(delivery.authorization_operation_id, Some(intent.operation()));
   assert!(effects.is_empty(), "the Admin's computer merges nothing");
   intent.operation()
 }
@@ -168,8 +174,11 @@ pub(crate) fn delivered(progress: DeliveryProgress) -> orchester_api::v2::Module
   delivery
 }
 
+/// With the automatic merge off, a request that cites no authorization waits for the Admin (S12): no refusal, nothing
+/// merged, and asking under the same operation again answers the same. The Admin's authorization of exactly it lets the
+/// holder's next request, under an operation of its own, take the merge.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn team_work_delivery_request_then_admin_authorize_then_merge_then_report() {
+async fn team_work_delivery_request_waits_then_admin_authorize_then_merge_then_report() {
   let server = TeamServer::start(crate::fixture::Config::new("Append one line."));
   let checkout = Checkout::linked(&server);
   let (base, head) = repository(&checkout);
@@ -177,15 +186,20 @@ async fn team_work_delivery_request_then_admin_authorize_then_merge_then_report(
   let (deliveries, _generation) = person_deliveries(&checkout, &server);
 
   let unauthorized = request(&server, claim, (&base, &head), None);
-  let refused = deliveries.request(unauthorized.clone()).await.expect("carried on");
-  assert!(
-    matches!(&refused, DeliveryProgress::Refused(error) if error.code() == AuthorityErrorCode::DeliveryNotAuthorized),
-    "{refused:?}"
+  let waits = deliveries.request(unauthorized.clone()).await.expect("carried on");
+  let DeliveryProgress::AwaitingAdmin(waiting) = &waits else {
+    panic!("not waiting for the Admin: {waits:?}");
+  };
+  assert_eq!(
+    (waiting.state, waiting.authorization_operation_id),
+    (DeliveryState::Requested, None)
   );
   assert_eq!(
     state(&deliveries, unauthorized.operation).status,
     DeliveryStatus::AwaitingAuthorization
   );
+  let again = deliveries.request(unauthorized.clone()).await.expect("carried on");
+  assert!(matches!(again, DeliveryProgress::AwaitingAdmin(_)), "{again:?}");
   assert!(
     merges(checkout.root()).is_empty(),
     "nothing merged without an authorization"
@@ -200,6 +214,7 @@ async fn team_work_delivery_request_then_admin_authorize_then_merge_then_report(
     fs::read_to_string(checkout.root().join("payments.txt")).expect("in the checkout"),
     "payments\n"
   );
+  assert_eq!(server.state().deliveries.len(), 1, "the waiting request was delivered");
   assert_eq!(server.state().deliveries[0].merge_commit.as_deref(), Some(tip.as_str()));
   let state = state(&deliveries, authorized.operation);
   assert_eq!(state.status, DeliveryStatus::Delivered);
@@ -210,6 +225,23 @@ async fn team_work_delivery_request_then_admin_authorize_then_merge_then_report(
     dispatcher.open_operations().expect("read").is_empty(),
     "the request's effect is carried out and its operation completed"
   );
+}
+
+/// An Admin may still authorize first: a request citing that authorization takes the merge at once.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn team_work_delivery_an_admin_authorizes_first_and_the_request_cites_it() {
+  let server = TeamServer::start(crate::fixture::Config::new("Append one line."));
+  let checkout = Checkout::linked(&server);
+  let (base, head) = repository(&checkout);
+  let claim = claim_module(&checkout, &server).await;
+  let (deliveries, _generation) = person_deliveries(&checkout, &server);
+
+  let authorization = authorize(&server, claim, (&base, &head)).await;
+  let authorized = request(&server, claim, (&base, &head), Some(authorization));
+  let delivery = delivered(deliveries.request(authorized.clone()).await.expect("carried on"));
+  assert_eq!(delivery.authorization_operation_id, Some(authorization));
+  merged_tip(checkout.root(), (&base, &head));
+  assert_eq!(server.state().delivery_requests, 1);
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]

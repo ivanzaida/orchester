@@ -1,10 +1,10 @@
 //! A team project's *Team policy* in Sharing (`07 · Sharing · admin` `MnVch`, `07b · Sharing · member` `FSeEz`,
 //! `docs/design/team-authority.md` §7): *Automatic merge*, a switch for whom the server's capabilities let change it
-//! and its value with a lock for a member, the Admins named; and *Stale claim after*, read-only, the server's threshold
-//! as a claim of the workspace shows it (the server tells it to its admins only), *—* while no claim does. A change of
-//! the automatic merge goes through the dispatcher on the policy's revision; one someone else made first shows what it
-//! is now, to change again or keep (`Sharing · Automatic merge` in `05b` `H7MBjm`). While the server refuses this
-//! version of Orchester, the page says so first (`07d` `BDJKM`).
+//! and its value with a lock for a member, the Admins named; and *Stale claim after*, read-only, the server's claim
+//! staleness threshold as the workspace's metadata gives it to every reader. A change of the automatic merge goes
+//! through the dispatcher on the policy's revision; one someone else made first shows what it is now, to change again
+//! or keep (`Sharing · Automatic merge` in `05b` `H7MBjm`). While the server refuses this version of Orchester, the
+//! page says so first, with the version it needs (`07d` `BDJKM`).
 
 use lurq::{
   app::{
@@ -17,6 +17,7 @@ use lurq::{
   layout::Alignment,
   node::Element,
 };
+use orchester_core::sharing::ClaimStalenessThreshold;
 use orchester_workspace::actions::{Action, PolicyAction};
 
 use super::super::kit::{Group, SettingRow, value};
@@ -25,12 +26,11 @@ use crate::{
   project::ShownProject,
   routes::{Route, UpdatesShow},
   screens::settings::orchester::PersonOnly,
-  services::Services,
+  services::{Services, updates},
   team::{
     TeamFailure, TeamSource,
     act::{Acted, Acting, Holds},
     lock,
-    pages::{TeamClaim, team_module_list},
     queries::{TeamPolicy, team_admins, team_policy},
     view,
   },
@@ -50,8 +50,6 @@ pub(super) struct TeamPart {
   pub source: Option<TeamSource>,
   pub failure: Option<TeamFailure>,
   pub policy: Option<TeamPolicy>,
-  /// The server's stale threshold in minutes, as a claim of the workspace shows it.
-  pub threshold: Option<String>,
   /// Who changes the policy, named.
   pub admins: Option<String>,
 }
@@ -68,7 +66,6 @@ pub(super) fn read(ctx: &mut Ctx, project: &ShownProject) -> TeamPart {
         source: None,
         failure: Some(failure),
         policy: None,
-        threshold: None,
         admins: None,
       };
     }
@@ -78,34 +75,25 @@ pub(super) fn read(ctx: &mut Ctx, project: &ShownProject) -> TeamPart {
       source: None,
       failure: None,
       policy: None,
-      threshold: None,
       admins: None,
     };
   };
   let policy = ctx.query(team_policy(source.clone()));
-  let modules = ctx.query(team_module_list(source.clone()));
   let admins = ctx.query(team_admins(source.clone())).data();
-  let threshold = modules.data().and_then(|modules| {
-    modules
-      .iter()
-      .find_map(|module| module.claim.as_ref())
-      .map(TeamClaim::threshold)
-  });
   TeamPart {
     failure: policy.error().map(|failure| (*failure).clone()),
     policy: policy.data().map(|policy| *policy),
-    threshold,
     admins: admins.map(|admins| lock::admin_names(ctx, &admins)),
     source: Some(source),
   }
 }
 
-/// The server refuses this version of Orchester (`Notice · This team server needs Orchester 0.4.0` in 07d): neither
-/// side says which version the other needs, so the words name none.
-pub(super) fn refusal(ctx: &mut Ctx, part: &TeamPart, server: &str) -> Option<Element> {
-  if part.failure != Some(TeamFailure::Unsupported) {
+/// The server refuses this version of Orchester (`Notice · This team server needs Orchester 0.4.0` in 07d): the
+/// version it needs, and this one it refuses, on the server `server` for the team project `project`.
+pub(super) fn refusal(ctx: &mut Ctx, part: &TeamPart, (server, project): (&str, &str)) -> Option<Element> {
+  let Some(TeamFailure::Unsupported { required }) = &part.failure else {
     return None;
-  }
+  };
   let navigation = Navigation::of(ctx);
   let check = ActionButton::new(
     "sharing-version-check",
@@ -114,14 +102,27 @@ pub(super) fn refusal(ctx: &mut Ctx, part: &TeamPart, server: &str) -> Option<El
   )
   .icon(Icon::RefreshCw)
   .opens(navigation.to(Route::Updates(UpdatesShow::Section)));
+  let current = updates::version();
   let notice = Notice::new(
     "sharing-version-refused",
     NoticeTone::Danger,
-    ctx.t("sharing.policy.versionTitle"),
+    ctx.t_args("sharing.policy.versionTitle", [("version", required.as_str())]),
   )
-  .body(ctx.t_args("sharing.policy.versionBody", [("server", server)]))
+  .body(ctx.t_args(
+    "sharing.policy.versionBody",
+    [("server", server), ("current", current.as_str()), ("project", project)],
+  ))
   .action(check);
   Some(notice.into())
+}
+
+/// The threshold as *Stale claim after* says it: whole minutes, or seconds when it is no whole number of minutes.
+fn threshold_words(ctx: &Ctx, threshold: ClaimStalenessThreshold) -> std::sync::Arc<str> {
+  let seconds = threshold.seconds();
+  if seconds.is_multiple_of(60) {
+    return ctx.t_args("sharing.policy.minutes", [("minutes", (seconds / 60).to_string())]);
+  }
+  ctx.t_args("sharing.policy.seconds", [("seconds", seconds.to_string())])
 }
 
 #[derive(Clone, PartialEq)]
@@ -162,13 +163,10 @@ impl Component for Policy {
       return Group::new("project-settings-sharing-policy", ctx.t("sharing.policy.title"));
     };
     let merge = self.merge_row(ctx, (&part, policy), &action);
-    let minutes = part.threshold.as_deref().map_or_else(
-      || ctx.t("sharing.policy.unknown"),
-      |minutes| ctx.t_args("sharing.policy.minutes", [("minutes", minutes)]),
-    );
+    let threshold = threshold_words(ctx, policy.stale_after);
     let stale = SettingRow::new("sharing-policy-stale", ctx.t("sharing.policy.stale"))
       .hint(ctx.t("sharing.policy.staleHint"))
-      .control(locked("sharing-policy-stale-value", &minutes))
+      .control(locked("sharing-policy-stale-value", &threshold))
       .render(ctx);
     Group::new("project-settings-sharing-policy", ctx.t("sharing.policy.title"))
       .row(merge)

@@ -11,7 +11,7 @@ use orchester_core::id::ServerId;
 use super::TeamFailure;
 use crate::{
   screens::settings::orchester::moment,
-  services::Services,
+  services::{Services, updates},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
@@ -40,7 +40,14 @@ pub fn card(ctx: &mut Ctx, unread: &Unread<'_>, (failure, place, project): (&Tea
     ),
     TeamFailure::SignedOut => ctx.t_args("tasks.team.signedOut", [("server", server), ("project", project)]),
     TeamFailure::NotMember => ctx.t_args("tasks.team.notMember", [("server", server), ("project", project)]),
-    TeamFailure::Unsupported => ctx.t_args("tasks.team.unsupported.body", [("server", server)]),
+    TeamFailure::Unsupported { required } => ctx.t_args(
+      "tasks.team.unsupported.body",
+      [
+        ("server", server),
+        ("version", required.as_str()),
+        ("current", updates::version().as_str()),
+      ],
+    ),
     TeamFailure::Refused => ctx.t_args("tasks.team.refused.body", [("server", server)]),
   };
   let services = Services::of(ctx);

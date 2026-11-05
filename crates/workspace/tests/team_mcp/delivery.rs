@@ -1,6 +1,7 @@
 //! `merge_run` of a team task's run (P7b) against the fake server's delivery commands, in a repository on `main` whose
-//! module branch is one commit ahead of it: the run's module is claimed and its delivery requested, which waits for an
-//! Admin's authorization, cited by its operation, or the automatic merge; a delivery whose merge waits is carried on,
+//! module branch is one commit ahead of it: the run's module is claimed and its delivery requested, which the server
+//! keeps waiting for an Admin's authorization (S12) unless an authorization is cited or the automatic merge is on; once
+//! an Admin authorized the waiting request, the next call takes the merge; a delivery whose merge waits is carried on,
 //! never requested again; a run outside a module, or a checkout on the module's own branch, has no delivery; and a
 //! local project's `merge_run` keeps its own path.
 
@@ -10,7 +11,7 @@ use serde_json::{Value, json};
 
 use crate::{
   Checkout, git,
-  team_server::{Delivery, MEMBER, MODULE_BRANCH},
+  team_server::{MEMBER, MODULE_BRANCH},
   tools::{canceled_run, run_from, server},
 };
 
@@ -51,8 +52,8 @@ fn team_mcp_merge_run_requests_the_module_delivery() {
     run_from(db, (Some(MODULE_BRANCH), RunBaseSource::Module { module }));
   });
 
-  // Without an Admin's authorization or the automatic merge the server refuses the request: it waits for one.
-  assert_eq!(checkout.refused("merge_run", &merge()), "delivery_not_authorized");
+  // Without an Admin's authorization or the automatic merge the server keeps the request waiting for an Admin.
+  assert_eq!(checkout.refused("merge_run", &merge()), "delivery_awaiting_admin");
   {
     let state = server.state();
     assert_eq!(state.delivery_requests, 1, "the delivery was requested");
@@ -60,11 +61,14 @@ fn team_mcp_merge_run_requests_the_module_delivery() {
       state.module_claim.as_ref().is_some_and(|claim| claim.token == MEMBER),
       "under the module's claim, taken in this session"
     );
-    assert!(state.deliveries.is_empty(), "the tool authorized nothing");
+    assert_eq!(state.deliveries.len(), 1, "the request is kept");
+    assert_eq!(state.deliveries[0].waits, Some("admin"));
+    assert_eq!(state.deliveries[0].authorization, None, "the tool authorized nothing");
   }
   assert!(merges(&checkout).is_empty(), "nothing merged");
 
-  // The workspace's automatic merge authorizes the next request: the module branch lands on main and is reported.
+  // The workspace's automatic merge allows the waiting request asked again: the module branch lands on main and is
+  // reported.
   server.state().automatic_merge = true;
   let delivered = checkout.call("merge_run", &merge()).expect("delivered");
   let tip = assert_delivered(&checkout, &delivered);
@@ -111,23 +115,16 @@ fn team_mcp_merge_run_cites_an_admins_authorization() {
   let checkout = Checkout::prepared(Some(&server), &["Say hello"], |db| {
     run_from(db, (Some(MODULE_BRANCH), RunBaseSource::Module { module }));
   });
-  assert_eq!(checkout.refused("merge_run", &merge()), "delivery_not_authorized");
+  assert_eq!(checkout.refused("merge_run", &merge()), "delivery_awaiting_admin");
 
-  // An Admin authorizes this delivery of the module's claim on their own computer, under their own operation.
+  // An Admin authorizes the waiting request of the module's claim on their own computer, under their own operation.
   let authorization = OperationId::generate().to_string();
   {
     let mut state = server.state();
-    let claim = state.module_claim.as_ref().expect("the module claimed").id;
-    state.deliveries.push(Delivery {
-      authorization: Some(authorization.clone()),
-      claim,
-      branch: MODULE_BRANCH.to_owned(),
-      source_commit: git(checkout.root(), &["rev-parse", MODULE_BRANCH]),
-      base_commit: git(checkout.root(), &["rev-parse", "main"]),
-      state: "authorized".to_owned(),
-      revision: 1,
-      merge_commit: None,
-    });
+    let waiting = &mut state.deliveries[0];
+    assert_eq!(waiting.waits, Some("admin"));
+    waiting.authorization = Some(authorization.clone());
+    waiting.waits = Some("holder");
   }
 
   // Called again with it, the new request cites it, and the module lands on main.
@@ -139,7 +136,7 @@ fn team_mcp_merge_run_cites_an_admins_authorization() {
   let state = server.state();
   assert_eq!(
     state.delivery_requests, 2,
-    "refused once, then requested on the authorization"
+    "waited once, then requested on the authorization"
   );
   assert_eq!(state.deliveries.len(), 1);
   assert_eq!(state.deliveries[0].state, "delivered");

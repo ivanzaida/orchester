@@ -6,6 +6,7 @@
 use orchester_core::time::Timestamp;
 use serde_json::{Value, json};
 
+use super::PendingDelivery;
 use crate::test_support::team_server::USER;
 
 /// The server's claim staleness threshold.
@@ -75,7 +76,7 @@ impl AuthorityClaim {
 }
 
 /// A module as the stand-in's reads give it, its days `YYYY-MM-DD`; `likely` its forecast's 50% and 85% days, or too
-/// little history without them.
+/// little history without them; `pending` its delivery to base that is requested and not yet delivered or failed.
 #[derive(Clone, Debug)]
 pub struct AuthorityModule {
   pub name: &'static str,
@@ -86,6 +87,7 @@ pub struct AuthorityModule {
   pub assignee: Option<Person>,
   pub claim: Option<AuthorityClaim>,
   pub likely: Option<(&'static str, &'static str)>,
+  pub pending: Option<PendingDelivery>,
 }
 
 /// The id of the module at `index` of those [`super::TeamServer::authority_modules`] set.
@@ -123,6 +125,7 @@ impl AuthorityModule {
       "assignee": self.assignee.map(Person::wire), "work": null,
       "effective_claim": self.claim.map(|claim| claim.wire(&json!({"kind": "module", "id": id}), module_number(index))),
       "capabilities": capabilities,
+      "pending_delivery": self.pending.as_ref().map(PendingDelivery::wire),
     })
   }
 

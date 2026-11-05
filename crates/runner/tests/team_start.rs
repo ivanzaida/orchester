@@ -131,7 +131,8 @@ fn client(server: &TeamServer) -> Client {
 /// The dispatcher of the person's session on `server` for the project at `root`, with the application data in `data`.
 fn dispatcher(root: &Path, data: &Path, server: &TeamServer) -> (Dispatcher, watch::Sender<u64>) {
   let workspace = Workspace::new(AppDb::open(&data.join("orchester.db")).expect("database"));
-  let servers = Servers::new(workspace, Vault::with(Arc::new(NoVault)));
+  let version = orchester_api::releases::ReleaseVersion::parse("0.5.0").expect("a release version");
+  let servers = Servers::new(workspace, Vault::with(Arc::new(NoVault)), version);
   let generation = watch::channel(0).0;
   let token = SecretValue::new(MEMBER.to_owned()).expect("token");
   let session = TeamSession::new(

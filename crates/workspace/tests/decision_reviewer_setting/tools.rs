@@ -40,7 +40,11 @@ fn services(repo: &std::path::Path) -> (app_mcp::Services, Workspace) {
       Activity::new(),
       orchester_ipc::SessionEnd::Clean,
     ),
-    Servers::new(workspace.clone(), vault.clone()),
+    Servers::new(
+      workspace.clone(),
+      vault.clone(),
+      orchester_api::releases::ReleaseVersion::parse("0.5.0").expect("a release version"),
+    ),
     Programs::processes(),
     (OutsideChanges::default(), Activity::new(), ProjectJobs::default()),
   )

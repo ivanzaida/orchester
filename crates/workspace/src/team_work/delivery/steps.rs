@@ -1,10 +1,11 @@
 //! A delivery carried forward from the boundary its record stands at: `delivery.request` through the dispatcher, the
-//! receipt's delivery kept once its effects allow the merge, the merge marked begun, made or found made, its outcome
-//! kept with the report made of it, and the report sent until the server answers it.
+//! receipt's delivery kept once its effects allow the merge, or kept waiting when the server answered it without one,
+//! the merge marked begun, made or found made, its outcome kept with the report made of it, and the report sent until
+//! the server answers it.
 
 use orchester_api::v2::{
-  AuthorityError, AuthorityRef, CommandRequest, DeliveryOutcome, ExpectedRevisions, LocalEffect, ModuleDeliveryRead,
-  Subject, TeamCommand, TeamCommandValue,
+  AuthorityError, AuthorityRef, CommandRequest, DeliveryOutcome, DeliveryState, ExpectedRevisions, LocalEffect,
+  ModuleDeliveryRead, Subject, TeamCommand, TeamCommandValue,
 };
 use orchester_core::{
   id::OperationId,
@@ -47,6 +48,7 @@ impl ModuleDeliveries {
         TeamDeliveryStage::Reporting if report_waits => Err(DeliveryProgress::Waiting(TeamDeliveryStage::Reporting)),
         TeamDeliveryStage::Reporting => Err(self.send_report(&record).await?),
         TeamDeliveryStage::Refused => Err(DeliveryProgress::Refused(kept_refusal(&record)?)),
+        TeamDeliveryStage::Waiting => Err(DeliveryProgress::AwaitingAdmin(kept_delivery(&record)?)),
         TeamDeliveryStage::Reported => Err(DeliveryProgress::Reported(kept_delivery(&record)?)),
         TeamDeliveryStage::ReportRefused => Err(DeliveryProgress::ReportRefused(kept_refusal(&record)?)),
       };
@@ -95,10 +97,16 @@ impl ModuleDeliveries {
     let TeamCommandValue::Delivery { delivery, effects } = &receipt.result else {
       return Err(TeamWorkError::NotADelivery(operation));
     };
+    let text = serde_json::to_string(delivery).expect("a delivery serializes");
+    // Without an authorization and with the automatic merge off, the server keeps the request waiting for an Admin
+    // and allows no merge yet (S12): that is no refusal.
+    if effects.is_empty() && delivery.state == DeliveryState::Requested {
+      self.db()?.wait_team_delivery(operation, &text, Timestamp::now())?;
+      return Ok(Err(DeliveryProgress::AwaitingAdmin(delivery.as_ref().clone())));
+    }
     if !effects.iter().any(|effect| allows(effect, kept)) {
       return Err(TeamWorkError::NotADelivery(operation));
     }
-    let text = serde_json::to_string(delivery).expect("a delivery serializes");
     Ok(Ok(self.db()?.accept_team_delivery(
       operation,
       &text,

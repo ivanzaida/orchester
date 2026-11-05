@@ -5,8 +5,9 @@
 //! the source commit, and the tip of the branch the checkout has checked out, the base the module branch was made from,
 //! as the base commit. A delivery of the module not settled yet is carried on rather than requested again. An Admin's
 //! authorization or the workspace's automatic merge (D7) decides whether it is delivered: the request cites the Admin's
-//! `delivery.authorize` operation its caller names, if any, and the tool never authorizes. Only a delivered module is
-//! the tool's result; every other state is a refusal that names it.
+//! `delivery.authorize` operation its caller names, if any, and the tool never authorizes; without either the server
+//! keeps the request waiting for an Admin, and the tool's next call, once authorized, takes the merge. Only a
+//! delivered module is the tool's result; every other state is a refusal that names it.
 
 use std::path::Path;
 
@@ -182,6 +183,7 @@ fn answer(
       "team_work_running",
       vec![Message::new("appMcp.errors.teamDeliveryWorkRunning").with("runs", runs.len().to_string())],
     )),
+    DeliveryProgress::AwaitingAdmin(_) => Err(awaiting_admin()),
     DeliveryProgress::Refused(error) if error.code() == AuthorityErrorCode::DeliveryNotAuthorized => {
       Err(not_authorized())
     }
@@ -216,7 +218,7 @@ fn recorded(state: Option<&TeamDeliveryState>, translate: &Translate) -> Result<
   match &recorded.status {
     DeliveryStatus::Delivered => delivered(state, translate),
     DeliveryStatus::Failed => Err(failed()),
-    DeliveryStatus::AwaitingAuthorization => Err(not_authorized()),
+    DeliveryStatus::AwaitingAuthorization => Err(awaiting_admin()),
     // Only a report is refused once the merge was made here.
     DeliveryStatus::Refused(error) if recorded.merge.is_some() => Err(report_refused(error)),
     DeliveryStatus::Refused(error) => Err(authority_refused(error)),
@@ -268,6 +270,11 @@ fn refused(code: &str, key: &'static str) -> ToolError {
 
 fn not_authorized() -> ToolError {
   refused("delivery_not_authorized", "appMcp.errors.teamDeliveryNotAuthorized")
+}
+
+/// The request was taken and waits for an Admin's authorization: no refusal of it, but nothing was merged yet.
+fn awaiting_admin() -> ToolError {
+  refused("delivery_awaiting_admin", "appMcp.errors.teamDeliveryAwaitingAdmin")
 }
 
 fn waiting() -> ToolError {
