@@ -180,15 +180,15 @@ impl Session {
         true
       }
       Some(Ok(Some(Event::RunChanged { run, task }))) => {
-        reporter.event_of(run);
-        reporter.run_changed();
-        reporter.task_run_changed(task);
+        reporter.run_state_changed(run, task);
         true
       }
-      Some(Ok(Some(
-        Event::TaskGroupChanged { .. } | Event::ToolApprovalChanged { .. } | Event::QuestionChanged { .. },
-      ))) => {
-        reporter.run_changed();
+      Some(Ok(Some(Event::ToolApprovalChanged { run, .. } | Event::QuestionChanged { run, .. }))) => {
+        reporter.run_changed(Some(run));
+        true
+      }
+      Some(Ok(Some(Event::TaskGroupChanged { .. }))) => {
+        reporter.run_changed(None);
         true
       }
       Some(Ok(Some(Event::ChatChanged { .. }))) => {
@@ -196,8 +196,7 @@ impl Session {
         true
       }
       Some(Ok(Some(Event::AgentActivity { run, .. }))) => {
-        reporter.event_of(run);
-        reporter.transcript_grew();
+        reporter.transcript_grew(run);
         true
       }
       Some(Ok(Some(Event::WorkSummary(summary)))) => {
