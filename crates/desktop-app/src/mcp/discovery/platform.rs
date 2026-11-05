@@ -1,7 +1,9 @@
 //! Where the user's discovery folder is, and how a file only the user can read is made, per
 //! platform. On Windows the folder is in the local app data folder, whose access the user, SYSTEM
-//! and administrators have and files in it inherit. On macOS it is in the user's Library, the folder
-//! is made `0700` and the file `0600` as they are created, before the token is written.
+//! and administrators have and files in it inherit; the file admits the user and the account the app
+//! runs as. On macOS it is in the user's Library, the folder is made `0700` and the file `0600` as
+//! they are created, before the token is written: the account the app runs as owns both, and a
+//! sandbox there (Seatbelt) runs as the same account.
 
 use std::{
   fs::{self, File},
@@ -60,7 +62,7 @@ pub(super) fn create_private_folder(folder: &Path) -> io::Result<()> {
 }
 
 /// Created only where no file or link is, then given an access list of its own that admits only the
-/// user (inheritance removed), before anything is written to it.
+/// user and the account the app runs as (inheritance removed), before anything is written to it.
 #[cfg(windows)]
 pub(super) fn create_private_file(path: &Path) -> io::Result<File> {
   let file = File::options().write(true).create_new(true).open(path)?;
@@ -75,26 +77,39 @@ pub(super) fn create_private_file(path: &Path) -> io::Result<File> {
   Ok(file)
 }
 
-/// `icacls <path> /inheritance:r /grant:r <user>:F`: the user, and nobody else, may use `path`. icacls
-/// ships with Windows and runs as `%SystemRoot%\System32\icacls.exe`, through `orchester-exec`, which
-/// hides its console; the user is named as `%USERDOMAIN%\%USERNAME%`.
+/// How long icacls and whoami may take.
+#[cfg(windows)]
+const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// `icacls <path> /inheritance:r /grant:r <user>:F *<account>:F`: the user and the account this process runs as, and
+/// nobody else, may use `path`. The user is named as `%USERDOMAIN%\%USERNAME%`; the account is the process token's,
+/// by SID ([`own_account`]). They differ when the app runs as another account than the person's environment names: a
+/// QA copy started inside Codex's Windows sandbox runs as its sandbox user, which reads the file the copy writes, and
+/// the person's runner relays to the copy through the file as well. icacls ships with Windows and runs as
+/// `%SystemRoot%\System32\icacls.exe`, through `orchester-exec`, which hides its console.
 #[cfg(windows)]
 fn admit_only_the_user(path: &Path) -> io::Result<()> {
   use orchester_core::command::{Command, CommandRunner};
 
-  /// How long icacls may take.
-  const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
   let user = std::env::var("USERNAME").map_err(|_| io::Error::other("USERNAME is not set"))?;
   let user = match std::env::var("USERDOMAIN") {
     Ok(domain) if !domain.is_empty() => format!(r"{domain}\{user}"),
     _ => user,
   };
-  let system_root = std::env::var_os("SystemRoot").ok_or_else(|| io::Error::other("SystemRoot is not set"))?;
-  let icacls = PathBuf::from(system_root).join("System32").join("icacls.exe");
+  let account = own_account()?;
   let file = path
     .to_str()
     .ok_or_else(|| io::Error::other("the discovery file's path is not Unicode"))?;
-  let command = Command::new(&icacls, [file, "/inheritance:r", "/grant:r", &format!("{user}:F")]);
+  let command = Command::new(
+    &system_program("icacls.exe")?,
+    [
+      file,
+      "/inheritance:r",
+      "/grant:r",
+      &format!("{user}:F"),
+      &format!("*{account}:F"),
+    ],
+  );
   let output = orchester_exec::ProcessRunner::new(TIMEOUT)
     .run(&command)
     .map_err(io::Error::other)?;
@@ -102,9 +117,47 @@ fn admit_only_the_user(path: &Path) -> io::Result<()> {
     return Ok(());
   }
   Err(io::Error::other(format!(
-    "icacls could not limit the discovery file to {user}: {}",
+    "icacls could not limit the discovery file to {user} and {account}: {}",
     output.stderr.trim()
   )))
+}
+
+/// The SID of the account this process's token runs as, from `whoami /user /fo csv /nh`, which answers
+/// `"<domain>\<name>","<SID>"` (`%SystemRoot%\System32\whoami.exe`, through `orchester-exec`).
+#[cfg(windows)]
+fn own_account() -> io::Result<String> {
+  use orchester_core::command::{Command, CommandRunner};
+
+  let command = Command::new(&system_program("whoami.exe")?, ["/user", "/fo", "csv", "/nh"]);
+  let output = orchester_exec::ProcessRunner::new(TIMEOUT)
+    .run(&command)
+    .map_err(io::Error::other)?;
+  if !output.success() {
+    return Err(io::Error::other(format!(
+      "whoami could not name this process's account: {}",
+      output.stderr.trim()
+    )));
+  }
+  output
+    .stdout
+    .trim()
+    .rsplit(',')
+    .next()
+    .map(|field| field.trim().trim_matches('"'))
+    .filter(|sid| {
+      sid
+        .strip_prefix("S-1-")
+        .is_some_and(|rest| !rest.is_empty() && rest.bytes().all(|byte| byte.is_ascii_digit() || byte == b'-'))
+    })
+    .map(str::to_owned)
+    .ok_or_else(|| io::Error::other("whoami named this process's account without a SID"))
+}
+
+/// `%SystemRoot%\System32\<program>`.
+#[cfg(windows)]
+fn system_program(program: &str) -> io::Result<PathBuf> {
+  let system_root = std::env::var_os("SystemRoot").ok_or_else(|| io::Error::other("SystemRoot is not set"))?;
+  Ok(PathBuf::from(system_root).join("System32").join(program))
 }
 
 #[cfg(unix)]

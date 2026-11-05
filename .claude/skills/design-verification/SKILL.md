@@ -211,7 +211,9 @@ It runs without asking only for an app whose resolved executable is inside this 
 using the same process boundary as `stop_run_process`. The relay finds the exact-pid discovery file
 in the user's discovery folder or a QA copy's folder `.tmp/qa/<task>/` in the worktree, checks its
 pid and app name, and keeps the token private; a QA copy's file is the `.tmp/qa/<task>/mcp/<pid>.json`
-that `tools/qa-app.ps1` writes (or `.tmp/qa/<task>/profile/<folder>/<pid>.json` for a QA profile). It
+that `tools/qa-app.ps1` writes (or `.tmp/qa/<task>/profile/<folder>/<pid>.json` for a QA profile). A copy
+the script started (`orchester-app-qa`) is reached only while it runs from `.tmp/qa/<task>/bin/`, through
+that same task folder's `mcp/<pid>.json`, also when you started it inside your sandbox. It
 looks nowhere else under `.tmp/`. Use it instead of running `tools/lurq-mcp-client.py`,
 reading discovery or escalating a script outside the sandbox.
 

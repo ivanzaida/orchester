@@ -5,6 +5,7 @@
 //! own, never the user's. Team servers per account through the tools, which need a real team server, are checked by
 //! the end-to-end tests of the private platform repository (`crates/e2e`, `mcp_servers_per_account`).
 
+mod access;
 mod http;
 mod signed_out;
 #[path = "../support/mod.rs"]
