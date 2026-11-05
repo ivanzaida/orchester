@@ -26,7 +26,7 @@ use orchester_workspace::{
 use parking_lot::Mutex;
 
 use super::shown_lines::cut_lines;
-use crate::services::Services;
+use crate::{project::settled_read::settled_read, services::Services};
 
 /// Why a read failed: the files' own reason, or the background work that did not finish.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -175,24 +175,22 @@ async fn run<T: Send + 'static>(work: impl FnOnce() -> Result<T, FilesError> + S
     .map_err(Failure::Files)
 }
 
-/// The files of `at`.
+/// The files of `at`, one read at a time (`project::settled_read`).
 pub fn list(ctx: &mut Ctx, root: &Path, at: &Version, (wake, kept): (Wake, &Steady<FileList>)) -> Shown<FileList> {
   let services = Services::of(ctx);
   let (programs, hold) = (services.programs, services.hold);
   let key = at.clone();
-  let state = ctx
-    .future((root.to_path_buf(), key.clone(), wake), move |(root, at, _)| {
-      let (programs, hold) = (programs.clone(), hold.clone());
-      async move {
-        hold.released().await;
-        let read = at.clone();
-        let value = run(move || list_files(programs.runner(), &root, &read)).await?;
-        let digest = value.digest();
-        Ok(Found::new(at, value, Some(digest)))
-      }
-    })
-    .state()
-    .get();
+  let deps = (root.to_path_buf(), key.clone(), wake);
+  let state = settled_read(ctx, "files", deps, move |(root, at, _)| {
+    let (programs, hold) = (programs.clone(), hold.clone());
+    async move {
+      hold.released().await;
+      let read = at.clone();
+      let value = run(move || list_files(programs.runner(), &root, &read)).await?;
+      let digest = value.digest();
+      Ok(Found::new(at, value, Some(digest)))
+    }
+  });
   kept.keep(shown(&key, &state))
 }
 
@@ -229,9 +227,9 @@ const KEPT_OVER: u32 = 2;
 /// page follows the runner's changes.
 pub type FileFollowing<'a> = (Wake, &'a Steady<FileView>, &'a Arc<FileReads>, bool);
 
-/// The file `path` at `at`, and why the text shown may be out of date: it is the text read before, kept over
-/// [`KEPT_OVER`] reads again in a row that could not read the file, or over one while the page no longer follows
-/// the runner's changes, since nothing reads it again soon.
+/// The file `path` at `at`, one read at a time (`project::settled_read`), and why the text shown may be out of date:
+/// it is the text read before, kept over [`KEPT_OVER`] reads again in a row that could not read the file, or over one
+/// while the page no longer follows the runner's changes, since nothing reads it again soon.
 pub fn file(
   ctx: &mut Ctx,
   root: &Path,
@@ -242,23 +240,21 @@ pub fn file(
   let (programs, hold) = (services.programs, services.hold);
   let key = (at.clone(), path.clone());
   let counted = reads.clone();
-  let state = ctx
-    .future((root.to_path_buf(), key.clone(), wake), move |(root, key, _)| {
-      let (programs, hold) = (programs.clone(), hold.clone());
-      let reads = counted.clone();
-      reads.started.fetch_add(1, Ordering::Relaxed);
-      async move {
-        hold.released().await;
-        let (at, path) = key.clone();
-        let read = run(move || read_steadily(programs.runner(), &root, (&at, &path))).await;
-        reads.settled(&read);
-        let value = read?;
-        let digest = value.digest();
-        Ok(Found::new(key, value, Some(digest)))
-      }
-    })
-    .state()
-    .get();
+  let deps = (root.to_path_buf(), key.clone(), wake);
+  let state = settled_read(ctx, "file", deps, move |(root, key, _)| {
+    let (programs, hold) = (programs.clone(), hold.clone());
+    let reads = counted.clone();
+    reads.started.fetch_add(1, Ordering::Relaxed);
+    async move {
+      hold.released().await;
+      let (at, path) = key.clone();
+      let read = run(move || read_steadily(programs.runner(), &root, (&at, &path))).await;
+      reads.settled(&read);
+      let value = read?;
+      let digest = value.digest();
+      Ok(Found::new(key, value, Some(digest)))
+    }
+  });
   let shown = kept.keep(shown(&key, &state));
   let kept_over = reads.kept_over.load(Ordering::Relaxed);
   let stale = match &shown {

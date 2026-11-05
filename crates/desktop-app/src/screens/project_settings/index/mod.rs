@@ -188,21 +188,22 @@ impl CodeIndex {
       .start();
   }
   /// The index's builds through their query, its last read at once and read again behind it when the tab opens; read
-  /// again at the tab's poll, a rebuild, the project's screens' saves, a change of the setting and the runs' state,
-  /// and, while a run runs and no build is followed, each of the runs' changes (a transcript line may be the runner
-  /// starting one). The project's loader reads them again on the runs' state too (`queries::changes::RUNS`). Each read
-  /// the tab asks for is logged on the window's thread, as it asks.
+  /// again at the tab's poll, a rebuild, the project's screens' saves, a change of the setting and the runs' state. A
+  /// transcript's lines do not read them: the runner builds a run's index before its agents start, and the build it
+  /// runs is followed by the poll. The project's loader reads them again on the runs' state too
+  /// (`queries::changes::RUNS`). An ask while they are read waits for that read's end ([`Again::follow_settled`]). Each
+  /// read the tab asks for is logged on the window's thread, as it asks.
   fn list(&self, ctx: &mut Ctx, props: &TabProps) -> FutureState<Listed, Message> {
     let feed = &props.project.feed;
     let asked = queries::asked(&(
       self.list_revision.get(),
-      feed.run_changes(feed.running.get() && !self.watching.load(Ordering::Relaxed)),
+      feed.states.get(),
       feed.revision.get(),
       feed.outside.get().of(Outside::CodeIndex),
     ));
     let session = Session::of(ctx);
     let query = ctx.query(project::index_builds(session, props.project.open.repo_root.clone()));
-    if self.list_again.follow(asked, &query) {
+    if self.list_again.follow_settled(asked, &query) {
       tracing::trace!(target: crate::app_log::READ_LOG, read = "code index");
     }
     let FutureState { status, data, error } = queries::state(&query);

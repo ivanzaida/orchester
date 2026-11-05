@@ -35,7 +35,7 @@ use orchester_workspace::{
 
 pub(crate) use self::toolbar::view_switch;
 use crate::{
-  project::ShownProject,
+  project::{ShownProject, settled_read::settled_read},
   screens::usage::card::{card_row, footnote},
   theme::UsageSpacing,
   ui::{
@@ -111,12 +111,9 @@ impl Component for DeliveryScreen {
     let DeliveryProps { project, period } = ctx.props::<DeliveryProps>().clone();
     let id = project.open.project.id();
     let name = project.open.project.name().as_str().to_owned();
-    // Again whenever the project's runs or tasks change, or Retry is pressed.
-    let deps = (
-      project.feed.changes.get(),
-      project.feed.revision.get(),
-      self.retry.get(),
-    );
+    // Again whenever a run changes state, the project's tasks change, or Retry is pressed. What it counts is the runs'
+    // steps and states: a transcript's lines change none of it.
+    let deps = (project.feed.states.get(), project.feed.revision.get(), self.retry.get());
     let read = read(ctx, &project, period, deps);
     let failed = read.error.as_ref().filter(|_| read.is_rejected());
     let content = match (failed, &read.data) {
@@ -196,21 +193,18 @@ where
   D: Clone + PartialEq + Send + Sync + 'static,
 {
   let root = project.open.repo_root.clone();
-  ctx
-    .future((root, period, deps), |(root, period, _)| async move {
-      background::run(move || {
-        let now = Timestamp::now();
-        let db = orchester_store::ProjectDb::open_read_only(&root)?;
-        Delivery::read(&db, period.range(local_date(now)), now)
-      })
-      .await
-      .map_err(ReadFailed)?
-      .map(|delivery| Read(Arc::new(delivery)))
-      .map_err(|error| {
-        tracing::error!(%error, "cannot read the project's delivery");
-        ReadFailed(messages::store_error(&error))
-      })
+  settled_read(ctx, "delivery", (root, period, deps), |(root, period, _)| async move {
+    background::run(move || {
+      let now = Timestamp::now();
+      let db = orchester_store::ProjectDb::open_read_only(&root)?;
+      Delivery::read(&db, period.range(local_date(now)), now)
     })
-    .state()
-    .get()
+    .await
+    .map_err(ReadFailed)?
+    .map(|delivery| Read(Arc::new(delivery)))
+    .map_err(|error| {
+      tracing::error!(%error, "cannot read the project's delivery");
+      ReadFailed(messages::store_error(&error))
+    })
+  })
 }

@@ -21,6 +21,8 @@ pub use busy::{fail_next_writes_for_test, fail_next_writes_of_for_test, set_lock
 pub use error::{RunStoreError, StoreError};
 pub use git_exclude::is_repository_root;
 #[cfg(feature = "test-support")]
+pub use lock_watch::statements::statements_run;
+#[cfg(feature = "test-support")]
 pub use lock_watch::worst::{LockHold, LockHolds, lock_holds, reset_lock_holds};
 #[cfg(feature = "test-support")]
 pub use project_db::ProjectMigration;

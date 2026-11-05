@@ -1,7 +1,8 @@
-//! The change count of one run of a project, for what shows that run alone: its runner's reports of that run, its
-//! transcript's lines among them, and of no run in particular (`Runners::run_changes_of`), but not the project's other
-//! runs. Like the feed's count of the project's changes ([`super::feed`]) it moves at most once per
-//! [`TRANSCRIPT_PACE`], and only while a tab of the project is active ([`super::ProjectFeed::following`]).
+//! The change count of one run of a project, for a screen that shows that run alone: its runner's reports of that
+//! run, its state and its transcript's lines among them, and of no run in particular (`Runners::run_changes_of`), but
+//! nothing of the project's other runs. Like the feed's count of the project's changes ([`super::feed`]) it moves at
+//! most once per [`TRANSCRIPT_PACE`], and only while a tab of the project is active
+//! ([`super::ProjectFeed::following`]).
 
 use std::path::PathBuf;
 
@@ -12,7 +13,7 @@ use orchester_workspace::runner::Runners;
 use super::{ShownProject, feed::TRANSCRIPT_PACE};
 use crate::services::Services;
 
-/// How often `run` of `project` changed while it is followed; it stays put while `run` is `None` or no tab of the
+/// How often `run` of `project` changed while it is followed; `0` while `run` is `None` or no tab of the
 /// project is active. Reading it in a render re-renders it when the count moves. Asked for in every render, whatever
 /// `run` is: lurq keeps a component's streams by the order it asks for them.
 pub fn of_run(ctx: &mut Ctx, project: &ShownProject, run: Option<RunId>) -> u64 {

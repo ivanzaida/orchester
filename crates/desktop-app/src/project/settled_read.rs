@@ -40,8 +40,8 @@ impl<D, E> DevtoolsInspectable for Failed<D, E> {}
 /// `Rejected`. The render that sees a read end gets its outcome, even when it starts the next read.
 ///
 /// `name` names the read in two trace lines of [`crate::app_log::READ_LOG`] per read: `read` as it starts, on the
-/// render's thread, with whether deps that moved after an earlier read made it (`again`); `ended` as it ends, with
-/// its duration (`took`) and whether it succeeded.
+/// render's thread as the other reads of the log are, with whether deps that moved after an earlier read made it
+/// (`again`); `ended` as it ends, with its duration (`took`), `again` and whether it succeeded.
 pub fn settled_read<D, T, E, F, Fut>(ctx: &mut Ctx, name: &'static str, deps: D, read: F) -> FutureState<T, E>
 where
   D: Clone + PartialEq + Send + Sync + 'static,
@@ -79,7 +79,7 @@ where
       let result = reading.await;
       let took = started.elapsed();
       if traced {
-        tracing::trace!(target: crate::app_log::READ_LOG, ended = name, ?took, ok = result.is_ok());
+        tracing::trace!(target: crate::app_log::READ_LOG, ended = name, ?took, again, ok = result.is_ok());
       }
       result
         .map(|value| Done {

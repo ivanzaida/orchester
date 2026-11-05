@@ -276,6 +276,31 @@ impl ProjectDb {
     Ok(self.task_group_for_task(run.task())?)
   }
 
+  /// The first run of each task that has one, in one statement: its run recorded with the task's first-run key
+  /// ([`TaskId::first_run_key`]), which [`Self::task_group_for_run`] looks for. Reads no run's record.
+  pub fn first_runs(&self) -> Result<std::collections::HashMap<TaskId, orchester_core::id::RunId>, StoreError> {
+    let mut statement = self
+      .connection
+      .prepare("SELECT task_id, id, idempotency_key FROM runs")?;
+    let rows = statement
+      .query_map([], |row| {
+        Ok((
+          row.get::<_, String>(0)?,
+          row.get::<_, String>(1)?,
+          row.get::<_, Option<String>>(2)?,
+        ))
+      })?
+      .collect::<Result<Vec<_>, _>>()?;
+    let mut first = std::collections::HashMap::new();
+    for (task, run, key) in rows {
+      let task: TaskId = parse("task id", &task)?;
+      if key.is_some_and(|key| key == task.first_run_key().to_string()) {
+        first.insert(task, parse("run id", &run)?);
+      }
+    }
+    Ok(first)
+  }
+
   pub fn task_group_limit_reached(&self, run: &orchester_core::run::Run) -> Result<bool, crate::RunStoreError> {
     let Some(group) = self.task_group_for_run(run)? else {
       return Ok(false);

@@ -127,6 +127,21 @@ impl ProjectDb {
     info(&self.connection, task)
   }
 
+  /// The tag names each *Not shared* task kept ([`SharedTaskInfo::kept_tags`]), in one statement; a task that kept
+  /// none is left out.
+  pub fn kept_tag_names(&self) -> Result<std::collections::HashMap<TaskId, Vec<String>>, StoreError> {
+    let mut statement = self
+      .connection
+      .prepare("SELECT id, kept_tag_names FROM tasks WHERE sharing = 'not_shared' AND kept_tag_names IS NOT NULL")?;
+    let rows = statement
+      .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+      .collect::<Result<Vec<_>, _>>()?;
+    rows
+      .into_iter()
+      .map(|(task, names)| Ok((parse("task id", &task)?, decode_json("kept tag names", 1, &names)?)))
+      .collect()
+  }
+
   /// The shared tasks whose pipeline this computer has no pipeline for, with the pipeline's slug:
   /// they show it as missing, and an edit sends no pipeline change for them.
   pub fn missing_pipelines(&self) -> Result<std::collections::HashMap<TaskId, String>, StoreError> {
