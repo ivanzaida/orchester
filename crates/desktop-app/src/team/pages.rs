@@ -32,7 +32,7 @@ use orchester_workspace::{
 };
 
 use super::{
-  queries::slugs,
+  queries::team_pipelines,
   source::{TeamFailure, TeamSource},
 };
 
@@ -141,8 +141,8 @@ pub async fn team_task(source: TeamSource, key: TaskKey) -> Result<Option<TeamTa
   let Some(read) = page.items.into_iter().find(|read| read.task.key == shown) else {
     return Ok(None);
   };
-  let (slugs, who) = (slugs(&source).await?, Who::of(&source).await);
-  team_task_of(&read, &slugs, &who).map(Some)
+  let (pipelines, who) = (team_pipelines(&source).await?, Who::of(&source).await);
+  team_task_of(&read, &pipelines, &who).map(Some)
 }
 
 /// The workspace's modules, oldest first.
@@ -242,9 +242,9 @@ fn abilities(capabilities: &Capabilities, subject: Subject) -> Abilities {
   }
 }
 
-fn team_task_of(read: &TaskRead, slugs: &listed::PipelineSlugs, who: &Who) -> Result<TeamTask, TeamFailure> {
-  let slug = read.task.content.pipeline.as_deref();
-  let pipeline = slug.and_then(|slug| slugs.id(slug));
+fn team_task_of(read: &TaskRead, pipelines: &listed::TeamPipelines, who: &Who) -> Result<TeamTask, TeamFailure> {
+  let named = read.task.content.pipeline.as_deref();
+  let pipeline = named.and_then(|named| pipelines.id(named));
   let task = listed::task_of(read, pipeline).map_err(|error| {
     tracing::warn!(%error, "a team task cannot be shown");
     TeamFailure::Refused
@@ -252,7 +252,7 @@ fn team_task_of(read: &TaskRead, slugs: &listed::PipelineSlugs, who: &Who) -> Re
   Ok(TeamTask {
     task,
     revision: read.task.revision,
-    missing_pipeline: slug.filter(|_| pipeline.is_none()).map(str::to_owned),
+    missing_pipeline: named.filter(|_| pipeline.is_none()).map(str::to_owned),
     assignee: read.assignee.as_ref().map(|user| person(user, who.you)),
     claim: read.effective_claim.as_ref().map(|read| claim(read, who)),
     work: read.work.as_ref().map(|work| work.state),

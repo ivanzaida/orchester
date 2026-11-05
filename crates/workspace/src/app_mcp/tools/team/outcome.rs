@@ -106,6 +106,14 @@ fn changed() -> ToolError {
   )
 }
 
+/// `named` is not one of the team's pipelines, which alone run a team task and which its Admins make: nothing was sent.
+pub(super) fn team_pipeline_required(named: &str) -> ToolError {
+  ToolError::refused(
+    "team_pipeline_required",
+    vec![Message::new("appMcp.errors.teamPipelineRequired").with("pipeline", named.to_owned())],
+  )
+}
+
 /// The dispatcher's refusal before anything was sent, or its failure.
 pub(super) fn action_refused(error: ActionError) -> ToolError {
   match error {
@@ -115,6 +123,7 @@ pub(super) fn action_refused(error: ActionError) -> ToolError {
       "decision_required",
       vec![Message::new("appMcp.errors.teamDecisionRequired").with("decision", format!("{decision:?}"))],
     ),
+    ActionError::NotTeamPipeline(pipeline) => team_pipeline_required(&pipeline.to_string()),
     ActionError::NothingToChange => ToolError::refused(
       "nothing_to_change",
       vec![Message::new("appMcp.errors.teamNothingToChange")],

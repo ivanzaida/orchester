@@ -1694,7 +1694,9 @@
       "bindingsRequired": "Choose the local connection these agent profiles run on: {{profiles}}. Each needs a binding, since this computer has none or several connections of its CLI.",
       "teamNotPublished": "The team has no published version of this pipeline or profile yet.",
       "teamModuleRequired": "A team task starts only in a module. An Admin puts it in one first.",
-      "teamNoPipeline": "This team task has no pipeline. An Admin chooses one first.",
+      "teamNoPipeline": "This team task has no pipeline. Whoever may edit it chooses one of the team's pipelines first.",
+      "teamPipelineRequired": "{{pipeline}} is not one of the team's pipelines. A team task runs only with a team pipeline, and the team's Admins create and publish those; your own local pipelines are not used for team tasks. Nothing was sent.",
+      "teamPipelineMissing": "This team task names the pipeline {{pipeline}}, which is not one of the team's pipelines on this computer. Choose a team pipeline for it; nothing was started.",
       "teamStartWaiting": "The start was recorded and waits for the team server or the runner; it goes on by itself once they answer. Nothing was started twice.",
       "teamStartFailed": "The team task's start could not go on. The task page says where it stands.",
       "teamRunAgain": "A team task runs again only through the team server: start its work with run_task. The message was not sent or kept."

@@ -26,7 +26,7 @@ use orchester_workspace::{
   sharing::project::{ProjectServer, TeamAdmins, convert},
   team_reads::{
     TeamRead,
-    listed::{ListedTasks, PipelineSlugs},
+    listed::{ListedTasks, TeamPipelines},
   },
 };
 
@@ -43,7 +43,7 @@ pub struct TaskListKey {
   pub priorities: Vec<Priority>,
   pub tags: Vec<TagId>,
   pub modules: Vec<Option<ModuleId>>,
-  /// This computer's pipelines, sent by the slugs the server names them with.
+  /// The team's pipelines, sent by their resource ids.
   pub pipelines: Vec<Option<ResourceId>>,
   pub sort: TaskSort,
 }
@@ -58,8 +58,8 @@ impl TaskListKey {
     }
   }
 
-  /// The server's filters. A pipeline this computer has no slug for keeps no task.
-  fn filters(&self, slugs: &PipelineSlugs) -> TaskFilters {
+  /// The server's filters; a team task names its pipeline by its resource id.
+  fn filters(&self) -> TaskFilters {
     TaskFilters {
       statuses: self.statuses.clone(),
       priorities: self.priorities.clone(),
@@ -68,7 +68,7 @@ impl TaskListKey {
       pipelines: self
         .pipelines
         .iter()
-        .map(|pipeline| pipeline.map(|id| slugs.slug(id).unwrap_or_default().to_owned()))
+        .map(|pipeline| pipeline.map(|id| id.to_string()))
         .collect(),
       modules: self.modules.clone(),
       search: self.search.clone(),
@@ -103,8 +103,8 @@ impl TeamTasks {
 
 #[lurq::query(stale_time = "30s", gc_time = "2m")]
 pub async fn team_tasks(source: TeamSource, list: TaskListKey) -> Result<TeamTasks, TeamFailure> {
-  let slugs = slugs(&source).await?;
-  let filters = list.filters(&slugs);
+  let pipelines = team_pipelines(&source).await?;
+  let filters = list.filters();
   let mut reads = Vec::new();
   let mut after = None;
   for _ in 0..PAGES {
@@ -118,16 +118,15 @@ pub async fn team_tasks(source: TeamSource, list: TaskListKey) -> Result<TeamTas
     reads.extend(page.items);
     match page.next {
       Some(next) => after = Some(next),
-      None => return listed(&reads, &slugs, false),
+      None => return listed(&reads, &pipelines, false),
     }
   }
-  listed(&reads, &slugs, true)
+  listed(&reads, &pipelines, true)
 }
 
 #[lurq::query(stale_time = "30s", gc_time = "5m")]
 pub async fn team_counts(source: TeamSource, list: TaskListKey) -> Result<TaskBoardCounts, TeamFailure> {
-  let slugs = slugs(&source).await?;
-  let read = source.project().board_counts(list.filters(&slugs)).await;
+  let read = source.project().board_counts(list.filters()).await;
   source.answered(read).map(TeamRead::into_value)
 }
 
@@ -194,11 +193,11 @@ pub async fn team_admins(source: TeamSource) -> Result<TeamAdmins, TeamFailure> 
   }
 }
 
-/// This computer's pipelines of the project by their slugs.
-pub(super) async fn slugs(source: &TeamSource) -> Result<PipelineSlugs, TeamFailure> {
+/// The team's pipelines this computer has.
+pub(super) async fn team_pipelines(source: &TeamSource) -> Result<TeamPipelines, TeamFailure> {
   let root = source.root().to_owned();
-  match background::run(move || PipelineSlugs::read(&root)).await {
-    Ok(Ok(slugs)) => Ok(slugs),
+  match background::run(move || TeamPipelines::read(&root)).await {
+    Ok(Ok(pipelines)) => Ok(pipelines),
     Ok(Err(error)) => {
       tracing::warn!(%error, "the project's pipelines cannot be read for its team tasks");
       Err(TeamFailure::Refused)
@@ -207,8 +206,12 @@ pub(super) async fn slugs(source: &TeamSource) -> Result<PipelineSlugs, TeamFail
   }
 }
 
-fn listed(reads: &[orchester_api::v2::TaskRead], slugs: &PipelineSlugs, more: bool) -> Result<TeamTasks, TeamFailure> {
-  ListedTasks::of(reads, |slug| slugs.id(slug))
+fn listed(
+  reads: &[orchester_api::v2::TaskRead],
+  pipelines: &TeamPipelines,
+  more: bool,
+) -> Result<TeamTasks, TeamFailure> {
+  ListedTasks::of(reads, |pipeline| pipelines.id(pipeline))
     .map(|listed| TeamTasks::of(listed, more))
     .map_err(|error| {
       tracing::warn!(%error, "a team task cannot be shown");

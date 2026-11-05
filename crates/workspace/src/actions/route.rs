@@ -26,7 +26,9 @@ pub(super) fn team_route(
 ) -> Result<TeamRoute, ActionError> {
   use TeamRoute::{Command, Definition};
   Ok(match action {
-    Action::Task(TaskAction::Create { details, organization }) => Command(command::create_task(details, organization)?),
+    Action::Task(TaskAction::Create { details, organization }) => {
+      Command(command::create_task(db, details, organization)?)
+    }
     Action::Task(TaskAction::Edit {
       task,
       read,
@@ -36,7 +38,7 @@ pub(super) fn team_route(
       db,
       link,
       (*task, *read),
-      definition::detail_changes(base, edited)?,
+      definition::detail_changes(db, base, edited)?,
     )?),
     Action::Task(TaskAction::Organize {
       task,

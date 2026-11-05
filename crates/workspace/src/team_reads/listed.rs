@@ -1,54 +1,62 @@
 //! A team project's tasks as the screens list them (P6): each [`TaskRead`] as core's [`Task`], so the lists built for a
-//! local project's tasks show the server's, with what a row says beside the task itself. A pipeline is named by its
-//! slug on the server; [`PipelineSlugs`] says which of this computer's pipelines a slug is, and a task whose slug names
-//! none is kept with no pipeline and its slug among the missing ones.
+//! local project's tasks show the server's, with what a row says beside the task itself. A team task names one of the
+//! team's pipelines by its resource id (the person's decision of 2026-11-05, `docs/architecture/server.md` row 80);
+//! [`TeamPipelines`] says which of the team's pipelines this computer has, and a task whose pipeline is none of them is
+//! kept with no pipeline and what it names among the missing ones.
 
-use std::{collections::HashMap, path::Path};
+use std::{
+  collections::{HashMap, HashSet},
+  path::Path,
+};
 
 use orchester_api::v2::TaskRead;
 use orchester_core::{
   id::{ResourceId, TaskId},
   project::TaskKey,
-  resource::ResourceKind,
+  resource::{Pipeline, ResourceKind},
   store::ResourceStore,
   task::{Task, TaskDetails},
   time::Timestamp,
 };
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{ProjectDb, ResourceSharing, StoreError};
 
 use crate::sharing::{SharingError, project::convert};
 
-/// This computer's pipelines of a project by the slug team tasks name them with, and back.
+/// The team's pipelines this computer has: each one the server shares, not archived, with a version this computer
+/// accepted. A team task may name only these; a person's own local pipelines never run a team task.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct PipelineSlugs {
-  by_slug: HashMap<String, ResourceId>,
-  by_id: HashMap<ResourceId, String>,
-}
+pub struct TeamPipelines(HashSet<ResourceId>);
 
-impl PipelineSlugs {
-  /// The pipelines of the project at `repo_root`. Blocking.
+impl TeamPipelines {
+  /// The team's pipelines of the project at `repo_root`. Blocking.
   pub fn read(repo_root: &Path) -> Result<Self, StoreError> {
-    let db = ProjectDb::open(repo_root)?;
-    let mut slugs = Self::default();
+    Self::of(&ProjectDb::open(repo_root)?)
+  }
+
+  /// The team's pipelines of the project of `db`.
+  pub fn of(db: &ProjectDb) -> Result<Self, StoreError> {
+    let mut team = HashSet::new();
     for resource in db.resources(ResourceKind::Pipeline)? {
-      let slug = resource.slug().as_str().to_owned();
-      slugs.by_id.insert(resource.id(), slug.clone());
-      slugs.by_slug.insert(slug, resource.id());
+      let shared = matches!(db.resource_sharing(resource.id())?, Some(ResourceSharing::Shared(_)));
+      if shared && db.latest_version::<Pipeline>(resource.id())?.is_some() {
+        team.insert(resource.id());
+      }
     }
-    Ok(slugs)
+    Ok(Self(team))
   }
 
-  pub fn id(&self, slug: &str) -> Option<ResourceId> {
-    self.by_slug.get(slug).copied()
+  pub fn contains(&self, pipeline: ResourceId) -> bool {
+    self.0.contains(&pipeline)
   }
 
-  pub fn slug(&self, id: ResourceId) -> Option<&str> {
-    self.by_id.get(&id).map(String::as_str)
+  /// The team pipeline a team task's `pipeline` names, as the server keeps it: its resource id.
+  pub fn id(&self, pipeline: &str) -> Option<ResourceId> {
+    pipeline.parse().ok().filter(|id| self.contains(*id))
   }
 }
 
-/// The tasks of one listing, in its order, with when each last changed, its key before it joined, the slug of a
-/// pipeline this computer lacks and the tasks of the listing that block it and are not closed.
+/// The tasks of one listing, in its order, with when each last changed, its key before it joined, the pipeline it
+/// names that is none of the team's pipelines here and the tasks of the listing that block it and are not closed.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct ListedTasks {
   pub tasks: Vec<Task>,
@@ -59,15 +67,15 @@ pub struct ListedTasks {
 }
 
 impl ListedTasks {
-  /// `reads` as listed tasks; `pipeline` finds this computer's pipeline of a slug. A read that is no valid task is
+  /// `reads` as listed tasks; `pipeline` finds the team pipeline a task names. A read that is no valid task is
   /// [`SharingError::InvalidAnswer`].
   pub fn of(reads: &[TaskRead], pipeline: impl Fn(&str) -> Option<ResourceId>) -> Result<Self, SharingError> {
     let mut listed = Self::default();
     for read in reads {
-      let slug = read.task.content.pipeline.as_deref();
-      let found = slug.and_then(&pipeline);
-      if let (Some(slug), None) = (slug, found) {
-        listed.missing_pipelines.insert(read.task.id, slug.to_owned());
+      let named = read.task.content.pipeline.as_deref();
+      let found = named.and_then(&pipeline);
+      if let (Some(named), None) = (named, found) {
+        listed.missing_pipelines.insert(read.task.id, named.to_owned());
       }
       if let Some(former) = &read.task.former_key {
         listed.former_keys.insert(read.task.id, former.clone());

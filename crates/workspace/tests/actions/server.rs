@@ -35,6 +35,8 @@ pub struct Task {
   pub id: TaskId,
   pub number: u32,
   pub title: String,
+  /// The team pipeline it names, by its id.
+  pub pipeline: Option<String>,
   pub revision: u64,
 }
 
@@ -87,6 +89,7 @@ impl TeamServer {
       id: TaskId::generate(),
       number: u32::try_from(state.tasks.len()).expect("a few tasks") + 1,
       title: title.to_owned(),
+      pipeline: None,
       revision: 1,
     };
     state.tasks.push(task.clone());
@@ -201,6 +204,9 @@ fn patch_task(state: &mut State, request: &Request, task: &str) -> (u16, Value) 
   if let Some(title) = body["changes"]["title"].as_str() {
     title.clone_into(&mut task.title);
   }
+  if let Some(pipeline) = body["changes"].get("pipeline") {
+    task.pipeline = pipeline.as_str().map(str::to_owned);
+  }
   task.revision += 1;
   let answer = json!({"task": shared_task(task)});
   state.writes += 1;
@@ -247,7 +253,7 @@ pub fn shared_task(task: &Task) -> Value {
   let attribution = json!({"by": person(), "at": 1});
   json!({
     "id": task.id, "number": task.number, "key": format!("KON-{}", task.number), "former_key": null,
-    "revision": task.revision, "title": task.title, "brief": "", "criteria": [], "pipeline": null, "limits": null,
+    "revision": task.revision, "title": task.title, "brief": "", "criteria": [], "pipeline": task.pipeline, "limits": null,
     "workflow": "backlog", "priority": "none", "tags": [], "blocking": [], "blocked_reason": null, "module": null,
     "status": "draft", "has_run": false, "created": attribution, "updated": attribution, "claim": null, "run": null
   })

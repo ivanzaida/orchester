@@ -1,15 +1,16 @@
 //! A team action the team server takes as a command (`POST …/commands`, with a receipt): task creation, claims,
 //! assignment, a module's branch, work start and a module's delivery authorized or requested, with the server's ids
-//! of its targets and the revisions it was decided on, checked here without any effect. A new task's pipeline, limits
-//! and workflow status are configuration whose owner is open (D4/D6): such a task is refused before it is sent, never
-//! sent without them.
+//! of its targets and the revisions it was decided on, checked here without any effect. A new task names one of the
+//! team's pipelines by its resource id (`docs/architecture/server.md` row 80, decided 2026-11-05), never a person's own
+//! local one; its limits and workflow status are configuration whose owner is open (D4/D6): such a task is refused
+//! before it is sent, never sent without them.
 
 use orchester_api::{
   TaskContent,
   v2::{AuthorityRef, DecisionId, ExpectedRevision, ExpectedRevisions, RevisionTarget, Subject, TeamCommand},
 };
 use orchester_core::{
-  id::ModuleId,
+  id::{ModuleId, ResourceId},
   run::BranchName,
   sharing::TaskRevision,
   task::{
@@ -24,6 +25,7 @@ use super::{
   action::{AssignmentAction, ClaimAction, DeliveryAction, DeliveryStep, WorkAction},
   ownership::{TeamLink, team_authority, team_subject},
 };
+use crate::team_reads::listed::TeamPipelines;
 
 pub(super) struct TeamRequest {
   pub(super) command: TeamCommand,
@@ -54,9 +56,13 @@ impl TeamRequest {
   }
 }
 
-/// `task.create`: one task, in the default workflow status, without pipeline or limits.
-pub(super) fn create_task(details: &TaskDetails, organization: &TaskOrganization) -> Result<TeamRequest, ActionError> {
-  if details.pipeline.is_some() || details.limits != TaskLimits::NONE {
+/// `task.create`: one task, in the default workflow status, without limits, naming a team pipeline by its id.
+pub(super) fn create_task(
+  db: &ProjectDb,
+  details: &TaskDetails,
+  organization: &TaskOrganization,
+) -> Result<TeamRequest, ActionError> {
+  if details.limits != TaskLimits::NONE {
     return Err(ActionError::DecisionRequired(DecisionId::D6));
   }
   if organization.status() != WorkflowStatus::default() {
@@ -66,7 +72,10 @@ pub(super) fn create_task(details: &TaskDetails, organization: &TaskOrganization
     title: details.title.as_str().to_owned(),
     brief: details.brief.clone(),
     criteria: details.acceptance_criteria.clone(),
-    pipeline: None,
+    pipeline: details
+      .pipeline
+      .map(|pipeline| team_pipeline(db, pipeline))
+      .transpose()?,
     limits: None,
     workflow: WorkflowStatus::default(),
     priority: organization.priority(),
@@ -77,6 +86,15 @@ pub(super) fn create_task(details: &TaskDetails, organization: &TaskOrganization
   };
   content.set_organization(organization);
   Ok(TeamRequest::unrevised(TeamCommand::TaskCreate { content }))
+}
+
+/// `pipeline` as a team task names it, its resource id, when it is one of the team's pipelines here; any other is
+/// refused before anything is sent.
+pub(super) fn team_pipeline(db: &ProjectDb, pipeline: ResourceId) -> Result<String, ActionError> {
+  if !TeamPipelines::of(db)?.contains(pipeline) {
+    return Err(ActionError::NotTeamPipeline(pipeline));
+  }
+  Ok(pipeline.to_string())
 }
 
 /// `module.branch.set`, on the module's revision.

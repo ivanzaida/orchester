@@ -198,6 +198,7 @@ fn holds(changes: &TaskChanges, task: &SharedTask) -> bool {
   same(changes.title.as_ref(), &content.title)
     && same(changes.brief.as_ref(), &content.brief)
     && same(changes.criteria.as_ref(), &content.criteria)
+    && same(changes.pipeline.as_ref(), &content.pipeline)
     && same(changes.priority.as_ref(), &content.priority)
     && same(changes.tags.as_ref(), &content.tags)
     && same(changes.blocking.as_ref(), &content.blocking)

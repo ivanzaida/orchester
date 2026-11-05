@@ -1,8 +1,9 @@
 //! A team task's edit from Edit task (team authority P6d, ORC-734): its details, its organization and its module go to
 //! the server through the dispatcher, each on its own definition route and on the revision the one before it left, as
 //! the domain MCP tools send them (`orchester_workspace::app_mcp`). The first refusal stops the rest; what was taken
-//! before it stays taken, and the edit says so with the task as the server then holds it. A pipeline or limits change
-//! waits for a team-authority decision (D6) and is refused before it is sent.
+//! before it stays taken, and the edit says so with the task as the server then holds it. The pipeline is one of the
+//! team's, sent by its id (`docs/architecture/server.md` row 80); a limits change waits for a team-authority decision
+//! (D6) and is refused before it is sent.
 
 use orchester_api::{SharedTask, v2::AuthorityErrorCode};
 use orchester_core::{

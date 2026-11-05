@@ -10,7 +10,7 @@ use std::path::Path;
 use orchester_api::v2::{AuthorityRef, Subject, TeamCommandValue};
 use orchester_core::{
   command::CommandRunner,
-  id::{ClaimId, OperationId, ResourceId},
+  id::{ClaimId, OperationId},
   run::{CommitId, inputs::LocalConsent},
   store::ConnectionStore,
 };
@@ -35,7 +35,7 @@ use crate::{
   messages::Message,
   runner::RunRequestError,
   tasks::run::start_messages,
-  team_reads::TeamReadError,
+  team_reads::{TeamReadError, listed::TeamPipelines},
   team_work::{self, ProjectRunner, StartChoices, StartOutcome, TeamStartRequest, TeamWork, TeamWorkError},
 };
 
@@ -53,13 +53,12 @@ pub(in crate::app_mcp::tools) async fn run_task(
       vec![Message::new("appMcp.errors.teamModuleRequired")],
     ));
   };
-  let pipeline: ResourceId = task
-    .task
-    .content
-    .pipeline
-    .as_deref()
-    .and_then(|pipeline| pipeline.parse().ok())
-    .ok_or_else(|| ToolError::refused("task_incomplete", vec![Message::new("appMcp.errors.teamNoPipeline")]))?;
+  let Some(named) = task.task.content.pipeline.clone() else {
+    return Err(ToolError::refused(
+      "task_incomplete",
+      vec![Message::new("appMcp.errors.teamNoPipeline")],
+    ));
+  };
   let module_read = match read(&project, project.module(module)).await {
     Ok(read) => read.into_value().module,
     Err(TeamReadError::NotFound) => return Err(ToolError::not_found(Missing::Module, module.to_string())),
@@ -67,9 +66,14 @@ pub(in crate::app_mcp::tools) async fn run_task(
   };
   let (root, programs) = (team.open.repo_root.clone(), services.programs().clone());
   let branch = module_read.branch.clone();
-  let (base_commit, connections) = blocking(move || {
+  let (pipeline, base_commit, connections) = blocking(move || {
+    let db = ProjectDb::open(&root)?;
+    // Only the team's pipelines run a team task: a person's own local pipeline never does, even with the same id.
+    let pipeline = TeamPipelines::of(&db)?
+      .id(&named)
+      .ok_or_else(|| pipeline_missing(&named))?;
     let commit = branch_tip(programs.runner(), &root, &branch)?;
-    Ok((commit, ProjectDb::open(&root)?.connections()?))
+    Ok((pipeline, commit, db.connections()?))
   })
   .await?;
   let choices = StartChoices {
@@ -177,6 +181,14 @@ fn work_refused(error: TeamWorkError) -> ToolError {
       start_failed()
     }
   }
+}
+
+/// The task names `named`, which is none of the team's pipelines this computer has: refused before anything is sent.
+fn pipeline_missing(named: &str) -> ToolError {
+  ToolError::refused(
+    "team_pipeline_missing",
+    vec![Message::new("appMcp.errors.teamPipelineMissing").with("pipeline", named.to_owned())],
+  )
 }
 
 fn start_failed() -> ToolError {

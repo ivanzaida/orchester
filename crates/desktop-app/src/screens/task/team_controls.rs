@@ -294,7 +294,8 @@ pub fn take_over_dialog(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
   Some(dialog)
 }
 
-/// The task's pipeline by its name on this computer, or the slug the server names it by.
+/// The task's pipeline by its name on this computer, or the id the server names it by when it is none of the team's
+/// pipelines here.
 pub fn pipeline_name(task: &TaskContext) -> String {
   published(task)
     .map(|(name, _)| name)

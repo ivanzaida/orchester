@@ -1,5 +1,5 @@
 use orchester_api::v2::DecisionId;
-use orchester_core::id::{OperationId, TaskId};
+use orchester_core::id::{OperationId, ResourceId, TaskId};
 use orchester_store::StoreError;
 
 use crate::tasks::writer::WriteError;
@@ -30,10 +30,14 @@ pub enum ActionError {
   LocalTask(TaskId),
   #[error("the action changes nothing")]
   NothingToChange,
-  /// The action sets something whose owner is an open team-authority decision (a task's pipeline, limits or workflow
-  /// status, D4/D6): no team command sets it.
+  /// The action sets something whose owner is an open team-authority decision (a task's limits or workflow status,
+  /// D4/D6): no team command sets it.
   #[error("this change waits for team-authority decision {0:?}")]
   DecisionRequired(DecisionId),
+  /// A team task names only one of the team's pipelines, which admins create and publish; this one is none of them
+  /// here, e.g. a person's own local pipeline (`docs/architecture/server.md` row 80). Nothing was sent.
+  #[error("pipeline {0} is not one of the team's pipelines")]
+  NotTeamPipeline(ResourceId),
   /// The operation id was used for another action: one id is one intent.
   #[error("operation {0} was used for another action")]
   OperationMismatch(OperationId),

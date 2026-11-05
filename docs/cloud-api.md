@@ -214,7 +214,8 @@ unknown field is refused. Times are milliseconds since the Unix epoch; days are 
   olha asked at 15:38". The full record stays `ModuleDeliveryRead` (S7).
 - Task list: `TaskListRequest` `{filters,sort,page}`, each defaulted. `TaskFilters`
   `{statuses,priorities,tags,all_tags,pipelines,modules,search}`: each facet keeps tasks with any of its values, `null`
-  among `pipelines` (slugs) or `modules` is a task without one, `all_tags` keeps tasks with every tag. `search`
+  among `pipelines` (team pipelines' resource ids, as a team task names its pipeline; `docs/architecture/server.md`
+  row 80) or `modules` is a task without one, `all_tags` keeps tasks with every tag. `search`
   (`SearchText`, trimmed, 1..=200 characters) matches title, key, former key, id or brief, ignoring case. `TaskSort`:
   `created` (default), `newest`, `title`, `status`, `priority`, each ending on creation sequence and id.
   `TaskBoardCounts`: `{backlog,todo,in_progress,in_review,done,canceled,cursor}` for a `TaskFilters`.

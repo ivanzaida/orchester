@@ -15,7 +15,7 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use super::{data::Assignables, levels::levels};
+use super::{data::Assignables, levels::levels, offered::Offered};
 use crate::messages::{self, Message};
 
 /// Where a pipeline is in its lifecycle.
@@ -44,14 +44,18 @@ pub struct LibraryEntry {
   pub default: bool,
 }
 
-/// The project's pipelines, ordered by slug.
+/// The project's pipelines it offers ([`Offered`]), ordered by slug.
 pub fn library(db: &ProjectDb) -> Result<Vec<LibraryEntry>, StoreError> {
   let tasks = db.tasks()?;
   let default = db.default_pipeline()?;
+  let offered = Offered::of(db)?;
   let mut entries = Vec::new();
   for resource in db.resources(ResourceKind::Pipeline)? {
     let id = resource.id();
     let latest = db.latest_version::<Pipeline>(id)?;
+    if !offered.offers(db, id, latest.is_some())? {
+      continue;
+    }
     let draft = db.draft::<Pipeline>(id)?;
     let (body, state) = match (draft, &latest) {
       (Some(draft), None) => (draft.body().clone(), VersionState::DraftOnly),

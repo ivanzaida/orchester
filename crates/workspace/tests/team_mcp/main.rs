@@ -4,7 +4,8 @@
 //! a member's edit is refused `not_admin` and changes nothing here, `run_task` starts the task's work through
 //! `work.start`, nothing falls back to the project database's tasks while the server is down, and a local project's
 //! tools work as before ([`tools`]); `merge_run` of a team task's run requests its module's delivery and answers each
-//! state it reaches, while a local project's `merge_run` keeps its own path ([`delivery`], P7b).
+//! state it reaches, while a local project's `merge_run` keeps its own path ([`delivery`], P7b); a team task names
+//! only a team pipeline, by its id, and a team project offers no pipeline of this computer's own ([`pipelines`]).
 //!
 //! `cargo test -p orchester-workspace --test team_mcp team_mcp_`
 
@@ -20,6 +21,7 @@ mod team_deliveries;
 mod team_server;
 
 mod delivery;
+mod pipelines;
 mod reads;
 mod tools;
 

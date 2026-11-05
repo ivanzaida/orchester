@@ -61,7 +61,7 @@ impl From<SearchText> for String {
 
 /// What narrows the task list. Each facet keeps the tasks that have any of its values; one without values keeps every
 /// task. `null` among `pipelines` or `modules` is a task without one; `all_tags` keeps only the tasks with every tag
-/// of `tags`. `pipelines` are pipeline slugs, as a shared task names its pipeline.
+/// of `tags`. `pipelines` are team pipelines' resource ids, as a team task names its pipeline.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TaskFilters {

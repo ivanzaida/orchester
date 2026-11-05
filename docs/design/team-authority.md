@@ -135,7 +135,11 @@ target date, a tag rename, a board move between Backlog and Todo, and Automatic 
 - **D4** — completing a task outside a run, manual blocked and reopen. Drawn: a succeeded run never marks the task
   Done; there is no Done action.
 - **D6** — default pipeline and the remaining field ownership. Drawn: the pipeline shown is the Admin's; members have
-  no control to change it, and no new field ownership is drawn.
+  no control to change it, and no new field ownership is drawn. **Decided for a task's pipeline** (the person,
+  2026-11-05, `docs/architecture/server.md` row 80): a team task's pipeline is one of the team's pipelines, chosen by
+  its resource id; only admins create and publish team pipelines, and a person's own local pipelines are not used for
+  team tasks (hidden in a team project). Whoever may edit the task chooses it; the server's task route decides who
+  that is (its Admins today). Still open: the default pipeline and the limits (refused as D6).
 - **D8** — offline continuation, human waits and delivery after an outage. Drawn: running work goes on and reports
   wait; what the server does with a claim that went stale during the outage is named as open.
 

@@ -27,6 +27,9 @@ pub struct Seen {
   pub task_edits: usize,
   /// Every `task.create` that reached the server, refused or not.
   pub task_creates: usize,
+  /// The pipeline the last task edit and the last `task.create` named, as sent.
+  pub edited_pipeline: Value,
+  pub created_pipeline: Value,
 }
 
 /// The routes, and what they saw.
@@ -92,16 +95,8 @@ fn route(
   };
   let path = request.path.split('?').next().unwrap_or_default();
   if let Some(route) = path.strip_prefix(&format!("/api/v1/projects/{project}/tasks/")) {
-    seen.lock().task_edits += 1;
-    let body = if request.token == MEMBER {
-      (
-        403,
-        json!({"error": "not_admin", "message": "Only an admin changes this."}),
-      )
-    } else {
-      (404, json!({"error": "not_found", "message": route}))
-    };
-    respond(stream, body.0, &body.1);
+    let (status, body) = task_edit(seen, request, route);
+    respond(stream, status, &body);
     return true;
   }
   let Some(route) = path.strip_prefix(&format!("/api/v2/projects/{project}")) else {
@@ -150,7 +145,10 @@ fn route(
       }
     }
     ("POST", ["commands"]) if request.json()["command"]["kind"] == "task.create" => {
-      seen.lock().task_creates += 1;
+      let mut seen = seen.lock();
+      seen.task_creates += 1;
+      seen.created_pipeline = request.json()["command"]["content"]["pipeline"].clone();
+      drop(seen);
       let operation = request.json()["operation_id"].clone();
       (
         403,
@@ -161,6 +159,23 @@ fn route(
   };
   respond(stream, status, &body);
   true
+}
+
+/// A task's definition route, which refuses a member `403 not_admin`; what it was sent is seen.
+fn task_edit(seen: &Mutex<Seen>, request: &Request, route: &str) -> (u16, Value) {
+  let mut seen = seen.lock();
+  seen.task_edits += 1;
+  if request.method == "PATCH" {
+    seen.edited_pipeline = request.json()["changes"]["pipeline"].clone();
+  }
+  if request.token == MEMBER {
+    (
+      403,
+      json!({"error": "not_admin", "message": "Only an admin changes this."}),
+    )
+  } else {
+    (404, json!({"error": "not_found", "message": route}))
+  }
 }
 
 /// `GET …/subscription` without `Last-Event-ID`: `ready` at the current cursor, then the stream stays open until the

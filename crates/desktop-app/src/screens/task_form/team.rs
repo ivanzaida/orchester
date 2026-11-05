@@ -10,7 +10,7 @@ use std::sync::Arc;
 use lurq::{app::ctx::Ctx, node::Element};
 use orchester_api::SharedTask;
 use orchester_core::{
-  id::TaskId,
+  id::{ResourceId, TaskId},
   name::Name,
   project::TaskKey,
   sharing::TaskRevision,
@@ -152,7 +152,10 @@ pub async fn store(
     changes.push(TaskChange::Module(args.module));
   }
   let Edited { saved, stopped: stop } = acting.edit_task(&team.source, (task, read), changes).await;
-  let saved = saved.and_then(|shared| as_task(made_on, &shared)).map(Arc::new);
+  // The details go first, so a task the server took any change of holds the pipeline the person chose.
+  let saved = saved
+    .and_then(|shared| as_task(made_on, args.details.pipeline, &shared))
+    .map(Arc::new);
   match stop {
     None => SaveOutcome::Stored(saved.unwrap_or_else(|| made_on.clone())),
     Some(acted) => {
@@ -171,22 +174,22 @@ fn stopped(stop: Stop, saved: Option<Arc<Task>>, current: Option<Changed>) -> Sa
 
 fn changed(made_on: &Task, shared: &SharedTask) -> Option<Changed> {
   Some(Changed {
-    task: Arc::new(as_task(made_on, shared)?),
+    task: Arc::new(as_task(made_on, made_on.details().pipeline, shared)?),
     by: shared.updated.by.display_name.clone(),
     at: Timestamp::from_unix_millis(shared.updated.at),
   })
 }
 
-/// `made_on` as the server holds it now (`shared`): its content, organization, module and revision. Its pipeline and
-/// limits stay: no save of the form changes them (D6), and the server names a pipeline by a slug this computer reads
-/// with the task.
-fn as_task(made_on: &Task, shared: &SharedTask) -> Option<Task> {
+/// `made_on` as the server holds it now (`shared`): its content, organization, module and revision, with the team
+/// pipeline `pipeline`, which this computer reads with the task from the id the server names it by. Its limits stay:
+/// no save of the form changes them (D6).
+fn as_task(made_on: &Task, pipeline: Option<ResourceId>, shared: &SharedTask) -> Option<Task> {
   let content = &shared.content;
   let details = TaskDetails {
     title: Name::new(&content.title).ok()?,
     brief: content.brief.clone(),
     acceptance_criteria: content.criteria.clone(),
-    pipeline: made_on.details().pipeline,
+    pipeline,
     limits: made_on.details().limits,
   };
   let organization = content.organization().core().ok()?;

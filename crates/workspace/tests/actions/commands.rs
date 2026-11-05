@@ -47,6 +47,7 @@ fn carry_out(state: &mut State, token: &str, body: &Value) -> Option<(u16, Value
         id: state.next_task.take().unwrap_or_else(TaskId::generate),
         number: u32::try_from(state.tasks.len()).expect("a few tasks") + 1,
         title: command["content"]["title"].as_str().expect("a title").to_owned(),
+        pipeline: command["content"]["pipeline"].as_str().map(str::to_owned),
         revision: 1,
       };
       state.tasks.push(task.clone());

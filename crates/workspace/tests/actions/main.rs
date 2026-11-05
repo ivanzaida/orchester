@@ -4,15 +4,18 @@
 //! the server; an operation never goes to another server project than the one it was recorded for; a work start's
 //! `start` stays pending while a claim allows nothing locally; a receipt whose identity cannot be recorded fails its
 //! local effect only; definition edits go to their own routes, are read again after a lost response, come with the
-//! current value after a revision conflict and are refused for a member ([`definitions`]); and a local project's
-//! actions run as they always did ([`organize`]).
+//! current value after a revision conflict and are refused for a member ([`definitions`]); a team task names only a
+//! team pipeline, by its id ([`pipelines`]); and a local project's actions run as they always did ([`organize`]).
 //!
 //! `cargo test -p orchester-workspace --test actions actions_`
 
 mod commands;
 mod definitions;
+#[path = "../team_work/fixture.rs"]
+mod fixture;
 mod http;
 mod organize;
+mod pipelines;
 mod run;
 mod server;
 

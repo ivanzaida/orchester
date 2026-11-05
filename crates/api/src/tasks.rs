@@ -88,6 +88,8 @@ pub struct TaskContent {
   pub brief: String,
   #[serde(default)]
   pub criteria: Vec<String>,
+  /// The team pipeline the task runs with, by its resource id (`docs/architecture/server.md` row 80); a person's own
+  /// local pipeline is never named here.
   #[serde(default)]
   pub pipeline: Option<String>,
   #[serde(default)]
@@ -223,6 +225,7 @@ pub struct TaskChanges {
   pub title: Option<String>,
   pub brief: Option<String>,
   pub criteria: Option<Vec<String>>,
+  /// The team pipeline the task moves to, by its resource id, as [`TaskContent::pipeline`]; `null` takes it off.
   #[serde(default, deserialize_with = "present", skip_serializing_if = "Option::is_none")]
   pub pipeline: Option<Option<String>>,
   #[serde(default, deserialize_with = "present", skip_serializing_if = "Option::is_none")]

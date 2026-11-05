@@ -1,8 +1,9 @@
 //! A team project's definitions (task edits, modules, tags and the workspace policy) are no commands: the team server
 //! changes them on their own Admin-checked routes (Authority S3, `docs/cloud-api.md`, "Team authority P2 commands"),
 //! each decided on the revision the person read. This module builds the edit for its route from the action, checked
-//! here without any effect; [`send`] carries it out. A change of something whose owner is an open decision (a task's
-//! pipeline, limits or workflow status, D4/D6) is refused before it is sent, never left out silently.
+//! here without any effect; [`send`] carries it out. A task's pipeline is one of the team's, named by its resource id
+//! (`docs/architecture/server.md` row 80, decided 2026-11-05). A change of something whose owner is an open decision
+//! (a task's limits or workflow status, D4/D6) is refused before it is sent, never left out silently.
 
 mod send;
 
@@ -23,6 +24,7 @@ pub(super) use self::send::carry_out;
 use super::{
   ActionError,
   action::{PolicyAction, TagAction},
+  command::team_pipeline,
   ownership::{TeamLink, team_task},
 };
 
@@ -81,14 +83,23 @@ pub(super) fn moved(module: Option<ModuleId>) -> TaskChanges {
   }
 }
 
-pub(super) fn detail_changes(base: &TaskDetails, edited: &TaskDetails) -> Result<TaskChanges, ActionError> {
-  if base.pipeline != edited.pipeline || base.limits != edited.limits {
+/// The details that changed; the limits' owner is open (D6), and a pipeline is a team pipeline, by its id.
+pub(super) fn detail_changes(
+  db: &ProjectDb,
+  base: &TaskDetails,
+  edited: &TaskDetails,
+) -> Result<TaskChanges, ActionError> {
+  if base.limits != edited.limits {
     return Err(ActionError::DecisionRequired(DecisionId::D6));
   }
+  let pipeline = changed(&base.pipeline, &edited.pipeline)
+    .map(|pipeline| pipeline.map(|pipeline| team_pipeline(db, pipeline)).transpose())
+    .transpose()?;
   some(TaskChanges {
     title: changed(&base.title, &edited.title).map(|title| title.as_str().to_owned()),
     brief: changed(&base.brief, &edited.brief).cloned(),
     criteria: changed(&base.acceptance_criteria, &edited.acceptance_criteria).cloned(),
+    pipeline,
     ..TaskChanges::default()
   })
 }
@@ -129,6 +140,7 @@ fn some(changes: TaskChanges) -> Result<TaskChanges, ActionError> {
   let nothing = changes.title.is_none()
     && changes.brief.is_none()
     && changes.criteria.is_none()
+    && changes.pipeline.is_none()
     && changes.priority.is_none()
     && changes.tags.is_none()
     && changes.blocking.is_none()

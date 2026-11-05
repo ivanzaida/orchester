@@ -209,7 +209,10 @@ pub(crate) fn run_from(db: &mut orchester_store::ProjectDb, (base_branch, base_s
 #[test]
 fn team_mcp_run_task_on_a_team_task_goes_through_work_start() {
   let (server, _seen) = server();
-  let checkout = Checkout::new(Some(&server), &[]);
+  let pipeline = server.state().config.pipeline;
+  let checkout = Checkout::prepared(Some(&server), &[], |db| {
+    crate::pipelines::team_pipeline(db, pipeline, "delivery");
+  });
 
   // The session has no runner here: the start is accepted and kept, and waits for the runner.
   let code = checkout.refused("run_task", &json!({"project": "Kontur", "key": "KON-7"}));

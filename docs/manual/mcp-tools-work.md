@@ -176,6 +176,14 @@ Refusals: `task_not_found` (unknown blocker), `invalid_organization` (blank reas
 (`no_automatic_merge` in a shared project), `module_not_found`, `branch_not_found` (the repository has the base branch
 nowhere; nothing is saved).
 
+**Team project.** The task goes to the team server (`task.create`). Its `pipeline` is one of the team's pipelines, by
+id or name, sent as its resource id; a pipeline of this computer's own (or any that is not the team's) is refused as
+`team_pipeline_required`: only the team's pipelines run team tasks, and its Admins create and publish them. A team
+project offers none of this computer's own pipelines (`list_pipelines`, `get_pipeline`). Limits are refused as
+`decision_required` (D6), a workflow status other than the default as `decision_required` (D4), and what the server
+keeps nowhere (`story_points`, `tags`, `blocked_by`, `no_automatic_merge`, `delivers`, `base_branch`) as
+`team_field_unsupported`; nothing is sent then.
+
 ### `update_task` — changes data · gate AP for switching pipelines
 
 Changes a task's details or organization; fields left out stay as they are; a `null` limit is no limit. Same fields
@@ -197,6 +205,8 @@ as `create_task` (all optional) plus `key` (req.). Specifics:
 - **`story_points`**: refused as `persons_points` when a person set them. After a brief/criteria change without
   points, Orchester re-estimates when the switch allows.
 - **Deleting a task** is a person's alone, in the app — no tool deletes one.
+- **Team project**: as `create_task` says; the change goes to the server's task route (Admins' today: a member gets
+  `not_admin`). Moving a team task to another team pipeline is a person's decision too (`person_only` unless AP is on).
 
 ### `get_story_point_calibration` — read-only
 
@@ -271,6 +281,11 @@ takes `run` accepts the id or the number (`7` or `#7`).
 Runs a task as the app allows: queues and starts a draft, starts a queued task, or runs a task again after its latest
 run ended. Refusals name why (e.g. the runner's `task_not_queued`, a held queue, missing base branch, limits).
 Parameters: `project`, `key` (both req.).
+
+A team project's task starts through its team server (`claim.acquire`, then `work.start`) with the team pipeline it
+names, by id: one it does not name is `task_incomplete`, and one that is not a team pipeline on this computer (a
+pipeline of this computer's own, or one not received here) is `team_pipeline_missing`; nothing is claimed or started
+then.
 
 ### `list_runs` — read-only · cross-project
 

@@ -1,9 +1,12 @@
 //! `create_task` and `update_task` of a team project, through the dispatcher: a new task is the team server's
 //! `task.create`, an edit its Admin-checked task route on the revision just read, so a member's edit is refused
-//! `not_admin` and nothing is saved here. Only what the team server holds of a task is sent. A pipeline, limits or a
-//! workflow status change wait for team-authority decisions (D6, D4) and are refused before anything is sent; what
-//! the server does not hold of a team task (story points, tags and blocking tasks by name, Don't merge automatically,
-//! delivers, the base branch) is refused rather than kept on this computer.
+//! `not_admin` and nothing is saved here. Only what the team server holds of a task is sent. Its pipeline is one of the
+//! team's, sent by its resource id (`docs/architecture/server.md` row 80, decided 2026-11-05); a person's own local
+//! pipeline, or anything else that is not a team pipeline here, is refused `team_pipeline_required`, and moving a task
+//! from one pipeline to another is a person's decision, as on a local project. Limits or a workflow status change wait
+//! for team-authority decisions (D6, D4) and are refused before anything is sent; what the server does not hold of a
+//! team task (story points, tags and blocking tasks by name, Don't merge automatically, delivers, the base branch) is
+//! refused rather than kept on this computer.
 //!
 //! The server takes a task's details, its organization and its module on separate routes, so one call may send up to
 //! three changes, each on the revision the one before it left. Once one is saved, a later refusal does not undo it:
@@ -15,19 +18,19 @@ use orchester_api::{
   v2::{DecisionId, TeamCommandValue},
 };
 use orchester_core::{
-  id::ModuleId,
+  id::{ModuleId, ResourceId},
   name::Name,
   task::{
     TaskDetails, TaskLimits,
     organization::{OrganizationError, TaskOrganization, WorkflowStatus},
   },
 };
-use orchester_store::StoreError;
+use orchester_store::{ProjectDb, StoreError};
 use serde_json::{Value, json};
 
 use super::{
   Team, on_worker,
-  outcome::{accepted, action_refused},
+  outcome::{accepted, action_refused, team_pipeline_required},
   tasks::find,
 };
 use crate::{
@@ -35,13 +38,16 @@ use crate::{
   app_mcp::{
     Services,
     error::{Missing, ToolError},
+    services::blocking,
     tools::{
-      task_write::{CreateTask, UpdateTask},
+      setup::widening,
+      task_write::{CreateTask, UpdateTask, pipeline_named},
       wire::{Rank, Workflow},
     },
   },
   messages::Message,
-  tasks::form::title_error,
+  tasks::{data::published_pipelines, form::title_error},
+  team_reads::listed::TeamPipelines,
 };
 
 /// One change of a team task, sent on its own route.
@@ -103,18 +109,19 @@ pub(in crate::app_mcp::tools) async fn create_task(
   ];
   refuse_unsupported(&unsupported)?;
   let limited = matches!(args.budget_tokens, Some(Some(_))) || matches!(args.time_limit_minutes, Some(Some(_)));
-  if args.pipeline.is_some() || limited {
+  if limited {
     return Err(action_refused(ActionError::DecisionRequired(DecisionId::D6)));
   }
   let status = args.workflow_status.map_or_else(WorkflowStatus::default, Into::into);
   if status != WorkflowStatus::default() {
     return Err(action_refused(ActionError::DecisionRequired(DecisionId::D4)));
   }
+  let (pipeline, _) = pipelines(team, args.pipeline.clone(), None).await?;
   let details = TaskDetails {
     title: title(&args.title)?,
     brief: args.brief.clone().unwrap_or_default(),
     acceptance_criteria: criteria(&args.criteria),
-    pipeline: None,
+    pipeline,
     limits: TaskLimits::NONE,
   };
   let organization = TaskOrganization::new(
@@ -156,7 +163,7 @@ pub(in crate::app_mcp::tools) async fn update_task(
     ("base_branch", args.base_branch.is_some()),
   ];
   refuse_unsupported(&unsupported)?;
-  if args.pipeline.is_some() || args.budget_tokens.is_some() || args.time_limit_minutes.is_some() {
+  if args.budget_tokens.is_some() || args.time_limit_minutes.is_some() {
     return Err(action_refused(ActionError::DecisionRequired(DecisionId::D6)));
   }
   let module = match &args.module {
@@ -165,9 +172,18 @@ pub(in crate::app_mcp::tools) async fn update_task(
     None => None,
   };
   let task = find(&team.reads(services).await?, &args.key).await?.task;
+  let (chosen, current) = pipelines(team, args.pipeline.clone(), task.content.pipeline.clone()).await?;
+  // Another pipeline runs the task with other steps, profiles and approvals: a person decides that, as on a local
+  // project. A task without one may get any team pipeline.
+  if let Some(chosen) = chosen
+    && task.content.pipeline.is_some()
+    && current != Some(chosen)
+  {
+    widening::allowed(services, vec![Message::new("appMcp.widens.taskPipeline")])?;
+  }
   // Everything refused in advance is refused here, before the first change is sent.
   let mut changes = Vec::new();
-  if let Some((base, edited)) = edited_details(&task, args)? {
+  if let Some((base, edited)) = edited_details(&task, args, (current, chosen.or(current)))? {
     changes.push(Change::Details(base, edited));
   }
   if let Some((base, edited)) = organized(&task, args)? {
@@ -215,18 +231,23 @@ fn answer(task: &SharedTask, not_saved: Option<NotSaved>) -> Value {
   result
 }
 
-/// The details read of `task` and as `args` change them; `None` when they change none.
-fn edited_details(task: &SharedTask, args: &UpdateTask) -> Result<Option<(TaskDetails, TaskDetails)>, ToolError> {
-  if args.title.is_none() && args.brief.is_none() && args.criteria.is_none() {
+/// The details read of `task`, the team pipeline `current` it names here, and as `args` change them, with the team
+/// pipeline `edited`; `None` when they change none.
+fn edited_details(
+  task: &SharedTask,
+  args: &UpdateTask,
+  (current, edited): (Option<ResourceId>, Option<ResourceId>),
+) -> Result<Option<(TaskDetails, TaskDetails)>, ToolError> {
+  if args.title.is_none() && args.brief.is_none() && args.criteria.is_none() && args.pipeline.is_none() {
     return Ok(None);
   }
   let content = &task.content;
-  // Pipeline and limits are left out of both: they wait for D6, and an edit sends only what changed.
+  // Limits are left out of both: they wait for D6, and an edit sends only what changed.
   let base = TaskDetails {
     title: title(&content.title)?,
     brief: content.brief.clone(),
     acceptance_criteria: content.criteria.clone(),
-    pipeline: None,
+    pipeline: current,
     limits: TaskLimits::NONE,
   };
   let edited = TaskDetails {
@@ -236,10 +257,39 @@ fn edited_details(task: &SharedTask, args: &UpdateTask) -> Result<Option<(TaskDe
       .criteria
       .as_deref()
       .map_or_else(|| base.acceptance_criteria.clone(), criteria),
-    pipeline: None,
+    pipeline: edited,
     limits: TaskLimits::NONE,
   };
   Ok((edited != base).then_some((base, edited)))
+}
+
+/// The team pipeline `named` among the team's pipelines published here, by its id or name, and the team pipeline a
+/// task's `current` pipeline is here, read together. A `named` pipeline that is not the team's, a person's own local
+/// one included, is refused: only the team's pipelines run a team task, and its Admins make them.
+async fn pipelines(
+  team: &Team,
+  named: Option<String>,
+  current: Option<String>,
+) -> Result<(Option<ResourceId>, Option<ResourceId>), ToolError> {
+  if named.is_none() && current.is_none() {
+    return Ok((None, None));
+  }
+  let root = team.open.repo_root.clone();
+  blocking(move || {
+    let db = ProjectDb::open(&root)?;
+    let pipelines = TeamPipelines::of(&db)?;
+    let chosen = match named {
+      Some(named) => {
+        // A team project offers only the team's pipelines: a person's own local one is none of these.
+        let published = published_pipelines(&db)?;
+        let chosen = pipeline_named(&published, &named).map_err(|_| team_pipeline_required(&named))?;
+        Some(chosen.id)
+      }
+      None => None,
+    };
+    Ok((chosen, current.and_then(|current| pipelines.id(&current))))
+  })
+  .await
 }
 
 /// The organization read of `task` and as `args` change it; `None` when they change nothing of it. A workflow status
