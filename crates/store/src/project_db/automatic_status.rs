@@ -158,7 +158,9 @@ impl ProjectDb {
       return Ok(());
     }
     let task: Option<String> = transaction
-      .query_row("SELECT task_id FROM runs WHERE id = ?1", [run.to_string()], |row| row.get(0))
+      .query_row("SELECT task_id FROM runs WHERE id = ?1", [run.to_string()], |row| {
+        row.get(0)
+      })
       .optional()?;
     let task: TaskId = parse("task id", &task.ok_or(StoreError::RunNotFound(run))?)?;
     if !super::shared_tasks::is_shared(&transaction, task)? {
