@@ -11,13 +11,14 @@ use std::path::{Path, PathBuf};
 
 use orchester_core::{
   id::RunId,
+  limits::{ComputerServiceSlots, ServiceSlots},
   resource::{CommandArg, CommandProgram},
   run::ProjectScope,
   service::{
     HttpPath, LogPattern, Readiness, ReadyCheck, ReadyTimeout, Service, ServiceApproval, ServiceName, Stack, StackName,
     UiDriver,
   },
-  store::ResourceStore,
+  store::{ResourceStore, SettingsStore},
 };
 use orchester_workspace::agent_testing::data::{create, service_slug, stack_slug};
 
@@ -158,6 +159,11 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   let pipeline = catalogue::tester(&mut kontur.db, connection, published)?;
   let services = services(&test_command(&fake_codex))?;
   let made_in = earlier_run(kontur, &pipeline)?;
+  // Five services run at once, and a person's Restart starts one or two more while the agent's start of cloud-web
+  // waits: more than a project's default share of *Services at once*, within the computer's default.
+  let limits = kontur.db.project_limits()?;
+  let share = ServiceSlots::new(u64::from(ComputerServiceSlots::DEFAULT.get().get())).map_err(invalid)?;
+  kontur.db.save_project_limits(&limits.with_service_slots(share))?;
   for service in &services {
     let id = create(&mut kontur.db, service_slug(service.name()), service, published)?;
     kontur.db.publish_draft::<Service>(id, published)?;
