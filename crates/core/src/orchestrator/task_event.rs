@@ -77,47 +77,17 @@ impl TaskEventKind {
 /// The code merge_run refuses with when merging a run stopped, at conflicts among others.
 const MERGE_FAILED: &str = "merge_failed";
 
-/// How long a run may make no progress before that is an event: never (`Off`), or after `minutes`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum NoProgressAfter {
-  Off,
-  Minutes { minutes: NonZeroU32 },
-}
-
-impl NoProgressAfter {
-  /// The minutes a run may make no progress for when the person set nothing.
-  pub const DEFAULT_MINUTES: NonZeroU32 = NonZeroU32::new(20).expect("20 is not zero");
-
-  /// After `minutes`; 0 turns it off.
-  pub const fn minutes(minutes: u32) -> Self {
-    match NonZeroU32::new(minutes) {
-      Some(minutes) => Self::Minutes { minutes },
-      None => Self::Off,
-    }
-  }
-}
-
-impl Default for NoProgressAfter {
-  fn default() -> Self {
-    Self::Minutes {
-      minutes: Self::DEFAULT_MINUTES,
-    }
-  }
-}
-
-/// The no-progress event of a run whose last progress was at `last`, at `now`, by the setting `after`: one once the
-/// run made none for the setting's minutes, unless one was already raised for this stall (`raised`: the `since` of
-/// the run's newest no-progress event, [`raised_stall`]). Progress again moves `last` past it, which re-arms the rule.
+/// The no-progress event of a run whose last progress was at `last`, at `now`, by the project's setting `minutes`
+/// ([`super::WatchSettings::no_progress_minutes`]: `None` when it is off): one once the run made none for that many
+/// minutes, unless one was already raised for this stall (`raised`: the `since` of the run's newest no-progress
+/// event, [`raised_stall`]). Progress again moves `last` past it, which re-arms the rule.
 pub fn no_progress(
   last: Timestamp,
   now: Timestamp,
-  after: NoProgressAfter,
+  minutes: Option<u32>,
   raised: Option<Timestamp>,
 ) -> Option<TaskEventKind> {
-  let NoProgressAfter::Minutes { minutes } = after else {
-    return None;
-  };
+  let minutes = NonZeroU32::new(minutes?)?;
   let waited = now.unix_millis().saturating_sub(last.unix_millis());
   let stalled = waited >= i64::from(minutes.get()) * 60_000;
   let already = raised.is_some_and(|since| since >= last);

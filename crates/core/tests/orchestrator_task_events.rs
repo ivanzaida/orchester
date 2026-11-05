@@ -6,7 +6,7 @@
 use orchester_core::{
   id::{RunId, TaskId},
   orchestrator::{
-    ActionOutcome, AgentWait, ChatAction, ChatEntry, EntryKind, NoProgressAfter, TaskEvent, TaskEventKind, WaitKind,
+    ActionOutcome, AgentWait, ChatAction, ChatEntry, EntryKind, TaskEvent, TaskEventKind, WaitKind, WatchSettings,
     change::{Change, ProposedChange},
     instructions::{event_prompt, wait_prompt},
     task_event::{no_progress, raised_stall},
@@ -90,12 +90,8 @@ fn stalled() -> TaskEventKind {
 
 #[test]
 fn task_event_no_progress_fires_after_its_minutes_once_per_stall() {
-  let after = NoProgressAfter::default();
-  assert_eq!(
-    after,
-    NoProgressAfter::minutes(20),
-    "20 minutes when the person set nothing"
-  );
+  let after = WatchSettings::default().no_progress_minutes();
+  assert_eq!(after, Some(20), "20 minutes when the person set nothing");
   assert_eq!(no_progress(at(0), at(19), after, None), None, "not yet");
   assert_eq!(
     no_progress(at(0), at(20), after, None),
@@ -115,13 +111,9 @@ fn task_event_no_progress_fires_after_its_minutes_once_per_stall() {
     }),
     "progress again re-armed it"
   );
-  assert_eq!(
-    no_progress(at(0), at(500), NoProgressAfter::minutes(0), None),
-    None,
-    "off never fires"
-  );
+  assert_eq!(no_progress(at(0), at(500), None, None), None, "off never fires");
   assert!(
-    no_progress(at(0), at(5), NoProgressAfter::minutes(5), None).is_some(),
+    no_progress(at(0), at(5), Some(5), None).is_some(),
     "after the minutes set"
   );
 }
