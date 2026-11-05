@@ -121,7 +121,9 @@
       "modelValue": "{{model}} · {{agent}}",
       "worktree": "Worktree",
       "worktreeTip": "{{path}} · click to copy",
-      "more": "Account, cached input, duration, agents, permissions"
+      "approvals": "Approvals",
+      "approvalsValue": "{{count}} by the reviewer",
+      "more": "Account, cached input, duration, agents, approvals, permissions"
     },
     "notice": {
       "theAgent": "The agent",

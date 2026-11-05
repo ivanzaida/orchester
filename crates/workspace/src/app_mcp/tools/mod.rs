@@ -293,7 +293,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "set_reviewer",
-    description: "Chooses the reviewer Manual asks before the person, as Project settings › Runs does: an agent connection of the project, a model of it and an effort it takes; without a connection, the default reviewer. Refused as automation_not_allowed unless a person turned on Let automation answer approvals, and another reviewer than the current one also needs Let automation change agent permissions (person_only). Answers as get_approvals does.",
+    description: "Chooses the reviewer Manual asks before the person. connection names a language reviewer with model and effort; decision_connection names a decision reviewer with model and threshold (0.01–0.99, two decimals, default 0.80). Without either, uses the default language reviewer. Choosing a hosted decision reviewer is always person_only. Threshold edits and switching back to a language reviewer are narrowing. Requires Let automation answer approvals; other reviewer changes require Let automation change agent permissions. Answers as get_approvals does.",
     schema: schema_for_type::<approval_settings::SetReviewer>,
     read_only: false,
   },

@@ -206,7 +206,7 @@ fn auto_mode_records_the_reviewers_verdict_and_fails_closed() {
   ] {
     let failed = reviewed(Err(error));
     assert!(
-      matches!(&failed, Review::Failed { failure: got, model: Some(_), detail: Some(why) } if *got == failure && why == detail),
+      matches!(&failed, Review::Failed { failure: got, model: Some(_), detail: Some(why), .. } if *got == failure && why == detail),
       "{failed:?}"
     );
     assert!(!failed.approves());
@@ -225,9 +225,32 @@ fn auto_mode_records_the_reviewers_verdict_and_fails_closed() {
     Review::Failed {
       failure: ReviewFailure::NoReviewer,
       model: None,
-      detail: None
+      detail: None,
+      decision: false,
     }
   );
+}
+
+/// A decision model's failed review is marked so: a timeout reads the same from any reviewer, and the card says a
+/// decision model's in its own line. The mark is kept as it is stored; records kept before it read unmarked.
+#[test]
+fn auto_mode_failed_review_by_a_decision_model_is_marked() {
+  let model = ModelId::new("jev").expect("model");
+  let reviewed = |answer| Review::of(answer, &model);
+  let timed_out = reviewed(Err(ReviewError::TimedOut));
+  assert!(!timed_out.decision_failed(), "a language reviewer's timeout");
+  let marked = timed_out.by_decision_model();
+  assert!(marked.decision_failed(), "{marked:?}");
+  let json = serde_json::to_value(&marked).expect("JSON");
+  assert_eq!(serde_json::from_value::<Review>(json).expect("read"), marked);
+  let older = serde_json::json!({"outcome": "failed", "failure": "timed_out", "model": "jev"});
+  assert!(!serde_json::from_value::<Review>(older).expect("read").decision_failed());
+  let refused = reviewed(Err(ReviewError::Decision(ReviewFailure::KeyRefused)));
+  assert!(refused.decision_failed(), "only a decision model's key is refused");
+  let approved = reviewed(Ok(ReviewVerdict::Approve {
+    reason: "It serves the task.".to_owned(),
+  }));
+  assert_eq!(approved.clone().by_decision_model(), approved);
 }
 
 #[test]

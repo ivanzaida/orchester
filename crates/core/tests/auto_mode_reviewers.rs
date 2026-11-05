@@ -93,10 +93,10 @@ fn auto_mode_reviewer_defaults_to_claude_code_with_haiku_then_to_any_connection(
   let openai = native("0 OpenAI", AgentProvider::OpenAiApi, "gpt-5.5");
   let settings = AutoModeSettings::default();
   let connections = [codex.clone(), claude.clone(), anthropic.clone()];
-  let resolved = resolve_reviewer(&settings, &connections).expect("a reviewer");
+  let resolved = resolve_reviewer(&settings, &connections, &[]).expect("a reviewer");
   assert_eq!(
     resolved.connection.id(),
-    claude.id(),
+    claude.id().into(),
     "Claude Code first, whatever its name"
   );
   assert_eq!(resolved.kind, ReviewerKind::ClaudeCode);
@@ -105,28 +105,28 @@ fn auto_mode_reviewer_defaults_to_claude_code_with_haiku_then_to_any_connection(
 
   // Without Claude Code: the first connection a reviewer runs on, by name, with its default model.
   let connections = [anthropic.clone(), openai.clone(), codex.clone()];
-  let resolved = resolve_reviewer(&settings, &connections).expect("a reviewer");
+  let resolved = resolve_reviewer(&settings, &connections, &[]).expect("a reviewer");
   assert_eq!(
     resolved.connection.id(),
-    codex.id(),
+    codex.id().into(),
     "the OpenAI API is not a reviewer yet"
   );
   assert_eq!(
     (resolved.kind, resolved.model),
     (ReviewerKind::Codex, model("gpt-5.5-codex"))
   );
-  let resolved = resolve_reviewer(&settings, std::slice::from_ref(&anthropic)).expect("a reviewer");
+  let resolved = resolve_reviewer(&settings, std::slice::from_ref(&anthropic), &[]).expect("a reviewer");
   assert_eq!(
     (resolved.kind, resolved.model),
     (ReviewerKind::AnthropicApi, model("claude-sonnet-5-5"))
   );
   assert_eq!(
-    resolve_reviewer(&settings, std::slice::from_ref(&openai)).err(),
+    resolve_reviewer(&settings, std::slice::from_ref(&openai), &[]).err(),
     Some(ReviewerUnavailable::NoConnection)
   );
   let unchecked = cli("Codex", AgentProvider::CodexCli, &[]);
   assert_eq!(
-    resolve_reviewer(&settings, &[unchecked]).err(),
+    resolve_reviewer(&settings, &[unchecked], &[]).err(),
     Some(ReviewerUnavailable::NoModel)
   );
 }
@@ -138,23 +138,24 @@ fn auto_mode_reviewer_is_the_one_a_person_chose_or_unavailable() {
   let openai = native("OpenAI", AgentProvider::OpenAiApi, "gpt-5.5");
   let chose = |connection: &Connection| AutoModeSettings {
     reviewer: Some(ReviewerChoice {
-      connection: connection.id(),
+      connection: connection.id().into(),
       model: model("gpt-5.5-codex"),
       effort: Some("high".to_owned()),
+      threshold: None,
     }),
   };
   let connections = [claude, codex.clone(), openai.clone()];
-  let resolved = resolve_reviewer(&chose(&codex), &connections).expect("the chosen reviewer");
-  assert_eq!(resolved.connection.id(), codex.id());
+  let resolved = resolve_reviewer(&chose(&codex), &connections, &[]).expect("the chosen reviewer");
+  assert_eq!(resolved.connection.id(), codex.id().into());
   assert_eq!(resolved.effort.as_deref(), Some("high"));
   assert!(!resolved.default);
   assert_eq!(
-    resolve_reviewer(&chose(&openai), &connections).err(),
+    resolve_reviewer(&chose(&openai), &connections, &[]).err(),
     Some(ReviewerUnavailable::Unsupported)
   );
   let gone = cli("Gone", AgentProvider::CodexCli, &[]);
   assert_eq!(
-    resolve_reviewer(&chose(&gone), &connections).err(),
+    resolve_reviewer(&chose(&gone), &connections, &[]).err(),
     Some(ReviewerUnavailable::ConnectionGone),
     "no silent fallback to another connection"
   );

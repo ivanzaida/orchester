@@ -106,6 +106,7 @@ pub(super) fn page(ctx: &mut Ctx, project: &ShownProject, recheck: &Signal<u64>)
       Some(&ctx.t("connections.empty.lead")),
     ))
     .child(Group::new("connections-agents", ctx.t("connections.groups.agentProviders")).rows(rows))
+    .child(super::super::decision::listed(ctx, project, &[]))
     .child(github_group(ctx))
     .child(mcp_group(ctx, add(NewConnection::McpServer)))
     .into()

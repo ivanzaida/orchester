@@ -1,7 +1,7 @@
 //! A shared project's configuration (`docs/architecture/server.md`, "Shared configuration", S5): its resources
-//! (pipelines, agent profiles, instructions, skills and tools), their published versions, and what a version names that
-//! each computer binds to its own connection, MCP server or secret. A skill's parts travel apart from its body, by
-//! their hash (`PUT …/files/{sha256}`). Only admins write (row 72); a member's write answers `403 not_admin`.
+//! (pipelines, agent profiles, instructions, skills, tools and team reviewers), their published versions, and what each
+//! computer binds locally. A skill's parts travel apart from its body, by hash (`PUT …/files/{sha256}`). Members read;
+//! only the project's owner or a server admin writes; a member's write answers `403 not_admin`.
 
 use orchester_core::{
   blob::ContentHash,
@@ -23,6 +23,8 @@ pub enum SharedResourceKind {
   Instruction,
   Skill,
   Tool,
+  /// Body: [`orchester_core::resource::TeamReviewer`], with named connection references, never local ids or secrets.
+  TeamReviewer,
 }
 
 impl SharedResourceKind {
@@ -33,6 +35,7 @@ impl SharedResourceKind {
       Self::Instruction => ResourceKind::Instruction,
       Self::Skill => ResourceKind::Skill,
       Self::Tool => ResourceKind::Tool,
+      Self::TeamReviewer => ResourceKind::TeamReviewer,
     }
   }
 
@@ -44,6 +47,7 @@ impl SharedResourceKind {
       ResourceKind::Instruction => Some(Self::Instruction),
       ResourceKind::Skill => Some(Self::Skill),
       ResourceKind::Tool => Some(Self::Tool),
+      ResourceKind::TeamReviewer => Some(Self::TeamReviewer),
       ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => None,
     }
   }
@@ -96,6 +100,11 @@ pub struct SharedVersion {
   pub references: Vec<Reference>,
   pub based_on: Option<VersionNumber>,
   pub published: Attribution,
+  /// Computed and kept by the server, never supplied by a publisher. For team reviewers, uses
+  /// [`orchester_core::resource::TeamReviewer::widens_over`] against the preceding version (or `None` for v1).
+  /// Absent on older servers; clients must still compare permissions locally before applying a version.
+  #[serde(default)]
+  pub widens: bool,
 }
 
 /// A version's content as an admin sends it: the body, and a reference for every id it names that is not a shared

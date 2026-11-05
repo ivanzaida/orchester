@@ -1,9 +1,10 @@
 //! Estimates (`Estimates` `vLiTy` in `02 · Runs`, the Runs window `g406O`): *Let Orchester estimate story points*, the
 //! project's own setting since ORC-103; opening a project that had none copied the application-wide value into it
 //! (ORC-595), and the row shows only the project's. Orchester's estimator then sizes new tasks, and tasks whose brief
-//! or criteria change, on auto mode's reviewer, never changing points a person set. It is read through its query,
-//! which the project's loader read as the project opened, and saved off the UI thread; until it is first read and
-//! while it saves, its switch cannot be flipped. Only a person flips it: the switch refuses lurq's synthetic input, an
+//! or criteria change, on auto mode's reviewer's language model, or the default language reviewer for a decision
+//! reviewer, never changing points a person set. It is read through its query, which the project's loader read as the
+//! project opened, and saved off the UI thread; until it is first read, while it saves, and when no language reviewer
+//! is available, its switch cannot be flipped. Only a person flips it: the switch refuses lurq's synthetic input, an
 //! MCP client's included, and says so under the row. Unlike the application-wide Automation section it moved from, the
 //! row does not close the whole window to MCP input while it shows, so Runs' other settings stay open to automation
 //! as before. While estimates are on and the estimator's last request could not run, the row says why in its hint's
@@ -47,6 +48,14 @@ const ID: &str = "settings-estimate-points";
 
 type SaveAction = FutureAction<bool, bool, Message>;
 
+#[derive(Clone, PartialEq)]
+pub(super) struct Props {
+  pub tab: TabProps,
+  pub settings: Option<orchester_workspace::project_settings::Settings>,
+  pub read_error: Option<Message>,
+}
+
+impl lurq::app::component::DevtoolsInspectable for Props {}
 pub(super) struct Estimates {
   /// What the person last chose; `None` until they do.
   saved: Signal<Option<bool>>,
@@ -56,11 +65,11 @@ pub(super) struct Estimates {
 }
 
 impl Component for Estimates {
-  type Props = TabProps;
+  type Props = Props;
 
   fn create(ctx: &mut Ctx) -> Self {
     let workspace = Services::of(ctx).workspace;
-    let root = ctx.props::<TabProps>().project.open.repo_root.clone();
+    let root = ctx.props::<Props>().tab.project.open.repo_root.clone();
     // The workspace counts the change once saved, which reads the setting again (`queries`).
     let save = ctx.future_action(move |allowed: bool| {
       let (workspace, root) = (workspace.clone(), root.clone());
@@ -82,8 +91,10 @@ impl Component for Estimates {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let props = ctx.props::<Props>().clone();
+    let (hint, info, available) = estimate_words(ctx, props.settings.as_ref());
     let state = self.save.state().get();
-    let root = ctx.props::<TabProps>().project.open.repo_root.clone();
+    let root = props.tab.project.open.repo_root.clone();
     let session = Session::of(ctx);
     let read = queries::state(&ctx.query(project::estimates(session, root.clone())));
     let fixed = state.is_pending() || read.is_pending();
@@ -101,12 +112,12 @@ impl Component for Estimates {
       ctx.t("project_settings.estimates.label"),
     )
     .hide_label();
-    let switch = if shown.is_some() && !fixed {
+    let switch = if shown.is_some() && !fixed && available {
       self.listen(switch)
     } else {
       switch
     };
-    let problem = match (&read.error, &state.error) {
+    let problem = match (props.read_error.as_ref().or(read.error.as_ref()), &state.error) {
       (Some(reason), _) => Some(("project_settings.estimates.unreadable", reason)),
       (None, Some(reason)) => Some(("project_settings.estimates.notSaved", reason)),
       (None, None) => None,
@@ -128,7 +139,7 @@ impl Component for Estimates {
     // Why the last estimate gave no points, in the hint's place while estimates are on.
     let row = match could_not_run(ctx, &root, shown) {
       Some(said) => row.toned(said, Tone::Warning),
-      None => row.hint(ctx.t("project_settings.estimates.hint")),
+      None => row.hint(hint),
     };
     // Until the setting is read, the switch is a bone of its size: no state shows that may not be the stored one.
     let control: Element = if shown.is_none() && read.is_pending() {
@@ -139,7 +150,7 @@ impl Component for Estimates {
       switch.into()
     };
     let row = row
-      .info(ctx.t("project_settings.estimates.info"))
+      .info(info)
       .control(control)
       .under_all(problem)
       .under_all(blocked)
@@ -173,4 +184,49 @@ fn could_not_run(ctx: &mut Ctx, root: &Path, shown: Option<bool>) -> Option<Arc<
   let trouble = health.filter(|_| shown == Some(true))?.estimates(now)?;
   let reason = reviewer_trouble::reason(ctx, trouble, now);
   Some(ctx.t_args("project_settings.estimates.couldNotRun", [("reason", &*reason)]))
+}
+
+fn estimate_words(
+  ctx: &Ctx,
+  settings: Option<&orchester_workspace::project_settings::Settings>,
+) -> (std::sync::Arc<str>, std::sync::Arc<str>, bool) {
+  use orchester_core::run::review::{ReviewerConnectionId, resolve_estimator};
+  let Some(settings) = settings else {
+    return (
+      ctx.t("project_settings.estimates.hint"),
+      ctx.t("project_settings.estimates.info"),
+      false,
+    );
+  };
+  if !matches!(
+    settings.auto_mode.reviewer.as_ref().map(|choice| choice.connection),
+    Some(ReviewerConnectionId::Decision { .. })
+  ) {
+    return (
+      ctx.t("project_settings.estimates.hint"),
+      ctx.t("project_settings.estimates.info"),
+      true,
+    );
+  }
+  match resolve_estimator(&settings.auto_mode, &settings.connections) {
+    Ok(estimator) => (
+      ctx.t_args(
+        "project_settings.estimates.decisionHint",
+        [("connection", estimator.connection.name().as_str())],
+      ),
+      ctx.t_args(
+        "project_settings.estimates.decisionInfo",
+        [
+          ("connection", estimator.connection.name().as_str()),
+          ("model", estimator.model.as_str()),
+        ],
+      ),
+      true,
+    ),
+    Err(_) => (
+      ctx.t("project_settings.estimates.noLanguage"),
+      ctx.t("project_settings.estimates.noLanguage"),
+      false,
+    ),
+  }
 }

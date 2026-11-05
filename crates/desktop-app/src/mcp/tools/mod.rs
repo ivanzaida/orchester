@@ -215,6 +215,9 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
       if let Some(connection) = view.selected() {
         insert("selected", &connection.to_string());
       }
+      if let Some(connection) = view.selected_decision() {
+        insert("decision", &connection.to_string());
+      }
     }
     ProjectPage::Settings(tab) => insert("tab", tab.name()),
     ProjectPage::ProjectRules | ProjectPage::Storage => {

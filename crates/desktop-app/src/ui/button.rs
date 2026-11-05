@@ -88,6 +88,7 @@ pub struct ActionButton {
   /// What a press leads to, under its label, in a stacked button.
   consequence: Option<Arc<str>>,
   element: Option<ElementRef>,
+  on_focus: Option<Arc<dyn Fn() + Send + Sync>>,
 }
 
 impl ActionButton {
@@ -118,6 +119,7 @@ impl ActionButton {
       stacked: false,
       consequence: None,
       element: None,
+      on_focus: None,
     }
   }
 
@@ -130,6 +132,12 @@ impl ActionButton {
   /// held, when the loader says it is under way.
   pub fn after(mut self, icon: Icon) -> Self {
     self.after = Some(icon);
+    self
+  }
+
+  /// Updates supporting copy when the keyboard focuses this answer (06b I8MyfC).
+  pub fn on_focus(mut self, handler: impl Fn() + Send + Sync + 'static) -> Self {
+    self.on_focus = Some(Arc::new(handler));
     self
   }
 
@@ -512,6 +520,9 @@ impl From<ActionButton> for Element {
     }
     if let Some(element) = button.element {
       frame = frame.ref_element(element);
+    }
+    if let Some(on_focus) = button.on_focus {
+      frame = frame.on_focus(move || on_focus());
     }
     if let Some(Hold::Unavailable(reason) | Hold::UnavailableWithIcon(reason)) = &button.hold {
       frame = frame.describe("reason", reason.clone());

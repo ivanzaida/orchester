@@ -12,4 +12,5 @@ mod catalog_client;
 mod client;
 mod errors;
 mod fixtures;
+mod reviewer;
 mod shapes;

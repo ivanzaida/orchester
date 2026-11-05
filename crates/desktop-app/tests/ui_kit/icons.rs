@@ -145,6 +145,19 @@ fn update_install_icons_match_bundled_font_names() {
   }
 }
 
+#[test]
+fn decision_connection_scale_matches_bundled_font_name() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  let codepoint = (0xe000..0xf000)
+    .find(|codepoint| glyph_name(font, font_glyph(font, *codepoint)) == "scale")
+    .expect("the bundled font includes scale");
+  assert_eq!(
+    Icon::Scale.glyph() as usize,
+    codepoint,
+    "scale codepoint: {codepoint:x}"
+  );
+}
+
 /// The glyphs of *Compact* and the compaction's lines (ORC-309, `GENCC`, `dPq1I`, `l5YmWb`).
 #[test]
 fn compact_icons_match_bundled_font_names() {

@@ -8,6 +8,7 @@ mod accounts;
 mod api_providers;
 mod complete;
 mod connections;
+mod decision_connections;
 mod instructions;
 mod mcp_preview;
 mod mcp_servers;
@@ -99,7 +100,8 @@ const SPECS: &[Spec] = &[
     name: "list_connections",
     description: "A project's connections: agent connections (id, name, provider codex_cli, claude_code_cli, \
                   anthropic_api or openai_api, program, status from the last check, CLI version, number of models, \
-                  the API provider a CLI runs on: base_url, host, key_secret's name and models), \
+                  the API provider a CLI runs on: base_url, host, key_secret's name and models), decision_models \
+                  (id, name, base_url, on_this_computer, key_secret id, models and last_check with answer timestamp), \
                   GitHub connections (id, name, host, status) and MCP servers, which profiles can give their \
                   agents: id, name, enabled, transport (stdio with program, args and working_directory, or http \
                   with url and authorization: its scheme none, bearer, basic with username, basic_credential or \
@@ -152,10 +154,11 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "list_models",
-    description: "The models an agent connection offers, each with the reasoning efforts it takes, as the profile \
-                  editor offers them: its last check's, an API provider's or a native connection's own. A model it \
-                  does not list can still be given to save_profile_draft (it runs as not verified); an effort is \
-                  kept only where the model lists it. `link` is the connection's in the app.",
+    description: "The models an agent or decision connection offers, each with the reasoning efforts it takes \
+                  (none for decision models). Decision models come from the connection's last model-list check, \
+                  with source decision. Agent models are offered as in the profile editor: its last check's, an \
+                  API provider's or a native connection's own. An unlisted agent model can still be given to \
+                  save_profile_draft (not verified); effort is kept only where listed. Agent connections include link.",
     schema: schema_for_type::<connections::InConnection>,
     read_only: true,
   },
@@ -439,6 +442,7 @@ const SPECS: &[Spec] = &[
 pub fn listed() -> Vec<Tool> {
   SPECS
     .iter()
+    .chain(decision_connections::SPECS)
     .chain(project_tools::SPECS)
     .chain(skills::SPECS)
     .chain(secrets::SPECS)
@@ -470,6 +474,9 @@ pub async fn call(
   }
   if named(storage::SPECS) {
     return Some(storage::call(services, name, Value::Object(arguments)).await);
+  }
+  if named(decision_connections::SPECS) {
+    return Some(decision_connections::call(services, name, Value::Object(arguments)).await);
   }
   if !SPECS.iter().any(|spec| spec.name == name) {
     return None;

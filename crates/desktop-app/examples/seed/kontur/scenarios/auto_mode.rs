@@ -81,7 +81,7 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
     request(kontur, (&run, &invocation), command, (reviewed, at))?;
     hold(kontur, run, (&invocation, !matches!(reviewed, Reviewed::Approved)))?;
   }
-  Ok(())
+  super::decision_reviews::seed(kontur, pipeline)
 }
 
 /// A request to run `command`, asked at `at`, as auto mode's review left it.
@@ -120,6 +120,7 @@ fn request(
       failure: ReviewFailure::TimedOut,
       model: Some(model),
       detail: Some("the reviewer did not answer in time".to_owned()),
+      decision: false,
     },
     Reviewed::Approved => Review::Approved {
       reason: "It only reads a log the step's tests wrote.".to_owned(),

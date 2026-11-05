@@ -115,6 +115,11 @@ define_id!(
   ConnectionId
 );
 define_id!(
+  /// A project's connection to a decision model's server (`crate::connection::DecisionConnection`). Its own type,
+  /// so no agent profile, which names a [`ConnectionId`], can choose one.
+  DecisionConnectionId
+);
+define_id!(
   /// A project secret. Bodies and rows hold only this reference; the value stays in the OS keychain.
   SecretId
 );

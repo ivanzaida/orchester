@@ -78,6 +78,7 @@ pub(super) async fn next(slot: &mut Option<Reviewing>) -> Reviewed {
       failure: ReviewFailure::CouldNotRun,
       model: None,
       detail: Some("the review did not finish".to_owned()),
+      decision: false,
     }
   });
   let reviewing = slot.take().expect("the review awaited above is under way");

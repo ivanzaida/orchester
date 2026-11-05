@@ -246,6 +246,14 @@ pub enum Command {
   /// [`Reply::ConnectionChecked`], or [`Rejection::Failed`] when the key cannot be read or the provider
   /// runs no agent in this version.
   CheckConnection { provider: AgentProvider, api: ApiEndpoint },
+  /// Explicit recorded-request comparison (protocol 41). Progress and results live in the project database.
+  /// Hosted servers refuse automation; the workspace supplies authority rather than accepting it as tool input.
+  TestDecisionConnection {
+    test: IdempotencyKey,
+    connection: crate::DecisionTestTarget,
+    model: orchester_core::resource::ModelId,
+    automation: bool,
+  },
   /// Answers the person's message `message` of the project's Orchestrator chat, which the desktop kept: one turn
   /// of the agent CLI on the Orchestrator's connection and model, read-only in the project folder, with the
   /// domain tools at `tools` (`orchester_core::orchestrator`). Answered with [`Reply::ChatAnswering`] once the turn
@@ -517,6 +525,10 @@ pub enum Reply {
   /// The answer to [`Command::Browser`].
   Browser(BrowserReply),
   Rejected(Rejection),
+  /// The comparison ended; its durable report includes completion or stop status.
+  DecisionTested {
+    test: IdempotencyKey,
+  },
 }
 
 /// A run [`Command::ContinueRuns`] did not continue.

@@ -32,6 +32,8 @@ pub enum ReviewSpend {
 pub struct Reviewed {
   pub verdict: Result<ReviewVerdict, ReviewError>,
   pub spend: ReviewSpend,
+  /// The provider's resolved model/version, when it differs from the chosen id.
+  pub reported_model: Option<ModelId>,
   pub limits: Vec<PlanLimits>,
 }
 
@@ -41,6 +43,7 @@ impl Reviewed {
     Self {
       verdict,
       spend,
+      reported_model: None,
       limits: Vec::new(),
     }
   }
@@ -64,7 +67,7 @@ impl ReviewCost {
       ReviewSpend::Reported(usage) => Some(usage),
     };
     Some(Self {
-      model: model.clone(),
+      model: reviewed.reported_model.clone().unwrap_or_else(|| model.clone()),
       usage,
       limits: reviewed.limits.clone(),
     })
@@ -88,10 +91,12 @@ pub enum ReviewEnd {
 
 impl ReviewEnd {
   /// How `review` ended; `None` for a request a hard rule kept from the reviewer.
-  pub const fn of(review: &Review) -> Option<Self> {
+  pub fn of(review: &Review) -> Option<Self> {
     match review {
       Review::Approved { .. } => Some(Self::Approved),
       Review::Asked { .. } => Some(Self::Asked),
+      Review::Decided { decision } if decision.approves() => Some(Self::Approved),
+      Review::Decided { .. } => Some(Self::Asked),
       Review::Failed { failure, .. } => Some(Self::Failed(*failure)),
       Review::Held { .. } => None,
     }

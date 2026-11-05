@@ -191,6 +191,7 @@ fn approval_mode_answer_a_failed_review_says_the_reviewer_could_not_run() {
       failure,
       model: Some("claude-haiku-4-5".to_owned()),
       detail: None,
+      decision: false,
     };
     for question in [ReviewQuestion::Request, ReviewQuestion::Roots] {
       let came = after_review(question, &failed).expect_err("to the person");
@@ -207,6 +208,7 @@ fn approval_mode_answer_a_failed_review_says_the_reviewer_could_not_run() {
     failure: ReviewFailure::NoReviewer,
     model: None,
     detail: None,
+    decision: false,
   };
   for question in [ReviewQuestion::Request, ReviewQuestion::Roots] {
     assert_eq!(

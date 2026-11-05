@@ -18,6 +18,58 @@ Two kinds of client call it:
   listed in `ORCHESTER_CLOUD_TRUSTED_PROXIES`. Otherwise every browser counts as the web front's one address in the
   rate limits.
 
+## Team server reviewer resource
+
+This is the team server's shared configuration contract, exported by `orchester-api`, rather than a cloud
+inference endpoint. The resource kind is `team_reviewer` (`SharedResourceKind::TeamReviewer`). Its body is core's
+`TeamReviewer`, with the same immutable, numbered versions as the other shared resource kinds:
+
+```text
+language { kind: "language",
+           connection: { kind: "connection", name, role: AgentProvider },
+           model, effort: string | null }
+decision { kind: "decision",
+           connection: { kind: "decision_connection", name, role: "decision" },
+           model, lowest_threshold: number,
+           destinations: { kind: "members_computers" } | { kind: "hosts", hosts: [exact host] } }
+```
+
+Connection references name a kind, name and role for each computer to bind locally. They carry no computer-local
+connection id, URL or credential. These named references are in the body; the version's separate `references`
+array is empty for a reviewer. Models are nonempty model identifiers; `lowest_threshold` is a finite probability
+from 0 through 1. A member may raise the effective threshold locally, never lower it. Decision destinations always
+allow servers on the member's computer; `hosts` additionally allows exactly the listed remote DNS names or IP
+addresses, case insensitive, without wildcards, schemes, ports or paths. An empty list allows no remote server.
+Language reviewers carry effort instead of a threshold or decision destinations.
+
+All paths below are under the team server's `/api/v1/projects/{project}`, with its normal project authentication:
+
+| Method and path | Access | Shape |
+| --- | --- | --- |
+| `GET /resources` | member | `Resources { resources: [SharedResource], cursor }`, including reviewer metadata and latest version number |
+| `POST /resources` | project owner or server admin | `ResourceCreate { idempotency_key, id, kind: "team_reviewer", slug, name, version: { body, references: [] } }`; `201 ResourceCreated { resource, version }` |
+| `GET /resources/{resource}/versions?after=` | member | `Versions { versions: [SharedVersion], next? }`, oldest first, at most 64 versions or 1 MiB per page |
+| `POST /resources/{resource}/versions` | project owner or server admin | `VersionPublish { idempotency_key, based_on, body, references: [] }`; `201 { version: SharedVersion }` |
+| `PATCH /resources/{resource}` | project owner or server admin | existing rename/archive `ResourcePatch` |
+
+A member's write returns `403 not_admin`. Publishing from a stale `based_on` returns `409 version_conflict`
+with the latest version. Uploading history at `POST /resources/import` uses the existing `UploadResource` and
+`UploadVersion` shapes and the same write access; the server computes each imported version's flag in number order.
+
+`SharedVersion` is `{ resource, number, body, hash, references, based_on, published, widens }`.
+The server computes `widens: boolean` with ORC-570's `TeamReviewer::widens_over` and keeps it on that immutable
+version; it is never accepted from a publisher, including on import. Compare against the preceding published
+version, or no previous body for v1. Adding a remote host or lowering an existing decision threshold widens;
+removing hosts, raising the threshold, and language reviewers do not. A first decision version, or a switch from
+language, compares destinations with members' computers and has no previous threshold to lower. Host order and case
+do not widen. Older servers may omit the flag; API readers default it to false and still compare permissions locally
+before applying a version.
+
+The existing stream carries reviewer metadata in `snapshot.begin.resources` and the existing `resource.published`,
+`resource.renamed` and `resource.archived` deltas. A publication carries the resource with its new `latest`;
+members read the body and stored flag through the versions endpoint. No additional event kind is introduced.
+The platform server and web tasks must update their repository pin to the commit containing this contract.
+
 ## Base
 
 The cloud has two addresses: its API address, which every API call goes to, and its web address (the public URL),

@@ -9,7 +9,7 @@ use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
   components::{Row, Text, TextOverflow},
   layout::Alignment,
-  node::{Element, dimension::Dimension},
+  node::{Element, Style, dimension::Dimension},
 };
 
 use crate::{
@@ -35,6 +35,8 @@ pub enum Mark {
   Stopped,
   /// The card still waits; it was folded with ✕ (`qr9ur`).
   Waiting,
+  /// A decision model approved the command (06 `xJ4Rf`).
+  Reviewer,
 }
 
 impl Mark {
@@ -46,6 +48,7 @@ impl Mark {
       Self::Ended => (Icon::Clock3, PaletteColor::TextMuted),
       Self::Stopped => (Icon::CirclePause, PaletteColor::TextMuted),
       Self::Waiting => (Icon::MessageCircleQuestion, PaletteColor::Warning),
+      Self::Reviewer => (Icon::ShieldCheck, PaletteColor::TextMuted),
     }
   }
 }
@@ -114,9 +117,15 @@ impl AnsweredLine {
   }
 
   /// The line `id` ending in `chevron`; a press runs `toggle`.
-  pub(super) fn render(&self, id: &str, chevron: Icon, toggle: impl Fn() + Send + Sync + 'static) -> Element {
+  pub fn render(&self, id: &str, chevron: Icon, toggle: impl Fn() + Send + Sync + 'static) -> Element {
     let (glyph, color) = self.mark.glyph();
-    pressable(toggle)
+    let button = pressable(toggle);
+    let button = if self.mark == Mark::Reviewer {
+      button.hovered_style(Style::new().background(crate::theme::ExtraColor::Hover.role()))
+    } else {
+      button
+    };
+    button
       .id(id.to_owned())
       .width(Dimension::Pct(100.0))
       .describe("a11y_name", self.lead.clone())
@@ -133,10 +142,19 @@ impl AnsweredLine {
               .nowrap(),
           )
           .with_children(self.chosen.as_ref().map(|chosen| {
-            Text::new(chosen)
+            let text = Text::new(chosen)
               .id(format!("{id}-chosen"))
               .variant(CardsText::Chosen.role())
-              .nowrap()
+              .nowrap();
+            if self.mark == Mark::Reviewer {
+              text
+                .variant(CardsText::AnsweredCommand.role())
+                .text_overflow(TextOverflow::Elipsis)
+                .flex_shrink(1.0)
+                .min_width(Dimension::Px(0.0))
+            } else {
+              text
+            }
           }))
           .child(
             Text::new(&self.detail)

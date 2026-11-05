@@ -26,6 +26,7 @@ mod codebase_index;
 mod connection_check;
 mod control;
 mod conversation;
+mod decision_test;
 mod environment;
 mod estimate;
 mod halt;
@@ -64,7 +65,7 @@ use std::{
 };
 
 use orchester_core::{
-  id::{ConnectionId, IdempotencyKey, RunId, TaskId},
+  id::{IdempotencyKey, RunId, TaskId},
   run::{InterruptCause, RaisedLimits, RunStatus},
   secret::SecretVault,
   store::RunStore,
@@ -145,6 +146,7 @@ impl Scheduler {
     orchester_store::pause_lock_waits_with(crate::lock_pause::pause_off_async_workers);
     // Before the desktop connects and reads the runs.
     missing_checkpoints::record(project_root);
+    crate::decision_test::recover(project_root);
     worktree_sweep::sweep_in_background(project_root.to_path_buf());
     Self {
       inner: Arc::new(Inner {
@@ -335,28 +337,6 @@ impl Scheduler {
     if result.is_err() {
       self.wait_for_plan_resets();
     }
-  }
-
-  /// Continues `run`, stopped at its account's plan limit, now on `connection`, another account's connection of
-  /// the same CLI, as a new session for the stopped step and this run only.
-  pub async fn continue_on_connection(&self, run: RunId, connection: ConnectionId) -> Result<(), Rejection> {
-    self.plan_waits().clear(run);
-    let continued = self
-      .continue_settled(run, |db, root| plan_limit::continue_on(db, root, run, connection))
-      .await;
-    self.wait_again_if_refused(&continued);
-    continued
-  }
-
-  /// Continues `run`, stopped at its account's plan limit, on the same account now, as a person asked; it stops there
-  /// again if the CLI still refuses.
-  pub async fn try_at_plan_limit(&self, run: RunId) -> Result<(), Rejection> {
-    self.plan_waits().clear(run);
-    let tried = self
-      .continue_settled(run, |db, root| plan_limit::try_now(db, root, run))
-      .await;
-    self.wait_again_if_refused(&tried);
-    tried
   }
 
   /// Raises the limits of `run`, stopped at a limit, and continues it.

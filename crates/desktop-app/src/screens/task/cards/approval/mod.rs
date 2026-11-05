@@ -1,3 +1,4 @@
+//! Requests showing the 05 review line use its 06b shell ([`shell`]). The other presentations stay below.
 //! A tool request an agent waits on (`Approval card` `gwOaJ`): on `surface_raised` in a `warning` stroke,
 //! radius 10, 14 by 16 inside and 12 between its parts: what it asks ([`request`]), its answers ([`answers`]) and
 //! what automation may do with it. One that came to the person by the run's approval mode is the compact card of
@@ -16,9 +17,13 @@ mod came;
 mod could_not_run;
 mod decided;
 mod message;
+mod message_inline;
+mod model_approved;
 mod quiet;
 mod request;
+mod review;
 mod reviewing;
+mod shell;
 mod words;
 
 use std::sync::{
@@ -58,6 +63,12 @@ struct ApprovalProps {
 impl lurq::app::component::DevtoolsInspectable for ApprovalProps {}
 
 pub(super) fn card(ctx: &mut Ctx, place: Place, card: &ApprovalCard) -> Element {
+  if model_approved::verdict(card).is_some() {
+    return ctx.mount_keyed::<model_approved::ModelApproved>(
+      &format!("cards-approval-{}", card.request.id),
+      model_approved::Props { card: card.clone() },
+    );
+  }
   if card.quiet().is_some() {
     return quiet::line(ctx, &format!("cards-approval-{}", card.request.id), card, None);
   }
@@ -85,6 +96,8 @@ struct ApprovalView {
   answer_myself: Signal<bool>,
   /// A request that came to the person shows its other answers under *Approve* and *Deny*.
   more: Signal<bool>,
+  folded: Signal<bool>,
+  hint: Signal<Option<Arc<str>>>,
 }
 
 impl Component for ApprovalView {
@@ -100,6 +113,8 @@ impl Component for ApprovalView {
       focus_field: Arc::default(),
       answer_myself: ctx.signal(false),
       more: ctx.signal(false),
+      folded: ctx.signal(false),
+      hint: ctx.signal(None),
     }
   }
 
@@ -147,43 +162,61 @@ impl Component for ApprovalView {
       Stage::Refused(refused) => Some(refusal(ctx, &id, &refused, &request.agent)),
       Stage::Sending | Stage::Taken(_) => None,
     });
-    let came = shown.as_ref().and_then(|shown| shown.came_to_person.clone());
-    let (head, body) = match &came {
-      Some(came) => {
-        let step = request::step(&place, shown.as_ref());
-        (
-          came::head(ctx, &id, (request, step.as_deref()), came),
-          request::came_body(ctx, &id, (&place, request, shown.as_ref()), (came, reviewing)),
-        )
-      }
-      None => (
-        request::head(ctx, &id, request),
-        request::body(ctx, &id, (&place, request), (shown.as_ref(), reviewing, editing)),
-      ),
-    };
-    let answers = if editing {
-      message::editor(ctx, &answering)
-    } else {
-      vec![answers::answers(ctx, &answering)]
-    };
-    // A request that came to the person keeps what automation may do with its other answers.
-    let automation = came.is_none().then(|| answers::automation(ctx, &id, shown.as_ref()));
-    let padding = Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role());
-    // In the panel its parts are 10 apart, as the item's own (`YDJsC`), and so are a request's that came to the
-    // person (`vO7CW`).
-    let gap = if place.in_panel || came.is_some() {
-      ExtraSpacing::Loose.role()
-    } else {
-      SpacingSize::Md
-    };
-    waiting_frame(&place, id.clone(), padding, || head)
-      .spacing(gap)
-      .with_children(body)
-      .with_children(answers)
-      .with_children(failed)
-      .with_children(automation)
-      .into()
+    if !place.in_panel && review::left_to_person(shown.as_ref().and_then(|shown| shown.review.as_ref())) {
+      return shell::card(ctx, self, &place, &answering, editing, failed);
+    }
+    legacy(ctx, &place, &answering, reviewing, editing, failed)
   }
+}
+
+fn legacy(
+  ctx: &mut Ctx,
+  place: &Place,
+  answering: &Answering<'_>,
+  reviewing: bool,
+  editing: bool,
+  failed: Option<Element>,
+) -> Element {
+  let (id, request, shown) = (answering.id, answering.request, answering.shown);
+  let came = shown.and_then(|shown| shown.came_to_person.clone());
+  let (head, body) = match &came {
+    Some(came) => {
+      let step = request::step(place, shown);
+      (
+        came::head(ctx, id, (request, step.as_deref()), came),
+        request::came_body(ctx, id, (place, request, shown), (came, reviewing)),
+      )
+    }
+    None => (
+      request::head(ctx, id, request),
+      request::body(ctx, id, (place, request), (shown, reviewing, editing)),
+    ),
+  };
+  let answers = if editing {
+    message::editor(ctx, answering)
+  } else {
+    vec![answers::answers(ctx, answering)]
+  };
+  // A request that came to the person keeps what automation may do with its other answers.
+  let automation = came.is_none().then(|| answers::automation(ctx, id, shown));
+  let padding = Padding::symmetric(SpacingSize::Lg, ExtraSpacing::Inset.role());
+  // In the panel its parts are 10 apart, as the item's own (`YDJsC`), and so are a request's that came to the
+  // person (`vO7CW`).
+  let gap = if place.in_panel || came.is_some() {
+    ExtraSpacing::Loose.role()
+  } else {
+    SpacingSize::Md
+  };
+  review::card(
+    waiting_frame(place, id.to_owned(), padding, || head),
+    shown.and_then(|shown| shown.review.as_ref()),
+  )
+  .spacing(gap)
+  .with_children(body)
+  .with_children(answers)
+  .with_children(failed)
+  .with_children(automation)
+  .into()
 }
 
 /// How the request was answered: as recorded, or as the runner just took the person's answer or said it no

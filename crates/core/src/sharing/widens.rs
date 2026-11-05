@@ -29,7 +29,7 @@ pub enum VersionWidening {
   Secret,
   /// A command tool's command runs what it did not, or a tool now runs a command.
   Command(CommandWidening),
-  /// An HTTP tool's address (its URL or allowed host) changed, or a tool now sends a request.
+  /// An HTTP tool's address changed, or a decision reviewer permits requests to additional hosts.
   Address,
   /// An HTTP tool's method changed.
   Method,
@@ -39,7 +39,7 @@ pub enum VersionWidening {
   Database,
   /// A database tool's query changed.
   Query,
-  /// A tool's access policy (allowed pipelines and steps, environment, approval, access window) changed.
+  /// A tool's access policy changed, or a decision reviewer's minimum approval threshold decreased.
   Access,
 }
 

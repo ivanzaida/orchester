@@ -1,5 +1,5 @@
-//! The story-point estimator ([`orchester_core::task::estimate`]) on auto mode's reviewer: the same connection,
-//! model and isolation (an empty folder the runner removes afterwards, supervised and bounded in time, or one request
+//! The story-point estimator uses the reviewer's language model, or the project's default language reviewer for a
+//! decision reviewer, in isolation (an empty folder removed afterwards, supervised and bounded in time, or one request
 //! of a native connection's client with its key from the keychain), with the estimate's instructions and schema. A
 //! task a person sized, or one whose points were made or asked from its brief and criteria as they are, asks nothing.
 //! A request that asked a model is recorded with what it spent ([`EstimateRecord`]); points are stored only where no
@@ -31,7 +31,7 @@ use tokio::runtime::Handle;
 
 use super::{
   process::{ReviewPlace, SupervisedRunner, stop_review},
-  setup::{ReviewerKeys, ReviewerSetup, reviewer_setup},
+  setup::{ReviewerKeys, ReviewerSetup, estimator_setup},
 };
 
 /// The longest an estimate may take; the estimator is stopped then, and the task gets no points.
@@ -77,7 +77,7 @@ fn estimate_blocking(
     return Ok(EstimateOutcome::TriedBefore);
   }
   let input = EstimateInput::new(task.details(), &db.calibration_records().map_err(failed)?);
-  let setup = reviewer_setup(&db, &keys).map_err(failed)?;
+  let setup = estimator_setup(&db, &keys).map_err(failed)?;
   let provider = setup.provider().map(|(provider, ..)| provider);
   let connection = setup.connection().cloned();
   let started_at = Timestamp::now();
@@ -144,7 +144,7 @@ impl ReviewerSetup {
       spend: ReviewSpend::Nothing,
     };
     match self {
-      Self::Missing => None,
+      Self::Missing | Self::Decision(_) => None,
       Self::Unreachable { model, .. } => Some((model, not_run("the reviewer cannot be reached".to_owned()))),
       Self::Native {
         client, model, effort, ..
@@ -188,6 +188,12 @@ impl ReviewerSetup {
           cli: match kind {
             ReviewerKind::Codex => EstimatorCli::Codex,
             ReviewerKind::ClaudeCode | ReviewerKind::AnthropicApi => EstimatorCli::ClaudeCode,
+            ReviewerKind::Decision => {
+              return Some((
+                model,
+                not_run("a decision model cannot estimate story points".to_owned()),
+              ));
+            }
           },
           executable,
           model: (model.clone(), effort),

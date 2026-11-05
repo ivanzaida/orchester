@@ -4,6 +4,9 @@
 
 mod browser;
 mod chat;
+mod check;
+mod decision_test;
+mod estimate;
 mod review;
 mod side;
 
@@ -19,7 +22,6 @@ use std::{
 };
 
 use orchester_core::{
-  connection::{AgentProvider, ApiEndpoint},
   id::{IdempotencyKey, RunId, StepExecutionId, TaskId},
   integration::Leftovers,
   question::GivenAnswer,
@@ -355,7 +357,8 @@ async fn answer(
     Command::DeliverMessages { run } => return later.answer(run, async move { handle.deliver_messages(run).await }),
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
     Command::StopIfIdle => return Answer::StopIfIdle(id),
-    Command::CheckConnection { provider, ref api } => return answer_check(&later, handle, provider, api.clone()),
+    Command::CheckConnection { provider, ref api } => return check::answer(&later, handle, provider, api.clone()),
+    ref command @ Command::TestDecisionConnection { .. } => return decision_test::answer(&later, handle, command),
     ref chat @ (Command::AnswerInChat { .. }
     | Command::StopChat { .. }
     | Command::CompactChat { .. }
@@ -365,23 +368,13 @@ async fn answer(
       return later.review(handle, review);
     }
     Command::Browser(ref command) => return later.browser(handle, command.clone()),
-    Command::EstimateTask { task } => return estimated(&later, handle, task),
+    Command::EstimateTask { task } => return estimate::answer(&later, handle, task),
     ref side @ (Command::AnswerSideQuestion { .. } | Command::StopSideQuestion { .. }) => {
       return side::answer_side(&later, handle, side);
     }
     Command::SetErrorReports { ref reports } => return Answer::ErrorReports(id, reports.clone()),
   };
   Answer::Reply(Event::Reply { id, reply })
-}
-
-/// Estimates the story points of `task` without holding up the runner's other requests.
-fn estimated(later: &Later<'_>, handle: Scheduler, task: TaskId) -> Answer {
-  later.reply(async move {
-    match handle.estimate_task(task).await {
-      Ok(outcome) => Reply::TaskEstimated { task, outcome },
-      Err(rejection) => Reply::Rejected(rejection),
-    }
-  })
 }
 
 /// Routes the decision commands without holding up the runner's other requests.
@@ -500,15 +493,6 @@ fn answer_question(
   let (request, answers) = (request.to_owned(), answers.to_vec());
   later.answer(run, async move {
     scheduler.answer_question(run, request, answers, by).await
-  })
-}
-
-fn answer_check(later: &Later<'_>, scheduler: Scheduler, provider: AgentProvider, api: ApiEndpoint) -> Answer {
-  later.reply(async move {
-    match scheduler.check_connection(provider, api).await {
-      Ok((result, models)) => Reply::ConnectionChecked { result, models },
-      Err(rejection) => Reply::Rejected(rejection),
-    }
   })
 }
 

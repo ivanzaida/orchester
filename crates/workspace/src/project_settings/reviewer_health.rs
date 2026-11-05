@@ -15,15 +15,19 @@ use crate::{accounts::AccountsError, workspace::Workspace};
 
 impl Workspace {
   /// The reviewer of the project at `repo_root`, as far as Orchester knows whether it can run; the default (nothing
-  /// known) for a project without one.
+  /// known) for a project without one, and for a decision model, which has no account and whose failures its own
+  /// line on the approval card says.
   pub fn reviewer_health(&self, repo_root: &Path) -> Result<ReviewerHealth, AccountsError> {
     let db = ProjectDb::open(repo_root)?;
     let (settings, connections) = (db.auto_mode_settings()?, db.connections()?);
-    let Ok(reviewer) = resolve_reviewer(&settings, &connections) else {
+    let Ok(reviewer) = resolve_reviewer(&settings, &connections, &[]) else {
       return Ok(ReviewerHealth::default());
     };
-    let account = match *reviewer.connection.kind() {
-      ConnectionKind::Agent(provider) => reviewer.connection.account().id(provider),
+    let (Some(connection), Some(provider)) = (reviewer.connection.language(), reviewer.kind.provider()) else {
+      return Ok(ReviewerHealth::default());
+    };
+    let account = match *connection.kind() {
+      ConnectionKind::Agent(provider) => connection.account().id(provider),
       ConnectionKind::GitHub { .. } => None,
     };
     let account = match account {
@@ -35,8 +39,8 @@ impl Workspace {
     };
     Ok(ReviewerHealth {
       account,
-      last_review: failure(db.last_review_end(reviewer.connection.id())?),
-      last_estimate: db.last_estimate_failure((reviewer.kind.provider(), &reviewer.model))?,
+      last_review: failure(db.last_review_end(connection.id())?),
+      last_estimate: db.last_estimate_failure((provider, &reviewer.model))?,
     })
   }
 }

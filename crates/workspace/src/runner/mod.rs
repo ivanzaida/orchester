@@ -14,6 +14,7 @@ mod browser;
 mod chat;
 mod check;
 mod connection;
+mod decision_test;
 mod estimate;
 mod idle;
 mod lifetime;

@@ -15,6 +15,8 @@ mod cards;
 mod changes;
 mod connections;
 mod conversation;
+mod decision_connections;
+mod decision_reviews;
 mod decisions;
 mod deliverables;
 mod delivery;
@@ -41,6 +43,7 @@ mod pull_requests;
 pub mod qa_app_asks;
 mod review_changed;
 mod review_page;
+mod reviewer_rows;
 mod run_context;
 mod run_model;
 pub mod settings;
@@ -106,7 +109,10 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 138] = [
+pub const ALL: [Scenario; 141] = [
+  Scenario::of("reviewer-row", reviewer_rows::seed),
+  Scenario::of("reviewer-row-local", reviewer_rows::local),
+  Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
   Scenario::of("agents", agents::seed),
   Scenario::of("agents-library", agents_library::seed),
   Scenario::of("agents-browser", agents_browser::seed),
@@ -192,6 +198,8 @@ pub const ALL: [Scenario; 138] = [
   Scenario::with_fake_codex("lifecycle", lifecycle::seed),
   Scenario::with_fake_codex("slot-wait", slot_wait::seed),
   Scenario::of("connections", connections::seed),
+  Scenario::of("decision-connections", decision_connections::seed),
+  Scenario::of("decision-connections-missing", decision_connections::missing),
   Scenario::of("api-providers", api_providers::seed),
   Scenario::of("native", native::seed),
   Scenario::of("project-settings", project_settings::seed),

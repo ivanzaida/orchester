@@ -39,13 +39,13 @@ fn project_settings_auto_save_needs_a_person_for_another_reviewer_and_keeps_narr
   let mut asked = base.clone();
   asked.reviewer = project_settings::reviewer(&settings, "", "sonnet", "").expect("B");
   assert_eq!(
-    project_settings::save_auto_mode_in(&page.repo, &base, &asked, false)
+    project_settings::save_auto_mode_in(&page.repo, &base, &asked, false, None)
       .expect_err("another reviewer from input that may not choose it")
       .key,
     "projectSettings.personOnly"
   );
   assert_eq!(db.auto_mode_settings().expect("unchanged"), base);
-  project_settings::save_auto_mode_in(&page.repo, &base, &base, false).expect("unchanged reviewer is narrow");
-  project_settings::save_auto_mode_in(&page.repo, &base, &asked, true).expect("a person's choice");
+  project_settings::save_auto_mode_in(&page.repo, &base, &base, false, None).expect("unchanged reviewer is narrow");
+  project_settings::save_auto_mode_in(&page.repo, &base, &asked, true, None).expect("a person's choice");
   assert_eq!(db.auto_mode_settings().expect("saved B"), asked);
 }

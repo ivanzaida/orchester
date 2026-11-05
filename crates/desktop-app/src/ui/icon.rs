@@ -241,6 +241,7 @@ icons! {
   Route => '\u{e53e}',
   Rows2 => '\u{e439}',
   Save => '\u{e14d}',
+  Scale => '\u{e212}',
   ScanEye => '\u{e536}',
   Scissors => '\u{e14e}',
   ScrollText => '\u{e45f}',

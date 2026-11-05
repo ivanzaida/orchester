@@ -61,7 +61,7 @@ pub fn settings(
     .collect::<Vec<_>>();
   let save = match shown {
     // A provider being added says it isn't saved yet (`Saved` `v6VzvO` in `10` `LaTB4`).
-    Shown::NewConnection(NewConnection::AgentProvider) => Some(status_line(
+    Shown::NewConnection(NewConnection::AgentProvider | NewConnection::DecisionModel) => Some(status_line(
       ctx,
       (Icon::CircleDashed, PaletteColor::TextMuted),
       "project_settings.notSavedYet",
@@ -106,7 +106,7 @@ pub fn settings(
 const fn at_root(shown: Shown) -> bool {
   match shown {
     Shown::Tab(_) => true,
-    Shown::Connections(view) => view.selected().is_none(),
+    Shown::Connections(view) => view.is_root(),
     Shown::Secrets(view) => view.secret.is_none() && matches!(view.panel, crate::routes::SecretsPanel::Inspect),
     Shown::Rules | Shown::Storage | Shown::NewConnection(_) | Shown::EditConnection(_) => false,
   }

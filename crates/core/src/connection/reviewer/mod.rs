@@ -276,6 +276,7 @@ pub fn read_claude_review(stdout: &str) -> Reviewed {
   Reviewed {
     verdict: parse_review(stdout),
     spend: claude_spend(stdout),
+    reported_model: None,
     limits,
   }
 }

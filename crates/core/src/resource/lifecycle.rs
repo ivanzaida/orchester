@@ -26,6 +26,7 @@ pub enum ResourceKind {
   TestSuite,
   Service,
   Stack,
+  TeamReviewer,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]

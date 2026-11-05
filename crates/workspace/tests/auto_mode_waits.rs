@@ -97,6 +97,7 @@ fn auto_mode_request_its_review_left_to_the_person_waits_for_them() {
     failure: ReviewFailure::TimedOut,
     model: Some("claude-haiku-4-5".to_owned()),
     detail: Some("the reviewer did not answer in time".to_owned()),
+    decision: false,
   };
   let (mut fixture, task, request) = under_review();
   fixture

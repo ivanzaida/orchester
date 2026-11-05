@@ -14,7 +14,7 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
     events::is_synthetic_input,
-    theme::{BorderSize, PaletteColor, SpacingSize},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Row, Spacer, Text},
   layout::Alignment,
@@ -43,6 +43,8 @@ pub enum WidenLook {
   Card,
   /// The question box Project settings and its tabs ask in place (`Archive · question` `fw0eT`).
   Box,
+  /// The reviewer destination question in Runs › Approvals (`Y1UUjZ`, 04 b).
+  Reviewer,
 }
 
 #[derive(Clone)]
@@ -105,6 +107,7 @@ impl Component for WidenConfirm {
     let props = ctx.props::<WidenProps>().clone();
     let (keep, confirm) = self.buttons(ctx, &props, ButtonKind::Secondary);
     match props.look {
+      WidenLook::Reviewer => reviewer_question(&props, (keep, confirm.icon(Icon::Check))),
       WidenLook::Card => card_question(&props, (keep, confirm)),
       WidenLook::Band => question(&props, (keep, confirm)),
       WidenLook::Box => crate::screens::project_settings::kit::question(
@@ -368,5 +371,51 @@ fn card_question(props: &WidenProps, (keep, confirm): (ActionButton, ActionButto
         .padding(Padding::new().top(ExtraSpacing::Snug.role()))
         .child(confirm)
         .child(keep),
+    )
+}
+
+/// The destination question keeps the person-only note beside Keep / Use (Y1UUjZ).
+fn reviewer_question(props: &WidenProps, (keep, confirm): (ActionButton, ActionButton)) -> Column {
+  let body = props.reasons.first().map(|line| {
+    Text::new(line)
+      .variant(ExtraTypography::Prose.role())
+      .width(Dimension::Pct(100.0))
+  });
+  let note = props.reasons.get(1).map(|line| {
+    Text::new(line)
+      .variant(ExtraTypography::Note.role())
+      .flex(1.0)
+      .min_width(Dimension::Px(0.0))
+  });
+  Column::new()
+    .id(props.id.to_string())
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(
+      crate::theme::ProjectSettingsSpacing::RowX.role(),
+      SpacingSize::Md,
+    ))
+    .spacing(ExtraSpacing::Loose.role())
+    .background(PaletteColor::SurfaceRaised)
+    .border_inside(BorderSize::Sm, PaletteColor::BorderStrong)
+    .rounded(RadiusSize::Md)
+    .child(
+      Row::new()
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .child(icon(Icon::Send, IconSize::Md, PaletteColor::Warning))
+        .child(
+          Text::new(&props.title)
+            .id(format!("{}-title", props.id))
+            .variant(ExtraTypography::Strong.role()),
+        ),
+    )
+    .with_children(body)
+    .child(
+      Row::new()
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .with_children(note)
+        .child(keep)
+        .child(confirm),
     )
 }

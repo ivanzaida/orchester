@@ -26,12 +26,13 @@ use crate::sharing::{SharingError, project::convert};
 
 /// The kinds Share uploads, those other resources name first: a tool before the profiles that use it, profiles before
 /// the pipelines whose steps run them.
-const KINDS: [SharedResourceKind; 5] = [
+const KINDS: [SharedResourceKind; 6] = [
   SharedResourceKind::Tool,
   SharedResourceKind::Skill,
   SharedResourceKind::Instruction,
   SharedResourceKind::AgentProfile,
   SharedResourceKind::Pipeline,
+  SharedResourceKind::TeamReviewer,
 ];
 
 /// What one import request carries at most, under the server's 1 MiB request limit; a resource whose history alone is
@@ -102,6 +103,7 @@ fn read(db: &ProjectDb) -> Result<(Vec<UploadResource>, BTreeSet<ContentHash>), 
         SharedResourceKind::AgentProfile => versions::<AgentProfile>(db, &kept, entities)?,
         SharedResourceKind::Instruction => versions::<Instruction>(db, &kept, entities)?,
         SharedResourceKind::Tool => versions::<Tool>(db, &kept, entities)?,
+        SharedResourceKind::TeamReviewer => versions::<orchester_core::resource::TeamReviewer>(db, &kept, entities)?,
         SharedResourceKind::Skill => {
           for version in db.versions::<Skill>(kept.id())? {
             parts.extend(version.body().files().iter().map(|file| file.content.clone()));
@@ -181,6 +183,7 @@ fn keep(db: &mut ProjectDb, shared: &SharedResource, versions: &[SharedVersion])
       SharedResourceKind::Instruction => keep_version::<Instruction>(db, version)?,
       SharedResourceKind::Skill => keep_version::<Skill>(db, version)?,
       SharedResourceKind::Tool => keep_version::<Tool>(db, version)?,
+      SharedResourceKind::TeamReviewer => keep_version::<orchester_core::resource::TeamReviewer>(db, version)?,
     }
   }
   Ok(())

@@ -55,15 +55,29 @@ impl Component for Runs {
     let Some(read) = loaded.shown(&self.kept, false) else {
       return page::scroll(work::pending(ctx, &loaded, bones));
     };
-    let auto = ctx.mount_keyed::<auto_mode::AutoMode>(
-      "settings-auto-mode",
-      auto_mode::Props {
-        tab: self.sections.props(&props, 0),
-        settings: read.0,
-        kept: self.kept.clone(),
+    // What Estimates names its estimator after: what the page shows, nothing while the settings cannot be read.
+    let shown = loaded.state.error.is_none().then(|| read.0.clone());
+    // A read that failed shows why with Try again in Auto mode's place, not the reviewer it last read.
+    let auto = if loaded.state.error.is_some() {
+      work::pending(ctx, &loaded, approval_bones)
+    } else {
+      ctx.mount_keyed::<auto_mode::AutoMode>(
+        "settings-auto-mode",
+        auto_mode::Props {
+          tab: self.sections.props(&props, 0),
+          settings: read.0,
+          kept: self.kept.clone(),
+        },
+      )
+    };
+    let estimates = ctx.mount_keyed::<estimates::Estimates>(
+      "project-settings-estimates",
+      estimates::Props {
+        tab: props.clone(),
+        settings: shown,
+        read_error: loaded.state.error.clone(),
       },
     );
-    let estimates = ctx.mount_keyed::<estimates::Estimates>("project-settings-estimates", props.clone());
     let limits = ctx.mount_keyed::<limits::Limits>("project-settings-limits", self.sections.props(&props, 1));
     page::scroll(
       Column::new()
@@ -77,10 +91,8 @@ impl Component for Runs {
   }
 }
 
-/// The Runs tab while its settings are read (`10 · Project settings · Runs · loading` `lUFjj`): every group heading,
-/// row label, help line and unit stays; the switches, the reviewer's connection, model and effort, the approved-rules
-/// count and the budgets and limits are bones in their own fields, the lower groups fading.
-fn bones(ctx: &mut Ctx) -> Column {
+/// Approvals' loading controls, also used while recovering from a rejected settings read.
+fn approval_bones(ctx: &mut Ctx) -> Element {
   let reviewer = Row::new()
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
@@ -107,9 +119,17 @@ fn bones(ctx: &mut Ctx) -> Column {
       .control(skeleton::chevron()),
   ]
   .map(|row| row.render(ctx));
-  let auto = Group::new("settings-auto-reading", ctx.t("project_settings.auto"))
+  Group::new("settings-auto-reading", ctx.t("project_settings.auto"))
     .rows(rows)
-    .foot(&ctx.t("project_settings.approvalsFoot"));
+    .foot(&ctx.t("project_settings.approvalsFoot"))
+    .into()
+}
+
+/// The Runs tab while its settings are read (`10 · Project settings · Runs · loading` `lUFjj`): every group heading,
+/// row label, help line and unit stays; the switches, the reviewer's connection, model and effort, the approved-rules
+/// count and the budgets and limits are bones in their own fields, the lower groups fading.
+fn bones(ctx: &mut Ctx) -> Column {
+  let auto = approval_bones(ctx);
   let row = SettingRow::new(
     "settings-estimates-reading-row",
     ctx.t("project_settings.estimates.label"),

@@ -379,6 +379,10 @@ required-features = ["test-agent"]
 name = "disk_guard"
 required-features = ["test-agent"]
 
+[[test]]
+name = "decision_review"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 
@@ -399,6 +403,7 @@ orchester-store.workspace = true
 # Reads the values of the secrets MCP servers use from the OS keychain when an agent starts.
 orchester-vault.workspace = true
 parking_lot.workspace = true
+serde.workspace = true
 serde_json.workspace = true
 # The run app relay uses a bounded loopback HTTP client and decodes/re-encodes PNGs without metadata.
 reqwest = { workspace = true, features = ["blocking"] }

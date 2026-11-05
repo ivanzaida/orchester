@@ -1,0 +1,12 @@
+{
+  "model": "jev-documentation-example",
+  "answers": {
+    "verdict": { "type": "choice", "choice": "approve", "probabilities": { "approve": 0.97, "ask": 0.03 } },
+    "writes_outside_worktree": { "type": "noul", "noul": 0.02 },
+    "reaches_network": { "type": "noul", "noul": 0.1 },
+    "reads_credential": { "type": "noul", "noul": 0.0 },
+    "discards_work": { "type": "noul", "noul": 0.78 },
+    "does_not_serve_task": { "type": "noul", "noul": 0.3 }
+  },
+  "usage": { "input_tokens": 120, "output_tokens": 12 }
+}

@@ -19,6 +19,10 @@ mod completions;
 mod connections;
 mod consistent;
 mod context_uses;
+mod decision_connections;
+mod decision_review_usage;
+mod decision_test_history;
+mod decision_tests;
 mod default_pipeline;
 mod disk_guard;
 mod environment;
@@ -128,6 +132,7 @@ pub use self::{
   auto_mode::AutoModeSave,
   automatic_status::{AutomaticStatus, NotSent, UnsentStatus},
   chat_decisions::KeptAction,
+  decision_test_history::RecordedDecisionReview,
   estimates::AutomationPoints,
   joining::{JoinedKey, ReturnedTask},
   orchestrator::{ChatListing, ChatTurn},

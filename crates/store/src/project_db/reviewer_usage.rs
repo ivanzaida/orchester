@@ -65,9 +65,9 @@ impl ProjectDb {
 
   /// The reviews of `run`'s requests, in the order they ended.
   pub fn reviewer_usage(&self, run: RunId) -> Result<Vec<ReviewRecord>, StoreError> {
-    let mut statement = self
-      .connection
-      .prepare(&format!("{SELECT} WHERE run_id = ?1 ORDER BY ended_at, id"))?;
+    let mut statement = self.connection.prepare(&format!(
+      "{SELECT} WHERE run_id = ?1 AND provider != 'decision' ORDER BY ended_at, id"
+    ))?;
     let rows = statement
       .query_map([run.to_string()], RecordRow::read)?
       .collect::<Result<Vec<_>, _>>()?;
@@ -77,7 +77,7 @@ impl ProjectDb {
   /// The reviews that ended from `since` on and reported what they spent, for the Usage dashboard.
   pub(super) fn reviews_since(&self, since: Timestamp) -> Result<Vec<ReviewUsage>, StoreError> {
     let mut statement = self.connection.prepare(&format!(
-      "{SELECT} WHERE ended_at >= ?1 AND input_tokens IS NOT NULL ORDER BY ended_at, id"
+      "{SELECT} WHERE ended_at >= ?1 AND input_tokens IS NOT NULL AND provider != 'decision' ORDER BY ended_at, id"
     ))?;
     let rows = statement
       .query_map([since.unix_millis()], RecordRow::read)?
@@ -140,18 +140,24 @@ fn usage([input, cached_input, output]: [i64; 3]) -> Result<TokenUsage, StoreErr
   })
 }
 
-const fn verdict_text(end: ReviewEnd) -> &'static str {
+pub(super) const fn verdict_text(end: ReviewEnd) -> &'static str {
   match end {
     ReviewEnd::Approved => "approved",
     ReviewEnd::Asked => "asked",
     ReviewEnd::Failed(ReviewFailure::TimedOut) => "timed_out",
     ReviewEnd::Failed(ReviewFailure::Unreadable) => "unreadable",
-    ReviewEnd::Failed(ReviewFailure::CouldNotRun) => "could_not_run",
+    ReviewEnd::Failed(
+      ReviewFailure::CouldNotRun
+      | ReviewFailure::KeyRefused
+      | ReviewFailure::NothingAnswers
+      | ReviewFailure::NotSystemOneApi
+      | ReviewFailure::ModelGone,
+    ) => "could_not_run",
     ReviewEnd::Failed(ReviewFailure::NoReviewer) => "no_reviewer",
   }
 }
 
-fn parse_verdict(text: &str) -> Result<ReviewEnd, StoreError> {
+pub(super) fn parse_verdict(text: &str) -> Result<ReviewEnd, StoreError> {
   Ok(match text {
     "approved" => ReviewEnd::Approved,
     "asked" => ReviewEnd::Asked,

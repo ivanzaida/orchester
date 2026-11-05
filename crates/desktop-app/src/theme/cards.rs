@@ -14,6 +14,8 @@ use super::typography::{mono, style};
 
 /// The answers an answered card did not choose, dimmed (`AAgL1`, `F0nR9` in `hm5wE`).
 pub const NOT_CHOSEN_OPACITY: f32 = 0.5;
+/// Risk track height in 06 (`INogI`).
+pub const RISK_TRACK_HEIGHT: f32 = 4.0;
 
 /// Text of the cards.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -44,10 +46,22 @@ pub enum CardsText {
   /// Mono 12.5 `text_secondary`, 1.5: what a request that came to the person asks, on its card (`ZNwbH` in
   /// `vO7CW`).
   Action,
+  /// Mono 12 primary, 1.5: the command or tool call in 06b (`G8YJb`).
+  Command,
+  /// 12.5 secondary, 1.4: decision review line (`Y4l5E` in 05 `JFEPS`).
+  Review,
+  /// Mono 11.5 primary, 1.4: decision probability chips (`B0Cmn`, `QkBOi`).
+  Probability,
+  /// 13 primary, 1.5: the denial message in 06b (cxLoV).
+  DenialMessage,
+  /// Mono 12 primary, 1.3: answered command and verdict in 06 (`Z0eJOB`, `x0FgN1`).
+  AnsweredCommand,
+  /// Mono 12 secondary, 1.3: the five risk values in 06 (`P1jHk`).
+  RiskValue,
 }
 
 impl CardsText {
-  pub const ALL: [Self; 12] = [
+  pub const ALL: [Self; 18] = [
     Self::Title,
     Self::ApprovalTitle,
     Self::PlanLines,
@@ -60,6 +74,12 @@ impl CardsText {
     Self::Lead,
     Self::Chosen,
     Self::Action,
+    Self::Command,
+    Self::Review,
+    Self::Probability,
+    Self::DenialMessage,
+    Self::AnsweredCommand,
+    Self::RiskValue,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -86,6 +106,12 @@ impl CardsText {
       Self::Lead => "cards_lead",
       Self::Chosen => "cards_chosen",
       Self::Action => "cards_action",
+      Self::Command => "cards_command",
+      Self::Review => "cards_review",
+      Self::Probability => "cards_probability",
+      Self::DenialMessage => "cards_denial_message",
+      Self::AnsweredCommand => "cards_answered_command",
+      Self::RiskValue => "cards_risk_value",
     }
   }
 
@@ -103,6 +129,12 @@ impl CardsText {
       Self::Lead => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
       Self::Chosen => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
       Self::Action => mono(style(12.5, FontWeight::Normal, 1.5, 0.0, palette.text_secondary)),
+      Self::Command => mono(style(12.0, FontWeight::Normal, 1.5, 0.0, palette.text_primary)),
+      Self::Review => style(12.5, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
+      Self::Probability => mono(style(11.5, FontWeight::Normal, 1.4, 0.0, palette.text_primary)),
+      Self::DenialMessage => style(13.0, FontWeight::Normal, 1.5, 0.0, palette.text_primary),
+      Self::AnsweredCommand => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
+      Self::RiskValue => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
     }
   }
 }
@@ -116,10 +148,12 @@ pub enum CardsSpacing {
   InlineEnds,
   /// 20: at the sides of the inside of an inline decision card (`yYTFc`).
   InlineSides,
+  /// 7: between decision review line items (`zrv45`, `STLJH`, `qfaGG`).
+  ReviewGap,
 }
 
 impl CardsSpacing {
-  pub const ALL: [Self; 3] = [Self::PlanHead, Self::InlineEnds, Self::InlineSides];
+  pub const ALL: [Self; 4] = [Self::PlanHead, Self::InlineEnds, Self::InlineSides, Self::ReviewGap];
 
   pub fn role(self) -> SpacingSize {
     SpacingSize::extra(self.name())
@@ -130,6 +164,7 @@ impl CardsSpacing {
       Self::PlanHead => "cards_plan_head",
       Self::InlineEnds => "cards_inline_ends",
       Self::InlineSides => "cards_inline_sides",
+      Self::ReviewGap => "cards_review_gap",
     }
   }
 
@@ -138,6 +173,7 @@ impl CardsSpacing {
       Self::PlanHead => 11.0,
       Self::InlineEnds => 18.0,
       Self::InlineSides => 20.0,
+      Self::ReviewGap => 7.0,
     }
   }
 }
