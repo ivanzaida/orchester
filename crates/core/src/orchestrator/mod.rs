@@ -24,6 +24,7 @@ pub mod sent;
 pub mod settings;
 pub mod task_event;
 pub mod wait;
+pub mod watch;
 
 pub use self::{
   chat::{
