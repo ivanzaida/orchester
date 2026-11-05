@@ -11,6 +11,7 @@
 
 mod change;
 pub mod created;
+mod ended;
 pub mod ending;
 pub mod stop;
 
@@ -20,6 +21,7 @@ use thiserror::Error;
 pub use self::{
   change::{News, Stopped, Taken, Told},
   created::created_task_watch,
+  ended::WatchEnd,
   ending::{EndReason, Ending, NeverEnds, TargetTasks},
   stop::{LeftOpen, OpenWork},
 };

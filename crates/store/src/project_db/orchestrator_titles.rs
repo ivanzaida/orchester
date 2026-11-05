@@ -5,8 +5,9 @@
 //! Deleting a conversation removes it, every entry it holds (the person's messages, the agent's replies, its actions,
 //! events, waits and reports, with the todo lists of its turns) and the attachments of its messages: an attachment
 //! row belongs to exactly one message (`attachments.chat_message_id`) and its copy is named by the attachment's own
-//! id, so the rows found by the conversation's messages and their copies are the ones it alone held. What its turns
-//! spent stays counted, and the tasks, runs and decisions it started stay as they are.
+//! id, so the rows found by the conversation's messages and their copies are the ones it alone held. Its
+//! subscriptions end, so their targets are free to lead again (ORC-758). What its turns spent stays counted, and the
+//! tasks, runs and decisions it started stay as they are.
 
 use std::path::{Path, PathBuf};
 
@@ -20,6 +21,7 @@ use rusqlite::{Connection, OptionalExtension, params};
 use super::{
   ProjectDb,
   attachments::{self, AttachmentOwner},
+  orchestrator_subscriptions::end_chat_subscriptions,
 };
 use crate::{StoreError, rows::parse};
 
@@ -65,8 +67,9 @@ impl ProjectDb {
     Ok(changed == 1)
   }
 
-  /// Deletes conversation `chat` with every entry it holds and the attachments of its messages, in one transaction,
-  /// then their copies; nothing while it is busy ([`ChatDeletion::Busy`]).
+  /// Deletes conversation `chat` with every entry it holds and the attachments of its messages, and ends its
+  /// subscriptions now, in one transaction, then removes their copies; nothing while it is busy
+  /// ([`ChatDeletion::Busy`]).
   pub fn delete_chat(&mut self, chat: ChatId) -> Result<ChatDeletion, StoreError> {
     let id = chat.to_string();
     let transaction = self.connection.transaction()?;
@@ -78,6 +81,7 @@ impl ProjectDb {
     let copies = forget_attachments(&transaction, &self.directory, chat, 0)?;
     transaction.execute("DELETE FROM orchestrator_entries WHERE chat_id = ?1", [&id])?;
     transaction.execute("DELETE FROM orchestrator_chats WHERE id = ?1", [&id])?;
+    end_chat_subscriptions(&transaction, chat, Timestamp::now())?;
     transaction.commit()?;
     attachments::remove_copies(&copies);
     Ok(ChatDeletion::Deleted)
