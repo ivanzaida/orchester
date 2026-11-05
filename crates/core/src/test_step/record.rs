@@ -238,7 +238,8 @@ fn location_of(run: &SuiteRun, name: &str) -> Option<String> {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ArtifactKind {
   Screenshot,
-  /// A recorded trace, as Playwright writes it: a `.zip` or a file named for a trace.
+  /// A recorded trace, as Playwright writes it: a `.zip`. The kind comes from the extension alone, never from the
+  /// name, so a program or a script named for a trace stays [`Self::Other`] and opens its folder.
   Trace,
   Video,
   Log,
@@ -248,14 +249,13 @@ pub enum ArtifactKind {
 impl ArtifactKind {
   pub const ALL: [Self; 5] = [Self::Screenshot, Self::Trace, Self::Video, Self::Log, Self::Other];
 
-  /// The kind of the file at `path`.
+  /// The kind of the file at `path`, by its extension.
   pub fn of(path: &str) -> Self {
     let name = path.rsplit(['/', '\\']).next().unwrap_or(path).to_ascii_lowercase();
     let extension = name.rsplit_once('.').map_or("", |(_, extension)| extension);
     match extension {
       "png" | "jpg" | "jpeg" | "gif" | "webp" | "bmp" => Self::Screenshot,
       "zip" => Self::Trace,
-      _ if name.contains("trace") => Self::Trace,
       "webm" | "mp4" | "mov" => Self::Video,
       "log" | "txt" => Self::Log,
       _ => Self::Other,

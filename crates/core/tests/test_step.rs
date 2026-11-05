@@ -329,11 +329,17 @@ fn test_step_artifacts_open_as_their_kind_or_their_folder() {
   for (path, kind) in [
     ("/runs/r/tests/t8/artifacts/test-failed-1.PNG", ArtifactKind::Screenshot),
     ("C:\\runs\\r\\trace.zip", ArtifactKind::Trace),
-    ("/runs/r/tests/t8/artifacts/network-trace.json", ArtifactKind::Trace),
     ("/runs/r/video.webm", ArtifactKind::Video),
     ("/runs/r/server.log", ArtifactKind::Log),
     ("/runs/r/setup.ps1", ArtifactKind::Other),
     ("/runs/r/report", ArtifactKind::Other),
+    // A name says nothing about what opening runs: only the extension makes a trace.
+    ("/runs/r/tests/t8/artifacts/network-trace.json", ArtifactKind::Other),
+    ("/runs/r/tests/t8/artifacts/trace.bat", ArtifactKind::Other),
+    ("/runs/r/tests/t8/artifacts/network-trace.cmd", ArtifactKind::Other),
+    ("C:\\runs\\r\\trace.exe", ArtifactKind::Other),
+    ("/runs/r/trace.lnk", ArtifactKind::Other),
+    ("/runs/r/trace", ArtifactKind::Other),
   ] {
     assert_eq!(ArtifactKind::of(path), kind, "{path}");
   }
