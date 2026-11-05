@@ -13,7 +13,7 @@ use orchester_core::{
   store::{RunStore, TaskStore},
   task::identity::TaskOwner,
 };
-use orchester_store::{AppDb, WorkReportState};
+use orchester_store::{AppDb, TeamOperationState, WorkReportState};
 use tokio::runtime::Runtime;
 
 use super::{
@@ -72,7 +72,8 @@ fn seed_team_running_states_run_kon_12_and_kon_21_here() {
 
 /// What the QA app does with the seeded data of each scenario with runs here before its window opens (ORC-732 Verify
 /// found three of them refused at startup): it joins the stand-in team and claims the seeded tasks through the
-/// dispatcher, which takes them as the team's, never as this computer's own.
+/// dispatcher, which takes them as the team's, never as this computer's own. In `team-running` KON-12's work starts
+/// through the stand-in's `work.start`, so its team run reports under the operation and work the stand-in issued.
 #[test]
 fn seed_team_scenarios_with_runs_here_start_as_the_qa_app_starts_them() {
   for state in State::ALL.into_iter().filter(|state| state.runs_here()) {
@@ -87,9 +88,10 @@ fn seed_team_scenarios_with_runs_here_start_as_the_qa_app_starts_them() {
     let qa_state = qa_team::State::beside(database)
       .expect("the marker reads")
       .expect("a team state");
-    if let Err(error) = qa_team::prepare(qa_state, services, runtime.handle()) {
-      panic!("{state:?} starts: {error}");
-    }
+    let server = match qa_team::prepare(qa_state, services, runtime.handle()) {
+      Ok(server) => server,
+      Err(error) => panic!("{state:?} starts: {error}"),
+    };
     let db = seed.db();
     let owner = db
       .task_identity(by_key(&db)["KON-12"].id())
@@ -98,6 +100,26 @@ fn seed_team_scenarios_with_runs_here_start_as_the_qa_app_starts_them() {
       .owner;
     let claimed = state != State::OutageRunning;
     assert_eq!(matches!(owner, TaskOwner::Team { .. }), claimed, "{state:?}");
+    if state == State::TeamRunning {
+      assert!(
+        server.commands().iter().any(|kind| kind == "work.start"),
+        "the stand-in started the work"
+      );
+      let runs = db.team_runs().expect("the team runs");
+      let [run] = runs.as_slice() else {
+        panic!("one team run: {runs:?}");
+      };
+      let start = db
+        .team_operation(run.operation)
+        .expect("the operation reads")
+        .expect("the start is the dispatcher's operation");
+      assert_eq!(
+        start.state,
+        TeamOperationState::Completed,
+        "its run carries its effect out"
+      );
+      assert_eq!(run.fence, None, "it reports");
+    }
     launch.end();
   }
 }

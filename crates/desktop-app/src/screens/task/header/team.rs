@@ -1,5 +1,6 @@
-//! What a team task's header offers and says (`Task header` `j8DakG` in 02 `nMUwg`, 02d `lpji3`, 03 `hWXxr`): Run,
-//! which starts through the team server, before the task has a run here; *Take over* as the primary action of someone
+//! What a team task's header offers and says (`Task header` `j8DakG` in 01c `Tb55G`, 02 `nMUwg`, 02d `lpji3`, 03
+//! `hWXxr`): Run, which starts through the team server, before the task has a run here; *Pause run* as the primary
+//! action while its run works here; *Take over* as the primary action of someone
 //! else's stale claim, asked first; *Release claim* in *More actions* while this computer holds the claim and no run of
 //! it works; and in place of the run's status line who has the task now once this computer's run lost its authority
 //! (*Taken over by mara · Run 8 stopped · output kept on this computer*), or, while this computer has no run of the
@@ -31,9 +32,10 @@ use crate::{
     },
   },
   team::pages::TeamClaim,
+  theme::{ExtraSpacing, IconSize},
   ui::{
     button::ButtonKind,
-    icon::Icon,
+    icon::{Icon, icon},
     pressable::Press,
     status::{Status, StatusChip},
   },
@@ -75,10 +77,20 @@ pub fn take_over(ctx: &mut Ctx, task: &TaskContext) -> Option<Control> {
   };
   Some(Control::new(
     ctx,
-    ("task-take-over", "summary.team.claim.takeOver", Icon::Hand),
+    ("task-take-over", "summary.team.claim.takeOver", Icon::HandHelping),
     ButtonKind::Primary,
     offer,
   ))
+}
+
+/// *Pause run* as the primary action while a team task's run works here (`Primary action` in 01c `Tb55G`, a `pause`
+/// on `accent`); `None` for a local task, whose Pause run stays in *More actions*, and while nothing pauses.
+pub fn pause(task: &TaskContext, pause: Option<&Control>) -> Option<Control> {
+  task.team.as_ref()?;
+  let mut pause = pause?.clone();
+  pause.kind = ButtonKind::Primary;
+  pause.icon = Icon::Pause;
+  Some(pause)
 }
 
 /// *Release claim* while this computer holds the task's own claim and no run of it works here.
@@ -117,7 +129,10 @@ pub fn status_line(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
     (None, Some(claim)) if task.detail.run.is_none() && !claim.here => elsewhere(ctx, team, claim)?,
     _ => return None,
   };
-  let chip = StatusChip::new("task-status", status).words(words);
+  let chip = match status {
+    Some(status) => StatusChip::new("task-status", status).words(words).render(ctx),
+    None => stopped_chip(&words),
+  };
   Some(
     Row::new()
       .id("task-status-row")
@@ -125,7 +140,7 @@ pub fn status_line(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
       .min_width(Dimension::Px(0.0))
       .spacing(SpacingSize::Sm)
       .align_items(Alignment::Center)
-      .child(chip.render(ctx))
+      .child(chip)
       .child(
         Text::new(&about)
           .id("task-run-line")
@@ -137,8 +152,29 @@ pub fn status_line(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
   )
 }
 
-/// What a status line says: the chip's status and words, and the line after it.
-type Said = (Status, Arc<str>, Arc<str>);
+/// What a status line says: the chip's status (`None` for a run stopped for good by the team server) and words, and
+/// the line after it.
+type Said = (Option<Status>, Arc<str>, Arc<str>);
+
+/// The chip of a run the team server stopped for good: a 13 `circle-stop` and its `words` in 12/500, both in `danger`
+/// (`Status line` in 03 `hWXxr`), which no run status names.
+fn stopped_chip(words: &str) -> Element {
+  Row::new()
+    .id("task-status")
+    .min_width(Dimension::Px(0.0))
+    .spacing(ExtraSpacing::Pair.role())
+    .align_items(Alignment::Center)
+    .describe("status", "stopped")
+    .child(icon(Icon::CircleStop, IconSize::Base, PaletteColor::Danger).id("task-status-icon"))
+    .child(
+      Text::new(words)
+        .id("task-status-label")
+        .variant(TypographyStyle::Label)
+        .color(PaletteColor::Danger)
+        .nowrap(),
+    )
+    .into()
+}
 
 /// The status of this computer's run whose authority the server fenced: who has the task now, and that the run stopped
 /// with its output kept here.
@@ -159,7 +195,7 @@ fn lost(ctx: &Ctx, task: &TaskContext) -> Option<Said> {
     (_, None) => ctx.t("task.team.unassigned"),
   };
   let about = ctx.t_args("task.team.stopped", [("run", run.run.number().get().to_string())]);
-  Some((Status::Canceled, words, about))
+  Some((None, words, about))
 }
 
 /// What the server says of the work on the task while another computer holds its claim: Running there with when it
@@ -169,7 +205,7 @@ fn elsewhere(ctx: &Ctx, team: &TeamTaskShown, claim: &TeamClaim) -> Option<Said>
   let time = moment(ctx, claim.renewed);
   if claim.stale {
     return Some((
-      Status::Interrupted,
+      Some(Status::Interrupted),
       ctx.t("task.team.staleClaim"),
       ctx.t_args("task.team.lastRenewed", [("holder", holder), ("time", time.as_str())]),
     ));
@@ -183,7 +219,7 @@ fn elsewhere(ctx: &Ctx, team: &TeamTaskShown, claim: &TeamClaim) -> Option<Said>
     ctx.t_args("task.team.runningOn", [("holder", holder)])
   };
   Some((
-    Status::Running,
+    Some(Status::Running),
     words,
     ctx.t_args("task.team.lastReport", [("time", time.as_str())]),
   ))

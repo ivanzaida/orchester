@@ -52,6 +52,9 @@ pub fn status_line(ctx: &mut Ctx, task: &TaskContext) -> Element {
   let (status, about) = chip_words(ctx, task);
   let chip = StatusChip::new("task-status", status);
   let chip = match about {
+    // A run at work names its step after a dot, as one that stopped does after *at* (`Running · 03 Implement` in
+    // 01c `Tb55G`).
+    Some(About::Step(step)) if status == Status::Running => chip.detail(step),
     Some(About::Step(step)) => {
       let words = ctx.t_args("task.status.at", [("status", ctx.t(status.key())), ("step", step)]);
       chip.words(words)

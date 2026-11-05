@@ -193,10 +193,12 @@ impl TaskHeader {
       Some(take_over) => Some(take_over),
       None => primary::primary(ctx, &props.task, &props.view, shown.moves.clone()),
     };
+    // A team task's run at work here pauses from the primary action (01c `Tb55G`).
+    let primary = primary.or_else(|| team::pause(&props.task, shown.pause.as_ref()));
+    let not_primary = |control: &controls::Control| primary.as_ref().is_none_or(|primary| primary.id != control.id);
     // The control that moves the run on goes in the menu while a card's action is the primary one.
-    let moves = shown
-      .moves
-      .filter(|moves| primary.as_ref().is_none_or(|primary| primary.id != moves.id));
+    let moves = shown.moves.filter(not_primary);
+    let pause = shown.pause.filter(not_primary);
     let run_again = run_again::button(
       ctx,
       check,
@@ -216,7 +218,7 @@ impl TaskHeader {
       Held {
         controls: moves
           .into_iter()
-          .chain(shown.pause)
+          .chain(pause)
           .chain(release)
           .chain(shown.cancel)
           .collect(),

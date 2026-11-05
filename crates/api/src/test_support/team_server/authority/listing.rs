@@ -102,7 +102,7 @@ fn authority_task(task: &AuthorityTask, (project, key): (&str, &str), state: &St
 }
 
 /// The work of task `id` numbered `number` under `claim`, in `state` (`running`, `awaiting_human`, …).
-fn work_read((id, number): (&str, u32), claim: AuthorityClaim, state: &str) -> Value {
+pub(super) fn work_read((id, number): (&str, u32), claim: AuthorityClaim, state: &str) -> Value {
   let at = Timestamp::now().unix_millis();
   json!({"id": format!("0191c7c0-0000-7000-8000-0000004{number:05x}"), "subject": {"kind": "task", "id": id},
     "claim_id": claim.id(number), "revision": 1, "state": state, "runs": [],

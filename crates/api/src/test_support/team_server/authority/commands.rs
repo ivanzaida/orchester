@@ -1,16 +1,16 @@
 //! The stand-in's commands, operations and policy under `/api/v2` (`docs/claim-authority.md`, `module-branches.md`,
 //! `operation-receipts.md` and `workspace-policy.md` of the platform), for the QA states and tests that act on a team
 //! project: `claim.acquire`, `claim.take_over` and `claim.release` of a task or a module, `module.branch.set`,
-//! `delivery.authorize`, `delivery.request` and `delivery.report`, each kept by its operation id with its request and
-//! answered again unchanged, another request under the same id `409 operation_mismatch`; `GET operations/{id}`; and
-//! `GET`/`PATCH policy`. The person reading holds what they took in their one session here. A command can meet a
-//! [`Plan`] instead of its rule once, as when someone else acted first. Each committed command invalidates the lists,
-//! the modules and the workspace on the subscription.
+//! `work.start` and `work.report` ([`execution`]), `delivery.authorize`, `delivery.request` and `delivery.report`, each
+//! kept by its operation id with its request and answered again unchanged, another request under the same id `409
+//! operation_mismatch`; `GET operations/{id}`; and `GET`/`PATCH policy`. The person reading holds what they took in
+//! their one session here. A command can meet a [`Plan`] instead of its rule once, as when someone else acted first.
+//! Each committed command invalidates the lists, the modules and the workspace on the subscription.
 
 use serde_json::{Value, json};
 
 use super::{
-  Authority, AuthorityClaim, Person, Standing,
+  Authority, AuthorityClaim, Person, Standing, execution,
   listing::task_id,
   work::{BranchChange, module_id, module_number},
 };
@@ -27,7 +27,7 @@ pub enum Plan {
 }
 
 /// A refusal's status and code.
-type Refused = (u16, &'static str);
+pub(super) type Refused = (u16, &'static str);
 
 /// The generations the claims acquired here are numbered from, past those the reads set and their take-overs.
 const ISSUED_FROM: u8 = 0x80;
@@ -123,6 +123,8 @@ fn carry_out(authority: &mut Authority, (project, operation): (&str, &str), comm
     "claim.acquire" | "claim.take_over" => take(authority, kind, command),
     "claim.release" => release(authority, command),
     "module.branch.set" => branch(authority, project, command),
+    "work.start" => execution::start(authority, command),
+    "work.report" => execution::report(authority, command),
     "delivery.authorize" | "delivery.request" | "delivery.report" => deliver(authority, (operation, kind), command),
     _ => Err((422, "invalid")),
   }

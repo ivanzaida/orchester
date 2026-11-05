@@ -11,6 +11,7 @@
 //! server admins [`TeamServer::members_named`] gives.
 
 mod commands;
+mod execution;
 mod listing;
 mod work;
 
@@ -340,7 +341,7 @@ const CLIENT_PATHS: [(&str, &str); 3] = [
 /// Answers one `/api/v2` request on `stream`: `line` is its request line, `headers` its headers in lowercase. The
 /// routes are the team server's: `GET workspace`, `GET capabilities`, `GET subscription`, `POST task-list`, `POST
 /// task-counts`, `GET tasks/{task}`, `POST module-list`, `GET modules/{module}` and `GET modules/{module}/progress`,
-/// and the commands, an operation and the policy ([`commands`]);
+/// the commands, an operation and the policy ([`commands`]), and the heartbeat ([`execution`]);
 /// the client's own paths for some of them are answered as those ([`CLIENT_PATHS`]). A request without the token is
 /// `401` and one for a project the server has not `404`, in the common `{error, message}` envelope, as the server
 /// answers them; an outage is `503 unavailable` in the authority envelope.
@@ -395,6 +396,10 @@ pub(super) fn serve(stream: &mut TcpStream, (line, headers, body): (&str, &str, 
     ("GET", operation) if operation.starts_with("operations/") => {
       let id = operation.trim_start_matches("operations/");
       let (status, answer) = commands::operation(&state.lock().authority, id);
+      respond(stream, status, &answer);
+    }
+    ("POST", "heartbeat") => {
+      let (status, answer) = execution::heartbeat(&mut state.lock().authority, body);
       respond(stream, status, &answer);
     }
     ("GET", "policy") => respond(stream, 200, &commands::policy(&state.lock().authority)),

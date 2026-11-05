@@ -50,6 +50,37 @@
     "team": {
       "readOnly": "Only Admins change this task: {{admins}}. You read it, run it and claim it.",
       "readOnlyUnnamed": "Only Admins change this task. You read it, run it and claim it.",
+      "run": {
+        "onHolder": "{{pipeline}} · on {{holder}}'s computer",
+        "onYourOther": "{{pipeline}} · on your other computer",
+        "notStarted": "{{pipeline}} · not started",
+        "holder": "Its steps and conversation stay on {{holder}}'s computer; the team server only knows the run is {{state}} · last report {{time}}.",
+        "yourOther": "Its steps and conversation stay on your other computer; this computer sees what the team server reports · {{state}} · last report {{time}}.",
+        "stale": "The team server last heard from {{holder}}'s run at {{time}} · paused or closed there. Its steps stay on their computer.",
+        "holderNotStarted": "No run yet. {{holder}} holds the claim, so the run starts on their computer.",
+        "yourOtherNotStarted": "No run yet. Your other computer holds the claim, so the run starts there.",
+        "underModule": "No run yet. {{holder}} starts it under their module claim; its runs merge into {{branch}}.",
+        "underModuleNoBranch": "No run yet. {{holder}} starts it under their module claim.",
+        "state": {
+          "running": "Running",
+          "paused": "Paused",
+          "awaitingHuman": "Waiting for a person",
+          "succeeded": "Succeeded",
+          "failed": "Failed",
+          "cancelled": "Canceled"
+        }
+      },
+      "stopped": {
+        "none": "Run {{run}} stopped in {{step}}. It reports nothing more to the team server ({{why}}); it stays here to read.",
+        "one": "Run {{run}} stopped in {{step}}. The team server refused its unsent report ({{why}}); it stays here to read, not sent again.",
+        "other": "Run {{run}} stopped in {{step}}. The team server refused its {{count}} unsent reports ({{why}}); they stay here to read, not sent again.",
+        "noStep": "its pipeline",
+        "why": {
+          "claimLost": "claim lost",
+          "removed": "membership removed",
+          "superseded": "a newer run carries the work on"
+        }
+      },
       "claim": {
         "hereTitle": "Claimed by you on this computer",
         "hereDetail": "{{computer}} holds the claim and the running step renews it · renewed {{time}} · stale after {{minutes}} min without renewal.",
@@ -126,7 +157,8 @@
         "notClaimed": "Not claimed",
         "you": "{{name}} (you)",
         "here": "You · this computer",
-        "yours": "You",
+        "staleAt": "You · stale at {{time}}",
+        "elsewhere": "You · other computer",
         "stale": "{{holder}} · stale"
       }
     },

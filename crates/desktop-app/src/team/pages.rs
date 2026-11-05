@@ -88,7 +88,8 @@ pub struct Abilities {
 
 /// A team task as its page shows it: the task, its revision, the slug of a pipeline this computer has none for, its
 /// assignee, its claim, the state of the work under it and what the person may do with it; and the team runs of the
-/// project the server fenced on this computer, with why, which the page finds its latest run among.
+/// project the server fenced on this computer, with why and how many of their reports it never took, which the page
+/// finds its latest run among.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TeamTask {
   pub task: Task,
@@ -99,6 +100,7 @@ pub struct TeamTask {
   pub work: Option<ExecutionState>,
   pub abilities: Abilities,
   pub fences: Vec<(RunId, TeamFence)>,
+  pub unsent: Vec<(RunId, usize)>,
 }
 
 /// A team module as its row and its page show it: the module, its revision, its progress and forecast as the server
@@ -251,6 +253,7 @@ fn team_task_of(read: &TaskRead, slugs: &listed::PipelineSlugs, who: &Who) -> Re
     work: read.work.as_ref().map(|work| work.state),
     abilities: abilities(&read.capabilities, Subject::Task { id: read.task.id }),
     fences: who.here.fences.clone(),
+    unsent: who.here.unsent.clone(),
   })
 }
 

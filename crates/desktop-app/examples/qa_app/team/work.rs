@@ -1,22 +1,27 @@
 //! What the ORC-732 states change of Kontur's tasks and modules on the stand-in team server, what it meets first, and
 //! what this computer holds once it joined (`Team authority · redesign` `BZc66` rows 2–5 and 7): the claims it took
-//! here, taken through the dispatcher as the Task page takes them; the team runs the server fenced, as this computer
-//! keeps them; and the module branch a delivery takes. Fixture data for QA, never shipped.
+//! here, taken through the dispatcher as the Task page takes them; the team run of `team-running`, whose work starts
+//! through the dispatcher's `work.start` as the Task page's Run starts it; the team runs the server fenced, as this
+//! computer keeps them; and the module branch a delivery takes. Fixture data for QA, never shipped.
 
 use std::{collections::HashMap, error::Error, path::Path, process::Command};
 
 use orchester_api::{
   test_support::team_server::{AuthorityClaim, AuthorityModule, AuthorityTask, Person, Plan, TeamServer},
-  v2::Subject,
+  v2::{AuthorityRef, Subject, TeamCommandValue},
 };
 use orchester_app::services::Services;
 use orchester_core::{
-  id::{ClaimId, ModuleId, OperationId, ProjectId, ServerId, TaskId},
+  id::{ClaimId, ModuleId, OperationId, ProjectId, ServerId, TaskId, WorkId},
+  run::CommitId,
+  sharing::TaskRevision,
   store::RunStore,
   time::Timestamp,
 };
-use orchester_store::ProjectDb;
-use orchester_workspace::actions::{Action, ActionOutcome, ClaimAction, Dispatcher, Intent, TeamOutcome};
+use orchester_store::{ProjectDb, TeamSettlement};
+use orchester_workspace::actions::{
+  Accepted, Action, ActionOutcome, ClaimAction, Dispatcher, Intent, TeamOutcome, WorkAction,
+};
 use tokio::runtime::Handle;
 
 use super::State;
@@ -53,18 +58,31 @@ const HELD_HERE: [u32; 4] = [12, 21, 14, 24];
 /// The team runs of `team-claims` the server fenced, by their task's number, with why.
 const FENCED: [(u32, &str); 2] = [(11, "claim_lost"), (23, "session_mismatch")];
 
+/// The index of Webhooks v2 among the modules, which KON-12 is in.
+const WEBHOOKS: usize = 0;
 /// The index of Billing exports among the modules, the person's on this computer.
 const BILLING: usize = 1;
 
+/// The base a start names when the checkout has no commit of its own, as in a headless test: fixture data, which the
+/// stand-in takes as it takes any commit.
+const NO_HEAD: &str = "0000000000000000000000000000000000000000";
+
+/// What a team run records of the start that made it: its operation, and the claim and work it reports under.
+type Authorized = (OperationId, ClaimId, WorkId);
+
 /// `task` as `state` has it on the server.
 pub fn task(state: State, task: &mut AuthorityTask) {
-  if state != State::Claims {
-    return;
-  }
-  if let Some((_, claim, work)) = CLAIMS.iter().find(|(number, ..)| *number == task.number) {
-    task.claim = *claim;
-    task.work = *work;
-    task.assignee = claim.map(|claim| claim.holder);
+  match state {
+    // KON-12 has no work yet: its start here makes it.
+    State::TeamRunning if task.number == 12 => task.work = None,
+    State::Claims => {
+      if let Some((_, claim, work)) = CLAIMS.iter().find(|(number, ..)| *number == task.number) {
+        task.claim = *claim;
+        task.work = *work;
+        task.assignee = claim.map(|claim| claim.holder);
+      }
+    }
+    _ => {}
   }
 }
 
@@ -100,7 +118,8 @@ pub fn plan(state: State, server: &TeamServer) {
 }
 
 /// What this computer holds in `state` once Kontur at `root` joined `server` as `id`: the claims it took here, the team
-/// runs the server fenced, and the module branch a delivery takes; `ids` are Kontur's tasks here by number.
+/// runs it started and those the server fenced, and the module branch a delivery takes; `ids` are Kontur's tasks here
+/// by number.
 pub fn after_join(
   state: State,
   (server, id): (&TeamServer, ServerId),
@@ -119,7 +138,8 @@ pub fn after_join(
       if state == State::TeamRunning
         && let Some(task) = local(ids, 12)?
       {
-        team_run(root, (task, claim), None)?;
+        let authorized = start_here((&dispatcher, runtime), root, (task, claim))?;
+        team_run(root, task, authorized, None)?;
       }
     }
     State::Claims => {
@@ -131,7 +151,10 @@ pub fn after_join(
       server.claim_aged(24, 22, true);
       for (number, fence) in FENCED {
         if let Some(task) = local(ids, number)? {
-          team_run(root, (task, ClaimId::generate()), Some(fence))?;
+          // Their claims are someone else's now, or this person's in another session: the ids only name what the
+          // fenced runs reported under, and nothing reports under them again.
+          let authorized = (OperationId::generate(), ClaimId::generate(), WorkId::generate());
+          team_run(root, task, authorized, Some(fence))?;
         }
       }
     }
@@ -151,14 +174,56 @@ fn claim_here(dispatcher: &Dispatcher, runtime: &Handle, subject: Subject) -> Re
   let intent = Intent::new(Action::Claim(ClaimAction::Acquire { subject }));
   // The dispatcher holds the project database across its awaits: it runs here, on the thread that sets the state up.
   let outcome = runtime.block_on(dispatcher.dispatch(&intent))?;
-  let ActionOutcome::Team(TeamOutcome::Completed(orchester_workspace::actions::Accepted::Command(receipt))) = outcome
-  else {
+  let ActionOutcome::Team(TeamOutcome::Completed(Accepted::Command(receipt))) = outcome else {
     return Err(format!("the stand-in did not give the claim: {outcome:?}").into());
   };
   match receipt.result {
-    orchester_api::v2::TeamCommandValue::Claim { claim, .. } => Ok(claim.id),
+    TeamCommandValue::Claim { claim, .. } => Ok(claim.id),
     other => Err(format!("the stand-in answered a claim with {other:?}").into()),
   }
+}
+
+/// Starts KON-12's work, `task` here, under `claim` through the dispatcher's `work.start`, as the Task page's Run sends
+/// it once its choices are made: from the checkout's head, in Webhooks v2 as first read. The stand-in issues the work;
+/// its start effect is this computer's run of the task, so the operation is settled completed, as `team_work` settles
+/// it once the start's run is recorded.
+fn start_here(
+  (dispatcher, runtime): (&Dispatcher, &Handle),
+  root: &Path,
+  (task, claim): (TaskId, ClaimId),
+) -> Result<Authorized, Box<dyn Error>> {
+  let base_commit = match head(root)? {
+    Some(head) => head,
+    None => CommitId::new(NO_HEAD)?,
+  };
+  let intent = Intent::new(Action::Work(WorkAction {
+    authority: AuthorityRef {
+      subject: Subject::Task { id: task },
+      claim_id: claim,
+      work_id: None,
+    },
+    base_commit,
+    read: TaskRevision::FIRST,
+    module: module_id(WEBHOOKS)?,
+    module_read: TaskRevision::FIRST,
+  }));
+  let outcome = runtime.block_on(dispatcher.dispatch(&intent))?;
+  let ActionOutcome::Team(TeamOutcome::AcceptedPending { receipt, .. }) = outcome else {
+    return Err(format!("the stand-in did not start the work: {outcome:?}").into());
+  };
+  let TeamCommandValue::Work { work, .. } = &receipt.result else {
+    return Err(format!("the stand-in answered a start with {:?}", receipt.result).into());
+  };
+  let operation = receipt.operation_id;
+  let mut db = ProjectDb::open(root)?;
+  let kept = db.team_operation(operation)?.ok_or("the dispatcher kept the start")?;
+  let text = kept.receipt.ok_or("the dispatcher kept the start's receipt")?;
+  db.settle_team_operation(
+    operation,
+    TeamSettlement::Completed { receipt: &text },
+    Timestamp::now(),
+  )?;
+  Ok((operation, claim, work.id))
 }
 
 /// The id here of the task numbered `number`, when this computer has it.
@@ -205,20 +270,23 @@ fn module_id(index: usize) -> Result<ModuleId, Box<dyn Error>> {
   Ok(format!("0191c7c0-0000-7000-8000-0000002{index:05x}").parse()?)
 }
 
-/// Records the latest run of `task` as a team run under `claim`, as a start through the team server leaves it, fenced
-/// for `fence` when one is given: the records `team_work` keeps of a start that reached its run.
-fn team_run(root: &Path, (task, claim): (TaskId, ClaimId), fence: Option<&str>) -> Result<(), Box<dyn Error>> {
+/// Records the latest run of `task` as the team run of the start `authorized` names, as a start through the team server
+/// leaves it, fenced for `fence` when one is given: the records `team_work` keeps of a start that reached its run. The
+/// stand-in's bundles are all the zero hash. A fenced run keeps two reports the server never took, as 03 `hWXxr`
+/// counts them: the one it refused with the fence, and the one never sent after it.
+fn team_run(
+  root: &Path,
+  task: TaskId,
+  (operation, claim, work): Authorized,
+  fence: Option<&str>,
+) -> Result<(), Box<dyn Error>> {
   let run = ProjectDb::open(root)?
     .runs_of_task(task)?
     .into_iter()
     .last()
     .ok_or("the seed gave the task a run")?
     .map_err(|_| "the seed's run reads")?;
-  let (operation, work, now) = (
-    OperationId::generate(),
-    ClaimId::generate(),
-    Timestamp::now().unix_millis(),
-  );
+  let now = Timestamp::now().unix_millis();
   let connection = rusqlite::Connection::open(root.join(".orchester").join("orchester.db"))?;
   connection.execute(
     "INSERT INTO team_starts (operation_id, task_id, request, stage, work_id, bundle_sha256, run_id, created_at, \
@@ -232,44 +300,75 @@ fn team_run(root: &Path, (task, claim): (TaskId, ClaimId), fence: Option<&str>) 
       now
     ],
   )?;
+  let unsent = if fence.is_some() { 2 } else { 0 };
   connection.execute(
     "INSERT INTO team_runs (run_id, operation_id, team_task_id, claim_id, work_id, next_sequence, fence, fenced_at) \
-     VALUES (?1, ?2, ?3, ?4, ?5, 1, ?6, ?7)",
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
     rusqlite::params![
       run.id().to_string(),
       operation.to_string(),
       task.to_string(),
       claim.to_string(),
       work.to_string(),
+      unsent + 1,
       fence,
       fence.map(|_| now)
     ],
   )?;
+  if let Some(fence) = fence {
+    let refusal = format!(r#"{{"code":"{fence}","details":{{}}}}"#);
+    for (sequence, refused) in [(1, Some(refusal.as_str())), (2, None)] {
+      connection.execute(
+        "INSERT INTO work_report_outbox (event_id, run_id, sequence, operation_id, outcome, request, state, refusal, \
+         created_at, settled_at) VALUES (?1, ?2, ?3, ?4, '{}', '{}', ?5, ?6, ?7, ?8)",
+        rusqlite::params![
+          orchester_core::id::WorkEventId::generate().to_string(),
+          run.id().to_string(),
+          sequence,
+          OperationId::generate().to_string(),
+          if refused.is_some() { "refused" } else { "pending" },
+          refused,
+          now,
+          refused.map(|_| now)
+        ],
+      )?;
+    }
+  }
   Ok(())
 }
 
-/// Makes `branch` at the checkout's head, as an Admin's first assignment of the module named it. Only in a repository
-/// whose top is the checkout itself and that has a commit: a headless test's checkout is none, and git would find the
-/// repository of a folder above it instead, which is never this scenario's to change.
+/// Makes `branch` at the checkout's head, as an Admin's first assignment of the module named it, when the checkout has
+/// a head of its own ([`head`]).
 fn branch(root: &Path, branch: &str) -> Result<(), Box<dyn Error>> {
-  let git = || {
-    let mut git = Command::new("git");
-    git.arg("-C").arg(root);
-    git
-  };
-  let top = git().args(["rev-parse", "--show-toplevel"]).output()?;
-  let top = String::from_utf8_lossy(&top.stdout);
-  let ours = !top.trim().is_empty() && Path::new(top.trim()).canonicalize().ok() == root.canonicalize().ok();
-  if !ours {
+  if head(root)?.is_none() {
     return Ok(());
   }
-  let head = git().args(["rev-parse", "--verify", "--quiet", "HEAD"]).output()?;
-  if !head.status.success() {
-    return Ok(());
-  }
-  let made = git().args(["branch", branch]).status()?;
+  let made = git(root).args(["branch", branch]).status()?;
   if !made.success() {
     return Err(format!("git did not make {branch}").into());
   }
   Ok(())
+}
+
+/// The commit the checkout at `root` has checked out. Only in a repository whose top is the checkout itself and that
+/// has a commit: a headless test's checkout is none, and git would find the repository of a folder above it instead,
+/// which is never this scenario's to read or change.
+fn head(root: &Path) -> Result<Option<CommitId>, Box<dyn Error>> {
+  let top = git(root).args(["rev-parse", "--show-toplevel"]).output()?;
+  let top = String::from_utf8_lossy(&top.stdout);
+  let ours = !top.trim().is_empty() && Path::new(top.trim()).canonicalize().ok() == root.canonicalize().ok();
+  if !ours {
+    return Ok(None);
+  }
+  let head = git(root).args(["rev-parse", "--verify", "--quiet", "HEAD"]).output()?;
+  if !head.status.success() {
+    return Ok(None);
+  }
+  Ok(Some(CommitId::new(String::from_utf8_lossy(&head.stdout).trim())?))
+}
+
+fn git(root: &Path) -> Command {
+  let mut git = Command::new("git");
+  git.arg("-C").arg(root);
+  git
 }

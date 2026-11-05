@@ -7,7 +7,7 @@ use std::path::Path;
 
 use orchester_api::v2::TeamCommandValue;
 use orchester_core::id::{ClaimId, RunId};
-use orchester_store::{ProjectDb, StoreError, TeamFence};
+use orchester_store::{ProjectDb, StoreError, TeamFence, WorkReportState};
 
 use crate::actions::Receipt;
 
@@ -18,6 +18,9 @@ pub struct TeamHere {
   pub claims: Vec<ClaimId>,
   /// The team runs the server fenced, with why.
   pub fences: Vec<(RunId, TeamFence)>,
+  /// How many work reports of each fenced run the server never acknowledged: refused, or never sent once the fence
+  /// stopped its reporting. They stay here to read.
+  pub unsent: Vec<(RunId, usize)>,
 }
 
 impl TeamHere {
@@ -60,15 +63,22 @@ pub fn team_here(root: &Path) -> Result<TeamHere, StoreError> {
       _ => {}
     }
   }
-  let mut fences = Vec::new();
+  let (mut fences, mut unsent) = (Vec::new(), Vec::new());
   for run in db.team_runs()? {
     match run.fence {
-      Some(fence) => fences.push((run.run, fence)),
+      Some(fence) => {
+        fences.push((run.run, fence));
+        let reports = db.work_reports(run.run)?;
+        let open = reports
+          .iter()
+          .filter(|report| report.state != WorkReportState::Acknowledged);
+        unsent.push((run.run, open.count()));
+      }
       None => claims.push(run.claim),
     }
   }
   claims.retain(|claim| !released.contains(claim));
   claims.sort_unstable();
   claims.dedup();
-  Ok(TeamHere { claims, fences })
+  Ok(TeamHere { claims, fences, unsent })
 }

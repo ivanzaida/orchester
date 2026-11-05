@@ -13,7 +13,10 @@ use lurq::{
 
 use super::properties::{Look, row, value};
 use crate::{
-  screens::task::{TaskContext, team_controls},
+  screens::{
+    settings::orchester::moment,
+    task::{TaskContext, team_controls},
+  },
   team::{
     lock,
     pages::{TeamClaim, TeamPerson},
@@ -59,7 +62,7 @@ pub fn first_rows(ctx: &Ctx, task: &TaskContext) -> Vec<Element> {
     property(
       "task-property-claim",
       &ctx.t("summary.team.properties.claim"),
-      claim(ctx, team.task.claim.as_ref()),
+      claim(ctx, team.task.claim.as_ref(), super::claim::unrenewed(task)),
     ),
   ]
 }
@@ -108,8 +111,11 @@ fn assignee(ctx: &Ctx, assignee: Option<&TeamPerson>) -> Element {
   }
 }
 
-/// *You · this computer*, *You*, the holder, or *olha · stale* in `warning`; *Not claimed* without a claim.
-fn claim(ctx: &Ctx, claim: Option<&TeamClaim>) -> Element {
+/// *You · this computer*, the holder, or *olha · stale* in `warning`; *You · stale at 15:35* with an `hourglass` in
+/// `warning` while nothing renews this computer's claim (`u6gvz`); *You · other computer* with a
+/// `monitor-smartphone` while the person's claim is another computer's (02b `XbNXU`, 03c `W6Ncf`); *Not claimed*
+/// without a claim.
+fn claim(ctx: &Ctx, claim: Option<&TeamClaim>, unrenewed: bool) -> Element {
   let id = "task-property-claim";
   let Some(claim) = claim else {
     return value(id, &ctx.t("summary.team.properties.notClaimed"), Look::Muted).into();
@@ -121,12 +127,30 @@ fn claim(ctx: &Ctx, claim: Option<&TeamClaim>) -> Element {
     );
     return glyphed(id, (Icon::UserRoundCheck, PaletteColor::Warning), &words);
   }
-  let words = match (claim.holder.you, claim.here) {
-    (true, true) => ctx.t("summary.team.properties.here"),
-    (true, false) => ctx.t("summary.team.properties.yours"),
-    (false, _) => claim.holder.name.as_str().into(),
-  };
-  glyphed(id, (Icon::UserRoundCheck, PaletteColor::Success), &words)
+  match (claim.holder.you, claim.here) {
+    (true, true) if unrenewed => {
+      let words = ctx.t_args(
+        "summary.team.properties.staleAt",
+        [("time", moment(ctx, claim.stale_at))],
+      );
+      glyphed(id, (Icon::Hourglass, PaletteColor::Warning), &words)
+    }
+    (true, true) => glyphed(
+      id,
+      (Icon::UserRoundCheck, PaletteColor::Success),
+      &ctx.t("summary.team.properties.here"),
+    ),
+    (true, false) => glyphed(
+      id,
+      (Icon::MonitorSmartphone, PaletteColor::TextSecondary),
+      &ctx.t("summary.team.properties.elsewhere"),
+    ),
+    (false, _) => glyphed(
+      id,
+      (Icon::UserRoundCheck, PaletteColor::Success),
+      claim.holder.name.as_str(),
+    ),
+  }
 }
 
 fn person_words(ctx: &Ctx, person: &TeamPerson) -> std::sync::Arc<str> {

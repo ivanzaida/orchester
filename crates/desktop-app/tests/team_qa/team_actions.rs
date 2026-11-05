@@ -1,10 +1,11 @@
 //! A team project's actions on its pages (ORC-732, `Team authority · redesign` `BZc66` rows 2–5 and 7), on the QA
 //! app's `team-claims`, `team-module-work`, `team-admin-work` and `team-version-refused` states with the stand-in
-//! team server's commands: the Task page's claim line in each state the server reads, Claim of a task nobody holds,
-//! Take over of a stale claim asked first and refused when its holder renewed it first; the Module page's take over
-//! refused while a task of it runs; an Admin's branch change refused for a taken branch, for running work and for
-//! someone else's change first; Automatic merge changed by someone else first, and its value for a member; and the
-//! refusal of this version of Orchester.
+//! team server's commands: the Task page's claim line in each state the server reads, the run the server reports of
+//! a task another computer holds and its claim's property, Claim of a task nobody holds, Take over of a stale claim
+//! asked first and refused when its holder renewed it first; the Module page's take over refused while a task of it
+//! runs; an Admin's branch change refused for a taken branch, for running work and for someone else's change first;
+//! Automatic merge changed by someone else first, and its value for a member; and the refusal of this version of
+//! Orchester.
 //!
 //! `cargo test -p orchester-app --test team_qa team_qa_actions`
 
@@ -71,6 +72,59 @@ fn team_qa_actions_the_claim_line_says_who_holds_each_task() {
     assert_eq!(claim_title(&mut window, title), title, "{key}");
   }
   assert!(window.texts("task-team-claim-take").is_none(), "KON-24 is the person's");
+}
+
+/// 02 `nMUwg`, 02b `XbNXU`, 02c `l82OS`, 02d `lpji3`: a task another computer holds has the run its server reports in
+/// place of *No runs yet*, and nothing to start here.
+#[test]
+fn team_qa_actions_a_claim_held_elsewhere_shows_the_run_its_server_reports() {
+  let (mut window, _server) = on(State::Claims, task_route("KON-13"), "task-event-text");
+  for (key, meta, event) in [
+    (
+      "KON-13",
+      "· on mara's computer",
+      "stay on mara's computer; the team server only knows the run is Running",
+    ),
+    (
+      "KON-10",
+      "· on your other computer",
+      "stay on your other computer; this computer sees what the team server",
+    ),
+    (
+      "KON-19",
+      "· not started",
+      "No run yet. olha starts it under their module claim",
+    ),
+    (
+      "KON-16",
+      "· on mara's computer",
+      "The team server last heard from mara's run at",
+    ),
+  ] {
+    go(&mut window, task_route(key), "task-team-claim-title");
+    window.until(event, |window| {
+      window
+        .texts("task-event-text")
+        .is_some_and(|texts| texts.concat().contains(event))
+    });
+    let shown = window.text("task-run-meta");
+    assert!(shown.ends_with(meta), "{key}: {shown}");
+    assert!(window.texts("task-summary-empty").is_none(), "{key} has no empty state");
+    assert!(window.texts("task-empty-start").is_none(), "{key} starts nothing here");
+  }
+}
+
+/// 02b `XbNXU`, 03c `W6Ncf`: the person's claim another computer holds reads so in the properties, never as this
+/// computer's. (The headless Kontur has none of the QA app's seeded runs, so a fenced run's stop is the QA app's.)
+#[test]
+fn team_qa_actions_the_persons_claim_on_another_computer_reads_so() {
+  let (mut window, _server) = on(State::Claims, task_route("KON-23"), "task-property-claim-label");
+  for key in ["KON-23", "KON-10"] {
+    go(&mut window, task_route(key), "task-property-claim-label");
+    window.until("the other computer", |window| {
+      window.text("task-property-claim-label") == "You · other computer"
+    });
+  }
 }
 
 #[test]

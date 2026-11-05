@@ -200,7 +200,8 @@ fn start_task(shown: &TeamTaskShown, claim: Option<ClaimId>, project: String) ->
 }
 
 /// Whether the task's work can start here now: a team task without a run here that has not ended, which this computer
-/// holds or may claim.
+/// holds, or which nobody holds and it may claim. A claim another computer holds, the person's own on their other
+/// computer too, starts nothing here (02 `nMUwg`, 02b `XbNXU`).
 pub fn can_run(task: &TaskContext) -> bool {
   let Some(team) = &task.team else {
     return false;
@@ -210,8 +211,20 @@ pub fn can_run(task: &TaskContext) -> bool {
     .run
     .as_ref()
     .is_some_and(|run| !run.run.status().is_terminal());
-  let held = team.task.claim.as_ref().is_some_and(|claim| claim.here && !claim.stale);
-  !runs_here && (held || team.task.abilities.acquire)
+  let startable = match &team.task.claim {
+    Some(claim) => claim.here && !claim.stale,
+    None => team.task.abilities.acquire,
+  };
+  !runs_here && startable
+}
+
+/// The claim another computer holds on the task while this computer has no run of it: someone else's, the person's
+/// own on their other computer, or its module's; nothing starts here under it.
+pub fn held_elsewhere(task: &TaskContext) -> Option<&crate::team::pages::TeamClaim> {
+  if task.detail.run.is_some() {
+    return None;
+  }
+  task.team.as_ref()?.task.claim.as_ref().filter(|claim| !claim.here)
 }
 
 /// Take over's question (`Dialog` `he6ir` in `02e`), while it is open and the claim as read again can still be taken
@@ -232,7 +245,7 @@ pub fn take_over_dialog(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
   let key = task.key.to_string();
   let holder = claim.holder.name.as_str();
   let computer = device::computer_name();
-  let pipeline = pipeline_name(task);
+  let pipeline = pipeline_version(ctx, task);
   let mut lines = vec![
     dialog::line(
       "task-take-over-claim",
@@ -257,7 +270,7 @@ pub fn take_over_dialog(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
   }
   let (open, ask) = (controls.taking_over.clone(), controls.clone());
   let confirm = ActionButton::new(TAKE_OVER, ButtonKind::Primary, ctx.t("summary.team.claim.takeOver"))
-    .icon(Icon::Hand)
+    .icon(Icon::HandHelping)
     .on_click(move || {
       if ask.person.allows(TAKE_OVER) {
         open.set(false);
@@ -270,7 +283,7 @@ pub fn take_over_dialog(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
   );
   let dialog = Dialog::new(
     "task-take-over",
-    Icon::Hand,
+    Icon::HandHelping,
     title,
     ctx.t("summary.team.takeOver.cancel"),
   )
@@ -283,18 +296,37 @@ pub fn take_over_dialog(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
 
 /// The task's pipeline by its name on this computer, or the slug the server names it by.
 pub fn pipeline_name(task: &TaskContext) -> String {
+  published(task)
+    .map(|(name, _)| name)
+    .or_else(|| task.detail.missing_pipeline.clone())
+    .unwrap_or_default()
+}
+
+/// The task's pipeline by its name and the version a run of it starts from on this computer (*Feature delivery v3*),
+/// or as [`pipeline_name`] names it without one.
+pub fn pipeline_version(ctx: &Ctx, task: &TaskContext) -> String {
+  match published(task) {
+    Some((name, version)) => ctx
+      .t_args(
+        "summary.properties.pipelineValue",
+        [("pipeline", name), ("version", version)],
+      )
+      .to_string(),
+    None => pipeline_name(task),
+  }
+}
+
+/// The name and the latest published version of the task's pipeline on this computer.
+fn published(task: &TaskContext) -> Option<(String, String)> {
   let pipeline = task.detail.task.details().pipeline;
-  let named = match task.project.feed.tasks.get() {
+  match task.project.feed.tasks.get() {
     crate::project::TasksState::Ready(tasks) => tasks
       .pipelines
       .iter()
       .find(|published| Some(published.id) == pipeline)
-      .map(|published| published.name.to_string()),
+      .map(|published| (published.name.to_string(), published.version.to_string())),
     _ => None,
-  };
-  named
-    .or_else(|| task.detail.missing_pipeline.clone())
-    .unwrap_or_default()
+  }
 }
 
 /// What the last ask came to, when it did not do what was asked (`DpoZG` in `02f`), with Try again.

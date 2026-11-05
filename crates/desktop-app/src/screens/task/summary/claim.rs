@@ -106,6 +106,16 @@ fn mine<'a>(task: &'a TaskContext, claim: &'a TeamClaim) -> Line<'a> {
   }
 }
 
+/// Whether this computer holds the task's claim and nothing renews it now, its run waiting for the person or in
+/// review (D1): the claim goes stale at its `stale_at`.
+pub fn unrenewed(task: &TaskContext) -> bool {
+  let Some(claim) = task.team.as_ref().and_then(|team| team.task.claim.as_ref()) else {
+    return false;
+  };
+  let mine_here = claim.holder.you && claim.here && !claim.under_module;
+  mine_here && fenced(task).is_none() && matches!(mine(task, claim), Line::NotRenewed(..))
+}
+
 fn strip(ctx: &mut Ctx, task: &TaskContext, line: &Line<'_>) -> Strip {
   let key = task.key.to_string();
   let id = "task-team-claim";
@@ -362,7 +372,7 @@ pub fn take_over_button(ctx: &mut Ctx, allowed: bool) -> Option<ActionButton> {
     ButtonKind::Secondary,
     ctx.t("summary.team.claim.takeOver"),
   )
-  .icon(Icon::Hand)
+  .icon(Icon::HandHelping)
   .small();
   Some(if controls.pending() {
     button.loading()

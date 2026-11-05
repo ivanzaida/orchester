@@ -47,4 +47,5 @@ async fn team_work_here_holds_what_this_computer_took_until_it_lets_go_or_loses_
   crate::take_over(&server, held).await;
   work.heartbeat().await.expect("sent");
   assert_eq!(here().fence(run), Some(TeamFence::ClaimLost), "taken over");
+  assert_eq!(here().unsent, [(run, 0)], "every report it queued was acknowledged");
 }
