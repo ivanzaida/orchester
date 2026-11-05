@@ -217,7 +217,7 @@ impl ProjectDb {
   }
 
   /// Sets the CLI session `chat`'s turns continue, on `connection` and its `account`. Another session than the one
-  /// before starts with an empty context: the reading of the one before is forgotten.
+  /// before starts with an empty context: the reading of the one before is forgotten, and the window its CLI reported.
   pub fn set_chat_session(
     &mut self,
     chat: ChatId,
@@ -228,7 +228,9 @@ impl ProjectDb {
       "UPDATE orchestrator_chats SET session = ?2, session_connection_id = ?3, session_account_id = ?4,
          context_used = CASE WHEN session IS ?2 THEN context_used END,
          context_window = CASE WHEN session IS ?2 THEN context_window END,
-         context_estimated = CASE WHEN session IS ?2 THEN context_estimated END
+         context_estimated = CASE WHEN session IS ?2 THEN context_estimated END,
+         reported_window = CASE WHEN session IS ?2 THEN reported_window END,
+         reported_window_model = CASE WHEN session IS ?2 THEN reported_window_model END
        WHERE id = ?1",
       params![chat.to_string(), session, connection.to_string(), account.to_string()],
     )?;

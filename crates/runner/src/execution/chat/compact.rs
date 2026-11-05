@@ -156,7 +156,7 @@ impl Turn {
       Err(error) => return failed_with(cannot(error.to_string())),
     };
     let mut seen = Seen::default();
-    let mut stream = ClaudeStream::chat();
+    let mut stream = ClaudeStream::chat().carrying(started.carried_window);
     let mut boundary = false;
     let limit = tokio::time::sleep(self.time_limit);
     tokio::pin!(limit);

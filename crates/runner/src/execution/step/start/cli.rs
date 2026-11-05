@@ -53,6 +53,8 @@ pub(super) struct CliCommand {
   pub(super) mcp_file: Option<PrivateFile>,
   pub(super) app_server: Option<AppServerSetup>,
   pub(super) tool_relay: Option<Listening>,
+  /// The context window Claude Code's stream carries from the session it resumes ([`RunTask::carried_window`]).
+  pub(super) carried_window: Option<u64>,
 }
 
 /// What decides the CLI's arguments besides its prompt and MCP servers.
@@ -152,6 +154,7 @@ impl RunTask {
           mcp_file: None,
           app_server: Some(app),
           tool_relay: Some(listening),
+          carried_window: None,
         })
       }
       McpSetup::Claude(servers) => {
@@ -161,9 +164,24 @@ impl RunTask {
           mcp_file,
           app_server: None,
           tool_relay: None,
+          carried_window: self.carried_window(cli.resume, cli.model)?,
         })
       }
     }
+  }
+
+  /// The context window Claude Code reported for `session`, the session the invocation resumes, in an earlier
+  /// invocation of the run on `model`: Claude Code reports one only in a turn's result, so the resumed session's
+  /// readings before it use this one instead of the table's estimate (ORC-704). `None` for a new session, or for one
+  /// no invocation on `model` reported a window of: a window of another model is never carried.
+  fn carried_window(&self, session: Option<&str>, model: &ModelId) -> Result<Option<u64>, RunnerProblem> {
+    let Some(session) = session else {
+      return Ok(None);
+    };
+    self
+      .db
+      .session_reported_window(self.run.id(), session, model)
+      .map_err(|error| problem(format!("cannot read the session's context window: {error}")))
   }
 
   /// `mcp` with a name of its own in Codex for each server named like one Codex's configuration already has
