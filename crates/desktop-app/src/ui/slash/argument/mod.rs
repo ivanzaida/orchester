@@ -12,7 +12,7 @@ mod picker;
 use std::sync::Arc;
 
 use lurq::{
-  app::{ctx::Ctx, events::KeyboardEvent},
+  app::{component::DevtoolsInspectable, ctx::Ctx, events::KeyboardEvent},
   node::Element,
 };
 
@@ -82,6 +82,8 @@ pub(super) struct Arguing {
   /// Its picker is open.
   pub(super) picking: bool,
 }
+
+impl DevtoolsInspectable for Arguing {}
 
 /// The rows the picker shows now, as the keys read them, and the one with the focus.
 #[derive(Clone, Debug, Default)]
