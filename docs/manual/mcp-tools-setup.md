@@ -155,8 +155,8 @@ A given `program` is examined before any gate, without running it, and saved as 
 through a link that leads there; refused before anything reads it), `program_not_found` when no file is there,
 `program_not_a_file` for a folder, `program_not_executable` on macOS for a file without an execute permission
 (`chmod +x`), and `program_unreadable` when it cannot be examined. Without `program`, when no copy is found, `program_not_found` names
-the folders searched, in search order (on macOS: the inherited `PATH`, the login shell's `PATH`, then the usual
-install folders).
+the folders searched, in search order (on Windows: the inherited `PATH`, then the `Path` Windows keeps for the
+machine and the user; on macOS: the inherited `PATH`, the login shell's `PATH`, then the usual install folders).
 
 | Parameter      | Type                    | Req. | Description                                                                  |
 |----------------|-------------------------|------|------------------------------------------------------------------------------|

@@ -3,9 +3,7 @@
 //! order they are searched after the inherited `PATH`. Only install folders that exist are used.
 
 use std::{
-  env,
-  ffi::OsString,
-  fs,
+  env, fs,
   io::{self, IsTerminal},
   path::{Path, PathBuf},
   process::Command as Process,
@@ -131,15 +129,12 @@ fn known() -> Option<LoginShellPath> {
 /// inherits, then the login shell's and the usual folders, then the folder of `program` (the file
 /// that starts), so a CLI finds the Node.js installed beside it.
 pub(crate) fn apply(process: &mut Process, command: &Command, program: &Path) {
-  let set = command
-    .env()
-    .iter()
-    .rev()
-    .find(|(key, _)| key == "PATH")
-    .map(|(_, value)| OsString::from(value));
-  let path = set.or_else(|| command.inherits_env().then(|| env::var_os("PATH")).flatten());
   let install = usual_folders(home().as_deref());
-  let mut search = SearchPath::merge(path.as_deref(), &login_shell_folders(), &install);
+  let mut search = SearchPath::merge(
+    super::command_path(command).as_deref(),
+    &login_shell_folders(),
+    &install,
+  );
   if let Some(folder) = program.parent().filter(|folder| folder.is_absolute()) {
     search = search.with_program_folder(folder);
   }
