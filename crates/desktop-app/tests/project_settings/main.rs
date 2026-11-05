@@ -21,6 +21,7 @@ mod reviewer_authority;
 mod reviewer_refresh;
 mod run_fixture;
 mod service_editor;
+mod service_sections;
 mod services;
 mod sources;
 mod storage;

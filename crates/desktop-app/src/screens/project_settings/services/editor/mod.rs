@@ -1,24 +1,33 @@
 //! A service's page under Project settings › Services, for a new service and an existing one (`02 · Service editor`
 //! `TGRTt`; `docs/architecture/agent-testing.md`): the crumb back to Services and the head, then in a 720 pane the
 //! Program group (program with whether it is found, arguments one per line, working folder, variables plain or a
-//! project secret by name) and Needs (chips, *Add a service* and the start-order chain) ([`fields`], [`needs`]), and
-//! at the pane's end Delete with the draft's state and Publish ([`actions`], [`delete`]); beside the pane the *Start
-//! order* card. Readiness, seed, per-run data, the UI driver, owned paths and approval are not edited here yet: what
-//! the service holds of them is kept as stored.
+//! project secret by name) and Needs (chips, *Add a service* and the start-order chain) ([`fields`], [`needs`]),
+//! Readiness, Seed, Per-run data, UI driver and Owned paths ([`readiness`], [`seed`], [`run_data`], [`ui_driver`],
+//! [`owned`], their fields in [`sections`]), whether a start asks for approval ([`approval`]), and at the pane's end
+//! Delete with the draft's state and Publish ([`actions`], [`delete`]); beside the pane the *Start order*, *Values in a
+//! run* and *Agents use it with* cards ([`aside`]).
 //!
 //! The draft saves as a person leaves a field, as the rest of Project settings does, and its status says at the
 //! page's title; a new service is made with its first save, and its page then opens under its id. Every value is
 //! checked by the core type it becomes and refused in place (`orchester_workspace::agent_testing::editor::form`);
-//! placeholders that name a service it does not need are said in place too, and keep Publish waiting. A service runs
-//! its program with the person's rights, so lurq's synthetic input (an MCP client driving the window) makes one,
-//! changes what it runs or publishes it only under *Let automation change agent permissions*, as
-//! `save_service_draft` and `publish_service` do: what such input typed into those fields otherwise is put back as the
-//! draft next saves, whoever's input saves it.
+//! placeholders that cannot be used are said in place too, and keep Publish waiting. A service runs its program and
+//! its seed with the person's rights, so lurq's synthetic input (an MCP client driving the window) makes one, changes
+//! what it runs or publishes it only under *Let automation change agent permissions*, as `save_service_draft` and
+//! `publish_service` do: what such input typed into those fields otherwise is put back as the draft next saves,
+//! whoever's input saves it.
 
 mod actions;
+mod approval;
+mod aside;
 mod delete;
 mod fields;
 mod needs;
+mod owned;
+mod readiness;
+mod run_data;
+mod sections;
+mod seed;
+mod ui_driver;
 mod variables;
 
 use std::{path::PathBuf, sync::Arc};
@@ -239,6 +248,7 @@ impl Component for Editor {
     let view = self.view(stored);
     self.status(&props.tab, &view);
     let commit = self.commit(root);
+    let sections = &self.fields.sections;
     let pane = Column::new()
       .id("settings-service-editor")
       .width(Dimension::Px(PANE_WIDTH))
@@ -248,12 +258,21 @@ impl Component for Editor {
       .child(head(ctx, &view))
       .child(fields::program_group(ctx, &self.fields, &view, &commit))
       .child(needs::needs_group(ctx, &self.fields, &view, &commit))
+      .child(readiness::readiness_group(ctx, sections, &view, &commit))
+      .child(seed::seed_group(ctx, sections, &view, &commit))
+      .child(run_data::run_data_group(ctx, sections, &view, &commit))
+      .child(ui_driver::ui_driver_group(ctx, sections, &view, &commit))
+      .child(owned::owned_group(ctx, sections, &view, &commit))
+      .with_children(approval::approval_group(ctx, &view))
       .child(actions::actions(ctx, self, &props, &view));
     let aside = Column::new()
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
       .padding(Padding::new().top(Dimension::Px(ASIDE_TOP)))
-      .with_children(needs::start_order_card(ctx, &view));
+      .spacing(ExtraSpacing::Tabs.role())
+      .with_children(needs::start_order_card(ctx, &view))
+      .with_children(aside::values_card(ctx, &view))
+      .with_children(aside::tools_card(ctx, &view));
     let deleting = self
       .deleting
       .get()

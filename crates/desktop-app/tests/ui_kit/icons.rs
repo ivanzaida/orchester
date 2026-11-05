@@ -216,3 +216,16 @@ fn memory_settings_icon_matches_bundled_font_name() {
     "settings-2"
   );
 }
+
+/// The glyphs of a service's seed requests: the handle that moves one and a capture's mark (`RCySH`, `j3gveD` in
+/// `TGRTt`).
+#[test]
+fn seed_request_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  for (icon, name) in [
+    (Icon::GripVertical, "grip-vertical"),
+    (Icon::CornerDownRight, "corner-down-right"),
+  ] {
+    assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
+  }
+}

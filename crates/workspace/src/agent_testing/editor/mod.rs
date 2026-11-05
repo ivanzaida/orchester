@@ -12,7 +12,8 @@ use std::path::Path;
 use orchester_core::{
   id::ResourceId,
   resource::{Removal, RemoveMode, ResourceKind, VersionNumber},
-  service::Service,
+  run::ProjectRule,
+  service::{Service, ServiceApproval},
   store::ResourceStore,
   time::Timestamp,
 };
@@ -36,6 +37,37 @@ pub struct EditorRead {
   /// What its draft is saved on ([`crate::drafts::draft_revision`]); a save made on it goes over no other change.
   pub revision: Option<String>,
   pub services: Vec<Entry<Service>>,
+  /// What the project's active *Approve for every run* rules approve of this service: one fingerprint each.
+  pub approved: Vec<ServiceApproval>,
+}
+
+/// Whether a start of a service asks a person (`docs/architecture/agent-testing.md`, "Service › approval").
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ApprovalState {
+  /// No rule of the project approves it: its first start asks.
+  NotApproved,
+  /// A rule approves it as it is now: starts are approved without asking.
+  Approved,
+  /// A rule approved it before its program, arguments, variables or seed changed: the next start asks again.
+  Changed,
+}
+
+impl EditorRead {
+  /// Whether a start of `service`, this page's service as its fields make it, asks a person.
+  pub fn approval(&self, service: &Service) -> ApprovalState {
+    let now = ServiceApproval::of(service);
+    if self
+      .approved
+      .iter()
+      .any(|approved| approved.fingerprint == now.fingerprint)
+    {
+      ApprovalState::Approved
+    } else if self.approved.is_empty() {
+      ApprovalState::NotApproved
+    } else {
+      ApprovalState::Changed
+    }
+  }
 }
 
 /// What the page of service `id`, or of a new one, opens with.
@@ -49,16 +81,22 @@ pub fn load_in(root: &Path, id: Option<ResourceId>) -> Result<EditorRead, Messag
         latest: None,
         revision: None,
         services,
+        approved: Vec::new(),
       });
     };
     let entry = services.iter().find(|entry| entry.id == id).cloned();
     let latest = db.latest_version::<Service>(id)?.map(|version| version.body().clone());
     let revision = revision_of::<Service>(&db, id)?;
+    let rules = db.project_approval_rules()?;
+    let approved = entry
+      .as_ref()
+      .map_or_else(Vec::new, |entry| approved_of(&rules, &entry.name));
     Ok(EditorRead {
       entry,
       latest,
       revision: Some(revision),
       services,
+      approved,
     })
   };
   let read = read().map_err(|error| store_error(&error))?;
@@ -66,6 +104,17 @@ pub fn load_in(root: &Path, id: Option<ResourceId>) -> Result<EditorRead, Messag
     return Err(Message::new("services.editor.errors.gone"));
   }
   Ok(read)
+}
+
+/// What the active rules of `rules` approve of the service `name`.
+fn approved_of(rules: &[ProjectRule], name: &str) -> Vec<ServiceApproval> {
+  rules
+    .iter()
+    .filter(|rule| rule.is_active())
+    .filter_map(|rule| rule.scope.service())
+    .filter(|service| service.name == name)
+    .cloned()
+    .collect()
 }
 
 /// What a save stored: the service's id and the revision the next save is made on.
