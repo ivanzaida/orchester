@@ -3,7 +3,7 @@
 //! state. Every field is sent; one without a value is `null`, and an unknown field is refused.
 
 use orchester_core::{
-  id::{ModuleId, TagId, TaskId},
+  id::{ModuleId, ReleaseId, TagId, TaskId},
   sharing::TaskRevision,
   task::{
     TaskStatus,
@@ -52,6 +52,8 @@ struct TaskReadWire {
   blocked_reason: Option<String>,
   #[serde(deserialize_with = "nullable")]
   module: Option<ModuleId>,
+  #[serde(deserialize_with = "nullable")]
+  release: Option<ReleaseId>,
   #[serde(with = "wire::Status")]
   status: TaskStatus,
   has_run: bool,
@@ -84,6 +86,7 @@ impl From<TaskReadWire> for TaskRead {
       blocking: wire.blocking,
       blocked_reason: wire.blocked_reason,
       module: wire.module,
+      release: wire.release,
     };
     Self {
       task: SharedTask {
@@ -141,6 +144,7 @@ impl From<TaskRead> for TaskReadWire {
       blocking: content.blocking,
       blocked_reason: content.blocked_reason,
       module: content.module,
+      release: content.release,
       status,
       has_run,
       created,

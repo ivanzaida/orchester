@@ -662,6 +662,60 @@ modules and which tasks are in them. The server calls core's module rules and ad
   and each move the server kept with its sequence there (`module_changes.server_sequence`). They are written only from
   what the server confirmed; the local writes of modules refuse a shared project.
 
+## Releases (team authority)
+
+Releases (`docs/design/roadmap.md`: what ships, when, and as which version) belong to the team server while a project
+is shared, as its modules do, together with each task's release and each module's horizon (decision 7): every member
+sees the same releases and roadmap. This is the public contract the server's *Roadmap and releases · team authority*
+module (platform OP-177…OP-195) builds against; the wire shapes and routes are in
+[cloud-api.md](../cloud-api.md#team-authority-releases). It supersedes ORC-468, which described the old replica model:
+nothing here is cached from an event stream, the desktop reads the S10 routes and drops a read when S11 names its
+scope. It changes the task and module reads (a task's `release`, a module's `horizon` and `place`, each required) in
+one coordinated breaking upgrade with no compatibility window.
+
+Core's release (ORC-461) has not landed; core holds only what the shapes need: `id::ReleaseId`,
+`release::ReleaseDetails` (a `Name`, a trimmed description, an optional planned day), `release::ReleaseState`
+(`planned`, `released`) and `module::Horizon` (`now`, `next`, `later`, default `later`). The order of releases, the
+move on *Mark released* and the changelog's composition are stated here and come to core with ORC-461.
+
+| Part | Shared as |
+| --- | --- |
+| Release | `SharedRelease`: id (made by the desktop, UUIDv7), name (unique in the project without regard to case), description, planned day, state, released on, by and commit (a released one only; the commit core's full `CommitId`), revision, created and updated by and at |
+| A task's release | `release`: a field of `TaskContent` (so `SharedTask`, `TaskRead`) and `TaskChanges`, changed under the task's revision like its module; at most one release per task, whatever its module |
+| History | `ReleaseChange { sequence, task, from, to, by, actor, at }` for every move into, out of or between releases, append-only, read by the burndown and the task's history; *Mark released*'s moves are `orchester`'s, a person's moves and a delete's are `person`'s |
+| Changelog | The release's document (Markdown with its block ids, core's `docs::blocks`), the tasks hidden from it and the edited entries kept aside, changed as a whole under the release's revision |
+| Horizon | `horizon` and `place` in `ModuleFields`, so in the module create and patch; a new module is in `later` |
+| Reads | The release list (by state) with each release's progress, task count, forecast, whether the forecast is after its planned day and how many days it is overdue; one release; its progress; its burndown with the forecast; its history; its changelog; the task list by release |
+
+- **Who changes them.** Release definitions are the team's planning, so only a workspace Admin or a server admin
+  writes them: create, change, *Mark released*, delete and the changelog. A member gets `403 not_admin`, as for task
+  definitions under team authority (Authority S3). Moving a task into or out of a release is a task edit, under the
+  task route's rule. Every member, and a server admin, reads them.
+- **Revisions.** A release write names the release's revision and replaces its fields as a whole; a mismatch is `409
+  revision_conflict` with the current release, and the desktop then refuses its change as changed meanwhile, as for a
+  module. The changelog's patch names the release's revision too and raises it. A task's move that meets a newer task
+  revision goes on the task as it is now, as a module move does.
+- **Mark released** records the server's day, who marked it and the commit (optional). The release keeps its Done
+  tasks; every other task but the Canceled moves to the next planned release (planned releases with a day by day, then
+  those without one in creation order; the first after this one), or out of any release when there is none, each move
+  in the answer and in the history. Released is final: no change, changelog edit, move in or out, or delete. Its
+  changelog is frozen as it was.
+- **Delete** is for a planned release only: its tasks are left without a release (each a move by the person) and its
+  changelog goes.
+- **Refusals.** `409 release_exists { release }`, `422 release { reason }` (`released`, `release_not_found`), `409
+  revision_conflict { current }`, `422 invalid` (a name or a day that is not one), `409 id_taken`, `403 not_admin`.
+- **Idempotency.** Each definition write carries an idempotency key, answered again with its first answer, as a module
+  create and change are.
+- **Scopes.** `release_list` and `release {release}` join S11's scopes; a write of a release invalidates both, a move
+  the release it left and the one it joined, and *Mark released* the release the tasks moved to.
+- **Progress, burndown and forecast** are served (S10), counted by core's module rules over the release's tasks; this
+  replaces the replica model's "each desktop computes them".
+
+Open, not decided: where *Mark released*'s commit picker reads the base branch's recent commits from (the desktop's
+checkout, or the server), and the time zone a server counts days in (the released day, overdue days, the burndown).
+The stand-in team server of `orchester_api::test_support` serves this contract for the tests; the desktop's store,
+workspace and screens adopt it later (roadmap R2–R4).
+
 ## Shared run progress
 
 S3's live run status, extended by row 29. The holder's desktop reports the progress of the task's latest run whenever

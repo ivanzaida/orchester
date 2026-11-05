@@ -108,8 +108,8 @@ fn route(
       "id": task, "number": 7, "key": "KON-7", "former_key": null, "revision": 1, "title": "Say hello",
       "brief": "Append one line.", "criteria": ["README.md ends with hello"], "pipeline": pipeline.to_string(),
       "limits": null, "workflow": "todo", "priority": "medium", "tags": [], "blocking": [], "blocked_reason": null,
-      "module": module, "status": "queued", "has_run": false, "created": attribution(), "updated": attribution(),
-      "claim": null, "run": null, "assignee": null, "work": null, "effective_claim": null,
+      "module": module, "release": null, "status": "queued", "has_run": false, "created": attribution(),
+      "updated": attribution(), "claim": null, "run": null, "assignee": null, "work": null, "effective_claim": null,
       "capabilities": capabilities(project)
     })
   };
@@ -117,6 +117,7 @@ fn route(
     json!({
       "module": {
         "id": module, "name": "Webhooks", "description": "", "start": null, "target": null, "state": "open",
+        "horizon": "later", "place": 0,
         "revision": 1, "created": attribution(), "updated": attribution(), "branch": MODULE_BRANCH,
         "assignee": null, "work": null, "effective_claim": null, "capabilities": capabilities(project),
         "pending_delivery": null

@@ -8,7 +8,9 @@ use orchester_core::{
   computer::OnComputer,
   connection::{AgentConnection, SessionOrigin, invocation::Platform, stream::RunnerProblem},
   id::StepExecutionId,
-  permission::{EffectiveApprovalMode, FolderBounds, ManualReason, ResolvedFolder, capability::EnforcedPermissions},
+  permission::{
+    CodexSandbox, EffectiveApprovalMode, FolderBounds, ManualReason, ResolvedFolder, capability::EnforcedPermissions,
+  },
   resource::{AgentProfile, ModelId, Step, StepKey, StepKind},
   run::{ModelChoice, PinnedVersion, StepExecutor},
   store::ActivityStore,
@@ -72,9 +74,10 @@ impl RunTask {
   /// The permissions the agent of step `key` gets on `connection`: the run's for the profile, if they
   /// were changed for it, else the profile's, narrowed by the step, in the approval mode the step runs in there
   /// (Autopilot only where the connection's CLI hands its requests to Orchester, else Manual). What a person on this
-  /// computer narrowed the step to in the run's inputs applies when it gives the agents no more than that. Preflight
-  /// already refused steps whose permissions the CLI cannot enforce; checked again because an agent never starts with
-  /// permissions that are not enforced.
+  /// computer narrowed the step to in the run's inputs applies when it gives the agents no more than that. A shared
+  /// project's agents keep their Codex sandbox on, whatever the profile says: the team's profiles have no such switch
+  /// yet. Preflight already refused steps whose permissions the CLI cannot enforce; checked again because an agent
+  /// never starts with permissions that are not enforced.
   pub(super) fn enforced(
     &self,
     key: &StepKey,
@@ -85,10 +88,15 @@ impl RunTask {
       .run
       .step_permissions(key, body.permissions())
       .expect("an agent step of the run has permissions");
-    let permissions = match self.resolver.narrowed(key) {
+    let mut permissions = match self.resolver.narrowed(key) {
       Some(narrowed) if narrowed.widenings_from(&permissions).is_empty() => narrowed.clone(),
       _ => permissions,
     };
+    let shared =
+      self.resolver.team().is_some() || self.db.sharing().map_err(|error| problem(error.to_string()))?.is_some();
+    if shared {
+      permissions.set_codex_sandbox(CodexSandbox::On);
+    }
     let effective = EffectiveApprovalMode::of(permissions.approval_mode(), connection.autopilot_support());
     if let EffectiveApprovalMode::Manual {
       why: ManualReason::CantEnforce { why },
@@ -217,6 +225,11 @@ impl RunTask {
       .map_err(|error| problem(error.to_string()))?
       .ok_or_else(|| problem("the agent profile's connection no longer exists".to_owned()))?
       .into_parts();
+    if let Some(inputs) = self.resolver.team() {
+      inputs
+        .check_connection(profile.resource, &connection)
+        .map_err(|_| problem("the agent profile's connection no longer exists".to_owned()))?;
+    }
     let connection =
       AgentConnection::try_from(connection).map_err(|_| problem("the connection is not an agent CLI".to_owned()))?;
     Ok((body, connection, here))

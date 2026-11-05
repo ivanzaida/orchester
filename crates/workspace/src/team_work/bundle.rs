@@ -95,9 +95,16 @@ pub(super) fn inputs(
   db: &ProjectDb,
   bundle: &ExecutionBundle,
   acceptance: TeamAcceptance,
-  choices: StartChoices,
+  mut choices: StartChoices,
 ) -> Result<RunInputs, TeamWorkError> {
   check_clis(db, bundle, &choices.bindings)?;
+  for bound in &mut choices.bindings.profiles {
+    bound.required_cli = bundle
+      .bindings()
+      .iter()
+      .find(|binding| binding.resource_id == bound.resource)
+      .map(|binding| binding.cli);
+  }
   let start = bundle.start();
   let budget = start
     .limits

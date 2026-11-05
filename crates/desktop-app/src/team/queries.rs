@@ -71,6 +71,7 @@ impl TaskListKey {
         .map(|pipeline| pipeline.map(|id| id.to_string()))
         .collect(),
       modules: self.modules.clone(),
+      releases: Vec::new(),
       search: self.search.clone(),
     }
   }

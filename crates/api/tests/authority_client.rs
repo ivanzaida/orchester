@@ -178,7 +178,8 @@ fn task(project: ProjectId, number: u32) -> Value {
   json!({
     "id": TaskId::generate(), "number": number, "key": format!("KON-{number}"), "former_key": null, "revision": 2,
     "title": "Sign in", "brief": "", "criteria": [], "pipeline": null, "limits": null, "workflow": "in_review",
-    "priority": "high", "tags": [], "blocking": [], "blocked_reason": null, "module": null, "status": "queued",
+    "priority": "high", "tags": [], "blocking": [], "blocked_reason": null, "module": null, "release": null,
+    "status": "queued",
     "has_run": false, "created": attribution, "updated": attribution, "claim": null, "run": null,
     "assignee": null, "work": null, "effective_claim": null, "capabilities": capabilities(project)
   })

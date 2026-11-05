@@ -45,7 +45,12 @@ impl Stale {
         QueryScope::Workspace {} => stale.workspace = true,
         // A module's progress counts its tasks; a task's move changes both.
         QueryScope::ModuleList {} | QueryScope::Module { .. } => stale.modules = true,
-        QueryScope::TaskComments { .. } | QueryScope::Library {} | QueryScope::Resource { .. } => {}
+        // The desktop reads no release from the server yet.
+        QueryScope::TaskComments { .. }
+        | QueryScope::Library {}
+        | QueryScope::Resource { .. }
+        | QueryScope::ReleaseList {}
+        | QueryScope::Release { .. } => {}
       }
     }
     stale

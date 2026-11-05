@@ -669,6 +669,7 @@
           "autopilot": "Autopilot · was Manual",
           "browser": "The browser on · was off",
           "browserSite": "An allowed site of the browser it did not list",
+          "codexSandboxOff": "The Codex sandbox off · was on",
           "mcpServer": "An MCP server it did not give its agents",
           "secret": "A secret it did not use",
           "serverNamed": "MCP server {{name}}",

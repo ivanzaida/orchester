@@ -4,6 +4,8 @@
 //! nothing for it; what this computer cannot run is refused before a run is recorded; and a local project's run is as
 //! it was. Needs `git`. Run with `cargo test -p orchester-runner --features test-agent --test team_inputs team_inputs`.
 
+#[path = "team_inputs/connection_kinds.rs"]
+mod connection_kinds;
 mod support;
 
 use std::{
@@ -209,6 +211,15 @@ impl Team {
   /// Keeps the inputs the server accepted for a run of the team task from `base`, its profile bound to `connection`;
   /// the operation that accepted them.
   fn accept(&self, connection: ConnectionId, base: &str) -> OperationId {
+    self.accept_with_cli(connection, base, None)
+  }
+
+  fn accept_with_cli(
+    &self,
+    connection: ConnectionId,
+    base: &str,
+    required_cli: Option<orchester_core::connection::AgentProvider>,
+  ) -> OperationId {
     let operation = OperationId::generate();
     let origin = InputsOrigin::Team(TeamAcceptance {
       task: self.team_task,
@@ -238,6 +249,7 @@ impl Team {
         resource: self.profile,
         connection,
         account: None,
+        required_cli,
       }],
       references: Vec::new(),
     };

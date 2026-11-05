@@ -208,6 +208,7 @@ pub(super) fn permissions_json(permissions: &AgentPermissions) -> Value {
     "ask_before_tool_calls": permissions.interactive_tool_approvals(),
     "browser": { "access": browser.access(), "allowed_sites": sites },
     "approval_mode": permissions.approval_mode(),
+    "codex_sandbox": permissions.codex_sandbox(),
   })
 }
 

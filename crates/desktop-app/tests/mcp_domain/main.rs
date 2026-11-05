@@ -15,6 +15,7 @@ mod base_moved;
 mod basics;
 mod board;
 mod cloud_accounts;
+mod codex_sandbox;
 mod completion;
 mod connections_window;
 mod context_use;

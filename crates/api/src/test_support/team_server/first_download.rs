@@ -152,7 +152,7 @@ fn attribution() -> Value {
 pub(super) fn module() -> Value {
   json!({
     "id": MODULE, "name": "Payments", "description": "", "start": null, "target": null, "state": "open",
-    "revision": 1, "created": attribution(), "updated": attribution(),
+    "horizon": "later", "place": 0, "revision": 1, "created": attribution(), "updated": attribution(),
   })
 }
 
@@ -160,7 +160,7 @@ pub(super) fn task(id: &str, (key, number): (&str, usize), (title, workflow): (&
   json!({
     "id": id, "number": number, "key": format!("{key}-{number}"), "former_key": null, "revision": 1,
     "title": title, "brief": "", "criteria": [], "pipeline": null, "limits": null, "workflow": workflow,
-    "priority": "high", "tags": [TAG], "blocking": [], "blocked_reason": null, "module": MODULE,
+    "priority": "high", "tags": [TAG], "blocking": [], "blocked_reason": null, "module": MODULE, "release": null,
     "status": "draft", "has_run": false, "created": attribution(), "updated": attribution(), "claim": null,
     "run": null,
   })

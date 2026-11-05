@@ -306,6 +306,7 @@ fn task(number: u32, title: &str, by: &UserRef) -> SharedTask {
       blocking: Vec::new(),
       blocked_reason: None,
       module: None,
+      release: None,
     },
     status: TaskStatus::Draft,
     has_run: false,

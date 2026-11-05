@@ -4,9 +4,9 @@
 //! identity), joining with a code (`POST /auth/code`) or a cloud identity (`POST /auth/cloud`), who signed in
 //! (`GET /auth/me`), and the projects the person is a member of (`GET /projects`, by `?slug=` too). What a linked
 //! checkout's first download reads, and what a first link of a project sends (the workspace's `local_owner`), is in
-//! [`first_download`]; the reads of a team project straight from the server (`/api/v2`) are in [`authority`]. It
-//! answers a wrong code and an expired one alike, `invalid_code`, as a real server does; it can have no place for a
-//! cloud identity, it can refuse a link, and it can stop answering.
+//! [`first_download`]; the reads of a team project straight from the server (`/api/v2`), and an Admin's writes of its
+//! tasks and releases, are in [`authority`]. It answers a wrong code and an expired one alike, `invalid_code`, as a
+//! real server does; it can have no place for a cloud identity, it can refuse a link, and it can stop answering.
 
 use std::{
   io::{Read, Write},
@@ -254,7 +254,10 @@ fn route((path, query): (&str, &str), (headers, body): (&str, &str), state: &Mut
         ("201 Created", joined("cloud", state.authority.server_admin()))
       }
     }
-    _ if (path.starts_with("GET ") || path.starts_with("POST /api/v1/projects/") || path.starts_with("PATCH "))
+    _ if (path.starts_with("GET ")
+      || path.starts_with("POST /api/v1/projects/")
+      || path.starts_with("PATCH ")
+      || path.starts_with("DELETE "))
       && !signed_in =>
     {
       ("401 Unauthorized", error("unauthorized"))
@@ -268,6 +271,7 @@ fn route((path, query): (&str, &str), (headers, body): (&str, &str), state: &Mut
       None => ("200 OK", json!({"projects": state.lock().projects})),
     },
     _ => authority::edits::answer(path, body, state)
+      .or_else(|| authority::roadmap::answer(path, body, state))
       .or_else(|| first_download::answer((path, query), state))
       .unwrap_or_else(|| ("404 Not Found", error("not_found"))),
   }

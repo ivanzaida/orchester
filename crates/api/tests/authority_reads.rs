@@ -11,8 +11,8 @@ use orchester_api::{
 };
 use orchester_core::{
   blob::ContentHash,
-  id::{ClaimId, ModuleId, ProjectId, RunId, TaskId, UserId, WorkId},
-  module::ModuleState,
+  id::{ClaimId, ModuleId, ProjectId, ReleaseId, RunId, TaskId, UserId, WorkId},
+  module::{Horizon, ModuleState},
   run::CommitId,
   sharing::TaskRevision,
   task::{
@@ -260,7 +260,7 @@ fn authority_reads_claim_and_work_shapes() {
 
 #[test]
 fn authority_reads_task_read_shape() {
-  let (id, by) = (TaskId::generate(), user());
+  let (id, by, release) = (TaskId::generate(), user(), ReleaseId::generate());
   let project_id = ProjectId::generate();
   let (capabilities, capabilities_wire) = capabilities(project_id);
   let (claim, claim_wire) = claim(Subject::Task { id });
@@ -283,6 +283,7 @@ fn authority_reads_task_read_shape() {
       blocking: vec![],
       blocked_reason: None,
       module: None,
+      release: Some(release),
     },
     status: TaskStatus::Queued,
     has_run: true,
@@ -303,6 +304,7 @@ fn authority_reads_task_read_shape() {
     "id":id,"number":12,"key":"KON-12","former_key":null,"revision":1,
     "title":"Sign in","brief":"","criteria":["works"],"pipeline":"default","limits":null,
     "workflow":"in_progress","priority":"high","tags":[],"blocking":[],"blocked_reason":null,"module":null,
+    "release":release,
     "status":"queued","has_run":true,"created":attribution(1),"updated":attribution(2),"claim":null,"run":null,
     "assignee":{"id":by.id,"display_name":"Ada"},"work":work_wire,"effective_claim":claim_wire,
     "capabilities":capabilities_wire
@@ -311,6 +313,7 @@ fn authority_reads_task_read_shape() {
   for field in [
     "former_key",
     "module",
+    "release",
     "assignee",
     "work",
     "effective_claim",
@@ -333,6 +336,8 @@ fn authority_reads_module_read_shape() {
       start: Some("2026-11-01".to_owned()),
       target: None,
       state: ModuleState::Open,
+      horizon: Horizon::Next,
+      place: 2,
     },
     revision: TaskRevision::FIRST,
     created: Attribution { by: by.clone(), at: 1 },
@@ -349,13 +354,16 @@ fn authority_reads_module_read_shape() {
   };
   let attribution = json!({"by":{"id":by.id,"display_name":"Ada"},"at":1});
   let wire = json!({
-    "id":id,"name":"Checkout","description":"","start":"2026-11-01","target":null,"state":"open","revision":1,
+    "id":id,"name":"Checkout","description":"","start":"2026-11-01","target":null,"state":"open",
+    "horizon":"next","place":2,"revision":1,
     "created":attribution,"updated":attribution,"branch":"modules/checkout","assignee":null,"work":null,
     "effective_claim":null,"capabilities":capabilities_wire,"pending_delivery":null
   });
   roundtrip(&read, &wire);
   for field in [
     "target",
+    "horizon",
+    "place",
     "branch",
     "assignee",
     "work",

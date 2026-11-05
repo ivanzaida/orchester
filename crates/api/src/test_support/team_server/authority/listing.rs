@@ -129,7 +129,7 @@ fn kept<'a>(tasks: &'a [Value], filters: &TaskFilters) -> Vec<&'a Value> {
   tasks
     .iter()
     .filter(|task| any("statuses", &task["workflow"]) && any("priorities", &task["priority"]))
-    .filter(|task| any("modules", &task["module"]))
+    .filter(|task| any("modules", &task["module"]) && any("releases", &task["release"]))
     .filter(|task| {
       search.as_ref().is_none_or(|search| {
         ["title", "key"]

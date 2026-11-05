@@ -21,7 +21,7 @@ use crate::{SharedModuleChange, wire};
 
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "WorkUnit", rename_all = "snake_case")]
-enum WorkUnitWire {
+pub(super) enum WorkUnitWire {
   Tasks,
 }
 

@@ -5,7 +5,7 @@
 use chrono::NaiveDate;
 use orchester_core::{
   id::{IdempotencyKey, ModuleId, TaskId},
-  module::{ModuleDetails, ModuleError, ModuleState},
+  module::{Horizon, ModuleDetails, ModuleError, ModuleState},
   name::Name,
   sharing::TaskRevision,
   task::organization::ChangeActor,
@@ -14,7 +14,9 @@ use serde::{Deserialize, Serialize};
 
 use crate::{Attribution, UserRef, wire};
 
-/// What a person sets of a module; its days are `YYYY-MM-DD`.
+/// What a person sets of a module; its days are `YYYY-MM-DD`. `horizon` and `place` put it on the Roadmap's
+/// Now / Next / Later board: the modules of one horizon in ascending `place`, then in the order they were created. A
+/// module that names neither is in `later` at place 0.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ModuleFields {
@@ -27,6 +29,10 @@ pub struct ModuleFields {
   pub target: Option<String>,
   #[serde(default, with = "wire::ModuleStateWire")]
   pub state: ModuleState,
+  #[serde(default)]
+  pub horizon: Horizon,
+  #[serde(default)]
+  pub place: u32,
 }
 
 /// Why fields are not a module's details.
@@ -46,6 +52,7 @@ impl ModuleFields {
     ModuleDetails::new(name, &self.description, days, self.state).map_err(FieldsError::Module)
   }
 
+  /// The fields of `details`, in `later` at place 0 as a new module is: core's details have no horizon yet.
   pub fn from_core(details: &ModuleDetails) -> Self {
     Self {
       name: details.name().as_str().to_owned(),
@@ -53,6 +60,8 @@ impl ModuleFields {
       start: details.start().map(|day| day.to_string()),
       target: details.target().map(|day| day.to_string()),
       state: details.state(),
+      horizon: Horizon::Later,
+      place: 0,
     }
   }
 }

@@ -206,6 +206,7 @@ fn auto_memory_switch_is_not_given_to_codex() {
     platform: Platform::current(),
     mcp: None,
     agent_files: CodexAgentFiles::Loaded,
+    sandbox: orchester_core::permission::CodexSandbox::On,
   }
   .command(Vec::<(OsString, OsString)>::new(), &CommandEnvironment::default())
   .expect("a command");
