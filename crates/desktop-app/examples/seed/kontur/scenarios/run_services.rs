@@ -19,6 +19,7 @@ use orchester_core::{
     UiDriver,
   },
   store::{ResourceStore, SettingsStore},
+  workspaces::KeepFree,
 };
 use orchester_workspace::agent_testing::data::{create, service_slug, stack_slug};
 
@@ -32,6 +33,8 @@ const TITLE: &str = "Invite people to a team server";
 const BRIEF: &str =
   "Accept invites to a team. Start the stack team. Then start the service cloud-web. Hold the services.";
 const CRITERIA: [&str; 1] = ["An invite accepted twice says it was accepted already."];
+/// The free space the disk guard keeps for this project, in GB.
+const KEEP_FREE_GB: u64 = 2;
 
 fn invalid(error: impl std::fmt::Display) -> SeedError {
   SeedError::Invalid(error.to_string())
@@ -164,6 +167,10 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   let limits = kontur.db.project_limits()?;
   let share = ServiceSlots::new(u64::from(ComputerServiceSlots::DEFAULT.get().get())).map_err(invalid)?;
   kontur.db.save_project_limits(&limits.with_service_slots(share))?;
+  // Its run and services write almost nothing: the disk guard keeps only a little free, so the run starts on a
+  // computer whose disk is nearly full too.
+  let keep = KeepFree::from_gigabytes(KEEP_FREE_GB).map_err(invalid)?;
+  kontur.db.save_keep_free(keep)?;
   for service in &services {
     let id = create(&mut kontur.db, service_slug(service.name()), service, published)?;
     kontur.db.publish_draft::<Service>(id, published)?;
