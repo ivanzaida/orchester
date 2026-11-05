@@ -13,7 +13,7 @@ use std::thread;
 use orchester_core::{
   orchester_tools::ToolResult,
   resource::Slug,
-  service::{RunData, Seed, Service, ServiceApproval, ServiceName, Stack, StackName, StartPlan},
+  service::{RunData, Service, ServiceApproval, ServiceName, Stack, StackName, StartPlan},
 };
 use serde_json::{Map, json};
 
@@ -266,22 +266,15 @@ impl StepServices {
   }
 }
 
-/// Whether this step can start `service`: one without seed or per-run data.
+/// Whether this step can start `service`: one without per-run data.
 fn startable(service: &Service) -> Result<(), String> {
-  let unsupported = if !matches!(service.seed(), Seed::None) {
-    Some("has a seed")
-  } else if !matches!(service.run_data(), RunData::None) {
-    Some("keeps data of its own per run")
-  } else {
-    None
-  };
-  match unsupported {
-    Some(what) => Err(format!(
-      "the service `{}` {what}, which Orchester cannot start for a run yet",
-      service.name()
-    )),
-    None => Ok(()),
+  if matches!(service.run_data(), RunData::None) {
+    return Ok(());
   }
+  Err(format!(
+    "the service `{}` keeps data of its own per run, which Orchester cannot start for a run yet",
+    service.name()
+  ))
 }
 
 /// The error of a start that stopped at the service `failed`, which failed as `why` says: it names the services after

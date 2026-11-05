@@ -12,14 +12,18 @@
 //! workers, and its port freed. A start that is still waiting for readiness when its invocation ends gives up and
 //! stops what it started.
 //!
+//! Once a service is ready, its seed runs once before its start answers ([`seed`]); what the seed's requests captured
+//! comes back with its URL and port.
+//!
 //! A start asks a person once for everything it runs, unless the project's rules approve every service of it
-//! ([`order`], `orchester_core::run::ProjectScope`). Not here yet: seeds and per-run data (the start refuses a service
-//! that has them), crash events and the computer's service slots.
+//! ([`order`], `orchester_core::run::ProjectScope`). Not here yet: per-run data (the start refuses a service that has
+//! it), crash events and the computer's service slots.
 
 mod launch;
 mod order;
 mod port;
 mod readiness;
+mod seed;
 mod task;
 
 use std::{
@@ -98,12 +102,18 @@ struct Running {
   tree: ProcessTree,
   url: String,
   lease: PortLease,
+  /// What its seed's requests captured, their secret values replaced.
+  captured: seed::Captured,
 }
 
 impl Running {
-  /// Its URL and port, as a start answers them.
+  /// Its URL and port, as a start answers them, and what its seed captured when it captured anything.
   fn address(&self) -> serde_json::Value {
-    json!({"url": self.url, "port": self.lease.port()})
+    let mut address = json!({"url": self.url, "port": self.lease.port()});
+    if !self.captured.is_empty() {
+      address["seed"] = json!(self.captured);
+    }
+    address
   }
 
   fn answer(&self) -> ToolResult {

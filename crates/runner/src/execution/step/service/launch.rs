@@ -1,15 +1,16 @@
 //! Starting one service: its program found as a command tool's is, its placeholders filled with its own port and URL
-//! and those of the services already running, its secrets read from the keychain, its tree started and held, its
-//! output kept in a fresh log, and the wait until it is ready. A start that fails after the program started stops the
-//! whole tree first, and its error says so with the last lines of its output.
+//! and those of the services already running, its secrets and those of its seed's headers read from the keychain, its
+//! tree started and held, its output kept in a fresh log, the wait until it is ready, and its seed ([`super::seed`]).
+//! A start that fails after the program started stops the whole tree first, and its error says so with the last lines
+//! of its output.
 
-use std::{path::Path, sync::Arc, time::Instant};
+use std::{ffi::OsString, path::Path, sync::Arc, time::Instant};
 
 use orchester_core::{
   command::SecretVariable,
   connection::invocation::Platform,
   resource::{ResourceBody, VariableName},
-  secret::{SecretName, SecretVault},
+  secret::{SecretName, SecretValue, SecretVault},
   service::{RunValues, Service, ServiceLog, ServicePhase, Stack},
   store::{ResourceStore, SecretStore},
 };
@@ -46,8 +47,8 @@ fn latest<T: ResourceBody + Clone>(root: &Path) -> Result<Vec<T>, StoreError> {
 }
 
 impl StepServices {
-  /// Starts `service` with the addresses of the services already running, `wired`, and waits until it is ready, giving
-  /// up when `ended` says the invocation ended.
+  /// Starts `service` with the addresses of the services already running, `wired`, waits until it is ready and runs
+  /// its seed, giving up when `ended` says the invocation ended.
   pub(super) fn launch(
     &self,
     service: &Service,
@@ -55,6 +56,9 @@ impl StepServices {
     ended: &dyn Fn() -> bool,
   ) -> Result<Running, String> {
     let name = service.name();
+    let headers = self
+      .header_secrets(service)
+      .map_err(|why| format!("the service `{name}` cannot be started: {why}"))?;
     let lease = self
       .services
       .ports
@@ -62,13 +66,14 @@ impl StepServices {
       .map_err(|error| format!("no free loopback port for the service `{name}`: {error}"))?;
     let port = lease.port();
     let url = format!("http://127.0.0.1:{port}");
-    let values = wired
+    let mut values = wired
       .iter()
       .fold(RunValues::new(self.run, port, &url), |values, (other, port, url)| {
         values.with_service(other.clone(), *port, url)
       });
-    let (mut tree, secrets) = self.spawn(service, &values)?;
-    let log = Arc::new(Mutex::new(ServiceLog::new(secrets)));
+    let (mut tree, mut secrets) = self.spawn(service, &values)?;
+    secrets.extend(headers.iter().map(|(_, secret)| secret.clone()));
+    let log = Arc::new(Mutex::new(ServiceLog::new(secrets.clone())));
     self.state.watched.lock().insert(
       name.clone(),
       Watch {
@@ -80,9 +85,15 @@ impl StepServices {
         exit: None,
       },
     );
-    let ready = readiness::wait(&mut tree, (service, &values), port, (&log, ended));
+    let ready = readiness::wait(&mut tree, (service, &values), port, (&log, ended))
+      .and_then(|()| self.seed(service, &mut values, (&headers, &secrets), (&log, ended)));
     match ready {
-      Ok(()) => Ok(Running { tree, url, lease }),
+      Ok(captured) => Ok(Running {
+        tree,
+        url,
+        lease,
+        captured,
+      }),
       Err(why) => {
         // A program that cannot be watched any more is stopped all the same; its status then says stopped.
         let exit = tree.exited().unwrap_or(None).map(|status| status.code());
@@ -110,12 +121,7 @@ impl StepServices {
       ));
     }
     let platform = Platform::current();
-    let inherited_path = self
-      .inherited
-      .iter()
-      .find(|(variable, _)| variable.to_string_lossy().eq_ignore_ascii_case("PATH"))
-      .map(|(_, value)| value.clone());
-    let path = service.search_path(&self.project, inherited_path);
+    let path = service.search_path(&self.project, self.inherited_path());
     let program = service
       .program_candidates(&self.worktree, path.as_deref(), platform)
       .into_iter()
@@ -148,7 +154,16 @@ impl StepServices {
     Ok((tree, secrets))
   }
 
-  fn secret(&self, variable: &VariableName, secret: &SecretName) -> Result<SecretVariable, String> {
+  /// The `PATH` of the environment the runner runs in.
+  pub(super) fn inherited_path(&self) -> Option<OsString> {
+    self
+      .inherited
+      .iter()
+      .find(|(variable, _)| variable.to_string_lossy().eq_ignore_ascii_case("PATH"))
+      .map(|(_, value)| value.clone())
+  }
+
+  pub(super) fn secret(&self, variable: &VariableName, secret: &SecretName) -> Result<SecretVariable, String> {
     project_secret((&self.root, self.vault.as_ref()), variable, secret)
   }
 }
@@ -160,7 +175,18 @@ pub(in crate::execution::step) fn project_secret(
   variable: &VariableName,
   secret: &SecretName,
 ) -> Result<SecretVariable, String> {
-  let missing = || format!("the variable `{variable}` names the secret `{secret}`, which the project does not have");
+  let value = secret_value((root, vault), &format!("the variable `{variable}`"), secret)?;
+  Ok(SecretVariable::new(variable.as_str(), value))
+}
+
+/// The value of the secret `secret` of the project at `root`, which `user` (e.g. "the variable `API_TOKEN`") names,
+/// read from `vault`, the keychain.
+pub(super) fn secret_value(
+  (root, vault): (&Path, &dyn SecretVault),
+  user: &str,
+  secret: &SecretName,
+) -> Result<Arc<SecretValue>, String> {
+  let missing = || format!("{user} names the secret `{secret}`, which the project does not have");
   let db = ProjectDb::open_read_only(root).map_err(|error| format!("the secrets cannot be read: {error}"))?;
   let found = db
     .secrets()
@@ -169,12 +195,10 @@ pub(in crate::execution::step) fn project_secret(
     .find(|found| found.name() == secret)
     .ok_or_else(missing)?;
   if found.is_archived() {
-    return Err(format!(
-      "the variable `{variable}` names the archived secret `{secret}`"
-    ));
+    return Err(format!("{user} names the archived secret `{secret}`"));
   }
   let value = vault
     .read(&found.vault_key(db.project().id()))
     .map_err(|error| format!("the secret `{secret}` cannot be read from the keychain: {error}"))?;
-  Ok(SecretVariable::new(variable.as_str(), Arc::new(value)))
+  Ok(Arc::new(value))
 }

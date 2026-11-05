@@ -43,6 +43,12 @@ reach.
   per service, tied to a fingerprint of its program, arguments, variables and seed; a later start whose every service
   has a rule is approved without asking and without the reviewer, and a change to any of them asks again. A start runs
   only the definitions its approval named: a service published again while it waited is refused.
+- Once a service is ready, its **seed** runs once before `start_service` answers: its HTTP requests in order (2xx
+  answers only, no redirect followed, 30 s each), each filled with what earlier requests captured (`$.key`,
+  `[index]`), or its command without a shell (5 minutes). The answer adds `seed: {<name>: <value>}` for the captured
+  values. A failing request or command fails the start and stops the service; the error names the request, its
+  status and at most 400 characters of its answer. A header's secret value is replaced in answers, captured values
+  and the service's log.
 
 ## Tool reference
 

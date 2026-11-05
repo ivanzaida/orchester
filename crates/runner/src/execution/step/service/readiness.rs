@@ -135,7 +135,7 @@ fn http_client() -> Result<blocking::Client, String> {
 }
 
 /// The readers of the tree's standard output and error, each on a thread of its own until its stream closes.
-struct Output {
+pub(super) struct Output {
   /// Set once a line matches the readiness pattern.
   seen: Arc<AtomicBool>,
   /// How many of the streams are still open.
@@ -144,7 +144,7 @@ struct Output {
 
 impl Output {
   /// Starts reading the tree's output into `log`, watching for `pattern`.
-  fn read(tree: &mut ProcessTree, pattern: Option<Regex>, log: &SharedLog) -> Self {
+  pub(super) fn read(tree: &mut ProcessTree, pattern: Option<Regex>, log: &SharedLog) -> Self {
     let output = Self {
       seen: Arc::new(AtomicBool::new(false)),
       open: Arc::new(AtomicUsize::new(0)),
@@ -174,7 +174,7 @@ impl Output {
 
   /// Waits up to [`SETTLE`] until both streams closed, so the log holds what an exited program wrote last; a process
   /// it started may hold them open longer.
-  fn settle(&self) {
+  pub(super) fn settle(&self) {
     let deadline = Instant::now() + SETTLE;
     while self.open.load(Ordering::Acquire) > 0 && Instant::now() < deadline {
       thread::sleep(Duration::from_millis(20));

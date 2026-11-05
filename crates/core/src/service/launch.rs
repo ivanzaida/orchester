@@ -8,7 +8,7 @@ use std::{
   path::{Path, PathBuf},
 };
 
-use super::{PlaceholderError, RunValues, Service, ServiceValue};
+use super::{PlaceholderError, RunValues, Seed, Service, ServiceValue};
 use crate::{
   command::Command,
   connection::invocation::{Platform, agent_environment},
@@ -63,6 +63,35 @@ impl Service {
     values: &RunValues,
   ) -> Result<ServiceProcess, PlaceholderError> {
     let arguments = values.arguments(self)?;
+    self.process_of((program, arguments, worktree), (environment, project), platform, values)
+  }
+
+  /// The process of the seed command: `program` (a file its [`crate::resource::CommandProgram::candidates`] found)
+  /// with the seed's arguments `values` fill, in the folder and with the environment [`Self::process`] gives the
+  /// service's program, its secret variables too. `None` when the seed is not a command.
+  pub fn seed_process(
+    &self,
+    (program, worktree): (&Path, &Path),
+    (environment, project): (impl IntoIterator<Item = (OsString, OsString)>, &CommandEnvironment),
+    platform: Platform,
+    values: &RunValues,
+  ) -> Result<Option<ServiceProcess>, PlaceholderError> {
+    if !matches!(self.seed(), Seed::Command { .. }) {
+      return Ok(None);
+    }
+    let arguments = values.seed_arguments(self)?;
+    self
+      .process_of((program, arguments, worktree), (environment, project), platform, values)
+      .map(Some)
+  }
+
+  fn process_of(
+    &self,
+    (program, arguments, worktree): (&Path, Vec<String>, &Path),
+    (environment, project): (impl IntoIterator<Item = (OsString, OsString)>, &CommandEnvironment),
+    platform: Platform,
+    values: &RunValues,
+  ) -> Result<ServiceProcess, PlaceholderError> {
     let mut variables = agent_environment(environment);
     project.add_to(&mut variables);
     let mut secrets = Vec::new();
