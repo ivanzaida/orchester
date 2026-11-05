@@ -194,6 +194,23 @@ person applies (as MCP servers today), since a service runs a program.
 - Test suites take a service slot while they run their own processes.
 - Builds reuse warm workspaces (ORC-114) instead of building per service.
 
+Built (ORC-248): the computer's *Services at once* is an application setting in `orchester.db` (default **8**,
+1–32); each project's share is with its limits (default **4**, 1 to the computer's limit; a share above a limit
+lowered later counts as the limit). Eight because a dev server or a database container takes about a core and a few
+hundred MB to a GB, which leaves a usual 8-core, 16 GB machine room for the agents and their builds; four as many as
+agents work at once by default, so two projects at their defaults fill the computer. Each running service holds one
+slot, a stack one per service it starts, a test suite's own process one while it runs. A slot is an OS file lock in
+the user's data folder, as a QA slot (`orchester-service-slots/slot-<n>.lock` for the computer's and
+`projects/<project>/slot-<n>.lock` for the share; a slot is one of each), so every runner counts the same slots and a
+dead runner holds none. A start takes all its slots before it starts anything; while too few are free it waits, its
+run's Conversation notes `waiting_for_service_slots` (slots needed, the share, the limit) and its answer says
+`waited_for_slots` once it got them. The starts of one project that wait go on in the order they began to; between
+projects, whoever tries first takes the freed slots. A start that could never get its slots (more than the share or
+the limit, counting the slots its step holds already) is refused at once. Slots are freed when a service stops, its
+step ends, its run pauses or ends, and while its turn waits for a person. The QA app still takes the separate *QA apps
+at once* slots until it is migrated to a service. Both limits are read and set through `update_project_limits`
+(`service_slots`, `computer_service_slots`); the settings screens are agent testing task 19.
+
 ## Screens (design board `eWydp`)
 
 | Screen | Node |

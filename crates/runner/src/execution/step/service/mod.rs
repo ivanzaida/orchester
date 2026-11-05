@@ -22,7 +22,12 @@
 //! notice with its next Orchester tool answer, and the run's conversation records it.
 //!
 //! A start asks a person once for everything it runs, unless the project's rules approve every service of it
-//! ([`order`], `orchester_core::run::ProjectScope`). Not here yet: the computer's service slots.
+//! ([`order`], `orchester_core::run::ProjectScope`).
+//!
+//! Each running service holds one of the computer's service slots within its project's share ([`slots`]), freed when
+//! it stops, also while its invocation waits for a person; a start takes the slots of every service it starts first,
+//! waiting while too few are free, and a test suite's own process takes one while it runs
+//! ([`StepServices::suite_slot`]).
 //!
 //! The task page's Services tab reads a run's services, their logs, and stops and restarts them through the service
 //! tools of the run's invocations ([`shown`]).
@@ -35,6 +40,7 @@ mod port;
 mod readiness;
 mod seed;
 mod shown;
+mod slots;
 mod task;
 
 use std::{
@@ -63,20 +69,23 @@ use parking_lot::Mutex;
 use serde_json::json;
 
 pub(in crate::execution) use self::shown::ShownServiceError;
+pub use self::slots::ServiceSlots;
 pub(in crate::execution::step) use self::{
   launch::{project_secret, published as published_services, published_stacks},
   order::Started,
+  slots::{ServiceSlot, Waited},
 };
 use self::{
   port::{PortLease, Ports},
   readiness::SharedLog,
+  slots::{Asker, Waiting},
 };
 
-/// The services of the runner's invocations that have not ended, the ports they hold, and the service tools of each
-/// invocation, which the Services tab reaches them through.
-#[derive(Default)]
+/// The services of the runner's invocations that have not ended, the ports they hold, the computer's service slots
+/// they take, and the service tools of each invocation, which the Services tab reaches them through.
 pub(in crate::execution) struct Services {
   ports: Arc<Ports>,
+  slots: ServiceSlots,
   invocations: Mutex<HashMap<InvocationId, Arc<InvocationServices>>>,
   tools: Mutex<HashMap<InvocationId, StepServices>>,
 }
@@ -148,8 +157,8 @@ impl InvocationServices {
   }
 }
 
-/// A service at work. Its tree is stopped, then its container removed, before its port is freed (fields drop in
-/// order).
+/// A service at work. Its tree is stopped, then its container removed, before its port and then its service slot are
+/// freed (fields drop in order).
 struct Running {
   tree: ProcessTree,
   /// The container it is, when its per-run data is a database container: held to be removed when it drops.
@@ -162,6 +171,8 @@ struct Running {
   needs: Vec<ServiceName>,
   /// The readers of its output, which a crash waits for so that its log holds the last lines.
   output: readiness::Output,
+  /// Its slot of the computer's *Services at once*.
+  _slot: ServiceSlot,
 }
 
 impl Running {
@@ -172,10 +183,6 @@ impl Running {
       address["seed"] = json!(self.captured);
     }
     address
-  }
-
-  fn answer(&self) -> ToolResult {
-    ToolResult::shown(self.address().to_string())
   }
 
   /// The exit code of its program, once it exited on its own.
@@ -220,6 +227,16 @@ impl Watch {
 }
 
 impl Services {
+  /// No services yet; they take `slots`.
+  pub(in crate::execution) fn new(slots: ServiceSlots) -> Self {
+    Self {
+      ports: Arc::default(),
+      slots,
+      invocations: Mutex::default(),
+      tools: Mutex::default(),
+    }
+  }
+
   /// The services of `invocation`, which is starting.
   fn register(&self, invocation: InvocationId) -> Arc<InvocationServices> {
     Arc::clone(self.invocations.lock().entry(invocation).or_default())
@@ -284,11 +301,13 @@ pub(in crate::execution::step) struct StepServices {
   project: CommandEnvironment,
   /// Records a crash in the run's conversation.
   crashed: crash::CrashReport,
+  /// Says in the run's conversation that a start waits for service slots.
+  waiting: Arc<dyn Fn(Waiting) + Send + Sync>,
 }
 
 impl StepServices {
-  /// Stops the service `name` the invocation started, with everything it started; one that still starts gives its
-  /// start up, which stops it. Says so when none runs.
+  /// Stops the service `name` the invocation started, with everything it started, and frees its port and its service
+  /// slot; one that still starts gives its start up, which stops it. Says so when none runs.
   pub(in crate::execution::step) fn stop(&self, name: &ServiceName) -> ToolResult {
     let removed = self.state.running.lock().remove(name);
     let Some(mut running) = removed else {
@@ -313,14 +332,38 @@ impl StepServices {
     let exit = running.exit().unwrap_or(None);
     self.state.note(name, ServicePhase::Stopped, exit);
     let port = running.lease.port();
+    // Its port and its slot are freed as the rest of it drops, when this answers.
     match running.tree.stop() {
       Ok(()) => ToolResult::shown(format!(
-        "the service `{name}` was stopped with everything it started; port {port} is free"
+        "the service `{name}` was stopped with everything it started; port {port} and its service slot are free"
       )),
       Err(error) => ToolResult::unavailable(&format!(
         "the service `{name}` was asked to stop, but it may not have ended: {error}"
       )),
     }
+  }
+
+  /// `count` of the computer's service slots for this invocation's start, waiting in order while too few are free;
+  /// refused when the invocation ends or begins to wait for a person meanwhile, or when it could get them only once
+  /// the services it runs, which hold a slot each, stopped.
+  fn take_slots(&self, count: u32) -> Result<(Vec<ServiceSlot>, Option<Waited>), String> {
+    let holding = u32::try_from(self.state.running.lock().len()).unwrap_or(u32::MAX);
+    let asker = Asker {
+      project: self.project_id,
+      root: &self.root,
+      holding,
+      gate: &|| self.may_start(),
+      waiting: &*self.waiting,
+    };
+    self.services.slots.take(count, &asker)
+  }
+
+  /// The service slot a test suite's own process holds while it runs, taken as a service's is.
+  pub(in crate::execution::step) fn suite_slot(&self) -> Result<ServiceSlot, String> {
+    let (mut slots, _) = self.take_slots(1)?;
+    slots
+      .pop()
+      .ok_or_else(|| "no service slot was taken for the suite".to_owned())
   }
 
   /// The status of the service `name` the invocation started, also while it starts and after it stopped.

@@ -310,6 +310,11 @@ pub enum RunnerProblem {
   },
   /// A service the agent started crashed after it was ready; the agent got the same facts as a notice.
   ServiceCrashed(crate::service::ServiceCrash),
+  /// The agent's start of services, or of a test suite's own process, waits for `slots` service slots
+  /// (`docs/architecture/agent-testing.md`, decision 3): its project's runs may run `share` services at once and the
+  /// computer's `limit`, and too few of them are free. It goes on once enough services stop, after the starts that
+  /// waited before it in the same project.
+  WaitingForServiceSlots { slots: u32, share: u32, limit: u32 },
 }
 
 /// A run whose QA app holds a QA slot: its task's key (`ORC-62`) and its number (39), as its slot file names them.

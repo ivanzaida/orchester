@@ -3,7 +3,9 @@
 //! its own, and a step starts only once every service of the steps before it is ready, so each service starts after
 //! its needs are ready. A service the invocation runs already is reused, not started again. Each start's
 //! `{{services.<name>.url|port}}` are filled from the services the invocation runs by then. When a service fails,
-//! the services of its step that became ready are kept, nothing after it starts, and the error names it.
+//! the services of its step that became ready are kept, nothing after it starts, and the error names it. Before
+//! anything starts, the start takes a service slot for each service it will start ([`super::slots`]), waiting while
+//! too few are free; its answer says how long it waited.
 //!
 //! A start's request names every service it runs ([`StepServices::service_approvals`]), and the start runs only those
 //! definitions: a service published again since, with another fingerprint, is refused until it is asked about.
@@ -19,7 +21,7 @@ use orchester_ipc::services::ServiceStarter;
 use serde_json::{Map, json};
 
 use super::{
-  Origin, Running, StepServices,
+  Origin, Running, ServiceSlot, StepServices, Waited,
   launch::{published, published_stacks},
 };
 
@@ -60,17 +62,24 @@ impl StepServices {
 
   /// Starts the published service `name` with what it needs, in order, and waits until it is ready; a service the
   /// invocation runs already is reused. Runs only the definitions `approved` names. Blocks while an earlier start of
-  /// the invocation runs.
+  /// the invocation runs, and while too few service slots are free; the answer says how long it waited for them.
   pub(in crate::execution::step) fn start(&self, name: &ServiceName, approved: &[ServiceApproval]) -> ToolResult {
     let _one_at_a_time = self.state.starting.lock();
     let started = self.services_of((Some(approved), &Origin::agent(None)), |services| {
       StartPlan::for_service(services, name).map_err(|error| format!("the service `{name}` cannot be started: {error}"))
     });
-    if let Err(refusal) = started {
-      return ToolResult::unavailable(&refusal);
-    }
+    let waited = match started {
+      Ok((_, waited)) => waited,
+      Err(refusal) => return ToolResult::unavailable(&refusal),
+    };
     match self.state.running.lock().get(name) {
-      Some(running) => running.answer(),
+      Some(running) => {
+        let mut address = running.address();
+        if let Some(waited) = waited {
+          address["waited_for_slots"] = waited.answer();
+        }
+        ToolResult::shown(address.to_string())
+      }
       None => ToolResult::unavailable(&format!("the service `{name}` was started but no longer runs")),
     }
   }
@@ -99,7 +108,7 @@ impl StepServices {
 
   /// Starts every service of the published stack `name` with what they need, in order, and answers each one's URL
   /// and port; a service the invocation runs already is reused. Runs only the definitions `approved` names. Blocks
-  /// while an earlier start of the invocation runs.
+  /// while an earlier start of the invocation runs, and while too few service slots are free for all of them.
   pub(in crate::execution::step) fn start_stack(&self, name: &StackName, approved: &[ServiceApproval]) -> ToolResult {
     let _one_at_a_time = self.state.starting.lock();
     let stack = match self.stack(name) {
@@ -109,8 +118,8 @@ impl StepServices {
     let started = self.services_of((Some(approved), &Origin::agent(Some(name))), |services| {
       StartPlan::for_stack(services, &stack).map_err(|error| error.to_string())
     });
-    let plan = match started {
-      Ok(plan) => plan,
+    let (plan, waited) = match started {
+      Ok(started) => started,
       Err(refusal) => return ToolResult::unavailable(&format!("the stack `{name}` was not started fully: {refusal}")),
     };
     let running = self.state.running.lock();
@@ -120,7 +129,11 @@ impl StepServices {
         answered.insert(service.to_string(), started.address());
       }
     }
-    ToolResult::shown(json!({ "services": answered }).to_string())
+    let mut answer = json!({ "services": answered });
+    if let Some(waited) = waited {
+      answer["waited_for_slots"] = waited.answer();
+    }
+    ToolResult::shown(answer.to_string())
   }
 
   /// The published stack `name`.
@@ -195,13 +208,13 @@ impl StepServices {
   }
 
   /// Reads the published services, orders them with `plan` and starts that plan, each service noted with `origin`; the
-  /// plan once it is up. With `approved`, a service whose definition it does not name is refused before anything
-  /// starts.
+  /// plan once it is up, and what it waited for service slots when it did. With `approved`, a service whose definition
+  /// it does not name is refused before anything starts.
   fn services_of(
     &self,
     (approved, origin): (Option<&[ServiceApproval]>, &Origin),
     plan: impl FnOnce(&[Service]) -> Result<StartPlan, String>,
-  ) -> Result<StartPlan, String> {
+  ) -> Result<(StartPlan, Option<Waited>), String> {
     self.may_start()?;
     let services = published(&self.root).map_err(|error| format!("the project's services cannot be read: {error}"))?;
     let plan = plan(&services)?;
@@ -225,57 +238,27 @@ impl StepServices {
       }
       steps.push(definitions);
     }
-    self.bring_up(&steps, origin)?;
-    Ok(plan)
+    let waited = self.bring_up(&steps, origin)?;
+    Ok((plan, waited))
   }
 
   /// Starts the services of `steps` the invocation does not run yet, step by step, those of one step together, each
-  /// noted with `origin`.
-  fn bring_up(&self, steps: &[Vec<&Service>], origin: &Origin) -> Result<(), String> {
+  /// noted with `origin`, once it holds a service slot for each of them; what it waited for the slots, when it did. The
+  /// slots of services that did not start are freed.
+  fn bring_up(&self, steps: &[Vec<&Service>], origin: &Origin) -> Result<Option<Waited>, String> {
+    let needed = {
+      let running = self.state.running.lock();
+      steps
+        .iter()
+        .flatten()
+        .filter(|service| !running.contains_key(service.name()))
+        .count()
+    };
+    let needed = u32::try_from(needed).map_err(|_| "a start cannot start that many services".to_owned())?;
+    let (mut slots, waited) = self.take_slots(needed)?;
     for (at, step) in steps.iter().enumerate() {
       self.may_start()?;
-      let (wired, missing) = {
-        let running = self.state.running.lock();
-        let wired: Vec<Address> = running
-          .iter()
-          .map(|(name, running)| (name.clone(), running.lease.port(), running.url.clone()))
-          .collect();
-        let missing: Vec<&Service> = step
-          .iter()
-          .copied()
-          .filter(|service| !running.contains_key(service.name()))
-          .collect();
-        (wired, missing)
-      };
-      let started: Vec<(&ServiceName, Result<Running, String>)> = thread::scope(|scope| {
-        let starts: Vec<_> = missing
-          .iter()
-          .map(|service| {
-            let wired = &wired;
-            (
-              service.name(),
-              scope.spawn(move || self.launch(service, (wired, origin), &|| self.state.ended())),
-            )
-          })
-          .collect();
-        starts
-          .into_iter()
-          .map(|(name, start)| {
-            let outcome = start
-              .join()
-              .unwrap_or_else(|_| Err(format!("the start of the service `{name}` ended without an answer")));
-            (name, outcome)
-          })
-          .collect()
-      });
-      let mut failed = None;
-      for (name, outcome) in started {
-        let kept = outcome.and_then(|running| self.keep(name, running));
-        if let Err(why) = kept {
-          failed.get_or_insert((name, why));
-        }
-      }
-      if let Some((name, why)) = failed {
+      if let Err((name, why)) = self.bring_up_step(step, (&mut slots, origin)) {
         let running = self.state.running.lock();
         let skipped: Vec<&ServiceName> = steps[at + 1..]
           .iter()
@@ -286,7 +269,67 @@ impl StepServices {
         return Err(stopped_chain(name, &why, &skipped));
       }
     }
-    Ok(())
+    Ok(waited)
+  }
+
+  /// Starts the services of `step` the invocation does not run yet, together, each with one of `slots` and noted with
+  /// `origin`; the first that failed and why.
+  fn bring_up_step<'a>(
+    &self,
+    step: &[&'a Service],
+    (slots, origin): (&mut Vec<ServiceSlot>, &Origin),
+  ) -> Result<(), (&'a ServiceName, String)> {
+    let (wired, missing) = {
+      let running = self.state.running.lock();
+      let wired: Vec<Address> = running
+        .iter()
+        .map(|(name, running)| (name.clone(), running.lease.port(), running.url.clone()))
+        .collect();
+      let missing: Vec<&Service> = step
+        .iter()
+        .copied()
+        .filter(|service| !running.contains_key(service.name()))
+        .collect();
+      (wired, missing)
+    };
+    let mut given = slots.split_off(slots.len().saturating_sub(missing.len()));
+    if let Some(first) = missing.get(given.len()) {
+      // A service counted as running when the slots were taken stopped since, as one a crash stopped: it takes a
+      // slot of its own now.
+      let short = u32::try_from(missing.len() - given.len()).unwrap_or(u32::MAX);
+      let (more, _) = self.take_slots(short).map_err(|why| (first.name(), why))?;
+      given.extend(more);
+    }
+    let started: Vec<(&ServiceName, Result<Running, String>)> = thread::scope(|scope| {
+      let starts: Vec<_> = missing
+        .iter()
+        .zip(given)
+        .map(|(service, slot)| {
+          let wired = &wired;
+          (
+            service.name(),
+            scope.spawn(move || self.launch(service, (wired, origin, slot), &|| self.state.ended())),
+          )
+        })
+        .collect();
+      starts
+        .into_iter()
+        .map(|(name, start)| {
+          let outcome = start
+            .join()
+            .unwrap_or_else(|_| Err(format!("the start of the service `{name}` ended without an answer")));
+          (name, outcome)
+        })
+        .collect()
+    });
+    let mut failed = None;
+    for (name, outcome) in started {
+      let kept = outcome.and_then(|running| self.keep(name, running));
+      if let Err(why) = kept {
+        failed.get_or_insert((name, why));
+      }
+    }
+    failed.map_or(Ok(()), Err)
   }
 }
 

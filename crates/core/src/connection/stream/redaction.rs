@@ -123,7 +123,8 @@ impl RunnerProblem {
       | Self::PermissionPromptUnreachable
       | Self::ContextCompacted { .. }
       | Self::ThinkingStripped
-      | Self::WaitingForQaSlot { .. } => {}
+      | Self::WaitingForQaSlot { .. }
+      | Self::WaitingForServiceSlots { .. } => {}
     }
   }
 }

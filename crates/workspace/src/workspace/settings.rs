@@ -7,6 +7,7 @@ use std::path::Path;
 
 use orchester_core::{
   appearance::ThemeSetting,
+  limits::ComputerServiceSlots,
   notification::NotificationSettings,
   orchestrator::{ReportSchedule, ReportTime},
   time::Timestamp,
@@ -42,6 +43,17 @@ impl Workspace {
     self.db.lock().set_usage_warning_threshold(threshold)?;
     self.changes.record_app(AppOutside::UsageThreshold);
     Ok(())
+  }
+
+  /// The computer's *Services at once*, which every project's runner reads at each start of a service; 8 until it is
+  /// changed.
+  pub fn service_slots(&self) -> Result<ComputerServiceSlots, StoreError> {
+    self.db.lock().service_slots()
+  }
+
+  /// Keeps the computer's *Services at once*; the runners follow it from their next start.
+  pub fn set_service_slots(&self, slots: ComputerServiceSlots) -> Result<(), StoreError> {
+    self.db.lock().set_service_slots(slots)
   }
 
   /// The colors the window uses (`orchester-app`); [`ThemeSetting::default`] until one is chosen.

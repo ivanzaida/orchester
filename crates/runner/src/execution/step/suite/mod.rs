@@ -93,7 +93,8 @@ impl StepSuites {
   }
 
   /// Runs `suite`, published as `slug`, with `filter`, its needs started through `services` before and those it
-  /// started stopped after, and keeps its run with the run; why it did not run when it did not.
+  /// started stopped after, and keeps its run with the run; why it did not run when it did not. Its own process holds
+  /// one of the computer's service slots while it runs, taken through `services` after its needs started.
   pub(in crate::execution::step) fn test(
     &self,
     slug: &Slug,
@@ -102,24 +103,28 @@ impl StepSuites {
     services: Option<&StepServices>,
   ) -> Result<Kept, String> {
     let name = slug.as_str();
-    let needs = suite.needs().as_slice();
-    let started = match (needs.is_empty(), services) {
-      (true, _) => Vec::new(),
-      (false, Some(services)) => services
-        .start_needs(needs)
-        .map_err(|why| format!("the suite `{name}` did not run: {why}"))?,
-      (false, None) => {
-        let needs: Vec<String> = needs.iter().map(|need| format!("`{}`", need.as_str())).collect();
-        return Err(format!(
-          "the suite `{name}` needs {}, but this step cannot start services",
-          needs.join(", ")
-        ));
-      }
+    let Some(services) = services else {
+      return Err(format!(
+        "the suite `{name}` did not run: this step cannot take a service slot for it"
+      ));
     };
-    let kept = self.run_started(slug, suite, filter);
-    if let Some(services) = services {
-      services.stop_started(&started);
-    }
+    let needs = suite.needs().as_slice();
+    let started = if needs.is_empty() {
+      Vec::new()
+    } else {
+      services
+        .start_needs(needs)
+        .map_err(|why| format!("the suite `{name}` did not run: {why}"))?
+    };
+    let kept = services
+      .suite_slot()
+      .map_err(|why| format!("the suite `{name}` did not run: {why}"))
+      .and_then(|slot| {
+        let kept = self.run_started(slug, suite, filter);
+        drop(slot);
+        kept
+      });
+    services.stop_started(&started);
     kept
   }
 

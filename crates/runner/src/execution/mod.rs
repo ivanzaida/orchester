@@ -84,7 +84,7 @@ use tokio::{
 
 pub use self::{
   attach::Attached,
-  step::{QaSlots, outside_read_refusals},
+  step::{QaSlots, ServiceSlots, outside_read_refusals},
 };
 use self::{
   board::Board,
@@ -140,7 +140,7 @@ struct Inner {
   board: Arc<Board>,
   /// The QA apps the runs' agents started, and the computer's QA slots they take.
   qa: Arc<QaApps>,
-  /// The services the runs' agents started, and the ports they hold.
+  /// The services the runs' agents started, the ports they hold and the computer's service slots they take.
   services: Arc<Services>,
   /// The project's browser, started at its runs' first use (`browser`).
   browser: Arc<ProjectBrowser>,
@@ -164,7 +164,8 @@ struct Inner {
 
 impl Scheduler {
   /// The scheduler of the project at `project_root`; its agents' QA apps take `qa_slots` ([`QaSlots::machine`]
-  /// outside tests). The disk guard reads this computer's disks unless [`Scheduler::with_disks`] says otherwise.
+  /// outside tests), their services the computer's service slots unless [`Scheduler::with_service_slots`] gives
+  /// others. The disk guard reads this computer's disks unless [`Scheduler::with_disks`] says otherwise.
   pub fn new(
     project_root: &Path,
     notifier: Notifier,
@@ -185,7 +186,7 @@ impl Scheduler {
         relay,
         board: Arc::new(Board::new(notifier.clone())),
         qa: Arc::new(QaApps::new(qa_slots)),
-        services: Arc::default(),
+        services: Arc::new(Services::new(ServiceSlots::machine())),
         browser: Arc::new(ProjectBrowser::of_project(project_root)),
         notifier,
         active: Mutex::new(HashMap::new()),

@@ -419,7 +419,10 @@ impl RunTask {
       host.browser = Some(if claude { browser.with_images() } else { browser });
     }
     let qa = self.step_qa(execution, invocation, worktree)?;
-    if host.tools.policy(OrchesterTool::StartService).is_some() {
+    // `run_tests` takes a service slot for its suite's process through the services, also where `start_service` is not
+    // offered.
+    if host.tools.policy(OrchesterTool::StartService).is_some() || host.tools.policy(OrchesterTool::RunTests).is_some()
+    {
       host.services = Some(self.step_services(invocation, worktree, environment));
     }
     if host.tools.policy(OrchesterTool::RunTests).is_some() {

@@ -142,6 +142,8 @@ impl LimitsText {
       default_time_limit: read_minutes(&self.minutes),
       agent_slots: read_agent_slots(&self.slots),
       qa_slots: read_qa_slots(&self.qa),
+      // The page has no field for the project's share of *Services at once* yet: it keeps what it read.
+      service_slots: Ok(base.service_slots()),
     }
     .limits();
     if let Err(error) = daily {
@@ -191,7 +193,12 @@ pub fn save_limits_in(
           stored.daily_budget_limit(),
         ))
         .with_agent_slots(pick(base.agent_slots(), asked.agent_slots(), stored.agent_slots()))
-        .with_qa_slots(pick(base.qa_slots(), asked.qa_slots(), stored.qa_slots())),
+        .with_qa_slots(pick(base.qa_slots(), asked.qa_slots(), stored.qa_slots()))
+        .with_service_slots(pick(
+          base.service_slots(),
+          asked.service_slots(),
+          stored.service_slots(),
+        )),
     )
   })?;
   ProjectDb::open(root)?.project_limits()
