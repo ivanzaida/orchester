@@ -11,7 +11,7 @@ use std::{
 
 use super::{
   AppCall, FileCall, FindSymbol, OutputKept, OutsideReadError, OutsideReads, ProcessCall, ProgramOutput, QaAppStart,
-  SkillCall, ToolCall, ToolCallError, ToolResult,
+  SkillCall, ToolCall, ToolCallError, ToolResult, UiCall,
 };
 use crate::{
   command::{Command, CommandError},
@@ -164,6 +164,8 @@ pub enum ToolWork {
   App(AppCall),
   /// Starts a QA copy of the app once a QA slot its project allows is free, and keeps it for the step.
   QaApp(QaAppStart),
+  /// Sees or uses the UI of a service the step started, through the service's UI driver.
+  Ui(UiCall),
   /// Starts the published service of this name and what it needs for the step and waits until it is ready.
   StartService(ServiceName),
   /// Starts the services of the published stack of this name and what they need for the step.
@@ -211,6 +213,7 @@ impl ToolCall {
       Self::Skill(call) => Ok(ToolWork::Skill(call.clone())),
       Self::App(call) => Ok(ToolWork::App(call.clone())),
       Self::StartQaApp(start) => Ok(ToolWork::QaApp(start.clone())),
+      Self::Ui(call) => Ok(ToolWork::Ui(call.clone())),
       Self::StartService(name) => Ok(ToolWork::StartService(name.clone())),
       Self::StartStack(name) => Ok(ToolWork::StartStack(name.clone())),
       Self::StopService(name) => Ok(ToolWork::StopService(name.clone())),

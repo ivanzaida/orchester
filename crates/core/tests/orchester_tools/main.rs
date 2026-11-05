@@ -17,6 +17,7 @@ mod skill_list;
 mod skill_reads;
 mod skills;
 mod test_tools;
+mod ui;
 
 use std::{
   fs,

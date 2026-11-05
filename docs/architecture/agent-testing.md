@@ -121,6 +121,18 @@ element without the needed pattern answers an explicit *unsupported for this ele
 needs Accessibility and Screen Recording; without them it shows a visible state naming the missing permission and where
 to grant it. Platform code lives in small `cfg(target_os)` modules; FFI with `unsafe` in dedicated modules (rule 9).
 
+Built (ORC-738): the `ui_*` interface and the `mcp` driver (`orchester_core::orchester_tools::ui`, the runner's
+`execution::step::ui`). Every driver answers in one shape: a snapshot is a tree of elements, each with a ref, a role
+and a name; `ui_act` takes `click`, `type`, `key`, `scroll` or `select`; a screenshot is a PNG saved in the run's
+storage, answered as a path `read_file` shows. The `mcp` driver maps each call onto one of the app's lurq tools
+(`lurq_windows`, `lurq_inspect`, `lurq_act`, `lurq_interact`, `lurq_set_value`, `lurq_screenshot`, `lurq_logs`,
+`lurq_wait`) over the run's relay to the app; `ui_wait` for an element inspects until it is shown. The QA app is the
+built-in service `desktop-qa` with the `mcp` driver, offered to every step that may start a QA app: `start_service`
+starts it on the `tasks` scenario with the QA script's approval, `start_qa_app(scenario)` stays its alias and
+`call_run_app` the raw relay. Until *Services at once* exists, a QA app's service slot is one of the computer's QA
+slots, as many as the project's *QA apps at once*. Only `desktop-qa` is driven yet: a project's service with the `mcp`
+driver answers that the driver reaches only the built-in one.
+
 ## The Test step
 
 A pipeline step kind that runs suites in layers — lint, then unit, then e2e — starting what each needs and stopping at

@@ -1,7 +1,10 @@
-//! `start_qa_app` (`orchester_core::orchester_tools::QaAppStart`): the runner takes one of the computer's QA slots its
-//! project allows ([`slots`]), waiting while other runs' QA apps hold every one, stops what a holder that died left
-//! running ([`leftover`]), runs the worktree's `tools/qa-app.ps1` ([`script`]) and keeps the app it started for the
-//! invocation, so `call_run_app` without a pid reaches it through its exact discovery file.
+//! The QA app, the built-in service `desktop-qa` (`orchester_core::orchester_tools::QaAppStart`), started by
+//! `start_service("desktop-qa")` or its alias `start_qa_app`: the runner takes one of the computer's service slots for
+//! QA apps that its project's *QA apps at once* allows ([`slots`]), waiting while other runs' QA apps hold every one,
+//! stops what a holder that died left running ([`leftover`]), runs the worktree's `tools/qa-app.ps1` ([`script`]) and
+//! keeps the app it started for the invocation, so the `ui_*` tools (`super::ui`) and `call_run_app` without a pid
+//! reach it through its exact discovery file. `stop_service` and `service_status` of `desktop-qa` stop it and say where
+//! it is.
 //!
 //! Several QA apps open at once do not clash: each run's step has its own QA folder, `.tmp/qa/run-<number>-<step>/`
 //! in its own worktree (run numbers are unique in a project and worktrees are per run), which holds the app's copied
@@ -39,7 +42,7 @@ use orchester_core::{
   connection::stream::QaSlotHolder,
   id::InvocationId,
   limits::QaSlots as Allowed,
-  orchester_tools::{ProcessCall, QA_APP_SCRIPT, QaAppStart, StartedQaApp, ToolResult},
+  orchester_tools::{ProcessCall, QA_APP_SCRIPT, QA_SERVICE, QaAppStart, StartedQaApp, ToolResult},
   project::TaskKey,
   run::RunNumber,
   store::SettingsStore,
@@ -48,6 +51,7 @@ use orchester_core::{
 use orchester_exec::run_processes::RunProcesses;
 use orchester_store::ProjectDb;
 use parking_lot::Mutex;
+use serde_json::json;
 
 pub use self::slots::QaSlots;
 use self::slots::{Holder, Lease, Take};
@@ -205,11 +209,34 @@ impl StepQa {
     }
   }
 
+  /// Stops the invocation's QA app, as `stop_service("desktop-qa")` does, and frees its slot; says so when none runs.
+  pub(in crate::execution::step) fn stop(&self) -> ToolResult {
+    let _one_at_a_time = self.state.starting.lock();
+    let Some(app) = self.state.app.lock().take() else {
+      return ToolResult::shown(format!("the service `{QA_SERVICE}` is not running in this step"));
+    };
+    let pid = app.running.pid;
+    drop(app);
+    ToolResult::shown(format!(
+      "the service `{QA_SERVICE}` (pid {pid}) was stopped with everything it started; its slot is free"
+    ))
+  }
+
+  /// Where the invocation's QA app is, as `service_status("desktop-qa")` answers it.
+  pub(in crate::execution::step) fn status(&self) -> ToolResult {
+    let answer = match self.state.app.lock().as_ref() {
+      Some(app) => json!({"state": "ready", "pid": app.running.pid, "driver": "mcp"}),
+      None => json!({"state": "stopped", "driver": "mcp"}),
+    };
+    ToolResult::shown(answer.to_string())
+  }
+
   /// Starts a QA copy for `start` once a QA slot is free and keeps it for the invocation, replacing the one it
   /// started before. Blocks while an earlier start of the invocation runs, while it waits for the slot and while the
   /// script builds and starts the copy.
-  /// `approved` is the QA script's blob its approval named: the script runs only while it is still that one.
-  pub(in crate::execution::step) fn start(&self, start: &QaAppStart, approved: Option<&str>) -> ToolResult {
+  /// `approved` is the QA script's blob its approval named: the script runs only while it is still that one. `via`
+  /// says which tool asked for it, whose answer it gets.
+  pub(in crate::execution::step) fn start(&self, start: &QaAppStart, approved: Option<&str>, via: QaVia) -> ToolResult {
     let _one_at_a_time = self.state.starting.lock();
     let waited = Instant::now();
     let earlier = self.state.app.lock().take();
@@ -246,7 +273,7 @@ impl StepQa {
       ));
     }
     match self.run_script(start, &folder) {
-      Ok(running) => self.keep(running, lease, start, waited),
+      Ok(running) => self.keep(running, lease, (start, via), waited),
       Err(refusal) => ToolResult::unavailable(&refusal),
     }
   }
@@ -330,7 +357,7 @@ impl StepQa {
   }
 
   /// Keeps `running` with `lease` for the invocation, or stops it when the invocation ended while it started.
-  fn keep(&self, running: Running, lease: Lease, start: &QaAppStart, waited: Duration) -> ToolResult {
+  fn keep(&self, running: Running, lease: Lease, (start, via): (&QaAppStart, QaVia), waited: Duration) -> ToolResult {
     let mut app = self.state.app.lock();
     if self.state.ended() {
       drop(app);
@@ -347,19 +374,45 @@ impl StepQa {
          start_qa_app again once you go on",
       );
     }
-    let mut text = format!(
-      "QA app started on the {} scenario: pid {}. Call call_run_app without pid to drive it. Orchester stops it when \
-       your turn ends or waits for a person; starting again replaces it.",
-      start.scenario(),
-      running.pid
-    );
-    if waited >= SLOT_POLL {
-      // Writing to a String cannot fail.
-      let _ = write!(text, " It waited {:.1} s for a QA slot.", waited.as_secs_f32());
-    }
+    let waited = (waited >= SLOT_POLL).then_some(waited.as_secs_f32());
+    let text = match via {
+      QaVia::Tool => {
+        let mut text = format!(
+          "QA app started on the {} scenario: pid {}. See and use it with ui_open(\"{QA_SERVICE}\") and the other ui_* \
+           tools, or call call_run_app without pid. Orchester stops it when your turn ends or waits for a person; \
+           starting again replaces it.",
+          start.scenario(),
+          running.pid
+        );
+        if let Some(waited) = waited {
+          // Writing to a String cannot fail.
+          let _ = write!(text, " It waited {waited:.1} s for a QA slot.");
+        }
+        text
+      }
+      QaVia::Service => {
+        let mut answer = json!({
+          "service": QA_SERVICE,
+          "pid": running.pid,
+          "driver": "mcp",
+          "scenario": start.scenario(),
+        });
+        if let Some(waited) = waited {
+          answer["waited_secs"] = json!((f64::from(waited) * 10.0).round() / 10.0);
+        }
+        answer.to_string()
+      }
+    };
     *app = Some(QaApp { running, lease });
     ToolResult::shown(text)
   }
+}
+
+/// Which tool asked for a QA app, whose answer its start gets: `start_qa_app`'s sentence, or `start_service`'s JSON.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(in crate::execution::step) enum QaVia {
+  Tool,
+  Service,
 }
 
 /// The runs `holders` names for the transcript; none when a slot named no holder that reads.

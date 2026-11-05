@@ -14,6 +14,7 @@
 //!
 //! A check is offered to a step whose run pinned it and whose access rules let the step call it.
 
+mod qa_service;
 mod requests;
 
 use std::{
@@ -37,7 +38,7 @@ use orchester_core::{
   },
   permission::{AgentPermissions, ResolvedFolder, category::CommandScope},
   resource::CommandEnvironment,
-  service::ServiceApproval,
+  service::{ServiceApproval, ServiceName},
   source::ResolvedSources,
 };
 use orchester_exec::{run_capped, run_processes::RunProcesses};
@@ -144,8 +145,10 @@ pub(in super::super) struct ToolHost {
   qa_scripts: Mutex<Vec<(QaAppStart, String)>>,
   /// The service and stack starts looked at and the services each one's approval named, not run yet.
   service_starts: Mutex<Vec<(ToolCall, Vec<ServiceApproval>)>>,
-  /// The invocation's QA app (`start_qa_app`); `None` while the host is being made.
+  /// The invocation's QA app (`start_qa_app`, `start_service("desktop-qa")`); `None` while the host is being made.
   qa: Option<StepQa>,
+  /// The service whose UI `ui_open` opened last.
+  ui_opened: Mutex<Option<ServiceName>>,
   /// The invocation's services (`start_service`, `stop_service`, `service_status`, `service_logs`); `None` while the
   /// host is being made.
   services: Option<StepServices>,
@@ -226,12 +229,9 @@ impl ToolHost {
     let target = match (call, reach) {
       (_, Some(reach)) => Some(reach.folder.display().to_string()),
       (ToolCall::RunCheck { name }, None) => Some(name.clone()),
-      (ToolCall::StartQaApp(start), None) => {
-        let approval = self.qa_approval(start);
-        // The start runs only the script this request names ([`StepQa::start`]).
-        self.qa_scripts.lock().push((start.clone(), approval.script.clone()));
-        Some(approval.target())
-      }
+      // The start runs only the script this request names ([`StepQa::start`]).
+      (ToolCall::StartQaApp(start), None) => Some(self.qa_target(start)),
+      (ToolCall::StartService(name), None) if self.is_qa(name) => Some(self.qa_target(&QaAppStart::of_service())),
       (ToolCall::StartService(name), None) => Some(self.service_target(call, Started::Service(name))?),
       (ToolCall::StartStack(name), None) => Some(self.service_target(call, Started::Stack(name))?),
       (ToolCall::RunTests { suite, filter }, None) => Some(match filter {
@@ -290,7 +290,14 @@ impl ToolHost {
       git_dir: &self.git_dir,
       hooks: &self.hooks,
     };
-    match call.work(&context) {
+    let work = call.work(&context);
+    // The QA app, also as the service `desktop-qa`, and the `ui_*` calls that drive it.
+    if let Ok(work) = &work
+      && let Some(answer) = self.qa_work(work)
+    {
+      return answer;
+    }
+    match work {
       Ok(ToolWork::Done(result)) => result,
       Ok(ToolWork::Files(call)) => self.files.run(&call, &context),
       Ok(ToolWork::SearchExternal { folder, term }) => self.files.search_external(&folder, &term, &self.outside),
@@ -306,20 +313,8 @@ impl ToolHost {
         &call,
         self.qa.as_ref(),
       ),
-      Ok(ToolWork::QaApp(start)) => match &self.qa {
-        Some(qa) => {
-          // The latest look at this start is what was asked about; earlier ones were denied or never run.
-          let mut asked = self.qa_scripts.lock();
-          let script = asked
-            .iter()
-            .rposition(|(looked, _)| *looked == start)
-            .map(|at| asked[at].1.clone());
-          asked.retain(|(looked, _)| *looked != start);
-          drop(asked);
-          qa.start(&start, script.as_deref())
-        }
-        None => ToolResult::unavailable("this step cannot start a QA app"),
-      },
+      // [`Self::qa_work`] answers every one of these.
+      Ok(ToolWork::QaApp(_) | ToolWork::Ui(_)) => ToolResult::unavailable("this step cannot start a QA app"),
       Ok(ToolWork::StartService(name)) => {
         let approved = self.approved_services(&ToolCall::StartService(name.clone()));
         self
@@ -506,6 +501,7 @@ impl RunTask {
       qa_scripts: Mutex::new(Vec::new()),
       service_starts: Mutex::new(Vec::new()),
       qa: None,
+      ui_opened: Mutex::new(None),
       services: None,
       suites: None,
       browser: None,

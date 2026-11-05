@@ -3,7 +3,7 @@
 //! published service's name; `service_logs` takes a capped tail. `start_stack` comes with them when the project
 //! publishes a stack, asks as a start does and takes only a published stack's name. The prompt tells the agent to
 //! start servers only through `start_service` and `start_stack` and to look at and stop them with these tools, not by
-//! shell.
+//! shell. A writing step is also offered the built-in `desktop-qa` (`ui`).
 
 use orchester_core::{
   orchester_tools::{OrchesterTool, StepTools, ToolCall, ToolCallError, ToolPolicy, auto_approvable},
@@ -40,7 +40,8 @@ fn service_tools_come_with_published_services_and_the_network() {
     OrchesterTool::ServiceLogs,
   ] {
     assert_eq!(none.policy(tool), None, "network off");
-    assert_eq!(step(RepositoryAccess::Write, &[]).policy(tool), None, "no service");
+    // A writing step is offered the built-in desktop-qa (`ui`); a read-only one has no service then.
+    assert_eq!(step(RepositoryAccess::ReadOnly, &[]).policy(tool), None, "no service");
   }
   for repository in [RepositoryAccess::Write, RepositoryAccess::ReadOnly] {
     let offered = step(repository, &["web", "api"]);
@@ -146,9 +147,10 @@ fn service_tools_list_the_services_and_point_the_agent_at_them() {
       .unwrap_or_else(|| panic!("{name} is listed"))
   };
   for name in ["start_service", "stop_service", "service_status", "service_logs"] {
+    // After the project's own, the built-in QA app a writing step on the network may start.
     assert_eq!(
       tool(name)["inputSchema"]["properties"]["name"]["enum"],
-      json!(["web", "api"]),
+      json!(["web", "api", "desktop-qa"]),
       "{name}"
     );
   }
@@ -173,7 +175,9 @@ fn service_prompt_rule_says_to_use_the_service_tools_instead_of_the_shell() {
   for (claude, prefix) in [(true, "mcp__Orchester__"), (false, "")] {
     let paragraph = offered.prompt_paragraph(claude);
     for expected in [
-      format!("Start the project's servers only with {prefix}start_service(name) (web, api), never by shell"),
+      format!(
+        "Start the project's servers only with {prefix}start_service(name) (web, api, desktop-qa), never by shell"
+      ),
       format!("with {prefix}service_status(name)"),
       format!("with {prefix}service_logs(name, tail, since)"),
       format!("stop it with {prefix}stop_service(name), not with shell commands"),
@@ -181,7 +185,7 @@ fn service_prompt_rule_says_to_use_the_service_tools_instead_of_the_shell() {
       assert!(paragraph.contains(&expected), "{expected}\n{paragraph}");
     }
   }
-  let none = step(RepositoryAccess::Write, &[]).prompt_paragraph(true);
+  let none = step(RepositoryAccess::ReadOnly, &[]).prompt_paragraph(true);
   assert!(!none.contains("start_service"), "{none}");
 }
 
@@ -208,7 +212,7 @@ fn service_stack_tool_comes_with_published_stacks_and_the_service_tools() {
     "no stack"
   );
   assert_eq!(
-    step(RepositoryAccess::Write, &[])
+    step(RepositoryAccess::ReadOnly, &[])
       .with_stacks(&stacks(&["full"]))
       .policy(OrchesterTool::StartStack),
     None,

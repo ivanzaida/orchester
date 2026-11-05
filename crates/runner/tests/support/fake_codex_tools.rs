@@ -190,7 +190,8 @@ fn named_after<'a>(prompt: &'a str, lead: &str) -> Option<&'a str> {
 }
 
 /// "Start the service <name>." calls `start_service`, "Start the stack <name>." `start_stack`; with "Then start the
-/// service <other>." it then calls `start_service` of that one; with "Then read outside" it then reads
+/// service <other>." it then calls `start_service` of that one; with "Then drive its UI" it then calls the `ui_*` tools
+/// on it ([`drive_ui`]); with "Then read outside" it then reads
 /// `deps-a/notes.txt` of the repository, which asks; with "Then wait for it to end" it calls `service_status` until the
 /// service is no longer ready; with "Then look at the service" it calls `service_status` and `service_logs`; and with
 /// "Then stop the service" it calls `stop_service`, then `service_status` again when it also looks.
@@ -205,6 +206,9 @@ fn services(server: &mut Prompt, worktree: &Path, prompt: &str) {
   };
   if let Some(other) = named_after(prompt, "Then start the service ") {
     report_call(server, "start_service", &json!({"name": other}));
+  }
+  if prompt.contains("Then drive its UI") {
+    drive_ui(server, name);
   }
   if prompt.contains("Then read outside") {
     read_outside(server, worktree);
@@ -230,6 +234,39 @@ fn services(server: &mut Prompt, worktree: &Path, prompt: &str) {
       report_call(server, "service_status", &named);
     }
   }
+}
+
+/// "Then drive its UI": a snapshot before any `ui_open`, which is refused, then `ui_open` of the service, a snapshot of
+/// the whole tree and one of a query, each `ui_act` action, a screenshot, the log, a wait for it to render and one for
+/// an element that shows only after a few looks, and the service's status and log through the service tools.
+fn drive_ui(server: &mut Prompt, name: &str) {
+  report_call(server, "ui_snapshot", &json!({}));
+  report_call(server, "ui_open", &json!({"service": name}));
+  report_call(server, "ui_snapshot", &json!({}));
+  report_call(server, "ui_snapshot", &json!({"query": "Save"}));
+  report_call(server, "ui_act", &json!({"ref": "ref_2", "action": "click"}));
+  report_call(
+    server,
+    "ui_act",
+    &json!({"ref": "ref_3", "action": "type", "text": "Fix login"}),
+  );
+  report_call(server, "ui_act", &json!({"action": "key", "text": "Enter"}));
+  report_call(server, "ui_act", &json!({"ref": "ref_3", "action": "scroll"}));
+  report_call(
+    server,
+    "ui_act",
+    &json!({"ref": "ref_4", "action": "select", "text": "High"}),
+  );
+  report_call(server, "ui_screenshot", &json!({}));
+  report_call(server, "ui_logs", &json!({"lines": 5}));
+  report_call(server, "ui_wait", &json!({"condition": "idle"}));
+  report_call(
+    server,
+    "ui_wait",
+    &json!({"condition": "element", "query": "Saved", "timeout_ms": 10000}),
+  );
+  report_call(server, "service_status", &json!({"name": name}));
+  report_call(server, "service_logs", &json!({"name": name}));
 }
 
 /// Reads `deps-a/notes.txt` of the repository, outside the worktree, which asks.

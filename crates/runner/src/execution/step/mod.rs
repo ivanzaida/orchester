@@ -32,6 +32,7 @@ mod stderr;
 mod suite;
 mod test_step;
 mod tool_files;
+mod ui;
 pub(super) mod worker;
 
 use orchester_core::{

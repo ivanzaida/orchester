@@ -8,8 +8,9 @@ mod transport;
 
 use std::path::{Path, PathBuf};
 
-use orchester_core::orchester_tools::{AppCall, AppDiscoveryError, ToolResult};
+use orchester_core::orchester_tools::{AppCall, AppDiscoveryError, ToolResult, redacted_value};
 use orchester_exec::run_processes::{RunAppProcessError, RunProcesses};
+use serde_json::Value;
 use thiserror::Error;
 
 use super::qa_app::StepQa;
@@ -60,9 +61,20 @@ pub(super) fn call(
   qa: Option<&StepQa>,
 ) -> ToolResult {
   match run(processes, (worktree, artifacts), call, qa) {
-    Ok(result) => result,
+    Ok(result) => ToolResult::from_app(result),
     Err(error) => ToolResult::unavailable(&error.to_string()),
   }
+}
+
+/// The app's MCP `tools/call` result for `call`, reached as [`call`] reaches it, its PNGs saved and its discovery
+/// token redacted, for a UI driver that reads it before it answers; why it could not be had, as the agent is told.
+pub(super) fn result(
+  processes: &RunProcesses,
+  (worktree, artifacts): (&Path, &Path),
+  call: &AppCall,
+  qa: Option<&StepQa>,
+) -> Result<Value, String> {
+  run(processes, (worktree, artifacts), call, qa).map_err(|error| error.to_string())
 }
 
 fn run(
@@ -70,7 +82,7 @@ fn run(
   (worktree, artifacts): (&Path, &Path),
   call: &AppCall,
   qa: Option<&StepQa>,
-) -> Result<ToolResult, AppError> {
+) -> Result<Value, AppError> {
   let target = qa
     .map(|qa| qa.target(call.pid()))
     .transpose()
@@ -103,7 +115,7 @@ fn run(
   let mut result = transport::Client::new(&process, &discovery)?.call(call)?;
   images::save(artifacts, &mut result)?;
   // Redact before a result can reach Debug, a relay event, the agent or persistence.
-  Ok(ToolResult::from_app(result).redacted(std::slice::from_ref(discovery.token())))
+  Ok(redacted_value(result, std::slice::from_ref(discovery.token())))
 }
 
 /// Whether `program` (a file name without its extension) is the app: `orchester`, or `orchester-app` as builds before
