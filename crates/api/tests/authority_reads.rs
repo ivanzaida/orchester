@@ -6,13 +6,14 @@ use orchester_api::{
   v2::{
     Action, ActionCapability, BundleRef, CallerRole, Capabilities, ClaimRead, CommandKind, DEFAULT_PAGE_LIMIT,
     DecisionId, DenialReason, EventCursor, ExecutionState, MAX_PAGE_LIMIT, ModuleRead, Page, PageCursor, PageRequest,
-    PageRequestError, Subject, TaskRead, WorkRead,
+    PageRequestError, PendingAuthorization, PendingDeliveryRead, Subject, TaskRead, WorkRead,
   },
 };
 use orchester_core::{
   blob::ContentHash,
   id::{ClaimId, ModuleId, ProjectId, RunId, TaskId, UserId, WorkId},
   module::ModuleState,
+  run::CommitId,
   sharing::TaskRevision,
   task::{
     TaskStatus,
@@ -344,15 +345,45 @@ fn authority_reads_module_read_shape() {
     work: None,
     effective_claim: None,
     capabilities,
+    pending_delivery: None,
   };
   let attribution = json!({"by":{"id":by.id,"display_name":"Ada"},"at":1});
   let wire = json!({
     "id":id,"name":"Checkout","description":"","start":"2026-11-01","target":null,"state":"open","revision":1,
     "created":attribution,"updated":attribution,"branch":"modules/checkout","assignee":null,"work":null,
-    "effective_claim":null,"capabilities":capabilities_wire
+    "effective_claim":null,"capabilities":capabilities_wire,"pending_delivery":null
   });
   roundtrip(&read, &wire);
-  for field in ["target", "branch", "assignee", "work", "effective_claim"] {
+  for field in [
+    "target",
+    "branch",
+    "assignee",
+    "work",
+    "effective_claim",
+    "pending_delivery",
+  ] {
     refuses_missing_and_unknown::<ModuleRead>(&wire, field);
   }
+
+  let (source, base) = ("1".repeat(40), "2".repeat(40));
+  let pending = PendingDeliveryRead::new(
+    by.clone(),
+    5,
+    CommitId::new(&source).expect("commit"),
+    CommitId::new(&base).expect("commit"),
+    PendingAuthorization::AwaitingAdmin,
+  )
+  .expect("pending delivery");
+  let read = ModuleRead {
+    pending_delivery: Some(pending),
+    ..read
+  };
+  let mut wire = wire;
+  wire["pending_delivery"] = json!({
+    "requested_by":{"id":by.id,"display_name":"Ada"},"requested_at":5,"source_commit":source,"base_commit":base,
+    "authorization":"awaiting_admin"
+  });
+  roundtrip(&read, &wire);
+  wire["pending_delivery"]["claim_id"] = json!(ClaimId::generate());
+  assert!(serde_json::from_value::<ModuleRead>(wire).is_err());
 }

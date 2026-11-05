@@ -95,8 +95,9 @@ whose pages the app opens in the browser.
 ## Team authority S2 shared contracts
 
 The public prerequisite for platform OP-145 is in core and `orchester-api`; it does not add cloud endpoints.
-Team server admins alone read/change `server_admin::ServerSettings.claim_staleness_seconds` and
-`SettingsChanges.claim_staleness_seconds` (optional in changes). Core's `ClaimStalenessThreshold` is a JSON
+Team server admins alone change `server_admin::ServerSettings.claim_staleness_seconds` through
+`SettingsChanges.claim_staleness_seconds` (optional in changes); every reader of a workspace, member or Admin, reads it
+on the v2 `WorkspaceMetadata` (S10, below). Core's `ClaimStalenessThreshold` is a JSON
 integer in whole seconds, defaults to 900, and accepts 300..=86400 inclusive. Missing read fields from older
 servers use the default; invalid supplied values are refused. Unknown settings-change fields remain refused.
 
@@ -152,7 +153,11 @@ are refused in every shape below.
   `{operation_id,state:"rejected",error:AuthorityError}`.
 - `AuthorityError`: `{operation_id?,code,details}`; `operation_id` is left out when the refusal came before the
   operation was read. `details` is `{}` for every code but `decision_required`, whose details are
-  `{decisions:["D1".."D9"]}` with at least one decision. Details never echo the request or carry credentials.
+  `{decisions:["D1".."D9"]}` with at least one decision, and `unsupported_contract`, whose details are
+  `{required_version:"0.4.0"}` (ORC-733): the oldest desktop version the server accepts, a `ReleaseVersion`
+  (`MAJOR.MINOR.PATCH` with an optional `-pre` suffix, no build metadata), so the desktop can say which Orchester the
+  server needs. A code with another code's details, or details of two codes, is refused. Details never echo the
+  request or carry credentials.
 
 | Code | Status |
 | --- | --- |
@@ -197,7 +202,16 @@ unknown field is refused. Times are milliseconds since the Unix epoch; days are 
 - `TaskRead`: every `SharedTask` field (the content's fields inline) and `assignee:UserRef?`, `work:WorkRead?`,
   `effective_claim:ClaimRead?`, `capabilities`. `workflow` stays apart from `work.state`.
 - `ModuleRead`: every `SharedModule` field (its fields inline) and `branch`, `assignee?`, `work?`, `effective_claim?`,
-  `capabilities`. A module's tasks are read with the task list's `modules` filter.
+  `capabilities`, `pending_delivery:PendingDeliveryRead?`. A module's tasks are read with the task list's `modules`
+  filter.
+- `PendingDeliveryRead` (ORC-733): the module's open delivery to base, from its `delivery.request` until the runner
+  reports the merge or the delivery fails, `null` when there is none:
+  `{requested_by:UserRef,requested_at,source_commit,base_commit,authorization}`. `requested_at` is when it was asked
+  for; `source_commit` (the module branch head) and `base_commit` are S7's `CommitId`s and differ, or it is refused
+  (`PendingDeliveryError::NothingToDeliver`). `authorization` (`PendingAuthorization`) is `awaiting_admin` (it waits
+  for an Admin's `delivery.authorize`), `admin` (an Admin authorized it) or `automatic` (the workspace's
+  `automatic_merge` authorized it, D7). An Admin's screen reads it as "Delivery to main waits for your authorization ·
+  olha asked at 15:38". The full record stays `ModuleDeliveryRead` (S7).
 - Task list: `TaskListRequest` `{filters,sort,page}`, each defaulted. `TaskFilters`
   `{statuses,priorities,tags,all_tags,pipelines,modules,search}`: each facet keeps tasks with any of its values, `null`
   among `pipelines` (slugs) or `modules` is a task without one, `all_tags` keeps tasks with every tag. `search`
@@ -215,7 +229,11 @@ unknown field is refused. Times are milliseconds since the Unix epoch; days are 
   (`Page<SharedResource>`); a resource's versions are `ResourceVersionsPage` (`Page<SharedVersion>`, oldest first);
   `ResourcePickerRequest` `{kind,search?,page}` answers `ResourcePickerPage` of `ResourceChoice`
   `{id,kind,slug,name,latest}`, resources not archived with a published version.
-- `WorkspaceMetadata`: `{project:SharedProject,policy:WorkspacePolicy,capabilities,cursor}`.
+- `WorkspaceMetadata`: `{project:SharedProject,policy:WorkspacePolicy,capabilities,cursor,claim_staleness_seconds}`.
+  `claim_staleness_seconds` (ORC-733) is the server's `ClaimStalenessThreshold` in whole seconds (300..=86400), sent
+  to every reader of the workspace, so a member's desktop can say when a claim goes stale; it is required, and a value
+  out of range is refused. It stays the server's setting, not `WorkspacePolicy`'s, and only a server admin changes it
+  (S2, above). A change to it makes every workspace's `{kind:"workspace"}` scope stale (S11).
 
 Left open, not invented here (they rest on the open decisions D1–D9 or on later stages): human waits beyond
 `awaiting_human` (questions, plans, approvals), the *Needs you* and *Active* list views and their counts that rest on
@@ -353,8 +371,8 @@ in every shape below.
 - Route, the server's: `GET /api/v2/projects/{project}/subscription`, a server-sent event stream, with an optional
   `Last-Event-ID` header carrying the last cursor the client saw. Each event's SSE `event:` name is its `kind`, its
   `id:` its `cursor` (`revoked` has none), and its `data:` the JSON below.
-- `QueryScope`, a family of cached reads, tagged by `kind`: `{kind:"workspace"}` (project, policy, capabilities,
-  members), `{kind:"task_list"}` (task list and task counts), `{kind:"task",task:TaskId}`,
+- `QueryScope`, a family of cached reads, tagged by `kind`: `{kind:"workspace"}` (project, policy, claim staleness
+  threshold, capabilities, members), `{kind:"task_list"}` (task list and task counts), `{kind:"task",task:TaskId}`,
   `{kind:"task_comments",task:TaskId}`, `{kind:"module_list"}`, `{kind:"module",module:ModuleId}` (summary, progress,
   burndown, history), `{kind:"library"}` (library and pickers) and `{kind:"resource",resource:ResourceId}` (its
   version list). Scopes compare by value and are totally ordered, so a set of them is stable.
