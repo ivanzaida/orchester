@@ -12,7 +12,8 @@
 //! placeholders that name a service it does not need are said in place too, and keep Publish waiting. A service runs
 //! its program with the person's rights, so lurq's synthetic input (an MCP client driving the window) makes one,
 //! changes what it runs or publishes it only under *Let automation change agent permissions*, as
-//! `save_service_draft` and `publish_service` do.
+//! `save_service_draft` and `publish_service` do: what such input typed into those fields otherwise is put back as the
+//! draft next saves, whoever's input saves it.
 
 mod actions;
 mod delete;
@@ -137,6 +138,12 @@ impl View {
   }
 }
 
+/// The service a save under way sends, which is stored once it lands.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct Sending(Option<Service>);
+
+impl DevtoolsInspectable for Sending {}
+
 #[derive(Clone)]
 struct Editor {
   fields: Fields,
@@ -145,6 +152,10 @@ struct Editor {
   retry: Signal<u64>,
   save: Save,
   publish: Publish,
+  /// What the save under way sends.
+  sending: Signal<Sending>,
+  /// A field was left or a need changed while a save was under way: the page saves again once it lands.
+  again: Signal<bool>,
   /// An MCP client's input asked for what only a person decides here; nothing was saved or published.
   refused: Signal<bool>,
   /// The delete question shows.
@@ -175,10 +186,13 @@ impl Component for Editor {
         })
         .await?
       }),
+      sending: ctx.signal(Sending(None)),
+      again: ctx.signal(false),
       refused: ctx.signal(false),
       deleting: ctx.signal(false),
       gate: ctx.use_context::<InputGate>(),
     };
+    editor.fields.watch_automation(ctx, editor.gate.as_ref());
     editor.follow(ctx, &props);
     // A service chosen in *Add a service* is needed after the others, and the draft saves.
     let commit = editor.commit(props.tab.project.open.repo_root.clone());
@@ -216,6 +230,11 @@ impl Component for Editor {
     let Some(Read(stored)) = self.stored.get() else {
       return self.pending(ctx, &read);
     };
+    if self.again.get_untracked() && !self.save.state().get_untracked().is_pending() {
+      // A field was left while the last save was under way: what it holds now saves after it.
+      self.again.set(false);
+      self.save_now(&root);
+    }
     self.fields.follow();
     let view = self.view(stored);
     self.status(&props.tab, &view);
@@ -253,15 +272,16 @@ impl Component for Editor {
 
 impl Editor {
   /// After a save or a publish: what it read back is stored, the page's status says so, and the project's other
-  /// screens read again; a new service's page opens under its id.
+  /// screens read again; a new service's page opens under its id, once a save asked for meanwhile landed too.
   fn follow(&self, ctx: &mut Ctx, props: &EditorProps) {
     let navigation = Navigation::of(ctx);
     let project = props.tab.project.open.project.id();
-    let (stored, status, feed, new) = (
+    let (stored, status, feed, new, again) = (
       self.stored.clone(),
       props.tab.status.clone(),
       props.tab.project.feed.clone(),
       props.id.is_none(),
+      self.again.clone(),
     );
     ctx.watch(&self.save.state(), move |state| {
       if state.is_pending() {
@@ -269,6 +289,7 @@ impl Editor {
         return;
       }
       if state.is_rejected() {
+        again.set(false);
         status.set(Status::Failed);
         return;
       }
@@ -279,6 +300,10 @@ impl Editor {
       stored.set(Some(read));
       status.set(Status::Saved);
       feed.saved();
+      if again.get_untracked() {
+        // The page saves again as it renders, and opens the new service's page after that save.
+        return;
+      }
       if let (true, Some(id)) = (new, id) {
         navigation.replace(Route::Project(
           project,
@@ -346,14 +371,26 @@ impl Editor {
     Arc::new(move || editor.save_now(&root))
   }
 
+  /// Saves the fields as they are now. What an MCP client changed of what the service runs, while only a person decides
+  /// that, is put back first to what is stored (or being stored), whoever's input saves; a save asked for while one is
+  /// under way follows it.
   fn save_now(&self, root: &std::path::Path) {
-    if self.save.state().get_untracked().is_pending() {
-      return;
-    }
     let Some(Read(stored)) = self.stored.get_untracked() else {
       return;
     };
     let base = stored.entry.as_ref().map(|entry| &entry.body);
+    let pending = self.save.state().get_untracked().is_pending();
+    let sending = self.sending.get_untracked().0.filter(|_| pending);
+    let to = sending.as_ref().or(base).map(ServiceForm::of).unwrap_or_default();
+    let put_back = self.fields.put_back(&to);
+    if put_back {
+      tracing::warn!("synthetic input changed what a service runs; put back");
+      self.refused.set(true);
+    }
+    if pending {
+      self.again.set(true);
+      return;
+    }
     let Ok(service) = self.fields.form().service(base) else {
       return;
     };
@@ -365,7 +402,11 @@ impl Editor {
       tracing::warn!("synthetic input asked to change what a service runs; not saved");
       return;
     }
+    if !put_back {
+      self.refused.set(false);
+    }
     let id = stored.entry.as_ref().map(|entry| entry.id);
+    self.sending.set(Sending(Some(service.clone())));
     self.save.run((root.to_path_buf(), id, service, stored.revision));
   }
 
@@ -379,6 +420,7 @@ impl Editor {
       tracing::warn!("synthetic input asked to publish a service; not published");
       return;
     }
+    self.refused.set(false);
     self.publish.run((root, id, service));
   }
 
@@ -386,7 +428,9 @@ impl Editor {
   /// client's only under *Let automation change agent permissions*. A refusal is said under the actions.
   fn may(&self, reasons: &[Message]) -> bool {
     let may = reasons.is_empty() || input_may_decide(self.gate.as_ref(), Guarded::PermissionWidening);
-    self.refused.set(!may);
+    if !may {
+      self.refused.set(true);
+    }
     may
   }
 

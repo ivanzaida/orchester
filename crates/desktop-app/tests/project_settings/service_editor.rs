@@ -3,6 +3,7 @@
 //! its first save, publishes the draft and deletes the service after its modal. Run with
 //! `cargo test -p orchester-app --test project_settings service_editor`.
 
+use lurq::app::events::with_synthetic_input;
 use orchester_core::{
   resource::{CommandArg, CommandProgram},
   service::{Readiness, ReadyCheck, ReadyTimeout, Service, ServiceName, ServiceValue},
@@ -241,4 +242,120 @@ fn service_editor_deletes_the_service_after_its_modal() {
   settings.until("back on Services", |s| s.exists("settings-service-postgres-row"));
   assert!(stored(&settings, "cloud-web").is_none(), "cloud-web is deleted");
   assert!(!settings.exists("settings-service-cloud-web-row"));
+}
+
+/// A change made while a save is under way saves once it lands: a need removed right after a field was left.
+#[test]
+fn service_editor_saves_a_change_made_while_a_save_is_under_way() {
+  let mut settings = open_web();
+  type_and_leave(
+    &mut settings,
+    ("settings-service-arguments", "serve\n--quiet"),
+    "settings-service-folder",
+  );
+  settings.click("settings-service-need-cloud-api-remove");
+  settings.until("both changes stored", |s| {
+    stored(s, "cloud-web").is_some_and(|web| web.needs().is_empty() && web.arguments().len() == 2)
+  });
+  settings.saved();
+}
+
+/// Lets an MCP client's window input change what a service runs, or not.
+fn automation_changes_permissions(settings: &Settings, on: bool) {
+  settings
+    .window
+    .launch
+    .workspace()
+    .expect("the session started")
+    .set_automation_changes_permissions(on)
+    .expect("the permissions opt-in");
+}
+
+/// An MCP client's program is put back and not saved while *Let automation change agent permissions* is off, even
+/// when a person's save of another field follows; the person's own change saves.
+#[test]
+fn service_editor_puts_back_what_an_mcp_client_typed_into_the_program() {
+  let mut settings = open_web();
+  with_synthetic_input(|| {
+    type_and_leave(
+      &mut settings,
+      ("settings-service-program", "other-tool"),
+      "settings-service-arguments",
+    );
+  });
+  settings.until("the refusal", |s| s.exists("settings-service-person-only"));
+  assert_eq!(settings.value("settings-service-program"), program(), "put back");
+  assert_eq!(
+    stored(&settings, "cloud-web").expect("cloud-web").program().as_str(),
+    program()
+  );
+
+  // Typed but not left: a person's save of another field puts it back too.
+  with_synthetic_input(|| settings.set("settings-service-program", "other-tool"));
+  type_and_leave(
+    &mut settings,
+    ("settings-service-arguments", "serve\n--quiet"),
+    "settings-service-folder",
+  );
+  settings.until("the person's arguments stored", |s| {
+    stored(s, "cloud-web").is_some_and(|web| web.arguments().len() == 2)
+  });
+  settings.saved();
+  assert_eq!(
+    stored(&settings, "cloud-web").expect("cloud-web").program().as_str(),
+    program(),
+    "the client's program is not saved with the person's change"
+  );
+  assert_eq!(settings.value("settings-service-program"), program());
+}
+
+/// Under *Let automation change agent permissions* an MCP client's program saves.
+#[test]
+fn service_editor_takes_an_mcp_clients_program_under_the_automation_setting() {
+  let mut settings = open_web();
+  automation_changes_permissions(&settings, true);
+  with_synthetic_input(|| {
+    type_and_leave(
+      &mut settings,
+      ("settings-service-program", "other-tool"),
+      "settings-service-arguments",
+    );
+  });
+  settings.until("the client's program stored", |s| {
+    stored(s, "cloud-web").is_some_and(|web| web.program().as_str() == "other-tool")
+  });
+  settings.saved();
+  assert!(!settings.exists("settings-service-person-only"));
+}
+
+/// An MCP client's Publish is refused while the setting is off and taken while it is on.
+#[test]
+fn service_editor_publishes_for_an_mcp_client_only_under_the_automation_setting() {
+  let mut settings = open_web();
+  with_synthetic_input(|| settings.click("settings-service-publish"));
+  settings.until("the refusal", |s| s.exists("settings-service-person-only"));
+  assert_eq!(settings.text("settings-service-state"), "Draft · not published yet");
+
+  automation_changes_permissions(&settings, true);
+  with_synthetic_input(|| settings.click("settings-service-publish"));
+  settings.until("published", |s| s.text("settings-service-state") == "Published v1");
+  assert!(!settings.exists("settings-service-person-only"));
+}
+
+/// Only a person deletes a service: an MCP client's confirm is refused in the modal, with the setting on too.
+#[test]
+fn service_editor_refuses_an_mcp_clients_delete() {
+  let mut settings = open_web();
+  automation_changes_permissions(&settings, true);
+  settings.click("settings-service-delete");
+  settings.until("the delete question", |s| s.exists("settings-service-delete-confirm"));
+  with_synthetic_input(|| settings.click("settings-service-delete-confirm"));
+  settings.until("the refusal", |s| {
+    s.exists("settings-service-delete-dialog-person-only")
+  });
+  for _ in 0..10 {
+    settings.window.tree.tick_futures();
+    settings.window.pass();
+  }
+  assert!(stored(&settings, "cloud-web").is_some(), "not deleted");
 }

@@ -26,6 +26,7 @@ use super::{
   Commit, LABEL_WIDTH, View,
 };
 use crate::{
+  mcp::input_gate::{Guarded, InputGate, input_may_decide},
   theme::{ExtraSpacing, ExtraTypography},
   ui::{field::FieldInput, icon::Icon, message::message_text},
 };
@@ -48,6 +49,27 @@ struct Found(Option<ProgramFound>);
 
 impl DevtoolsInspectable for Found {}
 
+/// The fields that say what a service runs which an MCP client's input changed while only a person decides that
+/// (*Let automation change agent permissions* off): the next save puts them back first, so no person's save of
+/// another field takes them along.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[expect(
+  clippy::struct_excessive_bools,
+  reason = "one mark per field, each set and put back on its own"
+)]
+pub(super) struct Automated {
+  name: bool,
+  program: bool,
+  arguments: bool,
+  folder: bool,
+  variables: bool,
+}
+
+impl DevtoolsInspectable for Automated {}
+
+/// Sets one field's mark.
+type Mark = fn(&mut Automated);
+
 /// The fields as typed.
 #[derive(Clone)]
 pub(super) struct Fields {
@@ -60,6 +82,7 @@ pub(super) struct Fields {
   pub needs: Signal<Needs>,
   /// The service *Add a service* chose, until it is added.
   pub adding: Signal<String>,
+  automated: Signal<Automated>,
 }
 
 impl Fields {
@@ -72,7 +95,57 @@ impl Fields {
       variables: ctx.signal(Lines::default()),
       needs: ctx.signal(Needs::default()),
       adding: ctx.signal(String::new()),
+      automated: ctx.signal(Automated::default()),
     }
+  }
+
+  /// Marks each field that says what the service runs as an MCP client's input changes it while it may not decide
+  /// that; the mark is read as the input lands, as lurq delivers it.
+  pub(super) fn watch_automation(&self, ctx: &mut Ctx, gate: Option<&InputGate>) {
+    let mark = |set: Mark| {
+      let (automated, gate) = (self.automated.clone(), gate.cloned());
+      move || {
+        if !input_may_decide(gate.as_ref(), Guarded::PermissionWidening) {
+          automated.update(set);
+        }
+      }
+    };
+    let texts: [(&Signal<String>, Mark); 4] = [
+      (&self.name, |a| a.name = true),
+      (&self.program, |a| a.program = true),
+      (&self.arguments, |a| a.arguments = true),
+      (&self.folder, |a| a.folder = true),
+    ];
+    for (field, set) in texts {
+      let mark = mark(set);
+      ctx.watch(field, move |_: &String| mark());
+    }
+    let mark = mark(|a| a.variables = true);
+    ctx.watch(&self.variables, move |_: &Lines| mark());
+  }
+
+  /// Puts each field an MCP client changed while it may not decide what runs back to what `to` holds, and forgets
+  /// the marks; whether one held something else.
+  pub(super) fn put_back(&self, to: &ServiceForm) -> bool {
+    let automated = self.automated.get_untracked();
+    let mut back = false;
+    for (marked, field, value) in [
+      (automated.name, &self.name, &to.name),
+      (automated.program, &self.program, &to.program),
+      (automated.arguments, &self.arguments, &to.arguments),
+      (automated.folder, &self.folder, &to.working_folder),
+    ] {
+      if marked && field.get_untracked() != *value {
+        field.set(value.clone());
+        back = true;
+      }
+    }
+    if automated.variables && self.variables.get_untracked().0 != to.variables {
+      self.variables.set(Lines(to.variables.clone()));
+      back = true;
+    }
+    self.automated.set(Automated::default());
+    back
   }
 
   pub(super) fn fill(&self, form: &ServiceForm) {
