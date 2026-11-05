@@ -1,13 +1,15 @@
 //! Settings › General (`01 · General` `l838Ty` in the new `orchester.pen`, with *Privacy* as `01b` `Z322E` and
 //! *Updates* as `wSMNG` draw them): *Appearance* with the window's theme and the honest note under it (`theme`), *Plan
-//! limits* with the warning threshold every project's Usage draws (`threshold`), *Privacy* with whether error reports
-//! are sent (`error_reports`), *Updates* with where this copy's update stands, its channel and whether it installs by
-//! itself (`updates`), and *This computer*: the app's version, whether it is a release or a development build and the
-//! channel it follows, and where its application database and its log are, each with Copy. What a row is for is in its
-//! (i) tooltip. A change saves as it is made, off the UI thread, and the header's save state follows it
-//! (`super::save_state`). Nothing here widens what agents may do, so no control is a person's alone.
+//! limits* with the warning threshold every project's Usage draws (`threshold`), *Services* with the computer's
+//! *Services at once* (`services`), *Privacy* with whether error reports are sent (`error_reports`), *Updates* with
+//! where this copy's update stands, its channel and whether it installs by itself (`updates`), and *This computer*: the
+//! app's version, whether it is a release or a development build and the channel it follows, and where its application
+//! database and its log are, each with Copy. What a row is for is in its (i) tooltip. A change saves as it is made, off
+//! the UI thread, and the header's save state follows it (`super::save_state`). Nothing here widens what agents may do,
+//! so no control is a person's alone.
 
 mod error_reports;
+mod services;
 mod theme;
 mod threshold;
 mod updates;
@@ -49,6 +51,7 @@ pub fn tab(ctx: &mut Ctx, show: Option<GeneralShow>) -> Element {
         .note(ctx.t(theme::NOTE)),
     )
     .child(ctx.mount_keyed::<threshold::PlanLimitsGroup>("settings-plan-limits-group", plan_limits))
+    .child(services::group(ctx))
     .child(
       SettingGroup::new("settings-privacy", ctx.t("settings.general.privacy.title"))
         .row(ctx.mount_keyed::<error_reports::ErrorReportsRow>("settings-error-reports", ())),

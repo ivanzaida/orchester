@@ -51,9 +51,12 @@ impl Workspace {
     self.db.lock().service_slots()
   }
 
-  /// Keeps the computer's *Services at once*; the runners follow it from their next start.
+  /// Keeps the computer's *Services at once*; the runners follow it from their next start, and every screen that shows
+  /// it (Settings › General, each project's Runs › Limits) reads it again.
   pub fn set_service_slots(&self, slots: ComputerServiceSlots) -> Result<(), StoreError> {
-    self.db.lock().set_service_slots(slots)
+    self.db.lock().set_service_slots(slots)?;
+    self.changes.record_app(AppOutside::ServiceSlots);
+    Ok(())
   }
 
   /// The colors the window uses (`orchester-app`); [`ThemeSetting::default`] until one is chosen.

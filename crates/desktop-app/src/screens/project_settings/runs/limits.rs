@@ -1,9 +1,10 @@
-//! Limits (`Limits` `tmV5e` in `02 · Runs`): the run and daily budgets, the time limit and how many agents and QA apps
-//! work at once, number fields with their units and read-backs, each saved as a person leaves it, with per-field
-//! validation. A change made elsewhere (`update_project_limits`) reaches the settings' query and fills the fields in
-//! place; only while a field holds an edit not saved yet is it said under the group, with Reload. Raising or removing
-//! the daily budget lets runs it stopped go on, a person's decision: window input from an MCP client saves it only
-//! while the person lets automation answer approvals.
+//! Limits (`Limits` `tmV5e` in `02 · Runs`): the run and daily budgets, the time limit and how many agents, services
+//! (`Services at once` `agehj` in `01c` `tJkyQ`, the project's share of the computer's) and QA apps work at once,
+//! number fields with their units and read-backs, each saved as a person leaves it, with per-field validation. A change
+//! made elsewhere (`update_project_limits`) reaches the settings' query and fills the fields in place; only while a
+//! field holds an edit not saved yet is it said under the group, with Reload. Raising or removing the daily budget lets
+//! runs it stopped go on, a person's decision: window input from an MCP client saves it only while the person lets
+//! automation answer approvals.
 use std::{path::Path, sync::Arc};
 
 use lurq::{
@@ -16,7 +17,10 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::tokens::compact_tokens;
+use orchester_core::{
+  limits::{ComputerServiceSlots, ProjectLimits},
+  tokens::compact_tokens,
+};
 use orchester_workspace::{
   budget::LimitsErrors, decisions::DecisionKind, messages::Message, project_settings::LimitsText,
 };
@@ -28,7 +32,7 @@ use super::super::{
 };
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
-  queries::Kept,
+  queries::{self, Kept, Session, app},
   theme::ExtraTypography,
   ui::{
     button::{ActionButton, ButtonKind},
@@ -53,6 +57,10 @@ pub(super) struct Limits {
   minutes: Signal<String>,
   slots: Signal<String>,
   qa: Signal<String>,
+  /// The project's share of *Services at once*.
+  services: Signal<String>,
+  /// The computer's *Services at once* once read: the most a changed share may be.
+  computer: Signal<Option<ComputerServiceSlots>>,
   /// The settings the fields were filled from or last saved as: the base of the next save.
   stored: Signal<Option<Read>>,
   /// What the page's last save read back, until the settings' query has it.
@@ -74,16 +82,28 @@ enum Field {
   Daily,
   Time,
   Slots,
+  /// *Services at once* (`agehj` in `tJkyQ`): the project's share of the computer's, beside *Agents at once*.
+  Services,
   /// *QA apps at once* (`DsTyK`), built as *Agents at once*.
   Qa,
 }
 impl Field {
+  /// The rows, in the order the group reads.
+  const ALL: [Self; 6] = [
+    Self::Default,
+    Self::Daily,
+    Self::Time,
+    Self::Slots,
+    Self::Services,
+    Self::Qa,
+  ];
   const fn id(self) -> &'static str {
     match self {
       Self::Default => "settings-default-budget",
       Self::Daily => "settings-daily-budget",
       Self::Time => "settings-time-limit",
       Self::Slots => "settings-agent-slots",
+      Self::Services => "settings-service-slots",
       Self::Qa => "settings-qa-slots",
     }
   }
@@ -94,6 +114,7 @@ impl Field {
       Self::Daily => "settings-daily",
       Self::Time => "settings-time",
       Self::Slots => "settings-slots",
+      Self::Services => "settings-services",
       Self::Qa => "settings-qa",
     }
   }
@@ -124,6 +145,12 @@ impl Field {
         "project_settings.slotsDetail",
         "project_settings.agentsUnit",
       ],
+      Self::Services => [
+        "project_settings.serviceSlots",
+        "project_settings.serviceSlotsHint",
+        "project_settings.serviceSlotsDetail",
+        "project_settings.servicesUnit",
+      ],
       Self::Qa => [
         "project_settings.qaSlots",
         "project_settings.countRange",
@@ -132,16 +159,31 @@ impl Field {
       ],
     }
   }
+  /// The row's hint: the share's names the most it may be, the computer's limit (its range's end until that is read).
+  fn hint(self, ctx: &Ctx, computer: Option<ComputerServiceSlots>) -> Arc<str> {
+    let [_, hint, _, _] = self.keys();
+    if matches!(self, Self::Services) {
+      let limit = computer.map_or(ComputerServiceSlots::MAX, |limit| limit.get().get());
+      return ctx.t_args(hint, [("limit", limit.to_string())]);
+    }
+    ctx.t(hint)
+  }
   /// A count of slots: always entered, and with nothing to read back.
   const fn counts(self) -> bool {
-    matches!(self, Self::Slots | Self::Qa)
+    matches!(self, Self::Slots | Self::Services | Self::Qa)
   }
+}
+/// The computer's *Services at once* once read, which Settings › General changes for every project.
+fn computer_limit(ctx: &mut Ctx) -> Option<ComputerServiceSlots> {
+  let session = Session::of(ctx);
+  queries::state(&ctx.query(app::service_slots(session))).data
 }
 /// The Limits group while it is read (`L02L` `Nxa0L`): its heading, its note, its foot and every row's label, hint and
 /// unit real, each value a bone in its field, the daily budget's read-back a bone under it.
 pub(super) fn bones(ctx: &mut Ctx) -> Element {
-  let rows = [Field::Default, Field::Daily, Field::Time, Field::Slots, Field::Qa].map(|kind| {
-    let [label, hint, info, unit] = kind.keys();
+  let computer = computer_limit(ctx);
+  let rows = Field::ALL.map(|kind| {
+    let [label, _, info, unit] = kind.keys();
     let value = if kind.counts() { 14.0 } else { 46.0 };
     let field = skeleton::unit_field(ctx, FIELD_WIDTH, value, &ctx.t(unit));
     let control: Element = if matches!(kind, Field::Daily) {
@@ -150,7 +192,7 @@ pub(super) fn bones(ctx: &mut Ctx) -> Element {
       field.into()
     };
     SettingRow::new(format!("{}-reading", kind.row()), ctx.t(label))
-      .hint(ctx.t(hint))
+      .hint(kind.hint(ctx, computer))
       .info(ctx.t(info))
       .control(control)
       .render(ctx)
@@ -172,6 +214,8 @@ impl Component for Limits {
       minutes: ctx.signal(String::new()),
       slots: ctx.signal(String::new()),
       qa: ctx.signal(String::new()),
+      services: ctx.signal(String::new()),
+      computer: ctx.signal(None),
       stored: ctx.signal(None),
       kept: ctx.props::<TabProps>().kept.clone(),
       separator: ctx.t("project_settings.groupSeparator"),
@@ -204,6 +248,10 @@ impl Component for Limits {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<TabProps>().clone();
     let save = self.save.clone();
+    let computer = computer_limit(ctx);
+    if self.computer.get_untracked() != computer {
+      self.computer.set(computer);
+    }
     let loaded = work::load(ctx, props.project.open.repo_root.clone());
     let shown = loaded.shown(&self.kept, save.state().get().is_pending());
     let Some(data) = shown.or_else(|| self.stored.get()) else {
@@ -213,7 +261,7 @@ impl Component for Limits {
       self.fill(data.clone());
     }
     let mut stored = self.stored.get().expect("fields were filled from the load");
-    let changed = self.text().limits(stored.0.limits, &self.separator).as_ref() != Ok(&stored.0.limits);
+    let changed = self.read(stored.0.limits, computer).as_ref() != Ok(&stored.0.limits);
     // A change made elsewhere: the settings' query has limits other than the fields' base.
     let outside = stored.0.limits != data.0.limits;
     if outside && !changed && !save.state().get().is_pending() {
@@ -228,7 +276,7 @@ impl Component for Limits {
     if !save.state().get().is_pending() && save.state().get().error.is_none() {
       props
         .status
-        .set(if self.text().limits(stored.0.limits, &self.separator).is_err() {
+        .set(if self.read(stored.0.limits, computer).is_err() {
           Status::Invalid
         } else if changed {
           Status::Unsaved
@@ -237,13 +285,12 @@ impl Component for Limits {
         });
     }
     let errors = self
-      .text()
-      .limits(stored.0.limits, &self.separator)
+      .read(stored.0.limits, computer)
       .err()
       .map(|e| *e)
       .unwrap_or_default();
     let commit = self.commit(&props, &save);
-    let rows = self.rows(ctx, &errors, &commit);
+    let rows = self.rows(ctx, &errors, &commit, computer);
     let note = Text::new(&ctx.t("project_settings.limitsNote"))
       .id("settings-limits-note")
       .variant(ExtraTypography::Note.role());
@@ -302,7 +349,12 @@ impl Limits {
       minutes: self.minutes.get(),
       slots: self.slots.get(),
       qa: self.qa.get(),
+      services: self.services.get(),
     }
+  }
+  /// The limits the fields hold over `base`, a changed share at most the `computer`'s limit when it is read.
+  fn read(&self, base: ProjectLimits, computer: Option<ComputerServiceSlots>) -> Result<ProjectLimits, Box<LimitsErrors>> {
+    self.text().limits(base, &self.separator, computer)
   }
   fn fill(&self, read: Read) {
     let text = LimitsText::of(read.0.limits, &self.separator);
@@ -311,9 +363,10 @@ impl Limits {
     self.minutes.set(text.minutes);
     self.slots.set(text.slots);
     self.qa.set(text.qa);
+    self.services.set(text.services);
     self.stored.set(Some(read));
   }
-  fn accept(&self, limits: orchester_core::limits::ProjectLimits) {
+  fn accept(&self, limits: ProjectLimits) {
     let Some(sent) = self.submitted.get_untracked().0 else {
       return;
     };
@@ -325,6 +378,7 @@ impl Limits {
       (&self.minutes, &sent.minutes, read.minutes),
       (&self.slots, &sent.slots, read.slots),
       (&self.qa, &sent.qa, read.qa),
+      (&self.services, &sent.services, read.services),
     ] {
       if signal.get_untracked() == *submitted {
         signal.set(saved);
@@ -358,7 +412,7 @@ impl Limits {
       return;
     };
     let text = self.text();
-    let Ok(asked) = text.limits(base.0.limits, &self.separator) else {
+    let Ok(asked) = text.limits(base.0.limits, &self.separator, self.computer.get_untracked()) else {
       return;
     };
     if base.0.limits.raises_daily_budget(asked) && !may_raise {
@@ -410,6 +464,7 @@ impl Limits {
       Field::Daily => &self.daily,
       Field::Time => &self.minutes,
       Field::Slots => &self.slots,
+      Field::Services => &self.services,
       Field::Qa => &self.qa,
     };
     let [label, _, _, unit] = kind.keys();
@@ -442,6 +497,7 @@ impl Limits {
       .limits;
     let value = match kind {
       Field::Slots => return limits.agent_slots().get().to_string(),
+      Field::Services => return limits.service_slots().get().to_string(),
       Field::Qa => return limits.qa_slots().get().to_string(),
       Field::Time => {
         return limits.default_time_limit().map_or_else(
@@ -469,25 +525,33 @@ impl Limits {
     )
   }
 
-  fn rows(&self, ctx: &mut Ctx, errors: &LimitsErrors, commit: &Arc<dyn Fn() + Send + Sync>) -> Vec<Element> {
-    [
-      (Field::Default, errors.default_run_budget.as_ref()),
-      (Field::Daily, errors.daily_budget.as_ref()),
-      (Field::Time, errors.default_time_limit.as_ref()),
-      (Field::Slots, errors.agent_slots.as_ref()),
-      (Field::Qa, errors.qa_slots.as_ref()),
-    ]
-    .into_iter()
-    .map(|(kind, error)| {
-      let field = self.number(ctx, kind, error, commit);
-      let [label, hint, info, _] = kind.keys();
-      SettingRow::new(kind.row(), ctx.t(label))
-        .hint(ctx.t(hint))
-        .info(ctx.t(info))
-        .control(field)
-        .render(ctx)
-    })
-    .collect()
+  fn rows(
+    &self,
+    ctx: &mut Ctx,
+    errors: &LimitsErrors,
+    commit: &Arc<dyn Fn() + Send + Sync>,
+    computer: Option<ComputerServiceSlots>,
+  ) -> Vec<Element> {
+    Field::ALL
+      .into_iter()
+      .map(|kind| {
+        let error = match kind {
+          Field::Default => errors.default_run_budget.as_ref(),
+          Field::Daily => errors.daily_budget.as_ref(),
+          Field::Time => errors.default_time_limit.as_ref(),
+          Field::Slots => errors.agent_slots.as_ref(),
+          Field::Services => errors.service_slots.as_ref(),
+          Field::Qa => errors.qa_slots.as_ref(),
+        };
+        let field = self.number(ctx, kind, error, commit);
+        let [label, _, info, _] = kind.keys();
+        SettingRow::new(kind.row(), ctx.t(label))
+          .hint(kind.hint(ctx, computer))
+          .info(ctx.t(info))
+          .control(field)
+          .render(ctx)
+      })
+      .collect()
   }
   fn outside(&self, ctx: &Ctx, read: Read) -> Element {
     let tab = self.clone();

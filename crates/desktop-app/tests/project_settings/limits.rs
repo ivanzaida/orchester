@@ -2,7 +2,7 @@
 //! daily budget as a person's decision (ORC-348, `docs/design/approval-modes.md`, "Decisions").
 use lurq::app::events::with_synthetic_input;
 use orchester_core::{
-  limits::{AgentSlots, ProjectLimits, QaSlots},
+  limits::{AgentSlots, ComputerServiceSlots, ProjectLimits, QaSlots, ServiceSlots},
   run::AllowAutopilot,
   store::SettingsStore,
   tokens::TokenBudget,
@@ -239,6 +239,80 @@ fn project_settings_limits_qa_apps_at_once_saves_like_agents_and_rejects_bad_val
   page.db().save_project_limits(&stored).expect("outside save");
   page.outside(Outside::Limits);
   page.until("the outside QA apps shown", |p| p.value("settings-qa-slots") == "16");
+}
+
+/// *Services at once* (`agehj` in `tJkyQ`): the project's share, 4 until changed, beside *Agents at once*; its hint names
+/// the computer's limit, which a share may not pass, and follows it when Settings › General changes it.
+#[test]
+fn project_settings_limits_services_at_once_saves_the_share_within_the_computers_limit_and_reloads() {
+  let mut page = Settings::new(false);
+  page.tab("limits", "settings-default-budget");
+  page.until("the computer's limit read", |p| {
+    p.text("settings-services-hint").ends_with("1 to 8")
+  });
+  assert_eq!(page.value("settings-service-slots"), "4");
+  assert_eq!(
+    page.text("settings-services-hint"),
+    "On this computer, for every run · a stack takes one per service · 1 to 8"
+  );
+  assert!(page.text("settings-services-row").contains("Services at once"));
+  assert!(
+    !page.exists("settings-service-slots-read-back"),
+    "a count reads nothing back"
+  );
+  page.set("settings-service-slots", "6");
+  page.leave();
+  page.saved();
+  let read = page.db().project_limits().expect("limits");
+  assert_eq!(read.service_slots().get().get(), 6);
+  assert_eq!(read.agent_slots(), AgentSlots::DEFAULT, "the agents' count is its own");
+  for (text, why) in [
+    ("9", "Services at once, 8."),
+    ("0", "Enter a whole number from 1 to 32."),
+    ("two", "Enter a whole number from 1 to 32."),
+  ] {
+    page.set("settings-service-slots", text);
+    page.leave();
+    let note = page.text("settings-service-slots-note");
+    assert!(note.contains(why) && note.contains("Still 6."), "{text}: {note}");
+    assert_eq!(page.value("settings-service-slots"), text, "the person's edit stays");
+  }
+  assert_eq!(service_share(&page), 6, "a refusal saves nothing");
+  page.set("settings-service-slots", "6");
+  page.leave();
+  page.saved();
+  // The computer's limit raised in Settings › General: the hint follows and a larger share saves.
+  page
+    .window
+    .launch
+    .workspace()
+    .expect("the session started")
+    .set_service_slots(ComputerServiceSlots::new(12).expect("in range"))
+    .expect("the computer's limit");
+  page.until("the raised limit in the hint", |p| {
+    p.text("settings-services-hint").ends_with("1 to 12")
+  });
+  page.set("settings-service-slots", "10");
+  page.leave();
+  page.saved();
+  assert_eq!(service_share(&page), 10);
+  // Shown again from what is stored.
+  page.tab("general", "settings-project-name");
+  page.tab("limits", "settings-default-budget");
+  assert_eq!(page.value("settings-service-slots"), "10");
+  // A share changed elsewhere fills the field.
+  let outside = page
+    .db()
+    .project_limits()
+    .expect("limits")
+    .with_service_slots(ServiceSlots::new(3).expect("in range"));
+  page.db().save_project_limits(&outside).expect("outside save");
+  page.outside(Outside::Limits);
+  page.until("the outside share shown", |p| p.value("settings-service-slots") == "3");
+}
+
+fn service_share(page: &Settings) -> u32 {
+  page.db().project_limits().expect("limits").service_slots().get().get()
 }
 
 #[test]

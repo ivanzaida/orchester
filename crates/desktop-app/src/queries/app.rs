@@ -9,6 +9,7 @@ use orchester_core::{
   app_update::UpdateSettings,
   connection::plan_limits::{LimitReading, ReadingSource},
   id::AgentAccountId,
+  limits::ComputerServiceSlots,
   orchestrator::ReportTime,
   time::Timestamp,
   usage::limits::WarningThreshold,
@@ -65,6 +66,16 @@ async fn stored<T: Send + 'static>(
 pub async fn usage_threshold(session: Session) -> Result<WarningThreshold, Message> {
   stored(session, "usage warning threshold", |services| {
     services.workspace.usage_warning_threshold()
+  })
+  .await
+}
+
+/// The computer's *Services at once* (Settings › General › Services), which each project's share in Runs › Limits is
+/// at most.
+#[lurq::query(stale_time = "24h", gc_time = "24h")]
+pub async fn service_slots(session: Session) -> Result<ComputerServiceSlots, Message> {
+  stored(session, "services at once", |services| {
+    services.workspace.service_slots()
   })
   .await
 }

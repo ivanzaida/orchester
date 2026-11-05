@@ -8,7 +8,7 @@ use orchester_core::{
   agent_files::RepositoryAgentFiles,
   code_index::CodeIndexSetting,
   connection::{AgentConnection, Connection},
-  limits::ProjectLimits,
+  limits::{ComputerServiceSlots, ProjectLimits},
   permission::ApprovalMode,
   resource::ModelId,
   run::{
@@ -29,7 +29,7 @@ use crate::{
   },
   budget::{
     LimitsErrors, ReadLimits, minutes_text, read_agent_slots, read_budget, read_minutes, read_optional_budget,
-    read_qa_slots,
+    read_qa_slots, read_service_slots,
   },
   messages::{self, Message},
   runner::Runners,
@@ -117,6 +117,8 @@ pub struct LimitsText {
   pub slots: String,
   /// *QA apps at once*.
   pub qa: String,
+  /// The project's share of *Services at once*.
+  pub services: String,
 }
 impl LimitsText {
   pub fn of(limits: ProjectLimits, separator: &str) -> Self {
@@ -127,10 +129,18 @@ impl LimitsText {
       minutes: minutes_text(limits.default_time_limit()),
       slots: limits.agent_slots().get().to_string(),
       qa: limits.qa_slots().get().to_string(),
+      services: limits.service_slots().get().to_string(),
     }
   }
 
-  pub fn limits(&self, base: ProjectLimits, separator: &str) -> Result<ProjectLimits, Box<LimitsErrors>> {
+  /// The limits the fields hold over `base`, the share of *Services at once* at most the computer's `computer` limit
+  /// when it is known.
+  pub fn limits(
+    &self,
+    base: ProjectLimits,
+    separator: &str,
+    computer: Option<ComputerServiceSlots>,
+  ) -> Result<ProjectLimits, Box<LimitsErrors>> {
     let daily = read_optional_budget(&self.daily, separator);
     let finite = match &daily {
       Ok(value) => value.unwrap_or(base.daily_budget()).get().to_string(),
@@ -142,8 +152,11 @@ impl LimitsText {
       default_time_limit: read_minutes(&self.minutes),
       agent_slots: read_agent_slots(&self.slots),
       qa_slots: read_qa_slots(&self.qa),
-      // The page has no field for the project's share of *Services at once* yet: it keeps what it read.
-      service_slots: Ok(base.service_slots()),
+      // A share kept from before the computer's limit was lowered stays as it is (it counts as the limit).
+      service_slots: match read_service_slots(&self.services, None) {
+        Ok(share) if share == base.service_slots() => Ok(share),
+        _ => read_service_slots(&self.services, computer),
+      },
     }
     .limits();
     if let Err(error) = daily {

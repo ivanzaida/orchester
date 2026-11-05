@@ -3,7 +3,7 @@ use std::{fs, time::Duration};
 
 use orchester_core::{
   id::{ConnectionId, ProjectId},
-  limits::{ProjectLimits, QaSlots, ServiceSlots},
+  limits::{ComputerServiceSlots, ProjectLimits, QaSlots, ServiceSlots},
   name::Name,
   project::{Project, ProjectKey},
   resource::ModelId,
@@ -37,9 +37,10 @@ fn project_settings_limits_are_optional_without_a_product_maximum_and_report_eac
   let text = LimitsText {
     slots: "4".into(),
     qa: "2".into(),
+    services: "4".into(),
     ..LimitsText::default()
   };
-  let limits = text.limits(ProjectLimits::DEFAULT, ",").expect("no limits");
+  let limits = text.limits(ProjectLimits::DEFAULT, ",", None).expect("no limits");
   assert_eq!(
     (
       limits.default_run_budget(),
@@ -54,25 +55,29 @@ fn project_settings_limits_are_optional_without_a_product_maximum_and_report_eac
     minutes: "400000".into(),
     slots: "16".into(),
     qa: "16".into(),
+    services: "32".into(),
   };
-  let read = large.limits(limits, ",").expect("large limits");
+  let read = large.limits(limits, ",", None).expect("large limits");
   assert_eq!(read.default_run_budget().map(TokenBudget::get), Some(900_000_000));
   assert_eq!(read.default_time_limit(), Some(Duration::from_secs(400000 * 60)));
   assert_eq!(read.qa_slots().get().get(), 16);
+  assert_eq!(read.service_slots().get().get(), 32);
   let invalid = LimitsText {
     default: "one".into(),
     daily: "0".into(),
     minutes: "1.5".into(),
     slots: "17".into(),
     qa: "0".into(),
+    services: "33".into(),
   };
-  let errors = invalid.limits(limits, ",").expect_err("invalid");
+  let errors = invalid.limits(limits, ",", None).expect_err("invalid");
   assert!(
     errors.default_run_budget.is_some()
       && errors.daily_budget.is_some()
       && errors.default_time_limit.is_some()
       && errors.agent_slots.is_some()
       && errors.qa_slots.is_some()
+      && errors.service_slots.is_some()
   );
 }
 
@@ -81,12 +86,12 @@ fn project_settings_qa_apps_at_once_read_back_and_refuse_outside_one_to_sixteen(
   let stored = ProjectLimits::DEFAULT.with_qa_slots(QaSlots::new(3).expect("in range"));
   let text = LimitsText::of(stored, ",");
   assert_eq!((text.slots.as_str(), text.qa.as_str()), ("4", "3"));
-  assert_eq!(text.limits(stored, ","), Ok(stored), "read back as stored");
+  assert_eq!(text.limits(stored, ",", None), Ok(stored), "read back as stored");
   let raised = LimitsText {
     qa: " 7 ".into(),
     ..text.clone()
   };
-  let read = raised.limits(stored, ",").expect("seven");
+  let read = raised.limits(stored, ",", None).expect("seven");
   assert_eq!(read.qa_slots().get().get(), 7);
   assert_eq!(read.agent_slots(), stored.agent_slots(), "the agents' count is its own");
   for qa in ["", "0", "17", "2.5", "two"] {
@@ -94,7 +99,7 @@ fn project_settings_qa_apps_at_once_read_back_and_refuse_outside_one_to_sixteen(
       qa: qa.into(),
       ..text.clone()
     }
-    .limits(stored, ",")
+    .limits(stored, ",", None)
     .expect_err("outside 1 to 16");
     let error = errors.qa_slots.expect("the QA field's error");
     assert_eq!(error.key, "settings.limits.qaSlotsInvalid", "{qa}");
@@ -104,19 +109,46 @@ fn project_settings_qa_apps_at_once_read_back_and_refuse_outside_one_to_sixteen(
 }
 
 #[test]
-fn project_settings_limits_keep_the_projects_share_of_services_at_once() {
+fn project_settings_limits_read_the_projects_share_of_services_at_once_up_to_the_computers_limit() {
   let stored = ProjectLimits::DEFAULT.with_service_slots(ServiceSlots::new(9).expect("in range"));
-  let text = LimitsText {
-    qa: "5".into(),
-    ..LimitsText::of(stored, ",")
-  };
-  let read = text.limits(stored, ",").expect("limits");
-  assert_eq!(read.qa_slots().get().get(), 5);
+  let computer = Some(ComputerServiceSlots::new(6).expect("in range"));
+  let text = LimitsText::of(stored, ",");
+  assert_eq!(text.services, "9");
   assert_eq!(
-    read.service_slots(),
-    stored.service_slots(),
-    "the page has no field for the share: it keeps the one it read"
+    text.limits(stored, ",", computer),
+    Ok(stored),
+    "a share kept from before the limit was lowered stays"
   );
+  let lowered = LimitsText {
+    services: " 5 ".into(),
+    ..text.clone()
+  };
+  assert_eq!(
+    lowered.limits(stored, ",", computer).expect("five").service_slots().get().get(),
+    5
+  );
+  let above = LimitsText {
+    services: "7".into(),
+    ..text.clone()
+  }
+  .limits(stored, ",", computer)
+  .expect_err("above the computer's");
+  let error = above.service_slots.expect("the share's error");
+  assert_eq!(error.key, "settings.limits.serviceSlotsAboveComputer");
+  assert_eq!(error.args, [("limit", "6".to_owned())]);
+  for services in ["", "0", "33", "two"] {
+    let errors = LimitsText {
+      services: services.into(),
+      ..text.clone()
+    }
+    .limits(stored, ",", None)
+    .expect_err("outside 1 to 32");
+    assert_eq!(
+      errors.service_slots.expect("the share's error").key,
+      "settings.limits.serviceSlotsInvalid",
+      "{services}"
+    );
+  }
 }
 #[test]
 fn project_settings_environment_requires_confirmation_and_refuses_a_stale_baseline() {

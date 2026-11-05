@@ -352,6 +352,16 @@
         "unreadable": "The warning threshold can't be read: {{reason}}",
         "notSaved": "Not saved: {{reason}}"
       },
+      "services": {
+        "title": "Services",
+        "label": "Services at once",
+        "hint": "On this computer, for every project · a stack takes one per service · 1 to 32",
+        "description": "Dev servers, databases and other services that runs of every project may run together on this computer; a test suite's own process takes one while it runs. Each project's share in its Runs › Limits counts within it. A start beyond it waits until enough stop; a change applies from the next start.",
+        "unit": "services",
+        "invalid": "Enter a whole number from 1 to 32.",
+        "unreadable": "Services at once can't be read: {{reason}}",
+        "notSaved": "Not saved: {{reason}}"
+      },
       "privacy": {
         "title": "Privacy",
         "errorReports": {

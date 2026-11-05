@@ -116,6 +116,18 @@ fn qa_slots_error() -> Message {
     .with("max", QaSlots::MAX.to_string())
 }
 
+/// A share of *Services at once* field's text: a whole number for [`service_slots`].
+pub fn read_service_slots(text: &str, limit: Option<ComputerServiceSlots>) -> Result<ServiceSlots, Message> {
+  let count: u64 = text.trim().parse().map_err(|_| service_slots_error())?;
+  service_slots(count, limit)
+}
+
+/// A computer's *Services at once* field's text: a whole number for [`computer_service_slots`].
+pub fn read_computer_service_slots(text: &str) -> Result<ComputerServiceSlots, Message> {
+  let count: u64 = text.trim().parse().map_err(|_| service_slots_error())?;
+  computer_service_slots(count)
+}
+
 /// A project's share of `count` services at once, from [`ServiceSlots::MIN`] to the computer's `limit`; only to
 /// [`ServiceSlots::MAX`] without a limit to check it against.
 pub fn service_slots(count: u64, limit: Option<ComputerServiceSlots>) -> Result<ServiceSlots, Message> {
