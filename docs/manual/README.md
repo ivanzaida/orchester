@@ -91,6 +91,7 @@ widening calls; **AA** = needs *Let automation answer approvals*; **WC** = needs
 | `create_pipeline` | | New pipeline from the starter, empty or a copy |
 | `save_pipeline_draft` | AP for weakening | Replace a pipeline's steps |
 | `publish_pipeline` | AP unless no weaker | Publish a pipeline |
+| `share_pipeline` | Admin · AP | Make one of your own local pipelines a team pipeline (team project) |
 | `list_instructions` / `get_instruction` | RO | Instructions |
 | `save_instruction_draft` | | Save an instruction draft |
 | `publish_instruction` | AP | Publish an instruction |

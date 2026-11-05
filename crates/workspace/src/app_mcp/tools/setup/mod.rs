@@ -31,6 +31,7 @@ mod skill_input;
 mod skills;
 mod stacks;
 mod storage;
+mod team_pipeline;
 mod tool_input;
 mod tool_program;
 pub(super) mod widening;
@@ -348,6 +349,12 @@ const SPECS: &[Spec] = &[
     read_only: false,
   },
   Spec {
+    name: "share_pipeline",
+    description: "In a team project, an Admin makes one of their own local pipelines, which a team project hides, a                   team pipeline: its newest published version becomes a new team pipeline's first version, sent to                   the team server as Publish for the team sends one (names and roles of what it uses, never a                   secret's value), and team tasks can then name it by its new id. The agent profiles and tools its                   steps run must be the team's already (team_resources_required names those that are not). Refused                   in a local project (team_project_required) and for a member (not_admin); every member's agents may                   run it, so it is person_only unless a person turned on Let automation change agent permissions.                   The local pipeline stays as it is, hidden, under the slug <slug>-local. state is team once the                   server took it, or waiting (with not_sent) until it can be sent.",
+    schema: schema_for_type::<pipelines::InPipeline>,
+    read_only: false,
+  },
+  Spec {
     name: "publish_pipeline",
     description: "Publishes a pipeline's draft as its next version, as Publish does, so tasks can run it. Refused \
                   while it has no steps or a step has no profile or tool, or when the draft was started from an older \
@@ -540,6 +547,7 @@ async fn configure(
     "create_pipeline" => pipelines::create_pipeline(services, parse(arguments)?, translate).await,
     "save_pipeline_draft" => pipeline_steps::save_pipeline_draft(services, parse(arguments)?, translate).await,
     "publish_pipeline" => pipelines::publish_pipeline(services, parse(arguments)?, translate).await,
+    "share_pipeline" => team_pipeline::share_pipeline(services, parse(arguments)?).await,
     "list_instructions" => instructions::list_instructions(services, parse(arguments)?, translate).await,
     "get_instruction" => instructions::get_instruction(services, parse(arguments)?).await,
     "save_instruction_draft" => instructions::save_instruction_draft(services, parse(arguments)?).await,

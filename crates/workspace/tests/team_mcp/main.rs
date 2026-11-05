@@ -23,6 +23,7 @@ mod team_server;
 mod delivery;
 mod pipelines;
 mod reads;
+mod share;
 mod tools;
 
 use std::{
@@ -98,6 +99,15 @@ impl Checkout {
 
   /// [`Self::new`], with what `prepare` keeps in the project's database before it is linked.
   fn prepared(server: Option<&team_server::TeamServer>, drafts: &[&str], prepare: impl FnOnce(&mut ProjectDb)) -> Self {
+    Self::standing(server, (drafts, Standing::default()), prepare)
+  }
+
+  /// [`Self::prepared`], linked as `standing` says.
+  fn standing(
+    server: Option<&team_server::TeamServer>,
+    (drafts, standing): (&[&str], Standing),
+    prepare: impl FnOnce(&mut ProjectDb),
+  ) -> Self {
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/team-mcp-tests");
     fs::create_dir_all(&scratch).expect("scratch");
     let dir = tempfile::Builder::new()
@@ -134,6 +144,9 @@ impl Checkout {
       .expect("data");
     let workspace = Workspace::new(AppDb::open(&data.path().join("orchester.db")).expect("database"));
     workspace.open(root).expect("register the project");
+    workspace
+      .set_automation_changes_permissions(standing.widens)
+      .expect("the switch");
     let runtime = Runtime::new().expect("runtime");
     let vault = Arc::new(MemoryVault::default());
     let version = orchester_api::releases::ReleaseVersion::parse("0.5.0").expect("a release version");
@@ -142,7 +155,7 @@ impl Checkout {
       let id = runtime.block_on(add_server(&servers, server));
       let token = SecretValue::new(team_server::MEMBER.to_owned()).expect("token");
       vault.store(&VaultKey::server_token(id), &token).expect("the token");
-      link(root, id, server.project);
+      link(root, id, server.project, standing.role);
     }
     let runners = Runners::new(
       root.join("no-runner"),
@@ -208,14 +221,30 @@ async fn add_server(servers: &Servers, server: &team_server::TeamServer) -> Serv
     .expect("the server added")
 }
 
-/// Links the project at `root` to `project` on `server`, as a member.
-fn link(root: &Path, server: ServerId, project: ProjectId) {
+/// How a checkout stands with its team: the person's role in the link, and whether a person lets automation change
+/// agent permissions.
+pub(crate) struct Standing {
+  pub(crate) role: &'static str,
+  pub(crate) widens: bool,
+}
+
+impl Default for Standing {
+  fn default() -> Self {
+    Self {
+      role: "member",
+      widens: false,
+    }
+  }
+}
+
+/// Links the project at `root` to `project` on `server`, with the person's `role` there.
+fn link(root: &Path, server: ServerId, project: ProjectId, role: &str) {
   rusqlite::Connection::open(root.join(".orchester/orchester.db"))
     .expect("open")
     .execute(
       "INSERT INTO sharing (only_row, server_id, project_id, project_key, role, joined_at, event_cursor, \
-       last_synced_at) VALUES (1, ?1, ?2, 'KON', 'member', 1, 0, 1)",
-      [server.to_string(), project.to_string()],
+       last_synced_at) VALUES (1, ?1, ?2, 'KON', ?3, 1, 0, 1)",
+      [server.to_string(), project.to_string(), role.to_owned()],
     )
     .expect("link the project");
 }

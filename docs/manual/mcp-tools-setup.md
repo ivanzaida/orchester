@@ -477,6 +477,23 @@ without AP. So every version a task can run is one a person published, allowed, 
 
 Parameters: `project` (req.), `pipeline` (req.).
 
+### `share_pipeline` — changes data · team project · Admin · gate AP
+
+In a team project only the team's pipelines are offered and run its tasks; a pipeline of your own (one you had before
+you joined, or kept on this computer) is hidden there ([server.md](../architecture/server.md) row 80). An Admin makes
+one a team pipeline with this tool: its newest published version becomes a **new** team pipeline's first version, with
+a new id, sent to the team server as *Publish for the team* sends one (what it uses by name and role, never a secret's
+value). Team tasks then name it by that id. The local pipeline stays as it is, hidden, under the slug `<slug>-local`.
+
+- The agent profiles and tools its steps run must be the team's already; `team_resources_required` names those that
+  are not (nothing is copied then).
+- Every member's agents may run it, so it is `person_only` unless AP is on.
+- Refused as `not_admin` for a member and `team_project_required` in a local project.
+- Answers the new pipeline's `id`, `name`, `slug` and `state`: `team` once the server took it, `waiting` (with
+  `not_sent`) while it waits to be sent; a waiting one is sent again on reconnect.
+
+Parameters: `project` (req.), `pipeline` (req.: id or name of one of your own pipelines).
+
 `duplicate_pipeline` (copy and publish) is in [mcp-tools-work.md](mcp-tools-work.md#duplicate_pipeline--changes-data--gate-ap-unless-identical).
 
 ---

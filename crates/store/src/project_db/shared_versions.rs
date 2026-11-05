@@ -87,22 +87,7 @@ impl ProjectDb {
   }
 
   pub fn resource_sharing(&self, id: ResourceId) -> Result<Option<ResourceSharing>, StoreError> {
-    let row: Option<(Option<String>, Option<i64>)> = self
-      .connection
-      .query_row(
-        "SELECT sharing, server_revision FROM resources WHERE id = ?1",
-        [id.to_string()],
-        |row| Ok((row.get(0)?, row.get(1)?)),
-      )
-      .optional()?;
-    match row.ok_or(StoreError::ResourceNotFound(id))? {
-      (None, _) => Ok(None),
-      (Some(sharing), revision) => match (sharing.as_str(), revision) {
-        ("shared", Some(revision)) => Ok(Some(ResourceSharing::Shared(revision_value(revision)?))),
-        ("not_shared", None) => Ok(Some(ResourceSharing::NotShared)),
-        _ => Err(corrupt("resource sharing", sharing)),
-      },
-    }
+    sharing_of(&self.connection, id)
   }
 
   /// Keeps `version` of `resource` as the server confirmed it. A version this computer has already, e.g. one published
@@ -303,10 +288,29 @@ pub struct NamingVersion {
   pub number: VersionNumber,
 }
 
+/// Whether resource `id` is the server's or kept local; `None` for a resource of this computer's own.
+pub(super) fn sharing_of(connection: &Connection, id: ResourceId) -> Result<Option<ResourceSharing>, StoreError> {
+  let row: Option<(Option<String>, Option<i64>)> = connection
+    .query_row(
+      "SELECT sharing, server_revision FROM resources WHERE id = ?1",
+      [id.to_string()],
+      |row| Ok((row.get(0)?, row.get(1)?)),
+    )
+    .optional()?;
+  match row.ok_or(StoreError::ResourceNotFound(id))? {
+    (None, _) => Ok(None),
+    (Some(sharing), revision) => match (sharing.as_str(), revision) {
+      ("shared", Some(revision)) => Ok(Some(ResourceSharing::Shared(revision_value(revision)?))),
+      ("not_shared", None) => Ok(Some(ResourceSharing::NotShared)),
+      _ => Err(corrupt("resource sharing", sharing)),
+    },
+  }
+}
+
 /// Adds `resource` with its own id and no draft, unless the slug is another resource's of its kind. A pipeline of the
 /// team wins its slug from one of this computer's own: in a team project only the team's pipelines are offered
 /// (`docs/architecture/server.md` row 80), so the local one, kept as it is otherwise, takes a free slug.
-fn insert_resource(connection: &Connection, resource: &Resource) -> Result<(), StoreError> {
+pub(super) fn insert_resource(connection: &Connection, resource: &Resource) -> Result<(), StoreError> {
   let kind = kind_text(resource.kind());
   let holder: Option<(String, Option<String>)> = connection
     .query_row(

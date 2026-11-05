@@ -117,6 +117,7 @@ mod task_groups;
 mod task_identities;
 mod task_snapshots;
 mod tasks;
+mod team_copies;
 mod team_deliveries;
 mod team_operations;
 mod team_runs;

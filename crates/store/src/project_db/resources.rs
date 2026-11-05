@@ -326,7 +326,7 @@ fn publish_checked<B: ResourceBody>(
 /// Publishes `draft`, based on `latest`, the version used here, after the newest version this computer has: a
 /// teammate's version that waits keeps its number, and this one supersedes it. In a shared project the callers checked
 /// that the person is an admin, and the version waits for the server's number ([`super::shared_publishes`]).
-fn publish_prepared<B: ResourceBody>(
+pub(super) fn publish_prepared<B: ResourceBody>(
   connection: &Connection,
   resource: ResourceId,
   draft: Draft<B>,
