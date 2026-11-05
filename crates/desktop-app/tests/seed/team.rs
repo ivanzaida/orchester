@@ -1,8 +1,8 @@
 //! The team scenarios: each is in the registry and leaves the marker the QA app reads its state from
 //! (`examples/qa_app/team/state.rs`), every other scenario leaves none, `team-offer` registers a local project,
 //! `team-outage-running`, `team-member-running` and `team-module-outage` have two tasks running on this computer (in
-//! `team-outage-running` with work reports waiting to be sent), `team-claims` a run of each task whose claim state rests
-//! on one, and `team-running` KON-12 interrupted at Implement.
+//! `team-outage-running` with work reports waiting to be sent), `team-claims` a run of each task whose claim state
+//! rests on one, and `team-running` KON-12 interrupted at Implement.
 
 use orchester_core::{
   run::TaskPhase,
