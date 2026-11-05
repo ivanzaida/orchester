@@ -534,6 +534,96 @@
           "http": "HTTP {{path}}",
           "log": "log line"
         },
+        "readiness": {
+          "title": "Readiness",
+          "when": "Ready when",
+          "whenHint": "Checked every second until the timeout",
+          "port": "The port accepts connections",
+          "http": "An HTTP 2xx or 3xx answers on",
+          "log": "A log line matches",
+          "path": "Path asked",
+          "pathExample": "/healthz",
+          "pattern": "Log pattern",
+          "patternExample": "ready in \\d+ ms",
+          "timeout": "Timeout",
+          "timeoutHint": "Then the start fails and shows the last log lines",
+          "seconds": "seconds"
+        },
+        "seed": {
+          "title": "Seed",
+          "hint": "Runs once after it is ready, before agents use it",
+          "requests": "HTTP requests",
+          "command": "A command",
+          "none": "None",
+          "add": "Add request",
+          "note": "Later requests use captured values as {{captured}}; agents get them in start_service's answer.",
+          "program": "Program",
+          "arguments": "Arguments",
+          "argumentsHint": "Arguments, one per line",
+          "noUrl": "No URL yet",
+          "edit": "Edit request {{number}}",
+          "method": "Method",
+          "url": "URL",
+          "body": "Body",
+          "bodyHint": "Body, sent as written; empty sends none",
+          "captureName": "Captured name",
+          "captureNameExample": "team_id",
+          "capturePath": "Where in the answer",
+          "capturePathExample": "$.id",
+          "addCapture": "Add capture",
+          "removeCapture": "Remove capture",
+          "moveUp": "Move up",
+          "moveDown": "Move down",
+          "remove": "Remove request",
+          "done": "Done"
+        },
+        "data": {
+          "title": "Per-run data",
+          "label": "Data",
+          "hint": "Each run gets its own; deleted when the run ends",
+          "none": "None",
+          "container": "A fresh database container",
+          "folder": "Files in the run's own folder",
+          "path": "Run folder",
+          "pathExample": "team-web"
+        },
+        "driver": {
+          "title": "UI driver",
+          "note": "How agents see and use it through the ui_* tools",
+          "none": "No UI: logs and HTTP only",
+          "native": "Windows UI Automation, macOS Accessibility",
+          "mcp": "An app with its own MCP server",
+          "opensAt": "Opens at",
+          "opensAtHint": "Where ui_open starts"
+        },
+        "owned": {
+          "title": "Owned paths",
+          "hint": "A run that changes these starts this service for its Test step",
+          "add": "Add a path pattern",
+          "addButton": "Add",
+          "remove": "Remove {{path}}"
+        },
+        "approval": {
+          "title": "Approval",
+          "label": "Asks on first start",
+          "hint": "The first run that starts it asks you · a change to the program, arguments, variables or seed asks again",
+          "notApproved": "Not approved yet",
+          "approved": "Approved for every run",
+          "changed": "Changed since approved"
+        },
+        "values": {
+          "title": "Values in a run",
+          "port": "a free port of its own",
+          "url": "its own URL",
+          "serviceUrl": "{{name}}'s URL",
+          "run": "the run's id",
+          "data": "its run folder",
+          "captured": "captured by request {{number}}",
+          "note": "Every run gets its own ports and folders, so parallel runs never clash."
+        },
+        "tools": {
+          "title": "Agents use it with"
+        },
         "state": {
           "new": "Not saved yet",
           "draftNew": "Draft · not published yet",

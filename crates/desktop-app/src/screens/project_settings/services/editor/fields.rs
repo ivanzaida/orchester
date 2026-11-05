@@ -24,6 +24,7 @@ use orchester_workspace::{
 use super::{
   super::super::kit::{FormField, Group},
   Commit, LABEL_WIDTH, View,
+  sections::Sections,
 };
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
@@ -82,6 +83,8 @@ pub(super) struct Fields {
   pub needs: Signal<Needs>,
   /// The service *Add a service* chose, until it is added.
   pub adding: Signal<String>,
+  /// Readiness, seed, per-run data, the UI driver and owned paths.
+  pub sections: Sections,
   automated: Signal<Automated>,
 }
 
@@ -95,6 +98,7 @@ impl Fields {
       variables: ctx.signal(Lines::default()),
       needs: ctx.signal(Needs::default()),
       adding: ctx.signal(String::new()),
+      sections: Sections::new(ctx),
       automated: ctx.signal(Automated::default()),
     }
   }
@@ -122,6 +126,7 @@ impl Fields {
     }
     let mark = mark(|a| a.variables = true);
     ctx.watch(&self.variables, move |_: &Lines| mark());
+    self.sections.watch_automation(ctx, gate);
   }
 
   /// Puts each field an MCP client changed while it may not decide what runs back to what `to` holds, and forgets
@@ -145,7 +150,7 @@ impl Fields {
       back = true;
     }
     self.automated.set(Automated::default());
-    back
+    self.sections.put_back(&to.seed) || back
   }
 
   pub(super) fn fill(&self, form: &ServiceForm) {
@@ -155,18 +160,20 @@ impl Fields {
     self.folder.set(form.working_folder.clone());
     self.variables.set(Lines(form.variables.clone()));
     self.needs.set(Needs(form.needs.clone()));
+    self.sections.fill(form);
   }
 
   /// The fields as they are now, without following them.
   pub(super) fn form(&self) -> ServiceForm {
-    ServiceForm {
+    self.sections.completed(ServiceForm {
       name: self.name.get_untracked(),
       program: self.program.get_untracked(),
       arguments: self.arguments.get_untracked(),
       working_folder: self.folder.get_untracked(),
       variables: self.variables.get_untracked().0,
       needs: self.needs.get_untracked().0,
-    }
+      ..ServiceForm::default()
+    })
   }
 
   /// Follows every field, so the page renders again as one is typed in.
@@ -177,6 +184,7 @@ impl Fields {
     self.folder.get();
     self.variables.get();
     self.needs.get();
+    self.sections.follow();
   }
 }
 
@@ -199,12 +207,13 @@ pub(super) fn program_group(ctx: &mut Ctx, fields: &Fields, view: &View, commit:
   .into()
 }
 
-fn field(id: &str, label: Arc<str>, hint: Arc<str>) -> FormField {
+/// A row of the page's groups: its label and hint in the 220 label column.
+pub(super) fn field(id: &str, label: Arc<str>, hint: Arc<str>) -> FormField {
   FormField::new(id, label).hint(hint).label_width(LABEL_WIDTH)
 }
 
 /// A field typing into `value` in Geist Mono 12 (`EltV2`), saved as it is left.
-fn input((id, name): (&str, Arc<str>), value: &Signal<String>, commit: &Commit) -> FieldInput {
+pub(super) fn input((id, name): (&str, Arc<str>), value: &Signal<String>, commit: &Commit) -> FieldInput {
   let commit = commit.clone();
   FieldInput::new(id.to_owned(), name, value.clone())
     .mono()
@@ -212,7 +221,7 @@ fn input((id, name): (&str, Arc<str>), value: &Signal<String>, commit: &Commit) 
 }
 
 /// `input` saying `error` under it, its stroke `danger`.
-fn with_error(ctx: &Ctx, input: FieldInput, error: Option<&Message>) -> FieldInput {
+pub(super) fn with_error(ctx: &Ctx, input: FieldInput, error: Option<&Message>) -> FieldInput {
   match error {
     Some(error) => input.error(message_text(ctx, error)),
     None => input,
@@ -314,7 +323,7 @@ fn arguments_row(ctx: &mut Ctx, fields: &Fields, view: &View, commit: &Commit) -
 }
 
 /// The placeholder problem said under `field`, if it is there.
-fn placeholder_in(view: &View, field: Field) -> Option<Message> {
+pub(super) fn placeholder_in(view: &View, field: Field) -> Option<Message> {
   view
     .placeholder
     .as_ref()

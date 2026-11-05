@@ -6,13 +6,14 @@ use std::collections::BTreeMap;
 
 use orchester_core::{
   resource::{
-    CommandArg, CommandProgram, CommandTimeout, ReportFormat, Slug, SuiteCommand, SuiteNeeds, SuitePath, TestLayer,
-    TestReport, TestSuite, VariableName,
+    CommandArg, CommandProgram, CommandTimeout, FieldName, HttpMethod, ReportFormat, Slug, SuiteCommand, SuiteNeeds,
+    SuitePath, TestLayer, TestReport, TestSuite, VariableName,
   },
   secret::SecretName,
   service::{
-    OwnedPath, Readiness, ReadyCheck, ReadyTimeout, RelativeFolder, RunData, Service, ServiceName, ServiceValue,
-    ServiceVariables, Stack, StackName, UiDriver,
+    Capture, CapturePath, HttpPath, OwnedPath, Readiness, ReadyCheck, ReadyTimeout, RelativeFolder, RunData, RunFolder,
+    Seed, SeedRequest, SeedRequests, Service, ServiceName, ServiceValue, ServiceVariables, Stack, StackName, UiDriver,
+    UiStart,
   },
   store::ResourceStore,
 };
@@ -73,7 +74,9 @@ fn suite(
 }
 
 /// `team-web` as its page draws it (`02 · Service editor` `TGRTt`): `npm run dev --port {{port}}` in `web/team`, the
-/// team server's URL and its port as plain variables and its session secret by name.
+/// team server's URL and its port as plain variables and its session secret by name, ready on `/healthz` within 90 s,
+/// seeded by three requests that capture a team and an invite, its files in a run folder of its own, opened by the
+/// native driver at `{{url}}/teams` (the design's *browser* is not offered yet) and owning two path patterns.
 fn team_web() -> Result<Service, SeedError> {
   let arguments = ["run", "dev", "--port", "{{port}}"]
     .into_iter()
@@ -92,12 +95,61 @@ fn team_web() -> Result<Service, SeedError> {
   .into_iter()
   .map(|(name, value)| Ok((VariableName::new(name).map_err(invalid)?, value)))
   .collect::<Result<BTreeMap<_, _>, SeedError>>()?;
-  Ok(
-    service("team-web", &["team-server"], &["web/team/**"])?
-      .with_arguments(arguments)
-      .with_working_folder(RelativeFolder::new("web/team").map_err(invalid)?)
-      .with_variables(ServiceVariables::new(variables).map_err(invalid)?),
+  let readiness = Readiness::new(
+    ReadyCheck::Http(HttpPath::new("/healthz").map_err(invalid)?),
+    ReadyTimeout::from_secs(90).map_err(invalid)?,
+  );
+  let owned = ["web/team/**", "packages/team-ui/**"]
+    .into_iter()
+    .map(OwnedPath::new)
+    .collect::<Result<Vec<_>, _>>()
+    .map_err(invalid)?;
+  let service = Service::new(
+    name("team-web")?,
+    CommandProgram::new("npm").map_err(invalid)?,
+    readiness,
   )
+  .with_arguments(arguments)
+  .with_working_folder(RelativeFolder::new("web/team").map_err(invalid)?)
+  .with_variables(ServiceVariables::new(variables).map_err(invalid)?)
+  .with_seed(team_seed()?)
+  .with_run_data(RunData::RunFolder(RunFolder::new("team-web").map_err(invalid)?))
+  .with_ui_driver(UiDriver::Native)
+  .with_ui_start(UiStart::new("{{url}}/teams").map_err(invalid)?)
+  .with_needs(vec![name("team-server")?])
+  .map_err(invalid)?;
+  service.with_owned_paths(owned).map_err(invalid)
+}
+
+/// `team-web`'s seed (`Requests` `n6vEc2`): a team, an invite to it, and the invite accepted.
+fn team_seed() -> Result<Seed, SeedError> {
+  let capture = |name: &str, path: &str| -> Result<Capture, SeedError> {
+    Ok(Capture::new(
+      FieldName::new(name).map_err(invalid)?,
+      CapturePath::new(path).map_err(invalid)?,
+    ))
+  };
+  let request = |url: &str, body: Option<&str>, captures: Vec<Capture>| {
+    SeedRequest::new(HttpMethod::Post, url, body.map(str::to_owned), Vec::new(), captures).map_err(invalid)
+  };
+  let requests = vec![
+    request(
+      "{{services.team-server.url}}/api/teams",
+      Some(r#"{"name": "QA team"}"#),
+      vec![capture("team_id", "$.id")?],
+    )?,
+    request(
+      "{{services.team-server.url}}/api/teams/{{seed.team_id}}/invites",
+      Some(r#"{"email": "qa@example.test"}"#),
+      vec![capture("invite_token", "$.token")?],
+    )?,
+    request(
+      "{{services.team-server.url}}/api/invites/{{seed.invite_token}}/accept",
+      None,
+      Vec::new(),
+    )?,
+  ];
+  Ok(Seed::Requests(SeedRequests::new(requests).map_err(invalid)?))
 }
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
