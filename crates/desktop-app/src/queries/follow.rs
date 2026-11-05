@@ -253,6 +253,7 @@ fn prefetch_project(ctx: &mut Ctx, session: &Session, open: &OpenProject) {
   for consent in OrchestratorConsent::ALL {
     ctx.query(project::orchestrator_allows(s.clone(), r.clone(), consent));
   }
+  ctx.query(project::orchestrator_watch(s.clone(), r.clone()));
   ctx.query(project::memory_settings(s.clone(), r.clone()));
   ctx.query(project::variables(s.clone(), r.clone()));
   ctx.query(project::connections(s.clone(), r.clone()));

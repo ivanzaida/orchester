@@ -3,7 +3,9 @@
 
 use std::path::{Path, PathBuf};
 
-use orchester_core::{id::SecretId, memory::MemorySettings, resource::CommandEnvironment};
+use orchester_core::{
+  id::SecretId, memory::MemorySettings, orchestrator::WatchSettings, resource::CommandEnvironment,
+};
 use orchester_store::StoreError;
 use orchester_workspace::{
   background,
@@ -12,6 +14,7 @@ use orchester_workspace::{
   display, environment,
   memory::settings as memory,
   messages::{self, Message},
+  orchestrator::settings as orchestrator_settings,
   project_settings::{self as settings_store, RepositoryRead, Settings},
   secrets::data::ProjectSecrets,
   sources::{check::Place, listed::Listed, project as sources},
@@ -73,6 +76,16 @@ pub async fn orchestrator_allows(
 ) -> Result<bool, Message> {
   stored((session, root), "orchestrator switch", move |services, root| {
     services.workspace.orchestrator_allows(root, consent)
+  })
+  .await
+}
+
+/// How the project's Orchestrator watches its runs: the default order and when a run without progress is reported
+/// (Orchestrator › Watching).
+#[lurq::query(stale_time = "24h", gc_time = "24h")]
+pub async fn orchestrator_watch(session: Session, root: PathBuf) -> Result<WatchSettings, Message> {
+  stored((session, root), "orchestrator watch", |_, root| {
+    orchestrator_settings::watch_in(root)
   })
   .await
 }

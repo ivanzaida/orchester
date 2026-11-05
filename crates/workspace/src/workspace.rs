@@ -11,6 +11,7 @@
 mod account_root;
 mod browser;
 mod orchestrator_consent;
+mod orchestrator_watch;
 mod owners;
 mod servers;
 mod settings;
