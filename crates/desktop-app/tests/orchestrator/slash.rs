@@ -311,6 +311,18 @@ fn orchestrator_sends_a_chosen_skill_as_codexs_own_and_its_chip_says_so() {
     said.contains("release-notes · Published v1") && said.contains("Codex loads it as its own skill ($release-notes)"),
     "{said}"
   );
+  // Over the chip, its left edge at the chip's, 6 clear of the composer's top edge, its words wrapping at 360
+  // (`mhanX` in `07` `QnPRC`).
+  screen.window.pass();
+  let (tip, chip, boxed) = (
+    screen.bounds(&tooltip),
+    screen.bounds(CHIP),
+    screen.bounds("orchestrator-composer"),
+  );
+  assert!((tip.x - chip.x).abs() < 0.5, "{tip:?} {chip:?}");
+  assert!((boxed.y - (tip.y + tip.height) - 6.0).abs() < 0.5, "{tip:?} {boxed:?}");
+  assert!(tip.width <= 360.0 + 16.0 + 0.5, "it wraps at 360: {tip:?}");
+  assert!(tip.height > 30.0, "its words wrap: {tip:?}");
 
   write(&mut screen, "for v0.4");
   screen.key(("Enter", "Enter"), true);

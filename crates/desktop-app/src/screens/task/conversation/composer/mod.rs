@@ -310,7 +310,8 @@ impl Composer {
     let presses = presses::presses(&composing.state, &target, (&mode, recipient));
     let field = self.field(ctx, props, &mode, (&presses, leave.clone()));
     // A run's agents read the skill in its block with the message, whatever their engine (ORC-634).
-    let field = with_skill_chip(ctx, ("composer", SkillReach::Text), &composing.state.skill, field);
+    let chip = ("composer", SkillReach::Text, &self.box_anchor);
+    let field = with_skill_chip(ctx, chip, &composing.state.skill, field);
     let attached = &composing.state.attached;
     let context = composing
       .detail

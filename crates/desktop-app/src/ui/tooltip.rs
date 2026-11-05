@@ -40,6 +40,27 @@ pub struct Tooltip {
   /// Its right edge lines up with its anchor's, for an anchor at the end of a row (`Tooltip · Resets at …` in
   /// `uuaob`); else its left edge does.
   end: bool,
+  /// It opens over its anchor, clear of the top of the box the anchor sits in; else under the anchor.
+  over: Option<Over>,
+  /// The widest its words run before they wrap.
+  wrap_at: f32,
+}
+
+/// The box a tooltip that opens over its anchor keeps clear of: its bottom 6 over the box's top edge.
+#[derive(Clone)]
+struct Over(ElementRef);
+
+/// The box is its anchor's, laid out by the same component for as long as the tooltip lives: two compare equal.
+impl PartialEq for Over {
+  fn eq(&self, _: &Self) -> bool {
+    true
+  }
+}
+
+impl std::fmt::Debug for Over {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    f.debug_struct("Over").finish_non_exhaustive()
+  }
 }
 
 /// How a cut text is set, and what its tooltip says.
@@ -98,12 +119,27 @@ impl Tooltip {
       cut: None,
       silent: false,
       end: false,
+      over: None,
+      wrap_at: TEXT_MAX_WIDTH,
     }
   }
 
   /// It lines up with its anchor's right edge.
   pub fn end(mut self) -> Self {
     self.end = true;
+    self
+  }
+
+  /// It opens over its anchor, its bottom 6 clear of the top edge of `frame`, the box the anchor sits in (`Tooltip ·
+  /// skill chip on Codex` `mhanX` in `07` `QnPRC`).
+  pub fn over(mut self, frame: &ElementRef) -> Self {
+    self.over = Some(Over(frame.clone()));
+    self
+  }
+
+  /// Its words wrap at `width` rather than at the widest a tooltip's run.
+  pub fn wrap_at(mut self, width: f32) -> Self {
+    self.wrap_at = width;
     self
   }
 
@@ -166,7 +202,7 @@ impl Tooltip {
         Text::new(words)
           .variant(typography)
           .color(PaletteColor::TextInverse)
-          .max_width(Dimension::Px(TEXT_MAX_WIDTH)),
+          .max_width(Dimension::Px(self.wrap_at)),
       );
     if let Some(keys) = &self.shortcut {
       panel = panel.child(
@@ -238,21 +274,43 @@ impl Component for TooltipHost {
       None => anchor.with_children(ctx.children().iter().cloned()),
     };
     if let Some(words) = tooltip.words(self.fits.get()).filter(|_| self.shown.get()) {
+      let (placement, away) = self.placement(&tooltip);
       anchor = anchor.child(
         Popup::new(self.anchor.clone(), tooltip.panel(words))
           .open_when(true)
-          .placement(if tooltip.end {
-            Placement::BottomEnd
-          } else {
-            Placement::BottomStart
-          })
-          .offset(0.0, ExtraSpacing::Snug.value())
+          .placement(placement)
+          .offset(0.0, away)
           .hit_test(HitTestBehavior::None)
           .dismiss_on_outside_click(false)
           .dismiss_on_escape(false),
       );
     }
     anchor
+  }
+}
+
+impl TooltipHost {
+  /// Where `tooltip` opens from its anchor, and how far from it: under it, 6 away; over it, 6 clear of its box's top,
+  /// which is as far over the anchor's top as the box's top is (lurq counts the offset away from the anchor).
+  fn placement(&self, tooltip: &Tooltip) -> (Placement, f32) {
+    let gap = ExtraSpacing::Snug.value();
+    match &tooltip.over {
+      Some(Over(frame)) => {
+        let inset = if frame.is_attached() && self.anchor.is_attached() {
+          (self.anchor.y() - frame.y()).max(0.0)
+        } else {
+          0.0
+        };
+        let placement = if tooltip.end {
+          Placement::TopEnd
+        } else {
+          Placement::TopStart
+        };
+        (placement, gap + inset)
+      }
+      None if tooltip.end => (Placement::BottomEnd, gap),
+      None => (Placement::BottomStart, gap),
+    }
   }
 }
 

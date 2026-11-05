@@ -22,9 +22,17 @@ The person chose (2026-11-01) to put every frame on `Task page · redesign`, bec
 | | | `W4SNj3` 06b · Conversation · slash menu · filtered | `/st` while Builder works (the header says *Running 03 Implement · Builder*); menu `zRg3n` shows *Stop turn* available and focused, and the skill `rust-change` matched inside its name |
 | | | `DunaJ` 06c · Conversation · skill chip | The run composer holds the chip `rust-change ×` before the message to Builder |
 | | | `lXQi1` 06d · Slash menu · parts and rules | The row kinds (command, keyboard focus, unavailable with why, skill, filtered match, long description); the chip in the composer, in a sent message, and on hover with its tooltip; the rules |
+| `Orchestrator · redesign` `hujxu` | Row 5 `C8CMX` · Skill on Codex (ORC-663) | `QnPRC` 07 · Skill chip on Codex | The Orchestrator on *Codex · Default · gpt-5.5*; the sent message carries the chip `release-notes` (no ×) 8 above its text; the composer holds `release-notes ×` on hover (`border_strong` stroke) before the typed text; the `Tooltip` `mhanX` opens above the chip, its left edge at the chip's, 6 clear of the composer's top edge, wrapping at 360, with the `composer.skill.reach.codex` text |
+| | | `z1VcW9` 07b · The skill chip's tooltip, by where the message goes | The tooltip on Codex (new text), on Claude Code and for a run's agent (unchanged); the sent message is the same on every engine |
 
-Exports at scale 1: `.tmp/design/ORC-318/<node>.png` (not committed). Pencil exports a nested frame without its
-board's theme, so the window exports render light; the canvas shows them dark.
+The ORC-318 nodes listed above for `Task page · redesign` are not in the open `orchester.pen` (checked 2026-11-05):
+the board `C3wC8` is there, but not its rows `Fc9RD` and `IZmxI`, their frames (`jAiyu`, `m85qp`, `f0b717`, `R8eum`,
+`yKWQx`, `W4SNj3`, `DunaJ`, `lXQi1`), the menus (`IQOLN`, `OKWFL`, `G2ajn7`, `v7Xwo`, `zRg3n`) or the parts `dBGRj`,
+`FKUJD`, `OKzZ6` and `r78GAg`. For the skill chip, its tooltip and the sent message, compare with `QnPRC` and `z1VcW9`.
+
+Exports at scale 1: `.tmp/design/ORC-318/<node>.png` and `.tmp/design/ORC-663/<node>.png` in the main checkout (not
+committed). Pencil exports a nested frame without its board's theme, so the window exports render light; the canvas
+shows them dark.
 
 ## The menu
 
