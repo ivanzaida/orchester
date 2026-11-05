@@ -187,7 +187,8 @@ Added by ORC-751:
       and the header has no primary action.
     - The step pill is neutral, with the hourglass.
     - The Summary's last-event row names the task and the branch it must be merged into.
-    - Properties show *Depends on: KON-52 · not merged* and *Led in «…» · via Webhooks v2*.
+    - Properties show *Depends on: KON-52 · not merged* and *Led in* with the leading conversation's name, cut to one
+      line (`IbtAj`); its ↗ opens the conversation.
     - When the wait cannot be met, the row and the status line take the warning tone (`rlnEZ` f).
     - Conversation shows where the wait came from and the wait line. Its composer holds a message until the run
       continues.
@@ -197,10 +198,13 @@ Added by ORC-751:
     - **Unreadable:** the danger mark, *The tasks of Kontur can't be read*, and *Try again*, inside the picker rather
       than in a toast. Chips already chosen stay, and Ctrl Enter still watches them.
 13. **Cannot apply (`Y9Sfg`).** A command applies what still exists. A target that was closed or deleted meanwhile is
-    struck through in the sent message, and the delivery line names it. With nothing left the line reads *Not
-    applied · … — nothing changed*: there is no turn and nothing is spent, and *Edit* puts the text back without the
-    gone chip. An `/unwatch` of something another conversation took is *Not applied*, and the line says where it is
-    led now.
+    struck through in the sent message (*Mobile release* `i2n0A`, *KON-47* `CdY1l`; Pencil does not keep
+    `strikethrough` on these texts, so the line is drawn as the 1 px rules `Bz8JW` and `Y46ela` in `text_muted`;
+    the app uses the text's own strikethrough), and the delivery line names it.
+    With nothing left the line reads *Not applied · … — nothing changed*: there is no turn and nothing is spent, and
+    *Edit* puts the text back without the gone chip. An `/unwatch` of something another conversation took is *Not
+    applied*, and the line says where it is led now. *Not applied* always takes the warning mark (`vB1WN` in b,
+    `gALBV` in c): nothing failed and nothing changed, so it is not the danger tone.
 14. **Take it here while the other conversation answers (`DE2n1`).**
     - The card says *answering now* and the button stays enabled.
     - The turn under way finishes in the other conversation, and the events after it come here.
