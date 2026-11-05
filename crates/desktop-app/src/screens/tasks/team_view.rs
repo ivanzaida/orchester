@@ -89,9 +89,13 @@ impl TasksScreen {
         .as_deref()
         .unwrap_or_else(|| shared.sharing.server_name())
     });
-    let mut lines: Vec<Element> = vec![inset(team::team_line(ctx, id, (place, team.role))).into()];
+    let board = self.display.get().layout == Layout::Board;
+    let mut lines: Vec<Element> = Vec::new();
+    // The board draws the team's line (01b `zv7b6`); the list does not (01 `QdL7N`).
+    if board {
+      lines.push(inset(team::team_line(ctx, id, (place, team.role))).into());
+    }
     if team.member() {
-      let board = self.display.get().layout == Layout::Board;
       lines.push(inset(team::lock_line(ctx, team.admins.as_deref(), board)).into());
     }
     if team.more {
@@ -123,5 +127,5 @@ fn outage(
     }
   };
   let name = project.open.project.name().as_str();
-  team::outage::outage(ctx, (failure, shared, name), local, retry)
+  team::outage::outage(ctx, (failure, shared, name), (&project.open.repo_root, local), retry)
 }

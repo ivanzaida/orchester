@@ -20,6 +20,8 @@ use orchester_workspace::{
 };
 use parking_lot::Mutex;
 
+use super::reached::{Reached, ReadsReached};
+
 /// What a team read is kept by: the server, the session's generation and the project on the server.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct SourceKey {
@@ -37,16 +39,23 @@ pub struct TeamSource {
   servers: Servers,
   /// When a read last found the server unreachable, until one answers.
   unanswered: Arc<Mutex<Option<Timestamp>>>,
+  /// Where the session keeps how each project's reads last ended.
+  reached: ReadsReached,
 }
 
 impl TeamSource {
-  pub(super) fn new(key: SourceKey, project: TeamProject, (root, servers): (PathBuf, Servers)) -> Self {
+  pub(super) fn new(
+    key: SourceKey,
+    project: TeamProject,
+    (root, servers, reached): (PathBuf, Servers, ReadsReached),
+  ) -> Self {
     Self {
       key,
       project,
       root: Arc::new(root),
       servers,
       unanswered: Arc::default(),
+      reached,
     }
   }
 
@@ -67,17 +76,22 @@ impl TeamSource {
     &self.servers
   }
 
-  /// What a read's `answer` says: the read, or why it failed, with since when the server has not answered.
+  /// What a read's `answer` says: the read, or why it failed, with since when the server has not answered. Whether
+  /// the server answered is kept for the session ([`ReadsReached`]).
   pub(super) fn answered<T>(&self, answer: Result<T, TeamReadError>) -> Result<T, TeamFailure> {
     let mut unanswered = self.unanswered.lock();
     match answer {
       Ok(read) => {
         *unanswered = None;
+        self.reached.record(&self.root, Reached::Answered);
         Ok(read)
       }
-      Err(TeamReadError::Unavailable { .. }) => Err(TeamFailure::Unavailable {
-        since: *unanswered.get_or_insert_with(Timestamp::now),
-      }),
+      Err(TeamReadError::Unavailable { .. }) => {
+        self.reached.record(&self.root, Reached::Unanswered);
+        Err(TeamFailure::Unavailable {
+          since: *unanswered.get_or_insert_with(Timestamp::now),
+        })
+      }
       Err(error) => Err(TeamFailure::from(&error)),
     }
   }

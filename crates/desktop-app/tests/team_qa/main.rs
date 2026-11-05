@@ -211,7 +211,8 @@ fn team_qa_download_failed_says_team_data_is_unavailable_and_try_again_reads_aga
   window.until("the outage", |window| window.texts("tasks-team-unavailable").is_some());
   let said = window.text("tasks-team-unavailable");
   assert!(said.contains("Team data is unavailable"), "{said}");
-  assert!(said.contains("Acme hasn't answered since"), "{said}");
+  let host = server.url().trim_start_matches("http://").to_owned();
+  assert!(said.contains(&format!("{host} hasn't answered since")), "{said}");
   let reads = server.authority_reads();
   window.press("tasks-team-try-again");
   window.until("the tasks to be read again", |_| server.authority_reads() > reads);

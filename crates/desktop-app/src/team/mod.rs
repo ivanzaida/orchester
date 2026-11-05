@@ -19,6 +19,7 @@ pub mod lock;
 pub mod outage;
 pub mod pages;
 pub mod queries;
+pub mod reached;
 mod source;
 pub mod start;
 pub mod strip;
@@ -40,6 +41,7 @@ use orchester_workspace::{
 use parking_lot::Mutex;
 use tokio::{runtime::Handle, sync::watch, task::JoinHandle};
 
+use self::reached::ReadsReached;
 pub use self::source::{SourceKey, TeamFailure, TeamSource};
 
 /// The session's team reads. Clones share them.
@@ -53,6 +55,8 @@ struct Inner {
   runtime: Handle,
   generation: watch::Sender<u64>,
   current: Mutex<Current>,
+  /// How each project's reads last ended, across generations: the latest answer stays what is known of its server.
+  reached: ReadsReached,
 }
 
 /// What belongs to the session's current generation.
@@ -99,6 +103,7 @@ impl TeamQueries {
           sources: HashMap::new(),
           ended: HashMap::new(),
         }),
+        reached: ReadsReached::new(),
       }),
     }
   }
@@ -115,6 +120,11 @@ impl TeamQueries {
   /// Wakes whenever a generation ends.
   pub fn subscribe(&self) -> watch::Receiver<u64> {
     self.inner.generation.subscribe()
+  }
+
+  /// How each project's reads last ended with its server.
+  pub fn reached(&self) -> &ReadsReached {
+    &self.inner.reached
   }
 
   /// Ends the current generation: a new client, no source, nothing ended. *Try again* after an outage or after a
@@ -157,7 +167,11 @@ impl TeamQueries {
       project: server.team_project(),
     };
     let project = TeamProject::new(session);
-    let source = TeamSource::new(key, project, (root.to_owned(), self.inner.servers.clone()));
+    let source = TeamSource::new(
+      key,
+      project,
+      (root.to_owned(), self.inner.servers.clone(), self.inner.reached.clone()),
+    );
     Ok(Some(self.inner.open(root, source, generation)))
   }
 

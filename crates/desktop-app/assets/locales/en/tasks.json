@@ -377,6 +377,10 @@
       "running": "Running on this computer",
       "run": "Run {{number}}",
       "runStep": "{{number}} {{step}} · run {{run}}",
+      "reportsWaiting": {
+        "one": "1 report waits to send",
+        "other": "{{count}} reports wait to send"
+      },
       "outageNote": "Runs that started before the outage keep going with what they had at their start. Nothing new starts and no Admin change is saved until the server answers."
     },
     "formerKey": "was {{key}}",
