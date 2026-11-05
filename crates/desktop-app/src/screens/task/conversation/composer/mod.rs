@@ -74,7 +74,7 @@ use crate::{
     icon::{Icon, icon},
     mention::{self, MentionField, MenuProps},
     message::message_text,
-    slash::{SkillReach, SlashField, plan_held, with_skill_chip},
+    slash::{SkillReach, SlashField, plan_held, with_chips},
   },
 };
 
@@ -311,7 +311,7 @@ impl Composer {
     let field = self.field(ctx, props, &mode, (&presses, leave.clone()));
     // A run's agents read the skill in its block with the message, whatever their engine (ORC-634).
     let chip = ("composer", SkillReach::Text, &self.box_anchor);
-    let field = with_skill_chip(ctx, chip, &composing.state.skill, field);
+    let field = with_chips(ctx, chip, &self.slash, field);
     let attached = &composing.state.attached;
     let context = composing
       .detail

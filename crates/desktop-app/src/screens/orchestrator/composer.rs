@@ -42,7 +42,7 @@ use crate::{
     icon::{Icon, icon},
     mention::MentionField,
     pressable::{inert, pressable},
-    slash::{SkillReach, with_skill_chip},
+    slash::{SkillReach, with_chips},
     tooltip::Tooltip,
   },
 };
@@ -137,10 +137,10 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, mut composer: ComposerBox<'_>
     .take()
     .map_or((None, Vec::new()), |plan| (Some(plan.switch), plan.over));
   let field = field(ctx, view, &composer, (not_set_up, flip));
-  let field = with_skill_chip(
+  let field = with_chips(
     ctx,
     ("orchestrator-composer", composer.reach, &view.mention_anchor),
-    &view.skill,
+    &view.slash,
     field,
   );
   let end: Vec<Element> = match composer.set_up {

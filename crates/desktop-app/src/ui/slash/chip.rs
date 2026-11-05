@@ -22,6 +22,7 @@ use lurq::{
 use orchester_core::connection::AgentProvider;
 use orchester_workspace::skills::offered::OfferedSkill;
 
+use super::{SlashField, argument};
 use crate::{
   theme::{ExtraRadius, ExtraSpacing, ExtraTypography, IconSize, SlashText},
   ui::{
@@ -63,21 +64,24 @@ impl SkillReach {
 /// The widest the composer chip's tooltip runs before it wraps (`Label` `xuZ4N` in `mhanX`, `07` `QnPRC`).
 const SKILL_TIP_WIDTH: f32 = 360.0;
 
-/// `field`, the composer's message field, after the chip of the skill `skill` holds while it holds one, in the
-/// composer named `id`, whose message reaches its agent as `reach` says; the chip's tooltip keeps clear of `frame`, the
-/// composer's box. The field keeps its place in the tree either way, and with it its focus.
-pub fn with_skill_chip(
+/// `field`, the composer's message field, after the chips `slash` holds: the command with an argument and its choices
+/// ([`super::argument`]), and the skill, in the composer named `id`, whose message reaches its agent as `reach` says;
+/// the skill chip's tooltip keeps clear of `frame`, the composer's box. The field keeps its place in the tree either
+/// way, and with it its focus.
+pub fn with_chips(
   ctx: &mut Ctx,
   (id, reach, frame): (&str, SkillReach, &ElementRef),
-  skill: &Signal<Option<OfferedSkill>>,
+  slash: &SlashField,
   field: Element,
 ) -> Element {
-  let chip = skill_chip(ctx, (id, reach, frame), skill);
+  let command = argument::chips(ctx, id, slash);
+  let chip = skill_chip(ctx, (id, reach, frame), &slash.skill);
   Row::new()
     .id(format!("{id}-skill-line"))
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Start)
+    .with_children(command)
     .with_children(chip)
     .child(
       Row::new()
@@ -144,24 +148,33 @@ fn skill_chip(
 
 /// The pill of `skill` named `chip_id`: its glyph and its name.
 fn pill(chip_id: &str, skill: &OfferedSkill) -> Row {
-  Row::new()
-    .id(chip_id.to_owned())
+  pill_frame(chip_id, PaletteColor::Border)
     .describe("skill", skill.slug.clone())
     .describe("version", skill.version.get().to_string())
+    .child(icon(Icon::GraduationCap, IconSize::Xs, PaletteColor::TextSecondary))
+    .child(chip_words(&format!("{chip_id}-name"), &skill.slug))
+}
+
+/// A composer chip's pill named `chip_id`, in a `stroke` line: `surface_raised`, round, 2 over and under its parts
+/// and 8 at their sides, 4 between them.
+pub(super) fn pill_frame(chip_id: &str, stroke: PaletteColor) -> Row {
+  Row::new()
+    .id(chip_id.to_owned())
     .flex_shrink(0.0)
     .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Tight.role()))
     .spacing(SpacingSize::Xs)
     .align_items(Alignment::Center)
     .background(PaletteColor::SurfaceRaised)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .border(Border::inside(BorderSize::Sm, stroke))
     .rounded(ExtraRadius::Full.role())
-    .child(icon(Icon::GraduationCap, IconSize::Xs, PaletteColor::TextSecondary))
-    .child(
-      Text::new(&skill.slug)
-        .id(format!("{chip_id}-name"))
-        .variant(SlashText::Chip.role())
-        .nowrap(),
-    )
+}
+
+/// A chip's name `id`, in Geist Mono 11 `text_secondary`.
+pub(super) fn chip_words(id: &str, words: &str) -> Text {
+  Text::new(words)
+    .id(id.to_owned())
+    .variant(SlashText::Chip.role())
+    .nowrap()
 }
 
 /// The words of the tooltip `key` names, for `skill`.
