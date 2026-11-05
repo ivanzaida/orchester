@@ -25,7 +25,7 @@ use orchester_core::{
   run::{Invocation, StepAt, StepExecutor, StepFailure},
   store::ActivityStore,
   test_report::SuiteRun,
-  test_step::{PlannedSuite, SuiteOutcome, TestPlan, TestStepResult, rerun_filters},
+  test_step::{PlannedSuite, SuiteOutcome, TestPlan, TestStepResult, flaky::Quarantine, rerun_filters},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -68,7 +68,7 @@ impl RunTask {
     let prepared = self
       .test_plan(workspace.path())
       .and_then(|plan| self.environment().map(|environment| (plan, environment)));
-    let (plan, environment) = match prepared {
+    let ((plan, quarantine), environment) = match prepared {
       Ok(prepared) => prepared,
       Err(problem) => return self.not_started(execution, &mut invocation, problem, StepFailure::NotStarted),
     };
@@ -84,6 +84,7 @@ impl RunTask {
       invocation: invocation.clone(),
       step,
       plan,
+      quarantine,
       suites: self.step_suites(workspace.path(), &environment),
       services: self.step_services(invocation.id, workspace.path(), &environment),
       events: self.worker_events.clone(),
@@ -96,15 +97,20 @@ impl RunTask {
     Ok(())
   }
 
-  /// The suites the run's changes in `worktree` choose, from the project's published suites, services and stacks.
-  fn test_plan(&self, worktree: &Path) -> Result<TestPlan, RunnerProblem> {
+  /// The suites the run's changes in `worktree` choose, from the project's published suites, services and stacks,
+  /// and the project's quarantined tests as the step starts.
+  fn test_plan(&self, worktree: &Path) -> Result<(TestPlan, Quarantine), RunnerProblem> {
     let unreadable = |what: &str, error: &dyn std::error::Error| problem(format!("cannot read {what}: {error}"));
     let suites = published(&self.root).map_err(|error| unreadable("the project's test suites", &error))?;
     let services = published_services(&self.root).map_err(|error| unreadable("the project's services", &error))?;
     let stacks = published_stacks(&self.root).map_err(|error| unreadable("the project's stacks", &error))?;
+    let quarantined = ProjectDb::open(&self.root)
+      .and_then(|db| db.quarantined_tests())
+      .map_err(|error| unreadable("the project's quarantined tests", &error))?;
     let changed = changed_paths(worktree, self.run.base().as_str())
       .map_err(|error| unreadable("the paths the run changed", &error))?;
-    Ok(TestPlan::new(suites, &services, &stacks, &changed))
+    let quarantine = Quarantine::new(quarantined.into_iter().map(|(test, _)| test));
+    Ok((TestPlan::new(suites, &services, &stacks, &changed), quarantine))
   }
 }
 
@@ -137,6 +143,7 @@ struct TestWorker {
   invocation: Invocation,
   step: StepKey,
   plan: TestPlan,
+  quarantine: Quarantine,
   suites: StepSuites,
   services: StepServices,
   events: mpsc::UnboundedSender<WorkerEvent>,
@@ -157,9 +164,9 @@ impl TestWorker {
 
   async fn follow(mut self) -> Result<CommandFinished, StoreError> {
     let stop = Arc::new(AtomicBool::new(false));
-    let (plan, suites, services) = (self.plan, self.suites, self.services);
+    let (plan, quarantine, suites, services) = (self.plan, self.quarantine, self.suites, self.services);
     let flag = Arc::clone(&stop);
-    let job = tokio::task::spawn_blocking(move || run_layers(plan, &suites, &services, &flag));
+    let job = tokio::task::spawn_blocking(move || run_layers(plan, (&suites, &services), &quarantine, &flag));
     tokio::pin!(job);
     let mut stopped = None;
     let mut listening = true;
@@ -188,8 +195,9 @@ impl TestWorker {
   }
 }
 
-/// Records how the Test step's invocation ended, and what it means for the step: its result when it ran to its end;
-/// none when the run stopped it, or when its suites ended without a result, which fails it as a breakage.
+/// Records how the Test step's invocation ended, and what it means for the step: its result when it ran to its end,
+/// with its flaky and quarantined outcomes kept for the project; none when the run stopped it, or when its suites
+/// ended without a result, which fails it as a breakage.
 fn finish(
   root: &Path,
   invocation: &Invocation,
@@ -210,6 +218,7 @@ fn finish(
       }
     }
     (None, Some(result)) => {
+      db.record_flaky_outcomes(&result.flaky_outcomes(invocation.run, now))?;
       let failure = result.failure();
       ended.outcome = Some(match failure {
         None => InvocationOutcome::Completed,
@@ -244,8 +253,8 @@ fn finish(
 /// `stop` was set before it was done.
 fn run_layers(
   plan: TestPlan,
-  suites: &StepSuites,
-  services: &StepServices,
+  (suites, services): (&StepSuites, &StepServices),
+  quarantine: &Quarantine,
   stop: &AtomicBool,
 ) -> Option<TestStepResult> {
   let mut result = TestStepResult {
@@ -261,18 +270,19 @@ fn run_layers(
     }
     let mut outcomes = Vec::with_capacity(layer.suites.len());
     for planned in layer.suites {
-      outcomes.push(run_suite(planned, suites, services, stop)?);
+      outcomes.push(run_suite(planned, (suites, services), quarantine, stop)?);
     }
     result.reached.push((layer.layer, outcomes));
   }
   Some(result)
 }
 
-/// Runs `planned` once, then each test that failed once more; `None` when `stop` was set meanwhile.
+/// Runs `planned` once, then each test that failed once more, quarantined ones too, so a quarantined test that passes
+/// again shows as flaky; `None` when `stop` was set meanwhile.
 fn run_suite(
   planned: PlannedSuite,
-  suites: &StepSuites,
-  services: &StepServices,
+  (suites, services): (&StepSuites, &StepServices),
+  quarantine: &Quarantine,
   stop: &AtomicBool,
 ) -> Option<SuiteOutcome> {
   let stopped = || stop.load(Ordering::Acquire);
@@ -296,5 +306,5 @@ fn run_suite(
       Err(why) => tracing::warn!(suite = slug.as_str(), %why, "a failed test did not run again"),
     }
   }
-  Some(SuiteOutcome::settle(slug, layer, first, &reruns))
+  Some(SuiteOutcome::settle(slug, layer, first, &reruns, quarantine))
 }

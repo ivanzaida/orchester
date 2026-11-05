@@ -1,8 +1,10 @@
 //! The Test step end to end against `orchester-fake-codex`, with `orchester-test-command` as the suites' and services'
 //! program (`support::suites`, `support::services`): its suites run layer by layer and it stops after the first layer
 //! that fails; only the suites whose services own a path the run changed run, beside those marked always; a test that
-//! fails and then passes when run again is flaky and does not fail the step; a failure returns to the writing step
-//! with only the failed tests, never the raw output; and the step after it reads the result it stored. Needs `git`.
+//! fails and then passes when run again is flaky and does not fail the step, and the project's flaky history keeps it;
+//! a quarantined test that fails still runs, is in the result and the history, but neither fails the step nor goes
+//! back to the writing step; a failure returns to the writing step with only the failed tests, never the raw output;
+//! and the step after it reads the result it stored. Needs `git`.
 //! Run with `cargo test -p orchester-runner --features test-agent --test test_step test_step`.
 
 mod support;
@@ -16,6 +18,8 @@ use orchester_core::{
   service::{OwnedPath, ReadyCheck, Service},
   store::ActivityStore,
   test_report::SuiteRun,
+  test_step::flaky::{FlakyKind, TestKey},
+  time::Timestamp,
 };
 use orchester_store::ProjectDb;
 
@@ -246,6 +250,13 @@ async fn test_step_flaky_test_does_not_fail_and_review_reads_the_stored_result()
     "{}",
     output.text
   );
+  // The project's flaky history keeps it, with the run.
+  let history = db.flaky_outcomes().expect("flaky history");
+  assert_eq!(history.len(), 1);
+  assert_eq!(
+    (history[0].test.test(), history[0].kind, history[0].run),
+    ("subtracts numbers", FlakyKind::Flaky, run.id())
+  );
 
   // Review reads the stored result, and how to check a single test.
   let prompts = reported(&db, run.id(), "prompt| ");
@@ -264,6 +275,62 @@ async fn test_step_flaky_test_does_not_fail_and_review_reads_the_stored_result()
     prompts
       .iter()
       .any(|line| line.contains("`subtracts numbers` in `unit`")),
+    "{prompts:?}"
+  );
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn test_step_quarantined_failing_test_does_not_fail_and_is_not_returned() {
+  let project = service_project(pipeline(), Vec::new());
+  let root = project.repo.path();
+  commit(root, &[("fixtures/node.tap", NODE_TAP)]);
+  publish_one(
+    root,
+    "unit",
+    &printing(TestLayer::Unit, "fixtures/node.tap").run_always(true),
+  );
+  let quarantined = TestKey::new(Slug::new("unit").expect("slug"), "subtracts numbers").expect("test");
+  ProjectDb::open(root)
+    .expect("open")
+    .quarantine_test(&quarantined, Timestamp::now())
+    .expect("a person quarantines it");
+
+  let run = run_to_the_end(root, project.task).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  assert_eq!(run.attempts().len(), 1, "nothing went back to Implement");
+  // It still ran, and once more after it failed.
+  let kept = kept_runs(root, run.id());
+  assert_eq!(kept.len(), 2);
+  assert!(!kept[0].passed() && !kept[1].passed());
+
+  let db = ProjectDb::open(root).expect("open");
+  let output = &outputs_of(&db, run.id(), "tests")[0];
+  assert_eq!(output.outcome, Some(StepOutcome::Done));
+  assert!(
+    output
+      .text
+      .contains("Quarantined by the person, so they do not fail the step"),
+    "{}",
+    output.text
+  );
+  assert!(
+    output
+      .text
+      .lines()
+      .any(|line| line.starts_with("- `subtracts numbers` in `unit`: failed at ")),
+    "{}",
+    output.text
+  );
+  let history = db.flaky_outcomes().expect("flaky history");
+  assert_eq!(history.len(), 1);
+  assert_eq!(
+    (&history[0].test, history[0].kind, history[0].run),
+    (&quarantined, FlakyKind::QuarantinedFailure, run.id())
+  );
+  // Implement ran once, and was never told about it.
+  let prompts = reported(&db, run.id(), "prompt| ");
+  assert!(
+    !prompts.iter().any(|line| line.starts_with("# Returned from Tests")),
     "{prompts:?}"
   );
 }

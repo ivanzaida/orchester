@@ -2,10 +2,12 @@
 //! published test suites in layers — lint, then unit, then e2e — and stops at the first layer that fails. Only the
 //! suites whose services own a path the run changed run, plus those marked always ([`TestPlan`]). Each test that
 //! fails runs once more ([`rerun_filters`]); passing then marks it flaky, and it does not fail the step
-//! ([`SuiteOutcome::settle`]). The runner runs the suites as `run_tests` does and keeps each run with the run; the
-//! step's result ([`TestStepResult`]) is its output: what later steps read when it passed, only the failed tests when
-//! it failed, which its failure route returns to the writing step.
+//! ([`SuiteOutcome::settle`]); nor does a quarantined test that fails again ([`flaky`]). The runner runs the suites as
+//! `run_tests` does and keeps each run with the run; the step's result ([`TestStepResult`]) is its output: what later
+//! steps read when it passed, only the failed tests when it failed, which its failure route returns to the writing
+//! step. Its flaky and quarantined outcomes are kept for the project ([`TestStepResult::flaky_outcomes`]).
 
+pub mod flaky;
 mod outcome;
 mod plan;
 mod result;

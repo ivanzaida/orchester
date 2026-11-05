@@ -1,7 +1,8 @@
 //! How one suite of a Test step came out: its first run, the tests that failed in it run once more, and what is left
-//! failing. A failed test that passes when run again is flaky and does not fail the suite; a quarantined test never
-//! fails it either, but there is no quarantine list yet (ORC-259), so none is.
+//! failing. A failed test that passes when run again is flaky and does not fail the suite; a quarantined test
+//! ([`Quarantine`]) that fails again is kept apart and never fails it either.
 
+use super::flaky::Quarantine;
 use crate::{
   resource::{Slug, TestFilter, TestLayer, TestSuite},
   test_report::{SuiteRun, SuiteRunEnd, TestCase, Totals, test_name},
@@ -31,10 +32,12 @@ pub struct SuiteOutcome {
   pub layer: TestLayer,
   /// Its first run, kept with the run as `run_tests` keeps one, and where its result is; `None` when it did not run.
   pub kept: Option<(SuiteRun, String)>,
-  /// The tests still failing after they ran again.
+  /// The tests still failing after they ran again, and not quarantined.
   pub failed: Vec<FailedTest>,
   /// The tests that failed, then passed when run again.
   pub flaky: Vec<String>,
+  /// The quarantined tests that failed when run again too: shown, but they never fail the suite.
+  pub quarantined: Vec<FailedTest>,
   /// Why the suite fails besides its failed tests: it did not run, its report cannot be read, it timed out, the
   /// report names errors outside the tests, or the program's exit code says it failed.
   pub problem: Option<String>,
@@ -49,19 +52,27 @@ impl SuiteOutcome {
       kept: None,
       failed: Vec::new(),
       flaky: Vec::new(),
+      quarantined: Vec::new(),
       problem: Some(why),
     }
   }
 
   /// A suite whose first run is `first`, kept at `stored`, after its failed tests ran again in `reruns`: a failed
-  /// test that one of them shows passed is flaky, every other one still fails.
-  pub fn settle(suite: Slug, layer: TestLayer, (first, stored): (SuiteRun, String), reruns: &[SuiteRun]) -> Self {
+  /// test that one of them shows passed is flaky, one `quarantine` holds is quarantined, every other one still fails.
+  pub fn settle(
+    suite: Slug,
+    layer: TestLayer,
+    (first, stored): (SuiteRun, String),
+    reruns: &[SuiteRun],
+    quarantine: &Quarantine,
+  ) -> Self {
     let mut outcome = Self {
       suite,
       layer,
       kept: None,
       failed: Vec::new(),
       flaky: Vec::new(),
+      quarantined: Vec::new(),
       problem: problem(&first),
     };
     if let Some(report) = first.report() {
@@ -71,6 +82,8 @@ impl SuiteOutcome {
           if !outcome.flaky.contains(&name) {
             outcome.flaky.push(name);
           }
+        } else if quarantine.holds(&outcome.suite, &name) {
+          outcome.quarantined.push(failed(&first, case, name));
         } else {
           outcome.failed.push(failed(&first, case, name));
         }

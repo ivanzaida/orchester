@@ -8,7 +8,7 @@ use orchester_core::{
   },
   service::{OwnedPath, Readiness, ReadyCheck, ReadyTimeout, Service, ServiceName, Stack, StackName},
   test_report::{self, SuiteRun, SuiteRunEnd, TestRunId},
-  test_step::{Chosen, MAX_SINGLE_RERUNS, SuiteOutcome, TestPlan, TestStepResult, rerun_filters},
+  test_step::{Chosen, MAX_SINGLE_RERUNS, SuiteOutcome, TestPlan, TestStepResult, flaky::Quarantine, rerun_filters},
 };
 
 const FAILING: &str = "TAP version 13\n# printed by subtracts\nok 1 - adds\nnot ok 2 - subtracts\n  ---\n  \
@@ -155,11 +155,13 @@ fn test_step_failed_tests_run_again_by_name_or_with_the_whole_suite() {
 
 #[test]
 fn test_step_a_test_that_passes_again_is_flaky_and_does_not_fail_the_suite() {
+  let none = Quarantine::default();
   let flaky = SuiteOutcome::settle(
     slug("unit"),
     TestLayer::Unit,
     (run(1, FAILING), "t1/result.json".to_owned()),
     &[run(2, PASSING)],
+    &none,
   );
   assert!(flaky.passed(), "{flaky:?}");
   assert_eq!(flaky.flaky, ["subtracts"]);
@@ -168,28 +170,38 @@ fn test_step_a_test_that_passes_again_is_flaky_and_does_not_fail_the_suite() {
     TestLayer::Unit,
     (run(1, FAILING), "t1/result.json".to_owned()),
     &[run(2, FAILING)],
+    &none,
   );
   assert!(!failing.passed());
   assert_eq!(failing.failed[0].name, "subtracts");
   assert_eq!(failing.failed[0].location.as_deref(), Some("src/math.test.mjs:8"));
   // A rerun that did not run shows nothing passed.
-  let unrun = SuiteOutcome::settle(slug("unit"), TestLayer::Unit, (run(1, FAILING), "t1".to_owned()), &[]);
+  let unrun = SuiteOutcome::settle(
+    slug("unit"),
+    TestLayer::Unit,
+    (run(1, FAILING), "t1".to_owned()),
+    &[],
+    &none,
+  );
   assert!(!unrun.passed());
 }
 
 #[test]
 fn test_step_failure_report_lists_only_the_failed_tests() {
+  let none = Quarantine::default();
   let failing = SuiteOutcome::settle(
     slug("web-unit"),
     TestLayer::Unit,
     (run(2, FAILING), "/runs/r/tests/t2/result.json".to_owned()),
     &[run(3, FAILING)],
+    &none,
   );
   let passing = SuiteOutcome::settle(
     slug("lint"),
     TestLayer::Lint,
     (run(1, PASSING), "/runs/r/tests/t1/result.json".to_owned()),
     &[],
+    &none,
   );
   let missing = SuiteOutcome::not_run(
     slug("api-unit"),

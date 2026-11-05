@@ -113,6 +113,15 @@ A test that is flaky again and again is listed as *watched*; the person moves it
 quarantined test still runs; its failure is shown but never fails the step. The list lives in Project settings ›
 Services › Flaky tests.
 
+Built (ORC-259): the project database keeps every flaky outcome a Test step sees (suite, test, run, time) and every
+failure of a quarantined test. A test flaky in **3 runs within 14 days** is watched — one flaky outcome is often
+chance and two can be one bad hour, a third in another run is a pattern; runs are counted, not outcomes, and a fixed
+test leaves the list after two quiet weeks (`orchester_core::test_step::flaky`). A quarantined failure is in the
+step's result for the steps after it, never in what returns to the writing step. Quarantining goes through
+`quarantine_test` (person_only unless *Let automation change agent permissions*) and the workspace's
+`agent_testing::flaky`; `release_test` is always taken. The quarantine list is this computer's project data: it does
+not travel with a shared project's configuration yet.
+
 ## Import
 
 A first draft of services and stacks can be read once from `docker compose` files, `package.json` scripts and Cargo
