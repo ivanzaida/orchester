@@ -13,11 +13,13 @@ use std::num::NonZeroU32;
 
 use orchester_core::{
   id::{ClaimId, IdempotencyKey, ProjectId, ServerId, TagId, UserId},
+  integration::{MergeKind, RunMerge},
   project::ProjectKey,
   resource::{ResourceKind, VersionNumber},
-  run::TaskPhase,
+  revision::Revision,
+  run::{BranchName, TaskPhase},
   sharing::{ClaimKind, MemberRole, TaskRevision},
-  store::{ResourceStore, RunStore, TaskStore},
+  store::{MergeStore, ResourceStore, RunStore, TaskStore},
   task::{
     TaskDetails, TaskLimits, TaskStatus, TaskUpdate,
     organization::{ChangeActor, Priority, Tag, TaskOrganization, WorkflowStatus},
@@ -335,6 +337,60 @@ fn shared_tasks_a_run_status_the_server_changed_meanwhile_is_not_sent_and_says_w
   assert_eq!(unsent.status, WorkflowStatus::InReview);
   db.dismiss_unsent_status(task.id()).expect("dismissed");
   assert_eq!(db.unsent_status(task.id()).expect("unsent"), None);
+}
+
+/// A run git found merged has its Done recorded from the In review the passed run left, not from the status a
+/// teammate set since, which the cache has (ORC-750); once it is not sent, it stays so, whether the claim's end tries
+/// again or Orchester's merge writes its record after it.
+#[test]
+fn shared_tasks_a_done_git_found_changes_from_in_review_and_stays_not_sent() {
+  let (_repo, mut db, mut run, execution) = started_run();
+  let task = db.task(run.task()).expect("read").expect("task");
+  db.start_sharing(
+    &link("ORC"),
+    &[],
+    (
+      &[cached(&db, &task, Some("delivery"), "Alice Moreau")],
+      &Default::default(),
+    ),
+  )
+  .expect("share");
+  let events = run.start_step(execution, at(120)).expect("start step");
+  db.append_events(&run, &events).expect("stored");
+  let events = run.complete_step(execution, at(121)).expect("complete step");
+  db.append_events(&run, &events).expect("stored");
+  db.clear_automatic_status(task.id(), at(121))
+    .expect("the In review was sent");
+  let mut moved = cached(&db, &task, Some("delivery"), "Bob Lind");
+  moved.revision = task.revision().next().expect("next");
+  moved.organization = moved.organization.with_status(WorkflowStatus::InProgress);
+  db.cache_shared_tasks(&[moved], None).expect("cache");
+
+  db.record_merged_done(run.id(), at(130)).expect("the Done");
+  let done = AutomaticStatus {
+    task: task.id(),
+    from: WorkflowStatus::InReview,
+    status: WorkflowStatus::Done,
+    at: at(130),
+  };
+  assert_eq!(db.automatic_statuses().expect("pending"), vec![done]);
+
+  let reason = NotSent::Changed {
+    current: WorkflowStatus::InProgress,
+  };
+  db.record_not_sent(task.id(), at(130), reason).expect("not sent");
+  db.record_merged_done(run.id(), at(130)).expect("tried again");
+  let merge = RunMerge {
+    run: run.id(),
+    into: BranchName::new("main").expect("a branch"),
+    revision: Revision::new(&"b".repeat(40)).expect("a revision"),
+    kind: MergeKind::MergeCommit,
+    merged_at: at(131),
+  };
+  db.save_run_merge(&merge).expect("the merge");
+  assert!(db.automatic_statuses().expect("pending").is_empty(), "it is never sent");
+  let unsent = db.unsent_status(task.id()).expect("unsent").expect("shown");
+  assert_eq!((unsent.status, unsent.reason), (WorkflowStatus::Done, reason));
 }
 
 #[test]

@@ -186,8 +186,8 @@ impl ProjectDb {
   }
 }
 
-/// Whether the claim's end of `run` recorded a Done of its `task` ([`ProjectDb::record_merged_done`]) that was not sent:
-/// the merge's own record, written after it, keeps why rather than sending it again over the server's status.
+/// Whether the claim's end of `run` recorded a Done of its `task` ([`ProjectDb::record_merged_done`]) that was not
+/// sent: the merge's own record, written after it, keeps why rather than sending it again over the server's status.
 pub(super) fn merged_done_not_sent(connection: &Connection, task: TaskId, run: RunId) -> Result<bool, StoreError> {
   Ok(connection.query_row(
     "SELECT EXISTS(SELECT 1 FROM shared_automatic_status WHERE task_id = ?1 AND status = ?2 \
