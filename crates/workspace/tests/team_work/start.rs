@@ -37,7 +37,8 @@ async fn team_work_start_recovers_once_from_every_boundary() {
   let server = TeamServer::start(config.clone());
   let checkout = Checkout::linked(&server);
   let claim = checkout.claim(&server, MEMBER).await;
-  let request = checkout.start_request(&server, claim, &config);
+  let mut request = checkout.start_request(&server, claim, &config);
+  request.choices.bindings.profiles[0].required_cli = Some(orchester_core::connection::AgentProvider::ClaudeCodeCli);
   let operation = request.operation;
   let runner = StoreRunner::new(checkout.root(), &[Hiccup::Unavailable, Hiccup::StartsThenLost]);
   let (work, _generation) = checkout.work(&server, MEMBER, runner.clone());
@@ -87,6 +88,11 @@ async fn team_work_start_recovers_once_from_every_boundary() {
     .label(config.skill)
     .expect("the skill's label");
   assert_eq!(skill.slug().as_str(), crate::fixture::SKILL_SLUG);
+  assert_eq!(
+    accepted.inputs.bindings().profiles[0].required_cli,
+    Some(orchester_core::connection::AgentProvider::CodexCli),
+    "the bundle's CLI is kept locally"
+  );
   let file = accepted.inputs.bundle().inputs().files()[0].sha256.clone();
   assert_eq!(checkout.db().blob(&file).expect("the bundle's file"), NOTES);
 

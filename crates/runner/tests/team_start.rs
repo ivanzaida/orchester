@@ -179,6 +179,7 @@ fn request(root: &Path, server: &TeamServer, (claim, base): (ClaimId, &str), con
           resource: config.profile,
           connection,
           account: None,
+          required_cli: None,
         }],
         references: Vec::new(),
       },

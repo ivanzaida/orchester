@@ -220,6 +220,7 @@ impl RunTask {
       agent_files: cli
         .repository_skills
         .map_or(CodexAgentFiles::Loaded, |skills| CodexAgentFiles::LeftOut { skills }),
+      sandbox: cli.enforced.permissions().codex_sandbox(),
     };
     invocation
       .command(std::env::vars_os(), cli.environment)
@@ -266,6 +267,7 @@ impl RunTask {
         effort: cli.effort.map(str::to_owned),
         worktree: cli.worktree.to_path_buf(),
         access: cli.enforced.permissions().repository(),
+        sandbox: cli.enforced.permissions().codex_sandbox(),
         // Autopilot hands Orchester every request Codex makes: execpolicy prompts and MCP approvals too.
         command_approvals: autopilot || *cli.enforced.permissions().commands() == CommandPermission::AskBefore,
         sandbox_approvals: cli.enforced.outside_commands() == OutsideCommands::SandboxApproval,

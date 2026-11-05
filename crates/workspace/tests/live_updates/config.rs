@@ -370,10 +370,10 @@ async fn live_updates_an_mcp_server_or_secret_reference_stays_unbound_and_its_ru
       reference: unbound.theirs,
       bound: Some(Bound {
         local: work,
-        by: BoundBy::Name
+        by: BoundBy::Role
       }),
     }),
-    "the connection by its name, without regard to case: {bound:?}"
+    "the only connection of its role: {bound:?}"
   );
   assert!(bound.contains(&BoundReference::McpServer {
     reference: unbound.their_docs,
@@ -504,7 +504,7 @@ async fn live_updates_on_this_computer_lists_each_reference_with_who_needs_it() 
     [
       Standing::Bound {
         local: "work".into(),
-        by: BoundBy::Name
+        by: BoundBy::Role
       },
       Standing::Found {
         local: docs,
@@ -548,7 +548,7 @@ async fn live_updates_on_this_computer_lists_each_reference_with_who_needs_it() 
   );
   assert!(
     chosen_at(&runs_here.binding).is_none(),
-    "bound by its name, not by the person"
+    "bound by its role, not by the person"
   );
 
   let chosen = BoundReference::McpServer {

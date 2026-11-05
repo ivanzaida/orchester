@@ -105,6 +105,7 @@ fn check(db: &ProjectDb, root: &Path, accepted: &AcceptedInputs) -> Result<NewRu
 /// bound connections and MCP servers and its tools, with each tool's secret looked up as the bindings bind it.
 fn preflight_inputs(db: &ProjectDb, inputs: &RunInputs) -> Result<Vec<PreflightProblem>, StoreError> {
   let canonical = inputs.bundle().inputs();
+  let connections = db.connections()?;
   // The preflight reads the bodies only; the versions are dated now.
   let now = Timestamp::now();
   let profiles: BTreeMap<ResourceId, Version<AgentProfile>> = canonical
@@ -132,7 +133,7 @@ fn preflight_inputs(db: &ProjectDb, inputs: &RunInputs) -> Result<Vec<PreflightP
     pipeline: Some(canonical.pipeline().body()),
     profiles: &profiles,
     tools: &tools,
-    connections: &db.connections()?,
+    connections: &connections,
     mcp_servers: &db.mcp_servers()?,
     secrets: &secrets,
   })
@@ -140,6 +141,21 @@ fn preflight_inputs(db: &ProjectDb, inputs: &RunInputs) -> Result<Vec<PreflightP
   .filter(|problem| !matches!(problem, PreflightProblem::SecretMissing { .. }))
   .collect();
   for step in canonical.pipeline().body().steps() {
+    if let StepKind::Agent {
+      profile: Some(profile), ..
+    } = &step.kind
+      && let Some(binding) = inputs
+        .bindings()
+        .profiles
+        .iter()
+        .find(|binding| binding.resource == *profile)
+      && let Some(connection) = connections
+        .iter()
+        .find(|connection| connection.id() == binding.connection)
+      && inputs.check_connection(*profile, connection).is_err()
+    {
+      problems.push(PreflightProblem::ConnectionMissing { step: step.key.clone() });
+    }
     let StepKind::Tool { tool: Some(tool) } = &step.kind else {
       continue;
     };

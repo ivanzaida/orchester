@@ -1,6 +1,7 @@
 //! What the runner checks of Codex App Server's answers before the turn starts: the thread it started or
 //! resumed (sandbox, approval policy, reviewer, network, writable roots, model and local environment), and
-//! the MCP servers of its inventory.
+//! the MCP servers of its inventory. With the step's Codex sandbox off, the sandbox must be `dangerFullAccess`, and it
+//! has no network or writable roots to check.
 
 use std::{
   collections::BTreeSet,
@@ -49,13 +50,28 @@ impl AppServerSession {
       .get("sandbox")
       .and_then(|sandbox| sandbox.get("type"))
       .and_then(Value::as_str);
-    let expected = match self.setup.access {
-      RepositoryAccess::ReadOnly => "readOnly",
-      RepositoryAccess::Write => "workspaceWrite",
-    };
+    let (_, expected) = self.setup.sandbox_mode();
     if sandbox != Some(expected) {
       return Err("Codex activated an unexpected sandbox".to_owned());
     }
+    // Without a sandbox there is no network or writable root of it to check: a person turned it off.
+    if self.setup.sandbox.is_on() {
+      self.check_sandbox(result)?;
+    }
+    if result.get("model").and_then(Value::as_str) != Some(&self.setup.model) {
+      return Err("Codex selected a different model for the tool-approval step".to_owned());
+    }
+    if let Some(provider) = &self.setup.model_provider
+      && result.get("modelProvider").and_then(Value::as_str) != Some(provider)
+    {
+      return Err("Codex selected another model provider than the connection's API provider".to_owned());
+    }
+    Ok(())
+  }
+
+  /// The network and writable roots of the sandbox Codex activated: network only where a writing step has it on, and
+  /// the worktree with the step's writable folders as roots.
+  fn check_sandbox(&self, result: &Value) -> Result<(), String> {
     let network = result
       .get("sandbox")
       .and_then(|sandbox| sandbox.get("networkAccess"))
@@ -80,14 +96,6 @@ impl AppServerSession {
       if actual != allowed {
         return Err("Codex writable roots do not match this step's grants".to_owned());
       }
-    }
-    if result.get("model").and_then(Value::as_str) != Some(&self.setup.model) {
-      return Err("Codex selected a different model for the tool-approval step".to_owned());
-    }
-    if let Some(provider) = &self.setup.model_provider
-      && result.get("modelProvider").and_then(Value::as_str) != Some(provider)
-    {
-      return Err("Codex selected another model provider than the connection's API provider".to_owned());
     }
     Ok(())
   }

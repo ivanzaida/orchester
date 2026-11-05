@@ -10,6 +10,7 @@ use std::{
 
 use orchester_core::{
   blob::ContentHash,
+  connection::{AgentConnection, AgentProvider},
   id::{
     ClaimId, ConnectionId, ModuleId, OperationId, ProjectId, ResourceId, SecretId, ServerId, TaskId, VersionId, WorkId,
   },
@@ -147,6 +148,7 @@ fn bound(fixture: &Fixture) -> LocalBindings {
       resource: fixture.profile,
       connection: ConnectionId::generate(),
       account: None,
+      required_cli: None,
     }],
     references: vec![BoundReference::Secret {
       named: SecretId::generate(),
@@ -345,4 +347,56 @@ fn run_inputs_keep_local_bindings_out_of_the_canonical_content() {
   );
   let inputs = RunInputs::new(content.clone(), bindings, LocalConsent::default()).expect("inputs");
   assert_eq!(inputs.bundle(), &content);
+}
+
+#[test]
+fn run_inputs_connection_kind_mismatch_is_an_unbound_profile() {
+  let fixture = fixture();
+  let mut bindings = bound(&fixture);
+  bindings.profiles[0].required_cli = Some(AgentProvider::CodexCli);
+  let local = bindings.profiles[0].connection;
+  let inputs = RunInputs::new(content(&fixture, team()), bindings, LocalConsent::default()).expect("inputs");
+  for (provider, matches) in [(AgentProvider::CodexCli, true), (AgentProvider::ClaudeCodeCli, false)] {
+    let connection = AgentConnection::new(
+      local,
+      Name::new("Own account").expect("name"),
+      provider,
+      std::env::current_dir().expect("directory").join("agent"),
+      Timestamp::now(),
+    )
+    .expect("absolute path")
+    .into_connection();
+    assert_eq!(
+      inputs.check_connection(fixture.profile, &connection),
+      if matches {
+        Ok(())
+      } else {
+        Err(InputsError::MissingBinding(fixture.profile))
+      }
+    );
+  }
+}
+
+#[test]
+fn run_inputs_connection_kind_absent_in_older_bindings_and_local_runs_stay_usable() {
+  let fixture = fixture();
+  let bindings = bound(&fixture);
+  let value = serde_json::to_value(&bindings).expect("json");
+  assert!(value["profiles"][0].get("required_cli").is_none(), "older JSON shape");
+  let mut older: LocalBindings = serde_json::from_value(value).expect("older bindings read");
+  let connection = AgentConnection::new(
+    older.profiles[0].connection,
+    Name::new("Own account").expect("name"),
+    AgentProvider::ClaudeCodeCli,
+    std::env::current_dir().expect("directory").join("agent"),
+    Timestamp::now(),
+  )
+  .expect("absolute path")
+  .into_connection();
+  let inputs = RunInputs::new(content(&fixture, team()), older.clone(), LocalConsent::default()).expect("inputs");
+  assert_eq!(inputs.check_connection(fixture.profile, &connection), Ok(()));
+  older.profiles[0].required_cli = Some(AgentProvider::CodexCli);
+  let local =
+    RunInputs::new(content(&fixture, InputsOrigin::Local), older, LocalConsent::default()).expect("local inputs");
+  assert_eq!(local.check_connection(fixture.profile, &connection), Ok(()));
 }

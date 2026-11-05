@@ -101,7 +101,7 @@ pub fn bind(root: &Path, choice: BoundReference, by: Answerer) -> Result<usize, 
     .into_iter()
     .find(|kept| bindings::binding_target(kept.reference) == target)
     .ok_or_else(|| not_found(target))?;
-  check_local(&db, choice)?;
+  check_local(&db, choice, kept.role.as_deref())?;
   db.set_reference_binding(&ReferenceBinding {
     reference: by_person(choice),
     changed_at: Timestamp::now(),
@@ -221,13 +221,22 @@ fn not_found(target: ReferenceTarget) -> StoreError {
   }
 }
 
-/// Fails unless the local entity `choice` binds to exists here; a secret must not be archived.
-fn check_local(db: &ProjectDb, choice: BoundReference) -> Result<(), StoreError> {
+/// Fails unless the local entity exists here, a connection matches its role, and a secret is not archived.
+fn check_local(db: &ProjectDb, choice: BoundReference, role: Option<&str>) -> Result<(), SharingError> {
   let missing = match choice {
-    BoundReference::Connection { bound: Some(bound), .. } => db
-      .connection(bound.local)?
-      .is_none()
-      .then_some(StoreError::ConnectionNotFound(bound.local)),
+    BoundReference::Connection { bound: Some(bound), .. } => {
+      let connection = db
+        .connection(bound.local)?
+        .ok_or(StoreError::ConnectionNotFound(bound.local))?;
+      let actual = orchester_core::sharing::ConnectionRole::of(connection.kind());
+      if Some(actual.as_str()) != role {
+        return Err(SharingError::ConnectionKindMismatch {
+          expected: role.map(str::to_owned),
+          actual,
+        });
+      }
+      None
+    }
     BoundReference::McpServer { bound: Some(bound), .. } => db
       .mcp_server(bound.local)?
       .is_none()
@@ -240,7 +249,7 @@ fn check_local(db: &ProjectDb, choice: BoundReference) -> Result<(), StoreError>
     | BoundReference::McpServer { bound: None, .. }
     | BoundReference::Secret { bound: None, .. } => None,
   };
-  missing.map_or(Ok(()), Err)
+  missing.map_or(Ok(()), |error| Err(error.into()))
 }
 
 /// `choice` as a person's binding, whoever it says bound it.
@@ -270,7 +279,7 @@ fn person<I>(bound: Option<Bound<I>>) -> Option<Bound<I>> {
 
 /// Writes again the local body of every cached version that names `target`, with the bindings as they are now.
 fn rewrite(db: &mut ProjectDb, target: ReferenceTarget) -> Result<usize, SharingError> {
-  let bindings = bindings::bound(&db.reference_bindings()?);
+  let bindings = bindings::bound(&db.reference_bindings()?, &db.connections()?);
   let mut rewritten = 0;
   for naming in db.versions_naming(target)? {
     let changed = match naming.kind {

@@ -5,18 +5,22 @@
 use serde::{Deserialize, Serialize};
 
 use crate::{
+  connection::AgentProvider,
   id::{AgentAccountId, ConnectionId, ResourceId, SecretId},
   run::{PinnedVersion, bundle::ResolvedStepPermissions},
 };
 
-/// `{resource, connection, account?}`: the local agent connection, and the CLI account when one was chosen, a pinned
-/// agent profile runs with.
+/// `{resource, connection, account?, required_cli?}`: the local connection and account a pinned profile runs with,
+/// and the CLI kind its shared reference requires.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProfileBinding {
   pub resource: ResourceId,
   pub connection: ConnectionId,
   pub account: Option<AgentAccountId>,
+  /// The shared reference's required CLI; absent in runs recorded before kind validation and in local runs.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub required_cli: Option<AgentProvider>,
 }
 
 /// A connection, MCP server or secret the canonical bodies name by the publisher's id, bound to this computer's.

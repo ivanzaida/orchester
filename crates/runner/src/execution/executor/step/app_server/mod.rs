@@ -29,7 +29,6 @@ use orchester_core::{
     invocation::EXTRA_ROOTS_METHOD,
     stream::{AgentEvent, OutputStream, RunnerProblem},
   },
-  resource::RepositoryAccess,
 };
 use serde_json::{Value, json};
 use thiserror::Error;
@@ -457,10 +456,7 @@ impl AppServerSession {
   }
 
   async fn start_thread(&self, process: &Supervised) -> io::Result<()> {
-    let sandbox = match self.setup.access {
-      RepositoryAccess::ReadOnly => "read-only",
-      RepositoryAccess::Write => "workspace-write",
-    };
+    let (sandbox, _) = self.setup.sandbox_mode();
     let policy = json!({"granular":{
       "mcp_elicitations":self.setup.tool_approvals,
       "rules":self.setup.command_approvals,"sandbox_approval":self.setup.sandbox_approvals,

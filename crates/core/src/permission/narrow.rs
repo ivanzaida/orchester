@@ -84,6 +84,8 @@ impl AgentPermissions {
     // A step narrows the browser only through its network: without network it gets no browser tool.
     effective.set_browser(self.browser.clone());
     effective.set_approval_mode(self.approval_mode);
+    // Nor does it turn the profile's Codex sandbox back on: a person turned it off for the profile's work.
+    effective.set_codex_sandbox(self.codex_sandbox);
     effective
   }
 }

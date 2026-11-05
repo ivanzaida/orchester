@@ -176,6 +176,7 @@ impl Team {
         resource: self.profile,
         connection: ConnectionId::generate(),
         account: None,
+        required_cli: None,
       }],
       references,
     };
@@ -476,6 +477,7 @@ fn local_inputs(db: &ProjectDb, snapshot: &RunSnapshot) -> RunInputs {
         resource: pinned.resource,
         connection: ConnectionId::generate(),
         account: None,
+        required_cli: None,
       })
       .collect(),
     references: Vec::new(),
@@ -532,4 +534,33 @@ fn team_run_inputs_a_local_run_keeps_its_inputs_and_rules() {
 
   let draft_run = db.create_run_with_inputs(IdempotencyKey::generate(), new(run.task()), &inputs, (at(12), None));
   assert!(matches!(draft_run, Err(RunStoreError::TaskNotQueued(task)) if task == run.task()));
+}
+
+#[test]
+fn team_run_inputs_cli_requirement_round_trips_and_older_json_stays_readable() {
+  let mut team = team_project();
+  let task = team.task();
+  let id = team.db.record_team_task(task, revision(3)).expect("identity");
+  for required_cli in [None, Some(orchester_core::connection::AgentProvider::CodexCli)] {
+    let operation = OperationId::generate();
+    let original = team.inputs(accepted(task, operation), Vec::new());
+    let mut bindings = original.bindings().clone();
+    bindings.profiles[0].required_cli = required_cli;
+    let inputs = RunInputs::new(original.bundle().clone(), bindings, original.consent().clone()).expect("inputs");
+    team.db.accept_team_inputs(id, &inputs, at(6)).expect("accepted");
+    let read = team.db.accepted_team_inputs(operation).expect("read").expect("inputs");
+    assert_eq!(read.inputs, inputs);
+    let raw: String = connection(team.repo.path())
+      .query_row(
+        "SELECT bindings FROM accepted_run_inputs WHERE operation_id = ?1",
+        [operation.to_string()],
+        |row| row.get(0),
+      )
+      .expect("stored JSON");
+    assert_eq!(
+      raw.contains("required_cli"),
+      required_cli.is_some(),
+      "older rows omit the field"
+    );
+  }
 }
