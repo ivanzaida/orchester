@@ -3,6 +3,7 @@
 //! what the core refuses is said in place and nothing is saved. Run with
 //! `cargo test -p orchester-app --test project_settings service_sections`.
 
+use lurq::app::events::with_synthetic_input;
 use orchester_core::{
   resource::HttpMethod,
   run::ProjectScope,
@@ -13,7 +14,7 @@ use orchester_core::{
 use super::{
   harness::Settings,
   run_fixture::started_run,
-  service_editor::{open_web, stored, type_and_leave},
+  service_editor::{automation_changes_permissions, open_web, stored, type_and_leave},
 };
 
 /// Where leaving a field moves the focus: a field every service's page shows.
@@ -176,6 +177,66 @@ fn service_sections_say_seed_errors_in_place_and_save_a_command() {
   assert_eq!(arguments.len(), 2);
   reopen(&mut settings);
   assert_eq!(settings.value("settings-service-seed-program"), "npm");
+}
+
+/// The seed runs with the person's rights: an MCP client's seed is put back and not saved while *Let automation
+/// change agent permissions* is off, whether it chose a seed kind or typed into a seed command.
+#[test]
+fn service_sections_put_back_an_mcp_clients_seed() {
+  let mut settings = open_web();
+  with_synthetic_input(|| settings.click("settings-service-seed-requests"));
+  settings.until("the refusal", |s| s.exists("settings-service-person-only"));
+  assert!(
+    !settings.exists("settings-service-seed-request-0-url"),
+    "no request is added"
+  );
+  assert!(matches!(
+    stored(&settings, "cloud-web").expect("cloud-web").seed(),
+    Seed::None
+  ));
+
+  settings.click("settings-service-seed-command");
+  settings.until("the seed command", |s| s.exists("settings-service-seed-program"));
+  type_and_leave(&mut settings, ("settings-service-seed-program", "npm"), ELSEWHERE);
+  settings.saved();
+  with_synthetic_input(|| {
+    type_and_leave(
+      &mut settings,
+      ("settings-service-seed-program", "other-tool"),
+      ELSEWHERE,
+    );
+  });
+  settings.until("the refusal", |s| s.exists("settings-service-person-only"));
+  assert_eq!(settings.value("settings-service-seed-program"), "npm", "put back");
+  settings.saved();
+  let web = stored(&settings, "cloud-web").expect("cloud-web");
+  assert!(
+    matches!(web.seed(), Seed::Command { program, .. } if program.as_str() == "npm"),
+    "the client's seed is not saved: {:?}",
+    web.seed()
+  );
+}
+
+/// Under *Let automation change agent permissions* an MCP client's seed saves.
+#[test]
+fn service_sections_take_an_mcp_clients_seed_under_the_automation_setting() {
+  let mut settings = open_web();
+  automation_changes_permissions(&settings, true);
+  with_synthetic_input(|| settings.click("settings-service-seed-command"));
+  settings.until("the seed command", |s| s.exists("settings-service-seed-program"));
+  with_synthetic_input(|| {
+    type_and_leave(
+      &mut settings,
+      ("settings-service-seed-program", "other-tool"),
+      ELSEWHERE,
+    );
+  });
+  settings.until("the client's seed stored", |s| {
+    stored(s, "cloud-web")
+      .is_some_and(|web| matches!(web.seed(), Seed::Command { program, .. } if program.as_str() == "other-tool"))
+  });
+  settings.saved();
+  assert!(!settings.exists("settings-service-person-only"));
 }
 
 #[test]

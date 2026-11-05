@@ -109,15 +109,15 @@ impl Sections {
     }
   }
 
-  /// Puts the seed an MCP client changed back to `to`'s and forgets the mark; whether it held something else.
+  /// Puts the seed an MCP client changed back to `to`'s and forgets the mark; whether it held something else. The mark
+  /// is forgotten after the seed is put back, which marks it again while the client's input is being delivered.
   pub(super) fn put_back(&self, to: &SeedForm) -> bool {
-    let marked = self.automated_seed.get_untracked();
-    self.automated_seed.set(false);
-    if !marked || self.seed() == *to {
-      return false;
+    let back = self.automated_seed.get_untracked() && self.seed() != *to;
+    if back {
+      self.fill_seed(to);
     }
-    self.fill_seed(to);
-    true
+    self.automated_seed.set(false);
+    back
   }
 
   pub(super) fn fill(&self, form: &ServiceForm) {

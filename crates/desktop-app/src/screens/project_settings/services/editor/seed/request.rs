@@ -391,7 +391,17 @@ impl Act {
         }
       }),
       Self::Up | Self::Down => {
-        let to = if matches!(self, Self::Up) { at - 1 } else { at + 1 };
+        let to = if matches!(self, Self::Up) {
+          at.checked_sub(1)
+        } else {
+          at.checked_add(1)
+        };
+        let Some(to) = to.filter(|to| *to < seeds.get_untracked().requests.len()) else {
+          return;
+        };
+        if at >= seeds.get_untracked().requests.len() {
+          return;
+        }
         seeds.update(|seeds| seeds.requests.swap(at, to));
         open.set(Some(to));
         (props.commit)();

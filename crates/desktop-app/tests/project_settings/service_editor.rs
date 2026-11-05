@@ -261,7 +261,7 @@ fn service_editor_saves_a_change_made_while_a_save_is_under_way() {
 }
 
 /// Lets an MCP client's window input change what a service runs, or not.
-fn automation_changes_permissions(settings: &Settings, on: bool) {
+pub(super) fn automation_changes_permissions(settings: &Settings, on: bool) {
   settings
     .window
     .launch
