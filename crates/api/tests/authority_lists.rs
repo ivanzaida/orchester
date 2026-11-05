@@ -5,7 +5,7 @@ use chrono::NaiveDate;
 use orchester_api::{
   SharedResourceKind,
   v2::{
-    BurndownDayRead, ForecastRead, ModuleBurndownRead, ModuleListRequest, ModuleProgressRead, OutlookRead,
+    BurndownDayRead, CallerRole, ForecastRead, ModuleBurndownRead, ModuleListRequest, ModuleProgressRead, OutlookRead,
     ResourceChoice, ResourceLibraryRequest, ResourcePickerRequest, SearchText, SearchTextError, TaskBoardCounts,
     TaskFilters, TaskListRequest, TaskSort, WorkspaceMetadata,
   },
@@ -184,20 +184,51 @@ fn authority_lists_module_list_and_library_requests() {
   assert_eq!(serde_json::from_value::<ResourceChoice>(wire).expect("read"), choice);
 }
 
-#[test]
-fn authority_lists_workspace_metadata_refuses_unknown_fields() {
+fn workspace_metadata_wire() -> Value {
   let project = orchester_core::id::ProjectId::generate();
-  let wire = json!({
+  json!({
     "project":{"id":project,"slug":"kontur","address":"https://team.example/kontur","key":"KON","name":"Kontur",
       "remote_hint":null,"role":"member","next_number":13},
     "policy":{"revision":1,"automatic_merge":false},
     "capabilities":{"project_id":project,"revision":1,"role":"member","actions":[],"unresolved":[]},
-    "cursor":"1"
-  });
+    "cursor":"1",
+    "claim_staleness_seconds":1800
+  })
+}
+
+#[test]
+fn authority_lists_workspace_metadata_refuses_unknown_fields() {
+  let wire = workspace_metadata_wire();
   let metadata: WorkspaceMetadata = serde_json::from_value(wire.clone()).expect("metadata");
   assert_eq!(metadata.project.key, "KON");
   assert_eq!(serde_json::to_value(&metadata).expect("serialize"), wire);
   let mut unknown = wire;
   unknown["members"] = json!([]);
   assert!(serde_json::from_value::<WorkspaceMetadata>(unknown).is_err());
+}
+
+#[test]
+fn authority_lists_workspace_metadata_carries_the_claim_staleness_threshold() {
+  let wire = workspace_metadata_wire();
+  let metadata: WorkspaceMetadata = serde_json::from_value(wire.clone()).expect("metadata");
+  assert_eq!(metadata.claim_staleness_seconds.seconds(), 1800);
+  assert_eq!(metadata.capabilities.role, CallerRole::Member, "a member reads it");
+  let mut missing = wire.clone();
+  missing
+    .as_object_mut()
+    .expect("an object")
+    .remove("claim_staleness_seconds");
+  assert!(serde_json::from_value::<WorkspaceMetadata>(missing).is_err());
+  for invalid in [
+    json!(299),
+    json!(86401),
+    json!(-1),
+    json!(900.5),
+    json!("900"),
+    json!(null),
+  ] {
+    let mut malformed = wire.clone();
+    malformed["claim_staleness_seconds"] = invalid;
+    assert!(serde_json::from_value::<WorkspaceMetadata>(malformed).is_err());
+  }
 }

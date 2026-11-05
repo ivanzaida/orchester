@@ -52,7 +52,8 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   its place (memory: the task's memory, from summary; local-integration: Local integration, which Try locally opens \
   from changes) and, on its changes tab, `file` with `from`; project_settings \
   `tab` (general, runs, orchestrator, context, connections, environment or sharing; secrets, the tab Environment was, still opens \
-  it) and, with tab runs, `view` rules (Approved for every run). Connections and Environment are tabs of Project \
+  it) and, with tab runs, `view` rules (Approved for every run) or storage (Storage). Connections and Environment \
+  are tabs of Project \
   settings with routes of their own: connections takes `selected` (the id of the connection whose page it opens); \
   secrets opens the Environment tab, the project's variables and secrets; new_connection takes `kind` (Add \
   provider or Add MCP server); edit_connection `connection` (an MCP server's id, or an agent CLI connection's for its \
@@ -108,7 +109,7 @@ fn schema() -> Value {
   );
   let kinds: Vec<&str> = NewConnection::ALL.into_iter().map(NewConnection::name).collect();
   let sources: Vec<&str> = ChangeSource::ALL.into_iter().map(ChangeSource::name).collect();
-  let views: Vec<&str> = ["usage", "delivery", "rules", "edit", "new"]
+  let views: Vec<&str> = ["usage", "delivery", "rules", "storage", "edit", "new"]
     .into_iter()
     .chain(TaskView::SUB_VIEWS)
     .collect();

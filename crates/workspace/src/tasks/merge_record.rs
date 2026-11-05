@@ -65,7 +65,7 @@ pub fn record_merge(root: &Path, programs: &Programs, run: RunId) -> Result<RunM
   db.save_run_merge(&merge)?;
   super::local_integration::settle_review(&mut db, &merge);
   crate::base_moved::after_merge(root, programs);
-  if let Err(problem) = clear(&mut db, programs, root, &stored, None) {
+  if let Err(problem) = clear(&mut db, programs, root, &stored, None, false) {
     tracing::warn!(?problem, %run, "the merge was recorded, but what the run left could not be cleared");
   }
   Ok(merge)

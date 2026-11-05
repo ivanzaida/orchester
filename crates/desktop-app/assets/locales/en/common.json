@@ -2,6 +2,7 @@
   "common": {
     "newTab": "New tab",
     "copy": "Copy",
+    "listSeparator": ", ",
     "tryAgain": "Try again"
   }
 }

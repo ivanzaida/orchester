@@ -107,6 +107,8 @@ pub enum ProjectPage {
   Settings(ProjectSettingsTab),
   /// Project settings › Runs › *Approved for every run*: the project's rules (`12` `wQy6o`).
   ProjectRules,
+  /// Project settings › Runs › Storage (Storage · redesign, Jsbd1).
+  Storage,
   /// Project settings on its Sharing tab with *Make local*'s question open (the task list's *no longer a
   /// member* notice).
   MakeLocal,
@@ -206,7 +208,9 @@ impl ProjectPage {
       Self::Connections(_) => Screen::Connections,
       Self::NewConnection(_) => Screen::NewConnection,
       Self::EditConnection(_) => Screen::EditConnection,
-      Self::Settings(_) | Self::ProjectRules | Self::MakeLocal | Self::Join(_) => Screen::ProjectSettings,
+      Self::Settings(_) | Self::ProjectRules | Self::Storage | Self::MakeLocal | Self::Join(_) => {
+        Screen::ProjectSettings
+      }
       Self::Files(_) => Screen::Files,
       Self::Import(_) => Screen::ImportResources,
     }
@@ -277,7 +281,9 @@ impl ProjectPage {
       Self::Files(view) => view.path(format!("{project_root}/{FILES}")),
       Self::Import(tab) => with_query(segment(Screen::ImportResources), &[tab.param()]),
       Self::MergeAttempt(key, number) => format!("{}/{key}/{}", segment(Screen::Merges), number.get()),
-      Self::MakeLocal | Self::ProjectRules | Self::Join(_) => self.settings_path(segment(Screen::ProjectSettings)),
+      Self::MakeLocal | Self::ProjectRules | Self::Storage | Self::Join(_) => {
+        self.settings_path(segment(Screen::ProjectSettings))
+      }
       page => segment(page.screen()),
     }
   }
@@ -290,6 +296,7 @@ impl ProjectPage {
         &[ProjectSettingsTab::Sharing.param(), (ASK, Some(MAKE_LOCAL))],
       ),
       Self::Join(target) => join_path(settings, target),
+      Self::Storage => with_query(settings, &[ProjectSettingsTab::Runs.param(), (VIEW, Some("storage"))]),
       _ => with_query(settings, &[ProjectSettingsTab::Runs.param(), (VIEW, Some(RULES))]),
     }
   }
@@ -470,6 +477,7 @@ fn settings(params: &mut Params) -> Result<ProjectPage, RouteError> {
         .ok_or(RouteError::NoScreen);
     }
     (ProjectSettingsTab::Runs, Some(view)) if view == RULES => return Ok(ProjectPage::ProjectRules),
+    (ProjectSettingsTab::Runs, Some(view)) if view == "storage" => return Ok(ProjectPage::Storage),
     (_, Some(value)) => {
       return Err(RouteError::InvalidParam {
         param: VIEW.to_owned(),

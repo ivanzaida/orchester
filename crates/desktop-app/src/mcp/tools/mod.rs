@@ -217,9 +217,9 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
       }
     }
     ProjectPage::Settings(tab) => insert("tab", tab.name()),
-    ProjectPage::ProjectRules => {
+    ProjectPage::ProjectRules | ProjectPage::Storage => {
       insert("tab", crate::routes::ProjectSettingsTab::Runs.name());
-      insert("view", "rules");
+      insert("view", settings_view(page));
     }
     ProjectPage::NewConnection(kind) => insert("kind", kind.name()),
     ProjectPage::EditConnection(connection) => insert("connection", &connection.to_string()),
@@ -268,6 +268,14 @@ fn merge_params(page: &ProjectPage) -> Vec<(&'static str, String)> {
   match page {
     ProjectPage::MergeAttempt(key, number) => vec![("key", key.to_string()), ("run", number.get().to_string())],
     _ => Vec::new(),
+  }
+}
+
+fn settings_view(page: &ProjectPage) -> &'static str {
+  if matches!(page, ProjectPage::Storage) {
+    "storage"
+  } else {
+    "rules"
   }
 }
 
