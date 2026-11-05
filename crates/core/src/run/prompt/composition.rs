@@ -398,11 +398,13 @@ fn push_skills(text: &mut String, input: &PromptInput<'_>) {
   }
 }
 
-/// How an agent that has Orchester's `read_skill`, called `tool`, reads its skills.
+/// How an agent that has Orchester's `read_skill`, called `tool`, reads the skills listed below, and that the
+/// repository's other files, its own skill documents included, stay ordinary files.
 fn skills_tool(tool: &str) -> String {
   format!(
     "Read a skill with the {tool} tool by its name, and a reference file with its name and the file's path in the \
-     skill; do not read skills by path."
+     skill; do not read the skills listed here by path. Other files of the repository, skill documents in its own \
+     folders included, are read with your usual file tools when your instructions point at them."
   )
 }
 
