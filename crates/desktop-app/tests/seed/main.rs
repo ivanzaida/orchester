@@ -18,6 +18,8 @@ mod orchestrator;
 mod pipelines;
 mod plan_only;
 mod refusals;
+#[path = "../../../workspace/tests/support/runner_programs.rs"]
+mod runner_programs;
 mod scenario_names;
 mod settings;
 mod shared_config;

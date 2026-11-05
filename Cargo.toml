@@ -53,6 +53,8 @@ orchester-exec = { path = "crates/exec" }
 orchester-index = { path = "crates/index" }
 orchester-ipc = { path = "crates/ipc" }
 orchester-report = { path = "crates/report" }
+# The runner's own reading of a run's files, which the app's window tests answer with in-process (`test_support`).
+orchester-runner = { path = "crates/runner" }
 orchester-store = { path = "crates/store" }
 orchester-vault = { path = "crates/vault" }
 orchester-workspace = { path = "crates/workspace" }

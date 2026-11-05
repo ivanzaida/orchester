@@ -1,9 +1,11 @@
 //! What a memory record says: its kind, an optional key, the text, tags, and how important and
 //! how certain it is. Validated here; whether the text may be stored at all (no secret value in
-//! it) is decided by [`super::SecretScreen`].
+//! it) is decided by [`super::SecretScreen`]. Content is sent between the runner's executor and its
+//! coordinator as values that are validated again when they arrive.
 
 use std::collections::BTreeSet;
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -21,7 +23,7 @@ pub enum MemoryContentError {
 }
 
 /// What kind of knowledge a record holds.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum MemoryKind {
   Fact,
   Decision,
@@ -90,7 +92,8 @@ pub(super) fn is_line_break(character: char) -> bool {
 
 /// A short name a record is known by (`auth.token-refresh`), so a newer record on the same subject
 /// replaces it instead of standing beside it.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub struct MemoryKey(String);
 
 impl MemoryKey {
@@ -117,8 +120,23 @@ impl MemoryKey {
   }
 }
 
+impl TryFrom<String> for MemoryKey {
+  type Error = MemoryContentError;
+
+  fn try_from(value: String) -> Result<Self, Self::Error> {
+    Self::new(&value)
+  }
+}
+
+impl From<MemoryKey> for String {
+  fn from(key: MemoryKey) -> Self {
+    key.0
+  }
+}
+
 /// A record's tags: lowercase words without spaces, each once, in order.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "Vec<String>", into = "Vec<String>")]
 pub struct Tags(BTreeSet<String>);
 
 impl Tags {
@@ -150,9 +168,23 @@ impl Tags {
   }
 }
 
+impl TryFrom<Vec<String>> for Tags {
+  type Error = MemoryContentError;
+
+  fn try_from(tags: Vec<String>) -> Result<Self, Self::Error> {
+    Self::new(tags.iter().map(String::as_str))
+  }
+}
+
+impl From<Tags> for Vec<String> {
+  fn from(tags: Tags) -> Self {
+    tags.0.into_iter().collect()
+  }
+}
+
 /// How much a record matters. A person sets it; an agent's records are of high importance when
 /// they hand off, of normal importance otherwise.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum Importance {
   Low,
   Normal,
@@ -178,7 +210,7 @@ impl Importance {
 
 /// How sure the author is. An agent says so for its own records, and people cannot change it; a
 /// person's record is certain.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum Confidence {
   Low,
   Medium,
@@ -202,8 +234,10 @@ impl Confidence {
   }
 }
 
-/// Everything a record says, validated: what a person may edit.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// Everything a record says, validated: what a person may edit. It is read back from serde through
+/// [`MemoryContent::new`], so the text is checked again.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "ContentFields")]
 pub struct MemoryContent {
   kind: MemoryKind,
   key: Option<MemoryKey>,
@@ -265,5 +299,29 @@ impl MemoryContent {
 
   pub const fn importance(&self) -> Importance {
     self.importance
+  }
+}
+
+/// [`MemoryContent`] as serde reads it, before it is checked.
+#[derive(Deserialize)]
+struct ContentFields {
+  kind: MemoryKind,
+  key: Option<MemoryKey>,
+  text: String,
+  tags: Tags,
+  importance: Importance,
+}
+
+impl TryFrom<ContentFields> for MemoryContent {
+  type Error = MemoryContentError;
+
+  fn try_from(fields: ContentFields) -> Result<Self, Self::Error> {
+    let content = Self::new(fields.kind, &fields.text)?
+      .with_tags(fields.tags)
+      .with_importance(fields.importance);
+    Ok(match fields.key {
+      Some(key) => content.with_key(key),
+      None => content,
+    })
   }
 }

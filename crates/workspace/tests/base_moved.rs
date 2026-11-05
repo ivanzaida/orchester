@@ -32,6 +32,7 @@ use orchester_workspace::{
     detail::TaskDetail,
     integration::merge_in,
     timeline::{ItemKind, base_moved::NoticeState},
+    worktree_removal::WorktreeRemover,
   },
 };
 
@@ -327,7 +328,8 @@ fn base_moved_a_merge_by_orchester_tells_the_other_runs_still_at_work_on_the_bas
   repo.observe();
 
   let programs = Programs::processes();
-  merge_in(repo.root(), &programs, (merged.id(), None)).expect("merged by Orchester");
+  let worktrees = WorktreeRemover::here_for_test(repo.root(), programs.clone());
+  merge_in(&worktrees, &programs, (merged.id(), None)).expect("merged by Orchester");
   let head = git(repo.root(), &["rev-parse", "main"]);
   let notices = repo.notices(&working);
   assert_eq!(notices.len(), 1, "the merge itself told the run: {notices:?}");

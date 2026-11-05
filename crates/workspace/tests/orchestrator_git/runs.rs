@@ -12,6 +12,7 @@ use std::{
 use orchester_core::{
   id::IdempotencyKey,
   name::Name,
+  orchestrator::run_git::{GitAccess, GitInvocation, RunGitAnswer, RunGitCall, RunGitRequest},
   resource::{CommandAction, CommandArg, CommandProgram, Pipeline, PromptText, Slug, Step, StepKey, StepKind, Tool},
   revision::Revision,
   run::{BranchName, NewRun, PublishedVersions, Run, RunSnapshot},
@@ -19,7 +20,9 @@ use orchester_core::{
   task::{TaskDetails, TaskLimits},
   time::Timestamp,
 };
+use orchester_ipc::Rejection;
 use orchester_store::ProjectDb;
+use orchester_workspace::{orchestrator::git::RunGit, runner::RunRequestError};
 use serde_json::json;
 
 use super::scratch::{Scratch, refused};
@@ -142,6 +145,8 @@ fn orchestrator_git_reads_a_runs_worktree_and_never_writes_there_while_it_works(
   };
   assert_eq!(status["branch"], "orc-1-run", "{status}");
   assert_eq!(status["files"][0]["path"], "agent.txt");
+  let log = scratch.read_tool("git_log", &json!({ "run": named }));
+  assert_eq!(log["commits"][0]["subject"], "Initial commit", "{log}");
 
   for (name, arguments) in [
     (
@@ -158,6 +163,78 @@ fn orchestrator_git_reads_a_runs_worktree_and_never_writes_there_while_it_works(
     scratch.git_in(&worktree, &["status", "--porcelain"]),
     "?? agent.txt",
     "the agent's work is untouched"
+  );
+  let asked = scratch.asked_runner();
+  assert!(!asked.is_empty(), "the runner ran the reads");
+  assert!(
+    asked
+      .iter()
+      .all(|request| request.run == run.id() && request.access == GitAccess::Read),
+    "{asked:?}"
+  );
+  assert!(
+    !scratch.desktop_ran_in(&worktree),
+    "the desktop never ran git in the run's worktree"
+  );
+}
+
+/// The runner itself refuses a write, and git that does not only read, in the worktree of a run that works, whatever
+/// the desktop asked.
+#[test]
+fn orchestrator_git_runner_refuses_writes_in_a_working_runs_worktree() {
+  let scratch = Scratch::new();
+  let run = working_run(&scratch);
+  let git = |access, args: &[&str]| RunGitRequest {
+    run: run.id(),
+    access,
+    call: RunGitCall::Git(GitInvocation {
+      args: args.iter().map(|arg| (*arg).to_owned()).collect(),
+      input: None,
+      ssh: None,
+      timeout_ms: 30_000,
+      cap: None,
+    }),
+  };
+  for request in [
+    git(GitAccess::Write, &["status"]),
+    git(GitAccess::Read, &["commit", "-m", "Mine"]),
+    git(GitAccess::Read, &["symbolic-ref", "HEAD", "refs/heads/main"]),
+    git(GitAccess::Read, &["remote", "add", "far", "https://example.invalid"]),
+  ] {
+    assert!(
+      matches!(
+        scratch.runs.call(request.clone()),
+        Err(RunRequestError::Rejected(Rejection::RunNotEnded))
+      ),
+      "{request:?}"
+    );
+  }
+  assert!(matches!(
+    scratch.runs.call(git(GitAccess::Read, &["status", "--porcelain"])),
+    Ok(RunGitAnswer::Ran { .. })
+  ));
+}
+
+/// Once the run ended, the chat writes in its worktree, and git there still runs in the runner.
+#[test]
+fn orchestrator_git_writes_in_an_ended_runs_worktree_through_the_runner() {
+  let scratch = Scratch::new();
+  let run = succeeded_run(&scratch);
+  let named = run.number().get().to_string();
+  let told = scratch.wrote("git_commit", &json!({ "run": named, "message": "Mine", "all": true }));
+  assert_eq!(told["branch"], "orc-1-run", "{told}");
+  let worktree = scratch.root().join(".orchester/worktrees").join(run.id().to_string());
+  assert_eq!(scratch.git_in(&worktree, &["log", "-1", "--format=%s"]), "Mine");
+  assert!(
+    scratch
+      .asked_runner()
+      .iter()
+      .any(|request| request.access == GitAccess::Write),
+    "the write went to the runner"
+  );
+  assert!(
+    !scratch.desktop_ran_in(&worktree),
+    "the desktop never ran git in the run's worktree"
   );
 }
 

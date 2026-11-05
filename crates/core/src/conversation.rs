@@ -23,6 +23,7 @@
 
 mod body;
 pub mod skill;
+mod wire;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -66,7 +67,7 @@ pub enum Recipient {
 }
 
 /// When a person's message reaches an agent that is at work.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Timing {
   /// When the agent's turn ends (*Send after this turn*, and every message before ORC-61).
   #[default]
@@ -76,7 +77,7 @@ pub enum Timing {
 }
 
 /// How a delivered message reached its agent.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Arrival {
   /// With the prompt of an invocation that started: a step's start, an answer, a follow-up or a run
   /// that continued.
@@ -89,7 +90,7 @@ pub enum Arrival {
 }
 
 /// Why the agent's CLI did not take a message sent now.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Undelivered {
   /// The CLI refused to add it to the running turn.
   Refused,
@@ -107,7 +108,7 @@ pub enum NotTaken {
 }
 
 /// Where a person's message stands: queued → delivered → acknowledged, or not delivered.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Delivery {
   /// Waiting for an invocation to start with it, or for the agent to take it mid-turn.
   Queued,
@@ -164,7 +165,7 @@ pub enum AgentMessage {
 }
 
 /// Who wrote a message.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Sender {
   Person {
     recipient: Recipient,
@@ -178,8 +179,10 @@ pub enum Sender {
   },
 }
 
-/// One message of a task's conversation.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// One message of a task's conversation. It is read back from its serialized form only as [`Message::restore`] and
+/// the person's side's markings allow ([`wire`]).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "wire::MessageFields")]
 pub struct Message {
   id: MessageId,
   task: TaskId,

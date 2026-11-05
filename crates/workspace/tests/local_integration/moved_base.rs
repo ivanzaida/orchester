@@ -80,7 +80,7 @@ fn moved_base_a_run_fast_forwarded_onto_newer_main_merges_and_shows_only_its_own
     "only the run's own work"
   );
   assert_eq!(recorded_base(&fixture), started, "the start revision is kept");
-  merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).expect("merged");
+  merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).expect("merged");
   assert_eq!(git(fixture.root(), &["show", "main:task.txt"]), "delivered task");
   assert_eq!(git(fixture.root(), &["show", "main:later.txt"]), "later main work");
 }
@@ -108,7 +108,7 @@ fn moved_base_a_run_that_merged_main_with_no_ff_after_a_checkpoint_merges() {
   let (files, from) = changes(&fixture);
   assert_eq!(files, ["more.txt", "task.txt"], "landed.txt is main's");
   assert_eq!(from, landed);
-  merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).expect("merged");
+  merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).expect("merged");
   assert_eq!(git(fixture.root(), &["show", "main:more.txt"]), "more task work");
 }
 
@@ -127,7 +127,7 @@ fn moved_base_a_commit_of_the_run_cherry_picked_into_main_still_needs_local_inte
     .expect("part of the run is in main");
   assert_eq!(evidence.kind, ResultEvidenceKind::EquivalentPatches);
   let before = git(fixture.root(), &["rev-parse", "main"]);
-  assert!(merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).is_err());
+  assert!(merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).is_err());
   assert_eq!(git(fixture.root(), &["rev-parse", "main"]), before, "nothing merged");
 }
 
@@ -145,7 +145,7 @@ fn moved_base_a_partial_manual_merge_of_the_run_still_needs_local_integration() 
     .expect("part of the run is in main");
   assert_eq!(evidence.kind, ResultEvidenceKind::PartialAncestry);
   let before = git(fixture.root(), &["rev-parse", "main"]);
-  assert!(merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).is_err());
+  assert!(merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).is_err());
   assert_eq!(git(fixture.root(), &["rev-parse", "main"]), before, "nothing merged");
 }
 
@@ -171,6 +171,6 @@ fn moved_base_a_merged_run_still_shows_its_own_work_from_the_commit_it_took_in()
     vec![commit(task, "task.txt", "delivered task\n", "task work")]
   });
   let landed = git(fixture.root(), &["rev-parse", "main"]);
-  merge_in(fixture.root(), &Programs::processes(), (fixture.run, None)).expect("merged");
+  merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).expect("merged");
   assert_eq!(changes(&fixture), (vec!["task.txt".to_owned()], landed));
 }

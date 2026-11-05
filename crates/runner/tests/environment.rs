@@ -6,7 +6,7 @@
 
 mod support;
 
-use std::collections::BTreeMap;
+use std::{collections::BTreeMap, path::Path};
 
 use orchester_core::{
   connection::stream::AgentEvent,
@@ -100,6 +100,62 @@ async fn environment_parallel_worktrees_get_the_same_value() {
   let run = run_to_the_end(&project).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
   assert_eq!(reported(&db, run.id(), "build dir: "), vec![folder.clone(), folder]);
+}
+
+/// A project variable that names something on this computer only (the project's sccache) comes through the coordinator
+/// link and the computer's resources as the project set it: the agent CLI and the command tool get exactly its value,
+/// beside the run's storage, and nothing else of the runner's environment.
+#[tokio::test(flavor = "multi_thread")]
+async fn environment_a_computer_specific_project_variable_reaches_agents_and_tools_as_set() {
+  let project = project(&Setup {
+    steps: vec![
+      StepSpec::new("implement", "Implement", "Append one line.", &[]),
+      StepSpec::new("checks", "Checks", "", &["implement"]).command(ToolSpec::test_command(&[
+        "env",
+        "SCCACHE_DIR",
+        "env",
+        "ORCHESTER_RUN_STORAGE",
+        "env",
+        "GH_TOKEN",
+      ])),
+    ],
+    ..Setup::new("Build with the cache.")
+  });
+  let root = project.repo.path();
+  let cache = root.join(".orchester").join("sccache");
+  let cache = cache.to_str().expect("a Unicode temporary path").to_owned();
+  let name = VariableName::new("SCCACHE_DIR").expect("valid name");
+  let environment = CommandEnvironment::new(BTreeMap::from([(name, cache.clone())])).expect("valid variables");
+  ProjectDb::open(root)
+    .expect("open")
+    .save_project_environment(&environment)
+    .expect("save the project's environment");
+  let run = run_to_the_end(&project).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let db = ProjectDb::open(root).expect("open");
+  let names = reported(&db, run.id(), "env: ");
+  assert!(
+    !names.is_empty()
+      && names
+        .iter()
+        .all(|names| names.split(',').any(|name| name == "SCCACHE_DIR")),
+    "{names:?}"
+  );
+  let output = command_output(&db, run.id());
+  assert!(
+    output.lines().any(|line| line == format!("SCCACHE_DIR={cache}")),
+    "{output}"
+  );
+  // The run's storage, compared as a path: its separators are written as the execution root joins them.
+  let storage = root.join(".orchester").join("runs").join(run.id().to_string());
+  assert!(
+    output
+      .lines()
+      .filter_map(|line| line.strip_prefix("ORCHESTER_RUN_STORAGE="))
+      .any(|value| Path::new(value) == storage),
+    "{output}"
+  );
+  assert!(output.lines().any(|line| line == "GH_TOKEN is not set"), "{output}");
 }
 
 #[tokio::test(flavor = "multi_thread")]

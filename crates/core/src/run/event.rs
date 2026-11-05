@@ -47,7 +47,7 @@ impl EventSequence {
 
 /// One append-only entry of a run's log. A run's current state is the result of applying its
 /// events in sequence order.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct RunEvent {
   run: RunId,
   sequence: EventSequence,

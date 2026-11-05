@@ -18,6 +18,7 @@ use crate::{
   tasks::{
     integration::{IntegrationProblem, merge_in},
     local_integration::LegacyPolicy,
+    worktree_removal::WorktreeRemover,
   },
   workspace::OpenProject,
 };
@@ -77,6 +78,7 @@ impl RunJobs {
       branch,
       run,
       programs,
+      worktrees,
       activity,
       separator,
       changed,
@@ -92,7 +94,7 @@ impl RunJobs {
         .map_err(Clone::clone)?
         .as_ref()
         .map_or(Ok(()), preflight)?;
-      merge_in(&open.repo_root, &programs, (run, expected))
+      merge_in(&worktrees, &programs, (run, expected))
     }));
     let policy = made_policy.ok().flatten();
     let continues_locally = matches!(&result, Ok(Err(problem)) if problem.continues_locally());
@@ -188,6 +190,8 @@ pub struct MergeArgs {
   pub branch: String,
   pub run: RunId,
   pub programs: Programs,
+  /// The project's run worktrees, which its runner removes once the run merged.
+  pub worktrees: WorktreeRemover,
   pub activity: Activity,
   pub separator: Arc<str>,
   pub changed: Arc<dyn Fn() + Send + Sync>,

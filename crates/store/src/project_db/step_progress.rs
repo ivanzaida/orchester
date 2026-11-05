@@ -2,10 +2,39 @@
 //! one before.
 
 use orchester_core::{id::StepExecutionId, run::StepProgress, time::Timestamp};
-use rusqlite::{OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, params};
+use serde::{Deserialize, Serialize};
 
-use super::ProjectDb;
+use super::{ProjectDb, step_records::StepRecord};
 use crate::{StoreError, rows::corrupt};
+
+/// The columns of a `step_progress` row, as a record of the runner carries them (`super::step_records`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(super) struct ProgressRow {
+  execution: StepExecutionId,
+  text: String,
+  at: Timestamp,
+}
+
+impl ProgressRow {
+  pub(super) fn of(execution: StepExecutionId, progress: &StepProgress, at: Timestamp) -> Self {
+    Self {
+      execution,
+      text: progress.as_str().to_owned(),
+      at,
+    }
+  }
+
+  /// Keeps the row's line in place of the one before.
+  pub(super) fn save(&self, connection: &Connection) -> Result<(), StoreError> {
+    connection.execute(
+      "INSERT INTO step_progress (step_execution_id, text, reported_at) VALUES (?1, ?2, ?3)
+       ON CONFLICT (step_execution_id) DO UPDATE SET text = excluded.text, reported_at = excluded.reported_at",
+      params![self.execution.to_string(), self.text, self.at.unix_millis()],
+    )?;
+    Ok(())
+  }
+}
 
 impl ProjectDb {
   /// Keeps `progress` as the line of `execution`, reported at `at`, in place of the one before.
@@ -15,12 +44,7 @@ impl ProjectDb {
     progress: &StepProgress,
     at: Timestamp,
   ) -> Result<(), StoreError> {
-    self.connection.execute(
-      "INSERT INTO step_progress (step_execution_id, text, reported_at) VALUES (?1, ?2, ?3)
-       ON CONFLICT (step_execution_id) DO UPDATE SET text = excluded.text, reported_at = excluded.reported_at",
-      params![execution.to_string(), progress.as_str(), at.unix_millis()],
-    )?;
-    Ok(())
+    self.write_step(&StepRecord::progress(execution, progress, at))
   }
 
   /// The latest line `execution` reported, and when; `None` when it reported none.

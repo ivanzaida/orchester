@@ -129,8 +129,9 @@ async fn browser_restart_keeps_the_tab_shown_and_tells_the_window_when_the_tabs_
 }
 
 /// A restart that cannot start the browser again: the old browser is gone, so the answer says why, and the window,
-/// which heard nothing meanwhile, has already learned that no tabs are left and none is shown. Only ever headless, so
-/// no window opens.
+/// which heard nothing meanwhile, has already learned that no tabs are left and none is shown. Settings › Browser
+/// changed while the browser ran, as the app passed them, is what the restart starts with (ORC-675). Only ever
+/// headless, so no window opens.
 #[tokio::test(flavor = "multi_thread")]
 async fn browser_restart_that_fails_tells_the_window_the_tabs_are_gone_before_it_answers() {
   if !browser_installed() {
@@ -138,12 +139,8 @@ async fn browser_restart_that_fails_tells_the_window_the_tabs_are_gone_before_it
   }
   let installed = orchester_exec::browser::find().expect("installed");
   let data = tempfile::tempdir().expect("temporary folder");
-  let database = data.path().join("orchester.db");
-  let mut settings = orchester_store::AppDb::open(&database).expect("the application database");
-  settings
-    .set_browser_program(Some(installed.path()))
-    .expect("the choice is kept");
-  let browser = ProjectBrowser::new(data.path().join("profile")).with_settings(database);
+  let browser = ProjectBrowser::new(data.path().join("profile"));
+  browser.set_computer(crate::chosen(installed.path()));
   let site = pages().await;
   let mut desktop = Desktop::new();
   desktop.serve(&browser, BrowserCommand::Subscribe).await;
@@ -155,9 +152,7 @@ async fn browser_restart_that_fails_tells_the_window_the_tabs_are_gone_before_it
   desktop.serve(&browser, show).await;
   desktop.state(|state| state.shown.as_ref() == Some(&tab)).await;
   let before = desktop.received().len();
-  settings
-    .set_browser_program(Some(&data.path().join("gone").join("chrome")))
-    .expect("the choice is kept");
+  browser.set_computer(crate::chosen(&data.path().join("gone").join("chrome")));
 
   let refused = browser
     .serve(browser.arrived(BrowserCommand::BackToOrchester), &desktop.sender)

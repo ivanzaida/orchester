@@ -16,14 +16,16 @@ use std::{
 use orchester_core::{
   command::CommandError,
   id::{RunId, StepExecutionId},
-  integration::{ListedWorktree, parse_worktree_list},
+  integration::{ListedWorktree, WORKTREES_DIR, parse_worktree_list},
   run::{GitMessage, WorktreeFailure},
 };
 use thiserror::Error;
 
-use crate::git::Git;
+use crate::{
+  execution_root::{ExecutionRoot, relative_worktree},
+  git::Git,
+};
 
-const WORKTREES_DIR: &str = ".orchester/worktrees";
 /// The last numbered name a run's branch may take when its own is taken. Leftovers never take that
 /// many, so past it the run fails ([`WorktreeError::NoFreeBranch`]) instead of calling git on.
 const MAX_SUFFIX: u32 = 100;
@@ -113,28 +115,33 @@ impl Worktree {
   }
 }
 
-/// The run worktrees of one repository.
+/// The run worktrees of one repository, in its execution root ([`ExecutionRoot`]).
 #[derive(Clone, Debug)]
 pub struct Worktrees {
   repo_root: PathBuf,
+  root: ExecutionRoot,
 }
 
 impl Worktrees {
+  /// The worktrees of the repository at `repo_root`, which is its execution root as well.
   pub fn new(repo_root: &Path) -> Result<Self, WorktreeError> {
     let repo_root = std::path::absolute(repo_root).map_err(|source| WorktreeError::RepositoryPath {
       path: repo_root.to_path_buf(),
       source,
     })?;
-    Ok(Self { repo_root })
+    Ok(Self {
+      root: ExecutionRoot::local(&repo_root),
+      repo_root,
+    })
   }
 
   pub fn path(&self, run: RunId) -> PathBuf {
-    self.at(&run.to_string())
+    self.root.run_worktree(run)
   }
 
   /// The worktree of step execution `execution`, when it runs beside other steps.
   pub fn step_path(&self, execution: StepExecutionId) -> PathBuf {
-    self.at(&execution.to_string())
+    self.root.worktree(&execution.to_string())
   }
 
   /// Creates the run's worktree on a new branch starting at `base` (any commit-ish): `branch`, or
@@ -204,17 +211,6 @@ impl Worktrees {
     }
   }
 
-  /// The worktree folder `name`.
-  fn at(&self, name: &str) -> PathBuf {
-    self.repo_root.join(WORKTREES_DIR).join(name)
-  }
-
-  /// The worktree folder `name` as git reads it in the repository's folder: relative, so a
-  /// repository path that is not valid text still works.
-  fn relative(name: &str) -> String {
-    format!("{WORKTREES_DIR}/{name}")
-  }
-
   /// The repository's worktrees as git lists them.
   fn listed(&self) -> Result<Vec<ListedWorktree>, WorktreeError> {
     let listed = Git::new(&self.repo_root).stdout(&["worktree", "list", "--porcelain", "-z"])?;
@@ -230,7 +226,7 @@ impl Worktrees {
     candidates: impl Iterator<Item = String>,
     base: &str,
   ) -> Result<Option<Worktree>, WorktreeError> {
-    let path = self.at(name);
+    let path = self.root.worktree(name);
     if path.exists() {
       return Err(WorktreeError::AlreadyExists(path));
     }
@@ -284,7 +280,7 @@ impl Worktrees {
         Err(error)
       };
     }
-    if let Err(error) = git.stdout(&["worktree", "add", &Self::relative(name), branch]) {
+    if let Err(error) = git.stdout(&["worktree", "add", &relative_worktree(name), branch]) {
       self.discard_added(git, name, branch, base_revision);
       return Err(error);
     }
@@ -297,8 +293,8 @@ impl Worktrees {
   /// is still at `base_revision`, so no work is lost and it does not take the name of the next try.
   /// What cannot be undone is left and logged; the creation fails for git's first error either way.
   fn discard_added(&self, git: &Git<'_>, name: &str, branch: &str, base_revision: &str) {
-    let relative = Self::relative(name);
-    if self.at(name).exists()
+    let relative = relative_worktree(name);
+    if self.root.worktree(name).exists()
       && let Err(error) = git.stdout(&["worktree", "remove", "--force", "--force", &relative])
     {
       tracing::warn!(%relative, %error, "the worktree git kept after failing to add it is left");
@@ -338,11 +334,11 @@ impl Worktrees {
   }
 
   fn remove_at(&self, name: &str, mode: RemoveMode) -> Result<(), WorktreeError> {
-    let path = self.at(name);
+    let path = self.root.worktree(name);
     if !path.is_dir() {
       return Err(WorktreeError::NotFound(path));
     }
-    let relative = Self::relative(name);
+    let relative = relative_worktree(name);
     let mut command = vec!["worktree", "remove"];
     match mode {
       RemoveMode::RefuseIfDirty => {

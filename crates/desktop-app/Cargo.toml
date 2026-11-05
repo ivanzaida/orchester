@@ -27,8 +27,14 @@ devtools = ["lurq/devtools"]
 perf_profile = ["lurq/perf_profile"]
 # The window headless on a data folder of its own, signed in to a stand-in cloud (`test_support`), for the tests and QA
 # examples here and the end-to-end tests of the private platform repository, which build this crate by git; the QA
-# Browser window's fixture fed as a runner's reports (`test_support::browser_qa`). Never in the app's program.
-test-support = ["dep:tempfile", "orchester-api/test-support", "orchester-workspace/test-support"]
+# Browser window's fixture fed as a runner's reports (`test_support::browser_qa`); a window without a runner reads
+# runs' files with the runner's own code, in-process (`orchester-runner`). Never in the app's program.
+test-support = [
+  "dep:tempfile",
+  "dep:orchester-runner",
+  "orchester-api/test-support",
+  "orchester-workspace/test-support",
+]
 
 [dependencies]
 # The Usage page's days (`orchester_core::usage::DayRange`) read as month, day and weekday; already built
@@ -55,6 +61,8 @@ orchester-report = { workspace = true, features = ["switch"] }
 # Where the apps keep their data and logs, and the application database (`orchester.db`) that holds the
 # app's settings.
 orchester-store.workspace = true
+# The runner's reading of a run's files, for a test's window that starts no runner (feature `test-support` only).
+orchester-runner = { workspace = true, optional = true }
 # The wire types Settings › Orchester shows (invites, a server's answer, the cloud's and servers' refusals), as
 # `orchester-workspace` hands them over; the client feature for the server addresses and client errors it carries; the
 # release keys built into the app (`updates`), with `release-signature`.
@@ -162,6 +170,8 @@ orchester-app = { workspace = true, features = ["test-support"] }
 # Counts a runner's reports in tests of what follows them, which run no runner.
 orchester-workspace = { workspace = true, features = ["devtools-inspect", "test-support"] }
 orchester-api = { workspace = true, features = ["client", "identity"] }
+# Builds the code indexes a runner would have built, as fixtures of the Code index tab (`tests/project_settings`).
+orchester-index.workspace = true
 # The handles of lurq's `RenderEngine`, for a stand-in engine that captures without a GPU
 # (`tests/browser_window/inspection.rs`); already built through lurq.
 raw-window-handle.workspace = true

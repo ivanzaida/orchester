@@ -294,7 +294,7 @@ fn remove_args(ctx: &mut Ctx, confirm: &Confirm, state: PageState) -> RemoveArgs
     number: confirm.run.number().get(),
     run: confirm.run.as_ref().clone(),
     confirmed: confirm.leftovers.clone(),
-    programs: services.programs,
+    worktrees: services.worktree_remover(&confirm.project.open),
     activity: services.activity,
     separator: ctx.t("task.listSeparator"),
     changed: Arc::new(move || feed.saved()),

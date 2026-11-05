@@ -31,7 +31,7 @@ fn remove(fixture: &Fixture) -> Result<(), IntegrationProblem> {
     .1;
   assert_eq!(left.worktrees.len(), 1);
   assert!(!left.loses_files(), "task worktree is clean");
-  remove_in(fixture.root(), &programs, &run, &left)
+  remove_in(&fixture.worktrees(), &run, &left)
 }
 
 fn assert_reserved(fixture: &Fixture) {
@@ -223,6 +223,5 @@ fn local_integration_worktree_removal_admission_blocks_reservation_before_git_re
   assert!(!saved.reserves_checkout());
   db.undo_worktree_removal(fixture.run, admitted)
     .expect("Git removed nothing");
-  remove_in(fixture.root(), &Programs::processes(), &run, &Leftovers::default())
-    .expect("normal cleanup remains usable");
+  remove_in(&fixture.worktrees(), &run, &Leftovers::default()).expect("normal cleanup remains usable");
 }

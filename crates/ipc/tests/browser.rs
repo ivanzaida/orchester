@@ -271,7 +271,8 @@ async fn round_trip(sent: &[Event]) -> Vec<Event> {
 /// with each kind of field, and each answer the window gives it.
 #[tokio::test]
 async fn browser_file_chooser_round_trips_under_a_raised_protocol() {
-  assert_eq!(PROTOCOL_VERSION, 38);
+  // Later protocols raised the number again; each test of a later message checks its own.
+  const { assert!(PROTOCOL_VERSION >= 38, "came with protocol 38") };
   let opened = |chooser| {
     Event::Browser(BrowserEvent::FileChooserOpened {
       tab: tab("P1"),

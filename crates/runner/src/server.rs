@@ -1,14 +1,20 @@
-//! Serves the desktop over the project's IPC endpoint: answers its requests and forwards the
-//! scheduler's change notifications, the project's browser's events and the frames of the tab the *Browser* window
-//! shows.
+//! Serves the desktop over the project's IPC endpoint: answers its requests and forwards the scheduler's change
+//! notifications, the project's browser's events and the frames of the tab the *Browser* window shows.
 
+mod attach;
 mod browser;
 mod chat;
+mod code_index;
+mod decisions;
+mod estimate;
+mod folders;
+mod merge_queue;
+mod resolve;
+mod run_folder;
 mod side;
 
 use std::{
   future::Future,
-  num::NonZeroU32,
   path::Path,
   sync::{
     Arc,
@@ -19,16 +25,14 @@ use std::{
 
 use orchester_core::{
   connection::{AgentProvider, ApiEndpoint},
-  id::{IdempotencyKey, RunId, StepExecutionId, TaskId},
+  id::{IdempotencyKey, ResourceId, RunId, TaskId},
   integration::Leftovers,
-  question::GivenAnswer,
-  run::{Answerer, ApprovalAnswer, InterruptCause, PlanDecision, PlanVersion, RaisedLimits, StuckDecision},
+  run::{InterruptCause, RaisedLimits},
   sharing::TaskRevision,
   tokens::TokenBudget,
 };
 use orchester_ipc::{
-  AttachSession, Command, Endpoint, ErrorReports, Event, IpcError, Rejection, Reply, Request, RequestId, ShutdownMode,
-  WorkReturn,
+  Command, Endpoint, ErrorReports, Event, IpcError, Rejection, Reply, Request, RequestId, ShutdownMode, WorkReturn,
   frame::{FrameReader, FrameWriter},
   handshake,
 };
@@ -300,12 +304,14 @@ async fn answer(
   let handle = scheduler.clone();
   let later = Later { replies, in_flight, id };
   let reply = match request.command {
-    Command::Attach { session, agent_slots } => attached(scheduler, session, agent_slots).await,
-    Command::SetAgentSlots { agent_slots } => slots_set(scheduler, agent_slots).await,
-    Command::ContinueRuns { ref runs } => {
-      let (continued, refused) = scheduler.continue_runs(runs).await;
-      Reply::Continued { continued, refused }
-    }
+    Command::Attach {
+      session,
+      agent_slots,
+      ref browser,
+    } => attach::attached(scheduler, session, agent_slots, browser.clone()).await,
+    Command::SetAgentSlots { agent_slots } => attach::slots_set(scheduler, agent_slots).await,
+    Command::SetBrowser { ref browser } => attach::browser_set(scheduler, browser.clone()),
+    Command::ContinueRuns { ref runs } => attach::continued(scheduler, runs).await,
     Command::Ping { nonce } => Reply::Pong { nonce },
     Command::StartRun { key, task } => started(scheduler.start_requested_run(key, task).await),
     Command::RunAgain {
@@ -329,28 +335,16 @@ async fn answer(
     Command::RaiseStepBudget { run, budget } => {
       return later.answer(run, async move { handle.raise_step_budget(run, budget).await });
     }
-    Command::ChangeRunPermissions {
-      run,
-      profile,
-      ref permissions,
-      apply,
-    } => {
-      let permissions = permissions.clone();
-      return later.answer(run, async move {
-        handle.change_permissions(run, profile, permissions, apply).await
-      });
-    }
+    ref change @ Command::ChangeRunPermissions { .. } => return change_permissions(&later, handle, change),
     Command::KeepPermissionsForNextInvocation { run, profile } => {
-      return later.answer(run, async move {
-        handle.keep_permissions_for_next_invocation(run, profile).await
-      });
+      return keep_permissions(&later, handle, run, profile);
     }
     Command::ReturnRun(ref returned) => return answer_return(&later, handle, returned.clone()),
     ref decision @ (Command::DecidePlan { .. }
     | Command::DecideStuckRun { .. }
     | Command::DecideStuckRunAs { .. }
     | Command::DecideToolApproval { .. }
-    | Command::AnswerQuestion { .. }) => return answer_decision(&later, handle, decision),
+    | Command::AnswerQuestion { .. }) => return later.decision(handle, decision),
     Command::DeliverMessages { run } => return later.answer(run, async move { handle.deliver_messages(run).await }),
     Command::Shutdown { mode } => return Answer::Shutdown(mode),
     Command::StopIfIdle => return Answer::StopIfIdle(id),
@@ -361,56 +355,22 @@ async fn answer(
     Command::SteerChat { message } => chat::steered(scheduler, message),
     Command::StopTurn { run } => return later.answer(run, async move { handle.stop_turn(run).await }),
     Command::Browser(ref command) => return later.browser(handle, command.clone()),
-    Command::EstimateTask { task } => return estimated(&later, handle, task),
+    Command::Folders(ref command) => return later.folders(handle, command.clone()),
+    Command::MergeQueue(ref command) => return later.merge_queue(handle, command.clone()),
+    Command::Resolve { run, ref request } => return later.resolve(handle, run, request.clone()),
+    Command::RunGit(ref git) => return later.reply(handle.run_git(git.clone())),
+    Command::EstimateTask { task } => return later.estimate(handle, task),
+    Command::RunFolderState { run } => return later.run_folder_state(handle, run),
     ref side @ (Command::AnswerSideQuestion { .. } | Command::StopSideQuestion { .. }) => {
       return side::answer_side(&later, handle, side);
     }
     Command::SetErrorReports { ref reports } => return Answer::ErrorReports(id, reports.clone()),
+    Command::ReadWorktreeChanges { run } => return later.reply(handle.worktree_changes(run)),
+    Command::RebuildCodeIndex { ref revision } => return later.rebuild_code_index(handle, revision.clone()),
+    Command::RunFiles { run, ref request } => return later.reply(handle.run_files(run, request.clone())),
+    Command::RemoveWorktrees { run, ref request } => return later.reply(handle.remove_worktrees(run, request.clone())),
   };
   Answer::Reply(Event::Reply { id, reply })
-}
-
-/// Estimates the story points of `task` without holding up the runner's other requests.
-fn estimated(later: &Later<'_>, handle: Scheduler, task: TaskId) -> Answer {
-  later.reply(async move {
-    match handle.estimate_task(task).await {
-      Ok(outcome) => Reply::TaskEstimated { task, outcome },
-      Err(rejection) => Reply::Rejected(rejection),
-    }
-  })
-}
-
-/// Routes the decision commands without holding up the runner's other requests.
-fn answer_decision(later: &Later<'_>, handle: Scheduler, command: &Command) -> Answer {
-  match *command {
-    Command::DecidePlan {
-      run,
-      execution,
-      version,
-      ref decision,
-      by,
-    } => answer_plan(later, handle, (run, execution, version), (decision.clone(), by)),
-    Command::DecideStuckRun { run, ref decision } => answer_stuck(later, handle, run, (decision.clone(), None)),
-    Command::DecideStuckRunAs {
-      run,
-      expected,
-      ref decision,
-      by,
-    } => answer_stuck(later, handle, run, (decision.clone(), Some((by, expected)))),
-    Command::DecideToolApproval {
-      run,
-      ref approval,
-      ref answer,
-      by,
-    } => answer_tool_approval(later, handle, run, approval, (answer.clone(), by)),
-    Command::AnswerQuestion {
-      run,
-      ref request,
-      ref answers,
-      by,
-    } => answer_question(later, handle, run, (request, answers, by)),
-    _ => unreachable!("answer routes only the five decision commands here"),
-  }
 }
 
 /// Starts the next run of `task` after `after` (Run again), removing `remove_worktrees` first, only for the task at
@@ -441,18 +401,30 @@ fn at_plan_limit(
   }
 }
 
-/// The reply to [`Command::Attach`].
-async fn attached(scheduler: &Scheduler, session: AttachSession, agent_slots: NonZeroU32) -> Reply {
-  match scheduler.attach(session, agent_slots).await {
-    Ok(attached) => Reply::Attached {
-      active_runs: scheduler.active_runs(),
-      interrupted: attached.interrupted,
-      continued: attached.continued,
-    },
-    Err(rejection) => Reply::Rejected(rejection),
-  }
+/// Keeps the permissions of `profile` that `run`'s agent asked for for its next invocation
+/// ([`Command::KeepPermissionsForNextInvocation`]).
+/// Routes [`Command::ChangeRunPermissions`].
+fn change_permissions(later: &Later<'_>, handle: Scheduler, command: &Command) -> Answer {
+  let Command::ChangeRunPermissions {
+    run,
+    profile,
+    ref permissions,
+    apply,
+  } = *command
+  else {
+    unreachable!("change_permissions routes only Command::ChangeRunPermissions");
+  };
+  let permissions = permissions.clone();
+  later.answer(run, async move {
+    handle.change_permissions(run, profile, permissions, apply).await
+  })
 }
 
+fn keep_permissions(later: &Later<'_>, handle: Scheduler, run: RunId, profile: ResourceId) -> Answer {
+  later.answer(run, async move {
+    handle.keep_permissions_for_next_invocation(run, profile).await
+  })
+}
 fn raise_limit(
   later: &Later<'_>,
   scheduler: Scheduler,
@@ -466,39 +438,6 @@ fn raise_limit(
   later.answer(run, async move { scheduler.raise_limit(run, limits).await })
 }
 
-/// The reply to [`Command::SetAgentSlots`].
-async fn slots_set(scheduler: &Scheduler, agent_slots: NonZeroU32) -> Reply {
-  match scheduler.set_agent_slots(agent_slots).await {
-    Ok(()) => Reply::AgentSlotsSet { agent_slots },
-    Err(rejection) => Reply::Rejected(rejection),
-  }
-}
-
-fn answer_tool_approval(
-  later: &Later<'_>,
-  scheduler: Scheduler,
-  run: RunId,
-  approval: &str,
-  (answer, by): (ApprovalAnswer, Answerer),
-) -> Answer {
-  let approval = approval.to_owned();
-  later.answer(run, async move {
-    scheduler.decide_tool_approval(run, approval, answer, by).await
-  })
-}
-
-fn answer_question(
-  later: &Later<'_>,
-  scheduler: Scheduler,
-  run: RunId,
-  (request, answers, by): (&str, &[GivenAnswer], Answerer),
-) -> Answer {
-  let (request, answers) = (request.to_owned(), answers.to_vec());
-  later.answer(run, async move {
-    scheduler.answer_question(run, request, answers, by).await
-  })
-}
-
 fn answer_check(later: &Later<'_>, scheduler: Scheduler, provider: AgentProvider, api: ApiEndpoint) -> Answer {
   later.reply(async move {
     match scheduler.check_connection(provider, api).await {
@@ -508,34 +447,8 @@ fn answer_check(later: &Later<'_>, scheduler: Scheduler, provider: AgentProvider
   })
 }
 
-fn answer_plan(
-  later: &Later<'_>,
-  scheduler: Scheduler,
-  (run, execution, version): (RunId, StepExecutionId, PlanVersion),
-  (decision, by): (PlanDecision, Answerer),
-) -> Answer {
-  later.answer(run, async move {
-    scheduler.decide_plan(run, execution, version, decision, by).await
-  })
-}
-
-fn answer_stuck(
-  later: &Later<'_>,
-  scheduler: Scheduler,
-  run: RunId,
-  (decision, seen): (StuckDecision, Option<(Answerer, orchester_core::run::EventSequence)>),
-) -> Answer {
-  later.answer(run, async move {
-    match seen {
-      Some((by, expected)) => scheduler.decide_stuck_as(run, decision, by, expected).await,
-      None => scheduler.decide_stuck(run, decision).await,
-    }
-  })
-}
-
 fn answer_return(later: &Later<'_>, scheduler: Scheduler, returned: WorkReturn) -> Answer {
-  let run = returned.run;
-  later.answer(run, async move { scheduler.return_ended(returned).await })
+  later.answer(returned.run, async move { scheduler.return_ended(returned).await })
 }
 
 fn accepted(run: RunId, result: Result<(), Rejection>) -> Reply {

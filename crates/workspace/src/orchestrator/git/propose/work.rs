@@ -5,8 +5,6 @@
 //! each changed or untracked file's contents, never a patch; and it is bounded: more than [`MAX_FILES`] files or
 //! [`MAX_BYTES`] of them is refused (`too_large`).
 
-use std::fs;
-
 use super::super::command::{Git, refused};
 use crate::{app_mcp::ToolError, messages::Message};
 
@@ -78,17 +76,17 @@ fn contents(git: &Git, files: &[String]) -> Result<String, ToolError> {
   if files.len() > MAX_FILES {
     return Err(too_large());
   }
+  // A name git reads one per line cannot hold a line break: such a file counts by its name alone.
+  let named: Vec<String> = files
+    .iter()
+    .filter(|file| !file.contains(['\n', '\r']))
+    .cloned()
+    .collect();
   let mut hashed = Vec::new();
   let mut bytes = 0_u64;
-  for file in files {
-    // A name git reads one per line cannot hold a line break: such a file counts by its name alone.
-    if file.contains(['\n', '\r']) {
-      continue;
-    }
-    if let Ok(metadata) = fs::metadata(git.dir.join(file))
-      && metadata.is_file()
-    {
-      bytes += metadata.len();
+  for (file, facts) in named.iter().zip(git.facts(&named)?) {
+    if let Some(len) = facts.file_len {
+      bytes += len;
       hashed.push(file.as_str());
     }
   }

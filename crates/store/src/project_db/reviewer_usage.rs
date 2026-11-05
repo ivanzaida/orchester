@@ -4,7 +4,7 @@
 use std::sync::Arc;
 
 use orchester_core::{
-  id::{AgentAccountId, ConnectionId, RunId},
+  id::{AgentAccountId, ConnectionId, InvocationId, RunId, StepExecutionId},
   resource::ModelId,
   run::{
     TokenUsage,
@@ -15,10 +15,12 @@ use orchester_core::{
   usage::{ReviewUsage, UsedProvider},
 };
 use rusqlite::{Connection, OptionalExtension, Row, params};
+use serde::{Deserialize, Serialize};
 
 use super::{
   ProjectDb,
   connections::{parse_provider, provider_text},
+  step_records::StepRecord,
 };
 use crate::{
   StoreError,
@@ -29,38 +31,87 @@ const SELECT: &str = "SELECT run_id, step_execution_id, invocation_id, approval_
                       ended_at, input_tokens, cached_input_tokens, output_tokens, verdict, account_id, \
                       connection_id, connection_name FROM reviewer_usage";
 
-impl ProjectDb {
-  /// Stores what one review cost.
-  pub fn record_reviewer_usage(&mut self, record: &ReviewRecord) -> Result<(), StoreError> {
+/// The columns of a new `reviewer_usage` row, as a record of the runner carries them (`super::step_records`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(super) struct ReviewRow {
+  run: RunId,
+  execution: StepExecutionId,
+  invocation: InvocationId,
+  approval: String,
+  provider: String,
+  model: String,
+  started_at: Timestamp,
+  ended_at: Timestamp,
+  /// Input, cached input and output tokens; none when the reviewer did not say.
+  tokens: [Option<i64>; 3],
+  verdict: String,
+  account: Option<AgentAccountId>,
+  connection: Option<(ConnectionId, String)>,
+}
+
+impl ReviewRow {
+  pub(super) fn of(record: &ReviewRecord) -> Result<Self, StoreError> {
     let tokens = |count: fn(TokenUsage) -> u64| {
       record
         .usage
         .map(|usage| tokens_column("reviewer tokens", count(usage)))
         .transpose()
     };
-    self.connection.execute(
+    Ok(Self {
+      run: record.run,
+      execution: record.execution,
+      invocation: record.invocation,
+      approval: record.approval.clone(),
+      provider: provider_text(record.provider).to_owned(),
+      model: record.model.as_str().to_owned(),
+      started_at: record.started_at,
+      ended_at: record.ended_at,
+      tokens: [
+        tokens(|usage| usage.input)?,
+        tokens(|usage| usage.cached_input)?,
+        tokens(|usage| usage.output)?,
+      ],
+      verdict: verdict_text(record.end).to_owned(),
+      account: record.account,
+      connection: record
+        .connection
+        .as_ref()
+        .map(|connection| (connection.id, connection.name.to_string())),
+    })
+  }
+
+  pub(super) fn insert(&self, connection: &Connection) -> Result<(), StoreError> {
+    let [input, cached_input, output] = self.tokens;
+    connection.execute(
       "INSERT INTO reviewer_usage (run_id, step_execution_id, invocation_id, approval_id, provider, model, started_at, \
        ended_at, input_tokens, cached_input_tokens, output_tokens, verdict, account_id, connection_id, \
        connection_name) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)",
       params![
-        record.run.to_string(),
-        record.execution.to_string(),
-        record.invocation.to_string(),
-        record.approval,
-        provider_text(record.provider),
-        record.model.as_str(),
-        record.started_at.unix_millis(),
-        record.ended_at.unix_millis(),
-        tokens(|usage| usage.input)?,
-        tokens(|usage| usage.cached_input)?,
-        tokens(|usage| usage.output)?,
-        verdict_text(record.end),
-        record.account.map(|account| account.to_string()),
-        record.connection.as_ref().map(|connection| connection.id.to_string()),
-        record.connection.as_ref().map(|connection| connection.name.to_string()),
+        self.run.to_string(),
+        self.execution.to_string(),
+        self.invocation.to_string(),
+        self.approval,
+        self.provider,
+        self.model,
+        self.started_at.unix_millis(),
+        self.ended_at.unix_millis(),
+        input,
+        cached_input,
+        output,
+        self.verdict,
+        self.account.map(|account| account.to_string()),
+        self.connection.as_ref().map(|(id, _)| id.to_string()),
+        self.connection.as_ref().map(|(_, name)| name.as_str()),
       ],
     )?;
     Ok(())
+  }
+}
+
+impl ProjectDb {
+  /// Stores what one review cost.
+  pub fn record_reviewer_usage(&mut self, record: &ReviewRecord) -> Result<(), StoreError> {
+    self.write_step(&StepRecord::review(record)?)
   }
 
   /// The reviews of `run`'s requests, in the order they ended.

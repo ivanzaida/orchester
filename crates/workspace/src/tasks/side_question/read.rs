@@ -11,6 +11,7 @@ use orchester_core::{
   diff::{Diff, LineKind},
   id::{RunId, TaskId},
   run::side_question::{Exchange, SideAbout, SideInput, SideQuestionText, SideState},
+  store::RunStore,
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
@@ -20,7 +21,7 @@ use crate::{
   display::clock,
   messages::{self, Message},
   tasks::{
-    changes::{Checkpointed, NotCheckpointed, RunRange, RunStage, not_checkpointed_in, run_changes_in},
+    changes::{ChangesError, Checkpointed, NotCheckpointed, RunRange, RunStage, run_changes_in},
     detail::{RunView, TaskDetail},
     timeline::load::transcript_in,
     transcript::{Entry, EntryKind},
@@ -31,12 +32,14 @@ use crate::{
 const OUTPUT_TAIL_CHARS: usize = 1_500;
 
 /// What the side agent reads to answer `question` about `run` of `task` in the project at `root`: the run's
-/// transcript and changes, and the questions asked about it before with their answers.
+/// transcript and changes, the checkpointed ones read here and what its worktree holds beyond them as the project's
+/// runner read it (`worktree`, [`crate::tasks::changes::not_checkpointed_in`]), and the questions asked about it before
+/// with their answers.
 pub fn side_input_in(
   root: &Path,
   programs: &Programs,
   (task, run): (TaskId, RunId),
-  question: &SideQuestionText,
+  (question, worktree): (&SideQuestionText, &Result<NotCheckpointed, ChangesError>),
 ) -> Result<SideInput, Message> {
   let detail = TaskDetail::load_in(root, task).map_err(|error| messages::store_error(&error))?;
   let view = detail
@@ -49,7 +52,7 @@ pub fn side_input_in(
   lines.extend(person_lines(&detail, run));
   lines.sort_by_key(|(at, _)| *at);
   let lines: Vec<String> = lines.into_iter().map(|(_, line)| line).collect();
-  let diff = run_diff(root, programs, view);
+  let diff = run_diff(root, programs, view, worktree);
   let earlier = earlier_in(root, (task, run))?;
   let about = SideAbout {
     task_key: detail.task.key().to_string(),
@@ -60,6 +63,16 @@ pub fn side_input_in(
       .and_then(|step| step.agent.as_deref().map(str::to_owned)),
   };
   Ok(SideInput::new(about, question, (&lines, &diff), &earlier))
+}
+
+/// Where `run` of the project at `root` is, for what its missing worktree means.
+pub fn run_stage_in(root: &Path, run: RunId) -> Result<RunStage, Message> {
+  let db = ProjectDb::open_read_only(root).map_err(|error| messages::store_error(&error))?;
+  let stored = db
+    .run(run)
+    .map_err(|error| messages::store_error(&crate::tasks::detail::run_store_error(error)))?
+    .ok_or_else(|| Message::new("sideQuestion.errors.notLatestRun"))?;
+  Ok(RunStage::of(stored.status()))
 }
 
 /// Whether `run` has anything for the side agent to read yet: a transcript entry.
@@ -170,8 +183,13 @@ fn tail(output: &str) -> String {
 }
 
 /// `view`'s changes as a unified diff: from where its work starts to its latest checkpoint, then what its worktree
-/// holds beyond that. What cannot be read is said in the text instead.
-fn run_diff(root: &Path, programs: &Programs, view: &RunView) -> String {
+/// holds beyond that, `worktree`. What cannot be read is said in the text instead.
+fn run_diff(
+  root: &Path,
+  programs: &Programs,
+  view: &RunView,
+  worktree: &Result<NotCheckpointed, ChangesError>,
+) -> String {
   let mut text = String::new();
   match run_changes_in(root, programs, &RunRange::of(&view.run)) {
     Ok(Checkpointed::Read { changes, .. }) => text.push_str(&unified_text(&changes.diff)),
@@ -185,7 +203,7 @@ fn run_diff(root: &Path, programs: &Programs, view: &RunView) -> String {
       line(&mut text, "(the checkpointed changes could not be read)");
     }
   }
-  match not_checkpointed_in(root, programs, (view.id(), RunStage::of(view.run.status()))) {
+  match worktree {
     Ok(NotCheckpointed::Read(changes)) => {
       line(&mut text, "(not checkpointed yet, in the worktree:)");
       text.push_str(&unified_text(&changes.diff));

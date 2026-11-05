@@ -397,10 +397,12 @@ locks (`orchester_core::integration`).
   no longer lists is then deleted as a folder. A folder something holds is tried again once the run's own processes
   running from it (a QA copy, a build) are stopped; one that still stays is recorded as not removed
   (`run_worktrees_not_removed`, its path and why), and the task page and `get_run` say *not removed*, never
-  *removed*, while it is on disk. Remove worktree finishes it later. The runner at its start, and the desktop and the
-  runner after each removal, sweep `.orchester/worktrees/`: a folder no git worktree lists and whose run (by its own
-  or a step execution's id) ended — succeeded, failed, cancelled, or interrupted with its removal recorded — is
-  deleted and logged; a folder of a run that has not ended, and one no run has, is never touched.
+  *removed*, while it is on disk. Remove worktree finishes it later. The runner removes every run worktree, stops the
+  run's processes in a held folder and prunes the codebase indexes; the desktop asks it to (`Command::RemoveWorktrees`,
+  protocol 49) and records the removal before and after (ORC-686). The runner at its start and after each removal
+  sweeps `.orchester/worktrees/`: a folder no git worktree lists and whose run (by its own or a step execution's id)
+  ended — succeeded, failed, cancelled, or interrupted with its removal recorded — is deleted and logged; a folder of a
+  run that has not ended, and one no run has, is never touched.
 
 ## Storage layout
 

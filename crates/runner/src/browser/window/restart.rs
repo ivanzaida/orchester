@@ -8,7 +8,7 @@ use std::{
 };
 
 use orchester_exec::browser::{BrowserProgram, BrowserUnavailable};
-use orchester_ipc::browser::{BrowserMode, TabOwner};
+use orchester_ipc::browser::{BrowserMode, ComputerBrowser, TabOwner};
 use parking_lot::Mutex;
 use tokio::sync::oneshot;
 
@@ -17,12 +17,23 @@ use crate::browser::{
   BrowserError, ProjectBrowser, RunningSlot, cdp::TargetId, chosen_or_found, running::Running, tabs::Remembered,
 };
 
+/// Which profile folder the browser starts on.
+#[derive(Clone)]
+pub(in crate::browser) enum Profile {
+  /// A folder of its own, a test's.
+  Own(PathBuf),
+  /// The project's own folder among the computer's profiles, named by the project's id, or why the project cannot be
+  /// read.
+  OfProject(Result<String, BrowserUnavailable>),
+}
+
 /// What starts the project's browser; a copy waits for each browser in a window of its own to end
 /// ([`back_when_closed`]).
 #[derive(Clone)]
 pub(in crate::browser) struct Starter {
-  profile: Result<PathBuf, BrowserUnavailable>,
-  pub(in crate::browser) settings: Option<PathBuf>,
+  profile: Profile,
+  /// The computer's Settings › Browser as the desktop passed them last; `None` until it did. Read at each start.
+  pub(in crate::browser) computer: Arc<Mutex<Option<ComputerBrowser>>>,
   pub(in crate::browser) out_of_sight: bool,
   pub(in crate::browser) window: Arc<Window>,
   /// Why the browser did not start again, until one starts: the answer to a run that still names its tab.
@@ -30,14 +41,10 @@ pub(in crate::browser) struct Starter {
 }
 
 impl Starter {
-  pub(in crate::browser) fn new(
-    profile: Result<PathBuf, BrowserUnavailable>,
-    settings: Option<PathBuf>,
-    window: Arc<Window>,
-  ) -> Self {
+  pub(in crate::browser) fn new(profile: Profile, computer: Option<ComputerBrowser>, window: Arc<Window>) -> Self {
     Self {
       profile,
-      settings,
+      computer: Arc::new(Mutex::new(computer)),
       out_of_sight: false,
       window,
       unavailable: Arc::new(Mutex::new(None)),
@@ -51,19 +58,39 @@ impl Starter {
 
   /// A new browser, headless or in a window of its own as `mode` says.
   pub(in crate::browser) async fn start(&self, mode: BrowserMode) -> Result<Running, BrowserError> {
-    let profile = self.profile.clone()?;
+    let profile = self.profile()?;
     let found = self.program().await?;
     let started = Running::start(&found, &profile, (mode, self.out_of_sight), &self.window).await?;
     self.unavailable.lock().take();
     Ok(started)
   }
 
+  /// The computer's Settings › Browser as the desktop passed them last; unavailable until it did.
+  fn computer(&self) -> Result<ComputerBrowser, BrowserUnavailable> {
+    self
+      .computer
+      .lock()
+      .clone()
+      .ok_or_else(|| BrowserUnavailable::new("the app has not passed this computer's Settings › Browser yet"))
+  }
+
+  /// The profile folder of the next start ([`ProjectBrowser::profile`]).
+  pub(in crate::browser) fn profile(&self) -> Result<PathBuf, BrowserUnavailable> {
+    match &self.profile {
+      Profile::Own(profile) => Ok(profile.clone()),
+      Profile::OfProject(project) => {
+        let profiles = self.computer()?.profiles.map_err(BrowserUnavailable::new)?;
+        Ok(profiles.join(project.clone()?))
+      }
+    }
+  }
+
   /// The program the browser starts with: the one chosen in Settings › Browser, else the one installed
   /// ([`chosen_or_found`]).
   async fn program(&self) -> Result<BrowserProgram, BrowserError> {
-    let settings = self.settings.clone();
+    let chosen = self.computer()?.program;
     Ok(
-      tokio::task::spawn_blocking(move || chosen_or_found(settings.as_deref()))
+      tokio::task::spawn_blocking(move || chosen_or_found(chosen))
         .await
         .map_err(|error| BrowserError::Start(format!("looking for the browser failed: {error}")))??,
     )

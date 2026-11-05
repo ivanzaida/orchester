@@ -26,8 +26,13 @@ use orchester_workspace::{
   secrets::Vault,
   session::AppSession,
   sharing::{self, Servers, cloud::Cloud, project::clone::Clones, team_join::TeamJoin},
-  tasks::{integration_jobs::ProjectJobs, outside::OutsideChanges, resolve::Editor},
-  workspace::Workspace,
+  tasks::{
+    integration_jobs::ProjectJobs,
+    outside::OutsideChanges,
+    resolve::{Editor, RunWorktrees},
+    worktree_removal::WorktreeRemover,
+  },
+  workspace::{OpenProject, Workspace},
 };
 use tokio::{runtime::Handle, task::JoinHandle};
 
@@ -125,10 +130,13 @@ impl Services {
     let activity = Activity::new();
     let workspace = session.workspace().clone();
     let runners = Runners::new(runner, runtime.clone(), activity.clone(), session.previous_end());
+    // Before any runner starts: each attaches with this computer's Settings › Browser, and gets every change of them
+    // while the background runs (`run_background`).
+    runners.set_browser(&workspace.computer_browser());
     let programs = Programs::processes();
     let jobs = ProjectJobs::default();
     let recovery = Recovery::start(
-      (workspace.clone(), programs.clone()),
+      (workspace.clone(), runners.clone()),
       session.previous_end(),
       session.interrupted_since(),
       &runtime,
@@ -178,10 +186,15 @@ impl Services {
       .expect("the root provides the services before mounting the window of a started session")
   }
 
+  /// The run worktrees of `project`, which resolving a merge by hand reaches through the project's runner.
+  pub fn run_worktrees(&self, project: &OpenProject) -> RunWorktrees {
+    RunWorktrees::through_runner(&self.runners, (&project.repo_root, project.project.name().as_str()))
+  }
+
   /// Starts the shared servers' connection monitor, the shared projects' sync and live event streams, the check of the
-  /// cloud sign-in (`sharing::cloud::keep_checking`), the activity's following of the account signed in and the
-  /// update's following of the runs at work (`app_updates::follow_runs`); they run until the returned [`Background`]
-  /// is dropped.
+  /// cloud sign-in (`sharing::cloud::keep_checking`), the activity's following of the account signed in, the
+  /// update's following of the runs at work (`app_updates::follow_runs`) and the runners' following of Settings ›
+  /// Browser (`Runners::follow_browser_settings`); they run until the returned [`Background`] is dropped.
   pub fn run_background(&self) -> Background {
     Background(vec![
       self.runtime.spawn(sharing::monitor(self.servers.clone())),
@@ -200,7 +213,15 @@ impl Services {
         self.updates.clone(),
         self.runners.clone(),
       )),
+      self
+        .runtime
+        .spawn(self.runners.clone().follow_browser_settings(self.workspace.clone())),
     ])
+  }
+
+  /// The run worktrees of `project`, which removing what runs left reaches through the project's runner.
+  pub fn worktree_remover(&self, project: &OpenProject) -> WorktreeRemover {
+    WorktreeRemover::through_runner(&self.runners, (&project.repo_root, project.project.name().as_str()))
   }
 }
 

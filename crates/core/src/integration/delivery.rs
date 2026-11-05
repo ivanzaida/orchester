@@ -68,7 +68,8 @@ fn status_lines(status: &str) -> Vec<String> {
 }
 
 /// How syncing a run's branch with its base branch went.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "synced", rename_all = "snake_case")]
 pub enum Synced {
   /// The branch holds the base branch at `base` now and its tip is `tip`: it already held it, or git merged it
   /// without a conflict and committed the merge.

@@ -129,7 +129,8 @@ pub struct WaitReason {
 }
 
 /// What a borrower gets.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case", tag = "kind", content = "value")]
 pub enum Borrow {
   /// This workspace, made first when no record of it exists yet.
   Take(WorkspaceNumber),

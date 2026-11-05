@@ -2,32 +2,61 @@
 //! read into the prompts of the steps that run after it.
 
 use orchester_core::{
-  id::RunId,
+  id::{RunId, StepExecutionId},
   run::{StepOutcome, StepOutput},
   time::Timestamp,
 };
 use rusqlite::{Connection, params};
+use serde::{Deserialize, Serialize};
 
 use crate::{
   StoreError,
   rows::{corrupt, decode_json, encode_json, parse},
 };
 
-pub(super) fn save(connection: &Connection, output: &StepOutput) -> Result<(), StoreError> {
-  connection.execute(
-    "INSERT INTO step_outputs (step_execution_id, run_id, step_key, outcome, text, created_at, unverified) \
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT (step_execution_id) DO NOTHING",
-    params![
-      output.execution.to_string(),
-      output.run.to_string(),
-      output.step.as_str(),
-      output.outcome.map(outcome_text).transpose()?,
-      output.text,
-      output.created_at.unix_millis(),
-      unverified_column(output)?,
-    ],
-  )?;
-  Ok(())
+/// The columns of a new `step_outputs` row, as a record of the runner carries them (`super::step_records`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(super) struct OutputRow {
+  execution: StepExecutionId,
+  run: RunId,
+  step: String,
+  outcome: Option<String>,
+  text: String,
+  created_at: Timestamp,
+  unverified: Option<String>,
+}
+
+impl OutputRow {
+  /// The row of `output`; a question is no output.
+  pub(super) fn of(output: &StepOutput) -> Result<Self, StoreError> {
+    Ok(Self {
+      execution: output.execution,
+      run: output.run,
+      step: output.step.as_str().to_owned(),
+      outcome: output.outcome.map(outcome_text).transpose()?.map(str::to_owned),
+      text: output.text.clone(),
+      created_at: output.created_at,
+      unverified: unverified_column(output)?,
+    })
+  }
+
+  /// Stores the row, unless its execution has an output already.
+  pub(super) fn save(&self, connection: &Connection) -> Result<(), StoreError> {
+    connection.execute(
+      "INSERT INTO step_outputs (step_execution_id, run_id, step_key, outcome, text, created_at, unverified) \
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7) ON CONFLICT (step_execution_id) DO NOTHING",
+      params![
+        self.execution.to_string(),
+        self.run.to_string(),
+        self.step,
+        self.outcome,
+        self.text,
+        self.created_at.unix_millis(),
+        self.unverified,
+      ],
+    )?;
+    Ok(())
+  }
 }
 
 pub(super) fn of_run(connection: &Connection, run: RunId) -> Result<Vec<StepOutput>, StoreError> {

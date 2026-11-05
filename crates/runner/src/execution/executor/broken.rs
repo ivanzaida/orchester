@@ -1,0 +1,108 @@
+//! A run whose task failed on the runner's own side: the project database failed or refused a write, a
+//! transition was rejected, or no step could run. Its agents have ended by then. The run must not stay
+//! running with nothing behind it, so it is interrupted ([`InterruptCause::RunnerFailed`]) from what was
+//! last stored, with why ([`RunnerFailure`], ORC-75), and the error goes into its activity: a person continues
+//! it from its last checkpoint, where retrying is safe, or cancels it; the Orchestrator may continue it too when
+//! the database only stayed busy.
+
+use orchester_core::{
+  connection::stream::{AgentEvent, InvocationOutcome, RunnerProblem},
+  id::RunId,
+  run::{InterruptCause, RunStatus, RunnerFailure},
+  store::{ActivityStore, RunStore},
+  time::Timestamp,
+};
+use orchester_ipc::Event;
+use orchester_store::{InvocationRecord, ProjectDb, RunLogRecord, StoreError};
+
+use super::{
+  pool::PoolError,
+  record::RecordError,
+  run::{ExecutionError, RunTask},
+  sink::Sink,
+};
+
+impl ExecutionError {
+  /// What kind of failure stopped the run, as the store reads its storage errors.
+  fn runner_failure(&self) -> RunnerFailure {
+    match self {
+      Self::Store(error) | Self::Workspace(PoolError::Store(error)) => error.runner_failure(),
+      Self::Record(RecordError::Store(error)) => error.runner_failure(),
+      Self::Link(error) | Self::Workspace(PoolError::Link(error)) => error.failure,
+      Self::Record(RecordError::Run(_))
+      | Self::Computer(_)
+      | Self::NotAnAgentStep(_)
+      | Self::Stalled
+      | Self::Conversation(_)
+      | Self::Workspace(PoolError::Git { .. }) => RunnerFailure::Other,
+    }
+  }
+}
+
+impl RunTask {
+  /// Interrupts the run after `error` ended its task. What the task held in memory may be ahead of
+  /// what was stored, so the run is read again, through a fresh connection. A run that settled
+  /// meanwhile stays as it is; one that cannot be recorded either is left to the runner's log.
+  pub(super) fn interrupt_broken(&mut self, error: &ExecutionError) {
+    if let Err(second) = self.try_interrupt(error) {
+      tracing::error!(run = %self.run.id(), %second, "the run could not be interrupted after its failure");
+    }
+  }
+
+  fn try_interrupt(&mut self, error: &ExecutionError) -> Result<(), ExecutionError> {
+    let run = self.run.id();
+    self.db = ProjectDb::open(&self.root)?;
+    if let Some(stored) = self.db.run(run).map_err(RecordError::from)? {
+      self.run = stored;
+    }
+    if self.run.status() != &RunStatus::Running {
+      return Ok(());
+    }
+    // Recording an invocation or activity may still fail. Persist the interruption first, with why, so
+    // a writable run log never claims that the workers we already ended are still running.
+    let ended_at = Timestamp::now();
+    let events = self
+      .run
+      .interrupt(InterruptCause::RunnerFailed, ended_at)
+      .map_err(RecordError::from)?;
+    RunLogRecord::runner_failure(&self.run, &events, error.runner_failure())
+      .and_then(|record| self.sink.run_log(record))
+      .map_err(RecordError::from)?;
+    self.notifier.send(Event::RunChanged {
+      run,
+      task: self.run.task(),
+    });
+    if let Err(error) = close_invocations(&self.db, self.sink.as_mut(), run, ended_at) {
+      tracing::error!(%run, %error, "the ended invocations could not be recorded after runner failure");
+    }
+    let problem = RunnerProblem::RunnerFailed {
+      detail: error.to_string(),
+    };
+    if let Some(invocation) = self.db.invocations(run)?.last() {
+      let events = vec![(Timestamp::now(), AgentEvent::RunnerProblem { problem })];
+      self.record_activity(invocation, events)?;
+    }
+    Ok(())
+  }
+}
+
+/// All workers had ended by the recorded interruption. Close missing end records then, read in `db` and sent to
+/// `sink`, even if storage only becomes writable on an explicit continuation, preserving usage and sessions.
+pub(in crate::execution) fn close_invocations(
+  db: &ProjectDb,
+  sink: &mut dyn Sink,
+  run: RunId,
+  ended_at: Timestamp,
+) -> Result<(), StoreError> {
+  for mut invocation in db
+    .invocations(run)?
+    .into_iter()
+    .filter(|invocation| invocation.ended_at.is_none())
+  {
+    invocation.ended_at = Some(ended_at);
+    invocation.outcome = Some(InvocationOutcome::Unrecorded);
+    invocation.timing.resume(ended_at);
+    sink.invocation(InvocationRecord::state(&invocation))?;
+  }
+  Ok(())
+}

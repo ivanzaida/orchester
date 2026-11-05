@@ -158,7 +158,7 @@ impl lurq::app::component::DevtoolsInspectable for InWorktree {}
 /// `run`'s worktree and the merge waiting in it for the person to resolve it, read again when the task or its
 /// resolving changes and at each `look` while one waits; `None` while it is first read.
 pub(super) fn in_worktree(ctx: &mut Ctx, task: &TaskContext, (run, look): (RunId, u64)) -> Option<Worktree> {
-  let services = Services::of(ctx);
+  let worktrees = Services::of(ctx).run_worktrees(&task.project.open);
   let root = task.project.open.repo_root.clone();
   let job = task.jobs.run(run);
   let idle = !job.resolving();
@@ -169,9 +169,9 @@ pub(super) fn in_worktree(ctx: &mut Ctx, task: &TaskContext, (run, look): (RunId
   );
   ctx
     .future(key, move |(root, (run, idle), _)| {
-      let programs = services.programs.clone();
+      let worktrees = worktrees.clone();
       async move {
-        background::run(move || worktree::read(&programs, &root, (run, idle)))
+        background::run(move || worktree::read(&worktrees, &root, (run, idle)))
           .await
           .map_err(|_| ())?
           .map(InWorktree)

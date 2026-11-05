@@ -28,8 +28,9 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
-use orchester_workspace::tasks::side_question::{
-  Asking, end_in, keep_in, send_on_as, send_on_in, side_input_in, side_questions_in,
+use orchester_workspace::tasks::{
+  changes::NotCheckpointed,
+  side_question::{Asking, end_in, keep_in, send_on_as, send_on_in, side_input_in, side_questions_in},
 };
 
 use self::support::{Fixture, at};
@@ -96,7 +97,15 @@ fn side_question_is_answered_from_the_run_and_reaches_its_agent_only_when_sent()
 
   let question = keep_in(&root, &asked).expect("kept");
   assert_eq!(question.state, SideState::Answering);
-  let input = side_input_in(&root, &Programs::processes(), (task, run.id()), &question.question).expect("read");
+  // The runner reads the worktree; a clean one adds nothing to what the side agent reads.
+  let worktree = Ok(NotCheckpointed::Clean);
+  let input = side_input_in(
+    &root,
+    &Programs::processes(),
+    (task, run.id()),
+    (&question.question, &worktree),
+  )
+  .expect("read");
   let read = input.transcript().join("\n");
   assert!(read.contains("I added a 30 s retry case"), "{read}");
   assert!(

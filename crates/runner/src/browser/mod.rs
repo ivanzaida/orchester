@@ -30,8 +30,10 @@ use std::{
 
 use orchester_core::id::RunId;
 use orchester_exec::browser::{self as program, BrowserProgram, BrowserUnavailable};
-use orchester_ipc::browser::{AgentAction, BrowserEvent, BrowserMode, BrowserTabId, ScreencastFrame, TabOwner};
-use orchester_store::{AppDb, ProjectDb, location::browser_profiles_beside};
+use orchester_ipc::browser::{
+  AgentAction, BrowserEvent, BrowserMode, BrowserTabId, ComputerBrowser, ScreencastFrame, TabOwner,
+};
+use orchester_store::ProjectDb;
 use serde_json::Value;
 use thiserror::Error;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
@@ -39,7 +41,7 @@ use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 use self::{
   cdp::{CdpError, TargetId, TargetInfo},
   running::Running,
-  window::{Starter, Window},
+  window::{Profile, Starter, Window},
 };
 pub use self::{
   log::{ConsoleMessage, FILE_ASKED, KEPT, Request, TabLog},
@@ -105,24 +107,44 @@ pub struct ProjectBrowser {
 }
 
 impl ProjectBrowser {
-  /// The browser of the project at `project_root`, on its profile folder ([`profile_of`]), with the program Settings ›
-  /// Browser names in the application database beside the runner.
+  /// The browser of the project at `project_root`, on its own profile folder among the computer's
+  /// ([`Self::profile`]), with the program Settings › Browser names; both come from the desktop
+  /// ([`Self::set_computer`]), and until it passed them the browser is unavailable, saying so.
   pub fn of_project(project_root: &Path) -> Self {
-    let profile = profile_of(project_root);
-    // Without the application database the profile folder is unknown too, and its error says why.
-    Self::on(profile, app_database().ok())
+    Self::on(Profile::OfProject(project_of(project_root)), None)
   }
 
-  /// A browser on the profile folder `profile`, with the program installed.
+  /// A browser on the profile folder `profile`, with the program installed until [`Self::set_computer`] names another.
   pub fn new(profile: PathBuf) -> Self {
-    Self::on(Ok(profile), None)
+    let computer = ComputerBrowser {
+      program: Ok(None),
+      profiles: Err("the browser has a profile folder of its own".to_owned()),
+    };
+    Self::on(Profile::Own(profile), Some(computer))
   }
 
-  /// This browser with the program Settings › Browser names in the application database `database`.
-  #[must_use]
-  pub fn with_settings(mut self, database: PathBuf) -> Self {
-    self.starter.settings = Some(database);
+  /// This computer's Settings › Browser as the desktop passed them (`computer`): the browser starts with them from its
+  /// next start, headless or in a window of its own; one running now keeps its program and profile.
+  pub fn set_computer(&self, computer: ComputerBrowser) {
+    *self.starter.computer.lock() = Some(computer);
+  }
+
+  /// The folder of every project's browser profile on this computer, as the desktop passed it, where the cookies and
+  /// sign-ins are; `None` until it did, or when it could not tell.
+  pub fn profiles_folder(&self) -> Option<PathBuf> {
     self
+      .starter
+      .computer
+      .lock()
+      .as_ref()
+      .and_then(|computer| computer.profiles.clone().ok())
+  }
+
+  /// The profile folder the browser starts on at its next start: the project's own, `<profiles>/<project id>/`, never
+  /// the person's own browser profile and never inside a repository. Unavailable, with the reason, when it cannot be
+  /// known.
+  pub fn profile(&self) -> Result<PathBuf, BrowserUnavailable> {
+    self.starter.profile()
   }
 
   /// This browser with its own window, for a test, out of sight: *Open in a browser window* starts it headless, and to
@@ -143,10 +165,10 @@ impl ProjectBrowser {
     self
   }
 
-  fn on(profile: Result<PathBuf, BrowserUnavailable>, settings: Option<PathBuf>) -> Self {
+  fn on(profile: Profile, computer: Option<ComputerBrowser>) -> Self {
     let window = Arc::new(Window::default());
     Self {
-      starter: Starter::new(profile, settings, Arc::clone(&window)),
+      starter: Starter::new(profile, computer, Arc::clone(&window)),
       running: Arc::new(Mutex::new(None)),
       window,
     }
@@ -380,44 +402,23 @@ impl ProjectBrowser {
   }
 }
 
-/// The project's own browser profile folder: `<application data>/browser/<project id>/` beside `orchester.db`, never
-/// the person's own browser profile and never inside a repository. Unavailable, with the reason, when either part
-/// cannot be known.
-pub fn profile_of(project_root: &Path) -> Result<PathBuf, BrowserUnavailable> {
-  let profiles = profiles_folder()?;
-  let project = ProjectDb::open_read_only(project_root)
-    .map_err(|error| BrowserUnavailable::new(format!("the project cannot be read: {error}")))?
-    .project()
-    .id();
-  Ok(profiles.join(project.to_string()))
+/// The id of the project at `project_root`, which names its profile folder among the computer's profiles; unavailable,
+/// with the reason, when the project cannot be read.
+fn project_of(project_root: &Path) -> Result<String, BrowserUnavailable> {
+  Ok(
+    ProjectDb::open_read_only(project_root)
+      .map_err(|error| BrowserUnavailable::new(format!("the project cannot be read: {error}")))?
+      .project()
+      .id()
+      .to_string(),
+  )
 }
 
-/// The folder of every project's browser profile, `<application data>/browser/` beside `orchester.db`, where the
-/// cookies and sign-ins are.
-pub fn profiles_folder() -> Result<PathBuf, BrowserUnavailable> {
-  browser_profiles_beside(&app_database()?)
-    .ok_or_else(|| BrowserUnavailable::new("the application database has no folder"))
-}
-
-/// The application database beside the runner, as the app that started it keeps it.
-fn app_database() -> Result<PathBuf, BrowserUnavailable> {
-  orchester_store::location::app_data_location()
-    .map(|location| location.database)
-    .map_err(|error| BrowserUnavailable::new(format!("the application data folder is unknown: {error}")))
-}
-
-/// The program Settings › Browser names in the application database `settings` when the person chose one, else the
-/// one installed; `None` (a test's browser) or a database not made yet is the one installed. A chosen program that
-/// is no Chromium-based browser's (any more) is unavailable, saying so: the person's choice is never passed over.
-/// Blocks on SQLite and, on Windows, on the registry.
-fn chosen_or_found(settings: Option<&Path>) -> Result<BrowserProgram, BrowserUnavailable> {
-  let chosen = match settings {
-    Some(database) if database.is_file() => AppDb::open_read_only(database)
-      .and_then(|settings| settings.browser_program())
-      .map_err(|error| BrowserUnavailable::new(format!("Settings › Browser cannot be read: {error}")))?,
-    _ => None,
-  };
-  match chosen {
+/// The program the person chose in Settings › Browser, as the desktop passed it (`chosen`), else the one installed. A
+/// choice that could not be read, or a chosen program that is no Chromium-based browser's (any more), is unavailable,
+/// saying so: the person's choice is never passed over. Blocks, on Windows, on the registry.
+fn chosen_or_found(chosen: Result<Option<PathBuf>, String>) -> Result<BrowserProgram, BrowserUnavailable> {
+  match chosen.map_err(BrowserUnavailable::new)? {
     Some(program) => program::chosen(&program).map_err(|refused| {
       BrowserUnavailable::new(format!(
         "the program chosen in Settings › Browser cannot be used: {refused}"

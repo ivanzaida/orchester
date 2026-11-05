@@ -11,6 +11,7 @@ pub mod native;
 pub mod pending;
 pub mod qa;
 pub mod reviewer;
+pub mod rows;
 pub mod tool_wait;
 pub mod tools;
 pub mod vault;

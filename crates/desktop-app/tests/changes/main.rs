@@ -2,8 +2,9 @@
 //! run's checkpointed files and what its worktree holds beyond them with their counts, the diff's line
 //! numbers and painted token colors, choosing a file, the count on the tab's label, and every designed
 //! state (`states`): no checkpoint yet, too large, worktree removed, a line shortened, a file in both
-//! groups, a worktree read again, and changes that could not be read until Try again. The project's runner
-//! program does not exist, so no agent is at work. Needs `git`.
+//! groups, a worktree read again, and changes that could not be read until Try again. What a worktree holds is read
+//! by the project's real runner, which the tests build themselves (`support::runner_programs`); it continues no run,
+//! so no agent is at work. Needs `git`.
 
 #[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(
@@ -16,7 +17,7 @@ mod states;
 #[path = "../support/mod.rs"]
 mod support;
 
-use std::path::PathBuf;
+use std::{path::PathBuf, time::Duration};
 
 use kontur::{SeedRequest, scenarios};
 use lurq::{
@@ -35,7 +36,12 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
-use support::{Data, Window};
+use orchester_workspace::runner::state::RunnerState;
+use support::{Data, Window, runner_programs::programs};
+
+/// How long a test waits for the project's runner to start and attach, beside the runners of the tests running at
+/// the same time.
+const RUNNER_START: Duration = Duration::from_secs(120);
 
 /// The window on the `changes` scenario, and where it was seeded.
 struct Page {
@@ -61,9 +67,28 @@ impl Page {
       data.database(),
       "the seed registers Kontur where the app reads"
     );
-    let launch = data.launch();
+    let launch = data.launch_with(programs().runner.clone());
+    let mut window = Window::of(data, launch);
+    // The runner starts and attaches here, as the project opens, so the page's own waits do not count its start beside
+    // the other tests' runners.
+    let registered = window
+      .launch
+      .workspace()
+      .expect("the session started")
+      .projects()
+      .expect("the projects")
+      .into_iter()
+      .find(|project| project.id == seeded.project)
+      .expect("Kontur is registered");
+    let runners = window.launch.services().expect("the session started").runners.clone();
+    runners.ensure(&registered.repo_root, registered.name.as_str());
+    window.until_within(RUNNER_START, "the project's runner attached", |_| {
+      runners
+        .status_of(&registered.repo_root)
+        .is_some_and(|status| *status.state() == RunnerState::Online && status.work().is_some())
+    });
     Self {
-      window: Window::of(data, launch),
+      window,
       project: seeded.project,
       repo,
     }
@@ -187,6 +212,15 @@ impl Page {
       .expect("a run")
       .expect("a readable run");
     self.repo.join(WORKTREES_DIR).join(run.id().to_string())
+  }
+}
+
+/// The project's runner ends with the page, before its folder is removed.
+impl Drop for Page {
+  fn drop(&mut self) {
+    if let Some(services) = self.window.launch.services() {
+      services.runners.terminate();
+    }
   }
 }
 

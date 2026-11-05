@@ -10,10 +10,12 @@ use orchester_core::{
   usage::limits::{LimitSnapshot, SnapshotSource, retained_since},
 };
 use rusqlite::{OptionalExtension, params};
+use serde::{Deserialize, Serialize};
 
 use super::{
   ProjectDb,
   connections::{parse_provider, provider_text},
+  step_records::StepRecord,
 };
 use crate::{
   StoreError,
@@ -23,27 +25,55 @@ use crate::{
 const SCHEMA: u32 = 1;
 const WHAT: &str = "plan limits snapshot";
 
-impl ProjectDb {
-  /// Stores what `run`'s CLI reported of its limits, and removes the reports older than 90 days
-  /// before it, in one transaction.
-  pub fn save_limit_snapshot(&mut self, run: RunId, reading: &LimitReading) -> Result<(), StoreError> {
-    let transaction = self.connection.transaction()?;
+/// The columns of a new `plan_limit_snapshots` row, as a record of the runner carries them
+/// (`super::step_records`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub(super) struct SnapshotRow {
+  run: RunId,
+  provider: String,
+  at: Timestamp,
+  body: String,
+  account: Option<AgentAccountId>,
+}
+
+impl SnapshotRow {
+  pub(super) fn of(run: RunId, reading: &LimitReading) -> Result<Self, StoreError> {
+    Ok(Self {
+      run,
+      provider: provider_text(reading.provider).to_owned(),
+      at: reading.at,
+      body: encode_json(WHAT, SCHEMA, &reading.limits)?,
+      account: reading.account,
+    })
+  }
+
+  /// Stores the row and removes the reports older than 90 days before it, in one transaction.
+  pub(super) fn save(&self, db: &mut ProjectDb) -> Result<(), StoreError> {
+    let transaction = db.connection.transaction()?;
     transaction.execute(
       "INSERT INTO plan_limit_snapshots (provider, at, run_id, body, account_id) VALUES (?1, ?2, ?3, ?4, ?5)",
       params![
-        provider_text(reading.provider),
-        reading.at.unix_millis(),
-        run.to_string(),
-        encode_json(WHAT, SCHEMA, &reading.limits)?,
-        reading.account.map(|account| account.to_string()),
+        self.provider,
+        self.at.unix_millis(),
+        self.run.to_string(),
+        self.body,
+        self.account.map(|account| account.to_string()),
       ],
     )?;
     transaction.execute(
       "DELETE FROM plan_limit_snapshots WHERE at < ?1",
-      [retained_since(reading.at).unix_millis()],
+      [retained_since(self.at).unix_millis()],
     )?;
     transaction.commit()?;
     Ok(())
+  }
+}
+
+impl ProjectDb {
+  /// Stores what `run`'s CLI reported of its limits, and removes the reports older than 90 days
+  /// before it, in one transaction.
+  pub fn save_limit_snapshot(&mut self, run: RunId, reading: &LimitReading) -> Result<(), StoreError> {
+    self.write_step(&StepRecord::limits(run, reading)?)
   }
 
   /// The reports stored from `since` on, oldest first, each with the run that reported it.

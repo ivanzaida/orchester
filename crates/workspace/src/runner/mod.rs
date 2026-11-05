@@ -13,19 +13,29 @@ mod ask;
 mod browser;
 mod chat;
 mod check;
+mod code_index;
 mod connection;
 mod estimate;
+mod folders;
 mod idle;
 mod lifetime;
+mod log;
+mod merge_queue;
+mod outcome;
 mod report;
 mod requests;
+mod resolve;
+mod run_files;
+mod run_git;
+mod settings;
 mod side_question;
 pub mod state;
 mod work;
+mod worktree_changes;
+mod worktree_removal;
 
 use std::{
   collections::{HashMap, HashSet},
-  io,
   path::{Path, PathBuf},
   sync::{
     Arc,
@@ -35,15 +45,20 @@ use std::{
 };
 
 use orchester_core::id::RunId;
-use orchester_ipc::{AttachSession, Command, ErrorReports, RefusedRun, Rejection, Reply, SessionEnd, WorkState};
+use orchester_ipc::{AttachSession, ErrorReports, SessionEnd, WorkState, browser::ComputerBrowser};
 use parking_lot::Mutex;
 use tokio::{runtime::Handle, sync::watch, task::JoinSet};
 
 pub use self::{
   answers::AnswerMark,
+  folders::ExecutorFolders,
   idle::ForgetRefusal,
+  merge_queue::RunnerWorktrees,
+  outcome::{Continued, QUIET_STOP_TIMEOUT, RunRequestError, ShutdownOutcome},
   report::RunnerStatus,
   requests::RequestError,
+  run_files::ProjectRunFiles,
+  run_git::ThroughRunner,
   work::{ActiveWork, ActiveWorkFields, SaveState},
 };
 use self::{
@@ -54,37 +69,6 @@ use self::{
 };
 use crate::{activity::Activity, browser::BrowserWindow, workspace::OpenProject};
 
-/// How long a close without active work waits for the runner to stop and exit before
-/// terminating it.
-pub const QUIET_STOP_TIMEOUT: Duration = Duration::from_secs(6);
-
-/// How asking the runners to stop ended.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ShutdownOutcome {
-  /// No runner was running.
-  NoRunner,
-  /// Every runner confirmed that it stopped.
-  Stopped,
-  /// A runner did not confirm in time or went away first; it was terminated.
-  Unanswered,
-}
-
-/// Why the runner did not do what a request about a run asked.
-#[derive(Clone, Debug, PartialEq, Eq, thiserror::Error)]
-pub enum RunRequestError {
-  #[error(transparent)]
-  Request(#[from] RequestError),
-  #[error("the runner refused the request: {0:?}")]
-  Rejected(Rejection),
-}
-
-/// The answer to continuing interrupted runs.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Continued {
-  pub continued: Vec<RunId>,
-  pub refused: Vec<RefusedRun>,
-}
-
 /// Starts and stops the projects' runners and publishes the displayed project's status.
 #[derive(Clone)]
 pub struct Runners {
@@ -93,11 +77,14 @@ pub struct Runners {
 
 struct Inner {
   runner_exe: PathBuf,
-  /// Whether the runners send error reports, and in which environment and release; each runner reads it when it
-  /// starts.
+  /// Whether the runners send error reports, in which environment and release; each runner reads it as it starts.
   reports: Arc<Mutex<Option<ErrorReports>>>,
   /// Held while the setting is stored and handed to the running runners ([`Runners::set_error_reports`]).
   report_updates: Mutex<()>,
+  /// This computer's Settings › Browser, which each runner attaches with; `None` until [`Runners::set_browser`].
+  browser: Arc<Mutex<Option<ComputerBrowser>>>,
+  /// Held while the settings are stored and handed to the attached runners ([`Runners::set_browser`]).
+  browser_updates: Mutex<()>,
   runtime: Handle,
   /// How the previous session ended: each project's first runner attaches with it.
   previous_end: SessionEnd,
@@ -107,11 +94,16 @@ struct Inner {
   tabbed: Mutex<HashSet<PathBuf>>,
   /// Set once the application closes; no runner starts after that.
   closing: AtomicBool,
-  /// Held while a project's limits are stored and changed agent slots are handed to its runner, so
-  /// the runner gets them in the order they were stored ([`Runners::store_agent_slots`]).
+  /// Held while a project's limits are stored and changed agent slots are handed to its runner, so the runner gets
+  /// them in the order they were stored ([`Runners::store_agent_slots`]).
   slot_updates: Mutex<()>,
   /// Hands out the generations of the projects' runners.
   generations: AtomicU64,
+  /// What answers for a runner about runs' files in tests that start none (`run_files`).
+  run_files_stand_in: run_files::StandIn,
+  /// The programs a test without a runner carries out requests about runs' worktrees with, in its own process.
+  #[cfg(feature = "test-support")]
+  worktrees_here: Mutex<Option<orchester_exec::programs::Programs>>,
 }
 
 /// One project's runner.
@@ -142,14 +134,15 @@ impl Runners {
     self.inner.shared.limits.subscribe()
   }
 
-  /// The runners of the program `runner_exe`. They send no error reports until
-  /// [`Self::set_error_reports`] says so.
+  /// The runners of the program `runner_exe`. They send no error reports until [`Self::set_error_reports`] says so.
   pub fn new(runner_exe: PathBuf, runtime: Handle, activity: Activity, previous_end: SessionEnd) -> Self {
     Self {
       inner: Arc::new(Inner {
         runner_exe,
         reports: Arc::new(Mutex::new(None)),
         report_updates: Mutex::new(()),
+        browser: Arc::new(Mutex::new(None)),
+        browser_updates: Mutex::new(()),
         runtime,
         previous_end,
         shared: Arc::new(Shared {
@@ -168,6 +161,9 @@ impl Runners {
         closing: AtomicBool::new(false),
         slot_updates: Mutex::new(()),
         generations: AtomicU64::new(0),
+        run_files_stand_in: run_files::StandIn::default(),
+        #[cfg(feature = "test-support")]
+        worktrees_here: Mutex::new(None),
       }),
     }
   }
@@ -302,48 +298,11 @@ impl Runners {
     Connection::spawn(
       &self.inner.runtime,
       self.inner.runner_exe.clone(),
-      self.inner.reports.clone(),
+      (self.inner.reports.clone(), self.inner.browser.clone()),
       root.to_path_buf(),
       Reporter::new(generation, name.clone(), status.clone(), self.inner.shared.clone()),
       session,
     )
-  }
-
-  /// The runners send their panics and ERROR lines as error reports with `reports`, or none with `None`
-  /// (`orchester_ipc::error_reports`): every runner running now is told at once
-  /// (`Command::SetErrorReports`), without waiting for its answer, and every runner started from now on starts so.
-  /// A runner that is starting is told once it is connected; one that cannot be reached misses nothing, since it
-  /// starts with the setting the next time.
-  pub fn set_error_reports(&self, reports: Option<&ErrorReports>) {
-    let reports = reports.cloned();
-    // Held while storing and telling the runners, so they end with the setting stored last.
-    let _in_order = self.inner.report_updates.lock();
-    *self.inner.reports.lock() = reports.clone();
-    let answers: Vec<_> = self
-      .inner
-      .projects
-      .lock()
-      .iter()
-      .filter_map(|(root, entry)| {
-        let connection = entry.connection.as_ref()?;
-        let command = Command::SetErrorReports {
-          reports: reports.clone(),
-        };
-        Some((root.clone(), connection.request(command)))
-      })
-      .collect();
-    for (root, answer) in answers {
-      self.inner.runtime.spawn(async move {
-        // The task ended without answering, e.g. when the runner stopped meanwhile.
-        match answer.await.unwrap_or(Err(RequestError::Lost)) {
-          Ok(Reply::ErrorReportsSet) => {}
-          Ok(other) => tracing::error!(?other, "unexpected reply to SetErrorReports"),
-          Err(error) => {
-            tracing::info!(project = %root.display(), %error, "no runner took the error reports setting now");
-          }
-        }
-      });
-    }
   }
 
   fn displayed(&self) -> Option<PathBuf> {
@@ -362,7 +321,7 @@ impl Runners {
   pub fn open_log_of(&self, root: &Path) {
     let project = root.to_path_buf();
     self.inner.runtime.spawn_blocking(move || {
-      if let Err(error) = open_log(&project) {
+      if let Err(error) = log::open_log(&project) {
         tracing::error!(project = %project.display(), %error, "cannot open the runner log");
       }
     });
@@ -577,14 +536,4 @@ impl Runners {
       }
     }
   }
-}
-
-fn open_log(project: &Path) -> io::Result<()> {
-  let log = orchester_ipc::runner_log_path(project, SystemTime::now());
-  let target = if log.is_file() {
-    log
-  } else {
-    orchester_ipc::runner_log_dir(project)
-  };
-  orchester_exec::external::open_path(&target)
 }

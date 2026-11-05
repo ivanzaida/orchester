@@ -10,7 +10,7 @@ use orchester_core::{
   limits::AgentSlots,
   sharing::TaskRevision,
 };
-use orchester_ipc::{Command, Reply};
+use orchester_ipc::{Command, FolderState, Reply};
 use orchester_store::StoreError;
 use tokio::sync::oneshot;
 
@@ -166,6 +166,22 @@ impl Runners {
     }
   }
 
+  /// What the folder of run `run` of project `root` holds beyond its last commit, as the project's runner reads it
+  /// there for the start-up recovery: the desktop never reads a run's folder itself. Starts the runner (named `name`)
+  /// if needed and waits for it to attach, as continuing the interrupted runs does.
+  pub async fn run_folder_state(&self, root: &Path, name: &str, run: RunId) -> Result<FolderState, RunRequestError> {
+    self.ensure(root, name);
+    // A project no tab shows keeps its runner while it reads, then lets it stop.
+    let _pin = self.pin(root);
+    self.linger_untabbed();
+    self.attached(root).await?;
+    match self.ask(Some(root), Command::RunFolderState { run }).await? {
+      Reply::RunFolderState { state, .. } => Ok(state),
+      Reply::Rejected(rejection) => Err(RunRequestError::Rejected(rejection)),
+      other => unexpected(&other, "RunFolderState"),
+    }
+  }
+
   /// Runs `store`, which stores project `root`'s limits and returns the agent slots when they
   /// changed, then hands changed slots to the project's runner, which applies them at once, without
   /// waiting for its answer. Storing and queueing happen under one lock, so with saves close
@@ -209,8 +225,14 @@ impl Runners {
   /// Asks `project`'s runner, starting it if needed and waiting for it to attach. A project no tab
   /// shows keeps its runner while the request is under way, then lets it stop once it has no work.
   pub(super) async fn ask_project(&self, project: &OpenProject, command: Command) -> Result<Reply, RequestError> {
-    let root = project.repo_root.as_path();
-    self.ensure(root, project.project.name().as_str());
+    self
+      .ask_named((&project.repo_root, project.project.name().as_str()), command)
+      .await
+  }
+
+  /// [`Runners::ask_project`] for the project at `root`, named `name`.
+  pub(super) async fn ask_named(&self, (root, name): (&Path, &str), command: Command) -> Result<Reply, RequestError> {
+    self.ensure(root, name);
     let _pin = self.pin(root);
     self.linger_untabbed();
     self.attached(root).await?;
