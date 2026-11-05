@@ -121,6 +121,20 @@ impl RunWaitsOn {
     })
   }
 
+  /// Rebuilds a kept wait: run `run` of task `task` waits on `waited` until it is merged into `base`. Refused for the
+  /// run's own task; the project and what the run waited for were checked when [`Self::new`] made it.
+  pub fn restore(run: RunId, task: TaskId, base: BranchName, waited: TaskId) -> Result<Self, WaitsOnError> {
+    if waited == task {
+      return Err(WaitsOnError::OwnTask);
+    }
+    Ok(Self {
+      run,
+      task,
+      base,
+      waited,
+    })
+  }
+
   /// Whether it may be kept beside `waits`, those kept already: its run waits on no task yet.
   pub fn check_only(&self, waits: &[Self]) -> Result<(), WaitsOnError> {
     match waits.iter().find(|wait| wait.run == self.run) {
