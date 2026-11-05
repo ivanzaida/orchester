@@ -1,3 +1,4 @@
+mod children;
 mod columns;
 mod legacy;
 mod load;
@@ -87,7 +88,7 @@ impl ProjectDb {
     Ok(load_runs(
       &self.connection,
       "WHERE status NOT IN ('succeeded', 'failed', 'cancelled') ORDER BY number",
-      [],
+      &[],
     )?)
   }
 
@@ -97,7 +98,7 @@ impl ProjectDb {
     Ok(load_runs(
       &self.connection,
       "WHERE status = 'succeeded' AND id NOT IN (SELECT run_id FROM checkpoints) ORDER BY number",
-      [],
+      &[],
     )?)
   }
 
@@ -105,7 +106,7 @@ impl ProjectDb {
     Ok(load_runs(
       &self.connection,
       "WHERE status = 'paused' AND status_reason = 'plan_limit' ORDER BY number",
-      [],
+      &[],
     )?)
   }
 
@@ -135,7 +136,7 @@ impl ProjectDb {
     let key = key.to_string();
     let project = self.project.key().clone();
     let transaction = self.connection.transaction()?;
-    if let Some(existing) = load_runs(&transaction, "WHERE idempotency_key = ?1", [&key])?.pop() {
+    if let Some(existing) = load_runs(&transaction, "WHERE idempotency_key = ?1", params![key])?.pop() {
       return existing.map_err(|unreadable| unreadable.error);
     }
     if let Some(revision) = queued {
@@ -174,7 +175,7 @@ impl RunStore for ProjectDb {
   }
 
   fn run_with_key(&self, key: IdempotencyKey) -> Result<Option<Run>, RunStoreError> {
-    load_runs(&self.connection, "WHERE idempotency_key = ?1", [key.to_string()])?
+    load_runs(&self.connection, "WHERE idempotency_key = ?1", params![key.to_string()])?
       .pop()
       .transpose()
       .map_err(|unreadable| unreadable.error)
@@ -203,7 +204,7 @@ impl RunStore for ProjectDb {
   }
 
   fn run(&self, id: RunId) -> Result<Option<Run>, RunStoreError> {
-    load_runs(&self.connection, "WHERE id = ?1", [id.to_string()])?
+    load_runs(&self.connection, "WHERE id = ?1", params![id.to_string()])?
       .pop()
       .transpose()
       .map_err(|unreadable| unreadable.error)
@@ -213,7 +214,7 @@ impl RunStore for ProjectDb {
     Ok(load_runs(
       &self.connection,
       "WHERE task_id = ?1 ORDER BY number",
-      [task.to_string()],
+      params![task.to_string()],
     )?)
   }
 
@@ -229,7 +230,7 @@ impl RunStore for ProjectDb {
     Ok(load_runs(
       &self.connection,
       "WHERE status = ?1 AND id NOT IN (SELECT run_id FROM run_worktree_removals) ORDER BY number",
-      [columns::INTERRUPTED],
+      params![columns::INTERRUPTED],
     )?)
   }
 
@@ -237,7 +238,7 @@ impl RunStore for ProjectDb {
     Ok(load_runs(
       &self.connection,
       "WHERE status = ?1 ORDER BY number",
-      [columns::RUNNING],
+      params![columns::RUNNING],
     )?)
   }
 
@@ -245,7 +246,7 @@ impl RunStore for ProjectDb {
     Ok(load_runs(
       &self.connection,
       "WHERE status = 'paused' AND status_reason = ?1 ORDER BY number",
-      ["low_disk"],
+      params!["low_disk"],
     )?)
   }
 

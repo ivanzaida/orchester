@@ -1,36 +1,30 @@
 //! Reading runs back. Rows are rebuilt through [`Run::restore`] and events through the domain
-//! deserializers, so a damaged row surfaces as `StoreError::Corrupt`. Each run is read on its own:
+//! deserializers, so a damaged row surfaces as `StoreError::Corrupt`. Each run is restored on its own:
 //! a run whose record cannot be read back is listed as an [`UnreadableRun`] beside the others.
 
-use std::{
-  collections::BTreeMap,
-  num::{NonZeroU32, NonZeroU64},
-};
+use std::{collections::HashMap, num::NonZeroU64};
 
 use orchester_core::{
-  id::{ResourceId, RunId, TaskId},
-  resource::StepKey,
+  id::{RunId, TaskId},
   revision::Revision,
   run::{
-    Attempt, BranchName, Checkpoint, EventSequence, ListedRun, Run, RunCreated, RunEvent, RunEventKind, RunPermissions,
-    StepExecution, StoredRun, UnreadableRun,
+    BranchName, Checkpoint, EventSequence, ListedRun, Run, RunCreated, RunEvent, RunEventKind, StoredRun, UnreadableRun,
   },
   time::Timestamp,
-  tokens::{TokenBudget, TokensUsed},
+  tokens::TokensUsed,
 };
-use rusqlite::{Connection, OptionalExtension, Params, Row};
+use rusqlite::{Connection, OptionalExtension, Row, ToSql};
 
 use super::{
-  EVENT_SCHEMA, PERMISSIONS_SCHEMA, SNAPSHOT_SCHEMA,
-  columns::{
-    AttemptReasonColumns, parse_attempt_reason, parse_attempt_status, parse_run_status, parse_step_failure,
-    parse_step_status, step_key,
-  },
+  EVENT_SCHEMA, SNAPSHOT_SCHEMA,
+  children::{self, Children, RunRecords},
+  columns::parse_run_status,
   legacy::{self, CreationLimits},
   run_number,
 };
 use crate::{
   RunStoreError, StoreError,
+  project_db::ProjectDb,
   rows::{corrupt, decode_body, decode_document, decode_json, optional_budget_value, optional_duration_value, parse},
 };
 
@@ -39,17 +33,54 @@ const SELECT_RUNS: &str = "SELECT id, task_id, number, snapshot, branch, base_re
                            status, status_reason, failed_step, limit_execution, last_sequence, created_at, \
                            base_branch, failure_reason, base_source, base_module FROM runs";
 
-/// The runs `clause` selects, each read on its own. Only a run whose id or task cannot be read
+impl ProjectDb {
+  /// Every run of the project, by task, each task's by number: [`RunStore::runs_of_task`] of every task, read in a
+  /// constant number of statements.
+  ///
+  /// [`RunStore::runs_of_task`]: orchester_core::store::RunStore::runs_of_task
+  pub fn runs_by_task(&self) -> Result<HashMap<TaskId, Vec<ListedRun<RunStoreError>>>, RunStoreError> {
+    let mut by_task: HashMap<TaskId, Vec<_>> = HashMap::new();
+    for run in load_runs(&self.connection, "ORDER BY number", &[])? {
+      let task = match &run {
+        Ok(run) => run.task(),
+        Err(unreadable) => unreadable.task,
+      };
+      by_task.entry(task).or_default().push(run);
+    }
+    Ok(by_task)
+  }
+
+  /// When each run's last event was recorded, in one statement; a run without events is left out. Reads no event's
+  /// payload: [`RunStore::events`]`.last()` of each run, by its time alone.
+  ///
+  /// [`RunStore::events`]: orchester_core::store::RunStore::events
+  pub fn last_event_times(&self) -> Result<HashMap<RunId, Timestamp>, StoreError> {
+    let mut statement = self.connection.prepare(
+      "SELECT runs.id, (SELECT at FROM run_events WHERE run_id = runs.id ORDER BY sequence DESC LIMIT 1) FROM runs",
+    )?;
+    let rows = statement
+      .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<i64>>(1)?)))?
+      .collect::<Result<Vec<_>, _>>()?;
+    rows
+      .into_iter()
+      .filter_map(|(run, at)| Some((run, at?)))
+      .map(|(run, at)| Ok((parse("run id", &run)?, Timestamp::from_unix_millis(at))))
+      .collect()
+  }
+}
+
+/// The runs `clause` selects with `params`, each restored on its own. Only a run whose id or task cannot be read
 /// fails the listing: it cannot be told which run it is.
 ///
-/// A run is stored in several tables (its row, attempts, step executions, checkpoints, events),
-/// read by separate statements in one [consistent read](super::super::consistent::read), so a run
-/// row is never paired with rows written after it (the runner recording an attempt while the
-/// desktop reads).
+/// A run is stored in several tables (its row, attempts, step executions, checkpoints, events), read
+/// for every selected run at once ([`Children`]) by separate statements in one [consistent
+/// read](super::super::consistent::read), so a run row is never paired with rows written after it (the
+/// runner recording an attempt while the desktop reads). `clause` is read again in those statements'
+/// `IN (SELECT id FROM runs {clause})`, so it names only the columns of `runs`.
 pub(super) fn load_runs(
   connection: &Connection,
   clause: &str,
-  params: impl Params,
+  params: &[&dyn ToSql],
 ) -> Result<Vec<ListedRun<RunStoreError>>, StoreError> {
   super::super::consistent::read(connection, || read_runs(connection, clause, params))
 }
@@ -57,12 +88,16 @@ pub(super) fn load_runs(
 fn read_runs(
   connection: &Connection,
   clause: &str,
-  params: impl Params,
+  params: &[&dyn ToSql],
 ) -> Result<Vec<ListedRun<RunStoreError>>, StoreError> {
   let mut statement = connection.prepare(&format!("{SELECT_RUNS} {clause}"))?;
   let rows = statement
     .query_map(params, |row| Ok((RunIdentity::read(row)?, RunRow::read(row))))?
     .collect::<Result<Vec<_>, _>>()?;
+  if rows.is_empty() {
+    return Ok(Vec::new());
+  }
+  let mut children = Children::read(connection, clause, params)?;
   rows
     .into_iter()
     .map(|(identity, row)| {
@@ -70,7 +105,7 @@ fn read_runs(
       let task: TaskId = parse("task id", &identity.task)?;
       let restored = row
         .map_err(StoreError::from)
-        .and_then(|row| row.into_run(connection, (id, task, identity.number)));
+        .and_then(|row| row.into_run(children.take(&identity.id)?, (id, task, identity.number)));
       Ok(restored.map_err(|source| UnreadableRun {
         id,
         task,
@@ -128,7 +163,7 @@ pub(super) fn load_events(connection: &Connection, run: RunId) -> Result<Vec<Run
 }
 
 pub(super) fn load_checkpoint(connection: &Connection, run: RunId) -> Result<Option<Checkpoint>, StoreError> {
-  let row: Option<(String, String, String, i64)> = connection
+  let row: Option<children::CheckpointColumns> = connection
     .query_row(
       "SELECT id, step_execution_id, revision, created_at FROM checkpoints WHERE run_id = ?1 \
        ORDER BY sequence DESC LIMIT 1",
@@ -136,139 +171,7 @@ pub(super) fn load_checkpoint(connection: &Connection, run: RunId) -> Result<Opt
       |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
     )
     .optional()?;
-  let Some((id, execution, revision, created_at)) = row else {
-    return Ok(None);
-  };
-  Ok(Some(Checkpoint::new(
-    parse("checkpoint id", &id)?,
-    parse("step execution id", &execution)?,
-    Revision::new(&revision).map_err(|error| corrupt("checkpoint revision", error))?,
-    Timestamp::from_unix_millis(created_at),
-  )))
-}
-
-fn load_step_budgets(connection: &Connection, run: &str) -> Result<BTreeMap<StepKey, Option<TokenBudget>>, StoreError> {
-  let mut statement = connection.prepare("SELECT step_key, budget_tokens FROM run_step_budgets WHERE run_id = ?1")?;
-  let rows = statement
-    .query_map([run], |row| {
-      Ok((row.get::<_, String>(0)?, row.get::<_, Option<i64>>(1)?))
-    })?
-    .collect::<Result<Vec<_>, _>>()?;
-  rows
-    .into_iter()
-    .map(|(step, budget)| Ok((step_key(&step)?, optional_budget_value("step budget", budget)?)))
-    .collect()
-}
-
-fn load_permissions(connection: &Connection, run: &str) -> Result<BTreeMap<ResourceId, RunPermissions>, StoreError> {
-  let mut statement = connection.prepare("SELECT profile_id, body FROM run_permissions WHERE run_id = ?1")?;
-  let rows = statement
-    .query_map([run], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
-    .collect::<Result<Vec<_>, _>>()?;
-  rows
-    .into_iter()
-    .map(|(profile, body)| {
-      Ok((
-        parse("profile id", &profile)?,
-        decode_json("run permissions", PERMISSIONS_SCHEMA, &body)?,
-      ))
-    })
-    .collect()
-}
-
-fn load_attempts(connection: &Connection, run: &str) -> Result<Vec<Attempt>, StoreError> {
-  let mut statement = connection.prepare(
-    "SELECT id, number, reason, failed_step, return_to, note, status, conflicts FROM attempts WHERE run_id = ?1 \
-     ORDER BY number",
-  )?;
-  type AttemptColumns = (
-    String,
-    i64,
-    String,
-    Option<String>,
-    Option<String>,
-    Option<String>,
-    String,
-    Option<String>,
-  );
-  let rows = statement
-    .query_map([run], |row| {
-      Ok((
-        row.get(0)?,
-        row.get(1)?,
-        row.get(2)?,
-        row.get(3)?,
-        row.get(4)?,
-        row.get(5)?,
-        row.get(6)?,
-        row.get(7)?,
-      ))
-    })?
-    .collect::<Result<Vec<AttemptColumns>, _>>()?;
-  rows
-    .into_iter()
-    .map(
-      |(id, number, reason, failed_step, return_to, note, status, conflicts)| {
-        let number = u32::try_from(number)
-          .ok()
-          .and_then(NonZeroU32::new)
-          .ok_or_else(|| corrupt("attempt number", number))?;
-        Ok(Attempt::new(
-          parse("attempt id", &id)?,
-          number,
-          parse_attempt_reason(&AttemptReasonColumns {
-            reason: &reason,
-            failed_step: failed_step.as_deref(),
-            return_to: return_to.as_deref(),
-            note: note.as_deref(),
-            conflicts: conflicts.as_deref(),
-          })?,
-          parse_attempt_status(&status)?,
-          load_executions(connection, &id)?,
-        ))
-      },
-    )
-    .collect()
-}
-
-/// Executions in insertion order, which is pipeline order within an attempt.
-fn load_executions(connection: &Connection, attempt: &str) -> Result<Vec<StepExecution>, StoreError> {
-  let mut statement = connection.prepare(
-    "SELECT id, step_key, status, wait_reason, failure, judged_revision FROM step_executions WHERE attempt_id = ?1 \
-     ORDER BY rowid",
-  )?;
-  let rows = statement
-    .query_map([attempt], |row| {
-      Ok((
-        row.get::<_, String>(0)?,
-        row.get::<_, String>(1)?,
-        row.get::<_, String>(2)?,
-        row.get::<_, Option<String>>(3)?,
-        row.get::<_, Option<String>>(4)?,
-        row.get::<_, Option<String>>(5)?,
-      ))
-    })?
-    .collect::<Result<Vec<_>, _>>()?;
-  rows
-    .into_iter()
-    .map(|(id, step, status, wait_reason, failure, judged)| {
-      let failure = failure.as_deref().map(parse_step_failure).transpose()?;
-      let judged = judged
-        .as_deref()
-        .map(Revision::new)
-        .transpose()
-        .map_err(|error| corrupt("judged revision", error))?;
-      Ok(
-        StepExecution::new(
-          parse("step execution id", &id)?,
-          step_key(&step)?,
-          parse_step_status(&status, wait_reason.as_deref())?,
-        )
-        .with_failure(failure)
-        .with_judged(judged),
-      )
-    })
-    .collect()
+  row.map(children::checkpoint).transpose()
 }
 
 pub(in crate::project_db) fn sequence_value(sequence: i64) -> Result<EventSequence, StoreError> {
@@ -337,9 +240,8 @@ impl RunRow {
     })
   }
 
-  /// The run `id` of `task`, numbered `number`, with these columns and its other rows.
-  fn into_run(self, connection: &Connection, (id, task, number): (RunId, TaskId, i64)) -> Result<Run, StoreError> {
-    let row = id.to_string();
+  /// The run `id` of `task`, numbered `number`, with these columns and its other rows, `records`.
+  fn into_run(self, records: RunRecords, (id, task, number): (RunId, TaskId, i64)) -> Result<Run, StoreError> {
     let [initial_budget, initial_duration, budget, duration] = self.limits;
     let (source, module) = &self.base_source;
     let created = RunCreated {
@@ -370,12 +272,12 @@ impl RunRow {
       )?,
       budget: optional_budget_value("run budget", budget)?,
       max_duration: optional_duration_value("run time limit", duration)?,
-      step_budgets: load_step_budgets(connection, &row)?,
-      permissions: load_permissions(connection, &row)?,
+      step_budgets: records.step_budgets,
+      permissions: records.permissions,
       used: TokensUsed::new(u64::try_from(self.used_tokens).map_err(|_| corrupt("run usage", self.used_tokens))?),
       pause_requested: self.pause_requested,
-      attempts: load_attempts(connection, &row)?,
-      last_checkpoint: load_checkpoint(connection, id)?,
+      attempts: records.attempts,
+      last_checkpoint: records.last_checkpoint,
       last_sequence: sequence_value(self.last_sequence)?,
     };
     Run::restore(stored).map_err(|error| corrupt("run", error))
