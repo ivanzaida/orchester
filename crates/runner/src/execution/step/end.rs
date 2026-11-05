@@ -200,7 +200,7 @@ impl RunTask {
         self.fail(execution, StepFailure::MergeConflict)
       }
       Err(IntegrateError::Execution(error)) => Err(error),
-      Err(IntegrateError::Git(error)) => {
+      Err(error @ (IntegrateError::Git(_) | IntegrateError::ConflictsLeft(_))) => {
         let problem = RunnerProblem::CheckpointFailed {
           detail: error.to_string(),
         };
@@ -213,7 +213,7 @@ impl RunTask {
 
   /// Commits a passed step's work and brings it onto the run's branch: in the run's worktree it is
   /// there already; from a worktree of its own it is merged, and that worktree removed, or the workspace it borrowed
-  /// given back.
+  /// given back. Conflict markers its agent left of a base merge it was handed fail it: they are never committed.
   fn integrate(
     &mut self,
     execution: StepExecutionId,
@@ -222,6 +222,9 @@ impl RunTask {
   ) -> Result<Integrated, IntegrateError> {
     let message = self.commit_message(execution, None);
     let saved = self.save_work(workspace, judged, &message)?;
+    if let Saved::Conflicted(files) = saved {
+      return Err(IntegrateError::ConflictsLeft(files));
+    }
     let Workspace::Own {
       branch,
       owner,
@@ -300,7 +303,8 @@ impl RunTask {
   fn keep(&mut self, execution: StepExecutionId, invocation: &Invocation, saved: Saved) -> Result<(), ExecutionError> {
     match saved {
       Saved::At(revision) => self.checkpoint(execution, revision),
-      Saved::Nothing => Ok(()),
+      // The merge of the base branch stays in progress, its work uncommitted, until its agent resolves its conflicts.
+      Saved::Nothing | Saved::Conflicted(_) => Ok(()),
       Saved::Elsewhere { head, branch } => {
         tracing::warn!(run = %self.run.id(), %execution, %head, %branch, "the agent's commits are off the step's branch");
         let detail =
@@ -404,7 +408,7 @@ impl RunTask {
 
   /// "ORC-129: Implement (run 128)", or with `what` happened: "ORC-129: Implement, step failed
   /// (run 128)".
-  fn commit_message(&self, execution: StepExecutionId, what: Option<&str>) -> String {
+  pub(super) fn commit_message(&self, execution: StepExecutionId, what: Option<&str>) -> String {
     let step = self
       .run
       .execution(execution)
@@ -439,4 +443,9 @@ enum IntegrateError {
   Git(#[from] WorktreeError),
   #[error(transparent)]
   Execution(#[from] ExecutionError),
+  #[error(
+    "conflict markers are left in {}: the merge of the base branch was not committed",
+    .0.join(", ")
+  )]
+  ConflictsLeft(Vec<String>),
 }

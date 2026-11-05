@@ -119,11 +119,15 @@ fn domain_ask_an_agent_returns_the_conflicting_run_to_its_writing_step() {
   assert!(
     note
       .as_str()
-      .starts_with("Merge main into this branch and resolve the conflicts listed below"),
+      .starts_with("Resolve the conflicts with main listed below"),
     "{}",
     note.as_str()
   );
-  assert!(note.as_str().ends_with("commit the merge."), "{}", note.as_str());
+  assert!(
+    note.as_str().ends_with("commits the merge with your work."),
+    "{}",
+    note.as_str()
+  );
   assert!(
     !note.as_str().contains("src/"),
     "the files are data beside the note: {}",

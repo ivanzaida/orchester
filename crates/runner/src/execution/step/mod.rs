@@ -4,6 +4,7 @@
 //! [`worker::Worker`] of its own.
 
 mod accepted;
+mod agent_merge;
 mod answer;
 pub(super) mod app_server;
 mod approval;
@@ -17,6 +18,7 @@ mod end;
 mod mcp;
 mod memory;
 mod native;
+mod occasion;
 mod orchester_tools;
 mod qa_app;
 pub(super) mod question;
@@ -34,13 +36,13 @@ pub(super) mod worker;
 use orchester_core::{
   command::SecretVariable,
   connection::stream::{AgentEvent, InvocationOutcome, RunnerProblem},
-  conversation::{Arrival, Message, latest_question},
+  conversation::{Message, latest_question},
   id::{InvocationId, StepExecutionId},
   memory::MemoryStore,
   permission::LaunchPermissions,
   resource::ModelId,
   revision::Revision,
-  run::{EditProgress, Invocation, MessageOccasion, Plan, StepExecutor, StepFailure, StepStatus, execution_tokens},
+  run::{EditProgress, Invocation, Plan, StepExecutor, StepFailure, StepStatus, execution_tokens},
   store::{ActivityStore, ConversationStore, RunStore, SettingsStore},
   time::Timestamp,
   tokens::{TokenBudget, TokensUsed},
@@ -52,6 +54,7 @@ pub(super) use self::qa_app::QaApps;
 use self::{
   command_scope::command_scope,
   end::Taken,
+  occasion::Occasion,
   start::Driven,
   worker::{Stop, Worker},
 };
@@ -80,46 +83,7 @@ pub(super) struct Continuation {
   pub(super) messages: Vec<Message>,
   pub(super) occasion: Occasion,
   /// The notice that the run's base branch moved, which the invocation delivers ([`base_notice`]).
-  pub(super) notice: Option<orchester_core::base_move::BaseNotice>,
-}
-
-/// Why an invocation delivers people's messages now ([`MessageOccasion`], owning the question).
-#[derive(Default)]
-pub(super) enum Occasion {
-  /// Before the step started, or while it was stopped.
-  #[default]
-  Written,
-  /// Its agent finished its turn while they came in.
-  AfterTurn,
-  /// A person stopped its agent's turn (*Stop turn*): they are its next instruction.
-  TurnStopped,
-  /// They answer the question its agent asked.
-  Answer(String),
-  /// A follow-up of a run that succeeded.
-  FollowUp,
-  /// A new message resumes a failed attempt with its earlier output as context.
-  Recovery(String),
-}
-
-impl Occasion {
-  /// How the messages an invocation started for this occasion reach its agent.
-  const fn arrival(&self) -> Arrival {
-    match self {
-      Self::AfterTurn | Self::TurnStopped => Arrival::TurnEnd,
-      Self::Written | Self::Answer(_) | Self::FollowUp | Self::Recovery(_) => Arrival::Prompt,
-    }
-  }
-
-  pub(super) fn as_prompt(&self) -> MessageOccasion<'_> {
-    match self {
-      Self::Written => MessageOccasion::Written,
-      Self::AfterTurn => MessageOccasion::AfterTurn,
-      Self::TurnStopped => MessageOccasion::TurnStopped,
-      Self::Answer(question) => MessageOccasion::Answer { question },
-      Self::FollowUp => MessageOccasion::FollowUp,
-      Self::Recovery(previous_result) => MessageOccasion::Recovery { previous_result },
-    }
-  }
+  pub(super) notice: Option<base_notice::TakenNotice>,
 }
 
 /// An agent at work on one execution of the run.
@@ -274,7 +238,7 @@ impl RunTask {
     self.try_at_plan_limit.take_if(|asked| *asked == execution);
     let mut continuation = self.begin_step(execution)?;
     self.keep_session_on_its_account(execution, &mut continuation)?;
-    let judged = self.meet_moved_base(execution, workspace.as_ref(), &mut continuation, judged)?;
+    let (workspace, judged) = self.meet_moved_base(execution, workspace, &mut continuation, judged)?;
     let model = self.model(execution)?;
     let mut invocation = self
       .db

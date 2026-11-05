@@ -7,7 +7,11 @@ use std::num::NonZeroU32;
 use orchester_core::{
   connection::stream::ToolCommandResult,
   resource::{InjectionEvent, Step},
-  run::{BranchName, FailureReport, MergeConflicts, PromptInput, RetryReport, ReturnedWork, ReviewNote, StepResult},
+  revision::Revision,
+  run::{
+    BaseMerge, BranchName, FailureReport, MergeConflicts, PromptInput, RetryReport, ReturnedWork, ReviewNote,
+    StepResult,
+  },
 };
 
 use crate::{
@@ -217,6 +221,7 @@ fn retry_prompt_the_work_of_an_ended_run_returned_carries_only_the_persons_note(
     retry: Some(ReturnedWork::AfterEnd {
       note: &note,
       conflicts: Some(&conflicts),
+      merge: None,
     }),
     ..prompt.input(&[], &[], true)
   }
@@ -247,4 +252,76 @@ fn retry_prompt_the_work_of_an_ended_run_returned_carries_only_the_persons_note(
   ] {
     assert!(text.contains(line), "{line} in {text}");
   }
+}
+
+/// A step the conflicts of a merge were returned to, the runner having merged the base into its worktree as `merge`
+/// says, with the person's note.
+fn resolving(merge: Option<BaseMerge<'_>>) -> String {
+  let prompt = Prompt::new(builder("Role."), step_with("Implement it."), task("Brief.", &[]));
+  let note = ReviewNote::new("Resolve the conflicts with main listed below.").expect("a note");
+  let conflicts = MergeConflicts {
+    base: BranchName::new("main").expect("a branch"),
+    files: vec!["src/a.rs".to_owned(), "src/b.rs".to_owned()],
+  };
+  PromptInput {
+    retry: Some(ReturnedWork::AfterEnd {
+      note: &note,
+      conflicts: Some(&conflicts),
+      merge,
+    }),
+    ..prompt.input(&[], &[], true)
+  }
+  .assemble(InjectionEvent::Start)
+  .expect("no variables")
+  .text
+}
+
+#[test]
+fn retry_prompt_conflicts_returned_name_the_files_the_runners_merge_stopped_at_and_forbid_git() {
+  let left = ["src/a.rs".to_owned()];
+  let text = resolving(Some(BaseMerge::Conflicted(&left)));
+  let merge = text.find("## The merge in this worktree").expect("the merge part");
+  assert!(
+    merge > text.find("## What conflicted").expect("the conflicts"),
+    "{text}"
+  );
+  let part = &text[merge..];
+  assert!(
+    part.contains("Orchester merged `main` into this worktree before this step started"),
+    "{part}"
+  );
+  assert!(
+    part.contains("Git stopped at conflicts in these files, which now hold its conflict markers"),
+    "{part}"
+  );
+  assert!(part.contains("- `src/a.rs`\n"), "{part}");
+  assert!(!part.contains("- `src/b.rs`"), "only what git left in progress: {part}");
+  assert!(
+    part.contains("Run no `git merge`, `git add`, `git commit`, `git stash`, `git reset` or `git checkout`"),
+    "{part}"
+  );
+}
+
+#[test]
+fn retry_prompt_conflicts_returned_that_merged_cleanly_say_so() {
+  let merged = Revision::new("0123456789abcdef0123456789abcdef01234567").expect("a revision");
+  let text = resolving(Some(BaseMerge::Merged(&merged)));
+  let part = &text[text.find("## The merge in this worktree").expect("the merge part")..];
+  assert!(
+    part.contains("Git merged `main` without conflicts, as merge commit 0123456789."),
+    "{part}"
+  );
+  assert!(!part.contains("Git stopped at conflicts"), "{part}");
+}
+
+#[test]
+fn retry_prompt_conflicts_returned_without_the_merges_state_still_forbid_git() {
+  let text = resolving(None);
+  let part = &text[text.find("## The merge in this worktree").expect("the merge part")..];
+  assert!(
+    part.contains("Orchester merges the base branch into this worktree for you"),
+    "{part}"
+  );
+  assert!(part.contains("run no `git merge`"), "{part}");
+  assert!(!part.contains("Git stopped at conflicts"), "{part}");
 }

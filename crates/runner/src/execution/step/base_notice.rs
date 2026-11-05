@@ -17,11 +17,19 @@
 //! that merge conflict, it is undone and the notice keeps the files it conflicted in as its overlapping ones, so that
 //! the next writing step's agent takes it. A newer move replaces a pending notice (the desktop), so pending moves
 //! combine, and the combined one is delivered as soon as any of its files overlap.
+//!
+//! An agent never merges the base itself ([`super::agent_merge`]): before the invocation that delivers the notice
+//! starts, the runner commits the agent's work and merges the base into its worktree, leaving a merge that conflicts
+//! in progress for the agent to resolve by editing files. No newer notice is taken while such a merge is in progress.
 
 use std::path::Path;
 
 use orchester_core::{
-  base_move::BaseNotice, id::StepExecutionId, permission::RepositoryAccess, revision::Revision, run::Invocation,
+  base_move::BaseNotice,
+  id::StepExecutionId,
+  permission::RepositoryAccess,
+  revision::Revision,
+  run::{BaseMerge, Invocation},
   time::Timestamp,
 };
 
@@ -34,36 +42,98 @@ use super::{
   Continuation,
 };
 
+/// A notice an agent takes, its base merged into the agent's worktree by the runner first: the agent's sandbox may
+/// write its worktree's files but not the repository's git data, so the agent itself could neither merge nor commit.
+pub(in super::super) struct TakenNotice {
+  pub(super) notice: BaseNotice,
+  merge: Merge,
+}
+
+impl TakenNotice {
+  /// How its base was merged, as the agent is told.
+  pub(super) fn merge(&self) -> BaseMerge<'_> {
+    self.merge.as_prompt()
+  }
+}
+
 impl RunTask {
-  /// What `execution`, an agent step about to start in `workspace` on `judged`, meets of the run's moved base: the
-  /// runner merges it first when the step does not take base moves ([`RunTask::merge_moved_base`]), else its agent
-  /// takes the notice that overlaps the run's changes with `continuation`. The revision of the run's branch it starts
-  /// on.
+  /// What `execution`, an agent step about to start in `workspace` on `judged`, meets of the run's base: a step the
+  /// conflicts of a merge were returned to has the base branch merged first ([`RunTask::merge_for_resolving`]), which
+  /// holds back the notice below while its conflicts are in progress. Of the moved base: the runner merges it first
+  /// when the step does not take base moves ([`RunTask::merge_moved_base`]), else, when the notice overlaps the run's
+  /// changes, the runner merges it into the agent's worktree, leaving its conflicts there, and the agent takes the
+  /// notice with `continuation` ([`RunTask::merge_for_agent`]). The workspace, which is gone when git refused a merge,
+  /// and the revision of the run's branch the step starts on.
   pub(super) fn meet_moved_base(
     &mut self,
     execution: StepExecutionId,
-    workspace: Result<&Workspace, &String>,
+    workspace: Result<Workspace, String>,
     continuation: &mut Continuation,
     judged: Option<Revision>,
-  ) -> Result<Option<Revision>, ExecutionError> {
-    let merged = self.merge_moved_base(execution, workspace.ok())?;
-    let worktree = workspace.map_or_else(
-      |_| self.worktree().to_path_buf(),
-      |workspace| workspace.path().to_path_buf(),
-    );
-    continuation.notice = self.notice_for(execution, &worktree)?;
-    Ok(merged.or(judged))
+  ) -> Result<(Result<Workspace, String>, Option<Revision>), ExecutionError> {
+    let (workspace, judged) = self.merge_for_resolving(execution, workspace, judged)?;
+    let judged = self.merge_moved_base(execution, workspace.as_ref().ok())?.or(judged);
+    let Ok(workspace) = workspace else {
+      return Ok((workspace, judged));
+    };
+    let Some(notice) = self.notice_for(execution, workspace.path())? else {
+      return Ok((Ok(workspace), judged));
+    };
+    let taken = match self.merge_for_agent(execution, workspace.path(), notice)? {
+      Ok(taken) => taken,
+      Err(detail) => return Ok((Err(detail), judged)),
+    };
+    continuation.notice = Some(taken);
+    let judged = match &workspace {
+      Workspace::Run(worktree) => checkpoint::head(worktree).ok().or(judged),
+      Workspace::Own { .. } => judged,
+    };
+    Ok((Ok(workspace), judged))
+  }
+
+  /// Merges `notice`'s base into `worktree`, where `execution`'s agent is about to read it, as the agent was told to
+  /// before ([`RunTask::begin_agent_merge`]). A merge that conflicts stays in progress for the agent to resolve; the
+  /// step's save commits it once no conflict marker is left. Why git refused to merge, as the step's failure,
+  /// otherwise.
+  fn merge_for_agent(
+    &mut self,
+    execution: StepExecutionId,
+    worktree: &Path,
+    notice: BaseNotice,
+  ) -> Result<Result<TakenNotice, String>, ExecutionError> {
+    let target = (&notice.revision, notice.branch.as_str(), "the moved base");
+    let merge = match self.begin_agent_merge(execution, worktree, target)? {
+      Ok(merge) => merge,
+      Err(detail) => return Ok(Err(detail)),
+    };
+    match &merge {
+      Merge::Merged(merged) => {
+        tracing::info!(run = %self.run.id(), %execution, revision = %notice.revision, %merged, "the runner merged the moved base for its agent");
+      }
+      Merge::Conflict(files) => {
+        tracing::info!(run = %self.run.id(), %execution, revision = %notice.revision, ?files, "the moved base conflicts; its agent resolves the conflicts");
+      }
+    }
+    Ok(Ok(TakenNotice { notice, merge }))
   }
 
   /// The notice `execution`'s agent, working in `worktree`, takes now: the run's pending one, past its window, when it
   /// overlaps the run's changes, its step takes base moves and the project tells its working agents when the base
-  /// branch moves.
+  /// branch moves. None while a merge is in progress there: its agent resolves the one it was handed first.
   pub(super) fn notice_for(
     &self,
     execution: StepExecutionId,
     worktree: &Path,
   ) -> Result<Option<BaseNotice>, ExecutionError> {
     if !self.takes_base_moves(execution) || !self.db.tells_base_moves()? {
+      return Ok(None);
+    }
+    let merging = checkpoint::in_merge(worktree).unwrap_or_else(|error| {
+      // Git that cannot tell would not merge either: the notice waits.
+      tracing::warn!(run = %self.run.id(), %error, "cannot tell whether a merge is in progress in the worktree");
+      true
+    });
+    if merging {
       return Ok(None);
     }
     let notice = self.db.pending_base_notice(self.run.id())?;
@@ -98,7 +168,8 @@ impl RunTask {
   /// run's worktree, while no other agent works there, merges the run's pending notice that overlaps none of the run's
   /// changes into it, with a merge commit recorded as `execution`'s checkpoint. The revision the run's branch is at
   /// then, once it merged; `None` when it merged nothing. A merge that conflicts is undone and leaves the notice to a
-  /// writing step's agent; one git refuses is logged and tried again before the next such step.
+  /// writing step's agent; one git refuses is logged and tried again before the next such step. Nothing is merged while
+  /// a merge is in progress there, one an agent resolves.
   pub(in super::super) fn merge_moved_base(
     &mut self,
     execution: StepExecutionId,
@@ -114,6 +185,15 @@ impl RunTask {
         .any(|active| matches!(active.workspace, Workspace::Run(_)))
       || !self.db.tells_base_moves()?
     {
+      return Ok(None);
+    }
+    let merging = checkpoint::in_merge(worktree).unwrap_or_else(|error| {
+      // Git that cannot tell would not merge either: the notice waits.
+      tracing::warn!(run = %self.run.id(), %error, "cannot tell whether a merge is in progress in the run's worktree");
+      true
+    });
+    // A merge an agent resolves there is left alone: undoing a conflict below would undo that merge.
+    if merging {
       return Ok(None);
     }
     let Some(notice) = self
@@ -164,9 +244,9 @@ impl RunTask {
     &mut self,
     execution: StepExecutionId,
     invocation: &Invocation,
-    notice: Option<BaseNotice>,
+    taken: Option<TakenNotice>,
   ) -> Result<(), ExecutionError> {
-    let Some(notice) = notice else {
+    let Some(TakenNotice { notice, .. }) = taken else {
       return Ok(());
     };
     let at = invocation.started_at;

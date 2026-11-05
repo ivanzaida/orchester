@@ -30,8 +30,9 @@
 //! the step the work returned to, why it came back; the step that failed, its own earlier result.
 //!
 //! An invocation that delivers a notice that the run's base branch moved ([`BaseMoved`]) reads it like people's
-//! messages: in a new session's task part, first in a resumed one; every writing agent's *Files and commands* part
-//! says how to merge the base safely ([`MERGE_SAFELY`]).
+//! messages: in a new session's task part, first in a resumed one, with how the runner merged it ([`BaseMerge`]); every
+//! writing agent's *Files and commands* part says that Orchester merges the base and the agent only resolves its
+//! conflicts ([`MERGE_SAFELY`]).
 //!
 //! Placeholders resolve against the run; a variable without a value is an error that names it,
 //! never an empty string. A preview keeps such placeholders and lists them instead.
@@ -51,7 +52,7 @@ use std::num::NonZeroU32;
 use thiserror::Error;
 
 pub use self::{
-  base_moved::{BaseMoved, MERGE_SAFELY, notice_text},
+  base_moved::{BaseMerge, BaseMoved, MERGE_SAFELY, notice_text},
   composition::{AssembledPrompt, Composition, ExcludedInstruction, PromptSection},
   native::{NativePrompt, NativeSetting},
   retry::{FailureReport, RetryReport, ReturnedWork},

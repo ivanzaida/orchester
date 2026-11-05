@@ -13,7 +13,9 @@ use orchester_core::{
   id::{InvocationId, NoticeId, RunId, StepExecutionId, TaskId},
   resource::InjectionEvent,
   revision::Revision,
-  run::{BaseMoved, BranchName, CONTINUE_PROMPT, DeliveredMessages, MessageOccasion, PromptInput, notice_text},
+  run::{
+    BaseMerge, BaseMoved, BranchName, CONTINUE_PROMPT, DeliveredMessages, MessageOccasion, PromptInput, notice_text,
+  },
   time::Timestamp,
 };
 
@@ -113,25 +115,47 @@ fn base_moved_a_notice_is_deliverable_once_pending_past_its_window() {
 }
 
 #[test]
-fn base_moved_the_notice_names_the_revision_what_landed_the_overlaps_and_how_to_merge() {
-  let text = notice_text(&notice(0));
+fn base_moved_the_notice_names_the_revision_what_landed_the_overlaps_and_the_merge_orchester_made() {
+  let merged = revision('c');
+  let text = notice_text(&notice(0), BaseMerge::Merged(&merged));
   assert!(
-    text.starts_with(&format!("Orchester: the base branch `main` moved to {}", revision('b'))),
+    text.starts_with(&format!(
+      "Orchester: the base branch `main` moved to {} while you worked, and Orchester merged it into this worktree.",
+      revision('b')
+    )),
     "{text}"
   );
   assert!(text.contains("- ORC-7: Pull the people's change"), "{text}");
   assert!(text.contains("- bbbbbbbbbb Merge ORC-7 run #3"), "{text}");
   assert!(text.contains("- `src/login.rs`"), "{text}");
   assert!(
-    text.contains("`git commit --allow-empty -m \"checkpoint before merging main\"`), then `git merge --no-ff main`"),
-    "a checkpoint first, then a merge that never fast-forwards: {text}"
+    text.contains("Git merged `main` without conflicts, as merge commit cccccccccc."),
+    "{text}"
   );
+  assert!(!text.contains("git merge"), "the agent merges nothing itself: {text}");
+}
+
+#[test]
+fn base_moved_a_merge_that_conflicts_leaves_the_agent_only_files_to_edit() {
+  let files = ["src/login.rs".to_owned(), "README.md".to_owned()];
+  let text = notice_text(&notice(0), BaseMerge::Conflicted(&files));
+  let conflicts = text
+    .find("Git stopped at conflicts in these files")
+    .expect("the conflicts");
   assert!(
-    text.contains("never `git stash`, never rebase a shared branch"),
+    text[conflicts..].contains("\n- `src/login.rs`\n- `README.md`\n"),
     "{text}"
   );
   assert!(
-    text.contains("say in your result what you merged and how you resolved the conflicts"),
+    text.contains("Resolve each conflict by editing the file, keeping both sides' intent"),
+    "{text}"
+  );
+  assert!(
+    text.contains("Run no `git merge`, `git add`, `git commit`, `git stash`, `git reset` or `git checkout`"),
+    "a sandboxed agent cannot write the repository's git data: {text}"
+  );
+  assert!(
+    text.contains("Orchester commits it with your work when your step ends"),
     "{text}"
   );
 }
@@ -151,8 +175,10 @@ fn assembled(moved: BaseMoved<'_>, messages: Option<DeliveredMessages<'_>>, even
 #[test]
 fn base_moved_an_invocation_reads_the_notice_where_its_event_puts_it() {
   let notice = notice(0);
+  let merged = revision('c');
   let after_turn = BaseMoved {
     notice: &notice,
+    merge: BaseMerge::Merged(&merged),
     after_turn: true,
   };
   let start = assembled(after_turn, None, InjectionEvent::Start);
@@ -171,6 +197,7 @@ fn base_moved_an_invocation_reads_the_notice_where_its_event_puts_it() {
   assert!(!resumed.contains(CONTINUE_PROMPT), "it finished its turn: {resumed}");
   let stopped = BaseMoved {
     notice: &notice,
+    merge: BaseMerge::Merged(&merged),
     after_turn: false,
   };
   let continued = assembled(stopped, None, InjectionEvent::Resume);
