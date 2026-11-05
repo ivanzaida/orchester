@@ -89,7 +89,13 @@ pub(super) fn service_action(ctx: &mut Ctx, root: PathBuf, run: RunId) -> Servic
   })
 }
 
-pub(super) type OpenAction = FutureAction<Arc<str>, BrowserTabId, Message>;
+/// The browser's tab an address opened in.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) struct OpenedTab(BrowserTabId);
+
+impl DevtoolsInspectable for OpenedTab {}
+
+pub(super) type OpenAction = FutureAction<Arc<str>, OpenedTab, Message>;
 
 /// Opens an address in a new tab of the browser of the project at `root`, and shows it in the Browser window once the
 /// tab is open; made once, in the tab's `create`.
@@ -103,7 +109,7 @@ pub(super) fn open_action(ctx: &mut Ctx, root: PathBuf) -> OpenAction {
         url: Some(url.to_string()),
       };
       match runners.browser(&root, open).await {
-        Ok(BrowserReply::TabOpened { tab }) => Ok(tab),
+        Ok(BrowserReply::TabOpened { tab }) => Ok(OpenedTab(tab)),
         Ok(other) => {
           tracing::error!(?other, "the browser answered a new tab with something else");
           Err(messages::interrupted())
@@ -117,7 +123,7 @@ pub(super) fn open_action(ctx: &mut Ctx, root: PathBuf) -> OpenAction {
   });
   let link = BrowserLink::of(ctx);
   ctx.watch(&action.state(), move |state| {
-    if let (Some(link), Some(tab), false, None) = (&link, &state.data, state.is_pending(), &state.error) {
+    if let (Some(link), Some(OpenedTab(tab)), false, None) = (&link, &state.data, state.is_pending(), &state.error) {
       link.show(&shown, Some(tab.clone()));
     }
   });

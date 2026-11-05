@@ -71,7 +71,10 @@ pub(super) fn row(ctx: &mut Ctx, service: &RunService, parts: &RowParts<'_>) -> 
     .describe("state", words::state_key(service.state))
     .describe("selected", if parts.selected { "true" } else { "false" })
     .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(ExtraSpacing::Inset.role(), ExtraSpacing::Loose.role()))
+    .padding(Padding::symmetric(
+      ExtraSpacing::Inset.role(),
+      ExtraSpacing::Loose.role(),
+    ))
     .spacing(ExtraSpacing::Inset.role())
     .align_items(Alignment::Center)
     .child(cell(STATE_WIDTH).child(state_badge(ctx, &id, service.state)))
@@ -187,7 +190,10 @@ fn link(ctx: &Ctx, id: &str, url: &str, open: Arc<dyn Fn(Arc<str>) + Send + Sync
   let opened = address.clone();
   pressable(move || open(opened.clone()))
     .id(format!("{id}-address"))
-    .describe("a11y_name", ctx.t_args("run_services.actions.open", [("url", url.to_owned())]))
+    .describe(
+      "a11y_name",
+      ctx.t_args("run_services.actions.open", [("url", url.to_owned())]),
+    )
     .spacing(ExtraSpacing::Snug.role())
     .child(icon(Icon::Globe, IconSize::Sm, PaletteColor::TextSecondary))
     .child(
@@ -245,7 +251,12 @@ fn actions(ctx: &mut Ctx, id: &str, service: &RunService, parts: &RowParts<'_>) 
     Icon::RotateCw,
     ServiceRequest::Restart(name.clone()),
   );
-  let stop = button(stop, ButtonKind::Ghost, Icon::Square, ServiceRequest::Stop(name.clone()));
+  let stop = button(
+    stop,
+    ButtonKind::Ghost,
+    Icon::Square,
+    ServiceRequest::Stop(name.clone()),
+  );
   let shown: Vec<Element> = match service.state {
     RunServiceState::Ready => vec![restart.into(), stop.into()],
     RunServiceState::Starting => vec![stop.into()],

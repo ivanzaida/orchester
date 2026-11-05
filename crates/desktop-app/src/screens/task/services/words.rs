@@ -33,7 +33,10 @@ fn listed(ctx: &Ctx, names: &[&str]) -> String {
     [] => String::new(),
     [one] => (*one).to_owned(),
     [first @ .., last] => ctx
-      .t_args("run_services.header.and", [("first", first.join(LIST)), ("last", (*last).to_owned())])
+      .t_args(
+        "run_services.header.and",
+        [("first", first.join(LIST)), ("last", (*last).to_owned())],
+      )
       .to_string(),
   }
 }
@@ -199,10 +202,9 @@ pub fn waiting(ctx: &Ctx, service: &RunService, definition: Option<&Service>, ra
 pub fn ended(ctx: &Ctx, service: &RunService) -> Arc<str> {
   let time = service.ended_at.map_or_else(String::new, display::clock_seconds);
   match (service.state, service.stopped_for.as_deref()) {
-    (RunServiceState::Crashed { code: Some(code) }, _) => ctx.t_args(
-      "run_services.exited",
-      [("code", code.to_string()), ("time", time)],
-    ),
+    (RunServiceState::Crashed { code: Some(code) }, _) => {
+      ctx.t_args("run_services.exited", [("code", code.to_string()), ("time", time)])
+    }
     (RunServiceState::Crashed { code: None }, _) => ctx.t_args("run_services.ended", [("time", time)]),
     (_, Some(need)) => ctx.t_args("run_services.stoppedFor", [("name", need.to_owned())]),
     _ => ctx.t_args("run_services.stoppedAt", [("time", time)]),

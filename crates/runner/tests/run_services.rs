@@ -136,7 +136,10 @@ async fn run_services_list_log_stop_and_restart_through_the_runner() {
 
   let (lines, last) = log(&scheduler, id, 0).await;
   assert!(lines.iter().any(|line| line == "API_TOKEN=<redacted>"), "{lines:?}");
-  assert!(lines.iter().all(|line| !line.contains(TOKEN)), "the secret's value reached the log");
+  assert!(
+    lines.iter().all(|line| !line.contains(TOKEN)),
+    "the secret's value reached the log"
+  );
   let (later, _) = log(&scheduler, id, last).await;
   assert!(later.is_empty(), "nothing after the last line read: {later:?}");
 
@@ -172,7 +175,10 @@ async fn run_services_list_log_stop_and_restart_through_the_runner() {
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
   closed(again.port, "the restarted service once its step ended").await;
-  assert!(listed(&scheduler, id).await.is_empty(), "a run whose steps ended has none");
+  assert!(
+    listed(&scheduler, id).await.is_empty(),
+    "a run whose steps ended has none"
+  );
 }
 
 #[tokio::test(flavor = "multi_thread")]
@@ -186,9 +192,14 @@ async fn run_services_show_a_crash_and_what_it_stopped() {
     ReadyCheck::LogLine(LogPattern::new("^ready$").expect("a pattern")),
     20,
   );
-  let web = service("web", &["listen".to_owned(), "{{port}}".to_owned()], ReadyCheck::PortOpen, 20)
-    .with_needs(vec![ServiceName::new("api").expect("a name")])
-    .expect("needs");
+  let web = service(
+    "web",
+    &["listen".to_owned(), "{{port}}".to_owned()],
+    ReadyCheck::PortOpen,
+    20,
+  )
+  .with_needs(vec![ServiceName::new("api").expect("a name")])
+  .expect("needs");
   publish(root, &[api, web]);
   let hold = hold(root);
   let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
@@ -225,7 +236,12 @@ async fn run_services_restart_does_not_wait_for_the_agents_start_under_way() {
     Vec::new(),
   );
   let root = project.repo.path();
-  let api = service("api", &["listen".to_owned(), "{{port}}".to_owned()], ReadyCheck::PortOpen, 20);
+  let api = service(
+    "api",
+    &["listen".to_owned(), "{{port}}".to_owned()],
+    ReadyCheck::PortOpen,
+    20,
+  );
   let never = ["say", "warming up", "sleep", "600"].map(str::to_owned);
   let slow = service("slow", &never, ReadyCheck::PortOpen, 20);
   publish(root, &[api, slow]);

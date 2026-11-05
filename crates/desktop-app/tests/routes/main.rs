@@ -350,13 +350,9 @@ fn a_tasks_tabs_share_one_router_pattern_and_its_forms_keep_their_own() {
   assert_eq!(leaf(format!("{task}/new")), Screen::NewTask.pattern());
   assert_eq!(TaskTab::default(), TaskTab::Summary, "a task opens on its Summary");
   assert_eq!(
-    TaskTab::ALL,
-    [TaskTab::Summary, TaskTab::Conversation, TaskTab::Changes, TaskTab::Services],
-    "Summary, Conversation, Changes (ORC-100), Services (ORC-265)"
-  );
-  assert_eq!(
     TaskTab::ALL.map(TaskTab::name),
-    ["summary", "conversation", "changes", "services"]
+    ["summary", "conversation", "changes", "services"],
+    "Summary, Conversation, Changes (ORC-100), Services (ORC-265)"
   );
   assert_eq!(
     TaskView::Memory.tab(),

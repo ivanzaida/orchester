@@ -38,10 +38,7 @@ pub enum Listed {
   #[default]
   Reading,
   /// The services the steps of `run` at work started, in the order they started.
-  Shown {
-    run: RunId,
-    services: Arc<[RunService]>,
-  },
+  Shown { run: RunId, services: Arc<[RunService]> },
   /// The runner did not answer, and why.
   Failed(Message),
 }

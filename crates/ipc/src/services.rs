@@ -38,7 +38,9 @@ pub enum RunServiceState {
   Starting,
   Ready,
   /// Its program exited on its own; `code` is `None` when a signal ended it.
-  Crashed { code: Option<i32> },
+  Crashed {
+    code: Option<i32>,
+  },
   /// Orchester stopped it.
   Stopped,
 }

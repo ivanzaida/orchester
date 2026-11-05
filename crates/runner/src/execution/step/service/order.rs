@@ -91,7 +91,8 @@ impl StepServices {
     };
     self
       .services_of((None, &person), |services| {
-        StartPlan::for_service(services, name).map_err(|error| format!("the service `{name}` cannot be started: {error}"))
+        StartPlan::for_service(services, name)
+          .map_err(|error| format!("the service `{name}` cannot be started: {error}"))
       })
       .map(|_| ())
   }

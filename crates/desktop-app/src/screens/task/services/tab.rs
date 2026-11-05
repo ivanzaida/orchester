@@ -44,11 +44,10 @@ const BONE_ROW: f32 = 960.0;
 
 /// The tab of `task`'s latest run.
 pub(super) fn mount(ctx: &mut Ctx, task: &TaskContext) -> Element {
-  let key = task
-    .detail
-    .run
-    .as_ref()
-    .map_or_else(|| "task-services".to_owned(), |run| format!("task-services-{}", run.id()));
+  let key = task.detail.run.as_ref().map_or_else(
+    || "task-services".to_owned(),
+    |run| format!("task-services-{}", run.id()),
+  );
   ctx.mount_keyed::<ServicesTab>(&key, task.clone())
 }
 
@@ -314,7 +313,11 @@ fn log_panel(ctx: &mut Ctx, task: &TaskContext, service: &RunService) -> Element
     service: service.name.as_str().into(),
     started_at: service.started_at,
   };
-  let key = format!("task-services-log-{}-{}", service.name, service.started_at.unix_millis());
+  let key = format!(
+    "task-services-log-{}-{}",
+    service.name,
+    service.started_at.unix_millis()
+  );
   ctx.mount_keyed::<LogPanel>(&key, props)
 }
 

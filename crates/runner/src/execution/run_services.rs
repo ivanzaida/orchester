@@ -25,7 +25,7 @@ impl Scheduler {
       } => {
         let (lines, last) = services
           .log_of(run, &service, (since, tail.min(MAX_SHOWN_LINES)))
-          .map_err(refused)?;
+          .map_err(|error| refused(&error))?;
         Ok(ServiceReply::Log { lines, last })
       }
       ServiceCommand::Stop { run, service } => {
@@ -43,14 +43,14 @@ impl Scheduler {
 /// Runs `work` on a blocking thread.
 async fn blocking(work: impl FnOnce() -> Result<(), ShownServiceError> + Send + 'static) -> Result<(), Rejection> {
   match tokio::task::spawn_blocking(work).await {
-    Ok(done) => done.map_err(refused),
+    Ok(done) => done.map_err(|error| refused(&error)),
     Err(error) => Err(Rejection::Failed {
       detail: format!("the request about the service ended without an answer: {error}"),
     }),
   }
 }
 
-fn refused(error: ShownServiceError) -> Rejection {
+fn refused(error: &ShownServiceError) -> Rejection {
   Rejection::Failed {
     detail: error.to_string(),
   }

@@ -118,43 +118,46 @@ impl LogPanel {
     let runners = Services::of(ctx).runners;
     let following = Arc::clone(&self.following);
     let deps = (props.root.clone(), props.run, props.service.clone(), props.started_at);
-    ctx.stream(deps, move |(root, run, service, _), emitter: StreamEmitter<Lines, Message>| {
-      let (runners, following) = (runners.clone(), Arc::clone(&following));
-      async move {
-        let mut kept: Vec<ServiceLogLine> = Vec::new();
-        let mut since = 0;
-        loop {
-          if following.load(Ordering::Acquire) {
-            let command = ServiceCommand::Log {
-              run,
-              service: service.to_string(),
-              since,
-              tail: u32::try_from(SHOWN_LINES).expect("a few lines"),
-            };
-            match runners.services(&root, command).await {
-              Ok(ServiceReply::Log { lines, last }) => {
-                since = last;
-                if !lines.is_empty() || kept.is_empty() {
-                  kept.extend(lines);
-                  kept.drain(..kept.len().saturating_sub(SHOWN_LINES));
-                  if !emitter.emit(Lines(kept.clone().into())) {
+    ctx.stream(
+      deps,
+      move |(root, run, service, _), emitter: StreamEmitter<Lines, Message>| {
+        let (runners, following) = (runners.clone(), Arc::clone(&following));
+        async move {
+          let mut kept: Vec<ServiceLogLine> = Vec::new();
+          let mut since = 0;
+          loop {
+            if following.load(Ordering::Acquire) {
+              let command = ServiceCommand::Log {
+                run,
+                service: service.to_string(),
+                since,
+                tail: u32::try_from(SHOWN_LINES).expect("a few lines"),
+              };
+              match runners.services(&root, command).await {
+                Ok(ServiceReply::Log { lines, last }) => {
+                  since = last;
+                  if !lines.is_empty() || kept.is_empty() {
+                    kept.extend(lines);
+                    kept.drain(..kept.len().saturating_sub(SHOWN_LINES));
+                    if !emitter.emit(Lines(kept.clone().into())) {
+                      return;
+                    }
+                  }
+                }
+                Ok(other) => tracing::error!(?other, "unexpected answer to a service's log"),
+                Err(error) => {
+                  tracing::debug!(%error, "a service's log cannot be read now");
+                  if !emitter.reject(control_message(&error)) {
                     return;
                   }
                 }
               }
-              Ok(other) => tracing::error!(?other, "unexpected answer to a service's log"),
-              Err(error) => {
-                tracing::debug!(%error, "a service's log cannot be read now");
-                if !emitter.reject(control_message(&error)) {
-                  return;
-                }
-              }
             }
+            tokio::time::sleep(POLL).await;
           }
-          tokio::time::sleep(POLL).await;
         }
-      }
-    })
+      },
+    )
   }
 
   /// The head: what the log is, how many lines it shows, *Follow* and *Open full log*.
@@ -211,7 +214,9 @@ impl LogPanel {
 
 /// The lines on `code_bg`.
 pub(super) fn tail(lines: &[ServiceLogLine]) -> Element {
-  log_box("task-services-log-lines").with_children(lines.iter().map(line)).into()
+  log_box("task-services-log-lines")
+    .with_children(lines.iter().map(line))
+    .into()
 }
 
 /// The box the lines stand in.

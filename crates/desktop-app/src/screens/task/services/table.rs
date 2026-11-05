@@ -81,17 +81,18 @@ pub(super) fn columns(ctx: &Ctx) -> Element {
       .variant(ExtraTypography::Note.role())
       .nowrap();
     match width {
-      Some(width) => Row::new()
-        .width(Dimension::Px(width))
-        .flex_shrink(0.0)
-        .child(text),
+      Some(width) => Row::new().width(Dimension::Px(width)).flex_shrink(0.0).child(text),
       None => Row::new().flex(1.0).min_width(Dimension::Px(0.0)).child(text),
     }
   };
   Row::new()
     .id("task-services-columns")
     .width(Dimension::Pct(100.0))
-    .padding(Padding::new().left(ExtraSpacing::Inset.role()).right(ExtraSpacing::Inset.role()))
+    .padding(
+      Padding::new()
+        .left(ExtraSpacing::Inset.role())
+        .right(ExtraSpacing::Inset.role()),
+    )
     .spacing(ExtraSpacing::Inset.role())
     .child(head("state", "run_services.columns.state", Some(STATE_WIDTH)))
     .child(head("service", "run_services.columns.service", Some(NAME_WIDTH)))
