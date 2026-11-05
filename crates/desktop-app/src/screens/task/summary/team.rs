@@ -1,36 +1,29 @@
-//! What a team task's Summary adds (`01c` `Tb55G`, `docs/design/team-authority.md` §1–2): for a member, one calm line
-//! naming who changes the task (`Read-only line` `drVo6`); the claim its work runs under as one strip (`Claim · Claimed
-//! by you on this computer` `LR58S`: a 1 `border` outline, radius 6, 10 over and under and 12 at its sides, a 14
-//! `user-check` in `success`, 10 to the title in 12.5 `text_primary` and the detail under it in 12 `text_secondary`, 2
-//! apart; in `warning` once the server finds it stale); and the properties *Assignee* and *Claim* first, *Module* after
-//! the pipeline and *Merges into* the module's branch in place of *Base* (`iqkBC`, `RwzsJ`, `q254Rz`, `P81IsR`). Each
-//! is read-only: claiming, taking over and changing them come with the team's actions.
+//! What a team task's Summary adds (`01c` `Tb55G`, `docs/design/team-authority.md` §1–3): for a member, one calm line
+//! naming who changes the task (`Read-only line` `drVo6`); what the last team action did not do (`DpoZG` in `02f`,
+//! [`team_controls::refusal`]); the claim its work runs under as one strip ([`super::claim`]); and the properties
+//! *Assignee* and *Claim* first, *Module* after the pipeline and *Merges into* the module's branch in place of *Base*
+//! (`iqkBC`, `RwzsJ`, `q254Rz`, `P81IsR`), each read-only.
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
-  },
-  components::{Column, Row, Text},
+  app::{ctx::Ctx, theme::PaletteColor},
+  components::Row,
   layout::Alignment,
-  node::{Element, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension},
 };
-use orchester_core::run::RunStatus;
-use orchester_workspace::sharing::device;
 
 use super::properties::{Look, row, value};
 use crate::{
-  screens::{settings::orchester::moment, task::TaskContext},
+  screens::task::{TaskContext, team_controls},
   team::{
     lock,
     pages::{TeamClaim, TeamPerson},
   },
-  theme::{ExtraSpacing, HubText, IconSize, TaskSpacing},
+  theme::{ExtraSpacing, IconSize, TaskSpacing},
   ui::icon::{Icon, icon},
 };
 
-/// The member's line and the claim's strip, over the Summary's other parts.
-pub fn top(ctx: &Ctx, task: &TaskContext) -> Vec<Element> {
+/// The member's line, the last action's refusal and the claim's strip, over the Summary's other parts.
+pub fn top(ctx: &mut Ctx, task: &TaskContext) -> Vec<Element> {
   let Some(team) = &task.team else {
     return Vec::new();
   };
@@ -42,100 +35,9 @@ pub fn top(ctx: &Ctx, task: &TaskContext) -> Vec<Element> {
     );
     lock::locked("task-team-read-only", &words).into()
   });
-  let claim = team.task.claim.as_ref().map(|claim| strip(ctx, task, claim));
-  lock.into_iter().chain(claim).collect()
-}
-
-/// Whether the task's latest run runs on this computer: its running step renews a claim held here.
-fn runs_here(task: &TaskContext) -> bool {
-  task
-    .detail
-    .run
-    .as_ref()
-    .is_some_and(|run| *run.run.status() == RunStatus::Running)
-}
-
-/// The minutes a claim goes without renewal before the server finds it stale.
-fn stale_minutes(claim: &TeamClaim) -> String {
-  let millis = claim.stale_at.unix_millis() - claim.renewed.unix_millis();
-  (millis / 60_000).max(0).to_string()
-}
-
-fn strip(ctx: &Ctx, task: &TaskContext, claim: &TeamClaim) -> Element {
-  let (time, minutes) = (moment(ctx, claim.renewed), stale_minutes(claim));
-  let holder = &claim.holder.name;
-  let module = task
-    .team
-    .as_ref()
-    .and_then(|team| team.module.as_ref())
-    .map(|module| module.module.details().name().as_str().to_owned());
-  let detail = || {
-    ctx.t_args(
-      "summary.team.claim.detail",
-      [("time", time.as_str()), ("minutes", &minutes)],
-    )
-  };
-  let (title, detail, tone) = if claim.stale {
-    (
-      ctx.t_args("summary.team.claim.staleTitle", [("holder", holder.as_str())]),
-      ctx.t_args(
-        "summary.team.claim.staleDetail",
-        [("time", time.as_str()), ("minutes", &minutes)],
-      ),
-      PaletteColor::Warning,
-    )
-  } else if claim.holder.you && runs_here(task) {
-    let computer = device::computer_name();
-    (
-      ctx.t("summary.team.claim.hereTitle"),
-      ctx.t_args(
-        "summary.team.claim.hereDetail",
-        [("computer", computer.as_str()), ("time", &time), ("minutes", &minutes)],
-      ),
-      PaletteColor::Success,
-    )
-  } else if let (true, Some(module)) = (claim.under_module, module) {
-    let title = ctx.t_args(
-      "summary.team.claim.moduleTitle",
-      [("module", module.as_str()), ("holder", holder.as_str())],
-    );
-    (title, detail(), PaletteColor::Success)
-  } else if claim.holder.you {
-    (ctx.t("summary.team.claim.yoursTitle"), detail(), PaletteColor::Success)
-  } else {
-    let title = ctx.t_args("summary.team.claim.otherTitle", [("holder", holder.as_str())]);
-    (title, detail(), PaletteColor::Success)
-  };
-  Row::new()
-    .id("task-team-claim")
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Loose.role()))
-    .spacing(ExtraSpacing::Loose.role())
-    .align_items(Alignment::Center)
-    .rounded(RadiusSize::Md)
-    .border_inside(BorderSize::Sm, PaletteColor::Border)
-    .describe("stale", if claim.stale { "true" } else { "false" })
-    .child(icon(Icon::UserRoundCheck, IconSize::Md, tone))
-    .child(
-      Column::new()
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0))
-        .spacing(ExtraSpacing::Tight.role())
-        .child(
-          Text::new(&title)
-            .id("task-team-claim-title")
-            .variant(HubText::TeamLine.role())
-            .color(PaletteColor::TextPrimary)
-            .width(Dimension::Pct(100.0)),
-        )
-        .child(
-          Text::new(&detail)
-            .id("task-team-claim-detail")
-            .variant(TypographyStyle::Description)
-            .width(Dimension::Pct(100.0)),
-        ),
-    )
-    .into()
+  let refusal = team_controls::refusal(ctx, task);
+  let claim = super::claim::line(ctx, task);
+  lock.into_iter().chain(refusal).chain(claim).collect()
 }
 
 /// A property's row, as the Summary's other properties are.
@@ -157,7 +59,7 @@ pub fn first_rows(ctx: &Ctx, task: &TaskContext) -> Vec<Element> {
     property(
       "task-property-claim",
       &ctx.t("summary.team.properties.claim"),
-      claim(ctx, task, team.task.claim.as_ref()),
+      claim(ctx, team.task.claim.as_ref()),
     ),
   ]
 }
@@ -207,7 +109,7 @@ fn assignee(ctx: &Ctx, assignee: Option<&TeamPerson>) -> Element {
 }
 
 /// *You · this computer*, *You*, the holder, or *olha · stale* in `warning`; *Not claimed* without a claim.
-fn claim(ctx: &Ctx, task: &TaskContext, claim: Option<&TeamClaim>) -> Element {
+fn claim(ctx: &Ctx, claim: Option<&TeamClaim>) -> Element {
   let id = "task-property-claim";
   let Some(claim) = claim else {
     return value(id, &ctx.t("summary.team.properties.notClaimed"), Look::Muted).into();
@@ -219,7 +121,7 @@ fn claim(ctx: &Ctx, task: &TaskContext, claim: Option<&TeamClaim>) -> Element {
     );
     return glyphed(id, (Icon::UserRoundCheck, PaletteColor::Warning), &words);
   }
-  let words = match (claim.holder.you, runs_here(task)) {
+  let words = match (claim.holder.you, claim.here) {
     (true, true) => ctx.t("summary.team.properties.here"),
     (true, false) => ctx.t("summary.team.properties.yours"),
     (false, _) => claim.holder.name.as_str().into(),

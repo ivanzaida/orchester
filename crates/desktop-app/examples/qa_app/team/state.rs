@@ -48,16 +48,33 @@ pub enum State {
   OutageRunning,
   /// As [`Self::Member`], until the tasks were read and shown: then the server stops answering (ORC-716, 06 `GR3RS`).
   OutageLater,
-  /// As [`Self::Member`], with KON-12 and KON-21 running on this computer, KON-12 claimed by the person and assigned to
-  /// them (ORC-717, 01c `Tb55G`).
+  /// As [`Self::Member`], with KON-12 and KON-21 running on this computer, KON-12 claimed by the person on this
+  /// computer and assigned to them (ORC-717, 01c `Tb55G`).
   MemberRunning,
   /// As [`Self::MemberRunning`], until a module's page read its module: then the server stops answering (ORC-717, 06d
   /// `B7Mbe`).
   ModuleOutage,
+  /// A member, with a task in every claim state of `02h` `xUwYS` and rows 2–3 (ORC-732): KON-12 claimed here and
+  /// running, KON-21 waiting for the person, KON-14 in review, KON-11 taken over by mara, KON-23 moved to the person's
+  /// other computer, KON-24 the person's stale claim, KON-13 mara's, KON-10 the person's on another computer, KON-19
+  /// under olha's module claim, KON-16 mara's stale claim (whose take over she renews first, 02f) and KON-5 nobody's.
+  Claims,
+  /// A member on the modules (ORC-732, 04d `PqVUn`): olha's stale claim on Webhooks v2, whose take over the server
+  /// refuses while a task of it runs; Billing exports the person's on this computer, its delivery to ask for.
+  ModuleWork,
+  /// An Admin on the modules and Sharing (ORC-732, 04 `MvniR`, 04b–c, 04e, 07 `MnVch`, 05b): a branch change meets a
+  /// taken branch, then running work, then someone else's change first; Automatic merge on, changed by someone else
+  /// first; Billing exports the person's on this computer, its delivery to authorize.
+  AdminWork,
+  /// As [`Self::Member`], with the server refusing this version of Orchester (ORC-732, 07d `BDJKM`).
+  VersionRefused,
+  /// As [`Self::Member`], with KON-12's run interrupted at Implement, a team run under the claim this computer holds,
+  /// which Continue run takes on with `orchester-fake-codex` (ORC-732, 01c `Tb55G` Running).
+  TeamRunning,
 }
 
 impl State {
-  pub const ALL: [Self; 21] = [
+  pub const ALL: [Self; 26] = [
     Self::Join,
     Self::WrongCode,
     Self::ExpiredCode,
@@ -79,6 +96,11 @@ impl State {
     Self::OutageLater,
     Self::MemberRunning,
     Self::ModuleOutage,
+    Self::Claims,
+    Self::ModuleWork,
+    Self::AdminWork,
+    Self::VersionRefused,
+    Self::TeamRunning,
   ];
 
   /// The seed's scenario of this state.
@@ -105,12 +127,20 @@ impl State {
       Self::OutageLater => "team-outage-later",
       Self::MemberRunning => "team-member-running",
       Self::ModuleOutage => "team-module-outage",
+      Self::Claims => "team-claims",
+      Self::ModuleWork => "team-module-work",
+      Self::AdminWork => "team-admin-work",
+      Self::VersionRefused => "team-version-refused",
+      Self::TeamRunning => "team-running",
     }
   }
 
-  /// Whether KON-12 and KON-21 run on this computer.
+  /// Whether tasks of Kontur have runs on this computer, which the server names by their ids here.
   pub const fn runs_here(self) -> bool {
-    matches!(self, Self::OutageRunning | Self::MemberRunning | Self::ModuleOutage)
+    matches!(
+      self,
+      Self::OutageRunning | Self::MemberRunning | Self::ModuleOutage | Self::Claims | Self::TeamRunning
+    )
   }
 
   /// Whether the QA copy presses in the window before it shows: *Join with the code* and *Clone repository…* are a

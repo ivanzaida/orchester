@@ -40,6 +40,7 @@ pub fn card(ctx: &mut Ctx, unread: &Unread<'_>, (failure, place, project): (&Tea
     ),
     TeamFailure::SignedOut => ctx.t_args("tasks.team.signedOut", [("server", server), ("project", project)]),
     TeamFailure::NotMember => ctx.t_args("tasks.team.notMember", [("server", server), ("project", project)]),
+    TeamFailure::Unsupported => ctx.t_args("tasks.team.unsupported.body", [("server", server)]),
     TeamFailure::Refused => ctx.t_args("tasks.team.refused.body", [("server", server)]),
   };
   let services = Services::of(ctx);

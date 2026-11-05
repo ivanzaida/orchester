@@ -22,6 +22,8 @@ mod save;
 mod summary;
 mod tasks;
 mod team_properties;
+mod team_work;
+mod team_work_lines;
 pub(crate) mod words;
 
 use std::sync::Arc;

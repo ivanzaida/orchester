@@ -30,7 +30,7 @@ pub(super) mod joined;
 mod removed;
 mod rows;
 
-use super::{Facts, make_local, members};
+use super::{Facts, make_local, members, policy};
 use crate::{
   project::ShownProject,
   screens::{
@@ -135,6 +135,7 @@ impl Component for Linked {
     let Some(link) = props.facts.link.as_ref() else {
       return Column::new();
     };
+    let part = policy::read(ctx, &props.project);
     let server = props
       .facts
       .linked_server()
@@ -186,14 +187,19 @@ impl Component for Linked {
       .facts
       .references
       .then(|| super::bindings::section(ctx, &props.project));
+    let version = policy::refusal(ctx, &part, &server);
+    let team_policy = (link.removed_at.is_none() && part.policy.is_some())
+      .then(|| ctx.mount_keyed::<policy::Policy>("sharing-policy", policy::Props { part }));
     Column::new()
       .id("project-settings-sharing")
       .width(Dimension::Pct(100.0))
       .spacing(crate::theme::ExtraSpacing::Roomy.role())
+      .with_children(version)
       .with_children(joined_note)
       .with_children(notice)
       .with_children(here)
       .child(team)
+      .with_children(team_policy)
       .child(refused(ctx))
       .child(discovery)
       .with_children(keys)

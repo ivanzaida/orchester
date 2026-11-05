@@ -25,9 +25,11 @@
 //! ([`TeamRunState`]). The MCP tool `run_task` starts a team task's work through it (P7); the screens adopt it in P6.
 
 mod bundle;
+mod choices;
 pub mod delivery;
 mod error;
 mod heartbeat;
+mod here;
 mod reports;
 mod runner;
 mod start;
@@ -41,11 +43,13 @@ use orchester_store::{ProjectDb, TeamFence, WorkReportState};
 
 pub use self::{
   bundle::StartChoices,
+  choices::{ChoiceError, bind, branch_tip},
   delivery::{
     DeliveryProgress, DeliveryStatus, ModuleDeliveries, RecoveredDeliveries, TeamDeliveryRequest, TeamDeliveryState,
   },
   error::TeamWorkError,
   heartbeat::Heartbeat,
+  here::{TeamHere, team_here},
   reports::Reported,
   runner::{ProjectRunner, TeamRunner},
   start::{Recovered, StartFailure, StartOutcome, TeamStartRequest},

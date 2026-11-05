@@ -11,7 +11,7 @@ use orchester_workspace::team_reads::{Changes, TeamProject, TeamReadError};
 
 use super::{
   pages::{team_module, team_module_list, team_task},
-  queries::{team_admins, team_capabilities, team_counts, team_modules, team_tasks},
+  queries::{team_admins, team_capabilities, team_counts, team_modules, team_policy, team_tasks},
 };
 
 /// The shortest time between two rounds of invalidations of one project.
@@ -61,6 +61,7 @@ impl Stale {
     if self.workspace {
       client.invalidate(team_capabilities::all());
       client.invalidate(team_admins::all());
+      client.invalidate(team_policy::all());
     }
     if self.modules {
       client.invalidate(team_modules::all());

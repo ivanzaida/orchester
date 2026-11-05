@@ -10,10 +10,12 @@
 //! unavailable`. Who reads them stands as [`TeamServer::stand_as`] says; the v1 members read names the Admins and
 //! server admins [`TeamServer::members_named`] gives.
 
+mod commands;
 mod listing;
 mod work;
 
 use std::{
+  collections::HashMap,
   io::Write,
   net::TcpStream,
   thread,
@@ -23,7 +25,10 @@ use std::{
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 
-pub use self::work::{AuthorityClaim, AuthorityModule, Person, STALE_AFTER_MINUTES};
+pub use self::{
+  commands::Plan,
+  work::{AuthorityClaim, AuthorityModule, Person, STALE_AFTER_MINUTES},
+};
 use super::{State, TasksAnswer, TeamServer, USER, first_download};
 
 /// The cursor before the first change the stand-in commits.
@@ -62,8 +67,8 @@ impl Standing {
 
 /// A task as the stand-in's `/api/v2` reads give it: its number in the project, title, workflow status and priority as
 /// the wire names them, the slug of its pipeline, the module it is in, and how long ago it was created; its id, when it
-/// is to be the one this computer's runs of it name, its assignee and its claim. Its brief and its one criterion repeat
-/// its title, so it is complete.
+/// is to be the one this computer's runs of it name, its assignee, its claim and the state of the work under that
+/// claim. Its brief and its one criterion repeat its title, so it is complete.
 #[derive(Clone, Debug)]
 pub struct AuthorityTask {
   pub number: u32,
@@ -78,6 +83,8 @@ pub struct AuthorityTask {
   pub id: Option<String>,
   pub assignee: Option<Person>,
   pub claim: Option<AuthorityClaim>,
+  /// The work's execution state as the wire names it (`running`, `awaiting_human`); none without a claim.
+  pub work: Option<&'static str>,
 }
 
 /// What the stand-in's `/api/v2` surface answers.
@@ -87,6 +94,8 @@ pub(super) struct Authority {
   tasks: Option<Vec<AuthorityTask>>,
   modules: Option<Vec<AuthorityModule>>,
   unavailable: bool,
+  /// Every request is refused as of another version of the protocol.
+  unsupported: bool,
   /// Each committed change: its cursor and the scopes it invalidates.
   batches: Vec<(u64, Vec<Value>)>,
   /// Streams opened before this generation end.
@@ -98,9 +107,27 @@ pub(super) struct Authority {
   /// The usernames the members read names as Admins and as server admins.
   admins: Vec<String>,
   server_admins: Vec<String>,
+  /// Every command by its operation id: its request, its status and its answer.
+  operations: Vec<(String, Value, u16, Value)>,
+  /// The workspace policy: its revision and the automatic merge.
+  policy: (u64, bool),
+  /// An Admin's change of the automatic merge that lands before the next one asked here.
+  policy_first: Option<bool>,
+  /// What the next command of a kind meets in place of its rule.
+  planned: Vec<(&'static str, Plan)>,
+  /// The modules' branches as Admins changed them, by the module's index.
+  branches: HashMap<usize, work::BranchChange>,
 }
 
 impl Authority {
+  /// Nothing set yet, the policy at its first revision with the automatic merge off.
+  pub(super) fn new() -> Self {
+    Self {
+      policy: (1, false),
+      ..Self::default()
+    }
+  }
+
   fn cursor(&self) -> u64 {
     self.batches.last().map_or(FIRST_CURSOR, |(cursor, _)| *cursor)
   }
@@ -201,6 +228,50 @@ impl TeamServer {
     state.authority.admins = admins.iter().map(|name| (*name).to_owned()).collect();
     state.authority.server_admins = server_admins.iter().map(|name| (*name).to_owned()).collect();
   }
+
+  /// The next command of `kind` (`claim.take_over`, `module.branch.set`, …) meets `plan` in place of its rule, once.
+  pub fn plan(&self, kind: &'static str, plan: Plan) {
+    self.state.lock().authority.planned.push((kind, plan));
+  }
+
+  /// The workspace's automatic merge is `on`, at the policy's next revision; committed as one batch.
+  pub fn automatic_merge(&self, on: bool) {
+    let mut state = self.state.lock();
+    let revision = state.authority.policy.0 + 1;
+    state.authority.policy = (revision, on);
+    state.authority.commit(vec![json!({"kind": "workspace"})]);
+  }
+
+  /// Another Admin sets the automatic merge `on` just before the next change asked here, which then finds the policy at
+  /// a newer revision.
+  pub fn automatic_merge_changed_first(&self, on: bool) {
+    self.state.lock().authority.policy_first = Some(on);
+  }
+
+  /// The claim on the task numbered `number` was last renewed `minutes` ago, and is `stale` or not; committed as one
+  /// batch. Nothing changes for a task without a claim.
+  pub fn claim_aged(&self, number: u32, minutes: i64, stale: bool) {
+    let mut state = self.state.lock();
+    let tasks = state.authority.tasks.iter_mut().flatten();
+    let Some(claim) = tasks
+      .into_iter()
+      .find(|task| task.number == number)
+      .and_then(|task| task.claim.as_mut())
+    else {
+      return;
+    };
+    claim.renewed_minutes_ago = minutes;
+    claim.stale = stale;
+    state.authority.commit(vec![json!({"kind": "task_list"})]);
+  }
+
+  /// Every `/api/v2` request is refused `426 unsupported_contract` while `refused`: the server and this desktop speak
+  /// different versions of the team protocol.
+  pub fn refuse_this_version(&self, refused: bool) {
+    let mut state = self.state.lock();
+    state.authority.unsupported = refused;
+    state.authority.streams += 1;
+  }
 }
 
 /// `GET /api/v1/projects/{id}/members`: Bohdan as he stands (a member, an Admin, or one of the server admins), the
@@ -252,7 +323,8 @@ const CLIENT_PATHS: [(&str, &str); 3] = [
 
 /// Answers one `/api/v2` request on `stream`: `line` is its request line, `headers` its headers in lowercase. The
 /// routes are the team server's: `GET workspace`, `GET capabilities`, `GET subscription`, `POST task-list`, `POST
-/// task-counts`, `GET tasks/{task}`, `POST module-list`, `GET modules/{module}` and `GET modules/{module}/progress`;
+/// task-counts`, `GET tasks/{task}`, `POST module-list`, `GET modules/{module}` and `GET modules/{module}/progress`,
+/// and the commands, an operation and the policy ([`commands`]);
 /// the client's own paths for some of them are answered as those ([`CLIENT_PATHS`]). A request without the token is
 /// `401` and one for a project the server has not `404`, in the common `{error, message}` envelope, as the server
 /// answers them; an outage is `503 unavailable` in the authority envelope.
@@ -273,6 +345,9 @@ pub(super) fn serve(stream: &mut TcpStream, (line, headers, body): (&str, &str, 
   let Some(key) = project_key(state, project) else {
     return respond(stream, 404, &super::error("not_found"));
   };
+  if state.lock().authority.unsupported {
+    return refusal(stream, 426, "unsupported_contract");
+  }
   if state.lock().authority.unavailable {
     return refusal(stream, 503, "unavailable");
   }
@@ -296,6 +371,20 @@ pub(super) fn serve(stream: &mut TcpStream, (line, headers, body): (&str, &str, 
         Some(answer) => respond(stream, 200, &answer),
         None => respond(stream, 404, &super::error("not_found")),
       }
+    }
+    ("POST", "commands") => {
+      let (status, answer) = commands::command(&mut state.lock().authority, project.0, body);
+      respond(stream, status, &answer);
+    }
+    ("GET", operation) if operation.starts_with("operations/") => {
+      let id = operation.trim_start_matches("operations/");
+      let (status, answer) = commands::operation(&state.lock().authority, id);
+      respond(stream, status, &answer);
+    }
+    ("GET", "policy") => respond(stream, 200, &commands::policy(&state.lock().authority)),
+    ("PATCH", "policy") => {
+      let (status, answer) = commands::change_policy(&mut state.lock().authority, body);
+      respond(stream, status, &answer);
     }
     _ => respond(stream, 404, &super::error("not_found")),
   }
@@ -372,7 +461,7 @@ fn workspace((id, key): (&str, &str), state: &Mutex<State>) -> Value {
   json!({
     "project": {"id": id, "slug": project["slug"], "address": project["address"], "key": key, "name": project["name"],
       "remote_hint": project["remote_hint"], "role": role, "next_number": project["next_number"]},
-    "policy": {"revision": 1, "automatic_merge": false},
+    "policy": commands::policy_wire(&state.authority),
     "capabilities": capabilities(id, standing),
     "cursor": state.authority.cursor().to_string(),
   })

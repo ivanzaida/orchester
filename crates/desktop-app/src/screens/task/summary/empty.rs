@@ -72,7 +72,7 @@ pub fn empty(ctx: &mut Ctx, task: &TaskContext) -> Element {
     .into()
 }
 
-/// Start run, and why it is unavailable when it is.
+/// Start run, and why it is unavailable when it is. A team task's starts through its server.
 fn start(ctx: &mut Ctx, task: &TaskContext) -> (ActionButton, Option<Arc<str>>) {
   let run_controls = RunControls::of(ctx);
   let controls = Controls {
@@ -83,7 +83,12 @@ fn start(ctx: &mut Ctx, task: &TaskContext) -> (ActionButton, Option<Arc<str>>) 
     requested: &run_controls.requested,
     approval_waits: false,
   };
-  if let Some(control) = first_start(ctx, &controls, "task-empty-start") {
+  let first = if task.team.is_some() {
+    crate::screens::task::header::team::run(ctx, task, ("task-empty-start", "task.controls.start"))
+  } else {
+    first_start(ctx, &controls, "task-empty-start")
+  };
+  if let Some(control) = first {
     let reason = control.reason().map(|reason| reason.full.clone());
     return (control.button(), reason);
   }

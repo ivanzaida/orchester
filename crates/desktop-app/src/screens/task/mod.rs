@@ -26,6 +26,7 @@ mod reading;
 mod sharing;
 pub(crate) mod summary;
 mod team;
+mod team_controls;
 
 use std::time::Instant;
 
@@ -341,6 +342,8 @@ struct TaskFrame {
   /// Whether the task's latest run ran when the task was last read: only then do its transcript's lines
   /// change the task.
   live: Signal<bool>,
+  /// A team task's Take over asks first.
+  taking_over: Signal<bool>,
 }
 
 impl Component for TaskFrame {
@@ -367,6 +370,7 @@ impl Component for TaskFrame {
       },
       requested: ctx.signal(None),
       live: ctx.signal(false),
+      taking_over: ctx.signal(false),
     }
   }
 
@@ -376,12 +380,7 @@ impl Component for TaskFrame {
     // only when it was made while a send ran, which holds for the page's life.
     self.composer.await_flight(ctx);
     let services = Services::of(ctx);
-    let runners = (services.runners.clone(), services.servers.clone());
-    let action = control_action(ctx, (props.project.open.clone(), props.task), runners);
-    ctx.provide(RunControls {
-      action,
-      requested: self.requested.clone(),
-    });
+    self.provide_controls(ctx, &props, &services);
     ctx.provide(self.composer.clone());
     ctx.provide(self.state.clone());
     ctx.provide(self.changes.clone());
@@ -443,6 +442,7 @@ impl Component for TaskFrame {
       view: props.view.clone(),
       stale,
     };
+    let take_over = team_controls::take_over_dialog(ctx, &task);
     let body = match props.view {
       TaskView::Summary => ctx.mount_keyed::<TaskSummary>("task-summary", SummaryProps { task }),
       TaskView::Memory => memory::tab(ctx, &task),
@@ -456,11 +456,22 @@ impl Component for TaskFrame {
       .height(Dimension::Pct(100.0))
       .child(ctx.mount_keyed::<TaskHeader>("task-header", header))
       .child(body)
+      .with_children(take_over)
       .into()
   }
 }
 
 impl TaskFrame {
+  /// Provides the run controls, the header's and the Summary's, and a team task's actions ([`team_controls`]).
+  fn provide_controls(&self, ctx: &mut Ctx, props: &FrameProps, services: &Services) {
+    let runners = (services.runners.clone(), services.servers.clone());
+    let action = control_action(ctx, (props.project.open.clone(), props.task), runners);
+    ctx.provide(RunControls {
+      action,
+      requested: self.requested.clone(),
+    });
+    team_controls::provide(ctx, (&props.project, props.team.clone()), &self.taking_over);
+  }
   /// Why the task could not be read again: `failed` now, else what failed before while the task is
   /// read again (`pending`), so the notice does not flicker; nothing once a reading succeeded.
   fn stale(&self, failed: Option<Message>, pending: bool) -> Option<Message> {

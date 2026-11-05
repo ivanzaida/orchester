@@ -29,14 +29,16 @@ use super::{
   header,
   page::{ModuleScreen, back_only, body_padding, missing, padded, tabs},
   summary::{burndown_line, description},
-  tasks, team_properties, words,
+  tasks, team_properties,
+  team_work::{ModuleWork, WorkProps},
+  words,
 };
 use crate::{
   project::{ShownProject, TasksState},
   routes::ModuleTab,
   screens::settings::orchester::moment,
   team::{
-    TeamFailure, lock, outage,
+    TeamFailure, TeamSource, lock, outage,
     pages::{TeamModule, team_module},
     queries::{TaskListKey, TeamTasks, team_tasks},
     view::{self, Standing},
@@ -51,7 +53,8 @@ enum Team {
   Missing,
   /// Why the module cannot be read, with what was read of it before, which only names it.
   Failed(TeamFailure, Option<Arc<TeamModule>>, Option<Arc<TeamTasks>>),
-  Ready(Arc<TeamModule>, Arc<TeamTasks>, Standing),
+  /// The module, its tasks and the person's standing, with the project's reads, which its actions go to.
+  Ready(Arc<TeamModule>, Arc<TeamTasks>, Standing, TeamSource),
 }
 
 impl ModuleScreen {
@@ -71,10 +74,10 @@ impl ModuleScreen {
         let body = unavailable_body(ctx, (project, &place), (&failure, name.as_deref()), tasks.as_deref());
         (top, body)
       }
-      Team::Ready(shown, tasks, standing) => {
+      Team::Ready(shown, tasks, standing, source) => {
         let top = ready_header(ctx, (id, &shown), tab);
         let body = match tab {
-          ModuleTab::Summary => self.team_summary(ctx, id, (&shown, &tasks), &standing),
+          ModuleTab::Summary => self.team_summary(ctx, id, (&shown, &tasks), (&standing, source)),
           ModuleTab::Burndown => padded(
             Text::new(&ctx.t("modules.team.page.noBurndown"))
               .id("module-team-no-burndown")
@@ -93,13 +96,14 @@ impl ModuleScreen {
       .child(body)
   }
 
-  /// The Summary: the lock line for a member, the description, the tasks and the burndown line, the properties beside.
+  /// The Summary: the lock line for a member, the description, *Work and delivery*, the tasks and the burndown line,
+  /// the properties beside.
   fn team_summary(
     &self,
     ctx: &mut Ctx,
     project: ProjectId,
-    (shown, tasks): (&TeamModule, &TeamTasks),
-    standing: &Standing,
+    (shown, tasks): (&Arc<TeamModule>, &TeamTasks),
+    (standing, source): (&Standing, TeamSource),
   ) -> Element {
     let lock = standing.member().then(|| {
       let words = lock::lock_words(
@@ -113,6 +117,15 @@ impl ModuleScreen {
       .forecast
       .as_ref()
       .map(|forecast| burndown_line(ctx, (project, shown.module.id()), (shown.progress, forecast)));
+    let work = ctx.mount_keyed::<ModuleWork>(
+      "module-team-work",
+      WorkProps {
+        project,
+        module: shown.clone(),
+        source,
+        standing: standing.clone(),
+      },
+    );
     let column = Column::new()
       .id("module-summary-column")
       .flex(1.0)
@@ -120,6 +133,7 @@ impl ModuleScreen {
       .spacing(TaskSpacing::Sections.role())
       .with_children(lock)
       .child(description(ctx, &shown.module))
+      .child(work)
       .child(tasks::section(ctx, project, &tasks.tasks, &self.toggled))
       .with_children(burndown);
     let body = Row::new()
@@ -153,7 +167,7 @@ fn read(ctx: &mut Ctx, project: &ShownProject, module: ModuleId) -> Team {
     modules: vec![Some(module)],
     ..TaskListKey::default()
   };
-  let listed = ctx.query(team_tasks(source, key));
+  let listed = ctx.query(team_tasks(source.clone(), key));
   let found = read.data();
   let known = found.as_deref().and_then(|found| found.clone()).map(Arc::new);
   let failure = [read.error(), listed.error()]
@@ -168,7 +182,7 @@ fn read(ctx: &mut Ctx, project: &ShownProject, module: ModuleId) -> Team {
   match (found, listed.data(), standing) {
     (Some(found), ..) if found.is_none() => Team::Missing,
     (Some(_), Some(tasks), Ok(Some(standing))) => {
-      known.map_or(Team::Missing, |shown| Team::Ready(shown, tasks, standing))
+      known.map_or(Team::Missing, |shown| Team::Ready(shown, tasks, standing, source))
     }
     _ => Team::Reading,
   }
@@ -211,7 +225,9 @@ fn unavailable_header(
     TeamFailure::Unavailable { since } => {
       ctx.t_args("modules.team.page.unavailableSince", [("time", moment(ctx, *since))])
     }
-    TeamFailure::SignedOut | TeamFailure::NotMember | TeamFailure::Refused => ctx.t("tasks.team.unavailable.title"),
+    TeamFailure::SignedOut | TeamFailure::NotMember | TeamFailure::Unsupported | TeamFailure::Refused => {
+      ctx.t("tasks.team.unavailable.title")
+    }
   };
   let status = Row::new()
     .id("module-team-unavailable-since")

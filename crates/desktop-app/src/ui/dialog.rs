@@ -43,13 +43,17 @@ pub enum Tone {
   Warning,
   /// `info_muted` with the glyph in `info` (`Tile` `gGQD5` of `MGILm`).
   Info,
+  /// `hover` with the glyph in `text_secondary`: a plain change, e.g. a team module's branch (`yhAB1` in `04b`
+  /// `InYp8`).
+  Neutral,
 }
 
 impl Tone {
-  const fn colors(self) -> (PaletteColor, PaletteColor) {
+  fn colors(self) -> (PaletteColor, PaletteColor) {
     match self {
       Self::Warning => (PaletteColor::WarningMuted, PaletteColor::Warning),
       Self::Info => (PaletteColor::InfoMuted, PaletteColor::Info),
+      Self::Neutral => (ExtraColor::Hover.role(), PaletteColor::TextSecondary),
     }
   }
 }

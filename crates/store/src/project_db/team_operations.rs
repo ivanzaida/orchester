@@ -146,6 +146,17 @@ impl ProjectDb {
     rows.map(|row| row?).collect()
   }
 
+  /// The operations of the server project the project is linked to now that the server committed, oldest first: what
+  /// this computer was given there, such as the claims it took and released. None while the project is local.
+  pub fn committed_team_operations(&self) -> Result<Vec<TeamOperation>, StoreError> {
+    let mut statement = self.connection.prepare(&format!(
+      "{SELECT} WHERE state IN ('committed', 'completed', 'effect_failed') AND server_id = (SELECT server_id FROM \
+       sharing) AND team_project_id = (SELECT project_id FROM sharing) ORDER BY created_at, id"
+    ))?;
+    let rows = statement.query_map([], read)?;
+    rows.map(|row| row?).collect()
+  }
+
   /// Records what became of operation `id`. A settled outcome stays: the database refuses to change it.
   pub fn settle_team_operation(
     &mut self,

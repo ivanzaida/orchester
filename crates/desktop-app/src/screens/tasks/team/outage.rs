@@ -56,6 +56,10 @@ pub(in crate::screens::tasks) fn outage(
       ctx.t("tasks.team.unavailable.title"),
       ctx.t_args("tasks.team.notMember", [("server", server), ("project", project)]),
     ),
+    TeamFailure::Unsupported => (
+      ctx.t("tasks.team.unsupported.title"),
+      ctx.t_args("tasks.team.unsupported.body", [("server", server)]),
+    ),
     TeamFailure::Refused => (
       ctx.t("tasks.team.refused.title"),
       ctx.t_args("tasks.team.refused.body", [("server", server)]),

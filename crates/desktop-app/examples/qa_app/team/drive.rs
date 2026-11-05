@@ -51,7 +51,12 @@ pub fn to(
     | State::OutageRunning
     | State::OutageLater
     | State::MemberRunning
-    | State::ModuleOutage => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
+    | State::ModuleOutage
+    | State::Claims
+    | State::ModuleWork
+    | State::AdminWork
+    | State::VersionRefused
+    | State::TeamRunning => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
   }
 }
 

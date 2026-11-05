@@ -33,20 +33,41 @@ impl Person {
   }
 }
 
-/// A claim: who holds it, how long ago its work last renewed it, and whether the server finds it stale.
+/// A claim: who holds it, how long ago its work last renewed it, whether the server finds it stale, and which of the
+/// subject's claims it is: each acquisition and take-over issues a new one.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct AuthorityClaim {
   pub holder: Person,
   pub renewed_minutes_ago: i64,
   pub stale: bool,
+  pub generation: u8,
 }
 
 impl AuthorityClaim {
+  /// A fresh claim of `holder`, renewed now, the subject's claim after `before`.
+  pub(super) const fn taken(holder: Person, before: Option<&Self>) -> Self {
+    let generation = match before {
+      Some(before) => before.generation.wrapping_add(1),
+      None => 0,
+    };
+    Self {
+      holder,
+      renewed_minutes_ago: 0,
+      stale: false,
+      generation,
+    }
+  }
+
+  /// The id of this claim of the subject numbered `number`.
+  pub(super) fn id(&self, number: u32) -> String {
+    format!("0191c7c0-0000-7000-8000-00003{:02x}{number:05x}", self.generation)
+  }
+
   /// The claim on `subject` (`{kind, id}`), its id made from `number`.
   pub(super) fn wire(&self, subject: &Value, number: u32) -> Value {
     let renewed = Timestamp::now().unix_millis() - self.renewed_minutes_ago * 60_000;
     json!({
-      "subject": subject, "id": format!("0191c7c0-0000-7000-8000-0000003{number:05x}"), "holder": self.holder.wire(),
+      "subject": subject, "id": self.id(number), "holder": self.holder.wire(),
       "acquired_at": renewed - 30 * 60_000, "last_execution_heartbeat_at": renewed,
       "stale_at": renewed + STALE_AFTER_MINUTES * 60_000, "stale": self.stale, "parent_module_claim_id": null,
     })
@@ -72,17 +93,35 @@ pub(super) fn module_id(index: usize) -> String {
   format!("0191c7c0-0000-7000-8000-0000002{index:05x}")
 }
 
+/// The number the claims of the module at `index` are made from, past every task's.
+pub(super) fn module_number(index: usize) -> u32 {
+  u32::try_from(index).unwrap_or_default() + 0x800
+}
+
+/// A module's branch as an Admin changed it: the branch, the module's revision after it, and who changed it.
+#[derive(Clone, Debug)]
+pub(super) struct BranchChange {
+  pub branch: String,
+  pub revision: u64,
+  pub by: Person,
+}
+
 impl AuthorityModule {
-  /// The module at `index` as a `ModuleRead`, with `capabilities`.
-  pub(super) fn read(&self, index: usize, capabilities: &Value) -> Value {
+  /// The module at `index` as a `ModuleRead`, with `capabilities`; its branch as `changed` says, when it changed.
+  pub(super) fn read(&self, index: usize, capabilities: &Value, changed: Option<&BranchChange>) -> Value {
     let id = module_id(index);
-    let at = json!({"by": Person::You.wire(), "at": Timestamp::now().unix_millis() - 21 * 24 * 60 * 60_000});
-    let number = u32::try_from(index).unwrap_or_default() + 0x800;
+    let at = Timestamp::now().unix_millis() - 21 * 24 * 60 * 60_000;
+    let created = json!({"by": Person::You.wire(), "at": at});
+    let updated = changed.map_or_else(
+      || created.clone(),
+      |changed| json!({"by": changed.by.wire(), "at": Timestamp::now().unix_millis() - 60_000}),
+    );
+    let (branch, revision) = changed.map_or((self.branch, 1), |changed| (changed.branch.as_str(), changed.revision));
     json!({
       "id": id, "name": self.name, "description": self.description, "start": self.start, "target": self.target,
-      "state": "open", "revision": 1, "created": at, "updated": at, "branch": self.branch,
+      "state": "open", "revision": revision, "created": created, "updated": updated, "branch": branch,
       "assignee": self.assignee.map(Person::wire), "work": null,
-      "effective_claim": self.claim.map(|claim| claim.wire(&json!({"kind": "module", "id": id}), number)),
+      "effective_claim": self.claim.map(|claim| claim.wire(&json!({"kind": "module", "id": id}), module_number(index))),
       "capabilities": capabilities,
     })
   }

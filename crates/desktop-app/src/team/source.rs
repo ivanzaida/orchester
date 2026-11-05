@@ -9,6 +9,7 @@ use std::{
   sync::Arc,
 };
 
+use orchester_api::v2::AuthorityErrorCode;
 use orchester_core::{
   id::{ProjectId, ServerId},
   time::Timestamp,
@@ -116,6 +117,9 @@ pub enum TeamFailure {
   SignedOut,
   /// The person is no longer a member of the workspace.
   NotMember,
+  /// The server refuses this version of Orchester (`426 unsupported_contract`): the server and this desktop speak
+  /// different versions of the team protocol, and neither says which one the other needs.
+  Unsupported,
   /// The server refused the read otherwise, or answered with what the contract does not read.
   Refused,
 }
@@ -128,6 +132,7 @@ impl From<&TeamReadError> for TeamFailure {
       },
       TeamReadError::SignedOut | TeamReadError::SessionChanged => Self::SignedOut,
       TeamReadError::MembershipRevoked | TeamReadError::NotFound => Self::NotMember,
+      TeamReadError::Refused(AuthorityErrorCode::UnsupportedContract) => Self::Unsupported,
       TeamReadError::CursorExpired
       | TeamReadError::KeptChanging
       | TeamReadError::Refused(_)

@@ -11,8 +11,7 @@ use orchester_api::v2::{AuthorityRef, Subject, TeamCommandValue};
 use orchester_core::{
   command::CommandRunner,
   id::{ClaimId, OperationId, ResourceId},
-  integration::base::set_branch_tip,
-  run::{BranchName, CommitId, inputs::LocalConsent},
+  run::{CommitId, inputs::LocalConsent},
   store::ConnectionStore,
 };
 use orchester_store::ProjectDb;
@@ -20,7 +19,7 @@ use serde_json::{Value, json};
 
 use super::{
   Team,
-  bindings::{Binding, bind},
+  bindings::{Binding, bind, choice_refused},
   on_worker,
   outcome::{accepted, action_refused, authority_refused},
   read, read_refused,
@@ -35,9 +34,9 @@ use crate::{
   },
   messages::Message,
   runner::RunRequestError,
-  tasks::{changes::GIT, run::start_messages},
+  tasks::run::start_messages,
   team_reads::TeamReadError,
-  team_work::{ProjectRunner, StartChoices, StartOutcome, TeamStartRequest, TeamWork, TeamWorkError},
+  team_work::{self, ProjectRunner, StartChoices, StartOutcome, TeamStartRequest, TeamWork, TeamWorkError},
 };
 
 pub(in crate::app_mcp::tools) async fn run_task(
@@ -118,18 +117,7 @@ pub(super) fn branch_tip(
   root: &Path,
   branch: &str,
 ) -> Result<CommitId, ToolError> {
-  let missing = || {
-    ToolError::refused(
-      "branch_not_found",
-      vec![Message::new("appMcp.errors.branchNotFound").with("branch", branch.to_owned())],
-    )
-  };
-  let name = BranchName::new(branch).map_err(|_| missing())?;
-  let revision = set_branch_tip(&runner, Path::new(GIT), (root, &name)).map_err(|error| {
-    tracing::warn!(%error, "cannot read a team branch's tip");
-    missing()
-  })?;
-  CommitId::new(revision.as_str()).map_err(|_| missing())
+  team_work::branch_tip(runner, root, branch).map_err(|error| choice_refused(&error))
 }
 
 /// The claim of `subject` this session holds, taken now unless it held it already; `failed` when the server answered

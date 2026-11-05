@@ -18,6 +18,7 @@ mod refusal;
 pub(super) mod run_again;
 mod run_line;
 mod run_mode;
+pub(super) mod team;
 
 use std::sync::Arc;
 
@@ -125,6 +126,7 @@ impl Component for TaskHeader {
     let state = run_controls.action.state().get();
     let refused = self.refusals.shown(&state, run_controls.requested.get(), &detail);
     let status_line = no_branch::status_line(ctx, &props.task, &self.no_branch, (&self.confirming, &self.remove))
+      .or_else(|| team::status_line(ctx, &props.task))
       .unwrap_or_else(|| run_line::status_line(ctx, &props.task));
     Column::new()
       .id("task-header")
@@ -172,7 +174,7 @@ impl TaskHeader {
     let kept = detail.not_shared();
     let run_controls = RunControls::of(ctx);
     let pending = run_controls.pending();
-    let shown = controls(
+    let mut shown = controls(
       ctx,
       &Controls {
         detail: &detail,
@@ -183,7 +185,14 @@ impl TaskHeader {
         approval_waits: props.task.waiting_approval().is_some(),
       },
     );
-    let primary = primary::primary(ctx, &props.task, &props.view, shown.moves.clone());
+    // A team task's first run starts through its server, never from this computer's queue (`team`).
+    if props.task.team.is_some() && detail.run.is_none() {
+      shown.moves = team::run(ctx, &props.task, ("task-run", "task.controls.run"));
+    }
+    let primary = match team::take_over(ctx, &props.task) {
+      Some(take_over) => Some(take_over),
+      None => primary::primary(ctx, &props.task, &props.view, shown.moves.clone()),
+    };
     // The control that moves the run on goes in the menu while a card's action is the primary one.
     let moves = shown
       .moves
@@ -203,8 +212,14 @@ impl TaskHeader {
     } else {
       // A team's member does not close or delete the team's task: only its Admins do.
       let closing = (!props.task.read_only()).then(|| (self.closer.clone(), subject(&props.task)));
+      let release = team::release(ctx, &props.task);
       Held {
-        controls: moves.into_iter().chain(shown.pause).chain(shown.cancel).collect(),
+        controls: moves
+          .into_iter()
+          .chain(shown.pause)
+          .chain(release)
+          .chain(shown.cancel)
+          .collect(),
         run_again,
         closing,
       }

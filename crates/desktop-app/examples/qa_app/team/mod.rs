@@ -9,6 +9,7 @@ mod member;
 mod state;
 #[path = "../../sign_in_qa/window.rs"]
 pub mod window;
+mod work;
 
 use std::{
   collections::HashMap,
@@ -100,9 +101,16 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
     | State::OutageRunning
     | State::OutageLater
     | State::MemberRunning
-    | State::ModuleOutage => {
-      let role = member::serve_as(&server, state, &task_ids(services)?);
-      join_linked_as(&server, (services, runtime), (TasksAnswer::Serve, role)).map(drop)?;
+    | State::ModuleOutage
+    | State::Claims
+    | State::ModuleWork
+    | State::AdminWork
+    | State::VersionRefused
+    | State::TeamRunning => {
+      let ids = task_ids(services)?;
+      let role = member::serve_as(&server, state, &ids);
+      let (kontur, id) = join_linked_as(&server, (services, runtime), (TasksAnswer::Serve, role))?;
+      work::after_join(state, (&server, id), (services, runtime), (&kontur, &ids))?;
     }
   }
   Ok(server)
@@ -170,21 +178,21 @@ fn join_linked(
   runtime: &Handle,
   tasks: TasksAnswer,
 ) -> Result<PathBuf, Box<dyn Error>> {
-  join_linked_as(server, (services, runtime), (tasks, Some(MemberRole::Member)))
+  join_linked_as(server, (services, runtime), (tasks, Some(MemberRole::Member))).map(|(kontur, _)| kontur)
 }
 
-/// [`join_linked`], with the person's role in Kontur `role` (none for the server's admin).
+/// [`join_linked`], with the person's role in Kontur `role` (none for the server's admin); the server's id too.
 fn join_linked_as(
   server: &TeamServer,
   (services, runtime): (&Services, &Handle),
   (tasks, role): (TasksAnswer, Option<MemberRole>),
-) -> Result<PathBuf, Box<dyn Error>> {
+) -> Result<(PathBuf, ServerId), Box<dyn Error>> {
   server.answer_tasks(tasks);
   let kontur = kontur(services)?;
   let (address, id) = add(server, services, runtime)?;
   link(&kontur, server, (id, role))?;
   join(&address, services, runtime)?;
-  Ok(kontur)
+  Ok((kontur, id))
 }
 
 /// Links the project at `repo` to the team's Kontur on `server` with `id`, the person's role there `role`, with nothing

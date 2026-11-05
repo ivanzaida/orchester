@@ -146,20 +146,83 @@ pub fn module_outage(kontur: &mut Kontur) -> Result<(), SeedError> {
   running(kontur, State::ModuleOutage)
 }
 
+/// A member with a task in every claim state (`02h` `xUwYS`): the runs this computer has of them, which the QA app
+/// joins with the server's claims, the claims it took here and the ones the server fenced.
+pub fn claims(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let runs = [
+    (11, "Export invoices as PDF", Shape::Cancelled("implement"), 50),
+    (12, "Add retry to webhook sender", Shape::Running("implement"), 40),
+    (14, "Cache GitHub API responses", Shape::Succeeded, 90),
+    (21, "Typed errors per module", Shape::Question("implement"), 25),
+    (23, "Explain an expired GitHub token", Shape::Cancelled("implement"), 60),
+    (24, "Import contacts from CSV", Shape::Interrupted("implement"), 70),
+  ];
+  with_runs(kontur, &runs)?;
+  write_marker(kontur, State::Claims)
+}
+
+/// A member on the modules (`04d` `PqVUn`).
+pub fn module_work(kontur: &mut Kontur) -> Result<(), SeedError> {
+  mark(kontur, State::ModuleWork)
+}
+
+/// An Admin on the modules and Sharing (`04` `MvniR`, `07` `MnVch`).
+pub fn admin_work(kontur: &mut Kontur) -> Result<(), SeedError> {
+  mark(kontur, State::AdminWork)
+}
+
+/// As [`member`], the server refusing this version of Orchester (`07d` `BDJKM`).
+pub fn version_refused(kontur: &mut Kontur) -> Result<(), SeedError> {
+  mark(kontur, State::VersionRefused)
+}
+
+/// KON-12's run interrupted at Implement, on the live catalogue's Feature delivery with a brief that keeps
+/// `orchester-fake-codex` working: Continue run takes it on, Running at 03 Implement with Pause run (`01c` `Tb55G`).
+pub fn team_running(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let catalogue = kontur.live_catalogue()?;
+  let pipeline = &catalogue.feature_delivery;
+  let (title, brief) = (
+    "Add retry to webhook sender",
+    "Retry failed webhook sends with backoff. Keep working.",
+  );
+  numbered(kontur, 12)?;
+  let mut task = kontur.task((title, brief, &[title]), Some(pipeline), kontur.ago(90))?;
+  shapes::apply(
+    kontur,
+    &mut task,
+    Some(pipeline),
+    Shape::Interrupted("implement"),
+    kontur.ago(40),
+  )?;
+  write_marker(kontur, State::TeamRunning)
+}
+
 /// KON-12 running Implement and KON-21 running Plan on this computer, and the marker naming `state`.
 fn running(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
+  let runs = RUNNING.map(|(number, title, step, minutes)| (number, title, Shape::Running(step), minutes));
+  with_runs(kontur, &runs)?;
+  write_marker(kontur, state)
+}
+
+/// Kontur's tasks numbered as `runs` say, each with its title and its run in its shape, started minutes ago.
+fn with_runs(kontur: &mut Kontur, runs: &[(u32, &str, Shape, i64)]) -> Result<(), SeedError> {
   let catalogue = kontur.catalogue()?;
   let pipeline = &catalogue.feature_delivery;
-  for (number, title, step, minutes) in RUNNING {
-    // The store numbers tasks in order and has no API to number one: the seed moves its counter on, as in a project
-    // whose earlier tasks are the server's.
-    rusqlite::Connection::open(kontur.database())?
-      .execute("UPDATE counters SET next = ?1 WHERE name = 'task'", [number])?;
+  for &(number, title, shape, minutes) in runs {
+    numbered(kontur, number)?;
     let (created, started) = (kontur.ago(minutes + 30), kontur.ago(minutes));
     let mut task = kontur.task((title, title, &[title]), Some(pipeline), created)?;
-    shapes::apply(kontur, &mut task, Some(pipeline), Shape::Running(step), started)?;
+    shapes::apply(kontur, &mut task, Some(pipeline), shape, started)?;
   }
-  write_marker(kontur, state)
+  Ok(())
+}
+
+/// The next task made is numbered `number`. The store numbers tasks in order and has no API to number one: the seed
+/// moves its counter on, as in a project whose earlier tasks are the server's.
+fn numbered(kontur: &Kontur, number: u32) -> Result<(), SeedError> {
+  rusqlite::Connection::open(kontur.database())?
+    .execute("UPDATE counters SET next = ?1 WHERE name = 'task'", [number])?;
+  Ok(())
 }
 
 /// Kontur's checkout has the team's repository as its `origin`, which the QA app's server names for its project.

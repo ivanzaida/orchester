@@ -1,6 +1,7 @@
 //! The team scenarios: each is in the registry and leaves the marker the QA app reads its state from
-//! (`examples/qa_app/team/state.rs`), every other scenario leaves none, `team-offer` registers a local project, and
-//! `team-outage-running`, `team-member-running` and `team-module-outage` have two tasks running on this computer.
+//! (`examples/qa_app/team/state.rs`), every other scenario leaves none, `team-offer` registers a local project,
+//! `team-outage-running`, `team-member-running` and `team-module-outage` have two tasks running on this computer,
+//! `team-claims` a run of each task whose claim state rests on one, and `team-running` KON-12 interrupted at Implement.
 
 use orchester_core::{run::TaskPhase, store::TaskStore};
 use orchester_store::AppDb;
@@ -14,13 +15,37 @@ use super::{
 #[test]
 fn seed_team_scenarios_leave_the_marker_of_their_state() {
   for state in State::ALL {
-    assert!(scenarios::named(state.name()).is_some(), "{state:?} is in the registry");
-    let seed = Seed::of(state.name());
+    let scenario = scenarios::named(state.name());
+    assert!(scenario.is_some(), "{state:?} is in the registry");
+    // The seed only stores the fake Codex's program: any file stands in.
+    let fake_codex = scenario
+      .filter(|scenario| scenario.needs_fake_codex())
+      .map(|_| std::path::PathBuf::from("Cargo.toml"));
+    let seed = Seed::with(state.name(), fake_codex).expect("the scenario seeds");
     let read = State::beside(&seed.seeded.app_database).expect("the marker reads");
     assert_eq!(read, Some(state));
     let tasks = seed.db().tasks().expect("tasks").len();
-    let expected = if state.runs_here() { 2 } else { 0 };
+    let expected = match state {
+      State::Claims => 6,
+      State::TeamRunning => 1,
+      state if state.runs_here() => 2,
+      _ => 0,
+    };
     assert_eq!(tasks, expected, "{state:?}");
+  }
+}
+
+#[test]
+fn seed_team_claims_runs_each_task_its_claim_state_rests_on() {
+  let seed = Seed::of("team-claims");
+  let db = seed.db();
+  for (key, expected) in [
+    ("KON-12", TaskPhase::Running),
+    ("KON-21", TaskPhase::Waiting),
+    ("KON-11", TaskPhase::Cancelled),
+    ("KON-24", TaskPhase::Interrupted),
+  ] {
+    assert_eq!(phase(&db, key), Some(expected), "{key}");
   }
 }
 

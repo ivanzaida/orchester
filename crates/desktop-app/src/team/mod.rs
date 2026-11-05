@@ -2,7 +2,9 @@
 //! P6): one lurq [`QueryClient`] for the session, shared by its windows, and per linked project the reads of
 //! `orchester_workspace::team_reads` with their subscription followed on the runtime ([`TeamSource`]). The lists'
 //! queries are in [`queries`], the pages' in [`pages`]; what the subscription makes stale is in [`invalidation`]; how a
-//! view finds its project's source is in [`view`].
+//! view finds its project's source is in [`view`]. The screens' actions go through the dispatcher ([`act`]): a task's
+//! work starts through the team server ([`start`]) and a module's delivery is asked for there ([`deliver`]); their
+//! lines share one strip ([`strip`]).
 //!
 //! The client and every source belong to one generation of the session. Another account on a server, signing out of
 //! one, or a membership revoked ends the generation: a new client replaces the old one, whose reads no view observes
@@ -10,12 +12,16 @@
 //! project whose reads ended for the person (signed out, no longer a member) stays ended, with why, until the accounts
 //! change or the person asks again ([`TeamQueries::retry`]).
 
+pub mod act;
+pub mod deliver;
 pub mod invalidation;
 pub mod lock;
 pub mod outage;
 pub mod pages;
 pub mod queries;
 mod source;
+pub mod start;
+pub mod strip;
 pub mod view;
 
 use std::{

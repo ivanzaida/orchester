@@ -95,7 +95,7 @@ fn team_qa_pages_a_members_task_page_shows_its_claim_and_nothing_to_edit() {
   assert_eq!(window.text("task-title"), "Add retry to webhook sender");
   assert_eq!(window.text("task-team-claim-title"), "Claimed by you");
   assert_eq!(window.text("task-property-assignee-label"), "Bohdan Koval (you)");
-  assert_eq!(window.text("task-property-claim-label"), "You");
+  assert_eq!(window.text("task-property-claim-label"), "You · this computer");
   assert_eq!(window.text("task-property-module-label"), "Webhooks v2");
   assert_eq!(window.text("task-property-merges-label"), "module/webhooks-v2");
   assert!(

@@ -21,7 +21,7 @@ use serde_json::{Value, json};
 
 mod authority;
 mod first_download;
-pub use authority::{AuthorityClaim, AuthorityModule, AuthorityTask, Person, STALE_AFTER_MINUTES, Standing};
+pub use authority::{AuthorityClaim, AuthorityModule, AuthorityTask, Person, Plan, STALE_AFTER_MINUTES, Standing};
 use first_download::TaskPages;
 pub use first_download::TasksAnswer;
 
@@ -91,7 +91,7 @@ impl TeamServer {
       tasks: TasksAnswer::default(),
       pages: None,
       tasks_asked: 0,
-      authority: authority::Authority::default(),
+      authority: authority::Authority::new(),
     }));
     let serving = state.clone();
     thread::spawn(move || {

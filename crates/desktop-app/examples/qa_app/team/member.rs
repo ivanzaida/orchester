@@ -1,8 +1,9 @@
-//! The member, role and outage states (ORC-716, ORC-717): Kontur's tasks and modules as the team server reads them,
-//! with the person a member (or an Admin, or the server's admin) and the Admins named as `Row 1 · Member views`
-//! (`rD8mt`) names them; the modules Webhooks v2 (held by olha), Billing exports (held by the person) and API rate
-//! limits (held by nobody) as 01d `rvXxg` draws them, and KON-12 claimed by the person and assigned to them. The tasks
-//! this computer runs keep their ids here, so their runs join the server's tasks. In the outage the server's reads are
+//! The member, role and outage states (ORC-716, ORC-717) and the claim, module and Sharing states (ORC-732): Kontur's
+//! tasks and modules as the team server reads them, with the person a member (or an Admin, or the server's admin) and
+//! the Admins named as `Row 1 · Member views` (`rD8mt`) names them; the modules Webhooks v2 (held by olha), Billing
+//! exports (held by the person) and API rate limits (held by nobody) as 01d `rvXxg` draws them, and KON-12 claimed by
+//! the person and assigned to them; what each ORC-732 state changes of them is in [`super::work`]. The tasks this
+//! computer runs keep their ids here, so their runs join the server's tasks. In the outage the server's reads are
 //! unavailable, from the start, once the tasks were shown, or once a module's page read its module. Fixture data for
 //! QA, never shipped.
 
@@ -13,7 +14,7 @@ use std::{collections::HashMap, time::Duration};
 use orchester_api::test_support::team_server::{AuthorityClaim, AuthorityTask, Person, Standing, TeamServer};
 use orchester_core::sharing::MemberRole;
 
-use super::State;
+use super::{State, work};
 
 /// How long the tasks show in `team-outage-later` before the server stops answering, and a module's page in
 /// `team-module-outage`.
@@ -23,21 +24,21 @@ const SHOWN_FOR: Duration = Duration::from_secs(3);
 /// the role the person's link records, as the server gives it.
 pub fn serve_as(server: &TeamServer, state: State, here: &HashMap<u32, String>) -> Option<MemberRole> {
   let standing = match state {
-    State::Admin => Standing::Admin,
+    State::Admin | State::AdminWork => Standing::Admin,
     State::ServerAdmin => Standing::ServerAdmin,
     _ => Standing::Member,
   };
   let ids = if state.runs_here() { here } else { &HashMap::new() };
   serve(
     server,
-    standing,
+    (state, standing),
     matches!(state, State::Outage | State::OutageRunning),
     ids,
   );
   match state {
     State::OutageLater => server.authority_unavailable_once_read(SHOWN_FOR),
     State::ModuleOutage => server.authority_unavailable_once_module_read(SHOWN_FOR),
-    _ => {}
+    _ => work::plan(state, server),
   }
   match standing {
     Standing::Member => Some(MemberRole::Member),
@@ -81,18 +82,20 @@ const QUICK_FIXES: [u32; 3] = [9, 17, 23];
 /// The task the person claimed and is assigned, and how many minutes ago their run last renewed the claim.
 const CLAIMED: (u32, i64) = (12, 2);
 
-/// Serves Kontur's tasks and modules to the person standing as `standing`, with dana-k as its Admin and olha as the
-/// server's admin, the tasks numbered in `ids` with those ids; `unavailable` makes every read of them `503
+/// Serves Kontur's tasks and modules to the person standing as `standing` in `state`, with dana-k as its Admin and olha
+/// as the server's admin, the tasks numbered in `ids` with those ids; `unavailable` makes every read of them `503
 /// unavailable`.
-fn serve(server: &TeamServer, standing: Standing, unavailable: bool, ids: &HashMap<u32, String>) {
+fn serve(server: &TeamServer, (state, standing): (State, Standing), unavailable: bool, ids: &HashMap<u32, String>) {
   server.stand_as(standing);
   server.members_named(&["dana-k"], &["olha"]);
-  server.authority_modules(modules::modules());
+  let mut modules = modules::modules();
+  work::modules(state, &mut modules);
+  server.authority_modules(modules);
   server.authority_tasks(
     TASKS
       .iter()
-      .map(
-        |&(number, title, workflow, priority, created_minutes_ago)| AuthorityTask {
+      .map(|&(number, title, workflow, priority, created_minutes_ago)| {
+        let mut task = AuthorityTask {
           number,
           title: title.to_owned(),
           workflow,
@@ -110,10 +113,15 @@ fn serve(server: &TeamServer, standing: Standing, unavailable: bool, ids: &HashM
             holder: Person::You,
             renewed_minutes_ago: CLAIMED.1,
             stale: false,
+            generation: 0,
           }),
-        },
-      )
+          work: (number == CLAIMED.0).then_some("running"),
+        };
+        work::task(state, &mut task);
+        task
+      })
       .collect(),
   );
   server.authority_unavailable(unavailable);
+  server.refuse_this_version(state == State::VersionRefused);
 }

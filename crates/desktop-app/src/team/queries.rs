@@ -8,8 +8,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use orchester_api::v2::{
-  Capabilities, MAX_PAGE_LIMIT, ModuleListRequest, PageRequest, SearchText, TaskBoardCounts, TaskFilters,
-  TaskListRequest, TaskSort,
+  CallerRole, Capabilities, MAX_PAGE_LIMIT, ModuleListRequest, PageRequest, SearchText, TaskBoardCounts, TaskFilters,
+  TaskListRequest, TaskSort, WorkspacePolicy,
 };
 use orchester_core::{
   id::{ModuleId, ResourceId, TagId, TaskId},
@@ -135,6 +135,24 @@ pub async fn team_counts(source: TeamSource, list: TaskListKey) -> Result<TaskBo
 pub async fn team_capabilities(source: TeamSource) -> Result<Capabilities, TeamFailure> {
   let read = source.project().capabilities().await;
   source.answered(read).map(TeamRead::into_value)
+}
+
+/// The workspace's policy, and whether the person changes it: an Admin or a server admin, as the server's capabilities
+/// say, never a role kept on this computer.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TeamPolicy {
+  pub policy: WorkspacePolicy,
+  pub changes: bool,
+}
+
+#[lurq::query(stale_time = "1m", gc_time = "10m")]
+pub async fn team_policy(source: TeamSource) -> Result<TeamPolicy, TeamFailure> {
+  let read = source.project().metadata().await;
+  let metadata = source.answered(read)?.into_value();
+  Ok(TeamPolicy {
+    policy: metadata.policy,
+    changes: metadata.capabilities.role != CallerRole::Member,
+  })
 }
 
 /// The workspace's modules, oldest first, for the filters and the board's columns.

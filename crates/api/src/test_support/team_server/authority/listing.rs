@@ -5,7 +5,7 @@
 use orchester_core::time::Timestamp;
 use serde_json::{Value, json};
 
-use super::{AuthorityTask, State, capabilities, work};
+use super::{AuthorityClaim, AuthorityTask, State, capabilities, commands, work};
 use crate::{
   test_support::team_server::{
     TasksAnswer, USER,
@@ -40,7 +40,7 @@ pub(super) fn tasks((project, key): (&str, &str), state: &State) -> Vec<Value> {
   if let Some(tasks) = &state.authority.tasks {
     return tasks
       .iter()
-      .map(|task| authority_task(task, key, state, capabilities(project, standing)))
+      .map(|task| authority_task(task, (project, key), state))
       .collect();
   }
   match (state.tasks, state.pages) {
@@ -60,8 +60,8 @@ pub(super) fn tasks((project, key): (&str, &str), state: &State) -> Vec<Value> {
   }
 }
 
-/// `task` as a `TaskRead` with the caller's `capabilities`. Its claim is its own, else its module's.
-fn authority_task(task: &AuthorityTask, key: &str, state: &State, capabilities: Value) -> Value {
+/// `task` of `project` as a `TaskRead`, with the caller's capabilities on it. Its claim is its own, else its module's.
+fn authority_task(task: &AuthorityTask, (project, key): (&str, &str), state: &State) -> Value {
   let number = usize::try_from(task.number).unwrap_or(usize::MAX);
   let id = task_id(task);
   let mut read = first_download::task(&id, (key, number), (&task.title, task.workflow));
@@ -80,7 +80,10 @@ fn authority_task(task: &AuthorityTask, key: &str, state: &State, capabilities: 
   read["created"] = json!({"by": {"id": USER, "display_name": "Bohdan Koval"}, "at": created});
   read["updated"] = read["created"].clone();
   read["assignee"] = task.assignee.map_or(Value::Null, work::Person::wire);
-  read["work"] = Value::Null;
+  read["work"] = match (task.claim, task.work) {
+    (Some(claim), Some(state)) => work_read((&id, task.number), claim, state),
+    _ => Value::Null,
+  };
   let module_claim = task
     .module
     .and_then(|index| modules?.get(index)?.claim.map(|claim| (claim, index)));
@@ -88,12 +91,22 @@ fn authority_task(task: &AuthorityTask, key: &str, state: &State, capabilities: 
     (Some(claim), _) => claim.wire(&json!({"kind": "task", "id": id}), task.number),
     (None, Some((claim, index))) => {
       let subject = json!({"kind": "module", "id": work::module_id(index)});
-      claim.wire(&subject, u32::try_from(index).unwrap_or_default() + 0x800)
+      claim.wire(&subject, work::module_number(index))
     }
     (None, None) => Value::Null,
   };
-  read["capabilities"] = capabilities;
+  let module_held = module_claim.map(|(claim, _)| claim.holder);
+  read["capabilities"] =
+    commands::task_capabilities(&state.authority, (project, &id), (task.claim.as_ref(), module_held));
   read
+}
+
+/// The work of task `id` numbered `number` under `claim`, in `state` (`running`, `awaiting_human`, …).
+fn work_read((id, number): (&str, u32), claim: AuthorityClaim, state: &str) -> Value {
+  let at = Timestamp::now().unix_millis();
+  json!({"id": format!("0191c7c0-0000-7000-8000-0000004{number:05x}"), "subject": {"kind": "task", "id": id},
+    "claim_id": claim.id(number), "revision": 1, "state": state, "runs": [],
+    "bundle": {"sha256": "0".repeat(64), "schema_version": 2}, "created_at": at, "updated_at": at})
 }
 
 /// The tasks `filters` keep.
@@ -210,8 +223,8 @@ fn summaries((project, key): (&str, &str), state: &State) -> Vec<Value> {
     .enumerate()
     .map(|(index, module)| {
       let (progress, count, remaining) = progress(&tasks, &work::module_id(index));
-      json!({"module": module.read(index, &capabilities()), "progress": progress, "tasks": count,
-        "forecast": module.forecast(remaining)})
+      json!({"module": commands::module_read(&state.authority, project, index), "progress": progress,
+        "tasks": count, "forecast": module.forecast(remaining)})
     })
     .collect()
 }
