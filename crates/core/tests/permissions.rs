@@ -464,6 +464,7 @@ fn codex_args(permissions: &AgentPermissions, platform: Platform) -> Vec<String>
     platform,
     mcp: None,
     agent_files: CodexAgentFiles::Loaded,
+    sandbox: enforced.permissions().codex_sandbox(),
   }
   .args()
   .expect("unicode paths")

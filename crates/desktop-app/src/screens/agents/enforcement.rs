@@ -44,6 +44,7 @@ pub fn mechanism(ctx: &Ctx, mechanism: Mechanism, permissions: &AgentPermissions
     Mechanism::CodexSandboxNetworkHosts => "codexNetworkHosts",
     Mechanism::CodexSandboxNetworkOn => "codexNetworkOn",
     Mechanism::CodexWritableRoots => "codexWritableRoots",
+    Mechanism::CodexSandboxOff => "codexSandboxOff",
     Mechanism::ClaudeEditToolsRemoved if empty => "claudeEditToolsRemovedAsk",
     Mechanism::ClaudeEditToolsRemoved => "claudeEditToolsRemoved",
     Mechanism::ClaudeAcceptEdits => "claudeAcceptEdits",
@@ -92,10 +93,12 @@ pub fn browser(ctx: &Ctx, permissions: &AgentPermissions) -> Arc<str> {
   ctx.t_args(key, [("count", count.to_string())])
 }
 
-/// Whether the connection enforces every permission: *Enforced by …* in `success`, else why not in `warning`.
+/// Whether the connection enforces every permission: *Enforced by …* in `success`, else why not in `warning`. With
+/// the Codex sandbox off nothing of the sandbox is enforced, network off or not.
 pub fn status(ctx: &Ctx, permissions: &AgentPermissions, connection: &AgentConnection) -> (Tone, Arc<str>) {
+  let unsandboxed = connection.provider() == AgentProvider::CodexCli && !permissions.codex_sandbox().is_on();
   let fallback = permissions.effective_network(connection.provider(), Platform::current()) != *permissions.network();
-  if fallback {
+  if fallback && !unsandboxed {
     return (Tone::Warning, ctx.t("agents.cannotBlockNetwork"));
   }
   if orchester_workspace::agents::permissions::fully_enforced(permissions, connection.provider()) {

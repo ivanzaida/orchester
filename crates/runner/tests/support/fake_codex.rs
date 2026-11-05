@@ -331,6 +331,7 @@ impl Session {
     roots.insert(cwd.clone());
     let sandbox = match params["sandbox"].as_str() {
       Some("read-only") => json!({"type": "readOnly", "networkAccess": false}),
+      Some("danger-full-access") => json!({"type": "dangerFullAccess"}),
       _ => json!({"type": "workspaceWrite", "networkAccess": network, "writableRoots": extra}),
     };
     emit(&json!({"id": 3, "result": {

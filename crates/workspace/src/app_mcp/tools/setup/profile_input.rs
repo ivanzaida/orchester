@@ -1,22 +1,23 @@
 //! `save_profile_draft`: an agent profile's editor through Orchester's MCP server. Every field is
 //! checked as the editor checks it (`agents::form`, `agents::permissions`, `agents::folders`), and only
 //! what the editor offers is taken: permissions the connection's CLI enforces on this computer, the
-//! project's MCP servers (adding only one that is turned on), an effort the model lists, and no approval switches or
-//! MCP servers on a connection whose agents Orchester runs itself. Permissions and MCP servers broader than the
-//! profile's latest published version (before its first: the most restrictive its CLI enforces, no server) are a
-//! person's decision ([`widening`]); narrowing them is always taken.
+//! project's MCP servers (adding only one that is turned on), an effort the model lists, no approval switches or
+//! MCP servers on a connection whose agents Orchester runs itself, and the Codex sandbox off only for a Codex
+//! connection of a local project. Permissions and MCP servers broader than the profile's latest published version
+//! (before its first: the most restrictive its CLI enforces, no server) are a person's decision ([`widening`]), the
+//! Codex sandbox turned off among them; narrowing them is always taken.
 
 use std::path::Path;
 
 use orchester_core::{
   connection::{
-    AgentConnection,
+    AgentConnection, AgentProvider,
     invocation::Platform,
     mcp::{McpServer, McpServerSelection},
   },
   id::ConnectionId,
   permission::{
-    AgentPermissions, AllowedCommands, ApprovalMode, BrowserPermission, CommandPermission, NetworkAccess,
+    AgentPermissions, AllowedCommands, ApprovalMode, BrowserPermission, CodexSandbox, CommandPermission, NetworkAccess,
     WritableFolders,
     browser::{AllowedSites, BrowserAccess},
   },
@@ -104,6 +105,10 @@ pub struct Permissions {
   /// The browser: Orchester's browser tools for its agents. Left out, a profile being changed keeps its own and a
   /// new profile has it off.
   pub browser: Option<Browser>,
+  /// A Codex connection's sandbox, which enforces repository access, network and writable folders. off runs Codex
+  /// without it (danger-full-access), only in a local project: a person's decision. Left out, a profile being changed
+  /// keeps its own and a new profile has it on.
+  pub codex_sandbox: Option<Network>,
 }
 
 #[derive(Deserialize, JsonSchema)]
@@ -136,13 +141,22 @@ impl From<Access> for RepositoryAccess {
   }
 }
 
-/// Off or on, as the tools name network access and the browser.
+/// Off or on, as the tools name network access, the browser and the Codex sandbox.
 #[derive(Clone, Copy, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 #[schemars(crate = "rmcp::schemars")]
 pub enum Network {
   Off,
   On,
+}
+
+impl From<Network> for CodexSandbox {
+  fn from(sandbox: Network) -> Self {
+    match sandbox {
+      Network::Off => Self::Off,
+      Network::On => Self::On,
+    }
+  }
 }
 
 #[derive(Clone, Copy, Deserialize, JsonSchema)]
@@ -189,17 +203,14 @@ pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> 
       .transpose()?;
     let connection = agent_named(&db, &args.connection)?;
     let permissions = match &args.permissions {
-      Some(given) => {
-        let kept = existing.map_or_else(BrowserPermission::off, |entry| {
-          entry.profile.permissions().browser().clone()
-        });
-        permissions(given, &root, kept)?
-      }
+      Some(given) => permissions(given, &root, existing.map(|entry| entry.profile.permissions()))?,
       None => existing.map_or_else(
         || AgentPermissions::most_restrictive(connection.provider(), Platform::current()),
         |entry| entry.profile.permissions().clone(),
       ),
     };
+    let given_sandbox = args.permissions.as_ref().and_then(|given| given.codex_sandbox);
+    let permissions = sandbox_offered(permissions, &connection, (given_sandbox, db.sharing()?.is_some()))?;
     offered(&connection, &permissions, &args)?;
     let project_servers = db.mcp_servers()?;
     let servers = mcp_servers(&project_servers, &args.mcp_servers)?;
@@ -274,9 +285,13 @@ fn form(
   })
 }
 
-/// The permissions given, each command, folder and site checked as the editor adds it; `kept` is the browser
-/// permission when none is given.
-fn permissions(given: &Permissions, root: &Path, kept: BrowserPermission) -> Result<AgentPermissions, ToolError> {
+/// The permissions given, each command, folder and site checked as the editor adds it; the browser and the Codex
+/// sandbox not given are `kept`'s, the profile's own (off and on for a new profile).
+fn permissions(
+  given: &Permissions,
+  root: &Path,
+  kept: Option<&AgentPermissions>,
+) -> Result<AgentPermissions, ToolError> {
   let invalid = |reason| refused("invalid_permissions", reason);
   let commands = match given.commands {
     Commands::AskBefore => CommandPermission::AskBefore,
@@ -305,13 +320,42 @@ fn permissions(given: &Permissions, root: &Path, kept: BrowserPermission) -> Res
   };
   let browser = match &given.browser {
     Some(browser) => browser_permission(browser, &network).map_err(invalid)?,
-    None => kept,
+    None => kept.map_or_else(BrowserPermission::off, |kept| kept.browser().clone()),
   };
+  let sandbox = given.codex_sandbox.map_or_else(
+    || kept.map_or(CodexSandbox::On, AgentPermissions::codex_sandbox),
+    CodexSandbox::from,
+  );
   let mut permissions =
     AgentPermissions::new(given.repository.into(), commands, network).with_writable_folders(folders);
   permissions.set_interactive_tool_approvals(given.ask_before_tool_calls);
   permissions.set_browser(browser);
   permissions.set_approval_mode(given.approval_mode.into());
+  permissions.set_codex_sandbox(sandbox);
+  Ok(permissions)
+}
+
+/// `permissions` with the Codex sandbox the editor offers: off only for a Codex connection of a local project (a shared
+/// project's profiles keep it on in this version). Turning it off anywhere else is refused; one kept off from before,
+/// on another CLI or once the project is shared, is on again, as the editor puts it when the connection changes.
+fn sandbox_offered(
+  mut permissions: AgentPermissions,
+  connection: &AgentConnection,
+  (given, shared): (Option<Network>, bool),
+) -> Result<AgentPermissions, ToolError> {
+  let codex = connection.provider() == AgentProvider::CodexCli;
+  if (codex && !shared) || permissions.codex_sandbox().is_on() {
+    return Ok(permissions);
+  }
+  if matches!(given, Some(Network::Off)) {
+    let key = if codex {
+      "appMcp.errors.codexSandboxShared"
+    } else {
+      "appMcp.errors.codexSandboxNotCodex"
+    };
+    return Err(refused("not_offered", Message::new(key)));
+  }
+  permissions.set_codex_sandbox(CodexSandbox::On);
   Ok(permissions)
 }
 

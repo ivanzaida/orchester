@@ -90,6 +90,7 @@ fn adds_key(add: &VersionWidening) -> &'static str {
       Widening::Autopilot => "sharing.config.widens.adds.autopilot",
       Widening::Browser => "sharing.config.widens.adds.browser",
       Widening::BrowserSite => "sharing.config.widens.adds.browserSite",
+      Widening::CodexSandboxOff => "sharing.config.widens.adds.codexSandboxOff",
     },
     VersionWidening::McpServer => "sharing.config.widens.adds.mcpServer",
     VersionWidening::Secret => "sharing.config.widens.adds.secret",

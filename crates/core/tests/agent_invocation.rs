@@ -34,6 +34,7 @@ fn invocation(access: RepositoryAccess, platform: Platform) -> CodexInvocation<'
     platform,
     mcp: None,
     agent_files: CodexAgentFiles::Loaded,
+    sandbox: orchester_core::permission::CodexSandbox::On,
   }
 }
 

@@ -66,6 +66,7 @@ pub(super) fn codex_command(mcp: &CodexMcp) -> Command {
     platform: Platform::MacOs,
     mcp: Some(mcp),
     agent_files: CodexAgentFiles::Loaded,
+    sandbox: orchester_core::permission::CodexSandbox::On,
   }
   .command(Vec::new(), &CommandEnvironment::default())
   .expect("a Unicode worktree")

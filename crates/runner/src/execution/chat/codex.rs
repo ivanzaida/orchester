@@ -31,7 +31,7 @@ use orchester_core::{
     TurnFailure, TurnState,
     instructions::{ProjectReads, SERVER, system_prompt},
   },
-  permission::NetworkAccess,
+  permission::{CodexSandbox, NetworkAccess},
   resource::RepositoryAccess,
   run::TokenUsage,
 };
@@ -121,6 +121,7 @@ impl Turn {
       effort: self.settings.effort().map(str::to_owned),
       worktree: self.root.clone(),
       access: RepositoryAccess::ReadOnly,
+      sandbox: CodexSandbox::On,
       command_approvals: false,
       sandbox_approvals: false,
       tool_approvals: true,

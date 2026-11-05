@@ -3,8 +3,8 @@
 //!
 //! `codex app-server --stdio <isolation> <sub-agents off>
 //!  -c projects={<worktree>={trust_level="untrusted"},<repository>=…}
-//!  [-c windows.sandbox=elevated] [-c sandbox_workspace_write.network_access=<on>]
-//!  -c sandbox_workspace_write.writable_roots=[<worktree>, <folders>]
+//!  [<sandbox settings>: [-c windows.sandbox=elevated] [-c sandbox_workspace_write.network_access=<on>]
+//!  -c sandbox_workspace_write.writable_roots=[<worktree>, <folders>]]
 //!  [-c tools.web_search.allowed_domains=[<hosts>]] [-c project_doc_max_bytes=0
 //!  [-c skills.config=[<skills>]]] [<MCP servers>]`
 //!
@@ -13,9 +13,14 @@
 //! policy and the reviewer, checks what Codex activated, and starts the turn with the prompt, the effort
 //! and, for a new session, the step result schema (`orchester-runner`'s `step::app_server`).
 //!
-//! - Permissions are enforced by Codex's own sandbox; bypass modes are never used. Read-only steps run in `read-only`,
-//!   writing steps in `workspace-write`. Both modes need `windows.sandbox=elevated` on Windows; without a Windows
-//!   sandbox even read-only shell commands are declined.
+//! - Permissions are enforced by Codex's own sandbox. Read-only steps run in `read-only`, writing steps in
+//!   `workspace-write`. Both modes need `windows.sandbox=elevated` on Windows; without a Windows sandbox even read-only
+//!   shell commands are declined.
+//! - The one bypass mode is a person's choice: a profile with its Codex sandbox off
+//!   ([`crate::permission::CodexSandbox::Off`]) runs `danger-full-access`, without the sandbox settings above, which
+//!   only that sandbox reads; the isolation, the untrusted project layers, the MCP servers, the approval policy and the
+//!   reviewer stay. Its shell stays too: only the Orchestrator chat takes Codex's shell away (`features.shell_tool`,
+//!   [`super::codex_chat`]), so commands run.
 //! - Network access is a setting of the `workspace-write` sandbox only; the `read-only` sandbox has none. A command
 //!   that needs more than the sandbox (network while it is off, a write outside the writable roots, an escalation the
 //!   model requests) asks a person through the granular approval policy's `sandbox_approval`
@@ -61,7 +66,7 @@ use super::{
 };
 use crate::{
   command::Command,
-  permission::{NetworkAccess, NetworkHosts},
+  permission::{CodexSandbox, NetworkAccess, NetworkHosts},
   resource::{CommandEnvironment, RepositoryAccess},
 };
 
@@ -124,6 +129,8 @@ pub struct CodexInvocation<'a> {
   /// The MCP servers the invocation gives the agent, if any.
   pub mcp: Option<&'a CodexMcp>,
   pub agent_files: CodexAgentFiles<'a>,
+  /// Off, none of the sandbox's settings is given: the thread runs `danger-full-access`.
+  pub sandbox: CodexSandbox,
 }
 
 /// Whether Codex loads the repository's own agent files.
@@ -145,6 +152,33 @@ impl CodexInvocation<'_> {
       args.extend(["-c".to_owned(), setting.to_owned()]);
     }
     args.extend(["-c".to_owned(), self.untrusted_projects()]);
+    if self.sandbox.is_on() {
+      args.extend(self.sandbox_settings());
+    }
+    if let NetworkAccess::Hosts(hosts) = &self.network {
+      args.extend(["-c".to_owned(), web_search_domains(hosts)]);
+    }
+    if let CodexAgentFiles::LeftOut { skills } = self.agent_files {
+      unicode_folders(skills)?;
+      args.extend(["-c".to_owned(), "project_doc_max_bytes=0".to_owned()]);
+      if !skills.is_empty() {
+        let disabled: Vec<String> = skills
+          .iter()
+          .map(|skill| format!("{{path={},enabled=false}}", toml_string(&skill.to_string_lossy())))
+          .collect();
+        args.extend(["-c".to_owned(), format!("skills.config=[{}]", disabled.join(","))]);
+      }
+    }
+    if let Some(mcp) = self.mcp {
+      args.extend(mcp.args());
+    }
+    Ok(args)
+  }
+
+  /// What only Codex's sandbox reads: the Windows sandbox, and the `workspace-write` sandbox's network and writable
+  /// roots (none while the agent only reads).
+  fn sandbox_settings(&self) -> Vec<String> {
+    let mut args = Vec::new();
     if self.platform == Platform::Windows {
       args.extend(["-c".to_owned(), "windows.sandbox=elevated".to_owned()]);
     }
@@ -170,24 +204,7 @@ impl CodexInvocation<'_> {
       "-c".to_owned(),
       format!("sandbox_workspace_write.writable_roots={}", toml_array(&roots)),
     ]);
-    if let NetworkAccess::Hosts(hosts) = &self.network {
-      args.extend(["-c".to_owned(), web_search_domains(hosts)]);
-    }
-    if let CodexAgentFiles::LeftOut { skills } = self.agent_files {
-      unicode_folders(skills)?;
-      args.extend(["-c".to_owned(), "project_doc_max_bytes=0".to_owned()]);
-      if !skills.is_empty() {
-        let disabled: Vec<String> = skills
-          .iter()
-          .map(|skill| format!("{{path={},enabled=false}}", toml_string(&skill.to_string_lossy())))
-          .collect();
-        args.extend(["-c".to_owned(), format!("skills.config=[{}]", disabled.join(","))]);
-      }
-    }
-    if let Some(mcp) = self.mcp {
-      args.extend(mcp.args());
-    }
-    Ok(args)
+    args
   }
 
   /// The worktree and its repository marked untrusted, so that Codex loads no `.codex` folder of

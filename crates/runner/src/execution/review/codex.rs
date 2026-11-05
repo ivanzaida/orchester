@@ -21,6 +21,7 @@ use orchester_core::{
     mcp::InvocationExemptions,
   },
   orchestrator::{TurnFailure, TurnState},
+  permission::CodexSandbox,
   resource::RepositoryAccess,
 };
 use tokio::sync::oneshot;
@@ -132,6 +133,8 @@ impl ReviewTurn {
       platform: Platform::current(),
       mcp: None,
       agent_files: CodexAgentFiles::LeftOut { skills: &skills },
+      // The reviewer only reads, whatever the profile it reviews for: its sandbox is always on.
+      sandbox: CodexSandbox::On,
     }
     .command(std::env::vars_os(), &prepared.environment)
     .and_then(|command| on_account(command, prepared.connection.account(), AgentProvider::CodexCli))
@@ -147,6 +150,7 @@ impl ReviewTurn {
       effort: prepared.effort.clone(),
       worktree: prepared.worktree.clone(),
       access: RepositoryAccess::ReadOnly,
+      sandbox: CodexSandbox::On,
       command_approvals: false,
       sandbox_approvals: false,
       tool_approvals: false,

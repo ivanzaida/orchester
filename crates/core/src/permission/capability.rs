@@ -31,6 +31,10 @@
 //!   there (`--add-dir`), while its commands are not confined to any folder in the first place.
 //! - Autopilot ([`super::EffectiveApprovalMode`]) hands every command to Orchester as asking before each one does,
 //!   whatever the commands setting, which is Manual's; whether the CLI's version can is [`super::autopilot_support`]'s.
+//! - A Codex profile whose sandbox a person turned off ([`super::CodexSandbox::Off`]) runs `danger-full-access`: Codex
+//!   then enforces neither its repository access, its network, its writable folders nor where any command runs
+//!   ([`Mechanism::CodexSandboxOff`], which [`Mechanism::enforces`] nothing). Asking before commands still asks: its
+//!   execpolicy rules do not rest on the sandbox. It runs anyway, as the person chose; the enforcement panel says so.
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -166,6 +170,15 @@ pub enum Mechanism {
   /// `tools.web_search.allowed_domains=[…]` limits web search to the listed domains
   /// (`crate::connection::invocation::codex`).
   CodexSandboxNetworkHosts,
+  /// `sandbox: danger-full-access`: a person turned the Codex sandbox off, so nothing enforces the setting.
+  CodexSandboxOff,
+}
+
+impl Mechanism {
+  /// Whether the mechanism holds the agent to the setting: every one does but [`Self::CodexSandboxOff`].
+  pub const fn enforces(self) -> bool {
+    !matches!(self, Self::CodexSandboxOff)
+  }
 }
 
 /// Why a CLI cannot enforce an option.
@@ -328,12 +341,34 @@ impl EnforcedPermissions {
   pub fn launch(&self) -> LaunchPermissions {
     LaunchPermissions::new(self.permissions.clone(), self.outside_commands)
   }
+
+  /// Whether each setting's mechanism holds the agent to it ([`Mechanism::enforces`]): not with the Codex sandbox off.
+  pub fn enforces_every_setting(&self) -> bool {
+    [self.repository, self.commands, self.network]
+      .into_iter()
+      .chain(self.writable_folders)
+      .all(Mechanism::enforces)
+  }
+
+  /// As Codex runs these permissions with its sandbox off: nothing enforces the repository access, the network, the
+  /// writable folders or where any command runs ([`Mechanism::CodexSandboxOff`]); asking before commands still asks.
+  fn unsandboxed(mut self) -> Self {
+    let off = Mechanism::CodexSandboxOff;
+    self.repository = off;
+    self.network = off;
+    if self.commands == Mechanism::CodexSandboxedCommands {
+      self.commands = off;
+    }
+    self.writable_folders = self.writable_folders.map(|_| off);
+    self
+  }
 }
 
 impl AgentPermissions {
   /// How `provider` enforces these permissions on `platform`, or why it cannot. Network off that
   /// cannot be enforced leaves network on, as the design decides (the profile stays usable and
-  /// says so); any other option that cannot be enforced is refused, never run unenforced.
+  /// says so); any other option that cannot be enforced is refused, never run unenforced, but for what a person turned
+  /// Codex's sandbox off for ([`EnforcedPermissions::unsandboxed`]).
   pub fn enforced_on(
     &self,
     provider: AgentProvider,
@@ -393,7 +428,7 @@ impl AgentPermissions {
       .granted_folders()
       .is_some_and(|folders| !folders.is_empty())
       .then_some(folders_mechanism);
-    Ok(EnforcedPermissions {
+    let enforced = EnforcedPermissions {
       permissions,
       repository,
       commands,
@@ -401,6 +436,10 @@ impl AgentPermissions {
       writable_folders,
       network_stays_on,
       outside_commands,
+    };
+    Ok(match provider {
+      AgentProvider::CodexCli if !self.codex_sandbox.is_on() => enforced.unsandboxed(),
+      _ => enforced,
     })
   }
 
@@ -424,7 +463,7 @@ impl AgentPermissions {
   /// These permissions with every option `provider` cannot enforce on `platform` reset to the most
   /// restrictive one it can, and the options that were reset. Used when a profile's connection
   /// changes; the editor shows the resets before publishing. A setting without any enforceable
-  /// option keeps its value (publishing then refuses it).
+  /// option keeps its value (publishing then refuses it). The Codex sandbox is on again on any other provider.
   pub fn fitted_to(&self, provider: AgentProvider, platform: Platform) -> (Self, Vec<PermissionOption>) {
     let mut fitted = self.clone();
     let mut resets = Vec::new();
@@ -461,6 +500,10 @@ impl AgentPermissions {
         PermissionOption::NetworkOn => NetworkAccess::On,
         _ => NetworkAccess::Off,
       };
+    }
+    // Only Codex has a sandbox to turn off: on another CLI it is on again, so a way back to Codex never brings it off.
+    if provider != AgentProvider::CodexCli {
+      fitted.codex_sandbox = super::CodexSandbox::On;
     }
     (fitted, resets)
   }

@@ -272,6 +272,7 @@ fn codex_args(access: RepositoryAccess, roots: &[PathBuf]) -> Vec<String> {
     platform: Platform::Windows,
     mcp: None,
     agent_files: CodexAgentFiles::Loaded,
+    sandbox: orchester_core::permission::CodexSandbox::On,
   }
   .args()
   .expect("unicode paths")

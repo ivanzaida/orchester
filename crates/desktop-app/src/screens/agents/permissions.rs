@@ -1,11 +1,12 @@
 //! A profile page's permissions (`01c · Profile · permissions` `WAWHr`, 07 `J1ixkr`): Repository access with its extra
-//! writable folders, Approvals with Manual's allowed commands, Network, the Browser with its allowed sites (`hQfEh`),
-//! and MCP servers as switches. An option the connection cannot enforce here cannot be chosen and says why; a widening
-//! change is asked about inside the section that widens it.
+//! writable folders, Approvals with Manual's allowed commands, Network, a Codex connection's Sandbox ([`sandbox`]), the
+//! Browser with its allowed sites (`hQfEh`), and MCP servers as switches. An option the connection cannot enforce here
+//! cannot be chosen and says why; a widening change is asked about inside the section that widens it.
 mod approvals;
 mod browser;
 mod commands;
 mod folders;
+mod sandbox;
 mod sites;
 
 use lurq::{
@@ -49,6 +50,7 @@ pub(super) enum Section {
   Connection,
   Repository,
   Network,
+  Sandbox,
   Browser,
   Mcp,
   Approvals,
@@ -60,6 +62,7 @@ impl Section {
     match reason.key {
       "appMcp.widens.repository" | "appMcp.widens.writableFolder" => Self::Repository,
       "appMcp.widens.network" => Self::Network,
+      "appMcp.widens.codexSandboxOff" => Self::Sandbox,
       "appMcp.widens.browser" | "appMcp.widens.browserSite" => Self::Browser,
       "appMcp.widens.mcpServers" => Self::Mcp,
       "appMcp.widens.commands" | "appMcp.widens.toolCallsUnasked" | "appMcp.widens.autopilot" => Self::Approvals,
@@ -76,8 +79,9 @@ pub(super) struct Context<'a> {
   pub project: &'a ShownProject,
 }
 
-/// The five sections, Approvals right after Repository access (07), the Browser after Network; `asked` opens in the
-/// one it names.
+/// The sections, Approvals right after Repository access (07), a Codex connection's Sandbox after Network, then the
+/// Browser; `asked` opens in the one it names, a question about the sandbox in Repository access where the page offers
+/// no Sandbox.
 pub(super) fn sections(ctx: &mut Ctx, context: &Context<'_>, asked: Option<(Section, Element)>) -> Vec<Element> {
   let provider = context.fields.connection(context.listed).map(|c| c.provider());
   let (section, mut question) = match asked {
@@ -85,12 +89,22 @@ pub(super) fn sections(ctx: &mut Ctx, context: &Context<'_>, asked: Option<(Sect
     None => (None, None),
   };
   let mut take = |here: Section| if section == Some(here) { question.take() } else { None };
-  let repository = repository(ctx, context, provider, take(Section::Repository));
+  let offers_sandbox = sandbox::offered(context, provider);
+  let (sandbox_asked, elsewhere) = match take(Section::Sandbox) {
+    asked if offers_sandbox => (asked, None),
+    asked => (None, asked),
+  };
+  let repository = repository(ctx, context, provider, take(Section::Repository).or(elsewhere));
   let approvals = approvals::group(ctx, context, provider, take(Section::Approvals));
   let network = network_section(ctx, context.fields, provider, take(Section::Network));
+  let sandbox = offers_sandbox.then(|| sandbox::sandbox(ctx, context.fields, sandbox_asked));
   let browser = browser::browser(ctx, context, take(Section::Browser));
   let mcp = mcp(ctx, context, provider, take(Section::Mcp));
-  vec![repository, approvals, network, browser, mcp]
+  [repository, approvals, network]
+    .into_iter()
+    .chain(sandbox)
+    .chain([browser, mcp])
+    .collect()
 }
 
 fn section(id: &str, (title, count): (&str, Option<&str>), rows: Vec<Element>) -> Element {

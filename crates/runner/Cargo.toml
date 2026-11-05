@@ -221,6 +221,10 @@ name = "writable_folders"
 required-features = ["test-agent"]
 
 [[test]]
+name = "codex_sandbox"
+required-features = ["test-agent"]
+
+[[test]]
 name = "missing_worktree"
 required-features = ["test-agent"]
 

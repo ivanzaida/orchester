@@ -15,7 +15,9 @@
 //! `shell` or `shell_command` was answered `unsupported call` and ran nothing, even in a `danger-full-access` sandbox;
 //! `apply_patch` was refused by Codex's own approval check before any sandbox ran ("writing is blocked by read-only
 //! sandbox; rejected by user approval settings"), as the runner's approval policy leaves nothing beyond the sandbox to
-//! a person. What the agent reads of the project, it reads through the chat's git tools.
+//! a person. What the agent reads of the project, it reads through the chat's git tools. The shell is gone because of
+//! `features.shell_tool=false`, not the sandbox: a step keeps its shell, so with its Codex sandbox off
+//! ([`crate::permission::CodexSandbox::Off`]) its commands run, outside any sandbox.
 //!
 //! - Its only MCP server is the chat's domain tools (`orchester`), their bearer token in the process environment only
 //!   ([`super::CodexMcp`]); the user's own servers, plugins and apps are turned off as for a step.
@@ -34,7 +36,7 @@ use std::{
 use super::{CodexAgentFiles, CodexInvocation, CodexMcp, InvocationError, Platform};
 use crate::{
   command::Command,
-  permission::NetworkAccess,
+  permission::{CodexSandbox, NetworkAccess},
   resource::{CommandEnvironment, RepositoryAccess},
 };
 
@@ -94,7 +96,7 @@ impl CodexChat<'_> {
     Ok(command.with_args(confinement()))
   }
 
-  /// A read-only step's invocation in the project folder, which the confinement adds to.
+  /// A read-only step's invocation in the project folder, its sandbox on, which the confinement adds to.
   const fn invocation(&self) -> CodexInvocation<'_> {
     CodexInvocation {
       executable: self.executable,
@@ -106,6 +108,7 @@ impl CodexChat<'_> {
       platform: self.platform,
       mcp: Some(self.mcp),
       agent_files: CodexAgentFiles::LeftOut { skills: self.skills },
+      sandbox: CodexSandbox::On,
     }
   }
 }
