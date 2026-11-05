@@ -74,9 +74,37 @@ fn release(repo: &Path) {
 fn run_services_tab_follows_the_runs_services_and_stops_and_restarts_them_through_the_runner() {
   let (mut window, repo) = running();
   // The log follows live: team-server's first lines as soon as it starts, then, with no press, its crash's.
-  window.until_within(PATIENCE, "team-server", |window| {
-    shows(window, "task-service-team-server")
-  });
+  let deadline = std::time::Instant::now() + PATIENCE;
+  while !shows(&mut window, "task-service-team-server") {
+    window.tree.tick_futures();
+    window.pass();
+    if std::time::Instant::now() > deadline {
+      use orchester_core::store::{ActivityStore, RunStore, TaskStore};
+      let db = orchester_store::ProjectDb::open(&repo).expect("open");
+      let mut seen = Vec::new();
+      let runs: Vec<_> = db
+        .tasks()
+        .expect("tasks")
+        .iter()
+        .flat_map(|task| db.runs_of_task(task.id()).expect("runs"))
+        .collect();
+      for run in runs.iter().flatten() {
+        seen.push(format!("{:?}", run.status()));
+        for entry in db.activity(run.id(), 0).expect("activity") {
+          seen.push(format!("{:?}", entry.event));
+        }
+      }
+      window.navigation().back();
+      window.pass();
+      panic!(
+        "DEBUG {}\nHEADER {}\nPAGE {}",
+        seen.join("\n"),
+        says(&mut window, "task-header"),
+        says(&mut window, "screen-task")
+      );
+    }
+    std::thread::sleep(Duration::from_millis(20));
+  }
   // On its name: the middle of a ready row is its address, which opens in the Browser tab.
   window.press("task-service-team-server-name");
   window.until_within(PATIENCE, "team-server's first lines", |window| {
