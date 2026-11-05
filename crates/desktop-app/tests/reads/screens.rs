@@ -151,13 +151,37 @@ fn reads_no_listed_project_again_when_the_list_changes_after_a_report() {
 }
 
 #[test]
-fn reads_the_code_index_on_a_line_while_a_run_runs() {
-  // KON-12 runs: its runner may start building an index the tab does not know of yet.
+fn reads_no_code_index_on_lines_while_a_run_runs() {
+  // KON-12 runs: the runner builds a run's index before its agents start, which is a change of the run's state.
   let mut index = Counted::open("conversation");
   index.show(ProjectPage::Settings(Default::default()), "screen-project_settings");
   index.window.press("settings-tab-context");
   index.settle();
-  index.report(false);
-  let line = index.settle();
-  assert_eq!(line.get("code index"), Some(&1), "{line:?}");
+  for _ in 0..5 {
+    index.report(false);
+    index.window.tree.tick_futures();
+    index.window.pass();
+  }
+  let lines = index.settle();
+  assert_eq!(lines.get("code index"), None, "transcript lines read no index: {lines:?}");
+  index.report(true);
+  let state = index.settle();
+  assert_eq!(state.get("code index"), Some(&1), "a run's state reads it: {state:?}");
+}
+
+#[test]
+fn reads_memory_again_when_a_run_changes_state_not_on_its_lines() {
+  // KON-12 runs.
+  let mut memory = Counted::open("conversation");
+  memory.show(ProjectPage::Memory(None), "screen-memory");
+  for _ in 0..5 {
+    memory.report(false);
+    memory.window.tree.tick_futures();
+    memory.window.pass();
+  }
+  let lines = memory.settle();
+  assert_eq!(lines.get("memory"), None, "transcript lines read no memory: {lines:?}");
+  memory.report(true);
+  let state = memory.settle();
+  assert_eq!(state.get("memory"), Some(&1), "a run's state reads it: {state:?}");
 }

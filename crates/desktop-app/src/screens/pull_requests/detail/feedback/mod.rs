@@ -33,7 +33,7 @@ use lurq::{
 };
 use orchester_core::{
   diff::Diff,
-  id::{FeedbackId, FeedbackPostId, IdempotencyKey, MessageId, ResourceId},
+  id::{FeedbackId, FeedbackPostId, IdempotencyKey, MessageId, ResourceId, RunId},
   pull_request::feedback::{DiffSide, FeedbackKind, LineSpan},
   revision::Revision,
   time::Timestamp,
@@ -55,7 +55,7 @@ pub(super) use self::{
   thread::Env,
 };
 use crate::{
-  project::{ProjectFeed, ShownProject, feedback_holds},
+  project::{ProjectFeed, ShownProject, feedback_holds, run_changes::run_changes, settled_read::settled_read},
   services::Services,
 };
 
@@ -192,6 +192,8 @@ pub struct FeedbackState {
   pub reveal: Signal<Held<Option<FeedbackId>>>,
   /// Counts the writes that landed: the threads are read again after each.
   pub written: Signal<u64>,
+  /// The run the feedback goes to, as the threads were last read: they are read again whenever it changes.
+  pub run: Signal<Held<Option<RunId>>>,
   /// Why the latest write did not land.
   pub failure: Signal<Option<Message>>,
   /// The head Files changed shows instead of the pull request's latest, one a thread was written at (*Show at*).
@@ -220,6 +222,7 @@ impl FeedbackState {
       drafts: Drafts::default(),
       reveal: ctx.signal(Held(None)),
       written: ctx.signal(0),
+      run: ctx.signal(Held(None)),
       failure: ctx.signal(None),
       pinned: ctx.signal(Held(None)),
       follow: ctx.signal(false),
@@ -373,25 +376,28 @@ struct Read(Arc<FeedbackBoard>);
 
 impl DevtoolsInspectable for Read {}
 
-/// The pull request's feedback, read off the UI thread when the page opens, whenever the project's runs change, a
-/// write landed or the pull request's head or diff is read again (`head`). What was read before shows meanwhile.
+/// The pull request's feedback, read off the UI thread when the page opens, whenever a run of the project changes
+/// state, the run the feedback goes to changes (its transcript too: the board shows its agents' answers), a write
+/// landed or the pull request's head or diff is read again (`head`). What was read before shows meanwhile; one read
+/// runs at a time (`project::settled_read`).
 pub fn read_board(
   ctx: &mut Ctx,
   (project, number): (&ShownProject, NonZeroU64),
   head: Option<(Revision, Option<Arc<Diff>>)>,
-  written: u64,
+  feedback: &FeedbackState,
 ) -> BoardRead {
   let programs = Services::of(ctx).programs;
   let root = project.open.repo_root.clone();
   let (slots, lost) = feedback_holds(project.feed.status.get().as_ref(), &root);
-  let live = project.feed.running.get();
-  let changes = project.feed.run_changes(live);
+  let Held(followed) = feedback.run.get();
+  let changes = (project.feed.states.get(), run_changes(ctx, &root, followed));
   let diff_key = head
     .as_ref()
     .and_then(|(_, diff)| diff.as_ref().map(|diff| Arc::as_ptr(diff) as usize));
   let head_key = head.as_ref().map(|(revision, _)| revision.clone());
+  let written = feedback.written.get();
   let deps = (root, number, head_key, diff_key, changes, written, lost, slots);
-  let load = ctx.future(deps, move |(root, number, ..)| {
+  let state = settled_read(ctx, "pull request feedback", deps, move |(root, number, ..)| {
     let (programs, head) = (programs.clone(), head.clone());
     async move {
       background::run(move || {
@@ -412,7 +418,12 @@ pub fn read_board(
       })
     }
   });
-  let state = load.state().get();
+  if let Some(Read(board)) = &state.data {
+    let run = board.task.as_ref().and_then(|task| task.run.as_ref()).map(|run| run.id);
+    if run != followed {
+      feedback.run.set(Held(run));
+    }
+  }
   BoardRead {
     board: state.data.map(|Read(board)| board),
     failed: state.error,

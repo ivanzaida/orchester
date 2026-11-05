@@ -39,8 +39,9 @@ impl<D, E> DevtoolsInspectable for Failed<D, E> {}
 /// that was read (kept while a read runs and after one failed), `error` the latest read's error while it is
 /// `Rejected`. The render that sees a read end gets its outcome, even when it starts the next read.
 ///
-/// `name` names the read in the trace lines of [`crate::app_log::READ_LOG`], one per read with its duration and
-/// whether deps that moved after an earlier read made it.
+/// `name` names the read in the trace lines of [`crate::app_log::READ_LOG`], two per read: `read` as it starts, on
+/// the thread that renders, as the other reads of the log are; `settled` as it ends, with its duration and whether
+/// deps that moved after an earlier read made it.
 pub fn settled_read<D, T, E, F, Fut>(ctx: &mut Ctx, name: &'static str, deps: D, read: F) -> FutureState<T, E>
 where
   D: Clone + PartialEq + Send + Sync + 'static,
@@ -50,12 +51,13 @@ where
   Fut: Future<Output = Result<T, E>> + Send + 'static,
 {
   let action = ctx.future_action(move |(deps, again): (D, bool)| {
+    tracing::trace!(target: crate::app_log::READ_LOG, read = name, again);
     let reading = read(deps.clone());
     async move {
       let started = Instant::now();
       let result = reading.await;
       let took = started.elapsed();
-      tracing::trace!(target: crate::app_log::READ_LOG, read = name, ?took, again, ok = result.is_ok());
+      tracing::trace!(target: crate::app_log::READ_LOG, settled = name, ?took, again, ok = result.is_ok());
       result
         .map(|value| Done {
           deps: deps.clone(),
@@ -65,7 +67,11 @@ where
     }
   });
   let state = action.state().get();
-  if !action.is_active() {
+  let active = action.is_active();
+  if name == "file" {
+    eprintln!("DBG file render status={:?} active={active}", state.status);
+  }
+  if !active {
     let last = match state.status {
       FutureStatus::Fulfilled => state.data.as_ref().map(|done| &done.deps),
       FutureStatus::Rejected => state.error.as_ref().map(|failed| &failed.deps),
@@ -73,7 +79,10 @@ where
     };
     if last != Some(&deps) {
       let again = !state.is_idle();
-      action.run_if_idle((deps, again));
+      let started = action.run_if_idle((deps, again));
+      if name == "file" {
+        eprintln!("DBG file start started={started}");
+      }
     }
   }
   let shown = if state.is_idle() {
