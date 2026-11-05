@@ -104,7 +104,7 @@ pub fn top(
   shown: &Shown<'_>,
   changes: Option<&Result<Checkpointed, Message>>,
 ) -> Element {
-  let Some(action) = merge::action(ctx, task, shown.merge, false) else {
+  let Some(action) = merge::action(ctx, task, shown.merge) else {
     return Column::new().into();
   };
   let (look, words) = match shown.merge {
@@ -264,16 +264,6 @@ fn buttons(
   let open = ActionButton::new(id, ButtonKind::Secondary, ctx.t(label))
     .icon(glyph)
     .opens(navigation.to(page));
-  let pull_request = review.map(|number| {
-    let route = Route::Project(project, ProjectPage::PullRequest(number, None));
-    ActionButton::new(
-      "task-review-pull-request",
-      ButtonKind::Secondary,
-      ctx.t("decisions.ready.review"),
-    )
-    .icon(Icon::GitPullRequest)
-    .opens(navigation.to(route))
-  });
   Row::new()
     .id("task-ready-actions")
     .spacing(SpacingSize::Sm)
@@ -281,8 +271,20 @@ fn buttons(
     .child(action.control.button())
     .child(open)
     .child(close(ctx, task))
-    .with_children(pull_request)
+    .with_children(review.map(|number| review_pull_request(ctx, task, number)))
     .into()
+}
+
+/// *Review PR*: the run's pull request `number` on its page.
+fn review_pull_request(ctx: &mut Ctx, task: &TaskContext, number: NonZeroU64) -> ActionButton {
+  let route = Route::Project(task.project.open.project.id(), ProjectPage::PullRequest(number, None));
+  ActionButton::new(
+    "task-review-pull-request",
+    ButtonKind::Secondary,
+    ctx.t("decisions.ready.review"),
+  )
+  .icon(Icon::GitPullRequest)
+  .opens(Navigation::of(ctx).to(route))
 }
 
 /// *Close without merging*: the task is marked done as *More actions* › *Mark as done* does, its run's work left
@@ -382,21 +384,11 @@ pub fn merge_actions(ctx: &mut Ctx, task: &TaskContext, run: &RunView, pull: &Pu
   let Some(standing) = Merge::of(task) else {
     return Column::new().into();
   };
-  let Some(action) = merge::action(ctx, task, standing, true) else {
+  let Some(action) = merge::action(ctx, task, standing) else {
     return Column::new().into();
   };
   let pull = pull_request::parts(ctx, task, run, pull);
-  let review = pull.review.map(|number| {
-    let route = Route::Project(task.project.open.project.id(), ProjectPage::PullRequest(number, None));
-    let navigation = Navigation::of(ctx);
-    ActionButton::new(
-      "task-review-pull-request",
-      ButtonKind::Secondary,
-      ctx.t("decisions.ready.review"),
-    )
-    .icon(Icon::GitPullRequest)
-    .opens(navigation.to(route))
-  });
+  let review = pull.review.map(|number| review_pull_request(ctx, task, number));
   let row = Row::new()
     .id("task-ready-actions")
     .spacing(SpacingSize::Sm)

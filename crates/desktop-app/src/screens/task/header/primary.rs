@@ -102,7 +102,7 @@ pub fn primary(
   // The merge's action, with its keys, on every tab, the Summary's top card too (01i `k9GBy`, 01j `k4C0Es`).
   if card == Some(Card::Decision(Waiting::Ready))
     && let Some(merge) = Merge::of(task)
-    && let Some(action) = merge::action(ctx, task, merge, false)
+    && let Some(action) = merge::action(ctx, task, merge)
   {
     return Some(Control {
       id: "task-primary-merge".into(),

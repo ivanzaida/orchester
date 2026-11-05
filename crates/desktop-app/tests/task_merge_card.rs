@@ -38,6 +38,9 @@ const KEYS: &str = if cfg!(target_os = "macos") {
 } else {
   "Ctrl+Enter"
 };
+/// Why Merge waits while a merge waits in the run's worktree.
+const WAITS_RESOLVING: &str =
+  "Merge waits while Orchester merges into the run's worktree for you to resolve its conflicts.";
 
 struct Page {
   window: Window,
@@ -126,6 +129,48 @@ impl Page {
       .key_down_with_meta("Enter".to_owned(), "Enter".to_owned(), false, ctrl, false, meta);
     self.window.pass();
   }
+
+  /// The run's worktree, as the seed adds it.
+  fn worktree(&self) -> PathBuf {
+    self.repo.join(".orchester/worktrees").join(self.run.0.to_string())
+  }
+
+  /// No merge of the run began: none was recorded and no attempt either, for as long as one would take to begin.
+  fn no_merge_began(&mut self, what: &str) {
+    let (run, repo) = (self.run.0, self.repo.clone());
+    let until = std::time::Instant::now() + Duration::from_secs(2);
+    while std::time::Instant::now() < until {
+      self.window.tree.tick_futures();
+      self.window.tree.tick_timers();
+      self.window.pass();
+      std::thread::sleep(Duration::from_millis(20));
+    }
+    let db = ProjectDb::open(&repo).expect("the project database");
+    assert!(
+      db.run_merge(run).expect("the run's merge").is_none(),
+      "{what}: nothing merged"
+    );
+    assert!(
+      db.merge_attempts(run).expect("the run's attempts").is_empty(),
+      "{what}: no merge was tried"
+    );
+  }
+}
+
+/// `git <args>` in `dir`, as a person with a name; what it printed.
+fn git_in(dir: &std::path::Path, args: &[&str]) -> String {
+  let output = std::process::Command::new("git")
+    .args(["-c", "user.name=Kontur", "-c", "user.email=kontur@example.com"])
+    .args(args)
+    .current_dir(dir)
+    .output()
+    .expect("run git");
+  assert!(
+    output.status.success(),
+    "git {args:?}: {}",
+    String::from_utf8_lossy(&output.stderr)
+  );
+  String::from_utf8_lossy(&output.stdout).trim().to_owned()
 }
 
 #[test]
@@ -179,6 +224,42 @@ fn task_merge_card_shortcut_merges_from_another_tab() {
     let merged = db.run_merge(run).expect("the run's merge").is_some();
     merged || !db.merge_attempts(run).expect("the run's attempts").is_empty()
   });
+}
+
+#[test]
+fn task_merge_card_header_and_shortcut_wait_while_a_merge_waits_in_the_worktree() {
+  let mut page = Page::open("task-merge-card-ready", "Ready to merge");
+  // A merge left unfinished in the run's worktree, as one the person resolves in their editor: no resolving job runs.
+  // Begun outside Orchester, it is read when the task's page opens again.
+  let worktree = page.worktree();
+  let side = git_in(&worktree, &["commit-tree", "HEAD^{tree}", "-p", "HEAD", "-m", "side"]);
+  git_in(&worktree, &["merge", "--no-ff", "--no-commit", &side]);
+  let away = page.run_page();
+  page.window.navigation().go(away);
+  page
+    .window
+    .until("another page", |window| window.texts("task-frame").is_none());
+  page.go(TaskTab::Summary);
+  page.until_says("task-merge-reason", WAITS_RESOLVING);
+  page.go(TaskTab::Changes);
+  page.until_says("task-primary-merge-label", "Merge");
+  page.window.press("task-primary-merge");
+  page.merge_keys();
+  page.no_merge_began("the header's Merge and ⌘↵");
+  git_in(&worktree, &["rev-parse", "--verify", "MERGE_HEAD"]);
+}
+
+#[test]
+fn task_merge_card_shortcut_does_nothing_while_typing() {
+  let mut page = Page::open("task-merge-card-ready", "Ready to merge");
+  page.go(TaskTab::Conversation);
+  page.until_says("task-primary-merge-label", "Merge");
+  page
+    .window
+    .until("the composer", |window| window.texts("composer-input").is_some());
+  page.window.press("composer-input");
+  page.merge_keys();
+  page.no_merge_began("⌘↵ in the composer");
 }
 
 #[test]

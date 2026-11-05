@@ -6,8 +6,9 @@
 //! request is created from the header's *More actions* ([`pull_request`]); once it has one, the card says so and
 //! *Review PR* opens it. Merging and creating a pull request run on the project's shared operations (`ProjectJobs`,
 //! which Orchester's MCP server uses too), so they go on when the page closes: the buttons show them under way. While
-//! a merge of the base branch waits in the run's worktree for the person to finish it, that is shown instead
-//! ([`resolving`]); a merged run says where its work went and what was cleared after it.
+//! a merge of the base branch waits in the run's worktree for the person to finish it, as the task's frame read it
+//! (`merge::worktree`), that is shown instead ([`resolving`]); a merged run says where its work went and what was
+//! cleared after it.
 
 mod card;
 pub(super) mod changed;
@@ -17,53 +18,30 @@ mod pull_request;
 mod resolving;
 mod unpushed;
 
-use std::time::Duration;
-
 use lurq::{
-  app::{
-    component::Component,
-    ctx::{Ctx, Interval},
-  },
+  app::{component::Component, ctx::Ctx},
   components::Column,
   core::Signal,
   node::Element,
 };
 use orchester_core::id::RunId;
-use orchester_workspace::{
-  background,
-  tasks::{
-    integration_jobs::JobState,
-    resolve::{self as worktree, Worktree},
-  },
-};
+use orchester_workspace::tasks::{integration_jobs::JobState, resolve::Worktree};
 
 pub(super) use self::card::frame;
 pub use self::pull_request::PullRequestState;
 use super::{TaskContext, arranged};
-use crate::{
-  screens::task::{PageState, merge::Merge},
-  services::Services,
+use crate::screens::task::{
+  PageState,
+  merge::{self, Merge},
 };
 
-/// How often a merge waiting in the run's worktree is read again while the person resolves it.
-const LOOK: Duration = Duration::from_secs(2);
-
-pub struct ReadyForReview {
-  /// Counts while a merge waits in the run's worktree, which is read again then: the person resolves it in an editor,
-  /// which tells Orchester nothing.
-  look: Signal<u64>,
-  /// Ticks [`Self::look`]; it runs only while a merge waits in the worktree.
-  looking: Interval,
-}
+pub struct ReadyForReview;
 
 impl Component for ReadyForReview {
   type Props = TaskContext;
 
-  fn create(ctx: &mut Ctx) -> Self {
-    let look = ctx.signal(0_u64);
-    let next = look.clone();
-    let looking = ctx.create_interval(LOOK, move || next.update(|tick| *tick += 1));
-    Self { look, looking }
+  fn create(_ctx: &mut Ctx) -> Self {
+    Self
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -79,13 +57,7 @@ impl Component for ReadyForReview {
     let (reminder, reminded) = local::reminder(ctx, &props);
     let readiness = pull_request::read(ctx, &props, settled && reminded);
     let pull = PageState::of(ctx).pull_request.read(readiness);
-    let worktree = in_worktree(ctx, &props, (run.id(), self.look.get()));
-    let in_merge = worktree.as_ref().and_then(|worktree| worktree.merge.as_ref());
-    if in_merge.is_some() {
-      self.looking.start();
-    } else {
-      self.looking.stop();
-    }
+    let in_merge = props.worktree.as_ref().and_then(|worktree| worktree.merge.as_ref());
     let job = props.jobs.run(run.id());
     // A merge git made shows as soon as it is made, also while the task is not read again with it; one it could not
     // record is not merged yet, and the top card's merge records it.
@@ -129,39 +101,11 @@ pub fn pull_request_rows(ctx: &mut Ctx, task: &TaskContext, menu: &Signal<bool>)
   pull_request::menu_rows(ctx, task, &read, menu)
 }
 
-/// What [`in_worktree`] read.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct InWorktree(Worktree);
-
-impl lurq::app::component::DevtoolsInspectable for InWorktree {}
-
 /// `run`'s worktree and the merge waiting in it for the person to resolve it, read again when the task or its
 /// resolving changes and at each `look` while one waits; `None` while it is first read.
 pub(super) fn in_worktree(ctx: &mut Ctx, task: &TaskContext, (run, look): (RunId, u64)) -> Option<Worktree> {
-  let services = Services::of(ctx);
   let root = task.project.open.repo_root.clone();
   let job = task.jobs.run(run);
-  let idle = !job.resolving();
-  let key = (
-    root,
-    (run, idle),
-    (task.project.feed.revision.get(), job.resolve.ended, look),
-  );
-  ctx
-    .future(key, move |(root, (run, idle), _)| {
-      let programs = services.programs.clone();
-      async move {
-        background::run(move || worktree::read(&programs, &root, (run, idle)))
-          .await
-          .map_err(|_| ())?
-          .map(InWorktree)
-          .map_err(|message| {
-            tracing::warn!(?message, "cannot read whether a merge waits in the run's worktree");
-          })
-      }
-    })
-    .state()
-    .get()
-    .data
-    .map(|read| read.0)
+  let again = ((task.project.feed.revision.get(), job.resolve.ended), look);
+  merge::worktree::read(ctx, root, (run, !job.resolving()), again)
 }

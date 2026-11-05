@@ -60,11 +60,13 @@ enum Work {
   Requeue,
 }
 
-/// The action of `task`'s latest run as `merge` stands, its keys with it; `in_worktree`: a merge waits in the run's
-/// worktree for the person to finish it, so the action that merges waits.
-pub fn action(ctx: &mut Ctx, task: &TaskContext, merge: Merge, in_worktree: bool) -> Option<MergeAction> {
+/// The action of `task`'s latest run as `merge` stands, its keys with it. While a merge waits in the run's worktree for
+/// the person to finish it, as the frame read it, the action that merges waits: the same for the top card, the header
+/// and ⌘↵.
+pub fn action(ctx: &mut Ctx, task: &TaskContext, merge: Merge) -> Option<MergeAction> {
   let run = task.detail.run.as_ref()?;
   let page = task.attempt.as_deref();
+  let in_worktree = task.merge_in_worktree();
   let mut action = match merge {
     Merge::NotMerged(Standing::Conflicts) if !in_worktree && !resolved(task, run) => resolve(ctx, task, run),
     Merge::NotMerged(Standing::NotRecorded) if !in_worktree => work(ctx, task, run, Work::Record),

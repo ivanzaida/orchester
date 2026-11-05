@@ -325,6 +325,9 @@ struct TaskFrame {
   ci_actions: ci::actions::CiActions,
   /// The latest run's merge attempts as last read, while it waits for review (`merge::reader`).
   attempts: Signal<merge::reader::Attempts>,
+  /// The latest run's worktree and the merge waiting in it as last read, while it waits for review
+  /// (`merge::worktree`).
+  worktree: Signal<merge::worktree::InWorktree>,
 }
 
 impl Component for TaskFrame {
@@ -365,6 +368,7 @@ impl Component for TaskFrame {
       ci: ctx.signal(ci::reader::Found::default()),
       ci_actions: ci::actions::CiActions::new(ctx, &props.project.feed),
       attempts: ctx.signal(merge::reader::Attempts::default()),
+      worktree: ctx.signal(merge::worktree::InWorktree::default()),
     }
   }
 
@@ -425,6 +429,7 @@ impl Component for TaskFrame {
     self.changes.read(ctx, &root, &detail, follow);
     let (reader, ci) = self.ci(ctx, (&props.project, &detail), (saves, online));
     let attempt = detail.run.as_ref().and_then(|run| self.attempts.get().of(run.id()));
+    let worktree = detail.run.as_ref().and_then(|run| self.worktree.get().of(run.id()));
     let task = TaskContext {
       project: props.project.clone(),
       key: props.key.clone(),
@@ -434,8 +439,9 @@ impl Component for TaskFrame {
       jobs,
       ci,
       attempt,
+      worktree,
     };
-    let (attempts, merge) = self.merge(ctx, &task);
+    let (readers, merge) = self.merge(ctx, &task);
     let header = HeaderProps {
       task: task.clone(),
       view: props.view.clone(),
@@ -450,17 +456,19 @@ impl Component for TaskFrame {
       .child(ctx.mount_keyed::<TaskHeader>("task-header", header))
       .child(body)
       .with_children(reader)
-      .with_children(attempts)
+      .with_children(readers)
       .into()
   }
 }
 
 impl TaskFrame {
-  /// The latest run's merge while it waits for review (ORC-731): the reader of its merge attempts, and what ⌘↵ presses
-  /// now, if anything.
-  fn merge(&self, ctx: &mut Ctx, task: &TaskContext) -> (Option<Element>, Option<Press>) {
-    let waits = summary::waiting(task) == Some(summary::Waiting::Ready);
-    let reader = task.detail.run.as_ref().filter(|_| waits).map(|run| {
+  /// The latest run's merge while it waits for review (ORC-731): the readers of its merge attempts and of the merge
+  /// waiting in its worktree, which the top card, the header and ⌘↵ share, and what ⌘↵ presses now, if anything.
+  fn merge(&self, ctx: &mut Ctx, task: &TaskContext) -> (Vec<Element>, Option<Press>) {
+    if summary::waiting(task) != Some(summary::Waiting::Ready) {
+      return (Vec::new(), None);
+    }
+    let attempts = task.detail.run.as_ref().map(|run| {
       merge::reader::mount(
         ctx,
         &task.project,
@@ -469,13 +477,14 @@ impl TaskFrame {
         &self.attempts,
       )
     });
+    let worktree = merge::worktree::mount(ctx, task, &self.worktree);
     let press = merge::Merge::of(task)
-      .and_then(|standing| merge::action(ctx, task, standing, false))
+      .and_then(|standing| merge::action(ctx, task, standing))
       .and_then(|action| match action.control.offer {
         header::controls::Offer::Ready(press) => Some(press),
         _ => None,
       });
-    (reader, press)
+    (attempts.into_iter().chain(worktree).collect(), press)
   }
 }
 

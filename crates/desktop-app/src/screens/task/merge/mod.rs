@@ -1,11 +1,13 @@
 //! The latest run's merge on its task page (ORC-731; `Review · redesign`, Row 4 `XHQpC`: 01i `k9GBy`, 01j `k4C0Es`):
 //! whether the run waits to be merged or its last merge attempt did not land, read from its merge attempts while it
-//! waits for review ([`reader`]); the one action that moves it on, which the Summary's top card and the header's
-//! primary action both show with its key cap ([`action`]); and ⌘↵ (Ctrl+Enter elsewhere), which presses it from
-//! anywhere on the page but a text field ([`shortcut`]).
+//! waits for review ([`reader`]), and whether a merge waits in its worktree for the person to finish it
+//! ([`worktree`]); the one action that moves it on, which the Summary's top card and the header's primary action both
+//! show with its key cap ([`action`]); and ⌘↵ (Ctrl+Enter elsewhere), which presses it from anywhere on the page but a
+//! text field ([`shortcut`]).
 
 mod action;
 pub(super) mod reader;
+pub(super) mod worktree;
 
 use std::sync::Arc;
 
