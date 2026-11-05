@@ -60,10 +60,7 @@ fn orchestrator_watch_starts_at_its_defaults_and_keeps_what_is_set() {
   drop(db);
 
   let current = repo.path().join(".orchester/orchester.db");
-  let old = copied_at_version(
-    &current,
-    version_before_table(schema_version(&current), "orchestrator_watch"),
-  );
+  let old = copied_at_version(&current, version_before_watch(schema_version(&current)));
   let upgraded = ProjectDb::open(old.path()).expect("migrate");
   assert_eq!(
     upgraded.orchestrator_watch().expect("read"),
@@ -403,18 +400,18 @@ fn version_before_chat_accounts(latest: u32) -> u32 {
     .expect("a schema before the chat's account")
 }
 
-/// The newest schema without the table `table`.
-fn version_before_table(latest: u32, table: &str) -> u32 {
+/// The newest schema without the Orchestrator's watch settings (ORC-757): later migrations may follow it.
+fn version_before_watch(latest: u32) -> u32 {
   (1..latest)
     .rev()
     .find(|&version| {
       let repo = tempfile::tempdir().expect("temporary directory");
       let old = ProjectDb::create_at_version(repo.path(), version).expect("an old database");
       !old
-        .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?1")
+        .prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'orchestrator_watch'")
         .expect("schema")
-        .exists([table])
+        .exists([])
         .expect("schema")
     })
-    .expect("a schema before the table")
+    .expect("a schema before the watch settings")
 }

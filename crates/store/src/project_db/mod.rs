@@ -92,6 +92,7 @@ mod run_connections;
 mod run_ends;
 mod run_inputs;
 mod run_models;
+mod run_waits;
 mod runner_failures;
 mod runs;
 mod schema;
@@ -176,6 +177,7 @@ pub use self::{
   resources::ResourceUpdate,
   run_ends::EndedRun,
   run_inputs::AcceptedInputs,
+  run_waits::{KeptRunWait, RunWaitEnd, RunWaitEnded},
   runs::{RunBranch, RunLogRecord},
   shared_events::{SharedEvent, SharedSnapshot},
   shared_members::{ServerAdmin, SharedMember},
