@@ -14,10 +14,12 @@ use std::{
 
 use orchester_api::{
   ErrorCode, SharedResourceKind,
-  client::{AuthorityCallError, Client, ClientError, PlainHttp, ServerAddress, SubscriptionEnd},
+  client::{AuthorityCallError, CLIENT_VERSION_HEADER, Client, ClientError, PlainHttp, ServerAddress, SubscriptionEnd},
+  releases::ReleaseVersion,
   v2::{
-    AuthorityErrorCode, EventCursor, ModuleListRequest, PageCursor, PageRequest, QueryScope, ResourceLibraryRequest,
-    ResourcePickerRequest, SearchText, SubscriptionEvent, TaskFilters, TaskListRequest, TaskSort,
+    AuthorityErrorCode, ErrorDetails, EventCursor, ModuleListRequest, PageCursor, PageRequest, QueryScope,
+    ResourceLibraryRequest, ResourcePickerRequest, SearchText, SubscriptionEvent, TaskFilters, TaskListRequest,
+    TaskSort,
   },
 };
 use orchester_core::{
@@ -230,6 +232,45 @@ async fn authority_client_task_list_posts_its_request_and_reads_the_page() {
     seen[0].json(),
     serde_json::to_value(&request).expect("the request's JSON")
   );
+}
+
+#[tokio::test]
+async fn authority_client_names_its_version_and_reads_the_version_a_server_needs() {
+  let project = ProjectId::generate();
+  let refused = json!({"code": "unsupported_contract", "details": {"required_version": "0.5.0"}});
+  let server = Server::start(vec![
+    Answer::json(&capabilities(project)),
+    Answer::status(426, &refused),
+  ]);
+  let version = ReleaseVersion::parse("0.4.0").expect("version");
+  let (client, token) = (server.client().with_client_version(version), token());
+  let authority = client.authority(&token, project);
+  authority.capabilities().await.expect("capabilities");
+  let error = authority.tasks(&TaskListRequest::default()).await.expect_err("refused");
+  let AuthorityCallError::Refused { status, error, .. } = error else {
+    panic!("a refusal, not {error:?}");
+  };
+  assert_eq!((status, error.code()), (426, AuthorityErrorCode::UnsupportedContract));
+  let required = ReleaseVersion::parse("0.5.0").expect("version");
+  assert_eq!(
+    error.details(),
+    &ErrorDetails::UnsupportedContract {
+      required_version: required
+    }
+  );
+  let seen = server.seen();
+  for request in &seen {
+    assert_eq!(request.header("orchester-client-version"), Some("0.4.0"));
+  }
+  assert_eq!(CLIENT_VERSION_HEADER, "Orchester-Client-Version");
+  let plain = Server::start(vec![Answer::json(&capabilities(project))]);
+  let client = plain.client();
+  client
+    .authority(&token, project)
+    .capabilities()
+    .await
+    .expect("capabilities");
+  assert_eq!(plain.seen()[0].header("orchester-client-version"), None);
 }
 
 #[tokio::test]

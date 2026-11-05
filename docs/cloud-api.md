@@ -402,6 +402,14 @@ a page is a `POST` of its request body, so filters never travel in a URL. The se
 may read the workspace (a member, a workspace Admin, or a server admin without membership); anyone else, a removed
 member too, gets `404`.
 
+Every `/api/v2` request, the commands and the work routes below too, names the desktop's own version in the
+`Orchester-Client-Version` header (`orchester_api::client::CLIENT_VERSION_HEADER`, ORC-735), a `ReleaseVersion` such
+as `0.5.0`; the desktop's client sends it once made with `Client::with_client_version`. A server refuses a desktop older
+than it accepts, or one that names no version or an unreadable one, `426 unsupported_contract` with
+`details:{required_version}`, the oldest version it accepts (the team server's minimum is `0.5.0`), before the session
+or the operation is read: nothing was kept, and the same request after the update is safe. The desktop says which
+Orchester the server needs.
+
 | Method and path | Request | Answer |
 | --- | --- | --- |
 | `GET …/workspace` | | `WorkspaceMetadata` |

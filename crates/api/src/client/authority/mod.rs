@@ -25,6 +25,9 @@ use crate::v2::{AuthorityError, AuthorityErrorCode};
 
 /// Where the workspace-authority API is under a team server's address.
 const V2_BASE: &str = "/api/v2";
+/// The header every `/api/v2` request names the desktop's version in, a `ReleaseVersion` (`0.5.0`): a server refuses a
+/// desktop older than it accepts `426 unsupported_contract`, with the version it needs (`docs/cloud-api.md`).
+pub const CLIENT_VERSION_HEADER: &str = "Orchester-Client-Version";
 
 /// What can go wrong calling the `/api/v2` surface. No variant carries a request or response body, a header or a
 /// token.
@@ -72,11 +75,15 @@ impl Client {
 }
 
 impl Authority<'_> {
-  /// A request to `route` under the project, e.g. `/task-list`, with the bearer token.
+  /// A request to `route` under the project, e.g. `/task-list`, with the bearer token and the client's version.
   fn request(&self, method: Method, route: &str) -> Result<RequestBuilder, ClientError> {
     let path = format!("/projects/{}{route}", self.project);
     let url = self.client.address.endpoint_under(V2_BASE, &path)?;
-    Ok(bearer(self.client.http.request(method, url), self.token))
+    let request = bearer(self.client.http.request(method, url), self.token);
+    Ok(match &self.client.version {
+      Some(version) => request.header(CLIENT_VERSION_HEADER, version.as_str()),
+      None => request,
+    })
   }
 
   /// `GET` of `route`, read as `T`.

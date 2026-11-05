@@ -38,7 +38,7 @@ use zeroize::Zeroize;
 pub use self::recorded::trust_for_tests;
 pub use self::{
   address::{AddressError, PlainHttp, ServerAddress},
-  authority::{Authority, AuthorityCallError, PolicyChange, Subscription, SubscriptionEnd},
+  authority::{Authority, AuthorityCallError, CLIENT_VERSION_HEADER, PolicyChange, Subscription, SubscriptionEnd},
   cloud::{CloudClient, SignInAnswer},
   cloud_address::CloudAddress,
   error::ClientError,
@@ -48,7 +48,7 @@ pub use self::{
 use crate::{
   ApiError, ApprovalResponse, CloudJoin, CloudJoinAnswer, CodeJoin, Joined, KeyProofRequest, KeyProofResponse,
   PairingCode, ServerInfo, Session, SessionsResponse, SharingErrorDetails, User, UserChanges, UserResponse,
-  UsersResponse, certificate::CertificatePin,
+  UsersResponse, certificate::CertificatePin, releases::ReleaseVersion,
 };
 
 /// How long making the connection may take (10.03 E: "the connection timed out after 10 s").
@@ -62,6 +62,8 @@ pub struct Client {
   http: reqwest::Client,
   address: ServerAddress,
   certificate: Certificate,
+  /// The desktop's own version, named on every `/api/v2` request ([`CLIENT_VERSION_HEADER`]); `None` names none.
+  version: Option<ReleaseVersion>,
 }
 
 /// What a client knows of the certificate its connections present.
@@ -99,6 +101,7 @@ impl Client {
       http,
       address,
       certificate: Certificate::Recorded(presented),
+      version: None,
     })
   }
 
@@ -117,7 +120,19 @@ impl Client {
       http,
       address,
       certificate: Certificate::Pinned(pin),
+      version: None,
     })
+  }
+
+  /// The client naming `version`, the desktop's own, on every `/api/v2` request ([`CLIENT_VERSION_HEADER`]). A team
+  /// server refuses a desktop older than it accepts, or one that names no version, `426 unsupported_contract` with the
+  /// version it needs.
+  #[must_use]
+  pub fn with_client_version(self, version: ReleaseVersion) -> Self {
+    Self {
+      version: Some(version),
+      ..self
+    }
   }
 
   /// The certificate the team server at the `https` `address` presents, read without trusting it, for the person to
