@@ -71,10 +71,13 @@ pub enum State {
   /// As [`Self::Member`], with KON-12's run interrupted at Implement, a team run under the claim this computer holds,
   /// which Continue run takes on with `orchester-fake-codex` (ORC-732, 01c `Tb55G` Running).
   TeamRunning,
+  /// An Admin editing KON-12 (priority High): olha sets its priority to Urgent just before the person's first save,
+  /// which then meets her change first (ORC-734, `Team authority · redesign` 05 `LmxUY`).
+  EditConflict,
 }
 
 impl State {
-  pub const ALL: [Self; 26] = [
+  pub const ALL: [Self; 27] = [
     Self::Join,
     Self::WrongCode,
     Self::ExpiredCode,
@@ -101,6 +104,7 @@ impl State {
     Self::AdminWork,
     Self::VersionRefused,
     Self::TeamRunning,
+    Self::EditConflict,
   ];
 
   /// The seed's scenario of this state.
@@ -132,6 +136,7 @@ impl State {
       Self::AdminWork => "team-admin-work",
       Self::VersionRefused => "team-version-refused",
       Self::TeamRunning => "team-running",
+      Self::EditConflict => "team-edit-conflict",
     }
   }
 

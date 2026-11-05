@@ -3,8 +3,8 @@
 //! `orchester_workspace::team_reads` with their subscription followed on the runtime ([`TeamSource`]). The lists'
 //! queries are in [`queries`], the pages' in [`pages`]; what the subscription makes stale is in [`invalidation`]; how a
 //! view finds its project's source is in [`view`]. The screens' actions go through the dispatcher ([`act`]): a task's
-//! work starts through the team server ([`start`]) and a module's delivery is asked for there ([`deliver`]); their
-//! lines share one strip ([`strip`]).
+//! edit ([`edit`]), a task's work starts through the team server ([`start`]) and a module's delivery is asked for there
+//! ([`deliver`]); their lines share one strip ([`strip`]).
 //!
 //! The client and every source belong to one generation of the session. Another account on a server, signing out of
 //! one, or a membership revoked ends the generation: a new client replaces the old one, whose reads no view observes
@@ -14,6 +14,7 @@
 
 pub mod act;
 pub mod deliver;
+pub mod edit;
 pub mod invalidation;
 pub mod lock;
 pub mod outage;

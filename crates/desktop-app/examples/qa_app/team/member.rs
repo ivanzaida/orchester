@@ -24,7 +24,7 @@ const SHOWN_FOR: Duration = Duration::from_secs(3);
 /// the role the person's link records, as the server gives it.
 pub fn serve_as(server: &TeamServer, state: State, here: &HashMap<u32, String>) -> Option<MemberRole> {
   let standing = match state {
-    State::Admin | State::AdminWork => Standing::Admin,
+    State::Admin | State::AdminWork | State::EditConflict => Standing::Admin,
     State::ServerAdmin => Standing::ServerAdmin,
     _ => Standing::Member,
   };

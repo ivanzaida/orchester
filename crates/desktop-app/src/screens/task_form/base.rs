@@ -211,13 +211,13 @@ impl TaskForm {
 
   /// Takes a newer stored version of the task while the fields hold no edits; under edits puts them on
   /// it ([`Self::meet_newer`]). Not while a save or a run request is under way, which settle the
-  /// version themselves, nor while the person chooses between versions: saving the choice meets a
-  /// change made meanwhile.
+  /// version themselves, nor while the person chooses between versions, or what to do with a team task's save its
+  /// server did not take: saving the choice meets a change made meanwhile.
   pub(super) fn follow_stored(&self, props: &FormProps, separator: &str, busy: bool) {
     let (Some(task), Some(base)) = (props.subject.task(), self.base.get_untracked()) else {
       return;
     };
-    let choosing = self.conflict.get_untracked().is_some();
+    let choosing = self.conflict.get_untracked().is_some() || self.team_stop.get_untracked().is_some();
     if busy || choosing || task.revision().get() <= base.revision_number() {
       return;
     }

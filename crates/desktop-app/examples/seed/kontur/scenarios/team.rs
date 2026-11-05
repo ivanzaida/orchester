@@ -182,6 +182,11 @@ pub fn version_refused(kontur: &mut Kontur) -> Result<(), SeedError> {
   mark(kontur, State::VersionRefused)
 }
 
+/// An Admin editing KON-12, whose first save meets olha's change of its priority first (`05` `LmxUY`).
+pub fn edit_conflict(kontur: &mut Kontur) -> Result<(), SeedError> {
+  mark(kontur, State::EditConflict)
+}
+
 /// KON-12's run interrupted at Implement, on the live catalogue's Feature delivery with a brief that keeps
 /// `orchester-fake-codex` working: Continue run takes it on, Running at 03 Implement with Pause run (`01c` `Tb55G`).
 pub fn team_running(kontur: &mut Kontur) -> Result<(), SeedError> {

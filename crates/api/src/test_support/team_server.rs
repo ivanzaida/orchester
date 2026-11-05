@@ -241,7 +241,9 @@ fn route((path, query): (&str, &str), (headers, body): (&str, &str), state: &Mut
         ("201 Created", joined("cloud", state.authority.server_admin()))
       }
     }
-    _ if (path.starts_with("GET ") || path.starts_with("POST /api/v1/projects/")) && !signed_in => {
+    _ if (path.starts_with("GET ") || path.starts_with("POST /api/v1/projects/") || path.starts_with("PATCH "))
+      && !signed_in =>
+    {
       ("401 Unauthorized", error("unauthorized"))
     }
     "GET /api/v1/auth/me" => {
@@ -252,7 +254,9 @@ fn route((path, query): (&str, &str), (headers, body): (&str, &str), state: &Mut
       Some(slug) => first_download::by_slug(slug, state),
       None => ("200 OK", json!({"projects": state.lock().projects})),
     },
-    _ => first_download::answer((path, query), state).unwrap_or_else(|| ("404 Not Found", error("not_found"))),
+    _ => authority::edits::answer(path, body, state)
+      .or_else(|| first_download::answer((path, query), state))
+      .unwrap_or_else(|| ("404 Not Found", error("not_found"))),
   }
 }
 

@@ -11,6 +11,7 @@
 //! server admins [`TeamServer::members_named`] gives.
 
 mod commands;
+pub(super) mod edits;
 mod execution;
 mod listing;
 mod work;
@@ -120,6 +121,10 @@ pub(super) struct Authority {
   branches: HashMap<usize, work::BranchChange>,
   /// How many claims were acquired anew here.
   issued: u8,
+  /// The tasks' definitions as Admins changed them, by the task's id, and someone else's change of one that lands
+  /// before the next one asked here.
+  edits: HashMap<String, edits::Edited>,
+  edit_first: Option<edits::FirstChange>,
 }
 
 impl Authority {
