@@ -40,9 +40,9 @@ Exports at scale 1 are in `.tmp/design/ORC-751/<node id>.png`.
 | Row | Node | Frames |
 | --- | --- | --- |
 | Head | `Nbbt0` | title and lead (unchanged) |
-| Row 1 · Commands | `Gg8Z5` | `h1KHAx` 01 commands, `c8pALl` 02 choosing modules, `mQdxa` 03 choosing tasks (unchanged) |
+| Row 1 · Commands | `Gg8Z5` | `h1KHAx` 01 commands, `c8pALl` 02 choosing modules, `mQdxa` 03 choosing tasks; content unchanged, **menus brought to the as-built geometry by ORC-751** (see *Menus as built*) |
 | Row 2 · Leading | `V3yTK` | `OKtX2` 04 leading two modules, `EIjDH` 05 already led elsewhere, `Ff7AD` 06 /watching (unchanged) |
-| Row 3 · Parts and states | `hKt0P` | `X93D8T` header, `NtsXc` /unwatch, `avDZO` lines, `i687ei` elsewhere (unchanged); `MvWyD` notes, **extended by ORC-751** |
+| Row 3 · Parts and states | `hKt0P` | `X93D8T` header, `avDZO` lines, `i687ei` elsewhere (unchanged); `NtsXc` /unwatch, picker restyled as built; `MvWyD` notes, **extended by ORC-751** |
 | Row 4 · Project settings › Orchestrator | `VrdLr` | `DE2Pj` 07 the tab with the *Watching* section; `b00C9G` settings rows · states |
 | Row 5 · A run waiting on a task | `lCgmQ` | `QaOUt` 08 KON-52 canceled · the conversation tells you; `SLuUW` 09 KON-41 Summary · waits on KON-52; `z5sQf` 10 KON-41 Conversation · waits on KON-52; `rlnEZ` waits on · states |
 | Row 6 · States | `E8SduL` | `w1Euu` pickers · loading and unreadable; `Y9Sfg` cannot apply; `DE2n1` Take it here · answering; `UYVFQ` composer chips · keyboard focus |
@@ -90,6 +90,36 @@ Exports at scale 1 are in `.tmp/design/ORC-751/<node id>.png`.
 - Notes `MvWyD`: new rows are *Settings* `GrS3q`, *Wait not met* `rFJgg`, *Drop the wait* `w8ZMfd`, *Task page*
   `wqd1d`, *Pickers* `AmcLa`, *Cannot apply* `duiZq`, *Take it here* `H6jjZ`, *Chips* `ynfw7` and *Light* `qTJPl`.
   They sit above *Not here* `xwOE4`. The earlier rows are unchanged.
+
+### Menus as built
+
+Frame 01 was drawn without the old slash-menu frames, and its geometry differed from the menu the app ships. ORC-771
+builds the watch commands in the menus' current form. So ORC-751 brought 01, the pickers in 02, 02L and 03, and the
+/unwatch picker to the code. Their content stays the same: the commands with their labels and details, the faded
+rows while nothing is watched, the modules and tasks with their states, and the who-leads notes.
+
+- **01's slash menu `VCIFR`** follows `crates/desktop-app/src/ui/slash/` (`menu.rs`, `rows.rs`, `theme/slash.rs`):
+  - The panel is the `Menu` panel: 640 wide, 4 inside, 2 between rows, `radius_tile`, `surface_raised` in
+    `border_strong`, with a shadow. Its left edge sits at the composer's box and its bottom 8 over it.
+  - The head *Commands* `Q5SCrS` is 11/500 `text_muted`, with *4 of 6* at its end (11 `text_muted`).
+  - The rows are 28 high: `Doupc` /watch-module, `ghVbT` /watch-task, `frTaq` /unwatch, `YpyZM` /watching. Each has
+    8 at its sides and 8 between its parts: a 14 icon in `text_secondary`, the label in a 150 column, and the detail
+    in 12 `text_muted`. The label is 12; what matches */wa* is 600 `text_primary` and the rest `text_secondary`.
+  - There is no `/name` column; the chip in the composer shows the command's name.
+  - The focus is on `hover`, with the `Kbd` *Enter* at the row's end. /unwatch and /watching are faded to half and
+    say why (*Watches nothing yet*) in `text_secondary`.
+  - The footer `gm9w5` has key caps (*↑ ↓ Move*, *Enter Choose*, *Esc Close*) and */wa* at its end.
+- **Pickers** (`R1s1o` in 02, `rql2F` in 02L, `gumeP` in 03, `eK1DB` in /unwatch, and the state pickers `BayQR` and
+  `mCXhw` in `w1Euu`) follow the @ menu, `crates/desktop-app/src/ui/mention/rows.rs`:
+  - The panels in a window are 560 wide, their bottom 8 over the composer.
+  - A head has its title in 11/500 `text_muted` and its count at its end: *4*, *4 of 24*, *3*.
+  - Rows are 28 high, with 8 between parts. Names and titles are 12; meta, states and who-leads notes are 11.
+  - A task's key is in Geist Mono 12, in a 64 column: what matches is in `text_primary` 600, the rest in
+    `text_secondary`. Its title is 12 `text_primary`.
+  - A task's workflow status is the word in 11 `text_muted` (*In progress*, *Todo*, *Done*), as the @ menu shows it,
+    no longer a chip. KON-47's note became *nothing to watch* so that it does not repeat *Done*.
+  - The keys are `Kbd` caps with their words: *↑ ↓ Move*, *Enter Add*, *Backspace Remove the last*, *Ctrl Enter
+    Watch* (or *Stop*), and *Esc Close*. The /unwatch picker has *Type to filter* at the end.
 
 ## What the design decides
 
