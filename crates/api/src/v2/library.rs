@@ -2,7 +2,7 @@
 //! pages of the existing public resource types, the pickers a form chooses a resource with, and the workspace's
 //! metadata. A request leaves out what it does not narrow by; an unknown field is refused.
 
-use orchester_core::{id::ResourceId, resource::VersionNumber};
+use orchester_core::{id::ResourceId, resource::VersionNumber, sharing::ClaimStalenessThreshold};
 use serde::{Deserialize, Serialize};
 
 use super::{Capabilities, EventCursor, Page, PageRequest, SearchText, SharedProject, WorkspacePolicy};
@@ -54,8 +54,8 @@ pub struct ResourceChoice {
 /// A picker's resources, in creation order.
 pub type ResourcePickerPage = Page<ResourceChoice>;
 
-/// The workspace as its pages open on it: the project, its effective policy and the caller's capabilities, at
-/// snapshot `cursor`.
+/// The workspace as its pages open on it: the project, its effective policy, the server's claim staleness threshold
+/// and the caller's capabilities, at snapshot `cursor`.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct WorkspaceMetadata {
@@ -63,4 +63,7 @@ pub struct WorkspaceMetadata {
   pub policy: WorkspacePolicy,
   pub capabilities: Capabilities,
   pub cursor: EventCursor,
+  /// After how long without a heartbeat a claim goes stale, in whole seconds. Every reader of the workspace reads
+  /// it; only a server admin changes it (`ServerSettings`), so it is the server's, not the workspace policy's.
+  pub claim_staleness_seconds: ClaimStalenessThreshold,
 }

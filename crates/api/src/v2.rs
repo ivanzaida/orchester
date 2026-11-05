@@ -14,6 +14,7 @@ mod module_read;
 mod module_summary;
 mod operations;
 mod page;
+mod pending_delivery;
 mod policy;
 mod projects;
 pub mod subscription;
@@ -37,6 +38,7 @@ pub use page::{
   DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT, PAGE_CURSOR_RETENTION_SECONDS, Page, PageCursor, PageCursorError, PageRequest,
   PageRequestError,
 };
+pub use pending_delivery::*;
 pub use policy::*;
 pub use projects::*;
 pub use subscription::*;
