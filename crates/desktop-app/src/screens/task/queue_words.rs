@@ -1,20 +1,11 @@
-//! What a run of the merge queue says, shared by the Merge queue screen and the task page: the base branch it delivers
-//! into, its place in line, how its pipeline delivers, why it left the queue and how long a phase has run.
+//! What a run of the merge queue says on the task page: its place in line, how its pipeline delivers, why it left the
+//! queue and how long a phase has run.
 
 use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
-use orchester_core::{
-  merge_queue::Left,
-  resource::{DeliverMode, MergeMethod},
-  time::Timestamp,
-};
-use orchester_workspace::{display::short_revision, merge_queue::QueueRow};
-
-/// The base branch `row` delivers into, as its words name it.
-pub(crate) fn base(row: &QueueRow) -> &str {
-  row.base_branch.as_ref().map_or("", |branch| branch.as_str())
-}
+use orchester_core::{merge_queue::Left, resource::DeliverMode, time::Timestamp};
+use orchester_workspace::display::short_revision;
 
 /// `1st in line`, `2nd in line`, …
 pub(crate) fn place(ctx: &Ctx, place: usize) -> Arc<str> {
@@ -30,13 +21,6 @@ pub(crate) fn mode(ctx: &Ctx, mode: DeliverMode) -> Arc<str> {
   match mode {
     DeliverMode::ApproveToMerge => ctx.t("delivery.queue.mode.approve"),
     DeliverMode::AutoMerge => ctx.t("delivery.queue.mode.auto"),
-  }
-}
-
-pub(crate) fn method(ctx: &Ctx, method: MergeMethod) -> Arc<str> {
-  match method {
-    MergeMethod::MergeCommit => ctx.t("delivery.queue.method.mergeCommit"),
-    MergeMethod::Squash => ctx.t("delivery.queue.method.squash"),
   }
 }
 

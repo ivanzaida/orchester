@@ -17,8 +17,8 @@ use orchester_core::integration::attempt::RecordedAttempt;
 use orchester_workspace::display;
 
 use super::{
-  super::words::who,
   checks::{self, Branches, Size},
+  lines::who,
   words::{attempt_outcome, attempt_time, attempt_via},
 };
 use crate::{

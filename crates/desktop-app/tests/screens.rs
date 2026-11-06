@@ -1,5 +1,5 @@
 //! Every route's path shows its screen's own element, `screen-<name>`, which the screen's own tests read (`BUILT`;
-//! Settings is `tests/settings`; the Merge queue is `tests/merge_queue.rs`). A path that names nothing shows
+//! Settings is `tests/settings`; the merge queue's delivery is `tests/merge_queue.rs`). A path that names nothing shows
 //! `screen-not-found`, which says why. The paths go straight to the router, as a tab's history would hand them over, so
 //! a path no route prints is shown too. The project the paths name is known to be open; what the window does until a
 //! project opens, and for one that cannot, is `tests/projects.rs`. The shell around the screens works with a session's
@@ -72,8 +72,6 @@ const BUILT: &[Screen] = &[
   Screen::JoinTeam,
   Screen::Instructions,
   Screen::Memory,
-  Screen::MergeQueue,
-  Screen::Merges,
   Screen::Modules,
   Screen::NewConnection,
   Screen::NewTask,
@@ -312,8 +310,6 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
       READING_TASK.to_vec(),
     ),
     (at(ProjectPage::Task(key("KON-12"), changes)), READING_TASK.to_vec()),
-    (at(ProjectPage::MergeQueue), placeholder("Merge queue")),
-    (at(ProjectPage::Merges), placeholder("Merges")),
     (at(ProjectPage::Usage(Box::new(filtered_usage()))), placeholder("Usage")),
     (at(ProjectPage::Pipelines), placeholder("Pipelines")),
     (at(ProjectPage::Agents), placeholder("Agents")),

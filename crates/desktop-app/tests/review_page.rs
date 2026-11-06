@@ -130,29 +130,20 @@ impl Page {
 #[test]
 fn review_page_opens_from_its_waiting_row_with_the_runs_real_diff() {
   let mut page = Page::new();
+  let task = page
+    .tasks
+    .iter()
+    .find(|task| task.title == "Sign webhook payloads")
+    .expect("the scenario seeds the task");
+  let row = format!("review-row-{}", task.key);
   page
     .window
     .navigation()
-    .go(Route::Project(page.project, ProjectPage::Merges));
-  page.window.until_within(GIT_WORK, "the merges", |window| {
-    window.texts("merges-waiting-rows").is_some()
-  });
-  let rows: Vec<String> = page
+    .go(Route::Project(page.project, ProjectPage::Review));
+  page
     .window
-    .tree
-    .get_element_by_id("merges-waiting-rows")
-    .map_or_else(Vec::new, |rows| {
-      rows
-        .children()
-        .into_iter()
-        .filter_map(|row| row.id().map(str::to_owned))
-        .collect()
-    });
-  let row = rows
-    .into_iter()
-    .find(|row| page.window.text(row).contains("Sign webhook payloads"))
-    .expect("the run waits for review");
-  page.window.press(&format!("{row}-open"));
+    .until_within(GIT_WORK, "the review list", |window| window.texts(&row).is_some());
+  page.window.press(&row);
   page.until_read();
   let route = page.window.navigation().route_now();
   assert!(

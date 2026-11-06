@@ -244,6 +244,10 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
         insert("from", file.source().name());
       }
     }
+    ProjectPage::TaskMerge(key, number) => {
+      insert("key", &key.to_string());
+      insert("run", &number.get().to_string());
+    }
     page => {
       for (name, value) in other_params(page) {
         insert(name, &value);
@@ -252,20 +256,9 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
   }
 }
 
-/// The parameters `navigate` takes back for the places of Modules, the code viewer and a run's merge attempts.
+/// The parameters `navigate` takes back for the places of Modules and the code viewer.
 fn other_params(page: &ProjectPage) -> impl Iterator<Item = (&'static str, String)> {
-  module_params(page)
-    .into_iter()
-    .chain(files_params(page))
-    .chain(merge_params(page))
-}
-
-/// The parameters `navigate` takes back for a run's merge attempts: its task's `key` and its number, `run`.
-fn merge_params(page: &ProjectPage) -> Vec<(&'static str, String)> {
-  match page {
-    ProjectPage::MergeAttempt(key, number) => vec![("key", key.to_string()), ("run", number.get().to_string())],
-    _ => Vec::new(),
-  }
+  module_params(page).into_iter().chain(files_params(page))
 }
 
 fn settings_view(page: &ProjectPage) -> &'static str {

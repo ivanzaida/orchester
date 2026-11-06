@@ -23,6 +23,7 @@ pub fn routes() -> Routes {
       .route(super::PIPELINE_PATTERN, screens::screen)
       .route(super::AGENT_PATTERN, screens::screen)
       .route(super::TASK_REVIEW_PATTERN, screens::screen)
+      .route(super::TASK_MERGE_PATTERN, screens::screen)
       .route(super::MODULE_PATTERN, screens::screen)
       .route(super::MODULE_TAB_PATTERN, screens::screen)
       .route(super::DELIVERY_PATTERN, screens::screen)

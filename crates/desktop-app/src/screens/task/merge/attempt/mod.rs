@@ -1,5 +1,5 @@
 //! A run's merge attempts (ORC-363; `Review · redesign` 09b `PVZKL`, 09e `s1jIpI`, 09f `Q6yPN8`, 09g `i2rVv`, 09h
-//! `rzo3w`, 09j `GhnHQ`, 09k `X3DJKY`, 09l `Asu5i`), under Review › Merges at `/project/<id>/merges/<KEY>/<run>`: the
+//! `rzo3w`, 09j `GhnHQ`, 09k `X3DJKY`, 09l `Asu5i`), under its task at `/project/<id>/tasks/<KEY>/merge/<run>`: the
 //! breadcrumb, the task's title with *Copy details* (or the action that moves the run on), *Open task* and the primary
 //! action of how its last attempt left it, and the status line; then *What stopped it* (*What happened* once merged) in
 //! the words of the stage that ended it, the conflicting files or the files left changed, the last attempt's *Checks*,
@@ -14,8 +14,10 @@ mod conflicts;
 mod details;
 pub(crate) mod head;
 mod left;
+pub(crate) mod lines;
 mod properties;
 pub(crate) mod read;
+mod retry;
 pub(crate) mod standing;
 pub(super) mod watch;
 mod words;
@@ -48,9 +50,9 @@ use self::{
   checks::{Branches, Size},
   conflicts::{AskAction, Conflicts, Resolving, StepChoice},
   read::{Read, read},
+  retry::try_again,
   standing::Standing,
 };
-use super::not_merged::try_again;
 use crate::{
   navigation::{Navigation, link::Open},
   project::ShownProject,
@@ -71,7 +73,7 @@ use crate::{
 const COPY_FEEDBACK: Duration = Duration::from_secs(2);
 /// The branch a line names when the run did not record the one it merges into.
 const NO_BRANCH: &str = "—";
-/// An empty state's card, as Review › Merges' (`jhPCL`).
+/// An empty state's card (`jhPCL`).
 const EMPTY_WIDTH: f32 = 440.0;
 
 #[derive(Clone, PartialEq)]
@@ -172,7 +174,7 @@ impl Component for AttemptScreen {
           .right(HubSpacing::Side.role()),
       )
       .spacing(DeliverySpacing::Lanes.role())
-      .child(head::crumbs(ctx, &project, (&key.to_string(), number.get())));
+      .child(head::crumbs(ctx, &project, (&key, number.get())));
     let page = match read {
       Read::Reading => {
         return Element::from(frame.child(loading("merge-attempt-reading", &ctx.t("merges.page.reading"))));
@@ -364,11 +366,14 @@ impl AttemptScreen {
         .on_click(move || actions.try_now())
         .into(),
       Standing::AwaitingApproval => {
-        let queue = Route::Project(shown.project.open.project.id(), ProjectPage::MergeQueue);
-        let open = Navigation::of(ctx).to(queue);
+        let review = Route::Project(
+          shown.project.open.project.id(),
+          ProjectPage::TaskReview(shown.page.run.key.clone()),
+        );
+        let open = Navigation::of(ctx).to(review);
         button(
-          "merge-attempt-open-queue",
-          "merges.page.openQueue",
+          "merge-attempt-open-review",
+          "merges.page.openReview",
           Icon::ArrowUpRight,
           ctx,
         )
@@ -545,7 +550,7 @@ fn section_head(id: &str, title: &str, count: Option<&str>) -> Element {
     .into()
 }
 
-/// The empty state `id` with `glyph`, `title` and `body`: a card 440 wide, centered, as Review › Merges' own.
+/// The empty state `id` with `glyph`, `title` and `body`: a card 440 wide, centered.
 fn empty(id: &str, glyph: Icon, (title, body): (Arc<str>, Arc<str>)) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))

@@ -1,7 +1,6 @@
-//! Values of Delivery (ORC-19, the `Delivery` layer `p9aqZc`): the Merge queue screen (`seRYH`, `H7OHPT`, `mtrlT`)
-//! with its lanes (ORC-410, 05 `S1pTL` of `Base branch · redesign`) and their rows, the pipeline editor's Deliver step
-//! (`qukzW`, `OqgbW`), the task page's delivery (`ulEuh`, `RRk9E`, `lvupO`, `wN5Bz`, `hKct7`, `fAcWt`) with `Conflict
-//! file row` `Nanwh`, `Commit row` `wEWkY` and `Delivery check row` `QyqsJ`, and its Needs you cards (`K1d1mi`).
+//! Values of Delivery (ORC-19, the `Delivery` layer `p9aqZc`): the pipeline editor's Deliver step (`qukzW`, `OqgbW`),
+//! the task page's delivery (`ulEuh`, `RRk9E`, `lvupO`, `wN5Bz`, `hKct7`, `fAcWt`) with `Conflict file row` `Nanwh`,
+//! `Commit row` `wEWkY` and `Delivery check row` `QyqsJ`, and its Needs you cards (`K1d1mi`).
 
 use std::sync::Arc;
 
@@ -14,11 +13,7 @@ use super::typography::{mono, style};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DeliveryText {
-  /// 13 `text_secondary`, 1.4: what the Merge queue screen says under its title (`kJavK`).
-  Lead,
-  /// 12.5/500 `text_primary`: a queue row's state (`State label` in `kcUhy`), colored by the state.
-  State,
-  /// Geist Mono 12 `text_muted`: a section's count (`HKJV1`) and a row's task key (`Key` in `kcUhy`).
+  /// Geist Mono 12 `text_muted`: a count and a task key (`Key` in `kcUhy`).
   Count,
   /// Geist Mono 11.5 `text_secondary`: an uncommitted or conflicting file (`QjQHb`, `src/webhooks/sender.rs`).
   File,
@@ -32,14 +27,10 @@ pub enum DeliveryText {
   ReadBack,
   /// 12.5 `text_primary`: how a pipeline delivers, on the canvas's chip (`UVqgh` in `gURMA`).
   Chip,
-  /// Geist Mono 13/600 `text_primary`: the base branch in a lane's head (`TXA1k` in `BBL6x`).
-  LaneBranch,
 }
 
 impl DeliveryText {
-  pub const ALL: [Self; 10] = [
-    Self::Lead,
-    Self::State,
+  pub const ALL: [Self; 7] = [
     Self::Count,
     Self::File,
     Self::Branch,
@@ -47,7 +38,6 @@ impl DeliveryText {
     Self::Stage,
     Self::ReadBack,
     Self::Chip,
-    Self::LaneBranch,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -56,8 +46,6 @@ impl DeliveryText {
 
   const fn name(self) -> &'static str {
     match self {
-      Self::Lead => "delivery_lead",
-      Self::State => "delivery_state",
       Self::Count => "delivery_count",
       Self::File => "delivery_file",
       Self::Branch => "delivery_branch",
@@ -65,14 +53,11 @@ impl DeliveryText {
       Self::Stage => "delivery_stage",
       Self::ReadBack => "delivery_read_back",
       Self::Chip => "delivery_chip",
-      Self::LaneBranch => "delivery_lane_branch",
     }
   }
 
   fn style(self, palette: &ThemePalette) -> TextStyle {
     match self {
-      Self::Lead => style(13.0, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
-      Self::State => style(12.5, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
       Self::Count => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
       Self::File => mono(style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
       Self::Branch => mono(style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
@@ -80,7 +65,6 @@ impl DeliveryText {
       Self::Stage => mono(style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted)),
       Self::ReadBack => style(11.0, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
       Self::Chip => style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
-      Self::LaneBranch => mono(style(13.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary)),
     }
   }
 }
@@ -90,33 +74,16 @@ pub const LOCKED_SWITCH_OPACITY: f32 = 0.45;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DeliverySpacing {
-  /// 20: between the parts of the Merge queue screen while it is read (`zMx0E`).
-  Sections,
   /// 26: a file under the check that found it, in from the check's glyph (`File line` `mjqx2` in `e7geY3`).
   FileIndent,
-  /// 14: the Merge queue's info line, its lanes and its note apart, and under the hub's tabs (`YfZEw` in `S1pTL`); the
-  /// parts of Review › Merges apart (`Review` `ZPIfX` in 09 `Os7b3`).
+  /// 14: the parts of the attempt page apart (`Review` `ZPIfX` in 09 `Os7b3`).
   Lanes,
-  /// 10: above a lane's head, and between its glyph, *Into*, its branch, its count and how it lands (`BBL6x`).
-  LaneHead,
-  /// 14: between a lane row's place, glyph, words, time and actions (`mTyPp`), and a Merges row's (`y6btZh`).
-  LaneRow,
-  /// 10: above a section's heading in Review › Merges (`Section · Not merged` `g7qwcU` in 09 `Os7b3`).
-  MergesSection,
-  /// 56: Review › Merges' empty state under its info line, past the parts' gap (09c `jhPCL`).
+  /// 56: the attempt page's empty state under its status line, past the parts' gap (09c `jhPCL`).
   MergesEmpty,
 }
 
 impl DeliverySpacing {
-  pub const ALL: [Self; 7] = [
-    Self::Sections,
-    Self::FileIndent,
-    Self::Lanes,
-    Self::LaneHead,
-    Self::LaneRow,
-    Self::MergesSection,
-    Self::MergesEmpty,
-  ];
+  pub const ALL: [Self; 3] = [Self::FileIndent, Self::Lanes, Self::MergesEmpty];
 
   pub fn role(self) -> SpacingSize {
     SpacingSize::extra(self.name())
@@ -124,22 +91,16 @@ impl DeliverySpacing {
 
   const fn name(self) -> &'static str {
     match self {
-      Self::Sections => "delivery_sections",
       Self::FileIndent => "delivery_file_indent",
       Self::Lanes => "delivery_lanes",
-      Self::LaneHead => "delivery_lane_head",
-      Self::LaneRow => "delivery_lane_row",
-      Self::MergesSection => "delivery_merges_section",
       Self::MergesEmpty => "delivery_merges_empty",
     }
   }
 
   pub const fn value(self) -> f32 {
     match self {
-      Self::Sections => 20.0,
       Self::FileIndent => 26.0,
-      Self::Lanes | Self::LaneRow => 14.0,
-      Self::LaneHead | Self::MergesSection => 10.0,
+      Self::Lanes => 14.0,
       Self::MergesEmpty => 56.0,
     }
   }

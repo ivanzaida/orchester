@@ -226,7 +226,7 @@ fn task_merge_row_stays_beside_the_not_merged_card_and_opens_the_attempt_page() 
     .expect("its run");
   assert_eq!(
     page.window.navigation().route_now(),
-    Route::Project(page.project, ProjectPage::MergeAttempt(key, run.number()))
+    Route::Project(page.project, ProjectPage::TaskMerge(key, run.number()))
   );
 }
 

@@ -1,4 +1,4 @@
-//! What Review › Merges and the attempt page read of the project's merges (`crates/desktop-app/design/orchester.pen`,
+//! What Review and the attempt page read of the project's merges (`crates/desktop-app/design/orchester.pen`,
 //! board `Review · redesign`, 09 to 09l): the runs whose last attempt did not land, the runs that wait for a person's
 //! review before they merge, the merged runs by day, and one run's attempts. Blocks on SQLite and git.
 

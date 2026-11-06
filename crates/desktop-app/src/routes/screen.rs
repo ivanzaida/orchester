@@ -24,10 +24,6 @@ pub enum Screen {
   Modules,
   /// Review (`Review - v2` `j1Drb`): the tasks whose run finished, and a task's review.
   Review,
-  /// The Merge queue, a tab of Review before Review was rebuilt; reached by its route until its own task removes it.
-  MergeQueue,
-  /// Merges, a tab of Review before Review was rebuilt: every merge attempt into the project's base branches (ORC-362).
-  Merges,
   Usage,
   Pipelines,
   Agents,
@@ -47,7 +43,7 @@ pub enum Screen {
 }
 
 impl Screen {
-  pub const ALL: [Self; 30] = [
+  pub const ALL: [Self; 28] = [
     Self::AllProjects,
     Self::AddProject,
     Self::JoinTeam,
@@ -62,8 +58,6 @@ impl Screen {
     Self::Task,
     Self::Modules,
     Self::Review,
-    Self::MergeQueue,
-    Self::Merges,
     Self::Usage,
     Self::Pipelines,
     Self::Agents,
@@ -117,8 +111,6 @@ impl Screen {
       Self::Task => "task",
       Self::Modules => "modules",
       Self::Review => "review",
-      Self::MergeQueue => "merge_queue",
-      Self::Merges => "merges",
       Self::Usage => "usage",
       Self::Pipelines => "pipelines",
       Self::Agents => "agents",
@@ -157,8 +149,6 @@ impl Screen {
       Self::Task => "shell.screens.task",
       Self::Modules => "shell.screens.modules",
       Self::Review => "shell.screens.review",
-      Self::MergeQueue => "shell.screens.mergeQueue",
-      Self::Merges => "shell.screens.merges",
       Self::Usage => "shell.screens.usage",
       Self::Pipelines => "shell.screens.pipelines",
       Self::Agents => "shell.screens.agents",
@@ -196,8 +186,6 @@ impl Screen {
       Self::Tasks => Some(TASKS),
       Self::Modules => Some(MODULES),
       Self::Review => Some(REVIEW),
-      Self::MergeQueue => Some("merge-queue"),
-      Self::Merges => Some("merges"),
       Self::Usage => Some("usage"),
       Self::Pipelines => Some("pipelines"),
       Self::Agents => Some("agents"),

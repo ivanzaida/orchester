@@ -109,7 +109,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 158] = [
+pub const ALL: [Scenario; 154] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -178,12 +178,8 @@ pub const ALL: [Scenario; 158] = [
   Scenario::of("deliverables", deliverables::seed),
   Scenario::of("delivery", delivery::seed),
   Scenario::of("delivery-blocked", delivery::blocked),
-  Scenario::of("delivery-lanes", delivery::lanes),
-  Scenario::of("delivery-empty", delivery::empty),
   Scenario::of("merges", merges::seed),
-  Scenario::of("merges-outcomes", merges::outcomes),
   Scenario::of("merges-empty", merges::empty),
-  Scenario::of("merges-many", merges::many),
   Scenario::of("merge-attempts", merge_attempts::seed),
   Scenario::of("review-page", review_page::seed),
   Scenario::of("review-changed", review_changed::seed),

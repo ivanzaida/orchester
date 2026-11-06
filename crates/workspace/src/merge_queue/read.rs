@@ -1,4 +1,4 @@
-//! The queue as the Merge queue screen, the sidebar, the task page and automation read it: its lanes, one per base
+//! The queue as the sidebar, the task page and automation read it: its lanes, one per base
 //! branch a run of it delivers into, each with its branch, how the person's checkout stands for it and how its runs
 //! land; its runs in order with their tasks, pipelines and what happened to them; and, for an empty queue, how the
 //! project's pipelines deliver. A run that left the queue or was merged shows on the day it did, and a lane shows

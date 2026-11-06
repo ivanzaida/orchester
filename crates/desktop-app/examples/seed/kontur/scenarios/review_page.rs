@@ -1,5 +1,5 @@
 //! `review-page`: a run's review page (ORC-697, `Review · redesign` 09i `wLyFt` and the states of `RBR9O`), each run
-//! opened from its row in Review › Merges or at `/project/<id>/review/<KEY>`. Answers under way are kept only
+//! opened from its row in Review or at `/project/<id>/review/<KEY>`. Answers under way are kept only
 //! while no runner drives the project: open it in a QA app started without a runner, or the runner ends them. State 8
 //! *Sending…* and the tray's sending state are a send under way: call the debug tool `hold_hand_offs` `held: true`,
 //! then *Send to Implement (1)* on *Sign webhook payloads* (or *Try again* on *Per-endpoint secrets*) keeps its

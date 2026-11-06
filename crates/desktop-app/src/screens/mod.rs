@@ -18,8 +18,6 @@ mod instructions;
 pub(crate) mod join_team;
 mod kept;
 pub(crate) mod memory;
-pub(crate) mod merge_queue;
-mod merges;
 pub(crate) mod modules;
 mod not_found;
 mod orchestrator;
@@ -113,7 +111,6 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::OrchestratorSettings => orchestrator::settings(ctx, project),
     ProjectPage::Review => review::list(ctx, project),
     ProjectPage::TaskReview(key) => review::task::screen(ctx, project, key),
-    ProjectPage::MergeQueue => merge_queue::screen(ctx, project),
     ProjectPage::Memory(tab) => memory::screen(ctx, project, *tab),
     ProjectPage::Tasks(list) => tasks::screen(ctx, project, list),
     ProjectPage::NewTask => task_form::new_task(ctx, project, None),
@@ -125,8 +122,7 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::NewModule => modules::new_module(ctx, project),
     ProjectPage::Module(id, tab) => modules::page(ctx, project, *id, *tab),
     ProjectPage::EditModule(id) => modules::edit_module(ctx, project, *id),
-    ProjectPage::Merges => merges::screen(ctx, project),
-    ProjectPage::MergeAttempt(key, number) => merges::attempt::screen(ctx, project, key, *number),
+    ProjectPage::TaskMerge(key, number) => task::merge::attempt::screen(ctx, project, key, *number),
     ProjectPage::Usage(query) => usage::screen(ctx, project, query),
     ProjectPage::Delivery(period) => delivery::screen(ctx, project, *period),
     ProjectPage::Pipelines => pipelines::screen(ctx, project),

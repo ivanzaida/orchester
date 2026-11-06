@@ -122,7 +122,6 @@ fn sidebar_lists_six_places_then_configure_and_the_usage_card_and_goes_to_them()
   );
   // What the sidebar held before lives in a hub, Project settings, the switcher's menu or the usage card now.
   for screen in [
-    "merge_queue",
     "usage",
     "instructions",
     "memory",
@@ -137,7 +136,7 @@ fn sidebar_lists_six_places_then_configure_and_the_usage_card_and_goes_to_them()
     let item = format!("nav-{screen}");
     assert!(window.texts(&item).is_none(), "{item} left the sidebar");
   }
-  // Every entry opens its own screen (`tests/orchestrator/`, `tests/merge_queue.rs`, `tests/sidebar_places/`).
+  // Every entry opens its own screen (`tests/orchestrator/`, `tests/sidebar_places/`).
   for (item, screen, title) in [
     ("nav-orchestrator", "screen-orchestrator", "Orchestrator"),
     ("nav-review", "screen-review", "Review"),

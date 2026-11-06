@@ -116,9 +116,9 @@ impl Page {
     Route::Project(self.project, ProjectPage::TaskReview(self.key.clone()))
   }
 
-  /// The run's page under Review › Merges, which Open in Review and Resolve open.
+  /// The run's merge attempts under its task, which Resolve opens.
   fn run_page(&self) -> Route {
-    Route::Project(self.project, ProjectPage::MergeAttempt(self.key.clone(), self.run.1))
+    Route::Project(self.project, ProjectPage::TaskMerge(self.key.clone(), self.run.1))
   }
 
   /// ⌘↵ on macOS, Ctrl+Enter elsewhere, as a person presses them.
@@ -278,7 +278,7 @@ fn task_merge_card_refused_says_why_and_opens_the_attempt_page() {
   let body = page.window.text("task-notice-body");
   assert!(
     body.starts_with("Refused before Git at Integration lock: ") && body.ends_with("Nothing changed."),
-    "one line of what stopped it, as Review › Merges says it: {body}"
+    "one line of what stopped it, as the attempt page says it: {body}"
   );
   assert_eq!(page.window.text("task-merge-label"), "Try again");
   assert_eq!(page.window.text("task-merge-key"), KEYS);

@@ -1,4 +1,4 @@
-//! The top of the attempt page (09b `PVZKL`): the breadcrumb *← Review / Merges / KON-12 · run #8* (`A99gLf`), the
+//! The top of the attempt page (09b `PVZKL`): the breadcrumb *← Tasks / KON-12 / Merge · run #8* (`A99gLf`), the
 //! task's title with the page's actions (`KOUkd`: a ghost action, *Open task*, and the primary action of how the run
 //! stands), and the status line (`E8U3x`): a 14 glyph and the status in 13/500 in `warning`, `info` or `success`, then
 //! the run, its attempts and the last one's time and asker in 12 `text_muted`. While Orchester waits to try again, the
@@ -19,6 +19,7 @@ use lurq::{
 };
 use orchester_core::{
   integration::{attempt::MergeAsker, retry::RETRIES},
+  project::TaskKey,
   time::Timestamp,
 };
 use orchester_workspace::tasks::merge_attempts::page::AttemptPage;
@@ -30,7 +31,7 @@ use super::{
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::{ProjectPage, Route},
+  routes::{ProjectPage, Route, TaskList, TaskView},
   theme::{ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
@@ -40,20 +41,21 @@ use crate::{
 
 const TICK: Duration = Duration::from_secs(1);
 
-/// *← Review / Merges / KON-12 · run #8*: Review opens the hub on its Merge queue, Merges the Merges tab.
-pub(in crate::screens::merges) fn crumbs(ctx: &mut Ctx, project: &ShownProject, (key, run): (&str, u32)) -> Element {
+/// *← Tasks / KON-12 / Merge · run #8*: Tasks opens the task list, the key the task's page.
+pub(super) fn crumbs(ctx: &mut Ctx, project: &ShownProject, (key, run): (&TaskKey, u32)) -> Element {
   let navigation = Navigation::of(ctx);
   let id = project.open.project.id();
   let trail = vec![
     Crumb::to(
-      ctx.t("shell.screens.review"),
-      navigation.to(Route::Project(id, ProjectPage::MergeQueue)),
+      ctx.t("shell.screens.tasks"),
+      navigation.to(Route::Project(id, ProjectPage::Tasks(TaskList::default()))),
     ),
     Crumb::to(
-      ctx.t("shell.screens.merges"),
-      navigation.to(Route::Project(id, ProjectPage::Merges)),
-    ),
-    Crumb::here(ctx.t_args("merges.page.crumb", [("key", key.to_owned()), ("run", run.to_string())])).mono(),
+      key.to_string(),
+      navigation.to(Route::Project(id, ProjectPage::Task(key.clone(), TaskView::default()))),
+    )
+    .mono(),
+    Crumb::here(ctx.t_args("merges.page.crumb", [("run", run.to_string())])),
   ];
   Row::new()
     .id("merge-attempt-crumbs-row")
@@ -136,7 +138,7 @@ fn meta(ctx: &Ctx, page: &AttemptPage, standing: Standing, base: &str) -> Arc<st
   let mut parts = vec![ctx.t_args("merges.page.meta.run", [("run", page.run.number.get().to_string())])];
   if let Standing::Retrying(_) = standing {
     parts.push(ctx.t("merges.page.meta.nothingMerged"));
-    return super::super::words::joined(ctx, &parts);
+    return super::lines::joined(ctx, &parts);
   }
   match (standing, &page.merge) {
     (Standing::Merged, Some(merge)) => parts.push(super::words::made(ctx, &merge.revision, merge.kind)),
@@ -159,7 +161,7 @@ fn meta(ctx: &Ctx, page: &AttemptPage, standing: Standing, base: &str) -> Arc<st
   if standing == Standing::LeftChanged {
     parts.push(ctx.t_args("merges.page.meta.didNotMove", [("branch", base)]));
   }
-  super::super::words::joined(ctx, &parts)
+  super::lines::joined(ctx, &parts)
 }
 
 #[derive(Clone, Debug, PartialEq)]

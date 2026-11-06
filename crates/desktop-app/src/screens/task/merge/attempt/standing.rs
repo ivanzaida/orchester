@@ -12,7 +12,7 @@ use orchester_workspace::{
 };
 
 use super::{
-  super::words::cause,
+  lines::cause,
   words::{silent_for, silent_long, stage_name},
 };
 use crate::ui::icon::Icon;

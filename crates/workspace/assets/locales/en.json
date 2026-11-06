@@ -350,7 +350,6 @@
         "reviewComplete": "Review & complete",
         "openTask": "Open task",
         "openConflicts": "Open conflicts",
-        "openMergeQueue": "Open merge queue",
         "reviewRecords": "Review records"
       },
       "unavailable": {

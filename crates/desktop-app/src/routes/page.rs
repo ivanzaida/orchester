@@ -13,10 +13,10 @@ use orchester_workspace::{
 };
 
 use super::{
-  AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, IMPORT, ImportTab, InstructionsView, JoinTarget, MODULES,
-  MemoryTab, ModuleListTab, ModuleTab, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab, PULL_REQUESTS,
-  PipelineView, ProjectSettingsTab, REVIEW, RouteError, SETTINGS, Screen, SecretsView, SkillsFilter, TAB, TASKS,
-  TaskList, TaskView, ToolTab,
+  AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, IMPORT, ImportTab, InstructionsView, JoinTarget, MERGE,
+  MERGE_QUEUE, MERGES, MODULES, MemoryTab, ModuleListTab, ModuleTab, NEW, NewConnection, ORCHESTRATOR,
+  OrchestratorChat, OverviewTab, PULL_REQUESTS, PipelineView, ProjectSettingsTab, REVIEW, RouteError, SETTINGS, Screen,
+  SecretsView, SkillsFilter, TAB, TASKS, TaskList, TaskView, ToolTab,
   files::FILES,
   modules, project_screen_path,
   query::{Params, with_query},
@@ -56,13 +56,9 @@ pub enum ProjectPage {
   Review,
   /// A task's review, by its key (`/review/KON-12`).
   TaskReview(TaskKey),
-  /// The Merge queue, a tab of Review before Review was rebuilt.
-  MergeQueue,
-  /// Merges, a tab of Review before Review was rebuilt: the runs not merged, those waiting for review and the merged
-  /// ones by day.
-  Merges,
-  /// One run's merge attempts, under Merges, by its task's key and its number (`/merges/KON-12/8`).
-  MergeAttempt(TaskKey, RunNumber),
+  /// One run's merge attempts, a page under its task, by the task's key and the run's number
+  /// (`/tasks/KON-12/merge/8`).
+  TaskMerge(TaskKey, RunNumber),
   /// The Usage page with its period, grouping and filters (boxed: a query holds many filters).
   Usage(Box<UsageQuery>),
   /// The Delivery view beside Usage, over its period.
@@ -154,8 +150,6 @@ impl ProjectPage {
       Screen::NewTask => Self::NewTask,
       Screen::Modules => Self::Modules(ModuleListTab::default()),
       Screen::Review => Self::Review,
-      Screen::MergeQueue => Self::MergeQueue,
-      Screen::Merges => Self::Merges,
       Screen::Usage => Self::Usage(Box::default()),
       Screen::Pipelines => Self::Pipelines,
       Screen::Agents => Self::Agents,
@@ -180,11 +174,9 @@ impl ProjectPage {
       Self::Tasks(_) => Screen::Tasks,
       Self::NewTask | Self::NewTaskInModule(_) => Screen::NewTask,
       Self::EditTask(_) => Screen::EditTask,
-      Self::Task(..) | Self::KeptTask(..) => Screen::Task,
+      Self::Task(..) | Self::KeptTask(..) | Self::TaskMerge(..) => Screen::Task,
       Self::Modules(_) | Self::NewModule | Self::Module(..) | Self::EditModule(_) => Screen::Modules,
       Self::Review | Self::TaskReview(_) => Screen::Review,
-      Self::MergeQueue => Screen::MergeQueue,
-      Self::Merges | Self::MergeAttempt(..) => Screen::Merges,
       Self::Usage(_) | Self::Delivery(_) => Screen::Usage,
       Self::Pipelines
       | Self::NewPipeline
@@ -258,7 +250,7 @@ impl ProjectPage {
       Self::EditConnection(id) => format!("{connections}/{id}/{EDIT}"),
       Self::Files(view) => view.path(format!("{project_root}/{FILES}")),
       Self::Import(tab) => with_query(segment(Screen::ImportResources), &[tab.param()]),
-      Self::MergeAttempt(key, number) => format!("{}/{key}/{}", segment(Screen::Merges), number.get()),
+      Self::TaskMerge(key, number) => format!("{tasks}/{key}/{MERGE}/{}", number.get()),
       Self::TaskReview(key) => format!("{}/{key}", segment(Screen::Review)),
       Self::MakeLocal | Self::ProjectRules | Self::Storage | Self::Join(_) => {
         self.settings_path(segment(Screen::ProjectSettings))
@@ -296,6 +288,10 @@ impl ProjectPage {
         let key = task_key(key)?;
         match rest {
           [EDIT] => Ok(Self::EditTask(key)),
+          [MERGE, number] => {
+            let number = number.parse::<NonZeroU32>().map_err(|_| RouteError::NoScreen)?;
+            Ok(Self::TaskMerge(key, RunNumber::new(number)))
+          }
           rest => TaskView::parse(rest, params).map(|view| Self::Task(key, view)),
         }
       }
@@ -343,9 +339,11 @@ impl ProjectPage {
       [CONNECTIONS, id, EDIT] => id.parse().map(Self::EditConnection).map_err(|_| RouteError::NoScreen),
       [MODULES, rest @ ..] => modules::parse(rest, params),
       [REVIEW, key] => task_key(key).map(Self::TaskReview),
-      ["merges", key, number] => {
-        let number = number.parse::<NonZeroU32>().map_err(|_| RouteError::NoScreen)?;
-        Ok(Self::MergeAttempt(task_key(key)?, RunNumber::new(number)))
+      // The Merge queue and Merges pages are gone (ORC-805): an address in a tab's history, whatever its path below
+      // them and its query, opens the Overview.
+      [MERGE_QUEUE | MERGES, ..] => {
+        params.clear();
+        Ok(Self::Overview(OverviewTab::default()))
       }
       [segment] => Screen::ALL
         .into_iter()

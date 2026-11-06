@@ -2,7 +2,7 @@
 //! Check on the merged result › Your approval › Merge into main*, each a 12 glyph and an 11.5 word, 5 apart, with an
 //! 11 chevron between them, 6 apart. Done is a `success` check, under way a turning loader in `text_primary` with a
 //! 500 word, not yet a dashed circle in `text_muted`, held a `warning` pause. A check under way says how long it has
-//! run, counted while it shows. Shared by the Merge queue screen and the task page's delivery card.
+//! run, counted while it shows. Drawn by the task page's delivery card.
 
 use std::sync::Arc;
 
@@ -243,7 +243,7 @@ impl Component for RunningCheck {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     self.tick.get();
     let RunningProps { id, since } = ctx.props::<RunningProps>().clone();
-    let elapsed = super::words::elapsed(ctx, since, Timestamp::now());
+    let elapsed = crate::screens::task::queue_words::elapsed(ctx, since, Timestamp::now());
     let label = ctx.t_args("delivery.queue.phase.checkRunning", [("elapsed", elapsed)]);
     item(&id, PhaseState::Active, &label)
   }

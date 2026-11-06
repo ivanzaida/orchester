@@ -355,7 +355,6 @@ pub const fn screen_icon(screen: Screen) -> Icon {
     Screen::NewTask => Icon::ListPlus,
     Screen::EditTask => Icon::Pencil,
     Screen::Modules => Icon::Target,
-    Screen::MergeQueue | Screen::Merges => Icon::GitMerge,
     Screen::Review => Icon::GitPullRequest,
     Screen::Usage => Icon::ChartColumn,
     Screen::Pipelines => Icon::Workflow,

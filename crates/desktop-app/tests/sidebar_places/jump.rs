@@ -59,13 +59,10 @@ fn sidebar_jump_to_opens_a_task_a_module_a_page_and_a_hub_tab() {
     navigation.route_now(),
     Route::Project(project, ProjectPage::Module(module, ModuleTab::Burndown))
   );
-  // A page, Review, which no longer lists the Merge queue as a tab, and a hub's tab.
+  // A page, Review, and a hub's tab.
   search(&mut window, "review");
   window.press("jump-to-pages-review");
   assert_eq!(navigation.route_now(), Route::Project(project, ProjectPage::Review));
-  search(&mut window, "merge");
-  window.press("jump-to-pages-merge-queue");
-  assert_eq!(navigation.route_now(), Route::Project(project, ProjectPage::MergeQueue));
   search(&mut window, "skills");
   window.press("jump-to-pages-agents-skills");
   assert_eq!(

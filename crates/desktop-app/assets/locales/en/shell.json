@@ -113,8 +113,6 @@
       "editTask": "Edit task",
       "editTaskOf": "Edit {{key}}",
       "task": "Task",
-      "mergeQueue": "Merge queue",
-      "merges": "Merges",
       "review": "Review",
       "usage": "Usage",
       "pipelines": "Pipelines",

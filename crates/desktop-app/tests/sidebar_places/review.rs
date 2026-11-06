@@ -47,17 +47,3 @@ fn sidebar_review_opens_its_list_and_history_retraces_it() {
   window.pass();
   assert_eq!(navigation.route_now(), task, "Forward returns to the task's review");
 }
-
-#[test]
-fn sidebar_review_stays_selected_on_the_pages_that_were_its_tabs() {
-  let mut window = Window::open();
-  let navigation = window.navigation();
-  let project = project_id();
-  navigation.go(overview(project));
-  window.until("the project to open", |window| window.texts("nav-review").is_some());
-  let screen = "screen-merge_queue";
-  navigation.go(Route::Project(project, ProjectPage::MergeQueue));
-  window.until(screen, |window| window.texts(screen).is_some());
-  assert!(selected(&mut window, "nav-review"), "{screen}");
-  assert!(window.texts("review-hub").is_none(), "{screen} has no hub around it");
-}
