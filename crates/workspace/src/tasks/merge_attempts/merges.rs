@@ -19,7 +19,7 @@ use orchester_core::{
     attempt::{AttemptOutcome, MergeAsker},
   },
   project::TaskKey,
-  run::{BranchName, RunNumber},
+  run::{BranchName, Run, RunNumber},
   store::{RunStore, WorktreeStore},
   task::Task,
   time::Timestamp,
@@ -270,19 +270,7 @@ fn waiting_run(
   waiting: WaitingReview,
 ) -> Result<WaitingRun, StoreError> {
   let size = match db.run(run.run).map_err(run_store_error)? {
-    Some(stored) => match run_changes_in(root, programs, &RunRange::of(&stored)) {
-      Ok(Checkpointed::Read { changes, .. }) => Some(Changes {
-        files: u32::try_from(changes.diff.files().len()).unwrap_or(u32::MAX),
-        additions: changes.diff.additions(),
-        deletions: changes.diff.deletions(),
-      }),
-      Ok(Checkpointed::TooLarge { size, .. }) => Some(size),
-      Ok(Checkpointed::NoCheckpoint) => None,
-      Err(error) => {
-        tracing::warn!(%error, run = %run.run, "cannot read what a run waiting for review changes");
-        None
-      }
-    },
+    Some(stored) => run_size((root, programs), &stored),
     None => None,
   };
   let unsent = db
@@ -297,6 +285,23 @@ fn waiting_run(
     size,
     unsent,
   })
+}
+
+/// What `run` changes up to its latest checkpoint; `None` when it has none or cannot be read (the log says why).
+pub(crate) fn run_size((root, programs): (&Path, &Programs), run: &Run) -> Option<Changes> {
+  match run_changes_in(root, programs, &RunRange::of(run)) {
+    Ok(Checkpointed::Read { changes, .. }) => Some(Changes {
+      files: u32::try_from(changes.diff.files().len()).unwrap_or(u32::MAX),
+      additions: changes.diff.additions(),
+      deletions: changes.diff.deletions(),
+    }),
+    Ok(Checkpointed::TooLarge { size, .. }) => Some(size),
+    Ok(Checkpointed::NoCheckpoint) => None,
+    Err(error) => {
+      tracing::warn!(%error, run = %run.id(), "cannot read what a run changes");
+      None
+    }
+  }
 }
 
 /// `run`, merged as `merge`; its branch is told deleted when `branches`, the repository's, no longer hold it.
