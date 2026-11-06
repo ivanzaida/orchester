@@ -7,6 +7,7 @@
 //! ([`read`]). Blocks on SQLite and git.
 
 pub mod approve;
+pub mod approved_run;
 pub mod ask;
 pub mod page;
 pub mod read;

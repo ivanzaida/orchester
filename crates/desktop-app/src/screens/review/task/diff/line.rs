@@ -125,8 +125,8 @@ pub(super) fn line(
     row = row.border_left(Border::inside(BorderSize::Md, PaletteColor::Info));
   }
   match key {
-    Some(key) => pressable(row, env, (path, key), hovered).into(),
-    None => row.into(),
+    Some(key) if !env.read_only => pressable(row, env, (path, key), hovered).into(),
+    _ => row.into(),
   }
 }
 

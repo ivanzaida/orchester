@@ -3,7 +3,8 @@
 //! changes, its head and how it merges in 12 `text_muted`. *Approve and merge* merges at the head shown; it is
 //! unavailable while Implement works on comments sent to it, or once the branch moved past the head reviewed, and its
 //! reason stands before it. Then the branch moved: *Changed since your review* says so and lists the new commits, and
-//! the person takes them in before they approve.
+//! the person takes them in before they approve. Once the run was approved ([`approved`]) there is no *Approve and
+//! merge*, and the status line tells how it merged.
 
 use std::sync::Arc;
 
@@ -25,7 +26,7 @@ use orchester_workspace::{
   },
 };
 
-use super::{Env, actions::Write, state::Held, words::counted};
+use super::{Env, actions::Write, approved, state::Held, words::counted};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
@@ -43,6 +44,9 @@ use crate::{
 
 /// The head that was reviewed, when the branch moved past it since and the person did not take the head shown in.
 pub(super) fn moved(env: &Env) -> Option<&Revision> {
+  if env.read_only {
+    return None;
+  }
   let reviewed = env.page.reviewed.as_ref()?;
   let taken = env.state.taken_in.get().0;
   (*reviewed != env.head && taken.as_ref() != Some(&env.head)).then_some(reviewed)
@@ -51,6 +55,9 @@ pub(super) fn moved(env: &Env) -> Option<&Revision> {
 /// The title with *Open task* and *Approve and merge*.
 pub(super) fn header(ctx: &mut Ctx, env: &Env) -> Element {
   let open = open_task(ctx, &env.navigation, &env.project, &env.page.run.key);
+  if env.read_only {
+    return title(&env.page.run.title, vec![open.into()]);
+  }
   let approve = approve_button(ctx);
   let (approve, reason) = match unavailable(ctx, env) {
     Some(reason) => (approve.unavailable(reason.clone()), Some(reason)),
@@ -132,6 +139,9 @@ impl Standing {
 
 /// The status line.
 pub(super) fn status(ctx: &Ctx, env: &Env) -> Element {
+  if let Some(approved) = &env.page.approved {
+    return approved::status(ctx, env, approved);
+  }
   let standing = if env.page.review_in.is_none() || env.review.implement_at_work {
     Standing::AtWork
   } else if moved(env).is_some() {

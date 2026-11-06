@@ -25,6 +25,20 @@
       "head": "head {{head}}",
       "into": "into {{branch}}"
     },
+    "approved": {
+      "merged": "Merged into {{branch}}",
+      "mergedNoBase": "Merged",
+      "merging": "Merging into {{branch}}",
+      "mergingNoBase": "Merging",
+      "by": "approved by you {{time}}",
+      "automatic": "merged without a person's approval",
+      "notRecorded": "who approved it is not recorded",
+      "queue": "the merge queue merges it in its turn",
+      "mergeCommit": "merge commit {{revision}}",
+      "squash": "squashed as {{revision}}",
+      "fastForward": "fast-forward to {{revision}}",
+      "alreadyMerged": "already in {{branch}} at {{revision}}"
+    },
     "changed": {
       "title": "Changed since your review",
       "body": "The branch moved from {{reviewed}}, the head you reviewed, to {{head}}: {{commits}}. The diff shows {{head}}; look at it, then approve it.",

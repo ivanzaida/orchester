@@ -48,6 +48,9 @@ enum Tray {
 
 /// The tray, or nothing while no comment waits or is being sent.
 pub(super) fn tray(ctx: &mut Ctx, env: &Env) -> Option<Element> {
+  if env.read_only {
+    return None;
+  }
   let unsent = unsent(env);
   let sending = env
     .review
