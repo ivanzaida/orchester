@@ -1,11 +1,9 @@
 //! Review › Merges (ORC-362, 09 `Os7b3` of `Review · redesign`) in the app's real window, on the QA seed's merges
-//! scenarios (`examples/seed`): the hub's third tab, its own route by tab, history, *Jump to* and `navigate`, with its
-//! count in `warning`; *Not merged* with each outcome's line and action, *Try again* merging as the task page does,
-//! Orchester's own retry followed live, and *Put files back* putting a stopped bring-in's file back; *Waiting for your
-//! review* with *Changed since your review*;
+//! scenarios (`examples/seed`): its own route, history, *Jump to* and `navigate`; *Not merged* with each outcome's line
+//! and action, *Try again* merging as the task page does, Orchester's own retry followed live, and *Put files back*
+//! putting a stopped bring-in's file back; *Waiting for your review* with *Changed since your review*;
 //! the merged runs by local day, older days read as the list scrolls; *No merges yet*; the merges last read shown at
-//! once when the tab opens again, and an info line that does not move as they are read; the hub's counts kept as its
-//! tabs switch, a bone only for the first. Needs `git`, as the seed does.
+//! once when the page opens again, and an info line that does not move as they are read. Needs `git`, as the seed does.
 //! `cargo test -p orchester-app --test review_merges review_merges`.
 
 #[path = "../examples/seed/kontur/mod.rs"]
@@ -16,15 +14,12 @@
 mod kontur;
 mod support;
 
-use std::{
-  path::PathBuf,
-  time::{Duration, Instant},
-};
+use std::{path::PathBuf, time::Duration};
 
 use lurq::app::events::ScrollPhase;
 use orchester_app::{
   mcp::tools::navigate,
-  routes::{OverviewTab, ProjectPage, Route},
+  routes::{ProjectPage, Route},
 };
 use orchester_core::{id::ProjectId, time::Timestamp};
 use orchester_exec::local_git::IntegrationLease;
@@ -108,36 +103,21 @@ impl Seeded {
 }
 
 #[test]
-fn review_merges_is_the_hubs_third_tab_by_tab_history_jump_to_and_navigate() {
+fn review_merges_keeps_its_route_history_jump_to_and_navigate() {
   let mut seeded = Seeded::new("merges");
   let navigation = seeded.window.navigation();
   let project = seeded.project;
-  navigation.go(Route::Project(project, ProjectPage::Overview(OverviewTab::default())));
-  seeded
-    .window
-    .until("the sidebar", |window| window.texts("nav-review").is_some());
-  seeded.window.press("nav-review");
-  seeded
-    .window
-    .until("the Review hub", |window| window.texts("review-hub").is_some());
-  let tabs = seeded.window.texts("review-hub-tabs").expect("the hub's tabs");
-  let names: Vec<&str> = ["Merge queue", "Pull requests", "Merges"]
-    .into_iter()
-    .filter(|name| tabs.iter().any(|tab| tab == name))
-    .collect();
-  assert_eq!(names, ["Merge queue", "Pull requests", "Merges"], "{tabs:?}");
-  // One run not merged and two waiting for review need the person.
-  seeded.window.until_within(GIT_WORK, "the Merges count", |window| {
-    window
-      .texts("review-hub-tab-merges-count")
-      .is_some_and(|texts| texts == ["3"])
-  });
-  seeded.window.press("review-hub-tab-merges");
   let merges = Route::Project(project, ProjectPage::Merges);
-  seeded.until_read();
-  assert_eq!(navigation.route_now(), merges);
   assert!(merges.path().ends_with("/merges"), "{}", merges.path());
   assert_eq!(Route::parse(&merges.path()).expect("the path reads"), merges);
+  navigation.go(Route::Project(project, ProjectPage::MergeQueue));
+  seeded
+    .window
+    .until("the Merge queue", |window| window.texts("screen-merge_queue").is_some());
+  assert!(!seeded.shows("review-hub"), "Review no longer holds the pages as tabs");
+  navigation.go(merges.clone());
+  seeded.until_read();
+  assert_eq!(navigation.route_now(), merges);
   navigation.back();
   seeded.window.until("Back to the Merge queue", |window| {
     window.texts("screen-merge_queue").is_some()
@@ -316,11 +296,6 @@ fn review_merges_try_again_merges_as_the_task_page_does() {
     text.contains("You · ") && text.contains("after 2 refused attempts"),
     "{text}"
   );
-  seeded.window.until("the count to drop", |window| {
-    window
-      .texts("review-hub-tab-merges-count")
-      .is_some_and(|texts| texts == ["2"])
-  });
 }
 
 /// While Orchester waits to try a merge again, no job state changes: the list watches the run that merges once a
@@ -399,9 +374,6 @@ fn review_merges_without_any_attempt_says_no_merges_yet() {
     empty.contains("No merges yet") && empty.contains("Every merge into main shows here once it is tried"),
     "{empty}"
   );
-  seeded.window.until("the tab without a count", |window| {
-    window.texts("review-hub-tab-merges").is_some() && window.texts("review-hub-tab-merges-count").is_none()
-  });
 }
 
 /// Opened again, the tab shows the merges it read last at once, from the first frame, with no reading state, and reads
@@ -460,78 +432,6 @@ fn review_merges_info_line_keeps_its_place_from_the_first_frame() {
   assert!(read.iter().all(Option::is_some), "{read:?}");
   for (frame, placed) in frames.iter().enumerate() {
     assert_eq!(placed, &read, "frame {frame} of {} of {parts:?}", frames.len());
-  }
-}
-
-/// Where each of the hub's tabs stands and how wide it is, and whether its count is a bone.
-fn hub_tabs(window: &mut Window) -> (Vec<(f32, f32)>, bool) {
-  let names = ["merge_queue", "pull_requests", "merges"];
-  let placed = names
-    .iter()
-    .map(|name| {
-      let bounds = window
-        .tree
-        .get_element_by_id_mut(&format!("review-hub-tab-{name}"))
-        .and_then(|tab| tab.bounds())
-        .unwrap_or_else(|| panic!("the {name} tab is laid out"));
-      (bounds.x, bounds.width)
-    })
-    .collect();
-  // A count is its text; its bone holds no text of its own, only the room of a digit.
-  let bone = names.iter().any(|name| {
-    window
-      .tree
-      .get_element_by_id(&format!("review-hub-tab-{name}-count"))
-      .is_some_and(|count| count.text_content().is_none())
-  });
-  (placed, bone)
-}
-
-/// A project's first count in the window is a bone until it is counted (09d `Zlk49`); switching tabs then shows each
-/// tab's count from the first frame, no bone, and moves no tab (ORC-723).
-#[test]
-fn review_merges_switching_tabs_keeps_the_counts_and_moves_no_tab() {
-  let mut seeded = Seeded::new("merges");
-  let project = seeded.project;
-  let navigation = seeded.window.navigation();
-  navigation.go(Route::Project(project, ProjectPage::MergeQueue));
-  let mut bones = false;
-  seeded.window.until_within(GIT_WORK, "the counts", |window| {
-    if window.tree.get_element_by_id("review-hub-tabs").is_none() {
-      return false;
-    }
-    let bone = hub_tabs(window).1;
-    bones |= bone;
-    !bone
-      && window
-        .texts("review-hub-tab-merges-count")
-        .is_some_and(|texts| texts == ["3"])
-  });
-  assert!(bones, "the first count is a bone until it is counted");
-  let queued = seeded.window.texts("review-hub-tab-merge_queue-count");
-  let (counted, _) = hub_tabs(&mut seeded.window);
-  let pages = [
-    (ProjectPage::PullRequests(Default::default()), "screen-pull_requests"),
-    (ProjectPage::Merges, "screen-merges"),
-    (ProjectPage::MergeQueue, "screen-merge_queue"),
-  ];
-  for (page, screen) in pages {
-    navigation.go(Route::Project(project, page.clone()));
-    seeded.window.pass();
-    // Every frame from the switch on, while the tab's page shows and its counts are read again behind them.
-    let shown = Instant::now();
-    seeded.window.until_within(GIT_WORK, screen, |window| {
-      let (placed, bone) = hub_tabs(window);
-      assert!(!bone, "{page:?}: no bone on a switch");
-      assert_eq!(placed, counted, "{page:?}: the tabs keep their place");
-      assert_eq!(
-        window.texts("review-hub-tab-merges-count"),
-        Some(vec!["3".to_owned()]),
-        "{page:?}"
-      );
-      assert_eq!(window.texts("review-hub-tab-merge_queue-count"), queued, "{page:?}");
-      window.tree.get_element_by_id(screen).is_some() && shown.elapsed() > Duration::from_secs(1)
-    });
   }
 }
 

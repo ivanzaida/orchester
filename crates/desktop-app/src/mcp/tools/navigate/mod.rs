@@ -60,8 +60,8 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   account); each opens Project settings on that tab or page. agents, instructions, skills, tools and memory are the \
   five tabs of one Agents page (Profiles, Instructions, Skills, Tools, Memory), each its own route: agents takes \
   `agent` (a profile's id, or new), skills takes \
-  `skill` (a skill id, new or import), tools takes tool (a tool id, or new), and its page's tab; merge_queue, \
-  pull_requests and merges are the tabs of one Review page, each its own route; merges takes `key` and `run` (a task's \
+  `skill` (a skill id, new or import), tools takes tool (a tool id, or new), and its page's tab; review is the list of tasks whose run finished and, with `key`, \
+  a task's review; merge_queue, pull_requests and merges are pages of their own, each its own route; merges takes `key` and `run` (a task's \
   key and its run's number) for that run's merge attempts; orchestrator takes `chat` (a \
   conversation's id, or new; left out, the latest); files takes `file` (a path in the project; the tree alone when \
   left out), `at` (checkout, the default, base, run:<run id> or rev:<commit>) and `line` (12 or 12-20); pull_requests \
@@ -118,7 +118,7 @@ fn schema() -> Value {
     "properties": {
       "route": { "type": "string", "enum": names },
       "project": { "type": "string", "description": "The project's id (a UUID), for every screen of a project." },
-      "key": { "type": "string", "description": "The task's key, e.g. KON-12, for task, edit_task and merges." },
+      "key": { "type": "string", "description": "The task's key, e.g. KON-12, for task, edit_task, review and merges." },
       "run": { "type": "string", "description": "merges: with `key`, the number of the run whose merge attempts to show, e.g. 8." },
       "tab": { "type": "string", "description": tabs },
       "q": { "type": "string", "description": "tasks: the text searched for." },
@@ -209,6 +209,7 @@ fn screen_route(screen: Screen, args: &Map<String, Value>, lookup: Option<&Looku
     Screen::EditTask => ProjectPage::EditTask(key(args, "key")?),
     Screen::Task => ProjectPage::Task(key(args, "key")?, task_view(args)?),
     Screen::Modules => module_page(args)?,
+    Screen::Review => review_page(args)?,
     Screen::MergeQueue => ProjectPage::MergeQueue,
     Screen::PullRequests => pull_requests_page(args)?,
     Screen::Merges => merges::merges_page(args)?,
@@ -285,10 +286,19 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::NewTask => &["project", "module"],
     Screen::ProjectSettings => &["project", "tab", "view"],
     Screen::Agents => &["project", "agent"],
+    Screen::Review => &["project", "key"],
     Screen::Merges => merges::PARAMS,
     Screen::MergeQueue | Screen::Pipelines | Screen::Instructions | Screen::Secrets | Screen::OrchestratorSettings => {
       &["project"]
     }
+  }
+}
+
+/// Review's list, or with `key` the review of that task.
+fn review_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
+  match string(args, "key")? {
+    None => Ok(ProjectPage::Review),
+    Some(_) => Ok(ProjectPage::TaskReview(key(args, "key")?)),
   }
 }
 

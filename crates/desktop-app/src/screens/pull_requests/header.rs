@@ -120,7 +120,7 @@ pub(super) fn reading(ctx: &mut Ctx) -> Row {
   frame(title(ctx), actions)
 }
 
-/// The Review hub's head and tab name the page (`screens::review`): what it shows leads it.
+/// What the page shows leads it.
 fn title(ctx: &Ctx) -> Column {
   Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(
     Text::new(&ctx.t("pull_requests.description"))

@@ -193,7 +193,7 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
         insert("highlight", &key.to_string());
       }
     }
-    ProjectPage::EditTask(key) => insert("key", &key.to_string()),
+    ProjectPage::EditTask(key) | ProjectPage::TaskReview(key) => insert("key", &key.to_string()),
     ProjectPage::Memory(Some(tab)) => insert("tab", tab.name()),
     ProjectPage::PullRequests(tab) => insert("tab", tab.name()),
     ProjectPage::PullRequest(number, _) => insert("number", &number.to_string()),

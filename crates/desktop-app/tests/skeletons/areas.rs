@@ -36,7 +36,6 @@ fn skeletons_review_shows_the_merge_queues_and_the_pull_requests_bones_after_a_m
   let mut held = Held::new();
   held.page(ProjectPage::MergeQueue);
   held.skeleton("merge-queue-loading");
-  assert!(held.exists("review-hub-title"), "the hub's title stays real");
   held.page(ProjectPage::PullRequests(Default::default()));
   held.skeleton("pull-requests-loading");
   assert!(held.exists("pull-requests-refresh"), "Refresh stays real");
@@ -51,9 +50,8 @@ fn skeletons_review_merges_shows_its_bones_after_a_moment() {
   let mut held = Held::new();
   held.page(ProjectPage::Merges);
   held.skeleton("merges-loading");
-  assert!(held.exists("review-hub-title"), "the hub's title stays real");
   // 09d `Zlk49`: the info line stands over the bones, drawn from git's word on the checkout, read apart from the held
-  // reads, as it will stand once the merges are read (ORC-721); every tab's count is a bone.
+  // reads, as it will stand once the merges are read (ORC-721).
   held.window.until("the info line from git", |window| {
     window
       .texts("merges-lead")
@@ -64,10 +62,6 @@ fn skeletons_review_merges_shows_its_bones_after_a_moment() {
     info.contains("Base main") && info.contains("Checkout on main · clean"),
     "{info}"
   );
-  for tab in ["merge_queue", "pull_requests", "merges"] {
-    let count = format!("review-hub-tab-{tab}-count");
-    assert!(held.exists(&count), "{count} is a bone while counts are read");
-  }
 }
 
 #[test]

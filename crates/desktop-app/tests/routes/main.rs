@@ -4,6 +4,7 @@
 
 mod files;
 mod project_settings;
+mod review;
 mod settings;
 mod usage;
 mod views;
@@ -115,6 +116,7 @@ fn every_route() -> Vec<Route> {
       Default::default(),
     )),
     at(ProjectPage::EditTask(key("KON-7"))),
+    at(ProjectPage::TaskReview(key("KON-12"))),
     at(ProjectPage::Usage(Box::new(usage_query()))),
     at(ProjectPage::EditConnection(connection())),
     at(ProjectPage::Connections(ConnectionsView::default())),

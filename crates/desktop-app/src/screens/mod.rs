@@ -114,10 +114,9 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::Overview(_) => overview::screen(ctx, project),
     ProjectPage::Orchestrator(chat) => orchestrator::screen(ctx, project, *chat),
     ProjectPage::OrchestratorSettings => orchestrator::settings(ctx, project),
-    ProjectPage::MergeQueue => {
-      let body = merge_queue::screen(ctx, project);
-      review::page(ctx, project, review::ReviewTab::MergeQueue, body)
-    }
+    ProjectPage::Review => review::list(ctx),
+    ProjectPage::TaskReview(key) => review::task(ctx, key),
+    ProjectPage::MergeQueue => merge_queue::screen(ctx, project),
     ProjectPage::Memory(tab) => memory::screen(ctx, project, *tab),
     ProjectPage::Tasks(list) => tasks::screen(ctx, project, list),
     ProjectPage::NewTask => task_form::new_task(ctx, project, None),
@@ -129,14 +128,8 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::NewModule => modules::new_module(ctx, project),
     ProjectPage::Module(id, tab) => modules::page(ctx, project, *id, *tab),
     ProjectPage::EditModule(id) => modules::edit_module(ctx, project, *id),
-    ProjectPage::PullRequests(tab) => {
-      let body = pull_requests::screen(ctx, project, *tab);
-      review::page(ctx, project, review::ReviewTab::PullRequests, body)
-    }
-    ProjectPage::Merges => {
-      let body = merges::screen(ctx, project);
-      review::page(ctx, project, review::ReviewTab::Merges, body)
-    }
+    ProjectPage::PullRequests(tab) => pull_requests::screen(ctx, project, *tab),
+    ProjectPage::Merges => merges::screen(ctx, project),
     ProjectPage::MergeAttempt(key, number) => merges::review::screen(ctx, project, key, *number),
     ProjectPage::PullRequest(number, file) => pull_requests::pull_request(
       ctx,
