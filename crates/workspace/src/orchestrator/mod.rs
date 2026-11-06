@@ -35,4 +35,5 @@ pub mod settings;
 mod told;
 pub mod tools;
 pub mod waits;
+pub mod watching;
 mod widening;
