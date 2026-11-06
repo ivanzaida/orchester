@@ -100,7 +100,11 @@ mod task_groups;
 mod task_identities;
 mod team_delivery;
 mod team_delivery_waits;
+<<<<<<< HEAD
 mod team_fill_ins;
+=======
+mod team_mcp_server;
+>>>>>>> claude/orc-810-mcp-server-kind
 mod team_operations;
 mod team_pipeline_ids;
 mod team_reviewer;

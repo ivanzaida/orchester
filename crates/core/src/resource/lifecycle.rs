@@ -27,6 +27,7 @@ pub enum ResourceKind {
   Service,
   Stack,
   TeamReviewer,
+  McpServer,
 }
 
 #[derive(Debug, Error, PartialEq, Eq)]

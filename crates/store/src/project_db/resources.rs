@@ -21,6 +21,10 @@ use crate::{
   rows::{corrupt, decode_body, decode_document, encode_json, parse},
 };
 
+mod kind;
+
+pub(in crate::project_db) use self::kind::{kind_text, parse_kind};
+
 const SELECT_RESOURCES: &str = "SELECT id, kind, slug, name, created_at FROM resources";
 /// The resources of kind `?1` the project offers (`docs/architecture/server.md` row 80, the person's decisions of
 /// 2026-11-05 and 2026-11-06): none removed (a team resource archived on the server is removed here); in a team
@@ -566,33 +570,4 @@ pub(crate) fn version_number(number: i64) -> Result<VersionNumber, StoreError> {
     .and_then(NonZeroU32::new)
     .map(VersionNumber::new)
     .ok_or_else(|| corrupt("version number", number))
-}
-
-pub(super) const fn kind_text(kind: ResourceKind) -> &'static str {
-  match kind {
-    ResourceKind::AgentProfile => "agent_profile",
-    ResourceKind::Instruction => "instruction",
-    ResourceKind::Pipeline => "pipeline",
-    ResourceKind::Tool => "tool",
-    ResourceKind::Skill => "skill",
-    ResourceKind::TestSuite => "test_suite",
-    ResourceKind::Service => "service",
-    ResourceKind::Stack => "stack",
-    ResourceKind::TeamReviewer => "team_reviewer",
-  }
-}
-
-pub(super) fn parse_kind(value: &str) -> Result<ResourceKind, StoreError> {
-  match value {
-    "agent_profile" => Ok(ResourceKind::AgentProfile),
-    "instruction" => Ok(ResourceKind::Instruction),
-    "pipeline" => Ok(ResourceKind::Pipeline),
-    "tool" => Ok(ResourceKind::Tool),
-    "skill" => Ok(ResourceKind::Skill),
-    "test_suite" => Ok(ResourceKind::TestSuite),
-    "service" => Ok(ResourceKind::Service),
-    "stack" => Ok(ResourceKind::Stack),
-    "team_reviewer" => Ok(ResourceKind::TeamReviewer),
-    other => Err(corrupt("resource kind", other)),
-  }
 }

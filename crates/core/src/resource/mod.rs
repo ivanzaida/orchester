@@ -13,6 +13,7 @@ mod pipeline;
 mod prompt;
 mod removal;
 mod skill;
+mod team_mcp_server;
 mod team_reviewer;
 mod test_suite;
 mod tool;
@@ -37,6 +38,7 @@ pub use self::{
   prompt::{PromptError, PromptReference, PromptText, Rendered, prompt_references},
   removal::{Removal, RemoveMode, StepUser, StepVersion, pipeline_step_users, step_users},
   skill::{SKILL_FILE, Skill, SkillError, SkillFile, SkillFilePath},
+  team_mcp_server::{TeamMcpLaunch, TeamMcpProgram, TeamMcpRemote, TeamMcpServer, TeamMcpServerError},
   team_reviewer::{
     DecisionReviewerReference, DecisionReviewerRole, LanguageReviewerReference, ReviewerDestinations, ReviewerHost,
     ReviewerHostError, TeamReviewer,

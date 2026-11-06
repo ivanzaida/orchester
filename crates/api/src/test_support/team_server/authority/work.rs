@@ -21,7 +21,7 @@ pub enum Person {
 
 impl Person {
   /// `{id, display_name}`; another member's id is made from the name, so it is the same in every read.
-  pub(super) fn wire(self) -> Value {
+  pub(in crate::test_support::team_server) fn wire(self) -> Value {
     match self {
       Self::You => json!({"id": USER, "display_name": "Bohdan Koval"}),
       Self::Named(name) => {

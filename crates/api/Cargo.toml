@@ -84,3 +84,7 @@ required-features = ["client", "release-signature"]
 [[test]]
 name = "team_releases"
 required-features = ["test-support"]
+
+[[test]]
+name = "team_resources"
+required-features = ["test-support"]
