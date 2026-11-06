@@ -219,7 +219,12 @@ fn watching_lists_each_subscription_with_what_goes_on_and_counts_the_rest() {
       .collect::<Vec<_>>(),
     [(project.export, Going::ReadyToMerge)]
   );
+}
 
+#[test]
+fn watching_totals_what_waits_and_counts_the_targets() {
+  let project = project();
+  let watching = reads(&project.fixture).watching(project.chat);
   assert_eq!(
     keys(&watching.total),
     [
