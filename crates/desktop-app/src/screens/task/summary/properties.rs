@@ -140,6 +140,9 @@ pub fn column(ctx: &mut Ctx, task: &TaskContext, (section, more): (Option<Elemen
       &ctx.t("summary.properties.dependsOn"),
       depends(ctx, task, tasks),
     ),
+  ]);
+  rows.extend(super::led_in::led_in_row(ctx, task));
+  rows.extend([
     property(
       "task-property-limits",
       &ctx.t("summary.properties.limits"),

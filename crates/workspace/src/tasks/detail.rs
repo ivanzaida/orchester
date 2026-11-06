@@ -38,6 +38,7 @@ use super::{
   step_views::step_views,
   unreadable::Unreadable,
 };
+use crate::orchestrator::watching::{LedIn, WatchReads};
 
 /// A task's messages, oldest first, and the files attached to them.
 type Conversation = (Vec<Message>, BTreeMap<MessageId, Vec<Attachment>>);
@@ -304,6 +305,8 @@ pub struct TaskDetail {
   pub shared: Option<orchester_store::SharedTaskInfo>,
   /// Before the task has a run: the agent its run would start with.
   pub first_agent: Option<Arc<str>>,
+  /// The Orchestrator conversation that leads the task, its properties' *Led in* (`i687ei` b).
+  pub led_in: LedIn,
 }
 
 impl TaskDetail {
@@ -354,6 +357,7 @@ impl TaskDetail {
   pub fn load_in(repo_root: &Path, task: TaskId) -> Result<Self, StoreError> {
     let mut db = ProjectDb::open(repo_root)?;
     let task = db.task(task)?.ok_or(StoreError::TaskNotFound(task))?;
+    let led_in = WatchReads::read_task_led_in(&db, &task)?;
     let blocked_by = blocking_keys(&db, &task)?;
     let missing_pipeline = db.missing_pipelines()?.remove(&task.id());
     let unsent_status = db.unsent_status(task.id())?;
@@ -376,6 +380,7 @@ impl TaskDetail {
         missing_pipeline,
         unsent_status,
         shared,
+        led_in,
         ..Self::without_runs(task, conversation, requirements)
       });
     }
@@ -425,6 +430,7 @@ impl TaskDetail {
       missing_pipeline,
       unsent_status,
       shared,
+      led_in,
       ..Self::without_runs(task, conversation, requirements)
     })
   }
@@ -453,6 +459,7 @@ impl TaskDetail {
       unsent_status: None,
       shared: None,
       first_agent: None,
+      led_in: LedIn::Nobody,
     }
   }
 }
