@@ -34,6 +34,7 @@ pub mod runs_on;
 pub mod search;
 pub mod send;
 pub mod settings;
+pub mod stalls;
 mod told;
 pub mod tools;
 pub mod waits;

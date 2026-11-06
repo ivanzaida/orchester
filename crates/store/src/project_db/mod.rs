@@ -92,6 +92,7 @@ mod run_connections;
 mod run_ends;
 mod run_inputs;
 mod run_models;
+mod run_progress;
 mod run_waits;
 mod runner_failures;
 mod runs;
