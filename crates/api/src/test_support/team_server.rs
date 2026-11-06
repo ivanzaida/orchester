@@ -29,6 +29,7 @@ pub use authority::{
 };
 use first_download::TaskPages;
 pub use first_download::TasksAnswer;
+pub use resources::PinnedRun;
 
 /// The server's name, as it gives it at `GET /server`, unless it is [`TeamServer::named`] otherwise.
 pub const NAME: &str = "Kontur team";

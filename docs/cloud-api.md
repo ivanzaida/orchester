@@ -51,10 +51,21 @@ All paths below are under the team server's `/api/v1/projects/{project}`, with i
 | `GET /resources/{resource}/versions?after=` | member | `Versions { versions: [SharedVersion], next? }`, oldest first, at most 64 versions or 1 MiB per page |
 | `POST /resources/{resource}/versions` | project owner or server admin | `VersionPublish { idempotency_key, based_on, body, references: [] }`; `201 { version: SharedVersion }` |
 | `PATCH /resources/{resource}` | project owner or server admin | existing rename/archive `ResourcePatch` |
+| `GET /resources/{resource}/used-by` | member (an admin reads it before archiving) | `UsedBy { resources: [UsedByResource], runs: [UsedByRun] }`; `404 not_found` for a resource the project does not have |
 
 A member's write returns `403 not_admin`. Publishing from a stale `based_on` returns `409 version_conflict`
 with the latest version. Uploading history at `POST /resources/import` uses the existing `UploadResource` and
 `UploadVersion` shapes and the same write access; the server computes each imported version's flag in number order.
+
+`GET /resources/{resource}/used-by` (decision E of `docs/design/team-configuration.md`) is what the archive
+confirmation reads before an admin archives a resource, and any member may read it. `resources` lists the other
+resources that are not archived and whose latest published version names this one in its body or references,
+`{ kind, id, name, version }` with the version that names it, by name and then id. `runs` lists the runs that have not
+ended and pin any version of the resource, `{ task_key, run, number, holder }`: the task's key (`KON-12`), the run's id
+and its number within the task, and the `UserRef` who holds the task's claim; by task key and then run number. Both
+lists are empty when nothing uses it. It only reads: archiving still cancels those runs (row 79 of
+`docs/architecture/server.md`). The client call is `used_by`, and the stand-in team server answers it from its own
+resources and the runs a test registers with `TeamServer::pin_run`.
 
 `SharedVersion` is `{ resource, number, body, hash, references, based_on, published, widens }`.
 The server computes `widens: boolean` with ORC-570's `TeamReviewer::widens_over` and keeps it on that immutable

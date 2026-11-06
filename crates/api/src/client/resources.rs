@@ -1,6 +1,6 @@
 //! A shared project's configuration (`docs/architecture/server.md`, "Shared configuration", "Resources"): reading its
-//! resources and their versions, and, for admins only (`403 not_admin` for a member), creating, importing, publishing,
-//! renaming and archiving them and uploading a skill's parts by their hash.
+//! resources and their versions and what uses one, and, for admins only (`403 not_admin` for a member), creating,
+//! importing, publishing, renaming and archiving them and uploading a skill's parts by their hash.
 
 use orchester_core::{
   blob::ContentHash,
@@ -13,7 +13,7 @@ use reqwest::{Method, header::CONTENT_TYPE};
 use super::{Client, ClientError, answered, bearer};
 use crate::{
   FileStored, ResourceCreate, ResourceCreated, ResourcePatch, ResourceResponse, Resources, ResourcesImport,
-  ResourcesImported, SharedResource, SharedVersion, VersionPublish, VersionResponse, Versions,
+  ResourcesImported, SharedResource, SharedVersion, UsedBy, VersionPublish, VersionResponse, Versions,
 };
 
 impl Client {
@@ -39,6 +39,19 @@ impl Client {
       url.query_pairs_mut().append_pair("after", &after.get().to_string());
     }
     self.call(bearer(self.http.get(url), token)).await
+  }
+
+  /// `GET …/resources/{resource}/used-by`: the resources whose latest version names this one and the runs that have
+  /// not ended and pin a version of it, which an archive stops; an admin reads it before archiving. `404` for an
+  /// unknown resource.
+  pub async fn used_by(
+    &self,
+    token: &SecretValue,
+    project: ProjectId,
+    resource: ResourceId,
+  ) -> Result<UsedBy, ClientError> {
+    let path = format!("/projects/{project}/resources/{resource}/used-by");
+    self.call(bearer(self.request(Method::GET, &path)?, token)).await
   }
 
   /// `POST …/resources`: a resource and its v1; `409 slug_taken` names the resource of its kind that has the slug. A
