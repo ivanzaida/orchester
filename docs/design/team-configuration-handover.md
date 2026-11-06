@@ -17,6 +17,7 @@ and Orchester Platform module "Team configuration" (OP-197…206). The team serv
 | ORC-813 | `mcp_server_programs` in the application database | merged here (20dbd8c17) |
 | ORC-814 | Leaving a team deletes the team's resources and cached versions | merged here (dae4066c9); **UI text changed: design verification not done** |
 | ORC-815 | Per-project fill-ins: connection pick, MCP on here, secret values by name | merged here (d492b65a4) |
+| ORC-811 | `GET …/resources/{id}/used-by`: what names a resource and the runs that stop; client, stand-in, docs | merged here (59d9fcc25) |
 
 ## In progress
 
@@ -26,7 +27,7 @@ and Orchester Platform module "Team configuration" (OP-197…206). The team serv
 
 ## Next (unblocked once this branch is pushed)
 
-- ORC-811 (used-by contract), ORC-817 (references by server id / secret name), ORC-818 (sync team MCP servers).
+- ORC-817 (references by server id / secret name), ORC-818 (sync team MCP servers).
 - Then ORC-819…823, and the Orchester Platform pin (OP-197) once the contract tasks are pushed.
 
 ## Pre-existing failures (not this module)
