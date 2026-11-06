@@ -6,7 +6,7 @@ pub(super) const MIGRATION: &str = r"
 CREATE TABLE orchestrator_watch (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   default_order TEXT NOT NULL,
-  no_progress_minutes INTEGER CHECK (no_progress_minutes IS NULL OR no_progress_minutes BETWEEN 1 AND 1440)
+  no_progress_minutes INTEGER CHECK (no_progress_minutes IS NULL OR no_progress_minutes BETWEEN 1 AND 240)
 ) STRICT;
 INSERT INTO orchestrator_watch (id, default_order, no_progress_minutes) VALUES (1, '', 20);
 ";

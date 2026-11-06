@@ -15,6 +15,7 @@ mod limits;
 mod memory;
 mod navigation_status;
 mod orchestrator;
+mod orchestrator_watching;
 mod queries;
 mod reads;
 mod review_regressions;

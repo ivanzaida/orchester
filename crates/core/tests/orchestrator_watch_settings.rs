@@ -12,13 +12,16 @@ fn watch_settings_default_to_no_order_and_twenty_minutes() {
 }
 
 #[test]
-fn watch_settings_keep_the_order_trimmed_and_minutes_from_one_to_a_day_or_off() {
+fn watch_settings_keep_the_order_trimmed_and_minutes_from_one_to_four_hours_or_off() {
   let watch = WatchSettings::new("  Watch ORC-12 until it merges.\n", Some(1)).expect("one minute");
   assert_eq!(watch.default_order(), "Watch ORC-12 until it merges.");
   assert_eq!(watch.no_progress_minutes(), Some(1));
+  assert_eq!(WatchSettings::MAX_NO_PROGRESS_MINUTES, 240);
   assert_eq!(
-    WatchSettings::new("", Some(1440)).expect("a day").no_progress_minutes(),
-    Some(1440)
+    WatchSettings::new("", Some(240))
+      .expect("four hours")
+      .no_progress_minutes(),
+    Some(240)
   );
   assert_eq!(
     WatchSettings::new(" \n", None).expect("off"),
@@ -28,13 +31,13 @@ fn watch_settings_keep_the_order_trimmed_and_minutes_from_one_to_a_day_or_off() 
 }
 
 #[test]
-fn watch_settings_refuse_minutes_outside_one_to_a_day() {
+fn watch_settings_refuse_minutes_outside_one_to_four_hours() {
   assert_eq!(
     WatchSettings::new("order", Some(0)),
     Err(NoProgressError { minutes: 0 })
   );
   assert_eq!(
-    WatchSettings::new("order", Some(1441)),
-    Err(NoProgressError { minutes: 1441 })
+    WatchSettings::new("order", Some(241)),
+    Err(NoProgressError { minutes: 241 })
   );
 }

@@ -7,7 +7,7 @@
 use orchester_core::{
   id::ChatId,
   orchestrator::{
-    Subscription, Subscriptions, WatchTarget,
+    Chat, ChatEvent, Subscription, Subscriptions, WatchTarget,
     watch::{EndReason, WatchEnd, WatchSummary},
   },
   time::Timestamp,
@@ -142,6 +142,26 @@ impl ProjectDb {
     super::orchestrator_watch_summaries::keep(&transaction, subscription, summary, at)?;
     transaction.commit()?;
     Ok(true)
+  }
+
+  /// Keeps `events`, a person's watch command and the lines it writes, in `chat` (stored with it when it is new) at
+  /// `at`, in one transaction and in their order. They start no turn: the app applies the command itself, also while
+  /// a turn of the conversation is under way.
+  pub fn keep_watch_entries(&mut self, chat: &Chat, events: &[ChatEvent], at: Timestamp) -> Result<(), StoreError> {
+    let transaction = self.connection.transaction()?;
+    transaction.execute(
+      "INSERT INTO orchestrator_chats (id, title, started_at) VALUES (?1, ?2, ?3) ON CONFLICT (id) DO NOTHING",
+      params![chat.id().to_string(), chat.title(), chat.started().unix_millis()],
+    )?;
+    for event in events {
+      let body = serde_json::to_string(event).map_err(|error| corrupt("chat event", error))?;
+      transaction.execute(
+        "INSERT INTO orchestrator_entries (chat_id, kind, at, body) VALUES (?1, 'event', ?2, ?3)",
+        params![chat.id().to_string(), at.unix_millis(), body],
+      )?;
+    }
+    transaction.commit()?;
+    Ok(())
   }
 
   fn end_led(

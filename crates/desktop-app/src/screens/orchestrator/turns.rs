@@ -19,7 +19,7 @@ use orchester_core::{
   },
   time::Timestamp,
 };
-use orchester_workspace::orchestrator::chat::{ChatView, EndMoved};
+use orchester_workspace::orchestrator::chat::{ChatView, EndMoved, EventFacts};
 
 /// A part of an answer.
 #[derive(Clone, Debug, PartialEq)]
@@ -90,6 +90,8 @@ pub(super) struct Turn {
   pub(super) stands: bool,
   /// What became of the run of a run's end that no longer stands.
   pub(super) moved: Option<EndMoved>,
+  /// What the line of an event of the wait's run names beside the wait.
+  pub(super) event: Option<EventFacts>,
   /// The daily report that opens the row instead of a person's message.
   pub(super) report: Option<Box<DailyReport>>,
   /// The end of a subscription that ended by itself, whose line opens the row instead of a person's message.
@@ -135,6 +137,7 @@ impl Turn {
       wait: None,
       stands: false,
       moved: None,
+      event: None,
       report: None,
       watch_ended: None,
       compaction: None,
@@ -173,6 +176,7 @@ impl Turn {
       wait: None,
       stands: false,
       moved: None,
+      event: None,
       report: None,
       watch_ended: None,
       compaction: None,
@@ -242,48 +246,16 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
   let mut waiting: Vec<Turn> = Vec::new();
   let mut plans = 0;
   for entry in &shown.entries {
+    if let Some(row) = own_row(entry, shown) {
+      turns.push(row);
+      continue;
+    }
     let part = match &entry.kind {
       EntryKind::Person { .. } => {
         add_person((&mut turns, &mut waiting), entry, shown);
         continue;
       }
-      EntryKind::Wait { wait, turn } => {
-        turns.push(Turn {
-          wait: Some(Box::new(wait.clone())),
-          stands: shown.standing.contains(&entry.seq),
-          moved: shown.moved_of(entry.seq),
-          ..Turn::opened(entry, turn.as_ref())
-        });
-        continue;
-      }
-      EntryKind::Report { report, turn } => {
-        turns.push(Turn {
-          report: Some(report.clone()),
-          ..Turn::opened(entry, turn.as_ref())
-        });
-        continue;
-      }
-      EntryKind::WatchEnded { summary, turn } => {
-        turns.push(Turn {
-          watch_ended: Some(summary.clone()),
-          ..Turn::opened(entry, turn.as_ref())
-        });
-        continue;
-      }
-      // A compaction is a row of its own between the turns (`06b` `j7eSQO`), and so are where a rewind went back to
-      // (`10` `Zm7kq`), a fork's first line and what its original made after it (`11` `RT5T7`).
-      EntryKind::Event(
-        event @ (ChatEvent::Compaction { .. }
-        | ChatEvent::Rewound { .. }
-        | ChatEvent::Forked { .. }
-        | ChatEvent::MadeInOriginal { .. }),
-      ) => {
-        turns.push(Turn {
-          compaction: Some(event.clone()),
-          ..Turn::opened(entry, None)
-        });
-        continue;
-      }
+      EntryKind::Wait { .. } | EntryKind::Report { .. } | EntryKind::WatchEnded { .. } => continue,
       EntryKind::Plan(plan) => {
         plans += 1;
         Part::Plan {
@@ -322,6 +294,40 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
   }
   turns.extend(waiting);
   turns
+}
+
+/// The row `entry` of `shown` opens by itself: a wait of an agent, a daily report or a subscription that ended by
+/// itself, with the turn it started, if any; and a compaction (`06b` `j7eSQO`), where a rewind went back to (`10`
+/// `Zm7kq`), a fork's first line and what its original made after it (`11` `RT5T7`), each a row between the turns.
+/// `None` for an entry that is a person's message or part of an answer.
+fn own_row(entry: &ChatEntry, shown: &ChatView) -> Option<Turn> {
+  Some(match &entry.kind {
+    EntryKind::Wait { wait, turn } => Turn {
+      wait: Some(Box::new(wait.clone())),
+      stands: shown.standing.contains(&entry.seq),
+      moved: shown.moved_of(entry.seq),
+      event: shown.event_of(entry.seq).cloned(),
+      ..Turn::opened(entry, turn.as_ref())
+    },
+    EntryKind::Report { report, turn } => Turn {
+      report: Some(report.clone()),
+      ..Turn::opened(entry, turn.as_ref())
+    },
+    EntryKind::WatchEnded { summary, turn } => Turn {
+      watch_ended: Some(summary.clone()),
+      ..Turn::opened(entry, turn.as_ref())
+    },
+    EntryKind::Event(
+      event @ (ChatEvent::Compaction { .. }
+      | ChatEvent::Rewound { .. }
+      | ChatEvent::Forked { .. }
+      | ChatEvent::MadeInOriginal { .. }),
+    ) => Turn {
+      compaction: Some(event.clone()),
+      ..Turn::opened(entry, None)
+    },
+    _ => return None,
+  })
 }
 
 /// The row of the person's message kept as `entry` of `shown`, among the `turns` or those `waiting`; the turn that
@@ -392,6 +398,7 @@ fn person(
     wait: None,
     stands: false,
     moved: None,
+    event: None,
     report: None,
     watch_ended: None,
     compaction: None,
