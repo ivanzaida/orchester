@@ -342,6 +342,8 @@
       "noClaims": "None",
       "othersKey": "Others' claims and run status",
       "others": "Removed from this computer",
+      "configurationKey": "Agents configuration",
+      "configuration": "Not kept: the team's pipelines, profiles, instructions, skills and tools leave with the team. Only this project's own stay",
       "notSharedKey": "Tasks kept Not shared",
       "notShared": "{{count}} return to the list with numbers after the highest",
       "membershipKey": "Membership",
