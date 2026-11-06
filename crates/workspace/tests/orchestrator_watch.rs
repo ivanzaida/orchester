@@ -21,9 +21,7 @@ use orchester_core::{
   task::organization::ChangeActor,
   time::Timestamp,
 };
-use orchester_workspace::orchestrator::watch::{
-  StopBy, StopWhat, WatchError, stop_in, take_over_in, watch_in,
-};
+use orchester_workspace::orchestrator::watch::{StopBy, StopWhat, WatchError, stop_in, take_over_in, watch_in};
 use support::{Fixture, at};
 
 /// A conversation that said `text`, its turn answered unless `thinking`.
@@ -31,7 +29,12 @@ fn conversation(fixture: &mut Fixture, text: &str, thinking: bool) -> Chat {
   let body = MessageBody::new(text).expect("text");
   let chat = Chat::start(ChatId::generate(), &body, Timestamp::now());
   let message = ChatMessageId::generate();
-  assert!(fixture.db.keep_chat_message(&chat, (message, &body), Timestamp::now()).expect("kept"));
+  assert!(
+    fixture
+      .db
+      .keep_chat_message(&chat, (message, &body), Timestamp::now())
+      .expect("kept")
+  );
   if !thinking {
     fixture
       .db
@@ -42,7 +45,8 @@ fn conversation(fixture: &mut Fixture, text: &str, thinking: bool) -> Chat {
 }
 
 fn module(fixture: &mut Fixture, name: &str) -> ModuleId {
-  let details = ModuleDetails::new(Name::new(name).expect("name"), "", (None, None), ModuleState::Open).expect("details");
+  let details =
+    ModuleDetails::new(Name::new(name).expect("name"), "", (None, None), ModuleState::Open).expect("details");
   fixture.db.create_module(details, at(10)).expect("module").id()
 }
 
@@ -96,7 +100,13 @@ fn watch_several_targets_keeps_the_new_and_returns_the_one_already_led() {
   let billing = WatchTarget::Module(module(&mut fixture, "Billing"));
   let theirs = conversation(&mut fixture, "Billing work", false);
   watch_in(fixture.repo.path(), &theirs, &[named(billing, "Billing")], "").expect("watched");
-  let since = fixture.db.active_subscriptions().expect("read").of(billing).expect("led").since();
+  let since = fixture
+    .db
+    .active_subscriptions()
+    .expect("read")
+    .of(billing)
+    .expect("led")
+    .since();
   let mine = conversation(&mut fixture, "Delivery work", false);
 
   let targets = [named(delivery, "Delivery"), named(billing, "Billing")];
@@ -105,10 +115,17 @@ fn watch_several_targets_keeps_the_new_and_returns_the_one_already_led() {
   assert_eq!(watched.started, vec![named(delivery, "Delivery")]);
   assert_eq!(watched.led_elsewhere.len(), 1);
   let card = &watched.led_elsewhere[0];
-  assert_eq!((card.target.clone(), card.chat, card.since), (named(billing, "Billing"), theirs.id(), since));
+  assert_eq!(
+    (card.target.clone(), card.chat, card.since),
+    (named(billing, "Billing"), theirs.id(), since)
+  );
   assert_eq!(card.title, "Billing work");
   assert_eq!(leader(&fixture, delivery), Some(mine.id()));
-  assert_eq!(leader(&fixture, billing), Some(theirs.id()), "the one led elsewhere is kept nowhere");
+  assert_eq!(
+    leader(&fixture, billing),
+    Some(theirs.id()),
+    "the one led elsewhere is kept nowhere"
+  );
   assert_eq!(
     watch_entries(&fixture, mine.id()),
     vec![
@@ -138,7 +155,13 @@ fn watch_take_over_moves_the_subscription_and_writes_both_lines() {
   watch_in(fixture.repo.path(), &theirs, &[named(billing, "Billing")], "").expect("watched");
   let mine = conversation(&mut fixture, "Delivery work", false);
 
-  let taken = take_over_in(fixture.repo.path(), &mine, &named(billing, "Billing"), "Merge when green.").expect("taken");
+  let taken = take_over_in(
+    fixture.repo.path(),
+    &mine,
+    &named(billing, "Billing"),
+    "Merge when green.",
+  )
+  .expect("taken");
 
   assert_eq!(taken.from, Some(theirs.id()));
   assert_eq!(leader(&fixture, billing), Some(mine.id()));
@@ -175,11 +198,23 @@ fn watch_task_inside_a_module_led_elsewhere_writes_the_line_there_with_no_card()
   let webhooks = module(&mut fixture, "Webhooks");
   let task = in_module(&mut fixture, "Retry failed deliveries", webhooks);
   let theirs = conversation(&mut fixture, "Webhooks work", false);
-  watch_in(fixture.repo.path(), &theirs, &[named(WatchTarget::Module(webhooks), "Webhooks")], "").expect("watched");
+  watch_in(
+    fixture.repo.path(),
+    &theirs,
+    &[named(WatchTarget::Module(webhooks), "Webhooks")],
+    "",
+  )
+  .expect("watched");
   let mine = conversation(&mut fixture, "Retries", false);
   let task_key = key(&fixture, task);
 
-  let watched = watch_in(fixture.repo.path(), &mine, &[named(WatchTarget::Task(task), &task_key)], "").expect("watched");
+  let watched = watch_in(
+    fixture.repo.path(),
+    &mine,
+    &[named(WatchTarget::Task(task), &task_key)],
+    "",
+  )
+  .expect("watched");
 
   assert_eq!(watched.started, vec![named(WatchTarget::Task(task), &task_key)]);
   assert!(watched.led_elsewhere.is_empty(), "no card: the task subscription wins");
@@ -210,7 +245,13 @@ fn watch_stop_cancels_nothing_and_lists_the_open_runs() {
     .expect("moved");
   in_module(&mut fixture, "Document the retries", webhooks);
   let mine = conversation(&mut fixture, "Webhooks work", false);
-  watch_in(fixture.repo.path(), &mine, &[named(WatchTarget::Module(webhooks), "Webhooks")], "").expect("watched");
+  watch_in(
+    fixture.repo.path(),
+    &mine,
+    &[named(WatchTarget::Module(webhooks), "Webhooks")],
+    "",
+  )
+  .expect("watched");
 
   let unwatched = stop_in(fixture.repo.path(), &mine, &StopWhat::All, StopBy::Unwatch).expect("stopped");
 
@@ -255,9 +296,17 @@ fn watch_refuses_a_target_that_vanished_meanwhile() {
   let mut fixture = Fixture::new();
   let mobile = module(&mut fixture, "Mobile release");
   let read = fixture.db.module(mobile).expect("read").expect("module");
-  let closed = ModuleDetails::new(Name::new("Mobile release").expect("name"), "", (None, None), ModuleState::Closed)
-    .expect("details");
-  fixture.db.update_module(mobile, read.details(), closed).expect("closed");
+  let closed = ModuleDetails::new(
+    Name::new("Mobile release").expect("name"),
+    "",
+    (None, None),
+    ModuleState::Closed,
+  )
+  .expect("details");
+  fixture
+    .db
+    .update_module(mobile, read.details(), closed)
+    .expect("closed");
   let task = fixture.task("Retry failed deliveries", at(20));
   let task_key = key(&fixture, task);
   fixture.db.delete_task(task, at(30)).expect("deleted");
@@ -290,14 +339,20 @@ fn watch_applies_while_a_turn_of_the_conversation_runs() {
   watch_in(fixture.repo.path(), &mine, &[named(delivery, "Delivery")], "").expect("watched while it answers");
 
   let entries = fixture.db.chat_entries(mine.id()).expect("entries");
+  assert!(
+    matches!(
+      &entries[0].kind,
+      EntryKind::Person {
+        turn: TurnState::Thinking,
+        ..
+      }
+    ),
+    "the turn under way goes on"
+  );
   assert!(matches!(
-    &entries[0].kind,
-    EntryKind::Person {
-      turn: TurnState::Thinking,
-      ..
-    }
-  ), "the turn under way goes on");
-  assert!(matches!(entries[1].kind, EntryKind::Event(ChatEvent::WatchCommand { .. })));
+    entries[1].kind,
+    EntryKind::Event(ChatEvent::WatchCommand { .. })
+  ));
   assert!(matches!(entries[2].kind, EntryKind::Event(ChatEvent::Watch { .. })));
   assert_eq!(entries.len(), 3, "no turn of its own");
   assert_eq!(leader(&fixture, delivery), Some(mine.id()));

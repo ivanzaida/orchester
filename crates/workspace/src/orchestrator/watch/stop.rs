@@ -96,7 +96,15 @@ fn chosen(db: &ProjectDb, chat: &Chat, set: &Subscriptions, what: &StopWhat) -> 
   let targets = match what {
     StopWhat::All => set
       .of_chat(chat.id())
-      .map(|led| read::renamed(db, &NamedTarget { target: led.target(), name: None }))
+      .map(|led| {
+        read::renamed(
+          db,
+          &NamedTarget {
+            target: led.target(),
+            name: None,
+          },
+        )
+      })
       .collect::<Result<Vec<_>, StoreError>>()?,
     StopWhat::Target(given) => match set.of(given.target) {
       Some(led) if led.chat() == chat.id() => vec![read::renamed(db, given)?],

@@ -71,7 +71,11 @@ pub fn watch_in(root: &Path, chat: &Chat, targets: &[NamedTarget], order: &str) 
     led_elsewhere: watched.led_elsewhere.clone(),
     gone: watched.gone.clone(),
   };
-  db.keep_watch_entries(chat, &[ChatEvent::WatchCommand { command }, ChatEvent::Watch { line }], now)?;
+  db.keep_watch_entries(
+    chat,
+    &[ChatEvent::WatchCommand { command }, ChatEvent::Watch { line }],
+    now,
+  )?;
   let here = kept(&db, chat)?;
   for owed in told {
     tell(&mut db, owed, &here, now)?;
@@ -112,7 +116,10 @@ impl Applying<'_> {
         WatchStart::LedElsewhere(led) => self.led_elsewhere(db, named.clone(), (led.chat(), led.since()))?,
       },
       Claim::AlreadyHere => {
-        let renewed = self.set.of(named.target).is_some_and(|led| led.order() != subscription.order());
+        let renewed = self
+          .set
+          .of(named.target)
+          .is_some_and(|led| led.order() != subscription.order());
         if renewed {
           db.take_over_subscription(&subscription)?;
           self.set = self.set.take_over(subscription, found.module).into_set();

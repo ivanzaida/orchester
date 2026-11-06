@@ -81,9 +81,7 @@ pub(super) fn left_open(
     LeftOpen::after_stop(phases)
       .tasks()
       .iter()
-      .filter_map(|(id, work)| {
-        keys.remove(id).map(|task| OpenTask { task, work: *work })
-      })
+      .filter_map(|(id, work)| keys.remove(id).map(|task| OpenTask { task, work: *work }))
       .collect(),
   )
 }
