@@ -13,6 +13,7 @@ mod change;
 pub mod chat;
 pub mod compact;
 mod duplicate;
+mod events;
 pub mod facts;
 pub mod fork;
 pub mod git;

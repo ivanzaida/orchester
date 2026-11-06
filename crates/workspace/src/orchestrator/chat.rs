@@ -124,9 +124,30 @@ pub struct ChatView {
   pub standing: HashSet<i64>,
   /// What became of the runs whose ends no longer stand, by entry.
   pub moved: HashMap<i64, EndMoved>,
+  /// What the lines of its events of tasks' runs name beside their waits, by entry.
+  pub events: HashMap<i64, EventFacts>,
   /// How full the context of the session its turns continue is; `None` while no turn's CLI reported it (unknown, not
   /// empty).
   pub context: Option<ContextUse>,
+}
+
+/// What the line of an event of a task's run names beside its wait ([`super::events`]): the module its task is in, the
+/// branch the run merges into, and the task the run waits on; each `None` when there is none or the project no longer
+/// keeps it.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct EventFacts {
+  /// The module's name.
+  pub module: Option<String>,
+  pub branch: Option<String>,
+  pub waited: Option<WaitedTask>,
+}
+
+/// A task a run waits on: its key as people read it (`KON-52`), and the number of its run the event is about, when it
+/// names one.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct WaitedTask {
+  pub key: String,
+  pub number: Option<u32>,
 }
 
 /// What became of a run since an end of it a conversation keeps, once that end no longer stands.
@@ -181,6 +202,7 @@ impl ChatView {
     let todos = db.chat_todos(chat).map_err(|error| messages::store_error(&error))?;
     let (standing, moved) =
       super::waits::standing(&db, chat, &entries).map_err(|error| messages::store_error(&error))?;
+    let events = super::events::event_facts(&db, &entries).map_err(|error| messages::store_error(&error))?;
     let context = db.chat_context(chat).map_err(|error| messages::store_error(&error))?;
     Ok(Some(Self {
       chat: found,
@@ -189,6 +211,7 @@ impl ChatView {
       todos: todos.into_iter().collect(),
       standing,
       moved,
+      events,
       context,
     }))
   }
@@ -196,6 +219,11 @@ impl ChatView {
   /// What became of the run of the end kept as entry `seq`, once that end no longer stands.
   pub fn moved_of(&self, seq: i64) -> Option<EndMoved> {
     self.moved.get(&seq).copied()
+  }
+
+  /// What the line of the event kept as entry `seq` names beside its wait; `None` for an entry that is no event.
+  pub fn event_of(&self, seq: i64) -> Option<&EventFacts> {
+    self.events.get(&seq)
   }
 
   /// The files attached to the person's message `message`.

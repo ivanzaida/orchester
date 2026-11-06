@@ -250,6 +250,29 @@
       "targetBy": "{{target}} · {{by}}",
       "applying": "Being carried out"
     },
+    "event": {
+      "noProgress": "No progress for {{minutes}} min",
+      "conflictModule": "Merge conflict in the module branch",
+      "conflict": "Merge conflict in the base branch",
+      "mergedInto": "Merged into {{branch}}",
+      "merged": "Merged into the base branch",
+      "closedInto": "Closed — will not be merged into {{branch}}",
+      "closed": "Closed — will not be merged",
+      "link": {
+        "run": "Run ↗",
+        "resolve": "Resolve ↗",
+        "changes": "Changes ↗"
+      }
+    },
+    "startedBy": {
+      "wait": "{{task}}'s wait",
+      "runEnd": "{{task}}'s run end",
+      "noProgress": "{{task}} made no progress",
+      "conflict": "{{task}}'s merge conflict",
+      "merged": "{{task}} merged",
+      "closed": "{{task}} closed",
+      "waited": "What {{task}} waits on"
+    },
     "decision": {
       "showDetails": "Show details",
       "hideDetails": "Hide details",

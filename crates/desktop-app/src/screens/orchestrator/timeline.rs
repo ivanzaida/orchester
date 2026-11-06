@@ -4,7 +4,8 @@
 //! stands (*Sending…*, then *Delivered* and when), the Orchestrator's answer ([`super::answer`]), and how the turn
 //! ended ([`super::ending`]). A wait of an agent of the project opens a row of its own with its line
 //! ([`super::wait`]), what the turn it started by itself said and did nested under it as a quote; the end of a run its
-//! line ([`super::run_end`]) and a daily report its card ([`super::report`]), with the turn they started, if any.
+//! line ([`super::run_end`]), an event of a task's run its line ([`super::task_event`]) and a daily report its card
+//! ([`super::report`]), with the turn they started, if any.
 //! Waits for the person kept one after another, with no message of theirs between them, gather into one digest
 //! ([`super::digest`]).
 
@@ -374,6 +375,11 @@ fn opening(ctx: &mut Ctx, row: &TurnRow, key: &str) -> (Element, Option<Element>
         WaitKind::Ended(end) => {
           let ended = (&**wait, end, row.turn.at, turned);
           let line = super::run_end::line(ctx, &id, ended, (row.turn.moved, row.env.project));
+          (line, super::answer::answer(ctx, row))
+        }
+        WaitKind::Event(event) => {
+          let facts = (row.turn.event.as_ref(), row.env.project);
+          let line = super::task_event::line(ctx, &id, (wait, event, row.turn.at), facts);
           (line, super::answer::answer(ctx, row))
         }
         _ => {
