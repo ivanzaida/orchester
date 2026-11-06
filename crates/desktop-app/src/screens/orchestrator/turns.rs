@@ -19,7 +19,10 @@ use orchester_core::{
   },
   time::Timestamp,
 };
-use orchester_workspace::orchestrator::chat::{ChatView, EndMoved, EventFacts};
+use orchester_workspace::orchestrator::{
+  chat::{ChatView, EndMoved, EventFacts},
+  waits_on::view::RunWaitView,
+};
 
 /// A part of an answer.
 #[derive(Clone, Debug, PartialEq)]
@@ -112,6 +115,8 @@ pub(super) struct Turn {
   /// A message the answer under way took follows it: that answer goes on, and ends, under that message.
   pub(super) continued: bool,
   pub(super) answer: Vec<Part>,
+  /// How the waits its answer's *waits on* rows name stand now (ORC-784).
+  pub(super) waits_on: Vec<RunWaitView>,
   /// The todo list of the turn it started, as the agent's latest update left it; `None` when the agent keeps none.
   pub(super) todo: Option<TodoList>,
   /// How the person's message's turn went: it planned only, or it acted.
@@ -146,6 +151,7 @@ impl Turn {
       arrival,
       continued: false,
       answer: Vec::new(),
+      waits_on: Vec::new(),
       todo: None,
       mode: TurnMode::Acts,
     }
@@ -184,6 +190,7 @@ impl Turn {
       arrival: Arrival::Own,
       continued: false,
       answer: Vec::new(),
+      waits_on: Vec::new(),
       todo: None,
       mode: TurnMode::Acts,
     }
@@ -313,6 +320,15 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
       .message
       .filter(|_| turn.arrival == Arrival::Own)
       .and_then(|message| shown.todo_of(message).cloned());
+    turn.waits_on = turn
+      .answer
+      .iter()
+      .filter_map(|part| match part {
+        Part::Action { action, .. } => action.waits_on.as_ref(),
+        _ => None,
+      })
+      .filter_map(|row| shown.wait_of(row.run).cloned())
+      .collect();
   }
   turns.extend(waiting);
   turns
@@ -397,6 +413,7 @@ fn person(
     arrival,
     continued: false,
     answer: Vec::new(),
+    waits_on: Vec::new(),
     todo: None,
     mode: TurnMode::Acts,
   }

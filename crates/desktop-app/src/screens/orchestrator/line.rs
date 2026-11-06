@@ -109,9 +109,13 @@ pub(super) struct Line {
   pub(super) tone: Tone,
   pub(super) what: Arc<str>,
   pub(super) target: Option<Arc<str>>,
+  /// What it says after its words in 12 `text_muted`, filling the line (a wait's row, `rlnEZ`).
+  pub(super) note: Option<Arc<str>>,
   pub(super) chip: Option<Chip>,
   pub(super) time: Option<String>,
   pub(super) link: Option<LineLink>,
+  /// Its link shows only under the pointer (*Drop the wait* of a wait that holds, `lguJb`).
+  pub(super) link_on_hover: bool,
   /// Why it was refused: on hover, and under the line once pressed.
   pub(super) detail: Option<Arc<str>>,
   /// The other places it opens, beyond its one link: under its detail once pressed.
@@ -128,12 +132,26 @@ impl Line {
       tone,
       what,
       target: None,
+      note: None,
       chip: None,
       time: None,
       link: None,
+      link_on_hover: false,
       detail: None,
       more: Vec::new(),
     }
+  }
+
+  #[must_use]
+  pub(super) fn note(mut self, note: Arc<str>) -> Self {
+    self.note = Some(note);
+    self
+  }
+
+  #[must_use]
+  pub(super) const fn link_on_hover(mut self, on_hover: bool) -> Self {
+    self.link_on_hover = on_hover;
+    self
   }
 
   #[must_use]
@@ -203,17 +221,21 @@ impl PartialEq for LineProps {
         one.tone,
         &one.what,
         &one.target,
+        &one.note,
         &one.chip,
         &one.time,
         one.link.as_ref().map(|link| &link.label),
+        one.link_on_hover,
         &one.detail,
       ) == (
         two.tone,
         &two.what,
         &two.target,
+        &two.note,
         &two.chip,
         &two.time,
         two.link.as_ref().map(|link| &link.label),
+        two.link_on_hover,
         &two.detail,
       )
       && one
@@ -229,6 +251,8 @@ impl DevtoolsInspectable for LineProps {}
 struct LineView {
   /// The detail is open under the line.
   open: Signal<bool>,
+  /// The pointer is over the line.
+  hovered: Signal<bool>,
 }
 
 impl Component for LineView {
@@ -237,13 +261,14 @@ impl Component for LineView {
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       open: ctx.signal(false),
+      hovered: ctx.signal(false),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let LineProps(line) = ctx.props::<LineProps>().clone();
     let Some(detail) = line.detail.clone() else {
-      return Element::from(row(ctx, &line));
+      return Element::from(row(ctx, &line, &self.hovered));
     };
     let open = self.open.get();
     let toggle = self.open.clone();
@@ -252,7 +277,7 @@ impl Component for LineView {
       .id(format!("{id}-line"))
       .describe("open", open.to_string())
       .width(Dimension::Pct(100.0))
-      .child(row(ctx, &line));
+      .child(row(ctx, &line, &self.hovered));
     let row = Tooltip::new(format!("{id}-why"), detail.clone()).wrap(ctx, row);
     let more = (open && !line.more.is_empty()).then(|| more(&id, line.more.clone()));
     Element::from(
@@ -282,8 +307,8 @@ fn more(id: &str, links: Vec<LineLink>) -> Element {
   )
 }
 
-/// The line's row.
-fn row(ctx: &mut Ctx, line: &Line) -> Row {
+/// The line's row; `hovered` tracks the pointer over it, for a link shown only then.
+fn row(ctx: &mut Ctx, line: &Line, hovered: &Signal<bool>) -> Row {
   let id = line.id.as_str();
   let (glyph_color, words_color) = line.tone.colors();
   let what = Text::new(&line.what)
@@ -314,7 +339,28 @@ fn row(ctx: &mut Ctx, line: &Line) -> Row {
       .flex_shrink(0.0)
       .nowrap()
   });
-  let link = line.link.clone().map(|link| link_element(&format!("{id}-open"), link));
+  // The note fills the line; without one, the room before the time does.
+  let fill = line.note.as_ref().map_or_else(
+    || Element::from(Spacer::new().flex(1.0)),
+    |note| {
+      Text::new(note)
+        .id(format!("{id}-note"))
+        .variant(TypographyStyle::Description)
+        .color(PaletteColor::TextMuted)
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis)
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .into()
+    },
+  );
+  let shown = !line.link_on_hover || hovered.get();
+  let link = line
+    .link
+    .clone()
+    .filter(|_| shown)
+    .map(|link| link_element(&format!("{id}-open"), link));
+  let (enter, leave) = (hovered.clone(), hovered.clone());
   Row::new()
     .id(id.to_owned())
     .describe("outcome", line.outcome)
@@ -326,11 +372,13 @@ fn row(ctx: &mut Ctx, line: &Line) -> Row {
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
+    .on_mouse_enter(move || enter.set(true))
+    .on_mouse_leave(move || leave.set(false))
     .child(icon(line.glyph, IconSize::Base, glyph_color).flex_shrink(0.0))
     .child(what)
     .with_children(target)
     .with_children(chip)
-    .child(Spacer::new().flex(1.0))
+    .child(fill)
     .with_children(time)
     .with_children(link)
 }

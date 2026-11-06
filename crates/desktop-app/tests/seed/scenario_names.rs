@@ -49,6 +49,7 @@ const NAMES: [&str; 160] = [
   "orchestrator-on-codex",
   "orchestrator-codex-limit",
   "orchestrator-events",
+  "orchestrator-waits-on",
   "orchestrator-context-plenty",
   "orchestrator-context-near-full",
   "orchestrator-context-full",

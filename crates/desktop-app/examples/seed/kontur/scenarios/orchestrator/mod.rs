@@ -20,6 +20,7 @@ pub mod context;
 pub mod events;
 mod live;
 mod proposals;
+pub mod waits_on;
 
 use orchester_core::{
   conversation::MessageBody,

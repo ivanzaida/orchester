@@ -1,5 +1,8 @@
 {
   "conversation": {
+    "waitsOn": {
+      "waiting": "Waits on {{waited}} · continues when it is merged into {{branch}} · the run's base branch"
+    },
     "agentMeta": "{{step}} · {{time}}",
     "baseMoved": {
       "commits": {
