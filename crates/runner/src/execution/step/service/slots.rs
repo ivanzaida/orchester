@@ -294,7 +294,11 @@ fn free_locks(folder: &Path, upto: u32, count: u32) -> io::Result<Option<Vec<(u3
 /// What a start that begins to wait says of the slots now: how many it could take, free both among its project's
 /// lowest `share` and the computer's lowest `limit`; how many of the computer's are held; and who holds them. Counts
 /// that cannot be looked at are logged and left out.
-fn looked(folder: &Path, project: &ProjectId, (share, limit): (u32, u32)) -> (Option<u32>, Option<u32>, Vec<ServiceSlotHolder>) {
+fn looked(
+  folder: &Path,
+  project: &ProjectId,
+  (share, limit): (u32, u32),
+) -> (Option<u32>, Option<u32>, Vec<ServiceSlotHolder>) {
   let own = folder.join("projects").join(project.to_string());
   let computer = slot_holders::look(folder, limit);
   let projects = slot_holders::look(&own, share);

@@ -26,7 +26,8 @@ pub struct ServiceSlotWait {
   /// How many of the computer's slots are held now, by whichever runner.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub held: Option<u32>,
-  /// Who holds them, in slot order, one entry per start; empty when no held slot names a holder that reads.
+  /// Who holds them, in slot order, one entry per start with the slots it holds; a held slot whose holder record does
+  /// not read is counted in `held` but names no one here.
   #[serde(default, skip_serializing_if = "Vec::is_empty")]
   pub holders: Vec<ServiceSlotHolder>,
 }

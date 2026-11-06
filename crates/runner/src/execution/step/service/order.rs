@@ -337,7 +337,10 @@ impl StepServices {
       // A service counted as running when the slots were taken stopped since, as one a crash stopped: it takes a
       // slot of its own now.
       let short = u32::try_from(missing.len() - given.len()).unwrap_or(u32::MAX);
-      let names = missing[given.len()..].iter().map(|service| service.name().to_string()).collect();
+      let names = missing[given.len()..]
+        .iter()
+        .map(|service| service.name().to_string())
+        .collect();
       let (more, _) = self
         .take_slots(short, &slot_use(origin, names))
         .map_err(|why| (first.name(), Failed::from(why)))?;

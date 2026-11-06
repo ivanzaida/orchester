@@ -98,7 +98,14 @@ pub(super) fn look(folder: &Path, upto: u32) -> io::Result<(u32, Vec<ServiceSlot
 /// Whether two records name the same start.
 fn same_start(held: &ServiceSlotHolder, record: &ServiceSlotHolder) -> bool {
   (held.project, &held.task, held.run, &held.step, &held.what, held.since)
-    == (record.project, &record.task, record.run, &record.step, &record.what, record.since)
+    == (
+      record.project,
+      &record.task,
+      record.run,
+      &record.step,
+      &record.what,
+      record.since,
+    )
 }
 
 /// The record of slot `slot` in `folder`; `None`, logged when it cannot be read, when it is missing or does not parse.

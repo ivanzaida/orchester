@@ -108,7 +108,11 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
       Some(docker()),
       "postgres could not start: Docker isn't running",
     ),
-    ("Check the invite page", Some(not_ready()), "team-web was not ready in 90 s"),
+    (
+      "Check the invite page",
+      Some(not_ready()),
+      "team-web was not ready in 90 s",
+    ),
     (
       "Run the team stack",
       None,

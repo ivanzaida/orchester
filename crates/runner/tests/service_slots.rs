@@ -101,7 +101,12 @@ async fn waited(root: &Path, events: &mut mpsc::UnboundedReceiver<Event>, run: R
 
 /// `wait` waits for `slots` under `share` and `limit` for a start of `starts`; `held` of the computer's slots are held,
 /// `free` it could take.
-fn assert_wait(wait: &ServiceSlotWait, (slots, share, limit): (u32, u32, u32), starts: &SlotUse, (held, free): (u32, u32)) {
+fn assert_wait(
+  wait: &ServiceSlotWait,
+  (slots, share, limit): (u32, u32, u32),
+  starts: &SlotUse,
+  (held, free): (u32, u32),
+) {
   assert_eq!((wait.slots, wait.share, wait.limit), (slots, share, limit), "{wait:?}");
   assert_eq!(wait.starts.as_ref(), Some(starts), "{wait:?}");
   assert_eq!((wait.held, wait.free), (Some(held), Some(free)), "{wait:?}");

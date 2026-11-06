@@ -146,7 +146,8 @@ fn holder_row(ctx: &mut Ctx, id: &str, holder: &ServiceSlotHolder, noted: Timest
     Some(step) => {
       let label = step_label(ctx, step.number as usize, &step.name).to_string();
       let held = noted.unix_millis() - holder.since.unix_millis();
-      let time = (held >= SAID_FOR_MILLIS).then(|| message_text(ctx, &display::waited(noted, holder.since)).to_string());
+      let time =
+        (held >= SAID_FOR_MILLIS).then(|| message_text(ctx, &display::waited(noted, holder.since)).to_string());
       (Some(label), time)
     }
   };
@@ -168,7 +169,10 @@ fn holder_row(ctx: &mut Ctx, id: &str, holder: &ServiceSlotHolder, noted: Timest
     ],
   );
   let open = holder.task.parse::<TaskKey>().ok().map(|key| {
-    let route = Route::Project(holder.project, ProjectPage::Task(key, TaskView::of(TaskTab::Conversation)));
+    let route = Route::Project(
+      holder.project,
+      ProjectPage::Task(key, TaskView::of(TaskTab::Conversation)),
+    );
     let label = ctx.t("service_cards.slots.holder.open");
     opening(Navigation::of(ctx).to(route))
       .id(format!("{id}-open"))
@@ -201,7 +205,9 @@ fn holder_row(ctx: &mut Ctx, id: &str, holder: &ServiceSlotHolder, noted: Timest
 /// What a holder runs: its stack, its services, or a test suite's own process.
 fn what(ctx: &Ctx, what: &SlotUse) -> String {
   match &what.stack {
-    Some(stack) => ctx.t_args("service_cards.slots.holder.stack", [("stack", stack.as_str())]).to_string(),
+    Some(stack) => ctx
+      .t_args("service_cards.slots.holder.stack", [("stack", stack.as_str())])
+      .to_string(),
     None if what.is_suite() => ctx.t("service_cards.slots.holder.suite").to_string(),
     None => super::listed(ctx, &what.services),
   }
