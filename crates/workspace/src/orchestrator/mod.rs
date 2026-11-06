@@ -20,6 +20,7 @@ pub mod fork;
 pub mod git;
 mod guard;
 mod keep;
+mod leads;
 mod mcp_servers;
 mod merge_conflicts;
 mod own_project;

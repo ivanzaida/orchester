@@ -32,6 +32,8 @@ pub enum Missing {
   Module,
   Service,
   Stack,
+  /// An Orchestrator conversation of the project.
+  Conversation,
 }
 
 impl Missing {
@@ -56,6 +58,7 @@ impl Missing {
       Self::Module => "module_not_found",
       Self::Service => "service_not_found",
       Self::Stack => "stack_not_found",
+      Self::Conversation => "conversation_not_found",
     }
   }
 }
