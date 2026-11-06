@@ -161,7 +161,10 @@ async fn resources_used_by_reads_its_endpoint_and_a_missing_resource_is_not_foun
   assert_eq!(used.resources[0].kind, SharedResourceKind::Pipeline);
   assert_eq!(used.resources[0].version.get(), 3);
   assert_eq!((used.runs[0].task_key.as_str(), used.runs[0].number), ("KON-12", 2));
-  assert_eq!(used.runs[0].holder.display_name, "Bohdan Koval");
+  assert_eq!(
+    used.runs[0].holder.as_ref().map(|holder| holder.display_name.as_str()),
+    Some("Bohdan Koval")
+  );
   let missing = client.used_by(&token(), project, id).await.expect_err("missing");
   assert_eq!(missing.code(), Some(ErrorCode::NotFound));
   let lines: Vec<_> = server.seen().into_iter().map(|seen| seen.line).collect();

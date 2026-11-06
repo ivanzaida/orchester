@@ -41,9 +41,9 @@ impl Client {
     self.call(bearer(self.http.get(url), token)).await
   }
 
-  /// `GET …/resources/{resource}/used-by`: the resources whose latest version names this one and the runs that have
-  /// not ended and pin a version of it, which an archive stops; an admin reads it before archiving. `404` for an
-  /// unknown resource.
+  /// `GET …/resources/{resource}/used-by`: the other resources whose latest version names this one and the runs that
+  /// have not ended and whose execution bundle pins a version of it, which an archive stops; an admin reads it
+  /// before archiving. `404 not_found` for an unknown resource; an archived one answers normally.
   pub async fn used_by(
     &self,
     token: &SecretValue,

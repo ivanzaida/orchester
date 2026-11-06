@@ -5,8 +5,8 @@
 //! MCP server is read as core's `TeamMcpServer`, so the stand-in refuses (`422 invalid`, reason `body`) a body with a
 //! path, a value or a local id, and computes `widens` with core's rules; the other kinds' bodies are kept as sent.
 //! `GET …/resources/{r}/used-by` answers from the stand-in's own resources and the runs a test pins with
-//! [`TeamServer::pin_run`]. A repeated idempotency key returns the first answer. Not served yet:
-//! `POST …/resources/import` and the files.
+//! [`TeamServer::pin_run`] (the stand-in builds no execution bundle, so the pins stand in for the bundle's). A repeated
+//! idempotency key returns the first answer. Not served yet: `POST …/resources/import` and the files.
 
 mod used_by;
 
@@ -16,7 +16,7 @@ use orchester_core::{resource::TeamMcpServer, sharing::widens};
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
-pub use used_by::PinnedRun;
+pub use used_by::{PinnedRun, RunReport};
 
 use super::{Person, Standing, State, TeamServer};
 use crate::{ResourceCreate, ResourcePatch, SharedResourceKind, VersionPublish};

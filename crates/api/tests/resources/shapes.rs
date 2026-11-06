@@ -152,11 +152,19 @@ fn resources_the_lists_round_trip_with_their_cursor_and_next_page() {
 fn resources_used_by_round_trips_and_an_unused_resource_has_two_empty_lists() {
   let used = json!({
     "resources":[{"kind":"agent_profile","id":ResourceId::generate(),"name":"Reviewer","version":2}],
-    "runs":[{"task_key":"KON-7","run":RunId::generate(),"number":1,"holder":user()}],
+    "runs":[
+      {"task_key":"KON-7","run":RunId::generate(),"number":1,"holder":user()},
+      {"task_key":"KON-8","run":RunId::generate(),"number":1},
+    ],
   });
   let decoded: UsedBy = round_trip(&used);
   assert_eq!(decoded.resources[0].kind, SharedResourceKind::AgentProfile);
   assert_eq!(decoded.runs[0].task_key, "KON-7");
+  assert!(decoded.runs[0].holder.is_some(), "a held task names its holder");
+  assert!(
+    decoded.runs[1].holder.is_none(),
+    "a released claim leaves the holder absent"
+  );
   let unused: UsedBy = round_trip(&json!({"resources":[],"runs":[]}));
   assert!(unused.resources.is_empty() && unused.runs.is_empty());
   assert!(serde_json::from_value::<UsedBy>(json!({"resources":[]})).is_err());
