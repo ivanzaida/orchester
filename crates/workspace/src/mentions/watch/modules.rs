@@ -58,7 +58,11 @@ impl WatchCatalog {
       .filter(|module| module.details().state() == ModuleState::Open)
       .filter(|module| matches(&query, &[module.name().as_str()]))
       .map(|module| {
-        let members: Vec<&WatchTask> = self.tasks.iter().filter(|task| task.module == Some(module.id())).collect();
+        let members: Vec<&WatchTask> = self
+          .tasks
+          .iter()
+          .filter(|task| task.module == Some(module.id()))
+          .collect();
         let statuses: Vec<WorkflowStatus> = members.iter().map(|task| task.status).collect();
         let target = WatchTarget::Module(module.id());
         ModuleEntry {

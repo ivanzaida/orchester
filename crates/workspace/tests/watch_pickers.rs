@@ -63,11 +63,23 @@ fn kontur() -> Kontur {
   let mut tasks = vec![
     WatchTask {
       running: true,
-      ..task(41, "Retry failed deliveries", Some(&webhooks), WorkflowStatus::InProgress, 30)
+      ..task(
+        41,
+        "Retry failed deliveries",
+        Some(&webhooks),
+        WorkflowStatus::InProgress,
+        30,
+      )
     },
     WatchTask {
       waits: true,
-      ..task(42, "Sign webhook payloads", Some(&webhooks), WorkflowStatus::InProgress, 20)
+      ..task(
+        42,
+        "Sign webhook payloads",
+        Some(&webhooks),
+        WorkflowStatus::InProgress,
+        20,
+      )
     },
     task(43, "Webhook docs", Some(&webhooks), WorkflowStatus::Done, 40),
     task(47, "Store screenshots", Some(&mobile), WorkflowStatus::Done, 50),
@@ -76,7 +88,13 @@ fn kontur() -> Kontur {
   ];
   tasks.push(WatchTask {
     running: true,
-    ..task(52, "Shared rate limiter for deliveries", None, WorkflowStatus::InProgress, 60)
+    ..task(
+      52,
+      "Shared rate limiter for deliveries",
+      None,
+      WorkflowStatus::InProgress,
+      60,
+    )
   });
   let (here, other) = (ChatId::generate(), ChatId::generate());
   let subscriptions = Subscriptions::new([
@@ -254,8 +272,13 @@ fn watch_pickers_read_the_project_and_its_leaders() {
   let mut fixture = support::Fixture::new();
   let running = fixture.task("Retry failed deliveries", support::at(10));
   let idle = fixture.task("Webhook docs", support::at(20));
-  let details = ModuleDetails::new(Name::new("Webhooks v2").expect("a name"), "", (None, None), ModuleState::Open)
-    .expect("details");
+  let details = ModuleDetails::new(
+    Name::new("Webhooks v2").expect("a name"),
+    "",
+    (None, None),
+    ModuleState::Open,
+  )
+  .expect("details");
   let webhooks = fixture.db.create_module(details, support::at(25)).expect("created");
   for id in [running, idle] {
     fixture
