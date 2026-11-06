@@ -10,6 +10,7 @@ use std::{
 };
 
 use orchester_core::{
+  connection::mcp::McpServerSelection,
   id::{ConnectionId, IdempotencyKey, ProjectId, ResourceId, TaskId},
   memory::{
     AgentProvenance, AgentWrite, Confidence, Memory, MemoryContent, MemoryKind, MemoryScope, MemorySettings,
@@ -211,7 +212,16 @@ impl Fixture {
     fixture
   }
 
+  /// [`Fixture::new`] whose Builder profile chooses the MCP servers `servers`.
+  pub fn choosing(servers: &[ConnectionId]) -> Self {
+    Self::with_setup(false, "ORC", servers)
+  }
+
   fn with_gate(approval_gate: bool, key: &str) -> Self {
+    Self::with_setup(approval_gate, key, &[])
+  }
+
+  fn with_setup(approval_gate: bool, key: &str, servers: &[ConnectionId]) -> Self {
     let repo = tempfile::tempdir().expect("temporary directory");
     fs::create_dir(repo.path().join(".git")).expect("create .git");
     let project = Project::new(
@@ -227,7 +237,8 @@ impl Fixture {
       ConnectionId::generate(),
       ModelId::new("gpt-5.5").expect("valid model"),
       ProviderSettings::default(),
-    );
+    )
+    .with_mcp_servers(McpServerSelection::new(servers.to_vec()).expect("servers"));
     let builder = db
       .create_resource(Slug::new("builder").expect("slug"), name("Builder"), &profile, at(2))
       .expect("profile")
