@@ -1,7 +1,8 @@
 //! The Orchestrator chat follows the project's agents (ORC-42, `docs/design/orchestrator-toolset.md`, decision 5):
 //! each time an agent of a task's latest run asks a question with suggested answers, its step waits for a message,
-//! or its plan waits for a decision, and each time a task's latest run ends or stops ([`super::run_ends`]), a
-//! conversation keeps one entry for that wait, linking to its card (a run's end: its task's Summary): the one that
+//! or its plan waits for a decision, each time a task's latest run ends or stops ([`super::run_ends`]), and each time
+//! merging a task's run stops at conflicts ([`super::merge_conflicts`]), a conversation keeps one entry for that wait,
+//! linking to its card (a run's end or a merge's conflicts: its task's Summary): the one that
 //! leads the task through a subscription when the wait is kept ([`orchester_core::orchestrator::Subscriptions::
 //! leading`], ORC-761), else the one that last dealt with the wait's task or run
 //! ([`orchester_core::orchestrator::wait::dealt_with`]), else the project's latest conversation, or a new one while
@@ -45,6 +46,7 @@ pub use super::run_ends::{MergeChecks, SucceededAt};
 use super::{
   auto_merge::{completes_in, merging_in},
   chat::EndMoved,
+  merge_conflicts::current_conflicts,
   run_ends::{Reading, current_ends, end_moved, merge_checks},
   settings::OrchestratorSetup,
 };
@@ -152,6 +154,7 @@ fn follow(reading: &Reading, (switches, ready): (Switches, bool), attached: bool
   now.extend(current_ends(&db, reading, |key| {
     kept.contains(key) && !pending.contains(key)
   })?);
+  now.extend(current_conflicts(&db, reading.project)?);
   let new: Vec<&(String, AgentWait)> = now.iter().filter(|(key, _)| !kept.contains(key)).collect();
   let kept = keep_new((&mut db, reading.root), &new, switches)?;
   let completed = switches.answers && switches.merges && complete_on_its_own(&db, reading)?;
@@ -397,10 +400,12 @@ pub(super) fn standing(
       _ => None,
     })
     .collect();
-  // What waits now is read only for a conversation that keeps a wait of an agent.
+  // What waits now is read only for a conversation that keeps a wait of an agent or an event.
   let now: HashSet<String> = if waits.iter().any(|(_, wait)| wait.kind.run_end().is_none()) {
-    current_waits(db, db.project().id())?
+    let project = db.project().id();
+    current_waits(db, project)?
       .into_iter()
+      .chain(current_conflicts(db, project)?)
       .map(|(key, _)| key)
       .collect()
   } else {
