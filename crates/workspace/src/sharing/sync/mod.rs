@@ -6,7 +6,7 @@
 //! starts or ends its stream.
 
 mod apply;
-mod archive;
+pub mod archive;
 mod catalog;
 mod config;
 mod state;
