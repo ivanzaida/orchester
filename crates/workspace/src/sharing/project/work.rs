@@ -2,7 +2,8 @@
 //! monitor and the live event streams (`docs/architecture/server.md`, "Claims", "Live updates", "The sync engine"):
 //! every minute, the workflow statuses that could not be sent yet are tried again ([`super::automatic`]), one
 //! heartbeat request per server names the claims the person holds in the projects this computer shares there, what
-//! they lost is written to the cache, and the claims of runs that ended are ended ([`super::claim_ends`]). The caches
+//! they lost is written to the cache, the claims of runs that ended are ended ([`super::claim_ends`]), and the work
+//! reports of team runs are sent ([`super::team_reports`]); a run change sends those reports at once too. The caches
 //! follow the servers through the streams ([`crate::sharing::sync`]), so nothing reads them every minute: a full read
 //! is left only for a person's request to sync now (*Check again*, *Try now*), which sends no heartbeat and so keeps to
 //! the server's limit of 12 heartbeats a minute.
@@ -69,6 +70,7 @@ pub async fn run(servers: Servers, mut runs: watch::Receiver<u64>, programs: Pro
         runs.borrow_and_update();
         servers.send_automatic_statuses().await;
         servers.end_claims(&programs).await;
+        servers.report_all_team_work().await;
       }
     }
   }
@@ -84,6 +86,14 @@ impl Servers {
       for project in projects {
         claim_ends::end_claims_of(project, programs).await;
       }
+      self.report_team_work(projects).await;
+    }
+  }
+
+  /// The work reports of every shared project's team runs, sent when a run changed.
+  async fn report_all_team_work(&self) {
+    for projects in self.shared_by_server().await.values() {
+      self.report_team_work(projects).await;
     }
   }
 
