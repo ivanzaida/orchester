@@ -239,8 +239,12 @@ fn publish_refusal(entry: &SkillEntry) -> Option<(Refusal, Message)> {
   if matches!(entry.state, crate::agents::data::VersionState::StaleDraft { .. }) {
     return Some((Refusal::StaleDraft, Message::new("skills.editorErrors.stale")));
   }
-  entry.body.check_publishable().err().map(|_| {
-    if entry.body.description().trim().is_empty() {
+  unpublishable(&entry.body)
+}
+/// The rule that refuses publishing `body`, with its words, when it is blank.
+fn unpublishable(body: &Skill) -> Option<(Refusal, Message)> {
+  body.check_publishable().err().map(|_| {
+    if body.description().trim().is_empty() {
       (
         Refusal::BlankDescription,
         Message::new("skills.editorErrors.descriptionRequired"),
@@ -268,7 +272,8 @@ pub fn save_by_in(
   }
   Ok(saved)
 }
-/// [`save_in`] at `now`, the time the draft is saved at, with why it was refused.
+/// [`save_in`] at `now`, the time the draft is saved at, with why it was refused. A skill that is `None` in `before` is
+/// created as its first version, v1 with no draft, if it can be published.
 pub fn save_checked_in(
   root: &Path,
   (before, name, body): (Option<&SkillEntry>, &str, &Skill),
@@ -292,9 +297,14 @@ pub fn save_checked_in(
     )?;
     before.id
   } else {
+    // A new skill is created as v1, with no draft, so it meets the rule of a publication.
+    if let Some(refusal) = unpublishable(body) {
+      return Err(refusal.into());
+    }
     let taken = db.slugs(ResourceKind::Skill)?;
     let fallback = Slug::new("skill").expect("skill is a valid slug");
-    db.create_resource(Slug::unique_for(&name, &fallback, &taken), name, body, now)?
+    db.create_published(Slug::unique_for(&name, &fallback, &taken), name, body, now)?
+      .0
       .id()
   };
   stored(&db, id)

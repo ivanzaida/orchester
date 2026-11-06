@@ -214,7 +214,24 @@ pub(crate) fn step_uses<S: ResourceStore>(store: &S) -> Result<Vec<StepUse>, S::
   Ok(uses)
 }
 
-/// Creates a profile whose first draft is `profile`, under a slug made from its role.
+/// Creates a profile as its first version, v1 with no draft, under a slug made from its role, if its connection's CLI
+/// can enforce its permissions on this platform (`PublishError::Permissions`); a profile whose connection is gone
+/// cannot say what is enforced (`PublishError::ConnectionMissing`). In a team project the version waits for the server
+/// (`Servers::send_created`).
+pub fn create_published_profile(
+  db: &mut ProjectDb,
+  profile: &AgentProfile,
+  now: Timestamp,
+) -> Result<ResourceId, StoreError> {
+  enforceable(db, profile)?;
+  let taken: Vec<Slug> = db.slugs(ResourceKind::AgentProfile)?;
+  let fallback = Slug::new(FALLBACK_SLUG).expect("the fallback slug is valid");
+  let slug = Slug::unique_for(profile.role(), &fallback, &taken);
+  Ok(db.create_published(slug, profile.role().clone(), profile, now)?.0.id())
+}
+
+/// Creates a resource that holds `profile` as its draft only, under a slug made from its role: not how a profile is
+/// created (that is [`create_published_profile`]), but a way to set up a profile with a draft in tests and fixtures.
 pub fn create_profile<S: ResourceStore>(
   store: &mut S,
   profile: &AgentProfile,
@@ -335,7 +352,7 @@ pub fn keep_draft_over_latest<S: ResourceStore>(store: &mut S, id: ResourceId, n
   Ok(())
 }
 
-/// A change to one profile, applied in the project database.
+/// A change to one profile, applied in the project database. A new profile is created as v1 with no draft.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ProfileChange {
   Create(AgentProfile),
@@ -349,7 +366,7 @@ pub fn apply_in(repo_root: &Path, change: ProfileChange) -> Result<ResourceId, S
   let mut db = ProjectDb::open(repo_root)?;
   let now = Timestamp::now();
   match change {
-    ProfileChange::Create(profile) => create_profile(&mut db, &profile, now),
+    ProfileChange::Create(profile) => create_published_profile(&mut db, &profile, now),
     ProfileChange::SaveDraft(id, profile) => save_draft(&mut db, id, profile, now).map(|()| id),
     ProfileChange::Publish(id) => publish(&mut db, id, now).map(|_| id),
     ProfileChange::KeepDraft(id) => keep_draft_over_latest(&mut db, id, now).map(|()| id),

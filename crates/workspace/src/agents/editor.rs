@@ -50,7 +50,9 @@ pub fn apply(root: &Path, request: &Request) -> Result<Outcome, Message> {
     .iter()
     .find(|c| c.id() == request.profile.connection())
     .ok_or_else(|| Message::new("errors.connectionRequired"))?;
-  if matches!(request.action, Action::Publish | Action::PublishStale) && !connection.provider().runs_agents() {
+  // A new profile is published as v1 when it is saved, so it meets the rule of a publication.
+  let publishes = request.existing.is_none() || matches!(request.action, Action::Publish | Action::PublishStale);
+  if publishes && !connection.provider().runs_agents() {
     return Err(Message::new("appMcp.errors.connectionRunsNoAgents"));
   }
   request
@@ -69,9 +71,12 @@ pub fn apply(root: &Path, request: &Request) -> Result<Outcome, Message> {
     &request.profile,
   )?;
   let db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
-  if let (Some(id), Action::Publish | Action::PublishStale, false) = (id, request.action, request.prompt_decided) {
-    let changes =
-      crate::prompt_changes::profile_in(&db, id, &request.profile).map_err(|error| messages::store_error(&error))?;
+  if publishes && !request.prompt_decided {
+    let changes = match id {
+      Some(id) => crate::prompt_changes::profile_in(&db, id, &request.profile)
+        .map_err(|error| messages::store_error(&error))?,
+      None => crate::prompt_changes::profile(None, &request.profile),
+    };
     if !changes.is_empty() {
       return Err(Message::new("appMcp.errors.promptPersonOnly"));
     }

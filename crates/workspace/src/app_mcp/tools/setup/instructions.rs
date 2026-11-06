@@ -25,6 +25,7 @@ use super::{
     across::{InProjects, across},
     wire,
   },
+  created::{settle, with_waiting},
   profiles::no_draft,
   widening,
 };
@@ -162,10 +163,10 @@ pub async fn get_instruction(services: &Services, args: InInstruction) -> Result
 }
 
 pub async fn save_instruction_draft(services: &Services, args: SaveInstructionDraft) -> Result<Value, ToolError> {
-  let services = services.clone();
-  blocking(move || {
-    let open = services.project(&args.project)?;
-    let root = open.repo_root;
+  let blocked = services.clone();
+  let (open, id, created) = blocking(move || {
+    let open = blocked.project(&args.project)?;
+    let root = open.repo_root.clone();
     let data = ProjectInstructions::load_in(&root)?;
     let existing = args
       .instruction
@@ -173,33 +174,45 @@ pub async fn save_instruction_draft(services: &Services, args: SaveInstructionDr
       .map(|named| entry_named(&data, named))
       .transpose()?;
     let body = instruction(&data, &args)?;
-    let saved = match (existing, &args.name) {
+    let (saved, created) = match (existing, &args.name) {
       (Some(_), Some(_)) => {
         return Err(refused(
           "name_not_editable",
           Message::new("appMcp.errors.nameNotEditable"),
         ));
       }
-      (Some(entry), None) => editor::save_in(&root, entry, body),
+      (Some(entry), None) => (editor::save_in(&root, entry, body), false),
       (None, name) => {
         let name = Name::new(name.as_deref().unwrap_or_default())
           .map_err(|error| refused("invalid_name", messages::name_error(&error)))?;
-        editor::create_in(&root, name, &body)
+        // A new instruction is created as v1, with no draft, so it reaches agents' prompts as a publication does.
+        widening::prompt_allowed(&blocked, vec![prompt_changes::instruction()])?;
+        (editor::create_in(&root, name, &body), true)
       }
     };
     let saved = saved.map_err(|error| write_error(&error))?;
     let id = saved.id;
     editor::mark_automation_in(&root, &saved).map_err(|error| write_error(&error))?;
-    services
+    blocked
       .changes
       .record(open.project.id(), crate::tasks::outside::Outside::Instructions);
-    let data = ProjectInstructions::load_in(&root)?;
+    Ok((open, id, created))
+  })
+  .await?;
+  let waiting = if created {
+    settle(services, open.repo_root.clone(), id).await?
+  } else {
+    None
+  };
+  let entry = blocking(move || {
+    let data = ProjectInstructions::load_in(&open.repo_root)?;
     let entry = data
       .entry(id)
       .ok_or_else(|| ToolError::not_found(Missing::Instruction, id.to_string()))?;
-    Ok(json!({ "instruction": entry_json(&data, entry, open.project.id()) }))
+    Ok(entry_json(&data, entry, open.project.id()))
   })
-  .await
+  .await?;
+  Ok(with_waiting(json!({ "instruction": entry }), "instruction", waiting))
 }
 
 pub async fn publish_instruction(services: &Services, args: InInstruction) -> Result<Value, ToolError> {

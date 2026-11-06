@@ -215,33 +215,10 @@ impl ResourceStore for ProjectDb {
   ) -> Result<Resource, StoreError> {
     let body = encode(body)?;
     let transaction = self.connection.transaction()?;
-    shared_publishes::ensure_may_create(&transaction, B::KIND)?;
-    let taken: bool = transaction.query_row(
-      "SELECT EXISTS (SELECT 1 FROM resources WHERE kind = ?1 AND slug = ?2)",
-      params![kind_text(B::KIND), slug.as_str()],
-      |row| row.get(0),
-    )?;
-    if taken {
-      return Err(StoreError::DuplicateSlug {
-        kind: B::KIND,
-        slug: slug.as_str().to_owned(),
-      });
-    }
-    let resource = Resource::new(ResourceId::generate(), B::KIND, slug, name, now);
-    let id = resource.id().to_string();
-    transaction.execute(
-      "INSERT INTO resources (id, kind, slug, name, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-      params![
-        id,
-        kind_text(B::KIND),
-        resource.slug().as_str(),
-        resource.name().as_str(),
-        now.unix_millis()
-      ],
-    )?;
+    let resource = super::new_resources::insert::<B>(&transaction, slug, name, now)?;
     transaction.execute(
       "INSERT INTO resource_drafts (resource_id, body, based_on, updated_at) VALUES (?1, ?2, NULL, ?3)",
-      params![id, body, now.unix_millis()],
+      params![resource.id().to_string(), body, now.unix_millis()],
     )?;
     transaction.commit()?;
     Ok(resource)
@@ -393,6 +370,7 @@ pub(super) fn save_draft<B: ResourceBody>(
   let body = encode(draft.body())?;
   check_kind::<B>(connection, resource)?;
   shared_publishes::ensure_may_change(connection, resource)?;
+  super::new_resources::ensure_has_version::<B>(connection, resource)?;
   let base = match draft.based_on() {
     Some(number) => load_versions::<B>(
       connection,

@@ -49,7 +49,6 @@ macro_rules! markers {
     impl $inspect for crate::import::data::ImportFailure {}
     impl $inspect for crate::import::data::LoadNotice {}
     impl $inspect for crate::import::data::Sources {}
-    impl $inspect for crate::instructions::data::NewInstruction {}
     impl $inspect for crate::instructions::data::ProjectInstructions {}
     impl $inspect for crate::instructions::form::Events {}
     impl<T> $inspect for crate::instructions::form::Picked<T> {}

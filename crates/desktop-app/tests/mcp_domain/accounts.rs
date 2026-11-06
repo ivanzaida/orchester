@@ -123,8 +123,8 @@ fn domain_profiles_and_the_reviewer_move_to_another_account_only_when_a_person_l
   connect(&seeded, ("Claude · Lab", AgentProvider::ClaudeCodeCli), &lab);
   served.let_automation_widen(false);
   let profile = |role: &str, connection: &str| json!({ "project": "Kontur", "role": role, "connection": connection, "model": "gpt-5.5" });
+  // A new profile is created as v1; the moves below are drafts over it.
   served.ok("save_profile_draft", &profile("Runner", "Codex · Kontur"));
-  served.ok("publish_profile", &json!({ "project": "Kontur", "profile": "Runner" }));
   let refused = served.refused("save_profile_draft", &profile("Client runner", "Codex · Client"));
   assert_eq!(
     refused["code"], "person_only",

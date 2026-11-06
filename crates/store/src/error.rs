@@ -160,6 +160,9 @@ pub enum StoreError {
   /// The resource was never published, so its draft is all it has: it is removed, not discarded. Nothing was changed.
   #[error("resource {0} has no published version to keep")]
   NotPublished(ResourceId),
+  /// A new resource has no draft: it is created as its first version, and a draft is only ever saved over a version.
+  #[error("resource {0} has no published version, so it can hold no draft")]
+  NoFirstVersion(ResourceId),
   /// The draft of resource `0` is not the one the caller checked: it changed meanwhile.
   #[error("the draft of resource {0} changed since it was read")]
   DraftChanged(ResourceId),
