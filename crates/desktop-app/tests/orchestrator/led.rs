@@ -166,4 +166,8 @@ fn orchestrator_led_card_opens_that_conversation_and_moves_nothing() {
   screen.until("the line in the card's place", |screen| screen.exists(&words));
   assert_eq!(screen.text(&words), "Billing stays led in «Billing and invoices»");
   assert!(!screen.exists(&open), "the card settled");
+  assert!(
+    screen.exists(&format!("{card}-there")),
+    "the line opens that conversation"
+  );
 }

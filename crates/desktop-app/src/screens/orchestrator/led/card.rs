@@ -322,6 +322,6 @@ fn settled_line(ctx: &mut Ctx, props: &LedProps, settled: &Settled) -> Element {
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )
-    .child(link_element(&format!("{id}-open"), link))
+    .child(link_element(&format!("{id}-there"), link))
     .into()
 }
