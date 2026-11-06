@@ -12,7 +12,7 @@ use orchester_core::{
   orchestrator::{
     AgentWait, Chat, ChatAction, ChatEntry, ChatEvent, ChatSession, EntryKind, Queued, TurnFailure, TurnMode,
     TurnState, WaitTurn,
-    instructions::{report_prompt, wait_prompt, watch_summary_prompt},
+    instructions::{report_prompt, watch_summary_prompt},
     plan::plan_prompt,
   },
   resource::ModelId,
@@ -48,7 +48,7 @@ pub struct ChatListing {
 }
 
 /// A turn's prompt, as the runner reads it to start the turn: a person's message, or what a wait of an agent that
-/// started the turn by itself tells the Orchestrator ([`wait_prompt`]).
+/// started the turn by itself tells the Orchestrator ([`ProjectDb::wait_turn_prompt`]).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ChatTurn {
   pub chat: Chat,
@@ -121,8 +121,9 @@ impl ProjectDb {
   }
 
   /// The turn of `message`: its prompt, its conversation and where it stands; `None` when it is not kept. A turn that
-  /// plans tells the agent so before the person's words ([`plan_prompt`]); the first turn after a rewind is told the
-  /// conversation as it was kept ([`Self::primed`]).
+  /// plans tells the agent so before the person's words ([`plan_prompt`]); a turn a wait started by itself is told
+  /// what its conversation leads and the subscription the wait came through ([`Self::wait_turn_prompt`]); the first
+  /// turn after a rewind is told the conversation as it was kept ([`Self::primed`]).
   pub fn chat_turn(&self, message: ChatMessageId) -> Result<Option<ChatTurn>, StoreError> {
     let row = self
       .connection
@@ -151,7 +152,7 @@ impl ProjectDb {
       .ok_or_else(|| corrupt("chat message", "its conversation is gone"))?;
     let mode = TurnMode::of_word(mode.as_deref()).map_err(|error| corrupt("chat turn mode", error))?;
     let prompt = match (kind.as_str(), mode) {
-      ("wait", _) => wait_prompt(&wait_of(&body)?),
+      ("wait", _) => self.wait_turn_prompt(chat.id(), &wait_of(&body)?)?,
       ("report", _) => match summary_of(&body)? {
         Some(summary) => watch_summary_prompt(&summary),
         None => report_prompt(&report_of(&body)?),
