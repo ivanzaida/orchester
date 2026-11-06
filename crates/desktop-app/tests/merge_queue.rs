@@ -106,11 +106,12 @@ fn merge_queue_lists_runs_waiting_for_approval_left_and_merged_today_and_counts_
   assert!(left.contains("Integrate couldn't resolve 2 files"), "{left}");
   let merged = seeded.window.text("merge-queue-row-1");
   assert!(merged.contains("Merged"), "{merged}");
-  // Only the run waiting for approval is still in the queue: the sidebar's Review counts it.
+  // The run waiting for approval and the one the queue took out with conflicts wait for you: the sidebar's Review
+  // counts both (`waiting_count`, ORC-794).
   seeded.window.until("the sidebar's count", |window| {
     window
       .texts("nav-review")
-      .is_some_and(|texts| texts.iter().any(|text| text == "1"))
+      .is_some_and(|texts| texts.iter().any(|text| text == "2"))
   });
 }
 

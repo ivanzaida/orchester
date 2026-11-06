@@ -30,7 +30,10 @@ fn list_at(repo: &Repo, now: Timestamp) -> (ReviewList, usize) {
   let programs = Programs::processes();
   let tasks = ProjectTasks::load(repo.root(), &programs).expect("the tasks read");
   let list = review_list(&tasks, (repo.root(), &programs), now).expect("the list reads");
-  (list, waiting_count(&tasks))
+  let count = waiting_count(&tasks);
+  // The sidebar's count and the page's bones are *Waiting for you*'s length: they never disagree.
+  assert_eq!(count, list.waiting.len(), "{list:?}");
+  (list, count)
 }
 
 fn list(repo: &Repo) -> (ReviewList, usize) {
