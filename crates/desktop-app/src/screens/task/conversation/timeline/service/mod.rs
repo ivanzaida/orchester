@@ -25,7 +25,7 @@ pub(super) fn card(ctx: &mut Ctx, timeline: &Timeline, key: &Arc<str>, entry: &E
   let id = format!("conversation-service-{key}");
   match problem {
     RunnerProblem::ServiceCrashed(crash) => Some(crash::card(ctx, timeline, &id, (crash, entry.at))),
-    RunnerProblem::ServiceStartFailed(failure) => Some(failed::card(ctx, timeline, &id, (failure, entry.at))),
+    RunnerProblem::ServiceStartFailed(failure) => Some(failed::card(ctx, timeline, &id, (&**failure, entry.at))),
     RunnerProblem::WaitingForServiceSlots { slots, share, limit } => {
       Some(slots::card(ctx, timeline, &id, (*slots, *share, *limit), entry))
     }

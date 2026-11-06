@@ -437,7 +437,7 @@ async fn service_readiness_timeout_is_noted_in_the_conversation_with_its_last_li
     .filter_map(|entry| match entry.event {
       AgentEvent::RunnerProblem {
         problem: RunnerProblem::ServiceStartFailed(failure),
-      } => Some(failure),
+      } => Some(*failure),
       _ => None,
     })
     .collect();
@@ -446,7 +446,13 @@ async fn service_readiness_timeout_is_noted_in_the_conversation_with_its_last_li
   };
   assert_eq!(failure.service, "api");
   assert!(
-    matches!(failure.cause, StartFailureCause::NotReady { secs: 1, asked: ReadyAsked::Port { .. } }),
+    matches!(
+      failure.cause,
+      StartFailureCause::NotReady {
+        secs: 1,
+        asked: ReadyAsked::Port { .. }
+      }
+    ),
     "{failure:?}"
   );
   assert_eq!(failure.not_started, ["web"]);

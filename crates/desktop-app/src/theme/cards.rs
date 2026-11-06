@@ -142,10 +142,12 @@ impl CardsSpacing {
   }
 }
 
+/// The cards' roles, the service cards' among them (`super::service_cards`).
 pub(super) fn typography(palette: &ThemePalette) -> impl Iterator<Item = (Arc<str>, TextStyle)> {
   CardsText::ALL
     .into_iter()
     .map(|text| (Arc::from(text.name()), text.style(palette)))
+    .chain(super::service_cards::typography(palette))
 }
 
 pub(super) fn install(theme: &Theme) {

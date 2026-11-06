@@ -9,6 +9,8 @@
 //!   ready in 90 s* and what readiness asked; what Orchester asked and that it stopped the service, the services that
 //!   keep running; its last lines with Orchester's own line last; then Restart, *Edit readiness* and *Open log*.
 
+use std::sync::Arc;
+
 use lurq::{
   app::{
     ctx::Ctx,
@@ -58,9 +60,18 @@ fn docker(
   let named = [("service", service.to_owned())];
   let (title, said) = match (missing, failure.not_started.is_empty()) {
     (true, true) => ("service_cards.docker.missingTitle", "service_cards.docker.missingBody"),
-    (true, false) => ("service_cards.docker.missingTitle", "service_cards.docker.missingBodyWaiting"),
-    (false, true) => ("service_cards.docker.notRunningTitle", "service_cards.docker.notRunningBody"),
-    (false, false) => ("service_cards.docker.notRunningTitle", "service_cards.docker.notRunningBodyWaiting"),
+    (true, false) => (
+      "service_cards.docker.missingTitle",
+      "service_cards.docker.missingBodyWaiting",
+    ),
+    (false, true) => (
+      "service_cards.docker.notRunningTitle",
+      "service_cards.docker.notRunningBody",
+    ),
+    (false, false) => (
+      "service_cards.docker.notRunningTitle",
+      "service_cards.docker.notRunningBodyWaiting",
+    ),
   };
   let said = ctx.t_args(
     said,
@@ -92,7 +103,14 @@ fn docker(
   let actions = super::actions(ctx, timeline, (id, service), (labels, LogPlace::None));
   frame(id, PaletteColor::Danger)
     .describe("service", service.to_owned())
-    .describe("cause", if missing { "docker_missing" } else { "docker_not_answering" })
+    .describe(
+      "cause",
+      if missing {
+        "docker_missing"
+      } else {
+        "docker_not_answering"
+      },
+    )
     .child(head(
       id,
       (Icon::Database, PaletteColor::Danger),
@@ -114,47 +132,7 @@ fn not_ready(
   (secs, asked): (u64, &ReadyAsked),
 ) -> Element {
   let service = failure.service.as_str();
-  let seconds = secs.to_string();
-  // Nothing else of the step runs: the body names no services that keep running.
-  let alone = failure.running.is_empty();
-  let (meta, said, last) = match asked {
-    ReadyAsked::Port { port } => (
-      ctx.t_args("service_cards.ready.metaPort", [("port", port.to_string())]),
-      if alone {
-        "service_cards.ready.bodyPort"
-      } else {
-        "service_cards.ready.bodyPortRunning"
-      },
-      ctx.t_args(
-        "service_cards.ready.lastPort",
-        [("port", port.to_string()), ("seconds", seconds.clone()), ("service", service.to_owned())],
-      ),
-    ),
-    ReadyAsked::Http { path, .. } => (
-      ctx.t_args("service_cards.ready.metaHttp", [("path", path.clone())]),
-      if alone {
-        "service_cards.ready.bodyHttp"
-      } else {
-        "service_cards.ready.bodyHttpRunning"
-      },
-      ctx.t_args(
-        "service_cards.ready.lastHttp",
-        [("path", path.clone()), ("seconds", seconds.clone()), ("service", service.to_owned())],
-      ),
-    ),
-    ReadyAsked::LogLine { pattern } => (
-      ctx.t_args("service_cards.ready.metaLine", [("pattern", pattern.clone())]),
-      if alone {
-        "service_cards.ready.bodyLine"
-      } else {
-        "service_cards.ready.bodyLineRunning"
-      },
-      ctx.t_args(
-        "service_cards.ready.lastLine",
-        [("seconds", seconds.clone()), ("service", service.to_owned())],
-      ),
-    ),
-  };
+  let (meta, said, last) = readiness_words(ctx, failure, (secs, asked));
   let said = ctx.t_args(said, words(ctx, failure, asked));
   let lines: Vec<TailLine> = failure
     .lines
@@ -168,18 +146,85 @@ fn not_ready(
     .collect();
   let title = ctx.t_args(
     "service_cards.ready.title",
-    [("service", service.to_owned()), ("seconds", seconds)],
+    [("service", service.to_owned()), ("seconds", secs.to_string())],
   );
-  let labels = (ctx.t("service_cards.actions.restart"), ctx.t("service_cards.actions.editReadiness"));
+  let labels = (
+    ctx.t("service_cards.actions.restart"),
+    ctx.t("service_cards.actions.editReadiness"),
+  );
   let actions = super::actions(ctx, timeline, (id, service), (labels, LogPlace::Last));
   frame(id, PaletteColor::Danger)
     .describe("service", service.to_owned())
     .describe("cause", "not_ready")
-    .child(head(id, (Icon::TimerOff, PaletteColor::Danger), &title, (&meta, Meta::AfterTitle)))
+    .child(head(
+      id,
+      (Icon::TimerOff, PaletteColor::Danger),
+      &title,
+      (&meta, Meta::AfterTitle),
+    ))
     .child(body(&format!("{id}-body"), &said))
     .child(log_tail(&format!("{id}-lines"), &lines))
     .with_children(actions)
     .into()
+}
+
+/// What readiness asked, the key of what the body says of it, and Orchester's own last line, for a service not
+/// ready within `secs`.
+fn readiness_words(
+  ctx: &Ctx,
+  failure: &ServiceStartFailure,
+  (secs, asked): (u64, &ReadyAsked),
+) -> (Arc<str>, &'static str, Arc<str>) {
+  let service = failure.service.as_str();
+  let seconds = secs.to_string();
+  // Nothing else of the step runs: the body names no services that keep running.
+  let alone = failure.running.is_empty();
+  match asked {
+    ReadyAsked::Port { port } => (
+      ctx.t_args("service_cards.ready.metaPort", [("port", port.to_string())]),
+      if alone {
+        "service_cards.ready.bodyPort"
+      } else {
+        "service_cards.ready.bodyPortRunning"
+      },
+      ctx.t_args(
+        "service_cards.ready.lastPort",
+        [
+          ("port", port.to_string()),
+          ("seconds", seconds),
+          ("service", service.to_owned()),
+        ],
+      ),
+    ),
+    ReadyAsked::Http { path, .. } => (
+      ctx.t_args("service_cards.ready.metaHttp", [("path", path.clone())]),
+      if alone {
+        "service_cards.ready.bodyHttp"
+      } else {
+        "service_cards.ready.bodyHttpRunning"
+      },
+      ctx.t_args(
+        "service_cards.ready.lastHttp",
+        [
+          ("path", path.clone()),
+          ("seconds", seconds),
+          ("service", service.to_owned()),
+        ],
+      ),
+    ),
+    ReadyAsked::LogLine { pattern } => (
+      ctx.t_args("service_cards.ready.metaLine", [("pattern", pattern.clone())]),
+      if alone {
+        "service_cards.ready.bodyLine"
+      } else {
+        "service_cards.ready.bodyLineRunning"
+      },
+      ctx.t_args(
+        "service_cards.ready.lastLine",
+        [("seconds", seconds), ("service", service.to_owned())],
+      ),
+    ),
+  }
 }
 
 /// What a readiness timeout's body names: the service, what readiness asked, and the services that keep running.

@@ -80,7 +80,7 @@ impl RunTask {
       inherited: std::env::vars_os().collect(),
       project: environment.clone(),
       crashed: Arc::new(move |crash| crash_noted(RunnerProblem::ServiceCrashed(crash.clone()))),
-      start_failed: Arc::new(move |failure| failure_noted(RunnerProblem::ServiceStartFailed(failure))),
+      start_failed: Arc::new(move |failure| failure_noted(RunnerProblem::ServiceStartFailed(Box::new(failure)))),
       // A note that cannot be written is logged by `runner_note`: the start waits all the same.
       waiting: Arc::new(move |Waiting { slots, share, limit }| {
         noted(RunnerProblem::WaitingForServiceSlots { slots, share, limit });

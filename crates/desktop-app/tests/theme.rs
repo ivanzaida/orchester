@@ -27,6 +27,8 @@ mod pipelines;
 mod projects;
 #[path = "theme/run_services.rs"]
 mod run_services;
+#[path = "theme/service_cards.rs"]
+mod service_cards;
 #[path = "theme/services.rs"]
 mod services;
 #[path = "theme/side_question.rs"]

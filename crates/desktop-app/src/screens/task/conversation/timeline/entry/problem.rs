@@ -9,7 +9,7 @@ use orchester_core::{
   code_index::RipgrepFallback,
   connection::stream::{CommandStatus, MemoryNotSavedReason, QaSlotHolder, QuestionRefusal, RunnerProblem},
   run::DecidedBy,
-  service::ServiceCrash,
+  service::{ServiceCrash, ServiceStartFailure},
   tokens::compact_tokens,
 };
 use orchester_workspace::tasks::transcript::{CommandEntry, CommandMark, Entry, EntryKind, command_preview};
@@ -138,19 +138,26 @@ pub(super) fn text(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<
     ),
     RunnerProblem::QuestionRefused { question, reason } => question_refused(ctx, question, *reason),
     RunnerProblem::ServiceCrashed(crash) => service_crashed(ctx, crash),
-    RunnerProblem::ServiceStartFailed(failure) => (
-      ctx.t_args(
-        "conversation.problem.serviceStartFailed",
-        [("service", failure.service.as_str())],
-      ),
-      (!failure.lines.is_empty()).then(|| failure.lines.join("\n").into()),
-    ),
+    RunnerProblem::ServiceStartFailed(failure) => service_start_failed(ctx, failure),
     RunnerProblem::ContextCompacted { .. }
     | RunnerProblem::ModelRetrying { .. }
     | RunnerProblem::ThinkingStripped
     | RunnerProblem::WaitingForQaSlot { .. }
     | RunnerProblem::WaitingForServiceSlots { .. } => note(ctx, problem),
   }
+}
+
+/// A start that failed for a reason the person can act on, and its last lines. In the chat it is its card
+/// (`timeline::service`); this is its plain row.
+fn service_start_failed(ctx: &Ctx, failure: &ServiceStartFailure) -> (Arc<str>, Option<Arc<str>>) {
+  let title = ctx.t_args(
+    "conversation.problem.serviceStartFailed",
+    [("service", failure.service.as_str())],
+  );
+  (
+    title,
+    (!failure.lines.is_empty()).then(|| failure.lines.join("\n").into()),
+  )
 }
 
 /// A service that crashed after it was ready: how it ended and how long it had run, then the services Orchester

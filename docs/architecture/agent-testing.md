@@ -270,6 +270,23 @@ a program); a press of automation opens nothing, and a QA copy or a test records
 went back to which step. The seed's `summary-tests` scenario holds such a run. Not built: the other states of `je8z3`
 (running, report unreadable, timed out), *Service logs* among the artifacts, and the stacks on a layer's line.
 
+Built (ORC-275): the service cards of a run's Conversation (`orchester-app`'s `screens::task::conversation::timeline::
+service`, `screens::task::cards::approval::services`, their parts in `ui::service_card`). The `service_crashed` note
+is the crash card (`FwHrv`): the service, its exit code, when and how long after it started, what Orchester stopped
+with it, its last lines and Orchester's own line, then *Restart*, *Open log* (the Services tab) and *Edit* (the
+service's page). A start that fails because Docker is not available (missing, or its engine not answering) or a
+service is not ready in time is recorded as a `service_start_failed` note (`orchester_core::service::
+ServiceStartFailure`: the service, the cause with what readiness asked, its last 20 lines, the services not started
+because of it and those the step still runs), shown as 10a and 10c of `oXVuM`; the `waiting_for_service_slots` note is
+10d, its bar the computer's slots with the ones the start needs. A start of services that waits for the person is one
+card for the service and its needs (`hvQDS`): each program in start order with whether a rule of the project approves
+it as it is, changed it since (which parts) or never ran it, the slots it takes of the computer's, and *Approve*,
+*Approve for every run while unchanged* (confirmed in a modal only a person confirms) and *Deny*, each sent to the
+runner. Restart and Retry are a person's press only. The seed's `service-cards` scenario holds every card recorded,
+`run-services-approve` (with `-FakeAgents`) a live start that asks. Not built: the root cause a crash names in its
+title, other services' lines in a crash's tail, the times of its lines, the runs that hold slots and how many are free
+(the notes carry none of them), and the start's working folder on the approve card.
+
 ## Phases
 
 1. Model and storage of services, stacks and suites; report parsers.

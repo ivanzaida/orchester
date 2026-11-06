@@ -18,6 +18,7 @@
       "exited": "{{service}} exited with code {{code}}",
       "endedBySignal": "{{service}} was ended by a signal",
       "alone": "{{service}} exited on its own after it was ready. No other service needed it; the agent got the same facts.",
+      "stoppedOne": "{{service}} exited on its own after it was ready. Orchester stopped {{services}}, which needs it; the agent got the same facts.",
       "stopped": "{{service}} exited on its own after it was ready. Orchester stopped {{services}}, which need it; the agent got the same facts."
     },
     "docker": {

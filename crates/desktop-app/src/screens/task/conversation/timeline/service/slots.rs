@@ -1,11 +1,14 @@
 //! A start that waits for *Services at once* slots, from the runner's `waiting_for_service_slots` note (10d of `10 ·
 //! States` `oXVuM`, `Card · Waiting for 4 Services at once slots` `qsBGf`): in an `info` stroke, an `hourglass` before
 //! *Waiting for 4 Services at once slots* and the task · step · since when; how many it needs under the project's share
-//! and the computer's limit; a slot bar of the project's share with the slots this start needs (`Slots` `uBP8F`); then
+//! and the computer's limit; a slot bar of the computer's slots with the ones this start needs (`Slots` `uBP8F`); then
 //! *Change Services at once*, which opens Project settings › Runs, where the share is. The note names neither the runs
 //! that hold slots nor how many are free, so the card lists no holders and the bar marks only what this start needs.
 
-use lurq::{app::ctx::Ctx, app::theme::PaletteColor, node::Element, node::dimension::Dimension};
+use lurq::{
+  app::{ctx::Ctx, theme::PaletteColor},
+  node::{Element, dimension::Dimension},
+};
 use orchester_workspace::{display, tasks::transcript::Entry};
 
 use super::super::Timeline;
@@ -49,8 +52,8 @@ pub(super) fn card(
       ("time", display::clock(entry.at)),
     ],
   );
-  // The project's share, the slots this start needs first.
-  let bar: Vec<Slot> = (0..share.max(slots))
+  // The computer's slots, the ones this start needs first: the note does not say which are held.
+  let bar: Vec<Slot> = (0..limit.max(slots))
     .map(|at| if at < slots { Slot::Taken } else { Slot::Free })
     .collect();
   let limits = Navigation::of(ctx).to(Route::Project(

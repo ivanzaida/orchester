@@ -6,7 +6,12 @@
 //! synthetic press on Restart starts nothing and the tab says only a person starts it. The services' secret
 //! values never reach the tab: the runner replaces them before it keeps a line, as its own test of the same request
 //! shows (`crates/runner/tests/run_services.rs`); a real runner reads secrets only from the OS keychain, which a test
-//! does not write. Needs `git`. Run with `cargo test -p orchester-app --test run_services run_services`.
+//! does not write.
+//!
+//! On `run-services-approve` the agent's start of team-web asks the person in one card for it and what it needs
+//! (ORC-275, `hvQDS`), and each answer goes to the runner: *Approve* starts them, *Approve for every run while
+//! unchanged*, confirmed in its modal, keeps a rule of the project per service, *Deny* tells the agent no. Needs
+//! `git`. Run with `cargo test -p orchester-app --test run_services run_services`.
 
 #[path = "../examples/seed/kontur/mod.rs"]
 #[allow(dead_code, reason = "the seed's helpers the other scenarios use")]
@@ -15,15 +20,18 @@ mod support;
 
 use std::{fs, path::Path, time::Duration};
 
-use lurq::app::events::with_synthetic_input;
+use lurq::{app::events::with_synthetic_input, node::element::ElementRef};
 use orchester_app::{
   routes::{ProjectPage, Route, TaskTab, TaskView},
   ui::icon::Icon,
 };
 use orchester_core::{project::TaskKey, time::Timestamp};
+use orchester_store::ProjectDb;
 use support::{Data, Window, runner_programs::programs};
 
 const TITLE: &str = "Invite people to a team server";
+/// The task of `run-services-approve`.
+const APPROVE_TITLE: &str = "Start the team web app";
 /// What a live run of the fake and the services may take: the stack starts in seconds, team-server crashes after
 /// about 45.
 const PATIENCE: Duration = Duration::from_secs(90);
@@ -38,20 +46,25 @@ fn says(window: &mut Window, id: &str) -> String {
 
 /// The window on the seeded project's task, its run started, on its Services tab; and the project's folder.
 fn running() -> (Window, std::path::PathBuf) {
+  running_on(("run-services", TITLE), TaskTab::Services)
+}
+
+/// The window on the task titled `title` of `scenario`, its run started, on its `tab`; and the project's folder.
+fn running_on((scenario, title): (&str, &str), tab: TaskTab) -> (Window, std::path::PathBuf) {
   let programs = programs();
   let data = Data::new();
   let repo = data.dir.path().join("repo-run-services");
   let seeded = kontur::seed(&kontur::SeedRequest {
     data_dir: data.dir.path().to_path_buf(),
     repo: repo.clone(),
-    scenario: kontur::scenarios::named("run-services").expect("a known scenario"),
+    scenario: kontur::scenarios::named(scenario).expect("a known scenario"),
     fake_codex: Some(programs.fake_codex.clone()),
     now: Timestamp::now(),
   })
   .expect("the scenario seeds");
   let launch = data.launch_with(programs.runner.clone());
   let mut window = Window::of(data, launch);
-  let task = seeded.tasks.iter().find(|task| task.title == TITLE).expect("the task");
+  let task = seeded.tasks.iter().find(|task| task.title == title).expect("the task");
   let key: TaskKey = task.key.parse().expect("a task key");
   let page = |view| Route::Project(seeded.project, ProjectPage::Task(key.clone(), view));
   window.navigation().go(page(TaskView::of(TaskTab::Summary)));
@@ -63,7 +76,7 @@ fn running() -> (Window, std::path::PathBuf) {
       .is_some_and(|glyph| glyph != Icon::Lock.glyph().to_string())
   });
   window.press("task-run");
-  window.navigation().go(page(TaskView::of(TaskTab::Services)));
+  window.navigation().go(page(TaskView::of(tab)));
   (window, repo)
 }
 
@@ -142,4 +155,106 @@ fn run_services_tab_follows_the_runs_services_and_stops_and_restarts_them_throug
   window.until_within(PATIENCE, "the run's step to end", |window| {
     shows(window, "task-services-idle")
   });
+}
+
+/// The id of the approve services card that waits in the Conversation, once its answers are laid out.
+fn approval_card(window: &mut Window) -> String {
+  let mut found: Option<String> = None;
+  window.until_within(PATIENCE, "the approve services card", |window| {
+    found = window.tree.get_element_by_id("conversation").and_then(|tab| {
+      let mut card = None;
+      walk(tab, &mut |element| {
+        if let Some(id) = element.id().and_then(|id| id.strip_suffix("-every-run"))
+          && id.starts_with("cards-approval-")
+        {
+          card = Some(id.to_owned());
+        }
+      });
+      card
+    });
+    found.as_ref().is_some_and(|card| {
+      window
+        .tree
+        .get_element_by_id_mut(&format!("{card}-approve"))
+        .and_then(|element| element.bounds())
+        .is_some()
+    })
+  });
+  found.expect("the card")
+}
+
+fn walk<'a>(element: ElementRef<'a>, visit: &mut impl FnMut(ElementRef<'a>)) {
+  visit(element);
+  for child in element.children() {
+    walk(child, visit);
+  }
+}
+
+/// How the card `card` reads once its answer was taken.
+fn decided(window: &mut Window, card: &str) -> String {
+  let decided = format!("{card}-decided");
+  window.until_within(PATIENCE, "the answer taken", |window| shows(window, &decided));
+  says(window, &decided)
+}
+
+#[test]
+fn run_services_approve_starts_the_service_and_its_needs_through_the_runner() {
+  let (mut window, repo) = running_on(("run-services-approve", APPROVE_TITLE), TaskTab::Conversation);
+  let card = approval_card(&mut window);
+  assert_eq!(
+    says(&mut window, &format!("{card}-title")),
+    "Start service team-web and what it needs: team-server, cloud-api, postgres"
+  );
+  assert!(says(&mut window, &format!("{card}-program-team-server")).ends_with("changed: arguments"));
+  assert!(says(&mut window, &format!("{card}-program-team-web")).ends_with("first start"));
+  window.press(&format!("{card}-approve"));
+  let said = decided(&mut window, &card);
+  assert!(said.starts_with("Approved once · by you at "), "{said}");
+  // The runner started what the person approved: the Services tab counts the four.
+  window.until_within(PATIENCE, "the four started", |window| {
+    says(window, "task-tab-services-count") == "4"
+  });
+  release(&repo);
+}
+
+#[test]
+fn run_services_approve_for_every_run_keeps_a_rule_of_the_project_per_service() {
+  let (mut window, repo) = running_on(("run-services-approve", APPROVE_TITLE), TaskTab::Conversation);
+  let card = approval_card(&mut window);
+  let confirm = format!("{card}-every-run-confirm-confirm");
+  window.press(&format!("{card}-every-run"));
+  window.until("the modal", |window| {
+    window
+      .tree
+      .get_element_by_id_mut(&confirm)
+      .and_then(|element| element.bounds())
+      .is_some()
+  });
+  window.press(&confirm);
+  let said = decided(&mut window, &card);
+  assert!(said.starts_with("Approved for every run of this project"), "{said}");
+  let rules = ProjectDb::open(&repo)
+    .expect("open")
+    .project_approval_rules()
+    .expect("rules");
+  let approved = |name: &str| {
+    rules
+      .iter()
+      .filter(|rule| rule.is_active())
+      .filter(|rule| rule.scope.service().is_some_and(|service| service.name == name))
+      .count()
+  };
+  assert_eq!(approved("team-web"), 1, "team-web is approved for every run now");
+  assert_eq!(approved("team-server"), 2, "team-server as it was and as it is now");
+  release(&repo);
+}
+
+#[test]
+fn run_services_deny_tells_the_agent_no_through_the_runner() {
+  let (mut window, repo) = running_on(("run-services-approve", APPROVE_TITLE), TaskTab::Conversation);
+  let card = approval_card(&mut window);
+  window.press(&format!("{card}-deny"));
+  let said = decided(&mut window, &card);
+  assert!(said.starts_with("Denied · by you at "), "{said}");
+  release(&repo);
 }

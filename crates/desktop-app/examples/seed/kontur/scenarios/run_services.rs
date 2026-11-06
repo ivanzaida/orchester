@@ -156,11 +156,56 @@ fn earlier_run(kontur: &mut Kontur, pipeline: &Published) -> Result<RunId, SeedE
 }
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
+  seed_with(
+    kontur,
+    Approved::All,
+    (
+      (TITLE, BRIEF),
+      "draft; Run holds the stack team and cloud-web, team-server crashes after about 45 s",
+    ),
+  )
+}
+
+/// The task of `run-services-approve`.
+const APPROVE_TITLE: &str = "Start the team web app";
+
+/// `run-services-approve`: the same services, but the earlier run approved only postgres and cloud-api as they are,
+/// and team-server before its arguments changed; team-web never. Its task's brief has the fake start team-web, so its
+/// start asks the person for all four in one card (`08 · Conversation · approve services` `hvQDS`). Press Run on
+/// *Start the team web app*.
+pub fn approve(kontur: &mut Kontur) -> Result<(), SeedError> {
+  seed_with(
+    kontur,
+    Approved::Some,
+    (
+      (
+        APPROVE_TITLE,
+        "Open the team web app. Start the service team-web. Hold the services.",
+      ),
+      "draft; Run asks you to start team-web with team-server, cloud-api and postgres",
+    ),
+  )
+}
+
+/// Which services the earlier run approved for every run of the project.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Approved {
+  All,
+  /// postgres and cloud-api as they are, team-server as it was before its arguments changed.
+  Some,
+}
+
+fn seed_with(
+  kontur: &mut Kontur,
+  approved: Approved,
+  ((title, brief), state): ((&str, &str), &'static str),
+) -> Result<(), SeedError> {
   let fake_codex = kontur.fake_codex.clone().ok_or(SeedError::FakeCodexRequired)?;
   let published = kontur.ago(60);
   let connection = catalogue::codex(&mut kontur.db, Some(&fake_codex), published)?;
   let pipeline = catalogue::tester(&mut kontur.db, connection, published)?;
-  let services = services(&test_command(&fake_codex))?;
+  let program = test_command(&fake_codex);
+  let services = services(&program)?;
   let made_in = earlier_run(kontur, &pipeline)?;
   // Five services run at once, and a person's Restart starts one or two more while the agent's start of cloud-web
   // waits: more than a project's default share of *Services at once*, within the computer's default.
@@ -171,13 +216,30 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   // computer whose disk is nearly full too.
   let keep = KeepFree::from_gigabytes(KEEP_FREE_GB).map_err(invalid)?;
   kontur.db.save_keep_free(keep)?;
+  // team-server as the earlier run approved it, before its arguments changed.
+  let earlier_team_server = service(
+    ("team-server", &program),
+    &["say", "INFO listening on 127.0.0.1:{{port}}", "listen", "{{port}}"],
+    (
+      ReadyCheck::LogLine(LogPattern::new("^INFO listening").map_err(invalid)?),
+      60,
+    ),
+    &["cloud-api"],
+  )?;
   for service in &services {
     let id = create(&mut kontur.db, service_slug(service.name()), service, published)?;
     kontur.db.publish_draft::<Service>(id, published)?;
-    let scope = ProjectScope::Service(ServiceApproval::of(service));
-    kontur
-      .db
-      .add_project_approval_rule(&scope, (made_in, "seed"), published)?;
+    let approval = match (approved, service.name().as_str()) {
+      (Approved::All, _) | (Approved::Some, "postgres" | "cloud-api") => Some(ServiceApproval::of(service)),
+      (Approved::Some, "team-server") => Some(ServiceApproval::of(&earlier_team_server)),
+      (Approved::Some, _) => None,
+    };
+    if let Some(approval) = approval {
+      let scope = ProjectScope::Service(approval);
+      kontur
+        .db
+        .add_project_approval_rule(&scope, (made_in, "seed"), published)?;
+    }
   }
   let team = StackName::new("team").map_err(invalid)?;
   let listed = ["postgres", "cloud-api", "team-server", "team-web"]
@@ -189,10 +251,7 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   kontur.db.publish_draft::<Stack>(id, published)?;
   let hold = kontur.repo.join(".orchester").join("fake-hold");
   std::fs::write(&hold, "hold").map_err(|source| SeedError::Io { path: hold, source })?;
-  let task = kontur.task((TITLE, BRIEF, &CRITERIA), Some(&pipeline), kontur.ago(5))?;
-  kontur.seeded(
-    &task,
-    "draft; Run holds the stack team and cloud-web, team-server crashes after about 45 s",
-  );
+  let task = kontur.task((title, brief, &CRITERIA), Some(&pipeline), kontur.ago(5))?;
+  kontur.seeded(&task, state);
   Ok(())
 }

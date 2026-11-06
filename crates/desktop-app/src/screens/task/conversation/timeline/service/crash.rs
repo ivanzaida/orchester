@@ -6,7 +6,10 @@
 
 use std::time::Duration;
 
-use lurq::{app::ctx::Ctx, app::theme::PaletteColor, node::Element};
+use lurq::{
+  app::{ctx::Ctx, theme::PaletteColor},
+  node::Element,
+};
 use orchester_core::{service::ServiceCrash, time::Timestamp};
 use orchester_workspace::display;
 
@@ -32,17 +35,26 @@ pub(super) fn card(ctx: &mut Ctx, timeline: &Timeline, id: &str, (crash, at): (&
       ),
     ),
     None => (
-      ctx.t_args("service_cards.crashed.metaSignal", [("time", time), ("seconds", seconds)]),
+      ctx.t_args(
+        "service_cards.crashed.metaSignal",
+        [("time", time), ("seconds", seconds)],
+      ),
       ctx.t_args("service_cards.crashed.endedBySignal", [("service", service.to_owned())]),
     ),
   };
-  let said = if crash.stopped.is_empty() {
-    ctx.t_args("service_cards.crashed.alone", [("service", service.to_owned())])
-  } else {
-    ctx.t_args(
-      "service_cards.crashed.stopped",
-      [("service", service.to_owned()), ("services", super::listed(ctx, &crash.stopped))],
-    )
+  let said = match crash.stopped.len() {
+    0 => ctx.t_args("service_cards.crashed.alone", [("service", service.to_owned())]),
+    count => ctx.t_args(
+      if count == 1 {
+        "service_cards.crashed.stoppedOne"
+      } else {
+        "service_cards.crashed.stopped"
+      },
+      [
+        ("service", service.to_owned()),
+        ("services", super::listed(ctx, &crash.stopped)),
+      ],
+    ),
   };
   let lines: Vec<TailLine> = crash
     .lines
@@ -56,13 +68,21 @@ pub(super) fn card(ctx: &mut Ctx, timeline: &Timeline, id: &str, (crash, at): (&
     .collect();
   let title = ctx.t_args("service_cards.crashed.title", [("service", service.to_owned())]);
   let labels = (
-    ctx.t_args("service_cards.actions.restartService", [("service", service.to_owned())]),
+    ctx.t_args(
+      "service_cards.actions.restartService",
+      [("service", service.to_owned())],
+    ),
     ctx.t_args("service_cards.actions.editService", [("service", service.to_owned())]),
   );
   let actions = super::actions(ctx, timeline, (id, service), (labels, LogPlace::Second));
   frame(id, PaletteColor::Danger)
     .describe("service", service.to_owned())
-    .child(head(id, (Icon::CircleX, PaletteColor::Danger), &title, (&meta, Meta::AfterTitle)))
+    .child(head(
+      id,
+      (Icon::CircleX, PaletteColor::Danger),
+      &title,
+      (&meta, Meta::AfterTitle),
+    ))
     .child(body(&format!("{id}-body"), &said))
     .child(log_tail(&format!("{id}-lines"), &lines))
     .with_children(actions)

@@ -183,7 +183,10 @@ impl ServiceActions {
     let why = message_text(ctx, &why);
     Some(said(
       &format!("{}-refused", props.id),
-      &ctx.t_args("service_cards.actions.refused", [("service", name), ("why", why.to_string())]),
+      &ctx.t_args(
+        "service_cards.actions.refused",
+        [("service", name), ("why", why.to_string())],
+      ),
     ))
   }
 }

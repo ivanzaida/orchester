@@ -335,7 +335,9 @@ impl StepServices {
       // A service counted as running when the slots were taken stopped since, as one a crash stopped: it takes a
       // slot of its own now.
       let short = u32::try_from(missing.len() - given.len()).unwrap_or(u32::MAX);
-      let (more, _) = self.take_slots(short).map_err(|why| (first.name(), Failed::from(why)))?;
+      let (more, _) = self
+        .take_slots(short)
+        .map_err(|why| (first.name(), Failed::from(why)))?;
       given.extend(more);
     }
     let started: Vec<(&ServiceName, Result<Running, Failed>)> = thread::scope(|scope| {
@@ -353,9 +355,9 @@ impl StepServices {
       starts
         .into_iter()
         .map(|(name, start)| {
-          let outcome = start.join().unwrap_or_else(|_| {
-            Err(format!("the start of the service `{name}` ended without an answer").into())
-          });
+          let outcome = start
+            .join()
+            .unwrap_or_else(|_| Err(format!("the start of the service `{name}` ended without an answer").into()));
           (name, outcome)
         })
         .collect()
