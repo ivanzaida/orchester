@@ -12,7 +12,9 @@ use orchester_api::{
 };
 use orchester_core::id::ClaimId;
 use orchester_workspace::{
-  actions::{Accepted, Action, ActionError, ActionOutcome, Current, Dispatcher, Intent, Refusal, TeamOutcome},
+  actions::{
+    Accepted, Action, ActionError, ActionOutcome, Current, Dispatcher, Intent, PipelineRefusal, Refusal, TeamOutcome,
+  },
   background,
   sharing::Servers,
 };
@@ -33,6 +35,9 @@ pub enum Acted {
   /// The server cannot be reached or refused for now, or its answer was lost: nothing is known to have changed, and
   /// asking again is safe.
   Unavailable,
+  /// The server refused the pipeline the task names (`422 invalid` with its reason), or this computer did before
+  /// sending it: nothing changed.
+  PipelineRefused(PipelineRefusal),
   /// The server accepts desktops of this version and later only: nothing changed, and asking again after the update
   /// is safe.
   NeedsVersion(ReleaseVersion),
@@ -166,6 +171,7 @@ fn refused(refusal: &Refusal, current: Option<Current>) -> Acted {
       ..
     } => Acted::Refused(AuthorityErrorCode::Forbidden),
     Refusal::Route { .. } => Acted::Refused(AuthorityErrorCode::Invalid),
+    Refusal::TaskPipeline(refusal) => Acted::PipelineRefused(*refusal),
   }
 }
 

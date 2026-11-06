@@ -11,7 +11,7 @@ use orchester_api::{
 use orchester_store::StoreError;
 
 use crate::{
-  actions::{Accepted, ActionError, Refusal, TeamOutcome},
+  actions::{Accepted, ActionError, PipelineRefusal, Refusal, TeamOutcome},
   app_mcp::{error::ToolError, tools::task_write::write_error},
   messages::Message,
 };
@@ -54,7 +54,17 @@ fn refused(refusal: &Refusal, retryable: bool) -> ToolError {
     | Refusal::PolicyRevisionConflict
     | Refusal::Superseded => changed(),
     Refusal::Route { code, .. } => coded(serde_json::to_value(code)),
+    Refusal::TaskPipeline(refusal) => pipeline_refused(*refusal),
   }
+}
+
+/// The server refused the pipeline a task names: none of the project's, or archived. Nothing was changed.
+fn pipeline_refused(refusal: PipelineRefusal) -> ToolError {
+  let (code, key) = match refusal {
+    PipelineRefusal::NotFound => ("pipeline_not_found", "appMcp.errors.teamPipelineNotFound"),
+    PipelineRefusal::Archived => ("pipeline_archived", "appMcp.errors.teamPipelineArchived"),
+  };
+  ToolError::refused(code, vec![Message::new(key)])
 }
 
 /// A team command's refusal: `forbidden` for a member is `not_admin`, as a definition route says it.

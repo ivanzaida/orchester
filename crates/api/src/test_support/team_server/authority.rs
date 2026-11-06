@@ -74,16 +74,16 @@ impl Standing {
 }
 
 /// A task as the stand-in's `/api/v2` reads give it: its number in the project, title, workflow status and priority as
-/// the wire names them, the slug of its pipeline, the module it is in, and how long ago it was created; its id, when it
-/// is to be the one this computer's runs of it name, its assignee, its claim and the state of the work under that
-/// claim. Its brief and its one criterion repeat its title, so it is complete.
+/// the wire names them, the resource id of its team pipeline, the module it is in, and how long ago it was created; its
+/// id, when it is to be the one this computer's runs of it name, its assignee, its claim and the state of the work
+/// under that claim. Its brief and its one criterion repeat its title, so it is complete.
 #[derive(Clone, Debug)]
 pub struct AuthorityTask {
   pub number: u32,
   pub title: String,
   pub workflow: &'static str,
   pub priority: &'static str,
-  pub pipeline: Option<&'static str>,
+  pub pipeline: Option<String>,
   /// The index of one of the modules [`TeamServer::authority_modules`] set; without them, any is the project's one.
   pub module: Option<usize>,
   pub created_minutes_ago: i64,

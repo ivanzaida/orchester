@@ -1,8 +1,7 @@
-//! Between the server's tasks and the project database's (`docs/architecture/server.md`, "API",
-//! "Pipelines by name"): a task the server confirmed becomes a cached task; a local task is uploaded
-//! with its pipeline's slug and its tags by name; and a change sends only the fields that differ
-//! from the cached task, so a person who lacks a task's pipeline does not clear it by editing its
-//! title.
+//! Between the server's tasks and the project database's (`docs/architecture/server.md`, "API"): a
+//! task the server confirmed becomes a cached task; a local task is uploaded with its team pipeline's
+//! resource id (row 80) and its tags by name; and a change sends only the fields that differ from the
+//! cached task, so a person who lacks a task's pipeline does not clear it by editing its title.
 
 use std::{num::NonZeroU32, time::Duration};
 
@@ -12,6 +11,7 @@ use orchester_api::{
 use orchester_core::{
   id::ResourceId,
   name::Name,
+  resource::{Pipeline, ResourceKind},
   store::ResourceStore,
   task::{Task, TaskDetails, TaskLimits, TaskStatus, organization::TaskOrganization},
   time::Timestamp,
@@ -19,7 +19,7 @@ use orchester_core::{
 };
 use orchester_store::{CachedClaim, CachedRunStatus, CachedTask, ProjectDb, SharedPerson, StoreError};
 
-use crate::sharing::SharingError;
+use crate::{sharing::SharingError, team_reads::listed::TeamPipelines};
 
 /// `task` as the server confirmed it, for the cache.
 pub fn cached(task: &SharedTask) -> Result<CachedTask, SharingError> {
@@ -102,14 +102,29 @@ pub fn shared_limits(limits: TaskLimits) -> Option<SharedLimits> {
   })
 }
 
-/// The slug of this computer's pipeline `id`: pipelines are shared by slug.
-pub fn pipeline_slug(db: &ProjectDb, id: Option<ResourceId>) -> Result<Option<String>, StoreError> {
-  id.map(|id| {
-    db.resource(id)?
-      .map(|resource| resource.slug().as_str().to_owned())
-      .ok_or(StoreError::ResourceNotFound(id))
-  })
-  .transpose()
+/// What a team task names `pipeline` by on the server (`docs/architecture/server.md` row 80): its resource id when it
+/// is one of the team's pipelines here; any other pipeline, a person's own local one, as none, never as an id the
+/// server lacks.
+pub fn team_pipeline_id(db: &ProjectDb, pipeline: Option<ResourceId>) -> Result<Option<String>, StoreError> {
+  let Some(id) = pipeline else {
+    return Ok(None);
+  };
+  Ok(TeamPipelines::of(db)?.contains(id).then(|| id.to_string()))
+}
+
+/// What a task uploaded with the project names `pipeline` by when the project is shared (*Share*): the configuration
+/// goes up first, every pipeline with a published version with its own id, so it is that id; a pipeline that does not
+/// go up with it is none.
+pub fn shared_pipeline_id(db: &ProjectDb, pipeline: Option<ResourceId>) -> Result<Option<String>, StoreError> {
+  let Some(id) = pipeline else {
+    return Ok(None);
+  };
+  let uploaded = db
+    .resources(ResourceKind::Pipeline)?
+    .iter()
+    .any(|resource| resource.id() == id)
+    && !db.versions::<Pipeline>(id)?.is_empty();
+  Ok(uploaded.then(|| id.to_string()))
 }
 
 /// A new task's content: `details` and its `organization`, in no module (its module is a move of its own, as locally).
@@ -122,7 +137,7 @@ pub fn content(
     title: details.title.as_str().to_owned(),
     brief: details.brief.clone(),
     criteria: details.acceptance_criteria.clone(),
-    pipeline: pipeline_slug(db, details.pipeline)?,
+    pipeline: team_pipeline_id(db, details.pipeline)?,
     limits: shared_limits(details.limits),
     workflow: organization.status(),
     priority: organization.priority(),
@@ -156,7 +171,7 @@ pub fn content_changes(
     changes.criteria = Some(after.acceptance_criteria.clone());
   }
   if before.pipeline != after.pipeline {
-    changes.pipeline = Some(pipeline_slug(db, after.pipeline)?);
+    changes.pipeline = Some(team_pipeline_id(db, after.pipeline)?);
   }
   if before.limits != after.limits {
     changes.limits = Some(shared_limits(after.limits));

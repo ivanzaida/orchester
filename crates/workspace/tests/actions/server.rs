@@ -50,6 +50,8 @@ pub struct State {
   pub cursor: u64,
   lose_next: bool,
   pub next_task: Option<TaskId>,
+  /// A team pipeline archived on the server, by its id: a task moved to it is `422 invalid`, `pipeline_archived`.
+  pub archived_pipeline: Option<String>,
   /// Every request to `POST …/commands`, and every write a definition route carried out.
   commands: usize,
   pub created: usize,
@@ -128,6 +130,11 @@ impl TeamServer {
     self.state.lock().next_task = Some(id);
   }
 
+  /// The team pipeline `id` is archived here from now on.
+  pub fn archive_pipeline(&self, id: &str) {
+    self.state.lock().archived_pipeline = Some(id.to_owned());
+  }
+
   /// How many command requests reached the server, and how many tasks they created.
   pub fn counts(&self) -> (usize, usize) {
     let state = self.state.lock();
@@ -195,6 +202,14 @@ fn patch_task(state: &mut State, request: &Request, task: &str) -> (u16, Value) 
     let mut conflict = api_error("revision_conflict");
     conflict["current"] = shared_task(&current);
     return (409, conflict);
+  }
+  if body["changes"]["pipeline"]
+    .as_str()
+    .is_some_and(|named| state.archived_pipeline.as_deref() == Some(named))
+  {
+    let mut refused = api_error("invalid");
+    refused["reason"] = json!("pipeline_archived");
+    return (422, refused);
   }
   let task = state
     .tasks

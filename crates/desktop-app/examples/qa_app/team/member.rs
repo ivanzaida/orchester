@@ -20,9 +20,19 @@ use super::{State, work};
 /// `team-module-outage`.
 const SHOWN_FOR: Duration = Duration::from_secs(3);
 
-/// Serves Kontur to the person as `state` says, the tasks this computer has by their number keeping their ids `here`;
-/// the role the person's link records, as the server gives it.
-pub fn serve_as(server: &TeamServer, state: State, here: &HashMap<u32, String>) -> Option<MemberRole> {
+/// The ids of Kontur's team pipelines, which its tasks on the server name.
+pub struct TeamPipelines {
+  pub feature_delivery: String,
+  pub quick_fix: String,
+}
+
+/// Serves Kontur to the person as `state` says, the tasks this computer has by their number keeping their ids `here`,
+/// each on one of `pipelines`; the role the person's link records, as the server gives it.
+pub fn serve_as(
+  server: &TeamServer,
+  state: State,
+  (here, pipelines): (&HashMap<u32, String>, &TeamPipelines),
+) -> Option<MemberRole> {
   let standing = match state {
     State::Admin | State::AdminWork | State::EditConflict => Standing::Admin,
     State::ServerAdmin => Standing::ServerAdmin,
@@ -33,7 +43,7 @@ pub fn serve_as(server: &TeamServer, state: State, here: &HashMap<u32, String>) 
     server,
     (state, standing),
     matches!(state, State::Outage | State::OutageRunning),
-    ids,
+    (ids, pipelines),
   );
   match state {
     State::OutageLater => server.authority_unavailable_once_read(SHOWN_FOR),
@@ -85,7 +95,12 @@ const CLAIMED: (u32, i64) = (12, 2);
 /// Serves Kontur's tasks and modules to the person standing as `standing` in `state`, with dana-k as its Admin and olha
 /// as the server's admin, the tasks numbered in `ids` with those ids; `unavailable` makes every read of them `503
 /// unavailable`.
-fn serve(server: &TeamServer, (state, standing): (State, Standing), unavailable: bool, ids: &HashMap<u32, String>) {
+fn serve(
+  server: &TeamServer,
+  (state, standing): (State, Standing),
+  unavailable: bool,
+  (ids, pipelines): (&HashMap<u32, String>, &TeamPipelines),
+) {
   server.stand_as(standing);
   server.members_named(&["dana-k"], &["olha"]);
   let mut modules = modules::modules();
@@ -101,9 +116,9 @@ fn serve(server: &TeamServer, (state, standing): (State, Standing), unavailable:
           workflow,
           priority,
           pipeline: Some(if QUICK_FIXES.contains(&number) {
-            "quick-fix"
+            pipelines.quick_fix.clone()
           } else {
-            "feature-delivery"
+            pipelines.feature_delivery.clone()
           }),
           module: modules::of(number),
           created_minutes_ago,

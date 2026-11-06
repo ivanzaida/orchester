@@ -388,6 +388,8 @@ fn acted_words(ctx: &Ctx, task: &TaskContext, ask: TeamAsk, acted: &Acted) -> Op
       ));
     }
     Acted::Refused(code) => return Some(refused_words(ctx, *code)),
+    // Only a task edit names a pipeline; any other action that met one was refused as invalid.
+    Acted::PipelineRefused(_) => return Some(refused_words(ctx, AuthorityErrorCode::Invalid)),
     Acted::NeedsVersion(required) => {
       return Some(ctx.t_args("summary.team.refused.needsVersion", [("version", required.as_str())]));
     }

@@ -1700,6 +1700,8 @@
       "teamPipelineRequired": "{{pipeline}} is not one of the team's pipelines. A team task runs only with a team pipeline, and the team's Admins create and publish those; your own local pipelines are not used for team tasks. Nothing was sent.",
       "sharePipelineLocal": "Only a team project has team pipelines; in a local project every pipeline is the project's already.",
       "sharePipelineLocalExecutors": "Its steps run {{resources}}, which are not the team's, so the team's copy would name what the team server does not have. Publish them for the team first, or choose team profiles and tools in its steps. Nothing was sent.",
+      "teamPipelineNotFound": "The team server has no pipeline of this team project with that id, so nothing was changed. Choose one of the team's pipelines.",
+      "teamPipelineArchived": "That team pipeline is archived on the team server, so a task cannot be moved to it. Nothing was changed; choose another of the team's pipelines.",
       "teamPipelineMissing": "This team task names the pipeline {{pipeline}}, which is not one of the team's pipelines on this computer. Choose a team pipeline for it; nothing was started.",
       "teamStartWaiting": "The start was recorded and waits for the team server or the runner; it goes on by itself once they answer. Nothing was started twice.",
       "teamStartFailed": "The team task's start could not go on. The task page says where it stands.",

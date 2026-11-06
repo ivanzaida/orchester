@@ -26,7 +26,8 @@ use orchester_core::{
   },
 };
 use orchester_store::{
-  AutomaticStatus, CachedClaim, CachedRunStatus, CachedTask, NotSent, ProjectDb, SharedPerson, SharingLink, StoreError,
+  AutomaticStatus, CachedClaim, CachedRunStatus, CachedTask, NotSent, ProjectDb, ResourceSharing, SharedPerson,
+  SharingLink, StoreError,
 };
 use support::{at, copied_at_version, name, started_run};
 
@@ -41,6 +42,14 @@ fn details(title: &str) -> TaskDetails {
     pipeline: None,
     limits: TaskLimits::NONE,
   }
+}
+
+/// The fixture's pipeline `delivery` made the team's, as Share leaves it; the id a shared task names it by.
+fn team_delivery(db: &mut ProjectDb) -> String {
+  let delivery = db.resources(ResourceKind::Pipeline).expect("pipelines").remove(0).id();
+  db.set_resource_sharing(delivery, Some(ResourceSharing::Shared(revision(1))))
+    .expect("the team's");
+  delivery.to_string()
 }
 
 /// The fixture's task made complete, on the pipeline `delivery`, as a task with a run must stay.
@@ -150,12 +159,15 @@ fn shared_tasks_an_organization_change_raises_the_revision() {
 fn shared_tasks_the_cache_keeps_the_server_s_tasks_and_refuses_local_writes() {
   let (_repo, mut db, run, _) = started_run();
   let task = db.task(run.task()).expect("read").expect("task");
+  let delivery = team_delivery(&mut db);
   let draft = db
     .create_tasks(IdempotencyKey::generate(), vec![details("Fix reconnect")], at(30))
     .expect("draft")
     .remove(0);
   let review = Tag::new(TagId::generate(), name("Review"));
-  let mut cached_draft = cached(&db, &draft, Some("design-review"), "Alice Moreau");
+  // A team pipeline this computer does not have, by its id.
+  let gone = orchester_core::id::ResourceId::generate().to_string();
+  let mut cached_draft = cached(&db, &draft, Some(gone.as_str()), "Alice Moreau");
   cached_draft.revision = revision(4);
   cached_draft.organization = TaskOrganization::default().with_tags(vec![review.id()]);
   let alice = person("Alice Moreau");
@@ -173,7 +185,10 @@ fn shared_tasks_the_cache_keeps_the_server_s_tasks_and_refuses_local_writes() {
     &link,
     std::slice::from_ref(&review),
     (
-      &[cached(&db, &task, Some("delivery"), "Alice Moreau"), cached_draft],
+      &[
+        cached(&db, &task, Some(delivery.as_str()), "Alice Moreau"),
+        cached_draft,
+      ],
       &Default::default(),
     ),
   )
@@ -186,20 +201,19 @@ fn shared_tasks_the_cache_keeps_the_server_s_tasks_and_refuses_local_writes() {
   let address = db.sharing().expect("link").and_then(|link| link.address);
   assert_eq!(address.as_deref(), Some("https://orchester.kontur.lan/kontur-2"));
   assert_eq!(db.project_tags().expect("tags"), vec![review.clone()]);
-  // This computer has the pipeline `delivery`, not `design-review`.
-  let delivery = db.resources(ResourceKind::Pipeline).expect("pipelines").remove(0).id();
+  // This computer has the team pipeline `delivery`, not `gone`.
   let shared = db.task(task.id()).expect("read").expect("task");
-  assert_eq!(shared.details().pipeline, Some(delivery));
+  assert_eq!(shared.details().pipeline.map(|id| id.to_string()), Some(delivery));
   let other = db.task(draft.id()).expect("read").expect("task");
   assert_eq!(other.details().pipeline, None);
   assert_eq!(other.revision(), revision(4));
   assert_eq!(other.organization().tags(), [review.id()]);
   let info = db.shared_task_info(draft.id()).expect("info").expect("shared");
-  assert_eq!(info.pipeline_slug.as_deref(), Some("design-review"));
+  assert_eq!(info.pipeline_slug.as_deref(), Some(gone.as_str()));
   assert_eq!(
     db.missing_pipelines().expect("missing pipelines"),
-    std::collections::HashMap::from([(draft.id(), "design-review".to_owned())]),
-    "only the pipeline this computer lacks is missing"
+    std::collections::HashMap::from([(draft.id(), gone)]),
+    "only the team pipeline this computer lacks is missing"
   );
   assert_eq!(info.claim.map(|claim| claim.holder), Some(alice.clone()));
   assert_eq!(db.claims_held_by(alice.id).expect("claims"), vec![draft.id()]);
@@ -227,6 +241,7 @@ fn shared_tasks_the_cache_keeps_the_server_s_tasks_and_refuses_local_writes() {
 fn shared_tasks_a_change_from_the_server_keeps_the_runs_content_and_the_local_pin() {
   let (_repo, mut db, run, _) = started_run();
   let mut task = completed(&mut db, run.task());
+  let delivery = team_delivery(&mut db);
   task.queue(VersionNumber::FIRST).expect("a complete task queues");
   let task = db.save_task(&task).expect("queue").saved().expect("saved as read");
   let pin = task.pipeline_version();
@@ -234,13 +249,13 @@ fn shared_tasks_a_change_from_the_server_keeps_the_runs_content_and_the_local_pi
     &link("ORC"),
     &[],
     (
-      &[cached(&db, &task, Some("delivery"), "Alice Moreau")],
+      &[cached(&db, &task, Some(delivery.as_str()), "Alice Moreau")],
       &Default::default(),
     ),
   )
   .expect("share");
 
-  let mut edited = cached(&db, &task, Some("delivery"), "Oleh Petrenko");
+  let mut edited = cached(&db, &task, Some(delivery.as_str()), "Oleh Petrenko");
   edited.title = name("Say hello twice");
   edited.revision = task.revision().next().expect("next");
   edited.run = Some(CachedRunStatus {
@@ -276,12 +291,13 @@ fn shared_tasks_a_change_from_the_server_keeps_the_runs_content_and_the_local_pi
 fn shared_tasks_a_run_of_a_shared_task_records_its_status_for_the_server() {
   let (_repo, mut db, mut run, execution) = started_run();
   let task = db.task(run.task()).expect("read").expect("task");
+  let delivery = team_delivery(&mut db);
   let organization = db.task_organization(task.id()).expect("organization");
   db.start_sharing(
     &link("ORC"),
     &[],
     (
-      &[cached(&db, &task, Some("delivery"), "Alice Moreau")],
+      &[cached(&db, &task, Some(delivery.as_str()), "Alice Moreau")],
       &Default::default(),
     ),
   )
@@ -313,11 +329,12 @@ fn shared_tasks_a_run_of_a_shared_task_records_its_status_for_the_server() {
 fn shared_tasks_a_run_status_the_server_changed_meanwhile_is_not_sent_and_says_why() {
   let (_repo, mut db, mut run, execution) = started_run();
   let task = db.task(run.task()).expect("read").expect("task");
+  let delivery = team_delivery(&mut db);
   db.start_sharing(
     &link("ORC"),
     &[],
     (
-      &[cached(&db, &task, Some("delivery"), "Alice Moreau")],
+      &[cached(&db, &task, Some(delivery.as_str()), "Alice Moreau")],
       &Default::default(),
     ),
   )
@@ -346,11 +363,12 @@ fn shared_tasks_a_run_status_the_server_changed_meanwhile_is_not_sent_and_says_w
 fn shared_tasks_a_done_git_found_changes_from_in_review_and_stays_not_sent() {
   let (_repo, mut db, mut run, execution) = started_run();
   let task = db.task(run.task()).expect("read").expect("task");
+  let delivery = team_delivery(&mut db);
   db.start_sharing(
     &link("ORC"),
     &[],
     (
-      &[cached(&db, &task, Some("delivery"), "Alice Moreau")],
+      &[cached(&db, &task, Some(delivery.as_str()), "Alice Moreau")],
       &Default::default(),
     ),
   )
@@ -361,7 +379,7 @@ fn shared_tasks_a_done_git_found_changes_from_in_review_and_stays_not_sent() {
   db.append_events(&run, &events).expect("stored");
   db.clear_automatic_status(task.id(), at(121))
     .expect("the In review was sent");
-  let mut moved = cached(&db, &task, Some("delivery"), "Bob Lind");
+  let mut moved = cached(&db, &task, Some(delivery.as_str()), "Bob Lind");
   moved.revision = task.revision().next().expect("next");
   moved.organization = moved.organization.with_status(WorkflowStatus::InProgress);
   db.cache_shared_tasks(&[moved], None).expect("cache");
@@ -397,7 +415,8 @@ fn shared_tasks_a_done_git_found_changes_from_in_review_and_stays_not_sent() {
 fn shared_tasks_make_local_keeps_every_cached_task() {
   let (_repo, mut db, run, _) = started_run();
   let task = db.task(run.task()).expect("read").expect("task");
-  let mut theirs = cached(&db, &task, Some("delivery"), "Alice Moreau");
+  let delivery = team_delivery(&mut db);
+  let mut theirs = cached(&db, &task, Some(delivery.as_str()), "Alice Moreau");
   theirs.id = orchester_core::id::TaskId::generate();
   theirs.number = NonZeroU32::new(41).expect("number");
   theirs.status = TaskStatus::Draft;
@@ -416,7 +435,10 @@ fn shared_tasks_make_local_keeps_every_cached_task() {
     &link("ORC"),
     std::slice::from_ref(&tag),
     (
-      &[cached(&db, &task, Some("delivery"), "Alice Moreau"), theirs.clone()],
+      &[
+        cached(&db, &task, Some(delivery.as_str()), "Alice Moreau"),
+        theirs.clone(),
+      ],
       &Default::default(),
     ),
   )
@@ -484,12 +506,54 @@ fn shared_tasks_migration_keeps_a_populated_database_of_schema_40() {
 fn shared_tasks_a_change_made_while_sharing_is_reported() {
   let (_repo, mut db, run, _) = started_run();
   let task = db.task(run.task()).expect("read").expect("task");
+  let delivery = team_delivery(&mut db);
   let uploaded = std::collections::HashMap::from([(task.id(), task.revision())]);
   let changed = completed(&mut db, run.task());
-  let cached = cached(&db, &task, Some("delivery"), "Alice Moreau");
+  let cached = cached(&db, &task, Some(delivery.as_str()), "Alice Moreau");
   let reported = db
     .start_sharing(&link("ORC"), &[], (&[cached], &uploaded))
     .expect("share");
   assert_eq!(reported.len(), 1);
   assert_eq!(reported[0].details(), changed.details());
+}
+
+/// Row 80: a value from before team tasks named their pipeline by id, a slug, names no team pipeline, and is not
+/// missing either; the upgrade turns the slug of a team pipeline this computer has into its id.
+#[test]
+fn shared_tasks_a_slug_names_no_team_pipeline_and_the_upgrade_turns_it_into_the_id() {
+  let (repo, mut db, run, _) = started_run();
+  let task = db.task(run.task()).expect("read").expect("task");
+  let delivery = team_delivery(&mut db);
+  db.start_sharing(
+    &link("ORC"),
+    &[],
+    (
+      &[cached(&db, &task, Some("delivery"), "Alice Moreau")],
+      &Default::default(),
+    ),
+  )
+  .expect("share");
+  assert_eq!(
+    db.task(task.id()).expect("read").expect("task").details().pipeline,
+    None
+  );
+  assert!(db.missing_pipelines().expect("missing").is_empty());
+  let info = db.shared_task_info(task.id()).expect("info").expect("shared");
+  assert_eq!(info.pipeline_slug.as_deref(), Some("delivery"));
+
+  // The upgrade's step, as it runs on a database with a slug kept.
+  let id = db.resources(ResourceKind::Pipeline).expect("pipelines").remove(0).id();
+  assert_eq!(id.to_string(), delivery);
+  drop(db);
+  let raw = rusqlite::Connection::open(repo.path().join(".orchester").join("orchester.db")).expect("open");
+  let version: u32 = raw
+    .pragma_query_value(None, "user_version", |row| row.get(0))
+    .expect("the version");
+  raw
+    .pragma_update(None, "user_version", version - 1)
+    .expect("one step back");
+  drop(raw);
+  let db = ProjectDb::open(repo.path()).expect("upgraded");
+  let upgraded = db.task(task.id()).expect("read").expect("task");
+  assert_eq!(upgraded.details().pipeline.map(|id| id.to_string()), Some(delivery));
 }

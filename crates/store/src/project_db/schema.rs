@@ -101,6 +101,7 @@ mod task_identities;
 mod team_delivery;
 mod team_delivery_waits;
 mod team_operations;
+mod team_pipeline_ids;
 mod team_reviewer;
 mod team_work;
 mod test_suites;

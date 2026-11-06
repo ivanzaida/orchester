@@ -23,8 +23,15 @@ use orchester_api::{
   test_support::team_server::{CODE, TasksAnswer, TeamServer, USERNAME},
 };
 use orchester_app::services::Services;
-use orchester_core::{id::ServerId, project::ProjectKey, sharing::MemberRole, store::TaskStore, time::Timestamp};
-use orchester_store::{ProjectDb, SharingLink};
+use orchester_core::{
+  id::{ResourceId, ServerId},
+  project::ProjectKey,
+  resource::ResourceKind,
+  sharing::{MemberRole, TaskRevision},
+  store::{ResourceStore, TaskStore},
+  time::Timestamp,
+};
+use orchester_store::{ProjectDb, ResourceSharing, SharingLink};
 use orchester_workspace::sharing::{CodeRequest, Servers, Trust, project::FirstDownload, team_join::JoinOutcome};
 pub use state::State;
 use tokio::runtime::Handle;
@@ -109,7 +116,7 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
     | State::TeamRunning
     | State::EditConflict => {
       let ids = task_ids(services)?;
-      let role = member::serve_as(&server, state, &ids);
+      let role = member::serve_as(&server, state, (&ids, &team_pipelines(services)?));
       let (kontur, id) = join_linked_as(&server, (services, runtime), (TasksAnswer::Serve, role))?;
       work::after_join(state, (&server, id), (services, runtime), (&kontur, &ids))?;
     }
@@ -139,6 +146,27 @@ fn task_ids(services: &Services) -> Result<HashMap<u32, String>, Box<dyn Error>>
       .map(|task| (task.key().number().get(), task.id().to_string()))
       .collect(),
   )
+}
+
+/// Kontur's Feature delivery and Quick fix as the team's pipelines, as Share leaves them (row 80): the tasks on the
+/// server name them by these ids. A Kontur without one, as the headless tests' is, names a team pipeline it lacks.
+fn team_pipelines(services: &Services) -> Result<member::TeamPipelines, Box<dyn Error>> {
+  let mut db = ProjectDb::open(&kontur(services)?)?;
+  let mut id_of = |slug: &str| -> Result<String, Box<dyn Error>> {
+    let found = db
+      .resources(ResourceKind::Pipeline)?
+      .into_iter()
+      .find(|resource| resource.slug().as_str() == slug);
+    let Some(pipeline) = found.map(|resource| resource.id()) else {
+      return Ok(ResourceId::generate().to_string());
+    };
+    db.set_resource_sharing(pipeline, Some(ResourceSharing::Shared(TaskRevision::FIRST)))?;
+    Ok(pipeline.to_string())
+  };
+  Ok(member::TeamPipelines {
+    feature_delivery: id_of("feature-delivery")?,
+    quick_fix: id_of("quick-fix")?,
+  })
 }
 
 /// Adds `server` to the list; its address and id.

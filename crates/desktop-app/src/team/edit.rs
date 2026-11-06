@@ -12,7 +12,9 @@ use orchester_core::{
   task::{TaskDetails, organization::TaskOrganization},
 };
 use orchester_workspace::{
-  actions::{Accepted, Action, ActionError, ActionOutcome, Definition, Intent, TaskAction, TeamOutcome},
+  actions::{
+    Accepted, Action, ActionError, ActionOutcome, Definition, Intent, PipelineRefusal, TaskAction, TeamOutcome,
+  },
   background,
 };
 
@@ -126,6 +128,8 @@ fn taken(outcome: Result<ActionOutcome, ActionError>) -> Result<Option<Box<Share
     Ok(ActionOutcome::Team(TeamOutcome::Completed(Accepted::Definition(Definition::Task(shared))))) => Ok(Some(shared)),
     Err(ActionError::NothingToChange) => Ok(None),
     Err(ActionError::DecisionRequired(_)) => Err(Acted::Refused(AuthorityErrorCode::DecisionRequired)),
+    // Refused here before it was sent: the pipeline is none of the team's on this computer.
+    Err(ActionError::NotTeamPipeline(_)) => Err(Acted::PipelineRefused(PipelineRefusal::NotFound)),
     outcome => match acted(outcome).0 {
       // The server answered a task's change with something other than the task: nothing to go on.
       Acted::Done => Err(Acted::Failed),
