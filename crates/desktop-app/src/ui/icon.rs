@@ -189,6 +189,7 @@ icons! {
   ListOrdered => '\u{e1d1}',
   ListPlus => '\u{e23f}',
   ListTodo => '\u{e4c3}',
+  ListTree => '\u{e408}',
   LoaderCircle => '\u{e10a}',
   Lock => '\u{e10b}',
   LockKeyhole => '\u{e531}',
