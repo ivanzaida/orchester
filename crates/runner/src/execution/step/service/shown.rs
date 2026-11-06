@@ -44,11 +44,37 @@ impl Services {
 
   /// The tools of the run's invocation that started the service `name`.
   fn tools_with(&self, run: RunId, name: &str) -> Result<(StepServices, ServiceName), ShownServiceError> {
+    self.tools_found(run, name, |tools, service| {
+      tools.state.watched.lock().contains_key(service)
+    })
+  }
+
+  /// The tools of the run's invocation that started the service `name`, or whose start ran it and failed before its
+  /// program started, as one whose Docker was not available: a person's Restart, or Retry, starts it again there.
+  fn tools_that_ran(&self, run: RunId, name: &str) -> Result<(StepServices, ServiceName), ShownServiceError> {
+    self.tools_found(run, name, |tools, service| {
+      tools.state.watched.lock().contains_key(service)
+        || tools
+          .state
+          .ran
+          .lock()
+          .iter()
+          .any(|approval| approval.name == service.as_str())
+    })
+  }
+
+  /// The tools of the run's first invocation that `found` says knows the service `name`.
+  fn tools_found(
+    &self,
+    run: RunId,
+    name: &str,
+    found: impl Fn(&StepServices, &ServiceName) -> bool,
+  ) -> Result<(StepServices, ServiceName), ShownServiceError> {
     let service = ServiceName::new(name).map_err(|_| ShownServiceError::Name(name.to_owned()))?;
     self
       .tools_of(run)
       .into_iter()
-      .find(|tools| tools.state.watched.lock().contains_key(&service))
+      .find(|tools| found(tools, &service))
       .map(|tools| (tools, service))
       .ok_or_else(|| ShownServiceError::NotStarted(name.to_owned()))
   }
@@ -105,9 +131,10 @@ impl Services {
     Ok(())
   }
 
-  /// Starts the service `name` of `run` again, stopping it first when it runs. Blocks until it is ready.
+  /// Starts the service `name` of `run` again, stopping it first when it runs, also one whose start failed before its
+  /// program started (the no-Docker card's Retry). Blocks until it is ready.
   pub(in crate::execution) fn restart_of(&self, run: RunId, name: &str) -> Result<(), ShownServiceError> {
-    let (tools, service) = self.tools_with(run, name)?;
+    let (tools, service) = self.tools_that_ran(run, name)?;
     tools.restart_for_person(&service).map_err(ShownServiceError::Failed)
   }
 }

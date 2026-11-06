@@ -3,7 +3,7 @@
 //! port and URL while its step holds them; a service's log lines come with their secret's value redacted, later lines
 //! after the last one read; the person's Stop stops it and frees its port, and Restart starts it again on a new port,
 //! started by the person, but never a definition published again since its approval; a crash shows with its exit code
-//! and the service that needs it as stopped for it. Needs
+//! and the service that needs it as stopped for it; Retry after Docker was not available starts it again. Needs
 //! `git`. Run with `cargo test -p orchester-runner --features test-agent --test run_services run_services`.
 
 mod support;
@@ -11,12 +11,16 @@ mod support;
 use std::{collections::BTreeMap, fs, path::Path, time::Duration};
 
 use orchester_core::{
+  connection::stream::{AgentEvent, RunnerProblem},
   id::{IdempotencyKey, RunId, SecretId},
-  resource::{Draft, ResourceBody, VariableName},
+  resource::{CommandEnvironment, CommandProgram, Draft, ResourceBody, VariableName},
   run::RunStatus,
   secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
-  service::{LogPattern, ReadyCheck, Service, ServiceName, ServiceValue, ServiceVariables},
-  store::ResourceStore,
+  service::{
+    LogPattern, Readiness, ReadyCheck, ReadyTimeout, RunData, Service, ServiceName, ServiceStartFailure, ServiceValue,
+    ServiceVariables, StartFailureCause,
+  },
+  store::{ActivityStore, ResourceStore, SettingsStore},
   time::Timestamp,
 };
 use orchester_ipc::{
@@ -31,6 +35,7 @@ use self::support::{
   qa::{approve, calls},
   scheduler_with,
   services::{accepts, answered, closed, publish, report_file, service, service_project, started_port},
+  tools::TEST_COMMAND,
   wait_for,
 };
 
@@ -370,6 +375,89 @@ async fn run_services_restart_refuses_a_definition_published_again_since_its_app
     "the refused Restart stopped nothing"
   );
   assert!(accepts(port), "the agent's service still listens");
+
+  fs::remove_file(&hold).expect("release");
+  let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+}
+
+/// The service failed starts noted in the run's conversation, oldest first.
+fn start_failures(root: &Path, run: RunId) -> Vec<ServiceStartFailure> {
+  ProjectDb::open(root)
+    .expect("open")
+    .activity(run, 0)
+    .expect("activity")
+    .into_iter()
+    .filter_map(|entry| match entry.event {
+      AgentEvent::RunnerProblem {
+        problem: RunnerProblem::ServiceStartFailed(failure),
+      } => Some(*failure),
+      _ => None,
+    })
+    .collect()
+}
+
+/// Retry on the no-Docker card (`oXVuM` 10a): a start that failed before its program started, Docker not answering,
+/// was never a running service, yet the person's Restart reaches the runner and starts it again as the agent's start
+/// ran it, which asks Docker again: with Docker still not answering, the refusal is Docker's and the conversation
+/// notes the failed start again.
+#[tokio::test(flavor = "multi_thread")]
+async fn run_services_retry_after_docker_was_not_available_starts_the_service_again() {
+  let project = service_project(implement("Start the service db. Hold the services."), Vec::new());
+  let root = project.repo.path();
+  // A `docker` first on the project's PATH whose engine never names a version.
+  let bin = root.join(".orchester").join("stand-in-bin");
+  fs::create_dir_all(&bin).expect("bin");
+  let docker = bin.join(if cfg!(windows) { "docker.exe" } else { "docker" });
+  fs::copy(TEST_COMMAND, &docker).expect("a stand-in docker");
+  let inherited = std::env::var_os("PATH").unwrap_or_default();
+  let path = std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(&inherited))).expect("a PATH");
+  let environment = CommandEnvironment::new(BTreeMap::from([(
+    VariableName::new("PATH").expect("a name"),
+    path.into_string().expect("a Unicode PATH"),
+  )]))
+  .expect("an environment");
+  ProjectDb::open(root)
+    .expect("open")
+    .save_project_environment(&environment)
+    .expect("saved");
+  let readiness = Readiness::new(ReadyCheck::PortOpen, ReadyTimeout::from_secs(20).expect("in range"));
+  let database = Service::new(
+    ServiceName::new("db").expect("a name"),
+    CommandProgram::new("redis:7-alpine").expect("an image"),
+    readiness,
+  )
+  .with_run_data(RunData::DatabaseContainer);
+  publish(root, &[database]);
+  let hold = hold(root);
+  let (scheduler, mut events) = scheduler_with(root, project.vault.clone());
+  let id = scheduler
+    .start_run(IdempotencyKey::generate(), project.task)
+    .await
+    .expect("run");
+  approve(&scheduler, root, &mut events, id).await;
+  let answer = answered(root, &mut events, id, "start_service").await;
+  assert!(answer.contains("Docker is not available"), "{answer}");
+  assert_eq!(start_failures(root, id).len(), 1, "the failed start is noted");
+  assert!(listed(&scheduler, id).await.is_empty(), "no service ran");
+
+  let retry = ServiceCommand::Restart {
+    run: id,
+    service: "db".to_owned(),
+  };
+  match scheduler.services(retry).await {
+    Err(Rejection::Failed { detail }) => assert!(
+      detail.contains("the service `db` cannot be started: Docker is not available"),
+      "the Retry reached the start, which asked Docker again: {detail}"
+    ),
+    other => panic!("Docker still does not answer: {other:?}"),
+  }
+  let failures = start_failures(root, id);
+  assert_eq!(failures.len(), 2, "the Retry's failed start is noted too: {failures:?}");
+  assert!(
+    matches!(failures[1].cause, StartFailureCause::DockerNotAnswering { .. }),
+    "{failures:?}"
+  );
 
   fs::remove_file(&hold).expect("release");
   let run = wait_for(root, &mut events, id, |run| run.status().is_terminal()).await;
