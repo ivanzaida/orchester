@@ -48,6 +48,7 @@ use super::{
   run_ends::{Reading, current_ends, end_moved, merge_checks},
   settings::OrchestratorSetup,
   stalls::{current_stalls, is_stall},
+  waits_on::follow as waits_on,
 };
 use crate::{
   links::{Link, TaskPage},
@@ -162,6 +163,8 @@ fn follow(
   (attached, at): (bool, Timestamp),
 ) -> Result<Followed, StoreError> {
   let mut db = ProjectDb::open(reading.root)?;
+  // A run's wait on a task that ended is read as its event below, in the same follow.
+  waits_on::settle(&mut db, Timestamp::now())?;
   let (kept, pending) = settled(&db)?;
   let mut now = current_waits(&db, reading.project)?;
   now.extend(current_ends(&db, reading, |key| {
@@ -448,8 +451,8 @@ pub(super) fn standing(
 }
 
 /// What the agents of the latest runs of project `project`'s tasks wait for now, each by the key it is kept by: the
-/// questions with suggested answers, the steps that wait for a message (but those of such a question), and the plans
-/// that wait for a decision.
+/// questions with suggested answers, the steps that wait for a message (but those of such a question), the plans
+/// that wait for a decision, and what became of the task such a run waits on ([`waits_on::event`]).
 fn current_waits(db: &ProjectDb, project: ProjectId) -> Result<Vec<(String, AgentWait)>, StoreError> {
   let asked = db.waiting_questions()?;
   let mut waits = Vec::new();
@@ -472,6 +475,15 @@ fn current_waits(db: &ProjectDb, project: ProjectId) -> Result<Vec<(String, Agen
       task: &task,
       view: &view,
     };
+    let waiting = view
+      .run
+      .awaiting_answer()
+      .into_iter()
+      .chain(view.run.awaiting_plan())
+      .next();
+    if let (Some((key, event)), Some(execution)) = (waits_on::event(db, &view.run, &messages)?, waiting) {
+      waits.push((key, wait.of(WaitKind::Event(event), execution, None)));
+    }
     for asked in &choices {
       let request = &asked.request;
       let key = format!("question:{}:{}", view.id(), request.id());

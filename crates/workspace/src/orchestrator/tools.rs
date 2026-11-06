@@ -45,6 +45,7 @@ use super::{
   proposal,
   repository::{self, INIT_REPOSITORY},
   told,
+  waits_on::{self, WAIT_ON_TASK},
 };
 use crate::{
   app_mcp::{self, Services, ToolError, Translate, blocking},
@@ -125,12 +126,13 @@ pub const TOOLS: [&str; 60] = [
 /// The chat's own tools, which no client of the app has: making the project's folder a git repository, always a card
 /// the person applies ([`super::repository`]), working with git in it ([`super::git`]), changing the project's
 /// MCP servers, a card the person applies for whatever widens ([`super::mcp_servers`]), applying a proposal the
-/// person approved in their own words ([`super::approval`]), and answering with a plan in plan-only mode
-/// ([`super::plan`]).
-pub const CHAT_TOOLS: [&str; 24] = [
+/// person approved in their own words ([`super::approval`]), answering with a plan in plan-only mode
+/// ([`super::plan`]), and making a waiting run wait on another task ([`super::waits_on`]).
+pub const CHAT_TOOLS: [&str; 25] = [
   INIT_REPOSITORY,
   APPLY_PROPOSAL,
   PROPOSE_PLAN,
+  WAIT_ON_TASK,
   git::NAMES[0],
   git::NAMES[1],
   git::NAMES[2],
@@ -182,7 +184,7 @@ pub fn listed() -> Vec<Tool> {
       }
       tool
     })
-    .chain([repository::tool(), approval::tool(), plan::tool()])
+    .chain([repository::tool(), approval::tool(), plan::tool(), waits_on::tool()])
     .chain(git::tools())
     .chain(mcp_servers::tools())
     .collect()
@@ -240,6 +242,9 @@ pub async fn call(
   }
   if name == APPLY_PROPOSAL {
     return approval::call((services, translate, runners), scope, arguments).await;
+  }
+  if name == WAIT_ON_TASK {
+    return waits_on::call((translate, runners), scope, arguments).await;
   }
   if read_only {
     own_project_by_id(scope, &mut arguments);

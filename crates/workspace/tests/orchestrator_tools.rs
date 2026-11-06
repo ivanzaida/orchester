@@ -349,6 +349,30 @@ fn orchestrator_tools_say_init_repository_is_always_the_persons_to_apply() {
   }
 }
 
+/// ORC-766: `wait_on_task` is the chat's own, changes something, and says what ends the wait and what it refuses.
+#[test]
+fn orchestrator_tools_say_wait_on_task_is_done_at_once_and_what_it_refuses() {
+  assert!(CHAT_TOOLS.contains(&"wait_on_task"));
+  let tool = listed()
+    .into_iter()
+    .find(|tool| tool.name == "wait_on_task")
+    .expect("wait_on_task is listed");
+  assert_eq!(tool.annotations.and_then(|hints| hints.read_only_hint), Some(false));
+  let told = tool.description.map(|told| told.into_owned()).unwrap_or_default();
+  for part in [
+    "done at once in any turn",
+    "merged into the waiting run's base branch",
+    "send_message",
+    "own_task",
+    "other_project",
+    "not_waiting_for_person",
+    "already_waits",
+    "no_base_branch",
+  ] {
+    assert!(told.contains(part), "wait_on_task says {part}: {told}");
+  }
+}
+
 fn app_tools_listed() -> Vec<rmcp::model::Tool> {
   app_mcp::listed().into_iter().chain(app_mcp::setup::listed()).collect()
 }

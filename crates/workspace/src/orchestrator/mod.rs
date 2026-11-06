@@ -38,6 +38,7 @@ pub mod stalls;
 mod told;
 pub mod tools;
 pub mod waits;
+mod waits_on;
 pub mod watch;
 pub mod watching;
 mod widening;
