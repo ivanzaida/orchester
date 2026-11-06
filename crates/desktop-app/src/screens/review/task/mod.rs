@@ -14,6 +14,7 @@ mod diff;
 mod files;
 mod head;
 mod read;
+mod reading;
 mod state;
 mod tag;
 mod thread;
@@ -65,7 +66,7 @@ use crate::{
     icon::Icon,
     message::message_text,
     notice::{Notice, NoticeTone},
-    state::{EmptyState, load_error, loading},
+    state::{EmptyState, load_error},
   },
 };
 
@@ -104,10 +105,7 @@ impl Component for TaskScreen {
     let Props { project, key } = ctx.props::<Props>().clone();
     let page = match read(ctx, &project, &key, self.again.get()) {
       Read::Ready(page) => page,
-      Read::Reading => {
-        let reading = loading("review-reading", &ctx.t("review_page.reading"));
-        return frame(ctx, &project, (&key, None)).child(reading).into();
-      }
+      Read::Reading => return reading::page(ctx, &project, &key),
       Read::Nothing => {
         let nothing = EmptyState::new(
           "review-no-run",

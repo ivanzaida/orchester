@@ -66,19 +66,25 @@ pub(in crate::screens::merges) fn crumbs(ctx: &mut Ctx, project: &ShownProject, 
 
 /// The title and, at the end of its row, `actions`: the ghost one, *Open task*, the primary one.
 pub(crate) fn title(title: &str, actions: Vec<Element>) -> Element {
+  title_row(
+    Text::new(title)
+      .id("merge-attempt-title")
+      .variant(TypographyStyle::Heading)
+      .flex(1.0)
+      .min_width(Dimension::Px(0.0))
+      .nowrap(),
+    actions,
+  )
+}
+
+/// `title`, which takes the room left, and at the end of its row `actions`; the title is a bone while it is read.
+pub(crate) fn title_row(title: impl Into<Element>, actions: Vec<Element>) -> Element {
   Row::new()
     .id("merge-attempt-header")
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(
-      Text::new(title)
-        .id("merge-attempt-title")
-        .variant(TypographyStyle::Heading)
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0))
-        .nowrap(),
-    )
+    .child(title)
     .with_children(actions)
     .into()
 }
