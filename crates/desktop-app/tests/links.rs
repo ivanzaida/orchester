@@ -3,8 +3,6 @@
 //! path and resolves in the router's table to that route's screen, so a link a tool returns opens its place.
 //! A page that is not built yet has its route too. A Usage link carries its whole query.
 
-use std::num::NonZeroU64;
-
 use chrono::NaiveDate;
 use lurq::router::RouteMatch;
 use orchester_app::routes::{
@@ -22,7 +20,6 @@ use orchester_workspace::{
   delivery::DeliveryPeriod,
   files::{FilePath, LineRange, Version},
   links::{Link, TaskPage},
-  pull_requests::list::PullRequestTab,
   usage::UsageQuery,
 };
 
@@ -30,7 +27,7 @@ const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const ID: &str = "7e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
 
 /// How many kinds of link there are: one per variant of [`Link`].
-const KINDS: usize = 19;
+const KINDS: usize = 17;
 
 /// The pattern the table matched for a path, whole: the layouts' and the route's under the shell's.
 fn matched(chain: &[RouteMatch]) -> String {
@@ -39,10 +36,6 @@ fn matched(chain: &[RouteMatch]) -> String {
 
 fn project() -> ProjectId {
   PROJECT.parse().expect("a project id")
-}
-
-fn number(number: u64) -> NonZeroU64 {
-  NonZeroU64::new(number).expect("a pull request number")
 }
 
 fn key() -> TaskKey {
@@ -71,15 +64,13 @@ const fn kind(link: &Link) -> usize {
     Link::Secrets(_) => 7,
     Link::Connection(..) => 8,
     Link::Account(_) => 9,
-    Link::PullRequest(..) => 10,
-    Link::File { .. } => 11,
-    Link::PullRequests(..) => 12,
-    Link::Usage(..) => 13,
-    Link::UsageEverywhere(_) => 14,
-    Link::Modules(_) => 15,
-    Link::Module(..) => 16,
-    Link::Orchestrator(..) => 17,
-    Link::Delivery(..) => 18,
+    Link::File { .. } => 10,
+    Link::Usage(..) => 11,
+    Link::UsageEverywhere(_) => 12,
+    Link::Modules(_) => 13,
+    Link::Module(..) => 14,
+    Link::Orchestrator(..) => 15,
+    Link::Delivery(..) => 16,
   }
 }
 
@@ -232,10 +223,6 @@ fn links_cover_every_kind_the_builder_makes() {
   for (link, _) in every_link() {
     covered[kind(&link)] = true;
   }
-  // These have no route of their own any more; `links_to_the_removed_pull_requests_page_open_the_overview` covers them.
-  for link in removed_page_links() {
-    covered[kind(&link)] = true;
-  }
   assert!(covered.iter().all(|kind| *kind), "every kind has a case: {covered:?}");
 }
 
@@ -316,14 +303,11 @@ fn links_carry_a_provider_and_earlier_runs_and_read_back() {
   );
 }
 
-/// The Pull requests page is gone (ORC-803): its links and old addresses in a tab's history, whatever follows them,
-/// open the project's Overview.
+/// The Pull requests page is gone (ORC-803): its old addresses in a tab's history, whatever follows them, open the
+/// project's Overview.
 #[test]
 fn links_to_the_removed_pull_requests_page_open_the_overview() {
   let overview = at(ProjectPage::Overview(OverviewTab::default()));
-  for link in removed_page_links() {
-    assert_eq!(Route::parse(&link.path()), Ok(overview.clone()), "{}", link.path());
-  }
   for path in [
     "pull-requests",
     "pull-requests?tab=needs_review",
@@ -335,15 +319,6 @@ fn links_to_the_removed_pull_requests_page_open_the_overview() {
     let path = format!("/project/{PROJECT}/{path}");
     assert_eq!(Route::parse(&path), Ok(overview.clone()), "{path}");
   }
-}
-
-/// The workspace still writes these links until its own task removes them.
-fn removed_page_links() -> [Link; 3] {
-  [
-    Link::PullRequest(project(), number(42)),
-    Link::PullRequests(project(), PullRequestTab::Open),
-    Link::PullRequests(project(), PullRequestTab::Merged),
-  ]
 }
 
 #[test]
