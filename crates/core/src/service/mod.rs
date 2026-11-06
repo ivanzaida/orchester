@@ -20,6 +20,7 @@ mod publish;
 mod readiness;
 mod run_data;
 mod seed;
+mod slots;
 mod stack;
 mod start_failure;
 mod status;
@@ -47,6 +48,7 @@ pub use self::{
     ContainerStart, container_notes_folder, run_data_folder,
   },
   seed::{Capture, CapturePath, Seed, SeedHeader, SeedRequest, SeedRequests},
+  slots::{ServiceSlotHolder, ServiceSlotWait, SlotStep, SlotUse},
   stack::Stack,
   start_failure::{ReadyAsked, ServiceStartFailure, StartFailureCause},
   status::{ServicePhase, ServiceState, ServiceStatus},

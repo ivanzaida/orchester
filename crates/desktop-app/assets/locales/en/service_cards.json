@@ -56,6 +56,33 @@
         "one": "This start needs {{count}} slot and none is free: the project may run {{share}} services at once and this computer {{limit}}. The run starts its services when one is free.",
         "other": "This start needs {{count}} slots and too few are free: the project may run {{share}} services at once and this computer {{limit}}. The run starts its services when {{count}} are free."
       },
+      "free": {
+        "startOne": "This start needs 1 and none is free. The run starts its services when one is free.",
+        "startNone": "This start needs {{count}} and none is free. The run starts its services when {{count}} are free.",
+        "startFreeOne": "This start needs {{count}} and 1 is free. The run starts its services when {{count}} are free.",
+        "startOther": "This start needs {{count}} and {{free}} are free. The run starts its services when {{count}} are free.",
+        "stackOne": "Stack {{stack}} needs 1 and none is free. The run starts its services when one is free.",
+        "stackNone": "Stack {{stack}} needs {{count}} and none is free. The run starts its services when {{count}} are free.",
+        "stackFreeOne": "Stack {{stack}} needs {{count}} and 1 is free. The run starts its services when {{count}} are free.",
+        "stackOther": "Stack {{stack}} needs {{count}} and {{free}} are free. The run starts its services when {{count}} are free."
+      },
+      "holder": {
+        "stack": "stack {{stack}}",
+        "suite": "a test suite",
+        "held": {
+          "one": "{{what}} · 1 slot",
+          "other": "{{what}} · {{count}} slots"
+        },
+        "heldIn": {
+          "one": "{{what}} · 1 slot · in {{step}}",
+          "other": "{{what}} · {{count}} slots · in {{step}}"
+        },
+        "heldFor": {
+          "one": "{{what}} · 1 slot · in {{step}} for {{time}}",
+          "other": "{{what}} · {{count}} slots · in {{step}} for {{time}}"
+        },
+        "open": "Open ↗"
+      },
       "change": "Change Services at once"
     },
     "approve": {

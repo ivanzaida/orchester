@@ -6,13 +6,13 @@ use std::{path::Path, sync::Arc};
 
 use orchester_core::{
   connection::stream::RunnerProblem,
-  id::InvocationId,
+  id::{InvocationId, StepExecutionId},
   resource::CommandEnvironment,
-  service::{ServiceName, StackName, UiDriver},
+  service::{ServiceName, SlotStep, StackName, UiDriver},
 };
 
 use super::{
-  ServiceSlots, Services, StepServices, Waiting,
+  Holding, ServiceSlots, Services, StepServices,
   launch::{published, published_stacks},
 };
 use crate::execution::{
@@ -58,11 +58,11 @@ impl RunTask {
     Ok(stacks.iter().map(|stack| stack.name().clone()).collect())
   }
 
-  /// The service tools of `invocation`, whose agent works in `worktree` with the project's `environment`; the
-  /// Services tab reaches the invocation's services through them until it ends.
+  /// The service tools of `invocation`, whose agent works on `execution` in `worktree` with the project's
+  /// `environment`; the Services tab reaches the invocation's services through them until it ends.
   pub(in crate::execution::step) fn step_services(
     &self,
-    invocation: InvocationId,
+    (execution, invocation): (StepExecutionId, InvocationId),
     worktree: &Path,
     environment: &CommandEnvironment,
   ) -> StepServices {
@@ -82,11 +82,26 @@ impl RunTask {
       crashed: Arc::new(move |crash| crash_noted(RunnerProblem::ServiceCrashed(crash.clone()))),
       start_failed: Arc::new(move |failure| failure_noted(RunnerProblem::ServiceStartFailed(Box::new(failure)))),
       // A note that cannot be written is logged by `runner_note`: the start waits all the same.
-      waiting: Arc::new(move |Waiting { slots, share, limit }| {
-        noted(RunnerProblem::WaitingForServiceSlots { slots, share, limit });
-      }),
+      waiting: Arc::new(move |wait| noted(RunnerProblem::WaitingForServiceSlots(Box::new(wait)))),
+      who: Holding {
+        project: self.project.id(),
+        task: self.task.key().to_string(),
+        run: self.run.number().get(),
+        step: self.slot_step(execution),
+      },
     };
     self.services.keep_tools(invocation, tools.clone());
     tools
+  }
+
+  /// The step `execution` executes, by its position in the run's pipeline and its name.
+  fn slot_step(&self, execution: StepExecutionId) -> Option<SlotStep> {
+    let key = self.run.execution(execution)?.step();
+    let steps = self.run.snapshot().body().steps();
+    let at = steps.iter().position(|step| &step.key == key)?;
+    Some(SlotStep {
+      number: u32::try_from(at + 1).ok()?,
+      name: steps[at].name.to_string(),
+    })
   }
 }

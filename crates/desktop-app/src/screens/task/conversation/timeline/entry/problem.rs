@@ -279,19 +279,19 @@ fn note(ctx: &Ctx, problem: &RunnerProblem) -> (Arc<str>, Option<Arc<str>>) {
       ctx.t("conversation.problem.waitingForQaSlot"),
       Some(qa_slot_holders(ctx, holders)),
     ),
-    RunnerProblem::WaitingForServiceSlots { slots, share, limit } => {
-      let key = if *slots == 1 {
+    RunnerProblem::WaitingForServiceSlots(wait) => {
+      let key = if wait.slots == 1 {
         "conversation.problem.waitingForServiceSlots.one"
       } else {
         "conversation.problem.waitingForServiceSlots.other"
       };
       (
-        ctx.t_args(key, [("count", slots.to_string().as_str())]),
+        ctx.t_args(key, [("count", wait.slots.to_string().as_str())]),
         Some(ctx.t_args(
           "conversation.problem.waitingForServiceSlotsDetail",
           [
-            ("share", share.to_string().as_str()),
-            ("limit", limit.to_string().as_str()),
+            ("share", wait.share.to_string().as_str()),
+            ("limit", wait.limit.to_string().as_str()),
           ],
         )),
       )

@@ -15,12 +15,13 @@
 
 use orchester_core::{
   connection::stream::{AgentEvent, RunnerProblem},
+  id::ProjectId,
   orchester_tools::{self, OrchesterTool},
   resource::{CommandArg, CommandProgram},
   run::{Invocation, PendingToolApproval, ProjectScope, Run},
   service::{
     HttpPath, Readiness, ReadyAsked, ReadyCheck, ReadyTimeout, Service, ServiceApproval, ServiceCrash, ServiceName,
-    ServiceStartFailure, StartFailureCause, start_target,
+    ServiceSlotHolder, ServiceSlotWait, ServiceStartFailure, SlotStep, SlotUse, StartFailureCause, start_target,
   },
   store::{ActivityStore, ResourceStore},
   time::Timestamp,
@@ -100,33 +101,34 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
     let id = create(&mut kontur.db, service_slug(service.name()), service, published)?;
     kontur.db.publish_draft::<Service>(id, published)?;
   }
-  let slots = RunnerProblem::WaitingForServiceSlots {
-    slots: 4,
-    share: 4,
-    limit: 8,
-  };
   let notes = [
-    ("Invite people to a team server", crashed(), "cloud-api crashed"),
+    ("Invite people to a team server", Some(crashed()), "cloud-api crashed"),
     (
       "Seed the team database",
-      docker(),
+      Some(docker()),
       "postgres could not start: Docker isn't running",
     ),
-    ("Check the invite page", not_ready(), "team-web was not ready in 90 s"),
+    ("Check the invite page", Some(not_ready()), "team-web was not ready in 90 s"),
     (
       "Run the team stack",
-      slots,
-      "its start waits for 4 Services at once slots",
+      None,
+      "its start waits for 4 Services at once slots: two runs hold 6 of 8",
     ),
   ];
+  let mut keys = Vec::new();
   for (index, (title, problem, state)) in notes.into_iter().enumerate() {
     let minutes = 200 - i64::try_from(index).expect("a short list") * 30;
     let mut task = kontur.task((title, title, &CRITERIA), Some(pipeline), kontur.ago(minutes + 20))?;
-    let (_, invocation) = at_work(kontur, &mut task, pipeline, kontur.ago(minutes))?;
+    let (run, invocation) = at_work(kontur, &mut task, pipeline, kontur.ago(minutes))?;
     let at = Timestamp::from_unix_millis(invocation.started_at.unix_millis() + 2 * 60_000);
+    let problem = match problem {
+      Some(problem) => problem,
+      None => slots_busy(kontur.db.project().id(), &keys, at),
+    };
     kontur
       .db
       .append_activity(&invocation, &[(at, AgentEvent::RunnerProblem { problem })])?;
+    keys.push((task.key().to_string(), run.number().get()));
     kontur.seeded(&task, state);
   }
   let title = "Start the team web app";
@@ -139,6 +141,62 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
     "start_service team-web waits for you: team-server changed, team-web never ran",
   );
   Ok(())
+}
+
+/// Stack team's start waits for 4 of the computer's 8 *Services at once* slots, at `at`: 6 are held by the runs of
+/// `keys`' first two tasks (stack cloud for 6 minutes in 04 Test; desktop-qa, cloud-api and postgres for half a minute
+/// in 03 Implement), so 2 are free.
+fn slots_busy(project: ProjectId, keys: &[(String, u32)], at: Timestamp) -> RunnerProblem {
+  let holder = |(task, run): &(String, u32), (step, name): (u32, &str), what: SlotUse, since: i64| ServiceSlotHolder {
+    project,
+    task: task.clone(),
+    run: *run,
+    step: Some(SlotStep {
+      number: step,
+      name: name.to_owned(),
+    }),
+    what,
+    slots: 3,
+    since: Timestamp::from_unix_millis(at.unix_millis() - since),
+  };
+  let names = |names: &[&str]| names.iter().map(|name| (*name).to_owned()).collect();
+  let holders = keys
+    .get(..2)
+    .map(|keys| {
+      vec![
+        holder(
+          &keys[0],
+          (4, "Test"),
+          SlotUse {
+            stack: Some("cloud".to_owned()),
+            services: names(&["postgres", "cloud-api", "cloud-web"]),
+          },
+          6 * 60_000,
+        ),
+        holder(
+          &keys[1],
+          (3, "Implement"),
+          SlotUse {
+            stack: None,
+            services: names(&["desktop-qa", "cloud-api", "postgres"]),
+          },
+          30_000,
+        ),
+      ]
+    })
+    .unwrap_or_default();
+  RunnerProblem::WaitingForServiceSlots(Box::new(ServiceSlotWait {
+    slots: 4,
+    share: 8,
+    limit: 8,
+    starts: Some(SlotUse {
+      stack: Some("team".to_owned()),
+      services: names(&["postgres", "cloud-api", "team-server", "team-web"]),
+    }),
+    free: Some(2),
+    held: Some(6),
+    holders,
+  }))
 }
 
 /// cloud-api exited with code 1 1.4 s after it was started, and Orchester stopped cloud-web, which needs it.

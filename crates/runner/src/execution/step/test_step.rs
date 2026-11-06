@@ -88,7 +88,7 @@ impl RunTask {
       plan,
       quarantine,
       suites: self.step_suites(workspace.path(), &environment),
-      services: self.step_services(invocation.id, workspace.path(), &environment),
+      services: self.step_services((execution, invocation.id), workspace.path(), &environment),
       events: self.worker_events.clone(),
       stops: stopped,
     };

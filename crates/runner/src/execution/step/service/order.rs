@@ -16,7 +16,7 @@ use std::thread;
 use orchester_core::{
   orchester_tools::ToolResult,
   resource::Slug,
-  service::{Service, ServiceApproval, ServiceName, ServiceStartFailure, Stack, StackName, StartPlan},
+  service::{Service, ServiceApproval, ServiceName, ServiceStartFailure, SlotUse, Stack, StackName, StartPlan},
 };
 use orchester_ipc::services::ServiceStarter;
 use serde_json::{Map, json};
@@ -275,16 +275,18 @@ impl StepServices {
   /// slots of services that did not start are freed. A failure the person can act on is noted in the run's
   /// conversation, with the services not started because of it and those the step still runs.
   fn bring_up(&self, steps: &[Vec<&Service>], origin: &Origin) -> Result<Option<Waited>, String> {
-    let needed = {
+    let missing: Vec<String> = {
       let running = self.state.running.lock();
       steps
         .iter()
         .flatten()
         .filter(|service| !running.contains_key(service.name()))
-        .count()
+        .map(|service| service.name().to_string())
+        .collect()
     };
-    let needed = u32::try_from(needed).map_err(|_| "a start cannot start that many services".to_owned())?;
-    let (mut slots, waited) = self.take_slots(needed)?;
+    let needed = u32::try_from(missing.len()).map_err(|_| "a start cannot start that many services".to_owned())?;
+    let what = slot_use(origin, missing);
+    let (mut slots, waited) = self.take_slots(needed, &what)?;
     for (at, step) in steps.iter().enumerate() {
       self.may_start()?;
       if let Err((name, failed)) = self.bring_up_step(step, (&mut slots, origin)) {
@@ -335,8 +337,9 @@ impl StepServices {
       // A service counted as running when the slots were taken stopped since, as one a crash stopped: it takes a
       // slot of its own now.
       let short = u32::try_from(missing.len() - given.len()).unwrap_or(u32::MAX);
+      let names = missing[given.len()..].iter().map(|service| service.name().to_string()).collect();
       let (more, _) = self
-        .take_slots(short)
+        .take_slots(short, &slot_use(origin, names))
         .map_err(|why| (first.name(), Failed::from(why)))?;
       given.extend(more);
     }
@@ -373,6 +376,14 @@ impl StepServices {
   }
 }
 
+/// What a start brought up by `origin` takes slots for, as its slots' holder records name it: `origin`'s stack, and
+/// the services it starts, `services`.
+fn slot_use(origin: &Origin, services: Vec<String>) -> SlotUse {
+  SlotUse {
+    stack: origin.stack.as_ref().map(ToString::to_string),
+    services,
+  }
+}
 /// The error of a start that stopped at the service `failed`, which failed as `why` says: it names the services after
 /// it that were not started, `skipped`.
 fn stopped_chain(failed: &ServiceName, why: &str, skipped: &[&ServiceName]) -> String {

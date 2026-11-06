@@ -112,7 +112,7 @@ fn service_readiness_timeout_says_what_was_asked_what_keeps_running_and_its_last
 }
 
 #[test]
-fn service_slots_busy_says_what_the_start_waits_for() {
+fn service_slots_busy_says_what_the_start_waits_for_and_who_holds_the_slots() {
   let (mut window, card) = card("Run the team stack", SERVICE);
   assert_eq!(
     text(&mut window, &format!("{card}-title")),
@@ -122,14 +122,31 @@ fn service_slots_busy_says_what_the_start_waits_for() {
   assert!(meta.contains(" · 03 Implement · since "), "{meta}");
   assert_eq!(
     text(&mut window, &format!("{card}-body")),
-    "This start needs 4 slots and too few are free: the project may run 4 services at once and this computer 8. \
-     The run starts its services when 4 are free."
+    "Stack team needs 4 and 2 are free. The run starts its services when 4 are free."
   );
-  let bar = window
-    .tree
-    .get_element_by_id(&format!("{card}-bar"))
-    .expect("the slot bar");
-  assert_eq!(bar.children().len(), 8, "one slot each of the computer's");
+  let slots: Vec<String> = (0..8)
+    .map(|at| {
+      window
+        .tree
+        .get_element_by_id(&format!("{card}-bar-{at}"))
+        .and_then(|slot| slot.describe_value("slot").map(str::to_owned))
+        .expect("one slot each of the computer's")
+    })
+    .collect();
+  assert_eq!(
+    slots,
+    ["held", "held", "held", "held", "held", "held", "free", "free"],
+    "the held slots first"
+  );
+  for (at, what) in [
+    (0, "stack cloud · 3 slots · in 04 Test for 6 min"),
+    (1, "desktop-qa, cloud-api, postgres · 3 slots · in 03 Implement"),
+  ] {
+    let holder = format!("{card}-holder-{at}");
+    assert!(text(&mut window, &format!("{holder}-key")).starts_with("KON-"));
+    assert_eq!(text(&mut window, &format!("{holder}-what")), what);
+    assert_eq!(text(&mut window, &format!("{holder}-open")), "Open ↗");
+  }
   assert_eq!(text(&mut window, &format!("{card}-change")), "Change Services at once");
 }
 

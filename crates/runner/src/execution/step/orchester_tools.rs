@@ -423,7 +423,7 @@ impl RunTask {
     // offered.
     if host.tools.policy(OrchesterTool::StartService).is_some() || host.tools.policy(OrchesterTool::RunTests).is_some()
     {
-      host.services = Some(self.step_services(invocation, worktree, environment));
+      host.services = Some(self.step_services((execution, invocation), worktree, environment));
     }
     if host.tools.policy(OrchesterTool::RunTests).is_some() {
       host.suites = Some(self.step_suites(worktree, environment));

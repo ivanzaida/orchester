@@ -115,6 +115,12 @@ impl RunnerProblem {
         *server = redact(server);
         *action = redact(action);
       }
+      // The names of the steps that hold service slots are a person's words; the rest are names and counts.
+      Self::WaitingForServiceSlots(wait) => {
+        for step in wait.holders.iter_mut().filter_map(|holder| holder.step.as_mut()) {
+          step.name = redact(&step.name);
+        }
+      }
       // Versions, a model id, task keys and counts, parsed as such: no text that could hold a secret.
       Self::StepBudgetReached { .. }
       | Self::RipgrepNotFound { .. }
@@ -124,8 +130,7 @@ impl RunnerProblem {
       | Self::PermissionPromptUnreachable
       | Self::ContextCompacted { .. }
       | Self::ThinkingStripped
-      | Self::WaitingForQaSlot { .. }
-      | Self::WaitingForServiceSlots { .. } => {}
+      | Self::WaitingForQaSlot { .. } => {}
     }
   }
 }

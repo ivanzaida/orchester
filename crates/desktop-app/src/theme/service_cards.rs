@@ -17,12 +17,17 @@ pub enum ServiceCardsText {
   /// Geist Mono 12 `text_secondary`: a service's program and arguments in the approve services card (`GZxEp`).
   Command,
   /// 12 `text_muted`: whether a service's start is approved, at a program's end (`jBOKa`; `warning` for a change,
-  /// `info` for a first start), the slots line (`XR7xh`) and the macOS line of 10a (`s3ehm`).
+  /// `info` for a first start), the slots line (`XR7xh`), the macOS line of 10a (`s3ehm`) and what a holder of
+  /// service slots runs in 10d (`VXOA1`).
   Detail,
+  /// Geist Mono 12 `text_primary`: the task key of a run that holds service slots in 10d (`Otz6B`).
+  HolderKey,
+  /// 12/500 `text_secondary`: *Open ↗* at a holder's end in 10d (`psrsV`).
+  Open,
 }
 
 impl ServiceCardsText {
-  pub const ALL: [Self; 3] = [Self::Body, Self::Command, Self::Detail];
+  pub const ALL: [Self; 5] = [Self::Body, Self::Command, Self::Detail, Self::HolderKey, Self::Open];
 
   pub fn role(self) -> TypographyStyle {
     TypographyStyle::extra(self.name())
@@ -33,6 +38,8 @@ impl ServiceCardsText {
       Self::Body => "service_cards_body",
       Self::Command => "service_cards_command",
       Self::Detail => "service_cards_detail",
+      Self::HolderKey => "service_cards_holder_key",
+      Self::Open => "service_cards_open",
     }
   }
 
@@ -41,6 +48,8 @@ impl ServiceCardsText {
       Self::Body => style(12.5, FontWeight::Normal, 1.5, 0.0, palette.text_secondary),
       Self::Command => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
       Self::Detail => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
+      Self::HolderKey => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
+      Self::Open => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_secondary),
     }
   }
 }

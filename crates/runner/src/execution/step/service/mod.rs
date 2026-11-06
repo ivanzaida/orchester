@@ -41,6 +41,7 @@ mod port;
 mod readiness;
 mod seed;
 mod shown;
+mod slot_holders;
 mod slots;
 mod task;
 
@@ -61,7 +62,10 @@ use orchester_core::{
   orchester_tools::ToolResult,
   resource::CommandEnvironment,
   secret::SecretVault,
-  service::{ServiceApproval, ServiceName, ServicePhase, ServiceStartFailure, ServiceState, ServiceStatus, StackName},
+  service::{
+    ServiceApproval, ServiceName, ServicePhase, ServiceSlotWait, ServiceStartFailure, ServiceState, ServiceStatus,
+    SlotUse, StackName,
+  },
   time::Timestamp,
 };
 use orchester_exec::process_tree::ProcessTree;
@@ -80,7 +84,8 @@ pub(in crate::execution::step) use self::{
 use self::{
   port::{PortLease, Ports},
   readiness::SharedLog,
-  slots::{Asker, Waiting},
+  slot_holders::Holding,
+  slots::Asker,
 };
 
 /// The services of the runner's invocations that have not ended, the ports they hold, the computer's service slots
@@ -309,7 +314,9 @@ pub(in crate::execution::step) struct StepServices {
   /// Records in the run's conversation a start that failed for a reason the person can act on.
   start_failed: Arc<dyn Fn(ServiceStartFailure) + Send + Sync>,
   /// Says in the run's conversation that a start waits for service slots.
-  waiting: Arc<dyn Fn(Waiting) + Send + Sync>,
+  waiting: Arc<dyn Fn(ServiceSlotWait) + Send + Sync>,
+  /// Whose starts these are, as the slots they take name them.
+  who: Holding,
 }
 
 impl StepServices {
@@ -350,15 +357,17 @@ impl StepServices {
     }
   }
 
-  /// `count` of the computer's service slots for this invocation's start, waiting in order while too few are free;
-  /// refused when the invocation ends or begins to wait for a person meanwhile, or when it could get them only once
-  /// the services it runs, which hold a slot each, stopped.
-  fn take_slots(&self, count: u32) -> Result<(Vec<ServiceSlot>, Option<Waited>), String> {
+  /// `count` of the computer's service slots for this invocation's start of `what`, waiting in order while too few
+  /// are free; refused when the invocation ends or begins to wait for a person meanwhile, or when it could get them
+  /// only once the services it runs, which hold a slot each, stopped.
+  fn take_slots(&self, count: u32, what: &SlotUse) -> Result<(Vec<ServiceSlot>, Option<Waited>), String> {
     let holding = u32::try_from(self.state.running.lock().len()).unwrap_or(u32::MAX);
     let asker = Asker {
       project: self.project_id,
       root: &self.root,
       holding,
+      who: &self.who,
+      what,
       gate: &|| self.may_start(),
       waiting: &*self.waiting,
     };
@@ -367,7 +376,7 @@ impl StepServices {
 
   /// The service slot a test suite's own process holds while it runs, taken as a service's is.
   pub(in crate::execution::step) fn suite_slot(&self) -> Result<ServiceSlot, String> {
-    let (mut slots, _) = self.take_slots(1)?;
+    let (mut slots, _) = self.take_slots(1, &SlotUse::suite())?;
     slots
       .pop()
       .ok_or_else(|| "no service slot was taken for the suite".to_owned())

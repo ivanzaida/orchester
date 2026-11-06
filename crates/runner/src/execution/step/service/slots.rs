@@ -9,10 +9,12 @@
 //! died keeps none: `slot-<n>.lock` for the computer's, `projects/<project>/slot-<n>.lock` for a project's share. A
 //! slot is both: a start takes one lock of each per service. Locks no limit reaches are never made.
 //!
-//! A start that cannot get every slot it needs waits, and says so once ([`Waiting`]). The starts of one project's
-//! runner that wait are served in the order they began to: only the earliest tries, so a later one that needs fewer
-//! slots does not pass it. Between projects, whoever tries first when slots are freed takes them. A start that needs
-//! more slots than its project may ever use is refused at once rather than waiting for ever.
+//! A start that cannot get every slot it needs waits, and says so once ([`ServiceSlotWait`]): with how many of the
+//! computer's slots are held and how many it could take, and who holds them (`super::slot_holders`), which each start
+//! names beside the computer's locks it takes. The starts of one project's runner that wait are served in the order
+//! they began to: only the earliest tries, so a later one that needs fewer slots does not pass it. Between projects,
+//! whoever tries first when slots are freed takes them. A start that needs more slots than its project may ever use
+//! is refused at once rather than waiting for ever.
 
 use std::{
   collections::VecDeque,
@@ -27,10 +29,13 @@ use std::{
 use orchester_core::{
   id::ProjectId,
   limits::{ComputerServiceSlots, ServiceSlots as Share},
+  service::{ServiceSlotHolder, ServiceSlotWait, SlotUse},
   store::SettingsStore,
 };
 use orchester_store::{AppDb, ProjectDb};
 use parking_lot::Mutex;
+
+use super::slot_holders::{self, Holding, lock_file};
 
 /// How often a start that waits for service slots tries again.
 const SLOT_POLL: Duration = Duration::from_millis(200);
@@ -58,14 +63,6 @@ pub(in crate::execution::step) struct ServiceSlot {
   _project: File,
 }
 
-/// What a start that waits says once: how many slots it needs, and the limits it waits under.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(in crate::execution::step) struct Waiting {
-  pub(in crate::execution::step) slots: u32,
-  pub(in crate::execution::step) share: u32,
-  pub(in crate::execution::step) limit: u32,
-}
-
 /// What a start that got its slots waited for, when it waited.
 #[derive(Clone, Copy, Debug)]
 pub(in crate::execution::step) struct Waited {
@@ -84,13 +81,16 @@ impl Waited {
 }
 
 /// Who asks for slots: the project, its repository whose database holds its share, how many slots it holds already,
-/// why it may not take them any more (its invocation ended or waits for a person), and what it says once it waits.
+/// whose start it is and what it starts, which the slots' holder records name, why it may not take them any more (its
+/// invocation ended or waits for a person), and what it says once it waits.
 pub(in crate::execution::step) struct Asker<'a> {
   pub(in crate::execution::step) project: ProjectId,
   pub(in crate::execution::step) root: &'a Path,
   pub(in crate::execution::step) holding: u32,
+  pub(in crate::execution::step) who: &'a Holding,
+  pub(in crate::execution::step) what: &'a SlotUse,
   pub(in crate::execution::step) gate: &'a dyn Fn() -> Result<(), String>,
-  pub(in crate::execution::step) waiting: &'a dyn Fn(Waiting),
+  pub(in crate::execution::step) waiting: &'a dyn Fn(ServiceSlotWait),
 }
 
 impl ServiceSlots {
@@ -182,13 +182,19 @@ impl ServiceSlots {
         && let Some(slots) =
           try_take(folder, &asker.project, count, (usable, limit.get())).map_err(|error| cannot(&error))?
       {
-        return Ok((slots, said));
+        slot_holders::claim(folder, &slots.computer, &asker.who.record(asker.what));
+        return Ok((slots.held, said));
       }
       if !said {
-        (asker.waiting)(Waiting {
+        let (free, held, holders) = looked(folder, &asker.project, (usable, limit.get().get()));
+        (asker.waiting)(ServiceSlotWait {
           slots: count,
           share: share.get().get(),
           limit: limit.get().get(),
+          starts: Some(asker.what.clone()),
+          free,
+          held,
+          holders,
         });
         said = true;
       }
@@ -228,6 +234,12 @@ fn cannot(error: &io::Error) -> String {
   format!("a service slot cannot be taken: {error}")
 }
 
+/// The slots a try took, and which of the computer's they are.
+struct Taken {
+  held: Vec<ServiceSlot>,
+  computer: Vec<u32>,
+}
+
 /// `count` free slots of the project's lowest `share` and the computer's lowest `limit`, or `None`, holding nothing,
 /// while fewer are free.
 fn try_take(
@@ -235,7 +247,7 @@ fn try_take(
   project: &ProjectId,
   count: u32,
   (share, limit): (u32, NonZeroU32),
-) -> io::Result<Option<Vec<ServiceSlot>>> {
+) -> io::Result<Option<Taken>> {
   let own = folder.join("projects").join(project.to_string());
   let Some(projects) = free_locks(&own, share, count)? else {
     return Ok(None);
@@ -243,20 +255,21 @@ fn try_take(
   let Some(computers) = free_locks(folder, limit.get(), count)? else {
     return Ok(None);
   };
-  Ok(Some(
-    computers
-      .into_iter()
-      .zip(projects)
-      .map(|(computer, project)| ServiceSlot {
-        _computer: computer,
-        _project: project,
-      })
-      .collect(),
-  ))
+  let computer = computers.iter().map(|(slot, _)| *slot).collect();
+  let held = computers
+    .into_iter()
+    .zip(projects)
+    .map(|((_, computer), (_, project))| ServiceSlot {
+      _computer: computer,
+      _project: project,
+    })
+    .collect();
+  Ok(Some(Taken { held, computer }))
 }
 
-/// `count` locks of the lowest `upto` slots in `folder`, held; `None`, freeing those it took, while fewer are free.
-fn free_locks(folder: &Path, upto: u32, count: u32) -> io::Result<Option<Vec<File>>> {
+/// `count` locks of the lowest `upto` slots in `folder`, held, with their numbers; `None`, freeing those it took,
+/// while fewer are free.
+fn free_locks(folder: &Path, upto: u32, count: u32) -> io::Result<Option<Vec<(u32, File)>>> {
   fs::create_dir_all(folder)?;
   let mut held = Vec::new();
   for slot in 0..upto {
@@ -268,12 +281,32 @@ fn free_locks(folder: &Path, upto: u32, count: u32) -> io::Result<Option<Vec<Fil
       .truncate(false)
       .read(true)
       .write(true)
-      .open(folder.join(format!("slot-{slot}.lock")))?;
+      .open(lock_file(folder, slot))?;
     match file.try_lock() {
-      Ok(()) => held.push(file),
+      Ok(()) => held.push((slot, file)),
       Err(TryLockError::WouldBlock) => {}
       Err(TryLockError::Error(error)) => return Err(error),
     }
   }
   Ok((held.len() == count as usize).then_some(held))
+}
+
+/// What a start that begins to wait says of the slots now: how many it could take, free both among its project's
+/// lowest `share` and the computer's lowest `limit`; how many of the computer's are held; and who holds them. Counts
+/// that cannot be looked at are logged and left out.
+fn looked(folder: &Path, project: &ProjectId, (share, limit): (u32, u32)) -> (Option<u32>, Option<u32>, Vec<ServiceSlotHolder>) {
+  let own = folder.join("projects").join(project.to_string());
+  let computer = slot_holders::look(folder, limit);
+  let projects = slot_holders::look(&own, share);
+  match (computer, projects) {
+    (Ok((computer, holders)), Ok((projects, _))) => (Some(computer.min(projects)), Some(limit - computer), holders),
+    (Ok((computer, holders)), Err(error)) => {
+      tracing::warn!(%error, "the project's service slots cannot be looked at");
+      (None, Some(limit - computer), holders)
+    }
+    (Err(error), _) => {
+      tracing::warn!(%error, "the computer's service slots cannot be looked at");
+      (None, None, Vec::new())
+    }
+  }
 }
