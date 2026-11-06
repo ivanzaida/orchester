@@ -30,6 +30,7 @@ mod failure;
 mod header;
 mod held;
 mod history;
+mod leads;
 mod line;
 mod page;
 mod pending;
@@ -173,6 +174,8 @@ struct View {
   rewind: rewind::Rewinding,
   /// The header's … with *Copy conversation as Markdown* and *Export conversation…* (ORC-327).
   export: export::ChatExport,
+  /// The header, which a Leads chip's tooltip hangs under (`leads`).
+  head: ElementRef,
 }
 
 struct OrchestratorScreen {
@@ -216,6 +219,7 @@ impl Component for OrchestratorScreen {
       plan_only: plan_only::PlanOnly::new(ctx),
       rewind: rewind::Rewinding::new(ctx),
       export: export::ChatExport::new(ctx),
+      head: ElementRef::new(),
     };
     rewind::watch(ctx, &view);
     let taker = view.clone();
@@ -230,18 +234,7 @@ impl Component for OrchestratorScreen {
       }
     });
     let project = ctx.props::<Props>().project.open.project.id();
-    let of = view.of.clone();
-    ctx.watch(&view.draft, move |text| {
-      if let Some(of) = of.get_untracked() {
-        draft::set(project, of, text);
-      }
-    });
-    let of = view.of.clone();
-    ctx.watch(&view.attached.attached, move |held| {
-      if let Some(of) = of.get_untracked() {
-        draft::set_attachments(project, of, &held.0);
-      }
-    });
+    keep_drafts(ctx, &view, project);
     let navigation = Navigation::of(ctx);
     let done = view.clone();
     ctx.watch(&view.send.state(), move |state| {
@@ -366,6 +359,22 @@ fn escape(view: &View) -> impl Fn(KeyboardEvent) + Send + Sync + 'static {
     }
     event.prevent_default();
   }
+}
+
+/// The draft and its files are kept as the draft of the conversation `view` holds it for, in `project`, as they change.
+fn keep_drafts(ctx: &mut Ctx, view: &View, project: ProjectId) {
+  let of = view.of.clone();
+  ctx.watch(&view.draft, move |text| {
+    if let Some(of) = of.get_untracked() {
+      draft::set(project, of, text);
+    }
+  });
+  let of = view.of.clone();
+  ctx.watch(&view.attached.attached, move |held| {
+    if let Some(of) = of.get_untracked() {
+      draft::set_attachments(project, of, &held.0);
+    }
+  });
 }
 
 impl View {

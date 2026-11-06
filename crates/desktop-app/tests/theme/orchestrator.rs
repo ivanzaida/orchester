@@ -30,6 +30,17 @@ fn orchestrator_roles_follow_the_design() {
     (OrchestratorText::Mode, 12.0, 1.3, FontWeight::Medium, "Geist"),
     // *Settings ↗* at the runs-on picker's foot (`rIT51`).
     (OrchestratorText::PickerLink, 12.0, 1.3, FontWeight::Normal, "Geist"),
+    // A Leads chip's name (`oVMRX`) and its tooltip's lines (`f4DCkr`, `X48YP`, `j1E7E` in `X93D8T`).
+    (OrchestratorText::LeadsChip, 11.5, 1.3, FontWeight::Normal, "Geist"),
+    (
+      OrchestratorText::LeadsTipTitle,
+      11.0,
+      1.3,
+      FontWeight::SemiBold,
+      "Geist",
+    ),
+    (OrchestratorText::LeadsTipOrder, 11.0, 1.45, FontWeight::Normal, "Geist"),
+    (OrchestratorText::LeadsTipHint, 11.0, 1.3, FontWeight::Normal, "Geist"),
   ] {
     let style = theme.typography_style(role.role());
     assert_eq!(
