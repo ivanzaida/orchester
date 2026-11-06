@@ -119,6 +119,7 @@ mod task_snapshots;
 mod tasks;
 mod team_copies;
 mod team_deliveries;
+mod team_leaving;
 mod team_operations;
 mod team_runs;
 mod team_starts;

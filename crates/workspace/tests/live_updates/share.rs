@@ -1,9 +1,9 @@
-//! Share uploads the project's configuration with its history, and Make local keeps it (`docs/architecture/server.md`,
+//! Share uploads the project's configuration with its history, and Make local drops it (`docs/architecture/server.md`,
 //! "Migration", S5), against the fake team server: every pipeline, profile, instruction and skill goes up with its id
 //! and every published version with its number and time, a skill's parts first by their hash, while a resource that
 //! was never published stays here; the sharer's versions become the server's with their ids and bodies, and a second
-//! workspace reads them from its stream. Make local keeps every version as a local one, drops the references and the
-//! bindings, and the runs that pinned them read them as before.
+//! workspace reads them from its stream. Make local keeps no copy of it: the cached resources and versions go, with the
+//! references and the bindings, while the project's own resources stay and the runs keep their snapshots.
 
 use std::time::Duration;
 
@@ -19,7 +19,7 @@ use orchester_core::{
   sharing::MemberRole,
   store::{BlobStore, ResourceStore, RunStore},
 };
-use orchester_store::{ProjectDb, ReferenceTarget as KeptTarget, ResourceSharing};
+use orchester_store::{ProjectDb, ReferenceTarget as KeptTarget, ResourceSharing, StoreError};
 use orchester_workspace::sharing::sync::{keep_uploaded_configuration, upload_configuration};
 
 use super::{
@@ -240,8 +240,33 @@ async fn live_updates_share_uploads_every_resource_with_its_numbers_and_skill_fi
   );
 }
 
+/// Nothing of the resource is left in the project: not the row, not a cached version, not a listing of its kind.
+fn assert_resource_gone(db: &ProjectDb, resource: ResourceId) {
+  assert!(
+    matches!(db.resource_sharing(resource), Err(StoreError::ResourceNotFound(_))),
+    "the resource is gone"
+  );
+  assert_eq!(
+    db.latest_version_number(resource).expect("read"),
+    None,
+    "no cached version"
+  );
+  for kind in [
+    ResourceKind::Pipeline,
+    ResourceKind::AgentProfile,
+    ResourceKind::Skill,
+    ResourceKind::Instruction,
+  ] {
+    let listed = db.resources(kind).expect("read");
+    assert!(
+      listed.iter().all(|found| found.id() != resource),
+      "not listed as {kind:?}"
+    );
+  }
+}
+
 #[tokio::test(flavor = "multi_thread")]
-async fn live_updates_make_local_keeps_every_version_and_past_runs_are_unchanged() {
+async fn live_updates_make_local_keeps_no_copy_of_the_teams_configuration_and_past_runs_are_unchanged() {
   let server = TeamServer::start(&[(ALICE, "Alice Moreau"), (BOB, "Bob Lind")], &[]);
   let alice = Sharer::new();
   alice.share(&server).await;
@@ -263,39 +288,50 @@ async fn live_updates_make_local_keeps_every_version_and_past_runs_are_unchanged
     1,
     "Tone's reference"
   );
-  let (alices, run) = (style_versions(&alice.db(), alice.style), alice.run());
-  let bobs = (style_versions(&bob.db(), alice.style), style_versions(&bob.db(), tone));
-
+  let (delivery, builder) = alice.delivery();
+  let run = alice.run();
   alice.db().make_local().expect("made local");
   bob.db().make_local().expect("made local");
 
-  assert_eq!(style_versions(&alice.db(), alice.style), alices, "every version kept");
   assert_eq!(alice.run(), run, "the run is unchanged");
-  let pinned = run.snapshot().pipeline();
-  let read = alice
-    .db()
-    .version::<Pipeline>(pinned.resource, pinned.number)
-    .expect("read");
-  let read = read.expect("the pinned version");
-  assert_eq!((read.id(), read.body()), (pinned.version, run.snapshot().body()));
-  assert_eq!(
-    (style_versions(&bob.db(), alice.style), style_versions(&bob.db(), tone)),
-    bobs,
-    "every cached version kept"
-  );
-  for (db, resource) in [(alice.db(), alice.style), (bob.db(), alice.style), (bob.db(), tone)] {
-    assert_eq!(db.resource_sharing(resource).expect("read"), None, "a local resource");
+  let gone = [
+    (alice.db(), alice.style),
+    (alice.db(), alice.skill),
+    (alice.db(), delivery),
+    (alice.db(), builder),
+    (bob.db(), alice.style),
+    (bob.db(), tone),
+  ];
+  for (db, resource) in gone {
+    assert_resource_gone(&db, resource);
   }
+  assert!(
+    matches!(
+      alice.db().versions::<Instruction>(alice.style),
+      Err(StoreError::ResourceNotFound(_))
+    ),
+    "no cached versions of a gone resource"
+  );
+  let notes = alice.db().resources(ResourceKind::Instruction).expect("read");
+  assert_eq!(
+    notes.iter().map(|found| found.id()).collect::<Vec<_>>(),
+    [alice.unpublished],
+    "Alice's own instruction stays"
+  );
+  assert!(
+    alice
+      .db()
+      .draft::<Instruction>(alice.unpublished)
+      .expect("read")
+      .is_some(),
+    "with its draft"
+  );
   let db = bob.db();
   assert_eq!(db.reference_bindings().expect("read"), []);
   assert_eq!(db.versions_naming(KeptTarget::Connection(agent)).expect("read"), []);
-
-  let mut db = alice.db();
-  db.save_draft(alice.style, &Draft::new(rule("v3"), Some(number(2)), at(30)))
-    .expect("a draft of v3");
-  let v3 = db
-    .publish_draft::<Instruction>(alice.style, at(31))
-    .expect("a local v3");
-  assert_eq!(v3.number().get(), 3, "numbered after the kept versions");
-  assert_eq!(on_server(&server, alice.style).len(), 2, "nothing goes to the server");
+  assert_eq!(
+    on_server(&server, alice.style).len(),
+    2,
+    "the server keeps the team's resources"
+  );
 }

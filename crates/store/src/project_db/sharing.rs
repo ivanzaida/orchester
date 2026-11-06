@@ -87,9 +87,9 @@ impl ProjectDb {
   /// as last synced, become its local tags with their ids, as its modules, each task's module and their moves become
   /// its own. The tasks kept *Not shared* when it
   /// joined return to the list after the highest number; they are returned with their keys. The server's resources
-  /// become local resources with every cached version, ids, numbers and local bodies kept, so the runs that pinned
-  /// them read them as before; a version published here and not sent yet stays with its number here. The references
-  /// the versions named on their publishers' computers and this computer's bindings of them go.
+  /// go with their drafts, cached versions and versions not sent yet: the project keeps no copy of the team's
+  /// configuration and leaves with its own resources only ([`super::team_leaving`]). Runs keep their own snapshots. The
+  /// bindings of the references the versions named on their publishers' computers go.
   pub fn make_local(&mut self) -> Result<Vec<ReturnedTask>, StoreError> {
     let transaction = self.connection.transaction()?;
     if link(&transaction)?.is_none() {
@@ -102,14 +102,13 @@ impl ProjectDb {
        UPDATE tasks SET sharing = NULL, pipeline_slug = NULL WHERE sharing = 'shared';",
     )?;
     let returned = super::joining::return_kept(&transaction, self.project.key())?;
+    super::team_leaving::remove_team_configuration(&transaction)?;
     transaction.execute_batch(
       "DELETE FROM task_claims;
        DELETE FROM task_run_status;
        DELETE FROM shared_automatic_status;
        DELETE FROM shared_members;
        DELETE FROM shared_server_admins;
-       DELETE FROM shared_publishes;
-       DELETE FROM shared_version_references;
        DELETE FROM reference_bindings;
        UPDATE resources SET sharing = NULL, server_revision = NULL WHERE sharing IS NOT NULL;
        DELETE FROM sharing;
