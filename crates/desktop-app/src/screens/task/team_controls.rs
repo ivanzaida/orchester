@@ -419,6 +419,10 @@ fn started_words(ctx: &Ctx, task: &TaskContext, ask: TeamAsk, started: &Started)
       "summary.team.refused.bindings",
       [("profiles", profiles.join(&ctx.t("task.listSeparator")))],
     ),
+    Stop::McpServersRequired(servers) => ctx.t_args(
+      "summary.team.refused.mcpServers",
+      [("servers", servers.join(&ctx.t("task.listSeparator")))],
+    ),
     Stop::NotReadable => ctx.t("summary.team.refused.notReadable"),
     Stop::Runner(messages) => messages.first().map_or_else(
       || ctx.t("summary.team.refused.failed"),

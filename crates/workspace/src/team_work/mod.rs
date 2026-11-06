@@ -43,7 +43,7 @@ use orchester_store::{ProjectDb, TeamFence, WorkReportState};
 
 pub use self::{
   bundle::StartChoices,
-  choices::{ChoiceError, bind, branch_tip},
+  choices::{ChoiceError, McpHere, bind, branch_tip},
   delivery::{
     DeliveryProgress, DeliveryStatus, ModuleDeliveries, RecoveredDeliveries, TeamDeliveryRequest, TeamDeliveryState,
   },
