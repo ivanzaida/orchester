@@ -155,6 +155,38 @@ fn run_waits_end_once_with_how_they_ended() {
   );
 }
 
+/// ORC-766: a wait also ends as its run was answered first; the table rebuilt for it keeps one active wait per run and
+/// one end per wait.
+#[test]
+fn run_waits_end_as_answered_and_keep_their_rules_on_the_rebuilt_table() {
+  let (repo, mut db, run, _) = started_run();
+  let (waited, another) = (task(&mut db, "Build it"), task(&mut db, "Test it"));
+  let first = wait(&db, &run, waited);
+  db.keep_run_wait(&first, at(20)).expect("kept");
+  assert!(
+    db.keep_run_wait(&wait(&db, &run, another), at(21)).is_err(),
+    "one active wait per run"
+  );
+  assert!(db.end_run_wait(run.id(), RunWaitEnd::Answered, at(30)).expect("ended"));
+  assert!(
+    !db.end_run_wait(run.id(), RunWaitEnd::Merged, at(31)).expect("read"),
+    "it ends once"
+  );
+  drop(db);
+  let db = ProjectDb::open(repo.path()).expect("reopen");
+  assert_eq!(
+    db.run_wait(run.id()).expect("read"),
+    Some(KeptRunWait {
+      wait: first,
+      since: at(20),
+      ended: Some(RunWaitEnded {
+        at: at(30),
+        end: RunWaitEnd::Answered
+      }),
+    })
+  );
+}
+
 #[test]
 fn run_waits_refuse_a_run_that_is_not_recorded() {
   let (_repo, mut db, run, _) = started_run();

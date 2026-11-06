@@ -2316,6 +2316,13 @@
       "blocked": "{{task}} waits for {{blockers}} to finish. A start from the chat follows the queue's rules, so nothing started.",
       "markedBlocked": "{{task}} is marked Blocked: {{reason}}. The chat does not start or propose a task marked Blocked, so nothing started; the person can start it in the app."
     },
+    "waitsOn": {
+      "ownTask": "A run cannot wait on its own task. Nothing was changed.",
+      "otherProject": "A run waits only on a task of its own project. Nothing was changed.",
+      "notWaiting": "Run #{{run}} does not wait for a message or a decision: only such a run can wait on a task. Nothing was changed.",
+      "alreadyWaits": "Run #{{run}} already waits on {{task}}: a run waits on one task at a time. Nothing was changed.",
+      "noBaseBranch": "Run #{{run}} has no base branch its work merges into, so no task's merge can reach it. Nothing was changed."
+    },
     "tools": {
       "otherProject": "The Orchestrator acts only in its own project.",
       "startWaits": "Nothing started yet: starting {{task}} on {{pipeline}} waits for the person, who starts or dismisses it in the conversation. Tell them it is ready to start.",

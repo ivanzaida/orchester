@@ -361,6 +361,10 @@ pub struct ChatAction {
   /// subscription of the conversation, or another conversation leads it.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub watch: Option<CreatedWatch>,
+  /// For `wait_on_task` (ORC-766): the run of the action's task that was made to wait, and the task it waits on, for
+  /// its row *KON-41 · #17 waits on KON-52*.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub waits_on: Option<WaitsOnRow>,
 }
 
 impl ChatAction {
@@ -385,8 +389,17 @@ impl ChatAction {
       claimed: None,
       approved_in: None,
       watch: None,
+      waits_on: None,
     }
   }
+}
+
+/// Run `run`, `#number` of its task, waits on the task `waited`, by its key as people read it (`KON-52`).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct WaitsOnRow {
+  pub run: RunId,
+  pub number: u32,
+  pub waited: String,
 }
 
 /// The person's message in the chat that approved a proposal: its id, its entry in the conversation (`seq`) and its

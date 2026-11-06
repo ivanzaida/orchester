@@ -97,7 +97,7 @@ Orchestrator …*.
 Related: *Let automation change agent permissions* (Settings › Automation), *Daily report from the Orchestrator*
 (Settings › Notifications), *Let Orchester estimate story points* (Project settings › Runs › Estimates).
 
-## Chat-only tools (23)
+## Chat-only tools (25)
 
 ### `init_repository`
 
@@ -118,6 +118,29 @@ applies that proposal exactly as *Apply*, recorded as the person's decision with
 in a turn the person's own message started. Refusals: `not_persons_turn`, `automation_input`, `not_pending`,
 `click_only` (publications that widen, MCP servers added/widened/turned on, `git_propose` operations, a first commit
 with secret-looking files).
+
+### `wait_on_task`
+
+Makes a run that waits for a message or a decision wait on another task of the project — typically one the chat just
+created for the work the run needs (screen 04 of the Orchestrator watch design: KON-41's run waits on KON-52). It
+changes no run, so it is **direct in any turn** (a turn that plans refuses it, as every change). The conversation
+keeps its row, *KON-41 · #17 waits on KON-52*. A run waits on one task at a time.
+
+Parameters: `run` (req.: id or number), `task` (req.: the waited task's key or id), `project` (the chat's own).
+Refusals: `own_task`, `other_project`, `not_waiting_for_person` (a tool call's approval is answered at once),
+`already_waits`, `no_base_branch` (the run has no base branch its work merges into).
+
+What ends the wait, read by the waits follower:
+
+- **The waited task's run is merged into the waiting run's base branch** — a *waited task merged* event of the
+  waiting task, kept in the conversation that leads it (else by the usual rule). With *Let the Orchestrator answer
+  agents* on it starts a turn there, which tells the run's agents with `send_message` (under the switches as for any
+  message); when the run goes on, the base-moved path merges the base branch into its worktree.
+- **The waited task is canceled, or closed without that merge** (a merge into another branch counts as closed) — an
+  event that tells the person and offers the choices; the run keeps waiting for them.
+- **The person answers the run** on its own wait card (a message, or a decision on its plan) — the wait ends without
+  an event.
+- **The waiting run ends** — the wait ends without a word.
 
 ### MCP server tools
 

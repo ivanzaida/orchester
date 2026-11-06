@@ -36,5 +36,6 @@ pub mod settings;
 mod told;
 pub mod tools;
 pub mod waits;
+mod waits_on;
 pub mod watching;
 mod widening;
