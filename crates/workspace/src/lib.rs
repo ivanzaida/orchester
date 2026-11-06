@@ -66,5 +66,6 @@ pub mod team_reads;
 pub mod team_work;
 pub mod tools;
 pub mod usage;
+pub mod used_by;
 pub mod warm_workspaces;
 pub mod workspace;
