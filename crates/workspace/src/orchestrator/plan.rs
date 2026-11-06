@@ -139,7 +139,7 @@ fn turn_plans(entries: &[ChatEntry], switched: bool) -> bool {
     EntryKind::Person { mode, turn, .. } => {
       *mode == TurnMode::Plans && matches!(turn, TurnState::Thinking | TurnState::Steering | TurnState::Joined)
     }
-    EntryKind::Wait { .. } | EntryKind::Report { .. } => {
+    EntryKind::Wait { .. } | EntryKind::Report { .. } | EntryKind::WatchEnded { .. } => {
       switched && entry.kind.turn().is_some_and(|(_, state)| state.is_thinking())
     }
     _ => false,

@@ -62,6 +62,7 @@ mod orchestrator_switches;
 mod orchestrator_titles;
 mod orchestrator_usage;
 mod orchestrator_waits;
+mod orchestrator_watch_summaries;
 mod organization;
 mod organized_drafts;
 mod owned_records;
