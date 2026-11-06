@@ -6,8 +6,8 @@
 //! (`hold_hand_offs`) shown *Sending…* in its threads and the tray, and *Approve and
 //! merge* unavailable while Implement works on a comment sent, whose link names the step at work; on
 //! `review-changed`, a branch that moved after the review
-//! (ORC-699) told with its new commits, and *Approve and merge* unavailable until they are taken in. Needs `git`, as
-//! the seed does.
+//! (ORC-699) told with its new commits, and *Approve and merge* unavailable until they are taken in; on
+//! `review-approved`, a task a person approved (ORC-800), read-only. Needs `git`, as the seed does.
 //! `cargo test -p orchester-app --test review_page review_page`.
 
 #[path = "../examples/seed/kontur/mod.rs"]
@@ -269,14 +269,13 @@ fn review_page_send_held_shows_sending_until_let_go() {
 }
 
 #[test]
-fn review_page_approve_is_unavailable_while_implement_works_on_a_comment_sent() {
+fn review_page_approve_is_not_shown_while_implement_works_on_a_comment_sent() {
   let mut page = Page::new();
   page.open(("Delivery log per endpoint", 3));
-  assert_eq!(page.window.text("review-status-text"), "Implement is changing the code");
-  let reason = page.window.text("review-approve-reason");
-  assert!(reason.contains("Implement is at work"), "{reason}");
+  assert_eq!(page.window.text("review-status-text"), "With the agent");
+  assert!(page.window.texts("review-approve").is_none(), "Approve and merge waits");
+  assert!(page.window.texts("review-approve-reason").is_none());
   let diff = page.diff_text();
-  assert!(diff.contains("Sent · Implement is changing the code"), "{diff}");
   assert!(
     diff.contains("In the Conversation · run #3, step 03 Implement"),
     "the step Implement works in: {diff}"
@@ -395,8 +394,8 @@ fn review_page_says_nothing_is_to_review_for_a_task_whose_run_is_not_in_review()
   let task = page
     .tasks
     .iter()
-    .find(|task| task.title == "Delivery log per endpoint")
-    .expect("the scenario seeds a merged task");
+    .find(|task| task.title == "Add retry to webhook sender")
+    .expect("the scenario seeds a run whose merge was refused");
   let key: TaskKey = task.key.parse().expect("a task key");
   let route = Route::Project(page.project, ProjectPage::TaskReview(key.clone()));
   page.window.navigation().go(route);
@@ -414,4 +413,73 @@ fn review_page_says_nothing_is_to_review_for_a_task_whose_run_is_not_in_review()
     ["Review", "/", &key.to_string()]
   );
   assert!(page.window.texts("review-diff").is_none());
+}
+
+#[test]
+fn review_page_an_approved_task_is_read_only_with_its_review_kept() {
+  let mut page = Page::of("review-approved");
+  page.open(("Retry budget per endpoint", 1));
+  assert_eq!(page.window.text("review-status-text"), "Merged into main");
+  let meta = page.window.text("review-status-meta");
+  assert!(
+    meta.starts_with("approved by you ") && (meta.contains("fast-forward to ") || meta.contains("merge commit ")),
+    "who approved it, how it landed and when: {meta}"
+  );
+  assert_eq!(page.window.text("merge-attempt-title"), "Retry budget per endpoint");
+  for control in [
+    "review-approve",
+    "review-approve-reason",
+    "review-tray",
+    "review-composer",
+    "review-changed",
+  ] {
+    assert!(
+      page.window.texts(control).is_none(),
+      "{control} is not on an approved page"
+    );
+  }
+  assert!(page.window.texts("review-open-task").is_some(), "Open task stays");
+  let diff = page.whole_diff();
+  for kept in [
+    "src/webhooks/sender.rs",
+    "Cap the sum of the delay and the jitter",
+    "Capped the sum: the delay",
+    "Addressed in",
+    "Answered · no code changed",
+    "The budget counts every attempt",
+    "Not sent",
+  ] {
+    assert!(diff.contains(kept), "{kept} in {diff}");
+  }
+  for action in ["Reply", "Resolve", "Ask again", "Stop answering", "Edit", "Delete"] {
+    assert!(!diff.contains(action), "no {action} on an approved page: {diff}");
+  }
+}
+
+#[test]
+fn review_page_an_approved_task_shows_no_plus_and_opens_no_comment_box() {
+  let mut page = Page::of("review-approved");
+  page.open(("Retry budget per endpoint", 1));
+  let line = first_line(&mut page, "review-line-1-new-");
+  page.window.hover(&line);
+  assert_eq!(count(&mut page, "review-diff", "review-line-add"), 0);
+  page.window.press(&line);
+  page.window.pass();
+  assert!(
+    page.window.texts("review-composer").is_none(),
+    "pressing a line opens no box"
+  );
+  assert!(page.window.texts("review-tray").is_none());
+}
+
+#[test]
+fn review_page_a_merge_automation_made_is_not_called_approved_by_you() {
+  let mut page = Page::of("review-approved");
+  page.open(("Honor Retry-After on 429 and 503", 2));
+  assert_eq!(page.window.text("review-status-text"), "Merged into main");
+  let meta = page.window.text("review-status-meta");
+  assert!(
+    meta.starts_with("merged without a person's approval") && !meta.contains("approved by you"),
+    "{meta}"
+  );
 }

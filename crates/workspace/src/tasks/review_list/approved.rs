@@ -4,13 +4,14 @@ use std::collections::HashSet;
 
 use orchester_core::{
   id::{RunId, TaskId},
-  integration::{RunMerge, attempt::MergeAsker},
+  integration::RunMerge,
   merge_queue::QueueEntry,
   time::Timestamp,
 };
 use orchester_store::StoreError;
 
 use super::{ReviewRow, ReviewState, rows::Reader};
+use crate::tasks::review_threads::approved_run::approval_of;
 
 /// How many merges are read at a time while looking for those of today.
 const PAGE: usize = 64;
@@ -90,16 +91,5 @@ fn merged_since(reader: &Reader<'_>, day: Timestamp) -> Result<Vec<(TaskId, RunM
 
 /// When a person approved `merge`, which landed: see [`approved_today`]; `None` when no person did.
 fn approved_at(reader: &Reader<'_>, merge: &RunMerge) -> Result<Option<Timestamp>, StoreError> {
-  let attempts = reader.db.merge_attempts(merge.run)?;
-  let Some(landed) = attempts.iter().find(|recorded| recorded.attempt.outcome().landed()) else {
-    return Ok(None);
-  };
-  Ok(match landed.attempt.asked_by() {
-    MergeAsker::Person | MergeAsker::Retry { .. } => Some(merge.merged_at),
-    MergeAsker::MergeQueue => reader
-      .db
-      .merge_queue_entry(merge.run)?
-      .and_then(|entry| entry.approved_at),
-    MergeAsker::Automation => None,
-  })
+  Ok(approval_of(&reader.db, merge)?.person_at())
 }

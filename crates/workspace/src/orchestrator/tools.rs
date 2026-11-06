@@ -58,7 +58,7 @@ use crate::{
 /// message and continuing a run that waits for a person's decision. Approvals, plan decisions, project setup,
 /// connections, MCP servers, the environment and what removes work are not among them. A name whose tool the app
 /// does not have (yet) is not listed ([`listed`]).
-pub const TOOLS: [&str; 60] = [
+pub const TOOLS: [&str; 58] = [
   "list_projects",
   "get_project",
   "list_tasks",
@@ -117,8 +117,6 @@ pub const TOOLS: [&str; 60] = [
   "get_delivery",
   "get_story_point_calibration",
   "get_daily_report",
-  "list_pull_requests",
-  "get_pull_request",
 ];
 
 /// The chat's own tools, which no client of the app has: making the project's folder a git repository, always a card

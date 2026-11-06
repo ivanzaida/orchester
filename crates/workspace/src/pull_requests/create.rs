@@ -15,7 +15,7 @@ use orchester_core::{
   github::GhCli,
   id::RunId,
   pull_request::{
-    CreateFailure, NewPullRequest, OpenFailure, OpenedPullRequest, PullRequestState, Push, PushFailure, SyncScope,
+    CreateFailure, NewPullRequest, OpenFailure, OpenedPullRequest, PullRequestState, Push, PushFailure,
     open_pull_request, task_link, task_pull_request,
   },
   repository::{RemoteName, RepositoryError, RepositoryLink, read_git_dir_remotes},
@@ -29,7 +29,7 @@ use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
 
 use super::{
-  InboxError, github_connection, sync_scope_in,
+  PullRequestError, github_connection, sync_in,
   unpushed::{BaseCheck, BaseOnRemote, base_on_remote},
 };
 use crate::{
@@ -88,21 +88,21 @@ pub enum Readiness {
 #[derive(Debug, Error)]
 pub enum ReadinessError {
   #[error(transparent)]
-  Inbox(#[from] InboxError),
+  PullRequest(#[from] PullRequestError),
   #[error(transparent)]
   Remotes(#[from] RepositoryError),
 }
 
 impl From<StoreError> for ReadinessError {
   fn from(error: StoreError) -> Self {
-    Self::Inbox(InboxError::Store(error))
+    Self::PullRequest(PullRequestError::Store(error))
   }
 }
 
 impl ReadinessError {
   pub fn message(&self) -> Message {
     match self {
-      Self::Inbox(error) => error.message(),
+      Self::PullRequest(error) => error.message(),
       Self::Remotes(_) => Message::new("errors.githubUnavailable"),
     }
   }
@@ -242,7 +242,7 @@ pub fn create_in(
     return outcome;
   }
   // The pull request stands either way; a failed sync is only logged.
-  if let Err(error) = sync_scope_in(repo_root, programs, SyncScope::OpenAndClosed) {
+  if let Err(error) = sync_in(repo_root, programs) {
     tracing::warn!(%error, "cannot sync the pull requests after creating one");
   }
   match outcome {
