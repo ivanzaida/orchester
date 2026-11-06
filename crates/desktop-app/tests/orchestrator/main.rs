@@ -25,6 +25,7 @@ mod git;
 mod harness;
 mod history;
 mod history_archive;
+mod history_leads;
 mod history_rows;
 mod history_search;
 mod layout;
