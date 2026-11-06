@@ -1074,6 +1074,19 @@
         "earlier": "Earlier runs",
         "commandTools": "Command tools"
       }
+    },
+    "watch": {
+      "led": {
+        "title": "{{target}} is already led in «{{title}}»",
+        "note": "Since {{date}} {{time}}. Its waits and run ends start turns there. Taking it moves them here, and that conversation gets a line saying so.",
+        "open": "Open that conversation",
+        "take": "Take it here",
+        "personOnly": "Only a person chooses where a target is led: input from automation is refused here.",
+        "taken": "{{target}} is now led here",
+        "takenFrom": "— taken from «{{title}}», which got a line saying so",
+        "left": "{{target}} stays led in «{{title}}»",
+        "leftAside": "— you opened that conversation; nothing moved"
+      }
     }
   }
 }

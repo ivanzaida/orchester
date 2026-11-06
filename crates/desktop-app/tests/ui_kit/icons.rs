@@ -261,3 +261,20 @@ fn task_event_icons_match_bundled_font_names() {
     assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
   }
 }
+
+/// The glyphs of the card of a target another conversation leads and of the line it settles into (ORC-778, `f1J8z`
+/// in 05 `EIjDH` and `JZzui` in `DE2n1`, `Orchestrator watch · redesign`).
+#[test]
+fn already_led_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  for (icon, name) in [
+    (Icon::ArrowDownToLine, "arrow-down-to-line"),
+    (Icon::MessagesSquare, "messages-square"),
+    (Icon::ArrowRightLeft, "arrow-right-left"),
+  ] {
+    let codepoint = (0xe000..0xf000)
+      .find(|codepoint| glyph_name(font, font_glyph(font, *codepoint)) == name)
+      .expect("the bundled font includes the icon");
+    assert_eq!(icon.glyph() as usize, codepoint, "{icon:?} codepoint: {codepoint:x}");
+  }
+}

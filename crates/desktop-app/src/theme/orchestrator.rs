@@ -78,10 +78,13 @@ pub enum OrchestratorText {
   Mode,
   /// 12 `text_secondary`, 1.3: *Settings ↗* at the runs-on picker's foot, one 16 line in its 32 (`rIT51` in `SwrjI`).
   PickerLink,
+  /// 11.5 `text_muted`, 1.5: what the card of a target another conversation leads says under its title (`kjs5n` in
+  /// `f1J8z`, `Orchestrator watch · redesign`).
+  CardNote,
 }
 
 impl OrchestratorText {
-  pub const ALL: [Self; 27] = [
+  pub const ALL: [Self; 28] = [
     Self::HeaderTitle,
     Self::StartTitle,
     Self::Emphasis,
@@ -109,6 +112,7 @@ impl OrchestratorText {
     Self::Message,
     Self::Mode,
     Self::PickerLink,
+    Self::CardNote,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -144,6 +148,7 @@ impl OrchestratorText {
       Self::Message => "orchestrator_message",
       Self::Mode => "orchestrator_mode",
       Self::PickerLink => "orchestrator_picker_link",
+      Self::CardNote => "orchestrator_card_note",
     }
   }
 
@@ -182,6 +187,7 @@ impl OrchestratorText {
       Self::Message => style(13.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
       Self::Mode => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
       Self::PickerLink => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
+      Self::CardNote => style(11.5, FontWeight::Normal, 1.5, 0.0, palette.text_muted),
     }
   }
 }

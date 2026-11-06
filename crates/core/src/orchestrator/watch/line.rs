@@ -78,6 +78,13 @@ pub enum WatchLine {
     from: ChatId,
     title: String,
   },
+  /// After *Open that conversation* on the card of `target`: the person left it where conversation `chat`, titled
+  /// `title` then, leads it. Nothing changed for the subscriptions; the card settles into this line.
+  LeftThere {
+    target: NamedTarget,
+    chat: ChatId,
+    title: String,
+  },
   /// A person's stop: what it ended and what it left open. Nothing was canceled or paused.
   Stopped {
     targets: Vec<NamedTarget>,

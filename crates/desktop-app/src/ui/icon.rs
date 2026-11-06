@@ -43,6 +43,7 @@ icons! {
   Archive => '\u{e041}',
   ArchiveRestore => '\u{e2cd}',
   ArrowDown => '\u{e042}',
+  ArrowDownToLine => '\u{e455}',
   ArrowDownUp => '\u{e046}',
   ArrowLeft => '\u{e048}',
   ArrowRight => '\u{e049}',

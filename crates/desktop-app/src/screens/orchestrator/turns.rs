@@ -21,6 +21,8 @@ use orchester_core::{
 };
 use orchester_workspace::orchestrator::chat::{ChatView, EndMoved, EventFacts};
 
+use super::led::LedCards;
+
 /// A part of an answer.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum Part {
@@ -99,6 +101,8 @@ pub(super) struct Turn {
   /// An event that is the whole row: a compaction of the session (`super::compaction`), or where a rewind went back
   /// to (`super::rewind::line`).
   pub(super) compaction: Option<ChatEvent>,
+  /// The cards of the targets a /watch named that other conversations lead, which are the whole row (`super::led`).
+  pub(super) led: Option<Box<LedCards>>,
   /// Its entry in the conversation; `None` while it is being sent.
   seq: Option<i64>,
   /// The entry of the last part of its answer; `None` before its answer said or did anything.
@@ -141,6 +145,7 @@ impl Turn {
       report: None,
       watch_ended: None,
       compaction: None,
+      led: None,
       seq: None,
       last: None,
       at: None,
@@ -180,6 +185,7 @@ impl Turn {
       report: None,
       watch_ended: None,
       compaction: None,
+      led: None,
       seq: Some(entry.seq),
       last: None,
       at: Some(entry.at),
@@ -274,6 +280,8 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
         at: entry.at,
         seq: entry.seq,
       },
+      // A choice on a card shows in the card's place (`super::led`).
+      EntryKind::Event(event) if super::led::is_choice(event) => continue,
       EntryKind::Event(event) => Part::Event {
         event: event.clone(),
         at: entry.at,
@@ -297,9 +305,10 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
 }
 
 /// The row `entry` of `shown` opens by itself: a wait of an agent, a daily report or a subscription that ended by
-/// itself, with the turn it started, if any; and a compaction (`06b` `j7eSQO`), where a rewind went back to (`10`
-/// `Zm7kq`), a fork's first line and what its original made after it (`11` `RT5T7`), each a row between the turns.
-/// `None` for an entry that is a person's message or part of an answer.
+/// itself, with the turn it started, if any; a compaction (`06b` `j7eSQO`), where a rewind went back to (`10`
+/// `Zm7kq`), a fork's first line and what its original made after it (`11` `RT5T7`), and the cards of a /watch's
+/// targets other conversations lead (05 `EIjDH`), each a row between the turns. `None` for an entry that is a person's
+/// message or part of an answer.
 fn own_row(entry: &ChatEntry, shown: &ChatView) -> Option<Turn> {
   Some(match &entry.kind {
     EntryKind::Wait { wait, turn } => Turn {
@@ -324,6 +333,10 @@ fn own_row(entry: &ChatEntry, shown: &ChatView) -> Option<Turn> {
       | ChatEvent::MadeInOriginal { .. }),
     ) => Turn {
       compaction: Some(event.clone()),
+      ..Turn::opened(entry, None)
+    },
+    EntryKind::Event(_) => Turn {
+      led: Some(Box::new(super::led::cards(entry, shown)?)),
       ..Turn::opened(entry, None)
     },
     _ => return None,
@@ -402,6 +415,7 @@ fn person(
     report: None,
     watch_ended: None,
     compaction: None,
+    led: None,
     seq: Some(entry.seq),
     last: None,
     at: Some(entry.at),

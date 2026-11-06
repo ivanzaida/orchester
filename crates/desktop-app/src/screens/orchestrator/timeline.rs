@@ -311,12 +311,16 @@ impl Component for TurnView {
   }
 }
 
-/// A turn's row: what opens it, the answer and how it ended; or a compaction's or a rewind's line. While a message is
-/// edited in place, what sending it drops is dimmed: its own answer under the line that counts them, and every row
-/// after it (`super::rewind::editing`).
+/// A turn's row: what opens it, the answer and how it ended; or a compaction's or a rewind's line, or the cards of
+/// targets other conversations lead. While a message is edited in place, what sending it drops is dimmed: its own
+/// answer under the line that counts them, and every row after it (`super::rewind::editing`).
 fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
   let key = row.turn.key();
   let dropped = row.env.rewind.drops(&row.turn);
+  if let Some(led) = &row.turn.led {
+    let column = super::led::column(ctx, &key, led, &row.env);
+    return room(ctx, dimmed(column, dropped), first);
+  }
   if let Some(event) = &row.turn.compaction {
     let id = format!("orchestrator-compaction-{key}");
     let line = super::compaction::line(ctx, &id, event, row.turn.at)

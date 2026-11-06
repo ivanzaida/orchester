@@ -21,7 +21,9 @@ use orchester_core::{
   task::organization::ChangeActor,
   time::Timestamp,
 };
-use orchester_workspace::orchestrator::watch::{StopBy, StopWhat, WatchError, stop_in, take_over_in, watch_in};
+use orchester_workspace::orchestrator::watch::{
+  StopBy, StopWhat, WatchError, leave_there_in, stop_in, take_over_in, watch_in,
+};
 use support::{Fixture, at};
 
 /// A conversation that said `text`, its turn answered unless `thinking`.
@@ -190,6 +192,36 @@ fn watch_take_over_moves_the_subscription_and_writes_both_lines() {
     take_over_in(fixture.repo.path(), &mine, &named(billing, "Billing"), ""),
     Err(WatchError::AlreadyHere)
   ));
+}
+
+#[test]
+fn watch_leave_there_keeps_the_line_and_moves_nothing() {
+  let mut fixture = Fixture::new();
+  let billing = WatchTarget::Module(module(&mut fixture, "Billing"));
+  let theirs = conversation(&mut fixture, "Billing work", false);
+  watch_in(fixture.repo.path(), &theirs, &[named(billing, "Billing")], "").expect("watched");
+  let mine = conversation(&mut fixture, "Delivery work", false);
+  let watched = watch_in(fixture.repo.path(), &mine, &[named(billing, "Billing")], "").expect("watched");
+  let theirs_before = watch_entries(&fixture, theirs.id());
+
+  leave_there_in(fixture.repo.path(), &mine, &watched.led_elsewhere[0]).expect("left");
+
+  assert_eq!(leader(&fixture, billing), Some(theirs.id()));
+  assert_eq!(
+    watch_entries(&fixture, mine.id()).last(),
+    Some(&ChatEvent::Watch {
+      line: WatchLine::LeftThere {
+        target: named(billing, "Billing"),
+        chat: theirs.id(),
+        title: "Billing work".to_owned(),
+      },
+    })
+  );
+  assert_eq!(
+    watch_entries(&fixture, theirs.id()),
+    theirs_before,
+    "that conversation is told nothing"
+  );
 }
 
 #[test]

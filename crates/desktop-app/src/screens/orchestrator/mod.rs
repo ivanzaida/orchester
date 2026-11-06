@@ -30,6 +30,7 @@ mod failure;
 mod header;
 mod held;
 mod history;
+mod led;
 mod line;
 mod page;
 mod pending;
