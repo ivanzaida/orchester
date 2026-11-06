@@ -29,7 +29,10 @@ fn review_since_approve_on_a_changed_branch_merges_at_the_head_shown() {
   );
   page.window.press("review-approve");
   page.window.until_within(GIT_WORK, "the merge", |window| {
-    window.texts("review-no-run").is_some() || window.texts("review-not-done").is_some()
+    window.texts("review-not-done").is_some()
+      || window
+        .texts("review-status-meta")
+        .is_some_and(|meta| meta.concat().starts_with("approved by you "))
   });
   assert!(
     page.window.texts("review-not-done").is_none(),
