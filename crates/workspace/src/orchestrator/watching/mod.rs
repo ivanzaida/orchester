@@ -21,7 +21,7 @@ use orchester_store::{ProjectDb, StoreError};
 
 pub use self::{
   answer::{Going, WaitsFor, WatchedSubscription, WatchedTask, Watching},
-  leads::{ChatLeads, LeadChip, LeadCounts, LedIn, Leader},
+  leads::{ChatLeads, LeadChip, LeadCounts, Leader, LedIn},
   targets::{TargetView, WatchOrder},
 };
 use crate::{messages::Message, tasks::data::ProjectTasks};

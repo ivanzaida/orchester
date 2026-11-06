@@ -133,12 +133,7 @@ impl WatchReads {
       since: subscription.since(),
       order: self.order(subscription),
       tasks,
-      rest: (rest > 0).then(|| {
-        counted(
-          rest,
-          ("orchestrator.watch.rest.one", "orchestrator.watch.rest.other"),
-        )
-      }),
+      rest: (rest > 0).then(|| counted(rest, ("orchestrator.watch.rest.one", "orchestrator.watch.rest.other"))),
     }
   }
 
@@ -216,7 +211,12 @@ fn going_of(kind: &WaitingKind) -> Going {
 fn words(going: Going) -> (&'static str, Option<Message>, Option<&'static str>, TaskPage) {
   let note = |key: &'static str| Some(Message::new(key));
   match going {
-    Going::Running => ("orchestrator.watch.task.state.running", None, None, TaskPage::Conversation),
+    Going::Running => (
+      "orchestrator.watch.task.state.running",
+      None,
+      None,
+      TaskPage::Conversation,
+    ),
     Going::Waits(waits) => {
       let (key, action, page) = match waits {
         WaitsFor::Question => (
@@ -282,7 +282,12 @@ fn total(subscriptions: &[WatchedSubscription]) -> Vec<Message> {
   if subscriptions.is_empty() {
     return vec![Message::new("orchestrator.watch.total.nothing")];
   }
-  let goings = || subscriptions.iter().flat_map(|watched| &watched.tasks).map(|task| task.going);
+  let goings = || {
+    subscriptions
+      .iter()
+      .flat_map(|watched| &watched.tasks)
+      .map(|task| task.going)
+  };
   let waits = goings().filter(|going| matches!(going, Going::Waits(_))).count();
   let limits = goings()
     .filter(|going| matches!(going, Going::StoppedAtLimit { .. }))
