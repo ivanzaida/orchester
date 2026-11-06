@@ -2392,6 +2392,10 @@
     }
   },
   "review": {
+    "since": {
+      "notReviewed": "No head of this run was reviewed yet, so there is nothing to compare with. All changes shows its whole diff.",
+      "rewritten": "The branch was rewritten after the head you reviewed, so its changes since then can't be told apart. Review all changes again."
+    },
     "refused": {
       "notFound": "This review thread is gone. Read the run's review again.",
       "notWaiting": "This run no longer waits for review: it is at work, ended without success or was merged.",

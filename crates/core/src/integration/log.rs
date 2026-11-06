@@ -37,6 +37,16 @@ pub fn own_commits(
   Ok(parse(&listed))
 }
 
+/// Whether `ancestor` is in the history of `descendant` in the repository at `repo`, or is it. A commit git does not
+/// know, such as one a rebase left behind and git pruned, is in no history.
+pub fn is_ancestor(
+  runner: &impl CommandRunner,
+  git: &Path,
+  (repo, ancestor, descendant): (&Path, &Revision, &Revision),
+) -> Result<bool, GitError> {
+  Git::new(runner, git, repo).is_ancestor(ancestor.as_str(), descendant.as_str())
+}
+
 /// The commits `git log --format=%H%x09%ct%x09%s` printed; a line it cannot read is left out.
 fn parse(text: &str) -> Vec<LoggedCommit> {
   text
