@@ -57,7 +57,7 @@ pub enum WatchLine {
   Watching {
     started: Vec<NamedTarget>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    renewed: Vec<NamedTarget>,
+    already_here: Vec<NamedTarget>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     led_elsewhere: Vec<LedElsewhere>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]

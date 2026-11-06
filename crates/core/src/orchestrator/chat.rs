@@ -11,6 +11,7 @@ use super::{
   report::DailyReport,
   rewind::RewoundTo,
   wait::AgentWait,
+  watch::{WatchCommand, WatchLine},
 };
 use crate::{
   connection::AccountStartProblem,

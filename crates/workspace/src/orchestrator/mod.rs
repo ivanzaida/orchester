@@ -3,8 +3,8 @@
 //! writing to it while it answers (`queue`), the domain tools its agent gets, its own tools that make the project's
 //! folder a git repository, work with git in it, change its MCP servers and apply a proposal the person approved in
 //! their own words, the waits of the
-//! project's agents and the ends of its runs it follows, and the project's daily report. The project's runner runs
-//! the agent; the app serves its tools.
+//! project's agents and the ends of its runs it follows, the project's daily report, and the person's watch commands
+//! it applies itself (`watch`). The project's runner runs the agent; the app serves its tools.
 
 pub mod approval;
 pub mod auto_merge;
@@ -35,4 +35,5 @@ pub mod settings;
 mod told;
 pub mod tools;
 pub mod waits;
+pub mod watch;
 mod widening;
