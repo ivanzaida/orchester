@@ -125,3 +125,25 @@ fn project_settings_orchestrator_watching_loads_what_the_project_holds() {
   page.until("off", |p| !p.switch_on(SWITCH));
   assert_eq!(page.value(MINUTES), "20");
 }
+
+#[test]
+fn project_settings_orchestrator_watching_takes_the_most_minutes_the_project_may_hold() {
+  let mut page = watching();
+  let most = WatchSettings::MAX_NO_PROGRESS_MINUTES;
+  let watch = WatchSettings::new("", Some(most)).expect("the most minutes");
+  page.db().save_orchestrator_watch(&watch).expect("saved");
+  page.outside(Outside::Orchestrator);
+  page.until("the most minutes", |p| p.value(MINUTES) == most.to_string());
+  assert!(!page.exists(ERROR));
+
+  // An order edit still saves beside them.
+  page.set(ORDER, "Watch the queue.");
+  focus(&mut page, MINUTES);
+  page.until("the order saved", |p| stored(p).default_order() == "Watch the queue.");
+  assert_eq!(stored(&page).no_progress_minutes(), Some(most));
+
+  // One more is wrong, and says the same limit.
+  page.set(MINUTES, &(most + 1).to_string());
+  page.until("the error", |p| p.exists(ERROR));
+  assert!(page.text(ERROR).contains(&format!("1 to {most}")));
+}

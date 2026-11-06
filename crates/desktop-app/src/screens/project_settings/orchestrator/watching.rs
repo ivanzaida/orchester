@@ -52,8 +52,6 @@ const NO_PROGRESS: &str = "settings-orchestrator-no-progress";
 const MINUTES_WIDTH: f32 = 56.0;
 /// The bone of the minutes while they are read, as wide as *20*.
 const MINUTES_BONE: f32 = 16.0;
-/// The most minutes the box takes: whole minutes from 1 to 240 (decision 8, `Error` `E94B6` in `ZnPlx`).
-const MOST_MINUTES: u32 = 240;
 
 /// How the Orchestrator watches, as a signal's and a save's value.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -262,7 +260,7 @@ impl Watching {
           "project_settings.orchestrator.watching.noProgress.invalid",
           [
             ("min", WatchSettings::MIN_NO_PROGRESS_MINUTES.to_string()),
-            ("max", MOST_MINUTES.to_string()),
+            ("max", WatchSettings::MAX_NO_PROGRESS_MINUTES.to_string()),
           ],
         ),
       ))
@@ -336,13 +334,12 @@ impl Watching {
   }
 }
 
-/// Whole minutes the box takes, from [`WatchSettings::MIN_NO_PROGRESS_MINUTES`] to [`MOST_MINUTES`].
+/// Whole minutes the box takes, from [`WatchSettings::MIN_NO_PROGRESS_MINUTES`] to
+/// [`WatchSettings::MAX_NO_PROGRESS_MINUTES`].
 fn minutes(typed: &str) -> Option<u32> {
-  typed
-    .trim()
-    .parse::<u32>()
-    .ok()
-    .filter(|minutes| (WatchSettings::MIN_NO_PROGRESS_MINUTES..=MOST_MINUTES).contains(minutes))
+  typed.trim().parse::<u32>().ok().filter(|minutes| {
+    (WatchSettings::MIN_NO_PROGRESS_MINUTES..=WatchSettings::MAX_NO_PROGRESS_MINUTES).contains(minutes)
+  })
 }
 
 /// The settings `order`, `typed` minutes and the switch `on` ask for; `None` while the minutes are wrong and on.
