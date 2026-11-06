@@ -1,10 +1,11 @@
 //! The top of the review page (09i `wLyFt`): the run's title with *Open task* and *Approve and merge*, and the status
 //! line (`Status` `tKlje`): a 14 glyph and *Waiting for your review* in 13/500 `info`, then the run, its steps, what it
-//! changes, its head and how it merges in 12 `text_muted`. *Approve and merge* merges at the head shown; it is
-//! unavailable while Implement works on comments sent to it, or once the branch moved past the head reviewed, and its
-//! reason stands before it. Then the branch moved: *Changed since your review* says so and lists the new commits, and
-//! the person takes them in before they approve. Once the run was approved ([`approved`]) there is no *Approve and
-//! merge*, and the status line tells how it merged.
+//! changes, its head and how it merges in 12 `text_muted`; while Implement works on comments sent to it, *With the
+//! agent* and what it works on (`agent`). *Approve and merge* merges at the head shown; it is not shown while Implement
+//! works, and unavailable once the branch moved past the head reviewed, and its reason stands before it. Then the
+//! branch moved: *Changed since your review* says so and lists the new commits, and the person takes them in before
+//! they approve. Once the run was approved ([`approved`]) there is no *Approve and merge*, and the status line tells
+//! how it merged.
 
 use std::sync::Arc;
 
@@ -26,7 +27,7 @@ use orchester_workspace::{
   },
 };
 
-use super::{Env, actions::Write, approved, state::Held, words::counted};
+use super::{Env, actions::Write, agent::Working, approved, state::Held, words::counted};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
@@ -52,10 +53,10 @@ pub(super) fn moved(env: &Env) -> Option<&Revision> {
   (*reviewed != env.head && taken.as_ref() != Some(&env.head)).then_some(reviewed)
 }
 
-/// The title with *Open task* and *Approve and merge*.
+/// The title with *Open task* and *Approve and merge*, which is not shown while Implement works on comments sent to it.
 pub(super) fn header(ctx: &mut Ctx, env: &Env) -> Element {
   let open = open_task(ctx, &env.navigation, &env.project, &env.page.run.key);
-  if env.read_only {
+  if env.read_only || env.review.implement_at_work {
     return title(&env.page.run.title, vec![open.into()]);
   }
   let approve = approve_button(ctx);
@@ -95,7 +96,7 @@ pub(super) fn approve_button(ctx: &Ctx) -> ActionButton {
 
 /// Why *Approve and merge* cannot be pressed now.
 fn unavailable(ctx: &Ctx, env: &Env) -> Option<Arc<str>> {
-  if env.review.implement_at_work || env.page.review_in.is_none() {
+  if env.page.review_in.is_none() {
     return Some(message_text(ctx, &ReviewRefusal::ImplementAtWork.message()));
   }
   if moved(env).is_some() {
@@ -149,7 +150,12 @@ pub(super) fn status(ctx: &Ctx, env: &Env) -> Element {
   } else {
     Standing::Waiting
   };
-  status_line(ctx, standing, &meta(ctx, &env.page, &env.head))
+  let working = Working::of(env);
+  let meta = match &working {
+    Some(working) => joined(ctx, &[working.status(ctx), working.sent(ctx)]),
+    None => meta(ctx, &env.page, &env.head),
+  };
+  status_line(ctx, standing, &meta)
 }
 
 /// The status line of a run that stands as `standing`, with `meta` after it; the page's and its reading state's.

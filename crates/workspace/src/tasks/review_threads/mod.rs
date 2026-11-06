@@ -129,14 +129,30 @@ fn waiting(db: &ProjectDb, run: RunId) -> Result<Run, ReviewRefusal> {
   Ok(stored)
 }
 
+/// `run` of the project in `db`, which a comment may be written on: it waits for review, or Implement works on comments
+/// sent from it, when a new comment waits unsent in the tray until the run is back.
+fn commentable(db: &mut ProjectDb, run: RunId) -> Result<Run, ReviewRefusal> {
+  match waiting(db, run) {
+    Err(ReviewRefusal::NotWaiting) => {}
+    other => return other,
+  }
+  let stored = db.run(run).map_err(run_store_error)?.ok_or(ReviewRefusal::NotFound)?;
+  let threads = recover::threads(db, run)?;
+  if db.run_merge(run)?.is_none() && implement_at_work(&threads, &stored) {
+    Ok(stored)
+  } else {
+    Err(ReviewRefusal::NotWaiting)
+  }
+}
+
 /// The thread `thread` of the project in `db`.
 fn thread_in(db: &ProjectDb, thread: ReviewThreadId) -> Result<ReviewThread, ReviewRefusal> {
   db.review_thread(thread)?.ok_or(ReviewRefusal::NotFound)
 }
 
 /// Starts a comment thread on `run` of the project at `root`, about `anchor` of its diff at `head`, with the person's
-/// `body` at `now`: it waits unsent in the tray. A question starts with [`ask::start`], as it goes to Implement at
-/// once.
+/// `body` at `now`: it waits unsent in the tray, also while Implement works on comments sent before. A question starts
+/// with [`ask::start`], as it goes to Implement at once.
 pub fn comment(
   root: &Path,
   run: RunId,
@@ -145,7 +161,7 @@ pub fn comment(
   now: Timestamp,
 ) -> Result<ReviewThread, ReviewRefusal> {
   let mut db = ProjectDb::open(root)?;
-  waiting(&db, run)?;
+  commentable(&mut db, run)?;
   let thread = ReviewThread::start(run, (ThreadKind::Comment, anchor, head), body, now);
   db.add_review_thread(&thread)?;
   Ok(thread)
@@ -177,7 +193,7 @@ pub fn reply(root: &Path, thread: ReviewThreadId, body: &MessageBody, now: Times
   if stored.kind() != ThreadKind::Comment {
     return Err(ReviewRefusal::Review(ReviewError::WrongKind));
   }
-  waiting(&db, stored.run())?;
+  commentable(&mut db, stored.run())?;
   let message = stored.follow_up(body, now).map_err(ReviewRefusal::Review)?;
   db.add_review_message(thread, &message)?;
   Ok(())

@@ -22,7 +22,7 @@
     "status": {
       "waiting": "Waiting for your review",
       "changed": "Changed since your review",
-      "atWork": "Implement is changing the code",
+      "atWork": "With the agent",
       "run": "run #{{run}}",
       "stepsPassed": "every step passed",
       "stepsOf": "{{passed}} of {{total}} steps passed",
@@ -115,11 +115,21 @@
       "notAsked": "Not asked",
       "notSent": "Not sent",
       "sending": "Sending…",
-      "sent": "Sent · Implement is changing the code",
+      "sent": "Sent",
+      "sentAt": "Sent {{time}}",
       "addressedIn": "Addressed in {{commit}}",
       "addressed": "Addressed",
       "resolved": "Resolved",
       "outdatedIn": "Outdated by {{commit}}"
+    },
+    "agent": {
+      "statusOne": "Implement is working on your comment",
+      "statusOther": "Implement is working on your {{count}} comments",
+      "sent": "sent {{time}}",
+      "titleOne": "Implement is working on 1 comment",
+      "titleOther": "Implement is working on {{count}} comments",
+      "body": "The task comes back here when it finishes; new comments wait until then.",
+      "open": "Open conversation"
     },
     "composer": {
       "new": "New",
@@ -148,7 +158,8 @@
       "failedDetail": "The send failed; nothing is lost. Your comments are kept.",
       "discard": "Discard",
       "send": "Send to Implement ({{count}})",
-      "tryAgain": "Try again"
+      "tryAgain": "Try again",
+      "waits": "Sent once the task is back from Implement."
     },
     "discard": {
       "titleOne": "Discard the comment not sent?",

@@ -5,11 +5,13 @@
 //! threads kept, and no **+**, comment box, tray, *Approve and merge*, *Viewed* mark or thread action. The
 //! breadcrumb, the title with *Open task* and *Approve and merge*, the status line; at the left the run's files with
 //! their *Viewed* marks; beside them the run's real diff against its base with the threads under their lines
-//! ([`diff`], [`thread`]) and the comment box ([`composer`]); under it the send tray while comments wait ([`tray`]).
+//! ([`diff`], [`thread`]) and the comment box ([`composer`]); under it the send tray while comments wait ([`tray`]),
+//! and the agent bar while Implement works on comments sent to it ([`agent`], `Review - v2` 06 `gwE2q`).
 //! The page is read again whenever the project's tasks or runs change state or a change of it landed, and the review
 //! alone on every change of the project's runs, so an answer streams in. Esc stops an answer under way.
 
 mod actions;
+mod agent;
 mod approved;
 mod composer;
 mod crumbs;
@@ -318,7 +320,8 @@ impl ReviewScreen {
           .height(Dimension::Pct(100.0))
           .spacing(ExtraSpacing::Loose.role())
           .child(diff)
-          .with_children(tray::tray(ctx, env)),
+          .with_children(tray::tray(ctx, env))
+          .with_children(agent::bar(ctx, env)),
       )
       .into()
   }
