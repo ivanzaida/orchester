@@ -1,10 +1,15 @@
 #![allow(unsafe_code)]
-//! ScreenCaptureKit has no bindings in the build, so it is reached through the Objective-C runtime, which is FFI
-//! without a safe wrapper: one window's image by its window id, as a desktop-independent window (its own content,
-//! wherever it lies and whatever covers it; never the screen around it). Its screenshots came with macOS 14; before,
-//! the window server's image of that one window is taken instead ([`window::image_of`]).
+//! ScreenCaptureKit has no bindings in the build, so it is loaded at run time and reached through the Objective-C
+//! runtime, which is FFI without a safe wrapper: one window's image by its window id, as a desktop-independent window
+//! (its own content, wherever it lies and whatever covers it; never the screen around it). Its screenshots came with
+//! macOS 14; before, or where the framework is missing, the window server's image of that one window is taken
+//! instead ([`window::image_of`]).
 
-use std::{ffi::c_void, sync::mpsc, time::Duration};
+use std::{
+  ffi::{CStr, c_void},
+  sync::{OnceLock, mpsc},
+  time::Duration,
+};
 
 use block2::RcBlock;
 use objc2::{
@@ -23,13 +28,25 @@ use super::{
 /// The longest a capture is waited for.
 const TIMEOUT: Duration = Duration::from_secs(10);
 
-#[link(name = "ScreenCaptureKit", kind = "framework")]
-unsafe extern "C" {}
+/// ScreenCaptureKit's library. It came with macOS 12.3 while the app starts on macOS 11, so it is never linked
+/// (the loader would refuse to start the app without it) but loaded when a capture first needs it.
+const FRAMEWORK: &CStr = c"/System/Library/Frameworks/ScreenCaptureKit.framework/ScreenCaptureKit";
+
+/// Whether ScreenCaptureKit is loaded; loads it once, and keeps it loaded for the life of the process.
+fn framework_loaded() -> bool {
+  static LOADED: OnceLock<bool> = OnceLock::new();
+  // SAFETY: `FRAMEWORK` is a NUL-terminated path; a null answer only says the library is missing, and a loaded one
+  // is never closed, so its classes stay valid.
+  *LOADED.get_or_init(|| !unsafe { libc::dlopen(FRAMEWORK.as_ptr(), libc::RTLD_LAZY) }.is_null())
+}
 
 type Answer = Result<NativeCapture, String>;
 
 /// The window `target` alone, in pixels.
 pub(super) fn window_image(target: &NativeWindow) -> Answer {
+  if !framework_loaded() {
+    return window::image_of(target.window_id);
+  }
   let (Some(content), Some(filter), Some(configuration), Some(manager)) = (
     AnyClass::get(c"SCShareableContent"),
     AnyClass::get(c"SCContentFilter"),
