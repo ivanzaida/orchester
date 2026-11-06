@@ -78,10 +78,18 @@ pub enum OrchestratorText {
   Mode,
   /// 12 `text_secondary`, 1.3: *Settings ↗* at the runs-on picker's foot, one 16 line in its 32 (`rIT51` in `SwrjI`).
   PickerLink,
+  /// 13 `text_primary`, 1.55: the order in the person's watch command's bubble (`oUZqo` in `04` `OKtX2`).
+  CommandOrder,
+  /// 12 `text_muted`, 1.3: what a line the app writes adds after its words (`Meta` `vYl6I` in `OKtX2`, `zGkK5` in
+  /// `avDZO`).
+  LineAside,
+  /// 12 `text_secondary`, 1.3: the time and the link at the end of a line the app writes, and what a stop left open
+  /// (`Hoj8n`, `bluWJ`, `l5cq8c` in `avDZO`).
+  LineEnd,
 }
 
 impl OrchestratorText {
-  pub const ALL: [Self; 27] = [
+  pub const ALL: [Self; 30] = [
     Self::HeaderTitle,
     Self::StartTitle,
     Self::Emphasis,
@@ -109,6 +117,9 @@ impl OrchestratorText {
     Self::Message,
     Self::Mode,
     Self::PickerLink,
+    Self::CommandOrder,
+    Self::LineAside,
+    Self::LineEnd,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -144,6 +155,9 @@ impl OrchestratorText {
       Self::Message => "orchestrator_message",
       Self::Mode => "orchestrator_mode",
       Self::PickerLink => "orchestrator_picker_link",
+      Self::CommandOrder => "orchestrator_command_order",
+      Self::LineAside => "orchestrator_line_aside",
+      Self::LineEnd => "orchestrator_line_end",
     }
   }
 
@@ -182,6 +196,9 @@ impl OrchestratorText {
       Self::Message => style(13.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
       Self::Mode => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
       Self::PickerLink => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
+      Self::CommandOrder => style(13.0, FontWeight::Normal, 1.55, 0.0, palette.text_primary),
+      Self::LineAside => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
+      Self::LineEnd => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
     }
   }
 }
@@ -205,10 +222,12 @@ pub enum OrchestratorSpacing {
   LinkColumns,
   /// 28: a new conversation's message over its composer's bar (`Composer` `QcfyZ` in `c99rep`).
   StartComposer,
+  /// 27: what a stop left open, in from its line's start to its words, past its icon (`Open` `j6XFdt` in `avDZO`).
+  LeftOpen,
 }
 
 impl OrchestratorSpacing {
-  pub const ALL: [Self; 7] = [
+  pub const ALL: [Self; 8] = [
     Self::Start,
     Self::PageSide,
     Self::Items,
@@ -216,6 +235,7 @@ impl OrchestratorSpacing {
     Self::Report,
     Self::LinkColumns,
     Self::StartComposer,
+    Self::LeftOpen,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -231,6 +251,7 @@ impl OrchestratorSpacing {
       Self::Report => "orchestrator_report",
       Self::LinkColumns => "orchestrator_link_columns",
       Self::StartComposer => "orchestrator_start_composer",
+      Self::LeftOpen => "orchestrator_left_open",
     }
   }
 
@@ -243,6 +264,7 @@ impl OrchestratorSpacing {
       Self::Report => 36.0,
       Self::LinkColumns => 12.0,
       Self::StartComposer => 28.0,
+      Self::LeftOpen => 27.0,
     }
   }
 }

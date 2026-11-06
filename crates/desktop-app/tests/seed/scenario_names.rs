@@ -3,7 +3,7 @@
 use crate::kontur::scenarios;
 
 /// The scenarios, in the order the seed lists them.
-const NAMES: [&str; 160] = [
+const NAMES: [&str; 161] = [
   "reviewer-row",
   "reviewer-row-local",
   "reviewer-row-unavailable",
@@ -49,6 +49,7 @@ const NAMES: [&str; 160] = [
   "orchestrator-on-codex",
   "orchestrator-codex-limit",
   "orchestrator-events",
+  "orchestrator-watch",
   "orchestrator-context-plenty",
   "orchestrator-context-near-full",
   "orchestrator-context-full",
