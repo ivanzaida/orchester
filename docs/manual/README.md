@@ -123,6 +123,7 @@ widening calls; **AA** = needs *Let automation answer approvals*; **WC** = needs
 | `return_to_draft` | | Return a held queued task to Draft |
 | `list_modules` / `get_module` | RO | Modules, burndown, forecast |
 | `create_module` / `update_module` | | Manage modules |
+| `get_watches` | RO | Who leads what: Orchestrator subscriptions and what waits there |
 | `run_task` | | Queue and start, or run again |
 | `list_runs` / `get_run` | RO | Runs and their full state |
 | `pause_run` / `resume_run` / `cancel_run` | | Control a run |

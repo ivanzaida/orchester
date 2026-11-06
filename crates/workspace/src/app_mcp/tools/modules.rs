@@ -1,8 +1,8 @@
 //! `list_modules`, `get_module`, `create_module` and `update_module`: a project's modules as the Modules list and a
-//! module's page show them (progress, tasks, the burndown by local day), and modules made and changed as the module
-//! form does, through the project's [`TaskWriter`], which makes a shared project's on its server. A module's base
-//! branch is this computer's ([`base_branch`]). A team project's modules are read from and changed on its team server
-//! ([`super::team`]).
+//! module's page show them (progress, tasks, the burndown by local day, who leads it), and modules made and changed as
+//! the module form does, through the project's [`TaskWriter`], which makes a shared project's on its server. A
+//! module's base branch is this computer's ([`base_branch`]). A team project's modules are read from and changed on
+//! its team server ([`super::team`]).
 
 use std::path::Path;
 
@@ -18,9 +18,9 @@ use serde::{Deserialize, Deserializer};
 use serde_json::{Value, json};
 
 use super::{
-  base_branch,
+  Translate, base_branch,
   task_write::write_error,
-  team,
+  team, watches,
   wire::{self, Workflow, task_link},
 };
 use crate::{
@@ -34,6 +34,7 @@ use crate::{
     data::{ModulePage, ModuleSummary, Progress, summaries},
     form::ModuleForm,
   },
+  orchestrator::watching::WatchReads,
   tasks::{outside::Outside, writer::TaskWriter},
 };
 
@@ -143,20 +144,24 @@ pub async fn list_modules(services: &Services, args: ListModules) -> Result<Valu
   .await
 }
 
-pub async fn get_module(services: &Services, args: GetModule) -> Result<Value, ToolError> {
+pub async fn get_module(services: &Services, args: GetModule, translate: &Translate) -> Result<Value, ToolError> {
   if let Some(team) = team::of(services, &args.project).await? {
     return team::get_module(services, &team, &args.module).await;
   }
   let services = services.clone();
-  blocking(move || {
+  let (project, page, led_in) = blocking(move || {
     let open = services.project(&args.project)?;
     let db = ProjectDb::open(&open.repo_root)?;
     let module = find_module(&db, &args.module)?;
     let page = ModulePage::read(&db, module.id(), orchester_core::time::Timestamp::now())?
       .ok_or_else(|| ToolError::not_found(Missing::Module, &args.module))?;
-    Ok(page_json(open.project.id(), &page))
+    let led_in = WatchReads::read(&db, &open.repo_root)?.module_led_in(module.id());
+    Ok((open.project.id(), page, led_in))
   })
-  .await
+  .await?;
+  let mut page = page_json(project, &page);
+  page["led_in"] = watches::led_in_json(&led_in, translate);
+  Ok(page)
 }
 
 pub async fn create_module(services: &Services, args: CreateModule) -> Result<Value, ToolError> {
