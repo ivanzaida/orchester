@@ -15,7 +15,7 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::project::TaskKey;
-use orchester_workspace::tasks::review_list::{ReviewRow, ReviewState};
+use orchester_workspace::tasks::review_list::{Pager, ReviewRow, ReviewState};
 
 use super::{
   files::{FILES_WIDTH, ROW_HEIGHT},
@@ -46,7 +46,8 @@ const STANDING_BONE: f32 = 141.0;
 const META_BONE: f32 = 386.0;
 
 /// The page while its run's changes are read.
-pub(super) fn page(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey) -> Element {
+/// `waiting` is the pager the crumbs show while the page reads, as they show it once read.
+pub(super) fn page(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey, waiting: Option<&Pager>) -> Element {
   ctx.provide(FromFirstFrame);
   let row = known(project, key);
   let navigation = Navigation::of(ctx);
@@ -55,7 +56,7 @@ pub(super) fn page(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey) -> Elem
   let columns = Skeleton::new("review-reading", ctx.t("review_page.reading"))
     .fills()
     .show(ctx, columns(ctx));
-  frame(ctx, project, (key, row.as_ref().map(|row| row.number)))
+  frame(ctx, project, (key, row.as_ref().map(|row| row.number)), waiting)
     .child(header)
     .child(status)
     .child(columns)

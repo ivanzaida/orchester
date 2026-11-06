@@ -16,6 +16,7 @@ mod crumbs;
 mod diff;
 mod files;
 mod head;
+mod pager;
 mod read;
 mod reading;
 mod state;
@@ -50,6 +51,7 @@ use orchester_core::{
 };
 use orchester_workspace::tasks::{
   changes::Checkpointed,
+  review_list::Pager,
   review_threads::{page::ReviewPage, read::Review},
 };
 use parking_lot::Mutex;
@@ -61,6 +63,7 @@ use self::{
   read::{Read, read},
   state::ReviewState,
 };
+use super::list::read::last_read;
 use crate::{
   navigation::Navigation,
   project::ShownProject,
@@ -95,20 +98,26 @@ impl DevtoolsInspectable for Props {}
 struct TaskScreen {
   /// Counts Try again after a failed read and the changes the page made.
   again: Signal<u64>,
+  /// Where the task stood in *Waiting for you* when the page last saw it there: once it left, the page stays on it.
+  stood: Mutex<Option<usize>>,
 }
 
 impl Component for TaskScreen {
   type Props = Props;
 
   fn create(ctx: &mut Ctx) -> Self {
-    Self { again: ctx.signal(0) }
+    Self {
+      again: ctx.signal(0),
+      stood: Mutex::new(None),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let Props { project, key } = ctx.props::<Props>().clone();
+    let waiting = pager::of(last_read(ctx, &project).as_ref(), &key, &mut self.stood.lock());
     let page = match read(ctx, &project, &key, self.again.get()) {
       Read::Ready(page) => page,
-      Read::Reading => return reading::page(ctx, &project, &key),
+      Read::Reading => return reading::page(ctx, &project, &key, waiting.as_ref()),
       Read::Nothing => {
         let nothing = EmptyState::new(
           "review-no-run",
@@ -117,7 +126,9 @@ impl Component for TaskScreen {
           ctx.t("review_page.noRunBody"),
         )
         .wide();
-        return frame(ctx, &project, (&key, None)).child(nothing).into();
+        return frame(ctx, &project, (&key, None), waiting.as_ref())
+          .child(nothing)
+          .into();
       }
       Read::Failed(reason) => {
         let again = self.again.clone();
@@ -128,7 +139,9 @@ impl Component for TaskScreen {
           (&ctx.t("review_page.readFailed"), &body),
           move || again.update(|count| *count += 1),
         );
-        return frame(ctx, &project, (&key, None)).child(failed).into();
+        return frame(ctx, &project, (&key, None), waiting.as_ref())
+          .child(failed)
+          .into();
       }
     };
     ctx.mount_keyed::<ReviewScreen>(
@@ -136,6 +149,7 @@ impl Component for TaskScreen {
       BodyProps {
         project,
         page,
+        waiting,
         written: self.again.clone(),
       },
     )
@@ -143,8 +157,8 @@ impl Component for TaskScreen {
 }
 
 /// The page's frame with its breadcrumb: 20 over it, 28 at its sides, its parts 12 apart (`W31YR`).
-fn frame(ctx: &mut Ctx, project: &ShownProject, run: (&TaskKey, Option<RunNumber>)) -> Column {
-  Column::new()
+fn frame(ctx: &mut Ctx, project: &ShownProject, run: (&TaskKey, Option<RunNumber>), waiting: Option<&Pager>) -> Column {
+  let column = Column::new()
     .id("screen-review")
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
@@ -156,19 +170,27 @@ fn frame(ctx: &mut Ctx, project: &ShownProject, run: (&TaskKey, Option<RunNumber
         .bottom(SpacingSize::Lg),
     )
     .spacing(SpacingSize::Md)
-    .child(crumbs(ctx, project, run))
+    .child(crumbs(ctx, project, run, waiting));
+  match waiting {
+    Some(waiting) => column.on_key_down(pager::keys(Navigation::of(ctx), project, waiting)),
+    None => column,
+  }
 }
 
 #[derive(Clone)]
 struct BodyProps {
   project: ShownProject,
   page: Arc<ReviewPage>,
+  waiting: Option<Pager>,
   written: Signal<u64>,
 }
 
 impl PartialEq for BodyProps {
   fn eq(&self, other: &Self) -> bool {
-    self.project == other.project && self.page == other.page && self.written.id() == other.written.id()
+    self.project == other.project
+      && self.page == other.page
+      && self.waiting == other.waiting
+      && self.written.id() == other.written.id()
   }
 }
 
@@ -226,10 +248,12 @@ impl Component for ReviewScreen {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let BodyProps { project, page, .. } = ctx.props::<BodyProps>().clone();
+    let BodyProps {
+      project, page, waiting, ..
+    } = ctx.props::<BodyProps>().clone();
     let key = (page.run.key.clone(), page.run.number);
     let live = read::live(ctx, &project, page.run.run, self.state.written.get());
-    let frame = frame(ctx, &project, (&key.0, Some(key.1)));
+    let frame = frame(ctx, &project, (&key.0, Some(key.1)), waiting.as_ref());
     let (Some(head), Checkpointed::Read { changes, .. }) = (page.review.head.clone(), &page.changes) else {
       return Element::from(frame.child(self.nothing(ctx, &page)));
     };
