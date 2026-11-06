@@ -10,7 +10,8 @@
 //!   (the tray idle with it), a question asked with nothing from Implement yet (3), one Implement is answering (4), a
 //!   stopped answer (5), an answered question (6), a question not asked because the runner was not running (11), an
 //!   addressed comment (10) and a resolved comment; on `settings.rs`, a comment a later checkpoint outdated. The
-//!   migration is marked *Viewed*, so it shows folded.
+//!   migration is marked *Viewed*, so it shows folded. Its last step reported (ORC-797), so the page tells the first
+//!   sentence of that report with *Run summary →*; the other two runs reported nothing and show no row.
 //! - *Per-endpoint secrets*, waiting for review: two comments whose send the runner did not take (the tray failed).
 //! - *Delivery log per endpoint*: a run returned to Implement with a comment sent, Implement at work on it (9); its
 //!   Implement step wrote the run's last checkpoint, so the comment's Conversation link names it (*step 03 Implement*).
@@ -24,7 +25,8 @@ use orchester_core::{
     AgentWords, CommentState, QuestionState, ReviewFailure, ReviewMessage, ReviewThread, Said, ThreadKind, ThreadParts,
   },
   revision::Revision,
-  run::Run,
+  run::{Run, StepOutcome, StepOutput},
+  store::ActivityStore,
   task::Task,
   time::Timestamp,
 };
@@ -38,6 +40,9 @@ const MIGRATION: &str = "migrations/0042_delivery_attempts.sql";
 /// The doc line of the retry budget the first checkpoint writes and the second rewrites.
 const BUDGET_DOC: &str = "  /// Attempts per delivery, the first included.";
 const BUDGET_DOC_AFTER: &str = "  /// Attempts per delivery, the first one included.";
+/// What the first run's last step reported: its first sentence is the page's summary row.
+const REPORT: &str = "## Retries\nDeliveries now retry with a capped, jittered backoff that honours Retry-After, and stop \
+                      after the settings' budget. Every attempt is logged, and a test covers the bound.";
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   let catalogue = kontur.delivering_catalogue()?;
@@ -74,6 +79,7 @@ fn every_thread(kontur: &mut Kontur, quick: &Published) -> Result<(), SeedError>
   drive.checkpoint("implement", &[(SETTINGS, settings)])?;
   drive.pass_with("implement", &[])?.pass_all()?;
   let run = drive.finish();
+  report(kontur, &run)?;
   let head = checkpoint(&run)?;
   let sender = added(&content(&work, SENDER)?);
   let line = |at: usize| -> Result<(String, u32, u32, Vec<String>), SeedError> {
@@ -111,6 +117,33 @@ fn every_thread(kontur: &mut Kontur, quick: &Published) -> Result<(), SeedError>
   kontur
     .db
     .mark_review_viewed((run.id(), &head, MIGRATION), Some(viewed))?;
+  Ok(())
+}
+
+/// The report the last step of `run` wrote.
+fn report(kontur: &mut Kontur, run: &Run) -> Result<(), SeedError> {
+  let step = run
+    .snapshot()
+    .body()
+    .steps()
+    .last()
+    .ok_or_else(|| SeedError::Invalid("the run has no steps".to_owned()))?
+    .key
+    .clone();
+  let execution = run
+    .latest_execution(&step)
+    .ok_or_else(|| SeedError::NoSuchStep(step.to_string()))?
+    .id();
+  let output = StepOutput {
+    run: run.id(),
+    execution,
+    step,
+    outcome: Some(StepOutcome::Done),
+    text: REPORT.to_owned(),
+    unverified: Vec::new(),
+    created_at: kontur.today_ago(30),
+  };
+  kontur.db.save_step_output(&output)?;
   Ok(())
 }
 

@@ -13,7 +13,7 @@ use orchester_core::{
   project::TaskKey,
   resource::StepKey,
   revision::Revision,
-  run::{BranchName, Run, RunNumber, RunStatus, StepStatus},
+  run::{BranchName, Run, RunNumber, RunStatus, StepStatus, last_report},
   store::{MergeStore, RunStore},
 };
 use orchester_exec::programs::Programs;
@@ -62,6 +62,9 @@ pub struct ReviewPage {
   pub implement: Option<Implement>,
   /// How many of the run's steps passed, of how many.
   pub steps: (usize, usize),
+  /// What the run's last step that reported said: the run's *Run summary* on its task page. `None` when no step
+  /// reported anything, and when the run is not the task's latest, whose steps the page does not read.
+  pub summary: Option<Arc<str>>,
 }
 
 impl ReviewPage {
@@ -163,14 +166,8 @@ pub fn review_page(
       agent: step.agent.clone(),
     })
   });
-  let steps = view.map_or((0, 0), |view| {
-    let passed = view
-      .steps
-      .iter()
-      .filter(|step| step.status == Some(StepStatus::Passed))
-      .count();
-    (passed, view.steps.len())
-  });
+  let steps = view.map_or((0, 0), steps_passed);
+  let summary = view.and_then(summary_of);
   Ok(Some(ReviewPage {
     run: MergeRun {
       task: task.id(),
@@ -192,7 +189,23 @@ pub fn review_page(
     review,
     implement,
     steps,
+    summary,
   }))
+}
+
+/// How many of `view`'s steps passed, of how many.
+fn steps_passed(view: &RunView) -> (usize, usize) {
+  let passed = view
+    .steps
+    .iter()
+    .filter(|step| step.status == Some(StepStatus::Passed))
+    .count();
+  (passed, view.steps.len())
+}
+
+/// What the last step of `view`'s run that reported said.
+fn summary_of(view: &RunView) -> Option<Arc<str>> {
+  last_report(&view.run, &view.outputs, &view.plans).map(|(_, report)| Arc::from(report))
 }
 
 /// The writing step at work on `view`'s run, which has not ended, so no step is one its work can go back to: the

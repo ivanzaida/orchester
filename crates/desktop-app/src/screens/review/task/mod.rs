@@ -15,6 +15,7 @@ mod files;
 mod head;
 mod read;
 mod state;
+mod summary;
 mod tag;
 mod thread;
 mod tray;
@@ -251,6 +252,7 @@ impl Component for ReviewScreen {
       .on_key_down(stop_on_escape(&env))
       .child(head::header(ctx, &env))
       .child(head::status(ctx, &env))
+      .with_children(summary::summary(ctx, &env))
       .with_children(head::changed(ctx, &env))
       .with_children(self.state.failure.get().map(|reason| -> Element {
         Notice::new("review-not-done", NoticeTone::Danger, message_text(ctx, &reason)).into()

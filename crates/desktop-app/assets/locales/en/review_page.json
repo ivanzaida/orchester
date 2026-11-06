@@ -25,6 +25,9 @@
       "head": "head {{head}}",
       "into": "into {{branch}}"
     },
+    "summary": {
+      "link": "Run summary →"
+    },
     "changed": {
       "title": "Changed since your review",
       "body": "The branch moved from {{reviewed}}, the head you reviewed, to {{head}}: {{commits}}. The diff shows {{head}}; look at it, then approve it.",
