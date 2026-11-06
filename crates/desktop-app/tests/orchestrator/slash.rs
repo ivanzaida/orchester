@@ -88,6 +88,12 @@ fn orchestrator_slash_lists_the_chats_commands_and_runs_history_by_keyboard() {
   screen.until("the focus on History", |screen| {
     screen.text(HISTORY).contains("Enter") && !screen.text(NEW).contains("Enter")
   });
+  // *Watch modules* runs (ORC-772); the faded watch commands after it are passed over, back to the first row.
+  let watch_module = "orchestrator-composer-slash-watch-module";
+  screen.key(("ArrowDown", "ArrowDown"), false);
+  screen.until("the focus on Watch modules", |screen| {
+    screen.text(watch_module).contains("Enter")
+  });
   screen.key(("ArrowDown", "ArrowDown"), false);
   screen.until("the focus back on the first row", |screen| {
     screen.text(NEW).contains("Enter")

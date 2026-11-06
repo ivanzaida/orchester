@@ -44,7 +44,8 @@ fn task(db: &mut ProjectDb, title: &str) -> TaskId {
 
 /// Module `name` holding the tasks titled `titles`.
 fn module(db: &mut ProjectDb, name: &str, titles: &[&str]) -> (ModuleId, Vec<TaskId>) {
-  let details = ModuleDetails::new(Name::new(name).expect("a name"), "", (None, None), ModuleState::Open).expect("details");
+  let details =
+    ModuleDetails::new(Name::new(name).expect("a name"), "", (None, None), ModuleState::Open).expect("details");
   let module = db.create_module(details, Timestamp::now()).expect("a module").id();
   let tasks = titles
     .iter()
@@ -71,24 +72,31 @@ struct Kontur {
 fn kontur() -> Kontur {
   let mut screen = Orchestrator::new(Setup::Ready);
   let billing_chat = kept(&screen, "Billing and invoices", Timestamp::now(), "Billing it is.");
-  let here = kept(&screen, "Split Webhooks v2 and Billing", Timestamp::now(), "Tell me what to watch.");
+  let here = kept(
+    &screen,
+    "Split Webhooks v2 and Billing",
+    Timestamp::now(),
+    "Tell me what to watch.",
+  );
   let mut db = screen.db();
-  let (webhooks, _) = module(&mut db, "Webhooks v2", &["Retry failed deliveries", "Sign webhook payloads"]);
+  let (webhooks, _) = module(
+    &mut db,
+    "Webhooks v2",
+    &["Retry failed deliveries", "Sign webhook payloads"],
+  );
   let (billing, _) = module(&mut db, "Billing", &["Invoice export"]);
   let (_, mobile) = module(&mut db, "Mobile release", &["Store screenshots"]);
-  db.close_task_organization(
-    mobile[0],
-    WorkflowStatus::Done,
-    (ChangeActor::Person, Timestamp::now()),
-  )
-  .expect("done");
+  db.close_task_organization(mobile[0], WorkflowStatus::Done, (ChangeActor::Person, Timestamp::now()))
+    .expect("done");
   task(&mut db, "Shared rate limiter");
   let led = Subscription::new(billing_chat, WatchTarget::Module(billing), "", Timestamp::now());
   db.start_subscription(&led).expect("led");
   drop(db);
   screen.go(OrchestratorChat::Chat(here));
   screen.until("the conversation", |screen| {
-    screen.text("orchestrator-conversation").contains("Tell me what to watch.")
+    screen
+      .text("orchestrator-conversation")
+      .contains("Tell me what to watch.")
   });
   Kontur {
     screen,
@@ -157,19 +165,21 @@ fn orchestrator_watch_module_picker_lists_modules_who_leads_them_and_the_whole_t
     assert!(shown.contains(words), "{words}: {shown}");
   }
   let webhooks_row = screen.text(&row(webhooks));
-  assert!(webhooks_row.contains("Enter"), "the focus starts on the first module: {webhooks_row}");
+  assert!(
+    webhooks_row.contains("Enter"),
+    "the focus starts on the first module: {webhooks_row}"
+  );
   let order: Vec<f32> = ["Webhooks v2", "Billing", "Mobile release", "Tasks without a module"]
     .iter()
     .map(|words| {
-      let found = screen
-        .text(PICKER)
-        .replace('\u{a0}', " ")
-        .find(words)
-        .expect("shown");
+      let found = screen.text(PICKER).replace('\u{a0}', " ").find(words).expect("shown");
       found as f32
     })
     .collect();
-  assert!(order.windows(2).all(|pair| pair[0] < pair[1]), "in 02's order: {order:?}");
+  assert!(
+    order.windows(2).all(|pair| pair[0] < pair[1]),
+    "in 02's order: {order:?}"
+  );
   assert!(
     (screen.bounds(PICKER).width - 560.0).abs() < 0.5,
     "560 wide: {:?}",
@@ -177,7 +187,9 @@ fn orchestrator_watch_module_picker_lists_modules_who_leads_them_and_the_whole_t
   );
 
   screen.key(("Enter", "Enter"), false);
-  screen.until("Webhooks v2 added", |screen| screen.text(&row(webhooks)).contains("Added"));
+  screen.until("Webhooks v2 added", |screen| {
+    screen.text(&row(webhooks)).contains("Added")
+  });
   assert!(
     screen.exists(&format!("orchestrator-composer-choice-{webhooks}")),
     "the module is a chip"
@@ -199,14 +211,16 @@ fn orchestrator_watch_module_filters_by_name_and_ctrl_enter_watches_with_the_ord
     mut screen,
     here,
     webhooks,
+    billing,
     ..
   } = kontur();
   open_picker(&mut screen);
   screen.set(INPUT, "hoo");
+  // The matched letters are a piece of their own, so the row is found by its id rather than its whole name.
   screen.until("only Webhooks v2", |screen| {
-    let shown = screen.text(PICKER);
-    shown.contains("Webhooks") && !shown.contains("Billing") && shown.contains("1 of 3")
+    screen.exists(&row(webhooks)) && !screen.exists(&row(billing)) && screen.text(PICKER).contains("1 of 3")
   });
+  assert!(screen.text(&row(webhooks)).contains("hoo"), "the matched letters show");
   screen.key(("Enter", "Enter"), false);
   screen.until("the chip", |screen| {
     screen.exists(&format!("orchestrator-composer-choice-{webhooks}"))
@@ -224,6 +238,6 @@ fn orchestrator_watch_module_filters_by_name_and_ctrl_enter_watches_with_the_ord
   let subscriptions = screen.db().active_subscriptions().expect("read");
   let led = subscriptions.of(WatchTarget::Module(webhooks)).expect("led");
   assert_eq!(led.chat(), here, "this conversation leads it");
-  assert_eq!(led.order(), "Ask before merging.");
+  assert_eq!(led.order(), Some("Ask before merging."));
   screen.until("the chips to go", |screen| !screen.exists(CHIP));
 }

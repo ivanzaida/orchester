@@ -33,7 +33,7 @@ use orchester_workspace::{
 use crate::{
   navigation::Navigation,
   routes::{OrchestratorChat, ProjectPage, Route},
-  theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, SlashText},
+  theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, IconSize, SlashText},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -67,6 +67,8 @@ pub(super) struct Shown<'a> {
   pub(super) focused: Option<usize>,
   /// How many open modules the project has.
   pub(super) total: usize,
+  /// Opens the conversation a *Led in* names.
+  pub(super) navigation: Navigation,
 }
 
 /// The panel with its rows and the keys.
@@ -132,7 +134,7 @@ pub(super) fn unreadable(
     .child(
       Text::new(&ctx.t_args("orchestrator.watch.modules.unreadable", [("project", project)]))
         .id(format!("{id}-watch-module-unreadable-title"))
-        .variant(ExtraTypography::NoticeHeading.role()),
+        .variant(TypographyStyle::Label),
     )
     .child(
       Text::new(&ctx.t_args("orchestrator.watch.modules.unreadableNote", [("reason", reason)]))
@@ -234,10 +236,7 @@ fn row(ctx: &Ctx, shown: &Shown<'_>, at: usize) -> Element {
   ];
   children.extend(state(ctx, shown, (entry, &choice.key)));
   if focused {
-    children.push(key_cap(
-      "watch-module-enter",
-      &ctx.t("orchestrator.watch.keys.enter"),
-    ));
+    children.push(key_cap("watch-module-enter", &ctx.t("orchestrator.watch.keys.enter")));
   }
   let row = line()
     .id(format!("{}-watch-module-{}", shown.id, choice.key))
@@ -275,9 +274,7 @@ fn name(label: &str, filter: &str) -> Element {
     let words = &label[range];
     (!words.is_empty()).then(|| {
       let style = if bold { SlashText::Match } else { SlashText::Label };
-      Text::new(&words.replace(' ', "\u{a0}"))
-        .variant(style.role())
-        .nowrap()
+      Text::new(&words.replace(' ', "\u{a0}")).variant(style.role()).nowrap()
     })
   };
   Row::new()
@@ -362,7 +359,12 @@ fn state(ctx: &Ctx, shown: &Shown<'_>, (entry, key): (&ModuleEntry, &str)) -> Op
 
 /// *Led in «title» ↗*, which opens conversation `chat`: in `warning`, a conflict for the command, except on the whole
 /// project, which every more specific subscription takes from.
-fn led_in(ctx: &Ctx, shown: &Shown<'_>, (entry, key): (&ModuleEntry, &str), (chat, title): (ChatId, Option<&str>)) -> Element {
+fn led_in(
+  ctx: &Ctx,
+  shown: &Shown<'_>,
+  (entry, key): (&ModuleEntry, &str),
+  (chat, title): (ChatId, Option<&str>),
+) -> Element {
   let color = if entry.target == WatchTarget::Project {
     PaletteColor::TextMuted
   } else {
@@ -373,7 +375,7 @@ fn led_in(ctx: &Ctx, shown: &Shown<'_>, (entry, key): (&ModuleEntry, &str), (cha
     None => ctx.t("orchestrator.watch.modules.ledInUnnamed"),
   };
   let route = Route::Project(shown.project, ProjectPage::Orchestrator(OrchestratorChat::Chat(chat)));
-  Press::Open(Navigation::of(ctx).to(route))
+  Press::Open(shown.navigation.to(route))
     .button()
     .id(format!("{}-watch-module-{key}-led-in", shown.id))
     .describe("chat", chat.to_string())
@@ -381,7 +383,7 @@ fn led_in(ctx: &Ctx, shown: &Shown<'_>, (entry, key): (&ModuleEntry, &str), (cha
     .min_width(Dimension::Px(0.0))
     .spacing(ExtraSpacing::Pair.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::MessagesSquare, IconSize::Sm, color))
+    .child(icon(Icon::MessagesSquare, IconSize::Sm, color.clone()))
     .child(
       Text::new(&words)
         .variant(TypographyStyle::Caption)

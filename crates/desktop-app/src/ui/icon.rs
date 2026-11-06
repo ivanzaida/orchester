@@ -57,7 +57,7 @@ icons! {
   Bot => '\u{e1bb}',
   // Also the design's `text-select`, which `lucide.ttf` has no glyph for (`wecdw`): the same dashed box.
   BoxSelect => '\u{e1cb}',
-  Boxes => '\u{f7f0}',
+  Boxes => '\u{e2d0}',
   Braces => '\u{e36a}',
   Brain => '\u{e3c6}',
   Calendar => '\u{e063}',
@@ -140,7 +140,7 @@ icons! {
   Folder => '\u{e0d7}',
   FolderCheck => '\u{e32e}',
   FolderGit2 => '\u{e40a}',
-  FolderKanban => '\u{f7f1}',
+  FolderKanban => '\u{e4c6}',
   FolderLock => '\u{e336}',
   FolderOpen => '\u{e247}',
   FolderPlus => '\u{e0d9}',

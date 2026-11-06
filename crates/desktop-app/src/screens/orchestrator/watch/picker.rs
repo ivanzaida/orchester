@@ -9,7 +9,10 @@ use std::{
   sync::Arc,
 };
 
-use lurq::{app::ctx::Ctx, core::Signal};
+use lurq::{
+  app::{component::DevtoolsInspectable, ctx::Ctx},
+  core::Signal,
+};
 use orchester_core::{
   id::{ChatId, ProjectId},
   orchestrator::WatchTarget,
@@ -28,6 +31,7 @@ use super::{
   target_of,
 };
 use crate::{
+  navigation::Navigation,
   project::ShownProject,
   screens::orchestrator::{data, draft::Conversation},
   services::Services,
@@ -56,6 +60,12 @@ enum Catalog {
   Read(Arc<WatchCatalog>),
 }
 
+/// The catalog as the picker's reading holds it.
+#[derive(Clone, PartialEq)]
+struct Read(Arc<WatchCatalog>);
+
+impl DevtoolsInspectable for Read {}
+
 impl ModulePicker {
   pub(super) fn new(project: &ShownProject, of: Signal<Option<Conversation>>) -> Self {
     Self {
@@ -76,7 +86,7 @@ impl ModulePicker {
     let saves = self.saves.get();
     let hold = services.hold;
     let state = ctx
-      .future((self.root.clone(), revision, saves), move |(root, _, _)| {
+      .future((self.root.clone(), revision, saves), move |(root, ..)| {
         let hold = hold.clone();
         async move {
           hold.released().await;
@@ -88,14 +98,15 @@ impl ModulePicker {
     let rejected = state.is_rejected();
     match (state.data, state.error) {
       (_, Some(error)) if rejected => Catalog::Unreadable(error),
-      (Some(catalog), _) => Catalog::Read(catalog),
+      (Some(Read(catalog)), _) => Catalog::Read(catalog),
       (None, Some(error)) => Catalog::Unreadable(error),
       (None, None) => Catalog::Reading,
     }
   }
 
   /// The rows of `catalog` for what was `asked`.
-  fn offer_read(&self, ctx: &Ctx, asked: &Asked<'_>, catalog: &WatchCatalog) -> Offer {
+  fn offer_read(&self, ctx: &mut Ctx, asked: &Asked<'_>, catalog: &WatchCatalog) -> Offer {
+    let navigation = Navigation::of(ctx);
     let chat = match self.of.get() {
       Some(Conversation::Chat(id)) => id,
       Some(Conversation::New) | None => self.unkept,
@@ -110,7 +121,12 @@ impl ModulePicker {
       .collect();
     let rows = offered
       .iter()
-      .map(|(entry, choice)| (choice.clone(), entry.faded.is_none() && entry.leader != Leader::JustAdded))
+      .map(|(entry, choice)| {
+        (
+          choice.clone(),
+          entry.faded.is_none() && entry.leader != Leader::JustAdded,
+        )
+      })
       .collect();
     let panel = rows::panel(
       ctx,
@@ -121,6 +137,7 @@ impl ModulePicker {
         offered: &offered,
         focused: asked.focused,
         total,
+        navigation,
       },
     );
     Offer { rows, panel }
@@ -178,11 +195,11 @@ fn modules_in(entries: &[ModuleEntry]) -> usize {
 }
 
 /// The catalog of the project at `root`. Blocks on SQLite.
-fn catalog_in(root: &Path) -> Result<Arc<WatchCatalog>, Message> {
+fn catalog_in(root: &Path) -> Result<Read, Message> {
   let read = || -> Result<_, StoreError> {
     let db = ProjectDb::open(root)?;
     let tasks = ProjectTasks::read(&db, root, None)?;
-    Ok(Arc::new(WatchCatalog::of(&tasks, Leaders::read(&db)?)))
+    Ok(Read(Arc::new(WatchCatalog::of(&tasks, Leaders::read(&db)?))))
   };
   read().map_err(|error| {
     tracing::error!(%error, "cannot read what the module picker offers");

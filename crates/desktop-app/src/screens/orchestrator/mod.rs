@@ -222,17 +222,7 @@ impl Component for OrchestratorScreen {
       watching: watch::watch_action(ctx),
     };
     rewind::watch(ctx, &view);
-    let taker = view.clone();
-    ctx.watch(&view.queued.state(), move |state| {
-      if let Some(taken) = state
-        .data
-        .as_ref()
-        .filter(|_| state.is_fulfilled())
-        .and_then(|changed| changed.taken.as_ref())
-      {
-        taker.take_back(taken);
-      }
-    });
+    take_back_queued(ctx, &view);
     let project = ctx.props::<Props>().project.open.project.id();
     watch::follow(ctx, &view, project);
     let of = view.of.clone();
@@ -371,6 +361,21 @@ fn escape(view: &View) -> impl Fn(KeyboardEvent) + Send + Sync + 'static {
     }
     event.prevent_default();
   }
+}
+
+/// A queued message taken back by *Edit*: its words and files go into the composer.
+fn take_back_queued(ctx: &mut Ctx, view: &View) {
+  let taker = view.clone();
+  ctx.watch(&view.queued.state(), move |state| {
+    if let Some(taken) = state
+      .data
+      .as_ref()
+      .filter(|_| state.is_fulfilled())
+      .and_then(|changed| changed.taken.as_ref())
+    {
+      taker.take_back(taken);
+    }
+  });
 }
 
 impl View {
