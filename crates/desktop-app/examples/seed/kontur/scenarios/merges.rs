@@ -256,7 +256,7 @@ pub(super) fn ready(
 
 /// A run titled `title` merged today, started `ago` minutes before now, its merge asked for by `asked`; with `before`,
 /// after an attempt that ended so.
-fn merged_today(
+pub(super) fn merged_today(
   kontur: &mut Kontur,
   pipeline: &Published,
   (title, ago): (&str, i64),
@@ -272,7 +272,7 @@ fn merged_today(
 }
 
 /// Deletes `run`'s branch, as Orchester's cleanup does once the run merged (`branch deleted` in 09 `Os7b3`).
-fn branch_deleted(kontur: &Kontur, run: &Run) -> Result<(), SeedError> {
+pub(super) fn branch_deleted(kontur: &Kontur, run: &Run) -> Result<(), SeedError> {
   git::delete_branch(&kontur.repo, run.branch().as_str())?;
   Ok(())
 }
@@ -309,7 +309,7 @@ pub(super) fn minutes_into_today(kontur: &Kontur) -> i64 {
 }
 
 /// A run of Feature delivery titled `title` waiting for approval in the merge queue, checked at its last checkpoint.
-fn waiting_in_queue(kontur: &mut Kontur, feature: &Published, title: &str) -> Result<Run, SeedError> {
+pub(super) fn waiting_in_queue(kontur: &mut Kontur, feature: &Published, title: &str) -> Result<Run, SeedError> {
   let run = passed(
     kontur,
     feature,
@@ -344,7 +344,7 @@ fn head(run: &Run) -> Result<orchester_core::revision::Revision, SeedError> {
 }
 
 /// `count` review comments on the first line of `run`'s work, written and not sent to Implement.
-fn unsent_comments(kontur: &mut Kontur, run: &Run, count: u32) -> Result<(), SeedError> {
+pub(super) fn unsent_comments(kontur: &mut Kontur, run: &Run, count: u32) -> Result<(), SeedError> {
   let head = head(run)?;
   let invalid = |error: String| SeedError::Invalid(error);
   let line = NonZeroU32::MIN;

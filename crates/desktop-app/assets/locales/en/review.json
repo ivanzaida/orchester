@@ -1,5 +1,59 @@
 {
   "review": {
+    "title": "Review",
+    "lead": "Tasks whose run finished. Read the code, comment or ask the agent, then approve.",
+    "search": {
+      "label": "Search review",
+      "placeholder": "Search review",
+      "clear": "Clear search",
+      "keys": "/"
+    },
+    "groups": {
+      "waiting": "Waiting for you",
+      "withAgent": "With the agent",
+      "approved": "Approved today",
+      "toggle": "Show or hide {{group}}"
+    },
+    "empty": {
+      "title": "Nothing waits for your review",
+      "hint": "a task shows up here when its run finishes every step"
+    },
+    "noMatch": "No task waiting for you matches the search",
+    "state": {
+      "commentsNotSent": {
+        "one": "1 comment not sent",
+        "other": "{{count}} comments not sent"
+      },
+      "changed": "Changed since your review",
+      "ready": "Ready for review",
+      "conflicts": {
+        "named": "Conflicts with {{base}}",
+        "unnamed": "Conflicts with its base branch"
+      },
+      "implementOn": {
+        "one": "Implement is on 1 comment",
+        "other": "Implement is on {{count}} comments"
+      },
+      "merged": {
+        "named": "Merged into {{base}}",
+        "unnamed": "Merged"
+      },
+      "merging": {
+        "named": "Merging into {{base}}",
+        "unnamed": "Merging"
+      }
+    },
+    "files": {
+      "one": "1 file",
+      "other": "{{count}} files"
+    },
+    "additions": "+{{count}}",
+    "deletions": "−{{count}}",
+    "comments": "{{count}} open comment threads",
+    "open": "Review",
+    "loading": "Reading the tasks to review…",
+    "readFailed": "The review list cannot be read",
+    "readFailedBody": "Reading the tasks to review failed. {{reason}} No task was changed.",
     "unavailable": {
       "title": "Review is being rebuilt",
       "taskTitle": "Review of {{key}} is being rebuilt",

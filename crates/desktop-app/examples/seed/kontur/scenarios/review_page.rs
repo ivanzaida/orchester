@@ -299,7 +299,7 @@ fn failed_send(kontur: &mut Kontur, quick: &Published) -> Result<(), SeedError> 
 }
 
 /// *Delivery log per endpoint*: its comment was sent, and Implement works on it.
-fn at_work(kontur: &mut Kontur, quick: &Published) -> Result<(), SeedError> {
+pub(super) fn at_work(kontur: &mut Kontur, quick: &Published) -> Result<(), SeedError> {
   let task = queued(
     kontur,
     quick,

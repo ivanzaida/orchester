@@ -97,6 +97,8 @@ pub struct ProjectFeed {
   pub hub_unread: Signal<u8>,
   /// What Review › Merges read last, which it shows again at once when it opens again and reads them anew.
   pub merges: Signal<Option<LastMerges>>,
+  /// What the Review list read last, shown again at once when it opens again while it is read anew.
+  pub review: Signal<Option<orchester_workspace::tasks::review_list::ReviewList>>,
   /// Whether the sidebar's Configure section is folded for the project, in every tab of the session.
   pub configure_folded: Signal<bool>,
   /// The team's configuration as the five libraries show it, while the project is shared (`team`); `None` while it is
@@ -198,6 +200,7 @@ impl ProjectFeed {
       hub_counts: Signal::new(None),
       hub_unread: Signal::new(0),
       merges: Signal::new(None),
+      review: Signal::new(None),
       configure_folded: Signal::new(false),
       team: Signal::new(None),
       offline: Arc::default(),

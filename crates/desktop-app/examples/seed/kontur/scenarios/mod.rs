@@ -42,6 +42,7 @@ mod project_settings;
 mod pull_requests;
 pub mod qa_app_asks;
 mod review_changed;
+mod review_list;
 mod review_page;
 mod reviewer_rows;
 mod run_context;
@@ -109,7 +110,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 159] = [
+pub const ALL: [Scenario; 160] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -187,6 +188,7 @@ pub const ALL: [Scenario; 159] = [
   Scenario::of("merge-attempts", merge_attempts::seed),
   Scenario::of("review-page", review_page::seed),
   Scenario::of("review-changed", review_changed::seed),
+  Scenario::of("review-list", review_list::seed),
   Scenario::of("task-merge-row", task_merge_row::seed),
   Scenario::of("task-merge-card-ready", task_merge_card::ready_to_merge),
   Scenario::of("task-merge-card-refused", task_merge_card::refused_at_lock),

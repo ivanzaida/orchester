@@ -114,7 +114,7 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::Overview(_) => overview::screen(ctx, project),
     ProjectPage::Orchestrator(chat) => orchestrator::screen(ctx, project, *chat),
     ProjectPage::OrchestratorSettings => orchestrator::settings(ctx, project),
-    ProjectPage::Review => review::list(ctx),
+    ProjectPage::Review => review::list(ctx, project),
     ProjectPage::TaskReview(key) => review::task(ctx, key),
     ProjectPage::MergeQueue => merge_queue::screen(ctx, project),
     ProjectPage::Memory(tab) => memory::screen(ctx, project, *tab),
