@@ -116,7 +116,7 @@ pub struct Leader {
 pub enum LedIn {
   /// No subscription covers it: its events go to the usual conversation.
   Nobody,
-  Chat(Leader),
+  Chat(Box<Leader>),
 }
 
 impl LedIn {
@@ -180,12 +180,12 @@ impl WatchReads {
       // A task is led through its own subscription only, which is `own`.
       WatchTarget::Task(_) => titled("orchestrator.watch.ledIn.chat"),
     };
-    LedIn::Chat(Leader {
+    LedIn::Chat(Box::new(Leader {
       chat,
       link: Link::Orchestrator(self.project, chat).path(),
       via: (via != own).then(|| self.target_view(via)),
       title,
       words,
-    })
+    }))
   }
 }
