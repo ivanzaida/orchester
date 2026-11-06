@@ -8,7 +8,7 @@ use orchester_core::{
   id::ChatId,
   orchestrator::{
     Chat, ChatEvent, Subscription, Subscriptions, WatchTarget,
-    watch::{EndReason, WatchEnd},
+    watch::{EndReason, WatchEnd, WatchSummary},
   },
   time::Timestamp,
 };
@@ -122,6 +122,26 @@ impl ProjectDb {
     at: Timestamp,
   ) -> Result<Option<Subscription>, StoreError> {
     self.end_led(chat, target, WatchEnd::ByItself(reason), at)
+  }
+
+  /// `subscription` ends by itself at `at`, for `summary`'s reason, and its conversation keeps `summary` (its line, and
+  /// the turn it starts when it is automatic), in one transaction. Whether it ended: `false` when `subscription` no
+  /// longer leads its target (it was stopped, taken over or renewed meanwhile), which leaves everything as it was.
+  pub fn end_subscription_by_itself(
+    &mut self,
+    subscription: &Subscription,
+    summary: &WatchSummary,
+    at: Timestamp,
+  ) -> Result<bool, StoreError> {
+    let target = subscription.target();
+    let transaction = self.connection.transaction()?;
+    if leader(&transaction, target)?.as_ref() != Some(subscription) {
+      return Ok(false);
+    }
+    end_leader(&transaction, target, WatchEnd::ByItself(summary.reason), at)?;
+    super::orchestrator_watch_summaries::keep(&transaction, subscription, summary, at)?;
+    transaction.commit()?;
+    Ok(true)
   }
 
   /// Keeps `events`, a person's watch command and the lines it writes, in `chat` (stored with it when it is new) at

@@ -41,5 +41,6 @@ pub mod tools;
 pub mod waits;
 mod waits_on;
 pub mod watch;
+pub mod watch_ends;
 pub mod watching;
 mod widening;
