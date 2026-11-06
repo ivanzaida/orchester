@@ -26,6 +26,7 @@ mod profiles;
 mod project;
 mod project_tools;
 mod secrets;
+mod service_import;
 mod service_input;
 mod services;
 mod skill_input;
@@ -472,6 +473,7 @@ pub fn listed() -> Vec<Tool> {
     .chain(skills::SPECS)
     .chain(secrets::SPECS)
     .chain(services::SPECS)
+    .chain(service_import::SPECS)
     .chain(flaky_tests::SPECS)
     .chain(storage::SPECS)
     .map(tool)
@@ -497,6 +499,9 @@ pub async fn call(
   }
   if named(self::services::SPECS) {
     return Some(self::services::call(services, translate, name, Value::Object(arguments)).await);
+  }
+  if named(service_import::SPECS) {
+    return Some(service_import::call(services, translate, name, Value::Object(arguments)).await);
   }
   if named(flaky_tests::SPECS) {
     return Some(flaky_tests::call(services, name, Value::Object(arguments)).await);

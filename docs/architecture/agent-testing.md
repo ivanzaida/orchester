@@ -211,6 +211,27 @@ A first draft of services and stacks can be read once from `docker compose` file
 binaries; the person keeps or skips each and edits the drafts. The Orchestrator chat may propose services as cards the
 person applies (as MCP servers today), since a service runs a program.
 
+Built (ORC-254): the workspace's `agent_testing::import` reads the checkout and runs nothing of it — no git, cargo or
+package manager; folders are listed up to 6 deep without following links, past hidden folders, `node_modules`,
+`target`, `vendor`, `dist`, `build`, `out` and test folders, and each file is opened through the file tools' scope, at
+most 512 KiB (a YAML file whose aliases expand past 100 000 nodes is refused). A compose service with an `image` is a
+service whose program is that image, run as a fresh container (`RunData::DatabaseContainer`): its `command` the
+arguments (a text a shell would read is reported), its `environment` values the variables (one Compose takes from where
+it runs is reported, for a value or a secret), its `depends_on` of the same file the needs, and a `healthcheck` that
+asks a local URL an HTTP readiness check of that path (any other test, and its timings, are reported; the port is
+waited for); more than one container port is reported. A service Compose builds without an image is passed over with
+why. Each compose file's services are a stack named after its `name`, else its folder. A `package.json` script named
+`dev`, `start`, `preview` or `serve` (or `dev:…`) is `<manager> run <script>` in the package's folder, the manager the
+nearest folder up names by its lockfile or `packageManager` (else npm), so a workspace's packages run through the
+workspace's manager; ready on a line showing a local URL. A Cargo binary target (`[[bin]]`, else `src/main.rs` and
+`src/bin/`) is `cargo run --bin <name>` with the features it requires, ready when its port opens. Both get `PORT` set to
+`{{port}}` and own their folder, and say that the port they listen on cannot be read. Every proposal names its file and
+key and what it could not carry; names are slugs, kept apart across files (`postgres`, `postgres-2`). Saving the chosen
+ones makes new services and stacks whose first draft is the proposal, never a version; a name the project has already is
+kept. MCP: `list_service_proposals` and `save_service_proposals` (saving services is person_only unless *Let automation
+change agent permissions*; stacks are always taken). Not built: the import page (task 22) and the Orchestrator chat's
+proposal cards.
+
 ## Limits and load
 
 - Services at once: the app setting (computer) and each project's share.

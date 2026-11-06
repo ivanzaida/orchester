@@ -1651,6 +1651,44 @@
         "missing": "The suite needs {{name}}, which is no longer a service or a stack of this project.",
         "timeout": "Enter a whole number of minutes from 1 to {{max}}."
       }
+    },
+    "import": {
+      "errors": {
+        "checkout": "The project's checkout could not be read: {{reason}}",
+        "notProposed": "{{name}} is not among the proposals the checkout gives now. List them again and choose among those."
+      },
+      "unreadable": {
+        "io": "It could not be read: {{reason}}",
+        "tooLarge": "It holds {{size}} bytes, more than the {{max}} the import reads.",
+        "notText": "It is not UTF-8 text.",
+        "outside": "It is not read, as it lies outside the checkout or in a folder Orchester keeps to itself: {{reason}}",
+        "yaml": "It is not valid YAML: {{reason}}",
+        "yamlTooLarge": "Its aliases expand it past {{max}} nodes, so it is not read.",
+        "noServices": "It has no services.",
+        "json": "It is not valid JSON: {{reason}}",
+        "toml": "It is not valid TOML: {{reason}}",
+        "cargoName": "Its package has no name."
+      },
+      "skipped": {
+        "notAMapping": "It does not describe a service: it holds no settings.",
+        "builds": "Compose builds its image from {{context}}. Orchester starts an image as it is: build and tag it, then add it as a service.",
+        "noImage": "It names no image for Orchester to start.",
+        "invalid": "It does not make a service: {{reason}}",
+        "binWithoutName": "This binary target has no name."
+      },
+      "unmapped": {
+        "field": "Orchester has no field for this; set it up in the draft, or in the program, if the service needs it.",
+        "build": "Orchester starts the image {{image}} as it is and does not build it from {{context}}.",
+        "commandShell": "The command is one text that a shell would read; Orchester starts no shell. Write its arguments one by one in the draft.",
+        "invalid": "It cannot be passed as it is: {{reason}}",
+        "variableName": "{{name}} is not a variable name Orchester can set.",
+        "environment": "{{name}} takes its value from where Compose runs. Give it a value, or a project secret, in the draft.",
+        "need": "{{need}} is not a service the import takes from this file.",
+        "ports": "Orchester publishes only the image's lowest exposed port, on the port it gives the service; of {{ports}}, the others are not published.",
+        "healthTiming": "Orchester waits up to {{secs}} seconds for the service to be ready instead.",
+        "healthcheck": "The healthcheck runs {{command}} in the container, which Orchester does not do; it waits for the port to open instead.",
+        "port": "Orchester gives the service a port of its own and sets {{variable}} to it. Which port the program listens on cannot be read from its manifest: pass that port to it, or change the readiness check, if it listens elsewhere."
+      }
     }
   },
   "sources": {
@@ -1873,6 +1911,7 @@
       },
       "widens": {
         "newService": "A new service runs its program whenever a run starts it: with your rights, network access and no sandbox, in the run's worktree, on files its agents wrote. Allow it only where you would let those agents do that.",
+        "imported": "The import would make the services {{names}}, each running its program whenever a run starts it once published: with your rights, network access and no sandbox, in the run's worktree, on files its agents wrote. Allow it only where you would let those agents do that.",
         "firstVersion": "A service's first version lets runs start its program with your rights, network access and no sandbox, so a person publishes it.",
         "program": "The service would run {{program}} where it ran {{before}}.",
         "arguments": "The service's arguments would change, and with them what its program does.",
