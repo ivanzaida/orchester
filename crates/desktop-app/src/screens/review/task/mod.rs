@@ -1,6 +1,8 @@
 //! A task's review (ORC-795, ORC-697; `Review - v2` 02 `gSMiI`, the thread and tray states of `Review · redesign`
-//! `RBR9O`), at `/project/<id>/review/<KEY>`: the task's latest run that waits for review or was sent back from it
-//! (Implement works on comments sent from here), or, when it has none, that there is nothing to review for it. The
+//! `RBR9O`), at `/project/<id>/review/<KEY>`: the task's latest run that waits for review, was sent back from it
+//! (Implement works on comments sent from here) or was approved, or, when it has none, that there is nothing to review
+//! for it. An approved run (ORC-800, 07 `eidig`) is read-only ([`approved`]): merged or merging, with its diff and
+//! threads kept, and no **+**, comment box, tray, *Approve and merge*, *Viewed* mark or thread action. The
 //! breadcrumb, the title with *Open task* and *Approve and merge*, the status line; at the left the run's files with
 //! their *Viewed* marks; beside them the run's real diff against its base with the threads under their lines
 //! ([`diff`], [`thread`]) and the comment box ([`composer`]); under it the send tray while comments wait ([`tray`]).
@@ -8,6 +10,7 @@
 //! alone on every change of the project's runs, so an answer streams in. Esc stops an answer under way.
 
 mod actions;
+mod approved;
 mod composer;
 mod crumbs;
 mod diff;
@@ -194,6 +197,8 @@ struct Env {
   pub state: ReviewState,
   pub writes: Writes,
   pub navigation: Navigation,
+  /// A person approved the run: nothing on the page changes anything.
+  pub read_only: bool,
   /// The files marked *Viewed* at `head`.
   pub viewed: Arc<BTreeSet<String>>,
   pub counts: Arc<HashMap<Arc<str>, ThreadCounts>>,
@@ -239,6 +244,7 @@ impl Component for ReviewScreen {
       viewed: Arc::new(review.viewed.iter().map(|viewed| viewed.path.clone()).collect()),
       diff: changes.diff.clone(),
       navigation: Navigation::of(ctx),
+      read_only: page.approved.is_some(),
       writes: self.writes.clone(),
       state: self.state.clone(),
       project,
@@ -247,8 +253,12 @@ impl Component for ReviewScreen {
       head,
     };
     let body = self.body(ctx, &env, changes.key.clone());
+    let frame = if env.read_only {
+      frame
+    } else {
+      frame.on_key_down(stop_on_escape(&env))
+    };
     frame
-      .on_key_down(stop_on_escape(&env))
       .child(head::header(ctx, &env))
       .child(head::status(ctx, &env))
       .with_children(head::changed(ctx, &env))
