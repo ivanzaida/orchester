@@ -6,8 +6,7 @@
 //! (`hold_hand_offs`) shown *Sending…* in its threads and the tray, and *Approve and
 //! merge* unavailable while Implement works on a comment sent, whose link names the step at work; on
 //! `review-changed`, a branch that moved after the review
-//! (ORC-699) told with its new commits, and *Approve and merge* unavailable until they are taken in. Needs `git`, as
-//! the seed does.
+//! (ORC-699) told with its new commits (the strip's switch is `review_since`). Needs `git`, as the seed does.
 //! `cargo test -p orchester-app --test review_page review_page`.
 
 #[path = "../examples/seed/kontur/mod.rs"]
@@ -329,25 +328,16 @@ fn review_page_shows_the_plus_only_on_the_line_under_the_pointer_beside_its_numb
 }
 
 #[test]
-fn review_page_tells_the_commits_after_the_review_and_approves_only_once_they_are_taken_in() {
+fn review_page_tells_the_commits_after_the_review_and_still_approves_the_head_shown() {
   let mut page = Page::of("review-changed");
   page.open(("Sign webhook payloads", 1));
   assert_eq!(page.window.text("review-status-text"), "Changed since your review");
-  let notice = page.window.text("review-changed");
-  assert!(notice.contains("2 new commits"), "{notice}");
-  let commits = page.window.text("review-changed-commits");
-  let (newest, oldest) = (
-    commits.find("Test the 30 s bound"),
-    commits.find("Cap the delay and its jitter together"),
+  let strip = page.window.text("review-since");
+  assert!(strip.contains("2 commits since you reviewed at "), "{strip}");
+  assert!(
+    page.window.texts("review-approve-reason").is_none(),
+    "the new commits are shown, so nothing holds Approve back"
   );
-  assert!(newest.is_some() && oldest.is_some() && newest < oldest, "{commits}");
-  let reason = page.window.text("review-approve-reason");
-  assert!(reason.contains("review the new commits first"), "{reason}");
-  page.window.press("review-changed-take");
-  page.window.until("the commits taken in", |window| {
-    window.texts("review-changed").is_none() && window.texts("review-approve-reason").is_none()
-  });
-  assert_eq!(page.window.text("review-status-text"), "Waiting for your review");
 }
 
 /// The id of the first line of the diff whose id starts with `prefix`.

@@ -166,6 +166,23 @@ pub(crate) fn reviewed_head(
   )
 }
 
+/// When the head [`reviewed_head`] names was reached: the merge queue's last check on it, else the run's latest
+/// checkpoint; `None` without either.
+pub(crate) fn reviewed_at(
+  db: &ProjectDb,
+  run: RunId,
+  queued: Option<&QueueEntry>,
+) -> Result<Option<Timestamp>, StoreError> {
+  if let Some(checked) = queued.and_then(|entry| entry.checked.as_ref()) {
+    return Ok(Some(checked.at));
+  }
+  Ok(
+    db.latest_checkpoint(run)
+      .map_err(run_store_error)?
+      .map(|checkpoint| checkpoint.created_at()),
+  )
+}
+
 /// The run's commits after `reviewed` up to `head`, newest first, at most
 /// [`MAX_LISTED`](orchester_core::integration::MAX_LISTED); none while they are the same, or when git cannot tell (the
 /// log says why).

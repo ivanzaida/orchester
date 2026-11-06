@@ -42,7 +42,7 @@ use parking_lot::Mutex;
 
 mod last;
 
-pub use last::LastMerges;
+pub use last::{LastMerges, ShowingAll};
 
 use super::{Projects, hold::ReadHold, settled_read::settled_read};
 use crate::services::Services;
@@ -99,6 +99,8 @@ pub struct ProjectFeed {
   pub merges: Signal<Option<LastMerges>>,
   /// What the Review list read last, shown again at once when it opens again while it is read anew.
   pub review: Signal<Option<orchester_workspace::tasks::review_list::ReviewList>>,
+  /// The reviews that show all their changes rather than those since the review.
+  pub all_changes: Signal<ShowingAll>,
   /// Whether the sidebar's Configure section is folded for the project, in every tab of the session.
   pub configure_folded: Signal<bool>,
   /// The team's configuration as the five libraries show it, while the project is shared (`team`); `None` while it is
@@ -201,6 +203,7 @@ impl ProjectFeed {
       hub_unread: Signal::new(0),
       merges: Signal::new(None),
       review: Signal::new(None),
+      all_changes: Signal::new(ShowingAll::default()),
       configure_folded: Signal::new(false),
       team: Signal::new(None),
       offline: Arc::default(),

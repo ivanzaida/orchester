@@ -15,6 +15,7 @@ use orchester_core::{
   revision::Revision,
   run::{BranchName, Run, RunNumber, RunStatus, StepStatus},
   store::{MergeStore, RunStore},
+  time::Timestamp,
 };
 use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
@@ -29,7 +30,7 @@ use crate::tasks::{
   detail::{RunView, TaskDetail, run_store_error},
   merge_attempts::{
     merges::MergeRun,
-    read::{ReviewIn, commits_after, reviewed_head},
+    read::{ReviewIn, commits_after, reviewed_at, reviewed_head},
   },
   return_work,
 };
@@ -54,6 +55,8 @@ pub struct ReviewPage {
   pub review_in: Option<ReviewIn>,
   /// The head that was reviewed: the tip the merge queue checked, else the run's latest checkpoint.
   pub reviewed: Option<Revision>,
+  /// When `reviewed` was reached: the merge queue's last check on it, else the run's latest checkpoint.
+  pub reviewed_at: Option<Timestamp>,
   /// The run's commits after `reviewed` up to where its branch is, newest first: what changed since the review.
   pub since_review: Vec<LoggedCommit>,
   /// The run's diff from where its own work starts to where its branch is (`review.head`).
@@ -140,6 +143,7 @@ pub fn review_page(
     .filter(|entry| entry.state == QueueState::WaitingForApproval);
   let waiting = *run.status() == RunStatus::Succeeded;
   let reviewed = reviewed_head(&db, run.id(), in_queue)?;
+  let reviewed_at = reviewed_at(&db, run.id(), in_queue)?;
   drop(db);
   let review = review_of(root, programs, run.id())?;
   let sent = review.threads.iter().any(|view| view.thread.sent().is_some());
@@ -163,14 +167,7 @@ pub fn review_page(
       agent: step.agent.clone(),
     })
   });
-  let steps = view.map_or((0, 0), |view| {
-    let passed = view
-      .steps
-      .iter()
-      .filter(|step| step.status == Some(StepStatus::Passed))
-      .count();
-    (passed, view.steps.len())
-  });
+  let steps = steps_passed(view);
   Ok(Some(ReviewPage {
     run: MergeRun {
       task: task.id(),
@@ -187,12 +184,25 @@ pub fn review_page(
       ReviewIn::TaskPage
     }),
     reviewed,
+    reviewed_at,
     since_review,
     changes,
     review,
     implement,
     steps,
   }))
+}
+
+/// How many of the run's steps passed, of how many; none while its view is not read.
+fn steps_passed(view: Option<&RunView>) -> (usize, usize) {
+  view.map_or((0, 0), |view| {
+    let passed = view
+      .steps
+      .iter()
+      .filter(|step| step.status == Some(StepStatus::Passed))
+      .count();
+    (passed, view.steps.len())
+  })
 }
 
 /// The writing step at work on `view`'s run, which has not ended, so no step is one its work can go back to: the

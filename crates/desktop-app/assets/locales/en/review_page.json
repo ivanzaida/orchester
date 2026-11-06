@@ -23,16 +23,25 @@
       "sizeOne": "1 file, +{{added}} −{{removed}}",
       "sizeOther": "{{files}} files, +{{added}} −{{removed}}",
       "head": "head {{head}}",
+      "commitsAfterOne": "1 commit after {{reviewed}}",
+      "commitsAfterOther": "{{count}} commits after {{reviewed}}",
       "into": "into {{branch}}"
     },
     "changed": {
-      "title": "Changed since your review",
-      "body": "The branch moved from {{reviewed}}, the head you reviewed, to {{head}}: {{commits}}. The diff shows {{head}}; look at it, then approve it.",
-      "commitsOne": "1 new commit",
-      "commitsOther": "{{count}} new commits",
-      "commit": "{{commit}}  {{subject}}  {{time}}",
-      "take": "I've reviewed the new commits",
-      "reason": "Changed since your review: review the new commits first."
+      "sinceOne": "1 commit since you reviewed at {{time}}.",
+      "sinceOther": "{{count}} commits since you reviewed at {{time}}.",
+      "sinceOneUntimed": "1 commit since you reviewed.",
+      "sinceOtherUntimed": "{{count}} commits since you reviewed.",
+      "outdatedOne": "1 of your comments is on a line they changed.",
+      "outdatedOther": "{{count}} of your comments are on lines they changed.",
+      "strip": "{{commits}} {{comments}}",
+      "all": "All changes",
+      "since": "Since your review",
+      "reading": "Reading what changed since your review…",
+      "nothing": "Nothing changed since your review",
+      "nothingBody": "The commits since then leave the files as they were. All changes shows the whole diff.",
+      "tooLarge": "Too large to show here",
+      "tooLargeBody": "The commits since your review change {{files}} files, more than Orchester reads. All changes shows the whole diff."
     },
     "files": {
       "title": "Files",

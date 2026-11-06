@@ -20,10 +20,12 @@ pub enum ReviewText {
   Tag,
   /// 13 `text_primary`, 1.45: what a message of a thread says, and the comment box's words (`tR5zv`, `IgR9h`).
   Message,
+  /// 12 `text_primary`, 1.3: what the *Since your review* strip says (`Text` `p2h89` in `miJaX`).
+  Strip,
 }
 
 impl ReviewText {
-  pub const ALL: [Self; 2] = [Self::Tag, Self::Message];
+  pub const ALL: [Self; 3] = [Self::Tag, Self::Message, Self::Strip];
 
   pub fn role(self) -> TypographyStyle {
     TypographyStyle::extra(self.name())
@@ -33,6 +35,7 @@ impl ReviewText {
     match self {
       Self::Tag => "review_tag",
       Self::Message => "review_message",
+      Self::Strip => "review_strip",
     }
   }
 
@@ -40,6 +43,7 @@ impl ReviewText {
     match self {
       Self::Tag => style(11.0, FontWeight::Medium, 1.2, 0.0, palette.text_muted),
       Self::Message => style(13.0, FontWeight::Normal, 1.45, 0.0, palette.text_primary),
+      Self::Strip => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
     }
   }
 }

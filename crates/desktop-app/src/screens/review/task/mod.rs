@@ -5,7 +5,9 @@
 //! their *Viewed* marks; beside them the run's real diff against its base with the threads under their lines
 //! ([`diff`], [`thread`]) and the comment box ([`composer`]); under it the send tray while comments wait ([`tray`]).
 //! The page is read again whenever the project's tasks or runs change state or a change of it landed, and the review
-//! alone on every change of the project's runs, so an answer streams in. Esc stops an answer under way.
+//! alone on every change of the project's runs, so an answer streams in. Esc stops an answer under way. Where the
+//! branch moved after the head reviewed, a strip under the status line switches the diff between all changes and those
+//! since the review ([`since`]).
 
 mod actions;
 mod composer;
@@ -14,6 +16,7 @@ mod diff;
 mod files;
 mod head;
 mod read;
+mod since;
 mod state;
 mod tag;
 mod thread;
@@ -55,6 +58,7 @@ use self::{
   crumbs::crumbs,
   diff::{DiffProps, ReviewDiff},
   read::{Read, read},
+  since::Shown,
   state::ReviewState,
 };
 use crate::{
@@ -197,8 +201,24 @@ struct Env {
   /// The files marked *Viewed* at `head`.
   pub viewed: Arc<BTreeSet<String>>,
   pub counts: Arc<HashMap<Arc<str>, ThreadCounts>>,
+  /// What the diff column shows: the whole diff, or what changed since the review.
+  pub shown: Shown,
   /// Tells what this was made of apart from what it was made of before: the page and the review read.
   pub version: u64,
+}
+
+impl Env {
+  /// This for the rows of `diff`, the diff shown: they name their files by position in it, and draw again when it is
+  /// another one.
+  fn showing(&self, diff: &Arc<Diff>) -> Self {
+    let mut hasher = DefaultHasher::new();
+    (self.version, Arc::as_ptr(diff) as usize).hash(&mut hasher);
+    Self {
+      diff: diff.clone(),
+      version: hasher.finish(),
+      ..self.clone()
+    }
+  }
 }
 
 struct ReviewScreen {
@@ -226,6 +246,13 @@ impl Component for ReviewScreen {
     let BodyProps { project, page, .. } = ctx.props::<BodyProps>().clone();
     let key = (page.run.key.clone(), page.run.number);
     let live = read::live(ctx, &project, page.run.run, self.state.written.get());
+    let wanted = since::moved(&page).is_some() && since::wanted(&project, &key.0);
+    let shown = Shown::of(read::since(
+      ctx,
+      &project,
+      (page.reviewed.clone(), page.review.head.clone()),
+      wanted,
+    ));
     let frame = frame(ctx, &project, (&key.0, Some(key.1)));
     let (Some(head), Checkpointed::Read { changes, .. }) = (page.review.head.clone(), &page.changes) else {
       return Element::from(frame.child(self.nothing(ctx, &page)));
@@ -236,6 +263,7 @@ impl Component for ReviewScreen {
     let env = Env {
       version: version(&page, &review),
       counts: Arc::new(counts(&review)),
+      shown,
       viewed: Arc::new(review.viewed.iter().map(|viewed| viewed.path.clone()).collect()),
       diff: changes.diff.clone(),
       navigation: Navigation::of(ctx),
@@ -251,7 +279,7 @@ impl Component for ReviewScreen {
       .on_key_down(stop_on_escape(&env))
       .child(head::header(ctx, &env))
       .child(head::status(ctx, &env))
-      .with_children(head::changed(ctx, &env))
+      .with_children(since::strip(ctx, &env))
       .with_children(self.state.failure.get().map(|reason| -> Element {
         Notice::new("review-not-done", NoticeTone::Danger, message_text(ctx, &reason)).into()
       }))
@@ -263,14 +291,21 @@ impl Component for ReviewScreen {
 impl ReviewScreen {
   /// The files beside the diff, the tray under it.
   fn body(&self, ctx: &mut Ctx, env: &Env, key: Arc<str>) -> Element {
-    let diff = ctx.mount_keyed::<ReviewDiff>(
-      "review-diff-view",
-      DiffProps {
-        env: Arc::new(env.clone()),
-        diff: env.diff.clone(),
-        key,
-      },
-    );
+    let (diff, key) = match &env.shown {
+      Shown::Since(changes) => (changes.diff.clone(), changes.key.clone()),
+      _ => (env.diff.clone(), key),
+    };
+    let diff = since::instead(ctx, &env.shown).unwrap_or_else(|| {
+      let shown = env.showing(&diff);
+      ctx.mount_keyed::<ReviewDiff>(
+        "review-diff-view",
+        DiffProps {
+          env: Arc::new(shown),
+          diff,
+          key,
+        },
+      )
+    });
     Row::new()
       .id("review-columns")
       .width(Dimension::Pct(100.0))
