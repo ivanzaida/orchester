@@ -12,7 +12,7 @@ use orchester_core::{
   resource::{Resource, ResourceKind, Slug},
   sharing::TaskRevision,
 };
-use orchester_workspace::sharing::sync::archive::pinning;
+use orchester_workspace::sharing::sync::pinning;
 use support::{Fixture, at};
 
 /// The team MCP server `id` named `called`, kept in the fixture's project as a synced one is.
@@ -45,13 +45,21 @@ fn archive_pins_a_run_whose_profile_chooses_the_team_mcp_server_is_stopped_by_it
   let task = fixture.task("Search", at(10));
   let run = fixture.started_run(task, at(11));
 
+  // The archive delta marks the resource archived before its runs are read (`apply.rs`).
+  for archived in [knowledge, other] {
+    fixture
+      .db
+      .mark_shared_archived(archived, true, at(12))
+      .expect("the archive is marked");
+  }
+
   let root = fixture.repo.path();
   let stopped = pinning(root, knowledge).expect("read").expect("the server is kept");
-  assert_eq!(stopped.runs, [(run.id(), task)]);
-  assert_eq!(stopped.resource.as_str(), "Knowledge");
+  assert_eq!(stopped.runs(), [(run.id(), task)]);
+  assert_eq!(stopped.resource().as_str(), "Knowledge");
   let spared = pinning(root, other).expect("read").expect("the server is kept");
   assert!(
-    spared.runs.is_empty(),
+    spared.runs().is_empty(),
     "a server no pinned profile chooses stops nothing"
   );
   assert!(
@@ -68,6 +76,10 @@ fn archive_pins_a_run_whose_profile_chooses_no_team_mcp_server_is_not_stopped() 
   let task = fixture.task("Search", at(10));
   fixture.started_run(task, at(11));
 
+  fixture
+    .db
+    .mark_shared_archived(knowledge, true, at(12))
+    .expect("the archive is marked");
   let stopped = pinning(fixture.repo.path(), knowledge).expect("read").expect("kept");
-  assert!(stopped.runs.is_empty());
+  assert!(stopped.runs().is_empty());
 }

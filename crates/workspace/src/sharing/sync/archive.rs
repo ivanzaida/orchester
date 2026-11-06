@@ -30,9 +30,21 @@ pub enum ArchiveError {
 
 /// The runs of the project at `root` that `resource` stops, with the project and the resource's name.
 pub struct Pinning {
-  pub project: OpenProject,
-  pub resource: Name,
-  pub runs: Vec<(RunId, TaskId)>,
+  project: OpenProject,
+  resource: Name,
+  runs: Vec<(RunId, TaskId)>,
+}
+
+impl Pinning {
+  /// The archived resource's name, as the *Stopped* notification names it.
+  pub fn resource(&self) -> &Name {
+    &self.resource
+  }
+
+  /// Each run that stops, with its task.
+  pub fn runs(&self) -> &[(RunId, TaskId)] {
+    &self.runs
+  }
 }
 
 /// Cancels every run of the project at `root` that pins `resource`, archived on the server, and records each one
@@ -117,6 +129,9 @@ fn pins(db: &ProjectDb, snapshot: &RunSnapshot, resource: &Resource) -> Result<b
   if resource.kind() != ResourceKind::McpServer {
     return Ok(false);
   }
+  // Temporary until ORC-817: a profile's MCP selection still holds `ConnectionId`s, and a team profile names a team
+  // MCP server by that server's resource id carried in one. Once team references are `TeamResource { kind, id }`,
+  // this compares the typed server id instead of reinterpreting the uuid.
   let server = ConnectionId::from_uuid(resource.id().as_uuid());
   for step in snapshot.steps() {
     let StepExecutor::Agent { profile, .. } = step.executor() else {
