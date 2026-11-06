@@ -55,13 +55,9 @@ fn sidebar_review_stays_selected_on_the_pages_that_were_its_tabs() {
   let project = project_id();
   navigation.go(overview(project));
   window.until("the project to open", |window| window.texts("nav-review").is_some());
-  for (page, screen) in [
-    (ProjectPage::MergeQueue, "screen-merge_queue"),
-    (ProjectPage::PullRequests(Default::default()), "screen-pull_requests"),
-  ] {
-    navigation.go(Route::Project(project, page));
-    window.until(screen, |window| window.texts(screen).is_some());
-    assert!(selected(&mut window, "nav-review"), "{screen}");
-    assert!(window.texts("review-hub").is_none(), "{screen} has no hub around it");
-  }
+  let screen = "screen-merge_queue";
+  navigation.go(Route::Project(project, ProjectPage::MergeQueue));
+  window.until(screen, |window| window.texts(screen).is_some());
+  assert!(selected(&mut window, "nav-review"), "{screen}");
+  assert!(window.texts("review-hub").is_none(), "{screen} has no hub around it");
 }

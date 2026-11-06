@@ -90,7 +90,7 @@
         "detected": "{{project}} will expect {{account}}. Orchester uses gh’s own sign-in and never stores or sees a token.",
         "detectedUnnamed": "This project will expect {{account}}. Orchester uses gh’s own sign-in and never stores or sees a token.",
         "detecting": "Reading the folder’s git remote and asking gh about the repository. You can already create the project.",
-        "noRemote": "You can create the project. Pull request steps and the Pull requests screen stay unavailable until the folder has a GitHub remote.",
+        "noRemote": "You can create the project. Pull request steps stay unavailable until the folder has a GitHub remote.",
         "notGitHub": "Pull request steps will be unavailable. If this is a GitHub Enterprise host, add a GitHub connection for it, then check again.",
         "ghNotFound": "Orchester reaches GitHub only through gh. Install it or choose its program file, then check again. You can create the project now.",
         "notSignedIn": "Run this in a terminal, then check again. Orchester never signs in for you.",

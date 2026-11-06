@@ -234,7 +234,10 @@ fn pull_request_readiness_says_why_a_run_cannot_have_one() {
     .expect("stored");
   assert_eq!(
     readiness(FakeGitHub::new(run.branch().as_str())),
-    Readiness::Open { number: 141 }
+    Readiness::Open {
+      number: 141,
+      url: "https://github.com/ivanzaida/kontur/pull/141".to_owned()
+    }
   );
 }
 
@@ -415,7 +418,10 @@ fn pull_request_creation_refuses_a_second_one_for_the_run() {
       &programs(&Arc::new(fake)),
       (run.id(), true, UnpushedBase::Refuse)
     ),
-    Err(CreateProblem::AlreadyOpen { number: Some(143) })
+    Err(CreateProblem::AlreadyOpen {
+      number: Some(143),
+      url: Some("https://github.com/ivanzaida/kontur/pull/143".to_owned())
+    })
   );
   fixture
     .db
@@ -438,7 +444,10 @@ fn pull_request_creation_refuses_a_second_one_for_the_run() {
       &programs(&fake),
       (run.id(), true, UnpushedBase::Refuse)
     ),
-    Err(CreateProblem::AlreadyOpen { number: Some(141) })
+    Err(CreateProblem::AlreadyOpen {
+      number: Some(141),
+      url: Some("https://github.com/ivanzaida/kontur/pull/141".to_owned())
+    })
   );
   assert!(
     fake.ran_one("push").is_none(),

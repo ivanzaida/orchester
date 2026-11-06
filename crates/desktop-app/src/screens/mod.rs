@@ -27,7 +27,6 @@ mod overview;
 mod pipelines;
 mod placeholder;
 mod project_settings;
-mod pull_requests;
 mod review;
 mod reviewer_trouble;
 mod secrets;
@@ -41,8 +40,6 @@ pub(crate) mod tasks;
 mod tools;
 mod unavailable_project;
 pub(crate) mod usage;
-
-use std::sync::Arc;
 
 use lurq::{
   app::ctx::Ctx,
@@ -128,21 +125,8 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::NewModule => modules::new_module(ctx, project),
     ProjectPage::Module(id, tab) => modules::page(ctx, project, *id, *tab),
     ProjectPage::EditModule(id) => modules::edit_module(ctx, project, *id),
-    ProjectPage::PullRequests(tab) => pull_requests::screen(ctx, project, *tab),
     ProjectPage::Merges => merges::screen(ctx, project),
     ProjectPage::MergeAttempt(key, number) => merges::review::screen(ctx, project, key, *number),
-    ProjectPage::PullRequest(number, file) => pull_requests::pull_request(
-      ctx,
-      project,
-      *number,
-      pull_requests::PullRequestShown::Files(file.as_deref().map(Arc::from)),
-    ),
-    ProjectPage::PullRequestFeedback(number, thread) => pull_requests::pull_request(
-      ctx,
-      project,
-      *number,
-      pull_requests::PullRequestShown::Feedback(*thread),
-    ),
     ProjectPage::Usage(query) => usage::screen(ctx, project, query),
     ProjectPage::Delivery(period) => delivery::screen(ctx, project, *period),
     ProjectPage::Pipelines => pipelines::screen(ctx, project),

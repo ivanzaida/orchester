@@ -25,8 +25,8 @@
 //! an agent CLI connection's account; its Environment tab is `/project/<id>/secrets` ([`SecretsView`]). The code viewer
 //! is `/project/<id>/files`, a file `/project/<id>/files/<path>` (`?at=` its version, `&line=` its lines; see
 //! [`FilesView`]). Review is `/project/<id>/review`, the tasks whose run finished, and a task's review
-//! `/project/<id>/review/<key>`. Pull requests is `/project/<id>/pull-requests` (`?tab=`) and a pull request
-//! `/project/<id>/pull-requests/<number>` (`?file=` the file whose diff it shows). Import resources is
+//! `/project/<id>/review/<key>`. The Pull requests page is gone: `/project/<id>/pull-requests` and what is under it,
+//! with any query, open the project's Overview. Import resources is
 //! `/project/<id>/import` (`?tab=` its kind tab, [`ImportTab`]). The Skills
 //! library, an agent profile, Instructions, a pipeline's page and Memory keep their tab,
 //! filter, item and panel in the query too ([`SkillsFilter`], [`AgentTab`],
@@ -116,6 +116,7 @@ const FIRST_DOWNLOAD: &str = "first-download";
 const FOLDER: &str = "folder";
 const TASKS: &str = "tasks";
 const CONNECTIONS: &str = "connections";
+/// The removed Pull requests page's segment: what is under it opens the Overview ([`ProjectPage::parse`]).
 const PULL_REQUESTS: &str = "pull-requests";
 /// Review's segment: its list, and a task's review under it.
 const REVIEW: &str = "review";
@@ -151,7 +152,6 @@ const AGENT_PATTERN: &str = "/project/:project/agents/:agent";
 const FILE_PATTERN: &str = "/project/:project/files/**path";
 /// A file's route under the code viewer's layout (`table`): [`FILE_PATTERN`] after the screen's own.
 const FILE_REST: &str = "/**path";
-const PULL_REQUEST_PATTERN: &str = "/project/:project/pull-requests/:number";
 /// A task's review, by its key.
 const TASK_REVIEW_PATTERN: &str = "/project/:project/review/:key";
 /// The Modules list's segment (`orchester_workspace::links::MODULES`); New module and a module's page without its tab
@@ -236,9 +236,6 @@ impl Route {
       Self::Project(_, ProjectPage::Pipeline(..) | ProjectPage::PipelineVersion(..)) => PIPELINE_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Agent(..) | ProjectPage::NewAgent(_)) => AGENT_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Files(view)) if view.file().is_some() => FILE_PATTERN.to_owned(),
-      Self::Project(_, ProjectPage::PullRequest(..) | ProjectPage::PullRequestFeedback(..)) => {
-        PULL_REQUEST_PATTERN.to_owned()
-      }
       Self::Project(_, ProjectPage::NewModule | ProjectPage::Module(_, ModuleTab::Summary)) => {
         MODULE_PATTERN.to_owned()
       }

@@ -159,18 +159,6 @@ fn every_link() -> Vec<(Link, Route)> {
       Link::Account(id()),
       Route::Accounts(AccountsView::of(id(), AccountsPanel::Account)),
     ),
-    (
-      Link::PullRequest(project, number(42)),
-      at(ProjectPage::PullRequest(number(42), None)),
-    ),
-    (
-      Link::PullRequests(project, PullRequestTab::Open),
-      at(ProjectPage::PullRequests(PullRequestTab::Open)),
-    ),
-    (
-      Link::PullRequests(project, PullRequestTab::NeedsReview),
-      at(ProjectPage::PullRequests(PullRequestTab::NeedsReview)),
-    ),
     (Link::Modules(project), at(ProjectPage::Modules(ModuleListTab::Open))),
     (
       Link::Module(project, id()),
@@ -244,6 +232,10 @@ fn links_cover_every_kind_the_builder_makes() {
   for (link, _) in every_link() {
     covered[kind(&link)] = true;
   }
+  // These have no route of their own any more; `links_to_the_removed_pull_requests_page_open_the_overview` covers them.
+  for link in removed_page_links() {
+    covered[kind(&link)] = true;
+  }
   assert!(covered.iter().all(|kind| *kind), "every kind has a case: {covered:?}");
 }
 
@@ -274,18 +266,6 @@ fn links_have_the_documented_paths() {
     (
       Link::Task(project(), key(), TaskPage::Conversation),
       format!("{root}/tasks/ORC-24/conversation"),
-    ),
-    (
-      Link::PullRequest(project(), number(7)),
-      format!("{root}/pull-requests/7"),
-    ),
-    (
-      Link::PullRequests(project(), PullRequestTab::Open),
-      format!("{root}/pull-requests"),
-    ),
-    (
-      Link::PullRequests(project(), PullRequestTab::Merged),
-      format!("{root}/pull-requests?tab=merged"),
     ),
     (Link::Account(id()), format!("/settings?tab=accounts&account={ID}")),
     (
@@ -336,15 +316,34 @@ fn links_carry_a_provider_and_earlier_runs_and_read_back() {
   );
 }
 
+/// The Pull requests page is gone (ORC-803): its links and old addresses in a tab's history, whatever follows them,
+/// open the project's Overview.
 #[test]
-fn links_pull_requests_are_numbered_from_one() {
-  for number in ["seven", "0"] {
-    assert_eq!(
-      Route::parse(&format!("/project/{PROJECT}/pull-requests/{number}")),
-      Err(RouteError::NoScreen),
-      "pull request {number}"
-    );
+fn links_to_the_removed_pull_requests_page_open_the_overview() {
+  let overview = at(ProjectPage::Overview(OverviewTab::default()));
+  for link in removed_page_links() {
+    assert_eq!(Route::parse(&link.path()), Ok(overview.clone()), "{}", link.path());
   }
+  for path in [
+    "pull-requests",
+    "pull-requests?tab=needs_review",
+    "pull-requests/142",
+    "pull-requests/142?file=src/a%20b.rs",
+    "pull-requests/142?tab=feedback&thread=0",
+    "pull-requests/seven",
+  ] {
+    let path = format!("/project/{PROJECT}/{path}");
+    assert_eq!(Route::parse(&path), Ok(overview.clone()), "{path}");
+  }
+}
+
+/// The workspace still writes these links until its own task removes them.
+fn removed_page_links() -> [Link; 3] {
+  [
+    Link::PullRequest(project(), number(42)),
+    Link::PullRequests(project(), PullRequestTab::Open),
+    Link::PullRequests(project(), PullRequestTab::Merged),
+  ]
 }
 
 #[test]

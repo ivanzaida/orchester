@@ -123,7 +123,6 @@ fn sidebar_lists_six_places_then_configure_and_the_usage_card_and_goes_to_them()
   // What the sidebar held before lives in a hub, Project settings, the switcher's menu or the usage card now.
   for screen in [
     "merge_queue",
-    "pull_requests",
     "usage",
     "instructions",
     "memory",
