@@ -39,7 +39,7 @@ use super::{
   created::{self, CREATE_TASK},
   duplicate, git, guard,
   keep::{self, HOLD_QUEUE, Named},
-  mcp_servers,
+  leads, mcp_servers,
   own_project::{in_own_project, own_project_by_id},
   plan::{self, PROPOSE_PLAN},
   proposal,
@@ -248,7 +248,7 @@ pub async fn call(
   }
   if read_only {
     own_project_by_id(scope, &mut arguments);
-    return app_tool((services, translate), name, arguments).await;
+    return leads::read_tool((services, translate), scope, name, arguments).await;
   }
   in_own_project(scope, &mut arguments)?;
   // A copy saves a draft: a turn a day's report started refuses it, and keeps the refusal.

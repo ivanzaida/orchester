@@ -3,6 +3,8 @@
 //! themselves: only the person stops them. The reason goes with the end, so the one turn that writes its summary can
 //! say why.
 
+use serde::{Deserialize, Serialize};
+
 use crate::task::organization::WorkflowStatus;
 
 /// A subscription's target with the workflow statuses of the tasks it takes in now.
@@ -55,7 +57,8 @@ pub enum Ending {
 }
 
 /// Why a subscription ended by itself.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum EndReason {
   TaskDone,
   TaskCanceled,

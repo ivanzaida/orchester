@@ -107,7 +107,7 @@ fn in_messages<'a>(
         answering = Speaker::Report;
         continue;
       }
-      EntryKind::Wait { .. } => {
+      EntryKind::Wait { .. } | EntryKind::WatchEnded { .. } => {
         answering = Speaker::Orchestrator;
         continue;
       }
