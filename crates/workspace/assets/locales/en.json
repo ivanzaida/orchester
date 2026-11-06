@@ -2240,6 +2240,13 @@
         "viaModule": "«{{title}}» · via {{module}}",
         "viaWithoutModule": "«{{title}}» · via the tasks without a module",
         "viaProject": "«{{title}}» · via the whole project"
+      },
+      "ended": {
+        "moduleDone": "Every task of {{module}} is Done — watching ended",
+        "moduleCanceled": "Every task of {{module}} is Canceled — watching ended",
+        "moduleClosed": "Every task of {{module}} is Done or Canceled — watching ended",
+        "taskDone": "{{task}} is Done — watching ended",
+        "taskCanceled": "{{task}} is Canceled — watching ended"
       }
     },
     "settings": {
@@ -2361,7 +2368,7 @@
         "optedOut": "Run #{{run}} was not merged on its own: its task says Don't merge automatically. Nothing was merged; the merge is the person's.",
         "deliveredByQueue": "Run #{{run}} was not merged on its own: its pipeline ends in a Deliver step, so the merge queue delivers it, after the person's approval when the step asks for one."
       },
-      "reportChangesNothing": "A turn the daily report started changes nothing, and this change is not one the person can apply from a card. Nothing was changed: put it in your recommendations instead.",
+      "reportChangesNothing": "A turn the daily report or the end of a watch started changes nothing, and this change is not one the person can apply from a card. Nothing was changed: put it in your recommendations instead.",
       "planOnly": "Plan only is on: this turn takes no action. Nothing was changed: put it in your plan with propose_plan instead.",
       "notPlanOnly": "This turn does not plan: propose_plan works only for a message sent in plan-only mode. Nothing was kept.",
       "invalidPlan": "A plan has at least one step that says what will happen, and at most 20. Nothing was kept.",

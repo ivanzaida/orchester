@@ -59,7 +59,9 @@ impl ProjectDb {
     body.map(|body| report_of(&body)).transpose()
   }
 
-  /// The reports of every conversation that start a turn by themselves (`automatic`) and have none, oldest first.
+  /// The reports of every conversation that start a turn by themselves (`automatic`) and have none, oldest first; the
+  /// summaries of subscriptions that ended by themselves are kept as reports (`super::orchestrator_watch_summaries`)
+  /// and among them.
   pub fn automatic_reports_without_turn(&self) -> Result<Vec<KeptReport>, StoreError> {
     let mut statement = self.connection.prepare(
       "SELECT chat_id, seq FROM orchestrator_entries
