@@ -76,10 +76,7 @@ fn watch(
 }
 
 fn led_elsewhere(db: &ProjectDb, chat: orchester_core::id::ChatId) -> Result<CreatedWatch, ToolError> {
-  let title = db
-    .chat(chat)?
-    .map(|kept| kept.title().to_owned())
-    .unwrap_or_default();
+  let title = db.chat(chat)?.map(|kept| kept.title().to_owned()).unwrap_or_default();
   Ok(CreatedWatch::LedElsewhere { chat, title })
 }
 
