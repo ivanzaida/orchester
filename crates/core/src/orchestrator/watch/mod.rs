@@ -7,12 +7,14 @@
 //!
 //! The rules that need no store beside them (the orchestrator-watch design frame "What the design decides", rows
 //! Ending and Created tasks): when a subscription ends by itself ([`ending`]), what a person's stop leaves open
-//! ([`stop`]), and which task the leading conversation creates becomes a task subscription of it ([`created`]).
+//! ([`stop`]), and which task the leading conversation creates becomes a task subscription of it ([`created`]). What
+//! a conversation keeps of the person's commands and of the changes to its subscriptions is in [`line`].
 
 mod change;
 pub mod created;
 mod ended;
 pub mod ending;
+pub mod line;
 pub mod stop;
 
 use serde::{Deserialize, Serialize};
@@ -23,6 +25,7 @@ pub use self::{
   created::{Created, CreatedWatch, created_task, created_task_watch, event_subscription},
   ended::WatchEnd,
   ending::{EndReason, Ending, NeverEnds, TargetTasks},
+  line::{LedElsewhere, NamedTarget, OpenTask, WatchCommand, WatchLine},
   stop::{LeftOpen, OpenWork},
 };
 use crate::{

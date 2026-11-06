@@ -22,7 +22,7 @@ use lurq::{
 use parking_lot::Mutex;
 
 use super::{
-  Pick, Run, Shown, SlashCommand, SlashField, matched, query,
+  Pick, Run, Shown, SlashCommand, SlashField, argument, matched, query,
   rows::{Face, footer, heading, nothing, row},
   skills::{self, Read, SkillsOffer},
 };
@@ -86,7 +86,7 @@ pub fn menu(ctx: &mut Ctx, menu: SlashMenuProps) -> Element {
       icon: command.icon,
       label: command.label.clone(),
       detail: command.detail.clone(),
-      runs: command.run.is_some(),
+      runs: command.does.is_some(),
       skill: false,
     })
     .collect();
@@ -148,12 +148,21 @@ impl Component for SlashMenu {
     if typed.is_none() && field.closed.get() {
       field.closed.set(false);
     }
-    let open = typed.is_some() && field.focused.get() && !field.closed.get();
+    // While the chip holds a command with an argument, the draft is that command's and its picker shows instead.
+    let held = field.argument.get();
+    let focused = field.focused.get();
+    let open = typed.is_some() && held.is_none() && focused && !field.closed.get();
     let read = skills::read(ctx, &props.skills, open);
     let (Some(typed), true) = (typed, open) else {
       *field.shown.lock() = None;
       *self.last.lock() = None;
-      return Element::new();
+      return match held {
+        Some(held) if held.picking && focused => argument::picker(ctx, (props.id, field, &props.anchor), held.command),
+        _ => {
+          field.forget_choices();
+          Element::new()
+        }
+      };
     };
     let skills = skill_rows(ctx, field, &props.skills, read);
     let skill_faces = match &skills {

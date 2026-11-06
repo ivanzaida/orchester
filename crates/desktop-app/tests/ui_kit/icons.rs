@@ -245,3 +245,19 @@ fn team_claim_icons_match_bundled_font_names() {
     assert_eq!(icon.glyph() as usize, codepoint, "{icon:?} codepoint: {codepoint:x}");
   }
 }
+
+/// The glyphs of the Orchestrator's lines of events of tasks' runs and of the tag of what started a turn (ORC-779,
+/// `c9YRv`, `OKtX2`, `q6udQx` in `Orchestrator watch · redesign`).
+#[test]
+fn task_event_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  for (icon, name) in [
+    (Icon::TimerOff, "timer-off"),
+    (Icon::GitPullRequestArrow, "git-pull-request-arrow"),
+    (Icon::GitMerge, "git-merge"),
+    (Icon::Ban, "ban"),
+    (Icon::Zap, "zap"),
+  ] {
+    assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
+  }
+}

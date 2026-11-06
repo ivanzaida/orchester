@@ -13,10 +13,11 @@
 //! `orchestrator-not-set-up` is the same project with nothing chosen for the Orchestrator (`02 Not set up`): its
 //! conversations stay readable. `orchestrator-on-codex` runs it on Codex · Default with its twelve models, and
 //! `orchestrator-codex-limit` the same with that plan at its limit (`Runs-on picker · states` `t7cdi`). The context
-//! meter's and *Compact*'s scenarios are [`context`]'s.
+//! meter's and *Compact*'s scenarios are [`context`]'s; the events of tasks' runs are [`events`]'.
 
 mod accounts;
 pub mod context;
+pub mod events;
 mod live;
 mod proposals;
 
@@ -45,10 +46,15 @@ use crate::kontur::{Kontur, SeedError, catalogue::Catalogue, shapes::Shape};
 const MODEL: &str = "claude-opus-5-5";
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
-  let sign_ins = project(kontur, CodexPlan::Used)?;
+  set_up(kontur).map(drop)
+}
+
+/// [`seed`], and the catalogue its tasks run on, for the scenarios that add to it ([`events`]).
+fn set_up(kontur: &mut Kontur) -> Result<Catalogue, SeedError> {
+  let (sign_ins, catalogue) = project(kontur, CodexPlan::Used)?;
   let settings = OrchestratorSettings::new(sign_ins.work, model(MODEL)?, Some("high".to_owned()));
   kontur.db.publish_orchestrator(&settings, kontur.ago(3 * 24 * 60))?;
-  Ok(())
+  Ok(catalogue)
 }
 
 /// The project, its connections and conversations, with nothing chosen for the Orchestrator.
@@ -60,28 +66,29 @@ pub fn not_set_up(kontur: &mut Kontur) -> Result<(), SeedError> {
 /// `Runs-on picker · states` `t7cdi`); `codex_limit` with Codex's *Default* plan at its limit and the high effort
 /// (`Codex at its limit`).
 pub fn on_codex(kontur: &mut Kontur) -> Result<(), SeedError> {
-  let sign_ins = project(kontur, CodexPlan::Used)?;
+  let (sign_ins, _) = project(kontur, CodexPlan::Used)?;
   let settings = OrchestratorSettings::new(sign_ins.codex, model(accounts::CODEX_MODELS[0])?, None);
   kontur.db.publish_orchestrator(&settings, kontur.ago(3 * 24 * 60))?;
   Ok(())
 }
 
 pub fn codex_limit(kontur: &mut Kontur) -> Result<(), SeedError> {
-  let sign_ins = project(kontur, CodexPlan::AtLimit)?;
+  let (sign_ins, _) = project(kontur, CodexPlan::AtLimit)?;
   let first = model(accounts::CODEX_MODELS[0])?;
   let settings = OrchestratorSettings::new(sign_ins.codex, first, Some("high".to_owned()));
   kontur.db.publish_orchestrator(&settings, kontur.ago(3 * 24 * 60))?;
   Ok(())
 }
 
-/// The project, its connections, sign-ins (Codex's *Default* plan as `codex` says) and conversations.
-fn project(kontur: &mut Kontur, codex: CodexPlan) -> Result<SignIns, SeedError> {
+/// The project, its connections, sign-ins (Codex's *Default* plan as `codex` says) and conversations; and the
+/// catalogue its tasks run on.
+fn project(kontur: &mut Kontur, codex: CodexPlan) -> Result<(SignIns, Catalogue), SeedError> {
   let catalogue = api_providers::seed_catalogue(kontur)?;
   let bin = kontur.repo.join(".orchester").join("qa-bin");
   let sign_ins = accounts::add(kontur, (&bin.join("claude"), &bin.join("codex")), codex)?;
   every_card(kontur, &catalogue)?;
   away(kontur, &catalogue)?;
-  Ok(sign_ins)
+  Ok((sign_ins, catalogue))
 }
 
 fn model(id: &str) -> Result<ModelId, SeedError> {
