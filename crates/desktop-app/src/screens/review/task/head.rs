@@ -2,8 +2,9 @@
 //! line (`Status` `tKlje`): a 14 glyph and *Waiting for your review* in 13/500 `info`, then the run, its steps, what it
 //! changes, its head and how it merges in 12 `text_muted`. *Approve and merge* merges at the head shown; it is
 //! unavailable while Implement works on comments sent to it, or once the branch moved past the head reviewed, and its
-//! reason stands before it. Then the branch moved: *Changed since your review* says so and lists the new commits, and
-//! the person takes them in before they approve.
+//! reason stands before it. A merge that conflicts has no *Approve and merge* and no other strip: its line says
+//! *Conflicts with master*, approved, nothing merged and how many files conflict. Then the branch moved: *Changed since
+//! your review* says so and lists the new commits, and the person takes them in before they approve.
 
 use std::sync::Arc;
 
@@ -21,11 +22,11 @@ use orchester_workspace::{
   display::{clock, short_revision},
   tasks::{
     changes::Checkpointed,
-    review_threads::{ReviewRefusal, page::ReviewPage},
+    review_threads::{ReviewRefusal, conflicts::ReviewConflicts, page::ReviewPage},
   },
 };
 
-use super::{Env, actions::Write, state::Held, words::counted};
+use super::{Env, actions::Write, conflict, state::Held, words::counted};
 use crate::{
   routes::{ProjectPage, Route, TaskTab, TaskView},
   screens::merges::{attempt::head::title, words::joined},
@@ -71,7 +72,9 @@ pub(super) fn header(ctx: &mut Ctx, env: &Env) -> Element {
       .into()
   }));
   actions.push(open.into());
-  actions.push(approve.into());
+  if env.page.conflicts.is_none() {
+    actions.push(approve.into());
+  }
   title(&env.page.run.title, actions)
 }
 
@@ -88,6 +91,9 @@ fn unavailable(ctx: &Ctx, env: &Env) -> Option<Arc<str>> {
 
 /// The status line.
 pub(super) fn status(ctx: &Ctx, env: &Env) -> Element {
+  if let Some(conflicts) = &env.page.conflicts {
+    return conflicting(ctx, conflicts);
+  }
   let (glyph, color, words, name) = if env.page.review_in.is_none() || env.review.implement_at_work {
     (
       Icon::LoaderCircle,
@@ -125,6 +131,43 @@ pub(super) fn status(ctx: &Ctx, env: &Env) -> Element {
     )
     .child(
       Text::new(&meta(ctx, &env.page, &env.head))
+        .id("review-status-meta")
+        .variant(TypographyStyle::Description)
+        .color(PaletteColor::TextMuted)
+        .nowrap(),
+    )
+    .into()
+}
+
+/// The status line of a merge that conflicts (`Status` `oTMra` in 11 `CT6Gc`): *Conflicts with master* in `danger`,
+/// then when it was approved, that nothing merged and how many files conflict.
+fn conflicting(ctx: &Ctx, conflicts: &ReviewConflicts) -> Element {
+  let base = conflict::base_name(ctx, conflicts);
+  let files = conflicts.files.len();
+  let words = ctx.t_args("review_page.status.conflicts", [("base", &*base)]);
+  let meta = ctx.t_args(
+    if files == 1 {
+      "review_page.status.conflictsMetaOne"
+    } else {
+      "review_page.status.conflictsMetaOther"
+    },
+    [("time", clock(conflicts.at)), ("count", files.to_string())],
+  );
+  Row::new()
+    .id("review-status")
+    .describe("status", "conflicts")
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(icon(Icon::GitCompareArrows, IconSize::Md, PaletteColor::Danger))
+    .child(
+      Text::new(&words)
+        .id("review-status-text")
+        .variant(ExtraTypography::Strong.role())
+        .color(PaletteColor::Danger)
+        .nowrap(),
+    )
+    .child(
+      Text::new(&meta)
         .id("review-status-meta")
         .variant(TypographyStyle::Description)
         .color(PaletteColor::TextMuted)
@@ -184,6 +227,9 @@ fn size(changes: &Checkpointed) -> Option<(usize, u32, u32)> {
 /// *Changed since your review*: the commits after the head reviewed, newest first, and *I've looked at them*, which
 /// takes the head shown in.
 pub(super) fn changed(ctx: &Ctx, env: &Env) -> Option<Element> {
+  if env.page.conflicts.is_some() {
+    return None;
+  }
   let reviewed = moved(env)?;
   let commits: Vec<Element> = env
     .page

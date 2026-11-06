@@ -17,6 +17,9 @@
       "waiting": "Waiting for your review",
       "changed": "Changed since your review",
       "atWork": "Implement is changing the code",
+      "conflicts": "Conflicts with {{base}}",
+      "conflictsMetaOne": "approved by you {{time}} · nothing merged · 1 file conflicts",
+      "conflictsMetaOther": "approved by you {{time}} · nothing merged · {{count}} files conflict",
       "run": "run #{{run}}",
       "stepsPassed": "every step passed",
       "stepsOf": "{{passed}} of {{total}} steps passed",
@@ -37,6 +40,7 @@
     "files": {
       "title": "Files",
       "viewed": "{{viewed}} of {{total}} viewed",
+      "conflicting": "{{count}} conflicting",
       "added": "+{{count}}",
       "removed": "−{{count}}"
     },
@@ -49,6 +53,8 @@
       "questionsOne": "1 question",
       "questionsOther": "{{count}} questions",
       "outdated": "{{count}} outdated",
+      "conflictsOne": "1 conflict",
+      "conflictsOther": "{{count}} conflicts",
       "viewed": "Viewed",
       "hunk": "@@ -{{old}} +{{new}} @@",
       "hunkSection": "@@ -{{old}} +{{new}} @@ {{section}}",
@@ -57,6 +63,18 @@
       "unchanged": "Moved from {{path}} without changing its content.",
       "empty": "An empty file.",
       "omitted": "{{count}} more lines are not shown."
+    },
+    "conflict": {
+      "title": "Conflict",
+      "removed": "The base branch removed these lines.",
+      "baseBranch": "its base branch",
+      "bar": {
+        "titleOne": "1 file conflicts with {{base}}",
+        "titleOther": "{{count}} files conflict with {{base}}",
+        "body": "The agent merges {{base}} in and resolves them, then it's back for your review.",
+        "tryAgain": "Try merge again",
+        "resolve": "Ask the agent to resolve"
+      }
     },
     "thread": {
       "comment": "Comment",

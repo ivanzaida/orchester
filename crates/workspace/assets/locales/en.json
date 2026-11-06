@@ -2402,6 +2402,7 @@
       "implementAtWork": "Implement is at work on the comments you sent. Approve once you've reviewed its changes.",
       "changedSinceReview": "Changed since your review: the branch moved after the head you reviewed, so nothing was merged. Review it again.",
       "nothingToSend": "No comment waits to be sent.",
+      "noConflicts": "The merge no longer conflicts: the run changed since, or its merge was tried again. Read the review again.",
       "noImplementingStep": "This run has no step whose agent may change its code, so there is no Implement to ask.",
       "notEditable": "Only a comment you haven't sent yet can be changed or deleted.",
       "notAnswered": "Ask again once Implement's answer has ended.",

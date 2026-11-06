@@ -1,8 +1,9 @@
 //! A file's head in the run's diff (`File head` `HEoFr` in 09i): 38 high on `surface_raised` between `border` lines, 16
 //! at its sides and its parts 10 apart: the chevron that folds and unfolds the file, its path in Geist Mono 12, its
-//! added and removed lines in `text_muted`, its tags (*2 comments*, *1 question* on `info_muted`, *1 outdated* on
-//! `surface_raised`), then *Viewed* at its end. A hunk's heading (`Hunk` `TvvGo`): 24 high on `code_bg`, its range in
-//! Geist Mono 12 `text_muted`, 16 from the side. A note says what a file's diff does not show as lines.
+//! added and removed lines in `text_muted`, its tags (*2 conflicts* in `danger` first, *2 comments*, *1 question* on
+//! `info_muted`, *1 outdated* on `surface_raised`), then *Viewed* at its end. A hunk's heading (`Hunk` `TvvGo`): 24
+//! high on `code_bg`, its range in Geist Mono 12 `text_muted`, 16 from the side. A note says what a file's diff does
+//! not show as lines.
 
 use lurq::{
   app::{
@@ -17,6 +18,7 @@ use lurq::{
 use super::super::{
   Env,
   actions::{Kept, Write},
+  conflict,
   tag::{TagLook, tag},
   words::counted,
 };
@@ -42,31 +44,8 @@ pub(super) fn file_head(ctx: &mut Ctx, env: &Env, file: usize, width: Dimension)
   let path: std::sync::Arc<str> = diff.path().into();
   let viewed = env.viewed.contains(diff.path());
   let folded = env.state.is_folded(&path, viewed);
-  let counts = env.counts.get(&path).copied().unwrap_or_default();
   let id = format!("review-file-{file}");
-  let info = TagLook::new(PaletteColor::InfoMuted, PaletteColor::Info);
-  let mut tags: Vec<Element> = Vec::new();
-  if counts.comments > 0 {
-    let words = counted(
-      ctx,
-      ("review_page.diff.commentsOne", "review_page.diff.commentsOther"),
-      counts.comments,
-    );
-    tags.push(tag(&format!("{id}-comments"), &words, info.clone()));
-  }
-  if counts.questions > 0 {
-    let words = counted(
-      ctx,
-      ("review_page.diff.questionsOne", "review_page.diff.questionsOther"),
-      counts.questions,
-    );
-    tags.push(tag(&format!("{id}-questions"), &words, info));
-  }
-  if counts.outdated > 0 {
-    let words = ctx.t_args("review_page.diff.outdated", [("count", counts.outdated.to_string())]);
-    let look = TagLook::new(PaletteColor::SurfaceRaised, PaletteColor::TextMuted);
-    tags.push(tag(&format!("{id}-outdated"), &words, look));
-  }
+  let tags = tags(ctx, env, (&id, diff.path()));
   let fold = {
     let (state, path) = (env.state.clone(), path.clone());
     pressable(move || state.fold(path.clone(), !folded))
@@ -115,6 +94,48 @@ pub(super) fn file_head(ctx: &mut Ctx, env: &Env, file: usize, width: Dimension)
     .child(fold)
     .child(viewed_box(ctx, env, (&id, path), viewed))
     .into()
+}
+
+/// The tags of file `path`'s head: its conflicts, then its open comments and questions and its outdated threads.
+fn tags(ctx: &Ctx, env: &Env, (id, path): (&str, &str)) -> Vec<Element> {
+  let counts = env.counts.get(path).copied().unwrap_or_default();
+  let info = TagLook::new(PaletteColor::InfoMuted, PaletteColor::Info);
+  let mut tags: Vec<Element> = Vec::new();
+  let conflicts = env
+    .page
+    .conflicts
+    .as_ref()
+    .map_or(0, |conflicts| conflict::count_in(conflicts, path));
+  if conflicts > 0 {
+    let look = TagLook::new(PaletteColor::SurfaceRaised, PaletteColor::Danger);
+    tags.push(tag(
+      &format!("{id}-conflicts"),
+      &conflict::tag_words(ctx, conflicts),
+      look,
+    ));
+  }
+  if counts.comments > 0 {
+    let words = counted(
+      ctx,
+      ("review_page.diff.commentsOne", "review_page.diff.commentsOther"),
+      counts.comments,
+    );
+    tags.push(tag(&format!("{id}-comments"), &words, info.clone()));
+  }
+  if counts.questions > 0 {
+    let words = counted(
+      ctx,
+      ("review_page.diff.questionsOne", "review_page.diff.questionsOther"),
+      counts.questions,
+    );
+    tags.push(tag(&format!("{id}-questions"), &words, info));
+  }
+  if counts.outdated > 0 {
+    let words = ctx.t_args("review_page.diff.outdated", [("count", counts.outdated.to_string())]);
+    let look = TagLook::new(PaletteColor::SurfaceRaised, PaletteColor::TextMuted);
+    tags.push(tag(&format!("{id}-outdated"), &words, look));
+  }
+  tags
 }
 
 /// *Viewed*: marks the file at the head shown, or takes the mark off.

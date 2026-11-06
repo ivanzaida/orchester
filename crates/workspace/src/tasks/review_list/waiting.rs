@@ -1,13 +1,9 @@
 //! *Waiting for you* and *With the agent*.
 
-use std::collections::HashMap;
-
 use orchester_core::{
-  id::RunId,
-  integration::attempt::AttemptOutcome,
   merge_queue::Left,
   review::{CommentState, ReviewThread, Said},
-  run::TaskPhase,
+  run::{Run, TaskPhase},
   time::Timestamp,
 };
 use orchester_store::StoreError;
@@ -20,13 +16,14 @@ use crate::tasks::{
   list::Latest,
   merge_attempts::read::{self, SinceReview, WaitingReview},
   needs_you::WaitingKind,
+  return_work,
+  review_threads::conflicts::{Standing, standing},
 };
 
 /// The runs that wait for the person, oldest wait first: those that passed every step and wait for the approval, with
 /// the state of their review; those whose last merge attempt found conflicts, and those the merge queue took out with
 /// conflicts, which *Conflicts with <base>* says.
 pub(super) fn waiting(reader: &Reader<'_>) -> Result<Vec<ReviewRow>, StoreError> {
-  let conflicts = conflicting_attempts(reader)?;
   let mut rows = Vec::new();
   for review in read::waiting_for_review(reader.tasks, (reader.root, reader.programs))? {
     let Some(task) = reader.task(review.task.id) else {
@@ -34,17 +31,21 @@ pub(super) fn waiting(reader: &Reader<'_>) -> Result<Vec<ReviewRow>, StoreError>
     };
     let stored = reader.run(review.run)?;
     let threads = reader.db.review_threads(review.run)?;
-    let standing = match conflicts.get(&review.run) {
-      Some(&(at, files)) => (
+    let conflicts = match stored.as_ref() {
+      Some(run) => standing(&reader.db, run)?,
+      None => None,
+    };
+    let state = match conflicts {
+      Some(Standing { at, files }) => (
         ReviewState::Conflicts {
           base: stored.as_ref().and_then(|run| run.base_branch().cloned()),
-          files,
+          files: files.len(),
         },
         at,
       ),
       None => (waiting_state(&review, &threads), review.since),
     };
-    rows.push(reader.row((task, (review.run, review.number)), stored.as_ref(), &threads, standing));
+    rows.push(reader.row((task, (review.run, review.number)), stored.as_ref(), &threads, state));
   }
   for item in reader.tasks.waiting().iter() {
     let (WaitingKind::DeliveryLeft(Left::Conflicts { files }), Some(waiting), Some((run, number))) =
@@ -91,12 +92,15 @@ pub(super) fn with_agent(reader: &Reader<'_>) -> Result<Vec<ReviewRow>, StoreErr
       continue;
     };
     let threads = reader.db.review_threads(latest.id)?;
+    let stored = reader.run(latest.id)?;
     let sent: Vec<Timestamp> = open(&threads).filter_map(sent_at).collect();
-    let Some(since) = sent.iter().min().copied() else {
+    let standing = match sent.iter().min().copied() {
+      Some(since) => Some((ReviewState::ImplementOn { comments: sent.len() }, since)),
+      None => resolving(reader, stored.as_ref())?,
+    };
+    let Some((state, since)) = standing else {
       continue;
     };
-    let stored = reader.run(latest.id)?;
-    let state = ReviewState::ImplementOn { comments: sent.len() };
     rows.push(reader.row(
       (task, (latest.id, latest.number)),
       stored.as_ref(),
@@ -106,6 +110,24 @@ pub(super) fn with_agent(reader: &Reader<'_>) -> Result<Vec<ReviewRow>, StoreErr
   }
   rows.sort_by_key(|row| (row.since, row.run));
   Ok(rows)
+}
+
+/// The run Implement works on to resolve the conflicts of its merge, and since when: the merge attempt that found them.
+fn resolving(reader: &Reader<'_>, run: Option<&Run>) -> Result<Option<(ReviewState, Timestamp)>, StoreError> {
+  let Some(run) = run.filter(|run| return_work::resolving_conflicts(run).is_some()) else {
+    return Ok(None);
+  };
+  let found = reader
+    .db
+    .merge_attempts(run.id())?
+    .first()
+    .map(|last| last.attempt.at());
+  Ok(found.map(|at| {
+    let state = ReviewState::ResolvingConflicts {
+      base: run.base_branch().cloned(),
+    };
+    (state, at)
+  }))
 }
 
 /// When `thread`'s comment was sent to Implement, which has not addressed it yet.
@@ -140,19 +162,4 @@ fn waiting_state(review: &WaitingReview, threads: &[ReviewThread]) -> ReviewStat
     Some(SinceReview::Moved { commits, .. }) => ReviewState::ChangedSinceReview { commits: commits.len() },
     Some(SinceReview::Unchanged) | None => ReviewState::Ready,
   }
-}
-
-/// The runs whose last merge attempt found conflicts and merged nothing: when, and how many files.
-fn conflicting_attempts(reader: &Reader<'_>) -> Result<HashMap<RunId, (Timestamp, usize)>, StoreError> {
-  Ok(
-    reader
-      .db
-      .unlanded_merge_attempts()?
-      .into_iter()
-      .filter_map(|recorded| match recorded.attempt.outcome() {
-        AttemptOutcome::Conflicts { files } => Some((recorded.attempt.run(), (recorded.attempt.at(), files.len()))),
-        _ => None,
-      })
-      .collect(),
-  )
 }

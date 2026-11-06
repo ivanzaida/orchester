@@ -424,3 +424,68 @@ fn review_page_says_nothing_is_to_review_for_a_task_whose_run_is_not_in_review()
   );
   assert!(page.window.texts("review-diff").is_none());
 }
+
+/// An approved run whose merge into `main` conflicted (ORC-807, `Review - v2` 11 `CT6Gc`): the seed's
+/// `review-conflicts`.
+const CONFLICTING: (&str, u32) = ("Rotate API keys from settings", 1);
+
+#[test]
+fn review_page_conflicts_name_the_files_show_what_the_base_has_and_offer_no_approval() {
+  let mut page = Page::of("review-conflicts");
+  page.open(CONFLICTING);
+  assert_eq!(page.window.text("review-status-text"), "Conflicts with main");
+  let meta = page.window.text("review-status-meta");
+  assert!(
+    meta.contains("approved by you") && meta.contains("nothing merged") && meta.contains("2 files conflict"),
+    "{meta}"
+  );
+  assert_eq!(page.window.text("review-files-viewed"), "2 conflicting");
+  assert!(page.window.texts("review-approve").is_none(), "no Approve and merge");
+  assert!(page.window.texts("review-open-task").is_some());
+  assert!(page.window.texts("review-changed").is_none(), "no other strip");
+  assert_eq!(page.window.text("review-conflict-title"), "2 files conflict with main");
+  assert_eq!(
+    page.window.text("review-conflict-body"),
+    "The agent merges main in and resolves them, then it's back for your review."
+  );
+  assert_eq!(page.window.text("review-conflict-try-again"), "Try merge again");
+  assert_eq!(page.window.text("review-conflict-resolve"), "Ask the agent to resolve");
+  let diff = page.whole_diff();
+  assert!(diff.contains("2 conflicts") || diff.contains("1 conflict"), "{diff}");
+  assert!(diff.contains("Conflict"), "{diff}");
+  assert!(
+    diff.contains("self.log.record(endpoint, response.status());"),
+    "what main has under the conflicting lines: {diff}"
+  );
+}
+
+#[test]
+fn review_page_conflicts_ask_the_agent_without_a_runner_says_why_and_changes_nothing() {
+  let mut page = Page::of("review-conflicts");
+  page.open(CONFLICTING);
+  page.window.press("review-conflict-resolve");
+  page.window.until_within(GIT_WORK, "the refusal", |window| {
+    window.texts("review-not-done").is_some()
+  });
+  let refusal = page.window.text("review-not-done");
+  assert!(refusal.contains("runner"), "{refusal}");
+  assert_eq!(page.window.text("review-status-text"), "Conflicts with main");
+}
+
+#[test]
+fn review_page_conflicts_try_merge_again_merges_and_shows_what_came_of_it() {
+  let mut page = Page::of("review-conflicts");
+  page.open(CONFLICTING);
+  page.window.press("review-conflict-try-again");
+  page
+    .window
+    .until_within(GIT_WORK * 4, "the merge tried again", |window| {
+      window.texts("review-not-done").is_some()
+    });
+  let refusal = page.window.text("review-not-done");
+  // Main is as it was, so the merge conflicts again (the workspace tests pin that outcome); the window has no runner to
+  // prove the run's processes stopped, so Git may also be refused. Either way the page tells it and keeps the
+  // conflicts.
+  assert!(refusal.contains("merge"), "{refusal}");
+  assert_eq!(page.window.text("review-status-text"), "Conflicts with main");
+}

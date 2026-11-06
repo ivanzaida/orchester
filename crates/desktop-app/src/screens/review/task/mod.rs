@@ -9,6 +9,7 @@
 
 mod actions;
 mod composer;
+mod conflict;
 mod crumbs;
 mod diff;
 mod files;
@@ -286,7 +287,8 @@ impl ReviewScreen {
           .height(Dimension::Pct(100.0))
           .spacing(ExtraSpacing::Loose.role())
           .child(diff)
-          .with_children(tray::tray(ctx, env)),
+          .with_children(tray::tray(ctx, env))
+          .with_children(conflict::bar(ctx, env)),
       )
       .into()
   }

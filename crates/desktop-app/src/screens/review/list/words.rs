@@ -34,6 +34,11 @@ impl Phrase {
         PaletteColor::TextSecondary,
         (Icon::LoaderCircle, PaletteColor::TextMuted),
       ),
+      ReviewState::ResolvingConflicts { .. } => (
+        "review.state.resolving",
+        PaletteColor::TextSecondary,
+        (Icon::LoaderCircle, PaletteColor::TextMuted),
+      ),
       ReviewState::Merged { .. } => (
         "review.state.merged",
         PaletteColor::Success,
@@ -64,7 +69,10 @@ fn words(ctx: &Ctx, key: &str, state: &ReviewState) -> Arc<str> {
   match state {
     ReviewState::CommentsNotSent { count } => count_words(ctx, key, *count),
     ReviewState::ImplementOn { comments } => count_words(ctx, key, *comments),
-    ReviewState::Conflicts { base, .. } | ReviewState::Merged { base } | ReviewState::Merging { base } => match base {
+    ReviewState::Conflicts { base, .. }
+    | ReviewState::ResolvingConflicts { base }
+    | ReviewState::Merged { base }
+    | ReviewState::Merging { base } => match base {
       Some(base) => ctx.t_args(&format!("{key}.named"), [("base", base.to_string())]),
       None => ctx.t(&format!("{key}.unnamed")),
     },

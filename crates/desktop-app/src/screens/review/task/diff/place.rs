@@ -15,9 +15,12 @@ use orchester_core::{
   review::ThreadState,
   revision::Revision,
 };
-use orchester_workspace::tasks::review_threads::read::{Review, ThreadView};
+use orchester_workspace::tasks::review_threads::{
+  conflicts::ReviewConflicts,
+  read::{Review, ThreadView},
+};
 
-use super::super::state::Composing;
+use super::super::{conflict, state::Composing};
 use crate::screens::task::changes::diff::{LineKey, Marks};
 
 /// The key of the comment box's block.
@@ -57,12 +60,13 @@ pub(in crate::screens::review::task) fn resolved_key(thread: &ThreadView) -> Arc
   format!("resolved:{}", thread.thread.id()).into()
 }
 
-/// What each file of `diff`, at `head`, shows besides its lines, by path; `opened`: the folds opened.
+/// What each file of `diff`, at `head`, shows besides its lines, by path; `opened`: the folds opened; `conflicts`:
+/// where the run's merge conflicts, each block under the last of its lines.
 pub(super) fn places(
   diff: &Diff,
   (review, head): (&Review, &Revision),
   composing: Option<&Composing>,
-  opened: &BTreeSet<Arc<str>>,
+  (opened, conflicts): (&BTreeSet<Arc<str>>, Option<&ReviewConflicts>),
 ) -> HashMap<Arc<str>, FilePlaces> {
   let mut places: HashMap<Arc<str>, FilePlaces> = HashMap::new();
   let files: HashMap<&str, &FileDiff> = diff.files().iter().map(|file| (file.path(), file)).collect();
@@ -86,6 +90,22 @@ pub(super) fn places(
       }
       ThreadState::Resolved => put(place, at, resolved_key(view)),
       _ => put(place, at, thread_key(view)),
+    }
+  }
+  if let Some(conflicts) = conflicts {
+    let mut counted: HashMap<&str, usize> = HashMap::new();
+    for region in &conflicts.regions {
+      let at = counted.entry(region.path.as_str()).or_default();
+      let line = LineKey {
+        side: region.side,
+        number: region.lines.1,
+      };
+      places
+        .entry(Arc::from(region.path.as_str()))
+        .or_default()
+        .blocks
+        .push((line, conflict::key(&region.path, *at)));
+      *at += 1;
     }
   }
   if let Some(composing) = composing.filter(|composing| composing.head == *head) {

@@ -2,12 +2,13 @@
 //! 09i `wLyFt`): the run as its task names it, where it waits for review, its diff from where its work starts to where
 //! its branch is, the person's review of it ([`super::read`]), the head that was reviewed and the commits after it, and
 //! the implementing step whose agent answers and changes the code. A run shows here while it waits for review, and
-//! while Implement works on comments sent from here; never once a merge of it was tried or recorded, which the attempt
-//! page tells. Blocks on SQLite and git.
+//! while Implement works on comments sent from here or on the conflicts of its merge; never once its merge landed,
+//! which the attempt page tells. Blocks on SQLite and git.
 
 use std::{path::Path, sync::Arc};
 
 use orchester_core::{
+  id::{RunId, TaskId},
   integration::LoggedCommit,
   merge_queue::QueueState,
   project::TaskKey,
@@ -21,6 +22,7 @@ use orchester_store::ProjectDb;
 
 use super::{
   ReviewRefusal,
+  conflicts::{self, ReviewConflicts},
   read::{Review, review_of},
 };
 use crate::tasks::{
@@ -62,6 +64,8 @@ pub struct ReviewPage {
   pub implement: Option<Implement>,
   /// How many of the run's steps passed, of how many.
   pub steps: (usize, usize),
+  /// The approved merge into the run's base branch found conflicts and merged nothing; the run waits for review again.
+  pub conflicts: Option<ReviewConflicts>,
 }
 
 impl ReviewPage {
@@ -107,7 +111,7 @@ pub fn task_review_page(
 
 /// The review page of run `number` of the task `key` among `tasks`, the project at `root`'s; `None` when there is no
 /// such task or run, or when the run is not reviewed here: it neither waits for review nor has comments Implement works
-/// on, or a merge of it was tried. `programs` read the run's branch and diff.
+/// on, or its merge landed. `programs` read the run's branch and diff.
 pub fn review_page(
   tasks: &ProjectTasks,
   (root, programs): (&Path, &Programs),
@@ -131,7 +135,7 @@ pub fn review_page(
   else {
     return Ok(None);
   };
-  if db.run_merge(run.id())?.is_some() || !db.merge_attempts(run.id())?.is_empty() {
+  if db.run_merge(run.id())?.is_some() || landed(&db, &run)? {
     return Ok(None);
   }
   let queue = db.merge_queue_entry(run.id())?;
@@ -139,38 +143,22 @@ pub fn review_page(
     .as_ref()
     .filter(|entry| entry.state == QueueState::WaitingForApproval);
   let waiting = *run.status() == RunStatus::Succeeded;
+  let standing = if waiting { conflicts::standing(&db, &run)? } else { None };
   let reviewed = reviewed_head(&db, run.id(), in_queue)?;
   drop(db);
   let review = review_of(root, programs, run.id())?;
   let sent = review.threads.iter().any(|view| view.thread.sent().is_some());
-  if !waiting && !sent && !review.implement_at_work {
+  let resolving = return_work::resolving_conflicts(&run).is_some();
+  if !waiting && !sent && !review.implement_at_work && !resolving {
     return Ok(None);
   }
   let changes = changes((root, programs), &run, review.head.as_ref())?;
+  let conflicts = standing.map(|standing| conflicts::read((root, programs), &run, (standing, &changes)));
   let since_review = match (&reviewed, &review.head) {
     (Some(reviewed), Some(head)) => commits_after((root, programs), (reviewed, head)),
     _ => Vec::new(),
   };
-  let detail = TaskDetail::load_in(root, task.id())?;
-  let view = detail.run.as_ref().filter(|view| view.id() == run.id());
-  let implement = view.and_then(|view| {
-    let key = return_work::implementing_step(view).or_else(|| at_work(view))?;
-    let step = view.steps.iter().find(|step| step.key == key)?;
-    Some(Implement {
-      key,
-      number: step.number,
-      name: step.name.clone(),
-      agent: step.agent.clone(),
-    })
-  });
-  let steps = view.map_or((0, 0), |view| {
-    let passed = view
-      .steps
-      .iter()
-      .filter(|step| step.status == Some(StepStatus::Passed))
-      .count();
-    (passed, view.steps.len())
-  });
+  let (implement, steps) = steps_of(root, (task.id(), run.id()))?;
   Ok(Some(ReviewPage {
     run: MergeRun {
       task: task.id(),
@@ -192,7 +180,42 @@ pub fn review_page(
     review,
     implement,
     steps,
+    conflicts,
   }))
+}
+
+/// The step whose agent answers and changes the code, and how many steps passed, of how many, of `run` of `task`.
+fn steps_of(root: &Path, (task, run): (TaskId, RunId)) -> Result<(Option<Implement>, (usize, usize)), ReviewRefusal> {
+  let detail = TaskDetail::load_in(root, task)?;
+  let view = detail.run.as_ref().filter(|view| view.id() == run);
+  let implement = view.and_then(|view| {
+    let key = return_work::implementing_step(view).or_else(|| at_work(view))?;
+    let step = view.steps.iter().find(|step| step.key == key)?;
+    Some(Implement {
+      key,
+      number: step.number,
+      name: step.name.clone(),
+      agent: step.agent.clone(),
+    })
+  });
+  let steps = view.map_or((0, 0), |view| {
+    let passed = view
+      .steps
+      .iter()
+      .filter(|step| step.status == Some(StepStatus::Passed))
+      .count();
+    (passed, view.steps.len())
+  });
+  Ok((implement, steps))
+}
+
+/// Whether an attempt to merge `run` landed: its work is in its base branch, whatever the project recorded of it.
+fn landed(db: &ProjectDb, run: &Run) -> Result<bool, ReviewRefusal> {
+  Ok(
+    db.merge_attempts(run.id())?
+      .iter()
+      .any(|recorded| recorded.attempt.outcome().landed()),
+  )
 }
 
 /// The writing step at work on `view`'s run, which has not ended, so no step is one its work can go back to: the

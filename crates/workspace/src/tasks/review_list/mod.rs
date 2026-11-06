@@ -42,6 +42,9 @@ pub enum ReviewState {
   Conflicts { base: Option<BranchName>, files: usize },
   /// *Implement is on N comments*: `comments` comments sent from the review page are being worked on.
   ImplementOn { comments: usize },
+  /// *Implement is resolving the conflicts with <base>*: the run went back to Implement to resolve the conflicts of its
+  /// approved merge into `base`.
+  ResolvingConflicts { base: Option<BranchName> },
   /// *Merged into <base>*.
   Merged { base: Option<BranchName> },
   /// Approved, and the merge queue delivers it into `base` in its turn.

@@ -8,6 +8,7 @@
 
 pub mod approve;
 pub mod ask;
+pub mod conflicts;
 pub mod page;
 pub mod read;
 mod recover;
@@ -47,6 +48,8 @@ pub enum ReviewRefusal {
   ChangedSinceReview,
   /// No comment waits to be sent.
   NothingToSend,
+  /// The run's last merge attempt found no conflicts that still stand: there is nothing to resolve.
+  NoConflicts,
   /// The run has no step whose agent may write: there is no Implement to ask or send to.
   NoImplementingStep,
   /// The thread does not take that change now.
@@ -74,6 +77,7 @@ impl ReviewRefusal {
       Self::ImplementAtWork => "implement_at_work",
       Self::ChangedSinceReview => "changed_since_review",
       Self::NothingToSend => "nothing_to_send",
+      Self::NoConflicts => "no_conflicts",
       Self::NoImplementingStep => "no_implementing_step",
       Self::Review(_) => "not_now",
       Self::NotAsked(_) => "not_asked",
@@ -93,6 +97,7 @@ impl ReviewRefusal {
       Self::ImplementAtWork => Message::new("review.refused.implementAtWork"),
       Self::ChangedSinceReview => Message::new("review.refused.changedSinceReview"),
       Self::NothingToSend => Message::new("review.refused.nothingToSend"),
+      Self::NoConflicts => Message::new("review.refused.noConflicts"),
       Self::NoImplementingStep => Message::new("review.refused.noImplementingStep"),
       Self::Review(error) => words::review_error(*error),
       Self::NotAsked(failure) | Self::NotSent(failure) => failure_message(failure),

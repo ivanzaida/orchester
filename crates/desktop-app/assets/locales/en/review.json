@@ -34,6 +34,10 @@
         "one": "Implement is on 1 comment",
         "other": "Implement is on {{count}} comments"
       },
+      "resolving": {
+        "named": "Implement is resolving the conflicts with {{base}}",
+        "unnamed": "Implement is resolving the conflicts"
+      },
       "merged": {
         "named": "Merged into {{base}}",
         "unnamed": "Merged"
