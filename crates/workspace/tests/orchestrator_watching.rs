@@ -18,6 +18,7 @@ use orchester_store::{ProjectDb, WatchStart};
 use orchester_workspace::{
   messages::Message,
   orchestrator::watching::{Going, LedIn, WaitsFor, WatchOrder, WatchReads},
+  tasks::detail::TaskDetail,
 };
 use support::{Fixture, at};
 
@@ -318,6 +319,31 @@ fn watching_a_task_outside_every_module_is_led_through_the_project_or_by_nobody(
     reads_after.task_led_in(loose).message().key,
     "orchestrator.watch.ledIn.nobody"
   );
+}
+
+#[test]
+fn watching_the_task_page_reads_who_leads_its_task_as_the_watch_reads_do() {
+  let mut project = project();
+  let loose = project.fixture.task("Loose end", at(300));
+  let detail = |project: &Project, task| {
+    TaskDetail::load_in(project.fixture.repo.path(), task)
+      .expect("the task's detail")
+      .led_in
+  };
+  let reads_now = reads(&project.fixture);
+  for task in [project.running, project.export, loose] {
+    assert_eq!(detail(&project, task), reads_now.task_led_in(task));
+  }
+  let LedIn::Chat(through_module) = detail(&project, project.running) else {
+    panic!("the task is led");
+  };
+  assert_eq!(arg(&through_module.words, "module"), "Webhooks v2");
+  project
+    .fixture
+    .db
+    .stop_subscription(project.other, WatchTarget::Project, at(400))
+    .expect("stopped");
+  assert_eq!(detail(&project, loose), LedIn::Nobody);
 }
 
 #[test]

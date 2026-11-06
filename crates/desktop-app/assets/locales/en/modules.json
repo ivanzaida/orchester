@@ -103,6 +103,8 @@
       "start": "Start date",
       "target": "Target date",
       "created": "Created",
+      "ledIn": "Led in",
+      "ledInLink": "{{leader}} ↗",
       "notSet": "Not set"
     },
     "burndown": {

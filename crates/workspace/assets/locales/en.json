@@ -2162,6 +2162,11 @@
   },
   "orchestrator": {
     "watch": {
+      "noTarget": "Choose what to watch first.",
+      "gone": "Not applied · {{targets}} was closed or deleted meanwhile — nothing changed",
+      "notWatched": "Not applied · this conversation doesn't watch that — nothing changed",
+      "ledElsewhere": "Not applied · it's led in «{{title}}» now — nothing changed",
+      "alreadyHere": "This conversation leads it already.",
       "target": {
         "named": "{{name}}",
         "gone": "Gone from the project",
@@ -2248,13 +2253,6 @@
       "connectionGone": "The Orchestrator's connection was removed. Choose another one.",
       "cliOnly": "The Orchestrator runs on Claude Code and Codex connections. This one runs a native agent on an API key; choose another one."
     },
-    "watch": {
-      "noTarget": "Choose what to watch first.",
-      "gone": "Not applied · {{targets}} was closed or deleted meanwhile — nothing changed",
-      "notWatched": "Not applied · this conversation doesn't watch that — nothing changed",
-      "ledElsewhere": "Not applied · it's led in «{{title}}» now — nothing changed",
-      "alreadyHere": "This conversation leads it already."
-    },
     "send": {
       "blank": "Write a message first.",
       "notReady": "Choose a connection and model in Orchestrator settings and publish them before you send.",
@@ -2329,6 +2327,13 @@
     "start": {
       "blocked": "{{task}} waits for {{blockers}} to finish. A start from the chat follows the queue's rules, so nothing started.",
       "markedBlocked": "{{task}} is marked Blocked: {{reason}}. The chat does not start or propose a task marked Blocked, so nothing started; the person can start it in the app."
+    },
+    "waitsOn": {
+      "ownTask": "A run cannot wait on its own task. Nothing was changed.",
+      "otherProject": "A run waits only on a task of its own project. Nothing was changed.",
+      "notWaiting": "Run #{{run}} does not wait for a message or a decision: only such a run can wait on a task. Nothing was changed.",
+      "alreadyWaits": "Run #{{run}} already waits on {{task}}: a run waits on one task at a time. Nothing was changed.",
+      "noBaseBranch": "Run #{{run}} has no base branch its work merges into, so no task's merge can reach it. Nothing was changed."
     },
     "tools": {
       "otherProject": "The Orchestrator acts only in its own project.",

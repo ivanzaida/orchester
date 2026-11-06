@@ -41,6 +41,8 @@ pub enum RunWaitEnd {
   ClosedUnmerged,
   /// The waiting run ended first.
   RunEnded,
+  /// The waiting run was answered first, on its own wait card: it went on without the waited task's work.
+  Answered,
 }
 
 impl RunWaitEnd {
@@ -50,6 +52,7 @@ impl RunWaitEnd {
       Self::Canceled => "canceled",
       Self::ClosedUnmerged => "closed_unmerged",
       Self::RunEnded => "run_ended",
+      Self::Answered => "answered",
     }
   }
 
@@ -59,6 +62,7 @@ impl RunWaitEnd {
       "canceled" => Ok(Self::Canceled),
       "closed_unmerged" => Ok(Self::ClosedUnmerged),
       "run_ended" => Ok(Self::RunEnded),
+      "answered" => Ok(Self::Answered),
       other => Err(corrupt("run wait end", other)),
     }
   }

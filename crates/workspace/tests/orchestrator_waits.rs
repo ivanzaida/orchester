@@ -30,7 +30,7 @@ use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
 use orchester_workspace::orchestrator::{
   chat::ChatView,
-  waits::{Followed, MergeChecks, Switches, check_merges_in, follow_in},
+  waits::{Followed, MergeChecks, Switches, check_merges_in, follow_at, follow_in},
 };
 use support::{Fixture, at};
 
@@ -96,7 +96,8 @@ fn project(fixture: &Fixture) -> ProjectId {
   fixture.db.project().id()
 }
 
-/// Follows the waits with the project's runner attached, *Let the Orchestrator answer agents* on when `answers`.
+/// Follows the waits with the project's runner attached, *Let the Orchestrator answer agents* on when `answers`, a
+/// minute after the agents' doings: no run stalls yet (`orchestrator_stalls`).
 fn follow(fixture: &Fixture, answers: bool) -> Followed {
   let (root, programs) = (fixture.repo.path(), Programs::processes());
   let checks = check_merges_in((root, &programs), &HashSet::new()).expect("checked");
@@ -104,7 +105,13 @@ fn follow(fixture: &Fixture, answers: bool) -> Followed {
     answers,
     ..Switches::default()
   };
-  follow_in((root, project(fixture), &programs), &checks, (switches, true)).expect("followed")
+  follow_at(
+    (root, project(fixture), &programs),
+    &checks,
+    (switches, true),
+    at(60_000),
+  )
+  .expect("followed")
 }
 
 /// The waits of the project's latest conversation, with their turns.
