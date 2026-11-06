@@ -5,7 +5,7 @@
 //! scrolls near its end. Sections without rows are left out; with none at all, *No merges yet* (09c `jhPCL`); while
 //! read the first time in the window, bones (09d `Zlk49`); opened again, the merges last read, kept in the project's
 //! feed, while they are read anew (ORC-721). A row's chevron opens the run's attempts ([`attempt`], ORC-363); a run
-//! waiting for review opens its review page ([`review`], ORC-697) at the same route. The merges are read again whenever
+//! waiting for review opens its review page (ORC-795, `screens::review::task`). The merges are read again whenever
 //! the project's tasks or runs change, a merge job ends, Orchester's wait to try a merge again begins, changes or ends,
 //! or a button here changed something.
 
@@ -15,7 +15,6 @@ mod header;
 mod merged;
 mod not_merged;
 mod retrying;
-pub(crate) mod review;
 mod row;
 mod states;
 mod waiting;
@@ -324,11 +323,18 @@ fn reading(ctx: &mut Ctx, project: &ShownProject) -> Element {
   states::reading(ctx, base.as_ref().map(Option::as_ref))
 }
 
-/// `run`'s page: its review while it waits for one (ORC-697, [`review`]), its merge attempts otherwise (ORC-363,
-/// [`attempt`]).
+/// `run`'s merge attempts page (ORC-363, [`attempt`]).
 fn attempt_page(ctx: &mut Ctx, project: &ShownProject, run: &MergeRun) -> Open {
   Navigation::of(ctx).to(Route::Project(
     project.open.project.id(),
     ProjectPage::MergeAttempt(run.key.clone(), run.number),
+  ))
+}
+
+/// `run`'s review page, which a run waiting for review opens (ORC-795, [`crate::screens::review::task`]).
+fn review_page(ctx: &mut Ctx, project: &ShownProject, run: &MergeRun) -> Open {
+  Navigation::of(ctx).to(Route::Project(
+    project.open.project.id(),
+    ProjectPage::TaskReview(run.key.clone()),
   ))
 }

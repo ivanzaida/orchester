@@ -249,21 +249,24 @@ fn buttons(
 ) -> Element {
   let navigation = Navigation::of(ctx);
   let project = task.project.open.project.id();
-  let page = Route::Project(
-    project,
-    ProjectPage::MergeAttempt(task.key.clone(), shown.run.run.number()),
-  );
-  let (id, label, glyph) = match shown.merge {
-    Merge::Ready => ("task-review-changes", "decisions.ready.reviewChanges", Icon::FileDiff),
+  let attempts = ProjectPage::MergeAttempt(task.key.clone(), shown.run.run.number());
+  let (id, label, glyph, page) = match shown.merge {
+    Merge::Ready => (
+      "task-review-changes",
+      "decisions.ready.reviewChanges",
+      Icon::FileDiff,
+      ProjectPage::TaskReview(task.key.clone()),
+    ),
     Merge::NotMerged(_) => (
       "task-open-in-review",
       "decisions.ready.openInReview",
       Icon::ArrowUpRight,
+      attempts,
     ),
   };
   let open = ActionButton::new(id, ButtonKind::Secondary, ctx.t(label))
     .icon(glyph)
-    .opens(navigation.to(page));
+    .opens(navigation.to(Route::Project(project, page)));
   Row::new()
     .id("task-ready-actions")
     .spacing(SpacingSize::Sm)

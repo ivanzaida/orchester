@@ -196,7 +196,7 @@ pub(crate) fn when(ctx: &Ctx, at: Timestamp) -> Arc<str> {
 }
 
 /// `parts` one after another, as a row's line runs them.
-pub(super) fn joined(ctx: &Ctx, parts: &[Arc<str>]) -> Arc<str> {
+pub(crate) fn joined(ctx: &Ctx, parts: &[Arc<str>]) -> Arc<str> {
   let separator = ctx.t("merges.separator");
   Arc::from(parts.iter().map(|part| &**part).collect::<Vec<_>>().join(&separator))
 }

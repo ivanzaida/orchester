@@ -2,7 +2,7 @@
 //! 09 `Os7b3` `Row · KON-20` and 09i `wLyFt`). *Sign webhook payloads* passed every step on Quick fix with the retry
 //! work of KON-12 at its last checkpoint, then two commits landed on its branch with no checkpoint. Its row in Review ›
 //! Merges reads *Changed since your review: 2 commits after <checkpoint> · nothing merged · review again*; its review
-//! page, opened from the row or at `/project/<id>/merges/<KEY>/1`, says so above the diff, lists the two commits, and
+//! page, opened from the row or at `/project/<id>/review/<KEY>`, says so above the diff, lists the two commits, and
 //! keeps *Approve and merge* unavailable until the person took them in.
 
 use crate::kontur::{Kontur, SeedError, files, run::Drive};

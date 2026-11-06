@@ -21,7 +21,7 @@ use super::super::state::Composing;
 use crate::screens::task::changes::diff::{LineKey, Marks};
 
 /// The key of the comment box's block.
-pub(in crate::screens::merges::review) const COMPOSER: &str = "composer";
+pub(in crate::screens::review::task) const COMPOSER: &str = "composer";
 
 /// What one file's diff shows besides its lines.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -43,17 +43,17 @@ impl FilePlaces {
 }
 
 /// The key of a thread's block.
-pub(in crate::screens::merges::review) fn thread_key(thread: &ThreadView) -> Arc<str> {
+pub(in crate::screens::review::task) fn thread_key(thread: &ThreadView) -> Arc<str> {
   format!("thread:{}", thread.thread.id()).into()
 }
 
 /// The key of the fold of a file's outdated threads.
-pub(in crate::screens::merges::review) fn outdated_key(path: &str) -> Arc<str> {
+pub(in crate::screens::review::task) fn outdated_key(path: &str) -> Arc<str> {
   format!("outdated:{path}").into()
 }
 
 /// The key of a resolved thread's fold.
-pub(in crate::screens::merges::review) fn resolved_key(thread: &ThreadView) -> Arc<str> {
+pub(in crate::screens::review::task) fn resolved_key(thread: &ThreadView) -> Arc<str> {
   format!("resolved:{}", thread.thread.id()).into()
 }
 

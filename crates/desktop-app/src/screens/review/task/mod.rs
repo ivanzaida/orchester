@@ -1,6 +1,6 @@
-//! A run's review page (ORC-697; `Review · redesign` 09i `wLyFt`, the thread and tray states of `RBR9O`), at the run's
-//! attempt route under Review › Merges (`/project/<id>/merges/<KEY>/<run>`) while the run waits for review or Implement
-//! works on comments sent from here; the attempt page (ORC-363, [`super::attempt`]) shows there otherwise. The
+//! A task's review (ORC-795, ORC-697; `Review - v2` 02 `gSMiI`, the thread and tray states of `Review · redesign`
+//! `RBR9O`), at `/project/<id>/review/<KEY>`: the task's latest run that waits for review or was sent back from it
+//! (Implement works on comments sent from here), or, when it has none, that there is nothing to review for it. The
 //! breadcrumb, the title with *Open task* and *Approve and merge*, the status line; at the left the run's files with
 //! their *Viewed* marks; beside them the run's real diff against its base with the threads under their lines
 //! ([`diff`], [`thread`]) and the comment box ([`composer`]); under it the send tray while comments wait ([`tray`]).
@@ -9,6 +9,7 @@
 
 mod actions;
 mod composer;
+mod crumbs;
 mod diff;
 mod files;
 mod head;
@@ -51,11 +52,11 @@ use parking_lot::Mutex;
 
 use self::{
   actions::{Write, Writes},
+  crumbs::crumbs,
   diff::{DiffProps, ReviewDiff},
   read::{Read, read},
   state::ReviewState,
 };
-use super::attempt;
 use crate::{
   navigation::Navigation,
   project::ShownProject,
@@ -68,14 +69,13 @@ use crate::{
   },
 };
 
-/// The page of run `number` of the task `key` in `project`: its review while it is reviewed, its attempts otherwise.
-pub(crate) fn screen(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey, number: RunNumber) -> Element {
-  ctx.mount_keyed::<RunScreen>(
-    &format!("merge-run-{}-{key}-{}", project.open.project.id(), number.get()),
+/// The review of the task `key` in `project`: its latest run that waits for review or was sent back from it.
+pub(crate) fn screen(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey) -> Element {
+  ctx.mount_keyed::<TaskScreen>(
+    &format!("task-review-{}-{key}", project.open.project.id()),
     Props {
       project: project.clone(),
       key: key.clone(),
-      number,
     },
   )
 }
@@ -84,17 +84,16 @@ pub(crate) fn screen(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey, numbe
 struct Props {
   project: ShownProject,
   key: TaskKey,
-  number: RunNumber,
 }
 
 impl DevtoolsInspectable for Props {}
 
-struct RunScreen {
+struct TaskScreen {
   /// Counts Try again after a failed read and the changes the page made.
   again: Signal<u64>,
 }
 
-impl Component for RunScreen {
+impl Component for TaskScreen {
   type Props = Props;
 
   fn create(ctx: &mut Ctx) -> Self {
@@ -102,13 +101,22 @@ impl Component for RunScreen {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let Props { project, key, number } = ctx.props::<Props>().clone();
-    let page = match read(ctx, &project, (&key, number), self.again.get()) {
-      Read::Elsewhere => return attempt::screen(ctx, &project, &key, number),
+    let Props { project, key } = ctx.props::<Props>().clone();
+    let page = match read(ctx, &project, &key, self.again.get()) {
       Read::Ready(page) => page,
       Read::Reading => {
         let reading = loading("review-reading", &ctx.t("review_page.reading"));
-        return frame(ctx, &project, (&key, number)).child(reading).into();
+        return frame(ctx, &project, (&key, None)).child(reading).into();
+      }
+      Read::Nothing => {
+        let nothing = EmptyState::new(
+          "review-no-run",
+          Icon::FileDiff,
+          ctx.t_args("review_page.noRun", [("key", key.to_string())]),
+          ctx.t("review_page.noRunBody"),
+        )
+        .wide();
+        return frame(ctx, &project, (&key, None)).child(nothing).into();
       }
       Read::Failed(reason) => {
         let again = self.again.clone();
@@ -119,7 +127,7 @@ impl Component for RunScreen {
           (&ctx.t("review_page.readFailed"), &body),
           move || again.update(|count| *count += 1),
         );
-        return frame(ctx, &project, (&key, number)).child(failed).into();
+        return frame(ctx, &project, (&key, None)).child(failed).into();
       }
     };
     ctx.mount_keyed::<ReviewScreen>(
@@ -134,7 +142,7 @@ impl Component for RunScreen {
 }
 
 /// The page's frame with its breadcrumb: 20 over it, 28 at its sides, its parts 12 apart (`W31YR`).
-fn frame(ctx: &mut Ctx, project: &ShownProject, (key, number): (&TaskKey, RunNumber)) -> Column {
+fn frame(ctx: &mut Ctx, project: &ShownProject, run: (&TaskKey, Option<RunNumber>)) -> Column {
   Column::new()
     .id("screen-review")
     .width(Dimension::Pct(100.0))
@@ -147,7 +155,7 @@ fn frame(ctx: &mut Ctx, project: &ShownProject, (key, number): (&TaskKey, RunNum
         .bottom(SpacingSize::Lg),
     )
     .spacing(SpacingSize::Md)
-    .child(attempt::head::crumbs(ctx, project, (&key.to_string(), number.get())))
+    .child(crumbs(ctx, project, run))
 }
 
 #[derive(Clone)]
@@ -218,7 +226,7 @@ impl Component for ReviewScreen {
     let BodyProps { project, page, .. } = ctx.props::<BodyProps>().clone();
     let key = (page.run.key.clone(), page.run.number);
     let live = read::live(ctx, &project, page.run.run, self.state.written.get());
-    let frame = frame(ctx, &project, (&key.0, key.1));
+    let frame = frame(ctx, &project, (&key.0, Some(key.1)));
     let (Some(head), Checkpointed::Read { changes, .. }) = (page.review.head.clone(), &page.changes) else {
       return Element::from(frame.child(self.nothing(ctx, &page)));
     };

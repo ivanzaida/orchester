@@ -111,7 +111,12 @@ impl Page {
     self.window.texts(id).is_some()
   }
 
-  /// The run's page under Review › Merges, which Review changes, Open in Review and Resolve open.
+  /// The task's review at `/review/<KEY>`, which Review changes opens.
+  fn review_page(&self) -> Route {
+    Route::Project(self.project, ProjectPage::TaskReview(self.key.clone()))
+  }
+
+  /// The run's page under Review › Merges, which Open in Review and Resolve open.
   fn run_page(&self) -> Route {
     Route::Project(self.project, ProjectPage::MergeAttempt(self.key.clone(), self.run.1))
   }
@@ -205,7 +210,7 @@ fn task_merge_card_ready_offers_merge_review_changes_and_close() {
   assert_eq!(page.window.text("task-primary-merge-label"), "Merge");
   assert_eq!(page.window.text("task-primary-merge-key"), KEYS);
   page.window.press("task-review-changes");
-  let route = page.run_page();
+  let route = page.review_page();
   page.window.until("the run's review page", |window| {
     window.navigation().route_now() == route
   });

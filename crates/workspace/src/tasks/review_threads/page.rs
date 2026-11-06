@@ -74,6 +74,37 @@ impl ReviewPage {
   }
 }
 
+/// The review page of the task `key`: of its latest run that [`review_page`] shows, the run that waits for review or
+/// was sent back from it; `None` when the task has none (no such task, or no run is reviewed now).
+pub fn task_review_page(
+  tasks: &ProjectTasks,
+  (root, programs): (&Path, &Programs),
+  key: &TaskKey,
+) -> Result<Option<ReviewPage>, ReviewRefusal> {
+  let Some(task) = tasks
+    .tasks
+    .iter()
+    .chain(tasks.not_shared.iter())
+    .find(|task| task.key() == key)
+  else {
+    return Ok(None);
+  };
+  let mut numbers: Vec<RunNumber> = ProjectDb::open(root)?
+    .runs_of_task(task.id())
+    .map_err(run_store_error)?
+    .into_iter()
+    .filter_map(Result::ok)
+    .map(|run| run.number())
+    .collect();
+  numbers.sort_unstable_by(|first, second| second.cmp(first));
+  for number in numbers {
+    if let Some(page) = review_page(tasks, (root, programs), (key, number))? {
+      return Ok(Some(page));
+    }
+  }
+  Ok(None)
+}
+
 /// The review page of run `number` of the task `key` among `tasks`, the project at `root`'s; `None` when there is no
 /// such task or run, or when the run is not reviewed here: it neither waits for review nor has comments Implement works
 /// on, or a merge of it was tried. `programs` read the run's branch and diff.

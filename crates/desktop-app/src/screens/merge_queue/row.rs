@@ -2,7 +2,8 @@
 //! and title with its run, the line that says where it stands, since when, its action and the chevron that opens its
 //! task. 60 high, 16 at its sides, 14 between its parts, over a `border` line but for the lane's last row. Under the
 //! state line, the files a dirty checkout holds or why the run left. A waiting run moves up, to the top or out of the
-//! queue with small buttons; a run waiting for approval opens its review; a blocked one has *Retry*.
+//! queue with small buttons; a run waiting for approval opens its task's review (`/review/<KEY>`); a blocked one
+//! has *Retry*.
 
 use std::sync::Arc;
 
@@ -287,7 +288,10 @@ fn action(ctx: &mut Ctx, id: &str, rows: &Rows, row: &QueueRow) -> Vec<Element> 
   match &row.entry.state {
     QueueState::Queued => waiting_buttons(ctx, id, rows, row),
     QueueState::WaitingForApproval => {
-      let page = task_page(ctx, rows, row);
+      let page = Navigation::of(ctx).to(Route::Project(
+        rows.project,
+        ProjectPage::TaskReview(row.task_key.clone()),
+      ));
       vec![
         ActionButton::new(
           format!("{id}-review"),

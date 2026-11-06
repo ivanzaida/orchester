@@ -115,7 +115,7 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::Orchestrator(chat) => orchestrator::screen(ctx, project, *chat),
     ProjectPage::OrchestratorSettings => orchestrator::settings(ctx, project),
     ProjectPage::Review => review::list(ctx, project),
-    ProjectPage::TaskReview(key) => review::task(ctx, key),
+    ProjectPage::TaskReview(key) => review::task::screen(ctx, project, key),
     ProjectPage::MergeQueue => merge_queue::screen(ctx, project),
     ProjectPage::Memory(tab) => memory::screen(ctx, project, *tab),
     ProjectPage::Tasks(list) => tasks::screen(ctx, project, list),
@@ -130,7 +130,7 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::EditModule(id) => modules::edit_module(ctx, project, *id),
     ProjectPage::PullRequests(tab) => pull_requests::screen(ctx, project, *tab),
     ProjectPage::Merges => merges::screen(ctx, project),
-    ProjectPage::MergeAttempt(key, number) => merges::review::screen(ctx, project, key, *number),
+    ProjectPage::MergeAttempt(key, number) => merges::attempt::screen(ctx, project, key, *number),
     ProjectPage::PullRequest(number, file) => pull_requests::pull_request(
       ctx,
       project,

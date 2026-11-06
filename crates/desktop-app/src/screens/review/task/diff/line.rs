@@ -25,7 +25,7 @@ use orchester_workspace::highlight::TokenKind;
 
 use crate::{
   screens::{
-    merges::review::Env,
+    review::task::Env,
     task::changes::diff::{LineKey, rows::LineRow},
   },
   theme::{ExtraColor, IconSize, token_color},

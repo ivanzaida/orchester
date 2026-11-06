@@ -1,6 +1,6 @@
 //! A run's review page (ORC-697, `Review · redesign` 09i `wLyFt` and the states of `RBR9O`) in the app's real window,
-//! on the QA seed's `review-page` scenario (`examples/seed`): opened from its *Waiting for your review* row at the
-//! run's route under Merges, with the run's real diff, its files and *Viewed* marks, every thread state, the comment
+//! on the QA seed's `review-page` scenario (`examples/seed`): opened from its *Waiting for your review* row at its
+//! task's review route, with the run's real diff, its files and *Viewed* marks, every thread state, the comment
 //! box that adds a comment to the tray and whose field takes the focus as it opens, the **+** only on the line under
 //! the pointer and never over its numbers (ORC-702), a send the runner did not take kept with why, a send QA holds
 //! (`hold_hand_offs`) shown *Sending…* in its threads and the tray, and *Approve and
@@ -82,9 +82,15 @@ impl Page {
       .unwrap_or_else(|| panic!("the scenario seeds {title}"));
     let key: TaskKey = task.key.parse().expect("a task key");
     let number = RunNumber::new(NonZeroU32::new(number).expect("runs are numbered from 1"));
-    let route = Route::Project(self.project, ProjectPage::MergeAttempt(key, number));
+    let route = Route::Project(self.project, ProjectPage::TaskReview(key.clone()));
     self.window.navigation().go(route);
     self.until_read();
+    let crumbs = self.window.texts("review-crumbs").expect("the breadcrumb");
+    assert_eq!(
+      crumbs,
+      ["Review", "/", &format!("{key} · run {}", number.get())],
+      "the task's latest run in review: {crumbs:?}"
+    );
   }
 
   /// The diff's words from its top to its end, turning the wheel over it: its rows are laid out only where they show.
@@ -150,7 +156,7 @@ fn review_page_opens_from_its_waiting_row_with_the_runs_real_diff() {
   page.until_read();
   let route = page.window.navigation().route_now();
   assert!(
-    matches!(route, Route::Project(_, ProjectPage::MergeAttempt(..))),
+    matches!(route, Route::Project(_, ProjectPage::TaskReview(_))),
     "{route:?}"
   );
   assert_eq!(page.window.text("review-status-text"), "Waiting for your review");
@@ -377,4 +383,44 @@ fn count(page: &mut Page, within: &str, id: &str) -> usize {
     stack.extend(element.children());
   }
   found
+}
+
+#[test]
+fn review_page_crumbs_lead_back_to_review_and_the_status_names_the_base() {
+  let mut page = Page::new();
+  page.open(("Sign webhook payloads", 1));
+  let meta = page.window.text("review-status-meta");
+  assert!(meta.contains("into main"), "{meta}");
+  page.window.press("review-crumbs-0");
+  let route = Route::Project(page.project, ProjectPage::Review);
+  page
+    .window
+    .until("Review", |window| window.navigation().route_now() == route);
+}
+
+#[test]
+fn review_page_says_nothing_is_to_review_for_a_task_whose_run_is_not_in_review() {
+  let mut page = Page::of("merges");
+  let task = page
+    .tasks
+    .iter()
+    .find(|task| task.title == "Delivery log per endpoint")
+    .expect("the scenario seeds a merged task");
+  let key: TaskKey = task.key.parse().expect("a task key");
+  let route = Route::Project(page.project, ProjectPage::TaskReview(key.clone()));
+  page.window.navigation().go(route);
+  page.window.until_within(GIT_WORK, "the empty state", |window| {
+    window.texts("review-no-run").is_some()
+  });
+  assert!(
+    page
+      .window
+      .text("review-no-run")
+      .contains(&format!("Nothing to review for {key}"))
+  );
+  assert_eq!(
+    page.window.texts("review-crumbs").expect("the breadcrumb"),
+    ["Review", "/", &key.to_string()]
+  );
+  assert!(page.window.texts("review-diff").is_none());
 }

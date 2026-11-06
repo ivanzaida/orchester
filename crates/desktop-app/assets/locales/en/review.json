@@ -53,11 +53,6 @@
     "open": "Review",
     "loading": "Reading the tasks to review…",
     "readFailed": "The review list cannot be read",
-    "readFailedBody": "Reading the tasks to review failed. {{reason}} No task was changed.",
-    "unavailable": {
-      "title": "Review is being rebuilt",
-      "taskTitle": "Review of {{key}} is being rebuilt",
-      "body": "The list of tasks to review and a task's review page are not available yet."
-    }
+    "readFailedBody": "Reading the tasks to review failed. {{reason}} No task was changed."
   }
 }

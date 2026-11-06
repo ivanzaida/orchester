@@ -20,7 +20,7 @@ use super::{
   line::line,
   rows::ReviewRow,
 };
-use crate::screens::merges::review::{Env, thread};
+use crate::screens::review::task::{Env, thread};
 
 #[derive(Clone)]
 pub(super) struct RowProps {
