@@ -1827,6 +1827,7 @@
       "teamActionFailed": "The change could not be carried out with the team server. Nothing was changed on this computer.",
       "teamFieldUnsupported": "A team task or module keeps no {{fields}} on its server in this version, so nothing was sent. Leave them out.",
       "bindingsRequired": "Choose the local connection these agent profiles run on: {{profiles}}. Each needs a binding, since this computer has none or several connections of its CLI.",
+      "mcpServersRequired": "The pipeline's agent profiles use MCP servers that are not set up on this computer: {{servers}}. Bind each to a local MCP server in Sharing › On this computer; nothing was started.",
       "teamNotPublished": "The team has no published version of this pipeline or profile yet.",
       "teamModuleRequired": "A team task starts only in a module. An Admin puts it in one first.",
       "teamNoPipeline": "This team task has no pipeline. Whoever may edit it chooses one of the team's pipelines first.",

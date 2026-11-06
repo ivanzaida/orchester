@@ -36,7 +36,7 @@ use crate::{
   runner::RunRequestError,
   tasks::run::start_messages,
   team_reads::{TeamReadError, listed::TeamPipelines},
-  team_work::{self, ProjectRunner, StartChoices, StartOutcome, TeamStartRequest, TeamWork, TeamWorkError},
+  team_work::{self, McpHere, ProjectRunner, StartChoices, StartOutcome, TeamStartRequest, TeamWork, TeamWorkError},
 };
 
 pub(in crate::app_mcp::tools) async fn run_task(
@@ -66,18 +66,18 @@ pub(in crate::app_mcp::tools) async fn run_task(
   };
   let (root, programs) = (team.open.repo_root.clone(), services.programs().clone());
   let branch = module_read.branch.clone();
-  let (pipeline, base_commit, connections) = blocking(move || {
+  let (pipeline, base_commit, (connections, mcp)) = blocking(move || {
     let db = ProjectDb::open(&root)?;
     // Only the team's pipelines run a team task: a person's own local pipeline never does, even with the same id.
     let pipeline = TeamPipelines::of(&db)?
       .id(&named)
       .ok_or_else(|| pipeline_missing(&named))?;
     let commit = branch_tip(programs.runner(), &root, &branch)?;
-    Ok((pipeline, commit, db.connections()?))
+    Ok((pipeline, commit, (db.connections()?, McpHere::read(&db)?)))
   })
   .await?;
   let choices = StartChoices {
-    bindings: bind(&project, pipeline, &connections, given).await?,
+    bindings: bind(&project, pipeline, (&connections, &mcp), given).await?,
     consent: LocalConsent::default(),
   };
   let dispatcher = team.dispatcher(services).await?;

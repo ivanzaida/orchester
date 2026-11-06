@@ -3,7 +3,8 @@
 //! queued reports are sent in sequence order, each again with the same bytes until the server acknowledges it. The
 //! outcomes are core's ([`ExecutionOutcome::of_status`]): an execution success is `succeeded` and never marks the task
 //! Done, a failure keeps the claim, a cancellation releases an independent claim, and a reached limit is a pause the
-//! work resumes from; a wait for a person has none (D1, D8).
+//! work resumes from; a wait for a person has none (D1, D8). The shared projects' background work sends them every
+//! minute and whenever a run changes (`crate::sharing::project::work`).
 
 use orchester_api::v2::{
   AuthorityErrorCode, AuthorityRef, CommandRequest, ExpectedRevisions, Subject, TeamCommand, TeamCommandValue,
@@ -17,7 +18,7 @@ use orchester_core::{
 };
 use orchester_store::{AcceptedWork, NewWorkReport, ProjectDb, TeamFence, TeamRun, WorkReportEntry, WorkReportState};
 
-use super::{Answer, TeamRunner, TeamWork, TeamWorkError, answer};
+use super::{Answer, TeamWork, TeamWorkError, answer};
 
 /// What one pass of reporting did.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -33,7 +34,7 @@ pub struct Reported {
   pub waiting: bool,
 }
 
-impl<R: TeamRunner> TeamWork<R> {
+impl<R> TeamWork<R> {
   /// Queues a report of each team run whose outcome changed, then sends every queued report in order. A run already
   /// started keeps executing whatever the server answers; only its reports wait.
   pub async fn report(&self) -> Result<Reported, TeamWorkError> {

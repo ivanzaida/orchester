@@ -11,7 +11,7 @@ use crate::{
   messages::Message,
   sharing::sync::SystemClock,
   team_reads::TeamProject,
-  team_work::{ChoiceError, bind as bind_choices},
+  team_work::{ChoiceError, McpHere, bind as bind_choices},
 };
 
 /// The local connection a team profile runs on, chosen by the caller.
@@ -25,12 +25,13 @@ pub struct Binding {
   pub connection: String,
 }
 
-/// The bindings of every agent profile of `pipeline`'s latest published version, on `connections`, read while the
+/// The bindings of every agent profile of `pipeline`'s latest published version and of the MCP servers they name, on
+/// this computer's connections and MCP servers `here`, read while the
 /// project's subscription gives the reads their position, as the tools' other reads are (`super::read`).
 pub(super) async fn bind(
   project: &TeamProject,
   pipeline: ResourceId,
-  connections: &[Connection],
+  here: (&[Connection], &McpHere),
   given: &[Binding],
 ) -> Result<LocalBindings, ToolError> {
   let given: Vec<(String, String)> = given
@@ -39,7 +40,7 @@ pub(super) async fn bind(
     .collect();
   tokio::select! {
     ended = project.follow(&SystemClock) => Err(read_refused(&ended)),
-    bound = bind_choices(project, pipeline, connections, &given) => bound.map_err(|error| choice_refused(&error)),
+    bound = bind_choices(project, pipeline, here, &given) => bound.map_err(|error| choice_refused(&error)),
   }
 }
 
@@ -62,6 +63,10 @@ pub(super) fn choice_refused(error: &ChoiceError) -> ToolError {
     ChoiceError::BindingsRequired(profiles) => ToolError::refused(
       "bindings_required",
       vec![Message::new("appMcp.errors.bindingsRequired").with("profiles", profiles.join(", "))],
+    ),
+    ChoiceError::McpServersRequired(servers) => ToolError::refused(
+      "mcp_servers_required",
+      vec![Message::new("appMcp.errors.mcpServersRequired").with("servers", servers.join(", "))],
     ),
   }
 }

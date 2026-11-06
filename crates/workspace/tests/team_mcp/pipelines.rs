@@ -183,8 +183,11 @@ fn team_mcp_run_task_binds_a_profile_to_the_connection_its_reference_names() {
   let (server, seen) = server();
   let pipeline = server.state().config.pipeline;
   let named = seen.lock().publisher_connection.expect("the Builder's connection");
+  let mcp_server = seen.lock().publisher_mcp_server.expect("the Builder's MCP server");
   let checkout = Checkout::prepared(Some(&server), &[], |db| {
     team_pipeline(db, pipeline, "delivery");
+    orchester_core::store::McpServerStore::create_mcp_server(db, &crate::tools::local_mcp_server(mcp_server))
+      .expect("a local MCP server");
     for (id, label) in [
       (named, "Codex here"),
       (orchester_core::id::ConnectionId::generate(), "Codex work"),
