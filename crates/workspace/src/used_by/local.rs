@@ -8,21 +8,22 @@ use std::{num::NonZeroU32, path::Path};
 use orchester_api::SharedResourceKind;
 use orchester_core::{
   id::ResourceId,
-  resource::ResourceBody,
+  resource::{Resource, ResourceBody},
   run::RunNumber,
   store::{ResourceStore, TaskStore},
 };
 use orchester_store::ProjectDb;
 
 use super::{UsedBy, UsedByError, UsedByResource, UsedByRun, names};
+use crate::sharing::sync::pins;
 
 pub(super) fn used_by(root: &Path, resource: ResourceId) -> Result<UsedBy, UsedByError> {
   let db = ProjectDb::open(root)?;
   // A removed resource answers like an archived team one, so what still uses it can be checked.
-  db.resource(resource)?.ok_or(UsedByError::NotFound)?;
+  let kept = db.resource(resource)?.ok_or(UsedByError::NotFound)?;
   Ok(UsedBy {
     resources: resources(&db, resource)?,
-    runs: runs(&db, resource)?,
+    runs: runs(&db, &kept)?,
   })
 }
 
@@ -67,13 +68,13 @@ fn naming<B: ResourceBody>(
   Ok(())
 }
 
-/// The runs that have not ended and pin `target`: the ones an archive would stop. A run that cannot be read is
-/// logged and left out, as it is when the archive stops runs (`crate::sharing::sync`).
-fn runs(db: &ProjectDb, target: ResourceId) -> Result<Vec<UsedByRun>, UsedByError> {
+/// The runs that have not ended and pin `target` by the rule an archive stops runs by ([`pins`]). A run that cannot
+/// be read is logged and left out, as it is when the archive stops runs (`crate::sharing::sync`).
+fn runs(db: &ProjectDb, target: &Resource) -> Result<Vec<UsedByRun>, UsedByError> {
   let mut found: Vec<(NonZeroU32, RunNumber, UsedByRun)> = Vec::new();
   for listed in db.unfinished_runs()? {
     let run = match listed {
-      Ok(run) if run.snapshot().pins(target) => run,
+      Ok(run) if pins(db, run.snapshot(), target)? => run,
       Ok(_) => continue,
       Err(unreadable) => {
         tracing::warn!(

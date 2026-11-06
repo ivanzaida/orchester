@@ -6,42 +6,16 @@
 
 mod support;
 
-use orchester_core::{
-  id::{ConnectionId, ResourceId},
-  name::Name,
-  resource::{Resource, ResourceKind, Slug},
-  sharing::TaskRevision,
-};
+use orchester_core::id::ResourceId;
 use orchester_workspace::sharing::sync::pinning;
-use support::{Fixture, at};
-
-/// The team MCP server `id` named `called`, kept in the fixture's project as a synced one is.
-fn keep_team_server(fixture: &mut Fixture, id: ResourceId, called: &str) {
-  let server = Resource::new(
-    id,
-    ResourceKind::McpServer,
-    Slug::new(&called.to_lowercase()).expect("slug"),
-    Name::new(called).expect("name"),
-    at(1),
-  );
-  let revision = TaskRevision::try_from(1_u64).expect("a revision");
-  fixture
-    .db
-    .keep_shared_resource(&server, revision)
-    .expect("the team MCP server is kept");
-}
-
-/// How a profile's selection names the team MCP server `server`.
-fn chosen(server: ResourceId) -> ConnectionId {
-  ConnectionId::from_uuid(server.as_uuid())
-}
+use support::{Fixture, at, chosen};
 
 #[test]
 fn archive_pins_a_run_whose_profile_chooses_the_team_mcp_server_is_stopped_by_its_archive() {
   let (knowledge, other) = (ResourceId::generate(), ResourceId::generate());
   let mut fixture = Fixture::choosing(&[chosen(knowledge)]);
-  keep_team_server(&mut fixture, knowledge, "Knowledge");
-  keep_team_server(&mut fixture, other, "Other");
+  fixture.keep_team_server(knowledge, "Knowledge");
+  fixture.keep_team_server(other, "Other");
   let task = fixture.task("Search", at(10));
   let run = fixture.started_run(task, at(11));
 
@@ -72,7 +46,7 @@ fn archive_pins_a_run_whose_profile_chooses_the_team_mcp_server_is_stopped_by_it
 fn archive_pins_a_run_whose_profile_chooses_no_team_mcp_server_is_not_stopped() {
   let knowledge = ResourceId::generate();
   let mut fixture = Fixture::choosing(&[]);
-  keep_team_server(&mut fixture, knowledge, "Knowledge");
+  fixture.keep_team_server(knowledge, "Knowledge");
   let task = fixture.task("Search", at(10));
   fixture.started_run(task, at(11));
 

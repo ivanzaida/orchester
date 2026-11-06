@@ -6,6 +6,9 @@
 //! `cargo test -p orchester-workspace --test used_by used_by_`
 
 mod local;
+mod mcp_servers;
+#[path = "../support/mod.rs"]
+mod support;
 mod team;
 
 use std::process::Command;

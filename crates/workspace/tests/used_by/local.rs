@@ -2,14 +2,19 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use orchester_api::SharedResourceKind::{Instruction as InstructionKind, Pipeline as PipelineKind, Skill as SkillKind};
+use orchester_api::SharedResourceKind::{
+  Instruction as InstructionKind, Pipeline as PipelineKind, Skill as SkillKind, Tool as ToolKind,
+};
 use orchester_core::{
-  id::{IdempotencyKey, ProjectId, ResourceId, TaskId},
+  id::{ConnectionId, IdempotencyKey, ProjectId, ResourceId, TaskId},
   name::Name,
+  permission::StepPermissions,
   project::{Project, ProjectKey},
   resource::{
-    CommandAction, CommandArg, CommandProgram, Draft, InjectionEvent, Instruction, InstructionScope, Pipeline,
-    PromptText, RemoveMode, Skill, Slug, Step, StepKey, StepKind, Tool,
+    AccessPolicy, AccessWindow, AgentProfile, AgentTargets, AllowedSteps, ApprovalMode, CommandAction, CommandArg,
+    CommandProgram, DeliverStep, DeniedBehavior, Draft, InjectionEvent, Instruction, InstructionScope, ModelId,
+    Pipeline, PromptText, ProviderSettings, RemoveMode, RepositoryAccess, Skill, Slug, Step, StepKey, StepKind,
+    Tool, ToolAction,
   },
   revision::Revision,
   run::{BranchName, NewRun, PublishedVersions, Run, RunSnapshot, StepFailure},
@@ -32,10 +37,15 @@ fn at(millis: i64) -> Timestamp {
 }
 
 fn pipeline_running(tool: ResourceId) -> Pipeline {
+  pipeline_of(StepKind::Tool { tool: Some(tool) })
+}
+
+/// A pipeline of the one step `kind`.
+fn pipeline_of(kind: StepKind) -> Pipeline {
   let step = Step {
     key: StepKey::new("check").expect("key"),
     name: name("Check"),
-    kind: StepKind::Tool { tool: Some(tool) },
+    kind,
     instructions: PromptText::new("").expect("prompt"),
     depends_on: BTreeSet::new(),
     approval_gate: false,
@@ -46,13 +56,34 @@ fn pipeline_running(tool: ResourceId) -> Pipeline {
 }
 
 fn instruction_for(scope: InstructionScope, text: &str) -> Instruction {
+  instruction_targeting(AgentTargets::All, scope, text)
+}
+
+fn instruction_targeting(targets: AgentTargets, scope: InstructionScope, text: &str) -> Instruction {
   Instruction::new(
     PromptText::new(text).expect("prompt"),
-    orchester_core::resource::AgentTargets::All,
+    targets,
     BTreeSet::from([InjectionEvent::Start]),
     scope,
   )
   .expect("instruction")
+}
+
+fn status_action() -> CommandAction {
+  CommandAction::new(
+    CommandProgram::new("git").expect("program"),
+    vec![CommandArg::new("status").expect("arg")],
+  )
+}
+
+/// A step that an agent of `profile` runs.
+fn agent_step(profile: ResourceId) -> StepKind {
+  StepKind::Agent {
+    profile: Some(profile),
+    repository: RepositoryAccess::Write,
+    model: None,
+    permissions: StepPermissions::default(),
+  }
 }
 
 /// A local project KON in a folder, with a counter for the timestamps of what it stores.
@@ -113,11 +144,19 @@ impl Local {
   }
 
   fn tool(&mut self, slug: &str, label: &str) -> ResourceId {
-    let action = CommandAction::new(
-      CommandProgram::new("git").expect("program"),
-      vec![CommandArg::new("status").expect("arg")],
+    self.publish((slug, label), &Tool::command("", status_action()))
+  }
+
+  fn profile(&mut self, slug: &str, label: &str) -> ResourceId {
+    let profile = AgentProfile::new(
+      name(label),
+      String::new(),
+      PromptText::new("Build.").expect("prompt"),
+      ConnectionId::generate(),
+      ModelId::new("gpt-5.5").expect("model"),
+      ProviderSettings::default(),
     );
-    self.publish((slug, label), &Tool::command("", action))
+    self.publish((slug, label), &profile)
   }
 
   /// `count` tasks, so that the later ones have the larger numbers; the ids in order.
@@ -292,4 +331,69 @@ fn used_by_local_refuses_a_resource_the_project_does_not_have() {
     local.used_by(ResourceId::generate()),
     Err(UsedByError::NotFound)
   ));
+}
+
+#[test]
+fn used_by_local_names_an_agent_profile_by_a_step_the_deliver_integrator_and_an_instruction_target() {
+  let mut local = Local::new();
+  let profile = local.profile("builder", "Builder");
+  let other = local.profile("reviewer", "Reviewer");
+  let tool = local.tool("deploy", "Deploy");
+  local.publish(("implement", "Implement"), &pipeline_of(agent_step(profile)));
+  let integrating = pipeline_running(tool).with_deliver(Some(DeliverStep::default().with_integrator(Some(profile))));
+  local.publish(("ship", "Ship"), &integrating);
+  let targeting = instruction_targeting(
+    AgentTargets::Profiles(BTreeSet::from([profile])),
+    InstructionScope::Project,
+    "Be brief",
+  );
+  local.publish(("brief", "Brief"), &targeting);
+  // Other profiles, and every agent, are named by nothing.
+  local.publish(("other-step", "Other step"), &pipeline_of(agent_step(other)));
+  let elsewhere = instruction_targeting(
+    AgentTargets::Profiles(BTreeSet::from([other])),
+    InstructionScope::Project,
+    "Be kind",
+  );
+  local.publish(("kind", "Kind"), &elsewhere);
+  local.publish(("all", "All"), &instruction_for(InstructionScope::Project, "Be fast"));
+
+  let used = local.used_by(profile).expect("the profile's users");
+  assert_eq!(
+    shown(&used).0,
+    [
+      (InstructionKind, "Brief", 1),
+      (PipelineKind, "Implement", 1),
+      (PipelineKind, "Ship", 1)
+    ],
+    "a step's agent, the Deliver step's integrator and an instruction's targets name a profile"
+  );
+}
+
+#[test]
+fn used_by_local_names_a_pipeline_by_the_callers_of_a_tools_access_policy() {
+  let mut local = Local::new();
+  let tool = local.tool("deploy", "Deploy");
+  let pipeline = local.publish(("delivery", "Delivery"), &pipeline_running(tool));
+  let other = local.publish(("other", "Other"), &pipeline_running(tool));
+  let access = AccessPolicy::new(
+    BTreeMap::from([(pipeline, AllowedSteps::All)]),
+    name("Staging"),
+    ApprovalMode::Never,
+    AccessWindow::UntilStepEnds,
+    DeniedBehavior::FailStep,
+  )
+  .expect("access");
+  let guarded = Tool::new("", ToolAction::Command(status_action()), Some(access)).expect("tool");
+  local.publish(("guarded", "Guarded"), &guarded);
+
+  assert_eq!(
+    shown(&local.used_by(pipeline).expect("the pipeline's users")).0,
+    [(ToolKind, "Guarded", 1)]
+  );
+  assert_eq!(
+    shown(&local.used_by(other).expect("the pipeline's users")).0,
+    Vec::new(),
+    "a pipeline the policy does not list is not named"
+  );
 }
