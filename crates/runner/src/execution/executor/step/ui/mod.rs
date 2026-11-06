@@ -3,9 +3,10 @@
 //! driver reaches the built-in `desktop-qa` service, the invocation's QA app ([`super::qa_app`]), over the run's relay
 //! to the app (`super::run_app`), as `call_run_app` without a pid reaches it, so the same rules hold: only the app this
 //! run started, through its exact discovery file, its token kept private and its PNGs saved in the run's own storage.
-//! The `native` driver ([`native`]) reaches a project's service through the operating system's UI Automation, only in
-//! the windows of its processes the run may reach. A project's service with another driver, or none, answers why it
-//! cannot be opened.
+//! The `native` driver ([`native`]) reaches a project's service through the operating system's accessibility
+//! interface (UI Automation, macOS Accessibility), only in the windows of its processes the run may reach; on macOS
+//! each of its calls first answers a missing Accessibility or Screen Recording permission. A project's service with
+//! another driver, or none, answers why it cannot be opened.
 
 mod native;
 
@@ -25,7 +26,7 @@ use orchester_core::{
   },
   service::{ServiceName, UiDriver},
 };
-use orchester_exec::run_processes::RunProcesses;
+use orchester_exec::{native_ui, run_processes::RunProcesses};
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 
@@ -74,8 +75,10 @@ impl StepUi<'_> {
     }
   }
 
-  /// The `native` driver of the project's services.
+  /// The `native` driver of the project's services; why it cannot work on this computer now, such as the macOS
+  /// permission it misses, which every call of it answers.
   fn native(&self) -> Result<NativeUi<'_>, String> {
+    native_ui::ready().map_err(|error| error.to_string())?;
     Ok(NativeUi {
       processes: self.processes,
       services: self.services.ok_or_else(|| "this step has no services".to_owned())?,

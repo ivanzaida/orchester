@@ -1,8 +1,8 @@
 //! The `native` UI driver for a project's service (`orchester_exec::native_ui`): each call finds the service's windows
 //! again — the visible top-level windows of its program's tree whose processes pass the check `stop_run_process` makes
-//! ([`RunProcesses::tree`]) — and sees or uses them through UI Automation. `ui_open` places them off-screen without
-//! activating them; a screenshot is the window's own rendering, saved in the run's storage as an app's is; the log is
-//! the service's own output.
+//! ([`RunProcesses::tree`]) — and sees or uses them through UI Automation on Windows, Accessibility on macOS. `ui_open`
+//! places them off-screen without activating them; a screenshot is that window alone, saved in the run's storage as an
+//! app's is; the log is the service's own output.
 
 use std::{
   num::NonZeroU32,

@@ -7,7 +7,8 @@
 //! service's output. A service whose process the run may not reach — its program outside the worktree — has its
 //! windows refused, and a window the run did not start is never among them.
 //!
-//! Windows only: macOS has no native driver yet. Needs `git`. Run with `cargo test -p orchester-runner --features
+//! Windows only: the macOS driver needs a Mac with Accessibility and Screen Recording granted, and its pure parts are
+//! tested in `orchester-exec`'s `tests/native_ui.rs`. Needs `git`. Run with `cargo test -p orchester-runner --features
 //! test-agent --test native_ui native_ui`.
 #![cfg(windows)]
 

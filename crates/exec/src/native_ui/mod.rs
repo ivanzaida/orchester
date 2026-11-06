@@ -8,10 +8,21 @@
 //!   Toggle, SelectionItem, ExpandCollapse, Value, ScrollItem — and an element without the needed one answers
 //!   *unsupported for this element*; no key is pressed and no point is clicked. A screenshot is the window's own
 //!   rendering (`PrintWindow`) into memory, never the screen.
-//! - macOS and other platforms ([`unsupported`]): every call answers that the driver is not supported on this platform
-//!   yet; macOS Accessibility comes with the next agent testing task.
+//! - macOS ([`macos`]): the normal-layer windows of those processes as the window server lists them, each matched to
+//!   its Accessibility (AX) window. A snapshot is the AXUIElement tree of each, mapped by [`accessibility`]; actions
+//!   are AX actions and settable attributes only (`AXPress`, `AXPick`, `AXValue`, `AXIncrement`/`AXDecrement`,
+//!   `AXScrollToVisible`), never CGEvent input. A screenshot is that window alone by its window id, through
+//!   ScreenCaptureKit. Every call first needs the Accessibility and Screen Recording permissions ([`permission`]) and
+//!   answers which are missing and where to grant them.
+//! - Other platforms ([`unsupported`]): every call answers that the driver is not supported on this platform.
 
-#[cfg(not(windows))]
+pub mod accessibility;
+#[cfg(any(windows, target_os = "macos"))]
+mod crop;
+#[cfg(target_os = "macos")]
+mod macos;
+pub mod permission;
+#[cfg(not(any(windows, target_os = "macos")))]
 mod unsupported;
 #[cfg(windows)]
 mod windows;
@@ -19,10 +30,28 @@ mod windows;
 use orchester_core::orchester_tools::ui::UiElement;
 use thiserror::Error;
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+pub use self::macos::{act, capture, find_windows, idle, open, permissions, snapshot};
+pub use self::permission::{NativePermission, NativePermissions};
+#[cfg(not(any(windows, target_os = "macos")))]
 pub use self::unsupported::{act, capture, find_windows, idle, open, snapshot};
 #[cfg(windows)]
 pub use self::windows::{act, capture, find_windows, idle, open, snapshot};
+
+/// The permissions the driver needs of this computer: none outside macOS.
+#[cfg(not(target_os = "macos"))]
+pub fn permissions() -> Option<NativePermissions> {
+  None
+}
+
+/// Nothing when the driver can work on this computer now; else why not — on macOS the permissions it misses. Every
+/// `ui_*` call of a service with the native driver asks this first, so each one names a missing permission.
+pub fn ready() -> Result<(), NativeUiError> {
+  if !cfg!(any(windows, target_os = "macos")) {
+    return Err(NativeUiError::NotSupported);
+  }
+  permissions().map_or(Ok(()), NativePermissions::require)
+}
 
 /// The most elements one snapshot answers.
 pub const SNAPSHOT_NODES: usize = 300;
@@ -37,6 +66,9 @@ pub struct NativeWindow {
   /// Its handle, valid while its process runs.
   #[cfg(windows)]
   handle: isize,
+  /// Its window server id (`CGWindowID`), valid while the window lives.
+  #[cfg(target_os = "macos")]
+  window_id: u32,
   pub pid: u32,
   pub title: String,
   pub bounds: Bounds,
@@ -44,7 +76,7 @@ pub struct NativeWindow {
   pub off_screen: bool,
 }
 
-/// A rectangle on the computer's desktop, in pixels.
+/// A rectangle on the computer's desktop: in pixels on Windows, in points on macOS.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Bounds {
   pub x: i32,
@@ -72,10 +104,13 @@ pub struct NativeCapture {
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum NativeUiError {
   #[error(
-    "the native UI driver is not supported on this platform yet: it works on Windows through UI Automation; macOS \
-     Accessibility comes later"
+    "the native UI driver is not supported on this platform: it works on Windows through UI Automation and on macOS \
+     through Accessibility"
   )]
   NotSupported,
+  /// macOS has not granted Orchester these permissions; each is named with where a person grants it.
+  #[error("{}", permission::describe(.0))]
+  PermissionsMissing(Vec<NativePermission>),
   #[error("the service shows no window of a process this run started")]
   NoWindow,
   #[error("the service's windows cannot be listed or placed: {0}")]
@@ -83,12 +118,13 @@ pub enum NativeUiError {
   #[error("no element has the ref `{0}` now: take a new ui_snapshot")]
   NoElement(String),
   #[error(
-    "unsupported for this element: {action} needs the {patterns} pattern, and the element `{reference}` ({role}) has \
-     none of them; the native driver never clicks a point or presses keys instead"
+    "unsupported for this element: {action} needs {needs}, and the element `{reference}` ({role}) has none of them; \
+     the native driver never clicks a point or presses keys instead"
   )]
   Unsupported {
     action: &'static str,
-    patterns: &'static str,
+    /// The patterns (Windows) or AX actions and attributes (macOS) that would do it.
+    needs: &'static str,
     reference: String,
     role: String,
   },
@@ -97,13 +133,16 @@ pub enum NativeUiError {
   #[error("the element `{0}` is read-only")]
   ReadOnly(String),
   #[error(
-    "the native driver presses no keys: it acts only through UI Automation patterns (click, type, scroll, select)"
+    "the native driver presses no keys: it acts only through the elements' own accessibility actions (click, type, \
+     scroll, select)"
   )]
   NoKeys,
   #[error("the window did not become idle within {0} ms")]
   Busy(u32),
   #[error("UI Automation failed: {0}")]
   Automation(String),
+  #[error("macOS Accessibility failed: {0}")]
+  Accessibility(String),
   #[error("the window cannot be captured: {0}")]
   Capture(String),
 }
