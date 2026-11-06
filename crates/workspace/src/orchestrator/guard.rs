@@ -233,7 +233,7 @@ const fn stopped_key(stop: PersonsStop) -> &'static str {
 }
 
 /// The wait among a conversation's `entries` whose turn thinks now: the turn under way, when a wait started it.
-fn thinking_wait(entries: &[ChatEntry]) -> Option<AgentWait> {
+pub(super) fn thinking_wait(entries: &[ChatEntry]) -> Option<AgentWait> {
   entries.iter().rev().find_map(|entry| match &entry.kind {
     EntryKind::Wait { wait, turn: Some(turn) } if turn.state.is_thinking() => Some(wait.clone()),
     _ => None,

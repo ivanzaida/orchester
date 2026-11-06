@@ -36,6 +36,7 @@ use super::{
     self,
     control::{self, QueueCall, RELEASE_QUEUE, RESUME_RUN, ToldTo},
   },
+  created::{self, CREATE_TASK},
   duplicate, git, guard,
   keep::{self, HOLD_QUEUE, Named},
   mcp_servers,
@@ -261,7 +262,7 @@ pub(super) async fn act_and_keep(
   arguments: &JsonObject,
 ) -> Result<Value, ToolError> {
   let acted = act((services, translate), scope, name, arguments).await;
-  let Acted { result, kept } = acted;
+  let Acted { mut result, kept } = acted;
   let outcome = match (&result, kept.waits) {
     (Ok(_), Some(waits)) => waits,
     (Ok(_), None) => ActionOutcome::Done,
@@ -271,12 +272,18 @@ pub(super) async fn act_and_keep(
   let named = named.or_else(|| result.as_ref().ok().and_then(keep::created_task));
   // A hold that held new starts keeps what it held, for its card.
   let held = (name == HOLD_QUEUE && outcome == ActionOutcome::Done).then(|| keep::arguments_task(&named));
+  // A task created outside what the conversation watches comes back to it, unless another one leads it.
+  let watch = match (&mut result, name == CREATE_TASK && outcome == ActionOutcome::Done) {
+    (Ok(told), true) => created::watch_created(scope, told).await,
+    _ => None,
+  };
   let action = ChatAction {
     change: kept.change.map(Box::new),
     started: kept.started,
     resumed: kept.resumed,
     auto_mode: kept.auto_mode,
     on_its_own: kept.on_its_own,
+    watch,
     ..ChatAction::new(name, None, outcome)
   };
   keep::keep(scope, (named, held), action).await;
