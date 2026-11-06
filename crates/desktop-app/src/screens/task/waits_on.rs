@@ -77,10 +77,7 @@ pub fn status_line(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
   };
   let run = ctx.t_args(
     "task.waitsOn.runLine",
-    [
-      ("run", wait.number.to_string()),
-      ("time", display::clock(wait.since)),
-    ],
+    [("run", wait.number.to_string()), ("time", display::clock(wait.since))],
   );
   Some(
     Row::new()
@@ -212,7 +209,11 @@ impl Component for WaitRow {
     let unmet = matches!(props.wait.state, WaitState::Unmet { .. });
     let words = words(ctx, &props);
     let (glyph, fill, stroke) = match (props.place, unmet) {
-      (_, true) => (PaletteColor::Warning, Some(PaletteColor::WarningMuted), PaletteColor::Warning),
+      (_, true) => (
+        PaletteColor::Warning,
+        Some(PaletteColor::WarningMuted),
+        PaletteColor::Warning,
+      ),
       (Place::Summary, false) => (PaletteColor::TextMuted, None, PaletteColor::Border),
       (Place::Conversation, false) => (PaletteColor::TextSecondary, None, PaletteColor::Border),
     };
@@ -283,12 +284,7 @@ impl WaitRow {
     .rounded(ExtraRadius::Link.role())
     .hovered_style(Style::new().background(ExtraColor::Hover.role()))
     .cursor(CursorIcon::Pointer)
-    .child(
-      Text::new(&label)
-        .variant(TypographyStyle::Button)
-        .color(color)
-        .nowrap(),
-    )
+    .child(Text::new(&label).variant(TypographyStyle::Button).color(color).nowrap())
     .into()
   }
 }

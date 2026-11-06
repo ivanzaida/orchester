@@ -107,81 +107,59 @@ struct Pairs {
 
 impl Pairs {
   fn seed(kontur: &mut Kontur, catalogue: &Catalogue) -> Result<Self, SeedError> {
-    let mut ran = |(title, brief): (&str, &str), shape: Shape, minutes: i64| -> Result<Ran, SeedError> {
-      let at = kontur.ago(minutes);
-      live::task_in(kontur, catalogue, (title, brief), (shape, at))
-    };
-    let asking = Shape::Question("implement");
-    let continued = Pair {
-      waited: ran(
-        ("Retry budget storage", "Keep each endpoint's retry budget."),
-        Shape::Merged,
-        10 * 60,
-      )?
-      .task,
-      waiting: ran(
-        ("Batch retries per endpoint", "Send an endpoint's retries in one batch."),
-        asking,
+    let continued = pair(
+      (kontur, catalogue),
+      (
+        "Batch retries per endpoint",
+        "Send an endpoint's retries in one batch.",
         9 * 60,
-      )?,
-    };
-    let canceled = Pair {
-      waited: ran(
-        ("Delivery receipts", "Keep a receipt of each delivery."),
-        Shape::Cancelled("implement"),
-        9 * 60,
-      )?
-      .task,
-      waiting: ran(("Delivery dashboard", "Show deliveries per endpoint."), asking, 8 * 60)?,
-    };
-    let closed = Pair {
-      waited: ran(
-        ("Key store", "Keep the signing keys in one store."),
-        Shape::Succeeded,
-        8 * 60,
-      )?
-      .task,
-      waiting: ran(
-        ("Rotate signing keys", "Rotate the webhook signing keys monthly."),
-        asking,
-        7 * 60,
-      )?,
-    };
-    let dropped_waiting = ran(
-      ("Endpoint health", "Mark an endpoint unhealthy after failures."),
-      asking,
-      6 * 60,
+      ),
+      (
+        "Retry budget storage",
+        "Keep each endpoint's retry budget.",
+        Some(Shape::Merged),
+      ),
     )?;
-    let retry_waiting = ran(
+    let canceled = pair(
+      (kontur, catalogue),
+      ("Delivery dashboard", "Show deliveries per endpoint.", 8 * 60),
+      (
+        "Delivery receipts",
+        "Keep a receipt of each delivery.",
+        Some(Shape::Cancelled("implement")),
+      ),
+    )?;
+    let closed = pair(
+      (kontur, catalogue),
+      (
+        "Rotate signing keys",
+        "Rotate the webhook signing keys monthly.",
+        7 * 60,
+      ),
+      (
+        "Key store",
+        "Keep the signing keys in one store.",
+        Some(Shape::Succeeded),
+      ),
+    )?;
+    let dropped = pair(
+      (kontur, catalogue),
+      ("Endpoint health", "Mark an endpoint unhealthy after failures.", 6 * 60),
+      ("Health probe", "Probe an endpoint before delivering.", None),
+    )?;
+    let retry = pair(
+      (kontur, catalogue),
       (
         "Retry failed deliveries",
         "Retry a failed webhook delivery with backoff.",
+        5 * 60,
       ),
-      asking,
-      5 * 60,
+      (
+        "Shared rate limiter for deliveries",
+        "One rate limiter every delivery shares.",
+        None,
+      ),
     )?;
-    let at = kontur.ago(4 * 60);
-    let dropped = Pair {
-      waited: live::draft(
-        kontur,
-        catalogue,
-        ("Health probe", "Probe an endpoint before delivering."),
-        at,
-      )?,
-      waiting: dropped_waiting,
-    };
-    let retry = Pair {
-      waited: live::draft(
-        kontur,
-        catalogue,
-        (
-          "Shared rate limiter for deliveries",
-          "One rate limiter every delivery shares.",
-        ),
-        at,
-      )?,
-      waiting: retry_waiting,
-    };
     let module = module(kontur)?;
     let pairs = Self {
       retry,
@@ -227,6 +205,23 @@ impl Pairs {
     kontur.db.drop_run_wait(self.dropped.waiting.run.id(), at)?;
     Ok(())
   }
+}
+
+/// A run on a task `waiting` (title, brief, started that many minutes ago) whose agent asked a question, and the task
+/// `waited` it waits on: left in its shape, its run started half an hour before, or a draft without one.
+fn pair(
+  (kontur, catalogue): (&mut Kontur, &Catalogue),
+  (title, brief, minutes): (&str, &str, i64),
+  waited: (&str, &str, Option<Shape>),
+) -> Result<Pair, SeedError> {
+  let at = kontur.ago(minutes + 30);
+  let waited = match waited {
+    (name, about, Some(shape)) => live::task_in(kontur, catalogue, (name, about), (shape, at))?.task,
+    (name, about, None) => live::draft(kontur, catalogue, (name, about), at)?,
+  };
+  let at = kontur.ago(minutes);
+  let waiting = live::task_in(kontur, catalogue, (title, brief), (Shape::Question("implement"), at))?;
+  Ok(Pair { waiting, waited })
 }
 
 /// The module *Webhooks v2*.

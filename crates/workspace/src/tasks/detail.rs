@@ -409,13 +409,9 @@ impl TaskDetail {
       Some(run) => (db.run_merge(run.id())?, crate::merge_queue::task_delivery(&db, run)?),
       None => (None, None),
     };
-    let first_agent = match latest {
-      None => super::first_agent::first_agent(&db, &task)?,
-      Some(_) => None,
-    };
-    let waits_on = match &latest {
-      Some(run) => waits_on::view::read(&db, run)?,
-      None => None,
+    let (first_agent, waits_on) = match &latest {
+      None => (super::first_agent::first_agent(&db, &task)?, None),
+      Some(run) => (None, waits_on::view::read(&db, run)?),
     };
     let mut run = latest.map(|run| run_view(&db, run)).transpose()?;
     if let Some(view) = &mut run {

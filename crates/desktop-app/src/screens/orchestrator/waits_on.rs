@@ -6,7 +6,6 @@
 //! `warning` and *Drop the wait* always (`lmGw0`, `NtC6p`); dropped, an `hourglass` in `text_muted` and *Open ↗*
 //! (`mJqaY`). The row changes in place: no agent turn is started by a drop.
 
-
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -100,12 +99,7 @@ impl Component for WaitsOnLine {
     };
     let time = (!props.listed).then(|| display::clock(props.at));
     // A drop refused says why, on hover and once the line is pressed.
-    let refused = self
-      .dropping
-      .state()
-      .get()
-      .error
-      .map(|error| message_text(ctx, &error));
+    let refused = self.dropping.state().get().error.map(|error| message_text(ctx, &error));
     line.time(time).detail(refused).render(ctx)
   }
 }
@@ -118,7 +112,13 @@ fn words(ctx: &Ctx, props: &WaitsOnProps, state: Option<WaitState>) -> Line {
   let branch = props.wait.as_ref().map_or("", |wait| wait.base.as_str());
   let at = |at: Timestamp| display::clock(at);
   let (glyph, tone, title, status, note) = match state {
-    None => (Icon::Hourglass, Tone::Plain, "orchestrator.waitsOn.waits", "unread", None),
+    None => (
+      Icon::Hourglass,
+      Tone::Plain,
+      "orchestrator.waitsOn.waits",
+      "unread",
+      None,
+    ),
     Some(WaitState::Waiting) => (
       Icon::Hourglass,
       Tone::Plain,
@@ -171,10 +171,7 @@ fn words(ctx: &Ctx, props: &WaitsOnProps, state: Option<WaitState>) -> Line {
       Tone::Quiet,
       "orchestrator.waitsOn.noLonger",
       "over",
-      Some(ctx.t_args(
-        "orchestrator.waitsOn.over",
-        [("waited", waited), ("time", &at(when))],
-      )),
+      Some(ctx.t_args("orchestrator.waitsOn.over", [("waited", waited), ("time", &at(when))])),
     ),
   };
   let line = Line::new(props.id.clone(), (glyph, tone), ctx.t_args(title, named))
