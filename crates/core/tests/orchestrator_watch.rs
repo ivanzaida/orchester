@@ -10,7 +10,10 @@ use orchester_core::{
   id::{ChatId, ModuleId, TaskId},
   orchestrator::{
     Claim, Subscription, Subscriptions, WatchTarget,
-    watch::{EndReason, Ending, LeftOpen, NeverEnds, News, OpenWork, TargetTasks, TwoLeaders, created_task_watch},
+    watch::{
+      Created, EndReason, Ending, LeftOpen, NeverEnds, News, OpenWork, TargetTasks, TwoLeaders, created_task,
+      created_task_watch, event_subscription,
+    },
   },
   run::TaskPhase,
   task::organization::WorkflowStatus::{self, Backlog, Canceled, Done, InProgress, InReview, Todo},
@@ -380,4 +383,52 @@ fn watch_created_task_inside_a_target_adds_nothing() {
     created_task_watch(&project, chat, None, task, Some(module), at(9)),
     None
   );
+}
+
+#[test]
+fn watch_created_task_led_elsewhere_or_by_a_conversation_that_watches_nothing_is_not_taken() {
+  let (chat, billing_chat, loose_chat) = (ChatId::generate(), ChatId::generate(), ChatId::generate());
+  let (delivery, billing) = (ModuleId::generate(), ModuleId::generate());
+  let billing_watch = watch(billing_chat, WatchTarget::Module(billing), 2);
+  let loose_watch = watch(loose_chat, WatchTarget::WithoutModule, 3);
+  let all = set([
+    watch(chat, WatchTarget::Module(delivery), 1),
+    billing_watch.clone(),
+    loose_watch.clone(),
+  ]);
+  let task = TaskId::generate();
+  assert_eq!(
+    created_task(&all, chat, None, (task, Some(billing)), at(9)),
+    Created::LedElsewhere(billing_watch)
+  );
+  assert_eq!(
+    created_task(&all, chat, None, (task, None), at(9)),
+    Created::LedElsewhere(loose_watch)
+  );
+  assert_eq!(
+    created_task(&all, ChatId::generate(), None, (task, None), at(9)),
+    Created::Unchanged,
+    "a conversation that watches nothing"
+  );
+}
+
+#[test]
+fn watch_event_subscription_is_the_conversations_most_specific_one() {
+  let (chat, other) = (ChatId::generate(), ChatId::generate());
+  let (task, module) = (TaskId::generate(), ModuleId::generate());
+  let all = set([
+    watch(chat, WatchTarget::Project, 1),
+    watch(chat, WatchTarget::Module(module), 2),
+    watch(other, WatchTarget::Task(task), 3),
+  ]);
+  assert_eq!(
+    event_subscription(&all, chat, task, Some(module)).map(Subscription::target),
+    Some(WatchTarget::Module(module)),
+    "another conversation's subscription is not this one's"
+  );
+  assert_eq!(
+    event_subscription(&all, chat, task, None).map(Subscription::target),
+    Some(WatchTarget::Project)
+  );
+  assert_eq!(event_subscription(&all, ChatId::generate(), task, None), None);
 }

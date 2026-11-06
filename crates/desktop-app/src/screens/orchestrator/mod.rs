@@ -44,6 +44,8 @@ mod send;
 mod send_menu;
 mod settings;
 mod start;
+mod started_by;
+mod task_event;
 mod timeline;
 mod turns;
 mod wait;

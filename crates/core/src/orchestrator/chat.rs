@@ -11,6 +11,7 @@ use super::{
   report::DailyReport,
   rewind::RewoundTo,
   wait::AgentWait,
+  watch::{CreatedWatch, WatchCommand, WatchLine},
 };
 use crate::{
   connection::AccountStartProblem,
@@ -73,6 +74,10 @@ pub enum ChatEvent {
   /// What the agent did in the original after the point the fork was made from, which stays as it is there: the fork
   /// starts without it. Kept after the copies, only when the original had done something.
   MadeInOriginal { made: Vec<ChatAction> },
+  /// The person's /watch or /unwatch, which the app applied itself, with no turn ([`super::watch::line`]).
+  WatchCommand { command: WatchCommand },
+  /// A line about what the conversation watches: after a command, or written by another conversation's change.
+  Watch { line: WatchLine },
 }
 
 /// Where a compaction of an agent session stands.
@@ -356,6 +361,10 @@ pub struct ChatAction {
   /// applied it for, rather than with a click on its card.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub approved_in: Option<ChatApproval>,
+  /// For a task the chat created outside what its conversation watches (ORC-765): whether it became a task
+  /// subscription of the conversation, or another conversation leads it.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub watch: Option<CreatedWatch>,
 }
 
 impl ChatAction {
@@ -379,6 +388,7 @@ impl ChatAction {
       settled: None,
       claimed: None,
       approved_in: None,
+      watch: None,
     }
   }
 }

@@ -2161,9 +2161,92 @@
     }
   },
   "orchestrator": {
+    "watch": {
+      "target": {
+        "named": "{{name}}",
+        "gone": "Gone from the project",
+        "withoutModule": "Tasks without a module",
+        "project": "Every task of the project"
+      },
+      "kind": {
+        "task": "task",
+        "module": "module",
+        "withoutModule": "tasks without a module",
+        "project": "project"
+      },
+      "task": {
+        "state": {
+          "running": "Running",
+          "waits": "Needs input",
+          "queued": "Queued",
+          "stoppedAtLimit": "Stopped at limit",
+          "readyToMerge": "Ready to merge"
+        },
+        "note": {
+          "question": "its agent asks you",
+          "message": "its agent waits for your message",
+          "plan": "its plan waits for you",
+          "approval": "a tool request waits for you",
+          "decision": "its step waits for your decision",
+          "run": "its run waits for you",
+          "queued": "number {{position}} in the queue",
+          "limit": "only you can raise its limit",
+          "dailyBudget": "the project's daily budget is spent",
+          "readyToMerge": "you merge it"
+        },
+        "action": {
+          "answer": "Answer",
+          "decide": "Decide",
+          "summary": "Summary",
+          "review": "Review"
+        }
+      },
+      "rest": {
+        "one": "{{count}} more task with nothing under way",
+        "other": "{{count}} more tasks with nothing under way"
+      },
+      "total": {
+        "waits": {
+          "one": "{{count}} thing waits for you",
+          "other": "{{count}} things wait for you"
+        },
+        "limits": {
+          "one": "{{count}} run is stopped at a limit",
+          "other": "{{count}} runs are stopped at a limit"
+        },
+        "calm": "Nothing waits for you",
+        "nothing": "This conversation watches nothing yet"
+      },
+      "leads": {
+        "modules": {
+          "one": "{{count}} module",
+          "other": "{{count}} modules"
+        },
+        "tasks": {
+          "one": "{{count}} task",
+          "other": "{{count}} tasks"
+        },
+        "withoutModule": "the tasks without a module",
+        "project": "the whole project"
+      },
+      "ledIn": {
+        "nobody": "Nobody",
+        "chat": "«{{title}}»",
+        "viaModule": "«{{title}}» · via {{module}}",
+        "viaWithoutModule": "«{{title}}» · via the tasks without a module",
+        "viaProject": "«{{title}}» · via the whole project"
+      }
+    },
     "settings": {
       "connectionGone": "The Orchestrator's connection was removed. Choose another one.",
       "cliOnly": "The Orchestrator runs on Claude Code and Codex connections. This one runs a native agent on an API key; choose another one."
+    },
+    "watch": {
+      "noTarget": "Choose what to watch first.",
+      "gone": "Not applied · {{targets}} was closed or deleted meanwhile — nothing changed",
+      "notWatched": "Not applied · this conversation doesn't watch that — nothing changed",
+      "ledElsewhere": "Not applied · it's led in «{{title}}» now — nothing changed",
+      "alreadyHere": "This conversation leads it already."
     },
     "send": {
       "blank": "Write a message first.",
