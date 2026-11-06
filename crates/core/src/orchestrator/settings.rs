@@ -66,8 +66,8 @@ pub struct WatchSettings {
 
 impl WatchSettings {
   pub const MIN_NO_PROGRESS_MINUTES: u32 = 1;
-  /// A day.
-  pub const MAX_NO_PROGRESS_MINUTES: u32 = 24 * 60;
+  /// Four hours (`docs/design/orchestrator-watch.md` decision 8).
+  pub const MAX_NO_PROGRESS_MINUTES: u32 = 4 * 60;
   pub const DEFAULT_NO_PROGRESS_MINUTES: u32 = 20;
 
   /// `default_order` is kept trimmed; `no_progress_minutes` is `None` for off, else from

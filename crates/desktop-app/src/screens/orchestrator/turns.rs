@@ -19,7 +19,7 @@ use orchester_core::{
   },
   time::Timestamp,
 };
-use orchester_workspace::orchestrator::chat::{ChatView, EndMoved};
+use orchester_workspace::orchestrator::chat::{ChatView, EndMoved, EventFacts};
 
 /// A part of an answer.
 #[derive(Clone, Debug, PartialEq)]
@@ -90,6 +90,8 @@ pub(super) struct Turn {
   pub(super) stands: bool,
   /// What became of the run of a run's end that no longer stands.
   pub(super) moved: Option<EndMoved>,
+  /// What the line of an event of the wait's run names beside the wait.
+  pub(super) event: Option<EventFacts>,
   /// The daily report that opens the row instead of a person's message.
   pub(super) report: Option<Box<DailyReport>>,
   /// An event that is the whole row: a compaction of the session (`super::compaction`), or where a rewind went back
@@ -133,6 +135,7 @@ impl Turn {
       wait: None,
       stands: false,
       moved: None,
+      event: None,
       report: None,
       compaction: None,
       seq: None,
@@ -170,6 +173,7 @@ impl Turn {
       wait: None,
       stands: false,
       moved: None,
+      event: None,
       report: None,
       compaction: None,
       seq: Some(entry.seq),
@@ -248,6 +252,7 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
           wait: Some(Box::new(wait.clone())),
           stands: shown.standing.contains(&entry.seq),
           moved: shown.moved_of(entry.seq),
+          event: shown.event_of(entry.seq).cloned(),
           ..Turn::opened(entry, turn.as_ref())
         });
         continue;
@@ -381,6 +386,7 @@ fn person(
     wait: None,
     stands: false,
     moved: None,
+    event: None,
     report: None,
     compaction: None,
     seq: Some(entry.seq),

@@ -3,11 +3,13 @@
 //! the rules in `06d` `lXQi1`), shared by both composers: a `/` as the draft's first character opens the menu of the
 //! chat's own commands and the project's published skills ([`menu`]), and what is typed after it filters both by name.
 //! The arrow keys move through the rows that can be chosen, Enter or a click chooses one, which clears the typed `/`:
-//! a command runs, a skill becomes the composer's chip ([`with_skill_chip`]) in place of the one it held. Esc closes
-//! the menu and keeps the text. A row that cannot be chosen now stays in its place, faded, and says why. With nothing
-//! that matches, Enter sends the text as typed. Once a space or a new line follows the `/`, or anywhere later in the
-//! text, a `/` is just text.
+//! a command runs, or, when it takes an argument, becomes the composer's command chip and opens its picker
+//! ([`argument`], ORC-771); a skill becomes the composer's chip ([`with_chips`]) in place of the one it held. Esc
+//! closes the menu and keeps the text. A row that cannot be chosen now stays in its place, faded, and says why. With
+//! nothing that matches, Enter sends the text as typed. Once a space or a new line follows the `/`, or anywhere later
+//! in the text, a `/` is just text; while the chip holds a command, the draft is that command's.
 
+mod argument;
 mod chip;
 mod menu;
 mod rows;
@@ -23,8 +25,10 @@ use orchester_core::id::ResourceId;
 use orchester_workspace::skills::offered::OfferedSkill;
 use parking_lot::Mutex;
 
+use self::argument::Arguing;
 pub use self::{
-  chip::{SkillReach, plan_held, sent_skill_chip, with_skill_chip},
+  argument::{Applied, Apply, ArgumentPicker, Asked, Choice, Offer, Taking},
+  chip::{SkillReach, plan_held, sent_skill_chip, with_chips},
   menu::{SlashMenuProps, menu},
   skills::SkillsOffer,
 };
@@ -33,17 +37,24 @@ use super::icon::Icon;
 /// What running a command does.
 pub type Run = Arc<dyn Fn() + Send + Sync>;
 
+/// What choosing a command does: it runs, or it takes an argument first.
+#[derive(Clone)]
+pub enum Does {
+  Run(Run),
+  Take(Taking),
+}
+
 /// One of the chat's commands, as its composer offers it now.
 #[derive(Clone)]
 pub struct SlashCommand {
-  /// What names its row, in tools and tests.
+  /// What names its row, in tools and tests, and, for a command with an argument, what its chip shows after a `/`.
   pub name: &'static str,
   pub icon: Icon,
   pub label: Arc<str>,
   /// What it does or, while it cannot run, why.
   pub detail: Arc<str>,
   /// What it does; `None` while it cannot run.
-  pub run: Option<Run>,
+  pub does: Option<Does>,
 }
 
 /// What a row chooses: a command by its name, or a skill.
@@ -70,8 +81,9 @@ struct Offered {
   send: Option<Run>,
 }
 
-/// A composer's slash menu: its draft, whether the field has the focus, the skill its chip holds, and the menu's
-/// state. Made once with the composer's component, so the menu keeps its state while the draft changes.
+/// A composer's slash menu: its draft, whether the field has the focus, the skill its chip holds, the command with an
+/// argument it holds and the menu's and the picker's state. Made once with the composer's component, so the menu keeps
+/// its state while the draft changes.
 #[derive(Clone)]
 pub struct SlashField {
   draft: Signal<String>,
@@ -85,6 +97,13 @@ pub struct SlashField {
   closed: Signal<bool>,
   offered: Arc<Mutex<Offered>>,
   shown: Arc<Mutex<Option<Shown>>>,
+  /// The command with an argument the composer's chip holds, and its choices.
+  argument: Signal<Option<Arguing>>,
+  /// What that command's picker offers and what applying it does.
+  taking: Arc<Mutex<Option<Taking>>>,
+  /// The picker's row with the keyboard's focus, and the rows it shows now.
+  choice_focus: Signal<Option<usize>>,
+  offered_choices: Arc<Mutex<Option<argument::Offered>>>,
 }
 
 impl PartialEq for SlashField {
@@ -109,13 +128,21 @@ impl SlashField {
       closed: ctx.signal(false),
       offered: Arc::default(),
       shown: Arc::default(),
+      argument: ctx.signal(None),
+      taking: Arc::default(),
+      choice_focus: ctx.signal(None),
+      offered_choices: Arc::default(),
     }
   }
 
-  /// Takes `event` when the open menu has a use for it, before the field's own keys: whether it did.
+  /// Takes `event` when the open menu, or the command the chip holds, has a use for it, before the field's own keys:
+  /// whether it did.
   pub fn key(&self, event: &KeyboardEvent) -> bool {
     if event.composing || event.default_prevented() || !self.focused.get_untracked() {
       return false;
+    }
+    if let Some(held) = self.argument.get_untracked() {
+      return self.argument_key(event, &held);
     }
     let Some(shown) = self.shown.lock().clone() else {
       return false;
@@ -126,7 +153,8 @@ impl SlashField {
         *self.shown.lock() = None;
       }
       "ArrowDown" | "ArrowUp" => {
-        let next = step(&shown, event.key == "ArrowDown");
+        let choosable: Vec<bool> = shown.rows.iter().map(|(_, can)| *can).collect();
+        let next = step(&choosable, shown.focused, event.key == "ArrowDown");
         if next != shown.focused {
           self.focus.set(next);
         }
@@ -158,8 +186,8 @@ impl SlashField {
     true
   }
 
-  /// Chooses `pick` while it can be chosen: the typed `/` goes, and the menu with it; a command runs, a skill becomes
-  /// the chip.
+  /// Chooses `pick` while it can be chosen: the typed `/` goes, and the menu with it; a command runs or becomes the
+  /// command chip, a skill becomes the skill chip.
   fn run(&self, pick: &Pick) {
     let run = {
       let offered = self.offered.lock();
@@ -168,7 +196,16 @@ impl SlashField {
           .commands
           .iter()
           .find(|command| command.name == *name)
-          .and_then(|command| command.run.clone()),
+          .and_then(|command| {
+            let does = command.does.clone()?;
+            Some(match does {
+              Does::Run(run) => run,
+              Does::Take(taking) => {
+                let (field, held) = (self.clone(), (command.name, command.icon));
+                Arc::new(move || field.hold(held, taking.clone())) as Run
+              }
+            })
+          }),
         Pick::Skill(id) => offered
           .skills
           .iter()
@@ -190,11 +227,12 @@ impl SlashField {
   }
 }
 
-/// The row after (`down`) or before the one with the focus that can be chosen, around the ends; none when no row can.
-fn step(shown: &Shown, down: bool) -> Option<usize> {
-  let count = shown.rows.len();
+/// The row after (`down`) or before `focused` that can be chosen, by `choosable`, around the ends; none when no row
+/// can.
+fn step(choosable: &[bool], focused: Option<usize>, down: bool) -> Option<usize> {
+  let count = choosable.len();
   let last = count.checked_sub(1)?;
-  let from = shown.focused.unwrap_or(if down { last } else { 0 });
+  let from = focused.unwrap_or(if down { last } else { 0 });
   (1..=count)
     .map(|offset| {
       if down {
@@ -203,7 +241,7 @@ fn step(shown: &Shown, down: bool) -> Option<usize> {
         (from + count - offset) % count
       }
     })
-    .find(|&at| shown.rows[at].1)
+    .find(|&at| choosable[at])
 }
 
 /// What filters the menu in `text`, the draft: the words after a `/` that starts it, while no space or new line
