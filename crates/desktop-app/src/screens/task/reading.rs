@@ -66,7 +66,7 @@ pub fn page(ctx: &mut Ctx, task: &Reading<'_>, view: &TaskView) -> Element {
       let bones = super::changes::reading::panes(ctx);
       skeleton.fills().show(ctx, bones)
     }
-    TaskTab::Summary => {
+    TaskTab::Summary | TaskTab::Services => {
       let bones = super::summary::reading::bones(ctx);
       let body = skeleton.show(ctx, bones);
       ScrollVertical::new(body).id("task-summary-scroll").flex(1.0).into()
@@ -150,11 +150,11 @@ fn back(ctx: &mut Ctx, task: &Reading<'_>) -> Element {
     .into()
 }
 
-/// Summary, Conversation and Changes, its count a bone.
+/// Summary, Conversation, Changes, its count a bone, and Services.
 fn tabs(ctx: &mut Ctx, task: &Reading<'_>, view: &TaskView) -> Element {
   let navigation = Navigation::of(ctx);
   let chosen = view.tab();
-  let tabs: Vec<PageTab> = [TaskTab::Summary, TaskTab::Conversation, TaskTab::Changes]
+  let tabs: Vec<PageTab> = TaskTab::ALL
     .into_iter()
     .map(|tab| {
       let page = ProjectPage::task(task.key.clone(), TaskView::of(tab), task.kept);

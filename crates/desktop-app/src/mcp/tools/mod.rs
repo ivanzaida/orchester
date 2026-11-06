@@ -219,10 +219,10 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
         insert("decision", &connection.to_string());
       }
     }
-    ProjectPage::Settings(tab) => insert("tab", tab.name()),
-    ProjectPage::ProjectRules | ProjectPage::Storage => {
-      insert("tab", crate::routes::ProjectSettingsTab::Runs.name());
-      insert("view", settings_view(page));
+    ProjectPage::Settings(_) | ProjectPage::ProjectRules | ProjectPage::Storage | ProjectPage::Services(_) => {
+      for (name, value) in settings_params(page) {
+        insert(name, &value);
+      }
     }
     ProjectPage::NewConnection(kind) => insert("kind", kind.name()),
     ProjectPage::EditConnection(connection) => insert("connection", &connection.to_string()),
@@ -274,11 +274,20 @@ fn merge_params(page: &ProjectPage) -> Vec<(&'static str, String)> {
   }
 }
 
-fn settings_view(page: &ProjectPage) -> &'static str {
-  if matches!(page, ProjectPage::Storage) {
-    "storage"
-  } else {
-    "rules"
+/// The parameters `navigate` takes back for a Project settings tab: its `tab`, and the `view` of a page under Runs or
+/// Services, with the `id` of a service's, stack's or suite's.
+fn settings_params(page: &ProjectPage) -> Vec<(&'static str, String)> {
+  use crate::routes::ProjectSettingsTab;
+  let tab = |tab: ProjectSettingsTab| ("tab", tab.name().to_owned());
+  match page {
+    ProjectPage::Settings(shown) => vec![tab(*shown)],
+    ProjectPage::ProjectRules => vec![tab(ProjectSettingsTab::Runs), ("view", "rules".to_owned())],
+    ProjectPage::Storage => vec![tab(ProjectSettingsTab::Runs), ("view", "storage".to_owned())],
+    ProjectPage::Services(services) => [tab(ProjectSettingsTab::Services), ("view", services.name().to_owned())]
+      .into_iter()
+      .chain(services.item().map(|id| ("id", id.to_string())))
+      .collect(),
+    _ => Vec::new(),
   }
 }
 

@@ -88,7 +88,7 @@ pub use self::{
     DependencyOutput, ExcludedInstruction, FailureReport, InstructionSource, InstructionVersion, InvocationPrompt,
     MERGE_SAFELY, MessageOccasion, NativePrompt, NativeSetting, PipelineInfo, PlanRevision, ProfileInfo,
     PromptAssemblyError, PromptInput, PromptPart, PromptSection, PromptSource, RUN_PLAINLY, ResultDelivery,
-    RetryReport, ReturnedWork, RunContext, SCRATCH_FILES, SkillListing, WorkingTools, notice_text,
+    RetryReport, ReturnedWork, RunContext, SCRATCH_FILES, SkillListing, StoredTestResult, WorkingTools, notice_text,
   },
   result::{STEP_RESULT_SCHEMA, StepOutcome, StepOutput, StepResult, UnverifiedCheck},
   run_model::{ModelChoice, ModelEvent, ModelEventKind, ModelScope, StepBefore},

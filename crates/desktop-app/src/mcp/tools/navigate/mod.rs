@@ -51,8 +51,10 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   conversation or changes), `view` for what a tab opens in \
   its place (memory: the task's memory, from summary; local-integration: Local integration, which Try locally opens \
   from changes) and, on its changes tab, `file` with `from`; project_settings \
-  `tab` (general, runs, orchestrator, context, connections, environment or sharing; secrets, the tab Environment was, still opens \
-  it) and, with tab runs, `view` rules (Approved for every run) or storage (Storage). Connections and Environment \
+  `tab` (general, runs, services, orchestrator, context, connections, environment or sharing; secrets, the tab Environment \
+  was, still opens it) and, with tab runs, `view` rules (Approved for every run) or storage (Storage); with tab \
+  services, `view` new-service, new-stack, new-suite, import (Import draft) or flaky (Flaky tests), or service, stack \
+  or suite with `id`, its resource id, for its page. Connections and Environment \
   are tabs of Project settings with routes of their own: connections takes `selected` (the id of the connection whose \
   page it opens), or decision (a decision connection id); secrets opens the Environment tab, the project's variables \
   and secrets; new_connection takes `kind` (Add provider or Add MCP server); edit_connection `connection` (an MCP \
@@ -112,6 +114,8 @@ fn schema() -> Value {
   let views: Vec<&str> = ["usage", "delivery", "rules", "storage", "edit", "new"]
     .into_iter()
     .chain(TaskView::SUB_VIEWS)
+    .chain(crate::routes::ServicesPage::NAMED.map(crate::routes::ServicesPage::name))
+    .chain(["service", "stack", "suite"])
     .collect();
   let mut schema = json!({
     "type": "object",
@@ -140,6 +144,7 @@ fn schema() -> Value {
       "line": { "type": "string", "description": "files: the line or lines to show, 12 or 12-20." },
       "number": { "type": "string", "description": "pull_requests: the number of the pull request to open, e.g. 142; with tab feedback, on its Agent feedback." },
       "module": { "type": "string", "description": "modules: a module's id for its page, or new for New module; omitted opens the list. new_task: a module's id, for New task in module." },
+      "id": { "type": "string", "description": "project_settings with tab services and view service, stack or suite: its resource id." },
       "query": {
         "type": "string",
         "description": "usage: the period, grouping and filters as a link's query carries them, e.g. `from=2026-10-01&to=2026-10-15&group=task&model=gpt-5` (get_usage's `link`); omitted, the last 7 days by day.",
@@ -147,7 +152,7 @@ fn schema() -> Value {
       "view": {
         "type": "string",
         "enum": views,
-        "description": "usage of a project: the Usage page (the default) or the Delivery view beside it. task: what a tab opens in its place, memory (the task's memory, on summary) or local-integration (Local integration, on changes); without `tab` it opens its own. project_settings with tab runs: rules, the page Approved for every run. modules: new, without `module`, opens New module; edit, with a module's id, opens Edit module.",
+        "description": "usage of a project: the Usage page (the default) or the Delivery view beside it. task: what a tab opens in its place, memory (the task's memory, on summary) or local-integration (Local integration, on changes); without `tab` it opens its own. project_settings with tab runs: rules, the page Approved for every run; with tab services: a page under it (new-service, new-stack, new-suite, import, flaky, or service, stack or suite with `id`). modules: new, without `module`, opens New module; edit, with a module's id, opens Edit module.",
       },
       "period": {
         "type": "string",
@@ -283,7 +288,7 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::Usage => &["project", "query", "view", "period"],
     Screen::Modules => &["project", "module", "tab", "view"],
     Screen::NewTask => &["project", "module"],
-    Screen::ProjectSettings => &["project", "tab", "view"],
+    Screen::ProjectSettings => &["project", "tab", "view", "id"],
     Screen::Agents => &["project", "agent"],
     Screen::Merges => merges::PARAMS,
     Screen::MergeQueue | Screen::Pipelines | Screen::Instructions | Screen::Secrets | Screen::OrchestratorSettings => {

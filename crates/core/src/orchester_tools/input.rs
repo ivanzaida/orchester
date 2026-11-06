@@ -7,14 +7,19 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use super::{
-  AppCall, FileCall, FindSymbol, OrchesterTool, ProcessCall, QaAppStart, SkillCall, StepTools, ToolCallError,
+  AppCall, FileCall, FindSymbol, OrchesterTool, ProcessCall, QaAppStart, SkillCall, StepTools, ToolCallError, UiCall,
   files::term,
 };
 use crate::{
   memory::{Importance, MemoryContent, MemoryKey, MemoryKind, MemoryNote, NoteScope, Tags},
-  resource::{SKILL_FILE, SkillFilePath},
+  resource::{SKILL_FILE, SkillFilePath, Slug, TestFilter},
   run::StepProgress,
+  service::{DEFAULT_TAIL, MAX_TAIL, ServiceName, StackName},
+  test_report::TestRunId,
 };
+
+/// The longest test name `test_output` takes, in characters.
+const MAX_TEST_NAME_CHARS: usize = 2000;
 
 /// Lines a read returns when the call gives no `length` or `limit`.
 pub(super) const DEFAULT_READ_LINES: u32 = 2000;
@@ -76,6 +81,32 @@ pub enum ToolCall {
   Processes(ProcessCall),
   App(AppCall),
   StartQaApp(QaAppStart),
+  /// A call of a `ui_*` tool.
+  Ui(UiCall),
+  /// `start_service`: one of the project's published services, or the built-in `desktop-qa`, started for the step.
+  StartService(ServiceName),
+  /// `start_stack`: one of the project's published stacks, its services started for the step.
+  StartStack(StackName),
+  /// `stop_service`: a service the step started.
+  StopService(ServiceName),
+  /// `service_status`: where a service the step started is.
+  ServiceStatus(ServiceName),
+  /// `service_logs`: the last `tail` kept lines of a service the step started, numbered after `since`.
+  ServiceLogs {
+    name: ServiceName,
+    tail: u32,
+    since: u64,
+  },
+  /// `run_tests`: one of the project's published test suites, by its slug, narrowed by `filter`.
+  RunTests {
+    suite: Slug,
+    filter: Option<TestFilter>,
+  },
+  /// `test_output`: the captured output of the test `test` of the run's test run `run`.
+  TestOutput {
+    run: TestRunId,
+    test: String,
+  },
   GetTask,
   SaveMemory(Box<MemoryNote>),
   ReportProgress(StepProgress),
@@ -112,6 +143,16 @@ struct ExternalSearchInput {
 #[serde(deny_unknown_fields)]
 struct NameInput {
   name: String,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ServiceLogsInput {
+  name: String,
+  #[serde(default)]
+  tail: Option<NonZeroU32>,
+  #[serde(default)]
+  since: Option<u64>,
 }
 
 #[derive(Deserialize)]
@@ -161,12 +202,25 @@ impl ToolCall {
       arguments.clone()
     };
     let call = read(tool, arguments).map_err(|message| ToolCallError::Invalid { tool, message })?;
-    if let Self::RunCheck { name } = &call
-      && !step.offers_check(name)
-    {
-      return Err(ToolCallError::UnknownCheck(name.clone()));
+    match &call {
+      Self::RunCheck { name } if !step.offers_check(name) => Err(ToolCallError::UnknownCheck(name.clone())),
+      Self::StartService(name)
+      | Self::StopService(name)
+      | Self::ServiceStatus(name)
+      | Self::ServiceLogs { name, .. }
+        if !step.offers_service(name) =>
+      {
+        Err(ToolCallError::UnknownService(name.to_string()))
+      }
+      Self::Ui(ui) if ui.opened().is_some_and(|name| !step.offers_service(name)) => Err(ToolCallError::UnknownService(
+        ui.opened().map(ToString::to_string).unwrap_or_default(),
+      )),
+      Self::StartStack(name) if !step.offers_stack(name) => Err(ToolCallError::UnknownStack(name.to_string())),
+      Self::RunTests { suite, .. } if !step.offers_suite(suite) => {
+        Err(ToolCallError::UnknownSuite(suite.as_str().to_owned()))
+      }
+      _ => Ok(call),
     }
-    Ok(call)
   }
 
   pub fn tool(&self) -> OrchesterTool {
@@ -184,15 +238,71 @@ impl ToolCall {
       Self::Processes(ProcessCall::Stop { .. }) => OrchesterTool::StopRunProcess,
       Self::App(_) => OrchesterTool::CallRunApp,
       Self::StartQaApp(_) => OrchesterTool::StartQaApp,
+      Self::Ui(call) => call.tool(),
+      Self::StartService(_) => OrchesterTool::StartService,
+      Self::StartStack(_) => OrchesterTool::StartStack,
+      Self::StopService(_) => OrchesterTool::StopService,
+      Self::ServiceStatus(_) => OrchesterTool::ServiceStatus,
+      Self::ServiceLogs { .. } => OrchesterTool::ServiceLogs,
+      Self::RunTests { .. } => OrchesterTool::RunTests,
+      Self::TestOutput { .. } => OrchesterTool::TestOutput,
       Self::SaveMemory(_) => OrchesterTool::SaveMemory,
       Self::ReportProgress(_) => OrchesterTool::ReportProgress,
     }
   }
 }
 
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct RunTestsInput {
+  suite: String,
+  #[serde(default)]
+  filter: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TestOutputInput {
+  run: String,
+  test: String,
+}
+
+/// A `run_tests` call: a suite's slug and, when given, a filter that is one argument of a program.
+fn run_tests(input: &RunTestsInput) -> Result<ToolCall, String> {
+  Ok(ToolCall::RunTests {
+    suite: Slug::new(&input.suite).map_err(|error| error.to_string())?,
+    filter: input
+      .filter
+      .as_deref()
+      .map(|filter| TestFilter::new(filter).map_err(|error| format!("filter: {error}")))
+      .transpose()?,
+  })
+}
+
+/// A `test_output` call: a test run as `run_tests` names it and a test's name on one line.
+fn test_output(input: &TestOutputInput) -> Result<ToolCall, String> {
+  let test = input.test.trim();
+  if test.is_empty() || test.chars().count() > MAX_TEST_NAME_CHARS || test.chars().any(char::is_control) {
+    return Err(format!("`{}` is not a test's name", input.test));
+  }
+  Ok(ToolCall::TestOutput {
+    run: input.run.parse()?,
+    test: test.to_owned(),
+  })
+}
+/// The `name` of a service or stack tool's input, read as `Name`.
+fn named<Name, Error: ToString>(
+  arguments: Value,
+  new: impl FnOnce(&str) -> Result<Name, Error>,
+) -> Result<Name, String> {
+  let input: NameInput = serde_json::from_value(arguments).map_err(|error| error.to_string())?;
+  new(&input.name).map_err(|error| error.to_string())
+}
+
 /// `arguments` read as `tool`'s input, or why they are not.
 fn read(tool: OrchesterTool, arguments: Value) -> Result<ToolCall, String> {
   let invalid = |error: serde_json::Error| error.to_string();
+  let service = |arguments: Value| named(arguments, ServiceName::new);
   Ok(match tool {
     OrchesterTool::ListRunProcesses => {
       serde_json::from_value::<NoInput>(arguments).map_err(invalid)?;
@@ -204,6 +314,13 @@ fn read(tool: OrchesterTool, arguments: Value) -> Result<ToolCall, String> {
     }
     OrchesterTool::CallRunApp => ToolCall::App(AppCall::parse(arguments)?),
     OrchesterTool::StartQaApp => ToolCall::StartQaApp(QaAppStart::parse(arguments)?),
+    OrchesterTool::StartService => ToolCall::StartService(service(arguments)?),
+    OrchesterTool::StartStack => ToolCall::StartStack(named(arguments, StackName::new)?),
+    OrchesterTool::StopService => ToolCall::StopService(service(arguments)?),
+    OrchesterTool::ServiceStatus => ToolCall::ServiceStatus(service(arguments)?),
+    OrchesterTool::ServiceLogs => service_logs(&serde_json::from_value(arguments).map_err(invalid)?)?,
+    OrchesterTool::RunTests => run_tests(&serde_json::from_value(arguments).map_err(invalid)?)?,
+    OrchesterTool::TestOutput => test_output(&serde_json::from_value(arguments).map_err(invalid)?)?,
     OrchesterTool::FindSymbol => {
       let query: FindSymbol = serde_json::from_value(arguments).map_err(invalid)?;
       if query.name().trim().is_empty() {
@@ -261,6 +378,22 @@ fn read(tool: OrchesterTool, arguments: Value) -> Result<ToolCall, String> {
         .unwrap_or_else(|| Err(format!("{} has no file input Orchester reads", tool.as_str())))?;
       ToolCall::File(Box::new(file))
     }
+    // The `ui_*` tools, whose input lives with them.
+    _ => ToolCall::Ui(UiCall::parse(tool, arguments)?),
+  })
+}
+
+/// A `service_logs` call: [`DEFAULT_TAIL`] lines when it gives no `tail`, at most [`MAX_TAIL`], after line 0 when it
+/// gives no `since`.
+fn service_logs(input: &ServiceLogsInput) -> Result<ToolCall, String> {
+  let tail = input.tail.map_or(DEFAULT_TAIL, NonZeroU32::get);
+  if tail > MAX_TAIL {
+    return Err(format!("tail is at most {MAX_TAIL}"));
+  }
+  Ok(ToolCall::ServiceLogs {
+    name: ServiceName::new(&input.name).map_err(|error| error.to_string())?,
+    tail,
+    since: input.since.unwrap_or(0),
   })
 }
 

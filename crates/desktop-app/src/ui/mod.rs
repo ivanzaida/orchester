@@ -61,6 +61,7 @@ pub mod reference_file;
 pub mod resolved_source;
 pub mod row_group;
 pub mod rule_item;
+pub mod service_card;
 pub mod setting_notice;
 pub mod setting_rows;
 pub mod settings_page;

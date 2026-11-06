@@ -134,7 +134,7 @@ fn next_step(
       .enumerate()
       .filter_map(|(index, step)| match run.snapshot().step(&step.key)?.executor() {
         StepExecutor::Agent { profile, .. } => Some((index + 1, step, profile)),
-        StepExecutor::Tool { .. } => None,
+        StepExecutor::Tool { .. } | StepExecutor::Test => None,
       })
   };
   agent_steps()

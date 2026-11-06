@@ -128,9 +128,11 @@ Hard requirements:
    `crates/exec/src/run_processes/windows.rs`, `crates/exec/src/run_processes/macos.rs`,
    `crates/exec/src/run_processes/macos/identity.rs`, `crates/exec/src/trash/windows.rs`,
    `crates/exec/src/local_git/stamps/windows.rs`, `crates/exec/src/disk_space/windows.rs`,
-   `crates/exec/src/search_path/windows.rs`, and the tests `crates/desktop-app/tests/system_icon.rs`,
+   `crates/exec/src/search_path/windows.rs`, `crates/exec/src/native_ui/windows/automation.rs`,
+   `crates/exec/src/native_ui/windows/window.rs`, and the tests `crates/desktop-app/tests/system_icon.rs`,
    `crates/desktop-app/tests/browser_window/inspection.rs`, `crates/exec/tests/support/process_window.rs`,
-   `crates/exec/tests/support/process_term.rs` and `crates/exec/tests/support/console_children.rs`).
+   `crates/exec/tests/support/process_term.rs`, `crates/exec/tests/support/console_children.rs` and
+   `crates/runner/tests/support/test_window.rs`).
 10. Domain types enforce their invariants through constructors; do not make fields public just to allow raw struct
    literals from other modules.
 11. Secrets: a secret value never reaches logs, `Debug`/`Display` output, prompts, variables, copied text, errors,

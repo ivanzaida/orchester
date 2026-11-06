@@ -5,7 +5,7 @@ use std::{fmt::Write as _, ops::Range};
 use super::{
   CONTINUE_PROMPT, DeliveredMessages, DependencyOutput, InstructionSource, InstructionVersion, InvocationPrompt,
   MessageOccasion, PromptAssemblyError, PromptInput, PromptPart, PromptSource, ResultDelivery, base_moved, code_index,
-  finish::push_result, memory::push_memory, retry,
+  finish::push_result, memory::push_memory, retry, tests,
 };
 use crate::{
   conversation::Message,
@@ -237,6 +237,7 @@ fn task_section(input: &PromptInput<'_>, delivery: ResultDelivery) -> PromptSect
     text.push_str(&criteria(&details.acceptance_criteria));
   }
   push_dependencies(&mut text, input.dependencies);
+  tests::push(&mut text, input.tests);
   retry::push(&mut text, input);
   if let Some(revision) = input.revision {
     // Writing to a String cannot fail.

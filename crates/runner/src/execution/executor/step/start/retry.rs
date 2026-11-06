@@ -1,6 +1,7 @@
 //! The failure a retry attempt's prompt reports ([`orchester_core::run::Run::retry_report`] decides
 //! which executions get one), read from what the failed execution left: an agent's structured result
-//! or final message, or how a tool step's command ended and what it printed.
+//! or final message, how a tool step's command ended and what it printed, or the failed tests of a
+//! Test step.
 
 use std::num::NonZeroU32;
 
@@ -79,18 +80,16 @@ impl RunTask {
       return Ok(None);
     };
     let failed = source.failed.id();
-    let tool = matches!(
-      self
-        .run
-        .snapshot()
-        .step(source.failed.step())
-        .map(|step| step.executor()),
-      Some(StepExecutor::Tool { .. })
-    );
-    let failure = if tool {
-      self.command_failure(failed, outputs)?
-    } else {
-      self.agent_failure(failed, outputs)?
+    let executor = self
+      .run
+      .snapshot()
+      .step(source.failed.step())
+      .map(|step| step.executor());
+    let failure = match executor {
+      Some(StepExecutor::Tool { .. }) => self.command_failure(failed, outputs)?,
+      // What a Test step left: only the failed tests, never the suites' output.
+      Some(StepExecutor::Test) => LoadedFailure::Message(output_text(failed, outputs)),
+      Some(StepExecutor::Agent { .. }) | None => self.agent_failure(failed, outputs)?,
     };
     Ok(Some(LoadedReport {
       failed_step: source.failed.step().clone(),

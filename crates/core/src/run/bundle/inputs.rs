@@ -409,7 +409,7 @@ fn agent_profiles(steps: &[StepSnapshot]) -> Vec<PinnedVersion> {
     .iter()
     .filter_map(|step| match step.executor() {
       StepExecutor::Agent { profile, .. } => Some(*profile),
-      StepExecutor::Tool { .. } => None,
+      StepExecutor::Tool { .. } | StepExecutor::Test => None,
     })
     .collect();
   pinned.sort_by_key(|pinned| (pinned.resource, pinned.version));

@@ -33,6 +33,7 @@ mod step_budget;
 mod steps;
 mod stuck;
 mod stuck_loops;
+mod tests_prompt;
 mod tool;
 mod unverified;
 mod working_prompt;

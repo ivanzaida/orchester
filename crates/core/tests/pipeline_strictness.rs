@@ -75,7 +75,7 @@ fn changed(steps: &[Step], step: &str, change: impl FnOnce(&mut Step)) -> Pipeli
 fn narrowing(step: &mut Step) -> &mut StepPermissions {
   match &mut step.kind {
     StepKind::Agent { permissions, .. } => permissions,
-    StepKind::Tool { .. } => panic!("an agent step"),
+    StepKind::Tool { .. } | StepKind::Test => panic!("an agent step"),
   }
 }
 

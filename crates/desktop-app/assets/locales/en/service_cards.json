@@ -1,0 +1,123 @@
+{
+  "service_cards": {
+    "orchester": "orchester",
+    "actions": {
+      "restartService": "Restart {{service}}",
+      "restart": "Restart",
+      "retry": "Retry",
+      "openLog": "Open log",
+      "editService": "Edit {{service}}",
+      "editReadiness": "Edit readiness",
+      "personOnly": "Only a person starts {{service}} again here: a start you ask for is your approval of it.",
+      "refused": "{{service}} did not start again: {{why}}"
+    },
+    "crashed": {
+      "title": "{{service}} crashed",
+      "meta": "exit code {{code}} · {{time}} · {{seconds}} s after it started",
+      "metaSignal": "ended by a signal · {{time}} · {{seconds}} s after it started",
+      "exited": "{{service}} exited with code {{code}}",
+      "endedBySignal": "{{service}} was ended by a signal",
+      "alone": "{{service}} exited on its own after it was ready. No other service needed it; the agent got the same facts.",
+      "stoppedOne": "{{service}} exited on its own after it was ready. Orchester stopped {{services}}, which needs it; the agent got the same facts.",
+      "stopped": "{{service}} exited on its own after it was ready. Orchester stopped {{services}}, which need it; the agent got the same facts."
+    },
+    "docker": {
+      "notRunningTitle": "{{service}} can’t start: Docker isn’t running",
+      "missingTitle": "{{service}} can’t start: Docker isn’t installed",
+      "meta": "start_service {{service}} · {{time}}",
+      "notRunningBody": "{{service}}’s per-run data is a fresh database container, and Docker didn’t answer on this computer. Start Docker Desktop, then Retry; the agent got the same message.",
+      "notRunningBodyWaiting": "{{service}}’s per-run data is a fresh database container, and Docker didn’t answer on this computer. Start Docker Desktop, then Retry. {{services}} wait for it; the agent got the same message.",
+      "missingBody": "{{service}}’s per-run data is a fresh database container, and no docker program is on this computer’s PATH. Install Docker, then Retry; the agent got the same message.",
+      "missingBodyWaiting": "{{service}}’s per-run data is a fresh database container, and no docker program is on this computer’s PATH. Install Docker, then Retry. {{services}} wait for it; the agent got the same message.",
+      "mac": "On macOS any Docker that answers on the Docker socket works: Docker Desktop, OrbStack or colima."
+    },
+    "ready": {
+      "title": "{{service}} wasn’t ready in {{seconds}} s",
+      "metaPort": "readiness: port {{port}} open",
+      "metaHttp": "readiness: HTTP 2xx or 3xx on {{path}}",
+      "metaLine": "readiness: a log line matching {{pattern}}",
+      "bodyPort": "Orchester tried port {{asked}} until the timeout, it accepted no connection, and Orchester stopped {{service}}.",
+      "bodyPortRunning": "Orchester tried port {{asked}} until the timeout, it accepted no connection, and Orchester stopped {{service}}. {{services}} keep running for this step.",
+      "bodyHttp": "Orchester asked {{asked}} until the timeout, got no 2xx or 3xx answer, and stopped {{service}}.",
+      "bodyHttpRunning": "Orchester asked {{asked}} until the timeout, got no 2xx or 3xx answer, and stopped {{service}}. {{services}} keep running for this step.",
+      "bodyLine": "No line of {{service}}’s output matched {{asked}} before the timeout, and Orchester stopped it.",
+      "bodyLineRunning": "No line of {{service}}’s output matched {{asked}} before the timeout, and Orchester stopped it. {{services}} keep running for this step.",
+      "lastPort": "port {{port}} not open after {{seconds}} s · stopped {{service}}",
+      "lastHttp": "no answer on {{path}} after {{seconds}} s · stopped {{service}}",
+      "lastLine": "no matching line after {{seconds}} s · stopped {{service}}"
+    },
+    "slots": {
+      "title": {
+        "one": "Waiting for {{count}} Services at once slot",
+        "other": "Waiting for {{count}} Services at once slots"
+      },
+      "meta": "{{task}} · {{step}} · since {{time}}",
+      "body": {
+        "one": "This start needs {{count}} slot and none is free: the project may run {{share}} services at once and this computer {{limit}}. The run starts its services when one is free.",
+        "other": "This start needs {{count}} slots and too few are free: the project may run {{share}} services at once and this computer {{limit}}. The run starts its services when {{count}} are free."
+      },
+      "free": {
+        "startOne": "This start needs 1 and none is free. The run starts its services when one is free.",
+        "startNone": "This start needs {{count}} and none is free. The run starts its services when {{count}} are free.",
+        "startFreeOne": "This start needs {{count}} and 1 is free. The run starts its services when {{count}} are free.",
+        "startOther": "This start needs {{count}} and {{free}} are free. The run starts its services when {{count}} are free.",
+        "stackOne": "Stack {{stack}} needs 1 and none is free. The run starts its services when one is free.",
+        "stackNone": "Stack {{stack}} needs {{count}} and none is free. The run starts its services when {{count}} are free.",
+        "stackFreeOne": "Stack {{stack}} needs {{count}} and 1 is free. The run starts its services when {{count}} are free.",
+        "stackOther": "Stack {{stack}} needs {{count}} and {{free}} are free. The run starts its services when {{count}} are free."
+      },
+      "holder": {
+        "stack": "stack {{stack}}",
+        "suite": "a test suite",
+        "held": {
+          "one": "{{what}} · 1 slot",
+          "other": "{{what}} · {{count}} slots"
+        },
+        "heldIn": {
+          "one": "{{what}} · 1 slot · in {{step}}",
+          "other": "{{what}} · {{count}} slots · in {{step}}"
+        },
+        "heldFor": {
+          "one": "{{what}} · 1 slot · in {{step}} for {{time}}",
+          "other": "{{what}} · {{count}} slots · in {{step}} for {{time}}"
+        },
+        "open": "Open ↗"
+      },
+      "change": "Change Services at once"
+    },
+    "approve": {
+      "title": "Start service {{service}}",
+      "titleNeeds": "Start service {{service}} and what it needs: {{needs}}",
+      "titleStack": "Start stack {{stack}}: {{services}}",
+      "meta": "{{agent}} · {{tool}} · {{time}}",
+      "body": "They start in this order and run these programs on this computer until {{step}} ends.",
+      "bodyOne": "It runs this program on this computer until {{step}} ends.",
+      "changed": "{{services}} changed since you approved them.",
+      "changedOne": "{{services}} changed since you approved it.",
+      "firstStart": "{{services}} never ran here before.",
+      "unchanged": "approved, unchanged",
+      "changedWhat": "changed: {{what}}",
+      "first": "first start",
+      "what": {
+        "program": "program",
+        "arguments": "arguments",
+        "variables": "variables",
+        "values": "values or seed"
+      },
+      "slots": "Takes {{count}} of {{limit}} Services at once slots",
+      "approve": "Approve",
+      "everyRun": "Approve for every run while unchanged",
+      "deny": "Deny",
+      "denyTells": "Deny tells the agent no; it goes on without them",
+      "confirm": {
+        "title": "Approve these services for every run?",
+        "what": "Until one of them changes, Orchester starts them in any run of this project without asking.",
+        "covers": "Covers {{services}}: their program, arguments, variables and seed as they are now.",
+        "asksAgain": "A change to any of them asks again, and you can revoke the rules in Project settings.",
+        "personOnly": "Only you confirm this: automation never approves services for every run.",
+        "confirm": "Approve for every run",
+        "cancel": "Cancel"
+      }
+    }
+  }
+}

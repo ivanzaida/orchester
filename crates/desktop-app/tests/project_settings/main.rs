@@ -21,8 +21,13 @@ mod review_regressions;
 mod reviewer_authority;
 mod reviewer_refresh;
 mod run_fixture;
+mod service_editor;
+mod service_sections;
+mod services;
 mod sources;
+mod stack_editor;
 mod storage;
 mod storage_cleanup;
+mod suite_editor;
 #[path = "../support/mod.rs"]
 mod support;

@@ -177,9 +177,10 @@ pub struct DefinitionCapture {
 pub enum DefinitionRunData {
   #[default]
   None,
-  /// A fresh database container per run.
+  /// A fresh database container per start: the service is that container, its program the image (e.g.
+  /// `postgres:16-alpine`), published on its `{{port}}`.
   DatabaseContainer,
-  /// Files in a folder below the worktree, e.g. `runs/{{run}}/team`.
+  /// Files in a folder of the run's own storage, e.g. `team`, made before the start and reached as `{{data}}`.
   RunFolder { folder: String },
 }
 

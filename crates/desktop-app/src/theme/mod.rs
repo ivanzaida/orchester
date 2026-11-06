@@ -52,7 +52,10 @@ mod projects;
 mod pull_requests;
 mod review;
 mod run_model;
+mod run_services;
 mod secrets;
+mod service_cards;
+mod services;
 mod settings;
 mod shadow;
 mod shell;
@@ -65,6 +68,7 @@ mod startup;
 mod task;
 mod task_form;
 mod tasks;
+mod test_results;
 mod todo_list;
 mod typography;
 pub mod usage;
@@ -118,7 +122,10 @@ pub use self::{
   pull_requests::{PullRequestsSpacing, PullRequestsText},
   review::{REVIEW_TYPING_OPACITY, ReviewSpacing, ReviewText},
   run_model::ModelText,
+  run_services::RunServicesText,
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
+  service_cards::ServiceCardsText,
+  services::{ServicesSpacing, ServicesText},
   settings::{SettingsSpacing, SettingsText},
   shadow::ExtraShadow,
   shell::{ShellSpacing, ShellText},
@@ -133,6 +140,7 @@ pub use self::{
     DROP_SCRIM_OPACITY, DROP_VEIL_OPACITY, HELD_CARD_OPACITY, SKELETON_DELAY, SKELETON_DIM, SKELETON_FADE,
     SKELETON_LAST_CARD, SKELETON_PULSE, SKELETON_STEPS, TasksSpacing, list_scrollbar, skeleton_line,
   },
+  test_results::TestsText,
   todo_list::TodoText,
   typography::{ExtraTypography, IconSize},
   usage::{UsageRadius, UsageSpacing, UsageText},
@@ -198,6 +206,7 @@ pub fn install(app: &mut App, mode: Mode) {
   failure::install(theme);
   modules::install(theme);
   project_settings::install(theme);
+  services::install(theme);
   browser::install(theme);
   dialog::install(theme);
   permissions::install(theme);

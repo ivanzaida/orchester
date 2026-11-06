@@ -435,7 +435,9 @@ fn qa_start(
   kontur
     .db
     .delivered_tool_approval(run.id(), &request.id, ToolApprovalDecision::Approved)?;
-  let scope = ProjectScope::of_request(&request).ok_or_else(|| invalid("a start_qa_app rule"))?;
+  let scope = ProjectScope::of_request(&request)
+    .pop()
+    .ok_or_else(|| invalid("a start_qa_app rule"))?;
   let rule = kontur
     .db
     .add_project_approval_rule(&scope, (run.id(), &request.id), answered)?;

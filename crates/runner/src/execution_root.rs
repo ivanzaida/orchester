@@ -113,7 +113,12 @@ pub fn qa_slots() -> Option<PathBuf> {
   user_data().map(|data| data.join("orchester-qa-slots"))
 }
 
-/// The user's data folder, which holds the apps' discovery folders and the QA slots.
+/// The computer's service slots folder ("Services at once"), in the user's data folder; `None` without one.
+pub fn service_slots() -> Option<PathBuf> {
+  user_data().map(|data| data.join("orchester-service-slots"))
+}
+
+/// The user's data folder, which holds the apps' discovery folders, the QA slots and the service slots.
 #[cfg(windows)]
 fn user_data() -> Option<PathBuf> {
   std::env::var_os("LOCALAPPDATA").map(PathBuf::from)

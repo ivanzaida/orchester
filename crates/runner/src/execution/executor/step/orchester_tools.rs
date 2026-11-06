@@ -14,6 +14,9 @@
 //!
 //! A check is offered to a step whose run pinned it and whose access rules let the step call it.
 
+mod qa_service;
+mod requests;
+
 use std::{
   ffi::OsString,
   io,
@@ -30,11 +33,12 @@ use orchester_core::{
   },
   id::{InvocationId, StepExecutionId},
   orchester_tools::{
-    OrchesterTool, OutsideReads, ProjectTool, QaAppStart, QaApproval, StepSkills, StepTools, ToolCall, ToolCallError,
-    ToolContext, ToolResult, ToolWork,
+    OrchesterTool, OutsideReads, ProjectTool, QaAppStart, StepSkills, StepTools, ToolCall, ToolCallError, ToolContext,
+    ToolResult, ToolWork,
   },
   permission::{AgentPermissions, ResolvedFolder, category::CommandScope},
   resource::CommandEnvironment,
+  service::{ServiceApproval, ServiceName},
   source::ResolvedSources,
 };
 use orchester_exec::{run_capped, run_processes::RunProcesses};
@@ -46,10 +50,12 @@ use super::{
   browser::StepBrowser,
   claude_approval::ClaudeApprovals,
   mcp::McpSetup,
-  qa_app::{StepQa, script_blob},
+  qa_app::StepQa,
   relay::{Listening, Served, bind},
   run_records::RunRecords,
+  service::{Started, StepServices},
   start::problem,
+  suite::StepSuites,
   tool_files::ToolFiles,
 };
 use crate::{approval_relay::TOOLS_FLAG, git::Git, private_file};
@@ -138,8 +144,17 @@ pub(in super::super) struct ToolHost {
   grants: Mutex<Vec<(OrchesterTool, Value)>>,
   /// The QA starts looked at and the QA script's blob each one's approval named, not run yet.
   qa_scripts: Mutex<Vec<(QaAppStart, String)>>,
-  /// The invocation's QA app (`start_qa_app`); `None` while the host is being made.
+  /// The service and stack starts looked at and the services each one's approval named, not run yet.
+  service_starts: Mutex<Vec<(ToolCall, Vec<ServiceApproval>)>>,
+  /// The invocation's QA app (`start_qa_app`, `start_service("desktop-qa")`); `None` while the host is being made.
   qa: Option<StepQa>,
+  /// The service whose UI `ui_open` opened last.
+  ui_opened: Mutex<Option<ServiceName>>,
+  /// The invocation's services (`start_service`, `stop_service`, `service_status`, `service_logs`); `None` while the
+  /// host is being made.
+  services: Option<StepServices>,
+  /// The invocation's test tools (`run_tests`, `test_output`), for a step that is offered them.
+  suites: Option<StepSuites>,
   /// The browser tools, for a step that is offered them ([`StepTools::offers_browser`]).
   browser: Option<StepBrowser>,
 }
@@ -215,12 +230,15 @@ impl ToolHost {
     let target = match (call, reach) {
       (_, Some(reach)) => Some(reach.folder.display().to_string()),
       (ToolCall::RunCheck { name }, None) => Some(name.clone()),
-      (ToolCall::StartQaApp(start), None) => {
-        let approval = self.qa_approval(start);
-        // The start runs only the script this request names ([`StepQa::start`]).
-        self.qa_scripts.lock().push((start.clone(), approval.script.clone()));
-        Some(approval.target())
-      }
+      // The start runs only the script this request names ([`StepQa::start`]).
+      (ToolCall::StartQaApp(start), None) => Some(self.qa_target(start)),
+      (ToolCall::StartService(name), None) if self.is_qa(name) => Some(self.qa_target(&QaAppStart::of_service())),
+      (ToolCall::StartService(name), None) => Some(self.service_target(call, Started::Service(name))?),
+      (ToolCall::StartStack(name), None) => Some(self.service_target(call, Started::Stack(name))?),
+      (ToolCall::RunTests { suite, filter }, None) => Some(match filter {
+        Some(filter) => format!("{} {}", suite.as_str(), filter.as_str()),
+        None => suite.as_str().to_owned(),
+      }),
       _ => None,
     };
     Ok(Looked {
@@ -248,12 +266,16 @@ impl ToolHost {
     true
   }
 
-  /// Runs `call`, approved or not needing an approval, off the async workers.
+  /// Runs `call`, approved or not needing an approval, off the async workers. Its answer carries the notices of the
+  /// invocation's services that crashed since the last answer ([`StepServices::take_notices`]).
   pub(super) async fn run(self: &Arc<Self>, call: ToolCall) -> ToolResult {
     let host = Arc::clone(self);
     let tool = call.tool();
     match tokio::task::spawn_blocking(move || host.run_blocking(&call)).await {
-      Ok(result) => result.redacted(&self.secrets),
+      Ok(result) => {
+        let notices = self.services.as_ref().map_or_else(Vec::new, StepServices::take_notices);
+        result.with_notices(notices).redacted(&self.secrets)
+      }
       Err(error) => {
         tracing::warn!(%error, tool = tool.as_str(), "an Orchester tool call ended without an answer");
         ToolResult::unavailable("the call ended without an answer")
@@ -273,7 +295,14 @@ impl ToolHost {
       git_dir: &self.git_dir,
       hooks: &self.hooks,
     };
-    match call.work(&context) {
+    let work = call.work(&context);
+    // The QA app, also as the service `desktop-qa`, and the `ui_*` calls that drive it.
+    if let Ok(work) = &work
+      && let Some(answer) = self.qa_work(work)
+    {
+      return answer;
+    }
+    match work {
       Ok(ToolWork::Done(result)) => result,
       Ok(ToolWork::Files(call)) => self.files.run(&call, &context),
       Ok(ToolWork::SearchExternal { folder, term }) => self.files.search_external(&folder, &term, &self.outside),
@@ -289,52 +318,44 @@ impl ToolHost {
         &call,
         self.qa.as_ref(),
       ),
-      Ok(ToolWork::QaApp(start)) => match &self.qa {
-        Some(qa) => {
-          // The latest look at this start is what was asked about; earlier ones were denied or never run.
-          let mut asked = self.qa_scripts.lock();
-          let script = asked
-            .iter()
-            .rposition(|(looked, _)| *looked == start)
-            .map(|at| asked[at].1.clone());
-          asked.retain(|(looked, _)| *looked != start);
-          drop(asked);
-          qa.start(&start, script.as_deref())
-        }
-        None => ToolResult::unavailable("this step cannot start a QA app"),
-      },
+      // [`Self::qa_work`] answers every one of these.
+      Ok(ToolWork::QaApp(_) | ToolWork::Ui(_)) => ToolResult::unavailable("this step cannot start a QA app"),
+      Ok(ToolWork::StartService(name)) => {
+        let approved = self.approved_services(&ToolCall::StartService(name.clone()));
+        self
+          .services
+          .as_ref()
+          .map_or_else(no_services, |services| services.start(&name, &approved))
+      }
+      Ok(ToolWork::StartStack(name)) => {
+        let approved = self.approved_services(&ToolCall::StartStack(name.clone()));
+        self
+          .services
+          .as_ref()
+          .map_or_else(no_services, |services| services.start_stack(&name, &approved))
+      }
+      Ok(ToolWork::StopService(name)) => self
+        .services
+        .as_ref()
+        .map_or_else(no_services, |services| services.stop(&name)),
+      Ok(ToolWork::ServiceStatus(name)) => self
+        .services
+        .as_ref()
+        .map_or_else(no_services, |services| services.status(&name)),
+      Ok(ToolWork::ServiceLogs { name, tail, since }) => self
+        .services
+        .as_ref()
+        .map_or_else(no_services, |services| services.logs(&name, tail, since)),
+      Ok(ToolWork::RunTests { suite, filter }) => self.suites.as_ref().map_or_else(no_suites, |suites| {
+        suites.run(&suite, filter.as_ref(), self.services.as_ref())
+      }),
+      Ok(ToolWork::TestOutput { run, test }) => self
+        .suites
+        .as_ref()
+        .map_or_else(no_suites, |suites| suites.output(run, &test)),
       Ok(ToolWork::Processes(call)) => self.processes.run(call),
       Ok(ToolWork::Run(program)) => program.finished(run_capped(program.command(), program.timeout(), program.cap())),
       Err(error) => ToolResult::refused(&error),
-    }
-  }
-}
-
-impl ToolHost {
-  /// What the approval of `start` names: the QA script's git blob and the build or start scripts changed since the
-  /// run's base revision, committed or not. What git cannot tell is left out, and the request says less.
-  fn qa_approval(&self, start: &QaAppStart) -> QaApproval {
-    let git = Git::new(&self.worktree);
-    let script = script_blob(&self.worktree).unwrap_or_default();
-    let mut changed: Vec<String> = [
-      git.stdout(&["diff", "--name-only", &self.base, "--"]),
-      git.stdout(&["ls-files", "--others", "--exclude-standard"]),
-    ]
-    .into_iter()
-    .filter_map(|listed| {
-      listed
-        .inspect_err(|error| tracing::warn!(%error, "the changed build scripts cannot be listed"))
-        .ok()
-    })
-    .flat_map(|listed| listed.lines().map(str::to_owned).collect::<Vec<_>>())
-    .filter(|path| QaApproval::watches(path))
-    .collect();
-    changed.sort();
-    changed.dedup();
-    QaApproval {
-      script: script.trim().to_owned(),
-      scenario: start.scenario().to_owned(),
-      changed,
     }
   }
 }
@@ -354,6 +375,14 @@ fn called_with(arguments: &Value) -> Value {
   } else {
     arguments.clone()
   }
+}
+
+fn no_services() -> ToolResult {
+  ToolResult::unavailable("this step has no services")
+}
+
+fn no_suites() -> ToolResult {
+  ToolResult::unavailable("this step has no test suites")
 }
 
 /// The relay Codex starts as Orchester's server, with its tools approved, and the listener it reaches.
@@ -391,6 +420,15 @@ impl RunTask {
       host.browser = Some(if claude { browser.with_images() } else { browser });
     }
     let qa = self.step_qa(execution, invocation, worktree)?;
+    // `run_tests` takes a service slot for its suite's process through the services, also where `start_service` is not
+    // offered.
+    if host.tools.policy(OrchesterTool::StartService).is_some() || host.tools.policy(OrchesterTool::RunTests).is_some()
+    {
+      host.services = Some(self.step_services((execution, invocation), worktree, environment));
+    }
+    if host.tools.policy(OrchesterTool::RunTests).is_some() {
+      host.suites = Some(self.step_suites(worktree, environment));
+    }
     let secrets = setup.secrets().into_iter().chain(provider_key).collect();
     let tools = Arc::new(host.with_secrets(secrets).with_qa(qa));
     let approvals = self.claude_approvals((permissions, setup, &tools), (invocation, worktree))?;
@@ -431,7 +469,7 @@ impl RunTask {
       .map(|execution| execution.step().clone())
       .ok_or_else(|| problem("the step execution is not the run's".to_owned()))?;
     let checks = self.offered_checks(&step)?;
-    let mut tools = StepTools::for_step(permissions, &checks).with_sources(sources);
+    let mut tools = self.offered_tools(permissions, &checks)?;
     if files.indexed() {
       tools = tools.with_code_index();
     }
@@ -472,8 +510,28 @@ impl RunTask {
       secrets: Vec::new(),
       grants: Mutex::new(Vec::new()),
       qa_scripts: Mutex::new(Vec::new()),
+      service_starts: Mutex::new(Vec::new()),
       qa: None,
+      ui_opened: Mutex::new(None),
+      services: None,
+      suites: None,
       browser: None,
+    })
+  }
+
+  /// The Orchester tools a step with `permissions` and `checks` is offered: its sources, and the project's published
+  /// services, stacks and test suites, with the `ui_*` tools when a service has the native UI driver.
+  fn offered_tools(&self, permissions: &AgentPermissions, checks: &[ProjectTool]) -> Result<StepTools, RunnerProblem> {
+    let services = self.service_names()?;
+    let tools = StepTools::for_step(permissions, checks)
+      .with_sources(self.run.snapshot().sources())
+      .with_services(permissions, &services.names)
+      .with_stacks(&self.stack_names()?)
+      .with_test_suites(permissions, &self.suite_slugs()?);
+    Ok(if services.native_ui {
+      tools.with_native_ui()
+    } else {
+      tools
     })
   }
 

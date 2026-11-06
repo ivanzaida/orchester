@@ -127,7 +127,7 @@ fn answer_step_end(
     .and_then(|execution| run.snapshot().step(execution.step()))
     .and_then(|step| match step.executor() {
       StepExecutor::Agent { profile, .. } => Some(profile.resource),
-      StepExecutor::Tool { .. } => None,
+      StepExecutor::Tool { .. } | StepExecutor::Test => None,
     });
   let (true, Some(profile)) = (waits && latest == Some(request.invocation()), profile) else {
     db.end_waiting_question(run.id(), request.id()).map_err(store)?;

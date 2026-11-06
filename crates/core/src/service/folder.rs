@@ -53,8 +53,9 @@ impl RelativeFolder {
   }
 }
 
-/// The folder of a run's own files, below the worktree, e.g. `runs/{{run}}/team-web`. It is deleted when the run
-/// ends, so it is never the worktree itself.
+/// The folder of a run's own files, e.g. `team-web`: it lies in the run's data folder in the run's storage
+/// ([`crate::service::run_data_folder`]), is made before the service starts, reaches the service as `{{data}}` and is
+/// deleted when the run ends, so it is never that data folder itself.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct RunFolder(RelativeFolder);
 
@@ -88,5 +89,14 @@ impl OwnedPath {
 
   pub fn as_str(&self) -> &str {
     &self.0
+  }
+
+  /// Whether the service owns the repository file `path`, with `/` between its parts as git lists it: the pattern
+  /// matches it as an artifact glob does (`*` and `?` within a part, `**` across parts), or names a folder it is in.
+  pub fn matches(&self, path: &str) -> bool {
+    let pattern = self.0.replace('\\', "/");
+    let pattern = pattern.trim_end_matches('/');
+    crate::resource::glob_matches(pattern, path)
+      || (!pattern.contains(['*', '?']) && path.strip_prefix(pattern).is_some_and(|rest| rest.starts_with('/')))
   }
 }

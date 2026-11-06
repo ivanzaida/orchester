@@ -68,13 +68,13 @@ pub async fn list_projects(services: &Services, _: ListProjects) -> Result<Value
         }
       })
       .collect::<Vec<_>>();
-    Ok((entries, settings))
+    Ok((entries, settings, workspace.service_slots()?))
   })
   .await?;
-  let projects: Vec<Value> = listed
-    .0
+  let (entries, settings, computer) = listed;
+  let projects: Vec<Value> = entries
     .iter()
-    .zip(listed.1)
+    .zip(settings)
     .map(|(entry, (index, project_limits))| {
       json!({
         "id": entry.project.id.to_string(),
@@ -82,7 +82,7 @@ pub async fn list_projects(services: &Services, _: ListProjects) -> Result<Value
         "folder": entry.project.repo_root.display().to_string(),
         "folder_missing": entry.folder_missing,
         "code_index": index.map(CodeIndexSetting::is_on),
-        "limits": project_limits.map(limits::limits_json),
+        "limits": project_limits.map(|project_limits| limits::limits_json(project_limits, computer)),
         "link": Link::Project(entry.project.id).path(),
       })
     })

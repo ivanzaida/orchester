@@ -1157,7 +1157,9 @@
     },
     "limits": {
       "agentSlotsInvalid": "Enter a whole number from {{min}} to {{max}}.",
-      "qaSlotsInvalid": "Enter a whole number from {{min}} to {{max}}."
+      "qaSlotsInvalid": "Enter a whole number from {{min}} to {{max}}.",
+      "serviceSlotsInvalid": "Enter a whole number from {{min}} to {{max}}.",
+      "serviceSlotsAboveComputer": "A project’s share can be at most this computer’s Services at once, {{limit}}."
     }
   },
   "servers": {
@@ -1378,7 +1380,9 @@
       "readsOnly": "Reads the repository",
       "exitCodeDecides": "Its exit code decides the step",
       "toolUnavailable": "This tool can’t run in this version yet",
-      "profileConnectionModel": "{{profile}} · {{connection}} / {{model}}"
+      "profileConnectionModel": "{{profile}} · {{connection}} / {{model}}",
+      "tests": "Test suites of the changed areas",
+      "failedTestsDecide": "Failed tests fail the step"
     },
     "inspector": {
       "readOnly": "Read-only",
@@ -1519,6 +1523,134 @@
       "needNotPublished": "{{service}} needs {{need}}, which is not a published service. Publish {{need}} first.",
       "serviceNotPublished": "{{service}} is not a published service. Publish it first.",
       "needsCycle": "The services' needs form a cycle: {{cycle}}. A service cannot start after itself."
+    },
+    "editor": {
+      "errors": {
+        "nameRequired": "Enter the service's name.",
+        "name": "{{name}} is not a service name: 1 to {{max}} lowercase letters, digits and single hyphens, such as team-web.",
+        "nameTaken": "Another service is named {{name}}, or was. Give this one a name of its own.",
+        "outsideWorktree": "{{folder}} is not a folder in the run's worktree: write a relative path without .., a drive or a leading slash.",
+        "secretRequired": "Enter the name of the project secret {{name}} takes.",
+        "secretName": "{{name}} takes a secret by its name: a capital letter, then capital letters, digits or underscores, at most {{max}} characters.",
+        "needsItself": "{{name}} cannot need itself.",
+        "duplicateNeed": "{{name}} is needed twice.",
+        "needMissing": "{{service}} needs {{need}}, which is no longer a service of this project.",
+        "invalid": "This service cannot be saved as it is.",
+        "gone": "This service no longer exists. It was deleted, here or by automation.",
+        "inUse": "Something still uses this service, so it was not deleted.",
+        "httpPath": "{{path}} is not a path to ask: start it with / and leave out spaces, such as /healthz.",
+        "logPatternRequired": "Enter the pattern a log line matches once the service is ready.",
+        "logPatternTooLong": "A log pattern is at most {{max}} characters long.",
+        "logPattern": "{{pattern}} is not a regular expression.",
+        "readyTimeout": "Enter a whole number of seconds from 1 to {{max}}.",
+        "seedUrl": "Enter an http:// or https:// URL, or one that starts with a placeholder, without spaces.",
+        "captureName": "{{name}} cannot name a captured value: a lowercase letter, then lowercase letters, digits or underscores.",
+        "capturePath": "{{path}} is not a place in a JSON answer: start it with $, such as $.id or $.items[0].id.",
+        "duplicateCapture": "{{name}} is captured twice. Give each captured value a name of its own.",
+        "noSeedRequests": "Add a request, or choose None.",
+        "duplicateHeader": "The header {{name}} is set twice.",
+        "runFolderIsRoot": "Name a folder for the run's files, such as team-web.",
+        "runFolder": "{{folder}} is not a folder of the run's files: write a relative path without .., a drive or a leading slash.",
+        "uiStart": "Write where ui_open starts without spaces, or leave it empty.",
+        "ownedPath": "{{path}} is not a path in the repository: write a relative pattern without .., a drive or a leading slash, such as web/team/**.",
+        "duplicateOwnedPath": "{{path}} is owned already."
+      },
+      "placeholder": {
+        "argument": {
+          "unclosed": "Argument {{line}} opens a placeholder but never closes it.",
+          "malformed": "Argument {{line}} has a placeholder with nothing or a brace inside.",
+          "unknownField": "Argument {{line}}: {{value}} is not a placeholder of a service. They are port, url, run, data, services.<name>.url, services.<name>.port and seed.<name>.",
+          "unknownService": "Argument {{line}} uses the service {{value}}, which is not defined.",
+          "notNeeded": "Argument {{line}} uses {{value}}, which this service does not need. Add it under Needs.",
+          "unknownCapture": "Argument {{line}} uses seed.{{value}}, which no seed request captures before it.",
+          "noRunFolder": "Argument {{line}} uses data, the run's own folder: choose Files in the run's own folder under Per-run data."
+        },
+        "variable": {
+          "unclosed": "{{name}} opens a placeholder but never closes it.",
+          "malformed": "{{name}} has a placeholder with nothing or a brace inside.",
+          "unknownField": "{{name}}: {{value}} is not a placeholder of a service. They are port, url, run, data, services.<name>.url, services.<name>.port and seed.<name>.",
+          "unknownService": "{{name}} uses the service {{value}}, which is not defined.",
+          "notNeeded": "{{name}} uses {{value}}, which this service does not need. Add it under Needs.",
+          "unknownCapture": "{{name}} uses seed.{{value}}, which no seed request captures.",
+          "noRunFolder": "{{name}} uses data, the run's own folder: choose Files in the run's own folder under Per-run data."
+        },
+        "readiness": {
+          "unclosed": "The path opens a placeholder but never closes it.",
+          "malformed": "The path has a placeholder with nothing or a brace inside.",
+          "unknownField": "The path: {{value}} is not a placeholder of a service. They are port, url, run, data, services.<name>.url and services.<name>.port.",
+          "unknownService": "The path uses the service {{value}}, which is not defined.",
+          "notNeeded": "The path uses {{value}}, which this service does not need. Add it under Needs.",
+          "unknownCapture": "The path uses seed.{{value}}, but the seed runs only after the service is ready.",
+          "noRunFolder": "The path uses data, the run's own folder: choose Files in the run's own folder under Per-run data."
+        },
+        "seed": {
+          "unclosed": "Request {{request}} opens a placeholder but never closes it.",
+          "malformed": "Request {{request}} has a placeholder with nothing or a brace inside.",
+          "unknownField": "Request {{request}}: {{value}} is not a placeholder of a service. They are port, url, run, data, services.<name>.url, services.<name>.port and seed.<name>.",
+          "unknownService": "Request {{request}} uses the service {{value}}, which is not defined.",
+          "notNeeded": "Request {{request}} uses {{value}}, which this service does not need. Add it under Needs.",
+          "unknownCapture": "Request {{request}} uses seed.{{value}}, which no request before it captures.",
+          "noRunFolder": "Request {{request}} uses data, the run's own folder: choose Files in the run's own folder under Per-run data."
+        },
+        "seedArgument": {
+          "unclosed": "Argument {{line}} of the seed command opens a placeholder but never closes it.",
+          "malformed": "Argument {{line}} of the seed command has a placeholder with nothing or a brace inside.",
+          "unknownField": "Argument {{line}} of the seed command: {{value}} is not a placeholder of a service. They are port, url, run, data, services.<name>.url and services.<name>.port.",
+          "unknownService": "Argument {{line}} of the seed command uses the service {{value}}, which is not defined.",
+          "notNeeded": "Argument {{line}} of the seed command uses {{value}}, which this service does not need. Add it under Needs.",
+          "unknownCapture": "Argument {{line}} of the seed command uses seed.{{value}}, which only seed requests capture.",
+          "noRunFolder": "Argument {{line}} of the seed command uses data, the run's own folder: choose Files in the run's own folder under Per-run data."
+        },
+        "uiStart": {
+          "unclosed": "Where ui_open starts opens a placeholder but never closes it.",
+          "malformed": "Where ui_open starts has a placeholder with nothing or a brace inside.",
+          "unknownField": "Where ui_open starts: {{value}} is not a placeholder of a service. They are port, url, run, data, services.<name>.url, services.<name>.port and seed.<name>.",
+          "unknownService": "Where ui_open starts uses the service {{value}}, which is not defined.",
+          "notNeeded": "Where ui_open starts uses {{value}}, which this service does not need. Add it under Needs.",
+          "unknownCapture": "Where ui_open starts uses seed.{{value}}, which no seed request captures.",
+          "noRunFolder": "Where ui_open starts uses data, the run's own folder: choose Files in the run's own folder under Per-run data."
+        },
+        "elsewhere": "A placeholder of this service has no value in a run."
+      }
+    },
+    "stack": {
+      "errors": {
+        "nameRequired": "Enter the stack's name.",
+        "name": "{{name}} is not a stack name: 1 to {{max}} lowercase letters, digits and single hyphens, such as full.",
+        "nameTaken": "Another stack is named {{name}}, or was. Give this one a name of its own.",
+        "empty": "Add a service: a stack starts at least one.",
+        "duplicate": "{{name}} is in the stack twice.",
+        "missing": "The stack starts {{service}}, which is no longer a service of this project. Remove it.",
+        "invalid": "This stack cannot be saved as it is.",
+        "gone": "This stack no longer exists. It was deleted, here or by automation."
+      }
+    },
+    "suite": {
+      "errors": {
+        "nameRequired": "Enter the suite's name.",
+        "name": "{{name}} is not a suite name: 1 to {{max}} lowercase letters, digits and single hyphens, such as web-e2e.",
+        "nameTaken": "Another test suite is named {{name}}, or was. Give this one a name of its own.",
+        "gone": "This test suite no longer exists. It was deleted, here or by automation.",
+        "filterPlaceholder": "Write the argument that takes run_tests' filter with {{filter}} in it, such as --grep={{filter}}, or leave it empty.",
+        "placeholderInProgram": "The program cannot hold a placeholder: {{filter}} goes in the filter's argument.",
+        "unknownPlaceholder": "{{value}} is not a placeholder of a test suite: the only one is {{filter}}, in the filter's argument.",
+        "unclosedPlaceholder": "{{value}} opens a placeholder but never closes it.",
+        "repeatedFilter": "{{filter}} stands in one argument only, once: keep it in the filter's field.",
+        "unknownFormat": "{{value}} is not a report format.",
+        "unknownLayer": "{{value}} is not a layer: lint, unit or e2e.",
+        "reportPathRequired": "Enter the file the report is written to, inside the working folder.",
+        "reportPrinted": "This format is printed: read it from the standard output.",
+        "blankPath": "Enter a path, or remove it.",
+        "absolutePath": "{{value}} starts from a drive or a root: write a path inside the worktree.",
+        "leavesWorktree": "{{value}} leaves the worktree: write a path without ..",
+        "secretName": "A variable takes a secret by its name: a capital letter, then capital letters, digits or underscores.",
+        "need": "A need names a service or a stack: lowercase letters, digits and single hyphens.",
+        "repeatedNeed": "{{value}} is needed twice.",
+        "servicesRequired": "Add a service, or choose Nothing.",
+        "stackRequired": "Choose a stack, or choose Nothing.",
+        "missing": "The suite needs {{name}}, which is no longer a service or a stack of this project.",
+        "timeout": "Enter a whole number of minutes from 1 to {{max}}."
+      }
     }
   },
   "sources": {
@@ -1637,6 +1769,7 @@
       "stepKeyInvalid": "{{key}} is not a step key: use small letters, digits and -, starting with a letter or digit.",
       "profileOrTool": "A step runs an agent profile or a tool, not both.",
       "toolStepOptions": "A tool step takes no repository access, model or narrowed permissions; those are an agent step’s.",
+      "testStepOptions": "A Test step runs the project's test suites: it takes no profile, tool, repository access, model or narrowed permissions.",
       "toolNotPublished": "No published tool is named {{tool}}. A step calls a tool once it is published.",
       "toolNotRunnable": "{{tool}} cannot run as a step in this version.",
       "profileNotPublished": "No published agent profile is named {{profile}}. A step runs a profile once it is published.",
@@ -1726,7 +1859,8 @@
         "program": "The tool would run {{program}} where it ran {{before}}.",
         "arguments": "The tool's arguments would change, and with them what its program does.",
         "exitCodes": "Exit codes {{codes}} would pass, which did not.",
-        "toolStep": "Step {{step}} would run {{tool}} with your rights, network access and no sandbox, on files the agents before it wrote; the pipeline does not call it there yet. Approve it only after agents you would let do that."
+        "toolStep": "Step {{step}} would run {{tool}} with your rights, network access and no sandbox, on files the agents before it wrote; the pipeline does not call it there yet. Approve it only after agents you would let do that.",
+        "testStep": "Step {{step}} would run the project's test suites and the services they need with your rights, network access and no sandbox, on files the agents before it wrote, without asking. Approve it only after agents you would let do that."
       }
     },
     "services": {
@@ -1746,6 +1880,11 @@
         "variables": "The service's variables would change: a variable can change what its program loads, where it connects or what it trusts.",
         "seed": "The service's seed would change: what it runs, or the requests it sends, once the service is ready."
       }
+    },
+    "flakyTests": {
+      "quarantine": "Quarantining {{test}} in {{suite}} lets its failures pass the Test step: its runs would no longer be held to it, so a person decides it.",
+      "notFlaky": "{{test}} in {{suite}} was never flaky in a Test step of this project; list_flaky_tests lists the tests that were. Only a flaky test is quarantined.",
+      "invalid": "Name the suite and the test as list_flaky_tests gives them: {{reason}}"
     },
     "widens": {
       "repository": "Write access to the repository, which the latest version does not give.",

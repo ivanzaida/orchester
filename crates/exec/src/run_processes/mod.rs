@@ -7,6 +7,7 @@ pub mod identity;
 #[cfg(target_os = "macos")]
 mod macos;
 mod stop;
+mod tree;
 #[cfg(not(any(windows, target_os = "macos")))]
 mod unsupported;
 #[cfg(windows)]
@@ -29,10 +30,12 @@ use orchester_core::{
 use parking_lot::Mutex;
 use serde_json::json;
 use thiserror::Error;
+pub use tree::RunTree;
 #[cfg(not(any(windows, target_os = "macos")))]
 use unsupported as platform;
+
 #[cfg(windows)]
-use windows as platform;
+use self::windows as platform;
 
 #[derive(Clone, Copy)]
 struct Entry {

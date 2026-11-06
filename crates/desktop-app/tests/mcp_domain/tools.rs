@@ -208,6 +208,45 @@ fn domain_a_command_step_with_a_failure_route_needs_a_person() {
   assert_person_only(&served.refused("save_pipeline_draft", &other_tool));
 }
 
+/// A Test step (ORC-255) is chosen with `tests: true` and no profile or tool; adding one runs the project's suites on
+/// this computer, so it needs a person as a new command step does.
+#[test]
+fn domain_a_test_step_is_chosen_through_save_pipeline_draft() {
+  let mut served = served();
+  served.let_automation_widen(true);
+  served.ok(
+    "create_pipeline",
+    &json!({ "project": "Kontur", "name": "Change", "from": "empty" }),
+  );
+  served.let_automation_widen(false);
+  let steps = || {
+    json!({ "project": "Kontur", "pipeline": "Change", "steps": [
+      { "key": "implement", "name": "Implement", "profile": "Builder" },
+      {
+        "key": "tests",
+        "name": "Tests",
+        "tests": true,
+        "runs_after": ["implement"],
+        "on_failure": { "return_to": "implement", "retries": 2 },
+      },
+    ] })
+  };
+  assert_person_only(&served.refused("save_pipeline_draft", &steps()));
+  served.let_automation_widen(true);
+  let saved = served.ok("save_pipeline_draft", &steps());
+  let step = &saved["pipeline"]["steps"][1];
+  assert_eq!(step["tests"], true, "{saved}");
+  assert!(step.get("profile").is_none() && step.get("tool").is_none(), "{saved}");
+  served.ok(
+    "publish_pipeline",
+    &json!({ "project": "Kontur", "pipeline": "Change" }),
+  );
+  let mut with_profile = steps();
+  with_profile["steps"][1]["profile"] = json!("Builder");
+  let refused = served.refused("save_pipeline_draft", &with_profile);
+  assert_eq!(refused["code"], "invalid_step", "{refused}");
+}
+
 #[test]
 fn domain_a_tools_program_is_a_fixed_file_outside_the_repository() {
   let codex = Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");

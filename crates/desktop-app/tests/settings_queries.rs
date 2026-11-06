@@ -100,6 +100,7 @@ fn settings_queries_each_application_setting_reads_its_own_query() {
     (AppOutside::DailyReport, AppRead::DailyReport),
     (AppOutside::Browser, AppRead::Browser),
     (AppOutside::Automation, AppRead::Automation),
+    (AppOutside::ServiceSlots, AppRead::ServiceSlots),
   ];
   for (kind, read) in expected {
     assert_eq!(app_touched(kind), &[read], "{kind:?}");

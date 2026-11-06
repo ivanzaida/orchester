@@ -63,6 +63,7 @@ fn step_no_weaker(old: &Step, new: &Step) -> bool {
 fn kind_no_weaker(old: &StepKind, new: &StepKind) -> bool {
   match (old, new) {
     (StepKind::Tool { tool: before }, StepKind::Tool { tool: after }) => before == after,
+    (StepKind::Test, StepKind::Test) => true,
     (
       StepKind::Agent {
         profile: before,

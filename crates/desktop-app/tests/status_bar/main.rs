@@ -242,6 +242,7 @@ fn approval() -> ShownApproval {
     review: None,
     reviewing: false,
     came_to_person: None,
+    service_rules: Vec::new(),
   }
 }
 

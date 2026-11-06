@@ -100,14 +100,26 @@ pub enum StepKind {
   /// Calls a project tool under the tool's access policy. Unset (`None`) like an agent step's
   /// profile until a tool is chosen.
   Tool { tool: Option<ResourceId> },
+  /// Runs the project's published test suites in layers (`docs/architecture/agent-testing.md`, "The Test step"):
+  /// those whose services own a path the run changed, and those marked always. It needs no profile or tool.
+  Test,
 }
 
 impl StepKind {
-  /// The agent profile or tool that executes the step, once chosen.
+  /// The agent profile or tool that executes the step, once chosen; a Test step has none.
   pub const fn executor(&self) -> Option<ResourceId> {
     match self {
       Self::Agent { profile, .. } => *profile,
       Self::Tool { tool } => *tool,
+      Self::Test => None,
+    }
+  }
+
+  /// Whether the step has what executes it: an agent step its profile, a tool step its tool. A Test step always has.
+  pub const fn is_assigned(&self) -> bool {
+    match self {
+      Self::Agent { .. } | Self::Tool { .. } => self.executor().is_some(),
+      Self::Test => true,
     }
   }
 }
@@ -312,7 +324,7 @@ impl Pipeline {
       match &mut step.kind {
         StepKind::Agent { profile, .. } if *profile == Some(executor) => *profile = None,
         StepKind::Tool { tool } if *tool == Some(executor) => *tool = None,
-        StepKind::Agent { .. } | StepKind::Tool { .. } => {}
+        StepKind::Agent { .. } | StepKind::Tool { .. } | StepKind::Test => {}
       }
     }
     pipeline
@@ -346,7 +358,7 @@ impl Pipeline {
 fn unassigned(steps: &[Step]) -> impl Iterator<Item = &StepKey> {
   steps
     .iter()
-    .filter(|step| step.kind.executor().is_none())
+    .filter(|step| !step.kind.is_assigned())
     .map(|step| &step.key)
 }
 

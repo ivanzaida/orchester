@@ -29,6 +29,7 @@ mod requests;
 mod resolve;
 mod run_files;
 mod run_git;
+mod services;
 mod settings;
 mod side_question;
 pub mod state;

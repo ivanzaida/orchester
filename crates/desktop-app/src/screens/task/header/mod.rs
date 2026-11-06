@@ -317,7 +317,8 @@ fn removal(ctx: &mut Ctx, props: &HeaderProps) -> Option<Element> {
   confirm_for(ctx, &runs, run)
 }
 
-/// Summary, Conversation, and Changes with the count of the files it lists.
+/// Summary, Conversation, Changes with the count of the files it lists, and Services with how many the run's steps
+/// started and the dot of their state.
 fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
   let navigation = Navigation::of(ctx);
   let changes_reads = super::changes::ChangesReads::of(ctx);
@@ -332,7 +333,7 @@ fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
     Arc::new(move |at| {
       let view = match tab {
         TaskTab::Changes => TaskView::Changes(changes_reads.shown_file()),
-        TaskTab::Summary | TaskTab::Conversation => TaskView::of(tab),
+        TaskTab::Summary | TaskTab::Conversation | TaskTab::Services => TaskView::of(tab),
       };
       navigation.open(Route::Project(project, ProjectPage::task(key.clone(), view, kept)), at);
     })
@@ -343,10 +344,17 @@ fn tabs(ctx: &mut Ctx, props: &HeaderProps) -> Element {
   let changes = ctx.t(TaskTab::Changes.title_key());
   let count = super::changes_count(ctx, &props.task);
   let changes = super::changes::tab_label(ctx, &changes, count);
+  let services = tab(TaskTab::Services, ctx.t(TaskTab::Services.title_key()));
+  let services = match super::services::count(ctx, &props.task) {
+    Some((count, Some(dot))) => services.count(count, false).dot(dot),
+    Some((count, None)) => services.count(count, false),
+    None => services,
+  };
   let tabs = vec![
     tab(TaskTab::Summary, ctx.t(TaskTab::Summary.title_key())),
     tab(TaskTab::Conversation, ctx.t(TaskTab::Conversation.title_key())),
     tab(TaskTab::Changes, changes),
+    services,
   ];
   if props.view != TaskView::Conversation {
     return page_tabs(ctx, "task-tabs", tabs).into();

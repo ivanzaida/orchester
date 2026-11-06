@@ -230,6 +230,36 @@ fn memory_settings_icon_matches_bundled_font_name() {
   );
 }
 
+/// The glyphs of a service's seed requests: the handle that moves one and a capture's mark (`RCySH`, `j3gveD` in
+/// `TGRTt`).
+#[test]
+fn seed_request_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  for (icon, name) in [
+    (Icon::GripVertical, "grip-vertical"),
+    (Icon::CornerDownRight, "corner-down-right"),
+  ] {
+    assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
+  }
+}
+
+/// The glyphs of a task's Services tab: the stack line, a service's live log, its Stop, Start and Restart, and its
+/// address (`T92RJ`, `WGv2K`, `jzRK3`, `p3yTp` in `cjvRr`); the font names `layers` by its former name `layers-3`.
+#[test]
+fn run_services_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  for (icon, name) in [
+    (Icon::Layers, "layers-3"),
+    (Icon::ScrollText, "scroll-text"),
+    (Icon::Square, "square"),
+    (Icon::RotateCw, "rotate-cw"),
+    (Icon::Globe, "globe"),
+    (Icon::ArrowUpRight, "arrow-up-right"),
+  ] {
+    assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
+  }
+}
+
 /// The glyphs of a team task's Take over (`hand-helping`, which lucide named `helping-hand` before, in 02d `lpji3`) and
 /// of a run on another computer (`monitor-smartphone`, `Last event` in 02 `nMUwg`).
 #[test]

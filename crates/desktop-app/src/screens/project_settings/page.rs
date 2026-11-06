@@ -108,7 +108,7 @@ const fn at_root(shown: Shown) -> bool {
     Shown::Tab(_) => true,
     Shown::Connections(view) => view.is_root(),
     Shown::Secrets(view) => view.secret.is_none() && matches!(view.panel, crate::routes::SecretsPanel::Inspect),
-    Shown::Rules | Shown::Storage | Shown::NewConnection(_) | Shown::EditConnection(_) => false,
+    Shown::Rules | Shown::Storage | Shown::Services(_) | Shown::NewConnection(_) | Shown::EditConnection(_) => false,
   }
 }
 

@@ -14,6 +14,7 @@ mod merge_queue;
 mod resolve;
 mod review;
 mod run_folder;
+mod services;
 mod side;
 
 use std::{
@@ -362,6 +363,7 @@ async fn answer(
       return later.review(handle, review);
     }
     Command::Browser(ref command) => return later.browser(handle, command.clone()),
+    Command::Services(ref command) => return later.services(handle, command.clone()),
     Command::Folders(ref command) => return later.folders(handle, command.clone()),
     Command::MergeQueue(ref command) => return later.merge_queue(handle, command.clone()),
     Command::Resolve { run, ref request } => return later.resolve(handle, run, request.clone()),

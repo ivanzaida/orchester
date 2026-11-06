@@ -49,7 +49,7 @@ use self::{
     disk_guard::DiskGuard,
     prepared::Prepared,
     run::{RunTask, TaskContext},
-    step::QaApps,
+    step::{QaApps, Services},
   },
 };
 pub use self::{
@@ -57,7 +57,7 @@ pub use self::{
   executor::{
     link,
     run_files::{answer_run_files, list_page},
-    step::{QaSlots, outside_read_refusals},
+    step::{QaSlots, ServiceSlots, outside_read_refusals},
   },
 };
 pub use crate::notify::Notifier;
@@ -91,6 +91,8 @@ struct Inner {
   board: Arc<Board>,
   /// The QA apps the runs' agents started, and the computer's QA slots they take.
   qa: Arc<QaApps>,
+  /// The services the runs' agents started, the ports they hold and the computer's service slots they take.
+  services: Arc<Services>,
   /// The project's browser, started at its runs' first use (`browser`).
   browser: Arc<ProjectBrowser>,
   active: Mutex<HashMap<RunId, ActiveRun>>,
@@ -118,7 +120,8 @@ struct Inner {
 
 impl Scheduler {
   /// The scheduler of the project at `project_root`; its agents' QA apps take `qa_slots` ([`QaSlots::machine`]
-  /// outside tests). The disk guard reads this computer's disks unless [`Scheduler::with_disks`] says otherwise.
+  /// outside tests), their services the computer's service slots unless [`Scheduler::with_service_slots`] gives
+  /// others. The disk guard reads this computer's disks unless [`Scheduler::with_disks`] says otherwise.
   pub fn new(
     project_root: &Path,
     notifier: Notifier,
@@ -131,6 +134,8 @@ impl Scheduler {
     coordinator::missing_checkpoints::record(project_root);
     crate::decision_test::recover(project_root);
     executor::worktree_sweep::sweep_in_background(project_root.to_path_buf());
+    // Before any run starts a service: its notes are read now.
+    executor::run_data::sweep_in_background(project_root.to_path_buf());
     Self {
       inner: Arc::new(Inner {
         project_root: project_root.to_path_buf(),
@@ -139,6 +144,7 @@ impl Scheduler {
         relay,
         board: Arc::new(Board::new(notifier.clone())),
         qa: Arc::new(QaApps::new(qa_slots)),
+        services: Arc::new(Services::new(ServiceSlots::machine())),
         browser: Arc::new(ProjectBrowser::of_project(project_root)),
         notifier,
         active: Mutex::new(HashMap::new()),
@@ -306,6 +312,7 @@ impl Scheduler {
         task: cancelled.task(),
       });
       self.inner.browser.end_run(run);
+      executor::run_data::end_in_background(self.inner.project_root.clone(), run);
       return Ok(());
     }
   }
@@ -509,6 +516,7 @@ impl Scheduler {
       relay: self.inner.relay.clone(),
       board: self.inner.board.clone(),
       qa: self.inner.qa.clone(),
+      services: self.inner.services.clone(),
       browser: self.inner.browser.clone(),
       disks: self.inner.disks.clone(),
       controls,
@@ -518,6 +526,7 @@ impl Scheduler {
     let task = tokio::spawn(async move {
       if RunTask::new(db, prepared, context).drive().await {
         scheduler.inner.browser.end_run(run);
+        executor::run_data::end_in_background(scheduler.inner.project_root.clone(), run);
       }
       // A run its task stopped at a plan limit continues at the reset, and one it paused for low disk space once
       // the disk has room.

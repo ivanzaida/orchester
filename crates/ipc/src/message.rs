@@ -39,6 +39,7 @@ use crate::{
   merge_queue::{MergeQueueCommand, MergeQueueReply},
   rejection::Rejection,
   run_files::{RunFilesReply, RunFilesRequest},
+  services::{ServiceCommand, ServiceReply},
   work::WorkSummary,
   worktree::WorktreeChangesRead,
 };
@@ -385,6 +386,9 @@ pub enum Command {
   /// used and sweeps the worktree folders. Answered with [`Reply::WorktreesRemoved`], or [`Reply::RemovalFailed`] when
   /// nothing was removed.
   RemoveWorktrees { run: RunId, request: RemovalRequest },
+  /// A request of a task page's Services tab about a run's services (protocol 53). Answered with [`Reply::Services`]
+  /// once carried out, or [`Rejection::Failed`] with why not.
+  Services(ServiceCommand),
 }
 
 /// Runner to desktop.
@@ -566,6 +570,8 @@ pub enum Reply {
   ResolveFailed(ResolveFailure),
   /// The answer to [`Command::RunFiles`]; a file's bytes travel after it in a binary frame.
   RunFiles(RunFilesReply),
+  /// The answer to [`Command::Services`].
+  Services(ServiceReply),
   Rejected(Rejection),
   /// The comparison ended; its durable report includes completion or stop status.
   DecisionTested {

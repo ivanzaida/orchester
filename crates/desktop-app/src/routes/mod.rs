@@ -19,7 +19,8 @@
 //! `/project/<id>/modules/<module id>/edit` ([`ModuleListTab`], [`ModuleTab`]). The Delivery view
 //! beside Usage is `/project/<id>/usage/delivery` (`?period=` 30d, 90d or 365d).
 //! Project settings is `/project/<id>/settings` (`?tab=runs`, [`ProjectSettingsTab`];
-//! `?tab=runs&view=rules` its page *Approved for every run*). Its Connections tab is `/project/<id>/connections`
+//! `?tab=runs&view=rules` its page *Approved for every run*, `?tab=services&view=…` a page under Services,
+//! [`ServicesPage`]). Its Connections tab is `/project/<id>/connections`
 //! (`?selected=` the connection whose page shows), Add provider `/project/<id>/connections/new`
 //! (`?kind=mcp_server` adds an MCP server) and `/project/<id>/connections/<connection id>/edit` edits an MCP server or
 //! an agent CLI connection's account; its Environment tab is `/project/<id>/secrets` ([`SecretsView`]). The code viewer
@@ -64,6 +65,7 @@ mod project_settings;
 mod query;
 mod screen;
 mod secrets;
+mod services;
 mod skills;
 mod table;
 mod task;
@@ -98,6 +100,7 @@ pub use self::{
   project_settings::ProjectSettingsTab,
   screen::Screen,
   secrets::{SecretsPanel, SecretsView},
+  services::ServicesPage,
   skills::SkillsFilter,
   table::routes,
   task::{ChangeSource, ChangedFile, TaskTab, TaskView},

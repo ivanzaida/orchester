@@ -4,20 +4,20 @@
 use std::{path::Path, sync::Arc};
 
 use orchester_core::{
-  connection::stream::{AgentEvent, QaSlotHolder, RunnerProblem},
+  connection::stream::{QaSlotHolder, RunnerProblem},
   id::{InvocationId, RunId, StepExecutionId},
   orchester_tools::qa_name,
-  store::ActivityStore,
-  time::Timestamp,
 };
-use orchester_ipc::Event;
-use orchester_store::{ActivityRecord, ProjectDb, StoreError};
 use parking_lot::Mutex;
 
 use super::StepQa;
 use crate::execution::{
   Notifier,
-  executor::{run::RunTask, sink::Sink, step::start::problem},
+  executor::{
+    run::RunTask,
+    sink::Sink,
+    step::{runner_note, start::problem},
+  },
 };
 
 impl RunTask {
@@ -60,21 +60,6 @@ fn say_waiting(
   holders: Vec<QaSlotHolder>,
   notifier: &Notifier,
 ) {
-  let noted = || -> Result<Option<u64>, StoreError> {
-    let db = ProjectDb::open(root)?;
-    let Some(invocation) = db.invocations(run)?.into_iter().find(|found| found.id == invocation) else {
-      return Ok(None);
-    };
-    let note = AgentEvent::RunnerProblem {
-      problem: RunnerProblem::WaitingForQaSlot { holders },
-    };
-    sink
-      .activity(ActivityRecord::new(&invocation, vec![(Timestamp::now(), note)]))
-      .map(Some)
-  };
-  match noted() {
-    Ok(Some(sequence)) => notifier.send(Event::AgentActivity { run, sequence }),
-    Ok(None) => tracing::warn!(%run, %invocation, "the invocation waiting for a QA slot is not recorded"),
-    Err(error) => tracing::warn!(%run, %error, "the wait for a QA slot was not noted in the transcript"),
-  }
+  let problem = RunnerProblem::WaitingForQaSlot { holders };
+  runner_note::note((root, sink), (run, invocation), problem, notifier);
 }

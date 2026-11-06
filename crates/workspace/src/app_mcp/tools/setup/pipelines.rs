@@ -333,6 +333,7 @@ fn step_json(step: &Step, body: &Pipeline, assignables: &Assignables) -> Value {
     StepKind::Tool { tool } => json!({
       "tool": tool.map(|id| named(id, assignables.tool(id).map(|choice| &*choice.name))),
     }),
+    StepKind::Test => json!({ "tests": true }),
   };
   if let (Value::Object(step), Value::Object(executor)) = (&mut value, executor) {
     step.extend(executor);

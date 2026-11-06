@@ -2943,6 +2943,8 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.20",
  "tracing",
+ "win32job",
+ "windows 0.62.2",
  "windows-sys 0.61.2",
 ]
 
@@ -3025,6 +3027,7 @@ dependencies = [
  "orchester-vault",
  "orchester-workspace",
  "parking_lot",
+ "regex",
  "reqwest",
  "rusqlite",
  "rustls",
@@ -3037,6 +3040,7 @@ dependencies = [
  "tokio-tungstenite",
  "tracing",
  "tracing-subscriber",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

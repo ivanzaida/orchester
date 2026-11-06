@@ -46,6 +46,9 @@ mod review_page;
 mod reviewer_rows;
 mod run_context;
 mod run_model;
+mod run_services;
+mod service_cards;
+mod services;
 pub mod settings;
 mod shared_config;
 mod shared_here;
@@ -53,6 +56,7 @@ mod side_question;
 mod slot_wait;
 mod sources;
 mod storage;
+mod summary_tests;
 mod task_merge_card;
 mod task_merge_row;
 mod task_states;
@@ -109,7 +113,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 159] = [
+pub const ALL: [Scenario; 164] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -138,6 +142,7 @@ pub const ALL: [Scenario; 159] = [
   Scenario::of("memory-only", tasks_memory::alone),
   Scenario::of("memory", memory::seed),
   Scenario::of("task-states", task_states::seed),
+  Scenario::of("summary-tests", summary_tests::seed),
   Scenario::of("conversation", conversation::seed),
   Scenario::of("conversation-context-plenty", run_context::plenty),
   Scenario::of("conversation-context-near-full", run_context::near_full),
@@ -223,6 +228,10 @@ pub const ALL: [Scenario; 159] = [
   Scenario::of("pull-request-feedback", pull_requests::feedback::seed),
   Scenario::of("sources", sources::seed),
   Scenario::of("sources-unreadable", sources::unreadable),
+  Scenario::of("services", services::seed),
+  Scenario::with_fake_codex("run-services", run_services::seed),
+  Scenario::with_fake_codex("run-services-approve", run_services::approve),
+  Scenario::of("service-cards", service_cards::seed),
   Scenario::of("usage", usage::seed),
   Scenario::of("usage-empty", usage::no_runs_today),
   Scenario::of("usage-bare", usage::bare),

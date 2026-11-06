@@ -148,6 +148,7 @@ pub fn tool_notice(ctx: &Ctx, props: &Props) -> Option<Element> {
 fn runs_on(ctx: &mut Ctx, props: &Props) -> Option<std::sync::Arc<str>> {
   let id = match props.step.kind {
     StepKind::Tool { .. } => return Some(ctx.t("pipelines.toolBadge")),
+    StepKind::Test => return Some(ctx.t("pipelines.testsBadge")),
     StepKind::Agent { profile: Some(id), .. } => id,
     StepKind::Agent { profile: None, .. } => return None,
   };
@@ -260,6 +261,9 @@ pub(super) fn unavailable_tool(props: &Props) -> Option<orchester_workspace::pip
 /// which its menu lists as *From the profile*.
 pub fn model(ctx: &Ctx, props: &Props, value: &Signal<ModelChoice>) -> Option<GroupRow> {
   let row = GroupRow::new("step-model-row", ctx.t("pipelines.model"));
+  if matches!(props.step.kind, StepKind::Test) {
+    return None;
+  }
   if matches!(props.step.kind, StepKind::Tool { .. }) {
     unavailable_tool(props)?;
     let unused = Signal::new(false);
@@ -277,7 +281,7 @@ pub fn model(ctx: &Ctx, props: &Props, value: &Signal<ModelChoice>) -> Option<Gr
   let draft = draft_profile(props);
   let published_model = match props.step.kind {
     StepKind::Agent { profile: Some(id), .. } => editing.opened.assignables.profile(id).map(|p| p.model.clone()),
-    StepKind::Agent { profile: None, .. } | StepKind::Tool { .. } => None,
+    StepKind::Agent { profile: None, .. } | StepKind::Tool { .. } | StepKind::Test => None,
   };
   let profile_model = draft.as_ref().map(|p| p.model.clone()).or(published_model);
   let inherited = draft

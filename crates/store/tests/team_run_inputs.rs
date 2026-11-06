@@ -427,7 +427,7 @@ fn local_inputs(db: &ProjectDb, snapshot: &RunSnapshot) -> RunInputs {
     .iter()
     .filter_map(|step| match step.executor() {
       StepExecutor::Agent { profile, .. } => Some(*profile),
-      StepExecutor::Tool { .. } => None,
+      StepExecutor::Tool { .. } | StepExecutor::Test => None,
     })
     .collect();
   let versions: Vec<_> = profiles

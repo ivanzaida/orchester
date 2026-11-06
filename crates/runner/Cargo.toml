@@ -32,6 +32,12 @@ name = "orchester-test-command"
 path = "tests/support/test_command.rs"
 required-features = ["test-agent"]
 
+# A small native window the native UI driver's tests drive (Windows only).
+[[bin]]
+name = "orchester-test-window"
+path = "tests/support/test_window.rs"
+required-features = ["test-agent"]
+
 [[test]]
 name = "execution"
 required-features = ["test-agent"]
@@ -372,6 +378,38 @@ name = "qa_app_slots"
 required-features = ["test-agent"]
 
 [[test]]
+name = "qa_service"
+required-features = ["test-agent"]
+
+[[test]]
+name = "services"
+required-features = ["test-agent"]
+
+[[test]]
+name = "service_needs"
+required-features = ["test-agent"]
+
+[[test]]
+name = "service_seeds"
+required-features = ["test-agent"]
+
+[[test]]
+name = "service_data"
+required-features = ["test-agent"]
+
+[[test]]
+name = "run_services"
+required-features = ["test-agent"]
+
+[[test]]
+name = "run_tests"
+required-features = ["test-agent"]
+
+[[test]]
+name = "test_step"
+required-features = ["test-agent"]
+
+[[test]]
 name = "db_contention"
 required-features = ["test-agent"]
 
@@ -389,6 +427,10 @@ required-features = ["test-agent"]
 
 [[test]]
 name = "disk_guard"
+required-features = ["test-agent"]
+
+[[test]]
+name = "native_ui"
 required-features = ["test-agent"]
 
 [[test]]
@@ -438,6 +480,8 @@ parking_lot.workspace = true
 # The requests and answers of the coordinator link (`execution::link`), plain values that serialize.
 serde.workspace = true
 serde_json.workspace = true
+# The log line a service's readiness waits for (`execution::step::service`), as core checks the pattern.
+regex.workspace = true
 # The run app relay uses a bounded loopback HTTP client and decodes/re-encodes PNGs without metadata.
 reqwest = { workspace = true, features = ["blocking"] }
 # Also the ring crypto provider the error reports' reqwest client takes (`error_reports`).
@@ -456,6 +500,11 @@ tokio-tungstenite.workspace = true
 futures-util.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+# The Win32 window and controls of the native UI driver's fixture (`orchester-test-window`, built only with
+# `test-agent`; a program cannot take a dev-dependency). Already built for `orchester-exec`, so it adds no crate.
+windows-sys = { workspace = true, features = ["Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_UI_WindowsAndMessaging"] }
 
 [dev-dependencies]
 # The team start tests (`tests/team_start.rs`): the desktop's start through a fake team server into this runner, with

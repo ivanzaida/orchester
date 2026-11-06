@@ -10,7 +10,7 @@ use std::{
 };
 
 use base64::{Engine, engine::general_purpose::STANDARD};
-use image::{ImageFormat, ImageReader};
+use image::{DynamicImage, ImageFormat, ImageReader, RgbaImage};
 use orchester_agent::files::image::decoding_limits;
 use serde_json::{Value, json};
 
@@ -47,6 +47,20 @@ fn save_png(artifacts: &Path, block: &Value) -> Result<String, AppError> {
   let mut reader = ImageReader::with_format(Cursor::new(bytes), ImageFormat::Png);
   reader.limits(decoding_limits());
   let image = reader.decode().map_err(|_| AppError::Image)?;
+  keep(artifacts, &image)
+}
+
+/// Saves `rgba`, `width` × `height` pixels row by row from the top, as a PNG in the screenshots of the run's storage
+/// `artifacts`, as an app's screenshot is (a UI driver's own capture); its absolute path, with `/`.
+pub(in crate::execution::executor::step) fn save_pixels(
+  artifacts: &Path,
+  (width, height, rgba): (u32, u32, Vec<u8>),
+) -> Result<String, String> {
+  let image = RgbaImage::from_raw(width, height, rgba).ok_or_else(|| AppError::Image.to_string())?;
+  keep(artifacts, &DynamicImage::ImageRgba8(image)).map_err(|error| error.to_string())
+}
+
+fn keep(artifacts: &Path, image: &DynamicImage) -> Result<String, AppError> {
   let folder = output_folder(artifacts)?;
   let mut file = tempfile::Builder::new()
     .prefix("app-")

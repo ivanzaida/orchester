@@ -372,7 +372,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "update_project_limits",
-    description: "Changes a project's limits as Project settings › Runs › Limits does: the default run budget and default time limit in minutes (no maximum; null for no limit), the daily token budget, how many agents work at once (1 to 16, applied at once by the project's runner) and how many QA apps its runs may have open at once (1 to 16, from the next start_qa_app). Limits left out stay as they are; invalid ones are refused with why. Raising or removing the daily budget lets runs it stopped go on, so it is refused as automation_not_allowed unless a person turned on Let automation answer approvals. Returns the limits as saved, null for no limit.",
+    description: "Changes a project's limits as Project settings › Runs › Limits does: the default run budget and default time limit in minutes (no maximum; null for no limit), the daily token budget, how many agents work at once (1 to 16, applied at once by the project's runner), how many QA apps its runs may have open at once (1 to 16, from the next start_qa_app) and its share of Services at once (service_slots, 1 to the computer's limit, from the next start). It also sets the computer's Services at once for every project (computer_service_slots, 1 to 32). Limits left out stay as they are; invalid ones are refused with why. Raising or removing the daily budget lets runs it stopped go on, so it is refused as automation_not_allowed unless a person turned on Let automation answer approvals. Returns the limits as saved, null for no limit.",
     schema: schema_for_type::<limits::UpdateProjectLimits>,
     read_only: false,
   },

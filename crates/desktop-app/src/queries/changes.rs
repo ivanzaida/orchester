@@ -46,6 +46,8 @@ pub enum AppRead {
   /// What automation may do and whether agents control the window, every consent.
   Automation,
   Accounts,
+  /// The computer's *Services at once*, which Settings › General and every project's Runs › Limits show.
+  ServiceSlots,
 }
 
 /// What a project's runs starting, ending or changing state touches: the project's settings, whose rules *Approve for
@@ -92,6 +94,7 @@ pub const fn app_touched(kind: AppOutside) -> &'static [AppRead] {
     AppOutside::DailyReport => &[AppRead::DailyReport],
     AppOutside::Browser => &[AppRead::Browser],
     AppOutside::Automation => &[AppRead::Automation],
+    AppOutside::ServiceSlots => &[AppRead::ServiceSlots],
   }
 }
 
@@ -114,12 +117,13 @@ pub const OUTSIDE: [Outside; 14] = [
 ];
 
 /// Every application setting's change, for following them all.
-pub const APP_OUTSIDE: [AppOutside; 5] = [
+pub const APP_OUTSIDE: [AppOutside; 6] = [
   AppOutside::UsageThreshold,
   AppOutside::ErrorReports,
   AppOutside::DailyReport,
   AppOutside::Browser,
   AppOutside::Automation,
+  AppOutside::ServiceSlots,
 ];
 
 /// Invalidates the project at `root`'s query `read`: an entry a tab or the project's loader shows reads again behind
@@ -160,5 +164,6 @@ pub fn invalidate_app(client: &QueryClient, session: &Session, read: AppRead) {
       }
     }
     AppRead::Accounts => client.invalidate(app::agent_accounts(session)),
+    AppRead::ServiceSlots => client.invalidate(app::service_slots(session)),
   }
 }
