@@ -98,7 +98,7 @@ fn orchestrator_slash_lists_the_chats_commands_and_runs_history_by_keyboard() {
     screen.exists(HISTORY) && !screen.exists(NEW)
   });
   let shown = screen.text(MENU);
-  assert!(shown.contains("1 of 2"), "{shown}");
+  assert!(shown.contains("1 of 6"), "{shown}");
   assert!(shown.contains("/hist"), "{shown}");
   screen.key(("Enter", "Enter"), false);
   screen.until("History open", |screen| {
@@ -181,6 +181,41 @@ fn orchestrator_slash_menu_opens_over_the_box() {
     (boxed.y - (menu.y + menu.height) - 8.0).abs() < 0.5,
     "{menu:?} {boxed:?}"
   );
+}
+
+/// The watch commands after `/wa` (ORC-771, `01 · Watch commands` `h1KHAx`): *Watch modules*, *Watch tasks*, *Stop
+/// watching* and *What I watch*, the typed letters in bold. Until their pickers exist the first two are faded with
+/// why; the last two are faded while the conversation watches nothing. None takes the focus or a press.
+#[test]
+fn orchestrator_slash_offers_the_watch_commands_faded_while_nothing_is_watched() {
+  let mut screen = on_a_conversation();
+  write(&mut screen, "/wa");
+  let row = |name: &str| format!("orchestrator-composer-slash-{name}");
+  screen.until("the watch commands", |screen| screen.exists(&row("watching")));
+  let shown = screen.text(MENU);
+  assert!(shown.contains("4 of 6"), "{shown}");
+  assert!(!screen.exists(NEW) && !screen.exists(HISTORY), "{shown}");
+  let rows = [
+    ("watch-module", "Watch modules", "Not available in this version yet"),
+    ("watch-task", "Watch tasks", "Not available in this version yet"),
+    ("unwatch", "Stop watching", "Watches nothing yet"),
+    ("watching", "What I watch", "Watches nothing yet"),
+  ];
+  let mut tops = Vec::new();
+  for (name, label, why) in rows {
+    let words = screen.text(&row(name)).replace('\u{a0}', " ");
+    assert!(words.contains(why), "{name}: {words}");
+    assert!(
+      words.replace(' ', "").contains(&label.replace(' ', "")),
+      "{name}: {words}"
+    );
+    assert!(!words.contains("Enter"), "{name} cannot take the focus: {words}");
+    tops.push(screen.bounds(&row(name)).y);
+  }
+  assert!(tops.windows(2).all(|pair| pair[0] < pair[1]), "in 01's order: {tops:?}");
+  screen.click(&row("unwatch"));
+  assert!(screen.exists(MENU), "a faded command does nothing");
+  assert_eq!(draft(&mut screen), "/wa");
 }
 
 /// The project's skills (ORC-325): `release-notes` published, `draft-only` never published.

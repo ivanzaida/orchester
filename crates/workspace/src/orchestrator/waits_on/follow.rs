@@ -120,7 +120,8 @@ fn runs_of(db: &ProjectDb, task: TaskId) -> Result<Vec<RunId>, StoreError> {
 
 /// Whether `run` still waits for a message or a decision on its plan.
 fn waits_for_person(run: &Run) -> bool {
-  !run.status().is_terminal() && !(run.awaiting_answer().is_empty() && run.awaiting_plan().is_empty())
+  let waits = !run.awaiting_answer().is_empty() || !run.awaiting_plan().is_empty();
+  waits && !run.status().is_terminal()
 }
 
 /// Whether a person, or the Orchestrator for them, sent `run` a message among `messages` at `since` or after.

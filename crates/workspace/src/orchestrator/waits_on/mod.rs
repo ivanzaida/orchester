@@ -136,7 +136,7 @@ fn keep_in(db: &mut ProjectDb, scope: &ChatScope, asked: &WaitOnTask) -> Result<
     .task(run.task())?
     .ok_or_else(|| ToolError::not_found(Missing::Task, run.task().to_string()))?;
   let waited = waited_task(db, &asked.task)?;
-  let refused = |error: WaitsOnError| refusal(db, error, number);
+  let refused = |error: WaitsOnError| refusal(db, &error, number);
   let waits_for = waits_for(&run).ok_or_else(|| refused(WaitsOnError::NotWaitingForPerson))?;
   let base = run.base_branch().cloned().ok_or_else(|| {
     ToolError::refused(
@@ -156,7 +156,7 @@ fn keep_in(db: &mut ProjectDb, scope: &ChatScope, asked: &WaitOnTask) -> Result<
   let kept = db.keep_run_wait(&wait, Timestamp::now());
   match kept {
     Ok(()) => {}
-    Err(StoreError::RunWaitsOn(error)) => return Err(refusal(db, error, number)),
+    Err(StoreError::RunWaitsOn(error)) => return Err(refusal(db, &error, number)),
     Err(error) => return Err(error.into()),
   }
   Ok(Kept {
@@ -177,7 +177,7 @@ fn waited_task(db: &ProjectDb, named: &str) -> Result<Task, ToolError> {
     Err(missing) => missing,
   };
   match named.to_uppercase().parse::<TaskKey>() {
-    Ok(key) if key.project() != db.project().key() => Err(refusal(db, WaitsOnError::OtherProject, 0)),
+    Ok(key) if key.project() != db.project().key() => Err(refusal(db, &WaitsOnError::OtherProject, 0)),
     _ => Err(missing),
   }
 }
@@ -195,8 +195,8 @@ fn waits_for(run: &Run) -> Option<WaitReason> {
 }
 
 /// Why run `#number` cannot wait on the task, with a stable code.
-fn refusal(db: &ProjectDb, error: WaitsOnError, number: u32) -> ToolError {
-  let (code, message) = match error {
+fn refusal(db: &ProjectDb, error: &WaitsOnError, number: u32) -> ToolError {
+  let (code, message) = match *error {
     WaitsOnError::OwnTask => ("own_task", Message::new("orchestrator.waitsOn.ownTask")),
     WaitsOnError::OtherProject => ("other_project", Message::new("orchestrator.waitsOn.otherProject")),
     WaitsOnError::NotWaitingForPerson => (

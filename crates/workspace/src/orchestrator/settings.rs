@@ -13,7 +13,7 @@ use orchester_core::{
   store::ConnectionStore,
   time::Timestamp,
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, StoreError};
 
 use super::runs_on::RunsOn;
 use crate::{
@@ -245,6 +245,12 @@ pub fn save_watch_in(root: &Path, watch: &WatchSettings) -> Result<(), Message> 
   let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
   db.save_orchestrator_watch(watch)
     .map_err(|error| messages::store_error(&error))
+}
+
+/// How the Orchestrator watches the runs of the project at `root`, alone, as Project settings › Orchestrator shows
+/// it. Blocks on SQLite.
+pub fn watch_in(root: &Path) -> Result<WatchSettings, StoreError> {
+  ProjectDb::open(root)?.orchestrator_watch()
 }
 
 /// Why the Orchestrator cannot run on `connection`: not on a provider it does not run on. A connection on an API

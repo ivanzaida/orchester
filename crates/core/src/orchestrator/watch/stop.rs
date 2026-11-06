@@ -1,10 +1,13 @@
 //! A person's stop of a subscription (× or /unwatch) ends it at once and cancels and pauses nothing: the runs of its
 //! tasks go on as they are. The stop line lists what was left open, read here from the phases of those tasks.
 
+use serde::{Deserialize, Serialize};
+
 use crate::{id::TaskId, run::TaskPhase};
 
 /// Work of a task a stop leaves open, as the stop line names it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum OpenWork {
   /// Its run waits for a person: a step waits, or the run does.
   Waits,
