@@ -14,6 +14,7 @@ pub mod chat;
 pub mod compact;
 mod created;
 mod duplicate;
+mod events;
 pub mod facts;
 pub mod fork;
 pub mod git;
