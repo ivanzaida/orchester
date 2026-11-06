@@ -1,6 +1,6 @@
 use super::{
   ADD_PROJECT, CONNECTIONS, EDIT, FIRST_DOWNLOAD, IMPORT, MODULES, NEW, ORCHESTRATOR, PROJECT_PATTERN, PULL_REQUESTS,
-  SETTINGS, TASKS, files::FILES, join_team, project_screen_path,
+  REVIEW, SETTINGS, TASKS, files::FILES, join_team, project_screen_path,
 };
 
 /// A screen of the window, as the sidebar, the tabs and the app's MCP tools name it.
@@ -22,9 +22,12 @@ pub enum Screen {
   Task,
   /// The Modules list and a module's page.
   Modules,
+  /// Review (`Review - v2` `j1Drb`): the tasks whose run finished, and a task's review.
+  Review,
+  /// The Merge queue, a tab of Review before Review was rebuilt; reached by its route until its own task removes it.
   MergeQueue,
   PullRequests,
-  /// The Review hub's Merges: every merge attempt into the project's base branches (ORC-362).
+  /// Merges, a tab of Review before Review was rebuilt: every merge attempt into the project's base branches (ORC-362).
   Merges,
   Usage,
   Pipelines,
@@ -45,7 +48,7 @@ pub enum Screen {
 }
 
 impl Screen {
-  pub const ALL: [Self; 30] = [
+  pub const ALL: [Self; 31] = [
     Self::AllProjects,
     Self::AddProject,
     Self::JoinTeam,
@@ -59,6 +62,7 @@ impl Screen {
     Self::EditTask,
     Self::Task,
     Self::Modules,
+    Self::Review,
     Self::MergeQueue,
     Self::PullRequests,
     Self::Merges,
@@ -79,13 +83,12 @@ impl Screen {
   ];
   /// The project's screens the sidebar lists first (`Nav · Overview` … `Nav · Usage` in `q9mf0k`), Modules under
   /// Tasks (ORC-48, no frame yet), and Files under Usage (`Nav · Files` `E0b2rn` in `o1Uea4`).
-  pub const PROJECT_MAIN: [Self; 8] = [
+  pub const PROJECT_MAIN: [Self; 7] = [
     Self::Overview,
     Self::Orchestrator,
     Self::Tasks,
     Self::Modules,
-    Self::MergeQueue,
-    Self::PullRequests,
+    Self::Review,
     Self::Usage,
     Self::Files,
   ];
@@ -115,6 +118,7 @@ impl Screen {
       Self::EditTask => "edit_task",
       Self::Task => "task",
       Self::Modules => "modules",
+      Self::Review => "review",
       Self::MergeQueue => "merge_queue",
       Self::PullRequests => "pull_requests",
       Self::Merges => "merges",
@@ -155,6 +159,7 @@ impl Screen {
       Self::EditTask => "shell.screens.editTask",
       Self::Task => "shell.screens.task",
       Self::Modules => "shell.screens.modules",
+      Self::Review => "shell.screens.review",
       Self::MergeQueue => "shell.screens.mergeQueue",
       Self::PullRequests => "shell.screens.pullRequests",
       Self::Merges => "shell.screens.merges",
@@ -194,6 +199,7 @@ impl Screen {
       Self::Orchestrator => Some(ORCHESTRATOR),
       Self::Tasks => Some(TASKS),
       Self::Modules => Some(MODULES),
+      Self::Review => Some(REVIEW),
       Self::MergeQueue => Some("merge-queue"),
       Self::PullRequests => Some(PULL_REQUESTS),
       Self::Merges => Some("merges"),

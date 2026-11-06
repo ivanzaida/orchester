@@ -16,8 +16,8 @@ use orchester_workspace::{
 use super::{
   AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, IMPORT, ImportTab, InstructionsView, JoinTarget, MODULES,
   MemoryTab, ModuleListTab, ModuleTab, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab, PULL_REQUESTS,
-  PipelineView, ProjectSettingsTab, RouteError, SETTINGS, Screen, SecretsView, SkillsFilter, TAB, TASKS, TaskList,
-  TaskView, ToolTab,
+  PipelineView, ProjectSettingsTab, REVIEW, RouteError, SETTINGS, Screen, SecretsView, SkillsFilter, TAB, TASKS,
+  TaskList, TaskView, ToolTab,
   files::FILES,
   modules, project_screen_path,
   query::{Params, with_query},
@@ -58,10 +58,16 @@ pub enum ProjectPage {
   /// A module's page on its tab: its Summary with its tasks, or its burndown.
   Module(ModuleId, ModuleTab),
   EditModule(ModuleId),
+  /// Review: the tasks whose run finished (`/review`).
+  Review,
+  /// A task's review, by its key (`/review/KON-12`).
+  TaskReview(TaskKey),
+  /// The Merge queue, a tab of Review before Review was rebuilt.
   MergeQueue,
   /// The Pull requests page on its tab.
   PullRequests(PullRequestTab),
-  /// The Review hub's Merges: the runs not merged, those waiting for review and the merged ones by day.
+  /// Merges, a tab of Review before Review was rebuilt: the runs not merged, those waiting for review and the merged
+  /// ones by day.
   Merges,
   /// One run's merge attempts, under Merges, by its task's key and its number (`/merges/KON-12/8`).
   MergeAttempt(TaskKey, RunNumber),
@@ -160,6 +166,7 @@ impl ProjectPage {
       Screen::Tasks => Self::Tasks(TaskList::default()),
       Screen::NewTask => Self::NewTask,
       Screen::Modules => Self::Modules(ModuleListTab::default()),
+      Screen::Review => Self::Review,
       Screen::MergeQueue => Self::MergeQueue,
       Screen::PullRequests => Self::PullRequests(PullRequestTab::default()),
       Screen::Merges => Self::Merges,
@@ -189,6 +196,7 @@ impl ProjectPage {
       Self::EditTask(_) => Screen::EditTask,
       Self::Task(..) | Self::KeptTask(..) => Screen::Task,
       Self::Modules(_) | Self::NewModule | Self::Module(..) | Self::EditModule(_) => Screen::Modules,
+      Self::Review | Self::TaskReview(_) => Screen::Review,
       Self::MergeQueue => Screen::MergeQueue,
       Self::Merges | Self::MergeAttempt(..) => Screen::Merges,
       Self::PullRequests(_) | Self::PullRequest(..) | Self::PullRequestFeedback(..) => Screen::PullRequests,
@@ -281,6 +289,7 @@ impl ProjectPage {
       Self::Files(view) => view.path(format!("{project_root}/{FILES}")),
       Self::Import(tab) => with_query(segment(Screen::ImportResources), &[tab.param()]),
       Self::MergeAttempt(key, number) => format!("{}/{key}/{}", segment(Screen::Merges), number.get()),
+      Self::TaskReview(key) => format!("{}/{key}", segment(Screen::Review)),
       Self::MakeLocal | Self::ProjectRules | Self::Storage | Self::Join(_) => {
         self.settings_path(segment(Screen::ProjectSettings))
       }
@@ -364,6 +373,7 @@ impl ProjectPage {
       [FILES, file @ ..] => FilesView::parse(file, params).map(Self::Files),
       [CONNECTIONS, id, EDIT] => id.parse().map(Self::EditConnection).map_err(|_| RouteError::NoScreen),
       [MODULES, rest @ ..] => modules::parse(rest, params),
+      [REVIEW, key] => task_key(key).map(Self::TaskReview),
       ["merges", key, number] => {
         let number = number.parse::<NonZeroU32>().map_err(|_| RouteError::NoScreen)?;
         Ok(Self::MergeAttempt(task_key(key)?, RunNumber::new(number)))

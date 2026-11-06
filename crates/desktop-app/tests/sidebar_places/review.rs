@@ -1,6 +1,6 @@
-//! The Review hub (`Hub pages` `ZRBS5`): the Merge queue and the Pull requests as its tabs, each its own route, so
-//! a press on a tab is a step of the tab's history that Back and Forward retrace, and Review stays selected in the
-//! sidebar on both.
+//! Review (`Review - v2` `j1Drb`): the sidebar's entry opens its list at `/review`, with Back and Forward, and stays
+//! selected on a task's review and on the pages that were its tabs before (the Merge queue, the Pull requests, the
+//! Merges), which keep their own routes and no longer have a hub's head or tabs.
 
 use orchester_app::routes::{ProjectPage, Route};
 
@@ -10,43 +10,58 @@ use super::{
 };
 
 #[test]
-fn sidebar_review_hub_tabs_keep_their_own_routes() {
+fn sidebar_review_opens_its_list_and_history_retraces_it() {
   let mut window = Window::open();
   let navigation = window.navigation();
-  navigation.go(overview(project_id()));
+  let project = project_id();
+  navigation.go(overview(project));
   window.until("the project to open", |window| window.texts("nav-review").is_some());
   window.press("nav-review");
-  let queue = Route::Project(project_id(), ProjectPage::MergeQueue);
-  window.until("the Review hub", |window| window.texts("review-hub").is_some());
-  assert_eq!(navigation.route_now(), queue, "Review opens on its Merge queue");
-  assert_eq!(window.text("review-hub-title"), "Review");
-  let tabs = window.texts("review-hub-tabs").expect("the hub's tabs");
-  assert!(
-    tabs.first().is_some_and(|tab| tab == "Merge queue") && tabs.iter().any(|tab| tab == "Pull requests"),
-    "{tabs:?}"
-  );
-  assert!(
-    window.texts("screen-merge_queue").is_some(),
-    "the Merge queue under the tabs"
-  );
-  window.press("review-hub-tab-pull_requests");
-  let requests = Route::Project(project_id(), ProjectPage::PullRequests(Default::default()));
-  window.until("the Pull requests tab", |window| {
-    window.texts("screen-pull_requests").is_some()
-  });
-  assert_eq!(navigation.route_now(), requests);
-  assert!(selected(&mut window, "nav-review"), "Review stays selected on its tabs");
-  navigation.back();
-  window.until("Back to the Merge queue", |window| {
-    window.texts("screen-merge_queue").is_some()
-  });
-  assert_eq!(navigation.route_now(), queue);
+  let list = Route::Project(project, ProjectPage::Review);
+  window.until("Review", |window| window.texts("screen-review").is_some());
+  assert_eq!(navigation.route_now(), list, "Review opens its list");
   assert!(selected(&mut window, "nav-review"));
+  assert!(
+    window.texts("review-hub").is_none() && window.texts("review-hub-tabs").is_none(),
+    "Review is no hub of tabs"
+  );
+  let task = Route::parse(&format!("{}/KON-12", list.path())).expect("a task's review path reads");
+  navigation.go(task.clone());
+  window.until("a task's review", |window| {
+    window
+      .texts("screen-review")
+      .is_some_and(|texts| texts[0].contains("KON-12"))
+  });
+  assert!(
+    selected(&mut window, "nav-review"),
+    "Review stays selected on a task's review"
+  );
+  navigation.back();
+  window.until("Back to the list", |window| {
+    window
+      .texts("screen-review")
+      .is_some_and(|texts| !texts[0].contains("KON-12"))
+  });
+  assert_eq!(navigation.route_now(), list);
   navigation.forward();
   window.pass();
-  assert_eq!(navigation.route_now(), requests, "Forward returns to the tab");
-  // A link to a tab lands on it, in the hub.
-  navigation.go(Route::parse(&queue.path()).expect("the tab's path reads"));
-  window.until("the linked tab", |window| window.texts("screen-merge_queue").is_some());
-  assert!(window.texts("review-hub").is_some());
+  assert_eq!(navigation.route_now(), task, "Forward returns to the task's review");
+}
+
+#[test]
+fn sidebar_review_stays_selected_on_the_pages_that_were_its_tabs() {
+  let mut window = Window::open();
+  let navigation = window.navigation();
+  let project = project_id();
+  navigation.go(overview(project));
+  window.until("the project to open", |window| window.texts("nav-review").is_some());
+  for (page, screen) in [
+    (ProjectPage::MergeQueue, "screen-merge_queue"),
+    (ProjectPage::PullRequests(Default::default()), "screen-pull_requests"),
+  ] {
+    navigation.go(Route::Project(project, page));
+    window.until(screen, |window| window.texts(screen).is_some());
+    assert!(selected(&mut window, "nav-review"), "{screen}");
+    assert!(window.texts("review-hub").is_none(), "{screen} has no hub around it");
+  }
 }

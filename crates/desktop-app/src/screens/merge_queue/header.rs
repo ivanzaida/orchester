@@ -1,8 +1,7 @@
-//! The head of the Merge queue screen (`Info` `IqFXZ` in 05 `S1pTL`): what the queue does — the Review hub's head and
-//! tab name the page (`screens::review`) — and at its end how the person's checkout stands: a 6 dot (`success` while
-//! it keeps no lane out, `warning` otherwise), *Checkout*, the branch it has and whether it is clean. Its path is in
-//! the blocked notice. Under it, while delivery is blocked, the notice that says why with *Open folder* and *Retry*
-//! (`mM0HY`).
+//! The head of the Merge queue screen (`Info` `IqFXZ` in 05 `S1pTL`): what the queue does, and at its end how the
+//! person's checkout stands: a 6 dot (`success` while it keeps no lane out, `warning` otherwise), *Checkout*, the
+//! branch it has and whether it is clean. Its path is in the blocked notice. Under it, while delivery is blocked, the
+//! notice that says why with *Open folder* and *Retry* (`mM0HY`).
 
 use std::{path::Path, sync::Arc};
 

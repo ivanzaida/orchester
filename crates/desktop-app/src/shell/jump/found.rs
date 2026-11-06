@@ -253,7 +253,8 @@ fn places(ctx: &Ctx, project: ProjectId) -> Vec<Entry> {
     .collect()
 }
 
-/// The Review hub's and the Agents hub's tabs. The Overview has no tabs: it shows every section on one page.
+/// The Merge queue, Pull requests and Merges, which Review no longer lists as tabs, and the Agents hub's tabs. The
+/// Overview has no tabs: it shows every section on one page.
 fn hub_tabs(ctx: &Ctx, project: ProjectId) -> Vec<Entry> {
   let at = |page: ProjectPage| Target::Route(Route::Project(project, page));
   let review = word(ctx, "shell.screens.review");
