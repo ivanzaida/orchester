@@ -35,14 +35,21 @@ use orchester_workspace::{
   activity::Activity,
   app_mcp::{self, ToolError, Translate},
   orchestrator::{
+    chat::ChatView,
     tools::{self, ChatScope},
     waits::{Followed, Switches, check_merges_in, follow_in},
+    waits_on::{
+      dropping::drop_wait,
+      view::{Unmet, WaitState},
+    },
   },
   runner::Runners,
   secrets::Vault,
   sharing::Servers,
-  tasks::{integration_jobs::ProjectJobs, outside::OutsideChanges},
-  workspace::Workspace,
+  tasks::{
+    conversation::follow::Sent, detail::TaskDetail, integration_jobs::ProjectJobs, outside::OutsideChanges,
+  },
+  workspace::{OpenProject, Workspace},
 };
 use serde_json::{Value, json};
 use support::{Fixture, at};
@@ -71,6 +78,8 @@ struct Desktop {
   fixture: Fixture,
   services: app_mcp::Services,
   runners: Runners,
+  servers: Servers,
+  open: OpenProject,
   runtime: Runtime,
   scope: ChatScope,
   _data: TempDir,
@@ -82,7 +91,7 @@ impl Desktop {
     ready(&mut fixture);
     let data = TempDir::new().expect("application data");
     let workspace = Workspace::new(AppDb::open(&data.path().join("orchester.db")).expect("database"));
-    workspace.open(fixture.repo.path()).expect("register the project");
+    let open = workspace.open(fixture.repo.path()).expect("register the project");
     let runtime = Runtime::new().expect("runtime");
     let runners = Runners::new(
       fixture.repo.path().join("no-runner"),
@@ -95,7 +104,7 @@ impl Desktop {
     let services = app_mcp::Services::new(
       workspace,
       runners.clone(),
-      servers,
+      servers.clone(),
       Programs::processes(),
       (OutsideChanges::default(), Activity::new(), ProjectJobs::default()),
     );
@@ -111,10 +120,29 @@ impl Desktop {
       fixture,
       services,
       runners,
+      servers,
+      open,
       runtime,
       scope,
       _data: data,
     }
+  }
+
+  /// How `run`'s wait stands, as the conversation's *waits on* row reads it.
+  fn standing(&self) -> Vec<(RunId, WaitState)> {
+    let shown = ChatView::load_in(self.fixture.repo.path(), self.scope.chat)
+      .expect("read")
+      .expect("kept");
+    let mut waits: Vec<(RunId, WaitState)> = shown.waits_on.values().map(|wait| (wait.run, wait.state)).collect();
+    waits.sort_by_key(|(run, _)| run.to_string());
+    waits
+  }
+
+  /// The person presses *Drop the wait* of `run`.
+  fn drop_wait(&self, run: RunId) -> Result<Option<Sent>, orchester_workspace::messages::Message> {
+    self
+      .runtime
+      .block_on(drop_wait((&self.runners, &self.servers), &self.open, run))
   }
 
   fn db(&self) -> ProjectDb {
@@ -433,4 +461,45 @@ fn wait_on_task_answered_by_the_person_ends_the_wait_without_an_event() {
   desktop.merged_into(limiter, "main");
   desktop.follow(true);
   assert!(desktop.events().is_empty(), "the wait had ended");
+}
+
+/// ORC-784: the row and the task page read how the wait stands: it waits, then the waited task is canceled and nothing
+/// will end it but the person, who drops it; the run's agent is told, and a second drop is refused.
+#[test]
+fn wait_on_task_stands_until_the_person_drops_a_wait_that_cannot_be_met() {
+  let mut desktop = Desktop::new();
+  let (task, run) = desktop.waiting("Retry failed deliveries");
+  let limiter = desktop.fixture.task("Shared rate limiter", at(41));
+  desktop.wait_on(&desktop.scope, run.id(), "ORC-2").expect("waits");
+  assert_eq!(desktop.standing(), vec![(run.id(), WaitState::Waiting)]);
+  let page = TaskDetail::load_in(desktop.fixture.repo.path(), task).expect("read");
+  let wait = page.waits_on.expect("the task page reads the wait");
+  assert_eq!(
+    (&*wait.task, &*wait.waited, &*wait.waited_title, &*wait.base, wait.number),
+    ("ORC-1", "ORC-2", "Shared rate limiter", "main", 1)
+  );
+
+  desktop
+    .fixture
+    .db
+    .close_task_organization(limiter, WorkflowStatus::Canceled, (ChangeActor::Person, at(70)))
+    .expect("canceled");
+  desktop.follow(false);
+  let standing = desktop.standing();
+  assert!(
+    matches!(standing[..], [(_, WaitState::Unmet { how: Unmet::Canceled, .. })]),
+    "{standing:?}"
+  );
+  assert!(standing[0].1.holds(), "the run still waits for the person");
+
+  let sent = desktop.drop_wait(run.id()).expect("dropped");
+  assert!(sent.is_some(), "the waiting agent is told");
+  assert_eq!(desktop.ended(run.id()), Some(RunWaitEnd::Dropped));
+  assert!(matches!(desktop.standing()[..], [(_, WaitState::Dropped { .. })]));
+  let told = desktop.db().messages(task).expect("messages");
+  let told = told.last().expect("a message to the agent");
+  assert_eq!(told.run(), Some(run.id()));
+  assert!(told.body().as_str().contains("ORC-2"), "{told:?}");
+  let refused = desktop.drop_wait(run.id()).expect_err("dropped once");
+  assert_eq!(refused.key, "orchestrator.waitsOn.dropGone");
 }

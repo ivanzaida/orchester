@@ -13,13 +13,14 @@ use std::{
 use orchester_core::{
   attachment::Attachment,
   connection::{context_use::ContextUse, stream::TodoList},
-  id::{ChatId, ChatMessageId},
+  id::{ChatId, ChatMessageId, RunId},
   orchestrator::{BlankTitle, Chat, ChatEntry, ChatTitle, EntryKind, TurnState},
   run::RunStatus,
   time::Timestamp,
 };
 use orchester_store::{ChatDeletion, ChatListing, ProjectDb};
 
+use super::waits_on::view::RunWaitView;
 use crate::messages::{self, Message};
 
 /// The project's conversations, archived ones too, the one with the latest entry first.
@@ -126,6 +127,8 @@ pub struct ChatView {
   pub moved: HashMap<i64, EndMoved>,
   /// What the lines of its events of tasks' runs name beside their waits, by entry.
   pub events: HashMap<i64, EventFacts>,
+  /// How the waits its *waits on* rows name stand now, by the waiting run (ORC-784).
+  pub waits_on: HashMap<RunId, RunWaitView>,
   /// How full the context of the session its turns continue is; `None` while no turn's CLI reported it (unknown, not
   /// empty).
   pub context: Option<ContextUse>,
@@ -203,6 +206,7 @@ impl ChatView {
     let (standing, moved) =
       super::waits::standing(&db, chat, &entries).map_err(|error| messages::store_error(&error))?;
     let events = super::events::event_facts(&db, &entries).map_err(|error| messages::store_error(&error))?;
+    let waits_on = super::events::waits_on(&db, &entries).map_err(|error| messages::store_error(&error))?;
     let context = db.chat_context(chat).map_err(|error| messages::store_error(&error))?;
     Ok(Some(Self {
       chat: found,
@@ -212,6 +216,7 @@ impl ChatView {
       standing,
       moved,
       events,
+      waits_on,
       context,
     }))
   }
@@ -224,6 +229,11 @@ impl ChatView {
   /// What the line of the event kept as entry `seq` names beside its wait; `None` for an entry that is no event.
   pub fn event_of(&self, seq: i64) -> Option<&EventFacts> {
     self.events.get(&seq)
+  }
+
+  /// How the wait of run `run` stands now, when a *waits on* row of the conversation names it.
+  pub fn wait_of(&self, run: RunId) -> Option<&RunWaitView> {
+    self.waits_on.get(&run)
   }
 
   /// The files attached to the person's message `message`.

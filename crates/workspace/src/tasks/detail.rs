@@ -38,7 +38,10 @@ use super::{
   step_views::step_views,
   unreadable::Unreadable,
 };
-use crate::orchestrator::watching::{LedIn, WatchReads};
+use crate::orchestrator::{
+  waits_on::{self, view::RunWaitView},
+  watching::{LedIn, WatchReads},
+};
 
 /// A task's messages, oldest first, and the files attached to them.
 type Conversation = (Vec<Message>, BTreeMap<MessageId, Vec<Attachment>>);
@@ -307,6 +310,8 @@ pub struct TaskDetail {
   pub first_agent: Option<Arc<str>>,
   /// The Orchestrator conversation that leads the task, its properties' *Led in* (`i687ei` b).
   pub led_in: LedIn,
+  /// The latest run's latest wait on another task, and how it stands (ORC-784); `None` when it never waited on one.
+  pub waits_on: Option<RunWaitView>,
 }
 
 impl TaskDetail {
@@ -408,6 +413,10 @@ impl TaskDetail {
       None => super::first_agent::first_agent(&db, &task)?,
       Some(_) => None,
     };
+    let waits_on = match &latest {
+      Some(run) => waits_on::view::read(&db, run)?,
+      None => None,
+    };
     let mut run = latest.map(|run| run_view(&db, run)).transpose()?;
     if let Some(view) = &mut run {
       view.worktree_not_removed = super::worktree_left::not_removed(&db, repo_root, view.id())?;
@@ -431,6 +440,7 @@ impl TaskDetail {
       unsent_status,
       shared,
       led_in,
+      waits_on,
       ..Self::without_runs(task, conversation, requirements)
     })
   }
@@ -460,6 +470,7 @@ impl TaskDetail {
       shared: None,
       first_agent: None,
       led_in: LedIn::Nobody,
+      waits_on: None,
     }
   }
 }

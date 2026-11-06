@@ -2326,7 +2326,8 @@
       "otherProject": "A run waits only on a task of its own project. Nothing was changed.",
       "notWaiting": "Run #{{run}} does not wait for a message or a decision: only such a run can wait on a task. Nothing was changed.",
       "alreadyWaits": "Run #{{run}} already waits on {{task}}: a run waits on one task at a time. Nothing was changed.",
-      "noBaseBranch": "Run #{{run}} has no base branch its work merges into, so no task's merge can reach it. Nothing was changed."
+      "noBaseBranch": "Run #{{run}} has no base branch its work merges into, so no task's merge can reach it. Nothing was changed.",
+      "dropGone": "The run no longer waits on that task: it went on, or its wait was dropped already."
     },
     "tools": {
       "otherProject": "The Orchestrator acts only in its own project.",

@@ -1,17 +1,21 @@
 //! What the line of an event of a task's run (ORC-755, [`orchester_core::orchestrator::TaskEventKind`]) names beside
 //! its wait (`Parts · Lines` e `c9YRv` in `Orchestrator watch · redesign`): the module its task is in, the branch the
 //! run merges into, and the task the run waits on, by its key and its run's number. The wait keeps only ids of these,
-//! so they are read as the conversation is.
+//! so they are read as the conversation is; and so is how each wait a *waits on* row names stands now (ORC-784).
 
 use std::collections::HashMap;
 
 use orchester_core::{
-  orchestrator::{ChatEntry, EntryKind, TaskEventKind},
+  id::RunId,
+  orchestrator::{ChatAction, ChatEntry, EntryKind, TaskEventKind},
   store::{RunStore, TaskStore},
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use super::chat::{EventFacts, WaitedTask};
+use super::{
+  chat::{EventFacts, WaitedTask},
+  waits_on::view::{self, RunWaitView},
+};
 use crate::tasks::detail::run_store_error;
 
 /// The facts of each event among `entries`, by entry. What the project no longer keeps is left out of them. Blocks on
@@ -48,6 +52,30 @@ pub(super) fn event_facts(db: &ProjectDb, entries: &[ChatEntry]) -> Result<HashM
     );
   }
   Ok(facts)
+}
+
+/// How the wait of each run a *waits on* row among `entries` names stands now (ORC-784), by the run. A run the project
+/// no longer keeps is left out. Blocks on SQLite.
+pub(super) fn waits_on(db: &ProjectDb, entries: &[ChatEntry]) -> Result<HashMap<RunId, RunWaitView>, StoreError> {
+  let mut waits = HashMap::new();
+  for entry in entries {
+    let EntryKind::Action(ChatAction {
+      waits_on: Some(row), ..
+    }) = &entry.kind
+    else {
+      continue;
+    };
+    if waits.contains_key(&row.run) {
+      continue;
+    }
+    let Some(run) = db.run(row.run).map_err(run_store_error)? else {
+      continue;
+    };
+    if let Some(wait) = view::read(db, &run)? {
+      waits.insert(row.run, wait);
+    }
+  }
+  Ok(waits)
 }
 
 /// The task the run of an event of `kind` waits on, while the project keeps it.
