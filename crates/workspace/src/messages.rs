@@ -129,6 +129,7 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::InvocationNotFound(_)
     | StoreError::InvocationPermissionsNotRecordable(_)
     | StoreError::SecretNotFound(_)
+    | StoreError::Keychain(_)
     | StoreError::ServerNotFound(_)
     | StoreError::AgentAccountNotFound(_)
     | StoreError::MemoryNotFound(_)

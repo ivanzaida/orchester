@@ -190,6 +190,9 @@ pub enum StoreError {
   DuplicateSecretName { name: String, environment: &'static str },
   #[error("secret {0} does not exist")]
   SecretNotFound(SecretId),
+  /// The OS keychain refused or failed; the message never carries a value.
+  #[error("keychain: {0}")]
+  Keychain(#[from] orchester_core::secret::VaultError),
   /// The application database has no agent account with this id, or only a removed one.
   #[error("agent account {0} is not in the list")]
   AgentAccountNotFound(AgentAccountId),
