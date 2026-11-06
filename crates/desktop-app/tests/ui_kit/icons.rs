@@ -261,3 +261,15 @@ fn task_event_icons_match_bundled_font_names() {
     assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
   }
 }
+
+/// The glyphs of the /watch-module picker's rows (ORC-772, `R1s1o` in 02 `c8pALl`): a module's and the whole project's.
+#[test]
+fn watch_picker_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  for (icon, name) in [(Icon::Boxes, "boxes"), (Icon::FolderKanban, "folder-kanban")] {
+    let codepoint = (0xe000..0xf000)
+      .find(|codepoint| glyph_name(font, font_glyph(font, *codepoint)) == name)
+      .expect("the bundled font includes the icon");
+    assert_eq!(icon.glyph() as usize, codepoint, "{icon:?} codepoint: {codepoint:x}");
+  }
+}

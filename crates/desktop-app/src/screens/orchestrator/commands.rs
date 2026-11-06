@@ -33,7 +33,7 @@ pub(super) fn menu(
   (fresh, send, provider): (bool, Option<Press>, Option<AgentProvider>),
 ) -> Element {
   let mut commands = vec![new_conversation(ctx, project, fresh), history(ctx, view)];
-  commands.extend(watch_commands(ctx));
+  commands.extend(watch_commands(ctx, view, project));
   let providers: Vec<AgentProvider> = provider.into_iter().collect();
   let skills = SkillsOffer {
     root: project.open.repo_root.clone(),
@@ -90,10 +90,10 @@ fn history(ctx: &Ctx, view: &View) -> SlashCommand {
   }
 }
 
-/// The watch commands, faded with why: *Watch modules* and *Watch tasks* until their pickers and the subscriptions
-/// they make exist (ORC-772 and ORC-773 give them `Does::Take` with their `ui::slash::ArgumentPicker`), *Stop
-/// watching* and *What I watch* while the conversation watches nothing, which it always does until then.
-fn watch_commands(ctx: &Ctx) -> [SlashCommand; 4] {
+/// The watch commands: *Watch modules* with its picker ([`super::watch`], ORC-772); faded with why, *Watch tasks*
+/// until its picker exists (ORC-773 gives it `Does::Take` with its `ui::slash::ArgumentPicker`), *Stop watching* and
+/// *What I watch* while the conversation watches nothing, which they say until their commands exist.
+fn watch_commands(ctx: &Ctx, view: &View, project: &ShownProject) -> [SlashCommand; 4] {
   let faded = |name, icon, label: Arc<str>, detail: Arc<str>| SlashCommand {
     name,
     icon,
@@ -104,12 +104,7 @@ fn watch_commands(ctx: &Ctx) -> [SlashCommand; 4] {
   let not_yet = ctx.t("composer.slash.command.watch.notYet");
   let nothing = ctx.t("composer.slash.command.watch.nothing");
   [
-    faded(
-      "watch-module",
-      Icon::Eye,
-      ctx.t("composer.slash.command.watchModule.label"),
-      not_yet.clone(),
-    ),
+    super::watch::module_command(ctx, view, project),
     faded(
       "watch-task",
       Icon::ScanEye,

@@ -410,6 +410,59 @@
       "effectPlanRead": "Deciding a plan is yours, on its card. The Orchestrator reads it and tells you what it proposes.",
       "effectGone": "It was dealt with on the task's page, or its run went on: the agent no longer waits."
     },
+    "watch": {
+      "failed": "Nothing was watched",
+      "dismiss": "Dismiss",
+      "modules": {
+        "placeholder": "Search modules — then write what to do with their events",
+        "section": "Modules",
+        "also": "Also",
+        "count": "{{shown}} of {{total}}",
+        "nothing": "No module matches “{{query}}”",
+        "withoutModule": "Tasks without a module",
+        "project": "Everything in {{project}}",
+        "projectMeta": "What no other subscription takes",
+        "tasks": {
+          "one": "1 task",
+          "other": "{{count}} tasks"
+        },
+        "running": {
+          "none": "none running",
+          "some": "{{count}} running"
+        },
+        "waiting": {
+          "one": "1 waits for you",
+          "other": "{{count}} wait for you"
+        },
+        "meta": "{{tasks}} · {{running}}",
+        "metaWaiting": "{{tasks}} · {{running}} · {{waiting}}",
+        "allDone": "{{tasks}} · all done",
+        "allClosed": "{{tasks}} · all done or canceled",
+        "added": "Added",
+        "ledIn": "Led in «{{title}}» ↗",
+        "ledInUnnamed": "Led in another conversation ↗",
+        "ledHere": "Watched here",
+        "nothingLeft": "Nothing left to watch",
+        "unreadable": "The tasks of {{project}} can't be read",
+        "unreadableNote": "{{reason}} Nothing was added; the chips you have stay.",
+        "tryAgain": "Try again"
+      },
+      "keys": {
+        "move": "↑ ↓",
+        "enter": "Enter",
+        "backspace": "Backspace",
+        "ctrlEnter": "Ctrl Enter",
+        "cmdEnter": "Cmd Enter",
+        "esc": "Esc"
+      },
+      "hint": {
+        "move": "Move",
+        "add": "Add",
+        "removeLast": "Remove the last",
+        "watch": "Watch",
+        "close": "Close"
+      }
+    },
     "held": {
       "projectTitle": "New starts held in {{project}}",
       "projectEffect": "No waiting task in {{project}} starts until you resume. Running tasks keep running.",

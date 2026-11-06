@@ -49,6 +49,7 @@ mod task_event;
 mod timeline;
 mod turns;
 mod wait;
+mod watch;
 
 use std::sync::Arc;
 
@@ -173,6 +174,8 @@ struct View {
   rewind: rewind::Rewinding,
   /// The header's … with *Copy conversation as Markdown* and *Export conversation…* (ORC-327).
   export: export::ChatExport,
+  /// Applies `/watch-module` (ORC-772).
+  watching: watch::WatchAction,
 }
 
 struct OrchestratorScreen {
@@ -216,6 +219,7 @@ impl Component for OrchestratorScreen {
       plan_only: plan_only::PlanOnly::new(ctx),
       rewind: rewind::Rewinding::new(ctx),
       export: export::ChatExport::new(ctx),
+      watching: watch::watch_action(ctx),
     };
     rewind::watch(ctx, &view);
     let taker = view.clone();
@@ -230,6 +234,7 @@ impl Component for OrchestratorScreen {
       }
     });
     let project = ctx.props::<Props>().project.open.project.id();
+    watch::follow(ctx, &view, project);
     let of = view.of.clone();
     ctx.watch(&view.draft, move |text| {
       if let Some(of) = of.get_untracked() {

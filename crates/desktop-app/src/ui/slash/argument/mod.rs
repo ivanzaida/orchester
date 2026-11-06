@@ -93,6 +93,11 @@ pub(super) struct Offered {
 }
 
 impl SlashField {
+  /// The name of the command the composer's chip holds, while it holds one, read tracked: the composer's placeholder
+  /// is that command's then.
+  pub fn held_command(&self) -> Option<&'static str> {
+    self.argument.get().map(|held| held.command)
+  }
   /// The command `name` becomes the chip, without choices, and its picker opens; any command held before goes.
   pub(super) fn hold(&self, (name, icon): (&'static str, Icon), taking: Taking) {
     *self.taking.lock() = Some(taking);
