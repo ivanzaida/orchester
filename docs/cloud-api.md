@@ -70,6 +70,36 @@ The existing stream carries reviewer metadata in `snapshot.begin.resources` and 
 members read the body and stored flag through the versions endpoint. No additional event kind is introduced.
 The platform server and web tasks must update their repository pin to the commit containing this contract.
 
+## Team server MCP server resource
+
+An MCP server is a team resource of kind `mcp_server` (`SharedResourceKind::McpServer`), with the same immutable,
+numbered versions and the same create, publish, rename and archive calls, access and errors as the reviewer above. Its
+body is core's `TeamMcpServer`; `references` is empty. The team holds only what is the same on every computer:
+
+```text
+{ name,                       // lowercase letters, digits, "-" and "_", starting with a letter
+  launch: { kind: "program",
+            program,          // a name looked up on the PATH ("npx"), never a path
+            args?: [string], working_directory?: string /* relative to the worktree */,
+            variables?: [name] }
+        | { kind: "remote", url, secret_headers?: [header name] },
+  exempt_tools?: [tool name] } // tools that run without asking
+```
+
+The body has no other fields and the server refuses a body with one (`deny_unknown_fields`): no program path, no
+variable or secret value, no connection, secret or MCP server id of any computer. Each computer sets the path of a
+program, the values of the variables and of the secret headers, and whether the server is on, itself. Names within
+`variables` and `secret_headers` are distinct, ignoring case. A working directory that is absolute is refused, as is a
+program that is not a bare name.
+
+The server computes `widens` with core's `SharedBody` rules for this kind: a version widens when
+its program or arguments differ from the previous version's, its URL differs, it switches between a program and a
+remote server, or it adds a tool that runs without asking. The first version does not widen, because a person turns a
+team MCP server on at each computer. The stream carries it as it carries the other kinds: the metadata in
+`snapshot.begin.resources` and the `resource.published`, `resource.renamed` and `resource.archived` deltas, with
+`kind: "mcp_server"`; no new event kind. Libraries and pickers (`ResourceLibraryRequest`, `ResourcePickerRequest`)
+accept `"mcp_server"` as `kind`.
+
 ## Base
 
 The cloud has two addresses: its API address, which every API call goes to, and its web address (the public URL),

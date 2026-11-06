@@ -25,6 +25,8 @@ pub enum SharedResourceKind {
   Tool,
   /// Body: [`orchester_core::resource::TeamReviewer`], with named connection references, never local ids or secrets.
   TeamReviewer,
+  /// Body: [`orchester_core::resource::TeamMcpServer`], with no program path, variable or secret value, or local id.
+  McpServer,
 }
 
 impl SharedResourceKind {
@@ -36,6 +38,7 @@ impl SharedResourceKind {
       Self::Skill => ResourceKind::Skill,
       Self::Tool => ResourceKind::Tool,
       Self::TeamReviewer => ResourceKind::TeamReviewer,
+      Self::McpServer => ResourceKind::McpServer,
     }
   }
 
@@ -48,6 +51,7 @@ impl SharedResourceKind {
       ResourceKind::Skill => Some(Self::Skill),
       ResourceKind::Tool => Some(Self::Tool),
       ResourceKind::TeamReviewer => Some(Self::TeamReviewer),
+      ResourceKind::McpServer => Some(Self::McpServer),
       ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => None,
     }
   }

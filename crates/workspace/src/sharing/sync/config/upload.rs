@@ -104,6 +104,7 @@ fn read(db: &ProjectDb) -> Result<(Vec<UploadResource>, BTreeSet<ContentHash>), 
         SharedResourceKind::Instruction => versions::<Instruction>(db, &kept, entities)?,
         SharedResourceKind::Tool => versions::<Tool>(db, &kept, entities)?,
         SharedResourceKind::TeamReviewer => versions::<orchester_core::resource::TeamReviewer>(db, &kept, entities)?,
+        SharedResourceKind::McpServer => versions::<orchester_core::resource::TeamMcpServer>(db, &kept, entities)?,
         SharedResourceKind::Skill => {
           for version in db.versions::<Skill>(kept.id())? {
             parts.extend(version.body().files().iter().map(|file| file.content.clone()));
@@ -184,6 +185,7 @@ fn keep(db: &mut ProjectDb, shared: &SharedResource, versions: &[SharedVersion])
       SharedResourceKind::Skill => keep_version::<Skill>(db, version)?,
       SharedResourceKind::Tool => keep_version::<Tool>(db, version)?,
       SharedResourceKind::TeamReviewer => keep_version::<orchester_core::resource::TeamReviewer>(db, version)?,
+      SharedResourceKind::McpServer => keep_version::<orchester_core::resource::TeamMcpServer>(db, version)?,
     }
   }
   Ok(())

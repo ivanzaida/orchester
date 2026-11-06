@@ -100,6 +100,7 @@ mod task_groups;
 mod task_identities;
 mod team_delivery;
 mod team_delivery_waits;
+mod team_mcp_server;
 mod team_operations;
 mod team_pipeline_ids;
 mod team_reviewer;

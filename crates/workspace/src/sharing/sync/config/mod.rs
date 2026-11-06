@@ -141,6 +141,9 @@ fn write(root: &Path, shared: &SharedResource, versions: &[SharedVersion]) -> Re
       SharedResourceKind::TeamReviewer => {
         cache_version::<orchester_core::resource::TeamReviewer>(&mut db, version, &bindings)?
       }
+      SharedResourceKind::McpServer => {
+        cache_version::<orchester_core::resource::TeamMcpServer>(&mut db, version, &bindings)?
+      }
       // `sync` leaves skills out.
       SharedResourceKind::Skill => {}
     }
@@ -288,6 +291,7 @@ fn rewrite(db: &mut ProjectDb, target: ReferenceTarget) -> Result<usize, Sharing
       ResourceKind::Instruction => rewrite_version::<Instruction>(db, naming, &bindings)?,
       ResourceKind::Tool => rewrite_version::<Tool>(db, naming, &bindings)?,
       ResourceKind::TeamReviewer => rewrite_version::<orchester_core::resource::TeamReviewer>(db, naming, &bindings)?,
+      ResourceKind::McpServer => rewrite_version::<orchester_core::resource::TeamMcpServer>(db, naming, &bindings)?,
       // Skills are not kept here yet, and agent testing's kinds are never shared.
       ResourceKind::Skill | ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => false,
     };

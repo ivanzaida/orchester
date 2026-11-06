@@ -129,6 +129,7 @@ impl Servers {
         ResourceKind::Skill => db.reopen_draft::<Skill>(version, now),
         ResourceKind::Tool => db.reopen_draft::<Tool>(version, now),
         ResourceKind::TeamReviewer => db.reopen_draft::<orchester_core::resource::TeamReviewer>(version, now),
+        ResourceKind::McpServer => db.reopen_draft::<orchester_core::resource::TeamMcpServer>(version, now),
         // Agent testing's kinds are never the team's, so none of their versions waits for the server.
         ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => Ok(()),
       }

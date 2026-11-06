@@ -98,7 +98,7 @@ pub struct AuthorityTask {
 /// What the stand-in's `/api/v2` surface answers.
 #[derive(Default)]
 pub(super) struct Authority {
-  standing: Standing,
+  pub(in crate::test_support::team_server) standing: Standing,
   tasks: Option<Vec<AuthorityTask>>,
   modules: Option<Vec<AuthorityModule>>,
   unavailable: bool,
