@@ -46,9 +46,7 @@ use orchester_workspace::{
   runner::Runners,
   secrets::Vault,
   sharing::Servers,
-  tasks::{
-    conversation::follow::Sent, detail::TaskDetail, integration_jobs::ProjectJobs, outside::OutsideChanges,
-  },
+  tasks::{conversation::follow::Sent, detail::TaskDetail, integration_jobs::ProjectJobs, outside::OutsideChanges},
   workspace::{OpenProject, Workspace},
 };
 use serde_json::{Value, json};
@@ -475,7 +473,13 @@ fn wait_on_task_stands_until_the_person_drops_a_wait_that_cannot_be_met() {
   let page = TaskDetail::load_in(desktop.fixture.repo.path(), task).expect("read");
   let wait = page.waits_on.expect("the task page reads the wait");
   assert_eq!(
-    (&*wait.task, &*wait.waited, &*wait.waited_title, &*wait.base, wait.number),
+    (
+      &*wait.task,
+      &*wait.waited,
+      &*wait.waited_title,
+      &*wait.base,
+      wait.number
+    ),
     ("ORC-1", "ORC-2", "Shared rate limiter", "main", 1)
   );
 
@@ -487,7 +491,16 @@ fn wait_on_task_stands_until_the_person_drops_a_wait_that_cannot_be_met() {
   desktop.follow(false);
   let standing = desktop.standing();
   assert!(
-    matches!(standing[..], [(_, WaitState::Unmet { how: Unmet::Canceled, .. })]),
+    matches!(
+      standing[..],
+      [(
+        _,
+        WaitState::Unmet {
+          how: Unmet::Canceled,
+          ..
+        }
+      )]
+    ),
     "{standing:?}"
   );
   assert!(standing[0].1.holds(), "the run still waits for the person");

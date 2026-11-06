@@ -197,12 +197,21 @@ fn run_waits_drop_an_active_or_unmet_wait_only() {
   for waiting in [&run, &other, &third] {
     db.keep_run_wait(&wait(&db, waiting, waited), at(20)).expect("kept");
   }
-  assert!(db.end_run_wait(other.id(), RunWaitEnd::Canceled, at(30)).expect("ended"));
+  assert!(
+    db.end_run_wait(other.id(), RunWaitEnd::Canceled, at(30))
+      .expect("ended")
+  );
   assert!(db.end_run_wait(third.id(), RunWaitEnd::Merged, at(30)).expect("ended"));
 
   assert!(db.drop_run_wait(run.id(), at(40)).expect("dropped"), "an active wait");
-  assert!(db.drop_run_wait(other.id(), at(41)).expect("dropped"), "a canceled wait");
-  assert!(!db.drop_run_wait(third.id(), at(42)).expect("read"), "a merged wait stays");
+  assert!(
+    db.drop_run_wait(other.id(), at(41)).expect("dropped"),
+    "a canceled wait"
+  );
+  assert!(
+    !db.drop_run_wait(third.id(), at(42)).expect("read"),
+    "a merged wait stays"
+  );
   assert!(!db.drop_run_wait(run.id(), at(43)).expect("read"), "dropped once");
 
   let end = |run: &Run| db.run_wait(run.id()).expect("read").and_then(|kept| kept.ended);

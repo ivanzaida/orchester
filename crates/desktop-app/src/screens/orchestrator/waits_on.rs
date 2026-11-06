@@ -31,7 +31,7 @@ use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskTab, TaskView},
   services::Services,
-  ui::{icon::Icon, pressable::Press},
+  ui::{icon::Icon, message::message_text, pressable::Press},
 };
 
 #[derive(Clone, PartialEq)]
@@ -99,7 +99,14 @@ impl Component for WaitsOnLine {
       _ => line.link(open(ctx, &props)),
     };
     let time = (!props.listed).then(|| display::clock(props.at));
-    line.time(time).render(ctx)
+    // A drop refused says why, on hover and once the line is pressed.
+    let refused = self
+      .dropping
+      .state()
+      .get()
+      .error
+      .map(|error| message_text(ctx, &error));
+    line.time(time).detail(refused).render(ctx)
   }
 }
 

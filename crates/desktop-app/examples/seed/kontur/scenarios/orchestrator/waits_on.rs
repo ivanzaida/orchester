@@ -27,8 +27,7 @@ use crate::kontur::{Kontur, SeedError, catalogue::Catalogue, shapes::Shape};
 const BASE: &str = "module/webhooks-v2";
 
 /// The order the conversation leads its module by.
-const ORDER: &str =
-  "Answer agents from the brief and the docs. New tasks inside these modules are fine. Ask me before merging into the \
+const ORDER: &str = "Answer agents from the brief and the docs. New tasks inside these modules are fine. Ask me before merging into the \
    module branch.";
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
@@ -36,7 +35,13 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   let pairs = Pairs::seed(kontur, &catalogue)?;
   let start = kontur.ago(130);
   let chat = Chat::named(ChatId::generate(), "Webhooks v2 and Search index", start);
-  turn(kontur, &chat, (ORDER, start), vec![Part::Reply("I'll lead Webhooks v2.")], &TurnState::Answered)?;
+  turn(
+    kontur,
+    &chat,
+    (ORDER, start),
+    vec![Part::Reply("I'll lead Webhooks v2.")],
+    &TurnState::Answered,
+  )?;
   let target = WatchTarget::Module(pairs.module);
   kontur
     .db
@@ -127,11 +132,7 @@ impl Pairs {
         9 * 60,
       )?
       .task,
-      waiting: ran(
-        ("Delivery dashboard", "Show deliveries per endpoint."),
-        asking,
-        8 * 60,
-      )?,
+      waiting: ran(("Delivery dashboard", "Show deliveries per endpoint."), asking, 8 * 60)?,
     };
     let closed = Pair {
       waited: ran(
@@ -152,7 +153,10 @@ impl Pairs {
       6 * 60,
     )?;
     let retry_waiting = ran(
-      ("Retry failed deliveries", "Retry a failed webhook delivery with backoff."),
+      (
+        "Retry failed deliveries",
+        "Retry a failed webhook delivery with backoff.",
+      ),
       asking,
       5 * 60,
     )?;
@@ -199,7 +203,13 @@ impl Pairs {
   }
 
   fn all(&self) -> [&Pair; 5] {
-    [&self.retry, &self.continued, &self.canceled, &self.closed, &self.dropped]
+    [
+      &self.retry,
+      &self.continued,
+      &self.canceled,
+      &self.closed,
+      &self.dropped,
+    ]
   }
 
   /// Ends the waits that no longer wait, each as its state says.

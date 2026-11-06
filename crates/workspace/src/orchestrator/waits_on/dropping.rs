@@ -68,7 +68,9 @@ pub async fn drop_wait(
     key: stored.key,
     pipeline: &stored.pipeline,
   };
-  Ok(Some(follow((runners, servers, RunnerOf::Project(open)), &message, stored.then).await))
+  Ok(Some(
+    follow((runners, servers, RunnerOf::Project(open)), &message, stored.then).await,
+  ))
 }
 
 /// Keeps `run`'s wait as dropped in the project at `root`, and stores the message for its agent when it waits for one.
@@ -92,8 +94,14 @@ fn store(root: &Path, run: RunId) -> Result<Option<Told>, Message> {
   }
   let key = IdempotencyKey::generate();
   let text = told(&wait.waited);
-  let (then, _) = store_answer_in(root, &prepared, (key, Way::Primary), (&text, &[], None), Answerer::Person)
-    .map_err(|error| error.message())?;
+  let (then, _) = store_answer_in(
+    root,
+    &prepared,
+    (key, Way::Primary),
+    (&text, &[], None),
+    Answerer::Person,
+  )
+  .map_err(|error| error.message())?;
   let pipeline = prepared
     .detail
     .run
