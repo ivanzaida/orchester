@@ -16,7 +16,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::revision::Revision;
+use orchester_core::{project::TaskKey, revision::Revision};
 use orchester_workspace::{
   display::{clock, short_revision},
   tasks::{
@@ -27,6 +27,8 @@ use orchester_workspace::{
 
 use super::{Env, actions::Write, state::Held, words::counted};
 use crate::{
+  navigation::Navigation,
+  project::ShownProject,
   routes::{ProjectPage, Route, TaskTab, TaskView},
   screens::merges::{attempt::head::title, words::joined},
   theme::{ExtraTypography, IconSize},
@@ -48,14 +50,8 @@ pub(super) fn moved(env: &Env) -> Option<&Revision> {
 
 /// The title with *Open task* and *Approve and merge*.
 pub(super) fn header(ctx: &mut Ctx, env: &Env) -> Element {
-  let open = ActionButton::new("review-open-task", ButtonKind::Secondary, ctx.t("review_page.openTask"))
-    .icon(Icon::ArrowUpRight)
-    .opens(env.navigation.to(Route::Project(
-      env.project.open.project.id(),
-      ProjectPage::Task(env.page.run.key.clone(), TaskView::of(TaskTab::Summary)),
-    )));
-  let approve =
-    ActionButton::new("review-approve", ButtonKind::Primary, ctx.t("review_page.approve")).icon(Icon::Check);
+  let open = open_task(ctx, &env.navigation, &env.project, &env.page.run.key);
+  let approve = approve_button(ctx);
   let (approve, reason) = match unavailable(ctx, env) {
     Some(reason) => (approve.unavailable(reason.clone()), Some(reason)),
     None if env.writes.busy() => (approve.disabled(), None),
@@ -75,6 +71,21 @@ pub(super) fn header(ctx: &mut Ctx, env: &Env) -> Element {
   title(&env.page.run.title, actions)
 }
 
+/// *Open task*, which opens the task `key` of `project`.
+pub(super) fn open_task(ctx: &Ctx, navigation: &Navigation, project: &ShownProject, key: &TaskKey) -> ActionButton {
+  ActionButton::new("review-open-task", ButtonKind::Secondary, ctx.t("review_page.openTask"))
+    .icon(Icon::ArrowUpRight)
+    .opens(navigation.to(Route::Project(
+      project.open.project.id(),
+      ProjectPage::Task(key.clone(), TaskView::of(TaskTab::Summary)),
+    )))
+}
+
+/// *Approve and merge*, before it is told whether it can be pressed.
+pub(super) fn approve_button(ctx: &Ctx) -> ActionButton {
+  ActionButton::new("review-approve", ButtonKind::Primary, ctx.t("review_page.approve")).icon(Icon::Check)
+}
+
 /// Why *Approve and merge* cannot be pressed now.
 fn unavailable(ctx: &Ctx, env: &Env) -> Option<Arc<str>> {
   if env.review.implement_at_work || env.page.review_in.is_none() {
@@ -86,30 +97,54 @@ fn unavailable(ctx: &Ctx, env: &Env) -> Option<Arc<str>> {
   None
 }
 
+/// Where the run stands, which the status line's glyph and words say.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Standing {
+  AtWork,
+  Changed,
+  Waiting,
+}
+
+impl Standing {
+  fn parts(self, ctx: &Ctx) -> (Icon, PaletteColor, Arc<str>, &'static str) {
+    match self {
+      Self::AtWork => (
+        Icon::LoaderCircle,
+        PaletteColor::Info,
+        ctx.t("review_page.status.atWork"),
+        "implement_at_work",
+      ),
+      Self::Changed => (
+        Icon::TriangleAlert,
+        PaletteColor::Warning,
+        ctx.t("review_page.status.changed"),
+        "changed_since_review",
+      ),
+      Self::Waiting => (
+        Icon::Eye,
+        PaletteColor::Info,
+        ctx.t("review_page.status.waiting"),
+        "waiting_for_review",
+      ),
+    }
+  }
+}
+
 /// The status line.
 pub(super) fn status(ctx: &Ctx, env: &Env) -> Element {
-  let (glyph, color, words, name) = if env.page.review_in.is_none() || env.review.implement_at_work {
-    (
-      Icon::LoaderCircle,
-      PaletteColor::Info,
-      ctx.t("review_page.status.atWork"),
-      "implement_at_work",
-    )
+  let standing = if env.page.review_in.is_none() || env.review.implement_at_work {
+    Standing::AtWork
   } else if moved(env).is_some() {
-    (
-      Icon::TriangleAlert,
-      PaletteColor::Warning,
-      ctx.t("review_page.status.changed"),
-      "changed_since_review",
-    )
+    Standing::Changed
   } else {
-    (
-      Icon::Eye,
-      PaletteColor::Info,
-      ctx.t("review_page.status.waiting"),
-      "waiting_for_review",
-    )
+    Standing::Waiting
   };
+  status_line(ctx, standing, &meta(ctx, &env.page, &env.head))
+}
+
+/// The status line of a run that stands as `standing`, with `meta` after it; the page's and its reading state's.
+pub(super) fn status_line(ctx: &Ctx, standing: Standing, meta: &str) -> Element {
+  let (glyph, color, words, name) = standing.parts(ctx);
   Row::new()
     .id("review-status")
     .describe("status", name)
@@ -124,7 +159,7 @@ pub(super) fn status(ctx: &Ctx, env: &Env) -> Element {
         .nowrap(),
     )
     .child(
-      Text::new(&meta(ctx, &env.page, &env.head))
+      Text::new(meta)
         .id("review-status-meta")
         .variant(TypographyStyle::Description)
         .color(PaletteColor::TextMuted)
@@ -145,23 +180,28 @@ fn meta(ctx: &Ctx, page: &ReviewPage, head: &Revision) -> Arc<str> {
       [("passed", passed.to_string()), ("total", total.to_string())],
     )
   });
-  if let Some((files, added, removed)) = size(&page.changes) {
-    let args = [
-      ("files", files.to_string()),
-      ("added", added.to_string()),
-      ("removed", removed.to_string()),
-    ];
-    parts.push(if files == 1 {
-      ctx.t_args("review_page.status.sizeOne", args)
-    } else {
-      ctx.t_args("review_page.status.sizeOther", args)
-    });
+  if let Some(size) = size(&page.changes) {
+    parts.push(size_words(ctx, size));
   }
   parts.push(ctx.t_args("review_page.status.head", [("head", short_revision(head.as_str()))]));
   if let Some(branch) = &page.run.base {
     parts.push(ctx.t_args("review_page.status.into", [("branch", branch.as_str())]));
   }
   joined(ctx, &parts)
+}
+
+/// *7 files, +210 −36*.
+pub(super) fn size_words(ctx: &Ctx, (files, added, removed): (usize, u32, u32)) -> Arc<str> {
+  let args = [
+    ("files", files.to_string()),
+    ("added", added.to_string()),
+    ("removed", removed.to_string()),
+  ];
+  if files == 1 {
+    ctx.t_args("review_page.status.sizeOne", args)
+  } else {
+    ctx.t_args("review_page.status.sizeOther", args)
+  }
 }
 
 /// How many files the diff changes, and the lines it adds and removes.
