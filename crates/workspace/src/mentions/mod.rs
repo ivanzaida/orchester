@@ -5,11 +5,13 @@
 //! a draft stays the plain string both composers keep and a composer draws each mention as a chip. The @ menu offers
 //! the project's tasks and runs ([`catalog`]) and its repository's files ([`files`]); a message sent with mentions
 //! carries a marked block of what Orchester knows of each after the person's words ([`facts`]), which the
-//! conversations leave out of what they show.
+//! conversations leave out of what they show. The /watch pickers, which choose modules and tasks with the same
+//! search, are [`watch`]'s.
 
 pub mod catalog;
 pub mod facts;
 pub mod files;
+pub mod watch;
 
 use std::{num::NonZeroU32, ops::Range};
 
