@@ -32,12 +32,11 @@ fn repository() -> TempDir {
   dir
 }
 
-/// The users of a resource as the confirmation shows them: resources as kind, name and version, runs as task key and
-/// number.
-type Shown<'a> = (Vec<(SharedResourceKind, &'a str, u32)>, Vec<(&'a str, u32)>);
+/// The users of a resource as the confirmation shows them: resources as kind, name and version, runs as task key.
+type Shown<'a> = (Vec<(SharedResourceKind, &'a str, u32)>, Vec<&'a str>);
 
 /// A used-by answer as the Archive confirmation shows it: each resource as kind, name and version, each run as task
-/// key and number.
+/// key.
 fn shown(used: &UsedBy) -> Shown<'_> {
   (
     used
@@ -45,22 +44,18 @@ fn shown(used: &UsedBy) -> Shown<'_> {
       .iter()
       .map(|resource| (resource.kind, resource.name.as_str(), resource.version.get()))
       .collect(),
-    used
-      .runs
-      .iter()
-      .map(|run| (run.task_key.as_str(), run.number))
-      .collect(),
+    used.runs.iter().map(|run| run.task_key.as_str()).collect(),
   )
 }
 
 /// What the tool "Deploy" is used by in the scenario both projects are built with: two pipelines running it, by name
-/// without regard to case, and three runs that have not ended, by the task key's number.
+/// without regard to case, and three runs that have not ended, by the task key's number (two runs of KON-3).
 fn tool_users() -> Shown<'static> {
   (
     vec![
       (SharedResourceKind::Pipeline, "alpha flow", 1),
       (SharedResourceKind::Pipeline, "Delivery", 1),
     ],
-    vec![("KON-3", 2), ("KON-3", 3), ("KON-12", 1)],
+    vec!["KON-3", "KON-3", "KON-12"],
   )
 }

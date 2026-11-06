@@ -13,8 +13,8 @@ use orchester_core::{
   resource::{
     AccessPolicy, AccessWindow, AgentProfile, AgentTargets, AllowedSteps, ApprovalMode, CommandAction, CommandArg,
     CommandProgram, DeliverStep, DeniedBehavior, Draft, InjectionEvent, Instruction, InstructionScope, ModelId,
-    Pipeline, PromptText, ProviderSettings, RemoveMode, RepositoryAccess, Skill, Slug, Step, StepKey, StepKind,
-    Tool, ToolAction,
+    Pipeline, PromptText, ProviderSettings, RemoveMode, RepositoryAccess, Skill, Slug, Step, StepKey, StepKind, Tool,
+    ToolAction,
   },
   revision::Revision,
   run::{BranchName, NewRun, PublishedVersions, Run, RunSnapshot, StepFailure},
@@ -294,7 +294,7 @@ fn used_by_local_lists_the_resources_whose_latest_version_names_it_by_name_then_
 }
 
 #[test]
-fn used_by_local_lists_the_runs_that_have_not_ended_by_task_number_then_run_number() {
+fn used_by_local_lists_the_runs_that_have_not_ended_by_task_number_then_run_id() {
   let mut local = Local::new();
   let tool = local.tool("deploy", "Deploy");
   let delivery = local.publish(("delivery", "Delivery"), &pipeline_running(tool));
@@ -304,8 +304,8 @@ fn used_by_local_lists_the_runs_that_have_not_ended_by_task_number_then_run_numb
   let tasks = local.tasks(12);
   // Started in the order KON-12, KON-3, KON-3 again; a numeric order puts KON-3 first.
   local.run(tasks[11], (delivery, tool));
-  local.run(tasks[2], (delivery, tool));
-  local.run(tasks[2], (delivery, tool));
+  let first = local.run(tasks[2], (delivery, tool));
+  let second = local.run(tasks[2], (delivery, tool));
   let mut ended = local.run(tasks[4], (delivery, tool));
   local.fail(&mut ended);
   local.run(tasks[8], (other, other_tool));
@@ -315,6 +315,11 @@ fn used_by_local_lists_the_runs_that_have_not_ended_by_task_number_then_run_numb
     shown(&used),
     tool_users(),
     "a run pins the tool through its pipeline's step; the failed run and the other tool's run are left out"
+  );
+  assert_eq!(
+    used.runs[..2].iter().map(|run| run.run).collect::<Vec<_>>(),
+    [first.id(), second.id()],
+    "the runs of one task are ordered by run id"
   );
   assert!(
     used.runs.iter().all(|run| run.holder.is_none()),

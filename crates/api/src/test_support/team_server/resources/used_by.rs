@@ -1,6 +1,6 @@
 //! `GET …/resources/{r}/used-by` on the stand-in: the other resources that are not archived and whose latest version
 //! names the resource, by name (case-insensitively) and then id, and the runs registered with
-//! [`TeamServer::pin_run`] that have not ended and pin a version of it, by the task key's number and then run number.
+//! [`TeamServer::pin_run`] that have not ended and pin a version of it, by the task key's number and then run id.
 //! A version names a resource by the typed fields `docs/cloud-api.md` lists, read with core's body types. The target
 //! may be archived; it is never in its own `resources`.
 
@@ -16,7 +16,7 @@ use crate::{
   test_support::team_server::{Person, TeamServer},
 };
 
-/// The last work report the server accepted for a run.
+/// The last work report the server accepted for a run. The server knows a run only from its first accepted report.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RunReport {
   /// The run goes on, also while interrupted or waiting for a person on the desktop.
@@ -32,27 +32,32 @@ impl RunReport {
   }
 }
 
-/// A run of a task of the project at some slug whose execution bundle pins versions of shared resources: the
-/// pipeline, a step's profile or tool, an instruction. The stand-in builds no bundle at `work.start`, so a test names
-/// the pins the bundle would hold.
+/// A run of a task of the project at some slug whose work report the server accepted, and whose execution bundle pins
+/// versions of shared resources: the pipeline, a step's profile or tool, an instruction, and an MCP server the
+/// bundle's profiles name. The stand-in builds no bundle at `work.start`, so a test names the pins the bundle would
+/// hold.
 #[derive(Clone, Debug)]
 pub struct PinnedRun {
   /// The key of the run's task, e.g. `KON-12`.
   pub task_key: String,
   pub run: RunId,
-  pub number: u32,
+  /// The work the run belongs to, numbered within its task: runs reported later for the same work end the earlier
+  /// ones, a run of another work of the same task does not.
+  pub work: u32,
   /// Who holds the task's claim; `None` once it was released.
   pub holder: Option<Person>,
-  /// The last accepted work report; `None` for a run started and not reported yet. A terminal one ends the run.
-  pub last_report: Option<RunReport>,
+  /// The last accepted work report; a terminal one ends the run. A run with no accepted report is not known to the
+  /// server, so a test does not pin it.
+  pub last_report: RunReport,
   /// The versions its bundle pins.
   pub pins: Vec<(ResourceId, VersionNumber)>,
 }
 
 impl TeamServer {
   /// The project at `slug` has `run`, which counts in used-by while it has not ended and pins a version of the
-  /// resource asked about. Panics for a slug the stand-in does not hold or a task key that is not `KEY-<number>`, so a
-  /// test cannot pin to nothing.
+  /// resource asked about. Runs are pinned in the order the server first heard of them: a run pinned later for the
+  /// same task and work is a newer run of that work, which ends the earlier ones. Panics for a slug the stand-in does
+  /// not hold or a task key that is not `KEY-<number>`, so a test cannot pin to nothing.
   pub fn pin_run(&self, slug: &str, run: PinnedRun) {
     task_number(&run.task_key);
     let mut state = self.state.lock();
@@ -122,11 +127,16 @@ impl Project {
     let mut runs: Vec<&PinnedRun> = self
       .runs
       .iter()
-      .filter(|run| {
-        !run.last_report.is_some_and(RunReport::ends) && run.pins.iter().any(|(pinned, _)| *pinned == target)
+      .enumerate()
+      .filter(|(place, run)| {
+        let superseded = self.runs[place + 1..]
+          .iter()
+          .any(|newer| (&newer.task_key, newer.work) == (&run.task_key, run.work));
+        !superseded && !run.last_report.ends() && run.pins.iter().any(|(pinned, _)| *pinned == target)
       })
+      .map(|(_, run)| run)
       .collect();
-    runs.sort_by_key(|run| (task_number(&run.task_key), run.number));
+    runs.sort_by_key(|run| (task_number(&run.task_key), run.run));
     (
       200,
       json!({
@@ -135,7 +145,7 @@ impl Project {
           "version": stored.resource["latest"],
         })).collect::<Vec<_>>(),
         "runs": runs.iter().map(|run| {
-          let mut read = json!({"task_key": run.task_key, "run": run.run, "number": run.number});
+          let mut read = json!({"task_key": run.task_key, "run": run.run});
           if let Some(holder) = run.holder {
             read["holder"] = holder.wire();
           }

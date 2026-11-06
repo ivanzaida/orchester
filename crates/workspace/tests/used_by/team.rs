@@ -6,7 +6,7 @@ use std::path::Path;
 use orchester_api::{
   Credential, ResourceCreate, SharedResourceKind, UsedBy, VersionContent,
   client::{Client, PlainHttp, ServerAddress},
-  test_support::team_server::{CODE, Person, PinnedRun, Standing, TeamServer},
+  test_support::team_server::{CODE, Person, PinnedRun, RunReport, Standing, TeamServer},
 };
 use orchester_core::{
   id::{IdempotencyKey, ProjectId, ResourceId, RunId, ServerId},
@@ -128,16 +128,17 @@ impl Team {
     id
   }
 
-  fn pin(&self, (key, number): (&str, u32), holder: Option<Person>, pins: &[ResourceId]) -> RunId {
+  /// A run of `work` of the task `key`, last reported `progress`.
+  fn pin(&self, (key, work): (&str, u32), holder: Option<Person>, pins: &[ResourceId]) -> RunId {
     let run = RunId::generate();
     self.server.pin_run(
       "kontur",
       PinnedRun {
         task_key: key.to_owned(),
         run,
-        number,
+        work,
         holder,
-        last_report: None,
+        last_report: RunReport::Progress,
         pins: pins.iter().map(|id| (*id, VersionNumber::FIRST)).collect(),
       },
     );
@@ -183,8 +184,8 @@ fn used_by_team_asks_the_server_and_gives_the_shape_a_local_project_gives() {
     team.create(SharedResourceKind::Pipeline, (slug, label), pipeline_body(tool));
   }
   team.pin(("KON-12", 1), Some(Person::Named("Dana Ruiz")), &[tool]);
-  let held = team.pin(("KON-3", 2), Some(Person::Named("Dana Ruiz")), &[tool]);
-  team.pin(("KON-3", 3), None, &[tool]);
+  let held = team.pin(("KON-3", 1), Some(Person::Named("Dana Ruiz")), &[tool]);
+  team.pin(("KON-3", 2), None, &[tool]);
   team.pin(("KON-9", 1), None, &[ResourceId::generate()]);
   team
     .server

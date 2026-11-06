@@ -1,7 +1,7 @@
 //! A local project's answer, computed from its database as the team server computes its own: the other resources that
 //! are not removed and whose latest published version names the resource ([`super::names`]), by name compared
 //! case-insensitively and then by id; and the runs that have not ended and pin any version of it, by the task key's
-//! number and then the run's number. A local run has no holder: no one else's claim is on its task.
+//! number and then the run id. A local run has no holder: no one else's claim is on its task.
 
 use std::{num::NonZeroU32, path::Path};
 
@@ -9,7 +9,6 @@ use orchester_api::SharedResourceKind;
 use orchester_core::{
   id::ResourceId,
   resource::{Resource, ResourceBody},
-  run::RunNumber,
   store::{ResourceStore, TaskStore},
 };
 use orchester_store::ProjectDb;
@@ -71,7 +70,7 @@ fn naming<B: ResourceBody>(
 /// The runs that have not ended and pin `target` by the rule an archive stops runs by ([`pins`]). A run that cannot
 /// be read is logged and left out, as it is when the archive stops runs (`crate::sharing::sync`).
 fn runs(db: &ProjectDb, target: &Resource) -> Result<Vec<UsedByRun>, UsedByError> {
-  let mut found: Vec<(NonZeroU32, RunNumber, UsedByRun)> = Vec::new();
+  let mut found: Vec<(NonZeroU32, UsedByRun)> = Vec::new();
   for listed in db.unfinished_runs()? {
     let run = match listed {
       Ok(run) if pins(db, run.snapshot(), target)? => run,
@@ -88,11 +87,10 @@ fn runs(db: &ProjectDb, target: &Resource) -> Result<Vec<UsedByRun>, UsedByError
     let used = UsedByRun {
       task_key: task.key().to_string(),
       run: run.id(),
-      number: run.number().get(),
       holder: None,
     };
-    found.push((task.key().number(), run.number(), used));
+    found.push((task.key().number(), used));
   }
-  found.sort_by_key(|(task, number, _)| (*task, *number));
-  Ok(found.into_iter().map(|(_, _, used)| used).collect())
+  found.sort_by_key(|(task, used)| (*task, used.run));
+  Ok(found.into_iter().map(|(_, used)| used).collect())
 }

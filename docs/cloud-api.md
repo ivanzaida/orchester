@@ -61,7 +61,7 @@ with the latest version. Uploading history at `POST /resources/import` uses the 
 confirmation reads before an admin archives a resource; any member may read it, and so may everyone who may archive
 it (`PATCH …/resources/{resource}`: the project owner or a server admin, a member or not). It only reads: archiving still
 cancels the runs it lists (row 79 of `docs/architecture/server.md`). The answer is
-`UsedBy { resources: [UsedByResource { kind, id, name, version }], runs: [UsedByRun { task_key, run, number, holder? }] }`,
+`UsedBy { resources: [UsedByResource { kind, id, name, version }], runs: [UsedByRun { task_key, run, holder? }] }`,
 and both lists are empty when nothing uses the resource.
 
 - **`resources`**: the other resources that are not archived and whose latest published version names this one, with
@@ -83,28 +83,38 @@ and both lists are empty when nothing uses the resource.
   the rule then reads those too (a profile's MCP servers among them), and this list is extended with it.
 - **`runs`**: the runs that have not ended and whose execution bundle pins any version of the resource, as the
   team server knows it from the bundle it built at `work.start` (`execution-bundles.md` of the platform): every
-  pipeline, agent profile, tool, instruction and skill version the bundle pins, and no other: a team reviewer or an MCP
-  server has no runs today. A run *has not ended*
-  from the `work.start` the server accepted until it accepts a terminal work report (`succeeded`, `failed` or
-  `cancelled`). A run whose last accepted report is `progress` has not ended, nor has one that was interrupted or waits
-  for a person on the desktop. A run whose runner stopped without a terminal report stays listed: a stale claim
-  (`stale_task_threshold`) does not end its run. Each is `{ task_key, run, number, holder? }`: the task's key (`KON-12`), the run's id and
-  its number within the task, and the `UserRef` who holds the task's claim now. After a take-over that is the new
-  holder; `holder` is absent when the claim was released. Ordered by the number part of the task key, numerically
-  (`KON-3` before `KON-12`), then by run number.
+  pipeline, agent profile, tool, instruction and skill version the bundle pins, and every MCP server version its
+  profiles name (task OP-198: the bundle carries the MCP server versions of the profiles it pins), and no other. A run
+  uses an MCP server only through the profile versions it pins, so it pins one when its bundle does. The desktop
+  reaches the same answer for a local run with the rule an archive stops runs by (`pins` in
+  `crates/workspace/src/sharing/sync/archive.rs`): a pinned profile version that chooses the server pins it. A team
+  reviewer has no runs.
+  - **When a run is listed**: the server learns a run id only from `work.report` (`WorkReport` carries `run_id`, no run
+    number), so a run is listed from the first work report the server accepted for it until a terminal one
+    (`succeeded`, `failed` or `cancelled`). Known limit: work that was started and has no accepted report yet is not
+    listed. A run whose last accepted report is `progress` has not ended, nor has one that was interrupted or waits for
+    a person on the desktop; a run whose runner stopped without a terminal report stays listed too: a stale claim
+    (`stale_task_threshold`) does not end its run.
+  - **Superseded**: a run whose work has a newer run (a later run id first reported for the same work) has ended,
+    even when its own last report was `progress`.
+  - **Shape and order**: each is `{ task_key, run, holder? }`: the task's key (`KON-12`), the run's id, and the
+    `UserRef` who holds the task's claim now. After a take-over that is the new holder; `holder` is absent when the
+    claim was released. There is no run number: the server has none. Ordered by the number part of the task key,
+    numerically (`KON-3` before `KON-12`), then by run id (a stable tie-break).
 - **Paging**: none. Both lists are returned whole: they are bounded by the project's resources and by its runs that
   have not ended.
 - **Access and errors**: a member of the project reads it, and so does whoever may archive the resource (the project
-  owner, or a server admin without membership, as `PATCH …/resources/{resource}` allows). Anyone else gets what the
-  sibling reads of `resources/{resource}` give (`GET …/versions`): `404`, one answer for a project the caller may not
-  read and for a resource the project does not have or an id that is no resource id (`404 not_found`), so it tells an
-  outsider nothing. An archived resource
-  answers `200` like any other, so an admin can check what still uses it before a restore.
+  owner, or a server admin without membership, as `PATCH …/resources/{resource}` allows). Access is checked first, and
+  one answer, `404 not_found`, serves a project the caller may not read, a resource the project does not have and an id
+  that is no resource id, so it tells an outsider nothing. (`GET …/versions` answers `400` for a malformed id; used-by
+  answers `404` for it, because the access check comes first.) An archived resource answers `200` like any other, so
+  an admin can check what still uses it before a restore.
 
 The client call is `used_by`. The stand-in team server answers it from its own resources, reading the typed fields
 above with core's body types, and from the runs a test registers with `TeamServer::pin_run`: it builds no execution
-bundle, so the pins a test names stand in for the bundle's, and `last_report` and `claim_run_task` stand in for the
-accepted work reports and the task's claim. It has no non-member, so that `404` is not exercised there.
+bundle, so the pins a test names stand in for the bundle's (an MCP server's id among them), a pinned run is one whose
+first work report was accepted, and `last_report`, `work` (the later run of a work supersedes the earlier ones) and
+`claim_run_task` stand in for the accepted work reports and the task's claim. It has no non-member, so that `404` is not exercised there.
 
 `SharedVersion` is `{ resource, number, body, hash, references, based_on, published, widens }`.
 The server computes `widens: boolean` with ORC-570's `TeamReviewer::widens_over` and keeps it on that immutable

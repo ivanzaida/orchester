@@ -182,11 +182,11 @@ fn instruction(text: &str, targets: &Value, scope: &Value) -> Value {
   json!({"text":text,"targets":targets,"events":["start"],"scope":scope})
 }
 
-fn pin(task_key: &str, number: u32, last_report: Option<RunReport>, pins: &[ResourceId]) -> PinnedRun {
+fn pin(task_key: &str, last_report: RunReport, pins: &[ResourceId]) -> PinnedRun {
   PinnedRun {
     task_key: task_key.to_owned(),
     run: RunId::generate(),
-    number,
+    work: 1,
     holder: Some(Person::Named("Dana Ruiz")),
     last_report,
     pins: pins.iter().map(|id| (*id, VersionNumber::FIRST)).collect(),
@@ -306,28 +306,30 @@ fn stand_in_lists_the_runs_that_have_not_ended_by_task_number_and_names_the_curr
     &[created(tool, "tool", ("deploy", "Deploy"), (&json!({}), &json!([])))],
   );
   let other = ResourceId::generate();
-  let running = pin("KON-12", 2, Some(RunReport::Progress), &[tool]);
-  let started = pin("KON-3", 2, None, &[tool, other]);
-  let first = pin("KON-3", 1, None, &[tool]);
-  let (held, released) = (started.run, first.run);
-  for run in [running, started, first] {
+  let running = pin("KON-12", RunReport::Progress, &[tool]);
+  let held = pin("KON-3", RunReport::Progress, &[tool, other]);
+  let released = pin("KON-4", RunReport::Progress, &[tool]);
+  let (held_run, released_run) = (held.run, released.run);
+  for run in [running, held, released] {
     team.server.pin_run("kontur", run);
   }
   for ended in [RunReport::Succeeded, RunReport::Failed, RunReport::Cancelled] {
-    team.server.pin_run("kontur", pin("KON-5", 1, Some(ended), &[tool]));
+    team.server.pin_run("kontur", pin("KON-5", ended, &[tool]));
   }
-  team.server.pin_run("kontur", pin("KON-9", 1, None, &[other]));
   team
     .server
-    .claim_run_task("kontur", held, Some(Person::Named("Lena Moroz")));
-  team.server.claim_run_task("kontur", released, None);
+    .pin_run("kontur", pin("KON-9", RunReport::Progress, &[other]));
+  team
+    .server
+    .claim_run_task("kontur", held_run, Some(Person::Named("Lena Moroz")));
+  team.server.claim_run_task("kontur", released_run, None);
 
   team.server.stand_as(Standing::Member);
   let (status, used) = used_by(&team, tool);
   assert_eq!(status, 200, "{used}");
   assert!(
-    used["runs"][0].get("holder").is_none(),
-    "a released claim has no holder: {used}"
+    used["runs"][1].get("holder").is_none() && used["runs"][0].get("number").is_none(),
+    "a released claim has no holder and a run has no number: {used}"
   );
   let used: UsedBy = serde_json::from_value(used).expect("used by");
   let runs: Vec<_> = used
@@ -336,7 +338,6 @@ fn stand_in_lists_the_runs_that_have_not_ended_by_task_number_and_names_the_curr
     .map(|run| {
       (
         run.task_key.as_str(),
-        run.number,
         run.holder.as_ref().map(|holder| holder.display_name.as_str()),
       )
     })
@@ -344,10 +345,65 @@ fn stand_in_lists_the_runs_that_have_not_ended_by_task_number_and_names_the_curr
   assert_eq!(
     runs,
     [
-      ("KON-3", 1, None),
-      ("KON-3", 2, Some("Lena Moroz")),
-      ("KON-12", 2, Some("Dana Ruiz"))
+      ("KON-3", Some("Lena Moroz")),
+      ("KON-4", None),
+      ("KON-12", Some("Dana Ruiz"))
     ]
+  );
+}
+
+#[test]
+fn stand_in_orders_the_runs_of_a_task_by_run_id_and_ends_a_run_its_work_superseded() {
+  let team = Team::start(Standing::Admin);
+  let tool = ResourceId::generate();
+  create_all(
+    &team,
+    &[created(tool, "tool", ("deploy", "Deploy"), (&json!({}), &json!([])))],
+  );
+  // The first run of work 1 last reported `progress`, and a later run of that work was first reported: it has ended.
+  let superseded = pin("KON-3", RunReport::Progress, &[tool]);
+  let current = pin("KON-3", RunReport::Progress, &[tool]);
+  let mut again = pin("KON-3", RunReport::Progress, &[tool]);
+  again.work = 2;
+  let mut expected = vec![current.run, again.run];
+  expected.sort();
+  for run in [superseded, current, again] {
+    team.server.pin_run("kontur", run);
+  }
+
+  let (status, used) = used_by(&team, tool);
+  assert_eq!(status, 200, "{used}");
+  let used: UsedBy = serde_json::from_value(used).expect("used by");
+  assert_eq!(
+    used.runs.iter().map(|run| run.run).collect::<Vec<_>>(),
+    expected,
+    "the superseded run is left out; the runs of two works of one task are ordered by run id"
+  );
+}
+
+#[test]
+fn stand_in_lists_the_runs_of_a_team_mcp_server_that_its_bundles_pin() {
+  let team = Team::start(Standing::Admin);
+  let (server, other) = (ResourceId::generate(), ResourceId::generate());
+  let (status, created) = team.resources("POST", "", &create(server, &server_body("npx")));
+  assert_eq!(status, 201, "{created}");
+  team
+    .server
+    .pin_run("kontur", pin("KON-7", RunReport::Progress, &[server, other]));
+  team
+    .server
+    .pin_run("kontur", pin("KON-8", RunReport::Progress, &[other]));
+  team
+    .server
+    .pin_run("kontur", pin("KON-9", RunReport::Succeeded, &[server]));
+
+  let (status, used) = used_by(&team, server);
+  assert_eq!(status, 200, "{used}");
+  let used: UsedBy = serde_json::from_value(used).expect("used by");
+  assert_eq!(
+    used.runs.iter().map(|run| run.task_key.as_str()).collect::<Vec<_>>(),
+    ["KON-7"],
+    "a run uses a team MCP server through the bundle that pins it until it has ended"
   );
 }
 
@@ -368,7 +424,9 @@ fn stand_in_answers_used_by_for_an_archived_resource_and_not_found_for_an_unknow
       ),
     ],
   );
-  team.server.pin_run("kontur", pin("KON-1", 1, None, &[tool]));
+  team
+    .server
+    .pin_run("kontur", pin("KON-1", RunReport::Progress, &[tool]));
   let patch = json!({"idempotency_key":IdempotencyKey::generate(),"revision":1,"archived":true});
   assert_eq!(team.resources("PATCH", &format!("/{tool}"), &patch).0, 200);
 
@@ -379,4 +437,6 @@ fn stand_in_answers_used_by_for_an_archived_resource_and_not_found_for_an_unknow
   assert_eq!(used.runs.len(), 1);
   let (status, missing) = used_by(&team, ResourceId::generate());
   assert_eq!((status, missing["error"].as_str()), (404, Some("not_found")));
+  let (status, malformed) = used_by(&team, "not-a-resource-id");
+  assert_eq!((status, malformed["error"].as_str()), (404, Some("not_found")));
 }

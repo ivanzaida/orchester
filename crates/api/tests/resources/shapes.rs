@@ -153,8 +153,8 @@ fn resources_used_by_round_trips_and_an_unused_resource_has_two_empty_lists() {
   let used = json!({
     "resources":[{"kind":"agent_profile","id":ResourceId::generate(),"name":"Reviewer","version":2}],
     "runs":[
-      {"task_key":"KON-7","run":RunId::generate(),"number":1,"holder":user()},
-      {"task_key":"KON-8","run":RunId::generate(),"number":1},
+      {"task_key":"KON-7","run":RunId::generate(),"holder":user()},
+      {"task_key":"KON-8","run":RunId::generate()},
     ],
   });
   let decoded: UsedBy = round_trip(&used);
