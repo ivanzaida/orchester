@@ -42,8 +42,9 @@ impl Client {
   }
 
   /// `GET …/resources/{resource}/used-by`: the other resources whose latest version names this one and the runs that
-  /// have not ended and whose execution bundle pins a version of it, which an archive stops; an admin reads it
-  /// before archiving. `404 not_found` for an unknown resource; an archived one answers normally.
+  /// have not ended and whose execution bundle pins a version of it, which an archive stops. A member reads it, and so
+  /// does whoever may archive it (the project owner or a server admin) before archiving. `404 not_found` for an
+  /// unknown resource; an archived one answers normally.
   pub async fn used_by(
     &self,
     token: &SecretValue,
