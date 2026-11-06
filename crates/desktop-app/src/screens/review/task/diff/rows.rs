@@ -20,7 +20,7 @@ const LINE_END: f32 = 24.0;
 
 /// One row of the run's diff. `index` is the row's position, its key in the list; `file`, its file's position.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(in crate::screens::merges::review) enum ReviewRow {
+pub(in crate::screens::review::task) enum ReviewRow {
   Head {
     index: usize,
     file: usize,

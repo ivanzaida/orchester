@@ -2,8 +2,7 @@
   "review": {
     "unavailable": {
       "title": "Review is being rebuilt",
-      "taskTitle": "Review of {{key}} is being rebuilt",
-      "body": "The list of tasks to review and a task's review page are not available yet."
+      "body": "The list of tasks to review is not available yet."
     }
   }
 }

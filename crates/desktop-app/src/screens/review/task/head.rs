@@ -21,7 +21,6 @@ use orchester_workspace::{
   display::{clock, short_revision},
   tasks::{
     changes::Checkpointed,
-    merge_attempts::read::ReviewIn,
     review_threads::{ReviewRefusal, page::ReviewPage},
   },
 };
@@ -134,8 +133,7 @@ pub(super) fn status(ctx: &Ctx, env: &Env) -> Element {
     .into()
 }
 
-/// *run #4 · every step passed · 7 files, +210 −36 · head 7c41e2b · merges into master through the merge queue once
-/// you approve*.
+/// *run #4 · every step passed · 7 files, +210 −36 · head 7c41e2b · into master*.
 fn meta(ctx: &Ctx, page: &ReviewPage, head: &Revision) -> Arc<str> {
   let mut parts = vec![ctx.t_args("review_page.status.run", [("run", page.run.number.get().to_string())])];
   let (passed, total) = page.steps;
@@ -160,12 +158,9 @@ fn meta(ctx: &Ctx, page: &ReviewPage, head: &Revision) -> Arc<str> {
     });
   }
   parts.push(ctx.t_args("review_page.status.head", [("head", short_revision(head.as_str()))]));
-  let branch = page.run.base.as_ref().map(|branch| branch.as_str().to_owned());
-  parts.push(match (page.review_in, branch) {
-    (Some(ReviewIn::MergeQueue), Some(branch)) => ctx.t_args("review_page.status.mergesQueue", [("branch", branch)]),
-    (_, Some(branch)) => ctx.t_args("review_page.status.mergesInto", [("branch", branch)]),
-    (_, None) => ctx.t("review_page.status.mergesOnce"),
-  });
+  if let Some(branch) = &page.run.base {
+    parts.push(ctx.t_args("review_page.status.into", [("branch", branch.as_str())]));
+  }
   joined(ctx, &parts)
 }
 

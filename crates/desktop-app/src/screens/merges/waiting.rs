@@ -3,7 +3,7 @@
 //! in the merge queue, with its `info` eye. Its line says what it changes, how it merges and the review comments not
 //! sent yet; once its branch moved after the head that was reviewed, *Changed since your review: 2 commits after
 //! 0d6969d* in `warning` (`wVIYy` in `Row · KON-20` `cd7dN`). The row, and its *Review changes* or *Review again*, open
-//! the run's review page (ORC-697, [`super::review`]).
+//! the run's review page (ORC-795, `screens::review::task`).
 
 use std::sync::Arc;
 
@@ -21,7 +21,7 @@ use orchester_workspace::{
 };
 
 use super::{
-  attempt_page,
+  review_page,
   row::{self, Shown},
   words,
 };
@@ -73,13 +73,13 @@ fn shown(ctx: &mut Ctx, project: &ShownProject, run: &WaitingRun) -> Shown {
   let review = ActionButton::new(format!("{id}-action"), ButtonKind::Secondary, ctx.t(key))
     .icon(Icon::FileDiff)
     .small()
-    .opens(attempt_page(ctx, project, &run.run));
+    .opens(review_page(ctx, project, &run.run));
   Shown {
     glyph: (Icon::Eye, PaletteColor::Info),
     line: (row::line(&id, &line, color), name),
     meta,
     action: Some(review.into()),
-    opens: attempt_page(ctx, project, &run.run),
+    opens: review_page(ctx, project, &run.run),
     id,
   }
 }

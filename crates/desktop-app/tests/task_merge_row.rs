@@ -229,3 +229,15 @@ fn task_merge_row_stays_beside_the_not_merged_card_and_opens_the_attempt_page() 
     Route::Project(page.project, ProjectPage::MergeAttempt(key, run.number()))
   );
 }
+
+#[test]
+fn task_merge_row_opens_the_review_of_a_run_that_waits_for_it() {
+  let mut page = Page::new();
+  let key = page.open("Webhook replay endpoint");
+  page.until_row("Waits for your review");
+  page.window.press("task-merge-row");
+  let route = Route::Project(page.project, ProjectPage::TaskReview(key));
+  page
+    .window
+    .until("the task's review", |window| window.navigation().route_now() == route);
+}

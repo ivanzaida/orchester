@@ -12,7 +12,7 @@ mod attempts;
 mod checks;
 mod conflicts;
 mod details;
-pub(super) mod head;
+pub(crate) mod head;
 mod left;
 mod properties;
 pub(crate) mod read;

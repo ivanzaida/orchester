@@ -112,6 +112,13 @@ fn merge_queue_lists_runs_waiting_for_approval_left_and_merged_today_and_counts_
       .texts("nav-review")
       .is_some_and(|texts| texts.iter().any(|text| text == "1"))
   });
+  seeded.window.press("merge-queue-row-2-review");
+  seeded.window.until("the task's review", |window| {
+    matches!(
+      window.navigation().route_now(),
+      Route::Project(_, ProjectPage::TaskReview(_))
+    )
+  });
 }
 
 #[test]

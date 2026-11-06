@@ -65,7 +65,7 @@ pub(in crate::screens::merges) fn crumbs(ctx: &mut Ctx, project: &ShownProject, 
 }
 
 /// The title and, at the end of its row, `actions`: the ghost one, *Open task*, the primary one.
-pub(in crate::screens::merges) fn title(title: &str, actions: Vec<Element>) -> Element {
+pub(crate) fn title(title: &str, actions: Vec<Element>) -> Element {
   Row::new()
     .id("merge-attempt-header")
     .width(Dimension::Pct(100.0))

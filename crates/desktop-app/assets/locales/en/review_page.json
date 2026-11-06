@@ -3,6 +3,9 @@
     "reading": "Reading the run's review…",
     "readFailed": "The run's review can't be read",
     "readFailedBody": "{{reason}}",
+    "crumb": "{{key}} · run {{run}}",
+    "noRun": "Nothing to review for {{key}}",
+    "noRunBody": "The task has no run that waits for your review or was sent back from it.",
     "nothing": "Nothing to review yet",
     "nothingBody": "The run has no checkpoint, so its work has no diff to review.",
     "tooLarge": "Too large to review here",
@@ -20,9 +23,7 @@
       "sizeOne": "1 file, +{{added}} −{{removed}}",
       "sizeOther": "{{files}} files, +{{added}} −{{removed}}",
       "head": "head {{head}}",
-      "mergesQueue": "merges into {{branch}} through the merge queue once you approve",
-      "mergesInto": "merges into {{branch}} once you approve",
-      "mergesOnce": "merges once you approve"
+      "into": "into {{branch}}"
     },
     "changed": {
       "title": "Changed since your review",

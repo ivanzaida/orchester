@@ -1,16 +1,16 @@
-//! Reading the review page (`review_threads::page`) off the UI thread, again whenever the project's tasks or runs
-//! change state, a merge job ends, or a change of the page landed; and the run's review alone, again on every change
-//! of the project's runs while a tab of it is active, so an answer streams in as Implement writes it.
+//! Reading the task's review page (`review_threads::page`) off the UI thread, again whenever the project's tasks or
+//! runs change state, a merge job ends, or a change of the page landed; and the run's review alone, again on every
+//! change of the project's runs while a tab of it is active, so an answer streams in as Implement writes it.
 
 use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
-use orchester_core::{id::RunId, project::TaskKey, run::RunNumber};
+use orchester_core::{id::RunId, project::TaskKey};
 use orchester_workspace::{
   background,
   messages::Message,
   tasks::review_threads::{
-    page::{ReviewPage, review_page},
+    page::{ReviewPage, task_review_page},
     read::{Review, review_of},
   },
 };
@@ -20,21 +20,16 @@ use crate::{project::ShownProject, services::Services};
 
 /// What the page shows of the run.
 #[derive(Clone, Debug, PartialEq)]
-pub(in crate::screens::merges) enum Read {
+pub(in crate::screens::review) enum Read {
   Reading,
-  /// The run is not reviewed here: no such run, or its attempts tell it.
-  Elsewhere,
+  /// The task has no run to review: no such task, or none of its runs waits for review or was sent back from it.
+  Nothing,
   Ready(Arc<ReviewPage>),
   Failed(Message),
 }
 
-/// Run `number` of the task `key` in `project`, as last read; `again` counts what should read it again.
-pub(in crate::screens::merges) fn read(
-  ctx: &mut Ctx,
-  project: &ShownProject,
-  (key, number): (&TaskKey, RunNumber),
-  again: u64,
-) -> Read {
+/// The review of the task `key` in `project` as last read; `again` counts what should read it again.
+pub(in crate::screens::review) fn read(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey, again: u64) -> Read {
   let feed = &project.feed;
   let Some(tasks) = feed.tasks.with(|tasks| tasks.ready().cloned()) else {
     return Read::Reading;
@@ -44,19 +39,16 @@ pub(in crate::screens::merges) fn read(
   let services = Services::of(ctx);
   let (programs, hold) = (services.programs, services.hold);
   let loaded = ctx
-    .future(
-      (root, tasks, key.clone(), number, changes),
-      move |(root, tasks, key, number, _)| {
-        let (programs, hold) = (programs.clone(), hold.clone());
-        async move {
-          hold.released().await;
-          background::run(move || review_page(&tasks, (&root, &programs), (&key, number)))
-            .await?
-            .map(|page| Held(page.map(Arc::new)))
-            .map_err(|refusal| refusal.message())
-        }
-      },
-    )
+    .future((root, tasks, key.clone(), changes), move |(root, tasks, key, _)| {
+      let (programs, hold) = (programs.clone(), hold.clone());
+      async move {
+        hold.released().await;
+        background::run(move || task_review_page(&tasks, (&root, &programs), &key))
+          .await?
+          .map(|page| Held(page.map(Arc::new)))
+          .map_err(|refusal| refusal.message())
+      }
+    })
     .state()
     .get();
   if let Some(error) = loaded.error.clone().filter(|_| loaded.is_rejected()) {
@@ -64,7 +56,7 @@ pub(in crate::screens::merges) fn read(
   }
   match loaded.data {
     None => Read::Reading,
-    Some(Held(None)) => Read::Elsewhere,
+    Some(Held(None)) => Read::Nothing,
     Some(Held(Some(page))) => Read::Ready(page),
   }
 }

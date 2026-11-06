@@ -275,16 +275,10 @@ fn home_screens() -> Vec<(Route, Vec<&'static str>)> {
   .to_vec()
 }
 
-/// Review's list and a task's review, which say that Review is being rebuilt until their tasks build them.
-fn review_screens() -> [(Route, Vec<&'static str>); 2] {
-  let body = "The list of tasks to review and a task's review page are not available yet.";
-  [
-    (at(ProjectPage::Review), vec!["Review is being rebuilt", body]),
-    (
-      at(ProjectPage::TaskReview(key("KON-12"))),
-      vec!["Review of KON-12 is being rebuilt", body],
-    ),
-  ]
+/// Review's list, which says that Review is being rebuilt until its task builds it; a task's review has its own tests.
+fn review_screens() -> [(Route, Vec<&'static str>); 1] {
+  let body = "The list of tasks to review is not available yet.";
+  [(at(ProjectPage::Review), vec!["Review is being rebuilt", body])]
 }
 
 /// A route of every screen, with what it shows first; a screen in `BUILT` its own tests read, by its title here.
