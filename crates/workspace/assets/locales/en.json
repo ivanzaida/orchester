@@ -2235,18 +2235,16 @@
         "viaModule": "«{{title}}» · via {{module}}",
         "viaWithoutModule": "«{{title}}» · via the tasks without a module",
         "viaProject": "«{{title}}» · via the whole project"
-      }
-    },
-    "settings": {
-      "connectionGone": "The Orchestrator's connection was removed. Choose another one.",
-      "cliOnly": "The Orchestrator runs on Claude Code and Codex connections. This one runs a native agent on an API key; choose another one."
-    },
-    "watch": {
+      },
       "noTarget": "Choose what to watch first.",
       "gone": "Not applied · {{targets}} was closed or deleted meanwhile — nothing changed",
       "notWatched": "Not applied · this conversation doesn't watch that — nothing changed",
       "ledElsewhere": "Not applied · it's led in «{{title}}» now — nothing changed",
       "alreadyHere": "This conversation leads it already."
+    },
+    "settings": {
+      "connectionGone": "The Orchestrator's connection was removed. Choose another one.",
+      "cliOnly": "The Orchestrator runs on Claude Code and Codex connections. This one runs a native agent on an API key; choose another one."
     },
     "send": {
       "blank": "Write a message first.",
