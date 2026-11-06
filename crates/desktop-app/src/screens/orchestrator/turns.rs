@@ -15,7 +15,7 @@ use orchester_core::{
   id::ChatMessageId,
   orchestrator::{
     AgentWait, ChatAction, ChatEntry, ChatEvent, ChatPlan, DailyReport, EntryKind, PlanState, TurnMode, TurnState,
-    WaitTurn,
+    WaitTurn, watch::WatchSummary,
   },
   time::Timestamp,
 };
@@ -92,6 +92,8 @@ pub(super) struct Turn {
   pub(super) moved: Option<EndMoved>,
   /// The daily report that opens the row instead of a person's message.
   pub(super) report: Option<Box<DailyReport>>,
+  /// The end of a subscription that ended by itself, whose line opens the row instead of a person's message.
+  pub(super) watch_ended: Option<Box<WatchSummary>>,
   /// An event that is the whole row: a compaction of the session (`super::compaction`), or where a rewind went back
   /// to (`super::rewind::line`).
   pub(super) compaction: Option<ChatEvent>,
@@ -134,6 +136,7 @@ impl Turn {
       stands: false,
       moved: None,
       report: None,
+      watch_ended: None,
       compaction: None,
       seq: None,
       last: None,
@@ -148,10 +151,10 @@ impl Turn {
     }
   }
 
-  /// Whether its turn, if any, was one Orchester started by itself: a wait's or a report's, with no words of the
-  /// person's to send again.
+  /// Whether its turn, if any, was one Orchester started by itself: a wait's, a report's or a subscription's end's,
+  /// with no words of the person's to send again.
   pub(super) const fn on_its_own(&self) -> bool {
-    self.wait.is_some() || self.report.is_some()
+    self.wait.is_some() || self.report.is_some() || self.watch_ended.is_some()
   }
 
   /// Whether what the Orchestrator says next belongs to this row: one with a turn of its own, or a message the answer
@@ -171,6 +174,7 @@ impl Turn {
       stands: false,
       moved: None,
       report: None,
+      watch_ended: None,
       compaction: None,
       seq: Some(entry.seq),
       last: None,
@@ -255,6 +259,13 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
       EntryKind::Report { report, turn } => {
         turns.push(Turn {
           report: Some(report.clone()),
+          ..Turn::opened(entry, turn.as_ref())
+        });
+        continue;
+      }
+      EntryKind::WatchEnded { summary, turn } => {
+        turns.push(Turn {
+          watch_ended: Some(summary.clone()),
           ..Turn::opened(entry, turn.as_ref())
         });
         continue;
@@ -382,6 +393,7 @@ fn person(
     stands: false,
     moved: None,
     report: None,
+    watch_ended: None,
     compaction: None,
     seq: Some(entry.seq),
     last: None,

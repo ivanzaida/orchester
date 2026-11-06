@@ -25,7 +25,10 @@ use orchester_core::{
   id::{ChatMessageId, ProjectId},
   orchestrator::{Queued, TurnState, WaitKind},
 };
-use orchester_workspace::{orchestrator::tools::ChatScope, workspace::OpenProject};
+use orchester_workspace::{
+  orchestrator::{tools::ChatScope, watch_ends::ended_line},
+  workspace::OpenProject,
+};
 
 use super::{
   digest::{Digest, DigestProps, Waited, for_the_person},
@@ -44,6 +47,7 @@ use crate::{
       names::ProjectNames,
     },
     markdown::LinkHandler,
+    message::message_text,
   },
 };
 
@@ -363,9 +367,18 @@ fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
   room(ctx, dimmed(column, dropped), first)
 }
 
-/// What opens `row`, keyed `key`, and its answer. A wait of an agent, a run's end and a daily report open their row
-/// with their own line or card; a person's turn with their message. What a wait's turn said nests under its line.
+/// What opens `row`, keyed `key`, and its answer. A wait of an agent, a run's end, a daily report and a subscription
+/// that ended by itself open their row with their own line or card; a person's turn with their message. What a wait's
+/// turn said nests under its line.
 fn opening(ctx: &mut Ctx, row: &TurnRow, key: &str) -> (Element, Option<Element>) {
+  if let Some(summary) = &row.turn.watch_ended {
+    let line = Text::new(&message_text(ctx, &ended_line(summary)))
+      .id(format!("orchestrator-watch-ended-{key}"))
+      .variant(TypographyStyle::Description)
+      .color(PaletteColor::TextMuted)
+      .width(Dimension::Pct(100.0));
+    return (line.into(), super::answer::answer(ctx, row));
+  }
   match (&row.turn.wait, &row.turn.report) {
     (Some(wait), _) => {
       let id = format!("orchestrator-wait-{key}");

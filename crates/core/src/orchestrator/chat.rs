@@ -11,7 +11,7 @@ use super::{
   report::DailyReport,
   rewind::RewoundTo,
   wait::AgentWait,
-  watch::CreatedWatch,
+  watch::{CreatedWatch, WatchSummary},
 };
 use crate::{
   connection::AccountStartProblem,
@@ -473,12 +473,18 @@ pub enum EntryKind {
     report: Box<DailyReport>,
     turn: Option<WaitTurn>,
   },
+  /// A subscription of the conversation ended by itself ([`WatchSummary`], ORC-764): its line, and the turn it
+  /// started by itself to write the summary of its module or task, once it started one.
+  WatchEnded {
+    summary: Box<WatchSummary>,
+    turn: Option<WaitTurn>,
+  },
   /// A plan the Orchestrator answered with in a turn that plans, and where it stands ([`super::plan`]).
   Plan(Box<ChatPlan>),
 }
 
-/// The Orchestrator turn a wait or a daily report started by itself: under the id its prompt was kept by, where it
-/// stands and when it ended, as a person's message's turn.
+/// The Orchestrator turn a wait, a daily report or a subscription's end started by itself: under the id its prompt was
+/// kept by, where it stands and when it ended, as a person's message's turn.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct WaitTurn {
   pub message: ChatMessageId,
@@ -487,8 +493,9 @@ pub struct WaitTurn {
 }
 
 impl EntryKind {
-  /// The turn this entry started, and where it stands: a person's message's, or a wait's or a report's that started
-  /// one. A person's message that waits for the turn under way, or that turn took, started none.
+  /// The turn this entry started, and where it stands: a person's message's, or a wait's, a report's or a
+  /// subscription's end's that started one. A person's message that waits for the turn under way, or that turn took,
+  /// started none.
   pub fn turn(&self) -> Option<(ChatMessageId, &TurnState)> {
     match self {
       Self::Person { message, turn, .. } if turn.has_turn() => Some((*message, turn)),
@@ -497,9 +504,18 @@ impl EntryKind {
       }
       | Self::Report {
         turn: Some(started), ..
+      }
+      | Self::WatchEnded {
+        turn: Some(started), ..
       } => Some((started.message, &started.state)),
       _ => None,
     }
+  }
+
+  /// Whether its turn, started by itself, changes nothing: a daily report's, or the one a subscription's end starts to
+  /// write a summary.
+  pub const fn changes_nothing(&self) -> bool {
+    matches!(self, Self::Report { .. } | Self::WatchEnded { .. })
   }
 }
 

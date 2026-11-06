@@ -6,14 +6,16 @@
 //! which [`Subscriptions`] keeps, so two subscriptions never tie.
 //!
 //! The rules that need no store beside them (the orchestrator-watch design frame "What the design decides", rows
-//! Ending and Created tasks): when a subscription ends by itself ([`ending`]), what a person's stop leaves open
-//! ([`stop`]), and which task the leading conversation creates becomes a task subscription of it ([`created`]).
+//! Ending and Created tasks): when a subscription ends by itself ([`ending`]) and what its conversation keeps of that
+//! end ([`WatchSummary`]), what a person's stop leaves open ([`stop`]), and which task the leading conversation
+//! creates becomes a task subscription of it ([`created`]).
 
 mod change;
 pub mod created;
 mod ended;
 pub mod ending;
 pub mod stop;
+mod summary;
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
@@ -24,6 +26,7 @@ pub use self::{
   ended::WatchEnd,
   ending::{EndReason, Ending, NeverEnds, TargetTasks},
   stop::{LeftOpen, OpenWork},
+  summary::WatchSummary,
 };
 use crate::{
   id::{ChatId, ModuleId, TaskId},

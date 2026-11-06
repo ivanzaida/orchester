@@ -2,7 +2,8 @@
 //! takes up its own doing in a loop and never decides what is the person's: in a turn a wait or a run's end started by
 //! itself ([`super::tools::ChatScope::on_its_own`]) nobody asked for anything, so a merge, a start, a pause, a resume,
 //! a release of new starts and a publication are only proposed, whatever the person's switches and auto mode; in one a
-//! day's report started (ORC-47) the chat changes nothing at all: every change a card carries is proposed, whatever
+//! day's report started (ORC-47), or a subscription that ended by itself to have its summary written (ORC-764), the
+//! chat changes nothing at all: every change a card carries is proposed, whatever
 //! the person's switches, and any other is refused; a message that moves a run none of whose agents waits or works (a
 //! follow-up, a continuation, a resume, the task run again) is always proposed; a run stopped at a limit, canceled, or
 //! interrupted with its worktree gone or by the runner failing to record it for any reason but the database staying
@@ -59,7 +60,8 @@ pub(super) async fn only_proposed(scope: &ChatScope, name: &str) -> Result<bool,
   Ok(matches!(name, MERGE_RUN | PAUSE_RUN | RELEASE_QUEUE) || Publishing::of_tool(name).is_some())
 }
 
-/// Whether the turn under way in `scope`'s conversation is the one a day's report started by itself.
+/// Whether the turn under way in `scope`'s conversation is the one a day's report, or a subscription that ended by
+/// itself to have its summary written (ORC-764), started by itself: either changes nothing.
 pub(super) async fn in_report_turn(scope: &ChatScope) -> Result<bool, ToolError> {
   if !scope.on_its_own {
     return Ok(false);
@@ -84,13 +86,14 @@ fn card_carries(name: &str) -> bool {
   ) || Publishing::of_tool(name).is_some()
 }
 
-/// Whether the turn that thinks now among a conversation's `entries` is one a day's report started.
+/// Whether the turn that thinks now among a conversation's `entries` is one that changes nothing: a day's report's,
+/// or a subscription's end's.
 fn thinking_report(entries: &[ChatEntry]) -> bool {
   entries
     .iter()
     .rev()
     .find(|entry| entry.kind.turn().is_some_and(|(_, state)| state.is_thinking()))
-    .is_some_and(|entry| matches!(entry.kind, EntryKind::Report { .. }))
+    .is_some_and(|entry| entry.kind.changes_nothing())
 }
 
 /// What the chat's `resume_run` does.

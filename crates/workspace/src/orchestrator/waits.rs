@@ -16,8 +16,9 @@
 //! success merges the run when the chat's rule lets it ([`super::auto_merge`]), one such turn at a time in the order
 //! the runs ended; a run that committed nothing and whose result is its report is completed by the same rule, without a
 //! turn (ORC-93). A daily report kept to start a turn ([`super::report`]) gets its turn the same way, oldest entry
-//! first. The app attaches the runner when [`follow_in`] says a turn is pending, and asks it for the turns
-//! [`follow_in`] gives, with the chat's tools served for them.
+//! first, and so does the summary of a subscription that ended by itself, which each follow looks for
+//! ([`super::watch_ends`], ORC-764). The app attaches the runner when [`follow_in`] says a turn is pending, and asks
+//! it for the turns [`follow_in`] gives, with the chat's tools served for them.
 
 use std::{
   collections::{HashMap, HashSet},
@@ -47,6 +48,7 @@ use super::{
   chat::EndMoved,
   run_ends::{Reading, current_ends, end_moved, merge_checks},
   settings::OrchestratorSetup,
+  watch_ends,
 };
 use crate::{
   links::{Link, TaskPage},
@@ -65,7 +67,8 @@ pub struct WaitTurn {
   pub message: ChatMessageId,
 }
 
-/// What following the waits did: whether it kept a new wait, the turn a wait started by itself, if one did, and
+/// What following the waits did: whether it kept a new wait or the end of a subscription that ended by itself, the
+/// turn a wait started by itself, if one did, and
 /// whether a wait would start its turn now but the project's runner has not attached yet. The conversations changed
 /// only when `kept` or `turn` is so. `completed`: the Orchestrator completed a run that committed nothing on its own
 /// (ORC-93), so the project's tasks changed.
@@ -155,8 +158,10 @@ fn follow(reading: &Reading, (switches, ready): (Switches, bool), attached: bool
   let new: Vec<&(String, AgentWait)> = now.iter().filter(|(key, _)| !kept.contains(key)).collect();
   let kept = keep_new((&mut db, reading.root), &new, switches)?;
   let completed = switches.answers && switches.merges && complete_on_its_own(&db, reading)?;
+  // After the waits, so that a watched task's last run end is kept while its conversation still leads it.
+  let ended = watch_ends::end_closed(&mut db, ready, Timestamp::now())?;
   let followed = Followed {
-    kept,
+    kept: kept || ended,
     completed,
     ..Followed::default()
   };
@@ -304,8 +309,8 @@ fn continuing((db, root): (&ProjectDb, &Path), wait: &AgentWait) -> Result<Optio
 type NextTurn = (ChatId, i64, bool);
 
 /// The entries of every conversation that start a turn by themselves and have none, oldest first: the waits that
-/// still wait (their keys among `waiting`), and the daily reports (`super::report`), whose turn adds a summary to what
-/// they tell.
+/// still wait (their keys among `waiting`), the daily reports (`super::report`), whose turn adds a summary to what
+/// they tell, and the ends of subscriptions (`super::watch_ends`), whose turn writes their module's or task's summary.
 fn next_turns(db: &ProjectDb, waiting: &HashSet<&str>) -> Result<Vec<NextTurn>, StoreError> {
   let mut next: Vec<NextTurn> = db
     .automatic_waits_without_turn()?

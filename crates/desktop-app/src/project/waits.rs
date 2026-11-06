@@ -1,5 +1,6 @@
 //! The Orchestrator chat follows the agents of an open project (`orchester_workspace::orchestrator::waits`): whenever
-//! the project's runs change state or its conversations change, its new waits are kept in the conversation, and a
+//! the project's runs change state, its tasks are saved or its conversations change, its new waits are kept in the
+//! conversation, the subscriptions whose tasks were all closed end (ORC-764), and a
 //! wait that starts an Orchestrator turn by itself gets its turn as a person's message does: the project's runner
 //! attached first, its tools served (`mcp::chat`) and the runner asked to answer it. Mounted with the project's feed,
 //! so it follows the project while its tabs are inactive and whether or not the Orchestrator's screen is open. Each
@@ -42,13 +43,14 @@ pub(super) static KEEPING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_ne
 /// again.
 static QUIET: LazyLock<parking_lot::Mutex<HashMap<PathBuf, HashSet<SucceededAt>>>> = LazyLock::new(Default::default);
 
-/// Follows `open`'s waits again whenever its run `states` or its conversations change. Renders nothing.
-pub(super) fn follow(ctx: &mut Ctx, (open, states): (&OpenProject, u64)) {
+/// Follows `open`'s waits again whenever its run states or its tasks change (`changes` counts both) or its
+/// conversations do. Renders nothing.
+pub(super) fn follow(ctx: &mut Ctx, (open, changes): (&OpenProject, u64)) {
   let services = Services::of(ctx);
   let chats = chats(ctx, (services.runners.clone(), open.repo_root.clone()));
   let i18n = ctx.i18n().clone();
   let open = open.clone();
-  ctx.future((open.repo_root.clone(), states, chats), move |_| {
+  ctx.future((open.repo_root.clone(), changes, chats), move |_| {
     let (services, i18n, open) = (services.clone(), i18n.clone(), open.clone());
     async move {
       // A future whose deps change is replaced and aborted, and the turn a follower starts changes them (its
