@@ -206,8 +206,13 @@ workspace's manager; ready on a line showing a local URL. A Cargo binary target 
 key and what it could not carry; names are slugs, kept apart across files (`postgres`, `postgres-2`). Saving the chosen
 ones makes new services and stacks whose first draft is the proposal, never a version; a name the project has already is
 kept. MCP: `list_service_proposals` and `save_service_proposals` (saving services is person_only unless *Let automation
-change agent permissions*; stacks are always taken). Not built: the import page (task 22) and the Orchestrator chat's
-proposal cards.
+change agent permissions*; stacks are always taken).
+
+Built (ORC-264): Project settings › Services › *Import draft* (`DFWRJ`) reads the checkout once as it opens and shows
+the proposals grouped by their file, each with what was found, a line per key it could not carry with why, and Keep or
+Skip; what a file holds but cannot be proposed, and a proposal whose name the project has already, show Skip with why.
+*Save N drafts* saves the kept ones as they were read (a person saves here, so no widening question) and returns to the
+tab; *Cancel* saves nothing. Not built: the Orchestrator chat's proposal cards.
 
 ## Limits and load
 

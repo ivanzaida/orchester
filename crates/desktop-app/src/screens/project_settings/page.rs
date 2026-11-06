@@ -18,7 +18,7 @@ use super::{Section, Shown, Status};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::{NewConnection, Route, Screen},
+  routes::{NewConnection, Route, Screen, ServicesPage},
   theme::{ExtraSpacing, ExtraTypography, ProjectSettingsSpacing, TaskFormSpacing},
   ui::{
     icon::{Icon, icon},
@@ -60,8 +60,10 @@ pub fn settings(
     })
     .collect::<Vec<_>>();
   let save = match shown {
-    // A provider being added says it isn't saved yet (`Saved` `v6VzvO` in `10` `LaTB4`).
-    Shown::NewConnection(NewConnection::AgentProvider | NewConnection::DecisionModel) => Some(status_line(
+    // A provider being added says it isn't saved yet (`Saved` `v6VzvO` in `10` `LaTB4`), and so does Import draft
+    // until its drafts are saved (`Saved` `N0GBnO` in `DFWRJ`).
+    Shown::NewConnection(NewConnection::AgentProvider | NewConnection::DecisionModel)
+    | Shown::Services(ServicesPage::Import) => Some(status_line(
       ctx,
       (Icon::CircleDashed, PaletteColor::TextMuted),
       "project_settings.notSavedYet",

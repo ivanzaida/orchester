@@ -13,7 +13,7 @@ use orchester_workspace::agent_testing::data::Entry;
 /// What separates two facts of a hint, and two steps of a stack's start.
 const FACTS: &str = " · ";
 const STEPS: &str = " → ";
-const LIST: &str = ", ";
+pub(super) const LIST: &str = ", ";
 
 /// A service's driver as its chip names it (`Chip · no UI` `GCK3E`).
 pub(super) fn driver(ctx: &Ctx, driver: UiDriver) -> Arc<str> {
@@ -145,7 +145,8 @@ fn timeout(ctx: &Ctx, timeout: CommandTimeout) -> Arc<str> {
   }
 }
 
-fn join<const N: usize>(facts: [Option<Arc<str>>; N]) -> String {
+/// The facts given, each a whole message, joined by ` · `.
+pub(super) fn join<const N: usize>(facts: [Option<Arc<str>>; N]) -> String {
   facts
     .into_iter()
     .flatten()

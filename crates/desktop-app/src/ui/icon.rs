@@ -217,6 +217,7 @@ icons! {
   Newspaper => '\u{e348}',
   OctagonPause => '\u{e21b}',
   OctagonX => '\u{e128}',
+  Package => '\u{e129}',
   PackageCheck => '\u{e266}',
   PackageOpen => '\u{e2cc}',
   PanelRight => '\u{e431}',

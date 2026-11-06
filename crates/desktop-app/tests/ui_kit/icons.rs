@@ -275,3 +275,17 @@ fn team_claim_icons_match_bundled_font_names() {
     assert_eq!(icon.glyph() as usize, codepoint, "{icon:?} codepoint: {codepoint:x}");
   }
 }
+
+/// The glyph of a Cargo file's group on Import draft (`W01Hk` in `DFWRJ`).
+#[test]
+fn import_draft_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  let codepoint = (0xe000..0xf000)
+    .find(|codepoint| glyph_name(font, font_glyph(font, *codepoint)) == "package")
+    .expect("the bundled font includes the icon");
+  assert_eq!(
+    Icon::Package.glyph() as usize,
+    codepoint,
+    "package codepoint: {codepoint:x}"
+  );
+}

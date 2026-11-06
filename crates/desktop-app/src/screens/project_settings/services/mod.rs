@@ -3,15 +3,16 @@
 //! the order they start their services in and the slots they take; its test suites with their layer; and the entry to
 //! Flaky tests ([`groups`]). With no service yet it says what a service is and offers Import draft and New service.
 //! A service's row and New service open the service's page ([`editor`]), a stack's row and New stack the stack's
-//! ([`stack`]), a suite's row and New suite the suite's ([`suite`]); Import draft and Flaky tests say they are not
-//! built yet ([`not_built`]). The three editors share their delete modal ([`delete`]) and how they say where they
-//! stand ([`lifecycle`]).
+//! ([`stack`]), a suite's row and New suite the suite's ([`suite`]), Import draft the proposals read from the checkout
+//! ([`import`]); Flaky tests says it is not built yet ([`not_built`]). The three editors share their delete modal
+//! ([`delete`]) and how they say where they stand ([`lifecycle`]).
 //!
 //! What the tab lists is read off the UI thread when it opens and when the project's tasks are saved; services that
 //! automation adds while it shows appear when it is opened again.
 mod delete;
 mod editor;
 mod groups;
+mod import;
 mod lifecycle;
 mod not_built;
 mod stack;
@@ -47,6 +48,7 @@ pub(super) fn services_page(ctx: &mut Ctx, props: &TabProps, shown: ServicesPage
     ServicesPage::Stack(id) => stack::editor(ctx, props, Some(id)),
     ServicesPage::NewSuite => suite::editor(ctx, props, None),
     ServicesPage::Suite(id) => suite::editor(ctx, props, Some(id)),
+    ServicesPage::Import => import::import(ctx, props),
     other => not_built(ctx, &props.project, other),
   }
 }

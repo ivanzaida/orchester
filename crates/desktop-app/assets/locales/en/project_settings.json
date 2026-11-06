@@ -523,6 +523,43 @@
         "suite": "Test suite",
         "notBuilt": "This page is not built in this app yet."
       },
+      "import": {
+        "title": "Import a first draft",
+        "lead": "Orchester read these files once. Keep what you want: kept items become drafts you then edit here. Nothing in the repository changes, and the files are not read again.",
+        "reading": "Reading the checkout…",
+        "loadFailed": "The checkout cannot be read",
+        "fileKept": "{{kept}} of {{count}} kept",
+        "kind": {
+          "service": "service",
+          "stack": "stack"
+        },
+        "found": {
+          "image": "image {{image}} → a fresh database container per run",
+          "command": "{{key}} → {{command}}",
+          "stack": "starts {{names}}"
+        },
+        "exists": {
+          "service": "The project has a service named {{name}} already; saving keeps that one",
+          "stack": "The project has a stack named {{name}} already; saving keeps that one"
+        },
+        "cannotKeep": "Orchester cannot make a draft of this; why is said under its name.",
+        "keep": "Keep",
+        "skip": "Skip",
+        "unreadable": "Files not read",
+        "truncated": "The checkout holds more files than the import lists; what lies past them is not read.",
+        "startsWith": "No UI driver or seed can be read from these files: each draft starts with none until you edit it.",
+        "empty": {
+          "title": "Nothing to import",
+          "explanation": "No compose service, package.json dev, start, preview or serve script, or Cargo binary was found in the checkout. Add services by hand with New service."
+        },
+        "tally": "{{kept}} kept · {{skipped}} skipped · each new service asks for approval on its first start",
+        "cancel": "Cancel",
+        "save": {
+          "one": "Save 1 draft",
+          "other": "Save {{count}} drafts"
+        },
+        "saveWaits": "Keep at least one proposal to save it as a draft."
+      },
       "editor": {
         "lead": "A run starts it when an agent or the Test step needs it, and stops it when the step ends, the run pauses or waits for you.",
         "newLead": "A program Orchester starts for a run, without a shell. It is saved as a draft as you go; runs start it once it is published.",

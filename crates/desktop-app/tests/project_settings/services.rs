@@ -1,6 +1,6 @@
 //! Project settings › Services (`01 · Services` `G1sdS`, `01b · Services · none yet` `CdjWu`): the empty state with
 //! Import draft and New service, the rows of what the project defines with their real facts, the pages a row, New
-//! and Import draft open, which say they are not built yet, and `navigate` to them. Run with
+//! and Import draft open, and `navigate` to them. Run with
 //! `cargo test -p orchester-app --test project_settings services`.
 
 use orchester_app::mcp::tools::navigate;
@@ -85,13 +85,10 @@ fn services_tab_without_services_offers_import_and_new() {
   assert!(settings.exists("settings-services-agents"));
 
   settings.click("settings-services-import");
-  settings.until("Import draft's page", |s| s.exists("settings-services-page-import"));
-  assert_eq!(settings.text("settings-services-page-title"), "Import draft");
-  assert_eq!(
-    settings.text("settings-services-page-lead"),
-    "This page is not built in this app yet."
-  );
-  settings.click("settings-services-page-crumb-back");
+  settings.until("Import draft's page", |s| s.exists("settings-import"));
+  assert_eq!(settings.text("settings-import-head-title"), "Import a first draft");
+  settings.until("the empty checkout read", |s| s.exists("settings-import-empty"));
+  settings.click("settings-import-crumb-back");
   settings.until("back on Services", |s| s.exists("settings-services-empty"));
 }
 

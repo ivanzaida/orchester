@@ -1,5 +1,6 @@
-//! A page under Services whose task has not landed yet: a service's, a stack's or a suite's editor, their New pages,
-//! Import draft and Flaky tests. It keeps the crumb back to Services and its title, and says it is not built yet.
+//! A page under Services whose task has not landed yet: Flaky tests (the editors, their New pages and Import draft are
+//! built, and keep their titles here only as the match over the pages). It keeps the crumb back to Services and its
+//! title, and says it is not built yet.
 
 use lurq::{
   app::ctx::Ctx,
