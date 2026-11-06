@@ -29,7 +29,7 @@ use crate::{
 };
 
 /// The size of the checkout's dot and of a lane's (`Dot` `fBuea`, `L74dei`).
-pub(super) const DOT: f32 = 6.0;
+pub(crate) const DOT: f32 = 6.0;
 
 pub(super) fn header(ctx: &Ctx, read: &QueueRead) -> Row {
   Row::new()
@@ -48,7 +48,7 @@ pub(super) fn header(ctx: &Ctx, read: &QueueRead) -> Row {
 }
 
 /// A 6 dot of `color` (`Dot` `fBuea`).
-pub(super) fn dot(color: PaletteColor) -> Row {
+pub(crate) fn dot(color: PaletteColor) -> Row {
   Row::new()
     .width(Dimension::Px(DOT))
     .height(Dimension::Px(DOT))
@@ -59,8 +59,7 @@ pub(super) fn dot(color: PaletteColor) -> Row {
 
 /// How the checkout stands (`Checkout` `yZyeK`).
 fn checkout(ctx: &Ctx, base: &BaseState) -> Row {
-  // A checkout the runs land beside does not keep delivery out either.
-  let clean = matches!(base.checkout, CheckoutState::Clean | CheckoutState::Beside(_));
+  let clean = clean(base);
   let mark = if clean {
     PaletteColor::Success
   } else {
@@ -89,8 +88,13 @@ fn checkout(ctx: &Ctx, base: &BaseState) -> Row {
     )
 }
 
+/// Whether the checkout keeps nothing out: a checkout the runs land beside does not either.
+pub(crate) const fn clean(base: &BaseState) -> bool {
+  matches!(base.checkout, CheckoutState::Clean | CheckoutState::Beside(_))
+}
+
 /// The branch the checkout has and how it stands, for `base`'s lane.
-fn checkout_words(ctx: &Ctx, base: &BaseState) -> (Arc<str>, PaletteColor) {
+pub(crate) fn checkout_words(ctx: &Ctx, base: &BaseState) -> (Arc<str>, PaletteColor) {
   let on = [("branch", base.branch.as_str().to_owned())];
   match &base.checkout {
     CheckoutState::Clean => (

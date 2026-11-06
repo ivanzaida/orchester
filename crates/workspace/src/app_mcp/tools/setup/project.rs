@@ -159,7 +159,8 @@ pub async fn get_project(services: &Services, args: InProject) -> Result<Value, 
       "github": db.repository_link()?.map(|link| link.repo().to_string()),
       "connections": db.connections()?.len(),
       "profiles": resources(ResourceKind::AgentProfile)?,
-      "pipelines": resources(ResourceKind::Pipeline)?,
+      // The pipelines the project offers: a team project's own local ones are hidden.
+      "pipelines": crate::pipelines::library::library(&db)?.len(),
       "instructions": resources(ResourceKind::Instruction)?,
     });
     if let (Value::Object(project), Value::Object(settings)) = (&mut project, settings) {

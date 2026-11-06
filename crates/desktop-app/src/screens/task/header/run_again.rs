@@ -25,7 +25,7 @@ use orchester_core::{
   run::{RunAgainBlock, can_run_again_after},
   sharing::TaskRevision,
   task::TaskLimits,
-  tokens::compact_tokens,
+  tokens::{TokensUsed, compact_tokens},
 };
 use orchester_exec::programs::Programs;
 use orchester_workspace::{
@@ -49,7 +49,7 @@ use super::{
   no_branch::NoBranch,
 };
 use crate::{
-  project::ProjectFeed,
+  project::{ProjectFeed, settled_read::settled_read_traced},
   theme::{ExtraTypography, TaskText},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -75,12 +75,30 @@ pub struct Confirming(pub Option<IdempotencyKey>);
 
 impl lurq::app::component::DevtoolsInspectable for Confirming {}
 
-/// What makes Run again's check read again: tasks were saved, a run changed, the project's limits
-/// changed (the day's budget), counted as the project's feed counts them.
-pub type CheckAgain = (u64, u64, u64);
+/// What makes Run again's check read again: tasks were saved, a run of the project changed state (a run that
+/// starts takes the next run's number), the tokens the project's runs used today (the day's budget) and the
+/// project's limits changed, counted as the project's feed counts them ([`check_again`]).
+pub type CheckAgain = (u64, u64, Option<TokensUsed>, u64);
 
-/// Whether the task runs again after its latest run, read again whenever `again` changes; `None` for a
-/// latest run that cannot be followed by Run again, and until it was read.
+/// What the check reads again by, in `feed`. It shows what the project's other runs used today, which grows with
+/// their agents' turns: it follows the feed's reading of today's use, which their lines read again, rather than the
+/// lines themselves, so a line that used nothing does not check again.
+pub fn check_again(feed: &ProjectFeed) -> CheckAgain {
+  let outside = feed.outside.get();
+  let today = feed.usage.get().map(|usage| usage.today);
+  (
+    feed.revision.get() + outside.tasks,
+    feed.states.get(),
+    today,
+    outside.limits,
+  )
+}
+
+/// The deps of a check: where, of which task, after which run (none: nothing to check), and why again.
+type CheckDeps = (PathBuf, TaskId, Option<RunId>, CheckAgain);
+
+/// Whether the task runs again after its latest run, read again whenever `again` changes once the check under way
+/// ended; `None` for a latest run that cannot be followed by Run again, and until it was read.
 pub fn check(
   ctx: &mut Ctx,
   (root, programs): (PathBuf, Programs),
@@ -93,10 +111,9 @@ pub fn check(
     .filter(|run| can_run_again_after(&run.run, run.worktree_removed.is_some()) || committed_nothing(detail))
     .map(RunView::id);
   let deps = (root, detail.task.id(), after, again);
-  let load = ctx.future(deps, move |(root, task, after, _)| {
-    if after.is_some() {
-      tracing::trace!(target: crate::app_log::READ_LOG, read = "run again check");
-    }
+  // A latest run that cannot be followed checks nothing, and no line says so.
+  let traced: fn(&CheckDeps) -> bool = |(_, _, after, _)| after.is_some();
+  let state = settled_read_traced(ctx, ("run again check", traced), deps, move |(root, task, after, _)| {
     let programs = programs.clone();
     async move {
       let Some(after) = after else {
@@ -111,7 +128,6 @@ pub fn check(
         })
     }
   });
-  let state = load.state().get();
   let after = after?;
   match (state.data, state.error) {
     // A check for an earlier run of the task says nothing about this one.

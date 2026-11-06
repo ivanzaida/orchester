@@ -41,15 +41,7 @@ pub(crate) fn managed_checkout(db: &ProjectDb, run: RunId) -> Result<bool, Store
 /// before it begins. A review that only read the checkout, also one paused since, holds nothing and does not stand in
 /// the way of the run's direct merge; historical finished records do not reserve the checkout forever.
 pub(crate) fn checkout_holder(db: &ProjectDb, run: RunId) -> Result<Option<CheckoutHolder>, StoreError> {
-  let mut holders = Vec::new();
-  for operation in db.local_operations()? {
-    let unfinished = db
-      .local_process(operation.run())?
-      .is_some_and(|process| !process.finished);
-    if operation.reserves_checkout() || unfinished {
-      holders.push(operation.run());
-    }
-  }
+  let holders = holders(db)?;
   if holders.contains(&run) {
     return Ok(Some(CheckoutHolder::ThisRun));
   }
@@ -59,6 +51,26 @@ pub(crate) fn checkout_holder(db: &ProjectDb, run: RunId) -> Result<Option<Check
   Ok(Some(CheckoutHolder::OtherRun {
     task: task_of(db, *other)?,
   }))
+}
+
+/// Whether any local integration holds the shared checkout, as [`checkout_holder`] reads it: a merge that is no run's,
+/// a team module's delivery, waits for it.
+pub(crate) fn checkout_held(db: &ProjectDb) -> Result<bool, StoreError> {
+  Ok(!holders(db)?.is_empty())
+}
+
+/// The runs whose local integration holds the shared checkout.
+fn holders(db: &ProjectDb) -> Result<Vec<RunId>, StoreError> {
+  let mut holders = Vec::new();
+  for operation in db.local_operations()? {
+    let unfinished = db
+      .local_process(operation.run())?
+      .is_some_and(|process| !process.finished);
+    if operation.reserves_checkout() || unfinished {
+      holders.push(operation.run());
+    }
+  }
+  Ok(holders)
 }
 
 /// The key of the task of run `run`, which holds a local integration record and so is stored.

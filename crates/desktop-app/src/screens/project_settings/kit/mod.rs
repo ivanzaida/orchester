@@ -11,7 +11,8 @@ mod row;
 
 pub(crate) use self::{
   form::{
-    FormField, form_actions, form_actions_noted, form_group, form_link, form_note, form_row, on_enter, warning_line,
+    FormField, form_actions, form_actions_noted, form_group, form_link, form_note, form_row, notice_line, on_enter,
+    warning_line,
   },
   group::Group,
   parts::{

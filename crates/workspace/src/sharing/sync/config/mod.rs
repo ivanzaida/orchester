@@ -44,7 +44,7 @@ use crate::sharing::{SharingError, project::convert};
 
 /// Keeps `resource` as the server has it, with every version this computer does not have yet. While a version of it
 /// published here is being sent, its versions are read by the sending ([`RemoteResourceStore`]) instead: the server
-/// may have numbered that version already.
+/// may have numbered that version already. One archived only now stops the runs that pin it ([`Source::archived`]).
 pub(super) async fn sync(source: &impl Source, root: &Path, resource: SharedResource) -> Result<(), SharingError> {
   if resource.kind == SharedResourceKind::Skill {
     tracing::debug!(resource = %resource.id, "a shared skill is not kept on this computer yet");
@@ -82,7 +82,10 @@ pub(super) async fn sync(source: &impl Source, root: &Path, resource: SharedReso
     read = versions.len(),
     "a shared resource is kept"
   );
-  blocking(root, move |root| cache(root, &resource, &versions)).await
+  if blocking(root, move |root| cache(root, &resource, &versions)).await? {
+    source.archived(id).await;
+  }
+  Ok(())
 }
 
 /// Binds the reference of `choice` to the local connection, MCP server or secret a person chose (`None` unbinds it),
@@ -98,7 +101,7 @@ pub fn bind(root: &Path, choice: BoundReference, by: Answerer) -> Result<usize, 
     .into_iter()
     .find(|kept| bindings::binding_target(kept.reference) == target)
     .ok_or_else(|| not_found(target))?;
-  check_local(&db, choice)?;
+  check_local(&db, choice, kept.role.as_deref())?;
   db.set_reference_binding(&ReferenceBinding {
     reference: by_person(choice),
     changed_at: Timestamp::now(),
@@ -109,23 +112,25 @@ pub fn bind(root: &Path, choice: BoundReference, by: Answerer) -> Result<usize, 
 
 /// [`write`], except that a resource this computer cannot keep is left out with a warning instead of stopping the
 /// stream, which would read it again and fail again at every reconnect.
-fn cache(root: &Path, resource: &SharedResource, versions: &[SharedVersion]) -> Result<(), SharingError> {
+fn cache(root: &Path, resource: &SharedResource, versions: &[SharedVersion]) -> Result<bool, SharingError> {
   match write(root, resource, versions) {
     Err(SharingError::Store(error @ (StoreError::DuplicateSlug { .. } | StoreError::ResourceKindMismatch { .. }))) => {
       tracing::warn!(%error, resource = %resource.id, "a shared resource clashes with one of this project's");
-      Ok(())
+      Ok(false)
     }
     Err(error @ SharingError::InvalidAnswer(_)) => {
       tracing::warn!(%error, resource = %resource.id, "a shared resource's version cannot be read");
-      Ok(())
+      Ok(false)
     }
     written => written,
   }
 }
 
-fn write(root: &Path, shared: &SharedResource, versions: &[SharedVersion]) -> Result<(), SharingError> {
+/// Keeps `shared` with `versions`, archived or not as the server has it; whether it was archived only now.
+fn write(root: &Path, shared: &SharedResource, versions: &[SharedVersion]) -> Result<bool, SharingError> {
   let mut db = ProjectDb::open(root)?;
   db.keep_shared_resource(&resource(shared)?, shared.revision)?;
+  let archived_now = db.mark_shared_archived(shared.id, shared.archived, Timestamp::now())? && shared.archived;
   for version in versions {
     let bindings = bindings::bind_new(&mut db, &version.references)?;
     match shared.kind {
@@ -133,11 +138,14 @@ fn write(root: &Path, shared: &SharedResource, versions: &[SharedVersion]) -> Re
       SharedResourceKind::AgentProfile => cache_version::<AgentProfile>(&mut db, version, &bindings)?,
       SharedResourceKind::Instruction => cache_version::<Instruction>(&mut db, version, &bindings)?,
       SharedResourceKind::Tool => cache_version::<Tool>(&mut db, version, &bindings)?,
+      SharedResourceKind::TeamReviewer => {
+        cache_version::<orchester_core::resource::TeamReviewer>(&mut db, version, &bindings)?
+      }
       // `sync` leaves skills out.
       SharedResourceKind::Skill => {}
     }
   }
-  Ok(())
+  Ok(archived_now)
 }
 
 fn resource(shared: &SharedResource) -> Result<Resource, SharingError> {
@@ -213,13 +221,22 @@ fn not_found(target: ReferenceTarget) -> StoreError {
   }
 }
 
-/// Fails unless the local entity `choice` binds to exists here; a secret must not be archived.
-fn check_local(db: &ProjectDb, choice: BoundReference) -> Result<(), StoreError> {
+/// Fails unless the local entity exists here, a connection matches its role, and a secret is not archived.
+fn check_local(db: &ProjectDb, choice: BoundReference, role: Option<&str>) -> Result<(), SharingError> {
   let missing = match choice {
-    BoundReference::Connection { bound: Some(bound), .. } => db
-      .connection(bound.local)?
-      .is_none()
-      .then_some(StoreError::ConnectionNotFound(bound.local)),
+    BoundReference::Connection { bound: Some(bound), .. } => {
+      let connection = db
+        .connection(bound.local)?
+        .ok_or(StoreError::ConnectionNotFound(bound.local))?;
+      let actual = orchester_core::sharing::ConnectionRole::of(connection.kind());
+      if Some(actual.as_str()) != role {
+        return Err(SharingError::ConnectionKindMismatch {
+          expected: role.map(str::to_owned),
+          actual,
+        });
+      }
+      None
+    }
     BoundReference::McpServer { bound: Some(bound), .. } => db
       .mcp_server(bound.local)?
       .is_none()
@@ -232,7 +249,7 @@ fn check_local(db: &ProjectDb, choice: BoundReference) -> Result<(), StoreError>
     | BoundReference::McpServer { bound: None, .. }
     | BoundReference::Secret { bound: None, .. } => None,
   };
-  missing.map_or(Ok(()), Err)
+  missing.map_or(Ok(()), |error| Err(error.into()))
 }
 
 /// `choice` as a person's binding, whoever it says bound it.
@@ -262,7 +279,7 @@ fn person<I>(bound: Option<Bound<I>>) -> Option<Bound<I>> {
 
 /// Writes again the local body of every cached version that names `target`, with the bindings as they are now.
 fn rewrite(db: &mut ProjectDb, target: ReferenceTarget) -> Result<usize, SharingError> {
-  let bindings = bindings::bound(&db.reference_bindings()?);
+  let bindings = bindings::bound(&db.reference_bindings()?, &db.connections()?);
   let mut rewritten = 0;
   for naming in db.versions_naming(target)? {
     let changed = match naming.kind {
@@ -270,6 +287,7 @@ fn rewrite(db: &mut ProjectDb, target: ReferenceTarget) -> Result<usize, Sharing
       ResourceKind::AgentProfile => rewrite_version::<AgentProfile>(db, naming, &bindings)?,
       ResourceKind::Instruction => rewrite_version::<Instruction>(db, naming, &bindings)?,
       ResourceKind::Tool => rewrite_version::<Tool>(db, naming, &bindings)?,
+      ResourceKind::TeamReviewer => rewrite_version::<orchester_core::resource::TeamReviewer>(db, naming, &bindings)?,
       // Skills are not kept here yet, and agent testing's kinds are never shared.
       ResourceKind::Skill | ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => false,
     };

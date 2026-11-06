@@ -26,7 +26,7 @@ use orchester_core::{
 };
 use orchester_exec::run_capped;
 use orchester_ipc::Event;
-use orchester_runner::{browser::profiles_folder, execution::outside_read_refusals};
+use orchester_runner::execution::outside_read_refusals;
 use orchester_store::ProjectDb;
 use tokio::sync::mpsc;
 
@@ -443,13 +443,14 @@ async fn orchester_tools_denied_with_a_message_tell_the_call_why() {
   assert!(decided[1..].iter().all(|decided| decided.note.is_none()));
 }
 
-/// The folder of every project's browser profile is an entry of its own among the folders outside reads refuse: a read
-/// and a search under it are refused as Orchester's own files, with no relay's folder or other rule to cover it. The
-/// folder is where this test program's application data has it, on either platform.
+/// The folder of every project's browser profile, as the app passed it, is an entry of its own among the folders
+/// outside reads refuse: a read and a search under it are refused as Orchester's own files, with no relay's folder or
+/// other rule to cover it.
 #[test]
 fn orchester_tools_refuse_a_read_under_the_browser_profiles_folder() {
-  let profiles = profiles_folder().expect("the folder is known");
-  let refused = outside_read_refusals(None);
+  let data = tempfile::tempdir().expect("the application data");
+  let profiles = data.path().join("browser");
+  let refused = outside_read_refusals(None, Some(&profiles));
   assert!(refused.contains(&profiles), "{refused:?}");
   std::fs::create_dir_all(&profiles).expect("the profiles folder");
   let profile = tempfile::tempdir_in(&profiles).expect("a project's profile");

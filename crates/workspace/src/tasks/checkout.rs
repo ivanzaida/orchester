@@ -27,8 +27,7 @@ impl Checkout {
   /// The checkout at `repo_root`.
   pub fn read(programs: &Programs, repo_root: &Path) -> Self {
     let runner = programs.runner();
-    let git = Path::new(GIT);
-    let repository = match read_remotes(&runner, git, repo_root) {
+    let repository = match read_remotes(&runner, Path::new(GIT), repo_root) {
       Ok(remotes) => {
         let origin = RemoteName::origin();
         remotes
@@ -41,11 +40,18 @@ impl Checkout {
         None
       }
     };
-    let branch = checked_out_branch(&runner, git, repo_root).unwrap_or_else(|error| {
+    Self {
+      repository,
+      branch: Self::branch(programs, repo_root),
+    }
+  }
+
+  /// The branch checked out at `repo_root` alone, one quick git call.
+  pub fn branch(programs: &Programs, repo_root: &Path) -> Option<BranchName> {
+    checked_out_branch(&programs.runner(), Path::new(GIT), repo_root).unwrap_or_else(|error| {
       tracing::warn!(%error, "cannot read the checkout's branch");
       None
-    });
-    Self { repository, branch }
+    })
   }
 
   /// The line over the project's title: its key `key`, then the repository and the branch git named.

@@ -6,6 +6,7 @@ use std::{
   fmt,
   path::{Path, PathBuf},
   sync::Arc,
+  time::Duration,
 };
 
 use thiserror::Error;
@@ -252,7 +253,7 @@ impl Command {
 }
 
 /// Output of a finished command.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct CommandOutput {
   /// The exit code; `None` for a program ended by a signal (macOS). Some programs answer a
   /// question with it (git's `--quiet` queries: 1 is "no", anything else a failure).
@@ -268,12 +269,19 @@ impl CommandOutput {
   }
 }
 
-#[derive(Clone, Debug, Error, PartialEq, Eq)]
+/// Serializable: the runner answers with it for git it ran for the desktop in a run's worktree
+/// (`crate::orchestrator::run_git`).
+#[derive(Clone, Debug, Error, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(tag = "kind", content = "detail", rename_all = "snake_case")]
 pub enum CommandError {
   #[error("the program does not exist")]
   NotFound,
   #[error("the program did not finish in time")]
   TimedOut,
+  /// The program wrote nothing for `after` and was stopped with everything it started: a runner that watches for
+  /// silence ends a program that stopped answering, e.g. on a disk that hangs.
+  #[error("the program wrote nothing for {} s and was stopped", after.as_secs())]
+  Silent { after: Duration },
   #[error("the program could not be run: {0}")]
   Failed(String),
   /// The program was never started: it could not be prepared or its process not be created, so it ran

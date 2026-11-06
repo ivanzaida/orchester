@@ -1,7 +1,9 @@
 //! The user's own MCP servers in `orchester-fake-codex`'s configuration: `user-global` always, and each name a line of
 //! `fake-user-servers` in its working folder lists (the worktree, where a test commits the file), so that a test can
-//! give the user a server named like one the step chooses. Codex gets such a chosen server by another name
-//! (`orchester-<name>`); the fake's model calls a server by the name its arguments give it ([`argument_name`]).
+//! give the user a server named like one the step chooses. A line `<name> <url>` gives the server as an HTTP server
+//! (`url = "<url>"`, as Settings › Automation › Connect an agent writes the app's), any other a program
+//! (`command = "user-tool"`) ([`table`]). Codex gets such a chosen server by another name (`orchester-<name>`); the
+//! fake's model calls a server by the name its arguments give it ([`argument_name`]).
 
 use std::{collections::BTreeSet, fs};
 
@@ -10,18 +12,33 @@ use serde_json::{Value, json};
 /// The server every user of the fake has.
 const ALWAYS: &str = "user-global";
 
+/// The lines of `fake-user-servers`: a name, and a URL for an HTTP server.
+fn listed() -> Vec<(String, Option<String>)> {
+  fs::read_to_string("fake-user-servers")
+    .unwrap_or_default()
+    .lines()
+    .map(str::trim)
+    .filter(|line| !line.is_empty())
+    .map(|line| match line.split_once(char::is_whitespace) {
+      Some((name, url)) => (name.to_owned(), Some(url.trim().to_owned())),
+      None => (line.to_owned(), None),
+    })
+    .collect()
+}
+
 /// The user's own servers.
 pub fn servers() -> Vec<String> {
-  let listed = fs::read_to_string("fake-user-servers").unwrap_or_default();
   std::iter::once(ALWAYS.to_owned())
-    .chain(
-      listed
-        .lines()
-        .map(str::trim)
-        .filter(|name| !name.is_empty())
-        .map(str::to_owned),
-    )
+    .chain(listed().into_iter().map(|(name, _)| name))
     .collect()
+}
+
+/// The table of the user's server `name` in their configuration: its `url`, or its `command`.
+pub fn table(name: &str) -> Value {
+  match listed().into_iter().find(|(listed, _)| listed == name) {
+    Some((_, Some(url))) => json!({"url": url}),
+    _ => json!({"command": "user-tool"}),
+  }
 }
 
 /// The user's servers a thread's configuration turns off, by the dotted key or by a table.

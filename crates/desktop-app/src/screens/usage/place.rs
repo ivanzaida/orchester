@@ -43,6 +43,10 @@ impl Place {
 
   /// What the usage is read again on besides a saved threshold and Retry: the project's runs, or every
   /// runner's work.
+  ///
+  /// A project's page follows its runs' transcripts too, not only their states: the runner reports each agent turn,
+  /// whose tokens the page counts, as transcript activity. The read is settled (`project::settled_read`), so lines
+  /// faster than a read make one read at a time.
   pub fn changes(&self) -> (u64, u64) {
     match self {
       Self::Project(project) => (project.feed.changes.get(), project.feed.revision.get()),

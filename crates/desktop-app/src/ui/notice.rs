@@ -51,7 +51,7 @@ impl NoticeTone {
   }
 
   /// The fill, the stroke and the icon's color.
-  const fn colors(self) -> (PaletteColor, PaletteColor, PaletteColor) {
+  pub(crate) const fn colors(self) -> (PaletteColor, PaletteColor, PaletteColor) {
     match self {
       Self::Info => (PaletteColor::InfoMuted, PaletteColor::Info, PaletteColor::Info),
       Self::Warning => (PaletteColor::WarningMuted, PaletteColor::Warning, PaletteColor::Warning),

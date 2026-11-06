@@ -15,12 +15,15 @@
 //! redacted the same way. Its reason is the reviewer's own text, so it is kept to one plain line.
 
 mod choice;
+mod decision;
+mod decision_usage;
 mod detail;
 mod hold;
 mod input;
 mod prompt;
 mod push;
 mod spend;
+mod test;
 mod trouble;
 
 use serde::{Deserialize, Serialize};
@@ -29,18 +32,22 @@ use thiserror::Error;
 pub(crate) use self::prompt::one_line;
 pub use self::{
   choice::{
-    AutoModeSettings, DEFAULT_REVIEW_MODEL, ResolvedReviewer, ReviewerChoice, ReviewerKind, ReviewerUnavailable,
-    default_review_model, resolve_reviewer, reviewer_kind,
+    AutoModeSettings, DEFAULT_REVIEW_MODEL, DecisionReviewerConnection, ResolvedReviewer, ReviewerChoice,
+    ReviewerConnection, ReviewerConnectionId, ReviewerKind, ReviewerUnavailable, decision_reviewer_person_only,
+    default_decision_threshold, default_review_model, resolve_estimator, resolve_reviewer, reviewer_kind,
   },
+  decision::{DecisionVerdict, NotProbability, Probability, Risk, Risks},
+  decision_usage::DecisionReviewRecord,
   detail::DetailRedaction,
   hold::{HoldRules, ReviewHold, StepLimit, review_hold, step_limit, unread_parts},
   input::{ReviewInput, ReviewedRequest, ReviewedStep, ReviewedTask, RootsQuestion, UnreadPart, UnreadWhy},
   prompt::{
     DATA_END, DATA_START, REVIEW_INSTRUCTIONS, REVIEW_SCHEMA, ROOTS_QUESTION, parse_verdict, parse_verdict_text,
-    review_prompt,
+    review_prompt, review_state,
   },
   push::PushFacts,
   spend::{AutoReview, ReviewCost, ReviewEnd, ReviewRecord, ReviewSpend, Reviewed, reviews_usage},
+  test::{DecisionTestReport, DecisionTestStatus, ThresholdFigures},
   trouble::{ReviewerAccount, ReviewerHealth, ReviewerTrouble},
 };
 use super::answer::ApprovalSubject;
@@ -62,6 +69,7 @@ const QUOTES: [char; 6] = ['"', '\u{201c}', '\u{201d}', '\u{201e}', '\u{ab}', '\
 pub enum ReviewVerdict {
   Approve { reason: String },
   AskPerson { reason: String },
+  Decision(DecisionVerdict),
 }
 
 /// Why a review gave no verdict.
@@ -73,6 +81,8 @@ pub enum ReviewError {
   Unparseable(String),
   #[error("the reviewer could not run: {0}")]
   CouldNotRun(String),
+  #[error("the decision review failed: {0:?}")]
+  Decision(ReviewFailure),
 }
 
 /// A model that judges a request in its context: a provider boundary, so the runner's reviewer (Claude
@@ -88,11 +98,26 @@ pub trait RequestReviewer {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReviewFailure {
+  KeyRefused,
+  NothingAnswers,
+  NotSystemOneApi,
+  ModelGone,
   TimedOut,
   Unreadable,
   CouldNotRun,
   /// The project has no Claude Code connection to review with.
   NoReviewer,
+}
+
+impl ReviewFailure {
+  /// Whether only a decision model's review ends so: its key refused, nothing answering, not a System One API, or its
+  /// model gone.
+  pub const fn is_decision_only(self) -> bool {
+    matches!(
+      self,
+      Self::KeyRefused | Self::NothingAnswers | Self::NotSystemOneApi | Self::ModelGone
+    )
+  }
 }
 
 /// How auto mode handled a request, as it is recorded with the request.
@@ -103,6 +128,8 @@ pub enum Review {
   Approved { reason: String, model: String },
   /// The reviewer left it to the person, for this reason.
   Asked { reason: String, model: String },
+  /// A decision model judged it: approved at or above the threshold, left to the person below it.
+  Decided { decision: Box<DecisionVerdict> },
   /// A hard rule left it to the person without a review.
   Held { hold: ReviewHold },
   /// The review gave no verdict, so the person decides.
@@ -114,6 +141,10 @@ pub enum Review {
     /// a reviewer, and in records kept before it was.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     detail: Option<String>,
+    /// A decision model reviewed it ([`Review::by_decision_model`]), so the card says its failure in the decision
+    /// line; false in records kept before it was, where only a decision-only failure tells.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    decision: bool,
   },
 }
 
@@ -130,24 +161,57 @@ impl Review {
         reason: one_plain_line(&reason),
         model,
       },
+      Ok(ReviewVerdict::Decision(decision)) => Self::Decided {
+        decision: Box::new(decision),
+      },
       Err(error) => Self::Failed {
         failure: error.failure(),
         model: Some(model),
         detail: Some(error.detail()),
+        decision: false,
       },
     }
   }
 
-  /// Whether the request is approved without the person.
-  pub const fn approves(&self) -> bool {
-    matches!(self, Self::Approved { .. })
+  /// This review, marked as a decision model's when it failed: a timeout or a refusal reads the same from any
+  /// reviewer, and the card names a decision model's failure in its own line.
+  #[must_use]
+  pub fn by_decision_model(self) -> Self {
+    match self {
+      Self::Failed {
+        failure, model, detail, ..
+      } => Self::Failed {
+        failure,
+        model,
+        detail,
+        decision: true,
+      },
+      review => review,
+    }
   }
 
-  /// The reviewer's own reason, when it gave one.
+  /// Whether a decision model's review failed: marked so, or ended in a failure only a decision model has.
+  pub const fn decision_failed(&self) -> bool {
+    match self {
+      Self::Failed { failure, decision, .. } => *decision || failure.is_decision_only(),
+      _ => false,
+    }
+  }
+
+  /// Whether the request is approved without the person.
+  pub fn approves(&self) -> bool {
+    match self {
+      Self::Approved { .. } => true,
+      Self::Decided { decision } => decision.approves(),
+      Self::Asked { .. } | Self::Held { .. } | Self::Failed { .. } => false,
+    }
+  }
+
+  /// The reviewer's own reason, when it gave one; a decision model gives none.
   pub fn reason(&self) -> Option<&str> {
     match self {
       Self::Approved { reason, .. } | Self::Asked { reason, .. } => Some(reason),
-      Self::Held { .. } | Self::Failed { .. } => None,
+      Self::Decided { .. } | Self::Held { .. } | Self::Failed { .. } => None,
     }
   }
 }
@@ -231,6 +295,7 @@ fn ask(reviewer: Option<&dyn RequestReviewer>, input: &ReviewInput) -> AutoRevie
         failure: ReviewFailure::NoReviewer,
         model: None,
         detail: None,
+        decision: false,
       },
       cost: None,
     };

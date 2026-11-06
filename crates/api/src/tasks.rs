@@ -1,5 +1,5 @@
 use orchester_core::{
-  id::{ClaimId, IdempotencyKey, ModuleId, TagId, TaskId},
+  id::{ClaimId, IdempotencyKey, ModuleId, ReleaseId, TagId, TaskId},
   run::TaskPhase,
   sharing::{ClaimKind, TaskRevision},
   task::{
@@ -88,6 +88,8 @@ pub struct TaskContent {
   pub brief: String,
   #[serde(default)]
   pub criteria: Vec<String>,
+  /// The team pipeline the task runs with, by its resource id (`docs/architecture/server.md` row 80); a person's own
+  /// local pipeline is never named here.
   #[serde(default)]
   pub pipeline: Option<String>,
   #[serde(default)]
@@ -105,6 +107,9 @@ pub struct TaskContent {
   /// The project's module the task is in.
   #[serde(default)]
   pub module: Option<ModuleId>,
+  /// The project's release the task ships in, as its fix version.
+  #[serde(default)]
+  pub release: Option<ReleaseId>,
 }
 impl TaskContent {
   pub fn organization(&self) -> Organization {
@@ -223,6 +228,7 @@ pub struct TaskChanges {
   pub title: Option<String>,
   pub brief: Option<String>,
   pub criteria: Option<Vec<String>>,
+  /// The team pipeline the task moves to, by its resource id, as [`TaskContent::pipeline`]; `null` takes it off.
   #[serde(default, deserialize_with = "present", skip_serializing_if = "Option::is_none")]
   pub pipeline: Option<Option<String>>,
   #[serde(default, deserialize_with = "present", skip_serializing_if = "Option::is_none")]
@@ -240,6 +246,10 @@ pub struct TaskChanges {
   /// The module the task moves to; `null` takes it out of its module.
   #[serde(default, deserialize_with = "present", skip_serializing_if = "Option::is_none")]
   pub module: Option<Option<ModuleId>>,
+  /// The release the task moves to; `null` takes it out of its release. A released release takes no task and gives
+  /// none up (`422 release {reason: released}`).
+  #[serde(default, deserialize_with = "present", skip_serializing_if = "Option::is_none")]
+  pub release: Option<Option<ReleaseId>>,
   #[serde(default, with = "wire::optional_actor")]
   pub actor: Option<ChangeActor>,
 }

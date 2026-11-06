@@ -1,12 +1,15 @@
 //! The app's own MCP tools, served beside lurq's `lurq_*`: `app_state` reads where the window is,
 //! `navigate` takes the active tab somewhere, `set_theme` switches the colors, `sign_in_state` says whether the
 //! app is signed in to Orchester Cloud (the one tool that answers while it is not), `update_state` where this copy's
-//! own update stands, and in debug builds `hold_reads` holds the project feeds' reads and `set_update_state` shows
-//! any update state, for QA. They run on the event-loop thread, with the tree and the app, like every other change
-//! to the window.
+//! own update stands, and in debug builds `hold_reads` holds the project feeds' reads, `hold_hand_offs` the review
+//! page's hand-offs to the runner, `hold_integration` the active project's integration lease, and `set_update_state`
+//! shows any update state, for QA. They run on the event-loop thread, with the tree and the app, like every other
+//! change to the window.
 
 mod app_state;
 mod error;
+mod hold_hand_offs;
+mod hold_integration;
 mod hold_reads;
 mod navigate;
 mod project_settings_route;
@@ -23,6 +26,8 @@ use serde_json::{Map, Value, json};
 pub use self::{
   app_state::app_state,
   error::ToolError,
+  hold_hand_offs::hold_hand_offs,
+  hold_integration::{HeldLease, hold_integration},
   hold_reads::hold_reads,
   navigate::{navigate, navigate_with},
   set_theme::set_theme,
@@ -42,7 +47,8 @@ use crate::{
 
 /// Every app tool, for lurq's MCP configuration; for a started `session` `sign_in_state` on its cloud and `navigate`
 /// finding Settings' accounts and team servers in its data, and for a `debug_build` the tools only debug builds serve,
-/// for QA: `hold_reads`, whose reads its hold holds, and `set_update_state` on its updates.
+/// for QA: `hold_reads` and `hold_hand_offs`, whose reads and hand-offs their holds hold, `hold_integration` on the
+/// window's active project, and `set_update_state` on its updates.
 pub fn all(
   link: &WindowLink,
   appearance: &Appearance,
@@ -60,6 +66,8 @@ pub fn all(
   tools.extend(session.map(|services| update_state::tool(services.updates.clone())));
   if debug_build && let Some(services) = session {
     tools.push(hold_reads::tool(services.hold.clone()));
+    tools.push(hold_hand_offs::tool(services.hand_offs.clone()));
+    tools.push(hold_integration::tool(link.clone(), HeldLease::default()));
     tools.push(set_update_state::tool(services.updates.clone()));
   }
   tools
@@ -207,6 +215,9 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
       if let Some(connection) = view.selected() {
         insert("selected", &connection.to_string());
       }
+      if let Some(connection) = view.selected_decision() {
+        insert("decision", &connection.to_string());
+      }
     }
     ProjectPage::Settings(_) | ProjectPage::ProjectRules | ProjectPage::Storage | ProjectPage::Services(_) => {
       for (name, value) in settings_params(page) {
@@ -240,10 +251,26 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
       }
     }
     page => {
-      for (name, value) in module_params(page).into_iter().chain(files_params(page)) {
+      for (name, value) in other_params(page) {
         insert(name, &value);
       }
     }
+  }
+}
+
+/// The parameters `navigate` takes back for the places of Modules, the code viewer and a run's merge attempts.
+fn other_params(page: &ProjectPage) -> impl Iterator<Item = (&'static str, String)> {
+  module_params(page)
+    .into_iter()
+    .chain(files_params(page))
+    .chain(merge_params(page))
+}
+
+/// The parameters `navigate` takes back for a run's merge attempts: its task's `key` and its number, `run`.
+fn merge_params(page: &ProjectPage) -> Vec<(&'static str, String)> {
+  match page {
+    ProjectPage::MergeAttempt(key, number) => vec![("key", key.to_string()), ("run", number.get().to_string())],
+    _ => Vec::new(),
   }
 }
 

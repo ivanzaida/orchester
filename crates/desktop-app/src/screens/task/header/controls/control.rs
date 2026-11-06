@@ -41,7 +41,7 @@ pub struct Control {
   pub icon: Icon,
   pub kind: ButtonKind,
   pub offer: Offer,
-  /// The keys that do the same, which its menu row shows.
+  /// The keys that do the same, which its menu row shows, and its button in a cap.
   pub shortcut: Option<Arc<str>>,
 }
 
@@ -65,9 +65,13 @@ impl Control {
     }
   }
 
-  /// The control as a button.
+  /// The control as a button, its keys in a cap after its label (`Kbd` in `xxoqb` of 01i `k9GBy`).
   pub fn button(&self) -> ActionButton {
     let button = ActionButton::new(self.id.clone(), self.kind, self.label.clone()).icon(self.icon);
+    let button = match &self.shortcut {
+      Some(keys) => button.key(keys.clone()),
+      None => button,
+    };
     match &self.offer {
       Offer::Ready(press) => button.press(press.clone()),
       Offer::Pending => button.loading(),

@@ -75,7 +75,8 @@ pub(in crate::orchestrator) async fn call(
   result
 }
 
-/// Runs git tool `name` with `arguments` in `scope`'s project, `writes` the person's switch.
+/// Runs git tool `name` with `arguments` in `scope`'s project, `writes` the person's switch: in a run's worktree
+/// through the project's runner.
 async fn run(
   services: &Services,
   scope: &ChatScope,
@@ -83,7 +84,16 @@ async fn run(
   writes: bool,
 ) -> Result<Called, ToolError> {
   let (programs, root, name) = (services.programs().clone(), scope.root.clone(), name.to_owned());
-  blocking(move || call_git(&programs, &root, (&name, &arguments), (writes, Timeouts::STANDARD))).await
+  let runs = services.run_git(root.clone());
+  blocking(move || {
+    call_git(
+      (&programs, &runs),
+      &root,
+      (&name, &arguments),
+      (writes, Timeouts::STANDARD),
+    )
+  })
+  .await
 }
 
 /// Refused for a write in a turn nobody asked for: a day's report's turn changes nothing (`report_turn`), and a turn

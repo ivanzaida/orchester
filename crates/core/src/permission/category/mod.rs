@@ -47,6 +47,7 @@ mod reason;
 mod scripts;
 mod sed_script;
 mod shells;
+mod signing;
 mod toolchains;
 mod variables;
 mod words;
@@ -117,8 +118,9 @@ impl CommandCategory {
   }
 }
 
-/// A command line split into its simple commands, each classified.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// A command line split into its simple commands, each classified. It is sent as it was classified, so Always allow
+/// checks the same parts where it is applied (`docs/architecture/remote-runners.md`, rule 3).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ClassifiedCommand {
   parts: Vec<CommandPart>,
   /// The command line as asked about.
@@ -436,14 +438,14 @@ fn dotnet_part(call: dotnet::Call, statement: &str, placing: Placing<'_>) -> Com
 /// ([`Judged::folder_code`]) and the words that must lie inside ([`Judged::inside`]) are Unknown elsewhere. Git there
 /// (ORC-339) works in a repository that is not the run's: it holds as a write outside whatever it does, and a form
 /// that is the run's own only in its own repository ([`Judged::own_repository`]) is History / destructive anywhere
-/// but the worktree's root.
+/// but the worktree's root. Git that only reads in the repository's main checkout is a read outside (ORC-695).
 fn place_folders(part: &mut CommandPart, judged: &Judged, placing: Placing<'_>, folders: Option<&[PathBuf]>) {
   let mut outside = None;
   if judged.folder_code && !placing.inside(part, ".") {
     outside = Some(".");
   }
   for word in &judged.inside {
-    if !placing.inside(part, word) {
+    if !placing.reads_main_checkout(part, judged, word) && !placing.inside(part, word) {
       outside.get_or_insert(word.as_str());
     }
   }
@@ -474,7 +476,8 @@ fn in_worktree_root(judged: &Judged, placing: Placing<'_>, folders: Option<&[Pat
   })
 }
 /// Places the arguments of `part` that may name a file, and the files `judged` says it reads, from the
-/// `folders` it runs in, or for `git -C <folder>` from that folder. A script or a search's pattern names none.
+/// `folders` it runs in, or for `git -C <folder>` from that folder. A script or a search's pattern names none, nor
+/// do git's global options and its subcommand: only its `-C` folders, from the folders it runs in.
 fn place_arguments(
   part: &mut CommandPart,
   judged: &Judged,
@@ -482,10 +485,19 @@ fn place_arguments(
   placing: Placing<'_>,
   folders: Option<&[PathBuf]>,
 ) {
+  let first = match &judged.subcommand {
+    Some((sub, _)) if part.program() == Some("git") => sub + 1,
+    _ => 0,
+  };
+  if first > 0 {
+    for folder in &judged.inside {
+      placing.read(part, folder);
+    }
+  }
   let named: Vec<String> = args
     .iter()
     .enumerate()
-    .filter(|(at, _)| !judged.no_paths && judged.script != Some(*at) && !judged.patterns.contains(at))
+    .filter(|(at, _)| *at >= first && !judged.no_paths && judged.script != Some(*at) && !judged.patterns.contains(at))
     .map(|(_, arg)| arg.clone())
     .collect();
   let shifted: Option<Vec<PathBuf>> = judged.repository.as_ref().and_then(|repository| {

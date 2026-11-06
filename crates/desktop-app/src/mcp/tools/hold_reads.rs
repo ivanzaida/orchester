@@ -27,11 +27,15 @@ pub fn tool(hold: ReadHold) -> McpTool {
 
 /// Holds or releases the reads as `args` say, and answers whether they are held.
 pub fn hold_reads(hold: &ReadHold, args: &Value) -> Result<Value, ToolError> {
-  let held = match object(args)?.get("held") {
-    Some(Value::Bool(held)) => *held,
-    Some(_) => return Err(ToolError::NotABool { param: "held" }),
-    None => return Err(ToolError::Missing { param: "held" }),
-  };
-  hold.set(held);
+  hold.set(flag(args)?);
   Ok(json!({ "held": hold.is_held() }))
+}
+
+/// The `held` flag a hold tool is called with.
+pub(super) fn flag(args: &Value) -> Result<bool, ToolError> {
+  match object(args)?.get("held") {
+    Some(Value::Bool(held)) => Ok(*held),
+    Some(_) => Err(ToolError::NotABool { param: "held" }),
+    None => Err(ToolError::Missing { param: "held" }),
+  }
 }

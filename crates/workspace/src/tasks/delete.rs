@@ -14,7 +14,10 @@ use std::path::Path;
 
 use orchester_core::{
   id::TaskId,
-  integration::{Cleanup, CleanupError, KeepReason, Leftovers, RemovalStart, clean_up, clean_up_all, leftovers_of},
+  integration::{
+    Cleanup, CleanupError, KeepReason, Leftovers, RemovalStart, leftovers_of,
+    removal::{Discard, RemovalRequest},
+  },
   run::Run,
   store::{RunStore, WorktreeStore},
   time::Timestamp,
@@ -25,7 +28,8 @@ use orchester_store::{ProjectDb, StoreError, TaskDeletionFacts};
 use super::{
   changes::GIT,
   detail::run_store_error,
-  integration::{IntegrationProblem, prune_indexes},
+  integration::IntegrationProblem,
+  worktree_removal::{Unremoved, WorktreeRemover},
 };
 use crate::messages::{self, Message};
 
@@ -88,24 +92,25 @@ fn counted(mut preview: DeletionPreview, left: &Leftovers) -> DeletionPreview {
   preview
 }
 
-/// Deletes `task` of the project at `repo_root`: what its runs left in git first, with unmerged work only when
-/// `unmerged`, then the task with everything recorded about it.
-pub fn delete_in(repo_root: &Path, programs: &Programs, task: TaskId, unmerged: bool) -> Result<(), Message> {
-  let mut db = ProjectDb::open(repo_root).map_err(|error| messages::store_error(&error))?;
+/// Deletes `task` of the project whose run worktrees are `worktrees`: what its runs left in git first, which the
+/// project's runner removes, with unmerged work only when `unmerged`, then the task with everything recorded about it.
+pub fn delete_in(worktrees: &WorktreeRemover, task: TaskId, unmerged: bool) -> Result<(), Message> {
+  let mut db = ProjectDb::open(worktrees.root()).map_err(|error| messages::store_error(&error))?;
   check_deletable(&db, task)?;
   let runs = readable_runs(&db, task)?;
   let at = Timestamp::now();
   hold_worktrees(&mut db, &runs, at)?;
-  let git = programs.git_work();
   for run in &runs {
-    let cleanup = if unmerged {
-      clean_up_all(&git, Path::new(GIT), repo_root, run)
-    } else {
-      clean_up(&git, Path::new(GIT), repo_root, run, None)
+    let request = RemovalRequest {
+      discard: if unmerged {
+        Discard::Everything
+      } else {
+        Discard::Seen(None)
+      },
+      retry_held: false,
     };
-    refused_by_git(cleanup)?;
+    refused_by_git(worktrees.remove(run.id(), request))?;
   }
-  prune_indexes(repo_root);
   db.delete_task(task, at).map_err(|error| delete_error(&error))
 }
 
@@ -159,8 +164,8 @@ fn hold_worktrees(db: &mut ProjectDb, runs: &[Run], at: Timestamp) -> Result<(),
 
 /// Why git kept something the deletion was to remove: it refused or did not finish. A worktree with uncommitted
 /// changes or a branch not merged, which the person chose to keep, is no refusal.
-fn refused_by_git(cleanup: Result<Cleanup, CleanupError>) -> Result<(), Message> {
-  let cleanup = cleanup.map_err(|error| IntegrationProblem::Cleanup(error).message(""))?;
+fn refused_by_git(cleanup: Result<Cleanup, Unremoved>) -> Result<(), Message> {
+  let cleanup = cleanup.map_err(|unremoved| IntegrationProblem::from(unremoved).message(""))?;
   if let Some((worktree, KeepReason::Failed(detail))) = cleanup
     .kept_worktrees
     .into_iter()

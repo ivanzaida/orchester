@@ -27,6 +27,13 @@ use crate::{
   },
 };
 
+fn affix(text: &str) -> Text {
+  Text::new(text)
+    .variant(TypographyStyle::Description)
+    .color(PaletteColor::TextMuted)
+    .nowrap()
+}
+
 pub(super) struct FieldBox {
   focused: Signal<bool>,
 }
@@ -86,6 +93,7 @@ impl Component for FieldBox {
           .filter(|_| !props.leading_while_empty || props.value.get().is_empty())
           .map(|glyph| icon(glyph, IconSize::Base, PaletteColor::TextMuted).id(format!("{}-icon", props.id))),
       )
+      .with_children(props.prefix.as_deref().map(affix))
       .child(input)
       .with_children(clear_button(&props))
       .with_children(
@@ -95,12 +103,7 @@ impl Component for FieldBox {
           .filter(|_| props.value.get().is_empty())
           .map(|keys| key_cap(&format!("{}-keys", props.id), keys)),
       )
-      .with_children(
-        props
-          .unit
-          .as_deref()
-          .map(|unit| unit_text(&props.id, unit, props.unit_look)),
-      )
+      .with_children(unit_text(&props))
       .with_children(props.trailing.map(|glyph| {
         icon(
           glyph,
@@ -146,7 +149,10 @@ impl FieldBox {
     let tracking = shown.letter_spacing;
     let mut input = TextInput::styled(props.value.clone(), shown)
       // A mono field's placeholder reads in its own type (`The worktree` in `M20DGB`).
-      .placeholder_style(resolve(value, PaletteColor::TextMuted))
+      .placeholder_style(resolve(
+        props.placeholder_style.unwrap_or(value),
+        PaletteColor::TextMuted,
+      ))
       // The input takes the role's tracking only on its own, after the styles (a two-factor code's 2, `JQkW2`).
       .letter_spacing(tracking)
       .caret_color(PaletteColor::TextPrimary)
@@ -208,14 +214,15 @@ impl FieldBox {
   }
 }
 
-/// The unit after the value of the field `id`, as `look` has it read; its text's element id is `<id>-unit`.
-fn unit_text(id: &str, unit: &str, look: UnitLook) -> Row {
+/// The unit after the value of the field `props`, as its unit look has it read; its text's element id is `<id>-unit`.
+fn unit_text(props: &FieldInput) -> Option<Row> {
+  let (id, unit, look) = (&props.id, props.unit.as_deref()?, props.unit_look);
   let (style, color) = match look {
     UnitLook::Quiet => (TypographyStyle::Description, PaletteColor::TextMuted),
     UnitLook::Count | UnitLook::Busy => (ExtraTypography::Note.role(), PaletteColor::TextMuted),
     UnitLook::Refused => (ExtraTypography::Note.role(), PaletteColor::Danger),
   };
-  Row::new()
+  let row = Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .with_children((look == UnitLook::Busy).then(|| icon(Icon::LoaderCircle, IconSize::Sm, PaletteColor::TextMuted)))
@@ -225,7 +232,8 @@ fn unit_text(id: &str, unit: &str, look: UnitLook) -> Row {
         .variant(style)
         .color(color)
         .nowrap(),
-    )
+    );
+  Some(row)
 }
 
 /// A locked value as a text that ends in an ellipsis where the box is narrower, with the input's element id; the

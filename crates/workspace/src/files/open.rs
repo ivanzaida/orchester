@@ -35,6 +35,7 @@ use super::{
   source::{Source, source},
   text_types,
 };
+use crate::tasks::changes::run_worktree;
 
 /// The characters of a path Explorer may split it at, refused on Windows.
 pub const EXPLORER_SPLITS: &[char] = &[','];
@@ -151,8 +152,20 @@ pub fn open_target(
   path: &FilePath,
 ) -> Result<(PathBuf, OpenWith), OpenError> {
   let platform = Platform::current().ok_or(OpenError::Unsupported)?;
-  let Source::Folder(folder) = source(runner, repo_root, version)? else {
-    return Err(OpenError::NotOnDisk);
+  let folder = match source(runner, repo_root, version)? {
+    Source::Folder(folder) => folder,
+    // Remote runners (`docs/architecture/remote-runners.md`, rule 5, "Not part of the preparation"): the person's
+    // editor opens a file on this computer, so a run's worktree is taken where it lies here, beside the project. A
+    // run on another computer has no such folder here and will need something else (open it remotely, or a copy);
+    // nothing of that is built yet.
+    Source::Run(run) => {
+      let worktree = run_worktree(repo_root, run);
+      if !worktree.is_dir() {
+        return Err(FilesError::VersionGone(version.clone()).into());
+      }
+      worktree
+    }
+    Source::Commit { .. } => return Err(OpenError::NotOnDisk),
   };
   let unreadable = |error: std::io::Error| match error.kind() {
     std::io::ErrorKind::NotFound => OpenError::from(FilesError::Missing(path.clone())),

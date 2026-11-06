@@ -1,19 +1,24 @@
 //! What the Orchestrator runs on, in its composer (`Runs on` `KohZb` in `01 Conversation` `wRSL4`; the picker of
-//! `05 Account and model picker` `v6mWp8` and `05b On an API provider` `AZp3I`). The chip (24 high, radius 6, 8 at its
-//! sides, 6 apart: a 12 `waypoints`, *CLI · account · model* or *provider · model* in 11.5 `text_secondary`, and a
-//! chevron; on the `pressed` fill while its picker is open; *Not set up* in `warning` on `warning_muted` until the
-//! Orchester can answer) says what the next answer runs on; its tooltip, how the Orchestrator's actions are checked.
-//! It opens the picker over it, never under it, and no taller than the room over it (what does not fit scrolls, its
-//! foot stays): 360 wide on `surface_raised` in a `border_strong` stroke, radius 10, 6 inside, its
-//! rows 2 apart, lifted by the `lg` shadow: the connections ([`rows`]), a line, the model and the reasoning effort
-//! ([`select`]), on an API provider where prompts and code go, and at its foot that another account starts a new
-//! session and *Settings ↗*. Choosing publishes the next version of the Orchestrator's settings with *Publish vN*, as
-//! its settings page publishes, through the same checks (`orchester_workspace::orchestrator::settings::save_in`):
-//! nothing changes until the person presses it.
+//! `05 · Account and model` `v6mWp8`, `05b · On DeepSeek` `AZp3I` and `Runs-on picker · states` `t7cdi` in
+//! `Orchestrator · redesign` `hujxu`). The chip (24 high, radius 6, 8 at its sides, 6 apart: a 12 `waypoints`,
+//! *CLI · account · model* or *provider · model* in 11.5 `text_secondary`, and a chevron; on the `pressed` fill while
+//! its picker is open; *Not set up* in `warning` on `warning_muted` until the Orchester can answer) says what the next
+//! answer runs on; its tooltip, how the Orchestrator's actions are checked. It opens the picker over it, never under
+//! it, and no taller than the room over it (the models scroll inside their column, the foot stays): one panel
+//! ([`panel`]) with the connections on a rail ([`rail`]), the chosen one's models with Search ([`models`]) and the
+//! chosen model's efforts ([`effort`]), and no list ever opens inside it. Choosing applies at once ([`picking`]): the
+//! choice is published as the Orchestrator's next version, through the checks of its settings page
+//! (`orchester_workspace::orchestrator::settings::save_in`), and the next answer runs on it.
 
-mod choose;
-mod rows;
-mod select;
+mod effort;
+mod foot;
+mod header;
+mod item;
+mod keys;
+mod models;
+mod panel;
+mod picking;
+mod rail;
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -21,12 +26,12 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{CollisionStrategy, Ctx, FutureAction, Placement},
-    theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize},
+    theme::{PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Column, Popup, Row, ScrollVertical, Text},
+  components::{Popup, Row, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
-  node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, Style, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{id::ProjectId, time::Timestamp};
 use orchester_workspace::{
@@ -39,8 +44,8 @@ use orchester_workspace::{
 };
 
 use self::{
-  choose::Pending,
-  rows::{Sources, cli_name},
+  picking::Picking,
+  rail::{Sources, cli_name},
 };
 use crate::{
   chrome::TITLE_BAR_HEIGHT,
@@ -57,10 +62,8 @@ use crate::{
   },
 };
 
-/// The picker's width (`WaQcn`), the chip's height (`KohZb`) and the height of the line between its parts.
-const WIDTH: f32 = 360.0;
+/// The chip's height (`KohZb`).
 const CHIP_HEIGHT: f32 = 24.0;
-const RULE_HEIGHT: f32 = 1.0;
 
 /// What the chip and its picker are about: the project at `root`, what the Orchestrator runs on as read (`None` while
 /// it is read or could not be), and whether reading it failed; `open` shows the picker.
@@ -88,7 +91,7 @@ type Publish = FutureAction<Saving, (), Message>;
 
 pub(super) struct RunsOnPicker {
   anchor: ElementRef,
-  pending: Pending,
+  picking: Picking,
   publish: Publish,
 }
 
@@ -109,15 +112,9 @@ impl Component for RunsOnPicker {
         Ok(())
       }
     });
-    let open = ctx.props::<RunsOnProps>().open.clone();
-    ctx.watch(&publish.state(), move |state| {
-      if state.is_fulfilled() {
-        open.set(false);
-      }
-    });
     Self {
       anchor: ElementRef::new(),
-      pending: Pending::new(ctx),
+      picking: Picking::new(ctx),
       publish,
     }
   }
@@ -139,15 +136,17 @@ impl Component for RunsOnPicker {
     };
     let label = label(ctx, &sources);
     if !open {
-      self.pending.forget();
+      self.picking.forget();
       return self.chip(ctx, &props, Some(&label));
     }
-    self.pending.seed(setup);
-    let panel = self.panel(ctx, (&props, &sources));
+    let margin = ctx.theme().spacing_value(SpacingSize::Md).to_px();
+    // 16 over the chip (`Runs on menu` `r2owi1` over `KohZb` in `v6mWp8`).
+    let gap = ctx.theme().spacing_value(SpacingSize::Lg).to_px();
+    let room = room_over(&self.anchor, (gap, margin));
+    let panel = panel::panel(ctx, (&props, &sources), (&self.picking, &self.publish), room);
     let chip = self.chip(ctx, &props, Some(&label));
-    // Over the chip, 6 away from it, and never flipped under it, where it would cover the status bar: it is as tall
-    // as the room over the chip lets it be, and its connections and choices scroll inside.
-    let gap = ExtraSpacing::Snug.value();
+    // Over the chip, 16 away from it, and never flipped under it, where it would cover the status bar: it is as tall
+    // as the room over the chip lets it be, and its models scroll inside their column.
     let picker = Popup::new(self.anchor.clone(), panel)
       .open(props.open.clone())
       .placement(Placement::TopStart)
@@ -212,79 +211,6 @@ impl RunsOnPicker {
     Tooltip::new("orchestrator-runs-on-chip", ctx.t("orchestrator.runsOn.tip"))
       .silent(open)
       .wrap(ctx, chip)
-  }
-
-  /// The picker: the connections, the model and effort, the notes and its foot.
-  fn panel(&self, ctx: &mut Ctx, (props, sources): (&RunsOnProps, &Sources<'_>)) -> Element {
-    let choose = self.pending.chooser(sources.setup);
-    let chosen = self.pending.connection();
-    let groups = rows::groups(ctx, sources, chosen, &choose);
-    let choices = self.pending.choices(ctx, sources.setup);
-    let provider = chosen
-      .and_then(|chosen| sources.setup.runs_on(chosen))
-      .and_then(|runs_on| match runs_on {
-        RunsOn::ApiProvider { base_url, .. } => Some(base_url),
-        RunsOn::SignIn(_) | RunsOn::Native => None,
-      });
-    let sent_to = provider.map(|base_url| {
-      Row::new()
-        .id("orchestrator-runs-on-sent-to")
-        .width(Dimension::Pct(100.0))
-        .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Start)
-        .background(PaletteColor::WarningMuted)
-        .rounded(RadiusSize::Md)
-        .child(icon(Icon::Send, IconSize::Sm, PaletteColor::Warning))
-        .child(
-          Text::new(&ctx.t_args("orchestrator.runsOn.sentTo", [("host", base_url.host())]))
-            .variant(ExtraTypography::Note.role())
-            .color(PaletteColor::TextSecondary)
-            .flex(1.0)
-            .min_width(Dimension::Px(0.0)),
-        )
-    });
-    let apply = choose::apply(ctx, (props, sources.setup), &self.pending, &self.publish);
-    let body = Column::new()
-      .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Tight.role())
-      .with_children(groups)
-      .child(
-        Row::new()
-          .width(Dimension::Pct(100.0))
-          .padding(Padding::vertical(SpacingSize::Xs))
-          // A line 1 high: a row without height draws no inside stroke.
-          .child(
-            Row::new()
-              .width(Dimension::Pct(100.0))
-              .height(Dimension::Px(RULE_HEIGHT))
-              .background(PaletteColor::Border),
-          ),
-      )
-      .with_children(choices)
-      .with_children(sent_to)
-      .with_children(apply);
-    let margin = ctx.theme().spacing_value(SpacingSize::Md).to_px();
-    let menu = Column::new()
-      .id("orchestrator-runs-on-menu")
-      .width(Dimension::Px(WIDTH))
-      .padding(ExtraSpacing::Snug.role())
-      .spacing(ExtraSpacing::Tight.role())
-      .background(PaletteColor::SurfaceRaised)
-      .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
-      .rounded(RadiusSize::Lg)
-      .box_shadow(ShadowStyle::Lg)
-      .child(
-        ScrollVertical::new(body)
-          .id("orchestrator-runs-on-scroll")
-          .width(Dimension::Pct(100.0))
-          .flex_shrink(1.0),
-      )
-      .child(choose::foot(ctx, props));
-    match room_over(&self.anchor, (ExtraSpacing::Snug.value(), margin)) {
-      Some(room) => menu.max_height(Dimension::Px(room)).into(),
-      None => menu.into(),
-    }
   }
 }
 

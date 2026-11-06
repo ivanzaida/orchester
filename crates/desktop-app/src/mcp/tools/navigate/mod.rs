@@ -1,4 +1,5 @@
 mod join_team;
+mod merges;
 mod modules;
 
 use std::num::NonZeroU64;
@@ -54,15 +55,16 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   was, still opens it) and, with tab runs, `view` rules (Approved for every run) or storage (Storage); with tab \
   services, `view` new-service, new-stack, new-suite, import (Import draft) or flaky (Flaky tests), or service, stack \
   or suite with `id`, its resource id, for its page. Connections and Environment \
-  are tabs of Project \
-  settings with routes of their own: connections takes `selected` (the id of the connection whose page it opens); \
-  secrets opens the Environment tab, the project's variables and secrets; new_connection takes `kind` (Add \
-  provider or Add MCP server); edit_connection `connection` (an MCP server's id, or an agent CLI connection's for its \
+  are tabs of Project settings with routes of their own: connections takes `selected` (the id of the connection whose \
+  page it opens), or decision (a decision connection id); secrets opens the Environment tab, the project's variables \
+  and secrets; new_connection takes `kind` (Add provider or Add MCP server); edit_connection `connection` (an MCP \
+  server's id, or an agent CLI connection's for its \
   account); each opens Project settings on that tab or page. agents, instructions, skills, tools and memory are the \
   five tabs of one Agents page (Profiles, Instructions, Skills, Tools, Memory), each its own route: agents takes \
   `agent` (a profile's id, or new), skills takes \
-  `skill` (a skill id, new or import), tools takes tool (a tool id, or new), and its page's tab; merge_queue and \
-  pull_requests are the two tabs of one Review page, each its own route; orchestrator takes `chat` (a \
+  `skill` (a skill id, new or import), tools takes tool (a tool id, or new), and its page's tab; merge_queue, \
+  pull_requests and merges are the tabs of one Review page, each its own route; merges takes `key` and `run` (a task's \
+  key and its run's number) for that run's merge attempts; orchestrator takes `chat` (a \
   conversation's id, or new; left out, the latest); files takes `file` (a path in the project; the tree alone when \
   left out), `at` (checkout, the default, base, run:<run id> or rev:<commit>) and `line` (12 or 12-20); pull_requests \
   takes `tab`, or `number` for one pull request (with `tab` feedback, its Agent feedback); usage takes `query`, the \
@@ -120,7 +122,8 @@ fn schema() -> Value {
     "properties": {
       "route": { "type": "string", "enum": names },
       "project": { "type": "string", "description": "The project's id (a UUID), for every screen of a project." },
-      "key": { "type": "string", "description": "The task's key, e.g. KON-12, for task and edit_task." },
+      "key": { "type": "string", "description": "The task's key, e.g. KON-12, for task, edit_task and merges." },
+      "run": { "type": "string", "description": "merges: with `key`, the number of the run whose merge attempts to show, e.g. 8." },
       "tab": { "type": "string", "description": tabs },
       "q": { "type": "string", "description": "tasks: the text searched for." },
       "highlight": { "type": "string", "description": "tasks: the key of the task to highlight, as after Create." },
@@ -128,6 +131,7 @@ fn schema() -> Value {
         "type": "string",
         "description": "task: the repository path of a changed file to show on the changes tab (the tab when left out). files: the path of the file to show (the tree alone when left out).",
       },
+      "decision": { "type": "string", "description": "connections: the decision connection id; mutually exclusive with selected." },
       "selected": { "type": "string", "description": "connections: the id of the connection whose page Project settings Ã¢â‚¬Âº Connections opens." },
       "kind": { "type": "string", "enum": kinds, "description": "new_connection: what it adds, on a page of Project settings Ã¢â‚¬Âº Connections." },
       "connection": { "type": "string", "description": "edit_connection: the connection's id: an MCP server's form, or an agent CLI connection's account, on a page of Project settings Ã¢â‚¬Âº Connections." },
@@ -212,6 +216,7 @@ fn screen_route(screen: Screen, args: &Map<String, Value>, lookup: Option<&Looku
     Screen::Modules => module_page(args)?,
     Screen::MergeQueue => ProjectPage::MergeQueue,
     Screen::PullRequests => pull_requests_page(args)?,
+    Screen::Merges => merges::merges_page(args)?,
     Screen::Usage => return usage_route(args),
     Screen::Pipelines => ProjectPage::Pipelines,
     Screen::Agents => agent_page(args)?,
@@ -271,7 +276,7 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::Tasks => &["project", "tab", "q", "highlight"],
     Screen::EditTask => &["project", "key"],
     Screen::Task => &["project", "key", "tab", "view", "file", "from"],
-    Screen::Connections => &["project", "selected"],
+    Screen::Connections => &["project", "selected", "decision"],
     Screen::Memory => &["project", "tab"],
     Screen::Tools => &["project", "tool", "tab"],
     Screen::Skills => &["project", "skill"],
@@ -285,6 +290,7 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::NewTask => &["project", "module"],
     Screen::ProjectSettings => &["project", "tab", "view", "id"],
     Screen::Agents => &["project", "agent"],
+    Screen::Merges => merges::PARAMS,
     Screen::MergeQueue | Screen::Pipelines | Screen::Instructions | Screen::Secrets | Screen::OrchestratorSettings => {
       &["project"]
     }

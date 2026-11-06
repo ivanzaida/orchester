@@ -145,6 +145,19 @@ fn update_install_icons_match_bundled_font_names() {
   }
 }
 
+#[test]
+fn decision_connection_scale_matches_bundled_font_name() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  let codepoint = (0xe000..0xf000)
+    .find(|codepoint| glyph_name(font, font_glyph(font, *codepoint)) == "scale")
+    .expect("the bundled font includes scale");
+  assert_eq!(
+    Icon::Scale.glyph() as usize,
+    codepoint,
+    "scale codepoint: {codepoint:x}"
+  );
+}
+
 /// The glyphs of *Compact* and the compaction's lines (ORC-309, `GENCC`, `dPq1I`, `l5YmWb`).
 #[test]
 fn compact_icons_match_bundled_font_names() {
@@ -244,5 +257,21 @@ fn run_services_icons_match_bundled_font_names() {
     (Icon::ArrowUpRight, "arrow-up-right"),
   ] {
     assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
+  }
+}
+
+/// The glyphs of a team task's Take over (`hand-helping`, which lucide named `helping-hand` before, in 02d `lpji3`) and
+/// of a run on another computer (`monitor-smartphone`, `Last event` in 02 `nMUwg`).
+#[test]
+fn team_claim_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  for (icon, names) in [
+    (Icon::HandHelping, ["hand-helping", "helping-hand"]),
+    (Icon::MonitorSmartphone, ["monitor-smartphone", "monitor-smartphone"]),
+  ] {
+    let codepoint = (0xe000..0xf000)
+      .find(|codepoint| names.contains(&glyph_name(font, font_glyph(font, *codepoint))))
+      .expect("the bundled font includes the icon");
+    assert_eq!(icon.glyph() as usize, codepoint, "{icon:?} codepoint: {codepoint:x}");
   }
 }

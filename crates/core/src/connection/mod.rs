@@ -6,7 +6,8 @@
 //! check found out about it. A native agent provider ([`AgentProvider::is_native`]) is reached at a model
 //! API instead ([`AgentEndpoint::Api`]), with its key in a project secret; this version stores and shows
 //! such connections but runs no agent on them. An agent CLI connection can instead run on an API provider
-//! ([`ApiProvider`]): a third-party model API reached with a key in a project secret.
+//! ([`ApiProvider`]): a third-party model API reached with a key in a project secret. A decision model's server
+//! ([`DecisionConnection`]) is no agent connection and has its own id, so no agent profile can choose it.
 
 mod account;
 mod adapter;
@@ -20,6 +21,8 @@ pub mod claude_approval;
 mod claude_catalog;
 pub mod compaction;
 pub mod context_use;
+mod decision;
+mod decision_history;
 mod discovery;
 mod endpoint;
 mod github;
@@ -32,6 +35,7 @@ pub mod plan_limits;
 mod provider;
 pub mod reviewer;
 pub mod stream;
+mod wire;
 
 use std::path::{Path, PathBuf};
 
@@ -48,6 +52,8 @@ pub use self::{
   api_provider::{ApiProvider, ApiProviderError, CLAUDE_EFFORTS, ProviderEffortError, SessionOrigin, provider_effort},
   catalog::{CatalogModel, CatalogSource, ModelCatalog, ModelSupport, REASONING_EFFORT},
   claude_catalog::parse_claude_models,
+  decision::{DecisionConnection, DecisionServerUrl, DecisionServerUrlError, is_this_computer},
+  decision_history::{DecisionCheck, DecisionCheckResult, DecisionTest, DecisionThresholdFigures},
   discovery::{Installed, compare_versions, rank_installed},
   endpoint::{AgentEndpoint, ApiEndpoint, BaseUrl, EndpointError, EndpointPreset, offers_provider_fallback},
   github::{
@@ -224,8 +230,10 @@ impl LastCheck {
 }
 
 /// A project connection. [`AgentConnection`] and [`GitHubConnection`] are the typed views that
-/// code needing one kind works with.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// code needing one kind works with. Its serialized form (`wire`) is read back through the same checks as a stored
+/// connection.
+#[derive(Clone, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(try_from = "wire::ConnectionWire", into = "wire::ConnectionWire")]
 pub struct Connection {
   id: ConnectionId,
   name: Name,

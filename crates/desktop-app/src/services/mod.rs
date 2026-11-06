@@ -26,8 +26,13 @@ use orchester_workspace::{
   secrets::Vault,
   session::AppSession,
   sharing::{self, Servers, cloud::Cloud, project::clone::Clones, team_join::TeamJoin},
-  tasks::{integration_jobs::ProjectJobs, outside::OutsideChanges, resolve::Editor},
-  workspace::Workspace,
+  tasks::{
+    integration_jobs::ProjectJobs,
+    outside::OutsideChanges,
+    resolve::{Editor, RunWorktrees},
+    worktree_removal::WorktreeRemover,
+  },
+  workspace::{OpenProject, Workspace},
 };
 use tokio::{runtime::Handle, task::JoinHandle};
 
@@ -45,7 +50,7 @@ pub mod storage;
 pub mod updates;
 
 use self::{browser_lookup::BrowserLookup, links::Links, page_file_picker::PageFilePicker};
-use crate::{mcp::chat::ChatServers, open_link::LinkInbox, project::hold::ReadHold};
+use crate::{mcp::chat::ChatServers, open_link::LinkInbox, project::hold::ReadHold, team::TeamQueries};
 
 /// The session's services. Every field is a handle: clones share the same workspace, runners and
 /// operations.
@@ -62,6 +67,8 @@ pub struct Services {
   /// Where secret values are kept: the OS keychain.
   pub vault: Vault,
   pub servers: Servers,
+  /// The team projects' reads from their servers, cached for the session's windows.
+  pub team: TeamQueries,
   /// This computer's Orchester Cloud account and its invites.
   pub cloud: Cloud,
   /// Joining a team, by the Cloud account or by a server's address and a code, with no project open.
@@ -81,6 +88,8 @@ pub struct Services {
   pub jobs: ProjectJobs,
   /// Holds the project feeds' reads while QA captures loading states.
   pub hold: ReadHold,
+  /// Holds the review page's hand-offs to the runner while QA captures what shows while one is under way.
+  pub hand_offs: ReadHold,
   /// The runtime background work runs on.
   pub runtime: Handle,
   /// How the previous session ended, as the runners are told when they attach.
@@ -125,15 +134,18 @@ impl Services {
     let activity = Activity::new();
     let workspace = session.workspace().clone();
     let runners = Runners::new(runner, runtime.clone(), activity.clone(), session.previous_end());
+    // Before any runner starts: each attaches with this computer's Settings › Browser, and gets every change of them
+    // while the background runs (`run_background`).
+    runners.set_browser(&workspace.computer_browser());
     let programs = Programs::processes();
     let jobs = ProjectJobs::default();
     let recovery = Recovery::start(
-      (workspace.clone(), programs.clone()),
+      (workspace.clone(), runners.clone()),
       session.previous_end(),
       session.interrupted_since(),
       &runtime,
     );
-    let servers = Servers::new(workspace.clone(), vault.clone());
+    let servers = Servers::new(workspace.clone(), vault.clone(), updates::version());
     let cloud = Cloud::new(workspace.clone(), vault.clone(), servers.clone());
     let database = workspace
       .database_path()
@@ -146,6 +158,7 @@ impl Services {
       plan_reads: PlanReads::new(workspace.clone(), runners.clone()),
       runners,
       team_join: TeamJoin::new(servers.clone(), cloud.clone()),
+      team: TeamQueries::new(servers.clone(), runtime.clone()),
       clones: Clones::system(&workspace, programs.clone()),
       cloud,
       links: Links::from_env(),
@@ -161,6 +174,7 @@ impl Services {
       vault,
       jobs,
       hold: ReadHold::default(),
+      hand_offs: ReadHold::default(),
       runtime,
       previous_end: session.previous_end(),
       session_start: session.started_at(),
@@ -178,10 +192,15 @@ impl Services {
       .expect("the root provides the services before mounting the window of a started session")
   }
 
+  /// The run worktrees of `project`, which resolving a merge by hand reaches through the project's runner.
+  pub fn run_worktrees(&self, project: &OpenProject) -> RunWorktrees {
+    RunWorktrees::through_runner(&self.runners, (&project.repo_root, project.project.name().as_str()))
+  }
+
   /// Starts the shared servers' connection monitor, the shared projects' sync and live event streams, the check of the
-  /// cloud sign-in (`sharing::cloud::keep_checking`), the activity's following of the account signed in and the
-  /// update's following of the runs at work (`app_updates::follow_runs`); they run until the returned [`Background`]
-  /// is dropped.
+  /// cloud sign-in (`sharing::cloud::keep_checking`), the activity's following of the account signed in, the
+  /// update's following of the runs at work (`app_updates::follow_runs`) and the runners' following of Settings ›
+  /// Browser (`Runners::follow_browser_settings`); they run until the returned [`Background`] is dropped.
   pub fn run_background(&self) -> Background {
     Background(vec![
       self.runtime.spawn(sharing::monitor(self.servers.clone())),
@@ -190,7 +209,9 @@ impl Services {
         self.runners.run_changes(),
         self.programs.clone(),
       )),
-      self.runtime.spawn(sharing::sync::run(self.servers.clone())),
+      self
+        .runtime
+        .spawn(sharing::sync::run(self.servers.clone(), self.runners.clone())),
       self.runtime.spawn(sharing::cloud::keep_checking(self.cloud.clone())),
       self.runtime.spawn(sharing::cloud::keep_activity_to_the_account(
         self.cloud.clone(),
@@ -200,7 +221,15 @@ impl Services {
         self.updates.clone(),
         self.runners.clone(),
       )),
+      self
+        .runtime
+        .spawn(self.runners.clone().follow_browser_settings(self.workspace.clone())),
     ])
+  }
+
+  /// The run worktrees of `project`, which removing what runs left reaches through the project's runner.
+  pub fn worktree_remover(&self, project: &OpenProject) -> WorktreeRemover {
+    WorktreeRemover::through_runner(&self.runners, (&project.repo_root, project.project.name().as_str()))
   }
 }
 

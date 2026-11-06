@@ -2,10 +2,7 @@
 //! revision, branches with how far each is from its upstream, who last changed lines, and the remotes. Each runs one
 //! read of git's and changes nothing (git takes no optional locks). Long output is cut and the answer says so.
 
-use std::path::Path;
-
 use orchester_core::repository::redact_userinfo;
-use orchester_exec::programs::Programs;
 use serde_json::{Value, json};
 
 use super::{
@@ -120,18 +117,24 @@ pub(super) fn in_progress(git: &Git) -> Result<Option<&'static str>, ToolError> 
   for (mark, _) in MARKS {
     args.extend(["--git-path", mark]);
   }
-  let paths = git.ok(&args)?;
+  let paths: Vec<String> = git
+    .ok(&args)?
+    .lines()
+    .take(MARKS.len())
+    .map(|path| path.trim().to_owned())
+    .collect();
   Ok(
-    paths
-      .lines()
+    git
+      .facts(&paths)?
+      .into_iter()
       .zip(MARKS)
-      .find(|(path, _)| git.dir.join(Path::new(path.trim())).exists())
+      .find(|(facts, _)| facts.exists)
       .map(|(_, (_, operation))| operation),
   )
 }
 
 /// `git_log`: commits of a revision or range, or of every branch, newest first, touching a path when it names one.
-pub(super) fn log((programs, git): (&Programs, &Git), asked: &Log) -> Result<Value, ToolError> {
+pub(super) fn log(git: &Git, asked: &Log) -> Result<Value, ToolError> {
   let limit = asked.limit.unwrap_or(LOG_LIMIT).clamp(1, LOG_MAX).to_string();
   let mut args = vec![
     "log",
@@ -147,7 +150,7 @@ pub(super) fn log((programs, git): (&Programs, &Git), asked: &Log) -> Result<Val
   if let Some(path) = &asked.path {
     args.extend(["--", names::path("path", path)?]);
   }
-  let (text, truncated) = git.capped(programs, &args)?;
+  let (text, truncated) = git.capped(&args)?;
   // A cut output ends in the middle of a commit's record: only the whole records before it are told.
   let whole = if truncated {
     text.rsplit_once('\u{1e}').map_or("", |(whole, _)| whole)
@@ -176,7 +179,7 @@ pub(super) fn log((programs, git): (&Programs, &Git), asked: &Log) -> Result<Val
 }
 
 /// `git_diff`: the working tree's, the index's or two revisions' differences, as a patch or as counts.
-pub(super) fn diff((programs, git): (&Programs, &Git), asked: &Diff) -> Result<Value, ToolError> {
+pub(super) fn diff(git: &Git, asked: &Diff) -> Result<Value, ToolError> {
   if asked.to.is_some() && asked.from.is_none() {
     return Err(ToolError::InvalidArguments("to: needs from".to_owned()));
   }
@@ -195,16 +198,16 @@ pub(super) fn diff((programs, git): (&Programs, &Git), asked: &Diff) -> Result<V
   }
   args.push("--");
   args.extend(names::paths("paths", &asked.paths)?);
-  answered(git.capped(programs, &args)?)
+  answered(git.capped(&args)?)
 }
 
 /// `git_show`: a commit with its patch or counts, or a file's text at a revision.
-pub(super) fn show((programs, git): (&Programs, &Git), asked: &Show) -> Result<Value, ToolError> {
+pub(super) fn show(git: &Git, asked: &Show) -> Result<Value, ToolError> {
   let rev = revision("rev", &asked.rev)?;
   let text = match &asked.file {
     Some(file) => {
       let at = format!("{rev}:{}", names::path("file", file)?);
-      git.capped(programs, &["show", "--end-of-options", &at])?
+      git.capped(&["show", "--end-of-options", &at])?
     }
     None => {
       let mut args = vec!["show", "--no-ext-diff", "--format=fuller"];
@@ -212,14 +215,14 @@ pub(super) fn show((programs, git): (&Programs, &Git), asked: &Show) -> Result<V
         args.push("--stat");
       }
       args.extend(["--end-of-options", rev]);
-      git.capped(programs, &args)?
+      git.capped(&args)?
     }
   };
   answered(text)
 }
 
 /// `git_blame`: who last changed each line of a file, at a revision or in the working tree.
-pub(super) fn blame((programs, git): (&Programs, &Git), asked: &Blame) -> Result<Value, ToolError> {
+pub(super) fn blame(git: &Git, asked: &Blame) -> Result<Value, ToolError> {
   let lines = match (asked.start, asked.end) {
     (Some(start), Some(end)) => Some(format!("{start},{end}")),
     (Some(start), None) => Some(format!("{start},")),
@@ -235,7 +238,7 @@ pub(super) fn blame((programs, git): (&Programs, &Git), asked: &Blame) -> Result
     args.push(revision("rev", rev)?);
   }
   args.extend(["--", names::path("path", &asked.path)?]);
-  answered(git.capped(programs, &args)?)
+  answered(git.capped(&args)?)
 }
 
 /// `git_branches`: local and remote branches, each with its commit, upstream and how far ahead and behind it is.

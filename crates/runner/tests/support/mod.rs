@@ -11,6 +11,7 @@ pub mod native;
 pub mod pending;
 pub mod qa;
 pub mod reviewer;
+pub mod rows;
 pub mod services;
 mod spec;
 pub mod suites;

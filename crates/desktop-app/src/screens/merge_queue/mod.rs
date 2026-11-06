@@ -8,7 +8,7 @@
 
 mod actions;
 mod empty;
-mod header;
+pub(crate) mod header;
 mod lane;
 pub(crate) mod phases;
 mod reading;

@@ -11,7 +11,7 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 
-use crate::support::{Window, project_id};
+use crate::support::{Data, Window, project_id, runner_programs::programs};
 
 pub struct Settings {
   pub window: Window,
@@ -21,7 +21,17 @@ pub struct Settings {
 impl Settings {
   /// Project settings on Runs, where Auto mode, the limits and the environment are.
   pub fn new(reviewer: bool) -> Self {
-    let mut window = Window::open();
+    Self::in_window(Window::open(), reviewer)
+  }
+  /// [`Self::new`] without a reviewer, the real runner the project's runner, for what the runner carries out.
+  pub fn with_runner() -> Self {
+    let runner = programs().runner.clone();
+    let data = Data::new();
+    let launch = data.launch_with(runner);
+    data.add_kontur(launch.workspace().expect("the session started"));
+    Self::in_window(Window::of(data, launch), false)
+  }
+  fn in_window(mut window: Window, reviewer: bool) -> Self {
     let repo = window.data.dir.path().join("repo-kontur");
     if reviewer {
       add_reviewer(&repo);
@@ -150,15 +160,20 @@ impl Settings {
       return;
     }
     self.click(id);
-    let option = (0..)
-      .map(|index| format!("{id}-option-{index}"))
-      .map_while(|option| {
-        let first = self.window.texts(&option)?.first().cloned()?;
-        Some((option, first))
-      })
-      .find(|(_, first)| first == label)
-      .map(|(option, _)| option)
-      .unwrap_or_else(|| panic!("{id} offers {label}"));
+    // The open menu shows the choices of the settings as read; a change just counted may still be reading.
+    let mut option = None;
+    self.until(&format!("{id} offering {label}"), |s| {
+      option = (0..)
+        .map(|index| format!("{id}-option-{index}"))
+        .map_while(|option| {
+          let first = s.window.texts(&option)?.first().cloned()?;
+          Some((option, first))
+        })
+        .find(|(_, first)| first == label)
+        .map(|(option, _)| option);
+      option.is_some()
+    });
+    let option = option.expect("found above");
     self.click(&option);
   }
   pub fn saved(&mut self) {

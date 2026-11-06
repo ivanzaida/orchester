@@ -1,5 +1,6 @@
 //! Project settings shared by the window and automation. Blocking work belongs off the UI thread.
 
+pub mod decision_reviewer;
 mod repository;
 mod reviewer_health;
 use std::path::Path;
@@ -7,7 +8,7 @@ use std::path::Path;
 use orchester_core::{
   agent_files::RepositoryAgentFiles,
   code_index::CodeIndexSetting,
-  connection::{AgentConnection, Connection},
+  connection::{AgentConnection, Connection, DecisionConnection},
   limits::{ComputerServiceSlots, ProjectLimits},
   permission::ApprovalMode,
   resource::ModelId,
@@ -49,6 +50,7 @@ pub struct Settings {
   /// the project allows it.
   pub autopilot_profiles: Vec<String>,
   pub connections: Vec<Connection>,
+  pub decision_connections: Vec<DecisionConnection>,
   /// The project's active approval rules, oldest first (*Approve for every run of this project*).
   pub approval_rules: Vec<ProjectRule>,
   /// *Tell working agents when the base branch moves* (`crate::base_moved`); on until a person turns it off.
@@ -69,6 +71,7 @@ pub fn load_in(root: &Path) -> Result<Settings, StoreError> {
       .map(|entry| entry.profile.role().as_str().to_owned())
       .collect(),
     connections: db.connections()?,
+    decision_connections: db.decision_connections()?,
     approval_rules: db
       .project_approval_rules()?
       .into_iter()
@@ -237,9 +240,11 @@ pub fn reviewer(
       return Ok(None);
     }
     // Editing the default's model or effort pins the connection that default resolves to.
-    resolve_reviewer(&AutoModeSettings::default(), &settings.connections)
+    resolve_reviewer(&AutoModeSettings::default(), &settings.connections, &[])
       .map_err(|why| Message::new(unavailable_key(why)))?
       .connection
+      .language()
+      .expect("the default reviewer is a language reviewer")
   } else {
     settings
       .connections
@@ -262,16 +267,34 @@ pub fn reviewer(
     return Err(Message::new("errors.modelInvalid"));
   }
   Ok(Some(ReviewerChoice {
-    connection: selected.id(),
+    connection: selected.id().into(),
     model,
     effort: (!effort.is_empty()).then(|| effort.to_owned()),
+    threshold: None,
   }))
 }
 
-/// The reviewer approves requests in the person's place in every Manual run, so choosing another one needs
-/// confirmation.
+/// A different reviewer needs permission consent; threshold edits and returning to language do not.
 pub fn reviewer_widens(base: &AutoModeSettings, asked: &AutoModeSettings) -> bool {
-  base.reviewer != asked.reviewer
+  let threshold_only = base
+    .reviewer
+    .as_ref()
+    .zip(asked.reviewer.as_ref())
+    .is_some_and(|(old, new)| {
+      decision_reviewer::connection_id(old).is_some()
+        && old.connection == new.connection
+        && old.model == new.model
+        && old.effort == new.effort
+    });
+  let returns_to_language = base
+    .reviewer
+    .as_ref()
+    .is_some_and(|c| decision_reviewer::connection_id(c).is_some())
+    && asked
+      .reviewer
+      .as_ref()
+      .is_none_or(|c| decision_reviewer::connection_id(c).is_none());
+  base != asked && !threshold_only && !returns_to_language
 }
 
 pub fn save_auto_mode_in(
@@ -279,19 +302,39 @@ pub fn save_auto_mode_in(
   base: &AutoModeSettings,
   asked: &AutoModeSettings,
   confirmed: bool,
+  decision: Option<&DecisionConnection>,
 ) -> Result<(), Message> {
-  let widens = reviewer_widens(base, asked);
+  let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
+  let decisions = db
+    .decision_connections()
+    .map_err(|error| messages::store_error(&error))?;
+  let widens = reviewer_widens(base, asked) || decision_reviewer::choosing_hosted(base, asked, &decisions).is_some();
   if widens && !confirmed {
     return Err(Message::new("projectSettings.personOnly"));
   }
-  let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
-  if widens {
+  if let Some(choice) = asked.reviewer.as_ref().and_then(decision_reviewer::connection_id)
+    && decisions.iter().find(|c| c.id() == choice) != decision
+  {
+    return Err(Message::new("projectSettings.changedOutside"));
+  }
+  if base != asked {
+    if let Some(choice) = asked
+      .reviewer
+      .as_ref()
+      .filter(|c| decision_reviewer::connection_id(c).is_some())
+    {
+      let threshold = choice
+        .threshold
+        .unwrap_or_else(orchester_core::run::review::default_decision_threshold);
+      decision_reviewer::threshold(&threshold.value().to_string()).map_err(|_| Message::new("errors.modelInvalid"))?;
+    }
     let connections = db.connections().map_err(|error| messages::store_error(&error))?;
-    resolve_reviewer(asked, &connections).map_err(|why| Message::new(unavailable_key(why)))?;
+    resolve_reviewer(asked, &connections, &decision_reviewer::states(&decisions))
+      .map_err(|why| Message::new(unavailable_key(why)))?;
   }
   use orchester_store::AutoModeSave;
   match db
-    .save_auto_mode_if_current(base, asked)
+    .save_auto_mode_with_decision_if_current(base, asked, &decisions)
     .map_err(|error| messages::store_error(&error))?
   {
     AutoModeSave::Saved => Ok(()),
@@ -305,6 +348,8 @@ fn pick<T: Copy + PartialEq>(before: T, entered: T, stored: T) -> T {
 
 /// Options and read-back of the reviewer form, resolved by the domain rather than the component.
 pub struct ReviewOptions {
+  pub row: decision_reviewer::ReviewerRow,
+  pub decisions: Vec<DecisionConnection>,
   pub connections: Vec<(String, String)>,
   /// Agent CLI connections on an API provider, by id and name: listed, unavailable, since the reviewer starts its CLI
   /// on its own sign-in (`docs/design/api-providers.md`).
@@ -315,22 +360,26 @@ pub struct ReviewOptions {
   pub resolved: Result<crate::tasks::run_approvals::ReviewerShown, Message>,
 }
 pub fn review_options(settings: &Settings, connection: &str, model: &str) -> ReviewOptions {
-  let resolved = resolve_reviewer(&settings.auto_mode, &settings.connections)
-    .map(|r| crate::tasks::run_approvals::ReviewerShown {
-      connection: r.connection.name().as_str().into(),
-      model: r.model,
-      effort: r.effort,
-    })
-    .map_err(|why| Message::new(unavailable_key(why)));
+  let resolved = resolve_reviewer(
+    &settings.auto_mode,
+    &settings.connections,
+    &decision_reviewer::states(&settings.decision_connections),
+  )
+  .map(|r| crate::tasks::run_approvals::ReviewerShown {
+    connection: r.connection.name().as_str().into(),
+    model: r.model,
+    effort: r.effort,
+  })
+  .map_err(|why| Message::new(unavailable_key(why)));
   let selected = settings
     .connections
     .iter()
     .find(|c| c.id().to_string() == connection)
     .or_else(|| {
       // A missing reviewer has no selected option; its refusal is retained in `resolved` above.
-      resolve_reviewer(&settings.auto_mode, &settings.connections)
+      resolve_reviewer(&settings.auto_mode, &settings.connections, &[])
         .ok()
-        .map(|r| r.connection)
+        .and_then(|r| r.connection.language())
     });
   let mut models = Vec::new();
   let mut efforts = Vec::new();
@@ -344,9 +393,27 @@ pub fn review_options(settings: &Settings, connection: &str, model: &str) -> Rev
       }
     }
   }
+  if let Some(decision) = settings
+    .decision_connections
+    .iter()
+    .find(|c| c.id().to_string() == connection)
+  {
+    models = decision
+      .models()
+      .iter()
+      .map(|model| model.as_str().to_owned())
+      .collect();
+    efforts.clear();
+  }
   ReviewOptions {
+    row: decision_reviewer::row(
+      &settings.auto_mode,
+      &settings.connections,
+      &settings.decision_connections,
+    ),
+    decisions: settings.decision_connections.clone(),
     // No default caption when unavailable; the form retains the explicit refusal in resolved.
-    default_connection: resolve_reviewer(&AutoModeSettings::default(), &settings.connections)
+    default_connection: resolve_reviewer(&AutoModeSettings::default(), &settings.connections, &[])
       .ok()
       .map(|r| r.connection.name().as_str().to_owned()),
     connections: settings
@@ -368,8 +435,19 @@ pub fn review_options(settings: &Settings, connection: &str, model: &str) -> Rev
 }
 
 pub fn default_model(settings: &Settings, connection: &str) -> String {
+  if let Some(decision) = settings
+    .decision_connections
+    .iter()
+    .find(|c| c.id().to_string() == connection)
+  {
+    return decision
+      .models()
+      .first()
+      .map(|m| m.as_str().to_owned())
+      .unwrap_or_default();
+  }
   if connection.is_empty() {
-    return resolve_reviewer(&AutoModeSettings::default(), &settings.connections)
+    return resolve_reviewer(&AutoModeSettings::default(), &settings.connections, &[])
       .map(|reviewer| reviewer.model.as_str().to_owned())
       .unwrap_or_default();
   }

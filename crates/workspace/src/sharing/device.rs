@@ -34,6 +34,11 @@ pub fn this_computer() -> String {
   format!("{}{SEPARATOR}{}", platform::computer_name(), platform::NAME)
 }
 
+/// This computer's name, as a claim it holds names it (`DESKTOP-IVAN`).
+pub fn computer_name() -> String {
+  platform::computer_name()
+}
+
 /// This computer as Orchester Cloud lists it among the account's devices: its name and platform.
 pub fn cloud_device() -> DeviceInfo {
   DeviceInfo {

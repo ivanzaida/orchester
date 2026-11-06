@@ -6,8 +6,8 @@
 //! under it, where it stands. Where a link in what an agent wrote leads is [`links`]'; which places an agent names as
 //! plain text are links, [`references`]'; which of its lists are labelled links, [`labelled`]'s. Both chats open at
 //! their end and follow it ([`follow`]); what a search found in a message is filled behind its words ([`found`]).
-//! A message and a code block in it can be copied ([`copy`], [`code_block`]); a message's toolbar can offer *Edit* and
-//! a menu of more besides ([`toolbar`]).
+//! A message and a code block in it can be copied ([`copy`], [`code_block`]); a message's actions can offer *Edit*,
+//! *Rewind to here* and *Fork from here* besides ([`toolbar`]).
 
 mod agent_text;
 pub mod code_block;
@@ -198,20 +198,21 @@ pub fn own_bubble(
   message_column(ctx, id, None, said, (attached, delivery))
 }
 
-/// [`own_bubble`] whose toolbar holds `extras` around Copy ([`toolbar`]), at the start of the line under the message,
-/// before `delivery` (09 `GYAPg`).
+/// [`own_bubble`] whose actions hold `extras` around Copy ([`toolbar`]), in the line under the message, before
+/// `delivery` (`06 · Message actions` `XPDAX`).
 pub fn own_bubble_with(
   ctx: &mut Ctx,
   id: &str,
   said: Option<Said>,
   (attached, delivery): (Option<Element>, Element),
   extras: toolbar::MessageExtras,
-) -> Element {
+) -> Column {
   let (bubble, words) = said.map_or((None, Arc::from("")), |(said, words)| {
     (Some(bubble_box(id, said).into()), words)
   });
   let attached = attached.map(|attached| attached_row(attached).into());
-  copyable::acted(ctx, id, (&words, extras), [bubble, attached], delivery)
+  let message = copyable::person(ctx, id, (&words, Some(extras)), [bubble, attached], Some(delivery));
+  person_column(id).child(message)
 }
 
 /// What `body` says as written, without links (a note the person returned the work with), what a search found in it
@@ -257,6 +258,9 @@ fn attached_row(attached: Element) -> Row {
     .child(attached)
 }
 
+/// The person's message `id`: `head`, then what it says in its bubble with the files attached to it, and the line
+/// under them with Copy and `delivery` ([`copyable::person`]); a message of attachments only has neither bubble nor
+/// Copy.
 fn message_column(
   ctx: &mut Ctx,
   id: &str,
@@ -264,17 +268,24 @@ fn message_column(
   said: Option<Said>,
   (attached, delivery): (Option<Element>, Option<Element>),
 ) -> Column {
-  let bubble = said.map(|(said, words)| copyable::bubble(ctx, id, &words, bubble_box(id, said).into()));
+  let column = person_column(id).with_children(head);
   let attached = attached.map(attached_row);
+  match said {
+    Some((said, words)) => {
+      let parts = [Some(bubble_box(id, said).into()), attached.map(Into::into)];
+      column.child(copyable::person(ctx, id, (&words, None), parts, delivery))
+    }
+    None => column.with_children(attached).with_children(delivery),
+  }
+}
+
+/// The column of the person's message `id`, at the chat's end.
+fn person_column(id: &str) -> Column {
   Column::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Xs)
     .align_items(Alignment::End)
-    .with_children(head)
-    .with_children(bubble)
-    .with_children(attached)
-    .with_children(delivery)
 }
 
 /// The line under a person's message: a 12 icon in `color` and the words in 11 `text_muted` (in `color` when it is

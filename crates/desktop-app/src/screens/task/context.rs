@@ -6,10 +6,11 @@ use std::sync::Arc;
 
 use orchester_core::{id::StepExecutionId, project::TaskKey};
 use orchester_workspace::tasks::{
-  approvals::ShownApproval, detail::TaskDetail, integration_jobs::ProjectJobState, slot_wait::slot_waits,
+  approvals::ShownApproval, detail::TaskDetail, integration_jobs::ProjectJobState, merge_attempts::page::AttemptPage,
+  resolve::Worktree, slot_wait::slot_waits,
 };
 
-use super::read::TaskLeftovers;
+use super::{read::TaskLeftovers, team::TeamTaskShown};
 use crate::project::{ShownProject, TasksState};
 
 #[derive(Clone, PartialEq)]
@@ -27,6 +28,13 @@ pub struct TaskContext {
   pub jobs: ProjectJobState,
   /// The latest run's pull request and its CI, while its branch has one (`super::ci`).
   pub ci: Option<super::ci::ShownCi>,
+  /// The latest run's merge attempts as last read, while it waits for review (`super::merge::reader`).
+  pub attempt: Option<Arc<AttemptPage>>,
+  /// The latest run's worktree and the merge waiting in it as last read, while it waits for review
+  /// (`super::merge::worktree`).
+  pub worktree: Option<Worktree>,
+  /// A team task as its server reads it, with the person's standing; `None` for a local project's.
+  pub team: Option<Arc<TeamTaskShown>>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for TaskContext {}
@@ -35,6 +43,16 @@ impl TaskContext {
   /// The page of this task on `view`, at the address of a task kept *Not shared* when it is one.
   pub fn page(&self, view: crate::routes::TaskView) -> crate::routes::ProjectPage {
     crate::routes::ProjectPage::task(self.detail.task.key().clone(), view, self.detail.not_shared())
+  }
+
+  /// A merge waits in the latest run's worktree for the person to finish it, as last read.
+  pub fn merge_in_worktree(&self) -> bool {
+    self.worktree.as_ref().is_some_and(|worktree| worktree.merge.is_some())
+  }
+
+  /// The person changes nothing of the task: a member of its team, as the server says. Only Admins do.
+  pub fn read_only(&self) -> bool {
+    self.team.as_ref().is_some_and(|team| team.standing.member())
   }
 
   /// The run is recorded as running while no runner looks after it: it is interrupted until one does.

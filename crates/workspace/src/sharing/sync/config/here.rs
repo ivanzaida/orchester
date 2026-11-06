@@ -99,6 +99,7 @@ impl Here {
       .reference_bindings()?
       .into_iter()
       .map(|binding| {
+        let binding = super::bindings::current(binding, &connections);
         let needed_by = needers(&db, &binding)?;
         let standing = standing(&binding, (&connections, &mcp_servers, &secrets));
         Ok(HereReference {
@@ -219,6 +220,7 @@ fn used_version(db: &ProjectDb, resource: ResourceId, kind: ResourceKind) -> Res
     ResourceKind::AgentProfile => number::<AgentProfile>(db, resource),
     ResourceKind::Instruction => number::<Instruction>(db, resource),
     ResourceKind::Tool => number::<Tool>(db, resource),
+    ResourceKind::TeamReviewer => number::<orchester_core::resource::TeamReviewer>(db, resource),
     ResourceKind::Skill => number::<Skill>(db, resource),
     // Agent testing's kinds are never shared.
     ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => Ok(None),

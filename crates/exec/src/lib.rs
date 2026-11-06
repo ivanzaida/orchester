@@ -7,6 +7,7 @@
 mod capped;
 mod console;
 mod exchange;
+mod watched;
 
 pub mod browser;
 pub mod clone_console;
@@ -22,10 +23,12 @@ pub mod process_group;
 pub mod process_tree;
 pub mod programs;
 pub mod ripgrep;
+pub mod run_git;
 pub mod run_processes;
 pub mod search_path;
 pub mod sign_in_terminal;
 pub mod trash;
+pub mod user;
 pub mod verifier_app;
 
 use std::{
@@ -38,7 +41,7 @@ use std::{
 
 use orchester_core::command::{Command, CommandError, CommandOutput, CommandRunner};
 
-pub use self::capped::run_capped;
+pub use self::{capped::run_capped, watched::WatchedRunner};
 
 const POLL_INTERVAL: Duration = Duration::from_millis(50);
 
@@ -85,8 +88,8 @@ fn spawn(command: &Command) -> Result<Child, CommandError> {
 
 /// The process that runs `command`, ready to start: launched through what [`launch::resolve`]
 /// finds, with its arguments, directory and environment, standard input piped when the command
-/// has input (otherwise empty), output piped, no console window and, on macOS, leading a process
-/// group of its own ([`process_group`]) with the full search path ([`search_path`]). Secret variables are
+/// has input (otherwise empty), output piped, no console window, the full search path ([`search_path`]) and, on
+/// macOS, leading a process group of its own ([`process_group`]). Secret variables are
 /// set last; the returned process holds their values, so it is not logged. For callers that stream a
 /// program's output instead of waiting for it, such as the runner with agent CLIs.
 pub fn prepare(command: &Command) -> Result<Process, CommandError> {
@@ -124,6 +127,8 @@ pub fn prepare(command: &Command) -> Result<Process, CommandError> {
   process_group::lead_own_group(&mut process);
   #[cfg(target_os = "macos")]
   search_path::macos::apply(&mut process, command, launch.program());
+  #[cfg(windows)]
+  search_path::windows::apply(&mut process, command);
   Ok(process)
 }
 

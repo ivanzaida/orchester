@@ -33,11 +33,11 @@ serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-
-# Signals the runner process on macOS, where it has no Job Object, and gives it the search path
-# of programs (`orchester_exec::search_path`).
-[target.'cfg(unix)'.dependencies]
+# Gives the runner process the search path of programs (`orchester_exec::search_path`).
 orchester-exec.workspace = true
+
+# Signals the runner process on macOS, where it has no Job Object.
+[target.'cfg(unix)'.dependencies]
 rustix.workspace = true
 
 [target.'cfg(windows)'.dependencies]

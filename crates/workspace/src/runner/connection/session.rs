@@ -5,7 +5,7 @@ use std::num::NonZeroU32;
 
 use orchester_ipc::{
   AttachSession, Command, CommandSender, Event, Reply, RunnerClient, RunnerProcess, ShutdownMode,
-  browser::BrowserCommand,
+  browser::{BrowserCommand, ComputerBrowser},
 };
 use tokio::{
   sync::{mpsc, oneshot},
@@ -77,13 +77,17 @@ impl Session {
   /// Attaches, sends `catch_up` (a change the runner missed while it started) and serves the requests.
   pub(super) async fn serve(
     mut self,
-    (session, agent_slots): (AttachSession, NonZeroU32),
+    (session, agent_slots, browser): (AttachSession, NonZeroU32, ComputerBrowser),
     catch_up: Option<Command>,
     requests: &mut mpsc::UnboundedReceiver<Control>,
     reporter: &Reporter,
   ) -> Served {
     let (reply, mut attached) = oneshot::channel();
-    let attach = Command::Attach { session, agent_slots };
+    let attach = Command::Attach {
+      session,
+      agent_slots,
+      browser,
+    };
     if !self.send(attach, Some(reply)).await {
       return Served::Dropped(RunnerFailure::Lost);
     }
@@ -180,15 +184,15 @@ impl Session {
         true
       }
       Some(Ok(Some(Event::RunChanged { run, task }))) => {
-        reporter.event_of(run);
-        reporter.run_changed();
-        reporter.task_run_changed(task);
+        reporter.run_state_changed(run, task);
         true
       }
-      Some(Ok(Some(
-        Event::TaskGroupChanged { .. } | Event::ToolApprovalChanged { .. } | Event::QuestionChanged { .. },
-      ))) => {
-        reporter.run_changed();
+      Some(Ok(Some(Event::ToolApprovalChanged { run, .. } | Event::QuestionChanged { run, .. }))) => {
+        reporter.run_changed(Some(run));
+        true
+      }
+      Some(Ok(Some(Event::TaskGroupChanged { .. }))) => {
+        reporter.run_changed(None);
         true
       }
       Some(Ok(Some(Event::ChatChanged { .. }))) => {
@@ -196,8 +200,7 @@ impl Session {
         true
       }
       Some(Ok(Some(Event::AgentActivity { run, .. }))) => {
-        reporter.event_of(run);
-        reporter.transcript_grew();
+        reporter.transcript_grew(run);
         true
       }
       Some(Ok(Some(Event::WorkSummary(summary)))) => {

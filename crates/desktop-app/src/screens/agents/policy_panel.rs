@@ -1,7 +1,8 @@
 //! Connection enforcement beside a profile's page (`Connection enforcement` `Lj9fe` in 01c): the CLI and when it was
 //! checked, then each setting with what enforces it and *Enforced* or *Not enforced*, the Browser (`R2Md4h` in
-//! `hQfEh`) and the approval mode too, and that the limits apply to new runs after publishing. The repository's agent
-//! files are the project's, under *Set by the project* ([`super::project_sets`], S14 a).
+//! `hQfEh`) and the approval mode too, and that the limits apply to new runs after publishing. With the Codex sandbox
+//! off, repository access, the writable folders, the network and any command read *Not enforced* (ORC-789). The
+//! repository's agent files are the project's, under *Set by the project* ([`super::project_sets`], S14 a).
 use std::sync::Arc;
 
 use lurq::{
@@ -14,7 +15,7 @@ use orchester_core::{
   connection::{AgentConnection, AgentProvider, CheckResult, invocation::Platform},
   permission::{
     AgentPermissions, ApprovalMode, AutopilotMechanism, AutopilotSupport, CantEnforce, RepositoryAccess,
-    capability::{PermissionOption, Support, support},
+    capability::{Mechanism, PermissionOption, PermissionSetting, Support, support},
   },
 };
 use orchester_workspace::agents::data::ProjectAgents;
@@ -181,6 +182,8 @@ fn checked(ctx: &Ctx, connection: &AgentConnection) -> Arc<str> {
   )
 }
 
+/// What enforces `option`'s setting and whether it does: with the Codex sandbox off, nothing
+/// ([`Mechanism::enforces`]), which says so in place of why network stays on.
 fn setting(
   ctx: &Ctx,
   connection: &AgentConnection,
@@ -191,15 +194,19 @@ fn setting(
   let support = effective.as_ref().map_or_else(
     |_| support(connection.provider(), Platform::current(), option),
     |effective| {
-      if option == PermissionOption::NetworkOff && effective.network_stays_on().is_some() {
+      let mechanism = effective.mechanism(option.setting());
+      if option == PermissionOption::NetworkOff && effective.network_stays_on().is_some() && mechanism.enforces() {
         support(connection.provider(), Platform::current(), option)
       } else {
-        Support::Enforced(effective.mechanism(option.setting()))
+        Support::Enforced(mechanism)
       }
     },
   );
   match support {
-    Support::Enforced(mechanism) => (enforcement::mechanism(ctx, mechanism, permissions), true),
+    Support::Enforced(mechanism) => (
+      enforcement::mechanism(ctx, mechanism, permissions),
+      mechanism.enforces(),
+    ),
     _ => (
       enforcement::unavailable(ctx, Some(connection.provider()), option),
       false,
@@ -207,8 +214,19 @@ fn setting(
   }
 }
 
+/// The extra writable folders: with the Codex sandbox off, not enforced whether or not any are listed, as Codex may
+/// then write anywhere.
 fn folders(ctx: &Ctx, connection: &AgentConnection, permissions: &AgentPermissions) -> (Arc<str>, bool) {
   let effective = permissions.enforced_on(connection.provider(), Platform::current());
+  let unsandboxed = effective
+    .as_ref()
+    .is_ok_and(|p| !p.mechanism(PermissionSetting::Repository).enforces());
+  if unsandboxed {
+    return (
+      enforcement::mechanism(ctx, Mechanism::CodexSandboxOff, permissions),
+      false,
+    );
+  }
   let mechanism = effective.as_ref().ok().and_then(|p| p.writable_folders());
   let detail = mechanism.map_or_else(
     || {

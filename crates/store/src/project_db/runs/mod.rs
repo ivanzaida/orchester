@@ -1,36 +1,28 @@
+mod children;
 mod columns;
+mod create;
 mod legacy;
 mod load;
+mod record;
 
 use std::{collections::BTreeMap, num::NonZeroU32};
 
 use orchester_core::{
   id::{IdempotencyKey, ResourceId, RunId, TaskId},
   resource::VersionNumber,
-  run::{
-    AttemptReason, BranchName, Checkpoint, EventSequence, ListedRun, NewRun, Plan, Run, RunEvent, RunEventKind,
-    RunNumber, RunnerFailure, StepExecutor,
-  },
-  sharing::TaskRevision,
+  run::{AttemptReason, BranchName, Checkpoint, ListedRun, NewRun, Plan, Run, RunEvent, RunEventKind, RunNumber},
   store::RunStore,
   time::Timestamp,
 };
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
 pub(super) use self::load::sequence_value;
+pub use self::record::RunLogRecord;
 use self::{
-  columns::{
-    attempt_conflicts_column, attempt_reason_columns, attempt_status_text, run_status_columns, step_failure_text,
-    step_status_columns,
-  },
+  columns::run_status_columns,
   load::{load_checkpoint, load_events, load_runs},
 };
-use super::{
-  ProjectDb, plans,
-  resources::version_number,
-  tasks::{has_revision, is_queued, snapshot_new_run},
-  write_transaction::retried,
-};
+use super::{ProjectDb, plans, resources::version_number, write_transaction::retried};
 use crate::{
   RunStoreError, StoreError,
   rows::{corrupt, encode_json, optional_budget_column, optional_millis_column, tokens_column},
@@ -87,7 +79,7 @@ impl ProjectDb {
     Ok(load_runs(
       &self.connection,
       "WHERE status NOT IN ('succeeded', 'failed', 'cancelled') ORDER BY number",
-      [],
+      &[],
     )?)
   }
 
@@ -97,7 +89,7 @@ impl ProjectDb {
     Ok(load_runs(
       &self.connection,
       "WHERE status = 'succeeded' AND id NOT IN (SELECT run_id FROM checkpoints) ORDER BY number",
-      [],
+      &[],
     )?)
   }
 
@@ -105,61 +97,8 @@ impl ProjectDb {
     Ok(load_runs(
       &self.connection,
       "WHERE status = 'paused' AND status_reason = 'plan_limit' ORDER BY number",
-      [],
+      &[],
     )?)
-  }
-
-  /// [`RunStore::create_run`] for a task the caller found queued: the task must still be queued
-  /// when the run is recorded, in the same transaction. A person may have taken it back to the
-  /// drafts since the caller checked it (a held group's task), and a draft never has a run. With
-  /// `revision`, the task must also still be at that revision, read in the same transaction: a task
-  /// edited since a person confirmed its run is refused ([`RunStoreError::TaskChangedMeanwhile`]).
-  pub fn create_run_of_queued_task(
-    &mut self,
-    key: IdempotencyKey,
-    new: NewRun,
-    now: Timestamp,
-    revision: Option<TaskRevision>,
-  ) -> Result<Run, RunStoreError> {
-    self.record_run(key, new, now, Some(revision))
-  }
-
-  /// Records the run; `queued` checks the task is still queued and, with a revision, still at it.
-  fn record_run(
-    &mut self,
-    key: IdempotencyKey,
-    new: NewRun,
-    now: Timestamp,
-    queued: Option<Option<TaskRevision>>,
-  ) -> Result<Run, RunStoreError> {
-    let key = key.to_string();
-    let project = self.project.key().clone();
-    let transaction = self.connection.transaction()?;
-    if let Some(existing) = load_runs(&transaction, "WHERE idempotency_key = ?1", [&key])?.pop() {
-      return existing.map_err(|unreadable| unreadable.error);
-    }
-    if let Some(revision) = queued {
-      if !is_queued(&transaction, new.task)? {
-        return Err(RunStoreError::TaskNotQueued(new.task));
-      }
-      if let Some(revision) = revision
-        && !has_revision(&transaction, new.task, revision)?
-      {
-        return Err(RunStoreError::TaskChangedMeanwhile(new.task));
-      }
-    }
-    if super::shared_tasks::is_not_shared(&transaction, new.task)? {
-      return Err(StoreError::NotSharedTask(new.task).into());
-    }
-    super::organization::check_readiness(&transaction, new.task)?;
-    let number: i64 = transaction.query_row("SELECT next FROM counters WHERE name = 'run'", [], |row| row.get(0))?;
-    let (run, created) = Run::create(RunId::generate(), run_number(number)?, new, now)?;
-    insert_run(&transaction, &run, &key)?;
-    snapshot_new_run(&transaction, run.id(), run.task(), &project)?;
-    insert_event(&transaction, &created)?;
-    transaction.execute("UPDATE counters SET next = ?1 WHERE name = 'run'", [number + 1])?;
-    transaction.commit()?;
-    Ok(run)
   }
 }
 
@@ -170,11 +109,11 @@ impl RunStore for ProjectDb {
   /// drafts. Production code records runs with [`ProjectDb::create_run_of_queued_task`], which
   /// rechecks that the task is still queued.
   fn create_run(&mut self, key: IdempotencyKey, new: NewRun, now: Timestamp) -> Result<Run, RunStoreError> {
-    self.record_run(key, new, now, None)
+    self.record_run(key, new, now, None, None)
   }
 
   fn run_with_key(&self, key: IdempotencyKey) -> Result<Option<Run>, RunStoreError> {
-    load_runs(&self.connection, "WHERE idempotency_key = ?1", [key.to_string()])?
+    load_runs(&self.connection, "WHERE idempotency_key = ?1", params![key.to_string()])?
       .pop()
       .transpose()
       .map_err(|unreadable| unreadable.error)
@@ -188,14 +127,11 @@ impl RunStore for ProjectDb {
   }
 
   fn append_events(&mut self, run: &Run, events: &[RunEvent]) -> Result<(), RunStoreError> {
-    self.append(run, events, With::Nothing)
+    self.write_run_log(&RunLogRecord::events(run, events)?)
   }
 
   fn append_events_with_plan(&mut self, run: &Run, events: &[RunEvent], plan: &Plan) -> Result<(), RunStoreError> {
-    if plan.run != run.id() {
-      return Err(RunStoreError::EventsMismatch("the plan belongs to another run"));
-    }
-    self.append(run, events, With::Plan(plan))
+    self.write_run_log(&RunLogRecord::with_plan(run, events, plan)?)
   }
 
   fn plans(&self, run: RunId) -> Result<Vec<Plan>, RunStoreError> {
@@ -203,7 +139,7 @@ impl RunStore for ProjectDb {
   }
 
   fn run(&self, id: RunId) -> Result<Option<Run>, RunStoreError> {
-    load_runs(&self.connection, "WHERE id = ?1", [id.to_string()])?
+    load_runs(&self.connection, "WHERE id = ?1", params![id.to_string()])?
       .pop()
       .transpose()
       .map_err(|unreadable| unreadable.error)
@@ -213,7 +149,7 @@ impl RunStore for ProjectDb {
     Ok(load_runs(
       &self.connection,
       "WHERE task_id = ?1 ORDER BY number",
-      [task.to_string()],
+      params![task.to_string()],
     )?)
   }
 
@@ -229,7 +165,7 @@ impl RunStore for ProjectDb {
     Ok(load_runs(
       &self.connection,
       "WHERE status = ?1 AND id NOT IN (SELECT run_id FROM run_worktree_removals) ORDER BY number",
-      [columns::INTERRUPTED],
+      params![columns::INTERRUPTED],
     )?)
   }
 
@@ -237,7 +173,7 @@ impl RunStore for ProjectDb {
     Ok(load_runs(
       &self.connection,
       "WHERE status = ?1 ORDER BY number",
-      [columns::RUNNING],
+      params![columns::RUNNING],
     )?)
   }
 
@@ -245,7 +181,7 @@ impl RunStore for ProjectDb {
     Ok(load_runs(
       &self.connection,
       "WHERE status = 'paused' AND status_reason = ?1 ORDER BY number",
-      ["low_disk"],
+      params!["low_disk"],
     )?)
   }
 
@@ -271,111 +207,77 @@ impl RunStore for ProjectDb {
   }
 }
 
-/// What is stored with a run's events, in their transaction.
-#[derive(Clone, Copy)]
-pub(super) enum With<'a> {
-  Nothing,
-  Plan(&'a Plan),
-  /// Why the runner failed, kept with its interruption, the event at this sequence.
-  RunnerFailure(EventSequence, RunnerFailure),
-}
-
 impl ProjectDb {
-  /// Appends `events` and stores `run`, and what comes `with` them, in one transaction, run again while
-  /// the database is busy ([`retried`]).
-  pub(super) fn append(&mut self, run: &Run, events: &[RunEvent], with: With<'_>) -> Result<(), RunStoreError> {
-    check_events(run, events)?;
+  /// Writes `record`: appends its events and stores the change they make to the run and what is kept with them, in
+  /// one transaction, run again while the database is busy ([`retried`]). The first event must directly follow the
+  /// stored log; otherwise another writer appended first and the call fails with a sequence conflict, changing
+  /// nothing. The runner's records come here through the coordinator's sink.
+  pub fn write_run_log(&mut self, record: &RunLogRecord) -> Result<(), RunStoreError> {
+    record.check()?;
     retried(&mut self.connection, "append run events", |transaction| {
-      append_in(transaction, run, events, with)
+      append_in(transaction, record)
     })
   }
 }
 
-/// [`ProjectDb::append`] in `transaction`.
-fn append_in(
-  transaction: &Transaction<'_>,
-  run: &Run,
-  events: &[RunEvent],
-  with: With<'_>,
-) -> Result<(), RunStoreError> {
+/// [`ProjectDb::write_run_log`] in `transaction`.
+fn append_in(transaction: &Transaction<'_>, record: &RunLogRecord) -> Result<(), RunStoreError> {
+  let (run, task, events) = (record.run(), record.task(), record.appended());
   let continues = events.iter().any(|event| event.kind().starts_execution());
   // Transactions take the write lock before they read (`migrate`), so a continuation and a removal
   // of the run's worktrees (`WorktreeStore::begin_worktree_removal`) each see the other.
-  if continues && super::worktree_removals::removal(transaction, run.id())?.is_some() {
-    return Err(RunStoreError::WorktreeRemoved(run.id()));
+  if continues && super::worktree_removals::removal(transaction, run)?.is_some() {
+    return Err(RunStoreError::WorktreeRemoved(run));
   }
-  if continues && super::resolutions::resolution(transaction, run.id())?.is_some() {
-    return Err(RunStoreError::Resolving(run.id()));
+  if continues && super::resolutions::resolution(transaction, run)?.is_some() {
+    return Err(RunStoreError::Resolving(run));
   }
   // Work returned after the run ended goes on only while it is not merged: the merge stands for what the run did.
-  if events.iter().any(returns_after_end) && super::merges::merged(transaction, run.id())? {
-    return Err(RunStoreError::Merged(run.id()));
+  if events.iter().any(returns_after_end) && super::merges::merged(transaction, run)? {
+    return Err(RunStoreError::Merged(run));
   }
   let stored: Option<i64> = transaction
     .query_row(
       "SELECT last_sequence FROM runs WHERE id = ?1",
-      [run.id().to_string()],
+      [run.to_string()],
       |row| row.get(0),
     )
     .optional()?;
-  let stored = stored.ok_or(RunStoreError::RunNotFound(run.id()))?;
+  let stored = stored.ok_or(RunStoreError::RunNotFound(run))?;
   let expected = u64::try_from(stored).map_err(|error| corrupt("run sequence", error))? + 1;
   let found = events[0].sequence().get();
   if found != expected {
-    return Err(RunStoreError::SequenceConflict {
-      run: run.id(),
-      expected,
-      found,
-    });
+    return Err(RunStoreError::SequenceConflict { run, expected, found });
   }
-  if continues {
-    super::organization::check_readiness(transaction, run.task())?;
+  // A team task whose definition is kept only on its server has no readiness or workflow status here, and a run of
+  // inputs the team server accepted never changes its task here, even one with a cached definition: its run goes on
+  // from its inputs, and the server keeps the task's status.
+  let defined =
+    super::task_identities::has_definition(transaction, task)? && !super::run_inputs::is_team_run(transaction, run)?;
+  if continues && defined {
+    super::organization::check_readiness(transaction, task)?;
   }
-  update_run(transaction, run)?;
-  write_attempts(transaction, run)?;
+  record.store_change(transaction)?;
   for event in events {
     insert_event(transaction, event)?;
-    let status = match event.kind() {
-      kind if kind.starts_execution() => Some(orchester_core::task::organization::WorkflowStatus::InProgress),
-      RunEventKind::Succeeded | RunEventKind::FollowUpFailed => {
-        Some(orchester_core::task::organization::WorkflowStatus::InReview)
-      }
-      _ => None,
-    };
-    if let Some(status) = status {
-      super::organization::automatic(transaction, run.task(), status, event.at())?;
+    if defined {
+      follow_workflow(transaction, task, event)?;
     }
   }
-  match with {
-    With::Nothing => {}
-    With::Plan(plan) => plans::save(transaction, plan)?,
-    With::RunnerFailure(sequence, failure) => {
-      super::runner_failures::insert(transaction, run.id(), sequence, failure)?;
-    }
-  }
+  record.store_kept(transaction)?;
   Ok(())
 }
 
-/// `events` must be the consecutive events of `run` that end in its current state.
-fn check_events(run: &Run, events: &[RunEvent]) -> Result<(), RunStoreError> {
-  let last = events
-    .last()
-    .ok_or(RunStoreError::EventsMismatch("there are no events to append"))?;
-  if events.iter().any(|event| event.run() != run.id()) {
-    return Err(RunStoreError::EventsMismatch("an event belongs to another run"));
-  }
-  let consecutive = events
-    .windows(2)
-    .all(|pair| pair[0].sequence().next() == pair[1].sequence());
-  if !consecutive {
-    return Err(RunStoreError::EventsMismatch("the events are not consecutive"));
-  }
-  if last.sequence() != run.last_sequence() {
-    return Err(RunStoreError::EventsMismatch(
-      "the last event does not produce the stored state",
-    ));
-  }
-  Ok(())
+/// Moves `task` to the workflow status `event` brings it to, if any: In progress when an agent starts, In review when
+/// the run succeeds.
+fn follow_workflow(transaction: &Transaction<'_>, task: TaskId, event: &RunEvent) -> Result<(), StoreError> {
+  use orchester_core::task::organization::WorkflowStatus;
+  let status = match event.kind() {
+    kind if kind.starts_execution() => WorkflowStatus::InProgress,
+    RunEventKind::Succeeded | RunEventKind::FollowUpFailed => WorkflowStatus::InReview,
+    _ => return Ok(()),
+  };
+  super::organization::automatic(transaction, task, status, event.at())
 }
 
 fn insert_run(transaction: &Transaction<'_>, run: &Run, key: &str) -> Result<(), StoreError> {
@@ -415,98 +317,6 @@ fn insert_run(transaction: &Transaction<'_>, run: &Run, key: &str) -> Result<(),
       base_module,
     ],
   )?;
-  Ok(())
-}
-
-fn update_run(transaction: &Transaction<'_>, run: &Run) -> Result<(), StoreError> {
-  let columns = run_status_columns(run.status());
-  transaction.execute(
-    "UPDATE runs SET status = ?2, status_reason = ?3, failed_step = ?4, limit_execution = ?5, budget_tokens = ?6, \
-     max_duration_ms = ?7, used_tokens = ?8, pause_requested = ?9, last_sequence = ?10, branch = ?11, \
-     failure_reason = ?12 WHERE id = ?1",
-    params![
-      run.id().to_string(),
-      columns.status,
-      columns.reason,
-      columns.failed_step,
-      columns.limit_execution,
-      optional_budget_column("run budget", run.budget())?,
-      optional_millis_column("run time limit", run.max_duration())?,
-      tokens_column("run usage", run.used().get())?,
-      run.pause_requested(),
-      sequence_column(run.last_sequence().get())?,
-      run.branch().as_str(),
-      columns.failure_reason,
-    ],
-  )?;
-  let mut step_budget = transaction.prepare_cached(
-    "INSERT INTO run_step_budgets (run_id, step_key, budget_tokens) VALUES (?1, ?2, ?3) \
-     ON CONFLICT (run_id, step_key) DO UPDATE SET budget_tokens = excluded.budget_tokens",
-  )?;
-  for (step, budget) in run.raised_step_budgets() {
-    step_budget.execute(params![
-      run.id().to_string(),
-      step.as_str(),
-      optional_budget_column("step budget", *budget)?
-    ])?;
-  }
-  let mut permissions = transaction.prepare_cached(
-    "INSERT INTO run_permissions (run_id, profile_id, body) VALUES (?1, ?2, ?3)      ON CONFLICT (run_id, profile_id) DO UPDATE SET body = excluded.body",
-  )?;
-  for (profile, changed) in run.all_changed_permissions() {
-    permissions.execute(params![
-      run.id().to_string(),
-      profile.to_string(),
-      encode_json("run permissions", PERMISSIONS_SCHEMA, changed)?
-    ])?;
-  }
-  Ok(())
-}
-
-/// Inserts new attempts and executions and updates the status of existing ones.
-fn write_attempts(transaction: &Transaction<'_>, run: &Run) -> Result<(), StoreError> {
-  let mut attempt_statement = transaction.prepare_cached(
-    "INSERT INTO attempts (id, run_id, number, reason, failed_step, return_to, note, status, conflicts) \
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) ON CONFLICT (id) DO UPDATE SET status = excluded.status",
-  )?;
-  let mut execution_statement = transaction.prepare_cached(
-    "INSERT INTO step_executions (id, attempt_id, step_key, profile_version_id, model, status, wait_reason, failure, \
-     judged_revision) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) \
-     ON CONFLICT (id) DO UPDATE SET status = excluded.status, wait_reason = excluded.wait_reason, \
-     failure = excluded.failure, judged_revision = excluded.judged_revision",
-  )?;
-  for attempt in run.attempts() {
-    let reason = attempt_reason_columns(attempt.reason());
-    attempt_statement.execute(params![
-      attempt.id().to_string(),
-      run.id().to_string(),
-      attempt.number().get(),
-      reason.reason,
-      reason.failed_step,
-      reason.return_to,
-      reason.note,
-      attempt_status_text(attempt.status()),
-      attempt_conflicts_column(attempt.reason())?,
-    ])?;
-    for execution in attempt.executions() {
-      let (profile_version, model) = match run.snapshot().step(execution.step()).map(|step| step.executor()) {
-        Some(StepExecutor::Agent { profile, model, .. }) => (Some(profile.version.to_string()), Some(model.as_str())),
-        _ => (None, None),
-      };
-      let (status, wait_reason) = step_status_columns(execution.status());
-      execution_statement.execute(params![
-        execution.id().to_string(),
-        attempt.id().to_string(),
-        execution.step().as_str(),
-        profile_version,
-        model,
-        status,
-        wait_reason,
-        execution.failure().map(step_failure_text),
-        execution.judged().map(|revision| revision.as_str()),
-      ])?;
-    }
-  }
   Ok(())
 }
 

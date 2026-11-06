@@ -6,7 +6,9 @@
 //! group.
 mod autopilot;
 mod controls;
+mod decision;
 mod feedback;
+mod hosted;
 mod rules;
 
 use std::sync::{
@@ -65,6 +67,10 @@ pub struct AutoMode {
   connection_open: Signal<bool>,
   model: Signal<String>,
   effort: Signal<String>,
+  threshold: Signal<String>,
+  threshold_editing: Signal<bool>,
+  hosted_confirmed: Signal<Asked>,
+  check: decision::Check,
   stored: Signal<Stored>,
   supplied: Signal<Stored>,
   attempted: Signal<Asked>,
@@ -74,6 +80,7 @@ pub struct AutoMode {
   autopilot_refused: Signal<bool>,
   /// Whether the input that made the last edit may choose another reviewer, read while it was delivered.
   may_widen: Arc<AtomicBool>,
+  may_review: Arc<AtomicBool>,
   /// A widening from input that may not make it was put back; said under the group until the next change.
   refused: Signal<bool>,
 }
@@ -81,13 +88,17 @@ impl Component for AutoMode {
   type Props = Props;
   fn create(ctx: &mut Ctx) -> Self {
     let settings = ctx.props::<Props>().settings.clone();
-    let (connection, model, effort) = values(&settings);
+    let (connection, model, effort, threshold) = values(&settings);
     let tab = Self {
       save: work::action(ctx, ctx.props::<Props>().tab.project.open.project.id()),
       connection: ctx.signal(connection),
       connection_open: ctx.signal(false),
       model: ctx.signal(model),
       effort: ctx.signal(effort),
+      threshold: ctx.signal(threshold),
+      threshold_editing: ctx.signal(false),
+      hosted_confirmed: ctx.signal(Asked(None)),
+      check: decision::check_action(ctx),
       stored: ctx.signal(Stored(settings.clone())),
       supplied: ctx.signal(Stored(settings)),
       attempted: ctx.signal(Asked(None)),
@@ -95,20 +106,28 @@ impl Component for AutoMode {
       gate: ctx.use_context::<InputGate>(),
       autopilot_refused: ctx.signal(false),
       may_widen: Arc::new(AtomicBool::new(true)),
+      may_review: Arc::new(AtomicBool::new(true)),
       refused: ctx.signal(false),
     };
     let save = tab.save.clone();
     tab.follow(ctx, &save);
     let after = tab.clone();
     ctx.watch(&tab.connection, move |connection| {
-      if *connection == values(&after.stored.get_untracked().0).0 {
+      let (saved_connection, model, effort, threshold) = values(&after.stored.get_untracked().0);
+      if *connection == saved_connection {
+        after.model.set(model);
+        after.effort.set(effort);
+        after.threshold.set(threshold);
         return;
       }
+      after.hosted_confirmed.set(Asked(None));
+      after.check.state().set(lurq::app::ctx::FutureState::idle());
       after.model.set(project_settings::default_model(
         &after.stored.get_untracked().0,
         connection,
       ));
       after.effort.set(String::new());
+      after.threshold.set("0.80".to_owned());
     });
     let after = tab.clone();
     ctx.watch(&tab.model, move |model| {
@@ -117,10 +136,11 @@ impl Component for AutoMode {
       }
     });
     // A select's choice is taken in its handler, so who chose is read while the input is delivered.
-    for chosen in [&tab.connection, &tab.model, &tab.effort] {
+    for chosen in [&tab.connection, &tab.model, &tab.effort, &tab.threshold] {
       let after = tab.clone();
       ctx.watch(chosen, move |_| after.note_input());
     }
+    tab.follow_check(ctx);
     tab
   }
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -160,6 +180,8 @@ impl Component for AutoMode {
       props.tab.status.set(Status::Unsaved);
     } else if self.failed.get() {
       props.tab.status.set(Status::Failed);
+    } else if self.dirty() {
+      props.tab.status.set(Status::Unsaved);
     }
     Element::from(group)
   }
@@ -170,6 +192,13 @@ impl AutoMode {
   fn note_input(&self) {
     let may = input_may_decide(self.gate.as_ref(), Guarded::ApprovalWidening);
     self.may_widen.store(may, Ordering::SeqCst);
+    self.may_review.store(
+      input_may_decide(
+        self.gate.as_ref(),
+        Guarded::Decision(orchester_workspace::decisions::DecisionKind::Approval),
+      ),
+      Ordering::SeqCst,
+    );
   }
   fn dirty(&self) -> bool {
     let stored = self.stored.get_untracked().0;
@@ -177,12 +206,15 @@ impl AutoMode {
       self.connection.get_untracked(),
       self.model.get_untracked(),
       self.effort.get_untracked(),
+      self.threshold.get_untracked(),
     ) != values(&stored)
       || self.failed.get_untracked()
   }
   fn outside(&self) -> bool {
     let (stored, supplied) = (self.stored.get().0, self.supplied.get().0);
-    stored.auto_mode != supplied.auto_mode || stored.connections != supplied.connections
+    stored.auto_mode != supplied.auto_mode
+      || stored.connections != supplied.connections
+      || stored.decision_connections != supplied.decision_connections
   }
   fn refresh(&self, supplied: &Settings, pending: bool) {
     if pending || *supplied == self.supplied.get_untracked().0 {
@@ -197,16 +229,20 @@ impl AutoMode {
       let mut stored = supplied.clone();
       stored.auto_mode = self.stored.get_untracked().0.auto_mode;
       stored.connections = self.stored.get_untracked().0.connections;
+      stored.decision_connections = self.stored.get_untracked().0.decision_connections;
       self.stored.set(Stored(stored));
     }
   }
   fn fill(&self, settings: Settings) {
-    let (connection, model, effort) = values(&settings);
+    let (connection, model, effort, threshold) = values(&settings);
     // Publish the baseline before changing the select signals their watchers read.
     self.stored.set(Stored(settings));
     self.connection.set(connection);
     self.model.set(model);
     self.effort.set(effort);
+    self.threshold.set(threshold);
+    self.hosted_confirmed.set(Asked(None));
+    self.threshold_editing.set(false);
   }
   fn follow(&self, ctx: &mut Ctx, save: &Save) {
     let (tab, status, feed) = (
@@ -231,20 +267,25 @@ impl AutoMode {
       }
     });
   }
-  fn draft(&self) -> Result<AutoModeSettings, orchester_workspace::messages::Message> {
+  fn draft(&self) -> Option<AutoModeSettings> {
     let settings = self.stored.get().0;
-    let reviewer =
-      project_settings::reviewer(&settings, &self.connection.get(), &self.model.get(), &self.effort.get())?;
+    // Invalid form values have no savable draft; the row and threshold field explain their validation errors.
+    let reviewer = if let Some(connection) = self.selected_decision(&settings) {
+      let model = orchester_core::resource::ModelId::new(&self.model.get()).ok()?;
+      Some(project_settings::decision_reviewer::choose(connection, model, &self.threshold.get()).ok()?)
+    } else {
+      project_settings::reviewer(&settings, &self.connection.get(), &self.model.get(), &self.effort.get()).ok()?
+    };
     let mut asked = settings.auto_mode;
     asked.reviewer = reviewer;
-    Ok(asked)
+    Some(asked)
   }
   fn commit(&self, props: &Props, save: &Save) {
-    if save.state().get().is_pending() {
+    if save.state().get().is_pending() || self.threshold_editing.get() {
       return;
     }
     let settings = self.stored.get().0;
-    let Ok(asked) = self.draft() else {
+    let Some(asked) = self.draft() else {
       return;
     };
     if asked == settings.auto_mode {
@@ -265,16 +306,26 @@ impl AutoMode {
     if self.attempted.get_untracked().0.as_ref() == Some(&asked) {
       return;
     }
+    if self.needs_hosted_question(&settings, &asked) {
+      return;
+    }
     self.request(props, save, asked);
   }
   /// Saves `asked` at once; a widening from input that may not make it is put back and said instead.
   fn request(&self, props: &Props, save: &Save, asked: AutoModeSettings) {
     let settings = self.stored.get_untracked().0;
     let base = settings.auto_mode.clone();
-    let confirmed = self.may_widen.load(Ordering::SeqCst);
+    let hosted =
+      project_settings::decision_reviewer::choosing_hosted(&base, &asked, &settings.decision_connections).is_some();
+    if hosted
+      && (self.hosted_confirmed.get_untracked().0.as_ref() != Some(&asked) || lurq::app::events::is_synthetic_input())
+    {
+      return;
+    }
+    let confirmed = hosted || self.may_widen.load(Ordering::SeqCst);
     self.failed.set(false);
     self.refused.set(false);
-    if !confirmed && project_settings::reviewer_widens(&base, &asked) {
+    if !self.may_review.load(Ordering::SeqCst) || (!confirmed && project_settings::reviewer_widens(&base, &asked)) {
       tracing::warn!("input that may not choose another reviewer changed it; put back");
       self.attempted.set(Asked(None));
       self.fill(settings);
@@ -285,7 +336,14 @@ impl AutoMode {
     // The workspace refuses a widening it was not told a person (or automation under its opt-ins) made.
     save.run((
       props.tab.project.open.repo_root.clone(),
-      Change::Auto { base, asked, confirmed },
+      Change::Auto {
+        decision: self
+          .selected_decision(&settings)
+          .map(|connection| Box::new(connection.clone())),
+        base,
+        asked,
+        confirmed,
+      },
     ));
   }
 }
@@ -303,12 +361,19 @@ fn cannot_run(ctx: &mut Ctx, props: &Props, settings: &Settings) -> Option<Arc<s
   let reason = reviewer_trouble::reason(ctx, trouble, now);
   Some(ctx.t_args(key, [("reason", &*reason)]))
 }
-fn values(settings: &Settings) -> (String, String, String) {
+fn values(settings: &Settings) -> (String, String, String, String) {
   match &settings.auto_mode.reviewer {
     Some(choice) => (
       choice.connection.to_string(),
       choice.model.as_str().to_owned(),
       choice.effort.clone().unwrap_or_default(),
+      format!(
+        "{:.2}",
+        choice
+          .threshold
+          .unwrap_or_else(orchester_core::run::review::default_decision_threshold)
+          .value()
+      ),
     ),
     None => (
       String::new(),
@@ -317,6 +382,7 @@ fn values(settings: &Settings) -> (String, String, String) {
         .map(|r| r.model.as_str().to_owned())
         .unwrap_or_default(),
       String::new(),
+      "0.80".to_owned(),
     ),
   }
 }

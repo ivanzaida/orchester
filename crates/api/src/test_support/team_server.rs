@@ -4,8 +4,9 @@
 //! identity), joining with a code (`POST /auth/code`) or a cloud identity (`POST /auth/cloud`), who signed in
 //! (`GET /auth/me`), and the projects the person is a member of (`GET /projects`, by `?slug=` too). What a linked
 //! checkout's first download reads, and what a first link of a project sends (the workspace's `local_owner`), is in
-//! [`first_download`]. It answers a wrong code and an expired one alike, `invalid_code`, as a real server does; it can
-//! have no place for a cloud identity, it can refuse a link, and it can stop answering.
+//! [`first_download`]; the reads of a team project straight from the server (`/api/v2`), and an Admin's writes of its
+//! tasks and releases, are in [`authority`]. It answers a wrong code and an expired one alike, `invalid_code`, as a
+//! real server does; it can have no place for a cloud identity, it can refuse a link, and it can stop answering.
 
 use std::{
   io::{Read, Write},
@@ -18,7 +19,12 @@ use orchester_core::id::ProjectId;
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 
+mod authority;
 mod first_download;
+pub use authority::{
+  AuthorityClaim, AuthorityModule, AuthorityTask, DeliveryAuthorized, PendingDelivery, Person, Plan,
+  STALE_AFTER_MINUTES, Standing,
+};
 use first_download::TaskPages;
 pub use first_download::TasksAnswer;
 
@@ -59,6 +65,8 @@ struct State {
   pages: Option<TaskPages>,
   /// How often a project's tasks were asked for.
   tasks_asked: usize,
+  /// What the `/api/v2` surface answers.
+  authority: authority::Authority,
 }
 
 pub struct TeamServer {
@@ -89,6 +97,7 @@ impl TeamServer {
       tasks: TasksAnswer::default(),
       pages: None,
       tasks_asked: 0,
+      authority: authority::Authority::new(),
     }));
     let serving = state.clone();
     thread::spawn(move || {
@@ -105,17 +114,19 @@ impl TeamServer {
     format!("http://127.0.0.1:{}", self.port)
   }
 
-  /// The person's projects there: `(name, slug, remote hint)`.
+  /// The person's projects there: `(name, slug, remote hint)`, each with the role the person stands in.
   pub fn share(&self, projects: &[(&str, &str, Option<&str>)]) {
     let url = self.url();
-    self.state.lock().projects = projects
+    let mut state = self.state.lock();
+    let role = state.authority.v1_role();
+    state.projects = projects
       .iter()
       .enumerate()
       .map(|(index, (name, slug, hint))| {
         json!({
           "id": format!("0191c7c0-0000-7000-8000-00000000{index:04x}"), "slug": slug,
           "address": format!("{url}/{slug}"), "key": "KON", "name": name, "remote_hint": hint,
-          "role": "member", "next_number": 4,
+          "role": role, "next_number": 4,
         })
       })
       .collect();
@@ -192,6 +203,13 @@ fn serve(mut stream: TcpStream, state: &Mutex<State>) {
   let Some((line, headers, body)) = read_request(&mut stream) else {
     return;
   };
+  if line
+    .split_whitespace()
+    .nth(1)
+    .is_some_and(|path| path.starts_with("/api/v2/"))
+  {
+    return authority::serve(&mut stream, (&line, &headers, &body), state);
+  }
   let target = line.split_whitespace().take(2).collect::<Vec<_>>().join(" ");
   let (path, query) = target.split_once('?').unwrap_or((&target, ""));
   let (status, answer) = route((path, query), (&headers, &body), state);
@@ -220,7 +238,7 @@ fn route((path, query): (&str, &str), (headers, body): (&str, &str), state: &Mut
       state.code_joins.push(request.get("identity_token").is_some());
       let code = request["code"].as_str().unwrap_or_default();
       if code == CODE || (code == LATER_CODE && !state.later_expired) {
-        ("201 Created", joined("code"))
+        ("201 Created", joined("code", state.authority.server_admin()))
       } else {
         ("400 Bad Request", error("invalid_code"))
       }
@@ -233,28 +251,40 @@ fn route((path, query): (&str, &str), (headers, body): (&str, &str), state: &Mut
       } else if state.approval {
         ("202 Accepted", waiting())
       } else {
-        ("201 Created", joined("cloud"))
+        ("201 Created", joined("cloud", state.authority.server_admin()))
       }
     }
-    _ if (path.starts_with("GET ") || path.starts_with("POST /api/v1/projects/")) && !signed_in => {
+    _ if (path.starts_with("GET ")
+      || path.starts_with("POST /api/v1/projects/")
+      || path.starts_with("PATCH ")
+      || path.starts_with("DELETE "))
+      && !signed_in =>
+    {
       ("401 Unauthorized", error("unauthorized"))
     }
-    "GET /api/v1/auth/me" => ("200 OK", json!({"user": user(false)})),
+    "GET /api/v1/auth/me" => {
+      let admin = state.lock().authority.server_admin();
+      ("200 OK", json!({"user": user(false, admin)}))
+    }
     "GET /api/v1/projects" => match query.strip_prefix("slug=") {
       Some(slug) => first_download::by_slug(slug, state),
       None => ("200 OK", json!({"projects": state.lock().projects})),
     },
-    _ => first_download::answer((path, query), state).unwrap_or_else(|| ("404 Not Found", error("not_found"))),
+    _ => authority::edits::answer(path, body, state)
+      .or_else(|| authority::roadmap::answer(path, body, state))
+      .or_else(|| first_download::answer((path, query), state))
+      .unwrap_or_else(|| ("404 Not Found", error("not_found"))),
   }
 }
 
-/// The `201` of a join `via` a code or the cloud: this computer's device token and Bohdan's account.
-fn joined(via: &str) -> Value {
+/// The `201` of a join `via` a code or the cloud: this computer's device token and Bohdan's account, the server's
+/// admin's when `admin`.
+fn joined(via: &str, admin: bool) -> Value {
   json!({
     "token": TOKEN,
     "session": {"id": "0191c7c0-0000-7000-8000-00000000d0d0", "device": "Bohdan's laptop", "created_at": 1,
       "last_used_at": 1, "current": true, "via": via},
-    "user": user(via == "cloud"),
+    "user": user(via == "cloud", admin),
     "joined": null,
   })
 }
@@ -266,8 +296,8 @@ fn waiting() -> Value {
 }
 
 /// Bohdan's account.
-fn user(cloud: bool) -> Value {
-  json!({"id": USER, "username": USERNAME, "display_name": "Bohdan Koval", "admin": false, "disabled": false,
+fn user(cloud: bool, admin: bool) -> Value {
+  json!({"id": USER, "username": USERNAME, "display_name": "Bohdan Koval", "admin": admin, "disabled": false,
     "cloud": cloud})
 }
 

@@ -13,6 +13,8 @@
 //! relevance is below 0.2 is not given at all.
 //! The ranked records are then taken within the project's limits ([`super::selection`]).
 
+use serde::{Deserialize, Serialize};
+
 use super::{
   Confidence, Importance, Memory, MemoryAuthor, MemoryKind, MemoryLimits, MemoryMatch, MemoryScope, MemoryStatus,
   selection::{Ranked, Recalled, within_limits},
@@ -41,7 +43,7 @@ pub fn estimated_tokens(text: &str) -> u32 {
 }
 
 /// Why a record is in a prompt.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub enum InjectionReason {
   /// The task's latest handoff.
   Handoff,

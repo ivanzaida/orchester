@@ -6,7 +6,9 @@
 //! starts the run, and a run the runner did not start keeps the form with *Retry run* (`H8GYVZ`, `t0fDw`). Edit task
 //! saves changes in place (Ctrl S), discards them in place (`LVI8K`), and keeps them on this computer when the page is
 //! left (`Fd1ai`). A newer version saved meanwhile is put under the edits, and where both changed a field the person
-//! chooses (`Edit task · conflict · newer version` `PenUu`).
+//! chooses (`Edit task · conflict · newer version` `PenUu`). A team project's task is edited as its server reads it and
+//! saved through the dispatcher; someone else's change first is said as `Team authority · redesign` 05 `LmxUY` draws
+//! it (`team`, `team_conflict`).
 
 mod actions;
 pub(super) mod bar;
@@ -33,6 +35,8 @@ mod priority;
 mod reason;
 mod sources;
 mod state;
+mod team;
+mod team_conflict;
 mod values;
 
 use std::sync::Arc;
@@ -91,22 +95,35 @@ pub fn new_task(ctx: &mut Ctx, project: &ShownProject, module: Option<ModuleId>)
     modules: tasks.modules,
     shared: tasks.shared,
     starts_in: module,
+    team: None,
   };
   let place = module.map(|module| format!("-in-{module}")).unwrap_or_default();
   ctx.mount_keyed::<TaskForm>(&format!("task-form-new-{}{place}", project.open.project.id()), props)
 }
 
+/// Edit task: a local project's task as this computer stores it; a team project's as its server reads it (`team`).
 pub fn edit_task(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey) -> Element {
   let tasks = match read_tasks(ctx, project, Screen::EditTask) {
     Ok(tasks) => tasks,
     Err(waiting) => return waiting,
   };
-  let Some(task) = tasks.tasks.iter().find(|task| task.key() == key) else {
+  let found = if tasks.shared {
+    match team::read(ctx, project, key) {
+      Ok(found) => found.map(|(source, read)| (read.task, read.missing_pipeline, Some(source))),
+      Err(waiting) => return waiting,
+    }
+  } else {
+    tasks.tasks.iter().find(|task| task.key() == key).map(|task| {
+      let missing = tasks.missing_pipelines.get(&task.id()).cloned();
+      (task.clone(), missing, None)
+    })
+  };
+  let Some((task, missing_pipeline, team)) = found else {
     let title = ctx.t_args("task_form.load.notFound", [("key", key.to_string())]);
     let missing = centered(Icon::SearchX, &title, &ctx.t("task_form.load.notFoundBody")).id("task-form-not-found");
     return screen(Screen::EditTask, missing.into());
   };
-  let task = Arc::new(task.clone());
+  let task = Arc::new(task);
   let task_id = task.id();
   let subject = if tasks.phases.contains_key(&task.id()) {
     Subject::Ran(task)
@@ -120,15 +137,13 @@ pub fn edit_task(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey) -> Elemen
     subject,
     tasks: task_ids(&tasks),
     pipelines: Some(tasks.pipelines.clone()),
-    missing_pipeline: tasks
-      .missing_pipelines
-      .get(&task_id)
-      .map(|slug| Arc::from(slug.as_str())),
+    missing_pipeline: missing_pipeline.map(|slug| Arc::from(slug.as_str())),
     default_pipeline: None,
     limits: *tasks.limits,
     modules: tasks.modules.clone(),
     shared: tasks.shared,
     starts_in: None,
+    team,
   };
   ctx.mount_keyed::<TaskForm>(&format!("task-form-{}-{key}", project.open.project.id()), props)
 }
@@ -137,17 +152,20 @@ fn task_ids(tasks: &ProjectTasks) -> Arc<[TaskId]> {
   tasks.tasks.iter().map(|task| task.id()).collect()
 }
 
+/// `form`'s screen while what it starts from is read. No loading frame draws the task form: its fields' lines are
+/// bones until then.
+fn reading(ctx: &mut Ctx, form: Screen) -> Element {
+  let bones = skeleton::lines(ctx, &[180.0, 640.0, 520.0, 600.0, 300.0]);
+  let reading = Skeleton::new("task-form-loading", ctx.t("task_form.load.reading")).show(ctx, bones);
+  screen(form, reading)
+}
+
 /// The project's tasks and pipelines, which the form starts from; until they are read, `form`'s screen
 /// says they are being read, or why they cannot be.
 fn read_tasks(ctx: &mut Ctx, project: &ShownProject, form: Screen) -> Result<ProjectTasks, Element> {
   match project.feed.tasks.get() {
     TasksState::Ready(tasks) => Ok(tasks),
-    TasksState::Loading => {
-      // No loading frame draws the task form: its fields' lines are bones until the project's tasks are read.
-      let bones = skeleton::lines(ctx, &[180.0, 640.0, 520.0, 600.0, 300.0]);
-      let reading = Skeleton::new("task-form-loading", ctx.t("task_form.load.reading")).show(ctx, bones);
-      Err(screen(form, reading))
-    }
+    TasksState::Loading => Err(reading(ctx, form)),
     TasksState::Failed(error) => {
       let feed = project.feed.clone();
       let body = message_text(ctx, &error);

@@ -2,28 +2,32 @@
 //! updates", "Cursor and applying events"): two workspaces' caches see each other's task change, claim and run progress
 //! within a second; a connect without a cursor applies the snapshot and a reconnect resumes from the cursor; a delta
 //! the cache cannot take reads that task; `revoked` stops the stream and the list reads *not a member*; reconnects
-//! wait 1 s doubling to 60 s with jitter, on a settable clock; the project's state moves through *live*,
-//! *reconnecting*, *offline* and *not a member*, also as the desktop's servers keep it, and goes once the project is
-//! local. Without the minute's poll, a run's workflow status the server could not take goes with the minute's round,
-//! without *Check again*. The team's configuration comes with it ([`config`]), also to a stream resumed from a cursor
-//! that came without the snapshot ([`joined`]), its admins publish it from here ([`publish`]), Share uploads it with
-//! its history and Make local keeps it ([`share`]). This computer's catalog is reported while the stream is open
-//! ([`catalog`]).
+//! wait 1 s doubling to 60 s with jitter and the project's state moves through *live*, *reconnecting*, *offline* and
+//! *not a member* ([`reconnects`]), also as the desktop's servers keep it, and goes once the project is local. Without
+//! the minute's poll, a run's workflow status the server could not take goes with the minute's round, without *Check
+//! again*. The team's configuration comes with it ([`config`]), also to a stream resumed from a cursor that came
+//! without the snapshot ([`joined`]), its admins publish it from here ([`publish`]), Share uploads it with its history
+//! and Make local keeps it ([`share`]), and a resource archived there leaves this computer ([`archived`]). This
+//! computer's catalog is reported while the stream is open ([`catalog`]).
 //!
 //! `cargo test -p orchester-workspace --test live_updates live_updates_`
 
+mod archived;
 mod catalog;
 mod config;
+mod connection_kinds;
 mod desktop;
 mod here;
 mod http;
 mod joined;
 mod merged;
 mod publish;
+mod reconnects;
 mod server;
 mod share;
 #[path = "../support/mod.rs"]
 mod support;
+mod team_copy;
 mod widening;
 
 use std::{
@@ -51,10 +55,15 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
+use orchester_ipc::SessionEnd;
 use orchester_store::{CachedTask, ProjectDb, SharingLink};
-use orchester_workspace::sharing::{
-  SharingError,
-  sync::{Clock, Source, Stopped, SyncState, SystemClock, follow},
+use orchester_workspace::{
+  activity::Activity,
+  runner::Runners,
+  sharing::{
+    SharingError,
+    sync::{Clock, Source, Stopped, SyncState, SystemClock, follow},
+  },
 };
 use server::TeamServer;
 use support::Fixture;
@@ -72,6 +81,8 @@ struct Member {
   token: SecretValue,
   project: ProjectId,
   states: Mutex<Vec<SyncState>>,
+  /// The resources its stream saw archived, in order.
+  archived: Mutex<Vec<ResourceId>>,
 }
 
 impl Member {
@@ -82,6 +93,7 @@ impl Member {
       token: SecretValue::new(token.to_owned()).expect("token"),
       project: server.project,
       states: Mutex::new(Vec::new()),
+      archived: Mutex::new(Vec::new()),
     }
   }
 
@@ -140,6 +152,10 @@ impl Source for Member {
 
   async fn report_catalog(&self, report: CatalogReport) -> Result<(), SharingError> {
     Ok(self.client.report_catalog(&self.token, self.project, &report).await?)
+  }
+
+  async fn archived(&self, resource: ResourceId) {
+    self.archived.lock().expect("archived").push(resource);
   }
 
   fn changed(&self) {}
@@ -370,166 +386,19 @@ async fn live_updates_a_stale_delta_reads_that_task_and_revoked_stops_the_stream
   assert_eq!(server.connects().len(), 1, "a revoked stream does not connect again");
 }
 
-/// A clock whose waits pass at once and are kept, with a set jitter.
-struct SettableClock {
-  jitter: f64,
-  waits: Mutex<Vec<Duration>>,
-}
-
-impl SettableClock {
-  fn new(jitter: f64) -> Self {
-    Self {
-      jitter,
-      waits: Mutex::new(Vec::new()),
-    }
-  }
-
-  fn waits(&self) -> Vec<Duration> {
-    self.waits.lock().expect("waits").clone()
-  }
-}
-
-impl Clock for SettableClock {
-  async fn wait(&self, wait: Duration) {
-    self.waits.lock().expect("waits").push(wait);
-    tokio::task::yield_now().await;
-  }
-
-  fn jitter(&self) -> f64 {
-    self.jitter
-  }
-}
-
-/// A server that cannot be reached `failures` times, then refuses the token.
-struct Unreachable {
-  failures: Mutex<usize>,
-}
-
-impl Source for Unreachable {
-  async fn open(&self, _: Option<u64>) -> Result<EventStream, StreamEnd> {
-    let mut failures = self.failures.lock().expect("failures");
-    if *failures == 0 {
-      return Err(StreamEnd::Unauthorized);
-    }
-    *failures -= 1;
-    Err(StreamEnd::Failed(ClientError::Unreachable))
-  }
-
-  async fn task(&self, _: TaskId) -> Result<SharedTask, SharingError> {
-    Err(SharingError::Offline)
-  }
-
-  async fn resources(&self) -> Result<Vec<SharedResource>, SharingError> {
-    Err(SharingError::Offline)
-  }
-
-  async fn versions(&self, _: ResourceId, _: Option<VersionNumber>) -> Result<Versions, SharingError> {
-    Err(SharingError::Offline)
-  }
-
-  async fn report_catalog(&self, _: CatalogReport) -> Result<(), SharingError> {
-    Err(SharingError::Offline)
-  }
-
-  fn changed(&self) {}
-
-  fn state(&self, _: SyncState) {}
-}
-
-fn seconds(waits: &[f64]) -> Vec<Duration> {
-  waits.iter().map(|wait| Duration::from_secs_f64(*wait)).collect()
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn live_updates_reconnects_wait_one_second_doubling_to_sixty_with_jitter() {
-  let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
-  let workspace = Workspace::linked(&server);
-  for (jitter, share) in [(0.0, 1.0), (1.0, 0.8), (0.5, 0.9)] {
-    let clock = SettableClock::new(jitter);
-    let source = Unreachable {
-      failures: Mutex::new(8),
-    };
-    assert_eq!(follow(&source, &workspace.root, &clock).await, Stopped::SignedOut);
-    let expected: Vec<f64> = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 60.0, 60.0]
-      .iter()
-      .map(|wait| wait * share)
-      .collect();
-    assert_eq!(clock.waits(), seconds(&expected), "jitter {jitter}");
-  }
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn live_updates_a_stream_that_opened_starts_the_waits_over() {
-  let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &["Status bar"]);
-  let workspace = Workspace::linked(&server);
-  server.refuse_streams(3);
-  let clock = Arc::new(SettableClock::new(0.0));
-  let following = {
-    let (clock, root, member) = (clock.clone(), workspace.root.clone(), Member::of(&server, ALICE));
-    tokio::spawn(async move { follow(&member, &root, &*clock).await })
-  };
-  seen_within(LIVE, "the snapshot after three refusals", || {
-    workspace.link().cursor == server.cursor()
-  })
-  .await;
-  assert_eq!(clock.waits(), seconds(&[1.0, 2.0, 4.0]));
-  server.drop_streams();
-  seen_within(LIVE, "the reconnect", || server.connects().len() == 5).await;
-  assert_eq!(
-    clock.waits(),
-    seconds(&[1.0, 2.0, 4.0, 1.0]),
-    "the dropped stream had opened"
-  );
-  server.revoke(ALICE);
-  let stopped = tokio::time::timeout(LIVE, following).await.expect("stopped");
-  assert_eq!(stopped.expect("the stream's task"), Stopped::NotMember);
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn live_updates_the_state_moves_through_live_reconnecting_offline_and_not_a_member() {
-  let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &["Status bar"]);
-  let workspace = Workspace::linked(&server);
-  let clock = Arc::new(SettableClock::new(0.0));
-  let member = Arc::new(Member::of(&server, ALICE));
-  let started = Timestamp::now();
-  let following = {
-    let (clock, root, member) = (clock.clone(), workspace.root.clone(), member.clone());
-    tokio::spawn(async move { follow(&*member, &root, &*clock).await })
-  };
-  seen_within(LIVE, "the snapshot", || workspace.link().cursor == server.cursor()).await;
-  assert_eq!(member.states(), [SyncState::Live], "live once the stream connects");
-
-  // The stream drops, then six connects are refused before the seventh opens: the wait reaches a minute at the
-  // seventh failure in a row, the drop counting as the first.
-  server.refuse_streams(6);
-  server.drop_streams();
-  seen_within(LIVE, "live again after six refusals", || {
-    server.connects().len() == 8 && member.states().last() == Some(&SyncState::Live)
-  })
-  .await;
-  let states = member.states();
-  let reconnecting: Vec<_> = (1..=6).map(|attempt| SyncState::Reconnecting { attempt }).collect();
-  assert_eq!(states[..7], [&[SyncState::Live][..], &reconnecting].concat());
-  let SyncState::Offline { since } = states[7] else {
-    panic!("offline at the seventh failure in a row: {states:?}");
-  };
-  assert!(
-    since >= started && since <= Timestamp::now(),
-    "offline since the stream dropped"
-  );
-  assert_eq!(states[8..], [SyncState::Live], "live again once it connects");
-
-  server.revoke(ALICE);
-  let stopped = tokio::time::timeout(LIVE, following).await.expect("stopped");
-  assert_eq!(stopped.expect("the stream's task"), Stopped::NotMember);
-  assert_eq!(member.states().last(), Some(&SyncState::NotMember), "revoked");
-}
-
 #[tokio::test(flavor = "multi_thread")]
 async fn live_updates_the_desktops_state_is_live_reconnecting_not_a_member_and_none_once_local() {
   let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &["Status bar"]);
   let desktop = Desktop::signed_in(&server, ALICE, Fixture::new(), &[]);
-  let streams = tokio::spawn(orchester_workspace::sharing::sync::run(desktop.servers.clone()));
+  let streams = tokio::spawn(orchester_workspace::sharing::sync::run(
+    desktop.servers.clone(),
+    Runners::new(
+      "no-runner".into(),
+      tokio::runtime::Handle::current(),
+      Activity::new(),
+      SessionEnd::Clean,
+    ),
+  ));
   let state = || desktop.servers.sync_state(desktop.root());
   seen_within(LIVE, "live", || state() == Some(SyncState::Live)).await;
   assert_eq!(desktop.servers.sync_states().len(), 1, "one state, the project's");

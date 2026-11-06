@@ -120,7 +120,8 @@ impl Leftovers {
 }
 
 /// Why something was not cleared.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum KeepReason {
   /// The worktree has uncommitted changes nobody confirmed discarding.
   Uncommitted(Vec<String>),
@@ -147,8 +148,8 @@ pub enum CleanupError {
   Git(#[from] GitError),
 }
 
-/// What clearing did.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+/// What clearing did. It travels back to the desktop from the runner that cleared ([`super::removal`]).
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Cleanup {
   pub removed: Vec<LeftWorktree>,
   pub deleted: Vec<BranchName>,
@@ -161,6 +162,16 @@ impl Cleanup {
   /// can never continue in it, which is worth recording.
   pub fn removed_run_worktree(&self) -> bool {
     self.removed.iter().any(|worktree| worktree.owner == WorktreeOwner::Run)
+  }
+
+  /// Whether clearing touched nothing: no worktree went, and none stays because git or the file system refused (a
+  /// refusal can come part way).
+  pub fn untouched(&self) -> bool {
+    self.removed.is_empty()
+      && self
+        .kept_worktrees
+        .iter()
+        .all(|(_, reason)| !matches!(reason, KeepReason::Failed(_)))
   }
 }
 

@@ -52,6 +52,7 @@ pub enum Change {
     asked: AutoModeSettings,
     /// The input that made the change may choose another reviewer: a person's, or automation's under both opt-ins.
     confirmed: bool,
+    decision: Option<Box<orchester_core::connection::DecisionConnection>>,
   },
   /// *Allow Autopilot for agents in this project*, turned on by a person, or off by anyone.
   Autopilot {
@@ -103,9 +104,12 @@ pub fn action(ctx: &mut Ctx, project: ProjectId) -> Save {
             },
           )
           .map_err(|e| messages::store_error(&e))?,
-          Change::Auto { base, asked, confirmed } => {
-            project_settings::save_auto_mode_in(&root, &base, &asked, confirmed)?
-          }
+          Change::Auto {
+            base,
+            asked,
+            confirmed,
+            decision,
+          } => project_settings::save_auto_mode_in(&root, &base, &asked, confirmed, decision.as_deref())?,
           Change::Autopilot { on, by } => project_settings::save_allow_autopilot_in(&root, on, by).map(|_| ())?,
           Change::UseAccount(id) => expect_active_account_in(&root, id).map_err(|e| e.message())?,
           Change::Revoke(rule) => {

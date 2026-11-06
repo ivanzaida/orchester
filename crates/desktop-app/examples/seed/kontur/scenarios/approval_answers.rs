@@ -276,14 +276,22 @@ fn not_judged(kontur: &mut Kontur, request: &PendingToolApproval, failure: Revie
     failure,
     model: Some("claude-haiku-4-5".to_owned()),
     detail: Some("the reviewer could not run: the CLI exited with code 1".to_owned()),
+    decision: false,
   };
   kontur.db.record_review(request.run, &request.id, &failed)?;
   if failure != ReviewFailure::CouldNotRun {
     return Ok(());
   }
   let (settings, connections) = (kontur.db.auto_mode_settings()?, kontur.db.connections()?);
-  let reviewer = resolve_reviewer(&settings, &connections).expect("the catalogue's connection reviews");
-  let provider = reviewer.kind.provider();
+  let reviewer = resolve_reviewer(&settings, &connections, &[]).expect("the catalogue's connection reviews");
+  let provider = reviewer
+    .kind
+    .provider()
+    .expect("the catalogue's reviewer is an agent CLI's");
+  let connection = reviewer
+    .connection
+    .language()
+    .expect("the catalogue's reviewer is a language model's");
   let week = LimitWindow::new(
     7 * 24 * 60,
     Some(100.0),
@@ -294,7 +302,7 @@ fn not_judged(kontur: &mut Kontur, request: &PendingToolApproval, failure: Revie
   .expect("a whole week, used up");
   let reading = LimitReading {
     provider,
-    account: reviewer.connection.account().id(provider),
+    account: connection.account().id(provider),
     at: request.requested_at,
     limits: PlanLimits {
       windows: vec![week],

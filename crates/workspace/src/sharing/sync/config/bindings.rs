@@ -1,7 +1,7 @@
 //! This computer's binding of each reference a shared version names (`docs/architecture/server.md`, "What a version
 //! names on each computer"): made the first time a version names the reference and kept for every later one. A
-//! connection binds to the local connection of its role with its name (without regard to case), else to the only
-//! local connection of its role; an MCP server or a secret stays unbound until a person binds it ([`super::bind`]),
+//! connection binds to the only local connection of its role; with several, the person chooses. An MCP server or
+//! a secret stays unbound until a person binds it ([`super::bind`]),
 //! since binding one widens what agents may do or what a tool sends.
 
 use orchester_api::{Reference as SharedReference, ReferenceTarget as SharedTarget};
@@ -19,6 +19,7 @@ use orchester_store::{Bound, BoundBy, BoundReference, ProjectDb, ReferenceBindin
 /// The bound references this computer has, after giving each of `references` that has no binding yet its first one.
 pub(super) fn bind_new(db: &mut ProjectDb, references: &[SharedReference]) -> Result<Vec<Binding>, StoreError> {
   let mut kept = db.reference_bindings()?;
+  let connections = db.connections()?;
   for reference in references {
     let Some(unbound) = unbound(reference.target) else {
       continue;
@@ -30,7 +31,7 @@ pub(super) fn bind_new(db: &mut ProjectDb, references: &[SharedReference]) -> Re
     let first = match unbound {
       BoundReference::Connection { reference: id, .. } => BoundReference::Connection {
         reference: id,
-        bound: by_name_or_role(&db.connections()?, &reference.name, reference.role.as_deref()),
+        bound: by_role(&connections, reference.role.as_deref()),
       },
       person_only => person_only,
     };
@@ -43,13 +44,14 @@ pub(super) fn bind_new(db: &mut ProjectDb, references: &[SharedReference]) -> Re
     db.set_reference_binding(&binding)?;
     kept.push(binding);
   }
-  Ok(bound(&kept))
+  Ok(bound(&kept, &connections))
 }
 
 /// Binds each of `references` that has no binding yet to the entity it was made of: a version this computer uploaded
 /// names its own connections, MCP servers and secrets by their ids, so they mean the same here (Share).
 pub(super) fn bind_own(db: &mut ProjectDb, references: &[SharedReference]) -> Result<(), StoreError> {
   let kept = db.reference_bindings()?;
+  let connections = db.connections()?;
   for reference in references {
     let own = match reference.target {
       SharedTarget::Connection { id } => BoundReference::Connection {
@@ -79,20 +81,26 @@ pub(super) fn bind_own(db: &mut ProjectDb, references: &[SharedReference]) -> Re
     if kept.iter().any(|binding| binding_target(binding.reference) == target) {
       continue;
     }
-    db.set_reference_binding(&ReferenceBinding {
-      reference: own,
-      name: reference.name.clone(),
-      role: reference.role.clone(),
-      changed_at: Timestamp::now(),
-    })?;
+    db.set_reference_binding(&current(
+      ReferenceBinding {
+        reference: own,
+        name: reference.name.clone(),
+        role: reference.role.clone(),
+        changed_at: Timestamp::now(),
+      },
+      &connections,
+    ))?;
   }
   Ok(())
 }
 
 /// The bindings of `kept` that bind their reference, as core resolves bodies with them. A reference whose role this
 /// version does not know stays unresolved: core names a connection and a secret by their role.
-pub(super) fn bound(kept: &[ReferenceBinding]) -> Vec<Binding> {
-  kept.iter().filter_map(core_binding).collect()
+pub(super) fn bound(kept: &[ReferenceBinding], connections: &[Connection]) -> Vec<Binding> {
+  kept
+    .iter()
+    .filter_map(|kept| core_binding(&current(kept.clone(), connections)))
+    .collect()
 }
 
 pub(super) const fn binding_target(reference: BoundReference) -> ReferenceTarget {
@@ -122,30 +130,34 @@ const fn unbound(target: SharedTarget) -> Option<BoundReference> {
   }
 }
 
-/// The local connection of `role` named `name`, without regard to case; else the only local connection of `role`.
-fn by_name_or_role(connections: &[Connection], name: &str, role: Option<&str>) -> Option<Bound<ConnectionId>> {
+/// The only local connection of `role`; a publisher's connection name means nothing on this computer.
+fn by_role(connections: &[Connection], role: Option<&str>) -> Option<Bound<ConnectionId>> {
   let role = role?;
-  let of_role: Vec<&Connection> = connections
+  let mut matching = connections
     .iter()
-    .filter(|connection| ConnectionRole::of(connection.kind()).as_str() == role)
-    .collect();
-  let name = name.to_lowercase();
-  if let Some(named) = of_role
-    .iter()
-    .find(|connection| connection.name().as_str().to_lowercase() == name)
-  {
-    return Some(Bound {
-      local: named.id(),
-      by: BoundBy::Name,
-    });
-  }
-  match of_role[..] {
-    [only] => Some(Bound {
+    .filter(|connection| ConnectionRole::of(connection.kind()).as_str() == role);
+  match (matching.next(), matching.next()) {
+    (Some(only), None) => Some(Bound {
       local: only.id(),
       by: BoundBy::Role,
     }),
     _ => None,
   }
+}
+
+/// A stale connection binding is unbound here; the person's other choices stay as kept.
+pub(super) fn current(mut kept: ReferenceBinding, connections: &[Connection]) -> ReferenceBinding {
+  if let BoundReference::Connection {
+    reference,
+    bound: Some(bound),
+  } = kept.reference
+    && !connections.iter().any(|connection| {
+      connection.id() == bound.local && Some(ConnectionRole::of(connection.kind()).as_str()) == kept.role.as_deref()
+    })
+  {
+    kept.reference = BoundReference::Connection { reference, bound: None };
+  }
+  kept
 }
 
 fn core_binding(kept: &ReferenceBinding) -> Option<Binding> {

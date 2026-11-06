@@ -3,7 +3,8 @@
 //! views Open and Closed with their counts as the tabs, each a place of its own (`?tab=closed`). Under them a row per
 //! module of the view that the search finds, oldest first ([`super::list_row`]), each with its forecast once the
 //! project's delivery is read off the UI thread. A project without modules shows the empty state in place of the rows
-//! and no search; a view without modules says so in one line.
+//! and no search; a view without modules says so in one line. A team project's modules are its server's
+//! ([`super::list_team`]).
 
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
@@ -32,6 +33,7 @@ use crate::{
   navigation::Navigation,
   project::{ShownProject, TasksState},
   routes::{ModuleListTab, ProjectPage, Route},
+  team::pages::TeamPerson,
   theme::{ExtraSpacing, TaskSpacing, TasksSpacing},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -98,6 +100,12 @@ impl Component for ModulesList {
       self.focus_search.set(false);
     }
     let state = project.feed.tasks.get();
+    // A team project's modules are read from its server ([`super::list_team`]); this computer's copy is not shown.
+    if let TasksState::Ready(tasks) = &state
+      && tasks.shared
+    {
+      return self.team(ctx, &project, tab);
+    }
     let listed = match &state {
       TasksState::Ready(tasks) => Some(summaries(&tasks.modules, &tasks.tasks)),
       TasksState::Loading | TasksState::Failed(_) => None,
@@ -107,9 +115,12 @@ impl Component for ModulesList {
       TasksState::Loading | TasksState::Failed(_) => 0,
     };
     let forecasts = read_forecasts(ctx, project.open.repo_root.clone(), revision);
-    let header = self.header(ctx, &project, tab, listed.as_deref());
+    let reading_now = matches!(state, TasksState::Loading);
+    let header = self.header(ctx, (&project, tab), listed.as_deref(), (reading_now, true));
     let body = match (&state, &listed) {
-      (TasksState::Ready(_), Some(listed)) => self.body(ctx, (&project, tab), listed, forecasts.as_ref()),
+      (TasksState::Ready(_), Some(listed)) => {
+        self.body(ctx, (&project, tab), listed, (forecasts.as_ref(), Rows::creating()))
+      }
       (TasksState::Failed(error), _) => {
         let feed = project.feed.clone();
         let words = message_text(ctx, error);
@@ -123,6 +134,32 @@ impl Component for ModulesList {
       }
       _ => reading(ctx),
     };
+    self.screen(header, body)
+  }
+}
+
+/// What the rows add for a team project: the line naming who changes the modules, for a member, and who holds each
+/// module; and whether the person may create modules.
+pub(super) struct Rows {
+  pub lock: Option<Element>,
+  pub holders: Option<HashMap<ModuleId, Option<TeamPerson>>>,
+  pub creates: bool,
+}
+
+impl Rows {
+  /// A local project's: the rows alone, and New module.
+  const fn creating() -> Self {
+    Self {
+      lock: None,
+      holders: None,
+      creates: true,
+    }
+  }
+}
+
+impl ModulesList {
+  /// The screen of `header` over `body`, `/` reaching the search.
+  pub(super) fn screen(&self, header: Element, body: Element) -> Column {
     Column::new()
       .id("screen-modules")
       .width(Dimension::Pct(100.0))
@@ -131,23 +168,24 @@ impl Component for ModulesList {
       .child(header)
       .child(body)
   }
-}
 
-impl ModulesList {
-  fn header(
+  /// The header; `reading` while the modules are read, `creates` when the person may create one.
+  pub(super) fn header(
     &self,
     ctx: &mut Ctx,
-    project: &ShownProject,
-    tab: ModuleListTab,
+    (project, tab): (&ShownProject, ModuleListTab),
     listed: Option<&[ModuleSummary]>,
+    (reading, creates): (bool, bool),
   ) -> Element {
     let navigation = Navigation::of(ctx);
     let id = project.open.project.id();
-    let new = ActionButton::new("modules-new", ButtonKind::Primary, ctx.t("modules.newModule"))
-      .icon(Icon::Plus)
-      .opens(navigation.to(Route::Project(id, ProjectPage::NewModule)));
+    let new = creates.then(|| {
+      ActionButton::new("modules-new", ButtonKind::Primary, ctx.t("modules.newModule"))
+        .icon(Icon::Plus)
+        .opens(navigation.to(Route::Project(id, ProjectPage::NewModule)))
+        .into()
+    });
     // While the modules are read the search stands where it will (`05 · Modules · loading` `beo7S`).
-    let reading = matches!(project.feed.tasks.get(), TasksState::Loading);
     let any = reading || listed.is_some_and(|listed| !listed.is_empty());
     let search = any.then(|| {
       FieldInput::new("modules-search", ctx.t("modules.search.label"), self.search.clone())
@@ -168,22 +206,22 @@ impl ModulesList {
       id: "modules-header",
       back: None,
       title: header::title(ctx, "modules-title", &ctx.t("modules.title")),
-      actions: search.into_iter().chain([new.into()]).collect(),
+      actions: search.into_iter().chain(new).collect(),
       status: header::status_line("modules-status", vec![status.into()]),
       tabs: tabs(ctx, id, (tab, reading), listed),
     })
   }
 
-  /// The rows of the view the search finds, or why there are none.
-  fn body(
+  /// The rows of the view the search finds, or why there are none; `rows` what a team project adds to them.
+  pub(super) fn body(
     &self,
     ctx: &mut Ctx,
     (project, tab): (&ShownProject, ModuleListTab),
     listed: &[ModuleSummary],
-    forecasts: Option<&Forecasts>,
+    (forecasts, rows): (Option<&Forecasts>, Rows),
   ) -> Element {
     if listed.is_empty() {
-      return empty(ctx, project);
+      return empty(ctx, project, rows.creates);
     }
     let in_view: Vec<&ModuleSummary> = listed.iter().filter(|summary| shows(tab, summary)).collect();
     let search = self.search.get();
@@ -207,12 +245,17 @@ impl ModulesList {
         .iter()
         .enumerate()
         .map(|(index, summary)| {
-          let forecast = forecasts.and_then(|forecasts| forecasts.0.get(&summary.module.id()));
-          list_row::row(ctx, (id, index), summary, forecast)
+          let module = summary.module.id();
+          let forecast = forecasts.and_then(|forecasts| forecasts.0.get(&module));
+          let holder = rows
+            .holders
+            .as_ref()
+            .map(|holders| holders.get(&module).and_then(Option::as_ref));
+          list_row::row(ctx, (id, index), summary, (forecast, holder))
         })
         .collect()
     };
-    let rows = Column::new()
+    let list = Column::new()
       .id("modules-list")
       .width(Dimension::Pct(100.0))
       .padding(
@@ -223,8 +266,9 @@ impl ModulesList {
           .right(TaskSpacing::Side.role()),
       )
       .spacing(ExtraSpacing::Tight.role())
+      .with_children(rows.lock)
       .with_children(content);
-    ScrollVertical::new(rows).id("modules-scroll").flex(1.0).into()
+    ScrollVertical::new(list).id("modules-scroll").flex(1.0).into()
   }
 }
 
@@ -269,7 +313,7 @@ const READING: [(f32, f32, f32); 6] = [
 
 /// The rows while the modules are read, in the list's own room, the lower rows fading. *Reading the modules…*
 /// (`modules.reading`) names them.
-fn reading(ctx: &mut Ctx) -> Element {
+pub(super) fn reading(ctx: &mut Ctx) -> Element {
   let rows = READING.iter().map(|words| list_row::bones(ctx, *words)).collect();
   let rows = Column::new()
     .width(Dimension::Pct(100.0))
@@ -312,9 +356,9 @@ fn line(id: &str, words: &str) -> Element {
     .into()
 }
 
-/// A project without modules (`04 · Modules · none yet` `jztMU`): the empty state with New module, lifted over the
-/// middle of the panel.
-fn empty(ctx: &mut Ctx, project: &ShownProject) -> Element {
+/// A project without modules (`04 · Modules · none yet` `jztMU`): the empty state, with New module when the person
+/// `creates` modules, lifted over the middle of the panel.
+fn empty(ctx: &mut Ctx, project: &ShownProject, creates: bool) -> Element {
   let navigation = Navigation::of(ctx);
   let new = ActionButton::new("modules-empty-new", ButtonKind::Primary, ctx.t("modules.newModule"))
     .icon(Icon::Plus)
@@ -328,8 +372,8 @@ fn empty(ctx: &mut Ctx, project: &ShownProject) -> Element {
   .unframed()
   .centered()
   .gap(SpacingSize::Lg)
-  .measure(EMPTY_MEASURE)
-  .action(new);
+  .measure(EMPTY_MEASURE);
+  let state = if creates { state.action(new) } else { state };
   Column::new()
     .id("modules-empty-page")
     .width(Dimension::Pct(100.0))
@@ -342,7 +386,7 @@ fn empty(ctx: &mut Ctx, project: &ShownProject) -> Element {
 }
 
 /// The body's own room under the header, for the reading and failure lines.
-fn padded(content: Element) -> Element {
+pub(super) fn padded(content: Element) -> Element {
   Column::new()
     .width(Dimension::Pct(100.0))
     .padding(

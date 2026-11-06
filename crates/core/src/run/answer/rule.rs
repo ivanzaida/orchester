@@ -90,7 +90,7 @@ impl RuleScope {
       ApprovalSubject::McpTool { server, tool, reach } => {
         let (folder, check) = match reach {
           // Approve similar of a service start covers the tool's later starts in the run, whatever they start.
-          ToolReach::Any | ToolReach::Services { .. } => (None, None),
+          ToolReach::Any | ToolReach::Design(_) | ToolReach::Services { .. } => (None, None),
           ToolReach::Folder { broad: true, .. } => return Err(SimilarUnavailable::BroadFolder),
           ToolReach::Folder { folder, .. } => (Some(folder.clone()), None),
           ToolReach::Check { every_call: true, .. } | ToolReach::PageScript => {
@@ -159,8 +159,8 @@ fn similar_command(command: &ClassifiedCommand) -> Result<SimilarCommand, Simila
     .ok_or(SimilarUnavailable::Unknown)
 }
 
-/// A rule of a run.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// A rule of a run; it travels as it is to a run's executor (the coordinator link).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ApprovalRule {
   pub id: ApprovalRuleId,
   pub run: RunId,

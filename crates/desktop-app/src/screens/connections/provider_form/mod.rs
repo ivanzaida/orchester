@@ -9,6 +9,7 @@
 //! ([`ProviderForm::for_native`]), in its own words: Orchester's runner reads the key, and models may come from the
 //! endpoint once the connection is tested, so none need be typed.
 
+mod decision;
 mod fields;
 
 use std::sync::Arc;
@@ -80,6 +81,7 @@ pub(super) struct ProviderForm {
   secret_name: Signal<String>,
   /// Deliberately not a Ctx signal: no value in DevTools or its history.
   value: Signal<String>,
+  key_revision: Signal<u64>,
   models: Signal<Models>,
   /// The model id being typed, and why the last one could not be added.
   model: Signal<String>,
@@ -100,6 +102,7 @@ impl ProviderForm {
       key: ctx.signal(KeyChoice::None),
       secret_name: ctx.signal(String::new()),
       value: Signal::new(String::new()),
+      key_revision: ctx.signal(0),
       models: ctx.signal(Models::default()),
       model: ctx.signal(String::new()),
       model_error: ctx.signal(None),
@@ -326,6 +329,10 @@ pub(super) struct SaveGuard {
 }
 
 impl SaveGuard {
+  pub(in super::super) fn typed_key(&self) -> Option<SecretValue> {
+    // Blank means no new credential; a new-secret save reports valueRequired if the field changed under its click.
+    self.value.with(|value| SecretValue::new(value.clone()).ok())
+  }
   /// What saving `runs_on` takes along, or `None` when it is not saved: running a connection on an API provider
   /// widens what its agents send where, so automation's input saves one only where a person lets it, and the page
   /// says so. The key typed for a new secret comes along when it creates one.

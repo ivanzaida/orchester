@@ -4,14 +4,13 @@
 use std::{collections::BTreeMap, path::Path, sync::Arc};
 
 use orchester_core::{
-  conversation::{Message, latest_question},
-  id::{ResourceId, RunId, StepExecutionId, TaskId},
+  id::{ResourceId, RunId, TaskId},
   limits::ProjectLimits,
   memory::{Memory, MemoryFilter, MemoryStatus, MemoryStore, ScopeFilter},
   question::AskedQuestions,
-  resource::{AgentProfile, Pipeline, ResourceKind, Step, StepKey, VersionNumber},
-  run::{Run, RunEvent, RunNumber, RunStatus, StepExecutor, TaskPhase, can_run_again_after},
-  store::{ConversationStore, MergeStore, ResourceStore, RunStore, SettingsStore, TaskStore, WorktreeStore},
+  resource::{Pipeline, ResourceKind, Step, VersionNumber},
+  run::{RunNumber, TaskPhase},
+  store::{ResourceStore, SettingsStore, TaskStore},
   task::Task,
   task_group::GroupHold,
   time::Timestamp,
@@ -23,30 +22,15 @@ pub use super::draft_save::{SaveTarget, TaskDraftSaveError, save_draft, save_dra
 use super::{
   approvals::{self, ShownApproval},
   delivery::Unmerged,
-  detail::run_store_error,
-  list::{AwaitedPlan, AwaitedQuestion, AwaitedStep, CurrentStep, Latest, LatestRun, Phases, StepWait},
+  latest_runs::{LatestRuns, latest_runs},
+  list::Phases,
   needs_you::WaitingOnce,
-  run_approvals,
-  unreadable::Unreadable,
+  project_runs::ProjectRuns,
 };
 use crate::{
   messages::Message as UiMessage,
   pipelines::{data::Assignables, describe},
 };
-
-/// The tasks kept *Not shared* when the project joined, with the tag names each kept.
-type Kept = (Vec<Task>, std::collections::HashMap<TaskId, Vec<String>>);
-
-fn kept(db: &ProjectDb) -> Result<Kept, StoreError> {
-  let tasks = db.not_shared_tasks()?;
-  let mut tags = std::collections::HashMap::new();
-  for task in &tasks {
-    if let Some(names) = db.shared_task_info(task.id())?.and_then(|info| info.kept_tags) {
-      tags.insert(task.id(), names);
-    }
-  }
-  Ok((tasks, tags))
-}
 
 /// A step in a published pipeline a task can use.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -216,10 +200,31 @@ impl ProjectTasks {
 
   /// [`Self::load`] from `db`, the project database of `repo_root`, opened already: All projects reads a
   /// project's tasks without migrating its data. Without `programs` no git runs: a run merged outside Orchester
-  /// reads as its stored phase.
+  /// reads as its stored phase. The tasks' runs are read for the whole project at once ([`ProjectRuns::read`]).
   pub fn read(db: &ProjectDb, repo_root: &Path, programs: Option<&Programs>) -> Result<Self, StoreError> {
+    Self::read_with(db, (repo_root, programs), &ProjectRuns::read(db)?)
+  }
+
+  /// [`Self::read`] with the tasks' runs read task by task, as it read them before ORC-742, for the tests that
+  /// compare the two.
+  #[cfg(feature = "test-support")]
+  pub fn read_task_by_task(db: &ProjectDb, repo_root: &Path, programs: Option<&Programs>) -> Result<Self, StoreError> {
+    let runs = ProjectRuns::read_per_task(db, &db.tasks()?, &db.not_shared_tasks()?)?;
+    Self::read_with(db, (repo_root, programs), &runs)
+  }
+
+  /// [`Self::read`] with the project's `runs` read already.
+  fn read_with(
+    db: &ProjectDb,
+    (repo_root, programs): (&Path, Option<&Programs>),
+    runs: &ProjectRuns,
+  ) -> Result<Self, StoreError> {
     let tasks = db.tasks()?;
-    let (not_shared, kept_tags) = kept(db)?;
+    let not_shared = db.not_shared_tasks()?;
+    let kept_tags = not_shared
+      .iter()
+      .filter_map(|task| Some((task.id(), runs.kept_tags(task.id())?.clone())))
+      .collect();
     let (reviewing, pending): (Vec<_>, Vec<_>) = approvals::pending(db, repo_root)?
       .into_iter()
       .partition(|shown| shown.reviewing);
@@ -234,7 +239,7 @@ impl ProjectTasks {
       mut facts,
     } = latest_runs(
       db,
-      tasks.iter().chain(&not_shared),
+      (tasks.iter().chain(&not_shared), runs),
       (&pending, &asking),
       (&mut group_holds, &mut unmerged),
     )?;
@@ -243,28 +248,17 @@ impl ProjectTasks {
       unmerged.settle(programs, repo_root, &mut phases);
     }
     // Only a task with a run can have one that has not ended.
-    let active = phases
-      .keys()
-      .filter_map(|task| db.active_task_run(*task).map(|run| run.map(|_| *task)).transpose())
-      .collect::<Result<_, _>>()?;
+    let active = phases.keys().copied().filter(|task| runs.is_active(*task)).collect();
     Ok(Self {
       updated: Arc::new(
         tasks
           .iter()
-          .map(|task| {
-            db.task_organization_updated_at(task.id())
-              .map(|updated| (task.id(), updated.unwrap_or(task.created_at())))
-          })
-          .collect::<Result<_, _>>()?,
+          .map(|task| (task.id(), runs.organization_updated(task)))
+          .collect(),
       ),
       tags: Arc::new(db.project_tags()?),
       modules: Arc::new(db.modules()?),
-      blocking: Arc::new(
-        tasks
-          .iter()
-          .map(|task| db.unfinished_blocking_tasks(task.id()).map(|links| (task.id(), links)))
-          .collect::<Result<_, _>>()?,
-      ),
+      blocking: Arc::new(tasks.iter().map(|task| (task.id(), runs.blocking(task.id()))).collect()),
       proposed_memory: Arc::new(proposed_memory(db)?),
       merge_queue: Arc::new(
         db.merge_queue()?
@@ -325,95 +319,6 @@ impl ProjectTasks {
   }
 }
 
-/// What one reading finds of the tasks' runs: the latest run of each task that has one, how many runs of each
-/// can be read, the active runs that auto-approve, who works on the running ones and when the merged ones merged.
-struct LatestRuns {
-  phases: Phases,
-  counts: BTreeMap<TaskId, usize>,
-  auto_approving: Vec<AutoApprovingRun>,
-  facts: super::at_work::RunFacts,
-}
-
-/// The latest run of each of `tasks`, a run waiting in its turn on one of the `pending` tool requests or on
-/// a question of the `asking` runs waiting for a person. A task whose latest run is no group's leaves
-/// `group_holds`; a latest run that succeeded and was not merged goes to `unmerged`.
-fn latest_runs<'a>(
-  db: &ProjectDb,
-  tasks: impl Iterator<Item = &'a Task>,
-  (pending, asking): (&[ShownApproval], &[RunId]),
-  (group_holds, unmerged): (&mut BTreeMap<TaskId, GroupHold>, &mut Unmerged),
-) -> Result<LatestRuns, StoreError> {
-  let mut found = LatestRuns {
-    phases: Phases::new(),
-    counts: BTreeMap::new(),
-    auto_approving: Vec::new(),
-    facts: super::at_work::RunFacts::default(),
-  };
-  for task in tasks {
-    let runs = db.runs_of_task(task.id()).map_err(run_store_error)?;
-    found
-      .counts
-      .insert(task.id(), runs.iter().filter(|run| run.is_ok()).count());
-    let latest = match runs.last() {
-      Some(Ok(latest)) => {
-        if db.task_group_for_run(latest).map_err(run_store_error)?.is_none() {
-          group_holds.remove(&task.id());
-        }
-        let (mut shown, agent) = latest_run_and_agent(db, task, latest)?;
-        // A run whose agent waits for a tool decision or an answer in its turn waits for a person, as one at
-        // a plan does.
-        if shown.phase == TaskPhase::Running
-          && (pending.iter().any(|shown| shown.approval.run == latest.id()) || asking.contains(&latest.id()))
-        {
-          shown.phase = TaskPhase::Waiting;
-        }
-        if shown.phase == TaskPhase::Succeeded {
-          unmerged.add(task.id(), latest);
-        }
-        found.note(db, (latest, &shown), agent)?;
-        if run_approvals::counts_as_auto_approving(db, task, latest)? {
-          found.auto_approving.push(AutoApprovingRun {
-            run: latest.id(),
-            number: latest.number(),
-            task: task.id(),
-            key: task.key().to_string().into(),
-          });
-        }
-        Latest::Run(Box::new(shown))
-      }
-      Some(Err(unreadable)) => Latest::Unreadable(Unreadable::of(unreadable)),
-      None => continue,
-    };
-    found.phases.insert(task.id(), latest);
-  }
-  Ok(found)
-}
-
-impl LatestRuns {
-  /// Keeps who works on `latest` while it runs (`agent`, its step's agent as reading it found it), and when it merged
-  /// once it was merged in Orchester.
-  fn note(
-    &mut self,
-    db: &ProjectDb,
-    (latest, shown): (&Run, &LatestRun),
-    agent: Option<super::at_work::FoundAgent>,
-  ) -> Result<(), StoreError> {
-    match shown.phase {
-      TaskPhase::Running => {
-        let at_work = super::at_work::read(db, latest, agent)?;
-        self.facts.at_work.insert(latest.id(), at_work);
-      }
-      TaskPhase::Merged => {
-        if let Some(merge) = db.run_merge(latest.id())? {
-          self.facts.merged_at.insert(latest.id(), merge.merged_at);
-        }
-      }
-      _ => {}
-    }
-    Ok(())
-  }
-}
-
 /// The reviewed groups as a reading keeps them: why each task of a group that holds its work waits, every grouped
 /// task, and the task before each in its group's order.
 type Groups = (
@@ -449,103 +354,20 @@ fn proposed_memory(db: &ProjectDb) -> Result<Vec<Timestamp>, StoreError> {
   Ok(db.memories(&proposed)?.iter().map(Memory::created_at).collect())
 }
 
-/// `latest`, a run of `task`, with when it last changed, what it waits for, who runs its step's agent and, once it was
-/// interrupted, whether a person removed its worktree so that its task runs again after it (ORC-63).
-pub(super) fn latest_run(db: &ProjectDb, task: &Task, latest: &Run) -> Result<LatestRun, StoreError> {
-  latest_run_and_agent(db, task, latest).map(|(shown, _)| shown)
-}
-
-/// [`latest_run`], with its step's agent as it was found, so that a running run's facts don't look it up again.
-fn latest_run_and_agent(
-  db: &ProjectDb,
-  task: &Task,
-  latest: &Run,
-) -> Result<(LatestRun, Option<super::at_work::FoundAgent>), StoreError> {
-  let updated_at = db
-    .events(latest.id())
-    .map_err(run_store_error)?
-    .last()
-    .map_or_else(|| latest.created_at(), RunEvent::at);
-  let awaited = awaited(db, latest)?;
-  let merge = db.run_merge(latest.id())?;
-  let mut shown = LatestRun::of(task, (latest, merge.as_ref()), updated_at, awaited);
-  let agent = super::at_work::step_agent(db, latest, shown.step.as_ref())?;
-  shown.agent = agent.as_ref().map(|found| found.provider);
-  match latest.status() {
-    RunStatus::Interrupted(_) => {
-      let removed = db.worktree_removal(latest.id())?.is_some();
-      shown.ended_for_run_again = can_run_again_after(latest, removed);
-    }
-    RunStatus::Succeeded => shown.completed = db.run_completion(latest.id())?.is_some(),
-    _ => {}
-  }
-  Ok((shown, agent))
-}
-
-/// Each step of `run` that waits on a decision on its plan or for an answer to its question, with the
-/// agent role of the step that proposed or asked it; only such a run needs its plans or its conversation
-/// and its profiles read here. A plan that cannot be read is left out.
-fn awaited(db: &ProjectDb, run: &Run) -> Result<Vec<AwaitedStep>, StoreError> {
-  let (plans, answers) = (run.awaiting_plan(), run.awaiting_answer());
-  if plans.is_empty() && answers.is_empty() {
-    return Ok(Vec::new());
-  }
-  let mut roles = BTreeMap::new();
-  for step in run.snapshot().steps() {
-    if let StepExecutor::Agent { profile, .. } = step.executor()
-      && let Some(version) = db.version::<AgentProfile>(profile.resource, profile.number)?
-    {
-      roles.insert(step.key().clone(), Arc::<str>::from(version.body().role().as_str()));
-    }
-  }
-  let role = |step: &StepKey| roles.get(step).cloned();
-  let mut waiting = Vec::new();
-  if !plans.is_empty() {
-    let stored = db.plans(run.id()).map_err(run_store_error)?;
-    waiting.extend(plans.into_iter().filter_map(|execution| {
-      Some(AwaitedStep {
-        execution,
-        step: CurrentStep::of_execution(run, execution),
-        wait: StepWait::Plan(AwaitedPlan::of(run, &stored, execution, role)?),
-      })
-    }));
-  }
-  if !answers.is_empty() {
-    let messages = db.messages(run.task())?;
-    waiting.extend(answers.into_iter().map(|execution| AwaitedStep {
-      execution,
-      step: CurrentStep::of_execution(run, execution),
-      wait: StepWait::Answer(awaited_question(run, &messages, execution, role)),
-    }));
-  }
-  Ok(waiting)
-}
-
-/// The question `execution`, waiting for an answer, asked, among `messages`, and who asks.
-fn awaited_question(
-  run: &Run,
-  messages: &[Message],
-  execution: StepExecutionId,
-  role: impl Fn(&StepKey) -> Option<Arc<str>>,
-) -> Option<AwaitedQuestion> {
-  let question = latest_question(messages, execution)?;
-  let step = run.execution(execution)?.step();
-  let agent = role(step).or_else(|| run.snapshot().body().step(step).map(|step| step.name.as_str().into()))?;
-  Some(AwaitedQuestion {
-    agent,
-    text: question.body().as_str().into(),
-  })
-}
-
-/// Pipelines with a published version, ordered by slug. Drafts that were never published
-/// cannot be run, so they are not offered.
+/// Pipelines with a published version the project offers (in a team project only the team's,
+/// `crate::pipelines::offered`), ordered by slug. Drafts that were never published cannot be run,
+/// so they are not offered.
 pub fn published_pipelines(store: &ProjectDb) -> Result<Vec<PipelineChoice>, StoreError> {
   let mut choices = Vec::new();
   let assignables = Assignables::load(store)?;
+  let offered = crate::pipelines::offered::Offered::of(store)?;
   for resource in store.resources(ResourceKind::Pipeline)? {
     let Some(version) = store.latest_version::<Pipeline>(resource.id())? else {
       continue;
     };
+    if !offered.offers(store, resource.id(), true)? {
+      continue;
+    }
     choices.push(pipeline_choice(&resource, &version, &assignables));
   }
   Ok(choices)

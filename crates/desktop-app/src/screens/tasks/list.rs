@@ -78,14 +78,15 @@ pub(super) struct GroupLine {
   pub folded: bool,
 }
 
-/// What the rows are built from: the project and its tasks as read, the task a Create just added, and whether the
-/// project is shared.
+/// What the rows are built from: the project and its tasks as read, the task a Create just added, whether the
+/// project is shared, and whether the person is a member of the team project, who changes none of its tasks.
 pub(super) struct Source<'a> {
   pub project: ProjectId,
   pub tasks: &'a ProjectTasks,
   pub needs: &'a HashMap<orchester_core::id::TaskId, NeedItem>,
   pub highlight: Option<&'a str>,
   pub shared: bool,
+  pub member: bool,
 }
 
 /// The list's items: each group's header line and, unless it is folded, its rows; a flat view's rows alone.
@@ -113,6 +114,7 @@ pub(super) fn items(ctx: &Ctx, source: &Source<'_>, grouped: &[Grouped], folded:
         age: age(ctx, now, row.created_at),
         highlighted: source.highlight == Some(&*row.key),
         shared: source.shared,
+        member: source.member,
         row: row.clone(),
       }))
     }));

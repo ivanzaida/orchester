@@ -172,6 +172,15 @@ fn rest(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> Vec<Element> {
       value("task-fact-agents", &list, Look::Secondary),
     ));
   }
+  let approvals = ctx.t_args(
+    "summary.facts.approvalsValue",
+    [("count", run.approvals.counts.by_reviewer.to_string())],
+  );
+  rows.push(fact(
+    "task-fact-approvals",
+    &ctx.t("summary.facts.approvals"),
+    value("task-fact-approvals-value", &approvals, Look::Secondary),
+  ));
   rows.extend(permissions(ctx, run));
   rows.extend(delivery_rows(ctx, task.detail.queue.as_ref()));
   rows
@@ -326,6 +335,9 @@ fn worktree(ctx: &mut Ctx, run: &RunView, root: &Path) -> Element {
       value("task-fact-worktree", &text, Look::Secondary),
     );
   }
+  // Remote runners (`docs/architecture/remote-runners.md`, "Not part of the preparation"): *Copy path* copies where
+  // the worktree lies on this computer, beside the project. A run on another computer has no such path here and will
+  // need something else (that computer's path, named as such); nothing of that is built yet.
   let path = run_worktree(root, run.id()).display().to_string();
   let clipboard = ctx.use_context::<Clipboard>().unwrap_or_default();
   let copied = path.clone();

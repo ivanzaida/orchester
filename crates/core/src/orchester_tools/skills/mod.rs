@@ -67,7 +67,10 @@ pub enum SkillCall {
 /// Why a skill's file is not read. The message is the error result the agent gets.
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
 pub enum SkillReadError {
-  #[error("this step has no skill named `{0}`: list_skills names its skills")]
+  #[error(
+    "this step has no skill named `{0}`: list_skills names its skills; a skill of the repository that is not \
+     offered here is read as a repository file by its path"
+  )]
   UnknownSkill(String),
   #[error("`{file}` is not a reference file of the skill `{skill}`: list_skills lists its files")]
   NotInSkill { skill: String, file: String },

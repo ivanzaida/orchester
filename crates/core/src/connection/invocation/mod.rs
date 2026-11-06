@@ -11,6 +11,7 @@ mod http_authorization;
 pub mod mcp;
 mod orchester;
 mod provider;
+mod review_answer;
 
 use std::{
   ffi::OsString,
@@ -24,7 +25,7 @@ pub use self::{
     CodexAgentFiles, CodexInvocation, ISOLATION as CODEX_ISOLATION, SUB_AGENTS_OFF as CODEX_SUB_AGENTS_OFF,
     SUB_AGENTS_PROMPT as CODEX_SUB_AGENTS_PROMPT,
   },
-  codex_chat::{CONFINEMENT as CODEX_CHAT_CONFINEMENT, CodexChat},
+  codex_chat::{CONFINEMENT as CODEX_CHAT_CONFINEMENT, CodexChat, CodexChatSkill, EXTRA_ROOTS_METHOD},
   http_authorization::HttpAuthorization,
   mcp::{ClaudeMcpConfig, CodexMcp, LaunchValue, LeftOut, McpLaunch},
   orchester::CodexOrchester,
@@ -32,6 +33,7 @@ pub use self::{
     CLAUDE_KEY_VARIABLE, CLAUDE_MODEL_VARIABLES, CLAUDE_ROUTING, CODEX_KEY_VARIABLE, CODEX_PROVIDER_ID, OnProvider,
     codex_overrides,
   },
+  review_answer::ClaudeReviewAnswer,
 };
 use crate::{
   command::{Command, SecretVariable},

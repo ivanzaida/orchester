@@ -4,6 +4,7 @@ mod active;
 mod approval_modes;
 mod approvals;
 mod browser;
+mod codex_sandbox;
 mod failure;
 mod harness;
 mod hub;

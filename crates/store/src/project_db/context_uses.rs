@@ -1,12 +1,14 @@
 //! How full each agent session's context window is (ORC-304): the runner keeps an invocation's latest reading
 //! (`invocation_contexts`) and the Orchestrator chat's for the session its turns continue (`orchestrator_chats`), each
-//! in place of the one before; screens and automation read them back.
+//! in place of the one before; screens and automation read them back. The window a CLI reported for a session is
+//! read back for the next CLI that resumes it on the same model (ORC-704).
 
 use std::collections::HashMap;
 
 use orchester_core::{
   connection::context_use::ContextUse,
   id::{ChatId, InvocationId, RunId},
+  resource::ModelId,
   time::Timestamp,
 };
 use rusqlite::{OptionalExtension, params};
@@ -99,6 +101,59 @@ impl ProjectDb {
       Some(other) => Err(corrupt("chat context use", format!("{other:?}"))),
     }
   }
+
+  /// Keeps `window` as the context window the CLI last reported for the session `chat`'s turns continue, on `model`.
+  pub fn set_chat_reported_window(&mut self, chat: ChatId, model: &ModelId, window: u64) -> Result<(), StoreError> {
+    self.connection.execute(
+      "UPDATE orchestrator_chats SET reported_window = ?2, reported_window_model = ?3 WHERE id = ?1",
+      params![
+        chat.to_string(),
+        tokens_column("context window", window)?,
+        model.as_str()
+      ],
+    )?;
+    Ok(())
+  }
+
+  /// The context window the CLI last reported for the session `chat`'s turns continue, when it ran on `model`; `None`
+  /// while none reported one, after a turn on another model, or when `chat` is not kept.
+  pub fn chat_reported_window(&self, chat: ChatId, model: &ModelId) -> Result<Option<u64>, StoreError> {
+    let window = self
+      .connection
+      .query_row(
+        "SELECT reported_window FROM orchestrator_chats WHERE id = ?1 AND reported_window_model = ?2",
+        params![chat.to_string(), model.as_str()],
+        |row| row.get::<_, Option<i64>>(0),
+      )
+      .optional()?
+      .flatten();
+    window.map(window_of).transpose()
+  }
+
+  /// The context window the CLI reported for `session` in an earlier invocation of `run` on `model`: what the latest
+  /// such reading that was not the table's estimate says; `None` when none did.
+  pub fn session_reported_window(&self, run: RunId, session: &str, model: &ModelId) -> Result<Option<u64>, StoreError> {
+    let window = self
+      .connection
+      .query_row(
+        "SELECT c.window_tokens FROM invocation_contexts c JOIN invocations i ON i.id = c.invocation_id
+         WHERE i.run_id = ?1 AND i.session_id = ?2 AND i.model = ?3 AND c.estimated = 0
+           AND c.window_tokens IS NOT NULL
+         ORDER BY c.at DESC, i.started_at DESC LIMIT 1",
+        params![run.to_string(), session, model.as_str()],
+        |row| row.get::<_, i64>(0),
+      )
+      .optional()?;
+    window.map(window_of).transpose()
+  }
+}
+
+/// A window column as tokens.
+fn window_of(window: i64) -> Result<u64, StoreError> {
+  u64::try_from(window)
+    .ok()
+    .filter(|window| *window > 0)
+    .ok_or_else(|| corrupt("context window", window))
 }
 
 /// The used and window columns of `context`.

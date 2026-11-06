@@ -92,7 +92,8 @@ impl Desktop {
       .expect("linked");
     let workspace = Workspace::new(app);
     workspace.open(fixture.repo.path()).expect("the project");
-    let servers = Servers::new(workspace, Vault::with(Arc::new(Keychain(token.to_owned()))));
+    let version = orchester_api::releases::ReleaseVersion::parse("0.5.0").expect("a release version");
+    let servers = Servers::new(workspace, Vault::with(Arc::new(Keychain(token.to_owned()))), version);
     Self {
       _data: data,
       fixture,

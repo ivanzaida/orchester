@@ -2,14 +2,13 @@
 //! task and queue it, then ask the runner to start its run. Every step is safe to retry: the
 //! new draft is saved under the form's batch key or an existing draft is edited in place;
 //! queueing a queued task changes nothing, and the run is started under the form's run key. A
-//! shared task is claimed for the person before it is queued: someone else's task is not changed.
+//! team project's tasks are not queued here: their work starts on the team server (`work.start`).
 
 use std::{collections::BTreeMap, path::Path};
 
 use orchester_core::{
-  connection::AccountStartProblem,
   id::ResourceId,
-  resource::{AgentProfile, Pipeline, ResourceBody, ResourceKind, Tool, ToolKind, Version, VersionNumber},
+  resource::{AgentProfile, Pipeline, ResourceBody, ResourceKind, Tool, Version, VersionNumber},
   run::{AcceptRefusal, AutoAsk, PreflightInput, PreflightProblem, RunLimit, WorktreeFailure, preflight},
   store::{ConnectionStore, McpServerStore, ResourceStore, SecretStore, TaskStore},
   task::{QueueError, Task, TaskDetails, TaskStatus, TaskUpdate},
@@ -18,12 +17,12 @@ use orchester_core::{
 use orchester_ipc::Rejection;
 use orchester_store::{ProjectDb, StoreError};
 
+pub use super::preflight_messages::preflight_message;
 use super::{
   data::{PipelineChoice, SaveTarget, pinned_pipeline, save_to},
   writer::{TaskWriter, WriteError},
 };
 use crate::{
-  agents::permissions::hosts_refusal,
   messages::{self, Message},
   runner::{RequestError, RunRequestError},
   sharing::{
@@ -106,6 +105,7 @@ pub fn queue_organized_in(
   version: VersionNumber,
 ) -> Result<QueuedStart, QueueFailure> {
   let mut writer = TaskWriter::open(repo_root, servers)?;
+  not_team(writer.db())?;
   let existing = match target {
     SaveTarget::Task(task, _) => writer.db().task(task)?,
     SaveTarget::New(batch) => writer.db().task_by_batch(batch)?,
@@ -156,6 +156,15 @@ pub fn queue_in(
   }
 }
 
+/// Refused for a team project: its tasks are queued and started on its team server (`work.start`, team authority P7),
+/// never from this computer's copy of them.
+fn not_team(db: &ProjectDb) -> Result<(), QueueFailure> {
+  if db.sharing()?.is_some() {
+    return Err(QueueFailure::Store(StoreError::SharedProject));
+  }
+  Ok(())
+}
+
 fn queue_claimed(
   (repo_root, servers, claimed): (&Path, &Servers, &mut WorkClaim),
   target: SaveTarget,
@@ -163,6 +172,7 @@ fn queue_claimed(
   selected_version: VersionNumber,
 ) -> Result<QueuedStart, QueueFailure> {
   let mut writer = TaskWriter::open(repo_root, servers)?;
+  not_team(writer.db())?;
   let existing = match target {
     SaveTarget::New(batch) => writer.db().task_by_batch(batch)?,
     SaveTarget::Task(id, _) => writer.db().task(id)?,
@@ -292,57 +302,6 @@ fn latest<B: ResourceBody>(db: &ProjectDb, kind: ResourceKind) -> Result<BTreeMa
   Ok(versions)
 }
 
-/// What a person reads for a preflight problem.
-pub fn preflight_message(problem: &PreflightProblem) -> Message {
-  let step =
-    |key: &'static str, step: &orchester_core::resource::StepKey| Message::new(key).with("step", step.to_string());
-  match problem {
-    PreflightProblem::PipelineNotPublished => Message::new("runs.preflight.pipelineNotPublished"),
-    PreflightProblem::PipelineVersionNotPinned => Message::new("runs.preflight.pipelineVersionNotPinned"),
-    PreflightProblem::NoSteps => Message::new("runs.preflight.noSteps"),
-    PreflightProblem::ToolNotPublished { step: key } => step("runs.preflight.toolNotPublished", key),
-    PreflightProblem::ToolNotRunnable {
-      step: key,
-      kind: ToolKind::Http,
-    } => step("runs.preflight.toolNotRunnable.http", key),
-    PreflightProblem::ToolNotRunnable {
-      step: key,
-      kind: ToolKind::Database,
-    } => step("runs.preflight.toolNotRunnable.database", key),
-    PreflightProblem::ToolNotRunnable {
-      step: key,
-      kind: ToolKind::Command,
-    } => step("runs.preflight.toolNotRunnable.command", key),
-    PreflightProblem::ToolAccessRules { step: key } => step("runs.preflight.toolAccessRules", key),
-    PreflightProblem::ApprovalGate { step: key } => step("runs.preflight.approvalGate", key),
-    PreflightProblem::ProfileNotPublished { step: key } => step("runs.preflight.profileNotPublished", key),
-    PreflightProblem::ConnectionMissing { step: key } => step("runs.preflight.connectionMissing", key),
-    PreflightProblem::McpServerMissing { step: key } => step("runs.preflight.mcpServerMissing", key),
-    PreflightProblem::SecretMissing { step: key } => step("runs.preflight.secretMissing", key),
-    PreflightProblem::UnsupportedProvider { step: key } => step("runs.preflight.unsupportedProvider", key),
-    PreflightProblem::NativeNotAvailable { step: key } => step("runs.preflight.nativeNotAvailable", key),
-    PreflightProblem::ConnectionNotUsable { step: key, .. } => step("runs.preflight.connectionNotUsable", key),
-    PreflightProblem::AccountUnavailable { step: key, reason } => match reason {
-      AccountStartProblem::NoAccount => step("runs.preflight.account.none", key),
-      AccountStartProblem::FolderMissing { folder } => {
-        step("runs.preflight.account.folderMissing", key).with("folder", folder.display().to_string())
-      }
-    },
-    PreflightProblem::PermissionsNotEnforceable { step: key, .. } => {
-      step("runs.preflight.permissionsNotEnforceable", key)
-    }
-    PreflightProblem::NetworkHostsNotEnforceable { step: key, cli } => step(hosts_refusal(*cli), key),
-    PreflightProblem::CommandListNotOffered { step: key } => step("runs.preflight.commandListNotOffered", key),
-    PreflightProblem::NotAGitRepository => Message::new("runs.preflight.notAGitRepository"),
-    PreflightProblem::NoCommits => Message::new("runs.preflight.noCommits"),
-    PreflightProblem::BaseBranchMissing { branch } => {
-      Message::new("runs.preflight.baseBranchMissing").with("branch", branch.to_string())
-    }
-    PreflightProblem::NoBranchCheckedOut { head } => Message::new("runs.preflight.noBranchCheckedOut")
-      .with("head", crate::display::short_revision(head.as_str()).to_owned()),
-  }
-}
-
 /// What a person reads when the start request fails, including an unconfirmed outcome.
 pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
   match error {
@@ -409,6 +368,8 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::TurnNotStoppable
       | Rejection::BrowserUnavailable { .. }
       | Rejection::NoSuchTab
+      | Rejection::CodeIndexInUse
+      | Rejection::InputsNotAccepted
       | Rejection::Busy,
     ) => vec![Message::new("runs.start.failed")],
   }
@@ -539,6 +500,8 @@ pub fn control_message(error: &RunRequestError) -> Message {
       | Rejection::WorktreeNotRemoved { .. }
       | Rejection::BrowserUnavailable { .. }
       | Rejection::NoSuchTab
+      | Rejection::CodeIndexInUse
+      | Rejection::InputsNotAccepted
       | Rejection::Busy,
     ) => Message::new("runs.control.failed"),
   }

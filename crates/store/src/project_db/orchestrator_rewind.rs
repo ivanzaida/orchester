@@ -88,7 +88,8 @@ impl ProjectDb {
     // The session heard what was dropped: it is never resumed again.
     self.connection.execute(
       "UPDATE orchestrator_chats SET session = NULL, session_connection_id = NULL, session_account_id = NULL,
-         context_used = NULL, context_window = NULL, context_estimated = NULL
+         context_used = NULL, context_window = NULL, context_estimated = NULL, reported_window = NULL,
+         reported_window_model = NULL
        WHERE id = ?1",
       [&id],
     )?;

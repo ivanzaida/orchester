@@ -148,11 +148,13 @@ joins, the cloud link and the removal of passwords (S1c). Orchester Cloud (C1) d
 | 71 | Modules offline | Until S4 builds the outbox, module writes in a shared project fail at once offline, as task writes do; with S4 a create waits in the outbox with the id made on the desktop, a change with its revision (in `conflict` when met by a newer one), and a move in its task's change ([Modules](#modules)). **Under 27** | user (ORC-78, 2026-10-22) |
 | 72 | Who changes the team's configuration | In a shared project, the team's configuration (pipelines, agent profiles, instructions, skills, tools of every kind) is changed only by admins: the project's owner or the team server's admin. Members read it and run with it, on the desktop and in the web app; they have no drafts of shared resources. Admins change it in both places; every write of S5's resource endpoints answers a member `403 not_admin`. Core decides it with `sharing::may_change_configuration` ([Shared configuration](#shared-configuration)). **Changes 30 and 52** | user (2026-10-29) |
 | 73 | Snapshot and deltas | The project stream sends a client without a cursor, or with one older than the 30-day retention, a paged snapshot (`snapshot.begin`, `snapshot.tasks` pages of 64, `snapshot.end { cursor }`) with the project, members, tags, modules and tasks, later resources; a cursor inside the retention gets only the deltas after it, and `reset` goes away. Every delta carries `id`, `by`, `actor` (person or Orchester) and `at`; `task.changed` holds only the changed fields with `revision` and `base`, and a client applies it only when its cached revision equals `base`, otherwise it reads the task again; its own changes come back and are skipped by revision. The deltas are the record of who did what; there is no `activity` event, and the server's Activity feed stays. Not included: presence, typing, docs and plugins ([Events](#events)). **Extends 7 and 22; replaces the `task`, `members`, `tags`, `project`, `modules`, `resources` and `reset` kinds** | user (ORC-392, 2026-10-29) |
-| 74 | Local pipelines in a shared project | In a shared project a person may keep pipelines of their own that stay on their computer and are never sent to the team server; the team's pipelines stay shared and admin-only (row 72). A local pipeline is a local resource of the project: anyone, member or admin, makes it, publishes its versions and runs it without an admin, and publishing it makes a local version only. Share, Join and sync never upload it. Its steps may use the team's profiles and the person's own local profiles. A shared task that names one keeps on the server only the pipeline's name and kind (local, whose), never its body; other members see *a local pipeline of <person>* and cannot run the task with it until they choose a team pipeline or one of their own. An admin may *Publish for the team*, which makes it a team resource from that version on. Make local keeps local pipelines as they are ([Local pipelines](#local-pipelines)). **Changes 30 and 52** | user (ORC-402, 2026-10-29) |
+| 74 | Local pipelines in a shared project | **Replaced by 80** (2026-11-05): a team task names only a team pipeline, by id, and local pipelines are hidden in a team project. Before: In a shared project a person may keep pipelines of their own that stay on their computer and are never sent to the team server; the team's pipelines stay shared and admin-only (row 72). A local pipeline is a local resource of the project: anyone, member or admin, makes it, publishes its versions and runs it without an admin, and publishing it makes a local version only. Share, Join and sync never upload it. Its steps may use the team's profiles and the person's own local profiles. A shared task that names one keeps on the server only the pipeline's name and kind (local, whose), never its body; other members see *a local pipeline of <person>* and cannot run the task with it until they choose a team pipeline or one of their own. An admin may *Publish for the team*, which makes it a team resource from that version on. Make local keeps local pipelines as they are ([Local pipelines](#local-pipelines)). **Changes 30 and 52** | user (ORC-402, 2026-10-29) |
 | 75 | What the web editor can pick | The web app's profile editor picks from what the server serves. **Network:** a profile's network access is `Off`, `Hosts(list)` (only those hosts) or `On`, ordered Off < Hosts < On; a list with a host the previous one lacked, or Hosts → On, widens (row 35); each CLI enforces it where it can, and where it can't the step refuses to start and says so, as for any permission it can't enforce. **References catalog:** the team server keeps, per shared project, the connections and MCP servers its members' desktops report, each as kind, name and role only; the web pickers list it, and a choice there is a reference by name and role that every computer binds as rows 30 and 35 say. **Models per role:** desktops report, per connection role, the model ids their connections list; the server keeps the union, and the web dropdown lists the role's models plus *Other model id…*. Nothing personal leaves a computer: no account, email, path, key, program or setting, and the reads do not say whose computer reported what ([What the web editor can pick](#what-the-web-editor-can-pick)). **Extends 30 and 35** | the task's brief (ORC-444, 2026-10-30) |
 | 76 | Base branches are local | A task's and a module's base branch (the branch its runs start from and deliver into; `docs/architecture/storage.md`) is kept on each computer and never shared: in a shared project it is not sent to the team server, is not part of the task's or module's shared snapshot, revision or events, and teammates may choose differently for the same task or module. Setting it leaves a shared task's or module's revision alone; the app's screens and MCP tools set and read this computer's choice. Each run records the base it took, which stays local with the run. `orchester-api`'s shared task and module shapes do not change and the team server needs nothing. **Changes 52** | user (ORC-407, 2026-10-30) |
 | 77 | Accepting an invite outside Orchester | **Accepting in the browser** (the person's requirement): one *Accept* on Orchester Cloud's Invites page ends with the membership made on the team server, without the desktop: the server account (and, for a project invite, the membership with the invite's role) and a sign-in of that browser to the server's web app. The cloud never reaches a team server; the person's browser carries a one-time identity token (purpose `accept`, bound to the invite, 5 minutes) to the address the cloud registered for the server, as `/authorize` does for sign-in, and brings the server's signed receipt back. It needs a two-factor session on the cloud, as every acceptance does (row 43). When the browser cannot reach the server either, nothing is used up: the invite stays accepted for that account until it expires, the page says why and offers *Try again* and *Open in Orchester*. **The `orchester://` link**: `orchester://invite/<invite id>` and `orchester://open`, registered per user by the Windows installer; an open window takes the link; a link only opens the invite's existing landing in Settings › Orchester and never accepts, joins or sends anything without the person's click, and nothing in it is ever shown or passed to an agent. The desktop is optional afterwards: the server and project show as joined, and a computer joins later with its own device ([Accepting outside Orchester](#accepting-outside-orchester)). **Extends 43 and 62** | user (requirement 2026-10-31); the flow is the architect's (ORC-576) |
 | 78 | Local use and owners | The desktop needs no Orchester Cloud account for local work: the sign-in gate is gone, and sharing, cloud joining, invites and account servers offer the sign-in in place. A project or team server's `owner` NULL means this computer's: added with nobody signed in, it shows to nobody signed in and to every account, and no sign-in claims it. One added signed in is the account's, and waits (runners working) while that account is signed out. A person moves an unshared project between the two on All projects. A project and its server always have the same owner: a first link to the account's server moves a project of this computer's into the account and the page says so, an account's project is refused a server of this computer's, and a shared project doesn't move. Over MCP a project an account holds answers `sign_in_required` while nobody is signed in and `project_not_found` while another account is | user (ORC-132, 2026-10-30) |
+| 79 | A resource archived on the team server | An archived team resource leaves every list on each member's computer and no new run pins it; its versions stay readable. Each run there that has not ended and pins any version of it (its pipeline, a step's profile or tool, an instruction, tool or skill) is cancelled, and the person gets a *Stopped* notification naming the resource. A restore brings the resource back; stopped runs stay stopped | user (2026-11-04) |
+| 80 | A team task's pipeline is a team pipeline | In a team project only the team's pipelines are used: a team task names one of them, a resource the team server shares, by its resource id (`TaskContent.pipeline`, `TaskChanges.pipeline`), and only admins create and publish them (row 72). A person's own local pipelines are not used for a team project's tasks, also when they had them before they joined: in a team project they are hidden wherever the project's pipelines are listed or chosen (Pipelines, New and Edit task, the app's MCP `list_pipelines`, `get_pipeline` and `create_task`/`update_task`, and so the Orchestrator chat), and `run_task` runs only the team pipeline a task names. They stay in the project's database untouched, and a local project keeps them as before. A team resource whose slug a local pipeline of this computer has takes the slug: the local one moves to a free slug (`<slug>-local`) and stays hidden. A breaking change on purpose. Who may change a task's pipeline is whoever may edit the task (the team server's task route; today its Admins). An Admin makes one of their own local pipelines a team pipeline with the app's MCP tool `share_pipeline` (person-only unless automation may change agent permissions): its newest version becomes a new team pipeline's first version, published as any first version is; the profiles and tools its steps run must be the team's already. Default pipeline and limits stay open (D6, `docs/design/team-authority.md`) ([Local pipelines](#local-pipelines)). **Replaces 74, changes 30 and 52** | user (2026-11-05: "on a team server only admins create and publish pipelines; a team task names a team pipeline by id; local pipelines cannot be used for the team project's tasks") |
 
 ## Processes and crates
 
@@ -291,8 +293,9 @@ rule of row 28) live in `orchester_core::sharing`, so the server enforces and th
 **Organization writes.** Organization travels in the same task change as content, under the revision, and takes the
 same path through the outbox. Tags go through the tag endpoints ([Tags](#tags)).
 
-**Pipelines are shared now** (row 30). A shared task names its pipeline by slug, and the slug resolves to the shared
-pipeline every member has. A task names a pipeline no published version exists for only while it is a draft. The
+**Pipelines are shared now** (row 30). A shared task names its pipeline by ~~slug, and the slug resolves to the shared
+pipeline every member has~~ (**changed by 80:** the team pipeline's resource id, the shared pipeline every member
+has). A task names a pipeline no published version exists for only while it is a draft. The
 pinned version number is now meaningful on every computer: it is the server's. Whoever starts a run pins the latest
 published version, as Run again does today. Before row 30, a member who lacked the pipeline saw *missing on this
 computer*; that state now applies only to what a version names and this computer lacks ([Shared
@@ -473,9 +476,10 @@ Scoped invalidation subscriptions without replica snapshots. The wire shapes are
 `GET /api/v2/projects/{project}/subscription`, a server-sent event stream that a client resumes with an optional
 `Last-Event-ID`; each event is named by its `kind` and carries its cursor as the SSE `id:`. `v2::subscription` defines
 the `QueryScope`s a change can make stale (workspace, task list, task, task comments, module list, module, library,
-resource) and the `SubscriptionEvent`s: `ready` first with the stream's cursor and no snapshot, one `invalidated` per
-committed batch with its last cursor and its de-duplicated scopes, `reset` when the resume point is below the replay
-floor, and `revoked` before the stream closes. `QueryScope` is `Eq`, `Hash` and `Ord`, so a set of scopes is stable.
+resource) and the `SubscriptionEvent`s: `ready` first, only to a stream opened without `Last-Event-ID`, with the
+stream's cursor and no snapshot, one `invalidated` per committed batch with its last cursor and its de-duplicated
+scopes, `reset` when the resume point cannot be replayed, and `revoked` before the stream closes. `QueryScope` is `Eq`,
+`Hash` and `Ord`, so a set of scopes is stable.
 
 **Client race rule.** Reads stay on the ordinary routes, each answering the `EventCursor` it was taken at. An
 `EventCursor` is the server's committed event sequence position: on the wire a string holding the canonical decimal of
@@ -515,7 +519,12 @@ work on this computer asked for after the run ended (Run again, before the runne
 remembers when, for the session, and forgets it when that work does not start). Claims that were never ended
 before (ORC-281) end this way on the first sync of a fixed desktop. A server without `PUT …/run` answers `404` or
 `405`: the report fails as *not supported* and is logged, and the next sync tries it again; meanwhile the heartbeat
-no longer names the task, so the claim goes stale instead of staying fresh.
+no longer names the task, so the claim goes stale instead of staying fresh. A merged run's Done is sent before its
+claim is completed (ORC-545); when git finds the run merged before Orchester's merge has written its record, or with
+none (merged outside Orchester), the claim's end records that Done first (ORC-750), changed from the In review the
+passed run left rather than from the status the cache has by then, so a teammate's status set since still wins. Once
+that Done is not sent, it stays so: a claim's end tried again (its report failed) and Orchester's merge record written
+after it leave it. A Done recorded later that the server already has is dropped instead of being marked not sent.
 
 **Offline (row 28).** Without the server, work may start on a task only when the cached claim is the person's and is
 not stale by the person's own last answered heartbeat. Core decides it with one function over explicit times:
@@ -652,6 +661,60 @@ modules and which tasks are in them. The server calls core's module rules and ad
   the server's modules with their revision (`modules.revision`, empty for a local project), each cached task's module,
   and each move the server kept with its sequence there (`module_changes.server_sequence`). They are written only from
   what the server confirmed; the local writes of modules refuse a shared project.
+
+## Releases (team authority)
+
+Releases (`docs/design/roadmap.md`: what ships, when, and as which version) belong to the team server while a project
+is shared, as its modules do, together with each task's release and each module's horizon (decision 7): every member
+sees the same releases and roadmap. This is the public contract the server's *Roadmap and releases · team authority*
+module (platform OP-177…OP-195) builds against; the wire shapes and routes are in
+[cloud-api.md](../cloud-api.md#team-authority-releases). It supersedes ORC-468, which described the old replica model:
+nothing here is cached from an event stream, the desktop reads the S10 routes and drops a read when S11 names its
+scope. It changes the task and module reads (a task's `release`, a module's `horizon` and `place`, each required) in
+one coordinated breaking upgrade with no compatibility window.
+
+Core's release (ORC-461) has not landed; core holds only what the shapes need: `id::ReleaseId`,
+`release::ReleaseDetails` (a `Name`, a trimmed description, an optional planned day), `release::ReleaseState`
+(`planned`, `released`) and `module::Horizon` (`now`, `next`, `later`, default `later`). The order of releases, the
+move on *Mark released* and the changelog's composition are stated here and come to core with ORC-461.
+
+| Part | Shared as |
+| --- | --- |
+| Release | `SharedRelease`: id (made by the desktop, UUIDv7), name (unique in the project without regard to case), description, planned day, state, released on, by and commit (a released one only; the commit core's full `CommitId`), revision, created and updated by and at |
+| A task's release | `release`: a field of `TaskContent` (so `SharedTask`, `TaskRead`) and `TaskChanges`, changed under the task's revision like its module; at most one release per task, whatever its module |
+| History | `ReleaseChange { sequence, task, from, to, by, actor, at }` for every move into, out of or between releases, append-only, read by the burndown and the task's history; *Mark released*'s moves are `orchester`'s, a person's moves and a delete's are `person`'s |
+| Changelog | The release's document (Markdown with its block ids, core's `docs::blocks`), the tasks hidden from it and the edited entries kept aside, changed as a whole under the release's revision |
+| Horizon | `horizon` and `place` in `ModuleFields`, so in the module create and patch; a new module is in `later` |
+| Reads | The release list (by state) with each release's progress, task count, forecast, whether the forecast is after its planned day and how many days it is overdue; one release; its progress; its burndown with the forecast; its history; its changelog; the task list by release |
+
+- **Who changes them.** Release definitions are the team's planning, so only a workspace Admin or a server admin
+  writes them: create, change, *Mark released*, delete and the changelog. A member gets `403 not_admin`, as for task
+  definitions under team authority (Authority S3). Moving a task into or out of a release is a task edit, under the
+  task route's rule. Every member, and a server admin, reads them.
+- **Revisions.** A release write names the release's revision and replaces its fields as a whole; a mismatch is `409
+  revision_conflict` with the current release, and the desktop then refuses its change as changed meanwhile, as for a
+  module. The changelog's patch names the release's revision too and raises it. A task's move that meets a newer task
+  revision goes on the task as it is now, as a module move does.
+- **Mark released** records the server's day, who marked it and the commit (optional). The release keeps its Done
+  tasks; every other task but the Canceled moves to the next planned release (planned releases with a day by day, then
+  those without one in creation order; the first after this one), or out of any release when there is none, each move
+  in the answer and in the history. Released is final: no change, changelog edit, move in or out, or delete. Its
+  changelog is frozen as it was.
+- **Delete** is for a planned release only: its tasks are left without a release (each a move by the person) and its
+  changelog goes.
+- **Refusals.** `409 release_exists { release }`, `422 release { reason }` (`released`, `release_not_found`), `409
+  revision_conflict { current }`, `422 invalid` (a name or a day that is not one), `409 id_taken`, `403 not_admin`.
+- **Idempotency.** Each definition write carries an idempotency key, answered again with its first answer, as a module
+  create and change are.
+- **Scopes.** `release_list` and `release {release}` join S11's scopes; a write of a release invalidates both, a move
+  the release it left and the one it joined, and *Mark released* the release the tasks moved to.
+- **Progress, burndown and forecast** are served (S10), counted by core's module rules over the release's tasks; this
+  replaces the replica model's "each desktop computes them".
+
+Open, not decided: where *Mark released*'s commit picker reads the base branch's recent commits from (the desktop's
+checkout, or the server), and the time zone a server counts days in (the released day, overdue days, the burndown).
+The stand-in team server of `orchester_api::test_support` serves this contract for the tests; the desktop's store,
+workspace and screens adopt it later (roadmap R2–R4).
 
 ## Shared run progress
 
@@ -824,6 +887,11 @@ servers, the same words a published version already carries (row 30). Core build
 connections and MCP servers with one function, so no other field can reach it.
 
 ### Local pipelines
+
+**Replaced by row 80 (the person, 2026-11-05).** A team task names only one of the team's pipelines, by its resource
+id; the person's own local pipelines are not used for a team project's tasks and are hidden there wherever pipelines
+are listed or chosen, kept untouched in the project's database; a team pipeline whose slug a local one has takes it,
+and the local one moves to `<slug>-local`. An Admin makes one a team pipeline with the app's MCP tool `share_pipeline`, a new team pipeline whose first version is the local one's newest (no screen has it yet). What follows is row 74 as it was decided, kept for its history.
 
 Row 74 (the person, 2026-10-29). In a shared project a person may keep pipelines of their own beside the team's. The
 team's pipelines stay shared and admin-only (row 72); a local pipeline stays on the person's computer and is never

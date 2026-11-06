@@ -12,6 +12,7 @@ use orchester_core::{
 use orchester_ipc::{
   AttachSession, Command, ErrorReports, Event, LaunchError, Rejection, Reply, Request, RequestId, RunnerClient,
   SessionEnd, ShutdownMode, WorkSummary,
+  browser::{BrowserCommand, ComputerBrowser},
 };
 use orchester_store::ProjectDb;
 use tempfile::TempDir;
@@ -285,6 +286,7 @@ async fn runner_logs_to_the_project_log_directory() {
 #[tokio::test]
 async fn runner_answers_attach_and_start_run_requests() {
   let repo = initialized_project();
+  let data = tempfile::tempdir().expect("temporary directory");
   let mut client = launch(repo.path()).await;
 
   let attach = Command::Attach {
@@ -292,6 +294,7 @@ async fn runner_answers_attach_and_start_run_requests() {
       previous_end: SessionEnd::Clean,
     },
     agent_slots: NonZeroU32::new(2).expect("above zero"),
+    browser: ComputerBrowser::installed(data.path().join("browser")),
   };
   client.send(&request(1, attach)).await.expect("attach");
   assert_eq!(
@@ -346,6 +349,78 @@ async fn runner_answers_attach_and_start_run_requests() {
       })
     );
   }
+}
+
+/// The answer to request `id`, past the notifications that come before it.
+async fn reply_to(client: &mut RunnerClient, id: u64) -> Reply {
+  loop {
+    match next_event(client).await {
+      Some(Event::Reply { id: answered, reply }) if answered == RequestId::new(id) => return reply,
+      Some(_) => {}
+      None => panic!("the runner closed the connection before answering request {id}"),
+    }
+  }
+}
+
+/// The desktop passes this computer's Settings › Browser as it attaches and again when they change (ORC-675): the
+/// project's browser starts with the ones passed last, and the runner reads no `orchester.db` for them. Each here names
+/// a program that is gone, so the browser cannot start and says which one; no browser needs to be installed.
+#[tokio::test]
+async fn runner_starts_the_browser_with_the_settings_the_desktop_passed_last() {
+  let repo = initialized_project();
+  let data = tempfile::tempdir().expect("temporary directory");
+  let profiles = data.path().join("browser");
+  let chosen = |program: &Path| ComputerBrowser {
+    program: Ok(Some(program.to_path_buf())),
+    profiles: Ok(profiles.clone()),
+  };
+  let (first, second) = (
+    data.path().join("first").join("chrome"),
+    data.path().join("second").join("chrome"),
+  );
+  let refused = |program: &Path| {
+    Reply::Rejected(Rejection::BrowserUnavailable {
+      detail: format!(
+        "{}: the program chosen in Settings › Browser cannot be used: {} does not exist",
+        orchester_exec::browser::BROWSER_UNAVAILABLE,
+        program.display()
+      ),
+    })
+  };
+  let open = || Command::Browser(BrowserCommand::OpenTab { url: None });
+  let mut client = launch(repo.path()).await;
+
+  let attach = Command::Attach {
+    session: AttachSession::Fresh {
+      previous_end: SessionEnd::Clean,
+    },
+    agent_slots: NonZeroU32::MIN,
+    browser: chosen(&first),
+  };
+  client.send(&request(1, attach)).await.expect("attach");
+  assert!(matches!(reply_to(&mut client, 1).await, Reply::Attached { .. }));
+  client.send(&request(2, open())).await.expect("open a tab");
+  assert_eq!(
+    reply_to(&mut client, 2).await,
+    refused(&first),
+    "the program passed with Attach"
+  );
+
+  let changed = Command::SetBrowser {
+    browser: chosen(&second),
+  };
+  client
+    .send(&request(3, changed))
+    .await
+    .expect("Settings › Browser changed");
+  assert_eq!(reply_to(&mut client, 3).await, Reply::BrowserSet);
+  client.send(&request(4, open())).await.expect("open a tab");
+  assert_eq!(
+    reply_to(&mut client, 4).await,
+    refused(&second),
+    "the program passed last"
+  );
+  assert!(!profiles.exists(), "no browser started");
 }
 
 /// No tab shows the project and the runner has no work: it says it stops, then stops and exits.

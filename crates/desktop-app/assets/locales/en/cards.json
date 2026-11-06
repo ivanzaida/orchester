@@ -149,6 +149,20 @@
       "denyTells": "Deny tells {{agent}}: “{{message}}”",
       "deny": "Deny",
       "approveOnce": "Approve once",
+      "inline": {
+        "command": "Allow {{agent}} to run this command?",
+        "tool": "Allow {{agent}} to call this tool?",
+        "once": "Allow once",
+        "onceCovers": "Allows this request once. The next request will be checked again.",
+        "similar": "Allow similar in this run",
+        "everything": "Allow all in this run",
+        "deny": "Deny and tell {{agent}}…",
+        "more": "More",
+        "send": "Deny and send",
+        "told": "{{agent}} is told this and goes on; Deny never fails the step",
+        "escape": "Esc",
+        "enter": "Enter"
+      },
       "approve": "Approve",
       "moreAnswers": "More answers",
       "asks": {
@@ -176,6 +190,46 @@
         "reviewerDeniedSilent": "The reviewer denied it. Not on {{agent}}'s allowed list.",
         "push": "Pushes to a remote always come to you, in Autopilot too.",
         "refs": "Only the run's branch {{branch}} is the run's own; other refs come to you."
+      },
+      "decision": {
+        "left": "{{model}} left it to you",
+        "under": "under {{threshold}} ·",
+        "noRisk": "under {{threshold}} · no risk above 0.5",
+        "reviewer": "The reviewer",
+        "settings": "· Project settings › Connections",
+        "risk": {
+          "outside": "may write outside the worktree",
+          "network": "may reach the network",
+          "credential": "may read a credential",
+          "discard": "may discard work in the worktree",
+          "task": "does not serve the task"
+        },
+        "failure": {
+          "key": "{{model}} did not answer: its key was refused, so it came to you",
+          "unreachable": "{{model}} did not answer: nothing answers at its address, so it came to you",
+          "api": "{{model}} did not answer: the address is not a System 1 API, so it came to you",
+          "model": "{{model}} did not answer: the model is no longer available, so it came to you",
+          "timeout": "{{model}} did not answer in time, so it came to you",
+          "unreadable": "{{model}} did not give a readable answer, so it came to you",
+          "run": "{{model}} could not run, so it came to you",
+          "missing": "{{model}} is unavailable, so it came to you"
+        }
+      },
+      "modelApproved": {
+        "lead": "Approved by {{model}}",
+        "at": "· {{probability}} · {{time}}",
+        "model": "Model",
+        "modelValue": "{{model}} · {{version}} · {{ms}} ms",
+        "verdict": "Verdict",
+        "verdictValue": "approve {{approve}} · threshold {{threshold}}",
+        "unknown": "—",
+        "risk": {
+          "outside": "Writes outside the worktree",
+          "network": "Reaches the network",
+          "credential": "Reads a credential",
+          "discard": "Discards work",
+          "task": "Does not serve the task"
+        }
       },
       "quiet": {
         "autopilot": "Approved by autopilot",

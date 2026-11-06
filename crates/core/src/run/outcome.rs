@@ -1,11 +1,15 @@
-//! What a run reports to its team server about the authorized work it carries out (S9 `work.report`), and the rule
-//! that orders those reports. An execution success is not permission to mark the task Done: the human-wait and
-//! task-completion effects wait for the team-authority decisions D1, D4 and D8 and have no outcome here.
+//! What a run reports to its team server about the authorized work it carries out (S9 `work.report`), the rule that
+//! orders those reports, and when its work renews its claim (D1). An execution success is not permission to mark the
+//! task Done: the human-wait and task-completion effects wait for the team-authority decisions D1, D4 and D8 and have
+//! no outcome here.
 
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::status::RunFailure;
+use super::{
+  Run,
+  status::{InterruptCause, PauseReason, RunFailure, RunStatus, StepStatus},
+};
 
 /// Why authorized work failed, as the desktop's run states name it. A closed set of kinds without text, paths or local
 /// ids, so a report never carries a secret or one computer's details.
@@ -47,6 +51,43 @@ pub enum ExecutionOutcome {
     reason: ExecutionFailure,
   },
   Cancelled {},
+}
+
+impl ExecutionOutcome {
+  /// What a run in `status` reports, as the server's work states take it: running work is `progress`; a run stopped at
+  /// a limit is `failed` with `limit_reached`, which the server keeps resumable; a run the runner could not carry on
+  /// is `failed` with `runner_failed`. A requested pause, a pause for low disk, a wait for a person and any other
+  /// interruption have no outcome (D1, D8), nor has a run not started yet.
+  pub fn of_status(status: &RunStatus) -> Option<Self> {
+    match status {
+      RunStatus::Running => Some(Self::Progress {}),
+      RunStatus::Succeeded => Some(Self::Succeeded {}),
+      RunStatus::Failed(failure) => Some(Self::Failed { reason: failure.into() }),
+      RunStatus::Cancelled => Some(Self::Cancelled {}),
+      RunStatus::Paused(PauseReason::LimitReached(_)) => Some(Self::Failed {
+        reason: ExecutionFailure::LimitReached,
+      }),
+      RunStatus::Interrupted(InterruptCause::RunnerFailed) => Some(Self::Failed {
+        reason: ExecutionFailure::RunnerFailed,
+      }),
+      RunStatus::Pending
+      | RunStatus::Paused(PauseReason::Requested | PauseReason::LowDisk)
+      | RunStatus::WaitingForPerson(_)
+      | RunStatus::Interrupted(_) => None,
+    }
+  }
+}
+
+/// Whether `run`'s work renews its team claim now (D1): only while it runs and none of its steps waits for a person
+/// (an approval, a plan or a message). A paused, waiting, interrupted or ended run renews nothing.
+pub fn renews_claim(run: &Run) -> bool {
+  run.status() == &RunStatus::Running
+    && !run.current_attempt().is_some_and(|attempt| {
+      attempt
+        .executions()
+        .iter()
+        .any(|execution| matches!(execution.status(), StepStatus::Waiting(_)))
+    })
 }
 
 /// How a report stands against the last report the server accepted for the same run.

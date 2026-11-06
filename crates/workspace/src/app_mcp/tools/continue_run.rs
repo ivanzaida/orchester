@@ -12,13 +12,13 @@
 
 use std::path::Path;
 
+use orchester_api::v2::DecisionId;
 use orchester_core::{
   id::{RunId, TaskId},
   resource::StepKey,
   run::{Answerer, MergeConflicts, PauseReason, RaisedLimits, ReviewNote, RunLimit, RunStatus, StuckDecision},
   time::Timestamp,
 };
-use orchester_exec::programs::Programs;
 use orchester_ipc::{Command, WorkReturn};
 use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
@@ -27,7 +27,7 @@ use serde_json::Value;
 
 use super::{
   runs::{find_run, status_now},
-  wire,
+  team, wire,
 };
 use crate::{
   app_mcp::{
@@ -41,7 +41,8 @@ use crate::{
     detail::{RunView, TaskDetail},
     integration_jobs::{IntegrationJobs, JobState},
     raise::{self, Raise},
-    resolve, return_work,
+    resolve::{self, RunWorktrees},
+    return_work,
     run::control_message,
   },
 };
@@ -104,10 +105,12 @@ pub enum Choice {
   /// For a run whose last merge into its base branch stopped at conflicts (merge_run's merge_failed, the task page's
   /// Not merged into main): Ask an agent to resolve. Its work returns to `step` (its key or name; left out, the step
   /// that implemented what conflicts, else the last one), which must be a step whose agent may write in the worktree,
-  /// with a note to merge the base branch in and resolve the conflicts, `note` after it, and the conflicting files as
-  /// data. Refused as merge_not_conflicted unless the run's last merge in this app stopped at conflicts,
-  /// step_cannot_write for a step that may not write, no_writing_step when none may, integration_running while git
-  /// works on the run, and as return_to is refused (run_merged, worktree_removed, worktree_in_merge, run_not_ended).
+  /// with a note to resolve the conflicts, `note` after it, and the conflicting files as data; the runner merges the
+  /// base branch into its worktree before its agent starts, leaving the conflicts for the agent to edit away, and
+  /// commits the merge with its work. Refused as merge_not_conflicted unless the run's last merge in this app stopped
+  /// at conflicts, step_cannot_write for a step that may not write, no_writing_step when none may, integration_running
+  /// while git works on the run, and as return_to is refused (run_merged, worktree_removed, worktree_in_merge — a merge
+  /// already in the worktree, which the runner's own would collide with — and run_not_ended).
   ResolveConflicts {
     #[serde(default)]
     step: Option<String>,
@@ -130,8 +133,16 @@ pub async fn continue_run(services: &Services, args: ContinueRun) -> Result<Valu
 /// `continue_run` decided by `by`: automation's decision on a waiting run, or its raise of a limit that stopped one,
 /// needs the person's consent, while a person's (the Orchestrator chat's proposal a person applied) is recorded as
 /// theirs and needs none. A resume after the daily budget raises nothing: the runner refuses it while today's budget
-/// is still used up.
+/// is still used up. A team task's limits are its Admin's (D6), so a raise is refused there; its other choices read
+/// the task from this computer's copy, so they are refused for a team project until its runs are read from their
+/// own execution records.
 pub(crate) async fn continue_as(services: &Services, args: ContinueRun, by: Answerer) -> Result<Value, ToolError> {
+  if team::of(services, &args.project).await?.is_some() {
+    return Err(match args.choice {
+      Choice::RaiseLimits { .. } | Choice::RaiseStepBudget { .. } => team::decision_required(DecisionId::D6),
+      _ => team::team_only_on_server("continue_run"),
+    });
+  }
   let reading = services.clone();
   let resolves = matches!(args.choice, Choice::ResolveConflicts { .. });
   let (project, run, request) = blocking(move || {
@@ -147,7 +158,8 @@ pub(crate) async fn continue_as(services: &Services, args: ContinueRun, by: Answ
     }
     let project = reading.project(&args.project)?;
     let jobs = reading.jobs.of(project.project.id());
-    let (run, request) = request(&project.repo_root, &args, (&reading.programs, &jobs, by))?;
+    let worktrees = reading.run_worktrees(&project.repo_root, project.project.name().as_str());
+    let (run, request) = request(&project.repo_root, &args, (&worktrees, &jobs, by))?;
     Ok((project, run, request))
   })
   .await?;
@@ -189,15 +201,16 @@ pub(crate) struct Offered {
 }
 
 /// Checks continuing the run `args` names in the project at `root` as the tool checks it, and changes nothing; a
-/// refusal when its task page would not offer the choice now. `programs` read the worktree of a run that ended;
-/// `jobs`, the project's merges, say which run's last merge stopped at conflicts. Blocks on SQLite and git.
+/// refusal when its task page would not offer the choice now. The worktree of a run that ended is read among
+/// `worktrees`; `jobs`, the project's merges, say which run's last merge stopped at conflicts. Blocks on SQLite and
+/// the project's runner.
 pub(crate) fn offered(
   root: &Path,
   args: &ContinueRun,
-  (programs, jobs): (&Programs, &IntegrationJobs),
+  (worktrees, jobs): (&RunWorktrees, &IntegrationJobs),
 ) -> Result<Offered, ToolError> {
   // Who would decide does not change what is offered.
-  let (named, request) = request(root, args, (programs, jobs, Answerer::Person))?;
+  let (named, request) = request(root, args, (worktrees, jobs, Answerer::Person))?;
   let (target, conflicts) = match request {
     Request::Command(
       Command::DecideStuckRunAs {
@@ -220,12 +233,12 @@ pub(crate) fn offered(
 }
 
 /// The run `args` names in the project at `root` and what continuing it asks of the runner, decided by `by`; a
-/// refusal when its task page would not offer the choice now. `programs` read the worktree of a run that ended;
-/// `jobs` hold what the run's last merge stopped at.
+/// refusal when its task page would not offer the choice now. The worktree of a run that ended is read among
+/// `worktrees`; `jobs` hold what the run's last merge stopped at.
 fn request(
   root: &Path,
   args: &ContinueRun,
-  (programs, jobs, by): (&Programs, &IntegrationJobs, Answerer),
+  (worktrees, jobs, by): (&RunWorktrees, &IntegrationJobs, Answerer),
 ) -> Result<(Named, Request), ToolError> {
   let db = ProjectDb::open(root)?;
   let run = find_run(&db, &args.run)?;
@@ -251,7 +264,7 @@ fn request(
   let request = match (view.run.status(), &args.choice) {
     (_, Choice::ResolveConflicts { step, note }) => {
       let asked = (step.as_deref(), note.as_deref());
-      resolve_conflicts((root, programs, jobs), (&detail, view), asked, (by, &number))?
+      resolve_conflicts((root, worktrees, jobs), (&detail, view), asked, (by, &number))?
     }
     (RunStatus::Paused(PauseReason::LimitReached(limit)), choice) => at_limit(view, (*limit, choice), &number)?,
     (RunStatus::WaitingForPerson(_), choice) => Request::Command(Command::DecideStuckRunAs {
@@ -261,7 +274,7 @@ fn request(
       by,
     }),
     (_, Choice::ReturnTo { step, note }) if view.run.can_return_ended() => {
-      let worktree = resolve::read(programs, root, (view.id(), false))
+      let worktree = resolve::read(worktrees, root, (view.id(), false))
         .map_err(|message| ToolError::refused("worktree_unreadable", vec![message]))?;
       if let Some(refusal) = return_work::refusal(&detail, view, &worktree) {
         return Err(ToolError::refused(refusal.code(), vec![refusal.message()]));
@@ -364,9 +377,9 @@ fn return_target(view: &RunView, (step, note): (&str, &str), number: &str) -> Re
 /// *Ask an agent to resolve* on `detail`'s latest run `view`, whose last merge into its base branch stopped at
 /// conflicts as `jobs` hold it: its work returned to the writing step `step` names (by key or name; the implementing
 /// one when it names none) with the conflict's note, `note` after it, and the conflicting files as data, decided by
-/// `by`; refused as the task page would not offer it. `programs` read the run's worktree.
+/// `by`; refused as the task page would not offer it. The run's worktree is read among `worktrees`.
 fn resolve_conflicts(
-  (root, programs, jobs): (&Path, &Programs, &IntegrationJobs),
+  (root, worktrees, jobs): (&Path, &RunWorktrees, &IntegrationJobs),
   (detail, view): (&TaskDetail, &RunView),
   (step, note): (Option<&str>, Option<&str>),
   (by, number): (Answerer, &str),
@@ -375,7 +388,7 @@ fn resolve_conflicts(
     let refusal = return_work::ReturnRefusal::NotEnded;
     return Err(ToolError::refused(refusal.code(), vec![refusal.message()]));
   }
-  let worktree = resolve::read(programs, root, (view.id(), false))
+  let worktree = resolve::read(worktrees, root, (view.id(), false))
     .map_err(|message| ToolError::refused("worktree_unreadable", vec![message]))?;
   if let Some(refusal) = return_work::refusal(detail, view, &worktree) {
     return Err(ToolError::refused(refusal.code(), vec![refusal.message()]));

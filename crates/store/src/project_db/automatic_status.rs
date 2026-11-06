@@ -4,7 +4,11 @@
 //! server still has that status and the person still holds the task. A status that was not sent says
 //! why on the task until the person dismisses it.
 
-use orchester_core::{id::TaskId, task::organization::WorkflowStatus, time::Timestamp};
+use orchester_core::{
+  id::{RunId, TaskId},
+  task::organization::WorkflowStatus,
+  time::Timestamp,
+};
 use rusqlite::{Connection, OptionalExtension, params};
 
 use super::ProjectDb;
@@ -141,6 +145,60 @@ impl ProjectDb {
     )?;
     Ok(())
   }
+
+  /// Records the Done of the shared task of `run`, a run git found merged into its base branch, at `at`, as a merge
+  /// recorded here would ([`orchester_core::store::MergeStore::save_run_merge`]). Its claim's end reads the run merged
+  /// from git, which can be before Orchester's own merge writes its record, or without one for a merge made outside
+  /// Orchester; the Done must wait before the claim is completed, or it is no longer the person's to send (ORC-750).
+  /// Nothing is recorded for a run whose merge is recorded (it recorded the Done itself), a team run (whether it makes
+  /// its task Done is open, D4) or a run of a local task.
+  ///
+  /// The Done changes from the In review the passed run left, not from the status the cache has when the claim ends:
+  /// a teammate's status, cached since, must still win. A status of the task still waiting keeps the status it changed
+  /// from, and one already not sent stays so: a claim's end tried again after its report failed does not send it.
+  pub fn record_merged_done(&mut self, run: RunId, at: Timestamp) -> Result<(), StoreError> {
+    let transaction = self.connection.transaction()?;
+    if super::merges::merged(&transaction, run)? || super::run_inputs::is_team_run(&transaction, run)? {
+      return Ok(());
+    }
+    let task: Option<String> = transaction
+      .query_row("SELECT task_id FROM runs WHERE id = ?1", [run.to_string()], |row| {
+        row.get(0)
+      })
+      .optional()?;
+    let task: TaskId = parse("task id", &task.ok_or(StoreError::RunNotFound(run))?)?;
+    if !super::shared_tasks::is_shared(&transaction, task)? {
+      return Ok(());
+    }
+    transaction.execute(
+      "INSERT INTO shared_automatic_status (task_id, from_status, status, changed_at) VALUES (?1, ?2, ?3, ?4) \
+       ON CONFLICT (task_id) DO UPDATE SET status = excluded.status, changed_at = excluded.changed_at \
+       WHERE not_sent IS NULL",
+      params![
+        task.to_string(),
+        encode_json("automatic status", 1, &WorkflowStatus::InReview)?,
+        encode_json("automatic status", 1, &WorkflowStatus::Done)?,
+        at.unix_millis()
+      ],
+    )?;
+    transaction.commit()?;
+    Ok(())
+  }
+}
+
+/// Whether the claim's end of `run` recorded a Done of its `task` ([`ProjectDb::record_merged_done`]) that was not
+/// sent: the merge's own record, written after it, keeps why rather than sending it again over the server's status.
+pub(super) fn merged_done_not_sent(connection: &Connection, task: TaskId, run: RunId) -> Result<bool, StoreError> {
+  Ok(connection.query_row(
+    "SELECT EXISTS(SELECT 1 FROM shared_automatic_status WHERE task_id = ?1 AND status = ?2 \
+     AND not_sent IS NOT NULL AND changed_at >= (SELECT created_at FROM runs WHERE id = ?3))",
+    params![
+      task.to_string(),
+      encode_json("automatic status", 1, &WorkflowStatus::Done)?,
+      run.to_string()
+    ],
+    |row| row.get(0),
+  )?)
 }
 
 /// Records that a run moved shared `task` from `from` to `status`. A status still waiting keeps the

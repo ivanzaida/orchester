@@ -30,6 +30,7 @@ mod server_key;
 pub mod sync;
 pub mod team;
 pub mod team_join;
+mod team_session;
 pub mod trust;
 
 use std::{
@@ -39,7 +40,10 @@ use std::{
   time::{Duration, Instant},
 };
 
-use orchester_api::client::{Client, ClientError, PlainHttp, ServerAddress};
+use orchester_api::{
+  client::{Client, ClientError, PlainHttp, ServerAddress},
+  releases::ReleaseVersion,
+};
 use orchester_core::{
   id::ServerId,
   secret::{SecretValue, VaultError, VaultKey},
@@ -98,10 +102,15 @@ pub struct Servers {
 struct Inner {
   workspace: Workspace,
   vault: Vault,
+  /// This desktop's own version, which its team sessions name on every `/api/v2` request.
+  version: ReleaseVersion,
   schedule: Schedule,
   watched: Mutex<HashMap<ServerId, Watched>>,
   /// Counts changes of the list and of connections, for the monitor and the screens.
   changes: watch::Sender<u64>,
+  /// The generation of the servers' sessions, raised whenever a token is stored, refused or forgotten: a team session
+  /// made before ends ([`Servers::team_session`]).
+  sessions: watch::Sender<u64>,
   /// Counts changes of shared projects' caches, for the screens.
   shared: watch::Sender<u64>,
   /// Counts requests to read the shared projects' caches again now.
@@ -136,19 +145,22 @@ impl PartialEq for Servers {
 }
 
 impl Servers {
-  pub fn new(workspace: Workspace, vault: Vault) -> Self {
-    Self::with_schedule(workspace, vault, Schedule::DEFAULT)
+  /// The servers of this desktop, whose own version is `version`: its team sessions name it to their servers.
+  pub fn new(workspace: Workspace, vault: Vault, version: ReleaseVersion) -> Self {
+    Self::with_schedule((workspace, vault, version), Schedule::DEFAULT)
   }
 
   /// Servers asked on `schedule`, e.g. a short one in tests.
-  pub fn with_schedule(workspace: Workspace, vault: Vault, schedule: Schedule) -> Self {
+  pub fn with_schedule((workspace, vault, version): (Workspace, Vault, ReleaseVersion), schedule: Schedule) -> Self {
     Self {
       inner: Arc::new(Inner {
         workspace,
         vault,
+        version,
         schedule,
         watched: Mutex::new(HashMap::new()),
         changes: watch::channel(0).0,
+        sessions: watch::channel(0).0,
         shared: watch::channel(0).0,
         sync: watch::channel(0).0,
         sync_states: Mutex::new(HashMap::new()),
@@ -295,6 +307,12 @@ impl Servers {
     Ok((trust.client(server.address.clone())?, trust))
   }
 
+  /// The client a team session of `server` calls its `/api/v2` with: [`Self::client`], naming this desktop's version.
+  fn team_client(&self, server: &ServerEntry) -> Result<Client, SharingError> {
+    let (client, _) = Self::client(server)?;
+    Ok(client.with_client_version(self.inner.version.clone()))
+  }
+
   /// The token of `server` from the keychain; signed out when there is none.
   async fn token(&self, server: ServerId) -> Result<SecretValue, SharingError> {
     let vault = self.inner.vault.clone();
@@ -308,6 +326,7 @@ impl Servers {
   async fn store_token(&self, server: ServerId, token: SecretValue) -> Result<(), SharingError> {
     let vault = self.inner.vault.clone();
     background::run(move || vault.get().store(&VaultKey::server_token(server), &token)).await??;
+    self.sessions_ended();
     Ok(())
   }
 
@@ -440,6 +459,7 @@ impl Servers {
       last_reached: watched.and_then(|watched| watched.last_reached),
       certificate_changed: false,
     });
+    self.sessions_ended();
   }
 
   fn update(&self, server: ServerId, change: impl FnOnce(Option<&Watched>) -> Watched) {
@@ -455,6 +475,12 @@ impl Servers {
   fn forget(&self, server: ServerId) {
     self.inner.watched.lock().remove(&server);
     self.changed();
+    self.sessions_ended();
+  }
+
+  /// Ends every team session made so far: a token was stored, refused or forgotten.
+  fn sessions_ended(&self) {
+    self.inner.sessions.send_modify(|generation| *generation += 1);
   }
 
   /// The servers the monitor should ask now, and when it should look again.

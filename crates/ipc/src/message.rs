@@ -9,15 +9,22 @@ use std::{fmt, num::NonZeroU32};
 use orchester_core::{
   connection::{AgentProvider, ApiEndpoint, CheckResult, NativeModel},
   id::{
-    ChatId, ChatMessageId, ConnectionId, IdempotencyKey, ResourceId, RunId, SideQuestionId, StepExecutionId, TaskId,
+    ChatId, ChatMessageId, ConnectionId, IdempotencyKey, OperationId, ResourceId, ReviewMessageId, ReviewThreadId,
+    RunId, SideQuestionId, StepExecutionId, TaskId,
   },
-  integration::Leftovers,
+  integration::{
+    Cleanup, Leftovers,
+    removal::{RemovalFailure, RemovalRequest},
+    resolve::request::{ResolveAnswer, ResolveFailure, ResolveRequest},
+  },
+  orchestrator::run_git::{RunGitAnswer, RunGitRequest},
   permission::AgentPermissions,
   question::GivenAnswer,
   resource::StepKey,
+  revision::Revision,
   run::{
-    Answerer, ApprovalAnswer, EventSequence, InterruptCause, MergeConflicts, PermissionsApply, PlanDecision,
-    PlanVersion, ReviewNote, RunNumber, StuckDecision,
+    Answerer, ApprovalAnswer, EventSequence, MergeConflicts, PermissionsApply, PlanDecision, PlanVersion, ReviewNote,
+    RunNumber, StuckDecision,
     side_question::{SideInput, SideOutcome},
   },
   tokens::TokenBudget,
@@ -25,13 +32,21 @@ use orchester_core::{
 use serde::{Deserialize, Serialize};
 
 use crate::{
-  ErrorReports,
-  browser::{BrowserCommand, BrowserEvent, BrowserReply, ScreencastFrame},
+  ErrorReports, FolderState,
+  browser::{BrowserCommand, BrowserEvent, BrowserReply, ComputerBrowser, ScreencastFrame},
   chat::ChatTools,
+  folders::{FoldersCommand, FoldersReply},
+  merge_queue::{MergeQueueCommand, MergeQueueReply},
   rejection::Rejection,
+  run_files::{RunFilesReply, RunFilesRequest},
   services::{ServiceCommand, ServiceReply},
   work::WorkSummary,
+  worktree::WorktreeChangesRead,
 };
+
+mod session;
+
+pub use self::session::{AttachSession, SessionEnd, ShutdownMode};
 
 /// Identifies a request within one connection, so its reply can be matched.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -79,17 +94,22 @@ pub struct Request {
 pub enum Command {
   /// The first request of a connection: the desktop starts listening to notifications, says
   /// which session this runner serves, which decides what happens to runs still recorded as
-  /// running (`docs/architecture/storage.md`, "Lifecycle"), and how many agents may work at
-  /// once. Answered with [`Reply::Attached`], followed by an [`Event::WorkSummary`].
+  /// running (`docs/architecture/storage.md`, "Lifecycle"), how many agents may work at
+  /// once, and this computer's Settings › Browser (protocol 47). Answered with [`Reply::Attached`], followed by an
+  /// [`Event::WorkSummary`].
   Attach {
     session: AttachSession,
     agent_slots: NonZeroU32,
+    browser: ComputerBrowser,
   },
   /// The project's *Agents working at once* changed to `agent_slots` (protocol 18): it applies at
   /// once. More slots let queued work start now; fewer stop no agent at work, and new work waits
   /// until fewer agents work than there are slots. Answered with [`Reply::AgentSlotsSet`], followed
   /// by an [`Event::WorkSummary`].
   SetAgentSlots { agent_slots: NonZeroU32 },
+  /// This computer's Settings › Browser changed to `browser` (protocol 47): the project's browser starts with it from
+  /// its next start; a browser running now keeps its program. Answered with [`Reply::BrowserSet`].
+  SetBrowser { browser: ComputerBrowser },
   /// Liveness check, answered with [`Reply::Pong`] carrying the same nonce.
   Ping { nonce: u64 },
   /// Starts a run of the queued task `task`. Idempotent by `key`: repeating it (a retry after
@@ -97,6 +117,12 @@ pub enum Command {
   /// [`Reply::RunStarted`] or [`Reply::Rejected`]. An explicit first-run request also releases
   /// its scheduling group’s persisted session-end hold; it does not bypass group eligibility.
   StartRun { key: IdempotencyKey, task: TaskId },
+  /// Starts the run of the team inputs the accepted operation `operation` kept in the project database (protocol 42,
+  /// team authority §7): the runner reads and checks them, makes sure this computer can run them (the base commit,
+  /// room on the disk, the bound connections, MCP servers and secrets), then records the run with them and starts it.
+  /// It reads no task or resource definition and holds no server token. Idempotent by `operation`: the operation has
+  /// one run, and repeating the request answers with it. Answered with [`Reply::RunStarted`] or [`Reply::Rejected`].
+  StartAcceptedRun { operation: OperationId },
   /// Starts the next run of task `task`, whose latest run `after` failed or was cancelled (Run
   /// again): from the first step, in a new worktree on a new branch from the current base, with
   /// the latest published version of the task's pipeline and the task's limits. With
@@ -246,6 +272,14 @@ pub enum Command {
   /// [`Reply::ConnectionChecked`], or [`Rejection::Failed`] when the key cannot be read or the provider
   /// runs no agent in this version.
   CheckConnection { provider: AgentProvider, api: ApiEndpoint },
+  /// Explicit recorded-request comparison (protocol 41). Progress and results live in the project database.
+  /// Hosted servers refuse automation; the workspace supplies authority rather than accepting it as tool input.
+  TestDecisionConnection {
+    test: IdempotencyKey,
+    connection: crate::DecisionTestTarget,
+    model: orchester_core::resource::ModelId,
+    automation: bool,
+  },
   /// Answers the person's message `message` of the project's Orchestrator chat, which the desktop kept: one turn
   /// of the agent CLI on the Orchestrator's connection and model, read-only in the project folder, with the
   /// domain tools at `tools` (`orchester_core::orchestrator`). Answered with [`Reply::ChatAnswering`] once the turn
@@ -276,6 +310,20 @@ pub enum Command {
   /// [`Rejection::NoTurnToStop`] while no agent of the run works in a turn, [`Rejection::TurnNotStoppable`] for a
   /// native agent.
   StopTurn { run: RunId },
+  /// Answers the person's review question `message` on run `run`, which the desktop kept asked (protocol 40,
+  /// `orchester_core::review`): one read-only turn of the agent of the run's implementing step `step`, in the run's
+  /// worktree on the step's connection, model and network, resuming its session (Claude Code's as a fork); its words
+  /// and activity are kept in the thread as they come, and how it ends with the question. The run is not changed.
+  /// Answered with [`Reply::Accepted`] once the turn is under way, or was already, or ended;
+  /// [`Rejection::QuestionNotAwaited`] when no such question is kept asked.
+  AnswerReviewQuestion {
+    run: RunId,
+    step: StepKey,
+    message: ReviewMessageId,
+  },
+  /// Stops the answer under way in review thread `thread` of run `run` (*Stop answering*): its CLI ends, and what it
+  /// wrote stays. Answered with [`Reply::Accepted`], whether an answer was under way or not.
+  StopReviewAnswer { run: RunId, thread: ReviewThreadId },
   /// Estimates the story points of task `task` on auto mode's reviewer's connection and model (protocol 30), unless a
   /// person set them or they were estimated or asked from its brief and criteria as they are; what it spent is kept.
   /// Answered with [`Reply::TaskEstimated`] once it ended, [`Rejection::TaskNotFound`] for no such task.
@@ -300,62 +348,47 @@ pub enum Command {
   /// carried out, [`Rejection::BrowserUnavailable`] when the browser cannot start, [`Rejection::NoSuchTab`] for a tab
   /// it does not have, or [`Rejection::Failed`] when the browser refused.
   Browser(BrowserCommand),
-  /// A request of a task page's Services tab about a run's services (protocol 42). Answered with [`Reply::Services`]
+  /// Reads what the worktree of run `run` holds beyond its checked-out commit, for the task page's Changes and
+  /// `get_changes` (protocol 40): only the runner reads a run's worktree. Answered with [`Reply::WorktreeChanges`],
+  /// whatever it found, a failed read included.
+  ReadWorktreeChanges { run: RunId },
+  /// The merge queue's work in a run's worktree: syncing its base in, or running Check again on the merged result
+  /// (protocol 41). Answered with [`Reply::MergeQueue`] once done.
+  MergeQueue(MergeQueueCommand),
+  /// A request about the folders the project's runs leave with their executor (protocol 42, [`crate::folders`]).
+  /// Answered with [`Reply::Folders`] once carried out, or [`Rejection::Failed`].
+  Folders(FoldersCommand),
+  /// Builds the code index of `revision` again where the runner keeps the indexes (*Rebuild*, *Retry* in Project
+  /// settings › Context, protocol 43); the desktop builds none itself. Answered with [`Reply::CodeIndexRebuilt`] once
+  /// it is built, [`Rejection::CodeIndexInUse`] while it is in use, or [`Rejection::Failed`] with why it could not be
+  /// built.
+  RebuildCodeIndex { revision: Revision },
+  /// What run `run`'s folder holds beyond its last commit, for the start-up recovery (protocol 44): its own
+  /// worktree, else the workspace it holds or worked in last. The runner reads it with git in the folder; the desktop
+  /// never does. Answered with [`Reply::RunFolderState`], [`FolderState::Unknown`] when the run has no folder any more
+  /// or git cannot tell.
+  RunFolderState { run: RunId },
+  /// git of the Orchestrator chat in a run's worktree, which the runner runs there (protocol 45,
+  /// `docs/architecture/remote-runners.md` rule 5). Answered with [`Reply::RunGit`]; [`Rejection::RunNotFound`] for no
+  /// such run, [`Rejection::RunNotEnded`] for a write, or git that does not only read, before the run ended, and
+  /// [`Rejection::WorktreeRemoved`] when its worktree is gone.
+  RunGit(RunGitRequest),
+  /// `request` about the merge a person resolves by hand in run `run`'s worktree, carried out where the worktree is
+  /// (protocol 46): the desktop keeps the project's record of the resolution and runs no git there itself. Answered
+  /// with [`Reply::Resolved`], or [`Reply::ResolveFailed`] with why it did not go on.
+  Resolve { run: RunId, request: ResolveRequest },
+  /// The code viewer reads the worktree of run `run` (protocol 48, [`crate::run_files`]): the runner's executor side
+  /// reads it where the worktree is. Answered with [`Reply::RunFiles`].
+  RunFiles { run: RunId, request: RunFilesRequest },
+  /// Removes what run `run`, which ended, left, as `request` allows: its worktrees and branches, with the run's own
+  /// processes in a held folder stopped first when asked (protocol 49). The desktop records the removal in the
+  /// project's database before and after; the runner removes, then removes the codebase indexes only removed worktrees
+  /// used and sweeps the worktree folders. Answered with [`Reply::WorktreesRemoved`], or [`Reply::RemovalFailed`] when
+  /// nothing was removed.
+  RemoveWorktrees { run: RunId, request: RemovalRequest },
+  /// A request of a task page's Services tab about a run's services (protocol 53). Answered with [`Reply::Services`]
   /// once carried out, or [`Rejection::Failed`] with why not.
   Services(ServiceCommand),
-}
-
-/// Which session a runner serves, from the desktop's side.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum AttachSession {
-  /// The project's first runner in the desktop's session. Runs still recorded as running were
-  /// cut off by the end of the previous session and wait for a person to continue them.
-  Fresh { previous_end: SessionEnd },
-  /// The desktop started this runner after the project's previous runner dropped. Runs that
-  /// runner left running were interrupted by its loss and continue on their own.
-  Reconnect,
-}
-
-impl AttachSession {
-  /// Why a run still recorded as running when this runner attaches stopped: the previous
-  /// runner's loss, Quit now, or else a crash. A run left running by a session that says it
-  /// ended cleanly or with paused runs lost its runner without anyone recording it.
-  pub const fn interrupt_cause(self) -> InterruptCause {
-    match self {
-      Self::Reconnect => InterruptCause::RunnerLost,
-      Self::Fresh {
-        previous_end: SessionEnd::QuitNow,
-      } => InterruptCause::QuitNow,
-      Self::Fresh {
-        previous_end: SessionEnd::Crashed | SessionEnd::Clean | SessionEnd::RunsPaused,
-      } => InterruptCause::Crashed,
-    }
-  }
-}
-
-/// How the desktop's previous session ended, as its session log recorded it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum SessionEnd {
-  /// There was none, or it closed without active runs.
-  Clean,
-  /// The user waited for agents to save; the runs were paused.
-  RunsPaused,
-  /// The user chose Quit now.
-  QuitNow,
-  /// It never recorded its end: a crash, power loss or a killed process.
-  Crashed,
-}
-
-/// How the runner stops, matching the close confirmation in `docs/architecture/storage.md`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum ShutdownMode {
-  /// "Wait for agents to save": stop scheduling and let active steps reach a checkpoint.
-  FinishAtCheckpoints,
-  /// "Quit now": terminate agents without a checkpoint.
-  Immediate,
 }
 
 /// Runner to desktop.
@@ -503,11 +536,47 @@ pub enum Reply {
   },
   /// The answer to [`Command::SetErrorReports`]: the runner sends reports as it says from now on.
   ErrorReportsSet,
+  /// The answer to [`Command::SetBrowser`]: the project's browser starts with it from its next start.
+  BrowserSet,
   /// The answer to [`Command::Browser`].
   Browser(BrowserReply),
+  /// The answer to [`Command::ReadWorktreeChanges`]: what the worktree of `run` holds beyond its commit.
+  WorktreeChanges {
+    run: RunId,
+    read: WorktreeChangesRead,
+  },
+  /// The answer to [`Command::MergeQueue`].
+  MergeQueue(MergeQueueReply),
+  /// The answer to [`Command::Folders`].
+  Folders(FoldersReply),
+  /// The answer to [`Command::RebuildCodeIndex`]: the index of `revision` is built again.
+  CodeIndexRebuilt {
+    revision: Revision,
+  },
+  /// The answer to [`Command::RemoveWorktrees`] that removed: what it removed, and what stays and why.
+  WorktreesRemoved(Cleanup),
+  /// The answer to [`Command::RemoveWorktrees`] that removed nothing, and why.
+  RemovalFailed(RemovalFailure),
+  /// The answer to [`Command::RunFolderState`].
+  RunFolderState {
+    run: RunId,
+    state: FolderState,
+  },
+  /// The answer to [`Command::RunGit`].
+  RunGit(RunGitAnswer),
+  /// The answer to [`Command::Resolve`] that was carried out.
+  Resolved(ResolveAnswer),
+  /// The answer to [`Command::Resolve`] that did not go on, and why.
+  ResolveFailed(ResolveFailure),
+  /// The answer to [`Command::RunFiles`]; a file's bytes travel after it in a binary frame.
+  RunFiles(RunFilesReply),
   /// The answer to [`Command::Services`].
   Services(ServiceReply),
   Rejected(Rejection),
+  /// The comparison ended; its durable report includes completion or stop status.
+  DecisionTested {
+    test: IdempotencyKey,
+  },
 }
 
 /// A run [`Command::ContinueRuns`] did not continue.

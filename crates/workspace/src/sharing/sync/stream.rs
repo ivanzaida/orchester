@@ -49,6 +49,9 @@ pub trait Source: Send + Sync {
   /// Sends this computer's whole catalog for the project (`PUT …/catalog`).
   fn report_catalog(&self, report: CatalogReport) -> impl Future<Output = Result<(), SharingError>> + Send;
 
+  /// The team's `resource` was archived on the server and is removed here now: the runs that pin it stop.
+  fn archived(&self, resource: ResourceId) -> impl Future<Output = ()> + Send;
+
   /// The cache took a change from the stream.
   fn changed(&self);
 
@@ -215,6 +218,10 @@ async fn read(source: &impl Source, root: &Path, stream: &mut EventStream) -> En
       Ok(Applied::Changed) => Ok(()),
       Ok(Applied::Read { task, cursor }) => read_again(source, root, task, cursor).await,
       Ok(Applied::Published { resource, cursor }) => published(source, root, *resource, cursor).await,
+      Ok(Applied::Archived(resource)) => {
+        source.archived(resource).await;
+        Ok(())
+      }
       Err(error) => Err(error),
     };
     match result {

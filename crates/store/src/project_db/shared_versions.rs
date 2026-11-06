@@ -6,7 +6,8 @@
 use orchester_core::{
   blob::ContentHash,
   id::{ConnectionId, ResourceId, SecretId, VersionId},
-  resource::{Resource, ResourceBody, ResourceKind, Version, VersionNumber},
+  name::Name,
+  resource::{Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber},
   sharing::{SharedPerson, TaskRevision},
   time::Timestamp,
 };
@@ -86,22 +87,7 @@ impl ProjectDb {
   }
 
   pub fn resource_sharing(&self, id: ResourceId) -> Result<Option<ResourceSharing>, StoreError> {
-    let row: Option<(Option<String>, Option<i64>)> = self
-      .connection
-      .query_row(
-        "SELECT sharing, server_revision FROM resources WHERE id = ?1",
-        [id.to_string()],
-        |row| Ok((row.get(0)?, row.get(1)?)),
-      )
-      .optional()?;
-    match row.ok_or(StoreError::ResourceNotFound(id))? {
-      (None, _) => Ok(None),
-      (Some(sharing), revision) => match (sharing.as_str(), revision) {
-        ("shared", Some(revision)) => Ok(Some(ResourceSharing::Shared(revision_value(revision)?))),
-        ("not_shared", None) => Ok(Some(ResourceSharing::NotShared)),
-        _ => Err(corrupt("resource sharing", sharing)),
-      },
-    }
+    sharing_of(&self.connection, id)
   }
 
   /// Keeps `version` of `resource` as the server confirmed it. A version this computer has already, e.g. one published
@@ -302,19 +288,48 @@ pub struct NamingVersion {
   pub number: VersionNumber,
 }
 
-/// Adds `resource` with its own id and no draft, unless the slug is another resource's of its kind.
-fn insert_resource(connection: &Connection, resource: &Resource) -> Result<(), StoreError> {
+/// Whether resource `id` is the server's or kept local; `None` for a resource of this computer's own.
+pub(super) fn sharing_of(connection: &Connection, id: ResourceId) -> Result<Option<ResourceSharing>, StoreError> {
+  let row: Option<(Option<String>, Option<i64>)> = connection
+    .query_row(
+      "SELECT sharing, server_revision FROM resources WHERE id = ?1",
+      [id.to_string()],
+      |row| Ok((row.get(0)?, row.get(1)?)),
+    )
+    .optional()?;
+  match row.ok_or(StoreError::ResourceNotFound(id))? {
+    (None, _) => Ok(None),
+    (Some(sharing), revision) => match (sharing.as_str(), revision) {
+      ("shared", Some(revision)) => Ok(Some(ResourceSharing::Shared(revision_value(revision)?))),
+      ("not_shared", None) => Ok(Some(ResourceSharing::NotShared)),
+      _ => Err(corrupt("resource sharing", sharing)),
+    },
+  }
+}
+
+/// Adds `resource` with its own id and no draft, unless the slug is another resource's of its kind. A pipeline of the
+/// team wins its slug from one of this computer's own: in a team project only the team's pipelines are offered
+/// (`docs/architecture/server.md` row 80), so the local one, kept as it is otherwise, takes a free slug.
+pub(super) fn insert_resource(connection: &Connection, resource: &Resource) -> Result<(), StoreError> {
   let kind = kind_text(resource.kind());
-  let taken: bool = connection.query_row(
-    "SELECT EXISTS (SELECT 1 FROM resources WHERE kind = ?1 AND slug = ?2)",
-    params![kind, resource.slug().as_str()],
-    |row| row.get(0),
-  )?;
-  if taken {
-    return Err(StoreError::DuplicateSlug {
-      kind: resource.kind(),
-      slug: resource.slug().as_str().to_owned(),
-    });
+  let holder: Option<(String, Option<String>)> = connection
+    .query_row(
+      "SELECT id, sharing FROM resources WHERE kind = ?1 AND slug = ?2",
+      params![kind, resource.slug().as_str()],
+      |row| Ok((row.get(0)?, row.get(1)?)),
+    )
+    .optional()?;
+  match holder {
+    None => {}
+    Some((local, sharing)) if resource.kind() == ResourceKind::Pipeline && sharing.as_deref() != Some("shared") => {
+      give_way(connection, &local, resource)?;
+    }
+    Some(_) => {
+      return Err(StoreError::DuplicateSlug {
+        kind: resource.kind(),
+        slug: resource.slug().as_str().to_owned(),
+      });
+    }
   }
   connection.execute(
     "INSERT INTO resources (id, kind, slug, name, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -490,4 +505,28 @@ fn revision_value(revision: i64) -> Result<TaskRevision, StoreError> {
     .ok()
     .and_then(|revision| TaskRevision::try_from(revision).ok())
     .ok_or_else(|| corrupt("resource revision", revision))
+}
+
+/// Moves the local resource `local` off `team`'s slug to a free one of its kind (`<slug>-local`, then `-2`, …).
+fn give_way(connection: &Connection, local: &str, team: &Resource) -> Result<(), StoreError> {
+  let mut statement = connection.prepare("SELECT slug FROM resources WHERE kind = ?1")?;
+  let taken = statement
+    .query_map([kind_text(team.kind())], |row| row.get::<_, String>(0))?
+    .map(|slug| {
+      let slug = slug?;
+      Slug::new(&slug).map_err(|_| corrupt("resource slug", slug))
+    })
+    .collect::<Result<Vec<_>, _>>()?;
+  let name = Name::new(&format!("{} local", team.slug().as_str())).expect("a slug and a word are a name");
+  let free = Slug::unique_for(&name, team.slug(), &taken);
+  connection.execute(
+    "UPDATE resources SET slug = ?2 WHERE id = ?1",
+    params![local, free.as_str()],
+  )?;
+  tracing::info!(
+    resource = local,
+    slug = free.as_str(),
+    "a local pipeline gave its slug to the team's"
+  );
+  Ok(())
 }

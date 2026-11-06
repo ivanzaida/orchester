@@ -9,7 +9,7 @@ use orchester_core::{
   connection::AgentProvider,
   conversation::{Delivery, Message, Recipient},
   diff::Diff,
-  id::{FeedbackId, FeedbackPostId, MessageId, ResourceId, StepExecutionId},
+  id::{FeedbackId, FeedbackPostId, MessageId, ResourceId, RunId, StepExecutionId},
   integration::commit_subject,
   project::TaskKey,
   pull_request::feedback::{FeedbackAnchor, FeedbackKind, FeedbackThread, Located, locate},
@@ -94,6 +94,7 @@ pub enum Gate {
 /// The task's latest run.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RunFacts {
+  pub id: RunId,
   pub number: u32,
   pub branch: Arc<str>,
   /// Counted tokens the agents spent on feedback requests in this run.
@@ -479,6 +480,7 @@ fn board_task(detail: &TaskDetail, conversation: &Conversation, views: &[ThreadV
     targets,
     default,
     run: run.map(|run| RunFacts {
+      id: run.id(),
       number: run.run.number().get(),
       branch: Arc::from(run.run.branch().as_str()),
       feedback_tokens: views.iter().filter_map(|view| view.tokens).sum(),

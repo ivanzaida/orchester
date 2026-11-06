@@ -1,6 +1,9 @@
 //! Returning the work of an ended run to a step (the project task ORC-44 · Return a finished run to an earlier step)
 //! through the scheduler, with real worktrees and the fake CLI: the run works again from that step with the note in its
-//! prompt; a merged run and one whose worktree is gone are refused and stay as they were.
+//! prompt; a merged run and one whose worktree is gone are refused and stay as they were. A return to resolve a
+//! merge's conflicts has the runner merge the base first ([`conflicts`]).
+#[path = "returned/conflicts.rs"]
+mod conflicts;
 mod support;
 
 use std::{fs, path::Path};

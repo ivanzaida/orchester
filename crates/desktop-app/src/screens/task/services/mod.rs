@@ -78,8 +78,7 @@ impl ServicesReads {
 
 /// The run whose services live now: the task's latest run while it runs on a runner that is online.
 fn live_run(task: &TaskContext) -> Option<RunId> {
-  let run = task.detail.run.as_ref()?;
-  (task.online && super::read::runs(&task.detail)).then(|| run.id())
+  super::read::running(&task.detail).filter(|_| task.online)
 }
 
 /// The frame's reader of the run's services while they live (`reader`).

@@ -2,6 +2,8 @@
 //! *Address*, read-only with when it last synced and the server's state, and *Your role*. The server project's name is
 //! read from the server while it is connected.
 
+use std::sync::Arc;
+
 use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
   components::Row,
@@ -90,9 +92,10 @@ pub(super) fn address_row(ctx: &mut Ctx, link: &SharingLink, (entry, server): (O
     .render(ctx)
 }
 
-/// *Your role* (`Z1IkQX`): owner or member.
-pub(super) fn role_row(ctx: &mut Ctx, role: &str) -> Element {
+/// *Your role* (`Z1IkQX`): Member, Admin or Server admin, with what the role does under the label (`07e` `BLTsP`).
+pub(super) fn role_row(ctx: &mut Ctx, role: &str, hint: Arc<str>) -> Element {
   SettingRow::new("sharing-role", ctx.t("sharing.team.role"))
+    .hint(hint)
     .control(value("sharing-role-value", role))
     .render(ctx)
 }

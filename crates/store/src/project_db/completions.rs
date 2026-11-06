@@ -1,6 +1,8 @@
 //! `run_completions` and `run_artifacts`: runs completed without a merge (ORC-93), one row per run, and the texts a
 //! run keeps by name, a completed run's report.
 
+use std::collections::HashSet;
+
 use orchester_core::{
   id::{RunId, TaskId},
   resource::StepKey,
@@ -35,12 +37,16 @@ impl ProjectDb {
     }
     record(&transaction, completion, report)?;
     let task = task_of(&transaction, run)?;
-    super::organization::automatic(
-      &transaction,
-      task,
-      orchester_core::task::organization::WorkflowStatus::Done,
-      completion.completed_at,
-    )?;
+    // A team run's completion is its own record: the team server keeps its task's status, and whether a completed
+    // team run makes its task Done is open (D4).
+    if !super::run_inputs::is_team_run(&transaction, run)? {
+      super::organization::automatic(
+        &transaction,
+        task,
+        orchester_core::task::organization::WorkflowStatus::Done,
+        completion.completed_at,
+      )?;
+    }
     super::task_effort::record(&transaction, task, completion.completed_at)?;
     transaction.commit()?;
     Ok(())
@@ -108,6 +114,15 @@ impl ProjectDb {
         .map_err(|error| corrupt("run completer", error))?,
       completed_at: Timestamp::from_unix_millis(at),
     }))
+  }
+
+  /// The runs completed without a merge, in one statement: whose [`Self::run_completion`] is some.
+  pub fn completed_runs(&self) -> Result<HashSet<RunId>, StoreError> {
+    let mut statement = self.connection.prepare("SELECT run_id FROM run_completions")?;
+    let runs = statement
+      .query_map([], |row| row.get::<_, String>(0))?
+      .collect::<Result<Vec<_>, _>>()?;
+    runs.iter().map(|run| parse("run id", run)).collect()
   }
 
   /// The texts `run` keeps, by name.

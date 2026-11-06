@@ -132,8 +132,13 @@ fn command_categories_follow_shell_scripts() {
     folders.category("bash -lc 'git status && git diff'"),
     CommandCategory::ReadOnly
   );
+  // A shell written with the folder it is installed in, in this platform's own form.
+  #[cfg(windows)]
+  let installed = r#""C:\Program Files\PowerShell\7\pwsh.exe""#;
+  #[cfg(unix)]
+  let installed = "/usr/local/bin/pwsh";
   assert_eq!(
-    folders.category(r#""C:\Program Files\PowerShell\7\pwsh.exe" -Command "Get-ChildItem src""#),
+    folders.category(&format!(r#"{installed} -Command "Get-ChildItem src""#)),
     CommandCategory::ReadOnly
   );
   assert_eq!(

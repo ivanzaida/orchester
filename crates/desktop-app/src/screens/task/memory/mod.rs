@@ -31,6 +31,7 @@ use orchester_workspace::{
 
 use super::TaskContext;
 use crate::{
+  project::{run_changes, settled_read::settled_read},
   screens::memory::{
     self as memory_ui, Centered, FilterBar, FiltersProps, ListInput,
     state::{Made, MemoryState, OfTask, Opened, Shared},
@@ -172,8 +173,9 @@ impl TaskMemoryTab {
   }
 }
 
-/// What the tab shows of the task's memory, read off the UI thread whenever the project's tasks are saved or the
-/// task's runs change, and when the person tries again.
+/// What the tab shows of the task's memory, read off the UI thread whenever the project's tasks are saved, a run of
+/// the project changes state or the task's latest run changes while it goes on (another run's lines do not), and when
+/// the person tries again; never restarted while it reads.
 enum Read {
   Reading,
   Ready(Arc<TaskMemory>),
@@ -182,28 +184,25 @@ enum Read {
 
 fn read(ctx: &mut Ctx, task: &TaskContext, retries: u64) -> Read {
   let feed = &task.project.feed;
-  let live = task
-    .detail
-    .run
-    .as_ref()
-    .is_some_and(|run| !run.run.status().is_terminal());
-  let again = feed.revision.get() + feed.run_changes(live) + retries;
+  let latest = task.detail.run.as_ref();
+  let live = latest.is_some_and(|run| !run.run.status().is_terminal());
+  let changes = run_changes::of_shown_run(ctx, &task.project, latest.map(|run| run.id()), live);
+  let again = feed.revision.get() + changes + retries;
   let hold = Services::of(ctx).hold;
-  let loaded = ctx
-    .future(
-      (task.project.open.repo_root.clone(), task.detail.task.id(), again),
-      move |(repo, id, _)| {
-        let hold = hold.clone();
-        async move {
-          hold.released().await;
-          background::run(move || TaskMemory::load_in(&repo, id).map(Shared::new))
-            .await?
-            .map_err(|error| messages::store_error(&error))
-        }
-      },
-    )
-    .state()
-    .get();
+  let loaded = settled_read(
+    ctx,
+    "task memory",
+    (task.project.open.repo_root.clone(), task.detail.task.id(), again),
+    move |(repo, id, _)| {
+      let hold = hold.clone();
+      async move {
+        hold.released().await;
+        background::run(move || TaskMemory::load_in(&repo, id).map(Shared::new))
+          .await?
+          .map_err(|error| messages::store_error(&error))
+      }
+    },
+  );
   if let Some(error) = loaded.error.clone().filter(|_| loaded.is_rejected()) {
     return Read::Failed(error);
   }

@@ -1,78 +1,93 @@
 //! Where the chat's git tools run, and what they must leave alone there. They run in the project's checkout, or in a
-//! run's worktree named by its id or number. A run's worktree belongs to its agents while the run has not ended (it
-//! works, waits, is paused or interrupted and may go on), so the chat only reads there then (`run_active`). A write
-//! also respects Orchester's own claims (`checkout_reserved`): it holds the project's local-integration lease while it
-//! runs when it changes the working tree or the index, as local integration and a run's merge do, and is refused while
-//! a local integration reserves the checkout or its Git process has not finished, and in a run's worktree while a
-//! resolution of the run's conflicts is recorded or the merge queue holds the run (`run_queued`).
+//! run's worktree named by its id or number, where the project's runner runs git ([`Host::Run`]). A run's worktree
+//! belongs to its agents while the run has not ended (it works, waits, is paused or interrupted and may go on), so the
+//! chat only reads there then (`run_active`), refused here and again by the runner. A write also respects Orchester's
+//! own claims (`checkout_reserved`): it holds the project's local-integration lease while it runs when it changes the
+//! working tree or the index, as local integration and a run's merge do, and is refused while a local integration
+//! reserves the checkout or its Git process has not finished, and in a run's worktree while a resolution of the run's
+//! conflicts is recorded or the merge queue holds the run (`run_queued`).
 
 use std::path::{Path, PathBuf};
 
 use orchester_core::{
   integration::local::{LocalIntegrationStore, LocalProcessStore},
-  orchestrator::git::GitPlace,
+  orchestrator::{git::GitPlace, run_git::GitAccess},
   store::WorktreeStore,
 };
-use orchester_exec::local_git::IntegrationLease;
+use orchester_exec::{local_git::IntegrationLease, programs::Programs};
 use orchester_store::ProjectDb;
 
-use super::command::refused;
+use super::{
+  command::refused,
+  host::{Host, RunGit},
+};
 use crate::{
   app_mcp::{ToolError, find_run},
   messages::Message,
-  tasks::changes::run_worktree,
 };
 
-/// A folder git runs in, and what it is.
+/// The project at `root`, and where in it git runs.
 #[derive(Clone, Debug)]
 pub(super) struct Place {
-  pub(super) dir: PathBuf,
+  pub(super) root: PathBuf,
   pub(super) at: GitPlace,
 }
 
-/// Whether a tool only reads where it runs, or writes there.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum Use {
-  Read,
-  Write,
+impl Place {
+  /// Where git runs for a tool that does `access` here: in the checkout with `programs`, or in the run's worktree
+  /// through `runs`.
+  pub(super) fn host<'a>(&'a self, (programs, runs): (&'a Programs, &'a dyn RunGit), access: GitAccess) -> Host<'a> {
+    match self.at {
+      GitPlace::Checkout => Host::Here {
+        programs,
+        dir: &self.root,
+      },
+      GitPlace::Run { run, number } => Host::Run {
+        runs,
+        run,
+        number,
+        access,
+      },
+    }
+  }
 }
 
 /// The place of the project at `root` a call names: its checkout, or the worktree of the run `run` names. Blocks on
 /// SQLite.
-pub(super) fn resolve(root: &Path, run: Option<&str>, using: Use) -> Result<Place, ToolError> {
+pub(super) fn resolve(root: &Path, run: Option<&str>, using: GitAccess) -> Result<Place, ToolError> {
   let Some(named) = run else {
     return Ok(Place {
-      dir: root.to_path_buf(),
+      root: root.to_path_buf(),
       at: GitPlace::Checkout,
     });
   };
   let db = ProjectDb::open(root)?;
   let run = find_run(&db, named)?;
   let number = run.number().get();
-  if using == Use::Write && !run.status().is_terminal() {
+  if using == GitAccess::Write && !run.status().is_terminal() {
     return Err(refused(
       "run_active",
       Message::new("orchestrator.git.runActive").with("run", number.to_string()),
     ));
   }
-  let dir = run_worktree(root, run.id());
-  if db.worktree_removal(run.id())?.is_some() || !dir.is_dir() {
+  // Whether the folder is still there, the runner tells: the desktop never looks into a run's worktree.
+  if db.worktree_removal(run.id())?.is_some() {
     return Err(refused(
       "not_a_repository",
       Message::new("orchestrator.git.worktreeGone").with("run", number.to_string()),
     ));
   }
   Ok(Place {
-    dir,
+    root: root.to_path_buf(),
     at: GitPlace::Run { run: run.id(), number },
   })
 }
 
-/// The folder of `at` in the project at `root`, for a proposal applied later; checked again as a write.
+/// The place `at` in the project at `root`, for a proposal applied later; checked again as a write.
 pub(super) fn again(root: &Path, at: GitPlace) -> Result<Place, ToolError> {
   match at {
-    GitPlace::Checkout => resolve(root, None, Use::Write),
-    GitPlace::Run { run, .. } => resolve(root, Some(&run.to_string()), Use::Write),
+    GitPlace::Checkout => resolve(root, None, GitAccess::Write),
+    GitPlace::Run { run, .. } => resolve(root, Some(&run.to_string()), GitAccess::Write),
   }
 }
 

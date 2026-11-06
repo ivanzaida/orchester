@@ -63,6 +63,13 @@ pub enum ToolRequest<'a> {
   McpTool {
     paths: &'a [String],
   },
+  /// A read of a design ([`crate::permission::pencil::DesignRead`]): the design `file` may lie in the roots or the main
+  /// checkout, whose design a step is meant to read; each of `exports`, which it writes, in the roots or the run's
+  /// storage. Each is absolute: the design's server reads a relative one in a folder of its own.
+  Design {
+    file: &'a str,
+    exports: &'a [String],
+  },
 }
 
 /// Why one of the roots was refused.
@@ -107,6 +114,8 @@ pub struct RunRoots {
   started_in: PathBuf,
   roots: Vec<AllowedRoot>,
   main_checkout: Option<RootPath>,
+  /// The run's own storage, `.orchester/runs/<run>/`, where a read of a design may export to.
+  run_storage: Option<RootPath>,
 }
 
 impl RunRoots {
@@ -121,6 +130,7 @@ impl RunRoots {
         path: folder(platform, worktree)?,
       }],
       main_checkout: None,
+      run_storage: None,
     })
   }
 
@@ -128,6 +138,13 @@ impl RunRoots {
   /// `.git`, is [`RootsCheck::MainCheckout`]. Without it a write of the repository's shared state cannot be told.
   pub fn with_main_checkout(mut self, folder: &Path) -> Result<Self, RunRootsError> {
     self.main_checkout = Some(self::folder(self.platform, folder)?);
+    Ok(self)
+  }
+
+  /// These roots for a run whose own storage is `folder` ([`crate::workspaces::artifacts_folder`]): a read of a design
+  /// may export into it ([`ToolRequest::Design`]); it is no root for anything else.
+  pub fn with_run_storage(mut self, folder: &Path) -> Result<Self, RunRootsError> {
+    self.run_storage = Some(self::folder(self.platform, folder)?);
     Ok(self)
   }
 
@@ -176,7 +193,29 @@ impl RunRoots {
         })
         .find(|check| *check != RootsCheck::Inside)
         .unwrap_or(RootsCheck::Inside),
+      ToolRequest::Design { file, exports } => self.design(file, exports),
     }
+  }
+
+  /// A read of the design `file` that writes `exports`: the file in the roots or the main checkout, each export in
+  /// the roots or the run's storage.
+  fn design(&self, file: &str, exports: &[String]) -> RootsCheck {
+    let Some(file) = RootPath::new(self.platform, file, None) else {
+      return RootsCheck::Unknown;
+    };
+    match self.place(&file) {
+      RootsCheck::Inside | RootsCheck::MainCheckout { .. } => {}
+      outside => return outside,
+    }
+    exports
+      .iter()
+      .map(|export| match RootPath::new(self.platform, export, None) {
+        Some(path) if self.run_storage.as_ref().is_some_and(|storage| path.is_in(storage)) => RootsCheck::Inside,
+        Some(path) => self.place(&path),
+        None => RootsCheck::Unknown,
+      })
+      .find(|check| *check != RootsCheck::Inside)
+      .unwrap_or(RootsCheck::Inside)
   }
 
   /// Where `path` lies: in a root, in the main checkout, or outside.

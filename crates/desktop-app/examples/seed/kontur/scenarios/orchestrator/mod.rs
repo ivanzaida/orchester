@@ -11,7 +11,9 @@
 //! go on behind *Show details*, [`proposals`], with an answer and a release), decided ones folded into lines, a hold
 //! of new starts, a daily report, a stopped turn and a failed one.
 //! `orchestrator-not-set-up` is the same project with nothing chosen for the Orchestrator (`02 Not set up`): its
-//! conversations stay readable. The context meter's and *Compact*'s scenarios are [`context`]'s.
+//! conversations stay readable. `orchestrator-on-codex` runs it on Codex · Default with its twelve models, and
+//! `orchestrator-codex-limit` the same with that plan at its limit (`Runs-on picker · states` `t7cdi`). The context
+//! meter's and *Compact*'s scenarios are [`context`]'s.
 
 mod accounts;
 pub mod context;
@@ -19,12 +21,8 @@ mod live;
 mod proposals;
 
 use orchester_core::{
-  connection::{
-    AgentConnection, AgentProvider, CatalogModel, CatalogSource, CheckResult, ConnectionAccount, ConnectionCheck,
-    ModelCatalog, SignIn,
-  },
   conversation::MessageBody,
-  id::{ChatId, ChatMessageId, ConnectionId, RunId},
+  id::{ChatId, ChatMessageId, RunId},
   orchestrator::{
     ActionOutcome, AgentWait, Chat, ChatAction, DailyReport, HeldWork, OrchestratorSettings, RunEnd, TurnFailure,
     TurnState, WaitKind,
@@ -32,73 +30,58 @@ use orchester_core::{
     report::{DayUsage, MergedBy, MergedTask, PersonWait, PersonWaitKind, ReportRun},
   },
   resource::ModelId,
-  store::ConnectionStore,
   time::Timestamp,
   usage::local_date,
 };
 
-use self::live::{Kept, Ran};
+use self::{
+  accounts::{CodexPlan, SignIns},
+  live::{Kept, Ran},
+};
 use super::api_providers;
-use crate::kontur::{Kontur, SeedError, catalogue::Catalogue, name, shapes::Shape};
+use crate::kontur::{Kontur, SeedError, catalogue::Catalogue, shapes::Shape};
 
 /// The model the Orchestrator runs with, as Claude · Work's catalog lists it.
 const MODEL: &str = "claude-opus-5-5";
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
-  let work = project(kontur)?;
-  let settings = OrchestratorSettings::new(work, model(MODEL)?, Some("high".to_owned()));
+  let sign_ins = project(kontur, CodexPlan::Used)?;
+  let settings = OrchestratorSettings::new(sign_ins.work, model(MODEL)?, Some("high".to_owned()));
   kontur.db.publish_orchestrator(&settings, kontur.ago(3 * 24 * 60))?;
   Ok(())
 }
 
 /// The project, its connections and conversations, with nothing chosen for the Orchestrator.
 pub fn not_set_up(kontur: &mut Kontur) -> Result<(), SeedError> {
-  project(kontur).map(drop)
+  project(kontur, CodexPlan::Used).map(drop)
 }
 
-/// The project, its connections, sign-ins and conversations; Claude · Work's id.
-fn project(kontur: &mut Kontur) -> Result<ConnectionId, SeedError> {
+/// `orchestrator` on Codex · Default and its first model, with the CLI's own effort (`Searching`, `Many models` in
+/// `Runs-on picker · states` `t7cdi`); `codex_limit` with Codex's *Default* plan at its limit and the high effort
+/// (`Codex at its limit`).
+pub fn on_codex(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let sign_ins = project(kontur, CodexPlan::Used)?;
+  let settings = OrchestratorSettings::new(sign_ins.codex, model(accounts::CODEX_MODELS[0])?, None);
+  kontur.db.publish_orchestrator(&settings, kontur.ago(3 * 24 * 60))?;
+  Ok(())
+}
+
+pub fn codex_limit(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let sign_ins = project(kontur, CodexPlan::AtLimit)?;
+  let first = model(accounts::CODEX_MODELS[0])?;
+  let settings = OrchestratorSettings::new(sign_ins.codex, first, Some("high".to_owned()));
+  kontur.db.publish_orchestrator(&settings, kontur.ago(3 * 24 * 60))?;
+  Ok(())
+}
+
+/// The project, its connections, sign-ins (Codex's *Default* plan as `codex` says) and conversations.
+fn project(kontur: &mut Kontur, codex: CodexPlan) -> Result<SignIns, SeedError> {
   let catalogue = api_providers::seed_catalogue(kontur)?;
   let bin = kontur.repo.join(".orchester").join("qa-bin");
-  let sign_ins = accounts::add(kontur, (&bin.join("claude"), &bin.join("codex")))?;
-  let work = work(kontur, bin.join("claude"), sign_ins.work)?;
+  let sign_ins = accounts::add(kontur, (&bin.join("claude"), &bin.join("codex")), codex)?;
   every_card(kontur, &catalogue)?;
   away(kontur, &catalogue)?;
-  Ok(work)
-}
-
-/// Claude · Work: Claude Code on the *Work* account (`account`), checked and signed in, its models with the efforts it
-/// reports.
-fn work(
-  kontur: &mut Kontur,
-  program: std::path::PathBuf,
-  account: ConnectionAccount,
-) -> Result<ConnectionId, SeedError> {
-  let at = kontur.ago(2);
-  let mut connection = AgentConnection::new(
-    ConnectionId::generate(),
-    name("Claude · Work"),
-    AgentProvider::ClaudeCodeCli,
-    program,
-    at,
-  )?;
-  connection.set_account(account)?;
-  let efforts = || ["low", "medium", "high"].map(str::to_owned).to_vec();
-  let models = [MODEL, "claude-sonnet-5-5", "claude-haiku-4-5"]
-    .into_iter()
-    .map(|id| model(id).map(|id| CatalogModel::new(id, efforts())))
-    .collect::<Result<Vec<_>, _>>()?;
-  connection.record_check(ConnectionCheck {
-    at,
-    result: CheckResult::Available {
-      version: "2.1.89".to_owned(),
-      sign_in: SignIn::SignedIn,
-      catalog: ModelCatalog::new(CatalogSource::Provider, models),
-    },
-  })?;
-  let connection = connection.into_connection();
-  kontur.db.create_connection(&connection)?;
-  Ok(connection.id())
+  Ok(sign_ins)
 }
 
 fn model(id: &str) -> Result<ModelId, SeedError> {

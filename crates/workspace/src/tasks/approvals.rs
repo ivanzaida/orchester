@@ -204,6 +204,7 @@ fn shown(db: &ProjectDb, repo_root: &Path, (approval, reviewing): (PendingToolAp
     ),
     (
       &agent_worktree(repo_root, run.as_ref(), &approval),
+      repo_root,
       &writable,
       provider == Some(AgentProvider::CodexCli),
     ),

@@ -11,6 +11,7 @@
 
 use std::collections::HashSet;
 
+use orchester_api::v2::TaskBoardCounts;
 use orchester_core::{id::TaskId, run::TaskPhase, task::organization::WorkflowStatus};
 
 use super::{browse::TaskSort, data::ProjectTasks, list::TaskRow};
@@ -32,7 +33,11 @@ impl ListView {
   /// Done only, even while `waiting` names it.
   pub fn keeps(self, row: &TaskRow, waiting: &HashSet<TaskId>) -> bool {
     let status = row.organization.status();
-    let waits = !status.is_closed() && waiting.contains(&row.id);
+    self.holds(status, !status.is_closed() && waiting.contains(&row.id))
+  }
+
+  /// Whether the view holds a task in `status`, which `waits` for the person or not; a closed task never waits.
+  fn holds(self, status: WorkflowStatus, waits: bool) -> bool {
     match self {
       Self::NeedsYou => waits,
       Self::Active => {
@@ -52,6 +57,75 @@ impl ListView {
   pub fn count(self, rows: &[TaskRow], waiting: &HashSet<TaskId>) -> usize {
     rows.iter().filter(|row| self.keeps(row, waiting)).count()
   }
+
+  /// The workflow statuses of the tasks the view may hold, as [`ListView::keeps`] keeps them: what a team server is
+  /// asked for. Needs you and Active take every open status, as a Backlog task that waits is in both.
+  pub fn statuses(self) -> Vec<WorkflowStatus> {
+    WorkflowStatus::ALL
+      .into_iter()
+      .filter(|&status| self.holds(status, false) || (!status.is_closed() && self.holds(status, true)))
+      .collect()
+  }
+
+  /// How many tasks the view holds of those `counted` by workflow status, `waiting` counting the open ones among them
+  /// that something waits for, as [`ListView::keeps`] places them.
+  pub fn count_by_status(self, counted: &StatusCounts, waiting: &StatusCounts) -> usize {
+    WorkflowStatus::ALL
+      .into_iter()
+      .map(|status| {
+        let all = counted.get(status);
+        let waits = if status.is_closed() {
+          0
+        } else {
+          waiting.get(status).min(all)
+        };
+        usize::from(self.holds(status, false)) * (all - waits) + usize::from(self.holds(status, true)) * waits
+      })
+      .sum()
+  }
+}
+
+/// How many tasks are in each workflow status.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct StatusCounts([usize; WorkflowStatus::ALL.len()]);
+
+impl StatusCounts {
+  /// The statuses of `statuses`, one task each.
+  pub fn of(statuses: impl IntoIterator<Item = WorkflowStatus>) -> Self {
+    let mut counts = Self::default();
+    for status in statuses {
+      counts.0[index(status)] += 1;
+    }
+    counts
+  }
+
+  /// A team server's counts.
+  pub fn of_board(board: &TaskBoardCounts) -> Self {
+    let count = |count: u32| usize::try_from(count).unwrap_or(usize::MAX);
+    let mut counts = Self::default();
+    for (status, count) in [
+      (WorkflowStatus::Backlog, count(board.backlog)),
+      (WorkflowStatus::Todo, count(board.todo)),
+      (WorkflowStatus::InProgress, count(board.in_progress)),
+      (WorkflowStatus::InReview, count(board.in_review)),
+      (WorkflowStatus::Done, count(board.done)),
+      (WorkflowStatus::Canceled, count(board.canceled)),
+    ] {
+      counts.0[index(status)] = count;
+    }
+    counts
+  }
+
+  pub fn get(&self, status: WorkflowStatus) -> usize {
+    self.0[index(status)]
+  }
+}
+
+fn index(status: WorkflowStatus) -> usize {
+  WorkflowStatus::ALL
+    .iter()
+    .position(|listed| *listed == status)
+    .expect("every status is listed")
 }
 
 /// A group of a view's rows.

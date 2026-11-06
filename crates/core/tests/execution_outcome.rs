@@ -1,10 +1,11 @@
 //! What a run reports about authorized work (S9): the execution outcome's exact wire shapes, its closed failure
-//! reasons, and the per-run sequence rule that orders reports.
+//! reasons, the outcome of each run status, and the per-run sequence rule that orders reports.
 
 use orchester_core::{
   resource::StepKey,
   run::{
-    ExecutionFailure, ExecutionOutcome, ReportOrder, RunFailure, SequenceRegressed, WorktreeFailure, order_report,
+    ExecutionFailure, ExecutionOutcome, InterruptCause, PauseReason, ReportOrder, RunFailure, RunLimit, RunStatus,
+    SequenceRegressed, Stuck, WorktreeFailure, order_report,
   },
 };
 use serde_json::json;
@@ -108,5 +109,35 @@ fn execution_outcome_sequence_lower_is_refused() {
       order_report(Some((5, &succeeded)), sequence, &succeeded),
       Err(SequenceRegressed { last: 5, sequence })
     );
+  }
+}
+
+#[test]
+fn execution_outcome_of_a_run_status_is_as_decided() {
+  let step = StepKey::new("implement").expect("key");
+  let failed = |reason| Some(ExecutionOutcome::Failed { reason });
+  for (status, outcome) in [
+    (RunStatus::Running, Some(ExecutionOutcome::Progress {})),
+    (RunStatus::Succeeded, Some(ExecutionOutcome::Succeeded {})),
+    (RunStatus::Cancelled, Some(ExecutionOutcome::Cancelled {})),
+    (
+      RunStatus::Failed(RunFailure::StepFailed(step.clone())),
+      failed(ExecutionFailure::StepFailed),
+    ),
+    (
+      RunStatus::Paused(PauseReason::LimitReached(RunLimit::Tokens)),
+      failed(ExecutionFailure::LimitReached),
+    ),
+    (
+      RunStatus::Interrupted(InterruptCause::RunnerFailed),
+      failed(ExecutionFailure::RunnerFailed),
+    ),
+    (RunStatus::Pending, None),
+    (RunStatus::Paused(PauseReason::Requested), None),
+    (RunStatus::Paused(PauseReason::LowDisk), None),
+    (RunStatus::WaitingForPerson(Stuck::Unverified(step)), None),
+    (RunStatus::Interrupted(InterruptCause::RunnerLost), None),
+  ] {
+    assert_eq!(ExecutionOutcome::of_status(&status), outcome, "{status:?}");
   }
 }

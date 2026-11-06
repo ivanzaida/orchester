@@ -1013,6 +1013,106 @@ versioned routes and dependency pins remain OP-144 in `ivanzaida/orchester-platf
 core/API/store tests and `tools/check.ps1` passed. Contract:
 `docs/architecture/workspace-roles.md`.
 
+ORC-568 · Quiet decision-model approval and details (implemented 2026-11-03; Review and Verify follow).
+06 `xJ4Rf` a–b: the answered line names the recorded model, command, probability and time; opens Model,
+Verdict and five proportional risk bars. HTTP reviews retain optional elapsed milliseconds; old records show
+unavailable metadata. More run details counts these with language-reviewer approvals. QA: `cards-auto-mode`,
+*Check the app with jev* and *Review an approved tool request*. Verify `O1XJ6` / `sOxzW` and
+`lpfYV` / `On9Jp`, with `DtXld` for the quiet-line context. The run-count row has no dedicated design frame.
+
+ORC-565 · Connection page Test section (implemented 2026-11-02).
+Frame 02 GM4yE: explicit Test/Test again, durable progress and Stop, threshold results with the reviewer's row
+marked, recorded timing/input tokens and destination note. Cost and earlier-ask totals are absent in ORC-561's
+report and are not invented. Covers empty, completed and stopped results; independent design verification follows.
+
+ORC-567 · Decision reviewer approval line (implemented 2026-11-02; Review and Verify follow).
+Command and tool approval cards show the recorded model, approval probability and threshold, core's named risk
+with its probability, the no-risk variant, or a typed failure reason. Decision-review cards use the panel surface
+so the raised probability chip stays distinct; the existing layout and answers are unchanged.
+QA: `cards-auto-mode` includes Restore the reviewed files (05a), Merge the base branch (05b), Check the translations
+(05c), and Review the tool request. Tests: `orchester-app --test decision_cards card_decision_review`.
+Verify compares `JFEPS` (`zrv45`, `STLJH`, `qfaGG`) and checks the surrounding card against `iw7me`.
+The existing card still uses the older layout; `docs/design/decision-reviewer.md` is absent. Failure records do not
+carry a duration or reviewer kind, so timeout copy says "in time" without claiming a two-second limit.
+
+ORC-563 · Connections › Add decision model (implemented 2026-11-02; pipeline Review and Verify follow).
+Frames 01 `XMNUP` and 01b `z3G09h`: four server presets, project-secret picker and masked New secret,
+unsaved catalog checks, destination disclosure, and person-only hosted saves through ORC-559. Add and Edit share
+one form and authority checks. Tests: `orchester-app --test connections connections_decision` and i18n filters.
+No platform-specific code. Design verification remains the separate Verify step.
+
+ORC-569 · Story-point estimates with a decision reviewer · branch `orchester/orc-569-run-2` (implemented 2026-11-02).
+Estimates resolve the project's default language reviewer when a decision model is selected, keeping the language
+model's reason and token accounting. The Estimates row names that connection, or explains that estimates are
+unavailable without one. Explicit language reviewer choices keep their model and effort.
+
+ORC-561 · Test a decision model on recorded project requests (implemented 2026-11-01).
+Workspace exposes an explicit test action, stored progress/results and Stop; the runner reconstructs historical
+review context, omits unavailable facts explicitly, runs eight requests at once and refuses hosted automation.
+Results retain counts at 0.50 / 0.80 / 0.90 / 0.95, tested requests, median milliseconds and input tokens, including
+unknown usage after interruption. IPC protocol 41 binds Test to the selected URL/key reference; stale requests
+are refused. No automatic test or resume and no visual changes.
+Tests: `orchester-runner --test decision_test decision_test` (8 passed), existing `--features test-agent --test
+decision_review decision_review` (9 passed, live test ignored). Quality gate: `check: OK`.
+API and limitations: `docs/evidence/orc-561-decision-test.md`.
+
+ORC-562 · Decision reviewer MCP connections and threshold (implemented 2026-11-01).
+Decision connections participate in list_models by id or name, with no reasoning efforts. Existing save, check,
+remove and reviewer tools are covered by the mcp_decision_reviewer filter, including local/hosted authority,
+threshold validation and secret-reference-only schemas. Hosted reviewer choices use the app's refusal reason.
+No decision test-start tool is exposed. No visual or platform-specific changes.
+
+ORC-558 · Decision reviewer HTTP execution · branch `orchester/orc-558-run-1` (implemented 2026-11-01).
+The runner reviews requests on the explicitly chosen decision server, reading its project secret, checking the current
+model list and posting System One questions within a combined two-second deadline. Failures reach the person with
+typed reasons and never select a language fallback. Decision choices persist their threshold; reviewer_usage records
+the decision provider, resolved model/version and input-only tokens, including unknown usage on failures.
+Tests: `orchester-runner --features test-agent --test decision_review decision_review` (9 passed, live test ignored),
+`orchester-store --test auto_mode decision_review`, `--test auto_mode auto_mode`,
+`orchester-core --test decision_verdict decision`. Quality gate: `check: OK`. No visual or platform-specific changes.
+
+ORC-571 · Team reviewer API contract (implemented 2026-11-01). Existing `team_reviewer` resources use the shared
+create, publish, read and delta shapes; published versions carry the server-owned `widens` flag from ORC-570.
+Contract and access rules: `docs/cloud-api.md`. Tests: `orchester-api --test resources reviewer_resource`.
+
+ORC-555 · Decision reviewer request and answer · branch `orchester/orc-555-run-1` (implemented 2026-11-01).
+Runner pure functions build the six System One questions from core's shared, bounded and redacted review state,
+keep agent data apart as untrusted, substitute Autopilot's roots policy, and strictly parse choice/noul probabilities
+into a decision verdict. Documentation-derived fixtures cover Jev and Laya shapes; no live calls were made.
+HTTP execution remains ORC-558. Tests: `orchester-runner --test system_one_request system_one_request`.
+
+ORC-559 · Decision model connections in the workspace · branch `orchester/orc-559-run-1` (implemented 2026-11-01).
+Workspace and MCP list, add/edit, delete and check decision servers; hosted saves are person-only for automation.
+Check sends only a bodyless GET of the model catalog, with bounded transport and secret-safe results. TypeSafe and
+Laya formats come from their primary references; all five check states and answer timestamps are stored.
+Tests: `orchester-workspace --test decision_connections decision_connections`.
+Contract and limitations: `docs/evidence/orc-559-decision-connections.md`. No visual changes.
+
+ORC-570 · Team reviewer as a shared resource · branch `orchester/orc-570-run-1` (implemented 2026-11-01).
+Core adds immutable reviewer versions with named connection references, exact allowed hosts, widening rules and a
+member threshold that cannot undercut the team's. Tests: `orchester-core --test team_reviewer team_reviewer`.
+ORC-557 · Decision reviewer choice · branch `orchester/orc-557-run-1` (implemented 2026-11-01). Core resolves an
+explicitly chosen decision connection and model with a validated threshold (0.80 by default), distinguishes gone,
+disconnected and no-longer-listed choices without fallback, and exposes the person-only rule for hosted servers.
+Language defaults and effort remain unchanged. Storage and execution of decision reviewers belong to later tasks.
+Tests: `orchester-core --test decision_reviewer_choice decision_reviewer_choice`, `--test auto_mode_reviewers auto_mode`.
+OP-144 / S1 public prerequisite · Workspace `Admin` / `Member` contract, inherited server-admin capabilities and a
+last-workspace-admin invariant guard in core; API 4 role, admin-contact and error shapes. Existing local SQLite
+role encodings are preserved by the store adapter. Twenty focused core/API/store tests and `tools/check.ps1` passed.
+Server migrations,
+endpoint enforcement and platform dependency pins remain OP-144 in `ivanzaida/orchester-platform`. Contract:
+ORC-625 · Team authority S2 public contract · branch `orchester/orc-625-run-1`: validated server claim threshold
+in seconds, explicit heartbeat-edge staleness/takeover, server-admin settings, and separate v2 workspace policy,
+capabilities and optimistic revision conflict. Platform routes and persistence remain OP-145; open policy items
+remain excluded. See `docs/cloud-api.md`, “Team authority S2 shared contracts”.
+
+OP-144 / S1 public prerequisite · Additive `WorkspaceRole::Admin` / `Member`, inherited server-admin capabilities
+and a last-workspace-admin invariant guard in core; separate role-bearing DTOs in `orchester_api::v2`. Existing
+Owner/Member contracts, API clients, events, SQLite and desktop presentation remain unchanged. Server enforcement,
+versioned routes and dependency pins remain OP-144 in `ivanzaida/orchester-platform`. Twenty-three focused
+core/API/store tests and `tools/check.ps1` passed. Contract:
+`docs/architecture/workspace-roles.md`.
+
 ORC-403 · A ready step that waits for an agent slot says so · branch `orchester/orc-403-run-1` (implemented 2026-10-30;
 pipeline QA scenarios, Review and Verify follow). The runner reports ready agent steps held back only by the slots in
 `WorkSummary.slot_waits` (protocol 33); nothing is stored. `get_run` gives `status: { state: "pending", waits_for:
@@ -2896,5 +2996,7 @@ project or server added with nobody signed in is this computer's (`owner` NULL, 
 projects; sharing, joining, invites and team servers offer the sign-in in place; MCP answers `sign_in_required` only for
 a named project an account holds while nobody is signed in. Open: the *Verify* step's design verification, macOS
 unchecked. The three-way start page stays ORC-293.
+ORC-556 · Decision model connections in the project database · branch `orchester/orc-556-run-1`: versioned settings keep the secret reference, listed models, last check and per-threshold test figures; transactional reviewer selection prevents deleting a connection in use.
 ORC-613 · Wait for required Codex MCP servers · branch `orchester/orc-613-run-1`: bounded cancellable thread-scoped readiness on fresh start, quota resume and retry; missing/terminal/timeout errors retain redaction and server names. Evidence: `docs/evidence/orc-613-codex-mcp-readiness.md`.
 ORC-664 · Project settings › Runs › Storage and pinned low-disk status · branch `orchester/orc-664-run-1`: shared disk/inventory reads and Keep free validation, progressive sizing, confirmed cleanup of ended runs' worktrees with branches preserved, retry rows, and QA seeds `storage-low-disk` / `storage-empty`. Unsupported build-output clearing/sizing, clearing interval, warm-workspace removal and process identification are visibly unavailable. Filtered core/workspace/app tests and `tools/check.ps1` passed; the workspace `projects.txt` locale scan and app duplicate `project_settings.memory` locale key fail identically on base `2ec8d288`. Independent design verification and macOS remain for their respective later checks.
+ORC-560 · Workspace decision reviewer setting · branch `orchester/orc-560-run-1` (module/decision-models): model and two-decimal threshold selection, hosted-choice confirmation data, automation person_only and narrowing edits, persistent selection and reviewer row with destination, threshold-specific test figures and availability.

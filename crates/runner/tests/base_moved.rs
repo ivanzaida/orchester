@@ -7,9 +7,14 @@
 //! unless the steps choose otherwise. Only a notice that overlaps the run's changes interrupts a writing step
 //! (ORC-151): one that does not lets its step pass and the runner merges it itself before Check; a merge of the
 //! runner's that conflicts is undone and the notice goes to the next writing step; pending moves combine, and the
-//! combined one is delivered once any of its files overlap. Every writing agent is told how to merge the base safely.
+//! combined one is delivered once any of its files overlap. One that overlaps the runner merges into the agent's
+//! worktree before the agent reads it, as a sandboxed agent cannot write the repository's git data: the agent only
+//! edits away the conflicts, and a step that ends with conflict markers left fails without committing them. Every
+//! writing agent is told that Orchester merges the base and it only resolves the conflicts.
 //! Needs `git`. Run with `cargo test -p orchester-runner --features test-agent --test base_moved base_moved`.
 
+#[path = "base_moved/conflicts.rs"]
+mod conflicts;
 #[path = "base_moved/overlap.rs"]
 mod overlap;
 mod support;
@@ -35,7 +40,7 @@ use self::support::{
 /// The lead of the notice's text, as the agent reads it.
 const NOTICE: &str = "Orchester: the base branch `main` moved to ";
 /// The start of what every writing agent is told about merging its base.
-const MERGE_SAFELY: &str = "When Orchester tells you that the base branch moved, merge it into this worktree";
+const MERGE_SAFELY: &str = "When Orchester tells you that the base branch moved, it has already merged the base";
 
 fn release(root: &Path) {
   std::fs::write(root.join(".orchester").join("fake-release"), "go").expect("release");
@@ -127,7 +132,7 @@ async fn base_moved_a_writing_agent_reads_the_newest_notice_after_its_turn() {
   assert!(
     prompt
       .iter()
-      .any(|line| line == &format!("{NOTICE}{newer} while you worked, and this worktree does not have it yet.")),
+      .any(|line| line == &format!("{NOTICE}{newer} while you worked, and Orchester merged it into this worktree.")),
     "{prompt:?}"
   );
   assert!(
@@ -149,6 +154,16 @@ async fn base_moved_a_writing_agent_reads_the_newest_notice_after_its_turn() {
   );
   let log = git(root, &["log", "--format=%s", run.branch().as_str()]);
   assert!(log.contains("saved to merge the moved base"), "{log}");
+  assert!(
+    log.contains("merge the moved base main"),
+    "the runner merged it before the agent read it: {log}"
+  );
+  assert!(
+    prompt
+      .iter()
+      .any(|line| line.starts_with("Git merged `main` without conflicts")),
+    "{prompt:?}"
+  );
 }
 
 #[tokio::test(flavor = "multi_thread")]

@@ -5,7 +5,7 @@
 //! Permissions belong to an agent profile version; a pipeline step can only narrow them
 //! ([`StepPermissions`]). Which options a connection's CLI can enforce is decided by
 //! [`capability`]; an option it cannot enforce is never offered, and Orchester never starts an agent
-//! in a bypass mode.
+//! in a bypass mode but for one a person chose: a Codex profile with its sandbox off ([`CodexSandbox`]).
 
 mod approval_enforcement;
 mod approval_mode;
@@ -14,6 +14,7 @@ pub(crate) mod canonical;
 pub mod capability;
 pub mod category;
 pub mod claude;
+mod codex_sandbox;
 pub mod known_safe;
 mod launch;
 pub(crate) mod link_targets;
@@ -21,6 +22,7 @@ mod local_file;
 pub mod mcp;
 mod narrow;
 mod network;
+pub mod pencil;
 #[cfg(windows)]
 pub(crate) mod remote_drive;
 pub mod roots;
@@ -40,6 +42,7 @@ pub use self::{
   },
   approval_mode::ApprovalMode,
   browser::BrowserPermission,
+  codex_sandbox::CodexSandbox,
   launch::{LaunchPermissions, OutsideCommands},
   local_file::{ProgramPlace, program_place, resolve_local, stays_local},
   narrow::{StepCommands, StepNetwork, StepPermissions},
@@ -249,10 +252,13 @@ pub struct AgentPermissions {
   /// approved automatically: that reads as Autopilot.
   #[serde(skip_serializing_if = "ApprovalMode::is_manual")]
   approval_mode: ApprovalMode,
+  /// Left out of the stored form while on, as before it existed.
+  #[serde(skip_serializing_if = "CodexSandbox::is_on")]
+  codex_sandbox: CodexSandbox,
 }
 
 impl AgentPermissions {
-  /// Manual, the stricter approval mode; see [`Self::set_approval_mode`].
+  /// Manual, the stricter approval mode; see [`Self::set_approval_mode`]. The Codex sandbox is on.
   pub const fn new(repository: RepositoryAccess, commands: CommandPermission, network: NetworkAccess) -> Self {
     Self {
       repository,
@@ -262,6 +268,7 @@ impl AgentPermissions {
       interactive_tool_approvals: false,
       browser: BrowserPermission::off(),
       approval_mode: ApprovalMode::Manual,
+      codex_sandbox: CodexSandbox::On,
     }
   }
 
@@ -350,5 +357,15 @@ impl AgentPermissions {
 
   pub fn set_browser(&mut self, browser: BrowserPermission) {
     self.browser = browser;
+  }
+
+  /// *Codex sandbox* as chosen, whatever the connection: only Codex runs it ([`CodexSandbox`]).
+  pub const fn codex_sandbox(&self) -> CodexSandbox {
+    self.codex_sandbox
+  }
+
+  /// Turning it off widens ([`widening::Widening::CodexSandboxOff`]).
+  pub const fn set_codex_sandbox(&mut self, sandbox: CodexSandbox) {
+    self.codex_sandbox = sandbox;
   }
 }

@@ -79,12 +79,18 @@ pub(super) fn line(
 }
 
 /// How the review failed in plain words, where that alone says it: *The reviewer didn't answer in time.*, *The
-/// reviewer's answer couldn't be read.*; `None` for a reviewer that could not run, whose words need its account.
+/// reviewer's answer couldn't be read.*; `None` for a reviewer that could not run, whose words need its account, and
+/// for a decision model's own failures, which the card's review line says when the review was recorded.
 pub(super) fn failed_words(ctx: &Ctx, failure: Option<ReviewFailure>) -> Option<Arc<str>> {
   match failure? {
     ReviewFailure::TimedOut => Some(ctx.t("cards.approval.cameToYou.reviewerTimedOut")),
     ReviewFailure::Unreadable => Some(ctx.t("cards.approval.cameToYou.reviewerUnreadable")),
-    ReviewFailure::CouldNotRun | ReviewFailure::NoReviewer => None,
+    ReviewFailure::CouldNotRun
+    | ReviewFailure::NoReviewer
+    | ReviewFailure::KeyRefused
+    | ReviewFailure::NothingAnswers
+    | ReviewFailure::NotSystemOneApi
+    | ReviewFailure::ModelGone => None,
   }
 }
 

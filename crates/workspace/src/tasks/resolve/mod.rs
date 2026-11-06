@@ -10,37 +10,36 @@
 //! merge is recorded as the run's resolution before git begins it ([`ProjectDb::begin_resolution`]), in the same
 //! transaction that checks the run ended: while it is recorded the runner neither returns nor follows the run up, and
 //! the run is not merged; *Continue* and *Abort* end it, and a recorded resolution whose merge is gone from the
-//! worktree (a person aborted it themselves) ends when the page reads the worktree again.
+//! worktree (a person aborted it themselves) ends when the page reads the worktree again. The desktop keeps those
+//! records; git in the worktree runs where the worktree is, through the project's runner ([`RunWorktrees`]).
 
 mod editor;
+mod worktrees;
 
 use std::path::Path;
 
 use orchester_core::{
-  command::CommandError,
   id::RunId,
   integration::{
-    GitError,
     local::RebaseStore,
-    resolve::{self, Resolution, ResolveError, Side, Started},
+    resolve::{
+      Resolution, Side, Started,
+      request::{FailureReason, ResolveFailure},
+    },
   },
   revision::Revision,
   run::Run,
   store::RunStore,
   time::Timestamp,
 };
-use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, ResolutionStart};
 
-pub use self::editor::{EDITOR_VARIABLE, Editor, native};
-use super::{
-  changes::run_worktree,
-  integration::{file_list, git_message},
+pub use self::{
+  editor::{EDITOR_VARIABLE, Editor, native},
+  worktrees::{RunWorktrees, Unresolved},
 };
+use super::{integration::file_list, run::control_message};
 use crate::messages::Message;
-
-/// The git program, found on the search path.
-const GIT: &str = "git";
 
 /// How conflicted files are listed in a message.
 const SEPARATOR: &str = ", ";
@@ -54,37 +53,33 @@ pub struct Worktree {
   pub merge: Option<Resolution>,
 }
 
-/// `run`'s worktree under `repo_root` as it is now. With `idle` (no resolving of the run under way) a recorded
-/// resolution whose merge is gone from the worktree ends: a person aborted or committed it themselves.
-pub fn read(programs: &Programs, repo_root: &Path, (run, idle): (RunId, bool)) -> Result<Worktree, Message> {
+/// `run`'s worktree among `worktrees`, of the project at `repo_root`, as it is now. With `idle` (no resolving of the
+/// run under way) a recorded resolution whose merge is gone from the worktree ends: a person aborted or committed it
+/// themselves.
+pub fn read(worktrees: &RunWorktrees, repo_root: &Path, (run, idle): (RunId, bool)) -> Result<Worktree, Message> {
   let read_at = Timestamp::now();
-  let worktree = run_worktree(repo_root, run);
-  if !worktree.is_dir() {
+  let (present, merge) = worktrees.read(run).map_err(|error| problem(&error))?;
+  if !present {
     // No merge waits in a worktree that is gone.
     open(repo_root)?.end_resolution(run).map_err(storage)?;
-    return Ok(Worktree {
-      present: false,
-      merge: None,
-    });
+    return Ok(Worktree { present, merge: None });
   }
-  let merge = resolve::resolution(&programs.runner(), Path::new(GIT), &worktree).map_err(|error| problem(&error))?;
   if idle && merge.is_none() {
     // Only a resolution older than this read: one *Resolve in editor* begins meanwhile has not merged yet.
     open(repo_root)?.end_resolution_before(run, read_at).map_err(storage)?;
   }
-  Ok(Worktree { present: true, merge })
+  Ok(Worktree { present, merge })
 }
 
 /// Merges `run`'s base branch into its branch in its worktree: the files that conflict, or none when git merged
 /// and committed it at once.
-pub fn start(programs: &Programs, repo_root: &Path, run: RunId) -> Result<Started, Message> {
+pub fn start(worktrees: &RunWorktrees, repo_root: &Path, run: RunId) -> Result<Started, Message> {
   let mut db = open(repo_root)?;
   let stored = stored(&db, run)?;
   let base = stored
     .base_branch()
     .ok_or_else(|| Message::new("runs.merge.failure.noBaseBranch"))?;
-  let worktree = run_worktree(repo_root, run);
-  if !worktree.is_dir() {
+  if !worktrees.present(run).map_err(|error| problem(&error))? {
     return Err(Message::new("runs.control.worktreeRemoved"));
   }
   let expected = checkpoint_tip(&db, &stored)?;
@@ -93,12 +88,7 @@ pub fn start(programs: &Programs, repo_root: &Path, run: RunId) -> Result<Starte
     ResolutionStart::NotEnded => return Err(Message::new("tasks.resolve.notEnded")),
     ResolutionStart::Merged => return Err(Message::new("runs.control.merged")),
   }
-  let started = resolve::start(
-    &programs.git_work(),
-    Path::new(GIT),
-    &worktree,
-    (base, stored.branch(), &expected),
-  );
+  let started = worktrees.start(run, (base, stored.branch(), &expected));
   // Only a merge that waits for the person keeps the resolution recorded.
   if !matches!(started, Ok(Started::Conflicts(_))) {
     db.end_resolution(run).map_err(storage)?;
@@ -107,22 +97,20 @@ pub fn start(programs: &Programs, repo_root: &Path, run: RunId) -> Result<Starte
 }
 
 /// Keeps `side`'s version of `path`, a file git could not merge by content, in `run`'s worktree.
-pub fn decide(programs: &Programs, repo_root: &Path, (run, path, side): (RunId, &str, Side)) -> Result<(), Message> {
+pub fn decide(
+  worktrees: &RunWorktrees,
+  repo_root: &Path,
+  (run, path, side): (RunId, &str, Side),
+) -> Result<(), Message> {
   let db = open(repo_root)?;
   settled(&stored(&db, run)?)?;
-  resolve::decide(
-    &programs.git_work(),
-    Path::new(GIT),
-    &run_worktree(repo_root, run),
-    (path, side),
-  )
-  .map_err(|error| problem(&error))
+  worktrees.decide(run, (path, side)).map_err(|error| problem(&error))
 }
 
 /// Commits the merge in progress in `run`'s worktree once every conflicted file is resolved, and ends its resolution.
 /// The run's branch then holds the base branch; the integration reads its work from there
 /// (`local_integration::rebase`), which git proves from the merge commit.
-pub fn finish(programs: &Programs, repo_root: &Path, run: RunId) -> Result<(), Message> {
+pub fn finish(worktrees: &RunWorktrees, repo_root: &Path, run: RunId) -> Result<(), Message> {
   let mut db = open(repo_root)?;
   let stored = stored(&db, run)?;
   settled(&stored)?;
@@ -130,22 +118,17 @@ pub fn finish(programs: &Programs, repo_root: &Path, run: RunId) -> Result<(), M
     .base_branch()
     .ok_or_else(|| Message::new("runs.merge.failure.noBaseBranch"))?;
   let expected = checkpoint_tip(&db, &stored)?;
-  resolve::finish(
-    &programs.git_work(),
-    Path::new(GIT),
-    &run_worktree(repo_root, run),
-    (base, &expected),
-  )
-  .map_err(|error| problem(&error))?;
+  worktrees
+    .finish(run, (base, &expected))
+    .map_err(|error| problem(&error))?;
   db.end_resolution(run).map_err(storage)
 }
 
 /// Aborts the merge in progress in `run`'s worktree and ends its resolution.
-pub fn abort(programs: &Programs, repo_root: &Path, run: RunId) -> Result<(), Message> {
+pub fn abort(worktrees: &RunWorktrees, repo_root: &Path, run: RunId) -> Result<(), Message> {
   let mut db = open(repo_root)?;
   settled(&stored(&db, run)?)?;
-  resolve::abort(&programs.git_work(), Path::new(GIT), &run_worktree(repo_root, run))
-    .map_err(|error| problem(&error))?;
+  worktrees.abort(run).map_err(|error| problem(&error))?;
   db.end_resolution(run).map_err(storage)
 }
 
@@ -199,19 +182,24 @@ fn storage(error: impl std::fmt::Display) -> Message {
 }
 
 /// What a person reads when resolving did not go on.
-fn problem(error: &ResolveError) -> Message {
+fn problem(error: &Unresolved) -> Message {
   let files = |key, files: &[String]| Message::new(key).with("files", file_list(files, SEPARATOR));
-  match error {
-    ResolveError::Git(GitError::Run(CommandError::NotFound)) => Message::new("runs.changes.failure.gitMissing"),
-    ResolveError::Git(error) => git_message(error),
-    ResolveError::Uncommitted(changed) => files("tasks.resolve.uncommitted", changed),
-    ResolveError::NotOnBranch => Message::new("tasks.resolve.notOnBranch"),
-    ResolveError::BranchMoved => Message::new("tasks.resolve.branchMoved"),
-    ResolveError::NotTheBase => Message::new("tasks.resolve.notTheBase"),
-    ResolveError::InMerge => Message::new("tasks.resolve.inMerge"),
-    ResolveError::NotInMerge => Message::new("tasks.resolve.notInMerge"),
-    ResolveError::MarkersLeft(left) => markers_left(left),
-    ResolveError::Undecided(left) => undecided(left),
-    ResolveError::NotUnmerged(path) => Message::new("tasks.resolve.notUnmerged").with("file", path.clone()),
+  let ResolveFailure { reason, .. } = match error {
+    Unresolved::Runner(error) => return control_message(error),
+    Unresolved::Failed(failure) => failure,
+  };
+  match reason {
+    FailureReason::GitMissing => Message::new("runs.changes.failure.gitMissing"),
+    FailureReason::GitStopped => Message::new("runs.merge.failure.gitStopped"),
+    FailureReason::GitRefused(said) => Message::new("runs.merge.failure.git").with("detail", said.clone()),
+    FailureReason::Uncommitted(changed) => files("tasks.resolve.uncommitted", changed),
+    FailureReason::NotOnBranch => Message::new("tasks.resolve.notOnBranch"),
+    FailureReason::BranchMoved => Message::new("tasks.resolve.branchMoved"),
+    FailureReason::NotTheBase => Message::new("tasks.resolve.notTheBase"),
+    FailureReason::InMerge => Message::new("tasks.resolve.inMerge"),
+    FailureReason::NotInMerge => Message::new("tasks.resolve.notInMerge"),
+    FailureReason::MarkersLeft(left) => markers_left(left),
+    FailureReason::Undecided(left) => undecided(left),
+    FailureReason::NotUnmerged(path) => Message::new("tasks.resolve.notUnmerged").with("file", path.clone()),
   }
 }

@@ -1,6 +1,7 @@
 //! What a request asks to do, as the answers judge it: a command, classified, or a call of one tool of
 //! an MCP server; for a call of one of Orchester's tools that reads outside the worktree, also the folder it reads in,
-//! for `run_check`, the check it runs, and for a browser tool, the site it acts on ([`ToolReach`]).
+//! for `run_check`, the check it runs, for a browser tool, the site it acts on, and for a read of a design, its file
+//! and exports ([`ToolReach`]).
 
 use std::path::Path;
 
@@ -10,7 +11,10 @@ use crate::{
     OrchesterTool, ProjectTool, QaApproval, SERVER,
     browser::{BrowserReach, BrowserTool},
   },
-  permission::category::{ClassifiedCommand, CommandScope},
+  permission::{
+    category::{ClassifiedCommand, CommandScope},
+    pencil::DesignRead,
+  },
   resource::ApprovalMode,
   run::{CommandShell, NativeCommandAsk, PendingToolApproval},
   service::{ServiceApproval, started_by},
@@ -53,6 +57,9 @@ pub enum ToolReach {
   /// A call of `browser_eval`, which runs JavaScript in a page: a person approves every one, so no rule is made for it
   /// (`docs/design/browser.md`, decision 9).
   PageScript,
+  /// A call of the `pencil` server's `execute` that only reads a design ([`DesignRead`]), which Autopilot places by
+  /// its file and exports; Approve similar covers every call of the tool, as for [`ToolReach::Any`].
+  Design(DesignRead),
 }
 
 impl ApprovalSubject {
@@ -90,6 +97,8 @@ impl ApprovalSubject {
           services: target.as_deref().and_then(started_by).unwrap_or_default(),
         },
         (None, host) if ours => browser_reach(&approval.action, host),
+        (None, _) => DesignRead::of(&approval.server, &approval.action, approval.scope.as_deref())
+          .map_or(ToolReach::Any, ToolReach::Design),
         _ => ToolReach::Any,
       };
       Self::McpTool {

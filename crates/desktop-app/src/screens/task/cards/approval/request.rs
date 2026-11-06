@@ -29,7 +29,7 @@ use super::{
   },
   came, could_not_run,
   decided::asked,
-  words,
+  review, words,
 };
 use crate::{
   theme::{CardsText, ExtraSpacing, ExtraTypography, IconSize},
@@ -69,10 +69,13 @@ pub(super) fn came_body(
       .into()
   });
   let agent = request.agent.as_str();
-  let reason = if came.reason == PersonReason::ReviewerCouldNotRun {
-    could_not_run::line(ctx, id, (place, agent), (came, shown))
-  } else {
-    came::line(ctx, id, (place, agent), came)
+  // A decision model's verdict says why it left the request to the person; otherwise the reason it came.
+  let reason = match review::line(ctx, id, shown.and_then(|shown| shown.review.as_ref())) {
+    Some(line) => line,
+    None if came.reason == PersonReason::ReviewerCouldNotRun => {
+      could_not_run::line(ctx, id, (place, agent), (came, shown))
+    }
+    None => came::line(ctx, id, (place, agent), came),
   };
   action
     .into_iter()
@@ -148,6 +151,7 @@ pub(super) fn body(
       .map(|cause| note(&format!("{id}-hold-cause"), &message_text(ctx, &cause)).into()),
   );
   body.extend(value_box(ctx, id, request));
+  body.extend(review::line(ctx, id, shown.and_then(|shown| shown.review.as_ref())));
   body.push(facts(ctx, id, (place, request), shown));
   if !editing {
     body.push(deny_tells(ctx, id, request, shown));

@@ -38,6 +38,11 @@ pub enum ErrorCode {
   ModuleExists,
   /// Core's module rules refused a module or a task's module (`reason`: `target_before_start`, `module_not_found`).
   Module,
+  /// Another release of the project has this name, without regard to case; the error names it
+  /// ([`SharingErrorDetails::Release`]).
+  ReleaseExists,
+  /// A release or a task's release refused (`reason`, a [`crate::ReleaseRefusal`]: `released`, `release_not_found`).
+  Release,
   /// API 3: a cloud identity token that is malformed, forged, expired, used or for another server.
   InvalidIdentity,
   /// API 3: a valid identity with no account here and no open invite for it.
@@ -132,6 +137,15 @@ pub enum SharingErrorDetails {
   /// `409 module_exists`: the module that has the name.
   Module {
     module: Box<crate::SharedModule>,
+  },
+  /// A release's `409 revision_conflict`: the release as it is now. After the module's, whose fields a release does not
+  /// have.
+  ReleaseRevision {
+    current: Box<crate::SharedRelease>,
+  },
+  /// `409 release_exists`: the release that has the name.
+  Release {
+    release: Box<crate::SharedRelease>,
   },
   /// A resource's `409 slug_taken`: the resource of its kind that has the slug.
   Resource {

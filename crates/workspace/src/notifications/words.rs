@@ -57,6 +57,9 @@ fn title(event: &Event, others: usize) -> Message {
     Kind::Limit(Some(limit)) => limit_one(*limit),
     Kind::Limit(None) => "notifications.title.limit.any",
     Kind::Interrupted => "notifications.title.interrupted",
+    Kind::Archived { resource } => {
+      return Message::new("notifications.title.archived").with("resource", resource.to_string());
+    }
     Kind::RunnerOffline => "notifications.title.runnerOffline",
     Kind::RunnerNotStarted => "notifications.title.runnerNotStarted",
     Kind::MergeConflicts => "notifications.title.mergeConflicts",

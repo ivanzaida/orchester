@@ -130,7 +130,7 @@ pub async fn remove_worktree(
       number: run.number().get(),
       run: run.clone(),
       confirmed: left,
-      programs: services.programs.clone(),
+      worktrees: services.worktree_remover(&open),
       activity: services.activity.clone(),
       separator,
       changed: Arc::new(move || {

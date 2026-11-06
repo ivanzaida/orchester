@@ -244,6 +244,29 @@ async fn mcp_servers_reach_codex_as_overrides_with_secrets_in_its_environment_on
   assert_eq!(left_out(&db, &run), expected);
 }
 
+/// No secret value crosses the coordinator link (`docs/architecture/remote-runners.md`, rule 1): the executor reads
+/// the MCP servers' secrets on its own computer, and every request, answer and record it exchanges with the
+/// coordinator, as JSON, holds none of them.
+#[tokio::test(flavor = "multi_thread")]
+async fn mcp_secret_values_are_part_of_no_coordinator_link_message() {
+  let project = project(&setup(AgentProvider::CodexCli, Vec::new()));
+  let watch = orchester_runner::execution::link::sent::watch();
+  let run = run_to_the_end(&project).await;
+  assert_eq!(run.status(), &RunStatus::Succeeded);
+  let texts = watch.texts();
+  let run_id = run.id().to_string();
+  // The run's own records were sent, the CLI's environment among them as its activity shows it.
+  assert!(
+    texts.iter().any(|text| text.contains(&run_id)),
+    "no message of the run was sent"
+  );
+  assert!(
+    texts.iter().any(|text| text.contains("DOCS_TOKEN=<redacted>")),
+    "the activity naming the secret's variable was not sent"
+  );
+  assert_no_secret_in(&texts);
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn mcp_servers_reach_claude_code_in_a_private_file_removed_after_the_run() {
   let docs = server("docs", stdio(TEST_COMMAND, Some("tools")), McpEnvironment::default());

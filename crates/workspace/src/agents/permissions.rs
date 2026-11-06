@@ -71,12 +71,13 @@ pub fn runs_read_only_unlisted(provider: Option<AgentProvider>) -> bool {
   })
 }
 
-/// Whether `provider` runs agents and enforces every chosen permission here, network off included.
+/// Whether `provider` runs agents and enforces every chosen permission here, network off included: not on Codex with
+/// its sandbox off.
 pub fn fully_enforced(permissions: &AgentPermissions, provider: AgentProvider) -> bool {
   provider.runs_agents()
     && permissions
       .enforced_on(provider, Platform::current())
-      .is_ok_and(|effective| effective.network_stays_on().is_none())
+      .is_ok_and(|effective| effective.network_stays_on().is_none() && effective.enforces_every_setting())
 }
 
 /// Why a connection cannot run `problem`'s permissions, naming the setting it cannot enforce.

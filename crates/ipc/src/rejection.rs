@@ -18,6 +18,9 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "reason", rename_all = "snake_case")]
 pub enum Rejection {
   TaskNotFound,
+  /// No team inputs that the operation accepted are kept in the project database (protocol 42): a team run starts only
+  /// from inputs the team server accepted and the desktop kept first.
+  InputsNotAccepted,
   /// Only queued tasks start a run.
   TaskNotQueued,
   /// The task changed since it was checked for this run: nothing started.
@@ -122,7 +125,7 @@ pub enum Rejection {
   /// Automation gave a wider answer than approving once or denying, which only a person gives.
   AutomationWider,
   /// The question request does not wait any more: its agent can no longer take an answer, or there is no
-  /// such request.
+  /// such request. Also a person's review question that is not kept asked (protocol 40).
   QuestionNotAwaited,
   /// The question request was answered already.
   QuestionAnswered,
@@ -175,4 +178,6 @@ pub enum Rejection {
   },
   /// The project's browser has no such tab (any more).
   NoSuchTab,
+  /// The code index of the revision to rebuild is in use (protocol 40): a run's agents read it, or it is being built.
+  CodeIndexInUse,
 }

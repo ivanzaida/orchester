@@ -13,6 +13,7 @@ mod conversation;
 mod daily_report;
 mod delivery;
 mod limits;
+mod merge_attempts;
 mod merge_queue;
 mod message_waits;
 mod messages;
@@ -28,6 +29,7 @@ mod pull_requests;
 mod questions;
 mod queue_hold;
 mod return_to_draft;
+mod review;
 mod run_list;
 mod run_task;
 mod runs;
@@ -35,6 +37,7 @@ pub mod setup;
 mod task_organization;
 mod task_write;
 mod tasks;
+mod team;
 mod usage;
 mod wire;
 mod worktree;
@@ -138,13 +141,13 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "create_task",
-    description: "Saves a new draft task. Limits left out take the project's defaults, as the new task form fills them; null is no limit, and there is no maximum. Any published pipeline may be chosen, with Let automation change agent permissions on or off: every published version is one a person published, allowed, or could not object to (accepted behaviour). Moving an existing task to another pipeline is a person's decision (update_task). Its organization is checked as the task form checks it: blocked_reason marks it Blocked (informational: it keeps no run from starting, but the Orchestrator chat does not start the task) and must not be blank (invalid_organization); blocked_by lists the project's tasks that block it, by key or id, each with its gate (merge, the form's, when left out); a task it does not know is task_not_found and a link that closes a cycle invalid_organization. tags are names matched ignoring case, a new name created as a tag as the form's tag picker does. no_automatic_merge (Don't merge automatically) keeps the Orchestrator from merging the task's runs on its own; a shared project's server does not keep it, so there it is refused (shared_task). delivers says what the task's runs deliver instead of what its pipeline says: changes, report (an investigation that ends in a report), outside (work done through MCP tools outside the repository) or changes_or_report. base_branch is the branch its runs start from and deliver into: inherit (its module's, the default; for a task in no module, whatever the checkout has checked out when a run starts), checked_out (that, whatever its module says) or a branch name; a name only a remote has (release or origin/release) creates its local branch, tracking it, and a name the repository has nowhere is refused as branch_not_found before anything is saved. It is kept on this computer only: in a shared project it sets this computer's choice and is never sent to the server. The task's history records the organization as automation's. story_points (1, 2, 3, 5, 8, 13 or 21) are recorded as automation's; left out, Orchester estimates them when a person turned on Let Orchester estimate story points.",
+    description: "Saves a new draft task. Limits left out take the project's defaults, as the new task form fills them; null is no limit, and there is no maximum. Any published pipeline may be chosen, with Let automation change agent permissions on or off: every published version is one a person published, allowed, or could not object to (accepted behaviour). Moving an existing task to another pipeline is a person's decision (update_task). Its organization is checked as the task form checks it: blocked_reason marks it Blocked (informational: it keeps no run from starting, but the Orchestrator chat does not start the task) and must not be blank (invalid_organization); blocked_by lists the project's tasks that block it, by key or id, each with its gate (merge, the form's, when left out); a task it does not know is task_not_found and a link that closes a cycle invalid_organization. tags are names matched ignoring case, a new name created as a tag as the form's tag picker does. no_automatic_merge (Don't merge automatically) keeps the Orchestrator from merging the task's runs on its own; a shared project's server does not keep it, so there it is refused (shared_task). delivers says what the task's runs deliver instead of what its pipeline says: changes, report (an investigation that ends in a report), outside (work done through MCP tools outside the repository) or changes_or_report. base_branch is the branch its runs start from and deliver into: inherit (its module's, the default; for a task in no module, whatever the checkout has checked out when a run starts), checked_out (that, whatever its module says) or a branch name; a name only a remote has (release or origin/release) creates its local branch, tracking it, and a name the repository has nowhere is refused as branch_not_found before anything is saved. It is kept on this computer only: in a shared project it sets this computer's choice and is never sent to the server. The task's history records the organization as automation's. story_points (1, 2, 3, 5, 8, 13 or 21) are recorded as automation's; left out, Orchester estimates them when a person turned on Let Orchester estimate story points. In a team project the task goes to its team server: its pipeline must be one of the team's pipelines, sent by its id (a pipeline of this computer's own is refused as team_pipeline_required; the team's Admins create team pipelines), and limits are refused as decision_required.",
     schema: schema_for_type::<task_write::CreateTask>,
     read_only: false,
   },
   Spec {
     name: "update_task",
-    description: "Changes a task's details or organization; fields left out stay as they are, and a null limit is no limit. Changing a task's pipeline to another pipeline is a person's decision: refused as person_only unless a person turned on Let automation change agent permissions (a task without a pipeline may get any published one). workflow_status done or canceled closes the task, as the task page's and the Tasks list's Mark as done and Cancel task do, whatever its latest run did (failed or canceled runs included); either is refused as stop_run_first while a run of the task has not ended (cancel_run stops it first), and a closed task leaves In progress, Needs you and the queue (its group does not start it). workflow_status backlog or todo reopens it. workflow_status todo on a task whose latest run ended is the Tasks board's Move to Todo: only the status changes, no run starts and nothing is queued (run_task runs it again). Deleting a task is a person's alone, in the app: no tool deletes one. blocked_reason sets the manual Blocked with its reason (not blank: invalid_organization) and null clears it; it is informational, but the Orchestrator chat does not start a task marked Blocked. blocked_by is the whole list of the project's blocking tasks, by key or id, each with its gate (merge, the form's, when left out), and [] clears it; a task it does not know is task_not_found and a link that closes a cycle invalid_organization. tags is the whole list of tag names, matched ignoring case, a new name created as a tag as the form's tag picker does, and [] clears them. no_automatic_merge (Don't merge automatically) true keeps the Orchestrator from merging the task's runs on its own, false lets it again; a shared project's server does not keep it, so changing it there is refused (shared_task) before anything is saved. delivers (changes, report, outside or changes_or_report) says what the task's runs deliver instead of what its pipeline says, and null follows its pipeline again. base_branch sets the branch the task's next runs start from and deliver into: inherit (its module's), checked_out or a branch name; a name only a remote has creates its local branch, tracking it, and one the repository has nowhere is refused as branch_not_found before anything is saved. Runs that started keep the base they recorded. It is kept on this computer only: in a shared project it sets this computer's choice and is never sent to the server. The task's history records the organization changes as automation's. story_points (1, 2, 3, 5, 8, 13 or 21) are recorded as automation's and refused as persons_points when a person set the task's points; after a change of the brief or criteria without them, Orchester estimates them again when a person turned on Let Orchester estimate story points.",
+    description: "Changes a task's details or organization; fields left out stay as they are, and a null limit is no limit. Changing a task's pipeline to another pipeline is a person's decision: refused as person_only unless a person turned on Let automation change agent permissions (a task without a pipeline may get any published one). workflow_status done or canceled closes the task, as the task page's and the Tasks list's Mark as done and Cancel task do, whatever its latest run did (failed or canceled runs included); either is refused as stop_run_first while a run of the task has not ended (cancel_run stops it first), and a closed task leaves In progress, Needs you and the queue (its group does not start it). workflow_status backlog or todo reopens it. workflow_status todo on a task whose latest run ended is the Tasks board's Move to Todo: only the status changes, no run starts and nothing is queued (run_task runs it again). Deleting a task is a person's alone, in the app: no tool deletes one. blocked_reason sets the manual Blocked with its reason (not blank: invalid_organization) and null clears it; it is informational, but the Orchestrator chat does not start a task marked Blocked. blocked_by is the whole list of the project's blocking tasks, by key or id, each with its gate (merge, the form's, when left out), and [] clears it; a task it does not know is task_not_found and a link that closes a cycle invalid_organization. tags is the whole list of tag names, matched ignoring case, a new name created as a tag as the form's tag picker does, and [] clears them. no_automatic_merge (Don't merge automatically) true keeps the Orchestrator from merging the task's runs on its own, false lets it again; a shared project's server does not keep it, so changing it there is refused (shared_task) before anything is saved. delivers (changes, report, outside or changes_or_report) says what the task's runs deliver instead of what its pipeline says, and null follows its pipeline again. base_branch sets the branch the task's next runs start from and deliver into: inherit (its module's), checked_out or a branch name; a name only a remote has creates its local branch, tracking it, and one the repository has nowhere is refused as branch_not_found before anything is saved. Runs that started keep the base they recorded. It is kept on this computer only: in a shared project it sets this computer's choice and is never sent to the server. The task's history records the organization changes as automation's. story_points (1, 2, 3, 5, 8, 13 or 21) are recorded as automation's and refused as persons_points when a person set the task's points; after a change of the brief or criteria without them, Orchester estimates them again when a person turned on Let Orchester estimate story points. In a team project the change goes to its team server: a pipeline must be one of the team's pipelines, sent by its id (team_pipeline_required otherwise), and limits are refused as decision_required.",
     schema: schema_for_type::<task_write::UpdateTask>,
     read_only: false,
   },
@@ -156,7 +159,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "run_task",
-    description: "Runs a task as the app allows: queues and starts a draft, starts a queued task, or runs a task again after its latest run ended. Refusals name why.",
+    description: "Runs a task as the app allows: queues and starts a draft, starts a queued task, or runs a task again after its latest run ended. Refusals name why. A team project's task starts through its team server instead: it is claimed for this computer (claim.acquire) and its work started (work.start) in its module, from the module's branch here; each agent profile of its pipeline runs on the local connection bindings names for it, else on the only local agent connection of its CLI (bindings_required names the profiles that need a choice). A start the server or the runner can't take now waits and goes on by itself (team_start_waiting). A team task runs only with the team pipeline it names; one that is not a team pipeline on this computer is refused as team_pipeline_missing before anything is claimed.",
     schema: schema_for_type::<run_task::RunTask>,
     read_only: false,
   },
@@ -201,11 +204,19 @@ const SPECS: &[Spec] = &[
                   conflicts with files, check_failed, base_keeps_moving with heads, stopped, later_run), merged \
                   (revision, kind merge_commit or squash, worktree_removed, branch_deleted) or removed; since, \
                   resyncs, approved_at and checked_on (the base the last passed check ran on). A run the merge queue \
-                  delivers is not merged by merge_run. checks is the CI of the pull request of the run's branch, as \
-                  get_pull_request's checks reads it (no_pull_request when the last sync stored none, not_linked \
-                  without a linked GitHub repository). The run's \
-                  link is its task's page; the waiting approvals, questions, messages and plans link to their cards \
-                  on the task's Conversation.",
+                  delivers is not merged by merge_run. merge_attempts lists every attempt to merge the run, newest \
+                  first: sequence, at, who (person, automation, merge_queue, or retry with its retry number), via \
+                  (task_page, merge_run or merge_queue), outcome (merged with revision and kind, refused, conflicts \
+                  with files, not_recorded with the revision Git merged to, git_stopped, left_changed with the files \
+                  left changed, interrupted when the app or runner ended mid-merge, stopped, moved when the base or \
+                  the run's branch moved), stage (the one it ended at, null when it landed or reached none), cause \
+                  (why it did not land, or the merge queue's words; told only as merge_run's policy allows, else \
+                  null or the policy's notice) and stages (each stage with passed, refused or not_reached: policy \
+                  for automation's attempts, integration_lock, project_database, scratch_folder, checkout_identity, \
+                  git_metadata, existing_result, merge, record). checks is the CI of the pull request of the run's \
+                  branch, as get_pull_request's checks reads it (no_pull_request when the last sync stored none, \
+                  not_linked without a linked GitHub repository). The run's link is its task's page; the waiting \
+                  approvals, questions, messages and plans link to their cards on the task's Conversation.",
     schema: schema_for_type::<runs::InRun>,
     read_only: true,
   },
@@ -283,7 +294,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "set_reviewer",
-    description: "Chooses the reviewer Manual asks before the person, as Project settings › Runs does: an agent connection of the project, a model of it and an effort it takes; without a connection, the default reviewer. Refused as automation_not_allowed unless a person turned on Let automation answer approvals, and another reviewer than the current one also needs Let automation change agent permissions (person_only). Answers as get_approvals does.",
+    description: "Chooses the reviewer Manual asks before the person. connection names a language reviewer with model and effort; decision_connection names a decision reviewer with model and threshold (0.01–0.99, two decimals, default 0.80). Without either, uses the default language reviewer. Choosing a hosted decision reviewer is always person_only. Threshold edits and switching back to a language reviewer are narrowing. Requires Let automation answer approvals; other reviewer changes require Let automation change agent permissions. Answers as get_approvals does.",
     schema: schema_for_type::<approval_settings::SetReviewer>,
     read_only: false,
   },
@@ -325,7 +336,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "continue_run",
-    description: "Continues a run stopped at a limit with a choice its task page offers for how it stopped: raise_limits (token budget and time limit), raise_step_budget, resume (after the daily budget), allow_retry, return_to, or accept (a step waiting unverified or unchanged); and resolve_conflicts for a run whose merge into its base branch stopped at conflicts (merge_run's merge_failed): Ask an agent to resolve, which returns its work to a step whose agent may write in the worktree (the implementing one unless step names another) with a note to merge the base branch in and resolve them, the optional note after it, and the conflicting files as data; refused as merge_not_conflicted, step_cannot_write, no_writing_step, integration_running, run_merged, worktree_removed, worktree_in_merge or run_not_ended. Retry, return, resolving and acceptance require Let automation answer approvals and record automation as the decider. Every value is given, null for no limit; nothing raises or lifts a limit by itself. Refusals name why.",
+    description: "Continues a run stopped at a limit with a choice its task page offers for how it stopped: raise_limits (token budget and time limit), raise_step_budget, resume (after the daily budget), allow_retry, return_to, or accept (a step waiting unverified or unchanged); and resolve_conflicts for a run whose merge into its base branch stopped at conflicts (merge_run's merge_failed): Ask an agent to resolve, which returns its work to a step whose agent may write in the worktree (the implementing one unless step names another) with a note to resolve them, the optional note after it, and the conflicting files as data (Orchester merges the base branch into its worktree first and commits the merge with the agent's work); refused as merge_not_conflicted, step_cannot_write, no_writing_step, integration_running, run_merged, worktree_removed, worktree_in_merge or run_not_ended. Retry, return, resolving and acceptance require Let automation answer approvals and record automation as the decider. Every value is given, null for no limit; nothing raises or lifts a limit by itself. Refusals name why.",
     schema: schema_for_type::<continue_run::ContinueRun>,
     read_only: false,
   },

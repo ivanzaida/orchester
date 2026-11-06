@@ -85,3 +85,17 @@ fn merged_without_its_branch_or_its_base_branch_waits() {
     "no base branch"
   );
 }
+
+#[test]
+fn merged_branches_tell_which_local_branches_are_left() {
+  let repo = Repo::new();
+  let base = repo.head();
+  repo.worktree("run", RUN_BRANCH, &base);
+  let program = git_program();
+  let branches = Branches::read(&Processes, &program, &repo.root).expect("git lists the branches");
+  assert!(branches.has(&branch("main")) && branches.has(&branch(RUN_BRANCH)));
+  assert!(
+    !branches.has(&branch("deleted")),
+    "a branch the repository does not have"
+  );
+}

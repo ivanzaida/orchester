@@ -14,27 +14,35 @@ pub mod browser;
 mod chat;
 mod client;
 pub mod daily_log;
+mod decision_test;
 mod error;
 pub mod error_reports;
 mod exit_code;
+mod folder;
+pub mod folders;
 pub mod frame;
 mod handshake;
 #[cfg(windows)]
 mod job;
 mod log_path;
+pub mod merge_queue;
 mod message;
 #[cfg(windows)]
 mod pipe_owner;
 mod rejection;
+pub mod run_files;
 pub mod services;
 mod transport;
 mod work;
+mod worktree;
 
 pub use chat::{ChatToken, ChatTools};
 pub use client::{CommandSender, EventReceiver, LaunchError, RunnerClient, RunnerProcess};
+pub use decision_test::DecisionTestTarget;
 pub use error::{FrameError, IpcError};
 pub use error_reports::ErrorReports;
 pub use exit_code::EXIT_PROJECT_LOCKED;
+pub use folder::FolderState;
 pub use handshake::{Handshake, PROTOCOL_VERSION, handshake};
 #[cfg(windows)]
 pub use job::KillOnCloseJob;
@@ -45,3 +53,4 @@ pub use message::{
 pub use rejection::Rejection;
 pub use transport::{ClientStream, Endpoint, ServerStream, fnv1a, server_process_id};
 pub use work::{RunWork, SlotWait, WorkState, WorkSummary};
+pub use worktree::{WorktreeChangesRead, WorktreeReadFailure};

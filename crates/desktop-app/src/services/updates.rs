@@ -29,11 +29,15 @@ pub fn release_keys() -> AcceptedReleaseKeys {
   )
 }
 
+/// This program's own release version, which a team server is told on every `/api/v2` request too.
+pub fn version() -> ReleaseVersion {
+  ReleaseVersion::parse(env!("CARGO_PKG_VERSION")).expect("the app's version is a release version")
+}
+
 /// This program: its own release version, and whether it is a QA copy (started with [`DISCOVERY_VARIABLE`]).
 pub fn this_app() -> ThisApp {
-  let version = ReleaseVersion::parse(env!("CARGO_PKG_VERSION")).expect("the app's version is a release version");
   let qa = std::env::var_os(DISCOVERY_VARIABLE).is_some_and(|folder| !folder.is_empty());
-  ThisApp::detect(version, qa)
+  ThisApp::detect(version(), qa)
 }
 
 /// The updates of this program, whose settings are in `workspace` and whose downloads go to `data_folder`.

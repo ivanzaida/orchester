@@ -145,14 +145,17 @@ fn laid_out(
 
 /// "4 files · +120 / −18" of what was read, once it was.
 pub(in super::super) fn size(ctx: &Ctx, read: Option<&Result<Checkpointed, Message>>) -> Option<Arc<str>> {
+  counts(read).map(|(files, lines)| size_line(ctx, files, lines))
+}
+
+/// How many files the run changed and how many lines it added and removed, once they were read.
+pub(super) fn counts(read: Option<&Result<Checkpointed, Message>>) -> Option<(usize, (u32, u32))> {
   match read {
-    Some(Ok(Checkpointed::Read { changes, .. })) => Some(size_line(
-      ctx,
+    Some(Ok(Checkpointed::Read { changes, .. })) => Some((
       changes.diff.files().len(),
       (changes.diff.additions(), changes.diff.deletions()),
     )),
-    Some(Ok(Checkpointed::TooLarge { size, .. })) => Some(size_line(
-      ctx,
+    Some(Ok(Checkpointed::TooLarge { size, .. })) => Some((
       usize::try_from(size.files).unwrap_or(usize::MAX),
       (size.additions, size.deletions),
     )),

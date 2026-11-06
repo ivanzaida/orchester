@@ -33,6 +33,8 @@ pub enum Widening {
   BrowserSite,
   /// Autopilot where the approval mode was Manual ([`super::ApprovalMode::is_stricter_than`]).
   Autopilot,
+  /// The Codex sandbox off where it was on ([`super::CodexSandbox`]).
+  CodexSandboxOff,
 }
 
 impl AgentPermissions {
@@ -66,6 +68,10 @@ impl AgentPermissions {
       (
         base.approval_mode.is_stricter_than(self.approval_mode),
         Widening::Autopilot,
+      ),
+      (
+        base.codex_sandbox.is_on() && !self.codex_sandbox.is_on(),
+        Widening::CodexSandboxOff,
       ),
     ]
     .into_iter()

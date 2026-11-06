@@ -1,0 +1,480 @@
+//! How a request is answered (`orchester_core::run::ApprovalAnswer`, "Approval choices and waiting
+//! requests", `docs/design/approval-modes.md`): Orchester answers it itself by the run's approval mode. A rule of the
+//! run covers it in both modes (Approve similar, or a command Always allowed during the run), and so does a tool its
+//! MCP server lists to run without asking (always allowed): Autopilot's CLI hands even those to Orchester, Manual's
+//! did not know one listed since the agent started. So do the rules of the project (Approve for every run of this
+//! project: `start_qa_app`, and a service start whose every service has one), before auto mode looks at the request.
+//! Autopilot approves what lies in the run's roots within the step's
+//! own limits (`orchester_core::run::autopilot_step`), asks the reviewer about what it could not place, and brings the
+//! rest to the person. Manual approves what the profile's permissions allow (a command whose every part the step's
+//! permissions run on their own,
+//! `orchester_core::run::permitted`), then the run's own auto-approval; the rest goes to the reviewer. Otherwise a
+//! person answers, and a wider answer first leaves what it promises: a rule, a profile version or a server setting, or
+//! the run's auto-approval. Each answer is recorded with who gave it and how by the mode
+//! (`orchester_core::run::RequestAnswer`), delivered to the one call that asked, and marked in the activity; Deny
+//! tells the agent what [`denial_message`] says and lets it continue. A denial with a message tells it the denier's
+//! words ([`denial_with_message`]): Claude Code and Orchester's tools as the denial's reason; Codex, whose decline
+//! carries no words (0.159), as the next input of its turn, sent with the decline. A native agent's denial
+//! carries no words yet, so it is refused with one.
+
+use orchester_core::{
+  connection::{mcp::InvocationExemptions, stream::AgentEvent},
+  native::session::DENIED,
+  orchester_tools::auto_approvable,
+  permission::{category::CommandCategory, roots::RootsCheck},
+  resource::ApprovalMode,
+  run::{
+    AnswerKind, Answerer, ApprovalAnswer, ApprovalRuleId, ApprovalSubject, AutoVerdict, AutomationAnswerError,
+    CameToPerson, DecidedBy, DenialNote, ModeStep, PendingToolApproval, ProjectRuleId, ProjectScope, RequestAnswer,
+    ReviewQuestion, RuleScope, ToolApprovalDecision, ToolDecision, ToolReach, answering, answering_in_project,
+    auto_approves, auto_verdict, autopilot_check, autopilot_step, codex_denial, denial_message, denial_with_message,
+    permitted, review::Review,
+  },
+  store::McpServerStore,
+  time::Timestamp,
+};
+use orchester_ipc::{Event, Rejection};
+use orchester_store::{AlwaysAllowAnswer, AlwaysAllowRecord, ApprovalRecord, RuleRecord, StoreError};
+
+use super::{
+  super::{
+    link::approvals::{approval_review, approval_rules, project_approval_rules, run_auto_approve},
+    tool_approval::refusal,
+  },
+  approval::Awaiting,
+  worker::{Watch, Worker, WorkerError},
+};
+
+/// The rule that gives an answer: one of the run's, or the project's, one for each service a start runs.
+#[derive(Clone, Debug)]
+pub(super) enum Answering {
+  Run(ApprovalRuleId),
+  Project(Vec<ProjectRuleId>),
+}
+
+/// An answer about to be given: who gives it, the rule that does, a command's category for its mark,
+/// and what a denial tells the agent.
+pub(super) struct Settled {
+  pub(super) decided_by: DecidedBy,
+  /// How the run's approval mode answered, as the request records it.
+  pub(super) answer: RequestAnswer,
+  pub(super) rule: Option<Answering>,
+  pub(super) category: Option<CommandCategory>,
+  /// A command that reads a credential location, which its mark names; only a person answers one.
+  pub(super) secrets: bool,
+  pub(super) told: Option<String>,
+  /// The denier's words, kept with the decision.
+  pub(super) note: Option<DenialNote>,
+  /// What Codex gets as the next input of its turn, as its decline tells its model nothing of the note.
+  pub(super) follow_up: Option<String>,
+  /// What auto mode did with the request before it was answered.
+  pub(super) review: Option<Review>,
+}
+
+impl Settled {
+  pub(super) const fn by(decided_by: DecidedBy, category: Option<CommandCategory>) -> Self {
+    Self {
+      decided_by,
+      answer: RequestAnswer::by(AnswerKind::of(decided_by)),
+      rule: None,
+      category,
+      secrets: false,
+      told: None,
+      note: None,
+      follow_up: None,
+      review: None,
+    }
+  }
+}
+
+/// What a denial tells the agent through the call that asked, and what follows it as the next input of a Codex turn.
+struct Told {
+  told: String,
+  follow_up: Option<String>,
+}
+
+/// What Orchester does with a request before anyone answers it, by the run's approval mode.
+pub(super) enum Itself {
+  /// It answers it now.
+  Settled(Settled),
+  /// It asks the reviewer first.
+  Review(ReviewQuestion),
+  /// The request comes to the person, for this reason.
+  Person(CameToPerson),
+}
+
+impl Worker {
+  /// Orchester's own handling of `approval` in Autopilot (`autopilot`) or Manual: a rule a person made in the run,
+  /// a tool its server lists to run without asking and the project's rules answer in both, so a start they cover never
+  /// reaches the reviewer; then the mode's own rules answer, ask the reviewer, or bring it to the person.
+  pub(super) fn answer_itself(
+    &self,
+    watch: &Watch,
+    approval: &PendingToolApproval,
+    autopilot: bool,
+  ) -> Result<Itself, WorkerError> {
+    let subject = ApprovalSubject::of(approval, &self.scope).with_checks(&self.checks);
+    let category = category_of(&subject);
+    let rules = approval_rules(&*watch.link, approval.run)?;
+    if let Some(rule) = answering(&rules, &subject) {
+      let decided_by = if rule.scope.revocable() {
+        DecidedBy::SimilarRule
+      } else {
+        DecidedBy::AlwaysAllowed
+      };
+      return Ok(Itself::Settled(Settled {
+        rule: Some(Answering::Run(rule.id)),
+        ..Settled::by(decided_by, category)
+      }));
+    }
+    if self.listed(watch, approval)? {
+      return Ok(Itself::Settled(Settled {
+        answer: RequestAnswer::by(AnswerKind::Profile),
+        ..Settled::by(DecidedBy::AlwaysAllowed, None)
+      }));
+    }
+    if let Some(rules) = answering_in_project(&project_approval_rules(&*watch.link)?, &subject) {
+      return Ok(Itself::Settled(Settled {
+        rule: Some(Answering::Project(rules.iter().map(|rule| rule.id).collect())),
+        ..Settled::by(DecidedBy::SimilarRule, category)
+      }));
+    }
+    if autopilot {
+      return Ok(self.autopilot(watch, &subject, category));
+    }
+    self.manual(watch, approval, &subject)
+  }
+
+  /// Autopilot's rule for `subject`: by what it touches compared with the run's roots, which cannot be placed when the
+  /// roots could not be read, within the step's own limits (its network, repository access and credentials).
+  fn autopilot(&self, watch: &Watch, subject: &ApprovalSubject, category: Option<CommandCategory>) -> Itself {
+    let check = self
+      .roots
+      .as_ref()
+      .map_or(RootsCheck::Unknown, |roots| autopilot_check(roots, subject));
+    match autopilot_step(&check, self.step_limit(watch, subject)) {
+      ModeStep::Approve(answer) => Itself::Settled(Settled {
+        answer,
+        ..Settled::by(DecidedBy::AutoApproved, category)
+      }),
+      ModeStep::Review(question) => Itself::Review(question),
+      ModeStep::Person(came) => Itself::Person(came),
+    }
+  }
+
+  /// Manual's rules for `approval` about `subject`: what the profile's permissions allow, the run's own
+  /// auto-approval; else the reviewer.
+  fn manual(
+    &self,
+    watch: &Watch,
+    approval: &PendingToolApproval,
+    subject: &ApprovalSubject,
+  ) -> Result<Itself, WorkerError> {
+    if let Some(launch) = &watch.invocation.permissions
+      && let Some(category) = permitted(subject, launch.permissions())
+    {
+      return Ok(Itself::Settled(Settled::by(DecidedBy::Permissions, Some(category))));
+    }
+    // Manual is not Autopilot: only the run's own *Approve everything in this run*, a person's answer, approves here.
+    if auto_approves(run_auto_approve(&*watch.link, approval.run)?, false)
+      && (approval.command || auto_approvable(&approval.server, &approval.action))
+      && let AutoVerdict::Approve(category) = auto_verdict(subject)
+    {
+      return Ok(Itself::Settled(Settled {
+        answer: RequestAnswer::by(AnswerKind::Person),
+        ..Settled::by(DecidedBy::AutoApproved, category)
+      }));
+    }
+    Ok(Itself::Review(ReviewQuestion::Request))
+  }
+
+  /// Whether `approval`'s MCP tool is listed to run without asking now: in Manual, although the agent's CLI did not
+  /// know it when it started (Always allow answered for the rest of the invocation); in Autopilot, whose CLI hands
+  /// every call to Orchester, at all. A Claude Code tool whose name another server of the project could have is not,
+  /// as its CLI would not run it unasked.
+  fn listed(&self, watch: &Watch, approval: &PendingToolApproval) -> Result<bool, StoreError> {
+    if approval.command {
+      return Ok(false);
+    }
+    let servers = watch.db.mcp_servers()?;
+    let exemptions = InvocationExemptions::new(
+      servers
+        .iter()
+        .map(|server| (server.name().clone(), server.exempt_tools().clone())),
+    );
+    Ok(match self.app_server() {
+      Some(_) => exemptions.exempts(&approval.server, &approval.action),
+      None => exemptions
+        .claude_tool(&format!("mcp__{}__{}", approval.server, approval.action))
+        .is_some(),
+    })
+  }
+
+  /// Leaves what `answer`, given `by` a person or automation, promises beyond this request, which waits in
+  /// `awaiting`, and returns how the request itself is answered; a rejection when the answer is not available for it.
+  pub(super) fn widen(
+    &self,
+    watch: &mut Watch,
+    (approval, awaiting): (&PendingToolApproval, &Awaiting),
+    (answer, by): (&ApprovalAnswer, Answerer),
+  ) -> Result<Result<Settled, Rejection>, WorkerError> {
+    let subject = ApprovalSubject::of(approval, &self.scope).with_checks(&self.checks);
+    let decided_by = match answer.given_by(by, &subject) {
+      Ok(decided_by) => decided_by,
+      Err(AutomationAnswerError::Wider) => return Ok(Err(Rejection::AutomationWider)),
+      Err(AutomationAnswerError::PersonOnly(ask)) => return Ok(Err(Rejection::PersonOnly { ask })),
+    };
+    let settled = Settled {
+      secrets: matches!(&subject, ApprovalSubject::Command(command) if command.reads_secrets()),
+      review: approval_review(&*watch.link, approval.run, &approval.id)?,
+      ..Settled::by(decided_by, category_of(&subject))
+    };
+    let (run, at) = (approval.run, Timestamp::now());
+    match answer {
+      // A check its access rules approve once per run: this approval covers its later calls in the run.
+      ApprovalAnswer::Once if self.once_per_run(&subject) => {
+        if let Ok(scope) = RuleScope::similar(&subject) {
+          watch.sink.rule(RuleRecord::Run { run, scope, at })?;
+        }
+      }
+      ApprovalAnswer::Once => {}
+      ApprovalAnswer::Deny | ApprovalAnswer::DenyWithMessage { .. } => {
+        let note = answer.denial_note();
+        let Some(Told { told, follow_up }) = self.told(approval, awaiting, (by, note)) else {
+          return Ok(Err(unavailable("Deny with a message")));
+        };
+        return Ok(Ok(Settled {
+          told: Some(told),
+          note: note.cloned(),
+          follow_up,
+          ..settled
+        }));
+      }
+      ApprovalAnswer::ApproveRun => watch.db.set_run_auto_approve(approval.run, Some(true))?,
+      ApprovalAnswer::Similar => {
+        let Ok(scope) = RuleScope::similar(&subject) else {
+          return Ok(Err(unavailable("Approve similar")));
+        };
+        watch.sink.rule(RuleRecord::Run { run, scope, at })?;
+      }
+      ApprovalAnswer::SimilarProject => {
+        let scopes = ProjectScope::of(&subject);
+        if scopes.is_empty() {
+          return Ok(Err(unavailable("Approve for every run of this project")));
+        }
+        let request = approval.id.clone();
+        watch.sink.rule(RuleRecord::Project {
+          scopes,
+          run,
+          request,
+          at,
+        })?;
+      }
+      ApprovalAnswer::Always { prefix } => {
+        if let Err(rejection) = self.always_allow(watch, approval, &subject, prefix.as_ref())? {
+          return Ok(Err(rejection));
+        }
+      }
+    }
+    Ok(Ok(settled))
+  }
+
+  /// What denying `approval`, which waits in `awaiting`, `by` a person or automation tells the agent, with `note` when
+  /// it carries the denier's words: Claude Code and Orchester's tools get Orchester's words, Codex its own and the
+  /// note as its turn's next input, a native agent the denial result its loop answers the call with. `None` for a
+  /// note to a native agent, whose denial carries no words yet.
+  fn told(
+    &self,
+    approval: &PendingToolApproval,
+    awaiting: &Awaiting,
+    (by, note): (Answerer, Option<&DenialNote>),
+  ) -> Option<Told> {
+    let told = |told: String| Told { told, follow_up: None };
+    match (awaiting, note) {
+      (Awaiting::Native(_), Some(_)) => None,
+      (Awaiting::Native(_), None) => Some(told(DENIED.to_owned())),
+      (Awaiting::Codex(_), note) => Some(Told {
+        told: codex_denial(approval.command).to_owned(),
+        follow_up: note.map(|note| denial_with_message(approval, by, note)),
+      }),
+      (Awaiting::Claude { .. } | Awaiting::Tool { .. }, Some(note)) => {
+        Some(told(denial_with_message(approval, by, note)))
+      }
+      // A call of Orchester's tools refused to Codex reads as Codex's own refusal of an MCP call.
+      (Awaiting::Tool { .. }, None) if self.app_server().is_some() => {
+        Some(told(codex_denial(approval.command).to_owned()))
+      }
+      (Awaiting::Claude { .. } | Awaiting::Tool { .. }, None) => Some(told(denial_message(approval, by))),
+    }
+  }
+
+  /// Whether `subject` runs a check its access rules approve once per run.
+  fn once_per_run(&self, subject: &ApprovalSubject) -> bool {
+    let ApprovalSubject::McpTool {
+      reach: ToolReach::Check { name, .. },
+      ..
+    } = subject
+    else {
+      return false;
+    };
+    self
+      .checks
+      .iter()
+      .any(|check| check.name() == name && check.approval() == ApprovalMode::OncePerRun)
+  }
+
+  /// Always allow: a command's prefix is published in its profile and kept by the run; an MCP tool is
+  /// listed on its server. The coordinator leaves both, or says Always allow is not available.
+  fn always_allow(
+    &self,
+    watch: &mut Watch,
+    approval: &PendingToolApproval,
+    subject: &ApprovalSubject,
+    prefix: Option<&orchester_core::permission::CommandPrefix>,
+  ) -> Result<Result<(), Rejection>, StoreError> {
+    let record = match (subject, prefix, self.profile) {
+      (ApprovalSubject::Command(command), Some(prefix), Some(profile)) => AlwaysAllowRecord::Command {
+        run: approval.run,
+        profile,
+        command: command.clone(),
+        prefix: prefix.clone(),
+        at: Timestamp::now(),
+      },
+      (ApprovalSubject::McpTool { server, tool, .. }, None, _) => AlwaysAllowRecord::McpTool {
+        server: server.clone(),
+        tool: tool.clone(),
+      },
+      _ => return Ok(Err(unavailable("Always allow"))),
+    };
+    Ok(match watch.sink.always_allow(record)? {
+      AlwaysAllowAnswer::Allowed => Ok(()),
+      AlwaysAllowAnswer::Unavailable => Err(unavailable("Always allow")),
+    })
+  }
+
+  /// Records `settled` as the answer to `approval`, hands it to the call waiting in `awaiting` and marks
+  /// it in the activity.
+  pub(super) async fn settle(
+    &mut self,
+    watch: &mut Watch,
+    approval: &PendingToolApproval,
+    awaiting: Awaiting,
+    settled: Settled,
+  ) -> Result<Result<(), Rejection>, WorkerError> {
+    let run = approval.run;
+    // A review still under way is no longer wanted: dropping it stops the reviewer.
+    self.reviewing = None;
+    if !claim(watch, approval, &settled)? {
+      return Ok(Err(refusal(&*watch.link, run, &approval.id)?));
+    }
+    if settled.decided_by.answered_waiting() {
+      self.notifier.send(Event::ToolApprovalChanged { run, task: self.task });
+    }
+    let item = awaiting.item().to_owned();
+    // The answer settled: a QA start it lets run keeps its app, unless another wait for a person remains.
+    self.resume_qa(watch, Some(&approval.id));
+    let interrupted = ApprovalRecord::interrupted(run, watch.invocation.id);
+    if let Err(error) = self.deliver(watch, awaiting, &settled).await {
+      watch.sink.approval(interrupted)?;
+      self.end_approval_wait(watch)?;
+      self.observe(
+        watch,
+        AgentEvent::TurnFailed {
+          message: format!("The {} session closed before the tool decision arrived", self.cli()),
+        },
+      )?;
+      self.driver.end();
+      return Ok(Err(Rejection::Failed {
+        detail: format!("cannot send the tool decision to {}: {error}", self.cli()),
+      }));
+    }
+    let kind = if settled.decided_by.approves() {
+      ToolApprovalDecision::Approved
+    } else {
+      ToolApprovalDecision::Denied
+    };
+    if !watch
+      .sink
+      .approval(ApprovalRecord::delivered(run, &approval.id, kind))?
+    {
+      watch.sink.approval(interrupted)?;
+      self.end_approval_wait(watch)?;
+      self.observe(
+        watch,
+        AgentEvent::TurnFailed {
+          message: "The tool decision could not be recorded after delivery".to_owned(),
+        },
+      )?;
+      self.driver.end();
+      return Ok(Err(Rejection::Failed {
+        detail: "the tool decision could not be recorded after delivery".to_owned(),
+      }));
+    }
+    self.end_approval_wait(watch)?;
+    let waited = Timestamp::now().unix_millis() - approval.requested_at.unix_millis();
+    let decision = ToolDecision {
+      decided_by: settled.decided_by,
+      category: settled.category,
+      secrets: settled.secrets,
+      told: settled.told,
+      // A clock set back while it waited reads as no wait at all.
+      waited_ms: settled
+        .decided_by
+        .by_person()
+        .then(|| u64::try_from(waited).unwrap_or(0)),
+      review: settled.review,
+    };
+    self.observe(
+      watch,
+      AgentEvent::ToolDecided {
+        item,
+        server: approval.server.clone(),
+        action: approval.action.clone(),
+        decision,
+      },
+    )?;
+    // A decision is progress: a yielded cell that waited on it can now be collected.
+    watch.idle_continuations = 0;
+    self.continue_after_tools(watch).await?;
+    Ok(Ok(()))
+  }
+}
+
+/// Takes `approval` from the waiting as `settled` answers it, with how the run's mode answered it, the rule that did
+/// and a denial's words; whether it still waited.
+fn claim(watch: &mut Watch, approval: &PendingToolApproval, settled: &Settled) -> Result<bool, StoreError> {
+  let (run, id) = (approval.run, approval.id.as_str());
+  let claimed = ApprovalRecord::claimed(run, id, settled.decided_by, Timestamp::now());
+  if !watch.sink.approval(claimed)? {
+    return Ok(false);
+  }
+  watch.sink.approval(ApprovalRecord::answer(run, id, &settled.answer))?;
+  match &settled.rule {
+    Some(Answering::Run(rule)) => {
+      watch.sink.approval(ApprovalRecord::rule(run, id, *rule))?;
+    }
+    Some(Answering::Project(rules)) => {
+      for &rule in rules {
+        watch.sink.rule(RuleRecord::ProjectAnswered { rule })?;
+      }
+    }
+    None => {}
+  }
+  if let Some(note) = &settled.note {
+    watch.sink.approval(ApprovalRecord::denial_note(run, id, note))?;
+  }
+  Ok(true)
+}
+
+fn category_of(subject: &ApprovalSubject) -> Option<CommandCategory> {
+  match subject {
+    ApprovalSubject::Command(command) => Some(command.category()),
+    ApprovalSubject::McpTool { .. } => None,
+  }
+}
+
+fn unavailable(answer: &str) -> Rejection {
+  Rejection::Failed {
+    detail: format!("{answer} is not available for this request"),
+  }
+}

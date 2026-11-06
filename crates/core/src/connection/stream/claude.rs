@@ -13,7 +13,8 @@
 //! (`docs/design/orchester-workspace.md`, "Token budgets"). `total_cost_usd` is ignored.
 //!
 //! How full the context is ([`ClaudeStream::context`]) is what the latest message of the main conversation took in,
-//! against the `contextWindow` the result's `modelUsage` reports for its model.
+//! against the `contextWindow` the result's `modelUsage` reports for its model, or the one an earlier CLI of the
+//! session reported ([`ClaudeStream::carrying`]).
 //!
 //! The step result ([`StepResult`]) is the result's `structured_output`, which the CLI fills when it
 //! was given the result schema (`--json-schema`); else the one that closes the final message
@@ -38,16 +39,15 @@
 //! with such a result, then starts again and takes the prompt (run 22, 2026-10-06). It neither fails the step nor
 //! counts as a turn the CLI ended.
 
+mod context;
+
 use std::collections::HashMap;
 
 use serde_json::Value;
 
 use super::{AgentEvent, CommandStatus, FileChange, FileChangeKind, OutputStream, todo::claude_todos};
 use crate::{
-  connection::{
-    context_use::ContextUse,
-    mcp::{InvocationExemptions, McpServerProblem},
-  },
+  connection::mcp::{InvocationExemptions, McpServerProblem},
   orchester_tools::OrchesterTool,
   run::{StepResult, TokenUsage},
 };
@@ -91,6 +91,9 @@ pub struct ClaudeStream {
   prompt: Option<(u64, String)>,
   /// The context window of each model, as a result's `modelUsage` reported it.
   windows: HashMap<String, u64>,
+  /// The window an earlier CLI of the same session and model reported ([`Self::carrying`]), which holds until a
+  /// result of this one reports its own.
+  carried: Option<u64>,
 }
 
 #[derive(Clone, Debug)]
@@ -172,47 +175,6 @@ impl ClaudeStream {
   /// How many results the CLI printed: how many turns it ended.
   pub const fn results(&self) -> usize {
     self.results
-  }
-
-  /// How full the session's context is after its latest message, against the window a result reported for its model
-  /// (the only one reported, when the result names it otherwise); before any result did, the table's estimate.
-  /// `None` while no message of the main conversation reported its tokens.
-  pub fn context(&self) -> Option<ContextUse> {
-    let (used, model) = self.prompt.as_ref()?;
-    let reported = self.windows.get(model).or_else(|| match self.windows.len() {
-      1 => self.windows.values().next(),
-      _ => None,
-    });
-    Some(reported.map_or_else(
-      || ContextUse::of_model(*used, model),
-      |window| ContextUse::reported(*used, *window),
-    ))
-  }
-
-  /// The tokens a message of the main conversation took in; a subagent's messages fill a context of their own, and a
-  /// message without tokens (the CLI's own, when it is not signed in) tells nothing.
-  fn note_prompt(&mut self, value: &Value, message: &Value) {
-    if value.get("parent_tool_use_id").is_some_and(|parent| !parent.is_null()) {
-      return;
-    }
-    let Some(used) = message.get("usage").and_then(prompt_tokens).filter(|used| *used > 0) else {
-      return;
-    };
-    self.prompt = Some((used, text(message, "model").unwrap_or_default()));
-  }
-
-  /// The context windows a result's `modelUsage` reports, by model.
-  fn note_windows(&mut self, value: &Value) {
-    let models = value.get("modelUsage").and_then(Value::as_object).into_iter().flatten();
-    for (model, used) in models {
-      if let Some(window) = used
-        .get("contextWindow")
-        .and_then(Value::as_u64)
-        .filter(|window| *window > 0)
-      {
-        self.windows.insert(model.clone(), window);
-      }
-    }
   }
 
   /// The message's events, and whether every content block was understood.
@@ -566,17 +528,6 @@ pub(crate) fn usage(usage: &Value) -> Option<TokenUsage> {
   })
 }
 
-/// What a message's request took in, as a `usage` object reports it: input, cache writes and cache reads.
-fn prompt_tokens(usage: &Value) -> Option<u64> {
-  let count = |name| usage.get(name).and_then(Value::as_u64).unwrap_or(0);
-  Some(
-    usage
-      .get("input_tokens")?
-      .as_u64()?
-      .saturating_add(count("cache_creation_input_tokens"))
-      .saturating_add(count("cache_read_input_tokens")),
-  )
-}
 /// What `now` holds beyond `before`, part by part; `None` when nothing grew.
 fn growth(now: TokenUsage, before: TokenUsage) -> Option<TokenUsage> {
   let grown = TokenUsage {

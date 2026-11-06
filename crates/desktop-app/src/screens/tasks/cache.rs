@@ -14,7 +14,7 @@ use orchester_workspace::tasks::{
   browse::{Facets, TaskSort},
   data::ProjectTasks,
   list::TaskRow,
-  views::ListView,
+  views::{ListView, StatusCounts},
 };
 use parking_lot::Mutex;
 
@@ -48,6 +48,12 @@ pub(super) struct ViewCounts([usize; ListView::ALL.len()]);
 impl ViewCounts {
   fn of(rows: &[TaskRow], waiting: &HashSet<TaskId>) -> Self {
     Self(ListView::ALL.map(|view| view.count(rows, waiting)))
+  }
+
+  /// A team project's views as its server counts its tasks by workflow status, `waiting` counting by status those
+  /// something waits for the person in on this computer (`ListView::count_by_status`).
+  pub(super) fn of_server(counted: &StatusCounts, waiting: &StatusCounts) -> Self {
+    Self(ListView::ALL.map(|view| view.count_by_status(counted, waiting)))
   }
 
   pub(super) fn get(self, tab: TaskListTab) -> usize {

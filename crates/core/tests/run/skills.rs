@@ -132,26 +132,34 @@ fn new_session_prompt_lists_each_skill_before_the_task_and_a_resumed_one_does_no
 }
 
 /// An agent that has Orchester's `read_skill` is told to read its skills with it by name, and no skill's path:
-/// `read_outside_file` refuses the folder they were placed in.
+/// `read_outside_file` refuses the folder they were placed in. Only the listed skills are kept from being read by
+/// path: the repository's own skill documents stay files the agent's file tools read. The text is the same for
+/// Claude Code's and Codex's name of the tool.
 #[test]
 fn new_session_prompt_names_skills_for_read_skill_without_their_paths() {
-  let prompt = Prompt::new(builder("Fine."), step_with("Implement it."), task("Brief.", &[]));
-  let listings = [SkillListing {
-    name: "run-checks",
-    description: "Runs the checks.",
-    path: "/repo/.orchester/skills/e1/run-checks/SKILL.md",
-    tool: Some("mcp__Orchester__read_skill"),
-  }];
-  let mut input = prompt.input(&[], &[], true);
-  input.skills = &listings;
-  let text = input.assemble(InjectionEvent::Start).expect("assembles").text;
-  assert!(
-    text.contains("Read a skill with the mcp__Orchester__read_skill tool by its name"),
-    "{text}"
-  );
-  assert!(text.contains("do not read skills by path"), "{text}");
-  assert!(text.contains("- run-checks: Runs the checks.\n"), "{text}");
-  assert!(!text.contains(".orchester/skills"), "{text}");
+  for tool in ["mcp__Orchester__read_skill", "read_skill"] {
+    let prompt = Prompt::new(builder("Fine."), step_with("Implement it."), task("Brief.", &[]));
+    let listings = [SkillListing {
+      name: "run-checks",
+      description: "Runs the checks.",
+      path: "/repo/.orchester/skills/e1/run-checks/SKILL.md",
+      tool: Some(tool),
+    }];
+    let mut input = prompt.input(&[], &[], true);
+    input.skills = &listings;
+    let text = input.assemble(InjectionEvent::Start).expect("assembles").text;
+    assert!(
+      text.contains(&format!(
+        "Read a skill with the {tool} tool by its name, and a reference file with its name and the file's path in \
+         the skill; do not read the skills listed here by path. Other files of the repository, skill documents in \
+         its own folders included, are read with your usual file tools when your instructions point at them."
+      )),
+      "{text}"
+    );
+    assert!(!text.contains("do not read skills by path"), "{text}");
+    assert!(text.contains("- run-checks: Runs the checks.\n"), "{text}");
+    assert!(!text.contains(".orchester/skills"), "{text}");
+  }
 }
 
 #[test]

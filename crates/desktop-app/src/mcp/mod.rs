@@ -1,9 +1,10 @@
 //! The app's MCP server: agents look at and drive the running window the way browser-use drives a
 //! browser, through one server owned by the app. It hosts lurq's window tools (`lurq_*`: screenshots,
 //! the element tree, clicking and typing, logs) in-process (`McpConfig::hosted`) beside the app's own
-//! (`tools`: `app_state`, `navigate`, `set_theme`, `hold_reads`, `set_update_state`), which lurq's registry
-//! serves and which run on the event-loop thread with the window's state, and Orchester's domain tools
-//! (`domain`), which work on project data off the event loop. What agents may do is [`McpSettings`].
+//! (`tools`: `app_state`, `navigate`, `set_theme`, `hold_reads`, `hold_hand_offs`, `hold_integration`,
+//! `set_update_state`), which lurq's registry serves and which run on the event-loop thread with the window's state,
+//! and Orchester's domain tools (`domain`), which work on project data off the event loop. What agents may do is
+//! [`McpSettings`].
 //!
 //! It listens on `127.0.0.1` only and requires a bearer token and a loopback `Host` on every request (`server`,
 //! `guard`). The installed app listens on the fixed port set in Settings › Automation and keeps its token in the OS
@@ -53,7 +54,9 @@ pub const APP_NAME: &str = "orchester-app";
 const INSTRUCTIONS: &str = "Orchester is a desktop app that orchestrates coding agents per project. `app_state` \
   tells where its window is (route, tabs, theme, size); `navigate` takes the active tab to a route by name; \
   `set_theme` switches dark, light or system colors and keeps the choice; debug builds add `hold_reads`, which \
-  holds the reads of project data so a loading state can be captured, and `set_update_state`, which shows any \
+  holds the reads of project data so a loading state can be captured, `hold_hand_offs`, which holds the review \
+  page's hand-offs to the runner so Sending… can be captured, `hold_integration`, which holds the active project's \
+  integration lease so Orchester's own retry of a merge can be captured, and `set_update_state`, which shows any \
   update state in place of the real one so each can be seen. The `lurq_*` tools look at and drive the \
   window itself. Changing the window (navigate, set_theme, lurq input) needs window control, which a \
   release build grants only when the app's settings allow it or ORCHESTER_APP_MCP_WINDOW_CONTROL=on. \
@@ -70,8 +73,8 @@ const INSTRUCTIONS: &str = "Orchester is a desktop app that orchestrates coding 
   Narrowing is always allowed, and no tool takes or returns a secret's value. The tools work without an Orchester Cloud sign-in. Naming a project that belongs to an Orchester Cloud account while nobody is signed in answers sign_in_required; sign_in_state says whether a sign-in is there, and only a person signs in, in the window.";
 
 /// lurq's tools for `settings`, the app's tools on `link` and `appearance`, and, for a started session,
-/// the domain tools on its `services` (refusals worded by `i18n`) with `sign_in_state`, and `hold_reads` and
-/// `set_update_state` in debug builds.
+/// the domain tools on its `services` (refusals worded by `i18n`) with `sign_in_state`, and `hold_reads`,
+/// `hold_hand_offs`, `hold_integration` and `set_update_state` in debug builds.
 pub fn config(
   settings: McpSettings,
   link: &WindowLink,

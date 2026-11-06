@@ -278,7 +278,38 @@
       "reading": "Reading the project's tasks…",
       "failed": "The project's tasks cannot be read",
       "notFound": "No task {{key}} in this project",
-      "notFoundBody": "It may have been removed, or its key changed when the project was shared."
+      "notFoundBody": "It may have been removed, or its key changed when the project was shared.",
+      "teamFailed": "{{key}} can't be read from the team server",
+      "teamUnavailable": "The team server isn't answering. Nothing was changed.",
+      "teamSignedOut": "This computer is signed out of the team server. Sign in again to edit the team's tasks.",
+      "teamNotMember": "You're no longer a member of this workspace, so its tasks can't be read.",
+      "teamRefused": "The team server refused to read the task."
+    },
+    "team": {
+      "changed": {
+        "title": "{{name}} changed {{key}} first",
+        "titleUnread": "{{key}} changed on the team server first",
+        "priority": "Priority is {{current}} now ({{name}}, {{time}}); you set {{mine}}. The team server keeps one version, so nothing of yours was saved. Reapply yours over {{name}}'s, or keep theirs.",
+        "fields": "{{name}} saved {{key}} at {{time}}, after you opened it. The team server keeps one version, so nothing of yours was saved; your changes are still here. Reapply yours over {{name}}'s, or keep theirs.",
+        "partly": "{{name}} saved {{key}} at {{time}}, after the first of your changes went through. The rest of yours wasn't saved and is still here. Reapply it over {{name}}'s, or keep theirs.",
+        "unread": "Someone changed {{key}} on the team server since you opened it, and it couldn't be read again. Nothing of yours was saved; your changes are still here.",
+        "now": "{{field}} now: {{value}}",
+        "setAgain": "Set {{value}} again",
+        "keepValue": "Keep {{value}}",
+        "reapply": "Reapply my changes",
+        "keepTheirs": "Keep {{name}}'s"
+      },
+      "refused": {
+        "title": "Couldn't save {{key}}",
+        "titlePartly": "Saved part of your changes to {{key}}",
+        "notAdmin": "Only Admins of the workspace change its tasks, and the team server says you aren't one. Nothing more was saved.",
+        "decision": "The team server doesn't take a task's pipeline or limits yet. Put them back to save the rest.",
+        "unkept": "The team server doesn't keep a task's points or base branch. Nothing was saved; put them back to save the rest.",
+        "unavailable": "The team server isn't answering. Nothing more is known to have changed; saving again is safe.",
+        "signedOut": "This computer is signed out of the team server. Nothing more was saved.",
+        "other": "The team server refused the change. Nothing more was saved.",
+        "failed": "The change couldn't be sent to the team server. Nothing more was saved."
+      }
     },
     "conflict": {
       "notice": "A newer version of {{key}} was saved while you were editing",

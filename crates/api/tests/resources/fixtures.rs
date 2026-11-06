@@ -34,7 +34,7 @@ pub fn references() -> Value {
 pub fn version(resource: ResourceId, number: u32) -> Value {
   json!({"resource":resource,"number":number,"body":{"name":"Feature delivery","steps":[]},
     "hash":hash('a'),"references":references(),"based_on":number.checked_sub(1).filter(|n| *n > 0),
-    "published":{"by":user(),"at":3}})
+    "published":{"by":user(),"at":3},"widens":false})
 }
 
 /// `value` read as `T` and written back is `value` again.

@@ -1,7 +1,8 @@
 //! The Integrate step: when syncing a run with its base branch conflicts, the run's work goes back, with the
 //! conflicts, to the agent step the Deliver step's integrator profile works in, as *Ask an agent to resolve* sends it
-//! (`tasks::return_work`). That agent merges the base and resolves them; the steps after it (Check, Review) run again,
-//! and once the run passed every step again its delivery goes on. A pipeline whose integrator works in no step that
+//! (`tasks::return_work`). The runner merges the base into that agent's worktree and the agent resolves the conflicts
+//! by editing the files; the steps after it (Check, Review) run again, and once the run passed every step again its
+//! delivery goes on. A pipeline whose integrator works in no step that
 //! can write in the worktree has no Integrate step: its conflicts go to a person.
 
 use orchester_core::{

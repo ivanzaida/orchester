@@ -1,8 +1,11 @@
 //! The app's MCP tools on a window without a screen: `app_state` reports where the window is and the
 //! projects its tabs show, `navigate` goes through the tabs' history and refuses with typed errors,
-//! `set_theme` recolors the window, `hold_reads` holds the project feeds' reads, and what agents may do
-//! follows the settings.
+//! `set_theme` recolors the window, `hold_reads` and `hold_hand_offs` hold the project feeds' reads and the review
+//! page's hand-offs, `hold_integration` needs a project in the active tab, and what agents may do follows the
+//! settings.
 
+#[path = "mcp_tools/holds.rs"]
+mod holds;
 mod support;
 
 use std::sync::{Arc, OnceLock};
@@ -14,9 +17,8 @@ use orchester_app::{
     McpSettings, ThisRun, WindowLink,
     domain::DATA_SCOPE,
     settings::WINDOW_CONTROL_VARIABLE,
-    tools::{ToolError, app_state, hold_reads, navigate, set_theme},
+    tools::{ToolError, app_state, navigate, set_theme},
   },
-  project::hold::ReadHold,
   theme::Mode,
 };
 use orchester_store::AppDb;
@@ -548,24 +550,6 @@ fn tools_wait_for_the_window() {
   assert_eq!(error.to_json()["code"], "no_session");
 }
 
-#[test]
-fn hold_reads_holds_and_releases_the_feeds_reads() {
-  let hold = ReadHold::default();
-  assert_eq!(
-    hold_reads(&hold, &json!({ "held": true })).expect("a flag"),
-    json!({ "held": true })
-  );
-  assert!(hold.is_held());
-  assert_eq!(
-    hold_reads(&hold, &json!({ "held": false })).expect("a flag"),
-    json!({ "held": false })
-  );
-  assert!(!hold.is_held());
-  let error = hold_reads(&hold, &json!({ "held": "yes" })).expect_err("not a flag");
-  assert_eq!(error.to_json()["code"], "not_a_bool");
-  let error = hold_reads(&hold, &json!({})).expect_err("no flag");
-  assert_eq!(error.to_json()["code"], "missing_param");
-}
 #[test]
 fn navigate_skills_forms_round_trip_their_parameters() {
   let window = Window::open();

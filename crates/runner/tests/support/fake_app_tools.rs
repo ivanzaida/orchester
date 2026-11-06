@@ -22,6 +22,11 @@ impl Drop for App {
 }
 
 fn start(worktree: &Path, app: &str) -> (App, PathBuf) {
+  start_copy(worktree, app, "bin", app)
+}
+
+/// Starts the stand-in as `program` from `.tmp/qa/<task>/<place>/`, writing its discovery to `.tmp/qa/<task>/mcp`.
+fn start_copy(worktree: &Path, task: &str, place: &str, program: &str) -> (App, PathBuf) {
   let original = std::env::current_exe()
     .expect("CLI")
     .parent()
@@ -31,12 +36,12 @@ fn start(worktree: &Path, app: &str) -> (App, PathBuf) {
     } else {
       "orchester-test-command"
     });
-  let folder = worktree.join(".tmp/qa").join(app);
-  fs::create_dir_all(folder.join("bin")).expect("bin");
-  let program = folder.join("bin").join(if cfg!(windows) {
-    format!("{app}.exe")
+  let folder = worktree.join(".tmp/qa").join(task);
+  fs::create_dir_all(folder.join(place)).expect("program folder");
+  let program = folder.join(place).join(if cfg!(windows) {
+    format!("{program}.exe")
   } else {
-    app.to_owned()
+    program.to_owned()
   });
   fs::copy(original, &program).expect("copy");
   // A QA copy writes where ORCHESTER_APP_MCP_DISCOVERY points (`tools/qa-app.ps1`: `.tmp/qa/<task>/mcp`).
@@ -146,6 +151,40 @@ pub fn exercise(worktree: &Path, images: bool, mut call: impl FnMut(&str, &Value
     ["navigate", "lurq_screenshot", "tool_error", "bad_image", "redirect"]
   );
   exercise_program_name(worktree, &mut call);
+  exercise_qa_copy(worktree, &mut call);
+}
+
+/// A QA copy the agent started with `tools/qa-app.ps1` itself (`orchester-app-qa` from `.tmp/qa/<task>/bin/`, which
+/// no `start_qa_app` keeps) is called by its pid through its own task folder's discovery file; a copy of that name
+/// running from anywhere else in the worktree is refused before any request.
+fn exercise_qa_copy(worktree: &Path, call: &mut impl FnMut(&str, &Value) -> Value) {
+  let (app, folder) = start_copy(worktree, "agent-started", "bin", "orchester-app-qa");
+  let pid = app.0.id();
+  // A valid file for the same pid in another task folder: the copy's own folder is the only one read, so it is
+  // neither used nor a second match.
+  let other = worktree.join(".tmp/qa/agent-other/mcp");
+  fs::create_dir_all(&other).expect("other task folder");
+  fs::copy(folder.join(format!("{pid}.json")), other.join(format!("{pid}.json"))).expect("other discovery");
+  let answer = call(
+    "call_run_app",
+    &json!({"pid":pid,"tool":"navigate","arguments":{"route":"settings"}}),
+  );
+  assert_eq!(answer["isError"], false, "{answer}");
+  assert_eq!(answer["structuredContent"]["route"], "settings");
+  assert!(!answer.to_string().contains("stand-in-app-private-token"));
+  assert_eq!(fs::read_to_string(folder.join("calls")).expect("calls"), "navigate\n");
+  eprintln!("app-relay: the QA copy called by its pid");
+
+  let (misplaced, misplaced_folder) = start_copy(worktree, "misplaced", "tools", "orchester-app-qa");
+  let refused = call(
+    "call_run_app",
+    &json!({"pid":misplaced.0.id(),"tool":"app_state","arguments":{}}),
+  );
+  assert_eq!(refused["isError"], true);
+  let text = refused["content"][0]["text"].as_str().expect("error");
+  assert!(text.contains("reached only when it runs from"), "{text}");
+  assert!(!misplaced_folder.join("calls").exists(), "refusal made no request");
+  eprintln!("app-relay: a QA copy outside its bin refused");
 }
 
 /// Opens the saved screenshot at `path` with `read_file`: an MCP image block when the relay serves Claude Code

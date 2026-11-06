@@ -43,7 +43,21 @@ pub fn to(
     | State::DownloadProgress
     | State::DownloadStopped
     | State::SharedProjects
-    | State::NoSharedProjects => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
+    | State::NoSharedProjects
+    | State::Member
+    | State::Admin
+    | State::ServerAdmin
+    | State::Outage
+    | State::OutageRunning
+    | State::OutageLater
+    | State::MemberRunning
+    | State::ModuleOutage
+    | State::Claims
+    | State::ModuleWork
+    | State::AdminWork
+    | State::VersionRefused
+    | State::TeamRunning
+    | State::EditConflict => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
   }
 }
 

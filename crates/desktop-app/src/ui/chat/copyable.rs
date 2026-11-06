@@ -1,9 +1,9 @@
-//! Messages of a chat with Copy ([`super::copy`]), which shows while the pointer is on the message. An agent's or the
-//! Orchestrator's row has it at the end of its name line, which is `control_height_sm` high so the message does not
-//! move when it shows (`Name` `GXvO5` in 07 `GgXmd`). A person's message, which the ORC-323 frames do not draw, has it
-//! beside its bubble, at the bubble's start and bottom, 8 from it; one whose toolbar has more than Copy
-//! ([`super::toolbar`], ORC-330) has it at the start of the line under the bubble, 8 before where the message stands
-//! (`Meta · hover` `A5WAyl` in 09 `GYAPg`). That toolbar keeps its room while it is hidden, as Copy's does.
+//! Messages of a chat with their actions ([`super::copy`]), which show while the pointer is on the message
+//! (`06 · Message actions` `XPDAX`, ORC-706). An agent's or the Orchestrator's row has them in a line under what it
+//! wrote, 8 under it, starting 4 before its text so a glyph stands near the text's edge (`Line` `SRzsZ`); its name
+//! line keeps only who wrote it and when. A person's message has them in the line under its bubble, at its end, with
+//! where the message stands after them, last, so nothing moves when they show (`Line` `yLkjx`). The line keeps its
+//! room while it is hidden.
 
 use std::sync::Arc;
 
@@ -15,16 +15,24 @@ use lurq::{
   },
   components::{Column, Row},
   core::Signal,
-  layout::{Alignment, layout_kind::Justify},
-  node::{Element, dimension::Dimension},
+  layout::Alignment,
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 
-use super::{Avatar, copy::message_actions_with, head, message_row, toolbar::MessageExtras};
-use crate::theme::ControlHeight;
+use super::{
+  AVATAR_SIZE, Avatar,
+  copy::{Edge, message_actions},
+  head, message_row,
+  toolbar::MessageExtras,
+};
+use crate::theme::{ControlHeight, ExtraSpacing};
 
-/// The row `id` of a message whose Markdown is `markdown`, as `super::chat_row_marked` draws a message, with Copy at
-/// the end of its name line while the pointer is on it ([`super::copy`]); that line is `control_height_sm` high, with
-/// or without Copy.
+/// How far an answer's actions start before its text: the glyph in its 24 button then stands near the text's edge
+/// (`Line` `SRzsZ`, padding -4).
+const LINE_OUTDENT: f32 = 4.0;
+
+/// The row `id` of a message whose Markdown is `markdown`, as `super::chat_row_marked` draws a message, with Copy in a
+/// line under it while the pointer is on it ([`super::copy`]).
 pub fn row(
   ctx: &mut Ctx,
   id: &str,
@@ -35,7 +43,7 @@ pub fn row(
   row_with(ctx, id, (avatar, markdown, None), (name, meta, mark), body)
 }
 
-/// [`row`] whose toolbar holds `extras` around Copy.
+/// [`row`] whose line holds `extras` around Copy.
 pub fn row_with(
   ctx: &mut Ctx,
   id: &str,
@@ -56,32 +64,24 @@ pub fn row_with(
   ctx.mount_keyed_with::<CopyableRow>(&format!("copyable-{id}"), props, children)
 }
 
-/// The bubble of the person's message `id` that says `words`, with Copy beside it.
-pub(super) fn bubble(ctx: &mut Ctx, id: &str, words: &Arc<str>, bubble: Element) -> Element {
-  let props = BubbleProps {
-    id: Arc::from(id),
-    words: words.clone(),
-  };
-  ctx.mount_keyed_with::<CopyableBubble>(&format!("copyable-{id}"), props, vec![bubble])
-}
-
 /// The person's message `id` that says `words`: its bubble and the files attached to it (`parts`, either may be
-/// missing), then the line under them, its toolbar with `extras` at its start and `delivery`, where the message
-/// stands, after it.
-pub(super) fn acted(
+/// missing), then the line under them, its actions with `extras` around Copy and `delivery`, where the message stands,
+/// last.
+pub(super) fn person(
   ctx: &mut Ctx,
   id: &str,
-  (words, extras): (&Arc<str>, MessageExtras),
+  (words, extras): (&Arc<str>, Option<MessageExtras>),
   parts: [Option<Element>; 2],
-  delivery: Element,
+  delivery: Option<Element>,
 ) -> Element {
-  let props = ActedProps {
+  let props = PersonProps {
     id: Arc::from(id),
     words: words.clone(),
     extras,
+    delivered: delivery.is_some(),
   };
-  let children = parts.into_iter().flatten().chain([delivery]).collect();
-  ctx.mount_keyed_with::<ActedMessage>(&format!("copyable-{id}"), props, children)
+  let children = parts.into_iter().flatten().chain(delivery).collect();
+  ctx.mount_keyed_with::<PersonMessage>(&format!("copyable-{id}"), props, children)
 }
 
 #[derive(Clone, PartialEq)]
@@ -115,78 +115,55 @@ impl Component for CopyableRow {
     let props = ctx.props::<RowProps>().clone();
     let mut children = ctx.children().to_vec();
     let mark = (props.marked && !children.is_empty()).then(|| children.remove(0));
-    let actions = message_actions_with(
+    let actions = message_actions(
       ctx,
       &props.id,
       (&props.markdown, props.extras.clone()),
-      self.hovered.get(),
+      (Edge::Start, self.hovered.get()),
     );
-    let head = head((&props.name, &props.meta, mark))
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(ControlHeight::Sm.value()))
-      .child(Row::new().flex(1.0))
-      .child(actions);
+    let head = head((&props.name, &props.meta, mark));
+    // The line stands outside the row, which clips what leaves it, so it can start before the text. It is as high as
+    // its buttons before they are mounted, so the row's height never changes under a list that measured it.
+    let indent = AVATAR_SIZE + ExtraSpacing::Loose.value() - LINE_OUTDENT;
     let (enter, leave) = (self.hovered.clone(), self.hovered.clone());
-    message_row(props.id.to_string(), props.avatar, head, children)
-      .on_mouse_enter(move || enter.set(true))
-      .on_mouse_leave(move || leave.set(false))
-  }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-struct BubbleProps {
-  id: Arc<str>,
-  words: Arc<str>,
-}
-
-impl DevtoolsInspectable for BubbleProps {}
-
-struct CopyableBubble {
-  hovered: Signal<bool>,
-}
-
-impl Component for CopyableBubble {
-  type Props = BubbleProps;
-
-  fn create(ctx: &mut Ctx) -> Self {
-    Self {
-      hovered: ctx.signal(false),
-    }
-  }
-
-  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let props = ctx.props::<BubbleProps>().clone();
-    let bubble = ctx.children().to_vec();
-    let actions = message_actions_with(ctx, &props.id, (&props.words, None), self.hovered.get());
-    let (enter, leave) = (self.hovered.clone(), self.hovered.clone());
-    // The row is as wide as the chat, so the bubble keeps its widest of it; Copy sits at the bubble's start.
-    Row::new()
+    Column::new()
+      .id(props.id.to_string())
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Sm)
-      .align_items(Alignment::End)
-      .justify(Justify::End)
-      .child(actions)
-      .with_children(bubble)
+      .child(message_row(
+        format!("{}-message", props.id),
+        props.avatar,
+        head,
+        children,
+      ))
+      .child(
+        Row::new()
+          .height(Dimension::Px(ControlHeight::Sm.value()))
+          .padding(Padding::default().left(indent))
+          .child(actions),
+      )
       .on_mouse_enter(move || enter.set(true))
       .on_mouse_leave(move || leave.set(false))
   }
 }
 
 #[derive(Clone, PartialEq)]
-struct ActedProps {
+struct PersonProps {
   id: Arc<str>,
   words: Arc<str>,
-  extras: MessageExtras,
+  extras: Option<MessageExtras>,
+  /// The last child is where the message stands.
+  delivered: bool,
 }
 
-impl DevtoolsInspectable for ActedProps {}
+impl DevtoolsInspectable for PersonProps {}
 
-struct ActedMessage {
+struct PersonMessage {
   hovered: Signal<bool>,
 }
 
-impl Component for ActedMessage {
-  type Props = ActedProps;
+impl Component for PersonMessage {
+  type Props = PersonProps;
 
   fn create(ctx: &mut Ctx) -> Self {
     Self {
@@ -195,18 +172,17 @@ impl Component for ActedMessage {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let props = ctx.props::<ActedProps>().clone();
+    let props = ctx.props::<PersonProps>().clone();
     let mut parts = ctx.children().to_vec();
-    let delivery = parts.pop();
-    let actions = message_actions_with(
+    let delivery = props.delivered.then(|| parts.pop()).flatten();
+    let actions = message_actions(
       ctx,
       &props.id,
-      (&props.words, Some(props.extras.clone())),
-      self.hovered.get(),
+      (&props.words, props.extras.clone()),
+      (Edge::End, self.hovered.get()),
     );
     let (enter, leave) = (self.hovered.clone(), self.hovered.clone());
     Column::new()
-      .id(props.id.to_string())
       .width(Dimension::Pct(100.0))
       .spacing(SpacingSize::Xs)
       .align_items(Alignment::End)
@@ -214,6 +190,7 @@ impl Component for ActedMessage {
       .child(
         Row::new()
           .id(format!("{}-meta", props.id))
+          .height(Dimension::Px(ControlHeight::Sm.value()))
           .spacing(SpacingSize::Sm)
           .align_items(Alignment::Center)
           .child(actions)

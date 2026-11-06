@@ -173,7 +173,7 @@ fn update_states_a_release_build_serves_neither_set_update_state_nor_hold_reads(
   let session = served.session();
   let names = served.endpoint().tool_names(&session);
   assert!(names.iter().any(|name| name == "update_state"), "{names:?}");
-  for tool in ["set_update_state", "hold_reads"] {
+  for tool in ["set_update_state", "hold_reads", "hold_hand_offs", "hold_integration"] {
     assert!(
       !names.iter().any(|name| name == tool),
       "{tool} is not listed: {names:?}"

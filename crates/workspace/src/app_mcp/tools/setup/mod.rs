@@ -8,6 +8,7 @@ mod accounts;
 mod api_providers;
 mod complete;
 mod connections;
+mod decision_connections;
 mod flaky_tests;
 mod instructions;
 mod mcp_preview;
@@ -31,6 +32,7 @@ mod skill_input;
 mod skills;
 mod stacks;
 mod storage;
+mod team_pipeline;
 mod tool_input;
 mod tool_program;
 pub(super) mod widening;
@@ -100,7 +102,8 @@ const SPECS: &[Spec] = &[
     name: "list_connections",
     description: "A project's connections: agent connections (id, name, provider codex_cli, claude_code_cli, \
                   anthropic_api or openai_api, program, status from the last check, CLI version, number of models, \
-                  the API provider a CLI runs on: base_url, host, key_secret's name and models), \
+                  the API provider a CLI runs on: base_url, host, key_secret's name and models), decision_models \
+                  (id, name, base_url, on_this_computer, key_secret id, models and last_check with answer timestamp), \
                   GitHub connections (id, name, host, status) and MCP servers, which profiles can give their \
                   agents: id, name, enabled, transport (stdio with program, args and working_directory, or http \
                   with url and authorization: its scheme none, bearer, basic with username, basic_credential or \
@@ -153,10 +156,11 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "list_models",
-    description: "The models an agent connection offers, each with the reasoning efforts it takes, as the profile \
-                  editor offers them: its last check's, an API provider's or a native connection's own. A model it \
-                  does not list can still be given to save_profile_draft (it runs as not verified); an effort is \
-                  kept only where the model lists it. `link` is the connection's in the app.",
+    description: "The models an agent or decision connection offers, each with the reasoning efforts it takes \
+                  (none for decision models). Decision models come from the connection's last model-list check, \
+                  with source decision. Agent models are offered as in the profile editor: its last check's, an \
+                  API provider's or a native connection's own. An unlisted agent model can still be given to \
+                  save_profile_draft (not verified); effort is kept only where listed. Agent connections include link.",
     schema: schema_for_type::<connections::InConnection>,
     read_only: true,
   },
@@ -349,6 +353,12 @@ const SPECS: &[Spec] = &[
     read_only: false,
   },
   Spec {
+    name: "share_pipeline",
+    description: "In a team project, an Admin makes one of their own local pipelines, which a team project hides, a                   team pipeline: its newest published version becomes a new team pipeline's first version, sent to                   the team server as Publish for the team sends one (names and roles of what it uses, never a                   secret's value), and team tasks can then name it by its new id. The agent profiles and tools its                   steps run must be the team's already (team_resources_required names those that are not). Refused                   in a local project (team_project_required) and for a member (not_admin); every member's agents may                   run it, so it is person_only unless a person turned on Let automation change agent permissions.                   The local pipeline stays as it is, hidden, under the slug <slug>-local. state is team once the                   server took it, or waiting (with not_sent) until it can be sent.",
+    schema: schema_for_type::<pipelines::InPipeline>,
+    read_only: false,
+  },
+  Spec {
     name: "publish_pipeline",
     description: "Publishes a pipeline's draft as its next version, as Publish does, so tasks can run it. Refused \
                   while it has no steps or a step has no profile or tool, or when the draft was started from an older \
@@ -419,8 +429,22 @@ const SPECS: &[Spec] = &[
                   integration of the run under way. Otherwise it refuses (needs_decision, merge_failed): preparing \
                   the checkout, conflict choices and approving the exact merged result are a person's, in the \
                   app's Local integration page. A run merged already, by Orchester or outside it as git proves \
-                  (its base branch holds the run's commits), is refused with already_merged.",
-    schema: schema_for_type::<super::runs::InRun>,
+                  (its base branch holds the run's commits), is refused with already_merged. A team project's run \
+                  is never merged into the base branch itself: its work is in its module's branch, and merge_run \
+                  requests that module's delivery from the team server, under the module's claim (taken when nobody \
+                  holds it), from the module branch's tip onto the tip of the branch the checkout has checked out; \
+                  an open delivery of the module is carried on instead. An Admin's authorization or the team's \
+                  automatic merge decides it, never this tool: `authorization` names the operation id of an Admin's \
+                  delivery authorization of this branch at these commits for the request to cite; without either \
+                  the team server keeps the request waiting for an Admin. Only a delivered module is a result \
+                  (delivery with its merge_commit); otherwise it refuses with where the delivery stands: \
+                  delivery_awaiting_admin (requested, waiting for an Admin to authorize it; call again once \
+                  authorized), delivery_not_authorized (the cited authorization is not of this delivery), \
+                  team_work_running (runs of the module still work here), team_delivery_waiting (waits for the \
+                  server), team_delivery_merge_waiting (the checkout is busy), delivery_failed, \
+                  delivery_report_refused, module_branch_checked_out (the checkout is on the module's branch), or \
+                  module_required for a run outside a module. Call it again to carry a waiting delivery on.",
+    schema: schema_for_type::<merge::MergeRun>,
     read_only: false,
   },
   Spec {
@@ -443,6 +467,7 @@ const SPECS: &[Spec] = &[
 pub fn listed() -> Vec<Tool> {
   SPECS
     .iter()
+    .chain(decision_connections::SPECS)
     .chain(project_tools::SPECS)
     .chain(skills::SPECS)
     .chain(secrets::SPECS)
@@ -478,6 +503,9 @@ pub async fn call(
   }
   if named(storage::SPECS) {
     return Some(storage::call(services, name, Value::Object(arguments)).await);
+  }
+  if named(decision_connections::SPECS) {
+    return Some(decision_connections::call(services, name, Value::Object(arguments)).await);
   }
   if !SPECS.iter().any(|spec| spec.name == name) {
     return None;
@@ -527,6 +555,7 @@ async fn configure(
     "create_pipeline" => pipelines::create_pipeline(services, parse(arguments)?, translate).await,
     "save_pipeline_draft" => pipeline_steps::save_pipeline_draft(services, parse(arguments)?, translate).await,
     "publish_pipeline" => pipelines::publish_pipeline(services, parse(arguments)?, translate).await,
+    "share_pipeline" => team_pipeline::share_pipeline(services, parse(arguments)?).await,
     "list_instructions" => instructions::list_instructions(services, parse(arguments)?, translate).await,
     "get_instruction" => instructions::get_instruction(services, parse(arguments)?).await,
     "save_instruction_draft" => instructions::save_instruction_draft(services, parse(arguments)?).await,

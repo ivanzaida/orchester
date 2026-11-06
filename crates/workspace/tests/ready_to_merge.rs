@@ -18,6 +18,7 @@ use std::{
 
 use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
+  id::TaskId,
   orchestrator::{
     ActionOutcome, ChatAction,
     change::{Change, ProposedChange},
@@ -284,4 +285,86 @@ fn ready_to_merge_runs_of_many_tasks_are_settled_in_one_reading_of_the_branches(
     3,
     "one branch listing and one of what main holds for all tasks, and one ancestry check of the merged run"
   );
+}
+
+/// The phase of `task`'s latest run, as `tasks` read it.
+fn latest_phase(tasks: &ProjectTasks, task: TaskId) -> TaskPhase {
+  tasks
+    .phases
+    .get(&task)
+    .and_then(|latest| latest.run())
+    .expect("its run")
+    .phase
+}
+
+#[test]
+fn ready_to_merge_readings_ask_git_again_only_of_runs_whose_branches_moved() {
+  let mut fixture = Fixture::new();
+  let base = repository(&fixture);
+  let by_hand = fixture.task("Write docs", at(10));
+  let mut merged = fixture.started_run_from(by_hand, (&base, "main"), at(20));
+  fixture.succeed(&mut merged, at(30));
+  work_on_branch(&fixture, &merged, "docs.md");
+  let waiting = fixture.task("Add sign-out", at(40));
+  let mut open = fixture.started_run_from(waiting, (&base, "main"), at(50));
+  fixture.succeed(&mut open, at(60));
+  work_on_branch(&fixture, &open, "sign_out.rs");
+  let repo = fixture.repo.path();
+  git(
+    repo,
+    &["merge", "--quiet", "--no-ff", "-m", "by hand", merged.branch().as_str()],
+  );
+  let counted = Arc::new(Counted {
+    git: ProcessRunner::new(Duration::from_secs(30)),
+    runs: AtomicUsize::new(0),
+  });
+  let programs = Programs::with_runner(counted.clone());
+  let read = |why: &str| {
+    counted.runs.store(0, Ordering::Relaxed);
+    let tasks = ProjectTasks::load(repo, &programs).expect(why);
+    (tasks, counted.runs.load(Ordering::Relaxed))
+  };
+
+  let (tasks, runs) = read("the first reading");
+  assert_eq!(ready_to_merge(&tasks), ["Add sign-out"]);
+  assert_eq!(runs, 3, "the branches, what main holds, and the merged run's ancestry");
+  let (tasks, runs) = read("a reading with nothing moved");
+  assert_eq!(latest_phase(&tasks, by_hand), TaskPhase::Merged, "what git said stands");
+  assert_eq!(ready_to_merge(&tasks), ["Add sign-out"]);
+  assert_eq!(runs, 1, "only the branches' tips, to see that none moved");
+
+  git(
+    repo,
+    &["commit", "--quiet", "--allow-empty", "-m", "the person's own work"],
+  );
+  let (tasks, runs) = read("a reading after main moved");
+  assert_eq!(ready_to_merge(&tasks), ["Add sign-out"]);
+  assert_eq!(
+    runs, 2,
+    "the waiting run's base moved: what main holds is asked again, not the merged run"
+  );
+
+  git(
+    repo,
+    &[
+      "merge",
+      "--quiet",
+      "--no-ff",
+      "-m",
+      "by hand too",
+      open.branch().as_str(),
+    ],
+  );
+  let (tasks, _) = read("a reading after the other run was merged with git");
+  assert!(
+    ready_to_merge(&tasks).is_empty(),
+    "a merge outside Orchester is still found"
+  );
+  assert_eq!(latest_phase(&tasks, waiting), TaskPhase::Merged);
+  let (tasks, runs) = read("a reading with every run merged");
+  assert_eq!(
+    (latest_phase(&tasks, by_hand), latest_phase(&tasks, waiting)),
+    (TaskPhase::Merged, TaskPhase::Merged)
+  );
+  assert_eq!(runs, 0, "runs git found merged stay merged: git need not run");
 }

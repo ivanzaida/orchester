@@ -12,6 +12,7 @@
 //! made it, and a person can revoke it. A rule names a service's variables, never their values.
 
 use serde::{Deserialize, Serialize};
+use thiserror::Error;
 
 use super::{
   rule::RuleScope,
@@ -40,8 +41,11 @@ impl ProjectRuleId {
   }
 }
 
-/// What a rule of the project approves.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+/// What a rule of the project approves. Serialized (the coordinator link and the coordinator's sink) as the
+/// [`RuleScope`] Approve similar keeps for a `start_qa_app` rule, read back only as [`ProjectScope::stored`] takes it,
+/// and as its [`ServiceApproval`] for a service's.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "ScopeForm", into = "ScopeForm")]
 pub enum ProjectScope {
   /// Orchester's `start_qa_app`, while the QA script is at one git blob. Stored as the [`RuleScope`] Approve similar
   /// keeps for the same call.
@@ -49,6 +53,42 @@ pub enum ProjectScope {
   /// One service, in any start of `start_service` or `start_stack` that runs it, while its fingerprint is the one
   /// approved.
   Service(ServiceApproval),
+}
+
+/// A rule scope that is not one a rule of the project keeps ([`ProjectScope::stored`]).
+#[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]
+#[error(
+  "a rule of the project approves only `start_qa_app` while its QA script is one git blob, or one service by its fingerprint"
+)]
+pub struct NotAProjectScope;
+
+/// How a [`ProjectScope`] travels: a `start_qa_app` rule as its [`RuleScope`], a service's as its
+/// [`ServiceApproval`]. Untagged, so a `start_qa_app` rule reads as the bare [`RuleScope`] it was before services.
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+enum ScopeForm {
+  Rule(RuleScope),
+  Service(ServiceApproval),
+}
+
+impl TryFrom<ScopeForm> for ProjectScope {
+  type Error = NotAProjectScope;
+
+  fn try_from(form: ScopeForm) -> Result<Self, NotAProjectScope> {
+    match form {
+      ScopeForm::Rule(scope) => Self::stored(scope).ok_or(NotAProjectScope),
+      ScopeForm::Service(service) => Ok(Self::Service(service)),
+    }
+  }
+}
+
+impl From<ProjectScope> for ScopeForm {
+  fn from(scope: ProjectScope) -> Self {
+    match scope {
+      ProjectScope::Service(service) => Self::Service(service),
+      ProjectScope::QaApp { script } => Self::Rule(qa_rule_scope(script)),
+    }
+  }
 }
 
 impl ProjectScope {
@@ -115,12 +155,7 @@ impl ProjectScope {
   /// How a `start_qa_app` scope is stored; `None` for a service's, which is stored as its [`ServiceApproval`].
   pub fn rule_scope(&self) -> Option<RuleScope> {
     match self {
-      Self::QaApp { script } => Some(RuleScope::SimilarMcpTool {
-        server: self.server().to_owned(),
-        tool: self.tool().to_owned(),
-        folder: None,
-        check: Some(script.clone()),
-      }),
+      Self::QaApp { script } => Some(qa_rule_scope(script.clone())),
       Self::Service(_) => None,
     }
   }
@@ -159,11 +194,21 @@ impl ProjectScope {
   }
 }
 
+/// The [`RuleScope`] Approve similar keeps for `start_qa_app` with the QA script at git blob `script`.
+fn qa_rule_scope(script: String) -> RuleScope {
+  RuleScope::SimilarMcpTool {
+    server: SERVER.to_owned(),
+    tool: OrchesterTool::StartQaApp.as_str().to_owned(),
+    folder: None,
+    check: Some(script),
+  }
+}
+
 /// How many characters of a script's blob a person reads, as git abbreviates one.
 const SHORT_SCRIPT: usize = 7;
 
-/// A rule of the project ([`ProjectScope`]).
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// A rule of the project ([`ProjectScope`]); it travels as it is to a run's executor (the coordinator link).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ProjectRule {
   pub id: ProjectRuleId,
   pub scope: ProjectScope,

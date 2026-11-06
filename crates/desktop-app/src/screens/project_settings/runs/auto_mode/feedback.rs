@@ -25,7 +25,7 @@ impl AutoMode {
       .on_click(move || {
         // A retry uses the reviewer the controls show now.
         if !tab.outside()
-          && let Ok(asked) = tab.draft()
+          && let Some(asked) = tab.draft()
         {
           // Retrying makes the change again: whoever presses it must be one who may.
           tab.note_input();

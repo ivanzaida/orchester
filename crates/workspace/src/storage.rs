@@ -1,18 +1,46 @@
 //! The disk guard as Project settings › Runs › Storage and Orchester's MCP tools read it (ORC-422): the free space the
 //! project keeps, the repository's disk, whether the guard holds work back — in every project, warm workspaces on or
 //! off — and, while it does, what could be cleaned to make room, in the order to clean
-//! ([`orchester_core::workspaces::cleanable_order`]). The runner holds and resumes the work itself.
+//! ([`orchester_core::workspaces::cleanable_order`]). The runner holds and resumes the work itself, and sizes the
+//! folders that could be cleaned (`docs/architecture/remote-runners.md`, rule 5).
 
 mod inventory;
 use std::path::Path;
 
-pub use inventory::{KeptKind, KeptRow, inventory, largest_first, measure, paused_runs};
+pub use inventory::{KeptKind, KeptRow, inventory, largest_first, measure, measure_worktree, paused_runs};
 use orchester_core::{
-  store::SettingsStore,
-  workspaces::{Cleanable, DiskSpace, DiskUsage, KeepFree, cleanable_order},
+  integration::WORKTREES_DIR,
+  store::{RunStore, SettingsStore, TaskStore, WorkspaceStore},
+  workspaces::{Cleanable, CleanableKind, DiskSpace, DiskUsage, KeepFree, WorkspaceNumber, cleanable_order},
 };
 use orchester_exec::disk_space::LocalDisks;
 use orchester_store::{ProjectDb, StoreError};
+use thiserror::Error;
+
+use crate::{
+  runner::{ExecutorFolders, RunRequestError},
+  tasks::{detail::run_store_error, run::control_message},
+};
+
+/// Why what the project's folders hold could not be read.
+#[derive(Debug, Error)]
+pub enum FoldersReadError {
+  #[error(transparent)]
+  Store(#[from] StoreError),
+  /// The runner, which lists and sizes the folders, did not answer.
+  #[error(transparent)]
+  Runner(#[from] RunRequestError),
+}
+
+impl FoldersReadError {
+  /// What a person reads when the folders could not be read.
+  pub fn message(&self) -> crate::messages::Message {
+    match self {
+      Self::Store(error) => crate::messages::store_error(error),
+      Self::Runner(error) => control_message(error),
+    }
+  }
+}
 
 /// The disk guard of a project as it stands now.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -56,13 +84,14 @@ pub struct CleanableRow {
   pub run: Option<(String, u32)>,
 }
 
-/// The storage of the project at `repo_root`, its disk read by `disks`. While the guard holds it walks the folders
-/// that could be cleaned to size them, so it blocks: callers read it off the UI thread.
-pub fn read(repo_root: &Path, disks: &dyn DiskSpace) -> Result<Storage, StoreError> {
+/// The storage of the project at `repo_root`, its disk read by `disks`. While the guard holds, the project's runner
+/// (`folders`) walks the folders that could be cleaned to size them, so it blocks: callers read it off the UI thread
+/// and off the async runtime.
+pub fn read(repo_root: &Path, disks: &dyn DiskSpace, folders: &ExecutorFolders) -> Result<Storage, FoldersReadError> {
   let db = ProjectDb::open_read_only(repo_root)?;
   let guard = DiskGuard::read(&db, repo_root, disks)?;
   let cleanable = if guard.holds() {
-    cleanable(repo_root)?
+    cleanable(&db, repo_root, folders)?
   } else {
     Vec::new()
   };
@@ -70,41 +99,80 @@ pub fn read(repo_root: &Path, disks: &dyn DiskSpace) -> Result<Storage, StoreErr
 }
 
 /// [`read`] of this computer's disk.
-pub fn read_local(repo_root: &Path) -> Result<Storage, StoreError> {
-  read(repo_root, &LocalDisks)
+pub fn read_local(repo_root: &Path, folders: &ExecutorFolders) -> Result<Storage, FoldersReadError> {
+  read(repo_root, &LocalDisks, folders)
 }
 
-/// The worktrees of ended runs and idle warm workspaces, with the inventory's same rules.
-fn cleanable(repo_root: &Path) -> Result<Vec<CleanableRow>, StoreError> {
-  let mut rows = inventory(repo_root)?;
-  rows.retain(|row| row.cleanable.is_some());
-  for row in &mut rows {
-    measure(row);
-  }
+/// The worktrees of ended runs, their own and their steps' (ORC-664), and the idle warm workspaces, sized by the
+/// runner, in the order to clean.
+fn cleanable(
+  db: &ProjectDb,
+  repo_root: &Path,
+  folders: &ExecutorFolders,
+) -> Result<Vec<CleanableRow>, FoldersReadError> {
+  let idle: Vec<WorkspaceNumber> = db
+    .workspaces()?
+    .into_iter()
+    .filter(|record| record.holder.is_none() && record.stranded.is_none())
+    .map(|record| record.number)
+    .collect();
+  let sizes = folders.sizes(idle)?;
+  let worktrees = ended_worktrees(db, repo_root, sizes.worktrees)?;
+  let workspaces = sizes.workspaces.into_iter().map(|(number, bytes)| Cleanable {
+    kind: CleanableKind::IdleWorkspace { number },
+    path: number.path(repo_root),
+    bytes,
+  });
   let ordered = cleanable_order(
-    rows
+    worktrees
       .iter()
-      .filter_map(|row| {
-        row.cleanable.map(|kind| Cleanable {
-          kind,
-          path: row.path.clone(),
-          bytes: row.bytes,
-        })
-      })
+      .map(|row| row.cleanable.clone())
+      .chain(workspaces)
       .collect(),
   );
   Ok(
     ordered
       .into_iter()
       .map(|cleanable| {
-        let run = rows
+        let run = worktrees
           .iter()
-          .find(|row| row.path == cleanable.path)
-          .and_then(|row| row.task.as_ref().map(|(key, _, number)| (key.clone(), *number)));
+          .find(|row| row.cleanable.path == cleanable.path)
+          .and_then(|row| row.run.clone());
         CleanableRow { cleanable, run }
       })
       .collect(),
   )
+}
+
+/// Of the worktree folders the runner `found`, those of runs that ended, each with its run's task key and number.
+fn ended_worktrees(
+  db: &ProjectDb,
+  repo_root: &Path,
+  found: Vec<(String, Option<u64>)>,
+) -> Result<Vec<CleanableRow>, StoreError> {
+  let owners = db.worktree_folder_runs()?;
+  let mut ended = Vec::new();
+  for (name, bytes) in found {
+    let Some(&run) = owners.get(&name) else {
+      continue;
+    };
+    let Some(stored) = db.run(run).map_err(run_store_error)? else {
+      continue;
+    };
+    if !stored.status().is_terminal() {
+      continue;
+    }
+    let task = db
+      .task(stored.task())?
+      .map(|task| (task.key().to_string(), stored.number().get()));
+    let cleanable = Cleanable {
+      kind: CleanableKind::EndedRunWorktree { run },
+      path: repo_root.join(WORKTREES_DIR).join(&name),
+      bytes,
+    };
+    ended.push(CleanableRow { cleanable, run: task });
+  }
+  Ok(ended)
 }
 
 /// Saving a validated KeepFree is the same operation for the window and MCP.

@@ -73,11 +73,13 @@ async fn exercise(provider: AgentProvider) {
       "the program orchester called",
       "missing discovery refused",
       "duplicate discovery refused",
-      "QA folder bound refused"
+      "QA folder bound refused",
+      "the QA copy called by its pid",
+      "a QA copy outside its bin refused"
     ]
   );
   if provider == AgentProvider::ClaudeCodeCli {
-    assert_eq!(reported(&db, id, "app-permission: ").len(), 16);
+    assert_eq!(reported(&db, id, "app-permission: ").len(), 18);
   }
   // The fake app echoes its token. Neither its answers nor the persisted transcript may contain it.
   let transcript = reported(&db, id, "");

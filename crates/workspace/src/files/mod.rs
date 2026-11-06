@@ -2,8 +2,10 @@
 //! file and the tree at a version (the project's checkout, a run's worktree, a commit or the base
 //! branch), the versions a file has, file-name search and search within a file. Only files inside the
 //! project's folder or the run's worktree are read, through the file scope agents' file tools use;
-//! `.git` and `.orchester` are never shown. Only read-only git commands run. Everything here blocks on
-//! the file system and git; the UI calls it off the UI thread.
+//! `.git` and `.orchester` are never shown. Only read-only git commands run. A run's worktree is read by
+//! the project's runner ([`RunFiles`], `docs/architecture/remote-runners.md`, rule 5), the checkout and
+//! commits here. Everything here blocks on the file system, git and the runner; the UI calls it off the
+//! UI thread.
 
 mod digest;
 mod follow;
@@ -11,6 +13,7 @@ mod list;
 mod open;
 mod path;
 mod read;
+mod runs;
 mod source;
 mod text;
 mod text_types;
@@ -31,6 +34,7 @@ pub use self::{
   open::{OpenError, OpenFacts, OpenWith, Platform, Refusal, open_target, open_with},
   path::{FilePath, PathError, is_hidden},
   read::{FileView, MAX_VIEW_BYTES, read_file},
+  runs::RunFiles,
   text::{FileText, LineRange, LineRangeError, MAX_MATCHES, TextMatch},
   version::{Version, VersionParseError},
   versions::{FileFacts, Removal, RunFacts, VersionChoice, Versions, versions},
@@ -56,6 +60,9 @@ pub enum FilesError {
   Git(String),
   #[error("the project's database cannot be read: {0}")]
   Store(String),
+  /// The project's runner, which reads a run's worktree, did not answer.
+  #[error("the project's runner did not answer: {0}")]
+  Runner(String),
 }
 
 impl FilesError {
@@ -74,6 +81,7 @@ impl FilesError {
       Self::GitMissing => Message::new("files.failure.gitMissing"),
       Self::Git(_) => Message::new("files.failure.git"),
       Self::Store(_) => Message::new("files.failure.store"),
+      Self::Runner(_) => Message::new("files.failure.runner"),
     }
   }
 }
@@ -91,8 +99,13 @@ fn path_message(error: &PathError) -> Message {
 }
 
 /// The files of `version` of the project at `repo_root`. A folder lists what git tracks there and the
-/// files it does not ignore, without tracked files that were deleted; a commit lists what it holds.
-pub fn list_files(runner: &dyn CommandRunner, repo_root: &Path, version: &Version) -> Result<FileList, FilesError> {
+/// files it does not ignore, without tracked files that were deleted; a run's worktree the same, as its
+/// runner (`runs`) lists it; a commit lists what it holds.
+pub fn list_files(
+  (runner, runs): (&dyn CommandRunner, &dyn RunFiles),
+  repo_root: &Path,
+  version: &Version,
+) -> Result<FileList, FilesError> {
   let listed = |directory: &Path, args: &[&str]| -> Result<Vec<String>, FilesError> {
     let output = git_output(runner, directory, args)?;
     Ok(
@@ -113,6 +126,7 @@ pub fn list_files(runner: &dyn CommandRunner, repo_root: &Path, version: &Versio
       files.retain(|path| !deleted.contains(path));
       Ok(FileList::new(files))
     }
+    Source::Run(run) => Ok(FileList::new(runs::list(runs, run)?)),
     Source::Commit { repo, commit, .. } => Ok(FileList::new(listed(
       &repo,
       &["ls-tree", "-r", "-z", "--name-only", &commit],

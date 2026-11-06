@@ -1,8 +1,8 @@
-//! What the toolbars of the conversation's messages offer besides Copy (09 `GYAPg`, 09d `Pe6Di`): the person's own
-//! message *Edit* and `…`, an answer `…`, whose menu holds *Rewind to here* and *Fork from here* (ORC-334). While the
+//! What the actions of the conversation's messages offer besides Copy (`06 · Message actions` `XPDAX`, ORC-706): the
+//! person's own message *Edit*, *Rewind to here* and *Fork from here* (ORC-334), an answer the last two. While the
 //! Orchestrator answers, compacts its session or a message waits, *Edit* and *Rewind to here* are at half and say
 //! *Stop the answer to edit or rewind*, while *Fork from here* still forks what was kept so far; an answer nothing
-//! follows cannot be rewound to and its row says so. No second fork starts while one is being made.
+//! follows cannot be rewound to and its *Rewind to here* says so. No second fork starts while one is being made.
 
 use std::sync::Arc;
 
@@ -13,10 +13,7 @@ use orchester_workspace::workspace::OpenProject;
 use super::{Editing, Rewinding};
 use crate::{
   screens::orchestrator::turns::{Arrival, Turn},
-  ui::{
-    chat::toolbar::{Choice, MessageExtras, MoreActions, MoreRow, ToolbarChoice},
-    icon::Icon,
-  },
+  ui::chat::toolbar::{Choice, MessageExtras, ToolbarChoice},
 };
 
 /// Why nothing can be edited or rewound now, and why no fork can be made now; `None` for each that can.
@@ -84,8 +81,8 @@ impl RewindEnv {
       .is_some_and(|((editing, _), seq)| seq > editing.seq)
   }
 
-  /// *Edit* and `…` of the person's message that opens `turn`, once it is kept and has its turn, or the answer under
-  /// way took it; `None` for one being sent or that waits.
+  /// *Edit*, *Rewind to here* and *Fork from here* of the person's message that opens `turn`, once it is kept and has
+  /// its turn, or the answer under way took it; `None` for one being sent or that waits.
   pub(in crate::screens::orchestrator) fn on_message(&self, ctx: &Ctx, turn: &Turn) -> Option<MessageExtras> {
     let (message, seq, at) = (turn.message?, turn.seq()?, turn.at?);
     if turn.arrival == Arrival::Waiting || turn.on_its_own() {
@@ -103,14 +100,11 @@ impl RewindEnv {
     };
     let state = self.state.clone();
     let rewind = choose(Arc::new(move || state.ask(RewindPoint::Before(message), seq, at)));
-    Some(MessageExtras {
-      edit: Some(edit),
-      more: Some(self.more(ctx, rewind, RewindPoint::Before(message))),
-    })
+    Some(self.extras(ctx, Some(edit), rewind, RewindPoint::Before(message)))
   }
 
-  /// `…` of the answer of `turn`, which rewinds to just after its last part, or forks up to it; `None` before it said
-  /// anything.
+  /// *Rewind to here* and *Fork from here* of the answer of `turn`, which rewind to just after its last part, or fork
+  /// up to it; `None` before it said anything.
   pub(in crate::screens::orchestrator) fn on_answer(&self, ctx: &Ctx, turn: &Turn) -> Option<MessageExtras> {
     let (last, answered) = (turn.last()?, turn.answer.first()?.at());
     let point = RewindPoint::After { last, answered };
@@ -121,35 +115,26 @@ impl RewindEnv {
       None if !self.state.follows(last) => Err(ctx.t("orchestrator.message.nothingAfter")),
       None => Ok(rewind),
     };
-    Some(MessageExtras {
-      edit: None,
-      more: Some(self.more(ctx, rewind, point)),
-    })
+    Some(self.extras(ctx, None, rewind, point))
   }
 
-  /// The menu: *Rewind to here* as `rewind` says, and *Fork from here* at `point`.
-  fn more(&self, ctx: &Ctx, rewind: Choice, point: RewindPoint) -> MoreActions {
+  /// `edit`, *Rewind to here* as `rewind` says, and *Fork from here* at `point`.
+  fn extras(&self, ctx: &Ctx, edit: Option<ToolbarChoice>, rewind: Choice, point: RewindPoint) -> MessageExtras {
     let (state, project) = (self.state.clone(), self.project.clone());
     let fork: Choice = match &self.forking {
       Some(why) => Err(why.clone()),
       None => Ok(Arc::new(move || state.fork(&project, point))),
     };
-    MoreActions {
-      label: ctx.t("orchestrator.message.more"),
-      rows: vec![
-        MoreRow {
-          key: "rewind",
-          label: ctx.t("orchestrator.message.rewind"),
-          icon: Icon::History,
-          choose: rewind,
-        },
-        MoreRow {
-          key: "fork",
-          label: ctx.t("orchestrator.message.fork"),
-          icon: Icon::GitFork,
-          choose: fork,
-        },
-      ],
+    MessageExtras {
+      edit,
+      rewind: Some(ToolbarChoice {
+        label: ctx.t("orchestrator.message.rewind"),
+        choose: rewind,
+      }),
+      fork: Some(ToolbarChoice {
+        label: ctx.t("orchestrator.message.fork"),
+        choose: fork,
+      }),
     }
   }
 }

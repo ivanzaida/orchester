@@ -12,13 +12,12 @@ use std::path::Path;
 
 use orchester_core::{
   id::RunId,
-  integration::resolve::{self, ResolveError, Started},
+  integration::resolve::{Started, request::FailureReason},
   merge_queue::{Left, QueueEntry, QueueEvent, QueueState},
   run::{Answerer, BranchName, ReviewNote, Run, RunStatus, StuckDecision},
   store::RunStore,
   time::Timestamp,
 };
-use orchester_exec::programs::Programs;
 use orchester_ipc::{Command, WorkReturn};
 use orchester_store::{ProjectDb, ResolutionStart};
 
@@ -26,9 +25,10 @@ use super::{QueueRefusal, integrate::integrate_step, order::to_top, wake};
 use crate::{
   messages::Message,
   tasks::{
-    changes::{GIT, run_worktree},
     detail::run_store_error,
     integration::file_list,
+    resolve::{RunWorktrees, Unresolved},
+    run::control_message,
   },
 };
 
@@ -99,9 +99,9 @@ pub fn reject(root: &Path, run: RunId, now: Timestamp) -> Result<(), QueueRefusa
 }
 
 /// *Resolve myself* on `run`, out of the queue of the project at `root` with conflicts: the base branch is merged into
-/// the run's branch in its worktree and the files that conflict are left there with git's markers, unless a merge is in
-/// progress there already. Gives the files that conflict.
-pub fn resolve_myself(root: &Path, programs: &Programs, run: RunId) -> Result<Vec<String>, QueueRefusal> {
+/// the run's branch in its worktree, among `worktrees`, and the files that conflict are left there with git's markers,
+/// unless a merge is in progress there already. Gives the files that conflict.
+pub fn resolve_myself(root: &Path, worktrees: &RunWorktrees, run: RunId) -> Result<Vec<String>, QueueRefusal> {
   let mut db = ProjectDb::open(root)?;
   let entry = entry_in(&db, run, |state| {
     matches!(state, QueueState::Left(Left::Conflicts { .. }))
@@ -111,17 +111,15 @@ pub fn resolve_myself(root: &Path, programs: &Programs, run: RunId) -> Result<Ve
   };
   let stored = db.run(run).map_err(run_store_error)?.ok_or(QueueRefusal::NotThere)?;
   let base = stored.base_branch().ok_or(QueueRefusal::NotThere)?.clone();
-  let worktree = run_worktree(root, run);
-  let git = programs.git_work();
-  if resolve::in_merge(&git, Path::new(GIT), &worktree).map_err(|error| refusal(&error.into()))? {
+  if worktrees.in_merge(run).map_err(|error| refusal(&error))? {
     return Ok(files.clone());
   }
   match db.begin_resolution(run, Timestamp::now())? {
     ResolutionStart::Begun => {}
     ResolutionStart::NotEnded | ResolutionStart::Merged => return Err(QueueRefusal::NotThere),
   }
-  let tip = head(programs, &worktree)?;
-  let started = resolve::start(&git, Path::new(GIT), &worktree, (&base, stored.branch(), &tip));
+  let tip = worktrees.head(run).map_err(|error| refusal(&error))?;
+  let started = worktrees.start(run, (&base, stored.branch(), &tip));
   if !matches!(started, Ok(Started::Conflicts(_))) {
     db.end_resolution(run)?;
   }
@@ -135,11 +133,11 @@ pub fn resolve_myself(root: &Path, programs: &Programs, run: RunId) -> Result<Ve
 }
 
 /// *I've resolved it* on `run`, out of the queue of the project at `root` with conflicts: no conflict marker may be
-/// left, and the merge in its worktree is committed. Gives the command that sends its work back to its Integrate step
-/// with the person's resolution, for the project's runner, or `None` when its pipeline has no Integrate step (its
-/// conflicts went straight to the person); then tell how sending it went with [`requeue`]. The run is still out of the
-/// queue: pressing it again after the runner did not take the command sends it again.
-pub fn resolved(root: &Path, programs: &Programs, run: RunId) -> Result<Option<Command>, QueueRefusal> {
+/// left, and the merge in its worktree, among `worktrees`, is committed. Gives the command that sends its work back to
+/// its Integrate step with the person's resolution, for the project's runner, or `None` when its pipeline has no
+/// Integrate step (its conflicts went straight to the person); then tell how sending it went with [`requeue`]. The run
+/// is still out of the queue: pressing it again after the runner did not take the command sends it again.
+pub fn resolved(root: &Path, worktrees: &RunWorktrees, run: RunId) -> Result<Option<Command>, QueueRefusal> {
   let mut db = ProjectDb::open(root)?;
   let entry = entry_in(&db, run, |state| {
     matches!(state, QueueState::Left(Left::Conflicts { .. }))
@@ -155,22 +153,14 @@ pub fn resolved(root: &Path, programs: &Programs, run: RunId) -> Result<Option<C
       .deliver()
       .and_then(|deliver| integrate_step(&stored, deliver)),
   };
-  let worktree = run_worktree(root, run);
-  let git = programs.git_work();
-  if resolve::in_merge(&git, Path::new(GIT), &worktree).map_err(|error| refusal(&error.into()))? {
-    let tip = head(programs, &worktree)?;
-    resolve::finish(&git, Path::new(GIT), &worktree, (&base, &tip)).map_err(|error| refusal(&error))?;
+  if worktrees.in_merge(run).map_err(|error| refusal(&error))? {
+    let tip = worktrees.head(run).map_err(|error| refusal(&error))?;
+    worktrees.finish(run, (&base, &tip)).map_err(|error| refusal(&error))?;
     db.end_resolution(run)?;
   } else if let QueueState::Left(Left::Conflicts { files }) = &entry.state {
-    let marked: Vec<String> = files
-      .iter()
-      .filter(|file| {
-        std::fs::read_to_string(worktree.join(file.as_str())).is_ok_and(|text| resolve::holds_markers(&text))
-      })
-      .cloned()
-      .collect();
+    let marked = worktrees.marked(run, files).map_err(|error| refusal(&error))?;
     if !marked.is_empty() {
-      return Err(refusal(&ResolveError::MarkersLeft(marked)));
+      return Err(QueueRefusal::MarkersLeft(marked));
     }
   }
   // The run's worktree changed: whoever shows the run reads it again.
@@ -198,6 +188,23 @@ pub fn requeue(root: &Path, run: RunId, sent: Result<(), Message>, now: Timestam
     return Err(QueueRefusal::NotThere);
   }
   to_top(&mut db, run)?;
+  wake(root);
+  Ok(())
+}
+
+/// *Try again* on `run`, which delivery stopped at `now` for a cause that lasts until someone acts on it (the merge
+/// attempt page, 09e `s1jIpI`): it goes back in the queue in the place it had, its check and approval as they were, and
+/// is delivered in its turn.
+pub fn retry_stopped(root: &Path, run: RunId, now: Timestamp) -> Result<(), QueueRefusal> {
+  let mut db = ProjectDb::open(root)?;
+  let mut entry = entry_in(&db, run, |state| {
+    matches!(state, QueueState::Left(Left::Stopped { .. }))
+  })?;
+  let expected = std::mem::replace(&mut entry.state, QueueState::Queued);
+  entry.since = now;
+  if !db.save_merge_queue_entry(&entry, &expected, (&[QueueEvent::Requeued], now))? {
+    return Err(QueueRefusal::NotThere);
+  }
   wake(root);
   Ok(())
 }
@@ -245,16 +252,17 @@ fn entry_in(db: &ProjectDb, run: RunId, state: impl Fn(&QueueState) -> bool) -> 
     .ok_or(QueueRefusal::NotThere)
 }
 
-fn head(programs: &Programs, worktree: &Path) -> Result<orchester_core::revision::Revision, QueueRefusal> {
-  let runner = programs.runner();
-  orchester_core::integration::delivery::head(&runner, Path::new(GIT), worktree).map_err(|error| refusal(&error.into()))
-}
-
-/// Why resolving did not go on.
-fn refusal(error: &ResolveError) -> QueueRefusal {
-  QueueRefusal::Resolve(match error {
-    ResolveError::MarkersLeft(files) => return QueueRefusal::MarkersLeft(files.clone()),
-    ResolveError::Uncommitted(files) => Message::new("tasks.resolve.uncommitted").with("files", file_list(files, ", ")),
-    other => Message::new("mergeQueue.refused.resolve").with("detail", other.to_string()),
+/// Why resolving did not go on: the project's runner's words when it did not carry it out.
+fn refusal(error: &Unresolved) -> QueueRefusal {
+  let failure = match error {
+    Unresolved::Runner(error) => return QueueRefusal::Resolve(control_message(error)),
+    Unresolved::Failed(failure) => failure,
+  };
+  QueueRefusal::Resolve(match &failure.reason {
+    FailureReason::MarkersLeft(files) => return QueueRefusal::MarkersLeft(files.clone()),
+    FailureReason::Uncommitted(files) => {
+      Message::new("tasks.resolve.uncommitted").with("files", file_list(files, ", "))
+    }
+    _ => Message::new("mergeQueue.refused.resolve").with("detail", failure.detail.clone()),
   })
 }

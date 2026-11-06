@@ -1,7 +1,7 @@
-//! Base branches of tasks and modules (`orchester_core::integration::base`): `tasks.base_choice`/`tasks.base_branch`,
-//! `modules.base_branch` and where each run's came from (`runs.base_source`). Kept on this computer: a shared task's
-//! or module's base branch is never sent and leaves its server revision alone, while a local task's raises its
-//! revision as any edit does.
+//! Base branches of tasks and modules (`orchester_core::integration::base`): `task_bases` by task identity (Inherit
+//! has no row), `modules.base_branch` and where each run's came from (`runs.base_source`). Kept on this computer: a
+//! shared task's or module's base branch is never sent and leaves its server revision alone, while a local task's
+//! raises its revision as any edit does.
 
 use orchester_core::{
   id::{ModuleId, TaskId},
@@ -46,11 +46,17 @@ impl ProjectDb {
     if local && current.revision() != read {
       return Ok(TaskUpdate::Conflict { current });
     }
-    let (choice, branch) = task_base_columns(base);
+    match task_base_columns(base) {
+      Some((choice, branch)) => transaction.execute(
+        "INSERT INTO task_bases (task_id, choice, branch) VALUES (?1, ?2, ?3) \
+         ON CONFLICT (task_id) DO UPDATE SET choice = excluded.choice, branch = excluded.branch",
+        params![id.to_string(), choice, branch],
+      )?,
+      None => transaction.execute("DELETE FROM task_bases WHERE task_id = ?1", [id.to_string()])?,
+    };
     transaction.execute(
-      "UPDATE tasks SET base_choice = ?2, base_branch = ?3, \
-       revision = CASE WHEN sharing IS NULL THEN revision + 1 ELSE revision END WHERE id = ?1",
-      params![id.to_string(), choice, branch],
+      "UPDATE tasks SET revision = CASE WHEN sharing IS NULL THEN revision + 1 ELSE revision END WHERE id = ?1",
+      [id.to_string()],
     )?;
     let task = tasks::load_task(&transaction, self.project.key(), id)?;
     transaction.commit()?;
@@ -93,11 +99,12 @@ impl ProjectDb {
   }
 }
 
-pub(super) fn task_base_columns(base: &TaskBase) -> (&'static str, Option<&str>) {
+/// The `task_bases` row of `base`; Inherit has none.
+fn task_base_columns(base: &TaskBase) -> Option<(&'static str, Option<&str>)> {
   match base {
-    TaskBase::Inherit => ("inherit", None),
-    TaskBase::CheckedOut => ("checked_out", None),
-    TaskBase::Branch(branch) => ("branch", Some(branch.as_str())),
+    TaskBase::Inherit => None,
+    TaskBase::CheckedOut => Some(("checked_out", None)),
+    TaskBase::Branch(branch) => Some(("branch", Some(branch.as_str()))),
   }
 }
 

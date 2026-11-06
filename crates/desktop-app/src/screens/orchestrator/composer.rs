@@ -137,7 +137,12 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, mut composer: ComposerBox<'_>
     .take()
     .map_or((None, Vec::new()), |plan| (Some(plan.switch), plan.over));
   let field = field(ctx, view, &composer, (not_set_up, flip));
-  let field = with_skill_chip(ctx, ("orchestrator-composer", composer.reach), &view.skill, field);
+  let field = with_skill_chip(
+    ctx,
+    ("orchestrator-composer", composer.reach, &view.mention_anchor),
+    &view.skill,
+    field,
+  );
   let end: Vec<Element> = match composer.set_up {
     Some(set_up) => vec![set_up],
     None => vec![keys(ctx).into(), send(ctx, view, composer.sending)],

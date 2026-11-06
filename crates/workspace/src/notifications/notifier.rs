@@ -11,12 +11,23 @@ use orchester_core::{id::ProjectId, time::Timestamp};
 use super::{COALESCE, Event, Kind, NotificationGroup, NotificationSettings, Target, words::Notification};
 
 /// Whose events one reading holds: one project's, its Orchestrator conversations' proposals, which are read apart
-/// from it, or the agent accounts' plan limits, which every project shares.
+/// from it, the runs a resource archived on the team's server stopped there this session, or the agent accounts'
+/// plan limits, which every project shares.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Scope {
   Project(ProjectId),
   Chats(ProjectId),
+  Archives(ProjectId),
   Accounts,
+}
+
+impl Scope {
+  /// Whether what stands at its first reading is no news. The archive stops it is given are this session's only, and
+  /// one the stream recorded before the project's first reading (an archive made while this computer was offline)
+  /// is still news.
+  const fn baselined(self) -> bool {
+    !matches!(self, Self::Archives(_))
+  }
 }
 
 /// What decides, at a moment, whether a notification is shown.
@@ -70,9 +81,13 @@ impl Notifier {
       .iter()
       .map(|event| (event.key.clone(), event.batch.clone()))
       .collect();
-    let Some(before) = self.standing.insert(scope, standing) else {
-      self.batches.extend(events.into_iter().filter_map(|event| event.batch));
-      return;
+    let before = match self.standing.insert(scope, standing) {
+      Some(before) => before,
+      None if scope.baselined() => {
+        self.batches.extend(events.into_iter().filter_map(|event| event.batch));
+        return;
+      }
+      None => HashMap::new(),
     };
     let standing = &self.standing[&scope];
     self
@@ -86,12 +101,13 @@ impl Notifier {
     self.keep_standing_batches();
   }
 
-  /// Forgets `scope`: a project the app no longer has open, with its conversations' scope.
+  /// Forgets `scope`: a project the app no longer has open, with its conversations' and its archive stops' scopes.
   pub fn forget(&mut self, scope: Scope) {
     let mut gone = vec![scope];
     if let Scope::Project(project) = scope {
       self.needs_you.remove(&project);
       gone.push(Scope::Chats(project));
+      gone.push(Scope::Archives(project));
     }
     for scope in &gone {
       self.standing.remove(scope);

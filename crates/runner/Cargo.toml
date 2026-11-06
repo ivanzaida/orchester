@@ -99,7 +99,15 @@ name = "chat_codex"
 required-features = ["test-agent"]
 
 [[test]]
+name = "review_answer"
+required-features = ["test-agent"]
+
+[[test]]
 name = "chat_compact"
+required-features = ["test-agent"]
+
+[[test]]
+name = "chat_context_window"
 required-features = ["test-agent"]
 
 [[test]]
@@ -223,6 +231,10 @@ name = "writable_folders"
 required-features = ["test-agent"]
 
 [[test]]
+name = "codex_sandbox"
+required-features = ["test-agent"]
+
+[[test]]
 name = "missing_worktree"
 required-features = ["test-agent"]
 
@@ -248,6 +260,10 @@ required-features = ["test-agent"]
 
 [[test]]
 name = "returned"
+required-features = ["test-agent"]
+
+[[test]]
+name = "resolve"
 required-features = ["test-agent"]
 
 [[test]]
@@ -417,6 +433,30 @@ required-features = ["test-agent"]
 name = "native_ui"
 required-features = ["test-agent"]
 
+[[test]]
+name = "worktree_removal"
+required-features = ["test-agent"]
+
+[[test]]
+name = "run_git"
+required-features = ["test-agent"]
+
+[[test]]
+name = "serialized_boundary"
+required-features = ["test-agent"]
+
+[[test]]
+name = "decision_review"
+required-features = ["test-agent"]
+
+[[test]]
+name = "team_inputs"
+required-features = ["test-agent"]
+
+[[test]]
+name = "team_start"
+required-features = ["test-agent"]
+
 [features]
 test-agent = []
 
@@ -437,6 +477,8 @@ orchester-store.workspace = true
 # Reads the values of the secrets MCP servers use from the OS keychain when an agent starts.
 orchester-vault.workspace = true
 parking_lot.workspace = true
+# The requests and answers of the coordinator link (`execution::link`), plain values that serialize.
+serde.workspace = true
 serde_json.workspace = true
 # The log line a service's readiness waits for (`execution::step::service`), as core checks the pattern.
 regex.workspace = true
@@ -465,6 +507,10 @@ tracing-subscriber.workspace = true
 windows-sys = { workspace = true, features = ["Win32_Graphics_Gdi", "Win32_System_LibraryLoader", "Win32_UI_WindowsAndMessaging"] }
 
 [dev-dependencies]
+# The team start tests (`tests/team_start.rs`): the desktop's start through a fake team server into this runner, with
+# the server's API client and contract.
+orchester-api = { workspace = true, features = ["client"] }
+orchester-workspace.workspace = true
 # The contention tests read the longest write-lock holds and shorten the time a write waits for a lock.
 orchester-store = { workspace = true, features = ["test-support"] }
 # The in-memory keychain of the tests is shared with the scheduler.

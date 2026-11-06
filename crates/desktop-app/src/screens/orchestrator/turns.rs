@@ -77,6 +77,8 @@ pub(super) enum Arrival {
 pub(super) struct Turn {
   /// `None` while it is being sent and not kept yet, and for a wait or a report that started no turn.
   pub(super) message: Option<ChatMessageId>,
+  /// The id a message being sent is kept under: its row keeps its key, and so its element, once it is kept.
+  sending: Option<ChatMessageId>,
   /// The person's words; empty for a wait or a report, and for a message of attachments only.
   pub(super) text: Arc<str>,
   /// The files the person attached to the message.
@@ -115,9 +117,9 @@ pub(super) struct Turn {
 }
 
 impl Turn {
-  /// A message being sent, which the conversation does not hold yet: one that starts a turn of its own (`state`
+  /// Message `id` being sent, which the conversation does not hold yet: one that starts a turn of its own (`state`
   /// thinking), or one written while the Orchestrator answers, as it will wait.
-  pub(super) fn sending(text: &str, state: TurnState) -> Self {
+  pub(super) fn sending(id: ChatMessageId, text: &str, state: TurnState) -> Self {
     let arrival = if state.has_turn() {
       Arrival::Own
     } else {
@@ -125,6 +127,7 @@ impl Turn {
     };
     Self {
       message: None,
+      sending: Some(id),
       text: Arc::from(text),
       attachments: Arc::from([]),
       wait: None,
@@ -161,6 +164,7 @@ impl Turn {
   fn opened(entry: &ChatEntry, turn: Option<&WaitTurn>) -> Self {
     Self {
       message: turn.map(|turn| turn.message),
+      sending: None,
       text: Arc::from(""),
       attachments: Arc::from([]),
       wait: None,
@@ -192,9 +196,9 @@ impl Turn {
     })
   }
 
-  /// The row's key: its message, its wait's or report's entry, or *sending* until it is kept.
+  /// The row's key: its message, the one it is being sent as, or its wait's or report's entry.
   pub(super) fn key(&self) -> String {
-    match (self.message, self.seq) {
+    match (self.message.or(self.sending), self.seq) {
       (Some(message), _) => message.to_string(),
       (None, Some(seq)) => format!("wait-{seq}"),
       (None, None) => "sending".to_owned(),
@@ -371,6 +375,7 @@ fn person(
   };
   Turn {
     message: Some(message),
+    sending: None,
     text: Arc::from(words),
     attachments,
     wait: None,

@@ -5,12 +5,13 @@
 
 use std::ops::RangeInclusive;
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::MemoryScope;
 
 /// How a record an agent writes is kept.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum WritePolicy {
   /// Saved automatically: active at once, and injected from the next invocation on.
   Automatic,
@@ -42,8 +43,10 @@ pub enum MemoryLimitsError {
   Tokens(u32),
 }
 
-/// How much memory one agent invocation's prompt gets at most.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// How much memory one agent invocation's prompt gets at most. It is read back from serde through
+/// [`MemoryLimits::new`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(try_from = "LimitsFields")]
 pub struct MemoryLimits {
   records: u16,
   tokens: u32,
@@ -78,8 +81,23 @@ impl MemoryLimits {
   }
 }
 
+/// [`MemoryLimits`] as serde reads them, before they are checked.
+#[derive(Deserialize)]
+struct LimitsFields {
+  records: u16,
+  tokens: u32,
+}
+
+impl TryFrom<LimitsFields> for MemoryLimits {
+  type Error = MemoryLimitsError;
+
+  fn try_from(fields: LimitsFields) -> Result<Self, Self::Error> {
+    Self::new(fields.records, fields.tokens)
+  }
+}
+
 /// A project's memory setting.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MemorySettings {
   pub task_writes: WritePolicy,
   pub project_writes: WritePolicy,

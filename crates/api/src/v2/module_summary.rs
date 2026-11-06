@@ -21,7 +21,7 @@ use crate::{SharedModuleChange, wire};
 
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "WorkUnit", rename_all = "snake_case")]
-enum WorkUnitWire {
+pub(super) enum WorkUnitWire {
   Tasks,
 }
 
@@ -41,6 +41,15 @@ impl ModuleProgressRead {
       unit: progress.unit,
       scope: progress.scope,
       done: progress.done,
+    }
+  }
+
+  /// Core's progress, whose percent and remaining work a reader shows.
+  pub const fn to_core(self) -> Progress {
+    Progress {
+      unit: self.unit,
+      scope: self.scope,
+      done: self.done,
     }
   }
 }
@@ -90,6 +99,29 @@ impl ForecastRead {
       history_delivered: forecast.history_delivered,
       outlook,
     }
+  }
+
+  /// Core's forecast, which a reader words; `None` when a day is not `YYYY-MM-DD`.
+  pub fn to_core(&self) -> Option<Forecast> {
+    let outlook = match &self.outlook {
+      OutlookRead::Done {} => Outlook::Done,
+      OutlookRead::NotEnoughHistory {} => Outlook::NotEnoughHistory,
+      OutlookRead::Dates {
+        likely,
+        safe,
+        past_horizon,
+      } => Outlook::Dates {
+        likely: parse_day(likely)?,
+        safe: parse_day(safe)?,
+        past_horizon: *past_horizon,
+      },
+    };
+    Some(Forecast {
+      remaining: self.remaining,
+      history_days: self.history_days,
+      history_delivered: self.history_delivered,
+      outlook,
+    })
   }
 }
 
@@ -174,6 +206,10 @@ pub type ModuleHistoryPage = Page<SharedModuleChange>;
 
 fn day(date: NaiveDate) -> String {
   date.format("%Y-%m-%d").to_string()
+}
+
+fn parse_day(day: &str) -> Option<NaiveDate> {
+  NaiveDate::parse_from_str(day, "%Y-%m-%d").ok()
 }
 
 mod optional_state {

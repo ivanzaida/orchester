@@ -64,9 +64,12 @@ pub struct FieldInput {
   /// The leading glyph goes once the field holds text.
   leading_while_empty: bool,
   unit: Option<Arc<str>>,
+  prefix: Option<Arc<str>>,
   lines: Lines,
   mono: bool,
   text_style: Option<TypographyStyle>,
+  /// The placeholder's own role, where the design draws it in another type than the value.
+  placeholder_style: Option<TypographyStyle>,
   name: Arc<str>,
   /// Why the value is not accepted, said under the box, whose stroke turns `danger`.
   error: Option<Arc<str>>,
@@ -112,10 +115,12 @@ impl PartialEq for FieldInput {
       && self.leading == other.leading
       && self.leading_while_empty == other.leading_while_empty
       && self.unit == other.unit
+      && self.prefix == other.prefix
       && self.unit_look == other.unit_look
       && self.lines == other.lines
       && self.mono == other.mono
       && self.text_style == other.text_style
+      && self.placeholder_style == other.placeholder_style
       && self.name == other.name
       && self.error == other.error
       && self.group_separator == other.group_separator
@@ -147,9 +152,11 @@ impl FieldInput {
       leading: None,
       leading_while_empty: false,
       unit: None,
+      prefix: None,
       lines: Lines::One,
       mono: false,
       text_style: None,
+      placeholder_style: None,
       name: name.into(),
       error: None,
       group_separator: None,
@@ -224,6 +231,12 @@ impl FieldInput {
     self
   }
 
+  /// A quiet label before the value inside the box (`Approves at`, `04 c`).
+  pub fn prefix(mut self, prefix: impl Into<Arc<str>>) -> Self {
+    self.prefix = Some(prefix.into());
+    self
+  }
+
   /// The unit of the value, after it inside the box.
   pub fn unit(mut self, unit: impl Into<Arc<str>>) -> Self {
     self.unit = Some(unit.into());
@@ -290,6 +303,13 @@ impl FieldInput {
   /// The design's text role for the value and placeholder.
   pub fn text_style(mut self, style: TypographyStyle) -> Self {
     self.text_style = Some(style);
+    self
+  }
+
+  /// The placeholder in `style` instead of the value's, e.g. a search typed in Geist Mono whose placeholder is words
+  /// (`Search models…` `Aenob` in the runs-on picker).
+  pub fn placeholder_style(mut self, style: TypographyStyle) -> Self {
+    self.placeholder_style = Some(style);
     self
   }
 

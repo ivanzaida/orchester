@@ -232,7 +232,7 @@ at once* slots until it is migrated to a service. Both limits are read and set t
 
 Built (ORC-265): the task page's fourth tab, Services (`cjvRr`; `orchester-app`'s `screens::task::services`). While
 the run runs on a runner that is online, the page asks the runner every second for the services the steps at work
-started (`Command::Services`, `orchester_ipc::services`, protocol 42): each one's state, port, URL, when it started and
+started (`Command::Services`, `orchester_ipc::services`, protocol 53): each one's state, port, URL, when it started and
 ended, the stack whose start brought it up, who started it (the agent or the person) and the service whose crash
 stopped it. The tab counts them with a dot (`danger` once one crashed, `info` while one starts, `success` while all are
 ready), lists them with their UI driver and readiness from the published definitions, and shows the selected one's

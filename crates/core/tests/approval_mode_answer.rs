@@ -12,7 +12,7 @@ use orchester_core::{
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess,
     category::CommandScope,
-    roots::{RootsCheck, RunRoots},
+    roots::{RootPath, RootsCheck, RunRoots},
   },
   resource::ModelId,
   run::{
@@ -191,6 +191,7 @@ fn approval_mode_answer_a_failed_review_says_the_reviewer_could_not_run() {
       failure,
       model: Some("claude-haiku-4-5".to_owned()),
       detail: None,
+      decision: false,
     };
     for question in [ReviewQuestion::Request, ReviewQuestion::Roots] {
       let came = after_review(question, &failed).expect_err("to the person");
@@ -207,6 +208,7 @@ fn approval_mode_answer_a_failed_review_says_the_reviewer_could_not_run() {
     failure: ReviewFailure::NoReviewer,
     model: None,
     detail: None,
+    decision: false,
   };
   for question in [ReviewQuestion::Request, ReviewQuestion::Roots] {
     assert_eq!(
@@ -337,6 +339,11 @@ impl Fixture {
     let dir = tempfile::tempdir().expect("temporary folder");
     let root = std::fs::canonicalize(dir.path()).expect("canonical");
     let root = PathBuf::from(root.to_string_lossy().trim_start_matches(r"\\?\"));
+    // As the roots show it: on macOS `/var/…`, not the `/private/var/…` it resolves to.
+    let root = RootPath::new(Platform::current(), &root.to_string_lossy(), None)
+      .expect("absolute")
+      .path()
+      .to_path_buf();
     let main = root.join("repo");
     let worktree = main.join(".orchester").join("worktrees").join("w1");
     let elsewhere = root.join("elsewhere");

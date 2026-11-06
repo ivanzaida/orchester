@@ -21,16 +21,23 @@ pub use busy::{fail_next_writes_for_test, fail_next_writes_of_for_test, set_lock
 pub use error::{RunStoreError, StoreError};
 pub use git_exclude::is_repository_root;
 #[cfg(feature = "test-support")]
+pub use lock_watch::statements::statements_run;
+#[cfg(feature = "test-support")]
 pub use lock_watch::worst::{LockHold, LockHolds, lock_holds, reset_lock_holds};
 #[cfg(feature = "test-support")]
 pub use project_db::ProjectMigration;
 pub use project_db::{
-  ApprovedPlan, AttachmentOwner, AutoModeSave, AutomaticStatus, AutomationPoints, Bound, BoundBy, BoundReference,
+  AcceptedInputs, AcceptedWork, ActivityRecord, AlwaysAllowAnswer, AlwaysAllowRecord, ApprovalRecord, ApprovedPlan,
+  ArchiveStop, AttachmentOwner, AutoModeSave, AutomaticStatus, AutomationPoints, Bound, BoundBy, BoundReference,
   CachedClaim, CachedModule, CachedModuleChange, CachedRunStatus, CachedTask, CachedVersion, ChatDeletion, ChatFork,
-  ChatListing, ChatRewind, ChatTurn, ConfirmedVersion, DecisionCounts, EndedRun, JoinedKey, KeptAction, KeptReport,
-  KeptWait, NamingVersion, NotSent, OrchestratorSwitch, ProjectDb, PublishState, ReadOnlyProjectDb, ReferenceBinding,
-  ReferenceTarget, ResolutionStart, ResourceSharing, ResourceUpdate, ReturnedTask, RunBranch, ServerAdmin, SharedEvent,
-  SharedMember, SharedPerson, SharedSnapshot, SharedStanding, SharedTaskInfo, SharingLink, StartedQueued,
-  TaskDeletionFacts, UnsentStatus, VersionReference, WaitingPublish, WaitingVersion, attachment_file,
-  exclude_project_data,
+  ChatListing, ChatRewind, ChatTurn, ConfirmedVersion, DecisionCounts, DeliveryMerge, DeliveryReport, EndedRun,
+  InvocationRecord, InvocationStart, JoinedKey, KeptAction, KeptReport, KeptWait, MemoryAnswer, MemoryRecord,
+  MessageRecord, ModelRequirement, NamingVersion, NewTeamOperation, NewWorkReport, NotSent, NoticeRecord,
+  OrchestratorSwitch, ProjectDb, PublishState, QuestionRecord, ReadOnlyProjectDb, RecordedDecisionReview,
+  ReferenceBinding, ReferenceTarget, RemovalRecord, ResolutionStart, ResourceSharing, ResourceUpdate, ReturnedTask,
+  RuleAnswer, RuleRecord, RunBranch, RunLogRecord, ServerAdmin, SharedEvent, SharedMember, SharedPerson,
+  SharedSnapshot, SharedStanding, SharedTaskInfo, SharingLink, StartedQueued, StepRecord, TaskDeletionFacts,
+  TeamDelivery, TeamDeliveryStage, TeamFence, TeamOperation, TeamOperationState, TeamRun, TeamSettlement, TeamStart,
+  TeamStartStage, UnsentStatus, VersionReference, WaitingPublish, WaitingVersion, WarmWorkspaceRecord, WorkReportEntry,
+  WorkReportState, WorkspaceWritten, attachment_file, exclude_project_data,
 };

@@ -14,6 +14,21 @@
       "notFoundBody": "It may have been deleted, or its key changed. The task list shows the project's tasks.",
       "toTasks": "Open the task list"
     },
+    "team": {
+      "unavailableTitle": "{{task}} can't be read now",
+      "unavailableBody": "{{server}} hasn't answered since {{time}}. The task shows again when it does; Orchester keeps no copy of it. Its runs on this computer go on: open them from Running in the sidebar.",
+      "runningOn": "Running on {{holder}}'s computer",
+      "runningElsewhere": "Running on your other computer",
+      "lastReport": "last report {{time}}",
+      "staleClaim": "Stale claim",
+      "lastRenewed": "{{holder}} · last renewed {{time}}",
+      "takenOver": "Taken over by {{holder}}",
+      "moved": "Moved to your other computer",
+      "removed": "Removed from the team",
+      "unassigned": "Unassigned by an Admin",
+      "stopped": "Run {{run}} stopped · output kept on this computer",
+      "release": "Release claim"
+    },
     "module": {
       "label": "Module",
       "none": "No module"
@@ -44,6 +59,25 @@
       "answer": "Answer",
       "review": "Review",
       "merge": "Merge"
+    },
+    "merge": {
+      "label": "Merge",
+      "tryAgain": "Try again",
+      "resolve": "Resolve",
+      "recordMerge": "Record merge",
+      "putFilesBack": "Put files back",
+      "keysCmd": "⌘↵",
+      "keysCtrl": "Ctrl+Enter",
+      "noBranch": "Merge needs the branch your checkout had when the run started, which this run didn't record.",
+      "noBranchShort": "No branch to merge into",
+      "waits": {
+        "anotherMerge": "Merge waits until another run's merge in this project is done.",
+        "pullRequest": "Merge waits until the run's pull request is created.",
+        "removal": "Merge waits until the run's worktree is removed.",
+        "resolving": "Merge waits while Orchester merges into the run's worktree for you to resolve its conflicts.",
+        "localWork": "Merge waits while Local integration works in your checkout.",
+        "decision": "Merge waits for the decision Local integration asks for in this project."
+      }
     },
     "more": {
       "label": "More actions",

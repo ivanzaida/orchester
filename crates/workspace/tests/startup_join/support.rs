@@ -73,7 +73,7 @@ impl Desk {
     let workspace = Workspace::new(AppDb::open(&data.path().join("orchester.db")).expect("database"));
     let vault = Arc::new(MemoryVault::default());
     let keychain = Vault::with(vault.clone());
-    let servers = Servers::new(workspace.clone(), keychain.clone());
+    let servers = Servers::new(workspace.clone(), keychain.clone(), version());
     let cloud = Cloud::new(workspace.clone(), keychain, servers.clone());
     Self {
       runtime: Runtime::new().expect("runtime"),
@@ -128,7 +128,7 @@ impl Desk {
   /// The servers of a later start: a new workspace on the same application database and keychain.
   pub fn servers_again(&self) -> Servers {
     let workspace = Workspace::new(AppDb::open(&self.database()).expect("database"));
-    Servers::new(workspace, Vault::with(self.vault.clone()))
+    Servers::new(workspace, Vault::with(self.vault.clone()), version())
   }
 
   fn database(&self) -> PathBuf {
@@ -192,4 +192,9 @@ pub fn closed_address() -> ServerAddress {
     .expect("address")
     .port();
   ServerAddress::parse(&format!("http://127.0.0.1:{port}")).expect("address")
+}
+
+/// The desktop's version the servers name to theirs.
+fn version() -> orchester_api::releases::ReleaseVersion {
+  orchester_api::releases::ReleaseVersion::parse("0.5.0").expect("a release version")
 }

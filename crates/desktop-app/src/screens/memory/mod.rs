@@ -58,7 +58,12 @@ pub(crate) use self::{
   toolbar::{FilterBar, FiltersProps},
 };
 use self::{state::Made, tabs::Order};
-use crate::{project::ShownProject, routes::MemoryTab, services::Services, ui::failure::LastFailure};
+use crate::{
+  project::{ShownProject, settled_read::settled_read},
+  routes::MemoryTab,
+  services::Services,
+  ui::failure::LastFailure,
+};
 
 #[derive(Clone, PartialEq)]
 struct Props {
@@ -125,8 +130,8 @@ impl Component for MemoryScreen {
   }
 }
 
-/// What the page shows of the project's memory, read off the UI thread whenever the project's tasks are saved or its
-/// runs change, and when the person tries again.
+/// What the page shows of the project's memory, read off the UI thread whenever the project's tasks are saved or a
+/// run changes state, and when the person tries again.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum Read {
   Reading,
@@ -135,22 +140,24 @@ pub(super) enum Read {
   Failed(Message, bool),
 }
 
+/// The page shows no transcript, so a transcript's lines do not read it again: a record an agent saves while its run
+/// runs shows once a run changes state (a step ends, a question or an approval waits).
 fn read(ctx: &mut Ctx, project: &ShownProject, (retries, failure): (u64, &LastFailure)) -> Read {
   let feed = &project.feed;
-  let again = feed.revision.get() + feed.run_changes(feed.running.get()) + retries;
+  let deps = (
+    project.open.repo_root.clone(),
+    (feed.revision.get(), feed.states.get(), retries),
+  );
   let hold = Services::of(ctx).hold;
-  let loaded = ctx
-    .future((project.open.repo_root.clone(), again), move |(repo, _)| {
-      let hold = hold.clone();
-      async move {
-        hold.released().await;
-        background::run(move || ProjectMemory::load_in(&repo).map(state::Shared::new))
-          .await?
-          .map_err(|error| messages::store_error(&error))
-      }
-    })
-    .state()
-    .get();
+  let loaded = settled_read(ctx, "memory", deps, move |(repo, _)| {
+    let hold = hold.clone();
+    async move {
+      hold.released().await;
+      background::run(move || ProjectMemory::load_in(&repo).map(state::Shared::new))
+        .await?
+        .map_err(|error| messages::store_error(&error))
+    }
+  });
   // Data kept from before a failed reread is not shown as current, nor while it is read again.
   if let Some((error, retrying)) = failure.follow(&loaded) {
     return Read::Failed(error, retrying);

@@ -147,6 +147,13 @@ impl Follow {
     self
       .scroll
       .set_scroll_pending(self.scroll.scroll_x(), self.scroll.scroll_y());
+    self.let_row_change();
+  }
+
+  /// A row the person opens or folds with its own toggle: the chat stops following and the list keeps its first row
+  /// in view where it is on screen while that row's height changes (lurq 0.58). A pending scroll to the offset it had
+  /// would pin that offset instead, over rows above whose estimate the opened row's height changes.
+  pub fn let_row_change(&self) {
     *self.to_end.lock() = false;
     if self.following.get_untracked() {
       *self.left_at.lock() = Some(*self.seen.lock());

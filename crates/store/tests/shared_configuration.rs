@@ -277,6 +277,51 @@ fn shared_configuration_marks_a_resource_shared() {
   );
 }
 
+/// Row 80: in a team project only the team's pipelines are offered, so a team pipeline wins its slug from one of this
+/// computer's own, which is kept with a free slug; other kinds still refuse a clash.
+#[test]
+fn shared_configuration_a_team_pipeline_takes_its_slug_from_a_local_one() {
+  let (_repo, mut db, _run, _execution) = started_run();
+  let body = orchester_core::resource::Pipeline::new(vec![]).expect("an empty pipeline");
+  let own = db
+    .create_resource(Slug::new("review").expect("slug"), name("Review"), &body, at(10))
+    .expect("a local pipeline")
+    .id();
+  let team = ResourceId::generate();
+  let resource = orchester_core::resource::Resource::new(
+    team,
+    orchester_core::resource::ResourceKind::Pipeline,
+    Slug::new("review").expect("slug"),
+    name("Review"),
+    at(20),
+  );
+  db.keep_shared_resource(&resource, revision(1))
+    .expect("the team's wins");
+  let slug = |id| db.resource(id).expect("read").expect("kept").slug().as_str().to_owned();
+  assert_eq!(slug(team), "review");
+  assert_eq!(slug(own), "review-local");
+  assert_eq!(
+    db.resource_sharing(own).expect("read"),
+    None,
+    "still this computer's own"
+  );
+
+  let profile = &db
+    .resources(orchester_core::resource::ResourceKind::AgentProfile)
+    .expect("profiles")[0];
+  let clash = orchester_core::resource::Resource::new(
+    ResourceId::generate(),
+    profile.kind(),
+    profile.slug().clone(),
+    name("Builder"),
+    at(30),
+  );
+  assert!(matches!(
+    db.keep_shared_resource(&clash, revision(1)),
+    Err(StoreError::DuplicateSlug { .. })
+  ));
+}
+
 #[test]
 fn shared_configuration_a_waiting_version_is_left_out_of_the_latest_until_it_is_used() {
   let (_repo, mut db, _run, _execution) = started_run();

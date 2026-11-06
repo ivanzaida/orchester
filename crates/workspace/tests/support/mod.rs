@@ -341,18 +341,30 @@ impl Fixture {
 
   /// A run of `task`, created at `now` and not started.
   pub fn pending_run(&mut self, task: TaskId, now: Timestamp) -> Run {
-    self.pending_run_into(task, (&"a".repeat(40), None), now)
+    self.pending_run_into(task, (&"a".repeat(40), None), (IdempotencyKey::generate(), now))
   }
 
   /// A run of `task` started at `now` at the commit `base` of the checkout's branch `base_branch`, which
   /// merging it brings its work into.
   pub fn started_run_from(&mut self, task: TaskId, (base, base_branch): (&str, &str), now: Timestamp) -> Run {
     let into = BranchName::new(base_branch).expect("branch");
-    let run = self.pending_run_into(task, (base, Some(into)), now);
+    let run = self.pending_run_into(task, (base, Some(into)), (IdempotencyKey::generate(), now));
     self.start(run, now)
   }
 
-  fn pending_run_into(&mut self, task: TaskId, (base, base_branch): (&str, Option<BranchName>), now: Timestamp) -> Run {
+  /// The first run of `task`, recorded with the task's first-run key as a reviewed group's first run is, started at
+  /// `now`.
+  pub fn first_run(&mut self, task: TaskId, now: Timestamp) -> Run {
+    let run = self.pending_run_into(task, (&"a".repeat(40), None), (task.first_run_key(), now));
+    self.start(run, now)
+  }
+
+  fn pending_run_into(
+    &mut self,
+    task: TaskId,
+    (base, base_branch): (&str, Option<BranchName>),
+    (key, now): (IdempotencyKey, Timestamp),
+  ) -> Run {
     self.runs += 1;
     let new = NewRun {
       task,
@@ -364,7 +376,7 @@ impl Fixture {
       budget: Some(budget(1_000_000)),
       max_duration: Some(Duration::from_secs(1_800)),
     };
-    self.db.create_run(IdempotencyKey::generate(), new, now).expect("run")
+    self.db.create_run(key, new, now).expect("run")
   }
 
   /// A run of `task`, started at `now`: running its one step.

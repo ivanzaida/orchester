@@ -18,6 +18,7 @@ use orchester_workspace::{
 use super::{
   actions::QueuedTask,
   conflict::{Choices, Conflict},
+  team::TeamStopped,
   values::Values,
 };
 
@@ -120,6 +121,8 @@ pub struct View {
   pub choices: Choices,
   /// The person asked to run while the run still needed something: the chips it needs say their names in `warning`.
   pub tried_run: bool,
+  /// A team task's save the server did not take as a whole, while the form says it.
+  pub team_stop: Option<TeamStopped>,
 }
 
 impl View {

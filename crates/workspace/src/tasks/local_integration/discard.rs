@@ -132,7 +132,7 @@ fn failure(error: DiscardError) -> DiscardFailure {
     DiscardError::Git(LocalGitError::State(
       LocalError::Unsupported | LocalError::ConditionalRemovalUnsupported | LocalError::Collision,
     )) => DiscardFailure::Unsupported,
-    DiscardError::Git(LocalGitError::Refused) => DiscardFailure::Git,
+    DiscardError::Git(LocalGitError::Refused(_)) => DiscardFailure::Git,
     DiscardError::Git(_) => DiscardFailure::Io,
   }
 }

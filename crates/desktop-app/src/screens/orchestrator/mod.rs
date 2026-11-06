@@ -32,6 +32,7 @@ mod held;
 mod history;
 mod line;
 mod page;
+mod pending;
 mod plan_only;
 mod proposal;
 mod reading;
@@ -129,6 +130,9 @@ struct View {
   /// Orchestrator answers.
   outgoing: Signal<Option<Outgoing>>,
   how: Signal<Option<WhileAnswering>>,
+  /// The first message of the conversation this screen started, kept: it shows until that conversation is read
+  /// (`pending`).
+  started: Signal<Option<Outgoing>>,
   history: Signal<bool>,
   /// What History keeps while it shows: Esc ends the delete it asks about, then cancels a title edited in place,
   /// before it closes History.
@@ -187,6 +191,7 @@ impl Component for OrchestratorScreen {
       of: ctx.signal(None),
       outgoing: ctx.signal(None),
       how: ctx.signal(None),
+      started: ctx.signal(None),
       history: ctx.signal(false),
       listing: history::HistoryState::new(ctx),
       runs_on: ctx.signal(false),
@@ -280,8 +285,11 @@ impl Component for OrchestratorScreen {
       Shown::Chat(shown) => Some(&**shown),
       _ => None,
     });
+    view.hold_started(&reads);
     let chat = match &reads.shown {
       Shown::Chat(shown) => Named::Chat(&shown.chat, rewind::forked::is_fork(&shown.entries)),
+      // The conversation the first message started is named as new until it is read, as it was when it was sent.
+      Shown::Loading if view.started_read(&reads).is_some() => Named::New,
       Shown::Loading => Named::Opening(reads.target.and_then(|target| {
         let chats = &reads.history.ready()?.chats;
         let listing = chats.iter().find(|listing| listing.chat.id() == target)?;
@@ -403,8 +411,8 @@ impl View {
 
   /// `sent` was kept. The draft it was sent from empties while it still holds the words sent: what the person wrote
   /// since stays, and goes with the conversation when it was a new one's first message and the route still says a
-  /// new or the latest conversation (`fresh`). The chip empties while it still holds the skill sent. Whether it started
-  /// a conversation so.
+  /// new or the latest conversation (`fresh`); that message goes on showing until the conversation is read. The chip
+  /// empties while it still holds the skill sent. Whether it started a conversation so.
   fn sent(&self, project: ProjectId, sent: Sent, fresh: bool) -> bool {
     let outgoing = self
       .outgoing
@@ -418,7 +426,7 @@ impl View {
     }
     // The change of a plan went with it, and so did the skill.
     self.plan_only.stop_changing();
-    let skill = outgoing.and_then(|outgoing| outgoing.skill);
+    let skill = outgoing.as_ref().and_then(|outgoing| outgoing.skill.clone());
     if skill.is_some() && self.skill.get_untracked().and_then(|held| held.chosen()) == skill {
       self.skill.set(None);
     }
@@ -428,6 +436,7 @@ impl View {
     let started = fresh && from == Conversation::New;
     let of = if started {
       draft::started(project, sent.chat);
+      self.started.set(outgoing);
       Conversation::Chat(sent.chat)
     } else {
       from

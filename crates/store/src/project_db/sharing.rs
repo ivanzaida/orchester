@@ -81,7 +81,7 @@ impl ProjectDb {
   }
 
   /// Stops sharing on this computer (*Make local*): the link goes, and every cached task, with its
-  /// id, number and organization as last synced, becomes a local task of the project; their
+  /// id, number and organization as last synced, becomes a local task of the project, its identity with it; their
   /// pipelines are this computer's pipelines of their slugs. Claims and run statuses leave the
   /// cache, as do the members, and the next task number follows the highest. The project's tags, the server project's
   /// as last synced, become its local tags with their ids, as its modules, each task's module and their moves become
@@ -97,6 +97,8 @@ impl ProjectDb {
     }
     transaction.execute_batch(
       "UPDATE tasks SET pipeline_id = (SELECT resources.id FROM resources WHERE resources.kind = 'pipeline'          AND resources.slug = tasks.pipeline_slug) WHERE sharing = 'shared';
+       UPDATE task_identities SET owner = 'local', server_id = NULL, team_project_id = NULL, team_task_id = NULL, \
+         recorded_revision = NULL WHERE id IN (SELECT id FROM tasks WHERE sharing = 'shared');
        UPDATE tasks SET sharing = NULL, pipeline_slug = NULL WHERE sharing = 'shared';",
     )?;
     let returned = super::joining::return_kept(&transaction, self.project.key())?;

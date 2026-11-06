@@ -7,13 +7,14 @@
 //! computer (the claim's `since`), is kept. This runs on every run change and every sync, so claims that ended before
 //! it existed end on the first sync too. The heartbeat names only the claims that are kept: one whose end the server
 //! did not take goes stale instead of staying fresh, and the next sync tries again. A merged run's claim is completed
-//! only once its Done went to the server ([`ProjectServer::send_automatic_status`]), which needs the claim held.
+//! only once its Done went to the server ([`ProjectServer::send_automatic_status`]), which needs the claim held; a run
+//! git found merged before a merge of it was recorded here, or with none, has its Done recorded first (ORC-750).
 
 use std::{collections::HashMap, path::Path};
 
 use orchester_api::{ErrorCode, RunReport, client::ClientError};
 use orchester_core::{
-  id::{TaskId, UserId},
+  id::{RunId, TaskId, UserId},
   integration::{RunMerge, RunWork},
   run::{Run, RunEvent, RunEventKind, TaskPhase},
   sharing::{ClaimEnd, claim_end},
@@ -64,10 +65,13 @@ pub(super) struct HeldClaims {
 /// A claim its task's latest run ended.
 struct Ending {
   task: TaskId,
+  run: RunId,
   /// When the run ended, by this computer's clock.
   ended: Timestamp,
   /// A merged run's report, which completes the claim; a cancelled run's claim is released.
   report: Option<RunReport>,
+  /// Whether a merge of the run is recorded here, which recorded its Done; one git alone found merged has none yet.
+  recorded: bool,
 }
 
 impl Ending {
@@ -122,8 +126,10 @@ impl HeldClaims {
       let report = (end == ClaimEnd::Complete).then(|| run.report(ended));
       held.ending.push(Ending {
         task: run.task,
+        run: run.run.id(),
         ended,
         report,
+        recorded: run.merge.is_some(),
       });
     }
     Ok(held)
@@ -250,10 +256,23 @@ impl ProjectServer {
   }
 
   async fn end_claim(&self, ending: Ending) -> Result<(), ClaimEndError> {
-    let Ending { task, report, .. } = ending;
+    let Ending {
+      task,
+      run,
+      ended,
+      report,
+      recorded,
+    } = ending;
     let Some(report) = report else {
       return Ok(self.release_claim(task).await?);
     };
+    // Git found the run merged before (or without) a merge of it recorded here, which records its Done: the Done is
+    // recorded now, or it would come once the claim is completed and no longer the person's to send (ORC-750).
+    if !recorded {
+      let root = self.repo_root.clone();
+      let done = background::run(move || ProjectDb::open(&root)?.record_merged_done(run, ended)).await;
+      done.map_err(SharingError::from)?.map_err(SharingError::from)?;
+    }
     // The merge's Done goes while the claim it needs is held, whether or not the run change sent it already; one
     // that waits keeps the claim until it goes.
     if self.send_automatic_status(task).await? {

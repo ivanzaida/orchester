@@ -6,6 +6,7 @@
 //! starts or ends its stream.
 
 mod apply;
+mod archive;
 mod catalog;
 mod config;
 mod state;
@@ -41,10 +42,10 @@ pub use self::{
   stream::{Clock, Source, Stopped, SystemClock, follow},
 };
 use super::{Behalf, Connection, Servers, SharingError, project::ProjectServer};
-use crate::background;
+use crate::{background, runner::Runners};
 
 /// Runs until the window closes, as a task on the app runtime that `Root` starts and aborts when it drops.
-pub async fn run(servers: Servers) {
+pub async fn run(servers: Servers, runners: Runners) {
   let mut changes = servers.subscribe();
   let mut shared = servers.subscribe_shared();
   let mut streams: HashMap<PathBuf, Following> = HashMap::new();
@@ -56,7 +57,7 @@ pub async fn run(servers: Servers) {
       // The blocking pool is shutting down with the window.
       return;
     };
-    keep(&servers, &mut streams, projects);
+    keep((&servers, &runners), &mut streams, projects);
     tokio::select! {
       changed = changes.changed() => if changed.is_err() { return },
       changed = shared.changed() => if changed.is_err() { return },
@@ -81,7 +82,11 @@ impl Drop for Following {
 
 /// Keeps one stream for each of `projects` that follows its server now, and ends the others; the projects whose person
 /// is no longer a member read so, and those without a stream have no state.
-fn keep(servers: &Servers, streams: &mut HashMap<PathBuf, Following>, projects: Vec<ProjectServer>) {
+fn keep(
+  (servers, runners): (&Servers, &Runners),
+  streams: &mut HashMap<PathBuf, Following>,
+  projects: Vec<ProjectServer>,
+) {
   let mut kept = HashMap::new();
   let mut not_members = Vec::new();
   for project in projects {
@@ -97,7 +102,7 @@ fn keep(servers: &Servers, streams: &mut HashMap<PathBuf, Following>, projects: 
     let running = streams
       .remove(&root)
       .filter(|following| following.project == id && !following.task.is_finished());
-    let following = running.unwrap_or_else(|| start(servers, project));
+    let following = running.unwrap_or_else(|| start(servers, runners, project));
     kept.insert(root, following);
   }
   *streams = kept;
@@ -112,11 +117,12 @@ fn follows(servers: &Servers, project: &ProjectServer) -> bool {
     && servers.connection(project.link().server) != Connection::SignedOut
 }
 
-fn start(servers: &Servers, project: ProjectServer) -> Following {
+fn start(servers: &Servers, runners: &Runners, project: ProjectServer) -> Following {
   let id = project.link().project;
   let current = Arc::new(AtomicBool::new(true));
   let live = Live {
     servers: servers.clone(),
+    runners: runners.clone(),
     project,
     current: current.clone(),
   };
@@ -139,6 +145,8 @@ fn start(servers: &Servers, project: ProjectServer) -> Following {
 /// A shared project's stream through its server's stored trust and token.
 struct Live {
   servers: Servers,
+  /// Cancels the runs a resource archived on the server stops.
+  runners: Runners,
   project: ProjectServer,
   /// The stream's [`Following::current`].
   current: Arc<AtomicBool>,
@@ -234,6 +242,11 @@ impl Source for Live {
         client.report_catalog(&token, project, &report).await
       })
       .await
+  }
+
+  async fn archived(&self, resource: ResourceId) {
+    archive::stop_runs(&self.runners, self.project.repo_root(), resource).await;
+    self.servers.shared_changed();
   }
 
   fn changed(&self) {

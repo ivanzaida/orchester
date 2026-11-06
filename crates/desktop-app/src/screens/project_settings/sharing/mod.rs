@@ -13,6 +13,7 @@ mod link;
 mod linked;
 mod make_local;
 mod members;
+mod policy;
 mod upload;
 
 use std::path::PathBuf;

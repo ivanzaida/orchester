@@ -15,8 +15,9 @@ except the proposed default port `47821`, which is open decision 1.
 - `server.rs` binds `127.0.0.1:0`, so the OS picks a free port on every start. `AppMcp::start` (`mod.rs`) makes a new
   `BearerToken::generate()` on every start too.
 - `discovery/` writes both into `%LOCALAPPDATA%\orchester-app-mcp\<pid>.json` (macOS:
-  `~/Library/Application Support/orchester-app-mcp/<pid>.json`). Only the user can read the file (icacls / `0600`),
-  and a `<pid>.lock` cleans up after killed processes.
+  `~/Library/Application Support/orchester-app-mcp/<pid>.json`). Only the user and the account the app runs as can
+  read the file (icacls with the process token's SID / `0600`): a QA copy started inside Codex's Windows sandbox runs
+  as the sandbox's user, which then reads it too. A `<pid>.lock` cleans up after killed processes.
 - `McpStatus` carries the port only. The status bar shows `MCP on :{port}` / `MCP unavailable`
   (`shell.status.mcpListening`). The window never shows the token.
 - Clients find the file by pid (`tools/lurq-mcp-client.py <pid> …`, the runs' `call_run_app` relay,
@@ -275,6 +276,10 @@ http_headers = { Authorization = "Bearer <token>" }
 The registered name is **`orchester`**, never `Orchester`. Runs give Codex agents the runner's relay as
 `mcp_servers.Orchester` through `-c` overrides, and a user table of the same name would merge into it
 (`app_server_mcp.rs`: tables merge with the user's). Settings fixes the name in the commands; it is not a field.
+The Orchestrator chat's own server is also called `orchester`: when the person's Codex configuration has one (as this
+registration writes it), the chat gives its server a name apart in that Codex session (`orchester-orchester`, as a
+step's chosen servers get one), turns the person's off for the thread and tells the agent the name (ORC-710,
+`orchester-runner`'s `chat::codex`; `docs/evidence/orc-710-codex-orchestrator-server-name-2026-11-04.md`).
 
 ## Security
 

@@ -4,7 +4,7 @@
 //! cached read taken at cursor `R` only when an `invalidated` event with a cursor past `R` names its [`QueryScope`], so
 //! it may subscribe before or after reading without missing a change.
 
-use orchester_core::id::{ModuleId, ResourceId, TaskId};
+use orchester_core::id::{ModuleId, ReleaseId, ResourceId, TaskId};
 use serde::{Deserialize, Serialize};
 
 use super::EventCursor;
@@ -34,6 +34,12 @@ pub enum QueryScope {
   /// A resource's version list.
   Resource {
     resource: ResourceId,
+  },
+  /// The release list.
+  ReleaseList {},
+  /// A release's summary, progress, burndown, history and changelog.
+  Release {
+    release: ReleaseId,
   },
 }
 

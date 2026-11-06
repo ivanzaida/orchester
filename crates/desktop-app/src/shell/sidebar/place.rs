@@ -48,7 +48,7 @@ impl Place {
       Screen::Tasks | Screen::Task | Screen::NewTask | Screen::EditTask => Self::Tasks,
       Screen::Modules => Self::Modules,
       Screen::Orchestrator | Screen::OrchestratorSettings => Self::Orchestrator,
-      Screen::MergeQueue | Screen::PullRequests => Self::Review,
+      Screen::MergeQueue | Screen::PullRequests | Screen::Merges => Self::Review,
       Screen::Files => Self::Files,
       Screen::Pipelines => Self::Pipelines,
       Screen::Agents | Screen::Instructions | Screen::Memory | Screen::Skills | Screen::Tools => Self::Agents,

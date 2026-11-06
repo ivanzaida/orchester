@@ -103,8 +103,8 @@ pub fn found_copy<'a>(found: &'a [PathBuf], program: &Path) -> Option<&'a Path> 
 }
 
 /// Installed copies of `program` (see `ConnectionKind::program_name`) found on the search path
-/// (the `PATH`, and on macOS the login shell's and the usual install folders:
-/// `orchester_exec::search_path`), in search order.
+/// (the `PATH`, then on Windows the machine's and the user's `Path`, on macOS the login shell's and
+/// the usual install folders: `orchester_exec::search_path`), in search order.
 pub fn detect(program: &str) -> Vec<PathBuf> {
   match SearchPath::current().lookup(program) {
     ProgramLookup::Found(found) => found,

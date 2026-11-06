@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 
 use super::BundleError;
 use crate::{
+  connection::mcp::McpServerSelection,
+  id::ConnectionId,
   name::Name,
   permission::{AgentPermissions, WritableFolders},
   resource::{AgentProfile, ModelId, PromptText, ProviderSettings},
@@ -67,6 +69,21 @@ impl ExecutionProfile {
         .clone()
         .with_writable_folders(WritableFolders::none()),
     }
+  }
+
+  /// The profile as the computer that runs it binds it: on its own `connection`, giving its agents its `servers`, and
+  /// with no extra writable folders.
+  pub fn bound(&self, connection: ConnectionId, servers: McpServerSelection) -> AgentProfile {
+    AgentProfile::new(
+      self.role.clone(),
+      self.responsibilities.clone(),
+      self.instructions.clone(),
+      connection,
+      self.model.clone(),
+      self.settings.clone(),
+    )
+    .with_permissions(self.permissions.clone())
+    .with_mcp_servers(servers)
   }
 
   pub fn role(&self) -> &Name {

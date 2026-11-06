@@ -32,11 +32,17 @@ fn present(merge: Option<Resolution>) -> Worktree {
 fn return_work_the_conflict_note_names_no_file() {
   let note = return_work::conflict_note(&BranchName::new("main").expect("a branch"));
   assert!(
-    note.as_str().starts_with("Merge main into this branch"),
+    note
+      .as_str()
+      .starts_with("Resolve the conflicts with main listed below"),
     "{}",
     note.as_str()
   );
-  assert!(note.as_str().contains("conflicts listed below"), "{}", note.as_str());
+  assert!(
+    note.as_str().contains("Orchester merges main into this branch for you"),
+    "{}",
+    note.as_str()
+  );
 }
 
 #[test]

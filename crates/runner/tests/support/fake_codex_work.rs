@@ -56,10 +56,11 @@
 //! - anything else: appends `hello` to `README.md` in its worktree, reports the command, the file change and the usage,
 //!   and completes the turn.
 //!
-//! A resumed session appends `continued` to `README.md` and completes its turn, once no `fake-hold` lies next to the
-//! worktrees (a test holds a continued session at work with it); when its prompt says "Answer failed" (a person's
-//! message to a follow-up), its final message is the step result `failed` the prompt asks for, though a resumed turn
-//! has no output schema. The final message is the step result when the turn
+//! A turn told that the runner's merge of the moved base stopped at conflicts resolves them first by editing the files
+//! (`fake_codex_merge`), new session or resumed. A resumed session appends `continued` to `README.md` and completes its
+//! turn, once no `fake-hold` lies next to the worktrees (a test holds a continued session at work with it); when its
+//! prompt says "Answer failed" (a person's message to a follow-up), its final message is the step result `failed` the
+//! prompt asks for, though a resumed turn has no output schema. The final message is the step result when the turn
 //! was given an output schema (`{"outcome", "summary"}`, the summary "Finished <step>"), else "Done.". The step is read
 //! from the prompt's "# Current step:" line.
 
@@ -196,6 +197,7 @@ pub fn work(session: &mut Session, prompt: &str, structured: bool) -> Step {
   if let Some(step) = fake_app_server::start(session, prompt, structured) {
     return step;
   }
+  super::fake_codex_merge::resolve(&worktree, prompt);
   let result = asked_report(prompt, structured, &worktree);
   if session.resumed {
     return continued(session, prompt, result);

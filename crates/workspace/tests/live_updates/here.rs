@@ -16,7 +16,7 @@ use super::{
 };
 
 /// Builder's v1 named the API connection `DeepSeek`, which this computer has nothing for; v2, which runs use here,
-/// names Codex `Work`, bound by its name. Only what v2 names counts for the profile's page.
+/// names Codex `Work`, bound by its role. Only what v2 names counts for the profile's page.
 #[tokio::test(flavor = "multi_thread")]
 async fn live_updates_on_this_computer_counts_only_the_version_runs_use_for_a_resource() {
   let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
@@ -70,7 +70,7 @@ async fn live_updates_on_this_computer_counts_only_the_version_runs_use_for_a_re
     runs_here.standing,
     Standing::Bound {
       local: "work".into(),
-      by: BoundBy::Name
+      by: BoundBy::Role
     }
   );
   assert_eq!(

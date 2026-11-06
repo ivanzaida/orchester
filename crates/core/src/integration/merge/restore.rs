@@ -11,13 +11,17 @@
 //!   into a folder come back.
 //!
 //! Anything else, e.g. a file the person changed meanwhile, is left as it is. What should go back
-//! but cannot is named ([`MergeError::LeftChanged`]).
+//! but cannot is named ([`MergeError::LeftChanged`]). What was read before the fast-forward began is
+//! kept beside the checkout until it is in or put back ([`super::left`]), so that putting back can be
+//! asked for again later, also after the app ended.
 
 use std::{
   collections::{HashMap, HashSet},
   fs, io,
   path::{Path, PathBuf},
 };
+
+use serde::{Deserialize, Serialize};
 
 use super::MergeError;
 use crate::{
@@ -36,7 +40,7 @@ const NO_OBJECT: &str = "0000000000000000000000000000000000000000";
 const LITERAL: &str = "--literal-pathspecs";
 
 /// A file's entry in a tree or the index.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 struct Entry {
   mode: String,
   object: String,
@@ -53,6 +57,7 @@ impl Entry {
 }
 
 /// A path the fast-forward changes that matched the base before it began.
+#[derive(Serialize, Deserialize)]
 struct Clean {
   path: String,
   /// `None` where the base has no file.
@@ -63,6 +68,7 @@ struct Clean {
 
 /// The paths a fast-forward from the base to the merge changes and that were clean before, read
 /// before it begins.
+#[derive(Serialize, Deserialize)]
 pub(super) struct Touched {
   base: String,
   clean: Vec<Clean>,
@@ -153,9 +159,62 @@ impl Touched {
     left.into_result()
   }
 
-  /// Puts the index entries git wrote back to the base's; one that holds neither the base's nor the
-  /// merge's version is the person's and is left, named.
-  fn restore_index<R: CommandRunner>(&self, git: &Git<'_, R>, left: &mut Left) -> Result<(), MergeError> {
+  /// The commit the fast-forward began from.
+  pub(super) fn base(&self) -> &str {
+    &self.base
+  }
+
+  /// Every path the fast-forward may have written.
+  pub(super) fn paths(&self) -> Vec<String> {
+    self.clean.iter().map(|entry| entry.path.clone()).collect()
+  }
+
+  /// The paths that do not hold the base's version now, in the index or in the files: what a
+  /// fast-forward that stopped part way left changed and was not put back.
+  pub(super) fn still_changed<R: CommandRunner>(&self, git: &Git<'_, R>) -> Result<Vec<String>, GitError> {
+    let staged = self.staged(git)?;
+    let root = git.dir();
+    let mut changed: Vec<&str> = Vec::new();
+    let mut hashed = Vec::new();
+    for entry in &self.clean {
+      let found = fs::symlink_metadata(root.join(&entry.path));
+      let differs = staged.get(&entry.path) != entry.base.as_ref()
+        || match (&entry.base, &found) {
+          (None, found) => found.is_ok(),
+          (Some(_), Err(_)) => true,
+          (Some(base), Ok(_)) if base.is_link() || base.is_submodule() => false,
+          (Some(base), Ok(metadata)) if !metadata.is_dir() => {
+            hashed.push((entry.path.as_str(), base.object.as_str()));
+            false
+          }
+          (Some(_), Ok(_)) => true,
+        };
+      if differs {
+        changed.push(&entry.path);
+      }
+    }
+    for chunk in hashed.chunks(PATHS_PER_COMMAND) {
+      let mut args = vec!["hash-object", "--"];
+      args.extend(chunk.iter().map(|(path, _)| *path));
+      let objects = git.stdout(&args)?;
+      for ((path, base), object) in chunk.iter().zip(objects.lines()) {
+        if object.trim() != *base && !changed.contains(path) {
+          changed.push(path);
+        }
+      }
+    }
+    Ok(
+      self
+        .clean
+        .iter()
+        .filter(|entry| changed.contains(&entry.path.as_str()))
+        .map(|entry| entry.path.clone())
+        .collect(),
+    )
+  }
+
+  /// The index entries of the clean paths, by path.
+  fn staged<R: CommandRunner>(&self, git: &Git<'_, R>) -> Result<HashMap<String, Entry>, GitError> {
     let mut staged = HashMap::new();
     let paths: Vec<&str> = self.clean.iter().map(|entry| entry.path.as_str()).collect();
     for chunk in paths.chunks(PATHS_PER_COMMAND) {
@@ -163,10 +222,17 @@ impl Touched {
       args.extend(chunk);
       let output = git.output(&args)?;
       if !output.success() {
-        return Err(GitError::Failed(message(&output)).into());
+        return Err(GitError::Failed(message(&output)));
       }
       staged.extend(parse_ls_files(&output.stdout)?);
     }
+    Ok(staged)
+  }
+
+  /// Puts the index entries git wrote back to the base's; one that holds neither the base's nor the
+  /// merge's version is the person's and is left, named.
+  fn restore_index<R: CommandRunner>(&self, git: &Git<'_, R>, left: &mut Left) -> Result<(), MergeError> {
+    let staged = self.staged(git)?;
     let mut reset = Vec::new();
     for entry in &self.clean {
       let now = staged.get(&entry.path).cloned();

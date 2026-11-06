@@ -97,6 +97,7 @@ impl ReviewError {
       Self::TimedOut => Self::TimedOut,
       Self::Unparseable(text) => Self::Unparseable(redaction.apply(&text)),
       Self::CouldNotRun(text) => Self::CouldNotRun(redaction.apply(&text)),
+      Self::Decision(failure) => Self::Decision(failure),
     }
   }
 
@@ -106,6 +107,7 @@ impl ReviewError {
       Self::TimedOut => ReviewFailure::TimedOut,
       Self::Unparseable(_) => ReviewFailure::Unreadable,
       Self::CouldNotRun(_) => ReviewFailure::CouldNotRun,
+      Self::Decision(failure) => *failure,
     }
   }
 

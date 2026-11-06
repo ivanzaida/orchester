@@ -5,11 +5,14 @@
 //! shipped: an example is no part of the app's program.
 
 pub mod drive;
+mod member;
 mod state;
 #[path = "../../sign_in_qa/window.rs"]
 pub mod window;
+mod work;
 
 use std::{
+  collections::HashMap,
   error::Error,
   path::{Path, PathBuf},
 };
@@ -20,7 +23,7 @@ use orchester_api::{
   test_support::team_server::{CODE, TasksAnswer, TeamServer, USERNAME},
 };
 use orchester_app::services::Services;
-use orchester_core::{id::ServerId, project::ProjectKey, sharing::MemberRole, time::Timestamp};
+use orchester_core::{id::ServerId, project::ProjectKey, sharing::MemberRole, store::TaskStore, time::Timestamp};
 use orchester_store::{ProjectDb, SharingLink};
 use orchester_workspace::sharing::{CodeRequest, Servers, Trust, project::FirstDownload, team_join::JoinOutcome};
 pub use state::State;
@@ -91,8 +94,51 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
       let address = add(&server, services, runtime)?.0;
       join(&address, services, runtime)?;
     }
+    State::Member
+    | State::Admin
+    | State::ServerAdmin
+    | State::Outage
+    | State::OutageRunning
+    | State::OutageLater
+    | State::MemberRunning
+    | State::ModuleOutage
+    | State::Claims
+    | State::ModuleWork
+    | State::AdminWork
+    | State::VersionRefused
+    | State::TeamRunning
+    | State::EditConflict => {
+      let ids = task_ids(services)?;
+      let role = member::serve_as(&server, state, &ids);
+      let (kontur, id) = join_linked_as(&server, (services, runtime), (TasksAnswer::Serve, role))?;
+      work::after_join(state, (&server, id), (services, runtime), (&kontur, &ids))?;
+    }
   }
   Ok(server)
+}
+
+/// The session's Kontur's folder.
+fn kontur(services: &Services) -> Result<PathBuf, Box<dyn Error>> {
+  Ok(
+    services
+      .workspace
+      .projects()?
+      .into_iter()
+      .find(|project| project.name.as_str() == "Kontur")
+      .ok_or("the session has Kontur")?
+      .repo_root,
+  )
+}
+
+/// The ids of Kontur's tasks on this computer, by their number.
+fn task_ids(services: &Services) -> Result<HashMap<u32, String>, Box<dyn Error>> {
+  let tasks = ProjectDb::open(&kontur(services)?)?.tasks()?;
+  Ok(
+    tasks
+      .iter()
+      .map(|task| (task.key().number().get(), task.id().to_string()))
+      .collect(),
+  )
 }
 
 /// Adds `server` to the list; its address and id.
@@ -125,35 +171,39 @@ fn join(address: &ServerAddress, services: &Services, runtime: &Handle) -> Resul
   }
 }
 
-/// Adds `server` to the list, links the session's Kontur to the team's and joins with the code, its tasks answered as
-/// `tasks`; Kontur's folder.
+/// Adds `server` to the list, links the session's Kontur to the team's as a member and joins with the code, its tasks
+/// answered as `tasks`; Kontur's folder.
 fn join_linked(
   server: &TeamServer,
   services: &Services,
   runtime: &Handle,
   tasks: TasksAnswer,
 ) -> Result<PathBuf, Box<dyn Error>> {
-  server.answer_tasks(tasks);
-  let kontur = services
-    .workspace
-    .projects()?
-    .into_iter()
-    .find(|project| project.name.as_str() == "Kontur")
-    .ok_or("the session has Kontur")?
-    .repo_root;
-  let (address, id) = add(server, services, runtime)?;
-  link(&kontur, server, id)?;
-  join(&address, services, runtime)?;
-  Ok(kontur)
+  join_linked_as(server, (services, runtime), (tasks, Some(MemberRole::Member))).map(|(kontur, _)| kontur)
 }
 
-/// Links the project at `repo` to the team's Kontur on `server`, with nothing of it cached yet.
-fn link(repo: &Path, server: &TeamServer, id: ServerId) -> Result<(), Box<dyn Error>> {
+/// [`join_linked`], with the person's role in Kontur `role` (none for the server's admin); the server's id too.
+fn join_linked_as(
+  server: &TeamServer,
+  (services, runtime): (&Services, &Handle),
+  (tasks, role): (TasksAnswer, Option<MemberRole>),
+) -> Result<(PathBuf, ServerId), Box<dyn Error>> {
+  server.answer_tasks(tasks);
+  let kontur = kontur(services)?;
+  let (address, id) = add(server, services, runtime)?;
+  link(&kontur, server, (id, role))?;
+  join(&address, services, runtime)?;
+  Ok((kontur, id))
+}
+
+/// Links the project at `repo` to the team's Kontur on `server` with `id`, the person's role there `role`, with nothing
+/// of it cached yet.
+fn link(repo: &Path, server: &TeamServer, (id, role): (ServerId, Option<MemberRole>)) -> Result<(), Box<dyn Error>> {
   let link = SharingLink {
     server: id,
     project: server.project(SLUG).ok_or("the team shares Kontur")?,
     key: ProjectKey::new("KON")?,
-    role: Some(MemberRole::Member),
+    role,
     joined_at: Timestamp::now(),
     cursor: 0,
     last_synced_at: Timestamp::now(),

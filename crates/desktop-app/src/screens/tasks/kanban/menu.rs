@@ -188,24 +188,24 @@ fn commands(
 
 /// Copy key, with its keys.
 fn copy_key(ctx: &mut Ctx, card: &CardModel, open: &Signal<bool>) -> Element {
+  copy_key_item(ctx, format!("task-menu-{}-copy", card.row.key), card.row.key.clone())
+    .shortcut(ctx.t(if cfg!(target_os = "macos") {
+      "tasks.board.keys.copyMac"
+    } else {
+      "tasks.board.keys.copy"
+    }))
+    .render(ctx, open)
+}
+
+/// The menu row, as `id`, that copies the task `key`: a card's and a team member's list row's.
+pub(in crate::screens::tasks) fn copy_key_item(ctx: &mut Ctx, id: String, key: Arc<str>) -> MenuItem {
   let clipboard = ctx.use_context::<Clipboard>().unwrap_or_default();
-  let copied = card.row.key.clone();
-  MenuItem::new(
-    format!("task-menu-{}-copy", card.row.key),
-    ctx.t("tasks.board.menu.copyKey"),
-    move || {
-      if !clipboard.copy(&copied) {
-        tracing::warn!("the task's key was not copied");
-      }
-    },
-  )
+  MenuItem::new(id, ctx.t("tasks.board.menu.copyKey"), move || {
+    if !clipboard.copy(&key) {
+      tracing::warn!("the task's key was not copied");
+    }
+  })
   .icon(Icon::Copy)
-  .shortcut(ctx.t(if cfg!(target_os = "macos") {
-    "tasks.board.keys.copyMac"
-  } else {
-    "tasks.board.keys.copy"
-  }))
-  .render(ctx, open)
 }
 
 /// Run again, for a task whose latest run ended so that Run again may follow it (not one that succeeded with work to

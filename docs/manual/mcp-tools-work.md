@@ -181,6 +181,14 @@ Refusals: `task_not_found` (unknown blocker), `invalid_organization` (blank reas
 (`no_automatic_merge` in a shared project), `module_not_found`, `branch_not_found` (the repository has the base branch
 nowhere; nothing is saved).
 
+**Team project.** The task goes to the team server (`task.create`). Its `pipeline` is one of the team's pipelines, by
+id or name, sent as its resource id; a pipeline of this computer's own (or any that is not the team's) is refused as
+`team_pipeline_required`: only the team's pipelines run team tasks, and its Admins create and publish them. A team
+project offers none of this computer's own pipelines (`list_pipelines`, `get_pipeline`). Limits are refused as
+`decision_required` (D6), a workflow status other than the default as `decision_required` (D4), and what the server
+keeps nowhere (`story_points`, `tags`, `blocked_by`, `no_automatic_merge`, `delivers`, `base_branch`) as
+`team_field_unsupported`; nothing is sent then.
+
 ### `update_task` — changes data · gate AP for switching pipelines
 
 Changes a task's details or organization; fields left out stay as they are; a `null` limit is no limit. Same fields
@@ -202,6 +210,8 @@ as `create_task` (all optional) plus `key` (req.). Specifics:
 - **`story_points`**: refused as `persons_points` when a person set them. After a brief/criteria change without
   points, Orchester re-estimates when the switch allows.
 - **Deleting a task** is a person's alone, in the app — no tool deletes one.
+- **Team project**: as `create_task` says; the change goes to the server's task route (Admins' today: a member gets
+  `not_admin`). Moving a team task to another team pipeline is a person's decision too (`person_only` unless AP is on).
 
 ### `get_story_point_calibration` — read-only
 
@@ -276,6 +286,11 @@ takes `run` accepts the id or the number (`7` or `#7`).
 Runs a task as the app allows: queues and starts a draft, starts a queued task, or runs a task again after its latest
 run ended. Refusals name why (e.g. the runner's `task_not_queued`, a held queue, missing base branch, limits).
 Parameters: `project`, `key` (both req.).
+
+A team project's task starts through its team server (`claim.acquire`, then `work.start`) with the team pipeline it
+names, by id: one it does not name is `task_incomplete`, and one that is not a team pipeline on this computer (a
+pipeline of this computer's own, or one not received here) is `team_pipeline_missing`; nothing is claimed or started
+then.
 
 ### `list_runs` — read-only · cross-project
 
@@ -356,7 +371,7 @@ is given explicitly (no maximum); nothing raises or lifts a limit by itself.
 | `allow_retry`       | —                                              | A step used up its retries or broke again: *Allow 1 retry & continue*. A step waiting unverified/unchanged: run it again. | AA |
 | `return_to`         | `step`, `note` (both req.)                     | Return to an earlier agent step with a note. For an ended run (succeeded or failed): return its work to any agent step it executed, which runs again with the note, then the steps after it. | AA |
 | `accept`            | —                                              | A step could not check everything (*unverified*) or was not re-run on an unchanged revision: accept it; the next steps run. | AA |
-| `resolve_conflicts` | `step`?, `note`?                               | The last merge stopped at conflicts (`merge_run`'s `merge_failed`; *Not merged into main*): *Ask an agent to resolve*. Work returns to a writing step (default: the step that implemented what conflicts, else the last one) with a note to merge the base in and resolve, plus the conflicting files. | AA |
+| `resolve_conflicts` | `step`?, `note`?                               | The last merge stopped at conflicts (`merge_run`'s `merge_failed`; *Not merged into main*): *Ask an agent to resolve*. Work returns to a writing step (default: the step that implemented what conflicts, else the last one) with a note to resolve the conflicts, plus the conflicting files. Orchester merges the base into its worktree before the agent starts and commits the merge with its work; the agent only edits the conflicted files. | AA |
 
 Refusals: `run_merged`, `worktree_removed`, `worktree_in_merge`, `run_not_ended`, `merge_not_conflicted`,
 `step_cannot_write`, `no_writing_step`, `integration_running`, `automation_not_allowed`. Decisions are recorded as

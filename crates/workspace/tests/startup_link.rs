@@ -179,7 +179,8 @@ impl Setup {
   }
 
   fn link(&self, folder: &Path, anyway: bool) -> Result<FolderLinked, FolderLinkError> {
-    let servers = Servers::new(self.workspace.clone(), Vault::with(Arc::new(NoVault)));
+    let version = orchester_api::releases::ReleaseVersion::parse("0.5.0").expect("a release version");
+    let servers = Servers::new(self.workspace.clone(), Vault::with(Arc::new(NoVault)), version);
     self.runtime.block_on(servers.link_folder(
       &self.entry(),
       &self.project,

@@ -11,7 +11,7 @@
 
 use super::{
   build_output::BuildWords, files, gh, git, install::InstallSource, interpreters, network, packages, patterns,
-  powershell, processes, scripts,
+  powershell, processes, scripts, signing,
 };
 use crate::permission::known_safe;
 
@@ -342,6 +342,9 @@ pub(super) fn judge(program: &str, args: &[String]) -> Judged {
 
 /// What `program` with `args` does by its words alone.
 fn judge_words(program: &str, args: &[String]) -> Judged {
+  if let Some(judged) = signing::judge(program, args) {
+    return judged;
+  }
   if SECRET_STORES.contains(&program) {
     return Judged::unknown().secret();
   }
