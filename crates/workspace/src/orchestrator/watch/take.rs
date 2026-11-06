@@ -54,7 +54,8 @@ pub fn take_over_in(root: &Path, chat: &Chat, target: &NamedTarget, order: &str)
   };
   db.keep_watch_entries(chat, &[ChatEvent::Watch { line }], now)?;
   if let Some(told) = taken.told() {
-    tell(&mut db, (told, named), &kept(&db, chat)?, now)?;
+    let here = kept(&db, chat)?;
+    tell(&mut db, (told, named), &here, now)?;
   }
   Ok(TakenHere { from })
 }
