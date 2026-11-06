@@ -39,6 +39,7 @@ use super::{
   send::QueuedChange,
   turns::{Arrival, Turn},
   wait::Status,
+  watching::Live,
 };
 use crate::{
   theme::{DROPPED_OPACITY, OrchestratorSpacing, chat_scrollbar},
@@ -86,6 +87,8 @@ pub(super) struct TurnEnv {
   pub(super) answering: bool,
   /// Edit and *Rewind to here* (`super::rewind`).
   pub(super) rewind: RewindEnv,
+  /// What the conversation leads now, which a `/watching` row shows, and its *Stop watching* (`super::watching`).
+  pub(super) watching: Live,
 }
 
 /// The answers whose todo list the person opened under their name line, by the message that started each.
@@ -134,6 +137,7 @@ impl PartialEq for TurnRow {
       && self.env.names == other.env.names
       && self.env.changing == other.env.changing
       && self.env.rewind.shows() == other.env.rewind.shows()
+      && (!self.turn.asks_watching() || self.env.watching == other.env.watching)
   }
 }
 
@@ -311,12 +315,16 @@ impl Component for TurnView {
   }
 }
 
-/// A turn's row: what opens it, the answer and how it ended; or a compaction's or a rewind's line. While a message is
-/// edited in place, what sending it drops is dimmed: its own answer under the line that counts them, and every row
-/// after it (`super::rewind::editing`).
+/// A turn's row: what opens it, the answer and how it ended; or a compaction's or a rewind's line; or a `/watching`
+/// and its answer from the live state (`super::watching`). While a message is edited in place, what sending it drops
+/// is dimmed: its own answer under the line that counts them, and every row after it (`super::rewind::editing`).
 fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
   let key = row.turn.key();
   let dropped = row.env.rewind.drops(&row.turn);
+  if row.turn.asks_watching() {
+    let column = super::watching::row(ctx, row, &key);
+    return room(ctx, dimmed(column, dropped), first);
+  }
   if let Some(event) = &row.turn.compaction {
     let id = format!("orchestrator-compaction-{key}");
     let line = super::compaction::line(ctx, &id, event, row.turn.at)

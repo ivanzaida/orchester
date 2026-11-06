@@ -15,7 +15,8 @@ use orchester_core::{
   id::ChatMessageId,
   orchestrator::{
     AgentWait, ChatAction, ChatEntry, ChatEvent, ChatPlan, DailyReport, EntryKind, PlanState, TurnMode, TurnState,
-    WaitTurn, watch::WatchSummary,
+    WaitTurn,
+    watch::{WatchCommand, WatchSummary},
   },
   time::Timestamp,
 };
@@ -96,8 +97,8 @@ pub(super) struct Turn {
   pub(super) report: Option<Box<DailyReport>>,
   /// The end of a subscription that ended by itself, whose line opens the row instead of a person's message.
   pub(super) watch_ended: Option<Box<WatchSummary>>,
-  /// An event that is the whole row: a compaction of the session (`super::compaction`), or where a rewind went back
-  /// to (`super::rewind::line`).
+  /// An event that is the whole row: a compaction of the session (`super::compaction`), where a rewind went back to
+  /// (`super::rewind::line`), or the person's `/watching`, answered from the live state (`super::watching`).
   pub(super) compaction: Option<ChatEvent>,
   /// Its entry in the conversation; `None` while it is being sent.
   seq: Option<i64>,
@@ -158,6 +159,16 @@ impl Turn {
   /// with no words of the person's to send again.
   pub(super) const fn on_its_own(&self) -> bool {
     self.wait.is_some() || self.report.is_some() || self.watch_ended.is_some()
+  }
+
+  /// Whether the row is the person's `/watching`, which Orchester answers from the live state.
+  pub(super) const fn asks_watching(&self) -> bool {
+    matches!(
+      self.compaction,
+      Some(ChatEvent::WatchCommand {
+        command: WatchCommand::Watching,
+      })
+    )
   }
 
   /// Whether what the Orchestrator says next belongs to this row: one with a turn of its own, or a message the answer
@@ -298,8 +309,8 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
 
 /// The row `entry` of `shown` opens by itself: a wait of an agent, a daily report or a subscription that ended by
 /// itself, with the turn it started, if any; and a compaction (`06b` `j7eSQO`), where a rewind went back to (`10`
-/// `Zm7kq`), a fork's first line and what its original made after it (`11` `RT5T7`), each a row between the turns.
-/// `None` for an entry that is a person's message or part of an answer.
+/// `Zm7kq`), a fork's first line and what its original made after it (`11` `RT5T7`), and the person's `/watching`
+/// (`06` `Ff7AD`), each a row between the turns. `None` for an entry that is a person's message or part of an answer.
 fn own_row(entry: &ChatEntry, shown: &ChatView) -> Option<Turn> {
   Some(match &entry.kind {
     EntryKind::Wait { wait, turn } => Turn {
@@ -321,7 +332,10 @@ fn own_row(entry: &ChatEntry, shown: &ChatView) -> Option<Turn> {
       event @ (ChatEvent::Compaction { .. }
       | ChatEvent::Rewound { .. }
       | ChatEvent::Forked { .. }
-      | ChatEvent::MadeInOriginal { .. }),
+      | ChatEvent::MadeInOriginal { .. }
+      | ChatEvent::WatchCommand {
+        command: WatchCommand::Watching,
+      }),
     ) => Turn {
       compaction: Some(event.clone()),
       ..Turn::opened(entry, None)

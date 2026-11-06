@@ -111,6 +111,18 @@ pub fn sent_skill_chip(ctx: &mut Ctx, id: &str, skill: &OfferedSkill) -> Element
   Tooltip::new(chip_id, tip).wrap(ctx, chip)
 }
 
+/// The chip of command `name` in a sent message (`Chip · /watching` `az1pt` in 06 `Ff7AD`), named
+/// `{id}-command-chip`: its `glyph` and `/name`, as the composer's command chip shows them, in a `border_strong`
+/// stroke.
+pub fn sent_command_chip(id: &str, glyph: Icon, name: &str) -> Element {
+  let chip_id = format!("{id}-command-chip");
+  pill_frame(&chip_id, PaletteColor::BorderStrong)
+    .describe("command", name.to_owned())
+    .child(icon(glyph, IconSize::Xs, PaletteColor::TextSecondary))
+    .child(chip_words(&format!("{chip_id}-name"), &format!("/{name}")))
+    .into()
+}
+
 /// The chip of the skill `skill` holds, in the composer named `id`, while it holds one; its `x` empties it, and its
 /// tooltip opens over it, clear of `frame`, the composer's box.
 fn skill_chip(

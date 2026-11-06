@@ -27,6 +27,9 @@ pub enum WatchCommand {
   Unwatch { targets: Vec<NamedTarget> },
   /// `/unwatch` of everything the conversation watches.
   UnwatchAll,
+  /// `/watching`: the app answers it with what the conversation leads and what waits there, read from the live
+  /// state whenever the answer is shown (frame 06 `Ff7AD`), so the entry keeps nothing else.
+  Watching,
 }
 
 /// A target another conversation leads, as the card *Open that conversation* / *Take it here* shows it.

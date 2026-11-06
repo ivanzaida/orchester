@@ -104,7 +104,8 @@ pub(super) fn main(ctx: &mut Ctx, view: &View, (project, reads): (&ShownProject,
     Shown::Chat(shown) => {
       let queued = queued_problem(ctx, view)
         .or_else(|| super::compact::problem(ctx, view))
-        .or_else(|| super::rewind::problem(ctx, view));
+        .or_else(|| super::rewind::problem(ctx, view))
+        .or_else(|| view.what_i_watch.problem(ctx));
       conversation(
         ctx,
         view,

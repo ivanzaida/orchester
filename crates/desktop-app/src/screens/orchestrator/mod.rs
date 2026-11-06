@@ -49,6 +49,7 @@ mod task_event;
 mod timeline;
 mod turns;
 mod wait;
+mod watching;
 
 use std::sync::Arc;
 
@@ -173,6 +174,8 @@ struct View {
   rewind: rewind::Rewinding,
   /// The header's … with *Copy conversation as Markdown* and *Export conversation…* (ORC-327).
   export: export::ChatExport,
+  /// `/watching` and *Stop watching* in its answer (ORC-775).
+  what_i_watch: watching::WhatIWatch,
 }
 
 struct OrchestratorScreen {
@@ -216,6 +219,7 @@ impl Component for OrchestratorScreen {
       plan_only: plan_only::PlanOnly::new(ctx),
       rewind: rewind::Rewinding::new(ctx),
       export: export::ChatExport::new(ctx),
+      what_i_watch: watching::WhatIWatch::new(ctx),
     };
     rewind::watch(ctx, &view);
     let taker = view.clone();
@@ -230,18 +234,7 @@ impl Component for OrchestratorScreen {
       }
     });
     let project = ctx.props::<Props>().project.open.project.id();
-    let of = view.of.clone();
-    ctx.watch(&view.draft, move |text| {
-      if let Some(of) = of.get_untracked() {
-        draft::set(project, of, text);
-      }
-    });
-    let of = view.of.clone();
-    ctx.watch(&view.attached.attached, move |held| {
-      if let Some(of) = of.get_untracked() {
-        draft::set_attachments(project, of, &held.0);
-      }
-    });
+    keep_drafts(ctx, &view, project);
     let navigation = Navigation::of(ctx);
     let done = view.clone();
     ctx.watch(&view.send.state(), move |state| {
@@ -288,6 +281,7 @@ impl Component for OrchestratorScreen {
       _ => None,
     });
     view.hold_started(&reads);
+    view.what_i_watch.hold(&reads);
     let chat = match &reads.shown {
       Shown::Chat(shown) => Named::Chat(&shown.chat, rewind::forked::is_fork(&shown.entries)),
       // The conversation the first message started is named as new until it is read, as it was when it was sent.
@@ -346,6 +340,21 @@ impl Component for OrchestratorScreen {
   }
 }
 
+/// What is written and attached in the composer stays the draft of the conversation it was written for, in `project`.
+fn keep_drafts(ctx: &mut Ctx, view: &View, project: ProjectId) {
+  let of = view.of.clone();
+  ctx.watch(&view.draft, move |text| {
+    if let Some(of) = of.get_untracked() {
+      draft::set(project, of, text);
+    }
+  });
+  let of = view.of.clone();
+  ctx.watch(&view.attached.attached, move |held| {
+    if let Some(of) = of.get_untracked() {
+      draft::set_attachments(project, of, &held.0);
+    }
+  });
+}
 /// Esc while History shows: it first ends the delete History asks about, then cancels a title edited in place, and
 /// only then closes History, which opens on its list again.
 fn escape(view: &View) -> impl Fn(KeyboardEvent) + Send + Sync + 'static {
