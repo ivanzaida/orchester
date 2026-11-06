@@ -1,11 +1,12 @@
 //! What the Orchestrator's agent is told on every turn: its system prompt (`--system-prompt-file`), which a resumed
 //! session gets again because it is not part of the session; and the prompt of a turn a wait of an agent, the end
-//! of a task's run or an event of it started by itself ([`wait_prompt`], [`event_prompt`]), or a daily report did
-//! ([`report_prompt`]).
+//! of a task's run or an event of it started by itself ([`wait_prompt`], [`event_prompt`]), a daily report did
+//! ([`report_prompt`]), or a subscription that ended by itself did ([`watch_summary_prompt`]).
 
 mod events;
+mod summary;
 
-pub use self::events::event_prompt;
+pub use self::{events::event_prompt, summary::watch_summary_prompt};
 use super::{
   merging::{MergeLeft, Merging},
   report::DailyReport,

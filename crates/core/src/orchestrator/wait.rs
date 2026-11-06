@@ -232,6 +232,7 @@ fn is_about(kind: &EntryKind, wait: &AgentWait) -> bool {
     | EntryKind::Reply { .. }
     | EntryKind::Event(_)
     | EntryKind::Report { .. }
+    | EntryKind::WatchEnded { .. }
     | EntryKind::Plan(_) => false,
   }
 }
