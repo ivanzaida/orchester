@@ -119,6 +119,7 @@ mod task_snapshots;
 mod tasks;
 mod team_copies;
 mod team_deliveries;
+mod team_fill_ins;
 mod team_operations;
 mod team_runs;
 mod team_starts;
@@ -188,6 +189,7 @@ pub use self::{
   step_records::StepRecord,
   task_deletion::TaskDeletionFacts,
   team_deliveries::{DeliveryMerge, DeliveryReport, TeamDelivery, TeamDeliveryStage},
+  team_fill_ins::ConnectionPick,
   team_operations::{NewTeamOperation, TeamOperation, TeamOperationState, TeamSettlement},
   team_runs::{AcceptedWork, NewWorkReport, TeamFence, TeamRun, WorkReportEntry, WorkReportState},
   team_starts::{TeamStart, TeamStartStage},
