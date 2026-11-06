@@ -23,7 +23,7 @@ use orchester_core::{
   },
   resource::ModelId,
   run::{Run, StepFailure, WaitReason},
-  store::{ConnectionStore, ConversationStore},
+  store::{ActivityStore, ConnectionStore, ConversationStore},
   task::organization::ChangeActor,
   time::Timestamp,
 };
@@ -165,7 +165,8 @@ fn watch(fixture: &mut Fixture, chat: &Chat, target: WatchTarget, since: i64) {
 
 /// A module named `name`, with `tasks` in it.
 fn module(fixture: &mut Fixture, name: &str, tasks: &[TaskId]) -> ModuleId {
-  let details = ModuleDetails::new(Name::new(name).expect("name"), "", (None, None), ModuleState::Open).expect("details");
+  let details =
+    ModuleDetails::new(Name::new(name).expect("name"), "", (None, None), ModuleState::Open).expect("details");
   let module = fixture.db.create_module(details, at(30)).expect("module").id();
   for &task in tasks {
     fixture
@@ -238,8 +239,16 @@ fn led_waits_of_a_task_nobody_leads_keep_the_conversation_that_dealt_with_it() {
   fail(&mut fixture, &mut zoom_run);
   ask(&mut fixture, &mut avatars_run);
   assert!(follow(&fixture, false).kept);
-  assert_eq!(tasks_in(&fixture, &dealt), ["ORC-1"], "the conversation that dealt with it");
-  assert_eq!(tasks_in(&fixture, &latest), ["ORC-3"], "nobody dealt with it: the latest one");
+  assert_eq!(
+    tasks_in(&fixture, &dealt),
+    ["ORC-1"],
+    "the conversation that dealt with it"
+  );
+  assert_eq!(
+    tasks_in(&fixture, &latest),
+    ["ORC-3"],
+    "nobody dealt with it: the latest one"
+  );
   assert_eq!(tasks_in(&fixture, &watching), ["ORC-2"], "the led task's end");
   assert_eq!(fixture.db.chats().expect("History").len(), 3, "no conversation opened");
 }
