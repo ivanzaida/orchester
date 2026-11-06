@@ -49,7 +49,6 @@ mod permissions;
 pub mod pipelines;
 mod project_settings;
 mod projects;
-mod pull_requests;
 mod review;
 mod run_model;
 mod secrets;
@@ -115,7 +114,6 @@ pub use self::{
   pipelines::{PipelinesSpacing, PipelinesText},
   project_settings::{ProjectSettingsSpacing, ProjectSettingsText},
   projects::{ProjectsSpacing, ProjectsText},
-  pull_requests::{PullRequestsSpacing, PullRequestsText},
   review::{REVIEW_TYPING_OPACITY, ReviewSpacing, ReviewText},
   run_model::ModelText,
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
@@ -177,7 +175,6 @@ pub fn install(app: &mut App, mode: Mode) {
   connections::install(theme);
   secrets::install(theme);
   projects::install(theme);
-  pull_requests::install(theme);
   shell::install(theme);
   skills::install(theme);
   lifecycle::install(theme);

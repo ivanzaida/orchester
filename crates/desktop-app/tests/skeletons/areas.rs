@@ -32,17 +32,10 @@ fn skeletons_orchestrator_shows_the_conversations_bones_after_a_moment() {
 }
 
 #[test]
-fn skeletons_review_shows_the_merge_queues_and_the_pull_requests_bones_after_a_moment() {
+fn skeletons_review_shows_the_merge_queues_bones_after_a_moment() {
   let mut held = Held::new();
   held.page(ProjectPage::MergeQueue);
   held.skeleton("merge-queue-loading");
-  held.page(ProjectPage::PullRequests(Default::default()));
-  held.skeleton("pull-requests-loading");
-  assert!(held.exists("pull-requests-refresh"), "Refresh stays real");
-  assert!(
-    held.exists("pull-requests-repository-loading-bones") && held.exists("pull-requests-sync-status-loading-bones"),
-    "the repository and the sync line are bones in their own lines"
-  );
 }
 
 #[test]

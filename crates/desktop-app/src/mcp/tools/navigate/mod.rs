@@ -2,8 +2,6 @@ mod join_team;
 mod merges;
 mod modules;
 
-use std::num::NonZeroU64;
-
 use lurq::mcp::{McpTool, Scope};
 use modules::{agent_page, module_page, new_task_page};
 use orchester_core::{
@@ -13,7 +11,6 @@ use orchester_core::{
 use orchester_workspace::{
   delivery::DeliveryPeriod,
   files::{LineRangeError, Version, VersionParseError},
-  pull_requests::list::PullRequestTab,
 };
 use serde_json::{Map, Value, json};
 
@@ -61,11 +58,10 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   five tabs of one Agents page (Profiles, Instructions, Skills, Tools, Memory), each its own route: agents takes \
   `agent` (a profile's id, or new), skills takes \
   `skill` (a skill id, new or import), tools takes tool (a tool id, or new), and its page's tab; review is the list of tasks whose run finished and, with `key`, \
-  a task's review; merge_queue, pull_requests and merges are pages of their own, each its own route; merges takes `key` and `run` (a task's \
+  a task's review; merge_queue and merges are pages of their own, each its own route; merges takes `key` and `run` (a task's \
   key and its run's number) for that run's merge attempts; orchestrator takes `chat` (a \
   conversation's id, or new; left out, the latest); files takes `file` (a path in the project; the tree alone when \
-  left out), `at` (checkout, the default, base, run:<run id> or rev:<commit>) and `line` (12 or 12-20); pull_requests \
-  takes `tab`, or `number` for one pull request (with `tab` feedback, its Agent feedback); usage takes `query`, the \
+  left out), `at` (checkout, the default, base, run:<run id> or rev:<commit>) and `line` (12 or 12-20); usage takes `query`, the \
   page's query as a link carries it, and \
   without `project` shows every project's usage; with `view` delivery and `period` a project's Delivery view beside \
   it; modules takes `tab` (open or closed), `view` new for New module, or `module`: new for New module, a module's id \
@@ -96,12 +92,11 @@ pub fn tool(link: WindowLink, lookup: Option<Lookup>) -> McpTool {
 fn schema() -> Value {
   let names: Vec<&str> = Screen::ALL.into_iter().map(Screen::name).collect();
   let tabs = format!(
-    "The screen's tab, the one it opens on when left out: settings automation, general, plan-limits, updates, \n     whats-new, notifications, accounts, browser, \n     orchester (Orchester Cloud), connect (Connect a server), invite (an invite's landing); overview {} (kept for old \n     links: the Overview shows every section on one page); tasks {}; \n     task {}; project_settings {}; pull_requests {}; memory {}; import_resources {}; modules {}, a module's page {}.",
+    "The screen's tab, the one it opens on when left out: settings automation, general, plan-limits, updates, \n     whats-new, notifications, accounts, browser, \n     orchester (Orchester Cloud), connect (Connect a server), invite (an invite's landing); overview {} (kept for old \n     links: the Overview shows every section on one page); tasks {}; \n     task {}; project_settings {}; memory {}; import_resources {}; modules {}, a module's page {}.",
     OverviewTab::ALL.map(OverviewTab::name).join(", "),
     TaskListTab::ALL.map(TaskListTab::name).join(", "),
     TaskTab::ALL.map(TaskTab::name).join(", "),
     SETTINGS_TABS.join(", "),
-    PullRequestTab::ALL.map(PullRequestTab::name).join(", "),
     MemoryTab::ALL.map(MemoryTab::name).join(", "),
     ImportTab::ALL.map(ImportTab::name).join(", "),
     ModuleListTab::ALL.map(ModuleListTab::name).join(", "),
@@ -138,7 +133,6 @@ fn schema() -> Value {
       "way": { "type": "string", "enum": ["cloud", "code", "projects", "folder"], "description": "join_team: the account's teams and invites (cloud, the default), the code page, a joined team's shared projects (projects, with `server`) or linking one of them to a folder (folder, with `server` and `project`, its slug)." },
       "at": { "type": "string", "description": "files: the version, checkout (the default), base, run:<run id> or rev:<commit>." },
       "line": { "type": "string", "description": "files: the line or lines to show, 12 or 12-20." },
-      "number": { "type": "string", "description": "pull_requests: the number of the pull request to open, e.g. 142; with tab feedback, on its Agent feedback." },
       "module": { "type": "string", "description": "modules: a module's id for its page, or new for New module; omitted opens the list. new_task: a module's id, for New task in module." },
       "query": {
         "type": "string",
@@ -211,7 +205,6 @@ fn screen_route(screen: Screen, args: &Map<String, Value>, lookup: Option<&Looku
     Screen::Modules => module_page(args)?,
     Screen::Review => review_page(args)?,
     Screen::MergeQueue => ProjectPage::MergeQueue,
-    Screen::PullRequests => pull_requests_page(args)?,
     Screen::Merges => merges::merges_page(args)?,
     Screen::Usage => return usage_route(args),
     Screen::Pipelines => ProjectPage::Pipelines,
@@ -278,7 +271,6 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::Skills => &["project", "skill"],
     Screen::Orchestrator => &["project", "chat"],
     Screen::Files => &["project", "file", "at", "line"],
-    Screen::PullRequests => &["project", "tab", "number"],
     Screen::NewConnection => &["project", "kind"],
     Screen::EditConnection => &["project", "connection"],
     Screen::Usage => &["project", "query", "view", "period"],
@@ -445,36 +437,6 @@ pub(super) fn connection(args: &Map<String, Value>, param: &'static str) -> Resu
   value.parse().map_err(|error: uuid::Error| ToolError::InvalidParam {
     param,
     reason: format!("`{value}` is not a connection id ({error})"),
-  })
-}
-
-/// Pull request `number` on Files changed, or on Agent feedback with `tab` `feedback`; or the list on `tab`.
-fn pull_requests_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
-  let Some(number) = string(args, "number")? else {
-    let known = PullRequestTab::ALL.map(PullRequestTab::name);
-    return Ok(ProjectPage::PullRequests(tab(args, PullRequestTab::from_name, &known)?));
-  };
-  let feedback = match string(args, "tab")? {
-    None => false,
-    Some("feedback") => true,
-    Some(_) => {
-      return Err(ToolError::InvalidParam {
-        param: "tab",
-        reason: "a pull request's own tabs are files (no tab) and feedback".to_owned(),
-      });
-    }
-  };
-  let number = number
-    .trim_start_matches('#')
-    .parse::<NonZeroU64>()
-    .map_err(|_| ToolError::InvalidParam {
-      param: "number",
-      reason: format!("`{number}` is not a pull request number"),
-    })?;
-  Ok(if feedback {
-    ProjectPage::PullRequestFeedback(number, None)
-  } else {
-    ProjectPage::PullRequest(number, None)
   })
 }
 

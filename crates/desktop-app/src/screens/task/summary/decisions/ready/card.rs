@@ -12,7 +12,7 @@
 //! the page's own work on it did not happen, and what came of creating the run's pull request
 //! ([`super::pull_request`]). *Merged into main* (`nqp68`): where the work went and what was cleared after it.
 
-use std::{num::NonZeroU64, sync::Arc};
+use std::sync::Arc;
 
 use lurq::{
   app::{
@@ -44,10 +44,13 @@ use crate::{
       words::{attempt_line, stage, when},
     },
     task::{
-      PageState, header,
+      PageState,
+      ci::actions::open_page,
+      header,
       merge::{self, Merge, MergeAction},
     },
   },
+  services::Services,
   theme::{ExtraSpacing, ExtraTypography, IconSize, TaskText},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -240,12 +243,12 @@ fn not_merged_words(
 }
 
 /// The merge's action, *Review changes* or *Open in Review*, *Close without merging*, and *Review PR* once the run has
-/// pull request `review`.
+/// pull request page `review`.
 fn buttons(
   ctx: &mut Ctx,
   task: &TaskContext,
   shown: &Shown<'_>,
-  (action, review): (&MergeAction, Option<NonZeroU64>),
+  (action, review): (&MergeAction, Option<Arc<str>>),
 ) -> Element {
   let navigation = Navigation::of(ctx);
   let project = task.project.open.project.id();
@@ -274,20 +277,19 @@ fn buttons(
     .child(action.control.button())
     .child(open)
     .child(close(ctx, task))
-    .with_children(review.map(|number| review_pull_request(ctx, task, number)))
+    .with_children(review.map(|url| review_pull_request(ctx, &url)))
     .into()
 }
 
-/// *Review PR*: the run's pull request `number` on its page.
-fn review_pull_request(ctx: &mut Ctx, task: &TaskContext, number: NonZeroU64) -> ActionButton {
-  let route = Route::Project(task.project.open.project.id(), ProjectPage::PullRequest(number, None));
+/// *Review PR*: opens the run's pull request, at `url` on its repository's host, in the browser.
+fn review_pull_request(ctx: &mut Ctx, url: &Arc<str>) -> ActionButton {
   ActionButton::new(
     "task-review-pull-request",
     ButtonKind::Secondary,
     ctx.t("decisions.ready.review"),
   )
   .icon(Icon::GitPullRequest)
-  .opens(Navigation::of(ctx).to(route))
+  .on_click(open_page(&Services::of(ctx), url.clone()))
 }
 
 /// *Close without merging*: the task is marked done as *More actions* › *Mark as done* does, its run's work left
@@ -391,7 +393,7 @@ pub fn merge_actions(ctx: &mut Ctx, task: &TaskContext, run: &RunView, pull: &Pu
     return Column::new().into();
   };
   let pull = pull_request::parts(ctx, task, run, pull);
-  let review = pull.review.map(|number| review_pull_request(ctx, task, number));
+  let review = pull.review.map(|url| review_pull_request(ctx, &url));
   let row = Row::new()
     .id("task-ready-actions")
     .spacing(SpacingSize::Sm)

@@ -1,6 +1,6 @@
 use super::{
-  ADD_PROJECT, CONNECTIONS, EDIT, FIRST_DOWNLOAD, IMPORT, MODULES, NEW, ORCHESTRATOR, PROJECT_PATTERN, PULL_REQUESTS,
-  REVIEW, SETTINGS, TASKS, files::FILES, join_team, project_screen_path,
+  ADD_PROJECT, CONNECTIONS, EDIT, FIRST_DOWNLOAD, IMPORT, MODULES, NEW, ORCHESTRATOR, PROJECT_PATTERN, REVIEW,
+  SETTINGS, TASKS, files::FILES, join_team, project_screen_path,
 };
 
 /// A screen of the window, as the sidebar, the tabs and the app's MCP tools name it.
@@ -26,7 +26,6 @@ pub enum Screen {
   Review,
   /// The Merge queue, a tab of Review before Review was rebuilt; reached by its route until its own task removes it.
   MergeQueue,
-  PullRequests,
   /// Merges, a tab of Review before Review was rebuilt: every merge attempt into the project's base branches (ORC-362).
   Merges,
   Usage,
@@ -48,7 +47,7 @@ pub enum Screen {
 }
 
 impl Screen {
-  pub const ALL: [Self; 31] = [
+  pub const ALL: [Self; 30] = [
     Self::AllProjects,
     Self::AddProject,
     Self::JoinTeam,
@@ -64,7 +63,6 @@ impl Screen {
     Self::Modules,
     Self::Review,
     Self::MergeQueue,
-    Self::PullRequests,
     Self::Merges,
     Self::Usage,
     Self::Pipelines,
@@ -120,7 +118,6 @@ impl Screen {
       Self::Modules => "modules",
       Self::Review => "review",
       Self::MergeQueue => "merge_queue",
-      Self::PullRequests => "pull_requests",
       Self::Merges => "merges",
       Self::Usage => "usage",
       Self::Pipelines => "pipelines",
@@ -161,7 +158,6 @@ impl Screen {
       Self::Modules => "shell.screens.modules",
       Self::Review => "shell.screens.review",
       Self::MergeQueue => "shell.screens.mergeQueue",
-      Self::PullRequests => "shell.screens.pullRequests",
       Self::Merges => "shell.screens.merges",
       Self::Usage => "shell.screens.usage",
       Self::Pipelines => "shell.screens.pipelines",
@@ -201,7 +197,6 @@ impl Screen {
       Self::Modules => Some(MODULES),
       Self::Review => Some(REVIEW),
       Self::MergeQueue => Some("merge-queue"),
-      Self::PullRequests => Some(PULL_REQUESTS),
       Self::Merges => Some("merges"),
       Self::Usage => Some("usage"),
       Self::Pipelines => Some("pipelines"),

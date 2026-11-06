@@ -23,7 +23,6 @@ use orchester_core::project::TaskKey;
 use orchester_workspace::{
   activity::{ActivityLog, Event, Operation, Outcome, Place, Slot, Target},
   display,
-  pull_requests::list::PullRequestTab,
 };
 
 use super::{
@@ -291,7 +290,7 @@ fn page(place: Place, project: &ProjectFacts) -> Option<ProjectPage> {
   Some(match place {
     Place::Overview => ProjectPage::Overview(OverviewTab::default()),
     Place::Tasks => ProjectPage::Tasks(TaskList::default()),
-    Place::PullRequests => ProjectPage::PullRequests(PullRequestTab::default()),
+    Place::PullRequests => ProjectPage::Review,
     Place::Pipeline(_) => ProjectPage::Pipelines,
     Place::Instruction(_) => ProjectPage::Instructions(InstructionsView::default()),
     Place::Skill(_) => ProjectPage::Skills(SkillsFilter::default()),

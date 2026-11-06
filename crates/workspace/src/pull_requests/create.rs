@@ -75,9 +75,11 @@ impl Unavailable {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Readiness {
   Ready,
-  /// The run's branch has open pull request `number`, as the last sync read it: Review PR is offered instead.
+  /// The run's branch has open pull request `number` at `url`, as the last sync read it: Review PR is offered
+  /// instead.
   Open {
     number: u64,
+    url: String,
   },
   Unavailable(Unavailable),
 }
@@ -118,8 +120,8 @@ pub fn readiness_in(repo_root: &Path, programs: &Programs, run: RunId) -> Result
   let Some(link) = db.repository_link()? else {
     return Ok(Readiness::Unavailable(unlinked(repo_root, programs)?));
   };
-  if let Some(number) = open_for(&db, &link, run.branch())? {
-    return Ok(Readiness::Open { number });
+  if let Some(OpenedPullRequest { number, url }) = open_for(&db, &link, run.branch())? {
+    return Ok(Readiness::Open { number, url });
   }
   if run.base_branch().is_none() {
     return Ok(Readiness::Unavailable(Unavailable::NoBaseBranch));
@@ -151,7 +153,11 @@ fn unlinked(repo_root: &Path, programs: &Programs) -> Result<Unavailable, Reposi
 }
 
 /// The open pull request of `branch` the last sync of `link`'s repository stored, if any.
-fn open_for(db: &ProjectDb, link: &RepositoryLink, branch: &BranchName) -> Result<Option<u64>, StoreError> {
+fn open_for(
+  db: &ProjectDb,
+  link: &RepositoryLink,
+  branch: &BranchName,
+) -> Result<Option<OpenedPullRequest>, StoreError> {
   Ok(db.pull_requests(link.repo())?.and_then(|synced| {
     synced
       .pull_requests
@@ -161,7 +167,10 @@ fn open_for(db: &ProjectDb, link: &RepositoryLink, branch: &BranchName) -> Resul
           && !pull_request.is_cross_repository()
           && matches!(pull_request.state(), PullRequestState::Open | PullRequestState::Draft)
       })
-      .map(|pull_request| pull_request.number())
+      .map(|pull_request| OpenedPullRequest {
+        number: pull_request.number(),
+        url: pull_request.url().to_owned(),
+      })
   }))
 }
 
@@ -185,9 +194,10 @@ pub enum UnpushedBase {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CreateProblem {
   Unavailable(Unavailable),
-  /// The run's branch has an open pull request already: `number`, when known.
+  /// The run's branch has an open pull request already: `number` and its page `url`, when known.
   AlreadyOpen {
     number: Option<u64>,
+    url: Option<String>,
   },
   /// The run is not its task's latest run, or did not succeed.
   NotReady,
@@ -231,21 +241,25 @@ pub fn create_in(
   if !matches!(&outcome, Ok(_) | Err(CreateProblem::AlreadyOpen { .. })) {
     return outcome;
   }
-  // The pull request stands either way; the Pull requests page says why a sync failed.
+  // The pull request stands either way; a failed sync is only logged.
   if let Err(error) = sync_scope_in(repo_root, programs, SyncScope::OpenAndClosed) {
     tracing::warn!(%error, "cannot sync the pull requests after creating one");
   }
   match outcome {
-    // GitHub names the branch of the one already open, not its number: the sync just stored it.
-    Err(CreateProblem::AlreadyOpen { number: None }) => Err(CreateProblem::AlreadyOpen {
-      number: stored_open(repo_root, run),
-    }),
+    // GitHub names the branch of the one already open, not its page: the sync just stored it.
+    Err(CreateProblem::AlreadyOpen { number, url: None }) => {
+      let stored = stored_open(repo_root, run);
+      Err(CreateProblem::AlreadyOpen {
+        number: stored.as_ref().map(|pull_request| pull_request.number).or(number),
+        url: stored.map(|pull_request| pull_request.url),
+      })
+    }
     outcome => outcome,
   }
 }
 
 /// The open pull request of run `run`'s branch the last sync stored, if it can be read.
-fn stored_open(repo_root: &Path, run: RunId) -> Option<u64> {
+fn stored_open(repo_root: &Path, run: RunId) -> Option<OpenedPullRequest> {
   let db = ProjectDb::open(repo_root).ok()?;
   let link = db.repository_link().ok()??;
   let run = db.run(run).ok()??;
@@ -266,8 +280,11 @@ fn open(
     let unavailable = unlinked(repo_root, programs).map_err(CreateProblem::GitHub)?;
     return Err(CreateProblem::Unavailable(unavailable));
   };
-  if let Some(number) = open_for(&db, &link, run.branch())? {
-    return Err(CreateProblem::AlreadyOpen { number: Some(number) });
+  if let Some(OpenedPullRequest { number, url }) = open_for(&db, &link, run.branch())? {
+    return Err(CreateProblem::AlreadyOpen {
+      number: Some(number),
+      url: Some(url),
+    });
   }
   let task = db.task(run.task())?.ok_or(StoreError::TaskNotFound(run.task()))?;
   let (title, body) = task_pull_request(task.key(), task.details(), &task_link(db.project().id(), task.key()));
@@ -365,7 +382,7 @@ fn problem(failure: OpenFailure, link: &RepositoryLink) -> CreateProblem {
       remote: link.remote().clone(),
       host: host.clone(),
     },
-    OpenFailure::Create(CreateFailure::AlreadyExists { number }) => CreateProblem::AlreadyOpen { number },
+    OpenFailure::Create(CreateFailure::AlreadyExists { number }) => CreateProblem::AlreadyOpen { number, url: None },
     OpenFailure::Create(CreateFailure::NoCommits) => CreateProblem::NoCommits,
     OpenFailure::Create(CreateFailure::Repository(error)) => CreateProblem::GitHub(error),
   }

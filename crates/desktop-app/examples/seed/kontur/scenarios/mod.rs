@@ -39,7 +39,6 @@ mod overview_states;
 mod ownership;
 mod pipelines;
 mod project_settings;
-mod pull_requests;
 pub mod qa_app_asks;
 mod review_changed;
 mod review_list;
@@ -110,7 +109,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 160] = [
+pub const ALL: [Scenario; 158] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -221,8 +220,6 @@ pub const ALL: [Scenario; 160] = [
   Scenario::of("browser", browser::seed),
   Scenario::of("browser-not-found", browser::not_found),
   Scenario::of("browser-chosen", browser::chosen),
-  Scenario::of("pull-requests", pull_requests::seed),
-  Scenario::of("pull-request-feedback", pull_requests::feedback::seed),
   Scenario::of("sources", sources::seed),
   Scenario::of("sources-unreadable", sources::unreadable),
   Scenario::of("usage", usage::seed),

@@ -8,7 +8,7 @@
 
 mod support;
 
-use std::{num::NonZeroU64, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
   app::{
@@ -47,8 +47,7 @@ use orchester_core::{
   usage::{GroupBy, Period},
 };
 use orchester_workspace::{
-  files::Version, pull_requests::list::PullRequestTab, tasks::integration_jobs::ProjectJobs, usage::UsageQuery,
-  workspace::OpenProject,
+  files::Version, tasks::integration_jobs::ProjectJobs, usage::UsageQuery, workspace::OpenProject,
 };
 use parking_lot::Mutex;
 use support::Data;
@@ -83,7 +82,6 @@ const BUILT: &[Screen] = &[
   Screen::Overview,
   Screen::Pipelines,
   Screen::ProjectSettings,
-  Screen::PullRequests,
   Screen::Secrets,
   Screen::Settings,
   Screen::Skills,
@@ -287,7 +285,6 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
     ChangedFile::new("src/a b.rs", ChangeSource::Worktree).expect("a file path"),
   ));
   let placeholder = |title| vec![title];
-  let pull_request = NonZeroU64::new(142).expect("a pull request number");
   let mut all = home_screens();
   all.extend(review_screens());
   all.extend([
@@ -316,13 +313,7 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
     ),
     (at(ProjectPage::Task(key("KON-12"), changes)), READING_TASK.to_vec()),
     (at(ProjectPage::MergeQueue), placeholder("Merge queue")),
-    (
-      at(ProjectPage::PullRequests(PullRequestTab::Merged)),
-      placeholder("Pull requests"),
-    ),
     (at(ProjectPage::Merges), placeholder("Merges")),
-    (at(ProjectPage::PullRequest(pull_request, None)), Vec::new()),
-    (at(ProjectPage::PullRequestFeedback(pull_request, None)), Vec::new()),
     (at(ProjectPage::Usage(Box::new(filtered_usage()))), placeholder("Usage")),
     (at(ProjectPage::Pipelines), placeholder("Pipelines")),
     (at(ProjectPage::Agents), placeholder("Agents")),
