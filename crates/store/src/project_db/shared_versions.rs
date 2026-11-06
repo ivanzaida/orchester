@@ -307,22 +307,24 @@ pub(super) fn sharing_of(connection: &Connection, id: ResourceId) -> Result<Opti
   }
 }
 
-/// Adds `resource` with its own id and no draft, unless the slug is another resource's of its kind. A pipeline of the
-/// team wins its slug from one of this computer's own: in a team project only the team's pipelines are offered
-/// (`docs/architecture/server.md` row 80), so the local one, kept as it is otherwise, takes a free slug.
+/// Adds `resource` with its own id and no draft, unless the slug is another resource's of its kind. A pipeline or
+/// agent profile of the team wins its slug from one of this computer's own, or from a team resource archived here:
+/// the team's resource always arrives (`docs/architecture/server.md` row 80), and the other, kept as it is otherwise,
+/// takes a free slug.
 pub(super) fn insert_resource(connection: &Connection, resource: &Resource) -> Result<(), StoreError> {
   let kind = kind_text(resource.kind());
-  let holder: Option<(String, Option<String>)> = connection
+  let holder: Option<(String, Option<String>, bool)> = connection
     .query_row(
-      "SELECT id, sharing FROM resources WHERE kind = ?1 AND slug = ?2",
+      "SELECT id, sharing, id IN (SELECT resource_id FROM removed_resources) FROM resources WHERE kind = ?1 AND slug = ?2",
       params![kind, resource.slug().as_str()],
-      |row| Ok((row.get(0)?, row.get(1)?)),
+      |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
     )
     .optional()?;
+  let gives_way = matches!(resource.kind(), ResourceKind::Pipeline | ResourceKind::AgentProfile);
   match holder {
     None => {}
-    Some((local, sharing)) if resource.kind() == ResourceKind::Pipeline && sharing.as_deref() != Some("shared") => {
-      give_way(connection, &local, resource)?;
+    Some((other, sharing, removed)) if gives_way && (removed || sharing.as_deref() != Some("shared")) => {
+      give_way(connection, &other, resource)?;
     }
     Some(_) => {
       return Err(StoreError::DuplicateSlug {
@@ -507,7 +509,8 @@ fn revision_value(revision: i64) -> Result<TaskRevision, StoreError> {
     .ok_or_else(|| corrupt("resource revision", revision))
 }
 
-/// Moves the local resource `local` off `team`'s slug to a free one of its kind (`<slug>-local`, then `-2`, …).
+/// Moves the resource `local`, this computer's own or archived, off `team`'s slug to a free one of its kind
+/// (`<slug>-local`, then `-2`, …).
 fn give_way(connection: &Connection, local: &str, team: &Resource) -> Result<(), StoreError> {
   let mut statement = connection.prepare("SELECT slug FROM resources WHERE kind = ?1")?;
   let taken = statement
@@ -526,7 +529,7 @@ fn give_way(connection: &Connection, local: &str, team: &Resource) -> Result<(),
   tracing::info!(
     resource = local,
     slug = free.as_str(),
-    "a local pipeline gave its slug to the team's"
+    "a resource gave its slug to the team's"
   );
   Ok(())
 }

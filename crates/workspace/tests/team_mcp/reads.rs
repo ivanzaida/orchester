@@ -10,7 +10,10 @@ use std::{
   sync::Arc,
 };
 
-use orchester_core::{id::ResourceId, resource::Version};
+use orchester_core::{
+  id::{ConnectionId, ResourceId},
+  resource::Version,
+};
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 
@@ -30,12 +33,15 @@ pub struct Seen {
   /// The pipeline the last task edit and the last `task.create` named, as sent.
   pub edited_pipeline: Value,
   pub created_pipeline: Value,
+  /// The connection the Builder profile's version names, by its id on the publisher's computer.
+  pub publisher_connection: Option<ConnectionId>,
 }
 
 /// The routes, and what they saw.
 pub fn routes(config: &Config) -> (Extra, Arc<Mutex<Seen>>) {
   let seen = Arc::new(Mutex::new(Seen::default()));
   let versions = Arc::new(Versions::of(config));
+  seen.lock().publisher_connection = Some(versions.connection);
   let counted = seen.clone();
   let extra: Extra = Arc::new(move |state, request, stream| route(state, (&versions, &counted), request, stream));
   (extra, seen)
@@ -45,6 +51,7 @@ pub fn routes(config: &Config) -> (Extra, Arc<Mutex<Seen>>) {
 struct Versions {
   pipeline: (ResourceId, Value),
   profile: (ResourceId, Value),
+  connection: ConnectionId,
 }
 
 impl Versions {
@@ -53,6 +60,7 @@ impl Versions {
     let connection = profile.body().connection();
     let pipeline = fixture::one_step(config.profile, "Say hello.");
     Self {
+      connection,
       pipeline: (config.pipeline, version(config.pipeline, &pipeline, &json!([]))),
       profile: (
         config.profile,

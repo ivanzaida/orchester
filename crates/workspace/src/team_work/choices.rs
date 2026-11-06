@@ -3,9 +3,10 @@
 //! profile of the task's pipeline runs on. The profiles and the CLI each runs are read from the team server: the
 //! pipeline's latest published version names its profiles, and each profile's latest version names its connection by a
 //! reference whose role is the CLI the Admin chose. A profile runs on the connection the caller binds it to, otherwise
-//! on the only local agent connection of its CLI; with none or several, the start is refused naming the profiles that
-//! need a choice. Nothing else is guessed: the bindings are checked again against the bundle `work.start` answers, and
-//! a pipeline changed in between fails the start there.
+//! on the connection its reference names when this computer has it with that very id and CLI (the publisher's own
+//! computer), otherwise on the only local agent connection of its CLI; with none or several, the start is refused
+//! naming the profiles that need a choice. Nothing else is guessed: the bindings are checked again against the bundle
+//! `work.start` answers, and a pipeline changed in between fails the start there.
 
 use std::path::Path;
 
@@ -71,6 +72,8 @@ struct Profile {
   id: ResourceId,
   role: String,
   cli: AgentProvider,
+  /// The connection its version's reference names, by its id on the publisher's computer.
+  connection: ConnectionId,
 }
 
 /// The bindings of every agent profile of `pipeline`'s latest published version on `connections`, the caller's
@@ -108,7 +111,8 @@ pub async fn bind(
   })
 }
 
-/// The connection `profile` runs on: the caller's binding, else the only local connection of its CLI.
+/// The connection `profile` runs on: the caller's binding, else the connection its reference names when this computer
+/// has it with that id and CLI, else the only local connection of its CLI.
 fn chosen(
   profile: &Profile,
   connections: &[Connection],
@@ -122,9 +126,15 @@ fn chosen(
       .map(|connection| Some(connection.id()))
       .ok_or_else(|| ChoiceError::ConnectionNotFound(named.clone()));
   }
-  let mut matching = connections
+  let runs_cli = |connection: &&Connection| *connection.kind() == ConnectionKind::Agent(profile.cli);
+  if let Some(named) = connections
     .iter()
-    .filter(|connection| *connection.kind() == ConnectionKind::Agent(profile.cli));
+    .filter(runs_cli)
+    .find(|connection| connection.id() == profile.connection)
+  {
+    return Ok(Some(named.id()));
+  }
+  let mut matching = connections.iter().filter(runs_cli);
   Ok(match (matching.next(), matching.next()) {
     (Some(only), None) => Some(only.id()),
     _ => None,
@@ -168,6 +178,7 @@ async fn profile(project: &TeamProject, id: ResourceId) -> Result<Profile, Choic
     id,
     role: body.role().as_str().to_owned(),
     cli,
+    connection,
   })
 }
 

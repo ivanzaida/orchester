@@ -185,7 +185,8 @@ fn creation_snapshots_a_run_from_before_run_versions_has_none() {
   );
 }
 
-fn shared(id: TaskId, number: u32, revision: TaskRevision) -> CachedTask {
+/// A task as the server confirmed it, on the team pipeline `pipeline`, by its id.
+fn shared(id: TaskId, number: u32, revision: TaskRevision, pipeline: &str) -> CachedTask {
   let details = requirements("Shared retries");
   CachedTask {
     id,
@@ -194,7 +195,7 @@ fn shared(id: TaskId, number: u32, revision: TaskRevision) -> CachedTask {
     title: details.title,
     brief: details.brief,
     criteria: details.acceptance_criteria,
-    pipeline: Some("delivery".into()),
+    pipeline: Some(pipeline.to_owned()),
     limits: details.limits,
     status: TaskStatus::Draft,
     organization: TaskOrganization::default(),
@@ -223,20 +224,26 @@ fn creation_snapshots_a_shared_task_keeps_one_only_when_created_here_unchanged()
     removed_at: None,
     address: None,
   };
+  let delivery = db.resources(ResourceKind::Pipeline).expect("pipelines").remove(0).id();
+  db.set_resource_sharing(
+    delivery,
+    Some(orchester_store::ResourceSharing::Shared(TaskRevision::FIRST)),
+  )
+  .expect("the team's");
   db.start_sharing(&link, &[], (&[], &Default::default()))
     .expect("shared");
-  let delivery = db.resources(ResourceKind::Pipeline).expect("pipelines").remove(0).id();
-  let here = shared(TaskId::generate(), 5, TaskRevision::FIRST);
+  let named = delivery.to_string();
+  let here = shared(TaskId::generate(), 5, TaskRevision::FIRST, &named);
   db.cache_shared_tasks(std::slice::from_ref(&here), Some("batch-here"))
     .expect("cached");
   let kept = db.task_creation_details(here.id).expect("read").expect("created here");
   assert_eq!(kept.title.as_str(), "Shared retries");
-  assert_eq!(kept.pipeline, Some(delivery), "this computer's pipeline of its slug");
-  let elsewhere = shared(TaskId::generate(), 6, TaskRevision::FIRST);
+  assert_eq!(kept.pipeline, Some(delivery), "the team pipeline of its id");
+  let elsewhere = shared(TaskId::generate(), 6, TaskRevision::FIRST, &named);
   db.cache_shared_tasks(std::slice::from_ref(&elsewhere), None)
     .expect("cached");
   assert_eq!(db.task_creation_details(elsewhere.id).expect("read"), None);
-  let changed = shared(TaskId::generate(), 7, TaskRevision::FIRST.next().expect("next"));
+  let changed = shared(TaskId::generate(), 7, TaskRevision::FIRST.next().expect("next"), &named);
   db.cache_shared_tasks(std::slice::from_ref(&changed), Some("batch-replayed"))
     .expect("cached");
   assert_eq!(

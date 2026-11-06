@@ -557,3 +557,37 @@ fn shared_tasks_a_slug_names_no_team_pipeline_and_the_upgrade_turns_it_into_the_
   let upgraded = db.task(task.id()).expect("read").expect("task");
   assert_eq!(upgraded.details().pipeline.map(|id| id.to_string()), Some(delivery));
 }
+
+/// Row 80, 2026-11-06: a team project offers only what its server has live. The project's own pipeline and profiles,
+/// published before it was shared, are kept as they are and offered nowhere; one the team's shares is offered.
+#[test]
+fn shared_tasks_a_team_project_offers_only_the_teams_resources() {
+  let (_repo, mut db, _run, _) = started_run();
+  let offered = |db: &ProjectDb, kind| db.resources(kind).expect("read").len();
+  let (pipelines, profiles) = (
+    offered(&db, ResourceKind::Pipeline),
+    offered(&db, ResourceKind::AgentProfile),
+  );
+  assert!(pipelines > 0 && profiles > 0, "the fixture has its own");
+  let team = team_delivery(&mut db);
+  db.start_sharing(&link("ORC"), &[], (&[], &Default::default()))
+    .expect("share");
+
+  let ids = |kind| -> Vec<String> {
+    db.resources(kind)
+      .expect("read")
+      .iter()
+      .map(|resource| resource.id().to_string())
+      .collect()
+  };
+  assert_eq!(ids(ResourceKind::Pipeline), [team], "only the team's pipeline");
+  assert!(
+    ids(ResourceKind::AgentProfile).is_empty(),
+    "no profile of this computer's own"
+  );
+  assert_eq!(
+    db.kept_resources(ResourceKind::AgentProfile).expect("read").len(),
+    profiles,
+    "kept as they are"
+  );
+}

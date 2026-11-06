@@ -355,19 +355,15 @@ fn proposed_memory(db: &ProjectDb) -> Result<Vec<Timestamp>, StoreError> {
 }
 
 /// Pipelines with a published version the project offers (in a team project only the team's,
-/// `crate::pipelines::offered`), ordered by slug. Drafts that were never published cannot be run,
-/// so they are not offered.
+/// `ProjectDb::resources`), ordered by slug. Drafts that were never published cannot be run, so
+/// they are not offered.
 pub fn published_pipelines(store: &ProjectDb) -> Result<Vec<PipelineChoice>, StoreError> {
   let mut choices = Vec::new();
   let assignables = Assignables::load(store)?;
-  let offered = crate::pipelines::offered::Offered::of(store)?;
   for resource in store.resources(ResourceKind::Pipeline)? {
     let Some(version) = store.latest_version::<Pipeline>(resource.id())? else {
       continue;
     };
-    if !offered.offers(store, resource.id(), true)? {
-      continue;
-    }
     choices.push(pipeline_choice(&resource, &version, &assignables));
   }
   Ok(choices)

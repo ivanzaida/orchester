@@ -120,7 +120,7 @@ pub fn shared_pipeline_id(db: &ProjectDb, pipeline: Option<ResourceId>) -> Resul
     return Ok(None);
   };
   let uploaded = db
-    .resources(ResourceKind::Pipeline)?
+    .kept_resources(ResourceKind::Pipeline)?
     .iter()
     .any(|resource| resource.id() == id)
     && !db.versions::<Pipeline>(id)?.is_empty();
