@@ -210,6 +210,7 @@ impl Checkout {
             connection: self.connection,
             account: None,
             required_cli: None,
+            mcp_servers: Vec::new(),
           }],
           references: Vec::new(),
         },

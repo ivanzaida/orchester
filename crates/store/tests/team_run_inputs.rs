@@ -177,6 +177,7 @@ impl Team {
         connection: ConnectionId::generate(),
         account: None,
         required_cli: None,
+        mcp_servers: Vec::new(),
       }],
       references,
     };
@@ -478,6 +479,7 @@ fn local_inputs(db: &ProjectDb, snapshot: &RunSnapshot) -> RunInputs {
         connection: ConnectionId::generate(),
         account: None,
         required_cli: None,
+        mcp_servers: Vec::new(),
       })
       .collect(),
     references: Vec::new(),

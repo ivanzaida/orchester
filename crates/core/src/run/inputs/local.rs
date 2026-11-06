@@ -10,8 +10,9 @@ use crate::{
   run::{PinnedVersion, bundle::ResolvedStepPermissions},
 };
 
-/// `{resource, connection, account?, required_cli?}`: the local connection and account a pinned profile runs with,
-/// and the CLI kind its shared reference requires.
+/// `{resource, connection, account?, required_cli?, mcp_servers?}`: the local connection and account a pinned profile
+/// runs with, the CLI kind its shared reference requires, and the local MCP servers its version names (each also bound
+/// in [`LocalBindings::references`]).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProfileBinding {
@@ -21,6 +22,9 @@ pub struct ProfileBinding {
   /// The shared reference's required CLI; absent in runs recorded before kind validation and in local runs.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub required_cli: Option<AgentProvider>,
+  /// The local MCP servers this profile's agents get, and only this profile's; none for a profile that names none.
+  #[serde(default, skip_serializing_if = "Vec::is_empty")]
+  pub mcp_servers: Vec<ConnectionId>,
 }
 
 /// A connection, MCP server or secret the canonical bodies name by the publisher's id, bound to this computer's.
