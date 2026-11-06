@@ -12,7 +12,6 @@ pub mod history;
 pub mod levels;
 pub mod library;
 pub mod narrowing;
-pub mod offered;
 pub mod problems;
 pub mod sources;
 pub mod widening;

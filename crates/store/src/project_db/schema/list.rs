@@ -591,4 +591,7 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   super::reported_windows::MIGRATION,
   super::flaky_tests::MIGRATION,
   super::service_slots::MIGRATION,
+  // Master's `team_pipeline_ids` comes after ours on this branch: project databases already migrated by Agent testing
+  // builds hold `flaky_tests` and `service_slots` at 147 and 148, so master's migration cannot take 147 here.
+  super::team_pipeline_ids::MIGRATION,
 ];

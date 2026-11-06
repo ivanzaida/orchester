@@ -96,7 +96,7 @@ impl ProjectDb {
       return Err(StoreError::NotShared);
     }
     transaction.execute_batch(
-      "UPDATE tasks SET pipeline_id = (SELECT resources.id FROM resources WHERE resources.kind = 'pipeline'          AND resources.slug = tasks.pipeline_slug) WHERE sharing = 'shared';
+      "UPDATE tasks SET pipeline_id = (SELECT resources.id FROM resources WHERE resources.kind = 'pipeline'          AND resources.id = tasks.pipeline_slug) WHERE sharing = 'shared';
        UPDATE task_identities SET owner = 'local', server_id = NULL, team_project_id = NULL, team_task_id = NULL, \
          recorded_revision = NULL WHERE id IN (SELECT id FROM tasks WHERE sharing = 'shared');
        UPDATE tasks SET sharing = NULL, pipeline_slug = NULL WHERE sharing = 'shared';",

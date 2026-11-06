@@ -14,7 +14,7 @@ use orchester_core::id::OperationId;
 
 use super::{DefinitionEdit, TagEdit};
 use crate::{
-  actions::{Accepted, ActionError, Current, Definition, Refusal, TeamOutcome},
+  actions::{Accepted, ActionError, Current, Definition, PipelineRefusal, Refusal, TeamOutcome},
   team_reads::TeamSession,
 };
 
@@ -109,7 +109,11 @@ async fn refused(
   edit: &DefinitionEdit,
   (status, code, details): (u16, ErrorCode, Option<Box<SharingErrorDetails>>),
 ) -> TeamOutcome {
-  let refusal = Refusal::Route { status, code };
+  let pipeline = match (code, details.as_deref()) {
+    (ErrorCode::Invalid, Some(SharingErrorDetails::Reason { reason })) => PipelineRefusal::of_reason(reason),
+    _ => None,
+  };
+  let refusal = pipeline.map_or(Refusal::Route { status, code }, Refusal::TaskPipeline);
   if code != ErrorCode::RevisionConflict {
     return TeamOutcome::Rejected {
       operation,

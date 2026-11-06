@@ -32,7 +32,9 @@ pub use self::{
     PolicyAction, TagAction, TaskAction, WorkAction,
   },
   error::ActionError,
-  outcome::{Accepted, ActionOutcome, Current, Definition, LocalResult, Receipt, Refusal, TeamOutcome},
+  outcome::{
+    Accepted, ActionOutcome, Current, Definition, LocalResult, PipelineRefusal, Receipt, Refusal, TeamOutcome,
+  },
 };
 use self::{
   ownership::{ProjectOwner, project_owner},

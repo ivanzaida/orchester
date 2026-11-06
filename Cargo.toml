@@ -106,7 +106,7 @@ keyring-core = "1"
 # it is when measured heights change (a tall row opened in a chat no longer moves it);
 # 0.43: execution-bound input origin and canceled queued-call rejection; an app's own MCP server hosts lurq's window tools (`McpConfig::hosted`, `McpHandle::service`); see
 # `orchester-app`'s `mcp` module.
-lurq = { version = "0.58.0", default-features = false, features = ["query"] }
+lurq = { version = "0.58.2", default-features = false, features = ["query"] }
 # libproc process enumeration and identity on macOS; already transitive through rustix.
 libc = "0.2"
 parking_lot = "0.12"

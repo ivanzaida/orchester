@@ -406,6 +406,8 @@ fn acted_words(ctx: &Ctx, acted: &Acted) -> Option<Arc<str>> {
   let key = match acted {
     Acted::Done => return None,
     Acted::Refused(code) => return Some(refused_words(ctx, *code)),
+    // Only a task edit names a pipeline; any other action that met one was refused as invalid.
+    Acted::PipelineRefused(_) => return Some(refused_words(ctx, AuthorityErrorCode::Invalid)),
     Acted::NeedsVersion(required) => {
       return Some(ctx.t_args(
         "modules.team.work.refused.needsVersion",

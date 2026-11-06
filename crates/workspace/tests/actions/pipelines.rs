@@ -12,7 +12,7 @@ use orchester_core::{
   tokens::TokenBudget,
 };
 use orchester_store::{ProjectDb, ResourceSharing};
-use orchester_workspace::actions::{Action, ActionError, Intent, TaskAction};
+use orchester_workspace::actions::{Action, ActionError, Intent, PipelineRefusal, Refusal, TaskAction, TeamOutcome};
 
 use crate::{
   Checkout, completed_task, details, name, revision,
@@ -118,5 +118,37 @@ async fn actions_a_local_pipeline_or_limits_are_refused_before_anything_is_sent(
   let refused = dispatcher.dispatch(&Intent::new(edit)).await;
   assert!(matches!(refused, Err(ActionError::NotTeamPipeline(_))), "{refused:?}");
   assert_eq!(server.counts(), (0, 0), "nothing reached the server");
+  assert_eq!(server.writes(), 0);
+}
+
+/// The server refuses a move to an archived team pipeline `422 invalid` with its reason, which the refusal names.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn actions_the_servers_pipeline_refusal_is_named() {
+  let server = TeamServer::start();
+  let checkout = Checkout::local();
+  let archived = pipeline(&mut checkout.db(), "delivery", true);
+  let checkout = checkout.link(&server);
+  let (dispatcher, _generation) = checkout.team(&server, ADMIN);
+  server.archive_pipeline(&archived.to_string());
+  let task = server.add_task("Sign in");
+  let mut edited = details("Sign in");
+  edited.pipeline = Some(archived);
+  let edit = Action::Task(TaskAction::Edit {
+    task: task.id,
+    read: revision(1),
+    base: details("Sign in"),
+    edited,
+  });
+  let refused = team(dispatcher.dispatch(&Intent::new(edit)).await.expect("dispatched"));
+  assert!(
+    matches!(
+      refused,
+      TeamOutcome::Rejected {
+        refusal: Refusal::TaskPipeline(PipelineRefusal::Archived),
+        ..
+      }
+    ),
+    "{refused:?}"
+  );
   assert_eq!(server.writes(), 0);
 }

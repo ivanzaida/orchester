@@ -21,12 +21,13 @@ use crate::{
   },
 };
 
-/// A shared task names its pipeline by slug (`docs/architecture/server.md`, "Pipelines by name"): it
-/// is this computer's pipeline of that slug, or none when it has none. A *Not shared* task keeps its
-/// own pipeline and the key it had before the project joined (`kept_key`).
+/// A shared task names one of the team's pipelines by its resource id (`docs/architecture/server.md` row 80; the
+/// column keeps its old name, `pipeline_slug`): it is that team pipeline here, or none when this computer has none of
+/// that id, and a value that is no team pipeline's id (a slug from before row 80) is none. A *Not shared* task keeps
+/// its own pipeline and the key it had before the project joined (`kept_key`).
 const SELECT_TASKS: &str = "SELECT id, number, title, brief, CASE WHEN sharing IS 'shared' THEN \
-  (SELECT resources.id FROM resources WHERE resources.kind = 'pipeline' AND resources.slug = tasks.pipeline_slug) \
-  ELSE pipeline_id END, budget_tokens, max_duration_ms, status, created_at, pipeline_version, revision, kept_key, \
+  (SELECT resources.id FROM resources WHERE resources.kind = 'pipeline' AND resources.sharing = 'shared' \
+  AND resources.id = tasks.pipeline_slug) ELSE pipeline_id END, budget_tokens, max_duration_ms, status, created_at, pipeline_version, revision, kept_key, \
   (SELECT module_id FROM task_modules WHERE task_modules.task_id = tasks.id), \
   COALESCE((SELECT choice FROM task_bases WHERE task_bases.task_id = tasks.id), 'inherit'), \
   (SELECT branch FROM task_bases WHERE task_bases.task_id = tasks.id) \

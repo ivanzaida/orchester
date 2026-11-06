@@ -422,7 +422,11 @@ pub(super) fn upload_task(
     title: details.title.as_str().to_owned(),
     brief: details.brief.clone(),
     criteria: details.acceptance_criteria.clone(),
-    pipeline: convert::pipeline_slug(db, details.pipeline)?,
+    // Share uploads the configuration with its ids first; *Join* and *Share task* name only the team's pipelines.
+    pipeline: match this {
+      UploadAs::Share => convert::shared_pipeline_id(db, details.pipeline)?,
+      UploadAs::Import => convert::team_pipeline_id(db, details.pipeline)?,
+    },
     limits: convert::shared_limits(details.limits),
     workflow: organization.workflow,
     priority: organization.priority,

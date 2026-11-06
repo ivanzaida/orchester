@@ -20,6 +20,7 @@ use orchester_core::task::{
   organization::Priority,
 };
 use orchester_workspace::{
+  actions::PipelineRefusal,
   display,
   tasks::data::{PipelineChoice, SaveTarget},
 };
@@ -309,6 +310,8 @@ fn refused(ctx: &Ctx, stop: &TeamStop, key: &str) -> Element {
     Stop::Acted(Acted::Refused(AuthorityErrorCode::Forbidden)) => "task_form.team.refused.notAdmin",
     Stop::Acted(Acted::Refused(AuthorityErrorCode::DecisionRequired)) => "task_form.team.refused.decision",
     Stop::Acted(Acted::Refused(_)) => "task_form.team.refused.other",
+    Stop::Acted(Acted::PipelineRefused(PipelineRefusal::NotFound)) => "task_form.team.refused.pipelineNotFound",
+    Stop::Acted(Acted::PipelineRefused(PipelineRefusal::Archived)) => "task_form.team.refused.pipelineArchived",
     Stop::Acted(Acted::Unavailable) => "task_form.team.refused.unavailable",
     Stop::Acted(Acted::SignedOut) => "task_form.team.refused.signedOut",
     Stop::Acted(Acted::NeedsVersion(_)) => "summary.team.refused.needsVersion",

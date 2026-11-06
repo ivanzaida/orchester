@@ -306,18 +306,49 @@ fn shared_configuration_a_team_pipeline_takes_its_slug_from_a_local_one() {
     "still this computer's own"
   );
 
-  let profile = &db
+  // An agent profile of the team arrives the same way; the local one keeps everything but its slug.
+  let profile = db
     .resources(orchester_core::resource::ResourceKind::AgentProfile)
-    .expect("profiles")[0];
-  let clash = orchester_core::resource::Resource::new(
+    .expect("profiles")
+    .remove(0);
+  let team_profile = orchester_core::resource::Resource::new(
     ResourceId::generate(),
     profile.kind(),
     profile.slug().clone(),
     name("Builder"),
     at(30),
   );
+  db.keep_shared_resource(&team_profile, revision(1))
+    .expect("the team's arrives");
+  let slug = |id| db.resource(id).expect("read").expect("kept").slug().as_str().to_owned();
+  assert_eq!(slug(team_profile.id()), profile.slug().as_str());
+  assert_eq!(slug(profile.id()), format!("{}-local", profile.slug().as_str()));
+
+  // A team resource restored on the server takes its slug back from one archived here.
+  db.mark_shared_archived(team, true, at(40)).expect("archived");
+  let restored = orchester_core::resource::Resource::new(
+    ResourceId::generate(),
+    orchester_core::resource::ResourceKind::Pipeline,
+    Slug::new("review").expect("slug"),
+    name("Review"),
+    at(50),
+  );
+  db.keep_shared_resource(&restored, revision(1))
+    .expect("the restored one arrives");
+  let slug = |id| db.resource(id).expect("read").expect("kept").slug().as_str().to_owned();
+  assert_eq!(slug(restored.id()), "review");
+  assert_eq!(slug(team), "review-local-2");
+
+  // Two live team resources of one slug are the server's to sort out: refused, as before.
+  let other = orchester_core::resource::Resource::new(
+    ResourceId::generate(),
+    orchester_core::resource::ResourceKind::Pipeline,
+    Slug::new("review").expect("slug"),
+    name("Review"),
+    at(60),
+  );
   assert!(matches!(
-    db.keep_shared_resource(&clash, revision(1)),
+    db.keep_shared_resource(&other, revision(1)),
     Err(StoreError::DuplicateSlug { .. })
   ));
 }

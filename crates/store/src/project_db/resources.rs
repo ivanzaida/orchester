@@ -22,11 +22,29 @@ use crate::{
 };
 
 const SELECT_RESOURCES: &str = "SELECT id, kind, slug, name, created_at FROM resources";
+/// The resources of kind `?1` the project offers (`docs/architecture/server.md` row 80, the person's decisions of
+/// 2026-11-05 and 2026-11-06): none removed (a team resource archived on the server is removed here); in a team
+/// project only the team's (`sharing = 'shared'`), an Admin's new resource until the server has it (no version yet, or
+/// versions waiting for the server none of which it refused), and every resource of a kind that is never the team's
+/// (`?2`). A person's own resources of a team project, kept *Not shared* at Join or published here and refused by the
+/// server, stay in the database as they are and are offered nowhere ([`ProjectDb::kept_resources`] reads them).
+const OFFERED: &str = "WHERE kind = ?1 AND id NOT IN (SELECT resource_id FROM removed_resources) AND (?2   OR NOT EXISTS (SELECT 1 FROM sharing) OR sharing IS 'shared'   OR NOT EXISTS (SELECT 1 FROM resource_versions WHERE resource_versions.resource_id = resources.id)   OR (EXISTS (SELECT 1 FROM shared_publishes WHERE shared_publishes.resource_id = resources.id)     AND NOT EXISTS (SELECT 1 FROM shared_publishes WHERE shared_publishes.resource_id = resources.id       AND shared_publishes.refused IS NOT NULL)))";
+
 /// A cached version of a shared resource reads as its local body, which this computer's bindings rewrite.
 const SELECT_VERSIONS: &str = "SELECT id, number, COALESCE(local_body, body), published_at FROM resource_versions \
                                LEFT JOIN shared_version_bodies ON version_id = id";
 
 impl ProjectDb {
+  /// Every resource of `kind` this computer keeps and has not removed, ordered by slug, those a team project hides
+  /// too: a person's own, which the app MCP tool `share_pipeline` makes the team's.
+  pub fn kept_resources(&self, kind: ResourceKind) -> Result<Vec<Resource>, StoreError> {
+    load_resources(
+      &self.connection,
+      "WHERE kind = ?1 AND id NOT IN (SELECT resource_id FROM removed_resources) ORDER BY slug",
+      [kind_text(kind)],
+    )
+  }
+
   /// Reads the draft and latest version under the write lock, then saves the returned draft.
   /// A rejected edit leaves storage unchanged; no competing writer can run between the read and save.
   pub fn update_draft<B: ResourceBody>(
@@ -234,11 +252,13 @@ impl ResourceStore for ProjectDb {
     Ok(found.pop())
   }
 
+  /// The resources the project offers ([`OFFERED`]): in a team project only what the team server has live, an
+  /// Admin's new ones not sent yet, and the kinds that are never the team's.
   fn resources(&self, kind: ResourceKind) -> Result<Vec<Resource>, StoreError> {
     load_resources(
       &self.connection,
-      "WHERE kind = ?1 AND id NOT IN (SELECT resource_id FROM removed_resources) ORDER BY slug",
-      [kind_text(kind)],
+      &format!("{OFFERED} ORDER BY slug"),
+      params![kind_text(kind), !shared_publishes::shared_kind(kind)],
     )
   }
 

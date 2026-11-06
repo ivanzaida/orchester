@@ -90,6 +90,26 @@ pub enum Definition {
   Policy(WorkspacePolicy),
 }
 
+/// Why the team server refused the pipeline a task names.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum PipelineRefusal {
+  /// The project has no pipeline of that id.
+  NotFound,
+  /// The team's pipeline of that id is archived.
+  Archived,
+}
+
+impl PipelineRefusal {
+  /// The refusal a `422 invalid`'s `reason` names; `None` for any other reason.
+  pub fn of_reason(reason: &str) -> Option<Self> {
+    match reason {
+      "pipeline_not_found" => Some(Self::NotFound),
+      "pipeline_archived" => Some(Self::Archived),
+      _ => None,
+    }
+  }
+}
+
 /// Why the team server did not take an action.
 #[derive(Debug)]
 pub enum Refusal {
@@ -101,6 +121,9 @@ pub enum Refusal {
   /// A definition route's refusal: its HTTP status and code, e.g. `403 not_admin` for a member, or
   /// `409 revision_conflict`.
   Route { status: u16, code: ErrorCode },
+  /// A task's definition route refused the pipeline it names: `422 invalid` with the reason `pipeline_not_found` or
+  /// `pipeline_archived` (`docs/architecture/server.md` row 80).
+  TaskPipeline(PipelineRefusal),
   /// `PATCH …/policy`'s `409 policy_revision_conflict`.
   PolicyRevisionConflict,
   /// A definition edit's response was lost, and the subject read again holds neither the change nor the revision it

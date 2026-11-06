@@ -51,14 +51,14 @@ impl Kept {
 
 impl ProjectDb {
   /// What `task` asked for when it was created; `None` for a task created before creation versions were
-  /// kept, or a shared task this computer did not create. A shared task's pipeline is this computer's
-  /// pipeline of its slug, as for the task itself.
+  /// kept, or a shared task this computer did not create. A shared task's pipeline is the pipeline of the
+  /// id it named, as for the task itself; a slug from before row 80 names none.
   pub fn task_creation_details(&self, task: TaskId) -> Result<Option<TaskDetails>, StoreError> {
     let kept = self
       .connection
       .query_row(
         "SELECT title, brief, criteria, COALESCE(pipeline_id, (SELECT resources.id FROM resources \
-         WHERE resources.kind = 'pipeline' AND resources.slug = task_creation_snapshots.pipeline_slug)), \
+         WHERE resources.kind = 'pipeline' AND resources.id = task_creation_snapshots.pipeline_slug)), \
          budget_tokens, max_duration_ms FROM task_creation_snapshots WHERE task_id = ?1",
         [task.to_string()],
         Kept::read,

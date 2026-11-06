@@ -15,7 +15,7 @@ use orchester_core::{
   store::ResourceStore,
   time::Timestamp,
 };
-use orchester_store::{ProjectDb, ResourceSharing, StoreError};
+use orchester_store::{ProjectDb, PublishState, ResourceSharing, StoreError};
 use serde_json::{Value, json};
 
 use super::{pipelines::InPipeline, widening};
@@ -82,7 +82,7 @@ pub async fn share_pipeline(services: &Services, args: InPipeline) -> Result<Val
 fn own_pipeline(db: &ProjectDb, named: &str) -> Result<Resource, ToolError> {
   let lowered = named.to_lowercase();
   let mut own = Vec::new();
-  for resource in db.resources(ResourceKind::Pipeline)? {
+  for resource in db.kept_resources(ResourceKind::Pipeline)? {
     if !matches!(db.resource_sharing(resource.id())?, Some(ResourceSharing::Shared(_))) {
       own.push(resource);
     }
@@ -100,11 +100,7 @@ fn own_pipeline(db: &ProjectDb, named: &str) -> Result<Resource, ToolError> {
 
 /// Refused, naming them, when steps of `pipeline` run an agent profile or tool that is not the team's.
 fn refuse_local_executors(db: &ProjectDb, pipeline: &Pipeline) -> Result<(), ToolError> {
-  let waiting: HashSet<ResourceId> = db
-    .waiting_publishes()?
-    .into_iter()
-    .map(|waiting| waiting.resource)
-    .collect();
+  let waiting = pending_team(db)?;
   let mut local = Vec::new();
   for executor in pipeline.steps().iter().filter_map(|step| step.kind.executor()) {
     let name = match db.resource(executor)? {
@@ -129,4 +125,22 @@ fn refuse_local_executors(db: &ProjectDb, pipeline: &Pipeline) -> Result<(), Too
     "team_resources_required",
     vec![Message::new("appMcp.errors.sharePipelineLocalExecutors").with("resources", local.join(", "))],
   ))
+}
+
+/// The resources with versions published here that wait for the team server and none it refused: the team's, not
+/// there yet. One the server refused (a slug it has, say) never became the team's, so it is this computer's own.
+fn pending_team(db: &ProjectDb) -> Result<HashSet<ResourceId>, StoreError> {
+  let waiting = db.waiting_publishes()?;
+  let refused: HashSet<ResourceId> = waiting
+    .iter()
+    .filter(|waiting| matches!(waiting.state, PublishState::Refused { .. }))
+    .map(|waiting| waiting.resource)
+    .collect();
+  Ok(
+    waiting
+      .into_iter()
+      .map(|waiting| waiting.resource)
+      .filter(|resource| !refused.contains(resource))
+      .collect(),
+  )
 }

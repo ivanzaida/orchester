@@ -15,7 +15,11 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, ResourceSharing};
-use orchester_workspace::{tasks::data::published_pipelines, team_reads::listed::TeamPipelines};
+use orchester_workspace::{
+  sharing::project::convert::{shared_pipeline_id, team_pipeline_id},
+  tasks::data::published_pipelines,
+  team_reads::listed::TeamPipelines,
+};
 
 use super::{ALICE, TeamServer, publish::Computer};
 
@@ -133,4 +137,101 @@ async fn live_updates_a_member_cannot_copy_a_pipeline_for_the_team() {
     "{refused:?}"
   );
   assert!(alice.workspace.db().waiting_publishes().expect("read").is_empty());
+}
+
+/// A task goes up naming its pipeline by its id (row 80): when the project is shared every pipeline with a version goes
+/// up with its id first, so it is that id; a task of a team project names only a team pipeline, and any other is none.
+#[tokio::test(flavor = "multi_thread")]
+async fn live_updates_a_task_goes_up_naming_its_team_pipeline_by_id() {
+  let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
+  let alice = Computer::new(&server, ALICE, MemberRole::Owner);
+  let local = own_pipeline(&mut alice.workspace.db());
+  let team = alice
+    .workspace
+    .db()
+    .copy_for_the_team::<Pipeline>(local, Timestamp::now())
+    .expect("copied for the team")
+    .id();
+  alice.store(&server, |store| store.send_waiting()).await.expect("sent");
+
+  let db = alice.workspace.db();
+  assert_eq!(team_pipeline_id(&db, Some(team)).expect("read"), Some(team.to_string()));
+  assert_eq!(
+    team_pipeline_id(&db, Some(local)).expect("read"),
+    None,
+    "never a local id"
+  );
+  assert_eq!(team_pipeline_id(&db, None).expect("read"), None);
+  assert_eq!(
+    shared_pipeline_id(&db, Some(local)).expect("read"),
+    Some(local.to_string()),
+    "Share uploads it with its id"
+  );
+  let gone = ResourceId::generate();
+  assert_eq!(
+    shared_pipeline_id(&db, Some(gone)).expect("read"),
+    None,
+    "none it does not upload"
+  );
+}
+
+/// In a team project only what the team server has live is offered: an archived team pipeline leaves every list and
+/// comes back once restored; a pipeline the server refused to take, and an agent profile of this computer's own, are
+/// offered nowhere, kept as they are.
+#[tokio::test(flavor = "multi_thread")]
+async fn live_updates_a_team_project_offers_only_what_its_server_has_live() {
+  let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
+  let alice = Computer::new(&server, ALICE, MemberRole::Owner);
+  let local = own_pipeline(&mut alice.workspace.db());
+  let team = alice
+    .workspace
+    .db()
+    .copy_for_the_team::<Pipeline>(local, Timestamp::now())
+    .expect("copied for the team")
+    .id();
+  alice.store(&server, |store| store.send_waiting()).await.expect("sent");
+  let offered = |db: &ProjectDb| -> Vec<ResourceId> {
+    published_pipelines(db)
+      .expect("the pipelines")
+      .iter()
+      .map(|choice| choice.id)
+      .collect()
+  };
+
+  let mut db = alice.workspace.db();
+  db.mark_shared_archived(team, true, Timestamp::now()).expect("archived");
+  assert!(offered(&db).is_empty(), "an archived team pipeline is offered nowhere");
+  assert!(!TeamPipelines::of(&db).expect("read").contains(team));
+  db.mark_shared_archived(team, false, Timestamp::now())
+    .expect("restored");
+  assert_eq!(offered(&db), [team], "restored, it is back");
+
+  // An Admin's pipeline the server refused (its slug taken there, say) never became the team's.
+  let refused = db
+    .create_resource(
+      Slug::new("hotfix").expect("slug"),
+      Name::new("Hotfix").expect("name"),
+      &one_step(ResourceId::generate()),
+      Timestamp::now(),
+    )
+    .expect("a pipeline")
+    .id();
+  db.publish_draft::<Pipeline>(refused, Timestamp::now())
+    .expect("published here");
+  assert_eq!(offered(&db).len(), 2, "waiting for the server, it is the team's");
+  let waiting = db.waiting_publishes().expect("read");
+  let version = waiting
+    .iter()
+    .find(|waiting| waiting.resource == refused)
+    .expect("waits")
+    .version;
+  db.record_publish_refused(version, "slug_taken").expect("refused");
+  assert_eq!(offered(&db), [team]);
+  assert!(
+    db.kept_resources(orchester_core::resource::ResourceKind::Pipeline)
+      .expect("read")
+      .iter()
+      .any(|kept| kept.id() == refused),
+    "kept as it is"
+  );
 }

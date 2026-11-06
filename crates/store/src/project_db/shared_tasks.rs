@@ -1,13 +1,14 @@
 //! The cache of a shared project's tasks (`docs/architecture/server.md`, "Desktop data"): what the
 //! server confirmed, written by the desktop. A cached task is an ordinary row of `tasks`, so the
-//! runner and every local screen read it as before; it also keeps its pipeline's slug, its former
+//! runner and every local screen read it as before; it also keeps what it names its pipeline by (the team
+//! pipeline's resource id, in the column `pipeline_slug`; `docs/architecture/server.md` row 80), its former
 //! key, who created and last changed it, its claim and the run status its holder reported.
 
 use std::num::NonZeroU32;
 
 pub use orchester_core::sharing::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson};
 use orchester_core::{
-  id::{TaskId, UserId},
+  id::{ResourceId, TaskId, UserId},
   resource::VersionNumber,
   run::TaskPhase,
   sharing::{ClaimKind, TaskRevision},
@@ -29,8 +30,8 @@ use crate::{
 /// What the cache knows of a shared task beyond the task itself.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SharedTaskInfo {
-  /// The slug of the task's pipeline; the task's pipeline is none when this computer has none
-  /// of that slug.
+  /// What the server names the task's pipeline by, the team pipeline's resource id; the task's pipeline is none
+  /// when this computer has no team pipeline of that id.
   pub pipeline_slug: Option<String>,
   pub former_key: Option<String>,
   pub created_by: Option<String>,
@@ -142,18 +143,20 @@ impl ProjectDb {
       .collect()
   }
 
-  /// The shared tasks whose pipeline this computer has no pipeline for, with the pipeline's slug:
-  /// they show it as missing, and an edit sends no pipeline change for them.
+  /// The shared tasks that name a team pipeline by an id this computer has no team pipeline of, with that id: they
+  /// show it as missing, and an edit sends no pipeline change for them. A value that is no resource id (a slug from
+  /// before row 80) names no team pipeline, so it is not missing either.
   pub fn missing_pipelines(&self) -> Result<std::collections::HashMap<TaskId, String>, StoreError> {
     let mut statement = self.connection.prepare(
-      "SELECT id, pipeline_slug FROM tasks WHERE sharing IS NOT NULL AND pipeline_slug IS NOT NULL        AND NOT EXISTS (SELECT 1 FROM resources WHERE resources.kind = 'pipeline'        AND resources.slug = tasks.pipeline_slug)",
+      "SELECT id, pipeline_slug FROM tasks WHERE sharing IS NOT NULL AND pipeline_slug IS NOT NULL        AND NOT EXISTS (SELECT 1 FROM resources WHERE resources.kind = 'pipeline'        AND resources.sharing = 'shared' AND resources.id = tasks.pipeline_slug)",
     )?;
     let rows = statement
       .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
       .collect::<Result<Vec<_>, _>>()?;
     rows
       .into_iter()
-      .map(|(id, slug)| Ok((parse("task id", &id)?, slug)))
+      .filter(|(_, named)| named.parse::<ResourceId>().is_ok())
+      .map(|(id, named)| Ok((parse("task id", &id)?, named)))
       .collect()
   }
 
