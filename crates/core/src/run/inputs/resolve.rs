@@ -2,7 +2,7 @@
 //! the connection and with the MCP servers its bindings name, what a person here narrowed, and the task as it was at
 //! the start. Nothing here reads the current task or resource definitions.
 
-use super::{BoundReference, InputsError, InputsOrigin, LocalBindings, RunInputs};
+use super::{BoundReference, InputsError, InputsOrigin, LocalBindings, ProfileBinding, RunInputs};
 use crate::{
   connection::{Connection, mcp::McpServerSelection},
   id::{ConnectionId, ResourceId, SecretId, TaskId},
@@ -15,8 +15,8 @@ use crate::{
   time::Timestamp,
 };
 
-/// The MCP servers the bindings bind, in their order, as a profile gives them to its agents. A bundle names no MCP
-/// server of a profile: they are this computer's, and its bindings choose them.
+/// The MCP servers the bindings bind, in their order, over all profiles. A bundle names no MCP server of a profile:
+/// they are this computer's, and its bindings choose them.
 pub(super) fn mcp_servers(bindings: &LocalBindings) -> Result<McpServerSelection, InputsError> {
   let servers = bindings
     .references
@@ -27,6 +27,21 @@ pub(super) fn mcp_servers(bindings: &LocalBindings) -> Result<McpServerSelection
     })
     .collect();
   McpServerSelection::new(servers).map_err(InputsError::McpServers)
+}
+
+/// The MCP servers `binding`'s profile names: a selection of bound servers, checked when the inputs are made.
+pub(super) fn profile_mcp_servers(
+  bindings: &LocalBindings,
+  binding: &ProfileBinding,
+) -> Result<McpServerSelection, InputsError> {
+  let bound = mcp_servers(bindings)?;
+  if let Some(unbound) = binding.mcp_servers.iter().find(|server| !bound.ids().contains(server)) {
+    return Err(InputsError::UnboundMcpServer {
+      profile: binding.resource,
+      server: *unbound,
+    });
+  }
+  McpServerSelection::new(binding.mcp_servers.clone()).map_err(InputsError::McpServers)
 }
 
 fn body<B>(list: &[PinnedBody<B>], pinned: PinnedVersion) -> Option<&B> {
@@ -40,8 +55,8 @@ impl RunInputs {
   }
 
   /// The pinned profile version `pinned` as this computer runs it: the accepted body on the connection its binding
-  /// names, giving its agents the bound MCP servers, without extra writable folders. `None` when the inputs do not pin
-  /// it.
+  /// names, giving its agents only the MCP servers its own binding names, without extra writable folders. `None` when
+  /// the inputs do not pin it.
   pub fn profile(&self, pinned: PinnedVersion) -> Option<AgentProfile> {
     let accepted = body(self.bundle.inputs().profiles(), pinned)?;
     let binding = self
@@ -49,7 +64,8 @@ impl RunInputs {
       .profiles
       .iter()
       .find(|binding| binding.resource == pinned.resource)?;
-    let servers = mcp_servers(&self.bindings).expect("the bound MCP servers were checked when the inputs were made");
+    let servers = profile_mcp_servers(&self.bindings, binding)
+      .expect("the profiles' MCP servers were checked when the inputs were made");
     Some(accepted.bound(binding.connection, servers))
   }
 
@@ -105,7 +121,7 @@ impl RunInputs {
       .collect()
   }
 
-  /// The local MCP servers the bindings give the run's agents.
+  /// The local MCP servers the bindings bind for the run, over all its profiles.
   pub fn bound_mcp_servers(&self) -> McpServerSelection {
     mcp_servers(&self.bindings).expect("the bound MCP servers were checked when the inputs were made")
   }

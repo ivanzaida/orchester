@@ -250,6 +250,7 @@ impl Team {
         connection,
         account: None,
         required_cli,
+        mcp_servers: Vec::new(),
       }],
       references: Vec::new(),
     };

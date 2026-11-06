@@ -16,7 +16,7 @@ pub use self::{
 };
 use crate::{
   connection::mcp::McpSelectionError,
-  id::ResourceId,
+  id::{ConnectionId, ResourceId},
   name::NameError,
   resource::{StepKey, VersionNumber},
   run::{PinnedVersion, RunSnapshot, bundle::PinnedBody},
@@ -41,6 +41,8 @@ pub enum InputsError {
   UnexpectedBinding(ResourceId),
   #[error("the bound MCP servers: {0}")]
   McpServers(McpSelectionError),
+  #[error("agent profile {profile} names MCP server {server}, which the inputs do not bind")]
+  UnboundMcpServer { profile: ResourceId, server: ConnectionId },
   #[error("{resource} {number} is accepted here but the inputs do not pin it")]
   AcceptedUnpinned {
     resource: ResourceId,
@@ -67,6 +69,9 @@ impl RunInputs {
   pub fn new(bundle: BundleContent, bindings: LocalBindings, consent: LocalConsent) -> Result<Self, InputsError> {
     check_bindings(&bundle, &bindings)?;
     resolve::mcp_servers(&bindings)?;
+    for binding in &bindings.profiles {
+      resolve::profile_mcp_servers(&bindings, binding)?;
+    }
     check_consent(&bundle, &consent)?;
     Ok(Self {
       bundle,

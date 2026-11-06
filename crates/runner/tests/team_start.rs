@@ -180,6 +180,7 @@ fn request(root: &Path, server: &TeamServer, (claim, base): (ClaimId, &str), con
           connection,
           account: None,
           required_cli: None,
+          mcp_servers: Vec::new(),
         }],
         references: Vec::new(),
       },

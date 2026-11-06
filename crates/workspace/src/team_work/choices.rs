@@ -149,6 +149,7 @@ pub async fn bind(
         connection,
         account: None,
         required_cli: None,
+        mcp_servers: profile_servers(profile, mcp),
       }),
       None => unbound.push(profile.role.clone()),
     }
@@ -160,6 +161,18 @@ pub async fn bind(
     profiles: bound,
     references: mcp_references(&profiles, mcp)?,
   })
+}
+
+/// The local servers `profile`'s version names, in its order; the ones this computer lacks are refused by
+/// [`mcp_references`].
+fn profile_servers(profile: &Profile, mcp: &McpHere) -> Vec<ConnectionId> {
+  let mut servers = Vec::new();
+  for local in profile.mcp_servers.iter().filter_map(|(named, _)| mcp.local(*named)) {
+    if !servers.contains(&local) {
+      servers.push(local);
+    }
+  }
+  servers
 }
 
 /// Each MCP server the profiles name, once, bound to the local server it runs as here; refused naming every one that
