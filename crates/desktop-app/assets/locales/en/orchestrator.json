@@ -248,6 +248,8 @@
       "byYou": "by you",
       "byYouInChat": "by you in the chat",
       "targetBy": "{{target}} · {{by}}",
+      "watchedHere": "{{target}} · watched here",
+      "ledElsewhere": "{{target}} · led in «{{chat}}»",
       "applying": "Being carried out"
     },
     "decision": {

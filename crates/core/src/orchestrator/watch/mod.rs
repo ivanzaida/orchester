@@ -22,7 +22,7 @@ use thiserror::Error;
 
 pub use self::{
   change::{News, Stopped, Taken, Told},
-  created::created_task_watch,
+  created::{Created, CreatedWatch, created_task, created_task_watch, event_subscription},
   ended::WatchEnd,
   ending::{EndReason, Ending, NeverEnds, TargetTasks},
   line::{LedElsewhere, NamedTarget, OpenTask, WatchCommand, WatchLine},

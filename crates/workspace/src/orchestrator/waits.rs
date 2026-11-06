@@ -2,8 +2,10 @@
 //! each time an agent of a task's latest run asks a question with suggested answers, its step waits for a message,
 //! or its plan waits for a decision, and each time a task's latest run ends or stops ([`super::run_ends`]), a
 //! conversation keeps one entry for that wait, linking to its card (a run's end: its task's Summary): the one that
-//! last dealt with the wait's task or run ([`orchester_core::orchestrator::wait::dealt_with`]), else the project's
-//! latest conversation, or a new one while the project has none. With *Let the Orchestrator answer agents* on, a wait
+//! leads the task through a subscription when the wait is kept ([`orchester_core::orchestrator::Subscriptions::
+//! leading`], ORC-761), else the one that last dealt with the wait's task or run
+//! ([`orchester_core::orchestrator::wait::dealt_with`]), else the project's latest conversation, or a new one while
+//! the project has none. With *Let the Orchestrator answer agents* on, a wait
 //! the Orchestrator's own answer, message or decision on how the run continues did not raise also starts one
 //! Orchestrator turn by itself in its conversation
 //! ([`orchester_core::orchestrator::instructions::wait_prompt`]), at most one per wait, never while another turn of
@@ -27,7 +29,7 @@ use orchester_core::{
   conversation::{Message as TaskMessage, Sender},
   id::{ChatId, ChatMessageId, ProjectId, StepExecutionId},
   orchestrator::{
-    AgentWait, Chat, ChatEntry, ChatResume, Continuing, EntryKind, Merging, RunEnd, WaitKind,
+    AgentWait, Chat, ChatEntry, ChatResume, Continuing, EntryKind, Merging, RunEnd, Subscriptions, WaitKind,
     wait::{dealt_with, raised_by_own},
   },
   question::AskedQuestions,
@@ -199,11 +201,12 @@ fn complete_on_its_own(db: &ProjectDb, reading: &Reading) -> Result<bool, StoreE
   Ok(completed)
 }
 
-/// Keeps each of the `new` waits in the conversation that last dealt with its task ([`dealt_with`]), else in the
-/// project's latest conversation, or in one the first such wait opens while the project has none; each starts a turn
-/// by itself when *answer agents* is on and the Orchestrator's own answer, given in any conversation, did not raise
-/// it, such a turn of an interrupted run's end continues the run as [`continuing`] tells, and one of a run's success
-/// merges it as [`super::auto_merge::merging_in`] tells. Whether it kept one.
+/// Keeps each of the `new` waits in the conversation that leads its task through a subscription that has not ended
+/// ([`leader`]), whatever conversation dealt with it; for a task nobody leads, in the conversation that last dealt
+/// with it ([`dealt_with`]), else in the project's latest conversation, or in one the first such wait opens while the
+/// project has none. Each starts a turn by itself when *answer agents* is on and the Orchestrator's own answer, given
+/// in any conversation, did not raise it, such a turn of an interrupted run's end continues the run as [`continuing`]
+/// tells, and one of a run's success merges it as [`super::auto_merge::merging_in`] tells. Whether it kept one.
 fn keep_new(
   (db, root): (&mut ProjectDb, &Path),
   new: &[&(String, AgentWait)],
@@ -213,6 +216,7 @@ fn keep_new(
     return Ok(false);
   }
   let conversations = conversations(db)?;
+  let subscriptions = db.active_subscriptions()?;
   let mut entries: Vec<ChatEntry> = conversations.iter().flat_map(|(_, entries)| entries.clone()).collect();
   entries.sort_by_key(|entry| entry.seq);
   let mut latest = match db.latest_chat()? {
@@ -240,17 +244,38 @@ fn keep_new(
       merging,
       ..wait.clone()
     };
-    let about = conversations
-      .iter()
-      .flat_map(|(chat, entries)| entries.iter().map(|entry| (chat.id(), entry)));
-    let dealt = dealt_with(about, wait).and_then(|id| conversations.iter().find(|(chat, _)| chat.id() == id));
-    let chat = match dealt {
+    let of = |id: ChatId| conversations.iter().find(|(chat, _)| chat.id() == id);
+    let routed = match leader(db, &subscriptions, wait)?.and_then(of) {
+      Some(led) => Some(led),
+      None => {
+        let about = conversations
+          .iter()
+          .flat_map(|(chat, entries)| entries.iter().map(|entry| (chat.id(), entry)));
+        dealt_with(about, wait).and_then(of)
+      }
+    };
+    let chat = match routed {
       Some((chat, _)) => chat,
       None => &*latest.get_or_insert_with(|| Chat::named(ChatId::generate(), &opening_title(wait), Timestamp::now())),
     };
     kept_any |= db.keep_agent_wait(chat, (key, &kept), Timestamp::now())?;
   }
   Ok(kept_any)
+}
+
+/// The conversation that leads the task of `wait`'s run as the project's active `subscriptions` tell, now
+/// ([`Subscriptions::leading`]); `None` while none covers it, or its run or task is gone.
+fn leader(db: &ProjectDb, subscriptions: &Subscriptions, wait: &AgentWait) -> Result<Option<ChatId>, StoreError> {
+  if subscriptions.as_slice().is_empty() {
+    return Ok(None);
+  }
+  let Some(run) = db.run(wait.run).map_err(run_store_error)? else {
+    return Ok(None);
+  };
+  let Some(task) = db.task(run.task())? else {
+    return Ok(None);
+  };
+  Ok(subscriptions.leading(task.id(), task.module()))
 }
 
 /// What the turn `wait` starts does about its run while the person lets the Orchestrator continue interrupted runs:
