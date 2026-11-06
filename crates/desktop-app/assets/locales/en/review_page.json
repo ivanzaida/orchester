@@ -130,6 +130,16 @@
       "send": "Send to Implement ({{count}})",
       "tryAgain": "Try again"
     },
+    "approveAsk": {
+      "titleOne": "1 comment isn't sent yet",
+      "titleOther": "{{count}} comments aren't sent yet",
+      "bodyOne": "Your comment on {{file}}, {{lines}}, has not reached the agent. Send it to Implement to have it addressed first, or approve and merge without it; the comment is then discarded.",
+      "bodyOther": "Your {{count}} comments have not reached the agent. Send them to Implement to have them addressed first, or approve and merge without them; the comments are then discarded.",
+      "cancel": "Cancel",
+      "withoutOne": "Approve without it",
+      "withoutOther": "Approve without them",
+      "send": "Send to Implement"
+    },
     "discard": {
       "titleOne": "Discard the comment not sent?",
       "titleOther": "Discard {{count}} comments not sent?",

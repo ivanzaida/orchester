@@ -1,9 +1,10 @@
 //! Every change the review page makes, one at a time, off the UI thread (`tasks::review_threads`): a comment kept
 //! unsent, a question kept asked and then handed to the project's runner at once, *Ask again*, *Reply*, a comment's
 //! new words or its deletion, *Discard*, *Resolve*, *Viewed*, *Send to Implement* (the comments kept sending, then
-//! handed to the runner), *Stop answering* and *Approve and merge*. The review is read again once the change is kept,
-//! and again once the runner took what was handed to it. A question or comments the runner did not take are kept *Not
-//! asked* or *Not sent* with why, which the thread and the tray show; any other refusal shows over the diff.
+//! handed to the runner), *Stop answering* and *Approve and merge* (which first deletes the comments not sent that the
+//! person gives up). The review is read again once the change is kept, and again once the runner took what was handed
+//! to it. A question or comments the runner did not take are kept *Not asked* or *Not sent* with why, which the thread
+//! and the tray show; any other refusal shows over the diff.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -47,8 +48,8 @@ pub(super) enum Write {
   AskAgain(ReviewThreadId, MessageBody),
   Send,
   Stop(ReviewThreadId),
-  /// *Approve and merge* at the head reviewed.
-  Approve(Revision),
+  /// *Approve and merge* at the head reviewed, the comments not sent given here discarded first.
+  Approve(Revision, Vec<ReviewMessageId>),
 }
 
 /// A change that does not go to the runner.
@@ -209,7 +210,10 @@ async fn apply(reach: &Reach, write: Write) -> Result<Landed, ReviewRefusal> {
         .map_err(ReviewRefusal::Store)?;
       Ok(Landed::Kept)
     }
-    Write::Approve(reviewed) => {
+    Write::Approve(reviewed, unsent) => {
+      if !unsent.is_empty() {
+        blocking(move || keep(&root, run, Kept::Delete(unsent), now)).await?;
+      }
       let programs = reach.programs.clone();
       let worktrees =
         WorktreeRemover::through_runner(&reach.runners, (&reach.root, reach.open.project.name().as_str()));

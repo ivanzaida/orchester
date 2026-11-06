@@ -2,8 +2,8 @@
 //! line (`Status` `tKlje`): a 14 glyph and *Waiting for your review* in 13/500 `info`, then the run, its steps, what it
 //! changes, its head and how it merges in 12 `text_muted`. *Approve and merge* merges at the head shown; it is
 //! unavailable while Implement works on comments sent to it, or once the branch moved past the head reviewed, and its
-//! reason stands before it. Then the branch moved: *Changed since your review* says so and lists the new commits, and
-//! the person takes them in before they approve.
+//! reason stands before it. While comments wait unsent it asks first in a modal ([`approve`]). Then the branch moved:
+//! *Changed since your review* says so and lists the new commits, and the person takes them in before they approve.
 
 use std::sync::Arc;
 
@@ -25,7 +25,7 @@ use orchester_workspace::{
   },
 };
 
-use super::{Env, actions::Write, state::Held, words::counted};
+use super::{Env, actions::Write, approve, state::Held, words::counted};
 use crate::{
   routes::{ProjectPage, Route, TaskTab, TaskView},
   screens::merges::{attempt::head::title, words::joined},
@@ -54,14 +54,21 @@ pub(super) fn header(ctx: &mut Ctx, env: &Env) -> Element {
       env.project.open.project.id(),
       ProjectPage::Task(env.page.run.key.clone(), TaskView::of(TaskTab::Summary)),
     )));
-  let approve =
-    ActionButton::new("review-approve", ButtonKind::Primary, ctx.t("review_page.approve")).icon(Icon::Check);
-  let (approve, reason) = match unavailable(ctx, env) {
-    Some(reason) => (approve.unavailable(reason.clone()), Some(reason)),
-    None if env.writes.busy() => (approve.disabled(), None),
+  let button = ActionButton::new("review-approve", ButtonKind::Primary, ctx.t("review_page.approve")).icon(Icon::Check);
+  let (button, reason) = match unavailable(ctx, env) {
+    Some(reason) => (button.unavailable(reason.clone()), Some(reason)),
+    None if env.writes.busy() => (button.disabled(), None),
     None => {
       let (writes, head) = (env.writes.clone(), env.head.clone());
-      (approve.on_click(move || writes.run(Write::Approve(head.clone()))), None)
+      let (asking, waiting) = (env.state.approving.clone(), !approve::unsent(env).is_empty());
+      let press = move || {
+        if waiting {
+          asking.set(true);
+        } else {
+          writes.run(Write::Approve(head.clone(), Vec::new()));
+        }
+      };
+      (button.on_click(press), None)
     }
   };
   let mut actions: Vec<Element> = Vec::new();
@@ -71,7 +78,7 @@ pub(super) fn header(ctx: &mut Ctx, env: &Env) -> Element {
       .into()
   }));
   actions.push(open.into());
-  actions.push(approve.into());
+  actions.push(Row::new().child(button).child(approve::dialog(ctx, env)).into());
   title(&env.page.run.title, actions)
 }
 
