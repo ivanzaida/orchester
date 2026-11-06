@@ -278,14 +278,13 @@ fn review_page_send_held_shows_sending_until_let_go() {
 }
 
 #[test]
-fn review_page_approve_is_unavailable_while_implement_works_on_a_comment_sent() {
+fn review_page_approve_is_not_shown_while_implement_works_on_a_comment_sent() {
   let mut page = Page::new();
   page.open(("Delivery log per endpoint", 3));
-  assert_eq!(page.window.text("review-status-text"), "Implement is changing the code");
-  let reason = page.window.text("review-approve-reason");
-  assert!(reason.contains("Implement is at work"), "{reason}");
+  assert_eq!(page.window.text("review-status-text"), "With the agent");
+  assert!(page.window.texts("review-approve").is_none(), "Approve and merge waits");
+  assert!(page.window.texts("review-approve-reason").is_none());
   let diff = page.diff_text();
-  assert!(diff.contains("Sent · Implement is changing the code"), "{diff}");
   assert!(
     diff.contains("In the Conversation · run #3, step 03 Implement"),
     "the step Implement works in: {diff}"

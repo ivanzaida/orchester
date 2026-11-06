@@ -289,3 +289,38 @@ fn review_threads_nothing_to_send_and_only_unsent_comments_change() {
   );
   assert_eq!(sending.run, repo.run);
 }
+
+#[test]
+fn review_threads_a_comment_written_while_implement_works_waits_unsent_and_is_not_sent_with_the_earlier_batch() {
+  let repo = Repo::new();
+  let sent =
+    review_threads::comment(repo.root(), repo.run, repo.anchor(1, 1), &body("Rename one."), at(20)).expect("kept");
+  cut_off(&repo, &sent, at(30));
+  repo.return_to_implement(&ReviewNote::new("Rename one.").expect("note"), at(31));
+  assert!(review(&repo).implement_at_work);
+
+  review_threads::comment(
+    repo.root(),
+    repo.run,
+    repo.anchor(3, 3),
+    &body("Document three."),
+    at(32),
+  )
+  .expect("kept while Implement works");
+  let read = review(&repo);
+  assert_eq!(states(&read), vec![ThreadState::Sent, ThreadState::NotSent]);
+  assert_eq!(read.unsent(), 1);
+  assert!(read.implement_at_work, "the earlier batch is still at work");
+  let worktrees = RunWorktrees::here_for_test(repo.root(), Programs::processes());
+  assert_eq!(
+    send::begin(repo.root(), &worktrees, repo.run).map(|sending| sending.comments),
+    Err(ReviewRefusal::NotWaiting),
+    "nothing is sent until the run is back"
+  );
+
+  repo.implement("fn first() {}\nfn two() {}\nfn three() {}\n", "Renamed one.", at(40));
+  let read = review(&repo);
+  assert_eq!(read.threads[1].state, ThreadState::NotSent);
+  let sending = send::begin(repo.root(), &worktrees, repo.run).expect("sending");
+  assert_eq!(sending.comments.len(), 1, "only the comment written since goes");
+}
