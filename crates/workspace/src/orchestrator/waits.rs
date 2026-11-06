@@ -47,6 +47,7 @@ use super::{
   chat::EndMoved,
   run_ends::{Reading, current_ends, end_moved, merge_checks},
   settings::OrchestratorSetup,
+  stalls::{current_stalls, is_stall},
 };
 use crate::{
   links::{Link, TaskPage},
@@ -97,12 +98,22 @@ pub struct Switches {
 /// `attached`: whether the project's runner has attached. A runner that attaches ends the turns still thinking as
 /// interrupted, so a turn starts only once it is there: without it the turn stays `pending`, for the app to attach the
 /// runner and follow again. `checks` tell the runs that succeeded which are merged outside Orchester or have nothing
-/// to merge ([`check_merges_in`]); `programs` run git for one they do not tell. Blocks on SQLite, and on git only for
-/// such a run.
+/// to merge ([`check_merges_in`]); `programs` run git for one they do not tell. A run that stalls now raises its
+/// *no progress* event as a wait ([`super::stalls`]). Blocks on SQLite, and on git only for such a run.
 pub fn follow_in(
+  place: (&Path, ProjectId, &Programs),
+  checks: &MergeChecks,
+  (switches, attached): (Switches, bool),
+) -> Result<Followed, Message> {
+  follow_at(place, checks, (switches, attached), Timestamp::now())
+}
+
+/// [`follow_in`] at `now`, which tells the runs that stall.
+pub fn follow_at(
   (root, project, programs): (&Path, ProjectId, &Programs),
   checks: &MergeChecks,
   (switches, attached): (Switches, bool),
+  now: Timestamp,
 ) -> Result<Followed, Message> {
   let ready = switches.answers && OrchestratorSetup::load_in(root)?.readiness().is_ready();
   let reading = Reading {
@@ -111,7 +122,7 @@ pub fn follow_in(
     programs,
     checks,
   };
-  follow(&reading, (switches, ready), attached).map_err(|error| messages::store_error(&error))
+  follow(&reading, (switches, ready), (attached, now)).map_err(|error| messages::store_error(&error))
 }
 
 /// What git tells, in one reading of the branches, of the runs of the project at `root` that succeeded and that
@@ -145,13 +156,18 @@ fn settled(db: &ProjectDb) -> Result<(HashSet<String>, HashSet<String>), StoreEr
   Ok((db.kept_wait_keys()?, pending))
 }
 
-fn follow(reading: &Reading, (switches, ready): (Switches, bool), attached: bool) -> Result<Followed, StoreError> {
+fn follow(
+  reading: &Reading,
+  (switches, ready): (Switches, bool),
+  (attached, at): (bool, Timestamp),
+) -> Result<Followed, StoreError> {
   let mut db = ProjectDb::open(reading.root)?;
   let (kept, pending) = settled(&db)?;
   let mut now = current_waits(&db, reading.project)?;
   now.extend(current_ends(&db, reading, |key| {
     kept.contains(key) && !pending.contains(key)
   })?);
+  now.extend(current_stalls(&db, reading.project, at)?);
   let new: Vec<&(String, AgentWait)> = now.iter().filter(|(key, _)| !kept.contains(key)).collect();
   let kept = keep_new((&mut db, reading.root), &new, switches)?;
   let completed = switches.answers && switches.merges && complete_on_its_own(&db, reading)?;
@@ -382,9 +398,9 @@ fn last_exchanged(messages: &[TaskMessage], execution: StepExecutionId) -> Optio
 }
 
 /// The entries of conversation `chat` (its `entries`) whose waits still stand: the waits of agents that still wait,
-/// and the ends of runs still where they ended ([`end_moved`]); and, for the ends that no longer stand, what became of
-/// their runs. A wait the person dealt with elsewhere, on its task's page, stays kept in the conversation but no
-/// longer stands. Blocks on SQLite.
+/// the stalls of runs that made no progress since ([`super::stalls`]), and the ends of runs still where they ended
+/// ([`end_moved`]); and, for the ends that no longer stand, what became of their runs. A wait the person dealt with
+/// elsewhere, on its task's page, stays kept in the conversation but no longer stands. Blocks on SQLite.
 pub(super) fn standing(
   db: &ProjectDb,
   chat: ChatId,
@@ -397,8 +413,9 @@ pub(super) fn standing(
       _ => None,
     })
     .collect();
-  // What waits now is read only for a conversation that keeps a wait of an agent.
-  let now: HashSet<String> = if waits.iter().any(|(_, wait)| wait.kind.run_end().is_none()) {
+  // What waits now is read only for a conversation that keeps a wait of an agent, and the stalls for one that keeps
+  // a stall.
+  let mut now: HashSet<String> = if waits.iter().any(|(_, wait)| wait.kind.run_end().is_none()) {
     current_waits(db, db.project().id())?
       .into_iter()
       .map(|(key, _)| key)
@@ -406,6 +423,10 @@ pub(super) fn standing(
   } else {
     HashSet::new()
   };
+  if waits.iter().any(|(_, wait)| is_stall(wait.kind)) {
+    let stalls = current_stalls(db, db.project().id(), Timestamp::now())?;
+    now.extend(stalls.into_iter().map(|(key, _)| key));
+  }
   let keys: HashMap<i64, String> = db.chat_wait_keys(chat)?.into_iter().collect();
   let (mut standing, mut moved) = (HashSet::new(), HashMap::new());
   for (seq, wait) in waits {
