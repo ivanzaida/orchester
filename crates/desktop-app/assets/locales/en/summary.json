@@ -169,6 +169,7 @@
       "pipeline": "Pipeline",
       "tags": "Tags",
       "dependsOn": "Depends on",
+      "ledIn": "Led in",
       "limits": "Limits",
       "branch": "Branch",
       "merge": {

@@ -59,17 +59,31 @@ impl WatchReads {
   /// Reads them from `db`, the project database of `repo_root`. It writes nothing and runs no git: a run merged
   /// outside Orchester reads as its stored phase.
   pub fn read(db: &ProjectDb, repo_root: &Path) -> Result<Self, StoreError> {
-    let chats = db
-      .chats()?
-      .into_iter()
-      .map(|listing| (listing.chat.id(), Arc::from(listing.chat.title())));
     Ok(Self::new(
       db.project().id(),
       db.active_subscriptions()?,
-      chats,
+      chat_titles(db)?,
       ProjectTasks::read(db, repo_root, None)?,
       &db.orchestrator_watch()?,
     ))
+  }
+
+  /// Who leads `task`, read from `db` ([`Self::task_led_in`]): only the subscriptions, the conversations' titles and
+  /// the project's modules, not the project's other tasks, so the task page can read it with the task.
+  pub fn read_task_led_in(db: &ProjectDb, task: &Task) -> Result<LedIn, StoreError> {
+    let tasks = ProjectTasks {
+      modules: Arc::new(db.modules()?),
+      tasks: Arc::new(vec![task.clone()]),
+      ..ProjectTasks::default()
+    };
+    let reads = Self::new(
+      db.project().id(),
+      db.active_subscriptions()?,
+      chat_titles(db)?,
+      tasks,
+      &WatchSettings::default(),
+    );
+    Ok(reads.task_led_in(task.id()))
   }
 
   /// The subscription an event of `task` goes to: the most specific one that covers it.
@@ -101,6 +115,16 @@ impl WatchReads {
       .get(&task.id())
       .map_or_else(|| Some(TaskPhase::of(task, None, None)), |latest| latest.phase())
   }
+}
+
+/// Every conversation of `db` with its title.
+fn chat_titles(db: &ProjectDb) -> Result<Vec<(ChatId, Arc<str>)>, StoreError> {
+  Ok(
+    db.chats()?
+      .into_iter()
+      .map(|listing| (listing.chat.id(), Arc::from(listing.chat.title())))
+      .collect(),
+  )
 }
 
 /// `count` in the words of `one` or `other`.
