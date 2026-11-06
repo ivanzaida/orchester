@@ -33,6 +33,7 @@ use tokio::task::JoinHandle;
 
 pub(super) use self::state::SyncStates;
 pub use self::{
+  archive::{ArchiveError, Pinning, pinning},
   catalog::CATALOG_CHECK,
   config::{
     ConfigServer, Here, HereReference, Needer, RemoteResourceStore, Standing, Waiting, bind, chosen_at,
