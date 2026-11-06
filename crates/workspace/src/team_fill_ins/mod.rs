@@ -4,10 +4,12 @@
 //! keep it in the stores of `orchester-store`.
 //!
 //! Turning a server on and setting its program path widen what agents may do, so they are a person's alone: the
-//! window passes [`Answerer::Person`] only for a click it took from a person, and automation, which passes
-//! [`Answerer::Automation`], is refused [`FillInError::PersonOnly`] with nothing changed. Turning off and clearing are
-//! always taken. Every write is counted in the workspace's [`OutsideChanges`](crate::tasks::outside::OutsideChanges)
-//! as a change of the project's connections, so the screens that show them read again.
+//! window passes [`Answerer::Person`](orchester_core::run::Answerer::Person) only for a click it took from a person,
+//! and automation, which passes [`Answerer::Automation`](orchester_core::run::Answerer::Automation), is refused
+//! [`FillInError::PersonOnly`] with nothing changed. Turning off and clearing are always taken. Every write is counted
+//! in the workspace's [`OutsideChanges`](crate::tasks::outside::OutsideChanges) as a change of the project's
+//! connections, so the screens that show them read again; a program path, which is this computer's for the whole team
+//! server, is counted for every project shared on that server.
 
 mod connection;
 mod error;

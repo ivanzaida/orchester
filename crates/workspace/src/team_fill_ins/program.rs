@@ -3,7 +3,7 @@
 use std::{fs, path::Path};
 
 use orchester_core::{
-  id::ResourceId,
+  id::{ProjectId, ResourceId, ServerId},
   resource::{ResourceKind, TeamMcpLaunch, TeamMcpServer},
   run::Answerer,
   store::ResourceStore,
@@ -37,7 +37,7 @@ impl Workspace {
       .db
       .lock()
       .set_mcp_server_program(team_server, server, program, Timestamp::now())?;
-    self.changes.record(db.project().id(), Outside::Connections);
+    self.record_program_change(db.project().id(), team_server);
     Ok(())
   }
 
@@ -47,8 +47,34 @@ impl Workspace {
     let db = ProjectDb::open(repo_root)?;
     let team_server = team::server_of(&db)?;
     self.db.lock().clear_mcp_server_program(team_server, server)?;
-    self.changes.record(db.project().id(), Outside::Connections);
+    self.record_program_change(db.project().id(), team_server);
     Ok(())
+  }
+
+  /// A program path belongs to the team server, not to one project, so every project of this computer shared on
+  /// `team_server` shows a change of its connections, whichever account's; `changed`, which made it, always does.
+  fn record_program_change(&self, changed: ProjectId, team_server: ServerId) {
+    self.changes.record(changed, Outside::Connections);
+    let projects = match self.every_project() {
+      Ok(projects) => projects,
+      Err(error) => {
+        tracing::error!(%error, "cannot read the projects that share a program path");
+        return;
+      }
+    };
+    for project in projects
+      .into_iter()
+      .filter(|project| project.id != changed && project.repo_root.is_dir())
+    {
+      match ProjectDb::open(&project.repo_root).and_then(|other| other.sharing()) {
+        Ok(Some(link)) if link.server == team_server => {
+          self.changes.record(project.id, Outside::Connections);
+        }
+        Ok(_) => {}
+        // By id: the project may be another account's, whose folders the log does not name.
+        Err(error) => tracing::debug!(%error, project = %project.id, "a project's sharing cannot be read"),
+      }
+    }
   }
 }
 
