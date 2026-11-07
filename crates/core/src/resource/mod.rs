@@ -3,7 +3,7 @@
 //!
 //! Bodies reference other resources, connections and secrets by id, except a test suite, service and stack,
 //! which name their secrets and services ([`TestSuite`], [`crate::service`]), and the [`TeamReviewer`], which
-//! names its connection by kind, name and role. Which published version of a referenced resource is used is
+//! names a CLI kind (a decision reviewer nothing), never a connection. Which published version of a referenced resource is used is
 //! decided when a run snapshots its configuration, not inside a body.
 
 mod agent_profile;
@@ -46,8 +46,7 @@ pub use self::{
     TeamMcpServerError,
   },
   team_reviewer::{
-    DecisionReviewerReference, DecisionReviewerRole, LanguageReviewerReference, ReviewerDestinations, ReviewerHost,
-    ReviewerHostError, TeamReviewer,
+    ReviewerDestinations, ReviewerHost, ReviewerHostError, TeamReviewer, TeamReviewerError, TeamReviewerKnown,
   },
   test_suite::{
     ArtifactGlob, ReportFormat, ReportOutput, SuiteCommand, SuiteNeeds, SuitePath, SuiteVariable, SuiteVariables,

@@ -14,6 +14,7 @@
 mod connection;
 mod error;
 mod program;
+mod reviewer;
 mod secret;
 mod switch;
 mod team;

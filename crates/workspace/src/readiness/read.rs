@@ -13,7 +13,7 @@ use orchester_store::{McpServerProgram, ProjectDb};
 
 use super::{
   ReadinessError, facts, local,
-  needs::{self, Entry, Profile, Server},
+  needs::{self, Entry, Profile, Reviewer, Server},
   project::{PipelineReadiness, ProjectReadiness, ResourceReadiness},
   standing::{ReadinessStanding, Undecided},
   team,
@@ -32,6 +32,7 @@ pub(super) struct Setting<'a> {
 struct Gathered {
   servers: Vec<Server>,
   profiles: Vec<Profile>,
+  reviewers: Vec<Reviewer>,
   tools: Vec<Entry>,
   programs: Vec<McpServerProgram>,
 }
@@ -41,6 +42,8 @@ fn gather(db: &ProjectDb, setting: Setting<'_>) -> Result<Gathered, ReadinessErr
     return Ok(Gathered {
       servers: Vec::new(),
       profiles: local::profiles(db, setting.repo_root)?,
+      // A local project's reviewer is a setting of the project, not a resource (`orchester_core::run::review`).
+      reviewers: Vec::new(),
       tools: local::tools(db, setting.vault)?,
       programs: Vec::new(),
     });
@@ -49,6 +52,7 @@ fn gather(db: &ProjectDb, setting: Setting<'_>) -> Result<Gathered, ReadinessErr
   let needed: Vec<_> = servers.iter().map(|server| server.need.clone()).collect();
   Ok(Gathered {
     profiles: team::profiles(db, &needed)?,
+    reviewers: team::reviewers(db)?,
     tools: team::tools(db)?,
     servers,
     programs,
@@ -75,6 +79,15 @@ pub(super) fn read(db: &ProjectDb, setting: Setting<'_>) -> Result<ProjectReadin
     }
     entries.push(profile.entry);
   }
+  for reviewer in gathered.reviewers {
+    if let Some(pick) = reviewer.pick {
+      here = here.with_pick(reviewer.entry.resource, pick);
+    }
+    if let Some(pick) = reviewer.decision_pick {
+      here = here.with_decision_pick(reviewer.entry.resource, pick);
+    }
+    entries.push(reviewer.entry);
+  }
   entries.extend(gathered.tools);
   let here = entries
     .iter()
@@ -96,11 +109,12 @@ pub(super) fn read(db: &ProjectDb, setting: Setting<'_>) -> Result<ProjectReadin
   })
 }
 
-/// Profiles, then MCP servers, then tools.
+/// Profiles, then MCP servers, then tools, then reviewers.
 const fn kind_rank(kind: ResourceKind) -> u8 {
   match kind {
     ResourceKind::AgentProfile => 0,
     ResourceKind::McpServer => 1,
+    ResourceKind::TeamReviewer => 3,
     _ => 2,
   }
 }

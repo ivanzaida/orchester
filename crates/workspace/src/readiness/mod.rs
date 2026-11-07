@@ -32,8 +32,13 @@
 //! [`crate::team_fill_ins`]), with a team version the stream cached (`Servers::subscribe_shared`), and with a program
 //! file that appears or goes, which nothing announces, so whoever shows the answer reads it again when it is refreshed.
 //!
-//! Not modelled yet: the account of a connection pick. Instructions, skills and reviewers need nothing of a computer
-//! and are not listed.
+//! A team reviewer needs a connection like a profile: one of its CLI kind for a language reviewer, a decision connection
+//! for a decision reviewer ([`Missing::DecisionConnection`](orchester_core::sharing::Missing::DecisionConnection)).
+//! A pipeline names no reviewer (the project's reviewer is a setting), so no pipeline needs one. A local project's
+//! reviewer is that setting and is not listed.
+//!
+//! Not modelled yet: the account of a connection pick. Instructions and skills need nothing of a computer and are not
+//! listed.
 
 mod error;
 mod facts;
@@ -57,7 +62,7 @@ pub use self::{
 use crate::workspace::Workspace;
 
 impl Workspace {
-  /// Whether each profile, MCP server, tool and pipeline of the project at `repo_root` is ready on this computer. Reads
+  /// Whether each profile, MCP server, tool, team reviewer and pipeline of the project at `repo_root` is ready on this computer. Reads
   /// the databases, stats the program files and, for the tools of a local project that use a secret, asks `vault`
   /// whether it has the value, so it blocks: run it on the background pool.
   ///

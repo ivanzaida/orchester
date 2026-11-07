@@ -10,7 +10,7 @@ use orchester_core::{
 };
 use orchester_store::{McpServerProgram, ProjectDb, StoreError};
 
-/// The agent connections and the team secrets that have a value, by name. A local project has no secret by name, so it
+/// The agent and decision connections and the team secrets that have a value, by name. A local project has no secret by name, so it
 /// has none. "Has a value" is a row in `team_secret_values`: the keychain is not read, so a handle whose keychain value
 /// was removed outside Orchester still counts.
 pub(super) fn base(db: &ProjectDb) -> Result<Here, StoreError> {
@@ -19,6 +19,9 @@ pub(super) fn base(db: &ProjectDb) -> Result<Here, StoreError> {
     if let ConnectionKind::Agent(provider) = connection.kind() {
       here = here.with_connection(connection.id(), *provider);
     }
+  }
+  for connection in db.decision_connections()? {
+    here = here.with_decision_connection(connection.id());
   }
   for name in db.team_secret_names_set()? {
     here = here.with_secret(name);

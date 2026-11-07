@@ -79,7 +79,7 @@ fn profile_role(db: &ProjectDb, profile: ResourceId) -> Result<Option<Connection
 }
 
 /// Fails unless `connection` is of the `expected` role, or, when none is known, an agent connection.
-fn check_fits(connection: &Connection, expected: Option<ConnectionRole>) -> Result<(), FillInError> {
+pub(super) fn check_fits(connection: &Connection, expected: Option<ConnectionRole>) -> Result<(), FillInError> {
   let role = ConnectionRole::of(connection.kind());
   let fits = match expected {
     Some(expected) => role == expected,

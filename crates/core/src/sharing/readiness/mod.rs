@@ -24,7 +24,7 @@ use crate::{
   secret::SecretName,
 };
 
-/// Why a profile has no connection here.
+/// Why a profile or reviewer has no connection here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ConnectionProblem {
   /// No connection of the profile's CLI kind: one has to be added.
@@ -58,6 +58,11 @@ pub enum Missing {
   Connection {
     profile: ResourceId,
     cli: AgentProvider,
+    problem: ConnectionProblem,
+  },
+  /// A team decision reviewer has no decision connection here.
+  DecisionConnection {
+    reviewer: ResourceId,
     problem: ConnectionProblem,
   },
   /// The team MCP server is not switched on here.
@@ -106,7 +111,7 @@ impl Readiness {
 impl Missing {
   const fn rank(&self) -> u8 {
     match self {
-      Self::Connection { .. } => 0,
+      Self::Connection { .. } | Self::DecisionConnection { .. } => 0,
       Self::McpOff { .. } => 1,
       Self::McpProgram { .. } => 2,
       Self::LocalMcpProgram { .. } => 3,
@@ -136,6 +141,12 @@ fn lacking(need: &Need, here: &Here) -> Option<Missing> {
       cli: *cli,
       problem,
     }),
+    Need::DecisionConnection { reviewer } => {
+      decision_connection_problem(*reviewer, here).map(|problem| Missing::DecisionConnection {
+        reviewer: *reviewer,
+        problem,
+      })
+    }
     Need::McpOn(server) => (!here.mcp_on.contains(server)).then_some(Missing::McpOff { server: *server }),
     Need::McpProgram(server) => match here.programs.get(server) {
       Some(file) if file.exists => None,
@@ -188,5 +199,21 @@ fn connection_problem(profile: ResourceId, cli: AgentProvider, here: &Here) -> O
     (None, _) => Some(ConnectionProblem::NoneOfKind),
     (Some(_), None) => None,
     (Some(_), Some(_)) => Some(ConnectionProblem::PickNeeded),
+  }
+}
+
+/// As [`connection_problem`], for the decision connections of this computer.
+fn decision_connection_problem(reviewer: ResourceId, here: &Here) -> Option<ConnectionProblem> {
+  let picked = here
+    .decision_picks
+    .get(&reviewer)
+    .is_some_and(|pick| here.decision_connections.contains(pick));
+  if picked {
+    return None;
+  }
+  match here.decision_connections.as_slice() {
+    [] => Some(ConnectionProblem::NoneOfKind),
+    [_] => None,
+    _ => Some(ConnectionProblem::PickNeeded),
   }
 }

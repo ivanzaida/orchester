@@ -4,7 +4,7 @@
 use std::{collections::HashMap, fs};
 
 use orchester_core::{
-  id::{AgentAccountId, ConnectionId, ProjectId, ResourceId},
+  id::{AgentAccountId, ConnectionId, DecisionConnectionId, ProjectId, ResourceId},
   name::Name,
   project::{Project, ProjectKey},
   secret::{SecretName, SecretValue, SecretVault, VaultError, VaultKey},
@@ -82,6 +82,23 @@ fn fill_in_connection_pick_is_kept_replaced_and_cleared() {
   db.clear_connection_pick(profile).expect("clear");
   db.clear_connection_pick(profile).expect("clear again");
   assert_eq!(db.connection_pick(profile).expect("read"), None);
+}
+
+#[test]
+fn fill_in_decision_pick_is_kept_replaced_and_survives_reopening() {
+  let (repo, mut db) = project_repo();
+  let reviewer = ResourceId::generate();
+  assert_eq!(db.decision_pick(reviewer).expect("read"), None);
+  db.set_decision_pick(reviewer, DecisionConnectionId::generate())
+    .expect("set");
+  let second = DecisionConnectionId::generate();
+  db.set_decision_pick(reviewer, second).expect("replace");
+  drop(db);
+  let mut db = ProjectDb::open(repo.path()).expect("reopen");
+  assert_eq!(db.decision_pick(reviewer).expect("read"), Some(second));
+  assert_eq!(db.decision_pick(ResourceId::generate()).expect("read"), None);
+  db.clear_connection_pick(reviewer).expect("clear");
+  assert_eq!(db.decision_pick(reviewer).expect("read"), None);
 }
 
 #[test]

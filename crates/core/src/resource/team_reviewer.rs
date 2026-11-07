@@ -1,44 +1,31 @@
-//! The team's versioned reviewer. Connection references carry no URL, key or computer-local id.
+//! The team's versioned reviewer (`docs/design/team-configuration.md`, "Who owns what"). A language reviewer names the
+//! CLI kind it runs with, like a team agent profile, and a decision reviewer names no connection at all: its kind
+//! (`decision`) implies a decision connection. Each computer picks the connection it runs on
+//! (`team_connection_picks`), so the body holds no name, URL, key or computer-local id, and its JSON refuses any other
+//! field: a body that names a connection (the form before ORC-887) is not a team reviewer and is not read.
 
 mod destinations;
+mod local;
 
 pub use destinations::{ReviewerDestinations, ReviewerHost, ReviewerHostError};
+pub use local::{TeamReviewerError, TeamReviewerKnown};
 use serde::{Deserialize, Serialize};
 
 use super::{ModelId, ResourceBody, ResourceKind};
-use crate::{connection::AgentProvider, name::Name, run::review::Probability};
+use crate::{connection::AgentProvider, run::review::Probability};
 
-/// A language connection by the same kind, name and role shared profiles use.
+/// Language reviewers carry a CLI kind and effort; decision reviewers carry a minimum threshold and permitted
+/// destinations.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum LanguageReviewerReference {
-  Connection { name: Name, role: AgentProvider },
-}
-
-/// A decision connection is a separate kind, never usable as an agent connection.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
-pub enum DecisionReviewerReference {
-  DecisionConnection { name: Name, role: DecisionReviewerRole },
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "snake_case")]
-pub enum DecisionReviewerRole {
-  Decision,
-}
-
-/// Language reviewers carry effort; decision reviewers carry a minimum threshold and permitted destinations.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum TeamReviewer {
   Language {
-    connection: LanguageReviewerReference,
+    /// The agent provider a connection must have to run it; each computer picks one of its own of that kind.
+    cli: AgentProvider,
     model: ModelId,
     effort: Option<String>,
   },
   Decision {
-    connection: DecisionReviewerReference,
     model: ModelId,
     lowest_threshold: Probability,
     destinations: ReviewerDestinations,
@@ -46,6 +33,14 @@ pub enum TeamReviewer {
 }
 
 impl TeamReviewer {
+  /// The CLI kind a language reviewer runs with; `None` for a decision reviewer, which needs a decision connection.
+  pub const fn cli(&self) -> Option<AgentProvider> {
+    match self {
+      Self::Language { cli, .. } => Some(*cli),
+      Self::Decision { .. } => None,
+    }
+  }
+
   /// A computer may require more confidence than the team, never less. Language reviewers have no threshold.
   pub fn effective_threshold(&self, member: Option<Probability>) -> Option<Probability> {
     let Self::Decision { lowest_threshold, .. } = self else {
@@ -67,7 +62,8 @@ impl TeamReviewer {
   }
 
   /// A version widens if it adds destinations or lowers the team's decision threshold.
-  /// Language reviewers never widen; the first version is compared with members' computers only.
+  /// Language reviewers never widen, whatever CLI kind they name (a profile's CLI kind does not widen either); the
+  /// first version is compared with members' computers only.
   pub fn widens_over(&self, previous: Option<&Self>) -> bool {
     !crate::sharing::SharedBody::widenings_over(self, previous).is_empty()
   }

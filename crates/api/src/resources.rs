@@ -9,7 +9,7 @@ use orchester_core::{
   blob::ContentHash,
   connection::AgentProvider,
   id::{IdempotencyKey, ResourceId},
-  resource::{ResourceKind, TeamAgentProfile, VersionNumber},
+  resource::{ResourceKind, TeamAgentProfile, TeamReviewer, VersionNumber},
   secret::SecretName,
   sharing::TaskRevision,
 };
@@ -27,7 +27,8 @@ pub enum SharedResourceKind {
   Instruction,
   Skill,
   Tool,
-  /// Body: [`orchester_core::resource::TeamReviewer`], with named connection references, never local ids or secrets.
+  /// Body: [`orchester_core::resource::TeamReviewer`], which names a CLI kind (a decision reviewer nothing), never a
+  /// connection, a local id or a secret.
   TeamReviewer,
   /// Body: [`orchester_core::resource::TeamMcpServer`], with no program path, variable or secret value, or local id.
   McpServer,
@@ -77,12 +78,14 @@ pub struct SharedResource {
 }
 
 /// What a team resource's version names besides itself (`docs/design/team-configuration.md`): other team resources by
-/// their server id, secrets by name, and the CLI kind a profile runs with. It never holds an id or a path from a
-/// computer: no connection, no local MCP server, no secret id. Each computer fills in what is local by nature.
+/// their server id, secrets by name, and the CLI kind a profile or language reviewer runs with. It never holds an id
+/// or a path from a computer: no connection, no local MCP server, no secret id. Each computer fills in what is local
+/// by nature.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ReferenceTarget {
-  /// The agent provider a profile's connection must have; each computer picks one of its own connections of that kind.
+  /// The agent provider a profile's or language reviewer's connection must have; each computer picks one of its own
+  /// connections of that kind.
   CliKind { cli: AgentProvider },
   /// A team resource (an MCP server, tool, skill, instruction or profile) by its id on the server.
   TeamResource { kind: SharedResourceKind, id: ResourceId },
@@ -113,6 +116,12 @@ impl ReferenceTarget {
         .map(|name| Self::SecretName { name: name.clone() }),
     );
     references
+  }
+
+  /// The references of a team reviewer's body: a language reviewer's CLI kind, like a profile's; a decision reviewer
+  /// names no CLI kind, no team resource and no secret, so it has none. The body is the source, as for a profile.
+  pub fn of_reviewer(reviewer: &TeamReviewer) -> Vec<Self> {
+    reviewer.cli().map(|cli| Self::CliKind { cli }).into_iter().collect()
   }
 }
 

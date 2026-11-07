@@ -2,7 +2,7 @@
 
 use orchester_core::{
   id::ResourceId,
-  resource::{AgentProfile, ResourceKind, TeamAgentProfile, Tool, Version},
+  resource::{AgentProfile, ResourceKind, TeamAgentProfile, TeamReviewer, Tool, Version},
   sharing::{McpNeed, Needs, NeedsError},
   store::ResourceStore,
 };
@@ -10,7 +10,7 @@ use orchester_store::{ProjectDb, StoreError, WaitingPublish};
 use serde_json::Value;
 
 use super::{
-  needs::{Entry, Profile},
+  needs::{Entry, Profile, Reviewer},
   standing::Undecided,
 };
 use crate::sharing::sync::{is_local_form, team_form};
@@ -33,6 +33,37 @@ pub(super) fn profiles(db: &ProjectDb, servers: &[McpNeed]) -> Result<Vec<Profil
     });
   }
   Ok(profiles)
+}
+
+/// The team's reviewers. A reviewer's local body is its team body (it names no connection), so a version cached from
+/// the server and one published here that waits for it are read alike. The connection is the pick of the kind the
+/// body names; a pick of the other kind reads as none.
+pub(super) fn reviewers(db: &ProjectDb) -> Result<Vec<Reviewer>, StoreError> {
+  let mut reviewers = Vec::new();
+  for resource in db.resources(ResourceKind::TeamReviewer)? {
+    let Some(version) = db.latest_version::<TeamReviewer>(resource.id())? else {
+      continue;
+    };
+    let language = version.body().cli().is_some();
+    reviewers.push(Reviewer {
+      pick: if language {
+        db.connection_pick(resource.id())?.map(|pick| pick.connection)
+      } else {
+        None
+      },
+      decision_pick: if language {
+        None
+      } else {
+        db.decision_pick(resource.id())?
+      },
+      entry: Entry::new(
+        &resource,
+        version.number(),
+        Ok(Needs::reviewer(resource.id(), version.body())),
+      ),
+    });
+  }
+  Ok(reviewers)
 }
 
 fn profile_needs(
