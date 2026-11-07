@@ -2,15 +2,7 @@
 //! missing part, and at its end what comes after it. No bar when nothing is missing or the first missing part is one
 //! only the team can change.
 
-use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize},
-  },
-  components::{Row, Text},
-  layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
-};
+use lurq::{app::ctx::Ctx, node::Element};
 use orchester_core::sharing::Missing;
 use orchester_workspace::agents::team_profile::TeamProfileSheet;
 
@@ -18,18 +10,15 @@ use super::fix::Fix;
 use crate::{
   screens::team_hub::{
     actions::Busy,
+    bar,
     model::{Entry, Listing},
     words::cli_key,
   },
-  theme::{HubSpacing, HubText},
   ui::{
     button::{ActionButton, ButtonKind},
     pressable::Press,
   },
 };
-
-/// The pinned actions' height (`Actions` `o8tFHR`).
-const HEIGHT: f32 = 56.0;
 
 /// What the bar needs of the panel.
 pub(super) struct Words<'a> {
@@ -104,28 +93,12 @@ pub(super) fn bar(
     ButtonKind::Primary,
     words.action(ctx, fix),
   )
-  .icon(fix.glyph());
+  .icon(fix.glyph())
+  .pinned();
   let button = match busy {
     Busy::Idle => button.press(press),
     Busy::Taking => button.loading(),
     Busy::Reading => button.disabled(),
   };
-  Row::new()
-    .id("team-hub-actions")
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(HEIGHT))
-    .padding(Padding::horizontal(HubSpacing::Sections.role()))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .background(PaletteColor::SurfacePanel)
-    .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .child(button)
-    .child(Row::new().flex(1.0))
-    .child(
-      Text::new(&words.hint(ctx, fix, missing))
-        .id("team-hub-actions-hint")
-        .variant(HubText::Hint.role())
-        .nowrap(),
-    )
-    .into()
+  bar::bar(vec![button.into()], Some(words.hint(ctx, fix, missing)))
 }

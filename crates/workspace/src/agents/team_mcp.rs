@@ -15,7 +15,7 @@ use orchester_core::{
 };
 use orchester_store::{McpServerProgram, ProjectDb, StoreError};
 
-use super::team_profile::TeamProfileSheet;
+use super::{team_profile::TeamProfileSheet, team_sheets};
 
 /// Who published the version this computer uses, and when.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -87,20 +87,10 @@ pub(super) fn sheets(
       continue;
     };
     let body = version.body();
-    let published = db
-      .cached_version::<TeamMcpServer>(resource.id(), version.number())?
-      .map(|cached| Published {
-        by: cached.publisher.name,
-        at: cached.published_at,
-      });
-    let mut used_by = Vec::new();
-    for (profile, sheet) in profiles {
-      if sheet.mcp_servers.iter().any(|used| used.server.id == resource.id())
-        && let Some(found) = db.resource(*profile)?
-      {
-        used_by.push(found.name().to_string());
-      }
-    }
+    let published = team_sheets::published::<TeamMcpServer>(db, resource.id(), version.number())?;
+    let used_by = team_sheets::used_by(db, profiles, |sheet| {
+      sheet.mcp_servers.iter().any(|used| used.server.id == resource.id())
+    })?;
     sheets.push((
       resource.id(),
       TeamMcpSheet {

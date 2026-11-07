@@ -12,16 +12,20 @@
 //! last answer as current. Before the project is known to be shared the page is [`unread`]'s.
 
 mod actions;
+mod bar;
 mod create;
+mod fill;
 mod head;
 mod list;
 mod mcp;
 mod model;
 mod panel;
+mod plain;
 mod profile;
 mod row;
 mod rows;
 mod secret;
+mod tool;
 pub(super) mod unread;
 mod words;
 
@@ -317,31 +321,72 @@ fn resource_panel(
     may_change: team.may_change,
     navigation,
   };
-  match (hub.profile(selected.id), hub.mcp_server(selected.id)) {
-    (Some(sheet), _) => profile::panel(
-      ctx,
-      profile::Props {
-        repo_root: project.open.repo_root.clone(),
-        project: id,
-        may_change: team.may_change,
-        reading,
-        listing: listing.clone(),
-        entry: selected.clone(),
-        sheet: sheet.clone(),
-      },
-    ),
-    (None, Some(sheet)) => mcp::panel(
-      ctx,
-      mcp::Props {
-        repo_root: project.open.repo_root.clone(),
-        project: id,
-        reading,
-        reread: retry.clone(),
-        listing: listing.clone(),
-        entry: selected.clone(),
-        sheet: sheet.clone(),
-      },
-    ),
-    (None, None) => panel::panel(ctx, listing, selected, &shown),
+  detail(ctx, (project, team), (hub, listing, selected), (&shown, reading, retry))
+}
+
+/// The panel of `selected`: the one of its kind where the team holds what it shows, else the frame every kind has.
+fn detail(
+  ctx: &mut Ctx,
+  (project, team): (&ShownProject, &TeamConfiguration),
+  (hub, listing, selected): (&TeamHub, &Listing, &model::Entry),
+  (shown, reading, retry): (&panel::Shown<'_>, bool, &Signal<u64>),
+) -> Element {
+  let id = project.open.project.id();
+  let (repo_root, may_change) = (project.open.repo_root.clone(), team.may_change);
+  let plain = |sheet| plain::Props {
+    project: id,
+    may_change,
+    listing: listing.clone(),
+    entry: selected.clone(),
+    sheet,
+  };
+  match selected.kind {
+    model::Kind::Profile => hub.profile(selected.id).map(|sheet| {
+      profile::panel(
+        ctx,
+        profile::Props {
+          repo_root,
+          project: id,
+          may_change,
+          reading,
+          listing: listing.clone(),
+          entry: selected.clone(),
+          sheet: sheet.clone(),
+        },
+      )
+    }),
+    model::Kind::McpServer => hub.mcp_server(selected.id).map(|sheet| {
+      mcp::panel(
+        ctx,
+        mcp::Props {
+          repo_root,
+          project: id,
+          reading,
+          reread: retry.clone(),
+          listing: listing.clone(),
+          entry: selected.clone(),
+          sheet: sheet.clone(),
+        },
+      )
+    }),
+    model::Kind::Tool => hub.tool(selected.id).map(|sheet| {
+      tool::panel(
+        ctx,
+        tool::Props {
+          project: id,
+          may_change,
+          listing: listing.clone(),
+          entry: selected.clone(),
+          sheet: sheet.clone(),
+        },
+      )
+    }),
+    model::Kind::Instruction => hub
+      .instruction(selected.id)
+      .map(|sheet| plain::panel(ctx, plain(plain::Sheet::Instruction(sheet.clone())))),
+    model::Kind::Skill => hub
+      .skill(selected.id)
+      .map(|sheet| plain::panel(ctx, plain(plain::Sheet::Skill(sheet.clone())))),
   }
+  .unwrap_or_else(|| panel::panel(ctx, listing, selected, shown))
 }

@@ -17,6 +17,7 @@ use serde_json::{Value, json};
 use super::{
   harness::Agents,
   team_hub::{cached, open, team},
+  team_hub_other::bounds,
   team_hub_profile_fixes::Client,
 };
 
@@ -307,6 +308,7 @@ fn team_hub_mcp_automation_cannot_set_a_path_switch_on_or_add_a_value() {
   let mut agents = Agents::new(true);
   team(&agents);
   let pencil = server(&agents, ("pencil-design", program_body()), Switch::Undecided);
+  let github = server(&agents, ("copilot", remote_body()), Switch::On);
   show(&mut agents, pencil);
   let program = program_file(&agents);
   agents.stand_ins.choose(Some(program));
@@ -341,6 +343,53 @@ fn team_hub_mcp_automation_cannot_set_a_path_switch_on_or_add_a_value() {
   agents.until("said on", |s| {
     s.text("team-hub-here-switch") == "On: runs here may use it"
   });
+  // A secret without a value is the same: pressing Add value under automation opens no dialog, and says why.
+  show(&mut agents, github);
+  agents.until("its panel", |s| s.text("team-hub-panel-title") == "copilot");
+  assert_eq!(agents.text("team-hub-fix-add-value"), "Add value");
+  with_synthetic_input(|| agents.click("team-hub-fix-add-value"));
+  settle(&mut agents);
+  assert!(!agents.exists("team-hub-secret-dialog"), "automation opened no dialog");
+  assert!(agents.exists("team-hub-fix-person-only"), "and the panel says why");
+  // The person's own press does.
+  agents.click("team-hub-fix-add-value");
+  agents.until("the dialog", |s| s.exists("team-hub-secret-dialog"));
+}
+
+#[test]
+fn team_hub_mcp_keys_are_170_wide_from_the_team_and_150_on_this_computer() {
+  let mut agents = Agents::new(true);
+  team(&agents);
+  let pencil = server(&agents, ("pencil-design", program_body()), Switch::On);
+  show(&mut agents, pencil);
+  let mut key = |row: &str| {
+    let (value, ..) = bounds(&mut agents, &format!("{row}-value"));
+    let (label, ..) = bounds(&mut agents, &format!("{row}-label"));
+    value - label
+  };
+  let (from_team, on_computer) = (key("team-hub-from-team-program"), key("team-hub-path"));
+  assert!(
+    (from_team - on_computer - 20.0).abs() < 0.5,
+    "from the team {from_team}, on this computer {on_computer}"
+  );
+}
+
+#[test]
+fn team_hub_mcp_a_long_path_ends_in_an_ellipsis_inside_its_box() {
+  let mut agents = Agents::new(true);
+  team(&agents);
+  let pencil = server(&agents, ("pencil-design", program_body()), Switch::On);
+  let gone = agents
+    .root
+    .join("a".repeat(60))
+    .join("b".repeat(60))
+    .join("c".repeat(60))
+    .join("pencil-mcp");
+  set_path(&agents, pencil, &gone);
+  show(&mut agents, pencil);
+  let (_, text, _) = bounds(&mut agents, "team-hub-path-value-text");
+  let (_, boxed, _) = bounds(&mut agents, "team-hub-path-value");
+  assert!(text < boxed, "the path keeps to its box: {text} in {boxed}");
 }
 
 #[test]

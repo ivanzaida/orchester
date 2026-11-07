@@ -5,6 +5,7 @@
 //! `cargo test -p orchester-workspace --test team_fill_ins team_fill_ins`
 
 mod connection;
+mod other_sheets;
 mod program;
 mod reviewer;
 mod secret;

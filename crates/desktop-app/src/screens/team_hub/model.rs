@@ -7,7 +7,10 @@ use orchester_core::{
   resource::{ResourceKind, VersionNumber},
 };
 use orchester_workspace::{
-  agents::team_hub::{Form, TeamHub},
+  agents::{
+    team_hub::{Form, TeamHub},
+    team_text::Added,
+  },
   readiness::{Group, ReadinessStanding},
 };
 
@@ -106,6 +109,16 @@ pub(super) const fn form_key(form: Form) -> &'static str {
   }
 }
 
+/// Who gets a resource of the team, which a ready row says after its name (`Line` in `Item · Project rules` `ezTxs`,
+/// `Item · cargo-check` in `u9Hcc`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum Reach {
+  /// An instruction added to every run.
+  EveryRun,
+  /// The names of the profiles that use it; none when no profile does.
+  Profiles(Vec<String>),
+}
+
 /// One resource of the list.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Entry {
@@ -118,6 +131,8 @@ pub(super) struct Entry {
   /// The CLI kind a profile runs with, whose mark stands at its row's start; `None` for the other kinds and for a
   /// profile that is not in the team's form.
   pub cli: Option<AgentProvider>,
+  /// Who gets an instruction, a skill or a tool; `None` for the other kinds and for one with no sheet.
+  pub reach: Option<Reach>,
   pub group: Group,
   /// How it stands here; `None` for an instruction or a skill, which need nothing.
   pub standing: Option<ReadinessStanding>,
@@ -175,6 +190,7 @@ impl Listing {
         number: Some(found.number()),
         form: hub.form(found.resource()),
         cli: hub.profile(found.resource()).map(|sheet| sheet.cli),
+        reach: reach(hub, found.resource(), found.kind()),
         group: found.group(),
         standing: Some(found.standing().clone()),
       })
@@ -187,6 +203,7 @@ impl Listing {
         number: found.number,
         form: None,
         cli: None,
+        reach: reach(hub, found.id, found.kind),
         group: Group::Ready,
         standing: None,
       })
@@ -229,6 +246,18 @@ impl Listing {
   /// A resource of the team, wherever the filter stands.
   pub(super) fn find(&self, id: ResourceId) -> Option<&Entry> {
     self.entries.iter().find(|entry| entry.id == id)
+  }
+}
+
+fn reach(hub: &TeamHub, id: ResourceId, kind: ResourceKind) -> Option<Reach> {
+  match kind {
+    ResourceKind::Instruction => hub.instruction(id).map(|sheet| match sheet.added {
+      Added::Project => Reach::EveryRun,
+      Added::Role(_) | Added::Pipeline(_) | Added::Step { .. } => Reach::Profiles(sheet.used_by.clone()),
+    }),
+    ResourceKind::Skill => hub.skill(id).map(|sheet| Reach::Profiles(sheet.used_by.clone())),
+    ResourceKind::Tool => hub.tool(id).map(|sheet| Reach::Profiles(sheet.used_by.clone())),
+    _ => None,
   }
 }
 
