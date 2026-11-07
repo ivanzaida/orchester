@@ -21,7 +21,7 @@ use orchester_core::{
   project::{Project, ProjectKey},
   resource::{
     AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Resource, ResourceKind, Slug,
-    Step, StepKey, StepKind,
+    Step, StepKey, StepKind, VersionNumber,
   },
   revision::Revision,
   run::{Answerer, BranchName, NewRun, Plan, PlanDecision, PublishedVersions, Run, RunEvent, RunSnapshot},
@@ -303,6 +303,32 @@ impl Fixture {
       .expect("the team MCP server is kept");
   }
 
+  /// The team's next version of the Builder profile, cached as the server confirmed it and naming `servers` by
+  /// `TeamResource` references; the fixture's run keeps the version it pinned.
+  pub fn cache_next_builder_version(&mut self, servers: &[ResourceId]) {
+    let step = self.snapshot.body().steps()[0].clone();
+    let StepKind::Agent {
+      profile: Some(builder), ..
+    } = &step.kind
+    else {
+      panic!("the fixture's first step has a Builder profile");
+    };
+    let pinned = self
+      .db
+      .cached_version::<AgentProfile>(*builder, VersionNumber::FIRST)
+      .expect("read")
+      .expect("the pinned version is cached");
+    let next = CachedVersion {
+      number: VersionNumber::FIRST.next().expect("a next version"),
+      references: team_server_references(servers),
+      ..pinned
+    };
+    self
+      .db
+      .cache_shared_version(*builder, &next)
+      .expect("the next team version is cached");
+  }
+
   /// A task titled `title`, created at `now`.
   pub fn task(&mut self, title: &str, now: Timestamp) -> TaskId {
     let details = TaskDetails {
@@ -488,17 +514,7 @@ fn keep_as_team_profile(
   let revision = TaskRevision::try_from(1_u64).expect("a revision");
   db.set_resource_sharing(profile, Some(ResourceSharing::Shared(revision)))
     .expect("the profile is the team's");
-  let references = servers
-    .iter()
-    .map(|&id| VersionReference {
-      target: ReferenceTarget::TeamResource {
-        kind: ResourceKind::McpServer,
-        id,
-      },
-      name: String::new(),
-      role: None,
-    })
-    .collect();
+  let references = team_server_references(servers);
   let confirmed = CachedVersion {
     number: version.number(),
     published_at: at(3),
@@ -514,4 +530,19 @@ fn keep_as_team_profile(
   };
   db.cache_shared_version(profile, &confirmed)
     .expect("the team version is cached");
+}
+
+/// The references of a team profile version that chooses the team MCP servers `servers`.
+fn team_server_references(servers: &[ResourceId]) -> Vec<VersionReference> {
+  servers
+    .iter()
+    .map(|&id| VersionReference {
+      target: ReferenceTarget::TeamResource {
+        kind: ResourceKind::McpServer,
+        id,
+      },
+      name: String::new(),
+      role: None,
+    })
+    .collect()
 }

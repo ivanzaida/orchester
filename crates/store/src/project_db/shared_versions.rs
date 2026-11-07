@@ -40,16 +40,10 @@ pub enum ResourceSharing {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ReferenceTarget {
   CliKind(AgentProvider),
-  TeamResource {
-    kind: ResourceKind,
-    id: ResourceId,
-  },
+  TeamResource { kind: ResourceKind, id: ResourceId },
   SecretName(SecretName),
-  /// Legacy, removed by ORC-845.
   Connection(ConnectionId),
-  /// Legacy, removed by ORC-845.
   McpServer(ConnectionId),
-  /// Legacy, removed by ORC-845.
   Secret(SecretId),
 }
 

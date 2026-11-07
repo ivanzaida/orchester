@@ -57,3 +57,21 @@ fn archive_pins_a_run_whose_profile_chooses_no_team_mcp_server_is_not_stopped() 
   let stopped = pinning(fixture.repo.path(), knowledge).expect("read").expect("kept");
   assert!(stopped.runs().is_empty());
 }
+
+#[test]
+fn archive_pins_reads_the_profile_version_the_run_pinned_not_the_latest() {
+  let knowledge = ResourceId::generate();
+  let mut fixture = Fixture::choosing(&[knowledge]);
+  fixture.keep_team_server(knowledge, "Knowledge");
+  let task = fixture.task("Search", at(10));
+  let run = fixture.started_run(task, at(11));
+  // The team's version 2 of the profile drops the server; the run still holds version 1, which chooses it.
+  fixture.cache_next_builder_version(&[]);
+
+  fixture
+    .db
+    .mark_shared_archived(knowledge, true, at(12))
+    .expect("the archive is marked");
+  let stopped = pinning(fixture.repo.path(), knowledge).expect("read").expect("kept");
+  assert_eq!(stopped.runs(), [(run.id(), task)]);
+}
