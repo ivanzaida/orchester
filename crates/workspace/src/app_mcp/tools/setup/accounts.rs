@@ -5,7 +5,10 @@
 
 use orchester_core::{
   account::{AccountFolder, AgentAccount, same_sign_in},
-  connection::plan_limits::{LimitBlock, LimitReading, LimitState, PlanReadings},
+  connection::{
+    AgentProvider,
+    plan_limits::{LimitBlock, LimitReading, LimitState, PlanReadings},
+  },
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
@@ -140,11 +143,7 @@ pub async fn set_connection_account(services: &Services, args: SetConnectionAcco
     let open = services.project(&args.project)?;
     let connection = agent_named(&ProjectDb::open(&open.repo_root)?, &args.connection)?;
     let accounts = services.workspace.agent_accounts()?;
-    let account = accounts
-      .iter()
-      .filter(|account| account.cli().provider() == connection.provider())
-      .find(|account| names(account, &args.account))
-      .ok_or_else(|| ToolError::not_found(Missing::Account, &args.account))?;
+    let account = account_of(&accounts, connection.provider(), &args.account)?;
     if connection.account().id(connection.provider()) != Some(account.id()) {
       widening::allowed(&services, vec![Message::new("appMcp.errors.accountChoice")])?;
     }
@@ -157,6 +156,28 @@ pub async fn set_connection_account(services: &Services, args: SetConnectionAcco
     }))
   })
   .await
+}
+
+/// The account of `accounts` that `named` names among the accounts of the CLI of `provider`.
+fn account_of<'a>(
+  accounts: &'a [AgentAccount],
+  provider: AgentProvider,
+  named: &str,
+) -> Result<&'a AgentAccount, ToolError> {
+  accounts
+    .iter()
+    .filter(|account| account.cli().provider() == provider)
+    .find(|account| names(account, named))
+    .ok_or_else(|| ToolError::not_found(Missing::Account, named))
+}
+
+/// The account `named` names among the listed accounts of the CLI of `provider`.
+pub(super) fn account_for(
+  services: &Services,
+  provider: AgentProvider,
+  named: &str,
+) -> Result<AgentAccount, ToolError> {
+  account_of(&services.workspace.agent_accounts()?, provider, named).cloned()
 }
 
 /// Whether `named` names `account`: its id, or its name ignoring case (`default` for Default).

@@ -31,6 +31,7 @@ mod skill_input;
 mod skills;
 mod stacks;
 mod storage;
+mod team_fill_ins;
 mod team_pipeline;
 mod tool_input;
 mod tool_program;
@@ -223,7 +224,10 @@ const SPECS: &[Spec] = &[
                   NO_COLOR, FORCE_COLOR, TZ, LANG and the LC_ ones (removals included), a variable that takes a \
                   secret under any name, and a tool added to exempt_tools are refused as person_only unless a person \
                   turned on Let automation change agent permissions, judged by the fields as given before anything \
-                  reads the disk. Whether it is on stays.",
+                  reads the disk. Whether it is on stays. A team's MCP server (in a team project, by id or name) is the \
+                  team's: its definition is changed on the team server, and giving it a `program` on this computer is \
+                  refused as person_only always, also while Let automation change agent permissions is on, with \
+                  nothing changed: only a person chooses the program in the window.",
     schema: schema_for_type::<mcp_servers::UpdateMcpServer>,
     read_only: false,
   },
@@ -240,7 +244,10 @@ const SPECS: &[Spec] = &[
     description: "Turns an MCP server on or off for every profile that chooses it, as its inspector's Turn on and \
                   Turn off do: agents that start from now on get it, or work without it; agents at work keep what \
                   they started with. Turning off is always taken; turning on is refused as person_only unless a \
-                  person turned on Let automation change agent permissions.",
+                  person turned on Let automation change agent permissions. In a team project `server` can also be \
+                  one of the team's MCP servers (by id or name): turning it off here is taken, but turning it on is \
+                  refused as person_only always, also while Let automation change agent permissions is on, with \
+                  nothing changed: only a person turns a team MCP server on here, in the window.",
     schema: schema_for_type::<mcp_servers::SetMcpServerEnabled>,
     read_only: false,
   },
@@ -467,6 +474,7 @@ pub fn listed() -> Vec<Tool> {
     .chain(project_tools::SPECS)
     .chain(skills::SPECS)
     .chain(secrets::SPECS)
+    .chain(team_fill_ins::SPECS)
     .chain(services::SPECS)
     .chain(storage::SPECS)
     .map(tool)
@@ -489,6 +497,9 @@ pub async fn call(
   }
   if named(secrets::SPECS) {
     return Some(secrets::call(services, translate, name, Value::Object(arguments)).await);
+  }
+  if named(team_fill_ins::SPECS) {
+    return Some(team_fill_ins::call(services, name, Value::Object(arguments)).await);
   }
   if named(self::services::SPECS) {
     return Some(self::services::call(services, translate, name, Value::Object(arguments)).await);

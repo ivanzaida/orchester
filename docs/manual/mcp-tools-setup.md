@@ -303,6 +303,22 @@ from now on get it or work without it; agents at work keep what they started wit
 
 Parameters: `project` (req.), `server` (req.), `enabled` (boolean, req.).
 
+In a team project `server` can also be one of the team's MCP servers (id or name). Turning it off is accepted; turning
+it on is `person_only` always, also while AP is on, with nothing changed: only a person turns a team MCP server on
+here, in the window. The same holds for giving a team MCP server a `program` with `update_mcp_server`; its other
+fields are the team's, changed on the team server (`team_resource`).
+
+### `pick_profile_connection` — changes data · team project · gate AP for another account
+
+Chooses the connection a team profile runs on on this computer (the profile's *Connection* field in a team project).
+The pick is kept on this computer only; a connection added later changes nothing. Refused as `team_project_required`
+in a project that is not shared with a team, `profile_not_found` for a profile that is not the team's,
+`connection_does_not_fit` for a connection of another CLI kind than the profile names, and `person_only` for an
+`account` other than the profile's earlier pick unless AP is on.
+
+Parameters: `project` (req.), `profile` (req.: id or role of a team profile), `connection` (req.: id or name of an
+agent connection), `account` (id or name of an account of the connection's CLI; `default` is the CLI's Default).
+
 ---
 
 ## 4. Agent profiles
@@ -647,9 +663,10 @@ A project's active secrets **by name and use only — never a value** (values st
 read). Each: id, name, kind, environment (a name is unique per environment, written `NAME@environment` where tools
 and MCP servers refer to it), `added_at`, `replaced_at`, and `used_by` (tools, MCP servers, agent connections whose
 API key it is, and the profiles whose draft or latest version chooses an MCP server using it, with that server),
-each with a link, plus the link to Project settings › Environment.
+each with a link, plus the link to Project settings › Environment. In a team project the team's secrets this computer
+has a value for follow as `{name, team: true, value_set: true}`; names nobody gave a value are not listed yet.
 
-Adding, replacing and archiving secrets are done by a person in the app. Parameter: `project` (string | null).
+Adding, replacing and archiving secrets, and giving a team secret its value, are done by a person in the app. Parameter: `project` (string | null).
 
 ---
 
