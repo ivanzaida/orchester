@@ -9,6 +9,7 @@ pub mod permissions;
 pub mod prompts;
 pub mod servers;
 pub mod team_hub;
+pub mod team_mcp;
 pub mod team_profile;
 pub mod usage;
 pub mod widening;

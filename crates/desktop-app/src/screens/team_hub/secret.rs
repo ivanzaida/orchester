@@ -9,18 +9,29 @@
 
 use std::sync::Arc;
 
-use lurq::{app::ctx::Ctx, components::Column, core::Signal, node::Element};
+use lurq::{
+  app::ctx::{Ctx, FutureAction},
+  components::Column,
+  core::Signal,
+  node::Element,
+};
 use orchester_core::secret::{SecretName, SecretValue};
 use orchester_workspace::messages::Message;
 use zeroize::Zeroize;
 
-use crate::ui::{
-  button::{ActionButton, ButtonKind},
-  dialog::{Dialog, Tone},
-  field::{FieldInput, field_error},
-  icon::Icon,
-  message::message_text,
+use crate::{
+  screens::settings::orchester::PersonOnly,
+  ui::{
+    button::{ActionButton, ButtonKind},
+    dialog::{Dialog, Tone},
+    field::{FieldInput, field_error},
+    icon::Icon,
+    message::message_text,
+  },
 };
+
+/// The id the person-only check of the dialog's *Save* is made under.
+pub(super) const SAVE: &str = "team-hub-secret-save";
 
 /// What the dialog's *Save value* hands over: the secret's name and its value.
 pub(super) type Save = Arc<dyn Fn(SecretName, SecretValue) + Send + Sync>;
@@ -60,6 +71,31 @@ impl Entry {
     self.error.set(None);
     self.name.set(name.to_string());
     self.open.set(true);
+  }
+
+  /// A saved value closes the dialog; a failure shows in it, with the typed text kept.
+  pub(super) fn follow_save(&self, ctx: &mut Ctx, add_value: &FutureAction<(SecretName, SecretValue), (), Message>) {
+    let (open, error) = (self.open.clone(), self.error.clone());
+    ctx.watch(&add_value.state(), move |state| {
+      if state.is_pending() {
+        return;
+      }
+      if state.is_fulfilled() {
+        open.set(false);
+      } else if let Some(failed) = &state.error {
+        error.set(Some(failed.clone()));
+      }
+    });
+  }
+
+  /// What the dialog's *Save value* does, a person's alone: the value goes on as the person's.
+  pub(super) fn save_by(add_value: &FutureAction<(SecretName, SecretValue), (), Message>, person: &PersonOnly) -> Save {
+    let (action, person) = (add_value.clone(), person.clone());
+    Arc::new(move |name, value| {
+      if person.allows(SAVE) {
+        action.run((name, value));
+      }
+    })
   }
 
   /// Overwrites what was typed.

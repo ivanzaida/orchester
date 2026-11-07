@@ -1,11 +1,14 @@
-//! The boxes of the profile panel's sections (`Rows` `tQ5pu`, `YTWxX`, `MH6ZR` in `Agents · Profile` `NDZXC`): a row
-//! is its key (a label over an optional sub) 170 wide and its value, 12 apart, 8 over and under them and 12 at the
-//! sides; the rows stand in one `border` outline, radius `md`, each ruled from the next.
+//! The boxes of the panels' sections (`Rows` `tQ5pu`, `YTWxX`, `MH6ZR` in `Agents · Profile` `NDZXC`; `Rows` in `C4`
+//! `SpRvd`): a row is its key (a label over an optional sub) 170 wide and its value, 12 apart, 8 over and under them
+//! and 12 at the sides; the rows stand in one `border` outline, radius `md`, each ruled from the next.
 
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
+  app::{
+    ctx::Ctx,
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
+  },
   components::{Column, Row, Text},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
@@ -14,6 +17,7 @@ use lurq::{
 use crate::{
   screens::team_hub::row::tag_chip,
   theme::{ExtraSpacing, HubText},
+  ui::chip::{BadgeTone, badge},
 };
 
 /// A key's width (`Key` `P60rze`).
@@ -75,15 +79,23 @@ pub(super) fn section(id: &str, label: &str, after: Vec<Element>, rows: Vec<Row>
 
 /// One row: `label` over `sub`, and `value` beside them.
 pub(super) fn row(id: &str, label: &str, sub: Option<Sub>, value: impl Into<Element>) -> Row {
+  keyed(
+    id,
+    Text::new(label)
+      .id(format!("{id}-label"))
+      .variant(HubText::Status.role()),
+    sub,
+    value,
+  )
+}
+
+/// [`row`] whose key is `label`, already a text: a name that is an identifier, in mono.
+pub(super) fn keyed(id: &str, label: Text, sub: Option<Sub>, value: impl Into<Element>) -> Row {
   let key = Column::new()
     .width(Dimension::Px(KEY_WIDTH))
     .flex_shrink(0.0)
     .spacing(ExtraSpacing::Tight.role())
-    .child(
-      Text::new(label)
-        .id(format!("{id}-label"))
-        .variant(HubText::Status.role()),
-    )
+    .child(label)
     .with_children(sub.map(|sub| {
       Text::new(&sub.words)
         .id(format!("{id}-sub"))
@@ -130,4 +142,23 @@ pub(super) fn tags(id: &str, names: impl IntoIterator<Item = String>) -> Row {
         .enumerate()
         .map(|(index, name)| tag_chip(&format!("{id}-{index}"), &name)),
     )
+}
+
+/// *On this computer* (`On this computer` `qtmpw` in `NDZXC`, `JYO4l` in `SpRvd`): what is only this computer's and
+/// never sent to the team, as `rows`, with `after` under them.
+pub(super) fn on_this_computer(ctx: &Ctx, rows: Vec<Row>, after: Option<Element>) -> Column {
+  let note = Text::new(&ctx.t("team_hub.profile.onComputerNote"))
+    .id("team-hub-on-computer-note")
+    .variant(HubText::Hint.role())
+    .nowrap();
+  section(
+    "team-hub-on-computer",
+    &ctx.t("team_hub.profile.onComputer"),
+    vec![
+      badge("team-hub-yours", BadgeTone::Neutral, &ctx.t("team_hub.profile.yours")).into(),
+      note.into(),
+    ],
+    rows,
+  )
+  .with_children(after)
 }

@@ -12,7 +12,10 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use super::team_profile::{self, TeamProfileSheet};
+use super::{
+  team_mcp::{self, TeamMcpSheet},
+  team_profile::{self, TeamProfileSheet},
+};
 use crate::{
   readiness::{ProjectReadiness, ReadinessError},
   workspace::Workspace,
@@ -48,6 +51,7 @@ pub struct TeamHub {
   plain: Vec<Plain>,
   forms: Vec<(ResourceId, Form)>,
   profiles: Vec<(ResourceId, TeamProfileSheet)>,
+  mcp_servers: Vec<(ResourceId, TeamMcpSheet)>,
 }
 
 impl TeamHub {
@@ -65,6 +69,15 @@ impl TeamHub {
   pub fn profile(&self, resource: ResourceId) -> Option<&TeamProfileSheet> {
     self
       .profiles
+      .iter()
+      .find_map(|(found, sheet)| (*found == resource).then_some(sheet))
+  }
+
+  /// What the team holds of the MCP server `resource` and what this computer fills in for it; `None` for any other
+  /// resource, and for a server with no version cached here.
+  pub fn mcp_server(&self, resource: ResourceId) -> Option<&TeamMcpSheet> {
+    self
+      .mcp_servers
       .iter()
       .find_map(|(found, sheet)| (*found == resource).then_some(sheet))
   }
@@ -129,11 +142,17 @@ impl Workspace {
       of_kind.sort_by_key(|found| found.name.to_lowercase());
       plain.extend(of_kind);
     }
+    let profiles = team_profile::sheets(&db)?;
+    let programs = match db.sharing()? {
+      Some(link) => self.db.lock().mcp_server_programs(link.server)?,
+      None => Vec::new(),
+    };
     Ok(TeamHub {
       readiness,
       plain,
       forms: forms(&db)?,
-      profiles: team_profile::sheets(&db)?,
+      mcp_servers: team_mcp::sheets(&db, &programs, &profiles)?,
+      profiles,
     })
   }
 }

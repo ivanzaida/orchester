@@ -5,16 +5,23 @@ use orchester_core::{
   connection::AgentProvider,
   id::{ConnectionId, ResourceId},
   resource::{AgentProfile, ModelId, PromptText, ProviderSettings, Slug, TeamAgentProfile},
+  run::Answerer,
   sharing::TaskRevision,
   store::ResourceStore,
   time::Timestamp,
 };
 use orchester_store::ResourceSharing;
+use orchester_workspace::agents::team_mcp::McpRuns;
 
 use crate::support::{MemoryVault, Team, cached, connection, name, pick};
 
 /// A team profile in the team's form, running on Claude Code and using no MCP server.
 fn builder(team: &Team) -> ResourceId {
+  builder_using(team, Vec::new())
+}
+
+/// [`builder`] using the MCP servers `servers`.
+fn builder_using(team: &Team, servers: Vec<ResourceId>) -> ResourceId {
   let body = TeamAgentProfile::new(
     name("Builder"),
     String::new(),
@@ -24,7 +31,9 @@ fn builder(team: &Team) -> ResourceId {
       ModelId::new("claude-opus-5-5").expect("model"),
       ProviderSettings::default(),
     ),
-  );
+  )
+  .with_mcp_servers(servers)
+  .expect("servers");
   let local = AgentProfile::from_team(&body, ConnectionId::generate());
   let mut db = team.db();
   let id = db
@@ -98,4 +107,56 @@ fn team_fill_ins_a_profile_sheet_runs_on_nothing_until_the_person_picks_among_se
   let after = sheet(&team);
   assert_eq!(after.picked, Some(second));
   assert_eq!(after.runs_on().map(|choice| choice.id), Some(second));
+}
+
+#[test]
+fn team_fill_ins_an_mcp_server_sheet_says_how_it_runs_who_uses_it_and_what_this_computer_set() {
+  let team = Team::new();
+  builder_using(&team, vec![team.program_server]);
+  let vault = MemoryVault::default();
+  let sheet = |team: &Team, server| {
+    team
+      .workspace
+      .team_hub(&team.root, &vault)
+      .expect("hub")
+      .mcp_server(server)
+      .cloned()
+      .expect("a sheet")
+  };
+  let program = sheet(&team, team.program_server);
+  assert_eq!(
+    program.runs,
+    McpRuns::Program {
+      program: "npx".to_owned(),
+      args: Vec::new(),
+      folder: None,
+      variables: Vec::new()
+    }
+  );
+  assert_eq!(
+    program.used_by,
+    vec!["Builder".to_owned()],
+    "the profile that chooses it"
+  );
+  assert_eq!(program.program, None, "no path until the person sets one");
+  assert_eq!(program.switch, None, "nobody decided");
+  assert!(program.published.is_some(), "the version the server confirmed");
+
+  let file = team.program_file();
+  team
+    .workspace
+    .set_team_mcp_program(&team.root, team.program_server, &file, Answerer::Person)
+    .expect("a path");
+  team
+    .workspace
+    .switch_team_mcp_on_here(&team.root, team.program_server, true, Answerer::Person)
+    .expect("on");
+  let set = sheet(&team, team.program_server);
+  assert_eq!(set.program.map(|set| set.path), Some(file));
+  assert_eq!(set.switch, Some(true));
+
+  let remote = sheet(&team, team.remote_server);
+  assert!(matches!(remote.runs, McpRuns::Remote { ref url, .. } if url == "https://mcp.example.org/x"));
+  assert!(remote.used_by.is_empty());
+  assert_eq!(remote.program, None, "a remote server has no program");
 }

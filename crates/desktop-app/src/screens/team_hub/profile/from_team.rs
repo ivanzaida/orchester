@@ -8,8 +8,13 @@ use lurq::{
 };
 use orchester_workspace::agents::team_profile::{Listed, TeamProfileSheet};
 
-use super::rows::{self, Sub};
-use crate::{screens::team_hub::words::cli_key, theme::HubText};
+use crate::{
+  screens::team_hub::{
+    rows::{self, Sub},
+    words::cli_key,
+  },
+  theme::HubText,
+};
 
 pub(super) fn section(ctx: &Ctx, sheet: &TeamProfileSheet) -> lurq::components::Column {
   let note = Text::new(&ctx.t("team_hub.profile.fromTeamNote"))
