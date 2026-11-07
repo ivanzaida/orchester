@@ -11,10 +11,7 @@ use orchester_store::StoreError;
 use thiserror::Error;
 
 use super::refusal::ShareRefusal;
-use crate::{
-  i18n::fallback_text,
-  messages::{self, Message},
-};
+use crate::messages::{self, Message};
 
 #[derive(Debug, Error)]
 pub enum SharingError {
@@ -173,13 +170,14 @@ impl SharingError {
       Self::PipelineNamesNonTeam { name, .. } => {
         Message::new("sharing.errors.pipelineNamesNonTeam").with("name", name.clone())
       }
+      // The names only: each refusal's reason is a message of its own ([`ShareRefusal::message`]), said by the caller.
       Self::ShareRefused { refusals } => Message::new("sharing.errors.shareRefused").with(
         "resources",
         refusals
           .iter()
-          .map(|refusal| fallback_text(&refusal.message()))
+          .map(|refusal| refusal.name.clone())
           .collect::<Vec<_>>()
-          .join("\n"),
+          .join(", "),
       ),
       Self::WritableFoldersStay { folders, .. } => {
         Message::new("sharing.errors.writableFoldersStay").with("folders", folders.join(", "))

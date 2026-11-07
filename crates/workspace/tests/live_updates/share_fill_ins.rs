@@ -443,14 +443,13 @@ async fn live_updates_share_refuses_a_variable_that_is_not_a_secret_name_and_two
   let address = orchester_api::client::ServerAddress::parse("https://team.test").expect("an address");
   let said = refused.expect_err("refused").message(&address);
   assert_eq!(said.key, "sharing.errors.shareRefused");
-  let lines = &said
+  let names = &said
     .args
     .iter()
     .find(|(name, _)| *name == "resources")
     .expect("the resources")
     .1;
-  assert_eq!(lines.lines().count(), 2, "one line per resource: {lines}");
-  assert!(lines.contains("lower") && lines.contains("API_TOKEN"), "{lines}");
+  assert_eq!(names, "lower, second", "the refused resources, by name");
 }
 
 #[tokio::test(flavor = "multi_thread")]

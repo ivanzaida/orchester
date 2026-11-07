@@ -2122,7 +2122,7 @@
       "localEntitiesNamed": "The team can't take this: it names {{names}}, which belong to this computer only. Nothing was sent.",
       "pipelineNamesNonTeam": "The team can't take this pipeline: it uses {{name}}, which isn't one of the team's resources. Nothing was sent.",
       "writableFoldersStay": "The team can't take this profile: its writable folders ({{folders}}) are folders of this computer, so they stay here and are not shared. Remove them from the profile to share it. Nothing was sent.",
-      "shareRefused": "Nothing was shared: the team can't take these as they are. Fix each one and share again.\n{{resources}}",
+      "shareRefused": "Nothing was shared: the team can't take {{resources}} as they are. Fix each one and share again.",
       "shareRefusal": {
         "localEntities": "{{resource}} names {{names}}, which belong to this computer only, and its kind has no form for the team yet. Remove them from it to share it.",
         "pipelineNamesNonTeam": "{{resource}} uses {{name}}, which isn't shared with the team. Use a profile or tool the team gets, or remove the step.",
