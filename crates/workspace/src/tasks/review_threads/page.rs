@@ -15,7 +15,7 @@ use orchester_core::{
   project::TaskKey,
   resource::StepKey,
   revision::Revision,
-  run::{BranchName, Run, RunNumber, RunStatus, StepStatus},
+  run::{BranchName, Run, RunNumber, RunStatus, StepStatus, last_report},
   store::RunStore,
   time::Timestamp,
 };
@@ -74,6 +74,9 @@ pub struct ReviewPage {
   pub steps: (usize, usize),
   /// The approved merge into the run's base branch found conflicts and merged nothing; the run waits for review again.
   pub conflicts: Option<ReviewConflicts>,
+  /// What the run's last step that reported said: the run's *Run summary* on its task page. `None` when no step
+  /// reported anything, and when the run is not the task's latest, whose steps the page does not read.
+  pub summary: Option<Arc<str>>,
 }
 
 impl ReviewPage {
@@ -168,7 +171,11 @@ pub fn review_page(
     (Some(reviewed), Some(head)) if approved.is_none() => commits_after((root, programs), (reviewed, head)),
     _ => Vec::new(),
   };
-  let (implement, steps) = implementing(root, (task.id(), run.id()))?;
+  let Steps {
+    implement,
+    passed: steps,
+    summary,
+  } = steps_of(root, (task.id(), run.id()))?;
   Ok(Some(ReviewPage {
     run: MergeRun {
       task: task.id(),
@@ -193,14 +200,23 @@ pub fn review_page(
     implement,
     steps,
     conflicts,
+    summary,
   }))
 }
 
-/// The step whose agent answers on `run` of `task` and how many of its steps passed, of how many.
-fn implementing(
+/// What a run's steps tell of it.
+struct Steps {
+  implement: Option<Implement>,
+  passed: (usize, usize),
+  summary: Option<Arc<str>>,
+}
+
+/// The step whose agent answers on `run` of `task`, how many of its steps passed, of how many, and what its last step
+/// that reported said.
+fn steps_of(
   root: &Path,
   (task, run): (TaskId, RunId),
-) -> Result<(Option<Implement>, (usize, usize)), ReviewRefusal> {
+) -> Result<Steps, ReviewRefusal> {
   let detail = TaskDetail::load_in(root, task)?;
   let view = detail.run.as_ref().filter(|view| view.id() == run);
   let implement = view.and_then(|view| {
@@ -213,7 +229,14 @@ fn implementing(
       agent: step.agent.clone(),
     })
   });
-  Ok((implement, steps_passed(view)))
+  let passed = steps_passed(view);
+  let summary = view
+    .and_then(|view| last_report(&view.run, &view.outputs, &view.plans).map(|(_, report)| Arc::<str>::from(report)));
+  Ok(Steps {
+    implement,
+    passed,
+    summary,
+  })
 }
 
 /// How many of the run's steps passed, of how many; none while its view is not read.

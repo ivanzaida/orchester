@@ -20,7 +20,7 @@ use std::{num::NonZeroU32, time::Duration};
 use lurq::app::events::ScrollPhase;
 use orchester_app::{
   mcp::tools::hold_hand_offs,
-  routes::{ProjectPage, Route},
+  routes::{ProjectPage, Route, TaskTab, TaskView},
 };
 use orchester_core::{id::ProjectId, project::TaskKey, run::RunNumber, time::Timestamp};
 use serde_json::json;
@@ -478,6 +478,38 @@ fn review_page_conflicts_try_merge_again_merges_and_shows_what_came_of_it() {
   // conflicts.
   assert!(refusal.contains("merge"), "{refusal}");
   assert_eq!(page.window.text("review-status-text"), "Conflicts with main");
+}
+
+#[test]
+fn review_page_tells_the_first_sentence_of_the_runs_summary_and_its_link_opens_the_conversation() {
+  let mut page = Page::new();
+  page.open(("Sign webhook payloads", 1));
+  assert_eq!(
+    page.window.text("review-summary-text"),
+    "Deliveries now retry with a capped, jittered backoff that honours Retry-After, and stop after the settings' budget."
+  );
+  assert_eq!(page.window.text("review-summary-link"), "Run summary →");
+  page.window.press("review-summary-link");
+  let route = page.window.navigation().route_now();
+  let Route::Project(_, ProjectPage::Task(key, view)) = route else {
+    panic!("the link opens the task: {route:?}");
+  };
+  let task = page.tasks.iter().find(|task| task.title == "Sign webhook payloads");
+  assert_eq!(Some(key.to_string()), task.map(|task| task.key.clone()));
+  assert_eq!(view, TaskView::of(TaskTab::Conversation));
+}
+
+#[test]
+fn review_page_has_no_summary_row_for_a_run_no_step_reported_on() {
+  let mut page = Page::new();
+  for run in [("Per-endpoint secrets", 2), ("Delivery log per endpoint", 3)] {
+    page.open(run);
+    assert!(page.window.texts("review-status-text").is_some(), "{run:?} is shown");
+    assert!(
+      page.window.texts("review-summary").is_none(),
+      "{run:?} has no summary row"
+    );
+  }
 }
 
 #[test]

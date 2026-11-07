@@ -21,6 +21,7 @@ use super::{
   files::{FILES_WIDTH, ROW_HEIGHT},
   frame,
   head::{Standing, approve_button, open_task, size_words, status_line},
+  summary,
 };
 use crate::{
   navigation::Navigation,
@@ -59,6 +60,7 @@ pub(super) fn page(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey, waiting
   frame(ctx, project, (key, row.as_ref().map(|row| row.number)), waiting)
     .child(header)
     .child(status)
+    .child(summary::reading(ctx, project, key))
     .child(columns)
     .into()
 }

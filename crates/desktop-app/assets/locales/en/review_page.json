@@ -36,6 +36,9 @@
       "commitsAfterOther": "{{count}} commits after {{reviewed}}",
       "into": "into {{branch}}"
     },
+    "summary": {
+      "link": "Run summary →"
+    },
     "approved": {
       "merged": "Merged into {{branch}}",
       "mergedNoBase": "Merged",
