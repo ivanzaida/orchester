@@ -45,9 +45,7 @@ pub use self::{
     HeaderPrefix, HeaderPrefixError, TeamMcpLaunch, TeamMcpProgram, TeamMcpRemote, TeamMcpSecretHeader, TeamMcpServer,
     TeamMcpServerError,
   },
-  team_reviewer::{
-    ReviewerDestinations, ReviewerHost, ReviewerHostError, TeamReviewer, TeamReviewerError, TeamReviewerKnown,
-  },
+  team_reviewer::{ReviewerDestinations, ReviewerHost, ReviewerHostError, TeamReviewer},
   test_suite::{
     ArtifactGlob, ReportFormat, ReportOutput, SuiteCommand, SuiteNeeds, SuitePath, SuiteVariable, SuiteVariables,
     TestFilter, TestLayer, TestReport, TestSuite, TestSuiteError,

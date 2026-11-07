@@ -980,6 +980,23 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 - **S2d** (live list and claims): 10.31 `jakf4`, 10.32 `ByIkx`, 10.34 `omHGh`, 10.35 `U4GzjB`, 10.41 `RmDpQ`.
 - **S3** (live run status): the run status in 10.31 / 10.32, 10.33 `NikWo`, and the shared status on 10.25.
 
+### ORC-887 follow-up · The team reviewer in a team run (non-UI)
+
+The team's reviewer, its readiness and each computer's pick exist (`crates/workspace/src/team_fill_ins/reviewer.rs`),
+but no run uses them: a run gets its reviewer from the project's own `AutoModeSettings.reviewer`
+(`crates/runner/src/execution/{coordinator,executor}/link/settings.rs`). **Done when:**
+
+- **Start:** a team run's start (`crates/workspace/src/team_work/`) takes the reviewer from the team's reviewer
+  instead of the project's setting, and refuses `not_ready_here` when this computer has picked no connection for it.
+- **Bundle:** the execution bundle pins the reviewer's version (as it pins a profile's) and the runner receives the
+  connection this computer picked for it (`team_connection_picks` / the decision pick, read where
+  `team_work/bundle.rs` reads a profile's pick), never a connection id of another computer.
+- **Pick read:** the decision pick's server is checked against the pinned version's destinations again at the start, as
+  a version that lists fewer servers can arrive after the pick (`TeamReviewer::allows_server`).
+- **Publish:** a project's reviewer setting can be published as a team reviewer, which needs the CLI kind of its
+  connection and, for a decision reviewer, its server as the destination (the earlier `TeamReviewer::from_local`, in
+  git history at `7ef658678`, did this and was removed unused).
+
 ## P · Product decisions waiting for the user
 
 - **Secrets:** fixed Development / Staging / Production environments; archive a secret instead of deleting it.

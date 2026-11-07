@@ -1,12 +1,10 @@
 use orchester_core::{
-  connection::{AgentEndpoint, AgentProvider, Connection, ConnectionKind, DecisionConnection, DecisionServerUrl},
-  id::{ConnectionId, DecisionConnectionId},
-  name::Name,
+  connection::{AgentProvider, DecisionServerUrl},
   resource::{
-    Draft, ModelId, ResourceBody, ResourceKind, ReviewerDestinations, ReviewerHost, TeamReviewer, TeamReviewerError,
-    TeamReviewerKnown, VersionNumber, publish,
+    Draft, ModelId, ResourceBody, ResourceKind, ReviewerDestinations, ReviewerHost, TeamReviewer, VersionNumber,
+    publish,
   },
-  run::review::{Probability, ReviewerChoice, ReviewerConnectionId},
+  run::review::Probability,
   sharing::{VersionWidening, widens},
   time::Timestamp,
 };
@@ -113,96 +111,6 @@ fn team_reviewer_widens_ignore_the_cli_kind_a_language_reviewer_names() {
   };
   assert!(!claude.widens_over(Some(&codex)));
   assert!(widens(Some(&codex), &claude).is_empty());
-}
-
-fn agent(provider: AgentProvider) -> Connection {
-  Connection::new(
-    ConnectionId::generate(),
-    Name::new("Agent").expect("name"),
-    ConnectionKind::Agent(provider),
-    AgentEndpoint::Program(std::env::temp_dir().join("agent")),
-    Timestamp::from_unix_millis(1),
-  )
-  .expect("an agent connection")
-}
-
-fn decision_connection(url: &str) -> DecisionConnection {
-  DecisionConnection::new(
-    DecisionConnectionId::generate(),
-    Name::new("Decisions").expect("name"),
-    DecisionServerUrl::new(url).expect("server"),
-    None,
-  )
-}
-
-fn choice(connection: ReviewerConnectionId, threshold: Option<f64>) -> ReviewerChoice {
-  ReviewerChoice {
-    connection,
-    model: ModelId::new("m-1").expect("model"),
-    effort: Some("low".into()),
-    threshold: threshold.map(probability),
-  }
-}
-
-#[test]
-fn team_reviewer_from_local_names_the_cli_kind_of_the_connection_and_never_the_connection() {
-  let codex = agent(AgentProvider::CodexCli);
-  let known = TeamReviewerKnown {
-    connections: std::slice::from_ref(&codex),
-    decision_connections: &[],
-  };
-  let team = TeamReviewer::from_local(&choice(codex.id().into(), None), known).expect("team form");
-  assert_eq!(
-    team,
-    TeamReviewer::Language {
-      cli: AgentProvider::CodexCli,
-      model: ModelId::new("m-1").expect("model"),
-      effort: Some("low".into()),
-    }
-  );
-  let gone = ConnectionId::generate();
-  assert_eq!(
-    TeamReviewer::from_local(&choice(gone.into(), None), known),
-    Err(TeamReviewerError::Connection(gone))
-  );
-}
-
-#[test]
-fn team_reviewer_from_local_makes_a_hosted_decision_server_the_destination() {
-  let (local, hosted) = (
-    decision_connection("http://127.0.0.1:8000"),
-    decision_connection("https://api.typesafe.ai/v1"),
-  );
-  let both = [local.clone(), hosted.clone()];
-  let known = TeamReviewerKnown {
-    connections: &[],
-    decision_connections: &both,
-  };
-  let pick = |connection: &DecisionConnection, threshold| {
-    choice(
-      ReviewerConnectionId::Decision {
-        decision: connection.id(),
-      },
-      threshold,
-    )
-  };
-  assert_eq!(
-    TeamReviewer::from_local(&pick(&local, None), known).expect("local"),
-    TeamReviewer::Decision {
-      model: ModelId::new("m-1").expect("model"),
-      lowest_threshold: probability(0.8),
-      destinations: ReviewerDestinations::MembersComputers,
-    }
-  );
-  assert_eq!(
-    TeamReviewer::from_local(&pick(&hosted, Some(0.9)), known).expect("hosted"),
-    decision_named("m-1", &["api.typesafe.ai"], 0.9)
-  );
-  let gone = DecisionConnectionId::generate();
-  assert_eq!(
-    TeamReviewer::from_local(&choice(ReviewerConnectionId::Decision { decision: gone }, None), known),
-    Err(TeamReviewerError::DecisionConnection(gone))
-  );
 }
 
 #[test]

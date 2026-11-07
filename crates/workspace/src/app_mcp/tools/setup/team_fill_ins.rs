@@ -189,6 +189,8 @@ pub(super) fn refusal(error: FillInError) -> ToolError {
     FillInError::ConnectionDoesNotFit { .. } => "connection_does_not_fit",
     FillInError::DecisionConnectionNotFound(_) => "connection_not_found",
     FillInError::ReviewerIsLanguage(_) | FillInError::ReviewerIsDecision(_) => "connection_does_not_fit",
+    FillInError::ServerNotAllowed(_) => "server_not_allowed",
+    FillInError::ReviewerNotTeamForm(_) => "not_team_form",
     FillInError::AccountNotFound(_) => "account_not_found",
     FillInError::AccountOfOtherCli(_) => "account_of_other_cli",
     FillInError::ProgramNotAbsolute => "program_not_absolute",

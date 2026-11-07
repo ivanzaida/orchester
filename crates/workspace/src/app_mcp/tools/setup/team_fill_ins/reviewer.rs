@@ -8,7 +8,7 @@ use orchester_core::{
   run::Answerer,
   store::ResourceStore,
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, StoreError};
 use rmcp::{handler::server::common::schema_for_type, schemars::JsonSchema};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -17,9 +17,12 @@ use super::{
   super::{Spec, connections::agent_named},
   refusal, require_team_project, team_resource_named,
 };
-use crate::app_mcp::{
-  error::{Missing, ToolError},
-  services::{Services, blocking},
+use crate::{
+  app_mcp::{
+    error::{Missing, ToolError},
+    services::{Services, blocking},
+  },
+  team_fill_ins::FillInError,
 };
 
 pub(super) const SPEC: Spec = Spec {
@@ -27,11 +30,14 @@ pub(super) const SPEC: Spec = Spec {
   description: "Chooses the connection a team reviewer runs on on this computer, as the reviewer's Connection field \
                 does in a team project: `reviewer` is a team reviewer by id or name. A language reviewer takes an \
                 agent connection of the project (by id or name) of the CLI kind its newest version names; a decision \
-                reviewer takes a decision connection of the project. The pick is kept on this computer only. Choosing \
-                a decision connection whose server is not on this computer sends the project's requests there, so it \
-                is refused as person_only. Refused as team_project_required in a project that is not shared with a \
-                team, as reviewer_not_found for a reviewer that is not the team's, and as connection_does_not_fit \
-                for a connection of the other kind. Returns the pick.",
+                reviewer takes a decision connection of the project whose server the reviewer's destinations allow \
+                (a server on this computer always is). The pick is kept on this computer only. Choosing a decision \
+                connection whose server is not on this computer sends the project's requests there, so it is \
+                refused as person_only. Refused as team_project_required in a project that is not shared with a \
+                team, as reviewer_not_found for a reviewer that is not the team's, as connection_does_not_fit for a \
+                connection of the other kind, as server_not_allowed for a decision server the reviewer does not \
+                list, and as not_team_form for a reviewer whose newest version is not in the team's form (publish \
+                it again). Returns the pick.",
   schema: schema_for_type::<PickReviewerConnection>,
   read_only: false,
 };
@@ -60,7 +66,11 @@ pub(super) async fn pick_reviewer_connection(
     require_team_project(&db)?;
     let reviewer = team_resource_named(&db, ResourceKind::TeamReviewer, &args.reviewer)?
       .ok_or_else(|| ToolError::not_found(Missing::Reviewer, &args.reviewer))?;
-    let kind = db.latest_version::<TeamReviewer>(reviewer.id())?;
+    let kind = match db.latest_version::<TeamReviewer>(reviewer.id()) {
+      Ok(version) => version,
+      Err(StoreError::Corrupt { .. }) => return Err(refusal(FillInError::ReviewerNotTeamForm(reviewer.id()))),
+      Err(other) => return Err(other.into()),
+    };
     let (id, name) = if kind.is_some_and(|version| version.body().cli().is_none()) {
       let connection = decision_named(&db, &args.connection)?;
       services

@@ -11,7 +11,7 @@ use orchester_core::{
   sharing::ConnectionRole,
   store::{ConnectionStore, ResourceStore},
 };
-use orchester_store::{ConnectionPick, ProjectDb};
+use orchester_store::{ConnectionPick, ProjectDb, StoreError};
 
 use super::{FillInError, connection::check_fits, team};
 use crate::{tasks::outside::Outside, workspace::Workspace};
@@ -47,9 +47,9 @@ impl Workspace {
     Ok(())
   }
 
-  /// Keeps `connection` as the decision connection the team decision reviewer `reviewer` runs on here. Sending the
-  /// project's requests to a server that is not on this computer is a person's alone (`by`), as choosing it for a
-  /// reviewer of the project's own is.
+  /// Keeps `connection` as the decision connection the team decision reviewer `reviewer` runs on here. The connection's
+  /// server must be one the reviewer's destinations allow (08 d). Sending the project's requests to a server that is
+  /// not on this computer is a person's alone (`by`), as choosing it for a reviewer of the project's own is.
   pub fn pick_team_decision_connection(
     &self,
     repo_root: &Path,
@@ -62,8 +62,12 @@ impl Workspace {
     let found = db
       .decision_connection(connection)?
       .ok_or(FillInError::DecisionConnectionNotFound(connection))?;
-    if matches!(newest(&db, reviewer)?, Some(TeamReviewer::Language { .. })) {
+    let named = newest(&db, reviewer)?;
+    if matches!(named, Some(TeamReviewer::Language { .. })) {
       return Err(FillInError::ReviewerIsLanguage(reviewer));
+    }
+    if named.is_some_and(|body| !body.allows_server(found.base_url())) {
+      return Err(FillInError::ServerNotAllowed(reviewer));
     }
     if !found.is_on_this_computer() {
       team::require_person(by)?;
@@ -74,10 +78,12 @@ impl Workspace {
   }
 }
 
-/// The body of the newest version of `reviewer`; `None` when it has none.
+/// The body of the newest version of `reviewer`; `None` when it has none. A version that is not a team reviewer body
+/// (one that names a connection) is [`FillInError::ReviewerNotTeamForm`].
 fn newest(db: &ProjectDb, reviewer: ResourceId) -> Result<Option<TeamReviewer>, FillInError> {
-  Ok(
-    db.latest_version::<TeamReviewer>(reviewer)?
-      .map(|version| version.body().clone()),
-  )
+  match db.latest_version::<TeamReviewer>(reviewer) {
+    Ok(version) => Ok(version.map(|version| version.body().clone())),
+    Err(StoreError::Corrupt { .. }) => Err(FillInError::ReviewerNotTeamForm(reviewer)),
+    Err(other) => Err(other.into()),
+  }
 }

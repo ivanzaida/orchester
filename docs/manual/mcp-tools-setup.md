@@ -368,8 +368,10 @@ Chooses the connection a team reviewer runs on on this computer (the reviewer's 
 as `pick_profile_connection` does for a profile. A language reviewer takes an agent connection of the CLI kind its
 newest version names; a decision reviewer takes a decision connection. The pick is kept on this computer only. Refused
 as `team_project_required` in a project that is not shared with a team, `reviewer_not_found` for a reviewer that is not
-the team's, `connection_does_not_fit` for a connection of the other kind, and `person_only` for a decision connection
-whose server is not on this computer (it would send the project's requests there).
+the team's, `connection_does_not_fit` for a connection of the other kind, `server_not_allowed` for a decision connection
+whose server the reviewer's destinations do not list (a server on this computer always is), `not_team_form` for a
+reviewer whose newest version names a connection (the earlier form; it is published again), and `person_only` for a
+decision connection whose server is not on this computer (it would send the project's requests there).
 
 Parameters: `project` (req.), `reviewer` (req.: id or name of a team reviewer), `connection` (req.: id or name of an
 agent connection, or of a decision connection for a decision reviewer).

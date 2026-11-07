@@ -5,10 +5,8 @@
 //! field: a body that names a connection (the form before ORC-887) is not a team reviewer and is not read.
 
 mod destinations;
-mod local;
 
 pub use destinations::{ReviewerDestinations, ReviewerHost, ReviewerHostError};
-pub use local::{TeamReviewerError, TeamReviewerKnown};
 use serde::{Deserialize, Serialize};
 
 use super::{ModelId, ResourceBody, ResourceKind};

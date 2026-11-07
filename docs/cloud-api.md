@@ -38,12 +38,17 @@ connection name, role, id, URL or credential. The body refuses any other field (
 earlier form, which names a connection (`connection: { kind, name, role }`), is not a team reviewer: the desktop does
 not read it, and the reviewer is published again in the new form. There is no upgrade of the old form. The version's
 `references` repeat what the body names, as for a profile (`ReferenceTarget::of_reviewer`): a language reviewer's
-`[{ "type": "cli_kind", "cli": … }]`, and a decision reviewer's empty array. Models are nonempty model identifiers; `lowest_threshold` is a finite probability
-from 0 through 1. A member may raise the effective threshold locally, never lower it. Decision destinations always
+`[{ "type": "cli_kind", "cli": … }]`, and a decision reviewer's empty array. Models are nonempty model identifiers;
+`lowest_threshold` is a finite probability from 0 through 1. A member may raise the effective threshold locally, never lower it. Decision destinations always
 allow servers on the member's computer; `hosts` additionally allows exactly the listed remote DNS names or IP
 addresses, case insensitive, without wildcards, schemes, ports or paths. An empty list allows no remote server.
 Language reviewers carry effort instead of a threshold or decision destinations. The CLI kind a language reviewer
 names does not widen what a version allows (a profile's does not either): only added hosts and a lower threshold do.
+
+**Desktop use (2026-11-07):** a desktop reads the body, shows the reviewer's readiness and keeps each computer's pick
+(a decision pick is refused when `destinations` do not list the connection's server), but no team run uses the
+reviewer yet: a run gets its reviewer from the project's own setting, and the execution bundle pins none. Binding the
+team's reviewer into a run is not built (`docs/plan.md`).
 
 All paths below are under the team server's `/api/v1/projects/{project}`, with its normal project authentication:
 

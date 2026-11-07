@@ -245,14 +245,21 @@ fn domain_team_pick_reviewer_connection_keeps_the_pick_for_a_team_reviewer() {
   let language = |cli: &str| -> TeamReviewer {
     serde_json::from_value(json!({"kind": "language", "cli": cli, "model": "m-1", "effort": null})).expect("language")
   };
-  let decision: TeamReviewer = serde_json::from_value(json!({
-    "kind": "decision", "model": "d-1", "lowest_threshold": 0.8, "destinations": {"kind": "members_computers"}
-  }))
-  .expect("decision");
+  let decision = |destinations: Value| -> TeamReviewer {
+    serde_json::from_value(
+      json!({"kind": "decision", "model": "d-1", "lowest_threshold": 0.8, "destinations": destinations}),
+    )
+    .expect("decision")
+  };
   let mut db = team.db();
   let codex = team_resource(&mut db, "codex-reviewer", language("codex_cli"), Vec::new());
   let claude = team_resource(&mut db, "claude-reviewer", language("claude_code_cli"), Vec::new());
-  let decisions = team_resource(&mut db, "decisions", decision, Vec::new());
+  let listing = json!({"kind": "hosts", "hosts": ["api.typesafe.ai"]});
+  let decisions = team_resource(&mut db, "decisions", decision(listing), Vec::new());
+  let members_only = json!({"kind": "members_computers"});
+  let members = team_resource(&mut db, "members", decision(members_only), Vec::new());
+  let old = team_resource(&mut db, "old", language("codex_cli"), Vec::new());
+  make_old_form(&team, old);
   let (local, hosted) = (
     decision_connection(&mut db, "local", "http://127.0.0.1:8000"),
     decision_connection(&mut db, "hosted", "https://api.typesafe.ai/v1"),
@@ -299,6 +306,34 @@ fn domain_team_pick_reviewer_connection_keeps_the_pick_for_a_team_reviewer() {
     .served
     .refused("pick_reviewer_connection", &args(decisions, &connection));
   assert_eq!(refused["code"], "connection_not_found", "{refused}");
+
+  let refused = team
+    .served
+    .refused("pick_reviewer_connection", &args(members, &hosted.to_string()));
+  assert_eq!(refused["code"], "server_not_allowed", "{refused}");
+  assert_eq!(team.db().decision_pick(members).expect("read"), None);
+  let refused = team.served.refused("pick_reviewer_connection", &args(old, &connection));
+  assert_eq!(refused["code"], "not_team_form", "{refused}");
+  assert_eq!(team.db().connection_pick(old).expect("read"), None);
+}
+
+/// Writes the body of the earlier form (it names a connection) over the newest version of `reviewer`, as a cache from
+/// before ORC-887 holds it.
+fn make_old_form(team: &Team, reviewer: ResourceId) {
+  let old = json!({
+    "kind": "language", "connection": {"kind": "connection", "name": "Team language", "role": "codex_cli"},
+    "model": "m-1", "effort": null
+  });
+  let stored = json!({"schema": <TeamReviewer as ResourceBody>::SCHEMA, "body": old}).to_string();
+  let database = rusqlite::Connection::open(team.repo.join(".orchester").join("orchester.db")).expect("database");
+  let changed = database
+    .execute(
+      "UPDATE shared_version_bodies SET local_body = ?1 \
+       WHERE version_id IN (SELECT id FROM resource_versions WHERE resource_id = ?2)",
+      rusqlite::params![stored, reviewer.to_string()],
+    )
+    .expect("the old form");
+  assert_eq!(changed, 1);
 }
 
 fn decision_connection(db: &mut ProjectDb, label: &str, url: &str) -> DecisionConnectionId {
