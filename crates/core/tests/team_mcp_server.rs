@@ -80,3 +80,22 @@ fn team_mcp_server_widens_when_it_runs_or_reaches_more() {
   assert_eq!(widens(Some(&before), &exempt), vec![VersionWidening::Access]);
   assert!(widens(Some(&exempt), &before).is_empty());
 }
+
+#[test]
+fn team_mcp_server_refuses_a_url_with_a_query_or_a_fragment_without_naming_it() {
+  for url in [
+    "https://mcp.example.org/x?key=sk-live-123",
+    "https://mcp.example.org/x?",
+    "https://mcp.example.org/x#token=sk-live-123",
+    "https://mcp.example.org/x?a=b#c",
+  ] {
+    let body = json!({"name":"r","launch":{"kind":"remote","url":url}});
+    let error = parse(body).expect_err(url);
+    let message = error.to_string();
+    assert!(message.contains("secret header"), "{message}");
+    assert!(!message.contains("sk-live-123"), "{message}");
+    assert!(!format!("{error:?}").contains("sk-live-123"));
+  }
+  let plain = json!({"name":"r","launch":{"kind":"remote","url":"https://mcp.example.org/x/y"}});
+  assert!(parse(plain).is_ok());
+}

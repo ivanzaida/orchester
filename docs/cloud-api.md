@@ -217,7 +217,10 @@ The body has no other fields and the server refuses a body with one (`deny_unkno
 variable or secret value, no connection, secret or MCP server id of any computer. Each computer sets the path of a
 program, the values of the variables and of the secret headers, and whether the server is on, itself. Names within
 `variables` and `secret_headers` are distinct, ignoring case. A working directory that is absolute is refused, as is a
-program that is not a bare name.
+program that is not a bare name. A remote server's `url` has no query and no fragment (no `?` or `#`) and the server
+refuses one that has: a key in it (`?key=sk-…`) would reach the server and every member. A secret goes in a secret
+header, whose name is in `secret_headers` and whose value each computer fills in itself. The refusal does not repeat the
+URL.
 
 The server computes `widens` with core's `SharedBody` rules for this kind: a version widens when
 its program or arguments differ from the previous version's, its URL differs, it switches between a program and a

@@ -36,6 +36,10 @@ pub enum TeamMcpServerError {
   AbsoluteFolder(String),
   #[error("`{0}` is listed twice")]
   Duplicate(String),
+  /// A key in the query of a URL would go to the team server and to every member. The error holds no URL text for the
+  /// same reason: it may carry that key.
+  #[error("the URL of a team's MCP server must not have a query or a fragment; a secret goes in a secret header")]
+  UrlQuery,
 }
 
 /// A program the agent's CLI starts: its name, its arguments, the folder it starts in and the names of the variables
@@ -98,6 +102,9 @@ pub struct TeamMcpRemote {
 
 impl TeamMcpRemote {
   pub fn new(url: McpUrl, secret_headers: Vec<McpHeaderName>) -> Result<Self, TeamMcpServerError> {
+    if url.as_str().contains(['?', '#']) {
+      return Err(TeamMcpServerError::UrlQuery);
+    }
     Ok(Self {
       url,
       secret_headers: distinct(secret_headers, McpHeaderName::as_str)?,
