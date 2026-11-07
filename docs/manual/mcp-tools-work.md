@@ -537,33 +537,11 @@ steps other published profiles. A copy that is not identical to its source (othe
 
 ---
 
-## 8. Pull requests
+## 8. CI of a run's pull request
 
-### `list_pull_requests` — read-only · cross-project
-
-Pull requests of the project's linked GitHub repository, as the *Pull requests* page lists them: number, title,
-state (`open`, `draft`, `merged`, `closed`), review, GitHub checks on the head, branches, changes, merged/closed time,
-fork or not, the task and run whose branch it is (`agent_working` while that run runs), app link and GitHub url.
-They are what the last successful sync read (open ones plus the 50 most recently updated closed ones). Each
-repository reports its sync: `sync` (`synced`, `rate_limited`, `github_unreachable`, `paused_other_account`,
-`gh_unavailable`, …), `synced_at`, `attempted_at`, `paused_until`.
-
-| Parameter | Type           | Req. | Description                                                                          |
-|-----------|----------------|------|--------------------------------------------------------------------------------------|
-| `project` | string \| null | no   | Left out = every project.                                                            |
-| `refresh` | boolean        | no   | Sync through `gh` first (needs `project`); skipped if a sync ran in the last 30 s or a rate limit holds. |
-| `tab`     | `open` \| `needs_review` \| `agent_working` \| `merged` \| `closed` \| null | no | As the page's tabs. |
-| `search`  | string \| null | no   | A number (`42`, `#42`), title words, a branch, or a task key.                        |
-
-### `get_pull_request` — read-only
-
-One pull request, with the repository's sync state. One the last sync did not read is refused as
-`pull_request_not_synced`; with `refresh` it is read from GitHub on its own (once per 30 s). Errors:
-`github_rate_limited` (until `paused_until`), `github_unreachable`, `pull_request_not_read`,
-`pull_request_not_found`.
-
-`checks` keeps the last sync's counts (`passed`, `failed`, `running`, `skipped`, `revision`) and adds the pull
-request's CI read now through `gh pr checks`, at most once per 30 s per pull request (a call sooner gets that read):
+`get_run` gives `checks`: the CI of the pull request of the run's branch, as the last sync stored it (its open one,
+else its latest), read now through `gh pr checks`, at most once per 30 s per pull request (a call sooner gets that
+read). `no_pull_request` when there is none, `not_linked` without a linked GitHub repository.
 
 - `state`: `passed`, `failed`, `running` or `no_checks`; or why nothing was read — `no_pull_request`, `gh_missing`,
   `not_signed_in`, `wrong_account`, `missing_scope`, `gh_unavailable`, `rate_limited` (with `resets_at`),
@@ -573,11 +551,6 @@ request's CI read now through `gh pr checks`, at most once per 30 s per pull req
 - `runs`: each check's `name`, `workflow`, `state` (one of the counts' names), `url` and, for a failed GitHub
   Actions job, `log_tail` — the last 40 lines of its failed steps' log (`gh run view --job <id> --log-failed`),
   `null` when `gh` gave none. At most 5 failed jobs' logs are read per read.
-
-`get_run` gives the same `checks` for the pull request of the run's branch, as the last sync stored it (its open one,
-else its latest); `no_pull_request` when there is none, `not_linked` without a linked GitHub repository.
-
-Parameters: `project` (req.), `number` (integer, req.), `refresh` (boolean).
 
 ---
 

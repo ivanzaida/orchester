@@ -244,8 +244,15 @@ fn approve_modal_approve_without_them_discards_the_comments_and_approves() {
     window.texts("review-tray").is_none()
   });
   assert!(!page.asking(), "it closed");
-  // The run merged: its task has nothing left to review.
+  // The run merged: the page turns read-only, with no *Approve and merge* and no modal (ORC-800).
   page.window.until_within(MERGE_WORK, "the merge", |window| {
-    window.texts("review-no-run").is_some()
+    window
+      .texts("review-status-text")
+      .is_some_and(|words| words.join(" ").starts_with("Merged into"))
   });
+  assert!(
+    page.window.texts("review-approve").is_none(),
+    "Approve and merge is gone"
+  );
+  assert!(!page.asking(), "the modal stays closed");
 }

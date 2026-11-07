@@ -1,14 +1,16 @@
 //! How a thread's state shows in its head (the tags of `RBR9O`): *Sent to Implement* and *Implement is answering* on
 //! `success_muted` with a turning loader, *Answered · no code changed*, *Stopped by you*, *Not asked* and *Not sent* on
-//! `warning_muted`, *Sending…*, *Sent · Implement is changing the code* on `info_muted`, *Addressed in 9a1b2c3*, and a
-//! folded thread's *Resolved* or *Outdated*. A thread's kind gives its glyph, word and stroke: a comment `info`, a
-//! question `success`.
+//! `warning_muted`, *Sending…* and *Sent 12:05* on `info_muted`, *Addressed in 9a1b2c3*, and a folded thread's
+//! *Resolved* or *Outdated*. A thread's kind gives its glyph, word and stroke: a comment `info`, a question `success`.
 
 use std::sync::Arc;
 
 use lurq::app::{ctx::Ctx, theme::PaletteColor};
-use orchester_core::review::{Said, ThreadKind, ThreadState};
-use orchester_workspace::{display::short_revision, tasks::review_threads::read::ThreadView};
+use orchester_core::review::{CommentState, Said, ThreadKind, ThreadState};
+use orchester_workspace::{
+  display::{clock, short_revision},
+  tasks::review_threads::read::ThreadView,
+};
 
 use super::super::tag::TagLook;
 use crate::ui::icon::Icon;
@@ -32,6 +34,18 @@ pub(super) fn words_arrived(view: &ThreadView) -> bool {
   })
 }
 
+/// *Sent 12:05*: when the comment Implement works on was sent.
+fn sent_at(ctx: &Ctx, view: &ThreadView) -> Arc<str> {
+  let at = view.thread.sent().and_then(|message| match message.said() {
+    Said::Comment(CommentState::Sent { at }) => Some(*at),
+    _ => None,
+  });
+  match at {
+    Some(at) => ctx.t_args("review_page.tag.sentAt", [("time", clock(at))]),
+    None => ctx.t("review_page.tag.sent"),
+  }
+}
+
 /// The tag of `view`'s state: its words and look.
 pub(super) fn tag(ctx: &Ctx, view: &ThreadView) -> (Arc<str>, TagLook) {
   let success = TagLook::new(PaletteColor::SuccessMuted, PaletteColor::Success);
@@ -51,7 +65,7 @@ pub(super) fn tag(ctx: &Ctx, view: &ThreadView) -> (Arc<str>, TagLook) {
     ThreadState::NotSent | ThreadState::CouldNotSend(_) => (ctx.t("review_page.tag.notSent"), warning),
     ThreadState::Sending => (ctx.t("review_page.tag.sending"), quiet.glyph(Icon::LoaderCircle)),
     ThreadState::Sent => (
-      ctx.t("review_page.tag.sent"),
+      sent_at(ctx, view),
       TagLook::new(PaletteColor::InfoMuted, PaletteColor::Info).glyph(Icon::LoaderCircle),
     ),
     ThreadState::Addressed { commit: Some(commit) } => (

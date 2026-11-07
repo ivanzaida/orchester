@@ -1,4 +1,4 @@
-//! How `get_pull_request` and `get_run` write a pull request's CI as `checks`
+//! How `get_run` writes a pull request's CI as `checks`
 //! ([`crate::pull_requests::ci`]): its state, the checks one by one and, for a failed GitHub Actions job, the tail of
 //! its log; or why they were not read, by name. A state that was not read is never `passed`.
 
@@ -23,7 +23,7 @@ use crate::{
 
 /// The CI of pull request `number` of `project` at `root`, read through the server's
 /// [`crate::pull_requests::ci::CiReads`].
-pub(super) fn of_pull_request(
+fn of_pull_request(
   services: &Services,
   (project, root): (ProjectId, &std::path::Path),
   number: u64,

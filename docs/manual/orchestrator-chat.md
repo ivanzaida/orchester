@@ -47,7 +47,7 @@ Each goes through exactly the same tool an MCP client of the app calls ([mcp-too
 `save_profile_draft`, `publish_profile`, `list_instructions`, `get_instruction`, `save_instruction_draft`,
 `publish_instruction`, `list_skills`, `get_skill`, `save_skill_draft`, `publish_skill`, `list_tools`, `get_tool`,
 `save_tool_draft`, `publish_tool`, `list_secrets`, `list_connections`, `list_accounts`, `list_models`, `get_usage`,
-`get_delivery`, `get_story_point_calibration`, `get_daily_report`, `list_pull_requests`, `get_pull_request`.
+`get_delivery`, `get_story_point_calibration`, `get_daily_report`.
 
 **Not available to the chat**: `decide_approval`, `decide_plan` (approvals and plan decisions stay the person's);
 `continue_run`'s `raise_limits`, `raise_step_budget`, `resume` and `accept`; project setup (`add_project`,

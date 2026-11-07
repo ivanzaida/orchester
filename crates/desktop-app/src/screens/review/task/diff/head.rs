@@ -119,18 +119,22 @@ pub(super) fn file_head(ctx: &mut Ctx, env: &Env, file: usize, width: Dimension)
 
 /// *Viewed*: marks the file at the head shown, or takes the mark off.
 fn viewed_box(ctx: &Ctx, env: &Env, (id, path): (&str, std::sync::Arc<str>), viewed: bool) -> Element {
-  let (writes, head) = (env.writes.clone(), env.head.clone());
-  Toggle::new(
+  let toggle = Toggle::new(
     format!("{id}-viewed"),
     ToggleKind::Checkbox,
     viewed,
     ctx.t("review_page.diff.viewed"),
   )
-  .label_style(TypographyStyle::Description)
-  .on_change(move |on| {
-    writes.run(Write::Keep(Kept::Viewed(head.clone(), path.to_string(), on)));
-  })
-  .into()
+  .label_style(TypographyStyle::Description);
+  if env.read_only {
+    return toggle.settled().into();
+  }
+  let (writes, head) = (env.writes.clone(), env.head.clone());
+  toggle
+    .on_change(move |on| {
+      writes.run(Write::Keep(Kept::Viewed(head.clone(), path.to_string(), on)));
+    })
+    .into()
 }
 
 /// A hunk's heading: `@@ -40,9 +40,15 @@ impl RetryPolicy`.
