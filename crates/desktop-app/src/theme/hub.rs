@@ -60,10 +60,17 @@ pub enum HubText {
   /// 12 `text_muted`, 1.45: what a list says under its last group, e.g. why every instruction is ready (`Text` in
   /// `Why` `e1C14P`, `Agents · Instructions` `c3jU1R`).
   ListNote,
+  /// 11.5 `text_muted`, 1.3: what a panel row's label says under it (`Sub` in `Agent CLI` `d0HPwh`).
+  PanelSub,
+  /// Geist Mono 12.5 `text_primary`, 1.3: a panel row's value that is an identifier, e.g. a model (`Value` in `Model`
+  /// `C9sBy`).
+  PanelMono,
+  /// 12/500 `text_primary`, 1.2: the fix a missing part offers at its row's end (`Link` `rfGmw`).
+  PanelLink,
 }
 
 impl HubText {
-  pub const ALL: [Self; 17] = [
+  pub const ALL: [Self; 20] = [
     Self::PageTitle,
     Self::Crumb,
     Self::GroupTitle,
@@ -81,6 +88,9 @@ impl HubText {
     Self::RowLine,
     Self::RowTag,
     Self::ListNote,
+    Self::PanelSub,
+    Self::PanelMono,
+    Self::PanelLink,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -106,6 +116,9 @@ impl HubText {
       Self::RowLine => "hub_row_line",
       Self::RowTag => "hub_row_tag",
       Self::ListNote => "hub_list_note",
+      Self::PanelSub => "hub_panel_sub",
+      Self::PanelMono => "hub_panel_mono",
+      Self::PanelLink => "hub_panel_link",
     }
   }
 
@@ -128,6 +141,9 @@ impl HubText {
       Self::RowLine => style(12.0, FontWeight::Normal, 1.2, 0.0, palette.text_secondary),
       Self::RowTag => mono(style(11.0, FontWeight::Normal, 1.2, 0.0, palette.text_secondary)),
       Self::ListNote => style(12.0, FontWeight::Normal, 1.45, 0.0, palette.text_muted),
+      Self::PanelSub => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
+      Self::PanelMono => mono(style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
+      Self::PanelLink => style(12.0, FontWeight::Medium, 1.2, 0.0, palette.text_primary),
     }
   }
 }

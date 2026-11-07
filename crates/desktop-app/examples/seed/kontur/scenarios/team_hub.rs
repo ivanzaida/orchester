@@ -6,12 +6,19 @@
 //! Tools: `cargo-check`, a command, is ready; `sentry-issues`, an HTTP request with a project secret by id, cannot be
 //! told ready. Instructions and skills are always ready. The old catalogue's own resources are local, so the team
 //! project does not show them.
+//!
+//! The computer has one Claude Code connection (`Claude · Kontur`), so Builder runs on it without asking
+//! (`Agents · Profile` C1 `NDZXC`). `team-hub-pick` adds a second one, `Claude · Home`, so Builder asks which runs it
+//! (C2 `WPvZx`); `team-hub-no-connection` removes the Claude Code connection, so Builder says what to add (C3 `QOBF2`).
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::{
+  collections::{BTreeMap, BTreeSet},
+  fs,
+};
 
 use orchester_core::{
   blob::ContentHash,
-  connection::AgentProvider,
+  connection::{AgentProvider, SignIn},
   id::{ConnectionId, ResourceId, SecretId, UserId},
   name::Name,
   resource::{
@@ -27,7 +34,7 @@ use orchester_core::{
 use orchester_store::CachedVersion;
 use serde_json::{Value, json};
 
-use super::shared_config;
+use super::{connections, shared_config};
 use crate::kontur::{Kontur, SeedError};
 
 /// A hash the cached versions carry; the seed never compares them.
@@ -39,6 +46,45 @@ enum Here {
   On,
   Off,
   Undecided,
+}
+
+/// `team-hub-pick`: [`seed`] with a second Claude Code connection, so Builder's connection is the person's to pick.
+pub fn pick(kontur: &mut Kontur) -> Result<(), SeedError> {
+  seed(kontur)?;
+  let program = kontur.repo.join(".orchester").join("qa-bin").join("claude-home");
+  fs::write(&program, "").map_err(invalid)?;
+  connections::cli(
+    kontur,
+    ("Claude · Home", AgentProvider::ClaudeCodeCli, program),
+    (
+      "2.1.88",
+      SignIn::SignedIn,
+      &["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5"],
+    ),
+    kontur.ago(4),
+  )?;
+  Ok(())
+}
+
+/// `team-hub-no-connection`: [`seed`] on a computer with no Claude Code connection, so the team's profiles say what to
+/// add and nothing stands in for it. The store has no way to remove a connection, so the seed's own row goes, with the
+/// picks that name it; the seed has exactly one such connection, and anything else is an error.
+pub fn no_connection(kontur: &mut Kontur) -> Result<(), SeedError> {
+  seed(kontur)?;
+  let mut database = rusqlite::Connection::open(kontur.database())?;
+  let removal = database.transaction()?;
+  removal.execute(
+    "DELETE FROM team_connection_picks WHERE connection_id IN (SELECT id FROM connections WHERE provider = ?1)",
+    ["claude_code_cli"],
+  )?;
+  let removed = removal.execute("DELETE FROM connections WHERE provider = ?1", ["claude_code_cli"])?;
+  if removed != 1 {
+    return Err(SeedError::Invalid(format!(
+      "the seed has one Claude Code connection to remove, found {removed}"
+    )));
+  }
+  removal.commit()?;
+  Ok(())
 }
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {

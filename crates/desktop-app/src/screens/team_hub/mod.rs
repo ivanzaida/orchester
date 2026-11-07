@@ -16,6 +16,7 @@ mod head;
 mod list;
 mod model;
 mod panel;
+mod profile;
 mod row;
 pub(super) mod unread;
 mod words;
@@ -30,7 +31,9 @@ use lurq::{
   core::Signal,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_workspace::{background, messages::Message, sharing::team::TeamConfiguration, tasks::outside::Outside};
+use orchester_workspace::{
+  agents::team_hub::TeamHub, background, messages::Message, sharing::team::TeamConfiguration, tasks::outside::Outside,
+};
 
 use self::{create::NewMenu, head::FilterShown, model::Listing};
 use crate::{
@@ -120,19 +123,20 @@ impl Component for TeamHubScreen {
     // A read under way or failed keeps the last answer in `loaded`: it counts and lists only while the read is not
     // failed, and a read under way marks what shows as the last answer.
     let reading = loaded.is_pending();
-    let listing = loaded.data.as_ref().filter(|_| failed.is_none()).map(Listing::of);
+    let hub = loaded.data.as_ref().filter(|_| failed.is_none());
+    let listing = hub.map(Listing::of);
     let navigation = Navigation::of(ctx);
     let selected = listing
       .as_ref()
       .and_then(|listing| listing.selected(view.filter, view.item))
       .map(|entry| entry.id);
-    let body = match (failed, &listing) {
+    let body = match (failed, hub.zip(listing.as_ref())) {
       (Some((error, retrying)), _) => self.failure_page(ctx, &project, error, retrying),
-      (None, Some(listing)) => {
+      (None, Some((hub, listing))) => {
         if !reading {
           keep_route_on_shown(&project, view, selected, &navigation);
         }
-        hub_body(ctx, (&project, &team), listing, (&view, &navigation), reading)
+        hub_body(ctx, (&project, &team), (hub, listing), (&view, &navigation), reading)
       }
       (None, None) => loading("team-hub-loading", &ctx.t("team_hub.reading")).into(),
     };
@@ -218,7 +222,7 @@ fn frame(
 fn hub_body(
   ctx: &mut Ctx,
   (project, team): (&ShownProject, &TeamConfiguration),
-  listing: &Listing,
+  (hub, listing): (&TeamHub, &Listing),
   (view, navigation): (&HubView, &Navigation),
   reading: bool,
 ) -> Element {
@@ -242,16 +246,26 @@ fn hub_body(
       navigation,
     },
   );
-  let panel = panel::panel(
-    ctx,
-    listing,
-    selected,
-    &panel::Shown {
-      project: id,
-      may_change: team.may_change,
-      navigation,
-    },
-  );
+  let shown = panel::Shown {
+    project: id,
+    may_change: team.may_change,
+    navigation,
+  };
+  let panel = match hub.profile(selected.id) {
+    Some(sheet) => profile::panel(
+      ctx,
+      profile::Props {
+        repo_root: project.open.repo_root.clone(),
+        project: id,
+        may_change: team.may_change,
+        reading,
+        listing: listing.clone(),
+        entry: selected.clone(),
+        sheet: sheet.clone(),
+      },
+    ),
+    None => panel::panel(ctx, listing, selected, &shown),
+  };
   Row::new()
     .id("team-hub-master-detail")
     .describe("state", if reading { "reading" } else { "read" })

@@ -13,6 +13,8 @@ mod ci;
 mod decision_test;
 #[path = "theme/dialog.rs"]
 mod dialog;
+#[path = "theme/hub.rs"]
+mod hub;
 #[path = "theme/import.rs"]
 mod import;
 #[path = "theme/instructions.rs"]

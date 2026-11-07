@@ -4,10 +4,38 @@
 use std::sync::Arc;
 
 use lurq::app::{ctx::Ctx, theme::PaletteColor};
-use orchester_core::sharing::Missing;
+use orchester_core::{
+  connection::AgentProvider,
+  sharing::{ConnectionProblem, Missing},
+};
 use orchester_workspace::readiness::{Group, ReadinessStanding};
 
 use super::model::{Entry, Kind, Listing};
+
+/// The name of a CLI kind (`team_hub.cli.*`).
+pub(super) const fn cli_key(cli: AgentProvider) -> &'static str {
+  match cli {
+    AgentProvider::ClaudeCodeCli => "team_hub.cli.claude",
+    AgentProvider::CodexCli => "team_hub.cli.codex",
+    AgentProvider::AnthropicApi => "team_hub.cli.anthropicApi",
+    AgentProvider::OpenAiApi => "team_hub.cli.openaiApi",
+  }
+}
+
+/// The CLI kind the resource has no connection of at all here, when that is the one thing it misses: nothing stands in
+/// for it, so it is said in `danger`.
+fn has_no_connection(entry: &Entry) -> Option<AgentProvider> {
+  match entry.standing.as_ref()?.missing() {
+    [
+      Missing::Connection {
+        cli,
+        problem: ConnectionProblem::NoneOfKind,
+        ..
+      },
+    ] => Some(*cli),
+    _ => None,
+  }
+}
 
 /// A line of words and the color it is said in.
 pub(super) struct Said {
@@ -20,7 +48,11 @@ pub(super) fn line(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Said {
   match entry.group {
     Group::NeedsYouHere => Said {
       text: needs(ctx, listing, entry),
-      color: PaletteColor::Warning,
+      color: if has_no_connection(entry).is_some() {
+        PaletteColor::Danger
+      } else {
+        PaletteColor::Warning
+      },
     },
     Group::Ready => Said {
       text: ready(ctx, entry),
@@ -60,7 +92,14 @@ pub(super) fn missing(ctx: &Ctx, listing: &Listing, entry: &Entry, part: &Missin
       .map_or_else(String::new, |found| found.name.clone())
   };
   match part {
-    Missing::Connection { .. } | Missing::DecisionConnection { .. } => ctx.t("team_hub.line.connection"),
+    Missing::Connection { cli, problem, .. } => {
+      let cli = ctx.t(cli_key(*cli));
+      match problem {
+        ConnectionProblem::NoneOfKind => ctx.t_args("team_hub.line.connectionNone", [("cli", &*cli)]),
+        ConnectionProblem::PickNeeded => ctx.t_args("team_hub.line.connectionPick", [("cli", &*cli)]),
+      }
+    }
+    Missing::DecisionConnection { .. } => ctx.t("team_hub.line.decisionConnection"),
     Missing::McpOff { server } if *server == entry.id && entry.kind == Kind::McpServer => {
       ctx.t("team_hub.line.mcpUndecided")
     }
@@ -87,7 +126,13 @@ pub(super) fn missing(ctx: &Ctx, listing: &Listing, entry: &Entry, part: &Missin
 pub(super) fn chip(ctx: &Ctx, listing: &Listing, entry: &Entry) -> (Arc<str>, crate::ui::chip::BadgeTone) {
   use crate::ui::chip::BadgeTone;
   match entry.group {
-    Group::NeedsYouHere => (needs(ctx, listing, entry), BadgeTone::Warning),
+    Group::NeedsYouHere => match has_no_connection(entry) {
+      Some(cli) => (
+        ctx.t_args("team_hub.chip.noConnection", [("cli", &*ctx.t(cli_key(cli)))]),
+        BadgeTone::Danger,
+      ),
+      None => (needs(ctx, listing, entry), BadgeTone::Warning),
+    },
     Group::Ready => (ctx.t("team_hub.chip.ready"), BadgeTone::Success),
     Group::OffHere => (ctx.t("team_hub.chip.off"), BadgeTone::Neutral),
   }

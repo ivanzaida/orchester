@@ -2,6 +2,7 @@
 //! (*Needs you here*, *Ready here*, *Off here*), and the one the panel shows.
 
 use orchester_core::{
+  connection::AgentProvider,
   id::ResourceId,
   resource::{ResourceKind, VersionNumber},
 };
@@ -55,17 +56,6 @@ impl Kind {
     }
   }
 
-  /// The glyph at a row's start (`Item` in `t4mtQL`); a profile's mark is its CLI's in the design.
-  pub(super) const fn glyph(self) -> Icon {
-    match self {
-      Self::Profile => Icon::Bot,
-      Self::McpServer => Icon::Plug,
-      Self::Tool => Icon::Wrench,
-      Self::Instruction => Icon::FileText,
-      Self::Skill => Icon::Sparkles,
-    }
-  }
-
   pub(super) const fn tag_key(self) -> &'static str {
     match self {
       Self::Profile => "team_hub.kind.tag.profile",
@@ -113,12 +103,31 @@ pub(super) struct Entry {
   pub number: Option<VersionNumber>,
   /// What an MCP server or a tool is; `None` for the other kinds.
   pub form: Option<Form>,
+  /// The CLI kind a profile runs with, whose mark stands at its row's start; `None` for the other kinds and for a
+  /// profile that is not in the team's form.
+  pub cli: Option<AgentProvider>,
   pub group: Group,
   /// How it stands here; `None` for an instruction or a skill, which need nothing.
   pub standing: Option<ReadinessStanding>,
 }
 
 impl Entry {
+  /// The glyph at a row's start for what is not a profile with a CLI (`Item` in `t4mtQL`): an MCP server's is a plug,
+  /// or a globe when it is reached at an address; a tool's is a wrench, a terminal for a command and a globe for a
+  /// request.
+  pub(super) const fn glyph(&self) -> Icon {
+    match (self.kind, self.form) {
+      (Kind::Profile, _) => Icon::Bot,
+      (Kind::McpServer, Some(Form::McpRemote)) => Icon::Globe,
+      (Kind::McpServer, _) => Icon::Plug,
+      (Kind::Tool, Some(Form::ToolCommand)) => Icon::Terminal,
+      (Kind::Tool, Some(Form::ToolHttp)) => Icon::Globe,
+      (Kind::Tool, _) => Icon::Wrench,
+      (Kind::Instruction, _) => Icon::FileText,
+      (Kind::Skill, _) => Icon::Sparkles,
+    }
+  }
+
   /// A row's height: 56 when it says what a computer needs, 44 for a quiet one (`Item` in `t4mtQL`, `kgvaK`, `c3jU1R`).
   pub(super) fn height(&self, filter: HubFilter) -> f32 {
     if self.group == Group::NeedsYouHere || (filter != HubFilter::All && self.kind.fills_in()) {
@@ -153,6 +162,7 @@ impl Listing {
         name: found.name().to_owned(),
         number: Some(found.number()),
         form: hub.form(found.resource()),
+        cli: hub.profile(found.resource()).map(|sheet| sheet.cli),
         group: found.group(),
         standing: Some(found.standing().clone()),
       })
@@ -164,6 +174,7 @@ impl Listing {
         name: found.name.clone(),
         number: found.number,
         form: None,
+        cli: None,
         group: Group::Ready,
         standing: None,
       })

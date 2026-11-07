@@ -16,7 +16,7 @@ use orchester_core::{
   store::ResourceStore,
   time::Timestamp,
 };
-use orchester_store::{CachedVersion, ProjectDb, ResourceSharing, SharingLink};
+use orchester_store::{AppDb, CachedVersion, ProjectDb, ResourceSharing, SharingLink, StoredServer};
 use orchester_workspace::tools::{data::create_tool, form::CommandText};
 use serde_json::{Value, json};
 
@@ -32,8 +32,26 @@ pub(super) fn team(agents: &Agents) -> [ResourceId; 4] {
 /// [`team`] for a person with `role`, which they have once the team's resources are cached: a member cannot make them.
 pub(super) fn team_as(agents: &Agents, role: Option<MemberRole>) -> [ResourceId; 4] {
   let mut db = ProjectDb::open(&agents.root).expect("database");
+  let server = ServerId::generate();
+  // The team server is one of this computer's, which a fill-in of the server (a program path) is kept under.
+  AppDb::open(&agents.window.data.database())
+    .expect("application database")
+    .add_server(
+      &StoredServer {
+        id: server,
+        url: "https://team.test".to_owned(),
+        name: "Team".to_owned(),
+        plain_http_allowed: false,
+        certificate_pin: None,
+        added_at: Timestamp::from_unix_millis(1),
+        joined_with: None,
+        account: None,
+      },
+      None,
+    )
+    .expect("server");
   let link = SharingLink {
-    server: ServerId::generate(),
+    server,
     project: ProjectId::generate(),
     key: db.project().key().clone(),
     role: Some(MemberRole::Owner),
@@ -83,7 +101,7 @@ pub(super) fn team_as(agents: &Agents, role: Option<MemberRole>) -> [ResourceId;
 }
 
 /// The team's `body` at v1, cached the way the stream keeps it.
-fn cached<B: ResourceBody + Clone>(
+pub(super) fn cached<B: ResourceBody + Clone>(
   db: &mut ProjectDb,
   (slug, name): (&str, &str),
   server_body: Value,
