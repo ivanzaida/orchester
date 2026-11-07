@@ -32,7 +32,7 @@ mod merge_attempts;
 mod merges;
 mod modules;
 mod native;
-mod orchestrator;
+pub mod orchestrator;
 mod orchestrator_plan;
 mod orchestrator_rewind;
 mod overview_states;
@@ -109,7 +109,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 162] = [
+pub const ALL: [Scenario; 163] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -157,6 +157,7 @@ pub const ALL: [Scenario; 162] = [
   Scenario::of("orchestrator-events", orchestrator::events::seed),
   Scenario::of("orchestrator-waits-on", orchestrator::waits_on::seed),
   Scenario::of("orchestrator-watch", orchestrator::watch::seed),
+  Scenario::of("orchestrator-leads", orchestrator::leads::seed),
   Scenario::of("orchestrator-context-plenty", orchestrator::context::plenty),
   Scenario::of("orchestrator-context-near-full", orchestrator::context::near_full),
   Scenario::of("orchestrator-context-full", orchestrator::context::full),

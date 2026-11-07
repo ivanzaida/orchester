@@ -69,7 +69,7 @@ impl Modules {
 }
 
 /// Module `name`, open, with a draft of each of `titles`.
-fn module(
+pub(super) fn module(
   kontur: &mut Kontur,
   catalogue: &Catalogue,
   name: &str,
@@ -101,7 +101,7 @@ fn module(
 }
 
 /// The person's /watch of `targets` with `order` in `chat` at `at`, and the subscription line it wrote.
-fn watched(
+pub(super) fn watched(
   kontur: &mut Kontur,
   chat: &Chat,
   (targets, order): (Vec<NamedTarget>, &str),

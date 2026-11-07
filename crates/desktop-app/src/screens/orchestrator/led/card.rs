@@ -15,7 +15,6 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    events::is_synthetic_input,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text, TextOverflow},
@@ -35,6 +34,7 @@ use orchester_workspace::{
 
 use super::{LedCard, Settled, target_name};
 use crate::{
+  mcp::qa_person::QaPerson,
   navigation::Navigation,
   routes::{OrchestratorChat, ProjectPage, Route},
   screens::orchestrator::line::{LineLink, link_element},
@@ -115,6 +115,8 @@ pub(super) struct LedCardView {
   choose: ChooseAction,
   /// Synthetic input pressed one of the card's buttons.
   refused: Signal<bool>,
+  /// Whether the buttons take synthetic input as the person's: in a QA copy only.
+  qa_person: QaPerson,
 }
 
 impl Component for LedCardView {
@@ -124,6 +126,7 @@ impl Component for LedCardView {
     Self {
       choose: choose_action(ctx),
       refused: ctx.signal(false),
+      qa_person: QaPerson::of(ctx),
     }
   }
 
@@ -236,7 +239,7 @@ impl LedCardView {
     let (taking, leaving) = (choosing(Choice::Take), choosing(Choice::Leave));
     let navigation = Navigation::of(ctx);
     let there = conversation(props.project, props.card.led.chat);
-    let (choose, refused) = (self.choose.clone(), self.refused.clone());
+    let (choose, refused) = (self.choose.clone(), (self.refused.clone(), self.qa_person.clone()));
     let open = open.on_click(move || {
       if refuses(&refused) {
         return;
@@ -244,7 +247,7 @@ impl LedCardView {
       choose.run(leaving.clone());
       navigation.go(there.clone());
     });
-    let (choose, refused) = (self.choose.clone(), self.refused.clone());
+    let (choose, refused) = (self.choose.clone(), (self.refused.clone(), self.qa_person.clone()));
     let take = take.on_click(move || {
       if refuses(&refused) {
         return;
@@ -255,10 +258,10 @@ impl LedCardView {
   }
 }
 
-/// Whether the press being delivered is lurq's synthetic input, which a card of the person's does not take: then
-/// `refused` says so under the card.
-fn refuses(refused: &Signal<bool>) -> bool {
-  if !is_synthetic_input() {
+/// Whether the press being delivered is lurq's synthetic input, which a card of the person's does not take outside a
+/// QA copy (`mcp::qa_person`): then `refused` says so under the card.
+fn refuses((refused, qa_person): &(Signal<bool>, QaPerson)) -> bool {
+  if !qa_person.refuses_input() {
     return false;
   }
   tracing::warn!("synthetic input reached the card of a target another conversation leads; not taken");

@@ -50,7 +50,12 @@ pub mod storage;
 pub mod updates;
 
 use self::{browser_lookup::BrowserLookup, links::Links, page_file_picker::PageFilePicker};
-use crate::{mcp::chat::ChatServers, open_link::LinkInbox, project::hold::ReadHold, team::TeamQueries};
+use crate::{
+  mcp::{chat::ChatServers, qa_person::QaPerson},
+  open_link::LinkInbox,
+  project::hold::ReadHold,
+  team::TeamQueries,
+};
 
 /// The session's services. Every field is a handle: clones share the same workspace, runners and
 /// operations.
@@ -116,6 +121,9 @@ pub struct Services {
   pub opened_links: LinkInbox,
   /// The pull requests' checks the task pages and *Fix CI automatically* read in the last 30 s.
   pub ci_reads: CiReads,
+  /// Whether the MCP client counts as the person for the Orchestrator's person-only actions: off, but in a QA copy
+  /// (`examples/qa_app`) or a test that turns it on.
+  pub qa_person: QaPerson,
 }
 
 /// Services are the session's: two are equal when they share its workspace.
@@ -182,6 +190,8 @@ impl Services {
       editor: Editor::find(),
       opened_links: LinkInbox::default(),
       ci_reads: CiReads::default(),
+      // Off: only a QA copy turns it on (`mcp::qa_person`).
+      qa_person: QaPerson::default(),
     }
   }
 

@@ -12,7 +12,6 @@ use lurq::{
   app::{
     component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction, FutureState},
-    events::is_synthetic_input,
   },
   node::Element,
 };
@@ -143,11 +142,12 @@ fn named_module(choice: &Choice) -> Option<NamedTarget> {
 /// Ctrl Enter on the chips: the conversation shown, or a new one when the screen shows none yet, watches the targets
 /// the chips name (`named`) with the words after them as their order. Only a person's keys apply it: the order is kept
 /// as the person's own words, which the agent follows, and no subscription records who asked for it, so synthetic
-/// input (an MCP client's) is refused with a notice, and the chips and the order stay.
+/// input (an MCP client's) is refused with a notice outside a QA copy (`mcp::qa_person`), and the chips and the order
+/// stay.
 pub(super) fn apply(view: &View, root: PathBuf, named: fn(&Choice) -> Option<NamedTarget>) -> Apply {
-  let (of, action) = (view.of.clone(), view.watching.clone());
+  let (of, action, qa_person) = (view.of.clone(), view.watching.clone(), view.qa_person.clone());
   Arc::new(move |applied: Applied| {
-    if is_synthetic_input() {
+    if qa_person.refuses_input() {
       tracing::warn!("synthetic input asked to watch; not taken");
       let refused = Message::new(PERSON_ONLY);
       action.state().set(FutureState::rejected(refused, None));
