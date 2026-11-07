@@ -22,10 +22,14 @@ pub enum HeaderPrefixError {
   TooLong,
   #[error("a header prefix must not contain a control character")]
   Control,
+  /// A digit or other sign is how a value starts; a scheme such as `Bearer ` or `Token ` has none.
+  #[error("a header prefix is letters, spaces and - _ . : only; a value goes in the secret, not the prefix")]
+  NotScheme,
 }
 
 /// The fixed start of a secret header's value, e.g. `Bearer `. Plain text the team sees and keeps, never a value: it
-/// is short, and the errors do not repeat it.
+/// is short, letters and a few separators only (no digit, so a token cannot be typed into it), and the errors do not
+/// repeat it.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
 pub struct HeaderPrefix(String);
@@ -43,6 +47,12 @@ impl HeaderPrefix {
     }
     if value.chars().any(char::is_control) {
       return Err(HeaderPrefixError::Control);
+    }
+    if !value
+      .chars()
+      .all(|char| char.is_ascii_alphabetic() || matches!(char, ' ' | '-' | '_' | '.' | ':'))
+    {
+      return Err(HeaderPrefixError::NotScheme);
     }
     Ok(Self(value.to_owned()))
   }

@@ -25,7 +25,7 @@ added a case. The model below removes the cause: **the server never holds an id 
 | --- | --- | --- |
 | Pipeline | everything: steps, the profile or tool of each step (server ids), gates, Deliver | nothing |
 | Agent profile | role, instructions, CLI kind, model, effort, permissions; the MCP servers, tools, skills, instructions it uses (server ids); the secrets it needs (names) | which local connection and account runs it |
-| MCP server *(decided)* | name, how it runs (local program or remote URL), arguments, folder, tools that run without asking, the variables it needs (names); a remote server's URL | the program's path; variable and secret values; on or off here |
+| MCP server *(decided)* | name, how it runs (local program or remote URL), arguments, folder, tools that run without asking, the variables it needs and its secret headers (each the name of the team secret it takes); a remote server's URL | the program's path; the secrets' values; on or off here |
 | Instruction, skill | everything | nothing |
 | Tool (command, HTTP, database) | everything except secret values | secret values |
 | Secret *(decided)* | only its name and what it is for; never a value | its value |

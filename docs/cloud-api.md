@@ -278,10 +278,13 @@ program, the values of the secrets and whether the server is on, itself.
 The body names the team secrets it takes, by `SecretName` (a capital letter, then capital letters, digits and
 underscores; the team server holds those names and no values). Each entry of `variables` is filled from the team secret
 of the same name, so it must be a valid secret name (`token` is refused: `TOKEN`). Each entry of `secret_headers` is
-sent `header: <prefix><value of secret>`; `prefix` is plain text of at most 32 characters with a visible character and no
-control character, and is not a value (a response never repeats it). The entry has no other field (`deny_unknown_fields`),
+sent `header: <prefix><value of secret>`; `prefix` is plain text of at most 32 characters, ASCII letters, spaces and `- _ . :` only
+(no digit), and is not a value (a response never repeats it). The entry has no other field (`deny_unknown_fields`),
 and a bare header name (`"X-API-Key"`, the shape before a header named its secret) is refused (`422 invalid`, reason
-`body`): which secret it takes is not guessed. Two headers may take one secret. A server's secrets, in the order of its
+`body`): which secret it takes is not guessed. A version stored in that shape (on a team server of the module branch
+before ORC-882) cannot be read by a desktop; an admin republishes the server, and a desktop that has not cached its
+older versions yet reads none of them until those versions are gone (no team server running a release ever stored the
+old shape). Two headers may take one secret. A server's secrets, in the order of its
 variables or headers, each once, are what readiness (`docs/design/team-configuration.md`) asks a computer for. Headers
 within `secret_headers` and names within `variables` are distinct, ignoring case. A working directory that is absolute is refused, as is a
 program that is not a bare name. A remote server's `url` has no query and no fragment (no `?` or `#`) and the server

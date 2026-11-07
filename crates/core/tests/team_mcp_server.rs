@@ -246,7 +246,15 @@ fn a_header_prefix_is_short_plain_text() {
     let header = json!({"header":"Authorization","secret":"X_KEY","prefix":prefix});
     assert!(parse(remote(&json!([header]))).is_ok(), "{prefix:?}");
   }
-  for prefix in ["", "  ", "Bear\ner ", "Bearer\t", "x".repeat(33).as_str()] {
+  for prefix in [
+    "",
+    "  ",
+    "Bear\ner ",
+    "Bearer\t",
+    "x".repeat(33).as_str(),
+    "Bearer abc123",
+    "Token 9f",
+  ] {
     let header = json!({"header":"Authorization","secret":"X_KEY","prefix":prefix});
     assert!(parse(remote(&json!([header]))).is_err(), "{prefix:?}");
   }
