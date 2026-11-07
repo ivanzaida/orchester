@@ -184,6 +184,8 @@ struct View {
   what_i_watch: watching::WhatIWatch,
   /// The header, which a Leads chip's tooltip hangs under (`leads`).
   head: ElementRef,
+  /// A stall of a run stands in the conversation shown, as it was last read (`data::read`, ORC-894).
+  stalled: Signal<bool>,
 }
 
 struct OrchestratorScreen {
@@ -231,6 +233,7 @@ impl Component for OrchestratorScreen {
       watching: watch::watch_action(ctx),
       what_i_watch: watching::WhatIWatch::new(ctx),
       head: ElementRef::new(),
+      stalled: ctx.signal(false),
     };
     rewind::watch(ctx, &view);
     take_back_queued(ctx, &view);
@@ -270,7 +273,7 @@ impl Component for OrchestratorScreen {
       view.focus.set(false);
     }
     let saves = props.project.feed.saves.get();
-    let reads = data::read(ctx, (&props.project.open.repo_root, saves), props.chat);
+    let reads = data::read(ctx, (&props.project.open.repo_root, saves), (props.chat, &view.stalled));
     // Until History says which conversation is the latest, the screen shows none.
     if reads.target.is_some() || reads.shown != Shown::Loading {
       view.hold_draft_of(props.project.open.project.id(), reads.target.into());

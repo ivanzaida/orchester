@@ -286,6 +286,9 @@
     },
     "event": {
       "noProgress": "No progress for {{minutes}} min",
+      "noProgressMoving": "No progress for {{minutes}} min · moving again {{time}}",
+      "noProgressWaits": "No progress for {{minutes}} min · waits now",
+      "noProgressEnded": "No progress for {{minutes}} min · the run ended",
       "conflictModule": "Merge conflict in the module branch",
       "conflict": "Merge conflict in the base branch",
       "mergedInto": "Merged into {{branch}}",
@@ -448,7 +451,9 @@
         "message": "{{agent}} waits for a reply",
         "messageAnyone": "An agent waits for a reply",
         "plan": "{{agent}}'s plan waits for a decision",
-        "planAnyone": "A plan waits for a decision"
+        "planAnyone": "A plan waits for a decision",
+        "approval": "{{agent}} waits for a tool approval",
+        "approvalAnyone": "An agent waits for a tool approval"
       },
       "status": {
         "waits": "Waits for you",
@@ -463,6 +468,7 @@
       "effectWaits": "It waits for you on its card. Ask the Orchestrator here to read it, or answer it on the task's Conversation.",
       "effectPlan": "Deciding a plan is yours, on its card. Ask the Orchestrator here to read it with you.",
       "effectPlanRead": "Deciding a plan is yours, on its card. The Orchestrator reads it and tells you what it proposes.",
+      "effectApproval": "Approving a tool request is yours, on its card in the task's Conversation: the Orchestrator doesn't decide it, whatever Let the Orchestrator answer agents says.",
       "effectGone": "It was dealt with on the task's page, or its run went on: the agent no longer waits."
     },
     "watch": {
