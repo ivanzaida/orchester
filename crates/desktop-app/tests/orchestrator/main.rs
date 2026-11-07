@@ -35,6 +35,7 @@ mod lines;
 mod links;
 mod mcp_servers;
 mod mentions;
+mod menu_layout;
 mod open_long;
 mod paste;
 mod plan_only;
