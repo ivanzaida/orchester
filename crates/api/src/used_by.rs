@@ -20,12 +20,17 @@ pub struct UsedBy {
   /// lists them.
   pub resources: Vec<UsedByResource>,
   /// The runs that have not ended and whose execution bundle pins any version of this resource, ordered by the number
-  /// part of the task key numerically (`KON-3` before `KON-12`) and then by run id (a stable tie-break). The server
-  /// learns a run only from its work reports, so a run is listed from the first work report the server accepted for
-  /// it until a terminal one (`succeeded`, `failed` or `cancelled`); work started and not reported yet is not listed
-  /// (a known limit). A run whose last report is `progress`, also one interrupted or waiting for a person on the
-  /// desktop, has not ended, unless its work has a newer run (a later run id first reported for the same work): that
-  /// run has ended, superseded.
+  /// part of the task key numerically (`KON-3` before `KON-12`) and then by run id (a stable tie-break). Only each
+  /// task's current work is listed, the latest work started under the task's current claim: the server fences a work
+  /// after a take-over, a release or a restart under the same claim and accepts no further report from it, so its run
+  /// could never end. A released task lists none; a work whose bundle is an older schema (its pins are not known) is
+  /// not listed (a known limit). The server learns a run only from its work reports, so a run is listed from the first
+  /// work report the server accepted for it until a terminal one (`succeeded`, `failed` or `cancelled`); work started
+  /// and not reported yet is not listed (a known limit). A run whose last report is `progress`, also one interrupted
+  /// or waiting for a person on the desktop, has not ended, unless a run whose first accepted report came after its
+  /// own exists for the same work: that run has ended, superseded. Runs are ordered by the server's acceptance of
+  /// their first report (the order of `WorkRead.runs`), never by run id; a run whose first report arrives late is the
+  /// newest.
   pub runs: Vec<UsedByRun>,
 }
 
@@ -46,8 +51,9 @@ pub struct UsedByRun {
   /// The key of the run's task, e.g. `KON-12`.
   pub task_key: String,
   pub run: RunId,
-  /// Who holds the task's claim now, and so who is told the run stopped; after a take-over it is the new holder.
-  /// Absent when the claim was released.
+  /// Who holds the task's claim now, and so who is told the run stopped; after a take-over it is the new holder. The
+  /// team server always sets it, since only current work under the current claim is listed; it is absent only for a
+  /// local project's runs, which have no claim holder.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub holder: Option<UserRef>,
 }

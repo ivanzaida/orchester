@@ -1,7 +1,8 @@
 //! A local project's answer, computed from its database as the team server computes its own: the other resources that
 //! are not removed and whose latest published version names the resource ([`super::names`]), by name compared
 //! case-insensitively and then by id; and the runs that have not ended and pin any version of it, by the task key's
-//! number and then the run id. A local run has no holder: no one else's claim is on its task.
+//! number and then the run id. A local run has no holder: no one else's claim is on its task. Local tasks have no works or
+//! claims, so the team server's rule of listing only each task's current work does not apply here.
 
 use std::{num::NonZeroU32, path::Path};
 
