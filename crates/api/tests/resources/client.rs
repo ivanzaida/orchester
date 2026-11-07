@@ -150,7 +150,7 @@ async fn resources_used_by_reads_its_endpoint_and_a_missing_resource_is_not_foun
       200,
       &json!({
         "resources":[{"kind":"pipeline","id":ResourceId::generate(),"name":"Feature delivery","version":3}],
-        "runs":[{"task_key":"KON-12","run":RunId::generate(),"number":2,
+        "runs":[{"task_key":"KON-12","run":RunId::generate(),
           "holder":{"id":user,"display_name":"Bohdan Koval"}}],
       }),
     ),
@@ -160,7 +160,7 @@ async fn resources_used_by_reads_its_endpoint_and_a_missing_resource_is_not_foun
   let used = client.used_by(&token(), project, id).await.expect("used by");
   assert_eq!(used.resources[0].kind, SharedResourceKind::Pipeline);
   assert_eq!(used.resources[0].version.get(), 3);
-  assert_eq!((used.runs[0].task_key.as_str(), used.runs[0].number), ("KON-12", 2));
+  assert_eq!(used.runs[0].task_key, "KON-12");
   assert_eq!(
     used.runs[0].holder.as_ref().map(|holder| holder.display_name.as_str()),
     Some("Bohdan Koval")

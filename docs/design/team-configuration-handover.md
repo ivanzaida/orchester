@@ -18,6 +18,9 @@ and Orchester Platform module "Team configuration" (OP-197…206). The team serv
 | ORC-814 | Leaving a team deletes the team's resources and cached versions | merged here (dae4066c9); **UI text changed: design verification not done** |
 | ORC-815 | Per-project fill-ins: connection pick, MCP on here, secret values by name | merged here (d492b65a4) |
 | ORC-811 | `GET …/resources/{id}/used-by`: what names a resource and the runs that stop; client, stand-in, docs | merged here (59d9fcc25) |
+| ORC-818 | Team MCP servers cached and archived like other kinds; archive stops runs whose profile chooses the server (uuid stopgap until ORC-817) | merged here (728925a87, row 79 fixed in 456af94d8) |
+| ORC-825 | Fill-in writes: connection pick, MCP program path (refreshes every project of the server), secret value by name, MCP on here; person-only via `Answerer` | merged here (ec98cf814) |
+| ORC-819 | `used_by` read: team via the route, local from the project database with the archive's `pins()` rule; used-by contract amended (no run number, listed from the first report, superseded runs ended, no MCP server runs on the server until the bundle carries them) | merged here (f52581fd1) |
 
 ## In progress
 

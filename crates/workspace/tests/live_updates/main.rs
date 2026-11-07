@@ -18,6 +18,7 @@ mod config;
 mod desktop;
 mod http;
 mod joined;
+mod mcp_servers;
 mod merged;
 mod publish;
 mod reconnects;
