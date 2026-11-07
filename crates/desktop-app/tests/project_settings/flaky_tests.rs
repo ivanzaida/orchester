@@ -174,6 +174,45 @@ fn flaky_tests_quarantine_and_unquarantine_act_and_persist() {
   assert_eq!(settings.text("settings-flaky-watching-count"), "2");
 }
 
+/// The history set aside (`aside`) or put back, so reading the list fails while a move still goes through.
+fn history_readable(settings: &Settings, readable: bool) {
+  let sqlite =
+    rusqlite::Connection::open(settings.repo.join(".orchester").join("orchester.db")).expect("the database opens");
+  let (from, to) = if readable {
+    ("flaky_outcomes_aside", "flaky_outcomes")
+  } else {
+    ("flaky_outcomes", "flaky_outcomes_aside")
+  };
+  sqlite
+    .execute(&format!("ALTER TABLE {from} RENAME TO {to}"), [])
+    .expect("the table is renamed");
+}
+
+/// A move made whose list cannot be read again says why, with no row left to act on, until *Try again* reads it.
+#[test]
+fn flaky_tests_failing_to_read_again_after_a_move_offers_no_stale_row() {
+  let mut settings = opened();
+  history_readable(&settings, false);
+  settings.click("settings-flaky-quarantined-0-release");
+  settings.until("the failed read", |s| s.exists("settings-flaky-load-error"));
+  assert!(quarantined(&settings).is_empty(), "the move was made");
+  assert!(
+    settings
+      .text("settings-flaky-load-error")
+      .contains("The project's flaky tests cannot be read")
+  );
+  assert!(!settings.exists("settings-flaky-quarantined-rows"));
+  assert!(!settings.exists("settings-flaky-quarantined-0-release"));
+
+  history_readable(&settings, true);
+  settings.click("settings-flaky-load-error-retry");
+  settings.until("the list read again", |s| {
+    s.exists("settings-flaky-quarantined-empty-row")
+  });
+  assert!(!settings.exists("settings-flaky-load-error"));
+  assert_eq!(settings.text("settings-flaky-watching-count"), "3");
+}
+
 /// An MCP client's *Quarantine now* quarantines nothing while *Let automation change agent permissions* is off, and
 /// says so under the row; its *Unquarantine* is taken.
 #[test]

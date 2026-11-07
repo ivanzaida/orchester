@@ -106,6 +106,8 @@ type MoveAction = FutureAction<MoveAsk, Moved, Message>;
 #[derive(Clone)]
 struct Moves {
   root: PathBuf,
+  /// Whether the rows are the latest read's; while the list is read again they show the read before and act on none.
+  current: bool,
   action: MoveAction,
   /// The test of the move under way or last made, whose row shows it loading or why it failed.
   moving: Signal<Option<Row>>,
@@ -115,10 +117,10 @@ struct Moves {
 }
 
 impl Moves {
-  /// `change` pressed: made unless a move is under way. Quarantining is a person's, or automation's under *Let
-  /// automation change agent permissions*; refused, nothing changes.
+  /// `change` pressed: made unless a move is under way or the list is being read again. Quarantining is a person's,
+  /// or automation's under *Let automation change agent permissions*; refused, nothing changes.
   fn press(&self, change: Move) {
-    if self.action.state().get_untracked().is_pending() {
+    if !self.current || self.action.state().get_untracked().is_pending() {
       return;
     }
     let row = Row(change.test().clone());
@@ -220,20 +222,9 @@ impl Component for FlakyTests {
         )),
       ));
     shown = match (&read.data, &read.error) {
-      // What was read stays while it is read again.
-      (Some(listed), _) => {
-        let moves = Moves {
-          root,
-          action: self.action.clone(),
-          moving: self.moving.clone(),
-          refused: self.refused.clone(),
-          gate: self.gate.clone(),
-        };
-        shown
-          .with_children(rows::groups(ctx, &moves, listed))
-          .child(rows::rule(ctx, &self.rule))
-      }
-      (None, Some(error)) if !read.is_pending() => {
+      // A read that failed says why instead of the list read before it: its tests may have moved since, so none of
+      // its rows is offered to act on.
+      (_, Some(error)) if read.is_rejected() => {
         let reread = self.reread.clone();
         shown.child(load_error(
           ctx,
@@ -244,6 +235,20 @@ impl Component for FlakyTests {
           ),
           move || reread.update(|count| *count += 1),
         ))
+      }
+      // What was read stays while it is read again; its rows act only once the new read is in.
+      (Some(listed), _) => {
+        let moves = Moves {
+          root,
+          current: read.is_fulfilled(),
+          action: self.action.clone(),
+          moving: self.moving.clone(),
+          refused: self.refused.clone(),
+          gate: self.gate.clone(),
+        };
+        shown
+          .with_children(rows::groups(ctx, &moves, listed))
+          .child(rows::rule(ctx, &self.rule))
       }
       _ => shown.child(loading(
         "settings-flaky-loading",
