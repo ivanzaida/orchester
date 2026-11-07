@@ -13,7 +13,10 @@ mod created;
 mod decision_connections;
 mod instructions;
 mod mcp_preview;
+mod mcp_server_input;
+mod mcp_server_json;
 mod mcp_server_specs;
+mod mcp_server_text;
 mod mcp_servers;
 mod merge;
 pub(crate) use self::{
