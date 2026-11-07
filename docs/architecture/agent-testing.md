@@ -205,6 +205,13 @@ step's result for the steps after it, never in what returns to the writing step.
 `agent_testing::flaky`; `release_test` is always taken. The quarantine list is this computer's project data: it does
 not travel with a shared project's configuration yet.
 
+Built (ORC-267): Project settings › Services › *Flaky tests* (`Tv9VC`) lists the quarantined tests, then every flaky
+test not quarantined (watched first) under *Watching*, each with the runs it was flaky in within the window, when it
+was last seen and its suite, and *Unquarantine* or *Quarantine now*; under them the rule, its figures in locked fields
+since Orchester fixes them. The history keeps no file and line and no task of the run, so a row says less than the
+design's. A *Quarantine now* from an MCP client driving the window is taken only under *Let automation change agent
+permissions*, as `quarantine_test` is. The seed's `flaky-tests` scenario holds such a history.
+
 ## Import
 
 A first draft of services and stacks can be read once from `docker compose` files, `package.json` scripts and Cargo

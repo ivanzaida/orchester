@@ -6,6 +6,7 @@ mod environment;
 mod environment_geometry;
 mod environment_refresh;
 mod estimates;
+mod flaky_tests;
 mod general;
 mod github;
 mod harness;

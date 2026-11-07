@@ -21,6 +21,7 @@ mod decisions;
 mod deliverables;
 mod delivery;
 mod empty;
+mod flaky_tests;
 mod import;
 mod interrupted;
 mod lifecycle;
@@ -113,7 +114,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 164] = [
+pub const ALL: [Scenario; 165] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -229,6 +230,7 @@ pub const ALL: [Scenario; 164] = [
   Scenario::of("sources", sources::seed),
   Scenario::of("sources-unreadable", sources::unreadable),
   Scenario::of("services", services::seed),
+  Scenario::of("flaky-tests", flaky_tests::seed),
   Scenario::with_fake_codex("run-services", run_services::seed),
   Scenario::with_fake_codex("run-services-approve", run_services::approve),
   Scenario::of("service-cards", service_cards::seed),

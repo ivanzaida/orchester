@@ -517,11 +517,48 @@
       "quarantine": "Quarantine",
       "quarantineInfo": "A test that is flaky again and again can be quarantined: it still runs and its failure is shown, but it no longer fails the step.",
       "quarantineHint": "Quarantined tests still run, but no longer fail the step",
-      "page": {
-        "service": "Service",
-        "stack": "Stack",
-        "suite": "Test suite",
-        "notBuilt": "This page is not built in this app yet."
+      "flakyTests": {
+        "lead": "A test that fails and then passes on its re-run is flaky. After {{runs}} flaky runs in {{days}} days it is watched here for you to quarantine: a quarantined test still runs and is reported, but its failure no longer returns the work to Implement.",
+        "reading": "Reading the project's flaky tests…",
+        "loadFailed": "The project's flaky tests cannot be read",
+        "quarantined": "Quarantined",
+        "watching": "Watching",
+        "watchingNote": "Flaky, not quarantined",
+        "quarantinedEmpty": {
+          "title": "No test is quarantined",
+          "detail": "Quarantine now on a flaky test moves it here"
+        },
+        "watchingEmpty": {
+          "title": "No flaky test yet",
+          "detail": "A test that fails and then passes on its re-run in a Test step shows here"
+        },
+        "seenAgo": "{{suite}} · last seen {{ago}}",
+        "seenYesterday": "{{suite}} · last seen yesterday",
+        "seenOn": "{{suite}} · last seen {{month}} {{day}}",
+        "rate": {
+          "none": "not flaky in {{days}} days",
+          "one": "flaky in 1 run",
+          "other": "flaky in {{count}} runs"
+        },
+        "since": "quarantined {{month}} {{day}}",
+        "watched": "watched, not quarantined",
+        "notQuarantined": "not quarantined",
+        "unquarantine": "Unquarantine",
+        "quarantineNow": "Quarantine now",
+        "personOnly": "Only a person quarantines a test here: input from an MCP client is taken only while you let automation change agent permissions. Nothing was quarantined.",
+        "rule": {
+          "title": "Rule",
+          "after": "Watched after",
+          "afterHint": "Flaky runs of the same test, in any run of this project",
+          "runsName": "Flaky runs before a test is watched",
+          "runs": "flaky runs",
+          "in": "in",
+          "daysName": "Days its flaky runs are counted in",
+          "days": "days",
+          "outcome": "A quarantined test",
+          "outcomeHint": "Runs, and its failure is shown, not counted",
+          "outcomeValue": "Runs, doesn't fail"
+        }
       },
       "import": {
         "title": "Import a first draft",

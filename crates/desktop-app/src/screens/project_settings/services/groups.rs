@@ -89,7 +89,7 @@ pub(super) fn groups(ctx: &mut Ctx, props: &TabProps, listed: &ProjectServices) 
 }
 
 /// A group's count right after its heading (`Count` `n3kni`).
-fn count(id: &str, count: usize) -> Text {
+pub(super) fn count(id: &str, count: usize) -> Text {
   Text::new(&count.to_string())
     .id(format!("{id}-count"))
     .variant(ProjectSettingsText::Hint.role())

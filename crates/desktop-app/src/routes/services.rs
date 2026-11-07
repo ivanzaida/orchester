@@ -1,7 +1,6 @@
 //! The pages under Project settings › Services (`Agent testing · redesign` `eWydp`): a service's, a stack's and a test
 //! suite's editor, their New pages, Import draft and Flaky tests
-//! (`/project/<id>/settings?tab=services&view=service&id=…`, `view=new-service`, `view=import`, `view=flaky`, …). Until
-//! their tasks land, each is a page that says it is not built yet.
+//! (`/project/<id>/settings?tab=services&view=service&id=…`, `view=new-service`, `view=import`, `view=flaky`, …).
 
 use orchester_core::id::ResourceId;
 

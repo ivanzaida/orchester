@@ -4,17 +4,17 @@
 //! Flaky tests ([`groups`]). With no service yet it says what a service is and offers Import draft and New service.
 //! A service's row and New service open the service's page ([`editor`]), a stack's row and New stack the stack's
 //! ([`stack`]), a suite's row and New suite the suite's ([`suite`]), Import draft the proposals read from the checkout
-//! ([`import`]); Flaky tests says it is not built yet ([`not_built`]). The three editors share their delete modal
+//! ([`import`]), Flaky tests the quarantined and watched tests ([`flaky`]). The three editors share their delete modal
 //! ([`delete`]) and how they say where they stand ([`lifecycle`]).
 //!
 //! What the tab lists is read off the UI thread when it opens and when the project's tasks are saved; services that
 //! automation adds while it shows appear when it is opened again.
 mod delete;
 mod editor;
+mod flaky;
 mod groups;
 mod import;
 mod lifecycle;
-mod not_built;
 mod stack;
 mod suite;
 mod words;
@@ -27,7 +27,6 @@ use lurq::{
 };
 use orchester_workspace::{agent_testing::listing::ProjectServices, background, messages};
 
-use self::not_built::not_built;
 use super::{TabProps, page};
 use crate::{
   routes::ServicesPage,
@@ -39,7 +38,7 @@ use crate::{
   },
 };
 
-/// The page `shown` under the tab: a service's, a stack's or a suite's editor, a New page, or a page not built yet.
+/// The page `shown` under the tab: a service's, a stack's or a suite's editor, a New page, Import draft or Flaky tests.
 pub(super) fn services_page(ctx: &mut Ctx, props: &TabProps, shown: ServicesPage) -> Element {
   match shown {
     ServicesPage::NewService => editor::editor(ctx, props, None),
@@ -49,7 +48,7 @@ pub(super) fn services_page(ctx: &mut Ctx, props: &TabProps, shown: ServicesPage
     ServicesPage::NewSuite => suite::editor(ctx, props, None),
     ServicesPage::Suite(id) => suite::editor(ctx, props, Some(id)),
     ServicesPage::Import => import::import(ctx, props),
-    other => not_built(ctx, &props.project, other),
+    ServicesPage::Flaky => flaky::flaky_tests(ctx, props),
   }
 }
 
