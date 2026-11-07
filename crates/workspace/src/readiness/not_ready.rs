@@ -15,8 +15,8 @@ use serde_json::{Value, json};
 use super::{PipelineReadiness, ProjectReadiness, ReadinessStanding, Undecided};
 use crate::messages::Message;
 
-/// One part a pipeline lacks, with the name of the profile or MCP server it is about (the secret's own name for a
-/// secret). Kept with a start that failed on it, so it is serializable.
+/// One part a pipeline lacks, with the name of the profile, reviewer or MCP server it is about (the secret's own name
+/// for a secret). Kept with a start that failed on it, so it is serializable.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MissingPart {
   pub missing: Missing,
@@ -28,6 +28,7 @@ impl MissingPart {
   pub fn new(missing: Missing, name_of: &dyn Fn(ResourceId) -> String) -> Self {
     let name = match &missing {
       Missing::Connection { profile, .. } => name_of(*profile),
+      Missing::DecisionConnection { reviewer, .. } => name_of(*reviewer),
       Missing::McpOff { server } | Missing::McpUnsupported { server, .. } | Missing::McpProgram { server, .. } => {
         name_of(*server)
       }
@@ -49,6 +50,13 @@ impl MissingPart {
           ConnectionProblem::PickNeeded => "notReadyHere.connectionPickNeeded",
         };
         named(key, "profile").with("cli", cli_name(*cli).to_owned())
+      }
+      Missing::DecisionConnection { problem, .. } => {
+        let key = match problem {
+          ConnectionProblem::NoneOfKind => "notReadyHere.decisionConnectionNoneOfKind",
+          ConnectionProblem::PickNeeded => "notReadyHere.decisionConnectionPickNeeded",
+        };
+        named(key, "reviewer")
       }
       Missing::McpOff { .. } => named("notReadyHere.mcpOff", "server"),
       Missing::McpUnsupported {

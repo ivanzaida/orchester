@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
   connection::AgentProvider,
-  id::{ConnectionId, ResourceId, SecretId},
+  id::{ConnectionId, DecisionConnectionId, ResourceId, SecretId},
   secret::SecretName,
 };
 
@@ -24,6 +24,8 @@ pub(super) struct ProgramFile {
 pub struct Here {
   pub(super) connections: Vec<(ConnectionId, AgentProvider)>,
   pub(super) picks: HashMap<ResourceId, ConnectionId>,
+  pub(super) decision_connections: Vec<DecisionConnectionId>,
+  pub(super) decision_picks: HashMap<ResourceId, DecisionConnectionId>,
   pub(super) mcp_on: HashSet<ResourceId>,
   pub(super) programs: HashMap<ResourceId, ProgramFile>,
   pub(super) secrets: HashSet<SecretName>,
@@ -51,6 +53,21 @@ impl Here {
   #[must_use]
   pub fn with_pick(mut self, profile: ResourceId, connection: ConnectionId) -> Self {
     self.picks.insert(profile, connection);
+    self
+  }
+
+  /// A decision connection of this computer.
+  #[must_use]
+  pub fn with_decision_connection(mut self, connection: DecisionConnectionId) -> Self {
+    self.decision_connections.push(connection);
+    self
+  }
+
+  /// The decision connection the person picked for team reviewer `reviewer`. A pick of a connection that is not here
+  /// any more counts as no pick.
+  #[must_use]
+  pub fn with_decision_pick(mut self, reviewer: ResourceId, connection: DecisionConnectionId) -> Self {
+    self.decision_picks.insert(reviewer, connection);
     self
   }
 

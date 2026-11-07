@@ -60,7 +60,7 @@ pub(super) fn missing(ctx: &Ctx, listing: &Listing, entry: &Entry, part: &Missin
       .map_or_else(String::new, |found| found.name.clone())
   };
   match part {
-    Missing::Connection { .. } => ctx.t("team_hub.line.connection"),
+    Missing::Connection { .. } | Missing::DecisionConnection { .. } => ctx.t("team_hub.line.connection"),
     Missing::McpOff { server } if *server == entry.id && entry.kind == Kind::McpServer => {
       ctx.t("team_hub.line.mcpUndecided")
     }

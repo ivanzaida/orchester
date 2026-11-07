@@ -13,7 +13,7 @@ use orchester_core::{
   id::ResourceId,
   resource::{
     AgentProfile, Pipeline, Resource, ResourceKind, TeamAgentProfile, TeamCounterparts, TeamExecutors,
-    TeamPipelineError, TeamProfileError,
+    TeamPipelineError, TeamProfileError, TeamReviewer,
   },
   sharing::{LocalEntities, named},
   store::{ConnectionStore, McpServerStore, ResourceStore},
@@ -49,6 +49,18 @@ pub(super) fn unchanged(
   } else {
     Err(SharingError::LocalEntitiesNamed { resource, names })
   }
+}
+
+/// `reviewer`, a version of a team reviewer, as the team holds it: its body already names a CLI kind and no connection,
+/// so it is sent as it is, with the references that body names ([`ReferenceTarget::of_reviewer`]).
+pub(super) fn reviewer(reviewer: &TeamReviewer) -> Result<Publication, SharingError> {
+  Ok(Publication {
+    body: serde_json::to_value(reviewer).map_err(|error| StoreError::Corrupt {
+      what: "resource body",
+      detail: error.to_string(),
+    })?,
+    references: ReferenceTarget::of_reviewer(reviewer),
+  })
 }
 
 /// `local`, a version of the agent profile `resource`, as the team holds it: its connection becomes the CLI kind it

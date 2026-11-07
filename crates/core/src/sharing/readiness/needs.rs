@@ -4,20 +4,36 @@ use super::McpUnsupported;
 use crate::{
   connection::{AgentProvider, mcp::McpServerName},
   id::{ConnectionId, ResourceId, SecretId},
-  resource::{TeamAgentProfile, TeamMcpLaunch, TeamMcpServer},
+  resource::{TeamAgentProfile, TeamMcpLaunch, TeamMcpServer, TeamReviewer},
   secret::SecretName,
 };
 
 /// One thing a resource version asks of the computer.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Need {
-  Connection { profile: ResourceId, cli: AgentProvider },
+  Connection {
+    profile: ResourceId,
+    cli: AgentProvider,
+  },
+  /// A decision connection of this computer for the team reviewer.
+  DecisionConnection {
+    reviewer: ResourceId,
+  },
   McpOn(ResourceId),
-  McpUnsupported { server: ResourceId, why: McpUnsupported },
+  McpUnsupported {
+    server: ResourceId,
+    why: McpUnsupported,
+  },
   McpProgram(ResourceId),
   Secret(SecretName),
-  LocalMcpProgram { server: ConnectionId, name: McpServerName },
-  LocalSecret { secret: SecretId, name: SecretName },
+  LocalMcpProgram {
+    server: ConnectionId,
+    name: McpServerName,
+  },
+  LocalSecret {
+    secret: SecretId,
+    name: SecretName,
+  },
 }
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -92,6 +108,15 @@ impl Needs {
       needs.extend(Self::mcp_server(server).0);
     }
     Ok(Self(needs))
+  }
+
+  /// A team reviewer `reviewer`: a connection for its CLI kind, as a profile has; a decision reviewer needs a decision
+  /// connection. It chooses no MCP server and names no secret.
+  pub fn reviewer(reviewer: ResourceId, body: &TeamReviewer) -> Self {
+    Self(vec![match body.cli() {
+      Some(cli) => Need::Connection { profile: reviewer, cli },
+      None => Need::DecisionConnection { reviewer },
+    }])
   }
 
   /// A profile of a local project: a connection of the CLI kind of the one it runs on, which is its pick, and the
