@@ -98,6 +98,7 @@ impl TaskForm {
       discard: self.discard_handler(),
       save_chosen: self.save_chosen_handler(props, view, save),
       back_to_editing: self.back_to_editing_handler(),
+      show_missing: self.nav.to_agents(),
     }
   }
 

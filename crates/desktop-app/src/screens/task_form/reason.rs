@@ -12,6 +12,7 @@ use orchester_core::resource::Deliverable;
 use super::{
   conflict::field_key,
   delivers::delivered,
+  readiness::line,
   state::{Need, Phase, Subject, View},
 };
 use crate::ui::{icon::Icon, message::message_text};
@@ -34,6 +35,9 @@ pub enum Kind {
   Busy,
   /// What went wrong, e.g. the runner's refusal.
   Problem,
+  /// The chosen pipeline is not ready on this computer: its words in `warning`, and *Show* after them
+  /// (`Reason` `ACVRw` in `P6aAoZ`, `TSa5k` in `PMi6Q`).
+  NotReady,
   /// What the person should know: kept changes, Retry run.
   Note(Icon),
 }
@@ -45,6 +49,7 @@ impl Kind {
       Self::Ready => (Icon::CircleCheck, PaletteColor::TextMuted, "ready"),
       Self::Busy => (Icon::LoaderCircle, PaletteColor::TextMuted, "progress"),
       Self::Problem => (Icon::CircleAlert, PaletteColor::Warning, "problem"),
+      Self::NotReady => (Icon::CircleAlert, PaletteColor::Warning, "not-ready"),
       Self::Note(glyph) => (glyph, PaletteColor::TextMuted, "note"),
     }
   }
@@ -58,6 +63,7 @@ impl Need {
       Self::Brief => "task_form.reasons.need.brief",
       Self::Criteria => "task_form.reasons.need.criteria",
       Self::Pipeline => "task_form.reasons.need.pipeline",
+      Self::NotReady => "task_form.reasons.need.notReady",
       Self::NoPipelines => "task_form.reasons.need.noPipelines",
       Self::Budget => "task_form.reasons.need.budget",
       Self::TimeLimit => "task_form.reasons.need.timeLimit",
@@ -73,6 +79,7 @@ impl Need {
       Self::Brief => "task_form.reasons.also.brief",
       Self::Criteria => "task_form.reasons.also.criteria",
       Self::Pipeline => "task_form.reasons.also.pipeline",
+      Self::NotReady => "task_form.reasons.also.notReady",
       Self::NoPipelines => "task_form.reasons.also.noPipelines",
       Self::Budget => "task_form.reasons.also.budget",
       Self::TimeLimit => "task_form.reasons.also.timeLimit",
@@ -154,6 +161,12 @@ fn editing(ctx: &Ctx, view: &View) -> Option<Reason> {
     }
   }
   let run = view.run_needs();
+  if run == [Need::NotReady] {
+    return line(ctx, view).map(|words| Reason {
+      kind: Kind::NotReady,
+      words,
+    });
+  }
   if !run.is_empty() {
     return blocked(needs_text(ctx, "task_form.reasons.run", &run));
   }

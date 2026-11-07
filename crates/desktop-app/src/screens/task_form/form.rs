@@ -24,6 +24,7 @@ use orchester_core::{
 };
 use orchester_workspace::{
   messages::Message,
+  readiness::ProjectReadiness,
   tasks::{data::PipelineChoice, estimate::Estimates},
 };
 use parking_lot::Mutex;
@@ -38,6 +39,7 @@ use super::{
   fields::Fields,
   kept::KeptEdits,
   keys::FormKeys,
+  readiness,
   sources::Drafted,
   state::{Phase, Subject, View},
   team::TeamStopped,
@@ -215,12 +217,14 @@ impl Component for TaskForm {
       .id(format!("screen-{}", screen.name()))
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0));
+    // Before anything returns early: a future keeps its place by the order it is asked in.
+    let readiness = readiness::read(ctx, &props);
     if !self.seed(ctx, &props, &separator) {
       return root;
     }
     let busy = save.state().get_untracked().is_pending() || run.state().get_untracked().is_pending();
     self.follow_stored(&props, &separator, busy);
-    let view = self.view(&props, (&save, &run), &separator);
+    let view = self.view(&props, (&save, &run), (&separator, readiness));
     self.keep(&view, &props.project.feed);
     let handlers = self.handlers(&props, &view, (&save, &run));
     let keys = self.keys(&view, &handlers);
@@ -279,7 +283,12 @@ impl TaskForm {
     }
   }
 
-  fn view(&self, props: &FormProps, actions: (&SaveAction, &RunAction), separator: &str) -> View {
+  fn view(
+    &self,
+    props: &FormProps,
+    actions: (&SaveAction, &RunAction),
+    (separator, readiness): (&str, Option<Arc<ProjectReadiness>>),
+  ) -> View {
     let values = self.fields.values();
     let form = values.task_form(separator);
     let (ready, errors) = match form.details() {
@@ -308,6 +317,8 @@ impl TaskForm {
       missing,
       pipelines: props.pipelines.clone(),
       missing_pipeline: props.missing_pipeline.clone(),
+      readiness,
+      shared: props.shared,
       kept_at: self.kept_at.get().map(|at| at.0),
       failure,
       retrying: self.retrying.get(),

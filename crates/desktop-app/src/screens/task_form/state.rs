@@ -12,6 +12,7 @@ use orchester_core::{
 };
 use orchester_workspace::{
   messages::Message,
+  readiness::{PipelineReadiness, ProjectReadiness},
   tasks::{base_branch::BasePick, data::PipelineChoice},
 };
 
@@ -76,6 +77,8 @@ pub enum Need {
   Brief,
   Criteria,
   Pipeline,
+  /// The chosen pipeline is not ready on this computer: a run would refuse (`not_ready_here`).
+  NotReady,
   NoPipelines,
   Budget,
   TimeLimit,
@@ -108,6 +111,10 @@ pub struct View {
   pub pipelines: Option<Arc<Vec<PipelineChoice>>>,
   /// A shared task's pipeline, by its slug, that this computer has no pipeline for: saving keeps it.
   pub missing_pipeline: Option<Arc<str>>,
+  /// Whether each pipeline is ready on this computer; `None` while it is read, and when it could not be.
+  pub readiness: Option<Arc<ProjectReadiness>>,
+  /// The project is shared on a server: its words say *here* and *this computer*.
+  pub shared: bool,
   /// The changes were kept on this computer from an earlier visit, at this time.
   pub kept_at: Option<Timestamp>,
   /// Why the last save, or the last Create & run before queuing, failed.
@@ -140,6 +147,11 @@ impl View {
   pub fn pipeline(&self) -> Option<&PipelineChoice> {
     let id = self.values.pipeline?;
     self.pipelines.as_ref()?.iter().find(|choice| choice.id == id)
+  }
+
+  /// How `choice` stands on this computer, once that is read.
+  pub fn readiness_of(&self, choice: &PipelineChoice) -> Option<&PipelineReadiness> {
+    self.readiness.as_ref()?.pipeline(choice.id)
   }
 
   /// The project has no published pipeline to choose.
@@ -201,6 +213,13 @@ impl View {
     // A pipeline that is no longer published cannot run, though the task names it.
     if self.values.pipeline.is_some() && self.pipelines.is_some() && self.pipeline().is_none() {
       needs.push(Need::Pipeline);
+    }
+    if self
+      .pipeline()
+      .and_then(|choice| self.readiness_of(choice))
+      .is_some_and(|readiness| !readiness.standing().is_ready())
+    {
+      needs.push(Need::NotReady);
     }
     needs
   }
