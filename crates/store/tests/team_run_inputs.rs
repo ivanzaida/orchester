@@ -6,6 +6,10 @@ mod support;
 
 #[path = "team_run_inputs/accepted.rs"]
 mod accepted;
+#[path = "team_run_inputs/mcp_bindings.rs"]
+mod mcp_bindings;
+#[path = "team_run_inputs/pinned_server.rs"]
+mod pinned_server;
 
 use std::{collections::BTreeMap, fs, num::NonZeroU32, path::Path};
 
@@ -54,6 +58,8 @@ struct Team {
   server: ServerId,
   project: ProjectId,
   profile: ResourceId,
+  /// The team MCP server the bundle pins.
+  mcp_server: ResourceId,
   snapshot: RunSnapshot,
   inputs: CanonicalExecutionInputs,
 }
@@ -109,16 +115,18 @@ fn team_project() -> Team {
     skills: &BTreeMap::new(),
   };
   let snapshot = RunSnapshot::build(delivery, &version, published).expect("snapshot");
+  let (mcp_server, team, server_version) = pinned_server::pinned_server();
   let bodies = PinnedBodies {
     labels: &[
       (profile_version.id(), label("builder", "Builder")),
       (version.id(), label("delivery", "Delivery")),
+      (server_version.id(), label("docs", "Docs")),
     ],
-    profiles: &[(profile_version.id(), ExecutionProfile::of(profile_version.body()))],
+    profiles: &[(profile_version.id(), ExecutionProfile::of_team(&team))],
     instructions: &[],
     tools: &[],
     skills: &[],
-    mcp_servers: &[],
+    mcp_servers: &[(mcp_server, server_version)],
   };
   let inputs = CanonicalExecutionInputs::pin(&snapshot, bodies).expect("inputs");
   drop(db);
@@ -131,6 +139,7 @@ fn team_project() -> Team {
     server,
     project,
     profile,
+    mcp_server,
     snapshot,
     inputs,
   }
@@ -185,6 +194,7 @@ impl Team {
         mcp_servers: Vec::new(),
       }],
       references,
+      team_mcp: Vec::new(),
     };
     RunInputs::new(content, bindings, LocalConsent::default()).expect("inputs")
   }
@@ -492,6 +502,7 @@ fn local_inputs(db: &ProjectDb, snapshot: &RunSnapshot) -> RunInputs {
       })
       .collect(),
     references: Vec::new(),
+    team_mcp: Vec::new(),
   };
   RunInputs::new(content, bindings, LocalConsent::default()).expect("inputs")
 }

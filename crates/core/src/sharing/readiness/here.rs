@@ -27,6 +27,7 @@ pub struct Here {
   pub(super) mcp_on: HashSet<ResourceId>,
   pub(super) programs: HashMap<ResourceId, ProgramFile>,
   pub(super) secrets: HashSet<SecretName>,
+  pub(super) secrets_unreadable: HashSet<SecretName>,
   pub(super) local_programs: HashSet<ConnectionId>,
   pub(super) local_programs_moved: HashSet<ConnectionId>,
   pub(super) local_secrets: HashSet<SecretId>,
@@ -71,6 +72,14 @@ impl Here {
   #[must_use]
   pub fn with_secret(mut self, name: SecretName) -> Self {
     self.secrets.insert(name);
+    self
+  }
+
+  /// The keychain did not say whether a value is set here for the team secret `name`. Only the name is kept; a name
+  /// that also has a value counts as set.
+  #[must_use]
+  pub fn with_secret_unreadable(mut self, name: SecretName) -> Self {
+    self.secrets_unreadable.insert(name);
     self
   }
 

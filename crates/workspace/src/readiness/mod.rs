@@ -7,8 +7,14 @@
 //!
 //! What counts as "has" differs for a team and a local project:
 //!
-//! - A team secret "has a value here" when `team_secret_values` has a row for its name (a fill-in). The keychain is not
-//!   read, so a value removed from it outside Orchester still counts.
+//! - A team secret "has a value here" when `team_secret_values` has a row for its name (a fill-in) and the keychain
+//!   still holds its value, which is asked with [`SecretVault::exists`](orchester_core::secret::SecretVault::exists):
+//!   the value is not read and the person is not prompted. A row whose value is gone from the keychain is missing
+//!   [`Missing::Secret`](orchester_core::sharing::Missing::Secret); a keychain that cannot say is missing
+//!   [`Missing::SecretUnreadable`](orchester_core::sharing::Missing::SecretUnreadable), not assumed set.
+//! - A team MCP server this app cannot run as defined (a remote one with more than one secret header: an agent's CLI is
+//!   given one header per HTTP server) is missing [`Missing::McpUnsupported`](orchester_core::sharing::Missing::McpUnsupported)
+//!   in itself and in every profile that chooses it, instead of passing and being left out of every run.
 //! - A team MCP server is on only when the person switched it on. One they switched off is [`Group::OffHere`]; one
 //!   nobody decided on is [`Group::NeedsYouHere`]. Either way it and a profile that chooses it are missing
 //!   [`Missing::McpOff`](orchester_core::sharing::Missing::McpOff).
@@ -35,10 +41,13 @@
 //! Not modelled yet: the account of a connection pick. Instructions, skills and reviewers need nothing of a computer
 //! and are not listed.
 
+mod bundle;
 mod error;
 mod facts;
 mod local;
 mod needs;
+mod not_ready;
+mod programs;
 mod project;
 mod read;
 mod standing;
@@ -47,16 +56,30 @@ mod team;
 
 use std::path::Path;
 
-use orchester_core::secret::SecretVault;
+use orchester_core::{id::ResourceId, secret::SecretVault};
 use orchester_store::ProjectDb;
 
+pub(crate) use self::bundle::missing as bundle_missing;
 pub use self::{
   error::ReadinessError,
+  not_ready::{MissingPart, NotReadyHere, NotReadyPart, UndecidedPart},
+  programs::McpPrograms,
   project::{PipelineReadiness, ProjectReadiness, ResourceReadiness},
   standing::{Group, ReadinessStanding, Undecided},
   start::{NOT_READY_HERE, NotReadyHere, Unready},
 };
 use crate::workspace::Workspace;
+
+/// What a team start needs of this computer before it asks the team server for work.
+#[derive(Debug)]
+pub enum StartReadiness {
+  /// The pipeline is ready here: the program paths this computer has set for the team's MCP servers, which the start
+  /// takes with it.
+  Ready(McpPrograms),
+  NotReady(NotReadyHere),
+  /// This computer has no version of the pipeline.
+  PipelineUnknown,
+}
 
 impl Workspace {
   /// Whether each profile, MCP server, tool and pipeline of the project at `repo_root` is ready on this computer. Reads
@@ -71,10 +94,7 @@ impl Workspace {
     vault: &dyn SecretVault,
   ) -> Result<ProjectReadiness, ReadinessError> {
     let db = ProjectDb::open(repo_root)?;
-    let team_programs = match db.sharing()? {
-      Some(link) => Some(self.db.lock().mcp_server_programs(link.server)?),
-      None => None,
-    };
+    let team_programs = self.team_programs(&db)?;
     read::read(
       &db,
       read::Setting {
@@ -83,5 +103,42 @@ impl Workspace {
         team_programs,
       },
     )
+  }
+
+  /// Whether `pipeline` of the team project at `repo_root` is ready to start on this computer, read before the team
+  /// server is asked for anything. It is read from the team versions this computer has cached; the start checks the
+  /// versions the team server pins again. Blocks, as [`Self::project_readiness`] does.
+  pub fn team_start_readiness(
+    &self,
+    repo_root: &Path,
+    vault: &dyn SecretVault,
+    pipeline: ResourceId,
+  ) -> Result<StartReadiness, ReadinessError> {
+    let db = ProjectDb::open(repo_root)?;
+    let programs = self.team_programs(&db)?.ok_or(ReadinessError::NotATeamProject)?;
+    let readiness = read::read(
+      &db,
+      read::Setting {
+        repo_root,
+        vault,
+        team_programs: Some(programs.clone()),
+      },
+    )?;
+    Ok(match readiness.pipeline(pipeline) {
+      None => StartReadiness::PipelineUnknown,
+      Some(found) => match NotReadyHere::of(&readiness, found) {
+        Some(refusal) => StartReadiness::NotReady(refusal),
+        None => StartReadiness::Ready(programs),
+      },
+    })
+  }
+
+  /// The program paths set for the team MCP servers of the team server `db`'s project is shared with; `None` for a
+  /// local project.
+  fn team_programs(&self, db: &ProjectDb) -> Result<Option<McpPrograms>, ReadinessError> {
+    match db.sharing()? {
+      Some(link) => Ok(Some(McpPrograms::of(self.db.lock().mcp_server_programs(link.server)?))),
+      None => Ok(None),
+    }
   }
 }

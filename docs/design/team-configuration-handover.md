@@ -26,15 +26,35 @@ and Orchester Platform module "Team configuration" (OP-197…206). The team serv
 | ORC-829 | add/update/remove_mcp_server write team MCP servers (admin-only; widening-gated; `program` = team body name, the path is each computer's fill-in); remove archives after reading used-by and reports `runs_stopping_here`; a team MCP server URL has no query or fragment (core); chat MCP proposals refused in team projects until a team-aware preview (follow-up) | merged here (bb8dd77f4) |
 | ORC-828 (part 1) | MCP tools: pick_profile_connection, team MCP on (person_only always) / off, program person_only, list_secrets names; **readiness in get_profile/list_profiles and a team MCP server listing are part 2 (after ORC-822/824)** | merged here (aa745f907) |
 | OP-197 step 1, OP-198, OP-201 | Platform: pin on this branch (now e5d53c929), MCP server kind (migration 30; bundle MCP part waits for ORC-880), used-by route (current work only) | platform module/team-configuration 48d14c0 |
+| ORC-820 | Team profile body: CLI kind, team ids, no writable folders (refused, not stripped); bundle inputs take the execution profile per version; unresolved connection said | merged here (2fd23d062) |
+| ORC-821 | Team pipeline body: profiles and tools by server id; a version this computer cannot send is recorded refused | merged here (fe068697d) |
+| ORC-881 | The catalog reports only CLI kinds and models | merged here (21581e877) |
+| ORC-822 | Readiness rule in core: Ready here or the ordered missing parts | merged here (55cf66bac) |
+| ORC-880 | Execution bundle schema 3 pins the team MCP server versions its profiles name | merged here (bfa3ae62d) |
+| ORC-823 | Versions widen by the team references they name (new MCP server, tool, secret; header bound to another secret) | merged here (e1d0ab014) |
+| ORC-882 | An MCP server's variables and secret headers name team secrets (`{header, secret, prefix}`) | merged here (d09a38eb9) |
+| ORC-883 | A team start whose bundle schema differs fails with a reason | merged here (c4e8ceab8) |
+| ORC-830 | Share uploads a local project's configuration in the team's form; the sharer stays ready; what could not be carried is said | merged here (4973a375e) |
+| ORC-884 | `bundle_missing` carries why (`profile_unreadable`, `mcp_server_archived`, …) | merged here (5f0243edb) |
+| ORC-824 | Readiness of each team resource here; groups; a server nobody decided on is Needs you here | merged here (5082c794f) |
+| ORC-846 | Closed, won't do (person, 2026-11-07): the old local profile format is dropped; old-form profiles are republished | — |
+
+## Decisions (person, 2026-11-07)
+
+- The old local profile format is dropped: no compatibility on the desktop or the team server; no special message.
+- A team MCP server nobody decided on here is Needs you here; only one switched off is Off here.
 
 ## In progress
 
-- ORC-820 (team profile body), ORC-821 (team pipeline body, fix round).
+- ORC-826 (team start from fill-ins, `not_ready_here`), ORC-827 (local start `not_ready_here`), ORC-828 part 2
+  (readiness in the MCP tools), ORC-886 (vault presence check without reading the value).
 
-## Next (unblocked once this branch is pushed)
+## Next
 
-- ORC-817 (references by server id / secret name), ORC-818 (sync team MCP servers).
-- Then ORC-819…823, and the Orchester Platform pin (OP-197) once the contract tasks are pushed.
+- UI: ORC-831…844 (each with design verification), ORC-885 (start failure reason on the task page, claim release).
+- ORC-845 (remove bindings, `BindingsHere`, the legacy `local_body` fallback).
+- ORC-847 docs, ORC-848 QA; then merge `master` into this branch.
+- Platform: OP-203…206 (web), deploy blocker `FIRST_DESKTOP_WITH_BUNDLE_REASONS` / `MINIMUM_DESKTOP_VERSION`.
 
 ## Orchester Platform tasks (H:/projects/orchester-cloud, branch `module/team-configuration`)
 

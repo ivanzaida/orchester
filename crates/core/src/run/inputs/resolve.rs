@@ -2,22 +2,31 @@
 //! the connection and with the MCP servers its bindings name, what a person here narrowed, and the task as it was at
 //! the start. Nothing here reads the current task or resource definitions.
 
+use std::path::Path;
+
 use super::{BoundReference, InputsError, InputsOrigin, LocalBindings, ProfileBinding, RunInputs};
 use crate::{
   connection::{Connection, mcp::McpServerSelection},
   id::{ConnectionId, ResourceId, SecretId, TaskId},
   permission::AgentPermissions,
   project::{ProjectKey, TaskKey},
-  resource::{AgentProfile, Instruction, StepKey, Tool},
+  resource::{AgentProfile, Instruction, StepKey, TeamMcpServer, Tool},
   run::{PinnedVersion, bundle::PinnedBody},
   sharing::{ConnectionRole, TaskRevision},
   task::{Task, TaskDetails, TaskStatus, organization::TaskOrganization},
   time::Timestamp,
 };
 
+/// The id a team MCP server runs under in a profile's selection: its resource id as a connection id, which no local
+/// MCP server of this computer carries.
+pub fn team_mcp_id(server: ResourceId) -> ConnectionId {
+  ConnectionId::from_uuid(server.as_uuid())
+}
+
 /// The MCP servers the bindings bind, in their order, over all profiles. Which server a profile gives its agents is
 /// this computer's choice: a local bundle names none, and a team bundle names the team servers of its profiles
-/// (`CanonicalExecutionInputs::mcp_servers`), which this computer's bindings bind to a program and values of its own.
+/// (`CanonicalExecutionInputs::mcp_servers`), which this computer binds to a program and values of its own
+/// ([`LocalBindings::team_mcp`]).
 pub(super) fn mcp_servers(bindings: &LocalBindings) -> Result<McpServerSelection, InputsError> {
   let servers = bindings
     .references
@@ -26,6 +35,7 @@ pub(super) fn mcp_servers(bindings: &LocalBindings) -> Result<McpServerSelection
       BoundReference::McpServer { local, .. } => Some(*local),
       BoundReference::Connection { .. } | BoundReference::Secret { .. } => None,
     })
+    .chain(bindings.team_mcp.iter().map(|bound| team_mcp_id(bound.server)))
     .collect();
   McpServerSelection::new(servers).map_err(InputsError::McpServers)
 }
@@ -119,6 +129,33 @@ impl RunInputs {
       .iter()
       .map(|binding| binding.connection)
       .chain(references)
+      .collect()
+  }
+
+  /// The program this computer runs the team MCP server selected as `id` with, and the pinned version of the server;
+  /// `None` when `id` is no team MCP server of this run. The program is `None` for a remote server.
+  pub fn team_mcp_server(&self, id: ConnectionId) -> Option<(&TeamMcpServer, Option<&Path>)> {
+    let bound = self
+      .bindings
+      .team_mcp
+      .iter()
+      .find(|bound| team_mcp_id(bound.server) == id)?;
+    let pinned = self
+      .bundle
+      .inputs()
+      .mcp_servers()
+      .iter()
+      .find(|pinned| pinned.pinned().resource == bound.server)?;
+    Some((pinned.body(), bound.program.as_deref()))
+  }
+
+  /// The ids the run's team MCP servers are selected under, which no local MCP server of this computer answers to.
+  pub fn team_mcp_ids(&self) -> Vec<ConnectionId> {
+    self
+      .bindings
+      .team_mcp
+      .iter()
+      .map(|bound| team_mcp_id(bound.server))
       .collect()
   }
 

@@ -1,154 +1,229 @@
-//! A start on a pipeline that is not ready here is refused with the parts missing, and starts nothing: the parts are
-//! typed, each has its message, and no secret value reaches either.
-
-use std::collections::BTreeSet;
+//! What a team start reads before it asks the team server for anything: the pipeline is ready here, with the program
+//! paths this computer set, or it is not, and the answer lists each missing part with its fix.
 
 use orchester_core::{
-  connection::{AgentProvider, mcp::McpServerName},
+  connection::AgentProvider,
   id::ResourceId,
-  resource::{Pipeline, PromptText, Step, StepKey, StepKind},
-  secret::{SecretValue, SecretVault, VaultError, VaultKey},
-  sharing::{LocalProgramProblem, Missing},
+  run::Answerer,
+  secret::{SecretValue, SecretVault},
 };
-use orchester_workspace::readiness::{NotReadyHere, Unready};
+use orchester_workspace::readiness::{NotReadyHere, NotReadyPart, ReadinessError, StartReadiness};
+use serde_json::Value;
 
-use crate::support::{Fixture, http_tool, name, pipeline, profile_on, secret};
+use crate::support::{
+  Fixture, LockedVault, MemoryVault, pipeline, profile, program, remote, remote_two_headers, secret,
+};
+use crate::tools::AsksBeforeReading;
 
 const CLAUDE: AgentProvider = AgentProvider::ClaudeCodeCli;
+const TOKEN: &str = "fake-value-7Qx2";
 
-fn refusal(fixture: &Fixture, pipeline: ResourceId) -> Option<NotReadyHere> {
+#[test]
+fn readiness_start_a_ready_pipeline_hands_over_the_program_paths_set_here() {
+  let fixture = Fixture::team();
+  fixture.connection(CLAUDE, "claude");
+  let docs = fixture.team_server("knowledge", program(&["KNOWLEDGE_TOKEN"]));
+  let builder = fixture.team_profile("builder", &profile(CLAUDE, &[docs], &[]));
+  let delivery = fixture.team_resource("delivery", pipeline(&[Some(builder)], None));
+  let work = fixture.workspace.clone();
+  work
+    .switch_team_mcp_on_here(&fixture.root, docs, true, Answerer::Person)
+    .expect("on");
+  let path = fixture.program_file("knowledge-server");
+  work
+    .set_team_mcp_program(&fixture.root, docs, &path, Answerer::Person)
+    .expect("program");
+  work
+    .set_team_secret_value(
+      &fixture.root,
+      &fixture.vault,
+      &secret("KNOWLEDGE_TOKEN"),
+      &SecretValue::new(TOKEN.to_owned()).expect("value"),
+    )
+    .expect("secret");
+
+  let ready = work
+    .team_start_readiness(&fixture.root, &fixture.vault, delivery)
+    .expect("read");
+  let StartReadiness::Ready(programs) = ready else {
+    panic!("not ready: {ready:?}");
+  };
+  assert_eq!(programs.path(docs), Some(path.as_path()));
+}
+
+#[test]
+fn readiness_start_a_pipeline_that_is_not_ready_lists_each_part_with_its_fix_and_no_value() {
+  let fixture = Fixture::team();
+  let docs = fixture.team_server("knowledge", program(&["KNOWLEDGE_TOKEN"]));
+  let issues = fixture.team_server("issues", remote("ISSUES_KEY"));
+  let builder = fixture.team_profile("builder", &profile(CLAUDE, &[docs, issues], &[]));
+  let delivery = fixture.team_resource("delivery", pipeline(&[Some(builder)], None));
   fixture
     .workspace
-    .not_ready_here(&fixture.root, &fixture.vault, pipeline)
-    .expect("readiness")
-}
+    .set_team_secret_value(
+      &fixture.root,
+      &fixture.vault,
+      &secret("ISSUES_KEY"),
+      &SecretValue::new(TOKEN.to_owned()).expect("value"),
+    )
+    .expect("secret");
 
-/// A pipeline with one step that runs `tool`.
-fn tool_pipeline(tool: ResourceId) -> Pipeline {
-  let step = Step {
-    key: StepKey::new("deploy").expect("valid key"),
-    name: name("Deploy"),
-    kind: StepKind::Tool { tool: Some(tool) },
-    instructions: PromptText::new("").expect("valid prompt"),
-    depends_on: BTreeSet::new(),
-    approval_gate: false,
-    on_failure: None,
-    budget: None,
-  };
-  Pipeline::new(vec![step]).expect("a valid pipeline")
-}
-
-fn keys(refused: &NotReadyHere) -> Vec<&'static str> {
-  refused.messages().iter().map(|message| message.key).collect()
-}
-
-#[test]
-fn readiness_start_a_ready_pipeline_is_not_refused() {
-  let fixture = Fixture::local();
-  let own = fixture.connection(CLAUDE, "claude");
-  let program = fixture.program_outside("knowledge.sh");
-  let server = fixture.local_server("knowledge", program.to_str().expect("utf-8"));
-  let builder = fixture.own("builder", &profile_on(own, &[server]));
-  let ready = fixture.own("ship", &pipeline(&[Some(builder)], None));
-
-  assert_eq!(refusal(&fixture, ready), None);
-}
-
-#[test]
-fn readiness_start_a_program_that_is_gone_is_refused_with_the_server_named() {
-  let fixture = Fixture::local();
-  let own = fixture.connection(CLAUDE, "claude");
-  let gone = fixture.dir_path().join("gone.sh");
-  let server = fixture.local_server("knowledge", gone.to_str().expect("utf-8"));
-  let builder = fixture.own("builder", &profile_on(own, &[server]));
-  let ship = fixture.own("ship", &pipeline(&[Some(builder)], None));
-
-  let refused = refusal(&fixture, ship).expect("not ready here");
-  assert_eq!(refused.pipeline(), "ship");
-  assert_eq!(
-    refused.parts(),
-    [Unready::Missing(Missing::LocalMcpProgram {
-      server,
-      name: McpServerName::new("knowledge").expect("name"),
-      problem: LocalProgramProblem::NotFound,
-    })]
-  );
-  let messages = refused.messages();
-  assert_eq!(
-    keys(&refused),
-    ["runs.notReadyHere.lead", "runs.notReadyHere.localProgram.notFound"]
-  );
-  assert_eq!(messages[1].args, [("server", "knowledge".to_owned())]);
-}
-
-#[test]
-fn readiness_start_a_tool_secret_without_a_value_is_refused_and_the_value_stays_out() {
-  let fixture = Fixture::local();
-  let token = fixture.project_secret("DEPLOY_TOKEN", None);
-  let tool = fixture.own("deploy", &http_tool(token));
-  let ship = fixture.own("ship", &tool_pipeline(tool));
-
-  let refused = refusal(&fixture, ship).expect("not ready here");
-  assert_eq!(
-    refused.parts(),
-    [Unready::Missing(Missing::LocalSecret {
-      secret: token,
-      name: secret("DEPLOY_TOKEN"),
-    })]
-  );
-  assert_eq!(
-    keys(&refused),
-    ["runs.notReadyHere.lead", "runs.notReadyHere.localSecret"]
-  );
-
-  let other = Fixture::local();
-  let set = other.project_secret("DEPLOY_TOKEN", Some("s3cret-value"));
-  let tool = other.own("deploy", &http_tool(set));
-  let ship = other.own("ship", &tool_pipeline(tool));
-  assert_eq!(refusal(&other, ship), None, "a value in the keychain makes it ready");
-  assert!(!format!("{refused:?}").contains("s3cret-value"));
-}
-
-#[test]
-fn readiness_start_a_keychain_that_cannot_say_refuses_and_a_missing_connection_is_the_preflights() {
-  struct Locked;
-  impl SecretVault for Locked {
-    fn store(&self, _: &VaultKey, _: &SecretValue) -> Result<(), VaultError> {
-      Err(VaultError::AccessDenied("locked".to_owned()))
-    }
-
-    fn read(&self, _: &VaultKey) -> Result<SecretValue, VaultError> {
-      Err(VaultError::AccessDenied("locked".to_owned()))
-    }
-
-    fn delete(&self, _: &VaultKey) -> Result<(), VaultError> {
-      Ok(())
-    }
-  }
-
-  let fixture = Fixture::local();
-  let token = fixture.project_secret("DEPLOY_TOKEN", Some("a"));
-  let tool = fixture.own("deploy", &http_tool(token));
-  let ship = fixture.own("ship", &tool_pipeline(tool));
-  let refused = fixture
+  let read = fixture
     .workspace
-    .not_ready_here(&fixture.root, &Locked, ship)
-    .expect("readiness")
-    .expect("not ready here");
-  assert_eq!(refused.parts(), [Unready::SecretUnreadable(token)]);
+    .team_start_readiness(&fixture.root, &fixture.vault, delivery)
+    .expect("read");
+  let StartReadiness::NotReady(refusal) = read else {
+    panic!("ready: {read:?}");
+  };
+  assert_eq!(refusal.pipeline(), "delivery");
+  let keys: Vec<&str> = refusal.messages().iter().map(|message| message.key).collect();
   assert_eq!(
-    keys(&refused),
-    ["runs.notReadyHere.lead", "runs.notReadyHere.secretUnreadable"]
+    keys,
+    [
+      "notReadyHere.refused",
+      "notReadyHere.connectionNoneOfKind",
+      "notReadyHere.mcpOff",
+      "notReadyHere.mcpOff",
+      "notReadyHere.mcpProgramNotSet",
+      "notReadyHere.secret",
+    ]
   );
+  let parts = refusal.parts_json();
+  assert_eq!(parts[0]["kind"], "connection");
+  assert_eq!(parts[0]["name"], "builder");
+  assert_eq!(parts[3]["kind"], "mcp_program");
+  assert_eq!(parts[3]["problem"]["kind"], "not_set");
+  assert_eq!(parts[4]["name"], "KNOWLEDGE_TOKEN");
+  assert!(
+    refusal
+      .parts()
+      .iter()
+      .all(|part| matches!(part, NotReadyPart::Missing(_)))
+  );
+  let shown = format!("{refusal:?} {parts:?}");
+  assert!(!shown.contains(TOKEN), "a value is never in the answer");
+}
 
-  let gone = fixture.own(
-    "builder",
-    &profile_on(orchester_core::id::ConnectionId::generate(), &[]),
-  );
-  let runs_gone = fixture.own("lost", &pipeline(&[Some(gone)], None));
+#[test]
+fn readiness_start_a_pipeline_this_computer_has_no_version_of_is_unknown_and_a_local_project_has_no_team_start() {
+  let fixture = Fixture::team();
+  assert!(matches!(
+    fixture
+      .workspace
+      .team_start_readiness(&fixture.root, &fixture.vault, ResourceId::generate())
+      .expect("read"),
+    StartReadiness::PipelineUnknown
+  ));
+
+  let local = Fixture::local();
+  let error = local
+    .workspace
+    .team_start_readiness(&local.root, &local.vault, ResourceId::generate())
+    .expect_err("a local project");
+  assert!(matches!(error, ReadinessError::NotATeamProject));
+}
+
+/// A pipeline of one profile that chooses a remote server, switched on and given its secret's value in the fixture's
+/// keychain, so only what a test changes keeps it from being ready.
+fn ready_with_remote(fixture: &Fixture, server: Value) -> ResourceId {
+  fixture.connection(CLAUDE, "claude");
+  let issues = fixture.team_server("issues", server);
+  let builder = fixture.team_profile("builder", &profile(CLAUDE, &[issues], &[]));
+  let delivery = fixture.team_resource("delivery", pipeline(&[Some(builder)], None));
+  fixture
+    .workspace
+    .switch_team_mcp_on_here(&fixture.root, issues, true, Answerer::Person)
+    .expect("on");
+  for name in ["ISSUES_KEY", "ORG_KEY"] {
+    fixture
+      .workspace
+      .set_team_secret_value(
+        &fixture.root,
+        &fixture.vault,
+        &secret(name),
+        &SecretValue::new(TOKEN.to_owned()).expect("value"),
+      )
+      .expect("secret");
+  }
+  delivery
+}
+
+fn not_ready(fixture: &Fixture, vault: &dyn SecretVault, pipeline: ResourceId) -> NotReadyHere {
+  let read = fixture
+    .workspace
+    .team_start_readiness(&fixture.root, vault, pipeline)
+    .expect("read");
+  let StartReadiness::NotReady(refusal) = read else {
+    panic!("ready: {read:?}");
+  };
+  refusal
+}
+
+#[test]
+fn readiness_start_a_secret_whose_keychain_value_is_gone_is_missing_though_its_row_is_there() {
+  let fixture = Fixture::team();
+  let delivery = ready_with_remote(&fixture, remote("ISSUES_KEY"));
+  assert!(matches!(
+    fixture
+      .workspace
+      .team_start_readiness(&fixture.root, &fixture.vault, delivery)
+      .expect("read"),
+    StartReadiness::Ready(_)
+  ));
+
+  // The same rows, read where the keychain holds no value.
+  let refusal = not_ready(&fixture, &MemoryVault::default(), delivery);
+  let keys: Vec<&str> = refusal.messages().iter().map(|message| message.key).collect();
+  assert_eq!(keys, ["notReadyHere.refused", "notReadyHere.secret"]);
+  assert_eq!(refusal.parts_json()[0]["kind"], "secret");
+  assert_eq!(refusal.parts_json()[0]["name"], "ISSUES_KEY");
+}
+
+#[test]
+fn readiness_start_a_keychain_that_cannot_say_leaves_the_secret_unreadable_not_set() {
+  let fixture = Fixture::team();
+  let delivery = ready_with_remote(&fixture, remote("ISSUES_KEY"));
+
+  let refusal = not_ready(&fixture, &LockedVault, delivery);
+  let keys: Vec<&str> = refusal.messages().iter().map(|message| message.key).collect();
+  assert_eq!(keys, ["notReadyHere.refused", "notReadyHere.secretUnreadable"]);
+  let parts = refusal.parts_json();
+  assert_eq!(parts[0]["kind"], "secret_unreadable");
+  assert_eq!(parts[0]["name"], "ISSUES_KEY");
+  assert!(!format!("{parts:?}").contains(TOKEN), "a value is never in the answer");
+}
+
+#[test]
+fn readiness_start_a_remote_server_with_several_secret_headers_is_not_ready_for_it() {
+  let fixture = Fixture::team();
+  let delivery = ready_with_remote(&fixture, remote_two_headers("ISSUES_KEY", "ORG_KEY"));
+
+  let refusal = not_ready(&fixture, &fixture.vault, delivery);
+  let keys: Vec<&str> = refusal.messages().iter().map(|message| message.key).collect();
   assert_eq!(
-    refusal(&fixture, runs_gone),
-    None,
-    "a profile whose connection is gone is refused by the preflight with its own reason"
+    keys,
+    ["notReadyHere.refused", "notReadyHere.mcpMoreThanOneSecretHeader"]
   );
+  let parts = refusal.parts_json();
+  assert_eq!(parts[0]["kind"], "mcp_unsupported");
+  assert_eq!(parts[0]["why"], "more_than_one_secret_header");
+  assert_eq!(parts[0]["name"], "issues");
+}
+
+#[test]
+fn readiness_start_a_refusal_after_the_server_made_the_work_says_so_in_its_lead() {
+  let after = NotReadyHere::after_start("delivery", Vec::new());
+  assert_eq!(after.messages()[0].key, "notReadyHere.refusedAfterStart");
+}
+
+#[test]
+fn readiness_start_a_team_secret_is_asked_for_with_exists_and_never_read() {
+  let fixture = Fixture::team();
+  let delivery = ready_with_remote(&fixture, remote("ISSUES_KEY"));
+  let ready = fixture
+    .workspace
+    .team_start_readiness(&fixture.root, &AsksBeforeReading(Ok(true)), delivery)
+    .expect("read");
+  assert!(matches!(ready, StartReadiness::Ready(_)), "{ready:?}");
+  not_ready(&fixture, &AsksBeforeReading(Ok(false)), delivery);
 }

@@ -90,6 +90,64 @@ fn readiness_a_keychain_that_cannot_say_leaves_the_tool_undecided() {
   );
 }
 
+/// A keychain that answers whether a value is there but refuses to hand any value over, as one that asks the person
+/// before each read.
+pub struct AsksBeforeReading(pub Result<bool, VaultError>);
+
+impl SecretVault for AsksBeforeReading {
+  fn store(&self, _: &VaultKey, _: &SecretValue) -> Result<(), VaultError> {
+    Ok(())
+  }
+
+  fn read(&self, _: &VaultKey) -> Result<SecretValue, VaultError> {
+    panic!("readiness read a secret's value");
+  }
+
+  fn exists(&self, _: &VaultKey) -> Result<bool, VaultError> {
+    self.0.clone()
+  }
+
+  fn delete(&self, _: &VaultKey) -> Result<(), VaultError> {
+    Ok(())
+  }
+}
+
+#[test]
+fn readiness_a_local_tool_asks_whether_the_secret_exists_and_never_reads_it() {
+  let fixture = Fixture::local();
+  let token = fixture.project_secret("DEPLOY_TOKEN", None);
+  let tool = fixture.own("deploy", &http_tool(token));
+  let read_with = |answer| {
+    fixture
+      .workspace
+      .project_readiness(&fixture.root, &AsksBeforeReading(answer))
+      .expect("readiness")
+  };
+
+  assert_eq!(
+    read_with(Ok(true)).resource(tool).expect("listed").standing(),
+    &ReadinessStanding::Ready
+  );
+  assert_eq!(
+    read_with(Ok(false))
+      .resource(tool)
+      .expect("listed")
+      .standing()
+      .missing(),
+    [Missing::LocalSecret {
+      secret: token,
+      name: secret("DEPLOY_TOKEN")
+    }]
+  );
+  assert_eq!(
+    read_with(Err(VaultError::AccessDenied("locked".to_owned())))
+      .resource(tool)
+      .expect("listed")
+      .standing(),
+    &ReadinessStanding::Undecided(Undecided::SecretUnreadable(token))
+  );
+}
+
 #[test]
 fn readiness_a_team_tool_holding_a_secret_by_id_is_undecided_not_ready() {
   let fixture = Fixture::team();

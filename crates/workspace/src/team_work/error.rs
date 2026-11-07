@@ -1,15 +1,14 @@
 use orchester_api::v2::{BundleFileError, EXECUTION_BUNDLE_SCHEMA};
 use orchester_core::{
   blob::ContentHash,
-  connection::AgentProvider,
-  id::{OperationId, ResourceId, RunId},
+  id::{OperationId, RunId},
   integration::GitError,
   run::inputs::InputsError,
 };
 use orchester_exec::local_git::LocalGitError;
 use orchester_store::{RunStoreError, StoreError};
 
-use crate::actions::ActionError;
+use crate::{actions::ActionError, readiness::MissingPart};
 
 /// Why a team start, its reports, its heartbeat or a module delivery could not go on. A server that cannot be reached
 /// or refuses for now is no error: the outcome says so, and the work goes on from where it stands.
@@ -42,9 +41,13 @@ pub enum TeamWorkError {
   /// The accepted bundle with the caller's choices does not make a run's inputs.
   #[error("the accepted bundle does not make the run's inputs: {0}")]
   Inputs(#[from] InputsError),
-  /// A pinned profile is bound to a connection here that does not run the CLI the bundle binds it to.
-  #[error("agent profile {resource} is bound to a connection that is not {cli:?}")]
-  BindingCli { resource: ResourceId, cli: AgentProvider },
+  /// The versions the bundle pins need something this computer lacks, though the pipeline was ready here when the start
+  /// asked: the team server pinned newer versions than the cached ones.
+  #[error("the pipeline {pipeline} is not ready on this computer for the versions the bundle pins")]
+  NotReadyHere {
+    pipeline: String,
+    missing: Vec<MissingPart>,
+  },
   /// The recorded request or receipt of the start cannot be read back.
   #[error("the record of team start {0} cannot be read")]
   Unreadable(OperationId),

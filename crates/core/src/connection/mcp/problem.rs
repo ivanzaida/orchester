@@ -24,6 +24,8 @@ pub enum McpServerProblem {
   NotUnicode,
   /// A value comes from secret `secret` (its id), which the project no longer has.
   SecretMissing { secret: String },
+  /// A value comes from the team secret `secret` (its name), which has no value on this computer.
+  TeamSecretMissing { secret: String },
   /// A value comes from secret `secret` (its name), which is archived.
   SecretArchived { secret: String },
   /// The keychain did not give the value of secret `secret` (its name): it refused, or has no value for it on
@@ -41,6 +43,9 @@ pub enum McpServerProblem {
   /// only `reached` of them came to the runner: the agent may have worked without them. Runs recorded before
   /// this variant say the same as [`Self::FailedToStart`] with an English `detail`.
   ToolRelaysMissing { reached: usize, started: usize },
+  /// A team's remote server takes more than one secret header; an agent's CLI is given one header per HTTP server here,
+  /// so the server was left out.
+  MoreThanOneSecretHeader,
   /// A native agent reaches no MCP server yet (`docs/architecture/native-agent.md` §5.4, P4).
   NotSupportedByConnection,
 }

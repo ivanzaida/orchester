@@ -13,7 +13,7 @@ use orchester_core::{
   },
   id::{ConnectionId, ResourceId, SecretId},
   resource::{AgentProfile, ResourceKind, Tool},
-  secret::{SecretVault, VaultError},
+  secret::SecretVault,
   sharing::Needs,
   store::{ConnectionStore, McpServerStore, ResourceStore, SecretStore, SettingsStore},
 };
@@ -103,8 +103,8 @@ fn program_found(
 }
 
 /// The tools of a local project. A tool that sends or connects with a project secret needs its value, which only the
-/// keychain holds, so `vault` is asked for it; the value itself is dropped at once. A command tool holds no secret and
-/// asks nothing.
+/// keychain holds, so `vault` is asked whether it is there; the value is never read, since reading can make the
+/// keychain ask the person each time readiness is refreshed. A command tool holds no secret and asks nothing.
 pub(super) fn tools(db: &ProjectDb, vault: &dyn SecretVault) -> Result<Vec<Entry>, StoreError> {
   let mut tools = Vec::new();
   for resource in db.resources(ResourceKind::Tool)? {
@@ -135,9 +135,9 @@ fn secret_value(
   if secret.is_archived() {
     return Ok(());
   }
-  match vault.read(&secret.vault_key(db.project().id())) {
-    Ok(_) => entry.found.push(Found::SecretValue(id)),
-    Err(VaultError::NotFound) => {}
+  match vault.exists(&secret.vault_key(db.project().id())) {
+    Ok(true) => entry.found.push(Found::SecretValue(id)),
+    Ok(false) => {}
     Err(error) => {
       tracing::warn!(%tool, secret = %id, %error, "the keychain did not say whether a tool's secret has a value");
       entry.needs = Err(Undecided::SecretUnreadable(id));

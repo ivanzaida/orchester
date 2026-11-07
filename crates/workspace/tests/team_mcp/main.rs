@@ -22,13 +22,14 @@ mod team_server;
 
 mod bundle_missing;
 mod bundle_schema;
-mod choices;
 mod created;
 mod delivery;
 mod mcp_server_remove;
 mod mcp_servers;
+mod not_ready;
 mod pipelines;
 mod reads;
+mod ready;
 mod share;
 mod tools;
 

@@ -34,6 +34,10 @@ impl SecretVault for KeychainVault {
     platform::read(key)
   }
 
+  fn exists(&self, key: &VaultKey) -> Result<bool, VaultError> {
+    platform::exists(key)
+  }
+
   fn delete(&self, key: &VaultKey) -> Result<(), VaultError> {
     platform::delete(key)
   }

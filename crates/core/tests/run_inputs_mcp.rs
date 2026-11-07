@@ -20,7 +20,7 @@ use orchester_core::{
     bundle::{CanonicalExecutionInputs, ExecutionProfile, PinnedBodies, ResourceLabel},
     inputs::{
       BoundReference, BundleContent, InputsError, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, RunInputs,
-      TaskAtStart, TeamAcceptance,
+      TaskAtStart, TeamAcceptance, TeamMcpBinding,
     },
   },
   sharing::TaskRevision,
@@ -183,6 +183,7 @@ fn each_profile_gets_only_the_mcp_servers_it_names() {
       binding(ids[1], vec![issues, shared]),
     ],
     references: vec![reference(docs), reference(issues), reference(shared)],
+    team_mcp: Vec::new(),
   };
   let inputs = make(&canonical, bindings).expect("inputs");
   assert_eq!(servers_of(&inputs, ids[0]), [docs, shared]);
@@ -197,6 +198,7 @@ fn a_profile_naming_no_server_gets_none_even_when_others_are_bound() {
   let bindings = LocalBindings {
     profiles: vec![binding(ids[0], vec![docs]), binding(ids[1], Vec::new())],
     references: vec![reference(docs)],
+    team_mcp: Vec::new(),
   };
   let inputs = make(&canonical, bindings).expect("inputs");
   assert_eq!(servers_of(&inputs, ids[0]), [docs]);
@@ -210,6 +212,7 @@ fn a_profile_cannot_name_a_server_the_inputs_do_not_bind() {
   let bindings = LocalBindings {
     profiles: vec![binding(ids[0], vec![stray]), binding(ids[1], Vec::new())],
     references: Vec::new(),
+    team_mcp: Vec::new(),
   };
   assert_eq!(
     make(&canonical, bindings).expect_err("refused"),
@@ -217,5 +220,23 @@ fn a_profile_cannot_name_a_server_the_inputs_do_not_bind() {
       profile: ids[0],
       server: stray
     }
+  );
+}
+
+#[test]
+fn a_team_mcp_server_the_bundle_does_not_pin_cannot_be_bound() {
+  let (canonical, ids) = two_profiles();
+  let stray = ResourceId::generate();
+  let bindings = LocalBindings {
+    profiles: vec![binding(ids[0], Vec::new()), binding(ids[1], Vec::new())],
+    references: Vec::new(),
+    team_mcp: vec![TeamMcpBinding {
+      server: stray,
+      program: None,
+    }],
+  };
+  assert_eq!(
+    make(&canonical, bindings).expect_err("refused"),
+    InputsError::UnpinnedTeamMcp(stray)
   );
 }

@@ -20,6 +20,12 @@ pub(crate) fn read(key: &VaultKey) -> Result<SecretValue, VaultError> {
   entry::read(credential(key))
 }
 
+/// Credential Manager never asks the person to allow a read, so the check is a read of the credential's
+/// attributes: it does not copy the value into a [`SecretValue`] and drops what it got at once.
+pub(crate) fn exists(key: &VaultKey) -> Result<bool, VaultError> {
+  entry::exists_by_attributes(credential(key))
+}
+
 pub(crate) fn delete(key: &VaultKey) -> Result<(), VaultError> {
   entry::delete(credential(key))
 }

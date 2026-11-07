@@ -3,7 +3,7 @@
 
 use orchester_core::{
   id::{ProjectId, SecretId},
-  secret::{Environment, SecretError, VaultError, add, archive, existing, replace_value},
+  secret::{Environment, SecretError, SecretVault, VaultError, VaultKey, add, archive, existing, replace_value},
 };
 
 use crate::support::{MemoryStore, MemoryVault, VALUE, at, new_secret, value};
@@ -191,4 +191,22 @@ fn secret_unknown_ids_are_not_found() {
   let id = SecretId::generate();
   let result = archive(&mut fixture.store, &fixture.vault, fixture.project, id, at(1));
   assert!(matches!(result, Err(SecretError::NotFound(missing)) if missing == id));
+}
+
+#[test]
+fn secret_exists_says_whether_a_value_is_stored_and_passes_other_errors_on() {
+  let mut fixture = Fixture::new();
+  let id = fixture.add("DEPLOY_TOKEN", Environment::Production);
+  let key = fixture.store.rows[0].vault_key(fixture.project);
+  let other = VaultKey::new(fixture.project, SecretId::generate());
+  assert_eq!(id, fixture.store.rows[0].id());
+
+  assert_eq!(fixture.vault.exists(&key), Ok(true));
+  assert_eq!(fixture.vault.exists(&other), Ok(false));
+
+  fixture.vault.fail_with(VaultError::AccessDenied("locked".to_owned()));
+  assert_eq!(
+    fixture.vault.exists(&key),
+    Err(VaultError::AccessDenied("locked".to_owned()))
+  );
 }
