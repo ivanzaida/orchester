@@ -28,6 +28,7 @@ mod mcp_server_remove;
 mod mcp_servers;
 mod not_ready;
 mod pipelines;
+mod readiness;
 mod reads;
 mod ready;
 mod share;
@@ -95,6 +96,9 @@ impl SecretVault for MemoryVault {
 struct Checkout {
   dir: TempDir,
   services: app_mcp::Services,
+  workspace: Workspace,
+  /// The keychain the tools read: the team's secret values and the server tokens.
+  vault: Arc<MemoryVault>,
   runtime: Runtime,
   _data: TempDir,
 }
@@ -189,15 +193,18 @@ impl Checkout {
       orchester_ipc::SessionEnd::Clean,
     );
     let services = app_mcp::Services::new(
-      workspace,
+      workspace.clone(),
       runners,
       servers,
       Programs::processes(),
       (OutsideChanges::default(), Activity::new(), ProjectJobs::default()),
-    );
+    )
+    .with_vault(Vault::with(vault.clone()));
     Self {
       dir,
       services,
+      workspace,
+      vault,
       runtime,
       _data: data,
     }

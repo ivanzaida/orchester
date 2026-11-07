@@ -83,7 +83,8 @@ widening calls; **AA** = needs *Let automation answer approvals*; **WC** = needs
 | `update_mcp_server` | AP for widening | Change an MCP server |
 | `remove_mcp_server` | | Remove an MCP server |
 | `set_mcp_server_enabled` | AP to turn on | Turn an MCP server on or off |
-| `list_profiles` / `get_profile` | RO | Agent profiles |
+| `list_profiles` / `get_profile` | RO | Agent profiles, with readiness here |
+| `list_team_mcp_servers` | RO | A team project's MCP servers, with readiness here |
 | `list_pipelines` | RO | Published pipelines |
 | `save_profile_draft` | AP for widening | Save a profile draft |
 | `publish_profile` | AP for broader/re-worded | Publish a profile |

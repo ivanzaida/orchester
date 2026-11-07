@@ -409,6 +409,7 @@ fn domain_reads_leave_a_project_this_version_has_not_opened_untouched() {
     "list_tools",
     "list_secrets",
     "list_connections",
+    "list_team_mcp_servers",
   ] {
     let read = served.ok(tool, &json!({}));
     let unreadable = list(&read, "unreadable_projects");

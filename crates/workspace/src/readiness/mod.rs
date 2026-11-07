@@ -29,7 +29,7 @@
 //!   ([`LocalProgramProblem`](orchester_core::sharing::LocalProgramProblem)). A server turned off in Connections is
 //!   left out, as a run leaves it out. Such a server is not a resource of its own, and its variables' secrets are not
 //!   read. A tool that sends or connects with a project secret is ready only when the keychain has that secret's value,
-//!   which is read (and dropped) at the call; a keychain that cannot say is [`Undecided::SecretUnreadable`].
+//!   which it is asked about without reading the value; a keychain that cannot say is [`Undecided::SecretUnreadable`].
 //! - A tool of a team project names no secret by name until ORC-830, so one that holds none asks nothing. One that
 //!   holds a project secret by id is [`Undecided::TeamToolSecretById`]: it is not assumed ready.
 //!
@@ -88,11 +88,12 @@ pub enum StartReadiness {
 
 impl Workspace {
   /// Whether each profile, MCP server, tool, team reviewer and pipeline of the project at `repo_root` is ready on this
-  /// computer. Reads the databases, stats the program files and, for the tools of a local project that use a secret,
-  /// asks `vault` whether it has the value, so it blocks: run it on the background pool.
+  /// computer. Opens the project's database (which migrates it; a caller that only reads uses [`Self::readiness_in`]
+  /// with a read-only handle), reads the databases, stats the program files and, for the tools of a local project that
+  /// use a secret, asks `vault` whether it has the value, so it blocks: run it on the background pool.
   ///
-  /// Each local tool secret is read from the keychain on every call, which may prompt on macOS: a caller reads the
-  /// answer on an explicit change (a screen opening, a save), not on a timer.
+  /// The keychain is asked whether each local tool secret exists and never for its value, so a refresh does not make it
+  /// prompt; a caller still reads the answer on an explicit change (a screen opening, a save), not on a timer.
   pub fn project_readiness(
     &self,
     repo_root: &Path,
@@ -101,8 +102,9 @@ impl Workspace {
     self.readiness_in(&ProjectDb::open(repo_root)?, repo_root, vault)
   }
 
-  /// [`Self::project_readiness`] read from `db`, the project's database at `repo_root`, which the caller has open.
-  pub(crate) fn readiness_in(
+  /// [`Self::project_readiness`] read from `db`, the project's database at `repo_root`, which the caller has open, e.g.
+  /// only to read it. It never writes to `db`.
+  pub fn readiness_in(
     &self,
     db: &ProjectDb,
     repo_root: &Path,
