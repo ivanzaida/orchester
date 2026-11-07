@@ -31,7 +31,7 @@ added a case. The model below removes the cause: **the server never holds an id 
 | Instruction, skill | everything | nothing |
 | Tool (command, HTTP, database) | everything except secret values | secret values |
 | Secret *(decided)* | only its name and what it is for; never a value | its value |
-| Reviewer (`team_reviewer`) *(decided 2026-11-07; being built as ORC-887)* | the kind, model, effort or threshold and destinations; its CLI kind, like a profile's (today its body names a connection by name and role) | which local connection of that kind runs it |
+| Reviewer (`team_reviewer`) *(decided 2026-11-07; built as ORC-887)* | the kind, model, effort or threshold and destinations; a language reviewer's CLI kind, like a profile's | which local connection runs it: an agent connection of that CLI kind, or a decision connection for a decision reviewer |
 
 **Rule:** a team resource refers only to other team resources (by server id) and to names. A computer fills in only
 what is local by nature: connections, program paths, secret values.
@@ -50,7 +50,7 @@ what is local by nature: connections, program paths, secret values.
   they take (a variable the secret of its own name; a header its secret and an optional prefix such as `Bearer `), so
   the names an MCP server needs are read from its body.
 - **Secrets.** Each needed name gets a value here, once.
-- **Readiness.** Every profile, MCP server and tool shows *ready here* or exactly what is missing. A team MCP server
+- **Readiness.** Every profile, MCP server, tool and team reviewer shows *ready here* or exactly what is missing. A team MCP server
   nobody has decided on here is *Needs you here* (it is missing "switched on"); one a person switched off, or an
   automation did (off is the safe direction, so automation may), is *Off here*. Readiness also has an *undecided*
   state for what cannot be known yet: a version that cannot be turned into the team's form, a connection or secret the
@@ -58,7 +58,11 @@ what is local by nature: connections, program paths, secret values.
   what a run would: the value of each secret a tool uses, and the program of each MCP server a profile chooses that
   is turned on, looked up as a run does (the project's `PATH`, else Orchester's search path, or the project; a fixed
   file outside the repository). A run whose pipeline is not ready here does not start: it refuses with the missing
-  parts listed (`not_ready_here`). Nothing is ever dropped silently.
+  parts listed (`not_ready_here`). Nothing is ever dropped silently. A team reviewer needs a connection like a profile:
+  an agent connection of its CLI kind (`Missing::Connection`, the pick when there are several) or, for a decision
+  reviewer, a decision connection (`Missing::DecisionConnection`). No pipeline or bundle names a reviewer yet, so a run
+  does not wait on it: a team reviewer without a connection is listed *Needs you here*, and the design's reviewer row sends
+  every request to the person until one is picked.
 - **A team start.** A team run takes its inputs from the team versions plus what this computer filled in: the
   connection picked for each profile (else the only one of its CLI), the program path of each team MCP server that runs
   one, which servers are on, and the secrets' values by name. Each team MCP server comes from the version the
@@ -130,4 +134,4 @@ and hides local resources by slug is removed by ORC-845.
 2. A team MCP server nobody has decided on at this computer is *Needs you here*; only one a person or an automation
    switched off is *Off here*.
 3. A team reviewer names its CLI kind like a team agent profile, and each computer picks the connection it runs on
-   (row 95 of `docs/architecture/server.md`; being built as ORC-887, not merged when this was written).
+   (row 95 of `docs/architecture/server.md`; built as ORC-887).

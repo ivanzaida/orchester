@@ -362,6 +362,18 @@ in a project that is not shared with a team, `profile_not_found` for a profile t
 Parameters: `project` (req.), `profile` (req.: id or role of a team profile), `connection` (req.: id or name of an
 agent connection), `account` (id or name of an account of the connection's CLI; `default` is the CLI's Default).
 
+### `pick_reviewer_connection` — changes data · team project
+
+Chooses the connection a team reviewer runs on on this computer (the reviewer's *Connection* field in a team project),
+as `pick_profile_connection` does for a profile. A language reviewer takes an agent connection of the CLI kind its
+newest version names; a decision reviewer takes a decision connection. The pick is kept on this computer only. Refused
+as `team_project_required` in a project that is not shared with a team, `reviewer_not_found` for a reviewer that is not
+the team's, `connection_does_not_fit` for a connection of the other kind, and `person_only` for a decision connection
+whose server is not on this computer (it would send the project's requests there).
+
+Parameters: `project` (req.), `reviewer` (req.: id or name of a team reviewer), `connection` (req.: id or name of an
+agent connection, or of a decision connection for a decision reviewer).
+
 ---
 
 ## 4. Agent profiles
