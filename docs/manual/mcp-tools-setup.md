@@ -401,7 +401,9 @@ approvals), MCP servers, where it stands, which published pipeline steps run it,
 `list_profiles`, `get_profile` and `list_team_mcp_servers` add `readiness`: whether the resource can be used on this
 computer, read from the version this computer uses (not from a draft), or exactly what is missing. It works in team and
 local projects; it is `null` for a resource with no version. Reading it checks this computer (program files, and in a
-local project the keychain for the secret of each command tool that uses one), so it is read once per call.
+local project the keychain, asked only whether the secret of each command tool that uses one has a value, never for the
+value), so it is read once per call. It is computed for the whole project on each call, also by `get_profile` for its one
+profile. Reading it opens the project's data only to read it: it migrates and writes nothing.
 
 ```json
 {
@@ -435,9 +437,9 @@ local project the keychain for the secret of each command tool that uses one), s
 | `mcp_off` | `server` `{id, name}` — a team MCP server not switched on here | `set_mcp_server_enabled`; turning on is `person_only` always, so `gate: "person"` |
 | `mcp_program` | `server`, `problem`: `not_set` or `file_gone` — the team MCP server's program path on this computer | none: a person chooses the file in the app |
 | `secret` | `name` — the team secret has no value here | none: a person gives it in the app |
-| `local_mcp_program` | `server` `{id, name}`, `problem`: `not_found` (no such file on the `PATH` the agent starts with, or in the project) or `moved` (a fixed file now leads into the repository) — a local project's MCP server a profile chooses and that is turned on | `update_mcp_server` (another program widens: `gate: "ap"`), or install the program |
+| `local_mcp_program` | `server` `{id, name}`, `problem`: `not_found` (no such file on the `PATH` the agent starts with, or in the project) or `moved` (a fixed file now leads into the repository) — a local project's MCP server a profile chooses and that is turned on | `update_mcp_server` (another program widens: `gate: "ap"`); `not_found` may instead mean installing the program, which no tool does |
 | `local_secret` | `secret` `{id, name}` — a command tool's project secret has no value in the keychain | none: a person sets it in the app |
-| `undecided` | `why`, `fix: null` — what cannot be known yet (see below) | — |
+| `undecided` | `why` — what cannot be known yet (see below) | `{"tool": null, "gate": null}`, except `connection_gone`: `save_profile_draft` (change the profile's connection, then `publish_profile`), and `secret_gone`: `{"tool": null, "gate": "person"}` (no tool adds a project secret) |
 
 `undecided` is not ready and not assumed to need nothing. `why`: `not_team_form` (a version cached before the team
 configuration model), `cannot_be_published` (`reason`: `duplicate`, `too_many`, `connection`, `local_mcp_server` or

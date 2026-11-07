@@ -11,8 +11,9 @@ use orchester_core::{
     AgentConnection, AgentProvider,
     mcp::{McpEnvironment, McpServer, McpServerName, McpServerSelection, McpTransport, StdioServer},
   },
-  id::{ConnectionId, ResourceId, UserId},
+  id::{ConnectionId, ProjectId, ResourceId, UserId},
   name::Name,
+  project::{Project, ProjectKey},
   resource::{
     AgentProfile, CommandProgram, ModelId, PromptText, ProviderSettings, ResourceBody, Slug, TeamAgentProfile,
     TeamMcpServer, VersionNumber,
@@ -356,7 +357,7 @@ fn team_mcp_readiness_a_profile_version_that_is_not_in_the_teams_form_is_undecid
   assert_eq!(readiness["group"], "needs_you_here");
   assert_eq!(
     readiness["missing"],
-    json!([{"kind": "undecided", "why": "not_team_form", "fix": null}])
+    json!([{"kind": "undecided", "why": "not_team_form", "fix": {"tool": null, "gate": null}}])
   );
 }
 
@@ -375,35 +376,39 @@ fn local_server(program: &str) -> McpServer {
   .expect("server")
 }
 
+/// A published profile of a local project that chooses a server whose program no computer has: the profile and the
+/// server.
+fn local_profile_with_missing_program(db: &mut ProjectDb) -> (ResourceId, ConnectionId) {
+  let server = local_server("orchester-test-no-such-program");
+  db.create_mcp_server(&server).expect("a server");
+  let connection = db.connections().expect("connections")[0].id();
+  let profile = AgentProfile::new(
+    name("Builder"),
+    String::new(),
+    PromptText::new("Build.").expect("prompt"),
+    connection,
+    ModelId::new("gpt-5.5").expect("model"),
+    ProviderSettings::default(),
+  )
+  .with_mcp_servers(McpServerSelection::new(vec![server.id()]).expect("one server"));
+  let id = db
+    .create_resource(
+      Slug::new("builder").expect("slug"),
+      name("builder"),
+      &profile,
+      Timestamp::now(),
+    )
+    .expect("resource")
+    .id();
+  db.publish_draft::<AgentProfile>(id, Timestamp::now())
+    .expect("published");
+  (id, server.id())
+}
+
 #[test]
 fn team_mcp_readiness_a_local_project_says_what_a_run_would_find_and_lists_no_team_servers() {
   let mut ids = None;
-  let checkout = Checkout::prepared(None, &[], |db| {
-    let server = local_server("orchester-test-no-such-program");
-    db.create_mcp_server(&server).expect("a server");
-    let connection = db.connections().expect("connections")[0].id();
-    let profile = AgentProfile::new(
-      name("Builder"),
-      String::new(),
-      PromptText::new("Build.").expect("prompt"),
-      connection,
-      ModelId::new("gpt-5.5").expect("model"),
-      ProviderSettings::default(),
-    )
-    .with_mcp_servers(McpServerSelection::new(vec![server.id()]).expect("one server"));
-    let id = db
-      .create_resource(
-        Slug::new("builder").expect("slug"),
-        name("builder"),
-        &profile,
-        Timestamp::now(),
-      )
-      .expect("resource")
-      .id();
-    db.publish_draft::<AgentProfile>(id, Timestamp::now())
-      .expect("published");
-    ids = Some((id, server.id()));
-  });
+  let checkout = Checkout::prepared(None, &[], |db| ids = Some(local_profile_with_missing_program(db)));
   let (profile, server) = ids.expect("prepared");
 
   let readiness = profile_readiness(&checkout, profile);
@@ -426,4 +431,135 @@ fn team_mcp_readiness_a_local_project_says_what_a_run_would_find_and_lists_no_te
     .call("list_team_mcp_servers", &kontur(json!({})))
     .expect("servers");
   assert_eq!(servers["mcp_servers"], json!([]));
+}
+
+/// A second project, a local one named Local, registered in the checkout's workspace.
+fn add_local_project(checkout: &Checkout) -> (ResourceId, ConnectionId) {
+  let root = checkout._data.path().join("local-project");
+  fs::create_dir(&root).expect("a folder");
+  crate::repository(&root);
+  let project = Project::new(
+    ProjectId::generate(),
+    ProjectKey::new("LOC").expect("key"),
+    name("Local"),
+  );
+  let mut db = ProjectDb::create(&root, project).expect("create project");
+  let codex = AgentConnection::new(
+    ConnectionId::generate(),
+    name("Codex"),
+    AgentProvider::CodexCli,
+    root.join("codex.exe"),
+    Timestamp::now(),
+  )
+  .expect("connection");
+  db.create_connection(&codex).expect("a connection");
+  let ids = local_profile_with_missing_program(&mut db);
+  drop(db);
+  checkout.workspace.open(&root).expect("register the project");
+  ids
+}
+
+#[test]
+fn team_mcp_readiness_without_a_project_each_project_answers_its_own() {
+  let (_server, checkout, team_profile, knowledge) = team_with_server();
+  let (local_profile, local_server) = add_local_project(&checkout);
+
+  let profiles = checkout.call("list_profiles", &json!({})).expect("list_profiles");
+  assert_eq!(profiles["unreadable_projects"], json!([]), "{profiles}");
+  let readiness_of = |project: &str, id: ResourceId| {
+    let found: Vec<_> = profiles["profiles"]
+      .as_array()
+      .expect("profiles")
+      .iter()
+      .filter(|entry| entry["project"]["name"] == project && entry["id"] == id.to_string())
+      .collect();
+    assert_eq!(found.len(), 1, "{project}: {profiles}");
+    found[0]["readiness"].clone()
+  };
+  let team = readiness_of("Kontur", team_profile);
+  assert_eq!(team["group"], "needs_you_here", "{team}");
+  assert!(kinds(&team).contains(&"mcp_off".to_owned()), "{team}");
+  let local = readiness_of("Local", local_profile);
+  assert_eq!(local["ready_here"], false, "{local}");
+  assert_eq!(kinds(&local), ["local_mcp_program"], "{local}");
+  assert_eq!(local["missing"][0]["server"]["id"], local_server.to_string());
+
+  let servers = checkout
+    .call("list_team_mcp_servers", &json!({}))
+    .expect("list_team_mcp_servers");
+  assert_eq!(servers["unreadable_projects"], json!([]), "{servers}");
+  let listed = servers["mcp_servers"].as_array().expect("servers");
+  assert_eq!(listed.len(), 1, "only the team project has team servers: {servers}");
+  assert_eq!(listed[0]["project"]["name"], "Kontur");
+  assert_eq!(listed[0]["id"], knowledge.to_string());
+  assert_eq!(listed[0]["readiness"]["group"], "needs_you_here");
+}
+
+#[test]
+fn team_mcp_readiness_a_profile_without_a_published_version_has_none() {
+  let mut draft = None;
+  let checkout = Checkout::prepared(None, &[], |db| {
+    let connection = db.connections().expect("connections")[0].id();
+    let profile = AgentProfile::new(
+      name("Builder"),
+      String::new(),
+      PromptText::new("Build.").expect("prompt"),
+      connection,
+      ModelId::new("gpt-5.5").expect("model"),
+      ProviderSettings::default(),
+    );
+    draft = Some(
+      db.create_resource(
+        Slug::new("builder").expect("slug"),
+        name("builder"),
+        &profile,
+        Timestamp::now(),
+      )
+      .expect("resource")
+      .id(),
+    );
+  });
+  let id = draft.expect("prepared");
+
+  assert_eq!(profile_readiness(&checkout, id), Value::Null);
+  let listed = checkout
+    .call("list_profiles", &kontur(json!({})))
+    .expect("list_profiles");
+  assert_eq!(listed["profiles"][0]["id"], id.to_string(), "{listed}");
+  assert_eq!(listed["profiles"][0]["readiness"], Value::Null, "{listed}");
+}
+
+#[test]
+fn team_mcp_readiness_a_local_profile_whose_connection_is_gone_is_fixed_in_its_draft() {
+  let mut gone = None;
+  let checkout = Checkout::prepared(None, &[], |db| {
+    let profile = AgentProfile::new(
+      name("Builder"),
+      String::new(),
+      PromptText::new("Build.").expect("prompt"),
+      ConnectionId::generate(),
+      ModelId::new("gpt-5.5").expect("model"),
+      ProviderSettings::default(),
+    );
+    let id = db
+      .create_resource(
+        Slug::new("builder").expect("slug"),
+        name("builder"),
+        &profile,
+        Timestamp::now(),
+      )
+      .expect("resource")
+      .id();
+    db.publish_draft::<AgentProfile>(id, Timestamp::now())
+      .expect("published");
+    gone = Some(id);
+  });
+
+  let readiness = profile_readiness(&checkout, gone.expect("prepared"));
+  assert_eq!(readiness["ready_here"], false, "{readiness}");
+  assert_eq!(readiness["missing"][0]["why"], "connection_gone", "{readiness}");
+  assert_eq!(
+    readiness["missing"][0]["fix"],
+    json!({"tool": "save_profile_draft", "gate": null})
+  );
 }

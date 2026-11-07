@@ -116,8 +116,9 @@ const SPECS: &[Spec] = &[
                   stale_draft or published, with its published version), its readiness on this computer \
                   (ready_here, group ready, needs_you_here or off_here, and the ordered missing parts, each with the \
                   tool that fixes it and who may use it; of the version this computer uses, in team and local \
-                  projects), and its link in the app. Pipeline steps run published profiles. Without `project`, every project's, each naming its project \
-                  (unreadable_projects lists the projects that could not be read, with why).",
+                  projects), and its link in the app. Pipeline steps run published profiles. Without `project`, every \
+                  project's, each naming its project (unreadable_projects lists the projects that could not be read, \
+                  with why).",
     schema: schema_for_type::<InProjects>,
     read_only: true,
   },

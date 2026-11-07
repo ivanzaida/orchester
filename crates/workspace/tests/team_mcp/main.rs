@@ -95,6 +95,7 @@ impl SecretVault for MemoryVault {
 struct Checkout {
   dir: TempDir,
   services: app_mcp::Services,
+  workspace: Workspace,
   runtime: Runtime,
   _data: TempDir,
 }
@@ -189,7 +190,7 @@ impl Checkout {
       orchester_ipc::SessionEnd::Clean,
     );
     let services = app_mcp::Services::new(
-      workspace,
+      workspace.clone(),
       runners,
       servers,
       Programs::processes(),
@@ -198,6 +199,7 @@ impl Checkout {
     Self {
       dir,
       services,
+      workspace,
       runtime,
       _data: data,
     }

@@ -5,6 +5,7 @@ use orchester_core::{
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
   sharing::Missing,
 };
+use orchester_store::ProjectDb;
 use orchester_workspace::readiness::{Group, ReadinessStanding, Undecided};
 
 use crate::support::{Fixture, http_tool, secret};
@@ -158,4 +159,33 @@ fn readiness_a_team_tool_holding_a_secret_by_id_is_undecided_not_ready() {
     fixture.read().resource(tool).expect("listed").standing(),
     &ReadinessStanding::Undecided(Undecided::TeamToolSecretById(token))
   );
+}
+
+#[test]
+fn readiness_in_a_project_opened_only_to_read_it_answers_without_writing() {
+  let fixture = Fixture::local();
+  let unset = fixture.project_secret("DEPLOY_TOKEN", None);
+  let set = fixture.project_secret("PUBLISH_TOKEN", Some("s3cret-value"));
+  let without = fixture.own("deploy", &http_tool(unset));
+  let with = fixture.own("publish", &http_tool(set));
+
+  // A read-only handle refuses every write, so an answer from it proves readiness wrote nothing.
+  let db = ProjectDb::open_read_only(&fixture.root).expect("opened to read");
+  let read = fixture
+    .workspace
+    .project_readiness_in(&db, &fixture.root, &fixture.vault)
+    .expect("readiness");
+
+  assert_eq!(
+    read.resource(without).expect("listed").standing().missing(),
+    [Missing::LocalSecret {
+      secret: unset,
+      name: secret("DEPLOY_TOKEN")
+    }]
+  );
+  assert_eq!(
+    read.resource(with).expect("listed").standing(),
+    &ReadinessStanding::Ready
+  );
+  assert_eq!(read, fixture.read(), "the same answer as the project opened to write");
 }

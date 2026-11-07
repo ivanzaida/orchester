@@ -64,7 +64,7 @@ async fn list(services: &Services, args: InProjects, translate: &Translate) -> R
       if db.sharing()?.is_none() {
         return Ok(None);
       }
-      let readiness = readiness_json::read(&services, &open.repo_root)?;
+      let readiness = readiness_json::read(&services, db, &open.repo_root)?;
       let servers = servers_of(db, &readiness)?;
       Ok(Some((readiness, servers)))
     })
@@ -91,12 +91,13 @@ fn servers_of(db: &ProjectDb, readiness: &ProjectReadiness) -> Result<Vec<Listed
     .iter()
     .filter(|found| found.kind() == ResourceKind::McpServer)
   {
+    // Readiness names the version this computer uses; the body is all that is read here.
     let Some(version) = db.latest_version::<TeamMcpServer>(found.resource())? else {
       continue;
     };
     listed.push(Listed {
       id: found.resource(),
-      version: version.number().get(),
+      version: found.number().get(),
       server: body::server_json(version.body()),
     });
   }

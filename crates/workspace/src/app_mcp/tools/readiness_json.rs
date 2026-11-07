@@ -17,6 +17,7 @@ use orchester_core::{
   resource::TeamProfileError,
   sharing::{ConnectionProblem, LocalProgramProblem, Missing, ProgramProblem},
 };
+use orchester_store::ProjectDb;
 use serde_json::{Value, json};
 
 use crate::{
@@ -24,15 +25,17 @@ use crate::{
   readiness::{Group, ProjectReadiness, ReadinessError, ReadinessStanding, ResourceReadiness, Undecided},
 };
 
-/// The readiness of every resource of the project at `repo_root`, read once for a tool call. Blocks: it reads the
-/// databases and the filesystem, and the keychain for the secret of each tool of a local project that uses one.
+/// The readiness of every resource of the project at `repo_root` whose database `db` is open, read once for a tool call.
+/// A read tool passes the handle it opened only to read, so the call migrates and writes nothing. Blocks: it reads the
+/// databases and the filesystem, and asks the keychain whether the secret of each tool of a local project has a value.
 pub(in crate::app_mcp) fn read(
   services: &Services,
+  db: &ProjectDb,
   repo_root: &std::path::Path,
 ) -> Result<ProjectReadiness, ToolError> {
   services
     .workspace
-    .project_readiness(repo_root, services.vault.get())
+    .project_readiness_in(db, repo_root, services.vault.get())
     .map_err(|ReadinessError::Store(error)| ToolError::from(error))
 }
 
@@ -129,9 +132,10 @@ fn fix(tool: Option<&str>, gate: Option<&str>) -> Value {
   json!({ "tool": tool, "gate": gate })
 }
 
-/// A resource whose readiness cannot be known: not ready, and nothing here fixes it by itself.
+/// A resource whose readiness cannot be known: not ready. Only a local profile's lost connection has a tool that
+/// fixes it (its connection is changed in its draft); no tool adds the project secret a tool of a local project lost.
 fn undecided_json(why: &Undecided) -> Value {
-  let mut part = json!({ "kind": "undecided", "fix": null });
+  let mut part = json!({ "kind": "undecided", "fix": fix(None, None) });
   match why {
     Undecided::NotTeamForm => part["why"] = json!("not_team_form"),
     Undecided::CannotBePublished(error) => {
@@ -148,6 +152,7 @@ fn undecided_json(why: &Undecided) -> Value {
     }
     Undecided::ConnectionGone(connection) => {
       part["why"] = json!("connection_gone");
+      part["fix"] = fix(Some("save_profile_draft"), None);
       part["connection"] = json!(connection.to_string());
     }
     Undecided::TeamToolSecretById(secret) => {
@@ -156,6 +161,7 @@ fn undecided_json(why: &Undecided) -> Value {
     }
     Undecided::SecretGone(secret) => {
       part["why"] = json!("secret_gone");
+      part["fix"] = fix(None, Some("person"));
       part["secret"] = json!(secret.to_string());
     }
     Undecided::SecretUnreadable(secret) => {
