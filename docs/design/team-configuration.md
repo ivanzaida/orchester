@@ -25,7 +25,7 @@ added a case. The model below removes the cause: **the server never holds an id 
 | --- | --- | --- |
 | Pipeline | everything: steps, the profile or tool of each step (server ids), gates, Deliver | nothing |
 | Agent profile | role, instructions, CLI kind, model, effort, permissions; the MCP servers, tools, skills, instructions it uses (server ids); the secrets it needs (names) | which local connection and account runs it |
-| MCP server *(decided)* | name, how it runs (local program or remote URL), arguments, folder, tools that run without asking, the variables it needs and its secret headers (each the name of the team secret it takes); a remote server's URL | the program's path; the secrets' values; on or off here |
+| MCP server *(decided)* | name, how it runs (local program or remote URL), arguments, folder, tools that run without asking, the variables it needs and its secret headers (each the name of the team secret it takes); a remote server's URL | the program's path; the secrets' values; on or off here: nobody has decided until a person switches it on or off (an automation may switch it off, never on) |
 | Instruction, skill | everything | nothing |
 | Tool (command, HTTP, database) | everything except secret values | secret values |
 | Secret *(decided)* | only its name and what it is for; never a value | its value |
@@ -47,9 +47,15 @@ what is local by nature: connections, program paths, secret values.
   they take (a variable the secret of its own name; a header its secret and an optional prefix such as `Bearer `), so
   the names an MCP server needs are read from its body.
 - **Secrets.** Each needed name gets a value here, once.
-- **Readiness.** Every profile, MCP server and tool shows *ready here* or exactly what is missing. A run whose
-  pipeline is not ready here does not start: it refuses with the missing parts listed (`not_ready_here`). Nothing is
-  ever dropped silently.
+- **Readiness.** Every profile, MCP server and tool shows *ready here* or exactly what is missing. A team MCP server
+  nobody has decided on here is *Needs you here* (it is missing "switched on"); one a person switched off, or an
+  automation did (off is the safe direction, so automation may), is *Off here*. Readiness also has an *undecided*
+  state for what cannot be known yet: a version that cannot be turned into the team's form, a connection or secret the
+  project no longer has, a keychain that cannot say. It is not assumed ready. In a local project the same read checks
+  what a run would: the value of each secret a tool uses, and the program of each MCP server a profile chooses that
+  is turned on, looked up as a run does (the project's `PATH`, else Orchester's search path, or the project; a fixed
+  file outside the repository). A run whose pipeline is not ready here does not start: it refuses with the missing
+  parts listed (`not_ready_here`). Nothing is ever dropped silently.
 
 ## Edge cases
 

@@ -1001,6 +1001,8 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 
 ## Done
 
+ORC-824 · Readiness of each team resource on this computer · branch `claude/orc-824-readiness-read` (into `module/team-configuration`): `Workspace::project_readiness` reads, for every profile, MCP server, tool and pipeline of a project, core's answer to what this computer has; a team MCP server nobody decided on is *Needs you here*, one switched off is *Off here*, and a standing can be *undecided* (with the reason) instead of assumed ready. A local project checks each tool's secret in the keychain (read on every call, which may prompt on macOS, so callers read it on explicit changes) and the program of each enabled MCP server a profile chooses as a run starts it (project `PATH`, then the search path; a fixed file outside the repository; typed `LocalProgramProblem`). `ProjectDb::team_mcp_switch` replaces `team_mcp_on_here`. No screen calls it yet. Filtered readiness, store, team MCP, fill-in and app MCP tests and clippy passed; the macOS check is not run. Follow-up: a `SecretVault::exists` so the check need not read the value.
+
 ORC-625 · Team authority S2 public contract · branch `orchester/orc-625-run-1`: validated server claim threshold
 in seconds, explicit heartbeat-edge staleness/takeover, server-admin settings, and separate v2 workspace policy,
 capabilities and optimistic revision conflict. Platform routes and persistence remain OP-145; open policy items

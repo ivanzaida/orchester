@@ -51,6 +51,7 @@ pub mod project_settings;
 pub mod project_setup;
 pub mod prompt_changes;
 pub mod pull_requests;
+pub mod readiness;
 pub mod recovery;
 pub mod removal;
 pub mod repository;

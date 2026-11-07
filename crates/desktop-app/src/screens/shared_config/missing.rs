@@ -14,7 +14,7 @@ use orchester_core::{
 use orchester_store::BoundReference;
 use orchester_workspace::{
   background,
-  sharing::sync::{Here, HereReference},
+  sharing::sync::{BindingsHere, HereReference},
 };
 
 use super::kind_of;
@@ -117,7 +117,7 @@ pub(crate) struct Page<'a> {
 
 /// What this computer has of the project's references, as read.
 #[derive(Clone, Debug, PartialEq)]
-struct Read(Here);
+struct Read(BindingsHere);
 
 impl DevtoolsInspectable for Read {}
 
@@ -128,7 +128,7 @@ pub(crate) fn missing_here(ctx: &mut Ctx, page: &Page<'_>) -> Option<Element> {
   let shared = follow_shared(ctx, &servers);
   let state = ctx
     .future((page.project.open.repo_root.clone(), shared), |(root, _)| async move {
-      background::run(move || Here::read(&root))
+      background::run(move || BindingsHere::read(&root))
         .await
         .map_err(|_| Said::new("cloud.errors.local"))?
         .map(Read)

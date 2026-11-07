@@ -4,17 +4,24 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use orchester_core::{
-  connection::AgentProvider,
-  id::{ConnectionId, ResourceId},
+  connection::{AgentProvider, mcp::McpServerName},
+  id::{ConnectionId, ResourceId, SecretId},
   name::Name,
   resource::{ModelId, PromptText, ProviderSettings, TeamAgentProfile, TeamMcpServer},
   secret::SecretName,
-  sharing::{ConnectionProblem, Here, McpNeed, Missing, Needs, NeedsError, ProgramProblem, Readiness, readiness},
+  sharing::{
+    ConnectionProblem, Here, LocalProgramProblem, McpNeed, Missing, Needs, NeedsError, ProgramProblem, Readiness,
+    readiness,
+  },
 };
 use serde_json::json;
 
 const CLAUDE: AgentProvider = AgentProvider::ClaudeCodeCli;
 const CODEX: AgentProvider = AgentProvider::CodexCli;
+
+fn server_name(value: &str) -> McpServerName {
+  McpServerName::new(value).expect("valid server name")
+}
 
 fn secret(value: &str) -> SecretName {
   SecretName::new(value).expect("valid secret name")
@@ -89,6 +96,72 @@ fn a_profile_with_no_connection_of_its_kind_says_to_add_one() {
     [connection_part(id, CLAUDE, ConnectionProblem::NoneOfKind)]
   );
   assert!(!answer.is_ready());
+}
+
+#[test]
+fn a_local_profile_needs_only_the_connection_it_runs_on() {
+  let id = ResourceId::generate();
+  let own = ConnectionId::generate();
+  let needs = Needs::local_profile(id, CLAUDE, &[]);
+  // Two connections of its kind: its own is its pick, so nothing is asked of the person.
+  let here = Here::nothing()
+    .with_connection(own, CLAUDE)
+    .with_connection(ConnectionId::generate(), CLAUDE)
+    .with_pick(id, own);
+  assert_eq!(readiness(&needs, &here), Readiness::READY);
+  assert_eq!(
+    readiness(&needs, &Here::nothing()).missing(),
+    [connection_part(id, CLAUDE, ConnectionProblem::NoneOfKind)]
+  );
+}
+
+#[test]
+fn a_local_profile_asks_for_the_program_of_each_server_it_chooses() {
+  let id = ResourceId::generate();
+  let own = ConnectionId::generate();
+  let (found, gone) = (ConnectionId::generate(), ConnectionId::generate());
+  let (found_name, gone_name) = (server_name("found"), server_name("gone"));
+  let needs = Needs::local_profile(id, CLAUDE, &[(found, found_name), (gone, gone_name.clone())]);
+  let here = Here::nothing()
+    .with_connection(own, CLAUDE)
+    .with_pick(id, own)
+    .with_local_program(found);
+  assert_eq!(
+    readiness(&needs, &here).missing(),
+    [Missing::LocalMcpProgram {
+      server: gone,
+      name: gone_name.clone(),
+      problem: LocalProgramProblem::NotFound,
+    }]
+  );
+  let moved = here.with_local_program_moved(gone);
+  assert_eq!(
+    readiness(&needs, &moved).missing(),
+    [Missing::LocalMcpProgram {
+      server: gone,
+      name: gone_name,
+      problem: LocalProgramProblem::Moved,
+    }]
+  );
+}
+
+#[test]
+fn a_local_tool_asks_for_the_value_of_its_secret_by_id() {
+  let (set, unset) = (SecretId::generate(), SecretId::generate());
+  let same_name = secret("TOKEN");
+  let here = Here::nothing().with_local_secret(set);
+  assert_eq!(
+    readiness(&Needs::local_tool(set, same_name.clone()), &here),
+    Readiness::READY
+  );
+  assert_eq!(
+    readiness(&Needs::local_tool(unset, same_name.clone()), &here).missing(),
+    [Missing::LocalSecret {
+      secret: unset,
+      name: same_name
+    }],
+    "another secret of the same name having a value does not count"
+  );
 }
 
 #[test]

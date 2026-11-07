@@ -34,14 +34,14 @@ use tokio::task::JoinHandle;
 pub(super) use self::state::SyncStates;
 pub(crate) use self::{
   archive::pins,
-  config::{non_team_name, refresh_profile, refresh_team_profiles, team_executors},
+  config::{is_local_form, non_team_name, refresh_profile, refresh_team_profiles, team_executors, team_form},
 };
 pub use self::{
   archive::{ArchiveError, Pinning, pinning},
   catalog::CATALOG_CHECK,
   config::{
-    ConfigServer, FillInOutcome, Here, HereReference, Needer, RemoteResourceStore, ShareFillIns, Standing, Waiting,
-    bind, chosen_at, keep_uploaded_configuration, upload_configuration, use_here, waiting,
+    BindingsHere, ConfigServer, FillInOutcome, HereReference, Needer, RemoteResourceStore, ShareFillIns, Standing,
+    Waiting, bind, chosen_at, keep_uploaded_configuration, upload_configuration, use_here, waiting,
   },
   state::SyncState,
   stream::{Clock, Source, Stopped, SystemClock, follow},

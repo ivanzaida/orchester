@@ -1,3 +1,7 @@
+//! ORC-845 removes this with the bindings: what a team resource needs of this computer is read by
+//! [`crate::readiness`] from the team's bodies and the fill-ins, and the screens that still read bindings move to it
+//! with ORC-831 and ORC-833.
+//!
 //! What the team's versions need of this computer (`docs/design/shared-configuration.md`, decisions 7, 8 and 11): each
 //! connection, MCP server and secret a cached version names, with the resources that name it and how it stands here —
 //! bound (by name, by role or by the person), an MCP server found here by its name that waits for the person, or
@@ -81,7 +85,7 @@ impl HereReference {
 
 /// What this computer has of a shared project's references, and what it may bind them to.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Here {
+pub struct BindingsHere {
   /// Connections first, then MCP servers, then secrets, each kind in the order the publisher made them (their ids
   /// are time-ordered), so a row keeps its place when it is bound or goes missing.
   pub references: Vec<HereReference>,
@@ -90,7 +94,7 @@ pub struct Here {
   pub secrets: Vec<Secret>,
 }
 
-impl Here {
+impl BindingsHere {
   /// Reads it from the project at `root`.
   pub fn read(root: &Path) -> Result<Self, SharingError> {
     let db = ProjectDb::open(root)?;

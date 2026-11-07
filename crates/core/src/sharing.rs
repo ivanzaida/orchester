@@ -25,7 +25,10 @@ pub use self::{
   membership::{
     MembershipChangeError, WorkspaceRole, check_workspace_admin_change, may_administer_workspace, may_read_workspace,
   },
-  readiness::{ConnectionProblem, Here, McpNeed, Missing, Needs, NeedsError, ProgramProblem, Readiness, readiness},
+  readiness::{
+    ConnectionProblem, Here, LocalProgramProblem, McpNeed, Missing, Needs, NeedsError, ProgramProblem, Readiness,
+    readiness,
+  },
   references::{Binding, BindingKindError, LocalEntities, Reference, ReferenceKind, named, resolve},
   similar::similar_titles,
   widens::{SharedBody, VersionWidening, widens},

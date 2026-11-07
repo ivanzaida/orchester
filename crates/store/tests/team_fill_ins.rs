@@ -85,18 +85,15 @@ fn fill_in_connection_pick_is_kept_replaced_and_cleared() {
 }
 
 #[test]
-fn fill_in_mcp_server_is_off_until_switched_on() {
+fn fill_in_mcp_server_has_no_choice_until_one_is_made() {
   let (_repo, mut db) = project_repo();
   let server = ResourceId::generate();
-  assert!(!db.team_mcp_on_here(server).expect("read"));
+  assert_eq!(db.team_mcp_switch(server).expect("read"), None);
   db.set_team_mcp_on_here(server, true).expect("on");
-  assert!(db.team_mcp_on_here(server).expect("read"));
-  assert!(!db.team_mcp_on_here(ResourceId::generate()).expect("read"));
+  assert_eq!(db.team_mcp_switch(server).expect("read"), Some(true));
+  assert_eq!(db.team_mcp_switch(ResourceId::generate()).expect("read"), None);
   db.set_team_mcp_on_here(server, false).expect("off");
-  assert!(!db.team_mcp_on_here(server).expect("read"));
-  db.set_team_mcp_on_here(server, true).expect("on");
-  db.clear_team_mcp_on_here(server).expect("clear");
-  assert!(!db.team_mcp_on_here(server).expect("read"));
+  assert_eq!(db.team_mcp_switch(server).expect("read"), Some(false));
 }
 
 #[test]

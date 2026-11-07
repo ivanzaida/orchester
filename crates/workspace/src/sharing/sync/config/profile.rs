@@ -64,7 +64,7 @@ pub(crate) fn refresh(db: &mut ProjectDb, profile: ResourceId) -> Result<usize, 
 
 /// Whether `server_body` is a local profile body a version cached before the team configuration model holds: it names
 /// a `connection`, which a team body never does (ORC-845 removes this with those versions).
-fn is_local_form(server_body: &Value) -> bool {
+pub(crate) fn is_local_form(server_body: &Value) -> bool {
   server_body.get("connection").is_some()
 }
 

@@ -97,7 +97,7 @@ fn readiness_of(
     .body()
     .clone();
   let mut here = Here::nothing();
-  if db.team_mcp_on_here(resource).expect("read") {
+  if db.team_mcp_switch(resource).expect("read") == Some(true) {
     here = here.with_mcp_on(resource);
   }
   if let Some(program) = app.mcp_server_program(server, resource).expect("read") {
@@ -382,7 +382,7 @@ async fn live_updates_share_fill_ins_apply_every_one_and_say_what_failed() {
   );
   let (db, app) = (alice.db(), AppDb::open(&app_db).expect("application database"));
   assert!(
-    db.team_mcp_on_here(resource_of(&after)).expect("read"),
+    db.team_mcp_switch(resource_of(&after)).expect("read") == Some(true),
     "later fill-ins are still set"
   );
   assert!(

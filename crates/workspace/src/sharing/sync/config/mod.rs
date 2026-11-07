@@ -9,7 +9,7 @@
 //! from this computer through [`RemoteResourceStore`]; Share uploads the project's own configuration ([`upload`]).
 
 mod bindings;
-mod here;
+mod bindings_here;
 mod profile;
 mod publish;
 mod share_fill_ins;
@@ -37,15 +37,15 @@ use serde_json::Value;
 
 use self::profile::cache_profile;
 pub use self::{
-  here::{Here, HereReference, Needer, Standing, chosen_at},
+  bindings_here::{BindingsHere, HereReference, Needer, Standing, chosen_at},
   publish::{ConfigServer, RemoteResourceStore},
   share_fill_ins::{FillInOutcome, ShareFillIns},
   upload::{keep_uploaded_configuration, upload_configuration},
   waiting::{Waiting, use_here, waiting},
 };
 pub(crate) use self::{
-  profile::{refresh as refresh_profile, refresh_all as refresh_team_profiles},
-  team_body::{non_team_name, team_executors},
+  profile::{is_local_form, refresh as refresh_profile, refresh_all as refresh_team_profiles},
+  team_body::{non_team_name, team_executors, team_form},
 };
 use super::stream::{Source, blocking};
 use crate::sharing::{SharingError, project::convert};
