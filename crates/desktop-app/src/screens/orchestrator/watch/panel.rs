@@ -1,9 +1,13 @@
 //! What the /watch pickers' panels share (`R1s1o` in 02 `c8pALl`, `gumeP` in 03 `mQdxa`, `BayQR` and `mCXhw` in
-//! `w1Euu`), as the @ menu draws its rows: a `Menu` panel 560 wide; a head with its title in 11/500 `text_muted` and
-//! its count at its end; 28 high rows, 8 at their sides and between their parts; at a row's end *Added* in
+//! `w1Euu`; v2 `P1` `QXPDY` in `Proposal · watch composer v2` `LRg3R`, ORC-889), as the @ menu draws its rows: a `Menu`
+//! panel 560 wide; at its top the picker's own search field, *Search modules* with how many are open at its end; a head
+//! with its title in 11/500 `text_muted` and its count at its end; 28 high rows, 8 at their sides and between their
+//! parts, in a list that scrolls after 8 rows, its scrollbar in a lane of its own; at a row's end *Added* in
 //! `text_secondary` with a 14 `check` once it is a chip, *Led in «…» ↗* with a 12 `messages-square`, which opens that
-//! conversation, and the `Kbd` *Enter* while it has the focus, on `hover`; then the keys. While the catalog is read the
-//! head shows over three bone rows; a catalog that cannot be read says so in the picker, with *Try again*.
+//! conversation, and the `Kbd` *Enter* while it has the focus, on `hover`; what has nothing left to watch behind one
+//! quiet row while the search is empty (an `archive` and *12 finished modules · type to find them* in 11.5
+//! `text_muted`); then the keys. While the catalog is read the search and the head show over three bone rows; a
+//! catalog that cannot be read says so in the picker, with *Try again*.
 
 use std::{ops::Range, sync::Arc};
 
@@ -12,7 +16,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Spacer, Text, TextOverflow},
+  components::{Column, Row, ScrollVertical, Spacer, Text, TextOverflow},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -22,7 +26,7 @@ use orchester_workspace::messages::Message;
 use crate::{
   navigation::Navigation,
   routes::{OrchestratorChat, ProjectPage, Route},
-  theme::{ControlHeight, ExtraSpacing, ExtraTypography, IconSize, SlashText},
+  theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, SlashText, watch_list_scrollbar},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -31,11 +35,11 @@ use crate::{
     message::message_text,
     pressable::Press,
     skeleton::bone,
-    slash::matched,
+    slash::{PickerSearch, matched},
   },
 };
 
-/// The panel's width (`R1s1o`, `gumeP`).
+/// The panel's width (`R1s1o`, `gumeP`, `r7kka`).
 const WIDTH: f32 = 560.0;
 /// A bone row's icon, title and meta bones (`Mjy9O`, `h8p13`, `RgJYQ` in `BayQR`): the title's and the meta's widths
 /// row by row, and their heights.
@@ -43,6 +47,19 @@ const ICON_BONE: f32 = 14.0;
 const BONE_WIDTHS: [(f32, f32); 3] = [(96.0, 180.0), (64.0, 120.0), (110.0, 150.0)];
 const TITLE_BONE: f32 = 10.0;
 const META_BONE: f32 = 8.0;
+/// How many rows a list shows before it scrolls (`Scroll area` `dVboL` in `r7kka`, the rules in `TnKP9`).
+const LIST_ROWS: u16 = 8;
+
+/// The keys while there are rows (`Keys` `XGFYe`): *↑ ↓ Move*, *Enter Pick and close*, *Shift Enter Add another* and
+/// *Esc Close*; each a cap (`orchestrator.watch.keys.*`) and its words (`orchestrator.watch.hint.*`).
+pub(in crate::screens::orchestrator) const PICK_KEYS: [(&str, &str); 4] = [
+  ("move", "move"),
+  ("enter", "pick"),
+  ("shiftEnter", "addAnother"),
+  ("esc", "close"),
+];
+/// The keys while there is no row: *Esc Close*.
+const CLOSE_KEY: [(&str, &str); 1] = [("esc", "close")];
 
 /// Which picker a panel is: it names the panel's elements and its head.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -66,6 +83,14 @@ impl Picker {
       Self::Task => ctx.t("orchestrator.watch.tasks.section"),
     }
   }
+
+  /// What its search field says while it is empty: *Search modules*, *Search tasks*.
+  fn search_words(self, ctx: &Ctx) -> Arc<str> {
+    match self {
+      Self::Module => ctx.t("orchestrator.watch.modules.search"),
+      Self::Task => ctx.t("orchestrator.watch.tasks.search"),
+    }
+  }
 }
 
 /// The panel named after composer `id`, holding `content`.
@@ -74,6 +99,17 @@ pub(super) fn frame((id, picker): (&str, Picker), content: Vec<Element>) -> Elem
     .width(Dimension::Px(WIDTH))
     .with_children(content)
     .into()
+}
+
+/// The picker's own search field, `{id}-{prefix}-search`, with `count` at its end.
+pub(super) fn search_field(
+  ctx: &mut Ctx,
+  (id, picker): (&str, Picker),
+  search: &PickerSearch,
+  count: Option<Arc<str>>,
+) -> Element {
+  let words = picker.search_words(ctx);
+  search.field(ctx, &format!("{id}-{}-search", picker.prefix()), (words, count))
 }
 
 /// A row's frame: 28 high, 8 at its sides and between its parts.
@@ -87,14 +123,22 @@ pub(in crate::screens::orchestrator) fn line() -> Row {
     .rounded(RadiusSize::Sm)
 }
 
-/// How many rows the head counts: all of them while nothing is typed, else *shown of total*.
-pub(super) fn count(ctx: &Ctx, filter: &str, (shown, total): (usize, usize)) -> Arc<str> {
-  if filter.is_empty() {
-    return Arc::from(shown.to_string());
-  }
+/// How many rows the head counts once something is typed: *shown of total*.
+pub(super) fn count(ctx: &Ctx, (shown, total): (usize, usize)) -> Arc<str> {
   ctx.t_args(
     "orchestrator.watch.picker.count",
     [("shown", shown.to_string()), ("total", total.to_string())],
+  )
+}
+
+/// How many have something left to watch, *14 open*, and with `added` chips taken, *14 open · 2 added*.
+pub(super) fn open_count(ctx: &Ctx, open: usize, added: usize) -> Arc<str> {
+  if added == 0 {
+    return ctx.t_args("orchestrator.watch.picker.open", [("count", open.to_string())]);
+  }
+  ctx.t_args(
+    "orchestrator.watch.picker.openAdded",
+    [("count", open.to_string()), ("added", added.to_string())],
   )
 }
 
@@ -133,9 +177,12 @@ pub(super) fn heading(
     .into()
 }
 
-/// While the catalog is read: the head over three bone rows, and *Esc Close*.
-pub(super) fn reading(ctx: &Ctx, (id, picker): (&str, Picker)) -> Element {
-  let mut content = vec![heading(ctx, (id, picker, "section"), None, None)];
+/// While the catalog is read: the search field and the head over three bone rows, and *Esc Close*.
+pub(super) fn reading(ctx: &mut Ctx, (id, picker): (&str, Picker), search: &PickerSearch) -> Element {
+  let mut content = vec![
+    search_field(ctx, (id, picker), search, None),
+    heading(ctx, (id, picker, "section"), None, None),
+  ];
   content.extend(BONE_WIDTHS.iter().map(|(title, meta)| {
     line()
       .child(bone(ICON_BONE, ICON_BONE))
@@ -149,8 +196,9 @@ pub(super) fn reading(ctx: &Ctx, (id, picker): (&str, Picker)) -> Element {
 
 /// The catalog cannot be read: the danger mark, which project's tasks, `why` and *Try again*, which reads it again.
 pub(super) fn unreadable(
-  ctx: &Ctx,
+  ctx: &mut Ctx,
   (id, picker, project, why): (&str, Picker, &str, &Message),
+  search: &PickerSearch,
   retry: Arc<dyn Fn() + Send + Sync>,
 ) -> Element {
   let prefix = picker.prefix();
@@ -186,6 +234,7 @@ pub(super) fn unreadable(
     .child(words)
     .child(again);
   let content = vec![
+    search_field(ctx, (id, picker), search, None),
     heading(ctx, (id, picker, "section"), None, None),
     unreadable.into(),
     footer(ctx, (id, picker), false),
@@ -200,6 +249,47 @@ pub(super) fn nothing((id, picker): (&str, Picker), words: &str) -> Element {
     .child(
       Text::new(words)
         .variant(TypographyStyle::Caption)
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis),
+    )
+    .into()
+}
+
+/// `rows` in a list named `id`, 2 apart, which scrolls once they are more than 8 (`Scroll area` `dVboL`): its
+/// scrollbar in a lane of its own, 4 from the rows (`PtKK6`).
+pub(in crate::screens::orchestrator) fn list(ctx: &Ctx, id: &str, rows: Vec<Element>) -> Element {
+  let scrolls = rows.len() > usize::from(LIST_ROWS);
+  let column = Column::new()
+    .id(id.to_owned())
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Tight.role())
+    .with_children(rows);
+  if !scrolls {
+    return column.into();
+  }
+  let high = f32::from(LIST_ROWS) * ControlHeight::Md.value() + f32::from(LIST_ROWS - 1) * ExtraSpacing::Tight.value();
+  let theme = ctx.theme();
+  let bar = watch_list_scrollbar(&theme.scrollbar(), theme.palette_color(ExtraColor::Hover.role()));
+  ScrollVertical::new(column.padding(Padding::new().right(SpacingSize::Xs)))
+    .id(format!("{id}-scroll"))
+    .width(Dimension::Pct(100.0))
+    .max_height(Dimension::Px(high))
+    .scrollbar(bar)
+    .into()
+}
+
+/// The quiet row in the place of the `hidden` rows that have nothing left to watch while the search is empty
+/// (`Finished · hidden` `N3ZR9`): a 13 `archive` and `words` in 11.5 `text_muted`, named `{id}-{prefix}-finished`.
+pub(super) fn finished((id, picker): (&str, Picker), (hidden, words): (usize, &str)) -> Element {
+  line()
+    .id(format!("{id}-{}-finished", picker.prefix()))
+    .describe("count", hidden.to_string())
+    .child(icon(Icon::Archive, IconSize::Base, PaletteColor::TextMuted))
+    .child(
+      Text::new(words)
+        .variant(ExtraTypography::Note.role())
+        .color(PaletteColor::TextMuted)
+        .min_width(Dimension::Px(0.0))
         .nowrap()
         .text_overflow(TextOverflow::Elipsis),
     )
@@ -294,41 +384,16 @@ pub(super) fn led_in(ctx: &Ctx, led: LedIn<'_>, color: PaletteColor) -> Element 
     .into()
 }
 
-/// The keys (`Keys` `T0Gkl`, `HXrVq`): *↑ ↓ Move*, *Enter Add*, *Backspace Remove the last*, *Ctrl Enter Watch* and
-/// *Esc Close* while there are rows (`rows`), *Esc Close* alone otherwise.
+/// The keys ([`PICK_KEYS`]) while there are rows (`rows`), *Esc Close* alone otherwise.
 pub(super) fn footer(ctx: &Ctx, (id, picker): (&str, Picker), rows: bool) -> Element {
   let prefix = picker.prefix();
-  let hints: &[(&str, &str)] = if rows {
-    &[
-      ("move", "move"),
-      ("enter", "add"),
-      ("backspace", "removeLast"),
-      (apply_key(), "watch"),
-      ("esc", "close"),
-    ]
-  } else {
-    &[("esc", "close")]
-  };
-  keys(ctx, (&format!("{id}-{prefix}"), &format!("{prefix}-key")), hints, None)
-}
-
-/// The cap of the keys that apply a command: *Cmd Enter* on macOS, *Ctrl Enter* elsewhere.
-pub(in crate::screens::orchestrator) const fn apply_key() -> &'static str {
-  if cfg!(target_os = "macos") {
-    "cmdEnter"
-  } else {
-    "ctrlEnter"
-  }
+  let hints: &[(&str, &str)] = if rows { &PICK_KEYS } else { &CLOSE_KEY };
+  keys(ctx, (&format!("{id}-{prefix}"), &format!("{prefix}-key")), hints)
 }
 
 /// A picker's keys under a `border` line, named `{id}-keys`: each cap (`orchestrator.watch.keys.*`, named `cap_id`)
-/// with its words (`orchestrator.watch.hint.*`), and `note` at the end in 11 `text_muted`.
-pub(in crate::screens::orchestrator) fn keys(
-  ctx: &Ctx,
-  (id, cap_id): (&str, &str),
-  hints: &[(&str, &str)],
-  note: Option<Arc<str>>,
-) -> Element {
+/// with its words (`orchestrator.watch.hint.*`).
+pub(in crate::screens::orchestrator) fn keys(ctx: &Ctx, (id, cap_id): (&str, &str), hints: &[(&str, &str)]) -> Element {
   let hint = |(cap, label): &(&str, &str)| {
     Row::new()
       .spacing(ExtraSpacing::Snug.role())
@@ -340,16 +405,6 @@ pub(in crate::screens::orchestrator) fn keys(
           .nowrap(),
       )
   };
-  let note: Vec<Element> = note.map_or_else(Vec::new, |note| {
-    vec![
-      Spacer::new().flex(1.0).into(),
-      Text::new(&note)
-        .id(format!("{id}-keys-note"))
-        .variant(TypographyStyle::Caption)
-        .nowrap()
-        .into(),
-    ]
-  });
   Row::new()
     .id(format!("{id}-keys"))
     .width(Dimension::Pct(100.0))
@@ -364,7 +419,6 @@ pub(in crate::screens::orchestrator) fn keys(
     .align_items(Alignment::Center)
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .with_children(hints.iter().map(hint))
-    .with_children(note)
     .into()
 }
 

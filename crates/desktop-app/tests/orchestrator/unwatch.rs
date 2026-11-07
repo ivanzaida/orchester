@@ -1,8 +1,9 @@
-//! `/unwatch` (ORC-774, `Parts · /unwatch` `NtsXc`): *Stop watching* opens its picker while the conversation leads
-//! something. The picker lists only what this conversation watches (*Watched here · 3*), each with its kind, since when
-//! and what is still open there, then *All of them*, and the keys with *Type to filter*. Enter adds the focused row as
-//! a chip; Ctrl Enter stops the chips' subscriptions at once and keeps the person's `/unwatch`; *All of them* stops
-//! everything; automation's Ctrl Enter stops nothing.
+//! `/unwatch` (ORC-774, `Parts · /unwatch` `NtsXc`; its picker v2, ORC-889, as `P1` `QXPDY`): *Stop watching* opens
+//! its picker while the conversation leads something. The picker has its own search field and lists only what this
+//! conversation watches (*Watched here · 3*), each with its kind, since when and what is still open there, then *All
+//! of them*, and the keys. Enter adds the focused row as a chip and closes the picker; Ctrl Enter stops the chips'
+//! subscriptions at once and keeps the person's `/unwatch`; *All of them* stops everything; automation's Ctrl Enter
+//! stops nothing.
 //! `cargo test -p orchester-app --test orchestrator unwatch`.
 
 use lurq::app::events::with_synthetic_input;
@@ -29,6 +30,7 @@ use super::{
 
 const INPUT: &str = "orchestrator-input";
 const PICKER: &str = "orchestrator-composer-unwatch-picker";
+const SEARCH: &str = "orchestrator-composer-unwatch-search";
 const CHIP: &str = "orchestrator-composer-command-chip";
 const COMMAND: &str = "orchestrator-composer-slash-unwatch";
 
@@ -149,8 +151,9 @@ fn orchestrator_unwatch_picker_lists_only_what_this_conversation_watches_with_it
   screen.until("the subscriptions", |screen| {
     screen.exists(&row(format!("module-{webhooks}")))
   });
+  assert!(screen.exists(SEARCH), "the picker's own search field");
   let shown = screen.text(PICKER).replace('\u{a0}', " ");
-  assert!(shown.starts_with("Watched here 3"), "three subscriptions: {shown}");
+  assert!(shown.contains("Watched here 3"), "three subscriptions: {shown}");
   for words in [
     "Webhooks v2",
     "module · since",
@@ -162,11 +165,10 @@ fn orchestrator_unwatch_picker_lists_only_what_this_conversation_watches_with_it
     "stop watching everything here",
     "cancels nothing",
     "Move",
-    "Add",
-    "Ctrl Enter",
-    "Stop",
+    "Pick and close",
+    "Shift Enter",
+    "Add another",
     "Close",
-    "Type to filter",
   ] {
     assert!(shown.contains(words), "{words}: {shown}");
   }
@@ -193,7 +195,7 @@ fn orchestrator_unwatch_picker_lists_only_what_this_conversation_watches_with_it
     screen.bounds(PICKER)
   );
 
-  screen.set(INPUT, "sea");
+  screen.set(SEARCH, "sea");
   screen.until("only Search index", |screen| {
     screen.exists(&row(format!("module-{search}")))
       && !screen.exists(&row(format!("module-{webhooks}")))
@@ -218,9 +220,8 @@ fn orchestrator_unwatch_ctrl_enter_stops_the_chosen_and_all_of_them_stops_the_re
   });
   screen.key(("Enter", "Enter"), false);
   let chip = format!("orchestrator-composer-choice-module-{webhooks}");
-  screen.until("the chip", |screen| screen.exists(&chip));
-  screen.until("the row to say so", |screen| {
-    screen.text(&row(format!("module-{webhooks}"))).contains("Added")
+  screen.until("the chip, the picker closed", |screen| {
+    screen.exists(&chip) && !screen.exists(PICKER)
   });
   screen.key(("Enter", "Enter"), true);
   screen.until("Webhooks v2 to stop", |screen| {
@@ -251,7 +252,7 @@ fn orchestrator_unwatch_ctrl_enter_stops_the_chosen_and_all_of_them_stops_the_re
 
   open_picker(&mut screen);
   screen.until("the two left", |screen| {
-    screen.text(PICKER).replace('\u{a0}', " ").starts_with("Watched here 2")
+    screen.text(PICKER).replace('\u{a0}', " ").contains("Watched here 2")
   });
   // Search index, the task, then All of them.
   screen.key(("ArrowDown", "ArrowDown"), false);
