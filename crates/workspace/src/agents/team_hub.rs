@@ -6,11 +6,11 @@ use std::path::Path;
 
 use orchester_core::{
   id::ResourceId,
-  resource::{ResourceKind, VersionNumber},
+  resource::{ResourceKind, TeamMcpLaunch, TeamMcpServer, Tool, ToolKind, VersionNumber},
   secret::SecretVault,
   store::ResourceStore,
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, StoreError};
 
 use crate::{
   readiness::{ProjectReadiness, ReadinessError},
@@ -27,11 +27,25 @@ pub struct Plain {
   pub number: Option<VersionNumber>,
 }
 
+/// What an MCP server or a tool is, which a row of the hub names after its name (`Tag` in `Item` of `Agents · MCP
+/// servers` `yIsDi`, `Agents · Tools` `u9Hcc`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Form {
+  /// An MCP server that runs a program on each computer.
+  McpProgram,
+  /// An MCP server that is reached at an address.
+  McpRemote,
+  ToolCommand,
+  ToolHttp,
+  ToolDatabase,
+}
+
 /// The resources the hub lists, and how the profiles, MCP servers and tools stand on this computer.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct TeamHub {
   readiness: ProjectReadiness,
   plain: Vec<Plain>,
+  forms: Vec<(ResourceId, Form)>,
 }
 
 impl TeamHub {
@@ -43,6 +57,39 @@ impl TeamHub {
   pub fn plain(&self) -> &[Plain] {
     &self.plain
   }
+
+  /// What the MCP server or tool `resource` is; `None` for any other resource.
+  pub fn form(&self, resource: ResourceId) -> Option<Form> {
+    self
+      .forms
+      .iter()
+      .find_map(|(found, form)| (*found == resource).then_some(*form))
+  }
+}
+
+/// What each MCP server and tool of the project is, from its latest version.
+fn forms(db: &ProjectDb) -> Result<Vec<(ResourceId, Form)>, StoreError> {
+  let mut forms = Vec::new();
+  for resource in db.resources(ResourceKind::McpServer)? {
+    if let Some(version) = db.latest_version::<TeamMcpServer>(resource.id())? {
+      let form = match version.body().launch() {
+        TeamMcpLaunch::Program(_) => Form::McpProgram,
+        TeamMcpLaunch::Remote(_) => Form::McpRemote,
+      };
+      forms.push((resource.id(), form));
+    }
+  }
+  for resource in db.resources(ResourceKind::Tool)? {
+    if let Some(version) = db.latest_version::<Tool>(resource.id())? {
+      let form = match version.body().kind() {
+        ToolKind::Command => Form::ToolCommand,
+        ToolKind::Http => Form::ToolHttp,
+        ToolKind::Database => Form::ToolDatabase,
+      };
+      forms.push((resource.id(), form));
+    }
+  }
+  Ok(forms)
 }
 
 impl Workspace {
@@ -71,6 +118,10 @@ impl Workspace {
       of_kind.sort_by_key(|found| found.name.to_lowercase());
       plain.extend(of_kind);
     }
-    Ok(TeamHub { readiness, plain })
+    Ok(TeamHub {
+      readiness,
+      plain,
+      forms: forms(&db)?,
+    })
   }
 }

@@ -187,3 +187,30 @@ fn team_hub_says_so_when_the_filter_holds_nothing() {
   agents.until("empty", |s| s.exists("team-hub-empty"));
   assert_eq!(agents.text("team-hub-filter-tools-count"), "0");
 }
+
+#[test]
+fn team_hub_rows_show_what_a_server_is_and_its_version_under_the_kind_s_filter() {
+  let mut agents = Agents::new(true);
+  let [skill, rules, github, _] = team(&agents);
+  open(&mut agents, HubView::new(HubFilter::McpServers, None));
+  assert_eq!(agents.text(&format!("team-hub-row-{github}-tag")), "remote");
+  assert_eq!(agents.text(&format!("team-hub-row-{github}-version")), "v1");
+  // Under All a row names its kind and carries no version of its own.
+  open(&mut agents, HubView::default());
+  assert_eq!(agents.text(&format!("team-hub-row-{github}-tag")), "mcp");
+  assert!(!agents.exists(&format!("team-hub-row-{github}-version")));
+  // Instructions and skills need nothing of a computer: no tag, no version, and the list says why.
+  open(&mut agents, HubView::new(HubFilter::Instructions, None));
+  assert!(!agents.exists(&format!("team-hub-row-{rules}-tag")));
+  assert!(!agents.exists(&format!("team-hub-row-{rules}-version")));
+  assert_eq!(
+    agents.text("team-hub-note-text"),
+    "Instructions have nothing to fill in on a computer, so they are always ready here."
+  );
+  open(&mut agents, HubView::new(HubFilter::Skills, None));
+  assert!(!agents.exists(&format!("team-hub-row-{skill}-version")));
+  assert_eq!(
+    agents.text("team-hub-note-text"),
+    "Skills have nothing to fill in on a computer, so they are always ready here."
+  );
+}

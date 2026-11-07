@@ -41,6 +41,17 @@
         "skill": "Skill"
       }
     },
+    "form": {
+      "program": "program",
+      "remote": "remote",
+      "command": "command",
+      "http": "http",
+      "database": "database"
+    },
+    "note": {
+      "instructions": "Instructions have nothing to fill in on a computer, so they are always ready here.",
+      "skills": "Skills have nothing to fill in on a computer, so they are always ready here."
+    },
     "line": {
       "ready": "Ready here",
       "readyVersion": "Ready here · {{version}}",

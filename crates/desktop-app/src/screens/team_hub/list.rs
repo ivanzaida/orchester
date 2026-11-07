@@ -1,30 +1,25 @@
 //! The hub's list (`List` `gETjg` in `t4mtQL`): the resources of the filter in three groups by what this computer
 //! needs, each under a title with its count (`Section · Needs you here` `o6TEKq`), a row with its glyph, name, line
-//! and, under All, its kind's tag (`Item · Builder` `tF2OL`). The chosen row stands inert on `hover` with a 2
-//! `accent` start; the others open the hub on them.
+//! and at its end its tag and version (`Item · Builder` `tF2OL`, [`super::row`]); the instructions' and skills' lists
+//! say under their group why every one is ready (`Why` `e1C14P`).
 
 use lurq::{
-  app::theme::{BorderSize, PaletteColor, SpacingSize, TypographyStyle},
+  app::theme::{PaletteColor, SpacingSize},
   components::{Column, Row, ScrollVertical, Text},
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ProjectId;
 use orchester_workspace::readiness::Group;
 
 use super::{
-  model::{Entry, GROUPS, Kind, Listing},
-  words,
+  model::{Entry, GROUPS, Listing},
+  row::row,
 };
 use crate::{
   navigation::Navigation,
-  routes::{HubFilter, HubView, ProjectPage, Route},
-  theme::{ExtraColor, ExtraSpacing, HubText, IconSize},
-  ui::{
-    chip::TagChip,
-    icon::icon,
-    pressable::{inert, opening},
-  },
+  routes::HubFilter,
+  theme::{ExtraSpacing, HubSpacing, HubText},
 };
 
 /// The list's width (`List` `gETjg`).
@@ -58,7 +53,8 @@ pub(super) fn list(ctx: &lurq::app::ctx::Ctx, listing: &Listing, shown: &Shown<'
     .width(Dimension::Pct(100.0))
     .padding(Padding::vertical(ExtraSpacing::Snug.role()))
     .spacing(SpacingSize::Sm)
-    .with_children(groups);
+    .with_children(groups)
+    .with_children(note(ctx, shown.filter));
   ScrollVertical::new(groups)
     .id("team-hub-list-scroll")
     .width(Dimension::Px(LIST_WIDTH))
@@ -76,7 +72,7 @@ fn section(ctx: &lurq::app::ctx::Ctx, group: Group, count: usize) -> Row {
     .id(format!("team-hub-section-{name}"))
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(SECTION_HEIGHT))
-    .padding(Padding::horizontal(SpacingSize::Md))
+    .padding(Padding::horizontal(SpacingSize::Lg))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(
@@ -94,78 +90,24 @@ fn section(ctx: &lurq::app::ctx::Ctx, group: Group, count: usize) -> Row {
     )
 }
 
-fn row(ctx: &lurq::app::ctx::Ctx, listing: &Listing, entry: &Entry, shown: &Shown<'_>) -> Element {
-  let chosen = shown.selected.is_some_and(|selected| selected.id == entry.id);
-  let said = words::line(ctx, listing, entry);
-  let id = format!("team-hub-row-{}", entry.id);
-  let glyph_color = match (entry.group, entry.kind) {
-    (Group::NeedsYouHere, _) => PaletteColor::Warning,
-    (Group::OffHere, _) => PaletteColor::TextMuted,
-    (Group::Ready, Kind::Instruction | Kind::Skill | Kind::Profile) => PaletteColor::TextSecondary,
-    (Group::Ready, Kind::McpServer | Kind::Tool) => PaletteColor::Success,
+/// Why every resource of the filter is ready, under the list (`Why` `e1C14P` in `Agents · Instructions` `c3jU1R`): the
+/// kinds with nothing to fill in on a computer.
+fn note(ctx: &lurq::app::ctx::Ctx, filter: HubFilter) -> Option<Row> {
+  let key = match filter {
+    HubFilter::Instructions => "team_hub.note.instructions",
+    HubFilter::Skills => "team_hub.note.skills",
+    _ => return None,
   };
-  let text = Column::new()
-    .flex(1.0)
-    .min_width(Dimension::Px(0.0))
-    .spacing(ExtraSpacing::Fine.role())
-    .child(
-      Text::new(&entry.name)
-        .id(format!("{id}-name"))
-        .variant(TypographyStyle::Label)
-        .nowrap(),
-    )
-    .child(
-      Text::new(&said.text)
-        .id(format!("{id}-line"))
-        .variant(HubText::Hint.role())
-        .color(said.color)
-        .nowrap(),
-    );
-  let tag =
-    (shown.filter == HubFilter::All).then(|| TagChip::new(format!("{id}-tag"), ctx.t(entry.kind.tag_key())).mono());
-  let button = if chosen {
-    inert(lurq::components::Button::empty())
-  } else {
-    let route = Route::Project(
-      shown.project,
-      ProjectPage::hub(HubView::new(shown.filter, Some(entry.id))),
-    );
-    opening(shown.navigation.to(route))
-  };
-  let start = if chosen {
-    ExtraSpacing::Inset.role()
-  } else {
-    SpacingSize::Md
-  };
-  let button = button
-    .id(id)
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(entry.height(shown.filter)))
-    .padding(Padding::new().left(start).right(SpacingSize::Md))
-    .spacing(ExtraSpacing::Loose.role())
-    .align_items(Alignment::Center)
-    .describe("state", if chosen { "chosen" } else { "enabled" })
-    .describe("group", group_name(entry.group))
-    .describe("kind", entry.kind.name())
-    .child(icon(entry.kind.glyph(), IconSize::Lg, glyph_color))
-    .child(text)
-    .with_children(tag);
-  if chosen {
-    button
-      .background(ExtraColor::Hover.role())
-      .border_left(Border::inside(BorderSize::Lg, PaletteColor::Accent))
-      .into()
-  } else {
-    button
-      .hovered_style(lurq::node::Style::new().background(ExtraColor::Hover.role()))
-      .into()
-  }
-}
-
-const fn group_name(group: Group) -> &'static str {
-  match group {
-    Group::NeedsYouHere => "needs",
-    Group::Ready => "ready",
-    Group::OffHere => "off",
-  }
+  Some(
+    Row::new()
+      .id("team-hub-note")
+      .width(Dimension::Pct(100.0))
+      .padding(Padding::symmetric(SpacingSize::Lg, HubSpacing::NoteY.role()))
+      .child(
+        Text::new(&ctx.t(key))
+          .id("team-hub-note-text")
+          .variant(HubText::ListNote.role())
+          .flex(1.0),
+      ),
+  )
 }

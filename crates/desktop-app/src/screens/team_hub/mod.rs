@@ -12,6 +12,7 @@ mod head;
 mod list;
 mod model;
 mod panel;
+mod row;
 mod words;
 
 use lurq::{

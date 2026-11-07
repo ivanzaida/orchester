@@ -6,7 +6,7 @@ use orchester_core::{
   resource::{ResourceKind, VersionNumber},
 };
 use orchester_workspace::{
-  agents::team_hub::TeamHub,
+  agents::team_hub::{Form, TeamHub},
   readiness::{Group, ReadinessStanding},
 };
 
@@ -88,8 +88,19 @@ impl Kind {
 
   /// Whether the kind has something to fill in on a computer, so a row says what it needs (profiles, MCP servers and
   /// tools); instructions and skills are always ready here.
-  const fn fills_in(self) -> bool {
+  pub(super) const fn fills_in(self) -> bool {
     matches!(self, Self::Profile | Self::McpServer | Self::Tool)
+  }
+}
+
+/// What a form's tag says (`Tag` in `Item · pencil-design` `U9RFS`, `Item · sentry-issues`).
+pub(super) const fn form_key(form: Form) -> &'static str {
+  match form {
+    Form::McpProgram => "team_hub.form.program",
+    Form::McpRemote => "team_hub.form.remote",
+    Form::ToolCommand => "team_hub.form.command",
+    Form::ToolHttp => "team_hub.form.http",
+    Form::ToolDatabase => "team_hub.form.database",
   }
 }
 
@@ -100,6 +111,8 @@ pub(super) struct Entry {
   pub kind: Kind,
   pub name: String,
   pub number: Option<VersionNumber>,
+  /// What an MCP server or a tool is; `None` for the other kinds.
+  pub form: Option<Form>,
   pub group: Group,
   /// How it stands here; `None` for an instruction or a skill, which need nothing.
   pub standing: Option<ReadinessStanding>,
@@ -139,6 +152,7 @@ impl Listing {
         kind: Kind::of(found.kind())?,
         name: found.name().to_owned(),
         number: Some(found.number()),
+        form: hub.form(found.resource()),
         group: found.group(),
         standing: Some(found.standing().clone()),
       })
@@ -149,6 +163,7 @@ impl Listing {
         kind: Kind::of(found.kind)?,
         name: found.name.clone(),
         number: found.number,
+        form: None,
         group: Group::Ready,
         standing: None,
       })
