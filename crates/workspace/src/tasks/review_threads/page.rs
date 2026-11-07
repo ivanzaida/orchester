@@ -213,10 +213,7 @@ struct Steps {
 
 /// The step whose agent answers on `run` of `task`, how many of its steps passed, of how many, and what its last step
 /// that reported said.
-fn steps_of(
-  root: &Path,
-  (task, run): (TaskId, RunId),
-) -> Result<Steps, ReviewRefusal> {
+fn steps_of(root: &Path, (task, run): (TaskId, RunId)) -> Result<Steps, ReviewRefusal> {
   let detail = TaskDetail::load_in(root, task)?;
   let view = detail.run.as_ref().filter(|view| view.id() == run);
   let implement = view.and_then(|view| {

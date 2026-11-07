@@ -316,10 +316,14 @@ impl Component for ReviewScreen {
     frame
       .child(head::header(ctx, &env))
       .child(head::status(ctx, &env))
-      .with_children(
-        since::strip(ctx, &env)
-          .or_else(|| env.page.conflicts.is_none().then(|| summary::summary(ctx, &env)).flatten()),
-      )
+      .with_children(since::strip(ctx, &env).or_else(|| {
+        env
+          .page
+          .conflicts
+          .is_none()
+          .then(|| summary::summary(ctx, &env))
+          .flatten()
+      }))
       .with_children(self.state.failure.get().map(|reason| -> Element {
         Notice::new("review-not-done", NoticeTone::Danger, message_text(ctx, &reason)).into()
       }))
