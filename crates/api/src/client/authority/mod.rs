@@ -19,6 +19,7 @@ use thiserror::Error;
 pub use self::{
   commands::PolicyChange,
   subscription::{Subscription, SubscriptionEnd},
+  work::BundleReadError,
 };
 use super::{Client, ClientError, bearer, redirect, refused, retry_after};
 use crate::v2::{AuthorityError, AuthorityErrorCode};

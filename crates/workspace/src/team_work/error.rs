@@ -1,4 +1,4 @@
-use orchester_api::v2::BundleFileError;
+use orchester_api::v2::{BundleFileError, EXECUTION_BUNDLE_SCHEMA};
 use orchester_core::{
   blob::ContentHash,
   connection::AgentProvider,
@@ -30,6 +30,12 @@ pub enum TeamWorkError {
     expected: ContentHash,
     reason: &'static str,
   },
+  /// The server built the start's bundle in another schema than this computer reads, so it can never be read here.
+  #[error("the bundle is built in schema {built}, and this computer reads schema {EXECUTION_BUNDLE_SCHEMA}")]
+  BundleSchema { built: u32 },
+  /// The server answered JSON for the start's bundle that is not an execution bundle of the schema this computer reads.
+  #[error("the bundle the server answered is not one this computer can read")]
+  BundleUnreadable,
   /// A bundle file the server answered is not the file the bundle pins.
   #[error(transparent)]
   BundleFile(#[from] BundleFileError),

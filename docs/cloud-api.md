@@ -486,7 +486,11 @@ starts work under a claim and never accepts one a client wrote. Unknown fields a
   `schema_version` is `EXECUTION_BUNDLE_SCHEMA` (3), as `BundleRef.schema_version` names it; a bundle of another
   version is refused, with no compatibility shim (2 added `task_number` and the pinned versions' `label`; 3 added the
   pinned team MCP servers and a team profile's `mcp_servers`, so a desktop and a server on different versions refuse
-  each other's bundles, and a schema-2 bundle is refused as `Schema(2)`). `module_id`, `branch`
+  each other's bundles, and a schema-2 bundle is refused as `Schema(2)`). The desktop compares the start receipt's
+  `BundleRef.schema_version` with its own before it reads the bundle and settles the start failed (`bundle_schema`,
+  `read` and `built`); a bundle it reads of another schema, or JSON that is no bundle (`bundle_unreadable`), settles it
+  failed too, over MCP as `team_bundle_schema_mismatch` / `team_bundle_unreadable`. Only a failed call (no answer, a
+  body that is not JSON, a refusal) waits. `module_id`, `branch`
   and `base_commit` are S7's (below): the module the work is under, its module branch (`BranchName`) and the base
   branch's commit the work starts from (`CommitId`). `definition_revision` is the task's revision when the work
   started; `task_number` is the task's number in its project from 1 (the `7` of `ORC-7`, which names the run and its

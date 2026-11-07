@@ -3,7 +3,7 @@
 //! runner's run. Every step is kept before the next, and each is idempotent, so carrying on after a crash, a lost
 //! answer or an outage makes no second work and no second run.
 
-use orchester_api::v2::{AuthorityError, AuthorityRef, Subject, TeamCommandValue};
+use orchester_api::v2::{AuthorityError, AuthorityRef, EXECUTION_BUNDLE_SCHEMA, Subject, TeamCommandValue};
 use orchester_core::{
   id::{ModuleId, OperationId, RunId},
   run::{CommitId, inputs::TeamAcceptance},
@@ -55,6 +55,11 @@ pub enum StartOutcome {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", content = "reason", rename_all = "snake_case")]
 pub enum StartFailure {
+  /// The server built the bundle in schema `built`, and this computer reads schema `read`: the computer or the server
+  /// is older than the other, and one of them has to be updated.
+  BundleSchema { read: u32, built: u32 },
+  /// The server answered JSON for the bundle that is not an execution bundle of the schema this computer reads.
+  BundleUnreadable,
   /// The bundle the server answered, or one of its files, is not the one the receipt names or not built for the start.
   Bundle(String),
   /// The accepted bundle with the caller's choices does not make the run's inputs here.
@@ -65,6 +70,11 @@ impl StartFailure {
   /// The failure `error` is when it lasts: the same bundle and choices fail the same way every time.
   fn lasting(error: &TeamWorkError) -> Option<Self> {
     match error {
+      TeamWorkError::BundleSchema { built } => Some(Self::BundleSchema {
+        read: EXECUTION_BUNDLE_SCHEMA,
+        built: *built,
+      }),
+      TeamWorkError::BundleUnreadable => Some(Self::BundleUnreadable),
       TeamWorkError::BundleMismatch { .. } | TeamWorkError::BundleFile(_) => Some(Self::Bundle(error.to_string())),
       TeamWorkError::Inputs(_) | TeamWorkError::BindingCli { .. } => Some(Self::Inputs(error.to_string())),
       _ => None,
@@ -202,6 +212,11 @@ impl<R: TeamRunner> TeamWork<R> {
     let accepted = self
       .db()?
       .accept_team_start(operation, (work.id, &bundle.sha256), Timestamp::now())?;
+    // The receipt says the schema before the bundle is read: a bundle of another schema never decodes here.
+    if bundle.schema_version != EXECUTION_BUNDLE_SCHEMA {
+      let built = bundle.schema_version;
+      return self.fail(operation, TeamWorkError::BundleSchema { built }).map(Err);
+    }
     Ok(Ok(accepted))
   }
 

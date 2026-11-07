@@ -1724,6 +1724,9 @@
       "teamPipelineMissing": "This team task names the pipeline {{pipeline}}, which is not one of the team's pipelines on this computer. Choose a team pipeline for it; nothing was started.",
       "teamStartWaiting": "The start was recorded and waits for the team server or the runner; it goes on by itself once they answer. Nothing was started twice.",
       "teamStartFailed": "The team task's start could not go on. The task page says where it stands.",
+      "teamBundleSchemaNewer": "The team server built this run in bundle schema {{built}}, and this app reads schema {{read}}. Update Orchester on this computer; nothing was started.",
+      "teamBundleSchemaOlder": "The team server built this run in bundle schema {{built}}, and this app reads schema {{read}}. The team server is older than this app: ask whoever runs it to update it. Nothing was started.",
+      "teamBundleUnreadable": "The team server's bundle for this run is not one this app can read. Update Orchester and the team server to the same release; nothing was started.",
       "teamRunAgain": "A team task runs again only through the team server: start its work with run_task. The message was not sent or kept."
     },
     "githubConnectionName": "gh · {{host}}",

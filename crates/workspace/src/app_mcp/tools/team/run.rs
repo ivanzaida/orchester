@@ -36,7 +36,9 @@ use crate::{
   runner::RunRequestError,
   tasks::run::start_messages,
   team_reads::{TeamReadError, listed::TeamPipelines},
-  team_work::{self, McpHere, ProjectRunner, StartChoices, StartOutcome, TeamStartRequest, TeamWork, TeamWorkError},
+  team_work::{
+    self, McpHere, ProjectRunner, StartChoices, StartFailure, StartOutcome, TeamStartRequest, TeamWork, TeamWorkError,
+  },
 };
 
 pub(in crate::app_mcp::tools) async fn run_task(
@@ -157,6 +159,11 @@ fn started(outcome: StartOutcome) -> Result<Value, ToolError> {
       vec![Message::new("appMcp.errors.teamStartWaiting")],
     )),
     StartOutcome::Refused(error) => Err(authority_refused(&error)),
+    StartOutcome::Failed(StartFailure::BundleSchema { read, built }) => Err(bundle_schema(read, built)),
+    StartOutcome::Failed(StartFailure::BundleUnreadable) => Err(ToolError::refused(
+      "team_bundle_unreadable",
+      vec![Message::new("appMcp.errors.teamBundleUnreadable")],
+    )),
     StartOutcome::Failed(failure) => {
       tracing::warn!(?failure, "a team start failed for good");
       Err(start_failed())
@@ -170,6 +177,23 @@ fn started(outcome: StartOutcome) -> Result<Value, ToolError> {
       Err(ToolError::runner(&error, start_messages(&error)))
     }
   }
+}
+
+/// The bundle is built in another schema than this computer reads: the older of the two is updated.
+fn bundle_schema(read: u32, built: u32) -> ToolError {
+  let key = if built > read {
+    "appMcp.errors.teamBundleSchemaNewer"
+  } else {
+    "appMcp.errors.teamBundleSchemaOlder"
+  };
+  ToolError::refused(
+    "team_bundle_schema_mismatch",
+    vec![
+      Message::new(key)
+        .with("read", read.to_string())
+        .with("built", built.to_string()),
+    ],
+  )
 }
 
 fn work_refused(error: TeamWorkError) -> ToolError {
