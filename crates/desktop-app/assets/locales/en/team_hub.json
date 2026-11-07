@@ -1,0 +1,76 @@
+{
+  "team_hub": {
+    "title": "Agents",
+    "team": "Team",
+    "reading": "Reading the team's configuration…",
+    "loadFailed": "the team's configuration",
+    "filter": {
+      "all": "All",
+      "profiles": "Profiles",
+      "mcpServers": "MCP servers",
+      "instructions": "Instructions",
+      "skills": "Skills",
+      "tools": "Tools"
+    },
+    "hint": {
+      "all": "All of it is the team's; each computer fills in only what is local",
+      "profiles": "Profiles are the team's; each computer fills in only what is local",
+      "mcpServers": "The team's MCP servers; each computer sets the program path and secret values",
+      "instructions": "Instructions are the team's; each computer fills in only what is local",
+      "skills": "Skills are the team's; each computer fills in only what is local",
+      "tools": "Tools are the team's; each computer fills in only what is local"
+    },
+    "group": {
+      "needs": "Needs you here",
+      "ready": "Ready here",
+      "off": "Off here"
+    },
+    "kind": {
+      "tag": {
+        "profile": "profile",
+        "mcp": "mcp",
+        "tool": "tool",
+        "instruction": "instruction",
+        "skill": "skill"
+      },
+      "where": {
+        "profile": "Agent profile",
+        "mcp": "MCP server",
+        "tool": "Tool",
+        "instruction": "Instruction",
+        "skill": "Skill"
+      }
+    },
+    "line": {
+      "ready": "Ready here",
+      "readyVersion": "Ready here · {{version}}",
+      "off": "Off on this computer",
+      "undecided": "Can't tell yet whether it is ready here",
+      "many": "{{count}} things missing here",
+      "connection": "Needs a connection here",
+      "mcpUndecided": "Switch it on or off on this computer",
+      "mcpOff": "{{server}} is not switched on here",
+      "programHere": "Set its program path here",
+      "programOf": "Set the program path of {{server}}",
+      "secret": "Secret {{name}} has no value here",
+      "localProgram": "The program of {{server}} is not found here"
+    },
+    "chip": {
+      "team": "Team · {{version}}",
+      "teamUnnumbered": "Team · not numbered yet",
+      "ready": "Ready here",
+      "off": "Off here"
+    },
+    "readiness": {
+      "title": "Ready here?",
+      "missing": "{{count}} missing"
+    },
+    "panel": {
+      "edit": "Edit"
+    },
+    "empty": {
+      "title": "Nothing here yet",
+      "detail": "Nothing of this kind is published for the team yet."
+    }
+  }
+}
