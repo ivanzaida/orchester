@@ -185,12 +185,14 @@
           "notYet": "Not available in this version yet"
         },
         "watchModule": {
+          "detail": "Their tasks' events come here",
           "label": "Watch modules"
         },
         "watchTask": {
           "label": "Watch tasks"
         },
         "watching": {
+          "detail": "What this conversation leads and what waits there",
           "label": "What I watch"
         }
       },

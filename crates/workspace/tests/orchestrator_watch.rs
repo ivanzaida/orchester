@@ -22,7 +22,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_workspace::orchestrator::watch::{
-  StopBy, StopWhat, WatchError, leave_there_in, stop_in, take_over_in, watch_in,
+  StopBy, StopWhat, WatchError, leave_there_in, stop_in, take_over_in, watch_in, watching_in,
 };
 use support::{Fixture, at};
 
@@ -388,6 +388,35 @@ fn watch_applies_while_a_turn_of_the_conversation_runs() {
   assert!(matches!(entries[2].kind, EntryKind::Event(ChatEvent::Watch { .. })));
   assert_eq!(entries.len(), 3, "no turn of its own");
   assert_eq!(leader(&fixture, delivery), Some(mine.id()));
+}
+
+/// `/watching` (ORC-775) keeps only the person's command: the answer under it is read live, and no turn starts.
+#[test]
+fn watch_watching_keeps_the_command_only_while_the_conversation_watches_something() {
+  let mut fixture = Fixture::new();
+  let delivery = WatchTarget::Module(module(&mut fixture, "Delivery"));
+  let mine = conversation(&mut fixture, "Delivery work", false);
+  assert!(matches!(
+    watching_in(fixture.repo.path(), &mine),
+    Err(WatchError::NotWatched)
+  ));
+  assert!(watch_entries(&fixture, mine.id()).is_empty(), "nothing is kept");
+  watch_in(fixture.repo.path(), &mine, &[named(delivery, "Delivery")], "").expect("watched");
+
+  watching_in(fixture.repo.path(), &mine).expect("asked");
+
+  let entries = fixture.db.chat_entries(mine.id()).expect("entries");
+  assert_eq!(
+    entries.last().map(|entry| &entry.kind),
+    Some(&EntryKind::Event(ChatEvent::WatchCommand {
+      command: WatchCommand::Watching,
+    }))
+  );
+  assert_eq!(
+    entries.len(),
+    4,
+    "the message, the /watch and its line, and /watching: no turn of its own"
+  );
 }
 
 #[test]

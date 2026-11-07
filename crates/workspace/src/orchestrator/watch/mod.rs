@@ -1,12 +1,14 @@
 //! The person's watch commands in an Orchestrator conversation (`docs/design/orchestrator-watch.md`, frames 04 `OKtX2`
 //! and 05 `EIjDH`, lines `avDZO`): `/watch-task` and `/watch-module` ([`watch_in`]), *Take it here* and *Open that
-//! conversation* on the card of a target another conversation leads ([`take_over_in`], [`leave_there_in`]), and
-//! `/unwatch` or × on a header chip ([`stop_in`]). The app applies them itself, with no agent turn and nothing spent,
-//! also while a turn of the conversation is under way: each keeps the person's command and its lines as entries of the
+//! conversation* on the card of a target another conversation leads ([`take_over_in`], [`leave_there_in`]),
+//! `/unwatch` or × on a header chip ([`stop_in`]), and `/watching` (06 `Ff7AD`, [`watching_in`]). The app applies
+//! them itself, with no agent turn and nothing spent, also while a turn of the conversation is under way: each keeps
+//! the person's command and its lines as entries of the
 //! conversation, and the line another conversation is owed in that one. The agent has no tool for any of this; only
 //! the person subscribes. A target closed or deleted meanwhile is refused with [`WatchError`], whose
 //! [`WatchError::message`] the composer shows.
 
+mod asked;
 mod read;
 mod start;
 mod stop;
@@ -23,6 +25,7 @@ use orchester_store::{ProjectDb, StoreError};
 use thiserror::Error;
 
 pub use self::{
+  asked::watching_in,
   start::{Watched, watch_in},
   stop::{StopBy, StopWhat, Unwatched, stop_in},
   take::{TakenHere, leave_there_in, take_over_in},

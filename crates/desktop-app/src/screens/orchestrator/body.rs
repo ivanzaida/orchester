@@ -93,18 +93,24 @@ pub(super) fn main(ctx: &mut Ctx, view: &View, (project, reads): (&ShownProject,
   match &reads.shown {
     Shown::New if pending.is_none() => {
       let boxed = foot.composer(ctx, view, (project, true), ctx.t("orchestrator.composer.placeholder"));
+      let problem = problem.or_else(|| super::watch::problem(ctx, view));
       start(ctx, view, (boxed, unread.or(problem)))
     }
-    Shown::New => conversation(
-      ctx,
-      view,
-      (project, None, pending.as_ref()),
-      (&foot, [problem, None, unread]),
-    ),
+    Shown::New => {
+      let watched = super::watch::problem(ctx, view);
+      conversation(
+        ctx,
+        view,
+        (project, None, pending.as_ref()),
+        (&foot, [problem, watched, unread]),
+      )
+    }
     Shown::Chat(shown) => {
       let queued = queued_problem(ctx, view)
         .or_else(|| super::compact::problem(ctx, view))
-        .or_else(|| super::rewind::problem(ctx, view));
+        .or_else(|| super::rewind::problem(ctx, view))
+        .or_else(|| super::watch::problem(ctx, view))
+        .or_else(|| view.what_i_watch.problem(ctx));
       conversation(
         ctx,
         view,

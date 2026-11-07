@@ -38,6 +38,7 @@ use super::{
   turns::{Arrival, Turn},
   wait::Status,
   watch::WatchFacts,
+  watching::Live,
 };
 use crate::{
   theme::{DROPPED_OPACITY, OrchestratorSpacing, chat_scrollbar},
@@ -84,6 +85,8 @@ pub(super) struct TurnEnv {
   pub(super) answering: bool,
   /// Edit and *Rewind to here* (`super::rewind`).
   pub(super) rewind: RewindEnv,
+  /// What the conversation leads now, which a `/watching` row shows, and its *Stop watching* (`super::watching`).
+  pub(super) watching: Live,
   /// What the lines about watching name beside what they keep (`super::watch`).
   pub(super) watch: Arc<WatchFacts>,
 }
@@ -134,6 +137,7 @@ impl PartialEq for TurnRow {
       && self.env.names == other.env.names
       && self.env.changing == other.env.changing
       && self.env.rewind.shows() == other.env.rewind.shows()
+      && (!self.turn.asks_watching() || self.env.watching == other.env.watching)
       && self.env.watch == other.env.watch
   }
 }
@@ -312,12 +316,17 @@ impl Component for TurnView {
   }
 }
 
-/// A turn's row: what opens it, the answer and how it ended; or a compaction's, a rewind's or a watch entry's row, or
-/// the cards of targets other conversations lead. While a message is edited in place, what sending it drops is dimmed:
-/// its own answer under the line that counts them, and every row after it (`super::rewind::editing`).
+/// A turn's row: what opens it, the answer and how it ended; or a compaction's, a rewind's or a watch entry's row, with
+/// under a /watch's line the cards of its targets other conversations lead; or a `/watching` and its answer from the
+/// live state (`super::watching`). While a message is edited in place, what sending it drops is dimmed: its own answer
+/// under the line that counts them, and every row after it (`super::rewind::editing`).
 fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
   let key = row.turn.key();
   let dropped = row.env.rewind.drops(&row.turn);
+  if row.turn.asks_watching() {
+    let column = super::watching::row(ctx, row, &key);
+    return room(ctx, dimmed(column, dropped), first);
+  }
   if let Some(event) = &row.turn.compaction {
     let id = format!("orchestrator-compaction-{key}");
     let line = super::compaction::line(ctx, &id, event, row.turn.at)

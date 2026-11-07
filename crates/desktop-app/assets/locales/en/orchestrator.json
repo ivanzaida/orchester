@@ -297,56 +297,6 @@
         "changes": "Changes ↗"
       }
     },
-    "watch": {
-      "applied": "Applied {{time}}",
-      "target": {
-        "withoutModule": "Tasks without a module",
-        "project": "Every task of the project",
-        "gone": "Gone from the project"
-      },
-      "counted": {
-        "one": "{{target}} · {{count}} task",
-        "other": "{{target}} · {{count}} tasks"
-      },
-      "join": {
-        "pair": "{{first}} and {{last}}",
-        "more": "{{first}}, {{next}}"
-      },
-      "leading": "Leading {{targets}}",
-      "leadingAside": "— their waits, run ends, conflicts, limits and stalls start a turn here",
-      "nowLedIn": "{{target}} is now led in «{{title}}»",
-      "nowLedInAside": "— its events start turns there",
-      "nowLedInTask": "— watched there as a task; the rest of {{module}} stays here",
-      "nowLedInTaskBare": "— watched there as a task; the rest stays here",
-      "tookOver": "{{target}} is now led here",
-      "tookOverAside": "— taken from «{{title}}»; its events start turns here",
-      "ledHereAgain": "{{target}} is led here again",
-      "ledHereAgainAside": "— «{{title}}» stopped watching it; its events start turns here",
-      "stopped": "Stopped watching {{targets}}",
-      "stoppedAll": "Stopped watching everything",
-      "leftOpen": {
-        "one": "— {{count}} left open goes back to the usual rule",
-        "other": "— {{count}} left open go back to the usual rule"
-      },
-      "nothingOpen": "— nothing is canceled or paused",
-      "open": {
-        "waits": "{{task}} waits for you ↗",
-        "runs": "{{task}} is running ↗",
-        "queued": "{{task}} queued ↗",
-        "stoppedAtLimit": "{{task}} stopped at a limit ↗"
-      },
-      "led": {
-        "title": "{{target}} is already led in «{{title}}»",
-        "note": "Since {{date}} {{time}}. Its waits and run ends start turns there. Taking it moves them here, and that conversation gets a line saying so.",
-        "open": "Open that conversation",
-        "take": "Take it here",
-        "personOnly": "Only a person chooses where a target is led: input from automation is refused here.",
-        "taken": "{{target}} is now led here",
-        "takenFrom": "— taken from «{{title}}», which got a line saying so",
-        "left": "{{target}} stays led in «{{title}}»",
-        "leftAside": "— you opened that conversation; nothing moved"
-      }
-    },
     "startedBy": {
       "wait": "{{task}}'s wait",
       "runEnd": "{{task}}'s run end",
@@ -454,6 +404,29 @@
       "connection": "The Orchestrator runs on another connection now: this answer starts a new session and doesn't remember the earlier messages.",
       "account": "The Orchestrator's connection is on another account now: this answer starts a new session and doesn't remember the earlier messages."
     },
+    "watching": {
+      "applied": "Applied {{time}}",
+      "from": "Orchester",
+      "meta": "{{time}} · the live state, no agent turn",
+      "total": "This conversation leads {{leads}}. {{total}}.",
+      "only": "{{total}}.",
+      "and": "{{rest}} and {{last}}",
+      "comma": "{{rest}}, {{next}}",
+      "reading": "Reading what this conversation watches…",
+      "unreadable": "What this conversation watches can't be read: {{reason}}",
+      "head": {
+        "own": "{{kind}} · since {{since}} · “{{order}}”",
+        "same": "{{kind}} · since {{since}} · same order",
+        "projectDefault": "{{kind}} · since {{since}} · the default order “{{order}}”",
+        "none": "{{kind}} · since {{since}} · no order"
+      },
+      "stop": "Stop watching",
+      "keyRun": "{{key}} · #{{run}}",
+      "open": "{{action}} ↗",
+      "failed": "Not applied",
+      "personOnly": "Only a person stops watching here: input from an MCP client is not taken, and the subscription goes on.",
+      "dismiss": "Dismiss"
+    },
     "context": {
       "event": {
         "compacting": "Compacting the conversation",
@@ -490,6 +463,108 @@
       "effectPlan": "Deciding a plan is yours, on its card. Ask the Orchestrator here to read it with you.",
       "effectPlanRead": "Deciding a plan is yours, on its card. The Orchestrator reads it and tells you what it proposes.",
       "effectGone": "It was dealt with on the task's page, or its run went on: the agent no longer waits."
+    },
+    "watch": {
+      "applied": "Applied {{time}}",
+      "target": {
+        "withoutModule": "Tasks without a module",
+        "project": "Every task of the project",
+        "gone": "Gone from the project"
+      },
+      "counted": {
+        "one": "{{target}} · {{count}} task",
+        "other": "{{target}} · {{count}} tasks"
+      },
+      "join": {
+        "pair": "{{first}} and {{last}}",
+        "more": "{{first}}, {{next}}"
+      },
+      "leading": "Leading {{targets}}",
+      "leadingAside": "— their waits, run ends, conflicts, limits and stalls start a turn here",
+      "nowLedIn": "{{target}} is now led in «{{title}}»",
+      "nowLedInAside": "— its events start turns there",
+      "nowLedInTask": "— watched there as a task; the rest of {{module}} stays here",
+      "nowLedInTaskBare": "— watched there as a task; the rest stays here",
+      "tookOver": "{{target}} is now led here",
+      "tookOverAside": "— taken from «{{title}}»; its events start turns here",
+      "ledHereAgain": "{{target}} is led here again",
+      "ledHereAgainAside": "— «{{title}}» stopped watching it; its events start turns here",
+      "stopped": "Stopped watching {{targets}}",
+      "stoppedAll": "Stopped watching everything",
+      "leftOpen": {
+        "one": "— {{count}} left open goes back to the usual rule",
+        "other": "— {{count}} left open go back to the usual rule"
+      },
+      "nothingOpen": "— nothing is canceled or paused",
+      "open": {
+        "waits": "{{task}} waits for you ↗",
+        "runs": "{{task}} is running ↗",
+        "queued": "{{task}} queued ↗",
+        "stoppedAtLimit": "{{task}} stopped at a limit ↗"
+      },
+      "failed": "Nothing was watched",
+      "personOnly": "Only you can start watching from the composer: a command sent by automation is not applied. The chips and the order stay.",
+      "dismiss": "Dismiss",
+      "modules": {
+        "placeholder": "Search modules — then write what to do with their events",
+        "section": "Modules",
+        "also": "Also",
+        "count": "{{shown}} of {{total}}",
+        "nothing": "No module matches “{{query}}”",
+        "withoutModule": "Tasks without a module",
+        "project": "Everything in {{project}}",
+        "projectMeta": "What no other subscription takes",
+        "tasks": {
+          "one": "1 task",
+          "other": "{{count}} tasks"
+        },
+        "running": {
+          "none": "none running",
+          "some": "{{count}} running"
+        },
+        "waiting": {
+          "one": "1 waits for you",
+          "other": "{{count}} wait for you"
+        },
+        "meta": "{{tasks}} · {{running}}",
+        "metaWaiting": "{{tasks}} · {{running}} · {{waiting}}",
+        "allDone": "{{tasks}} · all done",
+        "allClosed": "{{tasks}} · all done or canceled",
+        "added": "Added",
+        "ledIn": "Led in «{{title}}» ↗",
+        "ledInUnnamed": "Led in another conversation ↗",
+        "ledHere": "Watched here",
+        "nothingLeft": "Nothing left to watch",
+        "unreadable": "The tasks of {{project}} can't be read",
+        "unreadableNote": "{{reason}} Nothing was added; the chips you have stay.",
+        "tryAgain": "Try again"
+      },
+      "keys": {
+        "move": "↑ ↓",
+        "enter": "Enter",
+        "backspace": "Backspace",
+        "ctrlEnter": "Ctrl Enter",
+        "cmdEnter": "Cmd Enter",
+        "esc": "Esc"
+      },
+      "hint": {
+        "move": "Move",
+        "add": "Add",
+        "removeLast": "Remove the last",
+        "watch": "Watch",
+        "close": "Close"
+      },
+      "led": {
+        "title": "{{target}} is already led in «{{title}}»",
+        "note": "Since {{date}} {{time}}. Its waits and run ends start turns there. Taking it moves them here, and that conversation gets a line saying so.",
+        "open": "Open that conversation",
+        "take": "Take it here",
+        "personOnly": "Only a person chooses where a target is led: input from automation is refused here.",
+        "taken": "{{target}} is now led here",
+        "takenFrom": "— taken from «{{title}}», which got a line saying so",
+        "left": "{{target}} stays led in «{{title}}»",
+        "leftAside": "— you opened that conversation; nothing moved"
+      }
     },
     "held": {
       "projectTitle": "New starts held in {{project}}",

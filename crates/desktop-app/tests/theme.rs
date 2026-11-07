@@ -37,6 +37,8 @@ mod skills;
 mod startup;
 #[path = "theme/task_form.rs"]
 mod task_form;
+#[path = "theme/watching.rs"]
+mod watching;
 
 use lurq::{
   app::{
