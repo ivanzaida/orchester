@@ -297,24 +297,46 @@ fn stand_in_answers_used_by_with_the_latest_versions_whose_typed_fields_name_the
   assert_eq!(nothing, json!({"resources": [], "runs": []}));
 }
 
-#[test]
-fn stand_in_lists_the_runs_that_have_not_ended_by_task_number_and_names_the_current_holder() {
+/// A tool "Deploy" in a team that has listed no run yet.
+fn team_with_tool() -> (Team, ResourceId) {
   let team = Team::start(Standing::Admin);
   let tool = ResourceId::generate();
   create_all(
     &team,
     &[created(tool, "tool", ("deploy", "Deploy"), (&json!({}), &json!([])))],
   );
+  (team, tool)
+}
+
+fn listed_runs(team: &Team, resource: ResourceId) -> Vec<RunId> {
+  let (status, used) = used_by(team, resource);
+  assert_eq!(status, 200, "{used}");
+  let used: UsedBy = serde_json::from_value(used).expect("used by");
+  assert!(
+    used.runs.iter().all(|run| run.holder.is_some()),
+    "the team server sets the holder of every run it lists: {used:?}"
+  );
+  used.runs.iter().map(|run| run.run).collect()
+}
+
+#[test]
+fn stand_in_lists_the_runs_that_have_not_ended_by_task_number_and_names_the_current_holder() {
+  let (team, tool) = team_with_tool();
   let other = ResourceId::generate();
   let running = pin("KON-12", RunReport::Progress, &[tool]);
   let held = pin("KON-3", RunReport::Progress, &[tool, other]);
-  let released = pin("KON-4", RunReport::Progress, &[tool]);
-  let (held_run, released_run) = (held.run, released.run);
-  for run in [running, held, released] {
+  let held_run = held.run;
+  for run in [running, held] {
     team.server.pin_run("kontur", run);
   }
-  for ended in [RunReport::Succeeded, RunReport::Failed, RunReport::Cancelled] {
-    team.server.pin_run("kontur", pin("KON-5", ended, &[tool]));
+  for (number, ended) in [
+    (5, RunReport::Succeeded),
+    (6, RunReport::Failed),
+    (7, RunReport::Cancelled),
+  ] {
+    team
+      .server
+      .pin_run("kontur", pin(&format!("KON-{number}"), ended, &[tool]));
   }
   team
     .server
@@ -322,15 +344,11 @@ fn stand_in_lists_the_runs_that_have_not_ended_by_task_number_and_names_the_curr
   team
     .server
     .claim_run_task("kontur", held_run, Some(Person::Named("Lena Moroz")));
-  team.server.claim_run_task("kontur", released_run, None);
 
   team.server.stand_as(Standing::Member);
   let (status, used) = used_by(&team, tool);
   assert_eq!(status, 200, "{used}");
-  assert!(
-    used["runs"][1].get("holder").is_none() && used["runs"][0].get("number").is_none(),
-    "a released claim has no holder and a run has no number: {used}"
-  );
+  assert!(used["runs"][0].get("number").is_none(), "a run has no number: {used}");
   let used: UsedBy = serde_json::from_value(used).expect("used by");
   let runs: Vec<_> = used
     .runs
@@ -344,41 +362,94 @@ fn stand_in_lists_the_runs_that_have_not_ended_by_task_number_and_names_the_curr
     .collect();
   assert_eq!(
     runs,
-    [
-      ("KON-3", Some("Lena Moroz")),
-      ("KON-4", None),
-      ("KON-12", Some("Dana Ruiz"))
-    ]
+    [("KON-3", Some("Lena Moroz")), ("KON-12", Some("Dana Ruiz"))],
+    "every listed run has the holder; the ended runs and the run of another resource are left out"
   );
 }
 
 #[test]
-fn stand_in_orders_the_runs_of_a_task_by_run_id_and_ends_a_run_its_work_superseded() {
-  let team = Team::start(Standing::Admin);
-  let tool = ResourceId::generate();
-  create_all(
-    &team,
-    &[created(tool, "tool", ("deploy", "Deploy"), (&json!({}), &json!([])))],
-  );
+fn stand_in_ends_a_run_its_work_superseded_and_orders_the_runs_of_different_tasks_by_task_number() {
+  let (team, tool) = team_with_tool();
   // The first run of work 1 last reported `progress`, and a later run of that work was first reported: it has ended.
   let superseded = pin("KON-3", RunReport::Progress, &[tool]);
   let current = pin("KON-3", RunReport::Progress, &[tool]);
-  let mut again = pin("KON-3", RunReport::Progress, &[tool]);
-  again.work = 2;
-  let mut expected = vec![current.run, again.run];
-  expected.sort();
-  // Pinned out of id order, so the answer's order is the stand-in's sort, not the order the runs came in.
-  for run in [again, superseded, current] {
+  let other_task = pin("KON-2", RunReport::Progress, &[tool]);
+  let expected = vec![other_task.run, current.run];
+  // KON-2 is pinned after KON-3, so the answer's order is the stand-in's sort, not the order the runs came in.
+  for run in [superseded, current, other_task] {
     team.server.pin_run("kontur", run);
   }
 
-  let (status, used) = used_by(&team, tool);
-  assert_eq!(status, 200, "{used}");
-  let used: UsedBy = serde_json::from_value(used).expect("used by");
   assert_eq!(
-    used.runs.iter().map(|run| run.run).collect::<Vec<_>>(),
+    listed_runs(&team, tool),
     expected,
-    "the superseded run is left out; the runs of two works of one task are ordered by run id"
+    "KON-3's only live run is the one first reported last in its work; KON-2 comes before KON-3"
+  );
+}
+
+#[test]
+fn stand_in_makes_the_run_whose_first_report_came_last_the_newest_whatever_its_id() {
+  let (team, tool) = team_with_tool();
+  let mut runs = [
+    pin("KON-3", RunReport::Progress, &[tool]),
+    pin("KON-3", RunReport::Progress, &[tool]),
+  ];
+  runs.sort_by_key(|run| run.run);
+  let [lower, higher] = runs;
+  let lower_run = lower.run;
+  // The run with the higher id reported first; the lower id's first report arrives late, so it is the newest.
+  team.server.pin_run("kontur", higher);
+  team.server.pin_run("kontur", lower);
+
+  assert_eq!(listed_runs(&team, tool), [lower_run]);
+}
+
+#[test]
+fn stand_in_does_not_list_the_runs_of_a_work_fenced_by_a_take_over() {
+  let (team, tool) = team_with_tool();
+  let first = pin("KON-3", RunReport::Progress, &[tool]);
+  let first_run = first.run;
+  team.server.pin_run("kontur", first);
+  assert_eq!(
+    listed_runs(&team, tool),
+    [first_run],
+    "the work under the claim is current"
+  );
+
+  // Lena takes the task over: the server starts work 2 and fences work 1, whose run last reported `progress`.
+  team
+    .server
+    .claim_run_task("kontur", first_run, Some(Person::Named("Lena Moroz")));
+  let mut taken = pin("KON-3", RunReport::Progress, &[tool]);
+  taken.work = 2;
+  taken.holder = Some(Person::Named("Lena Moroz"));
+  let taken_run = taken.run;
+  team.server.pin_run("kontur", taken);
+
+  assert_eq!(
+    listed_runs(&team, tool),
+    [taken_run],
+    "the fenced run of work 1 can no longer report, so it is not listed"
+  );
+}
+
+#[test]
+fn stand_in_lists_no_run_of_a_task_whose_claim_was_released() {
+  let (team, tool) = team_with_tool();
+  let released = pin("KON-4", RunReport::Progress, &[tool]);
+  let released_run = released.run;
+  team.server.pin_run("kontur", released);
+  let kept = pin("KON-5", RunReport::Progress, &[tool]);
+  let kept_run = kept.run;
+  team.server.pin_run("kontur", kept);
+  assert_eq!(listed_runs(&team, tool).len(), 2);
+
+  team.server.claim_run_task("kontur", released_run, None);
+
+  assert_eq!(
+    listed_runs(&team, tool),
+    [kept_run],
+    "a released task has no current work"
   );
 }
 
