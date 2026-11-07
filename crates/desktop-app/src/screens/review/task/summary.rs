@@ -8,7 +8,7 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
-  components::{Row, Text},
+  components::{Row, Text, TextOverflow},
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
@@ -41,7 +41,8 @@ pub(super) fn summary(ctx: &Ctx, env: &Env) -> Option<Element> {
     .color(PaletteColor::TextSecondary)
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
-    .nowrap();
+    .nowrap()
+    .text_overflow(TextOverflow::Elipsis);
   Some(row(words, link(ctx, &env.navigation, &env.project, &env.page.run.key)))
 }
 
