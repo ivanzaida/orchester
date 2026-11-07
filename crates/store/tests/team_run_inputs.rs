@@ -6,6 +6,8 @@ mod support;
 
 #[path = "team_run_inputs/accepted.rs"]
 mod accepted;
+#[path = "team_run_inputs/mcp_bindings.rs"]
+mod mcp_bindings;
 
 use std::{collections::BTreeMap, fs, num::NonZeroU32, path::Path};
 
@@ -185,6 +187,7 @@ impl Team {
         mcp_servers: Vec::new(),
       }],
       references,
+      team_mcp: Vec::new(),
     };
     RunInputs::new(content, bindings, LocalConsent::default()).expect("inputs")
   }
@@ -492,6 +495,7 @@ fn local_inputs(db: &ProjectDb, snapshot: &RunSnapshot) -> RunInputs {
       })
       .collect(),
     references: Vec::new(),
+    team_mcp: Vec::new(),
   };
   RunInputs::new(content, bindings, LocalConsent::default()).expect("inputs")
 }

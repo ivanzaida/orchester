@@ -41,6 +41,9 @@ pub enum McpServerProblem {
   /// only `reached` of them came to the runner: the agent may have worked without them. Runs recorded before
   /// this variant say the same as [`Self::FailedToStart`] with an English `detail`.
   ToolRelaysMissing { reached: usize, started: usize },
+  /// A team's remote server takes more than one secret header; an agent's CLI is given one header per HTTP server here,
+  /// so the server was left out.
+  MoreThanOneSecretHeader,
   /// A native agent reaches no MCP server yet (`docs/architecture/native-agent.md` §5.4, P4).
   NotSupportedByConnection,
 }

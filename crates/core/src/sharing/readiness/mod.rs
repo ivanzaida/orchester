@@ -13,6 +13,8 @@ mod needs;
 
 use std::path::PathBuf;
 
+use serde::{Deserialize, Serialize};
+
 use self::needs::Need;
 pub use self::{
   here::Here,
@@ -25,7 +27,8 @@ use crate::{
 };
 
 /// Why a profile has no connection here.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum ConnectionProblem {
   /// No connection of the profile's CLI kind: one has to be added.
   NoneOfKind,
@@ -34,7 +37,8 @@ pub enum ConnectionProblem {
 }
 
 /// Why a team MCP server's program cannot start here.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "path", rename_all = "snake_case")]
 pub enum ProgramProblem {
   /// No path is set on this computer.
   NotSet,
@@ -44,7 +48,8 @@ pub enum ProgramProblem {
 
 /// Why the program of a local project's MCP server cannot start, as a run decides it
 /// ([`McpServerProblem`](crate::connection::mcp::McpServerProblem)).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum LocalProgramProblem {
   /// No file of that name on the `PATH` the agent starts with, or in the project.
   NotFound,
@@ -52,8 +57,9 @@ pub enum LocalProgramProblem {
   Moved,
 }
 
-/// One part a computer lacks.
-#[derive(Clone, Debug, PartialEq, Eq)]
+/// One part a computer lacks. Names and ids only, never a value: it is kept with a start that was refused.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum Missing {
   Connection {
     profile: ResourceId,

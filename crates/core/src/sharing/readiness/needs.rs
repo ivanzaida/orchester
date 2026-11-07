@@ -61,18 +61,26 @@ impl Needs {
   /// A team profile `profile`: a connection for its CLI kind, the MCP servers it chooses (`servers` holds the pinned
   /// version of each) and the secrets it names. Fails when it chooses a server `servers` lacks.
   pub fn profile(profile: ResourceId, body: &TeamAgentProfile, servers: &[McpNeed]) -> Result<Self, NeedsError> {
-    let mut needs = vec![Need::Connection {
-      profile,
-      cli: body.cli(),
-    }];
-    for chosen in body.mcp_servers() {
+    let mut needs = Self::pinned_profile(profile, (body.cli(), body.mcp_servers()), servers)?;
+    needs.0.extend(body.secrets().iter().cloned().map(Need::Secret));
+    Ok(needs)
+  }
+
+  /// A profile as an execution bundle pins it: a connection for the CLI kind the bundle binds it to and the MCP servers
+  /// it names (`servers` holds the pinned version of each). The bundle's profile body names no team secret of its own.
+  pub fn pinned_profile(
+    profile: ResourceId,
+    (cli, chosen): (AgentProvider, &[ResourceId]),
+    servers: &[McpNeed],
+  ) -> Result<Self, NeedsError> {
+    let mut needs = vec![Need::Connection { profile, cli }];
+    for chosen in chosen {
       let server = servers
         .iter()
         .find(|server| server.server == *chosen)
         .ok_or(NeedsError::McpServerNotGiven(*chosen))?;
       needs.extend(Self::mcp_server(server).0);
     }
-    needs.extend(body.secrets().iter().cloned().map(Need::Secret));
     Ok(Self(needs))
   }
 

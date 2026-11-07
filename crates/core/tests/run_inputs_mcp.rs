@@ -183,6 +183,7 @@ fn each_profile_gets_only_the_mcp_servers_it_names() {
       binding(ids[1], vec![issues, shared]),
     ],
     references: vec![reference(docs), reference(issues), reference(shared)],
+    team_mcp: Vec::new(),
   };
   let inputs = make(&canonical, bindings).expect("inputs");
   assert_eq!(servers_of(&inputs, ids[0]), [docs, shared]);
@@ -197,6 +198,7 @@ fn a_profile_naming_no_server_gets_none_even_when_others_are_bound() {
   let bindings = LocalBindings {
     profiles: vec![binding(ids[0], vec![docs]), binding(ids[1], Vec::new())],
     references: vec![reference(docs)],
+    team_mcp: Vec::new(),
   };
   let inputs = make(&canonical, bindings).expect("inputs");
   assert_eq!(servers_of(&inputs, ids[0]), [docs]);
@@ -210,6 +212,7 @@ fn a_profile_cannot_name_a_server_the_inputs_do_not_bind() {
   let bindings = LocalBindings {
     profiles: vec![binding(ids[0], vec![stray]), binding(ids[1], Vec::new())],
     references: Vec::new(),
+    team_mcp: Vec::new(),
   };
   assert_eq!(
     make(&canonical, bindings).expect_err("refused"),

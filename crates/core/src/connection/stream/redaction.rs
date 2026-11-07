@@ -77,6 +77,7 @@ impl McpServerProblem {
       | Self::WorkingDirectoryUnsupported
       | Self::UnsafeScriptArgument { .. }
       | Self::NotUnicode
+      | Self::MoreThanOneSecretHeader
       | Self::NotSupportedByConnection
       | Self::ToolRelaysMissing { .. }
       | Self::FailedToStart { detail: None } => {}

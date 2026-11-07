@@ -12,7 +12,8 @@ use thiserror::Error;
 
 pub use self::{
   bundle::{BundleContent, InputsOrigin, RUN_INPUTS_FORMAT, TaskAtStart, TeamAcceptance},
-  local::{BoundReference, LocalBindings, LocalConsent, ProfileBinding},
+  local::{BoundReference, LocalBindings, LocalConsent, ProfileBinding, TeamMcpBinding},
+  resolve::team_mcp_id,
 };
 use crate::{
   connection::mcp::McpSelectionError,

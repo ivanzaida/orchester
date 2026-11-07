@@ -27,23 +27,21 @@ use orchester_api::{
 };
 use orchester_core::{
   id::{ClaimId, OperationId, RunId},
-  run::{
-    CommitId, RunStatus,
-    inputs::{LocalBindings, LocalConsent, ProfileBinding},
-  },
+  run::{CommitId, RunStatus},
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
   sharing::TaskRevision,
-  store::{ConnectionStore, RunStore},
+  store::RunStore,
 };
 use orchester_runner::execution::Scheduler;
 use orchester_store::{AppDb, ProjectDb};
 use orchester_workspace::{
   actions::{Accepted, Action, ActionOutcome, ClaimAction, Dispatcher, Intent, TeamOutcome, WorkAction},
+  readiness::McpPrograms,
   runner::{RequestError, RunRequestError},
   secrets::Vault,
   sharing::Servers,
   team_reads::TeamSession,
-  team_work::{StartChoices, StartOutcome, TeamRunner, TeamStartRequest, TeamWork},
+  team_work::{StartOutcome, TeamRunner, TeamStartRequest, TeamWork},
   workspace::Workspace,
 };
 use parking_lot::Mutex;
@@ -157,9 +155,8 @@ async fn claim(dispatcher: &Dispatcher, server: &TeamServer) -> ClaimId {
   claim.id
 }
 
-/// The start from `base`, the profile bound to the project's Codex connection.
-fn request(root: &Path, server: &TeamServer, (claim, base): (ClaimId, &str), config: &Config) -> TeamStartRequest {
-  let connection = ProjectDb::open(root).expect("open").connections().expect("connections")[0].id();
+/// The start from `base`; the profile runs on the project's only Codex connection.
+fn request(server: &TeamServer, (claim, base): (ClaimId, &str)) -> TeamStartRequest {
   TeamStartRequest {
     operation: OperationId::generate(),
     work: WorkAction {
@@ -173,19 +170,7 @@ fn request(root: &Path, server: &TeamServer, (claim, base): (ClaimId, &str), con
       module: server.module,
       module_read: TaskRevision::FIRST,
     },
-    choices: StartChoices {
-      bindings: LocalBindings {
-        profiles: vec![ProfileBinding {
-          resource: config.profile,
-          connection,
-          account: None,
-          required_cli: None,
-          mcp_servers: Vec::new(),
-        }],
-        references: Vec::new(),
-      },
-      consent: LocalConsent::default(),
-    },
+    programs: McpPrograms::default(),
   }
 }
 
@@ -204,7 +189,7 @@ async fn team_start_runs_in_the_runner_and_recovers_once_at_every_boundary() {
   link(root, &server);
   let (claiming, _claim_generation) = dispatcher(root, data.path(), &server);
   let claim = claim(&claiming, &server).await;
-  let request = request(root, &server, (claim, &head), &config);
+  let request = request(&server, (claim, &head));
   let (scheduler, mut events) = support::scheduler(root);
   let runner = SchedulerRunner {
     scheduler: scheduler.clone(),
