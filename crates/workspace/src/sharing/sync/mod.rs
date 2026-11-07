@@ -32,7 +32,10 @@ use orchester_core::{
 use tokio::task::JoinHandle;
 
 pub(super) use self::state::SyncStates;
-pub(crate) use self::{archive::pins, config::refresh_profile};
+pub(crate) use self::{
+  archive::pins,
+  config::{refresh_profile, refresh_team_profiles},
+};
 pub use self::{
   archive::{ArchiveError, Pinning, pinning},
   catalog::CATALOG_CHECK,

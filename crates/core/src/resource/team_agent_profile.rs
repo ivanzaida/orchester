@@ -235,6 +235,19 @@ impl TeamAgentProfile {
 }
 
 impl AgentProfile {
+  /// The connection a team profile has on this computer while it has none: no pick, and not exactly one connection of
+  /// its CLI kind. It is the profile's own id, which no connection of this computer has, so nothing resolves it; this
+  /// is the only place that stands it in, and [`Self::awaits_connection_pick`] the only place that recognizes it.
+  pub fn unresolved_connection(profile: ResourceId) -> ConnectionId {
+    ConnectionId::from_uuid(profile.as_uuid())
+  }
+
+  /// Whether this body is that of team profile `profile` with no connection yet ([`Self::unresolved_connection`]):
+  /// the person has to pick one, which is not a connection that is gone.
+  pub fn awaits_connection_pick(&self, profile: ResourceId) -> bool {
+    self.connection() == Self::unresolved_connection(profile)
+  }
+
   /// The team's `profile` as it runs on `connection` of this computer. The team MCP servers are chosen as the local
   /// profile chooses them: by their server ids, carried as [`ConnectionId`]s. The local profile has no tools, skills,
   /// instruction resources or secrets to keep, so the team's lists stay in the version's server body.

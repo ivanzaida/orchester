@@ -34,7 +34,7 @@ use orchester_store::{
 use serde_json::Value;
 
 use self::profile::cache_profile;
-pub(crate) use self::profile::refresh as refresh_profile;
+pub(crate) use self::profile::{refresh as refresh_profile, refresh_all as refresh_team_profiles};
 pub use self::{
   here::{Here, HereReference, Needer, Standing, chosen_at},
   publish::{ConfigServer, RemoteResourceStore},

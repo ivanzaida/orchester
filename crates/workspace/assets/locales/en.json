@@ -768,6 +768,7 @@
       "approvalGate": "Step “{{step}}” calls a tool and waits for an approval; only agent steps can propose a plan for review in this version.",
       "profileNotPublished": "Step “{{step}}” uses an agent profile without a published version.",
       "connectionMissing": "Step “{{step}}” uses an agent profile whose connection no longer exists.",
+      "connectionNotPicked": "Step “{{step}}” uses a team agent profile that has no connection on this computer yet. Pick a connection for this team profile.",
       "mcpServerMissing": "Step “{{step}}” uses an agent profile that gives its agents an MCP server missing on this computer, for example one a shared version names that is not bound here.",
       "secretMissing": "Step “{{step}}” calls a tool that uses a secret missing on this computer, for example one a shared version names that is not bound here.",
       "unsupportedProvider": "Step “{{step}}” uses a connection that is not an agent CLI; choose a Codex or Claude Code connection for its agent profile.",
@@ -975,7 +976,8 @@
         "noNetworkOption": "This connection cannot enforce any network option. Choose another connection."
       },
       "publish": {
-        "connectionMissing": "This profile’s connection no longer exists, so what it can enforce is unknown. Choose a connection before publishing."
+        "connectionMissing": "This profile’s connection no longer exists, so what it can enforce is unknown. Choose a connection before publishing.",
+        "connectionNotPicked": "This team profile has no connection on this computer yet, so what it can enforce is unknown. Pick a connection for this team profile before publishing."
       },
       "repository": "Repository access",
       "commands": "Commands",

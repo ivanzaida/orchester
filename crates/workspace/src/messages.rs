@@ -166,6 +166,7 @@ fn publish_error(error: &PublishError) -> Message {
     PublishError::BlankSkillDescription => Message::new("skills.errors.blankDescription"),
     PublishError::BlankSkillBody => Message::new("skills.errors.blankBody"),
     PublishError::ConnectionMissing => Message::new("agents.permissions.publish.connectionMissing"),
+    PublishError::ConnectionNotPicked => Message::new("agents.permissions.publish.connectionNotPicked"),
     PublishError::Permissions(problem) => crate::agents::permissions::not_enforceable(problem),
     PublishError::Needs(error) => needs_error(error),
   }

@@ -24,6 +24,7 @@ use crate::{
   background,
   messages::{self, Message},
   runner::{RequestError, RunRequestError, Runners},
+  sharing::sync::refresh_team_profiles,
 };
 
 /// What a save refused for a model something still uses says.
@@ -117,6 +118,7 @@ fn store_connection(
       .map_err(|error| connection_failure(&error))?;
     db.create_connection(&connection)
       .map_err(|error| store_failure(&error))?;
+    refresh_team_profiles(db).map_err(|error| store_failure(&error))?;
     return Ok(connection.id());
   };
   let mut connection = stored(db, id)?;
@@ -124,6 +126,7 @@ fn store_connection(
   connection.rename(draft.name.clone());
   connection.set_api(api).map_err(|error| connection_failure(&error))?;
   db.save_connection(&connection).map_err(|error| store_failure(&error))?;
+  refresh_team_profiles(db).map_err(|error| store_failure(&error))?;
   Ok(id)
 }
 
