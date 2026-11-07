@@ -371,6 +371,20 @@ computer uses), `launch` (`kind: program` with the program's name, arguments, fo
 [`readiness`](#readiness-here). A program's path on this computer and a secret's value are never listed.
 Parameter: `project` (string | null; left out, every project's, each naming its project).
 
+### `pick_reviewer_connection` — changes data · team project
+
+Chooses the connection a team reviewer runs on on this computer (the reviewer's *Connection* field in a team project),
+as `pick_profile_connection` does for a profile. A language reviewer takes an agent connection of the CLI kind its
+newest version names; a decision reviewer takes a decision connection. The pick is kept on this computer only. Refused
+as `team_project_required` in a project that is not shared with a team, `reviewer_not_found` for a reviewer that is not
+the team's, `connection_does_not_fit` for a connection of the other kind, `server_not_allowed` for a decision connection
+whose server the reviewer's destinations do not list (a server on this computer always is), `not_team_form` for a
+reviewer whose newest version names a connection (the earlier form; it is published again), and `person_only` for a
+decision connection whose server is not on this computer (it would send the project's requests there).
+
+Parameters: `project` (req.), `reviewer` (req.: id or name of a team reviewer), `connection` (req.: id or name of an
+agent connection, or of a decision connection for a decision reviewer).
+
 ---
 
 ## 4. Agent profiles
@@ -434,9 +448,12 @@ profile. Reading it opens the project's data only to read it: it migrates and wr
 | `kind` | Fields | Fix |
 |---|---|---|
 | `connection` | `cli`, `problem`: `none_of_kind` (no connection of that CLI: add one) or `pick_needed` (several, none picked for this profile) | `add_cli_connection` / `pick_profile_connection` |
+| `decision_connection` | `reviewer` (id), `problem`: `none_of_kind` (no decision connection: add one) or `pick_needed` (several, none picked for this reviewer) — a team decision reviewer | `save_decision_connection` / `pick_reviewer_connection` |
 | `mcp_off` | `server` `{id, name}` — a team MCP server not switched on here | `set_mcp_server_enabled`; turning on is `person_only` always, so `gate: "person"` |
+| `mcp_unsupported` | `server` `{id, name}`, `why`: `more_than_one_secret_header` — a team MCP server this app cannot run as defined | none: only the team can change the server |
 | `mcp_program` | `server`, `problem`: `not_set` or `file_gone` — the team MCP server's program path on this computer | none: a person chooses the file in the app |
 | `secret` | `name` — the team secret has no value here | none: a person gives it in the app |
+| `secret_unreadable` | `name` — the keychain did not say whether the team secret has a value here | none: try again; the keychain has to answer |
 | `local_mcp_program` | `server` `{id, name}`, `problem`: `not_found` (no such file on the `PATH` the agent starts with, or in the project) or `moved` (a fixed file now leads into the repository) — a local project's MCP server a profile chooses and that is turned on | `update_mcp_server` (another program widens: `gate: "ap"`); `not_found` may instead mean installing the program, which no tool does |
 | `local_secret` | `secret` `{id, name}` — a command tool's project secret has no value in the keychain | none: a person sets it in the app |
 | `undecided` | `why` — what cannot be known yet (see below) | `{"tool": null, "gate": null}`, except `connection_gone`: `save_profile_draft` (change the profile's connection, then `publish_profile`), and `secret_gone`: `{"tool": null, "gate": "person"}` (no tool adds a project secret) |

@@ -15,6 +15,7 @@ macro_rules! markers {
     impl $inspect for crate::agents::data::ProfileChange {}
     impl $inspect for crate::agents::data::ProjectAgents {}
     impl $inspect for crate::agents::hub::HubCounts {}
+    impl $inspect for crate::agents::team_hub::TeamHub {}
     impl $inspect for crate::removal::Users {}
     impl $inspect for crate::agents::form::ModelSelection {}
     impl $inspect for crate::clock::Clock {}
@@ -95,6 +96,7 @@ macro_rules! markers {
     impl $inspect for crate::pipelines::library::LibraryEntry {}
     impl $inspect for crate::pipelines::library::StartFrom {}
     impl $inspect for crate::pipelines::problems::ProblemView {}
+    impl $inspect for crate::readiness::ProjectReadiness {}
     impl $inspect for crate::plan_limits::Connections {}
     impl $inspect for crate::plan_limits::Readings {}
     impl $inspect for crate::project_list::Listing {}

@@ -12,6 +12,12 @@ use lurq::{
 
 use super::typography::{mono, style};
 
+/// The list and the panel of the team's Agents hub while its read is under way again: what shows is the last answer.
+pub const HUB_READING_OPACITY: f32 = 0.6;
+
+/// The width of the menu All's New opens (`Menu` in `t4mtQL`).
+pub const HUB_NEW_MENU_WIDTH: f32 = 220.0;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HubText {
   /// 17/600 `text_primary`: an opened item's title in its page head (`WeZzq` in `O355d`).
@@ -44,10 +50,27 @@ pub enum HubText {
   /// 11.5 `text_muted`, 1.4: what a bar says beside its actions, e.g. what a newer version changed (`xtJhx` in 02c
   /// `JZFlA`).
   Foot,
+  /// 13/500 `text_primary`, 1.2: a list row's name (`Title` in `Item · pencil-design` `U9RFS`).
+  RowName,
+  /// 12 `text_secondary`, 1.2: a list row's line under its name and the version at its end, in the color of what
+  /// it says (`Line`, `Meta` in `U9RFS`).
+  RowLine,
+  /// Geist Mono 11 `text_secondary`, 1.2: a list row's tag (`Text` in `Tag` `uJ2rP`).
+  RowTag,
+  /// 12 `text_muted`, 1.45: what a list says under its last group, e.g. why every instruction is ready (`Text` in
+  /// `Why` `e1C14P`, `Agents · Instructions` `c3jU1R`).
+  ListNote,
+  /// 11.5 `text_muted`, 1.3: what a panel row's label says under it (`Sub` in `Agent CLI` `d0HPwh`).
+  PanelSub,
+  /// Geist Mono 12.5 `text_primary`, 1.3: a panel row's value that is an identifier, e.g. a model (`Value` in `Model`
+  /// `C9sBy`).
+  PanelMono,
+  /// 12/500 `text_primary`, 1.2: the fix a missing part offers at its row's end (`Link` `rfGmw`).
+  PanelLink,
 }
 
 impl HubText {
-  pub const ALL: [Self; 13] = [
+  pub const ALL: [Self; 20] = [
     Self::PageTitle,
     Self::Crumb,
     Self::GroupTitle,
@@ -61,6 +84,13 @@ impl HubText {
     Self::Code,
     Self::TeamLine,
     Self::Foot,
+    Self::RowName,
+    Self::RowLine,
+    Self::RowTag,
+    Self::ListNote,
+    Self::PanelSub,
+    Self::PanelMono,
+    Self::PanelLink,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -82,6 +112,13 @@ impl HubText {
       Self::Code => "hub_code",
       Self::TeamLine => "hub_team_line",
       Self::Foot => "hub_foot",
+      Self::RowName => "hub_row_name",
+      Self::RowLine => "hub_row_line",
+      Self::RowTag => "hub_row_tag",
+      Self::ListNote => "hub_list_note",
+      Self::PanelSub => "hub_panel_sub",
+      Self::PanelMono => "hub_panel_mono",
+      Self::PanelLink => "hub_panel_link",
     }
   }
 
@@ -100,6 +137,13 @@ impl HubText {
       Self::Code => mono(style(13.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary)),
       Self::TeamLine => style(12.5, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
       Self::Foot => style(11.5, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
+      Self::RowName => style(13.0, FontWeight::Medium, 1.2, 0.0, palette.text_primary),
+      Self::RowLine => style(12.0, FontWeight::Normal, 1.2, 0.0, palette.text_secondary),
+      Self::RowTag => mono(style(11.0, FontWeight::Normal, 1.2, 0.0, palette.text_secondary)),
+      Self::ListNote => style(12.0, FontWeight::Normal, 1.45, 0.0, palette.text_muted),
+      Self::PanelSub => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
+      Self::PanelMono => mono(style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
+      Self::PanelLink => style(12.0, FontWeight::Medium, 1.2, 0.0, palette.text_primary),
     }
   }
 }
@@ -136,10 +180,14 @@ pub enum HubSpacing {
   Indent,
   /// 44: a block under a radio row from the box's side, past the radio and its gap (`A6i2K3`, `clbbm` in 07).
   Nested,
+  /// 4: over and under the note under a list's last group (`e1C14P`).
+  NoteY,
+  /// 16: the head's Team line to New (`Header` `NRqwv`).
+  NewGap,
 }
 
 impl HubSpacing {
-  pub const ALL: [Self; 15] = [
+  pub const ALL: [Self; 17] = [
     Self::Side,
     Self::HeadTop,
     Self::HeadBottom,
@@ -155,6 +203,8 @@ impl HubSpacing {
     Self::SubY,
     Self::Indent,
     Self::Nested,
+    Self::NoteY,
+    Self::NewGap,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -178,6 +228,8 @@ impl HubSpacing {
       Self::SubY => "hub_sub_y",
       Self::Indent => "hub_indent",
       Self::Nested => "hub_nested",
+      Self::NoteY => "hub_note_y",
+      Self::NewGap => "hub_new_gap",
     }
   }
 
@@ -191,9 +243,10 @@ impl HubSpacing {
       Self::Row => 14.0,
       Self::RowY => 10.0,
       Self::FieldY => 11.0,
-      Self::FieldGap => 16.0,
+      Self::FieldGap | Self::NewGap => 16.0,
       Self::SubY => 7.0,
       Self::Nested => 44.0,
+      Self::NoteY => 4.0,
     }
   }
 }

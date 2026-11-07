@@ -25,9 +25,10 @@ use crate::{
   readiness::{Group, ProjectReadiness, ReadinessError, ReadinessStanding, ResourceReadiness, Undecided},
 };
 
-/// The readiness of every resource of the project at `repo_root` whose database `db` is open, read once for a tool call.
-/// A read tool passes the handle it opened only to read, so the call migrates and writes nothing. Blocks: it reads the
-/// databases and the filesystem, and asks the keychain whether the secret of each tool of a local project has a value.
+/// The readiness of every resource of the project at `repo_root` whose database `db` is open, read once for a tool
+/// call. A read tool passes the handle it opened only to read, so the call migrates and writes nothing. Blocks: it
+/// reads the databases and the filesystem, and asks the keychain whether the secret of each tool of a local project has
+/// a value.
 pub(in crate::app_mcp) fn read(
   services: &Services,
   db: &ProjectDb,
@@ -35,8 +36,11 @@ pub(in crate::app_mcp) fn read(
 ) -> Result<ProjectReadiness, ToolError> {
   services
     .workspace
-    .project_readiness_in(db, repo_root, services.vault.get())
-    .map_err(|ReadinessError::Store(error)| ToolError::from(error))
+    .readiness_in(db, repo_root, services.vault.get())
+    .map_err(|error| match error {
+      ReadinessError::Store(error) => ToolError::from(error),
+      other @ ReadinessError::NotATeamProject => ToolError::from(other),
+    })
 }
 
 /// Resource `id` as a tool answers it; `null` for one with no version this computer uses, which `all` does not list.
@@ -86,6 +90,23 @@ fn missing_json(part: &Missing, all: &ProjectReadiness) -> Value {
       json!({ "server": server_json(*server, all) }),
       fix(Some("set_mcp_server_enabled"), Some("person")),
     ),
+    Missing::DecisionConnection { reviewer, problem } => match problem {
+      ConnectionProblem::NoneOfKind => part_of(
+        "decision_connection",
+        json!({ "reviewer": reviewer.to_string(), "problem": "none_of_kind" }),
+        fix(Some("save_decision_connection"), None),
+      ),
+      ConnectionProblem::PickNeeded => part_of(
+        "decision_connection",
+        json!({ "reviewer": reviewer.to_string(), "problem": "pick_needed" }),
+        fix(Some("pick_reviewer_connection"), None),
+      ),
+    },
+    Missing::McpUnsupported { server, why } => part_of(
+      "mcp_unsupported",
+      json!({ "server": server_json(*server, all), "why": why }),
+      fix(None, None),
+    ),
     Missing::McpProgram { server, problem } => {
       let problem = match problem {
         ProgramProblem::NotSet => "not_set",
@@ -98,6 +119,9 @@ fn missing_json(part: &Missing, all: &ProjectReadiness) -> Value {
       )
     }
     Missing::Secret { name } => part_of("secret", json!({ "name": name.as_str() }), fix(None, Some("person"))),
+    Missing::SecretUnreadable { name } => {
+      part_of("secret_unreadable", json!({ "name": name.as_str() }), fix(None, None))
+    }
     Missing::LocalMcpProgram { server, name, problem } => {
       let problem = match problem {
         LocalProgramProblem::NotFound => "not_found",

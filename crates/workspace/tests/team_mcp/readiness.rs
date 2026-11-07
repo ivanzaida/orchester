@@ -26,7 +26,7 @@ use orchester_core::{
 use orchester_store::{AppDb, CachedVersion, ProjectDb, ResourceSharing};
 use serde_json::{Value, json};
 
-use crate::{Checkout, MemoryVault, team_server::TeamServer};
+use crate::{Checkout, team_server::TeamServer};
 
 const SECRET_VALUE: &str = "fake-value-7Qx2";
 
@@ -325,7 +325,7 @@ fn team_mcp_readiness_a_secret_without_a_value_is_named_and_ready_once_it_has_on
   let name = SecretName::new("API_TOKEN").expect("name");
   checkout
     .db()
-    .set_team_secret_value(&MemoryVault::default(), &name, &value)
+    .set_team_secret_value(&*checkout.vault, &name, &value)
     .expect("the value");
   let ready = profile_readiness(&checkout, profile);
   assert_eq!(ready["ready_here"], true, "{ready}");

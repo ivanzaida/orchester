@@ -10,7 +10,7 @@ use orchester_core::{
 };
 use orchester_workspace::readiness::ReadinessStanding;
 
-use crate::support::{Fixture, MemoryVault, profile, program, remote, secret};
+use crate::support::{Fixture, profile, program, remote, secret};
 
 const CLAUDE: AgentProvider = AgentProvider::ClaudeCodeCli;
 
@@ -57,9 +57,14 @@ fn readiness_a_profile_asks_for_its_servers_switch_program_and_secrets_in_the_or
   work
     .set_team_mcp_program(&fixture.root, server, &path, Answerer::Person)
     .expect("program");
-  let vault = MemoryVault::default();
   work
-    .set_team_secret_value(&fixture.root, &vault, &secret("KNOWLEDGE_TOKEN"), &value())
+    .set_team_secret_value(
+      &fixture.root,
+      &fixture.vault,
+      &secret("KNOWLEDGE_TOKEN"),
+      &value(),
+      Answerer::Person,
+    )
     .expect("secret");
   assert_eq!(
     fixture.read().resource(id).expect("listed").standing().missing(),
@@ -70,7 +75,13 @@ fn readiness_a_profile_asks_for_its_servers_switch_program_and_secrets_in_the_or
   );
 
   work
-    .set_team_secret_value(&fixture.root, &vault, &secret("DEPLOY_KEY"), &value())
+    .set_team_secret_value(
+      &fixture.root,
+      &fixture.vault,
+      &secret("DEPLOY_KEY"),
+      &value(),
+      Answerer::Person,
+    )
     .expect("secret");
   assert_eq!(
     fixture.read().resource(id).expect("listed").standing(),
@@ -124,7 +135,13 @@ fn readiness_a_remote_server_needs_no_program_but_its_headers_secrets() {
   );
   fixture
     .workspace
-    .set_team_secret_value(&fixture.root, &MemoryVault::default(), &secret("ISSUES_KEY"), &value())
+    .set_team_secret_value(
+      &fixture.root,
+      &fixture.vault,
+      &secret("ISSUES_KEY"),
+      &value(),
+      Answerer::Person,
+    )
     .expect("secret");
   assert_eq!(
     fixture.read().resource(server).expect("listed").standing(),
@@ -138,7 +155,13 @@ fn readiness_the_secret_values_never_reach_the_answer() {
   let server = fixture.team_server("issues", remote("ISSUES_KEY"));
   fixture
     .workspace
-    .set_team_secret_value(&fixture.root, &MemoryVault::default(), &secret("ISSUES_KEY"), &value())
+    .set_team_secret_value(
+      &fixture.root,
+      &fixture.vault,
+      &secret("ISSUES_KEY"),
+      &value(),
+      Answerer::Person,
+    )
     .expect("secret");
   let shown = format!("{:?}", fixture.read().resource(server).expect("listed"));
   assert!(!shown.contains("fake-value-7Qx2"), "{shown}");

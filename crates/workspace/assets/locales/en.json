@@ -1692,7 +1692,6 @@
       "teamMembershipRevoked": "You are no longer a member of this team project, so nothing was read or changed.",
       "teamNotFound": "The team server doesn't know this, or it is no longer there for you.",
       "teamReadFailed": "The team server's answer could not be read, so nothing was read or changed.",
-      "teamProfileLegacy": "A profile of this pipeline was published before the team configuration model and names its publisher’s connection instead of a CLI kind, so no connection of this computer can be chosen for it. Publish the profile again.",
       "teamProjectUnsupported": "{{tool}} is not available for a team project in this version: what it reads or changes belongs to the team server, and it is not answered from this computer's copy.",
       "teamDeliveryPending": "A team task's run goes into its module's branch, and only its module's delivery, authorized by an Admin or the team's automatic merge, takes it to the base branch. A proposal does not request that delivery: call merge_run for the run. Nothing was merged.",
       "teamRunNotInModule": "This run did not start on a team module's branch, so no module delivery takes it to the base branch. Nothing was merged.",
@@ -1714,9 +1713,6 @@
       "teamNothingToChange": "This changes nothing of what the team server holds.",
       "teamActionFailed": "The change could not be carried out with the team server. Nothing was changed on this computer.",
       "teamFieldUnsupported": "A team task or module keeps no {{fields}} on its server in this version, so nothing was sent. Leave them out.",
-      "bindingsRequired": "Choose the local connection these agent profiles run on: {{profiles}}. Each needs a binding, since this computer has none or several connections of its CLI.",
-      "mcpServersRequired": "The pipeline's agent profiles use MCP servers that are not set up on this computer: {{servers}}. Bind each to a local MCP server in Sharing › On this computer; nothing was started.",
-      "teamNotPublished": "The team has no published version of this pipeline or profile yet.",
       "teamModuleRequired": "A team task starts only in a module. An Admin puts it in one first.",
       "teamNoPipeline": "This team task has no pipeline. Whoever may edit it chooses one of the team's pipelines first.",
       "teamPipelineRequired": "{{pipeline}} is not one of the team's pipelines. A team task runs only with a team pipeline, and the team's Admins create and publish those; your own local pipelines are not used for team tasks. Nothing was sent.",
@@ -2191,12 +2187,18 @@
       "notTeamProject": "This project is not shared with a team, so there is nothing of the team's to fill in.",
       "notTeamResource": "This is not one of the team's resources in this project.",
       "connectionGone": "That connection no longer exists. Choose another.",
-      "connectionDoesNotFit": "That connection cannot run this profile: it is for another CLI.",
+      "connectionDoesNotFit": "That connection cannot run this profile or reviewer: it is for another CLI.",
+      "decisionConnectionGone": "That decision connection no longer exists. Choose another.",
+      "reviewerIsLanguage": "This reviewer is a language model: it runs on an agent connection, not a decision connection.",
+      "reviewerIsDecision": "This reviewer is a decision model: it runs on a decision connection, not an agent connection.",
+      "serverNotAllowed": "The team's reviewer does not list that decision server, so it cannot run there. Choose a server on this computer or one the team lists.",
+      "reviewerNotTeamForm": "This reviewer is not in the team's form on this computer yet: ask a team Admin to publish it again.",
       "accountGone": "That account is no longer in the list. Choose another.",
       "accountOfOtherCli": "That account belongs to another CLI than the connection's.",
       "programNotAbsolute": "Choose the program with Choose…; its path must be complete.",
       "programNotAFile": "There is no file at that path. Choose the program again.",
-      "remoteServer": "This MCP server runs somewhere else, so it needs no program on this computer."
+      "remoteServer": "This MCP server runs somewhere else, so it needs no program on this computer.",
+      "valueBlank": "The value is empty. Paste the secret's value to save it."
     }
   },
   "teamJoin": {
@@ -2206,6 +2208,31 @@
       "unreachable": "Nothing answered at {{address}}. Check the address, and that this computer is on your team's network.",
       "noProjects": "{{server}} has no shared project you're invited to yet. Ask someone there to invite you to their project."
     }
+  },
+  "notReadyHere": {
+    "refused": "{{pipeline}} is not ready on this computer, so nothing was started: no work was claimed and no attempt was counted. Fix each of these, then run it again.",
+    "refusedAfterStart": "The team server pinned versions of {{pipeline}} that this computer is not ready for, so nothing ran. The work it made for this start and your claim on the task are still open. Fix each of these before you start it again.",
+    "connectionNoneOfKind": "Add a {{cli}} connection in Connections: {{profile}} runs on one, and this computer has none.",
+    "decisionConnectionNoneOfKind": "Add a decision connection in Connections: the reviewer {{reviewer}} runs on one, and this computer has none.",
+    "connectionPickNeeded": "Pick the {{cli}} connection {{profile}} runs on: this computer has several, and none is picked for it.",
+    "decisionConnectionPickNeeded": "Pick the decision connection the reviewer {{reviewer}} runs on: this computer has several, and none is picked for it.",
+    "mcpOff": "Switch on the MCP server {{server}} for this computer: the profiles of the pipeline give it to their agents.",
+    "mcpProgramNotSet": "Choose the program of the MCP server {{server}} on this computer: its path is not set.",
+    "mcpProgramFileGone": "The program of the MCP server {{server}} is no longer at {{path}}. Choose its program again.",
+    "mcpMoreThanOneSecretHeader": "The MCP server {{server}} takes more than one secret header, and this app can't send several yet, so the agents could not use it. Ask a team Admin to change it to one.",
+    "secret": "Set a value for the secret {{secret}} on this computer: an MCP server or tool of the pipeline is given it.",
+    "secretUnreadable": "The keychain did not say whether this computer has a value for the secret {{secret}}, which an MCP server of the pipeline is given. Unlock the keychain and run it again.",
+    "localMcpProgramNotFound": "The program of the MCP server {{server}} was not found on the PATH or in the project. Install it, or choose its program again in Connections.",
+    "localMcpProgramMoved": "The program of the MCP server {{server}} now leads into the project's repository or off this computer, so a run would not start it. Choose its program again in Connections.",
+    "localSecret": "Set a value for the secret {{secret}} on this computer: a tool of the pipeline uses it.",
+    "undecidedNotTeamForm": "{{resource}} is not in the team's form on this computer yet, so it is not known what it needs: ask a team Admin to publish it again.",
+    "undecidedCannotBePublished": "{{resource}} waits to be published for the team and cannot be as it is, so it is not known what it needs here. Open it and fix what keeps it from being published.",
+    "undecidedChoosesMcpServer": "{{resource}} chooses the MCP server {{server}}, which the team does not offer on this computer (archived, or not synced yet), so it is not known what it needs.",
+    "undecidedRunsUnknown": "The pipeline runs {{resource}}, which this computer has no version of yet. Wait for it to sync, or ask a team Admin.",
+    "undecidedConnectionGone": "{{resource}} runs on a connection this project no longer has. Choose another connection for it.",
+    "undecidedTeamToolSecretById": "The tool {{resource}} holds a project secret by id, which the team cannot name, so it is not known whether this computer has its value. Ask a team Admin to publish it again.",
+    "undecidedSecretGone": "The tool {{resource}} uses a secret this project no longer has or has archived. Choose another secret for it.",
+    "undecidedSecretUnreadable": "The keychain did not say whether this computer has the secret the tool {{resource}} uses. Unlock the keychain and run it again."
   },
   "claims": {
     "refused": {

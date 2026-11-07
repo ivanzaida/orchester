@@ -3,11 +3,24 @@
 Status: draft for the person's review (2026-10-29). Design only; the screens are built after approval
 (`docs/architecture/server-new-app-plan.md`, N7b).
 
+> **Partly superseded (2026-11-06, 2026-11-07).** `docs/design/team-configuration.md` is the decided model; where this
+> file disagrees, that file and rows 30, 52, 74, 75, 80 and 81–95 of `docs/architecture/server.md` win. What changed:
+> references to connections, MCP servers and secrets are no longer *bound* by name or role on each computer. The team
+> server owns all configuration, MCP servers included; a team resource names other team resources by server id and
+> secrets by name, and a computer fills in only a connection pick (per profile), an MCP program path (per computer),
+> secret values (per project) and *on here* (a person only). The *missing on this computer* state becomes readiness
+> (*ready here*, *Needs you here*, *Off here*, or what is missing; a run that is not ready is to be refused,
+> `not_ready_here`; not built yet, ORC-826 and ORC-827 are in progress). A person's local pipelines are not used in a team project. A new resource has no draft (Create is
+> v1) and archiving shows *Used by*. The redesigned screens are the desktop layer `acFkz` "Agents · v2" in
+> `orchester.pen` (ORC-809); the frames of the board **Shared configuration · redesign** that show bindings are history.
+> Each decision below says whether it stands.
+
 In a shared project the five libraries (Pipelines, Profiles, Instructions, Skills, Tools) are the team's
 (`docs/architecture/server.md` rows 30, 35, 36, 52). Only admins, the project's owner or the team server's admin,
 draft, publish, create, import, rename and archive them (row 72, ORC-380, core `sharing::may_change_configuration`);
-members read them and run with them. What a version needs that belongs to a person (a connection, an MCP server, a
-secret) is bound on each computer, MCP servers and secrets only by the person.
+members read them and run with them. What a version needs that belongs to a person is filled in on each computer
+(superseded: it was *bound* there; see the note above and `docs/design/team-configuration.md`, "What a computer fills
+in").
 
 ## Where it is
 
@@ -26,7 +39,7 @@ their pane replaced; the modals follow `05d · Delete connection` (`D3c8ht`). Co
 | Row 1 · Libraries | `WBcZ9` | `cHvkL` 01 Profiles · shared · admin (publishers, her draft, a version waiting, missing here, published here not sent), `P8tXS` 01b Profiles · shared · member (read-only, the admins named, no New or Import) | `flVbZ` 01L, `pAB0Z` 01bL |
 | Row 2 · Editor header · admin | `uKLQh` | `Sflw7` 02 draft on v4 with *Publish for the team*, `iLwm9` 02b *v? · published here, not sent*, `JZFlA` 02c conflict with v5 (Compare, Open my draft on v5, Publish mine as v6), `FuOXA` 02d *v5 widens what agents may do here* with *Use v5 here* | `UrSw2` 02L, `Q1Wtpk` 02bL, `pLCwC` 02cL, `N7SLf` 02dL |
 | Row 3 · Member | `KD90G` | `pjEjf` 03 Profile · member · read-only | `uUzBk` 03L |
-| Row 4 · Missing here, bindings | `uOk9L` | `w0Evp` 04 Profile · missing on this computer, `e41po` 04b Sharing › On this computer, `rpQ7s` 04c binding picker for a connection, `z0iFy` 04d bind an MCP server (person-only modal), `LRXYn` 04e bind a secret (person-only modal) | `Jr2O1` 04L, `flgJ3` 04bL, `YKZL4` 04cL, `qk8Gb` 04dL, `ziM4s` 04eL |
+| Row 4 · Missing here, bindings (superseded by readiness and fill-ins) | `uOk9L` | `w0Evp` 04 Profile · missing on this computer, `e41po` 04b Sharing › On this computer, `rpQ7s` 04c binding picker for a connection, `z0iFy` 04d bind an MCP server (person-only modal), `LRXYn` 04e bind a secret (person-only modal) | `Jr2O1` 04L, `flgJ3` 04bL, `YKZL4` 04cL, `qk8Gb` 04dL, `ziM4s` 04eL |
 | Row 5 · What sharing sends | `HUcP1` | `bqc8X` 05 Share with the updated *What sharing sends* | `cLOwD` 05L |
 | Row 6, Row 7 · Light | `E3JoE`, `XqAs9` | the light copies above (`theme: light` on each frame) | |
 | Row 9 · Runs here use (ORC-401) | `LbIBH` | `sakAV` 06 Profile · member · runs here use (Default and Work, Work chosen; page head *runs here: Claude Code · Work*), `p779C` 06b the account picker open (Default ✓, Work, *Add an account…*), `FO7Cq` 06c no Claude Code account (*Missing on this computer*, *Add an account…*), `q36bo` 06d Profile · admin · draft with *Runs here use* (publishing never sends it), `C8JAJ` 07 Sharing › On this computer with *Change* on rows bound by name and by role, `zE2cB` 07b *Change* picker on a row bound by name (Default, Personal, Work ✓, *Add an account…*), `A3rnh8` 07c On this computer without a Claude Code account | Row 10 `s10Hk`: `wPYC7` 06L, `Rg3Rj` 06bL, `z9R03e` 06cL, `zaIRx` 06dL, `EOV1X` 07L, `X9Nk2` 07bL, `lSMyI` 07cL |
@@ -47,19 +60,26 @@ their pane replaced; the modals follow `05d · Delete connection` (`D3c8ht`). Co
    *Try again* (02b).
 5. **Conflict** (`409 version_conflict`): *olha published v5 while you edited v4*, the draft kept, *Compare with v5*,
    *Open my draft on v5*, *Publish mine as v6*. Never merged (02c).
-6. **Widens** (row 35): the bar lists what v5 adds (an MCP server with its binding here, network); runs keep v4;
+6. **Widens** (row 35): the bar lists what v5 adds (a team MCP server, tool or secret name it names, network; the
+   frame's "binding here" is superseded); runs keep v4;
    *Use v5 here* with the line *Only you can press this: not the Orchestrator, a tool or automation.* Shown to admins
    and members alike, since it is per computer (02d).
-7. **Missing on this computer:** the resource says which reference is missing and that its pipelines can't run here;
-   *Choose on this computer…* opens Sharing › On this computer (04).
-8. **On this computer** (a section of Project settings › Sharing, `screens/project_settings/sharing/bindings.rs`):
-   references grouped by kind (Connections, MCP servers, Secrets), each with who needs it and its state: bound by
-   name, bound *by role* (badge), *Waits for you* with *Confirm…* (an MCP server found by name), missing with a picker
-   (04b). The connection picker lists only connections of the reference's role; others show *another role* as
-   unavailable (04c).
+7. **Missing on this computer** *(superseded by readiness)*: the resource says which reference is missing and that its
+   pipelines can't run here; *Choose on this computer…* opens Sharing › On this computer (04). Now: the resource shows
+   *ready here* or exactly what is missing (the connection, the MCP server that is off, its program path, a secret
+   value), and a run that is not ready is to be refused with the parts listed (not built yet: ORC-826 and ORC-827 are in progress).
+8. **On this computer** (a section of Project settings › Sharing, `screens/project_settings/sharing/bindings.rs`)
+   *(superseded: the section stays, its content changes)*: it was references grouped by kind (Connections, MCP servers,
+   Secrets), each with who needs it and its state: bound by name, bound *by role* (badge), *Waits for you* with
+   *Confirm…* (an MCP server found by name), missing with a picker (04b). Now it holds the fill-ins only: the
+   connection pick per profile (one connection of the CLI kind is used without asking), the program path of each team
+   MCP server, the secret values by name and *on here*; nothing is matched by name or role. The connection picker lists
+   only connections of the profile's CLI kind (04c).
 9. **Person-only confirmation** for an MCP server or a secret is a modal (confirmations are modals, decided
    2026-10-28): the choice, what it lets agents or tools do, that nothing about it is sent, and *Only you can confirm
-   this; the Orchestrator and tools can't.* (04d, 04e).
+   this; the Orchestrator and tools can't.* (04d, 04e). Still true for switching a team MCP server on here (decision
+   12 of 2026-11-06, `person_only`); a secret value is a fill-in anyone sets (it widens nothing: widening is decided
+   when a version names a new secret, row 35).
 10. **What sharing sends** gains *Team configuration* and *Named, not sent* (marked New); *Stays here* lists drafts,
     accounts, MCP server settings, secret values and environment; the note drops branch names, which shared progress
     now sends (05).
@@ -67,7 +87,8 @@ their pane replaced; the modals follow `05d · Delete connection` (`D3c8ht`). Co
     themselves which of their own accounts the team's agents run with on their computer. The profile stays the team's
     (admins change it); the connection and account it runs with here are the person's. This follows
     `agent-accounts.md` (*Accounts are app-wide and belong to the person; a project connection chooses one*) and
-    `server.md` rows 30 and 52 (connections and CLI accounts are per person and local).
+    `server.md` rows 30 and 52 (connections and CLI accounts are per person and local). Still true; the choice is the
+    connection pick of the model, kept per profile on this computer.
     - **Profile, member** (06): *Connection & model* shows the team's choice read-only (*Agent CLI* Claude Code,
       *Model*, *Reasoning effort*, each *The team's choice*) and one editable row, *Runs here use* with the badge
       *Yours*: a select of the person's own connections for that CLI with their accounts (*Claude Code · Work*), the
@@ -77,7 +98,8 @@ their pane replaced; the modals follow `05d · Delete connection` (`D3c8ht`). Co
     - **The picker** (06b, 07b) lists the person's connections of that role with their accounts (*Claude Code ·
       Default*, *· Work* with its plan, *· Personal*), the current one checked, then a separator and *Add an
       account…*, which opens Settings › Accounts. The profile's select and Sharing's *Change* open the same picker.
-    - **On this computer** (07): every connection reference can be changed, not only a missing one. A row bound by
+    - **On this computer** (07) *(the by name / by role wording is superseded; the connection pick stays)*: every
+      connection reference can be changed, not only a missing one. A row bound by
       name or by role keeps its status and *by name* / *by role*, and gains a secondary *Change*; after a choice the
       row says *chosen here*. The lead adds *and can change any of it*.
     - **No account of that CLI** (06c, 07c): *Missing on this computer* in the page head; the row's hint in `danger`
@@ -86,7 +108,10 @@ their pane replaced; the modals follow `05d · Delete connection` (`D3c8ht`). Co
     - **Admins** (06d): the same per-computer row for their own runs, next to the team's editable CLI and model. The
       draft bar says *publishing makes v5 for the whole team, without Runs here use*; the note says publishing never
       sends it and each member picks their own.
-12. **Local pipelines** (ORC-402, decided by the person 2026-10-29; `server.md` row 74, *Local pipelines*). In a
+12. **Local pipelines** *(superseded by `server.md` row 80, 2026-11-05: a team task names only a team pipeline, and a
+    person's local pipelines are not used in a team project; this decision and frames 08–08f are history, except
+    that an admin makes a local pipeline a team pipeline)* (ORC-402, decided by the person 2026-10-29; `server.md`
+    row 74, *Local pipelines*). In a
     shared project anyone, members included, may keep pipelines of their own that stay on their computer and are
     never sent to the team server. The team's pipelines stay shared and admin-only (row 72). A local pipeline is a
     local resource: made, published (local versions only) and run without an admin; its steps may use the team's
@@ -124,8 +149,9 @@ their pane replaced; the modals follow `05d · Delete connection` (`D3c8ht`). Co
 - **B.** *Publish for the team* without a confirmation (proposed), or a confirmation modal naming the team?
 - **C.** The member line names the project's owner and the server's admins even when an admin isn't a member of the
   project (proposed).
-- **D.** (ORC-401) *Runs here use* on the profile and *Change* on On this computer set the same per-computer binding
-  of the profile's connection reference (proposed), so changing it in one place shows in the other.
+- **D.** (ORC-401) *Runs here use* on the profile and *Change* on On this computer set the same per-computer
+  connection pick of the profile (proposed; the pick replaced the binding), so changing it in one place shows in the
+  other.
 - **E.** (ORC-402) Choosing another pipeline on a task that names someone's local pipeline changes the task for
   everyone (proposed, as any task edit), or only picks one for this run and leaves the task as it is?
 - **F.** (ORC-402) At Join, *Keep on this computer* on a pipeline keeps it as a live local pipeline (proposed),
@@ -154,7 +180,8 @@ their pane replaced; the modals follow `05d · Delete connection` (`D3c8ht`). Co
   settings · redesign*). In 08d and 08e the parallel checks and the last access row (*Permissions*) are hidden so the
   pane shows no clipped content. Exports: `.tmp/design/ORC-402/<node id>.png`.
 - Copy: `sharing.config.*` (library states, the bars, conflict, widens, missing, the read-only line),
-  `sharing.bindings.*` (On this computer, the picker, the two confirmations, *Change*, *chosen here*),
+  `sharing.bindings.*` (On this computer, the picker, the two confirmations, *Change*, *chosen here*; the binding
+  code and these words go with ORC-845),
   `sharing.sends.*` (updated), `sharing.runs_here.*` (ORC-401: *Runs here use*, *Yours*, *The team's choice*, the
   note, *Add an account…*, the missing line, the admin's draft line), `sharing.local_pipelines.*` (ORC-402: the
   groups, *Where it lives*, the mark and the *Not shared* line, *Publish for the team* and its modal, the task's

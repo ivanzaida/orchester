@@ -8,7 +8,8 @@ pub enum ExtraSpacing {
   /// 2: navigation items, tabs; a segmented control's padding and segments (`C9VsTA`), a menu's options
   /// (`ClKqz`), a chip's top and bottom (`jI8af`), a menu option's label to its detail (`j6ZUhL`).
   Tight,
-  /// 3: a badge's top and bottom (`Fm7lc`), a form row's label to its description (`XaNIz`).
+  /// 3: a badge's top and bottom (`Fm7lc`), a form row's label to its description (`XaNIz`), the space either side of
+  /// the dot before the action bar reason's *Show* (`ACVRw`).
   Fine,
   /// 5: a status, priority or stage icon to its word (`VWRbG`, `OfuTC`, `hDyRI`), a locked tab's lock to
   /// its label (`W4QYDM`).

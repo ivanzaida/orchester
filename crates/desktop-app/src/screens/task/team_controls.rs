@@ -415,14 +415,12 @@ fn started_words(ctx: &Ctx, task: &TaskContext, ask: TeamAsk, started: &Started)
     Stop::Refused(AuthorityErrorCode::Invalid) => ctx.t("summary.team.refused.other"),
     Stop::Refused(code) => refused_words(ctx, *code),
     Stop::BranchNotFound(branch) => ctx.t_args("summary.team.refused.branch", [("branch", branch.as_str())]),
-    Stop::BindingsRequired(profiles) => ctx.t_args(
-      "summary.team.refused.bindings",
-      [("profiles", profiles.join(&ctx.t("task.listSeparator")))],
-    ),
-    Stop::McpServersRequired(servers) => ctx.t_args(
-      "summary.team.refused.mcpServers",
-      [("servers", servers.join(&ctx.t("task.listSeparator")))],
-    ),
+    Stop::NotReadyHere(messages) => messages
+      .iter()
+      .map(|message| message_text(ctx, message).to_string())
+      .collect::<Vec<_>>()
+      .join("\n")
+      .into(),
     Stop::NotReadable => ctx.t("summary.team.refused.notReadable"),
     Stop::Runner(messages) => messages.first().map_or_else(
       || ctx.t("summary.team.refused.failed"),

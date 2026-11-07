@@ -10,6 +10,7 @@
 use std::{collections::BTreeMap, path::Path};
 
 use orchester_core::{
+  connection::mcp::McpServerSelection,
   id::{OperationId, ResourceId, RunId, SecretId},
   integration::base::RunBaseSource,
   resource::{AgentProfile, StepKind, Tool, Version},
@@ -114,6 +115,7 @@ fn preflight_inputs(db: &ProjectDb, inputs: &RunInputs) -> Result<Vec<PreflightP
     .filter_map(|pinned| {
       let pin = pinned.pinned();
       let body = inputs.profile(pin)?;
+      let body = without_team_mcp(inputs, body);
       Some((pin.resource, Version::new(pin.version, pin.number, body, now)))
     })
     .collect();
@@ -167,6 +169,21 @@ fn preflight_inputs(db: &ProjectDb, inputs: &RunInputs) -> Result<Vec<PreflightP
     }
   }
   Ok(problems)
+}
+
+/// `profile` without the team MCP servers of the run: they are launched from the bundle's pinned versions, and are no
+/// rows of this computer's MCP servers, which the preflight checks the profile's servers against.
+fn without_team_mcp(inputs: &RunInputs, profile: AgentProfile) -> AgentProfile {
+  let team = inputs.team_mcp_ids();
+  let local = profile
+    .mcp_servers()
+    .ids()
+    .iter()
+    .filter(|id| !team.contains(id))
+    .copied()
+    .collect();
+  let local = McpServerSelection::new(local).expect("ids taken from a selection stay distinct");
+  profile.with_mcp_servers(local)
 }
 
 /// The secret of this project the bindings bind the publisher's secret `named` to; `named` itself when they bind none.

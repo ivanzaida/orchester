@@ -27,7 +27,7 @@ use super::{
 use crate::{
   navigation::Navigation,
   routes::{
-    ChangeSource, ChangedFile, FilesView, ImportTab, InstructionsView, MemoryTab, ModuleListTab, ModuleTab,
+    ChangeSource, ChangedFile, FilesView, HubFilter, ImportTab, InstructionsView, MemoryTab, ModuleListTab, ModuleTab,
     NewConnection, OrchestratorChat, OverviewTab, ProjectPage, Route, Screen, SecretsView, SkillsFilter, TaskList,
     TaskListTab, TaskTab, TaskView,
   },
@@ -59,7 +59,7 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   server's id, or an agent CLI connection's for its \
   account); each opens Project settings on that tab or page. agents, instructions, skills, tools and memory are the \
   five tabs of one Agents page (Profiles, Instructions, Skills, Tools, Memory), each its own route: agents takes \
-  `agent` (a profile's id, or new), skills takes \
+  `agent` (a profile's id, or new) or, for a team project's hub, `filter` and `item`, skills takes \
   `skill` (a skill id, new or import), tools takes tool (a tool id, or new), and its page's tab; merge_queue, \
   pull_requests and merges are the tabs of one Review page, each its own route; merges takes `key` and `run` (a task's \
   key and its run's number) for that run's merge attempts; orchestrator takes `chat` (a \
@@ -139,6 +139,8 @@ fn schema() -> Value {
       "at": { "type": "string", "description": "files: the version, checkout (the default), base, run:<run id> or rev:<commit>." },
       "line": { "type": "string", "description": "files: the line or lines to show, 12 or 12-20." },
       "number": { "type": "string", "description": "pull_requests: the number of the pull request to open, e.g. 142; with tab feedback, on its Agent feedback." },
+      "filter": { "type": "string", "enum": HubFilter::ALL.map(HubFilter::name), "description": "agents of a team project: the kinds its hub lists, all (the default), profiles, mcp_servers, instructions, skills or tools." },
+      "item": { "type": "string", "description": "agents of a team project: the id of the resource the hub's panel shows; the first of the list when left out." },
       "module": { "type": "string", "description": "modules: a module's id for its page, or new for New module; omitted opens the list. new_task: a module's id, for New task in module." },
       "query": {
         "type": "string",
@@ -284,7 +286,7 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::Modules => &["project", "module", "tab", "view"],
     Screen::NewTask => &["project", "module"],
     Screen::ProjectSettings => &["project", "tab", "view"],
-    Screen::Agents => &["project", "agent"],
+    Screen::Agents => &["project", "agent", "filter", "item"],
     Screen::Merges => merges::PARAMS,
     Screen::MergeQueue | Screen::Pipelines | Screen::Instructions | Screen::Secrets | Screen::OrchestratorSettings => {
       &["project"]

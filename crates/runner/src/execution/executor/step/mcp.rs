@@ -8,6 +8,8 @@
 //! A server that cannot be given is left out, and the invocation's activity says why; the agent
 //! works without it.
 
+mod team;
+
 use std::{
   collections::HashMap,
   path::{Path, PathBuf},
@@ -19,15 +21,18 @@ use orchester_core::{
   connection::{
     AgentProvider,
     invocation::{ClaudeMcpConfig, CodexMcp, HttpAuthorization, LaunchValue, McpLaunch, Platform},
-    mcp::{InvocationExemptions, McpEnvValue, McpServer, McpServerName, McpServerProblem, McpTransport, StdioServer},
+    mcp::{InvocationExemptions, McpEnvValue, McpServer, McpServerName, McpServerProblem, McpTransport},
     stream::{AgentEvent, RunnerProblem},
   },
   id::{InvocationId, SecretId},
-  resource::{AgentProfile, CommandEnvironment, NO_CURRENT_DIRECTORY_IN_EXE_PATH, VariableName},
+  resource::{
+    AgentProfile, CommandArg, CommandEnvironment, CommandProgram, NO_CURRENT_DIRECTORY_IN_EXE_PATH, VariableName,
+  },
   secret::SecretValue,
 };
 use orchester_exec::launch::{self, Via};
 
+use self::team::TeamSecrets;
 use super::{
   super::run::RunTask,
   start::{NATIVE_NOT_AVAILABLE, problem},
@@ -161,8 +166,21 @@ impl RunTask {
       project: self.project.id(),
       read: HashMap::new(),
     };
+    let mut team_secrets = TeamSecrets::new(self.computer.as_ref());
     let (mut launches, mut left_out) = (Vec::new(), Vec::new());
     for id in profile.mcp_servers().ids() {
+      if let Some((server, program)) = self.resolver.team().and_then(|inputs| inputs.team_mcp_server(*id)) {
+        match team::launch(
+          server,
+          program,
+          (worktree, &self.root),
+          (environment, &mut team_secrets),
+        ) {
+          Ok(launch) => launches.push(launch),
+          Err(problem) => left_out.push((server.name().to_string(), problem)),
+        }
+        continue;
+      }
       let server = self
         .computer
         .mcp_server(*id)
@@ -206,12 +224,12 @@ fn launched(
     }
     McpTransport::Stdio(stdio) => stdio,
   };
-  let program = started(stdio, (worktree, repository), environment)?;
+  let program = started(stdio.program(), stdio.args(), (worktree, repository), environment)?;
   let working_directory = stdio
     .working_directory()
     .map(|directory| unicode(directory.resolve(worktree)))
     .transpose()?;
-  let mut variables = no_current_directory(server);
+  let mut variables = no_current_directory(server.environment().iter().map(|(variable, _)| variable));
   for (name, value) in server.environment().iter() {
     let value = match value {
       McpEnvValue::Text(text) => LaunchValue::Text(text.clone()),
@@ -229,7 +247,8 @@ fn launched(
 /// `orchester-exec` would start it. A program stored as a fixed file must still lead outside `repository` and stay on
 /// this machine (`CommandProgram::check_place`).
 fn started(
-  stdio: &StdioServer,
+  program: &CommandProgram,
+  args: &[CommandArg],
   (worktree, repository): (&Path, &Path),
   environment: &CommandEnvironment,
 ) -> Result<(String, Vec<String>), McpServerProblem> {
@@ -237,21 +256,19 @@ fn started(
     .get("PATH")
     .map(Into::into)
     .or_else(orchester_exec::search_path::search_path);
-  let found = stdio
-    .program()
+  let found = program
     .candidates(worktree, path.as_deref(), Platform::current())
     .into_iter()
     .find(|candidate| candidate.is_file())
     .ok_or_else(|| McpServerProblem::ProgramNotFound {
-      program: stdio.program().as_str().to_owned(),
+      program: program.as_str().to_owned(),
     })?;
-  stdio
-    .program()
+  program
     .check_place(&found, repository)
     .map_err(|_| McpServerProblem::ProgramMoved {
-      program: stdio.program().as_str().to_owned(),
+      program: program.as_str().to_owned(),
     })?;
-  let args: Vec<String> = stdio.args().iter().map(|arg| arg.as_str().to_owned()).collect();
+  let args: Vec<String> = args.iter().map(|arg| arg.as_str().to_owned()).collect();
   let launch = launch::resolve(&found);
   if let Err(orchester_core::command::CommandError::UnsafeScriptArgument { position }) = launch.check_args(&args) {
     return Err(McpServerProblem::UnsafeScriptArgument { position });
@@ -276,12 +293,13 @@ fn started(
 
 /// On Windows the server is told, as a command tool's program is, not to start programs by name from its current
 /// directory, which may be the worktree (`NO_CURRENT_DIRECTORY_IN_EXE_PATH`), unless it sets that variable itself.
-fn no_current_directory(server: &McpServer) -> Vec<(VariableName, LaunchValue)> {
+fn no_current_directory<'a>(
+  server_variables: impl IntoIterator<Item = &'a VariableName>,
+) -> Vec<(VariableName, LaunchValue)> {
   let (name, value) = NO_CURRENT_DIRECTORY_IN_EXE_PATH;
-  let own = server
-    .environment()
-    .iter()
-    .any(|(variable, _)| variable.as_str().eq_ignore_ascii_case(name));
+  let own = server_variables
+    .into_iter()
+    .any(|variable| variable.as_str().eq_ignore_ascii_case(name));
   if !cfg!(windows) || own {
     return Vec::new();
   }

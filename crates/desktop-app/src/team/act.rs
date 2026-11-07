@@ -16,7 +16,9 @@ use orchester_workspace::{
     Accepted, Action, ActionError, ActionOutcome, Current, Dispatcher, Intent, PipelineRefusal, Refusal, TeamOutcome,
   },
   background,
+  secrets::Vault,
   sharing::Servers,
+  workspace::Workspace,
 };
 use tokio::runtime::Handle;
 
@@ -66,6 +68,9 @@ pub struct Acting {
   pub servers: Servers,
   pub team: TeamQueries,
   pub runtime: Handle,
+  /// Where a start reads whether the task's pipeline is ready on this computer.
+  pub workspace: Workspace,
+  pub vault: Vault,
 }
 
 impl Acting {
@@ -74,6 +79,8 @@ impl Acting {
       servers: services.servers.clone(),
       team: services.team.clone(),
       runtime: services.runtime.clone(),
+      workspace: services.workspace.clone(),
+      vault: services.vault.clone(),
     }
   }
 

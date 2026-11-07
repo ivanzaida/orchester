@@ -2,7 +2,7 @@
 
 use orchester_core::{
   id::ResourceId,
-  resource::{AgentProfile, ResourceKind, TeamAgentProfile, Tool, Version},
+  resource::{AgentProfile, Resource, ResourceKind, TeamAgentProfile, TeamReviewer, Tool, Version},
   sharing::{McpNeed, Needs, NeedsError},
   store::ResourceStore,
 };
@@ -10,7 +10,7 @@ use orchester_store::{ProjectDb, StoreError, WaitingPublish};
 use serde_json::Value;
 
 use super::{
-  needs::{Entry, Profile},
+  needs::{Entry, Profile, Reviewer},
   standing::Undecided,
 };
 use crate::sharing::sync::{is_local_form, team_form};
@@ -35,15 +35,77 @@ pub(super) fn profiles(db: &ProjectDb, servers: &[McpNeed]) -> Result<Vec<Profil
   Ok(profiles)
 }
 
+/// The team's reviewers. A reviewer's local body is its team body (it names no connection), so a version cached from
+/// the server and one published here that waits for it are read alike. The connection is the pick of the kind the
+/// body names; a pick of the other kind reads as none.
+pub(super) fn reviewers(db: &ProjectDb) -> Result<Vec<Reviewer>, StoreError> {
+  let mut reviewers = Vec::new();
+  for resource in db.resources(ResourceKind::TeamReviewer)? {
+    let version = match db.latest_version::<TeamReviewer>(resource.id()) {
+      Ok(Some(version)) => version,
+      Ok(None) => continue,
+      Err(StoreError::Corrupt { .. }) => {
+        reviewers.push(unreadable_reviewer(db, &resource)?);
+        continue;
+      }
+      Err(other) => return Err(other),
+    };
+    let language = version.body().cli().is_some();
+    reviewers.push(Reviewer {
+      pick: if language {
+        db.connection_pick(resource.id())?.map(|pick| pick.connection)
+      } else {
+        None
+      },
+      decision_pick: if language {
+        None
+      } else {
+        db.decision_pick(resource.id())?
+      },
+      entry: Entry::new(
+        &resource,
+        version.number(),
+        Ok(Needs::reviewer(resource.id(), version.body())),
+      ),
+    });
+  }
+  Ok(reviewers)
+}
+
+/// A reviewer whose newest version is not a team reviewer body: one cached before ORC-887, which names a connection and
+/// is not read. Republishing it names a CLI kind instead.
+fn unreadable_reviewer(db: &ProjectDb, resource: &Resource) -> Result<Reviewer, StoreError> {
+  tracing::warn!(reviewer = %resource.id(), "a cached team reviewer version names a connection, so it is not read");
+  let number = db
+    .latest_version_number(resource.id())?
+    .ok_or(StoreError::ResourceNotFound(resource.id()))?;
+  Ok(Reviewer {
+    entry: Entry::new(resource, number, Err(Undecided::NotTeamForm)),
+    pick: None,
+    decision_pick: None,
+  })
+}
+
 fn profile_needs(
   db: &ProjectDb,
   profile: ResourceId,
   version: &Version<AgentProfile>,
   (waiting, servers): (&[WaitingPublish], &[McpNeed]),
 ) -> Result<Result<Needs, Undecided>, StoreError> {
+  Ok(body(db, profile, version, waiting)?.and_then(|team| with_servers(profile, &team, servers)))
+}
+
+/// What the team's `version` of `profile` says, in the team's form: read from the body the server sent, or, for one
+/// this computer published that waits for the server, from its local body turned into the team's form.
+pub(crate) fn body(
+  db: &ProjectDb,
+  profile: ResourceId,
+  version: &Version<AgentProfile>,
+  waiting: &[WaitingPublish],
+) -> Result<Result<TeamAgentProfile, Undecided>, StoreError> {
   let number = version.number();
   if let Some(cached) = db.cached_version::<AgentProfile>(profile, number)? {
-    return Ok(from_server(profile, cached.server_body, servers));
+    return Ok(from_server(profile, cached.server_body));
   }
   if !waiting
     .iter()
@@ -51,22 +113,18 @@ fn profile_needs(
   {
     return Ok(Err(Undecided::NotTeamForm));
   }
-  Ok(match team_form(db, version.body())? {
-    Ok(team) => with_servers(profile, &team, servers),
-    Err(error) => Err(Undecided::CannotBePublished(error)),
-  })
+  Ok(team_form(db, version.body())?.map_err(Undecided::CannotBePublished))
 }
 
-fn from_server(profile: ResourceId, server_body: Value, servers: &[McpNeed]) -> Result<Needs, Undecided> {
+fn from_server(profile: ResourceId, server_body: Value) -> Result<TeamAgentProfile, Undecided> {
   if is_local_form(&server_body) {
     tracing::debug!(%profile, "a profile version cached before the team configuration model is not in the team's form");
     return Err(Undecided::NotTeamForm);
   }
-  let team = serde_json::from_value::<TeamAgentProfile>(server_body).map_err(|error| {
+  serde_json::from_value::<TeamAgentProfile>(server_body).map_err(|error| {
     tracing::warn!(%profile, %error, "the team's profile version is not a team profile body this version can read");
     Undecided::NotTeamForm
-  })?;
-  with_servers(profile, &team, servers)
+  })
 }
 
 fn with_servers(profile: ResourceId, team: &TeamAgentProfile, servers: &[McpNeed]) -> Result<Needs, Undecided> {

@@ -1,21 +1,39 @@
 use thiserror::Error;
 
+use super::McpUnsupported;
 use crate::{
   connection::{AgentProvider, mcp::McpServerName},
   id::{ConnectionId, ResourceId, SecretId},
-  resource::{TeamAgentProfile, TeamMcpLaunch, TeamMcpServer},
+  resource::{TeamAgentProfile, TeamMcpLaunch, TeamMcpServer, TeamReviewer},
   secret::SecretName,
 };
 
 /// One thing a resource version asks of the computer.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Need {
-  Connection { profile: ResourceId, cli: AgentProvider },
+  Connection {
+    profile: ResourceId,
+    cli: AgentProvider,
+  },
+  /// A decision connection of this computer for the team reviewer.
+  DecisionConnection {
+    reviewer: ResourceId,
+  },
   McpOn(ResourceId),
+  McpUnsupported {
+    server: ResourceId,
+    why: McpUnsupported,
+  },
   McpProgram(ResourceId),
   Secret(SecretName),
-  LocalMcpProgram { server: ConnectionId, name: McpServerName },
-  LocalSecret { secret: SecretId, name: SecretName },
+  LocalMcpProgram {
+    server: ConnectionId,
+    name: McpServerName,
+  },
+  LocalSecret {
+    secret: SecretId,
+    name: SecretName,
+  },
 }
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -27,11 +45,12 @@ pub enum NeedsError {
 }
 
 /// What one pinned version of a team MCP server needs: to be on here, its program's path when it runs a program, and
-/// the secrets it is given values for.
+/// the secrets it is given values for; and, when this app cannot run it as defined, why.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct McpNeed {
   server: ResourceId,
   runs_program: bool,
+  unsupported: Option<McpUnsupported>,
   secrets: Vec<SecretName>,
 }
 
@@ -39,9 +58,16 @@ impl McpNeed {
   /// The need of `body`, the version of team MCP server `server`: the secrets are those its variables and secret
   /// headers name.
   pub fn of(server: ResourceId, body: &TeamMcpServer) -> Self {
+    let unsupported = match body.launch() {
+      TeamMcpLaunch::Remote(remote) if remote.secret_headers().len() > 1 => {
+        Some(McpUnsupported::MoreThanOneSecretHeader)
+      }
+      TeamMcpLaunch::Remote(_) | TeamMcpLaunch::Program(_) => None,
+    };
     Self {
       server,
       runs_program: matches!(body.launch(), TeamMcpLaunch::Program(_)),
+      unsupported,
       secrets: body.secrets(),
     }
   }
@@ -61,19 +87,36 @@ impl Needs {
   /// A team profile `profile`: a connection for its CLI kind, the MCP servers it chooses (`servers` holds the pinned
   /// version of each) and the secrets it names. Fails when it chooses a server `servers` lacks.
   pub fn profile(profile: ResourceId, body: &TeamAgentProfile, servers: &[McpNeed]) -> Result<Self, NeedsError> {
-    let mut needs = vec![Need::Connection {
-      profile,
-      cli: body.cli(),
-    }];
-    for chosen in body.mcp_servers() {
+    let mut needs = Self::pinned_profile(profile, (body.cli(), body.mcp_servers()), servers)?;
+    needs.0.extend(body.secrets().iter().cloned().map(Need::Secret));
+    Ok(needs)
+  }
+
+  /// A profile as an execution bundle pins it: a connection for the CLI kind the bundle binds it to and the MCP servers
+  /// it names (`servers` holds the pinned version of each). The bundle's profile body names no team secret of its own.
+  pub fn pinned_profile(
+    profile: ResourceId,
+    (cli, chosen): (AgentProvider, &[ResourceId]),
+    servers: &[McpNeed],
+  ) -> Result<Self, NeedsError> {
+    let mut needs = vec![Need::Connection { profile, cli }];
+    for chosen in chosen {
       let server = servers
         .iter()
         .find(|server| server.server == *chosen)
         .ok_or(NeedsError::McpServerNotGiven(*chosen))?;
       needs.extend(Self::mcp_server(server).0);
     }
-    needs.extend(body.secrets().iter().cloned().map(Need::Secret));
     Ok(Self(needs))
+  }
+
+  /// A team reviewer `reviewer`: a connection for its CLI kind, as a profile has; a decision reviewer needs a decision
+  /// connection. It chooses no MCP server and names no secret.
+  pub fn reviewer(reviewer: ResourceId, body: &TeamReviewer) -> Self {
+    Self(vec![match body.cli() {
+      Some(cli) => Need::Connection { profile: reviewer, cli },
+      None => Need::DecisionConnection { reviewer },
+    }])
   }
 
   /// A profile of a local project: a connection of the CLI kind of the one it runs on, which is its pick, and the
@@ -93,9 +136,14 @@ impl Needs {
   /// A team MCP server on its own.
   pub fn mcp_server(server: &McpNeed) -> Self {
     let program = server.runs_program.then_some(Need::McpProgram(server.server));
+    let unsupported = server.unsupported.map(|why| Need::McpUnsupported {
+      server: server.server,
+      why,
+    });
     let secrets = server.secrets.iter().cloned().map(Need::Secret);
     Self(
       std::iter::once(Need::McpOn(server.server))
+        .chain(unsupported)
         .chain(program)
         .chain(secrets)
         .collect(),

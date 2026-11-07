@@ -4,7 +4,7 @@
 use std::{collections::HashMap, fs};
 
 use orchester_core::{
-  id::{AgentAccountId, ConnectionId, ProjectId, ResourceId},
+  id::{AgentAccountId, ConnectionId, DecisionConnectionId, ProjectId, ResourceId},
   name::Name,
   project::{Project, ProjectKey},
   secret::{SecretName, SecretValue, SecretVault, VaultError, VaultKey},
@@ -85,6 +85,23 @@ fn fill_in_connection_pick_is_kept_replaced_and_cleared() {
 }
 
 #[test]
+fn fill_in_decision_pick_is_kept_replaced_and_survives_reopening() {
+  let (repo, mut db) = project_repo();
+  let reviewer = ResourceId::generate();
+  assert_eq!(db.decision_pick(reviewer).expect("read"), None);
+  db.set_decision_pick(reviewer, DecisionConnectionId::generate())
+    .expect("set");
+  let second = DecisionConnectionId::generate();
+  db.set_decision_pick(reviewer, second).expect("replace");
+  drop(db);
+  let mut db = ProjectDb::open(repo.path()).expect("reopen");
+  assert_eq!(db.decision_pick(reviewer).expect("read"), Some(second));
+  assert_eq!(db.decision_pick(ResourceId::generate()).expect("read"), None);
+  db.clear_connection_pick(reviewer).expect("clear");
+  assert_eq!(db.decision_pick(reviewer).expect("read"), None);
+}
+
+#[test]
 fn fill_in_mcp_server_has_no_choice_until_one_is_made() {
   let (_repo, mut db) = project_repo();
   let server = ResourceId::generate();
@@ -148,4 +165,57 @@ fn fill_in_secret_value_gone_from_the_keychain_is_an_error_without_the_value() {
   let error = db.team_secret_value(&vault, &name).expect_err("the value is gone");
   assert!(matches!(error, StoreError::Keychain(VaultError::NotFound)));
   assert!(!error.to_string().contains(FAKE));
+}
+
+/// A keychain that says whether a value is there but would ask the person before handing one over.
+struct AsksBeforeReading(Result<bool, VaultError>);
+
+impl SecretVault for AsksBeforeReading {
+  fn store(&self, _: &VaultKey, _: &SecretValue) -> Result<(), VaultError> {
+    Ok(())
+  }
+
+  fn read(&self, _: &VaultKey) -> Result<SecretValue, VaultError> {
+    panic!("the value was read");
+  }
+
+  fn exists(&self, _: &VaultKey) -> Result<bool, VaultError> {
+    self.0.clone()
+  }
+
+  fn delete(&self, _: &VaultKey) -> Result<(), VaultError> {
+    Ok(())
+  }
+}
+
+#[test]
+fn fill_in_secret_in_keychain_asks_whether_the_value_is_there_and_never_reads_it() {
+  let (_repo, mut db) = project_repo();
+  let vault = MemoryVault::default();
+  let name = secret_name("DOCS_TOKEN");
+  assert!(!db.team_secret_in_keychain(&vault, &name).expect("no row"));
+
+  db.set_team_secret_value(&vault, &name, &value()).expect("set");
+  assert!(db.team_secret_in_keychain(&vault, &name).expect("held"));
+  assert!(
+    db.team_secret_in_keychain(&AsksBeforeReading(Ok(true)), &name)
+      .expect("held")
+  );
+  assert!(
+    !db
+      .team_secret_in_keychain(&AsksBeforeReading(Ok(false)), &name)
+      .expect("gone")
+  );
+
+  vault.values.lock().clear();
+  assert!(
+    !db
+      .team_secret_in_keychain(&vault, &name)
+      .expect("the row outlives the value")
+  );
+  assert!(db.has_team_secret_value(&name).expect("read"), "the row is still there");
+
+  let refused = AsksBeforeReading(Err(VaultError::AccessDenied("locked".to_owned())));
+  let error = db.team_secret_in_keychain(&refused, &name).expect_err("cannot say");
+  assert!(matches!(error, StoreError::Keychain(VaultError::AccessDenied(_))));
 }

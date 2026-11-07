@@ -15,7 +15,7 @@ use orchester_core::{
   name::Name,
   resource::{
     Draft, Instruction, InstructionScope, Pipeline, ResourceKind, Skill, SkillFile, SkillFilePath, Slug,
-    TeamAgentProfile, Version,
+    TeamAgentProfile, TeamReviewer, Version,
   },
   run::Run,
   sharing::MemberRole,
@@ -268,6 +268,47 @@ async fn live_updates_share_uploads_a_profile_in_the_teams_form_with_the_cli_kin
       cli: AgentProvider::CodexCli
     }]
   );
+}
+
+/// A team reviewer names a CLI kind and no connection: Share uploads it as it is, with the CLI kind among its
+/// references, and a decision reviewer with none.
+#[tokio::test(flavor = "multi_thread")]
+async fn live_updates_share_uploads_a_team_reviewer_with_its_cli_kind_as_the_reference() {
+  let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
+  let mut alice = Sharer::new();
+  let language: TeamReviewer = serde_json::from_value(
+    serde_json::json!({"kind": "language", "cli": "claude_code_cli", "model": "m-1", "effort": "low"}),
+  )
+  .expect("a language reviewer");
+  let decision: TeamReviewer = serde_json::from_value(serde_json::json!({
+    "kind": "decision", "model": "d-1", "lowest_threshold": 0.8, "destinations": {"kind": "members_computers"}
+  }))
+  .expect("a decision reviewer");
+  let db = &mut alice.fixture.db;
+  let mut ids = Vec::new();
+  for (label, body) in [("language-reviewer", &language), ("decision-reviewer", &decision)] {
+    let id = db
+      .create_resource(slug(label), name(label), body, at(40))
+      .expect("a reviewer")
+      .id();
+    db.publish_draft::<TeamReviewer>(id, at(41)).expect("v1");
+    ids.push(id);
+  }
+
+  alice.share(&server).await;
+
+  let sent = server.versions_of(ids[0]).pop().expect("the language reviewer's v1");
+  assert_eq!(sent.body, serde_json::to_value(&language).expect("json"));
+  assert!(sent.body.get("connection").is_none(), "{}", sent.body);
+  assert_eq!(
+    sent.references,
+    [ReferenceTarget::CliKind {
+      cli: AgentProvider::ClaudeCodeCli
+    }]
+  );
+  let sent = server.versions_of(ids[1]).pop().expect("the decision reviewer's v1");
+  assert_eq!(sent.body, serde_json::to_value(&decision).expect("json"));
+  assert!(sent.references.is_empty(), "{:?}", sent.references);
 }
 
 /// Share uploads the pipelines with their ids, so a pipeline running a profile it does not upload would give the team

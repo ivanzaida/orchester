@@ -1,7 +1,7 @@
 //! What each MCP server of the team asks of this computer, and the entry every kind of resource is read into.
 
 use orchester_core::{
-  id::{ConnectionId, ResourceId},
+  id::{ConnectionId, DecisionConnectionId, ResourceId},
   resource::{Resource, ResourceKind, TeamMcpServer, VersionNumber},
   sharing::{McpNeed, Needs},
   store::ResourceStore,
@@ -46,6 +46,13 @@ pub(super) struct Server {
 pub(super) struct Profile {
   pub(super) entry: Entry,
   pub(super) pick: Option<ConnectionId>,
+}
+
+/// A team reviewer's entry and the connection it runs on: the pick, of the kind its body names.
+pub(super) struct Reviewer {
+  pub(super) entry: Entry,
+  pub(super) pick: Option<ConnectionId>,
+  pub(super) decision_pick: Option<DecisionConnectionId>,
 }
 
 pub(super) fn servers(db: &ProjectDb) -> Result<Vec<Server>, StoreError> {

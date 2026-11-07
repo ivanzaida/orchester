@@ -9,6 +9,9 @@ use crate::messages::{self, Message};
 pub enum ReadinessError {
   #[error(transparent)]
   Store(#[from] StoreError),
+  /// The project is not shared with a team server, so it has no team start.
+  #[error("the project is not shared with a team")]
+  NotATeamProject,
 }
 
 impl ReadinessError {
@@ -16,6 +19,7 @@ impl ReadinessError {
   pub fn message(&self) -> Message {
     match self {
       Self::Store(error) => messages::store_error(error),
+      Self::NotATeamProject => Message::new("teamFillIns.errors.notTeamProject"),
     }
   }
 }
