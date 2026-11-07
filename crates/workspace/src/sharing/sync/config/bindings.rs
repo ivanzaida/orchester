@@ -1,5 +1,5 @@
 //! This computer's binding of each reference a version cached before the team configuration model names
-//! (`docs/architecture/server.md`, "What a version names on each computer"): kept for those versions until the
+//! (`docs/design/team-configuration.md`, "What it replaces"): kept for those versions until the
 //! bindings are removed. A team version names no id of a computer, so nothing makes a new one.
 
 use orchester_core::{

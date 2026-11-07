@@ -35,7 +35,9 @@ decision { kind: "decision",
 ```
 
 Connection references name a kind, name and role for each computer to bind locally. They carry no computer-local
-connection id, URL or credential. These named references are in the body; the version's separate `references`
+connection id, URL or credential. **Status (2026-11-07):** this is today's body; the person decided that a team
+reviewer names its CLI kind like a team agent profile and each computer picks the connection it runs on, which
+changes the `connection` field (ORC-887, being built, not merged; row 95 of `docs/architecture/server.md`). These named references are in the body; the version's separate `references`
 array is empty for a reviewer. Models are nonempty model identifiers; `lowest_threshold` is a finite probability
 from 0 through 1. A member may raise the effective threshold locally, never lower it. Decision destinations always
 allow servers on the member's computer; `hosts` additionally allows exactly the listed remote DNS names or IP
@@ -190,7 +192,7 @@ A body holds none of these ids either: it has no connection, local MCP server or
 `{ reason: "shape" }` for a request that does not parse, such as a reference with another field or a secret name that
 breaks the rule). The agent profile's body is the team's form since ORC-820 (below); the tool's body still names a
 secret by a computer's id and has no team form yet, so a desktop sends no such tool body (Share refuses it, below), and a
-server migration rewrites the versions that exist (`team-configuration-handover.md`, OP-200). There is no compatibility window: a server
+server migration rewrites the versions that exist (OP-200, row 93 of `docs/architecture/server.md`). There is no compatibility window: a server
 and a desktop on different versions of this contract do not read each other's `references`.
 
 ### Team agent profile body
@@ -586,8 +588,9 @@ starts work under a claim and never accepts one a client wrote. Unknown fields a
   malformed label is refused. `steps` are the run snapshot's `[{key,executor}]` in
   pipeline order. The pipeline body lists no sources, a profile body is
   `{role,responsibilities,instructions,model,settings,permissions,mcp_servers?}` without its connection or writable
-  folders, and a command tool never starts a program by an absolute path; such inputs are refused. Bodies name
-  secrets by id today; the tool body names them by name (`secret_name`, above) once ORC-830 changes it.
+  folders, and a command tool never starts a program by an absolute path; such inputs are refused. A tool body
+  still names its secret by id and has no team form yet, so Share refuses it (above); the tool body is to name
+  secrets by name (`secret_name`, above) when it gets one.
 - **MCP servers (schema 3).** `mcp_servers` are the team MCP servers the pinned profiles name, and exactly those: a
   team profile's body lists them as `mcp_servers: [ResourceId]` (distinct, in the order the profile lists them; left
   out while empty), and `inputs.mcp_servers` pins one version of each, `{resource,version,number,label,body}` with
@@ -600,8 +603,9 @@ starts work under a claim and never accepts one a client wrote. Unknown fields a
   `PinnedBodies.mcp_servers` the versions. A **local** run's inputs pin none and its profiles name none: a local
   profile names the computer's own MCP servers, which are paths and values of that computer, and the computer resolves
   them itself (`ExecutionProfile::bound`); local inputs keep the same bytes and hash as before, and the stored run
-  inputs (format 2) read as before. The desktop starts a team server with this computer's program path, values and
-  switch-on state when it runs the profile (ORC-826).
+  inputs (format 2) read as before. ORC-826 builds the desktop starting a team server with this computer's program path,
+  values and switch-on state when it runs the profile; today the team start looks a team MCP server up by its id among
+  the computer's own MCP servers as a stopgap (`team_work/choices.rs`, `McpHere`).
 - Order: `steps` and `permissions` keep pipeline order; `profiles`, `bindings`, `resources`, `skill_files`, `mcp_servers` and the
   pinned versions are read in any order and kept in resource id order, `files` in hash order, a skill's files in path
   order.

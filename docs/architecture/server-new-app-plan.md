@@ -394,7 +394,7 @@ N8: one slice per phase from N4 on
 ### N7b · Shared configuration on the desktop (S5, decisions 30, 35–36) · non-UI and UI
 
 > The bindings, the binding picker and *missing on this computer* below are the plan as written in October. The team
-> configuration model (2026-11-06; `docs/design/team-configuration.md`, server.md rows 30 and 81–94) replaced them with
+> configuration model (2026-11-06; `docs/design/team-configuration.md`, server.md rows 30 and 81–95) replaced them with
 > fill-ins and readiness; the text is kept as the history of the plan.
 
 - **Scope.** Store: `shared_version_bodies`, `reference_bindings`, the resource columns. Workspace:

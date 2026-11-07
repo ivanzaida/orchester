@@ -4,13 +4,13 @@ Status: draft for the person's review (2026-10-29). Design only; the screens are
 (`docs/architecture/server-new-app-plan.md`, N7b).
 
 > **Partly superseded (2026-11-06, 2026-11-07).** `docs/design/team-configuration.md` is the decided model; where this
-> file disagrees, that file and rows 30, 52, 74, 75, 80 and 81–94 of `docs/architecture/server.md` win. What changed:
+> file disagrees, that file and rows 30, 52, 74, 75, 80 and 81–95 of `docs/architecture/server.md` win. What changed:
 > references to connections, MCP servers and secrets are no longer *bound* by name or role on each computer. The team
 > server owns all configuration, MCP servers included; a team resource names other team resources by server id and
 > secrets by name, and a computer fills in only a connection pick (per profile), an MCP program path (per computer),
 > secret values (per project) and *on here* (a person only). The *missing on this computer* state becomes readiness
-> (*ready here*, *Needs you here*, *Off here*, or what is missing; a run that is not ready is refused,
-> `not_ready_here`). A person's local pipelines are not used in a team project. A new resource has no draft (Create is
+> (*ready here*, *Needs you here*, *Off here*, or what is missing; a run that is not ready is to be refused,
+> `not_ready_here`; not built yet, ORC-826 and ORC-827 are in progress). A person's local pipelines are not used in a team project. A new resource has no draft (Create is
 > v1) and archiving shows *Used by*. The redesigned screens are the desktop layer `acFkz` "Agents · v2" in
 > `orchester.pen` (ORC-809); the frames of the board **Shared configuration · redesign** that show bindings are history.
 > Each decision below says whether it stands.
@@ -67,7 +67,7 @@ their pane replaced; the modals follow `05d · Delete connection` (`D3c8ht`). Co
 7. **Missing on this computer** *(superseded by readiness)*: the resource says which reference is missing and that its
    pipelines can't run here; *Choose on this computer…* opens Sharing › On this computer (04). Now: the resource shows
    *ready here* or exactly what is missing (the connection, the MCP server that is off, its program path, a secret
-   value), and a run that is not ready is refused with the parts listed.
+   value), and a run that is not ready is to be refused with the parts listed (not built yet: ORC-826 and ORC-827 are in progress).
 8. **On this computer** (a section of Project settings › Sharing, `screens/project_settings/sharing/bindings.rs`)
    *(superseded: the section stays, its content changes)*: it was references grouped by kind (Connections, MCP servers,
    Secrets), each with who needs it and its state: bound by name, bound *by role* (badge), *Waits for you* with

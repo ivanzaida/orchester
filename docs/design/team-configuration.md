@@ -1,11 +1,10 @@
 # Team configuration: what the team server owns and what each computer fills in
 
-Status: **model and open questions decided** (2026-11-06; two more decisions 2026-11-07), being built on the module
+Status: **model and open questions decided** (2026-11-06; three more decisions 2026-11-07), being built on the module
 branch `module/team-configuration`. It replaces the patches made on 2026-11-05/06 (rows 74 and 80 of
 `docs/architecture/server.md`, slug clashes, hidden local resources, reference bindings) with one model. The rows of
-`docs/architecture/server.md` describe it since ORC-847 (rows 30, 52, 74, 75, 80 rewritten, 81–94 added);
-`team-configuration-handover.md` says what is built. Decided in conversation on 2026-11-06 are marked *(decided)*; the
-rest is proposed.
+`docs/architecture/server.md` describe it since ORC-847 (rows 30, 52, 74, 75, 80 rewritten, 81–95 added) and say what is not built yet. Decided in conversation on 2026-11-06 are marked
+*(decided)*; the rest is proposed.
 
 ## Why
 
@@ -32,6 +31,7 @@ added a case. The model below removes the cause: **the server never holds an id 
 | Instruction, skill | everything | nothing |
 | Tool (command, HTTP, database) | everything except secret values | secret values |
 | Secret *(decided)* | only its name and what it is for; never a value | its value |
+| Reviewer (`team_reviewer`) *(decided 2026-11-07; being built as ORC-887)* | the kind, model, effort or threshold and destinations; its CLI kind, like a profile's (today its body names a connection by name and role) | which local connection of that kind runs it |
 
 **Rule:** a team resource refers only to other team resources (by server id) and to names. A computer fills in only
 what is local by nature: connections, program paths, secret values.
@@ -58,7 +58,7 @@ what is local by nature: connections, program paths, secret values.
   what a run would: the value of each secret a tool uses, and the program of each MCP server a profile chooses that
   is turned on, looked up as a run does (the project's `PATH`, else Orchester's search path, or the project; a fixed
   file outside the repository). A run whose pipeline is not ready here does not start: it refuses with the missing
-  parts listed (`not_ready_here`). Nothing is ever dropped silently.
+  parts listed (`not_ready_here`; not built yet, ORC-826 and ORC-827 are in progress). Nothing is ever dropped silently.
 
 ## Edge cases
 
@@ -103,7 +103,7 @@ what is local by nature: connections, program paths, secret values.
 
 Rows 30, 52, 74, 75 and 80 of `docs/architecture/server.md` (resource bodies with foreign references, local
 pipelines in a team project, the reference bindings of *On this computer*, slug-taking), which ORC-847 rewrote; the
-decisions of 2026-11-06 are rows 81–92 there and those of 2026-11-07 rows 93 and 94. The code that binds references
+decisions of 2026-11-06 are rows 81–92 there and those of 2026-11-07 rows 93 to 95. The code that binds references
 and hides local resources by slug is removed by ORC-845.
 
 ## Decided 2026-11-07 (the person)
@@ -112,3 +112,5 @@ and hides local resources by slug is removed by ORC-845.
    old-form profiles are republished. ORC-846, which would have read it, is closed as won't do.
 2. A team MCP server nobody has decided on at this computer is *Needs you here*; only one a person or an automation
    switched off is *Off here*.
+3. A team reviewer names its CLI kind like a team agent profile, and each computer picks the connection it runs on
+   (row 95 of `docs/architecture/server.md`; being built as ORC-887, not merged when this was written).

@@ -104,7 +104,7 @@ joins, the cloud link and the removal of passwords (S1c). Orchester Cloud (C1) d
 | 27 | Offline-first | Without the server, a shared project works as usual. Every change goes into a local outbox with the revision it was based on, and is sent in order after reconnect. Organization fields merge automatically, as in 26; title, brief, criteria, pipeline and limits that both sides changed go to the person. A task created offline has a temporary number until the server assigns one; its links, references and keys are remapped, and the person sees the change ([Offline and the outbox](#offline-and-the-outbox)). **Replaces 8** | user (2026-10-15) |
 | 28 | Claims offline | Offline, a run may start only on a task whose claim is already the person's; row 5's staleness applies: once the claim would be stale by the last heartbeat the server answered, nothing new starts until the server confirms the claim. Taking a new task needs the server ([Claims](#claims)) | user (2026-10-15) |
 | 29 | Shared progress | Shared: who took the task, the run phase, which pipeline step it is on, what it waits for (a person, a limit, a question, an approval: kinds only, no content), each step's result (passed, failed, unverified, unchanged), the branch and the pull request. Local only: transcripts, diffs, prompts, tool calls and secrets ([Shared run progress](#shared-run-progress)). Both ways (row 53). **Extends S3** | user (2026-10-15) |
-| 30 | Shared team configuration | **Rewritten 2026-11-06 (the model in `docs/design/team-configuration.md`).** The team server owns all of the team's configuration: pipelines, agent profiles, instructions, skills, tools (command, HTTP, database) and MCP servers (**changed by 52, 72, 74, 80 and 82**). A team resource names other team resources by server id, the CLI kind a profile runs on, and secrets by name; the server never holds an id, a path or a value from somebody's computer. Publishing creates a version on the server; there is no draft of a resource that has no version yet (Create is v1, row 86); only admins, the project's owner or the server's admin, publish and keep drafts of shared resources, and members read and run with them (**changed by 72**). Each computer fills in only what is local by nature: the connection of each profile (picked once per profile when several have its CLI kind), the program path of each team MCP server (once per computer), the secret values (once per project), and whether a team MCP server is on here (person only). A team profile, MCP server and tool shows *ready here* or exactly what is missing, a team MCP server nobody decided on being *Needs you here* (rows 92 and 94), and a run whose pipeline is not ready here is refused with the missing parts (`not_ready_here`, never started without them). Readiness is merged (ORC-822, ORC-824); the refusal at start is ORC-826 (team) and ORC-827 (local) and was not merged when this row was written (2026-11-07). **Replaced:** the earlier rule that a published version named what it needed by name and role and each computer bound those references by hand, with a *missing on this computer* state; no binding remains in the model (ORC-817, ORC-845 removes its code). A person's local pipelines and other local resources are not used in a team project (rows 74 and 80). Share uploads a local project's configuration in this form (ORC-830) ([Shared configuration](#shared-configuration)). **Changes 4** | user (2026-10-15; changed 2026-10-29; rewritten 2026-11-06 and 2026-11-07) |
+| 30 | Shared team configuration | **Rewritten 2026-11-06 (the model in `docs/design/team-configuration.md`).** The team server owns all of the team's configuration: pipelines, agent profiles, instructions, skills, tools (command, HTTP, database), MCP servers and the team's reviewer (kinds `pipeline`, `agent_profile`, `instruction`, `skill`, `tool`, `mcp_server` and `team_reviewer`) (**changed by 52, 72, 74, 80 and 82**). A team resource names other team resources by server id, the CLI kind a profile runs on, and secrets by name; the server never holds an id, a path or a value from somebody's computer. Publishing creates a version on the server; there is no draft of a resource that has no version yet (Create is v1, row 86); only admins, the project's owner or the server's admin, publish and keep drafts of shared resources, and members read and run with them (**changed by 72**). Each computer fills in only what is local by nature: the connection of each profile (picked once per profile when several have its CLI kind), the program path of each team MCP server (once per computer), the secret values (once per project), and whether a team MCP server is on here (person only). A team profile, MCP server and tool shows *ready here* or exactly what is missing, a team MCP server nobody decided on being *Needs you here* (rows 92 and 94), and a run whose pipeline is not ready here is to be refused with the missing parts (`not_ready_here`, never started without them). Readiness is merged (ORC-822, ORC-824); the refusal at start is not built yet: ORC-826 (team) and ORC-827 (local) are in progress (2026-11-07). **Replaced:** the earlier rule that a published version named what it needed by name and role and each computer bound those references by hand, with a *missing on this computer* state; no binding remains in the model (ORC-817, ORC-845 removes its code). A person's local pipelines and other local resources are not used in a team project (rows 74 and 80). Share uploads a local project's configuration in this form (ORC-830) ([Shared configuration](#shared-configuration)). **Changes 4** | user (2026-10-15; changed 2026-10-29; rewritten 2026-11-06 and 2026-11-07) |
 | 31 | The deprecated app | `crates/desktop` is frozen as of 2026-10-15 and never updated again (AGENTS.md). Its S2a–c sharing screens stay exactly as they are; after S4 they show read-only offline states that no longer apply, by design. Every phase touches only the new app, `orchester-workspace`, core, api and server | user (2026-10-15) |
 | 32 | Create & run offline | The task is saved with its temporary key and nothing more. Once it has its number and the server can give the claim, the task and the temporary-key notice offer *Start*; the run starts only when the person presses it. Nothing starts on its own | user (2026-10-15) |
 | 33 | Tags offline | Creating a tag works offline (it waits in the outbox); renaming, merging and deleting need the server, since they rewrite other people's tasks ([Tags](#tags)) | coordinator (2026-10-15) |
@@ -164,11 +164,12 @@ joins, the cloud link and the removal of passwords (S1c). Orchester Cloud (C1) d
 | 87 | A member sees the team part read-only | A member who is not an admin sees the team part read-only, with no disabled buttons, and changes everything under *On this computer* (the fill-ins of row 30). Row 72 stays for the writes (`403 not_admin`); the screens are ORC-831…844 and were not built when this row was written | user (2026-11-06; decision 7) |
 | 88 | Memory keeps its own page | Memory stays a page of its own, per computer, not part of the team configuration (design only; nothing in the contract) | user (2026-11-06; decision 8) |
 | 89 | Pipelines keep their own page | Pipelines keep their own page and are not a tab of the Agents filter (design only) | user (2026-11-06; decision 9) |
-| 90 | Program path per computer, secret values per project | The program path of an MCP server is shared by the whole computer (`mcp_server_programs` in the application database, ORC-813; setting it refreshes every project of that server, ORC-825); a secret value is kept per project, under the secret's name (ORC-815, ORC-825) | user (2026-11-06; decision 10) |
+| 90 | Program path per computer, secret values per project | The program path of an MCP server is shared by the whole computer, per team server and team MCP server resource (`mcp_server_programs` in the application database, keyed by team server and resource, ORC-813; setting it refreshes every project of that server, ORC-825); a secret value is kept per project, under the secret's name (ORC-815, ORC-825) | user (2026-11-06; decision 10) |
 | 91 | Archiving a used resource is not refused | A resource that something uses can be archived: the admin's confirmation modal first reads `GET …/resources/{resource}/used-by` and lists *Used by* (the latest versions of other resources that name it) and the runs that will stop (row 79). The desktop reads it from the route for a team resource and from the project database for a local one (ORC-811, ORC-819; design A23 `Pnpbe` and L11 `dS97b`, ORC-809; the screen is ORC-831…844 and was not built when this row was written) | user (2026-11-06; decision 11) |
 | 92 | Only a person turns a team MCP server on | A team MCP server is switched on at a computer only by a person in the window; the app's MCP tool answers `person_only`. Switching it off is the safe direction: a person or an automation may (ORC-825, ORC-828 part 1). Nobody-decided is *Needs you here* (row 94) | user (2026-11-06; decision 12) |
 | 93 | The old local profile format is dropped | A profile in the older form (naming a connection, a computer's MCP server or a secret by an id of that computer) has no compatibility on the desktop or on the team server and gets no special message: it is republished in the team's form (ORC-820; the migration of existing server versions is OP-200). ORC-846, which would have read the old form, is closed as won't do | user (2026-11-07) |
-| 94 | Needs you here and Off here | A team MCP server that nobody has decided on at this computer is *Needs you here* (it is missing "switched on"), and a profile that chooses it is missing the same part; only one a person switched off, or an automation did, is *Off here* (ORC-824, `crates/workspace/src/readiness/`). Both are not ready, and neither starts a run | user (2026-11-07) |
+| 94 | Needs you here and Off here | A team MCP server that nobody has decided on at this computer is *Needs you here* (it is missing "switched on"), and a profile that chooses it is missing the same part; only one a person switched off, or an automation did, is *Off here* (ORC-824, `crates/workspace/src/readiness/`). Both are not ready, and neither should start a run; refusing the run (`not_ready_here`) is not built yet: ORC-826 (team) and ORC-827 (local) are in progress | user (2026-11-07) |
+| 95 | A team reviewer names a CLI kind, each computer picks its connection | The team's reviewer (`team_reviewer`) will name its CLI kind like a team agent profile, and each computer picks the connection it runs on, once, as for a profile (row 30). Today its body names a connection by name and role for each computer to bind (`docs/cloud-api.md`, "Team server reviewer resource"); that is decided to change and is being built as ORC-887, not merged when this row was written. The decision reviewer's design notes (`docs/design/decision-reviewer.md`) say the same | user (2026-11-07; ORC-887) |
 
 ## Processes and crates
 
@@ -765,9 +766,9 @@ environment variables or secrets. The fields above are all it gets.
 
 ## Shared configuration
 
-Rows 30, 52, 72, 74, 75, 80 and 81–94, and the model in `docs/design/team-configuration.md`. Pipelines, agent
-profiles, instructions, skills, MCP servers and tools of every kind (command, HTTP, database) are resources of the
-server project, and the team server owns all of them. A resource refers to other team resources by server id, to the CLI
+Rows 30, 52, 72, 74, 75, 80 and 81–95, and the model in `docs/design/team-configuration.md`. Pipelines, agent
+profiles, instructions, skills, MCP servers, tools of every kind (command, HTTP, database) and the team's reviewer
+(kind `team_reviewer`) are resources of the server project, and the team server owns all of them. A resource refers to other team resources by server id, to the CLI
 kind a profile runs on, and to secrets by name; the server never holds an id, a path or a value from somebody's
 computer. What belongs to a computer (its connections and accounts, the program path of each MCP server, the secret
 values, whether a team MCP server is on here) is filled in on that computer and shown as readiness
@@ -778,7 +779,7 @@ by id and the CLI kinds and models from a catalog the desktops report
 
 | Part | Where it lives |
 | --- | --- |
-| Resource (id, kind, slug, name, archived; kinds: pipeline, agent profile, instruction, skill, tool, MCP server) | Server; cached locally. The id is the server's `ResourceId`, which Share keeps from the sharer's computer for a resource uploaded as task ids are |
+| Resource (id, kind, slug, name, archived; kinds: pipeline, agent profile, instruction, skill, tool, MCP server, team reviewer) | Server; cached locally. The id is the server's `ResourceId`, which Share keeps from the sharer's computer for a resource uploaded as task ids are |
 | Published versions (`v1..vN`, immutable) | Server; numbered by the server; cached locally with who published them and when |
 | Draft | Local only, per admin, of an existing resource, based on a server version. Publishing sends it. A new resource has none: *Create* publishes v1 (row 86). A member has none (row 72) |
 | A person's own resources in a team project (rows 74 and 80) | Local only, per person; never sent, not shown or used in the team project |
@@ -811,12 +812,16 @@ automation change agent permissions*. Core decides *widens* with one pure functi
 comparison the MCP person gate already makes:
 
 - an agent profile whose permissions are broader (repository access, commands, network: up the order Off < Hosts <
-  On, or a host list that gains a host, row 75), or that names a team MCP server the previous version did not;
-- any version that names a team secret the previous version did not, or an MCP server's secret header taken from
-  another secret (ORC-823);
+  On, or a host list that gains a host, row 75), or that names a team MCP server or a tool
+  (`VersionWidening::Tool`) the previous version did not;
+- any version that names a team secret the previous version did not (ORC-823);
+- a team MCP server whose program, arguments or folder changed, or whose URL changed, that gains a tool that runs
+  without asking, that takes a secret the previous version did not, whose header takes another secret or another prefix,
+  or that changes from a local program to a remote server or back;
 - a tool whose program, arguments or environment (command), address, method or headers (HTTP), database or
   query, or access policy (allowed pipelines and steps, approval mode, access window) changed;
-- a first version received from someone else counts as widening when it grants anything of the above.
+- a first version received from someone else counts as widening when it grants anything of the above, except a team MCP
+  server's first version, which never waits: nothing runs it here until a person switches it on (row 92).
 
 A version this computer published itself never waits. A version that waits blocks nothing else: pipelines keep
 pinning the version this computer uses.
@@ -846,21 +851,23 @@ connection, the MCP servers that are off, their program paths, the secret values
 secret the project no longer has, a tool that holds a project secret by id, a keychain that cannot say. It is never
 assumed ready. In a local project the same read checks what a run would: the value of each secret a tool uses, and the
 program of each MCP server a profile chooses that is turned on, looked up as a run does. A run whose pipeline is not
-ready here does not start and refuses with the missing parts listed (`not_ready_here`; ORC-826 for a team start,
-ORC-827 for a local one, not merged when this was written); nothing is dropped silently, and what is missing on one
+ready here is not to start and is to be refused with the missing parts listed (`not_ready_here`); that refusal is not built
+yet (ORC-826 for a team start, ORC-827 for a local one, in progress when this was written); nothing is to be dropped silently, and what is missing on one
 computer changes nothing on the others.
 
 **Resolving.** The cache holds each version's body as the server sent it; a team profile is read through
-`AgentProfile::from_team` with this computer's connection pick, and the runner starts a team MCP server with this
-computer's path, values and switch. The execution bundle pins the version of each team MCP server a profile names
+`AgentProfile::from_team` with this computer's connection pick, and the runner is to start a team MCP server with this
+computer's path, values and switch (ORC-826 builds this; today the team start looks a team MCP server up by its server id
+among the computer's own MCP servers as a stopgap, `team_work/choices.rs` `McpHere`). The execution bundle pins the version of each team MCP server a profile names
 (schema 3, ORC-880); a start whose bundle schema differs fails with a reason (ORC-883), as does one the server could not
 build (`bundle_missing` with why, ORC-884). Until ORC-845 the store still keeps the earlier cache columns for versions
 published before the model (the legacy `local_body` fallback and the `reference_bindings` table); nothing writes new
 bindings.
 
 **Publishing from this computer** sends the team's form: a profile's CLI kind, the server ids of the team resources it
-uses, and secret names. A local profile that names a connection or secret of this computer is refused as such
-(`local_entities_named`), not stripped. Nothing is sent beyond those names: never settings, accounts, credentials,
+uses, and secret names. `local_entities_named` refuses, not strips, a profile that chooses a local MCP server that is not a team resource, and a body not
+yet in the team's form (a tool, for one) that names a computer's connection, MCP server or secret (`team_body::unchanged`);
+a profile's connection becomes its CLI kind. Nothing is sent beyond those names: never settings, accounts, credentials,
 values or program paths. A pipeline is sent only when every id it names is a team resource (ORC-821).
 
 ### What the web editor can pick
@@ -1272,7 +1279,7 @@ Changes     { title?, brief?, criteria?, pipeline?, limits?, status?: "queued",
               actor?: "person"|"orchester" }
 UploadTask  { id, number?, former_key?, ...TaskContent, tag_names: [string] instead of tags,
               status, created_at, has_run: bool, claim: bool }   // module: one of the upload's or the project's
-Resource    { id, kind: "pipeline"|"agent_profile"|"instruction"|"skill"|"tool", slug, name, archived: bool,
+Resource    { id, kind: "pipeline"|"agent_profile"|"instruction"|"skill"|"tool"|"mcp_server"|"team_reviewer", slug, name, archived: bool,
               revision, latest: number|null, created: { by, at }, updated: { by, at } }   // API 3
 Version     { resource, number, body: JSON, hash, references: [Reference],
               based_on: number|null, published: { by: UserRef, at } }                     // API 3
@@ -2225,7 +2232,7 @@ Row 46. One forward migration of `orchester-server.db`:
 | Plain HTTP | Accepted for loopback hosts; any other `http://` server needs the person's explicit opt-in for that server. Redirects are never followed |
 | Membership | A project is visible only to its members: everything else answers `404`. Members read and change tasks, organization, tags and shared configuration, claim, and report progress for tasks they hold. Owners also manage members, roles, project invites and the project's name and key. Admins manage accounts, server invites, members and the cloud link, but see a project's data only as members |
 | Discovery file | `orchester.toml` is untrusted. The desktop never contacts its address until the person confirms it |
-| Published configuration | A version from another member can reach this computer's agents. MCP server and secret references are bound only after the person confirms them; a version that widens what agents may do waits for the person's *Use v<N> here* (row 35); neither can be done by a tool |
+| Published configuration | A version from another member can reach this computer's agents. A team version names other team resources by server id, a CLI kind and secret names, so nothing from another computer is bound here; a team MCP server is turned on at this computer only by a person (row 92), and a version that widens what agents may do waits for the person's *Use v<N> here* (row 35); a tool cannot do either |
 | At rest | The team servers' SQLite files are not encrypted; securing the hosts and backing up their data belong to whoever runs them. The cloud's PostgreSQL is reached over TLS with its own credentials from the host's environment; the person secures and backs up its database server. The cloud's root key and signing keys are encrypted with a key from its host's environment. The outbox is in the project database, beside the cache |
 
 ### The cloud's trust boundary
@@ -2276,8 +2283,8 @@ token usage, agent and model names, environment variables, secret values, connec
 credentials, MCP servers' programs, addresses and credentials, drafts, task and project sources, limits settings,
 and the code: the server never touches a repository (row 49). What does leave it, to the team server only: task content and organization, claims, the
 progress fields of row 29 (including step names, the branch name and the pull request's number, URL and state), and
-published configuration: bodies and parts of pipelines, profiles, instructions, skills and tools, with the
-**names and roles** of the connections, MCP servers and secrets they need, and the repository remote as a hint. To the cloud: the person's
+published configuration: bodies and parts of pipelines, profiles, instructions, skills, tools and MCP servers, with the
+CLI kinds, team resource ids and secret **names** they need (a team reviewer names a connection's name and role until ORC-887), and the repository remote as a hint. To the cloud: the person's
 email, display name and device names, and the invites they send. A test on each server asserts its database holds
 nothing beyond these.
 
@@ -2355,7 +2362,7 @@ A project reaches its server through its `sharing` row's `server`, as in S2b.
 | `shared_version_bodies` (S5) | per cached version: the server's body, hash and references |
 | `skill_files` (SK, row 37) | sha256, size, executable, content (zstd): every part of every skill version and draft, local or shared; replaces the blob files skills used |
 | `reference_bindings` (S5; legacy: the model of 2026-11-06 binds nothing, ORC-845 removes the table) | reference id, kind, name, role, the local connection, MCP server or secret (or none), how (`name`, `role`, `person`), when |
-| `joined_resources` (S5) | every local resource adopted or kept *Not shared* at the join, with its local id before, until Make local |
+| `joined_resources` (S5; dropped from the plan) | was planned to record every local resource adopted or kept *Not shared* at the join. The decided model has no such review (below), so the table is not built |
 
 `storage.md` gets these rows when each phase lands.
 
@@ -2383,10 +2390,12 @@ reached; otherwise they go stale on their own. Waiting outbox entries are not se
 view, which becomes the local data, and the desktop says how many changes never reached the server and which tasks
 they touched. The `sharing` row is removed. The tasks as the person sees them become local tasks with their ids and
 numbers; tasks with temporary keys get numbers after the highest. Claims and other people's progress are dropped.
-*Not shared* tasks return with new numbers after the highest. Shared resources become local resources with every
-cached version, ids and numbers kept; their local bodies already name local entities, and references left unbound
-stay visible as missing. Resources kept *Not shared* at the join return as they were. The server project is unchanged
-for everyone else.
+*Not shared* tasks return with new numbers after the highest. The project keeps no copy of the team's configuration
+(row 84 and edge case 13 of `docs/design/team-configuration.md`): `ProjectDb::make_local` calls
+`team_leaving::remove_team_configuration`, which deletes the team's resources (those marked `shared`) with their
+drafts, cached versions, versions not sent yet and what names them, and clears the pipeline of each task that named a
+team pipeline; only the project's own resources stay as they are. Runs keep their snapshots. The server project is
+unchanged for everyone else.
 
 ### Projects made under row 10
 
@@ -2418,28 +2427,23 @@ invite* from whoever shared it. Nothing is uploaded.
 ticked, each with the server's similar titles as a hint (`sharing::similar_titles`). The person unticks duplicates. A
 task with a run that has not ended cannot be unticked and is uploaded claimed for the joiner.
 
-**Review before joining: configuration (S5).** The same page lists the joiner's pipelines, agent profiles,
-instructions, skills and tools. Each is matched to the server's by kind and slug, then by name:
+**Configuration at joining (S5).** The review lists tasks only; it does not match, adopt or upload the joiner's own
+resources, and nothing is bound (the matching by slug, *Keep on this computer*, *Not shared* resources and the binding
+of the team's references that earlier versions of this section described are gone, rows 30, 74 and 80, and edge cases 2
+and 3 of `docs/design/team-configuration.md`):
 
-| Local resource | Choice (default first) | Result |
-| --- | --- | --- |
-| Same slug, latest versions equal by hash | *Use the team's* | The team's resource replaces it; the local one is kept *Not shared* with its history |
-| Same slug, different content | *Use the team's, keep mine as a draft* / *Upload as a new one* (a free slug, typed) | The team's resource, with the local latest body as the person's draft on top of the team's latest version; or a new shared resource |
-| No match | *Upload* (ticked) / *Keep on this computer* | Uploaded with its versions, numbers kept; or kept *Not shared* |
-
-- References between the joiner's resources are rewritten before upload (a local pipeline that names a local profile
-  adopted as the team's names the team's profile), with core's `import` reference rewrite.
-- The team's versions' references are bound on this computer by the rules of [Shared
-  configuration](#shared-configuration); what cannot be bound is listed on the review page as *missing on this
-  computer* and can be bound there or later.
+- The team's configuration comes from the server, as the team server's resources, by server id. The joiner's own
+  pipelines, agent profiles, instructions, skills, tools and MCP servers stay in the project's database untouched, are
+  not shown or used in the team project, and are not sent; an admin can *Publish for the team* one of them, which
+  makes a new team resource with a new server id.
+- What a team version needs on this computer is the computer's own fill-ins and shows as readiness ([What a computer
+  fills in](#what-a-computer-fills-in)): the profile's connection, the MCP servers a person switches on, their
+  program paths and the secret values. A team MCP server is never turned on by joining.
 - Local runs keep the version snapshots they started with; nothing about a past run changes.
-- A *Not shared* resource is read-only, used by no new run, and can be uploaded later with *Share*, like a *Not
-  shared* task.
 
 **Upload and numbers.** Confirming links the checkout and uploads the ticked tasks in one `POST …/link` (an import,
-or, into a project with no tasks yet, an upload that keeps numbers), then the ticked resources with `POST
-…/resources/import`. Each task gets a new number, keeps its id and records its former key. The
-local project takes the server project's key. After the join the desktop shows the old-to-new mapping, which stays in
+or, into a project with no tasks yet, an upload that keeps numbers); no resources are uploaded. Each task gets a new number, keeps its id and records its
+former key. The local project takes the server project's key. After the join the desktop shows the old-to-new mapping, which stays in
 the sharing settings. Runs, branches, worktrees and texts are handled as before:
 
 | Carries the old key | What happens |
@@ -2601,7 +2605,7 @@ each server once and links each project (rows 49–50, plan phase N1) and gets S
   views, the temporary-key notice, *Waiting to send* in Sharing.
 
 **S5 · Shared configuration** (rows 30, 35–37, 75). The list is the original plan; where it speaks of bindings and
-the binding picker, the team configuration model of 2026-11-06 (rows 30 and 81–94) replaces them with fill-ins and
+the binding picker, the team configuration model of 2026-11-06 (rows 30 and 81–95) replaces them with fill-ins and
 readiness.
 - [ ] Server: `resources`, `resource_versions`, `version_references`, `files`, the endpoints of API 3 with core's body
   checks; the `resource.published`, `resource.renamed` and `resource.archived` deltas (each with `by`, `actor` and
@@ -2613,9 +2617,11 @@ readiness.
   versions.
 - [ ] Store and workspace: the resource cache, the fill-ins, `RemoteResourceStore`, skill parts uploaded
   by hash, publishing through the outbox with `version_conflict` for the person, *Use v<N> here*.
-- [ ] Share uploads resources with their history; Join's review adopts, uploads or keeps them; Make local keeps them.
+- [ ] Share uploads resources with their history in the team's form (ORC-830); Join adopts, uploads and binds nothing
+  (the joiner's own resources stay local and unused in the team project); Make local deletes the team's resources and
+  cached versions and keeps only the project's own (row 84, ORC-814).
 - [ ] Screens: shared marks in the libraries, *Publish for the team*, the version publisher, readiness and the
-  fill-ins under *On this computer*, *Use v<N> here*, the join review's configuration part.
+  fill-ins under *On this computer*, *Use v<N> here*.
 - [ ] Loopback tests: a profile published on one computer runs on another with its connection picked by CLI kind; a team
   MCP server stays off there until the person switches it on; a widening version waits for *Use v<N> here* while runs
   keep the previous one; two publishes from one base give the second a `version_conflict`; a skill with parts
