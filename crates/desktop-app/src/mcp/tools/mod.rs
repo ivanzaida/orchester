@@ -264,6 +264,17 @@ fn other_params(page: &ProjectPage) -> impl Iterator<Item = (&'static str, Strin
     .into_iter()
     .chain(files_params(page))
     .chain(merge_params(page))
+    .chain(hub_params(page))
+}
+
+/// The parameters `navigate` takes back for the Agents hub of a team project: its `filter` and the `item` its panel shows.
+fn hub_params(page: &ProjectPage) -> Vec<(&'static str, String)> {
+  let ProjectPage::AgentsHub(view) = page else {
+    return Vec::new();
+  };
+  let mut params = vec![("filter", view.filter.name().to_owned())];
+  params.extend(view.item.map(|item| ("item", item.to_string())));
+  params
 }
 
 /// The parameters `navigate` takes back for a run's merge attempts: its task's `key` and its number, `run`.

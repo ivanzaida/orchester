@@ -34,6 +34,7 @@ pub use self::{
   host::ProjectsHost,
   known::Projects,
   state::{ProjectState, Unavailable},
+  team::TeamRead,
 };
 use crate::routes::{OverviewTab, ProjectPage, Route};
 

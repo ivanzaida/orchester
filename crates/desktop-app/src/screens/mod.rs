@@ -53,7 +53,7 @@ use lurq::{
 use orchester_core::id::ProjectId;
 
 use crate::{
-  project::{ProjectState, Projects, ShownProject},
+  project::{ProjectState, Projects, ShownProject, TeamRead},
   routes::{HubView, ProjectPage, Route},
 };
 
@@ -191,11 +191,13 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
 }
 
 /// The Agents hub of a team project is master–detail (`Agents · v2`); a local project keeps the Profiles list until
-/// its own master–detail is built.
+/// its own master–detail is built. Whether the project is shared is read from its database with the feed, so the page
+/// waits for that read, and says so when it failed, rather than show the local list for a team project.
 fn agents_or_hub(ctx: &mut Ctx, project: &ShownProject, view: HubView) -> Element {
-  if hub::team::of(project).is_some() {
-    team_hub::screen(ctx, project, view)
-  } else {
-    agents::screen(ctx, project, agents::Shown::List)
+  match project.feed.team.get() {
+    TeamRead::Read(Some(team)) => team_hub::screen(ctx, project, team, view),
+    TeamRead::Read(None) => agents::screen(ctx, project, agents::Shown::List),
+    TeamRead::Unread => team_hub::unread::reading(ctx),
+    TeamRead::Failed(error) => team_hub::unread::failed(ctx, project, error),
   }
 }

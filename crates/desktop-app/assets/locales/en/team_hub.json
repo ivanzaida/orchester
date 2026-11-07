@@ -85,6 +85,14 @@
     "empty": {
       "title": "Nothing here yet",
       "detail": "Nothing of this kind is published for the team yet."
+    },
+    "rereading": "Reading…",
+    "new": {
+      "all": "New",
+      "profiles": "New agent",
+      "instructions": "New instruction",
+      "skills": "New skill",
+      "tools": "New tool"
     }
   }
 }

@@ -217,6 +217,37 @@ fn navigate_takes_the_parameters_each_screen_has_and_answers_them_back() {
 }
 
 #[test]
+fn navigate_opens_the_agents_hub_on_a_filter_and_an_item_and_refuses_what_it_does_not_know() {
+  let window = Window::open();
+  let navigation = window.navigation();
+  let args = json!({ "route": "agents", "project": PROJECT, "filter": "mcp_servers", "item": PROFILE });
+  let answer = navigate(&navigation, &args).expect("the hub opens on a filter and an item");
+  assert_eq!(
+    answer["route"]["path"],
+    json!(format!("/project/{PROJECT}/agents?filter=mcp_servers&item={PROFILE}"))
+  );
+  assert_eq!(
+    answer["route"]["params"],
+    json!({ "project": PROJECT, "filter": "mcp_servers", "item": PROFILE })
+  );
+  let repeated = navigate(
+    &navigation,
+    &json!({ "route": "agents", "project": PROJECT, "filter": "skills" }),
+  );
+  assert_eq!(
+    repeated.expect("a filter alone")["route"]["params"],
+    json!({ "project": PROJECT, "filter": "skills" })
+  );
+  for refused in [
+    json!({ "route": "agents", "project": PROJECT, "filter": "pipelines" }),
+    json!({ "route": "agents", "project": PROJECT, "item": "not-an-id" }),
+    json!({ "route": "agents", "project": PROJECT, "agent": PROFILE, "filter": "skills" }),
+  ] {
+    assert!(navigate(&navigation, &refused).is_err(), "{refused}");
+  }
+}
+
+#[test]
 fn navigate_storage_opens_runs_subpage_and_refuses_other_tabs() {
   let window = Window::open();
   let navigation = window.navigation();

@@ -92,10 +92,19 @@ impl Workspace {
     repo_root: &Path,
     vault: &dyn SecretVault,
   ) -> Result<ProjectReadiness, ReadinessError> {
-    let db = ProjectDb::open(repo_root)?;
-    let team_programs = self.team_programs(&db)?;
+    self.readiness_in(&ProjectDb::open(repo_root)?, repo_root, vault)
+  }
+
+  /// [`Self::project_readiness`] read from `db`, the project's database at `repo_root`, which the caller has open.
+  pub(crate) fn readiness_in(
+    &self,
+    db: &ProjectDb,
+    repo_root: &Path,
+    vault: &dyn SecretVault,
+  ) -> Result<ProjectReadiness, ReadinessError> {
+    let team_programs = self.team_programs(db)?;
     read::read(
-      &db,
+      db,
       read::Setting {
         repo_root,
         vault,
