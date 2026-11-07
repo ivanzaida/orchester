@@ -13,7 +13,10 @@ use orchester_core::{
   },
   id::{ConnectionId, ResourceId},
   name::Name,
-  permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess, WritableFolders},
+  permission::{
+    AgentPermissions, AllowedCommands, CommandPermission, HostPattern, NetworkAccess, NetworkHosts, RepositoryAccess,
+    WritableFolders, widening::Widening,
+  },
   resource::{
     AgentProfile, ModelId, PromptText, ProviderSettings, ResourceBody, ResourceKind, TeamAgentProfile,
     TeamCounterparts, TeamProfileError,
@@ -327,6 +330,92 @@ fn team_agent_profile_widens_with_permissions_an_mcp_server_or_a_secret_the_vers
       .iter()
       .all(|widening| matches!(widening, VersionWidening::Permissions(_)))
       && !widens(Some(&v1), &writes).is_empty()
+  );
+}
+
+#[test]
+fn team_agent_profile_widens_with_a_tool_the_version_before_did_not_name_and_narrows_without_one() {
+  let (lint, deploy) = (ResourceId::generate(), ResourceId::generate());
+  let v1 = base(AgentProvider::CodexCli).with_tools(vec![lint]).expect("distinct");
+
+  let more = v1.clone().with_tools(vec![lint, deploy]).expect("distinct");
+  assert_eq!(widens(Some(&v1), &more), [VersionWidening::Tool]);
+  let swapped = v1.clone().with_tools(vec![deploy]).expect("distinct");
+  assert_eq!(
+    widens(Some(&v1), &swapped),
+    [VersionWidening::Tool],
+    "a different tool is a new one"
+  );
+  let fewer = v1.clone().with_tools(Vec::new()).expect("distinct");
+  assert!(widens(Some(&v1), &fewer).is_empty(), "naming none narrows");
+  assert!(
+    widens(None, &v1).contains(&VersionWidening::Tool),
+    "a first version names it over nothing"
+  );
+}
+
+#[test]
+fn team_agent_profile_removing_a_server_or_a_secret_narrows_and_reordering_widens_nothing() {
+  let (docs, notes) = (ResourceId::generate(), ResourceId::generate());
+  let v1 = base(AgentProvider::CodexCli)
+    .with_mcp_servers(vec![docs, notes])
+    .and_then(|profile| profile.with_secrets(vec![secret("TOKEN"), secret("OTHER")]))
+    .expect("distinct");
+
+  let fewer = v1
+    .clone()
+    .with_mcp_servers(vec![notes])
+    .and_then(|profile| profile.with_secrets(vec![secret("OTHER")]))
+    .expect("distinct");
+  assert!(widens(Some(&v1), &fewer).is_empty(), "removing narrows");
+  assert_eq!(
+    widens(Some(&fewer), &v1),
+    [VersionWidening::McpServer, VersionWidening::Secret],
+    "adding it back widens again"
+  );
+  let reordered = v1
+    .clone()
+    .with_mcp_servers(vec![notes, docs])
+    .and_then(|profile| profile.with_secrets(vec![secret("OTHER"), secret("TOKEN")]))
+    .expect("distinct");
+  assert!(widens(Some(&v1), &reordered).is_empty());
+}
+
+#[test]
+fn team_agent_profile_widens_when_network_hosts_gain_a_host_or_go_on_and_narrows_when_they_shrink() {
+  let hosts = |patterns: &[&str]| {
+    NetworkAccess::Hosts(
+      NetworkHosts::new(
+        patterns
+          .iter()
+          .map(|pattern| HostPattern::new(pattern).expect("a host"))
+          .collect(),
+      )
+      .expect("a host list"),
+    )
+  };
+  let with = |network| {
+    base(AgentProvider::CodexCli)
+      .with_permissions(AgentPermissions::new(
+        RepositoryAccess::ReadOnly,
+        CommandPermission::Allowed(AllowedCommands::default()),
+        network,
+      ))
+      .expect("no writable folders")
+  };
+  let one = with(hosts(&["api.example.test"]));
+  let two = with(hosts(&["api.example.test", "cdn.example.test"]));
+  let widening = |previous: &TeamAgentProfile, next: &TeamAgentProfile| widens(Some(previous), next);
+
+  assert_eq!(widening(&one, &two), [VersionWidening::Permissions(Widening::Network)]);
+  assert!(widening(&two, &one).is_empty(), "a shorter list narrows");
+  assert_eq!(
+    widening(&two, &with(NetworkAccess::On)),
+    [VersionWidening::Permissions(Widening::Network)]
+  );
+  assert!(
+    widening(&with(NetworkAccess::On), &two).is_empty(),
+    "On to Hosts narrows"
   );
 }
 

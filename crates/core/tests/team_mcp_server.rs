@@ -82,6 +82,55 @@ fn team_mcp_server_widens_when_it_runs_or_reaches_more() {
 }
 
 #[test]
+fn team_mcp_server_widens_with_a_variable_or_secret_header_name_the_version_before_did_not_need() {
+  let remote = |headers: Value| {
+    parse(
+      json!({"name":"issues","launch":{"kind":"remote","url":"https://mcp.example.org/x","secret_headers":headers}}),
+    )
+    .expect("remote")
+  };
+  let program = |variables: Value| {
+    let mut body = program("npx");
+    body["launch"]["variables"] = variables;
+    parse(body).expect("program")
+  };
+
+  let (one, two) = (remote(json!(["X-Key"])), remote(json!(["X-Key", "X-Other"])));
+  assert_eq!(widens(Some(&one), &two), vec![VersionWidening::Secret]);
+  assert!(widens(Some(&two), &one).is_empty(), "dropping a header narrows");
+  assert!(
+    widens(Some(&one), &remote(json!(["x-key"]))).is_empty(),
+    "header names ignore case"
+  );
+
+  let (token, both) = (program(json!(["TOKEN"])), program(json!(["TOKEN", "REGION"])));
+  assert_eq!(widens(Some(&token), &both), vec![VersionWidening::Secret]);
+  assert!(widens(Some(&both), &token).is_empty(), "dropping a variable narrows");
+  assert!(widens(Some(&token), &program(json!([]))).is_empty());
+
+  let moved = widens(Some(&token), &remote(json!(["X-Key"])));
+  assert!(moved.contains(&VersionWidening::McpServer) && moved.contains(&VersionWidening::Secret));
+  assert_eq!(
+    widens(Some(&token), &remote(json!([]))),
+    vec![VersionWidening::McpServer]
+  );
+}
+
+#[test]
+fn team_mcp_server_widens_when_its_program_starts_in_another_folder() {
+  let in_folder = |folder: Option<&str>| {
+    let mut body = program("npx");
+    if let Some(folder) = folder {
+      body["launch"]["working_directory"] = json!(folder);
+    }
+    parse(body).expect("program")
+  };
+  let (root, tools) = (in_folder(None), in_folder(Some("tools")));
+  assert!(matches!(widens(Some(&root), &tools)[..], [VersionWidening::Command(_)]));
+  assert!(widens(Some(&tools), &tools).is_empty());
+}
+
+#[test]
 fn team_mcp_server_refuses_a_url_with_a_query_or_a_fragment_without_naming_it() {
   for url in [
     "https://mcp.example.org/x?key=sk-live-123",

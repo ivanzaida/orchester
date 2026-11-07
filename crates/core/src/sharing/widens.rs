@@ -27,6 +27,8 @@ pub enum VersionWidening {
   Permissions(Widening),
   /// An agent profile chooses an MCP server the previous version did not.
   McpServer,
+  /// A team agent profile gives its agents a tool the previous version did not.
+  Tool,
   /// The version references a secret the previous version did not.
   Secret,
   /// A command tool's command runs what it did not, or a tool now runs a command.
@@ -57,6 +59,8 @@ pub fn widens<B: SharedBody>(previous: Option<&B>, next: &B) -> Vec<VersionWiden
   next.widenings_over(previous)
 }
 
+/// A profile body that names the publisher's connection and MCP servers by local id, which only versions cached before
+/// the team configuration model have; team versions are [`TeamAgentProfile`]s. ORC-845 removes this with the bindings.
 impl SharedBody for AgentProfile {
   /// A first version is compared with permissions that grant nothing: read-only, no command, network off and no MCP
   /// server. Unlike the person gate, it does not fit them to the profile's connection, which a body names by the
@@ -74,9 +78,10 @@ impl SharedBody for AgentProfile {
   }
 }
 
-/// A team profile widens as a local one does, and also when it needs a secret, or uses a team MCP server, the previous
-/// version did not. Tools, skills and instructions are not counted: they change what agents are offered or told, and a
-/// tool's own versions widen on their own.
+/// A team profile widens as a local one does, and also when it names a team MCP server or a tool, or needs a secret
+/// name, the previous version did not; naming fewer widens nothing. Its references are the server's ids and secret
+/// names, which are the same on every computer, so they are compared as they are. Skills and instructions are not
+/// counted: they change what agents are told, not what they may do.
 impl SharedBody for TeamAgentProfile {
   fn widenings_over(&self, previous: Option<&Self>) -> Vec<VersionWidening> {
     let mut widenings = permission_widenings(self.permissions(), previous.map(TeamAgentProfile::permissions));
@@ -87,6 +92,9 @@ impl SharedBody for TeamAgentProfile {
     };
     if added(self.mcp_servers(), previous.map(TeamAgentProfile::mcp_servers)) {
       widenings.push(VersionWidening::McpServer);
+    }
+    if added(self.tools(), previous.map(TeamAgentProfile::tools)) {
+      widenings.push(VersionWidening::Tool);
     }
     let needs_new_secret = self
       .secrets()

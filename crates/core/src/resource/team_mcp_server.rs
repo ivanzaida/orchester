@@ -165,7 +165,8 @@ impl ResourceBody for TeamMcpServer {
 }
 
 /// A computer switches a server on itself, so a version widens only what an already switched-on server may do: it
-/// runs another program or reaches another address, or asks less.
+/// runs another program (or in another folder) or reaches another address, needs a variable or secret header name the
+/// previous version did not (a variable's value may be a secret), or asks less. Dropping any of these narrows.
 impl SharedBody for TeamMcpServer {
   fn widenings_over(&self, previous: Option<&Self>) -> Vec<VersionWidening> {
     let Some(previous) = previous else {
@@ -173,15 +174,19 @@ impl SharedBody for TeamMcpServer {
     };
     let mut widenings = Vec::new();
     let launch_changed = match (&self.launch, &previous.launch) {
-      (TeamMcpLaunch::Program(now), TeamMcpLaunch::Program(before)) => (now.program != before.program
-        || now.args != before.args)
-        .then_some(VersionWidening::Command(CommandWidening::Program)),
+      (TeamMcpLaunch::Program(now), TeamMcpLaunch::Program(before)) => {
+        (now.program != before.program || now.args != before.args || now.working_directory != before.working_directory)
+          .then_some(VersionWidening::Command(CommandWidening::Program))
+      }
       (TeamMcpLaunch::Remote(now), TeamMcpLaunch::Remote(before)) => {
         (now.url != before.url).then_some(VersionWidening::Address)
       }
       _ => Some(VersionWidening::McpServer),
     };
     widenings.extend(launch_changed);
+    if self.launch.names_beyond(&previous.launch) {
+      widenings.push(VersionWidening::Secret);
+    }
     if self
       .exempt_tools
       .tools()
@@ -191,6 +196,26 @@ impl SharedBody for TeamMcpServer {
       widenings.push(VersionWidening::Access);
     }
     widenings
+  }
+}
+
+impl TeamMcpLaunch {
+  /// The variable names or secret header names a computer fills in.
+  fn filled_names(&self) -> Vec<&str> {
+    match self {
+      Self::Program(program) => program.variables.iter().map(VariableName::as_str).collect(),
+      Self::Remote(remote) => remote.secret_headers.iter().map(McpHeaderName::as_str).collect(),
+    }
+  }
+
+  /// Whether this launch needs a variable or a secret header, by name, that `before` did not. A launch of the other
+  /// kind needs all of its own.
+  fn names_beyond(&self, before: &Self) -> bool {
+    let was = before.filled_names();
+    self
+      .filled_names()
+      .iter()
+      .any(|name| !was.iter().any(|was| was.eq_ignore_ascii_case(name)))
   }
 }
 
