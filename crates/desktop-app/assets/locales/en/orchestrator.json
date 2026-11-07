@@ -443,6 +443,29 @@
       "connection": "The Orchestrator runs on another connection now: this answer starts a new session and doesn't remember the earlier messages.",
       "account": "The Orchestrator's connection is on another account now: this answer starts a new session and doesn't remember the earlier messages."
     },
+    "watching": {
+      "applied": "Applied {{time}}",
+      "from": "Orchester",
+      "meta": "{{time}} · the live state, no agent turn",
+      "total": "This conversation leads {{leads}}. {{total}}.",
+      "only": "{{total}}.",
+      "and": "{{rest}} and {{last}}",
+      "comma": "{{rest}}, {{next}}",
+      "reading": "Reading what this conversation watches…",
+      "unreadable": "What this conversation watches can't be read: {{reason}}",
+      "head": {
+        "own": "{{kind}} · since {{since}} · “{{order}}”",
+        "same": "{{kind}} · since {{since}} · same order",
+        "projectDefault": "{{kind}} · since {{since}} · the default order “{{order}}”",
+        "none": "{{kind}} · since {{since}} · no order"
+      },
+      "stop": "Stop watching",
+      "keyRun": "{{key}} · #{{run}}",
+      "open": "{{action}} ↗",
+      "failed": "Not applied",
+      "personOnly": "Only a person stops watching here: input from an MCP client is not taken, and the subscription goes on.",
+      "dismiss": "Dismiss"
+    },
     "context": {
       "event": {
         "compacting": "Compacting the conversation",

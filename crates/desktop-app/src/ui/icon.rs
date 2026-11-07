@@ -140,6 +140,7 @@ icons! {
   Folder => '\u{e0d7}',
   FolderCheck => '\u{e32e}',
   FolderGit2 => '\u{e40a}',
+  FolderKanban => '\u{e4c6}',
   FolderLock => '\u{e336}',
   FolderOpen => '\u{e247}',
   FolderPlus => '\u{e0d9}',

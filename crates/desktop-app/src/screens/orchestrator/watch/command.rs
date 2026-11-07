@@ -41,6 +41,8 @@ pub(super) fn bubble(ctx: &Ctx, id: &str, command: &WatchCommand, at: Option<Tim
     WatchCommand::Watch { targets, order } => ("watch-module", Icon::Eye, targets.as_slice(), order.trim()),
     WatchCommand::Unwatch { targets } => ("unwatch", Icon::EyeOff, targets.as_slice(), ""),
     WatchCommand::UnwatchAll => ("unwatch", Icon::EyeOff, &[][..], ""),
+    // Its row is the answer from the live state (`super::super::watching`); this is only its bubble's chip.
+    WatchCommand::Watching => ("watching", Icon::ListTree, &[][..], ""),
   };
   let chips = Row::new()
     .id(format!("{id}-chips"))

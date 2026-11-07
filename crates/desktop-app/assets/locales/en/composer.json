@@ -191,6 +191,7 @@
           "label": "Watch tasks"
         },
         "watching": {
+          "detail": "What this conversation leads and what waits there",
           "label": "What I watch"
         }
       },

@@ -52,6 +52,7 @@ mod turns;
 mod wait;
 mod waits_on;
 mod watch;
+mod watching;
 
 use std::sync::Arc;
 
@@ -176,6 +177,8 @@ struct View {
   rewind: rewind::Rewinding,
   /// The header's … with *Copy conversation as Markdown* and *Export conversation…* (ORC-327).
   export: export::ChatExport,
+  /// `/watching` and *Stop watching* in its answer (ORC-775).
+  what_i_watch: watching::WhatIWatch,
   /// The header, which a Leads chip's tooltip hangs under (`leads`).
   head: ElementRef,
 }
@@ -221,6 +224,7 @@ impl Component for OrchestratorScreen {
       plan_only: plan_only::PlanOnly::new(ctx),
       rewind: rewind::Rewinding::new(ctx),
       export: export::ChatExport::new(ctx),
+      what_i_watch: watching::WhatIWatch::new(ctx),
       head: ElementRef::new(),
     };
     rewind::watch(ctx, &view);
@@ -283,6 +287,7 @@ impl Component for OrchestratorScreen {
       _ => None,
     });
     view.hold_started(&reads);
+    view.what_i_watch.hold(&reads);
     let chat = match &reads.shown {
       Shown::Chat(shown) => Named::Chat(&shown.chat, rewind::forked::is_fork(&shown.entries)),
       // The conversation the first message started is named as new until it is read, as it was when it was sent.

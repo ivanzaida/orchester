@@ -262,6 +262,25 @@ fn task_event_icons_match_bundled_font_names() {
   }
 }
 
+/// The glyphs of the `/watching` answer (ORC-775, 06 `Ff7AD`): its avatar and command chip, and a head row's target.
+/// The bundled font names the design's `square-check` by its older name.
+#[test]
+fn watching_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  for (icon, name) in [
+    (Icon::ListTree, "list-tree"),
+    (Icon::Boxes, "boxes"),
+    (Icon::SquareCheck, "check-square-2"),
+    (Icon::Inbox, "inbox"),
+    (Icon::FolderKanban, "folder-kanban"),
+  ] {
+    let codepoint = (0xe000..0xf8ff)
+      .find(|codepoint| glyph_name(font, font_glyph(font, *codepoint)) == name)
+      .expect("the bundled font includes the icon");
+    assert_eq!(icon.glyph() as usize, codepoint, "{icon:?} codepoint: {codepoint:x}");
+  }
+}
+
 /// The glyphs of the lines the app writes about what an Orchestrator conversation watches and of a watch command's
 /// module chip (ORC-777, `avDZO`, `mgpxA` in `OKtX2`).
 #[test]

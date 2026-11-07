@@ -3,7 +3,7 @@
 //! and Model and effort join them once their controls exist (ORC-309, ORC-319); until then they are not offered. The
 //! watch commands follow them (ORC-771, `01 · Watch commands` `h1KHAx`): *Watch modules* (`/watch-module`) and *Watch
 //! tasks* (`/watch-task`) take an argument, chosen in their pickers; *Stop watching* (`/unwatch`) and *What I watch*
-//! (`/watching`) are faded while the conversation watches nothing. The project's published skills follow them
+//! (`/watching`, ORC-775) are faded while the conversation watches nothing. The project's published skills follow them
 //! (ORC-325), greyed while the Orchestrator's connection cannot take one.
 
 use std::sync::Arc;
@@ -33,7 +33,7 @@ pub(super) fn menu(
   (fresh, send, provider): (bool, Option<Press>, Option<AgentProvider>),
 ) -> Element {
   let mut commands = vec![new_conversation(ctx, project, fresh), history(ctx, view)];
-  commands.extend(watch_commands(ctx));
+  commands.extend(watch_commands(ctx, view, project));
   let providers: Vec<AgentProvider> = provider.into_iter().collect();
   let skills = SkillsOffer {
     root: project.open.repo_root.clone(),
@@ -90,10 +90,11 @@ fn history(ctx: &Ctx, view: &View) -> SlashCommand {
   }
 }
 
-/// The watch commands, faded with why: *Watch modules* and *Watch tasks* until their pickers and the subscriptions
-/// they make exist (ORC-772 and ORC-773 give them `Does::Take` with their `ui::slash::ArgumentPicker`), *Stop
-/// watching* and *What I watch* while the conversation watches nothing, which it always does until then.
-fn watch_commands(ctx: &Ctx) -> [SlashCommand; 4] {
+/// The watch commands: *What I watch* ([`super::watching`], ORC-775), offered while the conversation leads something;
+/// faded with why, *Watch modules* and *Watch tasks* until their pickers and the subscriptions they make exist
+/// (ORC-772 and ORC-773 give them `Does::Take` with their `ui::slash::ArgumentPicker`), and *Stop watching* while the
+/// conversation watches nothing, which it says until its command exists.
+fn watch_commands(ctx: &Ctx, view: &View, project: &ShownProject) -> [SlashCommand; 4] {
   let faded = |name, icon, label: Arc<str>, detail: Arc<str>| SlashCommand {
     name,
     icon,
@@ -120,13 +121,10 @@ fn watch_commands(ctx: &Ctx) -> [SlashCommand; 4] {
       "unwatch",
       Icon::EyeOff,
       ctx.t("composer.slash.command.unwatch.label"),
-      nothing.clone(),
-    ),
-    faded(
-      "watching",
-      Icon::ListTree,
-      ctx.t("composer.slash.command.watching.label"),
       nothing,
     ),
+    view
+      .what_i_watch
+      .command(ctx, project.open.repo_root.clone(), &view.follow),
   ]
 }

@@ -78,6 +78,7 @@ pub(super) fn env(
     changing: view.plan_only.changing.get().map(|changing| changing.seq),
     answering,
     rewind,
+    watching: view.what_i_watch.live(project.open.repo_root.clone()),
     watch: Arc::new(if watches {
       project.feed.tasks.with(|tasks| WatchFacts::of(tasks.ready()))
     } else {
