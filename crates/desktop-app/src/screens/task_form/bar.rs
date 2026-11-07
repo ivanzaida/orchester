@@ -28,7 +28,7 @@ use crate::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     kbd::key_cap,
-    pressable::{Focus, opening},
+    pressable::{Focus, Press},
     tooltip::Truncated,
   },
 };
@@ -52,6 +52,8 @@ pub struct Handlers {
   pub back_to_editing: Handler,
   /// Opens where what the chosen pipeline lacks on this computer is listed.
   pub show_missing: Open,
+  /// Reads again whether the chosen pipeline is ready on this computer.
+  pub retry_readiness: Handler,
 }
 
 /// The main action's keys on this platform: Create & run's, or Save changes' where there is no Create & run.
@@ -77,7 +79,7 @@ pub fn action_bar(ctx: &mut Ctx, view: &View, confirming_discard: bool, on: &Han
   };
   frame()
     .id("task-form-bar")
-    .with_children(reason_line(ctx, view, &on.show_missing))
+    .with_children(reason_line(ctx, view, on))
     .child(
       Row::new()
         .id("task-form-actions")
@@ -102,7 +104,7 @@ pub(in crate::screens) fn frame() -> Row {
 }
 
 /// The line at the bar's start: its 12 icon and its words in 12, cut to one line with the whole in a tooltip.
-fn reason_line(ctx: &mut Ctx, view: &View, show_missing: &Open) -> Vec<Element> {
+fn reason_line(ctx: &mut Ctx, view: &View, on: &Handlers) -> Vec<Element> {
   let Some(reason) = reason(ctx, view) else {
     return vec![Row::new().flex(1.0).into()];
   };
@@ -114,7 +116,7 @@ fn reason_line(ctx: &mut Ctx, view: &View, show_missing: &Open) -> Vec<Element> 
   )
   .color(match reason.kind {
     Kind::Problem => PaletteColor::TextSecondary,
-    Kind::NotReady => PaletteColor::Warning,
+    Kind::NotReady | Kind::CannotTell => PaletteColor::Warning,
     _ => PaletteColor::TextMuted,
   })
   .render(ctx);
@@ -129,14 +131,22 @@ fn reason_line(ctx: &mut Ctx, view: &View, show_missing: &Open) -> Vec<Element> 
       .describe("reason", reason.words)
       .child(icon(glyph, IconSize::Sm, color))
       .child(Row::new().flex_shrink(1.0).min_width(Dimension::Px(0.0)).child(words))
-      .with_children((reason.kind == Kind::NotReady).then(|| show_missing_link(ctx, show_missing)))
+      .with_children(reason_link(ctx, reason.kind, on))
       .into(),
   ]
 }
 
-/// *· Show* after a pipeline's missing parts (`Reason` `ACVRw`): the words of the line, `warning`, that open where they
-/// are listed.
-fn show_missing_link(ctx: &Ctx, open: &Open) -> Element {
+/// *· Show* after a pipeline's missing parts, that open where they are listed (`Reason` `ACVRw`), or *· Retry* after
+/// the words saying its readiness could not be read: the words of the line, `warning`.
+fn reason_link(ctx: &Ctx, kind: Kind, on: &Handlers) -> Option<Element> {
+  let (key, press) = match kind {
+    Kind::NotReady => ("task_form.readiness.show", Press::Open(on.show_missing.clone())),
+    Kind::CannotTell => {
+      let retry = on.retry_readiness.clone();
+      ("task_form.readiness.retry", Press::run(move || retry()))
+    }
+    _ => return None,
+  };
   let word = |id: &str, key: &str| {
     Text::new(&ctx.t(key))
       .id(id.to_owned())
@@ -144,17 +154,19 @@ fn show_missing_link(ctx: &Ctx, open: &Open) -> Element {
       .color(PaletteColor::Warning)
       .nowrap()
   };
-  Row::new()
-    .flex_shrink(0.0)
-    .spacing(ExtraSpacing::Tight.role())
-    .child(word("task-form-reason-dot", "task_form.readiness.dot"))
-    .child(
-      Focus::Link
-        .apply(opening(open.clone()))
-        .id("task-form-reason-show")
-        .child(word("task-form-reason-show-text", "task_form.readiness.show")),
-    )
-    .into()
+  Some(
+    Row::new()
+      .flex_shrink(0.0)
+      .spacing(ExtraSpacing::Tight.role())
+      .child(word("task-form-reason-dot", "task_form.readiness.dot"))
+      .child(
+        Focus::Link
+          .apply(press.button())
+          .id("task-form-reason-link")
+          .child(word("task-form-reason-link-text", key)),
+      )
+      .into(),
+  )
 }
 
 fn actions(ctx: &Ctx, view: &View, on: &Handlers) -> Vec<Element> {

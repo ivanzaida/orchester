@@ -24,7 +24,6 @@ use orchester_core::{
 };
 use orchester_workspace::{
   messages::Message,
-  readiness::ProjectReadiness,
   tasks::{data::PipelineChoice, estimate::Estimates},
 };
 use parking_lot::Mutex;
@@ -39,7 +38,7 @@ use super::{
   fields::Fields,
   kept::KeptEdits,
   keys::FormKeys,
-  readiness,
+  readiness::{self, Readiness},
   sources::Drafted,
   state::{Phase, Subject, View},
   team::TeamStopped,
@@ -109,6 +108,8 @@ pub struct TaskForm {
   pub(super) seeded: Signal<bool>,
   pub(super) confirming_discard: Signal<bool>,
   pub(super) retrying: Signal<bool>,
+  /// Counts the asks to read the pipelines' readiness again.
+  pub(super) readiness_retry: Signal<u64>,
   pub(super) queued: Signal<Option<QueuedTask>>,
   /// Generated once per form: every save of a new task names the same task.
   pub(super) batch: IdempotencyKey,
@@ -182,6 +183,7 @@ impl Component for TaskForm {
       seeded: ctx.signal(false),
       confirming_discard: ctx.signal(false),
       retrying: ctx.signal(false),
+      readiness_retry: ctx.signal(0),
       queued,
       batch,
       nav: Nav::new(ctx, project),
@@ -218,7 +220,7 @@ impl Component for TaskForm {
       .width(Dimension::Pct(100.0))
       .height(Dimension::Pct(100.0));
     // Before anything returns early: a future keeps its place by the order it is asked in.
-    let readiness = readiness::read(ctx, &props);
+    let readiness = readiness::read(ctx, &props, self.readiness_retry.get());
     if !self.seed(ctx, &props, &separator) {
       return root;
     }
@@ -287,7 +289,7 @@ impl TaskForm {
     &self,
     props: &FormProps,
     actions: (&SaveAction, &RunAction),
-    (separator, readiness): (&str, Option<Arc<ProjectReadiness>>),
+    (separator, readiness): (&str, Readiness),
   ) -> View {
     let values = self.fields.values();
     let form = values.task_form(separator);
