@@ -68,6 +68,7 @@ mod skills;
 mod table;
 mod task;
 mod tasks;
+mod team_hub;
 mod tools;
 mod updates;
 mod usage;
@@ -102,6 +103,7 @@ pub use self::{
   table::routes,
   task::{ChangeSource, ChangedFile, TaskTab, TaskView},
   tasks::{TaskList, TaskListTab},
+  team_hub::{HubFilter, HubView},
   tools::ToolTab,
   updates::UpdatesShow,
 };

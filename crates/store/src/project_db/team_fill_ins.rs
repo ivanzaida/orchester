@@ -155,6 +155,16 @@ impl ProjectDb {
     Ok(self.team_secret_handle(name)?.is_some())
   }
 
+  /// Whether the keychain has the value of the team secret `name`: a row for the name whose handle the keychain still
+  /// holds. It asks [`SecretVault::exists`], so the value is not read and the person is not prompted. A name with no
+  /// row has none; a keychain that cannot say is an error.
+  pub fn team_secret_in_keychain(&self, vault: &dyn SecretVault, name: &SecretName) -> Result<bool, StoreError> {
+    match self.team_secret_handle(name)? {
+      Some(handle) => Ok(vault.exists(&self.vault_key(handle))?),
+      None => Ok(false),
+    }
+  }
+
   /// The names that have a value here, in order.
   pub fn team_secret_names_set(&self) -> Result<Vec<SecretName>, StoreError> {
     let mut statement = self

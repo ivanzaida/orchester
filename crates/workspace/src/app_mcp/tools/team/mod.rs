@@ -5,7 +5,6 @@
 //! modules: a server that cannot be reached, a signed-out session or a refusal is the tool's refusal. A project without
 //! a link to a server is local, and its tools keep their own paths.
 
-mod bindings;
 mod bundle_missing;
 mod deliver;
 mod modules;
@@ -16,7 +15,6 @@ mod writes;
 
 use orchester_store::{ProjectDb, SharingLink};
 
-pub use self::bindings::Binding;
 pub(super) use self::{
   deliver::merge_run,
   modules::{create_module, get_module, list_modules, update_module},

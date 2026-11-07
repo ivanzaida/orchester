@@ -38,6 +38,7 @@ pub(crate) mod task;
 mod task_close;
 mod task_form;
 pub(crate) mod tasks;
+mod team_hub;
 mod tools;
 mod unavailable_project;
 pub(crate) mod usage;
@@ -53,7 +54,7 @@ use orchester_core::id::ProjectId;
 
 use crate::{
   project::{ProjectState, Projects, ShownProject},
-  routes::{ProjectPage, Route},
+  routes::{HubView, ProjectPage, Route},
 };
 
 /// The screen at the router's path.
@@ -160,7 +161,8 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::PipelineVersion(id, version, view) => {
       pipelines::editor(ctx, project, *id, (view.clone(), Some(*version)))
     }
-    ProjectPage::Agents => agents::screen(ctx, project, agents::Shown::List),
+    ProjectPage::Agents => agents_or_hub(ctx, project, HubView::default()),
+    ProjectPage::AgentsHub(view) => agents_or_hub(ctx, project, *view),
     ProjectPage::NewAgent(tab) => agents::screen(ctx, project, agents::Shown::New(*tab)),
     ProjectPage::Agent(id, tab) => agents::screen(ctx, project, agents::Shown::Edit(*id, *tab)),
     ProjectPage::Instructions(view) => instructions::screen(ctx, project, *view),
@@ -185,5 +187,15 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::Join(target) => project_settings::join_screen(ctx, project, target),
     ProjectPage::Files(view) => files::screen(ctx, project, view),
     ProjectPage::Import(tab) => import::screen(ctx, project, *tab),
+  }
+}
+
+/// The Agents hub of a team project is master–detail (`Agents · v2`); a local project keeps the Profiles list until
+/// its own master–detail is built.
+fn agents_or_hub(ctx: &mut Ctx, project: &ShownProject, view: HubView) -> Element {
+  if hub::team::of(project).is_some() {
+    team_hub::screen(ctx, project, view)
+  } else {
+    agents::screen(ctx, project, agents::Shown::List)
   }
 }

@@ -159,6 +159,7 @@ fn bound(fixture: &Fixture) -> LocalBindings {
       named: SecretId::generate(),
       local: SecretId::generate(),
     }],
+    team_mcp: Vec::new(),
   }
 }
 

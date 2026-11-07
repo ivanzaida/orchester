@@ -9,11 +9,12 @@ use orchester_core::{
   sharing::{Here, Needs, readiness},
   store::ResourceStore,
 };
-use orchester_store::{McpServerProgram, ProjectDb};
+use orchester_store::ProjectDb;
 
 use super::{
   ReadinessError, facts, local,
   needs::{self, Entry, Profile, Reviewer, Server},
+  programs::McpPrograms,
   project::{PipelineReadiness, ProjectReadiness, ResourceReadiness},
   standing::{ReadinessStanding, Undecided},
   team,
@@ -25,7 +26,7 @@ pub(super) struct Setting<'a> {
   pub(super) vault: &'a dyn SecretVault,
   /// The program paths set for the team server's MCP servers when the project is shared with one; `None` for a local
   /// project.
-  pub(super) team_programs: Option<Vec<McpServerProgram>>,
+  pub(super) team_programs: Option<McpPrograms>,
 }
 
 /// The resources of the project, before they are checked against this computer.
@@ -34,7 +35,7 @@ struct Gathered {
   profiles: Vec<Profile>,
   reviewers: Vec<Reviewer>,
   tools: Vec<Entry>,
-  programs: Vec<McpServerProgram>,
+  programs: McpPrograms,
 }
 
 fn gather(db: &ProjectDb, setting: Setting<'_>) -> Result<Gathered, ReadinessError> {
@@ -45,7 +46,7 @@ fn gather(db: &ProjectDb, setting: Setting<'_>) -> Result<Gathered, ReadinessErr
       // A local project's reviewer is a setting of the project, not a resource (`orchester_core::run::review`).
       reviewers: Vec::new(),
       tools: local::tools(db, setting.vault)?,
-      programs: Vec::new(),
+      programs: McpPrograms::default(),
     });
   };
   let servers = needs::servers(db)?;
@@ -60,9 +61,10 @@ fn gather(db: &ProjectDb, setting: Setting<'_>) -> Result<Gathered, ReadinessErr
 }
 
 pub(super) fn read(db: &ProjectDb, setting: Setting<'_>) -> Result<ProjectReadiness, ReadinessError> {
+  let vault = setting.vault;
   let gathered = gather(db, setting)?;
   let server_ids: Vec<ResourceId> = gathered.servers.iter().map(|server| server.entry.resource).collect();
-  let mut here = facts::with_programs(facts::base(db)?, gathered.programs, &server_ids);
+  let mut here = facts::with_programs(facts::base(db, vault)?, &gathered.programs, &server_ids);
   let mut entries: Vec<Entry> = Vec::new();
   for mut server in gathered.servers {
     match db.team_mcp_switch(server.entry.resource)? {

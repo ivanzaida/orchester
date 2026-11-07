@@ -2,8 +2,9 @@
 
 use orchester_core::{
   id::SecretId,
-  secret::{SecretValue, SecretVault, VaultError, VaultKey},
+  secret::{SecretValue, SecretVault, VaultError, VaultKey, archive},
   sharing::Missing,
+  time::Timestamp,
 };
 use orchester_workspace::readiness::{Group, ReadinessStanding, Undecided};
 
@@ -60,6 +61,22 @@ fn readiness_another_secret_of_the_same_name_does_not_stand_in() {
 }
 
 #[test]
+fn readiness_a_tool_whose_secret_is_archived_is_undecided_not_missing_a_value() {
+  let fixture = Fixture::local();
+  let token = fixture.project_secret("DEPLOY_TOKEN", Some("s3cret-value"));
+  let tool = fixture.own("deploy", &http_tool(token));
+  let mut db = fixture.db();
+  let project = db.project().id();
+  archive(&mut db, &fixture.vault, project, token, Timestamp::from_unix_millis(7)).expect("archived");
+
+  assert_eq!(
+    fixture.read().resource(tool).expect("listed").standing(),
+    &ReadinessStanding::Undecided(Undecided::SecretGone(token)),
+    "a value cannot be set for an archived secret, so it is not a missing value"
+  );
+}
+
+#[test]
 fn readiness_a_keychain_that_cannot_say_leaves_the_tool_undecided() {
   struct Locked;
   impl SecretVault for Locked {
@@ -92,7 +109,7 @@ fn readiness_a_keychain_that_cannot_say_leaves_the_tool_undecided() {
 
 /// A keychain that answers whether a value is there but refuses to hand any value over, as one that asks the person
 /// before each read.
-struct AsksBeforeReading(Result<bool, VaultError>);
+pub struct AsksBeforeReading(pub Result<bool, VaultError>);
 
 impl SecretVault for AsksBeforeReading {
   fn store(&self, _: &VaultKey, _: &SecretValue) -> Result<(), VaultError> {

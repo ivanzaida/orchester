@@ -1,9 +1,11 @@
 //! `run_task` of a team task: its work starts through the team server, never from this computer's queue. The task is
 //! read from the server, claimed for this session (`claim.acquire`, which answers the claim already held), and its
-//! module read for the branch its work builds on; the branch's commit here is the start's base. `work.start` goes
-//! through [`crate::team_work`], which keeps the start before each boundary and asks the project's runner for the run
-//! of the accepted inputs. A start the server or the runner cannot take now is recorded and carried on by recovery; the
-//! answer says where it waits.
+//! module read for the branch its work builds on; the branch's commit here is the start's base. Before anything is
+//! claimed, the pipeline must be ready on this computer ([`crate::readiness`]): one that is not is refused as
+//! `not_ready_here` with the missing parts, and no claim is taken, no work is asked for and no attempt is counted.
+//! `work.start` goes through [`crate::team_work`], which keeps the start before each boundary, checks the versions the
+//! bundle pins once more and asks the project's runner for the run of the accepted inputs. A start the server or the
+//! runner cannot take now is recorded and carried on by recovery; the answer says where it waits.
 
 use std::path::Path;
 
@@ -11,16 +13,13 @@ use orchester_api::v2::{AuthorityErrorCode, AuthorityRef, Subject, TeamCommandVa
 use orchester_core::{
   command::CommandRunner,
   id::{ClaimId, OperationId},
-  run::{CommitId, inputs::LocalConsent},
-  store::ConnectionStore,
+  run::CommitId,
 };
 use orchester_store::ProjectDb;
 use serde_json::{Value, json};
 
 use super::{
-  Team,
-  bindings::{Binding, bind, choice_refused},
-  bundle_missing, on_worker,
+  Team, bundle_missing, on_worker,
   outcome::{accepted, action_refused, authority_refused},
   read, read_refused,
   tasks::find,
@@ -33,11 +32,12 @@ use crate::{
     services::blocking,
   },
   messages::Message,
+  readiness::{NotReadyHere, StartReadiness},
   runner::RunRequestError,
   tasks::run::start_messages,
   team_reads::{TeamReadError, listed::TeamPipelines},
   team_work::{
-    self, McpHere, ProjectRunner, StartChoices, StartFailure, StartOutcome, TeamStartRequest, TeamWork, TeamWorkError,
+    self, BranchNotFound, ProjectRunner, StartFailure, StartOutcome, TeamStartRequest, TeamWork, TeamWorkError,
   },
 };
 
@@ -45,7 +45,6 @@ pub(in crate::app_mcp::tools) async fn run_task(
   services: &Services,
   team: &Team,
   key: &str,
-  given: &[Binding],
 ) -> Result<Value, ToolError> {
   let project = team.reads(services).await?;
   let task = find(&project, key).await?;
@@ -67,21 +66,26 @@ pub(in crate::app_mcp::tools) async fn run_task(
     Err(error) => return Err(read_refused(&error)),
   };
   let (root, programs) = (team.open.repo_root.clone(), services.programs().clone());
+  let (workspace, vault) = (services.workspace().clone(), services.vault.clone());
+  let start_vault = vault.clone();
   let branch = module_read.branch.clone();
-  let (pipeline, base_commit, (connections, mcp)) = blocking(move || {
+  let (base_commit, programs) = blocking(move || {
     let db = ProjectDb::open(&root)?;
     // Only the team's pipelines run a team task: a person's own local pipeline never does, even with the same id.
     let pipeline = TeamPipelines::of(&db)?
       .id(&named)
       .ok_or_else(|| pipeline_missing(&named))?;
     let commit = branch_tip(programs.runner(), &root, &branch)?;
-    Ok((pipeline, commit, (db.connections()?, McpHere::read(&db)?)))
+    match workspace
+      .team_start_readiness(&root, vault.get(), pipeline)
+      .map_err(ToolError::from)?
+    {
+      StartReadiness::Ready(programs) => Ok((commit, programs)),
+      StartReadiness::NotReady(refusal) => Err(ToolError::NotReadyHere(refusal)),
+      StartReadiness::PipelineUnknown => Err(pipeline_missing(&named)),
+    }
   })
   .await?;
-  let choices = StartChoices {
-    bindings: bind(&project, pipeline, (&connections, &mcp), given).await?,
-    consent: LocalConsent::default(),
-  };
   let dispatcher = team.dispatcher(services).await?;
   let runner = ProjectRunner::new(
     services.runners.clone(),
@@ -106,10 +110,10 @@ pub(in crate::app_mcp::tools) async fn run_task(
     let request = TeamStartRequest {
       operation: OperationId::generate(),
       work,
-      choices,
+      programs,
     };
     TeamWork::new(dispatcher, runner)
-      .start(request)
+      .start(request, start_vault.get())
       .await
       .map_err(work_refused)
   })
@@ -123,7 +127,12 @@ pub(super) fn branch_tip(
   root: &Path,
   branch: &str,
 ) -> Result<CommitId, ToolError> {
-  team_work::branch_tip(runner, root, branch).map_err(|error| choice_refused(&error))
+  team_work::branch_tip(runner, root, branch).map_err(|BranchNotFound(branch)| {
+    ToolError::refused(
+      "branch_not_found",
+      vec![Message::new("appMcp.errors.branchNotFound").with("branch", branch)],
+    )
+  })
 }
 
 /// The claim of `subject` this session holds, taken now unless it held it already; `failed` when the server answered
@@ -167,6 +176,9 @@ async fn started(team: &Team, outcome: StartOutcome) -> Result<Value, ToolError>
       "team_bundle_unreadable",
       vec![Message::new("appMcp.errors.teamBundleUnreadable")],
     )),
+    StartOutcome::Failed(StartFailure::NotReadyHere { pipeline, missing }) => {
+      Err(ToolError::NotReadyHere(NotReadyHere::after_start(pipeline, missing)))
+    }
     StartOutcome::Failed(failure) => {
       tracing::warn!(?failure, "a team start failed for good");
       Err(start_failed())

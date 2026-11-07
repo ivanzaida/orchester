@@ -11,7 +11,7 @@ use orchester_core::{
   id::{ConnectionId, DecisionConnectionId, ProjectId, SecretId},
   memory::{ScreenUnavailable, SecretScreen},
   resource::CommandEnvironment,
-  secret::{Secret, SecretValue, VaultError},
+  secret::{Secret, SecretName, SecretValue, VaultError},
 };
 
 use super::{Calls, Reply, Wire, crossed_whole, received, whole};
@@ -87,6 +87,10 @@ impl ComputerResources for ChannelComputer {
 
   fn secret_value(&self, project: ProjectId, secret: &Secret) -> Result<SecretValue, VaultError> {
     self.local.secret_value(project, secret)
+  }
+
+  fn team_secret_value(&self, name: &SecretName) -> Result<Option<SecretValue>, ComputerError> {
+    self.local.team_secret_value(name)
   }
 
   fn secret_screen(&self, project: ProjectId, secrets: &[Secret]) -> Result<SecretScreen, ScreenUnavailable> {

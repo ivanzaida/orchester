@@ -146,8 +146,6 @@
         "waiting": "The run waits for the team server or the runner, and starts once they answer.",
         "notReady": "The task names no module, or a pipeline this computer doesn't have.",
         "branch": "The module's branch {{branch}} isn't in this checkout.",
-        "bindings": "These agent profiles need a connection chosen on this computer: {{profiles}}.",
-        "mcpServers": "These MCP servers are not set up on this computer: {{servers}}. Bind them in Sharing › On this computer, then run again.",
         "notReadable": "The team server's pipeline or one of its agent profiles can't be read."
       },
       "properties": {
