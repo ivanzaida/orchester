@@ -103,7 +103,7 @@ impl Page {
   /// The id of the *Delete* of the first comment not sent that shows inside the diff's view, turning the wheel over
   /// it: a row the list lays out past the view's edge cannot be pressed.
   fn unsent_delete(&mut self) -> String {
-    for _ in 0..12 {
+    for _ in 0..40 {
       self
         .window
         .until("the rows in view", |window| window.texts("review-diff").is_some());
@@ -146,7 +146,7 @@ impl Page {
         .expect("the diff is laid out");
       let (x, y) = (bounds.x + bounds.width / 2.0, bounds.y + bounds.height / 2.0);
       self.window.tree.mouse_move(x, y);
-      self.window.tree.scroll(x, y, 0.0, -500.0, ScrollPhase::Scroll);
+      self.window.tree.scroll(x, y, 0.0, -150.0, ScrollPhase::Scroll);
       self.window.pass();
     }
     panic!("a comment not sent with its Delete");
