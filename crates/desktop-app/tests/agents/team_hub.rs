@@ -24,7 +24,7 @@ use super::{harness::Agents, support::project_id};
 /// Links the project as its owner and caches the team's resources: the skill `review-diff` and the instruction
 /// `Project rules` (always ready), the MCP server `github` nobody decided on here (needs the person) and `playwright`
 /// switched off here. Returns their ids in that order.
-fn team(agents: &Agents) -> [ResourceId; 4] {
+pub(super) fn team(agents: &Agents) -> [ResourceId; 4] {
   let mut db = ProjectDb::open(&agents.root).expect("database");
   let link = SharingLink {
     server: ServerId::generate(),
@@ -74,7 +74,7 @@ fn team(agents: &Agents) -> [ResourceId; 4] {
 }
 
 /// The team's `body` at v1, cached the way the stream keeps it.
-fn cached<B: ResourceBody + Clone>(
+pub(super) fn cached<B: ResourceBody + Clone>(
   db: &mut ProjectDb,
   (slug, name): (&str, &str),
   server_body: Value,
@@ -114,7 +114,7 @@ fn cached<B: ResourceBody + Clone>(
   id
 }
 
-fn open(agents: &mut Agents, view: HubView) {
+pub(super) fn open(agents: &mut Agents, view: HubView) {
   agents
     .window
     .navigation()

@@ -1,8 +1,8 @@
 //! A row of the hub's list (`Item · Builder` `tF2OL`, `Item · pencil-design` `U9RFS`): the kind's glyph, the name over
 //! what this computer needs, and at its end a tag and a version. Under All the tag names the kind; under a kind with
 //! something to fill in on a computer (profiles, MCP servers, tools) the tag names what an MCP server or a tool is
-//! and the version stands after it. The chosen row stands inert on `hover` with a thin `border_strong` start; the
-//! others open the hub on them.
+//! and the version stands after it. The chosen row stands inert on `hover` with a 2 `accent` start (`Item · Builder`
+//! `n330IO`); the others open the hub on them.
 
 use lurq::{
   app::{
@@ -24,6 +24,7 @@ use crate::{
   routes::{HubFilter, HubView, ProjectPage, Route},
   theme::{ExtraColor, ExtraSpacing, HubText, IconSize},
   ui::{
+    agent_mark::AgentMark,
     icon::icon,
     pressable::{inert, opening},
   },
@@ -59,19 +60,27 @@ pub(super) fn row(ctx: &Ctx, listing: &Listing, entry: &Entry, shown: &Shown<'_>
     .describe("state", if chosen { "chosen" } else { "enabled" })
     .describe("group", group_name(entry.group))
     .describe("kind", entry.kind.name())
-    .child(icon(entry.kind.glyph(), IconSize::Lg, glyph_color(entry)))
+    .child(mark(ctx, entry))
     .child(text(ctx, listing, entry, &id))
     .with_children(tag(ctx, entry, shown.filter, &id))
     .with_children(version(entry, shown.filter, &id));
   if chosen {
     button
       .background(ExtraColor::Hover.role())
-      .border_left(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+      .border_left(Border::inside(BorderSize::Lg, PaletteColor::Accent))
       .into()
   } else {
     button
       .hovered_style(lurq::node::Style::new().background(ExtraColor::Hover.role()))
       .into()
+  }
+}
+
+/// The glyph at a row's start: a profile's CLI's own mark, else the glyph of what the resource is.
+fn mark(ctx: &Ctx, entry: &Entry) -> Element {
+  match entry.cli {
+    Some(cli) => AgentMark::of(cli).render(ctx, IconSize::Lg),
+    None => icon(entry.glyph(), IconSize::Lg, glyph_color(entry)).into(),
   }
 }
 
@@ -117,7 +126,7 @@ fn tag(ctx: &Ctx, entry: &Entry, filter: HubFilter, id: &str) -> Option<Row> {
 }
 
 /// A tag (`Tag` `uJ2rP`).
-fn tag_chip(id: &str, words: &str) -> Row {
+pub(super) fn tag_chip(id: &str, words: &str) -> Row {
   Row::new()
     .id(id)
     .height(Dimension::Px(TAG_HEIGHT))

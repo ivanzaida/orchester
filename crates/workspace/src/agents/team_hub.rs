@@ -12,6 +12,7 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
+use super::team_profile::{self, TeamProfileSheet};
 use crate::{
   readiness::{ProjectReadiness, ReadinessError},
   workspace::Workspace,
@@ -46,6 +47,7 @@ pub struct TeamHub {
   readiness: ProjectReadiness,
   plain: Vec<Plain>,
   forms: Vec<(ResourceId, Form)>,
+  profiles: Vec<(ResourceId, TeamProfileSheet)>,
 }
 
 impl TeamHub {
@@ -56,6 +58,15 @@ impl TeamHub {
   /// The team's instructions, then its skills, each by name.
   pub fn plain(&self) -> &[Plain] {
     &self.plain
+  }
+
+  /// What the team holds of the profile `resource` and what this computer fills in for it; `None` for any other
+  /// resource, and for a profile whose newest version is not in the team's form.
+  pub fn profile(&self, resource: ResourceId) -> Option<&TeamProfileSheet> {
+    self
+      .profiles
+      .iter()
+      .find_map(|(found, sheet)| (*found == resource).then_some(sheet))
   }
 
   /// What the MCP server or tool `resource` is; `None` for any other resource.
@@ -122,6 +133,7 @@ impl Workspace {
       readiness,
       plain,
       forms: forms(&db)?,
+      profiles: team_profile::sheets(&db)?,
     })
   }
 }

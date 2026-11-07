@@ -7,6 +7,7 @@
 mod connection;
 mod program;
 mod secret;
+mod sheet;
 mod support;
 mod switch;
 mod unresolved;

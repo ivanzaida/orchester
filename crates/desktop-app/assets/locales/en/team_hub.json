@@ -58,7 +58,8 @@
       "off": "Off on this computer",
       "undecided": "Can't tell yet whether it is ready here",
       "many": "{{count}} things missing here",
-      "connection": "Needs a connection here",
+      "connectionNone": "No {{cli}} connection on this computer",
+      "connectionPick": "Choose a {{cli}} connection here",
       "mcpUndecided": "Switch it on or off on this computer",
       "mcpOff": "{{server}} is not switched on here",
       "programHere": "Set its program path here",
@@ -73,11 +74,13 @@
       "team": "Team · {{version}}",
       "teamUnnumbered": "Team · not numbered yet",
       "ready": "Ready here",
-      "off": "Off here"
+      "off": "Off here",
+      "noConnection": "No {{cli}} connection here"
     },
     "readiness": {
       "title": "Ready here?",
-      "missing": "{{count}} missing"
+      "missing": "{{count}} missing",
+      "allSet": "all set"
     },
     "panel": {
       "edit": "Edit"
@@ -85,6 +88,94 @@
     "empty": {
       "title": "Nothing here yet",
       "detail": "Nothing of this kind is published for the team yet."
+    },
+    "cli": {
+      "claude": "Claude Code",
+      "codex": "Codex",
+      "anthropicApi": "Anthropic API",
+      "openaiApi": "OpenAI API"
+    },
+    "profile": {
+      "fromTeam": "From the team",
+      "fromTeamNote": "· the same on every computer",
+      "onComputer": "On this computer",
+      "yours": "Yours",
+      "onComputerNote": "· never sent to the team",
+      "agentCli": "Agent CLI",
+      "agentCliSub": "the kind; never a connection",
+      "model": "Model",
+      "effort": "Reasoning effort",
+      "effortLevel": {
+        "low": "Low",
+        "medium": "Medium",
+        "high": "High",
+        "xhigh": "Extra high",
+        "max": "Max"
+      },
+      "instructions": "Instructions",
+      "mcpServers": "MCP servers",
+      "tools": "Tools",
+      "skills": "Skills",
+      "secrets": "Secrets it needs",
+      "secretsSub": "names only",
+      "runsOn": "Runs on",
+      "runsOnOnly": "chosen without asking",
+      "runsOnPicked": "picked on this computer",
+      "runsOnMany": "{{count}} {{cli}} connections here",
+      "runsOnNone": "nothing is substituted",
+      "connectionName": "{{cli}} · {{name}}",
+      "onlyOne": "· the only {{cli}} connection here",
+      "noConnection": "No {{cli}} connection on this computer",
+      "choose": "Choose a {{cli}} connection",
+      "cliVersion": "{{program}} {{version}}"
+    },
+    "ready": {
+      "connection": "Connection",
+      "mcpServer": "MCP server {{name}}",
+      "secret": "Secret {{name}}",
+      "connectionOk": "{{cli}} · {{name}}",
+      "connectionVersion": "{{cli}} · {{name}} · {{program}} {{version}}",
+      "noneOfKind": "No {{cli}} connection here",
+      "pickNeeded": "Choose a {{cli}} connection here",
+      "programSet": "Ready · program path set",
+      "programGone": "The program is not at its path any more",
+      "remote": "Ready · remote",
+      "remoteSecret": "Ready · remote; {{names}} has a value here",
+      "remoteSecrets": "Ready · remote; {{names}} have values here",
+      "switchedOff": "Switched off on this computer",
+      "valueSet": "Value set here",
+      "noValue": "No value set here",
+      "ready": "Ready"
+    },
+    "fix": {
+      "link": {
+        "use": "Use a connection →",
+        "add": "Add →",
+        "switchOn": "Switch on →",
+        "setPath": "Set path →",
+        "addValue": "Add value →"
+      },
+      "action": {
+        "use": "Use {{connection}} for {{profile}}",
+        "add": "Add a {{cli}} connection",
+        "switchOn": "Switch on {{server}}",
+        "setPath": "Set {{server}}'s program path",
+        "addValue": "Add value for {{name}}"
+      },
+      "hint": {
+        "then": "Then {{what}}",
+        "done": "{{profile}} runs here once nothing is missing",
+        "use": "Asked once per profile · kept on this computer",
+        "add": "Opens Settings › Accounts"
+      }
+    },
+    "secretDialog": {
+      "title": "Add value for {{name}}",
+      "what": "The value stays on this computer, in the keychain. The team gets only the name.",
+      "field": "Value",
+      "placeholder": "Paste the value",
+      "cancel": "Cancel",
+      "save": "Save value"
     }
   }
 }

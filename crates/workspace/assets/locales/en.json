@@ -2192,7 +2192,8 @@
       "accountOfOtherCli": "That account belongs to another CLI than the connection's.",
       "programNotAbsolute": "Choose the program with Choose…; its path must be complete.",
       "programNotAFile": "There is no file at that path. Choose the program again.",
-      "remoteServer": "This MCP server runs somewhere else, so it needs no program on this computer."
+      "remoteServer": "This MCP server runs somewhere else, so it needs no program on this computer.",
+      "valueBlank": "The value is empty. Paste the secret's value to save it."
     }
   },
   "teamJoin": {

@@ -1,8 +1,8 @@
 //! The panel beside the list (`Detail` `EXAbv` in `t4mtQL`): the chosen resource's head (what it is and its version,
 //! its name), its chips (`Chips` `Zi28O`: *Team · vN* and how it stands here) and what its readiness lacks, with the
 //! one action that moves it on pinned at its bottom (`Actions` `x3uhYJ`). The panel of each kind is its own task
-//! (ORC-832…834): until then the panel is this frame, and its pinned action is only Edit, which opens the editor the
-//! kind has today.
+//! (ORC-832…834): a profile's is [`super::profile`]; until the others have theirs the panel is this frame, and its
+//! pinned action is only Edit, which opens the editor the kind has today.
 
 use lurq::{
   app::{
@@ -51,7 +51,7 @@ pub(super) fn panel(ctx: &Ctx, listing: &Listing, entry: &Entry, shown: &Shown<'
         HubSpacing::BodyTop.role(),
       ))
       .spacing(HubSpacing::BodyTop.role())
-      .child(head(ctx, entry))
+      .child(head(ctx, entry, None))
       .child(chips(ctx, listing, entry))
       .with_children(readiness(ctx, listing, entry)),
   )
@@ -71,7 +71,8 @@ pub(super) fn panel(ctx: &Ctx, listing: &Listing, entry: &Entry, shown: &Shown<'
     .into()
 }
 
-fn head(ctx: &Ctx, entry: &Entry) -> Column {
+/// The head: what the resource is and its version over its name, and at its end what `end` puts there (*Edit*).
+pub(super) fn head(ctx: &Ctx, entry: &Entry, end: Option<Element>) -> Row {
   let mut where_ = Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
@@ -89,18 +90,33 @@ fn head(ctx: &Ctx, entry: &Entry) -> Column {
         .nowrap(),
     );
   }
-  Column::new()
+  Row::new()
     .width(Dimension::Pct(100.0))
-    .spacing(ExtraSpacing::Tight.role())
-    .child(where_)
+    .spacing(SpacingSize::Md)
     .child(
-      Text::new(&entry.name)
-        .id("team-hub-panel-title")
-        .variant(TypographyStyle::Title),
+      Column::new()
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .spacing(ExtraSpacing::Tight.role())
+        .child(where_)
+        .child(
+          Text::new(&entry.name)
+            .id("team-hub-panel-title")
+            .variant(TypographyStyle::Title),
+        ),
     )
+    .with_children(end)
 }
 
-fn chips(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Row {
+/// *Edit* in a head (`Edit` in `Agents · All · admin` `t4mtQL`).
+pub(super) fn edit_button(ctx: &Ctx, open: Open) -> Element {
+  ActionButton::new("team-hub-edit", ButtonKind::Ghost, ctx.t("team_hub.panel.edit"))
+    .icon(Icon::Pencil)
+    .opens(open)
+    .into()
+}
+
+pub(super) fn chips(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Row {
   let (words, tone) = words::chip(ctx, listing, entry);
   let team = match entry.number {
     Some(number) => ctx.t_args("team_hub.chip.team", [("version", number.to_string())]),
@@ -171,7 +187,7 @@ fn readiness(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Option<Column> {
 }
 
 /// The editor the kind has today, which a change of the team's resource opens; an MCP server has none yet.
-fn editor(entry: &Entry, project: ProjectId) -> Option<Route> {
+pub(super) fn editor(entry: &Entry, project: ProjectId) -> Option<Route> {
   let page = match entry.kind {
     Kind::Profile => ProjectPage::Agent(entry.id, AgentTab::default()),
     Kind::Skill => ProjectPage::Skill(entry.id),

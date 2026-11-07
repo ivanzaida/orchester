@@ -12,6 +12,7 @@ mod head;
 mod list;
 mod model;
 mod panel;
+mod profile;
 mod row;
 mod words;
 
@@ -199,16 +200,25 @@ fn hub_body(
       navigation,
     },
   );
-  let panel = panel::panel(
-    ctx,
-    &listing,
-    selected,
-    &panel::Shown {
-      project: id,
-      may_change: team.may_change,
-      navigation,
-    },
-  );
+  let shown = panel::Shown {
+    project: id,
+    may_change: team.may_change,
+    navigation,
+  };
+  let panel = match hub.profile(selected.id) {
+    Some(sheet) => profile::panel(
+      ctx,
+      profile::Props {
+        repo_root: project.open.repo_root.clone(),
+        project: id,
+        may_change: team.may_change,
+        listing: listing.clone(),
+        entry: selected.clone(),
+        sheet: sheet.clone(),
+      },
+    ),
+    None => panel::panel(ctx, &listing, selected, &shown),
+  };
   lurq::components::Row::new()
     .id("team-hub-master-detail")
     .width(Dimension::Pct(100.0))

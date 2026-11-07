@@ -59,7 +59,7 @@ use std::path::Path;
 use orchester_core::{id::ResourceId, secret::SecretVault};
 use orchester_store::ProjectDb;
 
-pub(crate) use self::bundle::missing as bundle_missing;
+pub(crate) use self::{bundle::missing as bundle_missing, team::body as team_profile_body};
 pub use self::{
   error::ReadinessError,
   not_ready::{MissingPart, NotReadyHere, NotReadyPart, UndecidedPart},
