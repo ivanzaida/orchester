@@ -177,6 +177,8 @@ struct View {
   rewind: rewind::Rewinding,
   /// The header's … with *Copy conversation as Markdown* and *Export conversation…* (ORC-327).
   export: export::ChatExport,
+  /// Applies `/watch-module` (ORC-772).
+  watching: watch::WatchAction,
   /// `/watching` and *Stop watching* in its answer (ORC-775).
   what_i_watch: watching::WhatIWatch,
   /// The header, which a Leads chip's tooltip hangs under (`leads`).
@@ -224,23 +226,15 @@ impl Component for OrchestratorScreen {
       plan_only: plan_only::PlanOnly::new(ctx),
       rewind: rewind::Rewinding::new(ctx),
       export: export::ChatExport::new(ctx),
+      watching: watch::watch_action(ctx),
       what_i_watch: watching::WhatIWatch::new(ctx),
       head: ElementRef::new(),
     };
     rewind::watch(ctx, &view);
-    let taker = view.clone();
-    ctx.watch(&view.queued.state(), move |state| {
-      if let Some(taken) = state
-        .data
-        .as_ref()
-        .filter(|_| state.is_fulfilled())
-        .and_then(|changed| changed.taken.as_ref())
-      {
-        taker.take_back(taken);
-      }
-    });
+    take_back_queued(ctx, &view);
     let project = ctx.props::<Props>().project.open.project.id();
-    keep_drafts(ctx, &view, project);
+    watch::follow(ctx, &view, project);
+    draft::keep(ctx, &view, project);
     let navigation = Navigation::of(ctx);
     let done = view.clone();
     ctx.watch(&view.send.state(), move |state| {
@@ -368,18 +362,17 @@ fn escape(view: &View) -> impl Fn(KeyboardEvent) + Send + Sync + 'static {
   }
 }
 
-/// The draft and its files are kept as the draft of the conversation `view` holds it for, in `project`, as they change.
-fn keep_drafts(ctx: &mut Ctx, view: &View, project: ProjectId) {
-  let of = view.of.clone();
-  ctx.watch(&view.draft, move |text| {
-    if let Some(of) = of.get_untracked() {
-      draft::set(project, of, text);
-    }
-  });
-  let of = view.of.clone();
-  ctx.watch(&view.attached.attached, move |held| {
-    if let Some(of) = of.get_untracked() {
-      draft::set_attachments(project, of, &held.0);
+/// A queued message taken back by *Edit*: its words and files go into the composer.
+fn take_back_queued(ctx: &mut Ctx, view: &View) {
+  let taker = view.clone();
+  ctx.watch(&view.queued.state(), move |state| {
+    if let Some(taken) = state
+      .data
+      .as_ref()
+      .filter(|_| state.is_fulfilled())
+      .and_then(|changed| changed.taken.as_ref())
+    {
+      taker.take_back(taken);
     }
   });
 }

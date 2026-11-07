@@ -262,8 +262,9 @@ fn task_event_icons_match_bundled_font_names() {
   }
 }
 
-/// The glyphs of the `/watching` answer (ORC-775, 06 `Ff7AD`): its avatar and command chip, and a head row's target.
-/// The bundled font names the design's `square-check` by its older name.
+/// The glyphs of the `/watching` answer (ORC-775, 06 `Ff7AD`): its avatar and command chip, and a head row's target;
+/// `boxes` and `folder-kanban` are the /watch-module picker's rows too (ORC-772, `R1s1o` in 02 `c8pALl`). The bundled
+/// font names the design's `square-check` by its older name.
 #[test]
 fn watching_icons_match_bundled_font_names() {
   let font = include_bytes!("../../assets/fonts/lucide.ttf");

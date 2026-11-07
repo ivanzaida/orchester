@@ -185,6 +185,7 @@
           "notYet": "Not available in this version yet"
         },
         "watchModule": {
+          "detail": "Their tasks' events come here",
           "label": "Watch modules"
         },
         "watchTask": {

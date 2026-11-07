@@ -61,5 +61,6 @@ mod todo;
 mod waits;
 mod waits_on;
 mod watch_lines;
+mod watch_module;
 mod watching;
 mod while_answering;

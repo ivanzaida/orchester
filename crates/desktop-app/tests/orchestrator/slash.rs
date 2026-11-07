@@ -88,6 +88,12 @@ fn orchestrator_slash_lists_the_chats_commands_and_runs_history_by_keyboard() {
   screen.until("the focus on History", |screen| {
     screen.text(HISTORY).contains("Enter") && !screen.text(NEW).contains("Enter")
   });
+  // *Watch modules* runs (ORC-772); the faded watch commands after it are passed over, back to the first row.
+  let watch_module = "orchestrator-composer-slash-watch-module";
+  screen.key(("ArrowDown", "ArrowDown"), false);
+  screen.until("the focus on Watch modules", |screen| {
+    screen.text(watch_module).contains("Enter")
+  });
   screen.key(("ArrowDown", "ArrowDown"), false);
   screen.until("the focus back on the first row", |screen| {
     screen.text(NEW).contains("Enter")
@@ -184,8 +190,9 @@ fn orchestrator_slash_menu_opens_over_the_box() {
 }
 
 /// The watch commands after `/wa` (ORC-771, `01 · Watch commands` `h1KHAx`): *Watch modules*, *Watch tasks*, *Stop
-/// watching* and *What I watch*, the typed letters in bold. Until their pickers exist the first two are faded with
-/// why; the last two are faded while the conversation watches nothing. None takes the focus or a press.
+/// watching* and *What I watch*, the typed letters in bold. *Watch modules* has its picker (ORC-772) and takes the
+/// focus; until its picker exists *Watch tasks* is faded with why; the last two are faded while the conversation
+/// watches nothing. A faded one takes neither the focus nor a press.
 #[test]
 fn orchestrator_slash_offers_the_watch_commands_faded_while_nothing_is_watched() {
   let mut screen = on_a_conversation();
@@ -196,20 +203,20 @@ fn orchestrator_slash_offers_the_watch_commands_faded_while_nothing_is_watched()
   assert!(shown.contains("4 of 6"), "{shown}");
   assert!(!screen.exists(NEW) && !screen.exists(HISTORY), "{shown}");
   let rows = [
-    ("watch-module", "Watch modules", "Not available in this version yet"),
-    ("watch-task", "Watch tasks", "Not available in this version yet"),
-    ("unwatch", "Stop watching", "Watches nothing yet"),
-    ("watching", "What I watch", "Watches nothing yet"),
+    ("watch-module", "Watch modules", "Their tasks' events come here", true),
+    ("watch-task", "Watch tasks", "Not available in this version yet", false),
+    ("unwatch", "Stop watching", "Watches nothing yet", false),
+    ("watching", "What I watch", "Watches nothing yet", false),
   ];
   let mut tops = Vec::new();
-  for (name, label, why) in rows {
+  for (name, label, why, runs) in rows {
     let words = screen.text(&row(name)).replace('\u{a0}', " ");
     assert!(words.contains(why), "{name}: {words}");
     assert!(
       words.replace(' ', "").contains(&label.replace(' ', "")),
       "{name}: {words}"
     );
-    assert!(!words.contains("Enter"), "{name} cannot take the focus: {words}");
+    assert_eq!(words.contains("Enter"), runs, "{name} takes the focus: {words}");
     tops.push(screen.bounds(&row(name)).y);
   }
   assert!(tops.windows(2).all(|pair| pair[0] < pair[1]), "in 01's order: {tops:?}");

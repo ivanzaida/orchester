@@ -118,9 +118,13 @@ pub(super) struct PlanParts {
   pub(super) flip: Press,
 }
 
-/// The box, and why the files last given were not attached under it.
+/// The box, and why the files last given were not attached under it. While its chip holds `/watch-module` the field
+/// says what to type (`Hint` `NknmC` in 02 `c8pALl`).
 pub(super) fn composer(ctx: &mut Ctx, view: &View, mut composer: ComposerBox<'_>) -> Column {
   let not_set_up = composer.set_up.is_some();
+  if view.slash.held_command() == Some(super::watch::MODULE) {
+    composer.placeholder = ctx.t("orchestrator.watch.modules.placeholder");
+  }
   let (fill, stroke) = match (not_set_up, composer.focused.get()) {
     (true, _) => (PaletteColor::SurfacePanel, PaletteColor::Border),
     (false, true) => (PaletteColor::SurfaceInput, PaletteColor::BorderFocus),

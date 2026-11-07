@@ -128,7 +128,10 @@ impl Component for Composer {
       detail: Arc::from("Their events come here"),
       does: Some(Does::Take(Taking {
         picker: Arc::new(Regions),
-        apply: Arc::new(move |done| applied.lock().push(done)),
+        apply: Arc::new(move |done| {
+          applied.lock().push(done);
+          true
+        }),
       })),
     };
     let menu = slash::menu(
