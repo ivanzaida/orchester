@@ -92,6 +92,23 @@ fn a_profile_with_no_connection_of_its_kind_says_to_add_one() {
 }
 
 #[test]
+fn a_local_profile_needs_only_the_connection_it_runs_on() {
+  let id = ResourceId::generate();
+  let own = ConnectionId::generate();
+  let needs = Needs::local_profile(id, CLAUDE);
+  // Two connections of its kind: its own is its pick, so nothing is asked of the person.
+  let here = Here::nothing()
+    .with_connection(own, CLAUDE)
+    .with_connection(ConnectionId::generate(), CLAUDE)
+    .with_pick(id, own);
+  assert_eq!(readiness(&needs, &here), Readiness::READY);
+  assert_eq!(
+    readiness(&needs, &Here::nothing()).missing(),
+    [connection_part(id, CLAUDE, ConnectionProblem::NoneOfKind)]
+  );
+}
+
+#[test]
 fn one_connection_of_the_kind_is_used_without_asking() {
   let id = ResourceId::generate();
   let needs = profile(id, &profile_body(CLAUDE, &[], &[]), &[]);

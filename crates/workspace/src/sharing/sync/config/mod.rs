@@ -9,7 +9,7 @@
 //! from this computer through [`RemoteResourceStore`]; Share uploads the project's own configuration ([`upload`]).
 
 mod bindings;
-mod here;
+mod bindings_here;
 mod profile;
 mod publish;
 mod team_body;
@@ -35,7 +35,7 @@ use serde_json::Value;
 
 use self::profile::cache_profile;
 pub use self::{
-  here::{Here, HereReference, Needer, Standing, chosen_at},
+  bindings_here::{BindingsHere, HereReference, Needer, Standing, chosen_at},
   publish::{ConfigServer, RemoteResourceStore},
   upload::{keep_uploaded_configuration, upload_configuration},
   waiting::{Waiting, use_here, waiting},

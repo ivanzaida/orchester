@@ -74,6 +74,12 @@ impl Needs {
     Ok(Self(needs))
   }
 
+  /// A profile of a local project: a connection of the CLI kind of the one it runs on, which is its pick. It chooses no
+  /// team MCP server and names no team secret.
+  pub fn local_profile(profile: ResourceId, cli: AgentProvider) -> Self {
+    Self(vec![Need::Connection { profile, cli }])
+  }
+
   /// A team MCP server on its own.
   pub fn mcp_server(server: &McpNeed) -> Self {
     let program = server.runs_program.then_some(Need::McpProgram(server.server));
