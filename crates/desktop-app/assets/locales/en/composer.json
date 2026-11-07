@@ -182,14 +182,14 @@
           "label": "Stop watching"
         },
         "watch": {
-          "nothing": "Watches nothing yet",
-          "notYet": "Not available in this version yet"
+          "nothing": "Watches nothing yet"
         },
         "watchModule": {
           "detail": "Their tasks' events come here",
           "label": "Watch modules"
         },
         "watchTask": {
+          "detail": "Only these tasks' events",
           "label": "Watch tasks"
         },
         "watching": {

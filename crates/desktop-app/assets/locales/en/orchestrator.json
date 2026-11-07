@@ -505,11 +505,19 @@
       "failed": "Nothing was watched",
       "personOnly": "Only you can start watching from the composer: a command sent by automation is not applied. The chips and the order stay.",
       "dismiss": "Dismiss",
+      "picker": {
+        "count": "{{shown}} of {{total}}",
+        "added": "Added",
+        "ledIn": "Led in «{{title}}» ↗",
+        "ledInUnnamed": "Led in another conversation ↗",
+        "unreadable": "The tasks of {{project}} can't be read",
+        "unreadableNote": "{{reason}} Nothing was added; the chips you have stay.",
+        "tryAgain": "Try again"
+      },
       "modules": {
         "placeholder": "Search modules — then write what to do with their events",
         "section": "Modules",
         "also": "Also",
-        "count": "{{shown}} of {{total}}",
         "nothing": "No module matches “{{query}}”",
         "withoutModule": "Tasks without a module",
         "project": "Everything in {{project}}",
@@ -530,14 +538,21 @@
         "metaWaiting": "{{tasks}} · {{running}} · {{waiting}}",
         "allDone": "{{tasks}} · all done",
         "allClosed": "{{tasks}} · all done or canceled",
-        "added": "Added",
-        "ledIn": "Led in «{{title}}» ↗",
-        "ledInUnnamed": "Led in another conversation ↗",
         "ledHere": "Watched here",
-        "nothingLeft": "Nothing left to watch",
-        "unreadable": "The tasks of {{project}} can't be read",
-        "unreadableNote": "{{reason}} Nothing was added; the chips you have stay.",
-        "tryAgain": "Try again"
+        "nothingLeft": "Nothing left to watch"
+      },
+      "tasks": {
+        "placeholder": "Search tasks by key or title — then write what to do with their events",
+        "section": "Tasks",
+        "nothing": "No task matches “{{query}}”",
+        "inModule": "{{title}} · {{module}}",
+        "withoutModule": "{{title}} · no module",
+        "ledHere": "Watched here",
+        "comesHere": "Comes here via {{module}}",
+        "comesHereModule": "Comes here via its module",
+        "comesHereWithoutModule": "Comes here via the tasks without a module",
+        "comesHereProject": "Comes here via the whole project",
+        "nothingToWatch": "nothing to watch"
       },
       "unwatch": {
         "section": "Watched here",

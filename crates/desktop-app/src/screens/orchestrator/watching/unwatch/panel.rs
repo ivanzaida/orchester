@@ -1,12 +1,12 @@
-//! The `/unwatch` picker's panel (`Unwatch picker` `eK1DB` in `Parts · /unwatch` `NtsXc`), drawn as the /watch-module
-//! picker draws its rows (`super::super::super::watch::rows`): a `Menu` panel 560 wide. Under the head *Watched here*
-//! with how many subscriptions it shows at its end (*1 of 3* once something is typed), a 28 high row for each: its 14
-//! icon in `text_secondary`, its name in 12 `text_primary` with the letters that match what was typed in 600, its kind
-//! and since when in 11 `text_muted` filling the row, and at its end what is still open there in 11: in `warning`
-//! while something waits for the person or is stopped at a limit, `text_muted` otherwise, *nothing open* when nothing
-//! is. A row that is a chip already adds *Added* with its check. Then a `border` line and *All of them* (`eye-off`,
-//! *stop watching everything here*, *cancels nothing*), and the keys with *Type to filter* at their end. The focused
-//! row is on `hover`.
+//! The `/unwatch` picker's panel (`Unwatch picker` `eK1DB` in `Parts · /unwatch` `NtsXc`), drawn as the /watch
+//! pickers draw their rows (`super::super::super::watch::panel`): a `Menu` panel 560 wide. Under the head *Watched
+//! here* with how many subscriptions it shows at its end (*1 of 3* once something is typed), a 28 high row for each:
+//! its 14 icon in `text_secondary`, its name in 12 `text_primary` with the letters that match what was typed in 600,
+//! its kind and since when in 11 `text_muted` filling the row, and at its end what is still open there in 11: in
+//! `warning` while something waits for the person or is stopped at a limit, `text_muted` otherwise, *nothing open* when
+//! nothing is. A row that is a chip already adds *Added* with its check. Then a `border` line and *All of them*
+//! (`eye-off`, *stop watching everything here*, *cancels nothing*), and the keys with *Type to filter* at their end.
+//! The focused row is on `hover`.
 
 use std::sync::Arc;
 
@@ -26,7 +26,7 @@ use orchester_workspace::{
 
 use super::super::answer::{since, target_name};
 use crate::{
-  screens::orchestrator::watch::rows::{apply_key, keys, line, name},
+  screens::orchestrator::watch::panel::{apply_key, keys, line, matched_label},
   theme::{ExtraColor, ExtraSpacing, IconSize, SlashText},
   ui::{
     icon::{Icon, icon},
@@ -204,7 +204,7 @@ fn row(ctx: &Ctx, shown: &Shown<'_>, (at, choice): (usize, &Choice), (meta, end)
     .describe("focused", focused.to_string())
     .describe("added", added.is_some().to_string())
     .child(icon(choice.icon, IconSize::Md, PaletteColor::TextSecondary))
-    .child(name(&choice.label, shown.filter))
+    .child(matched_label(&choice.label, shown.filter, false))
     .child(
       Text::new(meta)
         .variant(TypographyStyle::Caption)
@@ -263,7 +263,7 @@ fn open_work(ctx: &Ctx, watched: &WatchedSubscription) -> (Arc<str>, bool) {
 fn footer(ctx: &Ctx, id: &str) -> Element {
   keys(
     ctx,
-    &format!("{id}-unwatch"),
+    (&format!("{id}-unwatch"), &format!("{id}-unwatch-key")),
     &[
       ("move", "move"),
       ("enter", "add"),

@@ -90,21 +90,14 @@ fn history(ctx: &Ctx, view: &View) -> SlashCommand {
   }
 }
 
-/// The watch commands: *Watch modules* with its picker ([`super::watch`], ORC-772); *Stop watching* with its picker
-/// (`/unwatch`, ORC-774) and *What I watch* ([`super::watching`], ORC-775), offered while the conversation leads
-/// something; *Watch tasks* faded with why until its picker exists (ORC-773 gives it `Does::Take` with its
-/// `ui::slash::ArgumentPicker`).
+/// The watch commands: *Watch modules* and *Watch tasks* with their pickers ([`super::watch`], ORC-772, ORC-773);
+/// *Stop watching* with its picker (`/unwatch`, ORC-774) and *What I watch* ([`super::watching`], ORC-775), offered
+/// while the conversation leads something.
 fn watch_commands(ctx: &Ctx, view: &View, project: &ShownProject) -> [SlashCommand; 4] {
   let root = &project.open.repo_root;
   [
     super::watch::module_command(ctx, view, project),
-    SlashCommand {
-      name: "watch-task",
-      icon: Icon::ScanEye,
-      label: ctx.t("composer.slash.command.watchTask.label"),
-      detail: ctx.t("composer.slash.command.watch.notYet"),
-      does: None,
-    },
+    super::watch::task_command(ctx, view, project),
     view.what_i_watch.unwatch_command(ctx, root.clone()),
     view.what_i_watch.command(ctx, root.clone(), &view.follow),
   ]

@@ -30,7 +30,7 @@ const PICKER: &str = "orchestrator-composer-watch-module-picker";
 const CHIP: &str = "orchestrator-composer-command-chip";
 
 /// A task titled `title`, with no pipeline.
-fn task(db: &mut ProjectDb, title: &str) -> TaskId {
+pub(super) fn task(db: &mut ProjectDb, title: &str) -> TaskId {
   let details = TaskDetails {
     title: Name::new(title).expect("a title"),
     brief: "".into(),
@@ -44,7 +44,7 @@ fn task(db: &mut ProjectDb, title: &str) -> TaskId {
 }
 
 /// Module `name` holding the tasks titled `titles`.
-fn module(db: &mut ProjectDb, name: &str, titles: &[&str]) -> (ModuleId, Vec<TaskId>) {
+pub(super) fn module(db: &mut ProjectDb, name: &str, titles: &[&str]) -> (ModuleId, Vec<TaskId>) {
   let details =
     ModuleDetails::new(Name::new(name).expect("a name"), "", (None, None), ModuleState::Open).expect("details");
   let module = db.create_module(details, Timestamp::now()).expect("a module").id();
