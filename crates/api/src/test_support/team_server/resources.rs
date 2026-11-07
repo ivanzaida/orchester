@@ -3,7 +3,9 @@
 //! resource"), in the contract's shapes: numbered immutable versions, `409 slug_taken`, `409 version_conflict` with the
 //! latest, `409 revision_conflict` with the resource as it is, and `403 not_admin` for a member's write. The body of an
 //! MCP server is read as core's `TeamMcpServer`, so the stand-in refuses (`422 invalid`, reason `body`) a body with a
-//! path, a value or a local id, and computes `widens` with core's rules; the other kinds' bodies are kept as sent.
+//! path, a value or a local id, and computes `widens` with core's rules; the other kinds' bodies are kept as sent. A
+//! version's references are checked as the contract says (`422 invalid`, reason `references`): none repeats a target,
+//! and each team resource is an existing, not archived resource of that kind in the same project.
 //! `GET …/resources/{r}/used-by` answers from the stand-in's own resources and the runs a test pins with
 //! [`TeamServer::pin_run`] (the stand-in builds no execution bundle, so the pins stand in for the bundle's). A repeated
 //! idempotency key returns the first answer. Not served yet: `POST …/resources/import` and the files.
@@ -19,7 +21,7 @@ use sha2::{Digest, Sha256};
 pub use used_by::{PinnedRun, RunReport};
 
 use super::{Person, Standing, State, TeamServer};
-use crate::{ResourceCreate, ResourcePatch, SharedResourceKind, VersionPublish};
+use crate::{ReferenceTarget, ResourceCreate, ResourcePatch, SharedResourceKind, VersionPublish};
 
 /// The resources of every project of the stand-in, by project id.
 #[derive(Default)]
@@ -137,6 +139,9 @@ impl Project {
     let Some(widens) = widened(create.kind, None, &create.version.body) else {
       return invalid("body");
     };
+    if !self.references_hold(&create.version.references) {
+      return invalid("references");
+    }
     let attribution = self.changed();
     let version = version(&id, 1, (create.version.body, create.version.references), None);
     let version = with(version, [("published", attribution.clone()), ("widens", json!(widens))]);
@@ -178,6 +183,7 @@ impl Project {
     if let Some(first) = self.answers.get(&key) {
       return first.clone();
     }
+    let references_hold = self.references_hold(&publish.references);
     let attribution = self.changed();
     let Some(stored) = self.find(resource) else {
       return (404, error("not_found"));
@@ -200,6 +206,9 @@ impl Project {
     else {
       return invalid("body");
     };
+    if !references_hold {
+      return invalid("references");
+    }
     let published = version(
       &stored.resource["id"],
       number + 1,
@@ -216,6 +225,20 @@ impl Project {
     let answer = (201, json!({"version": published}));
     self.answers.insert(key, answer.clone());
     answer
+  }
+
+  /// Whether `references` hold: none repeats a target (the order is kept as sent), and each team resource is a resource
+  /// of its kind in this project that is not archived.
+  fn references_hold(&self, references: &[ReferenceTarget]) -> bool {
+    references.iter().enumerate().all(|(place, reference)| {
+      !references[..place].contains(reference)
+        && match reference {
+          ReferenceTarget::TeamResource { kind, id } => self.resources.iter().any(|stored| {
+            stored.id() == &json!(id) && stored.resource["kind"] == json!(kind) && stored.resource["archived"] == false
+          }),
+          ReferenceTarget::CliKind { .. } | ReferenceTarget::SecretName { .. } => true,
+        }
+    })
   }
 
   fn patch(&mut self, resource: &str, body: &str) -> (u16, Value) {

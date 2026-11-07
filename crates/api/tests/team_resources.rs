@@ -2,74 +2,19 @@
 //! archive, serves its versions, refuses a body with a path, a value or a local id, and computes `widens`; and it
 //! answers used-by from its own resources and the runs a test pins.
 
-use std::{
-  io::{Read, Write},
-  net::TcpStream,
-};
+#[path = "support/team.rs"]
+mod team;
 
 use orchester_api::{
   ResourceCreated, Resources, SharedResource, SharedResourceKind, SharedVersion, UsedBy, Versions,
-  test_support::team_server::{CODE, Person, PinnedRun, RunReport, Standing, TeamServer},
+  test_support::team_server::{Person, PinnedRun, RunReport, Standing},
 };
 use orchester_core::{
   id::{IdempotencyKey, ResourceId, RunId},
   resource::VersionNumber,
 };
 use serde_json::{Value, json};
-
-struct Team {
-  server: TeamServer,
-  token: String,
-  project: String,
-}
-
-impl Team {
-  fn start(standing: Standing) -> Self {
-    let server = TeamServer::start();
-    server.share(&[("Kontur", "kontur", None)]);
-    server.stand_as(standing);
-    let project = server.project("kontur").expect("the shared project").to_string();
-    let mut team = Self {
-      server,
-      token: String::new(),
-      project,
-    };
-    let (status, joined) = team.call("POST", "/api/v1/auth/code", &json!({"code": CODE}));
-    assert_eq!(status, 201, "{joined}");
-    joined["token"].as_str().expect("a token").clone_into(&mut team.token);
-    team
-  }
-
-  fn call(&self, method: &str, path: &str, body: &Value) -> (u16, Value) {
-    let address = self.server.url().trim_start_matches("http://").to_owned();
-    let mut stream = TcpStream::connect(address).expect("the stand-in listens");
-    let body = body.to_string();
-    let request = format!(
-      "{method} {path} HTTP/1.1\r\nHost: stand-in\r\nAuthorization: Bearer {}\r\nContent-Type: application/json\r\n\
-       Content-Length: {}\r\n\r\n{body}",
-      self.token,
-      body.len()
-    );
-    stream.write_all(request.as_bytes()).expect("send");
-    let mut answer = String::new();
-    stream.read_to_string(&mut answer).expect("an answer");
-    let (head, body) = answer.split_once("\r\n\r\n").expect("a head and a body");
-    let status = head
-      .split_whitespace()
-      .nth(1)
-      .and_then(|code| code.parse().ok())
-      .expect("a status");
-    (status, serde_json::from_str(body).unwrap_or(Value::Null))
-  }
-
-  fn resources(&self, method: &str, rest: &str, body: &Value) -> (u16, Value) {
-    self.call(
-      method,
-      &format!("/api/v1/projects/{}/resources{rest}", self.project),
-      body,
-    )
-  }
-}
+use team::Team;
 
 fn server_body(program: &str) -> Value {
   json!({"name":"knowledge","launch":{"kind":"program","program":program,"args":["-y"],"variables":["TOKEN"]}})
@@ -204,6 +149,16 @@ fn create_all(team: &Team, resources: &[Value]) {
   }
 }
 
+/// A resource's v2 names the resource itself, which a v1 cannot as it does not exist yet; it is never in its own list.
+fn name_themselves(team: &Team, tools: &[ResourceId]) {
+  for itself in tools {
+    let mut next = publish(1, &json!({}));
+    next["references"] = tool_reference(*itself);
+    let (status, published) = team.resources("POST", &format!("/{itself}/versions"), &next);
+    assert_eq!(status, 201, "{published}");
+  }
+}
+
 fn listed(used: &UsedBy) -> Vec<(SharedResourceKind, &str, u32)> {
   used
     .resources
@@ -221,7 +176,7 @@ fn stand_in_answers_used_by_with_the_latest_versions_whose_typed_fields_name_the
   create_all(
     &team,
     &[
-      created(tool, "tool", ("deploy", "Deploy"), (&json!({}), &tool_reference(tool))),
+      created(tool, "tool", ("deploy", "Deploy"), (&json!({}), &none)),
       created(profile, "agent_profile", ("coder", "Coder"), (&json!({}), &none)),
       created(delivery, "pipeline", ("delivery", "Delivery"), (&empty, &none)),
       created(
@@ -258,9 +213,10 @@ fn stand_in_answers_used_by_with_the_latest_versions_whose_typed_fields_name_the
           &none,
         ),
       ),
-      created(own, "tool", ("own", "Own"), (&json!({}), &tool_reference(own))),
+      created(own, "tool", ("own", "Own"), (&json!({}), &none)),
     ],
   );
+  name_themselves(&team, &[tool, own]);
   // Only the latest version counts: the pipeline names the profile and the tool in its second version.
   let latest = pipeline_of(&[agent_step(profile), json!({"tool":{"tool":tool}})]);
   let (status, published) = team.resources("POST", &format!("/{delivery}/versions"), &publish(1, &latest));

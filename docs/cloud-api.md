@@ -147,21 +147,35 @@ id or a path from somebody's computer (`docs/design/team-configuration.md`). A v
 ```text
 { type: "cli_kind",      cli: AgentProvider }                // "codex_cli" | "claude_code_cli" | "anthropic_api" | "openai_api"
 { type: "team_resource", kind: SharedResourceKind, id }      // an MCP server, tool, skill, instruction or agent profile
-{ type: "secret_name",   name }                              // a capital letter, then capital letters, digits and "_"
+{ type: "secret_name",   name }                              // core's `SecretName`, below
 ```
 
 - **`cli_kind`** replaces the reference to a connection. A profile names the CLI it runs with; each computer runs it on
   one of its own connections of that kind and the person picks when there are several. A version without one names no
-  CLI.
+  CLI, and **the server does not require one**: until ORC-820 and ORC-830 change the profile and tool bodies, the
+  desktop refuses to publish or share a body that names a connection, an MCP server or a secret of the computer
+  (`SharingError::LocalEntitiesNamed`) and sends `references: []`, so a profile version arrives with no `cli_kind` and
+  is accepted. A computer that finds none in a profile it starts refuses the start (`team_read_failed`).
 - **`team_resource`** replaces the references to an MCP server (by a computer's connection id) and to a tool. `id` is
   the resource's id on the server, and `kind` its kind (`mcp_server`, `tool`, `skill`, `instruction`, `agent_profile`,
-  `pipeline`, `team_reviewer`; never agent testing's kinds). The server accepts it only for a resource of that kind in
-  the same project that is not archived.
+  `pipeline`, `team_reviewer`; never agent testing's kinds). The server accepts it only for an existing resource of
+  that kind in the same project that is not archived (`422 invalid { reason: "references" }` for an unknown id, an id of
+  another kind or project, or an archived resource; a resource cannot name itself in its own v1, which it has not got
+  yet). The stand-in team server enforces this too.
 - **`secret_name`** replaces the reference to a secret by a computer's secret id. The server holds the name, never a
-  value; each computer fills in the value.
+  value; each computer fills in the value. The name follows core's `SecretName` rule: a capital letter, then capital
+  letters, digits and `_`, at most 128 characters. Surrounding whitespace is not part of the name: it is trimmed when the
+  reference is read, so the server stores and returns `STAGING_TOKEN` for `"  STAGING_TOKEN "`, and a name that breaks
+  the rule, or is blank, is a malformed request (`422 invalid { reason: "shape" }`).
+
+A version's `references` do not repeat a target: the same CLI kind, the same team resource (kind and id) or the same
+secret name twice, compared after the names are trimmed, is `422 invalid { reason: "references" }`. The list keeps the
+order it was sent in; the server neither sorts nor merges it, and `GET …/versions` returns it as published.
 
 A body holds none of these ids either: it has no connection, local MCP server or secret id, which the server refuses
-(`422 invalid { reason: "references" }` for a reference, `{ reason: "body" }` for a body). The kinds' bodies that still
+(`422 invalid { reason: "references" }` for a reference that does not hold, `{ reason: "body" }` for a body, `{ reason:
+"shape" }` for a request that does not parse, such as a reference with another field or a secret name that breaks the
+rule). The kinds' bodies that still
 name a connection, an MCP server or a secret by a computer's id (the agent profile and the tool) change in ORC-820 and
 later tasks; until then a desktop sends no such body, and a server migration rewrites the versions that exist
 (`team-configuration-handover.md`, OP-200). There is no compatibility window: a server and a desktop on different
