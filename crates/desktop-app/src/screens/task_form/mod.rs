@@ -32,6 +32,7 @@ mod module;
 mod plan;
 mod points;
 mod priority;
+mod readiness;
 mod reason;
 mod sources;
 mod state;
@@ -235,6 +236,11 @@ impl Nav {
     self
       .navigation
       .replace(self.route(ProjectPage::Task(key.clone(), view)));
+  }
+
+  /// What opens the Agents page, where what a computer lacks is listed, where a press asks.
+  pub fn to_agents(&self) -> Open {
+    self.navigation.to(self.route(ProjectPage::Agents))
   }
 
   /// What opens the Pipelines library where a press asks.

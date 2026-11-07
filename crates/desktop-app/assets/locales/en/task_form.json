@@ -253,7 +253,10 @@
         "budget": "fix the run budget",
         "timeLimit": "fix the time limit",
         "keepComplete": "keep a brief, criteria and a pipeline: the task already ran",
-        "newerVersion": "save your changes on the newer version first"
+        "newerVersion": "save your changes on the newer version first",
+        "notReady": "choose a pipeline that is ready",
+        "reading": "wait while the pipeline's readiness is read",
+        "cannotTell": "read the pipeline's readiness again"
       },
       "also": {
         "title": "a title",
@@ -264,7 +267,10 @@
         "budget": "a valid run budget",
         "timeLimit": "a valid time limit",
         "keepComplete": "a brief, criteria and a pipeline",
-        "newerVersion": "your changes saved on the newer version"
+        "newerVersion": "your changes saved on the newer version",
+        "notReady": "a pipeline that is ready",
+        "reading": "the pipeline's readiness read",
+        "cannotTell": "the pipeline's readiness read again"
       }
     },
     "discard": {
@@ -350,6 +356,50 @@
       "unchosen": "Save unavailable: choose a version for {{fields}}.",
       "changedMeanwhile": "This task changed meanwhile, so nothing was saved. Its newer version is read again.",
       "chosenNewer": "Chosen: the newer version"
+    },
+    "readiness": {
+      "ready": {
+        "team": "Ready here",
+        "local": "Ready"
+      },
+      "missing": {
+        "one": "{{count}} thing missing",
+        "other": "{{count}} things missing"
+      },
+      "missingHere": {
+        "one": "{{count}} thing missing here",
+        "other": "{{count}} things missing here"
+      },
+      "notReady": {
+        "team": "Not ready here",
+        "local": "Not ready"
+      },
+      "unknown": "Couldn't tell",
+      "line": {
+        "team": "{{name}} is not ready on this computer · {{what}}",
+        "local": "{{name}} is not ready · {{what}}"
+      },
+      "reading": {
+        "team": "Reading whether {{name}} is ready on this computer…",
+        "local": "Reading whether {{name}} is ready…"
+      },
+      "cannotTell": {
+        "team": "Couldn't tell whether {{name}} is ready on this computer",
+        "local": "Couldn't tell whether {{name}} is ready"
+      },
+      "show": "Show",
+      "retry": "Retry",
+      "dot": "·",
+      "undecided": {
+        "notTeamForm": "its version here is not in the team's form",
+        "cannotBePublished": "its version cannot be published",
+        "choosesMcpServer": "it chooses an MCP server the team does not offer",
+        "runsUnknown": "it runs a profile or tool this computer has no version of",
+        "connectionGone": "a profile runs on a connection the project no longer has",
+        "teamToolSecretById": "a tool holds a secret that cannot be checked on a team",
+        "secretGone": "a tool uses a secret the project no longer has",
+        "secretUnreadable": "the keychain did not say whether a secret has a value"
+      }
     }
   }
 }

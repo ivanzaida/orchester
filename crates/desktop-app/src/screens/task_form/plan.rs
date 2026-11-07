@@ -26,6 +26,7 @@ use orchester_workspace::tasks::{
 use super::{
   Nav,
   chips::{ChipState, HelpPlace, Look, MenuOption, PropertyChip},
+  readiness::option_status,
   state::View,
 };
 use crate::{
@@ -111,6 +112,7 @@ fn menu(ctx: &mut Ctx, view: &View, (state, nav): (&ChipState, &Nav), pick: &Sig
         title: choice_label(ctx, choice),
         help: Some(option_detail(ctx, choice)),
         help_place: HelpPlace::UnderIcon,
+        status: option_status(ctx, view, choice),
         chosen: chosen == Some(id),
         mono: false,
       }

@@ -235,6 +235,7 @@ fn from_module(ctx: &Ctx, props: &MenuProps, chosen: &BasePick) -> Element {
     mono: false,
     help: Some(help),
     help_place: HelpPlace::UnderIcon,
+    status: None,
     chosen: *chosen == BasePick::Inherit,
   }
   .render(&props.open, move || pick.set(BasePick::Inherit))
@@ -261,6 +262,7 @@ fn checked_out(ctx: &Ctx, props: &MenuProps, (chosen, menu): (&BasePick, Option<
     mono: false,
     help: Some(help),
     help_place: HelpPlace::UnderIcon,
+    status: None,
     chosen: *chosen == BasePick::CheckedOut,
   }
   .render(&props.open, move || pick.set(BasePick::CheckedOut))
@@ -304,6 +306,7 @@ fn branches(
         mono: true,
         help: None,
         help_place: HelpPlace::UnderIcon,
+        status: None,
         chosen: chosen.branch() == Some(branch),
       }
       .render(&props.open, move || pick.set(picked.clone()))
@@ -327,6 +330,7 @@ fn branches(
           [("branch", remote.local().as_str())],
         )),
         help_place: HelpPlace::UnderIcon,
+        status: None,
         chosen: *chosen == picked,
       }
       .render(&props.open, move || pick.set(picked.clone()))

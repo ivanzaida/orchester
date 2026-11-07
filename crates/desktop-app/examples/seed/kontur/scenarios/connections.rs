@@ -188,7 +188,7 @@ fn mcp_servers(kontur: &mut Kontur, at: Timestamp) -> Result<ConnectionId, SeedE
   Ok(docs.id())
 }
 
-fn server(
+pub(super) fn server(
   (named, transport): (&str, McpTransport),
   environment: McpEnvironment,
   at: Timestamp,
