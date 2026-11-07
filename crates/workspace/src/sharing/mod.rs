@@ -67,6 +67,7 @@ pub use self::{
   offer::OfferedProject,
   password::{PASSWORD_CHARS, PasswordProblem, password_problem},
   place::{Place, Places},
+  project::NotArchived,
   team_created::{Created, NotCreated},
   trust::{ConfirmedPin, PresentedCertificate, Trust},
 };

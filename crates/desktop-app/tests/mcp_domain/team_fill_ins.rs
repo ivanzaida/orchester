@@ -31,18 +31,23 @@ use super::{Served, accounts::add_account, vault::MemoryVault};
 const SECRET_VALUE: &str = "fake-value-7Qx2";
 
 /// The team project the tests fill in: Kontur shared on a server, with the team's profiles and MCP servers cached.
-struct Team {
-  served: Served,
-  repo: PathBuf,
-  app_database: PathBuf,
-  project: ProjectId,
-  server: ServerId,
+pub(super) struct Team {
+  pub(super) served: Served,
+  pub(super) repo: PathBuf,
+  pub(super) app_database: PathBuf,
+  pub(super) project: ProjectId,
+  pub(super) server: ServerId,
   codex_profile: ResourceId,
   claude_profile: ResourceId,
-  program_server: ResourceId,
+  pub(super) program_server: ResourceId,
 }
 
 fn team() -> Team {
+  team_as(MemberRole::Owner)
+}
+
+/// The team project as a person with the role `standing` in it sees it.
+pub(super) fn team_as(standing: MemberRole) -> Team {
   let codex = Path::new(env!("CARGO_MANIFEST_DIR")).join("Cargo.toml");
   let (served, seeded) = Served::seeded_with("empty", Some(codex));
   let server = ServerId::generate();
@@ -72,6 +77,8 @@ fn team() -> Team {
       .expect("a team MCP server"),
     Vec::new(),
   );
+  // The team's resources were set up as its owner; the person then has the role the test asks for.
+  db.record_sharing_state(Some(standing), None, None).expect("the role");
   drop(db);
   Team {
     served,
@@ -147,12 +154,12 @@ fn team_resource<B: ResourceBody>(
 }
 
 impl Team {
-  fn db(&self) -> ProjectDb {
+  pub(super) fn db(&self) -> ProjectDb {
     ProjectDb::open(&self.repo).expect("the project database opens")
   }
 
   /// How often the project's connections were counted as changed: what the screens read again on.
-  fn connection_changes(&self) -> u64 {
+  pub(super) fn connection_changes(&self) -> u64 {
     self
       .served
       .services()
@@ -364,10 +371,6 @@ fn domain_team_mcp_server_program_is_person_only_always_and_changes_nothing() {
     assert!(!team.program_set(team.program_server), "no program was kept");
     assert_eq!(team.connection_changes(), changes);
   }
-  // Anything else of a team server is the team's to change.
-  let rename = json!({ "project": "Kontur", "server": "knowledge", "name": "other" });
-  let refused = team.served.refused("update_mcp_server", &rename);
-  assert_eq!(refused["code"], "team_resource", "{refused}");
 }
 
 #[test]

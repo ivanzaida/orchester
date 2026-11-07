@@ -22,7 +22,7 @@ pub use super::mcp_server_input::{AddMcpServer, InServer, SetMcpServerEnabled, U
 use super::{
   mcp_server_json::server_result,
   team_fill_ins::{self, team_resource_named},
-  widening,
+  team_mcp_servers, widening,
 };
 pub(super) use super::{
   mcp_server_json::{servers_json, without_query_values},
@@ -40,6 +40,9 @@ use crate::{
 };
 
 pub async fn add_mcp_server(services: &Services, args: AddMcpServer) -> Result<Value, ToolError> {
+  if team_mcp_servers::is_team(services, &args.project).await? {
+    return team_mcp_servers::add(services, args).await;
+  }
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;
@@ -56,13 +59,13 @@ pub async fn add_mcp_server(services: &Services, args: AddMcpServer) -> Result<V
 }
 
 pub async fn update_mcp_server(services: &Services, args: UpdateMcpServer) -> Result<Value, ToolError> {
+  if let Some(found) = team_mcp_servers::named(services, &args.project, &args.server).await? {
+    return team_mcp_servers::update(services, found, args).await;
+  }
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;
     let db = ProjectDb::open(&open.repo_root)?;
-    if team_resource_named(&db, ResourceKind::McpServer, &args.server)?.is_some() {
-      return Err(team_fill_ins::update_server(args.fields.program.is_some()));
-    }
     let stored = server_named(&db, &args.server)?;
     let secrets = db.secrets()?;
     let text = filled(McpServerText::of(&stored, &secrets), args.fields, &secrets)?;
@@ -76,6 +79,9 @@ pub async fn update_mcp_server(services: &Services, args: UpdateMcpServer) -> Re
 }
 
 pub async fn remove_mcp_server(services: &Services, args: InServer) -> Result<Value, ToolError> {
+  if let Some(found) = team_mcp_servers::named(services, &args.project, &args.server).await? {
+    return team_mcp_servers::remove(services, found).await;
+  }
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;

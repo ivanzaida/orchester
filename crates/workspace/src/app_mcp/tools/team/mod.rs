@@ -54,7 +54,7 @@ pub(super) async fn of(services: &Services, named: &str) -> Result<Option<Team>,
 
 impl Team {
   /// A session of the team server, signed in for the project's link; refused when it cannot be made.
-  async fn session(&self, services: &Services) -> Result<TeamSession, ToolError> {
+  pub(super) async fn session(&self, services: &Services) -> Result<TeamSession, ToolError> {
     services
       .servers
       .team_session(self.link.server, self.link.project)

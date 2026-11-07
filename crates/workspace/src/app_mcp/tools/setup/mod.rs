@@ -38,6 +38,8 @@ mod skills;
 mod stacks;
 mod storage;
 mod team_fill_ins;
+mod team_mcp_body;
+mod team_mcp_servers;
 mod team_pipeline;
 mod tool_input;
 mod tool_program;

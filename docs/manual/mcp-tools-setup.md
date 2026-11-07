@@ -263,6 +263,20 @@ Always `person_only` unless AP is on. Returns the server as `list_connections` l
 | `url`               | string \| null                 | —    | Remote server, `http://` or `https://`. Not with `program`.                                         |
 | `authorization`     | Authorization \| null          | no   | What a remote server is sent (see below).                                                           |
 | `exempt_tools`      | array<string> \| null          | no   | The server's tools that run without asking, for profiles that ask before MCP actions.              |
+| `variable_names`    | array<string> \| null          | no   | Team project only: the variables the program needs, by name (see below). Not with `url`.            |
+| `secret_headers`    | array<string> \| null          | no   | Team project only: the headers a remote server is sent a secret in (`Authorization`, `X-API-Key`). Not with `program`. |
+
+**In a team project** the MCP server is the team's resource, and only an admin changes it: a member is refused
+`not_admin` by all three tools, before anything else. `add_mcp_server` creates it as **v1** on the team server (no
+draft); it is `person_only` unless AP is on. Offline, the new server waits in the outbox and the answer carries
+`waiting_for_server: {code: "team_server_unreachable"}`; a server the team server refuses is taken back
+(`team_server_refused`). The team holds names only, so `program` must be a name looked up on the search path (`npx`;
+a path is refused as `team_path_refused`, as is an absolute `working_directory`), `environment` and `authorization`
+(values, secrets) are refused as `team_value_refused`, and the variables and secret headers are named in
+`variable_names` and `secret_headers`; each computer sets the program's path and the values itself. The answer is the
+team server as `{id, name, team: true, published_version, launch, exempt_tools}`. In a project of this computer's
+own `variable_names` and `secret_headers` are refused (`field_not_applicable`) and nothing changes: its servers are
+plain rows of the project, without versions.
 
 **Authorization** (`scheme` selects the variant; each `secret` is an active project secret `NAME@environment`, never
 a value):
@@ -287,6 +301,15 @@ endpoint, an authorization that sends a different secret (another secret, scheme
 other than the harmless ones (removals included), a variable that takes a secret, and a tool added to
 `exempt_tools`. The judgement is made on the fields as given, before anything reads the disk.
 
+On a team's MCP server (id or name, in a team project) an admin's change that differs from the version this computer
+uses is saved as the draft and **published as the next version** on the team server at once (`published_version`,
+`waiting_for_server` while the server cannot be reached; a version the server refuses stays on this computer, unsent,
+and the call is refused as `team_server_refused`); a change that changes nothing publishes nothing and answers
+`unchanged: true`. What widens (another program or its arguments, another address, a tool added to `exempt_tools`, a
+different kind of server) is `person_only` unless AP is on. The server keeps its name (`name_not_editable`).
+Giving it a `program` is `person_only` always, also while AP is on, with nothing changed: the program's path is this
+computer's.
+
 ### `remove_mcp_server` — changes data
 
 Removes a server from a project. Refused as `in_use` while a profile's draft or latest published version chooses it
@@ -294,6 +317,16 @@ Removes a server from a project. Refused as `in_use` while a profile's draft or 
 settings.
 
 Parameters: `project` (string, req.), `server` (string, req.: id or name).
+
+A team's MCP server (id or name, in a team project) is **archived** on the team server instead, by an admin, and is
+never refused for being used. The answer first reads what uses it and gives
+`{removed: {id, name, team: true, archived: true}, used_by: {resources, runs}, runs_stopping_here}`: `used_by` is the
+team server's list (the other resources whose latest version names it and the runs that have not ended and pin it,
+`docs/cloud-api.md`), and `runs_stopping_here` the runs `{run, task}` of this computer whose profile version chooses
+the server. They are the runs that **will** stop, not runs that stopped: this computer cancels them when the team
+server's archive event reaches it, just after the answer. Nothing is archived (and the call is refused with
+`team_unavailable`, `team_read_failed` or `mcp_server_not_found`) while what uses the server cannot be read, and
+`team_server_refused` or `team_server_not_reached` when the archive itself is not taken.
 
 ### `set_mcp_server_enabled` — changes data · gate AP when turning on
 
@@ -306,7 +339,7 @@ Parameters: `project` (req.), `server` (req.), `enabled` (boolean, req.).
 In a team project `server` can also be one of the team's MCP servers (id or name). Turning it off is accepted; turning
 it on is `person_only` always, also while AP is on, with nothing changed: only a person turns a team MCP server on
 here, in the window. The same holds for giving a team MCP server a `program` with `update_mcp_server`; its other
-fields are the team's, changed on the team server (`team_resource`).
+fields are the team's, published as its next version by an admin.
 
 ### `pick_profile_connection` — changes data · team project · gate AP for another account
 

@@ -16,6 +16,12 @@ pub(super) fn filled(
   fields: ServerFields,
   secrets: &[Secret],
 ) -> Result<McpServerText, ToolError> {
+  if let Some(field) = fields.team_only() {
+    return Err(ToolError::refused(
+      "field_not_applicable",
+      vec![Message::new("appMcp.errors.teamOnlyField").with("field", field.to_owned())],
+    ));
+  }
   applies(&text, &fields)?;
   match (&fields.program, &fields.url) {
     (Some(_), Some(_)) => return Err(refused("invalid_transport", "appMcp.errors.mcpProgramAndUrl")),

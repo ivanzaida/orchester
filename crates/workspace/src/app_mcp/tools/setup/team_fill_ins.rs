@@ -131,17 +131,10 @@ pub(super) fn switch_server(
   )
 }
 
-/// `update_mcp_server` on a team MCP server: its program path is a person's alone and everything else is the team's,
-/// changed on the team server.
-pub(super) fn update_server(has_program: bool) -> ToolError {
-  if has_program {
-    person_only("appMcp.errors.teamMcpProgramPersonOnly")
-  } else {
-    ToolError::refused(
-      "team_resource",
-      vec![Message::new("appMcp.errors.teamMcpServerIsTheTeams")],
-    )
-  }
+/// `update_mcp_server` giving a team MCP server a `program`: the path of the file agents run on this computer is a
+/// person's alone, so it is refused whatever else the call changes.
+pub(super) fn program_person_only() -> ToolError {
+  person_only("appMcp.errors.teamMcpProgramPersonOnly")
 }
 
 /// The team's resource of `kind` that `named` names, by its id or its name; `None` in a project that is not shared

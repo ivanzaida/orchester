@@ -20,7 +20,15 @@ pub(super) const SPECS: &[Spec] = &[
                   NAME@environment, never a value), and `exempt_tools`, the server's tools that run without asking \
                   for profiles that ask before MCP actions. A server runs only for profiles that choose it \
                   (save_profile_draft). Refused as person_only unless a person turned on Let automation change \
-                  agent permissions. Returns the server as list_connections lists it.",
+                  agent permissions. Returns the server as list_connections lists it. In a team project it creates \
+                  the team's MCP server as v1 on the team server (admins only, a member is refused not_admin; no \
+                  draft; offline it waits and the answer says waiting_for_server, and a server the team server \
+                  refuses is not created): the team holds names only, so `program` is a name looked up on the search \
+                  path (npx), never a path, `working_directory` is relative, the variables the program needs are \
+                  named in `variable_names` and the headers a remote server is sent a secret in in `secret_headers` \
+                  (`Authorization` for a bearer or Basic credential), and a value or a secret in `environment` or \
+                  `authorization` is refused (team_value_refused, a path team_path_refused). Each computer sets the \
+                  program's path and the values itself.",
     schema: schema_for_type::<mcp_servers::AddMcpServer>,
     read_only: false,
   },
@@ -36,9 +44,16 @@ pub(super) const SPECS: &[Spec] = &[
                   secret under any name, and a tool added to exempt_tools are refused as person_only unless a person \
                   turned on Let automation change agent permissions, judged by the fields as given before anything \
                   reads the disk. Whether it is on stays. A team's MCP server (in a team project, by id or name) is the \
-                  team's: its definition is changed on the team server, and giving it a `program` on this computer is \
+                  team's: an admin's change that differs from the version this computer uses is saved as the draft \
+                  and published as the next version on the team server at once (offline it waits and the answer \
+                  says waiting_for_server; a change that widens what agents may do, a different program or \
+                  arguments, address or tools that run without asking, is person_only as above), a member is \
+                  refused not_admin, a different `name` is refused as name_not_editable, a change that changes \
+                  nothing publishes nothing (`unchanged`), and the fields are the team's (`variable_names`, \
+                  `secret_headers`; environment and authorization are refused as above). Giving it a `program` is \
                   refused as person_only always, also while Let automation change agent permissions is on, with \
-                  nothing changed: only a person chooses the program in the window.",
+                  nothing changed: the program's path is a file on this computer, which only a person chooses in \
+                  the window.",
     schema: schema_for_type::<mcp_servers::UpdateMcpServer>,
     read_only: false,
   },
@@ -46,7 +61,14 @@ pub(super) const SPECS: &[Spec] = &[
     name: "remove_mcp_server",
     description: "Removes an MCP server from a project. Refused as in_use while an agent profile's draft or latest \
                   published version chooses it (the reasons name their roles): switch them first, or turn the \
-                  server off with set_mcp_server_enabled, which keeps its settings.",
+                  server off with set_mcp_server_enabled, which keeps its settings. A team's MCP server (in a team \
+                  project, by id or name) is archived on the team server instead, admins only (a member is refused \
+                  not_admin), and never refused for being used: the answer first reads what uses it, `used_by` \
+                  { resources, runs } as the team server lists them (the runs that have not ended and pin it), and \
+                  `runs_stopping_here`, the runs on this computer whose profile version chooses it. They are the \
+                  runs that will stop, not runs that have stopped: this computer cancels them when the team \
+                  server's archive reaches it, right after the answer, and the other computers do the same. Nothing \
+                  is archived while the team server cannot be reached or what uses it cannot be read.",
     schema: schema_for_type::<mcp_servers::InServer>,
     read_only: false,
   },

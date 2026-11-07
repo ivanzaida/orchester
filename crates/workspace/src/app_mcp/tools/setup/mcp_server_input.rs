@@ -57,6 +57,26 @@ pub struct ServerFields {
   /// Tools of the server that run without asking, as the server names them, for profiles that ask
   /// before MCP actions.
   pub exempt_tools: Option<Vec<String>>,
+  /// Team MCP servers only: the names of the variables the program needs; each computer gives their values. A team
+  /// server holds no value, so `environment` is refused in a team project. With `program`, not with `url`.
+  pub variable_names: Option<Vec<String>>,
+  /// Team MCP servers only: the names of the headers a remote server is sent a secret in (`Authorization` for a
+  /// bearer or Basic credential, `X-API-Key`); each computer gives the secrets. A team server holds no secret, so
+  /// `authorization` is refused in a team project. With `url`, not with `program`.
+  pub secret_headers: Option<Vec<String>>,
+}
+
+impl ServerFields {
+  /// The first field only a team project's MCP server has, if one is given.
+  pub(super) const fn team_only(&self) -> Option<&'static str> {
+    if self.variable_names.is_some() {
+      Some("variable_names")
+    } else if self.secret_headers.is_some() {
+      Some("secret_headers")
+    } else {
+      None
+    }
+  }
 }
 
 #[derive(Deserialize, JsonSchema)]
