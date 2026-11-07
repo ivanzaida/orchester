@@ -204,12 +204,13 @@ fn named_module(choice: &Choice) -> Option<NamedTarget> {
 }
 
 /// The composer's send with the badge: the conversation the message goes to (the one shown, or the new one it
-/// starts) watches the targets the badge holds (`named`), with the message's words as their order. Only a person's
-/// keys apply it: the order is kept as the person's own words, which the agent follows, and no subscription records
-/// who asked for it, so synthetic input (an MCP client's) is refused with a notice, and the badge and the message
-/// stay.
+/// starts) watches the targets the badge holds (`named`), with the message's words as their order. A conversation it
+/// starts is kept as the message's send keeps it, with the new conversation's *Plan only* switch, so whichever of the
+/// two writes it first, it plans as the person set it. Only a person's keys apply it: the order is kept as the
+/// person's own words, which the agent follows, and no subscription records who asked for it, so synthetic input (an
+/// MCP client's) is refused with a notice, and the badge and the message stay.
 pub(super) fn apply(view: &View, root: PathBuf, named: fn(&Choice) -> Option<NamedTarget>) -> Apply {
-  let (of, action) = (view.of.clone(), view.watching.clone());
+  let (of, action, plan_only) = (view.of.clone(), view.watching.clone(), view.plan_only.clone());
   Arc::new(move |applied: Applied| {
     if is_synthetic_input() {
       tracing::warn!("synthetic input asked to watch; not taken");
@@ -223,7 +224,8 @@ pub(super) fn apply(view: &View, root: PathBuf, named: fn(&Choice) -> Option<Nam
       Some(Conversation::Chat(id)) => (Chat::named(id, "", now), false),
       Some(Conversation::New) | None => {
         let id = applied.chat.unwrap_or_else(ChatId::generate);
-        (Chat::named(id, &title(&applied), now), true)
+        let on = plan_only.on_now(Some(Conversation::New));
+        (Chat::named(id, &title(&applied), now).with_plan_only(on), true)
       }
     };
     action.run(Command {
