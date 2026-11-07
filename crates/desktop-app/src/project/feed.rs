@@ -42,7 +42,7 @@ use parking_lot::Mutex;
 
 mod last;
 
-pub use last::{LastMerges, ShowingAll};
+pub use last::ShowingAll;
 
 use super::{Projects, hold::ReadHold, settled_read::settled_read};
 use crate::services::Services;
@@ -95,8 +95,6 @@ pub struct ProjectFeed {
   pub hub_counts: Signal<Option<orchester_workspace::agents::hub::HubCounts>>,
   /// The Agents hub's tabs whose own read failed, one bit each: they show no count rather than a stale one.
   pub hub_unread: Signal<u8>,
-  /// What Review › Merges read last, which it shows again at once when it opens again and reads them anew.
-  pub merges: Signal<Option<LastMerges>>,
   /// What the Review list read last, shown again at once when it opens again while it is read anew.
   pub review: Signal<Option<orchester_workspace::tasks::review_list::ReviewList>>,
   /// The reviews that show all their changes rather than those since the review.
@@ -201,7 +199,6 @@ impl ProjectFeed {
       pipeline_names: Signal::new(PipelineNames::default()),
       hub_counts: Signal::new(None),
       hub_unread: Signal::new(0),
-      merges: Signal::new(None),
       review: Signal::new(None),
       all_changes: Signal::new(ShowingAll::default()),
       configure_folded: Signal::new(false),

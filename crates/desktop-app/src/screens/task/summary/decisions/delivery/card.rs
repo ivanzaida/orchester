@@ -27,11 +27,11 @@ use orchester_workspace::{
   tasks::detail::RunView,
 };
 
-use super::{super::TaskContext, rows::since};
+use super::{super::TaskContext, phases, rows::since};
 use crate::{
   navigation::Navigation,
-  routes::{ProjectPage, Route, TaskTab, TaskView},
-  screens::merge_queue::{phases, words},
+  routes::{Route, TaskTab, TaskView},
+  screens::task::queue_words as words,
   theme::{DeliveryText, ExtraSpacing, ExtraTypography, IconSize, TaskText},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -198,13 +198,12 @@ fn place_line(ctx: &Ctx, delivery: &RunDelivery) -> Arc<str> {
   }
 }
 
-/// *Open merge queue* and *Open conversation*.
+/// *Open conversation*.
 fn card_actions(ctx: &mut Ctx, task: &TaskContext) -> Element {
   Row::new()
     .id("task-delivery-actions")
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(open_queue(ctx, task, ButtonKind::Secondary))
     .child(
       ActionButton::new(
         "task-delivery-open-conversation",
@@ -218,13 +217,6 @@ fn card_actions(ctx: &mut Ctx, task: &TaskContext) -> Element {
       ))),
     )
     .into()
-}
-
-/// *Open merge queue*.
-pub(super) fn open_queue(ctx: &mut Ctx, task: &TaskContext, kind: ButtonKind) -> ActionButton {
-  ActionButton::new("task-delivery-open-queue", kind, ctx.t("delivery.task.openQueue"))
-    .icon(Icon::GitMerge)
-    .opens(Navigation::of(ctx).to(Route::Project(task.project.open.project.id(), ProjectPage::MergeQueue)))
 }
 
 /// *Merged into main · 9c41e02 · worktree removed* and how it was merged and cleared.

@@ -26,9 +26,9 @@ use super::{
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  screens::merges::{
-    attempt::head::{title, title_row},
-    words::joined,
+  screens::task::merge::attempt::{
+    head::{title, title_row},
+    lines::joined,
   },
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::skeleton::{FromFirstFrame, Skeleton, bone, fading, line, round_bone},

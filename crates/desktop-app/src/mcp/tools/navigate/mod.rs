@@ -1,6 +1,6 @@
 mod join_team;
-mod merges;
 mod modules;
+mod task_merge;
 
 use lurq::mcp::{McpTool, Scope};
 use modules::{agent_page, module_page, new_task_page};
@@ -45,7 +45,7 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   UUID, as app_state reports it). overview, memory and import_resources also take `tab`; tasks `tab`, `q` (the \
   search) and `highlight` (a task key, as after Create), and shows the list or the board as last chosen for the \
   project (press tasks-layout-list or tasks-layout-board to switch); edit_task `key`; task `key`, `tab` (summary, \
-  conversation or changes), `view` for what a tab opens in \
+  conversation or changes), `run` (a run's number: that run's merge attempts under the task, which no `tab`, `view` or `file` goes with), `view` for what a tab opens in \
   its place (memory: the task's memory, from summary; local-integration: Local integration, which Try locally opens \
   from changes) and, on its changes tab, `file` with `from`; project_settings \
   `tab` (general, runs, orchestrator, context, connections, environment or sharing; secrets, the tab Environment was, still opens \
@@ -58,8 +58,7 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   five tabs of one Agents page (Profiles, Instructions, Skills, Tools, Memory), each its own route: agents takes \
   `agent` (a profile's id, or new), skills takes \
   `skill` (a skill id, new or import), tools takes tool (a tool id, or new), and its page's tab; review is the list of tasks whose run finished and, with `key`, \
-  a task's review; merge_queue and merges are pages of their own, each its own route; merges takes `key` and `run` (a task's \
-  key and its run's number) for that run's merge attempts; orchestrator takes `chat` (a \
+  a task's review; orchestrator takes `chat` (a \
   conversation's id, or new; left out, the latest); files takes `file` (a path in the project; the tree alone when \
   left out), `at` (checkout, the default, base, run:<run id> or rev:<commit>) and `line` (12 or 12-20); usage takes `query`, the \
   page's query as a link carries it, and \
@@ -113,8 +112,8 @@ fn schema() -> Value {
     "properties": {
       "route": { "type": "string", "enum": names },
       "project": { "type": "string", "description": "The project's id (a UUID), for every screen of a project." },
-      "key": { "type": "string", "description": "The task's key, e.g. KON-12, for task, edit_task, review and merges." },
-      "run": { "type": "string", "description": "merges: with `key`, the number of the run whose merge attempts to show, e.g. 8." },
+      "key": { "type": "string", "description": "The task's key, e.g. KON-12, for task, edit_task and review." },
+      "run": { "type": "string", "description": "task: with `key`, the number of the run whose merge attempts to show, e.g. 8." },
       "tab": { "type": "string", "description": tabs },
       "q": { "type": "string", "description": "tasks: the text searched for." },
       "highlight": { "type": "string", "description": "tasks: the key of the task to highlight, as after Create." },
@@ -201,11 +200,9 @@ fn screen_route(screen: Screen, args: &Map<String, Value>, lookup: Option<&Looku
     Screen::Tasks => ProjectPage::Tasks(task_list(args)?),
     Screen::NewTask => new_task_page(args)?,
     Screen::EditTask => ProjectPage::EditTask(key(args, "key")?),
-    Screen::Task => ProjectPage::Task(key(args, "key")?, task_view(args)?),
+    Screen::Task => task_merge::task_page(args)?,
     Screen::Modules => module_page(args)?,
     Screen::Review => review_page(args)?,
-    Screen::MergeQueue => ProjectPage::MergeQueue,
-    Screen::Merges => merges::merges_page(args)?,
     Screen::Usage => return usage_route(args),
     Screen::Pipelines => ProjectPage::Pipelines,
     Screen::Agents => agent_page(args)?,
@@ -264,7 +261,7 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::Overview | Screen::ImportResources => &["project", "tab"],
     Screen::Tasks => &["project", "tab", "q", "highlight"],
     Screen::EditTask => &["project", "key"],
-    Screen::Task => &["project", "key", "tab", "view", "file", "from"],
+    Screen::Task => task_merge::PARAMS,
     Screen::Connections => &["project", "selected", "decision"],
     Screen::Memory => &["project", "tab"],
     Screen::Tools => &["project", "tool", "tab"],
@@ -279,10 +276,7 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::ProjectSettings => &["project", "tab", "view"],
     Screen::Agents => &["project", "agent"],
     Screen::Review => &["project", "key"],
-    Screen::Merges => merges::PARAMS,
-    Screen::MergeQueue | Screen::Pipelines | Screen::Instructions | Screen::Secrets | Screen::OrchestratorSettings => {
-      &["project"]
-    }
+    Screen::Pipelines | Screen::Instructions | Screen::Secrets | Screen::OrchestratorSettings => &["project"],
   }
 }
 

@@ -1,5 +1,5 @@
 //! `merge-attempts`: a run's merge attempt page (ORC-363, `Review · redesign` 09b to 09l), one run per state, each
-//! opened from its row in Review › Merges or at `/project/<id>/merges/<KEY>/<run>`:
+//! opened at `/project/<id>/tasks/<KEY>/merge/<run>`:
 //!
 //! - *Add retry to webhook sender* (09b `PVZKL`): automation's attempt through `merge_run` refused at Project database,
 //!   then the person's refused before Git at the integration lock, held by another operation. Its live retry (09j

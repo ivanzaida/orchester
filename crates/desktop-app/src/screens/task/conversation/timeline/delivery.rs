@@ -31,8 +31,7 @@ use super::{
   divider::{event, phase, step_label},
 };
 use crate::{
-  navigation::Navigation,
-  routes::{ProjectPage, Route, TaskView},
+  routes::TaskView,
   theme::{ConversationSpacing, ExtraTypography, IconSize},
   ui::{
     icon::{Icon, icon},
@@ -86,7 +85,7 @@ pub(super) fn line(ctx: &mut Ctx, timeline: &Timeline, line: &DeliveryLine) -> E
       let link = (ctx.t("delivery.queue.action.reviewAndMerge"), Press::Open(review));
       event(id, Icon::Hand, &text, Some(link))
     }
-    DeliveryKind::Event(queued) => queue_event(ctx, timeline, (&id, line.at), &names, queued),
+    DeliveryKind::Event(queued) => queue_event(ctx, (&id, line.at), &names, queued),
     DeliveryKind::Ci(ci) => {
       crate::screens::task::ci::timeline::line(ctx, (timeline.ci.as_ref(), &timeline.detail), &id, ci)
     }
@@ -107,21 +106,13 @@ impl Said<'_> {
   }
 }
 
-fn queue_event(
-  ctx: &mut Ctx,
-  timeline: &Timeline,
-  (id, at): (&str, Timestamp),
-  names: &Names,
-  queued: &QueueEvent,
-) -> Element {
+fn queue_event(ctx: &mut Ctx, (id, at): (&str, Timestamp), names: &Names, queued: &QueueEvent) -> Element {
   let said = Said { names, time: clock(at) };
   let id = id.to_owned();
   let (glyph, text) = match queued {
     QueueEvent::Joined => {
-      let queue = Navigation::of(ctx).to(Route::Project(timeline.project, ProjectPage::MergeQueue));
-      let link = (ctx.t("delivery.task.openQueue"), Press::Open(queue));
       let text = said.say(ctx, "delivery.conversation.joined", &[]);
-      return event(id, Icon::ListOrdered, &text, Some(link));
+      return event(id, Icon::ListOrdered, &text, None);
     }
     QueueEvent::Approved { .. } => (Icon::ShieldCheck, said.say(ctx, "delivery.conversation.approved", &[])),
     QueueEvent::Blocked(blocked) => {
@@ -147,7 +138,7 @@ fn queue_event(
       branch_deleted,
     } => return cleaned(ctx, &id, (*worktree_removed, *branch_deleted), names, &said.time),
     QueueEvent::Left(left) => {
-      let reason = crate::screens::merge_queue::words::left_reason(ctx, left);
+      let reason = crate::screens::task::queue_words::left_reason(ctx, left);
       let text = said.say(ctx, "delivery.conversation.left", &[("reason", &*reason)]);
       (Icon::CircleX, text)
     }

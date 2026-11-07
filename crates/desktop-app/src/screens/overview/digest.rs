@@ -192,7 +192,7 @@ const fn link_key(kind: NeedKind) -> &'static str {
     NeedKind::ReadyToMerge => "overview.waits.link.merge",
     NeedKind::ReadyToComplete => "overview.waits.link.complete",
     NeedKind::Conflicts => "overview.waits.link.resolve",
-    NeedKind::DeliveryBlocked => "overview.waits.link.mergeQueue",
+    NeedKind::DeliveryBlocked => "overview.waits.link.summary",
     NeedKind::Memory => "overview.waits.link.records",
   }
 }

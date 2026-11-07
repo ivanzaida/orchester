@@ -32,12 +32,12 @@ use crate::{
   navigation::Navigation,
   project::TasksState,
   routes::{ProjectPage, Route},
-  screens::{
-    merges::attempt::{
+  screens::task::{
+    TaskContext,
+    merge::attempt::{
       read::{Read, read},
       standing::Standing,
     },
-    task::TaskContext,
   },
   theme::{ExtraSpacing, IconSize, TaskSpacing},
   ui::{
@@ -189,7 +189,7 @@ impl Component for MergeRow {
         Shown::of(&page, waits)
       }
       Read::Reading | Read::Missing => Shown::known(&task),
-      // Why is said on the run's attempt page, which Review › Merges opens too.
+      // Why is said on the run's attempt page, which the Merge row opens.
       Read::Failed(message) => {
         tracing::warn!(?message, run = %run.id(), "cannot read the run's merge attempts for its Merge row");
         Shown::known(&task)
@@ -201,7 +201,7 @@ impl Component for MergeRow {
     let page = if in_review {
       ProjectPage::TaskReview(task.key.clone())
     } else {
-      ProjectPage::MergeAttempt(task.key.clone(), number)
+      ProjectPage::TaskMerge(task.key.clone(), number)
     };
     let route = Route::Project(task.project.open.project.id(), page);
     let open = Navigation::of(ctx).to(route);

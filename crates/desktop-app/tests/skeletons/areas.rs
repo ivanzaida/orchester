@@ -32,32 +32,6 @@ fn skeletons_orchestrator_shows_the_conversations_bones_after_a_moment() {
 }
 
 #[test]
-fn skeletons_review_shows_the_merge_queues_bones_after_a_moment() {
-  let mut held = Held::new();
-  held.page(ProjectPage::MergeQueue);
-  held.skeleton("merge-queue-loading");
-}
-
-#[test]
-fn skeletons_review_merges_shows_its_bones_after_a_moment() {
-  let mut held = Held::new();
-  held.page(ProjectPage::Merges);
-  held.skeleton("merges-loading");
-  // 09d `Zlk49`: the info line stands over the bones, drawn from git's word on the checkout, read apart from the held
-  // reads, as it will stand once the merges are read (ORC-721).
-  held.window.until("the info line from git", |window| {
-    window
-      .texts("merges-lead")
-      .is_some_and(|texts| texts.iter().any(|text| text.starts_with("Every merge into main:")))
-  });
-  let info = held.window.text("merges-info");
-  assert!(
-    info.contains("Base main") && info.contains("Checkout on main · clean"),
-    "{info}"
-  );
-}
-
-#[test]
 fn skeletons_files_shows_the_trees_bones_after_a_moment() {
   let mut held = Held::new();
   held.page(ProjectPage::Files(FilesView::default()));

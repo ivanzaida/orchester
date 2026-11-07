@@ -1,8 +1,7 @@
 //! The sidebar's entries (`Sidebar v2` `Zn8dR` in `Sidebar · redesign` `WWXmX`): six places for daily work, and
 //! the two hubs of the Configure section. Each opens one route and stays selected on every route that belongs to
 //! it (`Where each entry went` `j3WMs9`): a task and its forms are Tasks', a module's page and its forms Modules',
-//! Review's list and a task's review, with the Merge queue and the Merges
-//! until their tasks remove them, Review's, and Profiles, Instructions,
+//! Review's list and a task's review are Review's, and Profiles, Instructions,
 //! Skills, Tools and Memory the Agents hub's. Usage, Project settings with its Connections and Environment tabs, and
 //! the app's Settings have no entry: the usage card and the switcher's menu open them.
 
@@ -49,7 +48,7 @@ impl Place {
       Screen::Tasks | Screen::Task | Screen::NewTask | Screen::EditTask => Self::Tasks,
       Screen::Modules => Self::Modules,
       Screen::Orchestrator | Screen::OrchestratorSettings => Self::Orchestrator,
-      Screen::Review | Screen::MergeQueue | Screen::Merges => Self::Review,
+      Screen::Review => Self::Review,
       Screen::Files => Self::Files,
       Screen::Pipelines => Self::Pipelines,
       Screen::Agents | Screen::Instructions | Screen::Memory | Screen::Skills | Screen::Tools => Self::Agents,

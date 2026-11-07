@@ -8,10 +8,10 @@ use orchester_core::integration::attempt::StageResult;
 use orchester_workspace::tasks::merge_attempts::page::AttemptPage;
 
 use super::{
+  lines::cause,
   standing::Standing,
   words::{asked, attempt_time, stage_name},
 };
-use crate::screens::merges::words::cause;
 
 /// The details of `page`, whose run stands as `standing`, its status line's words `status`.
 pub(super) fn details(ctx: &Ctx, page: &AttemptPage, status: &str) -> String {

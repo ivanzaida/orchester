@@ -7,7 +7,7 @@ use chrono::NaiveDate;
 use lurq::router::RouteMatch;
 use orchester_app::routes::{
   AccountsPanel, AccountsView, ConnectionsView, FilesView, ModuleListTab, ModuleTab, OrchestratorChat, OverviewTab,
-  ProjectPage, Route, RouteError, TaskView, ToolTab, routes,
+  ProjectPage, Route, RouteError, Screen, TaskView, ToolTab, routes,
 };
 use orchester_core::{
   connection::AgentProvider,
@@ -318,6 +318,42 @@ fn links_to_the_removed_pull_requests_page_open_the_overview() {
   ] {
     let path = format!("/project/{PROJECT}/{path}");
     assert_eq!(Route::parse(&path), Ok(overview.clone()), "{path}");
+  }
+}
+
+/// The Merge queue and Merges pages are gone, and so is the attempt page under Merges (ORC-805; it moved under its
+/// task): old addresses in a tab's history open the project's Overview, whatever follows.
+#[test]
+fn links_to_the_removed_merge_queue_and_merges_pages_open_the_overview() {
+  let overview = at(ProjectPage::Overview(OverviewTab::default()));
+  for path in [
+    "merge-queue",
+    "merge-queue?tab=blocked",
+    "merges",
+    "merges?tab=waiting",
+    "merges/KON-12/8",
+    "merges/kon-12/8",
+    "merges/KON-12/seven",
+  ] {
+    let path = format!("/project/{PROJECT}/{path}");
+    assert_eq!(Route::parse(&path), Ok(overview.clone()), "{path}");
+  }
+}
+
+/// A run's merge attempts are a page under its task.
+#[test]
+fn a_runs_merge_attempts_read_back_from_their_path_under_the_task() {
+  let page = at(ProjectPage::TaskMerge(
+    "KON-12".parse().expect("a task key"),
+    orchester_core::run::RunNumber::new(std::num::NonZeroU32::new(8).expect("a run number")),
+  ));
+  let path = format!("/project/{PROJECT}/tasks/KON-12/merge/8");
+  assert_eq!(page.path(), path);
+  assert_eq!(Route::parse(&path), Ok(page.clone()));
+  assert_eq!(page.nav_screen(), Screen::Tasks);
+  for path in ["tasks/KON-12/merge/0", "tasks/KON-12/merge/seven", "tasks/KON-12/merge"] {
+    let path = format!("/project/{PROJECT}/{path}");
+    assert!(Route::parse(&path).is_err(), "{path}");
   }
 }
 

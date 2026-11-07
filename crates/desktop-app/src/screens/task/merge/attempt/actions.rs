@@ -1,4 +1,4 @@
-//! What the attempt page's buttons do besides the task page's merge (`super::super::not_merged::try_again`): *Try
+//! What the attempt page's buttons do besides the task page's merge (`super::retry::try_again`): *Try
 //! again* on a run the merge queue stopped puts it back in its place there (`merge_queue::retry_stopped`); *Try now*
 //! and *Stop retrying* end Orchester's wait for its next try (`merge_retry`); *Record merge* records the merge Git made
 //! (`merge_record`); *Put files back* puts back what a stopped bring-in left changed (`merge_left`). Each runs off the

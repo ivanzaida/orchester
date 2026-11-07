@@ -1,7 +1,7 @@
 //! While the run's merge job works, Orchester may wait between its tries (`merge_retry`) without the job's state
 //! changing: a component of its own looks at that wait once a second, and reads the page again when it begins, changes
 //! or ends, so the status turns to *Retrying by itself* and back and its attempt stays current. Nothing renders but
-//! this component, and only while the job works. The attempt page and Review › Merges both mount it.
+//! this component, and only while the job works. The attempt page mounts it.
 
 use std::time::Duration;
 
@@ -36,7 +36,7 @@ impl PartialEq for Props {
 impl DevtoolsInspectable for Props {}
 
 /// The watch of `run`'s wait, which bumps `again` when it changes.
-pub(in crate::screens::merges) fn watch(ctx: &mut Ctx, run: RunId, again: &Signal<u64>) -> Element {
+pub(super) fn watch(ctx: &mut Ctx, run: RunId, again: &Signal<u64>) -> Element {
   ctx.mount_keyed::<Watch>(
     &format!("merge-attempt-watch-{run}"),
     Props {

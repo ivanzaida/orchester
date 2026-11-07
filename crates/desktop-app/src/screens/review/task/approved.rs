@@ -23,7 +23,7 @@ use orchester_workspace::{
 
 use super::Env;
 use crate::{
-  screens::merges::words::joined,
+  screens::task::merge::attempt::lines::joined,
   theme::{ExtraTypography, IconSize},
   ui::icon::{Icon, icon},
 };

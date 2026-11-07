@@ -4,9 +4,9 @@
 //! apart. While the run waits to be merged it is `success` and `git-merge`, *Ready to merge*, the task, *every step
 //! passed* and the run, then how much the run changes onto its branch. Once a merge did not land it is `warning` and
 //! `triangle-alert`: the outcome as the run's attempt page titles it, the task, the stage it stopped at and when, then
-//! the attempt in one line as a row of Review › Merges says it. Its actions: the merge's
+//! the attempt in one line as the attempt page says it. Its actions: the merge's
 //! (`crate::screens::task::merge`) with its key cap; *Review changes* (`file-diff`), or *Open in Review*
-//! (`arrow-up-right`) once a merge did not land, which open the run's page under Review › Merges, its review page
+//! (`arrow-up-right`) once a merge did not land, which open the run's merge attempts under its task, its review page
 //! before any attempt and its attempt page after; *Close without merging* (`circle-check-big`), which marks the task
 //! done as *More actions* does; then *Review PR* once the run has a pull request. Under them why the merge waits, why
 //! the page's own work on it did not happen, and what came of creating the run's pull request
@@ -38,16 +38,16 @@ use super::{
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route},
-  screens::{
-    merges::{
-      attempt::standing::Standing,
-      words::{attempt_line, stage, when},
-    },
-    task::{
-      PageState,
-      ci::actions::open_page,
-      header,
-      merge::{self, Merge, MergeAction},
+  screens::task::{
+    PageState,
+    ci::actions::open_page,
+    header,
+    merge::{
+      self, Merge, MergeAction,
+      attempt::{
+        lines::{attempt_line, stage, when},
+        standing::Standing,
+      },
     },
   },
   services::Services,
@@ -212,7 +212,7 @@ fn ready_words(
 }
 
 /// The outcome as the run's attempt page titles it, *KON-12 · refused at Integration lock · 12:41*, and the last
-/// attempt in one line, as a row of Review › Merges says it.
+/// attempt in one line, as the attempt page says it.
 fn not_merged_words(
   ctx: &Ctx,
   task: &TaskContext,
@@ -252,7 +252,7 @@ fn buttons(
 ) -> Element {
   let navigation = Navigation::of(ctx);
   let project = task.project.open.project.id();
-  let attempts = ProjectPage::MergeAttempt(task.key.clone(), shown.run.run.number());
+  let attempts = ProjectPage::TaskMerge(task.key.clone(), shown.run.run.number());
   let (id, label, glyph, page) = match shown.merge {
     Merge::Ready => (
       "task-review-changes",

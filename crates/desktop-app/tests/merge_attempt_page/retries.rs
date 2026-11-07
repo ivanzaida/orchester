@@ -22,8 +22,8 @@ const RETRY_WAIT: Duration = Duration::from_secs(10);
 #[test]
 fn merge_attempt_page_try_again_puts_a_run_the_queue_stopped_back_in_its_place() {
   let mut page = Page::new();
-  let route = page.open("merges-not-merged", "Per-endpoint rate limits");
-  let Route::Project(_, ProjectPage::MergeAttempt(_, number)) = route else {
+  let route = page.open("Per-endpoint rate limits");
+  let Route::Project(_, ProjectPage::TaskMerge(_, number)) = route else {
     panic!("the attempt page");
   };
   assert_eq!(
@@ -45,13 +45,12 @@ fn merge_attempt_page_try_again_puts_a_run_the_queue_stopped_back_in_its_place()
   });
 }
 
-/// A run the queue took back and checked again waits for approval there: its page says so and opens the queue, and
-/// offers no *Try again* that would merge it from its task page past the approval; Merges lists it as not merged no
-/// more.
+/// A run the queue took back and checked again waits for approval there: its page says so and opens its review, and
+/// offers no *Try again* that would merge it from its task page past the approval.
 #[test]
-fn merge_attempt_page_a_run_back_in_the_queue_awaiting_approval_opens_the_queue() {
+fn merge_attempt_page_a_run_back_in_the_queue_awaiting_approval_opens_its_review() {
   let mut page = Page::new();
-  let route = page.open("merges-not-merged", "Per-endpoint rate limits");
+  let route = page.open("Per-endpoint rate limits");
   page.window.press("merge-attempt-try-again");
   let repo = page.repo.clone();
   // The queue may move the entry on between the read and the compare-and-swap, which then refuses it: read it again
@@ -73,33 +72,17 @@ fn merge_attempt_page_a_run_back_in_the_queue_awaiting_approval_opens_the_queue(
       db.save_merge_queue_entry(&entry, &before, (&[], Timestamp::now()))
         .expect("saved")
     });
-  page
-    .window
-    .navigation()
-    .go(Route::Project(page.project, ProjectPage::Merges));
-  // Merges shows the rows it last read at once, the run among them, and drops it once it reads the queue again.
-  page
-    .window
-    .until_within(GIT_WORK, "the merges without the run awaiting approval", |window| {
-      window.texts("merges-not-merged-rows").is_some_and(|rows| {
-        let rows = rows.join(" ");
-        rows.contains("Add retry to webhook sender") && !rows.contains("Per-endpoint rate limits")
-      })
-    });
+  // The page reads the run's attempts again as the queue moves.
   page.window.navigation().go(route);
-  page.until_read();
-  assert_eq!(
-    page.window.text("merge-attempt-status-text"),
-    "Waiting for your approval in the merge queue"
-  );
-  assert_eq!(page.window.text("merge-attempt-open-queue"), "Open merge queue");
+  page.until_status("Waiting for your approval in the merge queue");
+  assert_eq!(page.window.text("merge-attempt-open-review"), "Open review");
   assert!(!page.shows("merge-attempt-try-again"));
 }
 
 #[test]
 fn merge_attempt_page_retrying_counts_down_until_stop_retrying() {
   let mut page = Page::new();
-  page.open("merges-not-merged", "Add retry to webhook sender");
+  page.open("Add retry to webhook sender");
   let held = IntegrationLease::acquire(&page.repo).expect("another operation's lease");
   page.window.press("merge-attempt-try-again");
   page.until_status("Retrying by itself");
@@ -126,7 +109,7 @@ fn merge_attempt_page_retrying_counts_down_until_stop_retrying() {
 #[test]
 fn merge_attempt_page_hold_integration_retries_until_let_go_then_try_now_tries_at_once() {
   let mut page = Page::new();
-  page.open("merges-not-merged", "Add retry to webhook sender");
+  page.open("Add retry to webhook sender");
   let (link, lease) = (page.window.link.clone(), HeldLease::default());
   let held = hold_integration(&link, &lease, &json!({ "held": true })).expect("the lease");
   assert_eq!(held["held"], true, "{held}");

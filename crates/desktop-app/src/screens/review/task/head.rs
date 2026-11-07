@@ -35,7 +35,7 @@ use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{ProjectPage, Route, TaskTab, TaskView},
-  screens::merges::{attempt::head::title, words::joined},
+  screens::task::merge::attempt::{head::title, lines::joined},
   theme::{ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},

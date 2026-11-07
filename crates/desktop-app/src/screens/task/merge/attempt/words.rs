@@ -15,7 +15,7 @@ use orchester_core::{
 };
 use orchester_workspace::display::{self, short_revision};
 
-use super::super::words::cause;
+use super::lines::cause;
 
 /// The cause a preflight's integration lock gives when another operation holds it.
 const HELD: &str = "held by another operation";
@@ -248,5 +248,5 @@ pub(super) fn attempt_time(ctx: &Ctx, at: Timestamp, seconds: bool) -> Arc<str> 
   if seconds && at.local_day_start() == Timestamp::now().local_day_start() {
     return Arc::from(display::clock_seconds(at));
   }
-  super::super::words::when(ctx, at)
+  super::lines::when(ctx, at)
 }
