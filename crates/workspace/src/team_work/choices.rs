@@ -5,10 +5,10 @@
 //! chose by a `CliKind` reference. A profile runs on the connection the caller binds it to, otherwise on the connection
 //! its body names when this computer has it with that very id and CLI (the publisher's own computer), otherwise on the
 //! only local agent connection of its CLI; with none or several, the start is refused naming the profiles that need a
-//! choice. Each team MCP server a profile's version names by a `TeamResource` reference runs as this computer's own
-//! server with that very id; with none, the start is refused naming the servers ([`McpHere`]). Nothing else is guessed:
-//! the bindings are checked again against the bundle `work.start` answers, and a pipeline changed in between fails the
-//! start there.
+//! choice. A team MCP server a profile's version names by a `TeamResource` reference is, until ORC-826, looked up as a
+//! local `mcp_servers` row with that very id; with none, the start is refused naming the servers ([`McpHere`]). Nothing
+//! else is guessed: the bindings are checked again against the bundle `work.start` answers, and a pipeline changed in
+//! between fails the start there.
 
 use std::path::Path;
 
@@ -59,8 +59,13 @@ pub enum ChoiceError {
   McpServersRequired(Vec<String>),
 }
 
-/// This computer's MCP servers as a team start gives them to the profiles that name them: the server with the very id
-/// of the team MCP server a version names. Nothing is matched by name.
+/// This computer's MCP servers as a team start gives them to the profiles that name them: the local server with the
+/// very id of the team MCP server a version names. Nothing is matched by name.
+///
+/// A stopgap that ORC-826 replaces. A team MCP server is a cached team resource, launched with the program path this
+/// computer filled in and only when it is switched on here (`docs/design/team-configuration.md`); it is never a row of
+/// `mcp_servers`, so a team server is found here only when a local row happens to carry its id. ORC-826 builds the
+/// launcher from what this computer filled in and drops this type; the typed refusal stays.
 #[derive(Debug, Default)]
 pub struct McpHere {
   servers: Vec<ConnectionId>,
@@ -73,7 +78,7 @@ impl McpHere {
     Ok(Self { servers })
   }
 
-  /// The local server the team MCP server `named` runs as here, if any.
+  /// The local `mcp_servers` row with the team MCP server `named`'s id, if any (the stopgap above).
   fn local(&self, named: ResourceId) -> Option<ConnectionId> {
     let local = ConnectionId::from_uuid(named.as_uuid());
     self.servers.contains(&local).then_some(local)

@@ -35,15 +35,18 @@ pub enum ResourceSharing {
 
 /// What a version of the team's configuration names (`docs/design/team-configuration.md`): a CLI kind, a team resource
 /// by its server id, a secret by name. The last three are what a version cached before the team configuration model
-/// named by an id on the publisher's computer, which the bindings of this computer still resolve until they are
-/// removed.
+/// named by an id on the publisher's computer, which the bindings of this computer still resolve until ORC-845 removes
+/// the variants, the bindings and the code that resolves them.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ReferenceTarget {
   CliKind(AgentProvider),
   TeamResource { kind: ResourceKind, id: ResourceId },
   SecretName(SecretName),
+  /// Legacy, removed by ORC-845.
   Connection(ConnectionId),
+  /// Legacy, removed by ORC-845.
   McpServer(ConnectionId),
+  /// Legacy, removed by ORC-845.
   Secret(SecretId),
 }
 

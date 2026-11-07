@@ -187,6 +187,7 @@ pub fn named(body: &Value, entities: LocalEntities<'_>) -> Vec<Reference> {
 
 /// `body` with the id of every reference `bindings` bind replaced by the local id, the body runs on this computer pin.
 /// A reference without a binding keeps the publisher's id, which matches nothing here, so preflight reports it missing.
+/// Only versions cached before the team configuration model need it; ORC-845 removes it with the bindings.
 pub fn resolve(body: Value, bindings: &[Binding]) -> Value {
   rewrite(
     body,

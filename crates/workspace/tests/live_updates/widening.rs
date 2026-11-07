@@ -151,8 +151,12 @@ async fn live_updates_a_widening_version_waits_and_runs_keep_the_previous_one_un
   })
   .await;
   assert_eq!(used(&workspace, builder_id), Some(1), "runs keep v1");
-  assert!(
-    !problems(&workspace, delivery).contains(&PreflightProblem::McpServerMissing { step: key("implement") }),
+  // The joiner's cached profile body still carries the publisher's connection id, which this computer does not have,
+  // until a team body names a CLI kind instead of a connection (ORC-820): that is the one problem, and no MCP server
+  // is missing for v1.
+  assert_eq!(
+    problems(&workspace, delivery),
+    [PreflightProblem::ConnectionMissing { step: key("implement") }],
     "a run here takes v1, which needs no MCP server"
   );
   assert_eq!(
@@ -176,8 +180,13 @@ async fn live_updates_a_widening_version_waits_and_runs_keep_the_previous_one_un
   );
   assert_eq!(used(&workspace, builder_id), Some(2), "runs take v2 now");
   assert_eq!(waiting(&workspace.root, builder_id).expect("read"), None);
-  assert!(
-    problems(&workspace, delivery).contains(&PreflightProblem::McpServerMissing { step: key("implement") }),
+  // The same connection problem as for v1 (ORC-820), and now v2's MCP server too.
+  assert_eq!(
+    problems(&workspace, delivery),
+    [
+      PreflightProblem::ConnectionMissing { step: key("implement") },
+      PreflightProblem::McpServerMissing { step: key("implement") },
+    ],
     "v2's MCP server is not set up here"
   );
   stream.abort();

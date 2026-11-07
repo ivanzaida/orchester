@@ -90,7 +90,8 @@ pub(super) async fn sync(source: &impl Source, root: &Path, resource: SharedReso
 /// Binds the reference of `choice` to the local connection, MCP server or secret a person chose (`None` unbinds it),
 /// and writes again the local body of every cached version that names it; returns how many changed. Only a person
 /// binds: binding an MCP server or a secret widens what agents may do or what a tool sends, so automation is refused
-/// ([`SharingError::PersonOnly`]) and no MCP tool reaches this.
+/// ([`SharingError::PersonOnly`]) and no MCP tool reaches this. Only versions cached before the team configuration
+/// model have references to bind; ORC-845 removes this with the bindings.
 pub fn bind(root: &Path, choice: BoundReference, by: Answerer) -> Result<usize, SharingError> {
   waiting::person_only(by)?;
   let mut db = ProjectDb::open(root)?;
@@ -180,7 +181,7 @@ fn body<B: ResourceBody>(value: Value) -> Result<B, SharingError> {
 }
 
 /// `server_body` of a version cached before the team configuration model, with every reference `bindings` bind
-/// replaced by the local id.
+/// replaced by the local id. ORC-845 removes this with the bindings: a team body then runs as the server sent it.
 fn local_body<B: ResourceBody>(server_body: &Value, bindings: &[Binding]) -> Result<B, SharingError> {
   body(resolve(server_body.clone(), bindings))
 }
