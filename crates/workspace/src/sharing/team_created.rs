@@ -107,3 +107,13 @@ fn unreached(error: &SharingError) -> bool {
     _ => false,
   }
 }
+
+impl NotCreated {
+  /// Why it was not created, in words: the team server's own code, or why this computer did not send it.
+  pub fn message(&self) -> Message {
+    match self {
+      Self::Refused { code } => Message::new("appMcp.errors.teamServerRefused").with("code", code.clone()),
+      Self::NamesLocal(reason) | Self::NamesNonTeam(reason) | Self::Failed(reason) => reason.clone(),
+    }
+  }
+}

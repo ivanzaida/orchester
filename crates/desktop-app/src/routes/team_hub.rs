@@ -1,5 +1,6 @@
 //! The Agents hub of a team project (`Agents · v2` `acFkz`): the kind it filters by and the resource its panel
-//! shows, kept in its route (`/project/<id>/agents?filter=mcp_servers&item=<id>`).
+//! shows, kept in its route (`/project/<id>/agents?filter=mcp_servers&item=<id>`), or the form that creates a resource
+//! of the filter's kind (`…?filter=mcp_servers&new=1`, A7–A12).
 
 use orchester_core::id::ResourceId;
 
@@ -7,6 +8,7 @@ use super::{RouteError, query::Params};
 
 const FILTER: &str = "filter";
 const ITEM: &str = "item";
+const NEW: &str = "new";
 
 /// Which kinds the hub's list shows; All is the one it opens on.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
@@ -53,23 +55,45 @@ impl HubFilter {
 pub struct HubView {
   pub filter: HubFilter,
   pub item: Option<ResourceId>,
+  /// The panel is the form that creates a resource of the filter's kind, which only a kind has (not All).
+  pub adding: bool,
 }
 
 impl HubView {
   pub const fn new(filter: HubFilter, item: Option<ResourceId>) -> Self {
-    Self { filter, item }
+    Self {
+      filter,
+      item,
+      adding: false,
+    }
+  }
+
+  /// The form that creates a resource of the kind `filter` holds.
+  pub const fn adding(filter: HubFilter) -> Self {
+    Self {
+      filter,
+      item: None,
+      adding: true,
+    }
   }
 
   /// `path` with the filter and the item the hub is not opened on.
   pub(super) fn path(self, path: String) -> String {
     let item = self.item.map(|item| item.to_string());
     let filter = (self.filter != HubFilter::default()).then(|| self.filter.name());
-    super::with_query(path, &[(FILTER, filter), (ITEM, item.as_deref())])
+    let adding = self.adding.then_some("1");
+    super::with_query(path, &[(FILTER, filter), (ITEM, item.as_deref()), (NEW, adding)])
   }
 
   pub(super) fn take(params: &mut Params) -> Result<Self, RouteError> {
     let filter = params.take_or_default(FILTER, HubFilter::from_name)?;
     let item = params.take_parsed(ITEM)?;
-    Ok(Self { filter, item })
+    // A form has no resource, and only a kind has a form.
+    let adding = params.take(NEW)?.is_some_and(|new| new == "1") && filter != HubFilter::All;
+    Ok(Self {
+      filter,
+      item: item.filter(|_| !adding),
+      adding,
+    })
   }
 }

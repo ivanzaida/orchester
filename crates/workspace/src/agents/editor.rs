@@ -91,6 +91,28 @@ pub fn apply(root: &Path, request: &Request) -> Result<Outcome, Message> {
   Ok(Outcome::Saved(id))
 }
 
+/// Creates the new `profile` as v1 with every widening it asks accepted: the person who pressed Create decided them,
+/// which the caller has checked. Refused as [`apply`] refuses it otherwise.
+pub fn create_decided(root: &Path, profile: AgentProfile) -> Result<ResourceId, Message> {
+  let mut request = Request {
+    existing: None,
+    profile,
+    action: Action::Save,
+    allowed: Vec::new(),
+    prompt_decided: true,
+  };
+  match apply(root, &request)? {
+    Outcome::Saved(id) => Ok(id),
+    Outcome::Confirm(reasons) => {
+      request.allowed = reasons;
+      match apply(root, &request)? {
+        Outcome::Saved(id) => Ok(id),
+        Outcome::Confirm(_) => Err(Message::new("errors.draftChanged")),
+      }
+    }
+  }
+}
+
 /// What the stored draft of `entry` already widens over the latest published version: allowed when it was saved, so
 /// an autosave of later edits asks only about what widens beyond it. A profile without a draft widens nothing.
 pub fn approved_in(root: &Path, entry: &ProfileEntry) -> Result<Vec<Message>, Message> {

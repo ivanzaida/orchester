@@ -39,7 +39,7 @@
     "bodyFormat": "Markdown · SKILL.md",
     "bodyPlaceholder": "What an agent should know or do, in Markdown",
     "publish": "Publish v{{version}}",
-    "create": "Create draft",
+    "create": "Create",
     "saving": "Unsaved changes · saving",
     "publishing": "Publishing…",
     "publishFailed": "Could not publish {{name}} v{{version}}",

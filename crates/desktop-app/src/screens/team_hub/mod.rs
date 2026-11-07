@@ -39,7 +39,11 @@ use orchester_workspace::{
   agents::team_hub::TeamHub, background, messages::Message, sharing::team::TeamConfiguration, tasks::outside::Outside,
 };
 
-use self::{create::NewMenu, head::FilterShown, model::Listing};
+use self::{
+  create::NewMenu,
+  head::FilterShown,
+  model::{Kind, Listing},
+};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
@@ -130,8 +134,10 @@ impl Component for TeamHubScreen {
     let hub = loaded.data.as_ref().filter(|_| failed.is_none());
     let listing = hub.map(Listing::of);
     let navigation = Navigation::of(ctx);
+    // A form has no resource chosen: the filter's links go to the kind's list.
     let selected = listing
       .as_ref()
+      .filter(|_| !view.adding)
       .and_then(|listing| listing.selected(view.filter, view.item))
       .map(|entry| entry.id);
     let body = match (failed, hub.zip(listing.as_ref())) {
@@ -237,7 +243,10 @@ fn hub_body(
   (reading, retry): (bool, &Signal<u64>),
 ) -> Element {
   let id = project.open.project.id();
-  let Some(selected) = listing.selected(view.filter, view.item) else {
+  // Only an admin creates: a member who follows a link to a form sees the kind's list.
+  let adding = Kind::of_filter(view.filter).filter(|_| view.adding && team.may_change);
+  let selected = listing.selected(view.filter, view.item).filter(|_| adding.is_none());
+  if selected.is_none() && adding.is_none() {
     return EmptyState::new(
       "team-hub-empty",
       Icon::Users,
@@ -245,23 +254,70 @@ fn hub_body(
       ctx.t("team_hub.empty.detail"),
     )
     .into();
-  };
+  }
   let list = list::list(
     ctx,
     listing,
     &list::Shown {
       project: id,
       filter: view.filter,
-      selected: Some(selected),
+      selected,
+      adding,
       navigation,
     },
   );
+  let panel = match (adding, selected) {
+    (Some(kind), _) => create::panel(
+      ctx,
+      create::Props {
+        repo_root: project.open.repo_root.clone(),
+        project: id,
+        kind,
+        listing: listing.clone(),
+      },
+    ),
+    (None, Some(selected)) => resource_panel(
+      ctx,
+      (project, team, hub),
+      (listing, selected),
+      (navigation, reading, retry),
+    ),
+    (None, None) => return Element::from(Row::new()),
+  };
+  Row::new()
+    .id("team-hub-master-detail")
+    .describe("state", if reading { "reading" } else { "read" })
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+    .opacity(if reading { HUB_READING_OPACITY } else { 1.0 })
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(RadiusSize::Md)
+    .child(
+      Column::new()
+        .width(Dimension::Px(list::LIST_WIDTH))
+        .height(Dimension::Pct(100.0))
+        .flex_shrink(0.0)
+        .border_right(Border::inside(BorderSize::Sm, PaletteColor::Border))
+        .child(list),
+    )
+    .child(panel)
+    .into()
+}
+
+/// The panel of the resource `selected`: its kind's own, or the frame the kinds without one share.
+fn resource_panel(
+  ctx: &mut Ctx,
+  (project, team, hub): (&ShownProject, &TeamConfiguration, &TeamHub),
+  (listing, selected): (&Listing, &model::Entry),
+  (navigation, reading, retry): (&Navigation, bool, &Signal<u64>),
+) -> Element {
+  let id = project.open.project.id();
   let shown = panel::Shown {
     project: id,
     may_change: team.may_change,
     navigation,
   };
-  let panel = match (hub.profile(selected.id), hub.mcp_server(selected.id)) {
+  match (hub.profile(selected.id), hub.mcp_server(selected.id)) {
     (Some(sheet), _) => profile::panel(
       ctx,
       profile::Props {
@@ -287,23 +343,5 @@ fn hub_body(
       },
     ),
     (None, None) => panel::panel(ctx, listing, selected, &shown),
-  };
-  Row::new()
-    .id("team-hub-master-detail")
-    .describe("state", if reading { "reading" } else { "read" })
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Pct(100.0))
-    .opacity(if reading { HUB_READING_OPACITY } else { 1.0 })
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Md)
-    .child(
-      Column::new()
-        .width(Dimension::Px(list::LIST_WIDTH))
-        .height(Dimension::Pct(100.0))
-        .flex_shrink(0.0)
-        .border_right(Border::inside(BorderSize::Sm, PaletteColor::Border))
-        .child(list),
-    )
-    .child(panel)
-    .into()
+  }
 }

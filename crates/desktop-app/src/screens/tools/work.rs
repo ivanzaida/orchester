@@ -38,22 +38,34 @@ pub(super) fn action(ctx: &mut Ctx) -> Work {
     async move {
       let (name, change, version) = operation(&start.edit);
       let publishing = matches!(change, ToolChange::Publish(_));
+      let creating = matches!(change, ToolChange::Create(..));
       let spec = operations::tool_change(&start.open, &name, &change, version);
       let root: PathBuf = start.open.repo_root.clone();
       let (target, published) = (root.clone(), root.clone());
       let project = start.open.project.id();
       let changes = services.changes.clone();
+      let sent = services.clone();
       let saved = services
         .activity
         .track_to(
           spec,
           async move {
-            background::run(move || {
-              let saved = editor::apply_in(&root, start.edit, &start.allowed)?;
-              // Right after the write, whether or not the editor is still there to take the save.
-              Ok(Saved(saved, changes.record(project, Outside::Tools)))
+            let written = root.clone();
+            let (saved, recorded) = background::run(move || {
+              let saved = editor::apply_in(&written, start.edit, &start.allowed)?;
+              // Right after the write, whether or not the editor is still there to take the save; a new tool in a
+              // shared project is the team's only once its server takes it, so it is told after that.
+              Ok::<_, Message>((saved, (!creating).then(|| changes.record(project, Outside::Tools))))
             })
-            .await?
+            .await??;
+            let counts = match recorded {
+              Some(counts) => counts,
+              None => {
+                crate::screens::hub::team::send_created(&sent, &root, saved).await?;
+                sent.changes.record(project, Outside::Tools)
+              }
+            };
+            Ok(Saved(saved, counts))
           },
           move |saved| Some(operations::tool(&target, saved.0)),
         )

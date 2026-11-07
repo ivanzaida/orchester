@@ -4,7 +4,7 @@
     "rowLine": "{{kind}} · {{detail}} · {{secrets}}",
     "rowStatus": "{{status}} · {{version}}",
     "pageSub": "{{kind}} · {{standing}} · {{used}}",
-    "create": "Create draft",
+    "create": "Create",
     "saveFailed": "The draft was not saved",
     "barSubNew": "Saved as a draft once it has a name and a program. Nothing runs it until you publish it.",
     "barSubPublished": "Edits save as a draft; runs keep the tool version they started with.",

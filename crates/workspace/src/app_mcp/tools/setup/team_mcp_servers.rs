@@ -161,7 +161,7 @@ pub(super) async fn remove(services: &Services, found: Found) -> Result<Value, T
 }
 
 /// Refused as `not_admin` unless the person may change the team's configuration.
-fn require_admin(db: &ProjectDb) -> Result<(), ToolError> {
+pub(super) fn require_admin(db: &ProjectDb) -> Result<(), ToolError> {
   if db.may_change_configuration()? {
     Ok(())
   } else {
@@ -192,7 +192,7 @@ fn first_waits(db: &ProjectDb, id: ResourceId) -> Result<bool, StoreError> {
 }
 
 /// The names of the team's MCP servers, which a new one may not take.
-fn team_names(db: &ProjectDb) -> Result<Vec<orchester_core::connection::mcp::McpServerName>, StoreError> {
+pub(super) fn team_names(db: &ProjectDb) -> Result<Vec<orchester_core::connection::mcp::McpServerName>, StoreError> {
   Ok(
     db.resources(ResourceKind::McpServer)?
       .iter()
@@ -204,7 +204,7 @@ fn team_names(db: &ProjectDb) -> Result<Vec<orchester_core::connection::mcp::Mcp
 
 /// Creates the team MCP server `server` as its first version, v1 with no draft, under a slug made from its name. The
 /// version waits for the team server ([`crate::sharing::Servers::send_created`]).
-fn create_published_server(
+pub(super) fn create_published_server(
   db: &mut ProjectDb,
   server: &TeamMcpServer,
   now: Timestamp,

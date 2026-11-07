@@ -1,0 +1,82 @@
+//! The form of a new skill (`Agents · New skill` A11 `p4aSf`): its name, its description and its files. A skill is the
+//! team's whole: nothing is filled in on a computer afterwards. Its SKILL.md is made from the description; the other
+//! files and which CLIs load it are not in this form yet, and it says so rather than offering what it cannot make.
+
+use lurq::{app::ctx::Ctx, core::Signal};
+use orchester_core::resource::{InstructionScope, Skill};
+
+use super::{
+  fields::{self, Body, Error, Look, Shown, Spec, name_error},
+  work::Make,
+};
+use crate::screens::team_hub::rows;
+
+const NAME: Spec = Spec::new("skill-name", "team_new.skill.name")
+  .sub("team_new.skill.nameSub")
+  .required();
+const DESCRIPTION: Spec = Spec::new("skill-description", "team_new.skill.description").required();
+const FILES: Spec = Spec::new("skill-files", "team_new.skill.files").sub("team_new.skill.filesSub");
+
+pub(super) struct Fields {
+  name: Signal<String>,
+  description: Signal<String>,
+}
+
+impl Fields {
+  pub(super) fn new(ctx: &mut Ctx) -> Self {
+    Self {
+      name: ctx.signal(String::new()),
+      description: ctx.signal(String::new()),
+    }
+  }
+
+  pub(super) fn body(&self, ctx: &mut Ctx, shown: &Shown<'_>) -> Body {
+    let (name, description) = (self.name.get(), self.description.get());
+    let name_says = name_error(ctx, shown, &name, "team_new.skill.nameTaken");
+    let description_says = (shown.tried && description.trim().is_empty()).then_some(Error::Required);
+    let rows = vec![
+      fields::text_row(
+        ctx,
+        &NAME,
+        name_says.as_ref(),
+        (&self.name, "team_new.skill.namePlaceholder"),
+        (Look::Mono, shown.locked),
+      ),
+      fields::text_row(
+        ctx,
+        &DESCRIPTION,
+        description_says.as_ref(),
+        (&self.description, "team_new.skill.descriptionPlaceholder"),
+        (Look::Area, shown.locked),
+      ),
+      fields::row(
+        ctx,
+        &FILES,
+        None,
+        rows::tags("team-new-skill-files-value", ["SKILL.md".to_owned()]),
+      ),
+    ];
+    Body {
+      rows,
+      computer: "team_new.computer.skill",
+      make: made(&name, &description),
+      off: fields::taken(shown, &name).map(|_| fields::FIX_NAME),
+    }
+  }
+}
+
+/// The skill the fields make: its SKILL.md is its description, and it has no other file.
+fn made(name: &str, description: &str) -> Option<Make> {
+  if name.trim().is_empty() || description.trim().is_empty() {
+    return None;
+  }
+  let skill = Skill::new(
+    description.trim().to_owned(),
+    description.trim().to_owned(),
+    Vec::new(),
+    InstructionScope::Project,
+  )
+  // With no files, the only way a skill is refused (a file listed twice) cannot happen.
+  .ok()?;
+  Some(Make::Skill(name.trim().to_owned(), Box::new(skill)))
+}

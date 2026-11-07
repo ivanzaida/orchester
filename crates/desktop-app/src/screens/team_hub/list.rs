@@ -13,7 +13,8 @@ use orchester_core::id::ProjectId;
 use orchester_workspace::readiness::Group;
 
 use super::{
-  model::{Entry, GROUPS, Listing},
+  create,
+  model::{Entry, GROUPS, Kind, Listing},
   row::row,
 };
 use crate::{
@@ -32,6 +33,8 @@ pub(super) struct Shown<'a> {
   pub project: ProjectId,
   pub filter: HubFilter,
   pub selected: Option<&'a Entry>,
+  /// The kind whose form is open in the panel: its *New* row stands over the groups, chosen.
+  pub adding: Option<Kind>,
   pub navigation: &'a Navigation,
 }
 
@@ -53,6 +56,7 @@ pub(super) fn list(ctx: &lurq::app::ctx::Ctx, listing: &Listing, shown: &Shown<'
     .width(Dimension::Pct(100.0))
     .padding(Padding::vertical(ExtraSpacing::Snug.role()))
     .spacing(SpacingSize::Sm)
+    .with_children(shown.adding.map(|kind| create::new_row(ctx, kind)))
     .with_children(groups)
     .with_children(note(ctx, shown.filter));
   ScrollVertical::new(groups)

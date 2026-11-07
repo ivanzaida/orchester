@@ -392,7 +392,7 @@
     "useDetail": "{{model}} · {{source}} · {{permissions}} · {{runs}}",
     "newDraft": "New profile · not saved yet",
     "newDraftSub": "Create the draft to save it; after that, edits save as you make them.",
-    "createDraft": "Create draft",
+    "createDraft": "Create",
     "barFirstDraft": "Draft v1 · {{saved}} · not published",
     "barDraft": "Draft v{{next}} · {{saved}} · Based on Published v{{version}}",
     "changedField": "{{field}} {{from}} → {{to}}"
