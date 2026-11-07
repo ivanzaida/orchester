@@ -78,7 +78,7 @@ pub(in crate::app_mcp::tools) async fn run_task(
     let commit = branch_tip(programs.runner(), &root, &branch)?;
     match workspace
       .team_start_readiness(&root, vault.get(), pipeline)
-      .map_err(|error| readiness_failed(&error))?
+      .map_err(ToolError::from)?
     {
       StartReadiness::Ready(programs) => Ok((commit, programs)),
       StartReadiness::NotReady(refusal) => Err(ToolError::NotReadyHere(refusal)),
@@ -234,11 +234,6 @@ fn pipeline_missing(named: &str) -> ToolError {
     "team_pipeline_missing",
     vec![Message::new("appMcp.errors.teamPipelineMissing").with("pipeline", named.to_owned())],
   )
-}
-
-fn readiness_failed(error: &crate::readiness::ReadinessError) -> ToolError {
-  tracing::warn!(%error, "the readiness of a team pipeline could not be read for a start");
-  ToolError::refused("readiness_unreadable", vec![error.message()])
 }
 
 fn start_failed() -> ToolError {

@@ -29,7 +29,6 @@ use crate::{
     services::{Services, blocking},
   },
   messages::Message,
-  readiness::{NOT_READY_HERE, ReadinessError},
   sharing::project::WorkClaim,
   tasks::{
     data::{SaveTarget, published_pipelines},
@@ -192,10 +191,9 @@ fn ready_here(services: &Services, project: &OpenProject, task: &Task) -> Result
   };
   match services
     .workspace
-    .not_ready_here(&project.repo_root, services.vault.get(), pipeline)
-    .map_err(|ReadinessError::Store(error)| ToolError::from(error))?
+    .not_ready_here(&project.repo_root, services.vault.get(), pipeline)?
   {
-    Some(refused) => Err(ToolError::refused(NOT_READY_HERE, refused.messages())),
+    Some(refused) => Err(ToolError::NotReadyHere(refused)),
     None => Ok(()),
   }
 }

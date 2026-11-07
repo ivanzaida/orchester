@@ -25,7 +25,7 @@ pub enum Undecided {
   /// A tool of a team project holds a project secret by id. A team names its secrets, so nobody can say whether the
   /// secret this id stands for has a value on the teammates' computers (ORC-830 puts the tool in the team's form).
   TeamToolSecretById(SecretId),
-  /// A tool of a local project uses a secret the project does not have.
+  /// A tool of a local project uses a secret the project does not have, or has archived: no value can be set for it.
   SecretGone(SecretId),
   /// The keychain refused to say whether a tool's secret has a value here, or this platform has none.
   SecretUnreadable(SecretId),

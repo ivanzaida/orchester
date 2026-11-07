@@ -791,25 +791,6 @@
         "folderMissing": "Step “{{step}}” runs on an account whose folder {{folder}} no longer exists. Remove the account or choose another one for the connection."
       }
     },
-    "notReadyHere": {
-      "lead": "Nothing was started: the pipeline “{{pipeline}}” is not ready on this computer.",
-      "connection": {
-        "none": "The agent profile “{{profile}}” runs on a CLI this computer has no connection for. Add that connection in Connections.",
-        "pickNeeded": "The agent profile “{{profile}}” runs on a CLI this computer has several connections for, and none is picked for it. Pick one for the profile."
-      },
-      "mcpOff": "The MCP server “{{server}}” is not switched on on this computer.",
-      "mcpProgram": {
-        "notSet": "The MCP server “{{server}}” has no program path set on this computer.",
-        "fileGone": "The MCP server “{{server}}” starts {{path}}, which is not there any more."
-      },
-      "secret": "No value is set on this computer for the secret {{name}}.",
-      "localProgram": {
-        "notFound": "The MCP server “{{server}}” starts a program that is on neither the PATH agents start with nor in the project. Install it, or change the server’s program in Connections.",
-        "moved": "The MCP server “{{server}}” starts a file that now leads into the project’s repository or off this computer, which a run does not start. Choose another program for the server in Connections."
-      },
-      "localSecret": "The secret “{{name}}” that a tool uses has no value in this computer’s keychain. Set its value in Secrets.",
-      "secretUnreadable": "The keychain did not say whether a secret that a tool uses has a value on this computer, so it is not assumed to. Check the keychain, then run again."
-    },
     "start": {
       "incomplete": "Add the missing details before running the task.",
       "runnerUnavailable": "The runner is not connected. Try again once it is online.",
@@ -2242,7 +2223,7 @@
     "undecidedRunsUnknown": "The pipeline runs {{resource}}, which this computer has no version of yet. Wait for it to sync, or ask a team Admin.",
     "undecidedConnectionGone": "{{resource}} runs on a connection this project no longer has. Choose another connection for it.",
     "undecidedTeamToolSecretById": "The tool {{resource}} holds a project secret by id, which the team cannot name, so it is not known whether this computer has its value. Ask a team Admin to publish it again.",
-    "undecidedSecretGone": "The tool {{resource}} uses a secret this project no longer has. Choose another secret for it.",
+    "undecidedSecretGone": "The tool {{resource}} uses a secret this project no longer has or has archived. Choose another secret for it.",
     "undecidedSecretUnreadable": "The keychain did not say whether this computer has the secret the tool {{resource}} uses. Unlock the keychain and run it again."
   },
   "claims": {

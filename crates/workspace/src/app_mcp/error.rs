@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 
 use crate::{
   messages::{self, Message},
-  readiness::NotReadyHere,
+  readiness::{NotReadyHere, ReadinessError},
   runner::{RequestError, RunRequestError},
 };
 
@@ -147,6 +147,13 @@ impl ToolError {
       }
     };
     json!({ "error": { "code": self.code(), "message": message, "reasons": reasons } })
+  }
+}
+
+impl From<ReadinessError> for ToolError {
+  fn from(error: ReadinessError) -> Self {
+    tracing::warn!(%error, "the readiness of a pipeline could not be read for a start");
+    Self::refused("readiness_unreadable", vec![error.message()])
   }
 }
 
