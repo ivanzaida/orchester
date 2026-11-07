@@ -316,10 +316,10 @@ impl Component for TurnView {
   }
 }
 
-/// A turn's row: what opens it, the answer and how it ended; or a compaction's, a rewind's or a watch entry's row; or
-/// a `/watching` and its answer from the live state (`super::watching`). While a message is edited in place, what
-/// sending it drops is dimmed: its own answer under the line that counts them, and every row after it
-/// (`super::rewind::editing`).
+/// A turn's row: what opens it, the answer and how it ended; or a compaction's, a rewind's or a watch entry's row, with
+/// under a /watch's line the cards of its targets other conversations lead; or a `/watching` and its answer from the
+/// live state (`super::watching`). While a message is edited in place, what sending it drops is dimmed: its own answer
+/// under the line that counts them, and every row after it (`super::rewind::editing`).
 fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
   let key = row.turn.key();
   let dropped = row.env.rewind.drops(&row.turn);
@@ -348,7 +348,17 @@ fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
           (row.turn.at, &row.env),
         )
       });
-    let column = Column::new().width(Dimension::Pct(100.0)).with_children(line);
+    // A /watch's line, then the cards of its targets other conversations lead (05 `EIjDH`).
+    let cards = row
+      .turn
+      .led
+      .as_ref()
+      .map(|led| super::led::column(ctx, &key, led, &row.env));
+    let column = Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(OrchestratorSpacing::Items.role())
+      .with_children(line)
+      .with_children(cards);
     return room(ctx, dimmed(column, dropped), first);
   }
   let (opening, answer) = opening(ctx, row, &key);

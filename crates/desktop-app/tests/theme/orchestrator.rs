@@ -30,6 +30,8 @@ fn orchestrator_roles_follow_the_design() {
     (OrchestratorText::Mode, 12.0, 1.3, FontWeight::Medium, "Geist"),
     // *Settings ↗* at the runs-on picker's foot (`rIT51`).
     (OrchestratorText::PickerLink, 12.0, 1.3, FontWeight::Normal, "Geist"),
+    // What the card of a target another conversation leads says under its title (`kjs5n` in `f1J8z`).
+    (OrchestratorText::CardNote, 11.5, 1.5, FontWeight::Normal, "Geist"),
     // A watch command's order (`oUZqo`), a line's aside and its end (`vYl6I`, `Hoj8n` in `avDZO`).
     (OrchestratorText::CommandOrder, 13.0, 1.55, FontWeight::Normal, "Geist"),
     (OrchestratorText::LineAside, 12.0, 1.3, FontWeight::Normal, "Geist"),
