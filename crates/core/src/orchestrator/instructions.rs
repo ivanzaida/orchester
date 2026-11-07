@@ -219,6 +219,8 @@ pub fn wait_prompt(wait: &AgentWait) -> String {
     WaitKind::Question => "asks a question with suggested answers",
     WaitKind::Message => "waits for a message: the answer to what it wrote",
     WaitKind::Plan => "proposed a plan that waits for a decision",
+    // Not asked for: a tool request starts no turn ([`WaitKind::starts_turns`]).
+    WaitKind::Approval => "waits for the person's decision on a tool request",
     WaitKind::Ended(end) => return end_prompt(wait, end),
     WaitKind::Event(event) => return event_prompt(wait, event, None),
   };

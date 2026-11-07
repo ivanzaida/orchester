@@ -157,13 +157,14 @@ pub struct ChatView {
 
 /// What the line of an event of a task's run names beside its wait ([`super::events`]): the module its task is in, the
 /// branch the run merges into, and the task the run waits on; each `None` when there is none or the project no longer
-/// keeps it.
+/// keeps it. For a run's stall that no longer stands, what became of the run since (`settled`).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct EventFacts {
   /// The module's name.
   pub module: Option<String>,
   pub branch: Option<String>,
   pub waited: Option<WaitedTask>,
+  pub settled: Option<StallSettled>,
 }
 
 /// A task a run waits on: its key as people read it (`KON-52`), and the number of its run the event is about, when it
@@ -172,6 +173,17 @@ pub struct EventFacts {
 pub struct WaitedTask {
   pub key: String,
   pub number: Option<u32>,
+}
+
+/// What became of a run since a stall of it a conversation keeps, once that stall no longer stands (ORC-894).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StallSettled {
+  /// It progressed again, first at this time.
+  Moving(Timestamp),
+  /// It made no progress since, but waits now: for a person, in a queue, paused or held.
+  Waits,
+  /// It ended, or the project no longer keeps it.
+  Ended,
 }
 
 /// What became of a run since an end of it a conversation keeps, once that end no longer stands.
@@ -226,7 +238,7 @@ impl ChatView {
     let todos = db.chat_todos(chat).map_err(|error| messages::store_error(&error))?;
     let (standing, moved) =
       super::waits::standing(&db, chat, &entries).map_err(|error| messages::store_error(&error))?;
-    let events = super::events::event_facts(&db, &entries).map_err(|error| messages::store_error(&error))?;
+    let events = super::events::event_facts(&db, &entries, &standing).map_err(|error| messages::store_error(&error))?;
     let waits_on = super::events::waits_on(&db, &entries).map_err(|error| messages::store_error(&error))?;
     let context = db.chat_context(chat).map_err(|error| messages::store_error(&error))?;
     Ok(Some(Self {
@@ -250,6 +262,15 @@ impl ChatView {
   /// What the line of the event kept as entry `seq` names beside its wait; `None` for an entry that is no event.
   pub fn event_of(&self, seq: i64) -> Option<&EventFacts> {
     self.events.get(&seq)
+  }
+
+  /// Whether a run's stall the conversation keeps still stands as it was read: it settles once its run progresses,
+  /// which only the run's transcript may tell, so the screen reads it again on those too while one stands.
+  pub fn stall_stands(&self) -> bool {
+    self.entries.iter().any(|entry| {
+      self.standing.contains(&entry.seq)
+        && matches!(&entry.kind, EntryKind::Wait { wait, .. } if super::stalls::is_stall(wait.kind))
+    })
   }
 
   /// How the wait of run `run` stands now, when a *waits on* row of the conversation names it.
