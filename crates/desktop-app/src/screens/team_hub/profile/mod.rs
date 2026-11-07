@@ -9,15 +9,12 @@
 //! MCP servers are on, a secret's value). The connection is picked by a person or by automation as the workspace
 //! takes it; the others widen what agents may do, so a press that automation made does nothing and says so.
 
-mod actions;
 mod bar;
 mod computer;
 mod fix;
 mod from_team;
 mod parts;
 mod ready;
-mod rows;
-mod secret;
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -33,13 +30,11 @@ use lurq::{
 use orchester_core::id::{ConnectionId, ProjectId, ResourceId};
 use orchester_workspace::agents::team_profile::{ConnectionChoice, TeamProfileSheet};
 
-use self::{
-  actions::Actions,
-  fix::{Busy, Fix},
-};
+use self::fix::Fix;
 use super::{
+  actions::Actions,
   model::{Entry, Listing},
-  panel,
+  panel, secret,
 };
 use crate::{
   navigation::Navigation,
@@ -63,9 +58,8 @@ pub(super) struct Props {
 }
 impl DevtoolsInspectable for Props {}
 
-/// The id the person-only check of a fix is made under, and of the dialog's *Save*.
+/// The id the person-only check of a fix is made under.
 const FIX: &str = "team-hub-fix";
-const SAVE: &str = "team-hub-secret-save";
 
 pub(super) fn panel(ctx: &mut Ctx, props: Props) -> Element {
   ctx.mount_keyed::<ProfilePanel>(&format!("team-hub-profile-{}", props.entry.id), props)
@@ -98,7 +92,7 @@ impl Component for ProfilePanel {
       person: PersonOnly::new(ctx),
     };
     panel.watch_pick(ctx, props.entry.id);
-    panel.watch_save(ctx);
+    panel.secret.follow_save(ctx, &panel.actions.add_value);
     panel
   }
 
@@ -110,7 +104,7 @@ impl Component for ProfilePanel {
     let missing = entry.standing.as_ref().map_or(&[][..], |standing| standing.missing());
     let parts = parts::parts(ctx, listing, entry, sheet);
     let navigation = Navigation::of(ctx);
-    let busy = self.busy(&props);
+    let busy = self.actions.busy(props.reading);
     let press = |fix: &Fix| self.press(fix, &props, &navigation);
     let connection = self.connection(sheet);
     let words = bar::Words {
@@ -141,10 +135,10 @@ impl Component for ProfilePanel {
       .first()
       .and_then(Fix::of)
       .map(|fix| bar::bar(ctx, &words, (&fix, missing), press(&fix), busy));
-    let under = self.person.reason(ctx, SAVE);
+    let under = self.person.reason(ctx, secret::SAVE);
     let dialog = self.secret.dialog(
       ctx,
-      self.save_value(),
+      secret::Entry::save_by(&self.actions.add_value, &self.person),
       self.actions.add_value.state().get().is_pending(),
       under,
     );
@@ -200,38 +194,11 @@ impl ProfilePanel {
     });
   }
 
-  /// A saved value closes the dialog; a failure shows in it, with the typed text kept.
-  fn watch_save(&self, ctx: &mut Ctx) {
-    let (open, error) = (self.secret.open.clone(), self.secret.error.clone());
-    ctx.watch(&self.actions.add_value.state(), move |state| {
-      if state.is_pending() {
-        return;
-      }
-      if state.is_fulfilled() {
-        open.set(false);
-      } else if let Some(failed) = &state.error {
-        error.set(Some(failed.clone()));
-      }
-    });
-  }
-
   /// The name of the connection the pinned *Use* names and uses.
   fn connection(&self, sheet: &TeamProfileSheet) -> String {
     chosen_connection(&self.chosen.get(), &sheet.connections)
       .map(|choice| choice.name.clone())
       .unwrap_or_default()
-  }
-
-  /// Whether a fix can be pressed: not while the hub is read again, whose last answer it would act on, nor while one
-  /// is being taken.
-  fn busy(&self, props: &Props) -> Busy {
-    if props.reading {
-      Busy::Reading
-    } else if self.actions.pending() {
-      Busy::Taking
-    } else {
-      Busy::Idle
-    }
   }
 
   /// What a press on the fix `fix` does, for the control `id`.
@@ -270,16 +237,6 @@ impl ProfilePanel {
         guarded(Arc::new(move || entry.ask(&name)))
       }
     }
-  }
-
-  /// What the dialog's *Save* does, a person's alone: the value goes on as the person's.
-  fn save_value(&self) -> secret::Save {
-    let (action, person) = (self.actions.add_value.clone(), self.person.clone());
-    Arc::new(move |name, value| {
-      if person.allows(SAVE) {
-        action.run((name, value));
-      }
-    })
   }
 
   /// *Edit* in the head, which an admin has where the kind has an editor.

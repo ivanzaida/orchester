@@ -9,16 +9,6 @@ use orchester_core::{
 
 use crate::ui::icon::Icon;
 
-/// Whether a fix can be pressed now.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Busy {
-  Idle,
-  /// A fix is being taken.
-  Taking,
-  /// The hub is read again, and what the panel shows is its last answer.
-  Reading,
-}
-
 /// A fix this computer takes by itself; a part this panel does not fix (a server this app cannot run, a keychain
 /// that cannot say, a reviewer's connection) has none, and no action stands in its place.
 #[derive(Clone, Debug, PartialEq, Eq)]

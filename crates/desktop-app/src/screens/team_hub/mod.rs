@@ -11,13 +11,17 @@
 //! page shows the last answer dimmed with *Reading…*, and a read that failed shows its failure and no counts, never the
 //! last answer as current. Before the project is known to be shared the page is [`unread`]'s.
 
+mod actions;
 mod create;
 mod head;
 mod list;
+mod mcp;
 mod model;
 mod panel;
 mod profile;
 mod row;
+mod rows;
+mod secret;
 pub(super) mod unread;
 mod words;
 
@@ -136,7 +140,13 @@ impl Component for TeamHubScreen {
         if !reading {
           keep_route_on_shown(&project, view, selected, &navigation);
         }
-        hub_body(ctx, (&project, &team), (hub, listing), (&view, &navigation), reading)
+        hub_body(
+          ctx,
+          (&project, &team),
+          (hub, listing),
+          (&view, &navigation),
+          (reading, &self.retry),
+        )
       }
       (None, None) => loading("team-hub-loading", &ctx.t("team_hub.reading")).into(),
     };
@@ -224,7 +234,7 @@ fn hub_body(
   (project, team): (&ShownProject, &TeamConfiguration),
   (hub, listing): (&TeamHub, &Listing),
   (view, navigation): (&HubView, &Navigation),
-  reading: bool,
+  (reading, retry): (bool, &Signal<u64>),
 ) -> Element {
   let id = project.open.project.id();
   let Some(selected) = listing.selected(view.filter, view.item) else {
@@ -251,8 +261,8 @@ fn hub_body(
     may_change: team.may_change,
     navigation,
   };
-  let panel = match hub.profile(selected.id) {
-    Some(sheet) => profile::panel(
+  let panel = match (hub.profile(selected.id), hub.mcp_server(selected.id)) {
+    (Some(sheet), _) => profile::panel(
       ctx,
       profile::Props {
         repo_root: project.open.repo_root.clone(),
@@ -264,7 +274,19 @@ fn hub_body(
         sheet: sheet.clone(),
       },
     ),
-    None => panel::panel(ctx, listing, selected, &shown),
+    (None, Some(sheet)) => mcp::panel(
+      ctx,
+      mcp::Props {
+        repo_root: project.open.repo_root.clone(),
+        project: id,
+        reading,
+        reread: retry.clone(),
+        listing: listing.clone(),
+        entry: selected.clone(),
+        sheet: sheet.clone(),
+      },
+    ),
+    (None, None) => panel::panel(ctx, listing, selected, &shown),
   };
   Row::new()
     .id("team-hub-master-detail")

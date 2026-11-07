@@ -12,11 +12,11 @@ use lurq::{
 };
 
 use super::{
-  fix::{Busy, Fix},
+  fix::Fix,
   parts::{Part, State},
-  rows,
 };
 use crate::{
+  screens::team_hub::{actions::Busy, rows},
   theme::{HubText, IconSize},
   ui::{
     icon::{Icon, icon},

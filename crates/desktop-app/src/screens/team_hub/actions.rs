@@ -1,6 +1,6 @@
-//! What the panel's fixes write: each is one action of the workspace's fill-ins, run off the UI thread. The pick and
-//! the program path go on as the workspace takes them; a secret's value is a person's alone, and the window checks
-//! that before it runs the action (`mod.rs`).
+//! What the panels' fixes write, the profile's and the MCP server's: each is one action of the workspace's fill-ins,
+//! run off the UI thread. The pick, the program path and switching a server off go on as the workspace takes them;
+//! turning a server on and a secret's value are a person's alone, and the window checks that before it runs the action.
 
 use std::path::Path;
 
@@ -18,6 +18,16 @@ use crate::services::{
   path_picker::{PathKind, PathPicker},
 };
 
+/// Whether a fix can be pressed now.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Busy {
+  Idle,
+  /// A fix is being taken.
+  Taking,
+  /// The hub is read again, and what the panel shows is its last answer.
+  Reading,
+}
+
 #[derive(Clone)]
 pub(super) struct Actions {
   /// Keeps the connection (second) as the profile's (first) on this computer.
@@ -25,6 +35,8 @@ pub(super) struct Actions {
   /// Asks for the program of the MCP server, then sets it.
   pub set_path: FutureAction<ResourceId, (), Message>,
   pub switch_on: FutureAction<ResourceId, (), Message>,
+  /// Switching off is always taken, also for automation; only a person's press reaches it here.
+  pub switch_off: FutureAction<ResourceId, (), Message>,
   /// Keeps the value in the keychain under the secret's name. It holds the value as a [`SecretValue`] from the dialog
   /// on, which shows nothing of it.
   pub add_value: FutureAction<(SecretName, SecretValue), (), Message>,
@@ -77,6 +89,17 @@ impl Actions {
         }
       })
     };
+    let switch_off = {
+      let (workspace, root) = (workspace.clone(), root.clone());
+      ctx.future_action(move |server: ResourceId| {
+        let (workspace, root) = (workspace.clone(), root.clone());
+        async move {
+          background::run(move || workspace.switch_team_mcp_on_here(&root, server, false, Answerer::Person))
+            .await?
+            .map_err(|error| error.message())
+        }
+      })
+    };
     let add_value = ctx.future_action(move |(name, value): (SecretName, SecretValue)| {
       let (workspace, root, vault) = (workspace.clone(), root.clone(), vault.clone());
       async move {
@@ -89,7 +112,20 @@ impl Actions {
       pick,
       set_path,
       switch_on,
+      switch_off,
       add_value,
+    }
+  }
+
+  /// Whether a fix can be pressed: not while the hub is read again, whose last answer it would act on, nor while one is
+  /// being taken.
+  pub(super) fn busy(&self, reading: bool) -> Busy {
+    if reading {
+      Busy::Reading
+    } else if self.pending() {
+      Busy::Taking
+    } else {
+      Busy::Idle
     }
   }
 
@@ -98,6 +134,7 @@ impl Actions {
     self.pick.state().get().is_pending()
       || self.set_path.state().get().is_pending()
       || self.switch_on.state().get().is_pending()
+      || self.switch_off.state().get().is_pending()
   }
 
   /// Why the last fix of the connection, the path or the server did nothing, as the workspace said.
@@ -106,6 +143,7 @@ impl Actions {
       self.pick.state().get(),
       self.set_path.state().get(),
       self.switch_on.state().get(),
+      self.switch_off.state().get(),
     ]
     .into_iter()
     .find_map(|state| state.error.clone().filter(|_| !state.is_pending()))

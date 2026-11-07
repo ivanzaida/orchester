@@ -4,6 +4,8 @@
 //! (ORC-832…834): a profile's is [`super::profile`]; until the others have theirs the panel is this frame, and its
 //! pinned action is only Edit, which opens the editor the kind has today.
 
+use std::sync::Arc;
+
 use lurq::{
   app::{
     ctx::Ctx,
@@ -73,6 +75,11 @@ pub(super) fn panel(ctx: &Ctx, listing: &Listing, entry: &Entry, shown: &Shown<'
 
 /// The head: what the resource is and its version over its name, and at its end what `end` puts there (*Edit*).
 pub(super) fn head(ctx: &Ctx, entry: &Entry, end: Option<Element>) -> Row {
+  head_saying(ctx, entry, None, end)
+}
+
+/// [`head`] with `version` in the place of the version's number: what the panel of the kind says after what it is.
+pub(super) fn head_saying(ctx: &Ctx, entry: &Entry, version: Option<String>, end: Option<Element>) -> Row {
   let mut where_ = Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
@@ -82,9 +89,9 @@ pub(super) fn head(ctx: &Ctx, entry: &Entry, end: Option<Element>) -> Row {
         .variant(HubText::Status.role())
         .nowrap(),
     );
-  if let Some(number) = entry.number {
+  if let Some(number) = version.or_else(|| entry.number.map(|number| number.to_string())) {
     where_ = where_.child(
-      Text::new(&number.to_string())
+      Text::new(&number)
         .id("team-hub-panel-version")
         .variant(HubText::Hint.role())
         .nowrap(),
@@ -117,7 +124,11 @@ pub(super) fn edit_button(ctx: &Ctx, open: Open) -> Element {
 }
 
 pub(super) fn chips(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Row {
-  let (words, tone) = words::chip(ctx, listing, entry);
+  chips_saying(ctx, entry, words::chip(ctx, listing, entry))
+}
+
+/// [`chips`] whose second chip says `(words, tone)`.
+pub(super) fn chips_saying(ctx: &Ctx, entry: &Entry, (words, tone): (Arc<str>, BadgeTone)) -> Row {
   let team = match entry.number {
     Some(number) => ctx.t_args("team_hub.chip.team", [("version", number.to_string())]),
     None => ctx.t("team_hub.chip.teamUnnumbered"),

@@ -15,13 +15,14 @@ use lurq::{
 };
 use orchester_workspace::agents::team_profile::{ConnectionChoice, TeamProfileSheet};
 
-use super::rows::{self, Sub};
 use crate::{
-  screens::team_hub::words::cli_key,
+  screens::team_hub::{
+    rows::{self, Sub},
+    words::cli_key,
+  },
   theme::{HubText, IconSize},
   ui::{
     agent_mark::AgentMark,
-    chip::{BadgeTone, badge},
     field::SelectField,
     icon::{Icon, icon},
   },
@@ -30,23 +31,15 @@ use crate::{
 pub(super) fn section(ctx: &Ctx, sheet: &TeamProfileSheet, chosen: &Signal<String>) -> Column {
   let cli = ctx.t(cli_key(sheet.cli));
   let (sub, value) = runs_on(ctx, sheet, &cli, chosen);
-  let note = Text::new(&ctx.t("team_hub.profile.onComputerNote"))
-    .id("team-hub-on-computer-note")
-    .variant(HubText::Hint.role())
-    .nowrap();
-  rows::section(
-    "team-hub-on-computer",
-    &ctx.t("team_hub.profile.onComputer"),
-    vec![
-      badge("team-hub-yours", BadgeTone::Neutral, &ctx.t("team_hub.profile.yours")).into(),
-      note.into(),
-    ],
+  rows::on_this_computer(
+    ctx,
     vec![rows::row(
       "team-hub-runs-on",
       &ctx.t("team_hub.profile.runsOn"),
       Some(sub),
       value,
     )],
+    None,
   )
 }
 

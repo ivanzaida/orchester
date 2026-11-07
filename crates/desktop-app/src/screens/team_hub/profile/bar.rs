@@ -14,9 +14,10 @@ use lurq::{
 use orchester_core::sharing::Missing;
 use orchester_workspace::agents::team_profile::TeamProfileSheet;
 
-use super::fix::{Busy, Fix};
+use super::fix::Fix;
 use crate::{
   screens::team_hub::{
+    actions::Busy,
     model::{Entry, Listing},
     words::cli_key,
   },

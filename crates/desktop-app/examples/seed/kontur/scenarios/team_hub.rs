@@ -88,18 +88,38 @@ pub fn no_connection(kontur: &mut Kontur) -> Result<(), SeedError> {
 }
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
+  seed_with(kontur, &Mcp::default()).map(|_| ())
+}
+
+/// How the program MCP servers of the scenario differ (`team-hub-mcp-*`, C4–C8 in `acFkz`): the variables of
+/// `pencil-design`, and whether `figma` runs a program (`npx`) instead of being reached at an address.
+#[derive(Default)]
+pub(super) struct Mcp {
+  pub pencil_variables: &'static [&'static str],
+  pub figma_program: bool,
+}
+
+/// [`seed`], which also names the id of each MCP server it made.
+pub(super) fn seed_with(kontur: &mut Kontur, mcp: &Mcp) -> Result<BTreeMap<&'static str, ResourceId>, SeedError> {
   shared_config::admin(kontur)?;
-  let program =
-    json!({"name": "pencil-design", "launch": {"kind": "program", "program": "pencil-mcp", "variables": []}});
+  let program = json!({"name": "pencil-design", "launch": {
+    "kind": "program", "program": "pencil-mcp", "args": ["--stdio", "--app", "desktop"],
+    "variables": mcp.pencil_variables
+  }, "exempt_tools": ["get_screenshot", "batch_get", "get_variables"]});
   let github = remote("github", Some("GITHUB_TOKEN"));
+  let figma = if mcp.figma_program {
+    json!({"name": "figma", "launch": {"kind": "program", "program": "npx", "variables": []}})
+  } else {
+    remote("figma", None)
+  };
   let servers = [
     ("pencil-design", program, Here::On),
     ("github", github, Here::On),
-    ("figma", remote("figma", None), Here::On),
+    ("figma", figma, Here::On),
     ("playwright", remote("playwright", None), Here::Off),
     ("linear", remote("linear", None), Here::Undecided),
   ];
-  let mut ids = BTreeMap::new();
+  let mut ids: BTreeMap<&'static str, ResourceId> = BTreeMap::new();
   for (name, body, here) in servers {
     let id = team_server(kontur, name, body)?;
     match here {
@@ -112,7 +132,8 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   let builder = [ids["github"], ids["pencil-design"]];
   team_profile(kontur, "Builder", &builder, &["GITHUB_TOKEN"])?;
   team_profile(kontur, "Reviewer", &[], &[])?;
-  plain_resources(kontur)
+  plain_resources(kontur)?;
+  Ok(ids)
 }
 
 /// Instructions and skills, which need nothing of a computer, and the two tools.

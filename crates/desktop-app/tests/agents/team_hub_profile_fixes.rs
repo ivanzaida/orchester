@@ -48,7 +48,7 @@ fn kept(agents: &Agents) -> bool {
 }
 
 /// What an MCP client reads of the window.
-struct Client {
+pub(super) struct Client {
   tools: RunningService<RoleClient, ()>,
   server: tokio::task::JoinHandle<()>,
 }
@@ -60,7 +60,7 @@ impl Drop for Client {
 }
 
 impl Client {
-  fn new(agents: &mut Agents) -> Self {
+  pub(super) fn new(agents: &mut Agents) -> Self {
     let window = &mut agents.window;
     let appearance = Appearance::new(ThemeSetting::Dark, Arc::default(), None);
     let config = mcp::config(
@@ -93,7 +93,7 @@ impl Client {
   }
 
   /// The whole tree, as the window's MCP server gives it.
-  fn tree(&self, agents: &mut Agents) -> String {
+  pub(super) fn tree(&self, agents: &mut Agents) -> String {
     let peer = self.tools.peer().clone();
     let params = CallToolRequestParams::new("lurq_read_tree".to_owned())
       .with_arguments(json!({}).as_object().expect("arguments").clone());

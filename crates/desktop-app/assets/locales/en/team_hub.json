@@ -186,6 +186,78 @@
       "instructions": "New instruction",
       "skills": "New skill",
       "tools": "New tool"
+    },
+    "mcp": {
+      "headLine": "{{version}} · {{form}} · published by {{by}} · {{date}}",
+      "headLineUnpublished": "{{version}} · {{form}}",
+      "date": {
+        "today": "today",
+        "thisYear": "{{month}} {{day}}",
+        "otherYear": "{{month}} {{day}}, {{year}}"
+      },
+      "usedBy": "used by {{names}}",
+      "chip": {
+        "pathNotSet": "Needs the program path here",
+        "pathGone": "Program missing here"
+      },
+      "fromTeam": {
+        "runsAs": "Runs as",
+        "runsAsProgram": "A program on each computer",
+        "program": "Program",
+        "programSub": "a name; each computer sets its path",
+        "arguments": "Arguments",
+        "folder": "Folder",
+        "folderWorktree": "The run's worktree",
+        "exempt": "Run without asking",
+        "variables": "Variables it needs",
+        "variablesSub": "names only, never values",
+        "variable": "{{name}} ← secret {{name}}",
+        "url": "URL",
+        "header": "Header",
+        "headerPrefixed": "{{header}}: {{prefix}} ← secret {{secret}}",
+        "headerPlain": "{{header}} ← secret {{secret}}"
+      },
+      "path": {
+        "label": "Program path",
+        "sub": "{{program}} here",
+        "notSet": "Not set",
+        "found": "found · {{date}}",
+        "gone": "No file there",
+        "choose": "Choose…"
+      },
+      "secret": {
+        "sub": "secret value",
+        "noValue": "No value here",
+        "unreadable": "The keychain can't say if it has a value"
+      },
+      "here": {
+        "label": "On here",
+        "on": "On: runs here may use it",
+        "off": "Off: runs here don't use it",
+        "undecided": "Not decided yet: turn it on to let runs here use it"
+      },
+      "note": {
+        "ready": "Ready here: runs on this computer may use {{name}}.",
+        "off": "Off here: runs on this computer don't use {{name}}.",
+        "undecided": "Not ready here: switch {{name}} on or off for this computer.",
+        "setPath": "Not ready here: set the program path.",
+        "gone": "Not ready here: no file at {{path}}. Runs that use {{name}} don't start until it is there again.",
+        "secret": "Not ready here: {{name}} needs a value.",
+        "unreadable": "Not ready here: this computer's keychain can't say whether {{name}} has a value.",
+        "unsupported": "Not ready here: {{name}} takes several secret headers, which this app can't send yet."
+      },
+      "bar": {
+        "setPath": "Set program path",
+        "chooseAnother": "Choose another file",
+        "checkAgain": "Check again",
+        "addValue": "Add value",
+        "turnOn": "Turn on here",
+        "changePath": "Change path",
+        "setPathHint": "Asked once on this computer",
+        "addValueHint": "Stored in this computer's secret store",
+        "turnOnHint": "Only you can turn it on here",
+        "changePathHint": "Nothing missing on this computer"
+      }
     }
   }
 }
