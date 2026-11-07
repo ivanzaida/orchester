@@ -8,10 +8,13 @@ use std::{collections::BTreeSet, path::Path};
 
 use orchester_core::{
   blob::ContentHash,
+  connection::AgentProvider,
   id::{ConnectionId, ResourceId, SecretId, UserId},
   resource::{
-    AgentProfile, AgentTargets, InjectionEvent, Instruction, InstructionScope, PromptText, Slug, VersionNumber,
+    AgentProfile, AgentTargets, InjectionEvent, Instruction, InstructionScope, PromptText, ResourceKind, Slug,
+    VersionNumber,
   },
+  secret::SecretName,
   sharing::{SharedPerson, TaskRevision},
   store::ResourceStore,
 };
@@ -62,6 +65,49 @@ fn database(repo: &Path) -> Connection {
   Connection::open(repo.join(".orchester").join("orchester.db")).expect("open")
 }
 
+/// A reference of each kind a version names: a computer's ids as versions cached before the team model kept them, a
+/// CLI kind, team resources by server id and a secret by name.
+fn named_references() -> Vec<VersionReference> {
+  vec![
+    VersionReference {
+      target: ReferenceTarget::Connection(ConnectionId::generate()),
+      name: "Claude".to_owned(),
+      role: Some("claude_cli".to_owned()),
+    },
+    VersionReference {
+      target: ReferenceTarget::Secret(SecretId::generate()),
+      name: "GitHub token".to_owned(),
+      role: None,
+    },
+    VersionReference {
+      target: ReferenceTarget::CliKind(AgentProvider::CodexCli),
+      name: String::new(),
+      role: None,
+    },
+    VersionReference {
+      target: ReferenceTarget::TeamResource {
+        kind: ResourceKind::McpServer,
+        id: ResourceId::generate(),
+      },
+      name: String::new(),
+      role: None,
+    },
+    VersionReference {
+      target: ReferenceTarget::TeamResource {
+        kind: ResourceKind::Tool,
+        id: ResourceId::generate(),
+      },
+      name: String::new(),
+      role: None,
+    },
+    VersionReference {
+      target: ReferenceTarget::SecretName(SecretName::new("STAGING_TOKEN").expect("a secret name")),
+      name: String::new(),
+      role: None,
+    },
+  ]
+}
+
 #[test]
 fn shared_configuration_caches_a_version_with_both_bodies() {
   let (_repo, mut db, _run, _execution) = started_run();
@@ -74,23 +120,7 @@ fn shared_configuration_caches_a_version_with_both_bodies() {
     )
     .expect("create")
     .id();
-  let references = vec![
-    VersionReference {
-      target: ReferenceTarget::Connection(ConnectionId::generate()),
-      name: "Claude".to_owned(),
-      role: Some("claude_cli".to_owned()),
-    },
-    VersionReference {
-      target: ReferenceTarget::Secret(SecretId::generate()),
-      name: "GitHub token".to_owned(),
-      role: None,
-    },
-    VersionReference {
-      target: ReferenceTarget::Tool(ResourceId::generate()),
-      name: "Deploy".to_owned(),
-      role: None,
-    },
-  ];
+  let references = named_references();
   let version = cached(instruction("Use the local connection."), references);
 
   let stored = db.cache_shared_version(id, &version).expect("cache");

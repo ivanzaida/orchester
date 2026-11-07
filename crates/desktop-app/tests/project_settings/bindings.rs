@@ -146,7 +146,7 @@ fn cache_rules(db: &mut ProjectDb, theirs: &Theirs) {
     references: references
       .iter()
       .map(|(target, name, role)| VersionReference {
-        target: *target,
+        target: target.clone(),
         name: (*name).to_owned(),
         role: role.map(str::to_owned),
       })

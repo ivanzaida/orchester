@@ -3,6 +3,7 @@
 mod cached;
 mod catalog;
 mod claim_threshold;
+mod connection_role;
 mod delta;
 mod expected;
 mod membership;
@@ -17,15 +18,13 @@ pub use self::{
   cached::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson},
   catalog::{CATALOG_MODELS_PER_ROLE, CATALOG_REFERENCES, CatalogEntry, CatalogEntryKind, LocalCatalog, catalog},
   claim_threshold::{ClaimStalenessThreshold, ClaimStalenessThresholdError},
+  connection_role::ConnectionRole,
   delta::{DeltaOutcome, RunProgress, TagRemap, TaskChange, TaskDelta, TaskDeltaKind, remap_tags},
   expected::{ExpectedRevision, ExpectedRevisionError, ExpectedRevisions, RevisionTarget},
   membership::{
     MembershipChangeError, WorkspaceRole, check_workspace_admin_change, may_administer_workspace, may_read_workspace,
   },
-  references::{
-    Binding, BindingKindError, ConnectionRole, LocalEntities, Published, Reference, ReferenceKind, for_publishing,
-    named, resolve,
-  },
+  references::{Binding, BindingKindError, LocalEntities, Reference, ReferenceKind, named, resolve},
   similar::similar_titles,
   widens::{SharedBody, VersionWidening, widens},
 };

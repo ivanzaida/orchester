@@ -36,6 +36,22 @@ fn team_fill_ins_pick_a_connection_of_the_profiles_cli_kind() {
 }
 
 #[test]
+fn team_fill_ins_a_version_cached_before_the_cli_kind_still_fits_by_its_connections_role() {
+  let team = Team::new();
+  team
+    .workspace
+    .pick_team_connection(&team.root, team.legacy_profile, pick(team.claude))
+    .expect("a Claude Code connection for a profile that named one");
+  let refused = team
+    .workspace
+    .pick_team_connection(&team.root, team.legacy_profile, pick(team.codex));
+  assert!(
+    matches!(refused, Err(FillInError::ConnectionDoesNotFit { .. })),
+    "{refused:?}"
+  );
+}
+
+#[test]
 fn team_fill_ins_a_profile_of_no_known_kind_takes_any_agent_connection() {
   let team = Team::new();
   for connection in [team.claude, team.codex] {

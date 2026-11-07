@@ -53,6 +53,8 @@ pub struct Config {
   pub pipeline: ResourceId,
   pub skill: ResourceId,
   pub inputs: CanonicalExecutionInputs,
+  /// The CLI the bundle binds the profile to.
+  pub cli: AgentProvider,
 }
 
 impl Config {
@@ -87,7 +89,13 @@ impl Config {
       pipeline,
       skill,
       inputs: CanonicalExecutionInputs::pin(&snapshot, bodies).expect("inputs"),
+      cli: AgentProvider::CodexCli,
     }
+  }
+
+  /// This configuration whose profile runs on `cli`.
+  pub fn running(self, cli: AgentProvider) -> Self {
+    Self { cli, ..self }
   }
 
   /// The bundle the server builds for `claim` on `module`'s branch from `base_commit`.
@@ -118,7 +126,7 @@ impl Config {
       },
       delivery: Deliverable::default(),
     };
-    ExecutionBundle::new(start, self.inputs.clone(), &[(self.profile, AgentProvider::CodexCli)]).expect("bundle")
+    ExecutionBundle::new(start, self.inputs.clone(), &[(self.profile, self.cli)]).expect("bundle")
   }
 }
 

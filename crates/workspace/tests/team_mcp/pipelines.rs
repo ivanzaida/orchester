@@ -176,10 +176,11 @@ fn team_mcp_a_team_project_offers_no_pipeline_of_this_computers_own() {
   assert!(matches!(checkout.db().resource_sharing(own), Ok(None)));
 }
 
-/// A profile's version names its connection by the publisher's id; when this computer has that very connection for the
-/// profile's CLI, the start binds to it without asking, even among several of that CLI.
+/// A profile's body names its connection by the publisher's id and its version the CLI by a `CliKind` reference; when
+/// this computer has that very connection for the CLI, the start binds to it without asking, even among several of
+/// that CLI. The team MCP server the version names runs as this computer's server with the same id.
 #[test]
-fn team_mcp_run_task_binds_a_profile_to_the_connection_its_reference_names() {
+fn team_mcp_run_task_binds_a_profile_to_the_connection_its_body_names() {
   let (server, seen) = server();
   let pipeline = server.state().config.pipeline;
   let named = seen.lock().publisher_connection.expect("the Builder's connection");

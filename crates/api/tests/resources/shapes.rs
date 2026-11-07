@@ -1,11 +1,12 @@
 use orchester_api::{
-  Reference, ReferenceTarget, ResourceCreate, ResourceCreated, ResourcePatch, Resources, ResourcesImport,
-  ResourcesImported, SharedResource, SharedResourceKind, SharedVersion, UploadResource, UsedBy, VersionPublish,
-  Versions,
+  ReferenceTarget, ResourceCreate, ResourceCreated, ResourcePatch, Resources, ResourcesImport, ResourcesImported,
+  SharedResource, SharedResourceKind, SharedVersion, UploadResource, UsedBy, VersionPublish, Versions,
 };
 use orchester_core::{
-  id::{ResourceId, RunId, SecretId},
+  connection::AgentProvider,
+  id::{ResourceId, RunId},
   resource::ResourceKind,
+  secret::SecretName,
 };
 use serde_json::json;
 
@@ -52,27 +53,81 @@ fn resources_a_version_round_trips_with_a_reference_of_each_kind() {
   let kinds: Vec<_> = third
     .references
     .iter()
-    .map(|reference| match reference.target {
-      ReferenceTarget::Connection { .. } => "connection",
-      ReferenceTarget::McpServer { .. } => "mcp_server",
-      ReferenceTarget::Secret { .. } => "secret",
-      ReferenceTarget::Tool { .. } => "tool",
+    .map(|reference| match reference {
+      ReferenceTarget::CliKind { .. } => "cli_kind",
+      ReferenceTarget::TeamResource {
+        kind: SharedResourceKind::McpServer,
+        ..
+      } => "mcp_server",
+      ReferenceTarget::TeamResource {
+        kind: SharedResourceKind::Tool,
+        ..
+      } => "tool",
+      ReferenceTarget::TeamResource { .. } => "other team resource",
+      ReferenceTarget::SecretName { .. } => "secret_name",
     })
     .collect();
-  assert_eq!(kinds, ["connection", "mcp_server", "secret", "tool"]);
+  assert_eq!(kinds, ["cli_kind", "mcp_server", "secret_name", "tool"]);
 }
 
 #[test]
-fn resources_a_reference_needs_a_known_kind_and_its_id() {
-  let secret = SecretId::generate();
-  let reference: Reference = round_trip(&json!({"kind":"secret","id":secret,"name":"Token","role":null}));
-  assert_eq!(reference.target, ReferenceTarget::Secret { id: secret });
+fn resources_a_reference_names_a_cli_kind_a_team_resource_by_server_id_or_a_secret_by_name() {
+  let profile = ResourceId::generate();
+  let cli: ReferenceTarget = round_trip(&json!({"type":"cli_kind","cli":"codex_cli"}));
+  assert_eq!(
+    cli,
+    ReferenceTarget::CliKind {
+      cli: AgentProvider::CodexCli
+    }
+  );
+  let resource: ReferenceTarget = round_trip(&json!({"type":"team_resource","kind":"agent_profile","id":profile}));
+  assert_eq!(
+    resource,
+    ReferenceTarget::TeamResource {
+      kind: SharedResourceKind::AgentProfile,
+      id: profile
+    }
+  );
+  let secret: ReferenceTarget = round_trip(&json!({"type":"secret_name","name":"STAGING_TOKEN"}));
+  assert_eq!(
+    secret,
+    ReferenceTarget::SecretName {
+      name: SecretName::new("STAGING_TOKEN").expect("a secret name")
+    }
+  );
+}
+
+#[test]
+fn resources_a_reference_cannot_hold_an_id_or_a_path_from_a_computer() {
+  let local = ResourceId::generate();
   for value in [
-    json!({"kind":"environment","id":secret,"name":"Token","role":null}),
-    json!({"kind":"secret","name":"Token","role":null}),
-    json!({"id":secret,"name":"Token","role":null}),
+    // The shapes before the team configuration model: a connection, an MCP server or a secret by a computer's id.
+    json!({"kind":"connection","id":local,"name":"Work","role":"codex_cli"}),
+    json!({"kind":"mcp_server","id":local,"name":"docs","role":null}),
+    json!({"kind":"secret","id":local,"name":"Token","role":"token"}),
+    json!({"kind":"tool","id":local,"name":"Deploy","role":null}),
+    json!({"type":"connection","id":local}),
+    json!({"type":"mcp_server","id":local}),
+    json!({"type":"secret","id":local}),
+    // Known types with what they need missing, or more than they hold.
+    json!({"type":"cli_kind"}),
+    json!({"type":"cli_kind","cli":"github"}),
+    json!({"type":"team_resource","id":local}),
+    json!({"type":"team_resource","kind":"test_suite","id":local}),
+    json!({"type":"team_resource","kind":"tool"}),
+    json!({"type":"team_resource","kind":"tool","id":"not-an-id"}),
+    json!({"type":"team_resource","kind":"tool","id":local,"name":"Deploy"}),
+    json!({"type":"secret_name"}),
+    json!({"type":"secret_name","name":"lowercase"}),
+    json!({"type":"secret_name","name":""}),
+    json!({"type":"secret_name","name":"TOKEN","id":local}),
+    json!({"type":"environment","name":"TOKEN"}),
+    json!({"cli":"codex_cli"}),
   ] {
-    assert!(serde_json::from_value::<Reference>(value).is_err());
+    assert!(
+      serde_json::from_value::<ReferenceTarget>(value.clone()).is_err(),
+      "{value}"
+    );
   }
 }
 

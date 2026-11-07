@@ -2,8 +2,8 @@
 //! names the resource, by name (case-insensitively) and then id, and the runs registered with
 //! [`TeamServer::pin_run`] that have not ended, are of their task's current work and pin a version of it, by the task
 //! key's number and then run id.
-//! A version names a resource by the typed fields `docs/cloud-api.md` lists, read with core's body types. The target
-//! may be archived; it is never in its own `resources`.
+//! A version names a resource by its team resource references and the typed body fields `docs/cloud-api.md` lists, read
+//! with core's body types. The target may be archived; it is never in its own `resources`.
 
 use orchester_core::{
   id::{ResourceId, RunId},
@@ -13,7 +13,7 @@ use serde_json::{Value, json};
 
 use super::{Project, Stored, error};
 use crate::{
-  Reference, ReferenceTarget, SharedResourceKind,
+  ReferenceTarget, SharedResourceKind,
   test_support::team_server::{Person, TeamServer},
 };
 
@@ -175,14 +175,15 @@ impl Project {
   }
 }
 
-/// Whether `version` of a resource of `kind` names `target`: a reference to it as a tool, or, by the kind's body, a
-/// field that holds its server resource id. A body that is no body of its kind names nothing.
+/// Whether `version` of a resource of `kind` names `target`: a reference to a team resource with its server id, or, by
+/// the kind's body, a field that holds that id. A body that is no body of its kind names nothing.
 fn names(kind: &Value, version: &Value, target: ResourceId) -> bool {
-  let referenced = serde_json::from_value::<Vec<Reference>>(version["references"].clone()).is_ok_and(|references| {
-    references
-      .iter()
-      .any(|reference| reference.target == ReferenceTarget::Tool { id: target })
-  });
+  let referenced =
+    serde_json::from_value::<Vec<ReferenceTarget>>(version["references"].clone()).is_ok_and(|references| {
+      references
+        .iter()
+        .any(|reference| matches!(reference, ReferenceTarget::TeamResource { id, .. } if *id == target))
+    });
   let body = version["body"].clone();
   referenced
     || match serde_json::from_value::<SharedResourceKind>(kind.clone()) {
