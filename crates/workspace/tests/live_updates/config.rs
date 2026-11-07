@@ -16,7 +16,7 @@ use orchester_core::{
   permission::{AgentPermissions, StepPermissions},
   resource::{
     AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, ResourceBody, ResourceKind, Step,
-    StepKey, StepKind, Version, VersionNumber,
+    StepKey, StepKind, TeamAgentProfile, Version, VersionNumber,
   },
   run::{Answerer, PreflightProblem},
   secret::SecretName,
@@ -93,6 +93,34 @@ pub(super) fn builder(connection: ConnectionId, servers: &[ConnectionId]) -> Val
     .expect("a profile serializes")
 }
 
+/// The team's Builder profile: it runs with Codex, uses the team MCP servers `servers` and has `permissions`.
+pub(super) fn team_profile(servers: &[ResourceId], permissions: AgentPermissions) -> TeamAgentProfile {
+  TeamAgentProfile::new(
+    name("Builder"),
+    String::new(),
+    PromptText::new("Build.").expect("prompt"),
+    (
+      AgentProvider::CodexCli,
+      ModelId::new("gpt-5.5").expect("valid model"),
+      ProviderSettings::default(),
+    ),
+  )
+  .with_permissions(permissions)
+  .with_mcp_servers(servers.to_vec())
+  .expect("distinct servers")
+}
+
+/// [`team_profile`] with a profile's first permissions, as the server keeps it: as a teammate's first version it
+/// waits for the person, because it runs commands.
+pub(super) fn team_builder(servers: &[ResourceId]) -> Value {
+  serde_json::to_value(team_profile(servers, AgentPermissions::before_permissions())).expect("a profile serializes")
+}
+
+/// The references of [`team_builder`].
+pub(super) fn team_references(servers: &[ResourceId]) -> Vec<ReferenceTarget> {
+  ReferenceTarget::of_profile(&team_profile(servers, AgentPermissions::before_permissions()))
+}
+
 /// The person's *Use v1 here* of `resource`, once the stream cached it.
 pub(super) async fn use_first(workspace: &Workspace, resource: ResourceId) {
   seen_within(LIVE, "v1 waiting for the person", || {
@@ -149,23 +177,15 @@ pub(super) fn problems(workspace: &Workspace, delivery: ResourceId) -> Vec<Prefl
 #[tokio::test(flavor = "multi_thread")]
 async fn live_updates_a_profile_published_on_the_server_is_cached_with_its_references_and_binds_nothing() {
   let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
-  let theirs = ConnectionId::generate();
   let (profile, docs, delivery) = (ResourceId::generate(), ResourceId::generate(), ResourceId::generate());
-  let references = vec![
-    ReferenceTarget::CliKind {
-      cli: AgentProvider::CodexCli,
-    },
-    ReferenceTarget::TeamResource {
-      kind: SharedResourceKind::McpServer,
-      id: docs,
-    },
-    ReferenceTarget::SecretName {
-      name: SecretName::new("DOCS_TOKEN").expect("a secret name"),
-    },
-  ];
+  let team = team_profile(&[docs], AgentPermissions::before_permissions())
+    .with_secrets(vec![SecretName::new("DOCS_TOKEN").expect("a secret name")])
+    .expect("one secret");
+  let references = ReferenceTarget::of_profile(&team);
+  let body = serde_json::to_value(&team).expect("a profile serializes");
   server.publish(
     (profile, SharedResourceKind::AgentProfile, "Builder"),
-    builder(theirs, &[]),
+    body.clone(),
     references.clone(),
   );
   server.publish(
@@ -174,7 +194,7 @@ async fn live_updates_a_profile_published_on_the_server_is_cached_with_its_refer
     Vec::new(),
   );
   let workspace = Workspace::linked(&server);
-  codex(&mut workspace.db(), &workspace.root, "Laptop");
+  let laptop = codex(&mut workspace.db(), &workspace.root, "Laptop");
   let stream = workspace.follow(Member::of(&server, ALICE));
   seen_within(LIVE, "the snapshot's resources", || {
     latest::<Pipeline>(&workspace, delivery).is_some()
@@ -187,11 +207,11 @@ async fn live_updates_a_profile_published_on_the_server_is_cached_with_its_refer
     .cached_version::<AgentProfile>(profile, VersionNumber::FIRST)
     .expect("read")
     .expect("cached from the server");
-  assert_eq!(kept.server_body, builder(theirs, &[]), "the server's body as published");
+  assert_eq!(kept.server_body, body, "the server's body as published");
   assert_eq!(
-    serde_json::to_value(&kept.local_body).expect("a profile serializes"),
-    kept.server_body,
-    "a team body is not rewritten here"
+    kept.local_body,
+    AgentProfile::from_team(&team, laptop),
+    "it runs on the only connection of its CLI kind here"
   );
   assert_eq!(kept.publisher.name, "Alice Moreau");
   assert_eq!(
@@ -216,11 +236,7 @@ async fn live_updates_a_profile_published_on_the_server_is_cached_with_its_refer
     "nothing is bound to this computer's entities"
   );
 
-  server.publish(
-    (profile, SharedResourceKind::AgentProfile, "Builder"),
-    builder(theirs, &[]),
-    references,
-  );
+  server.publish((profile, SharedResourceKind::AgentProfile, "Builder"), body, references);
   seen_within(LIVE, "v2 from its event", || {
     latest::<AgentProfile>(&workspace, profile).is_some_and(|version| version.number().get() == 2)
   })
@@ -229,5 +245,35 @@ async fn live_updates_a_profile_published_on_the_server_is_cached_with_its_refer
     workspace.link().cursor == server.cursor()
   })
   .await;
+  stream.abort();
+}
+
+/// A profile cached before the team configuration model names the publisher's connection and is read as it is, until
+/// ORC-845 removes the bindings.
+#[tokio::test(flavor = "multi_thread")]
+async fn live_updates_a_profile_cached_before_the_team_configuration_model_is_read_as_it_is() {
+  let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
+  let (theirs, profile) = (ConnectionId::generate(), ResourceId::generate());
+  server.publish(
+    (profile, SharedResourceKind::AgentProfile, "Builder"),
+    builder(theirs, &[]),
+    Vec::new(),
+  );
+  let workspace = Workspace::linked(&server);
+  let stream = workspace.follow(Member::of(&server, ALICE));
+  let cached = || {
+    let db = workspace.db();
+    db.cached_version::<AgentProfile>(profile, VersionNumber::FIRST)
+      .ok()
+      .flatten()
+  };
+  seen_within(LIVE, "the legacy profile", || cached().is_some()).await;
+
+  let kept = cached().expect("cached");
+  assert_eq!(
+    kept.local_body.connection(),
+    theirs,
+    "the publisher's connection, bound or not"
+  );
   stream.abort();
 }

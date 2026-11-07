@@ -18,13 +18,15 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::{CachedVersion, PublishState, ResourceSharing, StoreError, WaitingPublish};
-use serde_json::Value;
 
 use super::{ConfigServer, RemoteResourceStore};
 use crate::sharing::{
   SharingError,
   project::convert,
-  sync::config::{cache_version, reference, resource as kept_resource, team_body},
+  sync::config::{
+    cache_profile, cache_version, reference, resource as kept_resource,
+    team_body::{self, Publication},
+  },
 };
 
 impl<S: ConfigServer> RemoteResourceStore<S> {
@@ -78,7 +80,10 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
   fn send_one(&mut self, waiting: &WaitingPublish) -> Result<(), SharingError> {
     match waiting.kind {
       ResourceKind::Pipeline => self.send_kind::<Pipeline>(waiting),
-      ResourceKind::AgentProfile => self.send_kind::<AgentProfile>(waiting),
+      ResourceKind::AgentProfile => {
+        let publication = self.profile_publication(waiting)?;
+        self.send_publication::<AgentProfile>(waiting, &publication)
+      }
       ResourceKind::Instruction => self.send_kind::<Instruction>(waiting),
       ResourceKind::Skill => self.send_kind::<Skill>(waiting),
       ResourceKind::Tool => self.send_kind::<Tool>(waiting),
@@ -96,8 +101,16 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
   }
 
   fn send_kind<B: ResourceBody + Clone>(&mut self, waiting: &WaitingPublish) -> Result<(), SharingError> {
-    let body = self.publication::<B>(waiting)?;
-    match self.deliver(waiting, &body) {
+    let publication = self.publication::<B>(waiting)?;
+    self.send_publication::<B>(waiting, &publication)
+  }
+
+  fn send_publication<B: ResourceBody + Clone>(
+    &mut self,
+    waiting: &WaitingPublish,
+    publication: &Publication,
+  ) -> Result<(), SharingError> {
+    match self.deliver(waiting, publication) {
       Ok((resource, version)) => self.confirm::<B>(waiting, resource.as_ref(), &version),
       Err(SharingError::Client(error)) => match (error.code(), error.details()) {
         (Some(ErrorCode::VersionConflict), Some(SharingErrorDetails::Version { latest })) => {
@@ -119,8 +132,9 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
     }
   }
 
-  /// `waiting`'s body, which must name nothing of this computer ([`team_body::check`]).
-  fn publication<B: ResourceBody>(&self, waiting: &WaitingPublish) -> Result<Value, SharingError> {
+  /// `waiting`'s body of a kind not in the team's form yet, which must name nothing of this computer
+  /// ([`team_body::unchanged`]).
+  fn publication<B: ResourceBody>(&self, waiting: &WaitingPublish) -> Result<Publication, SharingError> {
     let version = self
       .db
       .version::<B>(waiting.resource, waiting.number)?
@@ -135,8 +149,16 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
       mcp_servers: &mcp_servers,
       secrets: &secrets,
     };
-    team_body::check(waiting.resource, &body, entities)?;
-    Ok(body)
+    team_body::unchanged(waiting.resource, body, entities)
+  }
+
+  /// `waiting`'s profile as the team holds it ([`team_body::profile`]).
+  fn profile_publication(&self, waiting: &WaitingPublish) -> Result<Publication, SharingError> {
+    let version = self
+      .db
+      .version::<AgentProfile>(waiting.resource, waiting.number)?
+      .ok_or(StoreError::ResourceNotFound(waiting.resource))?;
+    team_body::profile(&self.db, waiting.resource, version.body())
   }
 
   /// Sends `waiting` with `body`, uploading the skill parts the server asks for first; the resource when the
@@ -144,9 +166,9 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
   fn deliver(
     &self,
     waiting: &WaitingPublish,
-    body: &Value,
+    publication: &Publication,
   ) -> Result<(Option<SharedResource>, SharedVersion), SharingError> {
-    match self.attempt(waiting, body) {
+    match self.attempt(waiting, publication) {
       Err(SharingError::Client(error)) if error.code() == Some(ErrorCode::MissingFiles) => {
         let Some(SharingErrorDetails::Files { hashes }) = error.details() else {
           return Err(SharingError::InvalidAnswer("missing files"));
@@ -154,7 +176,7 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
         for hash in hashes.clone() {
           self.upload(hash)?;
         }
-        self.attempt(waiting, body)
+        self.attempt(waiting, publication)
       }
       answer => answer,
     }
@@ -163,11 +185,11 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
   fn attempt(
     &self,
     waiting: &WaitingPublish,
-    body: &Value,
+    publication: &Publication,
   ) -> Result<(Option<SharedResource>, SharedVersion), SharingError> {
     let content = VersionContent {
-      body: body.clone(),
-      references: Vec::new(),
+      body: publication.body.clone(),
+      references: publication.references.clone(),
     };
     let on_server = matches!(
       self.db.resource_sharing(waiting.resource)?,
@@ -259,7 +281,7 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
     for version in &versions {
       match kind {
         ResourceKind::Pipeline => cache_version::<Pipeline>(&mut self.db, version)?,
-        ResourceKind::AgentProfile => cache_version::<AgentProfile>(&mut self.db, version)?,
+        ResourceKind::AgentProfile => cache_profile(&mut self.db, version)?,
         ResourceKind::Instruction => cache_version::<Instruction>(&mut self.db, version)?,
         ResourceKind::Tool => cache_version::<Tool>(&mut self.db, version)?,
         ResourceKind::TeamReviewer => cache_version::<orchester_core::resource::TeamReviewer>(&mut self.db, version)?,

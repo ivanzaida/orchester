@@ -175,36 +175,3 @@ fn team_mcp_a_team_project_offers_no_pipeline_of_this_computers_own() {
   );
   assert!(matches!(checkout.db().resource_sharing(own), Ok(None)));
 }
-
-/// A profile's body names its connection by the publisher's id and its version the CLI by a `CliKind` reference; when
-/// this computer has that very connection for the CLI, the start binds to it without asking, even among several of
-/// that CLI. The team MCP server the version names runs as this computer's server with the same id.
-#[test]
-fn team_mcp_run_task_binds_a_profile_to_the_connection_its_body_names() {
-  let (server, seen) = server();
-  let pipeline = server.state().config.pipeline;
-  let named = seen.lock().publisher_connection.expect("the Builder's connection");
-  let mcp_server = seen.lock().publisher_mcp_server.expect("the Builder's MCP server");
-  let checkout = Checkout::prepared(Some(&server), &[], |db| {
-    team_pipeline(db, pipeline, "delivery");
-    orchester_core::store::McpServerStore::create_mcp_server(db, &crate::tools::local_mcp_server(mcp_server))
-      .expect("a local MCP server");
-    for (id, label) in [
-      (named, "Codex here"),
-      (orchester_core::id::ConnectionId::generate(), "Codex work"),
-    ] {
-      let connection = orchester_core::connection::AgentConnection::new(
-        id,
-        name(label),
-        orchester_core::connection::AgentProvider::CodexCli,
-        std::env::temp_dir().join("codex.exe"),
-        Timestamp::now(),
-      )
-      .expect("connection");
-      orchester_core::store::ConnectionStore::create_connection(db, &connection).expect("a connection");
-    }
-  });
-  let code = checkout.refused("run_task", &json!({"project": "Kontur", "key": "KON-7"}));
-  assert_eq!(code, "runner_unavailable", "bound and started; no runner here");
-  assert_eq!(server.state().works_made, 1);
-}

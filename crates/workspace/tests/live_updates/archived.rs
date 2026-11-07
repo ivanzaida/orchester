@@ -4,16 +4,19 @@
 
 use std::sync::Arc;
 
-use orchester_api::{ReferenceTarget, SharedResourceKind};
+use orchester_api::SharedResourceKind;
 use orchester_core::{
-  connection::AgentProvider,
-  id::{ConnectionId, ResourceId},
+  id::ResourceId,
   resource::{AgentProfile, ResourceKind, VersionNumber},
   store::ResourceStore,
 };
 use orchester_workspace::sharing::sync::{SystemClock, follow};
 
-use super::{ALICE, LIVE, Member, TeamServer, Workspace, config::builder, seen_within};
+use super::{
+  ALICE, LIVE, Member, TeamServer, Workspace,
+  config::{team_builder, team_references},
+  seen_within,
+};
 
 fn listed(workspace: &Workspace, resource: ResourceId) -> bool {
   let profiles = workspace.db().resources(ResourceKind::AgentProfile).expect("listed");
@@ -27,15 +30,11 @@ fn archived(member: &Member) -> Vec<ResourceId> {
 #[tokio::test(flavor = "multi_thread")]
 async fn live_updates_an_archived_profile_leaves_the_list_and_stops_its_runs_until_restored() {
   let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
-  let theirs = ConnectionId::generate();
   let profile = ResourceId::generate();
-  let work = ReferenceTarget::CliKind {
-    cli: AgentProvider::CodexCli,
-  };
   server.publish(
     (profile, SharedResourceKind::AgentProfile, "Builder"),
-    builder(theirs, &[]),
-    vec![work],
+    team_builder(&[]),
+    team_references(&[]),
   );
   let workspace = Workspace::linked(&server);
   let member = Arc::new(Member::of(&server, ALICE));
@@ -70,13 +69,12 @@ async fn live_updates_an_archived_profile_leaves_the_list_and_stops_its_runs_unt
 #[tokio::test(flavor = "multi_thread")]
 async fn live_updates_a_snapshot_keeps_an_archived_profile_out_of_the_list() {
   let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
-  let theirs = ConnectionId::generate();
   let (profile, other) = (ResourceId::generate(), ResourceId::generate());
   for (id, name) in [(profile, "Builder"), (other, "Reviewer")] {
     server.publish(
       (id, SharedResourceKind::AgentProfile, name),
-      builder(theirs, &[]),
-      Vec::new(),
+      team_builder(&[]),
+      team_references(&[]),
     );
   }
   server.archive(profile, true);

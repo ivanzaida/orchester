@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use orchester_core::{
-  resource::{Instruction, ResourceKind},
+  resource::{Instruction, ResourceKind, TeamAgentProfile},
   store::ResourceStore,
 };
 use orchester_store::PublishState;
@@ -25,6 +25,8 @@ use crate::{
 struct Sent {
   /// Every `POST …/resources` that reached the server.
   created: usize,
+  /// The version of the last one: its body and references, as sent.
+  version: Value,
 }
 
 /// A team server that answers `POST …/resources` with `refusal` (a status and error code), or accepts the resource as
@@ -38,7 +40,10 @@ fn server(refusal: Option<(u16, &'static str)>) -> (TeamServer, Arc<Mutex<Sent>>
     if request.method != "POST" || path != format!("/api/v1/projects/{project}/resources") {
       return false;
     }
-    counted.lock().created += 1;
+    let mut counted = counted.lock();
+    counted.created += 1;
+    counted.version = request.json()["version"].clone();
+    drop(counted);
     match refusal {
       Some((status, code)) => respond(stream, status, &json!({"error": code, "message": "Refused."})),
       None => respond(stream, 201, &created(request)),
@@ -60,7 +65,7 @@ fn created(request: &Request) -> Value {
     },
     "version": {
       "resource": create["id"], "number": 1, "body": create["version"]["body"], "hash": "a".repeat(64),
-      "references": [], "based_on": null, "published": attribution, "widens": false
+      "references": create["version"]["references"], "based_on": null, "published": attribution, "widens": false
     }
   })
 }
@@ -176,9 +181,8 @@ const KINDS: [(&str, ResourceKind, &str); 3] = [
   ("save_tool_draft", ResourceKind::Tool, "tool"),
 ];
 
-/// The kinds the server is asked to take: a profile's body still names this computer's connection until ORC-820
-/// gives a team profile its own body, so it is refused here before anything is sent, online or not.
-const SENT_KINDS: [(&str, ResourceKind, &str); 2] = [KINDS[1], KINDS[2]];
+/// The kinds the server is asked to take, a profile in the team's form (`team_mcp_a_new_profile_is_sent_...`).
+const SENT_KINDS: [(&str, ResourceKind, &str); 3] = KINDS;
 
 /// The arguments of a new resource of the kind answered under `key`.
 fn new_resource(key: &str) -> Value {
@@ -253,21 +257,30 @@ fn team_mcp_a_profile_skill_or_tool_made_offline_waits_in_the_outbox() {
   }
 }
 
+/// A profile names no connection of this computer: the team's body names the CLI kind of the connection it was made
+/// for, and its references repeat that.
 #[test]
-fn team_mcp_a_new_profile_naming_this_computers_connection_is_refused_before_it_is_sent() {
+fn team_mcp_a_new_profile_is_sent_in_the_teams_form_with_the_cli_kind_of_its_connection() {
   let (server, sent) = server(None);
   let checkout = admin(&server);
 
-  let refused = checkout
+  let made = checkout
     .call("save_profile_draft", &new_resource("profile"))
-    .expect_err("a team body may not name a connection of this computer");
+    .expect("created");
 
-  assert_eq!(refused["error"]["code"], "local_entities_named", "{refused}");
-  assert_eq!(
-    refused["error"]["message"], "sharing.errors.localEntitiesNamed",
-    "the answer says why: {refused}"
+  let version = sent.lock().version.clone();
+  let body = &version["body"];
+  assert_eq!(body["cli"], "codex_cli", "{version}");
+  assert!(body.get("connection").is_none(), "{version}");
+  assert!(
+    serde_json::from_value::<TeamAgentProfile>(body.clone()).is_ok(),
+    "{version}"
   );
-  assert_eq!(sent.lock().created, 0, "nothing was sent");
-  assert_eq!(count(&checkout, ResourceKind::AgentProfile), 0, "it was taken back");
+  assert_eq!(
+    version["references"],
+    json!([{"type": "cli_kind", "cli": "codex_cli"}]),
+    "{version}"
+  );
+  assert!(made["profile"].get("waiting_for_server").is_none(), "{made}");
   assert!(checkout.db().waiting_publishes().expect("the outbox").is_empty());
 }

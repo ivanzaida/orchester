@@ -25,7 +25,8 @@ pub enum Created {
 pub enum NotCreated {
   /// The team server refused it with its error `code`.
   Refused { code: String },
-  /// Its body names a connection, MCP server or secret of this computer, which a team body may not
+  /// Its body names an MCP server of this computer that is not a team resource, or (of a kind whose body is not in the
+  /// team's form yet) a connection or secret of this computer, which a team body may not
   /// (`SharingError::LocalEntitiesNamed`); nothing was sent.
   NamesLocal(Message),
   /// It could not be sent for a reason other than being offline.

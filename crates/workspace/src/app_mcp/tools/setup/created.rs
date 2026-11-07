@@ -14,9 +14,10 @@ use crate::{
 };
 
 /// Settles resource `id`, just created as v1 in the project at `root`, with the team server (nothing to do in a local
-/// project): taken back, and refused as `team_server_refused`, `local_entities_named` (its body names something of
-/// this computer, until ORC-820 gives team profiles their own body) or `team_server_not_reached`, when it was not
-/// taken. Otherwise `Some` says it waits for the server, to be added to the answer.
+/// project): taken back, and refused as `team_server_refused`, `local_entities_named` (it chooses an MCP server of
+/// this computer, which the team cannot name, or its kind's body is not in the team's form yet) or
+/// `team_server_not_reached`, when it was not taken. Otherwise `Some` says it waits for the server, to be added to the
+/// answer.
 pub(super) async fn settle(services: &Services, root: PathBuf, id: ResourceId) -> Result<Option<Value>, ToolError> {
   match services.servers.send_created(&root, id).await {
     Ok(Created::Accepted) => Ok(None),

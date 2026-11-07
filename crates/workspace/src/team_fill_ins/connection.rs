@@ -13,7 +13,7 @@ use orchester_core::{
 use orchester_store::{ConnectionPick, ProjectDb, ReferenceTarget, StoreError};
 
 use super::{FillInError, team};
-use crate::{tasks::outside::Outside, workspace::Workspace};
+use crate::{sharing::sync::refresh_profile, tasks::outside::Outside, workspace::Workspace};
 
 impl Workspace {
   /// Keeps `pick` as the connection, and the account when the connection needs one, the team profile `profile` of
@@ -36,6 +36,7 @@ impl Workspace {
       self.check_account(&connection, account)?;
     }
     db.set_connection_pick(profile, pick)?;
+    refresh_profile(&mut db, profile)?;
     self.changes.record(db.project().id(), Outside::Connections);
     Ok(())
   }

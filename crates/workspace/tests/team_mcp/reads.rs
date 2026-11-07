@@ -10,10 +10,11 @@ use std::{
   sync::Arc,
 };
 
+use orchester_api::ReferenceTarget;
 use orchester_core::{
   connection::AgentProvider,
   id::{ConnectionId, ResourceId},
-  resource::Version,
+  resource::{AgentProfile, TeamAgentProfile},
 };
 use parking_lot::Mutex;
 use serde_json::{Value, json};
@@ -34,9 +35,7 @@ pub struct Seen {
   /// The pipeline the last task edit and the last `task.create` named, as sent.
   pub edited_pipeline: Value,
   pub created_pipeline: Value,
-  /// The connection the Builder profile's version names, by its id on the publisher's computer.
-  pub publisher_connection: Option<ConnectionId>,
-  /// The MCP server the Builder profile's version names, by its id on the publisher's computer.
+  /// The team MCP server the Builder profile's version names, as the local server id a stopgap start looks it up by.
   pub publisher_mcp_server: Option<ConnectionId>,
 }
 
@@ -45,11 +44,10 @@ pub fn routes(config: &Config) -> (Extra, Arc<Mutex<Seen>>) {
   routes_running(config, Some(AgentProvider::CodexCli))
 }
 
-/// [`routes`] whose Builder profile version names `cli` by a `CliKind` reference, or none when `cli` is `None`.
+/// [`routes`] whose Builder profile version runs on `cli`, or is a body that names no CLI kind when `cli` is `None`.
 pub fn routes_running(config: &Config, cli: Option<AgentProvider>) -> (Extra, Arc<Mutex<Seen>>) {
   let seen = Arc::new(Mutex::new(Seen::default()));
   let versions = Arc::new(Versions::of(config, cli));
-  seen.lock().publisher_connection = Some(versions.connection);
   seen.lock().publisher_mcp_server = Some(versions.mcp_server);
   let counted = seen.clone();
   let extra: Extra = Arc::new(move |state, request, stream| route(state, (&versions, &counted), request, stream));
@@ -60,36 +58,54 @@ pub fn routes_running(config: &Config, cli: Option<AgentProvider>) -> (Extra, Ar
 struct Versions {
   pipeline: (ResourceId, Value),
   profile: (ResourceId, Value),
-  connection: ConnectionId,
   mcp_server: ConnectionId,
 }
 
 impl Versions {
+  /// The Builder profile names `cli` in the team's form; with no `cli` its body is the old local one, which names a
+  /// connection and no CLI kind and cannot be read as a team profile.
   fn of(config: &Config, cli: Option<AgentProvider>) -> Self {
-    let profile = fixture::builder();
-    let connection = profile.body().connection();
+    let local = fixture::builder();
     let mcp_server = ConnectionId::generate();
+    let team_mcp = ResourceId::from_uuid(mcp_server.as_uuid());
     let pipeline = fixture::one_step(config.profile, "Say hello.");
-    let mut references =
-      vec![json!({"type": "team_resource", "kind": "mcp_server", "id": ResourceId::from_uuid(mcp_server.as_uuid())})];
-    if let Some(cli) = cli {
-      references.insert(0, json!({"type": "cli_kind", "cli": cli}));
-    }
-    Self {
-      connection,
-      mcp_server,
-      pipeline: (config.pipeline, version(config.pipeline, &pipeline, &json!([]))),
-      profile: (
-        config.profile,
-        version(config.profile, &profile, &Value::Array(references)),
+    let (body, references) = match cli {
+      Some(cli) => {
+        let profile = team_profile(local.body(), cli, team_mcp);
+        (json!(profile), json!(ReferenceTarget::of_profile(&profile)))
+      }
+      None => (
+        json!(local.body()),
+        json!([{"type": "team_resource", "kind": "mcp_server", "id": team_mcp}]),
       ),
+    };
+    Self {
+      mcp_server,
+      pipeline: (
+        config.pipeline,
+        version(config.pipeline, &json!(pipeline.body()), &json!([])),
+      ),
+      profile: (config.profile, version(config.profile, &body, &references)),
     }
   }
 }
 
-fn version<B: serde::Serialize>(resource: ResourceId, version: &Version<B>, references: &Value) -> Value {
+/// `local` as the team holds it: running on `cli` and using the team MCP server `mcp_server`.
+fn team_profile(local: &AgentProfile, cli: AgentProvider, mcp_server: ResourceId) -> TeamAgentProfile {
+  TeamAgentProfile::new(
+    local.role().clone(),
+    local.responsibilities().to_owned(),
+    local.instructions().clone(),
+    (cli, local.model().clone(), local.settings().clone()),
+  )
+  .with_permissions(local.permissions().clone())
+  .with_mcp_servers(vec![mcp_server])
+  .expect("one MCP server")
+}
+
+fn version(resource: ResourceId, body: &Value, references: &Value) -> Value {
   json!({
-    "resource": resource, "number": version.number().get(), "body": version.body(), "hash": "a".repeat(64),
+    "resource": resource, "number": 1, "body": body, "hash": "a".repeat(64),
     "references": references, "based_on": null, "published": attribution(), "widens": false
   })
 }

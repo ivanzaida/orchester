@@ -89,8 +89,9 @@ pub enum SharingError {
   /// refused and nothing changed.
   #[error("only a person does this; nothing was changed")]
   PersonOnly,
-  /// A body to send the team names connections, MCP servers or secrets of this computer, which a team resource never
-  /// holds (`docs/design/team-configuration.md`); `names` are theirs. Nothing was sent.
+  /// A body to send the team names MCP servers of this computer that are not team resources, or (of a kind whose body
+  /// is not in the team's form yet) connections or secrets of this computer, which a team resource never holds
+  /// (`docs/design/team-configuration.md`); `names` are theirs. Nothing was sent.
   #[error("resource {resource} names {} of this computer", names.join(", "))]
   LocalEntitiesNamed { resource: ResourceId, names: Vec<String> },
   /// The chosen local connection cannot run a reference of the required kind.

@@ -10,6 +10,7 @@
 
 mod bindings;
 mod here;
+mod profile;
 mod publish;
 mod team_body;
 mod upload;
@@ -32,6 +33,8 @@ use orchester_store::{
 };
 use serde_json::Value;
 
+use self::profile::cache_profile;
+pub(crate) use self::profile::refresh as refresh_profile;
 pub use self::{
   here::{Here, HereReference, Needer, Standing, chosen_at},
   publish::{ConfigServer, RemoteResourceStore},
@@ -134,7 +137,7 @@ fn write(root: &Path, shared: &SharedResource, versions: &[SharedVersion]) -> Re
   for version in versions {
     match shared.kind {
       SharedResourceKind::Pipeline => cache_version::<Pipeline>(&mut db, version)?,
-      SharedResourceKind::AgentProfile => cache_version::<AgentProfile>(&mut db, version)?,
+      SharedResourceKind::AgentProfile => cache_profile(&mut db, version)?,
       SharedResourceKind::Instruction => cache_version::<Instruction>(&mut db, version)?,
       SharedResourceKind::Tool => cache_version::<Tool>(&mut db, version)?,
       SharedResourceKind::TeamReviewer => cache_version::<orchester_core::resource::TeamReviewer>(&mut db, version)?,
@@ -160,7 +163,15 @@ fn cache_version<B: ResourceBody + SharedBody>(
   db: &mut ProjectDb,
   version: &SharedVersion,
 ) -> Result<(), SharingError> {
-  let local_body = body::<B>(version.body.clone())?;
+  cache_body(db, version, body::<B>(version.body.clone())?)
+}
+
+/// Keeps `version` as the server has it, with `local_body` as the body this computer runs.
+fn cache_body<B: ResourceBody + SharedBody>(
+  db: &mut ProjectDb,
+  version: &SharedVersion,
+  local_body: B,
+) -> Result<(), SharingError> {
   let waits_here = waiting::waits(db, version.resource, version.number, &local_body)?;
   let cached = CachedVersion {
     number: version.number,
