@@ -1,9 +1,11 @@
-//! The /watch-module picker's panel (`Module picker` `R1s1o` in 02 `c8pALl`), in the panel the pickers share
-//! ([`super::panel`]). Under the head *Modules*, with how many modules it shows at its end (*2 of 4* once something is
-//! typed), a row for each: a 14 `boxes` in `text_secondary`, the name in 12 `text_primary` with the letters that match
-//! what was typed in 600, what it takes in in 11 `text_muted` (*12 tasks · 2 running · 1 waits for you*), and at its
-//! end how it stands: *Added*, *Led in «…» ↗* in `warning` when another conversation leads it, or *Watched here*. A
-//! module with nothing left to watch is faded to half and says so. Under the head *Also* the tasks without a module
+//! The /watch-module picker's panel (`Module picker` `R1s1o` in 02 `c8pALl`, v2 `r7kka` in `P1` `QXPDY`), in the panel
+//! the pickers share ([`super::panel`]). Its own search field, *Search modules* with *14 open* at its end; under the
+//! head *Modules*, with *14 open · 2 added* at its end (*2 of 26* once something is typed), a row for each module in a
+//! list that scrolls after 8: a 14 `boxes` in `text_secondary`, the name in 12 `text_primary` with the letters that
+//! match what was typed in 600, what it takes in in 11 `text_muted` (*12 tasks · 2 running · 1 waits for you*), and at
+//! its end how it stands: *Added*, *Led in «…» ↗* in `warning` when another conversation leads it, or *Watched here*.
+//! While the search is empty the modules with nothing left to watch hide behind *12 finished modules · type to find
+//! them*; one the search finds is faded to half and says so. Under the head *Also* the tasks without a module
 //! (`inbox`) and everything in the project (`folder-kanban`, *What no other subscription takes*, its *Led in* in
 //! `text_muted`); then the keys.
 
@@ -27,53 +29,91 @@ use super::panel::{self, LedIn, Picker};
 use crate::{
   navigation::Navigation,
   theme::{DISABLED_OPACITY, ExtraColor, IconSize},
-  ui::{icon::icon, slash::Choice},
+  ui::{
+    icon::icon,
+    slash::{Choice, PickerSearch},
+  },
 };
 
 const PICKER: Picker = Picker::Module;
+
+/// What a picker counts: what has something left to watch, the chips taken, everything, and what the empty search
+/// hides.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct Counts {
+  pub(super) open: usize,
+  pub(super) added: usize,
+  pub(super) total: usize,
+  pub(super) hidden: usize,
+}
 
 /// What the picker shows now.
 pub(super) struct Shown<'a> {
   /// What names the composer: the picker's elements are named after it.
   pub(super) id: &'a str,
   pub(super) project: ProjectId,
-  /// The words typed after the chips.
+  /// The words typed in the picker's search.
   pub(super) filter: &'a str,
   /// Its rows, in order, with the chip each becomes.
   pub(super) offered: &'a [(&'a ModuleEntry, Choice)],
   pub(super) focused: Option<usize>,
-  /// How many open modules the project has.
-  pub(super) total: usize,
+  /// The project's open modules.
+  pub(super) counts: Counts,
   /// Opens the conversation a *Led in* names.
   pub(super) navigation: Navigation,
 }
 
-/// The panel with its rows and the keys.
-pub(super) fn panel(ctx: &Ctx, shown: &Shown<'_>) -> Element {
+/// The panel with its search, its rows and the keys.
+pub(super) fn panel(ctx: &mut Ctx, shown: &Shown<'_>, search: &PickerSearch) -> Element {
   let modules = shown
     .offered
     .iter()
     .filter(|(entry, _)| matches!(entry.target, WatchTarget::Module(_)))
     .count();
-  let count = panel::count(ctx, shown.filter, (modules, shown.total));
-  let mut content = vec![panel::heading(ctx, (shown.id, PICKER, "section"), None, Some(count))];
-  if modules == 0 && !shown.filter.is_empty() {
+  let Counts {
+    open,
+    added,
+    total,
+    hidden,
+  } = shown.counts;
+  let open_words = panel::open_count(ctx, open, 0);
+  let count = if shown.filter.trim().is_empty() {
+    panel::open_count(ctx, open, added)
+  } else {
+    panel::count(ctx, (modules, total))
+  };
+  let mut content = vec![
+    panel::search_field(ctx, (shown.id, PICKER), search, Some(open_words)),
+    panel::heading(ctx, (shown.id, PICKER, "section"), None, Some(count)),
+  ];
+  if modules == 0 && !shown.filter.trim().is_empty() {
     let words = ctx.t_args("orchestrator.watch.modules.nothing", [("query", shown.filter)]);
     content.push(panel::nothing((shown.id, PICKER), &words));
   }
-  for at in 0..shown.offered.len() {
-    if at == modules {
-      let also = ctx.t("orchestrator.watch.modules.also");
-      content.push(panel::heading(ctx, (shown.id, PICKER, "also"), Some(also), None));
-    }
-    content.push(row(ctx, shown, at));
+  let rows: Vec<Element> = (0..modules).map(|at| row(ctx, shown, at, search)).collect();
+  if !rows.is_empty() {
+    content.push(panel::list(ctx, &format!("{}-watch-module-list", shown.id), rows));
+  }
+  if hidden > 0 {
+    let form = if hidden == 1 { "one" } else { "other" };
+    let words = ctx.t_args(
+      &format!("orchestrator.watch.modules.finished.{form}"),
+      [("count", hidden.to_string())],
+    );
+    content.push(panel::finished((shown.id, PICKER), (hidden, &words)));
+  }
+  if modules < shown.offered.len() {
+    let also = ctx.t("orchestrator.watch.modules.also");
+    content.push(panel::heading(ctx, (shown.id, PICKER, "also"), Some(also), None));
+    content.extend((modules..shown.offered.len()).map(|at| row(ctx, shown, at, search)));
   }
   content.push(panel::footer(ctx, (shown.id, PICKER), true));
   panel::frame((shown.id, PICKER), content)
 }
 
-/// Row `at`: its icon, name, what it takes in and how it stands, *Enter* while it has the focus.
-fn row(ctx: &Ctx, shown: &Shown<'_>, at: usize) -> Element {
+/// Row `at`: its icon, name, what it takes in and how it stands, *Enter* while it has the focus, which `search` keeps
+/// in view.
+fn row(ctx: &Ctx, shown: &Shown<'_>, at: usize, search: &PickerSearch) -> Element {
   let (entry, choice) = &shown.offered[at];
   let focused = shown.focused == Some(at);
   let mut children: Vec<Element> = vec![
@@ -98,7 +138,7 @@ fn row(ctx: &Ctx, shown: &Shown<'_>, at: usize) -> Element {
     .describe("state", state_name(entry))
     .with_children(children);
   let row = if focused {
-    row.background(ExtraColor::Hover.role())
+    search.keep_in_view(row.background(ExtraColor::Hover.role()))
   } else {
     row
   };

@@ -1,21 +1,27 @@
-//! A command that takes an argument (ORC-771, `Orchestrator watch · redesign` `QOPcg`): chosen in the slash menu, it
-//! becomes the composer's command chip before the message and its picker opens over the composer's box. Enter adds
-//! the picker's focused choice as a chip after it, several allowed; Backspace in an empty field removes the last
-//! chip, the command's own once no choice is left; Esc closes the picker and keeps the chips, and a press on the
-//! command's chip opens it again. The words typed after the chips filter the picker while it is open and are the
-//! command's text; Ctrl Enter (Cmd Enter) applies the command to its choices and text instead of sending a message.
-//! What a picker offers is the command's own ([`ArgumentPicker`]); the slash menu draws the chips and does the keys.
+//! A command that takes an argument (ORC-771, `Orchestrator watch · redesign` `QOPcg`; its picker v2, ORC-889, `P1`
+//! `QXPDY` in `Proposal · watch composer v2` `LRg3R`): chosen in the slash menu, it becomes the composer's command chip
+//! before the message and its picker opens over the composer's box, the focus in the picker's own search field, whose
+//! words filter it ([`PickerSearch`]). While the picker is open its keys are its own, wherever the focus is: ↑ ↓ move
+//! through the rows that can be chosen, Enter adds the focused choice as a chip after the command's and closes the
+//! picker, Shift Enter adds it and keeps the picker open, Esc closes it and keeps the chips; a press outside it closes
+//! it too, and a press on the command's chip opens it again. Once it closes by its keys the composer's field takes
+//! the focus back. Backspace in an empty field removes the last chip, the command's own once no choice is left. The
+//! words typed in the composer are the command's text; Ctrl Enter (Cmd Enter) applies the command to its choices and
+//! text instead of sending a message. What a picker offers is the command's own ([`ArgumentPicker`]); the slash menu
+//! draws the chips and does the keys.
 
 mod chips;
 mod picker;
+mod search;
 
-use std::sync::Arc;
+use std::sync::{Arc, atomic::Ordering};
 
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx, events::KeyboardEvent},
   node::Element,
 };
 
+pub use self::search::PickerSearch;
 pub(super) use self::{chips::chips, picker::picker};
 use super::{SlashField, step};
 use crate::ui::icon::Icon;
@@ -44,12 +50,14 @@ pub type Apply = Arc<dyn Fn(Applied) -> bool + Send + Sync>;
 pub struct Asked<'a> {
   /// What names the composer: the picker's elements are named after it.
   pub id: &'a str,
-  /// The words typed after the chips.
+  /// The words typed in the picker's own search field.
   pub filter: &'a str,
   /// The choices that are chips already.
   pub taken: &'a [Choice],
   /// The row with the keyboard's focus, among the rows the picker offered last for this filter.
   pub focused: Option<usize>,
+  /// The picker's search field, which its panel draws at its top, and what keeps its focused row in view.
+  pub search: &'a PickerSearch,
 }
 
 /// What a picker shows: its rows as the keys read them, each with whether it can be chosen now, in order, and the
@@ -98,10 +106,12 @@ impl SlashField {
   pub fn held_command(&self) -> Option<&'static str> {
     self.argument.get().map(|held| held.command)
   }
-  /// The command `name` becomes the chip, without choices, and its picker opens; any command held before goes.
+  /// The command `name` becomes the chip, without choices, and its picker opens with an empty search; any command held
+  /// before goes.
   pub(super) fn hold(&self, (name, icon): (&'static str, Icon), taking: Taking) {
     *self.taking.lock() = Some(taking);
     self.forget_choices();
+    self.clear_search();
     self.argument.set(Some(Arguing {
       command: name,
       icon,
@@ -110,27 +120,15 @@ impl SlashField {
     }));
   }
 
-  /// Takes `event` while the chip holds a command, as the module's head says: whether it did.
-  pub(super) fn argument_key(&self, event: &KeyboardEvent, held: &Arguing) -> bool {
-    let plain = !event.shift && !event.ctrl && !event.meta && !event.alt;
+  /// Takes `event` while the chip holds a command whose picker is closed and the composer's field has the focus:
+  /// whether it did.
+  pub(super) fn argument_key(&self, event: &KeyboardEvent) -> bool {
     let took = match event.key.as_str() {
       "Enter" if (event.ctrl || event.meta) && !event.shift => {
         self.apply();
         true
       }
-      "Enter" if held.picking && plain => {
-        self.add_focused();
-        true
-      }
-      "ArrowDown" | "ArrowUp" if held.picking => {
-        self.move_focus(event.key == "ArrowDown");
-        true
-      }
-      "Escape" if held.picking => {
-        self.set_picking(false);
-        true
-      }
-      "Backspace" if plain && self.draft.get_untracked().is_empty() => {
+      "Backspace" if plain(event) && self.draft.get_untracked().is_empty() => {
         self.remove_last();
         true
       }
@@ -142,15 +140,62 @@ impl SlashField {
     took
   }
 
-  /// Opens or closes the picker of the command the chip holds.
+  /// Takes `event` while the picker is open, as the module's head says: whether it did.
+  pub(super) fn picker_key(&self, event: &KeyboardEvent) -> bool {
+    let shifted = event.shift && !event.ctrl && !event.meta && !event.alt;
+    let took = match event.key.as_str() {
+      "Enter" if (event.ctrl || event.meta) && !event.shift => {
+        self.apply();
+        true
+      }
+      "Enter" if plain(event) => {
+        if self.add_focused() {
+          self.close_picker();
+        }
+        true
+      }
+      "Enter" if shifted => {
+        self.add_focused();
+        true
+      }
+      "ArrowDown" | "ArrowUp" => {
+        self.move_focus(event.key == "ArrowDown");
+        true
+      }
+      "Escape" => {
+        self.close_picker();
+        true
+      }
+      "Backspace" if plain(event) && self.focused.get_untracked() && self.draft.get_untracked().is_empty() => {
+        self.remove_last();
+        true
+      }
+      _ => false,
+    };
+    if took {
+      event.prevent_default();
+    }
+    took
+  }
+
+  /// Opens or closes the picker of the command the chip holds; it opens with an empty search.
   pub(super) fn set_picking(&self, picking: bool) {
     let Some(mut held) = self.argument.get_untracked() else {
       return;
     };
     if held.picking != picking {
+      if picking {
+        self.clear_search();
+      }
       held.picking = picking;
       self.argument.set(Some(held));
     }
+  }
+
+  /// The picker closes by its keys, and the composer's field takes the focus back.
+  fn close_picker(&self) {
+    self.refocus.store(true, Ordering::Relaxed);
+    self.set_picking(false);
   }
 
   /// Removes the choice `key` from the chips.
@@ -163,7 +208,7 @@ impl SlashField {
   }
 
   /// Applies the command the chip holds to its choices and the text after them; once it took them, the chips and the
-  /// text go, and they stay when it refused.
+  /// text go, and the composer's field takes the focus; they stay when it refused.
   fn apply(&self) {
     let Some(held) = self.argument.get_untracked() else {
       return;
@@ -177,27 +222,33 @@ impl SlashField {
       text,
     });
     if took {
+      self.refocus.store(true, Ordering::Relaxed);
       self.drop_command();
       self.draft.set(String::new());
     }
   }
 
-  /// Enter in the picker: its focused row, while it can be chosen and is not a chip yet, becomes the last chip, and
-  /// the filter empties.
-  fn add_focused(&self) {
+  /// Enter or Shift Enter in the picker: its focused row, while it can be chosen and is not a chip yet, becomes the
+  /// last chip, and the search empties. Whether a row was focused that can be chosen.
+  fn add_focused(&self) -> bool {
     let offered = self.offered_choices.lock().clone().unwrap_or_default();
     let Some((choice, true)) = offered.focused.and_then(|at| offered.rows.get(at)).cloned() else {
-      return;
+      return false;
     };
     let Some(mut held) = self.argument.get_untracked() else {
-      return;
+      return false;
     };
     if !held.choices.contains(&choice) {
       held.choices.push(choice);
       self.argument.set(Some(held));
     }
-    if !self.draft.get_untracked().is_empty() {
-      self.draft.set(String::new());
+    self.clear_search();
+    true
+  }
+
+  fn clear_search(&self) {
+    if !self.search.get_untracked().is_empty() {
+      self.search.set(String::new());
     }
   }
 
@@ -228,9 +279,23 @@ impl SlashField {
     *self.offered_choices.lock() = None;
   }
 
+  /// The composer's field takes the focus back, once, after the picker closed by its keys.
+  pub(super) fn take_focus_back(&self, ctx: &Ctx) {
+    if self.refocus.swap(false, Ordering::Relaxed)
+      && let Some(input) = &self.input
+    {
+      ctx.focus(input);
+    }
+  }
+
   fn drop_command(&self) {
     *self.taking.lock() = None;
     self.forget_choices();
     self.argument.set(None);
   }
+}
+
+/// A key pressed with no modifier.
+fn plain(event: &KeyboardEvent) -> bool {
+  !event.shift && !event.ctrl && !event.meta && !event.alt
 }

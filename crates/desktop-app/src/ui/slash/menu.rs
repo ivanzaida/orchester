@@ -148,8 +148,10 @@ impl Component for SlashMenu {
     if typed.is_none() && field.closed.get() {
       field.closed.set(false);
     }
-    // While the chip holds a command with an argument, the draft is that command's and its picker shows instead.
+    // While the chip holds a command with an argument, the draft is that command's and its picker shows instead; the
+    // picker's own search holds the focus then.
     let held = field.argument.get();
+    field.take_focus_back(ctx);
     let focused = field.focused.get();
     let open = typed.is_some() && held.is_none() && focused && !field.closed.get();
     let read = skills::read(ctx, &props.skills, open);
@@ -157,7 +159,7 @@ impl Component for SlashMenu {
       *field.shown.lock() = None;
       *self.last.lock() = None;
       return match held {
-        Some(held) if held.picking && focused => argument::picker(ctx, (props.id, field, &props.anchor), held.command),
+        Some(held) if held.picking => argument::picker(ctx, (props.id, field, &props.anchor), held.command),
         _ => {
           field.forget_choices();
           Element::new()
