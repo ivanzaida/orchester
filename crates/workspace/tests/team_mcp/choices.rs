@@ -1,6 +1,6 @@
-//! What `run_task` chooses for a team start (`team_work/choices.rs`): a profile runs on a connection of the CLI kind its
-//! version names, never on one of another CLI; a version that names no CLI is refused; and a team MCP server a profile
-//! names is refused unless this computer has the stopgap's server for it (ORC-826 replaces that rule).
+//! What `run_task` chooses for a team start (`team_work/choices.rs`): a profile runs on a connection of the CLI kind
+//! its version names, never on one of another CLI; a version that names no CLI is refused; and a team MCP server a
+//! profile names is refused unless this computer has the stopgap's server for it (ORC-826 replaces that rule).
 
 use orchester_core::{
   connection::{AgentConnection, AgentProvider},

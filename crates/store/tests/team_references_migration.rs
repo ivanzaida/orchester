@@ -56,7 +56,11 @@ fn team_references_migration_reads_a_shared_tool_as_a_team_tool_and_keeps_the_ot
     role: role.map(str::to_owned),
   };
   let before = vec![
-    reference(ReferenceTarget::Connection(connection), "Claude", Some("claude_code_cli")),
+    reference(
+      ReferenceTarget::Connection(connection),
+      "Claude",
+      Some("claude_code_cli"),
+    ),
     reference(ReferenceTarget::Secret(secret), "GitHub token", None),
   ];
   let version = CachedVersion {
@@ -101,5 +105,8 @@ fn team_references_migration_reads_a_shared_tool_as_a_team_tool_and_keeps_the_ot
     "Deploy",
     None,
   ));
-  assert_eq!(read.references, expected, "the tool is a team tool, the others as they were");
+  assert_eq!(
+    read.references, expected,
+    "the tool is a team tool, the others as they were"
+  );
 }
