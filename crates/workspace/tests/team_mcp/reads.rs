@@ -99,8 +99,8 @@ fn team_profile(local: &AgentProfile, cli: AgentProvider, mcp_server: ResourceId
     (cli, local.model().clone(), local.settings().clone()),
   )
   .with_permissions(local.permissions().clone())
-  .with_mcp_servers(vec![mcp_server])
-  .expect("one MCP server")
+  .and_then(|profile| profile.with_mcp_servers(vec![mcp_server]))
+  .expect("no writable folders, one MCP server")
 }
 
 fn version(resource: ResourceId, body: &Value, references: &Value) -> Value {

@@ -257,7 +257,8 @@ fn execution_bundle_inputs_pin_a_team_profile_as_the_local_one_it_came_from() {
           .permissions()
           .clone()
           .with_writable_folders(WritableFolders::none()),
-      );
+      )
+      .expect("no writable folders");
       (version.id(), ExecutionProfile::of_team(&team))
     })
     .collect();

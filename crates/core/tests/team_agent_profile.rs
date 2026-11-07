@@ -274,8 +274,8 @@ fn team_agent_profile_runs_on_a_connection_of_this_computer_with_the_teams_mcp_s
       CommandPermission::AnyInWorktree,
       NetworkAccess::On,
     ))
-    .with_mcp_servers(vec![docs])
-    .expect("distinct");
+    .and_then(|profile| profile.with_mcp_servers(vec![docs]))
+    .expect("no writable folders, distinct servers");
   let on = ConnectionId::generate();
 
   let profile = AgentProfile::from_team(&team, on);
@@ -314,11 +314,14 @@ fn team_agent_profile_widens_with_permissions_an_mcp_server_or_a_secret_the_vers
     .expect("distinct");
   assert_eq!(widens(Some(&v1), &more_secrets), [VersionWidening::Secret]);
 
-  let writes = v1.clone().with_permissions(AgentPermissions::new(
-    RepositoryAccess::Write,
-    CommandPermission::AnyInWorktree,
-    NetworkAccess::On,
-  ));
+  let writes = v1
+    .clone()
+    .with_permissions(AgentPermissions::new(
+      RepositoryAccess::Write,
+      CommandPermission::AnyInWorktree,
+      NetworkAccess::On,
+    ))
+    .expect("no writable folders");
   assert!(
     widens(Some(&v1), &writes)
       .iter()
@@ -390,6 +393,19 @@ fn team_agent_profile_is_refused_for_a_profile_with_writable_folders() {
 
   assert_eq!(
     refused,
+    Err(TeamProfileError::WritableFolders {
+      folders: vec!["/opt/cache".to_owned(), "/opt/build".to_owned()]
+    })
+  );
+}
+
+#[test]
+fn team_agent_profile_refuses_permissions_with_writable_folders() {
+  let team = base(AgentProvider::CodexCli);
+  let permissions = with_folders(team.permissions().clone());
+
+  assert_eq!(
+    team.with_permissions(permissions),
     Err(TeamProfileError::WritableFolders {
       folders: vec!["/opt/cache".to_owned(), "/opt/build".to_owned()]
     })

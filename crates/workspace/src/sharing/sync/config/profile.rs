@@ -1,9 +1,10 @@
 //! A team agent profile on this computer. The server holds it in the team's form ([`TeamAgentProfile`]: a CLI kind, no
 //! connection); runs and the Agents page read the local body ([`AgentProfile`]), which runs on a connection of this
 //! computer: the one the person picked for the profile (`team_connection_picks`), else the only connection of its CLI
-//! kind, else [`AgentProfile::unresolved_connection`], which matches no connection here, so the Agents page, publishing
-//! and preflight say a connection must be picked. A version cached before the team configuration model is a local body
-//! with the publisher's connection and is read as it is (ORC-845 removes that).
+//! kind, else [`AgentProfile::unresolved_connection`], which matches no connection here: publishing and preflight say
+//! a connection must be picked, and the Agents page shows the profile's connection as missing. A version cached before
+//! the team configuration model is a local body with the publisher's connection and is read as it is (ORC-845 removes
+//! that).
 
 use orchester_api::SharedVersion;
 use orchester_core::{

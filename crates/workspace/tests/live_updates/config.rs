@@ -106,8 +106,8 @@ pub(super) fn team_profile(servers: &[ResourceId], permissions: AgentPermissions
     ),
   )
   .with_permissions(permissions)
-  .with_mcp_servers(servers.to_vec())
-  .expect("distinct servers")
+  .and_then(|profile| profile.with_mcp_servers(servers.to_vec()))
+  .expect("no writable folders, distinct servers")
 }
 
 /// [`team_profile`] with a profile's first permissions, as the server keeps it: as a teammate's first version it

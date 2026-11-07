@@ -106,10 +106,12 @@ impl TeamAgentProfile {
     }
   }
 
-  #[must_use]
-  pub fn with_permissions(mut self, permissions: AgentPermissions) -> Self {
+  /// The permissions the profile's agents run with. Refused when they name extra writable folders: those are paths of
+  /// one computer, so a team profile never carries them.
+  pub fn with_permissions(mut self, permissions: AgentPermissions) -> Result<Self, TeamProfileError> {
+    refuse_writable_folders(&permissions)?;
     self.permissions = permissions;
-    self
+    Ok(self)
   }
 
   /// The team MCP servers the profile's agents get, by server id, in the order given.
@@ -148,6 +150,7 @@ impl TeamAgentProfile {
   /// MCP server that is not a team one: the team never holds an id from a computer. A profile with extra writable
   /// folders is refused rather than stripped, so nobody believes the team's profile keeps them.
   pub fn from_local(profile: &AgentProfile, known: TeamCounterparts<'_>) -> Result<Self, TeamProfileError> {
+    // Before the connection and MCP lookups, so the folders are what such a profile is refused for.
     refuse_writable_folders(profile.permissions())?;
     let cli = known
       .connections
@@ -177,7 +180,7 @@ impl TeamAgentProfile {
       profile.instructions().clone(),
       (cli, profile.model().clone(), profile.settings().clone()),
     )
-    .with_permissions(profile.permissions().clone())
+    .with_permissions(profile.permissions().clone())?
     .with_mcp_servers(servers)
   }
 
@@ -353,14 +356,13 @@ mod wire {
     type Error = TeamProfileError;
 
     fn try_from(wire: TeamAgentProfileWire) -> Result<Self, TeamProfileError> {
-      super::refuse_writable_folders(&wire.permissions)?;
       Self::new(
         wire.role,
         wire.responsibilities,
         wire.instructions,
         (wire.cli, wire.model, wire.settings),
       )
-      .with_permissions(wire.permissions)
+      .with_permissions(wire.permissions)?
       .with_mcp_servers(wire.mcp_servers)?
       .with_tools(wire.tools)?
       .with_skills(wire.skills)?
