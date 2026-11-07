@@ -1,4 +1,4 @@
-//! The team's configuration as the fake server publishes it, and the schema-2 execution bundle it builds from it at a
+//! The team's configuration as the fake server publishes it, and the schema-3 execution bundle it builds from it at a
 //! work start, with the task's number and each pinned version's label: a Builder profile run by Codex, a one-step
 //! pipeline and a skill with one reference file. Shared with the runner's team start tests (`#[path]`), so both drive
 //! the same bundle.
@@ -83,6 +83,7 @@ impl Config {
       instructions: &[],
       tools: &[],
       skills: &[skill_version],
+      mcp_servers: &[],
     };
     Self {
       profile,

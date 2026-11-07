@@ -1,7 +1,7 @@
 //! A fake team server on loopback with the team server's routes and shapes for authorized work (its
 //! `http/workspace/mod.rs`, `bundles.rs`, `heartbeat.rs`, `docs/claim-authority.md`, `docs/module-branches.md`,
 //! `docs/work-reports.md`): one project with one task in a module, under `/api/v2/projects/{p}`. The commands with
-//! their receipts are in [`crate::team_commands`]; a work start names a schema-2 bundle, which carries the task's
+//! their receipts are in [`crate::team_commands`]; a work start names a schema-3 bundle, which carries the task's
 //! number and the pinned versions' labels. Reads: `GET …/bundles/{sha256}` and `GET …/bundles/{sha256}/files/{file}`
 //! for the claim's holder in its session (`409 claim_lost` otherwise), and `POST …/heartbeat` with D1's renewal rule.
 //! Each token is one member's session, [`ADMIN`] a workspace Admin's. A test can take the server down (every

@@ -3,7 +3,9 @@
 //! and file hashes bind the complete resolved inputs; nothing is "latest" when the run executes. A bundle holds no
 //! credential, account, connection or path of one computer: secrets stay in the local credential store, and each
 //! profile's CLI is bound on the executing computer from [`LocalBinding`], which names the profile by its server
-//! resource id and holds no id of a computer's connection, MCP server or secret.
+//! resource id and holds no id of a computer's connection, MCP server or secret. The team MCP servers a profile names
+//! are in the bundle's inputs by server resource id, with names only: each computer sets a program's path and the
+//! values itself.
 //!
 //! Its hash is the SHA-256 of its canonical bytes ([`orchester_core::run::bundle::canonical`]). The server hashes the
 //! bundle it built and never accepts one a client wrote. The work's module, its branch and the base commit it starts
@@ -40,8 +42,9 @@ use super::{BundleRef, Subject};
 use crate::SharedLimits;
 
 /// The version of the bundle's shape, as [`BundleRef::schema_version`] names it. 2 added the task's number and each
-/// pinned version's label; a side on another version refuses the bundle.
-pub const EXECUTION_BUNDLE_SCHEMA: u32 = 2;
+/// pinned version's label; 3 added the team MCP server versions the pinned profiles name, and the server ids a team
+/// profile lists. A side on another version refuses the bundle.
+pub const EXECUTION_BUNDLE_SCHEMA: u32 = 3;
 
 /// `{resource_id, version}`: a pinned published version.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
