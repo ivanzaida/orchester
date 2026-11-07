@@ -40,7 +40,9 @@ what is local by nature: connections, program paths, secret values.
   says what to add.
 - **MCP server program** *(decided)*. The team server holds the whole MCP server; for a local one the person sets only
   the path to its program on this computer, once. Nothing is guessed or found by name. A remote MCP server needs
-  nothing unless it has secret headers.
+  nothing unless it has secret headers. A program's variables and a remote server's secret headers name the team secrets
+  they take (a variable the secret of its own name; a header its secret and an optional prefix such as `Bearer `), so
+  the names an MCP server needs are read from its body.
 - **Secrets.** Each needed name gets a value here, once.
 - **Readiness.** Every profile, MCP server and tool shows *ready here* or exactly what is missing. A run whose
   pipeline is not ready here does not start: it refuses with the missing parts listed (`not_ready_here`). Nothing is
