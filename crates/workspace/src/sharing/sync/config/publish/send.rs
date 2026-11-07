@@ -52,6 +52,13 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
     Ok(())
   }
 
+  /// Sends the waiting versions of the one new `resource` and fails with why it was not sent, so its creator learns
+  /// it (`crate::sharing::team_created`); fails sending nothing when the server cannot be reached.
+  pub fn send_created(&mut self, resource: ResourceId) -> Result<(), SharingError> {
+    self.server.writable()?;
+    self.send_resource(resource)
+  }
+
   /// Sends the waiting versions of `resource`, oldest first, until one is not taken.
   pub(super) fn send_resource(&mut self, resource: ResourceId) -> Result<(), SharingError> {
     loop {

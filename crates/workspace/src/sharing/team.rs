@@ -175,6 +175,9 @@ pub(super) fn said(error: &SharingError, address: Option<&ServerAddress>) -> Mes
     (SharingError::Store(error), None) => messages::store_error(error),
     (SharingError::ServerMissing, None) => Message::new("sharing.errors.serverMissing"),
     (SharingError::NotAdmin, None) => Message::new("sharing.errors.notAdmin"),
+    (SharingError::LocalEntitiesNamed { names, .. }, None) => {
+      Message::new("sharing.errors.localEntitiesNamed").with("names", names.join(", "))
+    }
     (_, None) => messages::interrupted(),
   }
 }

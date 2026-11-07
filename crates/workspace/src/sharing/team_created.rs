@@ -25,6 +25,9 @@ pub enum Created {
 pub enum NotCreated {
   /// The team server refused it with its error `code`.
   Refused { code: String },
+  /// Its body names a connection, MCP server or secret of this computer, which a team body may not
+  /// (`SharingError::LocalEntitiesNamed`); nothing was sent.
+  NamesLocal(Message),
   /// It could not be sent for a reason other than being offline.
   Failed(Message),
 }
@@ -50,12 +53,15 @@ fn settle(servers: &Servers, root: &Path, resource: ResourceId) -> Result<Create
   {
     return Ok(Created::Accepted);
   }
-  let sent = send(servers, root);
+  let sent = send(servers, root, resource);
   let state = waiting_state(&db, resource).map_err(|error| failed(&error.into()))?;
   let outcome = match (state, sent) {
     (None, _) => return Ok(Created::Accepted),
     (Some(PublishState::Waiting), Ok(())) => return Ok(Created::Waiting),
     (Some(PublishState::Waiting), Err(error)) if unreached(&error) => return Ok(Created::Waiting),
+    (Some(PublishState::Waiting), Err(error @ SharingError::LocalEntitiesNamed { .. })) => {
+      NotCreated::NamesLocal(said(&error, None))
+    }
     (Some(PublishState::Waiting), Err(error)) => NotCreated::Failed(said(&error, None)),
     (Some(PublishState::Refused { code }), _) => NotCreated::Refused { code },
     (Some(PublishState::Conflict { .. }), _) => NotCreated::Refused {
@@ -69,12 +75,13 @@ fn settle(servers: &Servers, root: &Path, resource: ResourceId) -> Result<Create
   Err(outcome)
 }
 
-/// Sends what waits for the server of the project at `root`; nothing for a local project.
-fn send(servers: &Servers, root: &Path) -> Result<(), SharingError> {
+/// Sends the new `resource` of the project at `root` to its server, failing with why it was not taken; nothing for a
+/// local project.
+fn send(servers: &Servers, root: &Path, resource: ResourceId) -> Result<(), SharingError> {
   let Some(server) = ProjectServer::open(servers, root)? else {
     return Ok(());
   };
-  RemoteResourceStore::new(ProjectDb::open(root)?, server)?.send_waiting()
+  RemoteResourceStore::new(ProjectDb::open(root)?, server)?.send_created(resource)
 }
 
 fn waiting_state(db: &ProjectDb, resource: ResourceId) -> Result<Option<PublishState>, orchester_store::StoreError> {
