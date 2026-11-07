@@ -2,10 +2,10 @@
 //! (`docs/architecture/server.md` row 80), a team pipeline. Its newest version is copied as a new team pipeline's first
 //! version and sent through the shared configuration's publishing ([`crate::sharing::Servers::send_published`]), with
 //! what its body names as references by name and role, never a secret's value. The agent profiles and tools its steps
-//! run must be the team's already: a pipeline whose steps run one of this computer's own is refused, naming them, since
-//! the team's copy would name what the server does not have. Every member's agents may then run it, so it is a
-//! person's decision unless a person lets automation change agent permissions. The local pipeline stays as it is,
-//! hidden, but for its slug, which it gives way to the team's.
+//! run, and its Deliver step's integrator, must be the team's already: a pipeline that names one of this computer's own
+//! is refused, naming it, since the team's copy would name what the server does not have. Every member's agents may
+//! then run it, so it is a person's decision unless a person lets automation change agent permissions. The local
+//! pipeline stays as it is, hidden, but for its slug, which it gives way to the team's.
 
 use orchester_core::{
   resource::{Pipeline, Resource, ResourceKind},
@@ -22,7 +22,7 @@ use crate::{
     services::{Services, blocking},
   },
   messages::Message,
-  sharing::sync::pending_team,
+  sharing::sync::{non_team_name, team_executors},
   tasks::outside::Outside,
 };
 
@@ -96,31 +96,14 @@ fn own_pipeline(db: &ProjectDb, named: &str) -> Result<Resource, ToolError> {
     .ok_or_else(|| ToolError::not_found(Missing::Pipeline, named))
 }
 
-/// Refused, naming them, when steps of `pipeline` run an agent profile or tool that is not the team's.
+/// Refused, naming the first, when `pipeline` runs an agent profile or tool, or merges with an integrator, that is not
+/// the team's (a resource the server has, or the Admin's new one waiting to be sent).
 fn refuse_local_executors(db: &ProjectDb, pipeline: &Pipeline) -> Result<(), ToolError> {
-  let waiting = pending_team(db)?;
-  let mut local = Vec::new();
-  for executor in pipeline.steps().iter().filter_map(|step| step.kind.executor()) {
-    let name = match db.resource(executor)? {
-      // One this computer no longer has is none of the team's either.
-      None => executor.to_string(),
-      Some(_) if waiting.contains(&executor) => continue,
-      Some(resource) => {
-        if matches!(db.resource_sharing(executor)?, Some(ResourceSharing::Shared(_))) {
-          continue;
-        }
-        resource.name().as_str().to_owned()
-      }
-    };
-    if !local.contains(&name) {
-      local.push(name);
-    }
-  }
-  if local.is_empty() {
+  let Some(name) = non_team_name(db, pipeline, &team_executors(db)?)? else {
     return Ok(());
-  }
+  };
   Err(ToolError::refused(
     "team_resources_required",
-    vec![Message::new("appMcp.errors.sharePipelineLocalExecutors").with("resources", local.join(", "))],
+    vec![Message::new("appMcp.errors.sharePipelineLocalExecutors").with("resource", name)],
   ))
 }

@@ -2,7 +2,7 @@
 //! agent profile or calls a tool of the team, and the Deliver step's integrator is a profile of the team, every one
 //! named by its id on the server. A team resource keeps the server's id on every computer, so the body needs no
 //! rewriting; what the team body must rule out is an id of a resource the server does not have, such as a profile only
-//! this computer keeps. A local pipeline keeps naming its own profiles and tools and never becomes a [`TeamPipeline`].
+//! this computer keeps ([`Pipeline::check_team`]). A local pipeline keeps naming its own profiles and tools.
 //!
 //! The pipeline's `references` stay empty: the server reads what a pipeline names from these body fields
 //! (`docs/cloud-api.md`, used-by), so the body is the one source of truth.
@@ -43,15 +43,12 @@ pub enum TeamPipelineError {
   Integrator { profile: ResourceId },
 }
 
-/// A pipeline whose steps and Deliver step name only team resources. It is the body the team receives, unchanged.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TeamPipeline(Pipeline);
-
-impl TeamPipeline {
-  /// `pipeline` as a team body, which fails with the first profile or tool `team` does not have. A step whose profile
-  /// or tool is not chosen yet names nothing; publishing refuses it separately ([`Pipeline::unassigned_steps`]).
-  pub fn new(pipeline: Pipeline, team: &TeamExecutors) -> Result<Self, TeamPipelineError> {
-    for step in pipeline.steps() {
+impl Pipeline {
+  /// Whether this pipeline can be the team's: it fails with the first profile or tool `team` does not have. A step
+  /// whose profile or tool is not chosen yet names nothing; publishing refuses it separately
+  /// ([`Pipeline::unassigned_steps`]). A team pipeline is sent unchanged, so there is no other form of it.
+  pub fn check_team(&self, team: &TeamExecutors) -> Result<(), TeamPipelineError> {
+    for step in self.steps() {
       match &step.kind {
         StepKind::Agent {
           profile: Some(profile), ..
@@ -70,19 +67,9 @@ impl TeamPipeline {
         StepKind::Agent { .. } | StepKind::Tool { .. } => {}
       }
     }
-    if let Some(profile) = pipeline.deliver().and_then(|deliver| deliver.integrator())
-      && !team.profiles.contains(&profile)
-    {
-      return Err(TeamPipelineError::Integrator { profile });
+    match self.deliver().and_then(|deliver| deliver.integrator()) {
+      Some(profile) if !team.profiles.contains(&profile) => Err(TeamPipelineError::Integrator { profile }),
+      _ => Ok(()),
     }
-    Ok(Self(pipeline))
-  }
-
-  pub const fn pipeline(&self) -> &Pipeline {
-    &self.0
-  }
-
-  pub fn into_pipeline(self) -> Pipeline {
-    self.0
   }
 }

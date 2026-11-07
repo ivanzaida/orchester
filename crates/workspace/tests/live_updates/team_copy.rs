@@ -52,7 +52,7 @@ pub(super) fn one_step(profile: ResourceId) -> Pipeline {
 }
 
 /// An agent profile the team server has, cached on `alice`'s computer: a team pipeline may name only these.
-async fn team_profile(server: &TeamServer, alice: &Computer) -> ResourceId {
+pub(super) async fn team_profile(server: &TeamServer, alice: &Computer) -> ResourceId {
   let profile = ResourceId::generate();
   let cli = ReferenceTarget::CliKind {
     cli: AgentProvider::CodexCli,
@@ -73,7 +73,7 @@ async fn team_profile(server: &TeamServer, alice: &Computer) -> ResourceId {
 }
 
 /// An agent profile of this computer's own, hidden in the team project: not one the team server has.
-fn own_profile(db: &mut ProjectDb) -> ResourceId {
+pub(super) fn own_profile(db: &mut ProjectDb) -> ResourceId {
   let body = AgentProfile::new(
     Name::new("Scratch").expect("name"),
     String::new(),
@@ -97,7 +97,7 @@ fn own_profile(db: &mut ProjectDb) -> ResourceId {
 }
 
 /// A pipeline of this computer's own, kept on it when the project joined, at v1, run by `profile`.
-fn own_pipeline(db: &mut ProjectDb, profile: ResourceId) -> ResourceId {
+pub(super) fn own_pipeline(db: &mut ProjectDb, profile: ResourceId) -> ResourceId {
   let body = one_step(profile);
   let id = db
     .create_resource(

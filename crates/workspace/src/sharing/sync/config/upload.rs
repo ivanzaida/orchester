@@ -143,7 +143,7 @@ fn read(db: &ProjectDb) -> Result<(Vec<UploadResource>, BTreeSet<ContentHash>), 
 /// still be named there.
 fn check_latest_pipeline(db: &ProjectDb, resource: &Resource, team: &TeamExecutors) -> Result<(), SharingError> {
   match db.latest_version::<Pipeline>(resource.id())? {
-    Some(latest) => team_body::check_pipeline(db, resource.id(), latest.body().clone(), team),
+    Some(latest) => team_body::check_pipeline(db, resource.id(), latest.body(), team),
     None => Ok(()),
   }
 }

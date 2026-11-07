@@ -15,8 +15,9 @@ use crate::{
 
 /// Settles resource `id`, just created as v1 in the project at `root`, with the team server (nothing to do in a local
 /// project): taken back, and refused as `team_server_refused`, `local_entities_named` (its body names something of
-/// this computer, until ORC-820 gives team profiles their own body) or `team_server_not_reached`, when it was not
-/// taken. Otherwise `Some` says it waits for the server, to be added to the answer.
+/// this computer, until ORC-820 gives team profiles their own body), `pipeline_names_non_team` (a pipeline runs a
+/// profile or tool the team does not have) or `team_server_not_reached`, when it was not taken. Otherwise `Some` says
+/// it waits for the server, to be added to the answer.
 pub(super) async fn settle(services: &Services, root: PathBuf, id: ResourceId) -> Result<Option<Value>, ToolError> {
   match services.servers.send_created(&root, id).await {
     Ok(Created::Accepted) => Ok(None),
@@ -26,6 +27,7 @@ pub(super) async fn settle(services: &Services, root: PathBuf, id: ResourceId) -
       vec![Message::new("appMcp.errors.teamServerRefused").with("code", code)],
     )),
     Err(NotCreated::NamesLocal(reason)) => Err(ToolError::refused("local_entities_named", vec![reason])),
+    Err(NotCreated::NamesNonTeam(reason)) => Err(ToolError::refused("pipeline_names_non_team", vec![reason])),
     Err(NotCreated::Failed(reason)) => Err(ToolError::refused("team_server_not_reached", vec![reason])),
   }
 }

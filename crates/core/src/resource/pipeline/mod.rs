@@ -34,7 +34,7 @@ pub use self::{
   sources::{PipelineSources, PipelineSourcesError},
   starter::{StarterAssignments, StarterStep, StarterStepText, feature_delivery},
   strictness::{Weaker, weaker_than},
-  team::{TeamExecutors, TeamPipeline, TeamPipelineError},
+  team::{TeamExecutors, TeamPipelineError},
 };
 
 /// Stable key of a step within its pipeline, e.g. `implement`. Kept across versions so

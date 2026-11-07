@@ -27,6 +27,7 @@ mod share;
 #[path = "../support/mod.rs"]
 mod support;
 mod team_copy;
+mod team_refused;
 mod widening;
 
 use std::{

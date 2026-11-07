@@ -32,7 +32,7 @@ pub use self::{
   pipeline::{
     DeliverChange, DeliverMode, DeliverStep, Deliverable, EditProblem, FailureRoute, MergeMethod, Pipeline,
     PipelineChange, PipelineEdit, PipelineError, PipelineSources, PipelineSourcesError, RepositoryAccess,
-    StarterAssignments, StarterStep, StarterStepText, Step, StepChange, StepKey, StepKind, TeamExecutors, TeamPipeline,
+    StarterAssignments, StarterStep, StarterStepText, Step, StepChange, StepKey, StepKind, TeamExecutors,
     TeamPipelineError, UnknownDeliverable, Weaker, WithoutCommits, changes, feature_delivery, takes_base_moves,
     takes_base_moves_by_default, weaker_than,
   },

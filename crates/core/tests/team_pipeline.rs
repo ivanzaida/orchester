@@ -6,7 +6,7 @@ use orchester_core::{
   permission::StepPermissions,
   resource::{
     DeliverMode, DeliverStep, MergeMethod, Pipeline, PromptText, RepositoryAccess, Step, StepKey, StepKind,
-    TeamExecutors, TeamPipeline, TeamPipelineError,
+    TeamExecutors, TeamPipelineError,
   },
 };
 
@@ -45,10 +45,7 @@ fn a_pipeline_naming_team_profiles_and_tools_is_a_team_pipeline() {
   ]);
   let team = TeamExecutors::new([profile], [tool]);
 
-  let team_pipeline = TeamPipeline::new(body.clone(), &team).expect("every id is the team's");
-
-  assert_eq!(team_pipeline.pipeline(), &body);
-  assert_eq!(team_pipeline.into_pipeline(), body);
+  assert_eq!(body.check_team(&team), Ok(()));
 }
 
 #[test]
@@ -57,7 +54,7 @@ fn a_step_naming_a_profile_the_team_does_not_have_is_refused() {
   let body = pipeline(vec![step("build", agent(Some(local)))]);
   let team = TeamExecutors::new([ResourceId::generate()], []);
 
-  let refused = TeamPipeline::new(body, &team);
+  let refused = body.check_team(&team);
 
   assert_eq!(
     refused,
@@ -73,7 +70,7 @@ fn a_step_naming_a_tool_the_team_does_not_have_is_refused() {
   let local = ResourceId::generate();
   let body = pipeline(vec![step("lint", StepKind::Tool { tool: Some(local) })]);
 
-  let refused = TeamPipeline::new(body, &TeamExecutors::default());
+  let refused = body.check_team(&TeamExecutors::default());
 
   assert_eq!(
     refused,
@@ -90,8 +87,8 @@ fn a_tool_is_not_a_profile_and_a_profile_is_not_a_tool() {
   let as_profile = pipeline(vec![step("build", agent(Some(id)))]);
   let as_tool = pipeline(vec![step("lint", StepKind::Tool { tool: Some(id) })]);
 
-  assert!(TeamPipeline::new(as_profile, &TeamExecutors::new([], [id])).is_err());
-  assert!(TeamPipeline::new(as_tool, &TeamExecutors::new([id], [])).is_err());
+  assert!(as_profile.check_team(&TeamExecutors::new([], [id])).is_err());
+  assert!(as_tool.check_team(&TeamExecutors::new([id], [])).is_err());
 }
 
 #[test]
@@ -101,10 +98,10 @@ fn the_integrator_of_the_deliver_step_must_be_a_team_profile() {
   let deliver = DeliverStep::new(DeliverMode::AutoMerge, MergeMethod::Squash, Some(integrator), true);
   let body = pipeline(vec![step("build", agent(Some(profile)))]).with_deliver(Some(deliver));
 
-  let refused = TeamPipeline::new(body.clone(), &TeamExecutors::new([profile], []));
+  let refused = body.check_team(&TeamExecutors::new([profile], []));
   assert_eq!(refused, Err(TeamPipelineError::Integrator { profile: integrator }));
 
-  let accepted = TeamPipeline::new(body, &TeamExecutors::new([profile, integrator], []));
+  let accepted = body.check_team(&TeamExecutors::new([profile, integrator], []));
   assert!(accepted.is_ok());
 }
 
@@ -116,19 +113,19 @@ fn steps_without_a_profile_or_tool_yet_and_a_deliver_without_an_integrator_name_
   ])
   .with_deliver(Some(DeliverStep::default()));
 
-  assert!(TeamPipeline::new(body, &TeamExecutors::default()).is_ok());
+  assert!(body.check_team(&TeamExecutors::default()).is_ok());
 }
 
 #[test]
-fn a_team_pipeline_serializes_as_the_pipeline_body_the_server_reads() {
+fn a_pipeline_naming_team_ids_serializes_as_the_pipeline_body_the_server_reads() {
   let (profile, tool) = (ResourceId::generate(), ResourceId::generate());
   let body = pipeline(vec![
     step("build", agent(Some(profile))),
     step("lint", StepKind::Tool { tool: Some(tool) }),
   ]);
-  let team = TeamExecutors::new([profile], [tool]);
+  assert_eq!(body.check_team(&TeamExecutors::new([profile], [tool])), Ok(()));
 
-  let value = serde_json::to_value(TeamPipeline::new(body, &team).expect("team ids").pipeline()).expect("a body");
+  let value = serde_json::to_value(&body).expect("a body");
 
   assert_eq!(value["steps"][0]["kind"]["agent"]["profile"], profile.to_string());
   assert_eq!(value["steps"][1]["kind"]["tool"]["tool"], tool.to_string());

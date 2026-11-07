@@ -32,7 +32,7 @@ use orchester_store::{
 };
 use serde_json::Value;
 
-pub(crate) use self::team_body::pending_team;
+pub(crate) use self::team_body::{non_team_name, team_executors};
 pub use self::{
   here::{Here, HereReference, Needer, Standing, chosen_at},
   publish::{ConfigServer, RemoteResourceStore},

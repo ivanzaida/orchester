@@ -10,7 +10,7 @@ use std::collections::HashSet;
 
 use orchester_core::{
   id::ResourceId,
-  resource::{Pipeline, ResourceKind, TeamExecutors, TeamPipeline, TeamPipelineError},
+  resource::{Pipeline, ResourceKind, TeamExecutors, TeamPipelineError},
   sharing::{LocalEntities, named},
   store::ResourceStore,
 };
@@ -35,7 +35,7 @@ pub(super) fn check(resource: ResourceId, body: &Value, entities: LocalEntities<
 
 /// The agent profiles and tools of the team in the project: those the server has (marked shared here) and the
 /// Admin's new ones that wait for the server ([`pending_team`]), not a resource only this computer keeps.
-pub(super) fn team_executors(db: &ProjectDb) -> Result<TeamExecutors, StoreError> {
+pub(crate) fn team_executors(db: &ProjectDb) -> Result<TeamExecutors, StoreError> {
   let pending = pending_team(db)?;
   let ids = |kind| -> Result<Vec<ResourceId>, StoreError> {
     let mut team = Vec::new();
@@ -55,7 +55,7 @@ pub(super) fn team_executors(db: &ProjectDb) -> Result<TeamExecutors, StoreError
 
 /// The resources with versions published here that wait for the team server and none it refused: the team's, not
 /// there yet. One the server refused (a slug it has, say) never became the team's, so it is this computer's own.
-pub(crate) fn pending_team(db: &ProjectDb) -> Result<HashSet<ResourceId>, StoreError> {
+fn pending_team(db: &ProjectDb) -> Result<HashSet<ResourceId>, StoreError> {
   let waiting = db.waiting_publishes()?;
   let refused: HashSet<ResourceId> = waiting
     .iter()
@@ -71,24 +71,37 @@ pub(crate) fn pending_team(db: &ProjectDb) -> Result<HashSet<ResourceId>, StoreE
   )
 }
 
-/// Fails with [`SharingError::PipelineNamesNonTeam`] when `pipeline` runs a profile or tool, or merges with an
-/// integrator, that is not one of `team`'s. The resource is named by its name here when this computer has it.
-pub(super) fn check_pipeline(
+/// The first profile or tool that `pipeline` runs, or integrator it merges with, that is not one of `team`'s, by its
+/// name when this computer has the resource and by its id otherwise.
+pub(crate) fn non_team_name(
   db: &ProjectDb,
-  resource: ResourceId,
-  pipeline: Pipeline,
+  pipeline: &Pipeline,
   team: &TeamExecutors,
-) -> Result<(), SharingError> {
-  let named = match TeamPipeline::new(pipeline, team) {
-    Ok(_) => return Ok(()),
+) -> Result<Option<String>, StoreError> {
+  let named = match pipeline.check_team(team) {
+    Ok(()) => return Ok(None),
     Err(
       TeamPipelineError::Profile { profile: id, .. }
       | TeamPipelineError::Tool { tool: id, .. }
       | TeamPipelineError::Integrator { profile: id },
     ) => id,
   };
-  let name = db
-    .resource(named)?
-    .map_or_else(|| named.to_string(), |found| found.name().as_str().to_owned());
-  Err(SharingError::PipelineNamesNonTeam { resource, name })
+  Ok(Some(db.resource(named)?.map_or_else(
+    || named.to_string(),
+    |found| found.name().as_str().to_owned(),
+  )))
+}
+
+/// Fails with [`SharingError::PipelineNamesNonTeam`] when `pipeline` runs a profile or tool, or merges with an
+/// integrator, that is not one of `team`'s ([`non_team_name`]).
+pub(super) fn check_pipeline(
+  db: &ProjectDb,
+  resource: ResourceId,
+  pipeline: &Pipeline,
+  team: &TeamExecutors,
+) -> Result<(), SharingError> {
+  match non_team_name(db, pipeline, team)? {
+    Some(name) => Err(SharingError::PipelineNamesNonTeam { resource, name }),
+    None => Ok(()),
+  }
 }
