@@ -62,7 +62,7 @@ fn connection_part(profile: ResourceId, cli: AgentProvider, problem: ConnectionP
 
 #[test]
 fn instructions_and_skills_are_always_ready() {
-  assert_eq!(readiness(&Needs::none(), &Here::nothing()), Readiness::Ready);
+  assert_eq!(readiness(&Needs::none(), &Here::nothing()), Readiness::READY);
   assert!(readiness(&Needs::none(), &Here::nothing()).missing().is_empty());
   assert_eq!(readiness(&Needs::none(), &Here::nothing()).first(), None);
 }
@@ -88,7 +88,7 @@ fn one_connection_of_the_kind_is_used_without_asking() {
   let here = Here::nothing()
     .with_connection(ConnectionId::generate(), CLAUDE)
     .with_connection(ConnectionId::generate(), CODEX);
-  assert_eq!(readiness(&needs, &here), Readiness::Ready);
+  assert_eq!(readiness(&needs, &here), Readiness::READY);
 }
 
 #[test]
@@ -103,7 +103,7 @@ fn several_connections_need_a_pick() {
     readiness(&needs, &here).missing(),
     [connection_part(id, CLAUDE, ConnectionProblem::PickNeeded)]
   );
-  assert_eq!(readiness(&needs, &here.with_pick(id, second)), Readiness::Ready);
+  assert_eq!(readiness(&needs, &here.with_pick(id, second)), Readiness::READY);
 }
 
 #[test]
@@ -116,7 +116,7 @@ fn a_pick_is_per_profile_and_a_new_connection_does_not_change_it() {
     .with_connection(ConnectionId::generate(), CLAUDE)
     .with_pick(picked, first);
   let body = profile_body(CLAUDE, &[], &[]);
-  assert_eq!(readiness(&profile(picked, &body, &[]), &here), Readiness::Ready);
+  assert_eq!(readiness(&profile(picked, &body, &[]), &here), Readiness::READY);
   assert_eq!(
     readiness(&profile(other, &body, &[]), &here).missing(),
     [connection_part(other, CLAUDE, ConnectionProblem::PickNeeded)]
@@ -130,7 +130,7 @@ fn a_pick_of_a_connection_that_is_gone_counts_as_no_pick() {
   let gone = ConnectionId::generate();
   let kept = ConnectionId::generate();
   let one = Here::nothing().with_connection(kept, CLAUDE).with_pick(id, gone);
-  assert_eq!(readiness(&needs, &one), Readiness::Ready);
+  assert_eq!(readiness(&needs, &one), Readiness::READY);
   let several = one.with_connection(ConnectionId::generate(), CLAUDE);
   assert_eq!(
     readiness(&needs, &several).missing(),
@@ -180,7 +180,7 @@ fn an_mcp_server_that_is_off_is_missing_and_a_remote_one_needs_no_program() {
   );
   assert_eq!(
     readiness(&needs, &Here::nothing().with_mcp_on(server)),
-    Readiness::Ready
+    Readiness::READY
   );
 }
 
@@ -207,7 +207,7 @@ fn a_program_server_needs_a_path_and_the_file() {
   );
   assert_eq!(
     readiness(&needs, &on.with_program(server, path, true)),
-    Readiness::Ready
+    Readiness::READY
   );
 }
 
@@ -266,7 +266,7 @@ fn a_chosen_server_whose_version_is_not_given_is_an_error_not_ready() {
 
 #[test]
 fn a_tool_needs_only_its_secret_values() {
-  assert_eq!(readiness(&Needs::tool(Vec::new()), &Here::nothing()), Readiness::Ready);
+  assert_eq!(readiness(&Needs::tool(Vec::new()), &Here::nothing()), Readiness::READY);
   let needs = Needs::tool(vec![secret("DB_URL")]);
   assert_eq!(
     readiness(&needs, &Here::nothing()).missing(),
@@ -274,7 +274,7 @@ fn a_tool_needs_only_its_secret_values() {
   );
   assert_eq!(
     readiness(&needs, &Here::nothing().with_secret(secret("DB_URL"))),
-    Readiness::Ready
+    Readiness::READY
   );
 }
 
@@ -378,8 +378,8 @@ fn a_pipeline_is_ready_when_every_step_is() {
     .with_mcp_on(server)
     .with_program(server, PathBuf::from("/tools/npx"), true)
     .with_secret(secret("KEY"));
-  assert_eq!(readiness(&needs, &here), Readiness::Ready);
-  assert_eq!(readiness(&Needs::union([]), &Here::nothing()), Readiness::Ready);
+  assert_eq!(readiness(&needs, &here), Readiness::READY);
+  assert_eq!(readiness(&Needs::union([]), &Here::nothing()), Readiness::READY);
 }
 
 #[test]
@@ -389,7 +389,7 @@ fn a_local_project_uses_the_same_rule_with_its_connection_as_the_pick() {
   let here = Here::nothing()
     .with_connection(connection, CLAUDE)
     .with_pick(id, connection);
-  assert_eq!(readiness(&needs, &here), Readiness::Ready);
+  assert_eq!(readiness(&needs, &here), Readiness::READY);
   let deleted = Here::nothing().with_pick(id, connection);
   assert_eq!(
     readiness(&needs, &deleted).missing(),

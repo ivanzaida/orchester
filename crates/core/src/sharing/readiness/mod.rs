@@ -55,24 +55,23 @@ pub enum Missing {
   Secret { name: SecretName },
 }
 
-/// The answer: ready, or the parts missing, never empty, deduplicated.
+/// The answer: ready, or the parts missing, ordered and deduplicated. Only [`readiness`] makes one that is not ready.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Readiness {
-  Ready,
-  NotReady(Vec<Missing>),
+pub struct Readiness {
+  missing: Vec<Missing>,
 }
 
 impl Readiness {
+  /// Nothing is missing.
+  pub const READY: Self = Self { missing: Vec::new() };
+
   pub const fn is_ready(&self) -> bool {
-    matches!(self, Self::Ready)
+    self.missing.is_empty()
   }
 
   /// The parts missing, in the order to fix them; empty when ready.
   pub fn missing(&self) -> &[Missing] {
-    match self {
-      Self::Ready => &[],
-      Self::NotReady(missing) => missing,
-    }
+    &self.missing
   }
 
   /// The part to fix first.
@@ -92,7 +91,7 @@ impl Missing {
   }
 }
 
-/// Whether `needs` are met by `here`: [`Readiness::Ready`] or what is missing, ordered and without repeats.
+/// Whether `needs` are met by `here`: [`Readiness::READY`] or what is missing, ordered and without repeats.
 pub fn readiness(needs: &Needs, here: &Here) -> Readiness {
   let mut missing: Vec<Missing> = Vec::new();
   for part in needs.iter().filter_map(|need| lacking(need, here)) {
@@ -102,11 +101,7 @@ pub fn readiness(needs: &Needs, here: &Here) -> Readiness {
   }
   // Stable, so inside a kind the parts keep the order they were asked in.
   missing.sort_by_key(Missing::rank);
-  if missing.is_empty() {
-    Readiness::Ready
-  } else {
-    Readiness::NotReady(missing)
-  }
+  Readiness { missing }
 }
 
 fn lacking(need: &Need, here: &Here) -> Option<Missing> {
