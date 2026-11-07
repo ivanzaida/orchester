@@ -2,7 +2,7 @@
 
 use orchester_core::{
   id::ResourceId,
-  resource::{AgentProfile, ResourceKind, TeamAgentProfile, TeamReviewer, Tool, Version},
+  resource::{AgentProfile, Resource, ResourceKind, TeamAgentProfile, TeamReviewer, Tool, Version},
   sharing::{McpNeed, Needs, NeedsError},
   store::ResourceStore,
 };
@@ -41,8 +41,14 @@ pub(super) fn profiles(db: &ProjectDb, servers: &[McpNeed]) -> Result<Vec<Profil
 pub(super) fn reviewers(db: &ProjectDb) -> Result<Vec<Reviewer>, StoreError> {
   let mut reviewers = Vec::new();
   for resource in db.resources(ResourceKind::TeamReviewer)? {
-    let Some(version) = db.latest_version::<TeamReviewer>(resource.id())? else {
-      continue;
+    let version = match db.latest_version::<TeamReviewer>(resource.id()) {
+      Ok(Some(version)) => version,
+      Ok(None) => continue,
+      Err(StoreError::Corrupt { .. }) => {
+        reviewers.push(unreadable_reviewer(db, &resource)?);
+        continue;
+      }
+      Err(other) => return Err(other),
     };
     let language = version.body().cli().is_some();
     reviewers.push(Reviewer {
@@ -64,6 +70,20 @@ pub(super) fn reviewers(db: &ProjectDb) -> Result<Vec<Reviewer>, StoreError> {
     });
   }
   Ok(reviewers)
+}
+
+/// A reviewer whose newest version is not a team reviewer body: one cached before ORC-887, which names a connection and
+/// is not read. Republishing it names a CLI kind instead.
+fn unreadable_reviewer(db: &ProjectDb, resource: &Resource) -> Result<Reviewer, StoreError> {
+  tracing::warn!(reviewer = %resource.id(), "a cached team reviewer version names a connection, so it is not read");
+  let number = db
+    .latest_version_number(resource.id())?
+    .ok_or(StoreError::ResourceNotFound(resource.id()))?;
+  Ok(Reviewer {
+    entry: Entry::new(resource, number, Err(Undecided::NotTeamForm)),
+    pick: None,
+    decision_pick: None,
+  })
 }
 
 fn profile_needs(

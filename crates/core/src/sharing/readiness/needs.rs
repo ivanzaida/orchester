@@ -20,7 +20,10 @@ pub(super) enum Need {
     reviewer: ResourceId,
   },
   McpOn(ResourceId),
-  McpUnsupported { server: ResourceId, why: McpUnsupported },
+  McpUnsupported {
+    server: ResourceId,
+    why: McpUnsupported,
+  },
   McpProgram(ResourceId),
   Secret(SecretName),
   LocalMcpProgram {

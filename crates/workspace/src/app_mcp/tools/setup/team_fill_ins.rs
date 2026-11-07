@@ -6,6 +6,8 @@
 //! permissions* does not lift, before the write of [`crate::team_fill_ins`] is reached. Turning one off is taken. The
 //! program's path on this computer is that window's too: no tool sets it. No tool takes or returns a secret value.
 
+mod reviewer;
+
 use std::path::Path;
 
 use orchester_core::{
@@ -33,9 +35,10 @@ use crate::{
   team_fill_ins::FillInError,
 };
 
-pub(super) const SPECS: &[Spec] = &[Spec {
-  name: "pick_profile_connection",
-  description: "Chooses the connection a team profile runs on on this computer, as the profile's Connection field \
+pub(super) const SPECS: &[Spec] = &[
+  Spec {
+    name: "pick_profile_connection",
+    description: "Chooses the connection a team profile runs on on this computer, as the profile's Connection field \
                 does in a team project: `profile` is a team profile by id or role, `connection` an agent connection \
                 of the project by id or name, of the CLI kind the profile names (a profile that names none takes any \
                 agent connection). The pick is kept on this computer only and a connection added later changes \
@@ -45,9 +48,11 @@ pub(super) const SPECS: &[Spec] = &[Spec {
                 a person turned on Let automation change agent permissions. Refused as team_project_required in a \
                 project that is not shared with a team and as profile_not_found for a profile that is not the \
                 team's. Returns the pick.",
-  schema: schema_for_type::<PickProfileConnection>,
-  read_only: false,
-}];
+    schema: schema_for_type::<PickProfileConnection>,
+    read_only: false,
+  },
+  reviewer::SPEC,
+];
 
 #[derive(Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -67,6 +72,7 @@ pub struct PickProfileConnection {
 pub(super) async fn call(services: &Services, name: &str, arguments: Value) -> Result<Value, ToolError> {
   match name {
     "pick_profile_connection" => pick_profile_connection(services, parse(arguments)?).await,
+    "pick_reviewer_connection" => reviewer::pick_reviewer_connection(services, parse(arguments)?).await,
     other => Err(ToolError::InvalidArguments(format!("no tool is named {other}"))),
   }
 }
@@ -157,7 +163,7 @@ pub(super) fn team_resource_named(
   Ok(by_name)
 }
 
-fn require_team_project(db: &ProjectDb) -> Result<(), ToolError> {
+pub(super) fn require_team_project(db: &ProjectDb) -> Result<(), ToolError> {
   if db.sharing()?.is_some() {
     Ok(())
   } else {
@@ -173,7 +179,7 @@ fn person_only(reason: &'static str) -> ToolError {
 }
 
 /// A fill-in the workspace refused, with the code a client matches on and the words the window shows.
-fn refusal(error: FillInError) -> ToolError {
+pub(super) fn refusal(error: FillInError) -> ToolError {
   let code = match error {
     FillInError::Store(store) => return ToolError::from(store),
     FillInError::PersonOnly => return person_only("teamFillIns.errors.personOnly"),

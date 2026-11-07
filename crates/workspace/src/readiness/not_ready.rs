@@ -15,8 +15,8 @@ use serde_json::{Value, json};
 use super::{PipelineReadiness, ProjectReadiness, ReadinessStanding, Undecided};
 use crate::messages::Message;
 
-/// One part a pipeline lacks, with the name of the profile, reviewer or MCP server it is about (the secret's own name for a
-/// secret). Kept with a start that failed on it, so it is serializable.
+/// One part a pipeline lacks, with the name of the profile, reviewer or MCP server it is about (the secret's own name
+/// for a secret). Kept with a start that failed on it, so it is serializable.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct MissingPart {
   pub missing: Missing,

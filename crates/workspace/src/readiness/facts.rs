@@ -13,9 +13,9 @@ use orchester_store::{ProjectDb, StoreError};
 
 use super::programs::McpPrograms;
 
-/// The agent and decision connections and the team secrets that have a value, by name. A local project has no secret by name, so it
-/// has none. "Has a value" is a row in `team_secret_values` whose handle the keychain holds, which `vault` is asked
-/// without reading the value or prompting ([`SecretVault::exists`]): a value removed from the keychain outside
+/// The agent and decision connections and the team secrets that have a value, by name. A local project has no secret by
+/// name, so it has none. "Has a value" is a row in `team_secret_values` whose handle the keychain holds, which `vault`
+/// is asked without reading the value or prompting ([`SecretVault::exists`]): a value removed from the keychain outside
 /// Orchester does not count, and a keychain that cannot say leaves the secret unreadable, not set.
 pub(super) fn base(db: &ProjectDb, vault: &dyn SecretVault) -> Result<Here, StoreError> {
   let mut here = Here::nothing();

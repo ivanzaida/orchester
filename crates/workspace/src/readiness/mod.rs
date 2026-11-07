@@ -13,8 +13,9 @@
 //!   [`Missing::Secret`](orchester_core::sharing::Missing::Secret); a keychain that cannot say is missing
 //!   [`Missing::SecretUnreadable`](orchester_core::sharing::Missing::SecretUnreadable), not assumed set.
 //! - A team MCP server this app cannot run as defined (a remote one with more than one secret header: an agent's CLI is
-//!   given one header per HTTP server) is missing [`Missing::McpUnsupported`](orchester_core::sharing::Missing::McpUnsupported)
-//!   in itself and in every profile that chooses it, instead of passing and being left out of every run.
+//!   given one header per HTTP server) is missing
+//!   [`Missing::McpUnsupported`](orchester_core::sharing::Missing::McpUnsupported) in itself and in every profile that
+//!   chooses it, instead of passing and being left out of every run.
 //! - A team MCP server is on only when the person switched it on. One they switched off is [`Group::OffHere`]; one
 //!   nobody decided on is [`Group::NeedsYouHere`]. Either way it and a profile that chooses it are missing
 //!   [`Missing::McpOff`](orchester_core::sharing::Missing::McpOff).
@@ -38,10 +39,11 @@
 //! [`crate::team_fill_ins`]), with a team version the stream cached (`Servers::subscribe_shared`), and with a program
 //! file that appears or goes, which nothing announces, so whoever shows the answer reads it again when it is refreshed.
 //!
-//! A team reviewer needs a connection like a profile: one of its CLI kind for a language reviewer, a decision connection
-//! for a decision reviewer ([`Missing::DecisionConnection`](orchester_core::sharing::Missing::DecisionConnection)).
-//! A pipeline names no reviewer (the project's reviewer is a setting), so no pipeline needs one. A local project's
-//! reviewer is that setting and is not listed.
+//! A team reviewer needs a connection like a profile: one of its CLI kind for a language reviewer, a decision
+//! connection for a decision reviewer
+//! ([`Missing::DecisionConnection`](orchester_core::sharing::Missing::DecisionConnection)). A pipeline names no
+//! reviewer (the project's reviewer is a setting), so no pipeline needs one. A local project's reviewer is that setting
+//! and is not listed.
 //!
 //! Not modelled yet: the account of a connection pick. Instructions and skills need nothing of a computer and are not
 //! listed.
@@ -85,9 +87,9 @@ pub enum StartReadiness {
 }
 
 impl Workspace {
-  /// Whether each profile, MCP server, tool, team reviewer and pipeline of the project at `repo_root` is ready on this computer. Reads
-  /// the databases, stats the program files and, for the tools of a local project that use a secret, asks `vault`
-  /// whether it has the value, so it blocks: run it on the background pool.
+  /// Whether each profile, MCP server, tool, team reviewer and pipeline of the project at `repo_root` is ready on this
+  /// computer. Reads the databases, stats the program files and, for the tools of a local project that use a secret,
+  /// asks `vault` whether it has the value, so it blocks: run it on the background pool.
   ///
   /// Each local tool secret is read from the keychain on every call, which may prompt on macOS: a caller reads the
   /// answer on an explicit change (a screen opening, a save), not on a timer.
