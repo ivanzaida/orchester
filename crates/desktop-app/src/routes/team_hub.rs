@@ -42,7 +42,8 @@ impl HubFilter {
     }
   }
 
-  fn from_name(name: &str) -> Option<Self> {
+  /// The filter named `name`, as [`Self::name`] spells it.
+  pub fn from_name(name: &str) -> Option<Self> {
     Self::ALL.into_iter().find(|filter| filter.name() == name)
   }
 }

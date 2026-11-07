@@ -5,6 +5,7 @@
 
 mod follows;
 mod groups;
+mod hub;
 mod local;
 mod pending;
 mod pipelines;

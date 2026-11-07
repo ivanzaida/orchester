@@ -95,7 +95,7 @@ pub use self::{
   files::{FilesRadius, FilesText},
   fonts::mono_space,
   groups::GroupText,
-  hub::{HubSpacing, HubText},
+  hub::{HUB_NEW_MENU_WIDTH, HUB_READING_OPACITY, HubSpacing, HubText},
   import::{ImportSpacing, ImportText},
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   local_integration::LocalText,
