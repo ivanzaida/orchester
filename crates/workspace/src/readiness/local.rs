@@ -127,14 +127,12 @@ fn secret_value(
   id: SecretId,
   entry: &mut Entry,
 ) -> Result<(), StoreError> {
-  let Some(secret) = db.secret(id)? else {
+  let Some(secret) = db.secret(id)?.filter(|secret| !secret.is_archived()) else {
+    // An archived secret is as good as gone: no value can be set for it, and the preflight refuses a run on it.
     entry.needs = Err(Undecided::SecretGone(id));
     return Ok(());
   };
   entry.needs = Ok(Needs::local_tool(id, secret.name().clone()));
-  if secret.is_archived() {
-    return Ok(());
-  }
   match vault.exists(&secret.vault_key(db.project().id())) {
     Ok(true) => entry.found.push(Found::SecretValue(id)),
     Ok(false) => {}

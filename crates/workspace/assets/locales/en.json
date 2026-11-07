@@ -2223,7 +2223,7 @@
     "undecidedRunsUnknown": "The pipeline runs {{resource}}, which this computer has no version of yet. Wait for it to sync, or ask a team Admin.",
     "undecidedConnectionGone": "{{resource}} runs on a connection this project no longer has. Choose another connection for it.",
     "undecidedTeamToolSecretById": "The tool {{resource}} holds a project secret by id, which the team cannot name, so it is not known whether this computer has its value. Ask a team Admin to publish it again.",
-    "undecidedSecretGone": "The tool {{resource}} uses a secret this project no longer has. Choose another secret for it.",
+    "undecidedSecretGone": "The tool {{resource}} uses a secret this project no longer has or has archived. Choose another secret for it.",
     "undecidedSecretUnreadable": "The keychain did not say whether this computer has the secret the tool {{resource}} uses. Unlock the keychain and run it again."
   },
   "claims": {

@@ -131,6 +131,25 @@ impl Workspace {
     })
   }
 
+  /// What keeps a run of `pipeline` of the project at `repo_root` from starting on this computer, as a team start
+  /// refuses ([`NotReadyHere`]); `None` when it may start. Reads the project's readiness once
+  /// ([`Self::project_readiness`]: it blocks, and it reads the keychain for each local tool secret), so call it as a
+  /// start is asked for, never on a timer. A pipeline the project has no published version of is left to the
+  /// preflight, which refuses it with its own reason.
+  pub fn not_ready_here(
+    &self,
+    repo_root: &Path,
+    vault: &dyn SecretVault,
+    pipeline: ResourceId,
+  ) -> Result<Option<NotReadyHere>, ReadinessError> {
+    let readiness = self.project_readiness(repo_root, vault)?;
+    Ok(
+      readiness
+        .pipeline(pipeline)
+        .and_then(|found| NotReadyHere::of(&readiness, found)),
+    )
+  }
+
   /// The program paths set for the team MCP servers of the team server `db`'s project is shared with; `None` for a
   /// local project.
   fn team_programs(&self, db: &ProjectDb) -> Result<Option<McpPrograms>, ReadinessError> {
