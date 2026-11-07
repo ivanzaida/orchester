@@ -6,31 +6,39 @@
 //! (`recover`), settles the comments Implement addressed and tells which threads a later head made outdated
 //! ([`read`]). Blocks on SQLite and git.
 
+pub mod agents;
 pub mod approve;
+pub mod approved_run;
 pub mod ask;
+pub mod conflicts;
 pub mod page;
 pub mod read;
 mod recover;
 pub mod send;
+pub mod since;
 mod words;
 
 use std::path::Path;
 
 use orchester_core::{
   conversation::MessageBody,
-  id::{ReviewMessageId, ReviewThreadId, RunId},
+  id::{ResourceId, ReviewMessageId, ReviewThreadId, RunId},
   integration::MergeError,
   pull_request::feedback::LineAnchor,
   review::{CommentState, ReviewError, ReviewFailure, ReviewThread, Said, ThreadKind},
   revision::Revision,
-  run::{Run, RunStatus},
+  run::{ChosenProfile, Run, RunStatus},
   store::{MergeStore, RunStore},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
 
 pub use self::words::failure_message;
-use super::{detail::run_store_error, integration::IntegrationProblem, return_work::ReturnRefusal};
+use super::{
+  detail::run_store_error,
+  integration::IntegrationProblem,
+  return_work::{self, ReturnRefusal},
+};
 use crate::{merge_queue::QueueRefusal, messages::Message};
 
 /// Why a change of a run's review was not made.
@@ -46,8 +54,12 @@ pub enum ReviewRefusal {
   ChangedSinceReview,
   /// No comment waits to be sent.
   NothingToSend,
+  /// The run's last merge attempt found no conflicts that still stand: there is nothing to resolve.
+  NoConflicts,
   /// The run has no step whose agent may write: there is no Implement to ask or send to.
   NoImplementingStep,
+  /// The agent profile chosen for the step has no published version to run.
+  ProfileNotPublished,
   /// The thread does not take that change now.
   Review(ReviewError),
   /// The question was kept *Not asked*: the runner did not take it, as the failure says.
@@ -73,7 +85,9 @@ impl ReviewRefusal {
       Self::ImplementAtWork => "implement_at_work",
       Self::ChangedSinceReview => "changed_since_review",
       Self::NothingToSend => "nothing_to_send",
+      Self::NoConflicts => "no_conflicts",
       Self::NoImplementingStep => "no_implementing_step",
+      Self::ProfileNotPublished => "profile_not_published",
       Self::Review(_) => "not_now",
       Self::NotAsked(_) => "not_asked",
       Self::NotSent(_) => "not_sent",
@@ -92,7 +106,9 @@ impl ReviewRefusal {
       Self::ImplementAtWork => Message::new("review.refused.implementAtWork"),
       Self::ChangedSinceReview => Message::new("review.refused.changedSinceReview"),
       Self::NothingToSend => Message::new("review.refused.nothingToSend"),
+      Self::NoConflicts => Message::new("review.refused.noConflicts"),
       Self::NoImplementingStep => Message::new("review.refused.noImplementingStep"),
+      Self::ProfileNotPublished => Message::new("review.refused.profileNotPublished"),
       Self::Review(error) => words::review_error(*error),
       Self::NotAsked(failure) | Self::NotSent(failure) => failure_message(failure),
       Self::Returned(refusal) => refusal.message(),
@@ -127,14 +143,38 @@ fn waiting(db: &ProjectDb, run: RunId) -> Result<Run, ReviewRefusal> {
   Ok(stored)
 }
 
+/// The agent profile `profile` names, as a return of the run's work chooses it for its step this time: its latest
+/// published version. `None` for the pipeline's own agent.
+fn chosen(db: &ProjectDb, profile: Option<ResourceId>) -> Result<Option<ChosenProfile>, ReviewRefusal> {
+  profile
+    .map(|profile| return_work::choose_profile(db, profile)?.ok_or(ReviewRefusal::ProfileNotPublished))
+    .transpose()
+}
+
+/// `run` of the project in `db`, which a comment may be written on: it waits for review, or Implement works on comments
+/// sent from it, when a new comment waits unsent in the tray until the run is back.
+fn commentable(db: &mut ProjectDb, run: RunId) -> Result<Run, ReviewRefusal> {
+  match waiting(db, run) {
+    Err(ReviewRefusal::NotWaiting) => {}
+    other => return other,
+  }
+  let stored = db.run(run).map_err(run_store_error)?.ok_or(ReviewRefusal::NotFound)?;
+  let threads = recover::threads(db, run)?;
+  if db.run_merge(run)?.is_none() && implement_at_work(&threads, &stored) {
+    Ok(stored)
+  } else {
+    Err(ReviewRefusal::NotWaiting)
+  }
+}
+
 /// The thread `thread` of the project in `db`.
 fn thread_in(db: &ProjectDb, thread: ReviewThreadId) -> Result<ReviewThread, ReviewRefusal> {
   db.review_thread(thread)?.ok_or(ReviewRefusal::NotFound)
 }
 
 /// Starts a comment thread on `run` of the project at `root`, about `anchor` of its diff at `head`, with the person's
-/// `body` at `now`: it waits unsent in the tray. A question starts with [`ask::start`], as it goes to Implement at
-/// once.
+/// `body` at `now`: it waits unsent in the tray, also while Implement works on comments sent before. A question starts
+/// with [`ask::start`], as it goes to Implement at once.
 pub fn comment(
   root: &Path,
   run: RunId,
@@ -143,7 +183,7 @@ pub fn comment(
   now: Timestamp,
 ) -> Result<ReviewThread, ReviewRefusal> {
   let mut db = ProjectDb::open(root)?;
-  waiting(&db, run)?;
+  commentable(&mut db, run)?;
   let thread = ReviewThread::start(run, (ThreadKind::Comment, anchor, head), body, now);
   db.add_review_thread(&thread)?;
   Ok(thread)
@@ -175,7 +215,7 @@ pub fn reply(root: &Path, thread: ReviewThreadId, body: &MessageBody, now: Times
   if stored.kind() != ThreadKind::Comment {
     return Err(ReviewRefusal::Review(ReviewError::WrongKind));
   }
-  waiting(&db, stored.run())?;
+  commentable(&mut db, stored.run())?;
   let message = stored.follow_up(body, now).map_err(ReviewRefusal::Review)?;
   db.add_review_message(thread, &message)?;
   Ok(())

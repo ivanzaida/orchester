@@ -37,6 +37,7 @@ pub(super) fn integrate(
       base: branch.clone(),
       files: files.clone(),
     }),
+    profile: None,
     by: Answerer::Automation,
     expected: run.last_sequence(),
   });

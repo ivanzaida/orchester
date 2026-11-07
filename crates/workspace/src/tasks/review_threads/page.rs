@@ -1,26 +1,32 @@
 //! What the review page shows of a run (ORC-697; `crates/desktop-app/design/orchester.pen`, board `Review · redesign`,
 //! 09i `wLyFt`): the run as its task names it, where it waits for review, its diff from where its work starts to where
 //! its branch is, the person's review of it ([`super::read`]), the head that was reviewed and the commits after it, and
-//! the implementing step whose agent answers and changes the code. A run shows here while it waits for review, and
-//! while Implement works on comments sent from here; never once a merge of it was tried or recorded, which the attempt
-//! page tells. Blocks on SQLite and git.
+//! the implementing step whose agent answers and changes the code. A run shows here while it waits for review, while
+//! Implement works on comments sent from here or on the conflicts of its merge, and, read-only, once a person approved
+//! it ([`ApprovedRun`]: merged, or approved in the merge queue); not once a merge of it was tried and did not find
+//! conflicts, which the attempt page tells. Blocks on SQLite and git.
 
 use std::{path::Path, sync::Arc};
 
 use orchester_core::{
-  integration::LoggedCommit,
+  id::{RunId, TaskId},
+  integration::{LoggedCommit, attempt::AttemptOutcome},
   merge_queue::QueueState,
   project::TaskKey,
   resource::StepKey,
   revision::Revision,
-  run::{BranchName, Run, RunNumber, RunStatus, StepStatus},
-  store::{MergeStore, RunStore},
+  run::{BranchName, Run, RunNumber, RunStatus, StepStatus, last_report},
+  store::RunStore,
+  time::Timestamp,
 };
 use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
 
 use super::{
   ReviewRefusal,
+  agents::{self, ReviewAgent},
+  approved_run::{ApprovedRun, approved_run},
+  conflicts::{self, ReviewConflicts},
   read::{Review, review_of},
 };
 use crate::tasks::{
@@ -29,7 +35,7 @@ use crate::tasks::{
   detail::{RunView, TaskDetail, run_store_error},
   merge_attempts::{
     merges::MergeRun,
-    read::{ReviewIn, commits_after, reviewed_head},
+    read::{ReviewIn, commits_after, reviewed_at, reviewed_head},
   },
   return_work,
 };
@@ -43,6 +49,9 @@ pub struct Implement {
   pub name: Arc<str>,
   /// The agent role of its profile; `None` once that is gone.
   pub agent: Option<Arc<str>>,
+  /// The agent profile and model the run's pipeline gives the step: what it runs with unless a return chooses
+  /// another. `None` for a step the pipeline gives no agent.
+  pub own: Option<ReviewAgent>,
 }
 
 /// A run as its review page shows it.
@@ -50,18 +59,30 @@ pub struct Implement {
 pub struct ReviewPage {
   pub run: MergeRun,
   pub branch: BranchName,
-  /// Where the run waits for review; `None` while it does not, as Implement works on comments sent to it.
+  /// Where the run waits for review; `None` while it does not, as Implement works on comments sent to it, and once a
+  /// person approved it.
   pub review_in: Option<ReviewIn>,
+  /// A person approved the run: merged, or approved in the merge queue. Its review is read-only.
+  pub approved: Option<ApprovedRun>,
   /// The head that was reviewed: the tip the merge queue checked, else the run's latest checkpoint.
   pub reviewed: Option<Revision>,
+  /// When `reviewed` was reached: the merge queue's last check on it, else the run's latest checkpoint.
+  pub reviewed_at: Option<Timestamp>,
   /// The run's commits after `reviewed` up to where its branch is, newest first: what changed since the review.
   pub since_review: Vec<LoggedCommit>,
   /// The run's diff from where its own work starts to where its branch is (`review.head`).
   pub changes: Checkpointed,
   pub review: Review,
   pub implement: Option<Implement>,
+  /// The project's agent profiles with a published version: the agents a return of the run's work may choose.
+  pub agents: Vec<ReviewAgent>,
   /// How many of the run's steps passed, of how many.
   pub steps: (usize, usize),
+  /// The approved merge into the run's base branch found conflicts and merged nothing; the run waits for review again.
+  pub conflicts: Option<ReviewConflicts>,
+  /// What the run's last step that reported said: the run's *Run summary* on its task page. `None` when no step
+  /// reported anything, and when the run is not the task's latest, whose steps the page does not read.
+  pub summary: Option<Arc<str>>,
 }
 
 impl ReviewPage {
@@ -74,9 +95,40 @@ impl ReviewPage {
   }
 }
 
+/// The review page of the task `key`: of its latest run that [`review_page`] shows, the run that waits for review, was
+/// sent back from it or was approved; `None` when the task has none (no such task, or no run is reviewed now).
+pub fn task_review_page(
+  tasks: &ProjectTasks,
+  (root, programs): (&Path, &Programs),
+  key: &TaskKey,
+) -> Result<Option<ReviewPage>, ReviewRefusal> {
+  let Some(task) = tasks
+    .tasks
+    .iter()
+    .chain(tasks.not_shared.iter())
+    .find(|task| task.key() == key)
+  else {
+    return Ok(None);
+  };
+  let mut numbers: Vec<RunNumber> = ProjectDb::open(root)?
+    .runs_of_task(task.id())
+    .map_err(run_store_error)?
+    .into_iter()
+    .filter_map(Result::ok)
+    .map(|run| run.number())
+    .collect();
+  numbers.sort_unstable_by(|first, second| second.cmp(first));
+  for number in numbers {
+    if let Some(page) = review_page(tasks, (root, programs), (key, number))? {
+      return Ok(Some(page));
+    }
+  }
+  Ok(None)
+}
+
 /// The review page of run `number` of the task `key` among `tasks`, the project at `root`'s; `None` when there is no
 /// such task or run, or when the run is not reviewed here: it neither waits for review nor has comments Implement works
-/// on, or a merge of it was tried. `programs` read the run's branch and diff.
+/// on nor was approved, or a merge of it was tried and found no conflicts. `programs` read the run's branch and diff.
 pub fn review_page(
   tasks: &ProjectTasks,
   (root, programs): (&Path, &Programs),
@@ -100,46 +152,37 @@ pub fn review_page(
   else {
     return Ok(None);
   };
-  if db.run_merge(run.id())?.is_some() || !db.merge_attempts(run.id())?.is_empty() {
+  let approved = approved_run(&db, run.id())?;
+  if approved.is_none() && merge_tried(&db, &run)? {
     return Ok(None);
   }
   let queue = db.merge_queue_entry(run.id())?;
   let in_queue = queue
     .as_ref()
     .filter(|entry| entry.state == QueueState::WaitingForApproval);
-  let waiting = *run.status() == RunStatus::Succeeded;
+  let waiting = *run.status() == RunStatus::Succeeded && approved.is_none();
+  let standing = if waiting { conflicts::standing(&db, &run)? } else { None };
   let reviewed = reviewed_head(&db, run.id(), in_queue)?;
+  let reviewed_at = reviewed_at(&db, run.id(), in_queue)?;
+  let agents = agents::published(&db)?;
   drop(db);
   let review = review_of(root, programs, run.id())?;
   let sent = review.threads.iter().any(|view| view.thread.sent().is_some());
-  if !waiting && !sent && !review.implement_at_work {
+  let resolving = return_work::resolving_conflicts(&run).is_some();
+  if approved.is_none() && !waiting && !sent && !review.implement_at_work && !resolving {
     return Ok(None);
   }
   let changes = changes((root, programs), &run, review.head.as_ref())?;
+  let conflicts = standing.map(|standing| conflicts::read((root, programs), &run, (standing, &changes)));
   let since_review = match (&reviewed, &review.head) {
-    (Some(reviewed), Some(head)) => commits_after((root, programs), (reviewed, head)),
+    (Some(reviewed), Some(head)) if approved.is_none() => commits_after((root, programs), (reviewed, head)),
     _ => Vec::new(),
   };
-  let detail = TaskDetail::load_in(root, task.id())?;
-  let view = detail.run.as_ref().filter(|view| view.id() == run.id());
-  let implement = view.and_then(|view| {
-    let key = return_work::implementing_step(view).or_else(|| at_work(view))?;
-    let step = view.steps.iter().find(|step| step.key == key)?;
-    Some(Implement {
-      key,
-      number: step.number,
-      name: step.name.clone(),
-      agent: step.agent.clone(),
-    })
-  });
-  let steps = view.map_or((0, 0), |view| {
-    let passed = view
-      .steps
-      .iter()
-      .filter(|step| step.status == Some(StepStatus::Passed))
-      .count();
-    (passed, view.steps.len())
-  });
+  let Steps {
+    implement,
+    passed: steps,
+    summary,
+  } = steps_of(root, (task.id(), run.id()))?;
   Ok(Some(ReviewPage {
     run: MergeRun {
       task: task.id(),
@@ -155,13 +198,81 @@ pub fn review_page(
     } else {
       ReviewIn::TaskPage
     }),
+    approved,
     reviewed,
+    reviewed_at,
     since_review,
     changes,
     review,
     implement,
+    agents,
     steps,
+    conflicts,
+    summary,
   }))
+}
+
+/// What a run's steps tell of it.
+struct Steps {
+  implement: Option<Implement>,
+  passed: (usize, usize),
+  summary: Option<Arc<str>>,
+}
+
+/// The step whose agent answers on `run` of `task`, how many of its steps passed, of how many, and what its last step
+/// that reported said.
+fn steps_of(root: &Path, (task, run): (TaskId, RunId)) -> Result<Steps, ReviewRefusal> {
+  let detail = TaskDetail::load_in(root, task)?;
+  let view = detail.run.as_ref().filter(|view| view.id() == run);
+  let implement = view.and_then(|view| {
+    let key = return_work::implementing_step(view).or_else(|| at_work(view))?;
+    let step = view.steps.iter().find(|step| step.key == key)?;
+    let own = agents::pinned(&view.run, &key).and_then(|(id, model)| {
+      Some(ReviewAgent {
+        id,
+        name: step.agent.clone()?,
+        model,
+      })
+    });
+    Some(Implement {
+      key,
+      number: step.number,
+      name: step.name.clone(),
+      agent: step.agent.clone(),
+      own,
+    })
+  });
+  let passed = steps_passed(view);
+  let summary = view
+    .and_then(|view| last_report(&view.run, &view.outputs, &view.plans).map(|(_, report)| Arc::<str>::from(report)));
+  Ok(Steps {
+    implement,
+    passed,
+    summary,
+  })
+}
+
+/// How many of the run's steps passed, of how many; none while its view is not read.
+fn steps_passed(view: Option<&RunView>) -> (usize, usize) {
+  view.map_or((0, 0), |view| {
+    let passed = view
+      .steps
+      .iter()
+      .filter(|step| step.status == Some(StepStatus::Passed))
+      .count();
+    (passed, view.steps.len())
+  })
+}
+
+/// Whether a merge of `run` was tried and left something the attempt page tells: an attempt landed, or none of them
+/// found conflicts. A run whose merge conflicted is the review's own, also once its work changed and it waits again.
+fn merge_tried(db: &ProjectDb, run: &Run) -> Result<bool, ReviewRefusal> {
+  let attempts = db.merge_attempts(run.id())?;
+  let conflicted = attempts
+    .iter()
+    .any(|recorded| matches!(recorded.attempt.outcome(), AttemptOutcome::Conflicts { .. }));
+  let landed = attempts.iter().any(|recorded| recorded.attempt.outcome().landed());
+  Ok(!attempts.is_empty() && (landed || !conflicted))
 }
 
 /// The writing step at work on `view`'s run, which has not ended, so no step is one its work can go back to: the

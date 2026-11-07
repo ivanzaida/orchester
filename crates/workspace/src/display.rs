@@ -213,3 +213,37 @@ pub fn calendar_date(at: Timestamp) -> (usize, u32, i32) {
 pub fn short_revision(revision: &str) -> &str {
   revision.get(..7).unwrap_or(revision)
 }
+
+/// The first sentence of an agent's Markdown `report` as one plain line: the first paragraph that is not a heading, a
+/// code fence or a rule, cut after its first `.`, `!` or `?` that ends a word; `None` when it holds no words.
+pub fn first_sentence(report: &str) -> Option<String> {
+  let mut in_fence = false;
+  let mut paragraph: Vec<&str> = Vec::new();
+  for line in report.lines().map(str::trim) {
+    if line.starts_with("```") {
+      in_fence = !in_fence;
+      continue;
+    }
+    let skipped = in_fence || line.starts_with('#') || line.chars().all(|mark| matches!(mark, '-' | '*' | '_' | '='));
+    if skipped || line.is_empty() {
+      if !paragraph.is_empty() {
+        break;
+      }
+      continue;
+    }
+    paragraph.push(line.trim_start_matches(['>', '-', '*', ' ']));
+  }
+  let plain = paragraph.join(" ").replace(['`', '*'], "");
+  let end = plain
+    .char_indices()
+    .find(|&(at, mark)| {
+      matches!(mark, '.' | '!' | '?')
+        && plain[at + mark.len_utf8()..]
+          .chars()
+          .next()
+          .is_none_or(char::is_whitespace)
+    })
+    .map_or(plain.len(), |(at, mark)| at + mark.len_utf8());
+  let sentence = plain[..end].trim();
+  (!sentence.is_empty()).then(|| sentence.to_owned())
+}

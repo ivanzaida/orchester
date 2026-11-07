@@ -2,9 +2,13 @@
 
 #[path = "review_threads/approval.rs"]
 mod approval;
+#[path = "review_threads/approved.rs"]
+mod approved;
 #[path = "review_threads/comments.rs"]
 mod comments;
 #[path = "review_threads/questions.rs"]
 mod questions;
+#[path = "review_threads/since.rs"]
+mod since;
 #[path = "review_threads/support.rs"]
 mod support;

@@ -4,6 +4,7 @@ mod active_clock;
 mod again;
 mod agent;
 mod base_moved_prompt;
+mod chosen_profile;
 mod code_index;
 mod conversation;
 mod conversation_wire;

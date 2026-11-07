@@ -1,7 +1,7 @@
 //! The sidebar's entries (`Sidebar v2` `Zn8dR` in `Sidebar · redesign` `WWXmX`): six places for daily work, and
 //! the two hubs of the Configure section. Each opens one route and stays selected on every route that belongs to
 //! it (`Where each entry went` `j3WMs9`): a task and its forms are Tasks', a module's page and its forms Modules',
-//! the Merge queue and the Pull requests with a pull request's page the Review hub's, and Profiles, Instructions,
+//! Review's list and a task's review are Review's, and Profiles, Instructions,
 //! Skills, Tools and Memory the Agents hub's. Usage, Project settings with its Connections and Environment tabs, and
 //! the app's Settings have no entry: the usage card and the switcher's menu open them.
 
@@ -48,7 +48,7 @@ impl Place {
       Screen::Tasks | Screen::Task | Screen::NewTask | Screen::EditTask => Self::Tasks,
       Screen::Modules => Self::Modules,
       Screen::Orchestrator | Screen::OrchestratorSettings => Self::Orchestrator,
-      Screen::MergeQueue | Screen::PullRequests | Screen::Merges => Self::Review,
+      Screen::Review => Self::Review,
       Screen::Files => Self::Files,
       Screen::Pipelines => Self::Pipelines,
       Screen::Agents | Screen::Instructions | Screen::Memory | Screen::Skills | Screen::Tools => Self::Agents,
@@ -56,14 +56,14 @@ impl Place {
     })
   }
 
-  /// Where the entry goes in `project`: the Review hub on its Merge queue, the Agents hub on its Profiles.
+  /// Where the entry goes in `project`: Review's list, the Agents hub on its Profiles.
   pub fn route(self, project: ProjectId) -> Route {
     let page = match self {
       Self::Overview => ProjectPage::Overview(OverviewTab::default()),
       Self::Tasks => ProjectPage::Tasks(TaskList::default()),
       Self::Modules => ProjectPage::Modules(ModuleListTab::default()),
       Self::Orchestrator => ProjectPage::Orchestrator(OrchestratorChat::default()),
-      Self::Review => ProjectPage::MergeQueue,
+      Self::Review => ProjectPage::Review,
       Self::Files => ProjectPage::Files(FilesView::default()),
       Self::Pipelines => ProjectPage::Pipelines,
       Self::Agents => ProjectPage::Agents,
@@ -86,27 +86,21 @@ impl Place {
   }
 
   pub const fn title_key(self) -> &'static str {
-    match self {
-      Self::Review => "shell.screens.review",
-      place => place.screen().title_key(),
-    }
+    self.screen().title_key()
   }
 
   pub const fn icon(self) -> Icon {
-    match self {
-      Self::Review => screen_icon(Screen::PullRequests),
-      place => screen_icon(place.screen()),
-    }
+    screen_icon(self.screen())
   }
 
-  /// The screen the entry opens; the Review hub's is its first tab's.
+  /// The screen the entry opens.
   const fn screen(self) -> Screen {
     match self {
       Self::Overview => Screen::Overview,
       Self::Tasks => Screen::Tasks,
       Self::Modules => Screen::Modules,
       Self::Orchestrator => Screen::Orchestrator,
-      Self::Review => Screen::MergeQueue,
+      Self::Review => Screen::Review,
       Self::Files => Screen::Files,
       Self::Pipelines => Screen::Pipelines,
       Self::Agents => Screen::Agents,

@@ -70,7 +70,13 @@ fn return_work_while_the_step_resolves_the_run_row_says_when_and_with_what() {
   let step = run.ended_return_targets().remove(0);
   let note = return_work::conflict_note(&conflicts().base);
   let events = run
-    .return_ended(&step, (&note, Some(&conflicts())), Answerer::Person, support::at(40))
+    .return_ended(
+      &step,
+      (&note, Some(&conflicts())),
+      None,
+      Answerer::Person,
+      support::at(40),
+    )
     .expect("returned");
   fixture.record(&run, &events);
   let execution = run.current_attempt().expect("attempt").executions()[0].id();

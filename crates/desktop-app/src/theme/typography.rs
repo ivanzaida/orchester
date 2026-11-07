@@ -264,7 +264,6 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       .chain(super::orchestrator::typography(palette))
       .chain(super::overview::typography(palette))
       .chain(super::needs_you::typography(palette))
-      .chain(super::pull_requests::typography(palette))
       .chain(super::usage::typography(palette))
       .chain(super::memory::typography(palette))
       .chain(super::delivery::typography(palette))

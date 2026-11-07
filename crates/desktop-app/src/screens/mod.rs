@@ -18,8 +18,6 @@ mod instructions;
 pub(crate) mod join_team;
 mod kept;
 pub(crate) mod memory;
-pub(crate) mod merge_queue;
-mod merges;
 pub(crate) mod modules;
 mod not_found;
 mod orchestrator;
@@ -27,7 +25,6 @@ mod overview;
 mod pipelines;
 mod placeholder;
 mod project_settings;
-mod pull_requests;
 mod review;
 mod reviewer_trouble;
 mod secrets;
@@ -41,8 +38,6 @@ pub(crate) mod tasks;
 mod tools;
 mod unavailable_project;
 pub(crate) mod usage;
-
-use std::sync::Arc;
 
 use lurq::{
   app::ctx::Ctx,
@@ -114,10 +109,8 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::Overview(_) => overview::screen(ctx, project),
     ProjectPage::Orchestrator(chat) => orchestrator::screen(ctx, project, *chat),
     ProjectPage::OrchestratorSettings => orchestrator::settings(ctx, project),
-    ProjectPage::MergeQueue => {
-      let body = merge_queue::screen(ctx, project);
-      review::page(ctx, project, review::ReviewTab::MergeQueue, body)
-    }
+    ProjectPage::Review => review::list(ctx, project),
+    ProjectPage::TaskReview(key) => review::task::screen(ctx, project, key),
     ProjectPage::Memory(tab) => memory::screen(ctx, project, *tab),
     ProjectPage::Tasks(list) => tasks::screen(ctx, project, list),
     ProjectPage::NewTask => task_form::new_task(ctx, project, None),
@@ -129,27 +122,7 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::NewModule => modules::new_module(ctx, project),
     ProjectPage::Module(id, tab) => modules::page(ctx, project, *id, *tab),
     ProjectPage::EditModule(id) => modules::edit_module(ctx, project, *id),
-    ProjectPage::PullRequests(tab) => {
-      let body = pull_requests::screen(ctx, project, *tab);
-      review::page(ctx, project, review::ReviewTab::PullRequests, body)
-    }
-    ProjectPage::Merges => {
-      let body = merges::screen(ctx, project);
-      review::page(ctx, project, review::ReviewTab::Merges, body)
-    }
-    ProjectPage::MergeAttempt(key, number) => merges::review::screen(ctx, project, key, *number),
-    ProjectPage::PullRequest(number, file) => pull_requests::pull_request(
-      ctx,
-      project,
-      *number,
-      pull_requests::PullRequestShown::Files(file.as_deref().map(Arc::from)),
-    ),
-    ProjectPage::PullRequestFeedback(number, thread) => pull_requests::pull_request(
-      ctx,
-      project,
-      *number,
-      pull_requests::PullRequestShown::Feedback(*thread),
-    ),
+    ProjectPage::TaskMerge(key, number) => task::merge::attempt::screen(ctx, project, key, *number),
     ProjectPage::Usage(query) => usage::screen(ctx, project, query),
     ProjectPage::Delivery(period) => delivery::screen(ctx, project, *period),
     ProjectPage::Pipelines => pipelines::screen(ctx, project),

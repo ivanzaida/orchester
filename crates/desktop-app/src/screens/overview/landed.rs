@@ -1,5 +1,5 @@
 //! *Landed* (`Landed` `Gi9sx` in 01 `LXhun`): the merge queue's state on a `surface_raised` line with *Review ↗* to
-//! Review › Merge queue, then *Today · N merged* and the runs merged today (up to five, then *Show all N in Done*), and
+//! Review, then *Today · N merged* and the runs merged today (up to five, then *Show all N in Done*), and
 //! *Earlier* with up to three of the week before, greyed (`orchester_workspace::overview::landed`). Landed counts
 //! merges only. *Done ↗* opens Tasks on Done; a line opens its task's Summary.
 
@@ -98,7 +98,7 @@ fn queue_line(ctx: &mut Ctx, project: ProjectId, (state, waiting): (Message, Opt
     ),
     None => state,
   };
-  let open = Navigation::of(ctx).to(Route::Project(project, ProjectPage::MergeQueue));
+  let open = Navigation::of(ctx).to(Route::Project(project, ProjectPage::Review));
   Row::new()
     .id("overview-merge-queue")
     .width(Dimension::Pct(100.0))

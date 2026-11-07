@@ -32,12 +32,12 @@ use crate::{
   navigation::Navigation,
   project::TasksState,
   routes::{ProjectPage, Route},
-  screens::{
-    merges::attempt::{
+  screens::task::{
+    TaskContext,
+    merge::attempt::{
       read::{Read, read},
       standing::Standing,
     },
-    task::TaskContext,
   },
   theme::{ExtraSpacing, IconSize, TaskSpacing},
   ui::{
@@ -180,10 +180,16 @@ impl Component for MergeRow {
       return Element::from(Column::new());
     };
     let number = run.run.number();
+    let waits = waits_for_review(&task, run);
+    let mut in_review = false;
     let shown = match read(ctx, &task.project, (&task.key, number), 0) {
-      Read::Ready(page) => Shown::of(&page, waits_for_review(&task, run)),
+      Read::Ready(page) => {
+        // A run whose merge was tried is no longer in review: its attempts tell where it stands.
+        in_review = waits && Standing::of(&page).is_none();
+        Shown::of(&page, waits)
+      }
       Read::Reading | Read::Missing => Shown::known(&task),
-      // Why is said on the run's attempt page, which Review › Merges opens too.
+      // Why is said on the run's attempt page, which the Merge row opens.
       Read::Failed(message) => {
         tracing::warn!(?message, run = %run.id(), "cannot read the run's merge attempts for its Merge row");
         Shown::known(&task)
@@ -192,10 +198,12 @@ impl Component for MergeRow {
     let Some(shown) = shown else {
       return Column::new().into();
     };
-    let route = Route::Project(
-      task.project.open.project.id(),
-      ProjectPage::MergeAttempt(task.key.clone(), number),
-    );
+    let page = if in_review {
+      ProjectPage::TaskReview(task.key.clone())
+    } else {
+      ProjectPage::TaskMerge(task.key.clone(), number)
+    };
+    let route = Route::Project(task.project.open.project.id(), page);
     let open = Navigation::of(ctx).to(route);
     let words = shown.words(ctx);
     let (glyph, color) = shown.glyph();

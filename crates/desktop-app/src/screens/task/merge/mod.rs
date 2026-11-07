@@ -6,6 +6,7 @@
 //! text field ([`shortcut`]).
 
 mod action;
+pub(crate) mod attempt;
 pub(super) mod reader;
 pub(super) mod worktree;
 
@@ -25,7 +26,7 @@ use super::{
 };
 use crate::{
   navigation::press::OpenIn,
-  screens::merges::attempt::{
+  screens::task::merge::attempt::{
     actions::{Actions, Busy},
     standing::Standing,
   },

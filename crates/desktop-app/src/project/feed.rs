@@ -42,7 +42,7 @@ use parking_lot::Mutex;
 
 mod last;
 
-pub use last::{LastMerges, ReviewCounts};
+pub use last::ShowingAll;
 
 use super::{Projects, hold::ReadHold, settled_read::settled_read};
 use crate::services::Services;
@@ -95,10 +95,10 @@ pub struct ProjectFeed {
   pub hub_counts: Signal<Option<orchester_workspace::agents::hub::HubCounts>>,
   /// The Agents hub's tabs whose own read failed, one bit each: they show no count rather than a stale one.
   pub hub_unread: Signal<u8>,
-  /// What Review › Merges read last, which it shows again at once when it opens again and reads them anew.
-  pub merges: Signal<Option<LastMerges>>,
-  /// What the Review hub's tabs counted last, which they show again at once on each tab while they count anew.
-  pub review_counts: Signal<ReviewCounts>,
+  /// What the Review list read last, shown again at once when it opens again while it is read anew.
+  pub review: Signal<Option<orchester_workspace::tasks::review_list::ReviewList>>,
+  /// The reviews that show all their changes rather than those since the review.
+  pub all_changes: Signal<ShowingAll>,
   /// Whether the sidebar's Configure section is folded for the project, in every tab of the session.
   pub configure_folded: Signal<bool>,
   /// The team's configuration as the five libraries show it, while the project is shared (`team`); `None` while it is
@@ -199,8 +199,8 @@ impl ProjectFeed {
       pipeline_names: Signal::new(PipelineNames::default()),
       hub_counts: Signal::new(None),
       hub_unread: Signal::new(0),
-      merges: Signal::new(None),
-      review_counts: Signal::new(ReviewCounts::default()),
+      review: Signal::new(None),
+      all_changes: Signal::new(ShowingAll::default()),
       configure_folded: Signal::new(false),
       team: Signal::new(None),
       offline: Arc::default(),
@@ -313,10 +313,10 @@ impl Component for FeedLoader {
     // The Orchestrator chat gets its daily report (ORC-47).
     super::daily_report::deliver(ctx, &open);
     let runner = status(ctx, &runners, &root);
-    // Held pull request feedback goes once the runs' state lets it (ORC-14).
-    super::feedback::follow(ctx, (&open, states), runner.as_ref());
     // Failed CI goes to the runs whose *Fix CI automatically* is on (ORC-335).
-    let online = !super::feedback_holds(runner.as_ref(), &root).1;
+    let online = runner
+      .as_ref()
+      .is_some_and(|status| status.state_for(&root) == RunnerState::Online);
     super::ci_fix::follow(ctx, (&open, &self.feed), online);
     // Runs of pipelines with a Deliver step are delivered one at a time (ORC-19).
     super::merge_queue::follow(ctx, &open);

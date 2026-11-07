@@ -1,6 +1,6 @@
 //! The action that moves the run's merge on (`Merge` `j9nGlG` in 01i, `Bnjrk` in 01j), the same on the top card and
 //! as the header's primary action, its keys in a cap after its label: *Merge* while the run waits to be merged; once a
-//! merge did not land, the attempt page's primary action as Review › Merges words it (`Cjprb`): *Resolve* for
+//! merge did not land, the attempt page's primary action (`Cjprb`): *Resolve* for
 //! conflicts, which opens the run's attempt page, where they are resolved; *Record merge* for a merge Git made and
 //! Orchester did not record; *Put files back* for files a stopped bring-in left changed; *Try again* else, which puts
 //! a run the merge queue stopped back in its place there and merges any other on the job the card's Merge uses.
@@ -25,12 +25,10 @@ use super::{Merge, keys};
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route},
-  screens::{
-    merges::attempt::{actions::Busy, standing::Standing},
-    task::{
-      PageState, TaskContext,
-      header::controls::{Control, Offer, Reason},
-    },
+  screens::task::{
+    PageState, TaskContext,
+    header::controls::{Control, Offer, Reason},
+    merge::attempt::{actions::Busy, standing::Standing},
   },
   services::Services,
   ui::{button::ButtonKind, icon::Icon, pressable::Press},
@@ -93,7 +91,7 @@ fn resolved(task: &TaskContext, run: &RunView) -> bool {
 fn resolve(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> MergeAction {
   let route = Route::Project(
     task.project.open.project.id(),
-    ProjectPage::MergeAttempt(task.key.clone(), run.run.number()),
+    ProjectPage::TaskMerge(task.key.clone(), run.run.number()),
   );
   let open = Navigation::of(ctx).to(route);
   MergeAction::new(Control::new(

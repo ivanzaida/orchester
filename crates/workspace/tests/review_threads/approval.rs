@@ -67,6 +67,7 @@ fn review_threads_approve_is_refused_while_implement_works_on_sent_comments() {
     repo.root(),
     &RunWorktrees::here_for_test(repo.root(), Programs::processes()),
     repo.run,
+    None,
   )
   .expect("sending");
   assert_eq!(

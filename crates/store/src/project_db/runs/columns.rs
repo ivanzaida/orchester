@@ -4,8 +4,8 @@
 use orchester_core::{
   resource::StepKey,
   run::{
-    AttemptReason, AttemptStatus, InterruptCause, PauseReason, ReviewNote, RunFailure, RunLimit, RunStatus,
-    StepFailure, StepStatus, Stuck, WaitReason,
+    AttemptReason, AttemptStatus, ChosenProfile, InterruptCause, PauseReason, ReviewNote, RunFailure, RunLimit,
+    RunStatus, StepFailure, StepStatus, Stuck, WaitReason,
   },
 };
 
@@ -185,10 +185,13 @@ pub(super) struct AttemptReasonColumns<'a> {
   pub(super) return_to: Option<&'a str>,
   pub(super) note: Option<&'a str>,
   pub(super) conflicts: Option<&'a str>,
+  pub(super) profile: Option<&'a str>,
 }
 
 /// The schema of an attempt's `conflicts`.
 pub(super) const CONFLICTS_SCHEMA: u32 = 1;
+/// The schema of an attempt's `profile`.
+pub(super) const PROFILE_SCHEMA: u32 = 1;
 
 pub(super) fn attempt_reason_columns(reason: &AttemptReason) -> AttemptReasonColumns<'_> {
   let (text, failed_step, return_to, note) = match reason {
@@ -210,6 +213,7 @@ pub(super) fn attempt_reason_columns(reason: &AttemptReason) -> AttemptReasonCol
       failed_step,
       return_to,
       note,
+      ..
     } => (
       "returned",
       Some(failed_step.as_str()),
@@ -223,7 +227,28 @@ pub(super) fn attempt_reason_columns(reason: &AttemptReason) -> AttemptReasonCol
     return_to,
     note,
     conflicts: None,
+    profile: None,
   }
+}
+
+/// An attempt's `profile` column: the agent profile a return chose for its step, as JSON.
+pub(super) fn attempt_profile_column(reason: &AttemptReason) -> Result<Option<String>, StoreError> {
+  match reason {
+    AttemptReason::Returned {
+      profile: Some(profile), ..
+    }
+    | AttemptReason::ReturnedAfterEnd {
+      profile: Some(profile), ..
+    } => crate::rows::encode_json("attempt profile", PROFILE_SCHEMA, profile).map(Some),
+    _ => Ok(None),
+  }
+}
+
+fn parse_profile(columns: &AttemptReasonColumns<'_>) -> Result<Option<ChosenProfile>, StoreError> {
+  columns
+    .profile
+    .map(|text| crate::rows::decode_json("attempt profile", PROFILE_SCHEMA, text))
+    .transpose()
 }
 
 /// An attempt's `conflicts` column: what a return after the run ended resolves, as JSON.
@@ -253,6 +278,7 @@ pub(super) fn parse_attempt_reason(columns: &AttemptReasonColumns<'_>) -> Result
       failed_step: step_key(failed_step)?,
       return_to: step_key(return_to)?,
       note: ReviewNote::new(note).map_err(|error| corrupt("attempt note", error))?,
+      profile: parse_profile(columns)?,
     }),
     ("returned_after_end", None, Some(return_to), Some(note)) => Ok(AttemptReason::ReturnedAfterEnd {
       return_to: step_key(return_to)?,
@@ -261,6 +287,7 @@ pub(super) fn parse_attempt_reason(columns: &AttemptReasonColumns<'_>) -> Result
         .conflicts
         .map(|text| crate::rows::decode_json("attempt conflicts", CONFLICTS_SCHEMA, text))
         .transpose()?,
+      profile: parse_profile(columns)?,
     }),
     _ if columns.conflicts.is_some() => Err(corrupt("attempt conflicts", reason)),
     _ => Err(corrupt("attempt reason", reason)),

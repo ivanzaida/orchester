@@ -23,8 +23,8 @@ use orchester_core::{
   resource::StepKey,
   revision::Revision,
   run::{
-    Answerer, ApprovalAnswer, EventSequence, MergeConflicts, PermissionsApply, PlanDecision, PlanVersion, ReviewNote,
-    RunNumber, StuckDecision,
+    Answerer, ApprovalAnswer, ChosenProfile, EventSequence, MergeConflicts, PermissionsApply, PlanDecision,
+    PlanVersion, ReviewNote, RunNumber, StuckDecision,
     side_question::{SideInput, SideOutcome},
   },
   tokens::TokenBudget,
@@ -76,6 +76,10 @@ pub struct WorkReturn {
   pub step: StepKey,
   pub note: ReviewNote,
   pub conflicts: Option<MergeConflicts>,
+  /// The agent profile the step runs with this time instead of its pipeline's (protocol 53); the runner refuses it
+  /// with [`crate::Rejection::ProfileNotUsable`] when the run cannot run it.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub profile: Option<ChosenProfile>,
   pub by: Answerer,
   /// The event sequence shown when the run was read: a later state refuses the return.
   pub expected: EventSequence,

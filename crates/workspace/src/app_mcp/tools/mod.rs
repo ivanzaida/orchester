@@ -23,9 +23,6 @@ mod pipeline_copy;
 mod plan_read;
 mod plans;
 mod projects;
-mod pull_request_reads;
-mod pull_request_wire;
-mod pull_requests;
 mod questions;
 mod queue_hold;
 mod return_to_draft;
@@ -53,7 +50,6 @@ use rmcp::{
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
-pub(super) use self::pull_request_reads::RecentReads;
 use self::runs::Control;
 pub(crate) use self::{
   continue_run::{Choice as ContinueChoice, ContinueRun, Offered as ContinueOffered, offered as continue_offered},
@@ -215,8 +211,14 @@ const SPECS: &[Spec] = &[
                   null or the policy's notice) and stages (each stage with passed, refused or not_reached: policy \
                   for automation's attempts, integration_lock, project_database, scratch_folder, checkout_identity, \
                   git_metadata, existing_result, merge, record). checks is the CI of the pull request of the run's \
-                  branch, as get_pull_request's checks reads it (no_pull_request when the last sync stored none, \
-                  not_linked without a linked GitHub repository). The run's link is its task's page; the waiting \
+                  branch, read now through gh (gh pr checks), at most once in 30 s: state (passed, failed, running, \
+                  no_checks; or why it was not read: no_pull_request when the last sync stored none, not_linked \
+                  without a linked GitHub repository, gh_missing, not_signed_in, wrong_account, missing_scope, \
+                  gh_unavailable, rate_limited with resets_at, github_unreachable, github_server_error, not_read; never \
+                  passed when unread), read_at, next_read_at (when to read again while a check is queued or running, \
+                  else null), counts by state, and runs: each check's name, workflow, state (queued, running, passed, \
+                  failed, cancelled, skipped), url and, for a failed GitHub Actions job, log_tail (the last 40 lines of \
+                  its failed steps' log, null when gh gave none). The run's link is its task's page; the waiting \
                   approvals, questions, messages and plans link to their cards on the task's Conversation.",
     schema: schema_for_type::<runs::InRun>,
     read_only: true,
@@ -384,18 +386,6 @@ const SPECS: &[Spec] = &[
     read_only: false,
   },
   Spec {
-    name: "list_pull_requests",
-    description: "Pull requests of a project's linked GitHub repository as the Pull requests page lists them, or of every project: number, title, state (open, draft, merged, closed), review, GitHub checks on the head, branches, changes, when it was merged or closed, whether it comes from a fork, the task and run whose branch it is (agent_working while that run runs), its app link and its GitHub url. They are what the last successful sync read (open ones and the 50 most recently updated closed ones). Each repository says how its latest sync went (sync: synced, rate_limited, github_unreachable, paused_other_account, gh_unavailableâ€¦), when the list was read (synced_at), when the latest sync ran (attempted_at) and, during a rate limit, until when syncs wait (paused_until); unreadable_projects lists the projects that could not be read, with why. refresh syncs one project (needs project) first through gh, unless a sync ran in the last 30 s or a rate limit holds: then the stored list answers. A tab narrows them as the page's tabs do; search finds a number, title words, a branch or a task key.",
-    schema: schema_for_type::<pull_requests::ListPullRequests>,
-    read_only: true,
-  },
-  Spec {
-    name: "get_pull_request",
-    description: "One pull request of a project's linked GitHub repository, as list_pull_requests gives it, with how the repository's latest sync went. One the last sync did not read (an older closed one) is refused as pull_request_not_synced; with refresh it is read from GitHub on its own, and a refresh of the same number within 30 s answers what that read found. A read GitHub refuses says why: github_rate_limited (until paused_until), github_unreachable, or pull_request_not_read; pull_request_not_found when GitHub has no such pull request. checks adds to the last sync's counts its CI read now through gh (gh pr checks), at most once in 30 s: state (passed, failed, running, no_checks; or why it was not read: no_pull_request, gh_missing, not_signed_in, wrong_account, missing_scope, gh_unavailable, rate_limited with resets_at, github_unreachable, github_server_error, not_read, never passed when unread), read_at, next_read_at (when to read again while a check is queued or running, else null), counts by state, and runs: each check's name, workflow, state (queued, running, passed, failed, cancelled, skipped), url and, for a failed GitHub Actions job, log_tail (the last 40 lines of its failed steps' log, null when gh gave none).",
-    schema: schema_for_type::<pull_requests::GetPullRequest>,
-    read_only: true,
-  },
-  Spec {
     name: "get_usage",
     description: "Tokens (spent = input - cached input + output, as each CLI reported them) and active agent time of a project's runs, or of every project's, over a range of local days (the last 7 by default, today counted up to now; at most 366, by hour at most 7), as the Usage page reads them: totals, and rows grouped by hour, day, task, pipeline, step, agent (profile; auto mode's reviewer per model), model or provider (the agent connection the tokens were spent on), filtered by task, run, pipeline, step, agent profile, model or provider (an id, or `earlier` for usage no record names a provider for; names in any case); `unmatched` names each filter value nothing in the range matches. The totals' `output_unreported` counts the agent invocations whose CLI reported input but no output yet (Claude Code on some providers reports output only in its final result): their output is unknown, not 0, so `output` and `spent` hold only what the others reported. `link` opens the Usage page with the same query (without `project`, All projects' Usage tab; the page groups by hour or day, so another `group` is by day there); each row's `link` opens it narrowed to the row. `unread_runs` counts the runs left out because their record is damaged; the rest is counted. `estimates`, for one project, is the story-point estimator's own usage in the range (its tokens and how many requests asked a model), outside the runs and their filters; null without `project`.",
     schema: schema_for_type::<usage::GetUsage>,
@@ -530,8 +520,6 @@ async fn dispatch_answers(
     "get_auto_mode" => Err(approval_settings::retired(name, "get_approvals")),
     "set_auto_mode" => Err(approval_settings::retired(name, "set_allow_autopilot and set_reviewer")),
     "set_run_auto_mode" => Err(approval_settings::retired(name, "set_run_manual")),
-    "list_pull_requests" => pull_requests::list_pull_requests(services, parse(arguments)?, translate).await,
-    "get_pull_request" => pull_requests::get_pull_request(services, parse(arguments)?).await,
     "list_modules" => modules::list_modules(services, parse(arguments)?).await,
     "get_module" => modules::get_module(services, parse(arguments)?, translate).await,
     "create_module" => modules::create_module(services, parse(arguments)?).await,

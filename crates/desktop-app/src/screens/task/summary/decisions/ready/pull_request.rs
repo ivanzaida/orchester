@@ -5,11 +5,11 @@
 //! project's shared operations; unavailable with why when the project has no usable GitHub connection, the folder no
 //! GitHub remote, `gh` acts as another account or lacks the `repo` scope, the run recorded no base branch, or the
 //! branch has an open pull request already. Once opened, the top card says so with its number and *Review PR* opens
-//! it; a refused push or GitHub refusing to open it says why on the card, with the recovery the rules name (06.B
-//! `YDKJS`) and *Try again*. When the pull request would include commits of the local base its remote lacks, nothing
-//! is pushed and the person is asked on the card ([`super::unpushed`]).
+//! it on GitHub in the browser; a refused push or GitHub refusing to open it says why on the card, with the recovery
+//! the rules name (06.B `YDKJS`) and *Try again*. When the pull request would include commits of the local base its
+//! remote lacks, nothing is pushed and the person is asked on the card ([`super::unpushed`]).
 
-use std::{num::NonZeroU64, sync::Arc};
+use std::sync::Arc;
 
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx, theme::PaletteColor},
@@ -132,8 +132,8 @@ pub fn read(ctx: &mut Ctx, task: &TaskContext, settled: bool) -> Option<Result<R
 pub struct Parts {
   /// What came of creating one: it was opened, or why not.
   pub outcome: Option<Element>,
-  /// The run's open pull request, which *Review PR* opens.
-  pub review: Option<NonZeroU64>,
+  /// The page of the run's open pull request on its repository's host, which *Review PR* opens in the browser.
+  pub review: Option<Arc<str>>,
 }
 
 pub fn parts(ctx: &mut Ctx, task: &TaskContext, run: &RunView, read: &PullRequestRead) -> Parts {
@@ -141,7 +141,7 @@ pub fn parts(ctx: &mut Ctx, task: &TaskContext, run: &RunView, read: &PullReques
   if let PullRequestJob::Created(created) = &job.pull_request {
     return Parts {
       outcome: Some(opened(ctx, created)),
-      review: NonZeroU64::new(created.pull_request.number),
+      review: Some(created.pull_request.url.as_str().into()),
     };
   }
   let (open, state) = stands(ctx, task, run, read);
@@ -167,7 +167,10 @@ pub fn parts(ctx: &mut Ctx, task: &TaskContext, run: &RunView, read: &PullReques
     }
     _ => None,
   };
-  Parts { outcome, review: open }
+  Parts {
+    outcome,
+    review: open.and_then(|open| open.url),
+  }
 }
 
 /// *Create pull request* and *Open as draft*, rows of the header's *More actions* that a choice closes through
@@ -209,16 +212,37 @@ pub fn menu_rows(ctx: &mut Ctx, task: &TaskContext, read: &PullRequestRead, menu
   ]
 }
 
+/// The run's open pull request: its number, and its page when it is known.
+struct OpenPull {
+  number: u64,
+  url: Option<Arc<str>>,
+}
+
 /// The run's open pull request, if it has one, and where creating one stands.
-fn stands(ctx: &Ctx, task: &TaskContext, run: &RunView, read: &PullRequestRead) -> (Option<NonZeroU64>, State) {
+fn stands(ctx: &Ctx, task: &TaskContext, run: &RunView, read: &PullRequestRead) -> (Option<OpenPull>, State) {
   let job = task.jobs.run(run.id());
   let open = match (&job.pull_request, &read.readiness) {
-    (PullRequestJob::Failed(CreateProblem::AlreadyOpen { number: Some(number) }), _)
-    | (_, Some(Ok(Readiness::Open { number }))) => NonZeroU64::new(*number),
+    (
+      PullRequestJob::Failed(CreateProblem::AlreadyOpen {
+        number: Some(number),
+        url,
+      }),
+      _,
+    ) => Some(OpenPull {
+      number: *number,
+      url: url.as_deref().map(Arc::from),
+    }),
+    (_, Some(Ok(Readiness::Open { number, url }))) => Some(OpenPull {
+      number: *number,
+      url: Some(url.as_str().into()),
+    }),
     _ => None,
   };
-  let state = if let Some(number) = open {
-    State::Unavailable(ctx.t_args("decisions.ready.pullRequest.open", [("number", number.to_string())]))
+  let state = if let Some(open) = &open {
+    State::Unavailable(ctx.t_args(
+      "decisions.ready.pullRequest.open",
+      [("number", open.number.to_string())],
+    ))
   } else if job.pull_request == PullRequestJob::Running {
     State::UnderWay
   } else if job.busy() {

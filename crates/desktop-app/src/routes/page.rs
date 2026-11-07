@@ -1,7 +1,7 @@
-use std::num::{NonZeroU32, NonZeroU64};
+use std::num::NonZeroU32;
 
 use orchester_core::{
-  id::{ConnectionId, FeedbackId, ModuleId, ResourceId},
+  id::{ConnectionId, ModuleId, ResourceId},
   project::TaskKey,
   resource::VersionNumber,
   run::RunNumber,
@@ -9,25 +9,19 @@ use orchester_core::{
 use orchester_workspace::{
   delivery::DeliveryPeriod,
   links::{DELIVERY, PERIOD, USAGE, delivery_path},
-  pull_requests::list::PullRequestTab,
   usage::UsageQuery,
 };
 
 use super::{
-  AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, IMPORT, ImportTab, InstructionsView, JoinTarget, MODULES,
-  MemoryTab, ModuleListTab, ModuleTab, NEW, NewConnection, ORCHESTRATOR, OrchestratorChat, OverviewTab, PULL_REQUESTS,
-  PipelineView, ProjectSettingsTab, RouteError, SETTINGS, Screen, SecretsView, SkillsFilter, TAB, TASKS, TaskList,
-  TaskView, ToolTab,
+  AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, IMPORT, ImportTab, InstructionsView, JoinTarget, MERGE,
+  MERGE_QUEUE, MERGES, MODULES, MemoryTab, ModuleListTab, ModuleTab, NEW, NewConnection, ORCHESTRATOR,
+  OrchestratorChat, OverviewTab, PULL_REQUESTS, PipelineView, ProjectSettingsTab, REVIEW, RouteError, SETTINGS, Screen,
+  SecretsView, SkillsFilter, TAB, TASKS, TaskList, TaskView, ToolTab,
   files::FILES,
   modules, project_screen_path,
   query::{Params, with_query},
 };
 
-/// The query parameter of the file a pull request's page shows.
-const FILE: &str = "file";
-/// A pull request's Agent feedback tab, and the thread it shows open.
-const FEEDBACK: &str = "feedback";
-const THREAD: &str = "thread";
 /// What Project settings' Sharing tab asks once open.
 const ASK: &str = "ask";
 const MAKE_LOCAL: &str = "make-local";
@@ -58,18 +52,13 @@ pub enum ProjectPage {
   /// A module's page on its tab: its Summary with its tasks, or its burndown.
   Module(ModuleId, ModuleTab),
   EditModule(ModuleId),
-  MergeQueue,
-  /// The Pull requests page on its tab.
-  PullRequests(PullRequestTab),
-  /// The Review hub's Merges: the runs not merged, those waiting for review and the merged ones by day.
-  Merges,
-  /// One run's merge attempts, under Merges, by its task's key and its number (`/merges/KON-12/8`).
-  MergeAttempt(TaskKey, RunNumber),
-  /// A pull request of the project's repository, by its number, with the path of the file whose diff it
-  /// shows (`None`: the first).
-  PullRequest(NonZeroU64, Option<String>),
-  /// A pull request's Agent feedback tab, with the thread open beside its list (`?tab=feedback&thread=…`).
-  PullRequestFeedback(NonZeroU64, Option<FeedbackId>),
+  /// Review: the tasks whose run finished (`/review`).
+  Review,
+  /// A task's review, by its key (`/review/KON-12`).
+  TaskReview(TaskKey),
+  /// One run's merge attempts, a page under its task, by the task's key and the run's number
+  /// (`/tasks/KON-12/merge/8`).
+  TaskMerge(TaskKey, RunNumber),
   /// The Usage page with its period, grouping and filters (boxed: a query holds many filters).
   Usage(Box<UsageQuery>),
   /// The Delivery view beside Usage, over its period.
@@ -160,9 +149,7 @@ impl ProjectPage {
       Screen::Tasks => Self::Tasks(TaskList::default()),
       Screen::NewTask => Self::NewTask,
       Screen::Modules => Self::Modules(ModuleListTab::default()),
-      Screen::MergeQueue => Self::MergeQueue,
-      Screen::PullRequests => Self::PullRequests(PullRequestTab::default()),
-      Screen::Merges => Self::Merges,
+      Screen::Review => Self::Review,
       Screen::Usage => Self::Usage(Box::default()),
       Screen::Pipelines => Self::Pipelines,
       Screen::Agents => Self::Agents,
@@ -187,11 +174,9 @@ impl ProjectPage {
       Self::Tasks(_) => Screen::Tasks,
       Self::NewTask | Self::NewTaskInModule(_) => Screen::NewTask,
       Self::EditTask(_) => Screen::EditTask,
-      Self::Task(..) | Self::KeptTask(..) => Screen::Task,
+      Self::Task(..) | Self::KeptTask(..) | Self::TaskMerge(..) => Screen::Task,
       Self::Modules(_) | Self::NewModule | Self::Module(..) | Self::EditModule(_) => Screen::Modules,
-      Self::MergeQueue => Screen::MergeQueue,
-      Self::Merges | Self::MergeAttempt(..) => Screen::Merges,
-      Self::PullRequests(_) | Self::PullRequest(..) | Self::PullRequestFeedback(..) => Screen::PullRequests,
+      Self::Review | Self::TaskReview(_) => Screen::Review,
       Self::Usage(_) | Self::Delivery(_) => Screen::Usage,
       Self::Pipelines
       | Self::NewPipeline
@@ -258,21 +243,6 @@ impl ProjectPage {
       Self::Secrets(view) => view.path(segment(Screen::Secrets)),
       Self::Memory(tab) => with_query(segment(Screen::Memory), &[MemoryTab::param(*tab)]),
       Self::Settings(tab) => with_query(segment(Screen::ProjectSettings), &[tab.param()]),
-      Self::PullRequests(tab) => {
-        let tab = (*tab != PullRequestTab::default()).then(|| tab.name());
-        with_query(format!("{project_root}/{PULL_REQUESTS}"), &[(TAB, tab)])
-      }
-      Self::PullRequest(number, file) => with_query(
-        format!("{project_root}/{PULL_REQUESTS}/{number}"),
-        &[(FILE, file.as_deref())],
-      ),
-      Self::PullRequestFeedback(number, thread) => with_query(
-        format!("{project_root}/{PULL_REQUESTS}/{number}"),
-        &[
-          (TAB, Some(FEEDBACK)),
-          (THREAD, thread.map(|thread| thread.to_string()).as_deref()),
-        ],
-      ),
       Self::Usage(query) => super::usage::path(project_root, query),
       Self::Delivery(period) => delivery_path(project_root, *period),
       Self::Connections(view) => view.path(connections),
@@ -280,7 +250,8 @@ impl ProjectPage {
       Self::EditConnection(id) => format!("{connections}/{id}/{EDIT}"),
       Self::Files(view) => view.path(format!("{project_root}/{FILES}")),
       Self::Import(tab) => with_query(segment(Screen::ImportResources), &[tab.param()]),
-      Self::MergeAttempt(key, number) => format!("{}/{key}/{}", segment(Screen::Merges), number.get()),
+      Self::TaskMerge(key, number) => format!("{tasks}/{key}/{MERGE}/{}", number.get()),
+      Self::TaskReview(key) => format!("{}/{key}", segment(Screen::Review)),
       Self::MakeLocal | Self::ProjectRules | Self::Storage | Self::Join(_) => {
         self.settings_path(segment(Screen::ProjectSettings))
       }
@@ -317,6 +288,10 @@ impl ProjectPage {
         let key = task_key(key)?;
         match rest {
           [EDIT] => Ok(Self::EditTask(key)),
+          [MERGE, number] => {
+            let number = number.parse::<NonZeroU32>().map_err(|_| RouteError::NoScreen)?;
+            Ok(Self::TaskMerge(key, RunNumber::new(number)))
+          }
           rest => TaskView::parse(rest, params).map(|view| Self::Task(key, view)),
         }
       }
@@ -351,22 +326,24 @@ impl ProjectPage {
       [IMPORT] => ImportTab::take(params).map(Self::Import),
       ["memory"] => MemoryTab::take(params),
       [SETTINGS] => settings(params),
-      [PULL_REQUESTS] => Ok(Self::PullRequests(
-        params.take_or_default(TAB, PullRequestTab::from_name)?,
-      )),
-      [USAGE, rest @ ..] => usage(rest, params),
-      [PULL_REQUESTS, number] => {
-        let number = number.parse::<NonZeroU64>().map_err(|_| RouteError::NoScreen)?;
-        pull_request(number, params)
+      // The Pull requests page is gone (ORC-803); an address in a tab's history, whatever its query, opens the
+      // Overview.
+      [PULL_REQUESTS, ..] => {
+        params.clear();
+        Ok(Self::Overview(OverviewTab::default()))
       }
+      [USAGE, rest @ ..] => usage(rest, params),
       [CONNECTIONS] => ConnectionsView::take(params).map(Self::Connections),
       [CONNECTIONS, NEW] => NewConnection::take(params).map(Self::NewConnection),
       [FILES, file @ ..] => FilesView::parse(file, params).map(Self::Files),
       [CONNECTIONS, id, EDIT] => id.parse().map(Self::EditConnection).map_err(|_| RouteError::NoScreen),
       [MODULES, rest @ ..] => modules::parse(rest, params),
-      ["merges", key, number] => {
-        let number = number.parse::<NonZeroU32>().map_err(|_| RouteError::NoScreen)?;
-        Ok(Self::MergeAttempt(task_key(key)?, RunNumber::new(number)))
+      [REVIEW, key] => task_key(key).map(Self::TaskReview),
+      // The Merge queue and Merges pages are gone (ORC-805): an address in a tab's history, whatever its path below
+      // them and its query, opens the Overview.
+      [MERGE_QUEUE | MERGES, ..] => {
+        params.clear();
+        Ok(Self::Overview(OverviewTab::default()))
       }
       [segment] => Screen::ALL
         .into_iter()
@@ -395,30 +372,6 @@ fn usage(rest: &[&str], params: &mut Params) -> Result<ProjectPage, RouteError> 
         })
     }
     _ => Err(RouteError::NoScreen),
-  }
-}
-
-/// Pull request `number` on the tab the query names: Files changed with its file, or Agent feedback
-/// (`tab=feedback`) with its open thread.
-fn pull_request(number: NonZeroU64, params: &mut Params) -> Result<ProjectPage, RouteError> {
-  match params.take(TAB)?.as_deref() {
-    None => Ok(ProjectPage::PullRequest(number, params.take(FILE)?)),
-    Some(FEEDBACK) => {
-      let thread = params
-        .take(THREAD)?
-        .map(|value| {
-          value.parse().map_err(|_| RouteError::InvalidParam {
-            param: THREAD.to_owned(),
-            value,
-          })
-        })
-        .transpose()?;
-      Ok(ProjectPage::PullRequestFeedback(number, thread))
-    }
-    Some(value) => Err(RouteError::InvalidParam {
-      param: TAB.to_owned(),
-      value: value.to_owned(),
-    }),
   }
 }
 

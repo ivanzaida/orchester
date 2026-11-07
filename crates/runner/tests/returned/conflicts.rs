@@ -39,6 +39,7 @@ fn resolving(root: &Path, run: RunId, files: &[&str]) -> WorkReturn {
       base: BranchName::new("main").expect("a branch"),
       files: files.iter().map(|file| (*file).to_owned()).collect(),
     }),
+    profile: None,
     by: Answerer::Person,
     expected: read(root, run).last_sequence(),
   }

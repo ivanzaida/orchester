@@ -166,7 +166,7 @@ pub(super) fn left(ctx: &mut Ctx, view: &View<'_>, left: &Left) -> Element {
     (
       Icon::TriangleAlert,
       &title,
-      &crate::screens::merge_queue::words::left_reason(ctx, left),
+      &crate::screens::task::queue_words::left_reason(ctx, left),
     ),
     vec![take_out.into(), muted(&ctx.t("delivery.task.decision.takeOutNote"))],
   )

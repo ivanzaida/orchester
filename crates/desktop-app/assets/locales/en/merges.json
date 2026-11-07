@@ -1,26 +1,6 @@
 {
   "merges": {
-    "lead": "Every merge into {{branch}}: from a task page, from automation or from the merge queue, with who asked and what happened.",
-    "leadNoBranch": "Every merge: from a task page, from automation or from the merge queue, with who asked and what happened.",
-    "base": "Base",
-    "reading": "Reading the merges…",
-    "readingMore": "Reading earlier merges…",
-    "readFailed": "The merges cannot be read",
-    "readFailedBody": "Orchester could not read this project's merges: {{reason}}",
     "notDone": "Not done: {{reason}}",
-    "empty": {
-      "title": "No merges yet",
-      "body": "Every merge into {{branch}} shows here once it is tried: from a task page, by automation or by the merge queue, with why when it did not land.",
-      "bodyNoBranch": "Every merge shows here once it is tried: from a task page, by automation or by the merge queue, with why when it did not land."
-    },
-    "section": {
-      "notMerged": "Not merged",
-      "waiting": "Waiting for your review",
-      "today": "Today",
-      "yesterday": "Yesterday",
-      "day": "{{weekday}}, {{month}} {{day}}"
-    },
-    "run": "run #{{run}}",
     "separator": " · ",
     "stage": {
       "policy": "Policy",
@@ -51,10 +31,7 @@
       "interrupted": "Ended with the app or the runner at {{stage}}: {{cause}}",
       "moved": "{{branch}} or the run's branch moved since the run was checked: {{cause}}",
       "movedBefore": "{{branch}} or the run's branch moved since the run was checked; nothing was merged.",
-      "noCause": "no more was said",
-      "retrying": "Retrying by itself · attempt {{attempt}} of {{of}} in {{seconds}} s · {{cause}}",
-      "retryingNow": "Retrying by itself · attempt {{attempt}} of {{of}} now · {{cause}}",
-      "queueRetries": "The merge queue tries again when it gets to the run · {{cause}}"
+      "noCause": "no more was said"
     },
     "who": {
       "person": "You",
@@ -62,45 +39,21 @@
       "mergeQueue": "Merge queue",
       "orchester": "Orchester"
     },
-    "attempts": "{{count}} attempts",
-    "waiting": {
-      "passed": "Every step passed",
-      "sizeOne": "1 file, +{{added}} −{{removed}}",
-      "sizeOther": "{{files}} files, +{{added}} −{{removed}}",
-      "mergesInto": "merges into {{branch}} once you approve",
-      "mergesOnce": "merges once you approve",
-      "unsentOne": "1 comment not sent",
-      "unsentOther": "{{count}} comments not sent",
-      "changed": "Changed since your review · nothing merged · review again",
-      "changedOne": "Changed since your review: 1 commit after {{reviewed}} · nothing merged · review again",
-      "changedOther": "Changed since your review: {{count}} commits after {{reviewed}} · nothing merged · review again",
-      "inQueue": "Merge queue · since {{time}}",
-      "onTaskPage": "Task page · since {{time}}"
-    },
     "merged": {
       "mergeCommit": "Merge commit {{revision}}",
       "squash": "Squashed as {{revision}}",
-      "fastForward": "Fast-forward to {{revision}}",
-      "alreadyMerged": "Already in {{branch}} at {{revision}}",
-      "worktreeRemoved": "worktree removed",
-      "branchDeleted": "branch deleted",
-      "afterOne": "after 1 refused attempt",
-      "afterOther": "after {{count}} refused attempts"
+      "fastForward": "Fast-forward to {{revision}}"
     },
     "action": {
       "tryAgain": "Try again",
       "tryNow": "Try now",
-      "resolve": "Resolve",
       "recordMerge": "Record merge",
       "putFilesBack": "Put files back",
-      "reviewChanges": "Review changes",
-      "reviewAgain": "Review again",
-      "openRun": "Open the run",
       "noBranch": "The run did not record the branch it merges into.",
       "anotherMerge": "Another run of this project is merging."
     },
     "page": {
-      "crumb": "{{key}} · run #{{run}}",
+      "crumb": "Merge · run #{{run}}",
       "reading": "Reading the run's merge attempts…",
       "readFailed": "The run's merge attempts cannot be read",
       "readFailedBody": "Orchester could not read this run's merge attempts: {{reason}}",
@@ -114,7 +67,6 @@
       "openTask": "Open task",
       "openFolder": "Open folder",
       "stopRetrying": "Stop retrying",
-      "openQueue": "Open merge queue",
       "tryAgainWaits": "Try again waits until these files match {{branch}} again.",
       "status": {
         "notMerged": "Not merged into {{branch}}",
@@ -296,7 +248,8 @@
         "into": "Into: {{into}}",
         "reviewed": "Reviewed at: {{revision}}",
         "merged": "Merged as: {{revision}}"
-      }
+      },
+      "openReview": "Open review"
     }
   }
 }

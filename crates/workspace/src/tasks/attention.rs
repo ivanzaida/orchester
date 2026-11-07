@@ -86,7 +86,7 @@ impl NeedKind {
       Self::ReadyToMerge => "overview.needs.action.reviewMerge",
       Self::ReadyToComplete => "overview.needs.action.reviewComplete",
       Self::Conflicts => "overview.needs.action.openConflicts",
-      Self::DeliveryBlocked => "overview.needs.action.openMergeQueue",
+      Self::DeliveryBlocked => "overview.needs.action.openTask",
       Self::Memory => "overview.needs.action.reviewRecords",
     })
   }
@@ -115,8 +115,6 @@ pub enum Decided {
   Summary(Option<SummaryCard>),
   /// On the project's Memory page, in its *Waiting for approval* queue.
   Memory,
-  /// On the project's Merge queue screen.
-  MergeQueue,
   /// Nowhere it can be opened, and why.
   Unavailable(Message),
 }
@@ -157,13 +155,13 @@ impl NeedItem {
   /// that it is not known.
   pub fn context(&self) -> Message {
     match (self.task(), &self.waiting.kind) {
+      (_, WaitingKind::DeliveryBlocked { waiting, .. }) => {
+        Message::new("overview.needs.contextMergeQueue").with("count", waiting.to_string())
+      }
       (Some(task), _) => Message::new("overview.needs.context")
         .with("task", task.key.to_string())
         .with("title", task.title.to_string()),
       (None, WaitingKind::Memory { .. }) => Message::new("overview.needs.contextMemory"),
-      (None, WaitingKind::DeliveryBlocked { waiting, .. }) => {
-        Message::new("overview.needs.contextMergeQueue").with("count", waiting.to_string())
-      }
       (None, _) => Message::new("overview.needs.contextUnread"),
     }
   }
@@ -187,12 +185,10 @@ impl NeedItem {
 
   /// Where it is decided: a request at its card, an agent's question in the conversation, a plan, a limit
   /// and a decision after retries at their card of the Summary, the rest on the Summary; the project's memory
-  /// records on its Memory page, a blocked merge queue on its screen; what has no task to open nowhere.
+  /// records on its Memory page; what has no task to open nowhere.
   pub fn decided(&self) -> Decided {
-    match self.kind {
-      NeedKind::Memory => return Decided::Memory,
-      NeedKind::DeliveryBlocked => return Decided::MergeQueue,
-      _ => {}
+    if self.kind == NeedKind::Memory {
+      return Decided::Memory;
     }
     if self.task().is_none() {
       return Decided::Unavailable(Message::new("overview.needs.unavailable.task"));
@@ -205,7 +201,7 @@ impl NeedItem {
       NeedKind::PlanReview => Decided::Summary(Some(SummaryCard::Plan)),
       NeedKind::StoppedAtLimit => Decided::Summary(Some(SummaryCard::RaiseLimit)),
       NeedKind::Decision => Decided::Summary(Some(SummaryCard::Retries)),
-      NeedKind::DeliveryBlocked => Decided::MergeQueue,
+      NeedKind::DeliveryBlocked => Decided::Summary(None),
       NeedKind::Approval
       | NeedKind::Interrupted
       | NeedKind::ReadyToMerge

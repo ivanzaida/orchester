@@ -101,6 +101,25 @@ pub fn read_revision_diff<S: RevisionDiffStore>(
   Ok(RevisionChanges::Read(diff))
 }
 
+/// The diff of `path` alone between two commits, read with `git` in `repo`: what a branch changed in one file, to be
+/// set beside what another branch changed in it.
+pub fn read_path_diff(
+  runner: &impl CommandRunner,
+  git: &Path,
+  repo: &Path,
+  (from, to): (&Revision, &Revision),
+  path: &str,
+) -> Result<Diff, GitDiffError> {
+  let mut args = vec!["diff"];
+  args.extend(DIFF_OPTIONS);
+  args.extend([from.as_str(), to.as_str(), "--", path]);
+  let text = run(runner, &git_command(git, repo, args))?;
+  Diff::parse(&text).map_err(|error| GitDiffError::Unrecognized {
+    expected: "a unified diff",
+    detail: error.to_string(),
+  })
+}
+
 /// What the worktree at `worktree` changed beyond its checked-out commit, read with `git`.
 pub fn read_worktree_changes(
   runner: &impl CommandRunner,

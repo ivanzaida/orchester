@@ -39,9 +39,11 @@ mod overview_states;
 mod ownership;
 mod pipelines;
 mod project_settings;
-mod pull_requests;
 pub mod qa_app_asks;
+mod review_approved;
 mod review_changed;
+mod review_conflicts;
+mod review_list;
 mod review_page;
 mod reviewer_rows;
 mod run_context;
@@ -109,7 +111,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 162] = [
+pub const ALL: [Scenario; 159] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -181,15 +183,14 @@ pub const ALL: [Scenario; 162] = [
   Scenario::of("deliverables", deliverables::seed),
   Scenario::of("delivery", delivery::seed),
   Scenario::of("delivery-blocked", delivery::blocked),
-  Scenario::of("delivery-lanes", delivery::lanes),
-  Scenario::of("delivery-empty", delivery::empty),
   Scenario::of("merges", merges::seed),
-  Scenario::of("merges-outcomes", merges::outcomes),
   Scenario::of("merges-empty", merges::empty),
-  Scenario::of("merges-many", merges::many),
   Scenario::of("merge-attempts", merge_attempts::seed),
   Scenario::of("review-page", review_page::seed),
+  Scenario::of("review-approved", review_approved::seed),
   Scenario::of("review-changed", review_changed::seed),
+  Scenario::of("review-list", review_list::seed),
+  Scenario::of("review-conflicts", review_conflicts::seed),
   Scenario::of("task-merge-row", task_merge_row::seed),
   Scenario::of("task-merge-card-ready", task_merge_card::ready_to_merge),
   Scenario::of("task-merge-card-refused", task_merge_card::refused_at_lock),
@@ -222,8 +223,6 @@ pub const ALL: [Scenario; 162] = [
   Scenario::of("browser", browser::seed),
   Scenario::of("browser-not-found", browser::not_found),
   Scenario::of("browser-chosen", browser::chosen),
-  Scenario::of("pull-requests", pull_requests::seed),
-  Scenario::of("pull-request-feedback", pull_requests::feedback::seed),
   Scenario::of("sources", sources::seed),
   Scenario::of("sources-unreadable", sources::unreadable),
   Scenario::of("usage", usage::seed),

@@ -28,7 +28,7 @@ use crate::{
   rows::{corrupt, decode_json, optional_budget_value, parse},
 };
 
-/// `id`, `number`, `reason`, `failed_step`, `return_to`, `note`, `status` and `conflicts` of an attempt.
+/// `id`, `number`, `reason`, `failed_step`, `return_to`, `note`, `status`, `conflicts` and `profile` of an attempt.
 type AttemptColumns = (
   String,
   i64,
@@ -37,6 +37,7 @@ type AttemptColumns = (
   Option<String>,
   Option<String>,
   String,
+  Option<String>,
   Option<String>,
 );
 /// `id`, `step_key`, `status`, `wait_reason`, `failure` and `judged_revision` of a step execution.
@@ -85,7 +86,7 @@ impl Children {
       children.of(run).permissions.push(row);
     }
     let query = format!(
-      "SELECT run_id, id, number, reason, failed_step, return_to, note, status, conflicts FROM attempts \
+      "SELECT run_id, id, number, reason, failed_step, return_to, note, status, conflicts, profile FROM attempts \
        WHERE run_id IN ({runs}) ORDER BY number"
     );
     for (run, row) in keyed(connection, &query, params, attempt_columns)? {
@@ -149,7 +150,7 @@ impl Children {
 
   fn attempt(
     &mut self,
-    (id, number, reason, failed_step, return_to, note, status, conflicts): AttemptColumns,
+    (id, number, reason, failed_step, return_to, note, status, conflicts, profile): AttemptColumns,
   ) -> Result<Attempt, StoreError> {
     let number = u32::try_from(number)
       .ok()
@@ -171,6 +172,7 @@ impl Children {
         return_to: return_to.as_deref(),
         note: note.as_deref(),
         conflicts: conflicts.as_deref(),
+        profile: profile.as_deref(),
       })?,
       parse_attempt_status(&status)?,
       executions,
@@ -203,6 +205,7 @@ fn attempt_columns(row: &Row<'_>) -> rusqlite::Result<AttemptColumns> {
     row.get(6)?,
     row.get(7)?,
     row.get(8)?,
+    row.get(9)?,
   ))
 }
 

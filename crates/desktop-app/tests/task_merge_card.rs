@@ -111,9 +111,14 @@ impl Page {
     self.window.texts(id).is_some()
   }
 
-  /// The run's page under Review › Merges, which Review changes, Open in Review and Resolve open.
+  /// The task's review at `/review/<KEY>`, which Review changes opens.
+  fn review_page(&self) -> Route {
+    Route::Project(self.project, ProjectPage::TaskReview(self.key.clone()))
+  }
+
+  /// The run's merge attempts under its task, which Resolve opens.
   fn run_page(&self) -> Route {
-    Route::Project(self.project, ProjectPage::MergeAttempt(self.key.clone(), self.run.1))
+    Route::Project(self.project, ProjectPage::TaskMerge(self.key.clone(), self.run.1))
   }
 
   /// ⌘↵ on macOS, Ctrl+Enter elsewhere, as a person presses them.
@@ -205,7 +210,7 @@ fn task_merge_card_ready_offers_merge_review_changes_and_close() {
   assert_eq!(page.window.text("task-primary-merge-label"), "Merge");
   assert_eq!(page.window.text("task-primary-merge-key"), KEYS);
   page.window.press("task-review-changes");
-  let route = page.run_page();
+  let route = page.review_page();
   page.window.until("the run's review page", |window| {
     window.navigation().route_now() == route
   });
@@ -273,7 +278,7 @@ fn task_merge_card_refused_says_why_and_opens_the_attempt_page() {
   let body = page.window.text("task-notice-body");
   assert!(
     body.starts_with("Refused before Git at Integration lock: ") && body.ends_with("Nothing changed."),
-    "one line of what stopped it, as Review › Merges says it: {body}"
+    "one line of what stopped it, as the attempt page says it: {body}"
   );
   assert_eq!(page.window.text("task-merge-label"), "Try again");
   assert_eq!(page.window.text("task-merge-key"), KEYS);

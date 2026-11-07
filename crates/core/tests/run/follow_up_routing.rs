@@ -136,6 +136,7 @@ fn follow_up_routing_without_a_route_waits_with_the_return_choices() {
       &StuckDecision::ReturnTo {
         step: key("implement"),
         note: note.clone(),
+        profile: None,
       },
       at(60),
     )

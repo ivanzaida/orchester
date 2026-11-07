@@ -19,7 +19,7 @@ use orchester_workspace::tasks::merge_attempts::page::AttemptPage;
 
 use crate::{
   project::ShownProject,
-  screens::merges::attempt::read::{Read, read},
+  screens::task::merge::attempt::read::{Read, read},
 };
 
 /// What was read, for run `0`.

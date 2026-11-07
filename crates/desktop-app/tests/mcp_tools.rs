@@ -421,7 +421,7 @@ fn navigate_refusals_list_the_known_names_and_word_each_parameter() {
   assert!(
     known
       .as_array()
-      .is_some_and(|names| names.contains(&json!("pull_requests")))
+      .is_some_and(|names| names.contains(&json!("review")) && !names.contains(&json!("pull_requests")))
   );
   let tab = navigate(
     &navigation,

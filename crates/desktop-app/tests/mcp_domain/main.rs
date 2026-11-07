@@ -55,7 +55,6 @@ mod orchestrator_sent;
 mod orchestrator_sent_as;
 mod person_decisions;
 mod pipeline_permissions;
-mod pull_requests;
 mod reads;
 mod reads_setup;
 mod resolve;
