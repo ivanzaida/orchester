@@ -160,7 +160,11 @@ pub fn review_page(
     (Some(reviewed), Some(head)) if approved.is_none() => commits_after((root, programs), (reviewed, head)),
     _ => Vec::new(),
   };
-  let (implement, steps, summary) = implementing(root, (task.id(), run.id()))?;
+  let Steps {
+    implement,
+    passed: steps,
+    summary,
+  } = steps_of(root, (task.id(), run.id()))?;
   Ok(Some(ReviewPage {
     run: MergeRun {
       task: task.id(),
@@ -187,12 +191,19 @@ pub fn review_page(
   }))
 }
 
+/// What a run's steps tell of it.
+struct Steps {
+  implement: Option<Implement>,
+  passed: (usize, usize),
+  summary: Option<Arc<str>>,
+}
+
 /// The step whose agent answers on `run` of `task`, how many of its steps passed, of how many, and what its last step
 /// that reported said.
-fn implementing(
+fn steps_of(
   root: &Path,
   (task, run): (orchester_core::id::TaskId, orchester_core::id::RunId),
-) -> Result<(Option<Implement>, (usize, usize), Option<Arc<str>>), ReviewRefusal> {
+) -> Result<Steps, ReviewRefusal> {
   let detail = TaskDetail::load_in(root, task)?;
   let view = detail.run.as_ref().filter(|view| view.id() == run);
   let implement = view.and_then(|view| {
@@ -205,7 +216,7 @@ fn implementing(
       agent: step.agent.clone(),
     })
   });
-  let steps = view.map_or((0, 0), |view| {
+  let passed = view.map_or((0, 0), |view| {
     let passed = view
       .steps
       .iter()
@@ -215,7 +226,11 @@ fn implementing(
   });
   let summary = view
     .and_then(|view| last_report(&view.run, &view.outputs, &view.plans).map(|(_, report)| Arc::<str>::from(report)));
-  Ok((implement, steps, summary))
+  Ok(Steps {
+    implement,
+    passed,
+    summary,
+  })
 }
 
 /// The writing step at work on `view`'s run, which has not ended, so no step is one its work can go back to: the
