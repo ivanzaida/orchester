@@ -12,7 +12,7 @@ use lurq::{
 };
 
 use super::{
-  fix::Fix,
+  fix::{Busy, Fix},
   parts::{Part, State},
   rows,
 };
@@ -20,12 +20,17 @@ use crate::{
   theme::{HubText, IconSize},
   ui::{
     icon::{Icon, icon},
-    pressable::{Focus, Press},
+    pressable::{Focus, Press, inert},
   },
 };
 
 /// The section of `parts`, `missing` of which the readiness counts; `press` is what a press on a part's fix does.
-pub(super) fn section(ctx: &Ctx, parts: &[Part], missing: usize, press: &dyn Fn(&Fix) -> Press) -> Column {
+pub(super) fn section(
+  ctx: &Ctx,
+  parts: &[Part],
+  missing: usize,
+  (press, busy): (&dyn Fn(&Fix) -> Press, Busy),
+) -> Column {
   let blocked = parts
     .iter()
     .any(|part| matches!(part.state, State::Missing { blocking: true, .. }));
@@ -46,7 +51,7 @@ pub(super) fn section(ctx: &Ctx, parts: &[Part], missing: usize, press: &dyn Fn(
     .variant(HubText::Hint.role())
     .color(color)
     .nowrap();
-  let rows = parts.iter().map(|part| part_row(ctx, part, press)).collect();
+  let rows = parts.iter().map(|part| part_row(ctx, part, (press, busy))).collect();
   rows::section(
     "team-hub-readiness",
     &ctx.t("team_hub.readiness.title"),
@@ -55,7 +60,7 @@ pub(super) fn section(ctx: &Ctx, parts: &[Part], missing: usize, press: &dyn Fn(
   )
 }
 
-fn part_row(ctx: &Ctx, part: &Part, press: &dyn Fn(&Fix) -> Press) -> Row {
+fn part_row(ctx: &Ctx, part: &Part, (press, busy): (&dyn Fn(&Fix) -> Press, Busy)) -> Row {
   let id = format!("team-hub-ready-{}", part.id);
   let (glyph, color, words, fix, said) = match &part.state {
     State::Ready(words) => (
@@ -90,18 +95,20 @@ fn part_row(ctx: &Ctx, part: &Part, press: &dyn Fn(&Fix) -> Press) -> Row {
         .color(said)
         .flex(1.0),
     )
-    .with_children(fix.map(|fix| link(ctx, fix, &id, press(fix))));
+    .with_children(fix.map(|fix| link(ctx, fix, &id, (press(fix), busy))));
   rows::row(&id, &part.label, None, Element::from(value))
 }
 
-/// *Set path →*: the fix of a missing part, a link at its row's end.
-fn link(ctx: &Ctx, fix: &Fix, id: &str, press: Press) -> Button {
-  Focus::Link
-    .apply(press.button())
-    .id(format!("{id}-{}", fix.name()))
-    .child(
-      Text::new(&ctx.t(fix.link_key()))
-        .variant(HubText::PanelLink.role())
-        .nowrap(),
-    )
+/// *Set path →*: the fix of a missing part, a link at its row's end; inert while a fix is taken or the hub is read
+/// again.
+fn link(ctx: &Ctx, fix: &Fix, id: &str, (press, busy): (Press, Busy)) -> Button {
+  let button = match busy {
+    Busy::Idle => Focus::Link.apply(press.button()),
+    Busy::Taking | Busy::Reading => inert(Button::empty().align_items(Alignment::Center)),
+  };
+  button.id(format!("{id}-{}", fix.name())).child(
+    Text::new(&ctx.t(fix.link_key()))
+      .variant(HubText::PanelLink.role())
+      .nowrap(),
+  )
 }

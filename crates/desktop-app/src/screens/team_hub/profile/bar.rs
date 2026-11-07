@@ -14,7 +14,7 @@ use lurq::{
 use orchester_core::sharing::Missing;
 use orchester_workspace::agents::team_profile::TeamProfileSheet;
 
-use super::fix::Fix;
+use super::fix::{Busy, Fix};
 use crate::{
   screens::team_hub::{
     model::{Entry, Listing},
@@ -89,13 +89,14 @@ impl Words<'_> {
   }
 }
 
-/// The bar of the first missing part's `fix`, which `press` does; `pending` while it is being taken.
+/// The bar of the first missing part's `fix`, which `press` does; loading while one is being taken, disabled while
+/// the hub is read again.
 pub(super) fn bar(
   ctx: &Ctx,
   words: &Words<'_>,
   (fix, missing): (&Fix, &[Missing]),
   press: Press,
-  pending: bool,
+  busy: Busy,
 ) -> Element {
   let button = ActionButton::new(
     format!("team-hub-fix-{}", fix.name()),
@@ -103,7 +104,11 @@ pub(super) fn bar(
     words.action(ctx, fix),
   )
   .icon(fix.glyph());
-  let button = if pending { button.loading() } else { button.press(press) };
+  let button = match busy {
+    Busy::Idle => button.press(press),
+    Busy::Taking => button.loading(),
+    Busy::Reading => button.disabled(),
+  };
   Row::new()
     .id("team-hub-actions")
     .width(Dimension::Pct(100.0))

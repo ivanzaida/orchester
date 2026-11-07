@@ -39,6 +39,7 @@ fn readiness_start_a_ready_pipeline_hands_over_the_program_paths_set_here() {
       &fixture.vault,
       &secret("KNOWLEDGE_TOKEN"),
       &SecretValue::new(TOKEN.to_owned()).expect("value"),
+      Answerer::Person,
     )
     .expect("secret");
 
@@ -65,6 +66,7 @@ fn readiness_start_a_pipeline_that_is_not_ready_lists_each_part_with_its_fix_and
       &fixture.vault,
       &secret("ISSUES_KEY"),
       &SecretValue::new(TOKEN.to_owned()).expect("value"),
+      Answerer::Person,
     )
     .expect("secret");
 
@@ -142,6 +144,7 @@ fn ready_with_remote(fixture: &Fixture, server: Value) -> ResourceId {
         &fixture.vault,
         &secret(name),
         &SecretValue::new(TOKEN.to_owned()).expect("value"),
+        Answerer::Person,
       )
       .expect("secret");
   }

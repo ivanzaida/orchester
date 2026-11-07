@@ -25,7 +25,7 @@ use super::{
 };
 
 /// A Claude Code connection `name` whose last check found `version`.
-fn claude(root: &Path, name: &str, version: &str) -> ConnectionId {
+pub(super) fn claude(root: &Path, name: &str, version: &str) -> ConnectionId {
   let mut connection = AgentConnection::new(
     ConnectionId::generate(),
     Name::new(name).expect("name"),
@@ -59,7 +59,13 @@ fn claude(root: &Path, name: &str, version: &str) -> ConnectionId {
 /// The team's profile Builder on Claude Code, using the MCP server `gh`, which is on here and takes the secret header
 /// `GITHUB_TOKEN`; so the only thing it can miss besides a connection is that secret's value. The profile's id and the
 /// server's.
-fn builder(agents: &Agents) -> (ResourceId, ResourceId) {
+pub(super) fn builder(agents: &Agents) -> (ResourceId, ResourceId) {
+  builder_using(agents, false).0
+}
+
+/// [`builder`], which also uses the MCP server `lint`, a program the team names without a path, switched on here when
+/// `with_program`; the profile's and `gh`'s ids, then `lint`'s.
+pub(super) fn builder_using(agents: &Agents, with_program: bool) -> ((ResourceId, ResourceId), Option<ResourceId>) {
   let mut db = ProjectDb::open(&agents.root).expect("database");
   let body = json!({"name": "gh", "launch": {
     "kind": "remote", "url": "https://mcp.example.org/gh",
@@ -68,6 +74,13 @@ fn builder(agents: &Agents) -> (ResourceId, ResourceId) {
   let server: TeamMcpServer = serde_json::from_value(body.clone()).expect("a team MCP server");
   let server = cached(&mut db, ("gh", "gh"), body, &server);
   db.set_team_mcp_on_here(server, true).expect("on here");
+  let lint = with_program.then(|| {
+    let body = json!({"name": "lint", "launch": {"kind": "program", "program": "lint-mcp", "variables": []}});
+    let lint: TeamMcpServer = serde_json::from_value(body.clone()).expect("a team MCP server");
+    let lint = cached(&mut db, ("lint", "lint"), body, &lint);
+    db.set_team_mcp_on_here(lint, true).expect("on here");
+    lint
+  });
   let team = TeamAgentProfile::new(
     Name::new("Builder").expect("name"),
     String::new(),
@@ -78,7 +91,7 @@ fn builder(agents: &Agents) -> (ResourceId, ResourceId) {
       ProviderSettings::new(BTreeMap::from([("reasoning_effort".to_owned(), "high".to_owned())])).expect("settings"),
     ),
   )
-  .with_mcp_servers(vec![server])
+  .with_mcp_servers(std::iter::once(server).chain(lint).collect())
   .expect("servers");
   let local = AgentProfile::from_team(&team, ConnectionId::generate());
   let profile = cached(
@@ -87,10 +100,10 @@ fn builder(agents: &Agents) -> (ResourceId, ResourceId) {
     serde_json::to_value(&team).expect("json"),
     &local,
   );
-  (profile, server)
+  ((profile, server), lint)
 }
 
-fn show(agents: &mut Agents, profile: ResourceId) {
+pub(super) fn show(agents: &mut Agents, profile: ResourceId) {
   open(agents, HubView::new(HubFilter::Profiles, Some(profile)));
   agents.until("the profile panel", |s| s.exists("team-hub-from-team-cli-value"));
 }
@@ -230,12 +243,15 @@ fn team_hub_profile_pins_the_fix_of_the_first_missing_part_and_nothing_when_noth
   });
   assert_eq!(agents.text("team-hub-readiness-count"), "1 missing");
   // The secret's value is typed in a dialog, masked, and kept by the secret's name.
-  agents.click("team-hub-ready-secret-GITHUB_TOKEN-add-value");
-  agents.until("the dialog", |s| s.exists("team-hub-secret-dialog"));
+  agents.press_until("team-hub-ready-secret-GITHUB_TOKEN-add-value", "the dialog", |s| {
+    s.exists("team-hub-secret-dialog")
+  });
   agents.set("team-hub-secret-value", "ghp_not-a-real-token");
   agents.click("team-hub-secret-save");
-  agents.until("the value is kept and nothing is missing", |s| {
-    s.exists("team-hub-readiness-count") && s.text("team-hub-readiness-count") == "all set"
+  agents.until("the value is kept, nothing is missing and the dialog is closed", |s| {
+    s.exists("team-hub-readiness-count")
+      && s.text("team-hub-readiness-count") == "all set"
+      && !s.exists("team-hub-secret-dialog")
   });
   // Nothing to fix: no bar, and nothing disabled in its place.
   assert!(!agents.exists("team-hub-actions"));

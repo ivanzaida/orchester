@@ -9,6 +9,7 @@
 //! MCP servers are on, a secret's value). The connection is picked by a person or by automation as the workspace
 //! takes it; the others widen what agents may do, so a press that automation made does nothing and says so.
 
+mod actions;
 mod bar;
 mod computer;
 mod fix;
@@ -23,25 +24,19 @@ use std::{path::PathBuf, sync::Arc};
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
-    ctx::{Ctx, FutureAction},
+    ctx::Ctx,
   },
   components::{Column, ScrollVertical},
   core::Signal,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::{
-  id::{ConnectionId, ProjectId, ResourceId},
-  run::Answerer,
-  secret::{SecretName, SecretValue},
-};
-use orchester_store::ConnectionPick;
-use orchester_workspace::{
-  agents::team_profile::{ConnectionChoice, TeamProfileSheet},
-  background,
-  messages::Message,
-};
+use orchester_core::id::{ConnectionId, ProjectId, ResourceId};
+use orchester_workspace::agents::team_profile::{ConnectionChoice, TeamProfileSheet};
 
-use self::fix::Fix;
+use self::{
+  actions::Actions,
+  fix::{Busy, Fix},
+};
 use super::{
   model::{Entry, Listing},
   panel,
@@ -50,7 +45,6 @@ use crate::{
   navigation::Navigation,
   routes::{AccountsView, Route},
   screens::settings::orchester::PersonOnly,
-  services::Services,
   theme::HubSpacing,
   ui::{field::field_error, message::message_text, pressable::Press},
 };
@@ -77,13 +71,15 @@ pub(super) fn panel(ctx: &mut Ctx, props: Props) -> Element {
   ctx.mount_keyed::<ProfilePanel>(&format!("team-hub-profile-{}", props.entry.id), props)
 }
 
+/// The panel of one profile: it is keyed by the resource, so a pick, an open dialog or a typed value never carries
+/// over to another profile.
 struct ProfilePanel {
   /// The connection the person chose in the select, by id; empty while none is chosen.
   chosen: Signal<String>,
-  pick: FutureAction<(ResourceId, ConnectionId), (), Message>,
-  set_path: FutureAction<ResourceId, (), Message>,
-  switch_on: FutureAction<ResourceId, (), Message>,
-  add_value: FutureAction<(SecretName, String), (), Message>,
+  /// The connection kept as the profile's on this computer, by id; empty while none is. Once there is one, choosing
+  /// another in the select keeps that one.
+  kept: Signal<String>,
+  actions: Actions,
   secret: secret::Entry,
   person: PersonOnly,
 }
@@ -93,67 +89,17 @@ impl Component for ProfilePanel {
 
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<Props>().clone();
-    let services = Services::of(ctx);
-    let (workspace, vault) = (services.workspace, services.vault);
-    let root = props.repo_root;
-    let pick = {
-      let (workspace, root) = (workspace.clone(), root.clone());
-      ctx.future_action(move |(profile, connection): (ResourceId, ConnectionId)| {
-        let (workspace, root) = (workspace.clone(), root.clone());
-        async move {
-          let pick = ConnectionPick {
-            connection,
-            account: None,
-          };
-          background::run(move || workspace.pick_team_connection(&root, profile, pick))
-            .await?
-            .map_err(|error| error.message())
-        }
-      })
-    };
-    let set_path = {
-      let (workspace, root) = (workspace.clone(), root.clone());
-      ctx.future_action(move |server: ResourceId| {
-        let (workspace, root) = (workspace.clone(), root.clone());
-        async move {
-          let Some(program) = background::run(|| rfd::FileDialog::new().pick_file()).await? else {
-            return Ok(());
-          };
-          background::run(move || workspace.set_team_mcp_program(&root, server, &program, Answerer::Person))
-            .await?
-            .map_err(|error| error.message())
-        }
-      })
-    };
-    let switch_on = {
-      let (workspace, root) = (workspace.clone(), root.clone());
-      ctx.future_action(move |server: ResourceId| {
-        let (workspace, root) = (workspace.clone(), root.clone());
-        async move {
-          background::run(move || workspace.switch_team_mcp_on_here(&root, server, true, Answerer::Person))
-            .await?
-            .map_err(|error| error.message())
-        }
-      })
-    };
-    let add_value = ctx.future_action(move |(name, value): (SecretName, String)| {
-      let (workspace, root, vault) = (workspace.clone(), root.clone(), vault.clone());
-      async move {
-        let value = SecretValue::new(value).map_err(|_| Message::new("teamFillIns.errors.valueBlank"))?;
-        background::run(move || workspace.set_team_secret_value(&root, vault.get(), &name, &value))
-          .await?
-          .map_err(|error| error.message())
-      }
-    });
-    Self {
-      chosen: ctx.signal(props.sheet.picked.map(|picked| picked.to_string()).unwrap_or_default()),
-      pick,
-      set_path,
-      switch_on,
-      add_value,
+    let picked = props.sheet.picked.as_ref().map(ToString::to_string).unwrap_or_default();
+    let panel = Self {
+      chosen: ctx.signal(picked.clone()),
+      kept: ctx.signal(picked),
+      actions: Actions::new(ctx, &props.repo_root),
       secret: secret::Entry::new(ctx),
       person: PersonOnly::new(ctx),
-    }
+    };
+    panel.watch_pick(ctx, props.entry.id);
+    panel.watch_save(ctx);
+    panel
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -164,6 +110,7 @@ impl Component for ProfilePanel {
     let missing = entry.standing.as_ref().map_or(&[][..], |standing| standing.missing());
     let parts = parts::parts(ctx, listing, entry, sheet);
     let navigation = Navigation::of(ctx);
+    let busy = self.busy(&props);
     let press = |fix: &Fix| self.press(fix, &props, &navigation);
     let connection = self.connection(sheet);
     let words = bar::Words {
@@ -183,7 +130,7 @@ impl Component for ProfilePanel {
       .child(panel::chips(ctx, listing, entry))
       .child(from_team::section(ctx, sheet))
       .child(computer::section(ctx, sheet, &self.chosen))
-      .child(ready::section(ctx, &parts, missing.len(), &press))
+      .child(ready::section(ctx, &parts, missing.len(), (&press, busy)))
       .with_children(self.failure(ctx));
     let scroll = ScrollVertical::new(body)
       .id("team-hub-panel-scroll")
@@ -193,10 +140,14 @@ impl Component for ProfilePanel {
     let pinned = missing
       .first()
       .and_then(Fix::of)
-      .map(|fix| bar::bar(ctx, &words, (&fix, missing), press(&fix), self.pending()));
-    let dialog = self
-      .secret
-      .dialog(ctx, self.save_value(), self.add_value.state().get().is_pending());
+      .map(|fix| bar::bar(ctx, &words, (&fix, missing), press(&fix), busy));
+    let under = self.person.reason(ctx, SAVE);
+    let dialog = self.secret.dialog(
+      ctx,
+      self.save_value(),
+      self.actions.add_value.state().get().is_pending(),
+      under,
+    );
     Column::new()
       .id("team-hub-panel")
       .describe("resource", entry.id.to_string())
@@ -210,6 +161,12 @@ impl Component for ProfilePanel {
   }
 }
 
+impl Drop for ProfilePanel {
+  fn drop(&mut self) {
+    self.secret.wipe();
+  }
+}
+
 /// The connection the select holds (by id), else the first one listed: the one *Use* names and keeps.
 fn chosen_connection<'a>(chosen: &str, connections: &'a [ConnectionChoice]) -> Option<&'a ConnectionChoice> {
   connections
@@ -219,6 +176,45 @@ fn chosen_connection<'a>(chosen: &str, connections: &'a [ConnectionChoice]) -> O
 }
 
 impl ProfilePanel {
+  /// Once a connection is kept, choosing another in the select keeps that one (as *Use* does, and as the MCP tool
+  /// does for automation); before, the select only chooses and *Use* keeps it. A pick that failed puts the select
+  /// back on the one kept.
+  fn watch_pick(&self, ctx: &mut Ctx, profile: ResourceId) {
+    let (kept, pick) = (self.kept.clone(), self.actions.pick.clone());
+    ctx.watch(&self.chosen, move |now| {
+      let kept = kept.get();
+      if kept.is_empty() || *now == kept {
+        return;
+      }
+      if let Ok(connection) = now.parse::<ConnectionId>() {
+        pick.run((profile, connection));
+      }
+    });
+    let (chosen, kept) = (self.chosen.clone(), self.kept.clone());
+    ctx.watch(&self.actions.pick.state(), move |state| {
+      if state.is_fulfilled() {
+        kept.set(chosen.get());
+      } else if state.error.is_some() && !kept.get().is_empty() {
+        chosen.set(kept.get());
+      }
+    });
+  }
+
+  /// A saved value closes the dialog; a failure shows in it, with the typed text kept.
+  fn watch_save(&self, ctx: &mut Ctx) {
+    let (open, error) = (self.secret.open.clone(), self.secret.error.clone());
+    ctx.watch(&self.actions.add_value.state(), move |state| {
+      if state.is_pending() {
+        return;
+      }
+      if state.is_fulfilled() {
+        open.set(false);
+      } else if let Some(failed) = &state.error {
+        error.set(Some(failed.clone()));
+      }
+    });
+  }
+
   /// The name of the connection the pinned *Use* names and uses.
   fn connection(&self, sheet: &TeamProfileSheet) -> String {
     chosen_connection(&self.chosen.get(), &sheet.connections)
@@ -226,10 +222,16 @@ impl ProfilePanel {
       .unwrap_or_default()
   }
 
-  fn pending(&self) -> bool {
-    self.pick.state().get().is_pending()
-      || self.set_path.state().get().is_pending()
-      || self.switch_on.state().get().is_pending()
+  /// Whether a fix can be pressed: not while the hub is read again, whose last answer it would act on, nor while one
+  /// is being taken.
+  fn busy(&self, props: &Props) -> Busy {
+    if props.reading {
+      Busy::Reading
+    } else if self.actions.pending() {
+      Busy::Taking
+    } else {
+      Busy::Idle
+    }
   }
 
   /// What a press on the fix `fix` does, for the control `id`.
@@ -245,20 +247,22 @@ impl ProfilePanel {
     match fix {
       Fix::AddConnection => Press::Open(navigation.to(Route::Accounts(AccountsView::default()))),
       Fix::UseConnection => {
-        let (action, profile, chosen) = (self.pick.clone(), props.entry.id, self.chosen.clone());
+        let (action, profile, chosen) = (self.actions.pick.clone(), props.entry.id, self.chosen.clone());
         let connections = props.sheet.connections.clone();
         Press::run(move || {
           if let Some(choice) = chosen_connection(&chosen.get(), &connections) {
+            // The select shows the one kept; with none chosen yet that is the first listed.
+            chosen.set(choice.id.to_string());
             action.run((profile, choice.id));
           }
         })
       }
       Fix::SwitchOn(server) => {
-        let (action, server) = (self.switch_on.clone(), *server);
+        let (action, server) = (self.actions.switch_on.clone(), *server);
         guarded(Arc::new(move || action.run(server)))
       }
       Fix::SetPath(server) => {
-        let (action, server) = (self.set_path.clone(), *server);
+        let (action, server) = (self.actions.set_path.clone(), *server);
         guarded(Arc::new(move || action.run(server)))
       }
       Fix::AddValue(name) => {
@@ -268,9 +272,9 @@ impl ProfilePanel {
     }
   }
 
-  /// What the dialog's *Save* does, a person's alone.
-  fn save_value(&self) -> Arc<dyn Fn(SecretName, String) + Send + Sync> {
-    let (action, person) = (self.add_value.clone(), self.person.clone());
+  /// What the dialog's *Save* does, a person's alone: the value goes on as the person's.
+  fn save_value(&self) -> secret::Save {
+    let (action, person) = (self.actions.add_value.clone(), self.person.clone());
     Arc::new(move |name, value| {
       if person.allows(SAVE) {
         action.run((name, value));
@@ -284,19 +288,12 @@ impl ProfilePanel {
     Some(panel::edit_button(ctx, navigation.to(route)))
   }
 
-  /// Why the last fix did nothing: what the workspace refused with, or that automation pressed it.
+  /// Why the last fix did nothing: what the workspace refused with, or that automation pressed it. What went wrong
+  /// with a secret's value shows in its dialog.
   fn failure(&self, ctx: &Ctx) -> Option<Element> {
-    let reason = [
-      self.pick.state().get(),
-      self.set_path.state().get(),
-      self.switch_on.state().get(),
-      self.add_value.state().get(),
-    ]
-    .into_iter()
-    .find_map(|state| state.error.clone().filter(|_| !state.is_pending()));
-    if let Some(reason) = reason {
+    if let Some(reason) = self.actions.refused() {
       return Some(field_error("team-hub-fix-error", &message_text(ctx, &reason)).into());
     }
-    [FIX, SAVE].iter().find_map(|id| self.person.reason(ctx, id))
+    self.person.reason(ctx, FIX)
   }
 }

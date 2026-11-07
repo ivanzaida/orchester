@@ -116,11 +116,12 @@ pub(super) fn mono(id: &str, words: &str) -> Text {
   Text::new(words).id(id.to_owned()).variant(HubText::PanelMono.role())
 }
 
-/// A value that is names, each in a tag.
+/// A value that is names, each in a tag; they wrap onto the next line when the row runs out of room.
 pub(super) fn tags(id: &str, names: impl IntoIterator<Item = String>) -> Row {
   Row::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
+    .wrap()
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .with_children(

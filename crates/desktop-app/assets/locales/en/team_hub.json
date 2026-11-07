@@ -156,6 +156,7 @@
         "setPath": "Set path →",
         "addValue": "Add value →"
       },
+      "programTitle": "Choose the MCP server's program",
       "action": {
         "use": "Use {{connection}} for {{profile}}",
         "add": "Add a {{cli}} connection",

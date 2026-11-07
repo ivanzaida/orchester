@@ -67,11 +67,23 @@ pub fn pick(kontur: &mut Kontur) -> Result<(), SeedError> {
 }
 
 /// `team-hub-no-connection`: [`seed`] on a computer with no Claude Code connection, so the team's profiles say what to
-/// add and nothing stands in for it. The store has no way to remove a connection, so the seed's own row goes.
+/// add and nothing stands in for it. The store has no way to remove a connection, so the seed's own row goes, with the
+/// picks that name it; the seed has exactly one such connection, and anything else is an error.
 pub fn no_connection(kontur: &mut Kontur) -> Result<(), SeedError> {
   seed(kontur)?;
-  let database = kontur.repo.join(".orchester").join("orchester.db");
-  rusqlite::Connection::open(database)?.execute("DELETE FROM connections WHERE provider = ?1", ["claude_code_cli"])?;
+  let mut database = rusqlite::Connection::open(kontur.database())?;
+  let removal = database.transaction()?;
+  removal.execute(
+    "DELETE FROM team_connection_picks WHERE connection_id IN (SELECT id FROM connections WHERE provider = ?1)",
+    ["claude_code_cli"],
+  )?;
+  let removed = removal.execute("DELETE FROM connections WHERE provider = ?1", ["claude_code_cli"])?;
+  if removed != 1 {
+    return Err(SeedError::Invalid(format!(
+      "the seed has one Claude Code connection to remove, found {removed}"
+    )));
+  }
+  removal.commit()?;
   Ok(())
 }
 
