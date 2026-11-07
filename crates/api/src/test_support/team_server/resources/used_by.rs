@@ -34,8 +34,8 @@ impl RunReport {
 
 /// A run of a task of the project at some slug whose work report the server accepted, and whose execution bundle pins
 /// versions of shared resources: the pipeline, a step's profile or tool, an instruction, and an MCP server the
-/// bundle's profiles name. The stand-in builds no bundle at `work.start`, so a test names the pins the bundle would
-/// hold.
+/// bundle's profiles would name once a bundle carries them. The stand-in builds no bundle at `work.start`, so a test
+/// names the pins the bundle would hold; the runs of one work share one bundle, so give them the same pins.
 #[derive(Clone, Debug)]
 pub struct PinnedRun {
   /// The key of the run's task, e.g. `KON-12`.

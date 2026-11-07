@@ -121,8 +121,9 @@ pub fn pinning(root: &Path, resource: ResourceId) -> Result<Option<Pinning>, Arc
 }
 
 /// Whether a run with `snapshot` pins `resource`: the one rule for the runs an archive stops, also read by the used-by
-/// list before the archive (`crate::used_by`), so the list is what the archive stops. A run pins no MCP server of its
-/// own: it uses the servers its pinned profile versions choose, and a team MCP server is chosen by its resource id.
+/// list before the archive (`crate::used_by`), so for a local project the list is what the archive stops. A run pins no
+/// MCP server of its own: it uses the servers its pinned profile versions choose, and a team MCP server is chosen by
+/// its resource id.
 pub(crate) fn pins(db: &ProjectDb, snapshot: &RunSnapshot, resource: &Resource) -> Result<bool, StoreError> {
   if snapshot.pins(resource.id()) {
     return Ok(true);

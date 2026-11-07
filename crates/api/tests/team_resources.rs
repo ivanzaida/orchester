@@ -367,7 +367,8 @@ fn stand_in_orders_the_runs_of_a_task_by_run_id_and_ends_a_run_its_work_supersed
   again.work = 2;
   let mut expected = vec![current.run, again.run];
   expected.sort();
-  for run in [superseded, current, again] {
+  // Pinned out of id order, so the answer's order is the stand-in's sort, not the order the runs came in.
+  for run in [again, superseded, current] {
     team.server.pin_run("kontur", run);
   }
 

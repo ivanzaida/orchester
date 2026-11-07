@@ -83,16 +83,20 @@ and both lists are empty when nothing uses the resource.
   the rule then reads those too (a profile's MCP servers among them), and this list is extended with it.
 - **`runs`**: the runs that have not ended and whose execution bundle pins any version of the resource, as the
   team server knows it from the bundle it built at `work.start` (`execution-bundles.md` of the platform): every
-  pipeline, agent profile, tool, instruction and skill version the bundle pins, and every MCP server version its
-  profiles name (task OP-198: the bundle carries the MCP server versions of the profiles it pins), and no other. A run
-  uses an MCP server only through the profile versions it pins, so it pins one when its bundle does. The desktop
-  reaches the same answer for a local run with the rule an archive stops runs by (`pins` in
-  `crates/workspace/src/sharing/sync/archive.rs`): a pinned profile version that chooses the server pins it. A team
-  reviewer has no runs.
+  pipeline, agent profile, tool, instruction and skill version the bundle pins, and no other. A run uses an MCP
+  server only through the profile versions it pins. The execution bundle does not carry MCP servers yet (an
+  `ExecutionProfile` leaves them out, and a profile still names its MCP servers by the publisher's local id), so today
+  the team server lists no runs for an MCP server; once the bundle carries the MCP server versions its profiles name,
+  a run pins an MCP server when its bundle does. The desktop's own archive already stops a run whose pinned profile
+  version chooses the server (`pins` in `crates/workspace/src/sharing/sync/archive.rs`), and its local list follows
+  that rule. A team reviewer has no runs.
   - **When a run is listed**: the server learns a run id only from `work.report` (`WorkReport` carries `run_id`, no run
-    number), so a run is listed from the first work report the server accepted for it until a terminal one
-    (`succeeded`, `failed` or `cancelled`). Known limit: work that was started and has no accepted report yet is not
-    listed. A run whose last accepted report is `progress` has not ended, nor has one that was interrupted or waits for
+    number), so a run is listed from the first work report the server accepted for it, and its last accepted report
+    decides: `progress` lists it; `succeeded`, `failed` (whatever its reason, `limit_reached` included) or `cancelled`
+    ends it, and a run that resumes with `progress` after a `limit_reached` is listed again. Known limit: work that
+    was started and has no accepted report yet is not listed. For a team project the list can therefore be narrower
+    than what a member's desktop stops on archive (a run with no report yet, a run paused at a limit, a run that uses
+    an MCP server). A run whose last accepted report is `progress` has not ended, nor has one that was interrupted or waits for
     a person on the desktop; a run whose runner stopped without a terminal report stays listed too: a stale claim
     (`stale_task_threshold`) does not end its run.
   - **Superseded**: a run whose work has a newer run (a later run id first reported for the same work) has ended,
@@ -114,7 +118,9 @@ The client call is `used_by`. The stand-in team server answers it from its own r
 above with core's body types, and from the runs a test registers with `TeamServer::pin_run`: it builds no execution
 bundle, so the pins a test names stand in for the bundle's (an MCP server's id among them), a pinned run is one whose
 first work report was accepted, and `last_report`, `work` (the later run of a work supersedes the earlier ones) and
-`claim_run_task` stand in for the accepted work reports and the task's claim. It has no non-member, so that `404` is not exercised there.
+`claim_run_task` stand in for the accepted work reports and the task's claim. It lists whatever the pins name, an
+MCP server's id included, which a real bundle does not carry yet. It has no non-member, so that `404` is not
+exercised there.
 
 `SharedVersion` is `{ resource, number, body, hash, references, based_on, published, widens }`.
 The server computes `widens: boolean` with ORC-570's `TeamReviewer::widens_over` and keeps it on that immutable
