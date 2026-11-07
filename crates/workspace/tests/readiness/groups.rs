@@ -6,7 +6,7 @@ use orchester_core::{
   resource::{AgentProfile, ModelId, PromptText, ProviderSettings, ResourceKind},
   run::Answerer,
 };
-use orchester_workspace::readiness::{Group, Standing, Undecided};
+use orchester_workspace::readiness::{Group, ReadinessStanding, Undecided};
 
 use crate::support::{Fixture, name, profile, program, remote};
 
@@ -70,7 +70,7 @@ fn readiness_a_profile_choosing_a_server_the_team_does_not_offer_is_undecided() 
   assert_eq!(found.group(), Group::NeedsYouHere);
   assert_eq!(
     found.standing(),
-    &Standing::Undecided(Undecided::ChoosesMcpServer(gone))
+    &ReadinessStanding::Undecided(Undecided::ChoosesMcpServer(gone))
   );
 }
 
@@ -91,6 +91,6 @@ fn readiness_a_profile_version_that_is_not_in_the_teams_form_is_undecided() {
 
   assert_eq!(
     fixture.read().resource(id).expect("listed").standing(),
-    &Standing::Undecided(Undecided::NotTeamForm)
+    &ReadinessStanding::Undecided(Undecided::NotTeamForm)
   );
 }

@@ -12,8 +12,8 @@ use orchester_api::ReferenceTarget;
 use orchester_core::{
   id::ResourceId,
   resource::{
-    AgentProfile, Pipeline, ResourceKind, TeamAgentProfile, TeamCounterparts, TeamExecutors, TeamPipelineError,
-    TeamProfileError,
+    AgentProfile, Pipeline, Resource, ResourceKind, TeamAgentProfile, TeamCounterparts, TeamExecutors,
+    TeamPipelineError, TeamProfileError,
   },
   sharing::{LocalEntities, named},
   store::{ConnectionStore, McpServerStore, ResourceStore},
@@ -57,21 +57,7 @@ pub(super) fn unchanged(
 /// is not a team resource, and with [`StoreError::ConnectionNotFound`] for a connection that is not an agent connection
 /// of this computer; nothing is sent.
 pub(super) fn profile(db: &ProjectDb, resource: ResourceId, local: &AgentProfile) -> Result<Publication, SharingError> {
-  let (connections, local_mcp_servers) = (db.connections()?, db.mcp_servers()?);
-  let team_mcp_servers: Vec<ResourceId> = db
-    .resources(ResourceKind::McpServer)?
-    .iter()
-    .map(orchester_core::resource::Resource::id)
-    .collect();
-  let team = TeamAgentProfile::from_local(
-    local,
-    TeamCounterparts {
-      connections: &connections,
-      local_mcp_servers: &local_mcp_servers,
-      team_mcp_servers: &team_mcp_servers,
-    },
-  )
-  .map_err(|error| refused(resource, error))?;
+  let team = team_form(db, local)?.map_err(|error| refused(resource, error))?;
   Ok(Publication {
     body: serde_json::to_value(&team).map_err(|error| StoreError::Corrupt {
       what: "resource body",
@@ -79,6 +65,29 @@ pub(super) fn profile(db: &ProjectDb, resource: ResourceId, local: &AgentProfile
     })?,
     references: ReferenceTarget::of_profile(&team),
   })
+}
+
+/// `local` in the team's form, from what this computer knows of its connections and MCP servers; the outer error is the
+/// store failing, the inner one the profile that cannot be published. Publishing sends this, and the readiness of a
+/// version that waits for the server reads it ([`crate::readiness`]).
+pub(crate) fn team_form(
+  db: &ProjectDb,
+  local: &AgentProfile,
+) -> Result<Result<TeamAgentProfile, TeamProfileError>, StoreError> {
+  let (connections, local_mcp_servers) = (db.connections()?, db.mcp_servers()?);
+  let team_mcp_servers: Vec<ResourceId> = db
+    .resources(ResourceKind::McpServer)?
+    .iter()
+    .map(Resource::id)
+    .collect();
+  Ok(TeamAgentProfile::from_local(
+    local,
+    TeamCounterparts {
+      connections: &connections,
+      local_mcp_servers: &local_mcp_servers,
+      team_mcp_servers: &team_mcp_servers,
+    },
+  ))
 }
 
 fn refused(resource: ResourceId, error: TeamProfileError) -> SharingError {

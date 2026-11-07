@@ -5,7 +5,7 @@ use orchester_core::{
   resource::VersionNumber,
   sharing::{ConnectionProblem, Missing},
 };
-use orchester_workspace::readiness::Standing;
+use orchester_workspace::readiness::ReadinessStanding;
 
 use crate::support::{Fixture, profile};
 
@@ -19,7 +19,7 @@ fn readiness_follows_a_new_connection_and_a_new_version() {
   let id = fixture.team_profile("builder", &profile(CLAUDE, &[], &[]));
   assert_eq!(
     fixture.read().resource(id).expect("listed").standing(),
-    &Standing::Ready
+    &ReadinessStanding::Ready
   );
 
   let second = VersionNumber::FIRST.next().expect("v2");
@@ -43,7 +43,7 @@ fn readiness_follows_a_new_connection_and_a_new_version() {
   fixture.connection(CODEX, "codex");
   assert_eq!(
     fixture.read().resource(id).expect("listed").standing(),
-    &Standing::Ready
+    &ReadinessStanding::Ready
   );
 }
 
@@ -60,7 +60,7 @@ fn readiness_is_about_the_version_this_computer_uses_not_one_that_waits_for_the_
   assert_eq!(found.number(), VersionNumber::FIRST);
   assert_eq!(
     found.standing(),
-    &Standing::Ready,
+    &ReadinessStanding::Ready,
     "v2 would need a Codex connection, but v1 runs"
   );
 }

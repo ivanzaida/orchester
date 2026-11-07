@@ -34,7 +34,7 @@ use tokio::task::JoinHandle;
 pub(super) use self::state::SyncStates;
 pub(crate) use self::{
   archive::pins,
-  config::{non_team_name, refresh_profile, refresh_team_profiles, team_executors},
+  config::{is_local_form, non_team_name, refresh_profile, refresh_team_profiles, team_executors, team_form},
 };
 pub use self::{
   archive::{ArchiveError, Pinning, pinning},

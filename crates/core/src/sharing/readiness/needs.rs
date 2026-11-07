@@ -2,7 +2,7 @@ use thiserror::Error;
 
 use crate::{
   connection::AgentProvider,
-  id::ResourceId,
+  id::{ConnectionId, ResourceId, SecretId},
   resource::{TeamAgentProfile, TeamMcpLaunch, TeamMcpServer},
   secret::SecretName,
 };
@@ -14,6 +14,8 @@ pub(super) enum Need {
   McpOn(ResourceId),
   McpProgram(ResourceId),
   Secret(SecretName),
+  LocalMcpProgram(ConnectionId),
+  LocalSecret { secret: SecretId, name: SecretName },
 }
 
 #[derive(Clone, Debug, Error, PartialEq, Eq)]
@@ -74,10 +76,15 @@ impl Needs {
     Ok(Self(needs))
   }
 
-  /// A profile of a local project: a connection of the CLI kind of the one it runs on, which is its pick. It chooses no
+  /// A profile of a local project: a connection of the CLI kind of the one it runs on, which is its pick, and the
+  /// program of each of the project's MCP servers it chooses that the agent's CLI starts (`programs`). It chooses no
   /// team MCP server and names no team secret.
-  pub fn local_profile(profile: ResourceId, cli: AgentProvider) -> Self {
-    Self(vec![Need::Connection { profile, cli }])
+  pub fn local_profile(profile: ResourceId, cli: AgentProvider, programs: &[ConnectionId]) -> Self {
+    Self(
+      std::iter::once(Need::Connection { profile, cli })
+        .chain(programs.iter().copied().map(Need::LocalMcpProgram))
+        .collect(),
+    )
   }
 
   /// A team MCP server on its own.
@@ -92,10 +99,16 @@ impl Needs {
     )
   }
 
-  /// A tool: only the secret values it is given. A tool body does not name its secrets by name yet, so the caller
-  /// gives them.
+  /// A tool: only the team secret values it is given. A tool body does not name its secrets by name yet, so the
+  /// caller gives them.
   pub fn tool(secrets: Vec<SecretName>) -> Self {
     Self(secrets.into_iter().map(Need::Secret).collect())
+  }
+
+  /// A tool of a local project that sends or connects with the project secret `secret` (`name` is what the person
+  /// knows it by): the value has to be set here.
+  pub fn local_tool(secret: SecretId, name: SecretName) -> Self {
+    Self(vec![Need::LocalSecret { secret, name }])
   }
 
   /// The union of `parts`, for a pipeline: the needs of the profile or tool of each step and of the Deliver step's

@@ -6,7 +6,9 @@
 mod follows;
 mod groups;
 mod local;
+mod pending;
 mod pipelines;
 mod servers;
 mod support;
 mod team;
+mod tools;

@@ -5,7 +5,7 @@ use orchester_core::{
   resource::{ResourceKind, VersionNumber},
 };
 
-use super::standing::{Group, Standing};
+use super::standing::{Group, ReadinessStanding};
 
 /// One profile, MCP server or tool, as it stands on this computer.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -14,7 +14,7 @@ pub struct ResourceReadiness {
   pub(super) kind: ResourceKind,
   pub(super) name: String,
   pub(super) number: VersionNumber,
-  pub(super) standing: Standing,
+  pub(super) standing: ReadinessStanding,
   /// A team MCP server that is not switched on here.
   pub(super) off_here: bool,
 }
@@ -37,7 +37,7 @@ impl ResourceReadiness {
     self.number
   }
 
-  pub const fn standing(&self) -> &Standing {
+  pub const fn standing(&self) -> &ReadinessStanding {
     &self.standing
   }
 
@@ -58,7 +58,7 @@ pub struct PipelineReadiness {
   pub(super) pipeline: ResourceId,
   pub(super) name: String,
   pub(super) number: VersionNumber,
-  pub(super) standing: Standing,
+  pub(super) standing: ReadinessStanding,
 }
 
 impl PipelineReadiness {
@@ -74,7 +74,7 @@ impl PipelineReadiness {
     self.number
   }
 
-  pub const fn standing(&self) -> &Standing {
+  pub const fn standing(&self) -> &ReadinessStanding {
     &self.standing
   }
 }

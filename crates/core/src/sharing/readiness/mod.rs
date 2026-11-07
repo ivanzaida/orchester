@@ -4,8 +4,9 @@
 //! `not_ready_here` from the pinned versions alone. Local projects use the same rule; only the words differ.
 //!
 //! The missing parts come in a stable order, the one a person fixes them in: the connection of each profile, then
-//! the MCP servers that are off, then their program paths, then the secret values. Inside a kind they keep the order
-//! the needs were asked in. The first is the one a pinned action offers to fix.
+//! the MCP servers that are off, then their program paths (a team server's, then a local one's), then the secret
+//! values (a team secret's, by name, then a project secret's, by id). Inside a kind they keep the order the needs were
+//! asked in. The first is the one a pinned action offers to fix.
 
 mod here;
 mod needs;
@@ -17,7 +18,11 @@ pub use self::{
   here::Here,
   needs::{McpNeed, Needs, NeedsError},
 };
-use crate::{connection::AgentProvider, id::ResourceId, secret::SecretName};
+use crate::{
+  connection::AgentProvider,
+  id::{ConnectionId, ResourceId, SecretId},
+  secret::SecretName,
+};
 
 /// Why a profile has no connection here.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -51,8 +56,12 @@ pub enum Missing {
     server: ResourceId,
     problem: ProgramProblem,
   },
-  /// No value is set here for the secret.
+  /// No value is set here for the team secret.
   Secret { name: SecretName },
+  /// The program of a local project's MCP server, which a profile chooses, is no file on the `PATH` or in the project.
+  LocalMcpProgram { server: ConnectionId },
+  /// The project secret a local tool sends or connects with has no value here.
+  LocalSecret { secret: SecretId, name: SecretName },
 }
 
 /// The answer: ready, or the parts missing, ordered and deduplicated. Only [`readiness`] makes one that is not ready.
@@ -86,7 +95,9 @@ impl Missing {
       Self::Connection { .. } => 0,
       Self::McpOff { .. } => 1,
       Self::McpProgram { .. } => 2,
-      Self::Secret { .. } => 3,
+      Self::LocalMcpProgram { .. } => 3,
+      Self::Secret { .. } => 4,
+      Self::LocalSecret { .. } => 5,
     }
   }
 }
@@ -124,6 +135,13 @@ fn lacking(need: &Need, here: &Here) -> Option<Missing> {
       }),
     },
     Need::Secret(name) => (!here.secrets.contains(name)).then(|| Missing::Secret { name: name.clone() }),
+    Need::LocalMcpProgram(server) => {
+      (!here.local_programs.contains(server)).then_some(Missing::LocalMcpProgram { server: *server })
+    }
+    Need::LocalSecret { secret, name } => (!here.local_secrets.contains(secret)).then(|| Missing::LocalSecret {
+      secret: *secret,
+      name: name.clone(),
+    }),
   }
 }
 

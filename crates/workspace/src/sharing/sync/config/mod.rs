@@ -41,8 +41,8 @@ pub use self::{
   waiting::{Waiting, use_here, waiting},
 };
 pub(crate) use self::{
-  profile::{refresh as refresh_profile, refresh_all as refresh_team_profiles},
-  team_body::{non_team_name, team_executors},
+  profile::{is_local_form, refresh as refresh_profile, refresh_all as refresh_team_profiles},
+  team_body::{non_team_name, team_executors, team_form},
 };
 use super::stream::{Source, blocking};
 use crate::sharing::{SharingError, project::convert};

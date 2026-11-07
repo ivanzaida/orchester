@@ -8,7 +8,7 @@ use orchester_core::{
   secret::SecretValue,
   sharing::{Missing, ProgramProblem},
 };
-use orchester_workspace::readiness::Standing;
+use orchester_workspace::readiness::ReadinessStanding;
 
 use crate::support::{Fixture, MemoryVault, profile, program, remote, secret};
 
@@ -74,7 +74,7 @@ fn readiness_a_profile_asks_for_its_servers_switch_program_and_secrets_in_the_or
     .expect("secret");
   assert_eq!(
     fixture.read().resource(id).expect("listed").standing(),
-    &Standing::Ready
+    &ReadinessStanding::Ready
   );
 }
 
@@ -93,7 +93,7 @@ fn readiness_a_program_whose_file_is_gone_is_missing_again_without_any_fill_in()
     .expect("program");
   assert_eq!(
     fixture.read().resource(server).expect("listed").standing(),
-    &Standing::Ready
+    &ReadinessStanding::Ready
   );
 
   fs::remove_file(&path).expect("remove");
@@ -128,7 +128,7 @@ fn readiness_a_remote_server_needs_no_program_but_its_headers_secrets() {
     .expect("secret");
   assert_eq!(
     fixture.read().resource(server).expect("listed").standing(),
-    &Standing::Ready
+    &ReadinessStanding::Ready
   );
 }
 

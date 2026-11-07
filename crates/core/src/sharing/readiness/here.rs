@@ -5,7 +5,7 @@ use std::{
 
 use crate::{
   connection::AgentProvider,
-  id::{ConnectionId, ResourceId},
+  id::{ConnectionId, ResourceId, SecretId},
   secret::SecretName,
 };
 
@@ -18,7 +18,8 @@ pub(super) struct ProgramFile {
 }
 
 /// What this computer has, as plain data: the answers to "is it ready here" come from it alone. A local project fills
-/// it the same way, with the connection a profile names as that profile's pick and every MCP server switched on.
+/// it with the connection a profile names as that profile's pick, the program files of the MCP servers its profiles
+/// choose and the values of the secrets its tools use.
 #[derive(Clone, Debug, Default)]
 pub struct Here {
   pub(super) connections: Vec<(ConnectionId, AgentProvider)>,
@@ -26,6 +27,8 @@ pub struct Here {
   pub(super) mcp_on: HashSet<ResourceId>,
   pub(super) programs: HashMap<ResourceId, ProgramFile>,
   pub(super) secrets: HashSet<SecretName>,
+  pub(super) local_programs: HashSet<ConnectionId>,
+  pub(super) local_secrets: HashSet<SecretId>,
 }
 
 impl Here {
@@ -63,10 +66,24 @@ impl Here {
     self
   }
 
-  /// A value is set here for the secret `name`. Only the name is kept.
+  /// A value is set here for the team secret `name`. Only the name is kept.
   #[must_use]
   pub fn with_secret(mut self, name: SecretName) -> Self {
     self.secrets.insert(name);
+    self
+  }
+
+  /// The program of the local project's MCP server `server` is a file on this computer.
+  #[must_use]
+  pub fn with_local_program(mut self, server: ConnectionId) -> Self {
+    self.local_programs.insert(server);
+    self
+  }
+
+  /// The project secret `secret` has a value here. Only the id is kept.
+  #[must_use]
+  pub fn with_local_secret(mut self, secret: SecretId) -> Self {
+    self.local_secrets.insert(secret);
     self
   }
 }

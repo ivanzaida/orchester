@@ -5,7 +5,7 @@ use orchester_core::{
   sharing::{ConnectionProblem, Missing},
 };
 use orchester_store::ConnectionPick;
-use orchester_workspace::readiness::{Group, Standing};
+use orchester_workspace::readiness::{Group, ReadinessStanding};
 
 use crate::support::{Fixture, profile};
 
@@ -40,7 +40,7 @@ fn readiness_the_only_connection_of_the_kind_is_used_without_asking() {
   fixture.connection(CLAUDE, "claude");
 
   let read = fixture.read();
-  assert_eq!(read.resource(id).expect("listed").standing(), &Standing::Ready);
+  assert_eq!(read.resource(id).expect("listed").standing(), &ReadinessStanding::Ready);
   assert_eq!(read.resource(id).expect("listed").group(), Group::Ready);
 }
 
@@ -74,6 +74,6 @@ fn readiness_several_connections_of_the_kind_need_a_pick_and_the_pick_makes_it_r
     .expect("pick");
   assert_eq!(
     fixture.read().resource(id).expect("listed").standing(),
-    &Standing::Ready
+    &ReadinessStanding::Ready
   );
 }

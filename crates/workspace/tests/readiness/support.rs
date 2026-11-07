@@ -2,25 +2,29 @@
 //! one.
 
 use std::{
-  collections::{BTreeSet, HashMap},
+  collections::{BTreeMap, BTreeSet, HashMap},
   fs,
   path::PathBuf,
 };
 
 use orchester_core::{
   blob::ContentHash,
-  connection::{AgentConnection, AgentProvider},
-  id::{ConnectionId, ProjectId, ResourceId, ServerId, UserId},
+  connection::{
+    AgentConnection, AgentProvider,
+    mcp::{McpEnvironment, McpServer, McpServerName, McpServerSelection, McpTransport, StdioServer},
+  },
+  id::{ConnectionId, ProjectId, ResourceId, SecretId, ServerId, UserId},
   name::Name,
   permission::StepPermissions,
   project::{Project, ProjectKey},
   resource::{
-    AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, ResourceBody, Slug, Step, StepKey,
-    StepKind, TeamAgentProfile, TeamMcpServer, VersionNumber,
+    AccessPolicy, AccessWindow, AgentProfile, ApprovalMode, CommandProgram, DeniedBehavior, Draft, HttpAuth,
+    HttpMethod, HttpRequest, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, ResourceBody, Slug,
+    Step, StepKey, StepKind, TeamAgentProfile, TeamMcpServer, Tool, ToolAction, VersionNumber,
   },
-  secret::{SecretName, SecretValue, SecretVault, VaultError, VaultKey},
+  secret::{Environment, NewSecret, Secret, SecretKind, SecretName, SecretValue, SecretVault, VaultError, VaultKey},
   sharing::{MemberRole, SharedPerson, TaskRevision},
-  store::{ConnectionStore, ResourceStore},
+  store::{ConnectionStore, McpServerStore, ResourceStore, SecretStore},
   time::Timestamp,
 };
 use orchester_store::{AppDb, CachedVersion, ProjectDb, ResourceSharing, SharingLink, StoredServer};
@@ -66,6 +70,7 @@ pub struct Fixture {
   _dir: TempDir,
   pub root: PathBuf,
   pub workspace: Workspace,
+  pub vault: MemoryVault,
 }
 
 impl Fixture {
@@ -128,6 +133,7 @@ impl Fixture {
       _dir: dir,
       root,
       workspace: Workspace::new(app),
+      vault: MemoryVault::default(),
     }
   }
 
@@ -136,7 +142,10 @@ impl Fixture {
   }
 
   pub fn read(&self) -> ProjectReadiness {
-    self.workspace.project_readiness(&self.root).expect("readiness")
+    self
+      .workspace
+      .project_readiness(&self.root, &self.vault)
+      .expect("readiness")
   }
 
   pub fn connection(&self, provider: AgentProvider, label: &str) -> ConnectionId {
@@ -216,12 +225,94 @@ impl Fixture {
     id
   }
 
+  /// A new profile of the team's project, published here as v1 and waiting for the server to number it: nothing of it
+  /// is cached from the server.
+  pub fn pending_profile(&self, slug: &str, body: &AgentProfile) -> ResourceId {
+    let mut db = self.db();
+    let id = db
+      .create_resource(Slug::new(slug).expect("slug"), name(slug), body, at(10))
+      .expect("resource")
+      .id();
+    db.publish_draft::<AgentProfile>(id, at(11)).expect("published");
+    assert_waiting(&db, id, VersionNumber::FIRST);
+    id
+  }
+
+  /// Publishes `body` as the next version of `profile` while the server cannot be reached: it waits to be sent.
+  pub fn publish_offline(&self, profile: ResourceId, body: AgentProfile) -> VersionNumber {
+    let mut db = self.db();
+    let latest = db
+      .latest_version::<AgentProfile>(profile)
+      .expect("read")
+      .expect("a first version")
+      .number();
+    db.save_draft(profile, &Draft::new(body, Some(latest), at(30)))
+      .expect("draft");
+    let number = db
+      .publish_draft::<AgentProfile>(profile, at(31))
+      .expect("published")
+      .number();
+    assert_waiting(&db, profile, number);
+    number
+  }
+
+  /// A server of this computer that starts `program`.
+  pub fn local_server(&self, label: &str, program: &str) -> ConnectionId {
+    let server = McpServer::new(
+      ConnectionId::generate(),
+      McpServerName::new(label).expect("server name"),
+      McpTransport::Stdio(StdioServer::new(
+        CommandProgram::new(program).expect("program"),
+        vec![],
+        None,
+      )),
+      McpEnvironment::default(),
+      at(5),
+    )
+    .expect("server");
+    self.db().create_mcp_server(&server).expect("stored");
+    server.id()
+  }
+
+  /// A secret of the project; its value is in the keychain when `value` is.
+  pub fn project_secret(&self, label: &str, value: Option<&str>) -> SecretId {
+    let mut db = self.db();
+    let secret = Secret::new(
+      SecretId::generate(),
+      NewSecret {
+        name: secret(label),
+        kind: SecretKind::AccessToken,
+        environment: Environment::Production,
+      },
+      at(6),
+    );
+    db.create_secret(&secret).expect("stored");
+    if let Some(value) = value {
+      let value = SecretValue::new(value.to_owned()).expect("value");
+      self
+        .vault
+        .store(&secret.vault_key(db.project().id()), &value)
+        .expect("in the keychain");
+    }
+    secret.id()
+  }
+
   /// A newer version of the team's `profile`; `waits` is a teammate's version that waits for *Use v<N> here*.
   pub fn next_profile_version(&self, profile: ResourceId, number: VersionNumber, team: &TeamAgentProfile, waits: bool) {
     let local = AgentProfile::from_team(team, AgentProfile::unresolved_connection(profile));
     let server_body = serde_json::to_value(team).expect("json");
     cache(&mut self.db(), profile, (number, waits), server_body, local);
   }
+}
+
+fn assert_waiting(db: &ProjectDb, resource: ResourceId, number: VersionNumber) {
+  assert!(
+    db.waiting_publishes()
+      .expect("read")
+      .iter()
+      .any(|waiting| waiting.resource == resource && waiting.number == number),
+    "the version waits for the server"
+  );
 }
 
 fn cache<B: ResourceBody>(
@@ -245,6 +336,41 @@ fn cache<B: ResourceBody>(
     waits_here,
   };
   db.cache_shared_version(id, &cached).expect("cached");
+}
+
+/// A tool that sends `secret` as the bearer token of its request.
+pub fn http_tool(secret: SecretId) -> Tool {
+  let request = HttpRequest::new(
+    HttpMethod::Post,
+    "https://deploy.example.test/hook".into(),
+    "deploy.example.test".into(),
+    HttpAuth::Bearer { secret },
+    BTreeMap::new(),
+    BTreeMap::new(),
+  )
+  .expect("a request");
+  let access = AccessPolicy::new(
+    BTreeMap::from([(ResourceId::generate(), orchester_core::resource::AllowedSteps::All)]),
+    name("Production"),
+    ApprovalMode::EveryCall,
+    AccessWindow::UntilStepEnds,
+    DeniedBehavior::AwaitChangedPlan,
+  )
+  .expect("a policy");
+  Tool::new("", ToolAction::Http(request), Some(access)).expect("a tool")
+}
+
+/// A local profile of `connection` that chooses `servers`.
+pub fn profile_on(connection: ConnectionId, servers: &[ConnectionId]) -> AgentProfile {
+  AgentProfile::new(
+    name("Builder"),
+    String::new(),
+    PromptText::new("Build.").expect("prompt"),
+    connection,
+    ModelId::new("gpt-5.5").expect("model"),
+    ProviderSettings::default(),
+  )
+  .with_mcp_servers(McpServerSelection::new(servers.to_vec()).expect("distinct servers"))
 }
 
 pub fn server_body(body: Value) -> TeamMcpServer {
