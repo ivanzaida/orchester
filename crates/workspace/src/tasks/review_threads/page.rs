@@ -24,6 +24,7 @@ use orchester_store::ProjectDb;
 
 use super::{
   ReviewRefusal,
+  agents::{self, ReviewAgent},
   approved_run::{ApprovedRun, approved_run},
   conflicts::{self, ReviewConflicts},
   read::{Review, review_of},
@@ -48,6 +49,9 @@ pub struct Implement {
   pub name: Arc<str>,
   /// The agent role of its profile; `None` once that is gone.
   pub agent: Option<Arc<str>>,
+  /// The agent profile and model the run's pipeline gives the step: what it runs with unless a return chooses
+  /// another. `None` for a step the pipeline gives no agent.
+  pub own: Option<ReviewAgent>,
 }
 
 /// A run as its review page shows it.
@@ -70,6 +74,8 @@ pub struct ReviewPage {
   pub changes: Checkpointed,
   pub review: Review,
   pub implement: Option<Implement>,
+  /// The project's agent profiles with a published version: the agents a return of the run's work may choose.
+  pub agents: Vec<ReviewAgent>,
   /// How many of the run's steps passed, of how many.
   pub steps: (usize, usize),
   /// The approved merge into the run's base branch found conflicts and merged nothing; the run waits for review again.
@@ -158,6 +164,7 @@ pub fn review_page(
   let standing = if waiting { conflicts::standing(&db, &run)? } else { None };
   let reviewed = reviewed_head(&db, run.id(), in_queue)?;
   let reviewed_at = reviewed_at(&db, run.id(), in_queue)?;
+  let agents = agents::published(&db)?;
   drop(db);
   let review = review_of(root, programs, run.id())?;
   let sent = review.threads.iter().any(|view| view.thread.sent().is_some());
@@ -198,6 +205,7 @@ pub fn review_page(
     changes,
     review,
     implement,
+    agents,
     steps,
     conflicts,
     summary,
@@ -219,11 +227,19 @@ fn steps_of(root: &Path, (task, run): (TaskId, RunId)) -> Result<Steps, ReviewRe
   let implement = view.and_then(|view| {
     let key = return_work::implementing_step(view).or_else(|| at_work(view))?;
     let step = view.steps.iter().find(|step| step.key == key)?;
+    let own = agents::pinned(&view.run, &key).and_then(|(id, model)| {
+      Some(ReviewAgent {
+        id,
+        name: step.agent.clone()?,
+        model,
+      })
+    });
     Some(Implement {
       key,
       number: step.number,
       name: step.name.clone(),
       agent: step.agent.clone(),
+      own,
     })
   });
   let passed = steps_passed(view);

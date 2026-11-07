@@ -24,6 +24,7 @@ use orchester_core::{
 use orchester_workspace::messages::Message;
 use parking_lot::Mutex;
 
+use super::agent_field::AgentChoice;
 use crate::screens::task::changes::diff::LineKey;
 
 /// A value of the domain the page keeps in a signal: the domain's types know nothing of DevTools, which shows this
@@ -121,6 +122,8 @@ pub(super) struct ReviewState {
   pub discarding: Signal<bool>,
   /// *Approve and merge* asks first, while comments wait unsent.
   pub approving: Signal<bool>,
+  /// The agent *Send to Implement* and *Ask the agent to resolve* run the step with this time.
+  pub agent: AgentChoice,
 }
 
 impl PartialEq for ReviewState {
@@ -151,6 +154,7 @@ impl ReviewState {
       written,
       discarding: ctx.signal(false),
       approving: ctx.signal(false),
+      agent: AgentChoice::new(ctx),
     }
   }
 

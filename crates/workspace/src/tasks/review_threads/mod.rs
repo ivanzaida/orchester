@@ -6,6 +6,7 @@
 //! (`recover`), settles the comments Implement addressed and tells which threads a later head made outdated
 //! ([`read`]). Blocks on SQLite and git.
 
+pub mod agents;
 pub mod approve;
 pub mod approved_run;
 pub mod ask;

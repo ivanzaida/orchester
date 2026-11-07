@@ -15,7 +15,7 @@ use lurq::{
 };
 use orchester_core::{
   conversation::MessageBody,
-  id::{ReviewMessageId, ReviewThreadId, RunId},
+  id::{ResourceId, ReviewMessageId, ReviewThreadId, RunId},
   pull_request::feedback::LineAnchor,
   revision::Revision,
   time::Timestamp,
@@ -47,13 +47,15 @@ pub(super) enum Write {
   Keep(Kept),
   Ask(LineAnchor, Revision, MessageBody),
   AskAgain(ReviewThreadId, MessageBody),
-  Send,
+  /// *Send to Implement*, the step running with the agent profile, or the run's own when there is none.
+  Send(Option<ResourceId>),
   Stop(ReviewThreadId),
   /// *Approve and merge* at the head reviewed, the comments not sent given here discarded first; on a merge that
   /// conflicted, *Try merge again* (with none to discard).
   Approve(Revision, Vec<ReviewMessageId>),
-  /// *Ask the agent to resolve* the conflicts of the approved merge: the run goes back to Implement.
-  Resolve,
+  /// *Ask the agent to resolve* the conflicts of the approved merge: the run goes back to Implement, the step
+  /// running with the agent profile, or the run's own when there is none.
+  Resolve(Option<ResourceId>),
 }
 
 /// A change that does not go to the runner.
@@ -211,9 +213,9 @@ async fn apply(reach: &Reach, write: Write) -> Result<Landed, ReviewRefusal> {
       shown(reach).await;
       handed(ask::ask(&reach.runners, &reach.open, &asking).await)
     }
-    Write::Send => {
+    Write::Send(profile) => {
       let worktrees = RunWorktrees::through_runner(&reach.runners, (&reach.root, reach.open.project.name().as_str()));
-      let sending = blocking(move || send::begin(&root, &worktrees, run, None)).await?;
+      let sending = blocking(move || send::begin(&root, &worktrees, run, profile)).await?;
       shown(reach).await;
       handed(send::send(&reach.runners, &reach.open, &sending).await)
     }
@@ -233,9 +235,9 @@ async fn apply(reach: &Reach, write: Write) -> Result<Landed, ReviewRefusal> {
       blocking(move || approve_and_merge(&worktrees, &programs, (run, &reviewed), now)).await?;
       Ok(Landed::Approved)
     }
-    Write::Resolve => {
+    Write::Resolve(profile) => {
       let worktrees = RunWorktrees::through_runner(&reach.runners, (&reach.root, reach.open.project.name().as_str()));
-      let command = blocking(move || conflicts::resolve::begin(&root, &worktrees, run, None)).await?;
+      let command = blocking(move || conflicts::resolve::begin(&root, &worktrees, run, profile)).await?;
       reach.hand_offs.released().await;
       conflicts::resolve::send(&reach.runners, &reach.open, command).await?;
       Ok(Landed::Resolving)

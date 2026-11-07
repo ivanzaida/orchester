@@ -20,13 +20,19 @@ use orchester_workspace::tasks::review_threads::{
   conflicts::{ConflictRegion, ReviewConflicts},
 };
 
-use super::{Env, actions::Write, words::counted};
+use super::{
+  Env,
+  actions::Write,
+  agent_field::{self, Place},
+  words::counted,
+};
 use crate::{
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     message::message_text,
+    tooltip::Truncated,
   },
 };
 
@@ -124,11 +130,12 @@ fn base_lines(ctx: &Ctx, region: &ConflictRegion) -> Vec<Element> {
 }
 
 /// The conflict bar; `None` while the run's merge conflicts nowhere.
-pub(super) fn bar(ctx: &Ctx, env: &Env) -> Option<Element> {
+pub(super) fn bar(ctx: &mut Ctx, env: &Env) -> Option<Element> {
   let conflicts = env.page.conflicts.as_ref()?;
   let base = base_name(ctx, conflicts);
   let title = counted_with_base(ctx, conflicts.files.len(), &base);
   let body = ctx.t_args("review_page.conflict.bar.body", [("base", &*base)]);
+  let agent = agent_field::field(ctx, env, Place::Conflict);
   Some(
     Row::new()
       .id("review-conflict-bar")
@@ -154,14 +161,13 @@ pub(super) fn bar(ctx: &Ctx, env: &Env) -> Option<Element> {
               .nowrap(),
           )
           .child(
-            Text::new(&body)
-              .id("review-conflict-body")
-              .variant(TypographyStyle::Description)
+            Truncated::new("review-conflict-body", body, TypographyStyle::Description)
               .color(PaletteColor::TextMuted)
-              .nowrap(),
+              .render(ctx),
           ),
       )
       .child(try_again(ctx, env))
+      .with_children(agent)
       .child(resolve(ctx, env))
       .into(),
   )
@@ -218,8 +224,10 @@ fn resolve(ctx: &Ctx, env: &Env) -> Element {
   if env.writes.busy() {
     return button.loading().into();
   }
-  let writes = env.writes.clone();
-  button.on_click(move || writes.run(Write::Resolve)).into()
+  let (writes, state, page) = (env.writes.clone(), env.state.clone(), env.page.clone());
+  button
+    .on_click(move || writes.run(Write::Resolve(state.agent.profile(&page))))
+    .into()
 }
 
 /// How many conflicts `path` shows in its head: its regions, or one for a file that conflicts without lines to show.
