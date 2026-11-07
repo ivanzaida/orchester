@@ -90,6 +90,7 @@ fn fixture() -> Fixture {
     instructions: &[],
     tools: &[],
     skills: &[],
+    mcp_servers: &[],
     labels: &[
       (pipeline.id(), label("review-flow", "Review flow")),
       (profiles[&profile].id(), label("reviewer", "Reviewer")),

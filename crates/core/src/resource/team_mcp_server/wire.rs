@@ -2,9 +2,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::{TeamMcpLaunch, TeamMcpProgram, TeamMcpRemote, TeamMcpServer, TeamMcpServerError};
+use super::{TeamMcpLaunch, TeamMcpProgram, TeamMcpRemote, TeamMcpSecretHeader, TeamMcpServer, TeamMcpServerError};
 use crate::{
-  connection::mcp::{ExemptTools, McpHeaderName, McpServerName, McpUrl, WorkingDirectory},
+  connection::mcp::{ExemptTools, McpServerName, McpUrl, WorkingDirectory},
   resource::{CommandArg, CommandProgram, VariableName},
 };
 
@@ -32,7 +32,7 @@ enum LaunchWire {
   Remote {
     url: McpUrl,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    secret_headers: Vec<McpHeaderName>,
+    secret_headers: Vec<TeamMcpSecretHeader>,
   },
 }
 

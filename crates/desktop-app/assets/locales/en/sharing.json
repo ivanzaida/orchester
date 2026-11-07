@@ -674,6 +674,7 @@
           "codexSandboxOff": "The Codex sandbox off · was on",
           "mcpServer": "An MCP server it did not give its agents",
           "secret": "A secret it did not use",
+          "tool": "A tool it did not give its agents",
           "serverNamed": "MCP server {{name}}",
           "secretNamed": "Secret {{name}}",
           "boundHere": "{{what}} · bound here to “{{local}}”",

@@ -1,5 +1,6 @@
 use orchester_core::{
   resource::{ResourceBody, ResourceKind, TeamMcpLaunch, TeamMcpServer},
+  secret::SecretName,
   sharing::{VersionWidening, widens},
 };
 use serde_json::{Value, json};
@@ -16,7 +17,10 @@ fn parse(body: Value) -> Result<TeamMcpServer, serde_json::Error> {
 fn team_mcp_server_is_a_versioned_resource_and_round_trips() {
   assert_eq!(TeamMcpServer::KIND, ResourceKind::McpServer);
   let remote = json!({
-    "name":"issues","launch":{"kind":"remote","url":"https://mcp.example.org/x","secret_headers":["X-API-Key"]},
+    "name":"issues","launch":{"kind":"remote","url":"https://mcp.example.org/x","secret_headers":[
+      {"header":"X-API-Key","secret":"ISSUES_KEY"},
+      {"header":"Authorization","secret":"ISSUES_TOKEN","prefix":"Bearer "}
+    ]},
     "exempt_tools":["search"]
   });
   for body in [program("npx"), remote] {
@@ -56,8 +60,8 @@ fn team_mcp_server_refuses_a_path_a_value_or_a_local_id() {
   }
   let remote = json!({"name":"r","launch":{"kind":"remote","url":"https://u:p@mcp.example.org"}});
   assert!(parse(remote).is_err());
-  let header =
-    json!({"name":"r","launch":{"kind":"remote","url":"https://mcp.example.org","secret_headers":["X-Key","x-key"]}});
+  let header = json!({"name":"r","launch":{"kind":"remote","url":"https://mcp.example.org","secret_headers":[
+    {"header":"X-Key","secret":"A_KEY"},{"header":"x-key","secret":"B_KEY"}]}});
   assert!(parse(header).is_err());
   let mut twice = program("npx");
   twice["launch"]["variables"] = json!(["TOKEN", "token"]);
@@ -82,6 +86,75 @@ fn team_mcp_server_widens_when_it_runs_or_reaches_more() {
 }
 
 #[test]
+fn team_mcp_server_widens_with_a_secret_the_version_before_was_not_given() {
+  let remote = |headers: Value| {
+    parse(
+      json!({"name":"issues","launch":{"kind":"remote","url":"https://mcp.example.org/x","secret_headers":headers}}),
+    )
+    .expect("remote")
+  };
+  let program = |variables: Value| {
+    let mut body = program("npx");
+    body["launch"]["variables"] = variables;
+    parse(body).expect("program")
+  };
+
+  let key = |header: &str, secret: &str| json!({"header": header, "secret": secret});
+  let (one, two) = (
+    remote(json!([key("X-Key", "KEY")])),
+    remote(json!([key("X-Key", "KEY"), key("X-Other", "OTHER")])),
+  );
+  assert_eq!(widens(Some(&one), &two), vec![VersionWidening::Secret]);
+  assert!(widens(Some(&two), &one).is_empty(), "dropping a header narrows");
+  assert!(
+    widens(Some(&one), &remote(json!([key("x-key", "KEY")]))).is_empty(),
+    "header names ignore case"
+  );
+  assert_eq!(
+    widens(
+      Some(&two),
+      &remote(json!([key("X-Key", "OTHER"), key("X-Other", "OTHER")]))
+    ),
+    vec![VersionWidening::Secret],
+    "a header sent another secret's value widens"
+  );
+  assert_eq!(
+    widens(
+      Some(&one),
+      &remote(json!([{"header": "X-Key", "secret": "KEY", "prefix": "Bearer "}]))
+    ),
+    vec![VersionWidening::Secret],
+    "a header with another prefix widens"
+  );
+
+  let (token, both) = (program(json!(["TOKEN"])), program(json!(["TOKEN", "REGION"])));
+  assert_eq!(widens(Some(&token), &both), vec![VersionWidening::Secret]);
+  assert!(widens(Some(&both), &token).is_empty(), "dropping a variable narrows");
+  assert!(widens(Some(&token), &program(json!([]))).is_empty());
+
+  let moved = widens(Some(&token), &remote(json!([key("X-Key", "KEY")])));
+  assert!(moved.contains(&VersionWidening::McpServer) && moved.contains(&VersionWidening::Secret));
+  assert_eq!(
+    widens(Some(&token), &remote(json!([]))),
+    vec![VersionWidening::McpServer]
+  );
+}
+
+#[test]
+fn team_mcp_server_widens_when_its_program_starts_in_another_folder() {
+  let in_folder = |folder: Option<&str>| {
+    let mut body = program("npx");
+    if let Some(folder) = folder {
+      body["launch"]["working_directory"] = json!(folder);
+    }
+    parse(body).expect("program")
+  };
+  let (root, tools) = (in_folder(None), in_folder(Some("tools")));
+  assert!(matches!(widens(Some(&root), &tools)[..], [VersionWidening::Command(_)]));
+  assert!(widens(Some(&tools), &tools).is_empty());
+}
+
+#[test]
 fn team_mcp_server_refuses_a_url_with_a_query_or_a_fragment_without_naming_it() {
   for url in [
     "https://mcp.example.org/x?key=sk-live-123",
@@ -98,4 +171,104 @@ fn team_mcp_server_refuses_a_url_with_a_query_or_a_fragment_without_naming_it() 
   }
   let plain = json!({"name":"r","launch":{"kind":"remote","url":"https://mcp.example.org/x/y"}});
   assert!(parse(plain).is_ok());
+}
+
+fn remote(headers: &Value) -> Value {
+  json!({"name":"r","launch":{"kind":"remote","url":"https://mcp.example.org/x","secret_headers":headers}})
+}
+
+fn names(server: &TeamMcpServer) -> Vec<String> {
+  server.secrets().iter().map(SecretName::to_string).collect()
+}
+
+#[test]
+fn a_program_variable_takes_the_team_secret_of_its_own_name() {
+  let mut body = program("npx");
+  body["launch"]["variables"] = json!(["PENCIL_TOKEN", "API_KEY"]);
+  assert_eq!(names(&parse(body).expect("body")), ["PENCIL_TOKEN", "API_KEY"]);
+  // Valid variable names that are not secret names are refused as such; the rest never were variable names.
+  for name in ["token", "Token", "_TOKEN"] {
+    let mut body = program("npx");
+    body["launch"]["variables"] = json!([name]);
+    let error = parse(body).expect_err(name);
+    assert!(error.to_string().contains("secret name"), "{name}: {error}");
+  }
+  for name in ["9TOKEN", "TOKEN-2"] {
+    let mut body = program("npx");
+    body["launch"]["variables"] = json!([name]);
+    assert!(parse(body).is_err(), "{name}");
+  }
+  let mut none = program("npx");
+  none["launch"].as_object_mut().expect("launch").remove("variables");
+  assert!(names(&parse(none).expect("body")).is_empty());
+}
+
+#[test]
+fn a_secret_header_names_its_secret_and_an_optional_prefix() {
+  let server = parse(remote(&json!([
+    {"header":"Authorization","secret":"GITHUB_TOKEN","prefix":"Bearer "},
+    {"header":"X-Org","secret":"GITHUB_TOKEN"},
+    {"header":"X-API-Key","secret":"OTHER_KEY"}
+  ])))
+  .expect("body");
+  // Two headers on one secret ask for it once; the order is the headers'.
+  assert_eq!(names(&server), ["GITHUB_TOKEN", "OTHER_KEY"]);
+  let TeamMcpLaunch::Remote(launch) = server.launch() else {
+    panic!("a remote server");
+  };
+  let [first, second, _] = &launch.secret_headers()[..] else {
+    panic!("three headers");
+  };
+  assert_eq!(first.prefix().map(|prefix| prefix.as_str()), Some("Bearer "));
+  assert_eq!(second.prefix(), None);
+  assert_eq!(first.secret().as_str(), "GITHUB_TOKEN");
+  assert!(names(&parse(remote(&json!([]))).expect("no headers")).is_empty());
+}
+
+#[test]
+fn a_secret_header_refuses_a_missing_or_invalid_secret_and_any_other_field() {
+  for header in [
+    json!({"header":"X-Key"}),
+    json!({"header":"X-Key","secret":"lower"}),
+    json!({"header":"X-Key","secret":""}),
+    json!({"secret":"X_KEY"}),
+    json!({"header":"Content-Type","secret":"X_KEY"}),
+    json!({"header":"X-Key","secret":"X_KEY","value":"s3cret"}),
+    json!({"header":"X-Key","secret":"X_KEY","id":"0191c7c0"}),
+  ] {
+    assert!(parse(remote(&json!([header.clone()]))).is_err(), "{header}");
+  }
+}
+
+#[test]
+fn a_header_prefix_is_short_plain_text() {
+  for prefix in ["Bearer ", "Token ", "Basic ", "sk-"] {
+    let header = json!({"header":"Authorization","secret":"X_KEY","prefix":prefix});
+    assert!(parse(remote(&json!([header]))).is_ok(), "{prefix:?}");
+  }
+  for prefix in [
+    "",
+    "  ",
+    "Bear\ner ",
+    "Bearer\t",
+    "x".repeat(33).as_str(),
+    "Bearer abc123",
+    "Token 9f",
+  ] {
+    let header = json!({"header":"Authorization","secret":"X_KEY","prefix":prefix});
+    assert!(parse(remote(&json!([header]))).is_err(), "{prefix:?}");
+  }
+  let long = "sk-live-".to_owned() + &"1".repeat(40);
+  let error = parse(remote(
+    &json!([{"header":"Authorization","secret":"X_KEY","prefix":long}]),
+  ))
+  .expect_err("long");
+  assert!(!error.to_string().contains("sk-live"), "{error}");
+}
+
+#[test]
+fn a_body_with_bare_secret_header_names_is_refused_naming_the_header() {
+  let error = parse(remote(&json!(["X-API-Key"]))).expect_err("the old shape");
+  let message = error.to_string();
+  assert!(message.contains("`X-API-Key` names no secret"), "{message}");
 }

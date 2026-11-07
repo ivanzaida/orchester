@@ -15,8 +15,9 @@ use crate::{
   time::Timestamp,
 };
 
-/// The MCP servers the bindings bind, in their order, over all profiles. A bundle names no MCP server of a profile:
-/// they are this computer's, and its bindings choose them.
+/// The MCP servers the bindings bind, in their order, over all profiles. Which server a profile gives its agents is
+/// this computer's choice: a local bundle names none, and a team bundle names the team servers of its profiles
+/// (`CanonicalExecutionInputs::mcp_servers`), which this computer's bindings bind to a program and values of its own.
 pub(super) fn mcp_servers(bindings: &LocalBindings) -> Result<McpServerSelection, InputsError> {
   let servers = bindings
     .references

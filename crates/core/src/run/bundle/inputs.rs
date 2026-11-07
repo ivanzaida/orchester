@@ -4,7 +4,8 @@
 //! the mutable current definitions. Nothing in them is a secret value, an
 //! account, a connection or a path of one computer: bodies name secrets by id only, the run's sources
 //! ([`crate::source::RunSources`]) and the pipeline's are left out, and profiles go without their computer's bindings
-//! ([`ExecutionProfile`]).
+//! ([`ExecutionProfile`]). The team MCP servers the pinned profiles name are pinned by server resource id with their
+//! team body, which holds names only: no program path, no value of a variable or of a secret header.
 
 use serde::{Deserialize, Serialize};
 
@@ -19,7 +20,8 @@ use crate::{
   name::Name,
   permission::AgentPermissions,
   resource::{
-    Instruction, Pipeline, PipelineSources, Skill, Slug, StepKey, StepKind, Tool, ToolAction, Version, VersionNumber,
+    Instruction, Pipeline, PipelineSources, Skill, Slug, StepKey, StepKind, TeamMcpServer, Tool, ToolAction, Version,
+    VersionNumber,
   },
   run::{PinnedVersion, RunSnapshot, StepExecutor, StepSnapshot},
 };
@@ -91,12 +93,15 @@ impl<B> PinnedBody<B> {
 /// `profiles` holds each profile version as the bundle carries it, which the caller makes from the body it holds: a
 /// desktop from a local profile ([`ExecutionProfile::of`]), the team server from a team profile
 /// ([`ExecutionProfile::of_team`]). `labels` holds each pinned version's label, the pipeline's too, by version id.
+/// `mcp_servers` holds the team MCP server versions the caller pins, each with its server resource id; only those the
+/// pinned profiles name are pinned, and a local run names none.
 #[derive(Clone, Copy, Debug)]
 pub struct PinnedBodies<'a> {
   pub profiles: &'a [(VersionId, ExecutionProfile)],
   pub instructions: &'a [Version<Instruction>],
   pub tools: &'a [Version<Tool>],
   pub skills: &'a [Version<Skill>],
+  pub mcp_servers: &'a [(ResourceId, Version<TeamMcpServer>)],
   pub labels: &'a [(VersionId, ResourceLabel)],
 }
 
@@ -108,8 +113,9 @@ pub struct ResolvedStepPermissions {
   pub permissions: AgentPermissions,
 }
 
-/// `{pipeline, steps, profiles, instructions, tools, skills}`. Steps keep pipeline order; the pinned versions are in
-/// resource id order, one per resource.
+/// `{pipeline, steps, profiles, instructions, tools, skills, mcp_servers?}`. Steps keep pipeline order; the pinned
+/// versions are in resource id order, one per resource. `mcp_servers` are the team MCP servers the pinned profiles
+/// name, exactly those; it is left out while empty, which is every local run's.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "InputsFields")]
 pub struct CanonicalExecutionInputs {
@@ -119,6 +125,8 @@ pub struct CanonicalExecutionInputs {
   instructions: Vec<PinnedBody<Instruction>>,
   tools: Vec<PinnedBody<Tool>>,
   skills: Vec<PinnedBody<Skill>>,
+  #[serde(skip_serializing_if = "Vec::is_empty")]
+  mcp_servers: Vec<PinnedBody<TeamMcpServer>>,
 }
 
 #[derive(Deserialize)]
@@ -130,6 +138,8 @@ struct InputsFields {
   instructions: Vec<PinnedBody<Instruction>>,
   tools: Vec<PinnedBody<Tool>>,
   skills: Vec<PinnedBody<Skill>>,
+  #[serde(default)]
+  mcp_servers: Vec<PinnedBody<TeamMcpServer>>,
 }
 
 impl TryFrom<InputsFields> for CanonicalExecutionInputs {
@@ -157,7 +167,8 @@ impl CanonicalExecutionInputs {
           find_profile(bodies.profiles, pinned)?,
         ))
       })
-      .collect::<Result<_, BundleError>>()?;
+      .collect::<Result<Vec<_>, BundleError>>()?;
+    let mcp_servers = pinned_mcp_servers(&profiles, bodies.mcp_servers, bodies.labels)?;
     let pipeline = snapshot.pipeline();
     Self::checked(InputsFields {
       pipeline: PinnedBody::new(pipeline, label(bodies.labels, pipeline)?, body),
@@ -166,6 +177,7 @@ impl CanonicalExecutionInputs {
       instructions: pinned_bodies(snapshot.instructions(), bodies.instructions, bodies.labels)?,
       tools: pinned_bodies(snapshot.tools(), bodies.tools, bodies.labels)?,
       skills: pinned_bodies(snapshot.skills(), bodies.skills, bodies.labels)?,
+      mcp_servers,
     })
   }
 
@@ -180,10 +192,20 @@ impl CanonicalExecutionInputs {
       instructions: sorted(fields.instructions)?,
       tools: sorted(fields.tools)?,
       skills: sorted(fields.skills)?,
+      mcp_servers: sorted(fields.mcp_servers)?,
     };
     inputs.parts_snapshot()?;
     if pins(&inputs.profiles) != agent_profiles(&inputs.steps) {
       return Err(BundleError::ProfilesMismatch);
+    }
+    if named_mcp_servers(&inputs.profiles)
+      != inputs
+        .mcp_servers
+        .iter()
+        .map(|pinned| pinned.resource)
+        .collect::<Vec<_>>()
+    {
+      return Err(BundleError::McpServersMismatch);
     }
     inputs.check_tools()?;
     inputs.check_files()?;
@@ -253,6 +275,12 @@ impl CanonicalExecutionInputs {
     &self.skills
   }
 
+  /// The team MCP servers the pinned profiles name, one version each, in resource id order; their bodies hold names
+  /// only, and the computer that runs them sets the path of a program and the values.
+  pub fn mcp_servers(&self) -> &[PinnedBody<TeamMcpServer>] {
+    &self.mcp_servers
+  }
+
   /// The run snapshot these inputs hold, without sources: the computer that runs them adds its own.
   pub fn snapshot(&self) -> RunSnapshot {
     self
@@ -267,6 +295,7 @@ impl CanonicalExecutionInputs {
       .chain(self.instructions.iter().map(|pinned| pinned.resource))
       .chain(self.tools.iter().map(|pinned| pinned.resource))
       .chain(self.skills.iter().map(|pinned| pinned.resource))
+      .chain(self.mcp_servers.iter().map(|pinned| pinned.resource))
       .collect();
     resources.sort();
     resources.dedup();
@@ -280,6 +309,7 @@ impl CanonicalExecutionInputs {
       .chain(self.instructions.iter().map(|pinned| (pinned.resource, &pinned.label)))
       .chain(self.tools.iter().map(|pinned| (pinned.resource, &pinned.label)))
       .chain(self.skills.iter().map(|pinned| (pinned.resource, &pinned.label)))
+      .chain(self.mcp_servers.iter().map(|pinned| (pinned.resource, &pinned.label)))
       .find(|(pinned, _)| *pinned == resource)
       .map(|(_, label)| label)
   }
@@ -386,6 +416,36 @@ fn label(labels: &[(VersionId, ResourceLabel)], pinned: PinnedVersion) -> Result
       resource: pinned.resource,
       number: pinned.number,
     })
+}
+
+/// The team MCP servers the pinned profiles name, once each, in resource id order.
+fn named_mcp_servers(profiles: &[PinnedBody<ExecutionProfile>]) -> Vec<ResourceId> {
+  let mut named: Vec<ResourceId> = profiles
+    .iter()
+    .flat_map(|profile| profile.body.mcp_servers().iter().copied())
+    .collect();
+  named.sort();
+  named.dedup();
+  named
+}
+
+/// The versions of the servers the pinned `profiles` name, looked up in `servers` by server id.
+fn pinned_mcp_servers(
+  profiles: &[PinnedBody<ExecutionProfile>],
+  servers: &[(ResourceId, Version<TeamMcpServer>)],
+  labels: &[(VersionId, ResourceLabel)],
+) -> Result<Vec<PinnedBody<TeamMcpServer>>, BundleError> {
+  named_mcp_servers(profiles)
+    .into_iter()
+    .map(|server| {
+      let (_, version) = servers
+        .iter()
+        .find(|(resource, _)| *resource == server)
+        .ok_or(BundleError::McpServerMissing(server))?;
+      let pinned = PinnedVersion::of(server, version);
+      Ok(PinnedBody::new(pinned, label(labels, pinned)?, version.body().clone()))
+    })
+    .collect()
 }
 
 fn pins<B>(list: &[PinnedBody<B>]) -> Vec<PinnedVersion> {

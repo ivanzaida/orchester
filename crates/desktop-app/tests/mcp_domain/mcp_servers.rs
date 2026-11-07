@@ -330,7 +330,7 @@ fn mcp_server_a_local_project_has_no_team_only_fields_and_keeps_plain_rows() {
   served.let_automation_widen(true);
   for field in [
     json!({ "variable_names": ["TOKEN"] }),
-    json!({ "secret_headers": ["X-Key"] }),
+    json!({ "secret_headers": [{ "header": "X-Key", "secret": "X_KEY" }] }),
   ] {
     let mut args = pencil();
     if let (Value::Object(args), Value::Object(field)) = (&mut args, field.clone()) {

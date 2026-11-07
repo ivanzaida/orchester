@@ -177,6 +177,7 @@ fn team(setup: &Setup) -> Team {
     instructions: &[],
     tools: &[tool_version],
     skills: &[],
+    mcp_servers: &[],
   };
   let canonical = CanonicalExecutionInputs::pin(&snapshot, bodies).expect("inputs");
   let team_task = TeamTaskRef {
