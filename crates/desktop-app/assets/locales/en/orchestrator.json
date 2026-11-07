@@ -14,6 +14,23 @@
       "forkedToday": "· forked today {{time}}",
       "forkedOn": "· forked {{date}}"
     },
+    "leads": {
+      "label": "Leads",
+      "more": "+{{count}}",
+      "moreTip": "Also leads {{targets}}",
+      "stop": "Stop watching {{name}}",
+      "since": {
+        "today": "{{name}} · {{kind}} · since {{time}}",
+        "on": "{{name}} · {{kind}} · since {{date}}"
+      },
+      "order": {
+        "own": "“{{order}}”",
+        "projectDefault": "“{{order}}” · the project's default order",
+        "none": "No order of its own · your switches decide"
+      },
+      "hint": "× stops watching · /unwatch does the same",
+      "stopFailed": "Not stopped · {{reason}}"
+    },
     "export": {
       "what": "{{title}} · {{messages}} · {{when}}",
       "whatEmpty": "{{title}} · {{messages}}",
@@ -303,16 +320,6 @@
         "runs": "{{task}} is running ↗",
         "queued": "{{task}} queued ↗",
         "stoppedAtLimit": "{{task}} stopped at a limit ↗"
-      },
-      "ended": {
-        "moduleDone": "Every task of {{module}} is Done",
-        "moduleCanceled": "Every task of {{module}} is Canceled",
-        "moduleClosed": "Every task of {{module}} is Done or Canceled",
-        "taskDone": "{{task}} is Done",
-        "taskCanceled": "{{task}} is Canceled",
-        "aside": "— watching ended",
-        "asideModule": "— watching ended; the module's summary is below",
-        "asideTask": "— watching ended; the task's summary is below"
       }
     },
     "startedBy": {

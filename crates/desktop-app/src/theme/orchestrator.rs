@@ -86,10 +86,22 @@ pub enum OrchestratorText {
   /// 12 `text_secondary`, 1.3: the time and the link at the end of a line the app writes, and what a stop left open
   /// (`Hoj8n`, `bluWJ`, `l5cq8c` in `avDZO`).
   LineEnd,
+  /// 11.5 `text_secondary`, 1.3: a target's name on a Leads chip in the header, `text_primary` under the pointer
+  /// (`oVMRX`, `P16zSo` in `X93D8T`).
+  LeadsChip,
+  /// 11/600 `text_inverse`, 1.3: a Leads chip's tooltip's first line, *Webhooks v2 · module · since 09:14* (`f4DCkr`).
+  LeadsTipTitle,
+  /// 11 `text_inverse`, 1.45: the order in a Leads chip's tooltip (`X48YP`).
+  LeadsTipOrder,
+  /// 11 `text_inverse`, 1.3: the hint at a Leads chip's tooltip's foot (`j1E7E`), at [`LEADS_HINT_OPACITY`].
+  LeadsTipHint,
 }
 
+/// The hint at a Leads chip's tooltip's foot, *× stops watching* (`j1E7E` in `X93D8T`).
+pub const LEADS_HINT_OPACITY: f32 = 0.7;
+
 impl OrchestratorText {
-  pub const ALL: [Self; 30] = [
+  pub const ALL: [Self; 34] = [
     Self::HeaderTitle,
     Self::StartTitle,
     Self::Emphasis,
@@ -120,6 +132,10 @@ impl OrchestratorText {
     Self::CommandOrder,
     Self::LineAside,
     Self::LineEnd,
+    Self::LeadsChip,
+    Self::LeadsTipTitle,
+    Self::LeadsTipOrder,
+    Self::LeadsTipHint,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -158,6 +174,10 @@ impl OrchestratorText {
       Self::CommandOrder => "orchestrator_command_order",
       Self::LineAside => "orchestrator_line_aside",
       Self::LineEnd => "orchestrator_line_end",
+      Self::LeadsChip => "orchestrator_leads_chip",
+      Self::LeadsTipTitle => "orchestrator_leads_tip_title",
+      Self::LeadsTipOrder => "orchestrator_leads_tip_order",
+      Self::LeadsTipHint => "orchestrator_leads_tip_hint",
     }
   }
 
@@ -199,6 +219,10 @@ impl OrchestratorText {
       Self::CommandOrder => style(13.0, FontWeight::Normal, 1.55, 0.0, palette.text_primary),
       Self::LineAside => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
       Self::LineEnd => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
+      Self::LeadsChip => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
+      Self::LeadsTipTitle => style(11.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_inverse),
+      Self::LeadsTipOrder => style(11.0, FontWeight::Normal, 1.45, 0.0, palette.text_inverse),
+      Self::LeadsTipHint => style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_inverse),
     }
   }
 }
