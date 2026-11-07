@@ -5,7 +5,7 @@
 //! N new* (`Jump to latest` `tvvRD`: a 30 pill on `surface_raised` in a `border_strong` stroke, its 13 `arrow-down`
 //! and 12/500 words 6 apart, 12 from its sides, over a 0 4 16 shadow), floating centered over the chat's foot, *N*
 //! counting what arrived since; pressing it, or sending a message ([`Follow::follow_again`]), goes to the end and
-//! follows again, as does a scroll back down to the very end, by the wheel, the scrollbar or a key (ORC-892).
+//! follows again, as does a scroll of the person's back down to the very end, by the wheel or the scrollbar (ORC-892).
 
 use std::sync::Arc;
 
@@ -215,16 +215,18 @@ impl Follow {
       })
   }
 
-  /// A scroll of the person's that moved the chat: the card the chat opened at no longer holds it, a move up stops
-  /// following, and a move down to the end follows again, there at its very end. One that moved only a box inside a
-  /// row changes nothing. `false` when no wheel waited to be settled.
-  fn settle_wheel(&self) -> bool {
+  /// A scroll of the person's that moved the chat, by the wheel, a middle-button autoscroll or the scrollbar (whose
+  /// press or drag runs the list's scroll handler too, after it moved the chat): the card the chat opened at no
+  /// longer holds it, a move up stops following, and a move down to the end follows again, there at its very end.
+  /// One that moved only a box inside a row changes nothing. A scroll the app makes, to the end or to show the element
+  /// the keyboard focused, runs no handler and is not the person's.
+  fn settle_wheel(&self) {
     let Some(wheel) = self.wheel.lock().take() else {
-      return false;
+      return;
     };
     let now = self.scroll.scroll_y();
     if (now - wheel.from).abs() <= AT_END {
-      return true;
+      return;
     }
     *self.reveal.lock() = Reveal {
       key: None,
@@ -238,29 +240,6 @@ impl Follow {
       *self.left_at.lock() = (!at_end).then_some(wheel.arrived);
       self.following.set(at_end);
     }
-    true
-  }
-
-  /// A scroll that brought no wheel's event, a press or a drag on the scrollbar, settled from where the last layout
-  /// left the chat: at the very end the chat follows again, and up from the end while it followed it stops. The list
-  /// moves the scroll itself by at most `resized`, how much the content's height changed in the layout (it holds the
-  /// first row in view where it is, or its end at the end): only a move farther than that is the person's.
-  fn settle_moved(&self, resized: f32) {
-    if *self.to_end.lock() || self.reveal.lock().key.is_some() {
-      return;
-    }
-    let (now, laid, end) = (self.scroll.scroll_y(), *self.laid.lock(), self.scroll_end());
-    let moved = resized + AT_END;
-    let following = self.following.get_untracked();
-    let at_end = if !following && now > laid + moved && now >= end - AT_END {
-      true
-    } else if following && now < laid - moved && now < end - AT_END {
-      false
-    } else {
-      return;
-    };
-    *self.left_at.lock() = (!at_end).then(|| *self.seen.lock());
-    self.following.set(at_end);
   }
 
   /// How far the chat scrolls: to the end of its last row.
@@ -314,19 +293,16 @@ impl Follow {
   /// before the next frame: the list puts the row it anchored back where it was, which leaves the newest rows
   /// under the view, and rows it measures late (Markdown, cards) move the end further. A layout that did not grow
   /// the content ends that; a row the person opened never starts it, so the scroll stays as the person left it.
-  /// The person's scroll is settled first, a wheel's or one with no event ([`Follow::settle_moved`]).
+  /// The person's scroll is settled first ([`Follow::settle_wheel`]).
   fn keep_at_end(&self) {
-    let wheeled = self.settle_wheel();
+    self.settle_wheel();
     let height = self.scroll.content_height();
-    let (grew, resized) = {
+    let grew = {
       let mut last = self.height.lock();
-      let changed = (height > *last + AT_END, (height - *last).abs());
+      let grew = height > *last + AT_END;
       *last = height;
-      changed
+      grew
     };
-    if !wheeled {
-      self.settle_moved(resized);
-    }
     let mut to_end = self.to_end.lock();
     if !grew {
       *to_end = false;
