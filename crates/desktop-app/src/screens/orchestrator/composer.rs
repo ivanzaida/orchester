@@ -118,15 +118,11 @@ pub(super) struct PlanParts {
   pub(super) flip: Press,
 }
 
-/// The box, and why the files last given were not attached under it. While its chip holds `/watch-module` or
-/// `/watch-task` the field says what to type (`Hint` `NknmC` in 02 `c8pALl`).
+/// The box, and why the files last given were not attached under it. With the badges of `/watch-module`,
+/// `/watch-task` or `/unwatch` over the message the field stays the normal chat input (P2 `WbHSt` in `Proposal · watch
+/// composer v2` `LRg3R`, ORC-890).
 pub(super) fn composer(ctx: &mut Ctx, view: &View, mut composer: ComposerBox<'_>) -> Column {
   let not_set_up = composer.set_up.is_some();
-  match view.slash.held_command() {
-    Some(super::watch::MODULE) => composer.placeholder = ctx.t("orchestrator.watch.modules.placeholder"),
-    Some(super::watch::TASK) => composer.placeholder = ctx.t("orchestrator.watch.tasks.placeholder"),
-    _ => {}
-  }
   let (fill, stroke) = match (not_set_up, composer.focused.get()) {
     (true, _) => (PaletteColor::SurfacePanel, PaletteColor::Border),
     (false, true) => (PaletteColor::SurfaceInput, PaletteColor::BorderFocus),
@@ -151,7 +147,10 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, mut composer: ComposerBox<'_>
   );
   let end: Vec<Element> = match composer.set_up {
     Some(set_up) => vec![set_up],
-    None => vec![keys(ctx).into(), send(ctx, view, composer.sending)],
+    None => vec![
+      keys(ctx, view.slash.holds_choices()).into(),
+      send(ctx, view, composer.sending),
+    ],
   };
   let bar = Row::new()
     .id("orchestrator-composer-bar")
@@ -195,9 +194,12 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, mut composer: ComposerBox<'_>
     .with_children(composer.menus)
 }
 
-/// *Ctrl Enter* (*⌘ Enter* on macOS), the keys that send.
-fn keys(ctx: &Ctx) -> Text {
-  Text::new(&ctx.t(if cfg!(target_os = "macos") {
+/// The keys that send: *Ctrl Enter* (*⌘ Enter* on macOS), or *Enter* while a badge holds a choice (`vRdWz` in P2
+/// `WbHSt`).
+fn keys(ctx: &Ctx, enter_sends: bool) -> Text {
+  Text::new(&ctx.t(if enter_sends {
+    "orchestrator.keys.enter"
+  } else if cfg!(target_os = "macos") {
     "orchestrator.keys.cmdEnter"
   } else {
     "orchestrator.keys.ctrlEnter"
@@ -209,7 +211,8 @@ fn keys(ctx: &Ctx) -> Text {
 
 /// The message field, in 13 on 17 lines: it grows with its lines up to [`MAX_LINES`]; a paste of an image, files or
 /// long text attaches them instead of pasting words. Until the Orchestrator is set up its placeholder, saying so, is in
-/// `text_secondary`. Alt+P in it flips the *Plan only* switch as `flip` does, once it is set up.
+/// `text_secondary`. Alt+P in it flips the *Plan only* switch as `flip` does, once it is set up. Backspace at the start
+/// of the text removes the last badge.
 fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, (not_set_up, flip): (bool, Option<Press>)) -> Element {
   let theme = ctx.theme();
   let resolve = |color| {
@@ -224,6 +227,7 @@ fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, (not_set_up, flip):
     press: composer.sending.press(),
     stop: composer.stop.clone(),
     flip,
+    enter_sends: view.slash.holds_choices(),
     menu: view.menu.clone(),
     focused: composer.focused.clone(),
   };
@@ -250,7 +254,11 @@ fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, (not_set_up, flip):
     .on_blur(move || lost.set(false))
     .on_key_down(move |event: KeyboardEvent| {
       // The slash and @ menus and the chips take their keys first: Enter chooses while a menu is open, Esc closes it.
-      if !slash.key(&event) && !mention.key(&event) {
+      let at_start = event.key == "Backspace" && mention.caret_at_start();
+      if slash.key(&event) || (at_start && slash.backspace_at_start(&event)) {
+        return;
+      }
+      if !mention.key(&event) {
         keys.down(&event);
       }
     })
@@ -267,14 +275,17 @@ struct Keys {
   stop: Option<Press>,
   /// Flips the *Plan only* switch (Alt+P, ⌥P on macOS).
   flip: Option<Press>,
+  /// A badge holds a choice: Enter alone sends, with the badges (ORC-890).
+  enter_sends: bool,
   menu: Signal<bool>,
   focused: Signal<bool>,
 }
 
 impl Keys {
-  /// Ctrl+Enter (Cmd+Enter) sends; Enter alone adds a line, as the field does by itself. Esc closes the send menu,
-  /// else stops the answer under way. Alt+P flips the *Plan only* switch: the design's Shift Tab moves the focus back
-  /// to the replies' links here, so the person chose Alt+P instead (ORC-646).
+  /// Ctrl+Enter (Cmd+Enter) sends; Enter alone adds a line, as the field does by itself, except while a badge holds a
+  /// choice: then Enter sends and Shift Enter adds the line. Esc closes the send menu, else stops the answer under way.
+  /// Alt+P flips the *Plan only* switch: the design's Shift Tab moves the focus back to the replies' links here, so the
+  /// person chose Alt+P instead (ORC-646).
   fn down(&self, event: &KeyboardEvent) {
     if event.key == "Escape" {
       if event.default_prevented() || !self.focused.get_untracked() {
@@ -302,7 +313,8 @@ impl Keys {
       }
       return;
     }
-    if event.key != "Enter" || !(event.ctrl || event.meta) || event.composing {
+    let plain_enter = self.enter_sends && !event.shift && !event.alt;
+    if event.key != "Enter" || !(event.ctrl || event.meta || plain_enter) || event.composing {
       return;
     }
     event.prevent_default();

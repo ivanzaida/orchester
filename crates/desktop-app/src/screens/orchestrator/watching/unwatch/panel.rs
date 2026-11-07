@@ -26,7 +26,7 @@ use orchester_workspace::{
 
 use super::super::answer::{since, target_name};
 use crate::{
-  screens::orchestrator::watch::panel::{apply_key, keys, line, matched_label},
+  screens::orchestrator::watch::panel::{keys, line, matched_label},
   theme::{ExtraColor, ExtraSpacing, IconSize, SlashText},
   ui::{
     icon::{Icon, icon},
@@ -259,17 +259,13 @@ fn open_work(ctx: &Ctx, watched: &WatchedSubscription) -> (Arc<str>, bool) {
   (joined, warn)
 }
 
-/// The keys: *↑ ↓ Move*, *Enter Add*, *Ctrl Enter Stop*, *Esc Close*, and *Type to filter* at their end.
+/// The keys: *↑ ↓ Move*, *Enter Add*, *Esc Close*, and *Type to filter* at their end; the composer's send stops what
+/// the badge holds (ORC-890).
 fn footer(ctx: &Ctx, id: &str) -> Element {
   keys(
     ctx,
     (&format!("{id}-unwatch"), &format!("{id}-unwatch-key")),
-    &[
-      ("move", "move"),
-      ("enter", "add"),
-      (apply_key(), "stop"),
-      ("esc", "close"),
-    ],
+    &[("move", "move"), ("enter", "add"), ("esc", "close")],
     Some(ctx.t("orchestrator.watch.unwatch.filter")),
   )
 }

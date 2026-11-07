@@ -1,11 +1,11 @@
-//! `/unwatch` (ORC-774, `Parts · /unwatch` `NtsXc` in `Orchestrator watch · redesign`): *Stop watching* in the slash
-//! menu, offered while the conversation leads something. Chosen, it becomes the composer's command chip and opens its
-//! picker ([`panel`]), which lists only what this conversation watches, each with what is still open there, then *All
-//! of them*. Enter adds the focused row as a chip; Ctrl Enter (Cmd Enter) stops the chips' subscriptions at once
-//! (`orchester_workspace::orchestrator::watch::stop_in`, kept as the person's `/unwatch` with its stop line), off the
-//! UI thread and with no agent turn; *All of them* among the chips stops everything here. It cancels and pauses
-//! nothing. The words typed after the chips only filter the picker. The picker follows what the screen last read the
-//! conversation to lead.
+//! `/unwatch` (ORC-774, `Parts · /unwatch` `NtsXc` in `Orchestrator watch · redesign`; its badge P5 `ijspu`, ORC-890):
+//! *Stop watching* in the slash menu, offered while the conversation leads something. Chosen, it becomes the
+//! composer's *Stop watching* badge and opens its picker ([`panel`]), which lists only what this conversation watches,
+//! each with what is still open there, then *All of them*. Enter adds the focused row to the badge; the composer's
+//! send stops the badge's subscriptions (`orchester_workspace::orchestrator::watch::stop_in`, kept as the person's
+//! `/unwatch` with its stop line), off the UI thread and with no turn of its own; *All of them* in the badge stops
+//! everything here. It cancels and pauses nothing. A message written with it is optional and goes as any other. The
+//! picker follows what the screen last read the conversation to lead.
 
 mod panel;
 
@@ -25,13 +25,13 @@ use crate::{
   ui::{
     icon::Icon,
     message::message_text,
-    slash::{Applied, ArgumentPicker, Asked, Choice, Does, Offer, SlashCommand, Taking, matched},
+    slash::{Applied, ArgumentPicker, Asked, Badge, Choice, Does, Offer, SlashCommand, Taking, matched},
   },
 };
 
-/// The command's name, which its chip shows after a `/`.
+/// The command's name, which its picker's elements are named after.
 const COMMAND: &str = "unwatch";
-/// The keys of the picker's chips: *All of them*, the two targets that are no module or task, and the prefixes of a
+/// The keys of the picker's choices: *All of them*, the two targets that are no module or task, and the prefixes of a
 /// module's and a task's id.
 const ALL: &str = "all";
 const WITHOUT_MODULE: &str = "without-module";
@@ -64,12 +64,16 @@ impl WhatIWatch {
           held: self.held.clone(),
         }),
         apply: Arc::new(move |applied: Applied| this.unwatch(root.clone(), &applied)),
+        badge: Badge {
+          icon: Icon::EyeOff,
+          verb: ctx.t("composer.slash.command.unwatch.badge"),
+        },
       })),
     }
   }
 
-  /// Ctrl Enter on the chips: the conversation shown stops watching them, or everything once *All of them* is among
-  /// them, by the person's own keys only ([`WhatIWatch::stop_by_person`]); whether it took them.
+  /// The composer's send with the badge: the conversation shown stops watching what it holds, or everything once *All
+  /// of them* is among them, by the person's own keys only ([`WhatIWatch::stop_by_person`]); whether it took them.
   fn unwatch(&self, root: PathBuf, applied: &Applied) -> bool {
     let Held(Some((chat, _))) = self.held.get_untracked() else {
       return false;

@@ -21,6 +21,7 @@ use crate::ui::slash::SlashField;
 #[derive(Clone)]
 struct Props {
   id: &'static str,
+  command: &'static str,
   field: SlashField,
   anchor: ElementRef,
 }
@@ -28,23 +29,24 @@ struct Props {
 /// Compared by what it shows; the anchor is the composer's for as long as it is shown.
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
-    self.id == other.id && self.field == other.field
+    self.id == other.id && self.command == other.command && self.field == other.field
   }
 }
 
 impl DevtoolsInspectable for Props {}
 
-/// The picker of the command `command` that the chip of the composer `id` holds, over its box `anchor`; one component
-/// for each command, so each picker keeps what it reads.
+/// The picker of the command `command` whose badge the composer `id` holds, over its box `anchor`; one component for
+/// each command, so each picker keeps what it reads.
 pub(in crate::ui::slash) fn picker(
   ctx: &mut Ctx,
   (id, field, anchor): (&'static str, &SlashField, &ElementRef),
-  command: &str,
+  command: &'static str,
 ) -> Element {
   ctx.mount_keyed::<Picker>(
     &format!("{id}-argument-{command}"),
     Props {
       id,
+      command,
       field: field.clone(),
       anchor: anchor.clone(),
     },
@@ -72,11 +74,16 @@ impl Component for Picker {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
     let field = &props.field;
-    let choices = field.argument.get().map(|held| held.choices).unwrap_or_default();
+    let choices = field.argument.with(|held| {
+      held
+        .iter()
+        .find(|badge| badge.command == props.command)
+        .map(|badge| badge.choices.clone())
+        .unwrap_or_default()
+    });
     let filter = field.draft.get();
     let focus = field.choice_focus.get();
-    let picker = field.taking.lock().as_ref().map(|taking| taking.picker.clone());
-    let Some(picker) = picker else {
+    let Some(picker) = field.taking_of(props.command).map(|taking| taking.picker) else {
       *field.offered_choices.lock() = None;
       return Element::new();
     };

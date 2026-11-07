@@ -1,8 +1,9 @@
-//! `/watch-task` (ORC-773, `03 · Choosing tasks` `mQdxa` in `Orchestrator watch · redesign`): its picker lists the
-//! project's tasks with their module and status, who leads each (*Comes here via …* for one this conversation watches
-//! through its module, *Led in «…» ↗* for one another conversation leads, which opens it), a Done task faded with
-//! *nothing to watch*, and the keys; the words typed match a task's key or title; Enter makes the focused task a chip
-//! named by its key; Ctrl Enter has the conversation watch the chips with the words after them as their order.
+//! `/watch-task` (ORC-773, `03 · Choosing tasks` `mQdxa` in `Orchestrator watch · redesign`; the badge ORC-890, P4
+//! `nFeQs`): its picker lists the project's tasks with their module and status, who leads each (*Comes here via …* for
+//! one this conversation watches through its module, *Led in «…» ↗* for one another conversation leads, which opens
+//! it), a Done task faded with *nothing to watch*, and the keys; the words typed match a task's key or title; Enter
+//! adds the focused task to the *Watch* badge by its key; once the picker is closed Enter sends the message, and the
+//! conversation watches the badge's tasks with it as their order.
 
 use orchester_app::routes::{OrchestratorChat, ProjectPage, Route};
 use orchester_core::{
@@ -16,12 +17,12 @@ use orchester_core::{
 use super::{
   harness::{Orchestrator, Setup},
   history::kept,
-  watch_module::{module, task},
+  watch_module::{badge_words, messages, module, task},
 };
 
 const INPUT: &str = "orchestrator-input";
 const PICKER: &str = "orchestrator-composer-watch-task-picker";
-const CHIP: &str = "orchestrator-composer-command-chip";
+const BADGE: &str = "orchestrator-composer-badge-watch-task";
 
 /// Kontur's tasks: two in Webhooks v2, which this conversation watches; one in Billing, which *Billing and invoices*
 /// watches; a Done one in Mobile release; and *Shared rate limiter* without a module. The screen shows the
@@ -87,8 +88,8 @@ fn row(screen: &Orchestrator, id: TaskId) -> String {
   format!("orchestrator-composer-watch-task-{}", key(screen, id))
 }
 
-/// *Watch tasks* chosen in the slash menu, the second command `/watch` matches (↓ from *Watch modules*): the command
-/// chip and its picker.
+/// *Watch tasks* chosen in the slash menu, the second command `/watch` matches (↓ from *Watch modules*): the
+/// command's badge and its picker.
 fn open_picker(screen: &mut Orchestrator) {
   screen
     .window
@@ -106,7 +107,7 @@ fn open_picker(screen: &mut Orchestrator) {
     screen.text(command).contains("Enter")
   });
   screen.key(("Enter", "Enter"), false);
-  screen.until("the picker", |screen| screen.exists(PICKER) && screen.exists(CHIP));
+  screen.until("the picker", |screen| screen.exists(PICKER) && screen.exists(BADGE));
 }
 
 #[test]
@@ -137,12 +138,11 @@ fn orchestrator_watch_task_picker_lists_tasks_their_status_and_who_leads_them() 
     "Move",
     "Add",
     "Remove the last",
-    "Ctrl Enter",
-    "Watch",
     "Close",
   ] {
     assert!(shown.contains(words), "{words}: {shown}");
   }
+  assert!(!shown.contains("Ctrl Enter"), "no Ctrl Enter: {shown}");
   let done = row(&screen, screenshots);
   assert!(
     !screen.text(&done).contains("Enter"),
@@ -165,9 +165,11 @@ fn orchestrator_watch_task_picker_lists_tasks_their_status_and_who_leads_them() 
   screen.until("Shared rate limiter added", |screen| {
     screen.text(&focused).contains("Added")
   });
-  assert!(
-    screen.exists(&format!("orchestrator-composer-choice-{limiter}")),
-    "the task is a chip"
+  let limiter_key = key(&screen, limiter);
+  assert_eq!(
+    badge_words(&mut screen, BADGE),
+    format!("Watch · {limiter_key}"),
+    "the task joins the badge by its key"
   );
 
   screen.click(&format!("{}-led-in", row(&screen, invoices)));
@@ -181,7 +183,7 @@ fn orchestrator_watch_task_picker_lists_tasks_their_status_and_who_leads_them() 
 }
 
 #[test]
-fn orchestrator_watch_task_matches_key_or_title_and_ctrl_enter_watches_with_the_order() {
+fn orchestrator_watch_task_matches_key_or_title_and_enter_sends_the_message_with_the_watch() {
   let Kontur {
     mut screen,
     here,
@@ -201,14 +203,12 @@ fn orchestrator_watch_task_matches_key_or_title_and_ctrl_enter_watches_with_the_
     screen.exists(&limiter_row) && !screen.exists(&retry_row)
   });
   screen.key(("Enter", "Enter"), false);
-  let chip = format!("orchestrator-composer-choice-{limiter}");
-  screen.until("the chip", |screen| screen.exists(&chip));
-  assert!(
-    screen.text(&chip).contains(&limiter_key),
-    "the chip names the task by its key"
-  );
+  let words = format!("Watch · {limiter_key}");
+  screen.until("the badge", |screen| badge_words(screen, BADGE) == words);
+  screen.key(("Escape", "Escape"), false);
+  screen.until("the picker closed", |screen| !screen.exists(PICKER));
   screen.set(INPUT, "Ask before merging.");
-  screen.key(("Enter", "Enter"), true);
+  screen.key(("Enter", "Enter"), false);
   screen.until("the subscription", |screen| {
     screen
       .db()
@@ -221,5 +221,8 @@ fn orchestrator_watch_task_matches_key_or_title_and_ctrl_enter_watches_with_the_
   let led = subscriptions.of(WatchTarget::Task(limiter)).expect("led");
   assert_eq!(led.chat(), here, "this conversation leads it");
   assert_eq!(led.order(), Some("Ask before merging."));
-  screen.until("the chips to go", |screen| !screen.exists(CHIP));
+  screen.until("the message sent", |screen| {
+    messages(screen, here).iter().any(|text| text == "Ask before merging.")
+  });
+  screen.until("the badge to go", |screen| !screen.exists(BADGE));
 }

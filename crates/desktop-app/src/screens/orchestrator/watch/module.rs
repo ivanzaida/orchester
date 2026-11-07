@@ -1,10 +1,11 @@
-//! `/watch-module` (ORC-772, `02 · Choosing modules` `c8pALl` in `Orchestrator watch · redesign`): chosen in the slash
-//! menu it becomes the composer's command chip and opens the picker of the project's modules ([`super::picker`]); the
-//! modules chosen there become chips, and Ctrl Enter (Cmd Enter) has the conversation watch them with the words after
-//! the chips as their order (`orchester_workspace::orchestrator::watch::watch_in`), off the UI thread and with no agent
-//! turn. A new conversation is kept with its command, and the screen shows it. What another conversation leads is
-//! kept nowhere: the conversation's line names it, and its card offers it. A command that applied nothing says why
-//! over the composer. `/watch-task` ([`super::task`]) applies its chips the same way.
+//! `/watch-module` (ORC-772, `02 · Choosing modules` `c8pALl` in `Orchestrator watch · redesign`; its badge ORC-890):
+//! chosen in the slash menu it becomes the composer's *Watch* badge and opens the picker of the project's modules
+//! ([`super::picker`]); the modules chosen there join the badge, and the composer's send has the conversation the
+//! message goes to watch them with the message's words as their order
+//! (`orchester_workspace::orchestrator::watch::watch_in`), off the UI thread and with no turn of its own, before the
+//! message is sent. A new conversation is kept with its command, and the screen shows it. What another conversation
+//! leads is kept nowhere: the conversation's line names it, and its card offers it. A command that applied nothing
+//! says why over the composer. `/watch-task` ([`super::task`]) applies its badge the same way.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -39,7 +40,7 @@ use crate::{
     icon::Icon,
     message::message_text,
     notice::{Notice, NoticeTone},
-    slash::{Applied, Apply, Choice, Does, SlashCommand, Taking},
+    slash::{Applied, Apply, Badge, Choice, Does, SlashCommand, Taking},
   },
 };
 
@@ -118,7 +119,7 @@ pub(in crate::screens::orchestrator) fn follow(ctx: &mut Ctx, view: &View, proje
   });
 }
 
-/// *Watch modules* in the slash menu: it takes the modules chosen in its picker.
+/// *Watch modules* in the slash menu: it takes the modules chosen in its picker, and its badge says *Watch*.
 pub(in crate::screens::orchestrator) fn module_command(ctx: &Ctx, view: &View, project: &ShownProject) -> SlashCommand {
   let picker = ModulePicker::new(project, view.of.clone());
   SlashCommand {
@@ -129,21 +130,26 @@ pub(in crate::screens::orchestrator) fn module_command(ctx: &Ctx, view: &View, p
     does: Some(Does::Take(Taking {
       picker: Arc::new(picker),
       apply: apply(view, project.open.repo_root.clone(), named_module),
+      badge: Badge {
+        icon: Icon::Eye,
+        verb: ctx.t("composer.slash.command.watchModule.badge"),
+      },
     })),
   }
 }
 
-/// The target a chip of the module picker names, a module by its name.
+/// The target a choice of the module picker names, a module by its name.
 fn named_module(choice: &Choice) -> Option<NamedTarget> {
   let target = target_of(&choice.key)?;
   let name = matches!(target, WatchTarget::Module(_)).then(|| choice.label.to_string());
   Some(NamedTarget { target, name })
 }
 
-/// Ctrl Enter on the chips: the conversation shown, or a new one when the screen shows none yet, watches the targets
-/// the chips name (`named`) with the words after them as their order. Only a person's keys apply it: the order is kept
-/// as the person's own words, which the agent follows, and no subscription records who asked for it, so synthetic
-/// input (an MCP client's) is refused with a notice, and the chips and the order stay.
+/// The composer's send with the badge: the conversation the message goes to (the one shown, or the new one it
+/// starts) watches the targets the badge holds (`named`), with the message's words as their order. Only a person's
+/// keys apply it: the order is kept as the person's own words, which the agent follows, and no subscription records
+/// who asked for it, so synthetic input (an MCP client's) is refused with a notice, and the badge and the message
+/// stay.
 pub(super) fn apply(view: &View, root: PathBuf, named: fn(&Choice) -> Option<NamedTarget>) -> Apply {
   let (of, action) = (view.of.clone(), view.watching.clone());
   Arc::new(move |applied: Applied| {
@@ -157,7 +163,10 @@ pub(super) fn apply(view: &View, root: PathBuf, named: fn(&Choice) -> Option<Nam
     let now = Timestamp::now();
     let (chat, new) = match of.get_untracked() {
       Some(Conversation::Chat(id)) => (Chat::named(id, "", now), false),
-      Some(Conversation::New) | None => (Chat::named(ChatId::generate(), &title(&applied), now), true),
+      Some(Conversation::New) | None => {
+        let id = applied.chat.unwrap_or_else(ChatId::generate);
+        (Chat::named(id, &title(&applied), now), true)
+      }
     };
     action.run(Command {
       root: root.clone(),

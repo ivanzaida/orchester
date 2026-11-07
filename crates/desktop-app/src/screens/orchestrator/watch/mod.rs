@@ -43,8 +43,8 @@ use orchester_workspace::display;
 pub(super) use self::{
   ended::line as ended_line,
   facts::WatchFacts,
-  module::{MODULE, WatchAction, follow, module_command, problem, watch_action},
-  task::{TASK, task_command},
+  module::{WatchAction, follow, module_command, problem, watch_action},
+  task::task_command,
 };
 use super::timeline::TurnEnv;
 use crate::{

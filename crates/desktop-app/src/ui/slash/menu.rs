@@ -148,16 +148,18 @@ impl Component for SlashMenu {
     if typed.is_none() && field.closed.get() {
       field.closed.set(false);
     }
-    // While the chip holds a command with an argument, the draft is that command's and its picker shows instead.
-    let held = field.argument.get();
+    // While a badge's picker is open, the draft filters it and the picker shows instead.
+    let picking = field
+      .argument
+      .with(|held| held.iter().find(|badge| badge.picking).map(|badge| badge.command));
     let focused = field.focused.get();
-    let open = typed.is_some() && held.is_none() && focused && !field.closed.get();
+    let open = typed.is_some() && picking.is_none() && focused && !field.closed.get();
     let read = skills::read(ctx, &props.skills, open);
     let (Some(typed), true) = (typed, open) else {
       *field.shown.lock() = None;
       *self.last.lock() = None;
-      return match held {
-        Some(held) if held.picking && focused => argument::picker(ctx, (props.id, field, &props.anchor), held.command),
+      return match picking {
+        Some(command) if focused => argument::picker(ctx, (props.id, field, &props.anchor), command),
         _ => {
           field.forget_choices();
           Element::new()
@@ -236,12 +238,23 @@ impl SlashMenu {
   }
 }
 
-/// The rows of `faces` whose name matches `typed`, with the matched letters.
+/// The rows of `faces` that match `typed` ([`face_matched`]), with the matched letters.
 fn matching<'a>(faces: &'a [Face], typed: &str) -> Vec<Matched<'a>> {
   faces
     .iter()
-    .filter_map(|face| matched(&face.label, typed).map(|letters| (face, letters)))
+    .filter_map(|face| face_matched(face, typed).map(|letters| (face, letters)))
     .collect()
+}
+
+/// Where `typed` is in the row of `face`: in its label, whose letters show in bold; or in a command's own name, which
+/// the person types after the `/` (`/unwatch` for *Stop watching*), with no letters in bold.
+fn face_matched(face: &Face, typed: &str) -> Option<Range<usize>> {
+  matched(&face.label, typed).or_else(|| {
+    (!face.skill)
+      .then(|| matched(&face.name, typed))
+      .flatten()
+      .map(|_| 0..0)
+  })
 }
 
 /// The skills `read` found as rows, faded with why while the agent cannot take one; the field offers them to choose.
@@ -315,7 +328,7 @@ fn skills_section(
     None if filtered => count(ctx, skills.len(), section.total),
     None => ctx.t_args("composer.slash.published", [("count", section.total.to_string())]),
   };
-  let shown_commands = props.faces.iter().any(|face| matched(&face.label, typed).is_some());
+  let shown_commands = props.faces.iter().any(|face| face_matched(face, typed).is_some());
   let mut content: Vec<Element> = shown_commands.then(|| separator(ctx)).into_iter().collect();
   content.push(heading(ctx, ("skills", "composer.slash.skills"), Some(end)));
   if skills.is_empty() {

@@ -3,11 +3,11 @@
 //! the rules in `06d` `lXQi1`), shared by both composers: a `/` as the draft's first character opens the menu of the
 //! chat's own commands and the project's published skills ([`menu`]), and what is typed after it filters both by name.
 //! The arrow keys move through the rows that can be chosen, Enter or a click chooses one, which clears the typed `/`:
-//! a command runs, or, when it takes an argument, becomes the composer's command chip and opens its picker
-//! ([`argument`], ORC-771); a skill becomes the composer's chip ([`with_chips`]) in place of the one it held. Esc
-//! closes the menu and keeps the text. A row that cannot be chosen now stays in its place, faded, and says why. With
-//! nothing that matches, Enter sends the text as typed. Once a space or a new line follows the `/`, or anywhere later
-//! in the text, a `/` is just text; while the chip holds a command, the draft is that command's.
+//! a command runs, or, when it takes an argument, becomes a badge pinned at the top of the composer and opens its
+//! picker ([`argument`], ORC-771, ORC-890); a skill becomes the composer's chip ([`with_chips`]) in place of the one it
+//! held. Esc closes the menu and keeps the text. A row that cannot be chosen now stays in its place, faded, and says
+//! why. With nothing that matches, Enter sends the text as typed. Once a space or a new line follows the `/`, or
+//! anywhere later in the text, a `/` is just text; while a badge's picker is open, the words typed filter it.
 
 mod argument;
 mod chip;
@@ -27,7 +27,7 @@ use parking_lot::Mutex;
 
 use self::argument::Arguing;
 pub use self::{
-  argument::{Applied, Apply, ArgumentPicker, Asked, Choice, Offer, Taking},
+  argument::{Applied, Apply, ArgumentPicker, Asked, Badge, Choice, Offer, Taking},
   chip::{SkillReach, plan_held, sent_chip, sent_command_chip, sent_skill_chip, with_chips},
   menu::{SlashMenuProps, menu},
   skills::SkillsOffer,
@@ -81,9 +81,9 @@ struct Offered {
   send: Option<Run>,
 }
 
-/// A composer's slash menu: its draft, whether the field has the focus, the skill its chip holds, the command with an
-/// argument it holds and the menu's and the picker's state. Made once with the composer's component, so the menu keeps
-/// its state while the draft changes.
+/// A composer's slash menu: its draft, whether the field has the focus, the skill its chip holds, the badges of the
+/// commands with an argument it holds and the menu's and the picker's state. Made once with the composer's component,
+/// so the menu keeps its state while the draft changes.
 #[derive(Clone)]
 pub struct SlashField {
   draft: Signal<String>,
@@ -97,10 +97,10 @@ pub struct SlashField {
   closed: Signal<bool>,
   offered: Arc<Mutex<Offered>>,
   shown: Arc<Mutex<Option<Shown>>>,
-  /// The command with an argument the composer's chip holds, and its choices.
-  argument: Signal<Option<Arguing>>,
-  /// What that command's picker offers and what applying it does.
-  taking: Arc<Mutex<Option<Taking>>>,
+  /// The badges of the commands with an argument the composer holds, in the order they were chosen.
+  argument: Signal<Vec<Arguing>>,
+  /// What each held command's picker offers and what applying it does, by its name.
+  taking: Arc<Mutex<Vec<(&'static str, Taking)>>>,
   /// The picker's row with the keyboard's focus, and the rows it shows now.
   choice_focus: Signal<Option<usize>>,
   offered_choices: Arc<Mutex<Option<argument::Offered>>>,
@@ -128,21 +128,21 @@ impl SlashField {
       closed: ctx.signal(false),
       offered: Arc::default(),
       shown: Arc::default(),
-      argument: ctx.signal(None),
+      argument: ctx.signal(Vec::new()),
       taking: Arc::default(),
       choice_focus: ctx.signal(None),
       offered_choices: Arc::default(),
     }
   }
 
-  /// Takes `event` when the open menu, or the command the chip holds, has a use for it, before the field's own keys:
+  /// Takes `event` when the open menu, or a badge's open picker, has a use for it, before the field's own keys:
   /// whether it did.
   pub fn key(&self, event: &KeyboardEvent) -> bool {
     if event.composing || event.default_prevented() || !self.focused.get_untracked() {
       return false;
     }
-    if let Some(held) = self.argument.get_untracked() {
-      return self.argument_key(event, &held);
+    if self.argument_key(event) {
+      return true;
     }
     let Some(shown) = self.shown.lock().clone() else {
       return false;
@@ -201,8 +201,8 @@ impl SlashField {
             Some(match does {
               Does::Run(run) => run,
               Does::Take(taking) => {
-                let (field, held) = (self.clone(), (command.name, command.icon));
-                Arc::new(move || field.hold(held, taking.clone())) as Run
+                let (field, name) = (self.clone(), command.name);
+                Arc::new(move || field.hold(name, taking.clone())) as Run
               }
             })
           }),
