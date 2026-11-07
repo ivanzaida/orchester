@@ -49,12 +49,7 @@ fn resolve(run: u32, step: Option<&str>) -> Value {
 
 /// The code of a refusal of the chat's tool.
 fn code(error: &ToolError) -> &str {
-  match error {
-    ToolError::Refused { code, .. } => code,
-    ToolError::InvalidArguments(_) => "invalid_arguments",
-    ToolError::NotFound { .. } => "not_found",
-    ToolError::AmbiguousProject(_) => "ambiguous_project",
-  }
+  error.code()
 }
 
 /// The chat merges run `number` of `scope`'s project, as the person asked; the merge stops at conflicts.

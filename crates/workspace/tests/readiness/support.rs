@@ -54,6 +54,27 @@ impl SecretVault for MemoryVault {
   }
 }
 
+/// A keychain that is locked: it cannot say whether it has any value.
+pub struct LockedVault;
+
+impl SecretVault for LockedVault {
+  fn store(&self, _: &VaultKey, _: &SecretValue) -> Result<(), VaultError> {
+    Err(VaultError::AccessDenied("locked".to_owned()))
+  }
+
+  fn read(&self, _: &VaultKey) -> Result<SecretValue, VaultError> {
+    Err(VaultError::AccessDenied("locked".to_owned()))
+  }
+
+  fn exists(&self, _: &VaultKey) -> Result<bool, VaultError> {
+    Err(VaultError::AccessDenied("locked".to_owned()))
+  }
+
+  fn delete(&self, _: &VaultKey) -> Result<(), VaultError> {
+    Err(VaultError::AccessDenied("locked".to_owned()))
+  }
+}
+
 pub fn name(text: &str) -> Name {
   Name::new(text).expect("valid name")
 }
@@ -413,6 +434,14 @@ pub fn program(variables: &[&str]) -> Value {
 pub fn remote(secret: &str) -> Value {
   json!({"name": "issues", "launch": {
     "kind": "remote", "url": "https://mcp.example.org/x", "secret_headers": [{"header": "X-Key", "secret": secret}]
+  }})
+}
+
+/// A remote server with two secret headers, which an agent's CLI cannot be given here.
+pub fn remote_two_headers(first: &str, second: &str) -> Value {
+  json!({"name": "issues", "launch": {
+    "kind": "remote", "url": "https://mcp.example.org/x",
+    "secret_headers": [{"header": "X-Key", "secret": first}, {"header": "X-Org", "secret": second}]
   }})
 }
 

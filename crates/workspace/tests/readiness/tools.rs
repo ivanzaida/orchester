@@ -92,7 +92,7 @@ fn readiness_a_keychain_that_cannot_say_leaves_the_tool_undecided() {
 
 /// A keychain that answers whether a value is there but refuses to hand any value over, as one that asks the person
 /// before each read.
-struct AsksBeforeReading(Result<bool, VaultError>);
+pub struct AsksBeforeReading(pub Result<bool, VaultError>);
 
 impl SecretVault for AsksBeforeReading {
   fn store(&self, _: &VaultKey, _: &SecretValue) -> Result<(), VaultError> {

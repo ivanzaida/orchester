@@ -58,7 +58,24 @@ what is local by nature: connections, program paths, secret values.
   what a run would: the value of each secret a tool uses, and the program of each MCP server a profile chooses that
   is turned on, looked up as a run does (the project's `PATH`, else Orchester's search path, or the project; a fixed
   file outside the repository). A run whose pipeline is not ready here does not start: it refuses with the missing
-  parts listed (`not_ready_here`; not built yet, ORC-826 and ORC-827 are in progress). Nothing is ever dropped silently.
+  parts listed (`not_ready_here`). Nothing is ever dropped silently.
+- **A team start.** A team run takes its inputs from the team versions plus what this computer filled in: the
+  connection picked for each profile (else the only one of its CLI), the program path of each team MCP server that runs
+  one, which servers are on, and the secrets' values by name. Each team MCP server comes from the version the
+  execution bundle pins, not from the cached one. Readiness is read first, from the cached versions, before the team
+  server is asked for anything: a pipeline that is not ready takes no claim, makes no work and counts no attempt, and
+  `run_task` answers `not_ready_here` with the parts typed (a kind with the ids and names it is about; a path only
+  for the person's own program whose file is gone; never a value), each with a message that says the fix. The
+  pinned versions are checked again once the bundle is read, since the team server may pin newer ones; a start they
+  do not fit settles failed with the same parts, and its first line says that the server made the work and the claim
+  is still held (nothing ran). A team secret counts as set only when its row is there and the keychain still holds
+  its value, asked without reading the value or prompting; a keychain that cannot say is a part of its own
+  (`secret_unreadable`), not a value assumed set. The CLI is given one header per remote server, so a remote server
+  with more than one secret header is a part (`mcp_unsupported`) of the server and of every profile that chooses it,
+  until the app can send several. The run keeps the program paths and ids; the values are read by name in the
+  keychain when an agent starts (a header's value is its prefix followed by the secret's value; a variable takes the
+  value of the secret of its own name). A secret whose value goes between the check and that read leaves its server
+  out of that invocation, and the run's activity says why: the last resort, not the plan.
 
 ## Edge cases
 

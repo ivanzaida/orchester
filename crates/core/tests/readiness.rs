@@ -10,8 +10,8 @@ use orchester_core::{
   resource::{ModelId, PromptText, ProviderSettings, TeamAgentProfile, TeamMcpServer},
   secret::SecretName,
   sharing::{
-    ConnectionProblem, Here, LocalProgramProblem, McpNeed, Missing, Needs, NeedsError, ProgramProblem, Readiness,
-    readiness,
+    ConnectionProblem, Here, LocalProgramProblem, McpNeed, McpUnsupported, Missing, Needs, NeedsError, ProgramProblem,
+    Readiness, readiness,
   },
 };
 use serde_json::json;
@@ -478,4 +478,89 @@ fn a_local_project_uses_the_same_rule_with_its_connection_as_the_pick() {
     readiness(&needs, &deleted).missing(),
     [connection_part(id, CLAUDE, ConnectionProblem::NoneOfKind)]
   );
+}
+
+#[test]
+fn readiness_a_profile_as_a_bundle_pins_it_asks_its_cli_and_the_servers_it_names() {
+  let (profile_id, program, remote) = (ResourceId::generate(), ResourceId::generate(), ResourceId::generate());
+  let servers = [
+    program_server(program, &["API_TOKEN"]),
+    remote_server(remote, &["API_KEY"]),
+  ];
+  let pinned = Needs::pinned_profile(
+    profile_id,
+    (CODEX, &[program, remote]),
+    &[servers[0].clone(), servers[1].clone()],
+  )
+  .expect("every named server is pinned");
+
+  let missing = readiness(&pinned, &Here::nothing());
+  assert_eq!(
+    missing.missing(),
+    [
+      connection_part(profile_id, CODEX, ConnectionProblem::NoneOfKind),
+      Missing::McpOff { server: program },
+      Missing::McpOff { server: remote },
+      Missing::McpProgram {
+        server: program,
+        problem: ProgramProblem::NotSet
+      },
+      Missing::Secret {
+        name: secret("API_TOKEN")
+      },
+      Missing::Secret {
+        name: secret("API_KEY")
+      },
+    ]
+  );
+
+  let one = ConnectionId::generate();
+  let here = Here::nothing()
+    .with_connection(one, CODEX)
+    .with_mcp_on(program)
+    .with_mcp_on(remote)
+    .with_program(program, PathBuf::from("/opt/docs-mcp"), true)
+    .with_secret(secret("API_TOKEN"))
+    .with_secret(secret("API_KEY"));
+  assert_eq!(readiness(&pinned, &here), Readiness::READY);
+
+  assert_eq!(
+    Needs::pinned_profile(profile_id, (CODEX, &[program, remote]), &[servers[0].clone()]),
+    Err(NeedsError::McpServerNotGiven(remote)),
+    "a server the bundle does not pin is not assumed to need nothing"
+  );
+}
+
+#[test]
+fn readiness_missing_parts_are_kept_as_names_and_ids_and_read_back() {
+  let parts = vec![
+    connection_part(ResourceId::generate(), CLAUDE, ConnectionProblem::PickNeeded),
+    Missing::McpOff {
+      server: ResourceId::generate(),
+    },
+    Missing::McpProgram {
+      server: ResourceId::generate(),
+      problem: ProgramProblem::FileGone(PathBuf::from("/opt/gone")),
+    },
+    Missing::McpUnsupported {
+      server: ResourceId::generate(),
+      why: McpUnsupported::MoreThanOneSecretHeader,
+    },
+    Missing::Secret {
+      name: secret("API_KEY"),
+    },
+    Missing::SecretUnreadable { name: secret("DB_URL") },
+    Missing::LocalMcpProgram {
+      server: ConnectionId::generate(),
+      name: server_name("files"),
+      problem: LocalProgramProblem::Moved,
+    },
+    Missing::LocalSecret {
+      secret: SecretId::generate(),
+      name: secret("DEPLOY_KEY"),
+    },
+  ];
+  let text = serde_json::to_string(&parts).expect("serializes");
+  let read: Vec<Missing> = serde_json::from_str(&text).expect("reads");
+  assert_eq!(read, parts);
 }
