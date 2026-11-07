@@ -1,8 +1,11 @@
 # Team configuration: what the team server owns and what each computer fills in
 
-Status: **model and open questions decided** (2026-11-06); not built yet. It replaces the patches made on 2026-11-05/06
-(rows 74 and 80 of `docs/architecture/server.md`, slug clashes, hidden local resources, reference bindings) with one
-model. Nothing here is built yet. Decided in conversation on 2026-11-06 are marked *(decided)*; the rest is proposed.
+Status: **model and open questions decided** (2026-11-06; two more decisions 2026-11-07), being built on the module
+branch `module/team-configuration`. It replaces the patches made on 2026-11-05/06 (rows 74 and 80 of
+`docs/architecture/server.md`, slug clashes, hidden local resources, reference bindings) with one model. The rows of
+`docs/architecture/server.md` describe it since ORC-847 (rows 30, 52, 74, 75, 80 rewritten, 81–94 added);
+`team-configuration-handover.md` says what is built. Decided in conversation on 2026-11-06 are marked *(decided)*; the
+rest is proposed.
 
 ## Why
 
@@ -99,5 +102,13 @@ what is local by nature: connections, program paths, secret values.
 ## What it replaces
 
 Rows 30, 52, 74, 75 and 80 of `docs/architecture/server.md` (resource bodies with foreign references, local
-pipelines in a team project, the reference bindings of *On this computer*, slug-taking). Once decided, the module
-that builds this rewrites those rows and removes the binding and hiding code.
+pipelines in a team project, the reference bindings of *On this computer*, slug-taking), which ORC-847 rewrote; the
+decisions of 2026-11-06 are rows 81–92 there and those of 2026-11-07 rows 93 and 94. The code that binds references
+and hides local resources by slug is removed by ORC-845.
+
+## Decided 2026-11-07 (the person)
+
+1. The old local profile format is dropped: no compatibility on the desktop or the team server and no special message;
+   old-form profiles are republished. ORC-846, which would have read it, is closed as won't do.
+2. A team MCP server nobody has decided on at this computer is *Needs you here*; only one a person or an automation
+   switched off is *Off here*.

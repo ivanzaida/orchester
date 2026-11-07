@@ -598,9 +598,9 @@ starts work under a claim and never accepts one a client wrote. Unknown fields a
   (`BundleError::McpServerMissing`, `McpServersMismatch`, `Duplicate`). Which version of each server a bundle pins is
   the server's choice when it builds the bundle (the latest published); `ExecutionProfile::of_team` carries the ids, and
   `PinnedBodies.mcp_servers` the versions. A **local** run's inputs pin none and its profiles name none: a local
-  profile names the computer's own MCP servers, which are paths and values of that computer, and the computer binds
+  profile names the computer's own MCP servers, which are paths and values of that computer, and the computer resolves
   them itself (`ExecutionProfile::bound`); local inputs keep the same bytes and hash as before, and the stored run
-  inputs (format 2) read as before. The desktop binds a team server to this computer's program path, values and
+  inputs (format 2) read as before. The desktop starts a team server with this computer's program path, values and
   switch-on state when it runs the profile (ORC-826).
 - Order: `steps` and `permissions` keep pipeline order; `profiles`, `bindings`, `resources`, `skill_files`, `mcp_servers` and the
   pinned versions are read in any order and kept in resource id order, `files` in hash order, a skill's files in path
