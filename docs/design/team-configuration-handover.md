@@ -23,12 +23,13 @@ and Orchester Platform module "Team configuration" (OP-197…206). The team serv
 | ORC-819 | `used_by` read: team via the route, local from the project database with the archive's `pins()` rule; used-by contract amended (no run number, listed from the first report, superseded runs ended, no MCP server runs on the server until the bundle carries them) | merged here (f52581fd1) |
 | ORC-816 | Create = v1 with no draft (store create_published/discard_created, workspace, MCP save_*_draft, Servers::send_created); **UI windows still say "Create draft" and send a created team resource only on reconnect: ORC-835** | merged here (c7af6227d) |
 | ORC-817 | Team references are `CliKind`, `TeamResource { kind, id }`, `SecretName` (no local ids on the wire; store keeps legacy cached variants until ORC-845); archive `pins()`, used-by and fill-ins read them. **Interim until ORC-820/830: a team profile/tool naming a local connection or secret is refused (`local_entities_named`), the desktop sends `references: []`, team start's MCP servers are a stopgap until ORC-826** | merged here (2f94bef8d) |
+| ORC-829 | add/update/remove_mcp_server write team MCP servers (admin-only; widening-gated; `program` = team body name, the path is each computer's fill-in); remove archives after reading used-by and reports `runs_stopping_here`; a team MCP server URL has no query or fragment (core); chat MCP proposals refused in team projects until a team-aware preview (follow-up) | merged here (bb8dd77f4) |
 | ORC-828 (part 1) | MCP tools: pick_profile_connection, team MCP on (person_only always) / off, program person_only, list_secrets names; **readiness in get_profile/list_profiles and a team MCP server listing are part 2 (after ORC-822/824)** | merged here (aa745f907) |
 | OP-197 step 1, OP-198, OP-201 | Platform: pin on this branch (now e5d53c929), MCP server kind (migration 30; bundle MCP part waits for ORC-880), used-by route (current work only) | platform module/team-configuration 48d14c0 |
 
 ## In progress
 
-- ORC-829 (MCP server tools for admins).
+- ORC-820 (team profile body), ORC-821 (team pipeline body, fix round).
 
 ## Next (unblocked once this branch is pushed)
 
