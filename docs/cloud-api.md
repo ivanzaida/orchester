@@ -51,10 +51,76 @@ All paths below are under the team server's `/api/v1/projects/{project}`, with i
 | `GET /resources/{resource}/versions?after=` | member | `Versions { versions: [SharedVersion], next? }`, oldest first, at most 64 versions or 1 MiB per page |
 | `POST /resources/{resource}/versions` | project owner or server admin | `VersionPublish { idempotency_key, based_on, body, references: [] }`; `201 { version: SharedVersion }` |
 | `PATCH /resources/{resource}` | project owner or server admin | existing rename/archive `ResourcePatch` |
+| `GET /resources/{resource}/used-by` | member, project owner or server admin (whoever may archive it reads it first) | `UsedBy { resources: [UsedByResource], runs: [UsedByRun] }`; `404 not_found` for a resource the project does not have, a malformed resource id, or a caller who can neither read nor archive; `200` also for an archived resource |
 
 A member's write returns `403 not_admin`. Publishing from a stale `based_on` returns `409 version_conflict`
 with the latest version. Uploading history at `POST /resources/import` uses the existing `UploadResource` and
 `UploadVersion` shapes and the same write access; the server computes each imported version's flag in number order.
+
+`GET /resources/{resource}/used-by` (decision E of `docs/design/team-configuration.md`) is what the archive
+confirmation reads before an admin archives a resource; any member may read it, and so may everyone who may archive
+it (`PATCH …/resources/{resource}`: the project owner or a server admin, a member or not). It only reads: archiving still
+cancels the runs it lists (row 79 of `docs/architecture/server.md`). The answer is
+`UsedBy { resources: [UsedByResource { kind, id, name, version }], runs: [UsedByRun { task_key, run, holder? }] }`,
+and both lists are empty when nothing uses the resource.
+
+- **`resources`**: the other resources that are not archived and whose latest published version names this one, with
+  the version that names it. The resource asked about is never in its own list, even when its latest version names
+  itself. Ordered by `name` compared case-insensitively, then by `id`. A version *names* a resource by typed data, not
+  by a text scan: the ids in a free-text field, a prompt or a description name nothing. It names resource `R` when
+  - one of its `references` is a reference to a tool with `R`'s id (`ReferenceTarget::Tool`; a connection, an MCP
+    server or a secret reference holds the publisher's local id, which is never a resource id), or
+  - its body, read as the body type of its kind, holds `R`'s server resource id in one of these fields:
+    - pipeline: a step's executor, `steps[].kind.agent.profile` or `steps[].kind.tool.tool`, and the Deliver step's
+      `deliver.integrator`;
+    - instruction: `targets.profiles[]`, and `scope.pipeline.pipeline` or `scope.step.pipeline`;
+    - skill: `scope.pipeline.pipeline` or `scope.step.pipeline`;
+    - tool: the pipelines its access policy lists, the keys of `access.callers`;
+    - agent profile, team reviewer and MCP server: none today. A profile selects MCP servers by the publisher's local
+      connection id, which is no resource id.
+
+  A body that is no body of its kind names nothing. ORC-817 moves the references to `TeamResource { kind, server id }`;
+  the rule then reads those too (a profile's MCP servers among them), and this list is extended with it.
+- **`runs`**: the runs that have not ended and whose execution bundle pins any version of the resource, as the
+  team server knows it from the bundle it built at `work.start` (`execution-bundles.md` of the platform): every
+  pipeline, agent profile, tool, instruction and skill version the bundle pins, and no other. A run uses an MCP
+  server only through the profile versions it pins. The execution bundle does not carry MCP servers yet (an
+  `ExecutionProfile` leaves them out, and a profile still names its MCP servers by the publisher's local id), so today
+  the team server lists no runs for an MCP server; once the bundle carries the MCP server versions its profiles name,
+  a run pins an MCP server when its bundle does. The desktop's own archive already stops a run whose pinned profile
+  version chooses the server (`pins` in `crates/workspace/src/sharing/sync/archive.rs`), and its local list follows
+  that rule. A team reviewer has no runs.
+  - **When a run is listed**: the server learns a run id only from `work.report` (`WorkReport` carries `run_id`, no run
+    number), so a run is listed from the first work report the server accepted for it, and its last accepted report
+    decides: `progress` lists it; `succeeded`, `failed` (whatever its reason, `limit_reached` included) or `cancelled`
+    ends it, and a run that resumes with `progress` after a `limit_reached` is listed again. Known limit: work that
+    was started and has no accepted report yet is not listed. For a team project the list can therefore be narrower
+    than what a member's desktop stops on archive (a run with no report yet, a run paused at a limit, a run that uses
+    an MCP server). A run whose last accepted report is `progress` has not ended, nor has one that was interrupted or waits for
+    a person on the desktop; a run whose runner stopped without a terminal report stays listed too: a stale claim
+    (`stale_task_threshold`) does not end its run.
+  - **Superseded**: a run whose work has a newer run (a later run id first reported for the same work) has ended,
+    even when its own last report was `progress`.
+  - **Shape and order**: each is `{ task_key, run, holder? }`: the task's key (`KON-12`), the run's id, and the
+    `UserRef` who holds the task's claim now. After a take-over that is the new holder; `holder` is absent when the
+    claim was released. There is no run number: the server has none. Ordered by the number part of the task key,
+    numerically (`KON-3` before `KON-12`), then by run id (a stable tie-break).
+- **Paging**: none. Both lists are returned whole: they are bounded by the project's resources and by its runs that
+  have not ended.
+- **Access and errors**: a member of the project reads it, and so does whoever may archive the resource (the project
+  owner, or a server admin without membership, as `PATCH …/resources/{resource}` allows). Access is checked first, and
+  one answer, `404 not_found`, serves a project the caller may not read, a resource the project does not have and an id
+  that is no resource id, so it tells an outsider nothing. (`GET …/versions` answers `400` for a malformed id; used-by
+  answers `404` for it, because the access check comes first.) An archived resource answers `200` like any other, so
+  an admin can check what still uses it before a restore.
+
+The client call is `used_by`. The stand-in team server answers it from its own resources, reading the typed fields
+above with core's body types, and from the runs a test registers with `TeamServer::pin_run`: it builds no execution
+bundle, so the pins a test names stand in for the bundle's (an MCP server's id among them), a pinned run is one whose
+first work report was accepted, and `last_report`, `work` (the later run of a work supersedes the earlier ones) and
+`claim_run_task` stand in for the accepted work reports and the task's claim. It lists whatever the pins name, an
+MCP server's id included, which a real bundle does not carry yet. It has no non-member, so that `404` is not
+exercised there.
 
 `SharedVersion` is `{ resource, number, body, hash, references, based_on, published, widens }`.
 The server computes `widens: boolean` with ORC-570's `TeamReviewer::widens_over` and keeps it on that immutable

@@ -1,5 +1,6 @@
 //! The stand-in team server keeps an MCP server resource: it takes the kind through create, publish, rename and
-//! archive, serves its versions, refuses a body with a path, a value or a local id, and computes `widens`.
+//! archive, serves its versions, refuses a body with a path, a value or a local id, and computes `widens`; and it
+//! answers used-by from its own resources and the runs a test pins.
 
 use std::{
   io::{Read, Write},
@@ -7,10 +8,13 @@ use std::{
 };
 
 use orchester_api::{
-  ResourceCreated, Resources, SharedResource, SharedResourceKind, SharedVersion, Versions,
-  test_support::team_server::{CODE, Standing, TeamServer},
+  ResourceCreated, Resources, SharedResource, SharedResourceKind, SharedVersion, UsedBy, Versions,
+  test_support::team_server::{CODE, Person, PinnedRun, RunReport, Standing, TeamServer},
 };
-use orchester_core::id::{IdempotencyKey, ResourceId};
+use orchester_core::{
+  id::{IdempotencyKey, ResourceId, RunId},
+  resource::VersionNumber,
+};
 use serde_json::{Value, json};
 
 struct Team {
@@ -147,4 +151,293 @@ fn stand_in_leaves_a_member_without_writes_and_reuses_an_answer_for_a_repeated_k
   assert_eq!((first, second), (201, 201));
   assert_eq!(answer, again);
   assert_eq!(admin.server.resources("kontur").len(), 1);
+}
+
+fn created(id: ResourceId, kind: &str, (slug, name): (&str, &str), version: (&Value, &Value)) -> Value {
+  json!({"idempotency_key":IdempotencyKey::generate(),"id":id,"kind":kind,"slug":slug,"name":name,
+    "version":{"body":version.0,"references":version.1}})
+}
+
+fn tool_reference(id: ResourceId) -> Value {
+  json!([{"kind":"tool","id":id,"name":"Deploy","role":null}])
+}
+
+fn pipeline_of(kinds: &[Value]) -> Value {
+  let steps: Vec<Value> = kinds
+    .iter()
+    .enumerate()
+    .map(|(place, kind)| {
+      json!({"key":format!("step-{place}"),"name":"Step","kind":kind,"instructions":"Do it","depends_on":[],
+        "approval_gate":false,"on_failure":null,"budget":null})
+    })
+    .collect();
+  json!({"steps":steps})
+}
+
+fn agent_step(profile: ResourceId) -> Value {
+  json!({"agent":{"profile":profile,"repository":"write"}})
+}
+
+fn instruction(text: &str, targets: &Value, scope: &Value) -> Value {
+  json!({"text":text,"targets":targets,"events":["start"],"scope":scope})
+}
+
+fn pin(task_key: &str, last_report: RunReport, pins: &[ResourceId]) -> PinnedRun {
+  PinnedRun {
+    task_key: task_key.to_owned(),
+    run: RunId::generate(),
+    work: 1,
+    holder: Some(Person::Named("Dana Ruiz")),
+    last_report,
+    pins: pins.iter().map(|id| (*id, VersionNumber::FIRST)).collect(),
+  }
+}
+
+fn used_by(team: &Team, id: impl std::fmt::Display) -> (u16, Value) {
+  team.resources("GET", &format!("/{id}/used-by"), &Value::Null)
+}
+
+fn create_all(team: &Team, resources: &[Value]) {
+  for resource in resources {
+    let (status, answer) = team.resources("POST", "", resource);
+    assert_eq!(status, 201, "{answer}");
+  }
+}
+
+fn listed(used: &UsedBy) -> Vec<(SharedResourceKind, &str, u32)> {
+  used
+    .resources
+    .iter()
+    .map(|resource| (resource.kind, resource.name.as_str(), resource.version.get()))
+    .collect()
+}
+
+#[test]
+fn stand_in_answers_used_by_with_the_latest_versions_whose_typed_fields_name_the_resource() {
+  let team = Team::start(Standing::Admin);
+  let [tool, profile, delivery, referencing, archived, decoy, style, own] = [(); 8].map(|()| ResourceId::generate());
+  let (empty, none) = (json!({"steps":[]}), json!([]));
+  let project = json!("project");
+  create_all(
+    &team,
+    &[
+      created(tool, "tool", ("deploy", "Deploy"), (&json!({}), &tool_reference(tool))),
+      created(profile, "agent_profile", ("coder", "Coder"), (&json!({}), &none)),
+      created(delivery, "pipeline", ("delivery", "Delivery"), (&empty, &none)),
+      created(
+        referencing,
+        "pipeline",
+        ("alpha", "alpha flow"),
+        (&empty, &tool_reference(tool)),
+      ),
+      created(
+        archived,
+        "pipeline",
+        ("old", "Old flow"),
+        (&pipeline_of(&[agent_step(profile)]), &none),
+      ),
+      created(
+        decoy,
+        "instruction",
+        ("decoy", "Decoy"),
+        (
+          &instruction(&format!("call {tool} and {profile}"), &json!("all"), &project),
+          &none,
+        ),
+      ),
+      created(
+        style,
+        "instruction",
+        ("style", "Style"),
+        (
+          &instruction(
+            "Be brief",
+            &json!({"profiles":[profile]}),
+            &json!({"pipeline":{"pipeline":delivery}}),
+          ),
+          &none,
+        ),
+      ),
+      created(own, "tool", ("own", "Own"), (&json!({}), &tool_reference(own))),
+    ],
+  );
+  // Only the latest version counts: the pipeline names the profile and the tool in its second version.
+  let latest = pipeline_of(&[agent_step(profile), json!({"tool":{"tool":tool}})]);
+  let (status, published) = team.resources("POST", &format!("/{delivery}/versions"), &publish(1, &latest));
+  assert_eq!(status, 201, "{published}");
+  let patch = json!({"idempotency_key":IdempotencyKey::generate(),"revision":1,"archived":true});
+  assert_eq!(team.resources("PATCH", &format!("/{archived}"), &patch).0, 200);
+
+  team.server.stand_as(Standing::Member);
+  let (status, used) = used_by(&team, tool);
+  assert_eq!(status, 200, "{used}");
+  let used: UsedBy = serde_json::from_value(used).expect("used by");
+  // By name without regard to case ("alpha flow" before "Delivery"); the tool is not in its own list, the archived
+  // pipeline is left out and an id in an instruction's text names nothing.
+  assert_eq!(
+    listed(&used),
+    [
+      (SharedResourceKind::Pipeline, "alpha flow", 1),
+      (SharedResourceKind::Pipeline, "Delivery", 2)
+    ]
+  );
+  let (_, used) = used_by(&team, profile);
+  let used: UsedBy = serde_json::from_value(used).expect("used by");
+  assert_eq!(
+    listed(&used),
+    [
+      (SharedResourceKind::Pipeline, "Delivery", 2),
+      (SharedResourceKind::Instruction, "Style", 1)
+    ]
+  );
+  let (_, used) = used_by(&team, delivery);
+  let used: UsedBy = serde_json::from_value(used).expect("used by");
+  assert_eq!(listed(&used), [(SharedResourceKind::Instruction, "Style", 1)]);
+  let (_, nothing) = used_by(&team, own);
+  assert_eq!(nothing, json!({"resources": [], "runs": []}));
+}
+
+#[test]
+fn stand_in_lists_the_runs_that_have_not_ended_by_task_number_and_names_the_current_holder() {
+  let team = Team::start(Standing::Admin);
+  let tool = ResourceId::generate();
+  create_all(
+    &team,
+    &[created(tool, "tool", ("deploy", "Deploy"), (&json!({}), &json!([])))],
+  );
+  let other = ResourceId::generate();
+  let running = pin("KON-12", RunReport::Progress, &[tool]);
+  let held = pin("KON-3", RunReport::Progress, &[tool, other]);
+  let released = pin("KON-4", RunReport::Progress, &[tool]);
+  let (held_run, released_run) = (held.run, released.run);
+  for run in [running, held, released] {
+    team.server.pin_run("kontur", run);
+  }
+  for ended in [RunReport::Succeeded, RunReport::Failed, RunReport::Cancelled] {
+    team.server.pin_run("kontur", pin("KON-5", ended, &[tool]));
+  }
+  team
+    .server
+    .pin_run("kontur", pin("KON-9", RunReport::Progress, &[other]));
+  team
+    .server
+    .claim_run_task("kontur", held_run, Some(Person::Named("Lena Moroz")));
+  team.server.claim_run_task("kontur", released_run, None);
+
+  team.server.stand_as(Standing::Member);
+  let (status, used) = used_by(&team, tool);
+  assert_eq!(status, 200, "{used}");
+  assert!(
+    used["runs"][1].get("holder").is_none() && used["runs"][0].get("number").is_none(),
+    "a released claim has no holder and a run has no number: {used}"
+  );
+  let used: UsedBy = serde_json::from_value(used).expect("used by");
+  let runs: Vec<_> = used
+    .runs
+    .iter()
+    .map(|run| {
+      (
+        run.task_key.as_str(),
+        run.holder.as_ref().map(|holder| holder.display_name.as_str()),
+      )
+    })
+    .collect();
+  assert_eq!(
+    runs,
+    [
+      ("KON-3", Some("Lena Moroz")),
+      ("KON-4", None),
+      ("KON-12", Some("Dana Ruiz"))
+    ]
+  );
+}
+
+#[test]
+fn stand_in_orders_the_runs_of_a_task_by_run_id_and_ends_a_run_its_work_superseded() {
+  let team = Team::start(Standing::Admin);
+  let tool = ResourceId::generate();
+  create_all(
+    &team,
+    &[created(tool, "tool", ("deploy", "Deploy"), (&json!({}), &json!([])))],
+  );
+  // The first run of work 1 last reported `progress`, and a later run of that work was first reported: it has ended.
+  let superseded = pin("KON-3", RunReport::Progress, &[tool]);
+  let current = pin("KON-3", RunReport::Progress, &[tool]);
+  let mut again = pin("KON-3", RunReport::Progress, &[tool]);
+  again.work = 2;
+  let mut expected = vec![current.run, again.run];
+  expected.sort();
+  // Pinned out of id order, so the answer's order is the stand-in's sort, not the order the runs came in.
+  for run in [again, superseded, current] {
+    team.server.pin_run("kontur", run);
+  }
+
+  let (status, used) = used_by(&team, tool);
+  assert_eq!(status, 200, "{used}");
+  let used: UsedBy = serde_json::from_value(used).expect("used by");
+  assert_eq!(
+    used.runs.iter().map(|run| run.run).collect::<Vec<_>>(),
+    expected,
+    "the superseded run is left out; the runs of two works of one task are ordered by run id"
+  );
+}
+
+#[test]
+fn stand_in_lists_the_runs_of_a_team_mcp_server_that_its_bundles_pin() {
+  let team = Team::start(Standing::Admin);
+  let (server, other) = (ResourceId::generate(), ResourceId::generate());
+  let (status, created) = team.resources("POST", "", &create(server, &server_body("npx")));
+  assert_eq!(status, 201, "{created}");
+  team
+    .server
+    .pin_run("kontur", pin("KON-7", RunReport::Progress, &[server, other]));
+  team
+    .server
+    .pin_run("kontur", pin("KON-8", RunReport::Progress, &[other]));
+  team
+    .server
+    .pin_run("kontur", pin("KON-9", RunReport::Succeeded, &[server]));
+
+  let (status, used) = used_by(&team, server);
+  assert_eq!(status, 200, "{used}");
+  let used: UsedBy = serde_json::from_value(used).expect("used by");
+  assert_eq!(
+    used.runs.iter().map(|run| run.task_key.as_str()).collect::<Vec<_>>(),
+    ["KON-7"],
+    "a run uses a team MCP server through the bundle that pins it until it has ended"
+  );
+}
+
+#[test]
+fn stand_in_answers_used_by_for_an_archived_resource_and_not_found_for_an_unknown_one() {
+  let team = Team::start(Standing::Admin);
+  let (tool, pipeline) = (ResourceId::generate(), ResourceId::generate());
+  let none = json!([]);
+  create_all(
+    &team,
+    &[
+      created(tool, "tool", ("deploy", "Deploy"), (&json!({}), &none)),
+      created(
+        pipeline,
+        "pipeline",
+        ("flow", "Flow"),
+        (&pipeline_of(&[json!({"tool":{"tool":tool}})]), &none),
+      ),
+    ],
+  );
+  team
+    .server
+    .pin_run("kontur", pin("KON-1", RunReport::Progress, &[tool]));
+  let patch = json!({"idempotency_key":IdempotencyKey::generate(),"revision":1,"archived":true});
+  assert_eq!(team.resources("PATCH", &format!("/{tool}"), &patch).0, 200);
+
+  let (status, used) = used_by(&team, tool);
+  assert_eq!(status, 200, "{used}");
+  let used: UsedBy = serde_json::from_value(used).expect("used by");
+  assert_eq!(listed(&used), [(SharedResourceKind::Pipeline, "Flow", 1)]);
+  assert_eq!(used.runs.len(), 1);
+  let (status, missing) = used_by(&team, ResourceId::generate());
+  assert_eq!((status, missing["error"].as_str()), (404, Some("not_found")));
+  let (status, malformed) = used_by(&team, "not-a-resource-id");
+  assert_eq!((status, malformed["error"].as_str()), (404, Some("not_found")));
 }

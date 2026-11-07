@@ -4,7 +4,11 @@
 //! latest, `409 revision_conflict` with the resource as it is, and `403 not_admin` for a member's write. The body of an
 //! MCP server is read as core's `TeamMcpServer`, so the stand-in refuses (`422 invalid`, reason `body`) a body with a
 //! path, a value or a local id, and computes `widens` with core's rules; the other kinds' bodies are kept as sent.
-//! A repeated idempotency key returns the first answer. Not served yet: `POST …/resources/import` and the files.
+//! `GET …/resources/{r}/used-by` answers from the stand-in's own resources and the runs a test pins with
+//! [`TeamServer::pin_run`] (the stand-in builds no execution bundle, so the pins stand in for the bundle's). A repeated
+//! idempotency key returns the first answer. Not served yet: `POST …/resources/import` and the files.
+
+mod used_by;
 
 use std::collections::HashMap;
 
@@ -12,6 +16,7 @@ use orchester_core::{resource::TeamMcpServer, sharing::widens};
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
+pub use used_by::{PinnedRun, RunReport};
 
 use super::{Person, Standing, State, TeamServer};
 use crate::{ResourceCreate, ResourcePatch, SharedResourceKind, VersionPublish};
@@ -27,6 +32,8 @@ struct Project {
   resources: Vec<Stored>,
   /// The first answer of each idempotency key.
   answers: HashMap<String, (u16, Value)>,
+  /// The runs [`TeamServer::pin_run`] registered.
+  runs: Vec<PinnedRun>,
   /// The number of changes made; the event cursor the list is current at.
   cursor: u64,
 }
@@ -86,6 +93,7 @@ pub(super) fn answer((path, query): (&str, &str), body: &str, state: &Mutex<Stat
     ("POST", None) => held.create(body),
     ("PATCH", Some((resource, ""))) => held.patch(resource, body),
     ("GET", Some((resource, "versions"))) => held.versions(resource, query),
+    ("GET", Some((resource, "used-by"))) => held.used_by(resource),
     ("POST", Some((resource, "versions"))) => held.publish(resource, body),
     _ => return None,
   };
