@@ -408,6 +408,16 @@ are refused in every shape below.
   (`MAJOR.MINOR.PATCH` with an optional `-pre` suffix, no build metadata), so the desktop can say which Orchester the
   server needs. A code with another code's details, or details of two codes, is refused. Details never echo the
   request or carry credentials.
+  `bundle_missing` (`work.start` could not build the work's execution bundle) has `{}` or, when the server says why,
+  `{reason:{kind,resource_id?,version?}}` (ORC-884). `kind` is `pipeline_missing` (`resource_id`: the pipeline),
+  `file_missing`, `cli_kind_missing` and `mcp_servers_unresolved` (`resource_id`, `version`: an agent profile still in
+  the old local form, or one whose MCP servers no team MCP server stands for; its Admin publishes it again as a team
+  profile), `mcp_server_archived` (`resource_id`: the archived team MCP server a profile still names),
+  `body_unreadable`, `bundle_too_large` or `other`. A kind a reader does not know reads as `other`, and `reason` ignores
+  fields it does not know, unlike the closed shapes around it, so it can grow. It names no path and carries no secret.
+  A desktop older than the release that holds ORC-884 refuses `details` it does not know and reads such an answer as no
+  contract answer (it waits, as for a server it cannot reach): the server sends `reason` only to a client whose
+  `Orchester-Client-Version` is that release or later, and `{}` to any other.
 
 | Code | Status |
 | --- | --- |

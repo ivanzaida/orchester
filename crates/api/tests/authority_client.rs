@@ -20,9 +20,9 @@ use orchester_api::{
   },
   releases::ReleaseVersion,
   v2::{
-    AuthorityErrorCode, EXECUTION_BUNDLE_SCHEMA, ErrorDetails, EventCursor, ModuleListRequest, PageCursor, PageRequest,
-    QueryScope, ResourceLibraryRequest, ResourcePickerRequest, SearchText, SubscriptionEvent, TaskFilters,
-    TaskListRequest, TaskSort,
+    AuthorityErrorCode, BundleMissingKind, EXECUTION_BUNDLE_SCHEMA, ErrorDetails, EventCursor, ModuleListRequest,
+    PageCursor, PageRequest, QueryScope, ResourceLibraryRequest, ResourcePickerRequest, SearchText, SubscriptionEvent,
+    TaskFilters, TaskListRequest, TaskSort,
   },
 };
 use orchester_core::{
@@ -236,6 +236,36 @@ async fn authority_client_task_list_posts_its_request_and_reads_the_page() {
     seen[0].json(),
     serde_json::to_value(&request).expect("the request's JSON")
   );
+}
+
+#[tokio::test]
+async fn authority_client_reads_why_a_bundle_is_missing() {
+  let (project, profile) = (ProjectId::generate(), ResourceId::generate());
+  let reason = json!({"kind": "cli_kind_missing", "resource_id": profile});
+  let server = Server::start(vec![
+    Answer::status(409, &json!({"code": "bundle_missing", "details": {"reason": reason}})),
+    Answer::status(409, &json!({"code": "bundle_missing", "details": {}})),
+  ]);
+  let (client, token) = (server.client(), token());
+  let request = TaskListRequest::default();
+  for expected in [Some((BundleMissingKind::CliKindMissing, profile)), None] {
+    let error = client
+      .authority(&token, project)
+      .tasks(&request)
+      .await
+      .expect_err("refused");
+    let AuthorityCallError::Refused { status, error, .. } = error else {
+      panic!("a refusal, not {error:?}");
+    };
+    assert_eq!((status, error.code()), (409, AuthorityErrorCode::BundleMissing));
+    match (expected, error.details()) {
+      (Some((kind, id)), ErrorDetails::BundleMissing { reason }) => {
+        assert_eq!((reason.kind, reason.resource_id), (kind, Some(id)));
+      }
+      (None, ErrorDetails::None) => {}
+      (_, details) => panic!("{details:?}"),
+    }
+  }
 }
 
 #[tokio::test]
