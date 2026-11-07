@@ -28,6 +28,7 @@ use super::{
   proposal::{ProposalProps, StartProposal},
   timeline::TurnRow,
   turns::Part,
+  waits_on::{WaitsOnLine, WaitsOnProps},
 };
 use crate::{
   theme::ExtraSpacing,
@@ -259,6 +260,22 @@ fn action_element(
         action: action.clone(),
         at,
         listed,
+      },
+    );
+  }
+  if let (Some(waits), ActionOutcome::Done) = (&action.waits_on, &action.outcome) {
+    let wait = row.turn.waits_on.iter().find(|wait| wait.run == waits.run).cloned();
+    return ctx.mount_keyed::<WaitsOnLine>(
+      &id,
+      WaitsOnProps {
+        id: id.clone(),
+        row: waits.clone(),
+        task: action.task.clone().unwrap_or_default(),
+        wait,
+        at,
+        listed,
+        project: row.env.project,
+        open: row.env.open.clone(),
       },
     );
   }

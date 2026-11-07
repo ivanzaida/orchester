@@ -68,6 +68,20 @@
       "ctrlEnter": "Ctrl Enter",
       "cmdEnter": "⌘ Enter"
     },
+    "waitsOn": {
+      "waits": "{{task}} · #{{run}} waits on {{waited}}",
+      "stillWaits": "{{task}} · #{{run}} still waits on {{waited}}",
+      "continued": "{{task}} · #{{run}} continued",
+      "noLonger": "{{task}} · #{{run}} no longer waits on {{waited}}",
+      "whenMerged": "It continues when {{waited}} is merged into {{branch}}",
+      "merged": "{{waited}} merged into {{branch}} at {{time}}",
+      "canceled": "{{waited}} was canceled at {{time}} — nothing will end this wait",
+      "closed": "{{waited}} was closed without merging — nothing will end this wait",
+      "dropped": "You dropped it at {{time}} · the run continued",
+      "over": "It went on without {{waited}} at {{time}}",
+      "drop": "Drop the wait",
+      "dropping": "Dropping…"
+    },
     "runsOn": {
       "tip": "Acts with your project permissions: every action it takes is checked like the same action in the app.",
       "notSetUp": "Not set up",

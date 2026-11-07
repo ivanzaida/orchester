@@ -5,7 +5,7 @@
 //! where the message stands after them, last, so nothing moves when they show (`Line` `yLkjx`). The line keeps its
 //! room while it is hidden.
 
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 
 use lurq::{
   app::{
@@ -98,16 +98,19 @@ struct RowProps {
 
 impl DevtoolsInspectable for RowProps {}
 
+/// Whether the pointer is on a row: the signal of its [`RowActions`], which own it so that a change draws only them.
+type Pointer = Arc<OnceLock<Signal<bool>>>;
+
 struct CopyableRow {
-  hovered: Signal<bool>,
+  pointer: Pointer,
 }
 
 impl Component for CopyableRow {
   type Props = RowProps;
 
-  fn create(ctx: &mut Ctx) -> Self {
+  fn create(_ctx: &mut Ctx) -> Self {
     Self {
-      hovered: ctx.signal(false),
+      pointer: Arc::new(OnceLock::new()),
     }
   }
 
@@ -115,17 +118,20 @@ impl Component for CopyableRow {
     let props = ctx.props::<RowProps>().clone();
     let mut children = ctx.children().to_vec();
     let mark = (props.marked && !children.is_empty()).then(|| children.remove(0));
-    let actions = message_actions(
-      ctx,
-      &props.id,
-      (&props.markdown, props.extras.clone()),
-      (Edge::Start, self.hovered.get()),
+    let actions = ctx.mount_keyed::<RowActions>(
+      &format!("row-actions-{}", props.id),
+      ActionsProps {
+        id: props.id.clone(),
+        markdown: props.markdown.clone(),
+        extras: props.extras.clone(),
+        pointer: self.pointer.clone(),
+      },
     );
     let head = head((&props.name, &props.meta, mark));
     // The line stands outside the row, which clips what leaves it, so it can start before the text. It is as high as
     // its buttons before they are mounted, so the row's height never changes under a list that measured it.
     let indent = AVATAR_SIZE + ExtraSpacing::Loose.value() - LINE_OUTDENT;
-    let (enter, leave) = (self.hovered.clone(), self.hovered.clone());
+    let (enter, leave) = (self.pointer.clone(), self.pointer.clone());
     Column::new()
       .id(props.id.to_string())
       .width(Dimension::Pct(100.0))
@@ -142,8 +148,55 @@ impl Component for CopyableRow {
           .padding(Padding::default().left(indent))
           .child(actions),
       )
-      .on_mouse_enter(move || enter.set(true))
-      .on_mouse_leave(move || leave.set(false))
+      .on_mouse_enter(move || enter.get().into_iter().for_each(|on| on.set(true)))
+      .on_mouse_leave(move || leave.get().into_iter().for_each(|on| on.set(false)))
+  }
+}
+
+/// What [`RowActions`] shows: the row's actions; `pointer` gets their signal of the pointer on the row.
+#[derive(Clone)]
+struct ActionsProps {
+  id: Arc<str>,
+  markdown: Arc<str>,
+  extras: Option<MessageExtras>,
+  pointer: Pointer,
+}
+
+/// Compared by what it shows; the pointer's cell is the row's own for as long as it lives.
+impl PartialEq for ActionsProps {
+  fn eq(&self, other: &Self) -> bool {
+    (&self.id, &self.markdown, &self.extras) == (&other.id, &other.markdown, &other.extras)
+  }
+}
+
+impl DevtoolsInspectable for ActionsProps {}
+
+/// The actions of a [`CopyableRow`], which own the signal of the pointer on the row, so that the pointer coming onto
+/// it draws only them. A signal dirties the component that made it, and the row's body comes as slot children: a
+/// render of the row would put them back as its parent last drew them, over what a component in the body drew for the
+/// same pointer (a waits-on line's *Drop the wait*, `lguJb`).
+struct RowActions {
+  hovered: Signal<bool>,
+}
+
+impl Component for RowActions {
+  type Props = ActionsProps;
+
+  fn create(ctx: &mut Ctx) -> Self {
+    let hovered = ctx.signal(false);
+    // The row's cell takes the first signal; its actions are mounted under one key for as long as it lives.
+    let _ = ctx.props::<ActionsProps>().pointer.set(hovered.clone());
+    Self { hovered }
+  }
+
+  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
+    let props = ctx.props::<ActionsProps>().clone();
+    message_actions(
+      ctx,
+      &props.id,
+      (&props.markdown, props.extras),
+      (Edge::Start, self.hovered.get()),
+    )
   }
 }
 

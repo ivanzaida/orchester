@@ -21,6 +21,7 @@ pub mod context;
 pub mod events;
 mod live;
 mod proposals;
+pub mod waits_on;
 pub mod watch;
 
 use orchester_core::{

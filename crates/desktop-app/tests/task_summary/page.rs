@@ -97,6 +97,7 @@ impl Page {
         .texts("task-title-row")
         .is_some_and(|texts| texts.contains(&title))
         && (window.texts("task-event").is_some()
+          || window.texts("task-wait").is_some()
           || window.texts("task-notice-title").is_some()
           || window.texts("task-summary-empty").is_some())
     });
