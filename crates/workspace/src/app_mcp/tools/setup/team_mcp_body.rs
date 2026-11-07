@@ -1,17 +1,26 @@
 //! A team MCP server's body (core's `TeamMcpServer`: what the team server holds of one) from the fields of the MCP
-//! server tools, and back to what they answer. The body holds names only: a program is named, never located, and the
-//! variables and secret headers are names whose values each computer fills in. So a path, a value or a local id has no
-//! field to go in, and one given is refused with its own code (`team_path_refused`, `team_value_refused`) instead of
-//! being dropped. A first version widens nothing by itself ([`widens`]); creating one is gated by its caller.
+//! server tools, and back to what they answer. The body holds names only: a program is named, never located, a
+//! variable takes the team secret of its own name and a secret header names its secret and a plain-text prefix, whose
+//! values each computer fills in. So a path, a value or a local id has no field to go in, and one given is refused with
+//! its own code (`team_path_refused`, `team_value_refused`) instead of being dropped. A first version widens nothing by
+//! itself ([`widens`]); creating one is gated by its caller.
 
 use orchester_core::{
   connection::mcp::{McpHeaderName, McpServerName, McpTransport},
-  resource::{TeamMcpLaunch, TeamMcpProgram, TeamMcpRemote, TeamMcpServer, TeamMcpServerError, VariableName},
+  resource::{
+    HeaderPrefix, TeamMcpLaunch, TeamMcpProgram, TeamMcpRemote, TeamMcpSecretHeader, TeamMcpServer, TeamMcpServerError,
+    VariableName,
+  },
+  secret::SecretName,
   sharing::{VersionWidening, widens},
 };
 use serde_json::{Value, json};
 
-use super::{mcp_server_input::ServerFields, mcp_server_json::without_query_values, mcp_server_text::filled};
+use super::{
+  mcp_server_input::{SecretHeader, ServerFields},
+  mcp_server_json::without_query_values,
+  mcp_server_text::filled,
+};
 use crate::{
   app_mcp::error::ToolError,
   connections::mcp::{McpServerText, NAME_TAKEN, TransportChoice, authorization_message},
@@ -83,7 +92,11 @@ pub(super) fn server_json(server: &TeamMcpServer) -> Value {
     TeamMcpLaunch::Remote(remote) => json!({
       "kind": "remote",
       "url": without_query_values(remote.url().as_str()),
-      "secret_headers": remote.secret_headers().iter().map(McpHeaderName::as_str).collect::<Vec<_>>(),
+      "secret_headers": remote.secret_headers().iter().map(|header| json!({
+        "header": header.header().as_str(),
+        "secret": header.secret().as_str(),
+        "prefix": header.prefix().map(HeaderPrefix::as_str),
+      })).collect::<Vec<_>>(),
     }),
   };
   json!({
@@ -176,8 +189,10 @@ fn built(
     }
     McpTransport::Http(http) => {
       not_here(variables.is_some(), "variable_names")?;
-      let headers = headers.unwrap_or_else(|| kept_headers(before));
-      let headers = headers.iter().map(|name| header(name)).collect::<Result<Vec<_>, _>>()?;
+      let headers = match headers {
+        Some(given) => given.iter().map(secret_header).collect::<Result<Vec<_>, _>>()?,
+        None => kept_headers(before),
+      };
       TeamMcpLaunch::Remote(TeamMcpRemote::new(http.url().clone(), headers).map_err(|error| body_refusal(&error))?)
     }
   };
@@ -196,14 +211,10 @@ fn kept_variables(server: Option<&TeamMcpServer>) -> Vec<String> {
   }
 }
 
-/// The secret header names of `server` if it is a remote one, else none.
-fn kept_headers(server: Option<&TeamMcpServer>) -> Vec<String> {
+/// The secret headers of `server` if it is a remote one, else none.
+fn kept_headers(server: Option<&TeamMcpServer>) -> Vec<TeamMcpSecretHeader> {
   match server.map(TeamMcpServer::launch) {
-    Some(TeamMcpLaunch::Remote(remote)) => remote
-      .secret_headers()
-      .iter()
-      .map(|name| name.as_str().to_owned())
-      .collect(),
+    Some(TeamMcpLaunch::Remote(remote)) => remote.secret_headers().clone(),
     _ => Vec::new(),
   }
 }
@@ -230,6 +241,32 @@ fn not_here(given: bool, field: &str) -> Result<(), ToolError> {
   Ok(())
 }
 
+/// A secret header as given: its name, the team secret its value comes from and the prefix of the value. Neither
+/// refusal repeats the secret or the prefix: a value put there by mistake must not reach the answer.
+fn secret_header(given: &SecretHeader) -> Result<TeamMcpSecretHeader, ToolError> {
+  let name = header(&given.header)?;
+  let secret = SecretName::new(&given.secret).map_err(|_| {
+    refused(
+      "invalid_server",
+      Message::new("appMcp.errors.teamMcpSecretName").with("header", given.header.clone()),
+    )
+  })?;
+  let prefix = given
+    .prefix
+    .as_deref()
+    .map(HeaderPrefix::new)
+    .transpose()
+    .map_err(|_| {
+      refused(
+        "invalid_server",
+        Message::new("appMcp.errors.teamMcpHeaderPrefix")
+          .with("header", given.header.clone())
+          .with("max", HeaderPrefix::MAX_CHARS.to_string()),
+      )
+    })?;
+  Ok(TeamMcpSecretHeader::new(name, secret, prefix))
+}
+
 /// A secret header's name; `Authorization`, which the page reserves for its bearer and Basic schemes, is the name of
 /// those.
 fn header(name: &str) -> Result<McpHeaderName, ToolError> {
@@ -254,11 +291,16 @@ fn body_refusal(error: &TeamMcpServerError) -> ToolError {
       "team_value_refused",
       Message::new("appMcp.errors.teamMcpUrlQuery").with("field", "url".to_owned()),
     ),
+    TeamMcpServerError::VariableNotSecret(name) => refused(
+      "invalid_server",
+      Message::new("appMcp.errors.teamMcpVariableNotSecret").with("name", name.clone()),
+    ),
     TeamMcpServerError::Duplicate(name) => refused(
       "invalid_server",
       Message::new("appMcp.errors.teamMcpDuplicate").with("name", name.clone()),
     ),
-    // Name, program, arguments, folder, URL and header were checked as the page checks them before the body was made.
+    // Name, program, arguments, folder, URL, header, secret and prefix were checked as the page checks them before the
+    // body was made.
     _ => refused("invalid_server", Message::new("appMcp.errors.teamMcpInvalid")),
   }
 }

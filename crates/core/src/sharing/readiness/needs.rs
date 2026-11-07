@@ -34,13 +34,13 @@ pub struct McpNeed {
 }
 
 impl McpNeed {
-  /// The need of `body`, the version of team MCP server `server`. The body names its variables and secret headers
-  /// but not the secrets that hold their values, so the caller gives those as `secrets`.
-  pub fn of(server: ResourceId, body: &TeamMcpServer, secrets: Vec<SecretName>) -> Self {
+  /// The need of `body`, the version of team MCP server `server`: the secrets are those its variables and secret
+  /// headers name.
+  pub fn of(server: ResourceId, body: &TeamMcpServer) -> Self {
     Self {
       server,
       runs_program: matches!(body.launch(), TeamMcpLaunch::Program(_)),
-      secrets,
+      secrets: body.secrets(),
     }
   }
 }

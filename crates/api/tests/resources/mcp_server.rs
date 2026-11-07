@@ -17,7 +17,9 @@ fn bodies() -> [Value; 2] {
     }),
     json!({
       "name":"issues",
-      "launch":{"kind":"remote","url":"https://mcp.example.org/issues","secret_headers":["X-API-Key"]}
+      "launch":{"kind":"remote","url":"https://mcp.example.org/issues","secret_headers":[
+        {"header":"X-API-Key","secret":"ISSUES_KEY"},
+        {"header":"Authorization","secret":"ISSUES_TOKEN","prefix":"Bearer "}]}
     }),
   ]
 }

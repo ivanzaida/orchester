@@ -41,7 +41,10 @@ pub use self::{
   removal::{Removal, RemoveMode, StepUser, StepVersion, pipeline_step_users, step_users},
   skill::{SKILL_FILE, Skill, SkillError, SkillFile, SkillFilePath},
   team_agent_profile::{TeamAgentProfile, TeamCounterparts, TeamProfileError},
-  team_mcp_server::{TeamMcpLaunch, TeamMcpProgram, TeamMcpRemote, TeamMcpServer, TeamMcpServerError},
+  team_mcp_server::{
+    HeaderPrefix, HeaderPrefixError, TeamMcpLaunch, TeamMcpProgram, TeamMcpRemote, TeamMcpSecretHeader, TeamMcpServer,
+    TeamMcpServerError,
+  },
   team_reviewer::{
     DecisionReviewerReference, DecisionReviewerRole, LanguageReviewerReference, ReviewerDestinations, ReviewerHost,
     ReviewerHostError, TeamReviewer,

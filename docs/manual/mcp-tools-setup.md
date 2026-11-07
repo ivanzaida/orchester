@@ -263,8 +263,8 @@ Always `person_only` unless AP is on. Returns the server as `list_connections` l
 | `url`               | string \| null                 | —    | Remote server, `http://` or `https://`. Not with `program`.                                         |
 | `authorization`     | Authorization \| null          | no   | What a remote server is sent (see below).                                                           |
 | `exempt_tools`      | array<string> \| null          | no   | The server's tools that run without asking, for profiles that ask before MCP actions.              |
-| `variable_names`    | array<string> \| null          | no   | Team project only: the variables the program needs, by name (see below). Not with `url`.            |
-| `secret_headers`    | array<string> \| null          | no   | Team project only: the headers a remote server is sent a secret in (`Authorization`, `X-API-Key`). Not with `program`. |
+| `variable_names`    | array<string> \| null          | no   | Team project only: the variables the program needs; each takes the team secret of the same name, so each is a secret name (capitals, digits, `_`). Not with `url`. |
+| `secret_headers`    | array<{header, secret, prefix?}> \| null | no | Team project only: the headers a remote server is sent a secret in: the `header` (`Authorization`, `X-API-Key`), the team `secret` by name and an optional plain-text `prefix` (`Bearer `, at most 32 characters). The value sent is the prefix followed by the secret's value. Not with `program`. |
 
 **In a team project** the MCP server is the team's resource, and only an admin changes it: a member is refused
 `not_admin` by all three tools, before anything else. `add_mcp_server` creates it as **v1** on the team server (no
@@ -273,7 +273,9 @@ draft); it is `person_only` unless AP is on. Offline, the new server waits in th
 (`team_server_refused`). The team holds names only, so `program` must be a name looked up on the search path (`npx`;
 a path is refused as `team_path_refused`, as is an absolute `working_directory`), `environment` and `authorization`
 (values, secrets) are refused as `team_value_refused`, and the variables and secret headers are named in
-`variable_names` and `secret_headers`; each computer sets the program's path and the values itself. The answer is the
+`variable_names` and `secret_headers` (each header names its secret and prefix; a variable that is not a secret name,
+a secret that is not one or a prefix that is not short plain text is `invalid_server`, and the answer repeats neither
+the secret nor the prefix); each computer sets the program's path and the values itself. The answer is the
 team server as `{id, name, team: true, published_version, launch, exempt_tools}`. In a project of this computer's
 own `variable_names` and `secret_headers` are refused (`field_not_applicable`) and nothing changes: its servers are
 plain rows of the project, without versions.

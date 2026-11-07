@@ -48,7 +48,7 @@ fn server(name: &str, program: &str) -> TeamMcpServer {
 fn remote(name: &str) -> TeamMcpServer {
   serde_json::from_value(json!({
     "name": name,
-    "launch": {"kind": "remote", "url": "https://mcp.example.org/x", "secret_headers": ["X-API-Key"]}
+    "launch": {"kind": "remote", "url": "https://mcp.example.org/x", "secret_headers": [{"header": "X-API-Key", "secret": "API_KEY"}]}
   }))
   .expect("a team MCP server")
 }
@@ -277,7 +277,7 @@ fn execution_bundle_mcp_canonical_bytes_put_the_servers_last_with_names_only() {
   );
   assert_eq!(
     value["mcp_servers"][1]["body"]["launch"],
-    json!({"kind": "remote", "url": "https://mcp.example.org/x", "secret_headers": ["X-API-Key"]})
+    json!({"kind": "remote", "url": "https://mcp.example.org/x", "secret_headers": [{"header": "X-API-Key", "secret": "API_KEY"}]})
   );
   let fields: Vec<&str> = first
     .as_object()
@@ -327,7 +327,10 @@ fn execution_bundle_mcp_hashes_differently_when_a_server_or_the_names_change() {
     ("/mcp_servers/0/body/exempt_tools", json!(["write"])),
     ("/mcp_servers/0/number", json!(3)),
     ("/mcp_servers/0/label/slug", json!("design")),
-    ("/mcp_servers/1/body/launch/secret_headers", json!(["X-Other"])),
+    (
+      "/mcp_servers/1/body/launch/secret_headers",
+      json!([{"header": "X-API-Key", "secret": "OTHER_KEY"}]),
+    ),
   ];
   for (pointer, changed) in changes {
     let mut value = value.clone();

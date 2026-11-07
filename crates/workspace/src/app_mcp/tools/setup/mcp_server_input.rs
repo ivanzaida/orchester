@@ -34,6 +34,20 @@ pub enum Authorization {
   Header { name: String, secret: String },
 }
 
+/// A header a team's remote server is sent a secret in.
+#[derive(Clone, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(crate = "rmcp::schemars")]
+pub struct SecretHeader {
+  /// The header's name: `Authorization`, `X-API-Key`.
+  pub header: String,
+  /// The team secret whose value is sent, by its name (capital letters, digits and _): never a value.
+  pub secret: String,
+  /// Plain text the value starts with, e.g. `Bearer `; the value sent is this followed by the secret's value. A
+  /// prefix is not a value and is at most 32 characters.
+  pub prefix: Option<String>,
+}
+
 /// The fields of a server, as Add MCP server and Edit MCP server have them.
 #[derive(Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -57,13 +71,15 @@ pub struct ServerFields {
   /// Tools of the server that run without asking, as the server names them, for profiles that ask
   /// before MCP actions.
   pub exempt_tools: Option<Vec<String>>,
-  /// Team MCP servers only: the names of the variables the program needs; each computer gives their values. A team
+  /// Team MCP servers only: the names of the variables the program needs. Each is filled from the team secret of
+  /// the same name, so each is a secret name (capital letters, digits and _); each computer gives the values. A team
   /// server holds no value, so `environment` is refused in a team project. With `program`, not with `url`.
   pub variable_names: Option<Vec<String>>,
-  /// Team MCP servers only: the names of the headers a remote server is sent a secret in (`Authorization` for a
-  /// bearer or Basic credential, `X-API-Key`); each computer gives the secrets. A team server holds no secret, so
-  /// `authorization` is refused in a team project. With `url`, not with `program`.
-  pub secret_headers: Option<Vec<String>>,
+  /// Team MCP servers only: the headers a remote server is sent a secret in, each with the team secret its value
+  /// comes from and an optional prefix (`Authorization` with `Bearer ` for a bearer credential, `X-API-Key`); each
+  /// computer gives the secrets' values. A team server holds no secret, so `authorization` is refused in a team
+  /// project. With `url`, not with `program`.
+  pub secret_headers: Option<Vec<SecretHeader>>,
 }
 
 impl ServerFields {
