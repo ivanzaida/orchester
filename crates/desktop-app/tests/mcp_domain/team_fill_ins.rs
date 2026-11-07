@@ -11,10 +11,13 @@ use std::{
 use orchester_core::{
   account::AccountCli,
   blob::ContentHash,
-  id::{AgentAccountId, ConnectionId, ProjectId, ResourceId, ServerId, UserId},
+  connection::{DecisionConnection, DecisionServerUrl},
+  id::{AgentAccountId, ConnectionId, DecisionConnectionId, ProjectId, ResourceId, ServerId, UserId},
   name::Name,
   project::ProjectKey,
-  resource::{AgentProfile, ModelId, PromptText, ProviderSettings, ResourceBody, Slug, TeamMcpServer, VersionNumber},
+  resource::{
+    AgentProfile, ModelId, PromptText, ProviderSettings, ResourceBody, Slug, TeamMcpServer, TeamReviewer, VersionNumber,
+  },
   secret::{SecretName, SecretValue},
   sharing::{MemberRole, SharedPerson, TaskRevision},
   store::ResourceStore,
@@ -233,6 +236,80 @@ fn domain_team_pick_profile_connection_keeps_the_pick_for_a_team_profile() {
   let unknown = json!({ "project": "Kontur", "profile": "nobody", "connection": connection });
   let refused = team.served.refused("pick_profile_connection", &unknown);
   assert_eq!(refused["code"], "profile_not_found", "{refused}");
+}
+
+#[test]
+fn domain_team_pick_reviewer_connection_keeps_the_pick_for_a_team_reviewer() {
+  let mut team = team();
+  let connection = team.codex_connection();
+  let language = |cli: &str| -> TeamReviewer {
+    serde_json::from_value(json!({"kind": "language", "cli": cli, "model": "m-1", "effort": null})).expect("language")
+  };
+  let decision: TeamReviewer = serde_json::from_value(json!({
+    "kind": "decision", "model": "d-1", "lowest_threshold": 0.8, "destinations": {"kind": "members_computers"}
+  }))
+  .expect("decision");
+  let mut db = team.db();
+  let codex = team_resource(&mut db, "codex-reviewer", language("codex_cli"), Vec::new());
+  let claude = team_resource(&mut db, "claude-reviewer", language("claude_code_cli"), Vec::new());
+  let decisions = team_resource(&mut db, "decisions", decision, Vec::new());
+  let (local, hosted) = (
+    decision_connection(&mut db, "local", "http://127.0.0.1:8000"),
+    decision_connection(&mut db, "hosted", "https://api.typesafe.ai/v1"),
+  );
+  drop(db);
+  let args = |reviewer: ResourceId, connection: &str| json!({ "project": "Kontur", "reviewer": reviewer.to_string(), "connection": connection });
+
+  let picked = team.served.ok("pick_reviewer_connection", &args(codex, &connection));
+  assert_eq!(picked["reviewer"]["name"], "codex-reviewer");
+  assert_eq!(picked["connection"]["id"], connection);
+  assert_eq!(
+    team
+      .db()
+      .connection_pick(codex)
+      .expect("read")
+      .map(|pick| pick.connection.to_string()),
+    Some(connection.clone())
+  );
+  let refused = team
+    .served
+    .refused("pick_reviewer_connection", &args(claude, &connection));
+  assert_eq!(refused["code"], "connection_does_not_fit", "{refused}");
+  assert_eq!(team.db().connection_pick(claude).expect("read"), None);
+  let refused = team.served.refused(
+    "pick_reviewer_connection",
+    &json!({"project": "Kontur", "reviewer": "nobody", "connection": connection}),
+  );
+  assert_eq!(refused["code"], "reviewer_not_found", "{refused}");
+
+  team
+    .served
+    .ok("pick_reviewer_connection", &args(decisions, &local.to_string()));
+  assert_eq!(team.db().decision_pick(decisions).expect("read"), Some(local));
+  let refused = team
+    .served
+    .refused("pick_reviewer_connection", &args(decisions, &hosted.to_string()));
+  assert_person_only(&refused);
+  assert_eq!(
+    team.db().decision_pick(decisions).expect("read"),
+    Some(local),
+    "the pick stays"
+  );
+  let refused = team
+    .served
+    .refused("pick_reviewer_connection", &args(decisions, &connection));
+  assert_eq!(refused["code"], "connection_not_found", "{refused}");
+}
+
+fn decision_connection(db: &mut ProjectDb, label: &str, url: &str) -> DecisionConnectionId {
+  let made = DecisionConnection::new(
+    DecisionConnectionId::generate(),
+    name(label),
+    DecisionServerUrl::new(url).expect("server"),
+    None,
+  );
+  db.create_decision_connection(&made).expect("a decision connection");
+  made.id()
 }
 
 /// The account the codex profile's pick keeps, `None` before any pick.
