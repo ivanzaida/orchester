@@ -14,7 +14,7 @@ use orchester_api::{
 use orchester_core::{
   blob::ContentHash,
   id::IdempotencyKey,
-  resource::{AgentProfile, Instruction, Pipeline, Resource, ResourceBody, Skill, Tool},
+  resource::{AgentProfile, Instruction, Pipeline, Resource, ResourceBody, Skill, TeamExecutors, Tool},
   sharing::LocalEntities,
   store::{BlobStore, ConnectionStore, McpServerStore, ResourceStore, SecretStore},
   time::Timestamp,
@@ -96,10 +96,15 @@ fn read(db: &ProjectDb) -> Result<(Vec<UploadResource>, BTreeSet<ContentHash>), 
   };
   let mut uploads = Vec::new();
   let mut parts = BTreeSet::new();
+  let (mut profiles, mut tools) = (Vec::new(), Vec::new());
   for kind in KINDS {
     for kept in db.resources(kind.core())? {
       let versions = match kind {
-        SharedResourceKind::Pipeline => versions::<Pipeline>(db, &kept, entities)?,
+        SharedResourceKind::Pipeline => {
+          let team = TeamExecutors::new(profiles.iter().copied(), tools.iter().copied());
+          check_latest_pipeline(db, &kept, &team)?;
+          versions::<Pipeline>(db, &kept, entities)?
+        }
         SharedResourceKind::AgentProfile => versions::<AgentProfile>(db, &kept, entities)?,
         SharedResourceKind::Instruction => versions::<Instruction>(db, &kept, entities)?,
         SharedResourceKind::Tool => versions::<Tool>(db, &kept, entities)?,
@@ -115,6 +120,11 @@ fn read(db: &ProjectDb) -> Result<(Vec<UploadResource>, BTreeSet<ContentHash>), 
       if versions.is_empty() {
         continue;
       }
+      match kind {
+        SharedResourceKind::AgentProfile => profiles.push(kept.id()),
+        SharedResourceKind::Tool => tools.push(kept.id()),
+        _ => {}
+      }
       uploads.push(UploadResource {
         id: kept.id(),
         kind,
@@ -126,6 +136,16 @@ fn read(db: &ProjectDb) -> Result<(Vec<UploadResource>, BTreeSet<ContentHash>), 
     }
   }
   Ok((uploads, parts))
+}
+
+/// Fails when the newest version of the pipeline `resource` names a profile or tool Share does not upload: the team
+/// would hold a pipeline naming ids it does not have. Older versions are history; a profile or tool removed since may
+/// still be named there.
+fn check_latest_pipeline(db: &ProjectDb, resource: &Resource, team: &TeamExecutors) -> Result<(), SharingError> {
+  match db.latest_version::<Pipeline>(resource.id())? {
+    Some(latest) => team_body::check_pipeline(db, resource.id(), latest.body(), team),
+    None => Ok(()),
+  }
 }
 
 /// `resource`'s published versions, oldest first, which name nothing of `entities`.

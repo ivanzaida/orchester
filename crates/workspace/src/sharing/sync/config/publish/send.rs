@@ -29,8 +29,8 @@ use crate::sharing::{
 
 impl<S: ConfigServer> RemoteResourceStore<S> {
   /// Sends every version published here that waits, e.g. once the server can be reached again. One the server did not
-  /// take is recorded on it and logged; the others are still sent. Fails, sending nothing more, when the server cannot
-  /// be reached.
+  /// take, or this computer knows it cannot, is recorded on it and logged; the others are still sent. Fails, sending
+  /// nothing more, when the server cannot be reached.
   pub fn send_waiting(&mut self) -> Result<(), SharingError> {
     let mut resources: Vec<ResourceId> = Vec::new();
     for waiting in self.db.waiting_publishes()? {
@@ -75,9 +75,25 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
     }
   }
 
+  /// Sends `waiting`. A version this computer knows the team cannot take ([`refusal_code`]) is recorded as refused,
+  /// like one the server refused, instead of waiting to be retried: editing it or the team's resources makes a new
+  /// version, and *Publish again* is the admin's decision.
   fn send_one(&mut self, waiting: &WaitingPublish) -> Result<(), SharingError> {
+    let sent = self.dispatch(waiting);
+    if let Err(error) = &sent
+      && let Some(code) = refusal_code(error)
+    {
+      self.db.record_publish_refused(waiting.version, code)?;
+    }
+    sent
+  }
+
+  fn dispatch(&mut self, waiting: &WaitingPublish) -> Result<(), SharingError> {
     match waiting.kind {
-      ResourceKind::Pipeline => self.send_kind::<Pipeline>(waiting),
+      ResourceKind::Pipeline => {
+        self.check_team_pipeline(waiting)?;
+        self.send_kind::<Pipeline>(waiting)
+      }
       ResourceKind::AgentProfile => self.send_kind::<AgentProfile>(waiting),
       ResourceKind::Instruction => self.send_kind::<Instruction>(waiting),
       ResourceKind::Skill => self.send_kind::<Skill>(waiting),
@@ -93,6 +109,17 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
         .into(),
       ),
     }
+  }
+
+  /// A pipeline names its profiles and tools by their server ids, so it may name only what the team has
+  /// ([`team_body::check_pipeline`]).
+  fn check_team_pipeline(&self, waiting: &WaitingPublish) -> Result<(), SharingError> {
+    let version = self
+      .db
+      .version::<Pipeline>(waiting.resource, waiting.number)?
+      .ok_or(StoreError::ResourceNotFound(waiting.resource))?;
+    let team = team_body::team_executors(&self.db)?;
+    team_body::check_pipeline(&self.db, waiting.resource, version.body(), &team)
   }
 
   fn send_kind<B: ResourceBody + Clone>(&mut self, waiting: &WaitingPublish) -> Result<(), SharingError> {
@@ -269,6 +296,16 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
       }
     }
     Ok(())
+  }
+}
+
+/// The code a version is recorded as refused with when this computer itself finds the team cannot take it: its body
+/// names what the team does not have, so sending it again would only fail the same way.
+const fn refusal_code(error: &SharingError) -> Option<&'static str> {
+  match error {
+    SharingError::LocalEntitiesNamed { .. } => Some("local_entities_named"),
+    SharingError::PipelineNamesNonTeam { .. } => Some("pipeline_names_non_team"),
+    _ => None,
   }
 }
 

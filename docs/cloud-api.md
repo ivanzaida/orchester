@@ -194,6 +194,18 @@ agent profile and the tool) change in ORC-820 and later tasks; until then a desk
 migration rewrites the versions that exist (`team-configuration-handover.md`, OP-200). There is no compatibility
 window: a server and a desktop on different versions of this contract do not read each other's `references`.
 
+A **pipeline** names the profiles and tools it runs by their server resource ids in its body, and its `references` stay
+empty: the body is the one source of truth, which is also how used-by reads it (`steps[].kind.agent.profile`,
+`steps[].kind.tool.tool`, `deliver.integrator`). A team resource keeps the server's id on every computer, so the body
+is the same everywhere. The desktop sends a pipeline only when every id it names (profile, tool and integrator) is a
+team resource of the project (core's `Pipeline::check_team`; `SharingError::PipelineNamesNonTeam` otherwise, nothing
+sent, and the version is recorded as refused with the code `pipeline_names_non_team`); a
+step or Deliver step with no profile or tool chosen names nothing. The server (OP-199) should apply the same rule to a
+pipeline body: each of those ids must be an existing, not archived team resource of the right kind (`agent_profile`
+for a step's profile and the integrator, `tool` for a tool step) in the same project, else `422 invalid { reason:
+"body" }`. A Share import carries a pipeline's older versions as history: the server checks an imported
+resource's latest version like a publish; older versions are history and are not checked for named ids.
+
 The desktop's local projects keep their local ids; this shape is the team body's. The execution bundle carries none
 of these ids either: its `bindings` hold `{resource_id, role, cli, model}` of each pinned profile (below).
 

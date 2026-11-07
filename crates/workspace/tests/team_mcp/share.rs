@@ -4,9 +4,12 @@
 //! the team's.
 
 use orchester_core::{
-  id::ResourceId,
+  id::{ConnectionId, ResourceId},
   name::Name,
-  resource::{Pipeline, Resource, ResourceKind, Slug},
+  resource::{
+    AgentProfile, DeliverMode, DeliverStep, MergeMethod, ModelId, Pipeline, PromptText, ProviderSettings, Resource,
+    ResourceKind, Slug,
+  },
   sharing::TaskRevision,
   store::ResourceStore,
   time::Timestamp,
@@ -134,4 +137,60 @@ fn team_mcp_share_pipeline_is_refused_for_a_member_without_the_switch_locally_an
   });
   assert_eq!(own_profile.refused(SHARE, &args), "team_resources_required");
   assert!(own_profile.db().waiting_publishes().expect("read").is_empty());
+}
+
+/// The Deliver step's integrator is a profile too: one that only this computer keeps would leave the team's copy
+/// naming an id the server does not have, and the copy would wait for ever.
+#[test]
+fn team_mcp_share_pipeline_is_refused_when_the_integrator_is_a_profile_of_this_computer() {
+  let (server, _seen) = server();
+  let args = json!({"project": "Kontur", "pipeline": "Delivery"});
+  let switch_on = Standing {
+    role: "owner",
+    widens: true,
+  };
+  let checkout = Checkout::standing(Some(&server), (&[], switch_on), |db| {
+    let profile = team_profile(db);
+    let integrator = db
+      .create_resource(
+        Slug::new("scratch").expect("slug"),
+        Name::new("Scratch").expect("name"),
+        &AgentProfile::new(
+          Name::new("Scratch").expect("name"),
+          String::new(),
+          PromptText::new("Merge.").expect("prompt"),
+          ConnectionId::generate(),
+          ModelId::new("haiku").expect("model"),
+          ProviderSettings::default(),
+        ),
+        Timestamp::now(),
+      )
+      .expect("a profile")
+      .id();
+    let deliver = DeliverStep::new(DeliverMode::AutoMerge, MergeMethod::Squash, Some(integrator), true);
+    let body = fixture::one_step(profile, "Say hello.")
+      .body()
+      .clone()
+      .with_deliver(Some(deliver));
+    let id = db
+      .create_resource(
+        Slug::new("delivery").expect("slug"),
+        Name::new("Delivery").expect("name"),
+        &body,
+        Timestamp::now(),
+      )
+      .expect("a pipeline")
+      .id();
+    db.publish_draft::<Pipeline>(id, Timestamp::now()).expect("published");
+  });
+
+  let refused = checkout
+    .call(SHARE, &args)
+    .expect_err("the integrator is not the team's");
+
+  assert_eq!(refused["error"]["code"], "team_resources_required", "{refused}");
+  assert!(
+    checkout.db().waiting_publishes().expect("read").is_empty(),
+    "nothing was copied"
+  );
 }
