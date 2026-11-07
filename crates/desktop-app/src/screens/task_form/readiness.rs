@@ -142,15 +142,17 @@ fn missing_team(ctx: &Ctx, count: usize) -> Arc<str> {
 }
 
 /// The last words of a pipeline's line in the menu (`Ready` `e2m70N`, `dcW5J` in `P6aAoZ`): *Ready here* in
-/// `text_secondary`, or what is missing in `warning`; a local project's words leave out *here*. A readiness that could
+/// `text_secondary` after a `success` mark, or what is missing in `warning` after a `warning` one; a local project's words leave out *here*. A readiness that could
 /// not be read says *Couldn't tell*; nothing is said while it is read.
 pub(super) fn option_status(ctx: &Ctx, view: &View, choice: &PipelineChoice) -> Option<OptionStatus> {
   let team = view.shared;
-  let (words, color) = match (&view.readiness, view.readiness_of(choice)) {
+  let (words, color, mark) = match (&view.readiness, view.readiness_of(choice)) {
     (Readiness::Reading, _) => return None,
-    (Readiness::Failed, _) | (Readiness::Known(_), None) => {
-      (ctx.t("task_form.readiness.unknown"), PaletteColor::Warning)
-    }
+    (Readiness::Failed, _) | (Readiness::Known(_), None) => (
+      ctx.t("task_form.readiness.unknown"),
+      PaletteColor::Warning,
+      PaletteColor::Warning,
+    ),
     (Readiness::Known(_), Some(readiness)) => match readiness.standing() {
       ReadinessStanding::Ready => (
         ctx.t(if team {
@@ -159,6 +161,7 @@ pub(super) fn option_status(ctx: &Ctx, view: &View, choice: &PipelineChoice) -> 
           "task_form.readiness.ready.local"
         }),
         PaletteColor::TextSecondary,
+        PaletteColor::Success,
       ),
       ReadinessStanding::Missing(readiness) => {
         let count = readiness.missing().len();
@@ -169,6 +172,7 @@ pub(super) fn option_status(ctx: &Ctx, view: &View, choice: &PipelineChoice) -> 
             missing_local(ctx, count)
           },
           PaletteColor::Warning,
+          PaletteColor::Warning,
         )
       }
       ReadinessStanding::Undecided(_) => (
@@ -178,12 +182,14 @@ pub(super) fn option_status(ctx: &Ctx, view: &View, choice: &PipelineChoice) -> 
           "task_form.readiness.notReady.local"
         }),
         PaletteColor::Warning,
+        PaletteColor::Warning,
       ),
     },
   };
   Some(OptionStatus {
     words,
     color,
+    mark,
     dot: ctx.t("task_form.readiness.dot"),
   })
 }

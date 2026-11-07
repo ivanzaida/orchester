@@ -130,14 +130,22 @@ fn reason_line(ctx: &mut Ctx, view: &View, on: &Handlers) -> Vec<Element> {
       .describe("role", role)
       .describe("reason", reason.words)
       .child(icon(glyph, IconSize::Sm, color))
-      .child(Row::new().flex_shrink(1.0).min_width(Dimension::Px(0.0)).child(words))
-      .with_children(reason_link(ctx, reason.kind, on))
+      .child(
+        Row::new()
+          .flex_shrink(1.0)
+          .min_width(Dimension::Px(0.0))
+          .spacing(ExtraSpacing::Fine.role())
+          .align_items(Alignment::Center)
+          .child(Row::new().flex_shrink(1.0).min_width(Dimension::Px(0.0)).child(words))
+          .with_children(reason_link(ctx, reason.kind, on)),
+      )
       .into(),
   ]
 }
 
 /// *· Show* after a pipeline's missing parts, that open where they are listed (`Reason` `ACVRw`), or *· Retry* after
-/// the words saying its readiness could not be read: the words of the line, `warning`.
+/// the words saying its readiness could not be read: the words of the line, `warning`, a space (3) before and after
+/// the dot as in the line's one text.
 fn reason_link(ctx: &Ctx, kind: Kind, on: &Handlers) -> Option<Element> {
   let (key, press) = match kind {
     Kind::NotReady => ("task_form.readiness.show", Press::Open(on.show_missing.clone())),
@@ -157,7 +165,7 @@ fn reason_link(ctx: &Ctx, kind: Kind, on: &Handlers) -> Option<Element> {
   Some(
     Row::new()
       .flex_shrink(0.0)
-      .spacing(ExtraSpacing::Tight.role())
+      .spacing(ExtraSpacing::Fine.role())
       .child(word("task-form-reason-dot", "task_form.readiness.dot"))
       .child(
         Focus::Link

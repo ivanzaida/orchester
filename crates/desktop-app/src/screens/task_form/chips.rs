@@ -20,6 +20,7 @@ use lurq::{
 };
 
 use crate::{
+  shell::status_bar::dot,
   theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, TaskFormSpacing, TaskFormText},
   ui::{
     icon::{Icon, icon},
@@ -296,11 +297,14 @@ pub enum HelpPlace {
   UnderIcon,
 }
 
-/// The last words of an option's line, after a dot (`Ready` `e2m70N` in `P6aAoZ`): how the choice stands, in the color
-/// that says it.
+/// The last words of an option's line, after a dot and a 6 round mark (`Dot` `vKyvX`, `Ready` `e2m70N` in `P6aAoZ`): how
+/// the choice stands, the mark in the color that says it.
 pub struct OptionStatus {
   pub words: Arc<str>,
+  /// The words' color.
   pub color: PaletteColor,
+  /// The round mark before the words: `success` for what is ready, `warning` for what is not.
+  pub mark: PaletteColor,
   /// The dot between the help and the words.
   pub dot: Arc<str>,
 }
@@ -367,10 +371,12 @@ impl MenuOption {
         .spacing(ExtraSpacing::Snug.role())
         .with_children(help)
         .child(
-          text("status", &status.words)
-            .color(status.color.clone())
-            .nowrap()
-            .flex_shrink(0.0),
+          Row::new()
+            .flex_shrink(0.0)
+            .spacing(ExtraSpacing::Snug.role())
+            .align_items(Alignment::Center)
+            .child(dot(status.mark.clone()))
+            .child(text("status", &status.words).color(status.color.clone()).nowrap()),
         )
         .into(),
     )
