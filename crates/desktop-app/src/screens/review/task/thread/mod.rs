@@ -31,6 +31,7 @@ use super::{
   Env,
   actions::{Kept, Write},
   composer::{in_thread_box, new_box},
+  conflict,
   diff::{COMPOSER, outdated_key, resolved_key, thread_key},
   state::InThread,
   tag::tag,
@@ -53,6 +54,9 @@ const HEAD_HEIGHT: f32 = 30.0;
 pub(super) fn block(ctx: &mut Ctx, env: &Env, key: &Arc<str>) -> Element {
   if **key == *COMPOSER {
     return wrap(new_box(ctx, env));
+  }
+  if key.starts_with("conflict:") {
+    return conflict::block(ctx, env, key).map_or_else(Element::new, wrap);
   }
   if let Some(path) = key.strip_prefix("outdated:") {
     return wrap(outdated_fold(ctx, env, path));

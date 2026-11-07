@@ -1,7 +1,8 @@
 //! Every change the review page makes, one at a time, off the UI thread (`tasks::review_threads`): a comment kept
 //! unsent, a question kept asked and then handed to the project's runner at once, *Ask again*, *Reply*, a comment's
 //! new words or its deletion, *Discard*, *Resolve*, *Viewed*, *Send to Implement* (the comments kept sending, then
-//! handed to the runner), *Stop answering* and *Approve and merge*. The review is read again once the change is kept,
+//! handed to the runner), *Stop answering*, *Approve and merge* (also *Try merge again* on a merge that conflicted) and
+//! *Ask the agent to resolve* (the run goes back to Implement). The review is read again once the change is kept,
 //! and again once the runner took what was handed to it. A question or comments the runner did not take are kept *Not
 //! asked* or *Not sent* with why, which the thread and the tray show; any other refusal shows over the diff.
 
@@ -25,7 +26,7 @@ use orchester_workspace::{
   runner::Runners,
   tasks::{
     resolve::RunWorktrees,
-    review_threads::{self, ReviewRefusal, approve::approve_and_merge, ask, send},
+    review_threads::{self, ReviewRefusal, approve::approve_and_merge, ask, conflicts, send},
     worktree_removal::WorktreeRemover,
   },
   workspace::OpenProject,
@@ -47,8 +48,10 @@ pub(super) enum Write {
   AskAgain(ReviewThreadId, MessageBody),
   Send,
   Stop(ReviewThreadId),
-  /// *Approve and merge* at the head reviewed.
+  /// *Approve and merge* at the head reviewed; on a merge that conflicted, *Try merge again*.
   Approve(Revision),
+  /// *Ask the agent to resolve* the conflicts of the approved merge: the run goes back to Implement.
+  Resolve,
 }
 
 /// A change that does not go to the runner.
@@ -68,6 +71,7 @@ pub(super) enum Kept {
 pub(super) enum Landed {
   Kept,
   Approved,
+  Resolving,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Landed {}
@@ -143,9 +147,17 @@ impl Writes {
         Some(Closes::InThread) => state.close_in_thread(),
         None => {}
       }
-      if landed.data == Some(Landed::Approved) {
-        // A merge ran: the project's tasks and merges are read again.
-        feed.saved();
+      match landed.data {
+        Some(Landed::Approved) => {
+          // A merge ran: the project's tasks and merges are read again.
+          feed.saved();
+        }
+        Some(Landed::Resolving) => {
+          // The run's work went back to a step that resolves the merge, so what that merge found no longer stands.
+          feed.jobs.of(run).forget_merge_failure();
+          feed.saved();
+        }
+        _ => {}
       }
     });
     Self { action, closes }
@@ -215,6 +227,13 @@ async fn apply(reach: &Reach, write: Write) -> Result<Landed, ReviewRefusal> {
         WorktreeRemover::through_runner(&reach.runners, (&reach.root, reach.open.project.name().as_str()));
       blocking(move || approve_and_merge(&worktrees, &programs, (run, &reviewed), now)).await?;
       Ok(Landed::Approved)
+    }
+    Write::Resolve => {
+      let worktrees = RunWorktrees::through_runner(&reach.runners, (&reach.root, reach.open.project.name().as_str()));
+      let command = blocking(move || conflicts::resolve::begin(&root, &worktrees, run)).await?;
+      reach.hand_offs.released().await;
+      conflicts::resolve::send(&reach.runners, &reach.open, command).await?;
+      Ok(Landed::Resolving)
     }
   }
 }

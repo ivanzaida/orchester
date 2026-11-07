@@ -103,7 +103,7 @@ fn standing(state: &ReviewState) -> Option<Standing> {
   match state {
     ReviewState::Ready | ReviewState::CommentsNotSent { .. } => Some(Standing::Waiting),
     ReviewState::ChangedSinceReview { .. } => Some(Standing::Changed),
-    ReviewState::ImplementOn { .. } => Some(Standing::AtWork),
+    ReviewState::ImplementOn { .. } | ReviewState::ResolvingConflicts { .. } => Some(Standing::AtWork),
     ReviewState::Conflicts { .. } | ReviewState::Merged { .. } | ReviewState::Merging { .. } => None,
   }
 }

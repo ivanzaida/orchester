@@ -113,7 +113,12 @@ impl Component for ReviewDiff {
     let composing = state.composing.get().0;
     let opened = state.opened.get().0;
     let folded = state.folded.get().0;
-    let places = places(&props.diff, (&env.review, &env.head), composing.as_ref(), &opened);
+    let places = places(
+      &props.diff,
+      (&env.review, &env.head),
+      composing.as_ref(),
+      (&opened, env.page.conflicts.as_ref()),
+    );
     let made_of = MadeOf {
       key: props.key.clone(),
       highlighted: tokens.is_some(),

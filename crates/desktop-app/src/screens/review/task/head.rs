@@ -5,7 +5,8 @@
 //! works, and unavailable once the branch moved past the head reviewed, and its reason stands before it. Then the
 //! branch moved: *Changed since your review* says so and lists the new commits, and the person takes them in before
 //! they approve. Once the run was approved ([`approved`]) there is no *Approve and merge*, and the status line tells
-//! how it merged.
+//! how it merged. A merge that conflicts has no *Approve and merge* and no other strip: its line says *Conflicts with
+//! master*, approved, nothing merged and how many files conflict.
 
 use std::sync::Arc;
 
@@ -23,11 +24,11 @@ use orchester_workspace::{
   display::{clock, short_revision},
   tasks::{
     changes::Checkpointed,
-    review_threads::{ReviewRefusal, page::ReviewPage},
+    review_threads::{ReviewRefusal, conflicts::ReviewConflicts, page::ReviewPage},
   },
 };
 
-use super::{Env, actions::Write, agent::Working, approved, state::Held, words::counted};
+use super::{Env, actions::Write, agent::Working, approved, conflict, state::Held, words::counted};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
@@ -56,7 +57,7 @@ pub(super) fn moved(env: &Env) -> Option<&Revision> {
 /// The title with *Open task* and *Approve and merge*, which is not shown while Implement works on comments sent to it.
 pub(super) fn header(ctx: &mut Ctx, env: &Env) -> Element {
   let open = open_task(ctx, &env.navigation, &env.project, &env.page.run.key);
-  if env.read_only || env.review.implement_at_work {
+  if env.read_only || env.review.implement_at_work || env.page.conflicts.is_some() {
     return title(&env.page.run.title, vec![open.into()]);
   }
   let approve = approve_button(ctx);
@@ -143,6 +144,9 @@ pub(super) fn status(ctx: &Ctx, env: &Env) -> Element {
   if let Some(approved) = &env.page.approved {
     return approved::status(ctx, env, approved);
   }
+  if let Some(conflicts) = &env.page.conflicts {
+    return conflicting(ctx, conflicts);
+  }
   let standing = if env.page.review_in.is_none() || env.review.implement_at_work {
     Standing::AtWork
   } else if moved(env).is_some() {
@@ -176,6 +180,43 @@ pub(super) fn status_line(ctx: &Ctx, standing: Standing, meta: &str) -> Element 
     )
     .child(
       Text::new(meta)
+        .id("review-status-meta")
+        .variant(TypographyStyle::Description)
+        .color(PaletteColor::TextMuted)
+        .nowrap(),
+    )
+    .into()
+}
+
+/// The status line of a merge that conflicts (`Status` `oTMra` in 11 `CT6Gc`): *Conflicts with master* in `danger`,
+/// then when it was approved, that nothing merged and how many files conflict.
+fn conflicting(ctx: &Ctx, conflicts: &ReviewConflicts) -> Element {
+  let base = conflict::base_name(ctx, conflicts);
+  let files = conflicts.files.len();
+  let words = ctx.t_args("review_page.status.conflicts", [("base", &*base)]);
+  let meta = ctx.t_args(
+    if files == 1 {
+      "review_page.status.conflictsMetaOne"
+    } else {
+      "review_page.status.conflictsMetaOther"
+    },
+    [("time", clock(conflicts.at)), ("count", files.to_string())],
+  );
+  Row::new()
+    .id("review-status")
+    .describe("status", "conflicts")
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .child(icon(Icon::GitCompareArrows, IconSize::Md, PaletteColor::Danger))
+    .child(
+      Text::new(&words)
+        .id("review-status-text")
+        .variant(ExtraTypography::Strong.role())
+        .color(PaletteColor::Danger)
+        .nowrap(),
+    )
+    .child(
+      Text::new(&meta)
         .id("review-status-meta")
         .variant(TypographyStyle::Description)
         .color(PaletteColor::TextMuted)
@@ -240,6 +281,9 @@ fn size(changes: &Checkpointed) -> Option<(usize, u32, u32)> {
 /// *Changed since your review*: the commits after the head reviewed, newest first, and *I've looked at them*, which
 /// takes the head shown in.
 pub(super) fn changed(ctx: &Ctx, env: &Env) -> Option<Element> {
+  if env.page.conflicts.is_some() {
+    return None;
+  }
   let reviewed = moved(env)?;
   let commits: Vec<Element> = env
     .page

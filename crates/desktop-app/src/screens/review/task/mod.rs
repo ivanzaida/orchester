@@ -14,6 +14,7 @@ mod actions;
 mod agent;
 mod approved;
 mod composer;
+mod conflict;
 mod crumbs;
 mod diff;
 mod files;
@@ -321,7 +322,8 @@ impl ReviewScreen {
           .spacing(ExtraSpacing::Loose.role())
           .child(diff)
           .with_children(tray::tray(ctx, env))
-          .with_children(agent::bar(ctx, env)),
+          .with_children(agent::bar(ctx, env))
+          .with_children(conflict::bar(ctx, env)),
       )
       .into()
   }

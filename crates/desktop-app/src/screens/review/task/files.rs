@@ -1,9 +1,9 @@
 //! The run's files beside its diff (`Files` `qCQrx` in 09i): 240 wide, its head (*Files* in 13/600, their count, and
-//! *3 of 7 viewed* at its end), then a 30-high row per file, 10 at its sides: a mark (*Viewed*'s check in `success`, a
-//! file with open threads `info`'s speech mark, else the file's own), its name in 12, and its added and removed lines
-//! in Geist Mono 11 in `success` and `danger`. The chosen file's row is on `hover` in `text_primary`; choosing one
-//! scrolls the diff to it and unfolds it. A row's tooltip names the file's path and its threads (*2 comments · 1
-//! question*).
+//! *3 of 7 viewed* at its end, *2 conflicting* in `danger` in its place while the merge conflicts), then a 30-high row
+//! per file, 10 at its sides: a mark (*Viewed*'s check in `success`, a file with open threads `info`'s speech mark,
+//! else the file's own), its name in 12, and its added and removed lines in Geist Mono 11 in `success` and `danger`.
+//! The chosen file's row is on `hover` in `text_primary`; choosing one scrolls the diff to it and unfolds it. A row's
+//! tooltip names the file's path and its threads (*2 comments · 1 question*).
 
 use std::sync::Arc;
 
@@ -46,7 +46,8 @@ pub(super) fn files(ctx: &mut Ctx, env: &Env, diff: &Diff) -> Element {
     .get()
     .0
     .or_else(|| diff.files().first().map(|file| Arc::from(file.path())));
-  let head = head(ctx, (viewed, total));
+  let conflicting = env.page.conflicts.as_ref().map(|conflicts| conflicts.files.len());
+  let head = head(ctx, (viewed, total), conflicting);
   let rows: Vec<Element> = diff
     .files()
     .iter()
@@ -57,6 +58,11 @@ pub(super) fn files(ctx: &mut Ctx, env: &Env, diff: &Diff) -> Element {
         chosen: chosen.as_deref() == Some(file.path()),
         viewed: env.viewed.contains(file.path()),
         counts: env.counts.get(&path).copied().unwrap_or_default(),
+        conflicting: env
+          .page
+          .conflicts
+          .as_ref()
+          .is_some_and(|conflicts| conflicts.conflicts_in(&path)),
         lines: (file.additions(), file.deletions()),
       };
       row(ctx, env, (at, path), &shown)
@@ -85,18 +91,26 @@ pub(super) fn files(ctx: &mut Ctx, env: &Env, diff: &Diff) -> Element {
 }
 
 /// *Files* with their count, and *3 of 7 viewed* at the end.
-fn head(ctx: &Ctx, (viewed, total): (usize, usize)) -> Row {
-  let muted = |id: &str, words: &str| {
+fn head(ctx: &Ctx, (viewed, total): (usize, usize), conflicting: Option<usize>) -> Row {
+  let coloured = |id: &str, words: &str, color: PaletteColor| {
     Text::new(words)
       .id(id.to_owned())
       .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextMuted)
+      .color(color)
       .nowrap()
   };
+  let muted = |id: &str, words: &str| coloured(id, words, PaletteColor::TextMuted);
   let count = ctx.t_args(
     "review_page.files.viewed",
     [("viewed", viewed.to_string()), ("total", total.to_string())],
   );
+  let (end, end_color) = match conflicting {
+    Some(files) => (
+      ctx.t_args("review_page.files.conflicting", [("count", files.to_string())]),
+      PaletteColor::Danger,
+    ),
+    None => (count, PaletteColor::TextMuted),
+  };
   Row::new()
     .id("review-files-head")
     .width(Dimension::Pct(100.0))
@@ -115,7 +129,7 @@ fn head(ctx: &Ctx, (viewed, total): (usize, usize)) -> Row {
     )
     .child(muted("review-files-count", &total.to_string()))
     .child(Row::new().flex(1.0))
-    .child(muted("review-files-viewed", &count))
+    .child(coloured("review-files-viewed", &end, end_color))
 }
 
 /// What a file's row shows.
@@ -125,12 +139,16 @@ struct Shown {
   counts: ThreadCounts,
   /// Its added and removed lines.
   lines: (u32, u32),
+  /// Its merge into the run's base branch conflicts here.
+  conflicting: bool,
 }
 
 fn row(ctx: &mut Ctx, env: &Env, (at, path): (usize, Arc<str>), shown: &Shown) -> Element {
   let id = format!("review-files-{at}");
   let open = shown.counts.comments + shown.counts.questions > 0;
-  let (glyph, color) = if shown.viewed {
+  let (glyph, color) = if shown.conflicting {
+    (Icon::GitCompareArrows, PaletteColor::Danger)
+  } else if shown.viewed {
     (Icon::CircleCheck, PaletteColor::Success)
   } else if open {
     (Icon::MessageSquare, PaletteColor::Info)
