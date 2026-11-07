@@ -393,6 +393,13 @@ async fn run_again(
   (task, after, revision): (TaskId, RunId, Option<TaskRevision>),
   pipeline: &str,
 ) -> Result<(), Message> {
+  // A pipeline that is not ready here starts nothing: no claim is taken and no attempt counted. The task's page lists
+  // what is missing.
+  services
+    .workspace
+    .ready_to_start(&project.repo_root, &services.vault, task)
+    .await
+    .map_err(|refused| refused.short())?;
   let claim = services
     .servers
     .claim_for_work(&project.repo_root, task)

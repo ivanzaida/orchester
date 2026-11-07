@@ -34,6 +34,7 @@ use orchester_workspace::{
   display,
   messages::{self, Message},
   runner::Runners,
+  secrets::Vault,
   sharing::Servers,
   tasks::{
     delivery::Delivery,
@@ -41,7 +42,7 @@ use orchester_workspace::{
     integration::file_list,
     run_again::{NextRun, RunAgainCheck, block_message, request_messages},
   },
-  workspace::OpenProject,
+  workspace::{OpenProject, Workspace},
 };
 
 use super::{
@@ -180,8 +181,10 @@ pub fn start_action(
   (runners, servers): (Runners, Servers),
   (project, feed): (OpenProject, ProjectFeed),
   (open, no_branch): (Signal<Confirming>, Signal<Option<NoBranch>>),
+  (workspace, vault): (Workspace, Vault),
 ) -> StartAction {
   ctx.future_action(move |request: Request| {
+    let (workspace, vault) = (workspace.clone(), vault.clone());
     let (runners, servers, project, feed, open, no_branch) = (
       runners.clone(),
       servers.clone(),
@@ -195,6 +198,11 @@ pub fn start_action(
         key: request.key,
         messages,
       };
+      // A pipeline that is not ready here starts nothing: no claim is taken and no attempt counted.
+      workspace
+        .ready_to_start(&project.repo_root, &vault, request.task)
+        .await
+        .map_err(|not_started| refused(not_started.messages()))?;
       // A shared task runs again only under the person's claim.
       let claim = servers
         .claim_for_work(&project.repo_root, request.task)

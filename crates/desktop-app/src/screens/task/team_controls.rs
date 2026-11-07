@@ -415,12 +415,8 @@ fn started_words(ctx: &Ctx, task: &TaskContext, ask: TeamAsk, started: &Started)
     Stop::Refused(AuthorityErrorCode::Invalid) => ctx.t("summary.team.refused.other"),
     Stop::Refused(code) => refused_words(ctx, *code),
     Stop::BranchNotFound(branch) => ctx.t_args("summary.team.refused.branch", [("branch", branch.as_str())]),
-    Stop::NotReadyHere(messages) => messages
-      .iter()
-      .map(|message| message_text(ctx, message).to_string())
-      .collect::<Vec<_>>()
-      .join("\n")
-      .into(),
+    // The Summary's card lists each part with its fix (`not_ready`), not a notice.
+    Stop::NotReadyHere(_) => return None,
     Stop::NotReadable => ctx.t("summary.team.refused.notReadable"),
     Stop::Runner(messages) => messages.first().map_or_else(
       || ctx.t("summary.team.refused.failed"),

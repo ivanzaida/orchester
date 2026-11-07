@@ -7,12 +7,13 @@
 use orchester_core::{
   connection::AgentProvider,
   id::ResourceId,
+  resource::VersionNumber,
   sharing::{ConnectionProblem, LocalProgramProblem, McpUnsupported, Missing, ProgramProblem},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use super::{PipelineReadiness, ProjectReadiness, ReadinessStanding, Undecided};
+use super::{PipelineReadiness, ProjectReadiness, ReadinessStanding, ResourceReadiness, Undecided};
 use crate::messages::Message;
 
 /// One part a pipeline lacks, with the name of the profile, reviewer or MCP server it is about (the secret's own name
@@ -21,6 +22,10 @@ use crate::messages::Message;
 pub struct MissingPart {
   pub missing: Missing,
   pub name: String,
+  /// For a secret, the profile, MCP server or tool of the project that needs it and lacks its value, which is where
+  /// the person sets it; `None` for any other part, and for a part found only in the versions a team server pinned.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub owner: Option<ResourceId>,
 }
 
 impl MissingPart {
@@ -37,7 +42,11 @@ impl MissingPart {
       }
       Missing::LocalMcpProgram { name, .. } => name.as_str().to_owned(),
     };
-    Self { missing, name }
+    Self {
+      missing,
+      name,
+      owner: None,
+    }
   }
 
   /// What is missing and what to do about it.
@@ -183,6 +192,8 @@ enum Found {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NotReadyHere {
   pipeline: String,
+  /// The version this computer uses, when the answer is read from its readiness; the team server's pin is not.
+  number: Option<VersionNumber>,
   parts: Vec<NotReadyPart>,
   found: Found,
 }
@@ -201,7 +212,11 @@ impl NotReadyHere {
         .standing()
         .missing()
         .iter()
-        .map(|missing| NotReadyPart::Missing(MissingPart::new(missing.clone(), &name_of)))
+        .map(|missing| {
+          let mut part = MissingPart::new(missing.clone(), &name_of);
+          part.owner = secret_owner(readiness, missing);
+          NotReadyPart::Missing(part)
+        })
         .collect(),
       ReadinessStanding::Undecided(why) => {
         vec![NotReadyPart::Undecided(undecided(why, &name_of, pipeline.name()))]
@@ -209,6 +224,7 @@ impl NotReadyHere {
     };
     Some(Self {
       pipeline: pipeline.name().to_owned(),
+      number: Some(pipeline.number()),
       parts,
       found: Found::BeforeClaim,
     })
@@ -219,6 +235,7 @@ impl NotReadyHere {
   pub fn after_start(pipeline: impl Into<String>, missing: Vec<MissingPart>) -> Self {
     Self {
       pipeline: pipeline.into(),
+      number: None,
       parts: missing.into_iter().map(NotReadyPart::Missing).collect(),
       found: Found::AfterStart,
     }
@@ -226,6 +243,11 @@ impl NotReadyHere {
 
   pub fn pipeline(&self) -> &str {
     &self.pipeline
+  }
+
+  /// The version of the pipeline this computer uses; none for a refusal found in the versions the team server pinned.
+  pub const fn number(&self) -> Option<VersionNumber> {
+    self.number
   }
 
   pub fn parts(&self) -> &[NotReadyPart] {
@@ -243,10 +265,36 @@ impl NotReadyHere {
       .collect()
   }
 
+  /// Why nothing started in one line, for a place that has no room for the parts; the parts are in [`Self::parts`].
+  pub fn short(&self) -> Message {
+    Message::new("notReadyHere.refusedShort").with("pipeline", self.pipeline.clone())
+  }
+
+  /// The team server made the work and holds the claim, though nothing ran: the start was found not ready after it
+  /// was accepted ([`Self::after_start`]).
+  pub const fn after_server_started(&self) -> bool {
+    matches!(self.found, Found::AfterStart)
+  }
+
   /// The parts as a client reads them: a kind with the ids and names it is about, never a value.
   pub fn parts_json(&self) -> Vec<Value> {
     self.parts.iter().map(NotReadyPart::to_json).collect()
   }
+}
+
+/// The first resource of `readiness` that lacks the secret `missing` is; `None` for any other part.
+fn secret_owner(readiness: &ProjectReadiness, missing: &Missing) -> Option<ResourceId> {
+  if !matches!(
+    missing,
+    Missing::Secret { .. } | Missing::SecretUnreadable { .. } | Missing::LocalSecret { .. }
+  ) {
+    return None;
+  }
+  readiness
+    .resources()
+    .iter()
+    .find(|found| found.standing().missing().contains(missing))
+    .map(ResourceReadiness::resource)
 }
 
 /// The reason `why` leaves a resource undecided, with the resource it is about: a pipeline names the member that is.

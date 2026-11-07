@@ -163,6 +163,7 @@ impl Component for TaskForm {
       RunServices {
         runners: services.runners.clone(),
         servers: services.servers.clone(),
+        ready: (services.workspace.clone(), services.vault.clone()),
         programs: services.programs.clone(),
         repo_root: props.project.open.repo_root.clone(),
         queued: queued.clone(),

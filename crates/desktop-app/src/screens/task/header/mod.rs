@@ -110,6 +110,7 @@ impl Component for TaskHeader {
       runners,
       (open, feed),
       (self.confirming.clone(), self.no_branch.clone()),
+      (services.workspace.clone(), services.vault),
     );
     let pull_request = super::summary::pull_request_rows(ctx, &props.task, &self.menu.open);
     let latest_busy = detail

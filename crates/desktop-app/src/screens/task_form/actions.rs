@@ -34,6 +34,7 @@ use orchester_workspace::{
   background,
   messages::{self, Message},
   runner::{RunRequestError, Runners},
+  secrets::Vault,
   sharing::{Servers, project::WorkClaim},
   sources::task as sources,
   tasks::{
@@ -44,7 +45,7 @@ use orchester_workspace::{
     run::{QueueFailure, QueuedStart, StartOutcome, queue_in, queue_organized_in, start_messages},
     writer::{TaskWriter, WriteError},
   },
-  workspace::OpenProject,
+  workspace::{OpenProject, Workspace},
 };
 
 use super::team::{self, TeamSave, TeamStop};
@@ -258,6 +259,8 @@ pub type RunAction = FutureAction<RunArgs, Started, RunProblems>;
 pub struct RunServices {
   pub runners: Runners,
   pub servers: Servers,
+  /// Asks whether the chosen pipeline is ready on this computer before anything is queued, claimed or started.
+  pub ready: (Workspace, Vault),
   /// Runs git for the base branch picked.
   pub programs: Programs,
   pub repo_root: PathBuf,
@@ -321,6 +324,13 @@ async fn queue(
     queued: None,
     saved: None,
   };
+  // A pipeline that is not ready here starts nothing: the task is not queued, no claim is taken, no attempt counted.
+  services
+    .ready
+    .0
+    .ready_to_start_pipeline(&services.repo_root, &services.ready.1, save.details.pipeline)
+    .await
+    .map_err(|refused| not_queued(refused.messages().into()))?;
   let servers = services.servers.clone();
   let (repo_root, target, points, module) = (save.repo_root.clone(), save.target, save.points, save.module);
   let (sources, base_branch) = (save.sources.clone(), save.base_branch.clone());
@@ -453,6 +463,13 @@ async fn start(services: &RunServices, queued: QueuedTask, claim: WorkClaim) -> 
     queued: Some(queued),
     saved: None,
   };
+  // Retry run asks again: what was missing may be fixed, or still is, and then no claim is taken.
+  services
+    .ready
+    .0
+    .ready_to_start(&services.repo_root, &services.ready.1, queued.task)
+    .await
+    .map_err(|not_started| refused(not_started.messages().into(), queued.clone()))?;
   let claim = claim.and(
     services
       .servers

@@ -9,7 +9,7 @@ use lurq::{
 use orchester_core::{id::RunId, run::RunStatus};
 use orchester_workspace::{messages::Message, tasks::detail::TaskDetail};
 
-use super::controls::{Requested, RunControl};
+use super::controls::{Requested, RunControl, RunRefused};
 
 /// Where the task's run stood when a request was refused.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -48,7 +48,7 @@ impl Refusals {
   /// The refusal the notice shows for `detail`, after taking in how `requested` ended (`state`).
   pub fn shown(
     &self,
-    state: &FutureState<RunControl, Message>,
+    state: &FutureState<RunControl, RunRefused>,
     requested: Option<Requested>,
     detail: &TaskDetail,
   ) -> Option<(RunControl, Message)> {
@@ -57,7 +57,7 @@ impl Refusals {
       requested.filter(|requested| !state.is_pending() && requested.serial != self.taken.get_untracked())
     {
       self.taken.set(requested.serial);
-      let refusal = state.error.clone().map(|reason| Refusal {
+      let refusal = state.error.clone().and_then(RunRefused::message).map(|reason| Refusal {
         control: requested.control,
         reason,
         mark: mark.clone(),

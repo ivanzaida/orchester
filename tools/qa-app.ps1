@@ -61,6 +61,8 @@
 # picker shows readiness`, R2 `P6aAoZ` for the team project, L10 `PMi6Q` for the local one): open New task, fill it, open
 # the Pipeline chip and choose Team delivery (2 things missing here) or Design pass (2 things missing) for the bar's line
 # with Create & run off; Team quick fix is Ready here, Quick fix and Feature delivery are Ready.
+# -Scenario picker-readiness also has KON-1, a draft with every detail on Design pass: open its Summary and press Run for the
+# not-ready card (`Task · Run · not ready`, L9 `f5CEX`), two MCP server programs to set, each fix opening its page.
 #
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes

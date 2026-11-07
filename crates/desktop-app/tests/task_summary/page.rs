@@ -39,6 +39,13 @@ impl Page {
     Self::with("live", Some((programs.runner.clone(), programs.fake_codex.clone())))
   }
 
+  /// `scenario` seeded with the real runner (the fake Codex is the seed's, which the runner never starts here), so the
+  /// header's Run is pressable: without a runner it is locked.
+  pub fn seeded_with_runner(scenario: &str) -> Self {
+    let programs = programs();
+    Self::with(scenario, Some((programs.runner.clone(), programs.fake_codex.clone())))
+  }
+
   /// `scenario` seeded, the window started with `programs` (the runner and the fake Codex) when given, or
   /// a runner program that does not exist.
   fn with(scenario: &str, programs: Option<(PathBuf, PathBuf)>) -> Self {

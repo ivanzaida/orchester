@@ -34,7 +34,7 @@ use orchester_workspace::{
     answering::Answered,
     conversation::{
       composer::{ComposerMode, Then},
-      follow::{RunnerOf, Sent, Stored, follow_seen, tell},
+      follow::{RunnerOf, Sent, Stored, tell},
       outgoing::{Action, Context, Prepared, Way, plan_changes, prepare_in, store_answer_in},
       send_after_turn_as,
     },
@@ -469,7 +469,7 @@ async fn send(services: Services, request: Request) -> Result<Outcome, Message> 
     RunnerOf::Project(&request.project),
   );
   // On the task as the page showed it: Run again refuses one changed since.
-  let sent = follow_seen(runner, &stored, (then, Some(request.revision))).await;
+  let sent = super::ready::follow(&services, runner, &stored, (then, Some(request.revision))).await;
   if request.way == Way::StopTurn {
     stop_for_message(&services, &request.project, run).await;
   }
