@@ -25,8 +25,9 @@ pub(super) const SPECS: &[Spec] = &[
                   draft; offline it waits and the answer says waiting_for_server, and a server the team server \
                   refuses is not created): the team holds names only, so `program` is a name looked up on the search \
                   path (npx), never a path, `working_directory` is relative, the variables the program needs are \
-                  named in `variable_names` and the headers a remote server is sent a secret in in `secret_headers` \
-                  (`Authorization` for a bearer or Basic credential), and a value or a secret in `environment` or \
+                  named in `variable_names` (each takes the team secret of the same name, so each is a secret name) \
+                  and the headers a remote server is sent a secret in are `secret_headers`, each `header`, the \
+                  `secret` it takes by name and an optional plain-text `prefix` (`Authorization` with `Bearer `), and a value or a secret in `environment` or \
                   `authorization` is refused (team_value_refused, a path team_path_refused). A team server's `url` \
                   has no query or fragment (team_value_refused): a key in it would reach every member, so a secret \
                   goes in `secret_headers`. Each computer sets the program's path and the values itself.",

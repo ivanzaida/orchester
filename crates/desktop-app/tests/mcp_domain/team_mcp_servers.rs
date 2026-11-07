@@ -108,8 +108,13 @@ fn domain_team_mcp_server_add_refuses_what_the_team_body_cannot_hold() {
       with(json!({ "authorization": { "scheme": "bearer", "secret": "TOKEN@production" } })),
       "team_value_refused",
     ),
-    (with(json!({ "secret_headers": ["X-API-Key"] })), "field_not_applicable"),
+    (
+      with(json!({ "secret_headers": [{ "header": "X-API-Key", "secret": "API_KEY" }] })),
+      "field_not_applicable",
+    ),
     (with(json!({ "variable_names": ["TOKEN", "token"] })), "invalid_server"),
+    (with(json!({ "variable_names": ["TOKEN", "TOKEN"] })), "invalid_server"),
+    (with(json!({ "variable_names": ["lowercase"] })), "invalid_server"),
     (with(json!({ "name": "knowledge" })), "name_taken"),
     (with(json!({ "name": "Not A Name" })), "invalid_server"),
     (

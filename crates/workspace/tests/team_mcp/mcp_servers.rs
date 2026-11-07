@@ -132,6 +132,10 @@ pub(super) fn docs() -> Value {
   })
 }
 
+fn api_key_header() -> Value {
+  json!({ "header": "X-API-Key", "secret": "ISSUES_KEY" })
+}
+
 fn change(fields: Value) -> Value {
   let mut args = json!({ "project": "Kontur", "server": "docs" });
   if let (Value::Object(args), Value::Object(fields)) = (&mut args, fields) {
@@ -339,7 +343,7 @@ fn team_mcp_a_url_with_a_key_in_it_is_refused_and_nothing_is_stored_or_sent() {
   let (server, seen) = start(Answers::default());
   let checkout = admin(&server);
   let remote =
-    |url: &str| json!({ "project": "Kontur", "name": "issues", "url": url, "secret_headers": ["X-API-Key"] });
+    |url: &str| json!({ "project": "Kontur", "name": "issues", "url": url, "secret_headers": [api_key_header()] });
 
   for url in [
     "https://mcp.example.org/x?key=sk-live-123",
@@ -405,4 +409,51 @@ fn team_mcp_an_update_does_not_replace_an_unpublished_draft_that_differs() {
     .call("update_mcp_server", &change(json!({ "args": ["--other"] })))
     .expect("published");
   assert_eq!(made["server"]["published_version"], 2, "{made}");
+}
+
+#[test]
+fn team_mcp_a_secret_header_names_its_secret_and_prefix_and_a_variable_must_be_a_secret_name() {
+  let (server, seen) = start(Answers::default());
+  let checkout = admin(&server);
+  let remote = |headers: Value| json!({ "project": "Kontur", "name": "issues", "url": "https://mcp.example.org/x", "secret_headers": headers });
+
+  // What a person may have pasted in a name or a prefix field is never repeated.
+  for (headers, key) in [
+    (
+      json!([{ "header": "Authorization", "secret": "ghp_live_123" }]),
+      "teamMcpSecretName",
+    ),
+    (
+      json!([{ "header": "Authorization", "secret": "GITHUB_TOKEN", "prefix": "ghp_live_1234567890123456789012345678901234567890" }]),
+      "teamMcpHeaderPrefix",
+    ),
+  ] {
+    let refused = checkout.call("add_mcp_server", &remote(headers)).expect_err("refused");
+    assert_eq!(refused["error"]["code"], "invalid_server", "{refused}");
+    assert!(refused.to_string().contains(key), "{refused}");
+    assert!(!refused.to_string().contains("ghp_live"), "{refused}");
+  }
+  let lowercase = json!({ "project": "Kontur", "name": "docs", "program": "npx", "variable_names": ["token"] });
+  let refused = checkout.call("add_mcp_server", &lowercase).expect_err("refused");
+  assert!(refused.to_string().contains("teamMcpVariableNotSecret"), "{refused}");
+  assert_eq!(count(&checkout), 0);
+  assert!(seen.lock().calls.is_empty(), "nothing reached the team server");
+
+  let made = checkout
+    .call(
+      "add_mcp_server",
+      &remote(json!([{ "header": "Authorization", "secret": "GITHUB_TOKEN", "prefix": "Bearer " }])),
+    )
+    .expect("created");
+  let headers = json!([{ "header": "Authorization", "secret": "GITHUB_TOKEN", "prefix": "Bearer " }]);
+  assert_eq!(made["server"]["launch"]["secret_headers"], headers, "{made}");
+  assert_eq!(
+    seen.lock().created[0]["version"]["body"]["launch"]["secret_headers"],
+    headers
+  );
+
+  // A field left out keeps the headers, secrets and prefixes of the version in use.
+  let renamed = json!({ "project": "Kontur", "server": "issues", "exempt_tools": ["search"] });
+  let kept = checkout.call("update_mcp_server", &renamed).expect("updated");
+  assert_eq!(kept["server"]["launch"]["secret_headers"], headers, "{kept}");
 }
