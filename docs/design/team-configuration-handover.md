@@ -21,6 +21,8 @@ and Orchester Platform module "Team configuration" (OP-197…206). The team serv
 | ORC-818 | Team MCP servers cached and archived like other kinds; archive stops runs whose profile chooses the server (uuid stopgap until ORC-817) | merged here (728925a87, row 79 fixed in 456af94d8) |
 | ORC-825 | Fill-in writes: connection pick, MCP program path (refreshes every project of the server), secret value by name, MCP on here; person-only via `Answerer` | merged here (ec98cf814) |
 | ORC-819 | `used_by` read: team via the route, local from the project database with the archive's `pins()` rule; used-by contract amended (no run number, listed from the first report, superseded runs ended, no MCP server runs on the server until the bundle carries them) | merged here (f52581fd1) |
+| ORC-828 (part 1) | MCP tools: pick_profile_connection, team MCP on (person_only always) / off, program person_only, list_secrets names; **readiness in get_profile/list_profiles and a team MCP server listing are part 2 (after ORC-822/824)** | merged here (aa745f907) |
+| OP-197 step 1, OP-198, OP-201 | Platform: pin on this branch (now e5d53c929), MCP server kind (migration 30; bundle MCP part waits for ORC-880), used-by route (current work only) | platform module/team-configuration 48d14c0 |
 
 ## In progress
 
