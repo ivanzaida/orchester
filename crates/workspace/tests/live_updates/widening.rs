@@ -1,34 +1,35 @@
 //! A teammate's version that widens what agents may do here (`docs/architecture/server.md`, row 35, "A teammate's
 //! version that widens"): it is cached, but runs keep the version before it until the person's *Use v<N> here*, and
-//! the resource says what it adds. No MCP tool and no automation presses *Use v<N> here* or binds an MCP server or a
-//! secret. A version that does not widen, and one this computer published itself, apply at once.
+//! the resource says what it adds. No MCP tool and no automation presses *Use v<N> here*. A version that does not
+//! widen, and one this computer published itself, apply at once.
 
 use std::num::NonZeroU32;
 
-use orchester_api::{Reference, ReferenceTarget, SharedResourceKind};
+use orchester_api::{ReferenceTarget, SharedResourceKind};
 use orchester_core::{
+  connection::AgentProvider,
   id::{ConnectionId, ResourceId},
   name::Name,
   permission::{AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, widening::Widening},
-  resource::{AgentProfile, Draft, Pipeline, RepositoryAccess, Slug, VersionNumber},
+  resource::{AgentProfile, Draft, Pipeline, RepositoryAccess, Slug, TeamMcpServer, VersionNumber},
   run::{Answerer, PreflightProblem},
   sharing::{MemberRole, VersionWidening},
   store::ResourceStore,
   time::Timestamp,
 };
-use orchester_store::{Bound, BoundBy, BoundReference, PublishState, ResourceSharing};
+use orchester_store::{PublishState, ResourceSharing};
 use orchester_workspace::{
   app_mcp,
   orchestrator::tools,
   sharing::{
     SharingError,
-    sync::{Waiting, bind, use_here, waiting},
+    sync::{Waiting, use_here, waiting},
   },
 };
 
 use super::{
   ALICE, LIVE, Member, TeamServer, Workspace,
-  config::{agent, builder, codex, docs, key, latest, pipeline, problems, profile, reference, step, use_first},
+  config::{agent, builder, codex, key, latest, pipeline, problems, profile, step, use_first},
   publish::Computer,
   seen_within,
 };
@@ -57,7 +58,7 @@ impl Team {
     server.publish(
       (builder_id, SharedResourceKind::AgentProfile, "Builder"),
       builder(theirs, &[]),
-      vec![work(theirs)],
+      vec![work()],
     );
     server.publish(
       (delivery, SharedResourceKind::Pipeline, "Delivery"),
@@ -72,13 +73,12 @@ impl Team {
     }
   }
 
-  /// A workspace with a Codex connection and an MCP server `docs`, which follows the server until Builder's v1, which
-  /// runs commands, waits; with the local server and the stream.
-  async fn followed(&self) -> (Workspace, ConnectionId, tokio::task::JoinHandle<super::Stopped>) {
+  /// A workspace with a Codex connection, which follows the server until Builder's v1, which runs commands, waits;
+  /// with the stream.
+  async fn followed(&self) -> (Workspace, tokio::task::JoinHandle<super::Stopped>) {
     let workspace = Workspace::linked(&self.server);
     let mut db = workspace.db();
     codex(&mut db, &workspace.root, "Laptop");
-    let local_docs = docs(&mut db);
     drop(db);
     let stream = workspace.follow(Member::of(&self.server, ALICE));
     seen_within(LIVE, "the snapshot's resources", || {
@@ -86,43 +86,31 @@ impl Team {
       latest::<Pipeline>(&workspace, self.delivery).is_some() && builder_waits
     })
     .await;
-    (workspace, local_docs, stream)
+    (workspace, stream)
   }
 }
 
-/// The reference of the publisher's Codex connection `theirs`.
-fn work(theirs: ConnectionId) -> Reference {
-  reference(ReferenceTarget::Connection { id: theirs }, "Work", Some("codex_cli"))
+/// The reference of the CLI Builder runs with.
+const fn work() -> ReferenceTarget {
+  ReferenceTarget::CliKind {
+    cli: AgentProvider::CodexCli,
+  }
 }
 
-/// Neither *Use v2 here* nor binding the MCP server of `chosen` is automation's: both are refused and change nothing.
-fn refused_to_automation(workspace: &Workspace, builder_id: ResourceId, chosen: BoundReference) {
+/// *Use v2 here* is not automation's: it is refused and changes nothing.
+fn refused_to_automation(workspace: &Workspace, builder_id: ResourceId) {
   assert!(matches!(
     use_here(&workspace.root, builder_id, number(2), Answerer::Automation),
     Err(SharingError::PersonOnly)
   ));
-  assert!(matches!(
-    bind(&workspace.root, chosen, Answerer::Automation),
-    Err(SharingError::PersonOnly)
-  ));
   assert_eq!(used(workspace, builder_id), Some(1));
-  let BoundReference::McpServer { reference, .. } = chosen else {
-    panic!("an MCP server's binding");
-  };
-  let bindings = workspace.db().reference_bindings().expect("bindings");
-  assert!(
-    bindings
-      .iter()
-      .any(|kept| kept.reference == BoundReference::McpServer { reference, bound: None }),
-    "{bindings:?}"
-  );
 }
 
 #[tokio::test(flavor = "multi_thread")]
 async fn live_updates_a_widening_version_waits_and_runs_keep_the_previous_one_until_use_here() {
   let team = Team::publish();
   let (builder_id, delivery) = (team.builder, team.delivery);
-  let (workspace, local_docs, stream) = team.followed().await;
+  let (workspace, stream) = team.followed().await;
   assert_eq!(used(&workspace, builder_id), None, "no version is used here yet");
   assert_eq!(
     waiting(&workspace.root, builder_id).expect("read"),
@@ -135,9 +123,8 @@ async fn live_updates_a_widening_version_waits_and_runs_keep_the_previous_one_un
   );
   use_first(&workspace, builder_id).await;
   assert_eq!(used(&workspace, builder_id), Some(1));
-  assert_eq!(problems(&workspace, delivery), []);
 
-  let their_docs = ConnectionId::generate();
+  let their_docs = ResourceId::generate();
   let wider = AgentPermissions::new(
     RepositoryAccess::Write,
     CommandPermission::AnyInWorktree,
@@ -145,10 +132,18 @@ async fn live_updates_a_widening_version_waits_and_runs_keep_the_previous_one_un
   );
   team.server.publish(
     (builder_id, SharedResourceKind::AgentProfile, "Builder"),
-    serde_json::to_value(profile(team.theirs, &[their_docs], wider)).expect("a profile serializes"),
+    serde_json::to_value(profile(
+      team.theirs,
+      &[ConnectionId::from_uuid(their_docs.as_uuid())],
+      wider,
+    ))
+    .expect("a profile serializes"),
     vec![
-      work(team.theirs),
-      reference(ReferenceTarget::McpServer { id: their_docs }, "docs", None),
+      work(),
+      ReferenceTarget::TeamResource {
+        kind: SharedResourceKind::McpServer,
+        id: their_docs,
+      },
     ],
   );
   seen_within(LIVE, "v2 from its event", || {
@@ -156,9 +151,8 @@ async fn live_updates_a_widening_version_waits_and_runs_keep_the_previous_one_un
   })
   .await;
   assert_eq!(used(&workspace, builder_id), Some(1), "runs keep v1");
-  assert_eq!(
-    problems(&workspace, delivery),
-    [],
+  assert!(
+    !problems(&workspace, delivery).contains(&PreflightProblem::McpServerMissing { step: key("implement") }),
     "a run here takes v1, which needs no MCP server"
   );
   assert_eq!(
@@ -174,14 +168,7 @@ async fn live_updates_a_widening_version_waits_and_runs_keep_the_previous_one_un
     }),
     "the resource says what v2 adds"
   );
-  let chosen = BoundReference::McpServer {
-    reference: their_docs,
-    bound: Some(Bound {
-      local: local_docs,
-      by: BoundBy::Person,
-    }),
-  };
-  refused_to_automation(&workspace, builder_id, chosen);
+  refused_to_automation(&workspace, builder_id);
 
   assert!(
     use_here(&workspace.root, builder_id, number(2), Answerer::Person).expect("used"),
@@ -189,17 +176,10 @@ async fn live_updates_a_widening_version_waits_and_runs_keep_the_previous_one_un
   );
   assert_eq!(used(&workspace, builder_id), Some(2), "runs take v2 now");
   assert_eq!(waiting(&workspace.root, builder_id).expect("read"), None);
-  assert_eq!(
-    problems(&workspace, delivery),
-    [PreflightProblem::McpServerMissing { step: key("implement") }],
-    "v2's MCP server is not bound here yet"
+  assert!(
+    problems(&workspace, delivery).contains(&PreflightProblem::McpServerMissing { step: key("implement") }),
+    "v2's MCP server is not set up here"
   );
-  assert_eq!(
-    bind(&workspace.root, chosen, Answerer::Person).expect("bound"),
-    1,
-    "the person binds it; v2 names it"
-  );
-  assert_eq!(problems(&workspace, delivery), []);
   stream.abort();
 }
 
@@ -247,7 +227,7 @@ async fn live_updates_a_teammates_widening_version_waits_while_the_owners_own_ve
   team.server.publish(
     (builder_id, SharedResourceKind::AgentProfile, "Builder"),
     serde_json::to_value(profile(team.theirs, &[], wider)).expect("a profile serializes"),
-    vec![work(team.theirs)],
+    vec![work()],
   );
   alice.go_offline(false);
   let sent = alice.store(&team.server, |store| store.send_waiting()).await;
@@ -289,21 +269,30 @@ async fn live_updates_a_teammates_widening_version_waits_while_the_owners_own_ve
   );
 }
 
+/// A team MCP server `docs` running `npx`, whose tools `exempt` run without asking.
+fn docs_server(exempt: &[&str]) -> TeamMcpServer {
+  serde_json::from_value(serde_json::json!({
+    "name": "docs",
+    "launch": {"kind": "program", "program": "npx", "args": ["-y"]},
+    "exempt_tools": exempt,
+  }))
+  .expect("a team MCP server")
+}
+
+/// An MCP server is a team body that names nothing of a computer, so the owner publishes it from here.
 #[tokio::test(flavor = "multi_thread")]
 async fn live_updates_a_version_published_here_and_one_that_does_not_widen_apply_at_once() {
   let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
   let alice = Computer::new(&server, ALICE, MemberRole::Owner);
   let workspace = &alice.workspace;
-  let laptop = codex(&mut workspace.db(), &workspace.root, "Laptop");
-  // Any command in the worktree: as a teammate's first version, this Builder would wait.
-  let own = profile(laptop, &[], AgentPermissions::before_permissions());
+  let own = docs_server(&["search"]);
   let at = Timestamp::from_unix_millis(1);
   // The owner publishes it from here; the server numbers it at once.
-  let builder_id = alice
+  let docs_id = alice
     .store(&server, move |store| {
-      let slug = Slug::new("builder").expect("slug");
-      let created = store.create_resource(slug, Name::new("Builder").expect("name"), &own, at)?;
-      store.publish_draft::<AgentProfile>(created.id(), at)?;
+      let slug = Slug::new("docs").expect("slug");
+      let created = store.create_resource(slug, Name::new("Docs").expect("name"), &own, at)?;
+      store.publish_draft::<TeamMcpServer>(created.id(), at)?;
       Ok::<_, SharingError>(created.id())
     })
     .await
@@ -316,32 +305,48 @@ async fn live_updates_a_version_published_here_and_one_that_does_not_widen_apply
   let stream = workspace.follow(Member::of(&server, ALICE));
   seen_within(LIVE, "the resource the server's", || {
     matches!(
-      workspace.db().resource_sharing(builder_id),
+      workspace.db().resource_sharing(docs_id),
       Ok(Some(ResourceSharing::Shared(_)))
     )
   })
   .await;
-  assert_eq!(used(workspace, builder_id), Some(1), "published here, it never waits");
-  assert_eq!(waiting(&workspace.root, builder_id).expect("read"), None);
+  let used = |workspace: &Workspace| latest::<TeamMcpServer>(workspace, docs_id).map(|version| version.number().get());
+  assert_eq!(used(workspace), Some(1), "published here, it never waits");
+  assert_eq!(waiting(&workspace.root, docs_id).expect("read"), None);
 
-  // A teammate narrows it: no command, read-only, network off.
-  let narrower = AgentPermissions::new(
-    RepositoryAccess::ReadOnly,
-    CommandPermission::Allowed(AllowedCommands::default()),
-    NetworkAccess::Off,
-  );
+  // A teammate narrows it: no tool runs without asking.
   server.publish(
-    (builder_id, SharedResourceKind::AgentProfile, "Builder"),
-    serde_json::to_value(profile(laptop, &[], narrower)).expect("a profile serializes"),
-    vec![reference(
-      ReferenceTarget::Connection { id: laptop },
-      "Laptop",
-      Some("codex_cli"),
-    )],
+    (docs_id, SharedResourceKind::McpServer, "Docs"),
+    serde_json::to_value(docs_server(&[])).expect("a team MCP server serializes"),
+    Vec::new(),
   );
-  seen_within(LIVE, "v2 applied at once", || used(workspace, builder_id) == Some(2)).await;
-  assert_eq!(waiting(&workspace.root, builder_id).expect("read"), None);
+  seen_within(LIVE, "v2 applied at once", || used(workspace) == Some(2)).await;
+  assert_eq!(waiting(&workspace.root, docs_id).expect("read"), None);
   stream.abort();
+}
+
+/// A profile names the publisher's connection until its body changes (ORC-820), so a desktop does not send one: the
+/// version stays here and the person is told what it names.
+#[tokio::test(flavor = "multi_thread")]
+async fn live_updates_a_profile_naming_a_connection_of_this_computer_is_not_published() {
+  let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
+  let alice = Computer::new(&server, ALICE, MemberRole::Owner);
+  let workspace = &alice.workspace;
+  let laptop = codex(&mut workspace.db(), &workspace.root, "Laptop");
+  let own = profile(laptop, &[], AgentPermissions::before_permissions());
+  let at = Timestamp::from_unix_millis(1);
+  let refused = alice
+    .store(&server, move |store| {
+      let slug = Slug::new("builder").expect("slug");
+      let created = store.create_resource(slug, Name::new("Builder").expect("name"), &own, at)?;
+      store.publish_draft::<AgentProfile>(created.id(), at)?;
+      Ok::<_, SharingError>(created.id())
+    })
+    .await;
+  assert!(
+    matches!(refused, Err(SharingError::LocalEntitiesNamed { ref names, .. }) if *names == ["Laptop"]),
+    "{refused:?}"
+  );
 }
 
 #[test]

@@ -74,8 +74,8 @@ impl Versions {
           config.profile,
           &profile,
           &json!([
-            {"kind": "connection", "id": connection, "name": "Codex", "role": "codex_cli"},
-            {"kind": "mcp_server", "id": mcp_server, "name": "pencil-design", "role": null}
+            {"type": "cli_kind", "cli": "codex_cli"},
+            {"type": "team_resource", "kind": "mcp_server", "id": ResourceId::from_uuid(mcp_server.as_uuid())}
           ]),
         ),
       ),

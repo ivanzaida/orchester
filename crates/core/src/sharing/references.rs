@@ -1,9 +1,10 @@
-//! What a shared version names on each computer (`docs/architecture/server.md`, "Shared configuration"). A body refers
-//! to connections, MCP servers and secrets by the publisher's ids, and a published version carries a [`Reference`] per
-//! such id; each computer binds a reference to one of its own entities ([`Binding`]). The walks here go from a body to
-//! the references it names ([`named`]), through the bindings to the local body runs pin ([`resolve`]), and back to
-//! references when this computer publishes ([`for_publishing`]). They are `import`'s reference walk: an id is found
-//! and replaced as a JSON string wherever the body holds it.
+//! The local connections, MCP servers and secrets a body of this computer names (`docs/architecture/server.md`,
+//! "Shared configuration"). A team resource never carries them (`docs/design/team-configuration.md`: it refers to
+//! other team resources by server id, to secrets by name and to a CLI kind, never to an id from a computer), so a body
+//! that [`named`] finds any in is refused as a team body. Versions cached before the team configuration model still
+//! hold the publisher's ids with a [`Binding`] to this computer's entities each; [`resolve`] writes those bindings into
+//! such a body. The walks are `import`'s reference walk: an id is found and replaced as a JSON string wherever the body
+//! holds it.
 
 use std::collections::{HashMap, HashSet};
 
@@ -11,8 +12,9 @@ use serde_json::Value;
 use thiserror::Error;
 use uuid::Uuid;
 
+use super::ConnectionRole;
 use crate::{
-  connection::{AgentProvider, Connection, ConnectionKind, mcp::McpServer},
+  connection::{Connection, mcp::McpServer},
   id::{ConnectionId, SecretId},
   import::{
     Entity,
@@ -44,47 +46,6 @@ impl ReferenceKind {
       Entity::Secret(_) => Some(Self::Secret),
       Entity::Resource(_) => None,
     }
-  }
-}
-
-/// What a connection is for, without any of its settings: the agent provider it runs, or GitHub. A reference to a
-/// connection binds to a local connection of the same role.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub enum ConnectionRole {
-  Agent(AgentProvider),
-  GitHub,
-}
-
-impl ConnectionRole {
-  const ALL: [Self; 5] = [
-    Self::Agent(AgentProvider::CodexCli),
-    Self::Agent(AgentProvider::ClaudeCodeCli),
-    Self::Agent(AgentProvider::AnthropicApi),
-    Self::Agent(AgentProvider::OpenAiApi),
-    Self::GitHub,
-  ];
-
-  pub const fn of(kind: &ConnectionKind) -> Self {
-    match kind {
-      ConnectionKind::Agent(provider) => Self::Agent(*provider),
-      ConnectionKind::GitHub { .. } => Self::GitHub,
-    }
-  }
-
-  /// The role as a reference carries it: the connection's kind as the project database stores it.
-  pub const fn as_str(self) -> &'static str {
-    match self {
-      Self::Agent(AgentProvider::CodexCli) => "codex_cli",
-      Self::Agent(AgentProvider::ClaudeCodeCli) => "claude_code_cli",
-      Self::Agent(AgentProvider::AnthropicApi) => "anthropic_api",
-      Self::Agent(AgentProvider::OpenAiApi) => "openai_api",
-      Self::GitHub => "github",
-    }
-  }
-
-  /// The role a reference carries as [`Self::as_str`] writes it; `None` for one this version does not know.
-  pub fn parse(role: &str) -> Option<Self> {
-    Self::ALL.into_iter().find(|known| known.as_str() == role)
   }
 }
 
@@ -233,43 +194,6 @@ pub fn resolve(body: Value, bindings: &[Binding]) -> Value {
       .iter()
       .map(|binding| (binding.reference.entity().uuid(), binding.local.uuid())),
   )
-}
-
-/// A version to publish from this computer: its body in the publisher's ids, and a reference for each it names.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Published {
-  pub body: Value,
-  pub references: Vec<Reference>,
-}
-
-/// `body`, written with this computer's ids, turned back into a version to publish. A local id bound to a reference
-/// becomes that reference's id and carries it (the first binding, when several are bound to one entity); an id of a
-/// reference of `base`, the version the body was edited from, that has no binding here keeps that reference; any
-/// other connection, MCP server or secret of `entities` becomes a new reference by its own id.
-pub fn for_publishing(body: Value, entities: LocalEntities<'_>, base: &[Reference], bindings: &[Binding]) -> Published {
-  let mut bound = HashMap::new();
-  for binding in bindings {
-    bound.entry(binding.local.uuid()).or_insert(&binding.reference);
-  }
-  let mut seen = HashSet::new();
-  let references = references::values(&body)
-    .into_iter()
-    .filter_map(|uuid| {
-      bound
-        .get(&uuid)
-        .map(|reference| (*reference).clone())
-        .or_else(|| base.iter().find(|reference| reference.entity().uuid() == uuid).cloned())
-        .or_else(|| entities.reference(uuid))
-    })
-    .filter(|reference| seen.insert(reference.entity()))
-    .collect();
-  let body = rewrite(
-    body,
-    bound
-      .iter()
-      .map(|(local, reference)| (*local, reference.entity().uuid())),
-  );
-  Published { body, references }
 }
 
 /// `body` with each id of `ids` replaced by the id it maps to. Keys stay as they are: a map keyed by ids holds shared

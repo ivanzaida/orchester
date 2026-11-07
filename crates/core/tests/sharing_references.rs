@@ -1,5 +1,5 @@
-//! A shared version's references over explicit bodies of each kind: found, resolved through bindings, and turned back
-//! into references when publishing.
+//! The connections, MCP servers and secrets a body of this computer names, over explicit bodies of each kind: found
+//! (a team body must name none), and resolved through the bindings of versions cached before the team model.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -20,10 +20,7 @@ use orchester_core::{
     ProviderSettings, RepositoryAccess, Step, StepKey, StepKind, Tool, ToolAction,
   },
   secret::{Environment, NewSecret, Secret, SecretKind, SecretName, tool_uses},
-  sharing::{
-    Binding, BindingKindError, ConnectionRole, LocalEntities, Published, Reference, ReferenceKind, for_publishing,
-    named, resolve,
-  },
+  sharing::{Binding, BindingKindError, ConnectionRole, LocalEntities, Reference, ReferenceKind, named, resolve},
   time::Timestamp,
 };
 use serde_json::Value;
@@ -288,104 +285,6 @@ fn sharing_references_resolve_keeps_shared_resource_ids() {
   )];
 
   assert_eq!(resolve(body.clone(), &bindings), body);
-}
-
-#[test]
-fn sharing_references_publishing_turns_bound_local_ids_back_into_their_references() {
-  let publisher = publisher();
-  let (work, github) = (&publisher.connections[0], &publisher.servers[0]);
-  let published = profile(work.id(), &[github.id()]);
-  let references = named(&published, publisher.entities());
-  let here = Computer {
-    connections: vec![connection("My Claude", AgentProvider::ClaudeCodeCli)],
-    servers: vec![server("github-mine")],
-    secrets: Vec::new(),
-  };
-  let bindings = [
-    bind(&references[0], Entity::Connection(here.connections[0].id())),
-    bind(&references[1], Entity::McpServer(here.servers[0].id())),
-  ];
-  let local = resolve(published.clone(), &bindings);
-
-  let again = for_publishing(local, here.entities(), &references, &bindings);
-
-  assert_eq!(
-    again,
-    Published {
-      body: published,
-      references,
-    }
-  );
-}
-
-#[test]
-fn sharing_references_publishing_names_new_local_entities_by_kind_name_and_role_only() {
-  let publisher = publisher();
-  let work = &publisher.connections[0];
-  let base_body = profile(work.id(), &[]);
-  let base = named(&base_body, publisher.entities());
-  let here = Computer {
-    connections: vec![connection("Codex", AgentProvider::CodexCli)],
-    servers: vec![server("docs")],
-    secrets: vec![secret("DEPLOY_KEY", SecretKind::DeploymentToken)],
-  };
-  let edited = profile(here.connections[0].id(), &[here.servers[0].id()]);
-
-  let again = for_publishing(edited.clone(), here.entities(), &base, &[]);
-
-  assert_eq!(again.body, edited);
-  let described: Vec<_> = again
-    .references
-    .iter()
-    .map(|reference| (reference.entity(), reference.kind(), reference.name(), reference.role()))
-    .collect();
-  assert_eq!(
-    described,
-    [
-      (
-        Entity::Connection(here.connections[0].id()),
-        ReferenceKind::Connection,
-        "Codex",
-        Some("codex_cli")
-      ),
-      (
-        Entity::McpServer(here.servers[0].id()),
-        ReferenceKind::McpServer,
-        "docs",
-        None
-      ),
-    ]
-  );
-  let token = for_publishing(http_tool(here.secrets[0].id()), here.entities(), &[], &[]);
-  assert_eq!(
-    token.references,
-    [Reference::Secret {
-      id: here.secrets[0].id(),
-      name: "DEPLOY_KEY".into(),
-      role: SecretKind::DeploymentToken,
-    }]
-  );
-}
-
-#[test]
-fn sharing_references_publishing_keeps_an_unbound_reference_of_the_base_version() {
-  let publisher = publisher();
-  let github = &publisher.servers[0];
-  let here = Computer {
-    connections: vec![connection("Claude", AgentProvider::ClaudeCodeCli)],
-    servers: Vec::new(),
-    secrets: Vec::new(),
-  };
-  let base = named(
-    &profile(publisher.connections[0].id(), &[github.id()]),
-    publisher.entities(),
-  );
-  let bindings = [bind(&base[0], Entity::Connection(here.connections[0].id()))];
-  let local = resolve(profile(publisher.connections[0].id(), &[github.id()]), &bindings);
-
-  let again = for_publishing(local, here.entities(), &base, &bindings);
-
-  assert_eq!(again.references, base);
 }
 
 #[test]

@@ -159,6 +159,7 @@ impl From<&SharingError> for DownloadFailure {
       | SharingError::VersionConflict { .. }
       | SharingError::PersonOnly
       | SharingError::ConnectionKindMismatch { .. }
+      | SharingError::LocalEntitiesNamed { .. }
       | SharingError::ForeignAddress { .. } => Self::Refused,
     }
   }

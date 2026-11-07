@@ -267,7 +267,7 @@ fn widened(kind: SharedResourceKind, previous: Option<&Value>, body: &Value) -> 
 fn version(
   resource: &Value,
   number: u64,
-  (body, references): (Value, Vec<crate::Reference>),
+  (body, references): (Value, Vec<crate::ReferenceTarget>),
   based_on: Option<u64>,
 ) -> Value {
   let hash: String = Sha256::digest(body.to_string().as_bytes())

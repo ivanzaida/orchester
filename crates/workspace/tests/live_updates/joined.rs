@@ -3,6 +3,7 @@
 
 use orchester_api::{ReferenceTarget, SharedResourceKind};
 use orchester_core::{
+  connection::AgentProvider,
   id::{ConnectionId, ResourceId},
   resource::{AgentProfile, Pipeline, VersionNumber},
   time::Timestamp,
@@ -11,7 +12,7 @@ use orchester_store::SharedEvent;
 
 use super::{
   ALICE, BOB, LIVE, Member, TeamServer, Workspace,
-  config::{agent, builder, codex, latest, pipeline, reference, step},
+  config::{agent, builder, codex, latest, pipeline, step},
   seen_within,
 };
 
@@ -23,11 +24,9 @@ async fn live_updates_a_stream_resumed_without_the_snapshot_keeps_the_configurat
   server.publish(
     (profile, SharedResourceKind::AgentProfile, "Builder"),
     builder(theirs, &[]),
-    vec![reference(
-      ReferenceTarget::Connection { id: theirs },
-      "Work",
-      Some("codex_cli"),
-    )],
+    vec![ReferenceTarget::CliKind {
+      cli: AgentProvider::CodexCli,
+    }],
   );
   server.publish(
     (delivery, SharedResourceKind::Pipeline, "Delivery"),

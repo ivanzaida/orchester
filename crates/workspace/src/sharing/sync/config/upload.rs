@@ -3,8 +3,8 @@
 //! and name and every published version, numbers and times kept, after the skill parts its versions list, by hash. A
 //! resource with no published version stays here as its draft, and drafts stay local, based on the same versions.
 //! Then each uploaded resource is kept as the server's with its versions as the server numbered them; their local
-//! bodies stay the bodies this computer published, and the references they make of its own connections, MCP servers
-//! and secrets are bound to those same entities, so nothing changes for its runs.
+//! bodies stay the bodies this computer published. A body that names a connection, MCP server or secret of this
+//! computer is not uploaded ([`team_body`]): the upload fails and nothing is sent.
 
 use std::{collections::BTreeSet, path::Path};
 
@@ -15,13 +15,13 @@ use orchester_core::{
   blob::ContentHash,
   id::IdempotencyKey,
   resource::{AgentProfile, Instruction, Pipeline, Resource, ResourceBody, Skill, Tool},
-  sharing::{LocalEntities, named},
+  sharing::LocalEntities,
   store::{BlobStore, ConnectionStore, McpServerStore, ResourceStore, SecretStore},
   time::Timestamp,
 };
 use orchester_store::{CachedVersion, ProjectDb, StoreError};
 
-use super::{ConfigServer, bindings, blocking, reference, resource, shared_reference};
+use super::{ConfigServer, blocking, reference, resource, team_body};
 use crate::sharing::{SharingError, project::convert};
 
 /// The kinds Share uploads, those other resources name first: a tool before the profiles that use it, profiles before
@@ -128,8 +128,7 @@ fn read(db: &ProjectDb) -> Result<(Vec<UploadResource>, BTreeSet<ContentHash>), 
   Ok((uploads, parts))
 }
 
-/// `resource`'s published versions, oldest first, each with a reference for every connection, MCP server and secret of
-/// `entities` its body names.
+/// `resource`'s published versions, oldest first, which name nothing of `entities`.
 fn versions<B: ResourceBody>(
   db: &ProjectDb,
   resource: &Resource,
@@ -142,9 +141,10 @@ fn versions<B: ResourceBody>(
         what: "resource body",
         detail: error.to_string(),
       })?;
+      team_body::check(resource.id(), &body, entities)?;
       Ok(UploadVersion {
         number: version.number(),
-        references: named(&body, entities).iter().map(shared_reference).collect(),
+        references: Vec::new(),
         body,
         published_at: version.published_at().unix_millis(),
       })
@@ -177,7 +177,6 @@ fn batches(resources: Vec<UploadResource>) -> Vec<Vec<UploadResource>> {
 fn keep(db: &mut ProjectDb, shared: &SharedResource, versions: &[SharedVersion]) -> Result<(), SharingError> {
   db.keep_shared_resource(&resource(shared)?, shared.revision)?;
   for version in versions {
-    bindings::bind_own(db, &version.references)?;
     match shared.kind {
       SharedResourceKind::Pipeline => keep_version::<Pipeline>(db, version)?,
       SharedResourceKind::AgentProfile => keep_version::<AgentProfile>(db, version)?,

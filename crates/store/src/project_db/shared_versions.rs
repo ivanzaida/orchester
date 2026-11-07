@@ -5,10 +5,12 @@
 
 use orchester_core::{
   blob::ContentHash,
+  connection::AgentProvider,
   id::{ConnectionId, ResourceId, SecretId, VersionId},
   name::Name,
   resource::{Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber},
-  sharing::{SharedPerson, TaskRevision},
+  secret::SecretName,
+  sharing::{ConnectionRole, SharedPerson, TaskRevision},
   time::Timestamp,
 };
 use rusqlite::{Connection, OptionalExtension, params};
@@ -31,16 +33,22 @@ pub enum ResourceSharing {
   NotShared,
 }
 
-/// What a version's reference names on the publisher's computer.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// What a version of the team's configuration names (`docs/design/team-configuration.md`): a CLI kind, a team resource
+/// by its server id, a secret by name. The last three are what a version cached before the team configuration model
+/// named by an id on the publisher's computer, which the bindings of this computer still resolve until they are
+/// removed.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ReferenceTarget {
+  CliKind(AgentProvider),
+  TeamResource { kind: ResourceKind, id: ResourceId },
+  SecretName(SecretName),
   Connection(ConnectionId),
   McpServer(ConnectionId),
   Secret(SecretId),
-  Tool(ResourceId),
 }
 
-/// One id a version's body names, with what each computer binds it by: its name and its role there.
+/// One thing a version's body names, with the name and role it was bound by when the publisher's computer held it
+/// (empty for the team's references, which need none).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct VersionReference {
   pub target: ReferenceTarget,
@@ -249,7 +257,7 @@ impl ProjectDb {
   }
 
   /// The cached versions whose references name `target`, by resource and number.
-  pub fn versions_naming(&self, target: ReferenceTarget) -> Result<Vec<NamingVersion>, StoreError> {
+  pub fn versions_naming(&self, target: &ReferenceTarget) -> Result<Vec<NamingVersion>, StoreError> {
     let (kind, id) = target_columns(target);
     let mut statement = self.connection.prepare(
       "SELECT resources.id, resources.kind, resource_versions.number FROM shared_version_references \
@@ -446,7 +454,7 @@ fn write_references(
     [version.to_string()],
   )?;
   for (position, reference) in references.iter().enumerate() {
-    let (kind, target) = target_columns(reference.target);
+    let (kind, target) = target_columns(&reference.target);
     connection.execute(
       "INSERT INTO shared_version_references (version_id, position, kind, target_id, name, role) \
        VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
@@ -463,14 +471,40 @@ fn write_references(
   Ok(())
 }
 
-/// The `kind` and `target_id` columns of a reference.
-fn target_columns(target: ReferenceTarget) -> (&'static str, String) {
+/// The `kind` and `target_id` columns of a reference. A team resource's kind column is `team_` and its resource kind.
+fn target_columns(target: &ReferenceTarget) -> (String, String) {
   match target {
-    ReferenceTarget::Connection(id) => ("connection", id.to_string()),
-    ReferenceTarget::McpServer(id) => ("mcp_server", id.to_string()),
-    ReferenceTarget::Secret(id) => ("secret", id.to_string()),
-    ReferenceTarget::Tool(id) => ("tool", id.to_string()),
+    ReferenceTarget::CliKind(cli) => ("cli_kind".to_owned(), ConnectionRole::Agent(*cli).as_str().to_owned()),
+    ReferenceTarget::TeamResource { kind, id } => (format!("{TEAM_PREFIX}{}", kind_text(*kind)), id.to_string()),
+    ReferenceTarget::SecretName(name) => ("secret_name".to_owned(), name.as_str().to_owned()),
+    ReferenceTarget::Connection(id) => ("connection".to_owned(), id.to_string()),
+    ReferenceTarget::McpServer(id) => ("mcp_server".to_owned(), id.to_string()),
+    ReferenceTarget::Secret(id) => ("secret".to_owned(), id.to_string()),
   }
+}
+
+const TEAM_PREFIX: &str = "team_";
+
+fn parse_target(kind: &str, target: &str) -> Result<ReferenceTarget, StoreError> {
+  Ok(match kind {
+    "cli_kind" => match ConnectionRole::parse(target) {
+      Some(ConnectionRole::Agent(cli)) => ReferenceTarget::CliKind(cli),
+      Some(ConnectionRole::GitHub) | None => return Err(corrupt("reference CLI kind", target)),
+    },
+    "secret_name" => {
+      ReferenceTarget::SecretName(SecretName::new(target).map_err(|_| corrupt("reference secret name", target))?)
+    }
+    "connection" => ReferenceTarget::Connection(parse("reference id", target)?),
+    "mcp_server" => ReferenceTarget::McpServer(parse("reference id", target)?),
+    "secret" => ReferenceTarget::Secret(parse("reference id", target)?),
+    other => match other.strip_prefix(TEAM_PREFIX) {
+      Some(resource_kind) => ReferenceTarget::TeamResource {
+        kind: parse_kind(resource_kind)?,
+        id: parse("reference id", target)?,
+      },
+      None => return Err(corrupt("reference kind", other)),
+    },
+  })
 }
 
 fn load_references(connection: &Connection, version: &str) -> Result<Vec<VersionReference>, StoreError> {
@@ -490,14 +524,11 @@ fn load_references(connection: &Connection, version: &str) -> Result<Vec<Version
   rows
     .into_iter()
     .map(|(kind, target, name, role)| {
-      let target = match kind.as_str() {
-        "connection" => ReferenceTarget::Connection(parse("reference id", &target)?),
-        "mcp_server" => ReferenceTarget::McpServer(parse("reference id", &target)?),
-        "secret" => ReferenceTarget::Secret(parse("reference id", &target)?),
-        "tool" => ReferenceTarget::Tool(parse("reference id", &target)?),
-        _ => return Err(corrupt("reference kind", kind)),
-      };
-      Ok(VersionReference { target, name, role })
+      Ok(VersionReference {
+        target: parse_target(&kind, &target)?,
+        name,
+        role,
+      })
     })
     .collect()
 }

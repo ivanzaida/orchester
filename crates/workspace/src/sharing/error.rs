@@ -6,7 +6,7 @@ use orchester_api::{
   ErrorCode,
   client::{ClientError, ServerAddress},
 };
-use orchester_core::{resource::VersionNumber, secret::VaultError};
+use orchester_core::{id::ResourceId, resource::VersionNumber, secret::VaultError};
 use orchester_store::StoreError;
 use thiserror::Error;
 
@@ -89,6 +89,10 @@ pub enum SharingError {
   /// refused and nothing changed.
   #[error("only a person does this; nothing was changed")]
   PersonOnly,
+  /// A body to send the team names connections, MCP servers or secrets of this computer, which a team resource never
+  /// holds (`docs/design/team-configuration.md`); `names` are theirs. Nothing was sent.
+  #[error("resource {resource} names {} of this computer", names.join(", "))]
+  LocalEntitiesNamed { resource: ResourceId, names: Vec<String> },
   /// The chosen local connection cannot run a reference of the required kind.
   #[error("the connection kind {actual:?} does not match the reference kind {expected:?}")]
   ConnectionKindMismatch {
@@ -145,6 +149,9 @@ impl SharingError {
         Message::new("sharing.errors.versionConflict").with("version", latest.get().to_string())
       }
       Self::PersonOnly => Message::new("sharing.errors.personOnly"),
+      Self::LocalEntitiesNamed { names, .. } => {
+        Message::new("sharing.errors.localEntitiesNamed").with("names", names.join(", "))
+      }
     }
   }
 }

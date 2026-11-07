@@ -1,12 +1,16 @@
 //! A shared project's configuration (`docs/architecture/server.md`, "Shared configuration", S5): its resources
-//! (pipelines, agent profiles, instructions, skills, tools and team reviewers), their published versions, and what each
-//! computer binds locally. A skill's parts travel apart from its body, by hash (`PUT …/files/{sha256}`). Members read;
-//! only the project's owner or a server admin writes; a member's write answers `403 not_admin`.
+//! (pipelines, agent profiles, instructions, skills, tools, MCP servers and team reviewers) and their published
+//! versions. A resource refers only to other team resources by server id and to secrets by name
+//! ([`ReferenceTarget`]); what is local by nature stays on each computer. A skill's parts travel apart from its body,
+//! by hash (`PUT …/files/{sha256}`). Members read; only the project's owner or a server admin writes; a member's write
+//! answers `403 not_admin`.
 
 use orchester_core::{
   blob::ContentHash,
-  id::{ConnectionId, IdempotencyKey, ResourceId, SecretId},
+  connection::AgentProvider,
+  id::{IdempotencyKey, ResourceId},
   resource::{ResourceKind, VersionNumber},
+  secret::SecretName,
   sharing::TaskRevision,
 };
 use serde::{Deserialize, Serialize};
@@ -72,25 +76,18 @@ pub struct SharedResource {
   pub updated: Attribution,
 }
 
-/// What a reference names on the publisher's computer: a connection, an MCP server or a secret by its id there, or a
-/// shared tool.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+/// What a team resource's version names besides itself (`docs/design/team-configuration.md`): other team resources by
+/// their server id, secrets by name, and the CLI kind a profile runs with. It never holds an id or a path from a
+/// computer: no connection, no local MCP server, no secret id. Each computer fills in what is local by nature.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ReferenceTarget {
-  Connection { id: ConnectionId },
-  McpServer { id: ConnectionId },
-  Secret { id: SecretId },
-  Tool { id: ResourceId },
-}
-
-/// One id a version's body names that is not a shared resource of the project, with what each computer binds it by:
-/// its name, and its role, the connection's kind (`claude_cli`, `openai_api`, …) or the secret's.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Reference {
-  #[serde(flatten)]
-  pub target: ReferenceTarget,
-  pub name: String,
-  pub role: Option<String>,
+  /// The agent provider a profile's connection must have; each computer picks one of its own connections of that kind.
+  CliKind { cli: AgentProvider },
+  /// A team resource (an MCP server, tool, skill, instruction or profile) by its id on the server.
+  TeamResource { kind: SharedResourceKind, id: ResourceId },
+  /// A secret by its name; its value stays on each computer.
+  SecretName { name: SecretName },
 }
 
 /// One published version of a resource (`Version`), immutable and numbered by the server. `body` is the kind's body as
@@ -101,7 +98,7 @@ pub struct SharedVersion {
   pub number: VersionNumber,
   pub body: serde_json::Value,
   pub hash: ContentHash,
-  pub references: Vec<Reference>,
+  pub references: Vec<ReferenceTarget>,
   pub based_on: Option<VersionNumber>,
   pub published: Attribution,
   /// Computed and kept by the server, never supplied by a publisher. For team reviewers, uses
@@ -111,13 +108,13 @@ pub struct SharedVersion {
   pub widens: bool,
 }
 
-/// A version's content as an admin sends it: the body, and a reference for every id it names that is not a shared
-/// resource (`422 invalid { reason: "references" }` otherwise).
+/// A version's content as an admin sends it: the body, and the references it names (`422 invalid { reason:
+/// "references" }` when one does not hold).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct VersionContent {
   pub body: serde_json::Value,
-  pub references: Vec<Reference>,
+  pub references: Vec<ReferenceTarget>,
 }
 
 /// `POST …/resources`: a resource with the id the desktop made for it, and its first version.
@@ -146,7 +143,7 @@ pub struct ResourceCreated {
 pub struct UploadVersion {
   pub number: VersionNumber,
   pub body: serde_json::Value,
-  pub references: Vec<Reference>,
+  pub references: Vec<ReferenceTarget>,
   pub published_at: i64,
 }
 
@@ -185,7 +182,7 @@ pub struct VersionPublish {
   pub idempotency_key: IdempotencyKey,
   pub based_on: Option<VersionNumber>,
   pub body: serde_json::Value,
-  pub references: Vec<Reference>,
+  pub references: Vec<ReferenceTarget>,
 }
 
 /// `PATCH …/resources/{resource}`: a rename or an archived mark, made on `revision`.

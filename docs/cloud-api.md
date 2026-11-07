@@ -68,19 +68,19 @@ and both lists are empty when nothing uses the resource.
   the version that names it. The resource asked about is never in its own list, even when its latest version names
   itself. Ordered by `name` compared case-insensitively, then by `id`. A version *names* a resource by typed data, not
   by a text scan: the ids in a free-text field, a prompt or a description name nothing. It names resource `R` when
-  - one of its `references` is a reference to a tool with `R`'s id (`ReferenceTarget::Tool`; a connection, an MCP
-    server or a secret reference holds the publisher's local id, which is never a resource id), or
+  - one of its `references` is a `TeamResource` with `R`'s server id, of any kind (a profile's MCP servers, tools,
+    skills and instructions are among them; a `CliKind` or a `SecretName` names no resource), or
   - its body, read as the body type of its kind, holds `R`'s server resource id in one of these fields:
     - pipeline: a step's executor, `steps[].kind.agent.profile` or `steps[].kind.tool.tool`, and the Deliver step's
       `deliver.integrator`;
     - instruction: `targets.profiles[]`, and `scope.pipeline.pipeline` or `scope.step.pipeline`;
     - skill: `scope.pipeline.pipeline` or `scope.step.pipeline`;
     - tool: the pipelines its access policy lists, the keys of `access.callers`;
-    - agent profile, team reviewer and MCP server: none today. A profile selects MCP servers by the publisher's local
-      connection id, which is no resource id.
+    - agent profile, team reviewer and MCP server: none in the body today; a profile names what it uses in its
+      `references`.
 
-  A body that is no body of its kind names nothing. ORC-817 moves the references to `TeamResource { kind, server id }`;
-  the rule then reads those too (a profile's MCP servers among them), and this list is extended with it.
+  A body that is no body of its kind names nothing. The reference's `kind` is not compared with `R`'s: a reference of
+  the wrong kind is refused when published, not read here.
 - **`runs`**: the runs that have not ended and whose execution bundle pins any version of the resource, as the
   team server knows it from the bundle it built at `work.start` (`execution-bundles.md` of the platform): every
   pipeline, agent profile, tool, instruction and skill version the bundle pins, and no other: a team reviewer or an MCP
@@ -106,7 +106,8 @@ above with core's body types, and from the runs a test registers with `TeamServe
 bundle, so the pins a test names stand in for the bundle's, and `last_report` and `claim_run_task` stand in for the
 accepted work reports and the task's claim. It has no non-member, so that `404` is not exercised there.
 
-`SharedVersion` is `{ resource, number, body, hash, references, based_on, published, widens }`.
+`SharedVersion` is `{ resource, number, body, hash, references, based_on, published, widens }`, with `references` as the
+next section gives them.
 The server computes `widens: boolean` with ORC-570's `TeamReviewer::widens_over` and keeps it on that immutable
 version; it is never accepted from a publisher, including on import. Compare against the preceding published
 version, or no previous body for v1. Adding a remote host or lowering an existing decision threshold widens;
@@ -119,6 +120,39 @@ The existing stream carries reviewer metadata in `snapshot.begin.resources` and 
 `resource.renamed` and `resource.archived` deltas. A publication carries the resource with its new `latest`;
 members read the body and stored flag through the versions endpoint. No additional event kind is introduced.
 The platform server and web tasks must update their repository pin to the commit containing this contract.
+
+## Team resource references
+
+A team resource refers only to other team resources, by their server id, and to secrets, by name; it never carries an
+id or a path from somebody's computer (`docs/design/team-configuration.md`). A version's `references` (in
+`SharedVersion`, `VersionContent`, `UploadVersion` and `VersionPublish`) is a list of `ReferenceTarget`, each tagged by
+`type` and holding nothing else (the server refuses a reference with another field):
+
+```text
+{ type: "cli_kind",      cli: AgentProvider }                // "codex_cli" | "claude_code_cli" | "anthropic_api" | "openai_api"
+{ type: "team_resource", kind: SharedResourceKind, id }      // an MCP server, tool, skill, instruction or agent profile
+{ type: "secret_name",   name }                              // a capital letter, then capital letters, digits and "_"
+```
+
+- **`cli_kind`** replaces the reference to a connection. A profile names the CLI it runs with; each computer runs it on
+  one of its own connections of that kind and the person picks when there are several. A version without one names no
+  CLI.
+- **`team_resource`** replaces the references to an MCP server (by a computer's connection id) and to a tool. `id` is
+  the resource's id on the server, and `kind` its kind (`mcp_server`, `tool`, `skill`, `instruction`, `agent_profile`,
+  `pipeline`, `team_reviewer`; never agent testing's kinds). The server accepts it only for a resource of that kind in
+  the same project that is not archived.
+- **`secret_name`** replaces the reference to a secret by a computer's secret id. The server holds the name, never a
+  value; each computer fills in the value.
+
+A body holds none of these ids either: it has no connection, local MCP server or secret id, which the server refuses
+(`422 invalid { reason: "references" }` for a reference, `{ reason: "body" }` for a body). The kinds' bodies that still
+name a connection, an MCP server or a secret by a computer's id (the agent profile and the tool) change in ORC-820 and
+later tasks; until then a desktop sends no such body, and a server migration rewrites the versions that exist
+(`team-configuration-handover.md`, OP-200). There is no compatibility window: a server and a desktop on different
+versions of this contract do not read each other's `references`.
+
+The desktop's local projects keep their local ids; this shape is the team body's. The execution bundle carries none
+of these ids either: its `bindings` hold `{resource_id, role, cli, model}` of each pinned profile (below).
 
 ## Team server MCP server resource
 
@@ -344,8 +378,9 @@ starts work under a claim and never accepts one a client wrote. Unknown fields a
   and skills; `files` `[{sha256,size_bytes}]`, every file once; `skill_files`
   `[{resource_id,files:[{path,sha256,size_bytes}]}]`. `version` is the published version number.
 - `bindings` `[{resource_id,role,cli,model}]`: one per pinned profile, with its role and model; `cli` is the agent
-  provider (`codex_cli`, `claude_code_cli`, …) the executing computer runs it with. Which account or connection runs it,
-  and every path, stays on that computer.
+  provider (`codex_cli`, `claude_code_cli`, …) the executing computer runs it with. `resource_id` is the profile's server
+  resource id; a binding holds no id of a computer's connection, MCP server or secret. Which account or connection runs
+  it, and every path, stays on that computer.
 - `inputs` (`CanonicalExecutionInputs`): `{pipeline,steps,profiles,instructions,tools,skills}`, each pinned version
   `{resource,version,number,label,body}` with its published body. `label` (`ResourceLabel`) is `{slug,name}`, the
   resource's slug and name as the pinned version had them, which prompts and skill folders name it by: the slug is
@@ -354,7 +389,7 @@ starts work under a claim and never accepts one a client wrote. Unknown fields a
   pipeline order. The pipeline body lists no sources, a profile body is
   `{role,responsibilities,instructions,model,settings,permissions}` without its connection, MCP servers or writable
   folders, and a command tool never starts a program by an absolute path; such inputs are refused. Bodies name
-  secrets by id only.
+  secrets by id today; the tool body names them by name (`secret_name`, above) once ORC-820 and the tasks after it change it.
 - Order: `steps` and `permissions` keep pipeline order; `profiles`, `bindings`, `resources`, `skill_files` and the
   pinned versions are read in any order and kept in resource id order, `files` in hash order, a skill's files in path
   order.

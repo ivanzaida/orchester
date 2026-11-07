@@ -189,7 +189,7 @@ impl Here {
 /// runs use here.
 fn needers(db: &ProjectDb, binding: &ReferenceBinding) -> Result<Vec<Needer>, StoreError> {
   let mut needers: Vec<Needer> = Vec::new();
-  for naming in db.versions_naming(binding_target(binding.reference))? {
+  for naming in db.versions_naming(&binding_target(binding.reference))? {
     if let Some(kept) = needers.iter_mut().find(|needer| needer.resource == naming.resource) {
       kept.number = kept.number.max(naming.number);
       kept.numbers.push(naming.number);

@@ -159,7 +159,7 @@ fn created(id: ResourceId, kind: &str, (slug, name): (&str, &str), version: (&Va
 }
 
 fn tool_reference(id: ResourceId) -> Value {
-  json!([{"kind":"tool","id":id,"name":"Deploy","role":null}])
+  json!([{"type":"team_resource","kind":"tool","id":id}])
 }
 
 fn pipeline_of(kinds: &[Value]) -> Value {
@@ -295,6 +295,77 @@ fn stand_in_answers_used_by_with_the_latest_versions_whose_typed_fields_name_the
   assert_eq!(listed(&used), [(SharedResourceKind::Instruction, "Style", 1)]);
   let (_, nothing) = used_by(&team, own);
   assert_eq!(nothing, json!({"resources": [], "runs": []}));
+}
+
+#[test]
+fn stand_in_answers_used_by_with_the_profiles_whose_references_name_a_team_mcp_server() {
+  let team = Team::start(Standing::Admin);
+  let [docs, other, reviewer, builder, older] = [(); 5].map(|()| ResourceId::generate());
+  let references = |servers: &[ResourceId]| {
+    let mut references = vec![
+      json!({"type":"cli_kind","cli":"claude_code_cli"}),
+      json!({"type":"secret_name","name":"DOCS_TOKEN"}),
+    ];
+    references.extend(
+      servers
+        .iter()
+        .map(|server| json!({"type":"team_resource","kind":"mcp_server","id":server})),
+    );
+    json!(references)
+  };
+  create_all(
+    &team,
+    &[
+      created(docs, "mcp_server", ("docs", "Docs"), (&server_body("npx"), &json!([]))),
+      created(
+        other,
+        "mcp_server",
+        ("other", "Other"),
+        (&server_body("uvx"), &json!([])),
+      ),
+      created(
+        reviewer,
+        "agent_profile",
+        ("reviewer", "Reviewer"),
+        (&json!({}), &references(&[docs])),
+      ),
+      created(
+        builder,
+        "agent_profile",
+        ("builder", "Builder"),
+        (&json!({}), &references(&[other, docs])),
+      ),
+      created(
+        older,
+        "agent_profile",
+        ("older", "Older"),
+        (&json!({}), &references(&[docs])),
+      ),
+    ],
+  );
+  // Only the latest version counts: Older's second version drops the server.
+  let (status, published) = team.resources("POST", &format!("/{older}/versions"), &{
+    let mut next = publish(1, &json!({}));
+    next["references"] = references(&[]);
+    next
+  });
+  assert_eq!(status, 201, "{published}");
+
+  team.server.stand_as(Standing::Member);
+  let (status, used) = used_by(&team, docs);
+  assert_eq!(status, 200, "{used}");
+  let used: UsedBy = serde_json::from_value(used).expect("used by");
+  assert_eq!(
+    listed(&used),
+    [
+      (SharedResourceKind::AgentProfile, "Builder", 1),
+      (SharedResourceKind::AgentProfile, "Reviewer", 1)
+    ],
+    "the profiles that name the server by a team resource reference; a secret name or a CLI kind names no resource"
+  );
+  let (_, used) = used_by(&team, other);
+  let used: UsedBy = serde_json::from_value(used).expect("used by");
+  assert_eq!(listed(&used), [(SharedResourceKind::AgentProfile, "Builder", 1)]);
 }
 
 #[test]
