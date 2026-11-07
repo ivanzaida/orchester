@@ -12,6 +12,8 @@ mod bindings;
 mod here;
 mod profile;
 mod publish;
+mod share_fill_ins;
+mod share_mcp;
 mod team_body;
 mod upload;
 mod waiting;
@@ -37,6 +39,7 @@ use self::profile::cache_profile;
 pub use self::{
   here::{Here, HereReference, Needer, Standing, chosen_at},
   publish::{ConfigServer, RemoteResourceStore},
+  share_fill_ins::{FillInOutcome, ShareFillIns},
   upload::{keep_uploaded_configuration, upload_configuration},
   waiting::{Waiting, use_here, waiting},
 };

@@ -2124,7 +2124,38 @@
       "personOnly": "Only a person can do this in the window: it changes what agents may do on this computer. Nothing was changed.",
       "localEntitiesNamed": "The team can't take this: it names {{names}}, which belong to this computer only. Nothing was sent.",
       "pipelineNamesNonTeam": "The team can't take this pipeline: it uses {{name}}, which isn't one of the team's resources. Nothing was sent.",
-      "writableFoldersStay": "The team can't take this profile: its writable folders ({{folders}}) are folders of this computer, so they stay here and are not shared. Remove them from the profile to share it. Nothing was sent."
+      "writableFoldersStay": "The team can't take this profile: its writable folders ({{folders}}) are folders of this computer, so they stay here and are not shared. Remove them from the profile to share it. Nothing was sent.",
+      "shareRefused": "Nothing was shared: the team can't take {{resources}} as they are. Fix each one and share again.",
+      "shareRefusal": {
+        "localEntities": "{{resource}} names {{names}}, which belong to this computer only, and its kind has no form for the team yet. Remove them from it to share it.",
+        "pipelineNamesNonTeam": "{{resource}} uses {{name}}, which isn't shared with the team. Use a profile or tool the team gets, or remove the step.",
+        "writableFolders": "{{resource}} has writable folders ({{folders}}) that are folders of this computer, so they can't be shared. Remove them from the profile to share it.",
+        "mcpProgramInWorktree": "The MCP server {{resource}} starts a program inside the worktree. The team names a program by its name on the search path, so use one that is installed on the computer.",
+        "mcpProgramName": "The MCP server {{resource}} starts a program whose file name can't be looked up on the search path. Install it under a plain name.",
+        "mcpFolder": "The MCP server {{resource}} starts in a folder of this computer. The team's folder is relative to the worktree, so change it to one.",
+        "mcpUrlQuery": "The address of the MCP server {{resource}} has a query or a fragment, which would reach every member. Move the key into an authorization header.",
+        "mcpBasicUsername": "The MCP server {{resource}} signs in with a Basic user name and password. The team holds a whole credential in a secret header, so use a pasted Basic credential or a header instead.",
+        "mcpVariableNotSecret": "The MCP server {{resource}} has the variable {{variable}}. The team fills each variable from the team secret of the same name, and that isn't a valid secret name. Rename the variable to share it.",
+        "mcpHeaderWithoutSecret": "The MCP server {{resource}} sends the header {{header}} with no secret to take its value from, so it can't be shared.",
+        "mcpHeaderPrefix": "The MCP server {{resource}} sends a header whose fixed start isn't a scheme such as Bearer, so it can't be shared.",
+        "mcpSecretTaken": "The MCP server {{resource}} fills the team secret {{secret}} from another value than {{other}} does, and a team secret has one value on a computer. Use the same secret in both, or rename the variable.",
+        "mcpBody": "The MCP server {{resource}} breaks a rule of the team's MCP servers, so it can't be shared."
+      }
+    },
+    "shared": {
+      "notSet": {
+        "mcpProgramPath": "The program of the MCP server {{server}} wasn't found on this computer, so its path isn't set here. Set the path of {{server}} on this computer.",
+        "mcpProgramKept": "The path of the program of the MCP server {{server}} couldn't be saved on this computer. Set it on this computer.",
+        "mcpOn": "The MCP server {{server}} couldn't be switched on here. Switch it on on this computer.",
+        "connection": "The connection {{profile}} ran on couldn't be kept as its pick here. Pick a connection for {{profile}}.",
+        "secretValue": "This computer has no value for the secret {{secret}}, so none was carried. Set its value on this computer.",
+        "secretKept": "The value of the secret {{secret}} couldn't be saved on this computer. Set its value on this computer."
+      },
+      "notes": {
+        "variablesAreSecrets": "The variables {{variables}} of the MCP server {{server}} are team secrets now, and each member sets their value. Your values were kept on this computer.",
+        "goneServerLeftOut": "Version {{version}} of {{profile}} chose an MCP server this computer no longer has, so the shared copy of that version leaves it out.",
+        "unsharedServerLeftOut": "Version {{version}} of {{profile}} chose the MCP server {{server}}, which the team can't take, so the shared copy of that version leaves it out."
+      }
     },
     "folder": {
       "matches": "Its origin is {{hint}}, the repository this project names.",

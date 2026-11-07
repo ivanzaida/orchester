@@ -10,6 +10,7 @@ use orchester_core::{id::ResourceId, resource::VersionNumber, secret::VaultError
 use orchester_store::StoreError;
 use thiserror::Error;
 
+use super::refusal::ShareRefusal;
 use crate::messages::{self, Message};
 
 #[derive(Debug, Error)]
@@ -103,6 +104,10 @@ pub enum SharingError {
   /// are theirs. Nothing was sent.
   #[error("resource {resource} has writable folders of this computer ({})", folders.join(", "))]
   WritableFoldersStay { resource: ResourceId, folders: Vec<String> },
+  /// Share would upload what the team cannot take in the form it is in ([`ShareRefusal`]): every resource to fix is
+  /// listed, and nothing was sent.
+  #[error("{} resources cannot be shared as they are", refusals.len())]
+  ShareRefused { refusals: Vec<ShareRefusal> },
   /// The chosen local connection cannot run a reference of the required kind.
   #[error("the connection kind {actual:?} does not match the reference kind {expected:?}")]
   ConnectionKindMismatch {
@@ -165,6 +170,15 @@ impl SharingError {
       Self::PipelineNamesNonTeam { name, .. } => {
         Message::new("sharing.errors.pipelineNamesNonTeam").with("name", name.clone())
       }
+      // The names only: each refusal's reason is a message of its own ([`ShareRefusal::message`]), said by the caller.
+      Self::ShareRefused { refusals } => Message::new("sharing.errors.shareRefused").with(
+        "resources",
+        refusals
+          .iter()
+          .map(|refusal| refusal.name.clone())
+          .collect::<Vec<_>>()
+          .join(", "),
+      ),
       Self::WritableFoldersStay { folders, .. } => {
         Message::new("sharing.errors.writableFoldersStay").with("folders", folders.join(", "))
       }

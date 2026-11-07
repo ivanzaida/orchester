@@ -22,7 +22,7 @@ use orchester_core::{
   id::{IdempotencyKey, ProjectId, TaskId},
   project::TaskKey,
   repository::{RemoteName, RepositoryIdentity, RepositoryIdentityError, read_remotes},
-  sharing::TaskRevision,
+  sharing::{TaskRevision, may_change_configuration},
   store::{RunStore, TaskStore},
   task::{Task, TaskUpdate, organization::ChangeActor},
   time::Timestamp,
@@ -34,8 +34,8 @@ use super::{ProjectServer, convert, discovery, organization::tag, store::RemoteT
 use crate::{
   background,
   sharing::{
-    Behalf, ProjectAddress, ServerEntry, Servers, SharingError,
-    sync::{keep_uploaded_configuration, upload_configuration},
+    Behalf, NotSet, ProjectAddress, ServerEntry, Servers, ShareNote, SharingError,
+    sync::{FillInOutcome, ShareFillIns, keep_uploaded_configuration, upload_configuration},
   },
 };
 
@@ -57,6 +57,11 @@ pub struct Shared {
   pub link: SharingLink,
   /// `None` when the person did not ask for it; otherwise whether writing it worked.
   pub discovery: Option<Result<(), discovery::DiscoveryError>>,
+  /// What this computer could not set for the team's configuration after the Share; each stays missing where the
+  /// team's readiness is shown. Empty when all was set, or when nothing of the configuration was shared.
+  pub not_set: Vec<NotSet>,
+  /// What Share did to the configuration that differs from what the person had locally.
+  pub notes: Vec<ShareNote>,
 }
 
 /// Why the project was not shared.
@@ -221,7 +226,8 @@ impl Servers {
     }
     let _in_progress = InProgress::start(self, repo_root);
     let server = self.linking(entry, repo_root, &project, &address)?;
-    let configuration = upload_configuration_as_admin(&server).await?;
+    let (fill_ins, configuration) = self.upload_configuration_if_allowed(entry, &project, &server).await?;
+    let uploaded_any = !configuration.is_empty();
     let root = repo_root.to_owned();
     let (request, uploaded) = background::run(move || upload(&root, remote.as_ref(), key))
       .await
@@ -270,8 +276,71 @@ impl Servers {
       // The stream's snapshot names the uploaded resources too, and keeps them when it reads them.
       tracing::warn!(%error, "the uploaded configuration was not kept as the server's at once");
     }
+    let outcome = match fill_ins {
+      Some(fill_ins) if uploaded_any => self.apply_fill_ins(repo_root, entry.stored.id, fill_ins).await,
+      _ => FillInOutcome::default(),
+    };
     self.shared_changed();
-    Ok(Shared { link, discovery })
+    Ok(Shared {
+      link,
+      discovery,
+      not_set: outcome.not_set,
+      notes: outcome.notes,
+    })
+  }
+
+  /// Reads this computer's fill-ins and uploads the project's configuration, when the person may change the team's
+  /// configuration. A person who may not uploads none of it, and nothing of theirs is read for it.
+  async fn upload_configuration_if_allowed(
+    &self,
+    entry: &ServerEntry,
+    project: &SharedProject,
+    server: &ProjectServer,
+  ) -> Result<(Option<ShareFillIns>, Vec<SharedResource>), SharingError> {
+    let admin = entry.stored.account.as_ref().is_some_and(|account| account.admin);
+    if !may_change_configuration(project.role, admin) {
+      tracing::warn!("the configuration stays on this computer: only the server's admins share it");
+      return Ok((None, Vec::new()));
+    }
+    let fill_ins = self.read_fill_ins(server.repo_root()).await?;
+    let uploaded = upload_configuration_as_admin(server).await?;
+    Ok((Some(fill_ins), uploaded))
+  }
+
+  /// What this computer fills in once the project is shared, read before anything is uploaded: a keychain that
+  /// refuses stops the Share with nothing sent.
+  async fn read_fill_ins(&self, repo_root: &Path) -> Result<ShareFillIns, SharingError> {
+    let (root, vault) = (repo_root.to_owned(), self.inner.vault.clone());
+    background::run(move || {
+      ShareFillIns::read(
+        &root,
+        vault.get(),
+        orchester_exec::search_path::search_path().as_deref(),
+      )
+    })
+    .await
+    .map_err(SharingError::from)?
+  }
+
+  /// Sets what the project's runs had locally as this computer's fill-ins for the team's configuration, so the sharer's
+  /// runs stay ready. The project is shared by now, so a failure cannot undo the Share: every fill-in is tried, and
+  /// what could not be set comes back for the person to read; it shows as missing where the team's readiness is shown.
+  async fn apply_fill_ins(
+    &self,
+    repo_root: &Path,
+    server: orchester_core::id::ServerId,
+    fill_ins: ShareFillIns,
+  ) -> FillInOutcome {
+    let (root, servers) = (repo_root.to_owned(), self.clone());
+    background::run(move || fill_ins.apply((&servers.inner.workspace, servers.inner.vault.get()), &root, server))
+      .await
+      .unwrap_or_else(|error| {
+        tracing::error!(
+          ?error,
+          "this computer's fill-ins for the shared configuration were not set: the work was interrupted"
+        );
+        FillInOutcome::default()
+      })
   }
 
   /// The server project `project` on `entry` as the project at `repo_root` is linked to it, before the link is stored.

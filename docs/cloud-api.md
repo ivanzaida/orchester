@@ -189,8 +189,8 @@ A body holds none of these ids either: it has no connection, local MCP server or
 (`422 invalid { reason: "references" }` for a reference that does not hold, `{ reason: "body" }` for a body,
 `{ reason: "shape" }` for a request that does not parse, such as a reference with another field or a secret name that
 breaks the rule). The agent profile's body is the team's form since ORC-820 (below); the tool's body still names a
-secret by a computer's id and changes in ORC-830, until which a desktop sends no such tool body, and a server migration
-rewrites the versions that exist (`team-configuration-handover.md`, OP-200). There is no compatibility window: a server
+secret by a computer's id and has no team form yet, so a desktop sends no such tool body (Share refuses it, below), and a
+server migration rewrites the versions that exist (`team-configuration-handover.md`, OP-200). There is no compatibility window: a server
 and a desktop on different versions of this contract do not read each other's `references`.
 
 ### Team agent profile body
@@ -299,6 +299,44 @@ team MCP server on at each computer. The stream carries it as it carries the oth
 `snapshot.begin.resources` and the `resource.published`, `resource.renamed` and `resource.archived` deltas, with
 `kind: "mcp_server"`; no new event kind. Libraries and pickers (`ResourceLibraryRequest`, `ResourcePickerRequest`)
 accept `"mcp_server"` as `kind`.
+
+### Share: a local project's configuration in the team's form
+
+`POST …/resources/import` (Share) carries every resource with all its versions. Before it sends anything the desktop
+puts each resource in the team's form and the **latest** version of each is entirely in it (older versions are history
+and are not checked by the server): a profile is a `TeamAgentProfile` (above), a pipeline and the kinds without a team
+form keep their bodies and must name nothing of the computer. Each local MCP server an uploaded profile chooses (in any
+version) becomes a team MCP server with **the local server's id as its resource id**, so the sharer's own profiles keep
+choosing it, one version 1 made when the local server was (names are unique in a project, so no two become one). Its
+body has the program's file name (`notes-mcp` for `/opt/tools/notes-mcp`; a name on the search path stays), the
+arguments, a relative folder, the **names** of its environment variables (plain and secret-valued alike; no value; each
+name must be a valid secret name, as a variable takes the team secret of its own name), its secret headers for a
+remote server as `{ header, secret, prefix? }` (a bearer token: `Authorization`, the local secret's name, prefix
+`"Bearer "`; a pasted Basic credential: `Authorization`, the secret, prefix `"Basic "`; a header: its own name and
+secret, no prefix), and its tools that run without asking. A profile's older version that chooses a server this
+computer no longer has, or one that cannot be a team server, leaves it out and the Share result says so; its newest
+version does not, and is refused.
+
+The desktop refuses the whole Share, before anything is sent, with `SharingError::ShareRefused` listing every resource
+at once (`ShareRefusal { resource, name, reason }`, one line per resource in the surfaced message): a profile with
+writable folders, a tool, instruction, skill or reviewer whose body names a connection, MCP server or secret of this
+computer, a pipeline that runs a profile or tool it does not upload, and a local MCP server that cannot be a team one (a
+program inside the worktree, a file name that is not a program name, an absolute folder, a URL with a query or
+fragment, Basic authentication with a user name, a variable that is not a valid secret name, two servers that fill one
+team secret from different values).
+
+After the upload this computer fills in what it had, and the Share result (`Shared { not_set, notes, .. }`) says what
+it could not set or carried differently. Each profile's newest connection is its pick; each server that was on is on;
+the program of a stdio server is that team MCP server's program path for the team server (an absolute path as it was;
+a name on the search path looked up once on this computer, and `NotSet::McpProgramPath` when it is found nowhere); and
+the value of every team secret a server takes is kept under that secret's **name** (a variable `API_TOKEN` filled from
+the local secret `NOTES_TOKEN` is kept as `API_TOKEN`; a plain-text value such as `MODE=fast` is kept as the value of
+the team secret `MODE`, and `ShareNote::VariablesAreSecrets` says each member sets theirs; a pasted Basic credential is
+kept as the part after `Basic `). The values are read from the keychain before the upload and never leave the
+computer. Every fill-in is applied whatever happens to another; a secret with no value in the keychain and anything that
+could not be stored come back in `not_set`. A person who may not change the team's configuration uploads none of it and
+reads nothing of it.
+
 
 ## Team server catalog
 
