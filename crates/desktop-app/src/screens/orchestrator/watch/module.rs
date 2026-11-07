@@ -7,7 +7,7 @@
 //! leads is kept nowhere: the conversation's line names it, and its card offers it. A command that applied nothing
 //! says why over the composer. `/watch-task` ([`super::task`]) applies its badge the same way.
 
-use std::{path::PathBuf, sync::Arc};
+use std::{collections::VecDeque, path::PathBuf, sync::Arc};
 
 use lurq::{
   app::{
@@ -15,6 +15,7 @@ use lurq::{
     ctx::{Ctx, FutureAction, FutureState},
     events::is_synthetic_input,
   },
+  core::Signal,
   node::Element,
 };
 use orchester_core::{
@@ -26,7 +27,9 @@ use orchester_workspace::{
   background,
   messages::Message,
   orchestrator::watch::{WatchError, watch_in},
+  runner::Runners,
 };
+use parking_lot::Mutex;
 
 use super::picker::ModulePicker;
 use crate::{
@@ -74,27 +77,82 @@ pub(in crate::screens::orchestrator) struct Done {
 
 impl DevtoolsInspectable for Done {}
 
-pub(in crate::screens::orchestrator) type WatchAction = FutureAction<Command, Done, Message>;
+/// The commands asked while a run applies others, and whether one does.
+#[derive(Default)]
+struct Queue {
+  waiting: VecDeque<Command>,
+  running: bool,
+}
+
+/// What applies the /watch commands of the composer's send. `/watch-module` and `/watch-task` both apply through it,
+/// so a message with both badges asks two commands at once: one run applies them in turn, instead of the second run
+/// aborting the first. Its state is the last one applied, or the first that failed.
+#[derive(Clone)]
+pub(in crate::screens::orchestrator) struct WatchAction {
+  action: FutureAction<Command, Done, Message>,
+  queue: Arc<Mutex<Queue>>,
+}
+
+impl WatchAction {
+  pub(in crate::screens::orchestrator) fn state(&self) -> Signal<FutureState<Done, Message>> {
+    self.action.state()
+  }
+
+  /// Applies `command`, once the commands asked before it are, in the run that applies them.
+  fn run(&self, command: Command) {
+    {
+      let mut queue = self.queue.lock();
+      if queue.running {
+        queue.waiting.push_back(command);
+        return;
+      }
+      queue.running = true;
+    }
+    self.action.run(command);
+  }
+}
 
 pub(in crate::screens::orchestrator) fn watch_action(ctx: &mut Ctx) -> WatchAction {
   let runners = Services::of(ctx).runners;
-  ctx.future_action(move |command: Command| {
-    let runners = runners.clone();
+  let queue: Arc<Mutex<Queue>> = Arc::default();
+  let next = queue.clone();
+  let action = ctx.future_action(move |command: Command| {
+    let (runners, queue) = (runners.clone(), next.clone());
     async move {
-      let Command {
-        root,
-        chat,
-        new,
-        targets,
-        order,
-      } = command;
-      let (at, id) = (root.clone(), chat.id());
-      background::run(move || watch_in(&at, &chat, &targets, &order).map_err(|error: WatchError| error.message()))
-        .await??;
-      runners.chat_changed(&root);
-      Ok(Done { chat: id, new })
+      let mut outcome = watch(&runners, command).await;
+      loop {
+        let next = {
+          let mut held = queue.lock();
+          let next = held.waiting.pop_front();
+          held.running = next.is_some();
+          next
+        };
+        let Some(command) = next else {
+          return outcome;
+        };
+        let applied = watch(&runners, command).await;
+        // The first failure is what the notice says; each command still applies.
+        outcome = outcome.and(applied);
+      }
     }
-  })
+  });
+  WatchAction { action, queue }
+}
+
+/// Applies `command` off the UI thread, and tells the runners its conversation changed.
+async fn watch(runners: &Runners, command: Command) -> Result<Done, Message> {
+  let Command {
+    root,
+    chat,
+    new,
+    targets,
+    order,
+  } = command;
+  let (at, id) = (root.clone(), chat.id());
+  background::run(move || watch_in(&at, &chat, &targets, &order).map_err(|error: WatchError| error.message()))
+    .await??;
+  runners.chat_changed(&root);
+  Ok(Done { chat: id, new })
 }
 
 /// Once a command that started a conversation is applied, the route names that conversation while it still names a

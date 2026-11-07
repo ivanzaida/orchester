@@ -101,6 +101,7 @@ struct Kontur {
   billing_chat: ChatId,
   webhooks: ModuleId,
   billing: ModuleId,
+  limiter: TaskId,
 }
 
 fn kontur() -> Kontur {
@@ -117,7 +118,7 @@ fn kontur() -> Kontur {
   let (_, mobile) = module(&mut db, "Mobile release", &["Store screenshots"]);
   db.close_task_organization(mobile[0], WorkflowStatus::Done, (ChangeActor::Person, Timestamp::now()))
     .expect("done");
-  task(&mut db, "Shared rate limiter");
+  let limiter = task(&mut db, "Shared rate limiter");
   let led = Subscription::new(billing_chat, WatchTarget::Module(billing), "", Timestamp::now());
   db.start_subscription(&led).expect("led");
   drop(db);
@@ -133,6 +134,7 @@ fn kontur() -> Kontur {
     billing_chat,
     webhooks,
     billing,
+    limiter,
   }
 }
 
@@ -416,6 +418,73 @@ fn orchestrator_watch_module_refuses_synthetic_enter_and_keeps_the_badge_and_the
   let led = subscriptions.of(WatchTarget::Module(webhooks)).expect("led");
   assert_eq!(led.chat(), here, "this conversation leads it");
   assert_eq!(led.order(), Some("Ask before merging."), "the order stayed");
+}
+
+#[test]
+fn orchestrator_watch_module_and_task_badges_in_one_message_both_apply_on_enter() {
+  let Kontur {
+    mut screen,
+    here,
+    webhooks,
+    limiter,
+    ..
+  } = kontur();
+  webhooks_chosen(&mut screen, webhooks);
+  focus_field(&mut screen);
+  screen.set(INPUT, "/watch-task");
+  let command = "orchestrator-composer-slash-watch-task";
+  screen.until("Watch tasks focused", |screen| {
+    screen.exists(command) && screen.text(command).contains("Enter")
+  });
+  screen.key(("Enter", "Enter"), false);
+  let (task_picker, task_badge) = (
+    "orchestrator-composer-watch-task-picker",
+    "orchestrator-composer-badge-watch-task",
+  );
+  screen.until("the task picker", |screen| {
+    screen.exists(task_picker) && screen.exists(task_badge)
+  });
+  screen.set(INPUT, "rate lim");
+  let limiter_key = screen
+    .db()
+    .task(limiter)
+    .expect("read")
+    .expect("the task")
+    .key()
+    .to_string();
+  let limiter_row = format!("orchestrator-composer-watch-task-{limiter_key}");
+  screen.until("only the limiter", |screen| screen.exists(&limiter_row));
+  screen.key(("Enter", "Enter"), false);
+  let words = format!("Watch · {limiter_key}");
+  screen.until("the task badge", |screen| badge_words(screen, task_badge) == words);
+  screen.key(("Escape", "Escape"), false);
+  screen.until("the picker closed", |screen| !screen.exists(task_picker));
+  assert_eq!(
+    screen.text("orchestrator-composer-badges").matches("Watch").count(),
+    2,
+    "two badges, one per command"
+  );
+
+  screen.set(INPUT, "Ask before merging.");
+  screen.key(("Enter", "Enter"), false);
+  let both = |screen: &mut Orchestrator| {
+    let subscriptions = screen.db().active_subscriptions().expect("read");
+    subscriptions.of(WatchTarget::Module(webhooks)).is_some() && subscriptions.of(WatchTarget::Task(limiter)).is_some()
+  };
+  screen.until("both subscriptions", both);
+  let subscriptions = screen.db().active_subscriptions().expect("read");
+  for target in [WatchTarget::Module(webhooks), WatchTarget::Task(limiter)] {
+    let led = subscriptions.of(target).expect("led");
+    assert_eq!(led.chat(), here, "this conversation leads {target:?}");
+    assert_eq!(led.order(), Some("Ask before merging."), "the message is the order");
+  }
+  screen.until("the message sent", |screen| {
+    messages(screen, here).iter().any(|text| text == "Ask before merging.")
+  });
+  screen.until("the badges to go", |screen| {
+    !screen.exists(BADGE) && !screen.exists(task_badge)
+  });
+  assert!(!screen.exists("orchestrator-watch-problem"), "no watch failed");
 }
 
 #[test]
