@@ -1,12 +1,12 @@
-//! A version this computer knows the team cannot take (a pipeline running a profile the team does not have, a body
-//! naming a connection of this computer) is recorded as refused, as one the server refused is, instead of waiting to
+//! A version this computer knows the team cannot take (a pipeline running a profile the team does not have, a profile
+//! with writable folders of this computer) is recorded as refused, as one the server refused is, instead of waiting to
 //! be retried: the editors show it, the other versions are still sent, and a profile stuck on it is not the team's.
 //! A server that cannot be reached leaves a version waiting.
 
 use orchester_core::{
   id::ResourceId,
   name::Name,
-  permission::AgentPermissions,
+  permission::{AgentPermissions, WritableFolders},
   resource::{AgentProfile, Pipeline, Slug},
   sharing::MemberRole,
   store::ResourceStore,
@@ -89,13 +89,15 @@ async fn live_updates_a_pipeline_naming_a_profile_the_team_lacks_is_refused_and_
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn live_updates_a_profile_naming_a_connection_of_this_computer_is_refused_and_leaves_the_pending_team() {
+async fn live_updates_a_profile_with_writable_folders_is_refused_and_leaves_the_pending_team() {
   let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
   let alice = Computer::new(&server, ALICE, MemberRole::Owner);
   let laptop = codex(&mut alice.workspace.db(), &alice.workspace.root, "Laptop");
   let (stuck, pipeline) = {
     let mut db = alice.workspace.db();
-    let body: AgentProfile = profile(laptop, &[], AgentPermissions::before_permissions());
+    let folders: WritableFolders = serde_json::from_value(serde_json::json!(["/opt/cache"])).expect("folders");
+    let permissions = AgentPermissions::before_permissions().with_writable_folders(folders);
+    let body: AgentProfile = profile(laptop, &[], permissions);
     let stuck = db
       .create_resource(
         Slug::new("builder").expect("slug"),
@@ -114,7 +116,7 @@ async fn live_updates_a_profile_naming_a_connection_of_this_computer_is_refused_
   alice.store(&server, |store| store.send_waiting()).await.expect("sent");
 
   let db = alice.workspace.db();
-  assert_eq!(standing(&db, stuck), refused("local_entities_named"));
+  assert_eq!(standing(&db, stuck), refused("writable_folders_stay"));
   assert!(server.versions_of(stuck).is_empty());
   // While the profile waited it was the team's to come, so the pipeline running it could wait too; refused, it is not.
   assert_eq!(standing(&db, pipeline), refused("pipeline_names_non_team"));

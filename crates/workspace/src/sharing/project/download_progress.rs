@@ -161,6 +161,7 @@ impl From<&SharingError> for DownloadFailure {
       | SharingError::ConnectionKindMismatch { .. }
       | SharingError::LocalEntitiesNamed { .. }
       | SharingError::PipelineNamesNonTeam { .. }
+      | SharingError::WritableFoldersStay { .. }
       | SharingError::ForeignAddress { .. } => Self::Refused,
     }
   }

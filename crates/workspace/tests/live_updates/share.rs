@@ -10,14 +10,19 @@ use std::time::Duration;
 use orchester_api::{ReferenceTarget, SharedResourceKind};
 use orchester_core::{
   blob::ContentHash,
-  id::{ResourceId, RunId},
+  connection::{
+    AgentProvider,
+    mcp::{McpEnvironment, McpServer, McpServerName, McpServerSelection, McpTransport, StdioServer},
+  },
+  id::{ConnectionId, ResourceId, RunId},
   name::Name,
   resource::{
-    Draft, Instruction, InstructionScope, Pipeline, ResourceKind, Skill, SkillFile, SkillFilePath, Slug, Version,
+    AgentProfile, CommandProgram, Draft, Instruction, InstructionScope, Pipeline, ResourceKind, Skill, SkillFile,
+    SkillFilePath, Slug, TeamAgentProfile, Version,
   },
   run::Run,
   sharing::MemberRole,
-  store::{BlobStore, ResourceStore, RunStore},
+  store::{BlobStore, McpServerStore, ResourceStore, RunStore},
 };
 use orchester_store::{ProjectDb, ReferenceTarget as KeptTarget, ResourceSharing, StoreError};
 use orchester_workspace::sharing::{
@@ -51,6 +56,7 @@ struct Sharer {
 impl Sharer {
   fn new() -> Self {
     let mut fixture = Fixture::new();
+    fixture.connect_builder(AgentProvider::CodexCli);
     let db = &mut fixture.db;
     let style = db
       .create_resource(slug("style"), name("Style"), &rule("v1"), at(10))
@@ -244,22 +250,75 @@ async fn live_updates_share_uploads_every_resource_with_its_numbers_and_skill_fi
   );
 }
 
-/// A team resource names no connection of a computer: a profile whose connection is kept here is not uploaded, until
-/// its body names a CLI kind instead (ORC-820, ORC-830). Nothing is sent, so the server holds none of the project.
+/// A team resource names no connection of a computer: Share uploads a profile in the team's form, with the CLI kind of
+/// its connection, and the references that body names.
 #[tokio::test(flavor = "multi_thread")]
-async fn live_updates_share_uploads_nothing_when_a_profile_names_a_connection_of_this_computer() {
+async fn live_updates_share_uploads_a_profile_in_the_teams_form_with_the_cli_kind_of_its_connection() {
+  let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
+  let alice = Sharer::new();
+  let (_, builder) = alice.delivery();
+
+  alice.share(&server).await;
+
+  let sent = server.versions_of(builder).pop().expect("v1 on the server");
+  let team: TeamAgentProfile = serde_json::from_value(sent.body.clone()).expect("a team profile");
+  assert_eq!(team.cli(), AgentProvider::CodexCli);
+  assert!(sent.body.get("connection").is_none(), "{}", sent.body);
+  assert_eq!(sent.references, ReferenceTarget::of_profile(&team));
+  assert_eq!(
+    sent.references,
+    [ReferenceTarget::CliKind {
+      cli: AgentProvider::CodexCli
+    }]
+  );
+}
+
+/// A profile that chooses an MCP server of this computer, which the team has no counterpart of, is not uploaded, and
+/// nothing is sent: the person is told which server.
+#[tokio::test(flavor = "multi_thread")]
+async fn live_updates_share_uploads_nothing_when_a_profile_chooses_an_mcp_server_of_this_computer() {
   let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
   let mut alice = Sharer::new();
   let (_, builder) = alice.delivery();
+  let notes = McpServer::new(
+    ConnectionId::generate(),
+    McpServerName::new("notes").expect("name"),
+    McpTransport::Stdio(StdioServer::new(
+      CommandProgram::new("notes-mcp").expect("program"),
+      Vec::new(),
+      None,
+    )),
+    McpEnvironment::default(),
+    at(1),
+  )
+  .expect("server");
+  let published = alice
+    .db()
+    .latest_version::<AgentProfile>(builder)
+    .expect("read")
+    .expect("Builder");
+  let reviewer = published
+    .body()
+    .clone()
+    .with_mcp_servers(McpServerSelection::new(vec![notes.id()]).expect("one server"));
+  alice.fixture.db.create_mcp_server(&notes).expect("a local MCP server");
+  let reviewer = alice
+    .fixture
+    .db
+    .create_resource(slug("reviewer"), name("Reviewer"), &reviewer, at(30))
+    .expect("Reviewer")
+    .id();
   alice
     .fixture
-    .connect_builder(orchester_core::connection::AgentProvider::CodexCli);
+    .db
+    .publish_draft::<AgentProfile>(reviewer, at(31))
+    .expect("v1");
   let publisher = Publisher::online(&server, ALICE);
 
   let refused = upload_configuration(&publisher, alice.fixture.repo.path()).await;
 
   assert!(
-    matches!(&refused, Err(SharingError::LocalEntitiesNamed { resource, names }) if *resource == builder && !names.is_empty()),
+    matches!(&refused, Err(SharingError::LocalEntitiesNamed { resource, names }) if *resource == reviewer && *names == ["notes"]),
     "{refused:?}"
   );
   assert_eq!(on_server(&server, builder), [], "nothing was uploaded");

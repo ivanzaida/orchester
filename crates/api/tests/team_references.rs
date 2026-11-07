@@ -162,6 +162,6 @@ fn stand_in_does_not_require_a_cli_kind_of_a_profile_version() {
   assert_eq!(
     published["version"]["references"],
     json!([]),
-    "a desktop sends none until ORC-820 and ORC-830"
+    "the stand-in keeps the references as sent and adds none"
   );
 }

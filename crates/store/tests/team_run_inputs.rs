@@ -29,7 +29,7 @@ use orchester_core::{
   revision::Revision,
   run::{
     BranchName, CommitId, NewRun, PublishedVersions, RunSnapshot, StepExecutor,
-    bundle::{CanonicalExecutionInputs, PinnedBodies, ResourceLabel},
+    bundle::{CanonicalExecutionInputs, ExecutionProfile, PinnedBodies, ResourceLabel},
     inputs::{
       BoundReference, BundleContent, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, RunInputs, TaskAtStart,
       TeamAcceptance,
@@ -114,7 +114,7 @@ fn team_project() -> Team {
       (profile_version.id(), label("builder", "Builder")),
       (version.id(), label("delivery", "Delivery")),
     ],
-    profiles: &[profile_version],
+    profiles: &[(profile_version.id(), ExecutionProfile::of(profile_version.body()))],
     instructions: &[],
     tools: &[],
     skills: &[],
@@ -452,7 +452,10 @@ fn local_inputs(db: &ProjectDb, snapshot: &RunSnapshot) -> RunInputs {
     })
     .collect();
   let bodies = PinnedBodies {
-    profiles: &versions,
+    profiles: &versions
+      .iter()
+      .map(|version| (version.id(), ExecutionProfile::of(version.body())))
+      .collect::<Vec<_>>(),
     instructions: &[],
     tools: &[],
     skills: &[],

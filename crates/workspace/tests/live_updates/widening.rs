@@ -7,14 +7,16 @@ use std::num::NonZeroU32;
 
 use orchester_api::{ReferenceTarget, SharedResourceKind};
 use orchester_core::{
-  connection::AgentProvider,
+  connection::mcp::{McpEnvironment, McpServer, McpServerName, McpTransport, StdioServer},
   id::{ConnectionId, ResourceId},
   name::Name,
-  permission::{AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, widening::Widening},
-  resource::{AgentProfile, Draft, Pipeline, RepositoryAccess, Slug, TeamMcpServer, VersionNumber},
+  permission::{
+    AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, WritableFolders, widening::Widening,
+  },
+  resource::{AgentProfile, CommandProgram, Draft, Pipeline, RepositoryAccess, Slug, TeamMcpServer, VersionNumber},
   run::{Answerer, PreflightProblem},
   sharing::{MemberRole, VersionWidening},
-  store::ResourceStore,
+  store::{McpServerStore, ResourceStore},
   time::Timestamp,
 };
 use orchester_store::{PublishState, ResourceSharing};
@@ -29,7 +31,10 @@ use orchester_workspace::{
 
 use super::{
   ALICE, LIVE, Member, TeamServer, Workspace,
-  config::{agent, builder, codex, key, latest, pipeline, problems, profile, step, use_first},
+  config::{
+    agent, codex, key, latest, pipeline, problems, profile, step, team_builder, team_profile, team_references,
+    use_first,
+  },
   publish::Computer,
   seen_within,
 };
@@ -42,10 +47,9 @@ fn used(workspace: &Workspace, resource: ResourceId) -> Option<u32> {
   latest::<AgentProfile>(workspace, resource).map(|version| version.number().get())
 }
 
-/// Builder on the publisher's connection `theirs`, and pipeline Delivery that runs it.
+/// Builder, which runs with Codex, and pipeline Delivery that runs it.
 struct Team {
   server: TeamServer,
-  theirs: ConnectionId,
   builder: ResourceId,
   delivery: ResourceId,
 }
@@ -53,12 +57,11 @@ struct Team {
 impl Team {
   fn publish() -> Self {
     let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
-    let theirs = ConnectionId::generate();
     let (builder_id, delivery) = (ResourceId::generate(), ResourceId::generate());
     server.publish(
       (builder_id, SharedResourceKind::AgentProfile, "Builder"),
-      builder(theirs, &[]),
-      vec![work()],
+      team_builder(&[]),
+      team_references(&[]),
     );
     server.publish(
       (delivery, SharedResourceKind::Pipeline, "Delivery"),
@@ -67,7 +70,6 @@ impl Team {
     );
     Self {
       server,
-      theirs,
       builder: builder_id,
       delivery,
     }
@@ -87,13 +89,6 @@ impl Team {
     })
     .await;
     (workspace, stream)
-  }
-}
-
-/// The reference of the CLI Builder runs with.
-const fn work() -> ReferenceTarget {
-  ReferenceTarget::CliKind {
-    cli: AgentProvider::CodexCli,
   }
 }
 
@@ -130,34 +125,21 @@ async fn live_updates_a_widening_version_waits_and_runs_keep_the_previous_one_un
     CommandPermission::AnyInWorktree,
     NetworkAccess::On,
   );
+  let v2 = team_profile(&[their_docs], wider);
   team.server.publish(
     (builder_id, SharedResourceKind::AgentProfile, "Builder"),
-    serde_json::to_value(profile(
-      team.theirs,
-      &[ConnectionId::from_uuid(their_docs.as_uuid())],
-      wider,
-    ))
-    .expect("a profile serializes"),
-    vec![
-      work(),
-      ReferenceTarget::TeamResource {
-        kind: SharedResourceKind::McpServer,
-        id: their_docs,
-      },
-    ],
+    serde_json::to_value(&v2).expect("a profile serializes"),
+    ReferenceTarget::of_profile(&v2),
   );
   seen_within(LIVE, "v2 from its event", || {
     workspace.db().waiting_version(builder_id).ok().flatten().is_some()
   })
   .await;
   assert_eq!(used(&workspace, builder_id), Some(1), "runs keep v1");
-  // The joiner's cached profile body still carries the publisher's connection id, which this computer does not have,
-  // until a team body names a CLI kind instead of a connection (ORC-820): that is the one problem, and no MCP server
-  // is missing for v1.
   assert_eq!(
     problems(&workspace, delivery),
-    [PreflightProblem::ConnectionMissing { step: key("implement") }],
-    "a run here takes v1, which needs no MCP server"
+    [],
+    "a run here takes v1, which needs no MCP server and runs on the only Codex connection"
   );
   assert_eq!(
     waiting(&workspace.root, builder_id).expect("read"),
@@ -180,13 +162,9 @@ async fn live_updates_a_widening_version_waits_and_runs_keep_the_previous_one_un
   );
   assert_eq!(used(&workspace, builder_id), Some(2), "runs take v2 now");
   assert_eq!(waiting(&workspace.root, builder_id).expect("read"), None);
-  // The same connection problem as for v1 (ORC-820), and now v2's MCP server too.
   assert_eq!(
     problems(&workspace, delivery),
-    [
-      PreflightProblem::ConnectionMissing { step: key("implement") },
-      PreflightProblem::McpServerMissing { step: key("implement") },
-    ],
+    [PreflightProblem::McpServerMissing { step: key("implement") }],
     "v2's MCP server is not set up here"
   );
   stream.abort();
@@ -235,8 +213,8 @@ async fn live_updates_a_teammates_widening_version_waits_while_the_owners_own_ve
   );
   team.server.publish(
     (builder_id, SharedResourceKind::AgentProfile, "Builder"),
-    serde_json::to_value(profile(team.theirs, &[], wider)).expect("a profile serializes"),
-    vec![work()],
+    serde_json::to_value(team_profile(&[], wider)).expect("a profile serializes"),
+    team_references(&[]),
   );
   alice.go_offline(false);
   let sent = alice.store(&team.server, |store| store.send_waiting()).await;
@@ -334,28 +312,113 @@ async fn live_updates_a_version_published_here_and_one_that_does_not_widen_apply
   stream.abort();
 }
 
-/// A profile names the publisher's connection until its body changes (ORC-820), so a desktop does not send one: the
-/// version stays here and the person is told what it names.
+/// A profile made here is created in the team's form: the CLI kind of its connection, and each MCP server it chooses
+/// as the team MCP server it is. A server of this computer has no team counterpart, so a profile choosing one is not
+/// published and the person is told which.
 #[tokio::test(flavor = "multi_thread")]
-async fn live_updates_a_profile_naming_a_connection_of_this_computer_is_not_published() {
+async fn live_updates_a_profile_is_published_in_the_teams_form_and_one_choosing_a_local_mcp_server_is_not() {
   let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
+  let docs = ResourceId::generate();
+  server.publish(
+    (docs, SharedResourceKind::McpServer, "Docs"),
+    serde_json::to_value(docs_server(&[])).expect("a team MCP server serializes"),
+    Vec::new(),
+  );
   let alice = Computer::new(&server, ALICE, MemberRole::Owner);
   let workspace = &alice.workspace;
   let laptop = codex(&mut workspace.db(), &workspace.root, "Laptop");
-  let own = profile(laptop, &[], AgentPermissions::before_permissions());
+  let stream = workspace.follow(Member::of(&server, ALICE));
+  seen_within(LIVE, "the team MCP server", || {
+    latest::<TeamMcpServer>(workspace, docs).is_some()
+  })
+  .await;
+  stream.abort();
+
+  let team_docs = ConnectionId::from_uuid(docs.as_uuid());
+  let created = create_profile(
+    &alice,
+    &server,
+    profile(laptop, &[team_docs], AgentPermissions::before_permissions()),
+  )
+  .await
+  .expect("published in the team's form");
+  let sent = server.versions_of(created).pop().expect("the server has v1");
+  let wanted = team_profile(&[docs], AgentPermissions::before_permissions());
+  assert_eq!(sent.body, serde_json::to_value(&wanted).expect("serializes"));
+  assert_eq!(sent.references, ReferenceTarget::of_profile(&wanted));
+  assert!(sent.body.get("connection").is_none(), "{}", sent.body);
+
+  let notes = local_mcp_server();
+  workspace.db().create_mcp_server(&notes).expect("a local MCP server");
+  let refused = create_profile(
+    &alice,
+    &server,
+    profile(laptop, &[notes.id()], AgentPermissions::before_permissions()),
+  )
+  .await;
+  assert!(
+    matches!(refused, Err(SharingError::LocalEntitiesNamed { ref names, .. }) if *names == ["notes"]),
+    "{refused:?}"
+  );
+}
+
+/// A profile with extra writable folders is not published and the person is told they stay on this computer: a team
+/// profile carries no path of a computer.
+#[tokio::test(flavor = "multi_thread")]
+async fn live_updates_a_profile_with_writable_folders_is_not_published() {
+  let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
+  let alice = Computer::new(&server, ALICE, MemberRole::Owner);
+  let laptop = codex(&mut alice.workspace.db(), &alice.workspace.root, "Laptop");
+  let folders: WritableFolders = serde_json::from_value(serde_json::json!(["/opt/cache"])).expect("folders");
+
+  let refused = create_profile(
+    &alice,
+    &server,
+    profile(
+      laptop,
+      &[],
+      AgentPermissions::before_permissions().with_writable_folders(folders),
+    ),
+  )
+  .await;
+
+  assert!(
+    matches!(refused, Err(SharingError::WritableFoldersStay { ref folders, .. }) if *folders == ["/opt/cache"]),
+    "{refused:?}"
+  );
+}
+
+/// An MCP server that only this computer has.
+fn local_mcp_server() -> McpServer {
+  McpServer::new(
+    ConnectionId::generate(),
+    McpServerName::new("notes").expect("name"),
+    McpTransport::Stdio(StdioServer::new(
+      CommandProgram::new("notes-mcp").expect("program"),
+      Vec::new(),
+      None,
+    )),
+    McpEnvironment::default(),
+    Timestamp::from_unix_millis(1),
+  )
+  .expect("server")
+}
+
+/// Creates and publishes `profile` as a new team profile from `alice`'s computer.
+async fn create_profile(
+  alice: &Computer,
+  server: &TeamServer,
+  profile: AgentProfile,
+) -> Result<ResourceId, SharingError> {
   let at = Timestamp::from_unix_millis(1);
-  let refused = alice
-    .store(&server, move |store| {
-      let slug = Slug::new("builder").expect("slug");
-      let created = store.create_resource(slug, Name::new("Builder").expect("name"), &own, at)?;
+  alice
+    .store(server, move |store| {
+      let slug = Slug::new(&format!("builder-{}", ResourceId::generate())).expect("slug");
+      let created = store.create_resource(slug, Name::new("Builder").expect("name"), &profile, at)?;
       store.publish_draft::<AgentProfile>(created.id(), at)?;
       Ok::<_, SharingError>(created.id())
     })
-    .await;
-  assert!(
-    matches!(refused, Err(SharingError::LocalEntitiesNamed { ref names, .. }) if *names == ["Laptop"]),
-    "{refused:?}"
-  );
+    .await
 }
 
 #[test]

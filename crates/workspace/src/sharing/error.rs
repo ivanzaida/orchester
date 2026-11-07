@@ -89,8 +89,9 @@ pub enum SharingError {
   /// refused and nothing changed.
   #[error("only a person does this; nothing was changed")]
   PersonOnly,
-  /// A body to send the team names connections, MCP servers or secrets of this computer, which a team resource never
-  /// holds (`docs/design/team-configuration.md`); `names` are theirs. Nothing was sent.
+  /// A body to send the team names MCP servers of this computer that are not team resources, or (of a kind whose body
+  /// is not in the team's form yet) connections or secrets of this computer, which a team resource never holds
+  /// (`docs/design/team-configuration.md`); `names` are theirs. Nothing was sent.
   #[error("resource {resource} names {} of this computer", names.join(", "))]
   LocalEntitiesNamed { resource: ResourceId, names: Vec<String> },
   /// A pipeline to send the team runs an agent profile or tool, or merges with an integrator, that the team does not
@@ -98,6 +99,10 @@ pub enum SharingError {
   /// is the first. Nothing was sent.
   #[error("pipeline {resource} names {name}, which is not a team resource")]
   PipelineNamesNonTeam { resource: ResourceId, name: String },
+  /// A profile to send the team has extra writable folders, which are paths of this computer and stay on it; `folders`
+  /// are theirs. Nothing was sent.
+  #[error("resource {resource} has writable folders of this computer ({})", folders.join(", "))]
+  WritableFoldersStay { resource: ResourceId, folders: Vec<String> },
   /// The chosen local connection cannot run a reference of the required kind.
   #[error("the connection kind {actual:?} does not match the reference kind {expected:?}")]
   ConnectionKindMismatch {
@@ -159,6 +164,9 @@ impl SharingError {
       }
       Self::PipelineNamesNonTeam { name, .. } => {
         Message::new("sharing.errors.pipelineNamesNonTeam").with("name", name.clone())
+      }
+      Self::WritableFoldersStay { folders, .. } => {
+        Message::new("sharing.errors.writableFoldersStay").with("folders", folders.join(", "))
       }
     }
   }

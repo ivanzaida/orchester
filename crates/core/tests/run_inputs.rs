@@ -22,7 +22,7 @@ use orchester_core::{
   },
   run::{
     BranchName, CommitId, PinnedVersion, PublishedVersions, RunSnapshot,
-    bundle::{CanonicalExecutionInputs, PinnedBodies, ResourceLabel},
+    bundle::{CanonicalExecutionInputs, ExecutionProfile, PinnedBodies, ResourceLabel},
     inputs::{
       BoundReference, BundleContent, InputsError, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, RunInputs,
       TaskAtStart, TeamAcceptance,
@@ -83,7 +83,10 @@ fn fixture() -> Fixture {
   };
   let snapshot = RunSnapshot::build(ResourceId::generate(), &pipeline, published).expect("snapshot");
   let bodies = PinnedBodies {
-    profiles: &profiles.values().cloned().collect::<Vec<_>>(),
+    profiles: &profiles
+      .values()
+      .map(|version| (version.id(), ExecutionProfile::of(version.body())))
+      .collect::<Vec<_>>(),
     instructions: &[],
     tools: &[],
     skills: &[],

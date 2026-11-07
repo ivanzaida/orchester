@@ -227,6 +227,7 @@ pub(super) fn publish_error(error: &StoreError) -> ToolError {
     StoreError::Publish(PublishError::StaleDraft { .. }) => "stale_draft",
     StoreError::DraftChanged(_) => "draft_changed",
     StoreError::Publish(PublishError::ConnectionMissing) => "connection_missing",
+    StoreError::Publish(PublishError::ConnectionNotPicked) => "connection_not_picked",
     StoreError::Publish(PublishError::Permissions(_)) => "permissions_not_enforced",
     StoreError::Publish(PublishError::VersionLimit) => "version_limit",
     StoreError::NotAdmin => "not_admin",

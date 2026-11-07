@@ -25,8 +25,10 @@ pub enum Created {
 pub enum NotCreated {
   /// The team server refused it with its error `code`.
   Refused { code: String },
-  /// Its body names a connection, MCP server or secret of this computer, which a team body may not
-  /// (`SharingError::LocalEntitiesNamed`); nothing was sent.
+  /// Its body names an MCP server of this computer that is not a team resource, or (of a kind whose body is not in the
+  /// team's form yet) a connection or secret of this computer, which a team body may not
+  /// (`SharingError::LocalEntitiesNamed`), or it is a profile with writable folders, which are paths of this computer
+  /// (`SharingError::WritableFoldersStay`); nothing was sent.
   NamesLocal(Message),
   /// It runs a profile or tool that is not the team's (`SharingError::PipelineNamesNonTeam`); nothing was sent.
   NamesNonTeam(Message),
@@ -62,7 +64,9 @@ fn settle(servers: &Servers, root: &Path, resource: ResourceId) -> Result<Create
     (Some(PublishState::Waiting), Ok(())) => return Ok(Created::Waiting),
     (Some(PublishState::Waiting), Err(error)) if unreached(&error) => return Ok(Created::Waiting),
     // This computer found the team cannot take it and recorded it as refused ([`RemoteResourceStore::send_created`]).
-    (_, Err(error @ SharingError::LocalEntitiesNamed { .. })) => NotCreated::NamesLocal(said(&error, None)),
+    (_, Err(error @ (SharingError::LocalEntitiesNamed { .. } | SharingError::WritableFoldersStay { .. }))) => {
+      NotCreated::NamesLocal(said(&error, None))
+    }
     (_, Err(error @ SharingError::PipelineNamesNonTeam { .. })) => NotCreated::NamesNonTeam(said(&error, None)),
     (Some(PublishState::Waiting), Err(error)) => NotCreated::Failed(said(&error, None)),
     (Some(PublishState::Refused { code }), _) => NotCreated::Refused { code },

@@ -11,7 +11,7 @@ use crate::{
   id::ConnectionId,
   name::Name,
   permission::{AgentPermissions, WritableFolders},
-  resource::{AgentProfile, ModelId, PromptText, ProviderSettings},
+  resource::{AgentProfile, ModelId, PromptText, ProviderSettings, TeamAgentProfile},
 };
 
 /// `{role, responsibilities, instructions, model, settings, permissions}`: a profile version without its connection,
@@ -58,6 +58,22 @@ impl TryFrom<ProfileFields> for ExecutionProfile {
 
 impl ExecutionProfile {
   pub fn of(profile: &AgentProfile) -> Self {
+    Self {
+      role: profile.role().clone(),
+      responsibilities: profile.responsibilities().to_owned(),
+      instructions: profile.instructions().clone(),
+      model: profile.model().clone(),
+      settings: profile.settings().clone(),
+      permissions: profile
+        .permissions()
+        .clone()
+        .with_writable_folders(WritableFolders::none()),
+    }
+  }
+
+  /// A team profile version as the bundle carries it, which is how the team server builds the bundle: the same fields
+  /// as [`Self::of`], so a profile pins the same bytes whichever body held it.
+  pub fn of_team(profile: &TeamAgentProfile) -> Self {
     Self {
       role: profile.role().clone(),
       responsibilities: profile.responsibilities().to_owned(),

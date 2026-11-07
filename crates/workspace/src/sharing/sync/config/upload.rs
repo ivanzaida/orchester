@@ -3,8 +3,9 @@
 //! and name and every published version, numbers and times kept, after the skill parts its versions list, by hash. A
 //! resource with no published version stays here as its draft, and drafts stay local, based on the same versions.
 //! Then each uploaded resource is kept as the server's with its versions as the server numbered them; their local
-//! bodies stay the bodies this computer published. A body that names a connection, MCP server or secret of this
-//! computer is not uploaded ([`team_body`]): the upload fails and nothing is sent.
+//! bodies stay the bodies this computer published. An agent profile is uploaded in the team's form, with the references
+//! its body names ([`team_body::profile`]); any other body that names a connection, MCP server or secret of this
+//! computer is not uploaded ([`team_body::unchanged`]): the upload fails and nothing is sent.
 
 use std::{collections::BTreeSet, path::Path};
 
@@ -14,14 +15,17 @@ use orchester_api::{
 use orchester_core::{
   blob::ContentHash,
   id::IdempotencyKey,
-  resource::{AgentProfile, Instruction, Pipeline, Resource, ResourceBody, Skill, TeamExecutors, Tool},
+  resource::{AgentProfile, Instruction, Pipeline, Resource, ResourceBody, Skill, TeamExecutors, Tool, Version},
   sharing::LocalEntities,
   store::{BlobStore, ConnectionStore, McpServerStore, ResourceStore, SecretStore},
   time::Timestamp,
 };
 use orchester_store::{CachedVersion, ProjectDb, StoreError};
 
-use super::{ConfigServer, blocking, reference, resource, team_body};
+use super::{
+  ConfigServer, blocking, reference, resource,
+  team_body::{self, Publication},
+};
 use crate::sharing::{SharingError, project::convert};
 
 /// The kinds Share uploads, those other resources name first: a tool before the profiles that use it, profiles before
@@ -105,7 +109,7 @@ fn read(db: &ProjectDb) -> Result<(Vec<UploadResource>, BTreeSet<ContentHash>), 
           check_latest_pipeline(db, &kept, &team)?;
           versions::<Pipeline>(db, &kept, entities)?
         }
-        SharedResourceKind::AgentProfile => versions::<AgentProfile>(db, &kept, entities)?,
+        SharedResourceKind::AgentProfile => profile_versions(db, &kept)?,
         SharedResourceKind::Instruction => versions::<Instruction>(db, &kept, entities)?,
         SharedResourceKind::Tool => versions::<Tool>(db, &kept, entities)?,
         SharedResourceKind::TeamReviewer => versions::<orchester_core::resource::TeamReviewer>(db, &kept, entities)?,
@@ -161,15 +165,27 @@ fn versions<B: ResourceBody>(
         what: "resource body",
         detail: error.to_string(),
       })?;
-      team_body::check(resource.id(), &body, entities)?;
-      Ok(UploadVersion {
-        number: version.number(),
-        references: Vec::new(),
-        body,
-        published_at: version.published_at().unix_millis(),
-      })
+      let publication = team_body::unchanged(resource.id(), body, entities)?;
+      Ok(upload(&version, publication))
     })
     .collect()
+}
+
+/// The published versions of the agent profile `resource`, oldest first, in the team's form.
+fn profile_versions(db: &ProjectDb, resource: &Resource) -> Result<Vec<UploadVersion>, SharingError> {
+  db.versions::<AgentProfile>(resource.id())?
+    .into_iter()
+    .map(|version| Ok(upload(&version, team_body::profile(db, resource.id(), version.body())?)))
+    .collect()
+}
+
+fn upload<B>(version: &Version<B>, publication: Publication) -> UploadVersion {
+  UploadVersion {
+    number: version.number(),
+    references: publication.references,
+    body: publication.body,
+    published_at: version.published_at().unix_millis(),
+  }
 }
 
 /// `resources` in import requests of at most [`BATCH_BYTES`] each, in their order.

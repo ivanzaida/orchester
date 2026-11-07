@@ -30,7 +30,7 @@ use orchester_core::{
   },
   run::{
     BranchName, CommitId, PauseReason, PreflightProblem, PublishedVersions, RunSnapshot, RunStatus, StepStatus,
-    bundle::{CanonicalExecutionInputs, PinnedBodies, ResourceLabel},
+    bundle::{CanonicalExecutionInputs, ExecutionProfile, PinnedBodies, ResourceLabel},
     inputs::{
       BundleContent, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, RunInputs, TaskAtStart, TeamAcceptance,
     },
@@ -173,7 +173,7 @@ fn team(setup: &Setup) -> Team {
       (pipeline_version.id(), label("delivery", "Delivery")),
       (tool_version.id(), label("worktree-status", "Worktree status")),
     ],
-    profiles: &[profile_version],
+    profiles: &[(profile_version.id(), ExecutionProfile::of(profile_version.body()))],
     instructions: &[],
     tools: &[tool_version],
     skills: &[],

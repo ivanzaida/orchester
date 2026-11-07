@@ -321,6 +321,10 @@ pub enum PublishError {
   /// An agent profile whose connection no longer exists: what it can enforce is unknown.
   #[error("the agent profile's connection does not exist")]
   ConnectionMissing,
+  /// A team agent profile runs on no connection of this computer yet, so what it can enforce is unknown until the
+  /// person picks one.
+  #[error("the team agent profile has no connection on this computer yet")]
+  ConnectionNotPicked,
   /// An agent profile's connection cannot enforce its permissions.
   #[error(transparent)]
   Permissions(#[from] PermissionProblem),

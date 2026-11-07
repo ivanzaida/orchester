@@ -292,7 +292,7 @@ where
   S: ResourceStore<Error = StoreError> + ConnectionStore<Error = StoreError>,
 {
   let draft = store.draft::<AgentProfile>(id)?.ok_or(StoreError::NoDraft(id))?;
-  enforceable(store, draft.body())?;
+  publishable(store, id, draft.body())?;
   Ok(store.publish_draft::<AgentProfile>(id, now)?.number())
 }
 
@@ -304,14 +304,14 @@ pub fn publish_checked_in(
   checked: &AgentProfile,
 ) -> Result<VersionNumber, StoreError> {
   let mut db = ProjectDb::open(repo_root)?;
-  enforceable(&db, checked)?;
+  publishable(&db, id, checked)?;
   Ok(db.publish_draft_matching(id, checked, Timestamp::now())?.number())
 }
 
 /// Publishes exactly the stale draft and latest version the person reviewed, atomically.
 pub fn publish_stale_checked_in(root: &Path, expected: &ProfileEntry) -> Result<VersionNumber, StoreError> {
   let mut db = ProjectDb::open(root)?;
-  enforceable(&db, &expected.profile)?;
+  publishable(&db, expected.id, &expected.profile)?;
   let now = Timestamp::now();
   db.publish_draft_with(expected.id, now, |draft: Draft<AgentProfile>, latest| {
     if ProfileEntry::new(expected.id, Some(draft.clone()), latest.as_ref()).as_ref() != Some(expected) {
@@ -324,6 +324,19 @@ pub fn publish_stale_checked_in(root: &Path, expected: &ProfileEntry) -> Result<
     ))
   })
   .map(|version| version.number())
+}
+
+/// Refused when `profile`, version of `id`, is a team's with no connection picked here yet
+/// (`PublishError::ConnectionNotPicked`), or by [`enforceable`].
+fn publishable<S: ConnectionStore<Error = StoreError>>(
+  store: &S,
+  id: ResourceId,
+  profile: &AgentProfile,
+) -> Result<(), StoreError> {
+  if profile.awaits_connection_pick(id) {
+    return Err(PublishError::ConnectionNotPicked.into());
+  }
+  enforceable(store, profile)
 }
 
 /// Refused when `profile`'s connection is gone, or its CLI cannot enforce the profile's permissions here.

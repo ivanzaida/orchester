@@ -9,7 +9,7 @@ use orchester_core::{
   blob::ContentHash,
   connection::AgentProvider,
   id::{IdempotencyKey, ResourceId},
-  resource::{ResourceKind, VersionNumber},
+  resource::{ResourceKind, TeamAgentProfile, VersionNumber},
   secret::SecretName,
   sharing::TaskRevision,
 };
@@ -88,6 +88,32 @@ pub enum ReferenceTarget {
   TeamResource { kind: SharedResourceKind, id: ResourceId },
   /// A secret by its name; its value stays on each computer.
   SecretName { name: SecretName },
+}
+
+impl ReferenceTarget {
+  /// The references of a team agent profile's body, the one list a version of it sends: its CLI kind, then its MCP
+  /// servers, tools, skills and instructions as team resources, then its secrets by name, each in the body's order. The
+  /// body is the source; the references repeat what it names so the server can check the ids exist and read what uses
+  /// what without parsing every kind, and a version whose references differ from this list is not the body's.
+  pub fn of_profile(profile: &TeamAgentProfile) -> Vec<Self> {
+    let resources =
+      |kind, ids: &[ResourceId]| -> Vec<Self> { ids.iter().map(|id| Self::TeamResource { kind, id: *id }).collect() };
+    let mut references = vec![Self::CliKind { cli: profile.cli() }];
+    references.extend(resources(SharedResourceKind::McpServer, profile.mcp_servers()));
+    references.extend(resources(SharedResourceKind::Tool, profile.tools()));
+    references.extend(resources(SharedResourceKind::Skill, profile.skills()));
+    references.extend(resources(
+      SharedResourceKind::Instruction,
+      profile.instruction_resources(),
+    ));
+    references.extend(
+      profile
+        .secrets()
+        .iter()
+        .map(|name| Self::SecretName { name: name.clone() }),
+    );
+    references
+  }
 }
 
 /// One published version of a resource (`Version`), immutable and numbered by the server. `body` is the kind's body as

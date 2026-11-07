@@ -181,6 +181,9 @@ pub(super) fn said(error: &SharingError, address: Option<&ServerAddress>) -> Mes
     (SharingError::PipelineNamesNonTeam { name, .. }, None) => {
       Message::new("sharing.errors.pipelineNamesNonTeam").with("name", name.clone())
     }
+    (SharingError::WritableFoldersStay { folders, .. }, None) => {
+      Message::new("sharing.errors.writableFoldersStay").with("folders", folders.join(", "))
+    }
     (_, None) => messages::interrupted(),
   }
 }

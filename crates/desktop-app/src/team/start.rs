@@ -222,7 +222,11 @@ fn chosen(error: &ChoiceError) -> Stop {
     ChoiceError::BranchNotFound(branch) => Stop::BranchNotFound(branch.clone()),
     ChoiceError::BindingsRequired(profiles) => Stop::BindingsRequired(profiles.clone()),
     ChoiceError::McpServersRequired(servers) => Stop::McpServersRequired(servers.clone()),
-    ChoiceError::Read(_) | ChoiceError::NotPublished | ChoiceError::Unreadable | ChoiceError::ConnectionNotFound(_) => {
+    ChoiceError::Read(_)
+    | ChoiceError::NotPublished
+    | ChoiceError::Unreadable
+    | ChoiceError::LegacyProfileVersion
+    | ChoiceError::ConnectionNotFound(_) => {
       tracing::warn!(%error, "a team start's choices cannot be made");
       Stop::NotReadable
     }

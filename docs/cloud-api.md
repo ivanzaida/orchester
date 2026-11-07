@@ -76,8 +76,8 @@ both lists are empty when nothing uses the resource.
     - instruction: `targets.profiles[]`, and `scope.pipeline.pipeline` or `scope.step.pipeline`;
     - skill: `scope.pipeline.pipeline` or `scope.step.pipeline`;
     - tool: the pipelines its access policy lists, the keys of `access.callers`;
-    - agent profile, team reviewer and MCP server: none in the body today; a profile names what it uses in its
-      `references`.
+    - agent profile, team reviewer and MCP server: none, read from the body; a profile's body names what it uses
+      (`mcp_servers`, `tools`, `skills`, `instruction_resources`) and its `references` repeat that exactly.
 
   A body that is no body of its kind names nothing. The reference's `kind` is not compared with `R`'s: a reference of
   the wrong kind is refused when published, not read here.
@@ -165,11 +165,9 @@ id or a path from somebody's computer (`docs/design/team-configuration.md`). A v
 ```
 
 - **`cli_kind`** replaces the reference to a connection. A profile names the CLI it runs with; each computer runs it on
-  one of its own connections of that kind and the person picks when there are several. A version without one names no
-  CLI, and **the server does not require one**: until ORC-820 and ORC-830 change the profile and tool bodies, the
-  desktop refuses to publish or share a body that names a connection, an MCP server or a secret of the computer
-  (`SharingError::LocalEntitiesNamed`) and sends `references: []`, so a profile version arrives with no `cli_kind` and
-  is accepted. A computer that finds none in a profile it starts refuses the start (`team_read_failed`).
+  one of its own connections of that kind and the person picks when there are several. A version of another kind has
+  none, and **the server does not require one of a profile**: a computer that finds none in a profile it starts refuses
+  the start (`team_read_failed`).
 - **`team_resource`** replaces the references to an MCP server (by a computer's connection id) and to a tool. `id` is
   the resource's id on the server, and `kind` its kind (`mcp_server`, `tool`, `skill`, `instruction`, `agent_profile`,
   `pipeline`, `team_reviewer`; never agent testing's kinds). The server accepts it only for an existing resource of
@@ -189,10 +187,51 @@ order it was sent in; the server neither sorts nor merges it, and `GET …/versi
 A body holds none of these ids either: it has no connection, local MCP server or secret id, which the server refuses
 (`422 invalid { reason: "references" }` for a reference that does not hold, `{ reason: "body" }` for a body,
 `{ reason: "shape" }` for a request that does not parse, such as a reference with another field or a secret name that
-breaks the rule). The kinds' bodies that still name a connection, an MCP server or a secret by a computer's id (the
-agent profile and the tool) change in ORC-820 and later tasks; until then a desktop sends no such body, and a server
-migration rewrites the versions that exist (`team-configuration-handover.md`, OP-200). There is no compatibility
-window: a server and a desktop on different versions of this contract do not read each other's `references`.
+breaks the rule). The agent profile's body is the team's form since ORC-820 (below); the tool's body still names a
+secret by a computer's id and changes in ORC-830, until which a desktop sends no such tool body, and a server migration
+rewrites the versions that exist (`team-configuration-handover.md`, OP-200). There is no compatibility window: a server
+and a desktop on different versions of this contract do not read each other's `references`.
+
+### Team agent profile body
+
+The body of a `agent_profile` version is core's `TeamAgentProfile`; the server reads it with that type, which refuses
+any other field (`deny_unknown_fields`), so a `connection`, a local MCP server id or a secret id has nowhere to go:
+
+```text
+{ role, responsibilities, instructions,        // as the local profile has them
+  cli: AgentProvider,                          // "codex_cli" | "claude_code_cli" | "anthropic_api" | "openai_api"
+  model, settings, permissions,                // as the local profile has them (effort is in settings)
+  mcp_servers?: [ResourceId], tools?: [ResourceId], skills?: [ResourceId],
+  instruction_resources?: [ResourceId],       // team resources by server id, each list distinct, at most 20
+  secrets?: [SecretName] }                     // the names this profile needs, distinct, never a value
+```
+
+The lists are left out while empty. `permissions` carries no `writable_folders`: they are paths of one computer, so a
+server refuses a body that has any (`TeamAgentProfile` fails to read it) and a desktop refuses to send a profile that
+has them; each computer keeps its own. **The body is the one source of truth; `references` repeat it exactly.** A
+profile version's `references` are, in this order: one `cli_kind` for `cli`; a `team_resource` of kind `mcp_server` for
+each of `mcp_servers`, of kind `tool` for each of `tools`, of kind `skill` for each of `skills`, and of kind
+`instruction` for each of `instruction_resources`, each list in the body's order; then a `secret_name` for each of
+`secrets`. The desktop builds the list with `orchester_api::ReferenceTarget::of_profile` and sends nothing else. A
+server **should** derive the references from the body with the same function, or refuse a version whose `references`
+differ from it (`422 invalid { reason: "references" }`), so a stored version cannot name something its body does not;
+it then also checks that each named id is an existing, not archived team resource of the kind (above). Used-by
+(above) keeps reading the references of a version. The stand-in team server keeps a profile's body as sent and checks
+the references as it does for every kind; it does not read the body as a `TeamAgentProfile`.
+
+A server computes `widens` for a profile with core's `SharedBody` rules for `TeamAgentProfile`: a version widens when
+its permissions are broader (as for a local profile), when it names a team MCP server the previous version did not, or
+when it needs a secret name the previous version did not; the first version is compared with permissions that grant
+nothing. Tools, skills and instructions are not counted. A bundle pins a profile as `ExecutionProfile::of_team`, the
+fields `ExecutionProfile::of` takes from a local profile (below).
+
+A desktop turns its own profile into this body with `TeamAgentProfile::from_local`: the CLI kind of the profile's
+connection, and each MCP server it chooses as the team MCP server that has its id; a connection that is not an agent
+connection of the computer, or an MCP server that is not a team resource, is refused on the desktop (nothing is sent;
+`local_entities_named` names the MCP server). A local profile chooses no tool, skill, instruction or secret, so a
+desktop sends those lists empty; the web editor and other clients set them. A computer runs a team profile on the
+connection of its CLI kind it was filled in with (`AgentProfile::from_team`); the lists a local profile has no field
+for stay in the cached version's server body.
 
 A **pipeline** names the profiles and tools it runs by their server resource ids in its body, and its `references` stay
 empty: the body is the one source of truth, which is also how used-by reads it (`steps[].kind.agent.profile`,
@@ -467,8 +506,7 @@ starts work under a claim and never accepts one a client wrote. Unknown fields a
   pipeline order. The pipeline body lists no sources, a profile body is
   `{role,responsibilities,instructions,model,settings,permissions}` without its connection, MCP servers or writable
   folders, and a command tool never starts a program by an absolute path; such inputs are refused. Bodies name
-  secrets by id today; the tool body names them by name (`secret_name`, above) once ORC-820 and the tasks after it
-  change it.
+  secrets by id today; the tool body names them by name (`secret_name`, above) once ORC-830 changes it.
 - Order: `steps` and `permissions` keep pipeline order; `profiles`, `bindings`, `resources`, `skill_files` and the
   pinned versions are read in any order and kept in resource id order, `files` in hash order, a skill's files in path
   order.

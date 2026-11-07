@@ -1,10 +1,16 @@
 //! The connection (and account) a team profile runs on.
 
-use orchester_core::{account::AccountCli, id::ConnectionId};
+use orchester_core::{
+  account::AccountCli,
+  connection::AgentProvider,
+  id::ConnectionId,
+  name::Name,
+  resource::{AgentProfile, ModelId, PromptText, ProviderSettings, TeamAgentProfile, VersionNumber},
+};
 use orchester_store::ConnectionPick;
 use orchester_workspace::team_fill_ins::FillInError;
 
-use crate::support::{Team, pick};
+use crate::support::{Team, cached, pick, team_resource};
 
 #[test]
 fn team_fill_ins_pick_a_connection_of_the_profiles_cli_kind() {
@@ -124,4 +130,59 @@ fn team_fill_ins_an_account_is_a_listed_account_of_the_connections_cli() {
     matches!(gone, Err(FillInError::AccountNotFound(id)) if id == unknown),
     "{gone:?}"
   );
+}
+
+/// A profile in the team's form runs on the connection of its CLI kind a person picked: the local body, which runs and
+/// the Agents page read, follows the pick; the server's body is never changed.
+#[test]
+fn team_fill_ins_a_pick_points_a_team_profile_at_the_connection_it_runs_on() {
+  let team = Team::new();
+  let second = {
+    let mut db = team.db();
+    crate::support::connection(&mut db, &team.root, AgentProvider::CodexCli, "codex work")
+  };
+  let body = TeamAgentProfile::new(
+    Name::new("Builder").expect("role"),
+    String::new(),
+    PromptText::new("Build.").expect("prompt"),
+    (
+      AgentProvider::CodexCli,
+      ModelId::new("gpt-5.5").expect("model"),
+      ProviderSettings::default(),
+    ),
+  );
+  let server_body = serde_json::to_value(&body).expect("a team profile serializes");
+  let profile = {
+    let mut db = team.db();
+    let id = team_resource(
+      &mut db,
+      "team-builder",
+      AgentProfile::from_team(&body, ConnectionId::generate()),
+      Vec::new(),
+    );
+    let mut version = cached(AgentProfile::from_team(&body, ConnectionId::generate()), Vec::new());
+    version.server_body = server_body.clone();
+    db.cache_shared_version(id, &version).expect("the team form cached");
+    id
+  };
+  let runs_on = |team: &Team| {
+    let cached = team
+      .db()
+      .cached_version::<AgentProfile>(profile, VersionNumber::FIRST)
+      .expect("read")
+      .expect("cached");
+    (cached.local_body.connection(), cached.server_body)
+  };
+
+  team
+    .workspace
+    .pick_team_connection(&team.root, profile, pick(second))
+    .expect("a Codex connection for a Codex profile");
+
+  assert_eq!(runs_on(&team), (second, server_body.clone()));
+  team
+    .workspace
+    .pick_team_connection(&team.root, profile, pick(team.codex))
+    .expect("another pick replaces it");
+  assert_eq!(runs_on(&team), (team.codex, server_body));
 }

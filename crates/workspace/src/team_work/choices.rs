@@ -1,24 +1,23 @@
 //! What this computer chooses for a team task's start, the same for the MCP tool `run_task` and the Task page's Run
 //! (ORC-725's rule): the commit the module's branch is at here, the start's base; and which local connection each agent
 //! profile of the task's pipeline runs on. The profiles and the CLI each runs are read from the team server: the
-//! pipeline's latest published version names its profiles, and each profile's latest version names the CLI the Admin
-//! chose by a `CliKind` reference. A profile runs on the connection the caller binds it to, otherwise on the connection
-//! its body names when this computer has it with that very id and CLI (the publisher's own computer), otherwise on the
-//! only local agent connection of its CLI; with none or several, the start is refused naming the profiles that need a
-//! choice. A team MCP server a profile's version names by a `TeamResource` reference is, until ORC-826, looked up as a
-//! local `mcp_servers` row with that very id; with none, the start is refused naming the servers ([`McpHere`]). Nothing
+//! pipeline's latest published version names its profiles, and each profile's latest version ([`TeamAgentProfile`])
+//! names the CLI kind the Admin chose. A profile runs on the connection the caller binds it to, otherwise on the only
+//! local agent connection of its CLI; with none or several, the start is refused naming the profiles that need a
+//! choice. A team MCP server a profile's version names by its server id is, until ORC-826, looked up as a local
+//! `mcp_servers` row with that very id; with none, the start is refused naming the servers ([`McpHere`]). Nothing
 //! else is guessed: the bindings are checked again against the bundle `work.start` answers, and a pipeline changed in
 //! between fails the start there.
 
 use std::path::Path;
 
-use orchester_api::{ReferenceTarget, SharedResourceKind, SharedVersion, v2::PageRequest};
+use orchester_api::{SharedVersion, v2::PageRequest};
 use orchester_core::{
   command::CommandRunner,
   connection::{AgentProvider, Connection, ConnectionKind, mcp::McpServer},
   id::{ConnectionId, ResourceId},
   integration::base::set_branch_tip,
-  resource::{AgentProfile, Pipeline, StepKind, TeamMcpServer},
+  resource::{Pipeline, StepKind, TeamAgentProfile, TeamMcpServer},
   run::{
     BranchName, CommitId,
     inputs::{BoundReference, LocalBindings, ProfileBinding},
@@ -47,6 +46,11 @@ pub enum ChoiceError {
   /// A version the team server answered cannot be read as its kind.
   #[error("a version the team server answered cannot be read")]
   Unreadable,
+  /// The latest version of a profile was published before the team configuration model: it names the publisher's
+  /// connection instead of a CLI kind, so no connection of this computer can be chosen for it. The team publishes the
+  /// profile again in the team's form (ORC-845 removes such versions).
+  #[error("the latest version of a profile is in the form that names a connection, not a CLI kind")]
+  LegacyProfileVersion,
   /// A connection the caller named is not one of this computer's.
   #[error("no connection {0} here")]
   ConnectionNotFound(String),
@@ -105,9 +109,7 @@ struct Profile {
   id: ResourceId,
   role: String,
   cli: AgentProvider,
-  /// The connection its body names, by its id on the publisher's computer.
-  connection: ConnectionId,
-  /// The team MCP servers its version's references name.
+  /// The team MCP servers its version names.
   mcp_servers: Vec<ResourceId>,
 }
 
@@ -212,8 +214,7 @@ async fn mcp_names(project: &TeamProject, missing: &[ResourceId]) -> Vec<String>
   names
 }
 
-/// The connection `profile` runs on: the caller's binding, else the connection its reference names when this computer
-/// has it with that id and CLI, else the only local connection of its CLI.
+/// The connection `profile` runs on: the caller's binding, else the only local connection of its CLI.
 fn chosen(
   profile: &Profile,
   connections: &[Connection],
@@ -228,13 +229,6 @@ fn chosen(
       .ok_or_else(|| ChoiceError::ConnectionNotFound(named.clone()));
   }
   let runs_cli = |connection: &&Connection| *connection.kind() == ConnectionKind::Agent(profile.cli);
-  if let Some(named) = connections
-    .iter()
-    .filter(runs_cli)
-    .find(|connection| connection.id() == profile.connection)
-  {
-    return Ok(Some(named.id()));
-  }
   let mut matching = connections.iter().filter(runs_cli);
   Ok(match (matching.next(), matching.next()) {
     (Some(only), None) => Some(only.id()),
@@ -259,37 +253,21 @@ async fn profiles_of(project: &TeamProject, pipeline: ResourceId) -> Result<Vec<
   Ok(profiles)
 }
 
-/// Profile `id` as its latest version names it, with the CLI its `CliKind` reference says.
+/// Profile `id` as its latest version names it.
 async fn profile(project: &TeamProject, id: ResourceId) -> Result<Profile, ChoiceError> {
   let latest = latest(project, id).await?;
-  let body: AgentProfile = serde_json::from_value(latest.body).map_err(|_| ChoiceError::Unreadable)?;
-  let cli = latest
-    .references
-    .iter()
-    .find_map(|reference| match reference {
-      ReferenceTarget::CliKind { cli } => Some(*cli),
-      ReferenceTarget::TeamResource { .. } | ReferenceTarget::SecretName { .. } => None,
-    })
-    .ok_or(ChoiceError::Unreadable)?;
-  let mcp_servers = latest
-    .references
-    .iter()
-    .filter_map(|reference| match reference {
-      ReferenceTarget::TeamResource {
-        kind: SharedResourceKind::McpServer,
-        id,
-      } => Some(*id),
-      ReferenceTarget::TeamResource { .. } | ReferenceTarget::CliKind { .. } | ReferenceTarget::SecretName { .. } => {
-        None
-      }
-    })
-    .collect();
+  if latest.body.get("connection").is_some() {
+    return Err(ChoiceError::LegacyProfileVersion);
+  }
+  let body: TeamAgentProfile = serde_json::from_value(latest.body).map_err(|error| {
+    tracing::warn!(profile = %id, %error, "a team profile version cannot be read as a team profile");
+    ChoiceError::Unreadable
+  })?;
   Ok(Profile {
     id,
     role: body.role().as_str().to_owned(),
-    cli,
-    connection: body.connection(),
-    mcp_servers,
+    cli: body.cli(),
+    mcp_servers: body.mcp_servers().to_vec(),
   })
 }
 

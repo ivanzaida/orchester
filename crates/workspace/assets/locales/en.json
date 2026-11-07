@@ -768,6 +768,7 @@
       "approvalGate": "Step “{{step}}” calls a tool and waits for an approval; only agent steps can propose a plan for review in this version.",
       "profileNotPublished": "Step “{{step}}” uses an agent profile without a published version.",
       "connectionMissing": "Step “{{step}}” uses an agent profile whose connection no longer exists.",
+      "connectionNotPicked": "Step “{{step}}” uses a team agent profile that has no connection on this computer yet. Pick a connection for this team profile.",
       "mcpServerMissing": "Step “{{step}}” uses an agent profile that gives its agents an MCP server missing on this computer, for example one a shared version names that is not bound here.",
       "secretMissing": "Step “{{step}}” calls a tool that uses a secret missing on this computer, for example one a shared version names that is not bound here.",
       "unsupportedProvider": "Step “{{step}}” uses a connection that is not an agent CLI; choose a Codex or Claude Code connection for its agent profile.",
@@ -975,7 +976,8 @@
         "noNetworkOption": "This connection cannot enforce any network option. Choose another connection."
       },
       "publish": {
-        "connectionMissing": "This profile’s connection no longer exists, so what it can enforce is unknown. Choose a connection before publishing."
+        "connectionMissing": "This profile’s connection no longer exists, so what it can enforce is unknown. Choose a connection before publishing.",
+        "connectionNotPicked": "This team profile has no connection on this computer yet, so what it can enforce is unknown. Pick a connection for this team profile before publishing."
       },
       "repository": "Repository access",
       "commands": "Commands",
@@ -1687,6 +1689,7 @@
       "teamMembershipRevoked": "You are no longer a member of this team project, so nothing was read or changed.",
       "teamNotFound": "The team server doesn't know this, or it is no longer there for you.",
       "teamReadFailed": "The team server's answer could not be read, so nothing was read or changed.",
+      "teamProfileLegacy": "A profile of this pipeline was published before the team configuration model and names its publisher’s connection instead of a CLI kind, so no connection of this computer can be chosen for it. Publish the profile again.",
       "teamProjectUnsupported": "{{tool}} is not available for a team project in this version: what it reads or changes belongs to the team server, and it is not answered from this computer's copy.",
       "teamDeliveryPending": "A team task's run goes into its module's branch, and only its module's delivery, authorized by an Admin or the team's automatic merge, takes it to the base branch. A proposal does not request that delivery: call merge_run for the run. Nothing was merged.",
       "teamRunNotInModule": "This run did not start on a team module's branch, so no module delivery takes it to the base branch. Nothing was merged.",
@@ -2113,7 +2116,8 @@
       "versionConflict": "Someone published v{{version}} from the same version meanwhile. Open your draft on v{{version}}, or publish yours as the next version.",
       "personOnly": "Only a person can do this in the window: it changes what agents may do on this computer. Nothing was changed.",
       "localEntitiesNamed": "The team can't take this: it names {{names}}, which belong to this computer only. Nothing was sent.",
-      "pipelineNamesNonTeam": "The team can't take this pipeline: it uses {{name}}, which isn't one of the team's resources. Nothing was sent."
+      "pipelineNamesNonTeam": "The team can't take this pipeline: it uses {{name}}, which isn't one of the team's resources. Nothing was sent.",
+      "writableFoldersStay": "The team can't take this profile: its writable folders ({{folders}}) are folders of this computer, so they stay here and are not shared. Remove them from the profile to share it. Nothing was sent."
     },
     "folder": {
       "matches": "Its origin is {{hint}}, the repository this project names.",

@@ -8,12 +8,14 @@ use std::collections::BTreeSet;
 
 use crate::{
   connection::mcp::McpServerSelection,
+  id::ResourceId,
   permission::{
     AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, RepositoryAccess,
     widening::{CommandWidening, Widening, changed_variables},
   },
   resource::{
-    AgentProfile, CommandEnvironment, HttpRequest, Instruction, Pipeline, RequestTarget, Skill, Tool, ToolAction,
+    AgentProfile, CommandEnvironment, HttpRequest, Instruction, Pipeline, RequestTarget, Skill, TeamAgentProfile, Tool,
+    ToolAction,
   },
   secret::tool_uses,
 };
@@ -60,21 +62,50 @@ impl SharedBody for AgentProfile {
   /// server. Unlike the person gate, it does not fit them to the profile's connection, which a body names by the
   /// publisher's id.
   fn widenings_over(&self, previous: Option<&Self>) -> Vec<VersionWidening> {
-    let (permissions, servers) = previous.map_or_else(
-      || (nothing_granted(), McpServerSelection::none()),
-      |previous| (previous.permissions().clone(), previous.mcp_servers().clone()),
-    );
-    let mut widenings: Vec<_> = self
-      .permissions()
-      .widenings_from(&permissions)
-      .into_iter()
-      .map(VersionWidening::Permissions)
-      .collect();
-    if self.mcp_servers().adds_to(&servers) {
+    let servers = |profile: &Self| profile.mcp_servers().clone();
+    let mut widenings = permission_widenings(self.permissions(), previous.map(AgentProfile::permissions));
+    if self
+      .mcp_servers()
+      .adds_to(&previous.map_or_else(McpServerSelection::none, servers))
+    {
       widenings.push(VersionWidening::McpServer);
     }
     widenings
   }
+}
+
+/// A team profile widens as a local one does, and also when it needs a secret, or uses a team MCP server, the previous
+/// version did not. Tools, skills and instructions are not counted: they change what agents are offered or told, and a
+/// tool's own versions widen on their own.
+impl SharedBody for TeamAgentProfile {
+  fn widenings_over(&self, previous: Option<&Self>) -> Vec<VersionWidening> {
+    let mut widenings = permission_widenings(self.permissions(), previous.map(TeamAgentProfile::permissions));
+    let added = |now: &[ResourceId], before: Option<&[ResourceId]>| {
+      now
+        .iter()
+        .any(|item| !before.is_some_and(|before| before.contains(item)))
+    };
+    if added(self.mcp_servers(), previous.map(TeamAgentProfile::mcp_servers)) {
+      widenings.push(VersionWidening::McpServer);
+    }
+    let needs_new_secret = self
+      .secrets()
+      .iter()
+      .any(|secret| !previous.is_some_and(|previous| previous.secrets().contains(secret)));
+    if needs_new_secret {
+      widenings.push(VersionWidening::Secret);
+    }
+    widenings
+  }
+}
+
+fn permission_widenings(next: &AgentPermissions, previous: Option<&AgentPermissions>) -> Vec<VersionWidening> {
+  let nothing = nothing_granted();
+  next
+    .widenings_from(previous.unwrap_or(&nothing))
+    .into_iter()
+    .map(VersionWidening::Permissions)
+    .collect()
 }
 
 fn nothing_granted() -> AgentPermissions {
