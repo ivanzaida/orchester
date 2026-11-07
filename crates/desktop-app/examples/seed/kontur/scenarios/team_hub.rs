@@ -147,7 +147,11 @@ fn team_profile(kontur: &mut Kontur, name: &str, servers: &[ResourceId], secrets
 }
 
 /// The team's resource `name` of any kind whose body is the same on the server and here, at v1.
-fn team_resource<B: ResourceBody + Clone>(kontur: &mut Kontur, name: &str, body: &B) -> Result<(), SeedError> {
+pub(super) fn team_resource<B: ResourceBody + Clone>(
+  kontur: &mut Kontur,
+  name: &str,
+  body: &B,
+) -> Result<(), SeedError> {
   let resource = kontur.db.create_resource(
     Slug::new(&name.to_lowercase().replace(' ', "-")).map_err(invalid)?,
     Name::new(name).map_err(invalid)?,

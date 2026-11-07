@@ -1,8 +1,8 @@
-//! Whether each pipeline is ready on this computer, in the Pipeline menu and in the action bar (`R2` `P6aAoZ` for a team
-//! project, `L10` `PMi6Q` for a local one, rule 8 of `Agents · v2` `acFkz`). The answer is read once when the form opens
-//! and again when the pipelines it offers change, on the background pool: the read stats program files and asks the
-//! keychain, so it is never read on a timer. A pipeline that is not ready says how many things are missing, or, when
-//! that cannot be known yet, that it is not ready (`Undecided`); nothing is called ready before it is read.
+//! Whether each pipeline is ready on this computer, in the Pipeline menu and in the action bar (`R2` `P6aAoZ` for a
+//! team project, `L10` `PMi6Q` for a local one, rule 8 of `Agents · v2` `acFkz`). The answer is read once when the form
+//! opens and again when the pipelines it offers change, on the background pool: the read stats program files and asks
+//! the keychain, so it is never read on a timer. A pipeline that is not ready says how many things are missing, or,
+//! when that cannot be known yet, that it is not ready (`Undecided`); nothing is called ready before it is read.
 
 use std::sync::Arc;
 
@@ -20,7 +20,7 @@ use crate::services::Services;
 /// developer log: the runner still refuses a run that is not ready).
 pub(super) fn read(ctx: &mut Ctx, props: &FormProps) -> Option<Arc<ProjectReadiness>> {
   let services = Services::of(ctx);
-  let (workspace, vault) = (services.workspace.clone(), services.vault.clone());
+  let (workspace, vault) = (services.workspace.clone(), services.vault);
   let read = ctx.future(
     (props.project.open.repo_root.clone(), props.pipelines.clone()),
     move |(root, _)| {
@@ -29,7 +29,6 @@ pub(super) fn read(ctx: &mut Ctx, props: &FormProps) -> Option<Arc<ProjectReadin
         background::run(move || {
           workspace
             .project_readiness(&root, vault.get())
-            .map(Arc::new)
             .map_err(|error| error.message())
         })
         .await?
@@ -37,17 +36,21 @@ pub(super) fn read(ctx: &mut Ctx, props: &FormProps) -> Option<Arc<ProjectReadin
       }
     },
   );
-  read.state().get().data
+  read.state().get().data.map(Arc::new)
 }
 
 /// How many things are missing, as `missing` (or, in a team project's menu, `missingHere`) says it.
 fn missing_text(ctx: &Ctx, key: &str, count: usize) -> Arc<str> {
   let leaf = if count == 1 { "one" } else { "other" };
-  ctx.t_args(&format!("task_form.readiness.{key}.{leaf}"), [("count", count.to_string())])
+  ctx.t_args(
+    &format!("task_form.readiness.{key}.{leaf}"),
+    [("count", count.to_string())],
+  )
 }
 
 /// The last words of a pipeline's line in the menu (`Ready` `e2m70N`, `dcW5J` in `P6aAoZ`): *Ready here* in
-/// `text_secondary`, or what is missing in `warning`; a local project's words leave out *here*. `None` until it is read.
+/// `text_secondary`, or what is missing in `warning`; a local project's words leave out *here*. `None` until it is
+/// read.
 pub(super) fn option_status(ctx: &Ctx, view: &View, choice: &PipelineChoice) -> Option<OptionStatus> {
   let team = view.shared;
   let (words, color) = match view.readiness_of(choice)?.standing() {
