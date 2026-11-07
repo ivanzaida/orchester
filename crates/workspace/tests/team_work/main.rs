@@ -24,6 +24,7 @@ mod heartbeat;
 mod here;
 mod reports;
 mod start;
+mod start_release;
 mod team_commands;
 mod team_deliveries;
 mod team_server;

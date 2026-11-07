@@ -82,6 +82,10 @@ async fn assert_failed(held: &Accepted, outcome: StartOutcome, expected: &StartF
       .is_empty()
   );
   assert_eq!(held.runner.asked(), 0, "the runner was never asked");
+  assert!(
+    held.server.state().claim.is_none(),
+    "the claim was released with the failure"
+  );
 }
 
 fn set_body(held: &Accepted, body: impl FnOnce(&mut Value)) {

@@ -261,6 +261,10 @@ async fn start_failed_with(vault: &dyn SecretVault) -> (Vec<Missing>, Vec<&'stat
     panic!("not failed as not ready: {outcome:?}");
   };
   assert_eq!(runner.asked(), 0, "the runner was never asked");
+  assert!(
+    server.state().claim.is_none(),
+    "the claim was released with the failure"
+  );
   let keys = NotReadyHere::after_start(pipeline, missing.clone())
     .messages()
     .iter()

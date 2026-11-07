@@ -146,7 +146,12 @@
         "waiting": "The run waits for the team server or the runner, and starts once they answer.",
         "notReady": "The task names no module, or a pipeline this computer doesn't have.",
         "branch": "The module's branch {{branch}} isn't in this checkout.",
-        "notReadable": "The team server's pipeline or one of its agent profiles can't be read."
+        "notReadable": "The team server's pipeline or one of its agent profiles can't be read.",
+        "bundleSchemaNewer": "The team server built this run in bundle schema {{built}}, and this app reads schema {{read}}. Update Orchester on this computer, then run it again. Nothing ran, and your claim on the task was released.",
+        "bundleSchemaOlder": "The team server built this run in bundle schema {{built}}, and this app reads schema {{read}}. The team server is older than this app: ask whoever runs it to update it. Nothing ran, and your claim on the task was released.",
+        "bundleUnreadable": "The team server answered this run's bundle with something this app can't read. If Orchester and the team server are on different releases, update them. Nothing ran, and your claim on the task was released.",
+        "bundleMismatch": "The bundle the team server answered isn't the one it announced for this run, so it wasn't used. Nothing ran, and your claim on the task was released. Run it again; if it happens again, tell a team Admin.",
+        "inputsFailed": "This computer couldn't make the run's inputs from the bundle the team server built, so nothing ran, and your claim on the task was released. Check the agent profiles' connections in Agents, then run it again."
       },
       "properties": {
         "assignee": "Assignee",
@@ -172,7 +177,7 @@
       "metaOtherTeam": "{{pipeline}} · {{count}} things missing here",
       "body": "Fix these and press Run again. Nothing is queued until then.",
       "bodyTeam": "Fix these on this computer and press Run again. They stay here; the team's server and other computers are not changed.",
-      "bodyAfterStart": "The team server made the work for this start, and your claim on the task is still open. Fix these on this computer and press Run again. They stay here; other computers are not changed.",
+      "bodyAfterStart": "The team server made the work for this start, but nothing ran, so your claim on the task was released. Fix these on this computer and press Run again; it claims the task again. They stay here; other computers are not changed.",
       "openAgents": "Open Agents · Needs you",
       "openAgentsTeam": "Open Agents · Needs you here",
       "footnote": "Each fix opens its field in Agents",

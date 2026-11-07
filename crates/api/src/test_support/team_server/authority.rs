@@ -102,6 +102,8 @@ pub(super) struct Authority {
   tasks: Option<Vec<AuthorityTask>>,
   modules: Option<Vec<AuthorityModule>>,
   unavailable: bool,
+  /// Whether the bundle a `work.start` names is built in a schema newer than this contract's.
+  newer_bundles: bool,
   /// The oldest desktop version the server accepts; any while `None`.
   required: Option<ReleaseVersion>,
   /// Each committed change: its cursor and the scopes it invalidates.
@@ -210,6 +212,12 @@ impl TeamServer {
   /// Every `/api/v2` read and the subscription answer `503 unavailable` while `unavailable`; the open streams end.
   pub fn authority_unavailable(&self, unavailable: bool) {
     unavailable_now(&self.state, unavailable);
+  }
+
+  /// Every `work.start` names its bundle in a schema one newer than the desktop reads, as a team server a release ahead
+  /// of the desktop does: the start can never become a run here, whatever the desktop does.
+  pub fn authority_newer_bundles(&self) {
+    self.state.lock().authority.newer_bundles = true;
   }
 
   /// [`Self::authority_unavailable`] `after` the first task read was answered: an outage in a session that read the

@@ -215,4 +215,9 @@ async fn team_work_start_failed_here_holds_back_no_later_start() {
   );
   assert_eq!(db.run_of_operation(bound.operation).expect("read"), Some(run));
   assert_eq!(runner.asked(), 2, "only the newer start's run");
+  assert_eq!(
+    server.state().claim.as_ref().map(|held| held.id),
+    Some(claim),
+    "the older start's failure keeps the claim its newer start's run works under"
+  );
 }

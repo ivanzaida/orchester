@@ -7,9 +7,9 @@
 //! asks the project's runner for the run of the accepted inputs. A start the server or the runner cannot take now waits
 //! and is carried on by recovery; the page says so.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use orchester_api::v2::{AuthorityErrorCode, AuthorityRef, Subject};
+use orchester_api::v2::{AuthorityError, AuthorityErrorCode, AuthorityRef, ErrorDetails, Subject};
 use orchester_core::{
   id::{ClaimId, ModuleId, OperationId, ResourceId, RunId, TaskId},
   sharing::TaskRevision,
@@ -24,6 +24,7 @@ use orchester_workspace::{
   tasks::run::start_messages,
   team_work::{
     self, BranchNotFound, ProjectRunner, StartFailure, StartOutcome, TeamStartRequest, TeamWork, TeamWorkError,
+    bundle_missing_message,
   },
 };
 
@@ -77,6 +78,19 @@ pub enum Stop {
   NotReadyHere(NotReadyHere),
   /// The team server could not read the pipeline or a profile, or they have no published version.
   NotReadable,
+  /// The team server built no bundle for the start (`bundle_missing`) and says why, as a message that tells what to
+  /// do; no work was made and the claim was released.
+  BundleMissing(Message),
+  /// The bundle the server built is in a schema this computer does not read (`read`); the older of the two is
+  /// updated. The claim was released.
+  BundleSchema { read: u32, built: u32 },
+  /// The server answered something for the bundle that this computer cannot read. The claim was released.
+  BundleUnreadable,
+  /// The bundle or one of its files is not the one the server announced. The claim was released.
+  BundleMismatch,
+  /// The bundle does not make the run's inputs on this computer (a profile without a connection, …). The claim was
+  /// released.
+  InputsFailed,
   /// The runner refused the run.
   Runner(Vec<Message>),
   /// It could not be carried out here.
@@ -176,37 +190,71 @@ async fn carry_out(
         .team_session(key.server, key.project)
         .await
         .map_err(|_| Stop::Claim(Acted::SignedOut))?;
-      let dispatcher = Dispatcher::new(root, servers, Some(session));
-      TeamWork::new(dispatcher, runner)
+      let dispatcher = Dispatcher::new(root.clone(), servers, Some(session));
+      let outcome = TeamWork::new(dispatcher, runner)
         .start(start, vault.get())
         .await
-        .map_err(|error| work_failed(&error))
+        .map_err(|error| work_failed(&error))?;
+      Ok(started(outcome, &root))
     })
   })
   .await;
   match outcome {
-    Ok(Ok(outcome)) => started(outcome),
+    Ok(Ok(started)) => started,
     Ok(Err(stop)) => Started::Stopped(stop),
     Err(_) => Started::Stopped(Stop::Failed),
   }
 }
 
-fn started(outcome: StartOutcome) -> Started {
+/// Where `outcome` leaves the start, as the page says it; reads the cached name of a resource a refusal names from the
+/// project at `root`. Blocks on SQLite.
+fn started(outcome: StartOutcome, root: &Path) -> Started {
   match outcome {
     StartOutcome::Started(run) => Started::Run(run),
     StartOutcome::Waiting(_) => Started::Waiting,
-    StartOutcome::Refused(error) => Started::Stopped(Stop::Refused(error.code())),
-    StartOutcome::Failed(StartFailure::NotReadyHere { pipeline, missing }) => {
-      Started::Stopped(Stop::NotReadyHere(NotReadyHere::after_start(pipeline, missing)))
-    }
-    StartOutcome::Failed(failure) => {
-      tracing::warn!(?failure, "a team start failed for good");
-      Started::Stopped(Stop::Failed)
-    }
+    StartOutcome::Refused(error) => Started::Stopped(refused(&error, root)),
+    StartOutcome::Failed(failure) => Started::Stopped(failed(failure)),
     StartOutcome::RunnerRefused(rejection) => {
       Started::Stopped(Stop::Runner(start_messages(&RunRequestError::Rejected(rejection))))
     }
     StartOutcome::RunnerUnavailable(_) => Started::Waiting,
+  }
+}
+
+/// Why a start the server refused for good did not start, as the page says it.
+fn refused(error: &AuthorityError, root: &Path) -> Stop {
+  if error.code() != AuthorityErrorCode::BundleMissing {
+    return Stop::Refused(error.code());
+  }
+  let reason = match error.details() {
+    ErrorDetails::BundleMissing { reason } => Some(reason),
+    _ => None,
+  };
+  match bundle_missing_message(root, reason) {
+    Ok(message) => Stop::BundleMissing(message),
+    Err(error) => {
+      tracing::warn!(%error, "the resource a bundle_missing refusal names cannot be read");
+      Stop::Refused(AuthorityErrorCode::BundleMissing)
+    }
+  }
+}
+
+/// Why a start that failed for good did not start, as the page says it.
+fn failed(failure: StartFailure) -> Stop {
+  match failure {
+    StartFailure::NotReadyHere { pipeline, missing } => {
+      Stop::NotReadyHere(NotReadyHere::after_start(pipeline, missing))
+    }
+    StartFailure::BundleSchema { read, built } => Stop::BundleSchema { read, built },
+    StartFailure::BundleUnreadable => Stop::BundleUnreadable,
+    StartFailure::Bundle(why) => {
+      tracing::warn!(%why, "a team start's bundle is not the announced one");
+      Stop::BundleMismatch
+    }
+    StartFailure::Inputs(why) => {
+      tracing::warn!(%why, "a team start's bundle does not make the run's inputs");
+      Stop::InputsFailed
+    }
   }
 }
 

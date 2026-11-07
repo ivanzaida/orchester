@@ -40,6 +40,10 @@ async fn refused_with(details: Value) -> (StartOutcome, Checkout, StoreRunner) {
   assert_eq!(&again, first, "kept as the server sent it");
   assert!(checkout.db().open_team_starts().expect("open").is_empty());
   assert_eq!(runner.asked(), 0, "the runner was never asked");
+  assert!(
+    server.state().claim.is_none(),
+    "the claim was released with the refusal"
+  );
   (outcome, checkout, runner)
 }
 

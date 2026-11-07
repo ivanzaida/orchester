@@ -323,6 +323,8 @@ impl Component for FeedLoader {
     super::ci_fix::follow(ctx, (&open, &self.feed), online);
     // Runs of pipelines with a Deliver step are delivered one at a time (ORC-19).
     super::merge_queue::follow(ctx, &open);
+    // Team starts that waited for the team server or the runner go on by themselves (ORC-885).
+    super::team_starts::follow(ctx, &open);
     publish(&self.feed.status, runner);
     publish(&self.feed.changes, changes);
     publish(&self.feed.states, states);

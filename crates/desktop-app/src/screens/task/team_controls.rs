@@ -418,6 +418,18 @@ fn started_words(ctx: &Ctx, task: &TaskContext, ask: TeamAsk, started: &Started)
     // The Summary's card lists each part with its fix (`not_ready`), not a notice.
     Stop::NotReadyHere(_) => return None,
     Stop::NotReadable => ctx.t("summary.team.refused.notReadable"),
+    Stop::BundleMissing(message) => message_text(ctx, message),
+    Stop::BundleSchema { read, built } => {
+      let key = if built > read {
+        "summary.team.refused.bundleSchemaNewer"
+      } else {
+        "summary.team.refused.bundleSchemaOlder"
+      };
+      ctx.t_args(key, [("read", read.to_string()), ("built", built.to_string())])
+    }
+    Stop::BundleUnreadable => ctx.t("summary.team.refused.bundleUnreadable"),
+    Stop::BundleMismatch => ctx.t("summary.team.refused.bundleMismatch"),
+    Stop::InputsFailed => ctx.t("summary.team.refused.inputsFailed"),
     Stop::Runner(messages) => messages.first().map_or_else(
       || ctx.t("summary.team.refused.failed"),
       |message| message_text(ctx, message),

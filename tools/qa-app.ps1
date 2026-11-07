@@ -68,6 +68,10 @@
 # the program path of pencil-design, github's secret value and a connection are missing. Its fixes open the Agents hub on
 # the resource; a team MCP server's program path is set from the hub's MCP server panel, which ORC-833 builds, so
 # *Set path →* opens the server in the hub until then.
+# -Scenario team-start-failed is team-not-ready with every task on Team quick fix (ready here) and a team server a
+# release ahead of this computer: open KON-5 (API rate limits) and press Run. The start is claimed, the server builds it in
+# a bundle schema this computer does not read, the start fails for good and the claim is let go of: the Summary's notice
+# "Couldn't start KON-5's run" says to update Orchester (ORC-885).
 #
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes

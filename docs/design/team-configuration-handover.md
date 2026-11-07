@@ -51,7 +51,7 @@ and Orchester Platform module "Team configuration" (OP-197…206). The team serv
 
 ## Next
 
-- UI: ORC-831…844 (each with design verification), ORC-885 (start failure reason on the task page, claim release).
+- UI: ORC-831…844 (each with design verification), ORC-885 (start failure reason on the task page, claim release; done on `claude/orc-885-start-failure`, 2026-11-08).
 - ORC-845 (remove bindings, `BindingsHere`, the legacy `local_body` fallback).
 - ORC-847 docs, ORC-848 QA; then merge `master` into this branch.
 - Platform: OP-203…206 (web), deploy blocker `FIRST_DESKTOP_WITH_BUNDLE_REASONS` / `MINIMUM_DESKTOP_VERSION`.

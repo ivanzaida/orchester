@@ -17,12 +17,16 @@ pub(super) fn start(authority: &mut Authority, command: &Value) -> Result<Value,
   if !named["work_id"].is_null() {
     return Err((409, "claim_lost"));
   }
+  let newer_bundles = authority.newer_bundles;
   let (task, claim) = held(authority, named)?;
   if task.work == Some("running") {
     return Err((409, "transition_denied"));
   }
   task.work = Some("running");
-  let work = listing::work_read((&listing::task_id(task), task.number), claim, "running");
+  let mut work = listing::work_read((&listing::task_id(task), task.number), claim, "running");
+  if newer_bundles {
+    work["bundle"]["schema_version"] = json!(crate::v2::EXECUTION_BUNDLE_SCHEMA + 1);
+  }
   let bundle = work["bundle"].clone();
   Ok(json!({"kind": "work", "work": work, "bundle": bundle,
     "effects": [{"kind": "start", "work_id": work["id"], "bundle": bundle}]}))

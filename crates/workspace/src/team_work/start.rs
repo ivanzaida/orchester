@@ -3,7 +3,9 @@
 //! runner's run. Every step is kept before the next, and each is idempotent, so carrying on after a crash, a lost
 //! answer or an outage makes no second work and no second run.
 
-use orchester_api::v2::{AuthorityError, AuthorityRef, EXECUTION_BUNDLE_SCHEMA, Subject, TeamCommandValue};
+use orchester_api::v2::{
+  AuthorityError, AuthorityErrorCode, AuthorityRef, EXECUTION_BUNDLE_SCHEMA, Subject, TeamCommandValue,
+};
 use orchester_core::{
   id::{ModuleId, OperationId, RunId},
   run::{CommitId, inputs::TeamAcceptance},
@@ -19,6 +21,7 @@ use serde::{Deserialize, Serialize};
 use super::{
   Answer, TeamRunner, TeamWork, TeamWorkError,
   bundle::{self, Expected},
+  release::Released,
 };
 use crate::{
   actions::{Accepted, Action, ActionOutcome, Intent, Refusal, TeamOutcome, WorkAction, team_task},
@@ -44,7 +47,8 @@ pub enum StartOutcome {
   Started(RunId),
   /// The server cannot be reached, or refused for now: the start waits at this boundary and goes on from it.
   Waiting(TeamStartStage),
-  /// The server refused the start for good: it made no work, or the authority the bundle was built for is gone.
+  /// The server refused the start for good: it made no work, or the authority the bundle was built for is gone. A
+  /// `bundle_missing` refusal released the claim with it.
   Refused(AuthorityError),
   /// The accepted bundle can never become the run's inputs here; the start goes no further.
   Failed(StartFailure),
@@ -69,7 +73,7 @@ pub enum StartFailure {
   /// The accepted bundle does not make the run's inputs here.
   Inputs(String),
   /// The versions the bundle pins need something this computer lacks (`not_ready_here`); nothing ran. The server made
-  /// the work for the start and the claim is still held; releasing them waits for ORC-885.
+  /// the work for the start; the claim was released with the failure.
   NotReadyHere {
     pipeline: String,
     missing: Vec<MissingPart>,
@@ -102,8 +106,8 @@ pub type Recovered = Vec<(OperationId, Result<StartOutcome, TeamWorkError>)>;
 /// What a start keeps of its request: the work action, with the server's id of its task, and the program paths.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct KeptStart {
-  authority: AuthorityRef,
+pub(super) struct KeptStart {
+  pub(super) authority: AuthorityRef,
   base_commit: CommitId,
   read: TaskRevision,
   module: ModuleId,
@@ -182,7 +186,7 @@ impl<R: TeamRunner> TeamWork<R> {
         TeamStartStage::Requested => self.request_work(&record, &kept).await?,
         TeamStartStage::Accepted => match self.keep_inputs(&record, kept.clone(), vault).await {
           Ok(step) => step,
-          Err(error) => return self.fail(record.operation, error),
+          Err(error) => return self.fail((record.operation, kept.authority), error).await,
         },
         TeamStartStage::InputsStored => return self.start_run(record.operation).await,
         TeamStartStage::Started => {
@@ -213,7 +217,7 @@ impl<R: TeamRunner> TeamWork<R> {
         refusal: Refusal::Command(error),
         retryable: false,
         ..
-      } => return self.refuse(operation, error).map(Err),
+      } => return self.refuse((operation, kept.authority), error).await.map(Err),
       TeamOutcome::Rejected { .. } | TeamOutcome::AcceptanceUnknown { .. } => {
         return Ok(Err(StartOutcome::Waiting(TeamStartStage::Requested)));
       }
@@ -230,7 +234,10 @@ impl<R: TeamRunner> TeamWork<R> {
     // The receipt says the schema before the bundle is read: a bundle of another schema never decodes here.
     if bundle.schema_version != EXECUTION_BUNDLE_SCHEMA {
       let built = bundle.schema_version;
-      return self.fail(operation, TeamWorkError::BundleSchema { built }).map(Err);
+      return self
+        .fail((operation, kept.authority), TeamWorkError::BundleSchema { built })
+        .await
+        .map(Err);
     }
     Ok(Ok(accepted))
   }
@@ -254,7 +261,7 @@ impl<R: TeamRunner> TeamWork<R> {
     let fetched = match bundle::fetch(&session.authority(), &expected).await? {
       Ok(fetched) => fetched,
       Err(Answer::Unreachable) => return Ok(Err(StartOutcome::Waiting(TeamStartStage::Accepted))),
-      Err(Answer::Refused(error)) => return self.refuse(operation, error).map(Err),
+      Err(Answer::Refused(error)) => return self.refuse((operation, kept.authority), error).await.map(Err),
     };
     let team = bundle::task_subject(kept.authority.subject).ok_or(TeamWorkError::NotATask)?;
     let start = fetched.bundle.start();
@@ -295,17 +302,37 @@ impl<R: TeamRunner> TeamWork<R> {
     Ok(StartOutcome::Started(run))
   }
 
-  fn refuse(&self, operation: OperationId, error: AuthorityError) -> Result<StartOutcome, TeamWorkError> {
+  /// Settles the start under `operation` refused as the server did. A refusal that the bundle cannot be built
+  /// (`bundle_missing`) leaves the claim held with no work made, so it is released first: while the server cannot be
+  /// reached for that, the start waits at `Requested`, where the same operation answers the same refusal again.
+  async fn refuse(
+    &self,
+    (operation, authority): (OperationId, AuthorityRef),
+    error: AuthorityError,
+  ) -> Result<StartOutcome, TeamWorkError> {
+    if error.code() == AuthorityErrorCode::BundleMissing
+      && self.release_claim(operation, authority).await? == Released::Waits
+    {
+      return Ok(StartOutcome::Waiting(TeamStartStage::Requested));
+    }
     // A refusal serializes to JSON without fail: it holds no map with non-string keys.
     let text = serde_json::to_string(&error).expect("a refusal serializes");
     self.db()?.refuse_team_start(operation, &text, Timestamp::now())?;
     Ok(StartOutcome::Refused(error))
   }
 
-  /// Settles the accepted start under `operation` failed when `error` lasts; any other error stays the caller's, and
-  /// the start goes on from where it stands next time.
-  fn fail(&self, operation: OperationId, error: TeamWorkError) -> Result<StartOutcome, TeamWorkError> {
+  /// Settles the accepted start under `operation` failed when `error` lasts, after the claim is released; any other
+  /// error stays the caller's, and the start goes on from where it stands next time. While the server cannot be
+  /// reached for the release, the start waits at `Accepted` and fails the same way when it goes on.
+  async fn fail(
+    &self,
+    (operation, authority): (OperationId, AuthorityRef),
+    error: TeamWorkError,
+  ) -> Result<StartOutcome, TeamWorkError> {
     let failure = StartFailure::lasting(&error).ok_or(error)?;
+    if self.release_claim(operation, authority).await? == Released::Waits {
+      return Ok(StartOutcome::Waiting(TeamStartStage::Accepted));
+    }
     // A failure is a kind and a message: it serializes to JSON without fail.
     let text = serde_json::to_string(&failure).expect("a start failure serializes");
     self.db()?.fail_team_start(operation, &text, Timestamp::now())?;

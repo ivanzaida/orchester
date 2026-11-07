@@ -868,7 +868,13 @@ The desktop's team work (`orchester_workspace::team_work`) uses them so:
   the operation and the runner's start are idempotent, so a retry never makes a second work or run. A refusal of the
   start or of its bundle (`claim_lost`) is kept and starts nothing. A bundle that can never become the run's inputs
   here (it is not the one the receipt names, or the caller's bindings do not fit it) settles the start `failed`, kept
-  with the reason; recovery carries each open start on its own, so one such start holds back no other.
+  with the reason; recovery carries each open start on its own, so one such start holds back no other. A start that
+  fails for good (those, and the pinned versions needing what this computer lacks) or that the server refuses
+  `bundle_missing` lets go of its claim first (`claim.release`, unless a run or another open start here works under
+  the same claim), so teammates can take the task at once instead of after the claim goes stale; a server that cannot
+  be reached for the release keeps the start waiting. The work the server made for such a start is not reported:
+  `work.report` is a run's own (`run_id`, `sequence`, and `ExecutionFailure` names no start failure), and no run was
+  made. The release fences the work on the server. A project's open starts are carried on when it is opened.
 - **Inputs.** The task's number and each pinned version's label (`{slug,name}`) are the bundle's (schema 2, with the
   team MCP servers of schema 3); the
   start's caller supplies only the local bindings and consent, and each pinned profile must be bound to a connection

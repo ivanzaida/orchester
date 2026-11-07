@@ -2213,7 +2213,7 @@
     "refused": "{{pipeline}} is not ready on this computer, so nothing was started: no work was claimed and no attempt was counted. Fix each of these, then run it again.",
     "refusedShort": "{{pipeline}} is not ready on this computer, so nothing was started. Press Run or Run again on the task to see what is missing and how to fix it.",
     "groupMember": "{{task}} runs {{pipeline}}, which is not ready on this computer, so the group was not queued. Press Run on that task to see what is missing and how to fix it.",
-    "refusedAfterStart": "The team server pinned versions of {{pipeline}} that this computer is not ready for, so nothing ran. The work it made for this start and your claim on the task are still open. Fix each of these before you start it again.",
+    "refusedAfterStart": "The team server pinned versions of {{pipeline}} that this computer is not ready for, so nothing ran. Your claim on the task was released. Fix each of these before you start it again.",
     "connectionNoneOfKind": "Add a {{cli}} connection in Connections: {{profile}} runs on one, and this computer has none.",
     "decisionConnectionNoneOfKind": "Add a decision connection in Connections: the reviewer {{reviewer}} runs on one, and this computer has none.",
     "connectionPickNeeded": "Pick the {{cli}} connection {{profile}} runs on: this computer has several, and none is picked for it.",
