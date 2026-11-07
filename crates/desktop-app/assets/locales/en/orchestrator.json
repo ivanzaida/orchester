@@ -482,6 +482,8 @@
         "other": "{{count}} messages"
       },
       "meta": "{{when}} · {{messages}}",
+      "leads": "Leads {{what}} · {{when}}",
+      "leadsSeparator": ", ",
       "found": {
         "results": {
           "one": "Found in 1 conversation · titles and messages",
