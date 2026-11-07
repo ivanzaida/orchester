@@ -1,6 +1,7 @@
 //! The boxes of the panels' sections (`Rows` `tQ5pu`, `YTWxX`, `MH6ZR` in `Agents · Profile` `NDZXC`; `Rows` in `C4`
-//! `SpRvd`): a row is its key (a label over an optional sub) 170 wide and its value, 12 apart, 8 over and under them
-//! and 12 at the sides; the rows stand in one `border` outline, radius `md`, each ruled from the next.
+//! `SpRvd`): a row is its key (a label over an optional sub), 170 wide (150 in an MCP server's *On this computer*), and
+//! its value, 12 apart, 8 over and under them and 12 at the sides; the rows stand in one `border` outline, radius `md`,
+//! each ruled from the next.
 
 use std::sync::Arc;
 
@@ -16,12 +17,26 @@ use lurq::{
 
 use crate::{
   screens::team_hub::row::tag_chip,
-  theme::{ExtraSpacing, HubText},
+  theme::{ExtraSpacing, HubSpacing, HubText},
   ui::chip::{BadgeTone, badge},
 };
 
-/// A key's width (`Key` `P60rze`).
-const KEY_WIDTH: f32 = 170.0;
+/// How wide a row's key is (`Key` `P60rze` in `NDZXC`, `Key` in `SpRvd` … `lSA4x`).
+#[derive(Clone, Copy)]
+pub(super) enum Key {
+  Wide,
+  /// The key of the rows of an MCP server's *On this computer*.
+  Narrow,
+}
+
+impl Key {
+  fn width(self) -> f32 {
+    match self {
+      Self::Wide => HubSpacing::Key.value(),
+      Self::Narrow => HubSpacing::KeyNarrow.value(),
+    }
+  }
+}
 
 /// What a row's label says under it, and the color it says it in.
 pub(super) struct Sub {
@@ -79,7 +94,13 @@ pub(super) fn section(id: &str, label: &str, after: Vec<Element>, rows: Vec<Row>
 
 /// One row: `label` over `sub`, and `value` beside them.
 pub(super) fn row(id: &str, label: &str, sub: Option<Sub>, value: impl Into<Element>) -> Row {
-  keyed(
+  row_in(Key::Wide, id, label, sub, value)
+}
+
+/// [`row`] whose key is `key` wide.
+pub(super) fn row_in(key: Key, id: &str, label: &str, sub: Option<Sub>, value: impl Into<Element>) -> Row {
+  keyed_in(
+    key,
     id,
     Text::new(label)
       .id(format!("{id}-label"))
@@ -89,10 +110,10 @@ pub(super) fn row(id: &str, label: &str, sub: Option<Sub>, value: impl Into<Elem
   )
 }
 
-/// [`row`] whose key is `label`, already a text: a name that is an identifier, in mono.
-pub(super) fn keyed(id: &str, label: Text, sub: Option<Sub>, value: impl Into<Element>) -> Row {
+/// [`row_in`] whose key is `label`, already a text: a name that is an identifier, in mono.
+pub(super) fn keyed_in(key: Key, id: &str, label: Text, sub: Option<Sub>, value: impl Into<Element>) -> Row {
   let key = Column::new()
-    .width(Dimension::Px(KEY_WIDTH))
+    .width(Dimension::Px(key.width()))
     .flex_shrink(0.0)
     .spacing(ExtraSpacing::Tight.role())
     .child(label)

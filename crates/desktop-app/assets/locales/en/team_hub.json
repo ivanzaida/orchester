@@ -84,7 +84,10 @@
       "allSet": "all set"
     },
     "panel": {
-      "edit": "Edit"
+      "edit": "Edit",
+      "usedBy": "used by {{names}}",
+      "usedByNone": "No profile uses it yet",
+      "publishNext": "Publishing makes {{version}} for the whole team"
     },
     "empty": {
       "title": "Nothing here yet",
@@ -257,6 +260,74 @@
         "addValueHint": "Stored in this computer's secret store",
         "turnOnHint": "Only you can turn it on here",
         "changePathHint": "Nothing missing on this computer"
+      }
+    },
+    "head": {
+      "published": "{{version}} · published by {{by}} · {{date}}"
+    },
+    "plain": {
+      "everyRun": "added to every run",
+      "nothingInstruction": "Nothing to fill in on this computer: an instruction is the same everywhere.",
+      "nothingSkill": "Nothing to fill in on this computer: a skill is the same everywhere.",
+      "addedTo": "Added to",
+      "added": {
+        "project": "Every run",
+        "role": "Runs of the {{role}} role",
+        "pipeline": "Runs of the pipeline {{pipeline}}",
+        "step": "Step {{step}} of the pipeline {{pipeline}}"
+      },
+      "roles": "Roles",
+      "profiles": "Profiles",
+      "when": "When",
+      "whenStart": "When an agent starts",
+      "whenResume": "When an agent resumes",
+      "whenBoth": "When an agent starts or resumes",
+      "usedBy": "Used by",
+      "format": "Format",
+      "markdown": "Markdown",
+      "text": "Text",
+      "description": "Description",
+      "files": "Files"
+    },
+    "tool": {
+      "where": "Tool · {{kind}}",
+      "kind": {
+        "command": "Command",
+        "http": "HTTP request",
+        "database": "Database query"
+      },
+      "kindLabel": "Kind",
+      "kindSub": "command, HTTP or database",
+      "command": "Command",
+      "timeout": "Time limit",
+      "timeoutSeconds": "{{seconds}} seconds",
+      "request": "Request",
+      "headers": "Headers",
+      "bearer": "Authorization: Bearer ← secret {{secret}}",
+      "arguments": "Arguments",
+      "argument": "{{name}} · {{place}}",
+      "place": {
+        "query": "query",
+        "header": "header",
+        "body": "body"
+      },
+      "query": "Query",
+      "approval": "Run without asking",
+      "approvalNever": "Yes",
+      "approvalOnce": "No · a person approves once per run",
+      "approvalEvery": "No · a person approves each call",
+      "secretLabel": "Secret it uses",
+      "secretSub": "by id, never a value",
+      "valueLabel": "Secret value",
+      "cannotFill": "Can't be filled in here yet",
+      "cannotFillSub": "named by id",
+      "nothingHere": "Nothing to fill in on this computer: this tool runs as the team defined it.",
+      "chip": {
+        "secretById": "Secret named by id"
+      },
+      "note": {
+        "secret": "Not ready here: {{secret}} needs a value. Runs whose pipeline uses {{name}} don't start on this computer until then.",
+        "byId": "This tool names its secret by id; it can't be filled in here yet. Ask a team admin to publish {{name}} again."
       }
     }
   }

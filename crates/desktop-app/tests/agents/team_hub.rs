@@ -229,7 +229,11 @@ fn team_hub_keeps_the_filter_and_the_chosen_resource_in_the_route() {
   // A route that names a resource opens its panel, whatever the list's first row is.
   open(&mut agents, HubView::new(HubFilter::All, Some(skill)));
   assert_eq!(agents.text("team-hub-panel-title"), "review-diff");
-  assert_eq!(agents.text("team-hub-panel-version"), "v1");
+  assert!(
+    agents
+      .text("team-hub-panel-version")
+      .starts_with("v1 · published by Olena · ")
+  );
 }
 
 #[test]

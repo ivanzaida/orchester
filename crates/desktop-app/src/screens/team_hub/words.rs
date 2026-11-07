@@ -7,8 +7,13 @@ use lurq::app::{ctx::Ctx, theme::PaletteColor};
 use orchester_core::{
   connection::AgentProvider,
   sharing::{ConnectionProblem, Missing},
+  time::Timestamp,
 };
-use orchester_workspace::readiness::{Group, ReadinessStanding};
+use orchester_workspace::{
+  agents::team_mcp::Published,
+  display,
+  readiness::{Group, ReadinessStanding},
+};
 
 use super::model::{Entry, Kind, Listing};
 
@@ -136,4 +141,52 @@ pub(super) fn chip(ctx: &Ctx, listing: &Listing, entry: &Entry) -> (Arc<str>, cr
     Group::Ready => (ctx.t("team_hub.chip.ready"), BadgeTone::Success),
     Group::OffHere => (ctx.t("team_hub.chip.off"), BadgeTone::Neutral),
   }
+}
+
+/// The day `at` as the panels say it, on the day `now`: *today*, the month and day in this year, or with the year after
+/// them.
+pub(super) fn date(ctx: &Ctx, now: Timestamp, at: Timestamp) -> Arc<str> {
+  let (month, day, year) = display::calendar_date(at);
+  let now = display::calendar_date(now);
+  if (month, day, year) == now {
+    return ctx.t("team_hub.mcp.date.today");
+  }
+  let month = ctx.t_ns(orchester_workspace::i18n::NAMESPACE, display::MONTH_KEYS[month]);
+  if year == now.2 {
+    return ctx.t_args(
+      "team_hub.mcp.date.thisYear",
+      [("month", month.to_string()), ("day", day.to_string())],
+    );
+  }
+  ctx.t_args(
+    "team_hub.mcp.date.otherYear",
+    [
+      ("month", month.to_string()),
+      ("day", day.to_string()),
+      ("year", year.to_string()),
+    ],
+  )
+}
+
+/// *v6 · published by dana-k · Nov 1*: what stands after what a tool, an instruction or a skill is in its head.
+pub(super) fn published_line(
+  ctx: &Ctx,
+  now: Timestamp,
+  entry: &Entry,
+  published: Option<&Published>,
+) -> Option<String> {
+  let version = entry.number?.to_string();
+  Some(match published {
+    Some(published) => ctx
+      .t_args(
+        "team_hub.head.published",
+        [
+          ("version", version),
+          ("by", published.by.clone()),
+          ("date", date(ctx, now, published.at).to_string()),
+        ],
+      )
+      .to_string(),
+    None => version,
+  })
 }

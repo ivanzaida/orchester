@@ -29,7 +29,7 @@ use lurq::{
 use orchester_core::id::{ProjectId, ResourceId};
 use orchester_workspace::agents::team_mcp::TeamMcpSheet;
 
-use self::fix::{Bar, Step};
+use self::fix::{Bar, Fix, Step};
 use super::{
   actions::Actions,
   model::{Entry, Listing},
@@ -107,12 +107,13 @@ impl Component for McpPanel {
     let now = Services::of(ctx).clock.now();
     let press = |step: &Step| self.press(step, &props);
     let view = computer::View {
+      listing,
       entry,
       sheet,
       missing,
       busy,
       now,
-      choose: press(&Step::ChoosePath(entry.id)),
+      choose: press(&Step::Fix(Fix::ChoosePath(entry.id))),
       switch: self.switch(entry.id),
     };
     let used_by = (!sheet.used_by.is_empty()).then(|| {
@@ -190,15 +191,15 @@ impl McpPanel {
       })
     };
     match step {
-      Step::SwitchOn(server) => {
+      Step::Fix(Fix::SwitchOn(server)) => {
         let (action, server) = (self.actions.switch_on.clone(), *server);
         guarded(Arc::new(move || action.run(server)))
       }
-      Step::ChoosePath(server) => {
+      Step::Fix(Fix::ChoosePath(server)) => {
         let (action, server) = (self.actions.set_path.clone(), *server);
         guarded(Arc::new(move || action.run(server)))
       }
-      Step::AddValue(name) => {
+      Step::Fix(Fix::AddValue(name)) => {
         let (entry, name) = (self.secret.clone(), name.clone());
         guarded(Arc::new(move || entry.ask(&name)))
       }

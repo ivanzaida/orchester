@@ -15,6 +15,8 @@ use orchester_store::{ProjectDb, StoreError};
 use super::{
   team_mcp::{self, TeamMcpSheet},
   team_profile::{self, TeamProfileSheet},
+  team_text::{self, TeamInstructionSheet, TeamSkillSheet},
+  team_tool::{self, TeamToolSheet},
 };
 use crate::{
   readiness::{ProjectReadiness, ReadinessError},
@@ -52,6 +54,9 @@ pub struct TeamHub {
   forms: Vec<(ResourceId, Form)>,
   profiles: Vec<(ResourceId, TeamProfileSheet)>,
   mcp_servers: Vec<(ResourceId, TeamMcpSheet)>,
+  tools: Vec<(ResourceId, TeamToolSheet)>,
+  instructions: Vec<(ResourceId, TeamInstructionSheet)>,
+  skills: Vec<(ResourceId, TeamSkillSheet)>,
 }
 
 impl TeamHub {
@@ -78,6 +83,33 @@ impl TeamHub {
   pub fn mcp_server(&self, resource: ResourceId) -> Option<&TeamMcpSheet> {
     self
       .mcp_servers
+      .iter()
+      .find_map(|(found, sheet)| (*found == resource).then_some(sheet))
+  }
+
+  /// What the team holds of the tool `resource`; `None` for any other resource, and for a tool with no version cached
+  /// here.
+  pub fn tool(&self, resource: ResourceId) -> Option<&TeamToolSheet> {
+    self
+      .tools
+      .iter()
+      .find_map(|(found, sheet)| (*found == resource).then_some(sheet))
+  }
+
+  /// What the team holds of the instruction `resource`; `None` for any other resource, and for one with no version
+  /// cached here.
+  pub fn instruction(&self, resource: ResourceId) -> Option<&TeamInstructionSheet> {
+    self
+      .instructions
+      .iter()
+      .find_map(|(found, sheet)| (*found == resource).then_some(sheet))
+  }
+
+  /// What the team holds of the skill `resource`; `None` for any other resource, and for one with no version cached
+  /// here.
+  pub fn skill(&self, resource: ResourceId) -> Option<&TeamSkillSheet> {
+    self
+      .skills
       .iter()
       .find_map(|(found, sheet)| (*found == resource).then_some(sheet))
   }
@@ -152,6 +184,9 @@ impl Workspace {
       plain,
       forms: forms(&db)?,
       mcp_servers: team_mcp::sheets(&db, &programs, &profiles)?,
+      tools: team_tool::sheets(&db, &profiles)?,
+      instructions: team_text::instructions(&db, &profiles)?,
+      skills: team_text::skills(&db, &profiles)?,
       profiles,
     })
   }

@@ -1,8 +1,9 @@
 //! The panel beside the list (`Detail` `EXAbv` in `t4mtQL`): the chosen resource's head (what it is and its version,
 //! its name), its chips (`Chips` `Zi28O`: *Team · vN* and how it stands here) and what its readiness lacks, with the
 //! one action that moves it on pinned at its bottom (`Actions` `x3uhYJ`). The panel of each kind is its own task
-//! (ORC-832…834): a profile's is [`super::profile`]; until the others have theirs the panel is this frame, and its
-//! pinned action is only Edit, which opens the editor the kind has today.
+//! (ORC-832…834): a profile's is [`super::profile`], an MCP server's [`super::mcp`], a tool's [`super::tool`], an
+//! instruction's and a skill's [`super::plain`]; where a resource has no sheet of its kind the panel is this frame, and
+//! its pinned action is only Edit, which opens the editor the kind has today.
 
 use std::sync::Arc;
 
@@ -19,6 +20,7 @@ use orchester_core::id::ProjectId;
 use orchester_workspace::readiness::{Group, ReadinessStanding};
 
 use super::{
+  bar,
   model::{Entry, Kind, Listing},
   words,
 };
@@ -33,9 +35,6 @@ use crate::{
   },
 };
 
-/// The pinned actions' height (`Actions` `x3uhYJ`).
-const ACTIONS_HEIGHT: f32 = 56.0;
-
 /// What the panel needs besides the resource.
 pub(super) struct Shown<'a> {
   pub project: ProjectId,
@@ -45,22 +44,31 @@ pub(super) struct Shown<'a> {
 }
 
 pub(super) fn panel(ctx: &Ctx, listing: &Listing, entry: &Entry, shown: &Shown<'_>) -> Element {
-  let scroll = ScrollVertical::new(
-    Column::new()
-      .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(
-        HubSpacing::Sections.role(),
-        HubSpacing::BodyTop.role(),
-      ))
-      .spacing(HubSpacing::BodyTop.role())
-      .child(head(ctx, entry, None))
-      .child(chips(ctx, listing, entry))
-      .with_children(readiness(ctx, listing, entry)),
-  )
-  .id("team-hub-panel-scroll")
-  .width(Dimension::Pct(100.0))
-  .flex(1.0)
-  .min_height(Dimension::Px(0.0));
+  let body = body()
+    .child(head(ctx, entry, None))
+    .child(chips(ctx, listing, entry))
+    .with_children(readiness(ctx, listing, entry));
+  frame(entry, body, actions(ctx, entry, shown)).into()
+}
+
+/// The column a panel's sections stand in, 24 from its sides and 20 apart.
+pub(super) fn body() -> Column {
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(
+      HubSpacing::Sections.role(),
+      HubSpacing::BodyTop.role(),
+    ))
+    .spacing(HubSpacing::BodyTop.role())
+}
+
+/// The panel of `entry`: `body` scrolls over the pinned `bar`.
+pub(super) fn frame(entry: &Entry, body: Column, bar: Option<Element>) -> Column {
+  let scroll = ScrollVertical::new(body)
+    .id("team-hub-panel-scroll")
+    .width(Dimension::Pct(100.0))
+    .flex(1.0)
+    .min_height(Dimension::Px(0.0));
   Column::new()
     .id("team-hub-panel")
     .describe("resource", entry.id.to_string())
@@ -69,8 +77,7 @@ pub(super) fn panel(ctx: &Ctx, listing: &Listing, entry: &Entry, shown: &Shown<'
     .min_width(Dimension::Px(0.0))
     .height(Dimension::Pct(100.0))
     .child(scroll)
-    .with_children(actions(ctx, entry, shown))
-    .into()
+    .with_children(bar)
 }
 
 /// The head: what the resource is and its version over its name, and at its end what `end` puts there (*Edit*).
@@ -80,11 +87,16 @@ pub(super) fn head(ctx: &Ctx, entry: &Entry, end: Option<Element>) -> Row {
 
 /// [`head`] with `version` in the place of the version's number: what the panel of the kind says after what it is.
 pub(super) fn head_saying(ctx: &Ctx, entry: &Entry, version: Option<String>, end: Option<Element>) -> Row {
+  head_of(entry, (ctx.t(entry.kind.where_key()).to_string(), version), end)
+}
+
+/// [`head_saying`] with `kind` in the place of what the resource is: *Tool · HTTP request*.
+pub(super) fn head_of(entry: &Entry, (kind, version): (String, Option<String>), end: Option<Element>) -> Row {
   let mut where_ = Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(
-      Text::new(&ctx.t(entry.kind.where_key()))
+      Text::new(&kind)
         .id("team-hub-panel-kind")
         .variant(HubText::Status.role())
         .nowrap(),
@@ -213,21 +225,8 @@ pub(super) fn editor(entry: &Entry, project: ProjectId) -> Option<Route> {
 fn actions(ctx: &Ctx, entry: &Entry, shown: &Shown<'_>) -> Option<Element> {
   let route = editor(entry, shown.project).filter(|_| shown.may_change)?;
   let open: Open = shown.navigation.to(route);
-  Some(
-    Row::new()
-      .id("team-hub-actions")
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(ACTIONS_HEIGHT))
-      .padding(Padding::horizontal(HubSpacing::Sections.role()))
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .background(PaletteColor::SurfacePanel)
-      .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .child(
-        ActionButton::new("team-hub-edit", ButtonKind::Primary, ctx.t("team_hub.panel.edit"))
-          .icon(Icon::Pencil)
-          .opens(open),
-      )
-      .into(),
-  )
+  let edit = ActionButton::new("team-hub-edit", ButtonKind::Primary, ctx.t("team_hub.panel.edit"))
+    .icon(Icon::Pencil)
+    .opens(open);
+  Some(bar::bar(vec![edit.into()], None))
 }

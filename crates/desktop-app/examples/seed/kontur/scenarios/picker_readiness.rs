@@ -68,7 +68,7 @@ pub fn team(kontur: &mut Kontur) -> Result<(), SeedError> {
   };
   let (builder, reviewer) = (profile("Builder")?, profile("Reviewer")?);
   team_hub::team_resource(kontur, "Team delivery", &pipeline(&[builder, reviewer])?)?;
-  team_hub::team_resource(kontur, "Team quick fix", &pipeline(&[reviewer])?)
+  team_hub::team_resource(kontur, "Team quick fix", &pipeline(&[reviewer])?).map(|_| ())
 }
 
 /// A profile `title` on `connection` whose agents get `servers`, published.

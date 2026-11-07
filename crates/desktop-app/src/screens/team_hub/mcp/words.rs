@@ -5,14 +5,10 @@ use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
 use orchester_core::{
-  secret::SecretName,
   sharing::{Missing, ProgramProblem},
   time::Timestamp,
 };
-use orchester_workspace::{
-  agents::team_mcp::{McpRuns, TeamMcpSheet},
-  display,
-};
+use orchester_workspace::agents::team_mcp::{McpRuns, TeamMcpSheet};
 
 use crate::{
   screens::team_hub::{
@@ -50,30 +46,7 @@ pub(super) fn head_line(ctx: &Ctx, now: Timestamp, entry: &Entry, sheet: &TeamMc
   })
 }
 
-/// The day `at` as the panel says it, on the day `now`: *today*, the month and day in this year, or with the year
-/// after them.
-pub(super) fn date(ctx: &Ctx, now: Timestamp, at: Timestamp) -> Arc<str> {
-  let (month, day, year) = display::calendar_date(at);
-  let now = display::calendar_date(now);
-  if (month, day, year) == now {
-    return ctx.t("team_hub.mcp.date.today");
-  }
-  let month = ctx.t_ns(orchester_workspace::i18n::NAMESPACE, display::MONTH_KEYS[month]);
-  if year == now.2 {
-    return ctx.t_args(
-      "team_hub.mcp.date.thisYear",
-      [("month", month.to_string()), ("day", day.to_string())],
-    );
-  }
-  ctx.t_args(
-    "team_hub.mcp.date.otherYear",
-    [
-      ("month", month.to_string()),
-      ("day", day.to_string()),
-      ("year", year.to_string()),
-    ],
-  )
-}
+pub(super) use crate::screens::team_hub::words::date;
 
 /// The program's problem here, when the server has one.
 pub(super) fn program_problem(missing: &[Missing]) -> Option<&ProgramProblem> {
@@ -81,26 +54,6 @@ pub(super) fn program_problem(missing: &[Missing]) -> Option<&ProgramProblem> {
     Missing::McpProgram { problem, .. } => Some(problem),
     _ => None,
   })
-}
-
-/// How a secret's value stands here.
-#[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum Value {
-  Set,
-  Missing,
-  /// The keychain could not say.
-  Unreadable,
-}
-
-pub(super) fn value_of(missing: &[Missing], name: &SecretName) -> Value {
-  missing
-    .iter()
-    .find_map(|part| match part {
-      Missing::Secret { name: lacking } if lacking == name => Some(Value::Missing),
-      Missing::SecretUnreadable { name: unsure } if unsure == name => Some(Value::Unreadable),
-      _ => None,
-    })
-    .unwrap_or(Value::Set)
 }
 
 /// The panel's readiness chip: the line of the list, but for a program path, which the panel says in the design's

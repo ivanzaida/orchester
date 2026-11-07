@@ -184,10 +184,18 @@ pub enum HubSpacing {
   NoteY,
   /// 16: the head's Team line to New (`Header` `NRqwv`).
   NewGap,
+  /// 56: a panel's pinned actions (`Actions` `x3uhYJ` in `t4mtQL`, `o8tFHR` in `NDZXC`, `WpN6M` in `SpRvd`, `hDhr8` in
+  /// `c3jU1R`).
+  Actions,
+  /// 170: a panel row's key, the label over its sub (`Key` `P60rze` in `NDZXC`, `z3uHz` in `c3jU1R`, `XgW1K` in
+  /// `u9Hcc`).
+  Key,
+  /// 150: the key of *On this computer*'s rows of an MCP server (`Key` in `SpRvd` … `lSA4x`).
+  KeyNarrow,
 }
 
 impl HubSpacing {
-  pub const ALL: [Self; 17] = [
+  pub const ALL: [Self; 20] = [
     Self::Side,
     Self::HeadTop,
     Self::HeadBottom,
@@ -205,6 +213,9 @@ impl HubSpacing {
     Self::Nested,
     Self::NoteY,
     Self::NewGap,
+    Self::Actions,
+    Self::Key,
+    Self::KeyNarrow,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -230,6 +241,9 @@ impl HubSpacing {
       Self::Nested => "hub_nested",
       Self::NoteY => "hub_note_y",
       Self::NewGap => "hub_new_gap",
+      Self::Actions => "hub_actions",
+      Self::Key => "hub_key",
+      Self::KeyNarrow => "hub_key_narrow",
     }
   }
 
@@ -247,6 +261,9 @@ impl HubSpacing {
       Self::SubY => 7.0,
       Self::Nested => 44.0,
       Self::NoteY => 4.0,
+      Self::Actions => 56.0,
+      Self::Key => 170.0,
+      Self::KeyNarrow => 150.0,
     }
   }
 }

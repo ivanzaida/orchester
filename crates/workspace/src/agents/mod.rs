@@ -11,5 +11,8 @@ pub mod servers;
 pub mod team_hub;
 pub mod team_mcp;
 pub mod team_profile;
+mod team_sheets;
+pub mod team_text;
+pub mod team_tool;
 pub mod usage;
 pub mod widening;
