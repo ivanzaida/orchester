@@ -108,7 +108,8 @@ pub use self::{
   needs_you::{NeedsYouRadius, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
   orchester::{OrchesterSpacing, OrchesterText},
   orchestrator::{
-    OrchestratorShadow, OrchestratorSpacing, OrchestratorText, beside_chat_lane, chat_scrollbar, picker_scrollbar,
+    LEADS_HINT_OPACITY, OrchestratorShadow, OrchestratorSpacing, OrchestratorText, beside_chat_lane, chat_scrollbar,
+    picker_scrollbar,
   },
   overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},

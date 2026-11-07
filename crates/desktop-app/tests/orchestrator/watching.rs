@@ -3,6 +3,7 @@
 //! live state, grouped per subscription, whose *Stop watching* ends one at once.
 //! `cargo test -p orchester-app --test orchestrator watching`.
 
+use lurq::app::events::with_synthetic_input;
 use orchester_app::routes::OrchestratorChat;
 use orchester_core::{
   id::ChatId,
@@ -126,17 +127,36 @@ fn orchestrator_watching_answers_from_the_live_state_and_stops_watching_from_it(
     assert!(shown.contains(said), "{said}: {shown}");
   }
 
-  screen.click(&format!("{row}-answer-subscription-0-stop"));
-  screen.until("the subscription to end", |screen| {
-    screen
-      .db()
-      .active_subscriptions()
-      .expect("subscriptions")
-      .of_chat(chat)
-      .next()
-      .is_none()
-  });
+  let stop = format!("{row}-answer-subscription-0-stop");
+  refuses_a_synthetic_stop(&mut screen, chat, &stop);
+  assert_eq!(entries(&screen, chat).len(), before + 1, "nothing kept for it");
+
+  screen.click(&stop);
+  screen.until("the subscription to end", |screen| active(screen, chat) == 0);
   screen.until("the answer to follow the live state", |screen| {
     screen.text(&row).contains("This conversation watches nothing yet.")
   });
+}
+
+/// How many subscriptions of `chat` are active.
+fn active(screen: &Orchestrator, chat: ChatId) -> usize {
+  screen
+    .db()
+    .active_subscriptions()
+    .expect("subscriptions")
+    .of_chat(chat)
+    .count()
+}
+
+/// Stopping stays the person's command: a click on `stop` of automation driving the window is refused, says so, and
+/// the subscription of `chat` goes on.
+fn refuses_a_synthetic_stop(screen: &mut Orchestrator, chat: ChatId, stop: &str) {
+  with_synthetic_input(|| screen.click(stop));
+  screen.until("the refusal", |screen| {
+    screen.exists("orchestrator-watching-problem")
+      && screen
+        .text("orchestrator-watching-problem")
+        .contains("Only a person stops watching")
+  });
+  assert_eq!(active(screen, chat), 1, "a synthetic click stops nothing");
 }

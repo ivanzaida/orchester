@@ -15,7 +15,9 @@ use lurq::{
   app::{
     component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction, FutureState},
+    events::is_synthetic_input,
   },
+  core::Signal,
   node::Element,
 };
 use orchester_core::{
@@ -78,6 +80,8 @@ type Held = Option<(ChatId, Read<Arc<Watching>>)>;
 pub(super) struct WhatIWatch {
   ask: FutureAction<Asked, (), Message>,
   stop: FutureAction<Stopping, (), Message>,
+  /// The last *Stop watching* came from automation and was not taken.
+  refused: Signal<bool>,
   held: Arc<Mutex<Held>>,
 }
 
@@ -131,6 +135,7 @@ impl WhatIWatch {
     Self {
       ask,
       stop,
+      refused: ctx.signal(false),
       held: Arc::default(),
     }
   }
@@ -183,15 +188,23 @@ impl WhatIWatch {
     }
   }
 
-  /// What the rows show of the conversation shown, in the project at `root`.
+  /// What the rows show of the conversation shown, in the project at `root`. *Stop watching* is a person's press only:
+  /// stopping stays the person's command in the conversation and no MCP tool stops a subscription either, so synthetic
+  /// input (an MCP client's) is refused, the subscription goes on and the notice over the composer says so.
   pub(super) fn live(&self, root: PathBuf) -> Live {
     let held = self.held.lock().clone();
     let chat = held.as_ref().map(|(chat, _)| *chat);
-    let stop = self.stop.clone();
+    let (stop, refused) = (self.stop.clone(), self.refused.clone());
     Live {
       read: held.map(|(_, read)| read),
       stopping: stop.state().get().is_pending(),
       stop: Arc::new(move |target| {
+        if is_synthetic_input() {
+          tracing::warn!("synthetic input asked to stop watching a target; not taken");
+          refused.set(true);
+          return;
+        }
+        refused.set(false);
         let Some(chat) = chat else {
           return;
         };
@@ -207,9 +220,15 @@ impl WhatIWatch {
   }
 
   /// A `/watching` or a *Stop watching* that applied nothing: why, until the person dismisses it or applies one again.
+  /// A refused click of automation says that only a person stops watching.
   pub(super) fn problem(&self, ctx: &mut Ctx) -> Option<Element> {
-    let (asked, stopped) = (self.ask.state(), self.stop.state());
-    let error = asked.get().error.or_else(|| stopped.get().error)?;
+    let (asked, stopped, refused) = (self.ask.state(), self.stop.state(), self.refused.clone());
+    let body = if refused.get() {
+      ctx.t("orchestrator.watching.personOnly")
+    } else {
+      let error = asked.get().error.or_else(|| stopped.get().error)?;
+      message_text(ctx, &error)
+    };
     let dismiss = ActionButton::new(
       "orchestrator-watching-dismiss",
       ButtonKind::Secondary,
@@ -218,6 +237,7 @@ impl WhatIWatch {
     .on_click(move || {
       asked.set(FutureState::idle());
       stopped.set(FutureState::idle());
+      refused.set(false);
     });
     Some(
       Notice::new(
@@ -226,7 +246,7 @@ impl WhatIWatch {
         ctx.t("orchestrator.watching.failed"),
       )
       .icon(Icon::CircleAlert)
-      .body(message_text(ctx, &error))
+      .body(body)
       .action(dismiss)
       .into(),
     )
