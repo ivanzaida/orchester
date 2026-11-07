@@ -9,14 +9,15 @@ use orchester_core::{
   id::{ProjectId, ResourceId, ServerId, UserId},
   name::Name,
   resource::{
-    AgentTargets, InjectionEvent, Instruction, InstructionScope, PromptText, ResourceBody, Skill, Slug, TeamMcpServer,
-    VersionNumber,
+    AgentProfile, AgentTargets, InjectionEvent, Instruction, InstructionScope, PromptText, ResourceBody, Skill, Slug,
+    TeamMcpServer, VersionNumber,
   },
   sharing::{MemberRole, SharedPerson, TaskRevision},
   store::ResourceStore,
   time::Timestamp,
 };
 use orchester_store::{CachedVersion, ProjectDb, ResourceSharing, SharingLink};
+use orchester_workspace::tools::{data::create_tool, form::CommandText};
 use serde_json::{Value, json};
 
 use super::{harness::Agents, support::project_id};
@@ -24,7 +25,12 @@ use super::{harness::Agents, support::project_id};
 /// Links the project as its owner and caches the team's resources: the skill `review-diff` and the instruction
 /// `Project rules` (always ready), the MCP server `github` nobody decided on here (needs the person) and `playwright`
 /// switched off here. Returns their ids in that order.
-fn team(agents: &Agents) -> [ResourceId; 4] {
+pub(super) fn team(agents: &Agents) -> [ResourceId; 4] {
+  team_as(agents, Some(MemberRole::Owner))
+}
+
+/// [`team`] for a person with `role`, which they have once the team's resources are cached: a member cannot make them.
+pub(super) fn team_as(agents: &Agents, role: Option<MemberRole>) -> [ResourceId; 4] {
   let mut db = ProjectDb::open(&agents.root).expect("database");
   let link = SharingLink {
     server: ServerId::generate(),
@@ -70,6 +76,9 @@ fn team(agents: &Agents) -> [ResourceId; 4] {
     ),
   ];
   db.set_team_mcp_on_here(ids[3], false).expect("switched off here");
+  if role != Some(MemberRole::Owner) {
+    db.record_sharing_state(role, None, None).expect("the role");
+  }
   ids
 }
 
@@ -89,6 +98,12 @@ fn cached<B: ResourceBody + Clone>(
     )
     .expect("resource")
     .id();
+  share(db, id, server_body, body);
+  id
+}
+
+/// Makes the resource `id`, which has `body` here, the team's at v1.
+fn share<B: ResourceBody + Clone>(db: &mut ProjectDb, id: ResourceId, server_body: Value, body: &B) {
   db.set_resource_sharing(
     id,
     Some(ResourceSharing::Shared(TaskRevision::try_from(1).expect("revision"))),
@@ -111,10 +126,44 @@ fn cached<B: ResourceBody + Clone>(
     },
   )
   .expect("cached");
-  id
 }
 
-fn open(agents: &mut Agents, view: HubView) {
+/// A profile and a command tool the person made here before the project joined the team, which the team then took as
+/// its own; the project is linked as `role`. Returns the profile's and the tool's ids.
+pub(super) fn team_with_profile_and_tool(agents: &Agents, role: Option<MemberRole>) -> (ResourceId, ResourceId) {
+  let profile = agents.profile(true);
+  let command = CommandText {
+    program: std::env::current_exe()
+      .expect("test program")
+      .to_string_lossy()
+      .into_owned(),
+    description: "Runs checks".into(),
+    arguments: "test".into(),
+    ..CommandText::new_tool()
+  }
+  .tool(None)
+  .expect("command");
+  let tool = {
+    let mut db = ProjectDb::open(&agents.root).expect("database");
+    create_tool(&mut db, &Name::new("Checks").expect("name"), &command, Timestamp::now()).expect("tool")
+  };
+  team_as(agents, Some(MemberRole::Owner));
+  let mut db = ProjectDb::open(&agents.root).expect("database");
+  let body = db.latest_version::<AgentProfile>(profile).expect("read").expect("v1");
+  share(
+    &mut db,
+    profile,
+    serde_json::to_value(body.body()).expect("body"),
+    body.body(),
+  );
+  share(&mut db, tool, serde_json::to_value(&command).expect("body"), &command);
+  if role != Some(MemberRole::Owner) {
+    db.record_sharing_state(role, None, None).expect("the role");
+  }
+  (profile, tool)
+}
+
+pub(super) fn open(agents: &mut Agents, view: HubView) {
   agents
     .window
     .navigation()

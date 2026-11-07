@@ -41,7 +41,7 @@ pub enum Form {
 }
 
 /// The resources the hub lists, and how the profiles, MCP servers and tools stand on this computer.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TeamHub {
   readiness: ProjectReadiness,
   plain: Vec<Plain>,
@@ -97,8 +97,8 @@ impl Workspace {
   /// blocks: run it on the background pool, on an explicit change and never on a timer
   /// ([`Workspace::project_readiness`]).
   pub fn team_hub(&self, repo_root: &Path, vault: &dyn SecretVault) -> Result<TeamHub, ReadinessError> {
-    let readiness = self.project_readiness(repo_root, vault)?;
     let db = ProjectDb::open(repo_root)?;
+    let readiness = self.readiness_in(&db, repo_root, vault)?;
     let standings = db.shared_standings()?;
     let mut plain = Vec::new();
     for kind in [ResourceKind::Instruction, ResourceKind::Skill] {

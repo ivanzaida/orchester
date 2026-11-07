@@ -3,7 +3,7 @@
     "title": "Agents",
     "team": "Team",
     "reading": "Reading the team's configuration…",
-    "loadFailed": "the team's configuration",
+    "loadFailed": "The team's configuration couldn't be read",
     "filter": {
       "all": "All",
       "profiles": "Profiles",
@@ -85,6 +85,14 @@
     "empty": {
       "title": "Nothing here yet",
       "detail": "Nothing of this kind is published for the team yet."
+    },
+    "rereading": "Reading…",
+    "new": {
+      "all": "New",
+      "profiles": "New agent",
+      "instructions": "New instruction",
+      "skills": "New skill",
+      "tools": "New tool"
     }
   }
 }

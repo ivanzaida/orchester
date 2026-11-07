@@ -91,9 +91,10 @@ impl Said {
   }
 }
 
-/// The team's configuration of `project` while it is shared; `None` while it is local or not read yet.
+/// The team's configuration of `project` while it is shared; `None` while it is local or not read yet. A screen that
+/// must not take the unread for local reads [`TeamRead`] itself.
 pub(crate) fn of(project: &ShownProject) -> Option<TeamConfiguration> {
-  project.feed.team.get()
+  project.feed.team.get().configuration()
 }
 
 /// Whether the person may change `project`'s resources: always in a local project, an admin's in a shared one.

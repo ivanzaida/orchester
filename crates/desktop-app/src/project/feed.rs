@@ -28,7 +28,7 @@ use orchester_workspace::{
   background,
   messages::{self, Message},
   runner::{RunnerStatus, Runners, state::RunnerState},
-  sharing::{project::FirstDownload, team::TeamConfiguration},
+  sharing::project::FirstDownload,
   tasks::{
     answering::PendingAnswers,
     data::ProjectTasks,
@@ -44,7 +44,7 @@ mod last;
 
 pub use last::{LastMerges, ReviewCounts};
 
-use super::{Projects, hold::ReadHold, settled_read::settled_read};
+use super::{Projects, hold::ReadHold, settled_read::settled_read, team::TeamRead};
 use crate::services::Services;
 
 /// One project's data, shared by every tab and screen that shows it.
@@ -101,9 +101,10 @@ pub struct ProjectFeed {
   pub review_counts: Signal<ReviewCounts>,
   /// Whether the sidebar's Configure section is folded for the project, in every tab of the session.
   pub configure_folded: Signal<bool>,
-  /// The team's configuration as the five libraries show it, while the project is shared (`team`); `None` while it is
-  /// local or not read yet.
-  pub team: Signal<Option<TeamConfiguration>>,
+  /// Whether the project is shared and its team's configuration as the five libraries show it ([`TeamRead`]).
+  pub team: Signal<TeamRead>,
+  /// Counts the person's Try agains of a team configuration whose first read failed.
+  pub team_retries: Signal<u64>,
   /// The tasks last read while no runner served the project, as they stand without one.
   offline: Arc<Mutex<Option<Offline>>>,
 }
@@ -202,7 +203,8 @@ impl ProjectFeed {
       merges: Signal::new(None),
       review_counts: Signal::new(ReviewCounts::default()),
       configure_folded: Signal::new(false),
-      team: Signal::new(None),
+      team: Signal::new(TeamRead::Unread),
+      team_retries: Signal::new(0),
       offline: Arc::default(),
       jobs,
     }
@@ -336,9 +338,14 @@ impl Component for FeedLoader {
     let shared = super::closed::shared_changes(ctx, &services.servers);
     let saved = self.feed.revision.get() + outside.tasks + super::merge_queue::changes(ctx, &root) + shared;
     publish(&self.feed.saves, saved);
-    if let Some(team) = super::team::read(ctx, (&services.servers, &root), (shared, outside), &services.hold) {
-      publish(&self.feed.team, team);
-    }
+    let retries = self.feed.team_retries.get();
+    let team = super::team::read(
+      ctx,
+      (&services.servers, &root),
+      (shared, outside, retries),
+      &services.hold,
+    );
+    publish(&self.feed.team, team);
     // A task closed while its run waited to be completed settles that completion, however it was closed (ORC-150).
     super::closed::settle(ctx, (&open, saved + states));
     let hold = services.hold;
