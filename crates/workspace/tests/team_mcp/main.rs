@@ -28,6 +28,7 @@ mod delivery;
 mod mcp_server_remove;
 mod mcp_servers;
 mod pipelines;
+mod readiness;
 mod reads;
 mod share;
 mod tools;

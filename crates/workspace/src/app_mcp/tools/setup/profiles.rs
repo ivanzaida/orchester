@@ -17,6 +17,7 @@ use super::{
   super::{
     Translate,
     across::{InProjects, across},
+    readiness_json,
   },
   connections::agent_by_id,
   widening,
@@ -49,8 +50,16 @@ pub struct InProfile {
 
 pub async fn list_profiles(services: &Services, args: InProjects, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
-  let read = blocking(move || across(&services, args.project.as_deref(), |_, db| Ok(ProjectAgents::load(db)?))).await?;
-  Ok(read.json("profiles", translate, |open, agents| {
+  let read = blocking(move || {
+    across(&services, args.project.as_deref(), |open, db| {
+      Ok((
+        ProjectAgents::load(db)?,
+        readiness_json::read(&services, &open.repo_root)?,
+      ))
+    })
+  })
+  .await?;
+  Ok(read.json("profiles", translate, |open, (agents, readiness)| {
     agents
       .profiles
       .iter()
@@ -63,6 +72,7 @@ pub async fn list_profiles(services: &Services, args: InProjects, translate: &Tr
           "model": entry.profile.model().as_str(),
           "effort": stored_effort(&entry.profile),
           "state": state_json(entry.state),
+          "readiness": readiness_json::resource_of(readiness, entry.id),
           "link": Link::Profile(open.project.id(), entry.id).path(),
         })
       })
@@ -75,7 +85,10 @@ pub async fn get_profile(services: &Services, args: InProfile) -> Result<Value, 
   blocking(move || {
     let open = services.project(&args.project)?;
     let id = profile_named(&ProjectAgents::load_in(&open.repo_root)?, &args.profile)?.id;
-    Ok(json!({ "profile": profile_with_revision(&open, id)? }))
+    let mut profile = profile_with_revision(&open, id)?;
+    let readiness = readiness_json::read(&services, &open.repo_root)?;
+    profile["readiness"] = readiness_json::resource_of(&readiness, id);
+    Ok(json!({ "profile": profile }))
   })
   .await
 }

@@ -39,6 +39,7 @@ mod stacks;
 mod storage;
 mod team_fill_ins;
 mod team_mcp_body;
+mod team_mcp_list;
 mod team_mcp_servers;
 mod team_pipeline;
 mod tool_input;
@@ -112,8 +113,10 @@ const SPECS: &[Spec] = &[
   Spec {
     name: "list_profiles",
     description: "A project's agent profiles: id, role, connection, model, effort, and where each stands (draft, \
-                  stale_draft or published, with its published version), and its link in the app. Pipeline steps \
-                  run published profiles. Without `project`, every project's, each naming its project \
+                  stale_draft or published, with its published version), its readiness on this computer \
+                  (ready_here, group ready, needs_you_here or off_here, and the ordered missing parts, each with the \
+                  tool that fixes it and who may use it; of the version this computer uses, in team and local \
+                  projects), and its link in the app. Pipeline steps run published profiles. Without `project`, every project's, each naming its project \
                   (unreadable_projects lists the projects that could not be read, with why).",
     schema: schema_for_type::<InProjects>,
     read_only: true,
@@ -124,7 +127,8 @@ const SPECS: &[Spec] = &[
                   role, responsibilities, role instructions, connection, model, effort, permissions (repository \
                   access, extra writable folders, commands, network, approvals) and MCP servers, where it stands, \
                   which published pipeline steps run it, its revision, which save_profile_draft's \
-                  expected_revision takes, and its link in the app.",
+                  expected_revision takes, its readiness on this computer as list_profiles gives it, and its link in \
+                  the app.",
     schema: schema_for_type::<profiles::InProfile>,
     read_only: true,
   },
@@ -347,6 +351,7 @@ pub fn listed() -> Vec<Tool> {
     .chain(skills::SPECS)
     .chain(secrets::SPECS)
     .chain(team_fill_ins::SPECS)
+    .chain(team_mcp_list::SPECS)
     .chain(services::SPECS)
     .chain(storage::SPECS)
     .map(tool)
@@ -372,6 +377,9 @@ pub async fn call(
   }
   if named(team_fill_ins::SPECS) {
     return Some(team_fill_ins::call(services, name, Value::Object(arguments)).await);
+  }
+  if named(team_mcp_list::SPECS) {
+    return Some(team_mcp_list::call(services, translate, name, Value::Object(arguments)).await);
   }
   if named(self::services::SPECS) {
     return Some(self::services::call(services, translate, name, Value::Object(arguments)).await);

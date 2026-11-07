@@ -362,6 +362,15 @@ in a project that is not shared with a team, `profile_not_found` for a profile t
 Parameters: `project` (req.), `profile` (req.: id or role of a team profile), `connection` (req.: id or name of an
 agent connection), `account` (id or name of an account of the connection's CLI; `default` is the CLI's Default).
 
+### `list_team_mcp_servers` — read-only · cross-project
+
+The team's MCP servers of a team project (a local project answers an empty list; `list_connections` lists the
+project's own servers, which a team project does not use). Each: `id`, `name`, `team: true`, `version` (the one this
+computer uses), `launch` (`kind: program` with the program's name, arguments, folder and variable names, or
+`kind: remote` with its address and secret headers by name; the same as `add_mcp_server` takes) and its
+[`readiness`](#readiness-here). A program's path on this computer and a secret's value are never listed.
+Parameter: `project` (string | null; left out, every project's, each naming its project).
+
 ---
 
 ## 4. Agent profiles
@@ -373,19 +382,68 @@ its MCP servers. Pipeline steps run **published** profiles. Profiles are version
 ### `list_profiles` — read-only · cross-project
 
 Each profile: id, role, connection, model, effort, where it stands (`draft`, `stale_draft`, `published` with its
-version), and its link. Parameter: `project` (string | null).
+version), its [`readiness`](#readiness-here) on this computer, and its link. Parameter: `project` (string | null).
 
 ### `get_profile` — read-only
 
 One profile as its editor shows it (its draft if it has one, else its latest version): role, responsibilities, role
 instructions, connection, model, effort, permissions (repository access, extra writable folders, commands, network,
 approvals), MCP servers, where it stands, which published pipeline steps run it, its **`revision`** (for
-`save_profile_draft`'s `expected_revision`) and its link.
+`save_profile_draft`'s `expected_revision`), its [`readiness`](#readiness-here) on this computer and its link.
 
 | Parameter | Type   | Req. | Description                    |
 |-----------|--------|------|--------------------------------|
 | `project` | string | yes  | The project's id, or its name. |
 | `profile` | string | yes  | The profile's id, or its role. |
+
+### Readiness here
+
+`list_profiles`, `get_profile` and `list_team_mcp_servers` add `readiness`: whether the resource can be used on this
+computer, read from the version this computer uses (not from a draft), or exactly what is missing. It works in team and
+local projects; it is `null` for a resource with no version. Reading it checks this computer (program files, and in a
+local project the keychain for the secret of each command tool that uses one), so it is read once per call.
+
+```json
+{
+  "ready_here": false,
+  "group": "needs_you_here",
+  "version": 3,
+  "missing": [
+    { "kind": "connection", "cli": "codex_cli", "problem": "pick_needed",
+      "fix": { "tool": "pick_profile_connection", "gate": null } },
+    { "kind": "mcp_off", "server": { "id": "…", "name": "knowledge" },
+      "fix": { "tool": "set_mcp_server_enabled", "gate": "person" } },
+    { "kind": "mcp_program", "server": { "id": "…", "name": "knowledge" }, "problem": "not_set",
+      "fix": { "tool": null, "gate": "person" } },
+    { "kind": "secret", "name": "API_TOKEN", "fix": { "tool": null, "gate": "person" } }
+  ]
+}
+```
+
+- `ready_here` is `true` only when nothing is missing and the standing is decided.
+- `group`: `ready`; `needs_you_here` (something is missing, or it is undecided, or a team MCP server nobody has decided
+  on here is not switched on); `off_here` (a team MCP server switched off here — by a person or by automation, which
+  may turn off). A profile that chooses a server that is off is `needs_you_here`.
+- `missing` lists the parts in the order to fix them: connections, servers that are off, programs, secrets. Each has a
+  `kind` and a `fix`: `tool` is the tool that changes it (`null` when none does) and `gate` who may use it: `"person"`
+  for what only a person does in the app's window, `"ap"` when it needs *Let automation change agent permissions*,
+  `null` when automation may.
+
+| `kind` | Fields | Fix |
+|---|---|---|
+| `connection` | `cli`, `problem`: `none_of_kind` (no connection of that CLI: add one) or `pick_needed` (several, none picked for this profile) | `add_cli_connection` / `pick_profile_connection` |
+| `mcp_off` | `server` `{id, name}` — a team MCP server not switched on here | `set_mcp_server_enabled`; turning on is `person_only` always, so `gate: "person"` |
+| `mcp_program` | `server`, `problem`: `not_set` or `file_gone` — the team MCP server's program path on this computer | none: a person chooses the file in the app |
+| `secret` | `name` — the team secret has no value here | none: a person gives it in the app |
+| `local_mcp_program` | `server` `{id, name}`, `problem`: `not_found` (no such file on the `PATH` the agent starts with, or in the project) or `moved` (a fixed file now leads into the repository) — a local project's MCP server a profile chooses and that is turned on | `update_mcp_server` (another program widens: `gate: "ap"`), or install the program |
+| `local_secret` | `secret` `{id, name}` — a command tool's project secret has no value in the keychain | none: a person sets it in the app |
+| `undecided` | `why`, `fix: null` — what cannot be known yet (see below) | — |
+
+`undecided` is not ready and not assumed to need nothing. `why`: `not_team_form` (a version cached before the team
+configuration model), `cannot_be_published` (`reason`: `duplicate`, `too_many`, `connection`, `local_mcp_server` or
+`writable_folders`), `chooses_mcp_server` (`server`: the team does not offer it here), `runs_unknown` (`resource`),
+`connection_gone` (`connection`), `team_tool_secret_by_id`, `secret_gone`, `secret_unreadable` (`secret`: the keychain
+did not say) and `member` (`member` and its `cause`).
 
 ### `save_profile_draft` — changes data · gate AP for widening
 
@@ -707,7 +765,8 @@ read). Each: id, name, kind, environment (a name is unique per environment, writ
 and MCP servers refer to it), `added_at`, `replaced_at`, and `used_by` (tools, MCP servers, agent connections whose
 API key it is, and the profiles whose draft or latest version chooses an MCP server using it, with that server),
 each with a link, plus the link to Project settings › Environment. In a team project the team's secrets this computer
-has a value for follow as `{name, team: true, value_set: true}`; names nobody gave a value are not listed yet.
+has a value for follow as `{name, team: true, value_set: true}`; names nobody gave a value are not listed (the
+`secret` parts of a resource's `readiness` name them).
 
 Adding, replacing and archiving secrets, and giving a team secret its value, are done by a person in the app. Parameter: `project` (string | null).
 
