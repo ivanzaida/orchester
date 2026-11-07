@@ -129,6 +129,7 @@ fn fixture() -> Fixture {
     instructions: &instructions.into_values().collect::<Vec<_>>(),
     tools: &tools.into_values().collect::<Vec<_>>(),
     skills: &skills.into_values().collect::<Vec<_>>(),
+    mcp_servers: &[],
     labels: &labels,
   };
   let inputs = CanonicalExecutionInputs::pin(&snapshot, bodies).expect("the inputs pin");
@@ -216,7 +217,7 @@ fn execution_bundle_wire_shape_lists_its_fields_in_canonical_order() {
     })
     .collect();
   assert!(places.windows(2).all(|pair| pair[0] < pair[1]), "{bytes}");
-  assert!(bytes.starts_with("{\"schema_version\":2,"), "{bytes}");
+  assert!(bytes.starts_with("{\"schema_version\":3,"), "{bytes}");
   let s7 = format!(
     "\"claim_id\":{},\"module_id\":{},\"branch\":\"module/github-sign-in\",\"base_commit\":\"{BASE_COMMIT}\",\
      \"definition_revision\":7,\"task_number\":42,\"task\":",
@@ -367,8 +368,8 @@ fn execution_bundle_wire_shape_refuses_unknown_fields() {
 fn execution_bundle_wire_shape_refuses_fields_its_inputs_do_not_decide() {
   let value = serde_json::to_value(bundle().0).expect("serializes");
   let changes: [(&str, Value, &str); 7] = [
-    ("/schema_version", json!(1), "schema 1 is not 2"),
-    ("/schema_version", json!(3), "schema 3 is not 2"),
+    ("/schema_version", json!(2), "schema 2 is not 3"),
+    ("/schema_version", json!(4), "schema 4 is not 3"),
     ("/pipeline/version", json!(4), "`pipeline`"),
     ("/profiles/0/role", json!("Reviewer"), "`profiles`"),
     ("/files", json!([]), "`files`"),
