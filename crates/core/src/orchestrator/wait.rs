@@ -30,6 +30,8 @@ pub enum WaitKind {
   Message,
   /// A decision on its plan.
   Plan,
+  /// A person's decision on a tool request of its, which came to the person (ORC-894).
+  Approval,
   /// Its task's latest run ended or stopped so: the person decides what comes next.
   Ended(RunEnd),
   /// Something happened to the run or the task it waits on ([`TaskEvent`]).
@@ -41,7 +43,7 @@ impl WaitKind {
   pub const fn run_end(self) -> Option<RunEnd> {
     match self {
       Self::Ended(end) => Some(end),
-      Self::Question | Self::Message | Self::Plan | Self::Event(_) => None,
+      Self::Question | Self::Message | Self::Plan | Self::Approval | Self::Event(_) => None,
     }
   }
 
@@ -49,8 +51,15 @@ impl WaitKind {
   pub const fn event(self) -> Option<TaskEvent> {
     match self {
       Self::Event(event) => Some(event),
-      Self::Question | Self::Message | Self::Plan | Self::Ended(_) => None,
+      Self::Question | Self::Message | Self::Plan | Self::Approval | Self::Ended(_) => None,
     }
+  }
+
+  /// Whether a wait of this kind may start an Orchestrator turn by itself under *Let the Orchestrator answer agents*.
+  /// A tool request is the person's to decide, and the Orchestrator has no tool to decide it: it is kept in the
+  /// conversation, and waits for the person whatever the switch.
+  pub const fn starts_turns(self) -> bool {
+    !matches!(self, Self::Approval)
   }
 }
 

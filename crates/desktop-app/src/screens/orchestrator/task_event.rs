@@ -5,7 +5,8 @@
 //! Geist Mono 11 `text_muted`, and the one link that acts on it. A run without progress links to the run's
 //! Conversation (*Run ↗*), a merge conflict to the task's Summary, where it is resolved (*Resolve ↗*); a task the run
 //! waits on names that task and its run, and links to its Changes once merged (*Changes ↗*), else to its Summary
-//! (*Open ↗*).
+//! (*Open ↗*). A run without progress that moved again, ended or waits now reads as past (ORC-894): without the
+//! outline, its icon muted, saying what became of the run (*No progress for 20 min · moving again 20:50*).
 
 use std::sync::Arc;
 
@@ -24,7 +25,10 @@ use orchester_core::{
   project::TaskKey,
   time::Timestamp,
 };
-use orchester_workspace::{display, orchestrator::chat::EventFacts};
+use orchester_workspace::{
+  display,
+  orchestrator::chat::{EventFacts, StallSettled},
+};
 
 use super::line::{LineLink, link_element};
 use crate::{
@@ -41,7 +45,8 @@ use crate::{
 const HEIGHT: f32 = 34.0;
 
 /// The line of `event` of `wait`'s run, kept at `at`, with what it names beside the wait (`facts`, empty while they
-/// are not read); in project `project`; `id` names it.
+/// are not read); in project `project`; `id` names it. A stall that no longer stands (its facts say what became of the
+/// run, ORC-894) is past: it keeps its place and its parts, without the outline, its icon muted.
 pub(super) fn line(
   ctx: &mut Ctx,
   id: &str,
@@ -50,7 +55,9 @@ pub(super) fn line(
 ) -> Element {
   let empty = EventFacts::default();
   let facts = facts.unwrap_or(&empty);
+  let settled = facts.settled.is_some();
   let (glyph, color) = look(event.kind);
+  let color = if settled { PaletteColor::TextMuted } else { color };
   let what = what(ctx, event.kind, facts);
   let target = target(ctx, wait, facts);
   let link = link(ctx, event.kind, (wait, facts), project);
@@ -66,16 +73,23 @@ pub(super) fn line(
     )
   });
   let fill = module.unwrap_or_else(|| Spacer::new().flex(1.0).into());
-  Row::new()
+  let row = Row::new()
     .id(id.to_owned())
     .describe("outcome", name(event.kind))
+    .describe("status", if settled { "settled" } else { "stands" })
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(HEIGHT))
     .padding(Padding::horizontal(SpacingSize::Md))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
-    .rounded(RadiusSize::Md)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(RadiusSize::Md);
+  // An inside outline takes no room: the past line keeps its parts where they were.
+  let row = if settled {
+    row
+  } else {
+    row.border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+  };
+  row
     .child(icon(glyph, IconSize::Base, color).flex_shrink(0.0))
     .child(
       Text::new(&what)
@@ -117,12 +131,22 @@ const fn look(kind: TaskEventKind) -> (Icon, PaletteColor) {
   }
 }
 
-/// What the line says happened: the merges name the branch the run merges into, when it is known.
+/// What the line says happened: the merges name the branch the run merges into, when it is known; a stall that settled
+/// says what became of its run.
 fn what(ctx: &Ctx, kind: TaskEventKind, facts: &EventFacts) -> Arc<str> {
   let branch = facts.branch.as_deref();
   match (kind, branch) {
     (TaskEventKind::NoProgress { minutes, .. }, _) => {
-      ctx.t_args("orchestrator.event.noProgress", [("minutes", minutes.to_string())])
+      let minutes = ("minutes", minutes.to_string());
+      match facts.settled {
+        None => ctx.t_args("orchestrator.event.noProgress", [minutes]),
+        Some(StallSettled::Moving(at)) => ctx.t_args(
+          "orchestrator.event.noProgressMoving",
+          [minutes, ("time", display::clock(at))],
+        ),
+        Some(StallSettled::Waits) => ctx.t_args("orchestrator.event.noProgressWaits", [minutes]),
+        Some(StallSettled::Ended) => ctx.t_args("orchestrator.event.noProgressEnded", [minutes]),
+      }
     }
     (TaskEventKind::MergeConflict, _) if facts.module.is_some() => ctx.t("orchestrator.event.conflictModule"),
     (TaskEventKind::MergeConflict, _) => ctx.t("orchestrator.event.conflict"),
