@@ -1679,6 +1679,7 @@
       "teamMembershipRevoked": "You are no longer a member of this team project, so nothing was read or changed.",
       "teamNotFound": "The team server doesn't know this, or it is no longer there for you.",
       "teamReadFailed": "The team server's answer could not be read, so nothing was read or changed.",
+      "teamProfileLegacy": "A profile of this pipeline was published before the team configuration model and names its publisher’s connection instead of a CLI kind, so no connection of this computer can be chosen for it. Publish the profile again.",
       "teamProjectUnsupported": "{{tool}} is not available for a team project in this version: what it reads or changes belongs to the team server, and it is not answered from this computer's copy.",
       "teamDeliveryPending": "A team task's run goes into its module's branch, and only its module's delivery, authorized by an Admin or the team's automatic merge, takes it to the base branch. A proposal does not request that delivery: call merge_run for the run. Nothing was merged.",
       "teamRunNotInModule": "This run did not start on a team module's branch, so no module delivery takes it to the base branch. Nothing was merged.",

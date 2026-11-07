@@ -59,6 +59,10 @@ pub(super) fn choice_refused(error: &ChoiceError) -> ToolError {
     ChoiceError::Unreadable => {
       ToolError::refused("team_read_failed", vec![Message::new("appMcp.errors.teamReadFailed")])
     }
+    ChoiceError::LegacyProfileVersion => ToolError::refused(
+      "legacy_profile_version",
+      vec![Message::new("appMcp.errors.teamProfileLegacy")],
+    ),
     ChoiceError::ConnectionNotFound(named) => ToolError::not_found(Missing::Connection, named.clone()),
     ChoiceError::BindingsRequired(profiles) => ToolError::refused(
       "bindings_required",

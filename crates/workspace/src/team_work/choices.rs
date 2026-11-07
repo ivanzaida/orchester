@@ -46,6 +46,11 @@ pub enum ChoiceError {
   /// A version the team server answered cannot be read as its kind.
   #[error("a version the team server answered cannot be read")]
   Unreadable,
+  /// The latest version of a profile was published before the team configuration model: it names the publisher's
+  /// connection instead of a CLI kind, so no connection of this computer can be chosen for it. The team publishes the
+  /// profile again in the team's form (ORC-845 removes such versions).
+  #[error("the latest version of a profile is in the form that names a connection, not a CLI kind")]
+  LegacyProfileVersion,
   /// A connection the caller named is not one of this computer's.
   #[error("no connection {0} here")]
   ConnectionNotFound(String),
@@ -251,7 +256,13 @@ async fn profiles_of(project: &TeamProject, pipeline: ResourceId) -> Result<Vec<
 /// Profile `id` as its latest version names it.
 async fn profile(project: &TeamProject, id: ResourceId) -> Result<Profile, ChoiceError> {
   let latest = latest(project, id).await?;
-  let body: TeamAgentProfile = serde_json::from_value(latest.body).map_err(|_| ChoiceError::Unreadable)?;
+  if latest.body.get("connection").is_some() {
+    return Err(ChoiceError::LegacyProfileVersion);
+  }
+  let body: TeamAgentProfile = serde_json::from_value(latest.body).map_err(|error| {
+    tracing::warn!(profile = %id, %error, "a team profile version cannot be read as a team profile");
+    ChoiceError::Unreadable
+  })?;
   Ok(Profile {
     id,
     role: body.role().as_str().to_owned(),

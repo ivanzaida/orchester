@@ -1,7 +1,7 @@
 //! What `run_task` chooses for a team start (`team_work/choices.rs`): a profile runs on a connection of the CLI kind
-//! its version names, never on one of another CLI; a body that is not a team profile (it names no CLI kind) is refused;
-//! and a team MCP server a profile names is refused unless this computer has the stopgap's server for it (ORC-826
-//! replaces that rule).
+//! its version names, never on one of another CLI; a body in the old form, which names a connection and no CLI kind, is
+//! refused for that reason; and a team MCP server a profile names is refused unless this computer has the stopgap's
+//! server for it (ORC-826 replaces that rule).
 
 use orchester_core::{
   connection::{AgentConnection, AgentProvider},
@@ -64,7 +64,7 @@ fn team_mcp_choices_a_profile_runs_only_on_a_connection_of_its_cli_kind() {
 }
 
 #[test]
-fn team_mcp_choices_a_profile_body_that_names_no_cli_kind_is_refused() {
+fn team_mcp_choices_a_profile_version_in_the_old_form_is_refused_as_such() {
   let (server, seen) = server_running(None);
   let pipeline = server.state().config.pipeline;
   let mcp_server = seen.lock().publisher_mcp_server.expect("the Builder's MCP server");
@@ -75,7 +75,7 @@ fn team_mcp_choices_a_profile_body_that_names_no_cli_kind_is_refused() {
   });
 
   let run = json!({"project": "Kontur", "key": "KON-7"});
-  assert_eq!(checkout.refused("run_task", &run), "team_read_failed");
+  assert_eq!(checkout.refused("run_task", &run), "legacy_profile_version");
   assert_eq!(
     server.state().works_made,
     0,
