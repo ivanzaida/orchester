@@ -10,8 +10,8 @@ use std::{
 };
 
 use orchester_core::{
-  connection::mcp::McpServerSelection,
-  id::{ConnectionId, IdempotencyKey, ProjectId, ResourceId, TaskId},
+  blob::ContentHash,
+  id::{ConnectionId, IdempotencyKey, ProjectId, ResourceId, TaskId, UserId},
   memory::{
     AgentProvenance, AgentWrite, Confidence, Memory, MemoryContent, MemoryKind, MemoryScope, MemorySettings,
     SecretScreen,
@@ -25,13 +25,13 @@ use orchester_core::{
   },
   revision::Revision,
   run::{Answerer, BranchName, NewRun, Plan, PlanDecision, PublishedVersions, Run, RunEvent, RunSnapshot},
-  sharing::TaskRevision,
+  sharing::{SharedPerson, TaskRevision},
   store::{ResourceStore, RunStore, TaskStore},
   task::{TaskDetails, TaskLimits},
   time::Timestamp,
   tokens::TokenBudget,
 };
-use orchester_store::ProjectDb;
+use orchester_store::{CachedVersion, ProjectDb, ReferenceTarget, ResourceSharing, VersionReference};
 use tempfile::TempDir;
 
 pub fn at(millis: i64) -> Timestamp {
@@ -214,16 +214,17 @@ impl Fixture {
     fixture
   }
 
-  /// [`Fixture::new`] whose Builder profile chooses the MCP servers `servers`.
-  pub fn choosing(servers: &[ConnectionId]) -> Self {
-    Self::with_setup(false, "ORC", servers)
+  /// [`Fixture::new`] whose Builder profile is the team's, its cached version naming the team MCP servers `servers`
+  /// by `TeamResource` references.
+  pub fn choosing(servers: &[ResourceId]) -> Self {
+    Self::with_setup(false, "ORC", Some(servers))
   }
 
   fn with_gate(approval_gate: bool, key: &str) -> Self {
-    Self::with_setup(approval_gate, key, &[])
+    Self::with_setup(approval_gate, key, None)
   }
 
-  fn with_setup(approval_gate: bool, key: &str, servers: &[ConnectionId]) -> Self {
+  fn with_setup(approval_gate: bool, key: &str, team_servers: Option<&[ResourceId]>) -> Self {
     let repo = tempfile::tempdir().expect("temporary directory");
     fs::create_dir(repo.path().join(".git")).expect("create .git");
     let project = Project::new(
@@ -239,16 +240,16 @@ impl Fixture {
       ConnectionId::generate(),
       ModelId::new("gpt-5.5").expect("valid model"),
       ProviderSettings::default(),
-    )
-    .with_mcp_servers(McpServerSelection::new(servers.to_vec()).expect("servers"));
+    );
     let builder = db
       .create_resource(Slug::new("builder").expect("slug"), name("Builder"), &profile, at(2))
       .expect("profile")
       .id();
-    let profiles = BTreeMap::from([(
-      builder,
-      db.publish_draft::<AgentProfile>(builder, at(3)).expect("publish"),
-    )]);
+    let published = db.publish_draft::<AgentProfile>(builder, at(3)).expect("publish");
+    if let Some(servers) = team_servers {
+      keep_as_team_profile(&mut db, builder, &published, servers);
+    }
+    let profiles = BTreeMap::from([(builder, published)]);
     let step = Step {
       key: StepKey::new("implement").expect("key"),
       name: name("Implement"),
@@ -476,7 +477,41 @@ pub fn proposed(run: &Run, text: &str, now: i64) -> Memory {
   )
 }
 
-/// How a profile's selection names the team MCP server `server`.
-pub fn chosen(server: ResourceId) -> ConnectionId {
-  ConnectionId::from_uuid(server.as_uuid())
+/// Makes `profile`, published as `version`, the team's: its version is cached as the server confirmed it, naming
+/// `servers` by `TeamResource` references.
+fn keep_as_team_profile(
+  db: &mut ProjectDb,
+  profile: ResourceId,
+  version: &orchester_core::resource::Version<AgentProfile>,
+  servers: &[ResourceId],
+) {
+  let revision = TaskRevision::try_from(1_u64).expect("a revision");
+  db.set_resource_sharing(profile, Some(ResourceSharing::Shared(revision)))
+    .expect("the profile is the team's");
+  let references = servers
+    .iter()
+    .map(|&id| VersionReference {
+      target: ReferenceTarget::TeamResource {
+        kind: ResourceKind::McpServer,
+        id,
+      },
+      name: String::new(),
+      role: None,
+    })
+    .collect();
+  let confirmed = CachedVersion {
+    number: version.number(),
+    published_at: at(3),
+    publisher: SharedPerson {
+      id: UserId::generate(),
+      name: "Olena".to_owned(),
+    },
+    server_body: serde_json::json!({}),
+    hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
+    references,
+    local_body: version.body().clone(),
+    waits_here: false,
+  };
+  db.cache_shared_version(profile, &confirmed)
+    .expect("the team version is cached");
 }

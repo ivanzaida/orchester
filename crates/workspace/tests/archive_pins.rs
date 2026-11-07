@@ -8,12 +8,12 @@ mod support;
 
 use orchester_core::id::ResourceId;
 use orchester_workspace::sharing::sync::pinning;
-use support::{Fixture, at, chosen};
+use support::{Fixture, at};
 
 #[test]
 fn archive_pins_a_run_whose_profile_chooses_the_team_mcp_server_is_stopped_by_its_archive() {
   let (knowledge, other) = (ResourceId::generate(), ResourceId::generate());
-  let mut fixture = Fixture::choosing(&[chosen(knowledge)]);
+  let mut fixture = Fixture::choosing(&[knowledge]);
   fixture.keep_team_server(knowledge, "Knowledge");
   fixture.keep_team_server(other, "Other");
   let task = fixture.task("Search", at(10));

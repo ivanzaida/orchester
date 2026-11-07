@@ -8,7 +8,7 @@ use std::{num::NonZeroU32, path::Path};
 use orchester_api::SharedResourceKind;
 use orchester_core::{
   id::ResourceId,
-  resource::{Resource, ResourceBody},
+  resource::{AgentProfile, Resource, ResourceBody, TeamMcpServer, TeamReviewer, VersionNumber},
   store::{ResourceStore, TaskStore},
 };
 use orchester_store::ProjectDb;
@@ -37,11 +37,30 @@ fn resources(db: &ProjectDb, target: ResourceId) -> Result<Vec<UsedByResource>, 
   )?;
   naming(db, target, (SharedResourceKind::Skill, names::skill), &mut found)?;
   naming(db, target, (SharedResourceKind::Tool, names::tool), &mut found)?;
+  naming(
+    db,
+    target,
+    (SharedResourceKind::AgentProfile, names::never::<AgentProfile>),
+    &mut found,
+  )?;
+  naming(
+    db,
+    target,
+    (SharedResourceKind::McpServer, names::never::<TeamMcpServer>),
+    &mut found,
+  )?;
+  naming(
+    db,
+    target,
+    (SharedResourceKind::TeamReviewer, names::never::<TeamReviewer>),
+    &mut found,
+  )?;
   found.sort_by_cached_key(|used| (used.name.to_lowercase(), used.id.to_string()));
   Ok(found)
 }
 
-/// Adds the resources of `kind`, other than `target`, whose latest version `names` `target`.
+/// Adds the resources of `kind`, other than `target`, whose latest version `names` `target` in its body or, when it is
+/// a cached team version, in its references.
 fn naming<B: ResourceBody>(
   db: &ProjectDb,
   target: ResourceId,
@@ -55,7 +74,7 @@ fn naming<B: ResourceBody>(
     let Some(latest) = db.latest_version::<B>(resource.id())? else {
       continue;
     };
-    if names(latest.body(), target) {
+    if names(latest.body(), target) || referenced::<B>(db, resource.id(), latest.number(), target)? {
       found.push(UsedByResource {
         kind,
         id: resource.id(),
@@ -65,6 +84,19 @@ fn naming<B: ResourceBody>(
     }
   }
   Ok(())
+}
+
+/// Whether the cached team version `number` of `resource` has a reference to `target`; a version made here has none.
+fn referenced<B: ResourceBody>(
+  db: &ProjectDb,
+  resource: ResourceId,
+  number: VersionNumber,
+  target: ResourceId,
+) -> Result<bool, UsedByError> {
+  Ok(
+    db.cached_version::<B>(resource, number)?
+      .is_some_and(|cached| names::referenced(&cached.references, target)),
+  )
 }
 
 /// The runs that have not ended and pin `target` by the rule an archive stops runs by ([`pins`]). A run that cannot

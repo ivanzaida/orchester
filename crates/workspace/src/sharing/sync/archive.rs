@@ -7,7 +7,7 @@
 use std::path::Path;
 
 use orchester_core::{
-  id::{ConnectionId, ResourceId, RunId, TaskId},
+  id::{ResourceId, RunId, TaskId},
   name::Name,
   resource::{AgentProfile, Resource, ResourceKind},
   run::{RunSnapshot, StepExecutor},
@@ -15,7 +15,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_ipc::Command;
-use orchester_store::{ArchiveStop, ProjectDb, RunStoreError, StoreError};
+use orchester_store::{ArchiveStop, ProjectDb, ReferenceTarget, RunStoreError, StoreError};
 
 use crate::{background, runner::Runners, tasks::run::control_message, workspace::OpenProject};
 
@@ -122,8 +122,8 @@ pub fn pinning(root: &Path, resource: ResourceId) -> Result<Option<Pinning>, Arc
 
 /// Whether a run with `snapshot` pins `resource`: the one rule for the runs an archive stops, also read by the used-by
 /// list before the archive (`crate::used_by`), so for a local project the list is what the archive stops. A run pins no
-/// MCP server of its own: it uses the servers its pinned profile versions choose, and a team MCP server is chosen by
-/// its resource id.
+/// MCP server of its own: it uses the servers its pinned profile versions choose, and a team profile version chooses a
+/// team MCP server by a `TeamResource { kind: McpServer, id }` reference, read from the cached version.
 pub(crate) fn pins(db: &ProjectDb, snapshot: &RunSnapshot, resource: &Resource) -> Result<bool, StoreError> {
   if snapshot.pins(resource.id()) {
     return Ok(true);
@@ -131,16 +131,21 @@ pub(crate) fn pins(db: &ProjectDb, snapshot: &RunSnapshot, resource: &Resource) 
   if resource.kind() != ResourceKind::McpServer {
     return Ok(false);
   }
-  // Temporary until ORC-817: a profile's MCP selection still holds `ConnectionId`s, and a team profile names a team
-  // MCP server by that server's resource id carried in one. Once team references are `TeamResource { kind, id }`,
-  // this compares the typed server id instead of reinterpreting the uuid.
-  let server = ConnectionId::from_uuid(resource.id().as_uuid());
   for step in snapshot.steps() {
     let StepExecutor::Agent { profile, .. } = step.executor() else {
       continue;
     };
-    let chosen = db.version::<AgentProfile>(profile.resource, profile.number)?;
-    if chosen.is_some_and(|version| version.body().mcp_servers().contains(server)) {
+    // A profile made here has no cached version and so chooses no team server.
+    let Some(cached) = db.cached_version::<AgentProfile>(profile.resource, profile.number)? else {
+      continue;
+    };
+    let chooses = cached.references.iter().any(|reference| {
+      matches!(
+        reference.target,
+        ReferenceTarget::TeamResource { kind: ResourceKind::McpServer, id } if id == resource.id()
+      )
+    });
+    if chooses {
       return Ok(true);
     }
   }

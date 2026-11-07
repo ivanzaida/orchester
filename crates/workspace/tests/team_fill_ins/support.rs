@@ -75,8 +75,11 @@ pub struct Team {
   pub server: ServerId,
   pub claude: ConnectionId,
   pub codex: ConnectionId,
-  /// A team profile whose newest version names a Claude Code connection.
+  /// A team profile whose newest version names the Claude Code CLI kind.
   pub claude_profile: ResourceId,
+  /// A team profile whose newest version was cached before the team configuration model and names a connection of the
+  /// Claude Code role.
+  pub legacy_profile: ResourceId,
   /// A team profile whose newest version names no connection: its CLI kind is not known.
   pub open_profile: ResourceId,
   pub local_profile: ResourceId,
@@ -209,12 +212,18 @@ impl Team {
     share(&mut db, server);
     let claude = connection(&mut db, &root, AgentProvider::ClaudeCodeCli, "claude");
     let codex = connection(&mut db, &root, AgentProvider::CodexCli, "codex");
-    let named = VersionReference {
+    let cli_kind = VersionReference {
+      target: ReferenceTarget::CliKind(AgentProvider::ClaudeCodeCli),
+      name: String::new(),
+      role: None,
+    };
+    let claude_profile = team_resource(&mut db, "claude-builder", profile(), vec![cli_kind]);
+    let legacy = VersionReference {
       target: ReferenceTarget::Connection(ConnectionId::generate()),
       name: "Claude".to_owned(),
       role: Some("claude_code_cli".to_owned()),
     };
-    let claude_profile = team_resource(&mut db, "claude-builder", profile(), vec![named]);
+    let legacy_profile = team_resource(&mut db, "legacy-builder", profile(), vec![legacy]);
     let open_profile = team_resource(&mut db, "open-builder", profile(), Vec::new());
     let program_server = team_resource(
       &mut db,
@@ -247,6 +256,7 @@ impl Team {
       claude,
       codex,
       claude_profile,
+      legacy_profile,
       open_profile,
       local_profile,
       program_server,
