@@ -1,20 +1,23 @@
 //! The team's MCP server: what the team server holds of one. A program is named, never located (each computer sets
-//! the path of its own), and variables and secret headers are names whose values each computer fills in. The wire
-//! shape refuses any other field, so a path, a value or a local id cannot be sent by mistake.
+//! the path of its own), and variables and secret headers name the team secrets whose values each computer fills in:
+//! a variable takes the secret of its own name, a secret header names its secret and an optional fixed prefix. The
+//! wire shape refuses any other field, so a path, a value or a local id cannot be sent by mistake.
 //! `docs/design/team-configuration.md`, "Who owns what".
 
+mod header;
 mod wire;
 
+pub use header::{HeaderPrefix, HeaderPrefixError, TeamMcpSecretHeader};
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 use super::{CommandArg, CommandError, CommandProgram, ProgramLocation, ResourceBody, ResourceKind, VariableName};
 use crate::{
   connection::mcp::{
-    ExemptTools, McpAuthorizationError, McpHeaderName, McpServerName, McpServerNameError, McpUrl, TransportError,
-    WorkingDirectory,
+    ExemptTools, McpAuthorizationError, McpServerName, McpServerNameError, McpUrl, TransportError, WorkingDirectory,
   },
   permission::widening::CommandWidening,
+  secret::SecretName,
   sharing::{SharedBody, VersionWidening},
 };
 
@@ -28,6 +31,14 @@ pub enum TeamMcpServerError {
   Transport(#[from] TransportError),
   #[error(transparent)]
   Header(#[from] McpAuthorizationError),
+  #[error(transparent)]
+  Prefix(#[from] HeaderPrefixError),
+  /// A variable is filled from the team secret of its own name, so it is named as a secret is.
+  #[error("the variable `{0}` is filled from the team secret of the same name, so it must be a valid secret name")]
+  VariableNotSecret(String),
+  /// A body held before a header named its secret: which secret it takes is not guessed.
+  #[error("the secret header `{0}` names no secret; write it as {{\"header\": \"{0}\", \"secret\": NAME}}")]
+  HeaderWithoutSecret(String),
   /// The path of a program is set on each computer, so the team names it only: `npx`, not `C:\tools\npx`.
   #[error("the program `{0}` must be a name looked up on the PATH, not a path; each computer sets the path itself")]
   ProgramPath(String),
@@ -42,8 +53,8 @@ pub enum TeamMcpServerError {
   UrlQuery,
 }
 
-/// A program the agent's CLI starts: its name, its arguments, the folder it starts in and the names of the variables
-/// it needs.
+/// A program the agent's CLI starts: its name, its arguments, the folder it starts in and the variables it needs, each
+/// given the value of the team secret of the same name.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TeamMcpProgram {
   program: CommandProgram,
@@ -66,6 +77,12 @@ impl TeamMcpProgram {
       && is_rooted(folder.as_str())
     {
       return Err(TeamMcpServerError::AbsoluteFolder(folder.as_str().to_owned()));
+    }
+    if let Some(variable) = variables
+      .iter()
+      .find(|variable| SecretName::new(variable.as_str()).is_err())
+    {
+      return Err(TeamMcpServerError::VariableNotSecret(variable.as_str().to_owned()));
     }
     Ok(Self {
       program,
@@ -91,23 +108,33 @@ impl TeamMcpProgram {
   pub const fn variables(&self) -> &Vec<VariableName> {
     &self.variables
   }
+
+  /// The team secret each variable takes its value from: the one of its own name.
+  pub fn variable_secret(variable: &VariableName) -> SecretName {
+    SecretName::new(variable.as_str()).expect("a variable of a program is checked to be a secret name when built")
+  }
+
+  /// The secrets the variables take, in order.
+  pub fn secrets(&self) -> Vec<SecretName> {
+    self.variables.iter().map(Self::variable_secret).collect()
+  }
 }
 
-/// A server already running somewhere, with the names of the headers a computer fills in with secrets.
+/// A server already running somewhere, with the headers a computer fills in with the values of team secrets.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TeamMcpRemote {
   url: McpUrl,
-  secret_headers: Vec<McpHeaderName>,
+  secret_headers: Vec<TeamMcpSecretHeader>,
 }
 
 impl TeamMcpRemote {
-  pub fn new(url: McpUrl, secret_headers: Vec<McpHeaderName>) -> Result<Self, TeamMcpServerError> {
+  pub fn new(url: McpUrl, secret_headers: Vec<TeamMcpSecretHeader>) -> Result<Self, TeamMcpServerError> {
     if url.as_str().contains(['?', '#']) {
       return Err(TeamMcpServerError::UrlQuery);
     }
     Ok(Self {
       url,
-      secret_headers: distinct(secret_headers, McpHeaderName::as_str)?,
+      secret_headers: distinct(secret_headers, |header| header.header().as_str())?,
     })
   }
 
@@ -115,8 +142,19 @@ impl TeamMcpRemote {
     &self.url
   }
 
-  pub const fn secret_headers(&self) -> &Vec<McpHeaderName> {
+  pub const fn secret_headers(&self) -> &Vec<TeamMcpSecretHeader> {
     &self.secret_headers
+  }
+
+  /// The secrets the headers take, in order, each once.
+  pub fn secrets(&self) -> Vec<SecretName> {
+    let mut secrets: Vec<SecretName> = Vec::with_capacity(self.secret_headers.len());
+    for header in &self.secret_headers {
+      if !secrets.contains(header.secret()) {
+        secrets.push(header.secret().clone());
+      }
+    }
+    secrets
   }
 }
 
@@ -151,6 +189,15 @@ impl TeamMcpServer {
 
   pub const fn launch(&self) -> &TeamMcpLaunch {
     &self.launch
+  }
+
+  /// The team secrets this server is given the values of, in order, each once: what a computer needs a value for
+  /// before the server can run.
+  pub fn secrets(&self) -> Vec<SecretName> {
+    match &self.launch {
+      TeamMcpLaunch::Program(program) => program.secrets(),
+      TeamMcpLaunch::Remote(remote) => remote.secrets(),
+    }
   }
 
   /// The tools that run without asking.

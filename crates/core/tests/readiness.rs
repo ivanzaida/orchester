@@ -41,15 +41,25 @@ fn server_body(launch: &serde_json::Value) -> TeamMcpServer {
   serde_json::from_value(json!({"name": "knowledge", "launch": launch})).expect("a team MCP server")
 }
 
-fn program_server(id: ResourceId, secrets: &[&str]) -> McpNeed {
-  let body = server_body(&json!({"kind": "program", "program": "npx", "variables": ["TOKEN"]}));
-  McpNeed::of(id, &body, secrets.iter().map(|name| secret(name)).collect())
+/// A program server whose `variables` take the team secrets of the same names.
+fn program_server(id: ResourceId, variables: &[&str]) -> McpNeed {
+  McpNeed::of(
+    id,
+    &server_body(&json!({"kind": "program", "program": "npx", "variables": variables})),
+  )
 }
 
+/// A remote server whose headers take `secrets`, one header each.
 fn remote_server(id: ResourceId, secrets: &[&str]) -> McpNeed {
-  let body =
-    server_body(&json!({"kind": "remote", "url": "https://mcp.example.org/x", "secret_headers": ["X-API-Key"]}));
-  McpNeed::of(id, &body, secrets.iter().map(|name| secret(name)).collect())
+  let headers: Vec<_> = secrets
+    .iter()
+    .enumerate()
+    .map(|(index, secret)| json!({"header": format!("X-Key-{index}"), "secret": secret}))
+    .collect();
+  McpNeed::of(
+    id,
+    &server_body(&json!({"kind": "remote", "url": "https://mcp.example.org/x", "secret_headers": headers})),
+  )
 }
 
 fn profile(id: ResourceId, body: &TeamAgentProfile, servers: &[McpNeed]) -> Needs {
