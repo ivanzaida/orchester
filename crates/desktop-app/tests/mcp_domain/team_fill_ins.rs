@@ -9,8 +9,9 @@ use std::{
 };
 
 use orchester_core::{
+  account::AccountCli,
   blob::ContentHash,
-  id::{ConnectionId, ProjectId, ResourceId, ServerId, UserId},
+  id::{AgentAccountId, ConnectionId, ProjectId, ResourceId, ServerId, UserId},
   name::Name,
   project::ProjectKey,
   resource::{AgentProfile, ModelId, PromptText, ProviderSettings, ResourceBody, Slug, TeamMcpServer, VersionNumber},
@@ -25,7 +26,7 @@ use orchester_store::{
 use orchester_workspace::tasks::outside::Outside;
 use serde_json::{Value, json};
 
-use super::{Served, vault::MemoryVault};
+use super::{Served, accounts::add_account, vault::MemoryVault};
 
 const SECRET_VALUE: &str = "fake-value-7Qx2";
 
@@ -225,6 +226,79 @@ fn domain_team_pick_profile_connection_keeps_the_pick_for_a_team_profile() {
   let unknown = json!({ "project": "Kontur", "profile": "nobody", "connection": connection });
   let refused = team.served.refused("pick_profile_connection", &unknown);
   assert_eq!(refused["code"], "profile_not_found", "{refused}");
+}
+
+/// The account the codex profile's pick keeps, `None` before any pick.
+fn picked_account(team: &Team) -> Option<AgentAccountId> {
+  team
+    .db()
+    .connection_pick(team.codex_profile)
+    .expect("read")
+    .and_then(|pick| pick.account)
+}
+
+#[test]
+fn domain_team_pick_profile_connection_account_other_than_the_effective_one_is_a_persons_to_choose() {
+  let mut team = team();
+  let connection = team.codex_connection();
+  let (client, other) = (
+    add_account(&team.app_database, AccountCli::Codex, "Client"),
+    add_account(&team.app_database, AccountCli::Codex, "Other"),
+  );
+  let pick = |account: &str| json!({ "project": "Kontur", "profile": team.codex_profile.to_string(), "connection": connection, "account": account });
+
+  // The connection runs on the CLI's Default, so Client is another account: a person's choice.
+  team.served.let_automation_widen(false);
+  let refused = team.served.refused("pick_profile_connection", &pick("Client"));
+  assert_person_only(&refused);
+  assert_eq!(
+    team.db().connection_pick(team.codex_profile).expect("read"),
+    None,
+    "no pick was kept"
+  );
+
+  team.served.let_automation_widen(true);
+  let picked = team.served.ok("pick_profile_connection", &pick("Client"));
+  assert_eq!(picked["account"], client.id().to_string());
+  assert_eq!(picked_account(&team), Some(client.id()));
+
+  // The same account again, and the pick's account is the one the profile runs on now: no widening.
+  team.served.let_automation_widen(false);
+  team.served.ok("pick_profile_connection", &pick("client"));
+  assert_eq!(picked_account(&team), Some(client.id()));
+
+  // Another account than the earlier pick's is refused again, and the pick stays.
+  assert_person_only(&team.served.refused("pick_profile_connection", &pick("Other")));
+  assert_eq!(picked_account(&team), Some(client.id()));
+  assert_ne!(client.id(), other.id());
+}
+
+#[test]
+fn domain_team_pick_profile_connection_account_of_the_connection_itself_is_not_gated() {
+  let mut team = team();
+  let connection = team.codex_connection();
+  team.served.let_automation_widen(false);
+  let args = json!({
+    "project": "Kontur", "profile": team.codex_profile.to_string(), "connection": connection, "account": "default",
+  });
+  team.served.ok("pick_profile_connection", &args);
+  assert_eq!(picked_account(&team), Some(AccountCli::Codex.default_account()));
+}
+
+#[test]
+fn domain_team_pick_profile_connection_refuses_an_account_that_is_not_of_the_connections_cli() {
+  let mut team = team();
+  let connection = team.codex_connection();
+  add_account(&team.app_database, AccountCli::ClaudeCode, "Lab");
+  team.served.let_automation_widen(true);
+  for account in ["Lab", "nobody"] {
+    let args = json!({
+      "project": "Kontur", "profile": team.codex_profile.to_string(), "connection": connection, "account": account,
+    });
+    let refused = team.served.refused("pick_profile_connection", &args);
+    assert_eq!(refused["code"], "account_not_found", "{refused}");
+    assert_eq!(team.db().connection_pick(team.codex_profile).expect("read"), None);
+  }
 }
 
 #[test]

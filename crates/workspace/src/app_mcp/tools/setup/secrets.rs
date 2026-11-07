@@ -69,6 +69,8 @@ async fn list_secrets(services: &Services, args: InProjects, translate: &Transla
     let own = secrets
       .in_environment(None)
       .map(|secret| secret_json(secret, (secrets, agents), open.project.id()));
+    // Always true: only the names with a recorded value are listed until the names a team needs are known (ORC-828
+    // part 2), so a name without a value cannot appear yet.
     let team = team
       .iter()
       .map(|name| json!({ "name": name, "team": true, "value_set": true }));

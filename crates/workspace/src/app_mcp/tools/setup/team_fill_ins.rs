@@ -40,10 +40,11 @@ pub(super) const SPECS: &[Spec] = &[Spec {
                 of the project by id or name, of the CLI kind the profile names (a profile that names none takes any \
                 agent connection). The pick is kept on this computer only and a connection added later changes \
                 nothing. `account` (an account of the connection's CLI by id or name, list_accounts; `default` is the \
-                CLI's Default) is for a connection that needs one; choosing another account than the profile's \
-                earlier pick is refused as person_only unless a person turned on Let automation change agent \
-                permissions. Refused as team_project_required in a project that is not shared with a team and as \
-                not_team_resource for a profile that is not the team's. Returns the pick.",
+                CLI's Default) is for a connection that needs one; choosing another account than the one the \
+                profile runs on now (its earlier pick's, else the connection's own) is refused as person_only unless \
+                a person turned on Let automation change agent permissions. Refused as team_project_required in a \
+                project that is not shared with a team and as profile_not_found for a profile that is not the \
+                team's. Returns the pick.",
   schema: schema_for_type::<PickProfileConnection>,
   read_only: false,
 }];
@@ -83,10 +84,15 @@ async fn pick_profile_connection(services: &Services, args: PickProfileConnectio
       Some(named) => Some(accounts::account_for(&services, connection.provider(), named)?),
       None => None,
     };
-    if let Some(account) = &account
-      && db.connection_pick(profile.id())?.and_then(|earlier| earlier.account) != Some(account.id())
-    {
-      widening::allowed(&services, vec![Message::new("appMcp.errors.accountChoice")])?;
+    if let Some(account) = &account {
+      // The account the profile runs on now: its earlier pick's, else the connection's own.
+      let effective = db
+        .connection_pick(profile.id())?
+        .and_then(|earlier| earlier.account)
+        .or_else(|| connection.account().id(connection.provider()));
+      if effective != Some(account.id()) {
+        widening::allowed(&services, vec![Message::new("appMcp.errors.accountChoice")])?;
+      }
     }
     let pick = ConnectionPick {
       connection: connection.id(),
