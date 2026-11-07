@@ -44,10 +44,20 @@ pub enum HubText {
   /// 11.5 `text_muted`, 1.4: what a bar says beside its actions, e.g. what a newer version changed (`xtJhx` in 02c
   /// `JZFlA`).
   Foot,
+  /// 13/500 `text_primary`, 1.2: a list row's name (`Title` in `Item · pencil-design` `U9RFS`).
+  RowName,
+  /// 12 `text_secondary`, 1.2: a list row's line under its name and the version at its end, in the color of what
+  /// it says (`Line`, `Meta` in `U9RFS`).
+  RowLine,
+  /// Geist Mono 11 `text_secondary`, 1.2: a list row's tag (`Text` in `Tag` `uJ2rP`).
+  RowTag,
+  /// 12 `text_muted`, 1.45: what a list says under its last group, e.g. why every instruction is ready (`Text` in
+  /// `Why` `e1C14P`, `Agents · Instructions` `c3jU1R`).
+  ListNote,
 }
 
 impl HubText {
-  pub const ALL: [Self; 13] = [
+  pub const ALL: [Self; 17] = [
     Self::PageTitle,
     Self::Crumb,
     Self::GroupTitle,
@@ -61,6 +71,10 @@ impl HubText {
     Self::Code,
     Self::TeamLine,
     Self::Foot,
+    Self::RowName,
+    Self::RowLine,
+    Self::RowTag,
+    Self::ListNote,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -82,6 +96,10 @@ impl HubText {
       Self::Code => "hub_code",
       Self::TeamLine => "hub_team_line",
       Self::Foot => "hub_foot",
+      Self::RowName => "hub_row_name",
+      Self::RowLine => "hub_row_line",
+      Self::RowTag => "hub_row_tag",
+      Self::ListNote => "hub_list_note",
     }
   }
 
@@ -100,6 +118,10 @@ impl HubText {
       Self::Code => mono(style(13.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary)),
       Self::TeamLine => style(12.5, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
       Self::Foot => style(11.5, FontWeight::Normal, 1.4, 0.0, palette.text_muted),
+      Self::RowName => style(13.0, FontWeight::Medium, 1.2, 0.0, palette.text_primary),
+      Self::RowLine => style(12.0, FontWeight::Normal, 1.2, 0.0, palette.text_secondary),
+      Self::RowTag => mono(style(11.0, FontWeight::Normal, 1.2, 0.0, palette.text_secondary)),
+      Self::ListNote => style(12.0, FontWeight::Normal, 1.45, 0.0, palette.text_muted),
     }
   }
 }
@@ -136,10 +158,12 @@ pub enum HubSpacing {
   Indent,
   /// 44: a block under a radio row from the box's side, past the radio and its gap (`A6i2K3`, `clbbm` in 07).
   Nested,
+  /// 4: over and under the note under a list's last group (`e1C14P`).
+  NoteY,
 }
 
 impl HubSpacing {
-  pub const ALL: [Self; 15] = [
+  pub const ALL: [Self; 16] = [
     Self::Side,
     Self::HeadTop,
     Self::HeadBottom,
@@ -155,6 +179,7 @@ impl HubSpacing {
     Self::SubY,
     Self::Indent,
     Self::Nested,
+    Self::NoteY,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -178,6 +203,7 @@ impl HubSpacing {
       Self::SubY => "hub_sub_y",
       Self::Indent => "hub_indent",
       Self::Nested => "hub_nested",
+      Self::NoteY => "hub_note_y",
     }
   }
 
@@ -194,6 +220,7 @@ impl HubSpacing {
       Self::FieldGap => 16.0,
       Self::SubY => 7.0,
       Self::Nested => 44.0,
+      Self::NoteY => 4.0,
     }
   }
 }

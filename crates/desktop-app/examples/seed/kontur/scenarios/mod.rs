@@ -60,6 +60,7 @@ mod tasks;
 mod tasks_memory;
 mod tasks_unreadable;
 pub mod team;
+mod team_hub;
 mod todo_lists;
 mod unreadable_db;
 mod usage;
@@ -109,7 +110,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 159] = [
+pub const ALL: [Scenario; 160] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -211,6 +212,7 @@ pub const ALL: [Scenario; 159] = [
   Scenario::of("shared-config-here", shared_here::seed),
   Scenario::of("shared-config-chosen", shared_here::chosen),
   Scenario::of("shared-config-no-claude", shared_here::no_claude),
+  Scenario::of("team-hub", team_hub::seed),
   Scenario::of("pipelines", pipelines::seed),
   Scenario::of("pipelines-empty", pipelines::empty),
   Scenario::of("pipelines-publish", pipelines::publish),
