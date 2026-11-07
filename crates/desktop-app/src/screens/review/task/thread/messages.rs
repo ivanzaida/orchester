@@ -78,7 +78,7 @@ pub(super) fn messages(ctx: &mut Ctx, env: &Env, view: &ThreadView) -> Vec<Eleme
       _ => person_message(ctx, env, (&message_id, message), view),
     });
   }
-  let answering = matches!(view.state, ThreadState::Asked | ThreadState::Answering);
+  let answering = !env.read_only && matches!(view.state, ThreadState::Asked | ThreadState::Answering);
   if answering && !words_arrived(view) && !writing(all) {
     shown.push(starting(ctx, env, &id));
   }

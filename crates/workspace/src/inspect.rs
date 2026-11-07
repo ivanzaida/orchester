@@ -102,11 +102,6 @@ macro_rules! markers {
     impl $inspect for crate::project_list::Listing {}
     impl $inspect for crate::project_setup::CreateFailure {}
     impl $inspect for crate::project_setup::Creation {}
-    impl $inspect for crate::pull_requests::Inbox {}
-    impl $inspect for crate::pull_requests::detail::Detail {}
-    impl $inspect for crate::pull_requests::list::PullRequestList {}
-    impl $inspect for crate::pull_requests::list::PullRequestSort {}
-    impl $inspect for crate::pull_requests::page::PullRequestPage {}
     impl $inspect for crate::usage::UsageData {}
     impl $inspect for crate::recovery::InterruptedRun {}
     impl $inspect for crate::recovery::Recovery {}

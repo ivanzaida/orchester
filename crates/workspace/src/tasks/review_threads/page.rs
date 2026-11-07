@@ -1,9 +1,10 @@
 //! What the review page shows of a run (ORC-697; `crates/desktop-app/design/orchester.pen`, board `Review · redesign`,
 //! 09i `wLyFt`): the run as its task names it, where it waits for review, its diff from where its work starts to where
 //! its branch is, the person's review of it ([`super::read`]), the head that was reviewed and the commits after it, and
-//! the implementing step whose agent answers and changes the code. A run shows here while it waits for review, and
-//! while Implement works on comments sent from here; never once a merge of it was tried or recorded, which the attempt
-//! page tells. Blocks on SQLite and git.
+//! the implementing step whose agent answers and changes the code. A run shows here while it waits for review, while
+//! Implement works on comments sent from here, and, read-only, once a person approved it ([`ApprovedRun`]: merged, or
+//! approved in the merge queue); not once a merge of it was tried and did not land, which the attempt page tells.
+//! Blocks on SQLite and git.
 
 use std::{path::Path, sync::Arc};
 
@@ -14,13 +15,14 @@ use orchester_core::{
   resource::StepKey,
   revision::Revision,
   run::{BranchName, Run, RunNumber, RunStatus, StepStatus, last_report},
-  store::{MergeStore, RunStore},
+  store::RunStore,
 };
 use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
 
 use super::{
   ReviewRefusal,
+  approved_run::{ApprovedRun, approved_run},
   read::{Review, review_of},
 };
 use crate::tasks::{
@@ -50,8 +52,11 @@ pub struct Implement {
 pub struct ReviewPage {
   pub run: MergeRun,
   pub branch: BranchName,
-  /// Where the run waits for review; `None` while it does not, as Implement works on comments sent to it.
+  /// Where the run waits for review; `None` while it does not, as Implement works on comments sent to it, and once a
+  /// person approved it.
   pub review_in: Option<ReviewIn>,
+  /// A person approved the run: merged, or approved in the merge queue. Its review is read-only.
+  pub approved: Option<ApprovedRun>,
   /// The head that was reviewed: the tip the merge queue checked, else the run's latest checkpoint.
   pub reviewed: Option<Revision>,
   /// The run's commits after `reviewed` up to where its branch is, newest first: what changed since the review.
@@ -77,8 +82,8 @@ impl ReviewPage {
   }
 }
 
-/// The review page of the task `key`: of its latest run that [`review_page`] shows, the run that waits for review or
-/// was sent back from it; `None` when the task has none (no such task, or no run is reviewed now).
+/// The review page of the task `key`: of its latest run that [`review_page`] shows, the run that waits for review, was
+/// sent back from it or was approved; `None` when the task has none (no such task, or no run is reviewed now).
 pub fn task_review_page(
   tasks: &ProjectTasks,
   (root, programs): (&Path, &Programs),
@@ -110,7 +115,7 @@ pub fn task_review_page(
 
 /// The review page of run `number` of the task `key` among `tasks`, the project at `root`'s; `None` when there is no
 /// such task or run, or when the run is not reviewed here: it neither waits for review nor has comments Implement works
-/// on, or a merge of it was tried. `programs` read the run's branch and diff.
+/// on nor was approved, or a merge of it was tried and did not land. `programs` read the run's branch and diff.
 pub fn review_page(
   tasks: &ProjectTasks,
   (root, programs): (&Path, &Programs),
@@ -134,40 +139,28 @@ pub fn review_page(
   else {
     return Ok(None);
   };
-  if db.run_merge(run.id())?.is_some() || !db.merge_attempts(run.id())?.is_empty() {
+  let approved = approved_run(&db, run.id())?;
+  if approved.is_none() && !db.merge_attempts(run.id())?.is_empty() {
     return Ok(None);
   }
   let queue = db.merge_queue_entry(run.id())?;
   let in_queue = queue
     .as_ref()
     .filter(|entry| entry.state == QueueState::WaitingForApproval);
-  let waiting = *run.status() == RunStatus::Succeeded;
+  let waiting = *run.status() == RunStatus::Succeeded && approved.is_none();
   let reviewed = reviewed_head(&db, run.id(), in_queue)?;
   drop(db);
   let review = review_of(root, programs, run.id())?;
   let sent = review.threads.iter().any(|view| view.thread.sent().is_some());
-  if !waiting && !sent && !review.implement_at_work {
+  if approved.is_none() && !waiting && !sent && !review.implement_at_work {
     return Ok(None);
   }
   let changes = changes((root, programs), &run, review.head.as_ref())?;
   let since_review = match (&reviewed, &review.head) {
-    (Some(reviewed), Some(head)) => commits_after((root, programs), (reviewed, head)),
+    (Some(reviewed), Some(head)) if approved.is_none() => commits_after((root, programs), (reviewed, head)),
     _ => Vec::new(),
   };
-  let detail = TaskDetail::load_in(root, task.id())?;
-  let view = detail.run.as_ref().filter(|view| view.id() == run.id());
-  let implement = view.and_then(|view| {
-    let key = return_work::implementing_step(view).or_else(|| at_work(view))?;
-    let step = view.steps.iter().find(|step| step.key == key)?;
-    Some(Implement {
-      key,
-      number: step.number,
-      name: step.name.clone(),
-      agent: step.agent.clone(),
-    })
-  });
-  let steps = view.map_or((0, 0), steps_passed);
-  let summary = view.and_then(summary_of);
+  let (implement, steps, summary) = implementing(root, (task.id(), run.id()))?;
   Ok(Some(ReviewPage {
     run: MergeRun {
       task: task.id(),
@@ -183,6 +176,7 @@ pub fn review_page(
     } else {
       ReviewIn::TaskPage
     }),
+    approved,
     reviewed,
     since_review,
     changes,
@@ -193,19 +187,35 @@ pub fn review_page(
   }))
 }
 
-/// How many of `view`'s steps passed, of how many.
-fn steps_passed(view: &RunView) -> (usize, usize) {
-  let passed = view
-    .steps
-    .iter()
-    .filter(|step| step.status == Some(StepStatus::Passed))
-    .count();
-  (passed, view.steps.len())
-}
-
-/// What the last step of `view`'s run that reported said.
-fn summary_of(view: &RunView) -> Option<Arc<str>> {
-  last_report(&view.run, &view.outputs, &view.plans).map(|(_, report)| Arc::from(report))
+/// The step whose agent answers on `run` of `task`, how many of its steps passed, of how many, and what its last step
+/// that reported said.
+fn implementing(
+  root: &Path,
+  (task, run): (orchester_core::id::TaskId, orchester_core::id::RunId),
+) -> Result<(Option<Implement>, (usize, usize), Option<Arc<str>>), ReviewRefusal> {
+  let detail = TaskDetail::load_in(root, task)?;
+  let view = detail.run.as_ref().filter(|view| view.id() == run);
+  let implement = view.and_then(|view| {
+    let key = return_work::implementing_step(view).or_else(|| at_work(view))?;
+    let step = view.steps.iter().find(|step| step.key == key)?;
+    Some(Implement {
+      key,
+      number: step.number,
+      name: step.name.clone(),
+      agent: step.agent.clone(),
+    })
+  });
+  let steps = view.map_or((0, 0), |view| {
+    let passed = view
+      .steps
+      .iter()
+      .filter(|step| step.status == Some(StepStatus::Passed))
+      .count();
+    (passed, view.steps.len())
+  });
+  let summary = view
+    .and_then(|view| last_report(&view.run, &view.outputs, &view.plans).map(|(_, report)| Arc::<str>::from(report)));
+  Ok((implement, steps, summary))
 }
 
 /// The writing step at work on `view`'s run, which has not ended, so no step is one its work can go back to: the

@@ -34,7 +34,7 @@ use orchester_core::{
 use crate::kontur::{Kontur, SeedError, catalogue::Published, files, run::Drive};
 
 const CRITERIA: [&str; 1] = ["The change is covered by tests."];
-const SENDER: &str = "src/webhooks/sender.rs";
+pub(super) const SENDER: &str = "src/webhooks/sender.rs";
 const SETTINGS: &str = "src/webhooks/settings.rs";
 const MIGRATION: &str = "migrations/0042_delivery_attempts.sql";
 /// The doc line of the retry budget the first checkpoint writes and the second rewrites.
@@ -53,12 +53,12 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
 }
 
 /// What a thread is seeded with: its kind, the lines and their code, the head they were read at, and its messages.
-struct Seeded {
-  kind: ThreadKind,
-  lines: (String, u32, u32, Vec<String>),
-  head: Revision,
-  messages: Vec<(Said, String)>,
-  resolved: bool,
+pub(super) struct Seeded {
+  pub kind: ThreadKind,
+  pub lines: (String, u32, u32, Vec<String>),
+  pub head: Revision,
+  pub messages: Vec<(Said, String)>,
+  pub resolved: bool,
 }
 
 fn every_thread(kontur: &mut Kontur, quick: &Published) -> Result<(), SeedError> {
@@ -175,7 +175,7 @@ fn threads_on_sender(head: &Revision, line: Lines<'_>) -> Result<Vec<Seeded>, Se
 }
 
 /// Implement's words, `writing` or written, doing `activity`.
-fn words(writing: bool, activity: Option<&str>) -> Said {
+pub(super) fn words(writing: bool, activity: Option<&str>) -> Said {
   Said::Agent(AgentWords {
     writing,
     activity: activity.map(str::to_owned),
@@ -366,7 +366,11 @@ pub(super) fn at_work(kontur: &mut Kontur, quick: &Published) -> Result<(), Seed
 }
 
 /// A queued task titled `title`, on `pipeline`, noted as left in `state`.
-fn queued(kontur: &mut Kontur, pipeline: &Published, (title, state): (&str, &'static str)) -> Result<Task, SeedError> {
+pub(super) fn queued(
+  kontur: &mut Kontur,
+  pipeline: &Published,
+  (title, state): (&str, &'static str),
+) -> Result<Task, SeedError> {
   let mut task = kontur.task((title, state, &CRITERIA), Some(pipeline), kontur.ago(600))?;
   kontur.seeded(&task, state);
   kontur.queue(&mut task, pipeline)?;
@@ -374,7 +378,7 @@ fn queued(kontur: &mut Kontur, pipeline: &Published, (title, state): (&str, &'st
 }
 
 /// Stores `seeded` on `run`, written at `at`.
-fn store(kontur: &mut Kontur, run: &Run, seeded: Seeded, at: Timestamp) -> Result<(), SeedError> {
+pub(super) fn store(kontur: &mut Kontur, run: &Run, seeded: Seeded, at: Timestamp) -> Result<(), SeedError> {
   let invalid = |error: String| SeedError::Invalid(error);
   let (path, start, end, excerpt) = seeded.lines;
   let line = |number| NonZeroU32::new(number).ok_or_else(|| invalid("a line 0".to_owned()));
@@ -406,7 +410,7 @@ const fn not_sent() -> Said {
 }
 
 /// `run`'s latest checkpoint.
-fn checkpoint(run: &Run) -> Result<Revision, SeedError> {
+pub(super) fn checkpoint(run: &Run) -> Result<Revision, SeedError> {
   run
     .last_checkpoint()
     .map(|checkpoint| checkpoint.revision().clone())
@@ -414,7 +418,7 @@ fn checkpoint(run: &Run) -> Result<Revision, SeedError> {
 }
 
 /// The content `work` gives the file at `path`.
-fn content(work: &[(&str, String)], path: &str) -> Result<String, SeedError> {
+pub(super) fn content(work: &[(&str, String)], path: &str) -> Result<String, SeedError> {
   work
     .iter()
     .find(|(file, _)| *file == path)
@@ -424,7 +428,7 @@ fn content(work: &[(&str, String)], path: &str) -> Result<String, SeedError> {
 
 /// The lines of `content` that the repository's first version of its file does not hold, by number from 1: the lines
 /// the run's diff adds.
-fn added(content: &str) -> Vec<(u32, String)> {
+pub(super) fn added(content: &str) -> Vec<(u32, String)> {
   let initial: Vec<String> = files::initial()
     .into_iter()
     .flat_map(|(_, text)| text.lines().map(str::to_owned).collect::<Vec<_>>())

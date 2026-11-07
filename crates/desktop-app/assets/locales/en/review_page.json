@@ -10,13 +10,19 @@
     "nothingBody": "The run has no checkpoint, so its work has no diff to review.",
     "tooLarge": "Too large to review here",
     "tooLargeBody": "The run changes {{files}} files, more than Orchester reads. Review {{branch}} with git, then approve it from its task page.",
+    "pager": {
+      "position": "{{position}} of {{total}} waiting",
+      "rest": "{{total}} waiting",
+      "previous": "Previous waiting task",
+      "next": "Next waiting task"
+    },
     "openTask": "Open task",
     "approve": "Approve and merge",
     "separator": " · ",
     "status": {
       "waiting": "Waiting for your review",
       "changed": "Changed since your review",
-      "atWork": "Implement is changing the code",
+      "atWork": "With the agent",
       "run": "run #{{run}}",
       "stepsPassed": "every step passed",
       "stepsOf": "{{passed}} of {{total}} steps passed",
@@ -27,6 +33,20 @@
     },
     "summary": {
       "link": "Run summary →"
+    },
+    "approved": {
+      "merged": "Merged into {{branch}}",
+      "mergedNoBase": "Merged",
+      "merging": "Merging into {{branch}}",
+      "mergingNoBase": "Merging",
+      "by": "approved by you {{time}}",
+      "automatic": "merged without a person's approval",
+      "notRecorded": "who approved it is not recorded",
+      "queue": "the merge queue merges it in its turn",
+      "mergeCommit": "merge commit {{revision}}",
+      "squash": "squashed as {{revision}}",
+      "fastForward": "fast-forward to {{revision}}",
+      "alreadyMerged": "already in {{branch}} at {{revision}}"
     },
     "changed": {
       "title": "Changed since your review",
@@ -98,11 +118,21 @@
       "notAsked": "Not asked",
       "notSent": "Not sent",
       "sending": "Sending…",
-      "sent": "Sent · Implement is changing the code",
+      "sent": "Sent",
+      "sentAt": "Sent {{time}}",
       "addressedIn": "Addressed in {{commit}}",
       "addressed": "Addressed",
       "resolved": "Resolved",
       "outdatedIn": "Outdated by {{commit}}"
+    },
+    "agent": {
+      "statusOne": "Implement is working on your comment",
+      "statusOther": "Implement is working on your {{count}} comments",
+      "sent": "sent {{time}}",
+      "titleOne": "Implement is working on 1 comment",
+      "titleOther": "Implement is working on {{count}} comments",
+      "body": "The task comes back here when it finishes; new comments wait until then.",
+      "open": "Open conversation"
     },
     "composer": {
       "new": "New",
@@ -131,7 +161,8 @@
       "failedDetail": "The send failed; nothing is lost. Your comments are kept.",
       "discard": "Discard",
       "send": "Send to Implement ({{count}})",
-      "tryAgain": "Try again"
+      "tryAgain": "Try again",
+      "waits": "Sent once the task is back from Implement."
     },
     "discard": {
       "titleOne": "Discard the comment not sent?",
