@@ -23,7 +23,7 @@ use orchester_core::{
   },
   resource::ModelId,
   revision::Revision,
-  run::{BranchName, Run, WaitReason},
+  run::{Answerer, BranchName, Run, WaitReason},
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
   store::{ActivityStore, ConnectionStore, ConversationStore, MergeStore},
   task::organization::{ChangeActor, WorkflowStatus},
@@ -136,11 +136,11 @@ impl Desktop {
     waits
   }
 
-  /// The person presses *Drop the wait* of `run`.
-  fn drop_wait(&self, run: RunId) -> Result<Option<Sent>, orchester_workspace::messages::Message> {
+  /// *Drop the wait* of `run`, pressed by `by`.
+  fn drop_wait(&self, run: RunId, by: Answerer) -> Result<Option<Sent>, orchester_workspace::messages::Message> {
     self
       .runtime
-      .block_on(drop_wait((&self.runners, &self.servers), &self.open, run))
+      .block_on(drop_wait((&self.runners, &self.servers), &self.open, run, by))
   }
 
   fn db(&self) -> ProjectDb {
@@ -505,7 +505,20 @@ fn wait_on_task_stands_until_the_person_drops_a_wait_that_cannot_be_met() {
   );
   assert!(standing[0].1.holds(), "the run still waits for the person");
 
-  let sent = desktop.drop_wait(run.id()).expect("dropped");
+  let before = desktop.db().messages(task).expect("messages").len();
+  let automated = desktop
+    .drop_wait(run.id(), Answerer::Automation)
+    .expect_err("only the person drops a wait");
+  assert_eq!(automated.key, "orchestrator.waitsOn.onlyYou");
+  assert_ne!(
+    desktop.ended(run.id()),
+    Some(RunWaitEnd::Dropped),
+    "the wait still holds"
+  );
+  assert!(desktop.standing()[0].1.holds(), "the run still waits for the person");
+  assert_eq!(desktop.db().messages(task).expect("messages").len(), before);
+
+  let sent = desktop.drop_wait(run.id(), Answerer::Person).expect("dropped");
   assert!(sent.is_some(), "the waiting agent is told");
   assert_eq!(desktop.ended(run.id()), Some(RunWaitEnd::Dropped));
   assert!(matches!(desktop.standing()[..], [(_, WaitState::Dropped { .. })]));
@@ -513,6 +526,6 @@ fn wait_on_task_stands_until_the_person_drops_a_wait_that_cannot_be_met() {
   let told = told.last().expect("a message to the agent");
   assert_eq!(told.run(), Some(run.id()));
   assert!(told.body().as_str().contains("ORC-2"), "{told:?}");
-  let refused = desktop.drop_wait(run.id()).expect_err("dropped once");
+  let refused = desktop.drop_wait(run.id(), Answerer::Person).expect_err("dropped once");
   assert_eq!(refused.key, "orchestrator.waitsOn.dropGone");
 }

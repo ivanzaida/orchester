@@ -50,12 +50,16 @@ struct Told {
 
 /// Drops `run`'s wait in project `open` at once, and lets the message that tells its agent so follow through `open`'s
 /// runner; what became of that message, `None` when the run waits on a plan and gets none. Refused once the run no
-/// longer waits on a task.
+/// longer waits on a task, and refused to automation (`by`): the drop is the person's, and its message goes as theirs.
 pub async fn drop_wait(
   (runners, servers): (&Runners, &Servers),
   open: &OpenProject,
   run: RunId,
+  by: Answerer,
 ) -> Result<Option<Sent>, Message> {
+  if by != Answerer::Person {
+    return Err(Message::new("orchestrator.waitsOn.onlyYou"));
+  }
   let root = open.repo_root.clone();
   let stored = background::run(move || store(&root, run)).await??;
   let Some(stored) = stored else {

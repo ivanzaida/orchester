@@ -15,12 +15,14 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
+    events::is_synthetic_input,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
   layout::Alignment,
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension, padding::Padding},
 };
+use orchester_core::run::Answerer;
 use orchester_workspace::{
   display,
   messages::Message,
@@ -182,9 +184,9 @@ pub struct WaitProps {
 
 impl DevtoolsInspectable for WaitProps {}
 
-/// The row, with the person's *Drop the wait*.
+/// The row, with the person's *Drop the wait*: a press made by automation is refused, and says so.
 pub struct WaitRow {
-  dropping: FutureAction<(), (), Message>,
+  dropping: FutureAction<Answerer, (), Message>,
 }
 
 impl Component for WaitRow {
@@ -193,10 +195,10 @@ impl Component for WaitRow {
   fn create(ctx: &mut Ctx) -> Self {
     let services = Services::of(ctx);
     let props = ctx.props::<WaitProps>().clone();
-    let dropping = ctx.future_action(move |()| {
+    let dropping = ctx.future_action(move |by: Answerer| {
       let (services, open, run) = (services.clone(), props.open.clone(), props.wait.run);
       async move {
-        drop_wait((&services.runners, &services.servers), &open, run).await?;
+        drop_wait((&services.runners, &services.servers), &open, run, by).await?;
         services.changes.record(open.project.id(), Outside::Tasks);
         Ok(())
       }
@@ -275,7 +277,7 @@ impl WaitRow {
     let dropping = self.dropping.clone();
     pressable(move || {
       if !dropping.state().get_untracked().is_pending() {
-        dropping.run(());
+        dropping.run(pressed_by());
       }
     })
     .id(format!("{}-drop", props.id))
@@ -286,6 +288,16 @@ impl WaitRow {
     .cursor(CursorIcon::Pointer)
     .child(Text::new(&label).variant(TypographyStyle::Button).color(color).nowrap())
     .into()
+  }
+}
+
+/// Who pressed *Drop the wait*: automation when the press came as synthetic input (an MCP client's), else the person.
+pub(in crate::screens) fn pressed_by() -> Answerer {
+  if is_synthetic_input() {
+    tracing::warn!("synthetic input reached Drop the wait; refused as automation's");
+    Answerer::Automation
+  } else {
+    Answerer::Person
   }
 }
 

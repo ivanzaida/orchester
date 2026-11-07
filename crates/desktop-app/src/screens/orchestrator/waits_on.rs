@@ -13,7 +13,7 @@ use lurq::{
   },
   node::Element,
 };
-use orchester_core::{id::ProjectId, orchestrator::WaitsOnRow, time::Timestamp};
+use orchester_core::{id::ProjectId, orchestrator::WaitsOnRow, run::Answerer, time::Timestamp};
 use orchester_workspace::{
   display,
   messages::Message,
@@ -29,6 +29,7 @@ use super::line::{Line, LineLink, Tone};
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route, TaskTab, TaskView},
+  screens::task::waits_on::pressed_by,
   services::Services,
   ui::{icon::Icon, message::message_text, pressable::Press},
 };
@@ -50,9 +51,9 @@ pub(super) struct WaitsOnProps {
 
 impl DevtoolsInspectable for WaitsOnProps {}
 
-/// The row, with the person's *Drop the wait*.
+/// The row, with the person's *Drop the wait*: a press made by automation is refused, and says so.
 pub(super) struct WaitsOnLine {
-  dropping: FutureAction<(), (), Message>,
+  dropping: FutureAction<Answerer, (), Message>,
 }
 
 impl Component for WaitsOnLine {
@@ -61,10 +62,10 @@ impl Component for WaitsOnLine {
   fn create(ctx: &mut Ctx) -> Self {
     let services = Services::of(ctx);
     let props = ctx.props::<WaitsOnProps>().clone();
-    let dropping = ctx.future_action(move |()| {
+    let dropping = ctx.future_action(move |by: Answerer| {
       let (services, open, run) = (services.clone(), props.open.clone(), props.row.run);
       async move {
-        drop_wait((&services.runners, &services.servers), &open, run).await?;
+        drop_wait((&services.runners, &services.servers), &open, run, by).await?;
         services.changes.record(open.project.id(), Outside::Tasks);
         Ok(())
       }
@@ -87,7 +88,7 @@ impl Component for WaitsOnLine {
         });
         let press = Press::run(move || {
           if !dropping.state().get_untracked().is_pending() {
-            dropping.run(());
+            dropping.run(pressed_by());
           }
         });
         // A wait nothing else will end offers it always; one that waits, under the pointer (`lguJb`).

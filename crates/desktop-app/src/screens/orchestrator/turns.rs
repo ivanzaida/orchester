@@ -99,8 +99,8 @@ pub(super) struct Turn {
   pub(super) report: Option<Box<DailyReport>>,
   /// The end of a subscription that ended by itself, whose line opens the row instead of a person's message.
   pub(super) watch_ended: Option<Box<WatchSummary>>,
-  /// An event that is the whole row: a compaction of the session (`super::compaction`), or where a rewind went back
-  /// to (`super::rewind::line`).
+  /// An event that is the whole row: a compaction of the session (`super::compaction`), where a rewind went back to
+  /// (`super::rewind::line`), or a watch command or line (`super::watch`).
   pub(super) compaction: Option<ChatEvent>,
   /// Its entry in the conversation; `None` while it is being sent.
   seq: Option<i64>,
@@ -314,8 +314,9 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
 
 /// The row `entry` of `shown` opens by itself: a wait of an agent, a daily report or a subscription that ended by
 /// itself, with the turn it started, if any; and a compaction (`06b` `j7eSQO`), where a rewind went back to (`10`
-/// `Zm7kq`), a fork's first line and what its original made after it (`11` `RT5T7`), each a row between the turns.
-/// `None` for an entry that is a person's message or part of an answer.
+/// `Zm7kq`), a fork's first line and what its original made after it (`11` `RT5T7`), and the person's watch command
+/// and the lines about what the conversation watches (`super::watch`), each a row between the turns, which started
+/// none. `None` for an entry that is a person's message or part of an answer.
 fn own_row(entry: &ChatEntry, shown: &ChatView) -> Option<Turn> {
   Some(match &entry.kind {
     EntryKind::Wait { wait, turn } => Turn {
@@ -337,7 +338,9 @@ fn own_row(entry: &ChatEntry, shown: &ChatView) -> Option<Turn> {
       event @ (ChatEvent::Compaction { .. }
       | ChatEvent::Rewound { .. }
       | ChatEvent::Forked { .. }
-      | ChatEvent::MadeInOriginal { .. }),
+      | ChatEvent::MadeInOriginal { .. }
+      | ChatEvent::WatchCommand { .. }
+      | ChatEvent::Watch { .. }),
     ) => Turn {
       compaction: Some(event.clone()),
       ..Turn::opened(entry, None)
