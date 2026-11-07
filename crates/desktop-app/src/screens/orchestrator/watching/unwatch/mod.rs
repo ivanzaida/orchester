@@ -1,11 +1,12 @@
-//! `/unwatch` (ORC-774, `Parts · /unwatch` `NtsXc` in `Orchestrator watch · redesign`): *Stop watching* in the slash
-//! menu, offered while the conversation leads something. Chosen, it becomes the composer's command chip and opens its
-//! picker ([`panel`]), which lists only what this conversation watches, each with what is still open there, then *All
-//! of them*. Enter adds the focused row as a chip; Ctrl Enter (Cmd Enter) stops the chips' subscriptions at once
-//! (`orchester_workspace::orchestrator::watch::stop_in`, kept as the person's `/unwatch` with its stop line), off the
-//! UI thread and with no agent turn; *All of them* among the chips stops everything here. It cancels and pauses
-//! nothing. The words typed after the chips only filter the picker. The picker follows what the screen last read the
-//! conversation to lead.
+//! `/unwatch` (ORC-774, `Parts · /unwatch` `NtsXc` in `Orchestrator watch · redesign`; its picker v2 as `P1` `QXPDY`,
+//! ORC-889): *Stop watching* in the slash menu, offered while the conversation leads something. Chosen, it becomes the
+//! composer's command chip and opens its picker ([`panel`]), which lists only what this conversation watches whose
+//! name holds the words typed in its own search, each with what is still open there, then *All of them*. Enter adds
+//! the focused row as a chip and closes the picker, Shift Enter adds it and keeps it open; Ctrl Enter (Cmd Enter) stops
+//! the chips' subscriptions at once (`orchester_workspace::orchestrator::watch::stop_in`, kept as the person's
+//! `/unwatch` with its stop line), off the UI thread and with no agent turn; *All of them* among the chips stops
+//! everything here. It cancels and pauses nothing. The picker follows what the screen last read the conversation to
+//! lead.
 
 mod panel;
 
@@ -100,13 +101,13 @@ impl ArgumentPicker for UnwatchPicker {
       Some(Read::Failed(why)) => {
         return Offer {
           rows: Vec::new(),
-          panel: panel::unshown(ctx, asked.id, Some(&why)),
+          panel: panel::unshown(ctx, (asked.id, asked.search), Some(&why)),
         };
       }
       Some(Read::Loading) | None => {
         return Offer {
           rows: Vec::new(),
-          panel: panel::unshown(ctx, asked.id, None),
+          panel: panel::unshown(ctx, (asked.id, asked.search), None),
         };
       }
     };
@@ -129,18 +130,16 @@ impl ArgumentPicker for UnwatchPicker {
       .chain([&all])
       .map(|choice| (choice.clone(), !taken.contains(&choice.key)))
       .collect();
-    let panel = panel::panel(
-      ctx,
-      &Shown {
-        id: asked.id,
-        filter,
-        offered: &offered,
-        all: &all,
-        taken: &taken,
-        focused: asked.focused,
-        total: watching.subscriptions.len(),
-      },
-    );
+    let shown = Shown {
+      id: asked.id,
+      filter,
+      offered: &offered,
+      all: &all,
+      taken: &taken,
+      focused: asked.focused,
+      total: watching.subscriptions.len(),
+    };
+    let panel = panel::panel(ctx, &shown, asked.search);
     Offer { rows, panel }
   }
 }

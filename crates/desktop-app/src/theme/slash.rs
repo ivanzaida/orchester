@@ -32,10 +32,13 @@ pub enum SlashText {
   SkillMatch,
   /// Geist Mono 11 `text_secondary`, 1.3: a skill chip's name (`LTjMB` in `o6R6w`).
   Chip,
+  /// 12.5 `text_primary`, 1.3: the words typed in a command picker's own search, its placeholder in `text_muted`
+  /// (`slpmj` in `P1` `QXPDY`).
+  Search,
 }
 
 impl SlashText {
-  pub const ALL: [Self; 8] = [
+  pub const ALL: [Self; 9] = [
     Self::Section,
     Self::Note,
     Self::Label,
@@ -44,6 +47,7 @@ impl SlashText {
     Self::SkillLabel,
     Self::SkillMatch,
     Self::Chip,
+    Self::Search,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -60,6 +64,7 @@ impl SlashText {
       Self::SkillLabel => "slash_skill_label",
       Self::SkillMatch => "slash_skill_match",
       Self::Chip => "slash_chip",
+      Self::Search => "slash_search",
     }
   }
 
@@ -73,6 +78,7 @@ impl SlashText {
       Self::SkillLabel => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
       Self::SkillMatch => mono(style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary)),
       Self::Chip => mono(style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
+      Self::Search => style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
     }
   }
 }

@@ -9,7 +9,7 @@ use lurq::{
     scrollbar::{ScrollBarPlacement, ScrollBarStyle},
     text_style::{FontWeight, TextStyle},
   },
-  node::box_shadow::BoxShadow,
+  node::{box_shadow::BoxShadow, color::Color},
 };
 
 use super::{
@@ -328,6 +328,19 @@ pub fn picker_scrollbar(base: &ScrollBarStyle) -> ScrollBarStyle {
     track_radius: PICKER_SCROLLBAR_RADIUS,
     edge_inset: Some(0.0),
     end_inset: Some(PICKER_SCROLLBAR_END),
+    ..base.clone()
+  }
+}
+
+/// `base`, the theme's thin scrollbar (its 4 wide `border_strong` thumb, round), as a /watch picker's list draws it
+/// (`Scrollbar` `PtKK6` in `P1` `QXPDY`): in a lane of its own at the list's end, the whole list high, on a `track`
+/// (`hover`) of its own.
+pub fn watch_list_scrollbar(base: &ScrollBarStyle, track: Color) -> ScrollBarStyle {
+  ScrollBarStyle {
+    track_color: track,
+    edge_inset: Some(0.0),
+    end_inset: Some(0.0),
+    placement: ScrollBarPlacement::Reserved,
     ..base.clone()
   }
 }

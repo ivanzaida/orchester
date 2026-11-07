@@ -15,11 +15,14 @@ mod menu;
 mod rows;
 mod skills;
 
-use std::{ops::Range, sync::Arc};
+use std::{
+  ops::Range,
+  sync::{Arc, atomic::AtomicBool},
+};
 
 use lurq::{
   app::{ctx::Ctx, events::KeyboardEvent},
-  core::Signal,
+  core::{ElementRef, Signal},
 };
 use orchester_core::id::ResourceId;
 use orchester_workspace::skills::offered::OfferedSkill;
@@ -27,7 +30,7 @@ use parking_lot::Mutex;
 
 use self::argument::Arguing;
 pub use self::{
-  argument::{Applied, Apply, ArgumentPicker, Asked, Choice, Offer, Taking},
+  argument::{Applied, Apply, ArgumentPicker, Asked, Choice, Offer, PickerSearch, Taking},
   chip::{SkillReach, plan_held, sent_chip, sent_command_chip, sent_skill_chip, with_chips},
   menu::{SlashMenuProps, menu},
   skills::SkillsOffer,
@@ -104,6 +107,12 @@ pub struct SlashField {
   /// The picker's row with the keyboard's focus, and the rows it shows now.
   choice_focus: Signal<Option<usize>>,
   offered_choices: Arc<Mutex<Option<argument::Offered>>>,
+  /// The words typed in the picker's own search field, which filter it.
+  search: Signal<String>,
+  /// The composer's input, which takes the focus back once the picker closes by its keys.
+  input: Option<ElementRef>,
+  /// The picker closed by its keys: the input takes the focus back on the menu's next pass.
+  refocus: Arc<AtomicBool>,
 }
 
 impl PartialEq for SlashField {
@@ -132,17 +141,33 @@ impl SlashField {
       taking: Arc::default(),
       choice_focus: ctx.signal(None),
       offered_choices: Arc::default(),
+      search: ctx.signal(String::new()),
+      input: None,
+      refocus: Arc::default(),
     }
   }
 
+  /// The composer's input `input` takes the focus back when a picker closes by its keys: the picker's own search held
+  /// it.
+  pub fn returns_focus_to(mut self, input: ElementRef) -> Self {
+    self.input = Some(input);
+    self
+  }
+
   /// Takes `event` when the open menu, or the command the chip holds, has a use for it, before the field's own keys:
-  /// whether it did.
+  /// whether it did. An open picker takes its keys wherever the focus is: its own search field holds it.
   pub fn key(&self, event: &KeyboardEvent) -> bool {
-    if event.composing || event.default_prevented() || !self.focused.get_untracked() {
+    if event.composing || event.default_prevented() {
       return false;
     }
     if let Some(held) = self.argument.get_untracked() {
-      return self.argument_key(event, &held);
+      if held.picking {
+        return self.picker_key(event);
+      }
+      return self.focused.get_untracked() && self.argument_key(event);
+    }
+    if !self.focused.get_untracked() {
+      return false;
     }
     let Some(shown) = self.shown.lock().clone() else {
       return false;
