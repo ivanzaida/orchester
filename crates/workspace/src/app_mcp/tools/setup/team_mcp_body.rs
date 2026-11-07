@@ -51,10 +51,12 @@ pub(super) fn widenings(before: &TeamMcpServer, after: &TeamMcpServer) -> Vec<Me
     .into_iter()
     .map(|widening| match (widening, before.launch(), after.launch()) {
       (VersionWidening::Command(_), TeamMcpLaunch::Program(was), TeamMcpLaunch::Program(now)) => {
-        if was.program() == now.program() {
-          Message::new("appMcp.widens.mcpArguments")
-        } else {
+        if was.program() != now.program() {
           Message::new("appMcp.widens.mcpProgram").with("program", now.program().as_str().to_owned())
+        } else if was.working_directory() != now.working_directory() && was.args() == now.args() {
+          Message::new("appMcp.widens.mcpFolder")
+        } else {
+          Message::new("appMcp.widens.mcpArguments")
         }
       }
       (VersionWidening::Address, _, TeamMcpLaunch::Remote(now)) => {
@@ -70,6 +72,8 @@ pub(super) fn widenings(before: &TeamMcpServer, after: &TeamMcpServer) -> Vec<Me
           .collect();
         Message::new("appMcp.widens.mcpExemptTools").with("tools", added.join(", "))
       }
+      (VersionWidening::Secret, ..) => Message::new("appMcp.widens.mcpNeedsValue"),
+      // A launch switched between a program and a remote server, or a widening core adds later: said whole.
       _ => Message::new("appMcp.widens.teamMcpServer").with("server", server()),
     })
     .collect()

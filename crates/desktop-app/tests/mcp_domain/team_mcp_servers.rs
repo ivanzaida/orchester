@@ -174,11 +174,14 @@ fn domain_team_mcp_server_update_publishes_the_next_version_when_it_changes_some
   assert_eq!(same["unchanged"], true, "{same}");
   assert_eq!(latest(&team), 1);
 
-  // Dropping nothing and adding variable names widens nothing, so it is taken, kept here as v2 and, with no team
-  // server to number it, waits to be sent.
-  let named = team
-    .served
-    .ok("update_mcp_server", &change(json!({ "variable_names": ["TOKEN"] })));
+  // A variable is a team secret the server was not given, which widens: a person's, until automation may widen.
+  let secret = change(json!({ "variable_names": ["TOKEN"] }));
+  assert_eq!(team.served.refused("update_mcp_server", &secret)["code"], "person_only");
+  assert_eq!(latest(&team), 1, "a refused change publishes nothing");
+
+  // Allowed, it is taken, kept here as v2 and, with no team server to number it, waits to be sent.
+  team.served.let_automation_widen(true);
+  let named = team.served.ok("update_mcp_server", &secret);
   assert_eq!(named["server"]["published_version"], 2, "{named}");
   assert_eq!(named["server"]["launch"]["variable_names"], json!(["TOKEN"]), "{named}");
   assert_eq!(
@@ -199,6 +202,7 @@ fn domain_team_mcp_server_update_publishes_the_next_version_when_it_changes_some
     .ok("update_mcp_server", &change(json!({ "name": "knowledge" })));
 
   // Another endpoint kind, a remote server where a program ran, widens.
+  team.served.let_automation_widen(false);
   let remote = change(json!({ "url": "https://mcp.example.org/x" }));
   assert_eq!(team.served.refused("update_mcp_server", &remote)["code"], "person_only");
   assert_eq!(latest(&team), 2, "a refused change publishes nothing");

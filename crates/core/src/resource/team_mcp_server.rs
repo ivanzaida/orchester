@@ -212,7 +212,9 @@ impl ResourceBody for TeamMcpServer {
 }
 
 /// A computer switches a server on itself, so a version widens only what an already switched-on server may do: it
-/// runs another program or reaches another address, or asks less.
+/// runs another program (or in another folder) or reaches another address, is given a team secret the previous version
+/// was not, sends a header another secret's value (or with another prefix), or asks less. Dropping any of these
+/// narrows.
 impl SharedBody for TeamMcpServer {
   fn widenings_over(&self, previous: Option<&Self>) -> Vec<VersionWidening> {
     let Some(previous) = previous else {
@@ -220,15 +222,19 @@ impl SharedBody for TeamMcpServer {
     };
     let mut widenings = Vec::new();
     let launch_changed = match (&self.launch, &previous.launch) {
-      (TeamMcpLaunch::Program(now), TeamMcpLaunch::Program(before)) => (now.program != before.program
-        || now.args != before.args)
-        .then_some(VersionWidening::Command(CommandWidening::Program)),
+      (TeamMcpLaunch::Program(now), TeamMcpLaunch::Program(before)) => {
+        (now.program != before.program || now.args != before.args || now.working_directory != before.working_directory)
+          .then_some(VersionWidening::Command(CommandWidening::Program))
+      }
       (TeamMcpLaunch::Remote(now), TeamMcpLaunch::Remote(before)) => {
         (now.url != before.url).then_some(VersionWidening::Address)
       }
       _ => Some(VersionWidening::McpServer),
     };
     widenings.extend(launch_changed);
+    if self.launch.secrets_beyond(&previous.launch) {
+      widenings.push(VersionWidening::Secret);
+    }
     if self
       .exempt_tools
       .tools()
@@ -238,6 +244,33 @@ impl SharedBody for TeamMcpServer {
       widenings.push(VersionWidening::Access);
     }
     widenings
+  }
+}
+
+impl TeamMcpLaunch {
+  fn secrets(&self) -> Vec<SecretName> {
+    match self {
+      Self::Program(program) => program.secrets(),
+      Self::Remote(remote) => remote.secrets(),
+    }
+  }
+
+  /// Whether this launch is given a team secret `before` was not, or sends a header of `before` another secret's value
+  /// or with another prefix. A launch of the other kind is given all of its own.
+  fn secrets_beyond(&self, before: &Self) -> bool {
+    let was = before.secrets();
+    if self.secrets().iter().any(|secret| !was.contains(secret)) {
+      return true;
+    }
+    let (Self::Remote(now), Self::Remote(before)) = (self, before) else {
+      return false;
+    };
+    now.secret_headers.iter().any(|header| {
+      before.secret_headers.iter().any(|old| {
+        old.header().as_str().eq_ignore_ascii_case(header.header().as_str())
+          && (old.secret() != header.secret() || old.prefix() != header.prefix())
+      })
+    })
   }
 }
 

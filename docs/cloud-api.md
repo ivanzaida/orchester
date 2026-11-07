@@ -83,19 +83,19 @@ both lists are empty when nothing uses the resource.
   the wrong kind is refused when published, not read here.
 - **`runs`**: the runs that have not ended and whose execution bundle pins any version of the resource, as the team
   server knows it from the bundle it built at `work.start` (`execution-bundles.md` of the platform): every pipeline,
-  agent profile, tool, instruction and skill version the bundle pins, and no other. A run uses an MCP server only
-  through the profile versions it pins. The execution bundle does not carry MCP servers yet (ORC-880; an
-  `ExecutionProfile` leaves them out), so today the team server lists no runs for an MCP server; once the bundle carries
-  the MCP server versions its profiles name, a run pins an MCP server when its bundle does. The desktop's own archive
-  already stops a run whose pinned profile version chooses the server (`pins` in
-  `crates/workspace/src/sharing/sync/archive.rs`), and its local list follows that rule. A team reviewer has no runs.
+  agent profile, tool, instruction, skill and MCP server version the bundle pins, and no other. A run uses an MCP
+  server only through the profile versions it pins, and the bundle (schema 3, below) pins the team MCP server versions
+  those profile versions name, by server resource id (`inputs.mcp_servers`, also in the bundle's `resources`), so a run
+  is listed for an MCP server when its bundle pins it. A bundle of schema 2 pins none, but such a bundle is no longer
+  built or read (see "Known limit" under *Current work only*). The desktop's own archive already stops a run whose
+  pinned profile version chooses the server (`pins` in `crates/workspace/src/sharing/sync/archive.rs`), and its local
+  list follows that rule. A team reviewer has no runs.
   - **When a run is listed**: the server learns a run id only from `work.report` (`WorkReport` carries `run_id`, no run
     number), so a run is listed from the first work report the server accepted for it, and its last accepted report
     decides: `progress` lists it; `succeeded`, `failed` (whatever its reason, `limit_reached` included) or `cancelled`
     ends it, and a run that resumes with `progress` after a `limit_reached` is listed again. Known limit: work that was
     started and has no accepted report yet is not listed. For a team project the list can therefore be narrower than
-    what a member's desktop stops on archive (a run with no report yet, a run paused at a limit, a run that uses an MCP
-    server). A run whose last accepted report is `progress` has not ended, nor has one that was interrupted or waits for
+    what a member's desktop stops on archive (a run with no report yet, a run paused at a limit). A run whose last accepted report is `progress` has not ended, nor has one that was interrupted or waits for
     a person on the desktop; a run whose runner stopped without a terminal report stays listed too: a stale claim
     (`stale_task_threshold`) does not end its run.
   - **Current work only**: runs are listed only for each task's current work, the latest work started under the
@@ -103,7 +103,7 @@ both lists are empty when nothing uses the resource.
     (`claim_lost`) and never accepts another report from it, so a run of a fenced earlier work could never end: it is
     not listed, since it can no longer report and the archive confirmation lists the runs that will stop. A released
     task (no claim) lists no runs. Known limit: a work whose bundle the server cannot read as the current schema (an
-    older schema-1 bundle) is not listed either, because its pins are not known; that does not fail the read.
+    older-schema bundle, schema 2 or before) is not listed either, because its pins are not known; that does not fail the read.
   - **Superseded**: within the current work, a run is superseded, and so has ended even when its own last report was
     `progress`, by a run whose first accepted work report came after the first accepted report of the run asked
     about, for the same work. Runs are ordered by the server's acceptance of their first report (the order of
@@ -128,12 +128,13 @@ both lists are empty when nothing uses the resource.
 The client call is `used_by`. The stand-in team server answers it from its own resources, applying the names-it rule
 above: the `TeamResource` references of every kind (a profile's MCP servers, tools, skills and instructions among them)
 and the body fields read with core's body types, and from the runs a test registers with `TeamServer::pin_run`: it
-builds no execution bundle, so the pins a test names stand in for the bundle's (an MCP server's id among them), a pinned
+builds no execution bundle, so the pins a test names stand in for the bundle's (an MCP server's id among them, as the
+bundle pins it), a pinned
 run is one whose first work report was accepted, and `last_report`, `work` (a task's highest pinned work is its current
 work, and a run of a lower work is fenced and not listed; within a work, a run pinned later supersedes the earlier ones,
 as the first accepted report orders them) and `claim_run_task` (a take-over, or a release, after which the task lists no
 runs) stand in for the accepted work reports and the task's claim. It lists whatever the pins name, an MCP server's id
-included, which a real bundle does not carry yet. It has no non-member, so that `404` is not exercised there.
+included. It has no non-member, so that `404` is not exercised there.
 
 `SharedVersion` is `{ resource, number, body, hash, references, based_on, published, widens }`, with `references` as the
 next section gives them.
@@ -246,7 +247,9 @@ for a step's profile and the integrator, `tool` for a tool step) in the same pro
 resource's latest version like a publish; older versions are history and are not checked for named ids.
 
 The desktop's local projects keep their local ids; this shape is the team body's. The execution bundle carries none
-of these ids either: its `bindings` hold `{resource_id, role, cli, model}` of each pinned profile (below).
+of these ids either: its `bindings` hold `{resource_id, role, cli, model}` of each pinned profile (below). The one
+exception is the profile's `mcp_servers`: a pinned team profile names the team MCP servers it uses by their server
+resource id, which are team resource ids and not a computer's, and the bundle pins those servers' versions (below).
 
 ## Team server MCP server resource
 
@@ -493,9 +496,10 @@ starts work under a claim and never accepts one a client wrote. Unknown fields a
 
 - `ExecutionBundle`, in this field order:
   `{schema_version,project_id,subject,claim_id,module_id,branch,base_commit,definition_revision,task_number,task,pipeline,profiles,permissions,limits,delivery,resources,files,skill_files,bindings,inputs}`.
-  `schema_version` is `EXECUTION_BUNDLE_SCHEMA` (2), as `BundleRef.schema_version` names it; a bundle of another
-  version is refused, with no compatibility shim (2 added `task_number` and the pinned versions' `label`, so a
-  desktop and a server on different versions refuse each other's bundles). `module_id`, `branch`
+  `schema_version` is `EXECUTION_BUNDLE_SCHEMA` (3), as `BundleRef.schema_version` names it; a bundle of another
+  version is refused, with no compatibility shim (2 added `task_number` and the pinned versions' `label`; 3 added the
+  pinned team MCP servers and a team profile's `mcp_servers`, so a desktop and a server on different versions refuse
+  each other's bundles, and a schema-2 bundle is refused as `Schema(2)`). `module_id`, `branch`
   and `base_commit` are S7's (below): the module the work is under, its module branch (`BranchName`) and the base
   branch's commit the work starts from (`CommitId`). `definition_revision` is the task's revision when the work
   started; `task_number` is the task's number in its project from 1 (the `7` of `ORC-7`, which names the run and its
@@ -504,23 +508,37 @@ starts work under a claim and never accepts one a client wrote. Unknown fields a
   `changes_or_report`: the task's own choice, else its pipeline's).
 - Derived from `inputs`, and refused on read when they differ: `pipeline` `{resource_id,version}`; `profiles`
   `[{role,resource_id,version}]`; `permissions` `[{step,permissions}]`, each agent step's profile permissions
-  narrowed by the step, in pipeline step order; `resources` `[{resource_id,version}]`, the pinned instructions, tools
-  and skills; `files` `[{sha256,size_bytes}]`, every file once; `skill_files`
+  narrowed by the step, in pipeline step order; `resources` `[{resource_id,version}]`, the pinned instructions, tools,
+  skills and team MCP servers; `files` `[{sha256,size_bytes}]`, every file once; `skill_files`
   `[{resource_id,files:[{path,sha256,size_bytes}]}]`. `version` is the published version number.
 - `bindings` `[{resource_id,role,cli,model}]`: one per pinned profile, with its role and model; `cli` is the agent
   provider (`codex_cli`, `claude_code_cli`, …) the executing computer runs it with. `resource_id` is the profile's
   server resource id; a binding holds no id of a computer's connection, MCP server or secret. Which account or
   connection runs it, and every path, stays on that computer.
-- `inputs` (`CanonicalExecutionInputs`): `{pipeline,steps,profiles,instructions,tools,skills}`, each pinned version
-  `{resource,version,number,label,body}` with its published body. `label` (`ResourceLabel`) is `{slug,name}`, the
+- `inputs` (`CanonicalExecutionInputs`): `{pipeline,steps,profiles,instructions,tools,skills,mcp_servers?}`, each
+  pinned version `{resource,version,number,label,body}` with its published body. `label` (`ResourceLabel`) is `{slug,name}`, the
   resource's slug and name as the pinned version had them, which prompts and skill folders name it by: the slug is
   1–64 lowercase letters, digits and single inner hyphens, the name is not blank and at most 200 characters; a
   malformed label is refused. `steps` are the run snapshot's `[{key,executor}]` in
   pipeline order. The pipeline body lists no sources, a profile body is
-  `{role,responsibilities,instructions,model,settings,permissions}` without its connection, MCP servers or writable
+  `{role,responsibilities,instructions,model,settings,permissions,mcp_servers?}` without its connection or writable
   folders, and a command tool never starts a program by an absolute path; such inputs are refused. Bodies name
   secrets by id today; the tool body names them by name (`secret_name`, above) once ORC-830 changes it.
-- Order: `steps` and `permissions` keep pipeline order; `profiles`, `bindings`, `resources`, `skill_files` and the
+- **MCP servers (schema 3).** `mcp_servers` are the team MCP servers the pinned profiles name, and exactly those: a
+  team profile's body lists them as `mcp_servers: [ResourceId]` (distinct, in the order the profile lists them; left
+  out while empty), and `inputs.mcp_servers` pins one version of each, `{resource,version,number,label,body}` with
+  `resource` the server's resource id and `body` core's `TeamMcpServer` as above (`{name,launch,exempt_tools?}`, which
+  the read refuses any other field of: no program path, no value of a variable or of a secret header, no connection,
+  no id of a computer). It is left out while empty. A profile that names a server the inputs do not pin, a pinned
+  server no profile names, a server pinned twice or a profile listing one twice is refused
+  (`BundleError::McpServerMissing`, `McpServersMismatch`, `Duplicate`). Which version of each server a bundle pins is
+  the server's choice when it builds the bundle (the latest published); `ExecutionProfile::of_team` carries the ids, and
+  `PinnedBodies.mcp_servers` the versions. A **local** run's inputs pin none and its profiles name none: a local
+  profile names the computer's own MCP servers, which are paths and values of that computer, and the computer binds
+  them itself (`ExecutionProfile::bound`); local inputs keep the same bytes and hash as before, and the stored run
+  inputs (format 2) read as before. The desktop binds a team server to this computer's program path, values and
+  switch-on state when it runs the profile (ORC-826).
+- Order: `steps` and `permissions` keep pipeline order; `profiles`, `bindings`, `resources`, `skill_files`, `mcp_servers` and the
   pinned versions are read in any order and kept in resource id order, `files` in hash order, a skill's files in path
   order.
 - Hash: the lowercase hex SHA-256 of the bundle's canonical bytes, its compact JSON as `serde_json` writes it with the
@@ -777,7 +795,8 @@ The desktop's team work (`orchester_workspace::team_work`) uses them so:
   start or of its bundle (`claim_lost`) is kept and starts nothing. A bundle that can never become the run's inputs
   here (it is not the one the receipt names, or the caller's bindings do not fit it) settles the start `failed`, kept
   with the reason; recovery carries each open start on its own, so one such start holds back no other.
-- **Inputs.** The task's number and each pinned version's label (`{slug,name}`) are the bundle's (schema 2); the
+- **Inputs.** The task's number and each pinned version's label (`{slug,name}`) are the bundle's (schema 2, with the
+  team MCP servers of schema 3); the
   start's caller supplies only the local bindings and consent, and each pinned profile must be bound to a connection
   of the CLI the bundle binds it to.
 - **Reports.** Each change of a team run's outcome (core's `ExecutionOutcome::of_status`) is queued once in

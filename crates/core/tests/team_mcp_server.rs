@@ -86,6 +86,75 @@ fn team_mcp_server_widens_when_it_runs_or_reaches_more() {
 }
 
 #[test]
+fn team_mcp_server_widens_with_a_secret_the_version_before_was_not_given() {
+  let remote = |headers: Value| {
+    parse(
+      json!({"name":"issues","launch":{"kind":"remote","url":"https://mcp.example.org/x","secret_headers":headers}}),
+    )
+    .expect("remote")
+  };
+  let program = |variables: Value| {
+    let mut body = program("npx");
+    body["launch"]["variables"] = variables;
+    parse(body).expect("program")
+  };
+
+  let key = |header: &str, secret: &str| json!({"header": header, "secret": secret});
+  let (one, two) = (
+    remote(json!([key("X-Key", "KEY")])),
+    remote(json!([key("X-Key", "KEY"), key("X-Other", "OTHER")])),
+  );
+  assert_eq!(widens(Some(&one), &two), vec![VersionWidening::Secret]);
+  assert!(widens(Some(&two), &one).is_empty(), "dropping a header narrows");
+  assert!(
+    widens(Some(&one), &remote(json!([key("x-key", "KEY")]))).is_empty(),
+    "header names ignore case"
+  );
+  assert_eq!(
+    widens(
+      Some(&two),
+      &remote(json!([key("X-Key", "OTHER"), key("X-Other", "OTHER")]))
+    ),
+    vec![VersionWidening::Secret],
+    "a header sent another secret's value widens"
+  );
+  assert_eq!(
+    widens(
+      Some(&one),
+      &remote(json!([{"header": "X-Key", "secret": "KEY", "prefix": "Bearer "}]))
+    ),
+    vec![VersionWidening::Secret],
+    "a header with another prefix widens"
+  );
+
+  let (token, both) = (program(json!(["TOKEN"])), program(json!(["TOKEN", "REGION"])));
+  assert_eq!(widens(Some(&token), &both), vec![VersionWidening::Secret]);
+  assert!(widens(Some(&both), &token).is_empty(), "dropping a variable narrows");
+  assert!(widens(Some(&token), &program(json!([]))).is_empty());
+
+  let moved = widens(Some(&token), &remote(json!([key("X-Key", "KEY")])));
+  assert!(moved.contains(&VersionWidening::McpServer) && moved.contains(&VersionWidening::Secret));
+  assert_eq!(
+    widens(Some(&token), &remote(json!([]))),
+    vec![VersionWidening::McpServer]
+  );
+}
+
+#[test]
+fn team_mcp_server_widens_when_its_program_starts_in_another_folder() {
+  let in_folder = |folder: Option<&str>| {
+    let mut body = program("npx");
+    if let Some(folder) = folder {
+      body["launch"]["working_directory"] = json!(folder);
+    }
+    parse(body).expect("program")
+  };
+  let (root, tools) = (in_folder(None), in_folder(Some("tools")));
+  assert!(matches!(widens(Some(&root), &tools)[..], [VersionWidening::Command(_)]));
+  assert!(widens(Some(&tools), &tools).is_empty());
+}
+
+#[test]
 fn team_mcp_server_refuses_a_url_with_a_query_or_a_fragment_without_naming_it() {
   for url in [
     "https://mcp.example.org/x?key=sk-live-123",

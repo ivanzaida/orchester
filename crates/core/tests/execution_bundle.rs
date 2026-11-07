@@ -183,6 +183,7 @@ impl Config {
       instructions: &instructions,
       tools: &tools,
       skills: &skills,
+      mcp_servers: &[],
       labels: &labels,
     };
     CanonicalExecutionInputs::pin(&self.snapshot(), bodies)
@@ -267,6 +268,7 @@ fn execution_bundle_inputs_pin_a_team_profile_as_the_local_one_it_came_from() {
     instructions: &listed(&config.instructions, false),
     tools: &listed(&config.tools, false),
     skills: &listed(&config.skills, false),
+    mcp_servers: &[],
     labels: &config.labels(),
   };
 
@@ -361,6 +363,7 @@ fn execution_bundle_inputs_label_each_pinned_version_as_it_was() {
     instructions: &listed(&config.instructions, false),
     tools: &listed(&config.tools, false),
     skills: &listed(&config.skills, false),
+    mcp_servers: &[],
     labels: &unlabelled,
   };
   let missing = CanonicalExecutionInputs::pin(&config.snapshot(), bodies);
@@ -543,6 +546,7 @@ fn execution_bundle_inputs_need_every_pinned_body_and_bounded_files() {
     instructions: &[],
     tools: &config.tools.values().cloned().collect::<Vec<_>>(),
     skills: &config.skills.values().cloned().collect::<Vec<_>>(),
+    mcp_servers: &[],
     labels: &config.labels(),
   };
   let missing = CanonicalExecutionInputs::pin(&config.snapshot(), bodies);
