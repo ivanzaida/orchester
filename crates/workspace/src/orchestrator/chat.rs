@@ -20,12 +20,16 @@ use orchester_core::{
 };
 use orchester_store::{ChatDeletion, ChatListing, ProjectDb};
 
+use super::watching::LeadCounts;
 use crate::messages::{self, Message};
 
-/// The project's conversations, archived ones too, the one with the latest entry first.
+/// The project's conversations, archived ones too, the one with the latest entry first, with what those that lead
+/// something lead (`i687ei` c: *Leads 2 modules, 1 task*).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct History {
   pub chats: Vec<ChatListing>,
+  /// What each conversation that leads something leads; one that leads nothing is not here.
+  pub leads: HashMap<ChatId, LeadCounts>,
 }
 
 impl History {
@@ -40,13 +44,31 @@ impl History {
     archived.sort_by_key(|listing| Reverse(listing.archived));
     archived
   }
+
+  /// What `chat` leads; empty when it leads nothing.
+  pub fn leads_of(&self, chat: ChatId) -> LeadCounts {
+    self.leads.get(&chat).copied().unwrap_or_default()
+  }
 }
 
-/// Every conversation of the project at `root`. Blocks on SQLite.
+/// Every conversation of the project at `root`, with what each leads through the subscriptions that lead their
+/// targets. Blocks on SQLite.
 pub fn history_in(root: &Path) -> Result<History, Message> {
+  let read = |db: ProjectDb| {
+    let chats = db.chats()?;
+    let subscriptions = db.active_subscriptions()?;
+    let leads = chats
+      .iter()
+      .map(|listing| {
+        let chat = listing.chat.id();
+        (chat, LeadCounts::of(subscriptions.of_chat(chat)))
+      })
+      .filter(|(_, counts)| !counts.is_empty())
+      .collect();
+    Ok(History { chats, leads })
+  };
   ProjectDb::open(root)
-    .and_then(|db| db.chats())
-    .map(|chats| History { chats })
+    .and_then(read)
     .map_err(|error| messages::store_error(&error))
 }
 
