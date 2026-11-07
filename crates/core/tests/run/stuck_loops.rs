@@ -108,6 +108,7 @@ fn stuck_loops_a_restart_keeps_the_persons_note() {
   let back = StuckDecision::ReturnTo {
     step: key("implement"),
     note: note.clone(),
+    profile: None,
   };
   logged.apply(|run| run.decide_stuck(&back, at(70)));
   fail(&mut logged, "implement", StepFailure::AgentFailed);

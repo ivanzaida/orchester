@@ -6,7 +6,10 @@
 
 use std::path::Path;
 
-use orchester_core::{id::RunId, run::Answerer};
+use orchester_core::{
+  id::{ResourceId, RunId},
+  run::Answerer,
+};
 use orchester_ipc::Command;
 use orchester_store::ProjectDb;
 
@@ -17,7 +20,7 @@ use crate::{
     detail::TaskDetail,
     resolve::{self, RunWorktrees},
     return_work,
-    review_threads::{ReviewRefusal, waiting},
+    review_threads::{ReviewRefusal, chosen, waiting},
     run::control_message,
   },
   workspace::OpenProject,
@@ -27,10 +30,16 @@ use crate::{
 /// its last merge attempt, to be handed to the runner with [`send`]. Refused while the run does not wait for review,
 /// when its last attempt found no conflicts that still stand, and as a return of its work is refused. The run's
 /// worktree is read through `worktrees`.
-pub fn begin(root: &Path, worktrees: &RunWorktrees, run: RunId) -> Result<Command, ReviewRefusal> {
+pub fn begin(
+  root: &Path,
+  worktrees: &RunWorktrees,
+  run: RunId,
+  profile: Option<ResourceId>,
+) -> Result<Command, ReviewRefusal> {
   let db = ProjectDb::open(root)?;
   let stored = waiting(&db, run)?;
   let conflicts = standing(&db, &stored)?.ok_or(ReviewRefusal::NoConflicts)?;
+  let chosen = chosen(&db, profile)?;
   drop(db);
   let detail = TaskDetail::load_in(root, stored.task())?;
   let view = detail
@@ -43,7 +52,8 @@ pub fn begin(root: &Path, worktrees: &RunWorktrees, run: RunId) -> Result<Comman
   if let Some(refusal) = return_work::refusal(&detail, view, &worktree) {
     return Err(ReviewRefusal::Returned(refusal));
   }
-  return_work::resolve_command(view, step, (&conflicts.files, None), Answerer::Person).ok_or(ReviewRefusal::NoConflicts)
+  return_work::resolve_command(view, step, (&conflicts.files, None), (chosen, Answerer::Person))
+    .ok_or(ReviewRefusal::NoConflicts)
 }
 
 /// Hands `command`, made by [`begin`], to the runner of `open`, starting it when the project has none. The refusal

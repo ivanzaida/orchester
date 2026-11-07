@@ -88,6 +88,7 @@ pub fn mark_of(run: &RunView, index: usize) -> Option<Mark> {
       return_to,
       note,
       conflicts,
+      ..
     } => MarkKind::ReturnedWithNote {
       to: name(return_to),
       note: note.as_str().into(),

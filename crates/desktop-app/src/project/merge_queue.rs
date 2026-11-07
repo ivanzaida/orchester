@@ -65,7 +65,7 @@ async fn drive(open: OpenProject, runners: Runners, programs: Programs) {
       Ok(Advance::Changed) => continue,
       Ok(Advance::Integrate { run, command }) => {
         let sent = runners
-          .control_run_in(&open, command)
+          .control_run_in(&open, *command)
           .await
           .map_err(|error| control_message(&error));
         let root = root.clone();

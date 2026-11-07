@@ -220,13 +220,18 @@ fn continued(run: &Run, step: orchester_core::resource::StepKey, base: &BranchNa
   match run.status() {
     RunStatus::WaitingForPerson(_) => Command::DecideStuckRun {
       run: run.id(),
-      decision: StuckDecision::ReturnTo { step, note },
+      decision: StuckDecision::ReturnTo {
+        step,
+        note,
+        profile: None,
+      },
     },
     _ => Command::ReturnRun(WorkReturn {
       run: run.id(),
       step,
       note,
       conflicts: None,
+      profile: None,
       by: Answerer::Person,
       expected: run.last_sequence(),
     }),

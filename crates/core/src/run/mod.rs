@@ -12,6 +12,7 @@ mod approval_mode;
 mod attempt;
 mod branch;
 pub mod bundle;
+mod chosen_profile;
 mod commit;
 mod completion;
 mod error;
@@ -66,6 +67,7 @@ pub use self::{
   approval_mode::{AllowAutopilot, AutopilotPersonOnly, EffectiveMode, ManualBecause, ManualSwitch},
   attempt::{Attempt, Checkpoint, StepExecution},
   branch::{BranchName, BranchNameError},
+  chosen_profile::ChosenProfile,
   commit::{CommitId, CommitIdError},
   completion::{CompletedBy, REPORT_ARTIFACT, RunArtifact, RunCompletion, UnknownCompleter, last_report, run_delivers},
   error::RunError,

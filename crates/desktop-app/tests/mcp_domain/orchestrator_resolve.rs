@@ -258,6 +258,7 @@ fn chat_resolution_applied_returns_the_work_as_ask_an_agent_does_as_the_persons(
     return_to,
     note,
     conflicts,
+    ..
   } = returned.attempts()[run.attempts().len()].reason().clone()
   else {
     panic!("a return after the run ended: {:?}", returned.attempts().last());

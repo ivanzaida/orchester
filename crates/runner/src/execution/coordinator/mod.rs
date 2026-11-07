@@ -15,6 +15,7 @@ pub(super) mod browser;
 #[cfg(feature = "test-agent")]
 pub(super) mod channel;
 pub(super) mod chat;
+mod chosen_profile;
 pub(super) mod conversation;
 pub(super) mod decision_test;
 pub(super) mod estimate;

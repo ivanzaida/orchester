@@ -178,6 +178,7 @@ fn review_list_a_run_sent_back_leaves_waiting_for_the_agent() {
     repo.root(),
     &RunWorktrees::here_for_test(repo.root(), Programs::processes()),
     repo.run,
+    None,
   )
   .expect("sending");
   send::sent(repo.root(), &sending, Ok(()), at(22)).expect("sent");

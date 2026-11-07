@@ -255,7 +255,7 @@ impl Repo {
     let note = ReviewNote::new("Merge main and resolve the conflicts.").expect("note");
     let implement = StepKey::new("implement").expect("key");
     let events = run
-      .return_ended(&implement, (&note, None), Answerer::Automation, at(finished - 3))
+      .return_ended(&implement, (&note, None), None, Answerer::Automation, at(finished - 3))
       .expect("returned");
     self.db.append_events(run, &events).expect("events");
     let worktree = self.worktree(run);
@@ -305,7 +305,7 @@ impl Repo {
       match self.advance() {
         Advance::Idle { .. } => return commands,
         Advance::Changed => {}
-        Advance::Integrate { command, .. } => commands.push(command),
+        Advance::Integrate { command, .. } => commands.push(*command),
       }
     }
     panic!("the queue never came to rest");

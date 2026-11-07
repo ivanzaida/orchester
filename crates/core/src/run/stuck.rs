@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
   attempt::StepExecution,
+  chosen_profile::ChosenProfile,
   error::RunError,
   event::{PlannedExecution, RunEvent, RunEventKind},
   plan::ReviewNote,
@@ -38,8 +39,14 @@ pub enum StuckDecision {
   /// have not passed run ([`AttemptReason::Accepted`]). `by`: a person, or automation a person let answer approvals.
   Accept { by: super::answer::Answerer },
   /// A new attempt from agent step `step` (one of [`Run::return_targets`]), whose prompt carries
-  /// `note` as the person's instruction.
-  ReturnTo { step: StepKey, note: ReviewNote },
+  /// `note` as the person's instruction. `profile`: the agent profile version that step runs with this time instead of
+  /// the snapshot's ([`Run::executing_agent`]).
+  ReturnTo {
+    step: StepKey,
+    note: ReviewNote,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    profile: Option<ChosenProfile>,
+  },
   /// The run fails, as it did before runs waited for a person.
   Stop,
 }
@@ -322,7 +329,11 @@ impl Run {
           (reason, return_to)
         }
       },
-      StuckDecision::ReturnTo { step: target, note } => {
+      StuckDecision::ReturnTo {
+        step: target,
+        note,
+        profile,
+      } => {
         if !self.return_targets().contains(target) {
           return Err(RunError::NotAReturnTarget(target.clone()));
         }
@@ -330,6 +341,7 @@ impl Run {
           failed_step: step,
           return_to: target.clone(),
           note: note.clone(),
+          profile: profile.clone(),
         };
         (reason, target.clone())
       }
@@ -416,6 +428,7 @@ impl Run {
         failed_step,
         return_to,
         note,
+        ..
       } => (failed_step, return_to, Some(note)),
       _ => return None,
     };

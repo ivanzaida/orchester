@@ -6,12 +6,17 @@
 mod support;
 
 use orchester_core::{
+  id::{ResourceId, VersionId},
   integration::{MergeKind, RunMerge},
+  resource::{ModelId, VersionNumber},
   revision::Revision,
-  run::{Answerer, AttemptReason, BranchName, MergeConflicts, ReviewNote, Run, RunStatus},
+  run::{
+    Answerer, AttemptReason, BranchName, ChosenProfile, MergeConflicts, PinnedVersion, ReviewNote, Run, RunStatus,
+  },
   store::{MergeStore, RunStore},
 };
 use orchester_store::{ProjectDb, ResolutionStart, RunStoreError, StoreError};
+use rusqlite::Connection;
 
 use self::support::{at, copied_at_version, started_run};
 
@@ -51,7 +56,7 @@ fn returned_after_end_is_stored_with_its_note_and_conflicts() {
   let (repo, mut db, mut run) = succeeded();
   let step = run.ended_return_targets().remove(0);
   let events = run
-    .return_ended(&step, (&note(), Some(&conflicts())), Answerer::Person, at(20))
+    .return_ended(&step, (&note(), Some(&conflicts())), None, Answerer::Person, at(20))
     .expect("returned");
   db.append_events(&run, &events).expect("append");
   let reopened = ProjectDb::open(repo.path()).expect("open");
@@ -63,6 +68,7 @@ fn returned_after_end_is_stored_with_its_note_and_conflicts() {
       return_to: step,
       note: note(),
       conflicts: Some(conflicts()),
+      profile: None,
     }
   );
 }
@@ -74,7 +80,7 @@ fn returned_after_end_is_refused_for_a_merged_run() {
   let before = db.run(run.id()).expect("read").expect("run");
   let step = run.ended_return_targets().remove(0);
   let events = run
-    .return_ended(&step, (&note(), None), Answerer::Person, at(20))
+    .return_ended(&step, (&note(), None), None, Answerer::Person, at(20))
     .expect("the run allows it");
   assert!(matches!(
     db.append_events(&run, &events),
@@ -94,7 +100,7 @@ fn returned_after_end_a_resolution_holds_the_run_back_and_its_merge() {
   let step = run.ended_return_targets().remove(0);
   let mut returned = run.clone();
   let events = returned
-    .return_ended(&step, (&note(), None), Answerer::Person, at(21))
+    .return_ended(&step, (&note(), None), None, Answerer::Person, at(21))
     .expect("the run allows it");
   assert!(matches!(
     db.append_events(&returned, &events),
@@ -107,7 +113,7 @@ fn returned_after_end_a_resolution_holds_the_run_back_and_its_merge() {
   db.end_resolution(run.id()).expect("end");
   assert_eq!(db.resolution(run.id()).expect("read"), None);
   let events = run
-    .return_ended(&step, (&note(), None), Answerer::Person, at(22))
+    .return_ended(&step, (&note(), None), None, Answerer::Person, at(22))
     .expect("returned");
   db.append_events(&run, &events)
     .expect("the run continues once the merge in its worktree ended");
@@ -152,7 +158,7 @@ fn returned_after_end_a_reopened_run_that_ended_otherwise_is_not_merged() {
   let (_repo, mut db, mut run) = succeeded();
   let step = run.ended_return_targets().remove(0);
   let events = run
-    .return_ended(&step, (&note(), None), Answerer::Person, at(20))
+    .return_ended(&step, (&note(), None), None, Answerer::Person, at(20))
     .expect("returned");
   db.append_events(&run, &events).expect("reopened");
   let events = run.cancel(at(21)).expect("cancelled");
@@ -186,4 +192,91 @@ fn returned_after_end_migration_keeps_the_attempts() {
   let old = copied_at_version(&current, latest - 2);
   let upgraded = ProjectDb::open(old.path()).expect("migrate");
   assert_eq!(upgraded.run(run.id()).expect("read").expect("the run"), run);
+}
+
+fn chosen() -> ChosenProfile {
+  ChosenProfile {
+    profile: PinnedVersion {
+      resource: ResourceId::generate(),
+      version: VersionId::generate(),
+      number: VersionNumber::new(std::num::NonZeroU32::new(3).expect("positive")),
+    },
+    model: ModelId::new("model-chosen").expect("model"),
+  }
+}
+
+/// The profile version and model each execution of the run's attempts is recorded with, in order.
+fn recorded_agents(repo: &std::path::Path) -> Vec<(Option<String>, Option<String>)> {
+  let raw = Connection::open(repo.join(".orchester/orchester.db")).expect("open");
+  let mut statement = raw
+    .prepare("SELECT profile_version_id, model FROM step_executions ORDER BY rowid")
+    .expect("prepare");
+  statement
+    .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+    .expect("query")
+    .collect::<Result<_, _>>()
+    .expect("rows")
+}
+
+#[test]
+fn returned_with_a_chosen_profile_is_stored_and_the_history_records_the_profile_that_ran() {
+  let (repo, mut db, mut run) = succeeded();
+  let step = run.ended_return_targets().remove(0);
+  let chosen = chosen();
+  let events = run
+    .return_ended(&step, (&note(), None), Some(chosen.clone()), Answerer::Person, at(20))
+    .expect("returned");
+  db.append_events(&run, &events).expect("append");
+  let stored = ProjectDb::open(repo.path())
+    .expect("open")
+    .run(run.id())
+    .expect("read")
+    .expect("the run");
+  assert_eq!(stored, run);
+  assert!(matches!(
+    stored.current_attempt().expect("attempt").reason(),
+    AttemptReason::ReturnedAfterEnd { profile: Some(kept), .. } if *kept == chosen
+  ));
+  let agents = recorded_agents(repo.path());
+  assert_eq!(agents.len(), 2, "the first run of the step and its return");
+  assert_eq!(
+    agents[0].1.as_deref(),
+    Some("gpt-5.5"),
+    "the pipeline's agent ran first"
+  );
+  assert_eq!(
+    agents[1],
+    (
+      Some(chosen.profile.version.to_string()),
+      Some("model-chosen".to_owned())
+    ),
+    "the history names the profile that ran the return"
+  );
+  assert_ne!(agents[0].0, agents[1].0);
+}
+
+#[test]
+fn a_return_recorded_before_profiles_could_be_chosen_reads_as_having_none() {
+  let (repo, mut db, mut run) = succeeded();
+  let step = run.ended_return_targets().remove(0);
+  let events = run
+    .return_ended(&step, (&note(), None), None, Answerer::Person, at(20))
+    .expect("returned");
+  db.append_events(&run, &events).expect("append");
+  let raw = Connection::open(repo.path().join(".orchester/orchester.db")).expect("open");
+  let unset: i64 = raw
+    .query_row("SELECT COUNT(*) FROM attempts WHERE profile IS NULL", [], |row| {
+      row.get(0)
+    })
+    .expect("count");
+  assert_eq!(unset, 2, "no attempt without a choice keeps one");
+  let stored = ProjectDb::open(repo.path())
+    .expect("open")
+    .run(run.id())
+    .expect("read")
+    .expect("the run");
+  assert!(matches!(
+    stored.current_attempt().expect("attempt").reason(),
+    AttemptReason::ReturnedAfterEnd { profile: None, .. }
+  ));
 }
