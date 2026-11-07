@@ -37,8 +37,8 @@ pub struct Applied {
   pub text: String,
 }
 
-/// What applying a command does.
-pub type Apply = Arc<dyn Fn(Applied) + Send + Sync>;
+/// What applying a command does, and whether it took it: a command refused keeps its chips and text.
+pub type Apply = Arc<dyn Fn(Applied) -> bool + Send + Sync>;
 
 /// What a picker is asked to show now.
 pub struct Asked<'a> {
@@ -162,21 +162,24 @@ impl SlashField {
     self.argument.set(Some(held));
   }
 
-  /// Applies the command the chip holds to its choices and the text after them; the chips and the text go.
+  /// Applies the command the chip holds to its choices and the text after them; once it took them, the chips and the
+  /// text go, and they stay when it refused.
   fn apply(&self) {
     let Some(held) = self.argument.get_untracked() else {
       return;
     };
-    let Some(taking) = self.taking.lock().take() else {
+    let Some(taking) = self.taking.lock().clone() else {
       return;
     };
     let text = self.draft.get_untracked().trim().to_owned();
-    self.drop_command();
-    self.draft.set(String::new());
-    (taking.apply)(Applied {
+    let took = (taking.apply)(Applied {
       choices: held.choices,
       text,
     });
+    if took {
+      self.drop_command();
+      self.draft.set(String::new());
+    }
   }
 
   /// Enter in the picker: its focused row, while it can be chosen and is not a chip yet, becomes the last chip, and

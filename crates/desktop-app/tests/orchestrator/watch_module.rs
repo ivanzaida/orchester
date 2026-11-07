@@ -4,6 +4,7 @@
 //! project, and the keys; Enter makes the focused module a chip, which then reads *Added*; the words typed filter the
 //! modules by name; Ctrl Enter has the conversation watch the chips with the words after them as their order.
 
+use lurq::app::events::with_synthetic_input;
 use orchester_app::routes::{OrchestratorChat, ProjectPage, Route};
 use orchester_core::{
   id::{ChatId, IdempotencyKey, ModuleId, TaskId},
@@ -240,4 +241,57 @@ fn orchestrator_watch_module_filters_by_name_and_ctrl_enter_watches_with_the_ord
   assert_eq!(led.chat(), here, "this conversation leads it");
   assert_eq!(led.order(), Some("Ask before merging."));
   screen.until("the chips to go", |screen| !screen.exists(CHIP));
+}
+
+#[test]
+fn orchestrator_watch_module_refuses_synthetic_ctrl_enter_and_keeps_the_chips_and_the_order() {
+  let Kontur {
+    mut screen,
+    here,
+    webhooks,
+    ..
+  } = kontur();
+  open_picker(&mut screen);
+  screen.until("the modules", |screen| screen.exists(&row(webhooks)));
+  screen.key(("Enter", "Enter"), false);
+  let chip = format!("orchestrator-composer-choice-{webhooks}");
+  screen.until("the chip", |screen| screen.exists(&chip));
+  screen.set(INPUT, "Ask before merging.");
+
+  with_synthetic_input(|| screen.key(("Enter", "Enter"), true));
+  let problem = "orchestrator-watch-problem";
+  screen.until("the person-only notice", |screen| {
+    screen.exists(problem) && screen.text(problem).contains("Only you can start watching")
+  });
+  assert!(
+    screen
+      .db()
+      .active_subscriptions()
+      .expect("read")
+      .of(WatchTarget::Module(webhooks))
+      .is_none(),
+    "synthetic input watches nothing"
+  );
+  assert!(screen.exists(CHIP) && screen.exists(&chip), "the chips stay");
+
+  // The person's own Ctrl Enter, back in the message field, applies what stayed, the order included.
+  screen
+    .window
+    .tree
+    .get_element_by_id_mut(INPUT)
+    .expect("the message field")
+    .focus();
+  screen.key(("Enter", "Enter"), true);
+  screen.until("the subscription", |screen| {
+    screen
+      .db()
+      .active_subscriptions()
+      .expect("read")
+      .of(WatchTarget::Module(webhooks))
+      .is_some()
+  });
+  let subscriptions = screen.db().active_subscriptions().expect("read");
+  let led = subscriptions.of(WatchTarget::Module(webhooks)).expect("led");
+  assert_eq!(led.chat(), here, "this conversation leads it");
+  assert_eq!(led.order(), Some("Ask before merging."), "the order stayed");
 }

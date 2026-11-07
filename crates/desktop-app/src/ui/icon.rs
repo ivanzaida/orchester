@@ -55,9 +55,9 @@ icons! {
   Binary => '\u{e1f2}',
   BookOpen => '\u{e05f}',
   Bot => '\u{e1bb}',
+  Boxes => '\u{e2d0}',
   // Also the design's `text-select`, which `lucide.ttf` has no glyph for (`wecdw`): the same dashed box.
   BoxSelect => '\u{e1cb}',
-  Boxes => '\u{e2d0}',
   Braces => '\u{e36a}',
   Brain => '\u{e3c6}',
   Calendar => '\u{e063}',

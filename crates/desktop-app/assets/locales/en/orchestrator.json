@@ -14,6 +14,23 @@
       "forkedToday": "· forked today {{time}}",
       "forkedOn": "· forked {{date}}"
     },
+    "leads": {
+      "label": "Leads",
+      "more": "+{{count}}",
+      "moreTip": "Also leads {{targets}}",
+      "stop": "Stop watching {{name}}",
+      "since": {
+        "today": "{{name}} · {{kind}} · since {{time}}",
+        "on": "{{name}} · {{kind}} · since {{date}}"
+      },
+      "order": {
+        "own": "“{{order}}”",
+        "projectDefault": "“{{order}}” · the project's default order",
+        "none": "No order of its own · your switches decide"
+      },
+      "hint": "× stops watching · /unwatch does the same",
+      "stopFailed": "Not stopped · {{reason}}"
+    },
     "export": {
       "what": "{{title}} · {{messages}} · {{when}}",
       "whatEmpty": "{{title}} · {{messages}}",
@@ -412,6 +429,7 @@
     },
     "watch": {
       "failed": "Nothing was watched",
+      "personOnly": "Only you can start watching from the composer: a command sent by automation is not applied. The chips and the order stay.",
       "dismiss": "Dismiss",
       "modules": {
         "placeholder": "Search modules — then write what to do with their events",
