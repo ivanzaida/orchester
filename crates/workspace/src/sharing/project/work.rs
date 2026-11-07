@@ -3,7 +3,8 @@
 //! every minute, the workflow statuses that could not be sent yet are tried again ([`super::automatic`]), one
 //! heartbeat request per server names the claims the person holds in the projects this computer shares there, what
 //! they lost is written to the cache, the claims of runs that ended are ended ([`super::claim_ends`]), and the work
-//! reports of team runs are sent ([`super::team_reports`]); a run change sends those reports at once too. The caches
+//! reports of team runs are sent ([`super::team_reports`]). A run change sends the workflow statuses and the work
+//! reports at once too, at most [`RUN_ROUNDS_PER_MINUTE`] times a minute; it does not end claims (ORC-896). The caches
 //! follow the servers through the streams ([`crate::sharing::sync`]), so nothing reads them every minute: a full read
 //! is left only for a person's request to sync now (*Check again*, *Try now*), which sends no heartbeat and so keeps to
 //! the server's limit of 12 heartbeats a minute.
@@ -38,16 +39,21 @@ const HEARTBEATS_PER_MINUTE: usize = 12;
 /// How long run changes settle before their workflow statuses are sent, so a burst of them sends
 /// once.
 const RUN_SETTLE: Duration = Duration::from_secs(1);
+/// The most rounds of sending after run changes in a minute: a running run changes on every event of its agent, and
+/// each round may ask a server (ORC-896).
+const RUN_ROUNDS_PER_MINUTE: u32 = 12;
 
 /// Runs until the window closes, as a task on the app runtime that `Root` starts and aborts when it
 /// drops. `runs` changes whenever a runner reports a run change: the workflow statuses runs reached
-/// are sent then, between the minute's heartbeats, and the claims of runs that ended are ended. Git,
-/// through `programs`, tells which runs a person merged without Orchester.
+/// are sent then, between the minute's heartbeats, and the work reports of team runs. The claims of runs that ended
+/// are ended by the minute's round alone. Git, through `programs`, tells which runs a person merged without
+/// Orchester.
 pub async fn run(servers: Servers, mut runs: watch::Receiver<u64>, programs: Programs) {
   let mut requests = servers.subscribe_sync();
   requests.borrow_and_update();
   let mut next_beat = tokio::time::Instant::now();
   let mut runs_open = true;
+  let mut next_round = tokio::time::Instant::now();
   loop {
     tokio::select! {
       () = sleep_until(next_beat) => {
@@ -67,9 +73,10 @@ pub async fn run(servers: Servers, mut runs: watch::Receiver<u64>, programs: Pro
           continue;
         }
         sleep(RUN_SETTLE).await;
+        sleep_until(next_round).await;
+        next_round = tokio::time::Instant::now() + INTERVAL / RUN_ROUNDS_PER_MINUTE;
         runs.borrow_and_update();
         servers.send_automatic_statuses().await;
-        servers.end_claims(&programs).await;
         servers.report_all_team_work().await;
       }
     }

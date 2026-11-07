@@ -6,9 +6,12 @@
 //! that asked for it after the run ended (Run again, before the runner records the new run) or on the person's other
 //! computer (the claim's `since`), is kept. This runs on every run change and every sync, so claims that ended before
 //! it existed end on the first sync too. The heartbeat names only the claims that are kept: one whose end the server
-//! did not take goes stale instead of staying fresh, and the next sync tries again. A merged run's claim is completed
-//! only once its Done went to the server ([`ProjectServer::send_automatic_status`]), which needs the claim held; a run
-//! git found merged before a merge of it was recorded here, or with none, has its Done recorded first (ORC-750).
+//! did not take goes stale instead of staying fresh, and the next sync tries again, unless the server answered `409
+//! Conflict`: it will not end that claim that way, so the end is not tried again for that run this session (ORC-896).
+//! A merged run's claim is completed only once its Done went to the server ([`ProjectServer::send_automatic_status`]),
+//! which needs the claim held; a run git found merged before a merge of it was recorded here, or with none, has its
+//! Done recorded first (ORC-750). A task whose latest run is a team run is left to its work reports
+//! ([`super::team_reports`]): it has no claim end and no heartbeat here.
 
 use std::{collections::HashMap, path::Path};
 
@@ -31,7 +34,7 @@ use crate::{
   tasks::{delivery, detail::run_store_error},
 };
 
-/// Why a claim whose run ended was not ended on the server; the next sync tries again.
+/// Why a claim whose run ended was not ended on the server; the next sync tries again, except after `409 Conflict`.
 #[derive(Debug, thiserror::Error)]
 pub enum ClaimEndError {
   /// The server has no run progress report: `PUT …/run` answered `404` or `405`, as a server older than the report
@@ -102,6 +105,8 @@ impl HeldClaims {
     let mut latest = Vec::new();
     for task in db.claims_held_by(me)? {
       match Latest::read(&db, task)? {
+        // A team run settles its claim through its work reports.
+        Some(run) if db.team_run(run.run.id())?.is_some() => {}
         Some(run) => latest.push(run),
         None => held.kept.push(task),
       }
@@ -207,6 +212,15 @@ fn settle(programs: &Programs, root: &Path, latest: &mut [Latest]) {
 }
 
 impl Servers {
+  /// Whether the server refused to end the claim of `task` for its run `run` with `409 Conflict` this session.
+  fn claim_end_refused(&self, task: TaskId, run: RunId) -> bool {
+    self.inner.refused_claim_ends.lock().contains(&(task, run))
+  }
+
+  fn refuse_claim_end(&self, task: TaskId, run: RunId) {
+    self.inner.refused_claim_ends.lock().insert((task, run));
+  }
+
   /// Ends the claims of runs that ended in every shared project of the workspace, e.g. right after a run changed.
   pub async fn end_claims(&self, programs: &Programs) {
     let servers = self.clone();
@@ -240,19 +254,35 @@ impl ProjectServer {
     let held = background::run(move || HeldClaims::read(&root, me, &asked, &programs)).await??;
     let mut ended = Vec::with_capacity(held.ending.len());
     for ending in held.ending {
+      if self.servers.claim_end_refused(ending.task, ending.run) {
+        continue;
+      }
       // Work that asked for the claim after its run ended, while the claims before it were ended, keeps it.
       if self.servers.work_asked().get(&ending.task) > Some(&ending.ended) {
         continue;
       }
-      let (task, end) = (ending.task, ending.end());
+      let (task, run, end) = (ending.task, ending.run, ending.end());
       let result = self.end_claim(ending).await;
       if let Err(error) = &result {
-        tracing::warn!(%error, %task, project = %self.link.project, ?end,
-          "the claim of a run that ended was not ended; the next sync tries again");
+        self.log_unended(error, (task, run), end);
       }
       ended.push(EndedClaim { task, end, result });
     }
     Ok(ended)
+  }
+
+  /// Logs a claim end the server did not take. A `409 Conflict` is the server's final answer for this run's claim: it
+  /// is remembered, so later syncs do not ask again, and logged once.
+  fn log_unended(&self, error: &ClaimEndError, (task, run): (TaskId, RunId), end: ClaimEnd) {
+    let project = self.link.project;
+    if matches!(error, ClaimEndError::Sharing(error) if error.code() == Some(ErrorCode::Conflict)) {
+      self.servers.refuse_claim_end(task, run);
+      tracing::warn!(%error, %task, %run, %project, ?end,
+        "the server refused to end the claim of a run that ended; it is not tried again this session");
+    } else {
+      tracing::warn!(%error, %task, %project, ?end,
+        "the claim of a run that ended was not ended; the next sync tries again");
+    }
   }
 
   async fn end_claim(&self, ending: Ending) -> Result<(), ClaimEndError> {
