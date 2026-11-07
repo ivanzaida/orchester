@@ -14,6 +14,7 @@
 
 mod actions;
 mod agent;
+mod approve;
 mod approved;
 mod composer;
 mod conflict;
@@ -401,9 +402,10 @@ impl ReviewScreen {
   }
 }
 
-/// Esc stops the answer under way, unless a text field has the key.
+/// Esc stops the answer under way, unless a text field has the key or a modal is open, which Esc closes instead.
 fn stop_on_escape(env: &Env) -> impl Fn(KeyboardEvent) + Send + Sync + 'static {
   let writes = env.writes.clone();
+  let modals = (env.state.approving.clone(), env.state.discarding.clone());
   let answering = env
     .review
     .threads
@@ -413,6 +415,9 @@ fn stop_on_escape(env: &Env) -> impl Fn(KeyboardEvent) + Send + Sync + 'static {
     .map(|view| view.thread.id());
   move |event: KeyboardEvent| {
     if event.key != "Escape" || event.default_prevented() || event.text_input_focused {
+      return;
+    }
+    if modals.0.get_untracked() || modals.1.get_untracked() {
       return;
     }
     if let Some(thread) = answering {

@@ -197,7 +197,7 @@ fn try_again(ctx: &Ctx, env: &Env) -> Element {
     return button.disabled().into();
   }
   let (writes, head) = (env.writes.clone(), env.head.clone());
-  button.on_click(move || writes.run(Write::Approve(head.clone()))).into()
+  button.on_click(move || writes.run(Write::Approve(head.clone(), Vec::new()))).into()
 }
 
 /// *Ask the agent to resolve*: sends the run back to Implement with the base merged in; unavailable without one.

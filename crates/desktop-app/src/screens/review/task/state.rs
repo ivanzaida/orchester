@@ -119,6 +119,8 @@ pub(super) struct ReviewState {
   pub written: Signal<u64>,
   /// *Discard* asks whether every comment not sent goes.
   pub discarding: Signal<bool>,
+  /// *Approve and merge* asks first, while comments wait unsent.
+  pub approving: Signal<bool>,
 }
 
 impl PartialEq for ReviewState {
@@ -148,6 +150,7 @@ impl ReviewState {
       failure: ctx.signal(None),
       written,
       discarding: ctx.signal(false),
+      approving: ctx.signal(false),
     }
   }
 

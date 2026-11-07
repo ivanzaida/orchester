@@ -26,6 +26,7 @@ use orchester_workspace::tasks::review_threads::failure_message;
 use super::{
   Env,
   actions::{Kept, Write},
+  approve,
   words::counted,
 };
 use crate::{
@@ -55,7 +56,7 @@ pub(super) fn tray(ctx: &mut Ctx, env: &Env) -> Option<Element> {
   if env.read_only {
     return None;
   }
-  let unsent = unsent(env);
+  let unsent: Vec<ReviewMessageId> = approve::unsent(env).into_iter().map(|comment| comment.id).collect();
   let sending = env
     .review
     .threads
@@ -124,17 +125,6 @@ pub(super) fn tray(ctx: &mut Ctx, env: &Env) -> Option<Element> {
       .child(discard_dialog(ctx, env, unsent))
       .into(),
   )
-}
-
-/// The comments not sent yet, of threads not resolved.
-fn unsent(env: &Env) -> Vec<ReviewMessageId> {
-  env
-    .review
-    .threads
-    .iter()
-    .filter(|view| view.thread.resolved_at().is_none())
-    .flat_map(|view| view.thread.unsent().map(|message| message.id()))
-    .collect()
 }
 
 /// The tray's glyph and its color, its title and the title's color, and what it says under it.

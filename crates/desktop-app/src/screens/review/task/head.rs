@@ -8,6 +8,7 @@
 //! merge*, and the status line tells how it merged.
 //! A merge that conflicts has no *Approve and merge* and no other strip: its line says *Conflicts with master*,
 //! approved, nothing merged and how many files conflict.
+//! While comments wait unsent, *Approve and merge* asks first in a modal ([`approve`]).
 
 use std::sync::Arc;
 
@@ -29,7 +30,7 @@ use orchester_workspace::{
   },
 };
 
-use super::{Env, actions::Write, agent::Working, approved, conflict, since::moved};
+use super::{Env, actions::Write, agent::Working, approve, approved, conflict, since::moved};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
@@ -50,13 +51,21 @@ pub(super) fn header(ctx: &mut Ctx, env: &Env) -> Element {
   if env.read_only || env.review.implement_at_work || env.page.conflicts.is_some() {
     return title(&env.page.run.title, vec![open.into()]);
   }
-  let approve = approve_button(ctx);
-  let (approve, reason) = match unavailable(ctx, env) {
-    Some(reason) => (approve.unavailable(reason.clone()), Some(reason)),
-    None if env.writes.busy() => (approve.disabled(), None),
+  let button = approve_button(ctx);
+  let (button, reason) = match unavailable(ctx, env) {
+    Some(reason) => (button.unavailable(reason.clone()), Some(reason)),
+    None if env.writes.busy() => (button.disabled(), None),
     None => {
       let (writes, head) = (env.writes.clone(), env.head.clone());
-      (approve.on_click(move || writes.run(Write::Approve(head.clone()))), None)
+      let (asking, waiting) = (env.state.approving.clone(), !approve::unsent(env).is_empty());
+      let press = move || {
+        if waiting {
+          asking.set(true);
+        } else {
+          writes.run(Write::Approve(head.clone(), Vec::new()));
+        }
+      };
+      (button.on_click(press), None)
     }
   };
   let mut actions: Vec<Element> = Vec::new();
@@ -66,7 +75,7 @@ pub(super) fn header(ctx: &mut Ctx, env: &Env) -> Element {
       .into()
   }));
   actions.push(open.into());
-  actions.push(approve.into());
+  actions.push(Row::new().child(button).child(approve::dialog(ctx, env)).into());
   title(&env.page.run.title, actions)
 }
 
