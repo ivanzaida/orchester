@@ -63,5 +63,6 @@ mod waits;
 mod waits_on;
 mod watch_lines;
 mod watch_module;
+mod watch_task;
 mod watching;
 mod while_answering;
