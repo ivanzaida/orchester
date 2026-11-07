@@ -7,6 +7,7 @@ use orchester_api::v2::{AuthorityError, AuthorityRef, EXECUTION_BUNDLE_SCHEMA, S
 use orchester_core::{
   id::{ModuleId, OperationId, RunId},
   run::{CommitId, inputs::TeamAcceptance},
+  secret::SecretVault,
   sharing::TaskRevision,
   task::identity::TeamTaskRef,
   time::Timestamp,
@@ -16,21 +17,24 @@ use orchester_store::{ProjectDb, StoreError, TeamOperationState, TeamSettlement,
 use serde::{Deserialize, Serialize};
 
 use super::{
-  Answer, StartChoices, TeamRunner, TeamWork, TeamWorkError,
+  Answer, TeamRunner, TeamWork, TeamWorkError,
   bundle::{self, Expected},
 };
 use crate::{
   actions::{Accepted, Action, ActionOutcome, Intent, Refusal, TeamOutcome, WorkAction, team_task},
+  readiness::{McpPrograms, MissingPart},
   runner::{RequestError, RunRequestError},
 };
 
 /// A start of a team task's work from the claim its caller holds: the work action under the intent's operation, and
-/// what the caller read and chose for the run.
+/// the program paths this computer has set for the team's MCP servers when the caller found the pipeline ready
+/// ([`crate::readiness::StartReadiness`]). The run takes the rest of what this computer filled in (the connection of
+/// each profile, which servers are on, the secrets' values by name) when the bundle is made into its inputs.
 #[derive(Clone, Debug)]
 pub struct TeamStartRequest {
   pub operation: OperationId,
   pub work: WorkAction,
-  pub choices: StartChoices,
+  pub programs: McpPrograms,
 }
 
 /// Where a start stands after it was carried on.
@@ -62,8 +66,14 @@ pub enum StartFailure {
   BundleUnreadable,
   /// The bundle the server answered, or one of its files, is not the one the receipt names or not built for the start.
   Bundle(String),
-  /// The accepted bundle with the caller's choices does not make the run's inputs here.
+  /// The accepted bundle does not make the run's inputs here.
   Inputs(String),
+  /// The versions the bundle pins need something this computer lacks (`not_ready_here`); nothing ran. The server made
+  /// the work for the start and the claim is still held; releasing them waits for ORC-885.
+  NotReadyHere {
+    pipeline: String,
+    missing: Vec<MissingPart>,
+  },
 }
 
 impl StartFailure {
@@ -76,7 +86,11 @@ impl StartFailure {
       }),
       TeamWorkError::BundleUnreadable => Some(Self::BundleUnreadable),
       TeamWorkError::BundleMismatch { .. } | TeamWorkError::BundleFile(_) => Some(Self::Bundle(error.to_string())),
-      TeamWorkError::Inputs(_) | TeamWorkError::BindingCli { .. } => Some(Self::Inputs(error.to_string())),
+      TeamWorkError::Inputs(_) => Some(Self::Inputs(error.to_string())),
+      TeamWorkError::NotReadyHere { pipeline, missing } => Some(Self::NotReadyHere {
+        pipeline: pipeline.clone(),
+        missing: missing.clone(),
+      }),
       _ => None,
     }
   }
@@ -85,7 +99,7 @@ impl StartFailure {
 /// Each open start's operation with where it stands after recovery, or why it could not be carried on now.
 pub type Recovered = Vec<(OperationId, Result<StartOutcome, TeamWorkError>)>;
 
-/// What a start keeps of its request: the work action, with the server's id of its task, and the caller's choices.
+/// What a start keeps of its request: the work action, with the server's id of its task, and the program paths.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct KeptStart {
@@ -94,7 +108,7 @@ struct KeptStart {
   read: TaskRevision,
   module: ModuleId,
   module_read: TaskRevision,
-  choices: StartChoices,
+  programs: McpPrograms,
 }
 
 impl KeptStart {
@@ -114,20 +128,21 @@ type Step = Result<TeamStart, StartOutcome>;
 
 impl<R: TeamRunner> TeamWork<R> {
   /// Starts the work `request` asks for: recorded here first, then carried on as far as it goes now. Sending the same
-  /// request again carries on the recorded start; the same operation with another request is refused.
-  pub async fn start(&self, request: TeamStartRequest) -> Result<StartOutcome, TeamWorkError> {
+  /// request again carries on the recorded start; the same operation with another request is refused. `vault` is
+  /// asked whether this computer has the team secrets the pinned MCP servers take, when the bundle is checked.
+  pub async fn start(&self, request: TeamStartRequest, vault: &dyn SecretVault) -> Result<StartOutcome, TeamWorkError> {
     let record = self.record(request)?;
-    self.carry_on(record).await
+    self.carry_on(record, vault).await
   }
 
   /// Carries on every start not settled yet, oldest first, e.g. after a restart. Each goes on its own: one that cannot
   /// be carried on now holds back none after it.
-  pub async fn recover(&self) -> Result<Recovered, TeamWorkError> {
+  pub async fn recover(&self, vault: &dyn SecretVault) -> Result<Recovered, TeamWorkError> {
     let open = self.db()?.open_team_starts()?;
     let mut outcomes = Vec::with_capacity(open.len());
     for start in open {
       let operation = start.operation;
-      outcomes.push((operation, self.carry_on(start).await));
+      outcomes.push((operation, self.carry_on(start, vault).await));
     }
     Ok(outcomes)
   }
@@ -152,20 +167,20 @@ impl<R: TeamRunner> TeamWork<R> {
       read: request.work.read,
       module: request.work.module,
       module_read: request.work.module_read,
-      choices: request.choices,
+      programs: request.programs,
     };
     // The kept start's types serialize to JSON without fail: they hold no map with non-string keys.
     let text = serde_json::to_string(&kept).expect("a team start serializes");
     Ok(db.begin_team_start((request.operation, local), &text, Timestamp::now())?)
   }
 
-  async fn carry_on(&self, mut record: TeamStart) -> Result<StartOutcome, TeamWorkError> {
+  async fn carry_on(&self, mut record: TeamStart, vault: &dyn SecretVault) -> Result<StartOutcome, TeamWorkError> {
     let kept: KeptStart =
       serde_json::from_str(&record.request).map_err(|_| TeamWorkError::Unreadable(record.operation))?;
     loop {
       let step = match record.stage {
         TeamStartStage::Requested => self.request_work(&record, &kept).await?,
-        TeamStartStage::Accepted => match self.keep_inputs(&record, kept.clone()).await {
+        TeamStartStage::Accepted => match self.keep_inputs(&record, kept.clone(), vault).await {
           Ok(step) => step,
           Err(error) => return self.fail(record.operation, error),
         },
@@ -222,7 +237,12 @@ impl<R: TeamRunner> TeamWork<R> {
 
   /// Reads the bundle the receipt named with every file it pins, checks them, and keeps them as the run's accepted
   /// inputs with the start's record.
-  async fn keep_inputs(&self, record: &TeamStart, kept: KeptStart) -> Result<Step, TeamWorkError> {
+  async fn keep_inputs(
+    &self,
+    record: &TeamStart,
+    kept: KeptStart,
+    vault: &dyn SecretVault,
+  ) -> Result<Step, TeamWorkError> {
     let operation = record.operation;
     let (work, sha256) = record.work.clone().ok_or(TeamWorkError::Unreadable(operation))?;
     let (link, session) = self.dispatcher.team(&self.db()?)?;
@@ -254,7 +274,7 @@ impl<R: TeamRunner> TeamWork<R> {
       bundle: sha256,
     };
     let mut db = self.db()?;
-    let inputs = bundle::inputs(&db, &fetched.bundle, acceptance, kept.choices)?;
+    let inputs = bundle::inputs((&db, vault), &fetched.bundle, acceptance, &kept.programs)?;
     db.store_team_start_inputs(operation, &inputs, &fetched.files, Timestamp::now())?;
     let stored = db
       .team_start(operation)?

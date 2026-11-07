@@ -35,9 +35,9 @@ async fn accepted() -> Accepted {
   let claim = checkout.claim(&server, MEMBER).await;
   let runner = StoreRunner::new(checkout.root(), &[]);
   let (work, generation) = checkout.work(&server, MEMBER, runner.clone());
-  let request = checkout.start_request(&server, claim, &config);
+  let request = checkout.start_request(&server, claim);
   server.drop_next_file();
-  let cut = work.start(request.clone()).await.expect("started");
+  let cut = work.start(request.clone(), checkout.vault()).await.expect("started");
   assert!(
     matches!(cut, StartOutcome::Waiting(TeamStartStage::Accepted)),
     "{cut:?}"
@@ -64,11 +64,23 @@ async fn assert_failed(held: &Accepted, outcome: StartOutcome, expected: &StartF
   assert_eq!(kept.stage, TeamStartStage::Failed);
   assert!(db.accepted_team_inputs(operation).expect("read").is_none());
   assert!(db.open_team_starts().expect("open").is_empty(), "nothing left open");
-  let StartOutcome::Failed(again) = held.work.start(held.request.clone()).await.expect("carried on") else {
+  let StartOutcome::Failed(again) = held
+    .work
+    .start(held.request.clone(), held.checkout.vault())
+    .await
+    .expect("carried on")
+  else {
     panic!("the failure is kept");
   };
   assert_eq!(&again, expected);
-  assert!(held.work.recover().await.expect("recovered").is_empty());
+  assert!(
+    held
+      .work
+      .recover(held.checkout.vault())
+      .await
+      .expect("recovered")
+      .is_empty()
+  );
   assert_eq!(held.runner.asked(), 0, "the runner was never asked");
 }
 
@@ -86,10 +98,10 @@ async fn team_work_bundle_schema_of_the_receipt_fails_the_start_before_the_bundl
   let claim = checkout.claim(&server, MEMBER).await;
   let runner = StoreRunner::new(checkout.root(), &[]);
   let (work, generation) = checkout.work(&server, MEMBER, runner.clone());
-  let request = checkout.start_request(&server, claim, &config);
+  let request = checkout.start_request(&server, claim);
 
   server.state().receipt_schema = Some(OLDER);
-  let outcome = work.start(request.clone()).await.expect("started");
+  let outcome = work.start(request.clone(), checkout.vault()).await.expect("started");
   let held = Accepted {
     server,
     checkout,
@@ -110,7 +122,11 @@ async fn team_work_bundle_schema_of_the_receipt_fails_the_start_before_the_bundl
 async fn team_work_bundle_schema_of_the_answered_bundle_fails_the_start() {
   let held = accepted().await;
   set_body(&held, |bundle| bundle["schema_version"] = json!(OLDER));
-  let outcome = held.work.start(held.request.clone()).await.expect("carried on");
+  let outcome = held
+    .work
+    .start(held.request.clone(), held.checkout.vault())
+    .await
+    .expect("carried on");
   let expected = StartFailure::BundleSchema {
     read: EXECUTION_BUNDLE_SCHEMA,
     built: OLDER,
@@ -124,7 +140,7 @@ async fn team_work_bundle_unreadable_json_fails_the_start_and_recovery_passes_it
   set_body(&held, |bundle| {
     *bundle = json!({"schema_version": EXECUTION_BUNDLE_SCHEMA})
   });
-  let recovered = held.work.recover().await.expect("recovered");
+  let recovered = held.work.recover(held.checkout.vault()).await.expect("recovered");
   assert_eq!(recovered.len(), 1, "one open start");
   let outcome = recovered.into_iter().next().expect("one").1.expect("carried on");
   assert_failed(&held, outcome, &StartFailure::BundleUnreadable).await;
@@ -134,14 +150,22 @@ async fn team_work_bundle_unreadable_json_fails_the_start_and_recovery_passes_it
 async fn team_work_bundle_unreachable_server_still_waits_at_the_boundary() {
   let held = accepted().await;
   held.server.set_down(true);
-  let down = held.work.start(held.request.clone()).await.expect("carried on");
+  let down = held
+    .work
+    .start(held.request.clone(), held.checkout.vault())
+    .await
+    .expect("carried on");
   assert!(
     matches!(down, StartOutcome::Waiting(TeamStartStage::Accepted)),
     "{down:?}"
   );
   assert_eq!(held.checkout.db().open_team_starts().expect("open").len(), 1);
   held.server.set_down(false);
-  let after = held.work.start(held.request.clone()).await.expect("carried on");
+  let after = held
+    .work
+    .start(held.request.clone(), held.checkout.vault())
+    .await
+    .expect("carried on");
   assert!(
     matches!(after, StartOutcome::RunnerUnavailable(_) | StartOutcome::Started(_)),
     "{after:?}"

@@ -45,10 +45,6 @@ pub struct RunTask {
   pub project: String,
   /// The task's key, e.g. `KON-12`, or its id.
   pub key: String,
-  /// A team task only: the local connection each agent profile of its pipeline runs on. A profile left out runs on
-  /// the only local agent connection of its CLI.
-  #[serde(default)]
-  pub bindings: Vec<team::Binding>,
 }
 
 /// How the task runs, decided from what is stored.
@@ -66,12 +62,7 @@ enum Start {
 
 pub async fn run_task(services: &Services, args: RunTask) -> Result<Value, ToolError> {
   if let Some(team) = team::of(services, &args.project).await? {
-    return team::run_task(services, &team, &args.key, &args.bindings).await;
-  }
-  if !args.bindings.is_empty() {
-    return Err(ToolError::InvalidArguments(
-      "`bindings` choose connections for a team task only".to_owned(),
-    ));
+    return team::run_task(services, &team, &args.key).await;
   }
   run_checked(services, args, None).await
 }
@@ -87,11 +78,7 @@ pub async fn run_proposed(
   if team::of(services, &project).await?.is_some() {
     return Err(team::team_only_on_server("run_task"));
   }
-  let args = RunTask {
-    project,
-    key,
-    bindings: Vec::new(),
-  };
+  let args = RunTask { project, key };
   run_checked(services, args, Some(basis)).await
 }
 

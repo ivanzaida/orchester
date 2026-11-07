@@ -23,6 +23,11 @@ fn name(value: &str) -> Name {
 
 /// Keeps `id` as one of the team's pipelines, named `slug`, with version 1 as the server confirmed it.
 pub(crate) fn team_pipeline(db: &mut ProjectDb, id: ResourceId, slug: &str) {
+  team_pipeline_running(db, id, slug, ResourceId::generate());
+}
+
+/// [`team_pipeline`] whose one step is run by the profile `profile`.
+pub(crate) fn team_pipeline_running(db: &mut ProjectDb, id: ResourceId, slug: &str, profile: ResourceId) {
   let now = Timestamp::now();
   let resource = Resource::new(
     id,
@@ -34,11 +39,7 @@ pub(crate) fn team_pipeline(db: &mut ProjectDb, id: ResourceId, slug: &str) {
   let revision = TaskRevision::try_from(1).expect("a revision");
   db.keep_shared_resource(&resource, revision)
     .expect("the team's pipeline");
-  cache(
-    db,
-    id,
-    crate::fixture::one_step(ResourceId::generate(), "Say hello.").body(),
-  );
+  cache(db, id, crate::fixture::one_step(profile, "Say hello.").body());
 }
 
 fn cache(db: &mut ProjectDb, id: ResourceId, body: &Pipeline) {

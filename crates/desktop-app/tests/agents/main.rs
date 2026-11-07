@@ -16,6 +16,7 @@ mod shared;
 mod states;
 #[path = "../support/mod.rs"]
 mod support;
+mod team_hub;
 mod usage;
 
 mod usage_navigation;
