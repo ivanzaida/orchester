@@ -95,6 +95,19 @@ pub trait SecretVault: Send + Sync {
   /// The value under `key`; [`VaultError::NotFound`] when there is none.
   fn read(&self, key: &VaultKey) -> Result<SecretValue, VaultError>;
 
+  /// Whether there is a value under `key`, without handing it over. Callers that only need to know a
+  /// value is there (readiness, which asks again whenever the hub refreshes) use this instead of
+  /// [`SecretVault::read`]: the OS keychain can ask the person to allow every read of a value, but
+  /// not a look at which items exist. The default reads the value and drops it, which is right for a
+  /// vault whose read asks nothing (memory); the OS keychain overrides it.
+  fn exists(&self, key: &VaultKey) -> Result<bool, VaultError> {
+    match self.read(key) {
+      Ok(_) => Ok(true),
+      Err(VaultError::NotFound) => Ok(false),
+      Err(error) => Err(error),
+    }
+  }
+
   /// Removes the value under `key`. A key without a value is not an error, so removing twice
   /// succeeds.
   fn delete(&self, key: &VaultKey) -> Result<(), VaultError>;

@@ -28,6 +28,16 @@ pub(crate) fn read(entry: keyring_core::Result<Entry>) -> Result<SecretValue, Va
   SecretValue::new(text).map_err(|_| VaultError::Failed("a stored value is blank".to_owned()))
 }
 
+/// Whether the credential `entry` names exists, asked through its attributes (Windows; the macOS check is a search).
+#[cfg(windows)]
+pub(crate) fn exists_by_attributes(entry: keyring_core::Result<Entry>) -> Result<bool, VaultError> {
+  match entry.and_then(|entry| entry.get_attributes()) {
+    Ok(_) => Ok(true),
+    Err(Error::NoEntry) => Ok(false),
+    Err(error) => Err(vault_error(error)),
+  }
+}
+
 /// Removes the credential `entry` names; one that does not exist is already removed.
 pub(crate) fn delete(entry: keyring_core::Result<Entry>) -> Result<(), VaultError> {
   match entry.and_then(|entry| entry.delete_credential()) {
@@ -39,7 +49,7 @@ pub(crate) fn delete(entry: keyring_core::Result<Entry>) -> Result<(), VaultErro
 /// keyring's error as a vault error. The variants that carry stored bytes (`BadEncoding`,
 /// `BadDataFormat`) do not pass them on, and neither `Debug` output nor an unknown variant's text
 /// is used: only messages that describe the failure are kept.
-fn vault_error(error: Error) -> VaultError {
+pub(crate) fn vault_error(error: Error) -> VaultError {
   match error {
     Error::NoStorageAccess(platform) => VaultError::AccessDenied(platform.to_string()),
     Error::TooLong(_, max) => VaultError::TooLong { max },
