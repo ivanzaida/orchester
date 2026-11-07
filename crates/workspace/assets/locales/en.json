@@ -1664,6 +1664,7 @@
       "secretNotFound": "This project has no secret {{secret}} that is not archived.",
       "notAnAgentCli": "{{connection}} runs no agent CLI, so it runs on no API provider.",
       "secretAmbiguous": "More than one secret is named {{secret}}; name it by its id (list_secrets).",
+      "conversationAmbiguous": "More than one Orchestrator conversation is titled {{conversation}}; name it by its id (get_watches without a conversation lists those that lead something).",
       "teamUnavailable": "The team server can't be reached now, so nothing was read or changed. Nothing is answered from this computer's copy; try again once it answers.",
       "teamNeedsVersion": "The team server needs Orchester {{version}} or later and refuses this version, so nothing was read or changed. A person updates Orchester from Settings › Updates.",
       "teamSignedOut": "This computer is signed out of the team server, so nothing was read or changed. A person signs in again from Settings › Servers.",
