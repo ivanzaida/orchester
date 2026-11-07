@@ -7,6 +7,14 @@
 //! `cargo test -p orchester-app --test team_qa team_qa`
 
 mod first_download;
+#[path = "../../examples/seed/kontur/mod.rs"]
+#[allow(dead_code, reason = "the seed's helpers the other scenarios use")]
+#[allow(
+  clippy::duplicate_mod,
+  reason = "the seed's team scenarios and the QA app's team states both include the state file (the marker the seed writes and the QA app reads)"
+)]
+mod kontur;
+mod not_ready;
 #[path = "../../examples/qa_app/team/mod.rs"]
 mod team;
 mod team_actions;

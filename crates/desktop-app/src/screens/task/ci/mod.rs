@@ -93,6 +93,14 @@ impl ShownCi {
     }
   }
 
+  /// A Fix CI was sent for the failure the checks show, and waits because the task's pipeline is not ready here.
+  pub fn fix_waits(&self, fixes: &RunFixes) -> bool {
+    self
+      .read()
+      .and_then(|read| failure_of(&read.checks))
+      .is_some_and(|failure| fixes.waits_for(&failure))
+  }
+
   /// Whether the switch of *Fix CI automatically* can be used: CI is read.
   pub fn readable(&self) -> bool {
     self.read().is_some()

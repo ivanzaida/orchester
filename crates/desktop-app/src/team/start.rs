@@ -71,8 +71,10 @@ pub enum Stop {
   Refused(AuthorityErrorCode),
   /// The module's branch is not in this checkout.
   BranchNotFound(String),
-  /// The pipeline is not ready on this computer: what is missing, each part with its fix. Nothing was claimed.
-  NotReadyHere(Vec<Message>),
+  /// The pipeline is not ready on this computer: what is missing, each part with its fix, which the task's Summary
+  /// lists. Before the server was asked for anything nothing was claimed; a version the server pinned that this
+  /// computer is not ready for is found after it made the work ([`NotReadyHere::after_server_started`]).
+  NotReadyHere(NotReadyHere),
   /// The team server could not read the pipeline or a profile, or they have no published version.
   NotReadable,
   /// The runner refused the run.
@@ -151,7 +153,7 @@ async fn checked(
       })?;
     match ready {
       StartReadiness::Ready(programs) => Ok((commit, programs)),
-      StartReadiness::NotReady(refusal) => Err(Stop::NotReadyHere(refusal.messages())),
+      StartReadiness::NotReady(refusal) => Err(Stop::NotReadyHere(refusal)),
       StartReadiness::PipelineUnknown => Err(Stop::NotReady),
     }
   })
@@ -194,9 +196,9 @@ fn started(outcome: StartOutcome) -> Started {
     StartOutcome::Started(run) => Started::Run(run),
     StartOutcome::Waiting(_) => Started::Waiting,
     StartOutcome::Refused(error) => Started::Stopped(Stop::Refused(error.code())),
-    StartOutcome::Failed(StartFailure::NotReadyHere { pipeline, missing }) => Started::Stopped(Stop::NotReadyHere(
-      NotReadyHere::after_start(pipeline, missing).messages(),
-    )),
+    StartOutcome::Failed(StartFailure::NotReadyHere { pipeline, missing }) => {
+      Started::Stopped(Stop::NotReadyHere(NotReadyHere::after_start(pipeline, missing)))
+    }
     StartOutcome::Failed(failure) => {
       tracing::warn!(?failure, "a team start failed for good");
       Started::Stopped(Stop::Failed)

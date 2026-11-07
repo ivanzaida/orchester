@@ -107,6 +107,41 @@ fn readiness_start_a_pipeline_that_is_not_ready_lists_each_part_with_its_fix_and
 }
 
 #[test]
+fn readiness_start_a_servers_secret_is_set_on_the_server_not_on_either_profile_that_chooses_it() {
+  let fixture = Fixture::team();
+  fixture.connection(CLAUDE, "claude");
+  let docs = fixture.team_server("knowledge", program(&["KNOWLEDGE_TOKEN"]));
+  let first = fixture.team_profile("builder", &profile(CLAUDE, &[docs], &[]));
+  let second = fixture.team_profile("checker", &profile(CLAUDE, &[docs], &[]));
+  let delivery = fixture.team_resource("delivery", pipeline(&[Some(first), Some(second)], None));
+
+  let refusal = not_ready(&fixture, &fixture.vault, delivery);
+  let owners: Vec<_> = refusal
+    .parts()
+    .iter()
+    .filter_map(|part| match part {
+      NotReadyPart::Missing(part) if part.name == "KNOWLEDGE_TOKEN" => Some(part.owner),
+      _ => None,
+    })
+    .collect();
+  assert!(!owners.is_empty(), "the secret is listed: {refusal:?}");
+  assert!(
+    owners.iter().all(|owner| *owner == Some(docs)),
+    "the value is set on the server, whichever profile lacks it first: {owners:?}"
+  );
+
+  // A secret only a profile names is set on the profile.
+  let own = fixture.team_profile("reviewer", &profile(CLAUDE, &[], &["DEPLOY_KEY"]));
+  let alone = fixture.team_resource("alone", pipeline(&[Some(own)], None));
+  let refusal = not_ready(&fixture, &fixture.vault, alone);
+  let deploy = refusal.parts().iter().find_map(|part| match part {
+    NotReadyPart::Missing(part) if part.name == "DEPLOY_KEY" => Some(part.owner),
+    _ => None,
+  });
+  assert_eq!(deploy, Some(Some(own)));
+}
+
+#[test]
 fn readiness_start_a_pipeline_this_computer_has_no_version_of_is_unknown_and_a_local_project_has_no_team_start() {
   let fixture = Fixture::team();
   assert!(matches!(

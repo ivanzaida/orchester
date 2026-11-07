@@ -51,6 +51,7 @@
 mod bundle;
 mod error;
 mod facts;
+mod guard;
 mod local;
 mod needs;
 mod not_ready;
@@ -62,12 +63,17 @@ mod team;
 
 use std::path::Path;
 
-use orchester_core::{id::ResourceId, secret::SecretVault};
+use orchester_core::{
+  id::{ResourceId, TaskId},
+  secret::SecretVault,
+  store::TaskStore,
+};
 use orchester_store::ProjectDb;
 
 pub(crate) use self::{bundle::missing as bundle_missing, team::body as team_profile_body};
 pub use self::{
   error::ReadinessError,
+  guard::NotStarted,
   not_ready::{MissingPart, NotReadyHere, NotReadyPart, UndecidedPart},
   programs::McpPrograms,
   project::{PipelineReadiness, ProjectReadiness, ResourceReadiness},
@@ -166,6 +172,24 @@ impl Workspace {
         .pipeline(pipeline)
         .and_then(|found| NotReadyHere::of(&readiness, found)),
     )
+  }
+
+  /// [`Self::not_ready_here`] for the pipeline `task` of the project at `repo_root` runs, as every start of a task asks
+  /// it before it queues, claims or hands the task to a runner. A task with no pipeline, or none stored, is left to the
+  /// preflight, which refuses it with its own reason.
+  pub fn task_not_ready_here(
+    &self,
+    repo_root: &Path,
+    vault: &dyn SecretVault,
+    task: TaskId,
+  ) -> Result<Option<NotReadyHere>, ReadinessError> {
+    let pipeline = ProjectDb::open(repo_root)?
+      .task(task)?
+      .and_then(|found| found.details().pipeline);
+    match pipeline {
+      Some(pipeline) => self.not_ready_here(repo_root, vault, pipeline),
+      None => Ok(None),
+    }
   }
 
   /// The program paths set for the team MCP servers of the team server `db`'s project is shared with; `None` for a

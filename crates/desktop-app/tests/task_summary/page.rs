@@ -39,6 +39,13 @@ impl Page {
     Self::with("live", Some((programs.runner.clone(), programs.fake_codex.clone())))
   }
 
+  /// `scenario` seeded with the real runner (the fake Codex is the seed's, which the runner never starts here), so the
+  /// header's Run is pressable: without a runner it is locked.
+  pub fn seeded_with_runner(scenario: &str) -> Self {
+    let programs = programs();
+    Self::with(scenario, Some((programs.runner.clone(), programs.fake_codex.clone())))
+  }
+
   /// `scenario` seeded, the window started with `programs` (the runner and the fake Codex) when given, or
   /// a runner program that does not exist.
   fn with(scenario: &str, programs: Option<(PathBuf, PathBuf)>) -> Self {
@@ -101,6 +108,15 @@ impl Page {
           || window.texts("task-summary-empty").is_some())
     });
     key
+  }
+
+  /// Shows `view` of the task `key`, once its header does.
+  pub fn show(&mut self, key: &str, view: TaskView) {
+    let page = ProjectPage::Task(key.parse().expect("a task key"), view);
+    self.window.navigation().go(Route::Project(self.project, page));
+    self
+      .window
+      .until("the task's header", |window| window.texts("task-title-row").is_some());
   }
 
   /// The key of the task titled `title`.

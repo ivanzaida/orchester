@@ -4,6 +4,11 @@
 //!
 //! `cargo test -p orchester-workspace --test local_start_readiness local_start`
 
+#[path = "local_start_readiness/follows.rs"]
+mod follows;
+#[path = "local_start_readiness/queue.rs"]
+mod queue;
+
 use std::{
   collections::{BTreeMap, BTreeSet},
   fs,
@@ -39,11 +44,12 @@ use orchester_store::{AppDb, ProjectDb};
 use orchester_workspace::{
   activity::Activity,
   app_mcp::{self, Translate},
+  readiness::NotStarted,
   runner::Runners,
   secrets::Vault,
   sharing::Servers,
   tasks::{integration_jobs::ProjectJobs, outside::OutsideChanges},
-  workspace::Workspace,
+  workspace::{OpenProject, Workspace},
 };
 use serde_json::{Value, json};
 use tempfile::TempDir;
@@ -66,7 +72,10 @@ fn git(root: &Path, args: &[&str]) {
 /// server starting `program`.
 struct Kontur {
   dir: TempDir,
+  workspace: Workspace,
   services: app_mcp::Services,
+  /// What a message or a Fix CI follows through, as the window has them.
+  follow: (Runners, Servers, OpenProject),
   runtime: Runtime,
   published: Published,
   _data: TempDir,
@@ -121,7 +130,7 @@ impl Kontur {
       .tempdir_in(&scratch)
       .expect("application data");
     let workspace = Workspace::new(AppDb::open(&data.path().join("orchester.db")).expect("database"));
-    workspace.open(root).expect("register the project");
+    let open = workspace.open(root).expect("register the project");
     let runtime = Runtime::new().expect("runtime");
     let version = orchester_api::releases::ReleaseVersion::parse("0.5.0").expect("a release version");
     let servers = Servers::new(workspace.clone(), Vault::keychain(), version);
@@ -131,8 +140,9 @@ impl Kontur {
       Activity::new(),
       orchester_ipc::SessionEnd::Clean,
     );
+    let follow = (runners.clone(), servers.clone(), open);
     let services = app_mcp::Services::new(
-      workspace,
+      workspace.clone(),
       runners,
       servers,
       Programs::processes(),
@@ -140,7 +150,9 @@ impl Kontur {
     );
     Self {
       dir,
+      workspace,
       services,
+      follow,
       runtime,
       published,
       _data: data,
@@ -491,4 +503,49 @@ fn local_start_an_incomplete_draft_still_answers_task_incomplete() {
   let kontur = Kontur::with_brief(&outside.path().join("knowledge.sh"), "");
 
   assert_eq!(kontur.run_task()["error"]["code"], "task_incomplete");
+}
+
+#[test]
+fn local_start_the_window_guard_names_the_parts_and_lets_a_ready_task_through() {
+  let (kontur, program, _outside) = not_ready();
+  let task = kontur.task().id();
+  let workspace = &kontur.workspace;
+  let guard = || {
+    kontur
+      .runtime
+      .block_on(workspace.ready_to_start(kontur.dir.path(), &Vault::keychain(), task))
+  };
+
+  let Err(NotStarted::NotReadyHere(refusal)) = guard() else {
+    panic!("a program that is gone refuses the start");
+  };
+  assert_eq!(refusal.pipeline(), "Quick fix");
+  assert_eq!(refusal.number().map(|number| number.get()), Some(1));
+  assert_eq!(refusal.parts().len(), 1);
+  assert_eq!(refusal.short().key, "notReadyHere.refusedShort");
+  assert_eq!(
+    kontur.standing(),
+    (TaskStatus::Draft, kontur.task().revision().get(), 0),
+    "the check queues, claims and starts nothing"
+  );
+
+  fs::write(&program, "#!/bin/sh\n").expect("the program appears");
+  assert_eq!(guard(), Ok(()), "ready, the start goes on");
+}
+
+#[test]
+fn local_start_the_window_guard_by_pipeline_leaves_a_task_without_one_to_the_preflight() {
+  let (kontur, _program, _outside) = not_ready();
+  let workspace = &kontur.workspace;
+  let ready = |pipeline| {
+    kontur
+      .runtime
+      .block_on(workspace.ready_to_start_pipeline(kontur.dir.path(), &Vault::keychain(), pipeline))
+  };
+
+  assert_eq!(ready(None), Ok(()), "no pipeline is the preflight's to refuse");
+  assert!(matches!(
+    ready(Some(kontur.published.pipeline)),
+    Err(NotStarted::NotReadyHere(_))
+  ));
 }

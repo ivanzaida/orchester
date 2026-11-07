@@ -273,11 +273,13 @@ fn send_action(ctx: &mut Ctx) -> SendAction {
         let allowed = move |kind: DecisionKind| kind.read_consent(&workspace);
         let sent = side_question::send_on(
           (&services.runners, &services.servers),
+          (&services.workspace, &services.vault),
           &request.project,
           (request.task, request.question),
           (request.by, allowed),
         )
-        .await;
+        .await
+        .map(Sent::as_queued);
         // The conversation shows the message the send stored.
         projects.feed(request.project.project.id()).saved();
         sent

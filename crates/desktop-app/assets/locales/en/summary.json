@@ -162,6 +162,57 @@
         "stale": "{{holder}} · stale"
       }
     },
+    "notReady": {
+      "title": "Not ready · nothing started",
+      "titleTeam": "Not ready on this computer · nothing started",
+      "titleAfterStart": "Not ready on this computer · nothing ran",
+      "metaOne": "{{pipeline}} · 1 thing missing",
+      "metaOther": "{{pipeline}} · {{count}} things missing",
+      "metaOneTeam": "{{pipeline}} · 1 thing missing here",
+      "metaOtherTeam": "{{pipeline}} · {{count}} things missing here",
+      "body": "Fix these and press Run again. Nothing is queued until then.",
+      "bodyTeam": "Fix these on this computer and press Run again. They stay here; the team's server and other computers are not changed.",
+      "bodyAfterStart": "The team server made the work for this start, and your claim on the task is still open. Fix these on this computer and press Run again. They stay here; other computers are not changed.",
+      "openAgents": "Open Agents · Needs you",
+      "openAgentsTeam": "Open Agents · Needs you here",
+      "footnote": "Each fix opens its field in Agents",
+      "footnoteTeam": "Runs start from the cached team versions, also offline",
+      "secretName": "Secret {{name}}",
+      "cli": {
+        "claude": "Claude Code",
+        "codex": "Codex",
+        "anthropicApi": "Anthropic API",
+        "openAiApi": "OpenAI API"
+      },
+      "need": {
+        "connectionNone": "no {{cli}} connection here · add one",
+        "connectionPick": "more than one {{cli}} connection here · choose one",
+        "decisionNone": "reviewer · no decision connection here · add one",
+        "decisionPick": "reviewer · several decision connections here · choose one",
+        "mcpOff": "MCP server · switched off on this computer",
+        "mcpMoreThanOneSecretHeader": "MCP server · takes more than one secret header · ask a team Admin",
+        "mcpProgramNotSet": "MCP server · set its program path",
+        "mcpProgramFileGone": "MCP server · its program is no longer at {{path}}",
+        "mcpProgramMoved": "MCP server · its program now leads into the repository or off this computer",
+        "secret": "no value yet",
+        "secretTeam": "no value on this computer",
+        "secretUnreadable": "the keychain did not say whether it has a value · unlock it"
+      },
+      "fix": {
+        "setPath": "Set path",
+        "chooseFile": "Choose file",
+        "addValue": "Add value",
+        "choose": "Choose",
+        "addConnection": "Add connection",
+        "switchOn": "Switch on",
+        "arrow": "{{fix}} →"
+      },
+      "notice": {
+        "body": "{{pipeline}} is not ready, so nothing was started. The Summary lists what is missing and how to fix it.",
+        "bodyTeam": "{{pipeline}} is not ready on this computer, so nothing was started. The Summary lists what is missing and how to fix it.",
+        "open": "Open Summary"
+      }
+    },
     "properties": {
       "status": "Status",
       "priority": "Priority",

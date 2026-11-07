@@ -187,6 +187,17 @@ pub fn edit_conflict(kontur: &mut Kontur) -> Result<(), SeedError> {
   mark(kontur, State::EditConflict)
 }
 
+/// As [`member`], with the team's servers, profiles and pipelines of `picker-readiness-team`; the stand-in server's
+/// tasks are on Team delivery and Team quick fix. KON-5, in API rate limits, runs Team delivery, which needs the
+/// program path of `pencil-design`, `github`'s secret and a connection: its Run is refused `not_ready_here` and its
+/// Summary lists them (`Task · Run · not ready here`, R1 `Ku0qu`).
+pub fn not_ready_here(kontur: &mut Kontur) -> Result<(), SeedError> {
+  super::picker_readiness::team_work(kontur)?;
+  // KON-5's module branch, which a team start finds in the checkout before it asks whether the pipeline is ready.
+  git::branch(&kontur.repo, "module/api-rate-limits", git::MAIN)?;
+  write_marker(kontur, State::NotReadyHere)
+}
+
 /// KON-12's run interrupted at Implement, on the live catalogue's Feature delivery with a brief that keeps
 /// `orchester-fake-codex` working: Continue run takes it on, Running at 03 Implement with Pause run (`01c` `Tb55G`).
 pub fn team_running(kontur: &mut Kontur) -> Result<(), SeedError> {

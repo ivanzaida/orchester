@@ -3,7 +3,9 @@
 //! `PMi6Q` for a local one in `Agents · v2` `acFkz`, ORC-841).
 //!
 //! In the local project the catalogue's Feature delivery and Quick fix are ready; Design pass runs a profile that
-//! chooses two MCP servers whose programs this computer does not have, Review pass one of them. In the team project
+//! chooses two MCP servers whose programs this computer does not have, Review pass one of them. The local project's
+//! KON-1 is a draft with every detail on Design pass: its Run is refused `not_ready_here`, and the task's Summary lists
+//! the two programs to set (`Task · Run · not ready`, L9 `f5CEX`, ORC-840). In the team project
 //! (`team-hub`) Builder needs the program of `pencil-design`, `github`'s secret and a connection, Reviewer a
 //! connection, so Team delivery, which runs both, lacks more than Team quick fix, which runs Reviewer.
 
@@ -11,13 +13,14 @@ use std::collections::BTreeSet;
 
 use orchester_core::{
   connection::mcp::{McpServerSelection, McpTransport, StdioServer},
-  id::{ConnectionId, ResourceId},
+  id::{ConnectionId, IdempotencyKey, ResourceId},
   permission::{RepositoryAccess, StepPermissions},
   resource::{
     AgentProfile, CommandProgram, ModelId, Pipeline, PromptText, ProviderSettings, ResourceKind, Slug, Step, StepKey,
     StepKind,
   },
-  store::{McpServerStore, ResourceStore},
+  store::{McpServerStore, ResourceStore, TaskStore},
+  task::TaskDetails,
 };
 
 use super::{connections, team_hub};
@@ -43,13 +46,50 @@ pub fn local(kontur: &mut Kontur) -> Result<(), SeedError> {
   }
   let design = local_profile(kontur, "Design pass", seeded.codex, &servers)?;
   let review = local_profile(kontur, "Review pass", seeded.codex, &servers[..1])?;
+  let mut published = Vec::new();
   for (title, profile) in [("Design pass", design), ("Review pass", review)] {
     let id = kontur
       .db
       .create_resource(slug(title)?, name(title), &pipeline(&[profile])?, at)?
       .id();
     kontur.db.publish_draft::<Pipeline>(id, at)?;
+    published.push(id);
   }
+  // Design pass, the first one published.
+  let design_pass = published
+    .first()
+    .copied()
+    .ok_or_else(|| SeedError::Invalid("no pipeline was published".to_owned()))?;
+  draft_ready_to_run(kontur, design_pass)
+}
+
+/// KON-1, a draft with every detail on `pipeline`: Run is pressable, and the pipeline is not ready here.
+fn draft_ready_to_run(kontur: &mut Kontur, pipeline: ResourceId) -> Result<(), SeedError> {
+  let title = "Add retry to webhook sender";
+  let details = TaskDetails {
+    title: name(title),
+    brief: "Webhook deliveries fail for good after a single network error. Retry failed deliveries with exponential \
+            backoff and jitter, keep every attempt visible in the endpoint's delivery log, and let each endpoint \
+            set how many attempts it gets."
+      .to_owned(),
+    acceptance_criteria: [
+      "Failed deliveries retry with exponential backoff and full jitter.",
+      "429 and 503 responses honor Retry-After, capped at 60 s.",
+      "Each endpoint has a retry budget; the default is 5 attempts.",
+      "Every attempt is recorded with its status code and delay.",
+      "Tests cover the backoff schedule and the jitter bound.",
+    ]
+    .map(str::to_owned)
+    .to_vec(),
+    pipeline: Some(pipeline),
+    limits: crate::kontur::limits(),
+  };
+  let at = kontur.ago(30);
+  let task = kontur
+    .db
+    .create_tasks(IdempotencyKey::generate(), vec![details], at)?
+    .remove(0);
+  kontur.seeded(&task, "draft on a pipeline that is not ready here");
   Ok(())
 }
 
@@ -57,6 +97,18 @@ pub fn local(kontur: &mut Kontur) -> Result<(), SeedError> {
 /// (Reviewer), beside the catalogue's, which this computer has no team form of.
 pub fn team(kontur: &mut Kontur) -> Result<(), SeedError> {
   team_hub::seed(kontur)?;
+  team_pipelines(kontur)
+}
+
+/// [`team`]'s resources for a copy that joins the stand-in team server (`team-not-ready`): the server serves Kontur's
+/// tasks on Team delivery and Team quick fix, and Team delivery needs a program path this computer has not set
+/// (`Task · Run · not ready here`, R1 `Ku0qu`, ORC-840).
+pub fn team_work(kontur: &mut Kontur) -> Result<(), SeedError> {
+  team_hub::resources(kontur)?;
+  team_pipelines(kontur)
+}
+
+fn team_pipelines(kontur: &mut Kontur) -> Result<(), SeedError> {
   let profile = |role: &str| -> Result<ResourceId, SeedError> {
     kontur
       .db

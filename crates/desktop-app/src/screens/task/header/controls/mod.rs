@@ -18,7 +18,7 @@ use orchester_core::{
 use orchester_workspace::tasks::detail::{RunView, TaskDetail};
 
 pub use self::{
-  action::{ControlAction, RunControl, control_action, named_steps},
+  action::{ControlAction, RunControl, RunRefused, control_action, named_steps},
   control::{Control, Offer, Reason},
 };
 use crate::ui::{button::ButtonKind, icon::Icon, message::message_text, pressable::Press};

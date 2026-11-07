@@ -74,10 +74,14 @@ pub enum State {
   /// An Admin editing KON-12 (priority High): olha sets its priority to Urgent just before the person's first save,
   /// which then meets her change first (ORC-734, `Team authority · redesign` 05 `LmxUY`).
   EditConflict,
+  /// As [`Self::Member`], on the team's resources of `picker-readiness-team`: the server's tasks are on Team delivery
+  /// and Team quick fix, and Team delivery is not ready on this computer (ORC-840, `Task · Run · not ready here`
+  /// R1 `Ku0qu`).
+  NotReadyHere,
 }
 
 impl State {
-  pub const ALL: [Self; 27] = [
+  pub const ALL: [Self; 28] = [
     Self::Join,
     Self::WrongCode,
     Self::ExpiredCode,
@@ -105,6 +109,7 @@ impl State {
     Self::VersionRefused,
     Self::TeamRunning,
     Self::EditConflict,
+    Self::NotReadyHere,
   ];
 
   /// The seed's scenario of this state.
@@ -137,6 +142,7 @@ impl State {
       Self::VersionRefused => "team-version-refused",
       Self::TeamRunning => "team-running",
       Self::EditConflict => "team-edit-conflict",
+      Self::NotReadyHere => "team-not-ready",
     }
   }
 

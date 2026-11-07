@@ -52,7 +52,8 @@ impl TaskFrame {
   /// Provides the run controls, the header's and the Summary's, and a team task's actions ([`team_controls`]).
   pub(super) fn provide_controls(&self, ctx: &mut Ctx, props: &FrameProps, services: &Services) {
     let runners = (services.runners.clone(), services.servers.clone());
-    let action = control_action(ctx, (props.project.open.clone(), props.task), runners);
+    let ready = (services.workspace.clone(), services.vault.clone());
+    let action = control_action(ctx, (props.project.open.clone(), props.task), runners, ready);
     ctx.provide(RunControls {
       action,
       requested: self.requested.clone(),

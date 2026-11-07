@@ -102,6 +102,17 @@ pub(super) struct Mcp {
 /// [`seed`], which also names the id of each MCP server it made.
 pub(super) fn seed_with(kontur: &mut Kontur, mcp: &Mcp) -> Result<BTreeMap<&'static str, ResourceId>, SeedError> {
   shared_config::admin(kontur)?;
+  resources_with(kontur, mcp)
+}
+
+/// The team's servers, profiles, tools, instructions and skills of [`seed`], without the link to a team server and its
+/// members, which a QA copy that joins a stand-in server makes itself.
+pub(super) fn resources(kontur: &mut Kontur) -> Result<(), SeedError> {
+  resources_with(kontur, &Mcp::default()).map(|_| ())
+}
+
+/// [`resources`] with the MCP servers' differences, naming the id of each MCP server it made.
+fn resources_with(kontur: &mut Kontur, mcp: &Mcp) -> Result<BTreeMap<&'static str, ResourceId>, SeedError> {
   let program = json!({"name": "pencil-design", "launch": {
     "kind": "program", "program": "pencil-mcp", "args": ["--stdio", "--app", "desktop"],
     "variables": mcp.pencil_variables

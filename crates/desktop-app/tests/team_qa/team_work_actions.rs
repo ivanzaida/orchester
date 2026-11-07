@@ -37,7 +37,7 @@ const KON_5: &str = "0191c7c0-0000-7000-8000-000000100005";
 /// The committer of the checkout's commits.
 const COMMITTER: [&str; 4] = ["-c", "user.name=QA", "-c", "user.email=qa@example.invalid"];
 
-fn task_route(key: &str) -> Route {
+pub(super) fn task_route(key: &str) -> Route {
   let key: TaskKey = key.parse().expect("a task key");
   Route::Project(project_id(), ProjectPage::task(key, TaskView::Summary, false))
 }
@@ -63,7 +63,7 @@ fn git(root: &Path, args: &[&str]) {
 
 /// Makes Kontur's checkout at `root` a repository of its own, on `main` with a commit, `module/billing-exports` one
 /// commit ahead of it and `module/api-rate-limits` at it; the project's own folder is no change of it.
-fn own_repository(root: &Path) {
+pub(super) fn own_repository(root: &Path) {
   git(root, &["init", "--quiet", "--initial-branch=main"]);
   let top = Command::new("git")
     .arg("-C")
@@ -92,7 +92,7 @@ fn own_repository(root: &Path) {
 }
 
 /// The window in `state` on Kontur's own repository, on `route` once `shown` shows.
-fn on(state: State, route: Route, shown: &str) -> (Window, TeamServer) {
+pub(super) fn on(state: State, route: Route, shown: &str) -> (Window, TeamServer) {
   let (mut window, server) = prepared(state);
   own_repository(&window.data.repo("repo-kontur"));
   window.navigation().go(route);

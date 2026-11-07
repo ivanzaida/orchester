@@ -5,12 +5,17 @@
 //! automatically*, and a `gh` that is not signed in shows the callout with its command and the switch locked.
 
 use lurq::app::events::with_synthetic_input;
-use orchester_app::routes::{ProjectPage, Route, TaskTab, TaskView};
+use orchester_app::{
+  root::Start,
+  routes::{ProjectPage, Route, TaskTab, TaskView},
+};
 use orchester_core::{
-  pull_request::ci::fix::{FixEventKind, FixedBy},
+  pull_request::ci::fix::{FixEvent, FixEventKind, FixedBy},
   store::{ConversationStore, RunStore, TaskStore},
+  time::Timestamp,
 };
 use orchester_store::ProjectDb;
+use orchester_workspace::tasks::outside::Outside;
 
 use crate::harness::Seeded;
 
@@ -136,6 +141,58 @@ fn auto_on(seeded: &Seeded, title: &str) -> bool {
     .expect("a run")
     .expect("readable");
   db.ci_fixes(run.id()).expect("the run's Fix CI").auto.on
+}
+
+#[test]
+fn ci_a_fix_that_waits_for_a_pipeline_that_is_not_ready_here_is_not_called_fixing() {
+  let mut seeded = Seeded::answering("ok");
+  let title = "Typed errors per module";
+  open(&mut seeded, title, TaskTab::Summary, "task-ci");
+  seeded.window.press("task-ci-fix");
+  seeded.window.until("the card waits: Fix CI was sent", |window| {
+    window.texts("task-ci-badge").is_some_and(|badge| badge == ["Fixing"])
+  });
+  assert_eq!(seeded.text("task-status"), "Fixing CI on #137");
+
+  // The task's pipeline is not ready here: Run again with the message started nothing, and the run records it.
+  let mut db = ProjectDb::open(&seeded.repo).expect("the project");
+  let task = db
+    .tasks()
+    .expect("tasks")
+    .into_iter()
+    .find(|task| task.details().title.as_str() == title)
+    .expect("the task")
+    .id();
+  let run = db
+    .runs_of_task(task)
+    .expect("runs")
+    .pop()
+    .expect("a run")
+    .expect("readable");
+  let sent = db.ci_fixes(run.id()).expect("the run's Fix CI").events.remove(0);
+  let FixEventKind::Sent { message, .. } = sent.kind else {
+    panic!("the Fix CI sent");
+  };
+  let waiting = FixEvent {
+    at: Timestamp::now(),
+    kind: FixEventKind::NotReady { message },
+    ..sent
+  };
+  db.record_ci_fix(run.id(), &waiting).expect("recorded");
+  drop(db);
+  let Start::Ready(ready) = seeded.window.launch.start() else {
+    panic!("a started session");
+  };
+  ready.services.changes.record(seeded.project, Outside::Tasks);
+
+  open(&mut seeded, title, TaskTab::Conversation, "conversation-ci-fix-0");
+  open(&mut seeded, title, TaskTab::Summary, "task-ci");
+  seeded.window.until("the header says it is kept", |window| {
+    window
+      .texts("task-status")
+      .is_some_and(|status| status.concat().contains("is kept"))
+  });
+  assert_eq!(seeded.text("task-status"), "Fix CI on #137 is kept · not ready here");
 }
 
 #[test]

@@ -56,6 +56,7 @@ impl ProjectDb {
         };
         ("sent", Some(message.to_string()), count, limit)
       }
+      FixEventKind::NotReady { message } => ("not_ready", Some(message.to_string()), None, None),
       FixEventKind::Stopped { limit } => ("stopped", None, None, Some(i64::from(limit.get()))),
     };
     self.connection.execute(
@@ -156,6 +157,9 @@ fn event((at, number, failure, failing, kind, message, count, limit): EventRow) 
         count: u32::try_from(count).map_err(|_| corrupt("Fix CI count", count))?,
         limit: limit_of(limit)?,
       },
+    },
+    ("not_ready", Some(message), None, None) => FixEventKind::NotReady {
+      message: parse("Fix CI message id", &message)?,
     },
     ("stopped", None, None, Some(limit)) => FixEventKind::Stopped {
       limit: limit_of(limit)?,

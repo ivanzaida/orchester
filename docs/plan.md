@@ -219,6 +219,17 @@ focus rings. Note the behaviour changes: `focus()` now scrolls into view; create
 - The task-states seed's KON-10 "Canceled" shows "Ready to queue" (product check).
 - Chat Orchestrator (OR1, layers `TrG83`/`Xir64`) and Overview (O1, `vgqpM`) are built as Orchester tasks once A1–A3
   are done.
+- Not ready here, checked in the runner (ORC-840 review): the runner starts a queued task, and the members of a
+  reviewed group one by one, without asking whether the pipeline is ready on this computer
+  (`runner/src/execution/coordinator/task_groups.rs`, `start_run`). Today the check is made where the person or a tool
+  queues: the kanban's move to Todo (`Workspace::queue_draft`, the live path for a draft) and every start and message
+  that runs a task again. `tasks::group::queue` checks every member too (`Workspace::ready_group_to_start`) but has no
+  caller yet, so no window queues a group today. Releasing a held group is not checked at all. A pipeline that becomes
+  not ready after it was queued (a program removed, a secret deleted) still starts. The runner-side check needs the
+  facts `orchester-workspace` reads: whether each program file exists and whether the keychain holds each secret
+  (`SecretVault::exists`); `orchester-workspace` is only a dev-dependency of the runner, so the check needs either those
+  reads moved into `orchester-core` behind traits the runner gets, or the app handing the runner the answer with the
+  queue.
 
 ## T · Tests and runner
 
