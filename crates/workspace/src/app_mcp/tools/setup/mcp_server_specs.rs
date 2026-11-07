@@ -27,8 +27,9 @@ pub(super) const SPECS: &[Spec] = &[
                   path (npx), never a path, `working_directory` is relative, the variables the program needs are \
                   named in `variable_names` and the headers a remote server is sent a secret in in `secret_headers` \
                   (`Authorization` for a bearer or Basic credential), and a value or a secret in `environment` or \
-                  `authorization` is refused (team_value_refused, a path team_path_refused). Each computer sets the \
-                  program's path and the values itself.",
+                  `authorization` is refused (team_value_refused, a path team_path_refused). A team server's `url` \
+                  has no query or fragment (team_value_refused): a key in it would reach every member, so a secret \
+                  goes in `secret_headers`. Each computer sets the program's path and the values itself.",
     schema: schema_for_type::<mcp_servers::AddMcpServer>,
     read_only: false,
   },
@@ -50,10 +51,15 @@ pub(super) const SPECS: &[Spec] = &[
                   arguments, address or tools that run without asking, is person_only as above), a member is \
                   refused not_admin, a different `name` is refused as name_not_editable, a change that changes \
                   nothing publishes nothing (`unchanged`), and the fields are the team's (`variable_names`, \
-                  `secret_headers`; environment and authorization are refused as above). Giving it a `program` is \
-                  refused as person_only always, also while Let automation change agent permissions is on, with \
-                  nothing changed: the program's path is a file on this computer, which only a person chooses in \
-                  the window.",
+                  `secret_headers`; environment and authorization are refused as above). `program` is the team \
+                  body's program name (npx), team data like the rest: another one is person_only unless a person \
+                  turned on Let automation change agent permissions, and a path is team_path_refused. The program's \
+                  path on this computer is set by a person in the window, never by a tool. `name` is the body's \
+                  name and is not editable here (name_not_editable): rename the resource in the window. A draft of \
+                  the server that differs from the version this computer uses (someone's unpublished edit) is not \
+                  replaced: the call is refused (draft_changed). The `url` of a team's server has no query or \
+                  fragment (a key in it would reach every member: team_value_refused); a secret goes in \
+                  `secret_headers`.",
     schema: schema_for_type::<mcp_servers::UpdateMcpServer>,
     read_only: false,
   },
@@ -68,7 +74,8 @@ pub(super) const SPECS: &[Spec] = &[
                   `runs_stopping_here`, the runs on this computer whose profile version chooses it. They are the \
                   runs that will stop, not runs that have stopped: this computer cancels them when the team \
                   server's archive reaches it, right after the answer, and the other computers do the same. Nothing \
-                  is archived while the team server cannot be reached or what uses it cannot be read.",
+                  is archived while the team server cannot be reached or what uses it cannot be read, nor a server \
+                  the team server has not received yet (team_mcp_server_not_sent).",
     schema: schema_for_type::<mcp_servers::InServer>,
     read_only: false,
   },

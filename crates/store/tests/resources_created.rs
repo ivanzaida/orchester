@@ -10,7 +10,7 @@ use orchester_core::{
   project::{Project, ProjectKey},
   resource::{
     AgentTargets, Draft, InjectionEvent, Instruction, InstructionScope, PromptText, PublishError, ResourceKind, Slug,
-    VersionNumber,
+    TeamMcpServer, VersionNumber,
   },
   store::ResourceStore,
   time::Timestamp,
@@ -145,4 +145,25 @@ fn only_a_version_the_server_has_not_numbered_is_taken_back() {
     "{refused:?}"
   );
   assert_eq!(db.resources(ResourceKind::Instruction).unwrap().len(), 1);
+}
+
+#[test]
+fn a_draft_is_refused_for_a_team_mcp_server_that_holds_nothing() {
+  let (repo, mut db) = project_repo();
+  let id = ResourceId::generate();
+  rusqlite::Connection::open(repo.path().join(".orchester/orchester.db"))
+    .expect("open raw database")
+    .execute(
+      "INSERT INTO resources (id, kind, slug, name, created_at) VALUES (?1, 'mcp_server', 'bare', 'Bare', 1)",
+      [id.to_string()],
+    )
+    .expect("a resource without version or draft");
+  let server: TeamMcpServer =
+    serde_json::from_value(serde_json::json!({"name":"bare","launch":{"kind":"program","program":"npx"}}))
+      .expect("a team MCP server");
+
+  let refused = db.save_draft(id, &Draft::new(server, None, at(2)));
+
+  assert!(matches!(refused, Err(StoreError::NoFirstVersion(refused)) if refused == id));
+  assert!(db.draft::<TeamMcpServer>(id).unwrap().is_none());
 }

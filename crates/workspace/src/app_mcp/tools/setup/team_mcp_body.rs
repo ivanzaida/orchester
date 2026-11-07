@@ -246,6 +246,10 @@ fn body_refusal(error: &TeamMcpServerError) -> ToolError {
       "team_path_refused",
       Message::new("appMcp.errors.teamMcpFolderIsAbsolute").with("folder", folder.clone()),
     ),
+    TeamMcpServerError::UrlQuery => refused(
+      "team_value_refused",
+      Message::new("appMcp.errors.teamMcpUrlQuery").with("field", "url".to_owned()),
+    ),
     TeamMcpServerError::Duplicate(name) => refused(
       "invalid_server",
       Message::new("appMcp.errors.teamMcpDuplicate").with("name", name.clone()),

@@ -307,8 +307,14 @@ uses is saved as the draft and **published as the next version** on the team ser
 and the call is refused as `team_server_refused`); a change that changes nothing publishes nothing and answers
 `unchanged: true`. What widens (another program or its arguments, another address, a tool added to `exempt_tools`, a
 different kind of server) is `person_only` unless AP is on. The server keeps its name (`name_not_editable`).
-Giving it a `program` is `person_only` always, also while AP is on, with nothing changed: the program's path is this
-computer's.
+`program` is the body's program name (`npx`), team data like the rest: changing it is `person_only` unless AP is on,
+and a path is `team_path_refused`. The program's path on this computer is set by a person in the window, never by a
+tool. `name` is the body's name and is not editable here (`name_not_editable`; rename the resource in the window). A
+draft of the server that differs from the version this computer uses is someone's unpublished edit and is never
+replaced: the call is refused as `draft_changed`. A remote server's `url` has no query or fragment (`team_value_refused`,
+in `add_mcp_server` too): a key in it would reach the team server and every member, so a secret goes in
+`secret_headers`. The Orchestrator chat's MCP server proposals do not read a team's MCP servers yet: in a team project
+every one is refused (`team_mcp_proposal_unsupported`) and the tools above are used directly.
 
 ### `remove_mcp_server` — changes data
 
@@ -326,7 +332,9 @@ team server's list (the other resources whose latest version names it and the ru
 the server. They are the runs that **will** stop, not runs that stopped: this computer cancels them when the team
 server's archive event reaches it, just after the answer. Nothing is archived (and the call is refused with
 `team_unavailable`, `team_read_failed` or `mcp_server_not_found`) while what uses the server cannot be read, and
-`team_server_refused` or `team_server_not_reached` when the archive itself is not taken.
+`team_server_refused` or `team_server_not_reached` when the archive itself is not taken. A server still waiting to be
+sent (made offline, never received) is refused as `team_mcp_server_not_sent` before anything is read: the team server
+knows nothing of it.
 
 ### `set_mcp_server_enabled` — changes data · gate AP when turning on
 
@@ -338,8 +346,8 @@ Parameters: `project` (req.), `server` (req.), `enabled` (boolean, req.).
 
 In a team project `server` can also be one of the team's MCP servers (id or name). Turning it off is accepted; turning
 it on is `person_only` always, also while AP is on, with nothing changed: only a person turns a team MCP server on
-here, in the window. The same holds for giving a team MCP server a `program` with `update_mcp_server`; its other
-fields are the team's, published as its next version by an admin.
+here, in the window. Its fields, `program` (a name) included, are the team's, published as its next version by an
+admin with `update_mcp_server`.
 
 ### `pick_profile_connection` — changes data · team project · gate AP for another account
 

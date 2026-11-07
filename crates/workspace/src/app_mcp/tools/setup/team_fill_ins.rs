@@ -1,10 +1,10 @@
 //! What a computer fills in for a team project, over MCP (`docs/design/team-configuration.md`, "What a computer fills
 //! in"): `pick_profile_connection` chooses the connection (and account) a team profile runs on here, and the team MCP
 //! servers `set_mcp_server_enabled` and `update_mcp_server` name are the team's resources, not the project's own
-//! servers. Turning a team MCP server on and setting its program path let agents run more here, which the person
-//! decided is theirs alone, in the window (decision 12): over MCP they answer `person_only` always, which the switch
-//! *Let automation change agent permissions* does not lift, before the write of [`crate::team_fill_ins`] is reached.
-//! Turning one off is taken. No tool takes or returns a secret value.
+//! servers. Turning a team MCP server on lets agents run more here, which the person decided is theirs alone, in the
+//! window (decision 12): over MCP it answers `person_only` always, which the switch *Let automation change agent
+//! permissions* does not lift, before the write of [`crate::team_fill_ins`] is reached. Turning one off is taken. The
+//! program's path on this computer is that window's too: no tool sets it. No tool takes or returns a secret value.
 
 use std::path::Path;
 
@@ -129,12 +129,6 @@ pub(super) fn switch_server(
   Ok(
     json!({ "server": { "id": server.id().to_string(), "name": server.name().as_str(), "team": true, "enabled": false } }),
   )
-}
-
-/// `update_mcp_server` giving a team MCP server a `program`: the path of the file agents run on this computer is a
-/// person's alone, so it is refused whatever else the call changes.
-pub(super) fn program_person_only() -> ToolError {
-  person_only("appMcp.errors.teamMcpProgramPersonOnly")
 }
 
 /// The team's resource of `kind` that `named` names, by its id or its name; `None` in a project that is not shared

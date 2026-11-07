@@ -1,7 +1,8 @@
 //! The MCP server tools in a team project, where an MCP server is the team's resource and only an admin changes it: a
 //! member is refused `not_admin` before anything is looked at; a new server and a version that widens what agents may
 //! do are a person's unless they let automation change agent permissions; a path or a value, which the team body
-//! cannot hold, is refused with a code of its own; an update of the program is a person's always; a remove reads what
+//! cannot hold, is refused with a code of its own (a key in a URL's query too); an update of the program's name widens
+//! like any other change; a remove reads what
 //! uses the server first and archives nothing while that cannot be read. These tests run without a team server (the
 //! project's link names none), so what reaches the server is `workspace`'s `team_mcp` tests.
 
@@ -121,6 +122,39 @@ fn domain_team_mcp_server_add_refuses_what_the_team_body_cannot_hold() {
     assert_eq!(refused["code"], code, "{arguments}: {refused}");
   }
   assert_eq!(servers(&team), 1, "nothing was created");
+}
+
+#[test]
+fn domain_team_mcp_server_refuses_a_key_in_the_url_and_says_where_a_secret_goes() {
+  let mut team = team_as(MemberRole::Owner);
+  team.served.let_automation_widen(true);
+  let remote = |url: &str| json!({ "project": "Kontur", "name": "issues", "url": url });
+  for url in [
+    "https://mcp.example.org/x?key=sk-live-123",
+    "https://mcp.example.org/x#key=sk-live-123",
+  ] {
+    let refused = team.served.refused("add_mcp_server", &remote(url));
+    assert_eq!(refused["code"], "team_value_refused", "{url}: {refused}");
+    assert!(refused.to_string().contains("secret_headers"), "{refused}");
+    assert!(
+      !refused.to_string().contains("sk-live-123"),
+      "the key is not echoed: {refused}"
+    );
+  }
+  let switched = change(json!({ "url": "https://mcp.example.org/x?key=sk-live-123" }));
+  let refused = team.served.refused("update_mcp_server", &switched);
+  assert_eq!(refused["code"], "team_value_refused", "{refused}");
+  assert!(!refused.to_string().contains("sk-live-123"), "{refused}");
+  assert_eq!(servers(&team), 1, "nothing was created");
+  assert_eq!(latest(&team), 1, "nothing was published");
+
+  let plain = team
+    .served
+    .refused("add_mcp_server", &remote("https://mcp.example.org/x"));
+  assert_eq!(
+    plain["code"], "team_server_not_reached",
+    "a clean URL gets as far as the team server: {plain}"
+  );
 }
 
 #[test]

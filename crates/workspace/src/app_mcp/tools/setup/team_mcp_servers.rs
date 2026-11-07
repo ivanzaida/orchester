@@ -4,9 +4,10 @@
 //! every new team resource is, [`settle`]); updating saves a draft and publishes the next version at once; removing
 //! archives the resource on the server after reading what uses it (decision 11: never refused for being used). A new
 //! server, and a version that widens what agents may do ([`team_mcp_body::widenings`]), are a person's decision
-//! unless a person lets automation change agent permissions. The program's path is this computer's, a person's alone
-//! (`team_fill_ins`), so a `program` in an update is refused as `person_only` always. Local projects keep
-//! `mcp_servers`' own path: their MCP servers are plain rows of the project, with no versions.
+//! unless a person lets automation change agent permissions. A `program` here is the body's program name (`npx`), team
+//! data like the rest, so it widens like any other change; the program's path on this computer is a person's alone
+//! (`team_fill_ins`, in the window) and no tool sets it. Local projects keep `mcp_servers`' own path: their MCP servers
+//! are plain rows of the project, with no versions.
 
 use orchester_core::{
   id::ResourceId,
@@ -21,7 +22,7 @@ use serde_json::{Value, json};
 use super::{
   created::{settle, with_waiting},
   mcp_server_input::{AddMcpServer, ServerFields, UpdateMcpServer},
-  team_fill_ins::{program_person_only, team_resource_named},
+  team_fill_ins::team_resource_named,
   team_mcp_body as body, widening,
 };
 use crate::{
@@ -48,9 +49,24 @@ pub(super) async fn named(services: &Services, project: &str, named: &str) -> Re
   let named = named.to_owned();
   blocking(move || {
     let db = ProjectDb::open(&team.open.repo_root)?;
-    Ok(team_resource_named(&db, ResourceKind::McpServer, &named)?.map(|resource| Found { team, resource }))
+    let found = match team_resource_named(&db, ResourceKind::McpServer, &named)? {
+      Some(resource) => Some(resource),
+      None => unsent_named(&db, &named)?,
+    };
+    Ok(found.map(|resource| Found { team, resource }))
   })
   .await
+}
+
+/// The team MCP server `named` (by id or name) that this computer made and the team server has not received: the tools
+/// find it to say so ([`not_sent_yet`]), where the team's own are the ones the server has.
+fn unsent_named(db: &ProjectDb, named: &str) -> Result<Option<Resource>, ToolError> {
+  for resource in db.resources(ResourceKind::McpServer)? {
+    if (resource.id().to_string() == named || resource.name().as_str() == named) && first_waits(db, resource.id())? {
+      return Ok(Some(resource));
+    }
+  }
+  Ok(None)
 }
 
 /// A team MCP server of a team project.
@@ -86,9 +102,6 @@ pub(super) async fn add(services: &Services, args: AddMcpServer) -> Result<Value
 }
 
 pub(super) async fn update(services: &Services, found: Found, args: UpdateMcpServer) -> Result<Value, ToolError> {
-  if args.fields.program.is_some() {
-    return Err(program_person_only());
-  }
   let (blocked, root) = (services.clone(), found.team.open.repo_root.clone());
   let (id, project) = (found.resource.id(), found.team.open.project.id());
   let published = blocking(move || publish_next(&blocked, &root, id, args.fields)).await?;
@@ -124,7 +137,9 @@ pub(super) async fn remove(services: &Services, found: Found) -> Result<Value, T
   let (root, id) = (team.open.repo_root.clone(), resource.id());
   let checked = root.clone();
   let stopping = blocking(move || {
-    require_admin(&ProjectDb::open(&checked)?)?;
+    let db = ProjectDb::open(&checked)?;
+    require_admin(&db)?;
+    not_sent_yet(&db, id)?;
     stopping_here(&checked, id)
   })
   .await?;
@@ -140,7 +155,7 @@ pub(super) async fn remove(services: &Services, found: Found) -> Result<Value, T
   services.changes.record(team.open.project.id(), Outside::Connections);
   Ok(json!({
     "removed": { "id": id.to_string(), "name": resource.name().as_str(), "team": true, "archived": true },
-    "used_by": serde_json::to_value(&used).map_err(|_| ToolError::interrupted())?,
+    "used_by": serde_json::to_value(&used).expect("what uses a resource is plain data and serializes"),
     "runs_stopping_here": stopping,
   }))
 }
@@ -152,6 +167,28 @@ fn require_admin(db: &ProjectDb) -> Result<(), ToolError> {
   } else {
     Err(StoreError::NotAdmin.into())
   }
+}
+
+/// Refused as `team_mcp_server_not_sent` while team MCP server `id` has only its first version, which the team server
+/// has not numbered: it knows nothing of the server, so there is nothing to read the use of or to archive, and a next
+/// version has nothing to be based on.
+fn not_sent_yet(db: &ProjectDb, id: ResourceId) -> Result<(), ToolError> {
+  if first_waits(db, id)? {
+    return Err(ToolError::refused(
+      "team_mcp_server_not_sent",
+      vec![Message::new("appMcp.errors.teamMcpServerNotSent")],
+    ));
+  }
+  Ok(())
+}
+
+/// Whether the first version of resource `id` waits in the outbox: the team server has not numbered it.
+fn first_waits(db: &ProjectDb, id: ResourceId) -> Result<bool, StoreError> {
+  Ok(
+    db.waiting_publishes()?
+      .iter()
+      .any(|waiting| waiting.resource == id && waiting.based_on.is_none()),
+  )
 }
 
 /// The names of the team's MCP servers, which a new one may not take.
@@ -189,6 +226,7 @@ fn publish_next(
 ) -> Result<Option<orchester_core::id::VersionId>, ToolError> {
   let mut db = ProjectDb::open(root)?;
   require_admin(&db)?;
+  not_sent_yet(&db, id)?;
   let latest = db
     .latest_version::<TeamMcpServer>(id)?
     .ok_or(StoreError::NotPublished(id))?;
@@ -198,8 +236,11 @@ fn publish_next(
   }
   widening::allowed(services, body::widenings(latest.body(), &next))?;
   let (number, now) = (latest.number(), Timestamp::now());
-  db.update_draft::<TeamMcpServer>(id, |_, used| {
-    if used.as_ref().map(Version::number) != Some(number) {
+  db.update_draft::<TeamMcpServer>(id, |draft, used| {
+    // A draft that differs from the published version is someone's unpublished work (the window's editor): saving
+    // over it would lose it, and publishing it unreviewed is not this tool's to do.
+    let draft_is_work = draft.as_ref().is_some_and(|draft| draft.body() != latest.body());
+    if used.as_ref().map(Version::number) != Some(number) || draft_is_work {
       return Err(StoreError::DraftChanged(id));
     }
     Ok(Draft::new(next.clone(), Some(number), now))

@@ -357,20 +357,35 @@ fn domain_team_mcp_server_off_is_taken_and_counted() {
 }
 
 #[test]
-fn domain_team_mcp_server_program_is_person_only_always_and_changes_nothing() {
+fn domain_team_mcp_server_program_name_widens_and_its_path_here_is_never_set_by_a_tool() {
   let mut team = team();
-  let program = std::env::current_exe()
+  let path = std::env::current_exe()
     .expect("the test program")
     .to_string_lossy()
     .into_owned();
-  let set = json!({ "project": "Kontur", "server": "knowledge", "program": program });
+  let named = json!({ "project": "Kontur", "server": "knowledge", "program": "uvx" });
+  let located = json!({ "project": "Kontur", "server": "knowledge", "program": path });
   let changes = team.connection_changes();
   for let_automation_widen in [false, true] {
     team.served.let_automation_widen(let_automation_widen);
-    assert_person_only(&team.served.refused("update_mcp_server", &set));
-    assert!(!team.program_set(team.program_server), "no program was kept");
-    assert_eq!(team.connection_changes(), changes);
+    let refused = team.served.refused("update_mcp_server", &located);
+    assert_eq!(refused["code"], "team_path_refused", "{refused}");
   }
+  assert_eq!(team.connection_changes(), changes, "a path changed nothing");
+
+  // A name is the team's data, which widens: a person's unless they let automation change agent permissions.
+  team.served.let_automation_widen(false);
+  assert_person_only(&team.served.refused("update_mcp_server", &named));
+  assert_eq!(team.connection_changes(), changes);
+
+  team.served.let_automation_widen(true);
+  let made = team.served.ok("update_mcp_server", &named);
+  assert_eq!(made["server"]["launch"]["program"], "uvx", "{made}");
+  assert_eq!(made["server"]["published_version"], 2, "{made}");
+  assert!(
+    !team.program_set(team.program_server),
+    "no tool sets the path on this computer"
+  );
 }
 
 #[test]

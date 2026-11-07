@@ -23,6 +23,7 @@ mod team_server;
 mod choices;
 mod created;
 mod delivery;
+mod mcp_server_remove;
 mod mcp_servers;
 mod pipelines;
 mod reads;

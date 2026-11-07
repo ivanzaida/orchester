@@ -1,27 +1,18 @@
 //! The MCP server tools in a team project against a fake team server: a new server is created as v1 once the server
 //! accepts it and taken back when it refuses; an update publishes the next version, which waits in the outbox while the
-//! server cannot be reached; a remove reads what uses the server, archives it on the server, and reports the runs of
-//! this computer that will stop, without claiming they stopped. A member changes none of it.
+//! server cannot be reached and never replaces an unpublished draft; a URL with a query or a fragment, which would
+//! carry a key to every member, is refused and nothing is stored or sent. A member changes none of it. Removing is in
+//! [`super::mcp_server_remove`].
 
-use std::{collections::BTreeMap, sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use orchester_core::{
-  connection::mcp::McpServerSelection,
-  id::{ConnectionId, IdempotencyKey, ResourceId, RunId, TaskId},
-  name::Name,
-  permission::StepPermissions,
-  resource::{
-    AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, ResourceKind, Slug, Step, StepKey,
-    StepKind, TeamMcpServer,
-  },
-  revision::Revision,
-  run::{BranchName, NewRun, PublishedVersions, RunSnapshot},
-  store::{ResourceStore, RunStore, TaskStore},
-  task::{TaskDetails, TaskLimits},
+  id::ResourceId,
+  resource::{Draft, ResourceKind, TeamMcpServer},
+  store::ResourceStore,
   time::Timestamp,
-  tokens::TokenBudget,
 };
-use orchester_store::{ProjectDb, PublishState};
+use orchester_store::PublishState;
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 
@@ -35,24 +26,24 @@ use crate::{
 
 /// What the fake server saw, in order, and what each request carried.
 #[derive(Default)]
-struct Seen {
-  calls: Vec<String>,
-  created: Vec<Value>,
-  published: Vec<Value>,
-  patched: Vec<Value>,
+pub(super) struct Seen {
+  pub(super) calls: Vec<String>,
+  pub(super) created: Vec<Value>,
+  pub(super) published: Vec<Value>,
+  pub(super) patched: Vec<Value>,
 }
 
 /// How the fake server answers: `None` accepts, `Some((status, code))` refuses.
 #[derive(Default)]
-struct Answers {
-  create: Option<(u16, &'static str)>,
-  publish: Option<(u16, &'static str)>,
-  archive: Option<(u16, &'static str)>,
+pub(super) struct Answers {
+  pub(super) create: Option<(u16, &'static str)>,
+  pub(super) publish: Option<(u16, &'static str)>,
+  pub(super) archive: Option<(u16, &'static str)>,
   /// What `used-by` answers; the route is not found when `None`.
-  used_by: Option<Value>,
+  pub(super) used_by: Option<Value>,
 }
 
-fn start(answers: Answers) -> (TeamServer, Arc<Mutex<Seen>>) {
+pub(super) fn start(answers: Answers) -> (TeamServer, Arc<Mutex<Seen>>) {
   let seen = Arc::new(Mutex::new(Seen::default()));
   let recorded = seen.clone();
   let answers = Arc::new(answers);
@@ -134,7 +125,7 @@ fn archived(route: &str) -> Value {
   })
 }
 
-fn docs() -> Value {
+pub(super) fn docs() -> Value {
   json!({
     "project": "Kontur", "name": "docs", "program": "npx", "args": ["-y", "@acme/docs"],
     "variable_names": ["TOKEN"], "exempt_tools": ["search"],
@@ -344,218 +335,74 @@ fn team_mcp_an_update_made_offline_waits_and_one_the_server_refuses_stays_unsent
 }
 
 #[test]
-fn team_mcp_a_remove_reads_what_uses_the_server_then_archives_it() {
-  let used_by = json!({
-    "resources": [{ "kind": "agent_profile", "id": "01a183cf-b73c-71db-8a62-bd509770cd01", "name": "Builder", "version": 3 }],
-    "runs": [{ "task_key": "KON-12", "run": "01a183cf-b73c-71db-8a62-bd509770cd02" }],
-  });
-  let (server, seen) = start(Answers {
-    used_by: Some(used_by),
-    ..Answers::default()
-  });
+fn team_mcp_a_url_with_a_key_in_it_is_refused_and_nothing_is_stored_or_sent() {
+  let (server, seen) = start(Answers::default());
   let checkout = admin(&server);
-  checkout.call("add_mcp_server", &docs()).expect("created");
+  let remote =
+    |url: &str| json!({ "project": "Kontur", "name": "issues", "url": url, "secret_headers": ["X-API-Key"] });
 
-  let removed = checkout
-    .call("remove_mcp_server", &json!({ "project": "Kontur", "server": "docs" }))
-    .expect("archived");
+  for url in [
+    "https://mcp.example.org/x?key=sk-live-123",
+    "https://mcp.example.org/x#sk-live-123",
+  ] {
+    let refused = checkout.call("add_mcp_server", &remote(url)).expect_err("refused");
+    assert_eq!(refused["error"]["code"], "team_value_refused", "{url}: {refused}");
+    // The tests' translator answers the key of the message, which is where the words point to a secret header.
+    assert!(refused.to_string().contains("teamMcpUrlQuery"), "{refused}");
+    assert!(!refused.to_string().contains("sk-live-123"), "{refused}");
+  }
+  assert_eq!(count(&checkout), 0);
+  assert!(seen.lock().calls.is_empty(), "nothing reached the team server");
+  assert!(checkout.db().waiting_publishes().expect("the outbox").is_empty());
 
-  assert_eq!(removed["removed"]["name"], "docs", "{removed}");
-  assert_eq!(removed["removed"]["archived"], true, "{removed}");
-  assert_eq!(removed["used_by"]["resources"][0]["name"], "Builder", "{removed}");
-  assert_eq!(removed["used_by"]["runs"][0]["task_key"], "KON-12", "{removed}");
-  assert_eq!(removed["runs_stopping_here"], json!([]), "{removed}");
-  let seen = seen.lock();
-  assert_eq!(
-    seen.calls,
-    ["create", "used-by", "archive"],
-    "what uses it is read first"
-  );
-  assert_eq!(seen.patched[0]["archived"], true);
-  assert_eq!(seen.patched[0]["revision"], 1);
+  checkout
+    .call("add_mcp_server", &remote("https://mcp.example.org/x"))
+    .expect("a URL without a query is taken");
+  let changed = json!({ "project": "Kontur", "server": "issues", "url": "https://mcp.example.org/x?key=sk-live-123" });
+  let refused = checkout.call("update_mcp_server", &changed).expect_err("refused");
+  assert_eq!(refused["error"]["code"], "team_value_refused", "{refused}");
+  assert!(!refused.to_string().contains("sk-live-123"), "{refused}");
+  assert_eq!(seen.lock().calls, ["create"], "the update was not sent");
+  assert!(seen.lock().created[0].to_string().contains("secret_headers"));
+  assert!(!seen.lock().created[0].to_string().contains('?'));
 }
 
 #[test]
-fn team_mcp_a_remove_archives_nothing_while_what_uses_it_cannot_be_read_or_the_server_refuses() {
-  let nothing = || json!({ "resources": [], "runs": [] });
-  let (server, seen) = start(Answers {
-    used_by: Some(nothing()),
-    archive: Some((403, "not_admin")),
-    ..Answers::default()
-  });
-  let checkout = admin(&server);
-  checkout.call("add_mcp_server", &docs()).expect("created");
-  let refused = checkout
-    .call("remove_mcp_server", &json!({ "project": "Kontur", "server": "docs" }))
-    .expect_err("refused");
-  assert_eq!(refused["error"]["code"], "team_server_refused", "{refused}");
-  assert_eq!(seen.lock().calls, ["create", "used-by", "archive"]);
-
+fn team_mcp_an_update_does_not_replace_an_unpublished_draft_that_differs() {
   let (server, seen) = start(Answers::default());
   let checkout = admin(&server);
   checkout.call("add_mcp_server", &docs()).expect("created");
-  let refused = checkout.refused("remove_mcp_server", &json!({ "project": "Kontur", "server": "docs" }));
-  assert_eq!(
-    refused, "mcp_server_not_found",
-    "the server could not tell what uses it"
-  );
-  assert_eq!(seen.lock().calls, ["create", "used-by"], "no archive was sent");
+  let id = docs_id(&checkout);
+  let mut db = checkout.db();
+  let published = db
+    .latest_version::<TeamMcpServer>(id)
+    .expect("read")
+    .expect("a version");
+  let work: TeamMcpServer = serde_json::from_value(json!({
+    "name": "docs",
+    "launch": { "kind": "program", "program": "npx", "args": ["--someone-elses-work"] },
+  }))
+  .expect("a body");
+  let at = Timestamp::from_unix_millis(5);
+  db.save_draft(id, &Draft::new(work.clone(), Some(published.number()), at))
+    .expect("a draft");
 
-  let (server, seen) = start(Answers {
-    used_by: Some(nothing()),
-    ..Answers::default()
-  });
-  let checkout = admin(&server);
-  checkout.call("add_mcp_server", &docs()).expect("created");
-  server.set_down(true);
-  assert_eq!(
-    checkout.refused("remove_mcp_server", &json!({ "project": "Kontur", "server": "docs" })),
-    "team_unavailable"
-  );
+  let refused = checkout.refused("update_mcp_server", &change(json!({ "args": ["--other"] })));
+
+  assert_eq!(refused, "draft_changed");
   assert_eq!(seen.lock().calls, ["create"]);
-}
+  assert_eq!(versions(&checkout), 1);
+  let kept = db
+    .draft::<TeamMcpServer>(id)
+    .expect("read")
+    .expect("the draft is still there");
+  assert_eq!(kept.body(), &work);
 
-#[test]
-fn team_mcp_a_remove_names_the_runs_of_this_computer_that_will_stop_without_claiming_they_stopped() {
-  let (server, seen) = start(Answers {
-    used_by: Some(json!({ "resources": [], "runs": [] })),
-    ..Answers::default()
-  });
-  let knowledge = ResourceId::generate();
-  let mut pinned = None;
-  let owner = Standing {
-    role: "owner",
-    widens: true,
-  };
-  let checkout = Checkout::build(
-    Some(&server),
-    (&[], owner),
-    |db| pinned = Some(pin_run(db, knowledge)),
-    true,
-  );
-  let (run, task) = pinned.expect("a run");
-
-  let removed = checkout
-    .call(
-      "remove_mcp_server",
-      &json!({ "project": "Kontur", "server": knowledge.to_string() }),
-    )
-    .expect("archived");
-
-  assert_eq!(
-    removed["runs_stopping_here"],
-    json!([{ "run": run.to_string(), "task": task.to_string() }]),
-    "{removed}"
-  );
-  assert_eq!(seen.lock().calls, ["used-by", "archive"]);
-  let state = checkout
-    .db()
-    .unfinished_runs()
-    .expect("runs")
-    .into_iter()
-    .flatten()
-    .count();
-  assert_eq!(
-    state, 1,
-    "the run is still running: the stream's archive event stops it, not this answer"
-  );
-}
-
-/// A started run of a task that pins a profile choosing the team MCP server `server`, kept in the project as a synced
-/// one is (before the project is linked, so the tasks and runs are this computer's own).
-fn pin_run(db: &mut ProjectDb, server: ResourceId) -> (RunId, TaskId) {
-  let at = Timestamp::from_unix_millis;
-  let name = |text: &str| Name::new(text).expect("valid name");
-  let resource = orchester_core::resource::Resource::new(
-    server,
-    ResourceKind::McpServer,
-    Slug::new("knowledge").expect("slug"),
-    name("knowledge"),
-    at(1),
-  );
-  let revision = orchester_core::sharing::TaskRevision::try_from(1_u64).expect("a revision");
-  db.keep_shared_resource(&resource, revision).expect("kept");
-  let chosen = ConnectionId::from_uuid(server.as_uuid());
-  let profile = AgentProfile::new(
-    name("Builder"),
-    String::new(),
-    PromptText::new("Build.").expect("prompt"),
-    ConnectionId::generate(),
-    ModelId::new("gpt-5.5").expect("model"),
-    ProviderSettings::default(),
-  )
-  .with_mcp_servers(McpServerSelection::new(vec![chosen]).expect("servers"));
-  let builder = db
-    .create_resource(Slug::new("builder").expect("slug"), name("Builder"), &profile, at(2))
-    .expect("profile")
-    .id();
-  let profiles = BTreeMap::from([(
-    builder,
-    db.publish_draft::<AgentProfile>(builder, at(3)).expect("publish"),
-  )]);
-  let step = Step {
-    key: StepKey::new("implement").expect("key"),
-    name: name("Implement"),
-    kind: StepKind::Agent {
-      profile: Some(builder),
-      repository: RepositoryAccess::Write,
-      model: None,
-      permissions: StepPermissions::default(),
-    },
-    instructions: PromptText::new("").expect("prompt"),
-    depends_on: Default::default(),
-    approval_gate: false,
-    on_failure: None,
-    budget: None,
-  };
-  let pipeline = Pipeline::new(vec![step]).expect("pipeline");
-  let delivery = db
-    .create_resource(Slug::new("delivery").expect("slug"), name("Delivery"), &pipeline, at(4))
-    .expect("pipeline")
-    .id();
-  let version = db.publish_draft::<Pipeline>(delivery, at(5)).expect("publish");
-  let (tools, instructions, skills) = (BTreeMap::new(), BTreeMap::new(), BTreeMap::new());
-  let published = PublishedVersions {
-    profiles: &profiles,
-    tools: &tools,
-    instructions: &instructions,
-    skills: &skills,
-  };
-  let snapshot = RunSnapshot::build(delivery, &version, published).expect("snapshot");
-  started_run(db, snapshot)
-}
-
-/// A started run of a new task on `snapshot`.
-fn started_run(db: &mut ProjectDb, snapshot: RunSnapshot) -> (RunId, TaskId) {
-  let at = Timestamp::from_unix_millis;
-  let name = |text: &str| Name::new(text).expect("valid name");
-  let budget = TokenBudget::new(1_000_000).expect("above zero");
-  let details = TaskDetails {
-    title: name("Search"),
-    brief: String::new(),
-    acceptance_criteria: Vec::new(),
-    pipeline: None,
-    limits: TaskLimits::new(Some(budget), Some(Duration::from_secs(1_800))).expect("limits"),
-  };
-  let task = db
-    .create_tasks(IdempotencyKey::generate(), vec![details], at(10))
-    .expect("task")[0]
-    .id();
-  let new = NewRun {
-    task,
-    snapshot,
-    branch: BranchName::new("orchester/kon-run-1").expect("branch"),
-    base: Revision::new(&"a".repeat(40)).expect("revision"),
-    base_branch: None,
-    base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
-    budget: Some(budget),
-    max_duration: Some(Duration::from_secs(1_800)),
-  };
-  let mut run = db.create_run(IdempotencyKey::generate(), new, at(11)).expect("run");
-  let events = run.start(at(11)).expect("start");
-  db.append_events(&run, &events).expect("append");
-  let execution = run.current_attempt().expect("attempt").executions()[0].id();
-  let events = run.start_step(execution, at(11)).expect("start step");
-  db.append_events(&run, &events).expect("append");
-  (run.id(), task)
+  // A draft that holds what is published is nobody's work: it is replaced.
+  db.save_draft(id, &Draft::new(published.body().clone(), Some(published.number()), at))
+    .expect("a draft equal to the published version");
+  let made = checkout
+    .call("update_mcp_server", &change(json!({ "args": ["--other"] })))
+    .expect("published");
+  assert_eq!(made["server"]["published_version"], 2, "{made}");
 }
