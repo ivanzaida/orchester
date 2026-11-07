@@ -22,13 +22,18 @@ fn instructions_empty_and_new_draft_publish() {
   screen.set("instruction-name", "Working agreement");
   screen.set("instruction-prompt", "Follow the approved plan.");
   screen.click("instruction-create");
-  screen.until("draft created", |s| s.exists("instruction-publish"));
-  let id = screen.listed().entries[0].id;
-  assert!(screen.entry(id).state.has_draft());
-  screen.click("instruction-publish");
-  screen.until("published", |s| {
-    s.entry(id).state.published().is_some() && !s.entry(id).state.has_draft()
+  screen.until("created as v1", |s| {
+    s.listed()
+      .entries
+      .first()
+      .is_some_and(|e| e.state.published().is_some() && !e.state.has_draft())
   });
+  let id = screen.listed().entries[0].id;
+  assert_eq!(screen.entry(id).state.published().expect("v1").get(), 1);
+  assert!(
+    !screen.exists("instruction-publish"),
+    "a new rule has no draft to publish"
+  );
   assert_eq!(screen.entry(id).body.text().as_str(), "Follow the approved plan.");
 }
 #[test]
@@ -245,7 +250,13 @@ fn instructions_new_rule_chooses_its_scope_and_the_next_starts_fresh() {
   screen.choose("instruction-scope-role-select", "Builder");
   screen.set("instruction-prompt", "Do the work.");
   screen.click("instruction-create");
-  screen.until("created role", |s| s.exists("instruction-publish"));
+  screen.until("created role", |s| {
+    s.listed()
+      .entries
+      .iter()
+      .any(|e| &*e.name == "Role rule" && e.state.published().is_some())
+      && !s.exists("instruction-create")
+  });
   screen.click("instructions-new");
   screen.until("a fresh new rule", |s| {
     s.exists("instruction-scope-project") && s.exists("instruction-create")

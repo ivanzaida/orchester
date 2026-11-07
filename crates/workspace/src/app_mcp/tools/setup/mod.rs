@@ -9,6 +9,7 @@ mod api_providers;
 mod complete;
 mod connection_specs;
 mod connections;
+mod created;
 mod decision_connections;
 mod instructions;
 mod mcp_preview;
@@ -124,8 +125,12 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "save_profile_draft",
-    description: "Saves an agent profile's draft with every field of its editor; without `profile` a new profile is \
-                  made. Checked as the editor checks it: a role, an agent connection of the project and a model are \
+    description: "Without `profile`, creates a new agent profile as its version 1 in one call (no draft; it returns the \
+                  published profile or a refusal, and in a team project only once the team server accepts it, else \
+                  nothing is created; offline it waits in the outbox, waiting_for_server); with `profile`, saves \
+                  that profile's draft, which publish_profile publishes as its next version. Every field of the \
+                  editor is given. Checked as the editor checks it: a role, an agent connection of the project and \
+                  a model are \
                   required; role instructions may use {{variables}}; permissions must be ones the connection's CLI \
                   enforces on this computer (repository read_only or write; commands ask_before, allowed with a \
                   list of command prefixes, or any_in_worktree; network off or on; extra writable folders only with \
@@ -138,14 +143,18 @@ const SPECS: &[Spec] = &[
                   out, a new profile gets the most restrictive permissions. With expected_revision, the revision \
                   get_profile or the last save returned, the draft is saved only while it is unchanged, else \
                   refused as draft_changed; without it the save goes over a change a person or another agent \
-                  saved meanwhile. Publish it with publish_profile.",
+                  saved meanwhile. A new profile is published at once, so it is refused as publish_profile is \
+                  (a connection that \
+                  does not run agents, permissions its CLI cannot enforce, and person_only for any responsibilities \
+                  or role instructions); a draft exists only for a profile that has a version.",
     schema: schema_for_type::<profile_input::SaveProfileDraft>,
     read_only: false,
   },
   Spec {
     name: "publish_profile",
-    description: "Publishes an agent profile's draft as its next version, as Publish does, so pipeline steps can run \
-                  it. Refused for a draft started from an older version than the latest, a connection that is gone \
+    description: "Publishes an agent profile's draft (a change to a profile that has a version) as its next version, as \
+                  Publish does, so pipeline steps can run it. Refused for a draft started from an older version \
+                  than the latest, a connection that is gone \
                   or does not run agents, permissions its CLI cannot enforce, as person_only a draft broader than \
                   the latest version while Let automation change agent permissions is off, and as draft_changed a \
                   draft that changed while it was checked. A draft whose role, responsibilities or role \
@@ -248,13 +257,16 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "save_instruction_draft",
-    description: "Saves an instruction's draft as its editor does; without `instruction` a new one is made under \
-                  `name`. `applies_in` is project, agent_role (with `role`; it then reaches every agent of the \
+    description: "Without `instruction`, creates a new instruction under `name` as its version 1 in one call (no draft; \
+                  it returns the published instruction or a refusal, and in a team project only once the team server \
+                  accepts it; offline it waits in the outbox, waiting_for_server); with `instruction`, saves its \
+                  draft as its editor does, which publish_instruction publishes as its next version. \
+                  `applies_in` is project, agent_role (with `role`; it then reaches every agent of the \
                   role), pipeline (with `pipeline`) or step (with `pipeline` and `step`); `agents` all, or some \
-                  roles or profiles; `events` start, resume or both. The text may use {{variables}} and may be blank \
-                  in a draft. A draft reaches no agent, so saving is always open; the Instructions page marks it as \
-                  written by automation (draft_by_automation) until a person saves it or it is published. Publish it \
-                  with publish_instruction.",
+                  roles or profiles; `events` start, resume or both. The text may use {{variables}}; a new instruction \
+                  needs a text and is refused as publishing is (blank text, a variable without a value, person_only). \
+                  Saving a draft of an existing instruction is always open; the Instructions page marks it as written \
+                  by automation (draft_by_automation) until a person saves it or it is published.",
     schema: schema_for_type::<instructions::SaveInstructionDraft>,
     read_only: false,
   },

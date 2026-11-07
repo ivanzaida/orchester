@@ -47,6 +47,7 @@ mod message_records;
 mod messages;
 mod modules;
 mod native;
+mod new_resources;
 mod notice_records;
 mod orchestrator;
 mod orchestrator_compactions;

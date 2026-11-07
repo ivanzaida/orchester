@@ -35,7 +35,7 @@ fn create(f: &Fixture) -> orchester_core::id::ResourceId {
   .expect("saved")
 }
 #[test]
-fn tools_editor_requires_review_for_creation_and_first_publication() {
+fn tools_editor_requires_review_for_creation_and_publishes_it_as_v1() {
   let f = Fixture::new();
   let edit = Edit::Save {
     name: Name::new("Checks").expect("name"),
@@ -45,12 +45,11 @@ fn tools_editor_requires_review_for_creation_and_first_publication() {
   assert_eq!(edit.reasons(None).len(), 1);
   assert!(editor::apply_in(f.repo.path(), edit, &Allowed::These(vec![])).is_err());
   let id = create(&f);
+  assert!(f.db.latest_version::<Tool>(id).expect("version").is_some());
   let data = EditorData::load_in(f.repo.path(), Some(id)).expect("read");
   let entry = data.listed.tool(id).expect("entry").clone();
-  let publish = Edit::Publish(entry);
-  assert!(editor::apply_in(f.repo.path(), publish.clone(), &Allowed::These(vec![])).is_err());
-  editor::apply_in(f.repo.path(), publish, &Allowed::Anything).expect("published");
-  assert!(f.db.latest_version::<Tool>(id).expect("version").is_some());
+  assert!(!entry.state.has_draft());
+  assert!(editor::apply_in(f.repo.path(), Edit::Publish(entry), &Allowed::Anything).is_err());
 }
 #[test]
 fn tools_editor_rejects_stale_reads_and_duplicate_names() {

@@ -21,6 +21,7 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 
 use super::{
+  created::{settle, with_waiting},
   project::{Variable, environment},
   project_tools::{tool_json, tool_named, tools_with_revision},
   tool_program::found_program,
@@ -34,7 +35,7 @@ use crate::{
   drafts::save_draft_expecting_in,
   messages::{self, Message},
   tools::{
-    data::{ProjectTools, ToolEntry, create_tool},
+    data::{ProjectTools, ToolEntry, create_published_tool},
     form::program_message,
   },
 };
@@ -73,9 +74,9 @@ pub struct SaveToolDraft {
 }
 
 pub async fn save_tool_draft(services: &Services, args: SaveToolDraft) -> Result<Value, ToolError> {
-  let services = services.clone();
-  blocking(move || {
-    let open = services.project(&args.project)?;
+  let blocked = services.clone();
+  let (open, id, saved, created) = blocking(move || {
+    let open = blocked.project(&args.project)?;
     let mut db = ProjectDb::open(&open.repo_root)?;
     let tools = ProjectTools::load(&db)?;
     let project = db.project_environment()?;
@@ -86,7 +87,7 @@ pub async fn save_tool_draft(services: &Services, args: SaveToolDraft) -> Result
       .transpose()?;
     let (id, saved) = match existing {
       Some(entry) => {
-        let tool = changed_tool(&services, &args, entry, (&project, &open.repo_root))?;
+        let tool = changed_tool(&blocked, &args, entry, (&project, &open.repo_root))?;
         let expected = args.expected_revision.as_deref();
         (
           entry.id,
@@ -101,27 +102,41 @@ pub async fn save_tool_draft(services: &Services, args: SaveToolDraft) -> Result
       None => {
         let action = command(&args, None, &project, &open.repo_root)?;
         let name = new_name(&tools, args.name.as_deref())?;
-        widening::allowed(&services, vec![Message::new("appMcp.projectTools.widens.newTool")])?;
+        // A new tool is created as v1, with no draft: the tool's first version, which runs a program with the
+        // person's rights, is a person's decision as publishing it is.
+        widening::allowed(&blocked, vec![Message::new("appMcp.projectTools.widens.newTool")])?;
         let tool = command_tool(args.description.as_deref().unwrap_or_default(), action, None);
         (
-          create_tool(&mut db, &name, &tool, Timestamp::now())?,
-          DraftSaved::Stored,
+          create_published_tool(&mut db, &name, &tool, Timestamp::now())?,
+          DraftSaved::Discarded,
         )
       }
     };
+    Ok((open, id, saved, existing.is_none()))
+  })
+  .await?;
+  let waiting = if created {
+    settle(services, open.repo_root.clone(), id).await
+  } else {
+    Ok(None)
+  };
+  // After a refused creation took the tool back, so a screen that reads on this does not see it.
+  services
+    .changes
+    .record(open.project.id(), crate::tasks::outside::Outside::Tools);
+  let waiting = waiting?;
+  let tool = blocking(move || {
     let (tools, revision) = tools_with_revision(&open.repo_root, id)?;
     let entry = tools
       .tool(id)
       .ok_or_else(|| ToolError::not_found(Missing::Tool, id.to_string()))?;
-    services
-      .changes
-      .record(open.project.id(), crate::tasks::outside::Outside::Tools);
     let mut value = tool_json(&tools, entry, open.project.id());
     value["draft_kept"] = json!(saved == DraftSaved::Stored);
     value["revision"] = json!(revision);
-    Ok(json!({ "tool": value }))
+    Ok(value)
   })
-  .await
+  .await?;
+  Ok(with_waiting(json!({ "tool": tool }), "tool", waiting))
 }
 
 /// `entry` with the fields `args` give, unless it widens what the tool runs and no person lets it.

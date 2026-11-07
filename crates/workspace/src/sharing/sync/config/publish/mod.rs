@@ -130,7 +130,8 @@ impl<S: ConfigServer> ResourceStore for RemoteResourceStore<S> {
   type Error = SharingError;
 
   /// A new resource of the team's, kept here as a draft until the admin publishes it: its first version creates it on
-  /// the server.
+  /// the server. A pipeline is made this way; profiles, instructions, skills and tools are created as v1 with
+  /// no draft (`ProjectDb::create_published`, sent by `Servers::send_created`).
   fn create_resource<B: ResourceBody>(
     &mut self,
     slug: Slug,
