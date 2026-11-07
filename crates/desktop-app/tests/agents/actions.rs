@@ -16,22 +16,23 @@ use orchester_workspace::agents::data::VersionState;
 use super::harness::Agents;
 
 #[test]
-fn agents_create_first_draft_and_publish() {
+fn agents_create_publishes_the_first_version() {
   let mut screen = Agents::new(true);
   screen.go();
   screen.click("agents-new");
   screen.until("the new profile's editor", |s| s.exists("agent-role"));
   screen.set("agent-role", "Reviewer");
-  screen.set("agent-instructions", "Review the implementation.");
   screen.set("agent-custom-model", "test-model");
+  // No role instructions: a prompt change is published only after the person's question, which Create does not ask yet.
   screen.click("agent-create");
-  screen.until("created", |s| {
-    s.listed().profiles.len() == 1 && s.exists("agent-publish") && !s.exists("agent-create")
+  screen.until("created as v1", |s| {
+    s.listed().profiles.len() == 1 && !s.exists("agent-create")
   });
-  screen.click("agent-publish");
-  screen.until("first version", |s| {
-    matches!(s.listed().profiles[0].state, VersionState::Published(_))
-  });
+  assert!(matches!(
+    screen.listed().profiles[0].state,
+    VersionState::Published(version) if version.get() == 1
+  ));
+  assert!(!screen.exists("agent-publish"), "a new profile has no draft to publish");
 }
 
 #[test]

@@ -8,7 +8,7 @@ use orchester_workspace::{agents::data::VersionState, tools::data::ProjectTools}
 use super::harness::{Tools, command_text};
 
 #[test]
-fn tools_new_draft_saves_all_fields_then_publishes_with_questions() {
+fn tools_new_tool_saves_all_fields_as_v1_after_its_questions() {
   let mut t = Tools::new();
   t.go(ProjectPage::Tools);
   assert!(t.exists("tools-empty"));
@@ -43,7 +43,7 @@ fn tools_new_draft_saves_all_fields_then_publishes_with_questions() {
       .contains("your rights, network access and no sandbox")
   );
   t.confirm();
-  t.wait_state("Draft");
+  t.wait_state("Published v1");
   let Route::Project(_, ProjectPage::Tool(id, _)) = t.window.navigation().route_now() else {
     panic!("saved editor route")
   };
@@ -55,11 +55,7 @@ fn tools_new_draft_saves_all_fields_then_publishes_with_questions() {
   assert_eq!(text.output_limit, "64");
   assert_eq!(text.environment, "CI=true\nRUST_LOG=info");
   assert!(std::path::Path::new(&text.program).is_absolute());
-  t.wait_for("tool-publish");
-  t.click("tool-publish");
-  t.confirm();
-  t.wait_state("Published v1");
-  assert!(matches!(t.entry(id).state, VersionState::Published(_)));
+  assert!(matches!(t.entry(id).state, VersionState::Published(v) if v.get() == 1));
   assert!(t.db().draft::<Tool>(id).expect("draft read").is_none());
 }
 

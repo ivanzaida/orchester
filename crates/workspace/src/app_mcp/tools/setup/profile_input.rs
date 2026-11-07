@@ -15,7 +15,7 @@ use orchester_core::{
     invocation::Platform,
     mcp::{McpServer, McpServerSelection},
   },
-  id::ConnectionId,
+  id::{ConnectionId, ResourceId},
   permission::{
     AgentPermissions, AllowedCommands, ApprovalMode, BrowserPermission, CodexSandbox, CommandPermission, NetworkAccess,
     WritableFolders,
@@ -31,7 +31,8 @@ use serde_json::{Value, json};
 
 use super::{
   connections::agent_named,
-  profiles::{profile_named, profile_with_revision},
+  created::{settle, with_waiting},
+  profiles::{profile_named, profile_with_revision, publish_error},
   widening,
 };
 use crate::{
@@ -48,6 +49,7 @@ use crate::{
   },
   drafts::save_draft_expecting_in,
   messages::Message,
+  prompt_changes,
 };
 
 #[derive(Deserialize, JsonSchema)]
@@ -190,9 +192,9 @@ impl From<Approvals> for ApprovalMode {
 }
 
 pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> Result<Value, ToolError> {
-  let services = services.clone();
-  blocking(move || {
-    let open = services.project(&args.project)?;
+  let blocked = services.clone();
+  let (open, id, created) = blocking(move || {
+    let open = blocked.project(&args.project)?;
     let root = open.repo_root.clone();
     let agents = ProjectAgents::load_in(&root)?;
     let db = ProjectDb::open(&root)?;
@@ -218,25 +220,51 @@ pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> 
     servers::check(&project_servers, existing.map(|entry| &entry.profile), &profile)
       .map_err(|reason| refused("mcp_server_not_offered", reason))?;
     let id = existing.map(|entry| entry.id);
-    widening::check_profile(&services, &db, (id, &profile), connection.provider())?;
-    let id = match existing {
+    widening::check_profile(&blocked, &db, (id, &profile), connection.provider())?;
+    let (id, created) = match existing {
       Some(entry) => {
         save_draft_expecting_in(&root, entry.id, profile, args.expected_revision.as_deref())?;
-        entry.id
+        (entry.id, false)
       }
       None if args.expected_revision.is_some() => {
         return Err(ToolError::InvalidArguments(
           "expected_revision names a profile's draft; a new profile has none".into(),
         ));
       }
-      None => apply_in(&root, ProfileChange::Create(profile))?,
+      None => (create_published(&blocked, &root, &profile, &connection)?, true),
     };
-    services
+    blocked
       .changes
       .record(open.project.id(), crate::tasks::outside::Outside::Profiles);
-    Ok(json!({ "profile": profile_with_revision(&open, id)? }))
+    Ok((open, id, created))
   })
-  .await
+  .await?;
+  let waiting = if created {
+    settle(services, open.repo_root.clone(), id).await?
+  } else {
+    None
+  };
+  let profile = blocking(move || profile_with_revision(&open, id)).await?;
+  Ok(with_waiting(json!({ "profile": profile }), "profile", waiting))
+}
+
+/// A new profile created as v1, with no draft: published as Publish does, so it is refused where publishing is, and its
+/// role instructions and responsibilities reach its agents' prompts, which a person decides.
+fn create_published(
+  services: &Services,
+  root: &Path,
+  profile: &AgentProfile,
+  connection: &AgentConnection,
+) -> Result<ResourceId, ToolError> {
+  // The editor offers no Publish on a connection that runs no agents.
+  if !connection.provider().runs_agents() {
+    return Err(refused(
+      "connection_runs_no_agents",
+      Message::new("appMcp.errors.connectionRunsNoAgents"),
+    ));
+  }
+  widening::prompt_allowed(services, prompt_changes::profile(None, profile))?;
+  apply_in(root, ProfileChange::Create(profile.clone())).map_err(|error| publish_error(&error))
 }
 
 /// The profile the editor's fields make, refused with every field's reason.

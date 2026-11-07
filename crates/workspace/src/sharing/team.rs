@@ -169,7 +169,7 @@ impl Servers {
 }
 
 /// What to tell the person about `error`, from the server at `address` when it was opened.
-fn said(error: &SharingError, address: Option<&ServerAddress>) -> Message {
+pub(super) fn said(error: &SharingError, address: Option<&ServerAddress>) -> Message {
   match (error, address) {
     (_, Some(address)) => error.message(address),
     (SharingError::Store(error), None) => messages::store_error(error),
