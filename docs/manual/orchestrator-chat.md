@@ -242,7 +242,7 @@ In the composer's slash menu, after *New conversation* and *History*:
 |---|---|---|
 | `/watch-module` | *Watch modules* — "Their tasks' events come here" | Opens a picker of the project's open modules (those with a task left to watch first), then *Tasks without a module* and *Everything in* the project. Each row says how many tasks, running and waiting, and who leads it. |
 | `/watch-task` | *Watch tasks* — "Only these tasks' events" | Opens a picker of the project's tasks by key or title, with their workflow status, module and who leads them. |
-| `/unwatch` | *Stop watching* | Shown faded (*Watches nothing yet*) in this version; stop a subscription with × on its header chip or *Stop watching* in a `/watching` answer. |
+| `/unwatch` | *Stop watching* | Offered while the conversation leads something. Opens a picker of only what this conversation watches (*Watched here*), each with what is still open there, then *All of them*; Enter adds the focused row as a chip, the text after the chips only filters, and Ctrl Enter (Cmd Enter) stops the chosen subscriptions at once, with no agent turn. You can also stop one with × on its header chip or *Stop watching* in a `/watching` answer. |
 | `/watching` | *What I watch* — "What this conversation leads and what waits there" | Faded while the conversation leads nothing. Keeps the command with Orchester's answer under it, read from the live state: each subscription (target, kind, since when, its order) with what waits there, and *Stop watching* on each. |
 
 In a picker, Enter adds the focused row as a chip, Backspace removes the last chip, **Ctrl Enter (⌘Enter) watches**,
