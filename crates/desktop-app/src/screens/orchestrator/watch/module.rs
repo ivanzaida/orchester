@@ -4,7 +4,7 @@
 //! the chips as their order (`orchester_workspace::orchestrator::watch::watch_in`), off the UI thread and with no agent
 //! turn. A new conversation is kept with its command, and the screen shows it. What another conversation leads is
 //! kept nowhere: the conversation's line names it, and its card offers it. A command that applied nothing says why
-//! over the composer.
+//! over the composer. `/watch-task` ([`super::task`]) applies its chips the same way.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -39,7 +39,7 @@ use crate::{
     icon::Icon,
     message::message_text,
     notice::{Notice, NoticeTone},
-    slash::{Applied, Apply, Does, SlashCommand, Taking},
+    slash::{Applied, Apply, Choice, Does, SlashCommand, Taking},
   },
 };
 
@@ -128,33 +128,32 @@ pub(in crate::screens::orchestrator) fn module_command(ctx: &Ctx, view: &View, p
     detail: ctx.t("composer.slash.command.watchModule.detail"),
     does: Some(Does::Take(Taking {
       picker: Arc::new(picker),
-      apply: apply(view, project.open.repo_root.clone()),
+      apply: apply(view, project.open.repo_root.clone(), named_module),
     })),
   }
 }
 
+/// The target a chip of the module picker names, a module by its name.
+fn named_module(choice: &Choice) -> Option<NamedTarget> {
+  let target = target_of(&choice.key)?;
+  let name = matches!(target, WatchTarget::Module(_)).then(|| choice.label.to_string());
+  Some(NamedTarget { target, name })
+}
+
 /// Ctrl Enter on the chips: the conversation shown, or a new one when the screen shows none yet, watches the targets
-/// chosen with the words after them as their order. Only a person's keys apply it: the order is kept as the person's
-/// own words, which the agent follows, and no subscription records who asked for it, so synthetic input (an MCP
-/// client's) is refused with a notice, and the chips and the order stay.
-fn apply(view: &View, root: PathBuf) -> Apply {
+/// the chips name (`named`) with the words after them as their order. Only a person's keys apply it: the order is kept
+/// as the person's own words, which the agent follows, and no subscription records who asked for it, so synthetic
+/// input (an MCP client's) is refused with a notice, and the chips and the order stay.
+pub(super) fn apply(view: &View, root: PathBuf, named: fn(&Choice) -> Option<NamedTarget>) -> Apply {
   let (of, action) = (view.of.clone(), view.watching.clone());
   Arc::new(move |applied: Applied| {
     if is_synthetic_input() {
-      tracing::warn!("synthetic input asked to watch modules; not taken");
+      tracing::warn!("synthetic input asked to watch; not taken");
       let refused = Message::new(PERSON_ONLY);
       action.state().set(FutureState::rejected(refused, None));
       return false;
     }
-    let targets: Vec<NamedTarget> = applied
-      .choices
-      .iter()
-      .filter_map(|choice| {
-        let target = target_of(&choice.key)?;
-        let name = matches!(target, WatchTarget::Module(_)).then(|| choice.label.to_string());
-        Some(NamedTarget { target, name })
-      })
-      .collect();
+    let targets: Vec<NamedTarget> = applied.choices.iter().filter_map(named).collect();
     let now = Timestamp::now();
     let (chat, new) = match of.get_untracked() {
       Some(Conversation::Chat(id)) => (Chat::named(id, "", now), false),

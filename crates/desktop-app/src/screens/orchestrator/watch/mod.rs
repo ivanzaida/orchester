@@ -6,15 +6,21 @@
 //! Each line is one row, 4 in at its sides, its parts 10 apart: a 13 icon, its words in 12.5 `text_secondary`, what it
 //! adds after them in 12 `text_muted` filling the row, and at its end the time or *Open ↗* in 12 `text_secondary`.
 //!
-//! The `/watch-module` command and its picker of modules (ORC-772) are [`module`], [`picker`] and [`rows`].
+//! The `/watch-module` command and its picker of modules (ORC-772) are [`module`], [`picker`] and [`rows`]; the
+//! `/watch-task` command and its picker of tasks (ORC-773) are [`task`] and [`task_rows`]. Both pickers read the
+//! [`catalog`] and draw in the [`panel`] they share.
 
+mod catalog;
 mod command;
 mod ended;
 mod facts;
 mod lines;
 mod module;
+mod panel;
 mod picker;
 mod rows;
+mod task;
+mod task_rows;
 
 use std::sync::Arc;
 
@@ -37,6 +43,7 @@ pub(super) use self::{
   ended::line as ended_line,
   facts::WatchFacts,
   module::{MODULE, WatchAction, follow, module_command, problem, watch_action},
+  task::{TASK, task_command},
 };
 use super::timeline::TurnEnv;
 use crate::{

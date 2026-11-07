@@ -90,34 +90,20 @@ fn history(ctx: &Ctx, view: &View) -> SlashCommand {
   }
 }
 
-/// The watch commands: *Watch modules* with its picker ([`super::watch`], ORC-772); *What I watch*
-/// ([`super::watching`], ORC-775), offered while the conversation leads something; faded with why, *Watch tasks* until
-/// its picker exists (ORC-773 gives it `Does::Take` with its `ui::slash::ArgumentPicker`), and *Stop watching* while
-/// the conversation watches nothing, which it says until its command exists.
+/// The watch commands: *Watch modules* and *Watch tasks* with their pickers ([`super::watch`], ORC-772, ORC-773);
+/// *What I watch* ([`super::watching`], ORC-775), offered while the conversation leads something; *Stop watching*
+/// faded while the conversation watches nothing, which it says until its command exists.
 fn watch_commands(ctx: &Ctx, view: &View, project: &ShownProject) -> [SlashCommand; 4] {
-  let faded = |name, icon, label: Arc<str>, detail: Arc<str>| SlashCommand {
-    name,
-    icon,
-    label,
-    detail,
-    does: None,
-  };
-  let not_yet = ctx.t("composer.slash.command.watch.notYet");
-  let nothing = ctx.t("composer.slash.command.watch.nothing");
   [
     super::watch::module_command(ctx, view, project),
-    faded(
-      "watch-task",
-      Icon::ScanEye,
-      ctx.t("composer.slash.command.watchTask.label"),
-      not_yet,
-    ),
-    faded(
-      "unwatch",
-      Icon::EyeOff,
-      ctx.t("composer.slash.command.unwatch.label"),
-      nothing,
-    ),
+    super::watch::task_command(ctx, view, project),
+    SlashCommand {
+      name: "unwatch",
+      icon: Icon::EyeOff,
+      label: ctx.t("composer.slash.command.unwatch.label"),
+      detail: ctx.t("composer.slash.command.watch.nothing"),
+      does: None,
+    },
     view
       .what_i_watch
       .command(ctx, project.open.repo_root.clone(), &view.follow),
