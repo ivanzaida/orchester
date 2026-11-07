@@ -25,7 +25,7 @@ use orchester_core::{
   },
   run::{
     BranchName, CommitId, PublishedVersions, RunSnapshot,
-    bundle::{CanonicalExecutionInputs, PinnedBodies, ResourceLabel, file_sha256},
+    bundle::{CanonicalExecutionInputs, ExecutionProfile, PinnedBodies, ResourceLabel, file_sha256},
   },
   sharing::TaskRevision,
   time::Timestamp,
@@ -79,7 +79,7 @@ impl Config {
         (pipeline_version.id(), label("delivery", "Delivery")),
         (skill_version.id(), label(SKILL_SLUG, "Checks")),
       ],
-      profiles: &[profile_version],
+      profiles: &[(profile_version.id(), ExecutionProfile::of(profile_version.body()))],
       instructions: &[],
       tools: &[],
       skills: &[skill_version],

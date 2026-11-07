@@ -27,7 +27,7 @@ use orchester_core::{
   },
   run::{
     BranchName, CommitId, PublishedVersions, RunSnapshot,
-    bundle::{CanonicalExecutionInputs, PinnedBodies, bundle_sha256, canonical_bytes, file_sha256},
+    bundle::{CanonicalExecutionInputs, ExecutionProfile, PinnedBodies, bundle_sha256, canonical_bytes, file_sha256},
   },
   sharing::TaskRevision,
   time::Timestamp,
@@ -122,7 +122,10 @@ fn fixture() -> Fixture {
     (only(&skills).id(), label("checks", "Checks")),
   ];
   let bodies = PinnedBodies {
-    profiles: &profiles.into_values().collect::<Vec<_>>(),
+    profiles: &profiles
+      .values()
+      .map(|version| (version.id(), ExecutionProfile::of(version.body())))
+      .collect::<Vec<_>>(),
     instructions: &instructions.into_values().collect::<Vec<_>>(),
     tools: &tools.into_values().collect::<Vec<_>>(),
     skills: &skills.into_values().collect::<Vec<_>>(),

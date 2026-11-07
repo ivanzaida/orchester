@@ -19,8 +19,7 @@ use crate::{
   name::Name,
   permission::AgentPermissions,
   resource::{
-    AgentProfile, Instruction, Pipeline, PipelineSources, Skill, Slug, StepKey, StepKind, Tool, ToolAction, Version,
-    VersionNumber,
+    Instruction, Pipeline, PipelineSources, Skill, Slug, StepKey, StepKind, Tool, ToolAction, Version, VersionNumber,
   },
   run::{PinnedVersion, RunSnapshot, StepExecutor, StepSnapshot},
 };
@@ -89,10 +88,12 @@ impl<B> PinnedBody<B> {
 }
 
 /// The published versions a snapshot's pins are looked up in, by version id; older versions as well as the latest.
-/// `labels` holds each pinned version's label, the pipeline's too, by version id.
+/// `profiles` holds each profile version as the bundle carries it, which the caller makes from the body it holds: a
+/// desktop from a local profile ([`ExecutionProfile::of`]), the team server from a team profile
+/// ([`ExecutionProfile::of_team`]). `labels` holds each pinned version's label, the pipeline's too, by version id.
 #[derive(Clone, Copy, Debug)]
 pub struct PinnedBodies<'a> {
-  pub profiles: &'a [Version<AgentProfile>],
+  pub profiles: &'a [(VersionId, ExecutionProfile)],
   pub instructions: &'a [Version<Instruction>],
   pub tools: &'a [Version<Tool>],
   pub skills: &'a [Version<Skill>],
@@ -153,7 +154,7 @@ impl CanonicalExecutionInputs {
         Ok(PinnedBody::new(
           pinned,
           label(bodies.labels, pinned)?,
-          ExecutionProfile::of(find(bodies.profiles, pinned)?),
+          find_profile(bodies.profiles, pinned)?,
         ))
       })
       .collect::<Result<_, BundleError>>()?;
@@ -356,6 +357,20 @@ fn find<B>(versions: &[Version<B>], pinned: PinnedVersion) -> Result<&B, BundleE
     .iter()
     .find(|version| version.id() == pinned.version && version.number() == pinned.number)
     .map(Version::body)
+    .ok_or(BundleError::MissingVersion {
+      resource: pinned.resource,
+      number: pinned.number,
+    })
+}
+
+fn find_profile(
+  profiles: &[(VersionId, ExecutionProfile)],
+  pinned: PinnedVersion,
+) -> Result<ExecutionProfile, BundleError> {
+  profiles
+    .iter()
+    .find(|(version, _)| *version == pinned.version)
+    .map(|(_, profile)| profile.clone())
     .ok_or(BundleError::MissingVersion {
       resource: pinned.resource,
       number: pinned.number,
