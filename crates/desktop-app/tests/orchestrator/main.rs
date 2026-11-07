@@ -58,6 +58,7 @@ mod support;
 mod tall_reply;
 mod task_events;
 mod todo;
+mod unwatch;
 mod waits;
 mod waits_on;
 mod watch_lines;

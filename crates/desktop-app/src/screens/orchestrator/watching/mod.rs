@@ -4,10 +4,11 @@
 //! also while an answer is under way. Its row shows the command's bubble and Orchester's answer under it
 //! ([`answer`]), built from what the conversation leads now (`orchester_workspace::orchestrator::watching`), read
 //! again as runs and tasks change: an earlier `/watching` shows the live state too. *Stop watching* on a
-//! subscription's head row ends it at once, as × on its header chip does. A command or a stop that applied nothing
-//! says why over the composer.
+//! subscription's head row ends it at once, as × on its header chip does, and so does `/unwatch` ([`unwatch`],
+//! ORC-774) for what is chosen in its picker. A command or a stop that applied nothing says why over the composer.
 
 mod answer;
+mod unwatch;
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -33,7 +34,6 @@ use orchester_workspace::{
     watching::Watching,
   },
 };
-use parking_lot::Mutex;
 
 pub(super) use self::answer::row;
 use super::data::{Read, Reads};
@@ -61,28 +61,33 @@ pub(super) struct Asked {
 
 impl DevtoolsInspectable for Asked {}
 
-/// *Stop watching* on the head row of `target`, a subscription of conversation `chat` of the project at `root`.
+/// A stop of `what` that conversation `chat` of the project at `root` watches: *Stop watching* on a head row of the
+/// answer, or `/unwatch` (`by`).
 #[derive(Clone)]
 pub(super) struct Stopping {
   root: PathBuf,
   chat: ChatId,
-  target: WatchTarget,
+  what: StopWhat,
+  by: StopBy,
 }
 
 impl DevtoolsInspectable for Stopping {}
 
 /// The conversation shown and what it was read to lead, as the screen's last pass read them.
-type Held = Option<(ChatId, Read<Arc<Watching>>)>;
+#[derive(Clone, Debug, Default, PartialEq)]
+struct Held(Option<(ChatId, Read<Arc<Watching>>)>);
 
-/// What the screen keeps for `/watching`: keeping the command, stopping a subscription from the answer, and what the
-/// conversation shown leads, which the slash menu and the rows of the same pass read.
+impl DevtoolsInspectable for Held {}
+
+/// What the screen keeps for `/watching`: keeping the command, stopping a subscription from the answer or with
+/// `/unwatch`, and what the conversation shown leads, which the slash menu, the `/unwatch` picker and the rows read.
 #[derive(Clone)]
 pub(super) struct WhatIWatch {
   ask: FutureAction<Asked, (), Message>,
   stop: FutureAction<Stopping, (), Message>,
-  /// The last *Stop watching* came from automation and was not taken.
+  /// The last stop came from automation and was not taken.
   refused: Signal<bool>,
-  held: Arc<Mutex<Held>>,
+  held: Signal<Held>,
 }
 
 /// What a `/watching` row shows of the live state: what the conversation leads (`None` for a new one), whether a
@@ -117,13 +122,12 @@ impl WhatIWatch {
         Ok(())
       }
     });
-    let stop = ctx.future_action(move |Stopping { root, chat, target }: Stopping| {
+    let stop = ctx.future_action(move |Stopping { root, chat, what, by }: Stopping| {
       let runners = runners.clone();
       async move {
         let at = root.clone();
         background::run(move || {
-          let what = StopWhat::Target(NamedTarget { target, name: None });
-          stop_in(&at, &Chat::named(chat, "", Timestamp::now()), &what, StopBy::Chip)
+          stop_in(&at, &Chat::named(chat, "", Timestamp::now()), &what, by)
             .map(|_| ())
             .map_err(|error: WatchError| error.message())
         })
@@ -136,24 +140,46 @@ impl WhatIWatch {
       ask,
       stop,
       refused: ctx.signal(false),
-      held: Arc::default(),
+      held: ctx.signal(Held::default()),
     }
   }
 
-  /// Holds what `reads` found for the conversation shown, for the rest of this pass.
+  /// Holds what `reads` found for the conversation shown; the `/unwatch` picker follows it.
   pub(super) fn hold(&self, reads: &Reads) {
-    let held = reads.target.zip(reads.watching.clone());
-    *self.held.lock() = held;
+    let held = Held(reads.target.zip(reads.watching.clone()));
+    if self.held.get_untracked() != held {
+      self.held.set(held);
+    }
   }
 
   /// The conversation shown, while it was read to lead something.
   fn watches(&self) -> Option<ChatId> {
-    let held = self.held.lock();
-    let (chat, read) = held.as_ref()?;
+    let Held(held) = self.held.get_untracked();
+    let (chat, read) = held?;
     read
       .ready()
       .filter(|watching| !watching.subscriptions.is_empty())
-      .map(|_| *chat)
+      .map(|_| chat)
+  }
+
+  /// Stops `what` that conversation `chat` of the project at `root` watches, `by` the person: whether it started. A
+  /// stop is a person's press only: stopping stays the person's command in the conversation and no MCP tool stops a
+  /// subscription either, so synthetic input (an MCP client's) is refused, the subscriptions go on and the notice over
+  /// the composer says so. Nothing starts while a stop is under way.
+  fn stop_by_person(&self, (root, chat): (PathBuf, ChatId), what: StopWhat, by: StopBy) -> bool {
+    if is_synthetic_input() {
+      tracing::warn!("synthetic input asked to stop watching; not taken");
+      self.refused.set(true);
+      return false;
+    }
+    if self.refused.get_untracked() {
+      self.refused.set(false);
+    }
+    if self.stop.state().get_untracked().is_pending() {
+      return false;
+    }
+    self.stop.run(Stopping { root, chat, what, by });
+    true
   }
 
   /// *What I watch* in the slash menu of the project at `root`: it keeps the command in the conversation shown, whose
@@ -188,33 +214,21 @@ impl WhatIWatch {
     }
   }
 
-  /// What the rows show of the conversation shown, in the project at `root`. *Stop watching* is a person's press only:
-  /// stopping stays the person's command in the conversation and no MCP tool stops a subscription either, so synthetic
-  /// input (an MCP client's) is refused, the subscription goes on and the notice over the composer says so.
+  /// What the rows show of the conversation shown, in the project at `root`; *Stop watching* is a person's press only
+  /// ([`Self::stop_by_person`]).
   pub(super) fn live(&self, root: PathBuf) -> Live {
-    let held = self.held.lock().clone();
+    let Held(held) = self.held.get_untracked();
     let chat = held.as_ref().map(|(chat, _)| *chat);
-    let (stop, refused) = (self.stop.clone(), self.refused.clone());
+    let this = self.clone();
     Live {
       read: held.map(|(_, read)| read),
-      stopping: stop.state().get().is_pending(),
+      stopping: self.stop.state().get().is_pending(),
       stop: Arc::new(move |target| {
-        if is_synthetic_input() {
-          tracing::warn!("synthetic input asked to stop watching a target; not taken");
-          refused.set(true);
-          return;
-        }
-        refused.set(false);
         let Some(chat) = chat else {
           return;
         };
-        if !stop.state().get_untracked().is_pending() {
-          stop.run(Stopping {
-            root: root.clone(),
-            chat,
-            target,
-          });
-        }
+        let what = StopWhat::Targets(vec![NamedTarget { target, name: None }]);
+        this.stop_by_person((root.clone(), chat), what, StopBy::Chip);
       }),
     }
   }

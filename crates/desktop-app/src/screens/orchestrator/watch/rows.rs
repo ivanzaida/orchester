@@ -167,7 +167,7 @@ fn frame(id: &str, content: Vec<Element>) -> Element {
 }
 
 /// A row's frame: 28 high, 8 at its sides and between its parts.
-fn line() -> Row {
+pub(in crate::screens::orchestrator) fn line() -> Row {
   Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(ControlHeight::Md.value()))
@@ -268,7 +268,7 @@ fn state_name(entry: &ModuleEntry) -> &'static str {
 }
 
 /// The name in 12 `text_primary`; once something is typed, the letters it matches in 600.
-fn name(label: &str, filter: &str) -> Element {
+pub(in crate::screens::orchestrator) fn name(label: &str, filter: &str) -> Element {
   let letters: Range<usize> = matched(label, filter).unwrap_or(0..0);
   let piece = |range: Range<usize>, bold: bool| {
     let words = &label[range];
@@ -398,12 +398,43 @@ fn led_in(
 /// The keys (`Keys` `T0Gkl`): *↑ ↓ Move*, *Enter Add*, *Backspace Remove the last*, *Ctrl Enter Watch* and *Esc
 /// Close* while there are rows (`rows`), *Esc Close* alone otherwise.
 fn footer(ctx: &Ctx, id: &str, rows: bool) -> Element {
-  let hint = |cap: &str, label: &str| {
+  let hints: &[(&str, &str)] = if rows {
+    &[
+      ("move", "move"),
+      ("enter", "add"),
+      ("backspace", "removeLast"),
+      (apply_key(), "watch"),
+      ("esc", "close"),
+    ]
+  } else {
+    &[("esc", "close")]
+  };
+  keys(ctx, &format!("{id}-watch-module"), hints, None)
+}
+
+/// The cap of the keys that apply a command: *Cmd Enter* on macOS, *Ctrl Enter* elsewhere.
+pub(in crate::screens::orchestrator) const fn apply_key() -> &'static str {
+  if cfg!(target_os = "macos") {
+    "cmdEnter"
+  } else {
+    "ctrlEnter"
+  }
+}
+
+/// A picker's keys under a `border` line, named `{id}-keys`: each cap (`orchestrator.watch.keys.*`) with its words
+/// (`orchestrator.watch.hint.*`), and `note` at the end in 11 `text_muted`.
+pub(in crate::screens::orchestrator) fn keys(
+  ctx: &Ctx,
+  id: &str,
+  hints: &[(&str, &str)],
+  note: Option<Arc<str>>,
+) -> Element {
+  let hint = |(cap, label): &(&str, &str)| {
     Row::new()
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
       .child(key_cap(
-        "watch-module-key",
+        &format!("{id}-key"),
         &ctx.t(&format!("orchestrator.watch.keys.{cap}")),
       ))
       .child(
@@ -412,24 +443,18 @@ fn footer(ctx: &Ctx, id: &str, rows: bool) -> Element {
           .nowrap(),
       )
   };
-  let watch = if cfg!(target_os = "macos") {
-    "cmdEnter"
-  } else {
-    "ctrlEnter"
-  };
-  let hints = if rows {
+  let note: Vec<Element> = note.map_or_else(Vec::new, |note| {
     vec![
-      hint("move", "move"),
-      hint("enter", "add"),
-      hint("backspace", "removeLast"),
-      hint(watch, "watch"),
-      hint("esc", "close"),
+      Spacer::new().flex(1.0).into(),
+      Text::new(&note)
+        .id(format!("{id}-keys-note"))
+        .variant(TypographyStyle::Caption)
+        .nowrap()
+        .into(),
     ]
-  } else {
-    vec![hint("esc", "close")]
-  };
+  });
   Row::new()
-    .id(format!("{id}-watch-module-keys"))
+    .id(format!("{id}-keys"))
     .width(Dimension::Pct(100.0))
     .padding(
       Padding::new()
@@ -441,6 +466,7 @@ fn footer(ctx: &Ctx, id: &str, rows: bool) -> Element {
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .with_children(hints)
+    .with_children(hints.iter().map(hint))
+    .with_children(note)
     .into()
 }

@@ -14,7 +14,8 @@ mod facts;
 mod lines;
 mod module;
 mod picker;
-mod rows;
+/// The pickers' rows and keys, which `/unwatch`'s picker draws too (`super::watching::unwatch`).
+pub(super) mod rows;
 
 use std::sync::Arc;
 

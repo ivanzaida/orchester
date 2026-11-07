@@ -539,6 +539,44 @@
         "unreadableNote": "{{reason}} Nothing was added; the chips you have stay.",
         "tryAgain": "Try again"
       },
+      "unwatch": {
+        "section": "Watched here",
+        "count": "{{shown}} of {{total}}",
+        "nothing": "Nothing watched here matches “{{query}}”",
+        "reading": "Reading what this conversation watches…",
+        "unreadable": "What this conversation watches can't be read: {{reason}}",
+        "meta": "{{kind}} · since {{since}}",
+        "added": "Added",
+        "all": "All of them",
+        "allMeta": "stop watching everything here",
+        "cancelsNothing": "cancels nothing",
+        "filter": "Type to filter",
+        "open": {
+          "waits": {
+            "one": "1 waits for you",
+            "other": "{{count}} wait for you"
+          },
+          "stopped": {
+            "one": "1 stopped at a limit",
+            "other": "{{count}} stopped at a limit"
+          },
+          "readyToMerge": {
+            "one": "1 ready to merge",
+            "other": "{{count}} ready to merge"
+          },
+          "running": {
+            "one": "1 running",
+            "other": "{{count}} running"
+          },
+          "queued": {
+            "one": "1 queued",
+            "other": "{{count}} queued"
+          },
+          "join": "{{rest}} · {{next}}",
+          "idle": "nothing under way",
+          "nothing": "nothing open"
+        }
+      },
       "keys": {
         "move": "↑ ↓",
         "enter": "Enter",
@@ -552,6 +590,7 @@
         "add": "Add",
         "removeLast": "Remove the last",
         "watch": "Watch",
+        "stop": "Stop",
         "close": "Close"
       }
     },

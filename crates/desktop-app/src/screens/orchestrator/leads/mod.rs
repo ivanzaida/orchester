@@ -138,7 +138,7 @@ impl Component for Leads {
       async move {
         let (watched, kept) = (target.target, root.clone());
         let stopped = background::run(move || {
-          stop_in(&kept, &chat, &StopWhat::Target(target), StopBy::Chip).map_err(|error| error.message())
+          stop_in(&kept, &chat, &StopWhat::Targets(vec![target]), StopBy::Chip).map_err(|error| error.message())
         })
         .await
         .and_then(|stopped| stopped);

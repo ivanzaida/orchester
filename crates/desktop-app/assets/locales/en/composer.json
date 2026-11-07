@@ -178,6 +178,7 @@
           "stopping": "{{agent}}’s turn is being stopped"
         },
         "unwatch": {
+          "detail": "End what this conversation watches; nothing is canceled",
           "label": "Stop watching"
         },
         "watch": {
