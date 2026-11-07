@@ -8,7 +8,9 @@ use orchester_core::{
   sharing::Here,
   store::ConnectionStore,
 };
-use orchester_store::{McpServerProgram, ProjectDb, StoreError};
+use orchester_store::{ProjectDb, StoreError};
+
+use super::programs::McpPrograms;
 
 /// The agent connections and the team secrets that have a value, by name. A local project has no secret by name, so it
 /// has none. "Has a value" is a row in `team_secret_values`: the keychain is not read, so a handle whose keychain value
@@ -28,13 +30,9 @@ pub(super) fn base(db: &ProjectDb) -> Result<Here, StoreError> {
 
 /// The program path of each of `servers` that has one, with whether its file is there now. A path that cannot be read
 /// counts as no file: the person is asked to choose again either way.
-pub(super) fn with_programs(mut here: Here, programs: Vec<McpServerProgram>, servers: &[ResourceId]) -> Here {
-  for program in programs
-    .into_iter()
-    .filter(|program| servers.contains(&program.resource))
-  {
-    let exists = is_file(&program.program);
-    here = here.with_program(program.resource, program.program, exists);
+pub(super) fn with_programs(mut here: Here, programs: &McpPrograms, servers: &[ResourceId]) -> Here {
+  for (server, path) in programs.iter().filter(|(server, _)| servers.contains(server)) {
+    here = here.with_program(server, path.to_path_buf(), is_file(path));
   }
   here
 }

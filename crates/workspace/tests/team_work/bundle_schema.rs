@@ -35,7 +35,7 @@ async fn accepted() -> Accepted {
   let claim = checkout.claim(&server, MEMBER).await;
   let runner = StoreRunner::new(checkout.root(), &[]);
   let (work, generation) = checkout.work(&server, MEMBER, runner.clone());
-  let request = checkout.start_request(&server, claim, &config);
+  let request = checkout.start_request(&server, claim);
   server.drop_next_file();
   let cut = work.start(request.clone()).await.expect("started");
   assert!(
@@ -86,7 +86,7 @@ async fn team_work_bundle_schema_of_the_receipt_fails_the_start_before_the_bundl
   let claim = checkout.claim(&server, MEMBER).await;
   let runner = StoreRunner::new(checkout.root(), &[]);
   let (work, generation) = checkout.work(&server, MEMBER, runner.clone());
-  let request = checkout.start_request(&server, claim, &config);
+  let request = checkout.start_request(&server, claim);
 
   server.state().receipt_schema = Some(OLDER);
   let outcome = work.start(request.clone()).await.expect("started");

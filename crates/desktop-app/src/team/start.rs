@@ -1,30 +1,29 @@
 //! Run on a team task's page (`docs/design/team-authority.md` §2, ORC-725's `run_task` rule): its work starts through
-//! the team server, never from this computer's queue. The task's claim is this computer's or taken now
-//! (`claim.acquire`, through [`super::act`]); the module's branch tip here is the start's base; the pipeline's profiles
-//! run on the person's local connections, chosen as `run_task` chooses them (`orchester_workspace::team_work::bind`);
-//! then `work.start` goes through `team_work`, which keeps the start before each boundary and asks the project's
-//! runner for the run of the accepted inputs. A start the server or the runner cannot take now waits and is carried on
-//! by recovery; the page says so.
+//! the team server, never from this computer's queue. The pipeline must be ready on this computer
+//! (`orchester_workspace::readiness`), checked first: one that is not starts nothing, claims nothing and says what is
+//! missing (`not_ready_here`, as `run_task` refuses it). The task's claim is this computer's or taken now
+//! (`claim.acquire`, through [`super::act`]); the module's branch tip here is the start's base; then `work.start` goes
+//! through `team_work`, which keeps the start before each boundary, binds the run to what this computer filled in and
+//! asks the project's runner for the run of the accepted inputs. A start the server or the runner cannot take now waits
+//! and is carried on by recovery; the page says so.
 
 use std::path::PathBuf;
 
 use orchester_api::v2::{AuthorityErrorCode, AuthorityRef, Subject};
 use orchester_core::{
   id::{ClaimId, ModuleId, OperationId, ResourceId, RunId, TaskId},
-  run::inputs::LocalConsent,
   sharing::TaskRevision,
-  store::ConnectionStore,
 };
 use orchester_exec::programs::Programs;
-use orchester_store::ProjectDb;
 use orchester_workspace::{
   actions::{Action, ClaimAction, Dispatcher, WorkAction},
   background,
   messages::Message,
+  readiness::{McpPrograms, NotReadyHere, StartReadiness},
   runner::{RunRequestError, Runners},
   tasks::run::start_messages,
   team_work::{
-    self, ChoiceError, McpHere, ProjectRunner, StartChoices, StartOutcome, TeamStartRequest, TeamWork, TeamWorkError,
+    self, BranchNotFound, ProjectRunner, StartFailure, StartOutcome, TeamStartRequest, TeamWork, TeamWorkError,
   },
 };
 
@@ -72,10 +71,8 @@ pub enum Stop {
   Refused(AuthorityErrorCode),
   /// The module's branch is not in this checkout.
   BranchNotFound(String),
-  /// These profiles, by role, have no connection of their CLI here, or several.
-  BindingsRequired(Vec<String>),
-  /// These MCP servers, by name, that the pipeline's profiles use are not set up here.
-  McpServersRequired(Vec<String>),
+  /// The pipeline is not ready on this computer: what is missing, each part with its fix. Nothing was claimed.
+  NotReadyHere(Vec<Message>),
   /// The team server could not read the pipeline or a profile, or they have no published version.
   NotReadable,
   /// The runner refused the run.
@@ -94,6 +91,11 @@ pub async fn start(
   let (Some(pipeline), Some((module, module_read, branch))) = (request.pipeline, request.module.clone()) else {
     return Started::Stopped(Stop::NotReady);
   };
+  let root = source.root().to_owned();
+  let (base_commit, mcp_programs) = match checked(acting, (root.clone(), programs), (pipeline, &branch)).await {
+    Ok(checked) => checked,
+    Err(stop) => return Started::Stopped(stop),
+  };
   let (task, read) = request.task;
   let claim = match request.claim {
     Some(claim) => claim,
@@ -110,12 +112,6 @@ pub async fn start(
       (acted, _) => return Started::Stopped(Stop::Claim(acted)),
     },
   };
-  let root = source.root().to_owned();
-  let choices = match choices(source, (root.clone(), programs), (pipeline, &branch)).await {
-    Ok(choices) => choices,
-    Err(stop) => return Started::Stopped(stop),
-  };
-  let (base_commit, bindings) = choices;
   let work = WorkAction {
     authority: AuthorityRef {
       subject: Subject::Task { id: task },
@@ -130,46 +126,37 @@ pub async fn start(
   let start = TeamStartRequest {
     operation: OperationId::generate(),
     work,
-    choices: StartChoices {
-      bindings,
-      consent: LocalConsent::default(),
-    },
+    programs: mcp_programs,
   };
   let runner = ProjectRunner::new(runners, root.clone(), request.project);
   carry_out(acting, source, (runner, root), start).await
 }
 
-/// The start's base, the module branch's tip here, and the bindings of the pipeline's profiles on this computer's
-/// connections.
-async fn choices(
-  source: &TeamSource,
+/// The start's base, the module branch's tip here, and the program paths set for the team's MCP servers; or why the
+/// pipeline does not start on this computer.
+async fn checked(
+  acting: &Acting,
   (root, programs): (PathBuf, Programs),
   (pipeline, branch): (ResourceId, &str),
-) -> Result<
-  (
-    orchester_core::run::CommitId,
-    orchester_core::run::inputs::LocalBindings,
-  ),
-  Stop,
-> {
-  let branch = branch.to_owned();
-  let read = background::run(move || {
-    let commit = team_work::branch_tip(programs.runner(), &root, &branch).map_err(|error| chosen(&error))?;
-    let here = ProjectDb::open(&root)
-      .and_then(|db| Ok((db.connections()?, McpHere::read(&db)?)))
+) -> Result<(orchester_core::run::CommitId, McpPrograms), Stop> {
+  let (branch, workspace, vault) = (branch.to_owned(), acting.workspace.clone(), acting.vault.clone());
+  background::run(move || {
+    let commit = team_work::branch_tip(programs.runner(), &root, &branch)
+      .map_err(|BranchNotFound(branch)| Stop::BranchNotFound(branch))?;
+    let ready = workspace
+      .team_start_readiness(&root, vault.get(), pipeline)
       .map_err(|error| {
-        tracing::warn!(%error, "the project's connections cannot be read for a team start");
+        tracing::warn!(%error, "the readiness of a team pipeline cannot be read for a start");
         Stop::Failed
       })?;
-    Ok((commit, here))
+    match ready {
+      StartReadiness::Ready(programs) => Ok((commit, programs)),
+      StartReadiness::NotReady(refusal) => Err(Stop::NotReadyHere(refusal.messages())),
+      StartReadiness::PipelineUnknown => Err(Stop::NotReady),
+    }
   })
   .await
-  .map_err(|_| Stop::Failed)?;
-  let (commit, (connections, mcp)) = read?;
-  let bindings = team_work::bind(source.project(), pipeline, (&connections, &mcp), &[])
-    .await
-    .map_err(|error| chosen(&error))?;
-  Ok((commit, bindings))
+  .map_err(|_| Stop::Failed)?
 }
 
 /// The start through the team work, on a worker: its futures hold the project database across their awaits.
@@ -206,6 +193,9 @@ fn started(outcome: StartOutcome) -> Started {
     StartOutcome::Started(run) => Started::Run(run),
     StartOutcome::Waiting(_) => Started::Waiting,
     StartOutcome::Refused(error) => Started::Stopped(Stop::Refused(error.code())),
+    StartOutcome::Failed(StartFailure::NotReadyHere { pipeline, missing }) => Started::Stopped(Stop::NotReadyHere(
+      NotReadyHere::of_missing(pipeline, missing).messages(),
+    )),
     StartOutcome::Failed(failure) => {
       tracing::warn!(?failure, "a team start failed for good");
       Started::Stopped(Stop::Failed)
@@ -214,22 +204,6 @@ fn started(outcome: StartOutcome) -> Started {
       Started::Stopped(Stop::Runner(start_messages(&RunRequestError::Rejected(rejection))))
     }
     StartOutcome::RunnerUnavailable(_) => Started::Waiting,
-  }
-}
-
-fn chosen(error: &ChoiceError) -> Stop {
-  match error {
-    ChoiceError::BranchNotFound(branch) => Stop::BranchNotFound(branch.clone()),
-    ChoiceError::BindingsRequired(profiles) => Stop::BindingsRequired(profiles.clone()),
-    ChoiceError::McpServersRequired(servers) => Stop::McpServersRequired(servers.clone()),
-    ChoiceError::Read(_)
-    | ChoiceError::NotPublished
-    | ChoiceError::Unreadable
-    | ChoiceError::LegacyProfileVersion
-    | ChoiceError::ConnectionNotFound(_) => {
-      tracing::warn!(%error, "a team start's choices cannot be made");
-      Stop::NotReadable
-    }
   }
 }
 

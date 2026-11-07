@@ -18,6 +18,7 @@ mod bundle_schema;
 mod completion;
 mod delivery;
 mod delivery_recovery;
+mod fill_ins;
 mod fixture;
 mod heartbeat;
 mod here;
@@ -45,10 +46,7 @@ use orchester_core::{
   name::Name,
   project::{Project, ProjectKey},
   revision::Revision,
-  run::{
-    BranchName, CommitId, NewRun, Run, RunError, RunEvent,
-    inputs::{InputsOrigin, LocalBindings, LocalConsent, ProfileBinding},
-  },
+  run::{BranchName, CommitId, NewRun, Run, RunError, RunEvent, inputs::InputsOrigin},
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
   sharing::TaskRevision,
   store::{ConnectionStore, RunStore},
@@ -57,21 +55,19 @@ use orchester_core::{
 use orchester_store::{AppDb, ProjectDb};
 use orchester_workspace::{
   actions::{Accepted, Action, ActionOutcome, ClaimAction, Dispatcher, Intent, TeamOutcome, WorkAction},
+  readiness::McpPrograms,
   runner::{RequestError, RunRequestError},
   secrets::Vault,
   sharing::Servers,
   team_reads::TeamSession,
-  team_work::{StartChoices, StartOutcome, TeamRunner, TeamStartRequest, TeamWork},
+  team_work::{StartOutcome, TeamRunner, TeamStartRequest, TeamWork},
   workspace::Workspace,
 };
 use parking_lot::Mutex;
 use tempfile::TempDir;
 use tokio::sync::watch;
 
-use self::{
-  fixture::Config,
-  team_server::{MEMBER, OTHER, TeamServer},
-};
+use self::team_server::{MEMBER, OTHER, TeamServer};
 
 /// No secret is read or kept here.
 struct NoVault;
@@ -94,7 +90,6 @@ impl SecretVault for NoVault {
 struct Checkout {
   dir: TempDir,
   servers: Servers,
-  connection: ConnectionId,
   _data: TempDir,
 }
 
@@ -142,7 +137,6 @@ impl Checkout {
         Vault::with(Arc::new(NoVault)),
         orchester_api::releases::ReleaseVersion::parse("0.5.0").expect("a release version"),
       ),
-      connection: codex.id(),
       _data: data,
     }
   }
@@ -190,8 +184,8 @@ impl Checkout {
     claim.id
   }
 
-  /// The start of the task's work under `claim`, the profile bound to this project's Codex connection.
-  fn start_request(&self, server: &TeamServer, claim: ClaimId, config: &Config) -> TeamStartRequest {
+  /// The start of the task's work under `claim`; the profile runs on this project's only Codex connection.
+  fn start_request(&self, server: &TeamServer, claim: ClaimId) -> TeamStartRequest {
     TeamStartRequest {
       operation: OperationId::generate(),
       work: WorkAction {
@@ -205,19 +199,7 @@ impl Checkout {
         module: server.module,
         module_read: TaskRevision::FIRST,
       },
-      choices: StartChoices {
-        bindings: LocalBindings {
-          profiles: vec![ProfileBinding {
-            resource: config.profile,
-            connection: self.connection,
-            account: None,
-            required_cli: None,
-            mcp_servers: Vec::new(),
-          }],
-          references: Vec::new(),
-        },
-        consent: LocalConsent::default(),
-      },
+      programs: McpPrograms::default(),
     }
   }
 
@@ -241,8 +223,7 @@ fn client(server: &TeamServer) -> Client {
 /// The task claimed in the person's session and its work started: the team work, the run and the session's generation.
 async fn started(checkout: &Checkout, server: &TeamServer) -> (TeamWork<StoreRunner>, RunId, watch::Sender<u64>) {
   let claim = checkout.claim(server, MEMBER).await;
-  let config = server.state().config.clone();
-  let request = checkout.start_request(server, claim, &config);
+  let request = checkout.start_request(server, claim);
   let (work, generation) = checkout.work(server, MEMBER, StoreRunner::new(checkout.root(), &[]));
   let outcome = work.start(request).await.expect("started");
   let StartOutcome::Started(run) = outcome else {

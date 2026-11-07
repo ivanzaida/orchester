@@ -171,6 +171,7 @@ fn server_problem(ctx: &Ctx, problem: &McpServerProblem) -> (Arc<str>, Option<Ar
         ("started", started.to_string().as_str()),
       ],
     ),
+    McpServerProblem::MoreThanOneSecretHeader => ctx.t("conversation.mcp.moreThanOneSecretHeader"),
     McpServerProblem::NotSupportedByConnection => ctx.t("conversation.mcp.notSupportedByConnection"),
   };
   (body, None)

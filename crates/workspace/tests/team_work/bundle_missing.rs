@@ -22,7 +22,7 @@ async fn refused_with(details: Value) -> (StartOutcome, Checkout, StoreRunner) {
   let claim = checkout.claim(&server, MEMBER).await;
   let runner = StoreRunner::new(checkout.root(), &[]);
   let (work, _generation) = checkout.work(&server, MEMBER, runner.clone());
-  let request = checkout.start_request(&server, claim, &config);
+  let request = checkout.start_request(&server, claim);
   server.state().bundle_missing = Some(details);
   let outcome = work.start(request.clone()).await.expect("started");
   let kept = checkout

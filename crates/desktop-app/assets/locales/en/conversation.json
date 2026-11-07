@@ -422,6 +422,7 @@
       "disabled": "The server is turned off in Connections.",
       "failedToStart": "The agent’s CLI reported that the server did not start.",
       "missing": "The profile chooses a server this project no longer has.",
+      "moreThanOneSecretHeader": "This team server takes more than one secret header, and an agent is given one header per server here; the agent works without it.",
       "notSupportedByConnection": "Agents Orchester runs itself can’t use MCP servers yet; the agent works without it.",
       "notUnicode": "A path of the server is not valid Unicode.",
       "programNotFound": "{{program}} was not found on the PATH or in the worktree.",

@@ -16,21 +16,24 @@ use orchester_store::{ProjectDb, StoreError, TeamOperationState, TeamSettlement,
 use serde::{Deserialize, Serialize};
 
 use super::{
-  Answer, StartChoices, TeamRunner, TeamWork, TeamWorkError,
+  Answer, TeamRunner, TeamWork, TeamWorkError,
   bundle::{self, Expected},
 };
 use crate::{
   actions::{Accepted, Action, ActionOutcome, Intent, Refusal, TeamOutcome, WorkAction, team_task},
+  readiness::{McpPrograms, MissingPart},
   runner::{RequestError, RunRequestError},
 };
 
 /// A start of a team task's work from the claim its caller holds: the work action under the intent's operation, and
-/// what the caller read and chose for the run.
+/// the program paths this computer has set for the team's MCP servers when the caller found the pipeline ready
+/// ([`crate::readiness::StartReadiness`]). The run takes the rest of what this computer filled in (the connection of
+/// each profile, which servers are on, the secrets' values by name) when the bundle is made into its inputs.
 #[derive(Clone, Debug)]
 pub struct TeamStartRequest {
   pub operation: OperationId,
   pub work: WorkAction,
-  pub choices: StartChoices,
+  pub programs: McpPrograms,
 }
 
 /// Where a start stands after it was carried on.
@@ -62,8 +65,14 @@ pub enum StartFailure {
   BundleUnreadable,
   /// The bundle the server answered, or one of its files, is not the one the receipt names or not built for the start.
   Bundle(String),
-  /// The accepted bundle with the caller's choices does not make the run's inputs here.
+  /// The accepted bundle does not make the run's inputs here.
   Inputs(String),
+  /// The versions the bundle pins need something this computer lacks (`not_ready_here`); nothing was started, and the
+  /// work the server made for the start is the claim holder's to release.
+  NotReadyHere {
+    pipeline: String,
+    missing: Vec<MissingPart>,
+  },
 }
 
 impl StartFailure {
@@ -76,7 +85,11 @@ impl StartFailure {
       }),
       TeamWorkError::BundleUnreadable => Some(Self::BundleUnreadable),
       TeamWorkError::BundleMismatch { .. } | TeamWorkError::BundleFile(_) => Some(Self::Bundle(error.to_string())),
-      TeamWorkError::Inputs(_) | TeamWorkError::BindingCli { .. } => Some(Self::Inputs(error.to_string())),
+      TeamWorkError::Inputs(_) => Some(Self::Inputs(error.to_string())),
+      TeamWorkError::NotReadyHere { pipeline, missing } => Some(Self::NotReadyHere {
+        pipeline: pipeline.clone(),
+        missing: missing.clone(),
+      }),
       _ => None,
     }
   }
@@ -85,7 +98,7 @@ impl StartFailure {
 /// Each open start's operation with where it stands after recovery, or why it could not be carried on now.
 pub type Recovered = Vec<(OperationId, Result<StartOutcome, TeamWorkError>)>;
 
-/// What a start keeps of its request: the work action, with the server's id of its task, and the caller's choices.
+/// What a start keeps of its request: the work action, with the server's id of its task, and the program paths.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct KeptStart {
@@ -94,7 +107,7 @@ struct KeptStart {
   read: TaskRevision,
   module: ModuleId,
   module_read: TaskRevision,
-  choices: StartChoices,
+  programs: McpPrograms,
 }
 
 impl KeptStart {
@@ -152,7 +165,7 @@ impl<R: TeamRunner> TeamWork<R> {
       read: request.work.read,
       module: request.work.module,
       module_read: request.work.module_read,
-      choices: request.choices,
+      programs: request.programs,
     };
     // The kept start's types serialize to JSON without fail: they hold no map with non-string keys.
     let text = serde_json::to_string(&kept).expect("a team start serializes");
@@ -254,7 +267,7 @@ impl<R: TeamRunner> TeamWork<R> {
       bundle: sha256,
     };
     let mut db = self.db()?;
-    let inputs = bundle::inputs(&db, &fetched.bundle, acceptance, kept.choices)?;
+    let inputs = bundle::inputs(&db, &fetched.bundle, acceptance, &kept.programs)?;
     db.store_team_start_inputs(operation, &inputs, &fetched.files, Timestamp::now())?;
     let stored = db
       .team_start(operation)?

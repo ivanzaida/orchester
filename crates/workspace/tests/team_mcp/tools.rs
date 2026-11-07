@@ -3,17 +3,14 @@
 use std::collections::BTreeMap;
 
 use orchester_core::{
-  connection::{
-    AgentConnection, AgentProvider,
-    mcp::{McpEnvironment, McpServer, McpServerName, McpTransport, StdioServer},
-  },
+  connection::{AgentConnection, AgentProvider},
   id::{ConnectionId, IdempotencyKey},
   integration::base::RunBaseSource,
   name::Name,
-  resource::{AgentProfile, CommandProgram, Pipeline, Slug},
+  resource::{AgentProfile, Pipeline, Slug},
   revision::Revision,
   run::{BranchName, NewRun, PublishedVersions, RunSnapshot},
-  store::{ConnectionStore, ConversationStore, McpServerStore, ResourceStore, RunStore, TaskStore},
+  store::{ConnectionStore, ConversationStore, ResourceStore, RunStore, TaskStore},
   time::Timestamp,
 };
 
@@ -211,26 +208,11 @@ pub(crate) fn run_from(db: &mut orchester_store::ProjectDb, (base_branch, base_s
 
 #[test]
 fn team_mcp_run_task_on_a_team_task_goes_through_work_start() {
-  let (server, seen) = server();
-  let pipeline = server.state().config.pipeline;
+  let (server, _seen) = server();
+  let config = server.state().config.clone();
   let checkout = Checkout::prepared(Some(&server), &[], |db| {
-    crate::pipelines::team_pipeline(db, pipeline, "delivery");
+    crate::ready::team_ready(db, &config, AgentProvider::CodexCli);
   });
-
-  // The Builder profile uses the publisher's MCP server, which this computer does not have: nothing starts.
-  let code = checkout.refused("run_task", &json!({"project": "Kontur", "key": "KON-7"}));
-  assert_eq!(code, "mcp_servers_required");
-  assert_eq!(server.state().works_made, 0, "nothing was started without the server");
-
-  // This computer has it with the very id the version names (the publisher's own computer).
-  let mcp_server = seen
-    .lock()
-    .publisher_mcp_server
-    .expect("the profile names an MCP server");
-  checkout
-    .db()
-    .create_mcp_server(&local_mcp_server(mcp_server))
-    .expect("a local MCP server");
 
   // The session has no runner here: the start is accepted and kept, and waits for the runner.
   let code = checkout.refused("run_task", &json!({"project": "Kontur", "key": "KON-7"}));
@@ -251,15 +233,11 @@ fn team_mcp_run_task_on_a_team_task_goes_through_work_start() {
     "the accepted inputs are kept"
   );
   assert!(
-    starts[0].request.contains(&mcp_server.to_string()),
-    "the start gives the run the bound MCP server"
-  );
-  assert!(
     checkout.db().tasks().expect("tasks").is_empty(),
     "no task definition kept"
   );
 
-  // A second Codex connection leaves the Builder profile's connection to the caller.
+  // A second Codex connection and no pick for the profile: the pipeline is not ready here, and nothing more starts.
   let second = AgentConnection::new(
     ConnectionId::generate(),
     Name::new("Codex work").expect("name"),
@@ -270,24 +248,8 @@ fn team_mcp_run_task_on_a_team_task_goes_through_work_start() {
   .expect("connection");
   checkout.db().create_connection(&second).expect("a connection");
   let code = checkout.refused("run_task", &json!({"project": "Kontur", "key": "KON-7"}));
-  assert_eq!(code, "bindings_required");
+  assert_eq!(code, "not_ready_here");
   assert_eq!(server.state().works_made, 1, "nothing more was started");
-}
-
-/// A local MCP server with id `id`, as the publisher's own computer has the server its version names.
-pub(crate) fn local_mcp_server(id: ConnectionId) -> McpServer {
-  McpServer::new(
-    id,
-    McpServerName::new("pencil-design").expect("name"),
-    McpTransport::Stdio(StdioServer::new(
-      CommandProgram::new("pencil-mcp").expect("program"),
-      vec![],
-      None,
-    )),
-    McpEnvironment::default(),
-    Timestamp::now(),
-  )
-  .expect("server")
 }
 
 #[test]

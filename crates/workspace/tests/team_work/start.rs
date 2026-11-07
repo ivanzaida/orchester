@@ -4,7 +4,8 @@
 
 use orchester_api::v2::AuthorityErrorCode;
 use orchester_core::{
-  run::inputs::{InputsOrigin, LocalBindings},
+  connection::AgentProvider,
+  run::inputs::InputsOrigin,
   store::{BlobStore, RunStore},
 };
 use orchester_store::TeamStartStage;
@@ -37,8 +38,7 @@ async fn team_work_start_recovers_once_from_every_boundary() {
   let server = TeamServer::start(config.clone());
   let checkout = Checkout::linked(&server);
   let claim = checkout.claim(&server, MEMBER).await;
-  let mut request = checkout.start_request(&server, claim, &config);
-  request.choices.bindings.profiles[0].required_cli = Some(orchester_core::connection::AgentProvider::ClaudeCodeCli);
+  let request = checkout.start_request(&server, claim);
   let operation = request.operation;
   let runner = StoreRunner::new(checkout.root(), &[Hiccup::Unavailable, Hiccup::StartsThenLost]);
   let (work, _generation) = checkout.work(&server, MEMBER, runner.clone());
@@ -129,7 +129,7 @@ async fn team_work_start_refused_or_fenced_before_the_run_starts_nothing() {
   let claim = checkout.claim(&server, MEMBER).await;
   let runner = StoreRunner::new(checkout.root(), &[]);
   let (work, _generation) = checkout.work(&server, MEMBER, runner.clone());
-  let request = checkout.start_request(&server, claim, &config);
+  let request = checkout.start_request(&server, claim);
 
   // Offline: the start waits, and nothing new starts without the server.
   server.set_down(true);
@@ -164,16 +164,19 @@ async fn team_work_start_failed_here_holds_back_no_later_start() {
   let runner = StoreRunner::new(checkout.root(), &[Hiccup::Unavailable]);
   let (work, _generation) = checkout.work(&server, MEMBER, runner.clone());
 
-  // The older start binds none of the profiles the bundle pins; its bundle's file read is cut off before that shows.
-  let mut unbound = checkout.start_request(&server, claim, &config);
-  unbound.choices.bindings = LocalBindings::default();
+  // The older start's bundle binds the profile to a CLI this computer has no connection of; its bundle's file read is
+  // cut off before that shows.
+  server.state().config = config.clone().running(AgentProvider::ClaudeCodeCli);
+  let unbound = checkout.start_request(&server, claim);
   server.drop_next_file();
   let cut = work.start(unbound.clone()).await.expect("started");
   assert_eq!(stage(&checkout, &cut), TeamStartStage::Accepted);
 
-  // Its work ends on the server, and a newer start with the profile bound keeps its inputs; the runner is not there.
+  // Its work ends on the server, and a newer start whose bundle fits this computer keeps its inputs; the runner is not
+  // there.
   server.state().works[0].state = "failed".to_owned();
-  let bound = checkout.start_request(&server, claim, &config);
+  server.state().config = config.clone();
+  let bound = checkout.start_request(&server, claim);
   let waiting = work.start(bound.clone()).await.expect("started");
   assert!(matches!(waiting, StartOutcome::RunnerUnavailable(_)), "{waiting:?}");
 
@@ -188,7 +191,7 @@ async fn team_work_start_failed_here_holds_back_no_later_start() {
   let StartOutcome::Failed(failure) = &outcomes[0].1 else {
     panic!("not failed: {outcomes:?}");
   };
-  assert!(matches!(failure, StartFailure::Inputs(_)), "{failure:?}");
+  assert!(matches!(failure, StartFailure::NotReadyHere { .. }), "{failure:?}");
   assert_eq!(outcomes[1].0, bound.operation);
   let StartOutcome::Started(run) = outcomes[1].1 else {
     panic!("not started: {outcomes:?}");

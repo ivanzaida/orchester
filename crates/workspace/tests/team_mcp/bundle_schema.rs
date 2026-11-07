@@ -3,26 +3,18 @@
 //! time.
 
 use orchester_api::v2::EXECUTION_BUNDLE_SCHEMA;
-use orchester_core::store::McpServerStore;
+use orchester_core::connection::AgentProvider;
 use serde_json::{Value, json};
 
-use crate::{
-  Checkout,
-  pipelines::team_pipeline,
-  team_server::TeamServer,
-  tools::{local_mcp_server, server},
-};
+use crate::{Checkout, ready::team_ready, team_server::TeamServer, tools::server};
 
-/// A checkout whose task can start: its pipeline and the Builder's MCP server are here. `prepare` runs on the fake
-/// server's state before `run_task` is called.
+/// A checkout whose task can start: its pipeline and the Builder profile are cached here, and the checkout has the
+/// Codex connection the profile runs on. `prepare` runs on the fake server's state before `run_task` is called.
 pub(crate) fn started_with(prepare: impl FnOnce(&mut crate::team_server::State)) -> (TeamServer, Checkout) {
-  let (server, seen) = server();
-  let pipeline = server.state().config.pipeline;
-  let mcp_server = seen.lock().publisher_mcp_server.expect("the Builder's MCP server");
+  let (server, _seen) = server();
+  let config = server.state().config.clone();
   let checkout = Checkout::prepared(Some(&server), &[], |db| {
-    team_pipeline(db, pipeline, "delivery");
-    db.create_mcp_server(&local_mcp_server(mcp_server))
-      .expect("a local MCP server");
+    team_ready(db, &config, AgentProvider::CodexCli)
   });
   prepare(&mut server.state());
   (server, checkout)

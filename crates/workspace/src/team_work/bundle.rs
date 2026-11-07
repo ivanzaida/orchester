@@ -1,7 +1,7 @@
 //! The execution bundle a start's receipt names, read from the server by its hash with every file it pins, each checked
-//! against the bundle, and made into the run's inputs with what the start's caller chose.
+//! against the bundle, and made into the run's inputs with what this computer filled in.
 
-use std::time::Duration;
+use std::{path::Path, time::Duration};
 
 use orchester_api::{
   client::{Authority, BundleReadError},
@@ -9,29 +9,23 @@ use orchester_api::{
 };
 use orchester_core::{
   blob::ContentHash,
-  connection::ConnectionKind,
+  connection::{Connection, ConnectionKind},
+  resource::TeamMcpLaunch,
   run::{
     CommitId,
-    inputs::{BundleContent, InputsError, InputsOrigin, LocalBindings, LocalConsent, RunInputs, TeamAcceptance},
+    inputs::{
+      BundleContent, InputsError, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, RunInputs, TeamAcceptance,
+      TeamMcpBinding, team_mcp_id,
+    },
   },
   store::ConnectionStore,
   task::TaskLimits,
   tokens::TokenBudget,
 };
 use orchester_store::ProjectDb;
-use serde::{Deserialize, Serialize};
 
 use super::{Answer, TeamWorkError, answer};
-
-/// What the caller of a start chose for its run on this computer, kept with the start's record. The task's number and
-/// the pinned resources' labels are the bundle's.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct StartChoices {
-  /// The local connection each pinned profile runs on here, the person's choice.
-  pub bindings: LocalBindings,
-  pub consent: LocalConsent,
-}
+use crate::readiness::{self, McpPrograms};
 
 /// What the bundle must say to be the start's: the authority and the base commit it was asked for.
 pub(super) struct Expected<'a> {
@@ -91,22 +85,24 @@ fn check(bundle: &ExecutionBundle, expected: &Expected<'_>) -> Result<(), TeamWo
   }
 }
 
-/// The run's inputs of `bundle`, accepted as `acceptance`, with the caller's `choices`. Each pinned profile must be
-/// bound to a connection of this project that runs the CLI the bundle binds it to.
+/// The run's inputs of `bundle`, accepted as `acceptance`, with what this computer has filled in for the versions the
+/// bundle pins: the connection each profile runs on, and the program path of each team MCP server (`programs`). It is
+/// refused when the pinned versions need something this computer lacks ([`TeamWorkError::NotReadyHere`]): the versions
+/// the team server pins can be newer than the ones readiness was read from before the start.
 pub(super) fn inputs(
   db: &ProjectDb,
   bundle: &ExecutionBundle,
   acceptance: TeamAcceptance,
-  mut choices: StartChoices,
+  programs: &McpPrograms,
 ) -> Result<RunInputs, TeamWorkError> {
-  check_clis(db, bundle, &choices.bindings)?;
-  for bound in &mut choices.bindings.profiles {
-    bound.required_cli = bundle
-      .bindings()
-      .iter()
-      .find(|binding| binding.resource_id == bound.resource)
-      .map(|binding| binding.cli);
+  let missing = readiness::bundle_missing(db, programs, bundle)?;
+  if !missing.is_empty() {
+    return Err(TeamWorkError::NotReadyHere {
+      pipeline: bundle.inputs().pipeline().label().name().as_str().to_owned(),
+      missing,
+    });
   }
+  let bindings = bindings(db, bundle, programs)?;
   let start = bundle.start();
   let budget = start
     .limits
@@ -122,32 +118,63 @@ pub(super) fn inputs(
     (limits, start.delivery),
     bundle.inputs().clone(),
   )?;
-  Ok(RunInputs::new(content, choices.bindings, choices.consent)?)
+  Ok(RunInputs::new(content, bindings, LocalConsent::default())?)
 }
 
-fn check_clis(db: &ProjectDb, bundle: &ExecutionBundle, bindings: &LocalBindings) -> Result<(), TeamWorkError> {
+/// How this computer binds `bundle`: each pinned profile to the connection it picked for the profile, else the only one
+/// of the CLI the bundle binds the profile to, and each pinned team MCP server to its program path.
+fn bindings(db: &ProjectDb, bundle: &ExecutionBundle, programs: &McpPrograms) -> Result<LocalBindings, TeamWorkError> {
   let connections = db.connections()?;
+  let inputs = bundle.inputs();
+  let mut profiles = Vec::new();
   for binding in bundle.bindings() {
-    let bound = bindings
-      .profiles
+    let runs_cli = |connection: &&Connection| *connection.kind() == ConnectionKind::Agent(binding.cli);
+    let pick = db.connection_pick(binding.resource_id)?.filter(|pick| {
+      connections
+        .iter()
+        .filter(runs_cli)
+        .any(|found| found.id() == pick.connection)
+    });
+    let (connection, account) = match pick {
+      Some(pick) => (pick.connection, pick.account),
+      None => match connections.iter().filter(runs_cli).collect::<Vec<_>>().as_slice() {
+        [only] => (only.id(), None),
+        // Readiness said one is there, and one was removed or added since.
+        _ => return Err(InputsError::MissingBinding(binding.resource_id).into()),
+      },
+    };
+    let mcp_servers = inputs
+      .profiles()
       .iter()
-      .find(|bound| bound.resource == binding.resource_id)
-      .and_then(|bound| {
-        connections
-          .iter()
-          .find(|connection| connection.id() == bound.connection)
+      .find(|pinned| pinned.pinned().resource == binding.resource_id)
+      .map_or_else(Vec::new, |pinned| {
+        pinned.body().mcp_servers().iter().copied().map(team_mcp_id).collect()
       });
-    // A profile bound to no connection is the inputs' own refusal; a connection gone is the runner's preflight.
-    if let Some(connection) = bound
-      && *connection.kind() != ConnectionKind::Agent(binding.cli)
-    {
-      return Err(TeamWorkError::BindingCli {
-        resource: binding.resource_id,
-        cli: binding.cli,
-      });
-    }
+    profiles.push(ProfileBinding {
+      resource: binding.resource_id,
+      connection,
+      account,
+      required_cli: Some(binding.cli),
+      mcp_servers,
+    });
   }
-  Ok(())
+  let team_mcp = inputs
+    .mcp_servers()
+    .iter()
+    .map(|pinned| {
+      let server = pinned.pinned().resource;
+      let runs_program = matches!(pinned.body().launch(), TeamMcpLaunch::Program(_));
+      TeamMcpBinding {
+        server,
+        program: programs.path(server).filter(|_| runs_program).map(Path::to_path_buf),
+      }
+    })
+    .collect();
+  Ok(LocalBindings {
+    profiles,
+    references: Vec::new(),
+    team_mcp,
+  })
 }
 
 /// The subject a start's authority names, which must be a task's.
