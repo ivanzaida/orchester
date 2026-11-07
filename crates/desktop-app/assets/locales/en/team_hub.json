@@ -3,7 +3,7 @@
     "title": "Agents",
     "team": "Team",
     "reading": "Reading the team's configuration…",
-    "loadFailed": "the team's configuration",
+    "loadFailed": "The team's configuration couldn't be read",
     "filter": {
       "all": "All",
       "profiles": "Profiles",

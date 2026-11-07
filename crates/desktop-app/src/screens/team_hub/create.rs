@@ -4,21 +4,21 @@
 
 use lurq::{
   app::ctx::Ctx,
-  components::{Placement, Popup, Row},
+  components::Row,
   core::{ElementRef, Signal},
   layout::Alignment,
-  node::Element,
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::id::ProjectId;
 
 use crate::{
   navigation::Navigation,
   routes::{AgentTab, HubFilter, InstructionsTab, InstructionsView, ProjectPage, Route},
-  theme::ExtraSpacing,
+  theme::HUB_NEW_MENU_WIDTH,
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
-    menu::{MenuItem, menu_panel},
+    menu::{MenuItem, menu_at_end, menu_panel},
     menu_button::MenuButton,
   },
 };
@@ -90,7 +90,7 @@ pub(super) fn new_button(
 }
 
 fn all(ctx: &mut Ctx, project: ProjectId, navigation: &Navigation, menu: &NewMenu) -> Element {
-  let mut panel = menu_panel("team-hub-new-menu");
+  let mut panel = menu_panel("team-hub-new-menu").width(Dimension::Px(HUB_NEW_MENU_WIDTH));
   for filter in CREATABLE {
     let Some(page) = page(filter) else { continue };
     panel = panel.child(
@@ -110,11 +110,6 @@ fn all(ctx: &mut Ctx, project: ProjectId, navigation: &Navigation, menu: &NewMen
       menu.open.clone(),
       menu.anchor.clone(),
     ))
-    .child(
-      Popup::new(menu.anchor.clone(), panel)
-        .open(menu.open.clone())
-        .placement(Placement::BottomEnd)
-        .offset(0.0, ExtraSpacing::Snug.value()),
-    )
+    .child(menu_at_end(menu.anchor.clone(), menu.open.clone(), panel))
     .into()
 }

@@ -17,7 +17,7 @@ use super::model::Listing;
 use crate::{
   navigation::Navigation,
   routes::{HubFilter, HubView, ProjectPage, Route},
-  theme::{ExtraSpacing, ExtraTypography, HubText, IconSize},
+  theme::{ExtraSpacing, ExtraTypography, HubSpacing, HubText, IconSize},
   ui::{
     icon::{Icon, icon},
     pressable::Focus,
@@ -61,8 +61,13 @@ pub(super) fn head(ctx: &Ctx, team: &TeamConfiguration, new: Option<Element>) ->
         .variant(TypographyStyle::Heading)
         .flex(1.0),
     )
-    .child(at_right)
-    .with_children(new)
+    .child(
+      Row::new()
+        .spacing(HubSpacing::NewGap.role())
+        .align_items(Alignment::Center)
+        .child(at_right)
+        .with_children(new),
+    )
 }
 
 /// What the filter shows besides the counts.
