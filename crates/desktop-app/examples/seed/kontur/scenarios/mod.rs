@@ -109,7 +109,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 160] = [
+pub const ALL: [Scenario; 161] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -155,6 +155,7 @@ pub const ALL: [Scenario; 160] = [
   Scenario::of("orchestrator-on-codex", orchestrator::on_codex),
   Scenario::of("orchestrator-codex-limit", orchestrator::codex_limit),
   Scenario::of("orchestrator-events", orchestrator::events::seed),
+  Scenario::of("orchestrator-watch", orchestrator::watch::seed),
   Scenario::of("orchestrator-context-plenty", orchestrator::context::plenty),
   Scenario::of("orchestrator-context-near-full", orchestrator::context::near_full),
   Scenario::of("orchestrator-context-full", orchestrator::context::full),

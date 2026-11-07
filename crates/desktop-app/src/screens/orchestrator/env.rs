@@ -7,16 +7,19 @@ use lurq::app::ctx::Ctx;
 use orchester_core::id::ChatId;
 use orchester_workspace::orchestrator::tools::ChatScope;
 
-use super::{View, draft::Conversation, rewind::toolbar::RewindEnv, send::ChangeQueued, timeline::TurnEnv};
+use super::{
+  View, draft::Conversation, rewind::toolbar::RewindEnv, send::ChangeQueued, timeline::TurnEnv, watch::WatchFacts,
+};
 use crate::{project::ShownProject, ui::chat::names::ProjectNames};
 
 /// The rows' environment for conversation `chat` of `project`, on `connection` (its name) when the Orchestrator has
-/// one, `answering` while a turn of it thinks.
+/// one, `answering` while a turn of it thinks; `watches` when a line of it names what the conversation watches, which
+/// reads the project's tasks.
 pub(super) fn env(
   ctx: &Ctx,
   view: &View,
   project: &ShownProject,
-  (chat, connection, answering): (Option<ChatId>, Option<Arc<str>>, bool),
+  (chat, connection, answering, watches): (Option<ChatId>, Option<Arc<str>>, bool, bool),
   names: &ProjectNames,
 ) -> TurnEnv {
   let open = project.open.clone();
@@ -75,5 +78,10 @@ pub(super) fn env(
     changing: view.plan_only.changing.get().map(|changing| changing.seq),
     answering,
     rewind,
+    watch: Arc::new(if watches {
+      project.feed.tasks.with(|tasks| WatchFacts::of(tasks.ready()))
+    } else {
+      WatchFacts::default()
+    }),
   }
 }

@@ -34,7 +34,7 @@ use orchester_workspace::{
   orchestrator::{
     tools::{self, ChatScope},
     waits::{Followed, Switches, check_merges_in, follow_in},
-    watch_ends::ended_line,
+    watch_ends::{ended_aside, ended_done, ended_line},
   },
   runner::Runners,
   secrets::Vault,
@@ -330,6 +330,15 @@ fn watch_ends_a_module_once_its_tasks_are_done_or_canceled_with_its_line_and_one
   let line = ended_line(summary);
   assert_eq!(line.key, "orchestrator.watch.ended.moduleClosed");
   assert_eq!(line.args, [("module", "Mobile release".to_owned())]);
+  assert_eq!(ended_aside(summary).key, "orchestrator.watch.ended.asideModule");
+  assert!(!ended_done(summary.reason), "a Canceled task is no success");
+  for (done, canceled, success) in [(2, 0, true), (0, 2, false), (0, 0, false)] {
+    assert_eq!(
+      ended_done(EndReason::ModuleClosed { done, canceled }),
+      success,
+      "{done} {canceled}"
+    );
+  }
   let prompt = desktop
     .db()
     .chat_turn(turn.message)
@@ -400,6 +409,12 @@ fn watch_ends_a_task_with_its_line_but_no_turn_while_the_orchestrator_cannot_ans
     (line.key, line.args),
     ("orchestrator.watch.ended.taskDone", vec![("task", key)])
   );
+  assert_eq!(
+    ended_aside(summary).key,
+    "orchestrator.watch.ended.aside",
+    "no summary below"
+  );
+  assert!(ended_done(summary.reason), "a Done task is a success");
 
   // Once the Orchestrator is ready, an end kept without a turn starts none later.
   desktop.ready();
