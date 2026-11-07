@@ -1,6 +1,6 @@
 //! What the Orchestrator chat did, or proposes, with git in the project's repository (`docs/design/
-//! orchestrator-toolset.md`, decision 9): a write it ran itself under the person's switch *Let the Orchestrator write
-//! with git* (a commit, a branch, a switch, a pull, a push, a merge, a revert, a tag, a fetch), kept with the commands
+//! orchestrator-toolset.md`, decision 9): a write it ran itself under the person's switch *Let the Orchestrator
+//! drive* (a commit, a branch, a switch, a pull, a push, a merge, a revert, a tag, a fetch), kept with the commands
 //! and what git said so the person sees it, or an operation that can lose work, which is only ever proposed and which
 //! only a person applies, whatever the switch says. The closed set of [`GitProposal`]s is every such operation the chat
 //! has: what it is not offered it cannot do.

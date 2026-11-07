@@ -1,9 +1,9 @@
-//! A change the Orchestrator's agent proposed that only a person carries out, unless the person's switch lets the chat
-//! carry it out itself (`docs/design/orchestrator-toolset.md`, "Decisions" 3 to 5): publishing a draft, canceling a
+//! A change the Orchestrator's agent proposed that only a person carries out, while the project's switch *Let the
+//! Orchestrator drive* is off (`docs/design/orchestrator-toolset.md`, "Decisions" 3 to 5): publishing a draft, canceling a
 //! run, merging one, answering an agent's question, sending a run's agents a message, continuing a run that waits
 //! for a person's decision, making the project's folder a git repository, a git operation that can lose work or
-//! adding or widening an MCP server (always the person's); and a git write or an MCP server's narrowing the chat made
-//! itself, kept so the person sees it. It holds what the person reads before *Apply* and what *Apply* would change; a
+//! adding or widening an MCP server; and, while the switch is on, what the chat carried out itself, kept so the person
+//! sees it. It holds what the person reads before *Apply* and what *Apply* would change; a
 //! draft saved again, a version published meanwhile or a run with newer work needs a fresh proposal.
 
 use serde::{Deserialize, Serialize};
@@ -109,7 +109,7 @@ pub enum Change {
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     sensitive: Vec<String>,
   },
-  /// A git write the chat ran itself under *Let the Orchestrator write with git*, kept so the person sees it, or an
+  /// A git write the chat ran itself under *Let the Orchestrator drive*, kept so the person sees it, or an
   /// operation that can lose work, which only a person applies ([`super::git`]).
   Git(Box<GitChange>),
   /// A change to the project's MCP servers: adding or widening one only a person applies, narrowing one the chat may
@@ -226,21 +226,6 @@ impl Change {
     }
   }
 
-  /// Whether it carries a run's agents on: an answer to a question, a message, a decision on how a stopped run
-  /// continues, or a resume. What the run does next follows from it.
-  pub const fn carries_run_on(&self) -> bool {
-    matches!(
-      self,
-      Self::Answer { .. } | Self::Message { .. } | Self::Continue { .. } | Self::Resume { .. }
-    )
-  }
-
-  /// Whether it moves a run no agent of which waits or works: a message that follows it up, continues or resumes
-  /// it, or runs its task again. Such a message is the person's to send, never the chat's by itself.
-  pub const fn moves_run(&self) -> bool {
-    matches!(self, Self::Message { then: Some(_), .. })
-  }
-
   /// Whether it runs the task again: its next run follows from it.
   pub const fn runs_again(&self) -> bool {
     matches!(
@@ -320,7 +305,7 @@ impl Publishing {
 
   /// Whether publishing a draft of this kind can widen what agents may do, so that its tool refuses it as
   /// `person_only` while *Let automation change agent permissions* is off. Instructions and skills reach agents'
-  /// prompts only, which *Let the Orchestrator publish drafts* covers for the chat (ORC-30); a kind that gains a
+  /// prompts only, which *Let the Orchestrator drive* covers for the chat (ORC-30); a kind that gains a
   /// widening rule must say so here and be judged by the chat's widening rules.
   pub const fn can_widen(self) -> bool {
     match self {

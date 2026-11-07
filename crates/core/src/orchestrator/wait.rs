@@ -2,15 +2,13 @@
 //! a question with suggested answers, its step waits for a message, or its plan waits for a decision; or a task's
 //! latest run ended or stopped ([`RunEnd`]), or something happened to it ([`TaskEvent`]). The Orchestrator's
 //! conversation keeps one entry per wait, linking to its card, in the conversation that last dealt with its task
-//! ([`dealt_with`]); with *Let the Orchestrator answer agents* on, the wait also starts one Orchestrator turn by
-//! itself, unless the Orchestrator's own answer, message or decision raised it, so the chat and an agent never answer
-//! each other in a loop.
+//! ([`dealt_with`]); with *Let the Orchestrator drive* on, the wait also starts one Orchestrator turn by itself,
+//! whoever started the run and whatever raised the wait (ORC-909).
 
 use serde::{Deserialize, Serialize};
 
 use super::{
-  change::Change,
-  chat::{ChatAction, ChatEntry, EntryKind},
+  chat::{ChatEntry, EntryKind},
   merging::Merging,
   resume::Continuing,
   task_event::TaskEvent,
@@ -139,65 +137,18 @@ pub struct AgentWait {
   pub agent: Option<String>,
   /// The app link of its card: the task's Conversation; for a run's end, the task's Summary.
   pub link: String,
-  /// The Orchestrator's own answer, message or decision on how the run continues raised it ([`raised_by_own`]).
-  #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-  pub own: bool,
-  /// It starts an Orchestrator turn by itself: *Let the Orchestrator answer agents* was on when it was kept, and the
-  /// Orchestrator's own answer did not raise it.
+  /// It starts an Orchestrator turn by itself: *Let the Orchestrator drive* was on when it was kept.
   #[serde(default, skip_serializing_if = "std::ops::Not::not")]
   pub automatic: bool,
-  /// For an interrupted run's end that starts a turn while *Let the Orchestrator continue interrupted runs* was on
-  /// too and the chat may continue the run: whether that turn continues it, or leaves it to the person because it was
-  /// interrupted again soon. `None` otherwise: the turn only tells the person.
+  /// For an interrupted run's end that starts a turn and the chat may continue the run: whether that turn continues
+  /// it, or leaves it to the person because it was interrupted again soon. `None` otherwise: the turn only tells the
+  /// person.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub continuing: Option<Continuing>,
-  /// For a run's success that starts a turn while *Let the Orchestrator merge finished runs on its own* and *merge
-  /// runs* were on too: whether that turn merges the run, or leaves it to the person and why. `None` otherwise: the
-  /// turn only tells the person.
+  /// For a run's success that starts a turn: whether that turn merges the run, or leaves it to the person and why.
+  /// `None` otherwise: the turn only tells the person.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub merging: Option<Merging>,
-}
-
-/// Whether `wait` now was raised by the Orchestrator's own doing, so that it starts no turn by itself: in `entries`,
-/// those of every conversation in the order they were kept (the person may have started another since), the newest
-/// entry about its run, before a wait of the run, is the chat's own doing (applied, or done itself, or for a merge
-/// conflict its own merge refused at conflicts; [`own_doing`]). An agent the Orchestrator answered that asks again, or
-/// a run it continued, resumed or started that stops, is answered by a person, or by an Orchestrator turn the person
-/// starts.
-pub fn raised_by_own(entries: &[ChatEntry], wait: &AgentWait) -> bool {
-  for entry in entries.iter().rev() {
-    match &entry.kind {
-      EntryKind::Wait { wait: kept, .. } if kept.run == wait.run => return false,
-      EntryKind::Action(action) if own_doing(action, wait) => return true,
-      _ => {}
-    }
-  }
-  false
-}
-
-/// Whether `wait` follows from `action`, carried out: an answer, a message, a decision on how the run continues or a
-/// resume of its run; for a run's end also the chat's start of the run (`started`: its own start, or the run its
-/// message that ran the task again started). A run that succeeded follows only from a message of the chat's that
-/// moved the run (a follow-up, a continuation, a resume) or from its message that ran the task again: its turn only
-/// tells the person and proposes, so nothing else of the chat's makes it loop. An event follows from what its kind
-/// names, with the outcome it names ([`super::task_event::TaskEventKind::raised_by`]).
-fn own_doing(action: &ChatAction, wait: &AgentWait) -> bool {
-  if let Some(event) = wait.kind.event() {
-    return event.kind.raised_by(action, wait.run);
-  }
-  if !action.outcome.answered() {
-    return false;
-  }
-  let end = wait.kind.run_end();
-  let change = action.change.as_ref().map(|change| &change.change);
-  let on_run = change.is_some_and(|change| change.run() == Some(wait.run));
-  let started = end.is_some() && action.started == Some(wait.run);
-  if end == Some(RunEnd::Succeeded) {
-    let again = started && change.is_some_and(Change::runs_again);
-    return again || (on_run && change.is_some_and(Change::moves_run));
-  }
-  let carried = on_run && change.is_some_and(Change::carries_run_on);
-  carried || started || action.resumed == Some(wait.run)
 }
 
 const fn is_zero(count: &u32) -> bool {

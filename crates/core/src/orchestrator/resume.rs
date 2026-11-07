@@ -1,9 +1,7 @@
 //! What the Orchestrator chat's `resume_run` may do with a run (`docs/design/orchestrator-toolset.md`, decision 5):
 //! resume one a pause stopped; continue one a crash, the runner going away, *Quit now* or the project database staying
-//! busy (ORC-75) interrupted, from its last checkpoint, only while the person lets it (*Let the Orchestrator continue
-//! interrupted runs*); and nothing else that stopped: a limit, a person's cancel, the runner failing to record it for
-//! any other reason, or for one it did not record, and its worktree gone leave the run to the person whatever the
-//! switches say. A turn an interrupted run's end started by itself continues the run once, unless the run was
+//! busy (ORC-75) interrupted, from its last checkpoint, while the person lets the Orchestrator drive; and nothing else that stopped: a limit, a person's cancel, the runner failing to record it for
+//! any other reason, or for one it did not record, and its worktree gone leave the run to the person. A turn an interrupted run's end started by itself continues the run once, unless the run was
 //! interrupted again soon after the time before ([`Continuing::after`]), or, for the database staying busy, too many
 //! runs of the project were so lately ([`Continuing::after_contention`]).
 
@@ -31,9 +29,9 @@ pub enum ChatResume {
   Paused,
   /// A crash, the runner going away, *Quit now* or the database staying busy (`RunnerFailed` of
   /// [`RunnerFailure::StorageContention`]) interrupted it: the chat continues it from its last checkpoint, while the
-  /// person lets it.
+  /// person lets the Orchestrator drive.
   Interrupted(InterruptCause),
-  /// It is the person's to resume or continue, whatever the switches say.
+  /// It is the person's to resume or continue.
   PersonOnly(PersonsStop),
   /// It is not stopped so: the tool tells what resuming it does.
   Other,
@@ -78,8 +76,7 @@ impl ChatResume {
   }
 }
 
-/// What the Orchestrator turn an interrupted run's end starts by itself does about the run, while the person lets the
-/// Orchestrator both answer agents and continue interrupted runs.
+/// What the Orchestrator turn an interrupted run's end starts by itself does about the run.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Continuing {
