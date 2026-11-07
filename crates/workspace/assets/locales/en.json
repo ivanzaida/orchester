@@ -1797,6 +1797,7 @@
       "mcpEndpoint": "Agents would reach the server at {{endpoint}}.",
       "mcpAuthorization": "The server would be sent a secret in another way: another secret, scheme, user name or header.",
       "mcpExemptTools": "{{tools}} would run without asking, where a person is asked now.",
+      "mcpNeedsValue": "The server would need a variable or secret header the version this computer uses does not, with a value this computer gives it.",
       "teamMcpServer": "A new version of {{server}} would let the agents of profiles that choose it do more than the version this computer uses.",
       "mcpRename": "The server would be named {{server}}: a run's answers that approve tools of a server by its name would then apply to it.",
       "apiProvider": "The agents of profiles on {{connection}} would send the project’s prompts, code and command output to {{endpoint}}, with the key in secret {{secret}}."

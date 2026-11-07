@@ -94,6 +94,7 @@ fn adds_key(add: &VersionWidening) -> &'static str {
     },
     VersionWidening::McpServer => "sharing.config.widens.adds.mcpServer",
     VersionWidening::Secret => "sharing.config.widens.adds.secret",
+    VersionWidening::Tool => "sharing.config.widens.adds.tool",
     VersionWidening::Command(_) => "sharing.config.widens.adds.command",
     VersionWidening::Address => "sharing.config.widens.adds.address",
     VersionWidening::Method => "sharing.config.widens.adds.method",
