@@ -1,7 +1,8 @@
 //! What an Orchestrator conversation leads, as its prompts tell it (`docs/design/orchestrator-watch.md`, `MvWyD` row
 //! Commands): the conversation's subscriptions with their targets, since when and the order that applies to each, in
 //! its standing instructions ([`Leads::system_prompt`]) and in every turn an event starts ([`Leads::event_prompt`]),
-//! which also names the subscription the event came through. Only the person subscribes and the agent has no timers.
+//! which also names the subscription the event came through. Only the person subscribes, with a command or by asking
+//! the agent in words, which then applies it with its `watch` and `unwatch` tools (ORC-893); the agent has no timers.
 //! An order is the person's text: it is quoted as data and only narrows what the person's switches allow. A
 //! conversation that leads nothing gets the prompts of [`super::instructions`] unchanged.
 
@@ -100,9 +101,11 @@ impl Leads {
   /// The subscriptions with their orders, and what the agent may make of them.
   fn listed(&self) -> String {
     let mut text = String::from(
-      "What this conversation leads: the person subscribed it to these targets, and only the person subscribes. You \
-       have no tool that changes a subscription and no timers: Orchester starts a turn when an event of a task they \
-       take in comes, and events that come during a turn are taken together in the next one.",
+      "What this conversation leads: the person subscribed it to these targets, with a command or by asking you, and \
+       only the person decides what it watches. You change a subscription with watch and unwatch only when the \
+       person asks for it in this conversation, never in a turn Orchester started, and you have no timers: \
+       Orchester starts a turn when an event of a task they take in comes, and events that come during a turn are \
+       taken together in the next one.",
     );
     for lead in &self.leads {
       text.push_str(&format!("\n- {}. Its order: {}", lead.named(), self.order_words(lead)));

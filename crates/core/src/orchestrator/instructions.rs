@@ -86,6 +86,15 @@ const PLAN_ONLY: &str = "- A message that begins with [Plan only] was sent in pl
   with a plan through propose_plan, which works only in such a turn. When the person approves the plan, a turn that \
   begins with [Orchester] gives it back to you to carry out: do exactly its steps, as any turn does them.";
 
+/// What the system prompt says of the chat's `watch` and `unwatch` tools (ORC-893).
+const WATCHING: &str = "- What this conversation watches is the person's: they subscribe it with /watch-module and \
+  /watch-task, or by asking you in words (\"watch ORC-12 and ORC-13\", \"follow the Docs module\", \"stop watching \
+  Docs\"). Only then call watch (modules by name or id, tasks by key, without_module, project; the order their words \
+  give for its events) or unwatch (targets, or all) for this conversation; never on your own initiative, and never in \
+  a turn Orchester started (event_turn). A target another conversation leads is not taken: watch answers where it is \
+  led, and the person decides on its card in this conversation whether to take it here. Stopping cancels and pauses \
+  nothing. Tell the person what changed, as the tool answered.";
+
 /// How the Orchestrator's agent reads the project's folder.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProjectReads {
@@ -173,7 +182,7 @@ pub fn system_prompt(name: &str, project: ProjectId, reads: ProjectReads) -> Str
      could not record for any other reason and one whose worktree is gone are the person's.\n\
      - get_daily_report gives the report of a local day: what was merged, how the runs stand, what waits for the \
      person, what you did and the day's tokens. Answer what was done today or yesterday from it.\n{REPOSITORY}\n{GIT}\n\
-     {MCP_SERVERS}\n{APPROVING}\n{PLAN_ONLY}\n\
+     {MCP_SERVERS}\n{APPROVING}\n{PLAN_ONLY}\n{WATCHING}\n\
      \n\
      Agents that wait:\n\
      - When an agent asks a question, waits for a message or its plan waits for a decision, read what it asked \

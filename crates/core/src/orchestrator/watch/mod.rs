@@ -27,7 +27,7 @@ pub use self::{
   created::{Created, CreatedWatch, created_task, created_task_watch, event_subscription},
   ended::WatchEnd,
   ending::{EndReason, Ending, NeverEnds, TargetTasks},
-  line::{LedElsewhere, NamedTarget, OpenTask, WatchCommand, WatchLine},
+  line::{AtRequest, LedElsewhere, NamedTarget, OpenTask, WatchCommand, WatchLine},
   stop::{LeftOpen, OpenWork},
   summary::WatchSummary,
 };

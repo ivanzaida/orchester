@@ -480,6 +480,7 @@
         "more": "{{first}}, {{next}}"
       },
       "leading": "Leading {{targets}}",
+      "atRequest": "at your request",
       "leadingAside": "— their waits, run ends, conflicts, limits and stalls start a turn here",
       "nowLedIn": "{{target}} is now led in «{{title}}»",
       "nowLedInAside": "— its events start turns there",

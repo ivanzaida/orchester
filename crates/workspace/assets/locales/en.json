@@ -2168,6 +2168,8 @@
       "notWatched": "Not applied · this conversation doesn't watch that — nothing changed",
       "ledElsewhere": "Not applied · it's led in «{{title}}» now — nothing changed",
       "alreadyHere": "This conversation leads it already.",
+      "eventTurn": "Not applied · Orchester started this turn by itself: what this conversation watches changes only when you ask — nothing changed",
+      "unknownTarget": "Not applied · nothing in this project answers to “{{target}}”: name a task by its key or a module by its name — nothing changed",
       "target": {
         "named": "{{name}}",
         "gone": "Gone from the project",

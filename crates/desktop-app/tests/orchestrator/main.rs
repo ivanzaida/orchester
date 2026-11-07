@@ -63,6 +63,7 @@ mod todo;
 mod unwatch;
 mod waits;
 mod waits_on;
+mod watch_asked;
 mod watch_lines;
 mod watch_module;
 mod watch_picker;

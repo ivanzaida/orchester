@@ -51,6 +51,7 @@ pub fn take_over_in(root: &Path, chat: &Chat, target: &NamedTarget, order: &str)
       already_here: Vec::new(),
       led_elsewhere: Vec::new(),
       gone: Vec::new(),
+      at_request: None,
     },
   };
   db.keep_watch_entries(chat, &[ChatEvent::Watch { line }], now)?;
