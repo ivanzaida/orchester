@@ -6,18 +6,16 @@
 
 use orchester_api::test_support::team_server::TeamServer;
 use orchester_app::{
-  routes::{HubFilter, ProjectPage, Route, TaskView},
+  routes::{HubFilter, ProjectPage, Route, TaskTab, TaskView},
   test_support::{Data, Window},
   ui::icon::Icon,
 };
-use orchester_core::{id::ProjectId, time::Timestamp};
+use orchester_core::{id::ProjectId, resource::ResourceKind, store::ResourceStore, time::Timestamp};
+use orchester_store::{AppDb, ProjectDb};
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
 
-use super::{
-  team::{self, State},
-  team_work_actions::own_repository,
-};
+use super::team::{self, State};
 
 fn task_route(project: ProjectId, key: &str) -> Route {
   let key = key.parse().expect("a task key");
@@ -27,9 +25,10 @@ fn task_route(project: ProjectId, key: &str) -> Route {
 #[path = "../../../workspace/tests/support/runner_programs.rs"]
 mod runner_programs;
 
-/// The window on the seed's `team-not-ready` (Kontur with the team's resources of `picker-readiness-team`), joined to
-/// the stand-in team server with the real runner, which Run needs to be pressable; on KON-5 once Run shows.
-fn on_kon_5() -> (Window, TeamServer) {
+/// The window on the seed's `team-not-ready` (Kontur with the team's resources of `picker-readiness-team` and the
+/// module branch of KON-5), joined to the stand-in team server with the real runner, which Run needs to be pressable;
+/// on KON-5 once Run shows.
+fn on_kon_5() -> (Window, TeamServer, ProjectId) {
   let dir = TempDir::new().expect("a temporary folder");
   let request = crate::kontur::SeedRequest {
     data_dir: dir.path().to_path_buf(),
@@ -44,15 +43,14 @@ fn on_kon_5() -> (Window, TeamServer) {
   let services = launch.services().expect("the session started");
   let server = team::prepare(State::NotReadyHere, services, data.runtime.handle()).expect("the state is set up");
   let mut window = Window::of(data, launch);
-  own_repository(&window.data.repo("repo-kontur"));
   window.navigation().go(task_route(seeded.project, "KON-5"));
   window.until("Run", |window| window.texts("task-run").is_some());
-  (window, server)
+  (window, server, seeded.project)
 }
 
 #[test]
 fn team_qa_not_ready_run_says_here_and_lists_the_parts_with_a_hub_fix() {
-  let (mut window, server) = on_kon_5();
+  let (mut window, server, _) = on_kon_5();
   window.until("the runner", |window| {
     window
       .tree
@@ -106,4 +104,88 @@ fn team_qa_not_ready_run_says_here_and_lists_the_parts_with_a_hub_fix() {
   };
   assert_eq!(view.filter, HubFilter::McpServers);
   assert!(view.item.is_some(), "the server itself");
+}
+
+/// Lets the card's own re-read finish: it asks again as it shows, and what it finds replaces what the start refused.
+fn settle(window: &mut Window) {
+  for _ in 0..60 {
+    window.tree.tick_futures();
+    window.pass();
+    std::thread::sleep(std::time::Duration::from_millis(5));
+  }
+}
+
+/// The ids of the rows the card lists.
+fn rows(window: &mut Window) -> Vec<String> {
+  (0..12)
+    .filter_map(|index| {
+      window
+        .texts(&format!("task-not-ready-row-{index}-what"))
+        .map(|what| what.join(" "))
+    })
+    .collect()
+}
+
+/// Runs KON-5 until the card shows.
+fn refused(window: &mut Window) {
+  window.until("the runner", |window| {
+    window
+      .tree
+      .get_element_by_id("task-run-icon")
+      .and_then(|icon| icon.text_content().map(str::to_owned))
+      .is_some_and(|glyph| glyph != Icon::Lock.glyph().to_string())
+  });
+  window.press("task-run");
+  window.until("the not-ready card", |window| window.texts("task-not-ready").is_some());
+}
+
+/// The person sets the program path of the team's `pencil-design` on this computer, as the card's fix does.
+fn set_pencil_path(window: &Window) {
+  let root = window.data.repo("repo-kontur");
+  let db = ProjectDb::open(&root).expect("the project");
+  let server = db.sharing().expect("read").expect("a team project").server;
+  let pencil = db
+    .resources(ResourceKind::McpServer)
+    .expect("servers")
+    .into_iter()
+    .find(|resource| resource.name().as_str() == "pencil-design")
+    .expect("the team's pencil-design");
+  let program = std::env::current_exe().expect("a program that exists");
+  AppDb::open(&window.data.database())
+    .expect("the application database")
+    .set_mcp_server_program(server, pencil.id(), &program, Timestamp::now())
+    .expect("the path is kept");
+}
+
+#[test]
+fn team_qa_not_ready_card_follows_the_team_start_until_the_team_parts_are_fixed() {
+  let (mut window, _server, project) = on_kon_5();
+  refused(&mut window);
+  let before = rows(&mut window);
+  // The card asked again as it showed; a team task is no task of this computer's queue, so asking as a local start
+  // would find nothing missing and clear the card. It is read after the re-read settled, not before.
+  settle(&mut window);
+  assert_eq!(rows(&mut window), before, "the re-read finds what the start found");
+  assert_eq!(
+    before,
+    ["Builder", "Reviewer", "pencil-design", "Secret GITHUB_TOKEN"],
+    "a connection for each profile, the program and the secret"
+  );
+
+  // On another tab the notice reads as the card does.
+  let key = "KON-5".parse().expect("a task key");
+  let page = |view| Route::Project(project, ProjectPage::task(Clone::clone(&key), view, false));
+  window.navigation().go(page(TaskView::of(TaskTab::Conversation)));
+  window.until("the notice", |window| window.texts("task-not-ready-notice").is_some());
+  settle(&mut window);
+  assert!(window.texts("task-not-ready-notice").is_some(), "still not ready here");
+
+  // The person sets the program path and comes back: what the card lists is what is still missing.
+  set_pencil_path(&window);
+  window.navigation().go(page(TaskView::Summary));
+  window.until("the card without the program", |window| {
+    rows(window) == ["Builder", "Reviewer", "Secret GITHUB_TOKEN"]
+  });
+  settle(&mut window);
+  assert_eq!(rows(&mut window), ["Builder", "Reviewer", "Secret GITHUB_TOKEN"]);
 }

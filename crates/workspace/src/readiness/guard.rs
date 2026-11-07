@@ -12,7 +12,7 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 
-use super::{NotReadyHere, ReadinessError};
+use super::{NotReadyHere, ReadinessError, StartReadiness};
 use crate::{
   background,
   messages::{self, Message},
@@ -54,6 +54,27 @@ impl Workspace {
     self
       .refuse_unless_ready(repo_root, vault, move |workspace, root, vault| {
         workspace.task_not_ready_here(root, vault, task)
+      })
+      .await
+  }
+
+  /// [`Self::ready_to_start`] for a task of a team project, which is read from its server and so is not a task of this
+  /// computer's queue: by the `pipeline` it names, as the team start asks ([`Self::team_start_readiness`], with the
+  /// program paths this computer set for the team's MCP servers). A task with no pipeline, or one this computer has no
+  /// version of, is left to the start, which refuses it with its own reason.
+  pub async fn ready_to_start_team(
+    &self,
+    repo_root: &Path,
+    vault: &Vault,
+    pipeline: Option<ResourceId>,
+  ) -> Result<(), NotStarted> {
+    self
+      .refuse_unless_ready(repo_root, vault, move |workspace, root, vault| match pipeline {
+        Some(pipeline) => Ok(match workspace.team_start_readiness(root, vault, pipeline)? {
+          StartReadiness::NotReady(refusal) => Some(refusal),
+          StartReadiness::Ready(_) | StartReadiness::PipelineUnknown => None,
+        }),
+        None => Ok(None),
       })
       .await
   }

@@ -34,6 +34,7 @@ mod disk_guard;
 mod editor_drafts;
 mod feedback;
 mod import;
+mod initial;
 mod invocation_permissions;
 mod joining;
 mod list;

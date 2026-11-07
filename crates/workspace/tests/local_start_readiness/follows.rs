@@ -98,10 +98,12 @@ impl Kontur {
 }
 
 #[test]
-fn local_start_send_message_that_runs_the_task_again_is_refused_and_the_message_stays() {
+fn local_start_send_message_that_runs_the_task_again_is_refused_before_it_is_stored_so_a_retry_stores_it_once() {
   let (kontur, program, _outside) = not_ready();
   kontur.end_a_run();
   let before = kontur.standing();
+  let stored = || kontur.db().messages(kontur.task().id()).expect("messages").len();
+  let first = stored();
 
   let refused = kontur.send_message();
   assert_eq!(refused["error"]["code"], "not_ready_here", "{refused}");
@@ -111,10 +113,16 @@ fn local_start_send_message_that_runs_the_task_again_is_refused_and_the_message_
   );
   assert_eq!(kontur.standing(), before, "no run, no attempt, nothing queued");
   assert_eq!(
-    kontur.db().messages(kontur.task().id()).expect("messages").len(),
-    1,
-    "the message is stored and waits for the run"
+    stored(),
+    first,
+    "nothing was stored, so the client knows it must send it again"
   );
+  assert_eq!(
+    kontur.send_message()["error"]["code"],
+    "not_ready_here",
+    "asked again, still refused, still nothing stored"
+  );
+  assert_eq!(stored(), first);
 
   std::fs::write(&program, "#!/bin/sh\n").expect("the program appears");
   let sent = kontur.send_message();
@@ -122,6 +130,7 @@ fn local_start_send_message_that_runs_the_task_again_is_refused_and_the_message_
     sent["error"]["code"], "not_ready_here",
     "ready, the message goes on: {sent}"
   );
+  assert_eq!(stored(), first + 1, "the retry stored the message once");
 }
 
 #[test]

@@ -2,8 +2,9 @@
 //! frame's other notices are, with a link that opens the Summary, where the card lists each part and its fix.
 
 use lurq::{app::ctx::Ctx, node::Element};
+use orchester_workspace::readiness::NotReadyHere;
 
-use super::{super::TaskContext, refused};
+use super::{super::TaskContext, refused, reread};
 use crate::{
   navigation::Navigation,
   routes::{Route, TaskTab, TaskView},
@@ -21,6 +22,17 @@ pub fn notice(ctx: &mut Ctx, task: &TaskContext, view: &TaskView) -> Option<Elem
     return None;
   }
   let refusal = refused(ctx, task)?;
+  Some(ctx.mount_keyed::<reread::NotReadyNotice>(
+    "task-not-ready-notice-host",
+    reread::CardProps {
+      task: task.clone(),
+      refusal,
+    },
+  ))
+}
+
+/// The notice for `refusal`, which the person's last start was refused for or the card read since.
+pub(super) fn notice_of(ctx: &mut Ctx, task: &TaskContext, refusal: &NotReadyHere) -> Element {
   let team = task.team.is_some();
   let (title, body) = match (team, refusal.after_server_started()) {
     (_, true) => ("summary.notReady.titleAfterStart", "summary.notReady.notice.bodyTeam"),
@@ -41,11 +53,9 @@ pub fn notice(ctx: &mut Ctx, task: &TaskContext, view: &TaskView) -> Option<Elem
   .small()
   .tight()
   .opens(Navigation::of(ctx).to(route));
-  Some(
-    Notice::new("task-not-ready-notice", NoticeTone::Warning, ctx.t(title))
-      .icon(Icon::CircleAlert)
-      .body(body)
-      .action(open)
-      .into(),
-  )
+  Notice::new("task-not-ready-notice", NoticeTone::Warning, ctx.t(title))
+    .icon(Icon::CircleAlert)
+    .body(body)
+    .action(open)
+    .into()
 }

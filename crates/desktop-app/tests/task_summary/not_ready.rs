@@ -121,21 +121,39 @@ fn task_not_ready_on_another_tab_a_notice_says_it_and_opens_the_summary() {
   );
 }
 
-#[test]
-fn task_not_ready_coming_back_from_a_fix_asks_again_and_the_card_goes_once_nothing_is_missing() {
-  let (mut page, key) = refused_task();
-  page.click("task-not-ready-row-0-fix");
-  // The person fixes what the card lists (here: switches both servers off in Connections, which a run leaves out) and
-  // returns to the task.
+/// The person fixes what the card lists: here by switching both servers off in Connections, which a run leaves out.
+fn fix_everything(page: &Page) {
   let root = page.window.data.dir.path().join("repo-picker-readiness");
   let mut db = ProjectDb::open(&root).expect("the project");
   for mut server in db.mcp_servers().expect("servers") {
     server.set_enabled(false);
     db.save_mcp_server(&server).expect("saved");
   }
-  drop(db);
+}
+
+#[test]
+fn task_not_ready_coming_back_from_a_fix_asks_again_and_the_card_goes_once_nothing_is_missing() {
+  let (mut page, key) = refused_task();
+  page.click("task-not-ready-row-0-fix");
+  fix_everything(&page);
   page.show(&key, TaskView::of(TaskTab::Summary));
   page.wait("the card to be asked again", |window| {
+    window.texts("task-not-ready").is_none()
+  });
+}
+
+#[test]
+fn task_not_ready_on_another_tab_the_notice_asks_again_too_and_goes_with_the_card() {
+  let (mut page, key) = refused_task();
+  fix_everything(&page);
+  // The refusal is still the last answer of Run; the tab's notice reads again as the Summary's card does, so the two
+  // never disagree.
+  page.show(&key, TaskView::of(TaskTab::Conversation));
+  page.wait("the notice to be asked again", |window| {
+    window.texts("task-not-ready-notice").is_none()
+  });
+  page.show(&key, TaskView::of(TaskTab::Summary));
+  page.wait("the Summary's card to be asked again", |window| {
     window.texts("task-not-ready").is_none()
   });
 }

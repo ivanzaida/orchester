@@ -6,6 +6,8 @@
 
 #[path = "local_start_readiness/follows.rs"]
 mod follows;
+#[path = "local_start_readiness/queue.rs"]
+mod queue;
 
 use std::{
   collections::{BTreeMap, BTreeSet},

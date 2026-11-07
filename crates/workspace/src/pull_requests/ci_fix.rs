@@ -322,7 +322,11 @@ pub async fn fix_ci(
   };
   let sent = follow((runners, servers, RunnerOf::Project(open)), ready, &stored, fix.then).await;
   if matches!(sent, Sent::NotReady(_)) {
-    record_waiting(open, fix).await?;
+    // The Fix CI and its message are stored whatever follows, so this is no error of the Fix CI: the message stays
+    // queued with the run, and only the CI line that says it waits is missing.
+    if let Err(reason) = record_waiting(open, fix).await {
+      tracing::warn!(key = reason.key, run = %fix.run, "a Fix CI waits for a pipeline that is not ready here, and that was not recorded");
+    }
   }
   Ok((done, Some(sent)))
 }

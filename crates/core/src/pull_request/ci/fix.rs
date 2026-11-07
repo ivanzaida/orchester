@@ -121,6 +121,17 @@ impl RunFixes {
       .find(|event| event.failure == failure && matches!(event.kind, FixEventKind::Sent { .. }))
   }
 
+  /// Whether the last thing recorded for `failure` is a Fix CI that waits because the pipeline is not ready on this
+  /// computer ([`FixEventKind::NotReady`]): the agent works on nothing yet.
+  pub fn waits_for(&self, failure: &str) -> bool {
+    self
+      .events
+      .iter()
+      .rev()
+      .find(|event| event.failure == failure)
+      .is_some_and(|event| matches!(event.kind, FixEventKind::NotReady { .. }))
+  }
+
   /// The last Fix CI sent, of any failure.
   pub fn last_sent(&self) -> Option<&FixEvent> {
     self

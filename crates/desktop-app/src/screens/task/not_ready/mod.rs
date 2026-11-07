@@ -32,7 +32,7 @@ use crate::{
   navigation::{Navigation, link::Open},
   routes::{ProjectPage, Route},
   team::start::{Started, Stop},
-  theme::{CardsText, ExtraSpacing, ExtraTypography, IconSize, NOT_READY_ROW_HEIGHT, TaskText},
+  theme::{CardsText, ExtraSpacing, ExtraTypography, IconSize, NOT_READY_ROW_HEIGHT, TaskRadius, TaskText},
   ui::{
     button::{ActionButton, ButtonKind},
     card::{CardSurface, card},
@@ -89,6 +89,7 @@ fn card_of(ctx: &mut Ctx, task: &TaskContext, refusal: &NotReadyHere) -> Element
     (false, false) => "summary.notReady.body",
   };
   card("task-not-ready", CardSurface::Attention)
+    .rounded(TaskRadius::NotReadyCard.role())
     .spacing(SpacingSize::Md)
     .child(head(ctx, refusal, team))
     .child(
@@ -220,7 +221,6 @@ fn actions(ctx: &Ctx, team: bool, agents: Open) -> Element {
     .child(
       ActionButton::new("task-not-ready-open-agents", ButtonKind::Secondary, ctx.t(button))
         .icon(Icon::Bot)
-        .compact()
         .opens(agents),
     )
     .child(Column::new().flex(1.0))

@@ -193,6 +193,8 @@ pub fn edit_conflict(kontur: &mut Kontur) -> Result<(), SeedError> {
 /// Summary lists them (`Task · Run · not ready here`, R1 `Ku0qu`).
 pub fn not_ready_here(kontur: &mut Kontur) -> Result<(), SeedError> {
   super::picker_readiness::team_work(kontur)?;
+  // KON-5's module branch, which a team start finds in the checkout before it asks whether the pipeline is ready.
+  git::branch(&kontur.repo, "module/api-rate-limits", git::MAIN)?;
   write_marker(kontur, State::NotReadyHere)
 }
 
