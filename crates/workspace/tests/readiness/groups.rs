@@ -18,10 +18,15 @@ fn readiness_resources_fall_into_needs_you_ready_and_off() {
   fixture.connection(CLAUDE, "claude");
   let off = fixture.team_server("knowledge", program(&[]));
   let on = fixture.team_server("issues", remote("ISSUES_KEY"));
+  let undecided = fixture.team_server("notes", remote("NOTES_KEY"));
   fixture
     .workspace
     .switch_team_mcp_on_here(&fixture.root, on, true, Answerer::Person)
     .expect("on");
+  fixture
+    .workspace
+    .switch_team_mcp_on_here(&fixture.root, off, false, Answerer::Person)
+    .expect("off");
   let plain = fixture.team_profile("plain", &profile(CLAUDE, &[], &[]));
   let needs_server = fixture.team_profile("needs-server", &profile(CLAUDE, &[off], &[]));
 
@@ -30,8 +35,9 @@ fn readiness_resources_fall_into_needs_you_ready_and_off() {
   assert_eq!(ids(Group::OffHere), [off], "a team server switched off here");
   assert_eq!(
     ids(Group::NeedsYouHere),
-    [needs_server, on],
-    "a profile that chooses an off server cannot run, and a server that is on still lacks its secret"
+    [needs_server, on, undecided],
+    "a profile that chooses an off server cannot run, a server that is on still lacks its secret, and one nobody \
+     decided on needs the person"
   );
   assert_eq!(ids(Group::Ready), [plain]);
 
@@ -41,6 +47,7 @@ fn readiness_resources_fall_into_needs_you_ready_and_off() {
     [
       ResourceKind::AgentProfile,
       ResourceKind::AgentProfile,
+      ResourceKind::McpServer,
       ResourceKind::McpServer,
       ResourceKind::McpServer
     ],
@@ -52,9 +59,18 @@ fn readiness_resources_fall_into_needs_you_ready_and_off() {
 fn readiness_an_off_server_still_lists_what_else_it_lacks() {
   let fixture = Fixture::team();
   let server = fixture.team_server("knowledge", program(&[]));
+  let undecided = fixture.read();
+  let found = undecided.resource(server).expect("listed");
+  assert_eq!(found.group(), Group::NeedsYouHere, "nobody decided on it here");
+  assert_eq!(found.standing().missing().len(), 2, "off, and no program");
+
+  fixture
+    .workspace
+    .switch_team_mcp_on_here(&fixture.root, server, false, Answerer::Person)
+    .expect("off");
   let read = fixture.read();
   let found = read.resource(server).expect("listed");
-  assert_eq!(found.group(), Group::OffHere);
+  assert_eq!(found.group(), Group::OffHere, "switched off here");
   assert_eq!(found.standing().missing().len(), 2, "off, and no program");
 }
 

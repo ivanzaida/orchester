@@ -61,10 +61,11 @@ pub(super) fn read(db: &ProjectDb, setting: Setting<'_>) -> Result<ProjectReadin
   let mut here = facts::with_programs(facts::base(db)?, gathered.programs, &server_ids);
   let mut entries: Vec<Entry> = Vec::new();
   for mut server in gathered.servers {
-    if db.team_mcp_on_here(server.entry.resource)? {
-      here = here.with_mcp_on(server.entry.resource);
-    } else {
-      server.entry.off_here = true;
+    match db.team_mcp_switch(server.entry.resource)? {
+      Some(true) => here = here.with_mcp_on(server.entry.resource),
+      Some(false) => server.entry.off_here = true,
+      // Nobody decided here: not on, and it needs the person (its standing is missing `McpOff`).
+      None => {}
     }
     entries.push(server.entry);
   }

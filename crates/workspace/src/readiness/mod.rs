@@ -9,8 +9,8 @@
 //!
 //! - A team secret "has a value here" when `team_secret_values` has a row for its name (a fill-in). The keychain is not
 //!   read, so a value removed from it outside Orchester still counts.
-//! - A team MCP server is on only when the person switched it on; one nobody decided on reads like one switched off
-//!   ([`Group::OffHere`]), and a profile that chooses it is missing
+//! - A team MCP server is on only when the person switched it on. One they switched off is [`Group::OffHere`]; one
+//!   nobody decided on is [`Group::NeedsYouHere`]. Either way it and a profile that chooses it are missing
 //!   [`Missing::McpOff`](orchester_core::sharing::Missing::McpOff).
 //! - A version of a team profile published here that waits for the server is read from its local body turned into the
 //!   team's form as publishing does, so an Admin's own new profile or edit is as ready as it will be when the server

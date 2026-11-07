@@ -25,7 +25,8 @@ impl Workspace {
       team::require_resource(&db, server, ResourceKind::McpServer)?;
       db.set_team_mcp_on_here(server, true)?;
     } else {
-      db.clear_team_mcp_on_here(server)?;
+      // Kept as a choice: a server switched off is "off here", one nobody decided on needs the person.
+      db.set_team_mcp_on_here(server, false)?;
     }
     self.changes.record(db.project().id(), Outside::Connections);
     Ok(())

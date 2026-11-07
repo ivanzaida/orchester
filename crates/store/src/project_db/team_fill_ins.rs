@@ -79,15 +79,21 @@ impl ProjectDb {
 
   /// Whether the team MCP server `server` is on here; off when it was never set.
   pub fn team_mcp_on_here(&self, server: ResourceId) -> Result<bool, StoreError> {
-    let enabled: Option<bool> = self
-      .connection
-      .query_row(
-        "SELECT enabled FROM team_mcp_switches WHERE resource_id = ?1",
-        [server.to_string()],
-        |row| row.get(0),
-      )
-      .optional()?;
-    Ok(enabled.unwrap_or(false))
+    Ok(self.team_mcp_switch(server)?.unwrap_or(false))
+  }
+
+  /// The person's choice for the team MCP server `server` here: on, off, or `None` when nobody has decided.
+  pub fn team_mcp_switch(&self, server: ResourceId) -> Result<Option<bool>, StoreError> {
+    Ok(
+      self
+        .connection
+        .query_row(
+          "SELECT enabled FROM team_mcp_switches WHERE resource_id = ?1",
+          [server.to_string()],
+          |row| row.get(0),
+        )
+        .optional()?,
+    )
   }
 
   /// Forgets the switch of `server`, which is off again; a server without one is not an error.

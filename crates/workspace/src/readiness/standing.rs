@@ -79,8 +79,8 @@ pub enum Group {
   /// profile is what cannot run.
   NeedsYouHere,
   Ready,
-  /// A team MCP server that is not switched on here, which includes one nobody has decided on (a server
-  /// switched on here is a choice the person makes; none made reads as off). Its own missing parts still show on it,
-  /// and a profile that chooses it shows [`Missing::McpOff`] in [`Self::NeedsYouHere`].
+  /// A team MCP server a person switched off here. One nobody has decided on is not here but in
+  /// [`Self::NeedsYouHere`], missing [`Missing::McpOff`]. Its own missing parts still show on it, and a profile that
+  /// chooses it shows [`Missing::McpOff`] in [`Self::NeedsYouHere`].
   OffHere,
 }
