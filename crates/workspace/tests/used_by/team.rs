@@ -184,24 +184,27 @@ fn used_by_team_asks_the_server_and_gives_the_shape_a_local_project_gives() {
     team.create(SharedResourceKind::Pipeline, (slug, label), pipeline_body(tool));
   }
   team.pin(("KON-12", 1), Some(Person::Named("Dana Ruiz")), &[tool]);
-  let held = team.pin(("KON-3", 1), Some(Person::Named("Dana Ruiz")), &[tool]);
-  team.pin(("KON-3", 2), None, &[tool]);
+  // KON-3 was taken over: work 1 is fenced and left out, work 2 is the current work.
+  team.pin(("KON-3", 1), Some(Person::Named("Dana Ruiz")), &[tool]);
+  team.pin(("KON-3", 2), Some(Person::Named("Lena Moroz")), &[tool]);
   team.pin(("KON-9", 1), None, &[ResourceId::generate()]);
-  team
-    .server
-    .claim_run_task("kontur", held, Some(Person::Named("Lena Moroz")));
   team.server.stand_as(Standing::Member);
 
   let session = team.session();
   let used = team.used_by(Some(&session), tool).expect("the tool's users");
 
-  assert_eq!(shown(&used), tool_users(), "the same answer as the local project's");
+  let (resources, _) = tool_users();
+  assert_eq!(
+    shown(&used),
+    (resources, vec!["KON-3", "KON-12"]),
+    "the local project's resources; the team server lists only the current work of each task"
+  );
   let holders: Vec<_> = used
     .runs
     .iter()
     .map(|run| run.holder.as_ref().map(|holder| holder.display_name.as_str()))
     .collect();
-  assert_eq!(holders, [Some("Lena Moroz"), None, Some("Dana Ruiz")]);
+  assert_eq!(holders, [Some("Lena Moroz"), Some("Dana Ruiz")]);
 }
 
 #[test]

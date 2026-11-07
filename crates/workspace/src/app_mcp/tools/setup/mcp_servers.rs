@@ -6,13 +6,15 @@
 //! on) is refused as `person_only` unless a person lets automation change agent permissions, judged by the fields'
 //! text before anything reads the disk; removing, turning off and dropping exempt tools are always taken. A program
 //! is stored as the fixed file it is, outside the repository, as a command tool's (`tools::program`). A secret is
-//! named, never its value, and only the project's active secrets can be named.
+//! named, never its value, and only the project's active secrets can be named. In a team project an MCP server may be
+//! the team's (`team_fill_ins`): turning it on and giving it a program are a person's alone, always.
 
 use std::path::Path;
 
 use orchester_core::{
   connection::mcp::{McpAuthorization, McpEnvValue, McpServer, McpServerName, McpTransport},
   id::{ConnectionId, ProjectId, SecretId},
+  resource::ResourceKind,
   secret::Secret,
   store::{McpServerStore, SecretStore},
 };
@@ -21,7 +23,10 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::widening;
+use super::{
+  team_fill_ins::{self, team_resource_named},
+  widening,
+};
 use crate::{
   app_mcp::{
     error::{Missing, ToolError},
@@ -161,6 +166,9 @@ pub async fn update_mcp_server(services: &Services, args: UpdateMcpServer) -> Re
   blocking(move || {
     let open = services.project(&args.project)?;
     let db = ProjectDb::open(&open.repo_root)?;
+    if team_resource_named(&db, ResourceKind::McpServer, &args.server)?.is_some() {
+      return Err(team_fill_ins::update_server(args.fields.program.is_some()));
+    }
     let stored = server_named(&db, &args.server)?;
     let secrets = db.secrets()?;
     let text = filled(McpServerText::of(&stored, &secrets), args.fields, &secrets)?;
@@ -189,7 +197,11 @@ pub async fn set_mcp_server_enabled(services: &Services, args: SetMcpServerEnabl
   let services = services.clone();
   blocking(move || {
     let open = services.project(&args.project)?;
-    let server = server_named(&ProjectDb::open(&open.repo_root)?, &args.server)?;
+    let db = ProjectDb::open(&open.repo_root)?;
+    if let Some(team) = team_resource_named(&db, ResourceKind::McpServer, &args.server)? {
+      return team_fill_ins::switch_server(&services, &open.repo_root, &team, args.enabled);
+    }
+    let server = server_named(&db, &args.server)?;
     widening::allowed(&services, enabling(&server, args.enabled))?;
     mcp::set_enabled_in(&open.repo_root, server.id(), args.enabled)?;
     services.changes.record(open.project.id(), Outside::Connections);

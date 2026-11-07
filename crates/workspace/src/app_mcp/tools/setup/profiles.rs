@@ -221,7 +221,7 @@ pub(super) fn state_json(state: VersionState) -> Value {
   json!({ "state": name, "published_version": state.published().map(|version| version.get()) })
 }
 
-fn publish_error(error: &StoreError) -> ToolError {
+pub(super) fn publish_error(error: &StoreError) -> ToolError {
   let code = match error {
     StoreError::NoDraft(_) => return no_draft(),
     StoreError::Publish(PublishError::StaleDraft { .. }) => "stale_draft",

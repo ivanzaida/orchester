@@ -6,8 +6,10 @@ use std::sync::Arc;
 
 use orchester_core::{
   name::Name,
+  resource::{InstructionScope, Skill, Slug},
   secret::{Environment, NewSecret, SecretKind, SecretName, SecretValue},
-  store::SecretStore,
+  store::{ResourceStore, SecretStore},
+  time::Timestamp,
 };
 use orchester_store::ProjectDb;
 use orchester_workspace::secrets::data::{add_in, replace_in};
@@ -142,12 +144,8 @@ fn domain_reads_an_instruction_with_its_versions_and_skills_as_skills_shows_them
     "events": "start",
     "text": "Write the failing test first.",
   });
-  served.ok("save_instruction_draft", &rule);
   served.let_automation_widen(true);
-  served.ok(
-    "publish_instruction",
-    &json!({ "project": "Kontur", "instruction": "Tests first" }),
-  );
+  served.ok("save_instruction_draft", &rule);
   let got = served.ok(
     "get_instruction",
     &json!({ "project": "Kontur", "instruction": "tests first" }),
@@ -167,8 +165,18 @@ fn domain_reads_an_instruction_with_its_versions_and_skills_as_skills_shows_them
   );
   assert_eq!(missing["code"], "instruction_not_found", "{missing}");
 
-  let id = orchester_workspace::skills::data::create_in(&seeded.repo, Name::new("Release notes").expect("a name"))
-    .expect("a skill");
+  // A skill with a draft and no version, which only a fixture makes: tools create a skill as its first version.
+  let body = Skill::new(String::new(), String::new(), Vec::new(), InstructionScope::Project).expect("a skill");
+  let id = ProjectDb::open(&seeded.repo)
+    .expect("the project database")
+    .create_resource(
+      Slug::new("release-notes").expect("a slug"),
+      Name::new("Release notes").expect("a name"),
+      &body,
+      Timestamp::now(),
+    )
+    .expect("a skill")
+    .id();
   let skills = served.ok("list_skills", &json!({ "project": "Kontur" }));
   opens_in_the_app(&skills);
   let listed = named(&skills, "skills", "Release notes");

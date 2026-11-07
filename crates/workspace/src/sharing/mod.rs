@@ -29,6 +29,7 @@ pub mod project;
 mod server_key;
 pub mod sync;
 pub mod team;
+mod team_created;
 pub mod team_join;
 mod team_session;
 pub mod trust;
@@ -66,6 +67,7 @@ pub use self::{
   offer::OfferedProject,
   password::{PASSWORD_CHARS, PasswordProblem, password_problem},
   place::{Place, Places},
+  team_created::{Created, NotCreated},
   trust::{ConfirmedPin, PresentedCertificate, Trust},
 };
 use crate::{background, secrets::Vault, workspace::Workspace};

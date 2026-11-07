@@ -52,7 +52,11 @@ fn skills_name_validation_and_competing_edits_preserve_the_stored_draft() {
 #[test]
 fn skills_publish_requires_complete_reviewed_saved_content() {
   let (repo, _db) = project();
-  let blank = editor::save_in(repo.path(), None, "checks", &skill("", "")).expect("draft");
+  let refused = editor::save_in(repo.path(), None, "checks", &skill("", "")).expect_err("v1 must be publishable");
+  assert_eq!(refused.key, "skills.editorErrors.descriptionRequired");
+  let first = editor::save_in(repo.path(), None, "checks", &skill("Check", "Check first")).expect("v1");
+  assert!(!first.state.has_draft());
+  let blank = editor::save_in(repo.path(), Some(&first), "checks", &skill("", "")).expect("draft");
   assert_eq!(
     editor::publish_reason(&blank).expect("not publishable").key,
     "skills.editorErrors.descriptionRequired"
@@ -63,7 +67,7 @@ fn skills_publish_requires_complete_reviewed_saved_content() {
       .key,
     "skills.editorErrors.descriptionRequired"
   );
-  let draft = editor::save_in(repo.path(), Some(&blank), "checks", &skill("Check", "Check first")).expect("saved");
+  let draft = editor::save_in(repo.path(), Some(&blank), "checks", &skill("Check", "Check second")).expect("saved");
   let outside = editor::save_in(
     repo.path(),
     Some(&draft),
@@ -77,7 +81,7 @@ fn skills_publish_requires_complete_reviewed_saved_content() {
   );
   let published = editor::publish_in(repo.path(), &outside).expect("published");
   assert!(!published.state.has_draft());
-  assert_eq!(published.state.published().expect("version").get(), 1);
+  assert_eq!(published.state.published().expect("version").get(), 2);
 }
 #[test]
 fn skills_repository_files_match_ordinary_project_settings_semantics() {
@@ -188,8 +192,7 @@ fn skills_publication_rejects_reviewed_snapshot_after_same_content_version_chang
   use orchester_workspace::skills::data;
   let (repo, db) = project();
   let body = skill("Check", "Check first");
-  let first = editor::save_in(repo.path(), None, "checks", &body).expect("draft");
-  let first = editor::publish_in(repo.path(), &first).expect("ordinary v1");
+  let first = editor::save_in(repo.path(), None, "checks", &body).expect("created as v1");
   let reviewed_body = skill("Reviewed", "Reviewed saved content");
   let reviewed = editor::save_in(repo.path(), Some(&first), "checks", &reviewed_body).expect("reviewed saved draft");
   let outside_body = skill("Outside", "A different published version");

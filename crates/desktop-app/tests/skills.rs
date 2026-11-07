@@ -1,4 +1,6 @@
 //! Skills in the real headless app, with isolated project data and no agent process.
+#[path = "skills/draft_only.rs"]
+mod draft_only;
 #[path = "skills/recovery.rs"]
 mod recovery;
 mod support;
@@ -73,11 +75,10 @@ impl Skills {
       InstructionScope::Project,
     )
     .expect("skill");
-    let e = editor::save_in(&self.repo, None, name, &body).expect("create");
     if published {
-      editor::publish_in(&self.repo, &e).expect("publish");
+      return editor::save_in(&self.repo, None, name, &body).expect("create as v1").id;
     }
-    e.id
+    draft_only::create(&self.repo, name, &body)
   }
   fn entry(&self, id: ResourceId) -> orchester_workspace::skills::data::SkillEntry {
     ProjectSkills::load_in(&self.repo)

@@ -1,37 +1,36 @@
-//! `save_skill_draft` and `publish_skill` (ORC-79): the Skills editor through Orchester's MCP server. A new skill and a
-//! replaced draft take every field the editor has and are refused as the editor refuses them (name, scope, reference
-//! file paths and limits, expected_revision); a draft automation saved is marked until a person saves it or it is
-//! published; publishing reaches agents, so it waits for a person's switch and is refused for a blank description or
-//! body, a stale draft and a draft that changed. In a shared project a member has no drafts of the team's skills
+//! `save_skill_draft` and `publish_skill` (ORC-79, ORC-816): the Skills editor through Orchester's MCP server. A new
+//! skill is created as its v1 (it needs a description and a body, and a person's switch) and a replaced draft takes
+//! every field the editor has; both are refused as the editor refuses them (name, scope, reference file paths and
+//! limits, expected_revision); a draft automation saved is marked until a person saves it or it is published;
+//! publishing reaches agents, so it waits for a person's switch and is refused for a blank description or body, a
+//! stale draft and a draft that changed. In a shared project a member has no drafts of the team's skills
 //! (`not_admin`).
 
-use std::{collections::HashMap, fs, sync::Arc};
+use std::{fs, sync::Arc};
 
 use orchester_core::{
-  id::{ProjectId, ServerId},
+  id::ProjectId,
   name::Name,
   project::{Project, ProjectKey},
-  resource::{Draft, InstructionScope, Pipeline, PipelineEdit, Skill, Slug, StepKind},
+  resource::{Pipeline, PipelineEdit, Slug, StepKind},
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
-  sharing::MemberRole,
   store::{BlobStore, ResourceStore},
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
-use orchester_store::{AppDb, ProjectDb, SharingLink, StoreError};
+use orchester_store::{AppDb, ProjectDb};
 use orchester_workspace::{
   activity::Activity,
   app_mcp::{self, ToolError, Translate},
   runner::Runners,
   secrets::Vault,
   sharing::Servers,
-  skills::{
-    data::ProjectSkills,
-    editor::{self, Refusal, WriteError},
-  },
+  skills::{data::ProjectSkills, editor},
   tasks::{integration_jobs::ProjectJobs, outside::OutsideChanges},
   workspace::Workspace,
 };
+mod publishing;
+
 use serde_json::{Value, json};
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
@@ -132,6 +131,14 @@ impl Desktop {
       .expect("a person turns it on");
   }
 
+  /// A person turns it off again.
+  fn stop_automation_widening(&self) {
+    self
+      .workspace
+      .set_automation_changes_permissions(false)
+      .expect("a person turns it off");
+  }
+
   fn db(&self) -> ProjectDb {
     ProjectDb::open(self.repo.path()).expect("project database")
   }
@@ -176,6 +183,11 @@ fn save(fields: Value) -> Value {
   args
 }
 
+/// The arguments that create skill `name` as v1: a skill is published with a description and a body.
+fn make(name: &str) -> Value {
+  save(json!({ "name": name, "description": "Running checks.", "body": "# Checks" }))
+}
+
 fn publish(skill: &str) -> Value {
   json!({ "project": "Kontur", "skill": skill })
 }
@@ -184,6 +196,7 @@ fn publish(skill: &str) -> Value {
 fn skill_tools_make_a_skill_and_replace_its_draft_with_every_field() {
   let desktop = Desktop::new();
   desktop.tool_pipeline();
+  desktop.let_automation_widen();
   let made = desktop.ok(
     "save_skill_draft",
     &save(json!({
@@ -196,17 +209,29 @@ fn skill_tools_make_a_skill_and_replace_its_draft_with_every_field() {
   let skill = &made["skill"];
   assert_eq!(skill["slug"], "release-notes", "{skill}");
   assert_eq!(skill["applies_in"]["kind"], "project", "{skill}");
-  assert_eq!(skill["state"]["state"], "draft", "{skill}");
-  assert_eq!(skill["draft_by_automation"], true, "{skill}");
+  assert_eq!(
+    skill["state"]["state"], "published",
+    "a new skill is v1, not a draft: {skill}"
+  );
+  assert_eq!(skill["state"]["published_version"], 1, "{skill}");
+  assert_eq!(skill["draft_by_automation"], false, "{skill}");
   assert_eq!(skill["files"], json!([{ "path": "references/format.md", "size": 20 }]));
   assert!(skill["revision"].is_string(), "{skill}");
 
-  let other = desktop.ok("save_skill_draft", &save(json!({ "name": "Release-notes" })));
+  let blank = desktop.refused("save_skill_draft", &save(json!({ "name": "Other notes" })));
+  assert_eq!(
+    blank, "blank_description",
+    "a new skill is published, so it is not blank"
+  );
+  let other = desktop.ok(
+    "save_skill_draft",
+    &save(json!({ "name": "Release-notes", "description": "Other notes.", "body": "# Other" })),
+  );
   assert_eq!(
     other["skill"]["slug"], "release-notes-2",
     "the slug is unique, as the editor makes it"
   );
-  assert_eq!(other["skill"]["description"], "", "a new skill starts blank");
+  assert_eq!(other["skill"]["description"], "Other notes.");
 
   let replaced = desktop.ok(
     "save_skill_draft",
@@ -232,24 +257,8 @@ fn skill_tools_make_a_skill_and_replace_its_draft_with_every_field() {
   assert_eq!(skill["body"], "# Changelog");
   assert_eq!(skill["applies_in"]["kind"], "pipeline", "{skill}");
   assert_eq!(skill["applies_in"]["pipeline"]["name"], "Delivery", "{skill}");
-  let entry = ProjectSkills::load_in(desktop.repo.path())
-    .expect("skills")
-    .entries
-    .iter()
-    .find(|entry| &*entry.name == "Changelog")
-    .expect("saved")
-    .clone();
-  let contents: Vec<(String, Vec<u8>)> = entry
-    .body
-    .files()
-    .iter()
-    .map(|file| {
-      let content = desktop.db().blob(&file.content).expect("its content");
-      (file.path.as_str().to_owned(), content)
-    })
-    .collect();
   assert_eq!(
-    contents,
+    stored_files(&desktop, "Changelog"),
     vec![
       ("examples.md".to_owned(), b"- Fixed the login.".to_vec()),
       ("references/format.md".to_owned(), b"One line per change.".to_vec()),
@@ -258,15 +267,33 @@ fn skill_tools_make_a_skill_and_replace_its_draft_with_every_field() {
   );
 }
 
+/// The reference files of skill `name` with their stored content, by path.
+fn stored_files(desktop: &Desktop, name: &str) -> Vec<(String, Vec<u8>)> {
+  let entry = ProjectSkills::load_in(desktop.repo.path())
+    .expect("skills")
+    .entries
+    .iter()
+    .find(|entry| &*entry.name == name)
+    .expect("saved")
+    .clone();
+  entry
+    .body
+    .files()
+    .iter()
+    .map(|file| {
+      let content = desktop.db().blob(&file.content).expect("its content");
+      (file.path.as_str().to_owned(), content)
+    })
+    .collect()
+}
+
 #[test]
 fn skill_tools_refuse_what_the_skills_editor_refuses() {
   let desktop = Desktop::new();
   desktop.tool_pipeline();
-  desktop.ok("save_skill_draft", &save(json!({ "name": "Checks" })));
-  assert_eq!(
-    desktop.refused("save_skill_draft", &save(json!({ "name": "CHECKS" }))),
-    "name_taken"
-  );
+  desktop.let_automation_widen();
+  desktop.ok("save_skill_draft", &make("Checks"));
+  assert_eq!(desktop.refused("save_skill_draft", &make("CHECKS")), "name_taken");
   assert_eq!(
     desktop.refused("save_skill_draft", &save(json!({ "name": " " }))),
     "invalid_name"
@@ -329,7 +356,8 @@ fn skill_tools_refuse_what_the_skills_editor_refuses() {
 #[test]
 fn skill_tools_save_over_the_expected_revision_only() {
   let desktop = Desktop::new();
-  desktop.ok("save_skill_draft", &save(json!({ "name": "Checks" })));
+  desktop.let_automation_widen();
+  desktop.ok("save_skill_draft", &make("Checks"));
   let read = desktop.ok("get_skill", &publish("checks"));
   let revision = read["skill"]["revision"].as_str().expect("a revision").to_owned();
   let saved = desktop.ok(
@@ -348,7 +376,7 @@ fn skill_tools_save_over_the_expected_revision_only() {
     ),
     "draft_changed"
   );
-  assert_eq!(desktop.listed("Checks")["description"], "");
+  assert_eq!(desktop.listed("Checks")["description"], "Running checks.");
   assert_eq!(
     desktop.ok("get_skill", &publish("Checks"))["skill"]["body"],
     "First",
@@ -361,218 +389,4 @@ fn skill_tools_save_over_the_expected_revision_only() {
     ),
     "invalid_arguments"
   );
-}
-
-#[test]
-fn skill_tools_publish_only_under_the_persons_switch() {
-  let desktop = Desktop::new();
-  let draft = json!({ "name": "Checks", "description": "Running checks.", "body": "# Checks" });
-  desktop.ok("save_skill_draft", &save(draft));
-  let refused = desktop
-    .call("publish_skill", &publish("Checks"))
-    .expect_err("person only");
-  let refused = json_of(&refused);
-  assert_eq!(refused["error"]["code"], "person_only", "{refused}");
-  assert_eq!(
-    refused["error"]["reasons"],
-    json!(["appMcp.errors.promptPersonOnly", "appMcp.prompts.skill"])
-  );
-  assert_eq!(
-    desktop.listed("Checks")["state"]["state"],
-    "draft",
-    "nothing was published"
-  );
-
-  desktop.let_automation_widen();
-  let published = desktop.ok("publish_skill", &publish("checks"));
-  assert_eq!(published["skill"]["state"]["state"], "published", "{published}");
-  assert_eq!(published["skill"]["state"]["published_version"], 1, "{published}");
-  assert_eq!(published["skill"]["draft_by_automation"], false, "{published}");
-  desktop.ok(
-    "save_skill_draft",
-    &save(json!({ "skill": "Checks", "body": "# Checks v2" })),
-  );
-  let next = desktop.ok("publish_skill", &publish("Checks"));
-  assert_eq!(
-    next["skill"]["state"]["published_version"], 2,
-    "the next version: {next}"
-  );
-}
-
-#[test]
-fn skill_tools_refuse_a_blank_a_stale_and_a_changed_draft() {
-  let desktop = Desktop::new();
-  desktop.let_automation_widen();
-  desktop.ok(
-    "save_skill_draft",
-    &save(json!({ "name": "Checks", "body": "# Checks" })),
-  );
-  assert_eq!(
-    desktop.refused("publish_skill", &publish("Checks")),
-    "blank_description"
-  );
-  desktop.ok(
-    "save_skill_draft",
-    &save(json!({ "skill": "Checks", "description": "Running checks.", "body": "  " })),
-  );
-  assert_eq!(desktop.refused("publish_skill", &publish("Checks")), "blank_body");
-  desktop.ok(
-    "save_skill_draft",
-    &save(json!({ "skill": "Checks", "body": "# Checks" })),
-  );
-  desktop.ok("publish_skill", &publish("Checks"));
-  assert_eq!(
-    desktop.refused("publish_skill", &publish("Checks")),
-    "no_draft",
-    "the latest version is current"
-  );
-
-  // A draft started before v1, saved past it: published, it would undo v1.
-  let id = ProjectSkills::load_in(desktop.repo.path()).expect("skills").entries[0].id;
-  let body = Skill::new(
-    "Running checks.".into(),
-    "# Older".into(),
-    Vec::new(),
-    InstructionScope::Project,
-  )
-  .expect("a body");
-  desktop
-    .db()
-    .save_draft(id, &Draft::new(body, None, Timestamp::now()))
-    .expect("an old draft");
-  assert_eq!(desktop.refused("publish_skill", &publish("Checks")), "stale_draft");
-
-  // The draft publish_skill read changed before it was published: what was checked is not what would be published.
-  desktop.ok(
-    "save_skill_draft",
-    &save(json!({ "name": "Lint", "description": "Linting.", "body": "# Lint" })),
-  );
-  let read = ProjectSkills::load_in(desktop.repo.path())
-    .expect("skills")
-    .entries
-    .iter()
-    .find(|entry| &*entry.name == "Lint")
-    .expect("saved")
-    .clone();
-  let changed = Skill::new(
-    "Linting.".into(),
-    "# Lint, changed".into(),
-    Vec::new(),
-    InstructionScope::Project,
-  )
-  .expect("a body");
-  editor::save_in(desktop.repo.path(), Some(&read), "Lint", &changed).expect("a person's save meanwhile");
-  match editor::publish_checked_in(desktop.repo.path(), &read) {
-    Err(WriteError::Store(StoreError::DraftChanged(resource))) => assert_eq!(resource, read.id),
-    other => panic!("a changed draft is refused as draft_changed: {other:?}"),
-  }
-  assert_eq!(
-    desktop.listed("Lint")["state"]["state"],
-    "draft",
-    "nothing was published"
-  );
-}
-
-#[test]
-fn skill_tools_mark_automations_draft_until_a_person_saves_or_publishes_it() {
-  let desktop = Desktop::new();
-  desktop.ok(
-    "save_skill_draft",
-    &save(json!({ "name": "Checks", "description": "Running checks.", "body": "# Checks" })),
-  );
-  assert_eq!(desktop.listed("Checks")["draft_by_automation"], true);
-  let entry = ProjectSkills::load_in(desktop.repo.path()).expect("skills").entries[0].clone();
-  let body = Skill::new(
-    "Running checks.".into(),
-    "# A person's checks".into(),
-    Vec::new(),
-    InstructionScope::Project,
-  )
-  .expect("a body");
-  editor::save_in(desktop.repo.path(), Some(&entry), "Checks", &body).expect("a person saves it");
-  assert_eq!(
-    desktop.listed("Checks")["draft_by_automation"],
-    false,
-    "the person's draft"
-  );
-  desktop.ok(
-    "save_skill_draft",
-    &save(json!({ "skill": "Checks", "body": "# Again" })),
-  );
-  assert_eq!(desktop.listed("Checks")["draft_by_automation"], true);
-  desktop.let_automation_widen();
-  desktop.ok("publish_skill", &publish("Checks"));
-  assert_eq!(
-    desktop.listed("Checks")["draft_by_automation"],
-    false,
-    "published, it has no draft"
-  );
-}
-
-#[test]
-fn skill_tools_name_the_editors_rule_that_refused_a_write() {
-  let desktop = Desktop::new();
-  let root = desktop.repo.path();
-  let blank = Skill::new(String::new(), String::new(), Vec::new(), InstructionScope::Project).expect("a body");
-  let refusal = |error: WriteError| match error {
-    WriteError::Refused(refusal, _) => refusal,
-    other => panic!("refused by a rule: {other:?}"),
-  };
-  let made = editor::save_checked_in(root, (None, "Checks", &blank), Timestamp::now()).expect("a draft");
-  assert_eq!(
-    refusal(editor::save_checked_in(root, (None, "checks", &blank), Timestamp::now()).expect_err("taken")),
-    Refusal::NameTaken
-  );
-  assert_eq!(
-    refusal(editor::publish_checked_in(root, &made).expect_err("blank")),
-    Refusal::BlankDescription
-  );
-  assert_eq!(Refusal::BlankBody.code(), "blank_body");
-  assert_eq!(Refusal::InvalidFiles.code(), "invalid_files");
-}
-
-#[test]
-fn skill_tools_and_the_skills_editor_answer_a_member_of_a_shared_project_not_admin() {
-  let desktop = Desktop::new();
-  desktop.let_automation_widen();
-  desktop.ok(
-    "save_skill_draft",
-    &save(json!({ "name": "Checks", "description": "Running checks.", "body": "# Checks" })),
-  );
-  let entry = ProjectSkills::load_in(desktop.repo.path()).expect("skills").entries[0].clone();
-  let link = SharingLink {
-    server: ServerId::generate(),
-    project: ProjectId::generate(),
-    key: ProjectKey::new("KON").expect("key"),
-    role: Some(MemberRole::Member),
-    joined_at: Timestamp::from_unix_millis(1),
-    cursor: 0,
-    last_synced_at: Timestamp::from_unix_millis(1),
-    removed_at: None,
-    address: Some("https://team.example/kontur".to_owned()),
-  };
-  desktop
-    .db()
-    .start_sharing(&link, &[], (&[], &HashMap::new()))
-    .expect("joined as a member");
-
-  for args in [
-    save(json!({ "skill": "Checks", "body": "# Mine" })),
-    save(json!({ "name": "Lint", "description": "Linting.", "body": "# Lint" })),
-  ] {
-    assert_eq!(desktop.refused("save_skill_draft", &args), "not_admin", "{args}");
-  }
-  assert_eq!(desktop.refused("publish_skill", &publish("Checks")), "not_admin");
-  let body = Skill::new(
-    "Running checks.".into(),
-    "# Mine".into(),
-    Vec::new(),
-    InstructionScope::Project,
-  )
-  .expect("a body");
-  match editor::save_checked_in(desktop.repo.path(), (Some(&entry), "Checks", &body), Timestamp::now()) {
-    Err(WriteError::Store(StoreError::NotAdmin)) => {}
-    other => panic!("the editor's save answers not_admin: {other:?}"),
-  }
-  assert_eq!(desktop.listed("Checks")["state"]["state"], "draft", "nothing changed");
 }

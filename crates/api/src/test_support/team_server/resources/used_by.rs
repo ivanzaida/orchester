@@ -1,6 +1,7 @@
 //! `GET …/resources/{r}/used-by` on the stand-in: the other resources that are not archived and whose latest version
 //! names the resource, by name (case-insensitively) and then id, and the runs registered with
-//! [`TeamServer::pin_run`] that have not ended and pin a version of it, by the task key's number and then run id.
+//! [`TeamServer::pin_run`] that have not ended, are of their task's current work and pin a version of it, by the task
+//! key's number and then run id.
 //! A version names a resource by its team resource references and the typed body fields `docs/cloud-api.md` lists, read
 //! with core's body types. The target may be archived; it is never in its own `resources`.
 
@@ -41,10 +42,11 @@ pub struct PinnedRun {
   /// The key of the run's task, e.g. `KON-12`.
   pub task_key: String,
   pub run: RunId,
-  /// The work the run belongs to, numbered within its task: runs reported later for the same work end the earlier
-  /// ones, a run of another work of the same task does not.
+  /// The work the run belongs to, numbered within its task. The highest work pinned for a task key is its current
+  /// work: a run of a lower work is fenced (after a take-over, a release or a restart under the same claim) and is
+  /// not listed. Within a work, a run pinned later ends the earlier ones.
   pub work: u32,
-  /// Who holds the task's claim; `None` once it was released.
+  /// Who holds the task's claim; `None` once it was released, and a released task lists no runs.
   pub holder: Option<Person>,
   /// The last accepted work report; a terminal one ends the run. A run with no accepted report is not known to the
   /// server, so a test does not pin it.
@@ -65,21 +67,22 @@ impl TeamServer {
     state.resources.projects.entry(id).or_default().runs.push(run);
   }
 
-  /// The claim on the task of `run` in the project at `slug` is now `holder`'s (a take-over) or released (`None`).
+  /// The claim on the task of `run` in the project at `slug` is now `holder`'s (a take-over) or released (`None`: the
+  /// task then lists no runs). It is the task's claim, so it changes the holder of every pinned run of that task.
   /// Panics for a run that was not pinned.
   pub fn claim_run_task(&self, slug: &str, run: RunId, holder: Option<Person>) {
     let mut state = self.state.lock();
     let id = project_id(&state.projects, slug);
-    let pinned = state
-      .resources
-      .projects
-      .entry(id)
-      .or_default()
-      .runs
-      .iter_mut()
+    let runs = &mut state.resources.projects.entry(id).or_default().runs;
+    let key = runs
+      .iter()
       .find(|pinned| pinned.run == run)
-      .expect("`claim_run_task` names a run that was pinned");
-    pinned.holder = holder;
+      .expect("`claim_run_task` names a run that was pinned")
+      .task_key
+      .clone();
+    for pinned in runs.iter_mut().filter(|pinned| pinned.task_key == key) {
+      pinned.holder = holder;
+    }
   }
 }
 
@@ -132,7 +135,10 @@ impl Project {
         let superseded = self.runs[place + 1..]
           .iter()
           .any(|newer| (&newer.task_key, newer.work) == (&run.task_key, run.work));
-        !superseded && !run.last_report.ends() && run.pins.iter().any(|(pinned, _)| *pinned == target)
+        self.is_current(run)
+          && !superseded
+          && !run.last_report.ends()
+          && run.pins.iter().any(|(pinned, _)| *pinned == target)
       })
       .map(|(_, run)| run)
       .collect();
@@ -153,6 +159,19 @@ impl Project {
         }).collect::<Vec<_>>(),
       }),
     )
+  }
+}
+
+impl Project {
+  /// Whether `run` belongs to its task's current work (the highest work pinned for the task key) under a claim that
+  /// has not been released. Any other run is fenced or its task has no claim, so it can no longer report.
+  fn is_current(&self, run: &PinnedRun) -> bool {
+    run.holder.is_some()
+      && self
+        .runs
+        .iter()
+        .filter(|other| other.task_key == run.task_key)
+        .all(|other| other.work <= run.work)
   }
 }
 

@@ -21,6 +21,7 @@ mod team_deliveries;
 mod team_server;
 
 mod choices;
+mod created;
 mod delivery;
 mod pipelines;
 mod reads;
@@ -38,7 +39,7 @@ use std::{
 use orchester_api::client::{PlainHttp, ServerAddress};
 use orchester_core::{
   connection::{AgentConnection, AgentProvider},
-  id::{ConnectionId, IdempotencyKey, ProjectId, ServerId},
+  id::{ConnectionId, IdempotencyKey, ProjectId, ServerId, UserId},
   name::Name,
   project::{Project, ProjectKey},
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
@@ -47,7 +48,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
-use orchester_store::{AppDb, ProjectDb};
+use orchester_store::{AppDb, ProjectDb, ServerAccount};
 use orchester_workspace::{
   activity::Activity,
   app_mcp::{self, Translate},
@@ -103,11 +104,26 @@ impl Checkout {
     Self::standing(server, (drafts, Standing::default()), prepare)
   }
 
-  /// [`Self::prepared`], linked as `standing` says.
+  /// [`Self::prepared`], linked as `standing` says. The computer is not signed in to the server: what it publishes
+  /// waits to be sent.
   fn standing(
     server: Option<&team_server::TeamServer>,
     (drafts, standing): (&[&str], Standing),
     prepare: impl FnOnce(&mut ProjectDb),
+  ) -> Self {
+    Self::build(server, (drafts, standing), prepare, false)
+  }
+
+  /// A checkout linked as `standing` says, with an account signed in to `server`: what it publishes reaches the server.
+  fn signed_in(server: &team_server::TeamServer, standing: Standing) -> Self {
+    Self::build(Some(server), (&[], standing), |_| {}, true)
+  }
+
+  fn build(
+    server: Option<&team_server::TeamServer>,
+    (drafts, standing): (&[&str], Standing),
+    prepare: impl FnOnce(&mut ProjectDb),
+    signed_in: bool,
   ) -> Self {
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/team-mcp-tests");
     fs::create_dir_all(&scratch).expect("scratch");
@@ -154,6 +170,9 @@ impl Checkout {
     let servers = Servers::new(workspace.clone(), Vault::with(vault.clone()), version);
     if let Some(server) = server {
       let id = runtime.block_on(add_server(&servers, server));
+      if signed_in {
+        sign_in(&data.path().join("orchester.db"), id);
+      }
       let token = SecretValue::new(team_server::MEMBER.to_owned()).expect("token");
       vault.store(&VaultKey::server_token(id), &token).expect("the token");
       link(root, id, server.project, standing.role);
@@ -220,6 +239,21 @@ async fn add_server(servers: &Servers, server: &team_server::TeamServer) -> Serv
     .add(&address, "acme".to_owned(), PlainHttp::Allowed)
     .await
     .expect("the server added")
+}
+
+/// Records an account as signed in to `server` in the application database at `path`.
+fn sign_in(path: &Path, server: ServerId) {
+  let account = ServerAccount {
+    user: UserId::generate(),
+    username: "dana".to_owned(),
+    display_name: "Dana".to_owned(),
+    admin: true,
+    signed_in_at: Timestamp::now(),
+  };
+  AppDb::open(path)
+    .expect("the application database")
+    .set_server_account(server, Some(&account))
+    .expect("the account");
 }
 
 /// How a checkout stands with its team: the person's role in the link, and whether a person lets automation change

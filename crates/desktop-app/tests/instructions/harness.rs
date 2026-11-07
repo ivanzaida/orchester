@@ -4,8 +4,11 @@ use orchester_app::routes::{InstructionsTab, InstructionsView, ProjectPage, Rout
 use orchester_core::{
   id::ResourceId,
   name::Name,
-  resource::{AgentTargets, InjectionEvent, Instruction, InstructionScope, PromptText},
+  resource::{AgentTargets, InjectionEvent, Instruction, InstructionScope, PromptText, ResourceKind, Slug},
+  store::ResourceStore,
+  time::Timestamp,
 };
+use orchester_store::ProjectDb;
 use orchester_workspace::instructions::{
   data::{InstructionEntry, ProjectInstructions},
   editor,
@@ -42,17 +45,26 @@ impl Instructions {
       window: Window::of(data, launch),
     }
   }
+  /// A rule: a published one is created as its v1, as the editor creates it; an unpublished one holds a draft and no
+  /// version, as an imported one does (the editor creates only v1, so a store fixture makes it).
   pub fn rule(&self, name: &str, text: &str, scope: InstructionScope, published: bool) -> ResourceId {
-    let entry = editor::create_in(
-      &self.root,
-      Name::new(name).expect("valid instruction fixture"),
-      &body(text, scope),
-    )
-    .expect("valid instruction fixture");
+    let name = Name::new(name).expect("valid instruction fixture");
     if published {
-      editor::publish_in(&self.root, &entry).expect("valid instruction fixture");
+      return editor::create_in(&self.root, name, &body(text, scope))
+        .expect("valid instruction fixture")
+        .id;
     }
-    entry.id
+    let mut db = ProjectDb::open(&self.root).expect("valid instruction fixture");
+    let taken = db.slugs(ResourceKind::Instruction).expect("valid instruction fixture");
+    let fallback = Slug::new("instruction").expect("a valid slug");
+    db.create_resource(
+      Slug::unique_for(&name, &fallback, &taken),
+      name,
+      &body(text, scope),
+      Timestamp::now(),
+    )
+    .expect("valid instruction fixture")
+    .id()
   }
   /// Opens Instructions as it opened before the Agents hub: on the first project rule, or the list without one.
   pub fn go(&mut self) {

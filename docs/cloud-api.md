@@ -98,27 +98,41 @@ and both lists are empty when nothing uses the resource.
     an MCP server). A run whose last accepted report is `progress` has not ended, nor has one that was interrupted or waits for
     a person on the desktop; a run whose runner stopped without a terminal report stays listed too: a stale claim
     (`stale_task_threshold`) does not end its run.
-  - **Superseded**: a run whose work has a newer run (a later run id first reported for the same work) has ended,
-    even when its own last report was `progress`.
+  - **Current work only**: runs are listed only for each task's current work, the latest work started under the
+    task's current claim. The team server fences a work after a take-over, a release or a restart under the same claim
+    (`claim_lost`) and never accepts another report from it, so a run of a fenced earlier work could never end: it is
+    not listed, since it can no longer report and the archive confirmation lists the runs that will stop. A released
+    task (no claim) lists no runs. Known limit: a work whose bundle the server cannot read as the current schema (an
+    older schema-1 bundle) is not listed either, because its pins are not known; that does not fail the read.
+  - **Superseded**: within the current work, a run is superseded, and so has ended even when its own last report was
+    `progress`, by a run whose first accepted work report came after the first accepted report of the run asked
+    about, for the same work. Runs are ordered by the server's acceptance of their first report (the order of
+    `WorkRead.runs`), never by run id; a run whose first report arrives late is the newest.
   - **Shape and order**: each is `{ task_key, run, holder? }`: the task's key (`KON-12`), the run's id, and the
-    `UserRef` who holds the task's claim now. After a take-over that is the new holder; `holder` is absent when the
-    claim was released. There is no run number: the server has none. Ordered by the number part of the task key,
-    numerically (`KON-3` before `KON-12`), then by run id (a stable tie-break).
+    `UserRef` who holds the task's claim now. The team server always sets `holder`, because only current work under
+    the current claim is listed; after a take-over it is the new holder. It stays optional because a local project's
+    runs have no claim holder: it is absent only for a local project's runs. There is no run number: the server has
+    none. Ordered by the number part of the task key, numerically (`KON-3` before `KON-12`), then by run id (a
+    stable tie-break that never decides which run is newer).
 - **Paging**: none. Both lists are returned whole: they are bounded by the project's resources and by its runs that
   have not ended.
 - **Access and errors**: a member of the project reads it, and so does whoever may archive the resource (the project
   owner, or a server admin without membership, as `PATCH …/resources/{resource}` allows). Access is checked first, and
   one answer, `404 not_found`, serves a project the caller may not read, a resource the project does not have and an id
-  that is no resource id, so it tells an outsider nothing. (`GET …/versions` answers `400` for a malformed id; used-by
-  answers `404` for it, because the access check comes first.) An archived resource answers `200` like any other, so
+  that is no resource id, so it tells an outsider nothing. (`GET …/versions` answers `400` for a malformed resource id;
+  used-by answers `404` for it, because the access check comes first. A malformed project id answers `400`, from the
+  route's id extractor, like the other project routes; the one `404` covers unknown or forbidden projects and
+  resources.) An archived resource answers `200` like any other, so
   an admin can check what still uses it before a restore.
 
 The client call is `used_by`. The stand-in team server answers it from its own resources, applying the names-it rule
 above: the `TeamResource` references of every kind (a profile's MCP servers, tools, skills and instructions among them)
 and the body fields read with core's body types, and from the runs a test registers with `TeamServer::pin_run`: it builds no execution
 bundle, so the pins a test names stand in for the bundle's (an MCP server's id among them), a pinned run is one whose
-first work report was accepted, and `last_report`, `work` (the later run of a work supersedes the earlier ones) and
-`claim_run_task` stand in for the accepted work reports and the task's claim. It lists whatever the pins name, an
+first work report was accepted, and `last_report`, `work` (a task's highest pinned work is its current work, and a run of a lower work is fenced and not
+listed; within a work, a run pinned later supersedes the earlier ones, as the first accepted report orders them) and
+`claim_run_task` (a take-over, or a release, after which the task lists no runs) stand in for the accepted work reports
+and the task's claim. It lists whatever the pins name, an
 MCP server's id included, which a real bundle does not carry yet. It has no non-member, so that `404` is not
 exercised there.
 

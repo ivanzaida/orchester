@@ -58,11 +58,8 @@ fn domain_widening_a_profile_needs_a_person_and_narrowing_never_does() {
   let wide = permissions(&base, "write", "any_in_worktree");
   assert_person_only(&served.refused("save_profile_draft", &profile("Builder 2", Some(wide.clone()))));
   served.let_automation_widen(true);
+  // A new profile is created as v1 at once; what follows are drafts over it.
   served.ok("save_profile_draft", &profile("Builder 2", Some(wide.clone())));
-  served.ok(
-    "publish_profile",
-    &json!({ "project": "Kontur", "profile": "Builder 2" }),
-  );
   served.let_automation_widen(false);
   let mut narrow = profile("Builder 2", Some(permissions(&base, "read_only", "ask_before")));
   narrow["profile"] = json!("Builder 2");
@@ -219,15 +216,15 @@ fn domain_what_a_profile_tells_its_agents_reaches_them_only_through_a_person() {
   let publish = json!({ "project": "Kontur", "profile": "Scribe" });
   let mut told = profile("Scribe", None);
   told["responsibilities"] = json!("Writes the release notes.");
-  served.ok("save_profile_draft", &told);
-  let refused = served.refused("publish_profile", &publish);
+  // A new profile is published at once, so what it tells its agents is a person's to decide as publishing is.
+  let refused = served.refused("save_profile_draft", &told);
   assert_person_only(&refused);
   assert!(
     refused["reasons"].to_string().contains("Scribe's agents are told"),
     "{refused}"
   );
   served.let_automation_widen(true);
-  served.ok("publish_profile", &publish);
+  served.ok("save_profile_draft", &told);
   served.let_automation_widen(false);
   let mut model = told.clone();
   model["profile"] = json!("Scribe");
@@ -335,8 +332,6 @@ fn domain_pipeline_steps_only_narrow_what_the_inspector_offers() {
     "save_profile_draft",
     &profile("Writer", Some(permissions(&base, "write", "any_in_worktree"))),
   );
-  served.ok("publish_profile", &json!({ "project": "Kontur", "profile": "Writer" }));
-  served.ok("publish_profile", &json!({ "project": "Kontur", "profile": "Probe" }));
   served.let_automation_widen(false);
   served.ok(
     "create_pipeline",
