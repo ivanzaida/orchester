@@ -75,6 +75,8 @@ pub(super) fn line(
       line_row(id, "led_here_again", moved(ctx, target, keys, title), time(id, at)).into()
     }
     WatchLine::Stopped { targets, left_open } => stopped(ctx, id, (targets, left_open), (at, env.project)),
+    // A target left where another conversation leads it shows in its card's place (`super::super::led`).
+    WatchLine::LeftThere { .. } => return None,
   };
   Some(element)
 }
