@@ -13,6 +13,7 @@
 #[path = "../actions/http.rs"]
 mod http;
 
+mod bundle_missing;
 mod bundle_schema;
 mod completion;
 mod delivery;

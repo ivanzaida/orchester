@@ -7,7 +7,7 @@
 
 use std::path::Path;
 
-use orchester_api::v2::{AuthorityRef, Subject, TeamCommandValue};
+use orchester_api::v2::{AuthorityErrorCode, AuthorityRef, Subject, TeamCommandValue};
 use orchester_core::{
   command::CommandRunner,
   id::{ClaimId, OperationId},
@@ -20,7 +20,7 @@ use serde_json::{Value, json};
 use super::{
   Team,
   bindings::{Binding, bind, choice_refused},
-  on_worker,
+  bundle_missing, on_worker,
   outcome::{accepted, action_refused, authority_refused},
   read, read_refused,
   tasks::find,
@@ -114,7 +114,7 @@ pub(in crate::app_mcp::tools) async fn run_task(
       .map_err(work_refused)
   })
   .await?;
-  started(outcome)
+  started(team, outcome).await
 }
 
 /// The commit `branch` is at in the checkout at `root`: a module's branch is a start's base and a delivery's source.
@@ -151,13 +151,16 @@ pub(super) async fn acquire(
 }
 
 /// The tool's answer for where the start stands.
-fn started(outcome: StartOutcome) -> Result<Value, ToolError> {
+async fn started(team: &Team, outcome: StartOutcome) -> Result<Value, ToolError> {
   match outcome {
     StartOutcome::Started(run) => Ok(json!({ "run": { "id": run.to_string() }, "team": true })),
     StartOutcome::Waiting(_) => Err(ToolError::refused(
       "team_start_waiting",
       vec![Message::new("appMcp.errors.teamStartWaiting")],
     )),
+    StartOutcome::Refused(error) if error.code() == AuthorityErrorCode::BundleMissing => {
+      Err(bundle_missing::refused(team, error.details()).await)
+    }
     StartOutcome::Refused(error) => Err(authority_refused(&error)),
     StartOutcome::Failed(StartFailure::BundleSchema { read, built }) => Err(bundle_schema(Schemas { read, built })),
     StartOutcome::Failed(StartFailure::BundleUnreadable) => Err(ToolError::refused(

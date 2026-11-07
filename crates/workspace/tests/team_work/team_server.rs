@@ -113,6 +113,8 @@ pub struct State {
   pub receipt_schema: Option<u32>,
   /// What the next work start's bundle read answers instead of the bundle: JSON that is no bundle.
   pub bundle_body: Option<Value>,
+  /// The `details` every work start is refused `bundle_missing` with, when set: `{}` or `{reason:{…}}`.
+  pub bundle_missing: Option<Value>,
   /// Whether the work waits for a person: the heartbeat answers `decision_required [D1]`.
   pub waits_for_person: bool,
   pub works_made: usize,
@@ -160,6 +162,7 @@ impl TeamServer {
       drop_next_file: false,
       receipt_schema: None,
       bundle_body: None,
+      bundle_missing: None,
       waits_for_person: false,
       works_made: 0,
       heartbeats: 0,

@@ -20,6 +20,7 @@ mod team_deliveries;
 #[path = "../team_work/team_server.rs"]
 mod team_server;
 
+mod bundle_missing;
 mod bundle_schema;
 mod choices;
 mod created;
