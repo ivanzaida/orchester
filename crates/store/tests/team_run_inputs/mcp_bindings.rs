@@ -10,7 +10,7 @@ fn team_run_inputs_team_mcp_bindings_round_trip_with_the_program_path_and_no_val
   let mut team = team_project();
   let task = team.task();
   let id = team.db.record_team_task(task, revision(3)).expect("identity");
-  let server = ResourceId::generate();
+  let server = team.mcp_server;
   for programs in [
     Vec::new(),
     vec![(server, Some(std::path::PathBuf::from("/opt/docs-mcp")))],

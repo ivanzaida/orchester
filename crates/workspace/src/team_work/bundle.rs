@@ -18,6 +18,7 @@ use orchester_core::{
       TeamMcpBinding, team_mcp_id,
     },
   },
+  secret::SecretVault,
   store::ConnectionStore,
   task::TaskLimits,
   tokens::TokenBudget,
@@ -88,14 +89,15 @@ fn check(bundle: &ExecutionBundle, expected: &Expected<'_>) -> Result<(), TeamWo
 /// The run's inputs of `bundle`, accepted as `acceptance`, with what this computer has filled in for the versions the
 /// bundle pins: the connection each profile runs on, and the program path of each team MCP server (`programs`). It is
 /// refused when the pinned versions need something this computer lacks ([`TeamWorkError::NotReadyHere`]): the versions
-/// the team server pins can be newer than the ones readiness was read from before the start.
+/// the team server pins can be newer than the ones readiness was read from before the start. `vault` is asked whether it
+/// has each team secret's value, never for the value.
 pub(super) fn inputs(
-  db: &ProjectDb,
+  (db, vault): (&ProjectDb, &dyn SecretVault),
   bundle: &ExecutionBundle,
   acceptance: TeamAcceptance,
   programs: &McpPrograms,
 ) -> Result<RunInputs, TeamWorkError> {
-  let missing = readiness::bundle_missing(db, programs, bundle)?;
+  let missing = readiness::bundle_missing(db, vault, programs, bundle)?;
   if !missing.is_empty() {
     return Err(TeamWorkError::NotReadyHere {
       pipeline: bundle.inputs().pipeline().label().name().as_str().to_owned(),

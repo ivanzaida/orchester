@@ -44,7 +44,7 @@ impl<'a> TeamSecrets<'a> {
   fn fetch(&self, name: &SecretName) -> Result<Arc<SecretValue>, McpServerProblem> {
     match self.computer.team_secret_value(name) {
       Ok(Some(value)) => Ok(Arc::new(value)),
-      Ok(None) => Err(McpServerProblem::SecretMissing {
+      Ok(None) => Err(McpServerProblem::TeamSecretMissing {
         secret: name.to_string(),
       }),
       Err(error) => {

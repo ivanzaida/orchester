@@ -20,7 +20,7 @@ use orchester_core::{
     bundle::{CanonicalExecutionInputs, ExecutionProfile, PinnedBodies, ResourceLabel},
     inputs::{
       BoundReference, BundleContent, InputsError, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, RunInputs,
-      TaskAtStart, TeamAcceptance,
+      TaskAtStart, TeamAcceptance, TeamMcpBinding,
     },
   },
   sharing::TaskRevision,
@@ -220,5 +220,23 @@ fn a_profile_cannot_name_a_server_the_inputs_do_not_bind() {
       profile: ids[0],
       server: stray
     }
+  );
+}
+
+#[test]
+fn a_team_mcp_server_the_bundle_does_not_pin_cannot_be_bound() {
+  let (canonical, ids) = two_profiles();
+  let stray = ResourceId::generate();
+  let bindings = LocalBindings {
+    profiles: vec![binding(ids[0], Vec::new()), binding(ids[1], Vec::new())],
+    references: Vec::new(),
+    team_mcp: vec![TeamMcpBinding {
+      server: stray,
+      program: None,
+    }],
+  };
+  assert_eq!(
+    make(&canonical, bindings).expect_err("refused"),
+    InputsError::UnpinnedTeamMcp(stray)
   );
 }

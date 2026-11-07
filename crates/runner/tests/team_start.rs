@@ -201,19 +201,19 @@ async fn team_start_runs_in_the_runner_and_recovers_once_at_every_boundary() {
   // The work's answer is lost, then the bundle's file read is cut off, then the runner is not there, then it starts
   // the run and its answer is lost: each recovery goes on from where the start stopped.
   server.lose_next_response();
-  assert!(waiting(&work.start(request).await.expect("started")));
+  assert!(waiting(&work.start(request, &NoVault).await.expect("started")));
   server.drop_next_file();
   for _ in 0..3 {
-    let (_, outcome) = work.recover().await.expect("recovered").remove(0);
+    let (_, outcome) = work.recover(&NoVault).await.expect("recovered").remove(0);
     let outcome = outcome.expect("carried on");
     assert!(waiting(&outcome), "{outcome:?}");
   }
-  let (_, started) = work.recover().await.expect("recovered").remove(0);
+  let (_, started) = work.recover(&NoVault).await.expect("recovered").remove(0);
   let started = started.expect("carried on");
   let StartOutcome::Started(run) = started else {
     panic!("not started: {started:?}");
   };
-  assert!(work.recover().await.expect("recovered").is_empty());
+  assert!(work.recover(&NoVault).await.expect("recovered").is_empty());
 
   let done = wait_for(root, &mut events, run, |run| run.status().is_terminal()).await;
   assert_eq!(done.status(), &RunStatus::Succeeded);

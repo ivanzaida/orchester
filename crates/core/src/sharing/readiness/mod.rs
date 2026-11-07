@@ -4,8 +4,9 @@
 //! `not_ready_here` from the pinned versions alone. Local projects use the same rule; only the words differ.
 //!
 //! The missing parts come in a stable order, the one a person fixes them in: the connection of each profile, then
-//! the MCP servers that are off, then their program paths (a team server's, then a local one's), then the secret
-//! values (a team secret's, by name, then a project secret's, by id). Inside a kind they keep the order the needs were
+//! the MCP servers that are off, then the ones this app cannot run as the team defined them, then their program paths
+//! (a team server's, then a local one's), then the secret values (a team secret's, by name, whose keychain could not
+//! say, then a project secret's, by id). Inside a kind they keep the order the needs were
 //! asked in. The first is the one a pinned action offers to fix.
 
 mod here;
@@ -57,6 +58,14 @@ pub enum LocalProgramProblem {
   Moved,
 }
 
+/// Why this app cannot give a team MCP server to an agent as the team defined it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum McpUnsupported {
+  /// A remote server takes more than one secret header, and an agent's CLI is given one header per HTTP server here.
+  MoreThanOneSecretHeader,
+}
+
 /// One part a computer lacks. Names and ids only, never a value: it is kept with a start that was refused.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -68,12 +77,16 @@ pub enum Missing {
   },
   /// The team MCP server is not switched on here.
   McpOff { server: ResourceId },
+  /// The team MCP server is defined in a way this app cannot run yet: only the team can change that.
+  McpUnsupported { server: ResourceId, why: McpUnsupported },
   McpProgram {
     server: ResourceId,
     problem: ProgramProblem,
   },
   /// No value is set here for the team secret.
   Secret { name: SecretName },
+  /// The keychain did not say whether a value is set here for the team secret.
+  SecretUnreadable { name: SecretName },
   /// The program of a local project's MCP server, which a profile chooses and which is turned on, cannot start.
   LocalMcpProgram {
     server: ConnectionId,
@@ -114,10 +127,11 @@ impl Missing {
     match self {
       Self::Connection { .. } => 0,
       Self::McpOff { .. } => 1,
-      Self::McpProgram { .. } => 2,
-      Self::LocalMcpProgram { .. } => 3,
-      Self::Secret { .. } => 4,
-      Self::LocalSecret { .. } => 5,
+      Self::McpUnsupported { .. } => 2,
+      Self::McpProgram { .. } => 3,
+      Self::LocalMcpProgram { .. } => 4,
+      Self::Secret { .. } | Self::SecretUnreadable { .. } => 5,
+      Self::LocalSecret { .. } => 6,
     }
   }
 }
@@ -154,7 +168,11 @@ fn lacking(need: &Need, here: &Here) -> Option<Missing> {
         problem: ProgramProblem::NotSet,
       }),
     },
-    Need::Secret(name) => (!here.secrets.contains(name)).then(|| Missing::Secret { name: name.clone() }),
+    Need::McpUnsupported { server, why } => Some(Missing::McpUnsupported {
+      server: *server,
+      why: *why,
+    }),
+    Need::Secret(name) => secret_problem(name, here),
     Need::LocalMcpProgram { server, name } => {
       local_program_problem(*server, here).map(|problem| Missing::LocalMcpProgram {
         server: *server,
@@ -166,6 +184,16 @@ fn lacking(need: &Need, here: &Here) -> Option<Missing> {
       secret: *secret,
       name: name.clone(),
     }),
+  }
+}
+
+fn secret_problem(name: &SecretName, here: &Here) -> Option<Missing> {
+  if here.secrets.contains(name) {
+    None
+  } else if here.secrets_unreadable.contains(name) {
+    Some(Missing::SecretUnreadable { name: name.clone() })
+  } else {
+    Some(Missing::Secret { name: name.clone() })
   }
 }
 

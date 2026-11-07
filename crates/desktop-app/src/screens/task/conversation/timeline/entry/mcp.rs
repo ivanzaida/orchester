@@ -154,6 +154,7 @@ fn server_problem(ctx: &Ctx, problem: &McpServerProblem) -> (Arc<str>, Option<Ar
     ),
     McpServerProblem::NotUnicode => ctx.t("conversation.mcp.notUnicode"),
     McpServerProblem::SecretMissing { .. } => ctx.t("conversation.mcp.secretMissing"),
+    McpServerProblem::TeamSecretMissing { secret } => one("conversation.mcp.teamSecretMissing", "secret", secret),
     McpServerProblem::SecretArchived { secret } => one("conversation.mcp.secretArchived", "secret", secret),
     McpServerProblem::SecretUnreadable { secret } => one("conversation.mcp.secretUnreadable", "secret", secret),
     McpServerProblem::SharedVariable { variable } => one("conversation.mcp.sharedVariable", "variable", variable),

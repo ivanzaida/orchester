@@ -119,7 +119,7 @@ async fn team_inputs_mcp_servers_reach_the_cli_with_the_programs_and_secrets_thi
   // Both steps of the pipeline work without it, and each says so.
   let problem = (
     Some("knowledge".to_owned()),
-    McpServerProblem::SecretMissing {
+    McpServerProblem::TeamSecretMissing {
       secret: "KNOWLEDGE_TOKEN".to_owned(),
     },
   );

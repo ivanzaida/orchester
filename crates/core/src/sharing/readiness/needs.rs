@@ -1,5 +1,6 @@
 use thiserror::Error;
 
+use super::McpUnsupported;
 use crate::{
   connection::{AgentProvider, mcp::McpServerName},
   id::{ConnectionId, ResourceId, SecretId},
@@ -12,6 +13,7 @@ use crate::{
 pub(super) enum Need {
   Connection { profile: ResourceId, cli: AgentProvider },
   McpOn(ResourceId),
+  McpUnsupported { server: ResourceId, why: McpUnsupported },
   McpProgram(ResourceId),
   Secret(SecretName),
   LocalMcpProgram { server: ConnectionId, name: McpServerName },
@@ -27,11 +29,12 @@ pub enum NeedsError {
 }
 
 /// What one pinned version of a team MCP server needs: to be on here, its program's path when it runs a program, and
-/// the secrets it is given values for.
+/// the secrets it is given values for; and, when this app cannot run it as defined, why.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct McpNeed {
   server: ResourceId,
   runs_program: bool,
+  unsupported: Option<McpUnsupported>,
   secrets: Vec<SecretName>,
 }
 
@@ -39,9 +42,16 @@ impl McpNeed {
   /// The need of `body`, the version of team MCP server `server`: the secrets are those its variables and secret
   /// headers name.
   pub fn of(server: ResourceId, body: &TeamMcpServer) -> Self {
+    let unsupported = match body.launch() {
+      TeamMcpLaunch::Remote(remote) if remote.secret_headers().len() > 1 => {
+        Some(McpUnsupported::MoreThanOneSecretHeader)
+      }
+      TeamMcpLaunch::Remote(_) | TeamMcpLaunch::Program(_) => None,
+    };
     Self {
       server,
       runs_program: matches!(body.launch(), TeamMcpLaunch::Program(_)),
+      unsupported,
       secrets: body.secrets(),
     }
   }
@@ -101,9 +111,14 @@ impl Needs {
   /// A team MCP server on its own.
   pub fn mcp_server(server: &McpNeed) -> Self {
     let program = server.runs_program.then_some(Need::McpProgram(server.server));
+    let unsupported = server.unsupported.map(|why| Need::McpUnsupported {
+      server: server.server,
+      why,
+    });
     let secrets = server.secrets.iter().cloned().map(Need::Secret);
     Self(
       std::iter::once(Need::McpOn(server.server))
+        .chain(unsupported)
         .chain(program)
         .chain(secrets)
         .collect(),

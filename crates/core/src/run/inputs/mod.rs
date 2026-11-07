@@ -37,6 +37,9 @@ pub enum InputsError {
   TaskTitle(NameError),
   #[error("agent profile {0} has no local binding")]
   MissingBinding(ResourceId),
+  /// A team MCP server is bound that the bundle does not pin.
+  #[error("team MCP server {0} is bound but the bundle does not pin it")]
+  UnpinnedTeamMcp(ResourceId),
   /// A binding names a profile the inputs do not pin, or a pinned profile twice.
   #[error("agent profile {0} is bound but not pinned once")]
   UnexpectedBinding(ResourceId),
@@ -120,8 +123,16 @@ fn check_bindings(bundle: &BundleContent, bindings: &LocalBindings) -> Result<()
   if let Some(extra) = bound.iter().find(|resource| !pinned.contains(resource)) {
     return Err(InputsError::UnexpectedBinding(*extra));
   }
-  match pinned.iter().find(|resource| !bound.contains(resource)) {
-    Some(missing) => Err(InputsError::MissingBinding(*missing)),
+  if let Some(missing) = pinned.iter().find(|resource| !bound.contains(resource)) {
+    return Err(InputsError::MissingBinding(*missing));
+  }
+  let servers = bundle.inputs().mcp_servers();
+  match bindings
+    .team_mcp
+    .iter()
+    .find(|bound| !servers.iter().any(|pinned| pinned.pinned().resource == bound.server))
+  {
+    Some(unpinned) => Err(InputsError::UnpinnedTeamMcp(unpinned.server)),
     None => Ok(()),
   }
 }

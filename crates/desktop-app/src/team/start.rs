@@ -167,6 +167,7 @@ async fn carry_out(
   start: TeamStartRequest,
 ) -> Started {
   let (servers, key, runtime) = (acting.servers.clone(), source.key(), acting.runtime.clone());
+  let vault = acting.vault.clone();
   let outcome = background::run(move || {
     runtime.block_on(async move {
       let session = servers
@@ -175,7 +176,7 @@ async fn carry_out(
         .map_err(|_| Stop::Claim(Acted::SignedOut))?;
       let dispatcher = Dispatcher::new(root, servers, Some(session));
       TeamWork::new(dispatcher, runner)
-        .start(start)
+        .start(start, vault.get())
         .await
         .map_err(|error| work_failed(&error))
     })
@@ -194,7 +195,7 @@ fn started(outcome: StartOutcome) -> Started {
     StartOutcome::Waiting(_) => Started::Waiting,
     StartOutcome::Refused(error) => Started::Stopped(Stop::Refused(error.code())),
     StartOutcome::Failed(StartFailure::NotReadyHere { pipeline, missing }) => Started::Stopped(Stop::NotReadyHere(
-      NotReadyHere::of_missing(pipeline, missing).messages(),
+      NotReadyHere::after_start(pipeline, missing).messages(),
     )),
     StartOutcome::Failed(failure) => {
       tracing::warn!(?failure, "a team start failed for good");

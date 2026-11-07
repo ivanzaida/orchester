@@ -24,14 +24,14 @@ async fn refused_with(details: Value) -> (StartOutcome, Checkout, StoreRunner) {
   let (work, _generation) = checkout.work(&server, MEMBER, runner.clone());
   let request = checkout.start_request(&server, claim);
   server.state().bundle_missing = Some(details);
-  let outcome = work.start(request.clone()).await.expect("started");
+  let outcome = work.start(request.clone(), checkout.vault()).await.expect("started");
   let kept = checkout
     .db()
     .team_start(request.operation)
     .expect("read")
     .expect("kept");
   assert_eq!(kept.stage, TeamStartStage::Refused);
-  let StartOutcome::Refused(again) = work.start(request).await.expect("carried on") else {
+  let StartOutcome::Refused(again) = work.start(request, checkout.vault()).await.expect("carried on") else {
     panic!("the refusal is kept");
   };
   let StartOutcome::Refused(first) = &outcome else {

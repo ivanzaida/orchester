@@ -57,9 +57,10 @@ fn gather(db: &ProjectDb, setting: Setting<'_>) -> Result<Gathered, ReadinessErr
 }
 
 pub(super) fn read(db: &ProjectDb, setting: Setting<'_>) -> Result<ProjectReadiness, ReadinessError> {
+  let vault = setting.vault;
   let gathered = gather(db, setting)?;
   let server_ids: Vec<ResourceId> = gathered.servers.iter().map(|server| server.entry.resource).collect();
-  let mut here = facts::with_programs(facts::base(db)?, &gathered.programs, &server_ids);
+  let mut here = facts::with_programs(facts::base(db, vault)?, &gathered.programs, &server_ids);
   let mut entries: Vec<Entry> = Vec::new();
   for mut server in gathered.servers {
     match db.team_mcp_switch(server.entry.resource)? {

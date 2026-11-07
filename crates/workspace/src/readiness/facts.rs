@@ -5,6 +5,7 @@ use std::{fs, path::Path};
 use orchester_core::{
   connection::ConnectionKind,
   id::{ConnectionId, ResourceId, SecretId},
+  secret::SecretVault,
   sharing::Here,
   store::ConnectionStore,
 };
@@ -13,9 +14,10 @@ use orchester_store::{ProjectDb, StoreError};
 use super::programs::McpPrograms;
 
 /// The agent connections and the team secrets that have a value, by name. A local project has no secret by name, so it
-/// has none. "Has a value" is a row in `team_secret_values`: the keychain is not read, so a handle whose keychain value
-/// was removed outside Orchester still counts.
-pub(super) fn base(db: &ProjectDb) -> Result<Here, StoreError> {
+/// has none. "Has a value" is a row in `team_secret_values` whose handle the keychain holds, which `vault` is asked
+/// without reading the value or prompting ([`SecretVault::exists`]): a value removed from the keychain outside
+/// Orchester does not count, and a keychain that cannot say leaves the secret unreadable, not set.
+pub(super) fn base(db: &ProjectDb, vault: &dyn SecretVault) -> Result<Here, StoreError> {
   let mut here = Here::nothing();
   for connection in db.connections()? {
     if let ConnectionKind::Agent(provider) = connection.kind() {
@@ -23,7 +25,15 @@ pub(super) fn base(db: &ProjectDb) -> Result<Here, StoreError> {
     }
   }
   for name in db.team_secret_names_set()? {
-    here = here.with_secret(name);
+    match db.team_secret_in_keychain(vault, &name) {
+      Ok(true) => here = here.with_secret(name),
+      Ok(false) => {}
+      Err(StoreError::Keychain(error)) => {
+        tracing::warn!(secret = %name, %error, "the keychain did not say whether a team secret has a value");
+        here = here.with_secret_unreadable(name);
+      }
+      Err(other) => return Err(other),
+    }
   }
   Ok(here)
 }

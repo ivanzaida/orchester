@@ -7,8 +7,14 @@
 //!
 //! What counts as "has" differs for a team and a local project:
 //!
-//! - A team secret "has a value here" when `team_secret_values` has a row for its name (a fill-in). The keychain is not
-//!   read, so a value removed from it outside Orchester still counts.
+//! - A team secret "has a value here" when `team_secret_values` has a row for its name (a fill-in) and the keychain
+//!   still holds its value, which is asked with [`SecretVault::exists`](orchester_core::secret::SecretVault::exists):
+//!   the value is not read and the person is not prompted. A row whose value is gone from the keychain is missing
+//!   [`Missing::Secret`](orchester_core::sharing::Missing::Secret); a keychain that cannot say is missing
+//!   [`Missing::SecretUnreadable`](orchester_core::sharing::Missing::SecretUnreadable), not assumed set.
+//! - A team MCP server this app cannot run as defined (a remote one with more than one secret header: an agent's CLI is
+//!   given one header per HTTP server) is missing [`Missing::McpUnsupported`](orchester_core::sharing::Missing::McpUnsupported)
+//!   in itself and in every profile that chooses it, instead of passing and being left out of every run.
 //! - A team MCP server is on only when the person switched it on. One they switched off is [`Group::OffHere`]; one
 //!   nobody decided on is [`Group::NeedsYouHere`]. Either way it and a profile that chooses it are missing
 //!   [`Missing::McpOff`](orchester_core::sharing::Missing::McpOff).

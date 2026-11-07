@@ -10,8 +10,8 @@ use orchester_core::{
   resource::{ModelId, PromptText, ProviderSettings, TeamAgentProfile, TeamMcpServer},
   secret::SecretName,
   sharing::{
-    ConnectionProblem, Here, LocalProgramProblem, McpNeed, Missing, Needs, NeedsError, ProgramProblem, Readiness,
-    readiness,
+    ConnectionProblem, Here, LocalProgramProblem, McpNeed, McpUnsupported, Missing, Needs, NeedsError, ProgramProblem,
+    Readiness, readiness,
   },
 };
 use serde_json::json;
@@ -542,9 +542,14 @@ fn readiness_missing_parts_are_kept_as_names_and_ids_and_read_back() {
       server: ResourceId::generate(),
       problem: ProgramProblem::FileGone(PathBuf::from("/opt/gone")),
     },
+    Missing::McpUnsupported {
+      server: ResourceId::generate(),
+      why: McpUnsupported::MoreThanOneSecretHeader,
+    },
     Missing::Secret {
       name: secret("API_KEY"),
     },
+    Missing::SecretUnreadable { name: secret("DB_URL") },
     Missing::LocalMcpProgram {
       server: ConnectionId::generate(),
       name: server_name("files"),

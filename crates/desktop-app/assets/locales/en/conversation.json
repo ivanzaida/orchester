@@ -433,6 +433,7 @@
       "secretMissing": "A variable takes its value from a secret this project no longer has.",
       "secretUnreadable": "The system keychain did not give the value of {{secret}}. The runner log says why.",
       "sharedVariable": "Another server of this agent takes {{variable}} from a different secret, and Codex hands its servers one value per name.",
+      "teamSecretMissing": "This computer has no value for the team secret {{secret}}, so the agent works without this server.",
       "title": "Working without MCP server {{server}}",
       "titleUnnamed": "Working without an MCP server",
       "toolRelaysMissing": "Codex reached Orchester’s tools {{reached}} of the {{started}} times it starts them; the agent may have worked without them.",

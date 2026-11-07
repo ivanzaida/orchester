@@ -6,15 +6,18 @@
 use orchester_api::v2::ExecutionBundle;
 use orchester_core::{
   id::ResourceId,
+  secret::SecretVault,
   sharing::{McpNeed, Missing, Needs, readiness},
 };
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{facts, not_ready::MissingPart, programs::McpPrograms};
 
-/// What `bundle` needs that this computer lacks, in the order to fix it; empty when it is ready.
+/// What `bundle` needs that this computer lacks, in the order to fix it; empty when it is ready. The secrets are asked
+/// of `vault` as the first read asks them: whether the keychain has each value, never the value.
 pub(crate) fn missing(
   db: &ProjectDb,
+  vault: &dyn SecretVault,
   programs: &McpPrograms,
   bundle: &ExecutionBundle,
 ) -> Result<Vec<MissingPart>, StoreError> {
@@ -29,7 +32,7 @@ pub(crate) fn missing(
     .iter()
     .map(|pinned| pinned.pinned().resource)
     .collect();
-  let mut here = facts::with_programs(facts::base(db)?, programs, &server_ids);
+  let mut here = facts::with_programs(facts::base(db, vault)?, programs, &server_ids);
   for server in &server_ids {
     if db.team_mcp_switch(*server)? == Some(true) {
       here = here.with_mcp_on(*server);

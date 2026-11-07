@@ -67,6 +67,7 @@ pub(in crate::app_mcp::tools) async fn run_task(
   };
   let (root, programs) = (team.open.repo_root.clone(), services.programs().clone());
   let (workspace, vault) = (services.workspace().clone(), services.vault.clone());
+  let start_vault = vault.clone();
   let branch = module_read.branch.clone();
   let (base_commit, programs) = blocking(move || {
     let db = ProjectDb::open(&root)?;
@@ -112,7 +113,7 @@ pub(in crate::app_mcp::tools) async fn run_task(
       programs,
     };
     TeamWork::new(dispatcher, runner)
-      .start(request)
+      .start(request, start_vault.get())
       .await
       .map_err(work_refused)
   })
@@ -176,7 +177,7 @@ async fn started(team: &Team, outcome: StartOutcome) -> Result<Value, ToolError>
       vec![Message::new("appMcp.errors.teamBundleUnreadable")],
     )),
     StartOutcome::Failed(StartFailure::NotReadyHere { pipeline, missing }) => {
-      Err(ToolError::NotReadyHere(NotReadyHere::of_missing(pipeline, missing)))
+      Err(ToolError::NotReadyHere(NotReadyHere::after_start(pipeline, missing)))
     }
     StartOutcome::Failed(failure) => {
       tracing::warn!(?failure, "a team start failed for good");

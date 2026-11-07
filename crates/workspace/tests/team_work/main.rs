@@ -29,7 +29,7 @@ mod team_deliveries;
 mod team_server;
 
 use std::{
-  collections::VecDeque,
+  collections::{HashMap, VecDeque},
   fs,
   path::{Path, PathBuf},
   sync::Arc,
@@ -86,9 +86,52 @@ impl SecretVault for NoVault {
   }
 }
 
+#[derive(Default)]
+/// Values kept in memory, so a start's check of the team secrets has a keychain to ask.
+struct MemoryVault(Mutex<HashMap<VaultKey, String>>);
+
+impl SecretVault for MemoryVault {
+  fn store(&self, key: &VaultKey, value: &SecretValue) -> Result<(), VaultError> {
+    self.0.lock().insert(key.clone(), value.expose().to_owned());
+    Ok(())
+  }
+
+  fn read(&self, key: &VaultKey) -> Result<SecretValue, VaultError> {
+    let value = self.0.lock().get(key).cloned().ok_or(VaultError::NotFound)?;
+    SecretValue::new(value).map_err(|_| VaultError::NotFound)
+  }
+
+  fn delete(&self, key: &VaultKey) -> Result<(), VaultError> {
+    self.0.lock().remove(key);
+    Ok(())
+  }
+}
+
+/// A keychain that is locked: it cannot say whether it has any value.
+struct LockedVault;
+
+impl SecretVault for LockedVault {
+  fn store(&self, _: &VaultKey, _: &SecretValue) -> Result<(), VaultError> {
+    Err(VaultError::AccessDenied("locked".to_owned()))
+  }
+
+  fn read(&self, _: &VaultKey) -> Result<SecretValue, VaultError> {
+    Err(VaultError::AccessDenied("locked".to_owned()))
+  }
+
+  fn exists(&self, _: &VaultKey) -> Result<bool, VaultError> {
+    Err(VaultError::AccessDenied("locked".to_owned()))
+  }
+
+  fn delete(&self, _: &VaultKey) -> Result<(), VaultError> {
+    Err(VaultError::AccessDenied("locked".to_owned()))
+  }
+}
+
 /// A team project in a folder of its own, linked to the fake server's project, with a Codex connection.
 struct Checkout {
   dir: TempDir,
+  vault: MemoryVault,
   servers: Servers,
   _data: TempDir,
 }
@@ -132,6 +175,7 @@ impl Checkout {
     let workspace = Workspace::new(AppDb::open(&data.path().join("orchester.db")).expect("database"));
     Self {
       dir,
+      vault: MemoryVault::default(),
       servers: Servers::new(
         workspace,
         Vault::with(Arc::new(NoVault)),
@@ -143,6 +187,11 @@ impl Checkout {
 
   fn root(&self) -> &Path {
     self.dir.path()
+  }
+
+  /// The keychain the start asks about the team secrets; the fill-ins keep their values in it.
+  fn vault(&self) -> &MemoryVault {
+    &self.vault
   }
 
   fn db(&self) -> ProjectDb {
@@ -225,7 +274,7 @@ async fn started(checkout: &Checkout, server: &TeamServer) -> (TeamWork<StoreRun
   let claim = checkout.claim(server, MEMBER).await;
   let request = checkout.start_request(server, claim);
   let (work, generation) = checkout.work(server, MEMBER, StoreRunner::new(checkout.root(), &[]));
-  let outcome = work.start(request).await.expect("started");
+  let outcome = work.start(request, checkout.vault()).await.expect("started");
   let StartOutcome::Started(run) = outcome else {
     panic!("not started: {outcome:?}");
   };

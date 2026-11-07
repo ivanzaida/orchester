@@ -24,6 +24,8 @@ pub enum McpServerProblem {
   NotUnicode,
   /// A value comes from secret `secret` (its id), which the project no longer has.
   SecretMissing { secret: String },
+  /// A value comes from the team secret `secret` (its name), which has no value on this computer.
+  TeamSecretMissing { secret: String },
   /// A value comes from secret `secret` (its name), which is archived.
   SecretArchived { secret: String },
   /// The keychain did not give the value of secret `secret` (its name): it refused, or has no value for it on

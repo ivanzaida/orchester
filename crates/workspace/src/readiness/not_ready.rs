@@ -5,13 +5,14 @@
 //! for a team MCP server whose file is gone, which they need to see to fix it.
 
 use orchester_core::{
+  connection::AgentProvider,
   id::ResourceId,
-  sharing::{ConnectionProblem, LocalProgramProblem, Missing, ProgramProblem},
+  sharing::{ConnectionProblem, LocalProgramProblem, McpUnsupported, Missing, ProgramProblem},
 };
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
-use super::{PipelineReadiness, ProjectReadiness, Undecided};
+use super::{PipelineReadiness, ProjectReadiness, ReadinessStanding, Undecided};
 use crate::messages::Message;
 
 /// One part a pipeline lacks, with the name of the profile or MCP server it is about (the secret's own name for a
@@ -27,8 +28,12 @@ impl MissingPart {
   pub fn new(missing: Missing, name_of: &dyn Fn(ResourceId) -> String) -> Self {
     let name = match &missing {
       Missing::Connection { profile, .. } => name_of(*profile),
-      Missing::McpOff { server } | Missing::McpProgram { server, .. } => name_of(*server),
-      Missing::Secret { name } | Missing::LocalSecret { name, .. } => name.as_str().to_owned(),
+      Missing::McpOff { server } | Missing::McpUnsupported { server, .. } | Missing::McpProgram { server, .. } => {
+        name_of(*server)
+      }
+      Missing::Secret { name } | Missing::SecretUnreadable { name } | Missing::LocalSecret { name, .. } => {
+        name.as_str().to_owned()
+      }
       Missing::LocalMcpProgram { name, .. } => name.as_str().to_owned(),
     };
     Self { missing, name }
@@ -46,6 +51,10 @@ impl MissingPart {
         named(key, "profile").with("cli", cli_name(*cli).to_owned())
       }
       Missing::McpOff { .. } => named("notReadyHere.mcpOff", "server"),
+      Missing::McpUnsupported {
+        why: McpUnsupported::MoreThanOneSecretHeader,
+        ..
+      } => named("notReadyHere.mcpMoreThanOneSecretHeader", "server"),
       Missing::McpProgram {
         problem: ProgramProblem::NotSet,
         ..
@@ -55,6 +64,7 @@ impl MissingPart {
         ..
       } => named("notReadyHere.mcpProgramFileGone", "server").with("path", path.display().to_string()),
       Missing::Secret { .. } => named("notReadyHere.secret", "secret"),
+      Missing::SecretUnreadable { .. } => named("notReadyHere.secretUnreadable", "secret"),
       Missing::LocalMcpProgram {
         problem: LocalProgramProblem::NotFound,
         ..
@@ -86,48 +96,46 @@ pub struct UndecidedPart {
 
 impl UndecidedPart {
   pub fn message(&self) -> Message {
-    let resource = self.name.clone();
-    let (key, server) = match &self.why {
-      Undecided::NotTeamForm => ("notReadyHere.undecidedNotTeamForm", None),
-      Undecided::CannotBePublished(_) => ("notReadyHere.undecidedCannotBePublished", None),
-      Undecided::ChoosesMcpServer(server) => ("notReadyHere.undecidedChoosesMcpServer", Some(server.to_string())),
-      Undecided::RunsUnknown(_) => ("notReadyHere.undecidedRunsUnknown", None),
-      Undecided::ConnectionGone(_) => ("notReadyHere.undecidedConnectionGone", None),
-      Undecided::TeamToolSecretById(_) => ("notReadyHere.undecidedTeamToolSecretById", None),
-      Undecided::SecretGone(_) => ("notReadyHere.undecidedSecretGone", None),
-      Undecided::SecretUnreadable(_) => ("notReadyHere.undecidedSecretUnreadable", None),
-      Undecided::Member { why, .. } => {
-        return Self {
-          why: (**why).clone(),
-          name: resource,
-        }
-        .message();
-      }
-    };
-    let message = Message::new(key).with("resource", resource);
-    match server {
-      Some(server) => message.with("server", server),
-      None => message,
-    }
+    undecided_message(&self.why, &self.name)
   }
 
   /// A stable word for why, for a client to match on.
   fn code(&self) -> &'static str {
-    match &self.why {
-      Undecided::NotTeamForm => "not_team_form",
-      Undecided::CannotBePublished(_) => "cannot_be_published",
-      Undecided::ChoosesMcpServer(_) => "chooses_mcp_server",
-      Undecided::RunsUnknown(_) => "runs_unknown",
-      Undecided::ConnectionGone(_) => "connection_gone",
-      Undecided::TeamToolSecretById(_) => "team_tool_secret_by_id",
-      Undecided::SecretGone(_) => "secret_gone",
-      Undecided::SecretUnreadable(_) => "secret_unreadable",
-      Undecided::Member { why, .. } => Self {
-        why: (**why).clone(),
-        name: String::new(),
-      }
-      .code(),
-    }
+    undecided_code(&self.why)
+  }
+}
+
+/// What to do about `why`, naming `resource`; a pipeline's member says what the member is undecided for.
+fn undecided_message(why: &Undecided, resource: &str) -> Message {
+  let (key, server) = match why {
+    Undecided::NotTeamForm => ("notReadyHere.undecidedNotTeamForm", None),
+    Undecided::CannotBePublished(_) => ("notReadyHere.undecidedCannotBePublished", None),
+    Undecided::ChoosesMcpServer(server) => ("notReadyHere.undecidedChoosesMcpServer", Some(server.to_string())),
+    Undecided::RunsUnknown(_) => ("notReadyHere.undecidedRunsUnknown", None),
+    Undecided::ConnectionGone(_) => ("notReadyHere.undecidedConnectionGone", None),
+    Undecided::TeamToolSecretById(_) => ("notReadyHere.undecidedTeamToolSecretById", None),
+    Undecided::SecretGone(_) => ("notReadyHere.undecidedSecretGone", None),
+    Undecided::SecretUnreadable(_) => ("notReadyHere.undecidedSecretUnreadable", None),
+    Undecided::Member { why, .. } => return undecided_message(why, resource),
+  };
+  let message = Message::new(key).with("resource", resource.to_owned());
+  match server {
+    Some(server) => message.with("server", server),
+    None => message,
+  }
+}
+
+fn undecided_code(why: &Undecided) -> &'static str {
+  match why {
+    Undecided::NotTeamForm => "not_team_form",
+    Undecided::CannotBePublished(_) => "cannot_be_published",
+    Undecided::ChoosesMcpServer(_) => "chooses_mcp_server",
+    Undecided::RunsUnknown(_) => "runs_unknown",
+    Undecided::ConnectionGone(_) => "connection_gone",
+    Undecided::TeamToolSecretById(_) => "team_tool_secret_by_id",
+    Undecided::SecretGone(_) => "secret_gone",
+    Undecided::SecretUnreadable(_) => "secret_unreadable",
+    Undecided::Member { why, .. } => undecided_code(why),
   }
 }
 
@@ -154,11 +162,21 @@ impl NotReadyPart {
   }
 }
 
+/// When a start found that its pipeline is not ready here: what the first lines of its answer may say happened.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Found {
+  /// Before the team server was asked for anything: no claim, no work, no attempt.
+  BeforeClaim,
+  /// After `work.start`, from the versions the server pinned: the work and the claim exist, and nothing ran.
+  AfterStart,
+}
+
 /// A pipeline that does not start on this computer, and the parts that keep it from starting.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NotReadyHere {
   pipeline: String,
   parts: Vec<NotReadyPart>,
+  found: Found,
 }
 
 impl NotReadyHere {
@@ -170,28 +188,31 @@ impl NotReadyHere {
         .map_or_else(|| resource.to_string(), |found| found.name().to_owned())
     };
     let parts = match pipeline.standing() {
-      super::ReadinessStanding::Ready => return None,
-      super::ReadinessStanding::Missing(_) => pipeline
+      ReadinessStanding::Ready => return None,
+      ReadinessStanding::Missing(_) => pipeline
         .standing()
         .missing()
         .iter()
         .map(|missing| NotReadyPart::Missing(MissingPart::new(missing.clone(), &name_of)))
         .collect(),
-      super::ReadinessStanding::Undecided(why) => {
+      ReadinessStanding::Undecided(why) => {
         vec![NotReadyPart::Undecided(undecided(why, &name_of, pipeline.name()))]
       }
     };
     Some(Self {
       pipeline: pipeline.name().to_owned(),
       parts,
+      found: Found::BeforeClaim,
     })
   }
 
-  /// `pipeline` (by name), whose pinned versions lack `missing`, which is not empty.
-  pub fn of_missing(pipeline: impl Into<String>, missing: Vec<MissingPart>) -> Self {
+  /// `pipeline` (by name), whose versions the team server pinned for a start it accepted lack `missing`, which is not
+  /// empty: the work and the claim exist, though nothing ran.
+  pub fn after_start(pipeline: impl Into<String>, missing: Vec<MissingPart>) -> Self {
     Self {
       pipeline: pipeline.into(),
       parts: missing.into_iter().map(NotReadyPart::Missing).collect(),
+      found: Found::AfterStart,
     }
   }
 
@@ -205,7 +226,11 @@ impl NotReadyHere {
 
   /// Why nothing started, then each part with its fix.
   pub fn messages(&self) -> Vec<Message> {
-    std::iter::once(Message::new("notReadyHere.refused").with("pipeline", self.pipeline.clone()))
+    let lead = match self.found {
+      Found::BeforeClaim => "notReadyHere.refused",
+      Found::AfterStart => "notReadyHere.refusedAfterStart",
+    };
+    std::iter::once(Message::new(lead).with("pipeline", self.pipeline.clone()))
       .chain(self.parts.iter().map(NotReadyPart::message))
       .collect()
   }
@@ -235,8 +260,7 @@ fn undecided(why: &Undecided, name_of: &dyn Fn(ResourceId) -> String, pipeline: 
 }
 
 /// A CLI by the name of its program, or of its API; an identifier, not a sentence.
-const fn cli_name(cli: orchester_core::connection::AgentProvider) -> &'static str {
-  use orchester_core::connection::AgentProvider;
+const fn cli_name(cli: AgentProvider) -> &'static str {
   match cli {
     AgentProvider::CodexCli => "codex",
     AgentProvider::ClaudeCodeCli => "claude",
