@@ -49,7 +49,7 @@ fn server(refusal: Option<(u16, &'static str)>) -> (TeamServer, Arc<Mutex<Sent>>
 }
 
 /// The server's answer to the `ResourceCreate` in `request`: the resource and its v1.
-fn created(request: &Request) -> Value {
+pub(super) fn created(request: &Request) -> Value {
   let create = request.json();
   let by = json!({ "id": "01a183cf-b73c-71db-8a62-bd509770cd4e", "display_name": "Dana" });
   let attribution = json!({ "by": by, "at": 1 });
@@ -66,7 +66,7 @@ fn created(request: &Request) -> Value {
 }
 
 /// A checkout linked as the team's owner, who let automation change agent permissions, signed in to `server`.
-fn admin(server: &TeamServer) -> Checkout {
+pub(super) fn admin(server: &TeamServer) -> Checkout {
   let owner = Standing {
     role: "owner",
     widens: true,

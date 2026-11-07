@@ -4,6 +4,7 @@
 //! ([`store::RemoteTaskStore`]). While the server cannot be reached, or the person is no longer a
 //! member, nothing is sent: the change fails at once and the list stays read-only.
 
+mod archive_resource;
 mod authority;
 mod automatic;
 mod claim_ends;
@@ -42,6 +43,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, SharingLink};
 
 pub use self::{
+  archive_resource::NotArchived,
   authority::TeamAdmins,
   claim_ends::{ClaimEndError, EndedClaim},
   claims::{WorkClaim, WorkRefusal},

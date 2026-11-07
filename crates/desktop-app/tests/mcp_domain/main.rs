@@ -67,6 +67,7 @@ mod slot_waits;
 mod story_points;
 mod task_organization;
 mod team_fill_ins;
+mod team_mcp_servers;
 mod todo_lists;
 mod tools;
 mod tools_window;
