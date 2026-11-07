@@ -1,7 +1,7 @@
 //! What the review page keeps while it shows: the comment box's lines, kind and words, the line a drag over lines
 //! started on, the line under the pointer, the thread whose follow-up or edit is open, the fields that take the focus
-//! when their box opens, the files folded or unfolded by hand, the folds opened, the file the list scrolls to, the head
-//! the person took in after it moved, and why the latest change was not made.
+//! when their box opens, the files folded or unfolded by hand, the folds opened, the file the list scrolls to, and why
+//! the latest change was not made.
 
 use std::{
   collections::{BTreeMap, BTreeSet},
@@ -113,8 +113,6 @@ pub(super) struct ReviewState {
   pub opened: Signal<Held<BTreeSet<Arc<str>>>>,
   /// The file chosen in the list, which the diff scrolls to.
   pub chosen: Signal<Held<Option<Arc<str>>>>,
-  /// The head the person took in after the branch moved past the one reviewed.
-  pub taken_in: Signal<Held<Option<Revision>>>,
   /// Why the latest change was not made.
   pub failure: Signal<Option<Message>>,
   /// Counts the changes made here: the review is read again after each.
@@ -147,7 +145,6 @@ impl ReviewState {
       folded: ctx.signal(Held(BTreeMap::new())),
       opened: ctx.signal(Held(BTreeSet::new())),
       chosen: ctx.signal(Held(None)),
-      taken_in: ctx.signal(Held(None)),
       failure: ctx.signal(None),
       written,
       discarding: ctx.signal(false),

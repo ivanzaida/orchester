@@ -4,14 +4,18 @@
 
 use std::sync::Arc;
 
-use lurq::app::ctx::Ctx;
-use orchester_core::{id::RunId, project::TaskKey};
+use lurq::app::{component::DevtoolsInspectable, ctx::Ctx};
+use orchester_core::{id::RunId, project::TaskKey, revision::Revision};
 use orchester_workspace::{
   background,
   messages::Message,
-  tasks::review_threads::{
-    page::{ReviewPage, task_review_page},
-    read::{Review, review_of},
+  tasks::{
+    changes::Checkpointed,
+    review_threads::{
+      page::{ReviewPage, task_review_page},
+      read::{Review, review_of},
+      since::diff_since_review,
+    },
   },
 };
 
@@ -84,4 +88,76 @@ pub(super) fn live(ctx: &mut Ctx, project: &ShownProject, run: RunId, written: u
     .state()
     .get();
   loaded.data.map(|Held(review)| review)
+}
+
+/// What the page reads of the commits after the head reviewed.
+#[derive(Clone, Debug, PartialEq)]
+pub(super) enum SinceRead {
+  Reading,
+  Ready(Arc<Checkpointed>),
+  /// Why there is no diff since the review ([`diff_since_review`]).
+  Failed(Message),
+}
+
+/// The diff from `reviewed` to `head` as read once, with what it was read for.
+#[derive(Clone, Debug, PartialEq)]
+struct SinceDone {
+  reviewed: Option<Revision>,
+  head: Option<Revision>,
+  outcome: Result<Arc<Checkpointed>, Message>,
+}
+
+impl DevtoolsInspectable for SinceDone {}
+
+/// The diff since the review of the run's branch at `head`, read when `wanted`, again once the branch moves; `None`
+/// while it is not wanted.
+pub(super) fn since(
+  ctx: &mut Ctx,
+  project: &ShownProject,
+  (reviewed, head): (Option<Revision>, Option<Revision>),
+  wanted: bool,
+) -> Option<SinceRead> {
+  let wanted = wanted && head.is_some();
+  let root = project.open.repo_root.clone();
+  let programs = Services::of(ctx).programs;
+  let loaded = ctx
+    .future(
+      (root, reviewed.clone(), head.clone(), wanted),
+      move |(root, reviewed, head, wanted)| {
+        let programs = programs.clone();
+        async move {
+          if !wanted {
+            return Ok(Held(None));
+          }
+          background::run(move || {
+            let outcome = diff_since_review((&root, &programs), (reviewed.as_ref(), head.as_ref()))
+              .map(Arc::new)
+              .map_err(|error| error.message());
+            Held(Some(SinceDone {
+              reviewed,
+              head,
+              outcome,
+            }))
+          })
+          .await
+        }
+      },
+    )
+    .state()
+    .get();
+  if !wanted {
+    return None;
+  }
+  let rejected = loaded.is_rejected();
+  Some(match loaded.data {
+    // A pending read keeps the result of the one before: only the one for this head counts.
+    Some(Held(Some(done))) if done.reviewed == reviewed && done.head == head => match done.outcome {
+      Ok(read) => SinceRead::Ready(read),
+      Err(reason) => SinceRead::Failed(reason),
+    },
+    _ => match loaded.error.filter(|_| rejected) {
+      Some(reason) => SinceRead::Failed(reason),
+      None => SinceRead::Reading,
+    },
+  })
 }
