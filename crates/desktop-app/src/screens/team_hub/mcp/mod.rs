@@ -22,14 +22,14 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
   },
-  components::{Column, Row, ScrollVertical, Text},
+  components::{Column, ScrollVertical},
   core::Signal,
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::{ProjectId, ResourceId};
 use orchester_workspace::agents::team_mcp::TeamMcpSheet;
 
-use self::fix::{Bar, Step};
+use self::fix::{Bar, Fix, Step};
 use super::{
   actions::Actions,
   model::{Entry, Listing},
@@ -107,23 +107,21 @@ impl Component for McpPanel {
     let now = Services::of(ctx).clock.now();
     let press = |step: &Step| self.press(step, &props);
     let view = computer::View {
+      listing,
       entry,
       sheet,
       missing,
       busy,
       now,
-      choose: press(&Step::ChoosePath(entry.id)),
+      choose: press(&Step::Fix(Fix::ChoosePath(entry.id))),
       switch: self.switch(entry.id),
     };
-    let used_by = (!sheet.used_by.is_empty()).then(|| {
-      Text::new(&ctx.t_args("team_hub.mcp.usedBy", [("names", sheet.used_by.join(", "))]))
-        .id("team-hub-used-by")
-        .variant(crate::theme::HubText::Hint.role())
-        .nowrap()
-    });
-    let chips = panel::chips_saying(ctx, entry, words::chip(ctx, listing, entry, missing))
-      .child(Row::new().flex(1.0))
-      .with_children(used_by);
+    let chips = panel::chips_saying(
+      ctx,
+      entry,
+      words::chip(ctx, listing, entry, missing),
+      panel::used_by(ctx, &sheet.used_by),
+    );
     let body = Column::new()
       .width(Dimension::Pct(100.0))
       .padding(Padding::symmetric(
@@ -190,15 +188,15 @@ impl McpPanel {
       })
     };
     match step {
-      Step::SwitchOn(server) => {
+      Step::Fix(Fix::SwitchOn(server)) => {
         let (action, server) = (self.actions.switch_on.clone(), *server);
         guarded(Arc::new(move || action.run(server)))
       }
-      Step::ChoosePath(server) => {
+      Step::Fix(Fix::ChoosePath(server)) => {
         let (action, server) = (self.actions.set_path.clone(), *server);
         guarded(Arc::new(move || action.run(server)))
       }
-      Step::AddValue(name) => {
+      Step::Fix(Fix::AddValue(name)) => {
         let (entry, name) = (self.secret.clone(), name.clone());
         guarded(Arc::new(move || entry.ask(&name)))
       }

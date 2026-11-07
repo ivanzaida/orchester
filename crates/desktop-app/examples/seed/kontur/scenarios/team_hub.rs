@@ -4,8 +4,9 @@
 //! on here with its secret header `GITHUB_TOKEN` without a value, `figma` on here and ready, `playwright` switched off
 //! here and `linear` nobody decided on. Profiles: Builder chooses `github` and `pencil-design`, Reviewer nothing.
 //! Tools: `cargo-check`, a command, is ready; `sentry-issues`, an HTTP request with a project secret by id, cannot be
-//! told ready. Instructions and skills are always ready. The old catalogue's own resources are local, so the team
-//! project does not show them.
+//! told ready (A6 `u9Hcc`); `orders-report`, a database query, names its secret by id the same way. Builder uses
+//! `Project rules`, `review-diff` (which has a reference file) and `cargo-check`. Instructions and skills are always
+//! ready. The old catalogue's own resources are local, so the team project does not show them.
 //!
 //! The computer has one Claude Code connection (`Claude · Kontur`), so Builder runs on it without asking
 //! (`Agents · Profile` C1 `NDZXC`). `team-hub-pick` adds a second one, `Claude · Home`, so Builder asks which runs it
@@ -22,14 +23,14 @@ use orchester_core::{
   id::{ConnectionId, ResourceId, SecretId, UserId},
   name::Name,
   resource::{
-    AccessPolicy, AccessWindow, AgentProfile, AgentTargets, ApprovalMode, CommandAction, CommandProgram,
-    DeniedBehavior, HttpAuth, HttpMethod, HttpRequest, InjectionEvent, Instruction, InstructionScope, ModelId,
-    PromptText, ProviderSettings, ResourceBody, Skill, Slug, TeamAgentProfile, TeamMcpServer, Tool, ToolAction,
-    VersionNumber,
+    AccessPolicy, AccessWindow, AgentProfile, AgentTargets, ApprovalMode, CommandAction, CommandArg, CommandProgram,
+    DatabaseQuery, DeniedBehavior, HttpAuth, HttpMethod, HttpRequest, InjectionEvent, Instruction, InstructionScope,
+    ModelId, PromptText, ProviderSettings, ResourceBody, Skill, SkillFile, SkillFilePath, Slug, TeamAgentProfile,
+    TeamMcpServer, Tool, ToolAction, VersionNumber,
   },
   secret::SecretName,
   sharing::{SharedPerson, TaskRevision},
-  store::ResourceStore,
+  store::{BlobStore, ResourceStore},
 };
 use orchester_store::CachedVersion;
 use serde_json::{Value, json};
@@ -140,15 +141,36 @@ fn resources_with(kontur: &mut Kontur, mcp: &Mcp) -> Result<BTreeMap<&'static st
     }
     ids.insert(name, id);
   }
-  let builder = [ids["github"], ids["pencil-design"]];
+  let plain = plain_resources(kontur)?;
+  let builder = Uses {
+    servers: &[ids["github"], ids["pencil-design"]],
+    instructions: &[plain.rules],
+    skills: &[plain.review],
+    tools: &[plain.cargo],
+  };
   team_profile(kontur, "Builder", &builder, &["GITHUB_TOKEN"])?;
-  team_profile(kontur, "Reviewer", &[], &[])?;
-  plain_resources(kontur)?;
+  team_profile(kontur, "Reviewer", &Uses::default(), &[])?;
   Ok(ids)
 }
 
-/// Instructions and skills, which need nothing of a computer, and the two tools.
-fn plain_resources(kontur: &mut Kontur) -> Result<(), SeedError> {
+/// What a team profile of the seed uses.
+#[derive(Default)]
+struct Uses<'a> {
+  servers: &'a [ResourceId],
+  instructions: &'a [ResourceId],
+  skills: &'a [ResourceId],
+  tools: &'a [ResourceId],
+}
+
+/// The ids of the instruction, the skill and the command tool the profiles use.
+struct Plain {
+  rules: ResourceId,
+  review: ResourceId,
+  cargo: ResourceId,
+}
+
+/// Instructions and skills, which need nothing of a computer, and the tools.
+fn plain_resources(kontur: &mut Kontur) -> Result<Plain, SeedError> {
   let rules = Instruction::new(
     PromptText::new("Work inside the task's worktree and keep each commit small.").map_err(invalid)?,
     AgentTargets::All,
@@ -156,17 +178,30 @@ fn plain_resources(kontur: &mut Kontur) -> Result<(), SeedError> {
     InstructionScope::Project,
   )
   .map_err(invalid)?;
-  team_resource(kontur, "Project rules", &rules)?;
+  let rules = team_resource(kontur, "Project rules", &rules)?;
+  let checklist = b"- Every acceptance criterion has a test.\n- No unrelated change.\n";
+  let file = SkillFile {
+    path: SkillFilePath::new("references/checklist.md").map_err(invalid)?,
+    content: kontur.db.put_blob("text/markdown", checklist)?,
+    size: checklist.len() as u64,
+  };
   let skill = Skill::new(
     "Review a diff against the brief and the acceptance criteria.".into(),
     "# Review a diff\nReport each finding with its file and line.".into(),
-    Vec::new(),
+    vec![file],
     InstructionScope::Project,
   )
   .map_err(invalid)?;
-  team_resource(kontur, "review-diff", &skill)?;
-  let command = CommandAction::new(CommandProgram::new("cargo").map_err(invalid)?, Vec::new());
-  team_resource(kontur, "cargo-check", &Tool::command("", command))?;
+  let review = team_resource(kontur, "review-diff", &skill)?;
+  let command = CommandAction::new(
+    CommandProgram::new("cargo").map_err(invalid)?,
+    vec![CommandArg::new("check").map_err(invalid)?],
+  );
+  let cargo = team_resource(
+    kontur,
+    "cargo-check",
+    &Tool::command("Runs cargo check on the worktree.", command),
+  )?;
   let request = HttpRequest::new(
     HttpMethod::Post,
     "https://sentry.example.test/api/issues".into(),
@@ -188,12 +223,27 @@ fn plain_resources(kontur: &mut Kontur) -> Result<(), SeedError> {
   .map_err(invalid)?;
   let tool = Tool::new("", ToolAction::Http(request), Some(policy)).map_err(invalid)?;
   team_resource(kontur, "sentry-issues", &tool)?;
-  Ok(())
+  let database = DatabaseQuery::new(
+    SecretId::generate(),
+    "select status, count(*) from orders group by status".into(),
+  )
+  .map_err(invalid)?;
+  let policy = AccessPolicy::new(
+    BTreeMap::new(),
+    Name::new("Production").map_err(invalid)?,
+    ApprovalMode::Never,
+    AccessWindow::UntilStepEnds,
+    DeniedBehavior::FailStep,
+  )
+  .map_err(invalid)?;
+  let report = Tool::new("Orders per status.", ToolAction::DatabaseQuery(database), Some(policy)).map_err(invalid)?;
+  team_resource(kontur, "orders-report", &report)?;
+  Ok(Plain { rules, review, cargo })
 }
 
 /// The team's profile `name` on Claude Code, choosing `servers` and needing the team secrets `secrets`; this computer
 /// runs it by a local body, whose connection is not chosen.
-fn team_profile(kontur: &mut Kontur, name: &str, servers: &[ResourceId], secrets: &[&str]) -> Result<(), SeedError> {
+fn team_profile(kontur: &mut Kontur, name: &str, uses: &Uses<'_>, secrets: &[&str]) -> Result<(), SeedError> {
   let secrets = secrets
     .iter()
     .map(|secret| SecretName::new(secret))
@@ -209,7 +259,13 @@ fn team_profile(kontur: &mut Kontur, name: &str, servers: &[ResourceId], secrets
       ProviderSettings::default(),
     ),
   )
-  .with_mcp_servers(servers.to_vec())
+  .with_mcp_servers(uses.servers.to_vec())
+  .map_err(invalid)?
+  .with_instruction_resources(uses.instructions.to_vec())
+  .map_err(invalid)?
+  .with_skills(uses.skills.to_vec())
+  .map_err(invalid)?
+  .with_tools(uses.tools.to_vec())
   .map_err(invalid)?
   .with_secrets(secrets)
   .map_err(invalid)?;
@@ -229,7 +285,7 @@ pub(super) fn team_resource<B: ResourceBody + Clone>(
   kontur: &mut Kontur,
   name: &str,
   body: &B,
-) -> Result<(), SeedError> {
+) -> Result<ResourceId, SeedError> {
   let resource = kontur.db.create_resource(
     Slug::new(&name.to_lowercase().replace(' ', "-")).map_err(invalid)?,
     Name::new(name).map_err(invalid)?,
@@ -237,7 +293,8 @@ pub(super) fn team_resource<B: ResourceBody + Clone>(
     kontur.ago(20 * 24 * 60),
   )?;
   let server_body = serde_json::to_value(body).map_err(invalid)?;
-  cache(kontur, &resource, server_body, body.clone())
+  cache(kontur, &resource, server_body, body.clone())?;
+  Ok(resource.id())
 }
 
 /// Marks `resource` the team's and caches its v1 as the server confirmed it, published by olha.

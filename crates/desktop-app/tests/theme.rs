@@ -212,6 +212,31 @@ fn agents_page_spacing_matches_the_design() {
 }
 
 #[test]
+fn hub_panel_sizes_match_the_design() {
+  let app = themed(Mode::Dark);
+  for (role, value, why) in [
+    (
+      theme::HubSpacing::Actions,
+      56.0,
+      "every panel's pinned actions are 56 high (x3uhYJ, hDhr8)",
+    ),
+    (
+      theme::HubSpacing::Key,
+      170.0,
+      "a panel row's key is 170 wide (P60rze, z3uHz)",
+    ),
+    (
+      theme::HubSpacing::KeyNarrow,
+      150.0,
+      "an MCP server's On this computer rows have 150 (SpRvd)",
+    ),
+  ] {
+    assert_eq!(app.theme().spacing_value(role.role()), Dimension::Px(value), "{why}");
+    assert_eq!(role.value(), value, "{why}");
+  }
+}
+
+#[test]
 fn tasks_spacing_matches_the_redesign() {
   let app = themed(Mode::Dark);
   let theme = app.theme();

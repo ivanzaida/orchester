@@ -7,27 +7,28 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
+    theme::{BorderSize, PaletteColor, SpacingSize},
   },
-  components::{Column, Row, Text},
+  components::{Column, Row, Text, TextOverflow},
   layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_core::{
-  secret::SecretName,
   sharing::{Missing, ProgramProblem},
   time::Timestamp,
 };
 use orchester_workspace::agents::team_mcp::{McpRuns, TeamMcpSheet};
 
-use super::words::{self, Value};
+use super::words;
 use crate::{
   screens::team_hub::{
     actions::Busy,
-    model::Entry,
-    rows::{self, Sub},
+    fill::{self, Tone},
+    model::{Entry, Listing},
+    rows::{self, Key, Sub},
+    words as list_words,
   },
-  theme::{ControlHeight, ExtraSpacing, ExtraTypography, HubText, IconSize},
+  theme::{HubText, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
@@ -38,6 +39,7 @@ use crate::{
 
 /// What the rows stand on and what their controls do.
 pub(super) struct View<'a> {
+  pub listing: &'a Listing,
   pub entry: &'a Entry,
   pub sheet: &'a TeamMcpSheet,
   pub missing: &'a [Missing],
@@ -54,7 +56,12 @@ pub(super) fn section(ctx: &Ctx, view: &View<'_>) -> Column {
   let mut rows = Vec::new();
   rows.extend(path_row(ctx, view));
   for name in &view.sheet.secrets {
-    rows.push(secret_row(ctx, name, words::value_of(view.missing, name)));
+    rows.push(fill::secret_row(
+      ctx,
+      Key::Narrow,
+      name,
+      fill::value_of(view.missing, name),
+    ));
   }
   rows.push(here_row(ctx, view));
   rows::on_this_computer(ctx, rows, Some(note(ctx, view).into()))
@@ -72,7 +79,7 @@ fn path_row(ctx: &Ctx, view: &View<'_>) -> Option<Row> {
         words: ctx.t("team_hub.mcp.path.gone"),
         color: PaletteColor::Danger,
       },
-      input_box(
+      fill::input_box(
         &format!("{id}-value"),
         (Icon::FileX, PaletteColor::Danger),
         Text::new(&set.path.display().to_string())
@@ -85,7 +92,7 @@ fn path_row(ctx: &Ctx, view: &View<'_>) -> Option<Row> {
     (Some(set), _) => (
       Sub::quiet(ctx.t_args(
         "team_hub.mcp.path.found",
-        [("date", words::date(ctx, view.now, set.set_at).to_string())],
+        [("date", list_words::date(ctx, view.now, set.set_at).to_string())],
       )),
       Row::new()
         .id(format!("{id}-value"))
@@ -95,7 +102,10 @@ fn path_row(ctx: &Ctx, view: &View<'_>) -> Option<Row> {
         .child(
           Text::new(&set.path.display().to_string())
             .id(format!("{id}-value-text"))
-            .variant(HubText::Value.role()),
+            .variant(HubText::Value.role())
+            .nowrap()
+            .min_width(Dimension::Px(0.0))
+            .text_overflow(TextOverflow::Elipsis),
         ),
     ),
     (None, _) => (
@@ -105,7 +115,7 @@ fn path_row(ctx: &Ctx, view: &View<'_>) -> Option<Row> {
         .width(Dimension::Pct(100.0))
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
-        .child(input_box(
+        .child(fill::input_box(
           &format!("{id}-field"),
           (Icon::File, PaletteColor::TextMuted),
           Text::new(&ctx.t("team_hub.mcp.path.notSet"))
@@ -116,7 +126,13 @@ fn path_row(ctx: &Ctx, view: &View<'_>) -> Option<Row> {
         .child(choose(ctx, view)),
     ),
   };
-  Some(rows::row(id, &ctx.t("team_hub.mcp.path.label"), Some(sub), value))
+  Some(rows::row_in(
+    Key::Narrow,
+    id,
+    &ctx.t("team_hub.mcp.path.label"),
+    Some(sub),
+    value,
+  ))
 }
 
 fn choose(ctx: &Ctx, view: &View<'_>) -> Element {
@@ -132,84 +148,6 @@ fn choose(ctx: &Ctx, view: &View<'_>) -> Element {
     Busy::Reading => button.disabled(),
   }
   .into()
-}
-
-/// A box that looks like a field and holds `text` after its glyph; it is not typed in.
-fn input_box(id: &str, (glyph, color): (Icon, PaletteColor), text: Text) -> Row {
-  Row::new()
-    .id(id.to_owned())
-    .flex(1.0)
-    .min_width(Dimension::Px(0.0))
-    .height(Dimension::Px(ControlHeight::Md.value()))
-    .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .background(PaletteColor::SurfaceInput)
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Md)
-    .child(icon(glyph, IconSize::Base, color))
-    .child(text.flex(1.0))
-}
-
-/// One secret the server takes: its name over *secret value*, and whether it has a value here.
-fn secret_row(ctx: &Ctx, name: &SecretName, value: Value) -> Row {
-  let id = format!("team-hub-value-{name}");
-  let (sub, shown): (Sub, Element) = match value {
-    Value::Set => (
-      Sub::quiet(ctx.t("team_hub.mcp.secret.sub")),
-      Row::new()
-        .id(format!("{id}-value"))
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(icon(Icon::CircleCheck, IconSize::Base, PaletteColor::Success))
-        .child(
-          Text::new(&ctx.t("team_hub.ready.valueSet"))
-            .id(format!("{id}-words"))
-            .variant(HubText::Status.role()),
-        )
-        .into(),
-    ),
-    Value::Missing => (
-      Sub {
-        words: ctx.t("team_hub.mcp.secret.sub"),
-        color: PaletteColor::Warning,
-      },
-      Row::new()
-        .id(format!("{id}-value"))
-        .width(Dimension::Pct(100.0))
-        .child(input_box(
-          &format!("{id}-field"),
-          (Icon::KeyRound, PaletteColor::TextMuted),
-          Text::new(&ctx.t("team_hub.mcp.secret.noValue"))
-            .id(format!("{id}-words"))
-            .variant(HubText::Value.role())
-            .color(PaletteColor::TextMuted),
-        ))
-        .into(),
-    ),
-    Value::Unreadable => (
-      Sub {
-        words: ctx.t("team_hub.mcp.secret.sub"),
-        color: PaletteColor::Danger,
-      },
-      Row::new()
-        .id(format!("{id}-value"))
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(icon(Icon::CircleAlert, IconSize::Base, PaletteColor::Danger))
-        .child(
-          Text::new(&ctx.t("team_hub.mcp.secret.unreadable"))
-            .id(format!("{id}-words"))
-            .variant(HubText::Status.role()),
-        )
-        .into(),
-    ),
-  };
-  let key = Text::new(&name.to_string())
-    .id(format!("{id}-label"))
-    .variant(ExtraTypography::PropertyMono.role())
-    .color(PaletteColor::TextSecondary);
-  rows::keyed(&id, key, Some(sub), shown)
 }
 
 /// *On here*: the person's own choice to let runs on this computer use the server; nobody has decided until a person
@@ -228,7 +166,13 @@ fn here_row(ctx: &Ctx, view: &View<'_>) -> Row {
     }
     Busy::Taking | Busy::Reading => toggle,
   };
-  rows::row("team-hub-here", &ctx.t("team_hub.mcp.here.label"), None, toggle)
+  rows::row_in(
+    Key::Narrow,
+    "team-hub-here",
+    &ctx.t("team_hub.mcp.here.label"),
+    None,
+    toggle,
+  )
 }
 
 /// What stands under the rows, in the color of how the server stands.
@@ -265,58 +209,17 @@ fn note(ctx: &Ctx, view: &View<'_>) -> Row {
       Tone::Danger,
       ctx.t_args("team_hub.mcp.note.unreadable", [("name", secret.to_string())]),
     ),
-    Some(_) => (
+    Some(Missing::McpUnsupported { .. }) => (
       Tone::Danger,
       ctx.t_args("team_hub.mcp.note.unsupported", [("name", name)]),
     ),
+    // Parts of a profile, a reviewer or a local project: an MCP server of the team has none of them.
+    Some(
+      part @ (Missing::Connection { .. }
+      | Missing::DecisionConnection { .. }
+      | Missing::LocalMcpProgram { .. }
+      | Missing::LocalSecret { .. }),
+    ) => (Tone::Danger, list_words::missing(ctx, view.listing, view.entry, part)),
   };
-  let (fill, glyph, color) = tone.look();
-  Row::new()
-    .id("team-hub-mcp-note")
-    .describe("tone", tone.name())
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .background(fill)
-    .rounded(RadiusSize::Md)
-    .child(icon(glyph, IconSize::Md, color))
-    .child(
-      Text::new(&words)
-        .id("team-hub-mcp-note-text")
-        .variant(ExtraTypography::Prose.role())
-        .color(PaletteColor::TextPrimary)
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0)),
-    )
-}
-
-/// How the server stands, in the note's colors.
-#[derive(Clone, Copy)]
-enum Tone {
-  Ready,
-  Warning,
-  Danger,
-  /// A person switched it off: nothing is wrong.
-  Off,
-}
-
-impl Tone {
-  const fn name(self) -> &'static str {
-    match self {
-      Self::Ready => "success",
-      Self::Warning => "warning",
-      Self::Danger => "danger",
-      Self::Off => "neutral",
-    }
-  }
-
-  const fn look(self) -> (PaletteColor, Icon, PaletteColor) {
-    match self {
-      Self::Ready => (PaletteColor::SuccessMuted, Icon::CircleCheck, PaletteColor::Success),
-      Self::Warning => (PaletteColor::WarningMuted, Icon::CircleAlert, PaletteColor::Warning),
-      Self::Danger => (PaletteColor::DangerMuted, Icon::CircleX, PaletteColor::Danger),
-      Self::Off => (PaletteColor::AccentMuted, Icon::Power, PaletteColor::TextSecondary),
-    }
-  }
+  fill::note("team-hub-mcp-note", tone, &words)
 }
