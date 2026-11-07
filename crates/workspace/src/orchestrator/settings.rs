@@ -8,12 +8,12 @@ use std::{path::Path, sync::Arc};
 use orchester_core::{
   connection::{AgentConnection, AgentProvider},
   id::ConnectionId,
-  orchestrator::{OrchestratorSettings, runs_orchestrator},
+  orchestrator::{OrchestratorSettings, WatchSettings, runs_orchestrator},
   resource::ModelId,
   store::ConnectionStore,
   time::Timestamp,
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, StoreError};
 
 use super::runs_on::RunsOn;
 use crate::{
@@ -59,6 +59,8 @@ pub struct OrchestratorSetup {
   pub version: Option<u32>,
   /// The draft saved since.
   pub draft: Option<OrchestratorSettings>,
+  /// How the Orchestrator watches the project's runs (Project settings › Orchestrator); not versioned.
+  pub watch: WatchSettings,
   connections: Vec<AgentConnection>,
 }
 
@@ -70,6 +72,7 @@ impl OrchestratorSetup {
       .orchestrator_published()
       .map_err(|error| messages::store_error(&error))?;
     let draft = db.orchestrator_draft().map_err(|error| messages::store_error(&error))?;
+    let watch = db.orchestrator_watch().map_err(|error| messages::store_error(&error))?;
     let connections = db
       .connections()
       .map_err(|error| messages::store_error(&error))?
@@ -81,6 +84,7 @@ impl OrchestratorSetup {
       settings,
       version,
       draft,
+      watch,
       connections,
     })
   }
@@ -233,6 +237,20 @@ pub fn save_in(root: &Path, settings: &OrchestratorSettings, keep: Keep) -> Resu
     Keep::Publish => db.publish_orchestrator(settings, now).map(Some),
   };
   saved.map_err(|error| messages::store_error(&error))
+}
+
+/// Keeps how the Orchestrator watches the runs of the project at `root`, at once: these settings have no versions,
+/// and an agent may change them as a person can. Blocks on SQLite.
+pub fn save_watch_in(root: &Path, watch: &WatchSettings) -> Result<(), Message> {
+  let mut db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
+  db.save_orchestrator_watch(watch)
+    .map_err(|error| messages::store_error(&error))
+}
+
+/// How the Orchestrator watches the runs of the project at `root`, alone, as Project settings › Orchestrator shows
+/// it. Blocks on SQLite.
+pub fn watch_in(root: &Path) -> Result<WatchSettings, StoreError> {
+  ProjectDb::open(root)?.orchestrator_watch()
 }
 
 /// Why the Orchestrator cannot run on `connection`: not on a provider it does not run on. A connection on an API

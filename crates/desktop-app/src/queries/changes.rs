@@ -23,7 +23,7 @@ pub enum ProjectRead {
   /// The stored GitHub link and the account it expects.
   Repository,
   Estimates,
-  /// The Orchestrator's switches, every one.
+  /// The Orchestrator's switches, every one, and how it watches the project's runs.
   Orchestrator,
   Memory,
   Variables,
@@ -134,6 +134,7 @@ pub fn invalidate(client: &QueryClient, session: &Session, root: &Path, read: Pr
       for consent in OrchestratorConsent::ALL {
         client.invalidate(project::orchestrator_allows(session.clone(), root.clone(), consent));
       }
+      client.invalidate(project::orchestrator_watch(session, root));
     }
     ProjectRead::Memory => client.invalidate(project::memory_settings(session, root)),
     ProjectRead::Variables => client.invalidate(project::variables(session, root)),

@@ -39,6 +39,7 @@ mod task_write;
 mod tasks;
 mod team;
 mod usage;
+mod watches;
 mod wire;
 mod worktree;
 
@@ -135,7 +136,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_task",
-    description: "One task: title, brief, criteria, whether it is a draft or submitted, workflow status, priority, story points (points, set_by person or automation, automation's reason; null for none), tags, module, base_branch (choice: inherit its module's, checked_out or branch, with the branch set; next_run: the branch its next run takes as things stand, null for whatever the checkout has checked out, and its source task, module with that module's id, or checked_out; kept on this computer only, so in a shared project it is this computer's choice), blocked_reason, blocked_by, no_automatic_merge (Don't merge automatically), delivers (what its runs deliver when the task says it; null: as its pipeline says), pipeline, limits, where it stands, what its latest run that passed every step left (result: what it delivers, whether it committed nothing, its completion, its report and the MCP tool calls it was let make outside the repository; null for any other latest run), its runs (get_run gives each one's own base), and its link in the app (its page, on its Details; each run links to the page's Summary, which lists the runs).",
+    description: "One task: title, brief, criteria, whether it is a draft or submitted, workflow status, priority, story points (points, set_by person or automation, automation's reason; null for none), tags, module, base_branch (choice: inherit its module's, checked_out or branch, with the branch set; next_run: the branch its next run takes as things stand, null for whatever the checkout has checked out, and its source task, module with that module's id, or checked_out; kept on this computer only, so in a shared project it is this computer's choice), blocked_reason, blocked_by, no_automatic_merge (Don't merge automatically), delivers (what its runs deliver when the task says it; null: as its pipeline says), pipeline, limits, where it stands, what its latest run that passed every step left (result: what it delivers, whether it committed nothing, its completion, its report and the MCP tool calls it was let make outside the repository; null for any other latest run), its runs (get_run gives each one's own base), led_in (the Orchestrator conversation its events go to, through the most specific subscription that covers it: its own, its module's, the tasks without a module's or the whole project's, named as `via`; null when none does; get_watches reads the subscriptions), and its link in the app (its page, on its Details; each run links to the page's Summary, which lists the runs).",
     schema: schema_for_type::<tasks::GetTask>,
     read_only: true,
   },
@@ -426,7 +427,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_module",
-    description: "One module, as its page shows it: its details (base_branch among them, as list_modules gives it), progress, its tasks (key, title, workflow status, link) and its burndown by local day from its start (or the day it got its first task) through today or its target date, at most 366 days (a longer module gives its first year while today is in it, else the year up to today): scope and remaining work at the end of each day (null for a day still to come), the ideal line from the scope at the start to nothing at the target date (null without one), and the work added to and removed from the module that day, in the unit it names. Done is the task's Done: merging its run sets it, in Orchester or found merged outside it by git, as does a person. `forecast` is when its remaining work is likely delivered, as get_delivery forecasts it (50% and 85% dates, or not_enough_history).",
+    description: "One module, as its page shows it: its details (base_branch among them, as list_modules gives it), progress, its tasks (key, title, workflow status, link) and its burndown by local day from its start (or the day it got its first task) through today or its target date, at most 366 days (a longer module gives its first year while today is in it, else the year up to today): scope and remaining work at the end of each day (null for a day still to come), the ideal line from the scope at the start to nothing at the target date (null without one), and the work added to and removed from the module that day, in the unit it names. Done is the task's Done: merging its run sets it, in Orchester or found merged outside it by git, as does a person. `forecast` is when its remaining work is likely delivered, as get_delivery forecasts it (50% and 85% dates, or not_enough_history). `led_in` is the Orchestrator conversation that leads it, as its Led in shows it (its own subscription, else the whole project's, as `via`), or null when none does; get_watches reads the subscriptions.",
     schema: schema_for_type::<modules::GetModule>,
     read_only: true,
   },
@@ -441,6 +442,12 @@ const SPECS: &[Spec] = &[
     description: "Changes a module's name, description, dates (null for none), state (open or closed) or base_branch (checked_out or a branch name, as create_module takes it; the next runs of its tasks that inherit theirs take it, runs that started keep theirs; kept on this computer only and never sent to a server); fields left out stay as they are. Its tasks and the history of what moved in and out stay.",
     schema: schema_for_type::<modules::UpdateModule>,
     read_only: false,
+  },
+  Spec {
+    name: "get_watches",
+    description: "What a local project's Orchestrator conversations lead and what waits there now, as /watching shows it: per conversation (`conversation`'s alone, by id or title, when given; else every one that leads something) its id, title and link, how many modules and tasks it leads (and whether the tasks without a module or the whole project), the one-line total of what waits for the person, and its subscriptions in the order they were kept: target (kind module, task, without_module or project; id, name, link), since (ms), order (source own, project_default or none, with its text), the tasks it leads that have something going on (running, waits with what for, queued with its place, stopped_at_limit, ready_to_merge; each with its run, words and link) and the rest counted. Read-only: subscribing, stopping and taking over stay the person's commands in the conversation, and no tool changes them. get_module and get_task name the leading conversation (`led_in`).",
+    schema: schema_for_type::<watches::GetWatches>,
+    read_only: true,
   },
 ];
 
@@ -526,9 +533,10 @@ async fn dispatch_answers(
     "list_pull_requests" => pull_requests::list_pull_requests(services, parse(arguments)?, translate).await,
     "get_pull_request" => pull_requests::get_pull_request(services, parse(arguments)?).await,
     "list_modules" => modules::list_modules(services, parse(arguments)?).await,
-    "get_module" => modules::get_module(services, parse(arguments)?).await,
+    "get_module" => modules::get_module(services, parse(arguments)?, translate).await,
     "create_module" => modules::create_module(services, parse(arguments)?).await,
     "update_module" => modules::update_module(services, parse(arguments)?).await,
+    "get_watches" => watches::get_watches(services, parse(arguments)?, translate).await,
     "get_daily_report" => daily_report::get_daily_report(services, parse(arguments)?).await,
     "get_delivery" => delivery::get_delivery(services, parse(arguments)?).await,
     "get_story_point_calibration" => tasks::get_calibration(services, parse(arguments)?).await,

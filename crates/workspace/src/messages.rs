@@ -144,6 +144,8 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::TeamRunNotFound(_)
     | StoreError::TeamDeliveryNotFound(_)
     | StoreError::TeamDeliveryStage { .. }
+    | StoreError::RunWaitsOn(_)
+    | StoreError::RunWaitOfAnotherTask { .. }
     | StoreError::MigrationBrokeReferences { .. } => Message::new("errors.storage"),
     StoreError::Publish(error) => publish_error(error),
     StoreError::AlwaysAllow(_) => Message::new("errors.alwaysAllow"),

@@ -187,7 +187,7 @@ impl Catalog {
     let tasks = self
       .tasks
       .iter()
-      .filter(|task| matches(&query, &[&task.key.to_string(), &task.title]));
+      .filter(|task| task_matches(&query, &task.key, &task.title));
     let runs = self.runs.iter().filter(|run| {
       let number = run.number.get().to_string();
       matches(&query, &[&run.mention().written()[1..], &run.title, &number])
@@ -215,8 +215,14 @@ fn section<'a, T: Clone + 'a>(
   }
 }
 
+/// Whether the task `key` titled `title` matches `query`, already in lower case, by its key or its title: the @ menu's
+/// search, which the /watch-task picker shares.
+pub(crate) fn task_matches(query: &str, key: &TaskKey, title: &str) -> bool {
+  matches(query, &[&key.to_string(), title])
+}
+
 /// Whether one of `fields` holds `query`, already in lower case; everything holds nothing.
-fn matches(query: &str, fields: &[&str]) -> bool {
+pub(crate) fn matches(query: &str, fields: &[&str]) -> bool {
   query.is_empty() || fields.iter().any(|field| field.to_lowercase().contains(query))
 }
 

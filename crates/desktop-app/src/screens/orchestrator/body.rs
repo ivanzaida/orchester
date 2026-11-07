@@ -17,7 +17,7 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::id::ChatId;
+use orchester_core::{id::ChatId, orchestrator::ChatEvent};
 use orchester_workspace::{
   messages::Message,
   orchestrator::{chat::ChatView, queue::WhileAnswering, send::SendError, settings::Readiness},
@@ -93,18 +93,24 @@ pub(super) fn main(ctx: &mut Ctx, view: &View, (project, reads): (&ShownProject,
   match &reads.shown {
     Shown::New if pending.is_none() => {
       let boxed = foot.composer(ctx, view, (project, true), ctx.t("orchestrator.composer.placeholder"));
+      let problem = problem.or_else(|| super::watch::problem(ctx, view));
       start(ctx, view, (boxed, unread.or(problem)))
     }
-    Shown::New => conversation(
-      ctx,
-      view,
-      (project, None, pending.as_ref()),
-      (&foot, [problem, None, unread]),
-    ),
+    Shown::New => {
+      let watched = super::watch::problem(ctx, view);
+      conversation(
+        ctx,
+        view,
+        (project, None, pending.as_ref()),
+        (&foot, [problem, watched, unread]),
+      )
+    }
     Shown::Chat(shown) => {
       let queued = queued_problem(ctx, view)
         .or_else(|| super::compact::problem(ctx, view))
-        .or_else(|| super::rewind::problem(ctx, view));
+        .or_else(|| super::rewind::problem(ctx, view))
+        .or_else(|| super::watch::problem(ctx, view))
+        .or_else(|| view.what_i_watch.problem(ctx));
       conversation(
         ctx,
         view,
@@ -350,11 +356,14 @@ fn conversation(
     Some(Readiness::Ready { connection, .. }) => Some(connection.clone()),
     _ => None,
   };
+  let watches = all
+    .iter()
+    .any(|turn| matches!(turn.compaction, Some(ChatEvent::Watch { .. })));
   let env = Arc::new(env(
     ctx,
     view,
     project,
-    (chat, connection, answering),
+    (chat, connection, answering, watches),
     &foot.reads.names,
   ));
   let can_ask = matches!(foot.state, Sending::Ready(_) | Sending::Held(_) | Sending::Empty { .. }) && chat.is_some();

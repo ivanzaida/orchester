@@ -1666,6 +1666,7 @@
       "secretNotFound": "This project has no secret {{secret}} that is not archived.",
       "notAnAgentCli": "{{connection}} runs no agent CLI, so it runs on no API provider.",
       "secretAmbiguous": "More than one secret is named {{secret}}; name it by its id (list_secrets).",
+      "conversationAmbiguous": "More than one Orchestrator conversation is titled {{conversation}}; name it by its id (get_watches without a conversation lists those that lead something).",
       "teamUnavailable": "The team server can't be reached now, so nothing was read or changed. Nothing is answered from this computer's copy; try again once it answers.",
       "teamNeedsVersion": "The team server needs Orchester {{version}} or later and refuses this version, so nothing was read or changed. A person updates Orchester from Settings › Updates.",
       "teamSignedOut": "This computer is signed out of the team server, so nothing was read or changed. A person signs in again from Settings › Servers.",
@@ -2172,6 +2173,97 @@
     }
   },
   "orchestrator": {
+    "watch": {
+      "noTarget": "Choose what to watch first.",
+      "gone": "Not applied · {{targets}} was closed or deleted meanwhile — nothing changed",
+      "notWatched": "Not applied · this conversation doesn't watch that — nothing changed",
+      "ledElsewhere": "Not applied · it's led in «{{title}}» now — nothing changed",
+      "alreadyHere": "This conversation leads it already.",
+      "target": {
+        "named": "{{name}}",
+        "gone": "Gone from the project",
+        "withoutModule": "Tasks without a module",
+        "project": "Every task of the project"
+      },
+      "kind": {
+        "task": "task",
+        "module": "module",
+        "withoutModule": "tasks without a module",
+        "project": "project"
+      },
+      "task": {
+        "state": {
+          "running": "Running",
+          "waits": "Needs input",
+          "queued": "Queued",
+          "stoppedAtLimit": "Stopped at limit",
+          "readyToMerge": "Ready to merge"
+        },
+        "note": {
+          "question": "its agent asks you",
+          "message": "its agent waits for your message",
+          "plan": "its plan waits for you",
+          "approval": "a tool request waits for you",
+          "decision": "its step waits for your decision",
+          "run": "its run waits for you",
+          "queued": "number {{position}} in the queue",
+          "limit": "only you can raise its limit",
+          "dailyBudget": "the project's daily budget is spent",
+          "readyToMerge": "you merge it"
+        },
+        "action": {
+          "answer": "Answer",
+          "decide": "Decide",
+          "summary": "Summary",
+          "review": "Review"
+        }
+      },
+      "rest": {
+        "one": "{{count}} more task with nothing under way",
+        "other": "{{count}} more tasks with nothing under way"
+      },
+      "total": {
+        "waits": {
+          "one": "{{count}} thing waits for you",
+          "other": "{{count}} things wait for you"
+        },
+        "limits": {
+          "one": "{{count}} run is stopped at a limit",
+          "other": "{{count}} runs are stopped at a limit"
+        },
+        "calm": "Nothing waits for you",
+        "nothing": "This conversation watches nothing yet"
+      },
+      "leads": {
+        "modules": {
+          "one": "{{count}} module",
+          "other": "{{count}} modules"
+        },
+        "tasks": {
+          "one": "{{count}} task",
+          "other": "{{count}} tasks"
+        },
+        "withoutModule": "the tasks without a module",
+        "project": "the whole project"
+      },
+      "ledIn": {
+        "nobody": "Nobody",
+        "chat": "«{{title}}»",
+        "viaModule": "«{{title}}» · via {{module}}",
+        "viaWithoutModule": "«{{title}}» · via the tasks without a module",
+        "viaProject": "«{{title}}» · via the whole project"
+      },
+      "ended": {
+        "moduleDone": "Every task of {{module}} is Done",
+        "moduleCanceled": "Every task of {{module}} is Canceled",
+        "moduleClosed": "Every task of {{module}} is Done or Canceled",
+        "taskDone": "{{task}} is Done",
+        "taskCanceled": "{{task}} is Canceled",
+        "aside": "— watching ended",
+        "asideModule": "— watching ended; the module's summary is below",
+        "asideTask": "— watching ended; the task's summary is below"
+      }
+    },
     "settings": {
       "connectionGone": "The Orchestrator's connection was removed. Choose another one.",
       "cliOnly": "The Orchestrator runs on Claude Code and Codex connections. This one runs a native agent on an API key; choose another one."
@@ -2251,6 +2343,15 @@
       "blocked": "{{task}} waits for {{blockers}} to finish. A start from the chat follows the queue's rules, so nothing started.",
       "markedBlocked": "{{task}} is marked Blocked: {{reason}}. The chat does not start or propose a task marked Blocked, so nothing started; the person can start it in the app."
     },
+    "waitsOn": {
+      "ownTask": "A run cannot wait on its own task. Nothing was changed.",
+      "otherProject": "A run waits only on a task of its own project. Nothing was changed.",
+      "notWaiting": "Run #{{run}} does not wait for a message or a decision: only such a run can wait on a task. Nothing was changed.",
+      "alreadyWaits": "Run #{{run}} already waits on {{task}}: a run waits on one task at a time. Nothing was changed.",
+      "noBaseBranch": "Run #{{run}} has no base branch its work merges into, so no task's merge can reach it. Nothing was changed.",
+      "dropGone": "The run no longer waits on that task: it went on, or its wait was dropped already.",
+      "onlyYou": "Only you can drop a run's wait: a press made by automation was not taken. Nothing was changed."
+    },
     "tools": {
       "otherProject": "The Orchestrator acts only in its own project.",
       "startWaits": "Nothing started yet: starting {{task}} on {{pipeline}} waits for the person, who starts or dismisses it in the conversation. Tell them it is ready to start.",
@@ -2283,7 +2384,7 @@
         "optedOut": "Run #{{run}} was not merged on its own: its task says Don't merge automatically. Nothing was merged; the merge is the person's.",
         "deliveredByQueue": "Run #{{run}} was not merged on its own: its pipeline ends in a Deliver step, so the merge queue delivers it, after the person's approval when the step asks for one."
       },
-      "reportChangesNothing": "A turn the daily report started changes nothing, and this change is not one the person can apply from a card. Nothing was changed: put it in your recommendations instead.",
+      "reportChangesNothing": "A turn the daily report or the end of a watch started changes nothing, and this change is not one the person can apply from a card. Nothing was changed: put it in your recommendations instead.",
       "planOnly": "Plan only is on: this turn takes no action. Nothing was changed: put it in your plan with propose_plan instead.",
       "notPlanOnly": "This turn does not plan: propose_plan works only for a message sent in plan-only mode. Nothing was kept.",
       "invalidPlan": "A plan has at least one step that says what will happen, and at most 20. Nothing was kept.",

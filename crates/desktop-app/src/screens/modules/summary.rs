@@ -25,6 +25,7 @@ use orchester_core::{
 use orchester_workspace::{
   delivery::Forecast,
   modules::data::{ModulePage, Progress},
+  orchestrator::watching::LedIn,
 };
 
 use super::{
@@ -50,13 +51,15 @@ use crate::{
 pub struct SummaryProps {
   pub project: ShownProject,
   pub page: Arc<ModulePage>,
+  /// Who leads the module, read with the page.
+  pub led_in: Arc<LedIn>,
   /// The page's, for as long as it shows.
   pub written: Written,
 }
 
 impl PartialEq for SummaryProps {
   fn eq(&self, other: &Self) -> bool {
-    self.project == other.project && Arc::ptr_eq(&self.page, &other.page)
+    self.project == other.project && Arc::ptr_eq(&self.page, &other.page) && Arc::ptr_eq(&self.led_in, &other.led_in)
   }
 }
 
@@ -97,6 +100,7 @@ impl Component for ModuleSummary {
       PropertiesProps {
         project: props.project,
         module: Arc::new(page.module.clone()),
+        led_in: props.led_in,
         written: props.written,
       },
     );

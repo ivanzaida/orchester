@@ -103,6 +103,10 @@ pub struct FieldInput {
   unit_look: UnitLook,
   /// Its place among the window's first Tab stops ([`FieldInput::tab_first`]).
   tab_first: Option<i32>,
+  /// The value sits at the box's end, as a figure in a narrow box does ([`FieldInput::end_aligned`]).
+  end_aligned: bool,
+  /// A line inside a text area's box, under its lines ([`FieldInput::foot`]).
+  foot: Option<Arc<str>>,
 }
 
 /// Compared by what it shows; the value by its signal. The input's element ref and controller are its owner's, kept
@@ -136,6 +140,8 @@ impl PartialEq for FieldInput {
       && self.invalid == other.invalid
       && self.masked == other.masked
       && self.tab_first == other.tab_first
+      && self.end_aligned == other.end_aligned
+      && self.foot == other.foot
   }
 }
 
@@ -177,7 +183,22 @@ impl FieldInput {
       controller: None,
       unit_look: UnitLook::Quiet,
       tab_first: None,
+      end_aligned: false,
+      foot: None,
     }
+  }
+
+  /// The value sits at the box's end, as a figure does in a box made for it (`Minutes` `t9kksP`).
+  pub fn end_aligned(mut self) -> Self {
+    self.end_aligned = true;
+    self
+  }
+
+  /// A text area's box holds `foot` under its lines in 11 `text_muted`, e.g. how a line is added (`Keys` `GKNfX`); its
+  /// element id is `<id>-foot`.
+  pub fn foot(mut self, foot: impl Into<Arc<str>>) -> Self {
+    self.foot = Some(foot.into());
+    self
   }
 
   /// Credential input: lurq masks rendering and MCP inspection and blocks copying/cutting the value.

@@ -1,0 +1,123 @@
+//! `/watch-task` (ORC-773, `03 · Choosing tasks` `mQdxa` in `Orchestrator watch · redesign`): chosen in the slash menu
+//! it becomes the composer's command chip and opens the picker of the project's tasks, matched by key or title as
+//! `WatchCatalog::tasks` lists them for the conversation shown ([`super::catalog`], [`super::task_rows`]). The tasks
+//! chosen there become chips named by their keys, and Ctrl Enter (Cmd Enter) has the conversation watch them with the
+//! words after the chips as their order, as `/watch-module` does ([`super::module::apply`]). A Done or Canceled task,
+//! or one chosen already, cannot be chosen; one another conversation leads can, and the command returns it for the
+//! card.
+
+use std::sync::Arc;
+
+use lurq::app::ctx::Ctx;
+use orchester_core::{
+  id::TaskId,
+  orchestrator::{WatchTarget, watch::NamedTarget},
+};
+use orchester_workspace::mentions::watch::{Choosing, Leader, WatchCatalog, tasks::TaskEntry};
+
+use super::{
+  catalog::CatalogReader,
+  module::apply,
+  panel::Picker,
+  task_rows::{self, Shown},
+};
+use crate::{
+  navigation::Navigation,
+  project::ShownProject,
+  screens::orchestrator::View,
+  ui::{
+    icon::Icon,
+    slash::{ArgumentPicker, Asked, Choice, Does, Offer, SlashCommand, Taking},
+  },
+};
+
+/// The command's name, which its chip shows after a `/`.
+pub(in crate::screens::orchestrator) const TASK: &str = "watch-task";
+
+/// *Watch tasks* in the slash menu: it takes the tasks chosen in its picker.
+pub(in crate::screens::orchestrator) fn task_command(ctx: &Ctx, view: &View, project: &ShownProject) -> SlashCommand {
+  let picker = TaskPicker {
+    catalog: CatalogReader::new(project, view.of.clone()),
+  };
+  SlashCommand {
+    name: TASK,
+    icon: Icon::ScanEye,
+    label: ctx.t("composer.slash.command.watchTask.label"),
+    detail: ctx.t("composer.slash.command.watchTask.detail"),
+    does: Some(Does::Take(Taking {
+      picker: Arc::new(picker),
+      apply: apply(view, project.open.repo_root.clone(), named_task),
+    })),
+  }
+}
+
+/// The task a chip of the picker names, by its key.
+fn named_task(choice: &Choice) -> Option<NamedTarget> {
+  Some(NamedTarget {
+    target: target_of(&choice.key)?,
+    name: Some(choice.label.to_string()),
+  })
+}
+
+/// The task a chip's key names: its id.
+fn target_of(key: &str) -> Option<WatchTarget> {
+  key.parse::<TaskId>().ok().map(WatchTarget::Task)
+}
+
+/// The picker of the shown project's tasks, for the conversation `of` names.
+struct TaskPicker {
+  catalog: CatalogReader,
+}
+
+impl TaskPicker {
+  /// The rows of `catalog` for what was `asked`.
+  fn offer_read(&self, ctx: &mut Ctx, asked: &Asked<'_>, catalog: &WatchCatalog) -> Offer {
+    let navigation = Navigation::of(ctx);
+    let added: Vec<WatchTarget> = asked.taken.iter().filter_map(|choice| target_of(&choice.key)).collect();
+    let choosing = Choosing {
+      chat: self.catalog.chat(),
+      added: &added,
+    };
+    let entries = catalog.tasks(asked.filter, choosing);
+    let offered: Vec<(&TaskEntry, Choice)> = entries.iter().map(|entry| (entry, choice(entry))).collect();
+    let rows = offered
+      .iter()
+      .map(|(entry, choice)| {
+        (
+          choice.clone(),
+          entry.faded.is_none() && entry.leader != Leader::JustAdded,
+        )
+      })
+      .collect();
+    let panel = task_rows::panel(
+      ctx,
+      &Shown {
+        id: asked.id,
+        project: self.catalog.project,
+        filter: asked.filter,
+        offered: &offered,
+        focused: asked.focused,
+        total: catalog.tasks.len(),
+        navigation,
+      },
+    );
+    Offer { rows, panel }
+  }
+}
+
+impl ArgumentPicker for TaskPicker {
+  fn offer(&self, ctx: &mut Ctx, asked: &Asked<'_>) -> Offer {
+    self.catalog.offer(ctx, (asked, Picker::Task), |ctx, catalog| {
+      self.offer_read(ctx, asked, catalog)
+    })
+  }
+}
+
+/// The chip `entry` becomes: the task by its key.
+fn choice(entry: &TaskEntry) -> Choice {
+  Choice {
+    key: entry.id.to_string().into(),
+    icon: Icon::SquareCheck,
+    label: entry.key.to_string().into(),
+  }
+}

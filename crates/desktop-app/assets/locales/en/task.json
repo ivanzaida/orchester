@@ -1,5 +1,11 @@
 {
   "task": {
+    "waitsOn": {
+      "at": "Waits on {{waited}} at {{step}}",
+      "status": "Waits on {{waited}}",
+      "cannotBeMet": "Waits on {{waited}} · cannot be met",
+      "runLine": "Run {{run}} · since {{time}}"
+    },
     "tabs": {
       "summary": "Summary",
       "conversation": "Conversation",

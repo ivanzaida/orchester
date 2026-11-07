@@ -33,6 +33,7 @@ mod sharing;
 pub(crate) mod summary;
 mod team;
 mod team_controls;
+pub(in crate::screens) mod waits_on;
 
 use std::time::Instant;
 

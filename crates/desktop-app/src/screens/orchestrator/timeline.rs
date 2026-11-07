@@ -4,7 +4,9 @@
 //! stands (*Sending…*, then *Delivered* and when), the Orchestrator's answer ([`super::answer`]), and how the turn
 //! ended ([`super::ending`]). A wait of an agent of the project opens a row of its own with its line
 //! ([`super::wait`]), what the turn it started by itself said and did nested under it as a quote; the end of a run its
-//! line ([`super::run_end`]) and a daily report its card ([`super::report`]), with the turn they started, if any.
+//! line ([`super::run_end`]), an event of a task's run its line ([`super::task_event`]) and a daily report its card
+//! ([`super::report`]), with the turn they started, if any. The person's watch commands and the lines the app writes
+//! about what the conversation watches are rows of their own, with no turn ([`super::watch`]).
 //! Waits for the person kept one after another, with no message of theirs between them, gather into one digest
 //! ([`super::digest`]).
 
@@ -35,6 +37,8 @@ use super::{
   send::QueuedChange,
   turns::{Arrival, Turn},
   wait::Status,
+  watch::WatchFacts,
+  watching::Live,
 };
 use crate::{
   theme::{DROPPED_OPACITY, OrchestratorSpacing, chat_scrollbar},
@@ -81,6 +85,10 @@ pub(super) struct TurnEnv {
   pub(super) answering: bool,
   /// Edit and *Rewind to here* (`super::rewind`).
   pub(super) rewind: RewindEnv,
+  /// What the conversation leads now, which a `/watching` row shows, and its *Stop watching* (`super::watching`).
+  pub(super) watching: Live,
+  /// What the lines about watching name beside what they keep (`super::watch`).
+  pub(super) watch: Arc<WatchFacts>,
 }
 
 /// The answers whose todo list the person opened under their name line, by the message that started each.
@@ -129,6 +137,8 @@ impl PartialEq for TurnRow {
       && self.env.names == other.env.names
       && self.env.changing == other.env.changing
       && self.env.rewind.shows() == other.env.rewind.shows()
+      && (!self.turn.asks_watching() || self.env.watching == other.env.watching)
+      && self.env.watch == other.env.watch
   }
 }
 
@@ -306,12 +316,17 @@ impl Component for TurnView {
   }
 }
 
-/// A turn's row: what opens it, the answer and how it ended; or a compaction's or a rewind's line. While a message is
-/// edited in place, what sending it drops is dimmed: its own answer under the line that counts them, and every row
-/// after it (`super::rewind::editing`).
+/// A turn's row: what opens it, the answer and how it ended; or a compaction's, a rewind's or a watch entry's row, with
+/// under a /watch's line the cards of its targets other conversations lead; or a `/watching` and its answer from the
+/// live state (`super::watching`). While a message is edited in place, what sending it drops is dimmed: its own answer
+/// under the line that counts them, and every row after it (`super::rewind::editing`).
 fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
   let key = row.turn.key();
   let dropped = row.env.rewind.drops(&row.turn);
+  if row.turn.asks_watching() {
+    let column = super::watching::row(ctx, row, &key);
+    return room(ctx, dimmed(column, dropped), first);
+  }
   if let Some(event) = &row.turn.compaction {
     let id = format!("orchestrator-compaction-{key}");
     let line = super::compaction::line(ctx, &id, event, row.turn.at)
@@ -324,8 +339,26 @@ fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
           (at, row.env.project),
         )
       })
-      .or_else(|| super::rewind::forked::line(ctx, &format!("orchestrator-forked-{key}"), event, row.env.project));
-    let column = Column::new().width(Dimension::Pct(100.0)).with_children(line);
+      .or_else(|| super::rewind::forked::line(ctx, &format!("orchestrator-forked-{key}"), event, row.env.project))
+      .or_else(|| {
+        super::watch::row(
+          ctx,
+          &format!("orchestrator-watch-{key}"),
+          event,
+          (row.turn.at, &row.env),
+        )
+      });
+    // A /watch's line, then the cards of its targets other conversations lead (05 `EIjDH`).
+    let cards = row
+      .turn
+      .led
+      .as_ref()
+      .map(|led| super::led::column(ctx, &key, led, &row.env));
+    let column = Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(OrchestratorSpacing::Items.role())
+      .with_children(line)
+      .with_children(cards);
     return room(ctx, dimmed(column, dropped), first);
   }
   let (opening, answer) = opening(ctx, row, &key);
@@ -363,9 +396,15 @@ fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
   room(ctx, dimmed(column, dropped), first)
 }
 
-/// What opens `row`, keyed `key`, and its answer. A wait of an agent, a run's end and a daily report open their row
-/// with their own line or card; a person's turn with their message. What a wait's turn said nests under its line.
+/// What opens `row`, keyed `key`, and its answer. A wait of an agent, a run's end, a daily report and a subscription
+/// that ended by itself open their row with their own line or card; a person's turn with their message. What a wait's
+/// turn said nests under its line.
 fn opening(ctx: &mut Ctx, row: &TurnRow, key: &str) -> (Element, Option<Element>) {
+  if let Some(summary) = &row.turn.watch_ended {
+    let id = format!("orchestrator-watch-ended-{key}");
+    let line = super::watch::ended_line(ctx, &id, summary, row.turn.at);
+    return (line, super::answer::answer(ctx, row));
+  }
   match (&row.turn.wait, &row.turn.report) {
     (Some(wait), _) => {
       let id = format!("orchestrator-wait-{key}");
@@ -374,6 +413,11 @@ fn opening(ctx: &mut Ctx, row: &TurnRow, key: &str) -> (Element, Option<Element>
         WaitKind::Ended(end) => {
           let ended = (&**wait, end, row.turn.at, turned);
           let line = super::run_end::line(ctx, &id, ended, (row.turn.moved, row.env.project));
+          (line, super::answer::answer(ctx, row))
+        }
+        WaitKind::Event(event) => {
+          let facts = (row.turn.event.as_ref(), row.env.project);
+          let line = super::task_event::line(ctx, &id, (wait, event, row.turn.at), facts);
           (line, super::answer::answer(ctx, row))
         }
         _ => {

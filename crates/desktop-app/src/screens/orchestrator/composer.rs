@@ -42,7 +42,7 @@ use crate::{
     icon::{Icon, icon},
     mention::MentionField,
     pressable::{inert, pressable},
-    slash::{SkillReach, with_skill_chip},
+    slash::{SkillReach, with_chips},
     tooltip::Tooltip,
   },
 };
@@ -118,9 +118,15 @@ pub(super) struct PlanParts {
   pub(super) flip: Press,
 }
 
-/// The box, and why the files last given were not attached under it.
+/// The box, and why the files last given were not attached under it. While its chip holds `/watch-module` or
+/// `/watch-task` the field says what to type (`Hint` `NknmC` in 02 `c8pALl`).
 pub(super) fn composer(ctx: &mut Ctx, view: &View, mut composer: ComposerBox<'_>) -> Column {
   let not_set_up = composer.set_up.is_some();
+  match view.slash.held_command() {
+    Some(super::watch::MODULE) => composer.placeholder = ctx.t("orchestrator.watch.modules.placeholder"),
+    Some(super::watch::TASK) => composer.placeholder = ctx.t("orchestrator.watch.tasks.placeholder"),
+    _ => {}
+  }
   let (fill, stroke) = match (not_set_up, composer.focused.get()) {
     (true, _) => (PaletteColor::SurfacePanel, PaletteColor::Border),
     (false, true) => (PaletteColor::SurfaceInput, PaletteColor::BorderFocus),
@@ -137,10 +143,10 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, mut composer: ComposerBox<'_>
     .take()
     .map_or((None, Vec::new()), |plan| (Some(plan.switch), plan.over));
   let field = field(ctx, view, &composer, (not_set_up, flip));
-  let field = with_skill_chip(
+  let field = with_chips(
     ctx,
     ("orchestrator-composer", composer.reach, &view.mention_anchor),
-    &view.skill,
+    &view.slash,
     field,
   );
   let end: Vec<Element> = match composer.set_up {

@@ -18,7 +18,7 @@ use orchester_workspace::{
 use super::{super::timeline::step_label, Composing};
 use crate::ui::{
   icon::Icon,
-  slash::{self, SkillsOffer, SlashCommand, SlashField, SlashMenuProps},
+  slash::{self, Does, SkillsOffer, SlashCommand, SlashField, SlashMenuProps},
 };
 
 /// The slash menu over the box `anchor` for the run's state `mode`, for a message to `recipient`.
@@ -83,6 +83,6 @@ fn stop_turn(ctx: &Ctx, composing: &Composing, mode: &ComposerMode) -> SlashComm
     icon: Icon::Square,
     label: ctx.t("composer.slash.command.stopTurn.label"),
     detail,
-    run: run.map(|stop| stop as Arc<dyn Fn() + Send + Sync>),
+    does: run.map(|stop| Does::Run(stop as Arc<dyn Fn() + Send + Sync>)),
   }
 }

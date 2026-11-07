@@ -1,5 +1,7 @@
 //! The Orchestrator chat follows the agents of an open project (`orchester_workspace::orchestrator::waits`): whenever
-//! the project's runs change state or its conversations change, its new waits are kept in the conversation, and a
+//! the project's runs change state, its tasks are saved or its conversations change, and at the soonest time one of
+//! its runs may stall (`orchester_workspace::orchestrator::stalls`), its new waits are kept in the conversation, the
+//! subscriptions whose tasks were all closed end (ORC-764), and a
 //! wait that starts an Orchestrator turn by itself gets its turn as a person's message does: the project's runner
 //! attached first, its tools served (`mcp::chat`) and the runner asked to answer it. Mounted with the project's feed,
 //! so it follows the project while its tabs are inactive and whether or not the Orchestrator's screen is open. Each
@@ -10,12 +12,14 @@ use std::{
   collections::{HashMap, HashSet},
   path::PathBuf,
   sync::LazyLock,
+  time::Duration,
 };
 
 use lurq::app::{
   ctx::{Ctx, StreamEmitter},
   i18n::I18n,
 };
+use orchester_core::time::Timestamp;
 use orchester_store::StoreError;
 use orchester_workspace::{
   background, base_moved,
@@ -23,6 +27,7 @@ use orchester_workspace::{
   orchestrator::{
     queue,
     send::{self, SendError},
+    stalls,
     tools::ChatScope,
     waits::{self, Followed, MergeChecks, SucceededAt, Switches, WaitTurn},
   },
@@ -42,13 +47,15 @@ pub(super) static KEEPING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_ne
 /// again.
 static QUIET: LazyLock<parking_lot::Mutex<HashMap<PathBuf, HashSet<SucceededAt>>>> = LazyLock::new(Default::default);
 
-/// Follows `open`'s waits again whenever its run `states` or its conversations change. Renders nothing.
-pub(super) fn follow(ctx: &mut Ctx, (open, states): (&OpenProject, u64)) {
+/// Follows `open`'s waits again whenever its run states or its tasks change (`changes` counts both) or its
+/// conversations do, and when a run may have stalled since. Renders nothing.
+pub(super) fn follow(ctx: &mut Ctx, (open, changes): (&OpenProject, u64)) {
   let services = Services::of(ctx);
   let chats = chats(ctx, (services.runners.clone(), open.repo_root.clone()));
+  let stalls = stall_clock(ctx, (open.repo_root.clone(), changes));
   let i18n = ctx.i18n().clone();
   let open = open.clone();
-  ctx.future((open.repo_root.clone(), states, chats), move |_| {
+  ctx.future((open.repo_root.clone(), changes, chats, stalls), move |_| {
     let (services, i18n, open) = (services.clone(), i18n.clone(), open.clone());
     async move {
       // A future whose deps change is replaced and aborted, and the turn a follower starts changes them (its
@@ -224,4 +231,36 @@ fn chats(ctx: &mut Ctx, deps: (Runners, PathBuf)) -> u64 {
     }
   });
   count.state().get().data.unwrap_or(0)
+}
+
+/// How often the soonest time a run of the project at the deps' folder may stall passed
+/// (`orchester_workspace::orchestrator::stalls`): a stall changes nothing else the follower is woken by. One clock for
+/// the project, read again whenever its run states (the deps' count) change, and idle while no agent works.
+fn stall_clock(ctx: &mut Ctx, deps: (PathBuf, u64)) -> u64 {
+  let ticks = ctx.stream(deps, |(root, _), emitter: StreamEmitter<u64, ()>| async move {
+    let mut ticks = 0;
+    loop {
+      if !emitter.emit(ticks) {
+        return;
+      }
+      let next = {
+        let root = root.clone();
+        background::run(move || stalls::next_stall_in(&root, Timestamp::now()))
+          .await
+          .and_then(|next| next)
+      };
+      let due = match next {
+        Ok(Some(due)) => due,
+        Ok(None) => return,
+        Err(error) => {
+          tracing::error!(?error, "cannot read when a run of the project may stall");
+          return;
+        }
+      };
+      let wait = due.unix_millis().saturating_sub(Timestamp::now().unix_millis());
+      tokio::time::sleep(Duration::from_millis(u64::try_from(wait).unwrap_or(0))).await;
+      ticks += 1;
+    }
+  });
+  ticks.state().get().data.unwrap_or(0)
 }

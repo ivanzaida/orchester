@@ -73,6 +73,7 @@ mod unverified;
 mod usage;
 #[path = "../mcp_stable/vault.rs"]
 mod vault;
+mod watches;
 mod window;
 mod worktree_removal;
 
