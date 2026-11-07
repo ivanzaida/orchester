@@ -83,7 +83,7 @@ pub(in crate::orchestrator) fn event(
       task: waited,
       run: latest_run(db, waited)?,
     },
-    RunWaitEnd::RunEnded | RunWaitEnd::Answered => return Ok(None),
+    RunWaitEnd::RunEnded | RunWaitEnd::Answered | RunWaitEnd::Dropped => return Ok(None),
   };
   if answered_since(messages, run.id(), ended.at) {
     return Ok(None);
@@ -119,13 +119,13 @@ fn runs_of(db: &ProjectDb, task: TaskId) -> Result<Vec<RunId>, StoreError> {
 }
 
 /// Whether `run` still waits for a message or a decision on its plan.
-fn waits_for_person(run: &Run) -> bool {
+pub(super) fn waits_for_person(run: &Run) -> bool {
   let waits = !run.awaiting_answer().is_empty() || !run.awaiting_plan().is_empty();
   waits && !run.status().is_terminal()
 }
 
 /// Whether a person, or the Orchestrator for them, sent `run` a message among `messages` at `since` or after.
-fn answered_since(messages: &[Message], run: RunId, since: Timestamp) -> bool {
+pub(super) fn answered_since(messages: &[Message], run: RunId, since: Timestamp) -> bool {
   messages.iter().any(|message| {
     message.run() == Some(run) && matches!(message.sender(), Sender::Person { .. }) && message.created_at() >= since
   })

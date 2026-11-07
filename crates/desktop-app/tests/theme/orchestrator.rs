@@ -32,6 +32,21 @@ fn orchestrator_roles_follow_the_design() {
     (OrchestratorText::PickerLink, 12.0, 1.3, FontWeight::Normal, "Geist"),
     // What the card of a target another conversation leads says under its title (`kjs5n` in `f1J8z`).
     (OrchestratorText::CardNote, 11.5, 1.5, FontWeight::Normal, "Geist"),
+    // A watch command's order (`oUZqo`), a line's aside and its end (`vYl6I`, `Hoj8n` in `avDZO`).
+    (OrchestratorText::CommandOrder, 13.0, 1.55, FontWeight::Normal, "Geist"),
+    (OrchestratorText::LineAside, 12.0, 1.3, FontWeight::Normal, "Geist"),
+    (OrchestratorText::LineEnd, 12.0, 1.3, FontWeight::Normal, "Geist"),
+    // A Leads chip's name (`oVMRX`) and its tooltip's lines (`f4DCkr`, `X48YP`, `j1E7E` in `X93D8T`).
+    (OrchestratorText::LeadsChip, 11.5, 1.3, FontWeight::Normal, "Geist"),
+    (
+      OrchestratorText::LeadsTipTitle,
+      11.0,
+      1.3,
+      FontWeight::SemiBold,
+      "Geist",
+    ),
+    (OrchestratorText::LeadsTipOrder, 11.0, 1.45, FontWeight::Normal, "Geist"),
+    (OrchestratorText::LeadsTipHint, 11.0, 1.3, FontWeight::Normal, "Geist"),
   ] {
     let style = theme.typography_style(role.role());
     assert_eq!(
@@ -52,6 +67,8 @@ fn orchestrator_roles_follow_the_design() {
     (OrchestratorSpacing::Report, 36.0),
     // A new conversation's message over its composer's bar (`QcfyZ`).
     (OrchestratorSpacing::StartComposer, 28.0),
+    // What a stop left open, in from its line's start (`j6XFdt`).
+    (OrchestratorSpacing::LeftOpen, 27.0),
   ] {
     assert_eq!(theme.spacing_value(spacing.role()), Dimension::Px(value), "{spacing:?}");
   }

@@ -57,14 +57,23 @@ pub struct LiveSteps<'a> {
   pub slot_waits: &'a [StepExecutionId],
   /// The team server fenced the run: the step it stands at is where it stopped for good.
   pub fenced: bool,
+  /// The run waits on another task (ORC-784): the step it stands at is neutral.
+  pub waits_on: bool,
 }
 
 /// The rail of `run`'s steps at `now`, the step with key `current` drawn as the one the run stands at: a `circle-stop`
-/// in `danger` on `danger_muted` once the run was fenced (`03 Implement` in 03 `hWXxr`).
+/// in `danger` on `danger_muted` once the run was fenced (`03 Implement` in 03 `hWXxr`), an `hourglass` in
+/// `text_secondary` on `surface_raised` while it waits on another task (`ZzRVW` in 09 `SLuUW`).
 pub fn rail(ctx: &mut Ctx, run: &RunView, live: &LiveSteps<'_>, current: Option<Arc<str>>, now: Timestamp) -> Element {
   let rows = rows(run, live, now);
-  let stopped = live.fenced;
-  ctx.mount_keyed::<LiveRail>("task-steps-rail", RailProps { rows, current, stopped })
+  let stands = if live.fenced {
+    Stands::StoppedHere
+  } else if live.waits_on {
+    Stands::WaitsOnTask
+  } else {
+    Stands::Here
+  };
+  ctx.mount_keyed::<LiveRail>("task-steps-rail", RailProps { rows, current, stands })
 }
 
 /// The rows of `run`'s steps at `now`, in stage order.
@@ -97,8 +106,8 @@ fn rows(run: &RunView, live: &LiveSteps<'_>, now: Timestamp) -> Vec<StepRow> {
 struct RailProps {
   rows: Vec<StepRow>,
   current: Option<Arc<str>>,
-  /// The run stopped for good at `current`.
-  stopped: bool,
+  /// How the run stands at `current`.
+  stands: Stands,
 }
 
 impl lurq::app::component::DevtoolsInspectable for RailProps {}
@@ -110,6 +119,8 @@ enum Stands {
   Here,
   /// The run stopped for good at the step: the team server fenced it.
   StoppedHere,
+  /// The run waits on another task at the step.
+  WaitsOnTask,
 }
 
 /// The rail, its tooltips' active agent time going on while their agents work.
@@ -127,7 +138,7 @@ impl Component for LiveRail {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let RailProps { rows, current, stopped } = ctx.props::<RailProps>().clone();
+    let RailProps { rows, current, stands } = ctx.props::<RailProps>().clone();
     let counting = rows
       .iter()
       .any(|row| row.progress.usage.is_some_and(|usage| usage.active.counting()));
@@ -148,10 +159,10 @@ impl Component for LiveRail {
             .background(PaletteColor::Border),
         );
       }
-      let stands = match (current.as_deref() == Some(row.key()), stopped) {
-        (false, _) => Stands::Elsewhere,
-        (true, false) => Stands::Here,
-        (true, true) => Stands::StoppedHere,
+      let stands = if current.as_deref() == Some(row.key()) {
+        stands
+      } else {
+        Stands::Elsewhere
       };
       rail = rail.child(chip(ctx, row, stands, now));
     }
@@ -172,6 +183,7 @@ fn chip(ctx: &mut Ctx, row: &StepRow, stands: Stands, now: Timestamp) -> Element
   let here = stands != Stands::Elsewhere;
   let (glyph, color) = match (row.waits_since, unjudged(progress.state)) {
     _ if stands == Stands::StoppedHere => (Icon::CircleStop, PaletteColor::Danger),
+    _ if stands == Stands::WaitsOnTask => (Icon::Hourglass, PaletteColor::TextSecondary),
     (None, Some(glyph)) => (glyph, PaletteColor::Warning),
     (Some(_), _) => (Status::NeedsInput.icon(), Status::NeedsInput.color()),
     (None, None) => (status(progress.state).icon(), status(progress.state).color()),
@@ -214,6 +226,7 @@ fn chip(ctx: &mut Ctx, row: &StepRow, stands: Stands, now: Timestamp) -> Element
     Stands::Elsewhere => chip,
     Stands::Here => chip.background(PaletteColor::WarningMuted),
     Stands::StoppedHere => chip.background(PaletteColor::DangerMuted),
+    Stands::WaitsOnTask => chip.background(PaletteColor::SurfaceRaised),
   };
   Tooltip::new(format!("{id}-tip"), detail).wrap(ctx, chip)
 }

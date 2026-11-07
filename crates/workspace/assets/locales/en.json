@@ -2243,11 +2243,14 @@
         "viaProject": "«{{title}}» · via the whole project"
       },
       "ended": {
-        "moduleDone": "Every task of {{module}} is Done — watching ended",
-        "moduleCanceled": "Every task of {{module}} is Canceled — watching ended",
-        "moduleClosed": "Every task of {{module}} is Done or Canceled — watching ended",
-        "taskDone": "{{task}} is Done — watching ended",
-        "taskCanceled": "{{task}} is Canceled — watching ended"
+        "moduleDone": "Every task of {{module}} is Done",
+        "moduleCanceled": "Every task of {{module}} is Canceled",
+        "moduleClosed": "Every task of {{module}} is Done or Canceled",
+        "taskDone": "{{task}} is Done",
+        "taskCanceled": "{{task}} is Canceled",
+        "aside": "— watching ended",
+        "asideModule": "— watching ended; the module's summary is below",
+        "asideTask": "— watching ended; the task's summary is below"
       }
     },
     "settings": {
@@ -2334,7 +2337,9 @@
       "otherProject": "A run waits only on a task of its own project. Nothing was changed.",
       "notWaiting": "Run #{{run}} does not wait for a message or a decision: only such a run can wait on a task. Nothing was changed.",
       "alreadyWaits": "Run #{{run}} already waits on {{task}}: a run waits on one task at a time. Nothing was changed.",
-      "noBaseBranch": "Run #{{run}} has no base branch its work merges into, so no task's merge can reach it. Nothing was changed."
+      "noBaseBranch": "Run #{{run}} has no base branch its work merges into, so no task's merge can reach it. Nothing was changed.",
+      "dropGone": "The run no longer waits on that task: it went on, or its wait was dropped already.",
+      "onlyYou": "Only you can drop a run's wait: a press made by automation was not taken. Nothing was changed."
     },
     "tools": {
       "otherProject": "The Orchestrator acts only in its own project.",

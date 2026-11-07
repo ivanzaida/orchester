@@ -6,6 +6,7 @@
 //! never from an agent. The words are this crate's [`Message`]s; lists of them are joined by the app.
 
 mod answer;
+mod counts;
 mod leads;
 mod targets;
 
@@ -21,6 +22,7 @@ use orchester_store::{ProjectDb, StoreError};
 
 pub use self::{
   answer::{Going, WaitsFor, WatchedSubscription, WatchedTask, Watching},
+  counts::WatchedTasks,
   leads::{ChatLeads, LeadChip, LeadCounts, Leader, LedIn},
   targets::{TargetView, WatchOrder},
 };

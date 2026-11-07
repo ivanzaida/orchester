@@ -14,6 +14,23 @@
       "forkedToday": "· forked today {{time}}",
       "forkedOn": "· forked {{date}}"
     },
+    "leads": {
+      "label": "Leads",
+      "more": "+{{count}}",
+      "moreTip": "Also leads {{targets}}",
+      "stop": "Stop watching {{name}}",
+      "since": {
+        "today": "{{name}} · {{kind}} · since {{time}}",
+        "on": "{{name}} · {{kind}} · since {{date}}"
+      },
+      "order": {
+        "own": "“{{order}}”",
+        "projectDefault": "“{{order}}” · the project's default order",
+        "none": "No order of its own · your switches decide"
+      },
+      "hint": "× stops watching · /unwatch does the same",
+      "stopFailed": "Not stopped · {{reason}}"
+    },
     "export": {
       "what": "{{title}} · {{messages}} · {{when}}",
       "whatEmpty": "{{title}} · {{messages}}",
@@ -50,6 +67,20 @@
     "keys": {
       "ctrlEnter": "Ctrl Enter",
       "cmdEnter": "⌘ Enter"
+    },
+    "waitsOn": {
+      "waits": "{{task}} · #{{run}} waits on {{waited}}",
+      "stillWaits": "{{task}} · #{{run}} still waits on {{waited}}",
+      "continued": "{{task}} · #{{run}} continued",
+      "noLonger": "{{task}} · #{{run}} no longer waits on {{waited}}",
+      "whenMerged": "It continues when {{waited}} is merged into {{branch}}",
+      "merged": "{{waited}} merged into {{branch}} at {{time}}",
+      "canceled": "{{waited}} was canceled at {{time}} — nothing will end this wait",
+      "closed": "{{waited}} was closed without merging — nothing will end this wait",
+      "dropped": "You dropped it at {{time}} · the run continued",
+      "over": "It went on without {{waited}} at {{time}}",
+      "drop": "Drop the wait",
+      "dropping": "Dropping…"
     },
     "runsOn": {
       "tip": "Acts with your project permissions: every action it takes is checked like the same action in the app.",
@@ -266,6 +297,56 @@
         "changes": "Changes ↗"
       }
     },
+    "watch": {
+      "applied": "Applied {{time}}",
+      "target": {
+        "withoutModule": "Tasks without a module",
+        "project": "Every task of the project",
+        "gone": "Gone from the project"
+      },
+      "counted": {
+        "one": "{{target}} · {{count}} task",
+        "other": "{{target}} · {{count}} tasks"
+      },
+      "join": {
+        "pair": "{{first}} and {{last}}",
+        "more": "{{first}}, {{next}}"
+      },
+      "leading": "Leading {{targets}}",
+      "leadingAside": "— their waits, run ends, conflicts, limits and stalls start a turn here",
+      "nowLedIn": "{{target}} is now led in «{{title}}»",
+      "nowLedInAside": "— its events start turns there",
+      "nowLedInTask": "— watched there as a task; the rest of {{module}} stays here",
+      "nowLedInTaskBare": "— watched there as a task; the rest stays here",
+      "tookOver": "{{target}} is now led here",
+      "tookOverAside": "— taken from «{{title}}»; its events start turns here",
+      "ledHereAgain": "{{target}} is led here again",
+      "ledHereAgainAside": "— «{{title}}» stopped watching it; its events start turns here",
+      "stopped": "Stopped watching {{targets}}",
+      "stoppedAll": "Stopped watching everything",
+      "leftOpen": {
+        "one": "— {{count}} left open goes back to the usual rule",
+        "other": "— {{count}} left open go back to the usual rule"
+      },
+      "nothingOpen": "— nothing is canceled or paused",
+      "open": {
+        "waits": "{{task}} waits for you ↗",
+        "runs": "{{task}} is running ↗",
+        "queued": "{{task}} queued ↗",
+        "stoppedAtLimit": "{{task}} stopped at a limit ↗"
+      },
+      "led": {
+        "title": "{{target}} is already led in «{{title}}»",
+        "note": "Since {{date}} {{time}}. Its waits and run ends start turns there. Taking it moves them here, and that conversation gets a line saying so.",
+        "open": "Open that conversation",
+        "take": "Take it here",
+        "personOnly": "Only a person chooses where a target is led: input from automation is refused here.",
+        "taken": "{{target}} is now led here",
+        "takenFrom": "— taken from «{{title}}», which got a line saying so",
+        "left": "{{target}} stays led in «{{title}}»",
+        "leftAside": "— you opened that conversation; nothing moved"
+      }
+    },
     "startedBy": {
       "wait": "{{task}}'s wait",
       "runEnd": "{{task}}'s run end",
@@ -451,6 +532,8 @@
         "other": "{{count}} messages"
       },
       "meta": "{{when}} · {{messages}}",
+      "leads": "Leads {{what}} · {{when}}",
+      "leadsSeparator": ", ",
       "found": {
         "results": {
           "one": "Found in 1 conversation · titles and messages",
@@ -1073,19 +1156,6 @@
         "removedUnnamed": "Removed provider",
         "earlier": "Earlier runs",
         "commandTools": "Command tools"
-      }
-    },
-    "watch": {
-      "led": {
-        "title": "{{target}} is already led in «{{title}}»",
-        "note": "Since {{date}} {{time}}. Its waits and run ends start turns there. Taking it moves them here, and that conversation gets a line saying so.",
-        "open": "Open that conversation",
-        "take": "Take it here",
-        "personOnly": "Only a person chooses where a target is led: input from automation is refused here.",
-        "taken": "{{target}} is now led here",
-        "takenFrom": "— taken from «{{title}}», which got a line saying so",
-        "left": "{{target}} stays led in «{{title}}»",
-        "leftAside": "— you opened that conversation; nothing moved"
       }
     }
   }

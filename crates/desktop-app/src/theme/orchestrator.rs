@@ -81,10 +81,30 @@ pub enum OrchestratorText {
   /// 11.5 `text_muted`, 1.5: what the card of a target another conversation leads says under its title (`kjs5n` in
   /// `f1J8z`, `Orchestrator watch · redesign`).
   CardNote,
+  /// 13 `text_primary`, 1.55: the order in the person's watch command's bubble (`oUZqo` in `04` `OKtX2`).
+  CommandOrder,
+  /// 12 `text_muted`, 1.3: what a line the app writes adds after its words (`Meta` `vYl6I` in `OKtX2`, `zGkK5` in
+  /// `avDZO`).
+  LineAside,
+  /// 12 `text_secondary`, 1.3: the time and the link at the end of a line the app writes, and what a stop left open
+  /// (`Hoj8n`, `bluWJ`, `l5cq8c` in `avDZO`).
+  LineEnd,
+  /// 11.5 `text_secondary`, 1.3: a target's name on a Leads chip in the header, `text_primary` under the pointer
+  /// (`oVMRX`, `P16zSo` in `X93D8T`).
+  LeadsChip,
+  /// 11/600 `text_inverse`, 1.3: a Leads chip's tooltip's first line, *Webhooks v2 · module · since 09:14* (`f4DCkr`).
+  LeadsTipTitle,
+  /// 11 `text_inverse`, 1.45: the order in a Leads chip's tooltip (`X48YP`).
+  LeadsTipOrder,
+  /// 11 `text_inverse`, 1.3: the hint at a Leads chip's tooltip's foot (`j1E7E`), at [`LEADS_HINT_OPACITY`].
+  LeadsTipHint,
 }
 
+/// The hint at a Leads chip's tooltip's foot, *× stops watching* (`j1E7E` in `X93D8T`).
+pub const LEADS_HINT_OPACITY: f32 = 0.7;
+
 impl OrchestratorText {
-  pub const ALL: [Self; 28] = [
+  pub const ALL: [Self; 35] = [
     Self::HeaderTitle,
     Self::StartTitle,
     Self::Emphasis,
@@ -113,6 +133,13 @@ impl OrchestratorText {
     Self::Mode,
     Self::PickerLink,
     Self::CardNote,
+    Self::CommandOrder,
+    Self::LineAside,
+    Self::LineEnd,
+    Self::LeadsChip,
+    Self::LeadsTipTitle,
+    Self::LeadsTipOrder,
+    Self::LeadsTipHint,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -149,6 +176,13 @@ impl OrchestratorText {
       Self::Mode => "orchestrator_mode",
       Self::PickerLink => "orchestrator_picker_link",
       Self::CardNote => "orchestrator_card_note",
+      Self::CommandOrder => "orchestrator_command_order",
+      Self::LineAside => "orchestrator_line_aside",
+      Self::LineEnd => "orchestrator_line_end",
+      Self::LeadsChip => "orchestrator_leads_chip",
+      Self::LeadsTipTitle => "orchestrator_leads_tip_title",
+      Self::LeadsTipOrder => "orchestrator_leads_tip_order",
+      Self::LeadsTipHint => "orchestrator_leads_tip_hint",
     }
   }
 
@@ -188,6 +222,13 @@ impl OrchestratorText {
       Self::Mode => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
       Self::PickerLink => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
       Self::CardNote => style(11.5, FontWeight::Normal, 1.5, 0.0, palette.text_muted),
+      Self::CommandOrder => style(13.0, FontWeight::Normal, 1.55, 0.0, palette.text_primary),
+      Self::LineAside => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
+      Self::LineEnd => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
+      Self::LeadsChip => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
+      Self::LeadsTipTitle => style(11.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_inverse),
+      Self::LeadsTipOrder => style(11.0, FontWeight::Normal, 1.45, 0.0, palette.text_inverse),
+      Self::LeadsTipHint => style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_inverse),
     }
   }
 }
@@ -211,10 +252,12 @@ pub enum OrchestratorSpacing {
   LinkColumns,
   /// 28: a new conversation's message over its composer's bar (`Composer` `QcfyZ` in `c99rep`).
   StartComposer,
+  /// 27: what a stop left open, in from its line's start to its words, past its icon (`Open` `j6XFdt` in `avDZO`).
+  LeftOpen,
 }
 
 impl OrchestratorSpacing {
-  pub const ALL: [Self; 7] = [
+  pub const ALL: [Self; 8] = [
     Self::Start,
     Self::PageSide,
     Self::Items,
@@ -222,6 +265,7 @@ impl OrchestratorSpacing {
     Self::Report,
     Self::LinkColumns,
     Self::StartComposer,
+    Self::LeftOpen,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -237,6 +281,7 @@ impl OrchestratorSpacing {
       Self::Report => "orchestrator_report",
       Self::LinkColumns => "orchestrator_link_columns",
       Self::StartComposer => "orchestrator_start_composer",
+      Self::LeftOpen => "orchestrator_left_open",
     }
   }
 
@@ -249,6 +294,7 @@ impl OrchestratorSpacing {
       Self::Report => 36.0,
       Self::LinkColumns => 12.0,
       Self::StartComposer => 28.0,
+      Self::LeftOpen => 27.0,
     }
   }
 }

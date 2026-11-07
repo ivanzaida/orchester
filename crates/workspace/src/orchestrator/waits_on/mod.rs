@@ -3,9 +3,13 @@
 //! the relation `orchester_core::run::RunWaitsOn` with its row in the conversation (*KON-41 · #17 waits on KON-52*).
 //! It changes no run, so it is done at once in any turn. What ends the wait is [`follow`]'s: the waited task's merge
 //! into the run's base branch is an event of the waiting task in the conversation that leads it, as is the waited
-//! task canceled or closed without that merge; the person answering the run on its own wait card ends it too.
+//! task canceled or closed without that merge; the person answering the run on its own wait card ends it too, and so
+//! does the person dropping it ([`dropping`], ORC-784). How a wait stands, as its row and the task page show it, is
+//! [`view`]'s.
 
+pub mod dropping;
 pub(super) mod follow;
+pub mod view;
 
 use orchester_core::{
   orchestrator::{ActionOutcome, ChatAction, WaitsOnRow},

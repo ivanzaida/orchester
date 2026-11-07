@@ -42,7 +42,7 @@ pub fn summaries(modules: &[Module], tasks: &[Task]) -> Vec<ModuleSummary> {
   modules
     .iter()
     .map(|module| {
-      let members: Vec<&Task> = tasks.iter().filter(|task| task.module() == Some(module.id())).collect();
+      let members: Vec<&Task> = module_tasks(module.id(), tasks).collect();
       let measure = Measure::of(members.iter().copied());
       ModuleSummary {
         module: module.clone(),
@@ -51,6 +51,12 @@ pub fn summaries(modules: &[Module], tasks: &[Task]) -> Vec<ModuleSummary> {
       }
     })
     .collect()
+}
+
+/// The tasks of `tasks` that are in module `id`, Canceled ones too: what the Modules list counts in a module, and a
+/// line about watching it (`crate::orchestrator::watching::WatchedTasks`).
+pub fn module_tasks(id: ModuleId, tasks: &[Task]) -> impl Iterator<Item = &Task> {
+  tasks.iter().filter(move |task| task.module() == Some(id))
 }
 
 /// When the remaining work of each module of the project in `db` is likely delivered after `now`, by the project's

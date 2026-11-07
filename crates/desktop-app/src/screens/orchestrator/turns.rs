@@ -19,7 +19,10 @@ use orchester_core::{
   },
   time::Timestamp,
 };
-use orchester_workspace::orchestrator::chat::{ChatView, EndMoved, EventFacts};
+use orchester_workspace::orchestrator::{
+  chat::{ChatView, EndMoved, EventFacts},
+  waits_on::view::RunWaitView,
+};
 
 use super::led::LedCards;
 
@@ -98,8 +101,8 @@ pub(super) struct Turn {
   pub(super) report: Option<Box<DailyReport>>,
   /// The end of a subscription that ended by itself, whose line opens the row instead of a person's message.
   pub(super) watch_ended: Option<Box<WatchSummary>>,
-  /// An event that is the whole row: a compaction of the session (`super::compaction`), or where a rewind went back
-  /// to (`super::rewind::line`).
+  /// An event that is the whole row: a compaction of the session (`super::compaction`), where a rewind went back to
+  /// (`super::rewind::line`), or a watch command or line (`super::watch`).
   pub(super) compaction: Option<ChatEvent>,
   /// The cards of the targets a /watch named that other conversations lead, which are the whole row (`super::led`).
   pub(super) led: Option<Box<LedCards>>,
@@ -118,6 +121,8 @@ pub(super) struct Turn {
   /// A message the answer under way took follows it: that answer goes on, and ends, under that message.
   pub(super) continued: bool,
   pub(super) answer: Vec<Part>,
+  /// How the waits its answer's *waits on* rows name stand now (ORC-784).
+  pub(super) waits_on: Vec<RunWaitView>,
   /// The todo list of the turn it started, as the agent's latest update left it; `None` when the agent keeps none.
   pub(super) todo: Option<TodoList>,
   /// How the person's message's turn went: it planned only, or it acted.
@@ -154,6 +159,7 @@ impl Turn {
       arrival,
       continued: false,
       answer: Vec::new(),
+      waits_on: Vec::new(),
       todo: None,
       mode: TurnMode::Acts,
     }
@@ -194,6 +200,7 @@ impl Turn {
       arrival: Arrival::Own,
       continued: false,
       answer: Vec::new(),
+      waits_on: Vec::new(),
       todo: None,
       mode: TurnMode::Acts,
     }
@@ -299,16 +306,26 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
       .message
       .filter(|_| turn.arrival == Arrival::Own)
       .and_then(|message| shown.todo_of(message).cloned());
+    turn.waits_on = turn
+      .answer
+      .iter()
+      .filter_map(|part| match part {
+        Part::Action { action, .. } => action.waits_on.as_ref(),
+        _ => None,
+      })
+      .filter_map(|row| shown.wait_of(row.run).cloned())
+      .collect();
   }
   turns.extend(waiting);
   turns
 }
 
 /// The row `entry` of `shown` opens by itself: a wait of an agent, a daily report or a subscription that ended by
-/// itself, with the turn it started, if any; a compaction (`06b` `j7eSQO`), where a rewind went back to (`10`
-/// `Zm7kq`), a fork's first line and what its original made after it (`11` `RT5T7`), and the cards of a /watch's
-/// targets other conversations lead (05 `EIjDH`), each a row between the turns. `None` for an entry that is a person's
-/// message or part of an answer.
+/// itself, with the turn it started, if any; and a compaction (`06b` `j7eSQO`), where a rewind went back to (`10`
+/// `Zm7kq`), a fork's first line and what its original made after it (`11` `RT5T7`), and the person's watch command
+/// and the lines about what the conversation watches (`super::watch`), with under a /watch's line the cards of its
+/// targets other conversations lead (05 `EIjDH`), each a row between the turns, which started none. A choice on such a
+/// card shows in the card's place (`super::led`). `None` for an entry that is a person's message or part of an answer.
 fn own_row(entry: &ChatEntry, shown: &ChatView) -> Option<Turn> {
   Some(match &entry.kind {
     EntryKind::Wait { wait, turn } => Turn {
@@ -326,17 +343,17 @@ fn own_row(entry: &ChatEntry, shown: &ChatView) -> Option<Turn> {
       watch_ended: Some(summary.clone()),
       ..Turn::opened(entry, turn.as_ref())
     },
+    EntryKind::Event(event) if super::led::is_choice(event) => return None,
     EntryKind::Event(
       event @ (ChatEvent::Compaction { .. }
       | ChatEvent::Rewound { .. }
       | ChatEvent::Forked { .. }
-      | ChatEvent::MadeInOriginal { .. }),
+      | ChatEvent::MadeInOriginal { .. }
+      | ChatEvent::WatchCommand { .. }
+      | ChatEvent::Watch { .. }),
     ) => Turn {
       compaction: Some(event.clone()),
-      ..Turn::opened(entry, None)
-    },
-    EntryKind::Event(_) => Turn {
-      led: Some(Box::new(super::led::cards(entry, shown)?)),
+      led: super::led::cards(entry, shown).map(Box::new),
       ..Turn::opened(entry, None)
     },
     _ => return None,
@@ -424,6 +441,7 @@ fn person(
     arrival,
     continued: false,
     answer: Vec::new(),
+    waits_on: Vec::new(),
     todo: None,
     mode: TurnMode::Acts,
   }

@@ -24,7 +24,8 @@ use crate::{
   messages::Message,
 };
 
-/// The line a conversation shows for `summary`'s end.
+/// The line a conversation shows for `summary`'s end: what ended it (*Every task of Mobile release is Done*), then
+/// [`ended_aside`].
 pub fn ended_line(summary: &WatchSummary) -> Message {
   let name = summary.name.clone();
   match summary.reason {
@@ -37,6 +38,25 @@ pub fn ended_line(summary: &WatchSummary) -> Message {
       Message::new("orchestrator.watch.ended.moduleCanceled").with("module", name)
     }
     EndReason::ModuleClosed { .. } => Message::new("orchestrator.watch.ended.moduleClosed").with("module", name),
+  }
+}
+
+/// What the end's line adds after [`ended_line`]: *— watching ended*, and, while the turn it starts by itself writes
+/// the summary under it, where that summary is.
+pub fn ended_aside(summary: &WatchSummary) -> Message {
+  Message::new(match (summary.automatic, summary.target) {
+    (true, WatchTarget::Task(_)) => "orchestrator.watch.ended.asideTask",
+    (true, _) => "orchestrator.watch.ended.asideModule",
+    (false, _) => "orchestrator.watch.ended.aside",
+  })
+}
+
+/// Whether all the work `reason` ended on is Done, which the end's line marks as a success.
+pub const fn ended_done(reason: EndReason) -> bool {
+  match reason {
+    EndReason::TaskDone => true,
+    EndReason::TaskCanceled => false,
+    EndReason::ModuleClosed { done, canceled } => done > 0 && canceled == 0,
   }
 }
 

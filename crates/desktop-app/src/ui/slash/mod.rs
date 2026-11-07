@@ -28,7 +28,7 @@ use parking_lot::Mutex;
 use self::argument::Arguing;
 pub use self::{
   argument::{Applied, Apply, ArgumentPicker, Asked, Choice, Offer, Taking},
-  chip::{SkillReach, plan_held, sent_skill_chip, with_chips},
+  chip::{SkillReach, plan_held, sent_chip, sent_skill_chip, with_chips},
   menu::{SlashMenuProps, menu},
   skills::SkillsOffer,
 };

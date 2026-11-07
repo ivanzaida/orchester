@@ -23,7 +23,7 @@ pub struct LeadCounts {
 }
 
 impl LeadCounts {
-  pub(super) fn of<'a>(subscriptions: impl IntoIterator<Item = &'a Subscription>) -> Self {
+  pub(crate) fn of<'a>(subscriptions: impl IntoIterator<Item = &'a Subscription>) -> Self {
     subscriptions
       .into_iter()
       .fold(Self::default(), |counts, subscription| match subscription.target() {
