@@ -28,6 +28,7 @@ pub struct Here {
   pub(super) programs: HashMap<ResourceId, ProgramFile>,
   pub(super) secrets: HashSet<SecretName>,
   pub(super) local_programs: HashSet<ConnectionId>,
+  pub(super) local_programs_moved: HashSet<ConnectionId>,
   pub(super) local_secrets: HashSet<SecretId>,
 }
 
@@ -73,10 +74,18 @@ impl Here {
     self
   }
 
-  /// The program of the local project's MCP server `server` is a file on this computer.
+  /// The program of the local project's MCP server `server` is a file a run starts.
   #[must_use]
   pub fn with_local_program(mut self, server: ConnectionId) -> Self {
     self.local_programs.insert(server);
+    self
+  }
+
+  /// The program of the local project's MCP server `server` is a file, but a run would refuse to start it
+  /// ([`LocalProgramProblem::Moved`](super::LocalProgramProblem::Moved)).
+  #[must_use]
+  pub fn with_local_program_moved(mut self, server: ConnectionId) -> Self {
+    self.local_programs_moved.insert(server);
     self
   }
 

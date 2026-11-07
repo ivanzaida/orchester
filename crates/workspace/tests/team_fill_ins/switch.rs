@@ -9,7 +9,7 @@ use crate::support::Team;
 fn team_fill_ins_a_person_turns_a_team_mcp_server_on_and_anyone_turns_it_off() {
   let team = Team::new();
   let server = team.program_server;
-  let on = || team.db().team_mcp_on_here(server).expect("read");
+  let on = || team.db().team_mcp_switch(server).expect("read") == Some(true);
   assert!(!on(), "off until a person turns it on");
 
   let refused = team
@@ -44,6 +44,6 @@ fn team_fill_ins_only_a_team_mcp_server_is_turned_on() {
       matches!(refused, Err(FillInError::NotTeamResource { .. })),
       "{refused:?}"
     );
-    assert!(!team.db().team_mcp_on_here(not_a_server).expect("read"));
+    assert_eq!(team.db().team_mcp_switch(not_a_server).expect("read"), None);
   }
 }

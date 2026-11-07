@@ -169,7 +169,7 @@ impl Team {
   }
 
   fn on_here(&self, server: ResourceId) -> bool {
-    self.db().team_mcp_on_here(server).expect("read")
+    self.db().team_mcp_switch(server).expect("read") == Some(true)
   }
 
   fn program_set(&self, server: ResourceId) -> bool {

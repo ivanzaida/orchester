@@ -18,13 +18,13 @@ use orchester_core::{
   permission::StepPermissions,
   project::{Project, ProjectKey},
   resource::{
-    AccessPolicy, AccessWindow, AgentProfile, ApprovalMode, CommandProgram, DeniedBehavior, Draft, HttpAuth,
-    HttpMethod, HttpRequest, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, ResourceBody, Slug,
-    Step, StepKey, StepKind, TeamAgentProfile, TeamMcpServer, Tool, ToolAction, VersionNumber,
+    AccessPolicy, AccessWindow, AgentProfile, ApprovalMode, CommandEnvironment, CommandProgram, DeniedBehavior, Draft,
+    HttpAuth, HttpMethod, HttpRequest, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, ResourceBody,
+    Slug, Step, StepKey, StepKind, TeamAgentProfile, TeamMcpServer, Tool, ToolAction, VariableName, VersionNumber,
   },
   secret::{Environment, NewSecret, Secret, SecretKind, SecretName, SecretValue, SecretVault, VaultError, VaultKey},
   sharing::{MemberRole, SharedPerson, TaskRevision},
-  store::{ConnectionStore, McpServerStore, ResourceStore, SecretStore},
+  store::{ConnectionStore, McpServerStore, ResourceStore, SecretStore, SettingsStore},
   time::Timestamp,
 };
 use orchester_store::{AppDb, CachedVersion, ProjectDb, ResourceSharing, SharingLink, StoredServer};
@@ -67,7 +67,7 @@ fn at(millis: i64) -> Timestamp {
 }
 
 pub struct Fixture {
-  _dir: TempDir,
+  dir: TempDir,
   pub root: PathBuf,
   pub workspace: Workspace,
   pub vault: MemoryVault,
@@ -130,7 +130,7 @@ impl Fixture {
     }
     drop(db);
     Self {
-      _dir: dir,
+      dir,
       root,
       workspace: Workspace::new(app),
       vault: MemoryVault::default(),
@@ -164,6 +164,18 @@ impl Fixture {
   /// A file a person could choose as a program.
   pub fn program_file(&self, file: &str) -> PathBuf {
     let path = self.root.join(file);
+    fs::write(&path, "#!/bin/sh\n").expect("a program");
+    path
+  }
+
+  /// The folder that holds the project's repository, outside it.
+  pub fn dir_path(&self) -> &std::path::Path {
+    self.dir.path()
+  }
+
+  /// A file a person could choose as a program, outside the repository as a run requires of a fixed file.
+  pub fn program_outside(&self, file: &str) -> PathBuf {
+    let path = self.dir.path().join(file);
     fs::write(&path, "#!/bin/sh\n").expect("a program");
     path
   }
@@ -272,6 +284,21 @@ impl Fixture {
     .expect("server");
     self.db().create_mcp_server(&server).expect("stored");
     server.id()
+  }
+
+  /// Turns the server `id` off in Connections.
+  pub fn disable_server(&self, id: ConnectionId) {
+    let mut db = self.db();
+    let mut server = db.mcp_server(id).expect("read").expect("the server");
+    server.set_enabled(false);
+    db.save_mcp_server(&server).expect("saved");
+  }
+
+  /// The project's Environment sets `PATH` to `folder`.
+  pub fn project_path(&self, folder: &std::path::Path) {
+    let name = VariableName::new("PATH").expect("variable name");
+    let environment = CommandEnvironment::new(BTreeMap::from([(name, folder.display().to_string())])).expect("env");
+    self.db().save_project_environment(&environment).expect("saved");
   }
 
   /// A secret of the project; its value is in the keychain when `value` is.

@@ -4,17 +4,24 @@
 use std::{collections::BTreeMap, path::PathBuf};
 
 use orchester_core::{
-  connection::AgentProvider,
+  connection::{AgentProvider, mcp::McpServerName},
   id::{ConnectionId, ResourceId, SecretId},
   name::Name,
   resource::{ModelId, PromptText, ProviderSettings, TeamAgentProfile, TeamMcpServer},
   secret::SecretName,
-  sharing::{ConnectionProblem, Here, McpNeed, Missing, Needs, NeedsError, ProgramProblem, Readiness, readiness},
+  sharing::{
+    ConnectionProblem, Here, LocalProgramProblem, McpNeed, Missing, Needs, NeedsError, ProgramProblem, Readiness,
+    readiness,
+  },
 };
 use serde_json::json;
 
 const CLAUDE: AgentProvider = AgentProvider::ClaudeCodeCli;
 const CODEX: AgentProvider = AgentProvider::CodexCli;
+
+fn server_name(value: &str) -> McpServerName {
+  McpServerName::new(value).expect("valid server name")
+}
 
 fn secret(value: &str) -> SecretName {
   SecretName::new(value).expect("valid secret name")
@@ -113,14 +120,28 @@ fn a_local_profile_asks_for_the_program_of_each_server_it_chooses() {
   let id = ResourceId::generate();
   let own = ConnectionId::generate();
   let (found, gone) = (ConnectionId::generate(), ConnectionId::generate());
-  let needs = Needs::local_profile(id, CLAUDE, &[found, gone]);
+  let (found_name, gone_name) = (server_name("found"), server_name("gone"));
+  let needs = Needs::local_profile(id, CLAUDE, &[(found, found_name), (gone, gone_name.clone())]);
   let here = Here::nothing()
     .with_connection(own, CLAUDE)
     .with_pick(id, own)
     .with_local_program(found);
   assert_eq!(
     readiness(&needs, &here).missing(),
-    [Missing::LocalMcpProgram { server: gone }]
+    [Missing::LocalMcpProgram {
+      server: gone,
+      name: gone_name.clone(),
+      problem: LocalProgramProblem::NotFound,
+    }]
+  );
+  let moved = here.with_local_program_moved(gone);
+  assert_eq!(
+    readiness(&needs, &moved).missing(),
+    [Missing::LocalMcpProgram {
+      server: gone,
+      name: gone_name,
+      problem: LocalProgramProblem::Moved,
+    }]
   );
 }
 

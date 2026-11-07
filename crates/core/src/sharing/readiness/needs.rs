@@ -1,7 +1,7 @@
 use thiserror::Error;
 
 use crate::{
-  connection::AgentProvider,
+  connection::{AgentProvider, mcp::McpServerName},
   id::{ConnectionId, ResourceId, SecretId},
   resource::{TeamAgentProfile, TeamMcpLaunch, TeamMcpServer},
   secret::SecretName,
@@ -14,7 +14,7 @@ pub(super) enum Need {
   McpOn(ResourceId),
   McpProgram(ResourceId),
   Secret(SecretName),
-  LocalMcpProgram(ConnectionId),
+  LocalMcpProgram { server: ConnectionId, name: McpServerName },
   LocalSecret { secret: SecretId, name: SecretName },
 }
 
@@ -77,12 +77,15 @@ impl Needs {
   }
 
   /// A profile of a local project: a connection of the CLI kind of the one it runs on, which is its pick, and the
-  /// program of each of the project's MCP servers it chooses that the agent's CLI starts (`programs`). It chooses no
-  /// team MCP server and names no team secret.
-  pub fn local_profile(profile: ResourceId, cli: AgentProvider, programs: &[ConnectionId]) -> Self {
+  /// program of each of the project's MCP servers it chooses that a run starts (`programs`, by id and name). It chooses
+  /// no team MCP server and names no team secret.
+  pub fn local_profile(profile: ResourceId, cli: AgentProvider, programs: &[(ConnectionId, McpServerName)]) -> Self {
     Self(
       std::iter::once(Need::Connection { profile, cli })
-        .chain(programs.iter().copied().map(Need::LocalMcpProgram))
+        .chain(programs.iter().map(|(server, name)| Need::LocalMcpProgram {
+          server: *server,
+          name: name.clone(),
+        }))
         .collect(),
     )
   }

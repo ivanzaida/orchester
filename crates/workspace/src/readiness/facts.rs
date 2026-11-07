@@ -46,8 +46,10 @@ fn is_file(path: &Path) -> bool {
 /// What looking at this computer found for a local resource's needs.
 #[derive(Clone, Copy, Debug)]
 pub(super) enum Found {
-  /// The program of the local MCP server is a file.
+  /// The program of the local MCP server is a file a run starts.
   Program(ConnectionId),
+  /// The program of the local MCP server is a file, but a run refuses to start it where it leads now.
+  ProgramMoved(ConnectionId),
   /// The project secret has a value in the keychain.
   SecretValue(SecretId),
 }
@@ -56,6 +58,7 @@ impl Found {
   pub(super) fn add_to(self, here: Here) -> Here {
     match self {
       Self::Program(server) => here.with_local_program(server),
+      Self::ProgramMoved(server) => here.with_local_program_moved(server),
       Self::SecretValue(secret) => here.with_local_secret(secret),
     }
   }

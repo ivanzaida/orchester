@@ -19,7 +19,7 @@ pub use self::{
   needs::{McpNeed, Needs, NeedsError},
 };
 use crate::{
-  connection::AgentProvider,
+  connection::{AgentProvider, mcp::McpServerName},
   id::{ConnectionId, ResourceId, SecretId},
   secret::SecretName,
 };
@@ -42,6 +42,16 @@ pub enum ProgramProblem {
   FileGone(PathBuf),
 }
 
+/// Why the program of a local project's MCP server cannot start, as a run decides it
+/// ([`McpServerProblem`](crate::connection::mcp::McpServerProblem)).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LocalProgramProblem {
+  /// No file of that name on the `PATH` the agent starts with, or in the project.
+  NotFound,
+  /// A file is there, but a program saved as a fixed file now leads into the project's repository or off this computer.
+  Moved,
+}
+
 /// One part a computer lacks.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Missing {
@@ -58,8 +68,12 @@ pub enum Missing {
   },
   /// No value is set here for the team secret.
   Secret { name: SecretName },
-  /// The program of a local project's MCP server, which a profile chooses, is no file on the `PATH` or in the project.
-  LocalMcpProgram { server: ConnectionId },
+  /// The program of a local project's MCP server, which a profile chooses and which is turned on, cannot start.
+  LocalMcpProgram {
+    server: ConnectionId,
+    name: McpServerName,
+    problem: LocalProgramProblem,
+  },
   /// The project secret a local tool sends or connects with has no value here.
   LocalSecret { secret: SecretId, name: SecretName },
 }
@@ -135,13 +149,27 @@ fn lacking(need: &Need, here: &Here) -> Option<Missing> {
       }),
     },
     Need::Secret(name) => (!here.secrets.contains(name)).then(|| Missing::Secret { name: name.clone() }),
-    Need::LocalMcpProgram(server) => {
-      (!here.local_programs.contains(server)).then_some(Missing::LocalMcpProgram { server: *server })
+    Need::LocalMcpProgram { server, name } => {
+      local_program_problem(*server, here).map(|problem| Missing::LocalMcpProgram {
+        server: *server,
+        name: name.clone(),
+        problem,
+      })
     }
     Need::LocalSecret { secret, name } => (!here.local_secrets.contains(secret)).then(|| Missing::LocalSecret {
       secret: *secret,
       name: name.clone(),
     }),
+  }
+}
+
+fn local_program_problem(server: ConnectionId, here: &Here) -> Option<LocalProgramProblem> {
+  if here.local_programs.contains(&server) {
+    None
+  } else if here.local_programs_moved.contains(&server) {
+    Some(LocalProgramProblem::Moved)
+  } else {
+    Some(LocalProgramProblem::NotFound)
   }
 }
 

@@ -16,8 +16,11 @@
 //!   team's form as publishing does, so an Admin's own new profile or edit is as ready as it will be when the server
 //!   numbers it; one that cannot be turned that way is [`Undecided::CannotBePublished`], with the reason.
 //! - In a local project the connection a profile runs on is its pick. The program of each MCP server it chooses that
-//!   the agent's CLI starts must be a file, looked up as the runner does (`repo_root` stands for the worktree); such a
-//!   server is not a resource of its own, and its variables' secrets and a server turned off are not read. A tool that
+//!   a run starts must have a program it would start, looked up as the runner does: the `PATH` is the project's
+//!   Environment, else Orchester's search path; a program is a file there or in the project (`repo_root` stands for the
+//!   worktree), and a fixed file must also lie outside the repository ([`LocalProgramProblem`](orchester_core::sharing::LocalProgramProblem)).
+//!   A server turned off in Connections is left out, as a run leaves it out. Such a server is not a resource of its
+//!   own, and its variables' secrets are not read. A tool that
 //!   sends or connects with a project secret is ready only when the keychain has that secret's value, which is read
 //!   (and dropped) at the call; a keychain that cannot say is [`Undecided::SecretUnreadable`].
 //! - A tool of a team project names no secret by name until ORC-830, so one that holds none asks nothing. One that
@@ -57,6 +60,9 @@ impl Workspace {
   /// Whether each profile, MCP server, tool and pipeline of the project at `repo_root` is ready on this computer. Reads
   /// the databases, stats the program files and, for the tools of a local project that use a secret, asks `vault`
   /// whether it has the value, so it blocks: run it on the background pool.
+  ///
+  /// Each local tool secret is read from the keychain on every call, which may prompt on macOS: a caller reads the
+  /// answer on an explicit change (a screen opening, a save), not on a timer.
   pub fn project_readiness(
     &self,
     repo_root: &Path,
