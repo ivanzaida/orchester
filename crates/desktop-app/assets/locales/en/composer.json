@@ -1,5 +1,9 @@
 {
   "composer": {
+    "argument": {
+      "choose": "Choose what {{command}} takes",
+      "remove": "Remove {{name}}"
+    },
     "closed": {
       "unreadable": "The latest run’s record cannot be read, so messages cannot reach its agents."
     },
@@ -172,6 +176,25 @@
           "noTurnAnswer": "No turn is running: {{agent}} waits for your answer",
           "label": "Stop turn",
           "stopping": "{{agent}}’s turn is being stopped"
+        },
+        "unwatch": {
+          "detail": "End what this conversation watches; nothing is canceled",
+          "label": "Stop watching"
+        },
+        "watch": {
+          "nothing": "Watches nothing yet"
+        },
+        "watchModule": {
+          "detail": "Their tasks' events come here",
+          "label": "Watch modules"
+        },
+        "watchTask": {
+          "detail": "Only these tasks' events",
+          "label": "Watch tasks"
+        },
+        "watching": {
+          "detail": "What this conversation leads and what waits there",
+          "label": "What I watch"
         }
       },
       "commands": "Commands",

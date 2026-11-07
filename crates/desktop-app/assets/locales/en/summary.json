@@ -1,5 +1,16 @@
 {
   "summary": {
+    "waitsOn": {
+      "waiting": "Waits on {{waited}} · {{title}}. It continues when {{waited}} is merged into {{branch}}, the run's base branch.",
+      "waitingUntitled": "Waits on {{waited}}. It continues when {{waited}} is merged into {{branch}}, the run's base branch.",
+      "canceled": "{{waited}} was canceled at {{time}}, so nothing will end this wait.",
+      "canceledTold": "{{waited}} was canceled at {{time}}, so nothing will end this wait. «{{chat}}» told you.",
+      "closed": "{{waited}} was closed without merging at {{time}}, so nothing will end this wait.",
+      "closedTold": "{{waited}} was closed without merging at {{time}}, so nothing will end this wait. «{{chat}}» told you.",
+      "notMerged": "{{waited}} · not merged",
+      "drop": "Drop the wait",
+      "dropping": "Dropping…"
+    },
     "openConversation": "Conversation →",
     "browser": {
       "title": "Browser",
@@ -147,6 +158,7 @@
         "notReady": "The task names no module, or a pipeline this computer doesn't have.",
         "branch": "The module's branch {{branch}} isn't in this checkout.",
         "bindings": "These agent profiles need a connection chosen on this computer: {{profiles}}.",
+        "mcpServers": "These MCP servers are not set up on this computer: {{servers}}. Bind them in Sharing › On this computer, then run again.",
         "notReadable": "The team server's pipeline or one of its agent profiles can't be read."
       },
       "properties": {
@@ -169,6 +181,7 @@
       "pipeline": "Pipeline",
       "tags": "Tags",
       "dependsOn": "Depends on",
+      "ledIn": "Led in",
       "limits": "Limits",
       "branch": "Branch",
       "merge": {

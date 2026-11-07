@@ -58,6 +58,22 @@ impl ProjectDb {
       })
       .collect()
   }
+
+  /// Whether a conversation of the Orchestrator chat created the task `key` (`KON-52`) with `create_task`.
+  pub fn chat_created_task(&self, key: &str) -> Result<bool, StoreError> {
+    let created = self
+      .connection
+      .query_row(
+        "SELECT 1 FROM orchestrator_entries
+         WHERE kind = 'action' AND json_extract(body, '$.tool') = 'create_task'
+           AND json_extract(body, '$.task') = ?1
+         LIMIT 1",
+        [key],
+        |_| Ok(()),
+      )
+      .optional()?;
+    Ok(created.is_some())
+  }
   /// Settles the proposed action `seq` of conversation `chat` with `outcome` at `at`, e.g. dismissed: the action as
   /// it was, or `None` when there is no such action or it no longer waits for a person.
   pub fn settle_chat_action(

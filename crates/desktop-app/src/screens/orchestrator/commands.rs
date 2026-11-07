@@ -1,7 +1,10 @@
 //! The Orchestrator chat's own commands in its composer's slash menu (ORC-321, `07` `jAiyu`): *New conversation*,
 //! which the header's *New* starts, and *History*, which opens the History panel as the header's toggle does. Compact
 //! and Model and effort join them once their controls exist (ORC-309, ORC-319); until then they are not offered. The
-//! project's published skills follow them (ORC-325), greyed while the Orchestrator's connection cannot take one.
+//! watch commands follow them (ORC-771, `01 · Watch commands` `h1KHAx`): *Watch modules* (`/watch-module`), *Watch
+//! tasks* (`/watch-task`) and *Stop watching* (`/unwatch`, ORC-774) take an argument, chosen in their pickers; *Stop
+//! watching* and *What I watch* (`/watching`, ORC-775) are faded while the conversation watches nothing. The project's
+//! published skills follow them (ORC-325), greyed while the Orchestrator's connection cannot take one.
 
 use std::sync::Arc;
 
@@ -16,7 +19,7 @@ use crate::{
   routes::{OrchestratorChat, ProjectPage, Route},
   ui::{
     icon::Icon,
-    slash::{self, SkillsOffer, SlashCommand, SlashMenuProps},
+    slash::{self, Does, SkillsOffer, SlashCommand, SlashMenuProps},
   },
 };
 
@@ -29,7 +32,8 @@ pub(super) fn menu(
   project: &ShownProject,
   (fresh, send, provider): (bool, Option<Press>, Option<AgentProvider>),
 ) -> Element {
-  let commands = vec![new_conversation(ctx, project, fresh), history(ctx, view)];
+  let mut commands = vec![new_conversation(ctx, project, fresh), history(ctx, view)];
+  commands.extend(watch_commands(ctx, view, project));
   let providers: Vec<AgentProvider> = provider.into_iter().collect();
   let skills = SkillsOffer {
     root: project.open.repo_root.clone(),
@@ -58,7 +62,7 @@ fn new_conversation(ctx: &mut Ctx, project: &ShownProject, fresh: bool) -> Slash
       icon: Icon::MessageSquarePlus,
       label,
       detail: ctx.t("composer.slash.command.newConversation.already"),
-      run: None,
+      does: None,
     };
   }
   let navigation = Navigation::of(ctx);
@@ -71,7 +75,7 @@ fn new_conversation(ctx: &mut Ctx, project: &ShownProject, fresh: bool) -> Slash
     icon: Icon::MessageSquarePlus,
     label,
     detail: ctx.t("composer.slash.command.newConversation.detail"),
-    run: Some(Arc::new(move || navigation.go(route.clone()))),
+    does: Some(Does::Run(Arc::new(move || navigation.go(route.clone())))),
   }
 }
 
@@ -82,6 +86,19 @@ fn history(ctx: &Ctx, view: &View) -> SlashCommand {
     icon: Icon::History,
     label: ctx.t("composer.slash.command.history.label"),
     detail: ctx.t("composer.slash.command.history.detail"),
-    run: Some(Arc::new(move || open.set(true))),
+    does: Some(Does::Run(Arc::new(move || open.set(true)))),
   }
+}
+
+/// The watch commands: *Watch modules* and *Watch tasks* with their pickers ([`super::watch`], ORC-772, ORC-773);
+/// *Stop watching* with its picker (`/unwatch`, ORC-774) and *What I watch* ([`super::watching`], ORC-775), offered
+/// while the conversation leads something.
+fn watch_commands(ctx: &Ctx, view: &View, project: &ShownProject) -> [SlashCommand; 4] {
+  let root = &project.open.repo_root;
+  [
+    super::watch::module_command(ctx, view, project),
+    super::watch::task_command(ctx, view, project),
+    view.what_i_watch.unwatch_command(ctx, root.clone()),
+    view.what_i_watch.command(ctx, root.clone(), &view.follow),
+  ]
 }

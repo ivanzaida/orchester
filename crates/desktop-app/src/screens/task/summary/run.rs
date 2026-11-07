@@ -26,7 +26,10 @@ use super::{
 use crate::{
   navigation::Navigation,
   routes::{Route, TaskTab, TaskView},
-  screens::task::TaskContext,
+  screens::task::{
+    TaskContext,
+    waits_on::{self, Place},
+  },
   services::Services,
   theme::{ExtraSpacing, IconSize},
   ui::{
@@ -72,10 +75,12 @@ pub fn section(ctx: &mut Ctx, task: &TaskContext, run: Option<&RunView>) -> Elem
       },
     )
   });
-  // A team run whose authority the server fenced says it stopped, and what became of its reports (03 `hWXxr`).
+  // A team run whose authority the server fenced says it stopped, and what became of its reports (03 `hWXxr`); a run
+  // that waits on another task, that wait (09 `SLuUW`).
   let event = match run.and_then(|run| team_run::stopped(ctx, task, run)) {
     Some(text) => event_line(ctx, task, (Icon::CornerDownLeft, &text, "stopped"), true),
-    None => last_event(ctx, task, run.is_some()),
+    None => waits_on::row(ctx, (&task.detail, &task.project.open), Place::Summary)
+      .unwrap_or_else(|| last_event(ctx, task, run.is_some())),
   };
   section.child(event).with_children(browser).into()
 }
@@ -107,6 +112,7 @@ fn rail(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> Element {
     waiting: &waiting,
     slot_waits: &slot_waits,
     fenced,
+    waits_on: waits_on::holding(&task.detail).is_some(),
   };
   steps::rail(ctx, run, &live, current, now)
 }

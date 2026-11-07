@@ -140,6 +140,9 @@ otherwise), its runs and its link (Details tab; each run links to the Summary).
 its next run takes as things stand (`null` = whatever the checkout has checked out), with its `source` (`task`,
 `module` with that `module`'s id, or `checked_out`). Each run's own base is in `get_run`.
 
+`led_in` is the Orchestrator conversation the task's events go to, as its *Led in* shows it (see
+[`get_watches`](#get_watches--read-only)), or `null` when no subscription covers it.
+
 Parameters: `project` (req.), `key` (req.: key or id).
 
 ### `create_task` — changes data
@@ -244,6 +247,8 @@ link), and its **burndown** by local day from its start (or its first task's day
 366 days): scope and remaining work at each day's end (`null` for future days), the ideal line (`null` without a
 target), and work added and removed that day. *Done* is the task's Done (merging its run sets it, in Orchester or found
 merged outside by git, as does a person). `forecast`: 50% and 85% delivery dates, or `not_enough_history`.
+`led_in`: the Orchestrator conversation that leads the module (its own subscription, else the whole project's), or
+`null` when none does — see [`get_watches`](#get_watches--read-only).
 
 Parameters: `project` (req.), `module` (req.: id or name).
 
@@ -268,6 +273,38 @@ branch nowhere; nothing is made).
 Changes `name`, `description`, `start_date`, `target_date` (`null` = no date), `state` (`open` | `closed`) or
 `base_branch` (as `create_module` takes it; the next runs of its tasks that inherit theirs take it, runs that started
 keep theirs); fields left out stay. Its tasks and history stay. Parameters: `project`, `module` (req.) + the fields.
+
+### `get_watches` — read-only
+
+Who leads what: the project's Orchestrator conversations and what each one watches (its **subscriptions**), with what
+waits there now, as `/watching` shows it in the conversation. A subscription leads a module, a task, the tasks without
+a module or the whole project; a task's events go to the most specific subscription that covers it. Subscribing,
+stopping and taking a target over stay the person's commands in the conversation (`/watch`): **no tool writes a
+subscription**. A team project is refused as `team_project_unsupported`.
+
+| Parameter      | Type           | Req. | Description                                                                         |
+|----------------|----------------|------|-------------------------------------------------------------------------------------|
+| `project`      | string         | yes  | The project's id, or its name.                                                      |
+| `conversation` | string \| null | no   | One conversation, by id or title (ignoring case); left out = every one that leads something. |
+
+Answers `conversations`, each with:
+
+- `id`, `title`, `link` (the conversation in the app).
+- `leads`: `modules` and `tasks` (counts), `without_module` and `project` (booleans), and `shown` (*1 module*, …).
+- `total`: the one-line total, one part each (*1 thing waits for you*, *1 run is stopped at a limit*; *Nothing waits
+  for you*, or *This conversation watches nothing yet*).
+- `subscriptions`, in the order they were kept: `target` (`kind` `module` | `task` | `without_module` | `project`,
+  `id` of the module or task, `name`, `link` — `null` for the tasks without a module), `since` (ms), `order`
+  (`source` `own` | `project_default` | `none`, with its `text`), `tasks` (those it leads with something going on:
+  `key`, `id`, `title`, `run`, `going` — `running`, `waits` with `waits_for` `question` | `message` | `plan` |
+  `approval` | `decision` | `run`, `queued` with its `position` from 1, `stopped_at_limit` with `daily_budget`,
+  `ready_to_merge` — and its `state`, `note`, `action` words and `link`), and `rest` (*4 more tasks with nothing under
+  way*, or `null`). A task a more specific subscription leads is listed under that one only.
+
+`get_module` and `get_task` name the leading conversation as `led_in`: `conversation` (`id`, `title`, `link`), `via`
+(the less specific target it leads through, as `target` above; `null` when it leads the module or task itself) and
+`shown` (*«Webhooks v2 and Search index» · via Webhooks v2*). Refusals: `conversation_not_found`,
+`conversation_ambiguous` (several conversations have that title; name it by id).
 
 ---
 

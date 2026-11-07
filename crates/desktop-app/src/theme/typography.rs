@@ -285,6 +285,7 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       .chain(super::run_model::typography(palette))
       .chain(super::side_question::typography(palette))
       .chain(super::ci::typography(palette))
+      .chain(super::watching::typography(palette))
       .collect(),
   }
 }

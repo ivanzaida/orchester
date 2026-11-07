@@ -72,6 +72,10 @@ struct State {
   refuse_streams: usize,
   /// How many run progress reports are refused next ([`runs`]).
   refuse_runs: usize,
+  /// Whether run progress reports are answered `409 conflict`, as for a claim the server will not end that way.
+  conflict_runs: bool,
+  /// How many run progress reports reached the server, whatever it answered.
+  run_reports: usize,
   refuse_requests: bool,
   clock: i64,
 }
@@ -119,6 +123,8 @@ impl TeamServer {
         generation: 0,
         refuse_streams: 0,
         refuse_runs: 0,
+        conflict_runs: false,
+        run_reports: 0,
         refuse_requests: false,
         clock: 1_000,
       }),

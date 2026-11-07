@@ -5,7 +5,9 @@
 //! reference whose role is the CLI the Admin chose. A profile runs on the connection the caller binds it to, otherwise
 //! on the connection its reference names when this computer has it with that very id and CLI (the publisher's own
 //! computer), otherwise on the only local agent connection of its CLI; with none or several, the start is refused
-//! naming the profiles that need a choice. Nothing else is guessed: the bindings are checked again against the bundle
+//! naming the profiles that need a choice. Each MCP server a profile's version names runs as the local server a person
+//! bound it to, else as this computer's own server with that id; with neither, the start is refused naming the servers
+//! ([`McpHere`]). Nothing else is guessed: the bindings are checked again against the bundle
 //! `work.start` answers, and a pipeline changed in between fails the start there.
 
 use std::path::Path;
@@ -13,16 +15,18 @@ use std::path::Path;
 use orchester_api::{ReferenceTarget, SharedVersion, v2::PageRequest};
 use orchester_core::{
   command::CommandRunner,
-  connection::{AgentProvider, Connection, ConnectionKind},
+  connection::{AgentProvider, Connection, ConnectionKind, mcp::McpServer},
   id::{ConnectionId, ResourceId},
   integration::base::set_branch_tip,
   resource::{AgentProfile, Pipeline, StepKind},
   run::{
     BranchName, CommitId,
-    inputs::{LocalBindings, ProfileBinding},
+    inputs::{BoundReference, LocalBindings, ProfileBinding},
   },
   sharing::ConnectionRole,
+  store::McpServerStore,
 };
+use orchester_store::{BoundReference as StoredReference, ProjectDb, StoreError};
 
 use crate::{
   tasks::changes::GIT,
@@ -50,6 +54,50 @@ pub enum ChoiceError {
   /// These profiles, by role, have no connection of their CLI here, or several: the caller chooses.
   #[error("the profiles {0:?} need a connection chosen")]
   BindingsRequired(Vec<String>),
+  /// These MCP servers, by name, that the pipeline's profiles use are not set up on this computer: nothing starts
+  /// without them.
+  #[error("the MCP servers {0:?} are not set up here")]
+  McpServersRequired(Vec<String>),
+}
+
+/// This computer's MCP servers as a team start gives them to the profiles that name them: a person's binding of the
+/// publisher's server first, else this computer's own server with the very id the version names (the publisher's own
+/// computer). Nothing is matched by name.
+#[derive(Debug, Default)]
+pub struct McpHere {
+  servers: Vec<ConnectionId>,
+  bound: Vec<(ConnectionId, ConnectionId)>,
+}
+
+impl McpHere {
+  /// The MCP servers of the project kept in `db` and the person's bindings of the publishers' ones.
+  pub fn read(db: &ProjectDb) -> Result<Self, StoreError> {
+    let servers = db.mcp_servers()?.iter().map(McpServer::id).collect();
+    let bound = db
+      .reference_bindings()?
+      .into_iter()
+      .filter_map(|kept| match kept.reference {
+        StoredReference::McpServer {
+          reference,
+          bound: Some(bound),
+        } => Some((reference, bound.local)),
+        StoredReference::McpServer { bound: None, .. }
+        | StoredReference::Connection { .. }
+        | StoredReference::Secret { .. } => None,
+      })
+      .collect();
+    Ok(Self { servers, bound })
+  }
+
+  /// The local server the publisher's server `named` runs as here, if any.
+  fn local(&self, named: ConnectionId) -> Option<ConnectionId> {
+    self
+      .bound
+      .iter()
+      .find(|(reference, _)| *reference == named)
+      .map(|(_, local)| *local)
+      .or_else(|| self.servers.contains(&named).then_some(named))
+  }
 }
 
 /// The commit `branch` is at in the checkout at `root`: a module's branch is a start's base and a delivery's source.
@@ -74,15 +122,18 @@ struct Profile {
   cli: AgentProvider,
   /// The connection its version's reference names, by its id on the publisher's computer.
   connection: ConnectionId,
+  /// The MCP servers its version's references name, by their id on the publisher's computer, with their names.
+  mcp_servers: Vec<(ConnectionId, String)>,
 }
 
 /// The bindings of every agent profile of `pipeline`'s latest published version on `connections`, the caller's
-/// `given` first: each `(profile id, connection id or name)`. The versions are read from `project`, whose subscription
-/// the caller follows meanwhile: its reads wait for the subscription's position.
+/// `given` first: each `(profile id, connection id or name)`, and of the MCP servers those profiles name, on `mcp`.
+/// The versions are read from `project`, whose subscription the caller follows meanwhile: its reads wait for the
+/// subscription's position.
 pub async fn bind(
   project: &TeamProject,
   pipeline: ResourceId,
-  connections: &[Connection],
+  (connections, mcp): (&[Connection], &McpHere),
   given: &[(String, String)],
 ) -> Result<LocalBindings, ChoiceError> {
   let mut profiles = Vec::new();
@@ -107,8 +158,38 @@ pub async fn bind(
   }
   Ok(LocalBindings {
     profiles: bound,
-    references: Vec::new(),
+    references: mcp_references(&profiles, mcp)?,
   })
+}
+
+/// Each MCP server the profiles name, once, bound to the local server it runs as here; refused naming every one that
+/// has none, so a run never starts silently without a server its profiles use.
+fn mcp_references(profiles: &[Profile], mcp: &McpHere) -> Result<Vec<BoundReference>, ChoiceError> {
+  let mut references = Vec::new();
+  let mut missing = Vec::new();
+  for (named, name) in profiles.iter().flat_map(|profile| &profile.mcp_servers) {
+    match mcp.local(*named) {
+      Some(local) => {
+        let taken = references.iter().any(|reference| match reference {
+          BoundReference::McpServer {
+            named: other,
+            local: kept,
+          } => other == named || *kept == local,
+          BoundReference::Connection { .. } | BoundReference::Secret { .. } => false,
+        });
+        if !taken {
+          references.push(BoundReference::McpServer { named: *named, local });
+        }
+      }
+      None if !missing.contains(name) => missing.push(name.clone()),
+      None => {}
+    }
+  }
+  if missing.is_empty() {
+    Ok(references)
+  } else {
+    Err(ChoiceError::McpServersRequired(missing))
+  }
 }
 
 /// The connection `profile` runs on: the caller's binding, else the connection its reference names when this computer
@@ -174,11 +255,20 @@ async fn profile(project: &TeamProject, id: ResourceId) -> Result<Profile, Choic
       ConnectionRole::GitHub => None,
     })
     .ok_or(ChoiceError::Unreadable)?;
+  let mcp_servers = latest
+    .references
+    .iter()
+    .filter_map(|reference| match reference.target {
+      ReferenceTarget::McpServer { id } => Some((id, reference.name.clone())),
+      ReferenceTarget::Connection { .. } | ReferenceTarget::Secret { .. } | ReferenceTarget::Tool { .. } => None,
+    })
+    .collect();
   Ok(Profile {
     id,
     role: body.role().as_str().to_owned(),
     cli,
     connection,
+    mcp_servers,
   })
 }
 

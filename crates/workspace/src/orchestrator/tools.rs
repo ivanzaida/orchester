@@ -36,14 +36,16 @@ use super::{
     self,
     control::{self, QueueCall, RELEASE_QUEUE, RESUME_RUN, ToldTo},
   },
+  created::{self, CREATE_TASK},
   duplicate, git, guard,
   keep::{self, HOLD_QUEUE, Named},
-  mcp_servers,
+  leads, mcp_servers,
   own_project::{in_own_project, own_project_by_id},
   plan::{self, PROPOSE_PLAN},
   proposal,
   repository::{self, INIT_REPOSITORY},
   told,
+  waits_on::{self, WAIT_ON_TASK},
 };
 use crate::{
   app_mcp::{self, Services, ToolError, Translate, blocking},
@@ -122,12 +124,13 @@ pub const TOOLS: [&str; 58] = [
 /// The chat's own tools, which no client of the app has: making the project's folder a git repository, always a card
 /// the person applies ([`super::repository`]), working with git in it ([`super::git`]), changing the project's
 /// MCP servers, a card the person applies for whatever widens ([`super::mcp_servers`]), applying a proposal the
-/// person approved in their own words ([`super::approval`]), and answering with a plan in plan-only mode
-/// ([`super::plan`]).
-pub const CHAT_TOOLS: [&str; 24] = [
+/// person approved in their own words ([`super::approval`]), answering with a plan in plan-only mode
+/// ([`super::plan`]), and making a waiting run wait on another task ([`super::waits_on`]).
+pub const CHAT_TOOLS: [&str; 25] = [
   INIT_REPOSITORY,
   APPLY_PROPOSAL,
   PROPOSE_PLAN,
+  WAIT_ON_TASK,
   git::NAMES[0],
   git::NAMES[1],
   git::NAMES[2],
@@ -179,7 +182,7 @@ pub fn listed() -> Vec<Tool> {
       }
       tool
     })
-    .chain([repository::tool(), approval::tool(), plan::tool()])
+    .chain([repository::tool(), approval::tool(), plan::tool(), waits_on::tool()])
     .chain(git::tools())
     .chain(mcp_servers::tools())
     .collect()
@@ -238,9 +241,12 @@ pub async fn call(
   if name == APPLY_PROPOSAL {
     return approval::call((services, translate, runners), scope, arguments).await;
   }
+  if name == WAIT_ON_TASK {
+    return waits_on::call((translate, runners), scope, arguments).await;
+  }
   if read_only {
     own_project_by_id(scope, &mut arguments);
-    return app_tool((services, translate), name, arguments).await;
+    return leads::read_tool((services, translate), scope, name, arguments).await;
   }
   in_own_project(scope, &mut arguments)?;
   // A copy saves a draft: a turn a day's report started refuses it, and keeps the refusal.
@@ -259,7 +265,7 @@ pub(super) async fn act_and_keep(
   arguments: &JsonObject,
 ) -> Result<Value, ToolError> {
   let acted = act((services, translate), scope, name, arguments).await;
-  let Acted { result, kept } = acted;
+  let Acted { mut result, kept } = acted;
   let outcome = match (&result, kept.waits) {
     (Ok(_), Some(waits)) => waits,
     (Ok(_), None) => ActionOutcome::Done,
@@ -269,12 +275,18 @@ pub(super) async fn act_and_keep(
   let named = named.or_else(|| result.as_ref().ok().and_then(keep::created_task));
   // A hold that held new starts keeps what it held, for its card.
   let held = (name == HOLD_QUEUE && outcome == ActionOutcome::Done).then(|| keep::arguments_task(&named));
+  // A task created outside what the conversation watches comes back to it, unless another one leads it.
+  let watch = match (&mut result, name == CREATE_TASK && outcome == ActionOutcome::Done) {
+    (Ok(told), true) => created::watch_created(scope, told).await,
+    _ => None,
+  };
   let action = ChatAction {
     change: kept.change.map(Box::new),
     started: kept.started,
     resumed: kept.resumed,
     auto_mode: kept.auto_mode,
     on_its_own: kept.on_its_own,
+    watch,
     ..ChatAction::new(name, None, outcome)
   };
   keep::keep(scope, (named, held), action).await;

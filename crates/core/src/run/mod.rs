@@ -51,6 +51,7 @@ mod transition;
 mod unreadable;
 mod unverified;
 mod usage;
+mod waits_on;
 
 pub use self::{
   active_clock::ActiveClock,
@@ -112,4 +113,5 @@ pub use self::{
   unreadable::{ListedRun, UnreadableRun},
   unverified::AcceptRefusal,
   usage::TokenUsage,
+  waits_on::{RunWaitsOn, WaitedTaskEvent, WaitedTaskEventKind, WaitingRun, WaitsOnChange, WaitsOnEnd, WaitsOnError},
 };

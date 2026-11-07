@@ -14,6 +14,23 @@
       "forkedToday": "· forked today {{time}}",
       "forkedOn": "· forked {{date}}"
     },
+    "leads": {
+      "label": "Leads",
+      "more": "+{{count}}",
+      "moreTip": "Also leads {{targets}}",
+      "stop": "Stop watching {{name}}",
+      "since": {
+        "today": "{{name}} · {{kind}} · since {{time}}",
+        "on": "{{name}} · {{kind}} · since {{date}}"
+      },
+      "order": {
+        "own": "“{{order}}”",
+        "projectDefault": "“{{order}}” · the project's default order",
+        "none": "No order of its own · your switches decide"
+      },
+      "hint": "× stops watching · /unwatch does the same",
+      "stopFailed": "Not stopped · {{reason}}"
+    },
     "export": {
       "what": "{{title}} · {{messages}} · {{when}}",
       "whatEmpty": "{{title}} · {{messages}}",
@@ -50,6 +67,20 @@
     "keys": {
       "ctrlEnter": "Ctrl Enter",
       "cmdEnter": "⌘ Enter"
+    },
+    "waitsOn": {
+      "waits": "{{task}} · #{{run}} waits on {{waited}}",
+      "stillWaits": "{{task}} · #{{run}} still waits on {{waited}}",
+      "continued": "{{task}} · #{{run}} continued",
+      "noLonger": "{{task}} · #{{run}} no longer waits on {{waited}}",
+      "whenMerged": "It continues when {{waited}} is merged into {{branch}}",
+      "merged": "{{waited}} merged into {{branch}} at {{time}}",
+      "canceled": "{{waited}} was canceled at {{time}} — nothing will end this wait",
+      "closed": "{{waited}} was closed without merging — nothing will end this wait",
+      "dropped": "You dropped it at {{time}} · the run continued",
+      "over": "It went on without {{waited}} at {{time}}",
+      "drop": "Drop the wait",
+      "dropping": "Dropping…"
     },
     "runsOn": {
       "tip": "Acts with your project permissions: every action it takes is checked like the same action in the app.",
@@ -248,7 +279,32 @@
       "byYou": "by you",
       "byYouInChat": "by you in the chat",
       "targetBy": "{{target}} · {{by}}",
+      "watchedHere": "{{target}} · watched here",
+      "ledElsewhere": "{{target}} · led in «{{chat}}»",
       "applying": "Being carried out"
+    },
+    "event": {
+      "noProgress": "No progress for {{minutes}} min",
+      "conflictModule": "Merge conflict in the module branch",
+      "conflict": "Merge conflict in the base branch",
+      "mergedInto": "Merged into {{branch}}",
+      "merged": "Merged into the base branch",
+      "closedInto": "Closed — will not be merged into {{branch}}",
+      "closed": "Closed — will not be merged",
+      "link": {
+        "run": "Run ↗",
+        "resolve": "Resolve ↗",
+        "changes": "Changes ↗"
+      }
+    },
+    "startedBy": {
+      "wait": "{{task}}'s wait",
+      "runEnd": "{{task}}'s run end",
+      "noProgress": "{{task}} made no progress",
+      "conflict": "{{task}}'s merge conflict",
+      "merged": "{{task}} merged",
+      "closed": "{{task}} closed",
+      "waited": "What {{task}} waits on"
     },
     "decision": {
       "showDetails": "Show details",
@@ -348,6 +404,29 @@
       "connection": "The Orchestrator runs on another connection now: this answer starts a new session and doesn't remember the earlier messages.",
       "account": "The Orchestrator's connection is on another account now: this answer starts a new session and doesn't remember the earlier messages."
     },
+    "watching": {
+      "applied": "Applied {{time}}",
+      "from": "Orchester",
+      "meta": "{{time}} · the live state, no agent turn",
+      "total": "This conversation leads {{leads}}. {{total}}.",
+      "only": "{{total}}.",
+      "and": "{{rest}} and {{last}}",
+      "comma": "{{rest}}, {{next}}",
+      "reading": "Reading what this conversation watches…",
+      "unreadable": "What this conversation watches can't be read: {{reason}}",
+      "head": {
+        "own": "{{kind}} · since {{since}} · “{{order}}”",
+        "same": "{{kind}} · since {{since}} · same order",
+        "projectDefault": "{{kind}} · since {{since}} · the default order “{{order}}”",
+        "none": "{{kind}} · since {{since}} · no order"
+      },
+      "stop": "Stop watching",
+      "keyRun": "{{key}} · #{{run}}",
+      "open": "{{action}} ↗",
+      "failed": "Not applied",
+      "personOnly": "Only a person stops watching here: input from an MCP client is not taken, and the subscription goes on.",
+      "dismiss": "Dismiss"
+    },
     "context": {
       "event": {
         "compacting": "Compacting the conversation",
@@ -384,6 +463,162 @@
       "effectPlan": "Deciding a plan is yours, on its card. Ask the Orchestrator here to read it with you.",
       "effectPlanRead": "Deciding a plan is yours, on its card. The Orchestrator reads it and tells you what it proposes.",
       "effectGone": "It was dealt with on the task's page, or its run went on: the agent no longer waits."
+    },
+    "watch": {
+      "applied": "Applied {{time}}",
+      "target": {
+        "withoutModule": "Tasks without a module",
+        "project": "Every task of the project",
+        "gone": "Gone from the project"
+      },
+      "counted": {
+        "one": "{{target}} · {{count}} task",
+        "other": "{{target}} · {{count}} tasks"
+      },
+      "join": {
+        "pair": "{{first}} and {{last}}",
+        "more": "{{first}}, {{next}}"
+      },
+      "leading": "Leading {{targets}}",
+      "leadingAside": "— their waits, run ends, conflicts, limits and stalls start a turn here",
+      "nowLedIn": "{{target}} is now led in «{{title}}»",
+      "nowLedInAside": "— its events start turns there",
+      "nowLedInTask": "— watched there as a task; the rest of {{module}} stays here",
+      "nowLedInTaskBare": "— watched there as a task; the rest stays here",
+      "tookOver": "{{target}} is now led here",
+      "tookOverAside": "— taken from «{{title}}»; its events start turns here",
+      "ledHereAgain": "{{target}} is led here again",
+      "ledHereAgainAside": "— «{{title}}» stopped watching it; its events start turns here",
+      "stopped": "Stopped watching {{targets}}",
+      "stoppedAll": "Stopped watching everything",
+      "leftOpen": {
+        "one": "— {{count}} left open goes back to the usual rule",
+        "other": "— {{count}} left open go back to the usual rule"
+      },
+      "nothingOpen": "— nothing is canceled or paused",
+      "open": {
+        "waits": "{{task}} waits for you ↗",
+        "runs": "{{task}} is running ↗",
+        "queued": "{{task}} queued ↗",
+        "stoppedAtLimit": "{{task}} stopped at a limit ↗"
+      },
+      "failed": "Nothing was watched",
+      "personOnly": "Only you can start watching from the composer: a command sent by automation is not applied. The chips and the order stay.",
+      "dismiss": "Dismiss",
+      "picker": {
+        "count": "{{shown}} of {{total}}",
+        "added": "Added",
+        "ledIn": "Led in «{{title}}» ↗",
+        "ledInUnnamed": "Led in another conversation ↗",
+        "unreadable": "The tasks of {{project}} can't be read",
+        "unreadableNote": "{{reason}} Nothing was added; the chips you have stay.",
+        "tryAgain": "Try again"
+      },
+      "modules": {
+        "placeholder": "Search modules — then write what to do with their events",
+        "section": "Modules",
+        "also": "Also",
+        "nothing": "No module matches “{{query}}”",
+        "withoutModule": "Tasks without a module",
+        "project": "Everything in {{project}}",
+        "projectMeta": "What no other subscription takes",
+        "tasks": {
+          "one": "1 task",
+          "other": "{{count}} tasks"
+        },
+        "running": {
+          "none": "none running",
+          "some": "{{count}} running"
+        },
+        "waiting": {
+          "one": "1 waits for you",
+          "other": "{{count}} wait for you"
+        },
+        "meta": "{{tasks}} · {{running}}",
+        "metaWaiting": "{{tasks}} · {{running}} · {{waiting}}",
+        "allDone": "{{tasks}} · all done",
+        "allClosed": "{{tasks}} · all done or canceled",
+        "ledHere": "Watched here",
+        "nothingLeft": "Nothing left to watch"
+      },
+      "tasks": {
+        "placeholder": "Search tasks by key or title — then write what to do with their events",
+        "section": "Tasks",
+        "nothing": "No task matches “{{query}}”",
+        "inModule": "{{title}} · {{module}}",
+        "withoutModule": "{{title}} · no module",
+        "ledHere": "Watched here",
+        "comesHere": "Comes here via {{module}}",
+        "comesHereModule": "Comes here via its module",
+        "comesHereWithoutModule": "Comes here via the tasks without a module",
+        "comesHereProject": "Comes here via the whole project",
+        "nothingToWatch": "nothing to watch"
+      },
+      "unwatch": {
+        "section": "Watched here",
+        "count": "{{shown}} of {{total}}",
+        "nothing": "Nothing watched here matches “{{query}}”",
+        "reading": "Reading what this conversation watches…",
+        "unreadable": "What this conversation watches can't be read: {{reason}}",
+        "meta": "{{kind}} · since {{since}}",
+        "added": "Added",
+        "all": "All of them",
+        "allMeta": "stop watching everything here",
+        "cancelsNothing": "cancels nothing",
+        "filter": "Type to filter",
+        "open": {
+          "waits": {
+            "one": "1 waits for you",
+            "other": "{{count}} wait for you"
+          },
+          "stopped": {
+            "one": "1 stopped at a limit",
+            "other": "{{count}} stopped at a limit"
+          },
+          "readyToMerge": {
+            "one": "1 ready to merge",
+            "other": "{{count}} ready to merge"
+          },
+          "running": {
+            "one": "1 running",
+            "other": "{{count}} running"
+          },
+          "queued": {
+            "one": "1 queued",
+            "other": "{{count}} queued"
+          },
+          "join": "{{rest}} · {{next}}",
+          "idle": "nothing under way",
+          "nothing": "nothing open"
+        }
+      },
+      "keys": {
+        "move": "↑ ↓",
+        "enter": "Enter",
+        "backspace": "Backspace",
+        "ctrlEnter": "Ctrl Enter",
+        "cmdEnter": "Cmd Enter",
+        "esc": "Esc"
+      },
+      "hint": {
+        "move": "Move",
+        "add": "Add",
+        "removeLast": "Remove the last",
+        "watch": "Watch",
+        "stop": "Stop",
+        "close": "Close"
+      },
+      "led": {
+        "title": "{{target}} is already led in «{{title}}»",
+        "note": "Since {{date}} {{time}}. Its waits and run ends start turns there. Taking it moves them here, and that conversation gets a line saying so.",
+        "open": "Open that conversation",
+        "take": "Take it here",
+        "personOnly": "Only a person chooses where a target is led: input from automation is refused here.",
+        "taken": "{{target}} is now led here",
+        "takenFrom": "— taken from «{{title}}», which got a line saying so",
+        "left": "{{target}} stays led in «{{title}}»",
+        "leftAside": "— you opened that conversation; nothing moved"
+      }
     },
     "held": {
       "projectTitle": "New starts held in {{project}}",
@@ -426,6 +661,8 @@
         "other": "{{count}} messages"
       },
       "meta": "{{when}} · {{messages}}",
+      "leads": "Leads {{what}} · {{when}}",
+      "leadsSeparator": ", ",
       "found": {
         "results": {
           "one": "Found in 1 conversation · titles and messages",

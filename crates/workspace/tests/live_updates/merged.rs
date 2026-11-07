@@ -38,7 +38,7 @@ impl Member {
 }
 
 /// Alice's desktop, whose run of the shared task she holds passed, its In review on the server, and was merged.
-async fn merged(server: &TeamServer) -> (Desktop, TaskId) {
+pub(crate) async fn merged(server: &TeamServer) -> (Desktop, TaskId) {
   let mut fixture = support::Fixture::new();
   let task = fixture.task("Status bar", support::at(10));
   let mut run = fixture.started_run(task, support::at(11));

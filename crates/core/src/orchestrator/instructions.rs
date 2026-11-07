@@ -1,7 +1,12 @@
 //! What the Orchestrator's agent is told on every turn: its system prompt (`--system-prompt-file`), which a resumed
-//! session gets again because it is not part of the session; and the prompt of a turn a wait of an agent, or the end
-//! of a task's run, started by itself ([`wait_prompt`]), or a daily report did ([`report_prompt`]).
+//! session gets again because it is not part of the session; and the prompt of a turn a wait of an agent, the end
+//! of a task's run or an event of it started by itself ([`wait_prompt`], [`event_prompt`]), a daily report did
+//! ([`report_prompt`]), or a subscription that ended by itself did ([`watch_summary_prompt`]).
 
+mod events;
+mod summary;
+
+pub use self::{events::event_prompt, summary::watch_summary_prompt};
 use super::{
   merging::{MergeLeft, Merging},
   report::DailyReport,
@@ -201,7 +206,8 @@ const MERGING_RULES: &str = "- Merge a run only when the person asked in this ch
   Orchestrator merge finished runs on its own and the message says so, merge_run merges the run whose success \
   started the turn, once.";
 
-/// The prompt of the Orchestrator turn `wait` started by itself: what waits and where, and what to do about it.
+/// The prompt of the Orchestrator turn `wait` started by itself: what waits and where, and what to do about it. An
+/// event's turn here is one no conversation's order leads ([`event_prompt`] with no order).
 pub fn wait_prompt(wait: &AgentWait) -> String {
   let who = match (&wait.agent, &wait.step) {
     (Some(agent), Some(step)) => format!("The agent {agent} at the step {step}"),
@@ -214,6 +220,7 @@ pub fn wait_prompt(wait: &AgentWait) -> String {
     WaitKind::Message => "waits for a message: the answer to what it wrote",
     WaitKind::Plan => "proposed a plan that waits for a decision",
     WaitKind::Ended(end) => return end_prompt(wait, end),
+    WaitKind::Event(event) => return event_prompt(wait, event, None),
   };
   format!(
     "[Orchester] {who} {waits} in run #{number} of {task} ({title}); its card: {link}.\n\

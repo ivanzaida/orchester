@@ -310,8 +310,7 @@ impl Component for FeedLoader {
     let root = open.repo_root.clone();
     let states = counter(ctx, (runners.clone(), root.clone(), Counter::States));
     let changes = counter(ctx, (runners.clone(), root.clone(), Counter::Changes(active)));
-    // The Orchestrator chat follows what the project's agents wait for (ORC-42), and gets its daily report (ORC-47).
-    super::waits::follow(ctx, (&open, states));
+    // The Orchestrator chat gets its daily report (ORC-47).
     super::daily_report::deliver(ctx, &open);
     let runner = status(ctx, &runners, &root);
     // Failed CI goes to the runs whose *Fix CI automatically* is on (ORC-335).
@@ -341,6 +340,9 @@ impl Component for FeedLoader {
     }
     // A task closed while its run waited to be completed settles that completion, however it was closed (ORC-150).
     super::closed::settle(ctx, (&open, saved + states));
+    // The Orchestrator chat follows what the project's agents wait for (ORC-42), and ends the subscriptions whose tasks
+    // were all closed, however they were (ORC-764).
+    super::waits::follow(ctx, (&open, states + saved));
     let hold = services.hold;
     // An answer that settles reads the tasks again at once, whether or not a tab of the project is active.
     let settled = answers(ctx, (runners.clone(), root.clone())).settled();

@@ -43,7 +43,7 @@ use orchester_store::{ProjectDb, TeamFence, WorkReportState};
 
 pub use self::{
   bundle::StartChoices,
-  choices::{ChoiceError, bind, branch_tip},
+  choices::{ChoiceError, McpHere, bind, branch_tip},
   delivery::{
     DeliveryProgress, DeliveryStatus, ModuleDeliveries, RecoveredDeliveries, TeamDeliveryRequest, TeamDeliveryState,
   },
@@ -94,8 +94,9 @@ pub struct TeamRunState {
   pub refused_reports: usize,
 }
 
-impl<R: TeamRunner> TeamWork<R> {
-  /// The work of the team project `dispatcher` acts on, started by `runner`.
+impl<R> TeamWork<R> {
+  /// The work of the team project `dispatcher` acts on, started by `runner`. Reporting needs no runner: the
+  /// background reports make it with `()`.
   pub const fn new(dispatcher: Dispatcher, runner: R) -> Self {
     Self { dispatcher, runner }
   }
@@ -103,7 +104,9 @@ impl<R: TeamRunner> TeamWork<R> {
   fn db(&self) -> Result<ProjectDb, TeamWorkError> {
     Ok(ProjectDb::open(self.dispatcher.root())?)
   }
+}
 
+impl<R: TeamRunner> TeamWork<R> {
   /// Team run `run` as it stands here and on the server; `None` for a run that is not a team run.
   pub fn run_state(&self, run: RunId) -> Result<Option<TeamRunState>, TeamWorkError> {
     let db = self.db()?;

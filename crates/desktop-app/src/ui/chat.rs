@@ -66,13 +66,15 @@ pub fn links(ctx: &mut Ctx) -> LinkHandler {
   links::ChatLinks::of(ctx)
 }
 
-/// Who a row is from, as its avatar shows it: an agent of a run, a command tool that runs a step, or the
-/// project's Orchestrator (`waypoints`).
+/// Who a row is from, as its avatar shows it: an agent of a run, a command tool that runs a step, the
+/// project's Orchestrator (`waypoints`), or Orchester itself answering a command from the live state with no agent
+/// turn (`list-tree`, `MOrwu` in 06 `Ff7AD`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Avatar {
   Agent,
   Tool,
   Orchestrator,
+  Orchester,
 }
 
 impl Avatar {
@@ -81,6 +83,7 @@ impl Avatar {
       Self::Agent => Icon::Bot,
       Self::Tool => Icon::Terminal,
       Self::Orchestrator => Icon::Waypoints,
+      Self::Orchester => Icon::ListTree,
     }
   }
 }

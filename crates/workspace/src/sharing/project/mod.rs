@@ -29,6 +29,7 @@ pub mod share_task;
 pub mod state;
 pub mod store;
 mod sync;
+mod team_reports;
 pub mod work;
 
 use std::path::{Path, PathBuf};

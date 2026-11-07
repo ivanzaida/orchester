@@ -2,7 +2,7 @@
 //! ([`crate::team_server`]) as the team server answers them: the S11 subscription (`ready`, then held open), the S10
 //! task list, task, module list, module and a resource's versions, and a task's definition route, which refuses a
 //! member `403 not_admin`, as `task.create` refuses one `403 forbidden`. Its one task, `KON-7`, is in its one module
-//! and runs the team's pipeline, whose Builder profile runs on Codex.
+//! and runs the team's pipeline, whose Builder profile runs on Codex with the publisher's MCP server `pencil-design`.
 
 use std::{
   io::{Read, Write},
@@ -35,6 +35,8 @@ pub struct Seen {
   pub created_pipeline: Value,
   /// The connection the Builder profile's version names, by its id on the publisher's computer.
   pub publisher_connection: Option<ConnectionId>,
+  /// The MCP server the Builder profile's version names, by its id on the publisher's computer.
+  pub publisher_mcp_server: Option<ConnectionId>,
 }
 
 /// The routes, and what they saw.
@@ -42,6 +44,7 @@ pub fn routes(config: &Config) -> (Extra, Arc<Mutex<Seen>>) {
   let seen = Arc::new(Mutex::new(Seen::default()));
   let versions = Arc::new(Versions::of(config));
   seen.lock().publisher_connection = Some(versions.connection);
+  seen.lock().publisher_mcp_server = Some(versions.mcp_server);
   let counted = seen.clone();
   let extra: Extra = Arc::new(move |state, request, stream| route(state, (&versions, &counted), request, stream));
   (extra, seen)
@@ -52,22 +55,28 @@ struct Versions {
   pipeline: (ResourceId, Value),
   profile: (ResourceId, Value),
   connection: ConnectionId,
+  mcp_server: ConnectionId,
 }
 
 impl Versions {
   fn of(config: &Config) -> Self {
     let profile = fixture::builder();
     let connection = profile.body().connection();
+    let mcp_server = ConnectionId::generate();
     let pipeline = fixture::one_step(config.profile, "Say hello.");
     Self {
       connection,
+      mcp_server,
       pipeline: (config.pipeline, version(config.pipeline, &pipeline, &json!([]))),
       profile: (
         config.profile,
         version(
           config.profile,
           &profile,
-          &json!([{"kind": "connection", "id": connection, "name": "Codex", "role": "codex_cli"}]),
+          &json!([
+            {"kind": "connection", "id": connection, "name": "Codex", "role": "codex_cli"},
+            {"kind": "mcp_server", "id": mcp_server, "name": "pencil-design", "role": null}
+          ]),
         ),
       ),
     }

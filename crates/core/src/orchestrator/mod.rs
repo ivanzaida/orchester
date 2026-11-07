@@ -12,6 +12,7 @@ mod failure;
 pub mod fork;
 pub mod git;
 pub mod instructions;
+pub mod leads;
 pub mod mcp;
 pub mod merging;
 pub mod plan;
@@ -22,21 +23,26 @@ pub mod rewind;
 pub mod run_git;
 pub mod sent;
 pub mod settings;
+pub mod task_event;
 pub mod wait;
+pub mod watch;
 
 pub use self::{
   chat::{
     ActionOutcome, BlankTitle, Chat, ChatAction, ChatApproval, ChatEntry, ChatEvent, ChatSession, ChatTitle,
-    CompactionState, EntryKind, HeldWork, Queued, SessionChange, TurnFailure, TurnState, WaitTurn,
+    CompactionState, EntryKind, HeldWork, Queued, SessionChange, TurnFailure, TurnState, WaitTurn, WaitsOnRow,
   },
+  leads::{Lead, Leads},
   merging::{MergeLeft, Merging},
   plan::{ChatPlan, PlanState, PlanStep, StepKind, TurnMode},
   report::{DailyReport, ReportSchedule, ReportTime},
   resume::{ChatResume, Continuing, PersonsStop},
   rewind::{Dropped, RewindPoint, RewoundTo},
   sent::{FromOrchestrator, SentWay},
-  settings::{OrchestratorSettings, runs_orchestrator},
+  settings::{NoProgressError, OrchestratorSettings, WatchSettings, runs_orchestrator},
+  task_event::{TaskEvent, TaskEventKind},
   wait::{AgentWait, RunEnd, StopReason, WaitKind},
+  watch::{Claim, Subscription, Subscriptions, WatchTarget},
 };
 
 /// The agentic turns one answer on Claude Code may take at most (`--max-turns`): reading, searching and calling tools,

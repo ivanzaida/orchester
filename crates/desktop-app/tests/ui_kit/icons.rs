@@ -245,3 +245,76 @@ fn team_claim_icons_match_bundled_font_names() {
     assert_eq!(icon.glyph() as usize, codepoint, "{icon:?} codepoint: {codepoint:x}");
   }
 }
+
+/// The glyphs of the Orchestrator's lines of events of tasks' runs and of the tag of what started a turn (ORC-779,
+/// `c9YRv`, `OKtX2`, `q6udQx` in `Orchestrator watch · redesign`).
+#[test]
+fn task_event_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  for (icon, name) in [
+    (Icon::TimerOff, "timer-off"),
+    (Icon::GitPullRequestArrow, "git-pull-request-arrow"),
+    (Icon::GitMerge, "git-merge"),
+    (Icon::Ban, "ban"),
+    (Icon::Zap, "zap"),
+  ] {
+    assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
+  }
+}
+
+/// The glyphs of the card of a target another conversation leads and of the line it settles into (ORC-778, `f1J8z`
+/// in 05 `EIjDH` and `JZzui` in `DE2n1`, `Orchestrator watch · redesign`).
+#[test]
+fn already_led_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  for (icon, name) in [
+    (Icon::ArrowDownToLine, "arrow-down-to-line"),
+    (Icon::MessagesSquare, "messages-square"),
+    (Icon::ArrowRightLeft, "arrow-right-left"),
+  ] {
+    let codepoint = (0xe000..0xf000)
+      .find(|codepoint| glyph_name(font, font_glyph(font, *codepoint)) == name)
+      .expect("the bundled font includes the icon");
+    assert_eq!(icon.glyph() as usize, codepoint, "{icon:?} codepoint: {codepoint:x}");
+  }
+}
+
+/// The glyphs of the `/watching` answer (ORC-775, 06 `Ff7AD`): its avatar and command chip, and a head row's target;
+/// `boxes` and `folder-kanban` are the /watch-module picker's rows too (ORC-772, `R1s1o` in 02 `c8pALl`). The bundled
+/// font names the design's `square-check` by its older name.
+#[test]
+fn watching_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  for (icon, name) in [
+    (Icon::ListTree, "list-tree"),
+    (Icon::Boxes, "boxes"),
+    (Icon::SquareCheck, "check-square-2"),
+    (Icon::Inbox, "inbox"),
+    (Icon::FolderKanban, "folder-kanban"),
+  ] {
+    let codepoint = (0xe000..0xf8ff)
+      .find(|codepoint| glyph_name(font, font_glyph(font, *codepoint)) == name)
+      .expect("the bundled font includes the icon");
+    assert_eq!(icon.glyph() as usize, codepoint, "{icon:?} codepoint: {codepoint:x}");
+  }
+}
+
+/// The glyphs of the lines the app writes about what an Orchestrator conversation watches and of a watch command's
+/// module chip (ORC-777, `avDZO`, `mgpxA` in `OKtX2`).
+#[test]
+fn watch_line_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  let boxes = (0xe000..0xf000)
+    .find(|codepoint| glyph_name(font, font_glyph(font, *codepoint)) == "boxes")
+    .expect("the bundled font includes boxes");
+  assert_eq!(Icon::Boxes.glyph() as usize, boxes, "boxes codepoint: {boxes:x}");
+  for (icon, name) in [
+    (Icon::ArrowRightLeft, "arrow-right-left"),
+    (Icon::EyeOff, "eye-off"),
+    (Icon::Flag, "flag"),
+    (Icon::Eye, "eye"),
+    (Icon::ScanEye, "scan-eye"),
+  ] {
+    assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
+  }
+}

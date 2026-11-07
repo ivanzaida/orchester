@@ -24,7 +24,7 @@ use orchester_workspace::{
   runner::{RunRequestError, Runners},
   tasks::run::start_messages,
   team_work::{
-    self, ChoiceError, ProjectRunner, StartChoices, StartOutcome, TeamStartRequest, TeamWork, TeamWorkError,
+    self, ChoiceError, McpHere, ProjectRunner, StartChoices, StartOutcome, TeamStartRequest, TeamWork, TeamWorkError,
   },
 };
 
@@ -74,6 +74,8 @@ pub enum Stop {
   BranchNotFound(String),
   /// These profiles, by role, have no connection of their CLI here, or several.
   BindingsRequired(Vec<String>),
+  /// These MCP servers, by name, that the pipeline's profiles use are not set up here.
+  McpServersRequired(Vec<String>),
   /// The team server could not read the pipeline or a profile, or they have no published version.
   NotReadable,
   /// The runner refused the run.
@@ -153,18 +155,18 @@ async fn choices(
   let branch = branch.to_owned();
   let read = background::run(move || {
     let commit = team_work::branch_tip(programs.runner(), &root, &branch).map_err(|error| chosen(&error))?;
-    let connections = ProjectDb::open(&root)
-      .and_then(|db| db.connections())
+    let here = ProjectDb::open(&root)
+      .and_then(|db| Ok((db.connections()?, McpHere::read(&db)?)))
       .map_err(|error| {
         tracing::warn!(%error, "the project's connections cannot be read for a team start");
         Stop::Failed
       })?;
-    Ok((commit, connections))
+    Ok((commit, here))
   })
   .await
   .map_err(|_| Stop::Failed)?;
-  let (commit, connections) = read?;
-  let bindings = team_work::bind(source.project(), pipeline, &connections, &[])
+  let (commit, (connections, mcp)) = read?;
+  let bindings = team_work::bind(source.project(), pipeline, (&connections, &mcp), &[])
     .await
     .map_err(|error| chosen(&error))?;
   Ok((commit, bindings))
@@ -219,6 +221,7 @@ fn chosen(error: &ChoiceError) -> Stop {
   match error {
     ChoiceError::BranchNotFound(branch) => Stop::BranchNotFound(branch.clone()),
     ChoiceError::BindingsRequired(profiles) => Stop::BindingsRequired(profiles.clone()),
+    ChoiceError::McpServersRequired(servers) => Stop::McpServersRequired(servers.clone()),
     ChoiceError::Read(_) | ChoiceError::NotPublished | ChoiceError::Unreadable | ChoiceError::ConnectionNotFound(_) => {
       tracing::warn!(%error, "a team start's choices cannot be made");
       Stop::NotReadable

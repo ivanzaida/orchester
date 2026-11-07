@@ -12,7 +12,7 @@ use lurq::{
   },
   components::{Button, Column, Row, Text, TextInput, TextOverflow},
   core::Signal,
-  layout::Alignment,
+  layout::{Alignment, text_style::TextAlign},
   node::{CursorIcon, Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::tokens::regroup;
@@ -112,9 +112,10 @@ impl Component for FieldBox {
         )
         .id(format!("{}-trailing", props.id))
       })),
-      Lines::Many | Lines::Compact => {
-        dress(Row::new().id(format!("{}-box", props.id)).align_items(Alignment::Start)).child(input)
-      }
+      Lines::Many | Lines::Compact => match &props.foot {
+        None => dress(Row::new().id(format!("{}-box", props.id)).align_items(Alignment::Start)).child(input),
+        Some(foot) => dress(Row::new().id(format!("{}-box", props.id))).child(with_foot(&props.id, input, foot)),
+      },
     };
     let Some(error) = &props.error else {
       return Column::new().width(props.width).child(frame);
@@ -161,6 +162,10 @@ impl FieldBox {
       .on_blur(leave_field(lost, props));
     if props.masked {
       input = input.mask();
+    }
+    // After the styles, which would replace it.
+    if props.end_aligned {
+      input = input.text_align(TextAlign::Right);
     }
     if let Some(controller) = &props.controller {
       input = input.controller(controller.clone());
@@ -209,6 +214,23 @@ impl FieldBox {
         )),
     }
   }
+}
+
+/// The lines `input` of the field `id` with the line `foot` under them, inside the box, at the lines' sides; the
+/// foot's element id is `<id>-foot`.
+fn with_foot(id: &str, input: Element, foot: &str) -> Column {
+  Column::new().width(Dimension::Pct(100.0)).child(input).child(
+    Text::new(foot)
+      .id(format!("{id}-foot"))
+      .variant(TypographyStyle::Caption)
+      .width(Dimension::Pct(100.0))
+      .padding(
+        Padding::new()
+          .left(ExtraSpacing::Loose.role())
+          .right(ExtraSpacing::Loose.role())
+          .bottom(ExtraSpacing::TextArea.role()),
+      ),
+  )
 }
 
 /// The unit after the value of the field `props`, as its unit look has it read; its text's element id is `<id>-unit`.

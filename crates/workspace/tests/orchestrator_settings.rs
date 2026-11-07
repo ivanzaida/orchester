@@ -1,6 +1,7 @@
 //! Orchestrator settings › Profile on a Claude Code connection that runs on an API provider
 //! (`docs/design/api-providers.md`): it is offered like any connection the Orchestrator runs on, its models are the
-//! ones typed for the provider, and saving the settings on it is accepted. Run with
+//! ones typed for the provider, and saving the settings on it is accepted. Beside them, how the Orchestrator watches
+//! the runs (Project settings › Orchestrator). Run with
 //! `cargo test -p orchester-workspace --test orchestrator_settings orchestrator_settings`.
 
 mod support;
@@ -9,11 +10,11 @@ use orchester_core::{
   connection::{AgentConnection, AgentProvider, ApiProvider, BaseUrl},
   id::{ConnectionId, SecretId},
   name::Name,
-  orchestrator::OrchestratorSettings,
+  orchestrator::{OrchestratorSettings, WatchSettings},
   resource::ModelId,
   store::ConnectionStore,
 };
-use orchester_workspace::orchestrator::settings::{Keep, OrchestratorSetup, Readiness, save_in};
+use orchester_workspace::orchestrator::settings::{Keep, OrchestratorSetup, Readiness, save_in, save_watch_in};
 use support::{Fixture, at};
 
 const MODELS: [&str; 2] = ["deepseek-v4-flash", "deepseek-v4-pro"];
@@ -90,4 +91,19 @@ fn orchestrator_settings_on_an_api_provider_are_saved_and_published() {
     "the chat can send on it"
   );
   assert_eq!(setup.provider(), Some(AgentProvider::ClaudeCodeCli));
+}
+
+/// ORC-757: Project settings › Orchestrator reads how the Orchestrator watches the runs and keeps a change at once.
+#[test]
+fn orchestrator_settings_read_the_watch_defaults_and_keep_a_change() {
+  let fixture = Fixture::new();
+  let root = fixture.repo.path();
+  assert_eq!(
+    OrchestratorSetup::load_in(root).expect("read").watch,
+    WatchSettings::default(),
+    "no order and 20 minutes"
+  );
+  let watch = WatchSettings::new("Watch ORC-7 and merge it once it passes.", None).expect("off");
+  assert_eq!(save_watch_in(root, &watch), Ok(()));
+  assert_eq!(OrchestratorSetup::load_in(root).expect("read").watch, watch);
 }
