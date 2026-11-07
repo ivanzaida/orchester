@@ -1,8 +1,8 @@
 //! Something that happened to a task the Orchestrator chat follows, besides an agent's wait and a run's end (the
 //! module design's events, *Parts · Lines* e): a run that made no progress for a while, a merge that hit conflicts,
 //! and the task a run waits on merged or closed without merging. Each is kept as a wait of the run
-//! ([`super::WaitKind::Event`]), so it goes to the conversation that last dealt with its task and starts a turn by
-//! itself as a wait does, unless the Orchestrator's own doing raised it ([`TaskEventKind::raised_by`]).
+//! ([`super::WaitKind::Event`]), so it goes to the conversation that leads its task, if one does, and starts a turn
+//! by itself as a wait does, unless the Orchestrator's own doing raised it ([`TaskEventKind::raised_by`]).
 
 use std::num::NonZeroU32;
 

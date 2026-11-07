@@ -99,9 +99,9 @@ pub fn conversation(prepared: &super::data::Prepared, i18n: &I18n) -> Result<Cha
     parts: cards.into_iter().map(|card| Part::Action(Box::new(card))).collect(),
     end: TurnState::Answered,
   }];
-  let chat = keep(&mut db, ChatId::generate(), connection, turns)?;
-  elsewhere(&mut db)?;
-  Ok(chat)
+  // The seed's subscriptions are none: the waits and run ends its runner raises once the window opens go to no
+  // conversation (ORC-895), so they never land between the state's cards.
+  keep(&mut db, ChatId::generate(), connection, turns)
 }
 
 /// The words of every message card.
@@ -136,31 +136,6 @@ fn moving_cards(
     moving(limited, MessageThen::RaiseLimit, "raise_limit"),
     moving(ended, MessageThen::RunAgain, "run_again"),
   ])
-}
-
-/// A conversation, newer than the state's, that dealt with every task of the seed, so that the waits and run ends the
-/// project's runner raises once the window opens land there, not between the state's cards (the conversation that
-/// last dealt with a task gets them).
-pub fn elsewhere(db: &mut ProjectDb) -> Result<ChatId, Box<dyn Error>> {
-  let connection = db
-    .orchestrator_settings()?
-    .ok_or("the Orchestrator runs on the seed's connection")?
-    .connection();
-  let parts = db
-    .tasks()?
-    .into_iter()
-    .map(|task| {
-      let updated = ChatAction::new("update_task", Some(task.key().to_string()), ActionOutcome::Done);
-      Part::Action(Box::new(updated))
-    })
-    .collect();
-  let turn = Turn {
-    text: "Where the project's waits and run ends land in this QA state.",
-    at: Timestamp::now(),
-    parts,
-    end: TurnState::Answered,
-  };
-  keep(db, ChatId::generate(), connection, vec![turn])
 }
 
 /// The latest run of each of the seed's tasks that has one, with the task's key.

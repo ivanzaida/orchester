@@ -5,8 +5,8 @@
 use std::collections::BTreeMap;
 
 use orchester_core::{
-  id::{IdempotencyKey, ResourceId, StepExecutionId},
-  orchestrator::EntryKind,
+  id::{ChatId, IdempotencyKey, ResourceId, StepExecutionId},
+  orchestrator::{Chat, EntryKind, Subscription, WatchTarget},
   resource::{AgentProfile, Pipeline, StepKind},
   revision::Revision,
   run::{BranchName, NewRun, PublishedVersions, Run, RunSnapshot, WaitReason},
@@ -79,8 +79,22 @@ pub fn answered_on_task_page(screen: &Orchestrator, (run, execution): &mut (Run,
 }
 
 /// Keeps the waits that are new in the conversations, as the app's follower does, with *Let the Orchestrator answer
-/// agents* off.
+/// agents* off. Only subscriptions bring waits into a conversation (ORC-895): the first time, a conversation that
+/// watches everything in the project is opened, as the person would watch *Everything in* the project there.
 pub fn follow(screen: &Orchestrator) {
+  let mut db = screen.db();
+  if db
+    .active_subscriptions()
+    .expect("read")
+    .of(WatchTarget::Project)
+    .is_none()
+  {
+    let now = Timestamp::now();
+    let chat = Chat::named(ChatId::generate(), "Everything", now);
+    db.keep_watch_entries(&chat, &[], now).expect("the conversation");
+    let everything = Subscription::new(chat.id(), WatchTarget::Project, "", now);
+    db.start_subscription(&everything).expect("watching");
+  }
   let programs = Programs::processes();
   follow_in(
     (&screen.root, screen.project, &programs),

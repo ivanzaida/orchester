@@ -1,8 +1,8 @@
 //! The waits and run ends of a task a conversation leads (ORC-761, `orchestrator::waits`): with a subscription that
 //! has not ended covering the task, its waits are kept, and start their turn, in the leading conversation only (the
-//! task's own subscription before its module's), even when another conversation dealt with the task since; a task
-//! nobody leads, or whose subscription ended before its wait was kept, keeps the rule of the conversation that last
-//! dealt with it, else the latest one.
+//! task's own subscription before its module's, the whole project's last), even when another conversation dealt
+//! with the task since; a task nobody leads, or whose subscription ended before its wait was kept, keeps its waits in
+//! no conversation, starts no turn and opens none (ORC-895).
 //! `cargo test -p orchester-workspace --test orchestrator_led_waits led_waits`.
 
 mod support;
@@ -223,8 +223,9 @@ fn led_waits_and_run_ends_go_to_the_task_subscription_before_the_module_one() {
 }
 
 #[test]
-fn led_waits_of_a_task_nobody_leads_keep_the_conversation_that_dealt_with_it() {
+fn led_waits_of_a_task_nobody_leads_go_to_no_conversation_and_start_no_turn() {
   let mut fixture = Fixture::new();
+  ready(&mut fixture);
   let login = fixture.task("Add login", at(40));
   let zoom = fixture.task("Plan zoom", at(41));
   let avatars = fixture.task("Add avatars", at(42));
@@ -238,23 +239,55 @@ fn led_waits_of_a_task_nobody_leads_keep_the_conversation_that_dealt_with_it() {
   ask(&mut fixture, &mut login_run);
   fail(&mut fixture, &mut zoom_run);
   ask(&mut fixture, &mut avatars_run);
-  assert!(follow(&fixture, false).kept);
+  let followed = follow(&fixture, true);
+  assert!(followed.kept, "{followed:?}");
   assert_eq!(
-    tasks_in(&fixture, &dealt),
-    ["ORC-1"],
-    "the conversation that dealt with it"
+    followed.turn.map(|turn| turn.chat),
+    Some(watching.id()),
+    "only the led task's end starts a turn"
   );
-  assert_eq!(
-    tasks_in(&fixture, &latest),
-    ["ORC-3"],
-    "nobody dealt with it: the latest one"
+  assert!(
+    tasks_in(&fixture, &dealt).is_empty(),
+    "not the conversation that dealt with ORC-1"
   );
+  assert!(tasks_in(&fixture, &latest).is_empty(), "nor the latest one");
   assert_eq!(tasks_in(&fixture, &watching), ["ORC-2"], "the led task's end");
   assert_eq!(fixture.db.chats().expect("History").len(), 3, "no conversation opened");
+  let turns = fixture.db.automatic_waits_without_turn().expect("read");
+  assert!(turns.is_empty(), "no other wait waits for a turn: {turns:?}");
 }
 
 #[test]
-fn led_waits_whose_subscription_ended_before_they_were_kept_keep_todays_rule() {
+fn led_waits_of_tasks_no_more_specific_subscription_leads_go_to_the_whole_project() {
+  let mut fixture = Fixture::new();
+  let login = fixture.task("Add login", at(40));
+  let zoom = fixture.task("Plan zoom", at(41));
+  let avatars = fixture.task("Add avatars", at(42));
+  let mut login_run = fixture.started_run(login, at(50));
+  let mut zoom_run = fixture.started_run(zoom, at(51));
+  let mut avatars_run = fixture.started_run(avatars, at(52));
+  let accounts = module(&mut fixture, "Accounts", &[login]);
+  let by_module = talking(&mut fixture, "Look after Accounts", 5);
+  let by_task = talking(&mut fixture, "Look after ORC-2", 6);
+  let everything = talking(&mut fixture, "Everything", 7);
+  watch(&mut fixture, &by_module, WatchTarget::Module(accounts), 8);
+  watch(&mut fixture, &by_task, WatchTarget::Task(zoom), 9);
+  watch(&mut fixture, &everything, WatchTarget::Project, 10);
+  ask(&mut fixture, &mut login_run);
+  fail(&mut fixture, &mut zoom_run);
+  ask(&mut fixture, &mut avatars_run);
+  assert!(follow(&fixture, false).kept);
+  assert_eq!(tasks_in(&fixture, &by_module), ["ORC-1"], "the module's subscription");
+  assert_eq!(tasks_in(&fixture, &by_task), ["ORC-2"], "the task's own subscription");
+  assert_eq!(
+    tasks_in(&fixture, &everything),
+    ["ORC-3"],
+    "what no more specific subscription takes"
+  );
+}
+
+#[test]
+fn led_waits_whose_subscription_ended_before_they_were_kept_go_to_no_conversation() {
   let mut fixture = Fixture::new();
   ready(&mut fixture);
   let task = fixture.task("Add login", at(40));
@@ -269,7 +302,10 @@ fn led_waits_whose_subscription_ended_before_they_were_kept_keep_todays_rule() {
     .stop_subscription(leading.id(), WatchTarget::Task(task), at(70))
     .expect("stopped");
   assert!(stopped.is_some());
-  let turn = follow(&fixture, true).turn.expect("the wait starts a turn by itself");
-  assert_eq!(turn.chat, dealt.id(), "the conversation that last dealt with ORC-1");
+  assert_eq!(follow(&fixture, true), Followed::default(), "kept nowhere, no turn");
   assert!(tasks_in(&fixture, &leading).is_empty(), "it no longer leads ORC-1");
+  assert!(
+    tasks_in(&fixture, &dealt).is_empty(),
+    "nor does the conversation that last dealt with ORC-1"
+  );
 }

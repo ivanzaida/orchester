@@ -133,9 +133,9 @@ Refusals: `own_task`, `other_project`, `not_waiting_for_person` (a tool call's a
 What ends the wait, read by the waits follower:
 
 - **The waited task's run is merged into the waiting run's base branch** — a *waited task merged* event of the
-  waiting task, kept in the conversation that leads it (else by the usual rule). With *Let the Orchestrator answer
-  agents* on it starts a turn there, which tells the run's agents with `send_message` (under the switches as for any
-  message); when the run goes on, the base-moved path merges the base branch into its worktree.
+  waiting task, kept in the conversation that leads it (in none when no conversation leads it). With *Let the
+  Orchestrator answer agents* on it starts a turn there, which tells the run's agents with `send_message` (under the
+  switches as for any message); when the run goes on, the base-moved path merges the base branch into its worktree.
 - **The waited task is canceled, or closed without that merge** (a merge into another branch counts as closed) — a
   *waited task closed* event, routed the same way, whose turn tells the person and offers the choices (go on without
   that work, run that task again, or cancel this run) and decides none of them; the run keeps waiting for them.
@@ -187,19 +187,23 @@ resolution holds the checkout, and `operation_in_progress` during a merge or reb
 
 ## Turns the Orchestrator starts itself
 
-Every event of a task below is kept as **one entry** in exactly one conversation, chosen by the **routing rule**:
+Only subscriptions route the events of a task. By the **routing rule**, each event below is kept as **one entry** in
+the conversation that **leads the task** through a subscription (see [Watching](#watching)): the task's own, else its
+module's (or *Tasks without a module*'s, for a task with none), else the whole project's (*Everything in* the
+project).
 
-1. the conversation that **leads the task** through a subscription (see [Watching](#watching)): the task's own, else
-   its module's (or *Tasks without a module*'s, for a task with none), else the whole project's;
-2. with no subscription covering the task, the conversation that last dealt with the task or its run;
-3. else the project's latest conversation, else a new one, titled after the task and what waits.
+An event of a task **no conversation leads goes to no conversation** and starts no turn, even when a conversation
+dealt with the task before: it stays where it always shows outside the chat — the task's page, *Needs you*, the
+Overview and the notifications. No conversation is ever opened for an event. While such an event still stands, a
+subscription that starts later takes it into its conversation. To get every event into one conversation, watch
+*Everything in* the project there (`/watch-module`). Entries kept before stay in their conversations' history.
 
 A watched task's events never reach another conversation, whoever dealt with it before. With *Let the Orchestrator
 answer agents* on, each entry also starts **one** turn there by itself — never while another turn of that conversation
 thinks (it waits for that turn to end), only while what it is about still stands, and not when the Orchestrator's own
 answer, message, merge or cancel raised it. With the switch off the entry only links to its card. Such a turn is
-marked `[Orchester]`; in a conversation that leads something it is told the subscription the event came through and
-the order that applies (see [Orders](#orders)).
+marked `[Orchester]`; it is told the subscription the event came through and the order that applies (see
+[Orders](#orders)).
 
 - **Waits** — when an agent asks a question with suggested answers, a step waits for a message, or a plan waits for a
   decision, the conversation gets an entry linking to the card. The turn answers only what follows plainly from the
@@ -296,8 +300,8 @@ the line *… is now led in «…»*). Only a person chooses on the card: synthe
 - History shows *Leads …* on a conversation that leads something.
 - A module's Summary and a task's Summary properties show **Led in** with the leading conversation.
 - Stopping (× or *Stop watching*) ends the subscription at once and **cancels or pauses nothing**: the line *Stopped
-  watching …* lists what was left open (waiting, running, queued, stopped at a limit), which goes back to the usual
-  rule.
+  watching …* lists what was left open (waiting, running, queued, stopped at a limit); its later events go to the
+  conversation of a less specific subscription that covers it, or to none.
 
 ### Ending
 

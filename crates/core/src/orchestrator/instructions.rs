@@ -176,6 +176,10 @@ pub fn system_prompt(name: &str, project: ProjectId, reads: ProjectReads) -> Str
      {MCP_SERVERS}\n{APPROVING}\n{PLAN_ONLY}\n\
      \n\
      Agents that wait:\n\
+     - Orchester brings an agent's wait, a run's end or another event of a task into the chat only in the \
+     conversation that leads the task through the person's subscription; an event of a task no conversation leads \
+     comes to no conversation. When the person wants a task's events here, tell them to watch it in this \
+     conversation (/watch-task, /watch-module, or Everything in the project): only the person subscribes.\n\
      - When an agent asks a question, waits for a message or its plan waits for a decision, read what it asked \
      before anything else: get_run gives a waiting step's last words and its questions, get_conversation the \
      task's whole conversation.\n\

@@ -1,11 +1,11 @@
 //! The Orchestrator chat follows the ends of its project's runs (`orchestrator::waits`, `docs/design/
 //! orchestrator-toolset.md`, decision 5): a task's latest run that succeeded, failed, stopped for a decision, stopped
-//! at a limit or was interrupted is kept once, linking to the task's Summary, in the conversation that last dealt with
-//! its task, else the latest one; the runs the daily budget stopped at once are one entry; ends from before the project
-//! followed them, a pause, *Quit now* or a stop the person asked for, an interruption the runner continues by itself
-//! and a run merged are not kept; with *Let the Orchestrator answer agents* on an end starts one Orchestrator turn by
-//! itself, with the prompt its end calls for, but none for an end the chat's own decision on or start of the run led
-//! to, and none while the switch is off.
+//! at a limit or was interrupted is kept once, linking to the task's Summary, in the conversation that leads its task
+//! by a subscription, and in none while nobody leads it (ORC-895); the runs the daily budget stopped at once are one
+//! entry; ends from before the project followed them, a pause, *Quit now* or a stop the person asked for, an
+//! interruption the runner continues by itself and a run merged are not kept; with *Let the Orchestrator answer
+//! agents* on an end starts one Orchestrator turn by itself, with the prompt its end calls for, but none for an end
+//! the chat's own decision on or start of the run led to, and none while the switch is off.
 //! `cargo test -p orchester-workspace --test orchestrator_run_ends run_ends`.
 
 mod support;
@@ -22,7 +22,7 @@ use orchester_core::{
   name::Name,
   orchestrator::{
     ActionOutcome, AgentWait, Chat, ChatAction, Continuing, EntryKind, OrchestratorSettings, RunEnd, StopReason,
-    TurnState, WaitKind, WaitTurn,
+    Subscription, TurnState, WaitKind, WaitTurn, WatchTarget,
     change::{Change, ContinueChoice, ProposedChange, StepName},
   },
   resource::ModelId,
@@ -66,6 +66,13 @@ fn ready(fixture: &mut Fixture) {
     .db
     .publish_orchestrator(&settings, Timestamp::now())
     .expect("published");
+}
+
+/// A project one conversation of which watches everything: every run's end goes there.
+fn watched() -> Fixture {
+  let mut fixture = Fixture::new();
+  fixture.everything(at(5));
+  fixture
 }
 
 /// A run of task `title` at work.
@@ -145,31 +152,29 @@ fn acted(fixture: &mut Fixture, action: &ChatAction, start: i64) -> Chat {
 }
 
 #[test]
-fn run_ends_are_kept_once_in_the_conversation_that_dealt_with_their_task() {
+fn run_ends_are_kept_once_in_the_conversation_that_leads_their_task() {
   let mut fixture = Fixture::new();
   let mut done = working(&mut fixture, "Add login");
   let mut broken = working(&mut fixture, "Add logout");
-  let dealt = acted(
+  let by_task = acted(
     &mut fixture,
-    &ChatAction::new("update_task", Some("ORC-1".to_owned()), ActionOutcome::Done),
+    &ChatAction::new("update_task", Some("ORC-9".to_owned()), ActionOutcome::Done),
     10,
   );
-  let latest = acted(
-    &mut fixture,
-    &ChatAction::new("create_task", Some("ORC-9".to_owned()), ActionOutcome::Done),
-    20,
-  );
+  let watching = Subscription::new(by_task.id(), WatchTarget::Task(done.task()), "", at(13));
+  fixture.db.start_subscription(&watching).expect("watching");
+  let everything = fixture.everything(at(20));
   fixture.succeed(&mut done, Timestamp::now());
   fail(&mut fixture, &mut broken, StepFailure::ReportedFailed);
   assert!(follow(&fixture, false).kept);
-  let ready = waits_in(&fixture, dealt.id());
+  let ready = waits_in(&fixture, by_task.id());
   assert_eq!(ready.len(), 1, "{ready:?}");
   let (wait, turn) = &ready[0];
   assert_eq!(wait.kind, WaitKind::Ended(RunEnd::Succeeded));
   assert_eq!((wait.task.as_str(), wait.number), ("ORC-1", 1));
   assert_eq!(wait.link, format!("/project/{}/tasks/ORC-1/summary", project(&fixture)));
   assert!(!wait.automatic && turn.is_none(), "the switch is off: {wait:?}");
-  let failed = waits_in(&fixture, latest.id());
+  let failed = waits_in(&fixture, everything.id());
   assert_eq!(failed.len(), 1, "{failed:?}");
   assert_eq!(failed[0].0.kind, WaitKind::Ended(RunEnd::Failed));
   assert_eq!(failed[0].0.step.as_deref(), Some("Implement"), "the step it failed at");
@@ -177,8 +182,27 @@ fn run_ends_are_kept_once_in_the_conversation_that_dealt_with_their_task() {
 }
 
 #[test]
-fn run_ends_name_how_the_run_stopped_and_leave_out_what_is_no_end() {
+fn run_ends_of_a_task_nobody_leads_go_to_no_conversation_and_start_no_turn() {
   let mut fixture = Fixture::new();
+  ready(&mut fixture);
+  let mut done = working(&mut fixture, "Add login");
+  let dealt = acted(
+    &mut fixture,
+    &ChatAction::new("update_task", Some("ORC-1".to_owned()), ActionOutcome::Done),
+    10,
+  );
+  fixture.succeed(&mut done, Timestamp::now());
+  assert_eq!(follow(&fixture, true), Followed::default(), "kept nowhere, no turn");
+  assert!(
+    waits_in(&fixture, dealt.id()).is_empty(),
+    "not in the conversation that dealt with ORC-1"
+  );
+  assert_eq!(fixture.db.chats().expect("History").len(), 1, "no conversation opened");
+}
+
+#[test]
+fn run_ends_name_how_the_run_stopped_and_leave_out_what_is_no_end() {
+  let mut fixture = watched();
   let mut old = working(&mut fixture, "Old work");
   fixture.succeed(&mut old, at(60));
   let mut paused = working(&mut fixture, "Paused by the person");
@@ -237,7 +261,7 @@ fn run_ends_name_how_the_run_stopped_and_leave_out_what_is_no_end() {
 
 #[test]
 fn run_ends_start_one_turn_with_their_prompt_while_answering_agents_is_on() {
-  let mut fixture = Fixture::new();
+  let mut fixture = watched();
   ready(&mut fixture);
   let mut run = working(&mut fixture, "Add login");
   fixture.succeed(&mut run, Timestamp::now());
@@ -287,6 +311,7 @@ fn run_ends_the_chats_own_decision_led_to_start_no_turn() {
     ..ChatAction::new("continue_run", Some("ORC-1".to_owned()), ActionOutcome::Applied)
   };
   let chat = acted(&mut fixture, &retried, 10);
+  fixture.watch_everything(&chat, at(13));
   fail(&mut fixture, &mut run, StepFailure::ReportedFailed);
   let followed = follow(&fixture, true);
   assert!(followed.kept && followed.turn.is_none(), "{followed:?}");
@@ -296,7 +321,7 @@ fn run_ends_the_chats_own_decision_led_to_start_no_turn() {
 
 #[test]
 fn run_end_turns_name_what_the_person_chooses_for_a_run_that_stopped() {
-  let mut fixture = Fixture::new();
+  let mut fixture = watched();
   ready(&mut fixture);
   let mut run = working(&mut fixture, "Add login");
   fail(&mut fixture, &mut run, StepFailure::Unverified);
@@ -317,7 +342,7 @@ fn run_end_turns_name_what_the_person_chooses_for_a_run_that_stopped() {
 
 #[test]
 fn run_ends_leave_out_a_persons_stop_and_a_merged_run() {
-  let mut fixture = Fixture::new();
+  let mut fixture = watched();
   let mut stopped = working(&mut fixture, "Could not check");
   fail(&mut fixture, &mut stopped, StepFailure::Unverified);
   assert!(follow(&fixture, false).kept, "it waits for a decision");
@@ -347,7 +372,7 @@ fn run_ends_leave_out_a_persons_stop_and_a_merged_run() {
 
 #[test]
 fn run_ends_keep_the_runs_the_daily_budget_stopped_at_once_as_one() {
-  let mut fixture = Fixture::new();
+  let mut fixture = watched();
   ready(&mut fixture);
   for title in ["First", "Second", "Third"] {
     let mut run = working(&mut fixture, title);
@@ -378,6 +403,7 @@ fn run_ends_of_a_run_the_chat_started_start_no_turn() {
     ..ChatAction::new("run_task", Some("ORC-1".to_owned()), ActionOutcome::Done)
   };
   let chat = acted(&mut fixture, &started, 10);
+  fixture.watch_everything(&chat, at(13));
   fail(&mut fixture, &mut run, StepFailure::ReportedFailed);
   let followed = follow(&fixture, true);
   assert!(followed.kept && followed.turn.is_none(), "{followed:?}");
@@ -387,7 +413,7 @@ fn run_ends_of_a_run_the_chat_started_start_no_turn() {
 
 #[test]
 fn run_ends_leave_out_a_run_git_tells_merged_outside_or_with_nothing_to_merge() {
-  let mut fixture = Fixture::new();
+  let mut fixture = watched();
   let mut run = working(&mut fixture, "Nothing to merge");
   fixture.succeed(&mut run, Timestamp::now());
   let checks = MergeChecks {
@@ -434,7 +460,7 @@ fn prompt_of(fixture: &Fixture, followed: &Followed) -> String {
 
 #[test]
 fn run_ends_of_a_crash_continue_the_run_once_with_both_switches_on() {
-  let mut fixture = Fixture::new();
+  let mut fixture = watched();
   ready(&mut fixture);
   interrupted(&mut fixture, "Add login", InterruptCause::Crashed);
   let followed = follow_with(&fixture, CONTINUING);
@@ -457,7 +483,7 @@ fn run_ends_of_a_crash_continue_the_run_once_with_both_switches_on() {
 
 #[test]
 fn run_ends_of_a_run_interrupted_again_soon_leave_it_to_the_person() {
-  let mut fixture = Fixture::new();
+  let mut fixture = watched();
   ready(&mut fixture);
   let mut run = interrupted(&mut fixture, "Add login", InterruptCause::Crashed);
   let first = follow_with(&fixture, CONTINUING)
@@ -487,7 +513,7 @@ fn run_ends_of_a_run_interrupted_again_soon_leave_it_to_the_person() {
 
 #[test]
 fn run_ends_of_an_interruption_only_tell_the_person_without_the_switch_or_the_chats_right() {
-  let mut fixture = Fixture::new();
+  let mut fixture = watched();
   ready(&mut fixture);
   interrupted(&mut fixture, "Add login", InterruptCause::Crashed);
   // Answering agents alone: the turn tells the person, as before the switch.
@@ -497,7 +523,7 @@ fn run_ends_of_an_interruption_only_tell_the_person_without_the_switch_or_the_ch
   assert!(prompt.contains("goes on only when a person continues it"), "{prompt}");
   assert!(!prompt.contains("resume_run"), "{prompt}");
 
-  let mut fixture = Fixture::new();
+  let mut fixture = watched();
   ready(&mut fixture);
   interrupted(&mut fixture, "Runner failed", InterruptCause::RunnerFailed);
   let mut gone = working(&mut fixture, "Worktree gone");
@@ -513,7 +539,7 @@ fn run_ends_of_an_interruption_only_tell_the_person_without_the_switch_or_the_ch
       .iter()
       .all(|(wait, _)| !wait.automatic && wait.continuing.is_none())
   );
-  let mut fixture = Fixture::new();
+  let mut fixture = watched();
   ready(&mut fixture);
   interrupted(&mut fixture, "Runner failed", InterruptCause::RunnerFailed);
   let mut gone = working(&mut fixture, "Worktree gone");
@@ -543,7 +569,7 @@ fn contended(fixture: &mut Fixture, title: &str) -> Run {
 
 #[test]
 fn run_ends_of_storage_contention_continue_once_until_more_than_three_runs_were_so() {
-  let mut fixture = Fixture::new();
+  let mut fixture = watched();
   ready(&mut fixture);
   contended(&mut fixture, "Add login");
   let followed = follow_with(&fixture, CONTINUING);
