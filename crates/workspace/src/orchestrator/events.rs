@@ -1,9 +1,10 @@
 //! What the line of an event of a task's run (ORC-755, [`orchester_core::orchestrator::TaskEventKind`]) names beside
 //! its wait (`Parts · Lines` e `c9YRv` in `Orchestrator watch · redesign`): the module its task is in, the branch the
-//! run merges into, and the task the run waits on, by its key and its run's number. The wait keeps only ids of these,
-//! so they are read as the conversation is; and so is how each wait a *waits on* row names stands now (ORC-784).
+//! run merges into, the task the run waits on, by its key and its run's number, and for a stall that no longer stands
+//! what became of its run (ORC-894). The wait keeps only ids of these, so they are read as the conversation is; and so
+//! is how each wait a *waits on* row names stands now (ORC-784).
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use orchester_core::{
   id::RunId,
@@ -14,13 +15,18 @@ use orchester_store::{ProjectDb, StoreError};
 
 use super::{
   chat::{EventFacts, WaitedTask},
+  stalls,
   waits_on::view::{self, RunWaitView},
 };
 use crate::tasks::detail::run_store_error;
 
-/// The facts of each event among `entries`, by entry. What the project no longer keeps is left out of them. Blocks on
-/// SQLite.
-pub(super) fn event_facts(db: &ProjectDb, entries: &[ChatEntry]) -> Result<HashMap<i64, EventFacts>, StoreError> {
+/// The facts of each event among `entries`, by entry, those whose seq is in `standing` still standing. What the
+/// project no longer keeps is left out of them. Blocks on SQLite.
+pub(super) fn event_facts(
+  db: &ProjectDb,
+  entries: &[ChatEntry],
+  standing: &HashSet<i64>,
+) -> Result<HashMap<i64, EventFacts>, StoreError> {
   let mut facts = HashMap::new();
   for entry in entries {
     let EntryKind::Wait { wait, .. } = &entry.kind else {
@@ -42,12 +48,19 @@ pub(super) fn event_facts(db: &ProjectDb, entries: &[ChatEntry]) -> Result<HashM
       .as_ref()
       .and_then(|run| run.base_branch())
       .map(|branch| branch.as_str().to_owned());
+    let settled = match event.kind {
+      TaskEventKind::NoProgress { since, .. } if !standing.contains(&entry.seq) => {
+        Some(stalls::settled(db, run.as_ref(), since)?)
+      }
+      _ => None,
+    };
     facts.insert(
       entry.seq,
       EventFacts {
         module,
         branch,
         waited: waited(db, event.kind)?,
+        settled,
       },
     );
   }

@@ -1,13 +1,14 @@
 //! The Orchestrator chat follows the project's agents (ORC-42, `docs/design/orchestrator-toolset.md`, decision 5):
 //! each time an agent of a task's latest run asks a question with suggested answers, its step waits for a message,
-//! or its plan waits for a decision, each time a task's latest run ends or stops ([`super::run_ends`]), and each time
-//! merging a task's run stops at conflicts ([`super::merge_conflicts`]), the conversation that leads the task through
-//! a subscription when the wait is kept ([`orchester_core::orchestrator::Subscriptions::leading`], ORC-761) keeps one
-//! entry for that wait, linking to its card (a run's end or a merge's conflicts: its task's Summary). A wait of a task
-//! no conversation leads goes to no conversation and starts no turn (ORC-895): only subscriptions route the waits, and
-//! none opens a conversation. With *Let the Orchestrator answer agents* on, a kept wait
-//! the Orchestrator's own answer, message or decision on how the run continues did not raise also starts one
-//! Orchestrator turn by itself in its conversation
+//! its plan waits for a decision, or its tool request came to the person (ORC-894), each time a task's latest run ends
+//! or stops ([`super::run_ends`]), and each time merging a task's run stops at conflicts ([`super::merge_conflicts`]),
+//! the conversation that leads the task through a subscription when the wait is kept
+//! ([`orchester_core::orchestrator::Subscriptions::leading`], ORC-761) keeps one entry for that wait, linking to its
+//! card (a run's end or a merge's conflicts: its task's Summary), whatever the switches. A wait of a task no
+//! conversation leads goes to no conversation and starts no turn (ORC-895): only subscriptions route the waits, and
+//! none opens a conversation. With *Let the Orchestrator answer agents* on, a kept wait the Orchestrator's own answer,
+//! message or decision on how the run continues did not raise, and not a tool request ([`WaitKind::starts_turns`]),
+//! also starts one Orchestrator turn by itself in its conversation
 //! ([`orchester_core::orchestrator::instructions::wait_prompt`]), at most one per wait, never while another turn of
 //! that conversation thinks (it waits for that turn to end; a turn of another conversation does not hold it), only
 //! while the wait still waits, and only once the project's runner attached. With *Let the Orchestrator continue
@@ -34,7 +35,7 @@ use orchester_core::{
     wait::raised_by_own,
   },
   question::AskedQuestions,
-  run::{CompletedBy, Plan},
+  run::{CompletedBy, PendingToolApproval, Plan},
   store::{ConversationStore, RunStore, TaskStore, WorktreeStore},
   task::Task,
   time::Timestamp,
@@ -261,7 +262,8 @@ fn keep_new(
       continue;
     };
     let own = raised_by_own(&entries, wait);
-    let automatic = switches.answers && !own;
+    // Kept whatever the switch: the switch only decides whether it starts a turn by itself (ORC-894).
+    let automatic = switches.answers && !own && wait.kind.starts_turns();
     let continuing = if automatic && switches.continues {
       continuing((db, root), wait)?
     } else {
@@ -448,9 +450,13 @@ pub(super) fn standing(
 
 /// What the agents of the latest runs of project `project`'s tasks wait for now, each by the key it is kept by: the
 /// questions with suggested answers, the steps that wait for a message (but those of such a question), the plans
-/// that wait for a decision, and what became of the task such a run waits on ([`waits_on::event`]).
+/// that wait for a decision, the tool requests that came to the person (not those auto mode's reviewer still judges),
+/// and what became of the task such a run waits on ([`waits_on::event`]).
 fn current_waits(db: &ProjectDb, project: ProjectId) -> Result<Vec<(String, AgentWait)>, StoreError> {
   let asked = db.waiting_questions()?;
+  let reviewing: HashSet<String> = db.reviewing_tool_approvals()?.into_iter().collect();
+  let mut approvals = db.pending_tool_approvals_all()?;
+  approvals.retain(|approval| !reviewing.contains(&approval.id));
   let mut waits = Vec::new();
   for task in db.tasks()? {
     let Some(Ok(run)) = db.runs_of_task(task.id()).map_err(run_store_error)?.pop() else {
@@ -461,7 +467,8 @@ fn current_waits(db: &ProjectDb, project: ProjectId) -> Result<Vec<(String, Agen
       continue;
     }
     let choices: Vec<&AskedQuestions> = asked.iter().filter(|asked| asked.request.run() == run.id()).collect();
-    if choices.is_empty() && run.awaiting_answer().is_empty() && run.awaiting_plan().is_empty() {
+    let requests: Vec<&PendingToolApproval> = approvals.iter().filter(|approval| approval.run == run.id()).collect();
+    if choices.is_empty() && requests.is_empty() && run.awaiting_answer().is_empty() && run.awaiting_plan().is_empty() {
       continue;
     }
     let messages = db.messages(task.id())?;
@@ -487,6 +494,10 @@ fn current_waits(db: &ProjectDb, project: ProjectId) -> Result<Vec<(String, Agen
         key,
         wait.of(WaitKind::Question, request.execution(), Some(request.agent())),
       ));
+    }
+    for request in &requests {
+      let key = format!("approval:{}:{}", view.id(), request.id);
+      waits.push((key, wait.of(WaitKind::Approval, request.execution, None)));
     }
     for execution in view.run.awaiting_answer() {
       // A step whose turn the person stopped waits for them, not for an answer the Orchestrator could give.

@@ -20,6 +20,16 @@ use super::harness::Orchestrator;
 
 /// A run of a new task titled `title` on `pipeline`, its one step waiting for a message; the run and that step.
 pub fn waiting(screen: &Orchestrator, pipeline: ResourceId, title: &str) -> (Run, StepExecutionId) {
+  let now = Timestamp::now();
+  let (mut run, execution) = started(screen, (pipeline, title), now);
+  let events = run.wait_step(execution, WaitReason::Message, now).expect("waits");
+  screen.db().append_events(&run, &events).expect("kept");
+  (run, execution)
+}
+
+/// A run of a new task titled `title` on `pipeline`, started at `now`, its one step at work since; the run and that
+/// step.
+pub fn started(screen: &Orchestrator, (pipeline, title): (ResourceId, &str), now: Timestamp) -> (Run, StepExecutionId) {
   let mut db = screen.db();
   let version = db
     .latest_version::<Pipeline>(pipeline)
@@ -60,14 +70,11 @@ pub fn waiting(screen: &Orchestrator, pipeline: ResourceId, title: &str) -> (Run
     budget: None,
     max_duration: None,
   };
-  let now = Timestamp::now();
   let mut run = db.create_run(IdempotencyKey::generate(), new, now).expect("run");
   let events = run.start(now).expect("started");
   db.append_events(&run, &events).expect("kept");
   let execution = run.current_attempt().expect("attempt").executions()[0].id();
   let events = run.start_step(execution, now).expect("step started");
-  db.append_events(&run, &events).expect("kept");
-  let events = run.wait_step(execution, WaitReason::Message, now).expect("waits");
   db.append_events(&run, &events).expect("kept");
   (run, execution)
 }
