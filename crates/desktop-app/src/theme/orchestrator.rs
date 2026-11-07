@@ -78,6 +78,9 @@ pub enum OrchestratorText {
   Mode,
   /// 12 `text_secondary`, 1.3: *Settings ↗* at the runs-on picker's foot, one 16 line in its 32 (`rIT51` in `SwrjI`).
   PickerLink,
+  /// 11.5 `text_muted`, 1.5: what the card of a target another conversation leads says under its title (`kjs5n` in
+  /// `f1J8z`, `Orchestrator watch · redesign`).
+  CardNote,
   /// 13 `text_primary`, 1.55: the order in the person's watch command's bubble (`oUZqo` in `04` `OKtX2`).
   CommandOrder,
   /// 12 `text_muted`, 1.3: what a line the app writes adds after its words (`Meta` `vYl6I` in `OKtX2`, `zGkK5` in
@@ -101,7 +104,7 @@ pub enum OrchestratorText {
 pub const LEADS_HINT_OPACITY: f32 = 0.7;
 
 impl OrchestratorText {
-  pub const ALL: [Self; 34] = [
+  pub const ALL: [Self; 35] = [
     Self::HeaderTitle,
     Self::StartTitle,
     Self::Emphasis,
@@ -129,6 +132,7 @@ impl OrchestratorText {
     Self::Message,
     Self::Mode,
     Self::PickerLink,
+    Self::CardNote,
     Self::CommandOrder,
     Self::LineAside,
     Self::LineEnd,
@@ -171,6 +175,7 @@ impl OrchestratorText {
       Self::Message => "orchestrator_message",
       Self::Mode => "orchestrator_mode",
       Self::PickerLink => "orchestrator_picker_link",
+      Self::CardNote => "orchestrator_card_note",
       Self::CommandOrder => "orchestrator_command_order",
       Self::LineAside => "orchestrator_line_aside",
       Self::LineEnd => "orchestrator_line_end",
@@ -216,6 +221,7 @@ impl OrchestratorText {
       Self::Message => style(13.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
       Self::Mode => style(12.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary),
       Self::PickerLink => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),
+      Self::CardNote => style(11.5, FontWeight::Normal, 1.5, 0.0, palette.text_muted),
       Self::CommandOrder => style(13.0, FontWeight::Normal, 1.55, 0.0, palette.text_primary),
       Self::LineAside => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
       Self::LineEnd => style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary),

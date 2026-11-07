@@ -1,5 +1,6 @@
-//! *Take it here* on the card of a target another conversation leads: the subscription moves here, the conversation
-//! that lost it gets the line *X is now led in «…»*, and this one the line that it took it.
+//! The card of a target another conversation leads: *Take it here* moves the subscription here, the conversation that
+//! lost it gets the line *X is now led in «…»*, and this one the line that it took it ([`take_over_in`]); *Open that
+//! conversation* leaves it there and keeps the line the card settles into ([`leave_there_in`]).
 
 use std::path::Path;
 
@@ -7,7 +8,7 @@ use orchester_core::{
   id::ChatId,
   orchestrator::{
     Chat, ChatEvent, Subscription,
-    watch::{NamedTarget, WatchLine},
+    watch::{LedElsewhere, NamedTarget, WatchLine},
   },
   time::Timestamp,
 };
@@ -58,4 +59,17 @@ pub fn take_over_in(root: &Path, chat: &Chat, target: &NamedTarget, order: &str)
     tell(&mut db, (told, named), &here, now)?;
   }
   Ok(TakenHere { from })
+}
+
+/// *Open that conversation* on `chat`'s card of `led`, in the project at `root`: the target stays where it is led, and
+/// `chat` keeps the line its card settles into. Blocks on SQLite.
+pub fn leave_there_in(root: &Path, chat: &Chat, led: &LedElsewhere) -> Result<(), WatchError> {
+  let mut db = ProjectDb::open(root)?;
+  let line = WatchLine::LeftThere {
+    target: led.target.clone(),
+    chat: led.chat,
+    title: led.title.clone(),
+  };
+  db.keep_watch_entries(chat, &[ChatEvent::Watch { line }], Timestamp::now())?;
+  Ok(())
 }

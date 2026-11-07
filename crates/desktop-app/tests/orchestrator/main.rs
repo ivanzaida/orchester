@@ -30,6 +30,7 @@ mod history_rows;
 mod history_search;
 mod layout;
 mod leads;
+mod led;
 mod lines;
 mod links;
 mod mcp_servers;

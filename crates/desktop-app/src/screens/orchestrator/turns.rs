@@ -25,6 +25,8 @@ use orchester_workspace::orchestrator::{
   waits_on::view::RunWaitView,
 };
 
+use super::led::LedCards;
+
 /// A part of an answer.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) enum Part {
@@ -104,6 +106,8 @@ pub(super) struct Turn {
   /// (`super::rewind::line`), a watch command or line (`super::watch`), or the person's `/watching`, answered from the
   /// live state (`super::watching`).
   pub(super) compaction: Option<ChatEvent>,
+  /// The cards of the targets a /watch named that other conversations lead, which are the whole row (`super::led`).
+  pub(super) led: Option<Box<LedCards>>,
   /// Its entry in the conversation; `None` while it is being sent.
   seq: Option<i64>,
   /// The entry of the last part of its answer; `None` before its answer said or did anything.
@@ -148,6 +152,7 @@ impl Turn {
       report: None,
       watch_ended: None,
       compaction: None,
+      led: None,
       seq: None,
       last: None,
       at: None,
@@ -198,6 +203,7 @@ impl Turn {
       report: None,
       watch_ended: None,
       compaction: None,
+      led: None,
       seq: Some(entry.seq),
       last: None,
       at: Some(entry.at),
@@ -293,6 +299,8 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
         at: entry.at,
         seq: entry.seq,
       },
+      // A choice on a card shows in the card's place (`super::led`).
+      EntryKind::Event(event) if super::led::is_choice(event) => continue,
       EntryKind::Event(event) => Part::Event {
         event: event.clone(),
         at: entry.at,
@@ -327,9 +335,10 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
 /// The row `entry` of `shown` opens by itself: a wait of an agent, a daily report or a subscription that ended by
 /// itself, with the turn it started, if any; and a compaction (`06b` `j7eSQO`), where a rewind went back to (`10`
 /// `Zm7kq`), a fork's first line and what its original made after it (`11` `RT5T7`), the person's watch command and
-/// the lines about what the conversation watches (`super::watch`), and the person's `/watching` with its answer from
-/// the live state (`06` `Ff7AD`, `super::watching`), each a row between the turns, which started none. `None` for an
-/// entry that is a person's message or part of an answer.
+/// the lines about what the conversation watches (`super::watch`), with under a /watch's line the cards of its targets
+/// other conversations lead (05 `EIjDH`), and the person's `/watching` with its answer from the live state (`06`
+/// `Ff7AD`, `super::watching`), each a row between the turns, which started none. A choice on such a card shows in the
+/// card's place (`super::led`). `None` for an entry that is a person's message or part of an answer.
 fn own_row(entry: &ChatEntry, shown: &ChatView) -> Option<Turn> {
   Some(match &entry.kind {
     EntryKind::Wait { wait, turn } => Turn {
@@ -347,6 +356,7 @@ fn own_row(entry: &ChatEntry, shown: &ChatView) -> Option<Turn> {
       watch_ended: Some(summary.clone()),
       ..Turn::opened(entry, turn.as_ref())
     },
+    EntryKind::Event(event) if super::led::is_choice(event) => return None,
     EntryKind::Event(
       event @ (ChatEvent::Compaction { .. }
       | ChatEvent::Rewound { .. }
@@ -356,6 +366,7 @@ fn own_row(entry: &ChatEntry, shown: &ChatView) -> Option<Turn> {
       | ChatEvent::Watch { .. }),
     ) => Turn {
       compaction: Some(event.clone()),
+      led: super::led::cards(entry, shown).map(Box::new),
       ..Turn::opened(entry, None)
     },
     _ => return None,
@@ -434,6 +445,7 @@ fn person(
     report: None,
     watch_ended: None,
     compaction: None,
+    led: None,
     seq: Some(entry.seq),
     last: None,
     at: Some(entry.at),
