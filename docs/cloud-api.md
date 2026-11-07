@@ -242,6 +242,26 @@ team MCP server on at each computer. The stream carries it as it carries the oth
 `kind: "mcp_server"`; no new event kind. Libraries and pickers (`ResourceLibraryRequest`, `ResourcePickerRequest`)
 accept `"mcp_server"` as `kind`.
 
+## Team server catalog
+
+What a shared project's web editor can pick (row 75 of `docs/architecture/server.md`) is the CLI kinds and the model ids
+per kind that the members' desktops report. The wire types are `orchester-api`'s `catalog.rs`; the client calls are
+`report_catalog`, `catalog_cli_kinds` and `catalog_models`. All paths are under the team server's
+`/api/v1/projects/{project}`.
+
+- `PUT …/catalog` (a member's device token): `{ cli_kinds: [role], models: { role: [model id] } }`, this device's
+  whole state, answered `204`. A `role` is `codex_cli`, `claude_code_cli`, `anthropic_api` or `openai_api`; at most 4
+  CLI kinds and 512 ids per role. `github` or an unknown role, in `cli_kinds` or as a `models` key, and a report over
+  the limits are `422 invalid { reason: "catalog" }` (`CatalogReport::check`); an unknown field is `422 invalid`.
+- `GET …/cli-kinds` (a member, also a browser sign-in): `{ cli_kinds: [role] }`, the union of the current reports,
+  sorted, once each. It replaces `GET …/references`, which listed connection and MCP server names.
+- `GET …/models`: `{ models: { role: [model id] } }`, the union per role, each sorted.
+
+No name of a connection or an MCP server is reported or kept. For one release after this contract, the team server
+still accepts the previous `PUT` body, `{ references: [{ kind, name, role }], models }`, and discards the names: it
+keeps the roles of the `connection` references that are agent roles as the CLI kinds. A desktop of this version sends
+only `cli_kinds`.
+
 ## Base
 
 The cloud has two addresses: its API address, which every API call goes to, and its web address (the public URL),
