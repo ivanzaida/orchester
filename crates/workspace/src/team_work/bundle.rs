@@ -4,7 +4,7 @@
 use std::time::Duration;
 
 use orchester_api::{
-  client::Authority,
+  client::{Authority, BundleReadError},
   v2::{AuthorityRef, ExecutionBundle, Subject},
 };
 use orchester_core::{
@@ -47,14 +47,16 @@ pub(super) struct Fetched {
 }
 
 /// Reads the bundle `expected` names and every file it pins, each checked; the server's answer when it did not give
-/// them.
+/// them. A bundle this computer cannot read is an error, not an answer: reading it again gives the same bundle.
 pub(super) async fn fetch(
   authority: &Authority<'_>,
   expected: &Expected<'_>,
 ) -> Result<Result<Fetched, Answer>, TeamWorkError> {
   let bundle = match authority.bundle(expected.sha256).await {
     Ok(bundle) => bundle,
-    Err(error) => return Ok(Err(answer(error))),
+    Err(BundleReadError::Call(error)) => return Ok(Err(answer(error))),
+    Err(BundleReadError::Schema { built }) => return Err(TeamWorkError::BundleSchema { built }),
+    Err(BundleReadError::Unreadable { .. }) => return Err(TeamWorkError::BundleUnreadable),
   };
   check(&bundle, expected)?;
   let mut files = Vec::new();

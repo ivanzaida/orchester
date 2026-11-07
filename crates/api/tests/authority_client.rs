@@ -14,12 +14,15 @@ use std::{
 
 use orchester_api::{
   ErrorCode, SharedResourceKind,
-  client::{AuthorityCallError, CLIENT_VERSION_HEADER, Client, ClientError, PlainHttp, ServerAddress, SubscriptionEnd},
+  client::{
+    AuthorityCallError, BundleReadError, CLIENT_VERSION_HEADER, Client, ClientError, PlainHttp, ServerAddress,
+    SubscriptionEnd,
+  },
   releases::ReleaseVersion,
   v2::{
-    AuthorityErrorCode, ErrorDetails, EventCursor, ModuleListRequest, PageCursor, PageRequest, QueryScope,
-    ResourceLibraryRequest, ResourcePickerRequest, SearchText, SubscriptionEvent, TaskFilters, TaskListRequest,
-    TaskSort,
+    AuthorityErrorCode, EXECUTION_BUNDLE_SCHEMA, ErrorDetails, EventCursor, ModuleListRequest, PageCursor, PageRequest,
+    QueryScope, ResourceLibraryRequest, ResourcePickerRequest, SearchText, SubscriptionEvent, TaskFilters,
+    TaskListRequest, TaskSort,
   },
 };
 use orchester_core::{
@@ -406,6 +409,51 @@ async fn authority_client_refusals_are_typed() {
     partial,
     AuthorityCallError::Client(ClientError::NotOrchester { status: 200 })
   );
+}
+
+#[tokio::test]
+async fn authority_client_bundle_read_tells_a_bundle_it_cannot_read_from_a_failed_call() {
+  let sha256 = orchester_core::blob::ContentHash::new(&"a".repeat(64)).expect("a hash");
+  let html = |status| Answer {
+    content_type: "text/html",
+    pieces: vec!["<html>gateway</html>".to_owned()],
+    ..Answer::status(status, &json!(null))
+  };
+  let server = Server::start(vec![
+    Answer::json(&json!({"schema_version": EXECUTION_BUNDLE_SCHEMA - 1, "task": "v2 shape"})),
+    Answer::json(&json!({"schema_version": EXECUTION_BUNDLE_SCHEMA})),
+    Answer::json(&json!({"unrelated": true})),
+    html(200),
+    html(502),
+    Answer::refusal(409, "claim_lost"),
+  ]);
+  let (client, token) = (server.client(), token());
+  let authority = client.authority(&token, ProjectId::generate());
+  let read = |answer: Result<_, BundleReadError>| answer.expect_err("no bundle");
+  assert_eq!(
+    read(authority.bundle(&sha256).await),
+    BundleReadError::Schema {
+      built: EXECUTION_BUNDLE_SCHEMA - 1
+    }
+  );
+  for _ in 0..2 {
+    assert_eq!(
+      read(authority.bundle(&sha256).await),
+      BundleReadError::Unreadable { status: 200 }
+    );
+  }
+  for status in [200, 502] {
+    assert_eq!(
+      read(authority.bundle(&sha256).await),
+      BundleReadError::Call(ClientError::NotOrchester { status }.into()),
+      "not JSON: a gateway's page waits like an unreachable server"
+    );
+  }
+  let refused = read(authority.bundle(&sha256).await);
+  assert!(matches!(
+    refused,
+    BundleReadError::Call(AuthorityCallError::Refused { status: 409, .. })
+  ));
 }
 
 #[tokio::test]
