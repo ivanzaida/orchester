@@ -7,10 +7,12 @@
 mod accounts;
 mod api_providers;
 mod complete;
+mod connection_specs;
 mod connections;
 mod decision_connections;
 mod instructions;
 mod mcp_preview;
+mod mcp_server_specs;
 mod mcp_servers;
 mod merge;
 pub(crate) use self::{
@@ -31,6 +33,7 @@ mod skill_input;
 mod skills;
 mod stacks;
 mod storage;
+mod team_fill_ins;
 mod team_pipeline;
 mod tool_input;
 mod tool_program;
@@ -45,7 +48,7 @@ use serde_json::Value;
 use super::{Spec, Translate, across::InProjects, parse, tool};
 use crate::app_mcp::{error::ToolError, services::Services};
 
-const SPECS: &[Spec] = &[
+const PROJECT_SPECS: &[Spec] = &[
   Spec {
     name: "add_project",
     description: "Adds a project in a folder that is the top of a git repository, as project setup does: Orchester \
@@ -97,153 +100,9 @@ const SPECS: &[Spec] = &[
     schema: schema_for_type::<project::SetAgentFiles>,
     read_only: false,
   },
-  Spec {
-    name: "list_connections",
-    description: "A project's connections: agent connections (id, name, provider codex_cli, claude_code_cli, \
-                  anthropic_api or openai_api, program, status from the last check, CLI version, number of models, \
-                  the API provider a CLI runs on: base_url, host, key_secret's name and models), decision_models \
-                  (id, name, base_url, on_this_computer, key_secret id, models and last_check with answer timestamp), \
-                  GitHub connections (id, name, host, status) and MCP servers, which profiles can give their \
-                  agents: id, name, enabled, transport (stdio with program, args and working_directory, or http \
-                  with url and authorization: its scheme none, bearer, basic with username, basic_credential or \
-                  header with name, and its secret NAME@environment; the values of the url's query left out), \
-                  environment (each \
-                  variable's name and whether it is plain text or a secret, NAME@environment; a plain value is not \
-                  listed, nor any secret's value), the tools that run without asking and the roles of the profiles \
-                  whose draft or latest published version chooses it. Each connection and server has its link in \
-                  the app (its inspector in Connections). Without `project`, every project's, each naming its \
-                  project (unreadable_projects lists the projects that could not be read, with why).",
-    schema: schema_for_type::<InProjects>,
-    read_only: true,
-  },
-  Spec {
-    name: "add_cli_connection",
-    description: "Adds a connection to an agent CLI, as Connections › Add connection does: `kind` codex or claude, \
-                  a unique `name`, and the CLI's `program` as an absolute path (left out: the newest copy found on \
-                  the search path). A program that is not a copy found on the search path is refused as \
-                  person_only, before it runs, unless a person turned on Let automation change agent permissions. \
-                  The CLI is checked first with read-only commands (its version, whether it is \
-                  signed in, its models); it is saved only when it answers as the expected CLI, and the check \
-                  comes back either way. A CLI that is not signed in is saved and reads sign_in_required. With \
-                  `api_provider` the CLI runs on that model API with an API key instead of its own sign-in: claude \
-                  needs an Anthropic Messages API, codex an OpenAI Responses API; the key is an existing project \
-                  secret named by id or name (no tool takes a secret's value) and the models typed are the ones \
-                  profiles on it choose from. A provider is refused as person_only unless a person turned on Let \
-                  automation change agent permissions: the agents would send the project's prompts, code and \
-                  command output to that host.",
-    schema: schema_for_type::<connections::AddCliConnection>,
-    read_only: false,
-  },
-  Spec {
-    name: "set_api_provider",
-    description: "Runs a Codex or Claude Code connection on an API provider (`api_provider`: base_url, key_secret, \
-                  models, as add_cli_connection takes it), or back on its CLI's own sign-in (null). Running on a \
-                  host or key the connection does not run on now is refused as person_only unless a person turned \
-                  on Let automation change agent permissions; going back to the sign-in, or changing only the \
-                  models, is not. A connection on a provider runs on its CLI's Default account and reads no plan \
-                  limits. Returns the connection as list_connections lists it.",
-    schema: schema_for_type::<api_providers::SetApiProvider>,
-    read_only: false,
-  },
-  Spec {
-    name: "check_connection",
-    description: "Checks a connection's program again, as its Check again does, and stores what it found: status, \
-                  version and models. A native connection is tested as its Test connection does: the project's \
-                  runner reads its key and lists the endpoint's models.",
-    schema: schema_for_type::<connections::InConnection>,
-    read_only: false,
-  },
-  Spec {
-    name: "list_models",
-    description: "The models an agent or decision connection offers, each with the reasoning efforts it takes \
-                  (none for decision models). Decision models come from the connection's last model-list check, \
-                  with source decision. Agent models are offered as in the profile editor: its last check's, an \
-                  API provider's or a native connection's own. An unlisted agent model can still be given to \
-                  save_profile_draft (not verified); effort is kept only where listed. Agent connections include link.",
-    schema: schema_for_type::<connections::InConnection>,
-    read_only: true,
-  },
-  Spec {
-    name: "list_accounts",
-    description: "The person's agent CLI accounts on this computer, which every project's connections can run on \
-                  (Settings › Accounts): id, cli (claude_code or codex), name (null for a Default nobody renamed), \
-                  whether it is the CLI's Default (its own folder), state (signed_in, not_signed_in, \
-                  sign_in_expired, sign_in_unknown, cli_not_found, folder_missing, not_checked), \
-                  whether Orchester created its folder or the person brought it, and the account it shares a \
-                  sign-in with, if any, and its link in Settings › Accounts. No email and no folder are listed. \
-                  plan_limits is the account's latest plan limits reading as its CLI gave it, or null when none is \
-                  known: source (turn: an agent turn reported it; read: Orchester read it outside a run), \
-                  observed_at (ms since the epoch) and age_seconds, state (normal, near, reached), plan, blocked \
-                  (why the CLI refuses turns: window, credits, workspace, other; null when it does not), and each \
-                  window by minutes (300 five-hour, 10080 weekly) with used_percent, resets_at and \
-                  reset_since_reading (true when its reset has passed since: its use now is unknown, never \
-                  estimated). Codex accounts are read on their own; Claude Code accounts only by a turn or the \
-                  person's Check now. Adding, renaming and removing accounts \
-                  and signing them in are done by a person in the window.",
-    schema: schema_for_type::<accounts::NoArguments>,
-    read_only: true,
-  },
-  Spec {
-    name: "set_connection_account",
-    description: "Chooses which account an agent CLI connection runs on, as the connection's Account field does: \
-                  `account` is an account of the connection's CLI by id or name (list_accounts), `default` its \
-                  Default. Runs that start from now on use it; a running agent keeps its account. The connection is \
-                  checked again on that account. Choosing another account than the connection's is refused as \
-                  person_only unless a person turned on Let automation change agent permissions: it can send the \
-                  project's code to another organisation's provider.",
-    schema: schema_for_type::<accounts::SetConnectionAccount>,
-    read_only: false,
-  },
-  Spec {
-    name: "add_mcp_server",
-    description: "Adds an MCP server to a project, as Connections › Add MCP server does: a unique `name` (small \
-                  letters, digits, - and _, starting with a letter) and either a `program` the agent's CLI starts \
-                  with each agent (a name on the search path or an absolute path, stored as the fixed file it is, \
-                  links followed, outside the project's repository and on this computer, as a command tool's \
-                  program; with `args`, `working_directory` inside the worktree or absolute, and `environment`, where \
-                  ${secret:NAME@environment} takes the value of an active project secret when an agent starts) or a \
-                  remote `url` it reaches over HTTP (with an optional `authorization`: scheme bearer, basic with a \
-                  username and the password's secret, basic_credential with a pasted Basic credential's secret, or \
-                  header with a header name and the value's secret; each secret an active project secret \
-                  NAME@environment, never a value), and `exempt_tools`, the server's tools that run without asking \
-                  for profiles that ask before MCP actions. A server runs only for profiles that choose it \
-                  (save_profile_draft). Refused as person_only unless a person turned on Let automation change \
-                  agent permissions. Returns the server as list_connections lists it.",
-    schema: schema_for_type::<mcp_servers::AddMcpServer>,
-    read_only: false,
-  },
-  Spec {
-    name: "update_mcp_server",
-    description: "Changes an MCP server's fields, as Edit MCP server does; a field left out keeps its value, and \
-                  `program` or `url` switches how it is reached; a field the transport does not have is refused \
-                  (field_not_applicable). Dropping the authorization (scheme none) and removing tools that run \
-                  without asking are always taken. A new name (a run's answers approve a server's tools by its \
-                  name), another program, arguments, folder or endpoint, another authorization that sends a secret \
-                  (another secret, scheme, username or header), any variable but RUST_LOG, RUST_BACKTRACE, CI, \
-                  NO_COLOR, FORCE_COLOR, TZ, LANG and the LC_ ones (removals included), a variable that takes a \
-                  secret under any name, and a tool added to exempt_tools are refused as person_only unless a person \
-                  turned on Let automation change agent permissions, judged by the fields as given before anything \
-                  reads the disk. Whether it is on stays.",
-    schema: schema_for_type::<mcp_servers::UpdateMcpServer>,
-    read_only: false,
-  },
-  Spec {
-    name: "remove_mcp_server",
-    description: "Removes an MCP server from a project. Refused as in_use while an agent profile's draft or latest \
-                  published version chooses it (the reasons name their roles): switch them first, or turn the \
-                  server off with set_mcp_server_enabled, which keeps its settings.",
-    schema: schema_for_type::<mcp_servers::InServer>,
-    read_only: false,
-  },
-  Spec {
-    name: "set_mcp_server_enabled",
-    description: "Turns an MCP server on or off for every profile that chooses it, as its inspector's Turn on and \
-                  Turn off do: agents that start from now on get it, or work without it; agents at work keep what \
-                  they started with. Turning off is always taken; turning on is refused as person_only unless a \
-                  person turned on Let automation change agent permissions.",
-    schema: schema_for_type::<mcp_servers::SetMcpServerEnabled>,
-    read_only: false,
-  },
+];
+
+const SPECS: &[Spec] = &[
   Spec {
     name: "list_profiles",
     description: "A project's agent profiles: id, role, connection, model, effort, and where each stands (draft, \
@@ -461,12 +320,16 @@ const SPECS: &[Spec] = &[
 
 /// Every setup tool, as `tools/list` answers.
 pub fn listed() -> Vec<Tool> {
-  SPECS
+  PROJECT_SPECS
     .iter()
+    .chain(connection_specs::SPECS)
+    .chain(mcp_server_specs::SPECS)
+    .chain(SPECS)
     .chain(decision_connections::SPECS)
     .chain(project_tools::SPECS)
     .chain(skills::SPECS)
     .chain(secrets::SPECS)
+    .chain(team_fill_ins::SPECS)
     .chain(services::SPECS)
     .chain(storage::SPECS)
     .map(tool)
@@ -490,6 +353,9 @@ pub async fn call(
   if named(secrets::SPECS) {
     return Some(secrets::call(services, translate, name, Value::Object(arguments)).await);
   }
+  if named(team_fill_ins::SPECS) {
+    return Some(team_fill_ins::call(services, name, Value::Object(arguments)).await);
+  }
   if named(self::services::SPECS) {
     return Some(self::services::call(services, translate, name, Value::Object(arguments)).await);
   }
@@ -499,7 +365,8 @@ pub async fn call(
   if named(decision_connections::SPECS) {
     return Some(decision_connections::call(services, name, Value::Object(arguments)).await);
   }
-  if !SPECS.iter().any(|spec| spec.name == name) {
+  let setup = [PROJECT_SPECS, connection_specs::SPECS, mcp_server_specs::SPECS, SPECS];
+  if !setup.into_iter().any(named) {
     return None;
   }
   Some(dispatch(services, translate, name, Value::Object(arguments)).await)

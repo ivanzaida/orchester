@@ -7,6 +7,7 @@ use orchester_core::{
   id::{ProjectId, SecretId},
   secret::Secret,
 };
+use orchester_store::{ProjectDb, StoreError};
 use rmcp::handler::server::common::schema_for_type;
 use serde_json::{Value, json};
 
@@ -34,7 +35,11 @@ pub(super) const SPECS: &[Spec] = &[Spec {
                 and MCP servers refer to it), when it was added and its value last replaced, what uses it (tools, \
                 MCP servers, agent connections whose API key it is, and the agent profiles whose draft or latest \
                 version chooses an MCP server that uses it, with that server), each with its link, and the link \
-                to Project settings › Environment. Adding, replacing and archiving secrets are a person's, in the app.",
+                to Project settings › Environment. In a team project the team's secrets this computer has a value \
+                for follow, each as {name, team: true, value_set: true}: the name and that it is set, never the \
+                value, which no tool takes or returns; names the configuration needs and nobody gave a value are \
+                not listed yet. Adding, replacing and archiving secrets, and \
+                giving a team secret its value, are a person's, in the app.",
   schema: schema_for_type::<InProjects>,
   read_only: true,
 }];
@@ -56,16 +61,35 @@ async fn list_secrets(services: &Services, args: InProjects, translate: &Transla
   let services = services.clone();
   let read = blocking(move || {
     across(&services, args.project.as_deref(), |_, db| {
-      Ok((ProjectSecrets::load(db)?, ProjectAgents::load(db)?))
+      Ok((ProjectSecrets::load(db)?, ProjectAgents::load(db)?, team_names_set(db)?))
     })
   })
   .await?;
-  Ok(read.json("secrets", translate, |open, (secrets, agents)| {
-    secrets
+  Ok(read.json("secrets", translate, |open, (secrets, agents, team)| {
+    let own = secrets
       .in_environment(None)
-      .map(|secret| secret_json(secret, (secrets, agents), open.project.id()))
-      .collect()
+      .map(|secret| secret_json(secret, (secrets, agents), open.project.id()));
+    // Always true: only the names with a recorded value are listed until the names a team needs are known (ORC-828
+    // part 2), so a name without a value cannot appear yet.
+    let team = team
+      .iter()
+      .map(|name| json!({ "name": name, "team": true, "value_set": true }));
+    own.chain(team).collect()
   }))
+}
+
+/// The names of the team's secrets that have a value on this computer, in a team project; a local project has none.
+/// The store keeps the name and the keychain handle, so no value is read.
+fn team_names_set(db: &ProjectDb) -> Result<Vec<String>, StoreError> {
+  if db.sharing()?.is_none() {
+    return Ok(Vec::new());
+  }
+  Ok(
+    db.team_secret_names_set()?
+      .iter()
+      .map(|name| name.as_str().to_owned())
+      .collect(),
+  )
 }
 
 /// `secret` of `project` by its name, kind and environment, with what uses it: no value.
