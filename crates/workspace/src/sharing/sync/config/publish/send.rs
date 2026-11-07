@@ -77,7 +77,10 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
 
   fn send_one(&mut self, waiting: &WaitingPublish) -> Result<(), SharingError> {
     match waiting.kind {
-      ResourceKind::Pipeline => self.send_kind::<Pipeline>(waiting),
+      ResourceKind::Pipeline => {
+        self.check_team_pipeline(waiting)?;
+        self.send_kind::<Pipeline>(waiting)
+      }
       ResourceKind::AgentProfile => self.send_kind::<AgentProfile>(waiting),
       ResourceKind::Instruction => self.send_kind::<Instruction>(waiting),
       ResourceKind::Skill => self.send_kind::<Skill>(waiting),
@@ -93,6 +96,17 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
         .into(),
       ),
     }
+  }
+
+  /// A pipeline names its profiles and tools by their server ids, so it may name only what the team has
+  /// ([`team_body::check_pipeline`]).
+  fn check_team_pipeline(&self, waiting: &WaitingPublish) -> Result<(), SharingError> {
+    let version = self
+      .db
+      .version::<Pipeline>(waiting.resource, waiting.number)?
+      .ok_or(StoreError::ResourceNotFound(waiting.resource))?;
+    let team = team_body::team_executors(&self.db)?;
+    team_body::check_pipeline(&self.db, waiting.resource, version.body().clone(), &team)
   }
 
   fn send_kind<B: ResourceBody + Clone>(&mut self, waiting: &WaitingPublish) -> Result<(), SharingError> {

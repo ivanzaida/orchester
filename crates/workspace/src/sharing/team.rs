@@ -178,6 +178,9 @@ pub(super) fn said(error: &SharingError, address: Option<&ServerAddress>) -> Mes
     (SharingError::LocalEntitiesNamed { names, .. }, None) => {
       Message::new("sharing.errors.localEntitiesNamed").with("names", names.join(", "))
     }
+    (SharingError::PipelineNamesNonTeam { name, .. }, None) => {
+      Message::new("sharing.errors.pipelineNamesNonTeam").with("name", name.clone())
+    }
     (_, None) => messages::interrupted(),
   }
 }

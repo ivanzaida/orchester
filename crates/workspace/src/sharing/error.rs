@@ -93,6 +93,11 @@ pub enum SharingError {
   /// holds (`docs/design/team-configuration.md`); `names` are theirs. Nothing was sent.
   #[error("resource {resource} names {} of this computer", names.join(", "))]
   LocalEntitiesNamed { resource: ResourceId, names: Vec<String> },
+  /// A pipeline to send the team runs an agent profile or tool, or merges with an integrator, that the team does not
+  /// have (`docs/design/team-configuration.md`: a team pipeline names profiles and tools by their server ids); `name`
+  /// is the first. Nothing was sent.
+  #[error("pipeline {resource} names {name}, which is not a team resource")]
+  PipelineNamesNonTeam { resource: ResourceId, name: String },
   /// The chosen local connection cannot run a reference of the required kind.
   #[error("the connection kind {actual:?} does not match the reference kind {expected:?}")]
   ConnectionKindMismatch {
@@ -151,6 +156,9 @@ impl SharingError {
       Self::PersonOnly => Message::new("sharing.errors.personOnly"),
       Self::LocalEntitiesNamed { names, .. } => {
         Message::new("sharing.errors.localEntitiesNamed").with("names", names.join(", "))
+      }
+      Self::PipelineNamesNonTeam { name, .. } => {
+        Message::new("sharing.errors.pipelineNamesNonTeam").with("name", name.clone())
       }
     }
   }

@@ -2101,7 +2101,8 @@
       "versionInUse": "Runs or tasks here use the version you published, so it stays; nothing was changed. Publish yours as the next version instead.",
       "versionConflict": "Someone published v{{version}} from the same version meanwhile. Open your draft on v{{version}}, or publish yours as the next version.",
       "personOnly": "Only a person can do this in the window: it changes what agents may do on this computer. Nothing was changed.",
-      "localEntitiesNamed": "The team can't take this: it names {{names}}, which belong to this computer only. Nothing was sent."
+      "localEntitiesNamed": "The team can't take this: it names {{names}}, which belong to this computer only. Nothing was sent.",
+      "pipelineNamesNonTeam": "The team can't take this pipeline: it uses {{name}}, which isn't one of the team's resources. Nothing was sent."
     },
     "folder": {
       "matches": "Its origin is {{hint}}, the repository this project names.",

@@ -7,15 +7,12 @@
 //! person's decision unless a person lets automation change agent permissions. The local pipeline stays as it is,
 //! hidden, but for its slug, which it gives way to the team's.
 
-use std::collections::HashSet;
-
 use orchester_core::{
-  id::ResourceId,
   resource::{Pipeline, Resource, ResourceKind},
   store::ResourceStore,
   time::Timestamp,
 };
-use orchester_store::{ProjectDb, PublishState, ResourceSharing, StoreError};
+use orchester_store::{ProjectDb, ResourceSharing, StoreError};
 use serde_json::{Value, json};
 
 use super::{pipelines::InPipeline, widening};
@@ -25,6 +22,7 @@ use crate::{
     services::{Services, blocking},
   },
   messages::Message,
+  sharing::sync::pending_team,
   tasks::outside::Outside,
 };
 
@@ -125,22 +123,4 @@ fn refuse_local_executors(db: &ProjectDb, pipeline: &Pipeline) -> Result<(), Too
     "team_resources_required",
     vec![Message::new("appMcp.errors.sharePipelineLocalExecutors").with("resources", local.join(", "))],
   ))
-}
-
-/// The resources with versions published here that wait for the team server and none it refused: the team's, not
-/// there yet. One the server refused (a slug it has, say) never became the team's, so it is this computer's own.
-fn pending_team(db: &ProjectDb) -> Result<HashSet<ResourceId>, StoreError> {
-  let waiting = db.waiting_publishes()?;
-  let refused: HashSet<ResourceId> = waiting
-    .iter()
-    .filter(|waiting| matches!(waiting.state, PublishState::Refused { .. }))
-    .map(|waiting| waiting.resource)
-    .collect();
-  Ok(
-    waiting
-      .into_iter()
-      .map(|waiting| waiting.resource)
-      .filter(|resource| !refused.contains(resource))
-      .collect(),
-  )
 }

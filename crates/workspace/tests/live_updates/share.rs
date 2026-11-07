@@ -30,6 +30,7 @@ use super::{
   publish::{Publisher, json, number, rule},
   seen_within,
   support::{Fixture, at},
+  team_copy::one_step,
 };
 
 /// How long the second workspace may take to cache the uploaded resources from its stream.
@@ -263,6 +264,35 @@ async fn live_updates_share_uploads_nothing_when_a_profile_names_a_connection_of
   );
   assert_eq!(on_server(&server, builder), [], "nothing was uploaded");
   assert_eq!(on_server(&server, alice.style), []);
+}
+
+/// Share uploads the pipelines with their ids, so a pipeline running a profile it does not upload would give the team
+/// an id the server does not have: it is refused and nothing is sent.
+#[tokio::test(flavor = "multi_thread")]
+async fn live_updates_share_uploads_nothing_when_a_pipeline_runs_a_profile_it_does_not_upload() {
+  let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
+  let alice = Sharer::new();
+  let (delivery, _) = alice.delivery();
+  let mut db = alice.db();
+  let hotfix = db
+    .create_resource(
+      slug("hotfix"),
+      name("Hotfix"),
+      &one_step(ResourceId::generate()),
+      at(30),
+    )
+    .expect("Hotfix")
+    .id();
+  db.publish_draft::<Pipeline>(hotfix, at(31)).expect("v1");
+  let publisher = Publisher::online(&server, ALICE);
+
+  let refused = upload_configuration(&publisher, alice.fixture.repo.path()).await;
+
+  assert!(
+    matches!(&refused, Err(SharingError::PipelineNamesNonTeam { resource, .. }) if *resource == hotfix),
+    "{refused:?}"
+  );
+  assert_eq!(on_server(&server, delivery), [], "nothing was uploaded");
 }
 
 /// Nothing of the resource is left in the project: not the row, not a cached version, not a listing of its kind.
