@@ -30,7 +30,7 @@ use crate::{
 
 /// The list's width and a file's row (`qCQrx`, `niUdh`).
 pub(super) const FILES_WIDTH: f32 = 240.0;
-const ROW_HEIGHT: f32 = 30.0;
+pub(super) const ROW_HEIGHT: f32 = 30.0;
 
 /// The list of `diff`'s files.
 pub(super) fn files(ctx: &mut Ctx, env: &Env, diff: &Diff) -> Element {

@@ -158,6 +158,9 @@ fn head(ctx: &mut Ctx, env: &Env, view: &ThreadView) -> Element {
 
 /// What can be done with the thread now, at its head's end.
 fn actions(ctx: &mut Ctx, env: &Env, view: &ThreadView) -> Vec<Element> {
+  if env.read_only {
+    return Vec::new();
+  }
   let id = format!("review-thread-{}", view.thread.id());
   let thread = view.thread.id();
   match &view.state {

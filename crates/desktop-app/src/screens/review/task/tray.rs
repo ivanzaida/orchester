@@ -3,6 +3,8 @@
 //! only; questions never wait. Idle: *2 comments not sent*, what sending does, *Discard* and *Send to Implement (2)*.
 //! Sending: the loader and *Sending 2 comments to Implement…*, the button under way. Failed: why in `warning` (*Not
 //! sent: the runner is not running*), that nothing is lost, *Discard* and *Try again*. *Discard* asks first in a modal.
+//! While Implement works on comments sent before, new ones wait above the agent bar (`agent`): the tray says they are
+//! sent once the task is back, and *Send to Implement* cannot be pressed until then.
 
 use std::sync::Arc;
 
@@ -42,12 +44,17 @@ const TRAY_HEIGHT: f32 = 52.0;
 /// How the tray stands.
 enum Tray {
   Idle(usize),
+  /// Comments written while Implement works on others: they wait until the task is back.
+  Waiting(usize),
   Sending(usize),
   Failed(ReviewFailure),
 }
 
 /// The tray, or nothing while no comment waits or is being sent.
 pub(super) fn tray(ctx: &mut Ctx, env: &Env) -> Option<Element> {
+  if env.read_only {
+    return None;
+  }
   let unsent = unsent(env);
   let sending = env
     .review
@@ -63,6 +70,7 @@ pub(super) fn tray(ctx: &mut Ctx, env: &Env) -> Option<Element> {
   let tray = match (sending, failed) {
     (0, _) if unsent.is_empty() => return None,
     (0, Some(failure)) => Tray::Failed(failure),
+    (0, None) if env.review.implement_at_work => Tray::Waiting(unsent.len()),
     (0, None) => Tray::Idle(unsent.len()),
     (sending, _) => Tray::Sending(sending),
   };
@@ -73,6 +81,7 @@ pub(super) fn tray(ctx: &mut Ctx, env: &Env) -> Option<Element> {
       "state",
       match tray {
         Tray::Idle(_) => "idle",
+        Tray::Waiting(_) => "waiting",
         Tray::Sending(_) => "sending",
         Tray::Failed(_) => "failed",
       },
@@ -146,6 +155,17 @@ fn words(ctx: &Ctx, tray: &Tray) -> (Icon, PaletteColor, Arc<str>, PaletteColor,
         ctx.t("review_page.tray.whatOther")
       }),
     ),
+    Tray::Waiting(count) => (
+      Icon::MessageSquare,
+      PaletteColor::Info,
+      counted(
+        ctx,
+        ("review_page.tray.unsentOne", "review_page.tray.unsentOther"),
+        *count,
+      ),
+      PaletteColor::TextPrimary,
+      Some(ctx.t("review_page.tray.waits")),
+    ),
     Tray::Sending(count) => (
       Icon::LoaderCircle,
       PaletteColor::TextMuted,
@@ -218,6 +238,18 @@ fn buttons(ctx: &Ctx, env: &Env, tray: &Tray) -> Vec<Element> {
         ctx.t_args("review_page.tray.send", [("count", count.to_string())]),
         Icon::Send,
       )
+      .into(),
+    ],
+    Tray::Waiting(count) => vec![
+      discard(),
+      ActionButton::new(
+        "review-tray-send",
+        ButtonKind::Primary,
+        ctx.t_args("review_page.tray.send", [("count", count.to_string())]),
+      )
+      .icon(Icon::Send)
+      .small()
+      .disabled()
       .into(),
     ],
     Tray::Sending(_) => vec![

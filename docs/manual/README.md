@@ -140,7 +140,6 @@ widening calls; **AA** = needs *Let automation answer approvals*; **WC** = needs
 | `send_message` | | Message a run's agents |
 | `get_conversation` | RO | A task's conversation |
 | `duplicate_pipeline` | AP unless identical | Copy and publish a pipeline |
-| `list_pull_requests` / `get_pull_request` | RO | GitHub pull requests |
 | `get_usage` | RO | Tokens and agent time |
 | `get_delivery` | RO | Throughput, cycle/lead time, flow, forecasts |
 | `get_daily_report` | RO | A day's report |

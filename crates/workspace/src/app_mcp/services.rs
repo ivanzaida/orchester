@@ -7,10 +7,7 @@ use orchester_core::{id::ResourceId, resource::ResourceBody, store::ResourceStor
 use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, RegisteredProject};
 
-use super::{
-  error::{Missing, ToolError},
-  tools::RecentReads,
-};
+use super::error::{Missing, ToolError};
 use crate::{
   activity::Activity,
   messages::Message,
@@ -38,9 +35,7 @@ pub struct Services {
   pub(super) activity: Activity,
   /// The projects' merge and removal operations, shared with the task pages.
   pub(super) jobs: ProjectJobs,
-  /// What `get_pull_request` read of pull requests outside the synced lists in the last 30 s.
-  pub(super) pull_request_reads: RecentReads,
-  /// The pull requests' checks `get_pull_request` and `get_run` read in the last 30 s.
+  /// The pull requests' checks `get_run` reads in the last 30 s.
   pub(super) ci_reads: CiReads,
   /// A person decided the publication, or the MCP server's change, the tools are called for (they applied a proposal
   /// of the Orchestrator chat): what it widens is theirs to decide, as in the window, not *Let automation change agent
@@ -76,7 +71,6 @@ impl Services {
       changes,
       activity,
       jobs,
-      pull_request_reads: RecentReads::default(),
       ci_reads: CiReads::default(),
       person: None,
       chat_publishes: false,

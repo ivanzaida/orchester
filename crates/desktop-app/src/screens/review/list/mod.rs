@@ -14,7 +14,7 @@ mod bones;
 mod head;
 mod items;
 mod line;
-mod read;
+pub(super) mod read;
 mod row;
 mod words;
 

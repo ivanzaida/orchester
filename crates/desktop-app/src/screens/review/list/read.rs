@@ -69,3 +69,12 @@ pub(super) fn read(ctx: &mut Ctx, project: &ShownProject, again: u64) -> Read {
   }
   loaded.data.or_else(kept).map_or(Read::Reading { waiting }, Read::Ready)
 }
+
+/// The list as last read, for a page that needs only to know which tasks wait for the person (a task's review pages
+/// through them): `None` until the first read is done. It is read as the list is, so the page follows what changes it.
+pub(in crate::screens::review) fn last_read(ctx: &mut Ctx, project: &ShownProject) -> Option<ReviewList> {
+  match read(ctx, project, 0) {
+    Read::Ready(list) => Some(list),
+    _ => None,
+  }
+}

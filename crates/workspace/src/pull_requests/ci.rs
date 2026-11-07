@@ -25,7 +25,7 @@ use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
 use parking_lot::Mutex;
 
-use super::{InboxError, detail::hold_if_rate_limited, github_connection};
+use super::{PullRequestError, github_connection, hold_if_rate_limited};
 
 /// What is known of a pull request's CI.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -100,7 +100,7 @@ pub fn read_ci_in(
   programs: &Programs,
   number: u64,
   now: Timestamp,
-) -> Result<PullRequestCi, InboxError> {
+) -> Result<PullRequestCi, PullRequestError> {
   let mut db = ProjectDb::open(repo_root)?;
   let Some(link) = db.repository_link()? else {
     return Ok(PullRequestCi::NotLinked);
@@ -129,13 +129,13 @@ pub fn read_ci_in(
 }
 
 /// The number of the pull request of `run`'s branch the last sync stored ([`stored_run_pull_request`]).
-pub fn run_pull_request(db: &ProjectDb, run: &Run) -> Result<Option<u64>, InboxError> {
+pub fn run_pull_request(db: &ProjectDb, run: &Run) -> Result<Option<u64>, PullRequestError> {
   Ok(stored_run_pull_request(db, run)?.map(|pull_request| pull_request.number()))
 }
 
 /// The pull request of `run`'s branch the last sync stored: its open one, else the most recently updated one.
 /// `None` without a link or such a pull request.
-pub fn stored_run_pull_request(db: &ProjectDb, run: &Run) -> Result<Option<PullRequest>, InboxError> {
+pub fn stored_run_pull_request(db: &ProjectDb, run: &Run) -> Result<Option<PullRequest>, PullRequestError> {
   let Some(link) = db.repository_link()? else {
     return Ok(None);
   };
@@ -171,7 +171,7 @@ pub fn run_ci_in(
   (project, root): (ProjectId, &Path),
   programs: &Programs,
   (run, now): (orchester_core::id::RunId, Timestamp),
-) -> Result<Option<RunCi>, InboxError> {
+) -> Result<Option<RunCi>, PullRequestError> {
   let db = ProjectDb::open(root)?;
   let Some(run) = db.run(run).map_err(crate::tasks::detail::run_store_error)? else {
     return Ok(None);
@@ -201,7 +201,7 @@ impl CiReads {
     programs: &Programs,
     number: u64,
     now: Timestamp,
-  ) -> Result<PullRequestCi, InboxError> {
+  ) -> Result<PullRequestCi, PullRequestError> {
     let key = (project, number);
     {
       let mut reads = self.0.lock();

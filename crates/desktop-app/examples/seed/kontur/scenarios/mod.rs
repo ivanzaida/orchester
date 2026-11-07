@@ -40,6 +40,7 @@ mod ownership;
 mod pipelines;
 mod project_settings;
 pub mod qa_app_asks;
+mod review_approved;
 mod review_changed;
 mod review_conflicts;
 mod review_list;
@@ -110,7 +111,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 159] = [
+pub const ALL: [Scenario; 160] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -187,6 +188,7 @@ pub const ALL: [Scenario; 159] = [
   Scenario::of("merges-many", merges::many),
   Scenario::of("merge-attempts", merge_attempts::seed),
   Scenario::of("review-page", review_page::seed),
+  Scenario::of("review-approved", review_approved::seed),
   Scenario::of("review-changed", review_changed::seed),
   Scenario::of("review-list", review_list::seed),
   Scenario::of("review-conflicts", review_conflicts::seed),

@@ -141,7 +141,7 @@ fn review_conflicts_a_merge_that_was_refused_leaves_the_run_in_review_and_the_co
 }
 
 #[test]
-fn review_conflicts_a_run_whose_merge_was_only_refused_is_reviewed_without_conflicts() {
+fn review_conflicts_a_run_whose_merge_was_only_refused_is_the_attempt_pages() {
   let repo = Repo::new();
   let refused = MergeAttempt::new(
     (repo.run, Timestamp::now()),
@@ -152,8 +152,10 @@ fn review_conflicts_a_run_whose_merge_was_only_refused_is_reviewed_without_confl
     Some("the project's database is busy"),
   );
   repo.db().record_merge_attempt(&refused).expect("recorded");
-  let page = page(&repo).expect("the run waits for review, as the list says");
-  assert!(page.conflicts.is_none());
+  assert!(
+    page(&repo).is_none(),
+    "no conflicts: the attempt page tells a refused merge"
+  );
 }
 
 #[test]
@@ -273,5 +275,6 @@ fn review_conflicts_try_merge_again_conflicts_again_until_the_base_moved_away() 
   )
   .expect("merged");
   assert!(matches!(merged, Approved::Merged(_)));
-  assert!(page(&repo).is_none(), "a merged run is reviewed no more");
+  let merged = page(&repo).expect("a merged run keeps its read-only review");
+  assert!(merged.approved.is_some() && merged.conflicts.is_none());
 }

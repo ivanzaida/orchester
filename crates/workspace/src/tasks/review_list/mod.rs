@@ -7,6 +7,7 @@
 //! thread. [`waiting_count`] reads no store and no git.
 
 mod approved;
+mod pager;
 mod rows;
 mod waiting;
 
@@ -23,6 +24,7 @@ use orchester_core::{
 use orchester_exec::programs::Programs;
 use orchester_store::StoreError;
 
+pub use self::pager::{Pager, Place};
 use self::rows::Reader;
 use super::{data::ProjectTasks, needs_you::WaitingKind};
 
