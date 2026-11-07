@@ -3,7 +3,7 @@
     "title": "Agents",
     "team": "Team",
     "reading": "Reading the team's configuration…",
-    "loadFailed": "the team's configuration",
+    "loadFailed": "The team's configuration couldn't be read",
     "filter": {
       "all": "All",
       "profiles": "Profiles",
@@ -60,6 +60,7 @@
       "many": "{{count}} things missing here",
       "connectionNone": "No {{cli}} connection on this computer",
       "connectionPick": "Choose a {{cli}} connection here",
+      "decisionConnection": "Needs a connection here",
       "mcpUndecided": "Switch it on or off on this computer",
       "mcpOff": "{{server}} is not switched on here",
       "programHere": "Set its program path here",
@@ -176,6 +177,14 @@
       "placeholder": "Paste the value",
       "cancel": "Cancel",
       "save": "Save value"
+    },
+    "rereading": "Reading…",
+    "new": {
+      "all": "New",
+      "profiles": "New agent",
+      "instructions": "New instruction",
+      "skills": "New skill",
+      "tools": "New tool"
     }
   }
 }

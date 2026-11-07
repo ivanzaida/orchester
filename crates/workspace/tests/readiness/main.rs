@@ -5,9 +5,11 @@
 
 mod follows;
 mod groups;
+mod hub;
 mod local;
 mod pending;
 mod pipelines;
+mod reviewers;
 mod servers;
 mod start;
 mod support;

@@ -17,7 +17,9 @@ mod states;
 #[path = "../support/mod.rs"]
 mod support;
 mod team_hub;
+mod team_hub_admin;
 mod team_hub_profile;
+mod team_hub_reads;
 mod usage;
 
 mod usage_navigation;

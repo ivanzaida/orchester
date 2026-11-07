@@ -6,6 +6,7 @@
 
 mod connection;
 mod program;
+mod reviewer;
 mod secret;
 mod sheet;
 mod support;

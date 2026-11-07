@@ -3,17 +3,22 @@
 //! list of the team's resources grouped by what this computer needs (*Needs you here*, *Ready here*, *Off here*) and
 //! the panel of the chosen one, with the action that moves it on pinned at its bottom. The filter and the chosen
 //! resource are the route's ([`HubView`]), so links, Back and Forward land on them; a route that names none shows the
-//! first resource of the list. Instructions and skills need nothing of a computer and stand under *Ready here*.
+//! first resource of the list. Instructions and skills need nothing of a computer and stand under *Ready here*. An
+//! admin has New in the head ([`create`]).
 //!
 //! The readiness is read off the UI thread when the page opens and when the project's resources, fill-ins or team
-//! standings change, never on a timer: a local tool's secret is read from the keychain.
+//! standings change, never on a timer: a local tool's secret is read from the keychain. While it is read again the
+//! page shows the last answer dimmed with *Reading…*, and a read that failed shows its failure and no counts, never the
+//! last answer as current. Before the project is known to be shared the page is [`unread`]'s.
 
+mod create;
 mod head;
 mod list;
 mod model;
 mod panel;
 mod profile;
 mod row;
+pub(super) mod unread;
 mod words;
 
 use lurq::{
@@ -22,20 +27,21 @@ use lurq::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize},
   },
-  components::Column,
+  components::{Column, Row},
   core::Signal,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_workspace::{agents::team_hub::TeamHub, background, messages::Message, tasks::outside::Outside};
+use orchester_workspace::{
+  agents::team_hub::TeamHub, background, messages::Message, sharing::team::TeamConfiguration, tasks::outside::Outside,
+};
 
-use self::model::Listing;
-use super::hub::team;
+use self::{create::NewMenu, head::FilterShown, model::Listing};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::HubView,
+  routes::{HubView, ProjectPage, Route},
   services::Services,
-  theme::HubSpacing,
+  theme::{HUB_READING_OPACITY, HubSpacing},
   ui::{
     failure::{Failure, LastFailure},
     icon::Icon,
@@ -47,15 +53,18 @@ use crate::{
 pub struct Props {
   pub project: ShownProject,
   pub view: HubView,
+  /// The team's configuration, which the dispatch has read: the project is shared.
+  pub team: TeamConfiguration,
 }
 impl DevtoolsInspectable for Props {}
 
-pub fn screen(ctx: &mut Ctx, project: &ShownProject, view: HubView) -> Element {
+pub fn screen(ctx: &mut Ctx, project: &ShownProject, team: TeamConfiguration, view: HubView) -> Element {
   ctx.mount_keyed::<TeamHubScreen>(
     &format!("team-hub-{}", project.open.project.id()),
     Props {
       project: project.clone(),
       view,
+      team,
     },
   )
 }
@@ -64,6 +73,8 @@ struct TeamHubScreen {
   retry: Signal<u64>,
   /// Why the hub couldn't be read, kept while it is read again.
   failure: LastFailure,
+  /// The menu All's New opens in the head.
+  new_menu: NewMenu,
 }
 
 impl Component for TeamHubScreen {
@@ -73,14 +84,15 @@ impl Component for TeamHubScreen {
     Self {
       retry: ctx.signal(0),
       failure: LastFailure::default(),
+      new_menu: NewMenu {
+        open: ctx.signal(false),
+        anchor: ctx.element_ref(),
+      },
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let Props { project, view } = ctx.props::<Props>().clone();
-    let Some(team) = team::of(&project) else {
-      return Column::new().id("screen-team-hub-gone").into();
-    };
+    let Props { project, view, team } = ctx.props::<Props>().clone();
     let outside = project.feed.outside.get();
     // Fill-ins (a program path, a secret value, On here) count as Connections; the rest are the kinds the hub lists.
     let dep = (
@@ -108,14 +120,38 @@ impl Component for TeamHubScreen {
       .state()
       .get();
     let failed = self.failure.follow(&loaded);
+    // A read under way or failed keeps the last answer in `loaded`: it counts and lists only while the read is not
+    // failed, and a read under way marks what shows as the last answer.
+    let reading = loaded.is_pending();
+    let hub = loaded.data.as_ref().filter(|_| failed.is_none());
+    let listing = hub.map(Listing::of);
     let navigation = Navigation::of(ctx);
-    let body = match (&loaded.data, failed) {
-      (_, Some((error, retrying))) => self.failure_page(ctx, &project, error, retrying),
-      (Some(hub), None) => hub_body(ctx, &project, (&team, hub), (&view, &navigation)),
+    let selected = listing
+      .as_ref()
+      .and_then(|listing| listing.selected(view.filter, view.item))
+      .map(|entry| entry.id);
+    let body = match (failed, hub.zip(listing.as_ref())) {
+      (Some((error, retrying)), _) => self.failure_page(ctx, &project, error, retrying),
+      (None, Some((hub, listing))) => {
+        if !reading {
+          keep_route_on_shown(&project, view, selected, &navigation);
+        }
+        hub_body(ctx, (&project, &team), (hub, listing), (&view, &navigation), reading)
+      }
       (None, None) => loading("team-hub-loading", &ctx.t("team_hub.reading")).into(),
     };
-    let listing = loaded.data.as_ref().map(Listing::of).unwrap_or_default();
-    frame(ctx, (&project, &team, &listing), (&view, &navigation), body)
+    let id = project.open.project.id();
+    let new = team
+      .may_change
+      .then(|| create::new_button(ctx, (id, view.filter), (&navigation, &self.new_menu)))
+      .flatten();
+    let shown = FilterShown {
+      project: id,
+      filter: view.filter,
+      selected,
+      reading,
+    };
+    frame(ctx, (&team, listing.as_ref(), &shown), new, &navigation, (body, view))
   }
 }
 
@@ -130,16 +166,30 @@ impl TeamHubScreen {
   }
 }
 
+/// A route that names a resource the filter does not hold (one removed, or of another kind) shows the first one of the
+/// list; the route is corrected to the one shown, in place, so a link, Back and a reload land on what the page says.
+fn keep_route_on_shown(
+  project: &ShownProject,
+  view: HubView,
+  shown: Option<orchester_core::id::ResourceId>,
+  navigation: &Navigation,
+) {
+  if view.item.is_some() && view.item != shown {
+    let corrected = Route::Project(
+      project.open.project.id(),
+      ProjectPage::hub(HubView::new(view.filter, shown)),
+    );
+    navigation.replace(corrected);
+  }
+}
+
 /// The page: the head and the filter over `body`.
 fn frame(
-  ctx: &Ctx,
-  (project, team, listing): (
-    &ShownProject,
-    &orchester_workspace::sharing::team::TeamConfiguration,
-    &Listing,
-  ),
-  (view, navigation): (&HubView, &Navigation),
-  body: Element,
+  ctx: &mut Ctx,
+  (team, listing, shown): (&TeamConfiguration, Option<&Listing>, &FilterShown),
+  new: Option<Element>,
+  navigation: &Navigation,
+  (body, view): (Element, HubView),
 ) -> Element {
   Column::new()
     .id("screen-team-hub")
@@ -154,12 +204,8 @@ fn frame(
         .right(HubSpacing::Side.role()),
     )
     .spacing(crate::theme::ExtraSpacing::Inset.role())
-    .child(head::head(ctx, team))
-    .child(head::filter(
-      ctx,
-      listing,
-      (project.open.project.id(), view.filter, navigation),
-    ))
+    .child(head::head(ctx, team, new))
+    .child(head::filter(ctx, listing, shown, navigation))
     .child(
       Column::new()
         .id("team-hub-body")
@@ -171,17 +217,17 @@ fn frame(
     .into()
 }
 
-/// The list and the panel, or what stands in for them when the filter holds nothing.
+/// The list and the panel, or what stands in for them when the filter holds nothing. `reading`: they show the last
+/// answer while it is read again.
 fn hub_body(
   ctx: &mut Ctx,
-  project: &ShownProject,
-  (team, hub): (&orchester_workspace::sharing::team::TeamConfiguration, &TeamHub),
+  (project, team): (&ShownProject, &TeamConfiguration),
+  (hub, listing): (&TeamHub, &Listing),
   (view, navigation): (&HubView, &Navigation),
+  reading: bool,
 ) -> Element {
-  let listing = Listing::of(hub);
   let id = project.open.project.id();
-  let selected = listing.selected(view.filter, view.item);
-  let Some(selected) = selected else {
+  let Some(selected) = listing.selected(view.filter, view.item) else {
     return EmptyState::new(
       "team-hub-empty",
       Icon::Users,
@@ -192,7 +238,7 @@ fn hub_body(
   };
   let list = list::list(
     ctx,
-    &listing,
+    listing,
     &list::Shown {
       project: id,
       filter: view.filter,
@@ -212,17 +258,20 @@ fn hub_body(
         repo_root: project.open.repo_root.clone(),
         project: id,
         may_change: team.may_change,
+        reading,
         listing: listing.clone(),
         entry: selected.clone(),
         sheet: sheet.clone(),
       },
     ),
-    None => panel::panel(ctx, &listing, selected, &shown),
+    None => panel::panel(ctx, listing, selected, &shown),
   };
-  lurq::components::Row::new()
+  Row::new()
     .id("team-hub-master-detail")
+    .describe("state", if reading { "reading" } else { "read" })
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
+    .opacity(if reading { HUB_READING_OPACITY } else { 1.0 })
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)
     .child(

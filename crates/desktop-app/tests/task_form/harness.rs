@@ -2,7 +2,7 @@
 //! starts: the form is driven by element id, as a person fills it in, and what it stored is read back from
 //! the project's database.
 
-use std::{fs, path::Path};
+use std::{fs, path::Path, time::Duration};
 
 use orchester_app::routes::{ProjectPage, Route};
 use orchester_core::{
@@ -76,6 +76,20 @@ impl Form {
     self.window.until("Edit task's form", |window| {
       window.tree.get_element_by_id("task-form-head").is_some()
     });
+    self.until_readiness_read();
+  }
+
+  /// Waits until the bar no longer says the chosen pipeline's readiness is being read: Create & run is held back
+  /// meanwhile, and the bar's line is not the one a test asks for.
+  pub fn until_readiness_read(&mut self) {
+    self
+      .window
+      .until_within(Duration::from_secs(10), "the pipelines' readiness", |window| {
+        window.texts("task-form-reason-text").is_none_or(|reason| {
+          let reason = reason.join("");
+          !reason.starts_with("Reading whether") && !reason.contains("wait while the pipeline's readiness is read")
+        })
+      });
   }
 
   pub fn set(&mut self, id: &str, value: &str) {
@@ -130,6 +144,7 @@ impl Form {
       };
       if title.join("").starts_with(label) {
         self.click(&id);
+        self.until_readiness_read();
         return;
       }
     }

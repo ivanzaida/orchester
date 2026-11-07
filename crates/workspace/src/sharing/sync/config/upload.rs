@@ -18,7 +18,8 @@ use orchester_core::{
   blob::ContentHash,
   id::{IdempotencyKey, ResourceId},
   resource::{
-    AgentProfile, Instruction, Pipeline, Resource, ResourceBody, Skill, TeamExecutors, TeamMcpServer, Tool, Version,
+    AgentProfile, Instruction, Pipeline, Resource, ResourceBody, Skill, TeamExecutors, TeamMcpServer, TeamReviewer,
+    Tool, Version,
   },
   sharing::LocalEntities,
   store::{BlobStore, ConnectionStore, McpServerStore, ResourceStore, SecretStore},
@@ -195,7 +196,7 @@ fn versions_of(
     SharedResourceKind::AgentProfile => profile_versions(db, kept, mcp),
     SharedResourceKind::Instruction => versions::<Instruction>(db, kept, entities),
     SharedResourceKind::Tool => versions::<Tool>(db, kept, entities),
-    SharedResourceKind::TeamReviewer => versions::<orchester_core::resource::TeamReviewer>(db, kept, entities),
+    SharedResourceKind::TeamReviewer => reviewer_versions(db, kept),
     SharedResourceKind::McpServer => versions::<TeamMcpServer>(db, kept, entities),
     SharedResourceKind::Skill => {
       for version in db.versions::<Skill>(kept.id())? {
@@ -253,6 +254,14 @@ fn profile_versions(db: &ProjectDb, resource: &Resource, mcp: &McpPlan) -> Resul
     .collect()
 }
 
+/// The published versions of the team reviewer `resource`, oldest first. A reviewer's body is already the team's.
+fn reviewer_versions(db: &ProjectDb, resource: &Resource) -> Result<Vec<UploadVersion>, SharingError> {
+  db.versions::<TeamReviewer>(resource.id())?
+    .iter()
+    .map(|version| Ok(upload(version, team_body::reviewer(version.body())?)))
+    .collect()
+}
+
 fn upload<B>(version: &Version<B>, publication: Publication) -> UploadVersion {
   UploadVersion {
     number: version.number(),
@@ -293,7 +302,7 @@ fn keep(db: &mut ProjectDb, shared: &SharedResource, versions: &[SharedVersion])
       SharedResourceKind::Instruction => keep_version::<Instruction>(db, version)?,
       SharedResourceKind::Skill => keep_version::<Skill>(db, version)?,
       SharedResourceKind::Tool => keep_version::<Tool>(db, version)?,
-      SharedResourceKind::TeamReviewer => keep_version::<orchester_core::resource::TeamReviewer>(db, version)?,
+      SharedResourceKind::TeamReviewer => keep_version::<TeamReviewer>(db, version)?,
       SharedResourceKind::McpServer => keep_team_mcp_version(db, version)?,
     }
   }

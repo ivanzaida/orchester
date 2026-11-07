@@ -12,7 +12,7 @@ use orchester_api::{
 use orchester_core::{
   blob::ContentHash,
   id::ResourceId,
-  resource::{AgentProfile, Instruction, Pipeline, ResourceBody, ResourceKind, Skill, Tool},
+  resource::{AgentProfile, Instruction, Pipeline, ResourceBody, ResourceKind, Skill, TeamReviewer, Tool},
   sharing::LocalEntities,
   store::{BlobStore, ConnectionStore, McpServerStore, ResourceStore, SecretStore},
   time::Timestamp,
@@ -103,7 +103,13 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
       ResourceKind::Instruction => self.send_kind::<Instruction>(waiting),
       ResourceKind::Skill => self.send_kind::<Skill>(waiting),
       ResourceKind::Tool => self.send_kind::<Tool>(waiting),
-      ResourceKind::TeamReviewer => self.send_kind::<orchester_core::resource::TeamReviewer>(waiting),
+      ResourceKind::TeamReviewer => {
+        let version = self
+          .db
+          .version::<TeamReviewer>(waiting.resource, waiting.number)?
+          .ok_or(StoreError::ResourceNotFound(waiting.resource))?;
+        self.send_publication::<TeamReviewer>(waiting, &team_body::reviewer(version.body())?)
+      }
       ResourceKind::McpServer => self.send_kind::<orchester_core::resource::TeamMcpServer>(waiting),
       // The store never records a version of agent testing's kinds, which stay on this computer.
       ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => Err(
@@ -311,7 +317,7 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
         ResourceKind::AgentProfile => cache_profile(&mut self.db, version)?,
         ResourceKind::Instruction => cache_version::<Instruction>(&mut self.db, version)?,
         ResourceKind::Tool => cache_version::<Tool>(&mut self.db, version)?,
-        ResourceKind::TeamReviewer => cache_version::<orchester_core::resource::TeamReviewer>(&mut self.db, version)?,
+        ResourceKind::TeamReviewer => cache_version::<TeamReviewer>(&mut self.db, version)?,
         ResourceKind::McpServer => cache_version::<orchester_core::resource::TeamMcpServer>(&mut self.db, version)?,
         // Skills are left out above, and agent testing's kinds are never shared.
         ResourceKind::Skill | ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => {}

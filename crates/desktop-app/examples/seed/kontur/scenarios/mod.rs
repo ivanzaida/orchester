@@ -37,6 +37,7 @@ mod orchestrator_plan;
 mod orchestrator_rewind;
 mod overview_states;
 mod ownership;
+mod picker_readiness;
 mod pipelines;
 mod project_settings;
 mod pull_requests;
@@ -110,7 +111,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 162] = [
+pub const ALL: [Scenario; 164] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -215,6 +216,8 @@ pub const ALL: [Scenario; 162] = [
   Scenario::of("team-hub", team_hub::seed),
   Scenario::of("team-hub-pick", team_hub::pick),
   Scenario::of("team-hub-no-connection", team_hub::no_connection),
+  Scenario::of("picker-readiness", picker_readiness::local),
+  Scenario::of("picker-readiness-team", picker_readiness::team),
   Scenario::of("pipelines", pipelines::seed),
   Scenario::of("pipelines-empty", pipelines::empty),
   Scenario::of("pipelines-publish", pipelines::publish),

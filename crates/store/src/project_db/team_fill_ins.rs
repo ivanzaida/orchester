@@ -4,7 +4,7 @@
 //! the name and the keychain handle only.
 
 use orchester_core::{
-  id::{AgentAccountId, ConnectionId, ResourceId, SecretId},
+  id::{AgentAccountId, ConnectionId, DecisionConnectionId, ResourceId, SecretId},
   secret::{SecretName, SecretValue, SecretVault, VaultKey},
 };
 use rusqlite::{OptionalExtension, params};
@@ -56,6 +56,37 @@ impl ProjectDb {
         .map(|account| parse("picked account id", &account))
         .transpose()?,
     }))
+  }
+
+  /// Keeps `connection` as the decision connection the team decision reviewer `reviewer` runs on here, replacing an
+  /// earlier pick. It shares the row of [`Self::set_connection_pick`]: a reviewer is of one kind at a time, and a pick
+  /// of the other kind names no connection of this computer, so it reads as no pick.
+  pub fn set_decision_pick(
+    &mut self,
+    reviewer: ResourceId,
+    connection: DecisionConnectionId,
+  ) -> Result<(), StoreError> {
+    self.connection.execute(
+      "INSERT INTO team_connection_picks (resource_id, connection_id, account_id) VALUES (?1, ?2, NULL) \
+       ON CONFLICT (resource_id) DO UPDATE SET connection_id = excluded.connection_id, account_id = NULL",
+      params![reviewer.to_string(), connection.to_string()],
+    )?;
+    Ok(())
+  }
+
+  /// The decision connection picked for `reviewer` on this computer, if any.
+  pub fn decision_pick(&self, reviewer: ResourceId) -> Result<Option<DecisionConnectionId>, StoreError> {
+    let stored: Option<String> = self
+      .connection
+      .query_row(
+        "SELECT connection_id FROM team_connection_picks WHERE resource_id = ?1",
+        [reviewer.to_string()],
+        |row| row.get(0),
+      )
+      .optional()?;
+    stored
+      .map(|connection| parse("picked decision connection id", &connection))
+      .transpose()
   }
 
   /// Forgets the pick for `profile`; a profile without one is not an error.

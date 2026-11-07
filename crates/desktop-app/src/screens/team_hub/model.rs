@@ -147,7 +147,7 @@ pub(super) const ROW_SHORT: f32 = 44.0;
 pub(super) const GROUPS: [Group; 3] = [Group::NeedsYouHere, Group::Ready, Group::OffHere];
 
 /// The team's resources, and how many each filter holds.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Listing {
   entries: Vec<Entry>,
 }
@@ -200,6 +200,11 @@ impl Listing {
   /// The resources of `group` that `filter` holds.
   pub(super) fn group(&self, filter: HubFilter, group: Group) -> impl Iterator<Item = &Entry> {
     self.shown(filter).filter(move |entry| entry.group == group)
+  }
+
+  /// Whether `filter` holds the resource `id`.
+  pub(super) fn holds(&self, filter: HubFilter, id: ResourceId) -> bool {
+    self.shown(filter).any(|entry| entry.id == id)
   }
 
   /// The resource the panel shows: `chosen` while the filter holds it, else the first one of the list.

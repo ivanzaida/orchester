@@ -57,6 +57,11 @@
 # pickers and the Confirm… and secret modals; choosing a connection and confirming stay a person's. shared-config-chosen
 # has Work chosen here; shared-config-no-claude has no Claude Code connection.
 #
+# -Scenario picker-readiness-team and picker-readiness reach New task's Pipeline menu with readiness (`New task · pipeline
+# picker shows readiness`, R2 `P6aAoZ` for the team project, L10 `PMi6Q` for the local one): open New task, fill it, open
+# the Pipeline chip and choose Team delivery (2 things missing here) or Design pass (2 things missing) for the bar's line
+# with Create & run off; Team quick fix is Ready here, Quick fix and Feature delivery are Ready.
+#
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes
 # only cargo's target folder: never inside an installed Orchester (a folder with orchester.exe beside orchester.db),

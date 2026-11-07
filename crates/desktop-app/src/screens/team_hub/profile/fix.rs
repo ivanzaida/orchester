@@ -9,8 +9,8 @@ use orchester_core::{
 
 use crate::ui::icon::Icon;
 
-/// A fix this computer takes by itself; a part only the team can change (a server this app cannot run, a keychain
-/// that cannot say) has none, and no action stands in its place.
+/// A fix this computer takes by itself; a part this panel does not fix (a server this app cannot run, a keychain
+/// that cannot say, a reviewer's connection) has none, and no action stands in its place.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) enum Fix {
   /// Keep the connection the person chose among several as the profile's.
@@ -36,7 +36,8 @@ impl Fix {
       Missing::McpOff { server } => Some(Self::SwitchOn(*server)),
       Missing::McpProgram { server, .. } => Some(Self::SetPath(*server)),
       Missing::Secret { name } => Some(Self::AddValue(name.clone())),
-      Missing::McpUnsupported { .. }
+      Missing::DecisionConnection { .. }
+      | Missing::McpUnsupported { .. }
       | Missing::SecretUnreadable { .. }
       | Missing::LocalMcpProgram { .. }
       | Missing::LocalSecret { .. } => None,

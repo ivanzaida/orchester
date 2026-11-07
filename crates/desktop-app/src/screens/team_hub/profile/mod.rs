@@ -61,6 +61,8 @@ pub(super) struct Props {
   pub project: ProjectId,
   /// The person may change the team's resources: an admin of the team.
   pub may_change: bool,
+  /// The hub is read again: what shows is the last answer, and a fix would act on it.
+  pub reading: bool,
   pub listing: Listing,
   pub entry: Entry,
   pub sheet: TeamProfileSheet,

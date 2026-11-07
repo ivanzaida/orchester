@@ -12,6 +12,12 @@ use lurq::{
 
 use super::typography::{mono, style};
 
+/// The list and the panel of the team's Agents hub while its read is under way again: what shows is the last answer.
+pub const HUB_READING_OPACITY: f32 = 0.6;
+
+/// The width of the menu All's New opens (`Menu` in `t4mtQL`).
+pub const HUB_NEW_MENU_WIDTH: f32 = 220.0;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HubText {
   /// 17/600 `text_primary`: an opened item's title in its page head (`WeZzq` in `O355d`).
@@ -176,10 +182,12 @@ pub enum HubSpacing {
   Nested,
   /// 4: over and under the note under a list's last group (`e1C14P`).
   NoteY,
+  /// 16: the head's Team line to New (`Header` `NRqwv`).
+  NewGap,
 }
 
 impl HubSpacing {
-  pub const ALL: [Self; 16] = [
+  pub const ALL: [Self; 17] = [
     Self::Side,
     Self::HeadTop,
     Self::HeadBottom,
@@ -196,6 +204,7 @@ impl HubSpacing {
     Self::Indent,
     Self::Nested,
     Self::NoteY,
+    Self::NewGap,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -220,6 +229,7 @@ impl HubSpacing {
       Self::Indent => "hub_indent",
       Self::Nested => "hub_nested",
       Self::NoteY => "hub_note_y",
+      Self::NewGap => "hub_new_gap",
     }
   }
 
@@ -233,7 +243,7 @@ impl HubSpacing {
       Self::Row => 14.0,
       Self::RowY => 10.0,
       Self::FieldY => 11.0,
-      Self::FieldGap => 16.0,
+      Self::FieldGap | Self::NewGap => 16.0,
       Self::SubY => 7.0,
       Self::Nested => 44.0,
       Self::NoteY => 4.0,

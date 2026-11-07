@@ -146,9 +146,10 @@ fn problem_state(ctx: &Ctx, listing: &Listing, server: ResourceId, part: &Missin
     Missing::McpUnsupported { .. } => ctx.t("team_hub.line.unsupportedHere"),
     Missing::Secret { name } => ctx.t_args("team_hub.line.secret", [("name", name.to_string())]),
     Missing::SecretUnreadable { name } => ctx.t_args("team_hub.line.secretUnreadable", [("name", name.to_string())]),
-    Missing::Connection { .. } | Missing::LocalMcpProgram { .. } | Missing::LocalSecret { .. } => {
-      ctx.t("team_hub.ready.ready")
-    }
+    Missing::Connection { .. }
+    | Missing::DecisionConnection { .. }
+    | Missing::LocalMcpProgram { .. }
+    | Missing::LocalSecret { .. } => ctx.t("team_hub.ready.ready"),
   };
   State::Missing {
     words,
