@@ -160,6 +160,7 @@ impl From<&SharingError> for DownloadFailure {
       | SharingError::PersonOnly
       | SharingError::ConnectionKindMismatch { .. }
       | SharingError::LocalEntitiesNamed { .. }
+      | SharingError::WritableFoldersStay { .. }
       | SharingError::ForeignAddress { .. } => Self::Refused,
     }
   }

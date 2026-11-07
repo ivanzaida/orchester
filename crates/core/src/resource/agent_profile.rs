@@ -61,7 +61,8 @@ pub enum ProviderSettingsError {
 }
 
 /// Provider-specific settings (for example reasoning effort) passed through to the adapter
-/// unchanged. Orchester does not interpret them; the adapter validates them.
+/// unchanged. Orchester does not interpret them; the adapter validates them. It is a free map that is stored, shared
+/// with the team and bundled as it is, so no secret value belongs in it: a profile needs a secret by its name.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "BTreeMap<String, String>", into = "BTreeMap<String, String>")]
 pub struct ProviderSettings(BTreeMap<String, String>);

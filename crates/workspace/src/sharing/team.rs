@@ -178,6 +178,9 @@ pub(super) fn said(error: &SharingError, address: Option<&ServerAddress>) -> Mes
     (SharingError::LocalEntitiesNamed { names, .. }, None) => {
       Message::new("sharing.errors.localEntitiesNamed").with("names", names.join(", "))
     }
+    (SharingError::WritableFoldersStay { folders, .. }, None) => {
+      Message::new("sharing.errors.writableFoldersStay").with("folders", folders.join(", "))
+    }
     (_, None) => messages::interrupted(),
   }
 }

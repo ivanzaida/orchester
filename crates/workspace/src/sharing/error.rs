@@ -94,6 +94,10 @@ pub enum SharingError {
   /// (`docs/design/team-configuration.md`); `names` are theirs. Nothing was sent.
   #[error("resource {resource} names {} of this computer", names.join(", "))]
   LocalEntitiesNamed { resource: ResourceId, names: Vec<String> },
+  /// A profile to send the team has extra writable folders, which are paths of this computer and stay on it; `folders`
+  /// are theirs. Nothing was sent.
+  #[error("resource {resource} has writable folders of this computer ({})", folders.join(", "))]
+  WritableFoldersStay { resource: ResourceId, folders: Vec<String> },
   /// The chosen local connection cannot run a reference of the required kind.
   #[error("the connection kind {actual:?} does not match the reference kind {expected:?}")]
   ConnectionKindMismatch {
@@ -152,6 +156,9 @@ impl SharingError {
       Self::PersonOnly => Message::new("sharing.errors.personOnly"),
       Self::LocalEntitiesNamed { names, .. } => {
         Message::new("sharing.errors.localEntitiesNamed").with("names", names.join(", "))
+      }
+      Self::WritableFoldersStay { folders, .. } => {
+        Message::new("sharing.errors.writableFoldersStay").with("folders", folders.join(", "))
       }
     }
   }

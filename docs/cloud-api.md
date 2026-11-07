@@ -206,7 +206,9 @@ any other field (`deny_unknown_fields`), so a `connection`, a local MCP server i
   secrets?: [SecretName] }                     // the names this profile needs, distinct, never a value
 ```
 
-The lists are left out while empty. **The body is the one source of truth; `references` repeat it exactly.** A
+The lists are left out while empty. `permissions` carries no `writable_folders`: they are paths of one computer, so a
+server refuses a body that has any (`TeamAgentProfile` fails to read it) and a desktop refuses to send a profile that
+has them; each computer keeps its own. **The body is the one source of truth; `references` repeat it exactly.** A
 profile version's `references` are, in this order: one `cli_kind` for `cli`; a `team_resource` of kind `mcp_server` for
 each of `mcp_servers`, of kind `tool` for each of `tools`, of kind `skill` for each of `skills`, and of kind
 `instruction` for each of `instruction_resources`, each list in the body's order; then a `secret_name` for each of

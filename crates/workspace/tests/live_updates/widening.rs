@@ -10,7 +10,9 @@ use orchester_core::{
   connection::mcp::{McpEnvironment, McpServer, McpServerName, McpTransport, StdioServer},
   id::{ConnectionId, ResourceId},
   name::Name,
-  permission::{AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, widening::Widening},
+  permission::{
+    AgentPermissions, AllowedCommands, CommandPermission, NetworkAccess, WritableFolders, widening::Widening,
+  },
   resource::{AgentProfile, CommandProgram, Draft, Pipeline, RepositoryAccess, Slug, TeamMcpServer, VersionNumber},
   run::{Answerer, PreflightProblem},
   sharing::{MemberRole, VersionWidening},
@@ -356,6 +358,32 @@ async fn live_updates_a_profile_is_published_in_the_teams_form_and_one_choosing_
   .await;
   assert!(
     matches!(refused, Err(SharingError::LocalEntitiesNamed { ref names, .. }) if *names == ["notes"]),
+    "{refused:?}"
+  );
+}
+
+/// A profile with extra writable folders is not published and the person is told they stay on this computer: a team
+/// profile carries no path of a computer.
+#[tokio::test(flavor = "multi_thread")]
+async fn live_updates_a_profile_with_writable_folders_is_not_published() {
+  let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
+  let alice = Computer::new(&server, ALICE, MemberRole::Owner);
+  let laptop = codex(&mut alice.workspace.db(), &alice.workspace.root, "Laptop");
+  let folders: WritableFolders = serde_json::from_value(serde_json::json!(["/opt/cache"])).expect("folders");
+
+  let refused = create_profile(
+    &alice,
+    &server,
+    profile(
+      laptop,
+      &[],
+      AgentPermissions::before_permissions().with_writable_folders(folders),
+    ),
+  )
+  .await;
+
+  assert!(
+    matches!(refused, Err(SharingError::WritableFoldersStay { ref folders, .. }) if *folders == ["/opt/cache"]),
     "{refused:?}"
   );
 }

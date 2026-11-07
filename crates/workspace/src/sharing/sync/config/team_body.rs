@@ -80,6 +80,7 @@ fn refused(resource: ResourceId, error: TeamProfileError) -> SharingError {
       resource,
       names: vec![name],
     },
+    TeamProfileError::WritableFolders { folders } => SharingError::WritableFoldersStay { resource, folders },
     TeamProfileError::Connection(connection) => StoreError::ConnectionNotFound(connection).into(),
     other @ (TeamProfileError::Duplicate { .. } | TeamProfileError::TooMany { .. }) => StoreError::Corrupt {
       what: "agent profile",

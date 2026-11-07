@@ -13,7 +13,7 @@ use orchester_core::{
   },
   id::{ConnectionId, ResourceId},
   name::Name,
-  permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess},
+  permission::{AgentPermissions, CommandPermission, NetworkAccess, RepositoryAccess, WritableFolders},
   resource::{
     AgentProfile, ModelId, PromptText, ProviderSettings, ResourceBody, ResourceKind, TeamAgentProfile,
     TeamCounterparts, TeamProfileError,
@@ -363,4 +363,62 @@ fn team_agent_profile_pins_the_same_bundle_profile_as_the_local_one_it_came_from
   .expect("no MCP server to name");
 
   assert_eq!(ExecutionProfile::of_team(&team), ExecutionProfile::of(&local));
+}
+
+fn with_folders(permissions: AgentPermissions) -> AgentPermissions {
+  let folders: WritableFolders = serde_json::from_value(json!(["/opt/cache", "/opt/build"])).expect("folders");
+  permissions.with_writable_folders(folders)
+}
+
+#[test]
+fn team_agent_profile_is_refused_for_a_profile_with_writable_folders() {
+  let codex = connection(AgentProvider::CodexCli);
+  let local = local(codex.id(), Vec::new());
+  let local = local
+    .clone()
+    .with_permissions(with_folders(local.permissions().clone()));
+  let connections = [codex];
+
+  let refused = TeamAgentProfile::from_local(
+    &local,
+    TeamCounterparts {
+      connections: &connections,
+      local_mcp_servers: &[],
+      team_mcp_servers: &[],
+    },
+  );
+
+  assert_eq!(
+    refused,
+    Err(TeamProfileError::WritableFolders {
+      folders: vec!["/opt/cache".to_owned(), "/opt/build".to_owned()]
+    })
+  );
+}
+
+#[test]
+fn team_agent_profile_refuses_a_body_with_writable_folders() {
+  let mut body = serde_json::to_value(base(AgentProvider::CodexCli)).expect("serializes");
+  assert!(
+    body["permissions"].get("writable_folders").is_none(),
+    "none while empty"
+  );
+  body["permissions"]["writable_folders"] = json!(["/opt/cache"]);
+
+  let refused = serde_json::from_value::<TeamAgentProfile>(body).expect_err("paths of a computer");
+
+  assert!(refused.to_string().contains("/opt/cache"), "{refused}");
+}
+
+#[test]
+fn team_agent_profile_without_writable_folders_reads_back_and_runs_with_none() {
+  let team = base(AgentProvider::CodexCli);
+  let sent = serde_json::to_value(&team).expect("serializes");
+
+  let read: TeamAgentProfile = serde_json::from_value(sent).expect("a body without writable folders");
+
+  assert_eq!(read, team);
+  assert!(read.permissions().writable_folders().is_empty());
+  let on = AgentProfile::from_team(&read, ConnectionId::generate());
+  assert!(on.permissions().writable_folders().is_empty());
 }

@@ -5,6 +5,9 @@
 //! for one computer (`connection`, a local MCP server id) is not a team profile. Each computer fills in the rest: which
 //! of its connections runs the CLI kind, which team MCP servers are on, the secrets' values.
 //!
+//! The profile carries no writable folders either: they are paths of somebody's computer, so a body that has any is
+//! refused, as the execution bundle refuses them. A computer keeps its own folders.
+//!
 //! The local [`AgentProfile`] keeps local ids. [`TeamAgentProfile::from_local`] is the one way a computer turns its
 //! profile into the team's, and [`AgentProfile::from_team`] the one way a team's runs on a connection of this computer.
 
@@ -35,6 +38,9 @@ pub enum TeamProfileError {
   /// The profile chooses an MCP server of this computer that is not a team resource, which the team cannot name.
   #[error("the MCP server `{0}` is not a team resource; only team MCP servers can be named in a team profile")]
   LocalMcpServer(String),
+  /// The profile has extra writable folders, which are paths of one computer and stay there.
+  #[error("a team profile carries no writable folders; they are paths of one computer ({})", folders.join(", "))]
+  WritableFolders { folders: Vec<String> },
 }
 
 /// What a computer knows to turn its profile into the team's.
@@ -49,6 +55,11 @@ pub struct TeamCounterparts<'a> {
 }
 
 /// An agent profile of a team project, as a versioned resource.
+///
+/// The ids in its lists are the server's: this type only checks that each list is distinct and short (a UUID parses
+/// as a [`ResourceId`] of any kind), so the team server checks that each id names an existing, not archived team
+/// resource of the right kind. The settings are [`ProviderSettings`], a free map, so a secret is named in
+/// [`Self::secrets`] and never put there.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "wire::TeamAgentProfileWire", into = "wire::TeamAgentProfileWire")]
 pub struct TeamAgentProfile {
@@ -134,8 +145,10 @@ impl TeamAgentProfile {
   /// `profile` as the team holds it: the CLI kind of its connection, and its MCP servers by the server id of the team
   /// MCP server each is. A local profile chooses no tool, skill, instruction resource or secret, so the team profile
   /// lists none. Fails when the connection is not an agent connection of this computer, or the profile chooses an
-  /// MCP server that is not a team one: the team never holds an id from a computer.
+  /// MCP server that is not a team one: the team never holds an id from a computer. A profile with extra writable
+  /// folders is refused rather than stripped, so nobody believes the team's profile keeps them.
   pub fn from_local(profile: &AgentProfile, known: TeamCounterparts<'_>) -> Result<Self, TeamProfileError> {
+    refuse_writable_folders(profile.permissions())?;
     let cli = known
       .connections
       .iter()
@@ -268,6 +281,21 @@ fn listed<T: PartialEq + ToString>(list: &'static str, items: Vec<T>) -> Result<
   Ok(items)
 }
 
+/// `permissions` must grant no extra writable folder: the team's profile has none.
+fn refuse_writable_folders(permissions: &AgentPermissions) -> Result<(), TeamProfileError> {
+  let folders = permissions.writable_folders();
+  if folders.is_empty() {
+    return Ok(());
+  }
+  Err(TeamProfileError::WritableFolders {
+    folders: folders
+      .entries()
+      .iter()
+      .map(|folder| folder.as_str().to_owned())
+      .collect(),
+  })
+}
+
 /// The name of the local MCP server `chosen`, or its id when this computer does not list it.
 fn local_name(servers: &[McpServer], chosen: ConnectionId) -> String {
   servers
@@ -312,6 +340,7 @@ mod wire {
     type Error = TeamProfileError;
 
     fn try_from(wire: TeamAgentProfileWire) -> Result<Self, TeamProfileError> {
+      super::refuse_writable_folders(&wire.permissions)?;
       Self::new(
         wire.role,
         wire.responsibilities,
