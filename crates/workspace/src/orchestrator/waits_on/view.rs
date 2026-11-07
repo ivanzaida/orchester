@@ -25,6 +25,9 @@ pub struct RunWaitView {
   /// The waited task, by its key (`KON-52`) and its title; the title is empty once the project no longer keeps it.
   pub waited: String,
   pub waited_title: String,
+  /// The Orchestrator chat created the waited task: the task page says *It created KON-52 … and made this run wait on
+  /// it* (`LkNvZ`).
+  pub created: bool,
   /// The branch the waited task's work is to be merged into: the waiting run's base branch.
   pub base: String,
   pub since: Timestamp,
@@ -91,12 +94,14 @@ pub fn read(db: &ProjectDb, run: &Run) -> Result<Option<RunWaitView>, StoreError
   };
   let (task, _) = named(db, run.task())?;
   let (waited, waited_title) = named(db, kept.wait.waited())?;
+  let created = db.chat_created_task(&waited)?;
   Ok(Some(RunWaitView {
     run: run.id(),
     number: run.number().get(),
     task,
     waited,
     waited_title,
+    created,
     base: kept.wait.base().as_str().to_owned(),
     since: kept.since,
     state,

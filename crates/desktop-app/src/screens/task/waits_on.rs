@@ -5,8 +5,9 @@
 //! a `border` stroke, 10 by 12, its parts 8 apart, a 13 `hourglass` in `text_muted`, the task and the branch it must be
 //! merged into in 12 `text_secondary`, and *Drop the wait* 12/500 `text_primary` at its end. While the wait cannot be
 //! met (the task was canceled or closed without the merge) the row is on `warning_muted` in a `warning` stroke with a
-//! `warning` glyph, and the status line takes the warning tone. The Conversation ends with the wait's line (`Ejat3`),
-//! 10 apart, with *Drop the wait* 12/500 `text_secondary`. Properties show *Depends on: KON-52 · not merged* after a
+//! `warning` glyph, and the status line takes the warning tone. The Conversation ends with where the wait came from
+//! (`LkNvZ`) and the wait's line (`Ejat3`), 10 apart, with *Drop the wait* 12/500 `text_secondary`. Properties show
+//! *Depends on: KON-52 · not merged* after a
 //! 13 `hourglass` in `text_secondary`.
 
 use std::sync::Arc;
@@ -42,6 +43,7 @@ use crate::{
   services::Services,
   theme::{ExtraColor, ExtraRadius, ExtraSpacing, IconSize},
   ui::{
+    chat::AVATAR_SIZE,
     icon::{Icon, icon},
     message::message_text,
     pressable::pressable,
@@ -257,12 +259,48 @@ impl Component for WaitRow {
         .color(PaletteColor::Danger)
         .width(Dimension::Pct(100.0))
     });
+    let origin = (props.place == Place::Conversation).then(|| origin(ctx, &props.wait));
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Snug.role())
+      .with_children(origin)
       .child(row)
       .with_children(failed)
   }
+}
+
+/// Where the wait came from, over the Conversation's wait line (`LkNvZ`): in from the start as far as a message's
+/// words, a 13 `square-plus` in `text_muted`, 10 before *It created KON-52 · … and made this run wait on it · 10:41*
+/// in 12 `text_secondary`.
+fn origin(ctx: &Ctx, wait: &RunWaitView) -> Element {
+  let (waited, title, time) = (
+    wait.waited.as_str(),
+    wait.waited_title.as_str(),
+    display::clock(wait.since),
+  );
+  let key = match (wait.created, title.is_empty()) {
+    (true, false) => "conversation.waitsOn.created",
+    (true, true) => "conversation.waitsOn.createdUntitled",
+    (false, false) => "conversation.waitsOn.madeWait",
+    (false, true) => "conversation.waitsOn.madeWaitUntitled",
+  };
+  let words = ctx.t_args(key, [("waited", waited), ("title", title), ("time", &time)]);
+  Row::new()
+    .id("conversation-wait-origin")
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::default().left(AVATAR_SIZE + ExtraSpacing::Loose.value()))
+    .spacing(ExtraSpacing::Loose.role())
+    .align_items(Alignment::Center)
+    .child(icon(Icon::SquarePlus, IconSize::Base, PaletteColor::TextMuted))
+    .child(
+      Text::new(&words)
+        .id("conversation-wait-origin-text")
+        .variant(TypographyStyle::Description)
+        .color(PaletteColor::TextSecondary)
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0)),
+    )
+    .into()
 }
 
 impl WaitRow {

@@ -18,6 +18,7 @@ use orchester_store::{ProjectDb, RunWaitEnd};
 
 use super::{
   harness::{Orchestrator, Setup},
+  history_rows::hover,
   standing::waiting,
 };
 
@@ -130,6 +131,15 @@ fn orchestrator_waits_on_row_says_how_the_wait_stands() {
     !screen.exists(&format!("{waits}-open")),
     "a wait that holds offers Drop the wait under the pointer only"
   );
+  hover(&mut screen, &waits);
+  screen.until("Drop the wait under the pointer", |screen| {
+    screen.exists(&format!("{waits}-open"))
+  });
+  assert_eq!(screen.text(&format!("{waits}-open")), "Drop the wait");
+  hover(&mut screen, &merged);
+  screen.until("Drop the wait gone with the pointer", |screen| {
+    !screen.exists(&format!("{waits}-open"))
+  });
   assert_eq!(
     screen.text(&format!("{merged}-title")),
     format!("{} continued", named[1])

@@ -1,6 +1,10 @@
 {
   "conversation": {
     "waitsOn": {
+      "created": "It created {{waited}} · {{title}} and made this run wait on it · {{time}}",
+      "createdUntitled": "It created {{waited}} and made this run wait on it · {{time}}",
+      "madeWait": "It made this run wait on {{waited}} · {{title}} · {{time}}",
+      "madeWaitUntitled": "It made this run wait on {{waited}} · {{time}}",
       "waiting": "Waits on {{waited}} · continues when it is merged into {{branch}} · the run's base branch"
     },
     "agentMeta": "{{step}} · {{time}}",

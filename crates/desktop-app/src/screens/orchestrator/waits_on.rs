@@ -11,6 +11,7 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
   },
+  core::Signal,
   node::Element,
 };
 use orchester_core::{id::ProjectId, orchestrator::WaitsOnRow, run::Answerer, time::Timestamp};
@@ -54,6 +55,9 @@ impl DevtoolsInspectable for WaitsOnProps {}
 /// The row, with the person's *Drop the wait*: a press made by automation is refused, and says so.
 pub(super) struct WaitsOnLine {
   dropping: FutureAction<Answerer, (), Message>,
+  /// The pointer is over the row, which shows *Drop the wait* of a wait that waits. The row reads it here, not in the
+  /// line it draws: the row sits in the body of the answer's message, which is drawn again only with this component.
+  hovered: Signal<bool>,
 }
 
 impl Component for WaitsOnLine {
@@ -70,13 +74,16 @@ impl Component for WaitsOnLine {
         Ok(())
       }
     });
-    Self { dropping }
+    Self {
+      dropping,
+      hovered: ctx.signal(false),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<WaitsOnProps>().clone();
     let state = props.wait.as_ref().map(|wait| wait.state);
-    let line = words(ctx, &props, state);
+    let line = words(ctx, &props, state).pointer(self.hovered.clone());
     let line = match state {
       Some(state) if state.holds() => {
         let pending = self.dropping.state().get().is_pending();
@@ -92,9 +99,8 @@ impl Component for WaitsOnLine {
           }
         });
         // A wait nothing else will end offers it always; one that waits, under the pointer (`lguJb`).
-        line
-          .link_on_hover(state == WaitState::Waiting && !pending)
-          .link(Some(LineLink { label, press }))
+        let shown = state != WaitState::Waiting || pending || self.hovered.get();
+        line.link(shown.then_some(LineLink { label, press }))
       }
       _ => line.link(open(ctx, &props)),
     };

@@ -46,7 +46,30 @@ fn summary_a_run_waiting_on_a_task_says_so_in_the_header_and_its_row() {
     format!("Waits on {limiter} · continues when it is merged into {BASE} · the run's base branch")
   );
   assert_eq!(page.text("conversation-wait-drop"), "Drop the wait");
+  let origin = page.text("conversation-wait-origin-text");
+  assert!(
+    origin.starts_with(&format!(
+      "It created {limiter} · Shared rate limiter for deliveries and made this run wait on it · "
+    )),
+    "where the wait came from: {origin}"
+  );
   assert!(!page.has("task-primary"), "nor on the Conversation");
+}
+
+#[test]
+fn summary_a_wait_on_a_task_the_orchestrator_did_not_create_says_only_the_wait() {
+  let mut page = Page::seeded("orchestrator-waits-on");
+  let receipts = page.key_of("Delivery receipts");
+  page.open_titled("Delivery dashboard");
+  page.click("task-tab-conversation");
+  page.window.until("the Conversation's wait", |window| {
+    window.texts("conversation-wait-origin").is_some()
+  });
+  let origin = page.text("conversation-wait-origin-text");
+  assert!(
+    origin.starts_with(&format!("It made this run wait on {receipts} · Delivery receipts · ")),
+    "{origin}"
+  );
 }
 
 #[test]

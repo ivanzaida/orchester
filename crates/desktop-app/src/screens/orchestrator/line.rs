@@ -114,8 +114,10 @@ pub(super) struct Line {
   pub(super) chip: Option<Chip>,
   pub(super) time: Option<String>,
   pub(super) link: Option<LineLink>,
-  /// Its link shows only under the pointer (*Drop the wait* of a wait that holds, `lguJb`).
-  pub(super) link_on_hover: bool,
+  /// Set while the pointer is over the line. It is its owner's, which reads it to show a link under the pointer only
+  /// (*Drop the wait* of a wait that holds, `lguJb`): a line in a chat message's body is drawn again only with the
+  /// component that put it there, so the line's own state could not show it.
+  pub(super) pointer: Option<Signal<bool>>,
   /// Why it was refused: on hover, and under the line once pressed.
   pub(super) detail: Option<Arc<str>>,
   /// The other places it opens, beyond its one link: under its detail once pressed.
@@ -136,7 +138,7 @@ impl Line {
       chip: None,
       time: None,
       link: None,
-      link_on_hover: false,
+      pointer: None,
       detail: None,
       more: Vec::new(),
     }
@@ -149,8 +151,8 @@ impl Line {
   }
 
   #[must_use]
-  pub(super) const fn link_on_hover(mut self, on_hover: bool) -> Self {
-    self.link_on_hover = on_hover;
+  pub(super) fn pointer(mut self, pointer: Signal<bool>) -> Self {
+    self.pointer = Some(pointer);
     self
   }
 
@@ -212,7 +214,7 @@ impl Line {
 #[derive(Clone)]
 struct LineProps(Line);
 
-/// Compared by what it shows; the link's press is the screen's.
+/// Compared by what it shows; the link's press and the pointer's signal are the owner's.
 impl PartialEq for LineProps {
   fn eq(&self, other: &Self) -> bool {
     let (one, two) = (&self.0, &other.0);
@@ -225,7 +227,7 @@ impl PartialEq for LineProps {
         &one.chip,
         &one.time,
         one.link.as_ref().map(|link| &link.label),
-        one.link_on_hover,
+        one.pointer.is_some(),
         &one.detail,
       ) == (
         two.tone,
@@ -235,7 +237,7 @@ impl PartialEq for LineProps {
         &two.chip,
         &two.time,
         two.link.as_ref().map(|link| &link.label),
-        two.link_on_hover,
+        two.pointer.is_some(),
         &two.detail,
       )
       && one
@@ -251,8 +253,6 @@ impl DevtoolsInspectable for LineProps {}
 struct LineView {
   /// The detail is open under the line.
   open: Signal<bool>,
-  /// The pointer is over the line.
-  hovered: Signal<bool>,
 }
 
 impl Component for LineView {
@@ -261,14 +261,13 @@ impl Component for LineView {
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       open: ctx.signal(false),
-      hovered: ctx.signal(false),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let LineProps(line) = ctx.props::<LineProps>().clone();
     let Some(detail) = line.detail.clone() else {
-      return Element::from(row(ctx, &line, &self.hovered));
+      return Element::from(row(ctx, &line));
     };
     let open = self.open.get();
     let toggle = self.open.clone();
@@ -277,7 +276,7 @@ impl Component for LineView {
       .id(format!("{id}-line"))
       .describe("open", open.to_string())
       .width(Dimension::Pct(100.0))
-      .child(row(ctx, &line, &self.hovered));
+      .child(row(ctx, &line));
     let row = Tooltip::new(format!("{id}-why"), detail.clone()).wrap(ctx, row);
     let more = (open && !line.more.is_empty()).then(|| more(&id, line.more.clone()));
     Element::from(
@@ -307,8 +306,8 @@ fn more(id: &str, links: Vec<LineLink>) -> Element {
   )
 }
 
-/// The line's row; `hovered` tracks the pointer over it, for a link shown only then.
-fn row(ctx: &mut Ctx, line: &Line, hovered: &Signal<bool>) -> Row {
+/// The line's row, setting the line's `pointer` while the pointer is over it.
+fn row(ctx: &mut Ctx, line: &Line) -> Row {
   let id = line.id.as_str();
   let (glyph_color, words_color) = line.tone.colors();
   let what = Text::new(&line.what)
@@ -354,14 +353,8 @@ fn row(ctx: &mut Ctx, line: &Line, hovered: &Signal<bool>) -> Row {
         .into()
     },
   );
-  let shown = !line.link_on_hover || hovered.get();
-  let link = line
-    .link
-    .clone()
-    .filter(|_| shown)
-    .map(|link| link_element(&format!("{id}-open"), link));
-  let (enter, leave) = (hovered.clone(), hovered.clone());
-  Row::new()
+  let link = line.link.clone().map(|link| link_element(&format!("{id}-open"), link));
+  let row = Row::new()
     .id(id.to_owned())
     .describe("outcome", line.outcome)
     .describe("status", line.status.unwrap_or_default())
@@ -371,9 +364,17 @@ fn row(ctx: &mut Ctx, line: &Line, hovered: &Signal<bool>) -> Row {
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
-    .hovered_style(Style::new().background(ExtraColor::Hover.role()))
-    .on_mouse_enter(move || enter.set(true))
-    .on_mouse_leave(move || leave.set(false))
+    .hovered_style(Style::new().background(ExtraColor::Hover.role()));
+  let row = match line.pointer.clone() {
+    Some(pointer) => {
+      let leave = pointer.clone();
+      row
+        .on_mouse_enter(move || pointer.set(true))
+        .on_mouse_leave(move || leave.set(false))
+    }
+    None => row,
+  };
+  row
     .child(icon(line.glyph, IconSize::Base, glyph_color).flex_shrink(0.0))
     .child(what)
     .with_children(target)
