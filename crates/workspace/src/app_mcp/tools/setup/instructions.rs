@@ -193,17 +193,19 @@ pub async fn save_instruction_draft(services: &Services, args: SaveInstructionDr
     let saved = saved.map_err(|error| write_error(&error))?;
     let id = saved.id;
     editor::mark_automation_in(&root, &saved).map_err(|error| write_error(&error))?;
-    blocked
-      .changes
-      .record(open.project.id(), crate::tasks::outside::Outside::Instructions);
     Ok((open, id, created))
   })
   .await?;
   let waiting = if created {
-    settle(services, open.repo_root.clone(), id).await?
+    settle(services, open.repo_root.clone(), id).await
   } else {
-    None
+    Ok(None)
   };
+  // After a refused creation took the instruction back, so a screen that reads on this does not see it.
+  services
+    .changes
+    .record(open.project.id(), crate::tasks::outside::Outside::Instructions);
+  let waiting = waiting?;
   let entry = blocking(move || {
     let data = ProjectInstructions::load_in(&open.repo_root)?;
     let entry = data

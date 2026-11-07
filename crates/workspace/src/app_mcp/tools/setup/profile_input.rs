@@ -233,17 +233,19 @@ pub async fn save_profile_draft(services: &Services, args: SaveProfileDraft) -> 
       }
       None => (create_published(&blocked, &root, &profile, &connection)?, true),
     };
-    blocked
-      .changes
-      .record(open.project.id(), crate::tasks::outside::Outside::Profiles);
     Ok((open, id, created))
   })
   .await?;
   let waiting = if created {
-    settle(services, open.repo_root.clone(), id).await?
+    settle(services, open.repo_root.clone(), id).await
   } else {
-    None
+    Ok(None)
   };
+  // After a refused creation took the profile back, so a screen that reads on this does not see it.
+  services
+    .changes
+    .record(open.project.id(), crate::tasks::outside::Outside::Profiles);
+  let waiting = waiting?;
   let profile = blocking(move || profile_with_revision(&open, id)).await?;
   Ok(with_waiting(json!({ "profile": profile }), "profile", waiting))
 }

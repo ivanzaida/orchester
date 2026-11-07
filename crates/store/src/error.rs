@@ -60,6 +60,10 @@ pub enum StoreError {
   /// A stored value no longer satisfies the domain rules; the database was edited or damaged.
   #[error("stored {what} is invalid: {detail}")]
   Corrupt { what: &'static str, detail: String },
+  /// The resource has a version the team server numbered, so it is the team's and is not taken back. Nothing was
+  /// changed.
+  #[error("resource {0} has a version the team server numbered; it is the team's now")]
+  AlreadyNumbered(ResourceId),
   /// A value cannot be represented in the database, e.g. a number beyond its 64-bit integers.
   #[error("{0} cannot be stored")]
   Unrepresentable(&'static str),

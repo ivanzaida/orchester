@@ -115,6 +115,7 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::Sqlite(_)
     | StoreError::Io { .. }
     | StoreError::Corrupt { .. }
+    | StoreError::AlreadyNumbered(_)
     | StoreError::TaskNotFound(_)
     | StoreError::RunNotFound(_)
     | StoreError::EmptyBatch

@@ -112,15 +112,17 @@ pub async fn save_skill_draft(services: &Services, args: SaveSkillDraft) -> Resu
     let now = Timestamp::now();
     let saved = editor::save_checked_in(&root, (before, name, &body), now).map_err(|error| write_error(&error))?;
     editor::mark_automation_in(&root, &saved, now).map_err(|error| write_error(&error))?;
-    blocked.changes.record(open.project.id(), Outside::Skills);
     Ok((open, saved, before.is_none()))
   })
   .await?;
   let waiting = if created {
-    settle(services, open.repo_root.clone(), saved.id).await?
+    settle(services, open.repo_root.clone(), saved.id).await
   } else {
-    None
+    Ok(None)
   };
+  // After a refused creation took the skill back, so a screen that reads on this does not see it.
+  services.changes.record(open.project.id(), Outside::Skills);
+  let waiting = waiting?;
   let skill = blocking(move || {
     let mut skill = skill_json(&open.repo_root, saved.id, open.project.id())?;
     skill["draft_kept"] = json!(saved.state.has_draft());

@@ -168,3 +168,83 @@ fn team_mcp_a_member_cannot_create_an_instruction() {
   );
   assert_eq!(instructions(&checkout), 0);
 }
+
+/// The other kinds a tool creates: the tool that makes one, its resource kind, and the key its answer holds it under.
+const KINDS: [(&str, ResourceKind, &str); 3] = [
+  ("save_profile_draft", ResourceKind::AgentProfile, "profile"),
+  ("save_skill_draft", ResourceKind::Skill, "skill"),
+  ("save_tool_draft", ResourceKind::Tool, "tool"),
+];
+
+/// The arguments of a new resource of the kind answered under `key`.
+fn new_resource(key: &str) -> Value {
+  match key {
+    "profile" => json!({ "project": "Kontur", "role": "Reviewer", "connection": "Codex", "model": "gpt-5.5" }),
+    "skill" => json!({ "project": "Kontur", "name": "Checks", "description": "Checks the change.", "body": "Look." }),
+    _ => {
+      let program = std::env::current_exe().expect("the test program");
+      json!({ "project": "Kontur", "name": "Build", "program": program })
+    }
+  }
+}
+
+fn count(checkout: &Checkout, kind: ResourceKind) -> usize {
+  checkout.db().resources(kind).expect("the resources").len()
+}
+
+#[test]
+fn team_mcp_a_new_profile_skill_or_tool_is_created_as_v1_once_the_server_accepts_it() {
+  for (tool, kind, key) in KINDS {
+    let (server, sent) = server(None);
+    let checkout = admin(&server);
+
+    let made = checkout.call(tool, &new_resource(key)).expect(key);
+
+    assert_eq!(sent.lock().created, 1, "{key}: {made}");
+    assert_eq!(count(&checkout, kind), 1, "{key}");
+    assert!(made[key].get("waiting_for_server").is_none(), "{key}: {made}");
+    assert!(
+      checkout.db().waiting_publishes().expect("the outbox").is_empty(),
+      "{key}"
+    );
+  }
+}
+
+#[test]
+fn team_mcp_a_profile_skill_or_tool_the_server_refuses_is_not_created() {
+  for (tool, kind, key) in KINDS {
+    let (server, sent) = server(Some((403, "not_admin")));
+    let checkout = admin(&server);
+
+    let refused = checkout.call(tool, &new_resource(key)).expect_err(key);
+
+    assert_eq!(refused["error"]["code"], "team_server_refused", "{key}: {refused}");
+    assert_eq!(sent.lock().created, 1, "{key}");
+    assert_eq!(count(&checkout, kind), 0, "{key}: nothing shows as created");
+    assert!(
+      checkout.db().waiting_publishes().expect("the outbox").is_empty(),
+      "{key}"
+    );
+  }
+}
+
+#[test]
+fn team_mcp_a_profile_skill_or_tool_made_offline_waits_in_the_outbox() {
+  for (tool, kind, key) in KINDS {
+    let (server, sent) = server(None);
+    let checkout = admin(&server);
+    server.set_down(true);
+
+    let made = checkout.call(tool, &new_resource(key)).expect(key);
+
+    assert_eq!(
+      made[key]["waiting_for_server"]["code"], "team_server_unreachable",
+      "{key}: {made}"
+    );
+    assert_eq!(sent.lock().created, 0, "{key}");
+    assert_eq!(count(&checkout, kind), 1, "{key}");
+    let waiting = checkout.db().waiting_publishes().expect("the outbox");
+    assert_eq!(waiting.len(), 1, "{key}");
+    assert_eq!(waiting[0].state, PublishState::Waiting, "{key}");
+  }
+}

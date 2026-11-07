@@ -112,17 +112,19 @@ pub async fn save_tool_draft(services: &Services, args: SaveToolDraft) -> Result
         )
       }
     };
-    blocked
-      .changes
-      .record(open.project.id(), crate::tasks::outside::Outside::Tools);
     Ok((open, id, saved, existing.is_none()))
   })
   .await?;
   let waiting = if created {
-    settle(services, open.repo_root.clone(), id).await?
+    settle(services, open.repo_root.clone(), id).await
   } else {
-    None
+    Ok(None)
   };
+  // After a refused creation took the tool back, so a screen that reads on this does not see it.
+  services
+    .changes
+    .record(open.project.id(), crate::tasks::outside::Outside::Tools);
+  let waiting = waiting?;
   let tool = blocking(move || {
     let (tools, revision) = tools_with_revision(&open.repo_root, id)?;
     let entry = tools

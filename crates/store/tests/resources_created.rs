@@ -140,6 +140,9 @@ fn only_a_version_the_server_has_not_numbered_is_taken_back() {
   // This project is local, so its v1 is final: no server is waiting to number it.
   let refused = db.discard_created(resource.id());
 
-  assert!(matches!(refused, Err(StoreError::Corrupt { .. })), "{refused:?}");
+  assert!(
+    matches!(refused, Err(StoreError::AlreadyNumbered(numbered)) if numbered == resource.id()),
+    "{refused:?}"
+  );
   assert_eq!(db.resources(ResourceKind::Instruction).unwrap().len(), 1);
 }

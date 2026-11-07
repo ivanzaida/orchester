@@ -109,7 +109,7 @@ impl ProjectDb {
 
   /// Takes back the resource `resource` that [`ProjectDb::create_published`] made, whose only version the server has
   /// not numbered, e.g. because it refused it: the resource and its version are deleted, as if never created. A
-  /// resource with a version the server numbered is left ([`StoreError::Corrupt`]): it is the team's now.
+  /// resource with a version the server numbered is left ([`StoreError::AlreadyNumbered`]): it is the team's now.
   pub fn discard_created(&mut self, resource: ResourceId) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
     // The versions go before their rows in `shared_publishes`, which the delete trigger reads.
@@ -121,10 +121,7 @@ impl ProjectDb {
       |row| row.get(0),
     )?;
     if confirmed {
-      return Err(StoreError::Corrupt {
-        what: "created resource",
-        detail: format!("{resource} has a version the server numbered"),
-      });
+      return Err(StoreError::AlreadyNumbered(resource));
     }
     let id = resource.to_string();
     transaction.execute("DELETE FROM resource_versions WHERE resource_id = ?1", [&id])?;

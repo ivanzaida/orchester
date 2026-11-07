@@ -62,7 +62,10 @@ fn settle(servers: &Servers, root: &Path, resource: ResourceId) -> Result<Create
       code: "version_conflict".to_owned(),
     },
   };
-  db.discard_created(resource).map_err(|error| failed(&error.into()))?;
+  if let Err(error) = db.discard_created(resource) {
+    // The server's answer is what the caller needs; the resource that could not be taken back stays as it was.
+    tracing::warn!(%resource, %error, "a refused new team resource could not be taken back");
+  }
   Err(outcome)
 }
 
