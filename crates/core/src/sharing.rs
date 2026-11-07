@@ -16,7 +16,7 @@ use thiserror::Error;
 
 pub use self::{
   cached::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson},
-  catalog::{CATALOG_MODELS_PER_ROLE, CATALOG_REFERENCES, CatalogEntry, CatalogEntryKind, LocalCatalog, catalog},
+  catalog::{CATALOG_MODELS_PER_ROLE, LocalCatalog, catalog},
   claim_threshold::{ClaimStalenessThreshold, ClaimStalenessThresholdError},
   connection_role::ConnectionRole,
   delta::{DeltaOutcome, RunProgress, TagRemap, TaskChange, TaskDelta, TaskDeltaKind, remap_tags},

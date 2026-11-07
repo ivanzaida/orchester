@@ -149,7 +149,7 @@ joins, the cloud link and the removal of passwords (S1c). Orchester Cloud (C1) d
 | 72 | Who changes the team's configuration | In a shared project, the team's configuration (pipelines, agent profiles, instructions, skills, tools of every kind) is changed only by admins: the project's owner or the team server's admin. Members read it and run with it, on the desktop and in the web app; they have no drafts of shared resources. Admins change it in both places; every write of S5's resource endpoints answers a member `403 not_admin`. Core decides it with `sharing::may_change_configuration` ([Shared configuration](#shared-configuration)). **Changes 30 and 52** | user (2026-10-29) |
 | 73 | Snapshot and deltas | The project stream sends a client without a cursor, or with one older than the 30-day retention, a paged snapshot (`snapshot.begin`, `snapshot.tasks` pages of 64, `snapshot.end { cursor }`) with the project, members, tags, modules and tasks, later resources; a cursor inside the retention gets only the deltas after it, and `reset` goes away. Every delta carries `id`, `by`, `actor` (person or Orchester) and `at`; `task.changed` holds only the changed fields with `revision` and `base`, and a client applies it only when its cached revision equals `base`, otherwise it reads the task again; its own changes come back and are skipped by revision. The deltas are the record of who did what; there is no `activity` event, and the server's Activity feed stays. Not included: presence, typing, docs and plugins ([Events](#events)). **Extends 7 and 22; replaces the `task`, `members`, `tags`, `project`, `modules`, `resources` and `reset` kinds** | user (ORC-392, 2026-10-29) |
 | 74 | Local pipelines in a shared project | **Replaced by 80** (2026-11-05): a team task names only a team pipeline, by id, and local pipelines are hidden in a team project. Before: In a shared project a person may keep pipelines of their own that stay on their computer and are never sent to the team server; the team's pipelines stay shared and admin-only (row 72). A local pipeline is a local resource of the project: anyone, member or admin, makes it, publishes its versions and runs it without an admin, and publishing it makes a local version only. Share, Join and sync never upload it. Its steps may use the team's profiles and the person's own local profiles. A shared task that names one keeps on the server only the pipeline's name and kind (local, whose), never its body; other members see *a local pipeline of <person>* and cannot run the task with it until they choose a team pipeline or one of their own. An admin may *Publish for the team*, which makes it a team resource from that version on. Make local keeps local pipelines as they are ([Local pipelines](#local-pipelines)). **Changes 30 and 52** | user (ORC-402, 2026-10-29) |
-| 75 | What the web editor can pick | The web app's profile editor picks from what the server serves. **Network:** a profile's network access is `Off`, `Hosts(list)` (only those hosts) or `On`, ordered Off < Hosts < On; a list with a host the previous one lacked, or Hosts → On, widens (row 35); each CLI enforces it where it can, and where it can't the step refuses to start and says so, as for any permission it can't enforce. **References catalog:** the team server keeps, per shared project, the connections and MCP servers its members' desktops report, each as kind, name and role only; the web pickers list it, and a choice there is a reference by name and role that every computer binds as rows 30 and 35 say. **Models per role:** desktops report, per connection role, the model ids their connections list; the server keeps the union, and the web dropdown lists the role's models plus *Other model id…*. Nothing personal leaves a computer: no account, email, path, key, program or setting, and the reads do not say whose computer reported what ([What the web editor can pick](#what-the-web-editor-can-pick)). **Extends 30 and 35** | the task's brief (ORC-444, 2026-10-30) |
+| 75 | What the web editor can pick | The web app's profile editor picks from what the server serves. **Network:** a profile's network access is `Off`, `Hosts(list)` (only those hosts) or `On`, ordered Off < Hosts < On; a list with a host the previous one lacked, or Hosts → On, widens (row 35); each CLI enforces it where it can, and where it can't the step refuses to start and says so, as for any permission it can't enforce. **CLI kinds catalog:** the team server keeps, per shared project, the CLI kinds its members' desktops report (the agent roles their connections have: `codex_cli`, `claude_code_cli`, `anthropic_api`, `openai_api`), never a connection or MCP server name; the web picker lists them, and a choice there is a role that every computer binds to a connection as rows 30 and 35 say. **Models per role:** desktops report, per CLI kind, the model ids their connections list; the server keeps the union, and the web dropdown lists the role's models plus *Other model id…*. Nothing personal leaves a computer: no name, account, email, path, key, program or setting, and the reads do not say whose computer reported what ([What the web editor can pick](#what-the-web-editor-can-pick)). **Extends 30 and 35** | the task's brief (ORC-444, 2026-10-30) |
 | 76 | Base branches are local | A task's and a module's base branch (the branch its runs start from and deliver into; `docs/architecture/storage.md`) is kept on each computer and never shared: in a shared project it is not sent to the team server, is not part of the task's or module's shared snapshot, revision or events, and teammates may choose differently for the same task or module. Setting it leaves a shared task's or module's revision alone; the app's screens and MCP tools set and read this computer's choice. Each run records the base it took, which stays local with the run. `orchester-api`'s shared task and module shapes do not change and the team server needs nothing. **Changes 52** | user (ORC-407, 2026-10-30) |
 | 77 | Accepting an invite outside Orchester | **Accepting in the browser** (the person's requirement): one *Accept* on Orchester Cloud's Invites page ends with the membership made on the team server, without the desktop: the server account (and, for a project invite, the membership with the invite's role) and a sign-in of that browser to the server's web app. The cloud never reaches a team server; the person's browser carries a one-time identity token (purpose `accept`, bound to the invite, 5 minutes) to the address the cloud registered for the server, as `/authorize` does for sign-in, and brings the server's signed receipt back. It needs a two-factor session on the cloud, as every acceptance does (row 43). When the browser cannot reach the server either, nothing is used up: the invite stays accepted for that account until it expires, the page says why and offers *Try again* and *Open in Orchester*. **The `orchester://` link**: `orchester://invite/<invite id>` and `orchester://open`, registered per user by the Windows installer; an open window takes the link; a link only opens the invite's existing landing in Settings › Orchester and never accepts, joins or sends anything without the person's click, and nothing in it is ever shown or passed to an agent. The desktop is optional afterwards: the server and project show as joined, and a computer joins later with its own device ([Accepting outside Orchester](#accepting-outside-orchester)). **Extends 43 and 62** | user (requirement 2026-10-31); the flow is the architect's (ORC-576) |
 | 78 | Local use and owners | The desktop needs no Orchester Cloud account for local work: the sign-in gate is gone, and sharing, cloud joining, invites and account servers offer the sign-in in place. A project or team server's `owner` NULL means this computer's: added with nobody signed in, it shows to nobody signed in and to every account, and no sign-in claims it. One added signed in is the account's, and waits (runners working) while that account is signed out. A person moves an unshared project between the two on All projects. A project and its server always have the same owner: a first link to the account's server moves a project of this computer's into the account and the page says so, an account's project is refused a server of this computer's, and a shared project doesn't move. Over MCP a project an account holds answers `sign_in_required` while nobody is signed in and `project_not_found` while another account is | user (ORC-132, 2026-10-30) |
@@ -762,7 +762,7 @@ servers and models from a catalog the desktops report ([What the web editor can 
 | Draft | Local only, per admin, based on a server version. Publishing sends it. A member has none (row 72) |
 | A person's local pipeline, its drafts and versions (row 74) | Local only, per person; never sent. A shared task that names one keeps only its name and whose it is |
 | Connections, CLI accounts, MCP servers and their credentials, secrets, environment | Local only, per person |
-| Catalog: connection and MCP server names and roles, model ids per role (row 75) | Server, the union of the desktops' reports; nothing else about them is sent |
+| Catalog: CLI kinds and model ids per kind (row 75) | Server, the union of the desktops' reports; nothing else about them is sent |
 
 **Who publishes** (row 72). Only admins change the team's configuration: the project's owner or the team server's
 admin. They edit drafts, publish versions, create, import, rename and archive resources and upload their files, on
@@ -802,7 +802,7 @@ drafts* covers only local resources. The card says the version is published for 
 
 **What a version names on each computer.** A body refers to connections, MCP servers and secrets by the
 publisher's ids (other resources, tools included, are shared and keep their ids). A published version carries one
-**reference** per such id: its kind, its name, and its role, which is the connection's kind (`claude_cli`,
+**reference** per such id: its kind, its name, and its role, which is the connection's kind (`claude_code_cli`,
 `codex_cli`, `openai_api`, …) or the secret's kind. Each computer keeps a **binding** per reference: the local
 connection, MCP server or secret it means here.
 
@@ -852,39 +852,34 @@ connection's own sandbox or network settings for the step. Where a CLI cannot li
 turn it off), the step refuses to start and says which permission this connection cannot enforce, as the preflight
 does today for every permission a connection cannot enforce; Orchester never runs it with wider access instead.
 
-**References catalog.** The team server keeps, per shared project, the connections and MCP servers its members'
-desktops report: for each, its kind (connection or MCP server), its name and, for a connection, its role (the
-connection's kind: `claude_cli`, `codex_cli`, `openai_api`, …; an MCP server has none, as in core's `sharing::Reference`).
-Never its settings, account, program,
-arguments, address, environment or credentials, and secrets are not reported at all. The catalog is the union of the
-latest report of each device of each current member, without regard to case of the name: one entry per kind, role
-and name, with no count and nothing that says whose computer has it. A device's report replaces its previous one; a
-revoked device's or a removed member's entries leave with it. The web's connection and MCP server pickers list the
-catalog for the reference kind and, for a connection, the role the step needs. A choice there writes a reference by
-kind, name and role into the version, with a fresh reference id the web mints, the same shape a desktop publish sends.
-Nothing changes on the computers: each binds the reference as [What a version names on each
+**CLI kinds catalog.** The team server keeps, per shared project, the CLI kinds its members' desktops report: the
+agent roles their connections have, the four of core's `ConnectionRole::as_str` that are agents (`codex_cli`,
+`claude_code_cli`, `anthropic_api`, `openai_api`). Never a connection or MCP server name, nor its settings, account,
+program, arguments, address, environment or credentials, and secrets are not reported at all. The catalog is the union
+of the latest report of each device of each current member: one CLI kind once, with no count and nothing that says
+whose computer has it. A device's report replaces its previous one; a revoked device's or a removed member's kinds
+leave with it. The web's profile editor lists the catalog for the CLI kind a step needs. A choice there writes a
+reference by kind, name and role into the version, with a fresh reference id the web mints, the same shape a desktop
+publish sends. Nothing changes on the computers: each binds the reference as [What a version names on each
 computer](#shared-configuration) says (rows 30 and 35): a connection by name, else by role; an MCP server only after
 the person confirms it; *missing on this computer* otherwise.
 
 **Models per role.** Models come from each computer's CLI (`connection/catalog.rs`). The desktop reports, per
-connection role, the model ids its connections of that role list, ids only: no display names, account tiers or
+CLI kind, the model ids its connections of that kind list, ids only: no display names, account tiers or
 limits. The server keeps the union per role over the same latest reports. The web's model dropdown lists the models of
 the role the step's connection reference has, sorted, plus *Other model id…*, which takes any id. A model id is a
 string in the profile as today; a computer whose CLI does not know it fails the step as it does today for an unknown
 model.
 
 **Reporting.** The desktop sends `PUT /projects/{id}/catalog` for every shared project it is linked to: after
-joining, after each connect, and when a connection, an MCP server or a connection's model list changes (at most once
-a minute, the latest state winning). The body is the whole state, so a lost report costs nothing; offline it is not
-queued in the outbox, only sent again after reconnect. Members and admins both report and both read
-(`GET …/references`, `GET …/models`): the catalog is what the editor offers, not a permission. The references read
-also lists the connections and MCP servers the project's versions already name, so a reference a version carries
-stays pickable after the desktop that reported it leaves.
+joining, after each connect, and when a connection's role or model list changes (at most once a minute, the latest
+state winning). A change to an MCP server reports nothing: it is not in the catalog. The body is the whole state, so
+a lost report costs nothing; offline it is not queued in the outbox, only sent again after reconnect. Members and admins both report and both read
+(`GET …/cli-kinds`, `GET …/models`): the catalog is what the editor offers, not a permission.
 
-**Nothing personal leaves a computer.** A report holds kinds, names, roles and model ids only: no account, email,
-user name, path, URL, key, token, program or setting. Names are the person's own labels for their connections and MCP
-servers, the same words a published version already carries (row 30). Core builds the report from the local
-connections and MCP servers with one function, so no other field can reach it.
+**Nothing personal leaves a computer.** A report holds CLI kinds and model ids only: no connection or MCP server
+name, account, email, user name, path, URL, key, token, program or setting. Core builds the report from the local
+connections with one function, so no other field can reach it.
 
 ### Local pipelines
 
@@ -1325,8 +1320,8 @@ The *Since* column marks what API 3 adds or changes; the rest is built (S1a, S1b
 | `PATCH /projects/{id}/resources/{resource}` | admin (row 72) | `{ idempotency_key, revision, name?, archived? }` | `{ resource }` | `403 not_admin`, `409 revision_conflict { current }`, `422 invalid` | new in 3 (S5); admin row 72 |
 | `PUT /projects/{id}/files/{sha256}` | admin (row 72) | raw bytes (`application/octet-stream`), at most 1 MiB | `201`, or `200` when the server has it; idempotent by its hash | `403 not_admin`, `422 hash_mismatch`, `413 payload_too_large` | new in 3 (S5, row 37); admin row 72 |
 | `GET /projects/{id}/files/{sha256}` | member | | raw bytes | `404` | new in 3 (S5, row 37) |
-| `PUT /projects/{id}/catalog` | member (admins too; not a configuration write, row 72 does not apply); an app's device token only, refused to a browser sign-in (`admin_web`) | `{ references: [{ kind: "connection" \| "mcp_server", name, role }], models: { role: [model id] } }`: this device's whole state, at most 256 references and 512 ids per role, each word at most 200 characters; `role` is `null` (or left out) for an MCP server | `204`; it replaces this device's previous report | `422 invalid { reason: "catalog" }` (an unknown kind or role, a connection without a role, an MCP server with one, too many), `422 invalid` (an unknown field) | S5, row 75 (ORC-451) |
-| `GET /projects/{id}/references` | member, also through the web app's browser sign-in (`admin_web`) | | `{ references: [{ kind, name, role }] }`: the union of the current reports with the connection and MCP server references the project's versions name (`version_references`; secrets and tools are not listed), one per kind, role and name without regard to case, sorted by name; no count, no device or person | | S5, row 75 (ORC-451) |
+| `PUT /projects/{id}/catalog` | member (admins too; not a configuration write, row 72 does not apply); an app's device token only, refused to a browser sign-in (`admin_web`) | `{ cli_kinds: [role], models: { role: [model id] } }`: this device's whole state, a role being one of `codex_cli`, `claude_code_cli`, `anthropic_api`, `openai_api`; at most 4 CLI kinds and 512 ids per role. For one release the server also takes the previous body (`references` instead of `cli_kinds`) and discards the names ([Cloud API](../cloud-api.md#team-server-catalog)) | `204`; it replaces this device's previous report | `422 invalid { reason: "catalog" }` (`github` or an unknown role as a CLI kind or a model role, too many), `422 invalid` (an unknown field) | S5, row 75 (ORC-451, ORC-881) |
+| `GET /projects/{id}/cli-kinds` | member, also through the web app's browser sign-in (`admin_web`) | | `{ cli_kinds: [role] }`: the union of the current reports, sorted, once each; no count, no device or person. It replaces `GET …/references` | | S5, row 75 (ORC-451, ORC-881) |
 | `GET /projects/{id}/models` | member, also through the web app's browser sign-in (`admin_web`) | | `{ models: { role: [model id] } }`: the union of the current reports per role, each sorted | | S5, row 75 (ORC-451) |
 | `GET /projects/{id}/events` | member | `Last-Event-ID` header (none, or older than 30 days: the snapshot first) | `text/event-stream`: `snapshot.begin`, `snapshot.tasks`, `snapshot.end`; `task.created`, `task.changed`, `task.claim`, `task.run`; `tag.created`, `tag.renamed`, `tag.deleted`, `tag.merged`; `module.created`, `module.changed`; `member.added`, `member.removed`, `member.role_changed`; `project.changed`; `resource.published`, `resource.renamed`, `resource.archived` (S5); `revoked` | `401`, `403`, `429 rate_limited` | row 73 (S2d): these kinds replace `task`, `members`, `tags`, `project`, `modules` (ORC-78), the planned `resources` (3) and `reset` |
 | `GET /admin/users` | admin | | `{ users: [User] }` | | |
@@ -1368,17 +1363,16 @@ the requests `ResourceCreate`, `ResourcesImport`, `VersionPublish`, `ResourcePat
 
 **Catalog** (row 75). `PUT …/catalog` is keyed by the calling device's session: one report per device and project,
 replaced whole, removed with the device's session or the member's membership. The reads compute the union of the
-remaining reports, `GET …/references` with the connection and MCP server references of the project's versions too;
-they never name a device, a person or how many computers have an entry. A role is one of core's connection kinds
-(`ConnectionRole::as_str`: `codex_cli`, `claude_code_cli`, `anthropic_api`, `openai_api`, `github`); an unknown one is
-refused, so the catalog follows the kinds this server's core knows. A model id is core's `ModelId`. The web's profile
+remaining reports; they never name a device, a person or how many computers have an entry. A CLI kind and a model
+role are one of core's four agent roles (`ConnectionRole::as_str`: `codex_cli`, `claude_code_cli`, `anthropic_api`,
+`openai_api`); `github` and an unknown one are refused, so the catalog follows the kinds this server's core knows. A model id is core's `ModelId`. The web's profile
 editor reads both through its server side, with the browser sign-in; the desktop reports and never reads them (it
 binds against its own connections).
 
-The contract is `orchester-api`'s `catalog.rs` (`CatalogKind`, `CatalogReference`, `ModelsPerRole`, the request
-`CatalogReport` and the answers `CatalogReferences` and `CatalogModels`, each refusing fields it does not know, so no
-account, path, setting, key, id or device can ride along) and its client's `client/catalog.rs`: `report_catalog`,
-`catalog_references` and `catalog_models`.
+The contract is `orchester-api`'s `catalog.rs` (`ModelsPerRole`, the request `CatalogReport` with its `check` of the
+limits and roles, and the answers `CatalogCliKinds` and `CatalogModels`, each refusing fields it does not know, so no
+name, account, path, setting, key, id or device can ride along) and its client's `client/catalog.rs`: `report_catalog`,
+`catalog_cli_kinds` and `catalog_models`.
 
 **Progress reports.** `PUT …/run` replaces the task's report. The server checks the shape (step keys unique, `step`
 among `steps`, `waiting_for` only with `waiting`, `stuck` or `stopped_at_limit`; a URL that is `https`), stores it,
@@ -2285,7 +2279,7 @@ milliseconds. Rows marked *3* are new or changed for API 3.
 | `files` (*3*) | project, sha256, size, content (zstd); unique (project, sha256): the parts of skill versions |
 | `version_references` (*3*) | version, reference id, kind, name, role |
 | `catalog_reports` (S5, row 75) | project, device session, reported at; unique (project, device session); removed with the session or the membership |
-| `catalog_references`, `catalog_models` (S5, row 75) | per report: kind, name, role; role, model id. Nothing else about a connection or MCP server is stored |
+| `catalog_cli_kinds`, `catalog_models` (S5, row 75) | per report: CLI kind; role, model id. Nothing else about a connection or MCP server is stored |
 | `events` | append-only: sequence, project, kind (*3*: adds `resources`; schema 7: adds `modules`, the table rebuilt with its sequence carried over; S2d: the delta kinds of [Live updates](#live-updates) replace them, row 73), by, actor, payload, at; older than 30 days removed |
 | `audit_events` | append-only: actor, action, target, address, at |
 
@@ -2589,12 +2583,12 @@ each server once and links each project (rows 49–50, plan phase N1) and gets S
   round-trips by hash.
 - [x] Row 75 contract: `orchester-api`'s `catalog.rs` and `client/catalog.rs` (ORC-451); `crates/api/tests/resources`
   filter `catalog`.
-- [x] Row 75 desktop report (ORC-452): core's `sharing::catalog` builds it from the local connections and MCP servers
-  (agent connections only, at most 256 references and 512 ids per role); the workspace's `sharing/sync/catalog.rs`
+- [x] Row 75 desktop report (ORC-452, ORC-881): core's `sharing::catalog` builds it from the local connections (agent
+  connections only: their roles and at most 512 ids per role; no connection or MCP server name); the workspace's `sharing/sync/catalog.rs`
   sends it while the project's stream is open, on each connect and then every minute when it changed;
   `crates/workspace/tests/live_updates` filter `catalog`. *What linking sends* and *What joining sends* name it.
 - [ ] Row 75: core's `NetworkAccess::Hosts` with its order and *widens*, each connection's enforcement or refusal at
-  preflight; the server's `catalog_*` tables, `PUT …/catalog` and the two reads (`GET …/references`,
+  preflight; the server's `catalog_*` tables, `PUT …/catalog` and the two reads (`GET …/cli-kinds`,
   `GET …/models`). A loopback test: two desktops report, the reads list the union with no device or person, and a
   revoked device's entries leave.
 
