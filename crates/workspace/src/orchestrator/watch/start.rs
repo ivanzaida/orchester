@@ -9,7 +9,7 @@ use orchester_core::{
   id::ChatId,
   orchestrator::{
     Chat, ChatEvent, Claim, Subscription, Subscriptions,
-    watch::{LedElsewhere, NamedTarget, Told, WatchCommand, WatchLine},
+    watch::{AtRequest, LedElsewhere, NamedTarget, Told, WatchCommand, WatchLine},
   },
   time::Timestamp,
 };
@@ -37,6 +37,22 @@ impl Watched {
 /// in the project at `root`. The command and its line are kept in `chat`, which is kept with them when it is new.
 /// Refused, with nothing kept, when it names nothing or every target is gone. Blocks on SQLite.
 pub fn watch_in(root: &Path, chat: &Chat, targets: &[NamedTarget], order: &str) -> Result<Watched, WatchError> {
+  apply(root, chat, targets, (order, false))
+}
+
+/// The watch the person asked the Orchestrator for in words, which its `watch` tool applies (ORC-893): as
+/// [`watch_in`], by the same rules, but no command of theirs is kept, only the line, at their request with `order`.
+pub fn watch_asked_in(root: &Path, chat: &Chat, targets: &[NamedTarget], order: &str) -> Result<Watched, WatchError> {
+  apply(root, chat, targets, (order, true))
+}
+
+/// [`watch_in`], or [`watch_asked_in`] when `asked`.
+fn apply(
+  root: &Path,
+  chat: &Chat,
+  targets: &[NamedTarget],
+  (order, asked): (&str, bool),
+) -> Result<Watched, WatchError> {
   if targets.is_empty() {
     return Err(WatchError::NoTarget);
   }
@@ -61,21 +77,23 @@ pub fn watch_in(root: &Path, chat: &Chat, targets: &[NamedTarget], order: &str) 
   if watched.applied_nothing() {
     return Err(WatchError::Gone(watched.gone));
   }
-  let command = WatchCommand::Watch {
-    targets: named,
-    order: order.trim().to_owned(),
+  let order = order.trim().to_owned();
+  let line = ChatEvent::Watch {
+    line: WatchLine::Watching {
+      started: watched.started.clone(),
+      already_here: watched.already_here.clone(),
+      led_elsewhere: watched.led_elsewhere.clone(),
+      gone: watched.gone.clone(),
+      at_request: asked.then(|| AtRequest { order: order.clone() }),
+    },
   };
-  let line = WatchLine::Watching {
-    started: watched.started.clone(),
-    already_here: watched.already_here.clone(),
-    led_elsewhere: watched.led_elsewhere.clone(),
-    gone: watched.gone.clone(),
+  let entries = if asked {
+    vec![line]
+  } else {
+    let command = WatchCommand::Watch { targets: named, order };
+    vec![ChatEvent::WatchCommand { command }, line]
   };
-  db.keep_watch_entries(
-    chat,
-    &[ChatEvent::WatchCommand { command }, ChatEvent::Watch { line }],
-    now,
-  )?;
+  db.keep_watch_entries(chat, &entries, now)?;
   let here = kept(&db, chat)?;
   for owed in told {
     tell(&mut db, owed, &here, now)?;

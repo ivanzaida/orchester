@@ -2,7 +2,8 @@
 //! at once and returns those another conversation leads for the card, keeping them nowhere; *Take it here* moves the
 //! subscription and writes the line in the conversation that lost it; a task inside a module another conversation
 //! leads writes its line there, with no card; a stop cancels nothing and lists what was open; a target closed or
-//! deleted meanwhile is refused; and all of it is kept as the conversation's entries while a turn is under way.
+//! deleted meanwhile is refused; and all of it is kept as the conversation's entries while a turn is under way. The
+//! agent's own `watch` and `unwatch` are `orchestrator_watch_tools`'; taking over is no tool of its.
 //! `cargo test -p orchester-workspace --test orchestrator_watch watch_`.
 
 mod support;
@@ -143,6 +144,7 @@ fn watch_several_targets_keeps_the_new_and_returns_the_one_already_led() {
           already_here: Vec::new(),
           led_elsewhere: watched.led_elsewhere.clone(),
           gone: Vec::new(),
+          at_request: None,
         },
       },
     ]
@@ -313,6 +315,7 @@ fn watch_stop_cancels_nothing_and_lists_the_open_runs() {
         line: WatchLine::Stopped {
           targets: vec![named(WatchTarget::Module(webhooks), "Webhooks")],
           left_open,
+          at_request: None,
         },
       },
     ]
@@ -419,11 +422,14 @@ fn watch_watching_keeps_the_command_only_while_the_conversation_watches_somethin
   );
 }
 
+/// ORC-893: the agent watches and stops watching at the person's request with `watch` and `unwatch` only; taking a
+/// target over stays the person's click on the card.
 #[test]
-fn watch_commands_are_no_tool_of_the_agent() {
+fn watch_take_over_is_no_tool_of_the_agent() {
   for tool in orchestrator_workspace_tools() {
+    let watch_tool = tool == "watch" || tool == "unwatch";
     assert!(
-      !tool.contains("watch") && !tool.contains("take_over") && !tool.contains("subscri"),
+      watch_tool || (!tool.contains("watch") && !tool.contains("take_over") && !tool.contains("subscri")),
       "{tool} lets the agent change what the conversation watches"
     );
   }

@@ -7,7 +7,7 @@ use std::path::Path;
 use orchester_core::{
   orchestrator::{
     Chat, ChatEvent, Subscriptions, WatchTarget,
-    watch::{NamedTarget, OpenTask, WatchCommand, WatchLine},
+    watch::{AtRequest, NamedTarget, OpenTask, WatchCommand, WatchLine},
   },
   time::Timestamp,
 };
@@ -24,12 +24,14 @@ pub enum StopWhat {
   All,
 }
 
-/// How the person stopped: with `/unwatch`, whose command is kept as their entry, or with × on a header chip, which
-/// leaves only the stop line.
+/// How the person stopped: with `/unwatch`, whose command is kept as their entry, with × on a header chip, which
+/// leaves only the stop line, or by asking the Orchestrator in words, whose `unwatch` tool leaves only the stop line
+/// at their request (ORC-893).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StopBy {
   Unwatch,
   Chip,
+  Request,
 }
 
 /// What a stop ended, and what it left open.
@@ -81,6 +83,7 @@ pub fn stop_in(root: &Path, chat: &Chat, what: &StopWhat, by: StopBy) -> Result<
   let line = WatchLine::Stopped {
     targets: stopped.clone(),
     left_open: left_open.clone(),
+    at_request: (by == StopBy::Request).then(AtRequest::default),
   };
   entries.push(ChatEvent::Watch { line });
   db.keep_watch_entries(chat, &entries, now)?;
