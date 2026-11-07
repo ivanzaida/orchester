@@ -1,5 +1,5 @@
 //! The fake team server's `PUT …/tasks/{task}/run`: a run's progress, which completes the task's claim when the run
-//! merged. A test can have the next reports refused, as a server that fails for a moment does.
+//! merged. A test can have the next reports refused, as a server that fails for a moment does, or answered `409`.
 
 use std::net::TcpStream;
 
@@ -17,10 +17,27 @@ impl TeamServer {
   }
 }
 
+impl TeamServer {
+  /// Answers every run progress report `409 conflict` while `conflict` holds.
+  pub fn conflict_run_reports(&self, conflict: bool) {
+    self.state().conflict_runs = conflict;
+  }
+
+  /// How many run progress reports reached the server, whatever it answered.
+  pub fn run_reports(&self) -> usize {
+    self.state().run_reports
+  }
+}
+
 /// `PUT …/tasks/{task}/run`: the run's progress; a merged run's completes the task's claim.
 pub(super) fn run(shared: &Shared, user: &UserRef, id: TaskId, request: &Request, stream: &mut TcpStream) {
   let report: RunReport = request.json();
   let mut state = shared.state.lock().expect("state");
+  state.run_reports += 1;
+  if state.conflict_runs {
+    drop(state);
+    return refusal(stream, 409, "conflict");
+  }
   if state.refuse_runs > 0 {
     state.refuse_runs -= 1;
     drop(state);

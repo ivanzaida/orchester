@@ -14,6 +14,7 @@
 
 mod archived;
 mod catalog;
+mod claim_ends;
 mod config;
 mod connection_kinds;
 mod desktop;
