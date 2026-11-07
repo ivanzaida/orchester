@@ -14,6 +14,7 @@
 
 mod actions;
 mod agent;
+mod agent_field;
 mod approve;
 mod approved;
 mod composer;

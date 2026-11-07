@@ -104,6 +104,8 @@ pub struct MenuItem {
   danger: bool,
   /// The detail follows the label on its line.
   inline: bool,
+  /// The row is 40 high whatever its detail, its content centered.
+  tall: bool,
   /// The row opens a list beside the menu: a 12 `text_muted` chevron at its end.
   submenu: bool,
   /// An unavailable row's reason is said elsewhere, in the menu's foot: the row is only faded.
@@ -141,6 +143,7 @@ impl MenuItem {
       mono: false,
       danger: false,
       inline: false,
+      tall: false,
       submenu: false,
       reason_below: false,
       focus: Focus::Pointer,
@@ -218,6 +221,13 @@ impl MenuItem {
   /// The row is the current choice: a check at its end.
   pub fn chosen(mut self, chosen: bool) -> Self {
     self.chosen = chosen;
+    self
+  }
+
+  /// The row is 40 high with its label and detail centered, an agent with its model (`Agent · Builder` `lsXUc` in
+  /// `Agent menu` `BpZlb`).
+  pub fn tall(mut self) -> Self {
+    self.tall = true;
     self
   }
 
@@ -310,10 +320,14 @@ impl MenuItem {
       Choice::Unavailable(reason) => (Some(reason.clone()), None),
       Choice::Action(_) => (self.detail.clone(), None),
     };
-    let stacked = detail.is_some() && !self.inline;
+    let stacked = detail.is_some() && !self.inline && !self.tall;
     let row = Row::new()
       .width(Dimension::Pct(100.0))
-      .min_height(Dimension::Px(ControlHeight::Md.value()))
+      .min_height(Dimension::Px(if self.tall {
+        ControlHeight::Agent.value()
+      } else {
+        ControlHeight::Md.value()
+      }))
       .padding(if stacked {
         Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Snug.role())
       } else {

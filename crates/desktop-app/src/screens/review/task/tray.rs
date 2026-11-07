@@ -26,6 +26,7 @@ use orchester_workspace::tasks::review_threads::failure_message;
 use super::{
   Env,
   actions::{Kept, Write},
+  agent_field::{self, Place},
   approve,
   words::counted,
 };
@@ -36,6 +37,7 @@ use crate::{
     dialog::Dialog,
     icon::{Icon, icon},
     message::message_text,
+    tooltip::Truncated,
   },
 };
 
@@ -110,11 +112,9 @@ pub(super) fn tray(ctx: &mut Ctx, env: &Env) -> Option<Element> {
             .nowrap(),
         )
         .with_children(under.map(|under| {
-          Text::new(&under)
-            .id("review-tray-detail")
-            .variant(TypographyStyle::Description)
+          Truncated::new("review-tray-detail", under, TypographyStyle::Description)
             .color(PaletteColor::TextMuted)
-            .nowrap()
+            .render(ctx)
         })),
     )
     .with_children(buttons(ctx, env, &tray));
@@ -192,29 +192,36 @@ fn words(ctx: &Ctx, tray: &Tray) -> (Icon, PaletteColor, Arc<str>, PaletteColor,
   }
 }
 
-/// *Discard* and *Send to Implement (N)*, the button under way while sending, *Try again* after a failed send.
-fn buttons(ctx: &Ctx, env: &Env, tray: &Tray) -> Vec<Element> {
+/// *Discard* and *Send to Implement (N)* with the agent field before it, the button under way while sending, *Try
+/// again* after a failed send, which sends with the agent the field shows. With the field the buttons are as high as
+/// it (`Discard`, `Send to Implement (3)` in 02 `gSMiI`).
+fn buttons(ctx: &mut Ctx, env: &Env, tray: &Tray) -> Vec<Element> {
+  let agent = match tray {
+    Tray::Idle(_) | Tray::Failed(_) => agent_field::field(ctx, env, Place::Tray),
+    Tray::Waiting(_) | Tray::Sending(_) => None,
+  };
+  let ctx = &*ctx;
   let busy = env.writes.busy();
+  let sized = |button: ActionButton| if agent.is_some() { button } else { button.small() };
   let send = |label: Arc<str>, glyph: Icon| {
-    let writes = env.writes.clone();
-    let button = ActionButton::new("review-tray-send", ButtonKind::Primary, label)
-      .icon(glyph)
-      .small();
+    let (writes, state, page) = (env.writes.clone(), env.state.clone(), env.page.clone());
+    let button = sized(ActionButton::new("review-tray-send", ButtonKind::Primary, label).icon(glyph));
     if busy {
       button.loading()
     } else {
-      button.on_click(move || writes.run(Write::Send))
+      button.on_click(move || writes.run(Write::Send(state.agent.profile(&page))))
     }
   };
   let discard = || -> Element {
     let discarding = env.state.discarding.clone();
-    let button = ActionButton::new(
-      "review-tray-discard",
-      ButtonKind::Secondary,
-      ctx.t("review_page.tray.discard"),
-    )
-    .icon(Icon::Trash2)
-    .small();
+    let button = sized(
+      ActionButton::new(
+        "review-tray-discard",
+        ButtonKind::Secondary,
+        ctx.t("review_page.tray.discard"),
+      )
+      .icon(Icon::Trash2),
+    );
     if busy {
       button.disabled().into()
     } else {
@@ -222,14 +229,15 @@ fn buttons(ctx: &Ctx, env: &Env, tray: &Tray) -> Vec<Element> {
     }
   };
   match tray {
-    Tray::Idle(count) => vec![
-      discard(),
-      send(
+    Tray::Idle(count) => [Some(discard()), agent.clone()]
+      .into_iter()
+      .flatten()
+      .chain([send(
         ctx.t_args("review_page.tray.send", [("count", count.to_string())]),
         Icon::Send,
       )
-      .into(),
-    ],
+      .into()])
+      .collect(),
     Tray::Waiting(count) => vec![
       discard(),
       ActionButton::new(
@@ -252,10 +260,11 @@ fn buttons(ctx: &Ctx, env: &Env, tray: &Tray) -> Vec<Element> {
       .loading()
       .into(),
     ],
-    Tray::Failed(_) => vec![
-      discard(),
-      send(ctx.t("review_page.tray.tryAgain"), Icon::RotateCcw).into(),
-    ],
+    Tray::Failed(_) => [Some(discard()), agent.clone()]
+      .into_iter()
+      .flatten()
+      .chain([send(ctx.t("review_page.tray.tryAgain"), Icon::RotateCcw).into()])
+      .collect(),
   }
 }
 

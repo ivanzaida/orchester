@@ -217,6 +217,9 @@ pub enum ControlHeight {
   /// 26: an action in a review thread's head or the comment box (`Ask again` `SYiTG`, `Resolve` `j5u9bv`, `Stop
   /// answering` `D6BO9` in `RBR9O`; `Add comment` `Z0RVD`).
   Snug,
+  /// 40: a menu row with the model under the agent's name, its content centered (`Agent · Builder` `lsXUc` in `Agent
+  /// menu` `BpZlb`).
+  Agent,
 }
 
 impl ControlHeight {
@@ -232,6 +235,7 @@ impl ControlHeight {
       Self::Picker => 26.0,
       Self::Row => 30.0,
       Self::Snug => 26.0,
+      Self::Agent => 40.0,
     }
   }
 }

@@ -96,7 +96,7 @@ pub(super) fn dialog(ctx: &Ctx, env: &Env) -> Element {
     })
   };
   let send = {
-    let open = open.clone();
+    let (open, state, page) = (open.clone(), env.state.clone(), env.page.clone());
     ActionButton::new(
       "review-approve-ask-send",
       ButtonKind::Primary,
@@ -105,7 +105,7 @@ pub(super) fn dialog(ctx: &Ctx, env: &Env) -> Element {
     .icon(Icon::Send)
     .on_click(move || {
       open.set(false);
-      writes.run(Write::Send);
+      writes.run(Write::Send(state.agent.profile(&page)));
     })
   };
   Dialog::new(
