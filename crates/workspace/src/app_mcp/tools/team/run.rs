@@ -159,7 +159,7 @@ fn started(outcome: StartOutcome) -> Result<Value, ToolError> {
       vec![Message::new("appMcp.errors.teamStartWaiting")],
     )),
     StartOutcome::Refused(error) => Err(authority_refused(&error)),
-    StartOutcome::Failed(StartFailure::BundleSchema { read, built }) => Err(bundle_schema(read, built)),
+    StartOutcome::Failed(StartFailure::BundleSchema { read, built }) => Err(bundle_schema(Schemas { read, built })),
     StartOutcome::Failed(StartFailure::BundleUnreadable) => Err(ToolError::refused(
       "team_bundle_unreadable",
       vec![Message::new("appMcp.errors.teamBundleUnreadable")],
@@ -179,8 +179,14 @@ fn started(outcome: StartOutcome) -> Result<Value, ToolError> {
   }
 }
 
+/// The bundle schema this computer reads and the one the team server built the run's bundle in.
+struct Schemas {
+  read: u32,
+  built: u32,
+}
+
 /// The bundle is built in another schema than this computer reads: the older of the two is updated.
-fn bundle_schema(read: u32, built: u32) -> ToolError {
+fn bundle_schema(Schemas { read, built }: Schemas) -> ToolError {
   let key = if built > read {
     "appMcp.errors.teamBundleSchemaNewer"
   } else {

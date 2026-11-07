@@ -20,6 +20,7 @@ mod team_deliveries;
 #[path = "../team_work/team_server.rs"]
 mod team_server;
 
+mod bundle_schema;
 mod choices;
 mod created;
 mod delivery;
@@ -210,7 +211,17 @@ impl Checkout {
 
   /// Tool `name`, a domain or a setup tool, called with `args`: its result, or its error as the client reads it.
   fn call(&self, name: &str, args: &Value) -> Result<Value, Value> {
-    let translate = Translate::new(|message| message.key.to_owned());
+    self.call_rendering(name, args, |message| message.key.to_owned())
+  }
+
+  /// [`Self::call`], with each message rendered by `render` (to read its placeholders' values).
+  fn call_rendering(
+    &self,
+    name: &str,
+    args: &Value,
+    render: impl Fn(&orchester_workspace::messages::Message) -> String + Copy + Send + Sync + 'static,
+  ) -> Result<Value, Value> {
+    let translate = Translate::new(render);
     let Value::Object(args) = args.clone() else {
       panic!("arguments are an object");
     };
@@ -224,7 +235,7 @@ impl Checkout {
         }
       })
       .expect("a tool")
-      .map_err(|error| error.to_json(|message| message.key.to_owned()))
+      .map_err(|error| error.to_json(render))
   }
 
   /// The error code of tool `name`'s refusal of `args`.
