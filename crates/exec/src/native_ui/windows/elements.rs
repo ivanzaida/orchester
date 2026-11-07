@@ -162,9 +162,9 @@ pub(super) fn act_on(
   (element, reference): (Element, &str),
   action: &UiAction,
 ) -> Result<(), NativeUiError> {
-  let unsupported = |action: &'static str, patterns: &'static str| NativeUiError::Unsupported {
+  let unsupported = |action: &'static str, needs: &'static str| NativeUiError::Unsupported {
     action,
-    patterns,
+    needs,
     reference: reference.to_owned(),
     role: element
       .control_type()
@@ -176,11 +176,14 @@ pub(super) fn act_on(
       if clicked {
         Ok(())
       } else {
-        Err(unsupported("click", "Invoke, Toggle, SelectionItem or ExpandCollapse"))
+        Err(unsupported(
+          "click",
+          "the Invoke, Toggle, SelectionItem or ExpandCollapse pattern",
+        ))
       }
     }
     UiAction::Type(text) => match element.value()? {
-      None => Err(unsupported("type", "Value")),
+      None => Err(unsupported("type", "the Value pattern")),
       Some((_, true)) => Err(NativeUiError::ReadOnly(reference.to_owned())),
       Some((_, false)) => element.set_value(text).map(drop).map_err(NativeUiError::from),
     },
@@ -189,7 +192,7 @@ pub(super) fn act_on(
       if element.scroll_into_view()? {
         Ok(())
       } else {
-        Err(unsupported("scroll", "ScrollItem"))
+        Err(unsupported("scroll", "the ScrollItem pattern"))
       }
     }
     UiAction::Select(option) => {
@@ -198,7 +201,7 @@ pub(super) fn act_on(
       }
       Err(unsupported(
         "select",
-        "SelectionItem (of an option inside it), ExpandCollapse or Value",
+        "the SelectionItem (of an option inside it), ExpandCollapse or Value pattern",
       ))
     }
   }

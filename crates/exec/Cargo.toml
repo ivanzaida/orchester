@@ -66,6 +66,12 @@ rustix = { workspace = true, features = ["fs"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 libc.workspace = true
+# The native UI driver's window capture through ScreenCaptureKit (`native_ui::macos::capture`), which has no bindings in
+# the build: the Objective-C runtime, the blocks its completion handlers take and NSString for its errors. Already built
+# for the app's notifications, so they add no crate.
+block2.workspace = true
+objc2.workspace = true
+objc2-foundation.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 # The kill-on-close Job Object that holds a service's process tree (`process_tree`), as the runner's own jobs do.

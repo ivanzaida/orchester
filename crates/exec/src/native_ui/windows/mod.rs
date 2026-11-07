@@ -15,7 +15,7 @@ use self::{
   automation::{Automation, Element},
   elements::{Walk, act_on, describe, each, reference},
 };
-use super::{NativeCapture, NativeSnapshot, NativeUiError, NativeWindow, SNAPSHOT_NODES};
+use super::{NativeCapture, NativeSnapshot, NativeUiError, NativeWindow, SNAPSHOT_NODES, crop::crop};
 
 /// The visible top-level windows of the processes `pids`, front first.
 pub fn find_windows(pids: &[u32]) -> Result<Vec<NativeWindow>, NativeUiError> {
@@ -127,36 +127,6 @@ fn rendered(window: &NativeWindow) -> Result<NativeCapture, NativeUiError> {
     height,
     rgba: pixels,
   })
-}
-
-/// The part of `whole`, the capture of `window`, that the desktop rectangle `(left, top, right, bottom)` covers.
-fn crop(
-  whole: &NativeCapture,
-  window: &NativeWindow,
-  (left, top, right, bottom): (i32, i32, i32, i32),
-) -> Result<NativeCapture, NativeUiError> {
-  // A coordinate of the desktop as a column or row of the capture, within it.
-  let within = |value: i32, origin: i32, size: u32| u32::try_from(value - origin).unwrap_or(0).min(size);
-  let (x0, x1) = (
-    within(left, window.bounds.x, whole.width),
-    within(right, window.bounds.x, whole.width),
-  );
-  let (y0, y1) = (
-    within(top, window.bounds.y, whole.height),
-    within(bottom, window.bounds.y, whole.height),
-  );
-  if x1 <= x0 || y1 <= y0 {
-    return Err(NativeUiError::Capture(
-      "the element shows no part of itself in its window".to_owned(),
-    ));
-  }
-  let (width, height) = (x1 - x0, y1 - y0);
-  let mut rgba = Vec::with_capacity(width as usize * height as usize * 4);
-  for row in y0..y1 {
-    let start = (row as usize * whole.width as usize + x0 as usize) * 4;
-    rgba.extend_from_slice(&whole.rgba[start..start + width as usize * 4]);
-  }
-  Ok(NativeCapture { width, height, rgba })
 }
 
 /// Waits up to `timeout_ms` until every one of `windows` handled what it was sent before.

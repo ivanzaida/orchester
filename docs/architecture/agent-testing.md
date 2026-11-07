@@ -154,9 +154,32 @@ Toggle, SelectionItem or ExpandCollapse; `type` Value; `scroll` ScrollItem; `sel
 inside it (opening it first when it is collapsed), else Value; an element without one answers *unsupported for this
 element*, and `key` always answers that the driver presses no keys. `ui_screenshot` is the window's own rendering into
 memory (`PrintWindow` with `PW_RENDERFULLCONTENT`), or that cropped to an element; `ui_wait("idle")` waits until each
-window's thread handled a `WM_NULL`; `ui_logs` reads the service's own output. On macOS every call answers that the
-driver is not supported on this platform yet. The tests drive `orchester-test-window`, a Win32 fixture in the runner's
-test support (`tests/native_ui.rs`).
+window's thread handled a `WM_NULL`; `ui_logs` reads the service's own output. The tests drive
+`orchester-test-window`, a Win32 fixture in the runner's test support (`tests/native_ui.rs`).
+
+Built (ORC-258): the `native` driver on macOS (`orchester_exec::native_ui::macos`; its platform-independent mapping in
+`native_ui::accessibility` and `native_ui::permission`). Every `ui_*` call of such a service first asks
+`native_ui::ready()`: without Accessibility (`AXIsProcessTrusted`) or Screen Recording (`CGPreflightScreenCaptureAccess`)
+it answers *permission missing*, naming each missing one and its pane (System Settings › Privacy & Security ›
+Accessibility / Screen Recording); nothing prompts. macOS grants them to the responsible app, Orchester, which started
+the runner. The workspace exposes the state for the UI as `agent_testing::native_driver::NativeDriverState` (ready,
+needs these permissions, not supported), each permission with its System Settings link. The windows are the
+normal-layer windows of the reachable processes as the window server lists them (`CGWindowListCopyWindowInfo`), each
+matched to its AX window by its window id (`_AXUIElementGetWindow`); `ui_open` moves them beyond the right of the
+displays through `AXPosition`, which activates nothing, and says whether one still shows. A snapshot is the
+AXUIElement tree with the same bounds: a ref from the element's `CFHash` (`x…`, stable while it lives), its AX role in
+the Windows driver's words (`AXButton` is `button`, `AXTextField` `edit`, others lower case without `AX`), its name
+(title, else description, else a label's text), its states (`disabled`, `focused`, `checked`/`unchecked`/`mixed`,
+`expanded`/`collapsed`, `selected`, `readonly`, `password`) and its value (never a password field's). `ui_act` uses AX
+only: `click` `AXPress`, else `AXPick`; `type` sets a settable `AXValue`; `scroll` `AXScrollToVisible`; `select`
+presses or picks the option named so inside it (showing a pop-up's menu first), else sets `AXValue`, else steps a
+number with `AXIncrement`/`AXDecrement`; an element without one answers *unsupported for this element*, and `key` that
+the driver presses no keys. No CGEvent is ever posted. `ui_screenshot` is that window alone by its id through
+ScreenCaptureKit (`SCContentFilter` of the desktop-independent window, `SCScreenshotManager`, macOS 14), before macOS 14
+the window server's image of that one window (`CGWindowListCreateImage` with `kCGWindowListOptionIncludingWindow`);
+`ui_wait("idle")` waits until the app answers an AX read within the timeout. Nothing of it has run on a Mac yet: it is
+checked with `cargo check` and `cargo clippy --target aarch64-apple-darwin`, and its pure parts by `orchester-exec`'s
+`tests/native_ui.rs`.
 
 ## The Test step
 
