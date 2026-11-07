@@ -1,16 +1,15 @@
 //! A row of the hub's list (`Item · Builder` `tF2OL`, `Item · pencil-design` `U9RFS`): the kind's glyph, the name over
 //! what this computer needs, and at its end a tag and a version. Under All the tag names the kind; under a kind with
 //! something to fill in on a computer (profiles, MCP servers, tools) the tag names what an MCP server or a tool is
-//! and the version stands after it. The chosen row stands inert on `hover` with a hairline `accent` start (`Item ·
-//! Builder` `n330IO`: its 2 stroke is drawn under the list's own 1 outline, which leaves a hairline); the others open
-//! the hub on them.
+//! and the version stands after it. The chosen row stands inert on `hover` with a 2 `accent` start (`Item ·
+//! Builder` `n330IO`); the others open the hub on them.
 
 use lurq::{
   app::{
     ctx::Ctx,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Column, Row, Text},
+  components::{Column, Row, Text, TextOverflow},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -68,7 +67,7 @@ pub(super) fn row(ctx: &Ctx, listing: &Listing, entry: &Entry, shown: &Shown<'_>
   if chosen {
     button
       .background(ExtraColor::Hover.role())
-      .border_left(Border::inside(BorderSize::Sm, PaletteColor::Accent))
+      .border_left(Border::inside(BorderSize::Md, PaletteColor::Accent))
       .into()
   } else {
     button
@@ -112,7 +111,8 @@ fn text(ctx: &Ctx, listing: &Listing, entry: &Entry, id: &str) -> Column {
         .id(format!("{id}-line"))
         .variant(HubText::RowLine.role())
         .color(said.color)
-        .nowrap(),
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis),
     )
 }
 
