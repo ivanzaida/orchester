@@ -18,7 +18,7 @@ use crate::{tasks::outside::Outside, workspace::Workspace};
 impl Workspace {
   /// Keeps `pick` as the connection, and the account when the connection needs one, the team profile `profile` of
   /// the project at `repo_root` runs on here, in place of an earlier pick. The connection must exist and, where the
-  /// profile's CLI kind is known (its newest version names a connection of a role), be of that kind; the account must
+  /// profile's CLI kind is known (its newest version names one), be of that kind; the account must
   /// be a listed account of the connection's CLI.
   pub fn pick_team_connection(
     &self,
@@ -60,8 +60,9 @@ impl Workspace {
   }
 }
 
-/// The role of the connection the newest cached version of `profile` names, which is the profile's CLI kind until the
-/// team names it directly; `None` when no version names one.
+/// The role of the CLI kind the newest cached version of `profile` names; `None` when it names none. A version cached
+/// before the team configuration model names a connection of a role instead, which still counts until the store drops
+/// those references (ORC-845).
 fn profile_role(db: &ProjectDb, profile: ResourceId) -> Result<Option<ConnectionRole>, StoreError> {
   let Some(latest) = db.latest_version::<AgentProfile>(profile)? else {
     return Ok(None);
@@ -69,7 +70,8 @@ fn profile_role(db: &ProjectDb, profile: ResourceId) -> Result<Option<Connection
   let Some(cached) = db.cached_version::<AgentProfile>(profile, latest.number())? else {
     return Ok(None);
   };
-  Ok(cached.references.iter().find_map(|reference| match reference.target {
+  Ok(cached.references.iter().find_map(|reference| match &reference.target {
+    ReferenceTarget::CliKind(cli) => Some(ConnectionRole::Agent(*cli)),
     ReferenceTarget::Connection(_) => reference.role.as_deref().and_then(ConnectionRole::parse),
     _ => None,
   }))

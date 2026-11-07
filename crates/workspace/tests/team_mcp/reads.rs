@@ -11,6 +11,7 @@ use std::{
 };
 
 use orchester_core::{
+  connection::AgentProvider,
   id::{ConnectionId, ResourceId},
   resource::Version,
 };
@@ -41,8 +42,13 @@ pub struct Seen {
 
 /// The routes, and what they saw.
 pub fn routes(config: &Config) -> (Extra, Arc<Mutex<Seen>>) {
+  routes_running(config, Some(AgentProvider::CodexCli))
+}
+
+/// [`routes`] whose Builder profile version names `cli` by a `CliKind` reference, or none when `cli` is `None`.
+pub fn routes_running(config: &Config, cli: Option<AgentProvider>) -> (Extra, Arc<Mutex<Seen>>) {
   let seen = Arc::new(Mutex::new(Seen::default()));
-  let versions = Arc::new(Versions::of(config));
+  let versions = Arc::new(Versions::of(config, cli));
   seen.lock().publisher_connection = Some(versions.connection);
   seen.lock().publisher_mcp_server = Some(versions.mcp_server);
   let counted = seen.clone();
@@ -59,25 +65,23 @@ struct Versions {
 }
 
 impl Versions {
-  fn of(config: &Config) -> Self {
+  fn of(config: &Config, cli: Option<AgentProvider>) -> Self {
     let profile = fixture::builder();
     let connection = profile.body().connection();
     let mcp_server = ConnectionId::generate();
     let pipeline = fixture::one_step(config.profile, "Say hello.");
+    let mut references =
+      vec![json!({"type": "team_resource", "kind": "mcp_server", "id": ResourceId::from_uuid(mcp_server.as_uuid())})];
+    if let Some(cli) = cli {
+      references.insert(0, json!({"type": "cli_kind", "cli": cli}));
+    }
     Self {
       connection,
       mcp_server,
       pipeline: (config.pipeline, version(config.pipeline, &pipeline, &json!([]))),
       profile: (
         config.profile,
-        version(
-          config.profile,
-          &profile,
-          &json!([
-            {"kind": "connection", "id": connection, "name": "Codex", "role": "codex_cli"},
-            {"kind": "mcp_server", "id": mcp_server, "name": "pencil-design", "role": null}
-          ]),
-        ),
+        version(config.profile, &profile, &Value::Array(references)),
       ),
     }
   }

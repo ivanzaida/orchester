@@ -6,17 +6,14 @@ use std::sync::Arc;
 
 use orchester_api::{ReferenceTarget, SharedResourceKind};
 use orchester_core::{
+  connection::AgentProvider,
   id::{ConnectionId, ResourceId},
   resource::{AgentProfile, ResourceKind, VersionNumber},
   store::ResourceStore,
 };
 use orchester_workspace::sharing::sync::{SystemClock, follow};
 
-use super::{
-  ALICE, LIVE, Member, TeamServer, Workspace,
-  config::{builder, reference},
-  seen_within,
-};
+use super::{ALICE, LIVE, Member, TeamServer, Workspace, config::builder, seen_within};
 
 fn listed(workspace: &Workspace, resource: ResourceId) -> bool {
   let profiles = workspace.db().resources(ResourceKind::AgentProfile).expect("listed");
@@ -32,7 +29,9 @@ async fn live_updates_an_archived_profile_leaves_the_list_and_stops_its_runs_unt
   let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
   let theirs = ConnectionId::generate();
   let profile = ResourceId::generate();
-  let work = reference(ReferenceTarget::Connection { id: theirs }, "Work", Some("codex_cli"));
+  let work = ReferenceTarget::CliKind {
+    cli: AgentProvider::CodexCli,
+  };
   server.publish(
     (profile, SharedResourceKind::AgentProfile, "Builder"),
     builder(theirs, &[]),

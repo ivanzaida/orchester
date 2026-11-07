@@ -1,6 +1,6 @@
 //! The JSON a team server answers with for resources and versions.
 
-use orchester_core::id::{ConnectionId, IdempotencyKey, ResourceId, SecretId, UserId};
+use orchester_core::id::{IdempotencyKey, ResourceId, UserId};
 use serde::{Serialize, de::DeserializeOwned};
 use serde_json::{Value, json};
 
@@ -21,13 +21,13 @@ pub fn resource(id: ResourceId, kind: &str) -> Value {
     "revision":2,"latest":3,"created":{"by":user(),"at":1},"updated":{"by":user(),"at":2}})
 }
 
-/// One reference of each kind a body names.
+/// One reference of each kind a body names: a CLI kind, a team resource of a few kinds, and a secret by name.
 pub fn references() -> Value {
   json!([
-    {"kind":"connection","id":ConnectionId::generate(),"name":"Claude","role":"claude_cli"},
-    {"kind":"mcp_server","id":ConnectionId::generate(),"name":"GitHub","role":null},
-    {"kind":"secret","id":SecretId::generate(),"name":"API token","role":"token"},
-    {"kind":"tool","id":ResourceId::generate(),"name":"Deploy","role":null},
+    {"type":"cli_kind","cli":"claude_code_cli"},
+    {"type":"team_resource","kind":"mcp_server","id":ResourceId::generate()},
+    {"type":"secret_name","name":"API_TOKEN"},
+    {"type":"team_resource","kind":"tool","id":ResourceId::generate()},
   ])
 }
 

@@ -18,16 +18,17 @@ and Orchester Platform module "Team configuration" (OP-197…206). The team serv
 | ORC-814 | Leaving a team deletes the team's resources and cached versions | merged here (dae4066c9); **UI text changed: design verification not done** |
 | ORC-815 | Per-project fill-ins: connection pick, MCP on here, secret values by name | merged here (d492b65a4) |
 | ORC-811 | `GET …/resources/{id}/used-by`: what names a resource and the runs that stop; client, stand-in, docs | merged here (59d9fcc25) |
-| ORC-818 | Team MCP servers cached and archived like other kinds; archive stops runs whose profile chooses the server (uuid stopgap until ORC-817) | merged here (728925a87, row 79 fixed in 456af94d8) |
+| ORC-818 | Team MCP servers cached and archived like other kinds; archive stops runs whose profile chooses the server (typed `TeamResource` refs since ORC-817) | merged here (728925a87, row 79 fixed in 456af94d8) |
 | ORC-825 | Fill-in writes: connection pick, MCP program path (refreshes every project of the server), secret value by name, MCP on here; person-only via `Answerer` | merged here (ec98cf814) |
 | ORC-819 | `used_by` read: team via the route, local from the project database with the archive's `pins()` rule; used-by contract amended (no run number, listed from the first report, superseded runs ended, no MCP server runs on the server until the bundle carries them) | merged here (f52581fd1) |
 | ORC-816 | Create = v1 with no draft (store create_published/discard_created, workspace, MCP save_*_draft, Servers::send_created); **UI windows still say "Create draft" and send a created team resource only on reconnect: ORC-835** | merged here (c7af6227d) |
+| ORC-817 | Team references are `CliKind`, `TeamResource { kind, id }`, `SecretName` (no local ids on the wire; store keeps legacy cached variants until ORC-845); archive `pins()`, used-by and fill-ins read them. **Interim until ORC-820/830: a team profile/tool naming a local connection or secret is refused (`local_entities_named`), the desktop sends `references: []`, team start's MCP servers are a stopgap until ORC-826** | merged here (2f94bef8d) |
 | ORC-828 (part 1) | MCP tools: pick_profile_connection, team MCP on (person_only always) / off, program person_only, list_secrets names; **readiness in get_profile/list_profiles and a team MCP server listing are part 2 (after ORC-822/824)** | merged here (aa745f907) |
 | OP-197 step 1, OP-198, OP-201 | Platform: pin on this branch (now e5d53c929), MCP server kind (migration 30; bundle MCP part waits for ORC-880), used-by route (current work only) | platform module/team-configuration 48d14c0 |
 
 ## In progress
 
-- ORC-817 (references): implemented and reviewed, re-review of the merge fixes running.
+- ORC-829 (MCP server tools for admins).
 
 ## Next (unblocked once this branch is pushed)
 

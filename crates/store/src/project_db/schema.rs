@@ -104,6 +104,7 @@ mod team_fill_ins;
 mod team_mcp_server;
 mod team_operations;
 mod team_pipeline_ids;
+mod team_references;
 mod team_reviewer;
 mod team_work;
 mod test_suites;

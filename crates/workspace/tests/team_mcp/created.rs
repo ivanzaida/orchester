@@ -176,6 +176,10 @@ const KINDS: [(&str, ResourceKind, &str); 3] = [
   ("save_tool_draft", ResourceKind::Tool, "tool"),
 ];
 
+/// The kinds the server is asked to take: a profile's body still names this computer's connection until ORC-820
+/// gives a team profile its own body, so it is refused here before anything is sent, online or not.
+const SENT_KINDS: [(&str, ResourceKind, &str); 2] = [KINDS[1], KINDS[2]];
+
 /// The arguments of a new resource of the kind answered under `key`.
 fn new_resource(key: &str) -> Value {
   match key {
@@ -194,7 +198,7 @@ fn count(checkout: &Checkout, kind: ResourceKind) -> usize {
 
 #[test]
 fn team_mcp_a_new_profile_skill_or_tool_is_created_as_v1_once_the_server_accepts_it() {
-  for (tool, kind, key) in KINDS {
+  for (tool, kind, key) in SENT_KINDS {
     let (server, sent) = server(None);
     let checkout = admin(&server);
 
@@ -212,7 +216,7 @@ fn team_mcp_a_new_profile_skill_or_tool_is_created_as_v1_once_the_server_accepts
 
 #[test]
 fn team_mcp_a_profile_skill_or_tool_the_server_refuses_is_not_created() {
-  for (tool, kind, key) in KINDS {
+  for (tool, kind, key) in SENT_KINDS {
     let (server, sent) = server(Some((403, "not_admin")));
     let checkout = admin(&server);
 
@@ -230,7 +234,7 @@ fn team_mcp_a_profile_skill_or_tool_the_server_refuses_is_not_created() {
 
 #[test]
 fn team_mcp_a_profile_skill_or_tool_made_offline_waits_in_the_outbox() {
-  for (tool, kind, key) in KINDS {
+  for (tool, kind, key) in SENT_KINDS {
     let (server, sent) = server(None);
     let checkout = admin(&server);
     server.set_down(true);
@@ -247,4 +251,23 @@ fn team_mcp_a_profile_skill_or_tool_made_offline_waits_in_the_outbox() {
     assert_eq!(waiting.len(), 1, "{key}");
     assert_eq!(waiting[0].state, PublishState::Waiting, "{key}");
   }
+}
+
+#[test]
+fn team_mcp_a_new_profile_naming_this_computers_connection_is_refused_before_it_is_sent() {
+  let (server, sent) = server(None);
+  let checkout = admin(&server);
+
+  let refused = checkout
+    .call("save_profile_draft", &new_resource("profile"))
+    .expect_err("a team body may not name a connection of this computer");
+
+  assert_eq!(refused["error"]["code"], "local_entities_named", "{refused}");
+  assert_eq!(
+    refused["error"]["message"], "sharing.errors.localEntitiesNamed",
+    "the answer says why: {refused}"
+  );
+  assert_eq!(sent.lock().created, 0, "nothing was sent");
+  assert_eq!(count(&checkout, ResourceKind::AgentProfile), 0, "it was taken back");
+  assert!(checkout.db().waiting_publishes().expect("the outbox").is_empty());
 }

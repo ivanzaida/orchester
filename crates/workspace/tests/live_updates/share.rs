@@ -7,10 +7,10 @@
 
 use std::time::Duration;
 
-use orchester_api::{Reference, ReferenceTarget, SharedResourceKind};
+use orchester_api::{ReferenceTarget, SharedResourceKind};
 use orchester_core::{
   blob::ContentHash,
-  id::{ConnectionId, ResourceId, RunId},
+  id::{ResourceId, RunId},
   name::Name,
   resource::{
     Draft, Instruction, InstructionScope, Pipeline, ResourceKind, Skill, SkillFile, SkillFilePath, Slug, Version,
@@ -20,7 +20,10 @@ use orchester_core::{
   store::{BlobStore, ResourceStore, RunStore},
 };
 use orchester_store::{ProjectDb, ReferenceTarget as KeptTarget, ResourceSharing, StoreError};
-use orchester_workspace::sharing::sync::{keep_uploaded_configuration, upload_configuration};
+use orchester_workspace::sharing::{
+  SharingError,
+  sync::{keep_uploaded_configuration, upload_configuration},
+};
 
 use super::{
   ALICE, BOB, Member, TeamServer, Workspace, link,
@@ -240,6 +243,28 @@ async fn live_updates_share_uploads_every_resource_with_its_numbers_and_skill_fi
   );
 }
 
+/// A team resource names no connection of a computer: a profile whose connection is kept here is not uploaded, until
+/// its body names a CLI kind instead (ORC-820, ORC-830). Nothing is sent, so the server holds none of the project.
+#[tokio::test(flavor = "multi_thread")]
+async fn live_updates_share_uploads_nothing_when_a_profile_names_a_connection_of_this_computer() {
+  let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
+  let mut alice = Sharer::new();
+  let (_, builder) = alice.delivery();
+  alice
+    .fixture
+    .connect_builder(orchester_core::connection::AgentProvider::CodexCli);
+  let publisher = Publisher::online(&server, ALICE);
+
+  let refused = upload_configuration(&publisher, alice.fixture.repo.path()).await;
+
+  assert!(
+    matches!(&refused, Err(SharingError::LocalEntitiesNamed { resource, names }) if *resource == builder && !names.is_empty()),
+    "{refused:?}"
+  );
+  assert_eq!(on_server(&server, builder), [], "nothing was uploaded");
+  assert_eq!(on_server(&server, alice.style), []);
+}
+
 /// Nothing of the resource is left in the project: not the row, not a cached version, not a listing of its kind.
 fn assert_resource_gone(db: &ProjectDb, resource: ResourceId) {
   assert!(
@@ -270,12 +295,10 @@ async fn live_updates_make_local_keeps_no_copy_of_the_teams_configuration_and_pa
   let server = TeamServer::start(&[(ALICE, "Alice Moreau"), (BOB, "Bob Lind")], &[]);
   let alice = Sharer::new();
   alice.share(&server).await;
-  let agent = ConnectionId::generate();
   let tone = ResourceId::generate();
-  let named = Reference {
-    target: ReferenceTarget::Connection { id: agent },
-    name: "Agent".to_owned(),
-    role: Some("claude_cli".to_owned()),
+  let named = ReferenceTarget::TeamResource {
+    kind: SharedResourceKind::Skill,
+    id: alice.skill,
   };
   server.publish(
     (tone, SharedResourceKind::Instruction, "Tone"),
@@ -283,10 +306,25 @@ async fn live_updates_make_local_keeps_no_copy_of_the_teams_configuration_and_pa
     vec![named],
   );
   let bob = bob_caches(&server, &[alice.style, tone]).await;
+  let naming = |resource| KeptTarget::TeamResource {
+    kind: ResourceKind::Skill,
+    id: resource,
+  };
   assert_eq!(
-    bob.db().reference_bindings().expect("read").len(),
-    1,
-    "Tone's reference"
+    bob
+      .db()
+      .versions_naming(&naming(alice.skill))
+      .expect("read")
+      .iter()
+      .map(|version| version.resource)
+      .collect::<Vec<_>>(),
+    [tone],
+    "Tone's reference is cached"
+  );
+  assert_eq!(
+    bob.db().reference_bindings().expect("read"),
+    [],
+    "a team reference binds nothing"
   );
   let (delivery, builder) = alice.delivery();
   let run = alice.run();
@@ -328,7 +366,7 @@ async fn live_updates_make_local_keeps_no_copy_of_the_teams_configuration_and_pa
   );
   let db = bob.db();
   assert_eq!(db.reference_bindings().expect("read"), []);
-  assert_eq!(db.versions_naming(KeptTarget::Connection(agent)).expect("read"), []);
+  assert_eq!(db.versions_naming(&naming(alice.skill)).expect("read"), []);
   assert_eq!(
     on_server(&server, alice.style).len(),
     2,

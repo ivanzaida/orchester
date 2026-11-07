@@ -28,6 +28,7 @@ pub struct ProfileBinding {
 }
 
 /// A connection, MCP server or secret the canonical bodies name by the publisher's id, bound to this computer's.
+/// Removed by ORC-845 with the bindings.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum BoundReference {
@@ -36,7 +37,8 @@ pub enum BoundReference {
   Secret { named: SecretId, local: SecretId },
 }
 
-/// `{profiles, references}`: how this computer binds the run's inputs.
+/// `{profiles, references}`: how this computer binds the run's inputs. `references` is removed by ORC-845 with the
+/// bindings.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LocalBindings {
