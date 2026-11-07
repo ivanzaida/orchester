@@ -21,17 +21,17 @@ use lurq::{
 use orchester_core::id::ProjectId;
 use orchester_workspace::agents::team_text::{Added, TeamInstructionSheet, TeamSkillSheet};
 
-use super::{bar, fill::nothing_here, model::Entry, panel, rows};
+use super::{
+  bar,
+  fill::nothing_here,
+  model::{Entry, Listing},
+  panel, rows, words,
+};
 use crate::{
-  navigation::{Navigation, link::Open},
+  navigation::Navigation,
   routes::{InstructionsTab, InstructionsView, ProjectPage, Route},
   services::Services,
   theme::HubText,
-  ui::{
-    button::{ActionButton, ButtonKind},
-    chip::BadgeTone,
-    icon::Icon,
-  },
 };
 
 /// What the team holds of the resource shown.
@@ -46,6 +46,7 @@ pub(super) struct Props {
   pub project: ProjectId,
   /// The person may change the team's resources: an admin of the team.
   pub may_change: bool,
+  pub listing: Listing,
   pub entry: Entry,
   pub sheet: Sheet,
 }
@@ -69,6 +70,7 @@ impl Component for PlainPanel {
     let Props {
       project,
       may_change,
+      listing,
       entry,
       sheet,
     } = ctx.props::<Props>().clone();
@@ -88,13 +90,13 @@ impl Component for PlainPanel {
     let route = may_change.then(|| editor(&entry, project, &sheet));
     let navigation = Navigation::of(ctx);
     let head_edit = route.clone().map(|route| panel::edit_button(ctx, navigation.to(route)));
-    let version = super::words::published_line(ctx, now, &entry, published);
+    let version = words::published_line(ctx, now, &entry, published);
     let body = panel::body()
       .child(panel::head_of(&entry, (kind, version), head_edit))
-      .child(chips(ctx, &entry, &sheet))
+      .child(chips(ctx, &listing, &entry, &sheet))
       .with_children(shown)
       .child(on_this_computer(ctx, &sheet));
-    let bar = route.map(|route| bar(ctx, &entry, navigation.to(route)));
+    let bar = route.map(|route| bar::edit(ctx, &entry, navigation.to(route)));
     panel::frame(&entry, body, bar)
   }
 }
@@ -117,27 +119,14 @@ fn editor(entry: &Entry, project: ProjectId, sheet: &Sheet) -> Route {
 }
 
 /// *Team · v6*, *Ready here* and what the panel says of where it is used at their end.
-fn chips(ctx: &Ctx, entry: &Entry, sheet: &Sheet) -> Row {
-  let (used_by, everywhere) = match sheet {
-    Sheet::Instruction(sheet) => (&sheet.used_by, matches!(sheet.added, Added::Project)),
-    Sheet::Skill(sheet) => (&sheet.used_by, false),
+fn chips(ctx: &Ctx, listing: &Listing, entry: &Entry, sheet: &Sheet) -> Row {
+  let end = match sheet {
+    Sheet::Instruction(sheet) if matches!(sheet.added, Added::Project) => Some(ctx.t("team_hub.plain.everyRun")),
+    Sheet::Instruction(TeamInstructionSheet { used_by, .. }) | Sheet::Skill(TeamSkillSheet { used_by, .. }) => {
+      panel::used_by(ctx, used_by)
+    }
   };
-  let end = if everywhere {
-    Some(ctx.t("team_hub.plain.everyRun"))
-  } else if used_by.is_empty() {
-    None
-  } else {
-    Some(ctx.t_args("team_hub.panel.usedBy", [("names", used_by.join(", "))]))
-  };
-  let ready = (ctx.t("team_hub.chip.ready"), BadgeTone::Success);
-  panel::chips_saying(ctx, entry, ready)
-    .child(Row::new().flex(1.0))
-    .with_children(end.map(|words| {
-      Text::new(&words)
-        .id("team-hub-plain-end")
-        .variant(HubText::Hint.role())
-        .nowrap()
-    }))
+  panel::chips_saying(ctx, entry, words::chip(ctx, listing, entry), end)
 }
 
 /// *On this computer*: nothing is filled in on one.
@@ -147,23 +136,6 @@ fn on_this_computer(ctx: &Ctx, sheet: &Sheet) -> Column {
     Sheet::Skill(_) => ctx.t("team_hub.plain.nothingSkill"),
   };
   rows::on_this_computer(ctx, vec![nothing_here("team-hub-nothing", &words)], None)
-}
-
-/// *Edit* pinned at the bottom, and what publishing makes of the version.
-fn bar(ctx: &Ctx, entry: &Entry, open: Open) -> Element {
-  let edit = ActionButton::new(
-    "team-hub-action-edit",
-    ButtonKind::Primary,
-    ctx.t("team_hub.panel.edit"),
-  )
-  .icon(Icon::Pencil)
-  .opens(open);
-  let hint = entry.number.and_then(|number| number.next()).map(|next| {
-    ctx
-      .t_args("team_hub.panel.publishNext", [("version", next.to_string())])
-      .to_string()
-  });
-  bar::bar(vec![edit.into()], hint)
 }
 
 /// *Used by*: the profiles' names in tags, or that none uses it.
@@ -210,7 +182,7 @@ fn added_row(ctx: &Ctx, added: &Added) -> Row {
 fn from_team(ctx: &Ctx, rows: Vec<Row>) -> Column {
   let note = Text::new(&ctx.t("team_hub.profile.fromTeamNote"))
     .id("team-hub-from-team-note")
-    .variant(HubText::Hint.role())
+    .variant(HubText::PanelHint.role())
     .nowrap();
   rows::section(
     "team-hub-from-team",

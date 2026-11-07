@@ -73,15 +73,14 @@ fn text(ctx: &Ctx, text: &str) -> Column {
     .child(
       Text::new(&ctx.t("team_hub.plain.text"))
         .id("team-hub-text-label")
-        .variant(HubText::Kind.role())
-        .color(PaletteColor::TextMuted)
+        .variant(HubText::PanelLabel.role())
         .nowrap(),
     )
     .child(
       Column::new()
         .id("team-hub-text-area")
         .width(Dimension::Pct(100.0))
-        .padding(Padding::symmetric(HubSpacing::Row.role(), HubSpacing::Row.role()))
+        .padding(Padding::symmetric(SpacingSize::Md, HubSpacing::RowY.role()))
         .background(PaletteColor::SurfaceInput)
         .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
         .rounded(RadiusSize::Md)

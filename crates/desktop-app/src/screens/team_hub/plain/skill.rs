@@ -9,12 +9,15 @@ use super::{added_row, from_team, used_by_row};
 use crate::screens::team_hub::rows;
 
 pub(super) fn sections(ctx: &lurq::app::ctx::Ctx, sheet: &TeamSkillSheet) -> Vec<Element> {
-  let mut rows = vec![rows::row(
-    "team-hub-from-team-description",
-    &ctx.t("team_hub.plain.description"),
-    None,
-    rows::words("team-hub-from-team-description-value", &sheet.description),
-  )];
+  let mut rows = Vec::new();
+  if !sheet.description.is_empty() {
+    rows.push(rows::row(
+      "team-hub-from-team-description",
+      &ctx.t("team_hub.plain.description"),
+      None,
+      rows::words("team-hub-from-team-description-value", &sheet.description),
+    ));
+  }
   rows.push(files_row(ctx, &sheet.files));
   if !matches!(sheet.added, Added::Project) {
     rows.push(added_row(ctx, &sheet.added));

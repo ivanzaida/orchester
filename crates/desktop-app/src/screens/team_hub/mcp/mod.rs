@@ -22,7 +22,7 @@ use lurq::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
   },
-  components::{Column, Row, ScrollVertical, Text},
+  components::{Column, ScrollVertical},
   core::Signal,
   node::{Element, dimension::Dimension, padding::Padding},
 };
@@ -116,15 +116,12 @@ impl Component for McpPanel {
       choose: press(&Step::Fix(Fix::ChoosePath(entry.id))),
       switch: self.switch(entry.id),
     };
-    let used_by = (!sheet.used_by.is_empty()).then(|| {
-      Text::new(&ctx.t_args("team_hub.mcp.usedBy", [("names", sheet.used_by.join(", "))]))
-        .id("team-hub-used-by")
-        .variant(crate::theme::HubText::Hint.role())
-        .nowrap()
-    });
-    let chips = panel::chips_saying(ctx, entry, words::chip(ctx, listing, entry, missing))
-      .child(Row::new().flex(1.0))
-      .with_children(used_by);
+    let chips = panel::chips_saying(
+      ctx,
+      entry,
+      words::chip(ctx, listing, entry, missing),
+      panel::used_by(ctx, &sheet.used_by),
+    );
     let body = Column::new()
       .width(Dimension::Pct(100.0))
       .padding(Padding::symmetric(

@@ -13,7 +13,7 @@ use orchester_workspace::agents::team_mcp::{McpRuns, TeamMcpSheet};
 use crate::{
   screens::team_hub::{
     model::{Entry, Listing},
-    words,
+    words::{self, date},
   },
   ui::chip::BadgeTone,
 };
@@ -45,8 +45,6 @@ pub(super) fn head_line(ctx: &Ctx, now: Timestamp, entry: &Entry, sheet: &TeamMc
       .to_string(),
   })
 }
-
-pub(super) use crate::screens::team_hub::words::date;
 
 /// The program's problem here, when the server has one.
 pub(super) fn program_problem(missing: &[Missing]) -> Option<&ProgramProblem> {

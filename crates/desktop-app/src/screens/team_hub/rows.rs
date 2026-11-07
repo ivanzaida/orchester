@@ -75,8 +75,7 @@ pub(super) fn section(id: &str, label: &str, after: Vec<Element>, rows: Vec<Row>
         .child(
           Text::new(label)
             .id(format!("{id}-label"))
-            .variant(HubText::Kind.role())
-            .color(PaletteColor::TextMuted)
+            .variant(HubText::PanelLabel.role())
             .nowrap(),
         )
         .with_children(after),
@@ -139,14 +138,19 @@ pub(super) fn keyed_in(key: Key, id: &str, label: Text, sub: Option<Sub>, value:
     )
 }
 
-/// A value that is words.
+/// A value that is words; it wraps onto the next line when the row runs out of room.
 pub(super) fn words(id: &str, words: &str) -> Text {
-  Text::new(words).id(id.to_owned()).variant(HubText::Value.role())
+  value(Text::new(words).id(id.to_owned()).variant(HubText::Value.role()))
 }
 
-/// A value that is a model's name or another identifier.
+/// A value that is a model's name or another identifier; one without a place to break is broken where it ends.
 pub(super) fn mono(id: &str, words: &str) -> Text {
-  Text::new(words).id(id.to_owned()).variant(HubText::PanelMono.role())
+  value(Text::new(words).id(id.to_owned()).variant(HubText::PanelMono.role()))
+}
+
+/// A value text takes the row's room and no more, so that what does not fit wraps instead of being cut.
+fn value(text: Text) -> Text {
+  text.flex(1.0).min_width(Dimension::Px(0.0))
 }
 
 /// A value that is names, each in a tag; they wrap onto the next line when the row runs out of room.
@@ -170,7 +174,7 @@ pub(super) fn tags(id: &str, names: impl IntoIterator<Item = String>) -> Row {
 pub(super) fn on_this_computer(ctx: &Ctx, rows: Vec<Row>, after: Option<Element>) -> Column {
   let note = Text::new(&ctx.t("team_hub.profile.onComputerNote"))
     .id("team-hub-on-computer-note")
-    .variant(HubText::Hint.role())
+    .variant(HubText::PanelHint.role())
     .nowrap();
   section(
     "team-hub-on-computer",

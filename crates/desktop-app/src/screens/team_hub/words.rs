@@ -10,12 +10,12 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_workspace::{
-  agents::team_mcp::Published,
+  agents::{team_hub::Form, team_mcp::Published},
   display,
   readiness::{Group, ReadinessStanding},
 };
 
-use super::model::{Entry, Kind, Listing};
+use super::model::{Entry, Kind, Listing, Reach};
 
 /// The name of a CLI kind (`team_hub.cli.*`).
 pub(super) const fn cli_key(cli: AgentProvider) -> &'static str {
@@ -70,12 +70,39 @@ pub(super) fn line(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Said {
   }
 }
 
-/// *Ready here*, with the version a computer uses.
+/// What a ready row says: who gets an instruction, a skill or a tool, then the version a computer uses (a tool's
+/// stands at the row's end); for the other kinds *Ready here*.
 pub(super) fn ready(ctx: &Ctx, entry: &Entry) -> Arc<str> {
-  match entry.number {
-    Some(number) => ctx.t_args("team_hub.line.readyVersion", [("version", number.to_string())]),
-    None => ctx.t("team_hub.line.ready"),
+  let with_version = |words: Arc<str>| match entry.number {
+    Some(number) => ctx.t_args(
+      "team_hub.line.withVersion",
+      [("words", words.to_string()), ("version", number.to_string())],
+    ),
+    None => words,
+  };
+  match (&entry.reach, entry.kind) {
+    (Some(Reach::EveryRun), _) => with_version(ctx.t("team_hub.line.everyRun")),
+    (Some(Reach::Profiles(names)), Kind::Tool) => tool_line(ctx, entry.form, names),
+    (Some(Reach::Profiles(names)), _) if names.is_empty() => with_version(ctx.t("team_hub.panel.usedByNone")),
+    (Some(Reach::Profiles(names)), _) => with_version(Arc::from(names.join(", "))),
+    (None, _) => with_version(ctx.t("team_hub.line.ready")),
   }
+}
+
+/// *Command · used by Builder, Reviewer*.
+fn tool_line(ctx: &Ctx, form: Option<Form>, names: &[String]) -> Arc<str> {
+  let kind = match form {
+    Some(Form::ToolHttp) => ctx.t("team_hub.tool.kind.http"),
+    Some(Form::ToolDatabase) => ctx.t("team_hub.tool.kind.database"),
+    Some(Form::ToolCommand | Form::McpProgram | Form::McpRemote) | None => ctx.t("team_hub.tool.kind.command"),
+  };
+  if names.is_empty() {
+    return kind;
+  }
+  ctx.t_args(
+    "team_hub.line.toolUsedBy",
+    [("kind", kind.to_string()), ("names", names.join(", "))],
+  )
 }
 
 /// What a resource that needs the person misses: the one part, or how many.

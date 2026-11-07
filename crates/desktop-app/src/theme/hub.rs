@@ -67,10 +67,19 @@ pub enum HubText {
   PanelMono,
   /// 12/500 `text_primary`, 1.2: the fix a missing part offers at its row's end (`Link` `rfGmw`).
   PanelLink,
+  /// 12 `text_secondary`, 1.2: what a panel's resource is, over its name (`Where 0` `O1TUu` in `Head` `oqwSC`).
+  PanelWhere,
+  /// 12 `text_muted`, 1.2: a panel's version line, what its chips end with and what a section's head says after its
+  /// label (`Where 1` `Z7M9zP`, `Time` `TAV5u`, `Text` `ZKtPU`).
+  PanelHint,
+  /// 12/500 `text_muted`, 1.2: a panel section's label (`Label` `k4ivft` in `From the team` `jhzmO`).
+  PanelLabel,
+  /// 16/600 `text_primary`, 1.3: a panel's resource name (`Title` `x5AOBx`).
+  PanelTitle,
 }
 
 impl HubText {
-  pub const ALL: [Self; 20] = [
+  pub const ALL: [Self; 24] = [
     Self::PageTitle,
     Self::Crumb,
     Self::GroupTitle,
@@ -91,6 +100,10 @@ impl HubText {
     Self::PanelSub,
     Self::PanelMono,
     Self::PanelLink,
+    Self::PanelWhere,
+    Self::PanelHint,
+    Self::PanelLabel,
+    Self::PanelTitle,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -119,6 +132,10 @@ impl HubText {
       Self::PanelSub => "hub_panel_sub",
       Self::PanelMono => "hub_panel_mono",
       Self::PanelLink => "hub_panel_link",
+      Self::PanelWhere => "hub_panel_where",
+      Self::PanelHint => "hub_panel_hint",
+      Self::PanelLabel => "hub_panel_label",
+      Self::PanelTitle => "hub_panel_title",
     }
   }
 
@@ -144,6 +161,10 @@ impl HubText {
       Self::PanelSub => style(11.5, FontWeight::Normal, 1.3, 0.0, palette.text_muted),
       Self::PanelMono => mono(style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
       Self::PanelLink => style(12.0, FontWeight::Medium, 1.2, 0.0, palette.text_primary),
+      Self::PanelWhere => style(12.0, FontWeight::Normal, 1.2, 0.0, palette.text_secondary),
+      Self::PanelHint => style(12.0, FontWeight::Normal, 1.2, 0.0, palette.text_muted),
+      Self::PanelLabel => style(12.0, FontWeight::Medium, 1.2, 0.0, palette.text_muted),
+      Self::PanelTitle => style(16.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
     }
   }
 }

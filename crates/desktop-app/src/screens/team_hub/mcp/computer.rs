@@ -92,7 +92,7 @@ fn path_row(ctx: &Ctx, view: &View<'_>) -> Option<Row> {
     (Some(set), _) => (
       Sub::quiet(ctx.t_args(
         "team_hub.mcp.path.found",
-        [("date", words::date(ctx, view.now, set.set_at).to_string())],
+        [("date", list_words::date(ctx, view.now, set.set_at).to_string())],
       )),
       Row::new()
         .id(format!("{id}-value"))

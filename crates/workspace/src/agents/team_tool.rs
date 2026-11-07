@@ -33,11 +33,11 @@ pub struct ToolArgument {
 pub enum ToolRuns {
   /// A program with fixed arguments, as a person reads the command line, and how long it may run.
   Command { line: String, timeout_secs: u64 },
-  /// A request to a fixed address; the agent gives only `arguments`. `bearer`: it is sent with a bearer secret.
+  /// A request to a fixed address; the agent gives only `arguments`. A tool that names a secret sends it as the
+  /// bearer token ([`TeamToolSheet::secret`]).
   Http {
     method: HttpMethod,
     url: String,
-    bearer: bool,
     arguments: Vec<ToolArgument>,
   },
   /// A fixed query run with the credentials of a secret.
@@ -105,7 +105,6 @@ fn runs(tool: &Tool) -> ToolRuns {
     ToolAction::Http(request) => ToolRuns::Http {
       method: request.method(),
       url: request.url().to_owned(),
-      bearer: tool.secret().is_some(),
       arguments: request
         .inputs()
         .iter()

@@ -54,7 +54,9 @@
     },
     "line": {
       "ready": "Ready here",
-      "readyVersion": "Ready here · {{version}}",
+      "withVersion": "{{words}} · {{version}}",
+      "everyRun": "Added to every run",
+      "toolUsedBy": "{{kind}} · used by {{names}}",
       "off": "Off on this computer",
       "undecided": "Can't tell yet whether it is ready here",
       "many": "{{count}} things missing here",
@@ -198,7 +200,6 @@
         "thisYear": "{{month}} {{day}}",
         "otherYear": "{{month}} {{day}}, {{year}}"
       },
-      "usedBy": "used by {{names}}",
       "chip": {
         "pathNotSet": "Needs the program path here",
         "pathGone": "Program missing here"
@@ -326,7 +327,6 @@
         "secretById": "Secret named by id"
       },
       "note": {
-        "secret": "Not ready here: {{secret}} needs a value. Runs whose pipeline uses {{name}} don't start on this computer until then.",
         "byId": "This tool names its secret by id; it can't be filled in here yet. Ask a team admin to publish {{name}} again."
       }
     }

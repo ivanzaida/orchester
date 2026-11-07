@@ -152,7 +152,12 @@ fn team_hub_other_a4_an_instruction_shows_its_text_where_it_is_added_and_who_use
       .starts_with("v1 · published by Olena · ")
   );
   assert_eq!(agents.text("team-hub-chip-here-label"), "Ready here");
-  assert_eq!(agents.text("team-hub-plain-end"), "added to every run");
+  assert_eq!(agents.text("team-hub-chips-end"), "added to every run");
+  assert_eq!(
+    agents.text(&format!("team-hub-row-{rules}-line")),
+    "Added to every run · v1",
+    "a ready row says where it is added, then its version"
+  );
   assert_eq!(agents.text("team-hub-from-team-added-value"), "Every run");
   assert_eq!(agents.text("team-hub-from-team-when-value"), "When an agent starts");
   assert_eq!(agents.text("team-hub-from-team-used-by-value-0-label"), "Builder");
@@ -214,7 +219,7 @@ fn team_hub_other_an_instruction_for_a_role_says_which_agents_and_when() {
     agents.text("team-hub-from-team-used-by-value"),
     "No profile uses it yet"
   );
-  assert_eq!(agents.text("team-hub-plain-end"), "added to every run");
+  assert_eq!(agents.text("team-hub-chips-end"), "added to every run");
   show(&mut agents, HubFilter::Instructions, (handoff, "Handoff"));
   assert_eq!(
     agents.text("team-hub-from-team-added-value"),
@@ -222,7 +227,7 @@ fn team_hub_other_an_instruction_for_a_role_says_which_agents_and_when() {
   );
   assert_eq!(agents.text("team-hub-from-team-when-value"), "When an agent resumes");
   assert!(
-    !agents.exists("team-hub-plain-end"),
+    !agents.exists("team-hub-chips-end"),
     "nobody uses it and it is not every run's"
   );
   agents.click("team-hub-action-edit");
@@ -265,7 +270,12 @@ fn team_hub_other_a5_a_skill_shows_its_description_files_and_who_uses_it() {
     "references/checklist.md"
   );
   assert_eq!(agents.text("team-hub-from-team-used-by-value-0-label"), "Builder");
-  assert_eq!(agents.text("team-hub-plain-end"), "used by Builder");
+  assert_eq!(agents.text("team-hub-chips-end"), "used by Builder");
+  assert_eq!(
+    agents.text(&format!("team-hub-row-{tests}-line")),
+    "Builder · v1",
+    "a ready row names the profiles that use it, then its version"
+  );
   assert!(
     !agents.exists("team-hub-from-team-added"),
     "a skill of every run says no scope"
@@ -299,7 +309,7 @@ fn team_hub_other_a6_a_tool_that_names_its_secret_by_id_says_it_cannot_be_filled
       .starts_with("v1 · published by Olena · ")
   );
   assert_eq!(agents.text("team-hub-chip-here-label"), "Secret named by id");
-  assert_eq!(agents.text("team-hub-used-by"), "used by Builder");
+  assert_eq!(agents.text("team-hub-chips-end"), "used by Builder");
   assert_eq!(agents.text("team-hub-from-team-kind-value"), "HTTP request");
   assert_eq!(
     agents.text("team-hub-from-team-description-value"),
@@ -320,6 +330,13 @@ fn team_hub_other_a6_a_tool_that_names_its_secret_by_id_says_it_cannot_be_filled
   );
   assert_eq!(agents.text("team-hub-from-team-approval-value"), "Yes");
   assert!(!agents.text("team-hub-from-team-secret-value").is_empty());
+  // A long value that has no place to break stays inside its box.
+  let (rows, rows_width, _) = bounds(&mut agents, "team-hub-from-team-rows");
+  let (headers, headers_width, _) = bounds(&mut agents, "team-hub-from-team-headers-value");
+  assert!(
+    headers + headers_width <= rows + rows_width,
+    "{headers} + {headers_width} past {rows} + {rows_width}"
+  );
   // On this computer: visibly not fillable, with no action to take for it.
   assert_eq!(
     agents.text("team-hub-secret-by-id-words"),
@@ -422,19 +439,14 @@ fn team_hub_other_every_panel_pins_its_bar_at_the_same_height() {
     agents.until("the bar", |s| s.exists("team-hub-actions"));
     let (_, _, bar) = bounds(&mut agents, "team-hub-actions");
     assert!((bar - height).abs() < 0.5, "{filter:?}: {bar}");
+    if agents.exists("team-hub-action-edit") {
+      let (_, _, button) = bounds(&mut agents, "team-hub-action-edit");
+      assert!(
+        (button - 30.0).abs() < 0.5,
+        "{filter:?}: the pinned action is 30 high, not {button}"
+      );
+    }
   }
-}
-
-#[test]
-fn team_hub_other_a_tool_panel_never_carries_a_dialog_over_to_another_tool() {
-  let mut agents = Agents::new(true);
-  team(&agents);
-  let (cargo, orders) = (command(&agents), database(&agents));
-  show(&mut agents, HubFilter::Tools, (cargo, "cargo-check"));
-  assert_eq!(agents.text("team-hub-panel-title"), "cargo-check");
-  show(&mut agents, HubFilter::Tools, (orders, "orders-report"));
-  assert_eq!(agents.text("team-hub-panel-title"), "orders-report");
-  assert!(!agents.exists("team-hub-secret-dialog"));
 }
 
 #[test]

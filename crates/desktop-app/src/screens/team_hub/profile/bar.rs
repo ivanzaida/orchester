@@ -93,7 +93,8 @@ pub(super) fn bar(
     ButtonKind::Primary,
     words.action(ctx, fix),
   )
-  .icon(fix.glyph());
+  .icon(fix.glyph())
+  .pinned();
   let button = match busy {
     Busy::Idle => button.press(press),
     Busy::Taking => button.loading(),

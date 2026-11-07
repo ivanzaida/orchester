@@ -131,7 +131,9 @@ impl Bar<'_> {
   }
 
   fn button(&self, ctx: &Ctx, step: &Step, kind: ButtonKind, key: &str, glyph: Icon) -> ActionButton {
-    let button = ActionButton::new(format!("team-hub-fix-{}", name(step)), kind, ctx.t(key)).icon(glyph);
+    let button = ActionButton::new(format!("team-hub-fix-{}", name(step)), kind, ctx.t(key))
+      .icon(glyph)
+      .pinned();
     match self.busy {
       Busy::Idle => button.press((self.press)(step)),
       Busy::Taking => button.loading(),

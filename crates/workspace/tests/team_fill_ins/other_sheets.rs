@@ -112,18 +112,12 @@ fn team_fill_ins_other_a_tool_sheet_says_what_it_runs_calls_and_names_by_id() {
   assert_eq!(sheet.description, "Issues");
   assert_eq!(sheet.secret, ToolSecret::ById(secret));
   assert_eq!(sheet.approval, Some(ApprovalMode::Never));
-  let ToolRuns::Http {
-    method,
-    url,
-    bearer,
-    arguments,
-  } = &sheet.runs
-  else {
+  let ToolRuns::Http { method, url, arguments } = &sheet.runs else {
     panic!("an HTTP tool: {:?}", sheet.runs)
   };
   assert_eq!(
-    (*method, url.as_str(), *bearer),
-    (HttpMethod::Get, "https://sentry.io/api/0/issues/", true)
+    (*method, url.as_str()),
+    (HttpMethod::Get, "https://sentry.io/api/0/issues/")
   );
   assert_eq!(
     arguments.iter().map(|a| (a.name.as_str(), a.place)).collect::<Vec<_>>(),

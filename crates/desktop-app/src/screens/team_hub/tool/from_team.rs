@@ -28,7 +28,7 @@ pub(super) fn kind(ctx: &Ctx, sheet: &TeamToolSheet) -> Arc<str> {
 pub(super) fn section(ctx: &Ctx, sheet: &TeamToolSheet) -> Column {
   let note = Text::new(&ctx.t("team_hub.profile.fromTeamNote"))
     .id("team-hub-from-team-note")
-    .variant(HubText::Hint.role())
+    .variant(HubText::PanelHint.role())
     .nowrap();
   let mut rows = vec![rows::row(
     "team-hub-from-team-kind",
@@ -89,12 +89,7 @@ fn runs_rows(ctx: &Ctx, sheet: &TeamToolSheet) -> Vec<Row> {
         ),
       ),
     ],
-    ToolRuns::Http {
-      method,
-      url,
-      bearer,
-      arguments,
-    } => {
+    ToolRuns::Http { method, url, arguments } => {
       let mut rows = vec![rows::row(
         "team-hub-from-team-request",
         &ctx.t("team_hub.tool.request"),
@@ -104,7 +99,7 @@ fn runs_rows(ctx: &Ctx, sheet: &TeamToolSheet) -> Vec<Row> {
           &format!("{} {url}", method_word(*method)),
         ),
       )];
-      if let (true, ToolSecret::ById(secret)) = (bearer, sheet.secret) {
+      if let ToolSecret::ById(secret) = sheet.secret {
         rows.push(rows::row(
           "team-hub-from-team-headers",
           &ctx.t("team_hub.tool.headers"),

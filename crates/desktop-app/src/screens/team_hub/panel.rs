@@ -10,9 +10,9 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Column, Row, ScrollVertical, Text},
+  components::{Column, Row, ScrollVertical, Text, TextOverflow},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -98,14 +98,14 @@ pub(super) fn head_of(entry: &Entry, (kind, version): (String, Option<String>), 
     .child(
       Text::new(&kind)
         .id("team-hub-panel-kind")
-        .variant(HubText::Status.role())
+        .variant(HubText::PanelWhere.role())
         .nowrap(),
     );
   if let Some(number) = version.or_else(|| entry.number.map(|number| number.to_string())) {
     where_ = where_.child(
       Text::new(&number)
         .id("team-hub-panel-version")
-        .variant(HubText::Hint.role())
+        .variant(HubText::PanelHint.role())
         .nowrap(),
     );
   }
@@ -116,12 +116,12 @@ pub(super) fn head_of(entry: &Entry, (kind, version): (String, Option<String>), 
       Column::new()
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
-        .spacing(ExtraSpacing::Tight.role())
+        .spacing(SpacingSize::Xs)
         .child(where_)
         .child(
           Text::new(&entry.name)
             .id("team-hub-panel-title")
-            .variant(TypographyStyle::Title),
+            .variant(HubText::PanelTitle.role()),
         ),
     )
     .with_children(end)
@@ -136,11 +136,17 @@ pub(super) fn edit_button(ctx: &Ctx, open: Open) -> Element {
 }
 
 pub(super) fn chips(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Row {
-  chips_saying(ctx, entry, words::chip(ctx, listing, entry))
+  chips_saying(ctx, entry, words::chip(ctx, listing, entry), None)
 }
 
-/// [`chips`] whose second chip says `(words, tone)`.
-pub(super) fn chips_saying(ctx: &Ctx, entry: &Entry, (words, tone): (Arc<str>, BadgeTone)) -> Row {
+/// [`chips`] whose second chip says `(words, tone)` and, when there is `end`, with it at their end (`Time` `TAV5u`):
+/// who uses the resource or where it is added. It ends in an ellipsis when it runs out of room.
+pub(super) fn chips_saying(
+  ctx: &Ctx,
+  entry: &Entry,
+  (words, tone): (Arc<str>, BadgeTone),
+  end: Option<Arc<str>>,
+) -> Row {
   let team = match entry.number {
     Some(number) => ctx.t_args("team_hub.chip.team", [("version", number.to_string())]),
     None => ctx.t("team_hub.chip.teamUnnumbered"),
@@ -151,6 +157,20 @@ pub(super) fn chips_saying(ctx: &Ctx, entry: &Entry, (words, tone): (Arc<str>, B
     .align_items(Alignment::Center)
     .child(badge("team-hub-chip-team", BadgeTone::Neutral, &team))
     .child(badge("team-hub-chip-here", tone, &words))
+    .child(Row::new().flex(1.0))
+    .with_children(end.map(|end| {
+      Text::new(&end)
+        .id("team-hub-chips-end")
+        .variant(HubText::PanelHint.role())
+        .nowrap()
+        .min_width(Dimension::Px(0.0))
+        .text_overflow(TextOverflow::Elipsis)
+    }))
+}
+
+/// *used by Builder, Reviewer*: who uses the resource; nothing when no profile does.
+pub(super) fn used_by(ctx: &Ctx, names: &[String]) -> Option<Arc<str>> {
+  (!names.is_empty()).then(|| ctx.t_args("team_hub.panel.usedBy", [("names", names.join(", "))]))
 }
 
 /// *Ready here?*: the parts this computer lacks, one row each; none for a resource that lacks nothing.
@@ -185,17 +205,13 @@ fn readiness(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Option<Column> {
         Row::new()
           .spacing(SpacingSize::Sm)
           .align_items(Alignment::Center)
-          .child(
-            Text::new(&ctx.t("team_hub.readiness.title"))
-              .variant(HubText::Kind.role())
-              .color(PaletteColor::TextMuted),
-          )
+          .child(Text::new(&ctx.t("team_hub.readiness.title")).variant(HubText::PanelLabel.role()))
           .child(
             Text::new(&ctx.t_args(
               "team_hub.readiness.missing",
               [("count", missing.missing().len().to_string())],
             ))
-            .variant(HubText::Hint.role())
+            .variant(HubText::PanelHint.role())
             .color(PaletteColor::Warning),
           ),
       )
@@ -227,6 +243,7 @@ fn actions(ctx: &Ctx, entry: &Entry, shown: &Shown<'_>) -> Option<Element> {
   let open: Open = shown.navigation.to(route);
   let edit = ActionButton::new("team-hub-edit", ButtonKind::Primary, ctx.t("team_hub.panel.edit"))
     .icon(Icon::Pencil)
+    .pinned()
     .opens(open);
   Some(bar::bar(vec![edit.into()], None))
 }

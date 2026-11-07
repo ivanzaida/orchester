@@ -15,7 +15,7 @@ use orchester_core::{secret::SecretName, sharing::Missing};
 
 use super::rows::{self, Key, Sub};
 use crate::{
-  theme::{ControlHeight, ExtraSpacing, ExtraTypography, HubText, IconSize},
+  theme::{ControlHeight, ExtraSpacing, ExtraTypography, HubSpacing, HubText, IconSize},
   ui::icon::{Icon, icon},
 };
 
@@ -182,14 +182,14 @@ pub(super) fn nothing_here(id: &str, words: &str) -> Row {
   Row::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
+    .padding(Padding::symmetric(SpacingSize::Md, HubSpacing::RowY.role()))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(icon(Icon::CircleCheck, IconSize::Base, PaletteColor::Success))
     .child(
       Text::new(words)
         .id(format!("{id}-text"))
-        .variant(HubText::Value.role())
+        .variant(ExtraTypography::Prose.role())
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )

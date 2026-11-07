@@ -298,6 +298,7 @@ fn detail(
   let plain = |sheet| plain::Props {
     project: id,
     may_change,
+    listing: listing.clone(),
     entry: selected.clone(),
     sheet,
   };
@@ -334,10 +335,8 @@ fn detail(
       tool::panel(
         ctx,
         tool::Props {
-          repo_root,
           project: id,
           may_change,
-          reading,
           listing: listing.clone(),
           entry: selected.clone(),
           sheet: sheet.clone(),

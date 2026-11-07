@@ -1,45 +1,32 @@
-//! *On this computer* (`On this computer` in `Agents · Tools` `u9Hcc`): the value of the secret the tool takes, with
-//! *No value here* until a person adds one, and under the rows how the tool stands. A secret named by id cannot be
-//! filled in here yet: the row says so and has no action. Nothing here is sent to the team.
+//! *On this computer* (`On this computer` in `Agents · Tools` `u9Hcc`): a secret named by id cannot be filled in here
+//! yet, so the row says so and has no action; a tool that names none has nothing to fill in. Nothing here is sent to
+//! the team.
 
 use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
   components::{Column, Row, Text},
 };
-use orchester_core::sharing::Missing;
 use orchester_workspace::agents::team_tool::{TeamToolSheet, ToolSecret};
 
 use crate::{
   screens::team_hub::{
     fill::{self, Tone},
     model::Entry,
-    rows::{self, Key, Sub},
+    rows::{self, Sub},
   },
   theme::HubText,
   ui::icon::Icon,
 };
 
-pub(super) fn section(ctx: &Ctx, entry: &Entry, sheet: &TeamToolSheet, missing: &[Missing]) -> Column {
-  let mut rows = Vec::new();
-  let mut named = Vec::new();
-  for part in missing {
-    if let Missing::Secret { name } | Missing::SecretUnreadable { name } = part
-      && !named.contains(name)
-    {
-      named.push(name.clone());
-      rows.push(fill::secret_row(ctx, Key::Wide, name, fill::value_of(missing, name)));
-    }
-  }
-  if matches!(sheet.secret, ToolSecret::ById(_)) {
-    rows.push(by_id_row(ctx));
-  }
-  if rows.is_empty() {
-    rows.push(fill::nothing_here(
+pub(super) fn section(ctx: &Ctx, entry: &Entry, sheet: &TeamToolSheet) -> Column {
+  let rows = match sheet.secret {
+    ToolSecret::ById(_) => vec![by_id_row(ctx)],
+    ToolSecret::None => vec![fill::nothing_here(
       "team-hub-nothing",
       &ctx.t("team_hub.tool.nothingHere"),
-    ));
-  }
-  rows::on_this_computer(ctx, rows, note(ctx, entry, sheet, missing).map(Into::into))
+    )],
+  };
+  rows::on_this_computer(ctx, rows, note(ctx, entry, sheet).map(Into::into))
 }
 
 /// The secret the tool names by id: its value cannot be set here yet, so the row says so and holds no control.
@@ -60,35 +47,15 @@ fn by_id_row(ctx: &Ctx) -> Row {
   rows::row(id, &ctx.t("team_hub.tool.valueLabel"), Some(sub), value)
 }
 
-/// What stands under the rows, in the color of how the tool stands: nothing for a tool that is ready.
-fn note(ctx: &Ctx, entry: &Entry, sheet: &TeamToolSheet, missing: &[Missing]) -> Option<Row> {
-  let name = entry.name.as_str();
-  let (tone, words) = match missing.first() {
-    Some(Missing::Secret { name: secret }) => (
+/// What stands under the rows: that a secret named by id cannot be filled in here yet; nothing for a tool that names
+/// none.
+fn note(ctx: &Ctx, entry: &Entry, sheet: &TeamToolSheet) -> Option<Row> {
+  match sheet.secret {
+    ToolSecret::ById(_) => Some(fill::note(
+      "team-hub-tool-note",
       Tone::Warning,
-      ctx.t_args(
-        "team_hub.tool.note.secret",
-        [("secret", secret.to_string()), ("name", name.to_owned())],
-      ),
-    ),
-    Some(Missing::SecretUnreadable { name: secret }) => (
-      Tone::Danger,
-      ctx.t_args("team_hub.mcp.note.unreadable", [("name", secret.to_string())]),
-    ),
-    // Parts of a profile, an MCP server, a reviewer or a local project: a tool of the team has none of them.
-    Some(
-      Missing::Connection { .. }
-      | Missing::DecisionConnection { .. }
-      | Missing::McpOff { .. }
-      | Missing::McpProgram { .. }
-      | Missing::McpUnsupported { .. }
-      | Missing::LocalMcpProgram { .. }
-      | Missing::LocalSecret { .. },
-    )
-    | None => match sheet.secret {
-      ToolSecret::ById(_) => (Tone::Warning, ctx.t_args("team_hub.tool.note.byId", [("name", name)])),
-      ToolSecret::None => return None,
-    },
-  };
-  Some(fill::note("team-hub-tool-note", tone, &words))
+      &ctx.t_args("team_hub.tool.note.byId", [("name", entry.name.as_str())]),
+    )),
+    ToolSecret::None => None,
+  }
 }
