@@ -280,7 +280,7 @@ fn request(
         return Err(ToolError::refused(refusal.code(), vec![refusal.message()]));
       }
       let (step, note) = return_target(view, (step, note), &number)?;
-      Request::Command(return_work::command(view, step, (note, None), by))
+      Request::Command(return_work::command(view, step, (note, None), (None, by)))
     }
     (_, Choice::ReturnTo { .. }) => {
       let refusal = return_work::ReturnRefusal::NotEnded;
@@ -351,7 +351,11 @@ fn decision(view: &RunView, (choice, by): (&Choice, Answerer), number: &str) -> 
     }
     Choice::ReturnTo { step, note } => {
       let (step, note) = return_target(view, (step, note), number)?;
-      Ok(StuckDecision::ReturnTo { step, note })
+      Ok(StuckDecision::ReturnTo {
+        step,
+        note,
+        profile: None,
+      })
     }
     _ => Err(refused("choice_not_offered", "appMcp.errors.choiceNotOffered", number)),
   }
@@ -430,7 +434,7 @@ fn resolve_conflicts(
       shown.key.clone()
     }
   };
-  let command = return_work::resolve_command(view, target, (&job.conflicts, note), by)
+  let command = return_work::resolve_command(view, target, (&job.conflicts, note), (None, by))
     .ok_or_else(|| ToolError::refused("no_base_branch", vec![Message::new("appMcp.errors.noBaseBranch")]))?;
   Ok(Request::Command(command))
 }

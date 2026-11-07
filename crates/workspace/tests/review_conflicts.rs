@@ -73,7 +73,7 @@ fn return_to_resolve(repo: &Repo) {
   };
   let note = ReviewNote::new("Resolve.").expect("note");
   let events = run
-    .return_ended(&step, (&note, Some(&conflicts)), Answerer::Person, at(30))
+    .return_ended(&step, (&note, Some(&conflicts)), None, Answerer::Person, at(30))
     .expect("returned");
   db.append_events(&run, &events).expect("events");
   let execution = run.current_attempt().expect("attempt").executions()[0].id();
@@ -183,10 +183,11 @@ fn review_conflicts_work_after_the_merge_clears_them_and_the_run_is_reviewed_afr
 #[test]
 fn review_conflicts_ask_the_agent_returns_the_run_to_implement_with_the_conflicts_as_data() {
   let repo = Repo::new();
-  let refused = conflicts::resolve::begin(repo.root(), &worktrees(&repo), repo.run).expect_err("nothing conflicts");
+  let refused =
+    conflicts::resolve::begin(repo.root(), &worktrees(&repo), repo.run, None).expect_err("nothing conflicts");
   assert_eq!(refused, ReviewRefusal::NoConflicts);
   conflict_with_main(&repo);
-  let command = conflicts::resolve::begin(repo.root(), &worktrees(&repo), repo.run).expect("the command");
+  let command = conflicts::resolve::begin(repo.root(), &worktrees(&repo), repo.run, None).expect("the command");
   let Command::ReturnRun(returned) = command else {
     panic!("a return of the run's work: {command:?}");
   };

@@ -350,7 +350,7 @@ impl Conflicts<'_> {
       .get()
       .0
       .filter(|key| return_work::writing_targets(view).iter().any(|step| step.key == *key));
-    let returned = |by| return_work::resolve_command(view, chosen.clone()?, (self.files, None), by);
+    let returned = |by| return_work::resolve_command(view, chosen.clone()?, (self.files, None), (None, by));
     let (Some(person), Some(automation)) = (returned(Answerer::Person), returned(Answerer::Automation)) else {
       return button.disabled();
     };

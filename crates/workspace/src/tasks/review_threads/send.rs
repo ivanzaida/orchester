@@ -9,7 +9,7 @@
 use std::path::Path;
 
 use orchester_core::{
-  id::{ReviewMessageId, RunId},
+  id::{ResourceId, ReviewMessageId, RunId},
   review::{CommentState, ReviewFailure, ReviewMessage, ReviewThread, Said, send_note},
   run::Answerer,
   time::Timestamp,
@@ -18,7 +18,7 @@ use orchester_ipc::Command;
 use orchester_store::ProjectDb;
 
 use super::{
-  ReviewRefusal,
+  ReviewRefusal, chosen,
   recover::{self, Holding},
   waiting,
 };
@@ -42,10 +42,18 @@ pub struct Sending {
 
 /// Keeps every comment waiting unsent on `run` of the project at `root` sending, and gives the command that returns the
 /// run's work to its implementing step with them, to be handed to the runner with [`send`]. Refused while no comment
-/// waits, and as a return of the run's work is refused. The run's worktree is read through `worktrees`.
-pub fn begin(root: &Path, worktrees: &RunWorktrees, run: RunId) -> Result<Sending, ReviewRefusal> {
+/// waits, and as a return of the run's work is refused. The run's worktree is read through `worktrees`. `profile`: the
+/// agent profile the step runs with this return instead of the pipeline's (its latest published version; refused when
+/// it has none); the pipeline and later runs keep their agents.
+pub fn begin(
+  root: &Path,
+  worktrees: &RunWorktrees,
+  run: RunId,
+  profile: Option<ResourceId>,
+) -> Result<Sending, ReviewRefusal> {
   let mut db = ProjectDb::open(root)?;
   let stored = waiting(&db, run)?;
+  let chosen = chosen(&db, profile)?;
   let threads = recover::threads(&mut db, run)?;
   let unsent: Vec<(&ReviewThread, &ReviewMessage)> = threads
     .iter()
@@ -64,7 +72,7 @@ pub fn begin(root: &Path, worktrees: &RunWorktrees, run: RunId) -> Result<Sendin
   if let Some(refusal) = return_work::refusal(&detail, view, &worktree) {
     return Err(ReviewRefusal::Returned(refusal));
   }
-  let command = return_work::command(view, step, (note, None), Answerer::Person);
+  let command = return_work::command(view, step, (note, None), (chosen, Answerer::Person));
   let holding = Holding::hold(unsent.iter().map(|(_, comment)| comment.id()).collect());
   let sending = Said::Comment(CommentState::Sending {
     since: Timestamp::now(),

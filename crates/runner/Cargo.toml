@@ -257,6 +257,10 @@ name = "returned"
 required-features = ["test-agent"]
 
 [[test]]
+name = "returned_profile"
+required-features = ["test-agent"]
+
+[[test]]
 name = "resolve"
 required-features = ["test-agent"]
 

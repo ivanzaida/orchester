@@ -75,7 +75,11 @@ fn continued_return_the_person_applied_is_the_orchestrators() {
     .expect("claimed")
     .expect("it waited");
   let note = ReviewNote::new(NOTE).expect("a note");
-  let decision = StuckDecision::ReturnTo { step: target, note };
+  let decision = StuckDecision::ReturnTo {
+    step: target,
+    note,
+    profile: None,
+  };
   let events = run.decide_stuck(&decision, now).expect("returned");
   db.append_events(&run, &events).expect("recorded");
   let attempt = run.current_attempt().expect("the new attempt");

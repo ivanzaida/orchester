@@ -7,10 +7,16 @@
 //! worktree, with the note [`conflict_note`] words and the conflicts as data.
 
 use orchester_core::{
-  resource::StepKey,
-  run::{Answerer, AttemptReason, BranchName, MergeConflicts, ReviewNote, Run, RunStatus, StuckDecision},
+  id::ResourceId,
+  resource::{AgentProfile, StepKey},
+  run::{
+    Answerer, AttemptReason, BranchName, ChosenProfile, MergeConflicts, PinnedVersion, ReviewNote, Run, RunStatus,
+    StuckDecision,
+  },
+  store::ResourceStore,
 };
 use orchester_ipc::{Command, WorkReturn};
+use orchester_store::{ProjectDb, StoreError};
 
 use super::{
   detail::{RunView, StepView, TaskDetail},
@@ -116,27 +122,42 @@ pub fn implementing_step(view: &RunView) -> Option<StepKey> {
 }
 
 /// The command that returns `view`'s work to `step` with `note`, to resolve `conflicts` when that is what it is for,
-/// as `by` decides it on the run as `view` read it.
+/// as `by` decides it on the run as `view` read it. `profile`: the agent profile `step` runs with this time
+/// ([`choose_profile`]); `None` runs the pipeline's.
 pub fn command(
   view: &RunView,
   step: StepKey,
   (note, conflicts): (ReviewNote, Option<MergeConflicts>),
-  by: Answerer,
+  (profile, by): (Option<ChosenProfile>, Answerer),
 ) -> Command {
   match view.run.status() {
     RunStatus::WaitingForPerson(_) => Command::DecideStuckRun {
       run: view.id(),
-      decision: StuckDecision::ReturnTo { step, note },
+      decision: StuckDecision::ReturnTo { step, note, profile },
     },
     _ => Command::ReturnRun(WorkReturn {
       run: view.id(),
       step,
       note,
       conflicts,
+      profile,
       by,
       expected: view.run.last_sequence(),
     }),
   }
+}
+
+/// The latest published version of agent profile `profile` of the project `db` holds, and its model, to run a returned
+/// step with this time instead of the pipeline's agent; `None` when it has no published version. The runner reads the
+/// version again and refuses it when the run cannot run it ([`orchester_ipc::Rejection::ProfileNotUsable`]).
+pub fn choose_profile(db: &ProjectDb, profile: ResourceId) -> Result<Option<ChosenProfile>, StoreError> {
+  Ok(
+    db.latest_version::<AgentProfile>(profile)?
+      .map(|version| ChosenProfile {
+        profile: PinnedVersion::of(profile, &version),
+        model: version.body().model().clone(),
+      }),
+  )
 }
 
 /// The note an agent reads when the conflicts of a merge into `base` go back to it; the files that conflicted reach
@@ -169,7 +190,7 @@ pub fn resolve_command(
   view: &RunView,
   step: StepKey,
   (files, extra): (&[String], Option<&str>),
-  by: Answerer,
+  (profile, by): (Option<ChosenProfile>, Answerer),
 ) -> Option<Command> {
   let base = view.run.base_branch()?;
   let conflicts = MergeConflicts {
@@ -177,7 +198,7 @@ pub fn resolve_command(
     files: files.to_vec(),
   };
   let note = conflict_note_with(base, extra);
-  Some(command(view, step, (note, Some(conflicts)), by))
+  Some(command(view, step, (note, Some(conflicts)), (profile, by)))
 }
 
 /// The step `run`'s current attempt returned its work to, to resolve a merge's conflicts, and what it resolves,

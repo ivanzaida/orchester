@@ -10,16 +10,17 @@
 use super::{
   answer::Answerer,
   attempt::StepExecution,
+  chosen_profile::ChosenProfile,
   error::RunError,
   event::{PlannedExecution, RunEvent, RunEventKind},
   plan::ReviewNote,
-  snapshot::StepExecutor,
+  snapshot::{PinnedVersion, StepExecutor},
   state::Run,
   status::{AttemptReason, AttemptStatus, MergeConflicts, RunFailure, RunStatus, StepStatus},
 };
 use crate::{
   id::{AttemptId, StepExecutionId},
-  resource::StepKey,
+  resource::{ModelId, StepKey},
   time::Timestamp,
 };
 
@@ -60,11 +61,13 @@ impl Run {
 
   /// Reopens the ended run in a new attempt from agent step `step` (one of [`Run::ended_return_targets`]), whose
   /// prompt carries `note` as the instruction of `by` (a person, or automation acting for one), and the `conflicts`
-  /// of a merge it resolves, as data.
+  /// of a merge it resolves, as data. `profile`: the agent profile version the step runs with this time instead of the
+  /// snapshot's ([`Run::executing_agent`]); the caller has checked that it can run (the core does not know bodies).
   pub fn return_ended(
     &mut self,
     step: &StepKey,
     (note, conflicts): (&ReviewNote, Option<&MergeConflicts>),
+    profile: Option<ChosenProfile>,
     by: Answerer,
     now: Timestamp,
   ) -> Result<Vec<RunEvent>, RunError> {
@@ -88,6 +91,7 @@ impl Run {
           return_to: step.clone(),
           note: note.clone(),
           conflicts: conflicts.cloned(),
+          profile,
         },
         executions,
       })
@@ -141,6 +145,7 @@ impl Run {
       return_to,
       note,
       conflicts,
+      ..
     } = attempt.reason()
     else {
       return None;
@@ -150,5 +155,33 @@ impl Run {
       .map(StepExecution::step)
       .filter(|step| *step == return_to)
       .map(|_| (note, conflicts.as_ref()))
+  }
+
+  /// The agent profile version and the model `execution` runs with: the profile a person chose when they returned the
+  /// work to its step ([`AttemptReason::Returned`], [`AttemptReason::ReturnedAfterEnd`]), for the execution of that
+  /// step in the attempt that returned it only, else the snapshot's. `None` for a step that is not an agent step.
+  pub fn executing_agent(&self, execution: StepExecutionId) -> Option<(&PinnedVersion, &ModelId)> {
+    let attempt = self
+      .attempts()
+      .iter()
+      .find(|attempt| attempt.execution(execution).is_some())?;
+    let step = attempt.execution(execution)?.step();
+    let chosen = match attempt.reason() {
+      AttemptReason::Returned {
+        return_to,
+        profile: Some(chosen),
+        ..
+      }
+      | AttemptReason::ReturnedAfterEnd {
+        return_to,
+        profile: Some(chosen),
+        ..
+      } if return_to == step => Some((&chosen.profile, &chosen.model)),
+      _ => None,
+    };
+    chosen.or_else(|| match self.snapshot().step(step)?.executor() {
+      StepExecutor::Agent { profile, model, .. } => Some((profile, model)),
+      StepExecutor::Tool { .. } => None,
+    })
   }
 }

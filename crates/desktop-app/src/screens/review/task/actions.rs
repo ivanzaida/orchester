@@ -213,7 +213,7 @@ async fn apply(reach: &Reach, write: Write) -> Result<Landed, ReviewRefusal> {
     }
     Write::Send => {
       let worktrees = RunWorktrees::through_runner(&reach.runners, (&reach.root, reach.open.project.name().as_str()));
-      let sending = blocking(move || send::begin(&root, &worktrees, run)).await?;
+      let sending = blocking(move || send::begin(&root, &worktrees, run, None)).await?;
       shown(reach).await;
       handed(send::send(&reach.runners, &reach.open, &sending).await)
     }
@@ -235,7 +235,7 @@ async fn apply(reach: &Reach, write: Write) -> Result<Landed, ReviewRefusal> {
     }
     Write::Resolve => {
       let worktrees = RunWorktrees::through_runner(&reach.runners, (&reach.root, reach.open.project.name().as_str()));
-      let command = blocking(move || conflicts::resolve::begin(&root, &worktrees, run)).await?;
+      let command = blocking(move || conflicts::resolve::begin(&root, &worktrees, run, None)).await?;
       reach.hand_offs.released().await;
       conflicts::resolve::send(&reach.runners, &reach.open, command).await?;
       Ok(Landed::Resolving)

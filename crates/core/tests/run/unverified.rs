@@ -125,6 +125,7 @@ fn unverified_return_to_implement_refuses_checks_on_the_unchanged_revision() {
   let decision = StuckDecision::ReturnTo {
     step: key("implement"),
     note: note("Add the missing fixture."),
+    profile: None,
   };
   logged.apply(|run| run.decide_stuck(&decision, at(50)));
   logged.pass("implement");
@@ -165,6 +166,7 @@ fn unverified_returning_the_work_again_starts_where_this_attempt_returned_it() {
   let decision = StuckDecision::ReturnTo {
     step: key("plan"),
     note: note("Plan the missing fixture."),
+    profile: None,
   };
   logged.apply(|run| run.decide_stuck(&decision, at(50)));
   let mut plan = logged.propose("plan", "1. Add the fixture.", &[]);

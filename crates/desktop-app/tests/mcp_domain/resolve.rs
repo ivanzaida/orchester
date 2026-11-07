@@ -130,6 +130,7 @@ fn domain_ask_an_agent_returns_the_conflicting_run_to_its_writing_step() {
     return_to,
     note,
     conflicts,
+    ..
   } = returned.attempts()[run.attempts().len()].reason().clone()
   else {
     panic!("a return after the run ended: {:?}", returned.attempts().last());

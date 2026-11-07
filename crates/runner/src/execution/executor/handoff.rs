@@ -11,7 +11,7 @@ use orchester_core::{
   connection::stream::{AgentEvent, MemoryNotSavedReason, RunnerProblem},
   id::StepExecutionId,
   memory::{AgentProvenance, Handoff, StepFate},
-  run::{Run, StepExecutor, StepResult},
+  run::{Run, StepResult},
   store::ActivityStore,
   time::Timestamp,
 };
@@ -126,9 +126,7 @@ impl Keeper<'_> {
 /// The agent that worked on `execution`: its profile, run, step and execution.
 pub(super) fn provenance(run: &Run, execution: StepExecutionId) -> Option<AgentProvenance> {
   let step = run.execution(execution)?.step().clone();
-  let StepExecutor::Agent { profile, .. } = run.snapshot().step(&step)?.executor() else {
-    return None;
-  };
+  let (profile, _) = run.executing_agent(execution)?;
   Some(AgentProvenance {
     profile: profile.resource,
     run: run.id(),
