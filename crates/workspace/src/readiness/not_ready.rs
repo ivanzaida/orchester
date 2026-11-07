@@ -7,7 +7,7 @@
 use orchester_core::{
   connection::AgentProvider,
   id::ResourceId,
-  resource::VersionNumber,
+  resource::{ResourceKind, VersionNumber},
   sharing::{ConnectionProblem, LocalProgramProblem, McpUnsupported, Missing, ProgramProblem},
 };
 use serde::{Deserialize, Serialize};
@@ -282,7 +282,9 @@ impl NotReadyHere {
   }
 }
 
-/// The first resource of `readiness` that lacks the secret `missing` is; `None` for any other part.
+/// The resource of `readiness` that lacks the secret `missing` is, where the person sets the value: the MCP server or
+/// tool that needs it, and a profile only when no server or tool does (a profile lacks the secret of the servers it
+/// chooses, which the server itself shows). `None` for any other part.
 fn secret_owner(readiness: &ProjectReadiness, missing: &Missing) -> Option<ResourceId> {
   if !matches!(
     missing,
@@ -290,10 +292,15 @@ fn secret_owner(readiness: &ProjectReadiness, missing: &Missing) -> Option<Resou
   ) {
     return None;
   }
-  readiness
-    .resources()
-    .iter()
-    .find(|found| found.standing().missing().contains(missing))
+  let lacking = || {
+    readiness
+      .resources()
+      .iter()
+      .filter(|found| found.standing().missing().contains(missing))
+  };
+  lacking()
+    .find(|found| matches!(found.kind(), ResourceKind::McpServer | ResourceKind::Tool))
+    .or_else(|| lacking().next())
     .map(ResourceReadiness::resource)
 }
 

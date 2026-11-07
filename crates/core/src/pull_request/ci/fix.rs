@@ -55,6 +55,9 @@ pub enum FixedBy {
 pub enum FixEventKind {
   /// The failing checks went to the run's agent as message `message`.
   Sent { message: MessageId, by: FixedBy },
+  /// The message `message` of a Fix CI sent before waits: running the task again with it started nothing, because its
+  /// pipeline is not ready on this computer. It goes once the person fixed what is missing and ran the task again.
+  NotReady { message: MessageId },
   /// *Fix CI automatically* reached its limit on a failure it did not send: the run waits for the person.
   Stopped { limit: FixLimit },
 }

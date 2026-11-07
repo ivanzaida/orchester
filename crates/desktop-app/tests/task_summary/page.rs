@@ -110,6 +110,15 @@ impl Page {
     key
   }
 
+  /// Shows `view` of the task `key`, once its header does.
+  pub fn show(&mut self, key: &str, view: TaskView) {
+    let page = ProjectPage::Task(key.parse().expect("a task key"), view);
+    self.window.navigation().go(Route::Project(self.project, page));
+    self
+      .window
+      .until("the task's header", |window| window.texts("task-title-row").is_some());
+  }
+
   /// The key of the task titled `title`.
   pub fn key_of(&self, title: &str) -> String {
     self

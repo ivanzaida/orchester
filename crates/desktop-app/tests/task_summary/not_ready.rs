@@ -4,10 +4,10 @@
 //! on Design pass, which runs a profile whose two MCP servers start programs this computer does not have. Needs `git`.
 
 use orchester_app::{
-  routes::{ProjectPage, Route},
+  routes::{ProjectPage, Route, TaskTab, TaskView},
   ui::icon::Icon,
 };
-use orchester_core::store::{RunStore, TaskStore};
+use orchester_core::store::{McpServerStore, RunStore, TaskStore};
 use orchester_store::ProjectDb;
 
 use crate::Page;
@@ -16,8 +16,13 @@ const STATE: &str = "draft on a pipeline that is not ready here";
 
 /// The window on KON-1 after Run was pressed and the card showed.
 fn refused() -> Page {
+  refused_task().0
+}
+
+/// [`refused`], and the key of the task.
+fn refused_task() -> (Page, String) {
   let mut page = Page::seeded_with_runner("picker-readiness");
-  page.open(STATE);
+  let key = page.open(STATE);
   // Run is locked until the runner is connected.
   page.wait("the runner", |window| {
     window
@@ -28,7 +33,7 @@ fn refused() -> Page {
   });
   page.click("task-run");
   page.wait("the not-ready card", |window| window.texts("task-not-ready").is_some());
-  page
+  (page, key)
 }
 
 #[test]
@@ -83,4 +88,54 @@ fn task_not_ready_open_agents_opens_the_agents_page() {
   page.click("task-not-ready-open-agents");
   let route = page.window.navigation().route_now();
   assert!(matches!(route, Route::Project(_, ProjectPage::Agents)), "{route:?}");
+}
+
+#[test]
+fn task_not_ready_on_another_tab_a_notice_says_it_and_opens_the_summary() {
+  let (mut page, key) = refused_task();
+  page.show(&key, TaskView::of(TaskTab::Conversation));
+  page
+    .window
+    .until("the notice", |window| window.texts("task-not-ready-notice").is_some());
+  let words = page.text("task-not-ready-notice");
+  assert!(words.contains("Not ready · nothing started"), "{words}");
+  assert!(
+    words.contains("Design pass is not ready, so nothing was started"),
+    "{words}"
+  );
+  assert!(!words.contains("computer"), "a local project's words: {words}");
+  assert!(!page.has("task-not-ready"), "the card is the Summary's");
+
+  page.click("task-not-ready-notice-open");
+  let route = page.window.navigation().route_now();
+  assert!(
+    matches!(&route, Route::Project(_, ProjectPage::Task(_, TaskView::Summary))),
+    "{route:?}"
+  );
+  page.wait("the card on the Summary", |window| {
+    window.texts("task-not-ready").is_some()
+  });
+  assert!(
+    !page.has("task-not-ready-notice"),
+    "the Summary shows the card, not the notice"
+  );
+}
+
+#[test]
+fn task_not_ready_coming_back_from_a_fix_asks_again_and_the_card_goes_once_nothing_is_missing() {
+  let (mut page, key) = refused_task();
+  page.click("task-not-ready-row-0-fix");
+  // The person fixes what the card lists (here: switches both servers off in Connections, which a run leaves out) and
+  // returns to the task.
+  let root = page.window.data.dir.path().join("repo-picker-readiness");
+  let mut db = ProjectDb::open(&root).expect("the project");
+  for mut server in db.mcp_servers().expect("servers") {
+    server.set_enabled(false);
+    db.save_mcp_server(&server).expect("saved");
+  }
+  drop(db);
+  page.show(&key, TaskView::of(TaskTab::Summary));
+  page.wait("the card to be asked again", |window| {
+    window.texts("task-not-ready").is_none()
+  });
 }

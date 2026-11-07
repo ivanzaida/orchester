@@ -276,11 +276,30 @@ pub fn run_action(ctx: &mut Ctx, services: RunServices) -> RunAction {
     async move {
       let (queued, claim) = match args {
         RunArgs::New { save, version } => queue(&services, save, version).await?,
-        RunArgs::Retry(queued) => (store_unsourced(&services, queued).await?, WorkClaim::default()),
+        RunArgs::Retry(queued) => {
+          ready_again(&services, &queued).await?;
+          (store_unsourced(&services, queued).await?, WorkClaim::default())
+        }
       };
       start(&services, queued, claim).await
     }
   })
+}
+
+/// Retry run asks again whether the queued task's pipeline is ready here: what was missing may be fixed, or still is,
+/// and then nothing is claimed. Create & run asked before it queued (`queue`), which took the claim, so `start` never
+/// asks and a refusal never leaves a claim behind.
+async fn ready_again(services: &RunServices, queued: &QueuedTask) -> Result<(), RunProblems> {
+  services
+    .ready
+    .0
+    .ready_to_start(&services.repo_root, &services.ready.1, queued.task)
+    .await
+    .map_err(|not_started| RunProblems {
+      messages: not_started.messages().into(),
+      queued: Some(queued.clone()),
+      saved: None,
+    })
 }
 
 /// Saves and queues the task, with the organization the form changed, and stores a new task's sources before its run
@@ -463,13 +482,6 @@ async fn start(services: &RunServices, queued: QueuedTask, claim: WorkClaim) -> 
     queued: Some(queued),
     saved: None,
   };
-  // Retry run asks again: what was missing may be fixed, or still is, and then no claim is taken.
-  services
-    .ready
-    .0
-    .ready_to_start(&services.repo_root, &services.ready.1, queued.task)
-    .await
-    .map_err(|not_started| refused(not_started.messages().into(), queued.clone()))?;
   let claim = claim.and(
     services
       .servers

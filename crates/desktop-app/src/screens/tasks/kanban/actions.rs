@@ -369,7 +369,16 @@ async fn make(project: &OpenProject, services: &Services, change: &Change, actor
     ChangeKind::Status(status) => {
       background::run(move || write::set_status_in(&root, &servers, task, (status, actor))).await
     }
-    ChangeKind::Queue => background::run(move || write::queue_draft_in(&root, &servers, task, actor)).await,
+    ChangeKind::Queue => {
+      // The runner starts a queued task in its turn without asking again, so a pipeline that is not ready here is
+      // refused now: the task stays a draft.
+      services
+        .workspace
+        .ready_to_start(&project.repo_root, &services.vault, task)
+        .await
+        .map_err(|refused| refused.short())?;
+      background::run(move || write::queue_draft_in(&root, &servers, task, actor)).await
+    }
     ChangeKind::ReturnToDraft => background::run(move || write::return_to_draft_in(&root, &servers, task, actor)).await,
     ChangeKind::Priority(priority) => {
       background::run(move || write::organize_in(&root, &servers, (task, actor), |value| value.with_priority(priority)))

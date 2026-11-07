@@ -97,6 +97,18 @@ fn draft_ready_to_run(kontur: &mut Kontur, pipeline: ResourceId) -> Result<(), S
 /// (Reviewer), beside the catalogue's, which this computer has no team form of.
 pub fn team(kontur: &mut Kontur) -> Result<(), SeedError> {
   team_hub::seed(kontur)?;
+  team_pipelines(kontur)
+}
+
+/// [`team`]'s resources for a copy that joins the stand-in team server (`team-not-ready`): the server serves Kontur's
+/// tasks on Team delivery and Team quick fix, and Team delivery needs a program path this computer has not set
+/// (`Task · Run · not ready here`, R1 `Ku0qu`, ORC-840).
+pub fn team_work(kontur: &mut Kontur) -> Result<(), SeedError> {
+  team_hub::resources(kontur)?;
+  team_pipelines(kontur)
+}
+
+fn team_pipelines(kontur: &mut Kontur) -> Result<(), SeedError> {
   let profile = |role: &str| -> Result<ResourceId, SeedError> {
     kontur
       .db

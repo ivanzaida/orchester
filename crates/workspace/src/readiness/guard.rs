@@ -8,10 +8,17 @@ use std::path::Path;
 use orchester_core::{
   id::{ResourceId, TaskId},
   secret::SecretVault,
+  store::TaskStore,
 };
+use orchester_store::ProjectDb;
 
 use super::{NotReadyHere, ReadinessError};
-use crate::{background, messages::Message, secrets::Vault, workspace::Workspace};
+use crate::{
+  background,
+  messages::{self, Message},
+  secrets::Vault,
+  workspace::Workspace,
+};
 
 /// Why a start was refused before anything was queued, claimed or started.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -64,6 +71,41 @@ impl Workspace {
         None => Ok(None),
       })
       .await
+  }
+
+  /// [`Self::ready_to_start`] for every member of a group that is queued together, which the runner then starts one
+  /// by one without asking again: `Ok` when each member's pipeline is ready here, else one message for each member
+  /// that is not, naming its task, and nothing is queued. A read that fails refuses the whole group on its own.
+  pub async fn ready_group_to_start(
+    &self,
+    repo_root: &Path,
+    vault: &Vault,
+    tasks: &[TaskId],
+  ) -> Result<(), Vec<Message>> {
+    let mut members = Vec::new();
+    for &task in tasks {
+      match self.ready_to_start(repo_root, vault, task).await {
+        Ok(()) => {}
+        Err(NotStarted::NotReadyHere(refusal)) => {
+          let root = repo_root.to_owned();
+          let key = background::run(move || {
+            ProjectDb::open(&root)?
+              .task(task)
+              .map(|found| found.map_or_else(|| task.to_string(), |found| found.key().to_string()))
+          })
+          .await
+          .map_err(|message| vec![message])?
+          .map_err(|error| vec![messages::store_error(&error)])?;
+          members.push(
+            Message::new("notReadyHere.groupMember")
+              .with("task", key)
+              .with("pipeline", refusal.pipeline().to_owned()),
+          );
+        }
+        Err(NotStarted::Unreadable(message)) => return Err(vec![message]),
+      }
+    }
+    if members.is_empty() { Ok(()) } else { Err(members) }
   }
 
   async fn refuse_unless_ready(

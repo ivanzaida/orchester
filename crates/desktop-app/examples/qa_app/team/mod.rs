@@ -114,9 +114,10 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
     | State::AdminWork
     | State::VersionRefused
     | State::TeamRunning
-    | State::EditConflict => {
+    | State::EditConflict
+    | State::NotReadyHere => {
       let ids = task_ids(services)?;
-      let role = member::serve_as(&server, state, (&ids, &team_pipelines(services)?));
+      let role = member::serve_as(&server, state, (&ids, &team_pipelines(services, state)?));
       let (kontur, id) = join_linked_as(&server, (services, runtime), (TasksAnswer::Serve, role))?;
       work::after_join(state, (&server, id), (services, runtime), (&kontur, &ids))?;
     }
@@ -150,7 +151,12 @@ fn task_ids(services: &Services) -> Result<HashMap<u32, String>, Box<dyn Error>>
 
 /// Kontur's Feature delivery and Quick fix as the team's pipelines, as Share leaves them (row 80): the tasks on the
 /// server name them by these ids. A Kontur without one, as the headless tests' is, names a team pipeline it lacks.
-fn team_pipelines(services: &Services) -> Result<member::TeamPipelines, Box<dyn Error>> {
+/// `team-not-ready` names the team's own Team delivery and Team quick fix instead.
+fn team_pipelines(services: &Services, state: State) -> Result<member::TeamPipelines, Box<dyn Error>> {
+  let (feature, quick) = match state {
+    State::NotReadyHere => ("team-delivery", "team-quick-fix"),
+    _ => ("feature-delivery", "quick-fix"),
+  };
   let mut db = ProjectDb::open(&kontur(services)?)?;
   let mut id_of = |slug: &str| -> Result<String, Box<dyn Error>> {
     let found = db
@@ -164,8 +170,8 @@ fn team_pipelines(services: &Services) -> Result<member::TeamPipelines, Box<dyn 
     Ok(pipeline.to_string())
   };
   Ok(member::TeamPipelines {
-    feature_delivery: id_of("feature-delivery")?,
-    quick_fix: id_of("quick-fix")?,
+    feature_delivery: id_of(feature)?,
+    quick_fix: id_of(quick)?,
   })
 }
 

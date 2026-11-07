@@ -127,7 +127,7 @@ pub use self::{
   slash::SlashText,
   sources::{SourcesSpacing, SourcesText},
   startup::{StartupSpacing, StartupText},
-  task::{TaskSpacing, TaskText},
+  task::{NOT_READY_ROW_HEIGHT, TaskSpacing, TaskText},
   task_form::{TaskFormSpacing, TaskFormText, sources_scrollbar},
   tasks::{
     DROP_SCRIM_OPACITY, DROP_VEIL_OPACITY, HELD_CARD_OPACITY, SKELETON_DELAY, SKELETON_DIM, SKELETON_FADE,

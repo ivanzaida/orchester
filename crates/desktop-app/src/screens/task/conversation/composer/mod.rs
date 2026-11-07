@@ -22,7 +22,6 @@ mod controls;
 mod feedback;
 mod kept;
 mod presses;
-mod ready;
 mod state;
 mod undelivered;
 mod words;

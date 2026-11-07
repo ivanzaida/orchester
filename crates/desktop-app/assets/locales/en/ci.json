@@ -80,6 +80,7 @@
       "failed": "CI failed on #{{number}} · {{names}}",
       "sent": "{{failed}} · Fix CI sent to {{agent}} at {{time}}",
       "sentAuto": "{{failed}} · sent Fix CI {{count}} of {{limit}} automatically",
+      "notReady": "{{failed}} · Fix CI is kept: the pipeline is not ready here, so nothing started · press Run again on the Summary when it is",
       "autoStopped": "Fix CI automatically stopped at {{count}} of {{limit}} · CI still fails on #{{number}} · needs you",
       "notRead": "CI not read on #{{number}} · {{why}}",
       "whyNotFound": "GitHub CLI not found",

@@ -34,7 +34,7 @@ use orchester_workspace::{
     answering::Answered,
     conversation::{
       composer::{ComposerMode, Then},
-      follow::{RunnerOf, Sent, Stored, tell},
+      follow::{RunnerOf, Sent, Stored, follow_seen, tell},
       outgoing::{Action, Context, Prepared, Way, plan_changes, prepare_in, store_answer_in},
       send_after_turn_as,
     },
@@ -469,7 +469,11 @@ async fn send(services: Services, request: Request) -> Result<Outcome, Message> 
     RunnerOf::Project(&request.project),
   );
   // On the task as the page showed it: Run again refuses one changed since.
-  let sent = super::ready::follow(&services, runner, &stored, (then, Some(request.revision))).await;
+  // A Run again on a pipeline that is not ready here starts nothing: the message waits, with why.
+  let ready = (&services.workspace, &services.vault);
+  let sent = follow_seen(runner, ready, &stored, (then, Some(request.revision)))
+    .await
+    .as_queued();
   if request.way == Way::StopTurn {
     stop_for_message(&services, &request.project, run).await;
   }

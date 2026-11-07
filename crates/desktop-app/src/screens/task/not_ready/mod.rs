@@ -6,6 +6,8 @@
 //! one thing ([`fix`]).
 
 mod fix;
+mod notice;
+mod reread;
 mod words;
 
 use lurq::{
@@ -19,6 +21,7 @@ use lurq::{
 };
 use orchester_workspace::readiness::{NotReadyHere, NotReadyPart};
 
+pub use self::notice::notice;
 use self::words::{Glyph, Words};
 use super::{
   TaskContext,
@@ -29,7 +32,7 @@ use crate::{
   navigation::{Navigation, link::Open},
   routes::{ProjectPage, Route},
   team::start::{Started, Stop},
-  theme::{CardsText, ExtraSpacing, ExtraTypography, IconSize, TaskText},
+  theme::{CardsText, ExtraSpacing, ExtraTypography, IconSize, NOT_READY_ROW_HEIGHT, TaskText},
   ui::{
     button::{ActionButton, ButtonKind},
     card::{CardSurface, card},
@@ -37,9 +40,6 @@ use crate::{
     pressable::opening,
   },
 };
-
-/// A part's row is this high (`F0SmT` in `B6ee9`); a long reason makes it taller.
-const ROW_HEIGHT: f32 = 40.0;
 
 /// What the person's last start was refused for, if it was because the task's pipeline is not ready here: a team
 /// task's start through its server, or a local project's run control.
@@ -57,8 +57,22 @@ pub fn refused(ctx: &mut Ctx, task: &TaskContext) -> Option<NotReadyHere> {
   }
 }
 
+/// The card the Summary shows for the last refusal of `task`'s start, if it was for not being ready here. The card
+/// asks again when it is shown and when the connections, tools or profiles change ([`reread`]), so it follows a person
+/// who fixed what it lists and came back.
+pub fn shown(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
+  let refusal = refused(ctx, task)?;
+  Some(ctx.mount_keyed::<reread::NotReadyCard>(
+    "task-not-ready-card",
+    reread::CardProps {
+      task: task.clone(),
+      refusal,
+    },
+  ))
+}
+
 /// The card of `refusal` for `task`.
-pub fn card_of(ctx: &mut Ctx, task: &TaskContext, refusal: &NotReadyHere) -> Element {
+fn card_of(ctx: &mut Ctx, task: &TaskContext, refusal: &NotReadyHere) -> Element {
   let team = task.team.is_some();
   let project = task.project.open.project.id();
   let navigation = Navigation::of(ctx);
@@ -160,7 +174,7 @@ fn row(
   let mut row = Row::new()
     .id(id.clone())
     .width(Dimension::Pct(100.0))
-    .min_height(Dimension::Px(ROW_HEIGHT))
+    .min_height(Dimension::Px(NOT_READY_ROW_HEIGHT))
     .align_items(Alignment::Center)
     .spacing(ExtraSpacing::Loose.role())
     .padding(Padding::symmetric(SpacingSize::Md, ExtraSpacing::Snug.role()))
@@ -182,7 +196,7 @@ fn row(
     row = row.border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border));
   }
   if let Some((fix, page)) = fix::of(part) {
-    let label = format!("{} →", ctx.t(fix.key()));
+    let label = ctx.t_args("summary.notReady.fix.arrow", [("fix", ctx.t(fix.key()).as_ref())]);
     row = row.child(
       opening(open(page))
         .id(format!("{id}-fix"))

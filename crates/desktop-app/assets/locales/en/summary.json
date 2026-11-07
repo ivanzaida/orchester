@@ -204,7 +204,13 @@
         "addValue": "Add value",
         "choose": "Choose",
         "addConnection": "Add connection",
-        "switchOn": "Switch on"
+        "switchOn": "Switch on",
+        "arrow": "{{fix}} →"
+      },
+      "notice": {
+        "body": "{{pipeline}} is not ready, so nothing was started. The Summary lists what is missing and how to fix it.",
+        "bodyTeam": "{{pipeline}} is not ready on this computer, so nothing was started. The Summary lists what is missing and how to fix it.",
+        "open": "Open Summary"
       }
     },
     "properties": {

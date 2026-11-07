@@ -119,7 +119,7 @@ impl Component for TaskSummary {
     };
     // A team task's line for a member and its claim come first (`team`).
     // A start that was refused because the pipeline is not ready on this computer lists what is missing (`not_ready`).
-    let not_ready = super::not_ready::refused(ctx, task).map(|refusal| super::not_ready::card_of(ctx, task, &refusal));
+    let not_ready = super::not_ready::shown(ctx, task);
     let column = team::top(ctx, task)
       .into_iter()
       .chain(not_ready)

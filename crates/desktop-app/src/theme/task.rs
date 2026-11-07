@@ -10,6 +10,10 @@ use lurq::{
 
 use super::{fonts::ICONS, typography::style};
 
+/// A part's row in the card of a run that is not ready here is this high (`F0SmT` in `B6ee9`); a long reason makes it
+/// taller.
+pub const NOT_READY_ROW_HEIGHT: f32 = 40.0;
+
 /// Text of the task page.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TaskText {

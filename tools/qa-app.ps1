@@ -63,6 +63,11 @@
 # with Create & run off; Team quick fix is Ready here, Quick fix and Feature delivery are Ready.
 # -Scenario picker-readiness also has KON-1, a draft with every detail on Design pass: open its Summary and press Run for the
 # not-ready card (`Task · Run · not ready`, L9 `f5CEX`), two MCP server programs to set, each fix opening its page.
+# -Scenario team-not-ready joins the stand-in team server with the team's resources of picker-readiness-team; its tasks run
+# Team delivery. Open KON-5 (API rate limits) and press Run for the team card (`Task · Run · not ready here`, R1 `Ku0qu`):
+# the program path of pencil-design, github's secret value and a connection are missing. Its fixes open the Agents hub on
+# the resource; a team MCP server's program path is set from the hub's MCP server panel, which ORC-833 builds, so
+# *Set path →* opens the server in the hub until then.
 #
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes

@@ -43,6 +43,12 @@ enum Here {
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   shared_config::admin(kontur)?;
+  resources(kontur)
+}
+
+/// The team's servers, profiles, tools, instructions and skills of [`seed`], without the link to a team server and its
+/// members, which a QA copy that joins a stand-in server makes itself.
+pub(super) fn resources(kontur: &mut Kontur) -> Result<(), SeedError> {
   let program =
     json!({"name": "pencil-design", "launch": {"kind": "program", "program": "pencil-mcp", "variables": []}});
   let github = remote("github", Some("GITHUB_TOKEN"));

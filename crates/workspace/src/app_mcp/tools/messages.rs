@@ -22,6 +22,7 @@ use crate::{
     services::{Services, blocking},
   },
   messages::Message,
+  readiness::NotStarted,
   tasks::{
     conversation::{
       SendError,
@@ -162,7 +163,12 @@ pub async fn send_message(
     pipeline: &pipeline,
   };
   let runner = (&services.runners, &services.servers, RunnerOf::Project(&project));
-  let sent = follow(runner, &stored, then).await;
+  let ready = (&services.workspace, &services.vault);
+  let sent = follow(runner, ready, &stored, then).await;
+  // Run again on a pipeline that is not ready here started nothing; the stored message stays queued for the next run.
+  if let Sent::NotReady(NotStarted::NotReadyHere(refused)) = sent {
+    return Err(ToolError::NotReadyHere(refused));
+  }
   let mut result = reply(&project, run, (action(&prepared.mode, way), sent), translate).await?;
   result["message"] = json!({ "id": message.to_string(), "attachments": [] });
   Ok(result)
@@ -247,11 +253,12 @@ async fn reply(
 ) -> Result<Value, ToolError> {
   let started = match &sent {
     Sent::Started(started) => Some(*started),
-    Sent::Taken | Sent::Queued(_) | Sent::AwaitsLimit => None,
+    Sent::Taken | Sent::Queued(_) | Sent::NotReady(_) | Sent::AwaitsLimit => None,
   };
   let (outcome, reasons) = match sent {
     Sent::Taken | Sent::Started(_) => ("taken", Vec::new()),
     Sent::Queued(reason) => ("queued", vec![translate.text(&reason)]),
+    Sent::NotReady(unreadable) => ("queued", vec![translate.text(&unreadable.short())]),
     Sent::AwaitsLimit => (
       "awaits_limit",
       vec![translate.text(&Message::new("runs.limit.notRaised"))],

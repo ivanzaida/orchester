@@ -4,6 +4,9 @@
 //!
 //! `cargo test -p orchester-workspace --test local_start_readiness local_start`
 
+#[path = "local_start_readiness/follows.rs"]
+mod follows;
+
 use std::{
   collections::{BTreeMap, BTreeSet},
   fs,
@@ -44,7 +47,7 @@ use orchester_workspace::{
   secrets::Vault,
   sharing::Servers,
   tasks::{integration_jobs::ProjectJobs, outside::OutsideChanges},
-  workspace::Workspace,
+  workspace::{OpenProject, Workspace},
 };
 use serde_json::{Value, json};
 use tempfile::TempDir;
@@ -69,6 +72,8 @@ struct Kontur {
   dir: TempDir,
   workspace: Workspace,
   services: app_mcp::Services,
+  /// What a message or a Fix CI follows through, as the window has them.
+  follow: (Runners, Servers, OpenProject),
   runtime: Runtime,
   published: Published,
   _data: TempDir,
@@ -123,7 +128,7 @@ impl Kontur {
       .tempdir_in(&scratch)
       .expect("application data");
     let workspace = Workspace::new(AppDb::open(&data.path().join("orchester.db")).expect("database"));
-    workspace.open(root).expect("register the project");
+    let open = workspace.open(root).expect("register the project");
     let runtime = Runtime::new().expect("runtime");
     let version = orchester_api::releases::ReleaseVersion::parse("0.5.0").expect("a release version");
     let servers = Servers::new(workspace.clone(), Vault::keychain(), version);
@@ -133,6 +138,7 @@ impl Kontur {
       Activity::new(),
       orchester_ipc::SessionEnd::Clean,
     );
+    let follow = (runners.clone(), servers.clone(), open);
     let services = app_mcp::Services::new(
       workspace.clone(),
       runners,
@@ -144,6 +150,7 @@ impl Kontur {
       dir,
       workspace,
       services,
+      follow,
       runtime,
       published,
       _data: data,
