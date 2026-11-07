@@ -180,6 +180,27 @@ impl ProjectDb {
     })
   }
 
+  /// The runs recorded as running that are their task's latest run, in one statement: what the sidebar's Running list
+  /// starts from, without reading every run of every task.
+  pub fn latest_running_runs(&self) -> Result<Vec<(TaskId, RunId)>, StoreError> {
+    let mut statement = self.connection.prepare(
+      "SELECT task_id, id FROM runs WHERE status = 'running' \
+       AND number = (SELECT MAX(number) FROM runs AS latest WHERE latest.task_id = runs.task_id)",
+    )?;
+    let rows = statement
+      .query_map([], |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)))?
+      .collect::<Result<Vec<_>, _>>()?;
+    rows
+      .into_iter()
+      .map(|(task, run)| {
+        Ok((
+          crate::rows::parse("task id", &task)?,
+          crate::rows::parse("run id", &run)?,
+        ))
+      })
+      .collect()
+  }
+
   /// [`Self::active_task_run`] of every task that has an active run, in one statement.
   pub fn active_task_runs(&self) -> Result<HashMap<TaskId, RunId>, StoreError> {
     // SQLite takes the other columns from the row of the greatest number: each task's latest run that has not ended.

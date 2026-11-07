@@ -37,7 +37,7 @@ use orchester_workspace::tasks::review_list::waiting_count;
 use self::{
   edges::Watch,
   place::Place,
-  running::{Running, RunningProps, under_way},
+  running::{Running, RunningProps},
   switcher::{Switcher, SwitcherProps},
   team_count::{TeamCount, team_count},
 };
@@ -190,21 +190,14 @@ impl Count {
   }
 }
 
-/// The project's runs under way, once its tasks are read.
+/// The project's runs under way, once they are read (`running::Running`).
 fn running(ctx: &mut Ctx, project: ProjectId) -> Option<Element> {
-  let projects = Projects::of(ctx);
-  let Some(ProjectState::Open(open)) = projects.state(project) else {
+  let Some(ProjectState::Open(open)) = Projects::of(ctx).state(project) else {
     return None;
   };
-  let feed = projects.feed(project);
-  let online = feed.runner_online(&open.repo_root);
-  let runs = feed
-    .tasks
-    .with(|tasks| tasks.ready().map(|tasks| under_way(tasks, online)))?;
   let props = RunningProps {
     project,
     repo_root: open.repo_root,
-    runs,
   };
   Some(ctx.mount_keyed::<Running>("running", props))
 }
