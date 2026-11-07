@@ -2243,11 +2243,14 @@
         "viaProject": "«{{title}}» · via the whole project"
       },
       "ended": {
-        "moduleDone": "Every task of {{module}} is Done — watching ended",
-        "moduleCanceled": "Every task of {{module}} is Canceled — watching ended",
-        "moduleClosed": "Every task of {{module}} is Done or Canceled — watching ended",
-        "taskDone": "{{task}} is Done — watching ended",
-        "taskCanceled": "{{task}} is Canceled — watching ended"
+        "moduleDone": "Every task of {{module}} is Done",
+        "moduleCanceled": "Every task of {{module}} is Canceled",
+        "moduleClosed": "Every task of {{module}} is Done or Canceled",
+        "taskDone": "{{task}} is Done",
+        "taskCanceled": "{{task}} is Canceled",
+        "aside": "— watching ended",
+        "asideModule": "— watching ended; the module's summary is below",
+        "asideTask": "— watching ended; the task's summary is below"
       }
     },
     "settings": {

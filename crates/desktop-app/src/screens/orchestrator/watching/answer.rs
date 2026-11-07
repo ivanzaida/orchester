@@ -300,10 +300,11 @@ fn one_line(order: &str) -> String {
 /// A task's row: its key and run, title, status, note, and the link where the person answers it.
 fn task_row(ctx: &mut Ctx, id: &str, task: &WatchedTask) -> Element {
   let row_id = format!("{id}-task-{}", task.key);
+  // The template writes the run's `#`: it gets the bare number, not the run's display (`#17`).
   let key = match task.run {
     Some(run) => ctx.t_args(
       "orchestrator.watching.keyRun",
-      [("key", task.key.to_string()), ("run", run.to_string())],
+      [("key", task.key.to_string()), ("run", run.get().to_string())],
     ),
     None => task.key.clone(),
   };

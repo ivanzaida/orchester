@@ -280,3 +280,23 @@ fn watching_icons_match_bundled_font_names() {
     assert_eq!(icon.glyph() as usize, codepoint, "{icon:?} codepoint: {codepoint:x}");
   }
 }
+
+/// The glyphs of the lines the app writes about what an Orchestrator conversation watches and of a watch command's
+/// module chip (ORC-777, `avDZO`, `mgpxA` in `OKtX2`).
+#[test]
+fn watch_line_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  let boxes = (0xe000..0xf000)
+    .find(|codepoint| glyph_name(font, font_glyph(font, *codepoint)) == "boxes")
+    .expect("the bundled font includes boxes");
+  assert_eq!(Icon::Boxes.glyph() as usize, boxes, "boxes codepoint: {boxes:x}");
+  for (icon, name) in [
+    (Icon::ArrowRightLeft, "arrow-right-left"),
+    (Icon::EyeOff, "eye-off"),
+    (Icon::Flag, "flag"),
+    (Icon::Eye, "eye"),
+    (Icon::ScanEye, "scan-eye"),
+  ] {
+    assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
+  }
+}

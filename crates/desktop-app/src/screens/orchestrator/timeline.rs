@@ -5,7 +5,8 @@
 //! ended ([`super::ending`]). A wait of an agent of the project opens a row of its own with its line
 //! ([`super::wait`]), what the turn it started by itself said and did nested under it as a quote; the end of a run its
 //! line ([`super::run_end`]), an event of a task's run its line ([`super::task_event`]) and a daily report its card
-//! ([`super::report`]), with the turn they started, if any.
+//! ([`super::report`]), with the turn they started, if any. The person's watch commands and the lines the app writes
+//! about what the conversation watches are rows of their own, with no turn ([`super::watch`]).
 //! Waits for the person kept one after another, with no message of theirs between them, gather into one digest
 //! ([`super::digest`]).
 
@@ -26,10 +27,7 @@ use orchester_core::{
   id::{ChatMessageId, ProjectId},
   orchestrator::{Queued, TurnState, WaitKind},
 };
-use orchester_workspace::{
-  orchestrator::{tools::ChatScope, watch_ends::ended_line},
-  workspace::OpenProject,
-};
+use orchester_workspace::{orchestrator::tools::ChatScope, workspace::OpenProject};
 
 use super::{
   digest::{Digest, DigestProps, Waited, for_the_person},
@@ -39,6 +37,7 @@ use super::{
   send::QueuedChange,
   turns::{Arrival, Turn},
   wait::Status,
+  watch::WatchFacts,
   watching::Live,
 };
 use crate::{
@@ -49,7 +48,6 @@ use crate::{
       names::ProjectNames,
     },
     markdown::LinkHandler,
-    message::message_text,
   },
 };
 
@@ -89,6 +87,8 @@ pub(super) struct TurnEnv {
   pub(super) rewind: RewindEnv,
   /// What the conversation leads now, which a `/watching` row shows, and its *Stop watching* (`super::watching`).
   pub(super) watching: Live,
+  /// What the lines about watching name beside what they keep (`super::watch`).
+  pub(super) watch: Arc<WatchFacts>,
 }
 
 /// The answers whose todo list the person opened under their name line, by the message that started each.
@@ -138,6 +138,7 @@ impl PartialEq for TurnRow {
       && self.env.changing == other.env.changing
       && self.env.rewind.shows() == other.env.rewind.shows()
       && (!self.turn.asks_watching() || self.env.watching == other.env.watching)
+      && self.env.watch == other.env.watch
   }
 }
 
@@ -315,9 +316,10 @@ impl Component for TurnView {
   }
 }
 
-/// A turn's row: what opens it, the answer and how it ended; or a compaction's or a rewind's line; or a `/watching`
-/// and its answer from the live state (`super::watching`). While a message is edited in place, what sending it drops
-/// is dimmed: its own answer under the line that counts them, and every row after it (`super::rewind::editing`).
+/// A turn's row: what opens it, the answer and how it ended; or a compaction's, a rewind's or a watch entry's row; or
+/// a `/watching` and its answer from the live state (`super::watching`). While a message is edited in place, what
+/// sending it drops is dimmed: its own answer under the line that counts them, and every row after it
+/// (`super::rewind::editing`).
 fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
   let key = row.turn.key();
   let dropped = row.env.rewind.drops(&row.turn);
@@ -337,7 +339,15 @@ fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
           (at, row.env.project),
         )
       })
-      .or_else(|| super::rewind::forked::line(ctx, &format!("orchestrator-forked-{key}"), event, row.env.project));
+      .or_else(|| super::rewind::forked::line(ctx, &format!("orchestrator-forked-{key}"), event, row.env.project))
+      .or_else(|| {
+        super::watch::row(
+          ctx,
+          &format!("orchestrator-watch-{key}"),
+          event,
+          (row.turn.at, &row.env),
+        )
+      });
     let column = Column::new().width(Dimension::Pct(100.0)).with_children(line);
     return room(ctx, dimmed(column, dropped), first);
   }
@@ -381,12 +391,9 @@ fn turn(ctx: &mut Ctx, row: &TurnRow, first: bool) -> Element {
 /// turn said nests under its line.
 fn opening(ctx: &mut Ctx, row: &TurnRow, key: &str) -> (Element, Option<Element>) {
   if let Some(summary) = &row.turn.watch_ended {
-    let line = Text::new(&message_text(ctx, &ended_line(summary)))
-      .id(format!("orchestrator-watch-ended-{key}"))
-      .variant(TypographyStyle::Description)
-      .color(PaletteColor::TextMuted)
-      .width(Dimension::Pct(100.0));
-    return (line.into(), super::answer::answer(ctx, row));
+    let id = format!("orchestrator-watch-ended-{key}");
+    let line = super::watch::ended_line(ctx, &id, summary, row.turn.at);
+    return (line, super::answer::answer(ctx, row));
   }
   match (&row.turn.wait, &row.turn.report) {
     (Some(wait), _) => {

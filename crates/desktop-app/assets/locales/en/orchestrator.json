@@ -283,6 +283,45 @@
         "changes": "Changes ↗"
       }
     },
+    "watch": {
+      "applied": "Applied {{time}}",
+      "target": {
+        "withoutModule": "Tasks without a module",
+        "project": "Every task of the project",
+        "gone": "Gone from the project"
+      },
+      "counted": {
+        "one": "{{target}} · {{count}} task",
+        "other": "{{target}} · {{count}} tasks"
+      },
+      "join": {
+        "pair": "{{first}} and {{last}}",
+        "more": "{{first}}, {{next}}"
+      },
+      "leading": "Leading {{targets}}",
+      "leadingAside": "— their waits, run ends, conflicts, limits and stalls start a turn here",
+      "nowLedIn": "{{target}} is now led in «{{title}}»",
+      "nowLedInAside": "— its events start turns there",
+      "nowLedInTask": "— watched there as a task; the rest of {{module}} stays here",
+      "nowLedInTaskBare": "— watched there as a task; the rest stays here",
+      "tookOver": "{{target}} is now led here",
+      "tookOverAside": "— taken from «{{title}}»; its events start turns here",
+      "ledHereAgain": "{{target}} is led here again",
+      "ledHereAgainAside": "— «{{title}}» stopped watching it; its events start turns here",
+      "stopped": "Stopped watching {{targets}}",
+      "stoppedAll": "Stopped watching everything",
+      "leftOpen": {
+        "one": "— {{count}} left open goes back to the usual rule",
+        "other": "— {{count}} left open go back to the usual rule"
+      },
+      "nothingOpen": "— nothing is canceled or paused",
+      "open": {
+        "waits": "{{task}} waits for you ↗",
+        "runs": "{{task}} is running ↗",
+        "queued": "{{task}} queued ↗",
+        "stoppedAtLimit": "{{task}} stopped at a limit ↗"
+      }
+    },
     "startedBy": {
       "wait": "{{task}}'s wait",
       "runEnd": "{{task}}'s run end",
@@ -491,6 +530,8 @@
         "other": "{{count}} messages"
       },
       "meta": "{{when}} · {{messages}}",
+      "leads": "Leads {{what}} · {{when}}",
+      "leadsSeparator": ", ",
       "found": {
         "results": {
           "one": "Found in 1 conversation · titles and messages",

@@ -50,6 +50,7 @@ mod task_event;
 mod timeline;
 mod turns;
 mod wait;
+mod watch;
 mod watching;
 
 use std::sync::Arc;

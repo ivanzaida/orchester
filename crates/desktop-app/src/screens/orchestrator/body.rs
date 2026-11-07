@@ -17,7 +17,7 @@ use lurq::{
   layout::{Alignment, layout_kind::Justify},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::id::ChatId;
+use orchester_core::{id::ChatId, orchestrator::ChatEvent};
 use orchester_workspace::{
   messages::Message,
   orchestrator::{chat::ChatView, queue::WhileAnswering, send::SendError, settings::Readiness},
@@ -351,11 +351,14 @@ fn conversation(
     Some(Readiness::Ready { connection, .. }) => Some(connection.clone()),
     _ => None,
   };
+  let watches = all
+    .iter()
+    .any(|turn| matches!(turn.compaction, Some(ChatEvent::Watch { .. })));
   let env = Arc::new(env(
     ctx,
     view,
     project,
-    (chat, connection, answering),
+    (chat, connection, answering, watches),
     &foot.reads.names,
   ));
   let can_ask = matches!(foot.state, Sending::Ready(_) | Sending::Held(_) | Sending::Empty { .. }) && chat.is_some();
