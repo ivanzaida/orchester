@@ -88,6 +88,21 @@ fn credential_manager_stores_reads_replaces_and_removes_a_value() {
 }
 
 #[test]
+fn credential_manager_tells_a_value_exists_without_reading_it() {
+  let credential = Throwaway::new();
+  let vault = KeychainVault;
+  assert_eq!(vault.exists(&credential.key), Ok(false));
+
+  vault
+    .store(&credential.key, &value("fake-value-1"))
+    .expect("the value is stored");
+  assert_eq!(vault.exists(&credential.key), Ok(true));
+
+  vault.delete(&credential.key).expect("the value is removed");
+  assert_eq!(vault.exists(&credential.key), Ok(false));
+}
+
+#[test]
 fn credential_manager_refuses_a_long_value_without_repeating_it() {
   let credential = Throwaway::new();
   let marker = "fake-marker-7Q2";
