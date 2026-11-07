@@ -5,9 +5,10 @@
 
 use std::{fs, path::Path};
 
+use lurq::app::events::with_synthetic_input;
 use orchester_core::{resource::ResourceKind, store::ResourceStore};
 
-use super::harness::Settings;
+use super::{harness::Settings, service_editor::automation_changes_permissions};
 
 const COMPOSE: &str = "name: cloud
 services:
@@ -130,4 +131,35 @@ fn import_draft_cancel_saves_nothing() {
   settings.until("back on Services", |s| s.exists("settings-services-empty"));
   assert!(slugs(&settings, ResourceKind::Service).is_empty());
   assert!(slugs(&settings, ResourceKind::Stack).is_empty());
+}
+
+/// An MCP client's *Save* that keeps new services saves nothing while *Let automation change agent permissions* is
+/// off, as `save_service_proposals` refuses it, and says so in place.
+#[test]
+fn import_draft_save_by_an_mcp_client_saves_nothing_without_the_automation_setting() {
+  let mut settings = opened();
+  automation_changes_permissions(&settings, false);
+  with_synthetic_input(|| settings.click("settings-import-save"));
+  settings.until("the refusal", |s| s.exists("settings-import-person-only"));
+  for _ in 0..10 {
+    settings.window.tree.tick_futures();
+    settings.window.pass();
+  }
+  assert!(slugs(&settings, ResourceKind::Service).is_empty(), "nothing was saved");
+  assert!(slugs(&settings, ResourceKind::Stack).is_empty(), "nothing was saved");
+  assert!(settings.exists("settings-import-save"), "still Import draft");
+}
+
+/// Under *Let automation change agent permissions* an MCP client's *Save* saves the kept drafts.
+#[test]
+fn import_draft_save_by_an_mcp_client_saves_under_the_automation_setting() {
+  let mut settings = opened();
+  automation_changes_permissions(&settings, true);
+  settings.click("settings-import-service-api-skip");
+  settings.until("api skipped", |s| s.text("settings-import-save") == "Save 3 drafts");
+  with_synthetic_input(|| settings.click("settings-import-save"));
+  settings.until("back on Services", |s| s.exists("settings-service-postgres-row"));
+  assert!(!settings.exists("settings-import-person-only"));
+  assert_eq!(slugs(&settings, ResourceKind::Service), ["kontur-web-dev", "postgres"]);
+  assert_eq!(slugs(&settings, ResourceKind::Stack), ["cloud"]);
 }

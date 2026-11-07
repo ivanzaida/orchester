@@ -5,7 +5,9 @@
 //!
 //! The checkout is read once, off the UI thread, when the page opens (`orchester_workspace::agent_testing::import`),
 //! and nothing of it runs. Saving makes the kept proposals new drafts as they were read, never published, and returns
-//! to the tab. A person saves here, so the widening question automation is asked does not apply.
+//! to the tab. A new service runs its program with the person's rights, so lurq's synthetic input (an MCP client
+//! driving the window) saves kept services only under *Let automation change agent permissions*, as
+//! `save_service_proposals` does; otherwise nothing is saved and the page says so. Kept stacks alone always save.
 
 mod files;
 
@@ -36,6 +38,7 @@ use super::super::{
   page,
 };
 use crate::{
+  mcp::input_gate::{Guarded, InputGate, input_may_decide},
   navigation::Navigation,
   routes::{ProjectPage, ProjectSettingsTab, Route},
   theme::{ExtraSpacing, ProjectSettingsText},
@@ -76,6 +79,10 @@ struct ImportDraft {
   /// Counts *Try again*s after a failed read.
   retry: Signal<u64>,
   save: Save,
+  /// The app's MCP input gate, which decides whether an MCP client's *Save* may make new services.
+  gate: Option<InputGate>,
+  /// An MCP client's *Save* was refused: nothing was saved.
+  refused: Signal<bool>,
 }
 
 impl Component for ImportDraft {
@@ -86,6 +93,8 @@ impl Component for ImportDraft {
     let page = Self {
       skipped: ctx.signal(Skips::default()),
       retry: ctx.signal(0),
+      gate: ctx.use_context::<InputGate>(),
+      refused: ctx.signal(false),
       save: ctx.future_action(|(root, proposals, choice): SaveAsk| async move {
         background::run(move || {
           let chosen = proposals.chosen(&choice)?;
@@ -224,17 +233,13 @@ impl ImportDraft {
     } else if state.is_pending() {
       save.loading()
     } else {
-      let choice = choice(&kept);
-      let (action, root, proposals) = (
-        self.save.clone(),
+      let ask = (
         props.project.open.repo_root.clone(),
         Arc::clone(proposals),
+        choice(&kept),
       );
-      save.on_click(move || {
-        if !action.state().get_untracked().is_pending() {
-          action.run((root.clone(), Arc::clone(&proposals), choice.clone()));
-        }
-      })
+      let page = (self.save.clone(), self.gate.clone(), self.refused.clone());
+      save.on_click(move || save_now(&page, &ask))
     };
     let line = Row::new()
       .id("settings-import-actions")
@@ -251,6 +256,12 @@ impl ImportDraft {
       )
       .child(cancel)
       .child(save);
+    let refused = self.refused.get().then(|| {
+      field_error(
+        "settings-import-person-only",
+        &ctx.t("project_settings.services.import.personOnly"),
+      )
+    });
     let failure = state
       .error
       .as_ref()
@@ -260,11 +271,28 @@ impl ImportDraft {
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Snug.role())
       .child(line)
+      .with_children(refused)
       .with_children(failure)
       .into()
   }
 }
 
+/// *Save N drafts* pressed: saves `ask` unless a save is under way. A kept service is always new (one the project has
+/// already is never kept), so an MCP client's press that keeps one is taken only under *Let automation change agent
+/// permissions*, as `save_service_proposals` takes it; refused, nothing is saved.
+fn save_now((action, gate, refused): &(Save, Option<InputGate>, Signal<bool>), ask: &SaveAsk) {
+  if action.state().get_untracked().is_pending() {
+    return;
+  }
+  let (_, _, choice) = ask;
+  if !choice.services.is_empty() && !input_may_decide(gate.as_ref(), Guarded::PermissionWidening) {
+    tracing::warn!("synthetic input asked to save imported services; nothing saved");
+    refused.set(true);
+    return;
+  }
+  refused.set(false);
+  action.run(ask.clone());
+}
 /// The kept proposals by their names, services and stacks apart, as saving takes them.
 fn choice(kept: &[&Proposal]) -> Choice {
   let mut choice = Choice::default();

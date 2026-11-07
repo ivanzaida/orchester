@@ -558,7 +558,8 @@
           "one": "Save 1 draft",
           "other": "Save {{count}} drafts"
         },
-        "saveWaits": "Keep at least one proposal to save it as a draft."
+        "saveWaits": "Keep at least one proposal to save it as a draft.",
+        "personOnly": "Only a person saves new services here: input from an MCP client is taken only while you let automation change agent permissions. Nothing was saved."
       },
       "editor": {
         "lead": "A run starts it when an agent or the Test step needs it, and stops it when the step ends, the run pauses or waits for you.",
