@@ -5,7 +5,7 @@
 //! N new* (`Jump to latest` `tvvRD`: a 30 pill on `surface_raised` in a `border_strong` stroke, its 13 `arrow-down`
 //! and 12/500 words 6 apart, 12 from its sides, over a 0 4 16 shadow), floating centered over the chat's foot, *N*
 //! counting what arrived since; pressing it, or sending a message ([`Follow::follow_again`]), goes to the end and
-//! follows again.
+//! follows again, as does a scroll back down to the very end, by the wheel, the scrollbar or a key (ORC-892).
 
 use std::sync::Arc;
 
@@ -216,24 +216,65 @@ impl Follow {
   }
 
   /// A scroll of the person's that moved the chat: the card the chat opened at no longer holds it, a move up stops
-  /// following, and a move down to the end follows again. One that moved only a box inside a row changes nothing.
-  fn settle_wheel(&self) {
+  /// following, and a move down to the end follows again, there at its very end. One that moved only a box inside a
+  /// row changes nothing. `false` when no wheel waited to be settled.
+  fn settle_wheel(&self) -> bool {
     let Some(wheel) = self.wheel.lock().take() else {
-      return;
+      return false;
     };
     let now = self.scroll.scroll_y();
     if (now - wheel.from).abs() <= AT_END {
-      return;
+      return true;
     }
     *self.reveal.lock() = Reveal {
       key: None,
       scrolled: true,
     };
-    let end = (self.scroll.content_height() - self.scroll.viewport_height()).max(0.0);
-    let at_end = now > wheel.from && now >= end - FOLLOW_SLACK;
+    let at_end = now > wheel.from && now >= self.scroll_end() - FOLLOW_SLACK;
+    if at_end {
+      self.at_scroll_end();
+    }
     if at_end != self.following.get_untracked() {
       *self.left_at.lock() = (!at_end).then_some(wheel.arrived);
       self.following.set(at_end);
+    }
+    true
+  }
+
+  /// A scroll that brought no wheel's event, a press or a drag on the scrollbar, settled from where the last layout
+  /// left the chat: at the very end the chat follows again, and up from the end while it followed it stops. The list
+  /// moves the scroll itself by at most `resized`, how much the content's height changed in the layout (it holds the
+  /// first row in view where it is, or its end at the end): only a move farther than that is the person's.
+  fn settle_moved(&self, resized: f32) {
+    if *self.to_end.lock() || self.reveal.lock().key.is_some() {
+      return;
+    }
+    let (now, laid, end) = (self.scroll.scroll_y(), *self.laid.lock(), self.scroll_end());
+    let moved = resized + AT_END;
+    let following = self.following.get_untracked();
+    let at_end = if !following && now > laid + moved && now >= end - AT_END {
+      true
+    } else if following && now < laid - moved && now < end - AT_END {
+      false
+    } else {
+      return;
+    };
+    *self.left_at.lock() = (!at_end).then(|| *self.seen.lock());
+    self.following.set(at_end);
+  }
+
+  /// How far the chat scrolls: to the end of its last row.
+  fn scroll_end(&self) -> f32 {
+    (self.scroll.content_height() - self.scroll.viewport_height()).max(0.0)
+  }
+
+  /// Puts the chat at its very end at once, before the next frame, and there again after the next layout, whose rows
+  /// measured taller than the list estimated them move the end further.
+  fn at_scroll_end(&self) {
+    let end = self.scroll_end();
+    if self.scroll.scroll_y() < end - AT_END {
+      self.scroll.set_scroll(0.0, end);
+      self.scroll.scroll_to_bottom_pending();
     }
   }
 
@@ -273,15 +314,19 @@ impl Follow {
   /// before the next frame: the list puts the row it anchored back where it was, which leaves the newest rows
   /// under the view, and rows it measures late (Markdown, cards) move the end further. A layout that did not grow
   /// the content ends that; a row the person opened never starts it, so the scroll stays as the person left it.
+  /// The person's scroll is settled first, a wheel's or one with no event ([`Follow::settle_moved`]).
   fn keep_at_end(&self) {
-    self.settle_wheel();
+    let wheeled = self.settle_wheel();
     let height = self.scroll.content_height();
-    let grew = {
+    let (grew, resized) = {
       let mut last = self.height.lock();
-      let grew = height > *last + AT_END;
+      let changed = (height > *last + AT_END, (height - *last).abs());
       *last = height;
-      grew
+      changed
     };
+    if !wheeled {
+      self.settle_moved(resized);
+    }
     let mut to_end = self.to_end.lock();
     if !grew {
       *to_end = false;
@@ -289,12 +334,8 @@ impl Follow {
     if !*to_end || !self.following.get_untracked() || self.reveal.lock().key.is_some() {
       return;
     }
-    let end = (height - self.scroll.viewport_height()).max(0.0);
-    if self.scroll.scroll_y() < end - AT_END {
-      self.scroll.set_scroll(0.0, end);
-      // Rows the next layout measures taller than the list estimated them move the end further.
-      self.scroll.scroll_to_bottom_pending();
-    }
+    drop(to_end);
+    self.at_scroll_end();
   }
 }
 
