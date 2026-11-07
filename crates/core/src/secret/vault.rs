@@ -99,7 +99,8 @@ pub trait SecretVault: Send + Sync {
   /// value is there (readiness, which asks again whenever the hub refreshes) use this instead of
   /// [`SecretVault::read`]: the OS keychain can ask the person to allow every read of a value, but
   /// not a look at which items exist. The default reads the value and drops it, which is right for a
-  /// vault whose read asks nothing (memory); the OS keychain overrides it.
+  /// vault whose read asks nothing (memory); any vault whose `read` can ask the person (the OS
+  /// keychain, or one that wraps it) must override it.
   fn exists(&self, key: &VaultKey) -> Result<bool, VaultError> {
     match self.read(key) {
       Ok(_) => Ok(true),

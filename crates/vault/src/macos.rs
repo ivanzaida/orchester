@@ -22,7 +22,8 @@ pub(crate) fn read(key: &VaultKey) -> Result<SecretValue, VaultError> {
 
 /// A search by service and account that loads the item's attributes and never its data. Reading the data is what
 /// the keychain asks the person to allow (an ad-hoc signed build has a new identity each time it is built), so
-/// this lookup is silent.
+/// this lookup is silent. The crate drops a hit without a service or an account attribute; the items this app writes
+/// always have both.
 pub(crate) fn exists(key: &VaultKey) -> Result<bool, VaultError> {
   let spec = HashMap::from([("service", key.service()), ("user", key.account())]);
   let found = Store::new()
