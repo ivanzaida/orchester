@@ -77,7 +77,7 @@ pub(super) fn frame((id, picker): (&str, Picker), content: Vec<Element>) -> Elem
 }
 
 /// A row's frame: 28 high, 8 at its sides and between its parts.
-pub(super) fn line() -> Row {
+pub(in crate::screens::orchestrator) fn line() -> Row {
   Row::new()
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(ControlHeight::Md.value()))
@@ -208,7 +208,7 @@ pub(super) fn nothing((id, picker): (&str, Picker), words: &str) -> Element {
 
 /// `label` with the letters that match `filter` in 600 `text_primary`: a name in 12 `text_primary`, or a task's key
 /// in Geist Mono 12 `text_secondary` (`mono`).
-pub(super) fn matched_label(label: &str, filter: &str, mono: bool) -> Element {
+pub(in crate::screens::orchestrator) fn matched_label(label: &str, filter: &str, mono: bool) -> Element {
   let letters: Range<usize> = matched(label, filter).unwrap_or(0..0);
   let piece = |range: Range<usize>, bold: bool| {
     let words = &label[range];
@@ -298,36 +298,60 @@ pub(super) fn led_in(ctx: &Ctx, led: LedIn<'_>, color: PaletteColor) -> Element 
 /// *Esc Close* while there are rows (`rows`), *Esc Close* alone otherwise.
 pub(super) fn footer(ctx: &Ctx, (id, picker): (&str, Picker), rows: bool) -> Element {
   let prefix = picker.prefix();
-  let cap_id = format!("{prefix}-key");
-  let hint = |cap: &str, label: &str| {
+  let hints: &[(&str, &str)] = if rows {
+    &[
+      ("move", "move"),
+      ("enter", "add"),
+      ("backspace", "removeLast"),
+      (apply_key(), "watch"),
+      ("esc", "close"),
+    ]
+  } else {
+    &[("esc", "close")]
+  };
+  keys(ctx, (&format!("{id}-{prefix}"), &format!("{prefix}-key")), hints, None)
+}
+
+/// The cap of the keys that apply a command: *Cmd Enter* on macOS, *Ctrl Enter* elsewhere.
+pub(in crate::screens::orchestrator) const fn apply_key() -> &'static str {
+  if cfg!(target_os = "macos") {
+    "cmdEnter"
+  } else {
+    "ctrlEnter"
+  }
+}
+
+/// A picker's keys under a `border` line, named `{id}-keys`: each cap (`orchestrator.watch.keys.*`, named `cap_id`)
+/// with its words (`orchestrator.watch.hint.*`), and `note` at the end in 11 `text_muted`.
+pub(in crate::screens::orchestrator) fn keys(
+  ctx: &Ctx,
+  (id, cap_id): (&str, &str),
+  hints: &[(&str, &str)],
+  note: Option<Arc<str>>,
+) -> Element {
+  let hint = |(cap, label): &(&str, &str)| {
     Row::new()
       .spacing(ExtraSpacing::Snug.role())
       .align_items(Alignment::Center)
-      .child(key_cap(&cap_id, &ctx.t(&format!("orchestrator.watch.keys.{cap}"))))
+      .child(key_cap(cap_id, &ctx.t(&format!("orchestrator.watch.keys.{cap}"))))
       .child(
         Text::new(&ctx.t(&format!("orchestrator.watch.hint.{label}")))
           .variant(TypographyStyle::Caption)
           .nowrap(),
       )
   };
-  let watch = if cfg!(target_os = "macos") {
-    "cmdEnter"
-  } else {
-    "ctrlEnter"
-  };
-  let hints = if rows {
+  let note: Vec<Element> = note.map_or_else(Vec::new, |note| {
     vec![
-      hint("move", "move"),
-      hint("enter", "add"),
-      hint("backspace", "removeLast"),
-      hint(watch, "watch"),
-      hint("esc", "close"),
+      Spacer::new().flex(1.0).into(),
+      Text::new(&note)
+        .id(format!("{id}-keys-note"))
+        .variant(TypographyStyle::Caption)
+        .nowrap()
+        .into(),
     ]
-  } else {
-    vec![hint("esc", "close")]
-  };
+  });
   Row::new()
-    .id(format!("{id}-{prefix}-keys"))
+    .id(format!("{id}-keys"))
     .width(Dimension::Pct(100.0))
     .padding(
       Padding::new()
@@ -339,7 +363,8 @@ pub(super) fn footer(ctx: &Ctx, (id, picker): (&str, Picker), rows: bool) -> Ele
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .with_children(hints)
+    .with_children(hints.iter().map(hint))
+    .with_children(note)
     .into()
 }
 

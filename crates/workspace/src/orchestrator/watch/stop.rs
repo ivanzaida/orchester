@@ -11,15 +11,15 @@ use orchester_core::{
   },
   time::Timestamp,
 };
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::ProjectDb;
 
 use super::{WatchError, kept, read, tell};
 
 /// What a stop ends.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum StopWhat {
-  /// One target, as the chip names it.
-  Target(NamedTarget),
+  /// These targets, as the chips name them: × on a header chip names one, `/unwatch` the ones chosen in its picker.
+  Targets(Vec<NamedTarget>),
   /// Everything the conversation watches.
   All,
 }
@@ -39,8 +39,8 @@ pub struct Unwatched {
   pub left_open: Vec<OpenTask>,
 }
 
-/// `chat` stops watching `what` in the project at `root`. Refused when it watches none of it, or another
-/// conversation leads the target by now. Blocks on SQLite.
+/// `chat` stops watching `what` in the project at `root`; of several targets, those it still leads. Refused when it
+/// watches none of it, or another conversation leads by now every target it named. Blocks on SQLite.
 pub fn stop_in(root: &Path, chat: &Chat, what: &StopWhat, by: StopBy) -> Result<Unwatched, WatchError> {
   let mut db = ProjectDb::open(root)?;
   let now = Timestamp::now();
@@ -71,7 +71,7 @@ pub fn stop_in(root: &Path, chat: &Chat, what: &StopWhat, by: StopBy) -> Result<
   let mut entries = Vec::new();
   if by == StopBy::Unwatch {
     let command = match what {
-      StopWhat::Target(_) => WatchCommand::Unwatch {
+      StopWhat::Targets(_) => WatchCommand::Unwatch {
         targets: stopped.clone(),
       },
       StopWhat::All => WatchCommand::UnwatchAll,
@@ -91,34 +91,38 @@ pub fn stop_in(root: &Path, chat: &Chat, what: &StopWhat, by: StopBy) -> Result<
   Ok(Unwatched { stopped, left_open })
 }
 
-/// The targets `what` names that `chat` leads in `set`, named as they are now.
+/// The targets `what` names that `chat` leads in `set`, named as they are now. When it leads none of them and another
+/// conversation took one, the refusal names that conversation.
 fn chosen(db: &ProjectDb, chat: &Chat, set: &Subscriptions, what: &StopWhat) -> Result<Vec<NamedTarget>, WatchError> {
-  let targets = match what {
+  let given = match what {
     StopWhat::All => set
       .of_chat(chat.id())
-      .map(|led| {
-        read::renamed(
-          db,
-          &NamedTarget {
-            target: led.target(),
-            name: None,
-          },
-        )
+      .map(|led| NamedTarget {
+        target: led.target(),
+        name: None,
       })
-      .collect::<Result<Vec<_>, StoreError>>()?,
-    StopWhat::Target(given) => match set.of(given.target) {
-      Some(led) if led.chat() == chat.id() => vec![read::renamed(db, given)?],
-      Some(led) => {
-        return Err(WatchError::LedElsewhere {
-          chat: led.chat(),
-          title: read::title(db, led.chat())?,
-        });
-      }
-      None => Vec::new(),
-    },
+      .collect(),
+    StopWhat::Targets(given) => given.clone(),
   };
-  if targets.is_empty() {
-    return Err(WatchError::NotWatched);
+  let mut targets = Vec::new();
+  let mut elsewhere = None;
+  for named in &given {
+    match set.of(named.target) {
+      Some(led) if led.chat() == chat.id() => targets.push(read::renamed(db, named)?),
+      Some(led) => {
+        elsewhere.get_or_insert(led.chat());
+      }
+      None => {}
+    }
   }
-  Ok(targets)
+  if !targets.is_empty() {
+    return Ok(targets);
+  }
+  match elsewhere {
+    Some(other) => Err(WatchError::LedElsewhere {
+      chat: other,
+      title: read::title(db, other)?,
+    }),
+    None => Err(WatchError::NotWatched),
+  }
 }

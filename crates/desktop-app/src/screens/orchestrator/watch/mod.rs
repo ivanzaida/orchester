@@ -16,7 +16,8 @@ mod ended;
 mod facts;
 mod lines;
 mod module;
-mod panel;
+/// The pickers' panel, rows and keys, which `/unwatch`'s picker draws too (`super::watching::unwatch`).
+pub(super) mod panel;
 mod picker;
 mod rows;
 mod task;

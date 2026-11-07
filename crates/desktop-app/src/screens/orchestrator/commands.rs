@@ -1,10 +1,10 @@
 //! The Orchestrator chat's own commands in its composer's slash menu (ORC-321, `07` `jAiyu`): *New conversation*,
 //! which the header's *New* starts, and *History*, which opens the History panel as the header's toggle does. Compact
 //! and Model and effort join them once their controls exist (ORC-309, ORC-319); until then they are not offered. The
-//! watch commands follow them (ORC-771, `01 · Watch commands` `h1KHAx`): *Watch modules* (`/watch-module`) and *Watch
-//! tasks* (`/watch-task`) take an argument, chosen in their pickers; *Stop watching* (`/unwatch`) and *What I watch*
-//! (`/watching`, ORC-775) are faded while the conversation watches nothing. The project's published skills follow them
-//! (ORC-325), greyed while the Orchestrator's connection cannot take one.
+//! watch commands follow them (ORC-771, `01 · Watch commands` `h1KHAx`): *Watch modules* (`/watch-module`), *Watch
+//! tasks* (`/watch-task`) and *Stop watching* (`/unwatch`, ORC-774) take an argument, chosen in their pickers; *Stop
+//! watching* and *What I watch* (`/watching`, ORC-775) are faded while the conversation watches nothing. The project's
+//! published skills follow them (ORC-325), greyed while the Orchestrator's connection cannot take one.
 
 use std::sync::Arc;
 
@@ -91,21 +91,14 @@ fn history(ctx: &Ctx, view: &View) -> SlashCommand {
 }
 
 /// The watch commands: *Watch modules* and *Watch tasks* with their pickers ([`super::watch`], ORC-772, ORC-773);
-/// *What I watch* ([`super::watching`], ORC-775), offered while the conversation leads something; *Stop watching*
-/// faded while the conversation watches nothing, which it says until its command exists.
+/// *Stop watching* with its picker (`/unwatch`, ORC-774) and *What I watch* ([`super::watching`], ORC-775), offered
+/// while the conversation leads something.
 fn watch_commands(ctx: &Ctx, view: &View, project: &ShownProject) -> [SlashCommand; 4] {
+  let root = &project.open.repo_root;
   [
     super::watch::module_command(ctx, view, project),
     super::watch::task_command(ctx, view, project),
-    SlashCommand {
-      name: "unwatch",
-      icon: Icon::EyeOff,
-      label: ctx.t("composer.slash.command.unwatch.label"),
-      detail: ctx.t("composer.slash.command.watch.nothing"),
-      does: None,
-    },
-    view
-      .what_i_watch
-      .command(ctx, project.open.repo_root.clone(), &view.follow),
+    view.what_i_watch.unwatch_command(ctx, root.clone()),
+    view.what_i_watch.command(ctx, root.clone(), &view.follow),
   ]
 }

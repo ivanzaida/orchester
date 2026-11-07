@@ -284,7 +284,7 @@ fn head_meta(ctx: &Ctx, watched: &WatchedSubscription, same: bool) -> Arc<str> {
 }
 
 /// When a subscription started: its time today, its date on an earlier day.
-fn since(ctx: &Ctx, at: Timestamp) -> Arc<str> {
+pub(super) fn since(ctx: &Ctx, at: Timestamp) -> Arc<str> {
   if display::calendar_date(at) == display::calendar_date(Timestamp::now()) {
     Arc::from(display::clock(at))
   } else {
@@ -366,9 +366,9 @@ fn action(id: &str, words: &str, press: Press) -> Element {
     .into()
 }
 
-/// A target's icon on its head row: a module's `boxes`, a task's `square-check`, the tasks without a module's `inbox`
-/// and the whole project's `folder-kanban`.
-const fn target_icon(target: WatchTarget) -> Icon {
+/// A target's icon on its head row and in the `/unwatch` picker: a module's `boxes`, a task's `square-check`, the tasks
+/// without a module's `inbox` and the whole project's `folder-kanban`.
+pub(super) const fn target_icon(target: WatchTarget) -> Icon {
   match target {
     WatchTarget::Module(_) => Icon::Boxes,
     WatchTarget::Task(_) => Icon::SquareCheck,
@@ -378,7 +378,7 @@ const fn target_icon(target: WatchTarget) -> Icon {
 }
 
 /// The name `describe` reports a target by, for tests and QA.
-const fn target_name(target: WatchTarget) -> &'static str {
+pub(super) const fn target_name(target: WatchTarget) -> &'static str {
   match target {
     WatchTarget::Module(_) => "module",
     WatchTarget::Task(_) => "task",
