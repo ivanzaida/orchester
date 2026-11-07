@@ -1,9 +1,11 @@
-//! A slash command that takes an argument (ORC-771, its badge ORC-890), through `ui::slash`'s public API with pickers
-//! of the test's own: choosing it pins one badge at the top of the composer and opens its picker over the box; Enter
-//! adds the focused choice to the badge, several allowed, and the badge names two then counts the rest; Backspace in
-//! an empty field removes the badge's last choice, then the badge; Esc closes the picker, and a press on the badge
-//! opens it again; once it is closed the words typed are the message, and the composer's send applies the badge with
-//! them; a second command makes a second badge, and Backspace with nothing written removes the last.
+//! A slash command that takes an argument (ORC-771; its picker v2, ORC-889; its badge, ORC-890), through `ui::slash`'s
+//! public API with pickers of the test's own: choosing it pins one badge at the top of the composer and opens its
+//! picker over the box, the focus in the picker's own search field, whose words filter it; Enter adds the focused
+//! choice to the badge and closes the picker, the composer's field taking the focus back; Shift Enter adds it and
+//! keeps the picker open, several allowed, and the badge names two then counts the rest; Esc closes the picker and
+//! keeps the badge, and a press on the badge opens it again; once it is closed the words typed are the message, and
+//! the composer's send applies the badge with them; Backspace in the empty field removes the last badge, and a second
+//! command makes a second badge.
 
 use std::sync::Arc;
 
@@ -32,13 +34,14 @@ const ID: &str = "test-composer";
 const INPUT: &str = "test-input";
 const BADGE: &str = "test-composer-badge-watch-region";
 const PICKER: &str = "test-picker";
+const SEARCH: &str = "test-picker-search";
 
-/// The picker of the test: four regions, their names filtered by what is typed; `gamma` cannot be chosen. A row says
-/// `focused` and `taken` after its name while it is.
+/// The picker of the test: its search field, then four regions, their names filtered by what is typed there; `gamma`
+/// cannot be chosen. A row says `focused` and `taken` after its name while it is.
 struct Regions;
 
 impl ArgumentPicker for Regions {
-  fn offer(&self, _ctx: &mut Ctx, asked: &Asked<'_>) -> Offer {
+  fn offer(&self, ctx: &mut Ctx, asked: &Asked<'_>) -> Offer {
     let rows: Vec<(Choice, bool)> = ["alpha", "beta", "gamma", "delta"]
       .into_iter()
       .filter(|name| name.contains(asked.filter))
@@ -51,9 +54,11 @@ impl ArgumentPicker for Regions {
         (choice, name != "gamma")
       })
       .collect();
+    let search = asked.search.field(ctx, SEARCH, (Arc::from("Search regions"), None));
     let panel = Column::new()
       .id(PICKER)
       .width(Dimension::Px(300.0))
+      .child(search)
       .with_children(rows.iter().enumerate().map(|(at, (choice, _))| {
         let mut words = choice.label.to_string();
         if asked.focused == Some(at) {
@@ -90,6 +95,7 @@ struct Composer {
   focused: Signal<bool>,
   slash: SlashField,
   anchor: ElementRef,
+  input: ElementRef,
 }
 
 /// A command named `name` with the test's picker, whose badge says `verb`; applying it keeps what it was applied to.
@@ -119,12 +125,14 @@ impl Component for Composer {
 
   fn create(ctx: &mut Ctx) -> Self {
     let (draft, focused, skill) = (ctx.signal(String::new()), ctx.signal(false), ctx.signal(None));
-    let slash = SlashField::new(ctx, draft.clone(), (focused.clone(), skill));
+    let input = ElementRef::new();
+    let slash = SlashField::new(ctx, draft.clone(), (focused.clone(), skill)).returns_focus_to(input.clone());
     Self {
       draft,
       focused,
       slash,
       anchor: ElementRef::new(),
+      input,
     }
   }
 
@@ -135,6 +143,7 @@ impl Component for Composer {
     let enter_sends = self.slash.holds_choices();
     let input = TextInput::new(self.draft.clone())
       .id(INPUT)
+      .ref_element(self.input.clone())
       .width(Dimension::Px(400.0))
       .on_focus(move || gained.set(true))
       .on_blur(move || lost.set(false))
@@ -200,22 +209,23 @@ impl Fixture {
     Self { kit, props }
   }
 
-  fn write(&mut self, text: &str) {
+  /// `text` in the text input `id`.
+  fn write(&mut self, id: &str, text: &str) {
     self
       .kit
       .tree
-      .get_element_by_id_mut(INPUT)
+      .get_element_by_id_mut(id)
       .and_then(|element| element.as_text_input())
-      .expect("the field")
+      .unwrap_or_else(|| panic!("{id} is a text input"))
       .set_value(text);
     self.kit.pass();
     self.kit.pass();
   }
 
-  fn key(&mut self, (key, code): (&str, &str), ctrl: bool) {
+  fn key(&mut self, (key, code): (&str, &str), (shift, ctrl): (bool, bool)) {
     let tree = &mut self.kit.tree;
-    tree.key_down(key.to_owned(), code.to_owned(), false, ctrl, false);
-    tree.key_up(key.to_owned(), code.to_owned(), false, ctrl, false);
+    tree.key_down(key.to_owned(), code.to_owned(), shift, ctrl, false);
+    tree.key_up(key.to_owned(), code.to_owned(), shift, ctrl, false);
     self.kit.pass();
     self.kit.pass();
   }
@@ -238,21 +248,22 @@ impl Fixture {
     words
   }
 
-  fn draft(&mut self) -> String {
+  /// What the text input `id` holds.
+  fn value(&mut self, id: &str) -> String {
     self
       .kit
       .tree
-      .get_element_by_id_mut(INPUT)
+      .get_element_by_id_mut(id)
       .and_then(|element| element.as_text_input())
-      .expect("the field")
+      .unwrap_or_else(|| panic!("{id} is a text input"))
       .value()
   }
 
   /// The command `typed` matches first, chosen in the slash menu with Enter.
   fn choose_command(&mut self, typed: &str) {
-    self.write(typed);
+    self.write(INPUT, typed);
     assert!(self.kit.exists("test-composer-slash-menu"), "the slash menu");
-    self.key(("Enter", "Enter"), false);
+    self.key(("Enter", "Enter"), (false, false));
   }
 }
 
@@ -266,8 +277,9 @@ fn slash_argument_becomes_one_badge_and_its_picker_adds_several_choices() {
   fixture.choose_command("/watch-region");
   assert!(fixture.kit.exists(BADGE), "the badge");
   assert_eq!(fixture.badge(BADGE), "Watch", "the verb alone while nothing is chosen");
-  assert_eq!(fixture.draft(), "", "the typed / goes");
+  assert_eq!(fixture.value(INPUT), "", "the typed / goes");
   assert!(fixture.kit.exists(PICKER), "the picker opens");
+  assert!(fixture.kit.exists(SEARCH), "with its own search field");
   assert!(!fixture.kit.exists("test-composer-slash-menu"), "the slash menu closes");
   // Over the box, its bottom 8 over it.
   let (picker, boxed) = (fixture.kit.bounds(PICKER), fixture.kit.bounds("test-box"));
@@ -276,39 +288,45 @@ fn slash_argument_becomes_one_badge_and_its_picker_adds_several_choices() {
     "{picker:?} {boxed:?}"
   );
   assert_eq!(fixture.picker_row("alpha"), "alpha focused");
+  fixture.key(("b", "KeyB"), (false, false));
+  assert_eq!(
+    (fixture.value(SEARCH), fixture.value(INPUT)),
+    ("b".to_owned(), String::new()),
+    "the search holds the focus: what is typed goes there"
+  );
+  fixture.write(SEARCH, "");
 
-  fixture.key(("Enter", "Enter"), false);
-  assert_eq!(fixture.badge(BADGE), "Watch · alpha", "alpha joins the badge");
+  fixture.key(("Enter", "Enter"), (true, false));
+  assert_eq!(
+    fixture.badge(BADGE),
+    "Watch · alpha",
+    "Shift Enter adds alpha to the badge"
+  );
+  assert!(fixture.kit.exists(PICKER), "and keeps the picker open");
   assert_eq!(fixture.picker_row("alpha"), "alpha focused taken");
-  fixture.key(("ArrowDown", "ArrowDown"), false);
+  fixture.key(("ArrowDown", "ArrowDown"), (false, false));
   assert_eq!(fixture.picker_row("beta"), "beta focused");
-  fixture.key(("ArrowDown", "ArrowDown"), false);
+  fixture.key(("ArrowDown", "ArrowDown"), (false, false));
   assert_eq!(
     fixture.picker_row("delta"),
     "delta focused",
     "gamma cannot be chosen: the focus goes around it"
   );
 
-  fixture.write("bet");
+  fixture.write(SEARCH, "bet");
   assert!(
     !fixture.kit.exists(&format!("{PICKER}-alpha")),
-    "the words filter the picker while it is open"
+    "the search's words filter the picker"
   );
-  fixture.key(("Enter", "Enter"), false);
-  assert_eq!(fixture.badge(BADGE), "Watch · alpha, beta");
-  assert_eq!(fixture.draft(), "", "the filter empties");
+  assert_eq!(fixture.value(INPUT), "", "the composer's words stay as they were");
+  fixture.key(("Enter", "Enter"), (false, false));
+  assert_eq!(fixture.badge(BADGE), "Watch · alpha, beta", "Enter adds beta");
+  assert!(!fixture.kit.exists(PICKER), "and closes the picker");
 
-  fixture.key(("Backspace", "Backspace"), false);
-  assert_eq!(
-    fixture.badge(BADGE),
-    "Watch · alpha",
-    "Backspace in the open picker removes the badge's last choice"
-  );
-  fixture.key(("Backspace", "Backspace"), false);
-  fixture.key(("Backspace", "Backspace"), false);
+  fixture.key(("Backspace", "Backspace"), (false, false));
   assert!(
     !fixture.kit.exists(BADGE),
-    "with no choice left, Backspace removes the badge"
+    "back in the composer's empty field, Backspace removes the badge"
   );
   assert!(!fixture.kit.exists(PICKER));
   assert!(!fixture.kit.exists("test-composer-badges"), "and its row");
@@ -318,11 +336,11 @@ fn slash_argument_becomes_one_badge_and_its_picker_adds_several_choices() {
 fn slash_argument_badge_names_two_choices_and_counts_the_rest() {
   let mut fixture = Fixture::new();
   fixture.choose_command("/watch-region");
-  fixture.key(("Enter", "Enter"), false);
-  fixture.key(("ArrowDown", "ArrowDown"), false);
-  fixture.key(("Enter", "Enter"), false);
-  fixture.key(("ArrowDown", "ArrowDown"), false);
-  fixture.key(("Enter", "Enter"), false);
+  fixture.key(("Enter", "Enter"), (true, false));
+  fixture.key(("ArrowDown", "ArrowDown"), (false, false));
+  fixture.key(("Enter", "Enter"), (true, false));
+  fixture.key(("ArrowDown", "ArrowDown"), (false, false));
+  fixture.key(("Enter", "Enter"), (true, false));
   assert_eq!(fixture.badge(BADGE), "Watch · alpha, beta +1");
   assert_eq!(fixture.kit.texts(&format!("{BADGE}-more")), ["+1"]);
   // The badge sits in its own row over the message, at the composer's start.
@@ -339,19 +357,20 @@ fn slash_argument_badge_names_two_choices_and_counts_the_rest() {
 fn slash_argument_esc_keeps_the_badge_and_enter_sends_the_message_with_it() {
   let mut fixture = Fixture::new();
   fixture.choose_command("/watch-region");
-  fixture.key(("Enter", "Enter"), false);
-  fixture.key(("Escape", "Escape"), false);
+  fixture.key(("Enter", "Enter"), (true, false));
+  fixture.key(("Escape", "Escape"), (false, false));
   assert!(!fixture.kit.exists(PICKER), "Esc closes the picker");
   assert_eq!(fixture.badge(BADGE), "Watch · alpha", "the badge stays");
 
   fixture.kit.click(BADGE);
   assert!(fixture.kit.exists(PICKER), "the badge opens it again");
+  assert_eq!(fixture.value(SEARCH), "", "with an empty search");
   assert_eq!(fixture.picker_row("alpha"), "alpha focused taken");
-  fixture.key(("Escape", "Escape"), false);
+  fixture.key(("Escape", "Escape"), (false, false));
 
-  fixture.write("only the merges");
+  fixture.write(INPUT, "only the merges");
   assert!(!fixture.kit.exists(PICKER), "the words are the message, not a filter");
-  fixture.key(("Enter", "Enter"), false);
+  fixture.key(("Enter", "Enter"), (false, false));
   let applied = fixture.props.applied.lock().clone();
   assert_eq!(applied.len(), 1, "Enter applies the badge");
   let (name, done) = &applied[0];
@@ -366,8 +385,8 @@ fn slash_argument_esc_keeps_the_badge_and_enter_sends_the_message_with_it() {
   );
   assert!(!fixture.kit.exists(BADGE), "the badge goes");
 
-  fixture.write("plain words");
-  fixture.key(("Enter", "Enter"), false);
+  fixture.write(INPUT, "plain words");
+  fixture.key(("Enter", "Enter"), (false, false));
   assert_eq!(
     fixture.props.sent.lock().len(),
     1,
@@ -379,14 +398,14 @@ fn slash_argument_esc_keeps_the_badge_and_enter_sends_the_message_with_it() {
 fn slash_argument_two_commands_make_two_badges_and_backspace_removes_the_last() {
   let mut fixture = Fixture::new();
   fixture.choose_command("/watch-region");
-  fixture.key(("Enter", "Enter"), false);
-  fixture.key(("Escape", "Escape"), false);
+  fixture.key(("Enter", "Enter"), (false, false));
+  assert!(!fixture.kit.exists(PICKER), "Enter picks alpha and closes the picker");
   fixture.choose_command("/unwatch-region");
   let second = "test-composer-badge-unwatch-region";
   assert!(fixture.kit.exists(second), "a second badge");
-  fixture.key(("ArrowDown", "ArrowDown"), false);
-  fixture.key(("Enter", "Enter"), false);
-  fixture.key(("Escape", "Escape"), false);
+  fixture.key(("ArrowDown", "ArrowDown"), (false, false));
+  fixture.key(("Enter", "Enter"), (false, false));
+  assert!(!fixture.kit.exists(PICKER));
   assert_eq!(fixture.badge(BADGE), "Watch · alpha");
   assert_eq!(fixture.badge(second), "Stop watching · beta");
   let (first, next) = (fixture.kit.bounds(BADGE), fixture.kit.bounds(second));
@@ -395,7 +414,7 @@ fn slash_argument_two_commands_make_two_badges_and_backspace_removes_the_last() 
     "side by side: {first:?} {next:?}"
   );
 
-  fixture.key(("Backspace", "Backspace"), false);
+  fixture.key(("Backspace", "Backspace"), (false, false));
   assert!(!fixture.kit.exists(second), "Backspace removes the last badge");
   assert!(fixture.kit.exists(BADGE), "the first stays");
 }

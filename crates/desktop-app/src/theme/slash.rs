@@ -32,6 +32,9 @@ pub enum SlashText {
   SkillMatch,
   /// Geist Mono 11 `text_secondary`, 1.3: a skill chip's name (`LTjMB` in `o6R6w`).
   Chip,
+  /// 12.5 `text_primary`, 1.3: the words typed in a command picker's own search, its placeholder in `text_muted`
+  /// (`slpmj` in `P1` `QXPDY`).
+  Search,
   /// 12/500 `text_secondary`, 1.2: a command badge's verb, *Watch* (`v4W6sK` in `VvRWU`).
   BadgeVerb,
   /// 12 `text_primary`, 1.2: what a command badge holds, *Orchestrator watch* (`ejUxQ`); its `·` in `text_muted`.
@@ -41,7 +44,7 @@ pub enum SlashText {
 }
 
 impl SlashText {
-  pub const ALL: [Self; 11] = [
+  pub const ALL: [Self; 12] = [
     Self::Section,
     Self::Note,
     Self::Label,
@@ -50,6 +53,7 @@ impl SlashText {
     Self::SkillLabel,
     Self::SkillMatch,
     Self::Chip,
+    Self::Search,
     Self::BadgeVerb,
     Self::BadgeTarget,
     Self::BadgeMore,
@@ -69,6 +73,7 @@ impl SlashText {
       Self::SkillLabel => "slash_skill_label",
       Self::SkillMatch => "slash_skill_match",
       Self::Chip => "slash_chip",
+      Self::Search => "slash_search",
       Self::BadgeVerb => "slash_badge_verb",
       Self::BadgeTarget => "slash_badge_target",
       Self::BadgeMore => "slash_badge_more",
@@ -85,6 +90,7 @@ impl SlashText {
       Self::SkillLabel => mono(style(12.0, FontWeight::Normal, 1.3, 0.0, palette.text_primary)),
       Self::SkillMatch => mono(style(12.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary)),
       Self::Chip => mono(style(11.0, FontWeight::Normal, 1.3, 0.0, palette.text_secondary)),
+      Self::Search => style(12.5, FontWeight::Normal, 1.3, 0.0, palette.text_primary),
       Self::BadgeVerb => style(12.0, FontWeight::Medium, 1.2, 0.0, palette.text_secondary),
       Self::BadgeTarget => style(12.0, FontWeight::Normal, 1.2, 0.0, palette.text_primary),
       Self::BadgeMore => style(11.0, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),

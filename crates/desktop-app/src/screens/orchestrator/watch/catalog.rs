@@ -1,7 +1,7 @@
 //! What the /watch pickers choose from, as both read it: the project's modules and tasks and who leads what
 //! (`WatchCatalog`), read off the UI thread, again whenever a conversation or the project's tasks change, for the
-//! conversation shown. While it is read a picker shows its head over bone rows; one that cannot be read says so in the
-//! picker, with *Try again*.
+//! conversation shown. While it is read a picker shows its search and head over bone rows; one that cannot be read
+//! says so in the picker, with *Try again*.
 
 use std::{
   path::{Path, PathBuf},
@@ -97,7 +97,7 @@ impl CatalogReader {
       (None, None) => {
         return Offer {
           rows: Vec::new(),
-          panel: panel::reading(ctx, (asked.id, picker)),
+          panel: panel::reading(ctx, (asked.id, picker), asked.search),
         };
       }
     };
@@ -108,6 +108,7 @@ impl CatalogReader {
       panel: panel::unreadable(
         ctx,
         (asked.id, picker, &self.name, &why),
+        asked.search,
         Arc::new(move || runners.chat_changed(&root)),
       ),
     }

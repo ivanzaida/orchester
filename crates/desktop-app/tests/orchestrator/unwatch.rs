@@ -1,9 +1,9 @@
-//! `/unwatch` (ORC-774, `Parts · /unwatch` `NtsXc`; the badge ORC-890, P5 `ijspu`): *Stop watching* opens its picker
-//! while the conversation leads something. The picker lists only what this conversation watches (*Watched here · 3*),
-//! each with its kind, since when and what is still open there, then *All of them*, and the keys with *Type to
-//! filter*. Enter adds the focused row to the *Stop watching* badge; once the picker is closed Enter stops the badge's
-//! subscriptions and keeps the person's `/unwatch`, a message written with it optional; *All of them* stops
-//! everything; automation's Enter stops nothing.
+//! `/unwatch` (ORC-774, `Parts · /unwatch` `NtsXc`; its picker v2, ORC-889, as `P1` `QXPDY`; the badge ORC-890, P5
+//! `ijspu`): *Stop watching* opens its picker while the conversation leads something. The picker has its own search
+//! field and lists only what this conversation watches (*Watched here · 3*), each with its kind, since when and what
+//! is still open there, then *All of them*, and the keys. Enter adds the focused row to the *Stop watching* badge and
+//! closes the picker; then Enter stops the badge's subscriptions and keeps the person's `/unwatch`, a message written
+//! with it optional; *All of them* stops everything; automation's Enter stops nothing.
 //! `cargo test -p orchester-app --test orchestrator unwatch`.
 
 use lurq::app::events::with_synthetic_input;
@@ -32,6 +32,7 @@ use super::{
 const INPUT: &str = "orchestrator-input";
 const PICKER: &str = "orchestrator-composer-unwatch-picker";
 const BADGE: &str = "orchestrator-composer-badge-unwatch";
+const SEARCH: &str = "orchestrator-composer-unwatch-search";
 const COMMAND: &str = "orchestrator-composer-slash-unwatch";
 
 /// A task titled `title`, with no pipeline.
@@ -124,11 +125,9 @@ fn open_picker(screen: &mut Orchestrator) {
   screen.until("the picker", |screen| screen.exists(PICKER) && screen.exists(BADGE));
 }
 
-/// The focused row added to the badge with Enter, until `row` says so, and the picker closed with Esc.
-fn add_and_close(screen: &mut Orchestrator, row: &str) {
+/// The focused row added to the badge with Enter, which closes the picker.
+fn pick(screen: &mut Orchestrator) {
   screen.key(("Enter", "Enter"), false);
-  screen.until("the row to say so", |screen| screen.text(row).contains("Added"));
-  screen.key(("Escape", "Escape"), false);
   screen.until("the picker closed", |screen| !screen.exists(PICKER));
 }
 
@@ -160,8 +159,9 @@ fn orchestrator_unwatch_picker_lists_only_what_this_conversation_watches_with_it
   screen.until("the subscriptions", |screen| {
     screen.exists(&row(format!("module-{webhooks}")))
   });
+  assert!(screen.exists(SEARCH), "the picker's own search field");
   let shown = screen.text(PICKER).replace('\u{a0}', " ");
-  assert!(shown.starts_with("Watched here 3"), "three subscriptions: {shown}");
+  assert!(shown.contains("Watched here 3"), "three subscriptions: {shown}");
   for words in [
     "Webhooks v2",
     "module · since",
@@ -173,9 +173,10 @@ fn orchestrator_unwatch_picker_lists_only_what_this_conversation_watches_with_it
     "stop watching everything here",
     "cancels nothing",
     "Move",
-    "Add",
+    "Pick and close",
+    "Shift Enter",
+    "Add another",
     "Close",
-    "Type to filter",
   ] {
     assert!(shown.contains(words), "{words}: {shown}");
   }
@@ -203,7 +204,7 @@ fn orchestrator_unwatch_picker_lists_only_what_this_conversation_watches_with_it
     screen.bounds(PICKER)
   );
 
-  screen.set(INPUT, "sea");
+  screen.set(SEARCH, "sea");
   screen.until("only Search index", |screen| {
     screen.exists(&row(format!("module-{search}")))
       && !screen.exists(&row(format!("module-{webhooks}")))
@@ -226,7 +227,7 @@ fn orchestrator_unwatch_enter_stops_the_chosen_and_all_of_them_stops_the_rest() 
   screen.until("the subscriptions", |screen| {
     screen.exists(&row(format!("module-{webhooks}")))
   });
-  add_and_close(&mut screen, &row(format!("module-{webhooks}")));
+  pick(&mut screen);
   assert_eq!(badge_words(&mut screen, BADGE), "Stop watching · Webhooks v2");
   assert_eq!(screen.text("orchestrator-keys"), "Enter", "Enter sends now");
   screen.key(("Enter", "Enter"), false);
@@ -266,17 +267,15 @@ fn orchestrator_unwatch_enter_stops_the_chosen_and_all_of_them_stops_the_rest() 
 
   open_picker(&mut screen);
   screen.until("the two left", |screen| {
-    screen.text(PICKER).replace('\u{a0}', " ").starts_with("Watched here 2")
+    screen.text(PICKER).replace('\u{a0}', " ").contains("Watched here 2")
   });
-  // Search index, the task, then All of them.
+  // Search index, the task, then All of them; Enter picks it and closes the picker.
   screen.key(("ArrowDown", "ArrowDown"), false);
   screen.key(("ArrowDown", "ArrowDown"), false);
   screen.key(("Enter", "Enter"), false);
-  screen.until("All of them in the badge", |screen| {
-    badge_words(screen, BADGE) == "Stop watching · All of them"
+  screen.until("All of them in the badge, the picker closed", |screen| {
+    !screen.exists(PICKER) && badge_words(screen, BADGE) == "Stop watching · All of them"
   });
-  screen.key(("Escape", "Escape"), false);
-  screen.until("the picker closed", |screen| !screen.exists(PICKER));
   screen.key(("Enter", "Enter"), false);
   screen.until("everything here to stop", |screen| led(screen, here).is_empty());
   assert_eq!(
@@ -298,7 +297,7 @@ fn orchestrator_unwatch_refuses_synthetic_enter_and_keeps_the_badge() {
   screen.until("the subscriptions", |screen| {
     screen.exists(&row(format!("module-{webhooks}")))
   });
-  add_and_close(&mut screen, &row(format!("module-{webhooks}")));
+  pick(&mut screen);
 
   with_synthetic_input(|| screen.key(("Enter", "Enter"), false));
   let problem = "orchestrator-watching-problem";

@@ -1,19 +1,23 @@
 //! A command that takes an argument (ORC-771; v2 in `Proposal · watch composer v2` `LRg3R` of `Orchestrator watch ·
-//! redesign` `QOPcg`, ORC-890): chosen in the slash menu, it becomes one badge pinned in a row of its own at the top
-//! of the composer (*Watch · Orchestrator watch*, [`badges`]) and its picker opens over the composer's box. Enter adds
-//! the picker's focused choice to the badge, several allowed; Backspace in an empty field removes the badge's last
-//! choice, and the badge once none is left; Esc closes the picker, and a press on the badge opens it again. While a
-//! picker is open the words typed filter it; once it is closed the composer is the normal chat input, and a `/` opens
-//! the slash menu again, so one message can carry several commands, one badge each (choosing a command held already
-//! opens its own badge's picker). Then Backspace at the start of the text removes the last badge, and a badge's `x`
-//! removes it. The composer's own send applies every badge to its choices with the message's text
-//! ([`SlashField::apply_held`]) and sends the message with them. What a picker offers is the command's own
-//! ([`ArgumentPicker`]); the slash menu draws the badges and does the keys.
+//! redesign` `QOPcg`: the badge ORC-890, the picker `P1` `QXPDY` ORC-889): chosen in the slash menu, it becomes one
+//! badge pinned in a row of its own at the top of the composer (*Watch · Orchestrator watch*, [`badges`]) and its
+//! picker opens over the composer's box, the focus in the picker's own search field, whose words filter it
+//! ([`PickerSearch`]). While the picker is open its keys are its own, wherever the focus is: ↑ ↓ move through the rows
+//! that can be chosen, Enter adds the focused choice to the badge and closes the picker, Shift Enter adds it and keeps
+//! the picker open, Esc closes it and keeps the badge; a press outside it closes it too, and a press on the badge opens
+//! it again. Once it closes by its keys the composer's field takes the focus back. Backspace in an empty field removes
+//! the open badge's last choice, and the badge once none is left. Once the picker is closed the composer is the normal
+//! chat input, and a `/` opens the slash menu again, so one message can carry several commands, one badge each
+//! (choosing a command held already opens its own badge's picker). Then Backspace at the start of the text removes the
+//! last badge, and a badge's `x` removes it. The composer's own send applies every badge to its choices with the
+//! message's text ([`SlashField::apply_held`]) and sends the message with them. What a picker offers is the command's
+//! own ([`ArgumentPicker`]); the slash menu draws the badges and does the keys.
 
 mod badges;
 mod picker;
+mod search;
 
-use std::sync::Arc;
+use std::sync::{Arc, atomic::Ordering};
 
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx, events::KeyboardEvent},
@@ -21,6 +25,7 @@ use lurq::{
 };
 use orchester_core::id::ChatId;
 
+pub use self::search::PickerSearch;
 pub(super) use self::{badges::badges, picker::picker};
 use super::{SlashField, step};
 use crate::ui::icon::Icon;
@@ -51,12 +56,14 @@ pub type Apply = Arc<dyn Fn(Applied) -> bool + Send + Sync>;
 pub struct Asked<'a> {
   /// What names the composer: the picker's elements are named after it.
   pub id: &'a str,
-  /// The words typed while the picker is open.
+  /// The words typed in the picker's own search field.
   pub filter: &'a str,
   /// The choices its badge holds already.
   pub taken: &'a [Choice],
   /// The row with the keyboard's focus, among the rows the picker offered last for this filter.
   pub focused: Option<usize>,
+  /// The picker's search field, which its panel draws at its top, and what keeps its focused row in view.
+  pub search: &'a PickerSearch,
 }
 
 /// What a picker shows: its rows as the keys read them, each with whether it can be chosen now, in order, and the
@@ -159,8 +166,8 @@ impl SlashField {
     true
   }
 
-  /// The command `name` gets a badge, without choices, after those held, and its picker opens; for a command held
-  /// already, its own badge's picker opens.
+  /// The command `name` gets a badge, without choices, after those held, and its picker opens with an empty search;
+  /// for a command held already, its own badge's picker opens.
   pub(super) fn hold(&self, name: &'static str, taking: Taking) {
     let badge = taking.badge.clone();
     {
@@ -169,6 +176,7 @@ impl SlashField {
       takings.push((name, taking));
     }
     self.forget_choices();
+    self.clear_search();
     let mut held = self.argument.get_untracked();
     if !held.iter().any(|kept| kept.command == name) {
       held.push(Arguing {
@@ -194,30 +202,14 @@ impl SlashField {
       .map(|(_, taking)| taking.clone())
   }
 
-  /// Takes `event` while a badge's picker is open, and Backspace in an empty field while a badge is held, as the
-  /// module's head says: whether it did. Enter with no picker open is the composer's send.
+  /// Takes Backspace in an empty field while a badge is held, no picker open and the composer's field has the focus:
+  /// whether it did. Enter is the composer's send.
   pub(super) fn argument_key(&self, event: &KeyboardEvent) -> bool {
     if self.argument.with_untracked(Vec::is_empty) {
       return false;
     }
-    let plain = !event.shift && !event.ctrl && !event.meta && !event.alt;
-    let picking = self
-      .argument
-      .with_untracked(|held| held.iter().any(|badge| badge.picking));
     let took = match event.key.as_str() {
-      "Enter" if picking && plain => {
-        self.add_focused();
-        true
-      }
-      "ArrowDown" | "ArrowUp" if picking => {
-        self.move_focus(event.key == "ArrowDown");
-        true
-      }
-      "Escape" if picking => {
-        self.set_picking(None);
-        true
-      }
-      "Backspace" if plain && self.draft.get_untracked().is_empty() => {
+      "Backspace" if plain(event) && self.draft.get_untracked().is_empty() => {
         self.remove_last();
         true
       }
@@ -229,7 +221,41 @@ impl SlashField {
     took
   }
 
-  /// Opens the picker of the badge of `command`, or, for `None`, closes the one open.
+  /// Takes `event` while a badge's picker is open, as the module's head says: whether it did.
+  pub(super) fn picker_key(&self, event: &KeyboardEvent) -> bool {
+    let shifted = event.shift && !event.ctrl && !event.meta && !event.alt;
+    let took = match event.key.as_str() {
+      "Enter" if plain(event) => {
+        if self.add_focused() {
+          self.close_picker();
+        }
+        true
+      }
+      "Enter" if shifted => {
+        self.add_focused();
+        true
+      }
+      "ArrowDown" | "ArrowUp" => {
+        self.move_focus(event.key == "ArrowDown");
+        true
+      }
+      "Escape" => {
+        self.close_picker();
+        true
+      }
+      "Backspace" if plain(event) && self.focused.get_untracked() && self.draft.get_untracked().is_empty() => {
+        self.remove_last();
+        true
+      }
+      _ => false,
+    };
+    if took {
+      event.prevent_default();
+    }
+    took
+  }
+
+  /// Opens the picker of the badge of `command`, with an empty search, or, for `None`, closes the one open.
   pub(super) fn set_picking(&self, command: Option<&str>) {
     let mut held = self.argument.get_untracked();
     let mut changed = false;
@@ -239,8 +265,17 @@ impl SlashField {
       badge.picking = picking;
     }
     if changed {
+      if command.is_some() {
+        self.clear_search();
+      }
       self.argument.set(held);
     }
+  }
+
+  /// The picker closes by its keys, and the composer's field takes the focus back.
+  fn close_picker(&self) {
+    self.refocus.store(true, Ordering::Relaxed);
+    self.set_picking(None);
   }
 
   /// Removes the badge of `command`, with its choices.
@@ -264,23 +299,28 @@ impl SlashField {
     }
   }
 
-  /// Enter in the picker: its focused row, while it can be chosen and its badge does not hold it yet, becomes the
-  /// badge's last choice, and the filter empties.
-  fn add_focused(&self) {
+  /// Enter or Shift Enter in the picker: its focused row, while it can be chosen and its badge does not hold it yet,
+  /// becomes the badge's last choice, and the search empties. Whether a row was focused that can be chosen.
+  fn add_focused(&self) -> bool {
     let offered = self.offered_choices.lock().clone().unwrap_or_default();
     let Some((choice, true)) = offered.focused.and_then(|at| offered.rows.get(at)).cloned() else {
-      return;
+      return false;
     };
     let mut held = self.argument.get_untracked();
     let Some(badge) = held.iter_mut().find(|badge| badge.picking) else {
-      return;
+      return false;
     };
     if !badge.choices.contains(&choice) {
       badge.choices.push(choice);
       self.argument.set(held);
     }
-    if !self.draft.get_untracked().is_empty() {
-      self.draft.set(String::new());
+    self.clear_search();
+    true
+  }
+
+  fn clear_search(&self) {
+    if !self.search.get_untracked().is_empty() {
+      self.search.set(String::new());
     }
   }
 
@@ -317,4 +357,18 @@ impl SlashField {
   pub(super) fn forget_choices(&self) {
     *self.offered_choices.lock() = None;
   }
+
+  /// The composer's field takes the focus back, once, after the picker closed by its keys.
+  pub(super) fn take_focus_back(&self, ctx: &Ctx) {
+    if self.refocus.swap(false, Ordering::Relaxed)
+      && let Some(input) = &self.input
+    {
+      ctx.focus(input);
+    }
+  }
+}
+
+/// A key pressed with no modifier.
+fn plain(event: &KeyboardEvent) -> bool {
+  !event.shift && !event.ctrl && !event.meta && !event.alt
 }

@@ -148,10 +148,11 @@ impl Component for SlashMenu {
     if typed.is_none() && field.closed.get() {
       field.closed.set(false);
     }
-    // While a badge's picker is open, the draft filters it and the picker shows instead.
+    // While a badge's picker is open, it shows instead; the picker's own search holds the focus then.
     let picking = field
       .argument
       .with(|held| held.iter().find(|badge| badge.picking).map(|badge| badge.command));
+    field.take_focus_back(ctx);
     let focused = field.focused.get();
     let open = typed.is_some() && picking.is_none() && focused && !field.closed.get();
     let read = skills::read(ctx, &props.skills, open);
@@ -159,7 +160,7 @@ impl Component for SlashMenu {
       *field.shown.lock() = None;
       *self.last.lock() = None;
       return match picking {
-        Some(command) if focused => argument::picker(ctx, (props.id, field, &props.anchor), command),
+        Some(command) => argument::picker(ctx, (props.id, field, &props.anchor), command),
         _ => {
           field.forget_choices();
           Element::new()

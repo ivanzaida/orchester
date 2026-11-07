@@ -7,7 +7,7 @@
 //! picker ([`argument`], ORC-771, ORC-890); a skill becomes the composer's chip ([`with_chips`]) in place of the one it
 //! held. Esc closes the menu and keeps the text. A row that cannot be chosen now stays in its place, faded, and says
 //! why. With nothing that matches, Enter sends the text as typed. Once a space or a new line follows the `/`, or
-//! anywhere later in the text, a `/` is just text; while a badge's picker is open, the words typed filter it.
+//! anywhere later in the text, a `/` is just text; a badge's open picker is filtered by its own search field.
 
 mod argument;
 mod chip;
@@ -15,11 +15,14 @@ mod menu;
 mod rows;
 mod skills;
 
-use std::{ops::Range, sync::Arc};
+use std::{
+  ops::Range,
+  sync::{Arc, atomic::AtomicBool},
+};
 
 use lurq::{
   app::{ctx::Ctx, events::KeyboardEvent},
-  core::Signal,
+  core::{ElementRef, Signal},
 };
 use orchester_core::id::ResourceId;
 use orchester_workspace::skills::offered::OfferedSkill;
@@ -27,7 +30,7 @@ use parking_lot::Mutex;
 
 use self::argument::Arguing;
 pub use self::{
-  argument::{Applied, Apply, ArgumentPicker, Asked, Badge, Choice, Offer, Taking},
+  argument::{Applied, Apply, ArgumentPicker, Asked, Badge, Choice, Offer, PickerSearch, Taking},
   chip::{SkillReach, plan_held, sent_chip, sent_command_chip, sent_skill_chip, with_chips},
   menu::{SlashMenuProps, menu},
   skills::SkillsOffer,
@@ -104,6 +107,12 @@ pub struct SlashField {
   /// The picker's row with the keyboard's focus, and the rows it shows now.
   choice_focus: Signal<Option<usize>>,
   offered_choices: Arc<Mutex<Option<argument::Offered>>>,
+  /// The words typed in the picker's own search field, which filter it.
+  search: Signal<String>,
+  /// The composer's input, which takes the focus back once the picker closes by its keys.
+  input: Option<ElementRef>,
+  /// The picker closed by its keys: the input takes the focus back on the menu's next pass.
+  refocus: Arc<AtomicBool>,
 }
 
 impl PartialEq for SlashField {
@@ -132,13 +141,32 @@ impl SlashField {
       taking: Arc::default(),
       choice_focus: ctx.signal(None),
       offered_choices: Arc::default(),
+      search: ctx.signal(String::new()),
+      input: None,
+      refocus: Arc::default(),
     }
   }
 
-  /// Takes `event` when the open menu, or a badge's open picker, has a use for it, before the field's own keys:
-  /// whether it did.
+  /// The composer's input `input` takes the focus back when a picker closes by its keys: the picker's own search held
+  /// it.
+  pub fn returns_focus_to(mut self, input: ElementRef) -> Self {
+    self.input = Some(input);
+    self
+  }
+
+  /// Takes `event` when the open menu, a badge's open picker or the badges have a use for it, before the field's own
+  /// keys: whether it did. An open picker takes its keys wherever the focus is: its own search field holds it.
   pub fn key(&self, event: &KeyboardEvent) -> bool {
-    if event.composing || event.default_prevented() || !self.focused.get_untracked() {
+    if event.composing || event.default_prevented() {
+      return false;
+    }
+    if self
+      .argument
+      .with_untracked(|held| held.iter().any(|badge| badge.picking))
+    {
+      return self.picker_key(event);
+    }
+    if !self.focused.get_untracked() {
       return false;
     }
     if self.argument_key(event) {

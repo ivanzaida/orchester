@@ -1,11 +1,12 @@
-//! The /watch-task picker's panel (`Task picker` `gumeP` in 03 `mQdxa`), in the panel the pickers share
-//! ([`super::panel`]). Under the head *Tasks*, with how many tasks it shows at its end (*4 of 24* once something is
-//! typed), a row for each: a 14 `square-check` in `text_secondary`, the key in Geist Mono 12 `text_secondary` in a 64
-//! column with the letters that match what was typed in 600 `text_primary`, the title and its module in 12
+//! The /watch-task picker's panel (`Task picker` `gumeP` in 03 `mQdxa`, v2 as `r7kka` in `P1` `QXPDY`), in the panel
+//! the pickers share ([`super::panel`]). Its own search field, *Search tasks* with how many tasks are open at its end;
+//! under the head *Tasks*, with *22 open · 1 added* at its end (*4 of 24* once something is typed), a row for each in a
+//! list that scrolls after 8: a 14 `square-check` in `text_secondary`, the key in Geist Mono 12 `text_secondary` in a
+//! 64 column with the letters that match what was typed in 600 `text_primary`, the title and its module in 12
 //! `text_primary` (*· no module* without one), the workflow status in 11 `text_muted`, and at its end who leads it:
 //! *Added*, *Comes here via Webhooks v2* in `text_muted` when this conversation leads it through what covers it,
-//! *Watched here*, or *Led in «…» ↗* in `warning`. A Done or Canceled task is faded to half and says *nothing to
-//! watch*.
+//! *Watched here*, or *Led in «…» ↗* in `warning`. While the search is empty the Done and Canceled tasks hide behind
+//! *2 done tasks · type to find them*; one the search finds is faded to half and says *nothing to watch*.
 
 use std::sync::Arc;
 
@@ -20,11 +21,18 @@ use lurq::{
 use orchester_core::{id::ProjectId, orchestrator::WatchTarget};
 use orchester_workspace::mentions::watch::{Leader, tasks::TaskEntry};
 
-use super::panel::{self, LedIn, Picker};
+use super::{
+  panel::{self, LedIn, Picker},
+  rows::Counts,
+};
 use crate::{
   navigation::Navigation,
   theme::{DISABLED_OPACITY, ExtraColor, IconSize},
-  ui::{icon::icon, slash::Choice, status::workflow_key},
+  ui::{
+    icon::icon,
+    slash::{Choice, PickerSearch},
+    status::workflow_key,
+  },
 };
 
 const PICKER: Picker = Picker::Task;
@@ -36,32 +44,59 @@ pub(super) struct Shown<'a> {
   /// What names the composer: the picker's elements are named after it.
   pub(super) id: &'a str,
   pub(super) project: ProjectId,
-  /// The words typed after the chips.
+  /// The words typed in the picker's search.
   pub(super) filter: &'a str,
   /// Its rows, in order, with the chip each becomes.
   pub(super) offered: &'a [(&'a TaskEntry, Choice)],
   pub(super) focused: Option<usize>,
-  /// How many tasks the project has.
-  pub(super) total: usize,
+  /// The project's tasks.
+  pub(super) counts: Counts,
   /// Opens the conversation a *Led in* names.
   pub(super) navigation: Navigation,
 }
 
-/// The panel with its rows and the keys.
-pub(super) fn panel(ctx: &Ctx, shown: &Shown<'_>) -> Element {
-  let count = panel::count(ctx, shown.filter, (shown.offered.len(), shown.total));
-  let mut content = vec![panel::heading(ctx, (shown.id, PICKER, "section"), None, Some(count))];
-  if shown.offered.is_empty() && !shown.filter.is_empty() {
+/// The panel with its search, its rows and the keys.
+pub(super) fn panel(ctx: &mut Ctx, shown: &Shown<'_>, search: &PickerSearch) -> Element {
+  let Counts {
+    open,
+    added,
+    total,
+    hidden,
+  } = shown.counts;
+  let filtered = !shown.filter.trim().is_empty();
+  let count = if filtered {
+    panel::count(ctx, (shown.offered.len(), total))
+  } else {
+    panel::open_count(ctx, open, added)
+  };
+  let open_words = panel::open_count(ctx, open, 0);
+  let mut content = vec![
+    panel::search_field(ctx, (shown.id, PICKER), search, Some(open_words)),
+    panel::heading(ctx, (shown.id, PICKER, "section"), None, Some(count)),
+  ];
+  if shown.offered.is_empty() && filtered {
     let words = ctx.t_args("orchestrator.watch.tasks.nothing", [("query", shown.filter)]);
     content.push(panel::nothing((shown.id, PICKER), &words));
   }
-  content.extend((0..shown.offered.len()).map(|at| row(ctx, shown, at)));
+  let rows: Vec<Element> = (0..shown.offered.len()).map(|at| row(ctx, shown, at, search)).collect();
+  if !rows.is_empty() {
+    content.push(panel::list(ctx, &format!("{}-watch-task-list", shown.id), rows));
+  }
+  if hidden > 0 {
+    let form = if hidden == 1 { "one" } else { "other" };
+    let words = ctx.t_args(
+      &format!("orchestrator.watch.tasks.finished.{form}"),
+      [("count", hidden.to_string())],
+    );
+    content.push(panel::finished((shown.id, PICKER), (hidden, &words)));
+  }
   content.push(panel::footer(ctx, (shown.id, PICKER), !shown.offered.is_empty()));
   panel::frame((shown.id, PICKER), content)
 }
 
-/// Row `at`: its icon, key, title and module, status and who leads it, *Enter* while it has the focus.
-fn row(ctx: &Ctx, shown: &Shown<'_>, at: usize) -> Element {
+/// Row `at`: its icon, key, title and module, status and who leads it, *Enter* while it has the focus, which `search`
+/// keeps in view.
+fn row(ctx: &Ctx, shown: &Shown<'_>, at: usize, search: &PickerSearch) -> Element {
   let (entry, choice) = &shown.offered[at];
   let focused = shown.focused == Some(at);
   let key = Row::new()
@@ -92,7 +127,7 @@ fn row(ctx: &Ctx, shown: &Shown<'_>, at: usize) -> Element {
     .describe("state", state_name(entry))
     .with_children(children);
   let row = if focused {
-    row.background(ExtraColor::Hover.role())
+    search.keep_in_view(row.background(ExtraColor::Hover.role()))
   } else {
     row
   };

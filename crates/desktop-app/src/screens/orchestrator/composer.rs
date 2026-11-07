@@ -186,11 +186,16 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, mut composer: ComposerBox<'_>
     .with_children(attached)
     .child(field)
     .child(bar);
-  Column::new()
+  let spaced = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .child(tray::drop_target(boxed, &view.attached))
-    .with_children(tray::refusals(ctx, ATTACHMENTS, &view.attached))
+    .with_children(tray::refusals(ctx, ATTACHMENTS, &view.attached));
+  // The menus stay out of the spaced column: a closed one is an empty element, which takes a gap there, and an open
+  // one an overlay, which takes none, so the composer would move as one opens and closes (ORC-891).
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .child(spaced)
     .with_children(composer.menus)
 }
 

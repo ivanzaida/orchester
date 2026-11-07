@@ -1,10 +1,11 @@
-//! `/watch-module` (ORC-772, `02 · Choosing modules` `c8pALl` in `Orchestrator watch · redesign`; the badge ORC-890,
-//! P2 `WbHSt` in `Proposal · watch composer v2` `LRg3R`): its picker lists the project's open modules with what they
-//! take in, *Led in «…» ↗* for one another conversation leads (which opens it), a module with nothing left to watch
-//! faded, then *Also* with the tasks without a module and everything in the project, and the keys; Enter adds the
-//! focused module to the command's one badge, and the row then reads *Added*; the words typed filter the modules by
-//! name while the picker is open. Once it is closed the composer is the normal chat input: Enter sends the message,
-//! and the conversation watches the badge's modules with the message as their order.
+//! `/watch-module` (ORC-772, `02 · Choosing modules` `c8pALl` in `Orchestrator watch · redesign`; its picker v2,
+//! ORC-889, `P1` `QXPDY`, and its badge, ORC-890, P2 `WbHSt` in `Proposal · watch composer v2` `LRg3R`): its picker
+//! lists the project's open modules with what they take in, *Led in «…» ↗* for one another conversation leads (which
+//! opens it), a module with nothing left to watch behind one counted row, then *Also* with the tasks without a module
+//! and everything in the project, and the keys; Enter adds the focused module to the command's one badge and closes
+//! the picker, and the row then reads *Added*; the words typed in its own search filter the modules by name. Once it
+//! is closed the composer is the normal chat input: Enter sends the message, and the conversation watches the badge's
+//! modules with the message as their order. The list's cap, the finished row and the keys of v2 are `watch_picker`'s.
 
 use lurq::app::events::with_synthetic_input;
 use orchester_app::routes::{OrchestratorChat, ProjectPage, Route};
@@ -28,7 +29,8 @@ use super::{
 };
 
 const INPUT: &str = "orchestrator-input";
-const PICKER: &str = "orchestrator-composer-watch-module-picker";
+pub(super) const PICKER: &str = "orchestrator-composer-watch-module-picker";
+pub(super) const SEARCH: &str = "orchestrator-composer-watch-module-search";
 pub(super) const BADGE: &str = "orchestrator-composer-badge-watch-module";
 
 /// The person's messages kept in conversation `chat`, in order.
@@ -95,16 +97,22 @@ const TITLE: &str = "Split Webhooks v2 and Billing";
 
 /// Kontur's modules: Webhooks v2 (two tasks), Billing (one, led in *Billing and invoices*) and Mobile release (one,
 /// Done); one task without a module. The screen shows the conversation *Split Webhooks v2 and Billing*.
-struct Kontur {
-  screen: Orchestrator,
-  here: ChatId,
-  billing_chat: ChatId,
-  webhooks: ModuleId,
-  billing: ModuleId,
-  limiter: TaskId,
+pub(super) struct Kontur {
+  pub(super) screen: Orchestrator,
+  pub(super) here: ChatId,
+  pub(super) billing_chat: ChatId,
+  pub(super) webhooks: ModuleId,
+  pub(super) billing: ModuleId,
+  pub(super) mobile: ModuleId,
+  pub(super) limiter: TaskId,
 }
 
 fn kontur() -> Kontur {
+  kontur_with(|_| {})
+}
+
+/// [`kontur`], with what `more` adds to the project's database before the screen shows it.
+pub(super) fn kontur_with(more: impl FnOnce(&mut ProjectDb)) -> Kontur {
   let mut screen = Orchestrator::new(Setup::Ready);
   let billing_chat = kept(&screen, "Billing and invoices", Timestamp::now(), "Billing it is.");
   let here = kept(&screen, TITLE, Timestamp::now(), "Tell me what to watch.");
@@ -115,12 +123,12 @@ fn kontur() -> Kontur {
     &["Retry failed deliveries", "Sign webhook payloads"],
   );
   let (billing, _) = module(&mut db, "Billing", &["Invoice export"]);
-  let (_, mobile) = module(&mut db, "Mobile release", &["Store screenshots"]);
-  db.close_task_organization(mobile[0], WorkflowStatus::Done, (ChangeActor::Person, Timestamp::now()))
-    .expect("done");
+  let (mobile, mobile_tasks) = module(&mut db, "Mobile release", &["Store screenshots"]);
+  done(&mut db, mobile_tasks[0]);
   let limiter = task(&mut db, "Shared rate limiter");
   let led = Subscription::new(billing_chat, WatchTarget::Module(billing), "", Timestamp::now());
   db.start_subscription(&led).expect("led");
+  more(&mut db);
   drop(db);
   screen.go(OrchestratorChat::Chat(here));
   screen.until("the conversation", |screen| {
@@ -134,8 +142,15 @@ fn kontur() -> Kontur {
     billing_chat,
     webhooks,
     billing,
+    mobile,
     limiter,
   }
+}
+
+/// Task `id` is Done.
+pub(super) fn done(db: &mut ProjectDb, id: TaskId) {
+  db.close_task_organization(id, WorkflowStatus::Done, (ChangeActor::Person, Timestamp::now()))
+    .expect("done");
 }
 
 /// The focus in the message field.
@@ -150,7 +165,7 @@ pub(super) fn focus_field(screen: &mut Orchestrator) {
 
 /// *Watch modules* chosen in the slash menu, where it is the first command `/watch` matches that can run: the
 /// command's badge and its picker.
-fn open_picker(screen: &mut Orchestrator) {
+pub(super) fn open_picker(screen: &mut Orchestrator) {
   focus_field(screen);
   screen.set(INPUT, "/watch");
   let command = "orchestrator-composer-slash-watch-module";
@@ -162,7 +177,7 @@ fn open_picker(screen: &mut Orchestrator) {
   screen.until("the picker", |screen| screen.exists(PICKER) && screen.exists(BADGE));
 }
 
-fn row(id: impl std::fmt::Display) -> String {
+pub(super) fn row(id: impl std::fmt::Display) -> String {
   format!("orchestrator-composer-watch-module-{id}")
 }
 
@@ -176,16 +191,14 @@ fn watched(screen: &Orchestrator, module: ModuleId) -> bool {
     .is_some()
 }
 
-/// Webhooks v2 added to the badge with Enter in the open picker, and the picker closed with Esc.
+/// Webhooks v2 added to the badge with Enter in the open picker, which closes it.
 fn webhooks_chosen(screen: &mut Orchestrator, webhooks: ModuleId) {
   open_picker(screen);
   screen.until("the modules", |screen| screen.exists(&row(webhooks)));
   screen.key(("Enter", "Enter"), false);
-  screen.until("Webhooks v2 in the badge", |screen| {
-    badge_words(screen, BADGE) == "Watch · Webhooks v2"
+  screen.until("Webhooks v2 in the badge, the picker closed", |screen| {
+    !screen.exists(PICKER) && badge_words(screen, BADGE) == "Watch · Webhooks v2"
   });
-  screen.key(("Escape", "Escape"), false);
-  screen.until("the picker closed", |screen| !screen.exists(PICKER));
 }
 
 #[test]
@@ -199,23 +212,23 @@ fn orchestrator_watch_module_picker_lists_modules_who_leads_them_and_the_whole_t
   } = kontur();
   open_picker(&mut screen);
   screen.until("the modules", |screen| screen.exists(&row(webhooks)));
+  assert!(screen.exists(SEARCH), "the picker's own search field");
   let shown = screen.text(PICKER).replace('\u{a0}', " ");
-  assert!(shown.starts_with("Modules 3"), "three open modules: {shown}");
+  assert!(shown.contains("Modules 2 open"), "two open modules: {shown}");
   for words in [
     "Webhooks v2",
     "2 tasks · none running",
     "Billing",
     "Led in «Billing and invoices» ↗",
-    "Mobile release",
-    "1 task · all done",
-    "Nothing left to watch",
+    "1 finished module · type to find it",
     "Also",
     "Tasks without a module",
     "Everything in",
     "What no other subscription takes",
     "Move",
-    "Add",
-    "Remove the last",
+    "Pick and close",
+    "Shift Enter",
+    "Add another",
     "Close",
   ] {
     assert!(shown.contains(words), "{words}: {shown}");
@@ -226,7 +239,7 @@ fn orchestrator_watch_module_picker_lists_modules_who_leads_them_and_the_whole_t
     webhooks_row.contains("Enter"),
     "the focus starts on the first module: {webhooks_row}"
   );
-  let order: Vec<f32> = ["Webhooks v2", "Billing", "Mobile release", "Tasks without a module"]
+  let order: Vec<f32> = ["Webhooks v2", "Billing", "finished module", "Tasks without a module"]
     .iter()
     .map(|words| {
       let found = screen.text(PICKER).replace('\u{a0}', " ").find(words).expect("shown");
@@ -235,7 +248,7 @@ fn orchestrator_watch_module_picker_lists_modules_who_leads_them_and_the_whole_t
     .collect();
   assert!(
     order.windows(2).all(|pair| pair[0] < pair[1]),
-    "in 02's order: {order:?}"
+    "in P1's order: {order:?}"
   );
   assert!(
     (screen.bounds(PICKER).width - 560.0).abs() < 0.5,
@@ -244,15 +257,14 @@ fn orchestrator_watch_module_picker_lists_modules_who_leads_them_and_the_whole_t
   );
 
   screen.key(("Enter", "Enter"), false);
-  screen.until("Webhooks v2 added", |screen| {
-    screen.text(&row(webhooks)).contains("Added")
+  screen.until("Webhooks v2 in the badge, the picker closed", |screen| {
+    !screen.exists(PICKER) && badge_words(screen, BADGE) == "Watch · Webhooks v2"
   });
-  assert_eq!(
-    badge_words(&mut screen, BADGE),
-    "Watch · Webhooks v2",
-    "the module joins the badge"
-  );
 
+  screen.click(BADGE);
+  screen.until("Webhooks v2 added", |screen| {
+    screen.exists(&row(webhooks)) && screen.text(&row(webhooks)).contains("Added")
+  });
   screen.click(&row(format!("{billing}-led-in")));
   screen.until("the leading conversation", |screen| {
     screen.route()
@@ -279,10 +291,10 @@ fn orchestrator_watch_module_one_badge_names_two_modules_and_counts_the_rest() {
     "the verb alone while nothing is chosen"
   );
   screen.until("the modules", |screen| screen.exists(&row(webhooks)));
-  // Webhooks v2, then Tasks without a module and Everything in Kontur: Billing is led elsewhere and Mobile release has
-  // nothing left, so the focus steps over them as the rows can be chosen.
+  // Three rows added with Shift Enter, which keeps the picker open; the focus goes back to the first row that can be
+  // chosen once one is added, and the arrow moves past it.
   for _ in 0..3 {
-    screen.key(("Enter", "Enter"), false);
+    screen.shift_key(("Enter", "Enter"));
     screen.key(("ArrowDown", "ArrowDown"), false);
   }
   screen.until("three in the badge", |screen| screen.exists(&format!("{BADGE}-more")));
@@ -313,18 +325,16 @@ fn orchestrator_watch_module_typed_after_picking_is_a_message_and_enter_sends_it
     ..
   } = kontur();
   open_picker(&mut screen);
-  screen.set(INPUT, "hoo");
+  screen.set(SEARCH, "hoo");
   // The matched letters are a piece of their own, so the row is found by its id rather than its whole name.
   screen.until("only Webhooks v2", |screen| {
     screen.exists(&row(webhooks)) && !screen.exists(&row(billing)) && screen.text(PICKER).contains("1 of 3")
   });
   assert!(screen.text(&row(webhooks)).contains("hoo"), "the matched letters show");
   screen.key(("Enter", "Enter"), false);
-  screen.until("the badge", |screen| {
-    badge_words(screen, BADGE) == "Watch · Webhooks v2"
+  screen.until("the badge, the picker closed", |screen| {
+    !screen.exists(PICKER) && badge_words(screen, BADGE) == "Watch · Webhooks v2"
   });
-  screen.key(("Escape", "Escape"), false);
-  screen.until("the picker closed", |screen| !screen.exists(PICKER));
   assert!(
     screen.text(INPUT).contains("Message the Orchestrator…"),
     "the normal placeholder: {}",
@@ -444,7 +454,7 @@ fn orchestrator_watch_module_and_task_badges_in_one_message_both_apply_on_enter(
   screen.until("the task picker", |screen| {
     screen.exists(task_picker) && screen.exists(task_badge)
   });
-  screen.set(INPUT, "rate lim");
+  screen.set("orchestrator-composer-watch-task-search", "rate lim");
   let limiter_key = screen
     .db()
     .task(limiter)
@@ -456,9 +466,9 @@ fn orchestrator_watch_module_and_task_badges_in_one_message_both_apply_on_enter(
   screen.until("only the limiter", |screen| screen.exists(&limiter_row));
   screen.key(("Enter", "Enter"), false);
   let words = format!("Watch · {limiter_key}");
-  screen.until("the task badge", |screen| badge_words(screen, task_badge) == words);
-  screen.key(("Escape", "Escape"), false);
-  screen.until("the picker closed", |screen| !screen.exists(task_picker));
+  screen.until("the task badge, the picker closed", |screen| {
+    !screen.exists(task_picker) && badge_words(screen, task_badge) == words
+  });
   assert_eq!(
     screen.text("orchestrator-composer-badges").matches("Watch").count(),
     2,

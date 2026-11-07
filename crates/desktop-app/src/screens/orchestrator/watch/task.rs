@@ -1,10 +1,11 @@
-//! `/watch-task` (ORC-773, `03 · Choosing tasks` `mQdxa` in `Orchestrator watch · redesign`; its badge P4 `nFeQs`,
-//! ORC-890): chosen in the slash menu it becomes the composer's *Watch* badge and opens the picker of the project's
-//! tasks, matched by key or title as `WatchCatalog::tasks` lists them for the conversation shown ([`super::catalog`],
-//! [`super::task_rows`]). The tasks chosen there join the badge by their keys, and the composer's send has the
-//! conversation watch them with the message's words as their order, as `/watch-module` does
-//! ([`super::module::apply`]). A Done or Canceled task, or one chosen already, cannot be chosen; one another
-//! conversation leads can, and the command returns it for the card.
+//! `/watch-task` (ORC-773, `03 · Choosing tasks` `mQdxa` in `Orchestrator watch · redesign`; its picker v2 as `P1`
+//! `QXPDY`, ORC-889, its badge P4 `nFeQs`, ORC-890): chosen in the slash menu it becomes the composer's *Watch* badge
+//! and opens the picker of the project's tasks, matched by key or title in its own search as `WatchCatalog::tasks`
+//! lists them for the conversation shown ([`super::catalog`], [`super::task_rows`]). The tasks chosen there join the
+//! badge by their keys, and the composer's send has the conversation watch them with the message's words as their
+//! order, as `/watch-module` does ([`super::module::apply`]). A Done or Canceled task, or one chosen already, cannot be
+//! chosen; while the search is empty the Done and Canceled ones hide behind one row that counts them. One another
+//! conversation leads can be chosen, and the command returns it for the card.
 
 use std::sync::Arc;
 
@@ -19,6 +20,7 @@ use super::{
   catalog::CatalogReader,
   module::apply,
   panel::Picker,
+  rows::Counts,
   task_rows::{self, Shown},
 };
 use crate::{
@@ -75,7 +77,7 @@ struct TaskPicker {
 }
 
 impl TaskPicker {
-  /// The rows of `catalog` for what was `asked`.
+  /// The rows of `catalog` for what was `asked`; while the search is empty, without the Done and Canceled tasks.
   fn offer_read(&self, ctx: &mut Ctx, asked: &Asked<'_>, catalog: &WatchCatalog) -> Offer {
     let navigation = Navigation::of(ctx);
     let added: Vec<WatchTarget> = asked.taken.iter().filter_map(|choice| target_of(&choice.key)).collect();
@@ -84,7 +86,12 @@ impl TaskPicker {
       added: &added,
     };
     let entries = catalog.tasks(asked.filter, choosing);
-    let offered: Vec<(&TaskEntry, Choice)> = entries.iter().map(|entry| (entry, choice(entry))).collect();
+    let hide = asked.filter.trim().is_empty();
+    let offered: Vec<(&TaskEntry, Choice)> = entries
+      .iter()
+      .filter(|entry| !(hide && entry.faded.is_some()))
+      .map(|entry| (entry, choice(entry)))
+      .collect();
     let rows = offered
       .iter()
       .map(|(entry, choice)| {
@@ -94,18 +101,23 @@ impl TaskPicker {
         )
       })
       .collect();
-    let panel = task_rows::panel(
-      ctx,
-      &Shown {
-        id: asked.id,
-        project: self.catalog.project,
-        filter: asked.filter,
-        offered: &offered,
-        focused: asked.focused,
-        total: catalog.tasks.len(),
-        navigation,
-      },
-    );
+    let all = catalog.tasks("", choosing);
+    let counts = Counts {
+      open: all.iter().filter(|entry| entry.faded.is_none()).count(),
+      added: asked.taken.len(),
+      total: catalog.tasks.len(),
+      hidden: if hide { entries.len() - offered.len() } else { 0 },
+    };
+    let shown = Shown {
+      id: asked.id,
+      project: self.catalog.project,
+      filter: asked.filter,
+      offered: &offered,
+      focused: asked.focused,
+      counts,
+      navigation,
+    };
+    let panel = task_rows::panel(ctx, &shown, asked.search);
     Offer { rows, panel }
   }
 }
