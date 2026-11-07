@@ -37,8 +37,7 @@ fn bundle_missing_with_a_reason_round_trips_for_every_kind() {
   for kind in [
     "pipeline_missing",
     "file_missing",
-    "cli_kind_missing",
-    "mcp_servers_unresolved",
+    "profile_unreadable",
     "mcp_server_archived",
     "body_unreadable",
     "bundle_too_large",
@@ -87,10 +86,27 @@ fn bundle_missing_unknown_kind_reads_as_other_and_unknown_reason_fields_are_igno
 }
 
 #[test]
+fn bundle_missing_reason_without_a_known_kind_reads_as_other() {
+  let resource = ResourceId::generate();
+  for reason in [
+    json!({}),
+    json!({"kind": null}),
+    json!({"kind": 7}),
+    json!({"kind": ["file_missing"]}),
+    json!({"kind": {"name": "file_missing"}}),
+    json!({"kind": "cli_kind_missing"}),
+    json!({"kind": "mcp_servers_unresolved"}),
+  ] {
+    let error = bundle_missing(&json!({"reason": reason})).expect("a refusal");
+    assert_eq!(reason_of(&error).kind, BundleMissingKind::Other, "{reason}");
+  }
+  let error = bundle_missing(&json!({"reason": {"kind": 7, "resource_id": resource}})).expect("a refusal");
+  assert_eq!(reason_of(&error).resource_id, Some(resource));
+}
+
+#[test]
 fn bundle_missing_details_stay_closed_around_the_reason() {
   for invalid in [
-    json!({"reason": {}}),
-    json!({"reason": {"kind": null}}),
     json!({"reason": {"kind": "other", "resource_id": "not-an-id"}}),
     json!({"reason": {"kind": "other", "version": 0}}),
     json!({"reason": {"kind": "other"}, "path": "/srv/bundles/x"}),
@@ -98,7 +114,7 @@ fn bundle_missing_details_stay_closed_around_the_reason() {
   ] {
     assert!(bundle_missing(&invalid).is_err(), "{invalid}");
   }
-  let reason = json!({"reason": {"kind": "cli_kind_missing"}});
+  let reason = json!({"reason": {"kind": "profile_unreadable"}});
   for code in ["invalid", "decision_required", "claim_lost"] {
     let wire = json!({"code": code, "details": reason});
     assert!(serde_json::from_value::<AuthorityError>(wire).is_err(), "{code}");

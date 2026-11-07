@@ -241,14 +241,14 @@ async fn authority_client_task_list_posts_its_request_and_reads_the_page() {
 #[tokio::test]
 async fn authority_client_reads_why_a_bundle_is_missing() {
   let (project, profile) = (ProjectId::generate(), ResourceId::generate());
-  let reason = json!({"kind": "cli_kind_missing", "resource_id": profile});
+  let reason = json!({"kind": "profile_unreadable", "resource_id": profile});
   let server = Server::start(vec![
     Answer::status(409, &json!({"code": "bundle_missing", "details": {"reason": reason}})),
     Answer::status(409, &json!({"code": "bundle_missing", "details": {}})),
   ]);
   let (client, token) = (server.client(), token());
   let request = TaskListRequest::default();
-  for expected in [Some((BundleMissingKind::CliKindMissing, profile)), None] {
+  for expected in [Some((BundleMissingKind::ProfileUnreadable, profile)), None] {
     let error = client
       .authority(&token, project)
       .tasks(&request)

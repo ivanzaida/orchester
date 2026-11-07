@@ -46,7 +46,7 @@ async fn refused_with(details: Value) -> (StartOutcome, Checkout, StoreRunner) {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn team_work_bundle_missing_keeps_the_reason_the_server_gives() {
   let profile = ResourceId::generate();
-  for kind in ["cli_kind_missing", "mcp_servers_unresolved", "mcp_server_archived"] {
+  for kind in ["profile_unreadable", "mcp_server_archived", "file_missing", "body_unreadable"] {
     let details = json!({"reason": {"kind": kind, "resource_id": profile, "version": 2}});
     let (StartOutcome::Refused(error), ..) = refused_with(details).await else {
       panic!("{kind}: not refused");

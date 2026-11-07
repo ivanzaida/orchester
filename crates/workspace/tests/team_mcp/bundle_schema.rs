@@ -1,6 +1,5 @@
 //! A team start whose bundle this computer cannot read is refused with the reason and the side to update
-//! (`appMcp.errors.teamBundleSchema*`, `teamBundleUnreadable`): nothing waits for a bundle that reads the same every
-//! time.
+//! (`appMcp.errors.teamBundleSchema*`, `teamBundleUnreadable`): nothing waits for a bundle that reads the same every time.
 
 use orchester_api::v2::EXECUTION_BUNDLE_SCHEMA;
 use orchester_core::store::McpServerStore;

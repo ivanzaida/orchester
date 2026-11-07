@@ -5,7 +5,8 @@ use orchester_core::{
   id::{OperationId, ResourceId},
   resource::VersionNumber,
 };
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
 use thiserror::Error;
 
 use crate::releases::ReleaseVersion;
@@ -89,28 +90,33 @@ pub enum DecisionId {
 }
 
 /// What the team server could not build a bundle from: the closed set of reasons a `bundle_missing` can name. A kind
-/// this version does not know reads as [`Self::Other`], so a server that learns a reason first is still understood.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+/// this version does not know, or one that is not a string, reads as [`Self::Other`], so a server that learns a reason
+/// first is still understood.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BundleMissingKind {
   /// The task's pipeline: `resource_id` is the pipeline.
   PipelineMissing,
   /// A file a pinned version holds is no longer there.
   FileMissing,
-  /// An agent profile still in the old local form, with no agent CLI kind: `resource_id` is the profile, to be
-  /// published again as a team profile.
-  CliKindMissing,
-  /// An agent profile names MCP servers that no team MCP server stands for: `resource_id` is the profile, to be
-  /// published again as a team profile.
-  McpServersUnresolved,
+  /// The latest version of an agent profile is not a team profile body: `resource_id` is the profile and `version` its
+  /// latest version, to be published again as a team profile.
+  ProfileUnreadable,
   /// A profile names a team MCP server that is archived: `resource_id` is the archived server.
   McpServerArchived,
-  /// A pinned version's body cannot be read.
+  /// The body of a pinned version of another kind of resource cannot be read.
   BodyUnreadable,
   /// The bundle would be larger than the server builds.
   BundleTooLarge,
+  #[default]
   #[serde(other)]
   Other,
+}
+
+fn kind_or_other<'de, D: Deserializer<'de>>(deserializer: D) -> Result<BundleMissingKind, D::Error> {
+  let value = Value::deserialize(deserializer)?;
+  // A value that is no known kind, whatever its type, is a kind this version does not know.
+  Ok(serde_json::from_value(value).unwrap_or_default())
 }
 
 /// `{kind, resource_id?, version?}`: why a `bundle_missing` refusal built no bundle. It names no path and carries no
@@ -118,6 +124,8 @@ pub enum BundleMissingKind {
 /// still read by this version.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct BundleMissingReason {
+  /// Left out or not a known kind reads as [`BundleMissingKind::Other`].
+  #[serde(default, deserialize_with = "kind_or_other")]
   pub kind: BundleMissingKind,
   /// The resource the kind is about, when it is about one.
   #[serde(default, skip_serializing_if = "Option::is_none")]

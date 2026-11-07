@@ -32,11 +32,10 @@ async fn message(team: &Team, reason: Option<&BundleMissingReason>) -> Result<Me
   };
   let (key, argument) = match reason.kind {
     BundleMissingKind::PipelineMissing => ("appMcp.errors.teamBundleMissingPipeline", "pipeline"),
-    BundleMissingKind::CliKindMissing => ("appMcp.errors.teamBundleMissingCliKind", "profile"),
-    BundleMissingKind::McpServersUnresolved => ("appMcp.errors.teamBundleMissingMcpServers", "profile"),
+    BundleMissingKind::ProfileUnreadable => ("appMcp.errors.teamBundleMissingProfile", "profile"),
     BundleMissingKind::McpServerArchived => ("appMcp.errors.teamBundleMissingMcpArchived", "server"),
-    BundleMissingKind::FileMissing => return Ok(Message::new("appMcp.errors.teamBundleMissingFile")),
-    BundleMissingKind::BodyUnreadable => return Ok(Message::new("appMcp.errors.teamBundleMissingBody")),
+    BundleMissingKind::FileMissing => ("appMcp.errors.teamBundleMissingFile", "resource"),
+    BundleMissingKind::BodyUnreadable => ("appMcp.errors.teamBundleMissingBody", "resource"),
     BundleMissingKind::BundleTooLarge => return Ok(Message::new("appMcp.errors.teamBundleMissingTooLarge")),
     BundleMissingKind::Other => return Ok(Message::new("appMcp.errors.teamBundleMissing")),
   };

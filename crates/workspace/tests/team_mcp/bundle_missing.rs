@@ -50,29 +50,46 @@ fn keep(checkout: &Checkout, (id, kind): (ResourceId, ResourceKind), name: &str)
 
 #[test]
 fn team_mcp_bundle_missing_names_the_profile_to_publish_again() {
-  for (kind, key) in [
-    ("cli_kind_missing", "appMcp.errors.teamBundleMissingCliKind"),
-    ("mcp_servers_unresolved", "appMcp.errors.teamBundleMissingMcpServers"),
-  ] {
-    let profile = ResourceId::generate();
-    let (code, error) = refused_with(reason(kind, Some(profile)), |checkout| {
-      keep(checkout, (profile, ResourceKind::AgentProfile), "Reviewer");
-    });
-    assert_eq!(code, "team_bundle_missing", "{error}");
-    assert!(error.contains(&format!("{key} profile=Reviewer")), "{kind}: {error}");
-    assert!(!error.contains(&profile.to_string()), "{kind}: {error}");
-  }
+  let profile = ResourceId::generate();
+  let (code, error) = refused_with(reason("profile_unreadable", Some(profile)), |checkout| {
+    keep(checkout, (profile, ResourceKind::AgentProfile), "Reviewer");
+  });
+  assert_eq!(code, "team_bundle_missing", "{error}");
+  assert!(
+    error.contains("appMcp.errors.teamBundleMissingProfile profile=Reviewer"),
+    "{error}"
+  );
+  assert!(!error.contains(&profile.to_string()), "{error}");
 }
 
 #[test]
 fn team_mcp_bundle_missing_falls_back_to_the_id_of_a_profile_not_cached_here() {
   let profile = ResourceId::generate();
-  let (code, error) = refused_with(reason("cli_kind_missing", Some(profile)), |_| {});
+  let (code, error) = refused_with(reason("profile_unreadable", Some(profile)), |_| {});
   assert_eq!(code, "team_bundle_missing", "{error}");
   assert!(
-    error.contains(&format!("appMcp.errors.teamBundleMissingCliKind profile={profile}")),
+    error.contains(&format!("appMcp.errors.teamBundleMissingProfile profile={profile}")),
     "{error}"
   );
+}
+
+#[test]
+fn team_mcp_bundle_missing_names_the_resource_of_a_file_or_body_it_cannot_use() {
+  for (kind, key) in [
+    ("file_missing", "appMcp.errors.teamBundleMissingFile"),
+    ("body_unreadable", "appMcp.errors.teamBundleMissingBody"),
+  ] {
+    let skill = ResourceId::generate();
+    let (code, error) = refused_with(reason(kind, Some(skill)), |checkout| {
+      keep(checkout, (skill, ResourceKind::Skill), "Lint");
+    });
+    assert_eq!(code, "team_bundle_missing", "{kind}: {error}");
+    assert!(error.contains(&format!("{key} resource=Lint")), "{kind}: {error}");
+
+    let unknown = ResourceId::generate();
+    let (_, error) = refused_with(reason(kind, Some(unknown)), |_| {});
+    assert!(error.contains(&format!("{key} resource={unknown}")), "{kind}: {error}");
+  }
 }
 
 #[test]
@@ -102,8 +119,6 @@ fn team_mcp_bundle_missing_names_the_pipeline_the_server_cannot_find() {
 #[test]
 fn team_mcp_bundle_missing_has_a_message_for_every_other_reason_and_for_none() {
   for (details, key) in [
-    (reason("file_missing", None), "appMcp.errors.teamBundleMissingFile"),
-    (reason("body_unreadable", None), "appMcp.errors.teamBundleMissingBody"),
     (
       reason("bundle_too_large", None),
       "appMcp.errors.teamBundleMissingTooLarge",
@@ -111,6 +126,10 @@ fn team_mcp_bundle_missing_has_a_message_for_every_other_reason_and_for_none() {
     (reason("other", None), "appMcp.errors.teamBundleMissing "),
     (reason("quota_exceeded", None), "appMcp.errors.teamBundleMissing "),
     (reason("cli_kind_missing", None), "appMcp.errors.teamBundleMissing "),
+    (reason("profile_unreadable", None), "appMcp.errors.teamBundleMissing "),
+    (reason("file_missing", None), "appMcp.errors.teamBundleMissing "),
+    (json!({"reason": {}}), "appMcp.errors.teamBundleMissing "),
+    (json!({"reason": {"kind": 7}}), "appMcp.errors.teamBundleMissing "),
     (json!({}), "appMcp.errors.teamBundleMissing "),
   ] {
     let (code, error) = refused_with(details.clone(), |_| {});

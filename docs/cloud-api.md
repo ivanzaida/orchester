@@ -402,26 +402,31 @@ are refused in every shape below.
 - `OperationRead`: `{operation_id,state:"committed",response:CommandResult}` or
   `{operation_id,state:"rejected",error:AuthorityError}`.
 - `AuthorityError`: `{operation_id?,code,details}`; `operation_id` is left out when the refusal came before the
-  operation was read. `details` is `{}` for every code but `decision_required`, whose details are
-  `{decisions:["D1".."D9"]}` with at least one decision, and `unsupported_contract`, whose details are
+  operation was read. `details` is `{}` for every code but `bundle_missing` (below), `decision_required`, whose
+  details are `{decisions:["D1".."D9"]}` with at least one decision, and `unsupported_contract`, whose details are
   `{required_version:"0.4.0"}` (ORC-733): the oldest desktop version the server accepts, a `ReleaseVersion`
   (`MAJOR.MINOR.PATCH` with an optional `-pre` suffix, no build metadata), so the desktop can say which Orchester the
   server needs. A code with another code's details, or details of two codes, is refused. Details never echo the
   request or carry credentials.
   `bundle_missing` (`work.start` could not build the work's execution bundle) has `{}` or, when the server says why,
   `{reason:{kind,resource_id?,version?}}` (ORC-884). `kind` is `pipeline_missing` (`resource_id`: the pipeline),
-  `file_missing`, `cli_kind_missing` and `mcp_servers_unresolved` (`resource_id`, `version`: an agent profile still in
-  the old local form, or one whose MCP servers no team MCP server stands for; its Admin publishes it again as a team
-  profile), `mcp_server_archived` (`resource_id`: the archived team MCP server a profile still names),
-  `body_unreadable`, `bundle_too_large` or `other`. A kind a reader does not know reads as `other`, and `reason` ignores
-  fields it does not know, unlike the closed shapes around it, so it can grow. It names no path and carries no secret.
-  A desktop older than the release that holds ORC-884 refuses `details` it does not know and reads such an answer as no
-  contract answer (it waits, as for a server it cannot reach): the server sends `reason` only to a client whose
-  `Orchester-Client-Version` is that release or later, and `{}` to any other. The desktop settles the start refused
-  and answers `run_task` `team_bundle_missing` with a message per kind (`appMcp.errors.teamBundleMissing*`): for
-  `cli_kind_missing` and `mcp_servers_unresolved` "Publish agent profile <name> again as a team profile", for
-  `mcp_server_archived` the server by name and that a profile still uses it; the name is the resource's cached name on
-  that computer, or its id.
+  `file_missing` (`resource_id`: the resource whose pinned version holds the missing file, when known),
+  `profile_unreadable` (`resource_id`: the agent profile, `version`: its latest version; the team server refuses a
+  profile whose stored latest version is not a team profile body, so its Admin publishes it again as a team profile; the
+  old local profile format is dropped), `mcp_server_archived` (`resource_id`: the archived team MCP server a profile
+  still names), `body_unreadable` (`resource_id`: a resource of another kind whose pinned body cannot be read),
+  `bundle_too_large` or `other`. A `kind` that is left out, is not a string or is one a reader does not know reads as
+  `other`, and `reason` ignores fields it does not know, unlike the closed shapes around it, so it can grow. It names
+  no path and carries no secret. A desktop older than the release that holds ORC-884 refuses `details` it does not
+  know and reads such an answer as no contract answer (it waits, as for a server it cannot reach). So the team server
+  (on the module branch that ships team configuration) raises its minimum desktop version to the first desktop release
+  that holds ORC-884; the bundle schema change of ORC-880/883 already requires that release, so no per-field gate is
+  needed. A server that cannot raise its minimum sends `{}` to a client older than that release, by
+  `Orchester-Client-Version`. The desktop settles the start refused and answers `run_task` `team_bundle_missing` with a
+  message per kind (`appMcp.errors.teamBundleMissing*`): for `profile_unreadable` "Publish agent profile <name> again as
+  a team profile", for `mcp_server_archived` the server by name and that a profile still uses it, for `file_missing` and
+  `body_unreadable` the resource by name; the name is the resource's cached name on that computer, or its id. A kind
+  that names a resource but comes without one gets the message of `other`.
 
 | Code | Status |
 | --- | --- |
