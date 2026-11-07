@@ -53,7 +53,9 @@ fn words(ctx: &Ctx, wait: &AgentWait, facts: Option<&EventFacts>) -> Arc<str> {
     .and_then(|facts| facts.waited.as_ref())
     .map(|waited| waited.key.as_str());
   let (key, task) = match wait.kind {
-    WaitKind::Question | WaitKind::Message | WaitKind::Plan => ("orchestrator.startedBy.wait", None),
+    WaitKind::Question | WaitKind::Message | WaitKind::Plan | WaitKind::Approval => {
+      ("orchestrator.startedBy.wait", None)
+    }
     WaitKind::Ended(_) => ("orchestrator.startedBy.runEnd", None),
     WaitKind::Event(event) => match event.kind {
       TaskEventKind::NoProgress { .. } => ("orchestrator.startedBy.noProgress", None),
