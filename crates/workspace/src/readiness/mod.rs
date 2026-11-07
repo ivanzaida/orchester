@@ -42,6 +42,7 @@ mod needs;
 mod project;
 mod read;
 mod standing;
+mod start;
 mod team;
 
 use std::path::Path;
@@ -53,6 +54,7 @@ pub use self::{
   error::ReadinessError,
   project::{PipelineReadiness, ProjectReadiness, ResourceReadiness},
   standing::{Group, ReadinessStanding, Undecided},
+  start::{NOT_READY_HERE, NotReadyHere, Unready},
 };
 use crate::workspace::Workspace;
 
