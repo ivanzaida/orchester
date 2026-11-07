@@ -35,7 +35,7 @@ use crate::{
   background,
   sharing::{
     Behalf, ProjectAddress, ServerEntry, Servers, SharingError,
-    sync::{keep_uploaded_configuration, upload_configuration},
+    sync::{ShareFillIns, keep_uploaded_configuration, upload_configuration},
   },
 };
 
@@ -221,7 +221,9 @@ impl Servers {
     }
     let _in_progress = InProgress::start(self, repo_root);
     let server = self.linking(entry, repo_root, &project, &address)?;
+    let fill_ins = self.read_fill_ins(repo_root).await?;
     let configuration = upload_configuration_as_admin(&server).await?;
+    let uploaded_any = !configuration.is_empty();
     let root = repo_root.to_owned();
     let (request, uploaded) = background::run(move || upload(&root, remote.as_ref(), key))
       .await
@@ -270,8 +272,35 @@ impl Servers {
       // The stream's snapshot names the uploaded resources too, and keeps them when it reads them.
       tracing::warn!(%error, "the uploaded configuration was not kept as the server's at once");
     }
+    if uploaded_any {
+      self.apply_fill_ins(repo_root, entry.stored.id, fill_ins).await;
+    }
     self.shared_changed();
     Ok(Shared { link, discovery })
+  }
+
+  /// What this computer fills in once the project is shared, read before anything is uploaded: a keychain that
+  /// refuses stops the Share with nothing sent.
+  async fn read_fill_ins(&self, repo_root: &Path) -> Result<ShareFillIns, SharingError> {
+    let (root, vault) = (repo_root.to_owned(), self.inner.vault.clone());
+    background::run(move || ShareFillIns::read(&root, vault.get()))
+      .await
+      .map_err(SharingError::from)?
+  }
+
+  /// Sets what the project's runs had locally as this computer's fill-ins for the team's configuration, so the sharer's
+  /// runs stay ready. The project is shared by now, so a failure cannot undo the Share: it is logged, and what is not
+  /// set shows as missing where the team's readiness is shown.
+  async fn apply_fill_ins(&self, repo_root: &Path, server: orchester_core::id::ServerId, fill_ins: ShareFillIns) {
+    let (root, servers) = (repo_root.to_owned(), self.clone());
+    let applied =
+      background::run(move || fill_ins.apply((&servers.inner.workspace, servers.inner.vault.get()), &root, server))
+        .await
+        .map_err(SharingError::from)
+        .and_then(|applied| applied);
+    if let Err(error) = applied {
+      tracing::error!(%error, "this computer's fill-ins for the shared configuration were not all set");
+    }
   }
 
   /// The server project `project` on `entry` as the project at `repo_root` is linked to it, before the link is stored.

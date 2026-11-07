@@ -10,23 +10,20 @@ use std::time::Duration;
 use orchester_api::{ReferenceTarget, SharedResourceKind};
 use orchester_core::{
   blob::ContentHash,
-  connection::{
-    AgentProvider,
-    mcp::{McpEnvironment, McpServer, McpServerName, McpServerSelection, McpTransport, StdioServer},
-  },
-  id::{ConnectionId, ResourceId, RunId},
+  connection::AgentProvider,
+  id::{ResourceId, RunId},
   name::Name,
   resource::{
-    AgentProfile, CommandProgram, Draft, Instruction, InstructionScope, Pipeline, ResourceKind, Skill, SkillFile,
-    SkillFilePath, Slug, TeamAgentProfile, Version,
+    Draft, Instruction, InstructionScope, Pipeline, ResourceKind, Skill, SkillFile, SkillFilePath, Slug,
+    TeamAgentProfile, Version,
   },
   run::Run,
   sharing::MemberRole,
-  store::{BlobStore, McpServerStore, ResourceStore, RunStore},
+  store::{BlobStore, ResourceStore, RunStore},
 };
 use orchester_store::{ProjectDb, ReferenceTarget as KeptTarget, ResourceSharing, StoreError};
 use orchester_workspace::sharing::{
-  SharingError,
+  ShareRefusalReason, SharingError,
   sync::{keep_uploaded_configuration, upload_configuration},
 };
 
@@ -44,8 +41,8 @@ const CACHED: Duration = Duration::from_secs(5);
 /// Alice's local project: the fixture's pipeline Delivery and profile Builder at v1, the instruction Style at v1 and
 /// v2, the skill Release notes at v1 with one part, an instruction Notes never published, and a run that pinned
 /// Delivery's v1.
-struct Sharer {
-  fixture: Fixture,
+pub(super) struct Sharer {
+  pub(super) fixture: Fixture,
   style: ResourceId,
   skill: ResourceId,
   unpublished: ResourceId,
@@ -54,7 +51,7 @@ struct Sharer {
 }
 
 impl Sharer {
-  fn new() -> Self {
+  pub(super) fn new() -> Self {
     let mut fixture = Fixture::new();
     fixture.connect_builder(AgentProvider::CodexCli);
     let db = &mut fixture.db;
@@ -101,12 +98,12 @@ impl Sharer {
     }
   }
 
-  fn db(&self) -> ProjectDb {
+  pub(super) fn db(&self) -> ProjectDb {
     ProjectDb::open(self.fixture.repo.path()).expect("the project database")
   }
 
   /// The fixture's pipeline Delivery and its one profile, Builder.
-  fn delivery(&self) -> (ResourceId, ResourceId) {
+  pub(super) fn delivery(&self) -> (ResourceId, ResourceId) {
     let profiles = self.db().resources(ResourceKind::AgentProfile).expect("profiles");
     (self.run().snapshot().pipeline().resource, profiles[0].id())
   }
@@ -117,7 +114,7 @@ impl Sharer {
 
   /// Shares the project with `server` as its owner: the configuration goes up, the project is linked, and the uploaded
   /// resources are kept as the server's.
-  async fn share(&self, server: &TeamServer) {
+  pub(super) async fn share(&self, server: &TeamServer) {
     let publisher = Publisher::online(server, ALICE);
     let root = self.fixture.repo.path().to_owned();
     let uploaded = upload_configuration(&publisher, &root).await.expect("uploaded");
@@ -128,11 +125,11 @@ impl Sharer {
   }
 }
 
-fn slug(value: &str) -> Slug {
+pub(super) fn slug(value: &str) -> Slug {
   Slug::new(value).expect("slug")
 }
 
-fn name(value: &str) -> Name {
+pub(super) fn name(value: &str) -> Name {
   Name::new(value).expect("name")
 }
 
@@ -141,7 +138,7 @@ fn style_versions(db: &ProjectDb, style: ResourceId) -> Vec<Version<Instruction>
 }
 
 /// Each version of `resource` on the server: its number, when it was published, its publisher.
-fn on_server(server: &TeamServer, resource: ResourceId) -> Vec<(u32, i64, String)> {
+pub(super) fn on_server(server: &TeamServer, resource: ResourceId) -> Vec<(u32, i64, String)> {
   server
     .versions_of(resource)
     .into_iter()
@@ -273,58 +270,6 @@ async fn live_updates_share_uploads_a_profile_in_the_teams_form_with_the_cli_kin
   );
 }
 
-/// A profile that chooses an MCP server of this computer, which the team has no counterpart of, is not uploaded, and
-/// nothing is sent: the person is told which server.
-#[tokio::test(flavor = "multi_thread")]
-async fn live_updates_share_uploads_nothing_when_a_profile_chooses_an_mcp_server_of_this_computer() {
-  let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
-  let mut alice = Sharer::new();
-  let (_, builder) = alice.delivery();
-  let notes = McpServer::new(
-    ConnectionId::generate(),
-    McpServerName::new("notes").expect("name"),
-    McpTransport::Stdio(StdioServer::new(
-      CommandProgram::new("notes-mcp").expect("program"),
-      Vec::new(),
-      None,
-    )),
-    McpEnvironment::default(),
-    at(1),
-  )
-  .expect("server");
-  let published = alice
-    .db()
-    .latest_version::<AgentProfile>(builder)
-    .expect("read")
-    .expect("Builder");
-  let reviewer = published
-    .body()
-    .clone()
-    .with_mcp_servers(McpServerSelection::new(vec![notes.id()]).expect("one server"));
-  alice.fixture.db.create_mcp_server(&notes).expect("a local MCP server");
-  let reviewer = alice
-    .fixture
-    .db
-    .create_resource(slug("reviewer"), name("Reviewer"), &reviewer, at(30))
-    .expect("Reviewer")
-    .id();
-  alice
-    .fixture
-    .db
-    .publish_draft::<AgentProfile>(reviewer, at(31))
-    .expect("v1");
-  let publisher = Publisher::online(&server, ALICE);
-
-  let refused = upload_configuration(&publisher, alice.fixture.repo.path()).await;
-
-  assert!(
-    matches!(&refused, Err(SharingError::LocalEntitiesNamed { resource, names }) if *resource == reviewer && *names == ["notes"]),
-    "{refused:?}"
-  );
-  assert_eq!(on_server(&server, builder), [], "nothing was uploaded");
-  assert_eq!(on_server(&server, alice.style), []);
-}
-
 /// Share uploads the pipelines with their ids, so a pipeline running a profile it does not upload would give the team
 /// an id the server does not have: it is refused and nothing is sent.
 #[tokio::test(flavor = "multi_thread")]
@@ -347,10 +292,16 @@ async fn live_updates_share_uploads_nothing_when_a_pipeline_runs_a_profile_it_do
 
   let refused = upload_configuration(&publisher, alice.fixture.repo.path()).await;
 
-  assert!(
-    matches!(&refused, Err(SharingError::PipelineNamesNonTeam { resource, .. }) if *resource == hotfix),
-    "{refused:?}"
-  );
+  let Err(SharingError::ShareRefused { refusals }) = &refused else {
+    panic!("{refused:?}");
+  };
+  assert_eq!(refusals.len(), 1, "{refusals:?}");
+  assert_eq!(refusals[0].resource, hotfix);
+  assert_eq!(refusals[0].name, "Hotfix");
+  assert!(matches!(
+    refusals[0].reason,
+    ShareRefusalReason::PipelineNamesNonTeam { .. }
+  ));
   assert_eq!(on_server(&server, delivery), [], "nothing was uploaded");
 }
 

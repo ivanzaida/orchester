@@ -4,8 +4,10 @@
 //! resource with no published version stays here as its draft, and drafts stay local, based on the same versions.
 //! Then each uploaded resource is kept as the server's with its versions as the server numbered them; their local
 //! bodies stay the bodies this computer published. An agent profile is uploaded in the team's form, with the references
-//! its body names ([`team_body::profile`]); any other body that names a connection, MCP server or secret of this
-//! computer is not uploaded ([`team_body::unchanged`]): the upload fails and nothing is sent.
+//! its body names ([`team_body::profile`]), and the local MCP servers the profiles choose as team MCP servers
+//! ([`McpPlan`]); any other body that names a connection, MCP server or secret of this computer is not uploaded
+//! ([`team_body::unchanged`]). Every resource that cannot go is collected, and the upload fails with
+//! [`SharingError::ShareRefused`] listing them all, with nothing sent.
 
 use std::{collections::BTreeSet, path::Path};
 
@@ -14,8 +16,10 @@ use orchester_api::{
 };
 use orchester_core::{
   blob::ContentHash,
-  id::IdempotencyKey,
-  resource::{AgentProfile, Instruction, Pipeline, Resource, ResourceBody, Skill, TeamExecutors, Tool, Version},
+  id::{IdempotencyKey, ResourceId},
+  resource::{
+    AgentProfile, Instruction, Pipeline, Resource, ResourceBody, Skill, TeamExecutors, TeamMcpServer, Tool, Version,
+  },
   sharing::LocalEntities,
   store::{BlobStore, ConnectionStore, McpServerStore, ResourceStore, SecretStore},
   time::Timestamp,
@@ -23,13 +27,15 @@ use orchester_core::{
 use orchester_store::{CachedVersion, ProjectDb, StoreError};
 
 use super::{
-  ConfigServer, blocking, reference, resource,
+  ConfigServer, blocking, body, reference, resource,
+  share_mcp::McpPlan,
   team_body::{self, Publication},
 };
-use crate::sharing::{SharingError, project::convert};
+use crate::sharing::{ShareRefusal, ShareRefusalReason, SharingError, project::convert};
 
-/// The kinds Share uploads, those other resources name first: a tool before the profiles that use it, profiles before
-/// the pipelines whose steps run them.
+/// The kinds Share uploads from the project's resources, those other resources name first: a tool before the profiles
+/// that use it, profiles before the pipelines whose steps run them. The team MCP servers go before all of them
+/// ([`McpPlan`]): they are made from the local MCP servers, which are not resources.
 const KINDS: [SharedResourceKind; 6] = [
   SharedResourceKind::Tool,
   SharedResourceKind::Skill,
@@ -90,7 +96,19 @@ pub async fn keep_uploaded_configuration(
   Ok(())
 }
 
-/// Every resource of `db` Share uploads, with the skill parts their versions list.
+/// What Share has gathered of the project so far.
+#[derive(Default)]
+struct Collected {
+  uploads: Vec<UploadResource>,
+  parts: BTreeSet<ContentHash>,
+  refusals: Vec<ShareRefusal>,
+  /// The profiles and tools to upload, which pipelines may run; a refused one counts, as the Share is refused whole.
+  profiles: Vec<ResourceId>,
+  tools: Vec<ResourceId>,
+}
+
+/// Every resource of `db` Share uploads, with the skill parts their versions list. Fails with
+/// [`SharingError::ShareRefused`] listing every resource that cannot go in the team's form, before anything is sent.
 fn read(db: &ProjectDb) -> Result<(Vec<UploadResource>, BTreeSet<ContentHash>), SharingError> {
   let (connections, mcp_servers, secrets) = (db.connections()?, db.mcp_servers()?, db.secrets()?);
   let entities = LocalEntities {
@@ -98,48 +116,96 @@ fn read(db: &ProjectDb) -> Result<(Vec<UploadResource>, BTreeSet<ContentHash>), 
     mcp_servers: &mcp_servers,
     secrets: &secrets,
   };
-  let mut uploads = Vec::new();
-  let mut parts = BTreeSet::new();
-  let (mut profiles, mut tools) = (Vec::new(), Vec::new());
+  let mcp = McpPlan::read(db)?;
+  let mut found = Collected {
+    uploads: mcp.uploads()?,
+    refusals: mcp.refusals.clone(),
+    ..Collected::default()
+  };
   for kind in KINDS {
     for kept in db.resources(kind.core())? {
-      let versions = match kind {
-        SharedResourceKind::Pipeline => {
-          let team = TeamExecutors::new(profiles.iter().copied(), tools.iter().copied());
-          check_latest_pipeline(db, &kept, &team)?;
-          versions::<Pipeline>(db, &kept, entities)?
-        }
-        SharedResourceKind::AgentProfile => profile_versions(db, &kept)?,
-        SharedResourceKind::Instruction => versions::<Instruction>(db, &kept, entities)?,
-        SharedResourceKind::Tool => versions::<Tool>(db, &kept, entities)?,
-        SharedResourceKind::TeamReviewer => versions::<orchester_core::resource::TeamReviewer>(db, &kept, entities)?,
-        SharedResourceKind::McpServer => versions::<orchester_core::resource::TeamMcpServer>(db, &kept, entities)?,
-        SharedResourceKind::Skill => {
-          for version in db.versions::<Skill>(kept.id())? {
-            parts.extend(version.body().files().iter().map(|file| file.content.clone()));
-          }
-          versions::<Skill>(db, &kept, entities)?
-        }
-      };
-      if versions.is_empty() {
-        continue;
-      }
-      match kind {
-        SharedResourceKind::AgentProfile => profiles.push(kept.id()),
-        SharedResourceKind::Tool => tools.push(kept.id()),
-        _ => {}
-      }
-      uploads.push(UploadResource {
-        id: kept.id(),
-        kind,
-        slug: kept.slug().as_str().to_owned(),
-        name: kept.name().as_str().to_owned(),
-        archived: false,
-        versions,
-      });
+      collect(db, (entities, &mcp), kind, &kept, &mut found)?;
     }
   }
-  Ok((uploads, parts))
+  if !found.refusals.is_empty() {
+    return Err(SharingError::ShareRefused {
+      refusals: found.refusals,
+    });
+  }
+  Ok((found.uploads, found.parts))
+}
+
+/// Adds `kept` to `found`: its upload, or the refusal that it cannot be one.
+fn collect(
+  db: &ProjectDb,
+  (entities, mcp): (LocalEntities<'_>, &McpPlan),
+  kind: SharedResourceKind,
+  kept: &Resource,
+  found: &mut Collected,
+) -> Result<(), SharingError> {
+  let versions = match versions_of(db, (entities, mcp), kind, kept, found) {
+    Ok(versions) => versions,
+    Err(error) => {
+      found.refusals.push(ShareRefusal {
+        resource: kept.id(),
+        name: kept.name().as_str().to_owned(),
+        reason: ShareRefusalReason::of(error)?,
+      });
+      note_executor(found, kind, kept.id());
+      return Ok(());
+    }
+  };
+  if versions.is_empty() {
+    return Ok(());
+  }
+  note_executor(found, kind, kept.id());
+  found.uploads.push(UploadResource {
+    id: kept.id(),
+    kind,
+    slug: kept.slug().as_str().to_owned(),
+    name: kept.name().as_str().to_owned(),
+    archived: false,
+    versions,
+  });
+  Ok(())
+}
+
+fn note_executor(found: &mut Collected, kind: SharedResourceKind, resource: ResourceId) {
+  match kind {
+    SharedResourceKind::AgentProfile => found.profiles.push(resource),
+    SharedResourceKind::Tool => found.tools.push(resource),
+    _ => {}
+  }
+}
+
+/// The versions of `kept` to upload, each in the team's form; the skill parts they list join `found`'s.
+fn versions_of(
+  db: &ProjectDb,
+  (entities, mcp): (LocalEntities<'_>, &McpPlan),
+  kind: SharedResourceKind,
+  kept: &Resource,
+  found: &mut Collected,
+) -> Result<Vec<UploadVersion>, SharingError> {
+  match kind {
+    SharedResourceKind::Pipeline => {
+      let team = TeamExecutors::new(found.profiles.iter().copied(), found.tools.iter().copied());
+      check_latest_pipeline(db, kept, &team)?;
+      versions::<Pipeline>(db, kept, entities)
+    }
+    SharedResourceKind::AgentProfile => profile_versions(db, kept, mcp),
+    SharedResourceKind::Instruction => versions::<Instruction>(db, kept, entities),
+    SharedResourceKind::Tool => versions::<Tool>(db, kept, entities),
+    SharedResourceKind::TeamReviewer => versions::<orchester_core::resource::TeamReviewer>(db, kept, entities),
+    SharedResourceKind::McpServer => versions::<TeamMcpServer>(db, kept, entities),
+    SharedResourceKind::Skill => {
+      for version in db.versions::<Skill>(kept.id())? {
+        found
+          .parts
+          .extend(version.body().files().iter().map(|file| file.content.clone()));
+      }
+      versions::<Skill>(db, kept, entities)
+    }
+  }
 }
 
 /// Fails when the newest version of the pipeline `resource` names a profile or tool Share does not upload: the team
@@ -171,11 +237,19 @@ fn versions<B: ResourceBody>(
     .collect()
 }
 
-/// The published versions of the agent profile `resource`, oldest first, in the team's form.
-fn profile_versions(db: &ProjectDb, resource: &Resource) -> Result<Vec<UploadVersion>, SharingError> {
-  db.versions::<AgentProfile>(resource.id())?
-    .into_iter()
-    .map(|version| Ok(upload(&version, team_body::profile(db, resource.id(), version.body())?)))
+/// The published versions of the agent profile `resource`, oldest first, in the team's form: its MCP servers are the
+/// team MCP servers `mcp` plans.
+fn profile_versions(db: &ProjectDb, resource: &Resource, mcp: &McpPlan) -> Result<Vec<UploadVersion>, SharingError> {
+  let versions = db.versions::<AgentProfile>(resource.id())?;
+  let team_servers = mcp.team_ids();
+  versions
+    .iter()
+    .enumerate()
+    .map(|(index, version)| {
+      let adjusted = mcp.adjusted(version.body(), index + 1 == versions.len());
+      let publication = team_body::profile_naming(db, resource.id(), &adjusted, &team_servers)?;
+      Ok(upload(version, publication))
+    })
     .collect()
 }
 
@@ -220,7 +294,7 @@ fn keep(db: &mut ProjectDb, shared: &SharedResource, versions: &[SharedVersion])
       SharedResourceKind::Skill => keep_version::<Skill>(db, version)?,
       SharedResourceKind::Tool => keep_version::<Tool>(db, version)?,
       SharedResourceKind::TeamReviewer => keep_version::<orchester_core::resource::TeamReviewer>(db, version)?,
-      SharedResourceKind::McpServer => keep_version::<orchester_core::resource::TeamMcpServer>(db, version)?,
+      SharedResourceKind::McpServer => keep_team_mcp_version(db, version)?,
     }
   }
   Ok(())
@@ -231,17 +305,28 @@ fn keep_version<B: ResourceBody + Clone>(db: &mut ProjectDb, version: &SharedVer
   let local = db
     .version::<B>(version.resource, version.number)?
     .ok_or(StoreError::ResourceNotFound(version.resource))?;
-  let confirmed = CachedVersion {
+  db.cache_shared_version(version.resource, &confirmed(version, local.body().clone()))?;
+  Ok(())
+}
+
+/// Keeps the team MCP server `version` as the server confirmed it. The project has no local copy of it (it was made
+/// from a local MCP server, which stays as it is), so the server's body is the local one too.
+fn keep_team_mcp_version(db: &mut ProjectDb, version: &SharedVersion) -> Result<(), SharingError> {
+  let local = body::<TeamMcpServer>(version.body.clone())?;
+  db.cache_shared_version(version.resource, &confirmed(version, local))?;
+  Ok(())
+}
+
+fn confirmed<B>(version: &SharedVersion, local_body: B) -> CachedVersion<B> {
+  CachedVersion {
     number: version.number,
     published_at: Timestamp::from_unix_millis(version.published.at),
     publisher: convert::person(&version.published.by),
     server_body: version.body.clone(),
     hash: version.hash.clone(),
     references: version.references.iter().map(reference).collect(),
-    local_body: local.body().clone(),
+    local_body,
     // This computer published it, so it never waits for a *Use v<N> here*.
     waits_here: false,
-  };
-  db.cache_shared_version(version.resource, &confirmed)?;
-  Ok(())
+  }
 }

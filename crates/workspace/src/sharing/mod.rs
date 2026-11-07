@@ -26,6 +26,7 @@ mod owners;
 mod password;
 mod place;
 pub mod project;
+mod refusal;
 mod server_key;
 pub mod sync;
 pub mod team;
@@ -68,6 +69,7 @@ pub use self::{
   password::{PASSWORD_CHARS, PasswordProblem, password_problem},
   place::{Place, Places},
   project::NotArchived,
+  refusal::{ShareRefusal, ShareRefusalReason, TeamMcpProblem},
   team_created::{Created, NotCreated},
   trust::{ConfirmedPin, PresentedCertificate, Trust},
 };

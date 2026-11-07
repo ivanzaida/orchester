@@ -3,8 +3,8 @@
 //! this computer. An agent profile is turned into the team's ([`profile`]); a pipeline names its profiles and tools by
 //! the id they have on the server, which a team resource keeps on every computer, so its body needs no rewriting and
 //! [`check_pipeline`] refuses one that names an id the team does not have. The bodies of the other kinds are not in the
-//! team's form yet, so one that names an entity of this computer is refused here, before anything is sent, and stays on
-//! this computer until its kind's body changes (ORC-830).
+//! team's form yet, so one that names an entity of this computer is refused here, before anything is sent: Share lists
+//! it with the other refusals ([`SharingError::ShareRefused`]) until its kind's body has a team form.
 
 use std::collections::HashSet;
 
@@ -57,18 +57,29 @@ pub(super) fn unchanged(
 /// is not a team resource, and with [`StoreError::ConnectionNotFound`] for a connection that is not an agent connection
 /// of this computer; nothing is sent.
 pub(super) fn profile(db: &ProjectDb, resource: ResourceId, local: &AgentProfile) -> Result<Publication, SharingError> {
-  let (connections, local_mcp_servers) = (db.connections()?, db.mcp_servers()?);
   let team_mcp_servers: Vec<ResourceId> = db
     .resources(ResourceKind::McpServer)?
     .iter()
     .map(orchester_core::resource::Resource::id)
     .collect();
+  profile_naming(db, resource, local, &team_mcp_servers)
+}
+
+/// [`profile`], with `team_mcp_servers` as the team MCP servers a profile may choose: Share's, which are not resources
+/// of the project yet.
+pub(super) fn profile_naming(
+  db: &ProjectDb,
+  resource: ResourceId,
+  local: &AgentProfile,
+  team_mcp_servers: &[ResourceId],
+) -> Result<Publication, SharingError> {
+  let (connections, local_mcp_servers) = (db.connections()?, db.mcp_servers()?);
   let team = TeamAgentProfile::from_local(
     local,
     TeamCounterparts {
       connections: &connections,
       local_mcp_servers: &local_mcp_servers,
-      team_mcp_servers: &team_mcp_servers,
+      team_mcp_servers,
     },
   )
   .map_err(|error| refused(resource, error))?;
