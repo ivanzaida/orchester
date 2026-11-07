@@ -70,7 +70,13 @@ fn carry_out(state: &mut State, token: &str, body: &Value) -> Option<(u16, Value
         json!({"operation_id": operation, "state": "committed", "result": result, "cursor": state.cursor.to_string()}),
       )
     }
-    Err((status, code)) => (status, refusal(Some(operation), code)),
+    Err((status, code)) => {
+      let mut refused = refusal(Some(operation), code);
+      if let (true, Some(details)) = (code == "bundle_missing", &state.bundle_missing) {
+        refused["details"] = details.clone();
+      }
+      (status, refused)
+    }
   })
 }
 
@@ -171,6 +177,9 @@ fn start(state: &mut State, token: &str, body: &Value) -> Result<Value, Refused>
     .any(|work| work.claim == claim && work.state == "running")
   {
     return Err((409, "transition_denied"));
+  }
+  if state.bundle_missing.is_some() {
+    return Err((409, "bundle_missing"));
   }
   let bundle = build_bundle(state, claim, body["command"]["base_commit"].as_str().expect("a commit"));
   let work = Work {

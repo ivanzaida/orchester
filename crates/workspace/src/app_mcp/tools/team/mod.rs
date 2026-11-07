@@ -6,6 +6,7 @@
 //! a link to a server is local, and its tools keep their own paths.
 
 mod bindings;
+mod bundle_missing;
 mod deliver;
 mod modules;
 mod outcome;

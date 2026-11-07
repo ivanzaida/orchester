@@ -417,7 +417,11 @@ are refused in every shape below.
   fields it does not know, unlike the closed shapes around it, so it can grow. It names no path and carries no secret.
   A desktop older than the release that holds ORC-884 refuses `details` it does not know and reads such an answer as no
   contract answer (it waits, as for a server it cannot reach): the server sends `reason` only to a client whose
-  `Orchester-Client-Version` is that release or later, and `{}` to any other.
+  `Orchester-Client-Version` is that release or later, and `{}` to any other. The desktop settles the start refused
+  and answers `run_task` `team_bundle_missing` with a message per kind (`appMcp.errors.teamBundleMissing*`): for
+  `cli_kind_missing` and `mcp_servers_unresolved` "Publish agent profile <name> again as a team profile", for
+  `mcp_server_archived` the server by name and that a profile still uses it; the name is the resource's cached name on
+  that computer, or its id.
 
 | Code | Status |
 | --- | --- |

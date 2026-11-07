@@ -1,5 +1,6 @@
 //! A team start whose bundle this computer cannot read is refused with the reason and the side to update
-//! (`appMcp.errors.teamBundleSchema*`, `teamBundleUnreadable`): nothing waits for a bundle that reads the same every time.
+//! (`appMcp.errors.teamBundleSchema*`, `teamBundleUnreadable`): nothing waits for a bundle that reads the same every
+//! time.
 
 use orchester_api::v2::EXECUTION_BUNDLE_SCHEMA;
 use orchester_core::store::McpServerStore;
@@ -14,7 +15,7 @@ use crate::{
 
 /// A checkout whose task can start: its pipeline and the Builder's MCP server are here. `prepare` runs on the fake
 /// server's state before `run_task` is called.
-fn started_with(prepare: impl FnOnce(&mut crate::team_server::State)) -> (TeamServer, Checkout) {
+pub(crate) fn started_with(prepare: impl FnOnce(&mut crate::team_server::State)) -> (TeamServer, Checkout) {
   let (server, seen) = server();
   let pipeline = server.state().config.pipeline;
   let mcp_server = seen.lock().publisher_mcp_server.expect("the Builder's MCP server");
@@ -28,7 +29,7 @@ fn started_with(prepare: impl FnOnce(&mut crate::team_server::State)) -> (TeamSe
 }
 
 /// The refusal of `run_task` on KON-7: its code and the error, each message rendered as `key read=… built=…`.
-fn refusal(checkout: &Checkout) -> (String, Value) {
+pub(crate) fn refusal(checkout: &Checkout) -> (String, Value) {
   let error = checkout
     .call_rendering("run_task", &json!({"project": "Kontur", "key": "KON-7"}), |message| {
       let values: Vec<String> = message
