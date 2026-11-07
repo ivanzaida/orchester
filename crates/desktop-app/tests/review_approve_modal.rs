@@ -100,12 +100,19 @@ impl Page {
     self.window.pass();
   }
 
-  /// The id of the *Delete* of the first comment not sent that the diff lays out, turning the wheel over it.
+  /// The id of the *Delete* of the first comment not sent that shows inside the diff's view, turning the wheel over
+  /// it: a row the list lays out past the view's edge cannot be pressed.
   fn unsent_delete(&mut self) -> String {
     for _ in 0..12 {
       self
         .window
         .until("the rows in view", |window| window.texts("review-diff").is_some());
+      let view = self
+        .window
+        .tree
+        .get_element_by_id_mut("review-diff")
+        .and_then(|element| element.bounds())
+        .expect("the diff is laid out");
       let mut found = Vec::new();
       let mut stack = vec![self.window.tree.get_element_by_id("review-diff").expect("the diff")];
       while let Some(element) = stack.pop() {
@@ -123,7 +130,10 @@ impl Page {
           .tree
           .get_element_by_id_mut(&id)
           .and_then(|element| element.bounds())
-          .is_some()
+          .is_some_and(|button| {
+            let (x, y) = (button.x + button.width / 2.0, button.y + button.height / 2.0);
+            (view.x..view.x + view.width).contains(&x) && (view.y..view.y + view.height).contains(&y)
+          })
         {
           return id;
         }
