@@ -31,6 +31,7 @@ use orchester_core::{
 };
 use tokio::task::JoinHandle;
 
+pub(crate) use self::archive::pins;
 pub(super) use self::state::SyncStates;
 pub use self::{
   archive::{ArchiveError, Pinning, pinning},

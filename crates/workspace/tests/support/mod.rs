@@ -20,10 +20,12 @@ use orchester_core::{
   permission::StepPermissions,
   project::{Project, ProjectKey},
   resource::{
-    AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey, StepKind,
+    AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Resource, ResourceKind, Slug,
+    Step, StepKey, StepKind,
   },
   revision::Revision,
   run::{Answerer, BranchName, NewRun, Plan, PlanDecision, PublishedVersions, Run, RunEvent, RunSnapshot},
+  sharing::TaskRevision,
   store::{ResourceStore, RunStore, TaskStore},
   task::{TaskDetails, TaskLimits},
   time::Timestamp,
@@ -284,6 +286,22 @@ impl Fixture {
     }
   }
 
+  /// The team MCP server `id` named `called`, kept in this project as a synced one is.
+  pub fn keep_team_server(&mut self, id: ResourceId, called: &str) {
+    let server = Resource::new(
+      id,
+      ResourceKind::McpServer,
+      Slug::new(&called.to_lowercase()).expect("slug"),
+      name(called),
+      at(1),
+    );
+    let revision = TaskRevision::try_from(1_u64).expect("a revision");
+    self
+      .db
+      .keep_shared_resource(&server, revision)
+      .expect("the team MCP server is kept");
+  }
+
   /// A task titled `title`, created at `now`.
   pub fn task(&mut self, title: &str, now: Timestamp) -> TaskId {
     let details = TaskDetails {
@@ -456,4 +474,9 @@ pub fn proposed(run: &Run, text: &str, now: i64) -> Memory {
     &MemorySettings::default(),
     at(now),
   )
+}
+
+/// How a profile's selection names the team MCP server `server`.
+pub fn chosen(server: ResourceId) -> ConnectionId {
+  ConnectionId::from_uuid(server.as_uuid())
 }

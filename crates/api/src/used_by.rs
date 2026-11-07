@@ -19,10 +19,13 @@ pub struct UsedBy {
   /// version names itself. "Names" is decided by typed fields, not by a text scan of the body: `docs/cloud-api.md`
   /// lists them.
   pub resources: Vec<UsedByResource>,
-  /// The runs that have not ended and whose execution bundle pins any version of this resource, ordered by the
-  /// number part of the task key numerically (`KON-3` before `KON-12`) and then by run number. A run has not ended
-  /// from `work.start` until the server accepts a terminal work report (`succeeded`, `failed` or `cancelled`); a run
-  /// whose last report is `progress`, also one interrupted or waiting for a person on the desktop, has not ended.
+  /// The runs that have not ended and whose execution bundle pins any version of this resource, ordered by the number
+  /// part of the task key numerically (`KON-3` before `KON-12`) and then by run id (a stable tie-break). The server
+  /// learns a run only from its work reports, so a run is listed from the first work report the server accepted for
+  /// it until a terminal one (`succeeded`, `failed` or `cancelled`); work started and not reported yet is not listed
+  /// (a known limit). A run whose last report is `progress`, also one interrupted or waiting for a person on the
+  /// desktop, has not ended, unless its work has a newer run (a later run id first reported for the same work): that
+  /// run has ended, superseded.
   pub runs: Vec<UsedByRun>,
 }
 
@@ -36,14 +39,13 @@ pub struct UsedByResource {
   pub version: VersionNumber,
 }
 
-/// A run that has not ended and whose execution bundle pins a version of the resource: the run an archive stops.
+/// A run that has not ended and whose execution bundle pins a version of the resource: the run an archive stops. The
+/// server has no run number (a work report carries only the run's id).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct UsedByRun {
   /// The key of the run's task, e.g. `KON-12`.
   pub task_key: String,
   pub run: RunId,
-  /// The run's number within its task.
-  pub number: u32,
   /// Who holds the task's claim now, and so who is told the run stopped; after a take-over it is the new holder.
   /// Absent when the claim was released.
   #[serde(default, skip_serializing_if = "Option::is_none")]
