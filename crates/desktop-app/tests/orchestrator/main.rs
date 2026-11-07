@@ -17,6 +17,7 @@ mod continuation;
 mod copy;
 mod decisions;
 mod drafts;
+mod end;
 mod export;
 mod first_send;
 mod follow;
