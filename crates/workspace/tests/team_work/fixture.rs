@@ -83,6 +83,7 @@ impl Config {
       instructions: &[],
       tools: &[],
       skills: &[skill_version],
+      mcp_servers: &[],
     };
     Self {
       profile,

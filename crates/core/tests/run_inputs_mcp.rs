@@ -93,6 +93,7 @@ fn two_profiles() -> (CanonicalExecutionInputs, [ResourceId; 2]) {
     instructions: &[],
     tools: &[],
     skills: &[],
+    mcp_servers: &[],
     labels: &[
       (pipeline.id(), label("flow")),
       (profiles[&ids[0]].id(), label("first")),

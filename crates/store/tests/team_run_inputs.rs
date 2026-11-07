@@ -118,17 +118,12 @@ fn team_project() -> Team {
     instructions: &[],
     tools: &[],
     skills: &[],
+    mcp_servers: &[],
   };
   let inputs = CanonicalExecutionInputs::pin(&snapshot, bodies).expect("inputs");
   drop(db);
   let (server, project) = (ServerId::generate(), ProjectId::generate());
-  connection(repo.path())
-    .execute(
-      "INSERT INTO sharing (only_row, server_id, project_id, project_key, role, joined_at, event_cursor, \
-       last_synced_at) VALUES (1, ?1, ?2, 'ORC', 'member', 1, 0, 1)",
-      [server.to_string(), project.to_string()],
-    )
-    .expect("link the project");
+  link_project(repo.path(), server, project);
   let db = ProjectDb::open(repo.path()).expect("open");
   Team {
     repo,
@@ -139,6 +134,16 @@ fn team_project() -> Team {
     snapshot,
     inputs,
   }
+}
+
+fn link_project(repo: &Path, server: ServerId, project: ProjectId) {
+  connection(repo)
+    .execute(
+      "INSERT INTO sharing (only_row, server_id, project_id, project_key, role, joined_at, event_cursor, \
+       last_synced_at) VALUES (1, ?1, ?2, 'ORC', 'member', 1, 0, 1)",
+      [server.to_string(), project.to_string()],
+    )
+    .expect("link the project");
 }
 
 fn connection(repo: &Path) -> rusqlite::Connection {
@@ -459,6 +464,7 @@ fn local_inputs(db: &ProjectDb, snapshot: &RunSnapshot) -> RunInputs {
     instructions: &[],
     tools: &[],
     skills: &[],
+    mcp_servers: &[],
     labels: &labels,
   };
   let canonical = CanonicalExecutionInputs::pin(snapshot, bodies).expect("inputs");
