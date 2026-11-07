@@ -350,7 +350,12 @@ impl Editor {
     if state.busy {
       return button.loading();
     }
-    let (work, tried, allowed) = (self.work.clone(), self.tried.clone(), self.allowed.clone());
+    let (work, tried, allowed, gate) = (
+      self.work.clone(),
+      self.tried.clone(),
+      self.allowed.clone(),
+      self.gate.clone(),
+    );
     let candidate = state.checked.as_ref().ok().cloned();
     button.on_click(move || {
       tried.set(true);
@@ -360,7 +365,9 @@ impl Editor {
           profile: profile.clone(),
           action: Action::Save,
           allowed: allowed.get().0,
-          prompt_decided: false,
+          // A new profile is published as v1, so its role instructions are a prompt change that is the person's
+          // (ORC-30), read from the input that pressed Create.
+          prompt_decided: input_may_decide(gate.as_ref(), Guarded::PermissionWidening),
         });
       }
     })
