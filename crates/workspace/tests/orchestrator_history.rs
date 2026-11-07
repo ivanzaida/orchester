@@ -10,10 +10,12 @@ use orchester_core::{
   attachment::{AttachmentName, NewAttachment},
   conversation::MessageBody,
   id::{AgentAccountId, ChatId, ChatMessageId},
-  orchestrator::{Chat, TurnState},
+  module::{ModuleDetails, ModuleState},
+  name::Name,
+  orchestrator::{Chat, Subscription, TurnState, WatchTarget},
   run::{Answerer, TokenUsage},
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, WatchStart};
 use orchester_workspace::orchestrator::chat::{archive_in, delete_in, history_in, pin_in, rename_in};
 use support::{Fixture, at};
 
@@ -217,4 +219,49 @@ fn history_delete_is_refused_while_the_orchestrator_answers_and_says_so_for_one_
   assert_eq!(gone.key, "orchestrator.conversation.gone");
   let archived = archive_in(fixture.repo.path(), ChatId::generate(), Some(at(5))).expect_err("not kept");
   assert_eq!(archived.key, "orchestrator.conversation.gone");
+}
+
+/// ORC-782 (`i687ei` c): History says what each conversation that leads something leads, read from the subscriptions
+/// that lead their targets; one that leads nothing, or whose subscription ended, has no entry.
+#[test]
+fn history_says_what_each_leading_conversation_leads() {
+  let mut fixture = Fixture::new();
+  let leading = started(&mut fixture, "Plan the webhook retry work", 10);
+  let quiet = started(&mut fixture, "Why did KON-11 fail?", 20);
+  let module = |db: &mut ProjectDb, name: &str| {
+    let details =
+      ModuleDetails::new(Name::new(name).expect("name"), "", (None, None), ModuleState::Open).expect("details");
+    db.create_module(details, at(1)).expect("module").id()
+  };
+  let webhooks = module(&mut fixture.db, "Webhooks v2");
+  let search = module(&mut fixture.db, "Search index");
+  for (target, since) in [
+    (WatchTarget::Module(webhooks), 30),
+    (WatchTarget::Module(search), 31),
+    (WatchTarget::WithoutModule, 32),
+  ] {
+    let started = fixture
+      .db
+      .start_subscription(&Subscription::new(leading, target, "", at(since)))
+      .expect("kept");
+    assert_eq!(started, WatchStart::Started);
+  }
+  let history = history_in(fixture.repo.path()).expect("History");
+  let counts = history.leads_of(leading);
+  assert_eq!(
+    (counts.modules, counts.tasks, counts.without_module, counts.project),
+    (2, 0, true, false)
+  );
+  assert!(history.leads_of(quiet).is_empty());
+  assert!(
+    !history.leads.contains_key(&quiet),
+    "a conversation that leads nothing has no entry"
+  );
+  fixture
+    .db
+    .stop_subscription(leading, WatchTarget::WithoutModule, at(40))
+    .expect("stopped");
+  let counts = history_in(fixture.repo.path()).expect("History").leads_of(leading);
+  assert!(!counts.without_module, "an ended subscription no longer counts");
+  assert_eq!(counts.modules, 2);
 }

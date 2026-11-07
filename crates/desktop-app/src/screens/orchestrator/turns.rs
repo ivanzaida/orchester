@@ -15,11 +15,15 @@ use orchester_core::{
   id::ChatMessageId,
   orchestrator::{
     AgentWait, ChatAction, ChatEntry, ChatEvent, ChatPlan, DailyReport, EntryKind, PlanState, TurnMode, TurnState,
-    WaitTurn, watch::WatchSummary,
+    WaitTurn,
+    watch::{WatchCommand, WatchSummary},
   },
   time::Timestamp,
 };
-use orchester_workspace::orchestrator::chat::{ChatView, EndMoved, EventFacts};
+use orchester_workspace::orchestrator::{
+  chat::{ChatView, EndMoved, EventFacts},
+  waits_on::view::RunWaitView,
+};
 
 /// A part of an answer.
 #[derive(Clone, Debug, PartialEq)]
@@ -96,8 +100,9 @@ pub(super) struct Turn {
   pub(super) report: Option<Box<DailyReport>>,
   /// The end of a subscription that ended by itself, whose line opens the row instead of a person's message.
   pub(super) watch_ended: Option<Box<WatchSummary>>,
-  /// An event that is the whole row: a compaction of the session (`super::compaction`), or where a rewind went back
-  /// to (`super::rewind::line`).
+  /// An event that is the whole row: a compaction of the session (`super::compaction`), where a rewind went back to
+  /// (`super::rewind::line`), a watch command or line (`super::watch`), or the person's `/watching`, answered from the
+  /// live state (`super::watching`).
   pub(super) compaction: Option<ChatEvent>,
   /// Its entry in the conversation; `None` while it is being sent.
   seq: Option<i64>,
@@ -114,6 +119,8 @@ pub(super) struct Turn {
   /// A message the answer under way took follows it: that answer goes on, and ends, under that message.
   pub(super) continued: bool,
   pub(super) answer: Vec<Part>,
+  /// How the waits its answer's *waits on* rows name stand now (ORC-784).
+  pub(super) waits_on: Vec<RunWaitView>,
   /// The todo list of the turn it started, as the agent's latest update left it; `None` when the agent keeps none.
   pub(super) todo: Option<TodoList>,
   /// How the person's message's turn went: it planned only, or it acted.
@@ -149,6 +156,7 @@ impl Turn {
       arrival,
       continued: false,
       answer: Vec::new(),
+      waits_on: Vec::new(),
       todo: None,
       mode: TurnMode::Acts,
     }
@@ -158,6 +166,16 @@ impl Turn {
   /// with no words of the person's to send again.
   pub(super) const fn on_its_own(&self) -> bool {
     self.wait.is_some() || self.report.is_some() || self.watch_ended.is_some()
+  }
+
+  /// Whether the row is the person's `/watching`, which Orchester answers from the live state.
+  pub(super) const fn asks_watching(&self) -> bool {
+    matches!(
+      self.compaction,
+      Some(ChatEvent::WatchCommand {
+        command: WatchCommand::Watching,
+      })
+    )
   }
 
   /// Whether what the Orchestrator says next belongs to this row: one with a turn of its own, or a message the answer
@@ -188,6 +206,7 @@ impl Turn {
       arrival: Arrival::Own,
       continued: false,
       answer: Vec::new(),
+      waits_on: Vec::new(),
       todo: None,
       mode: TurnMode::Acts,
     }
@@ -291,6 +310,15 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
       .message
       .filter(|_| turn.arrival == Arrival::Own)
       .and_then(|message| shown.todo_of(message).cloned());
+    turn.waits_on = turn
+      .answer
+      .iter()
+      .filter_map(|part| match part {
+        Part::Action { action, .. } => action.waits_on.as_ref(),
+        _ => None,
+      })
+      .filter_map(|row| shown.wait_of(row.run).cloned())
+      .collect();
   }
   turns.extend(waiting);
   turns
@@ -298,8 +326,10 @@ pub(super) fn turns(shown: &ChatView) -> Vec<Turn> {
 
 /// The row `entry` of `shown` opens by itself: a wait of an agent, a daily report or a subscription that ended by
 /// itself, with the turn it started, if any; and a compaction (`06b` `j7eSQO`), where a rewind went back to (`10`
-/// `Zm7kq`), a fork's first line and what its original made after it (`11` `RT5T7`), each a row between the turns.
-/// `None` for an entry that is a person's message or part of an answer.
+/// `Zm7kq`), a fork's first line and what its original made after it (`11` `RT5T7`), the person's watch command and
+/// the lines about what the conversation watches (`super::watch`), and the person's `/watching` with its answer from
+/// the live state (`06` `Ff7AD`, `super::watching`), each a row between the turns, which started none. `None` for an
+/// entry that is a person's message or part of an answer.
 fn own_row(entry: &ChatEntry, shown: &ChatView) -> Option<Turn> {
   Some(match &entry.kind {
     EntryKind::Wait { wait, turn } => Turn {
@@ -321,7 +351,9 @@ fn own_row(entry: &ChatEntry, shown: &ChatView) -> Option<Turn> {
       event @ (ChatEvent::Compaction { .. }
       | ChatEvent::Rewound { .. }
       | ChatEvent::Forked { .. }
-      | ChatEvent::MadeInOriginal { .. }),
+      | ChatEvent::MadeInOriginal { .. }
+      | ChatEvent::WatchCommand { .. }
+      | ChatEvent::Watch { .. }),
     ) => Turn {
       compaction: Some(event.clone()),
       ..Turn::opened(entry, None)
@@ -410,6 +442,7 @@ fn person(
     arrival,
     continued: false,
     answer: Vec::new(),
+    waits_on: Vec::new(),
     todo: None,
     mode: TurnMode::Acts,
   }

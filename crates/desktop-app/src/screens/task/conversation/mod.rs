@@ -285,11 +285,12 @@ impl ConversationTab {
       (found.reveal, Some(found.track), Some(found.bar))
     });
     let delivery = with_ci(ctx, task, run, (&built.rows, &built.delivery));
+    let waits_on = super::waits_on::holding(&task.detail);
     let chat = timeline::chat(
       ctx,
       &self.follow,
       (&built.rows, &delivery, run.approvals.approved_by_autopilot()),
-      (items, &proposed),
+      (items, &proposed, waits_on),
       (working, arrived),
       (reveal, track),
     );

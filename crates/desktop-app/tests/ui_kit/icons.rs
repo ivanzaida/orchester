@@ -262,14 +262,42 @@ fn task_event_icons_match_bundled_font_names() {
   }
 }
 
-/// The glyphs of the /watch-module picker's rows (ORC-772, `R1s1o` in 02 `c8pALl`): a module's and the whole project's.
+/// The glyphs of the `/watching` answer (ORC-775, 06 `Ff7AD`): its avatar and command chip, and a head row's target;
+/// `boxes` and `folder-kanban` are the /watch-module picker's rows too (ORC-772, `R1s1o` in 02 `c8pALl`). The bundled
+/// font names the design's `square-check` by its older name.
 #[test]
-fn watch_picker_icons_match_bundled_font_names() {
+fn watching_icons_match_bundled_font_names() {
   let font = include_bytes!("../../assets/fonts/lucide.ttf");
-  for (icon, name) in [(Icon::Boxes, "boxes"), (Icon::FolderKanban, "folder-kanban")] {
-    let codepoint = (0xe000..0xf000)
+  for (icon, name) in [
+    (Icon::ListTree, "list-tree"),
+    (Icon::Boxes, "boxes"),
+    (Icon::SquareCheck, "check-square-2"),
+    (Icon::Inbox, "inbox"),
+    (Icon::FolderKanban, "folder-kanban"),
+  ] {
+    let codepoint = (0xe000..0xf8ff)
       .find(|codepoint| glyph_name(font, font_glyph(font, *codepoint)) == name)
       .expect("the bundled font includes the icon");
     assert_eq!(icon.glyph() as usize, codepoint, "{icon:?} codepoint: {codepoint:x}");
+  }
+}
+
+/// The glyphs of the lines the app writes about what an Orchestrator conversation watches and of a watch command's
+/// module chip (ORC-777, `avDZO`, `mgpxA` in `OKtX2`).
+#[test]
+fn watch_line_icons_match_bundled_font_names() {
+  let font = include_bytes!("../../assets/fonts/lucide.ttf");
+  let boxes = (0xe000..0xf000)
+    .find(|codepoint| glyph_name(font, font_glyph(font, *codepoint)) == "boxes")
+    .expect("the bundled font includes boxes");
+  assert_eq!(Icon::Boxes.glyph() as usize, boxes, "boxes codepoint: {boxes:x}");
+  for (icon, name) in [
+    (Icon::ArrowRightLeft, "arrow-right-left"),
+    (Icon::EyeOff, "eye-off"),
+    (Icon::Flag, "flag"),
+    (Icon::Eye, "eye"),
+    (Icon::ScanEye, "scan-eye"),
+  ] {
+    assert_eq!(glyph_name(font, font_glyph(font, icon.glyph() as usize)), name);
   }
 }

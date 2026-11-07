@@ -1,18 +1,24 @@
 //! What the Orchestrator screen reads: what the Orchestrator runs on, History's conversations, the conversation
 //! shown and the names of the projects the app knows (for what a link to another project's place says), each again
-//! whenever the project's runner or the chat's tools change a conversation; the conversation shown also whenever a
-//! run changes state or the project's tasks are saved (a merge in Orchester among them), which may end a wait it keeps.
+//! whenever the project's runner or the chat's tools change a conversation; the conversation shown, and what it
+//! watches (`/watching`, `super::watching`), also whenever a run changes state or the project's tasks are saved (a
+//! merge in Orchester among them), which may end a wait it keeps.
 
-use std::path::{Path, PathBuf};
+use std::{
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
 use lurq::app::ctx::{Ctx, StreamEmitter};
 use orchester_core::id::ChatId;
+use orchester_store::ProjectDb;
 use orchester_workspace::{
   background,
-  messages::Message,
+  messages::{self, Message},
   orchestrator::{
     chat::{ChatView, History, history_in},
     settings::OrchestratorSetup,
+    watching::{WatchReads, Watching},
   },
   runner::Runners,
 };
@@ -58,6 +64,8 @@ pub(super) struct Reads {
   pub(super) target: Option<ChatId>,
   pub(super) shown: Shown,
   pub(super) names: ProjectNames,
+  /// What the target conversation leads and what waits there now; `None` for a new one.
+  pub(super) watching: Option<Read<Arc<Watching>>>,
 }
 
 /// Reads what the screen of the project at `root` shows for `chat`, its tasks saved `saves` times so far.
@@ -82,6 +90,7 @@ pub(super) fn read(ctx: &mut Ctx, (root, saves): (&Path, u64), chat: Orchestrato
   };
   // Read on every pass, a new conversation's too, so the screen's hooks keep their order.
   let read = conversation(ctx, (root.to_path_buf(), target, (revision, states)), &hold);
+  let watching = watching(ctx, (root.to_path_buf(), target, (revision, states)), &hold);
   let names = ProjectNames::read(ctx, services.workspace, revision);
   let shown = match (chat, target) {
     (OrchestratorChat::Latest, None) if matches!(history, Read::Loading) => Shown::Loading,
@@ -94,6 +103,7 @@ pub(super) fn read(ctx: &mut Ctx, (root, saves): (&Path, u64), chat: Orchestrato
     target,
     shown,
     names,
+    watching,
   }
 }
 
@@ -178,4 +188,46 @@ fn conversation(ctx: &mut Ctx, (root, id, revision): (PathBuf, Option<ChatId>, (
     (None, Some(error)) => Shown::Failed(error),
     _ => Shown::Loading,
   }
+}
+
+/// What conversation `id` of the project at `root` leads and what waits there (`/watching`, 06 `Ff7AD`), read from the
+/// stored state again whenever `revision` (the conversations' and the runs' states, the tasks' saves) changes; `None`
+/// for a new one. What another conversation was read to lead does not stand for this one's.
+fn watching(
+  ctx: &mut Ctx,
+  (root, id, revision): (PathBuf, Option<ChatId>, (u64, u64)),
+  hold: &ReadHold,
+) -> Option<Read<Arc<Watching>>> {
+  let hold = hold.clone();
+  let state = ctx
+    .future((root, id, revision), move |(root, id, _)| {
+      let hold = hold.clone();
+      async move {
+        let Some(id) = id else {
+          return Ok(None);
+        };
+        hold.released().await;
+        background::run(move || {
+          let reads = ProjectDb::open(&root).and_then(|db| WatchReads::read(&db, &root));
+          reads
+            .map(|reads| Some((id, Arc::new(reads.watching(id)))))
+            .map_err(|error| {
+              tracing::error!(%error, "cannot read what the conversation watches");
+              messages::store_error(&error)
+            })
+        })
+        .await
+        .and_then(|read| read)
+      }
+    })
+    .state()
+    .get();
+  let id = id?;
+  let rejected = state.is_rejected();
+  Some(match (state.data, state.error) {
+    (_, Some(error)) if rejected => Read::Failed(error),
+    (Some(Some((read, watching))), _) if read == id => Read::Ready(watching),
+    (None, Some(error)) => Read::Failed(error),
+    _ => Read::Loading,
+  })
 }

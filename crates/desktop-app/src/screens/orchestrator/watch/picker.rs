@@ -26,9 +26,8 @@ use orchester_workspace::{
 };
 
 use super::{
-  key_of,
+  module::{key_of, target_of},
   rows::{self, Shown},
-  target_of,
 };
 use crate::{
   navigation::Navigation,

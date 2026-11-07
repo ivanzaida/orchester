@@ -13,13 +13,16 @@
 //! `orchestrator-not-set-up` is the same project with nothing chosen for the Orchestrator (`02 Not set up`): its
 //! conversations stay readable. `orchestrator-on-codex` runs it on Codex · Default with its twelve models, and
 //! `orchestrator-codex-limit` the same with that plan at its limit (`Runs-on picker · states` `t7cdi`). The context
-//! meter's and *Compact*'s scenarios are [`context`]'s; the events of tasks' runs are [`events`]'.
+//! meter's and *Compact*'s scenarios are [`context`]'s; the events of tasks' runs are [`events`]'; the watch entries
+//! the app writes are [`watch`]'s.
 
 mod accounts;
 pub mod context;
 pub mod events;
 mod live;
 mod proposals;
+pub mod waits_on;
+pub mod watch;
 
 use orchester_core::{
   conversation::MessageBody,

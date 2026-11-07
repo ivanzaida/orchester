@@ -43,6 +43,8 @@ pub enum RunWaitEnd {
   RunEnded,
   /// The waiting run was answered first, on its own wait card: it went on without the waited task's work.
   Answered,
+  /// The person dropped the wait (ORC-784): the run went on without the waited task's work.
+  Dropped,
 }
 
 impl RunWaitEnd {
@@ -53,6 +55,7 @@ impl RunWaitEnd {
       Self::ClosedUnmerged => "closed_unmerged",
       Self::RunEnded => "run_ended",
       Self::Answered => "answered",
+      Self::Dropped => "dropped",
     }
   }
 
@@ -63,6 +66,7 @@ impl RunWaitEnd {
       "closed_unmerged" => Ok(Self::ClosedUnmerged),
       "run_ended" => Ok(Self::RunEnded),
       "answered" => Ok(Self::Answered),
+      "dropped" => Ok(Self::Dropped),
       other => Err(corrupt("run wait end", other)),
     }
   }
@@ -152,6 +156,18 @@ impl ProjectDb {
       params![run.to_string(), at.unix_millis(), end.as_str()],
     )?;
     Ok(ended == 1)
+  }
+
+  /// Drops `run`'s latest wait at `at` (ORC-784): one that is active, or one its waited task ended as canceled or
+  /// closed without the merge, which still holds the run for the person; whether it had one to drop.
+  pub fn drop_run_wait(&mut self, run: RunId, at: Timestamp) -> Result<bool, StoreError> {
+    let dropped = self.connection.execute(
+      "UPDATE run_waits_on SET ended_at = ?2, ended_as = 'dropped'
+       WHERE id = (SELECT MAX(id) FROM run_waits_on WHERE run_id = ?1)
+         AND (ended_at IS NULL OR ended_as IN ('canceled', 'closed_unmerged'))",
+      params![run.to_string(), at.unix_millis()],
+    )?;
+    Ok(dropped == 1)
   }
 
   /// The project's active waits, in the order they were kept.

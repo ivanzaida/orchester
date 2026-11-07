@@ -68,6 +68,7 @@ mod tasks;
 mod todo_list;
 mod typography;
 pub mod usage;
+mod watching;
 
 use std::time::Duration;
 
@@ -137,6 +138,7 @@ pub use self::{
   todo_list::TodoText,
   typography::{ExtraTypography, IconSize},
   usage::{UsageRadius, UsageSpacing, UsageText},
+  watching::{WatchingSpacing, WatchingText},
 };
 
 /// A control that cannot be used, faded as a whole: a button that is unavailable or disabled (`Create
@@ -203,6 +205,7 @@ pub fn install(app: &mut App, mode: Mode) {
   dialog::install(theme);
   permissions::install(theme);
   side_question::install(theme);
+  watching::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

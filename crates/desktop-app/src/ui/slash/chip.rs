@@ -111,6 +111,28 @@ pub fn sent_skill_chip(ctx: &mut Ctx, id: &str, skill: &OfferedSkill) -> Element
   Tooltip::new(chip_id, tip).wrap(ctx, chip)
 }
 
+/// The chip of command `name` in a sent message (`Chip · /watching` `az1pt` in 06 `Ff7AD`), named
+/// `{id}-command-chip`: its `glyph` and `/name`, as [`sent_chip`] shows a sent command.
+pub fn sent_command_chip(id: &str, glyph: Icon, name: &str) -> Element {
+  let chip_id = format!("{id}-command-chip");
+  sent_pill(&chip_id, glyph, &format!("/{name}"))
+    .describe("command", name.to_owned())
+    .into()
+}
+
+/// A chip of a sent command, named `id`, as the composer held it but without its `x` (`Chip · /watch-module` `lC1cz`
+/// and `Chip · Webhooks v2` `mgpxA` in `04` `OKtX2`): its 11 `glyph` and its `words`, in a `border_strong` stroke.
+pub fn sent_chip(id: &str, glyph: Icon, words: &str) -> Element {
+  sent_pill(id, glyph, words).into()
+}
+
+/// The pill of a sent chip named `id`: its 11 `glyph` and its `words`, in a `border_strong` stroke.
+fn sent_pill(id: &str, glyph: Icon, words: &str) -> Row {
+  pill_frame(id, PaletteColor::BorderStrong)
+    .child(icon(glyph, IconSize::Xs, PaletteColor::TextSecondary))
+    .child(chip_words(&format!("{id}-name"), words))
+}
+
 /// The chip of the skill `skill` holds, in the composer named `id`, while it holds one; its `x` empties it, and its
 /// tooltip opens over it, clear of `frame`, the composer's box.
 fn skill_chip(

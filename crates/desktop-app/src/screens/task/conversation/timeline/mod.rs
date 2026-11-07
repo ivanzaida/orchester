@@ -44,6 +44,7 @@ use orchester_core::{
 };
 use orchester_workspace::{
   files::Version,
+  orchestrator::waits_on::view::RunWaitView,
   tasks::{
     conversation::orchestrator::{ChatMerge, Proposal},
     detail::TaskDetail,
@@ -74,6 +75,7 @@ use crate::{
   navigation::{Navigation, link::Open},
   project::ShownProject,
   routes::{ProjectPage, Route, TaskView},
+  screens::task::waits_on::{self, Place},
   theme::ExtraSpacing,
   ui::chat::{
     follow::{self, Follow},
@@ -296,6 +298,8 @@ enum Line {
   Delivery(Arc<DeliveryLine>),
   /// An answer or a message the Orchestrator chat proposed for the run and no one applied ([`proposal`]).
   Proposal(Box<Proposal>),
+  /// The run's wait on another task, with *Drop the wait*, after the rows while it holds the run (ORC-784, `Ejat3`).
+  WaitsOn(Box<RunWaitView>),
   /// *Builder is working · last event 2 s ago*, after the last row while an agent works.
   Working(Working),
   /// Room under the last row while *Jump to latest* floats over the chat's foot, so the row can scroll clear
@@ -319,6 +323,7 @@ impl RowProps {
       Line::Row(row) => row.key().clone(),
       Line::Delivery(line) => line.key.clone(),
       Line::Proposal(proposal) => proposal.key(),
+      Line::WaitsOn(_) => "conversation-waits-on".into(),
       Line::Working(_) => "conversation-working".into(),
       Line::JumpRoom => "conversation-jump-room".into(),
     };
@@ -349,16 +354,17 @@ fn with_delivery(rows: &[Arc<Row>], delivery: &[Placed]) -> Vec<Line> {
 }
 
 /// The chat of `rows` with the merge queue's lines (`delivery`) among them, what the timeline `items` show, then the
-/// Orchestrator chat's `proposals` for the run, then `working`, the working line while an agent works; *Jump to latest*
-/// under it while it does not follow the run, with what arrived since (`arrived` counts the transcript's entries, the
-/// conversation's messages and the proposals so far; the queue's lines count too). `autopilot`, whether Autopilot
-/// answers the run's requests, leads the rows with its line. While the search is open, the row of its current place
-/// (`found`) is brought into view, and its `track` of marks floats over the chat's end.
+/// Orchestrator chat's `proposals` for the run, then the run's wait on another task (`waits_on`), then `working`, the
+/// working line while an agent works; *Jump to latest* under it while it does not follow the run, with what arrived
+/// since (`arrived` counts the transcript's entries, the conversation's messages and the proposals so far; the queue's
+/// lines count too). `autopilot`, whether Autopilot answers the run's requests, leads the rows with its line. While the
+/// search is open, the row of its current place (`found`) is brought into view, and its `track` of marks floats over
+/// the chat's end.
 pub(super) fn chat(
   ctx: &mut Ctx,
   follow: &Follow,
   (rows, delivery, autopilot): (&[Arc<Row>], &[Placed], bool),
-  (items, proposals): (&[Item], &[Proposal]),
+  (items, proposals, waits_on): (&[Item], &[Proposal], Option<&RunWaitView>),
   (working, arrived): (Option<Working>, usize),
   (found, track): (Option<String>, Option<Element>),
 ) -> Element {
@@ -381,6 +387,7 @@ pub(super) fn chat(
           .iter()
           .map(|proposal| Line::Proposal(Box::new(proposal.clone()))),
       )
+      .chain(waits_on.map(|wait| Line::WaitsOn(Box::new(wait.clone()))))
       .chain(working.map(Line::Working))
       .chain((!follow.following.get()).then_some(Line::JumpRoom))
       .map(RowProps::of)
@@ -467,6 +474,11 @@ impl Component for RowView {
           proposal: (**proposal).clone(),
         };
         ctx.mount_keyed::<ProposalRow>(&props.proposal.key(), props)
+      }
+      Line::WaitsOn(_) => {
+        let timeline = Timeline::of(ctx);
+        let open = &timeline.shown_project.open;
+        waits_on::row(ctx, (&timeline.detail, open), Place::Conversation).unwrap_or_else(|| Column::new().into())
       }
     };
     let mark = match &props.line {
