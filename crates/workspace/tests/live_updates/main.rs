@@ -24,6 +24,7 @@ mod publish;
 mod reconnects;
 mod server;
 mod share;
+mod share_fill_ins;
 mod share_team_form;
 #[path = "../support/mod.rs"]
 mod support;

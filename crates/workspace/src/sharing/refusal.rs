@@ -56,6 +56,16 @@ pub enum TeamMcpProblem {
   UrlQuery,
   /// Basic authentication with a user name: the team's secret header holds a whole credential, not a user name.
   BasicUsername,
+  /// A variable's name is not a valid secret name; under the team's form each variable takes the team secret of its
+  /// own name.
+  VariableNotSecret { variable: String },
+  /// A secret header names no secret.
+  HeaderWithoutSecret { header: String },
+  /// The prefix of a secret header is not a scheme (letters, spaces and `- _ . :` only).
+  HeaderPrefix,
+  /// A team secret (`secret`) is filled from another local secret or value for the MCP server `other`: a team secret
+  /// has one value on a computer.
+  SecretTaken { secret: String, other: String },
   /// Any other rule of the team's body, as its error says (it holds names only, never a value).
   Body { detail: String },
 }
@@ -66,6 +76,9 @@ impl From<TeamMcpServerError> for TeamMcpProblem {
       TeamMcpServerError::ProgramPath(program) => Self::ProgramName { program },
       TeamMcpServerError::AbsoluteFolder(folder) => Self::AbsoluteFolder { folder },
       TeamMcpServerError::UrlQuery => Self::UrlQuery,
+      TeamMcpServerError::VariableNotSecret(variable) => Self::VariableNotSecret { variable },
+      TeamMcpServerError::HeaderWithoutSecret(header) => Self::HeaderWithoutSecret { header },
+      TeamMcpServerError::Prefix(_) => Self::HeaderPrefix,
       other => Self::Body {
         detail: other.to_string(),
       },
@@ -87,15 +100,31 @@ impl ShareRefusal {
       ShareRefusalReason::WritableFolders { folders } => {
         Message::new("sharing.errors.shareRefusal.writableFolders").with("folders", folders.join(", "))
       }
-      ShareRefusalReason::McpServer { problem, .. } => Message::new(match problem {
-        TeamMcpProblem::ProgramInWorktree { .. } => "sharing.errors.shareRefusal.mcpProgramInWorktree",
-        TeamMcpProblem::ProgramName { .. } => "sharing.errors.shareRefusal.mcpProgramName",
-        TeamMcpProblem::AbsoluteFolder { .. } => "sharing.errors.shareRefusal.mcpFolder",
-        TeamMcpProblem::UrlQuery => "sharing.errors.shareRefusal.mcpUrlQuery",
-        TeamMcpProblem::BasicUsername => "sharing.errors.shareRefusal.mcpBasicUsername",
-        TeamMcpProblem::Body { .. } => "sharing.errors.shareRefusal.mcpBody",
-      }),
+      ShareRefusalReason::McpServer { problem, .. } => mcp_message(problem),
     }
     .with("resource", resource)
+  }
+}
+
+fn mcp_message(problem: &TeamMcpProblem) -> Message {
+  let message = Message::new(match problem {
+    TeamMcpProblem::ProgramInWorktree { .. } => "sharing.errors.shareRefusal.mcpProgramInWorktree",
+    TeamMcpProblem::ProgramName { .. } => "sharing.errors.shareRefusal.mcpProgramName",
+    TeamMcpProblem::AbsoluteFolder { .. } => "sharing.errors.shareRefusal.mcpFolder",
+    TeamMcpProblem::UrlQuery => "sharing.errors.shareRefusal.mcpUrlQuery",
+    TeamMcpProblem::BasicUsername => "sharing.errors.shareRefusal.mcpBasicUsername",
+    TeamMcpProblem::VariableNotSecret { .. } => "sharing.errors.shareRefusal.mcpVariableNotSecret",
+    TeamMcpProblem::HeaderWithoutSecret { .. } => "sharing.errors.shareRefusal.mcpHeaderWithoutSecret",
+    TeamMcpProblem::HeaderPrefix => "sharing.errors.shareRefusal.mcpHeaderPrefix",
+    TeamMcpProblem::SecretTaken { .. } => "sharing.errors.shareRefusal.mcpSecretTaken",
+    TeamMcpProblem::Body { .. } => "sharing.errors.shareRefusal.mcpBody",
+  });
+  match problem {
+    TeamMcpProblem::VariableNotSecret { variable } => message.with("variable", variable.clone()),
+    TeamMcpProblem::HeaderWithoutSecret { header } => message.with("header", header.clone()),
+    TeamMcpProblem::SecretTaken { secret, other } => {
+      message.with("secret", secret.clone()).with("other", other.clone())
+    }
+    _ => message,
   }
 }

@@ -7,7 +7,8 @@
 
 use std::{
   collections::BTreeMap,
-  path::{Path, PathBuf},
+  path::PathBuf,
+  sync::atomic::{AtomicBool, AtomicI64, Ordering},
 };
 
 use orchester_api::{ReferenceTarget, SharedResourceKind};
@@ -18,17 +19,16 @@ use orchester_core::{
   },
   id::{ConnectionId, ResourceId, SecretId, ServerId},
   permission::{AgentPermissions, WritableFolders},
-  resource::{AgentProfile, CommandProgram, Draft, TeamAgentProfile, TeamMcpLaunch, TeamMcpServer, VariableName},
+  resource::{
+    AgentProfile, CommandProgram, Draft, HeaderPrefix, TeamAgentProfile, TeamMcpLaunch, TeamMcpServer, VariableName,
+  },
   secret::{Environment, NewSecret, Secret, SecretKind, SecretName, SecretValue, SecretVault, VaultError, VaultKey},
   store::{McpServerStore, ResourceStore, SecretStore},
   time::Timestamp,
 };
 use orchester_store::{AppDb, ProjectDb, ResourceSharing, StoredServer};
 use orchester_workspace::{
-  sharing::{
-    ShareRefusalReason, SharingError, TeamMcpProblem,
-    sync::{ShareFillIns, upload_configuration},
-  },
+  sharing::{ShareRefusalReason, SharingError, TeamMcpProblem, sync::upload_configuration},
   workspace::Workspace,
 };
 use parking_lot::Mutex;
@@ -41,9 +41,18 @@ use super::{
   support::at,
 };
 
-/// A keychain in memory: tests never touch the keychain of the user running them.
+/// A keychain in memory: tests never touch the keychain of the user running them. It can be told to refuse stores.
 #[derive(Default)]
-struct MemoryVault(Mutex<BTreeMap<String, String>>);
+pub(super) struct MemoryVault {
+  values: Mutex<BTreeMap<String, String>>,
+  refuse_stores: AtomicBool,
+}
+
+impl MemoryVault {
+  pub(super) fn refuse_stores(&self) {
+    self.refuse_stores.store(true, Ordering::SeqCst);
+  }
+}
 
 fn key_text(key: &VaultKey) -> String {
   format!("{key:?}")
@@ -51,25 +60,35 @@ fn key_text(key: &VaultKey) -> String {
 
 impl SecretVault for MemoryVault {
   fn store(&self, key: &VaultKey, value: &SecretValue) -> Result<(), VaultError> {
-    self.0.lock().insert(key_text(key), value.expose().to_owned());
+    if self.refuse_stores.load(Ordering::SeqCst) {
+      return Err(VaultError::AccessDenied("refused by the test".to_owned()));
+    }
+    self.values.lock().insert(key_text(key), value.expose().to_owned());
     Ok(())
   }
 
   fn read(&self, key: &VaultKey) -> Result<SecretValue, VaultError> {
-    let value = self.0.lock().get(&key_text(key)).cloned().ok_or(VaultError::NotFound)?;
+    let value = self
+      .values
+      .lock()
+      .get(&key_text(key))
+      .cloned()
+      .ok_or(VaultError::NotFound)?;
     SecretValue::new(value).map_err(|_| VaultError::NotFound)
   }
 
   fn delete(&self, key: &VaultKey) -> Result<(), VaultError> {
-    self.0.lock().remove(&key_text(key));
+    self.values.lock().remove(&key_text(key));
     Ok(())
   }
 }
 
-const PROGRAM: &str = "/opt/tools/notes-mcp";
-const TOKEN: &str = "s3cret-token-value";
+static NEXT_SERVER: AtomicI64 = AtomicI64::new(0);
 
-fn secret(db: &mut ProjectDb, label: &str) -> Secret {
+pub(super) const PROGRAM: &str = "/opt/tools/notes-mcp";
+pub(super) const TOKEN: &str = "s3cret-token-value";
+
+pub(super) fn secret(db: &mut ProjectDb, label: &str) -> Secret {
   let new = NewSecret {
     name: SecretName::new(label).expect("secret name"),
     kind: SecretKind::AccessToken,
@@ -80,19 +99,20 @@ fn secret(db: &mut ProjectDb, label: &str) -> Secret {
   secret
 }
 
-fn local_server(label: &str, transport: McpTransport, environment: McpEnvironment) -> McpServer {
+pub(super) fn local_server(label: &str, transport: McpTransport, environment: McpEnvironment) -> McpServer {
   McpServer::new(
     ConnectionId::generate(),
     McpServerName::new(label).expect("server name"),
     transport,
     environment,
-    at(2),
+    // In the order they are made: the plan reads servers by when they were made.
+    at(2 + NEXT_SERVER.fetch_add(1, Ordering::SeqCst)),
   )
   .expect("a server")
 }
 
-/// A stdio server `notes` started by an absolute path, with a plain variable and one that takes `token`.
-fn notes(token: &Secret) -> McpServer {
+/// A stdio server `notes` started by the absolute path `program`, with a plain variable and one that takes `token`.
+pub(super) fn notes(token: &Secret, program: &str) -> McpServer {
   let variables = BTreeMap::from([
     (
       VariableName::new("API_TOKEN").expect("variable"),
@@ -103,7 +123,7 @@ fn notes(token: &Secret) -> McpServer {
       McpEnvValue::Text("fast".to_owned()),
     ),
   ]);
-  let stdio = StdioServer::new(CommandProgram::new(PROGRAM).expect("program"), Vec::new(), None);
+  let stdio = StdioServer::new(CommandProgram::new(program).expect("program"), Vec::new(), None);
   local_server(
     "notes",
     McpTransport::Stdio(stdio),
@@ -111,13 +131,13 @@ fn notes(token: &Secret) -> McpServer {
   )
 }
 
-fn remote(label: &str, url: &str, authorization: McpAuthorization) -> McpServer {
+pub(super) fn remote(label: &str, url: &str, authorization: McpAuthorization) -> McpServer {
   let http = HttpServer::new(McpUrl::new(url).expect("url"), authorization);
   local_server(label, McpTransport::Http(http), McpEnvironment::default())
 }
 
 /// A published profile Reviewer, Builder's body choosing `servers`.
-fn reviewer(alice: &mut Sharer, servers: &[ConnectionId]) -> ResourceId {
+pub(super) fn reviewer(alice: &mut Sharer, servers: &[ConnectionId]) -> ResourceId {
   let (_, builder) = alice.delivery();
   let published = alice.db().latest_version::<AgentProfile>(builder).expect("read");
   let body = published
@@ -128,7 +148,7 @@ fn reviewer(alice: &mut Sharer, servers: &[ConnectionId]) -> ResourceId {
   profile_named(alice, "reviewer", &body)
 }
 
-fn profile_named(alice: &mut Sharer, label: &str, body: &AgentProfile) -> ResourceId {
+pub(super) fn profile_named(alice: &mut Sharer, label: &str, body: &AgentProfile) -> ResourceId {
   let db = &mut alice.fixture.db;
   let id = db
     .create_resource(slug(label), name(label), body, at(30))
@@ -147,7 +167,7 @@ async fn live_updates_share_turns_the_local_mcp_servers_a_profile_chooses_into_t
   let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
   let mut alice = Sharer::new();
   let token = secret(&mut alice.fixture.db, "NOTES_TOKEN");
-  let local = notes(&token);
+  let local = notes(&token, PROGRAM);
   let issues = remote(
     "issues",
     "https://mcp.example.dev/issues",
@@ -201,7 +221,9 @@ async fn live_updates_share_turns_the_local_mcp_servers_a_profile_chooses_into_t
     "{:?}",
     sent.references
   );
+  // The team servers take the local servers' ids on purpose, so those ids appear; the secret's id and values do not.
   assert!(sent.body.get("connection").is_none(), "{}", sent.body);
+  assert_profile_leaks_nothing(&alice, reviewer, &sent, &token);
 
   let db = alice.db();
   assert!(matches!(
@@ -221,56 +243,6 @@ async fn live_updates_share_turns_the_local_mcp_servers_a_profile_chooses_into_t
     local_profile.body().mcp_servers().ids(),
     [local.id(), issues.id()],
     "the local profile still chooses the local servers, which have the team servers' ids"
-  );
-}
-
-#[tokio::test(flavor = "multi_thread")]
-async fn live_updates_share_sets_this_computers_fill_ins_from_what_it_had_locally() {
-  let team = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
-  let mut alice = Sharer::new();
-  let token = secret(&mut alice.fixture.db, "NOTES_TOKEN");
-  let local = notes(&token);
-  alice.fixture.db.create_mcp_server(&local).expect("a local MCP server");
-  let reviewer = reviewer(&mut alice, &[local.id()]);
-  let (_, builder) = alice.delivery();
-  let connection = alice
-    .db()
-    .latest_version::<AgentProfile>(builder)
-    .expect("read")
-    .expect("Builder")
-    .body()
-    .connection();
-  let vault = MemoryVault::default();
-  let root = alice.fixture.repo.path().to_owned();
-  vault
-    .store(
-      &token.vault_key(alice.db().project().id()),
-      &SecretValue::new(TOKEN.to_owned()).expect("a value"),
-    )
-    .expect("the local value");
-  let (workspace, (_folder, app_db), server) = workspace_with_server();
-
-  let fill_ins = ShareFillIns::read(&root, &vault).expect("read before the upload");
-  alice.share(&team).await;
-  fill_ins.apply((&workspace, &vault), &root, server).expect("set");
-
-  let db = alice.db();
-  let pick = db.connection_pick(reviewer).expect("read").expect("a pick");
-  assert_eq!(pick.connection, connection);
-  assert!(db.connection_pick(builder).expect("read").is_some());
-  let team_notes = ResourceId::from_uuid(local.id().as_uuid());
-  assert!(db.team_mcp_on_here(team_notes).expect("read"), "it was on");
-  let name = SecretName::new("NOTES_TOKEN").expect("name");
-  let value = db.team_secret_value(&vault, &name).expect("read").expect("a value");
-  assert_eq!(value.expose(), TOKEN);
-  let program = AppDb::open(&app_db).expect("application database");
-  let program = program.mcp_server_program(server, team_notes).expect("read");
-  assert_eq!(program.expect("the path").program, Path::new(PROGRAM));
-  let cached = db.cached_version::<AgentProfile>(reviewer, number(1)).expect("read");
-  assert_eq!(
-    cached.expect("cached").local_body.connection(),
-    connection,
-    "the sharer's profile still runs on its connection"
   );
 }
 
@@ -423,6 +395,27 @@ async fn live_updates_share_leaves_a_gone_mcp_server_out_of_an_older_version_and
   );
 }
 
+/// The profile as the team holds it, and its references, name nothing of this computer: not its connection, its
+/// program path, a plain value, or a secret's id and value.
+fn assert_profile_leaks_nothing(
+  alice: &Sharer,
+  profile: ResourceId,
+  sent: &orchester_api::SharedVersion,
+  token: &Secret,
+) {
+  let text = format!("{} {:?}", json_text(&sent.body), sent.references);
+  let connection = alice
+    .db()
+    .latest_version::<AgentProfile>(profile)
+    .expect("read")
+    .expect("v1")
+    .body()
+    .connection();
+  for leaked in [&connection.to_string(), PROGRAM, "fast", TOKEN, &token.id().to_string()] {
+    assert!(!text.contains(leaked), "{leaked} reached the team: {text}");
+  }
+}
+
 /// The remote server `issues` was uploaded with its bearer token's header, and `unused` was not uploaded.
 fn assert_remote_server(server: &TeamServer, issues: ResourceId, unused: ResourceId) {
   let remote_body: TeamMcpServer =
@@ -433,9 +426,15 @@ fn assert_remote_server(server: &TeamServer, issues: ResourceId, unused: Resourc
   let headers: Vec<_> = remote_launch
     .secret_headers()
     .iter()
-    .map(|header| header.as_str())
+    .map(|header| {
+      (
+        header.header().as_str(),
+        header.secret().as_str(),
+        header.prefix().map(HeaderPrefix::as_str),
+      )
+    })
     .collect();
-  assert_eq!(headers, ["Authorization"]);
+  assert_eq!(headers, [("Authorization", "NOTES_TOKEN", Some("Bearer "))]);
   assert_eq!(
     on_server(server, unused),
     [],
@@ -444,7 +443,7 @@ fn assert_remote_server(server: &TeamServer, issues: ResourceId, unused: Resourc
 }
 
 /// A workspace whose application database knows one server.
-fn workspace_with_server() -> (Workspace, (TempDir, PathBuf), ServerId) {
+pub(super) fn workspace_with_server() -> (Workspace, (TempDir, PathBuf), ServerId) {
   let folder = tempfile::tempdir().expect("application data");
   let path = folder.path().join("orchester.db");
   let mut app = AppDb::open(&path).expect("application database");

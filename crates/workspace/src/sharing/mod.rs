@@ -28,6 +28,7 @@ mod place;
 pub mod project;
 mod refusal;
 mod server_key;
+mod share_outcome;
 pub mod sync;
 pub mod team;
 mod team_created;
@@ -70,6 +71,7 @@ pub use self::{
   place::{Place, Places},
   project::NotArchived,
   refusal::{ShareRefusal, ShareRefusalReason, TeamMcpProblem},
+  share_outcome::{NotSet, ShareNote},
   team_created::{Created, NotCreated},
   trust::{ConfirmedPin, PresentedCertificate, Trust},
 };

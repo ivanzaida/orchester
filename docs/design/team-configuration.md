@@ -39,7 +39,10 @@ what is local by nature: connections, program paths, secret values.
   without asking; with several, the person picks once per profile, kept on this computer; with none, the profile
   says what to add.
 - **MCP server program** *(decided)*. The team server holds the whole MCP server; for a local one the person sets only
-  the path to its program on this computer, once. Nothing is guessed or found by name. A remote MCP server needs
+  the path to its program on this computer, once. Nothing is guessed or found by name for other computers; **Share** is the
+  one exception, and only for the sharer's own computer: a local server started by a name on the search path (`npx`,
+  `uvx`) is looked up once there when the project is shared, the file found is this computer's path, and a name that is
+  found nowhere is reported in the Share result as needing its path set. A remote MCP server needs
   nothing unless it has secret headers. A program's variables and a remote server's secret headers name the team secrets
   they take (a variable the secret of its own name; a header its secret and an optional prefix such as `Bearer `), so
   the names an MCP server needs are read from its body.

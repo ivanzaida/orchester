@@ -11,7 +11,10 @@ use orchester_store::StoreError;
 use thiserror::Error;
 
 use super::refusal::ShareRefusal;
-use crate::messages::{self, Message};
+use crate::{
+  i18n::fallback_text,
+  messages::{self, Message},
+};
 
 #[derive(Debug, Error)]
 pub enum SharingError {
@@ -174,9 +177,9 @@ impl SharingError {
         "resources",
         refusals
           .iter()
-          .map(|refusal| refusal.name.as_str())
+          .map(|refusal| fallback_text(&refusal.message()))
           .collect::<Vec<_>>()
-          .join(", "),
+          .join("\n"),
       ),
       Self::WritableFoldersStay { folders, .. } => {
         Message::new("sharing.errors.writableFoldersStay").with("folders", folders.join(", "))
