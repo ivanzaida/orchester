@@ -1,6 +1,7 @@
 //! The `ui_*` tools and the QA app as the built-in service `desktop-qa`: a step that may start a QA app is offered
-//! `desktop-qa` beside the project's services and the `ui_*` tools, which run unasked; their input is strict; and the
-//! `mcp` driver maps each call onto one of the app's lurq tools and reads the app's answer into the common shape.
+//! `desktop-qa` beside the project's services and the `ui_*` tools, which run unasked; their input is strict; the
+//! `mcp` driver maps each call onto one of the app's lurq tools and reads the app's answer into the common shape; and
+//! the `browser` driver's tab opens only its services' origins.
 
 use orchester_core::{
   orchester_tools::{
@@ -8,6 +9,7 @@ use orchester_core::{
     ui::{
       UiAction, UiCondition, UiElement, UiRef,
       mcp::{self, UiAnswer},
+      origins::{AllowedOrigins, Origin},
     },
   },
   permission::NetworkAccess,
@@ -90,11 +92,11 @@ fn ui_tools_and_desktop_qa_come_with_start_qa_app_and_run_unasked() {
 
 #[test]
 fn ui_tools_come_with_a_service_of_the_native_driver_and_run_unasked() {
-  // A read-only step on the network may start services but no QA app: the native driver alone brings the ui_* tools.
+  // A read-only step on the network may start services but no QA app: a driven service alone brings the ui_* tools.
   let read_only = online(RepositoryAccess::ReadOnly);
   let step = StepTools::for_step(&read_only, &[])
     .with_services(&read_only, &[web()])
-    .with_native_ui();
+    .with_service_ui();
   for tool in OrchesterTool::UI {
     assert_eq!(step.policy(tool), Some(ToolPolicy::Runs), "{}", tool.as_str());
   }
@@ -118,12 +120,12 @@ fn ui_tools_come_with_a_service_of_the_native_driver_and_run_unasked() {
   );
 
   // The QA app already brought them: nothing is offered twice.
-  let both = ui_step().with_native_ui();
+  let both = ui_step().with_service_ui();
   assert_eq!(both.offered(), ui_step().offered());
   // Off the network a step starts no service, so it drives none.
   let offline = StepTools::for_step(&permissions(RepositoryAccess::Write), &[])
     .with_services(&permissions(RepositoryAccess::Write), &[web()])
-    .with_native_ui();
+    .with_service_ui();
   assert!(offline.offered().iter().all(|(tool, _)| !tool.is_ui_tool()));
 }
 
@@ -160,6 +162,22 @@ fn ui_tools_input_is_strict() {
       timeout_ms: 10_000,
     })
   );
+  for (condition, read) in [
+    ("selector", UiCondition::Selector("#status.saved".to_owned())),
+    ("text", UiCondition::Text("#status.saved".to_owned())),
+    ("url", UiCondition::Url("#status.saved".to_owned())),
+  ] {
+    let call = ui("ui_wait", &json!({"condition": condition, "query": "#status.saved"}));
+    assert!(read.is_page(), "{condition} is a page's condition");
+    assert_eq!(
+      call,
+      Ok(UiCall::Wait {
+        condition: read,
+        timeout_ms: 10_000
+      })
+    );
+  }
+  assert!(!UiCondition::Idle.is_page() && !UiCondition::Element("x".to_owned()).is_page());
   assert_eq!(
     ui("ui_logs", &json!({})),
     Ok(UiCall::Logs {
@@ -180,6 +198,8 @@ fn ui_tools_input_is_strict() {
     ("ui_logs", json!({"lines": 1001})),
     ("ui_wait", json!({"condition": "idle", "query": "x"})),
     ("ui_wait", json!({"condition": "element"})),
+    ("ui_wait", json!({"condition": "selector"})),
+    ("ui_wait", json!({"condition": "url", "query": "two\nlines"})),
     ("ui_wait", json!({"condition": "idle", "timeout_ms": 60_001})),
     ("ui_wait", json!({"condition": "soon"})),
   ] {
@@ -305,5 +325,45 @@ fn ui_mcp_driver_reads_the_apps_answers_into_the_common_shape() {
   assert_eq!(
     mcp::answer(&snapshot, &refused),
     Err("unknown or stale ref \"ref_2\"".to_owned())
+  );
+}
+
+/// The browser driver's tab opens only its services' origins: scheme, host and port compared as a browser compares
+/// them, a default port written or not; the page's own content (`data:`, `blob:`, `about:`) goes through, every other
+/// scheme and host is blocked.
+#[test]
+fn ui_browser_origins_allow_only_the_services_origins() {
+  let allowed = AllowedOrigins::of_services(["http://127.0.0.1:4100", "https://App.Test", "not a url"]);
+  let listed: Vec<&str> = allowed.iter().map(Origin::as_str).collect();
+  assert_eq!(listed, ["http://127.0.0.1:4100", "https://app.test:443"]);
+  for url in [
+    "http://127.0.0.1:4100/app?x=1",
+    "HTTP://127.0.0.1:4100",
+    "ws://127.0.0.1:4100/socket",
+    "https://app.test:443/a",
+    "https://user@app.test/a",
+    "data:text/plain,hi",
+    "about:blank",
+    "blob:http://127.0.0.1:4100/1f2e",
+  ] {
+    assert!(allowed.allows(url), "{url} is allowed");
+  }
+  for url in [
+    "http://127.0.0.1:4101/app",
+    "http://localhost:4100/app",
+    "https://127.0.0.1:4100/",
+    "http://app.test/a",
+    "https://example.com/track",
+    "file:///C:/secrets.txt",
+    "chrome://settings",
+    "http://127.0.0.1:notaport/",
+  ] {
+    assert!(!allowed.allows(url), "{url} is blocked");
+  }
+  assert!(AllowedOrigins::default().is_empty());
+  assert!(!AllowedOrigins::default().allows("http://127.0.0.1:4100/"));
+  assert_eq!(
+    Origin::of("http://[::1]:8080/x").map(|origin| origin.to_string()),
+    Some("http://[::1]:8080".to_owned())
   );
 }

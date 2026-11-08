@@ -2,7 +2,7 @@
 
 mod discovery;
 
-pub(in crate::execution::executor::step) use self::images::save_pixels;
+pub(in crate::execution::executor::step) use self::images::{save_pixels, save_png_bytes};
 mod images;
 mod transport;
 

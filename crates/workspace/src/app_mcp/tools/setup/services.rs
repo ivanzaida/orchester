@@ -250,6 +250,7 @@ fn summary_json(entry: &Entry<Service>) -> Value {
     UiDriver::None => "none",
     UiDriver::Native => "native",
     UiDriver::Mcp => "mcp",
+    UiDriver::Browser => "browser",
   });
   value
 }

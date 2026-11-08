@@ -13,8 +13,8 @@ pub enum RunData {
   RunFolder(RunFolder),
 }
 
-/// How agents see and use the service's UI through the `ui_*` tools. Browser automation comes later through the
-/// in-app Browser (`docs/architecture/agent-testing.md`, decision 6).
+/// How agents see and use the service's UI through the `ui_*` tools (`docs/architecture/agent-testing.md`, "UI
+/// drivers").
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum UiDriver {
   /// No UI: logs and HTTP only.
@@ -23,6 +23,9 @@ pub enum UiDriver {
   Native,
   /// An app with its own MCP server, such as lurq apps and Orchester.
   Mcp,
+  /// A web app, in a tab of the run's own in Orchester's Browser, driven over CDP: it opens only the origins of the
+  /// services the step started.
+  Browser,
 }
 
 /// Where `ui_open` starts, e.g. `{{url}}/teams/{{seed.team_id}}` or an app's route; its placeholders are kept as

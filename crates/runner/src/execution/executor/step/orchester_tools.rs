@@ -38,7 +38,7 @@ use orchester_core::{
   },
   permission::{AgentPermissions, ResolvedFolder, category::CommandScope},
   resource::CommandEnvironment,
-  service::{ServiceApproval, ServiceName},
+  service::{ServiceApproval, ServiceName, UiDriver},
   source::ResolvedSources,
 };
 use orchester_exec::{run_capped, run_processes::RunProcesses};
@@ -57,6 +57,7 @@ use super::{
   start::problem,
   suite::StepSuites,
   tool_files::ToolFiles,
+  ui::WebTabs,
 };
 use crate::{approval_relay::TOOLS_FLAG, git::Git, private_file};
 
@@ -148,8 +149,10 @@ pub(in super::super) struct ToolHost {
   service_starts: Mutex<Vec<(ToolCall, Vec<ServiceApproval>)>>,
   /// The invocation's QA app (`start_qa_app`, `start_service("desktop-qa")`); `None` while the host is being made.
   qa: Option<StepQa>,
-  /// The service whose UI `ui_open` opened last.
-  ui_opened: Mutex<Option<ServiceName>>,
+  /// The service whose UI `ui_open` opened last, with its driver.
+  ui_opened: Mutex<Option<(ServiceName, UiDriver)>>,
+  /// The `browser` UI driver's tabs of the invocation, in the project's browser.
+  web: WebTabs,
   /// The invocation's services (`start_service`, `stop_service`, `service_status`, `service_logs`); `None` while the
   /// host is being made.
   services: Option<StepServices>,
@@ -513,6 +516,7 @@ impl RunTask {
       service_starts: Mutex::new(Vec::new()),
       qa: None,
       ui_opened: Mutex::new(None),
+      web: WebTabs::new(Arc::clone(&self.browser), self.run.id()),
       services: None,
       suites: None,
       browser: None,
@@ -520,7 +524,7 @@ impl RunTask {
   }
 
   /// The Orchester tools a step with `permissions` and `checks` is offered: its sources, and the project's published
-  /// services, stacks and test suites, with the `ui_*` tools when a service has the native UI driver.
+  /// services, stacks and test suites, with the `ui_*` tools when a service has the native or browser UI driver.
   fn offered_tools(&self, permissions: &AgentPermissions, checks: &[ProjectTool]) -> Result<StepTools, RunnerProblem> {
     let services = self.service_names()?;
     let tools = StepTools::for_step(permissions, checks)
@@ -528,8 +532,8 @@ impl RunTask {
       .with_services(permissions, &services.names)
       .with_stacks(&self.stack_names()?)
       .with_test_suites(permissions, &self.suite_slugs()?);
-    Ok(if services.native_ui {
-      tools.with_native_ui()
+    Ok(if services.driven_ui {
+      tools.with_service_ui()
     } else {
       tools
     })

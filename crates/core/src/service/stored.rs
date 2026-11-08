@@ -128,6 +128,7 @@ enum UiDriverFields {
   None,
   Native,
   Mcp,
+  Browser,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -200,6 +201,7 @@ impl From<&Service> for ServiceFields {
         UiDriver::None => UiDriverFields::None,
         UiDriver::Native => UiDriverFields::Native,
         UiDriver::Mcp => UiDriverFields::Mcp,
+        UiDriver::Browser => UiDriverFields::Browser,
       },
       ui_start: service.ui_start().map(|start| start.as_str().to_owned()),
       owned_paths: service
@@ -234,6 +236,7 @@ impl TryFrom<ServiceFields> for Service {
       UiDriverFields::None => UiDriver::None,
       UiDriverFields::Native => UiDriver::Native,
       UiDriverFields::Mcp => UiDriver::Mcp,
+      UiDriverFields::Browser => UiDriver::Browser,
     };
     let owned_paths = fields
       .owned_paths

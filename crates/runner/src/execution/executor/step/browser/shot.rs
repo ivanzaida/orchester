@@ -20,7 +20,7 @@ use crate::browser::Tab;
 /// Where the screenshots go, relative to the worktree.
 const FOLDER: [&str; 2] = [".tmp", "browser"];
 /// How long the browser may take to take a screenshot: a full page takes longer than a command.
-const SHOT_LIMIT: Duration = Duration::from_secs(60);
+pub(in crate::execution::executor::step) const SHOT_LIMIT: Duration = Duration::from_secs(60);
 
 /// Takes the screenshot of `tab`: `element` only, the full page when `full_page`, else what is in view. Saved in
 /// `worktree`; the image comes back as well when `images`.
@@ -66,7 +66,16 @@ pub(super) async fn take(
 
 /// The page's area of `element`, scrolled into view, in CSS pixels of the page.
 async fn element_clip(tab: &Tab, element: &ElementRef) -> Result<Value, ToolError> {
-  let node = tab.node(element)?;
+  node_clip(tab, tab.node(element)?, element.as_str()).await
+}
+
+/// The page's area of `node` (a `backendNodeId`, named `label` in errors), scrolled into view, in CSS pixels of the
+/// page: a screenshot's `clip`.
+pub(in crate::execution::executor::step) async fn node_clip(
+  tab: &Tab,
+  node: i64,
+  label: &str,
+) -> Result<Value, ToolError> {
   tab
     .call("DOM.scrollIntoViewIfNeeded", json!({ "backendNodeId": node }))
     .await?;
@@ -84,8 +93,7 @@ async fn element_clip(tab: &Tab, element: &ElementRef) -> Result<Value, ToolErro
   );
   if border.len() != 8 || width < 1.0 || height < 1.0 {
     return Err(ToolError::Page(format!(
-      "{} has no box on the page: it is hidden or has no size",
-      element.as_str()
+      "{label} has no box on the page: it is hidden or has no size"
     )));
   }
   let metrics = tab.call("Page.getLayoutMetrics", json!({})).await?;

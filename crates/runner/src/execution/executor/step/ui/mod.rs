@@ -5,9 +5,11 @@
 //! run started, through its exact discovery file, its token kept private and its PNGs saved in the run's own storage.
 //! The `native` driver ([`native`]) reaches a project's service through the operating system's accessibility
 //! interface (UI Automation, macOS Accessibility), only in the windows of its processes the run may reach; on macOS
-//! each of its calls first answers a missing Accessibility or Screen Recording permission. A project's service with
-//! another driver, or none, answers why it cannot be opened.
+//! each of its calls first answers a missing Accessibility or Screen Recording permission. The `browser` driver
+//! ([`browser`]) opens a web service in a tab of the run's own in Orchester's Browser, which reaches only the origins
+//! of the services the step started. A project's service with another driver, or none, answers why it cannot be opened.
 
+mod browser;
 mod native;
 
 use std::{
@@ -30,7 +32,8 @@ use orchester_exec::{native_ui, run_processes::RunProcesses};
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 
-use self::native::NativeUi;
+pub(in crate::execution::executor::step) use self::browser::WebTabs;
+use self::{browser::WebUi, native::NativeUi};
 use super::{
   qa_app::StepQa,
   run_app,
@@ -44,12 +47,14 @@ pub(in crate::execution::executor::step) struct StepUi<'a> {
   pub(in crate::execution::executor::step) folders: (&'a Path, &'a Path),
   /// The invocation's QA app, the `desktop-qa` service.
   pub(in crate::execution::executor::step) qa: Option<&'a StepQa>,
-  /// The invocation's services, which the `native` driver reaches.
+  /// The invocation's services, which the `native` and `browser` drivers reach.
   pub(in crate::execution::executor::step) services: Option<&'a StepServices>,
+  /// The `browser` driver's tabs of the invocation.
+  pub(in crate::execution::executor::step) web: &'a WebTabs,
   /// The project's repository, whose published services say their drivers.
   pub(in crate::execution::executor::step) root: &'a Path,
-  /// The service `ui_open` opened last.
-  pub(in crate::execution::executor::step) opened: &'a Mutex<Option<ServiceName>>,
+  /// The service `ui_open` opened last, with its driver.
+  pub(in crate::execution::executor::step) opened: &'a Mutex<Option<(ServiceName, UiDriver)>>,
 }
 
 impl StepUi<'_> {
@@ -81,20 +86,34 @@ impl StepUi<'_> {
     native_ui::ready().map_err(|error| error.to_string())?;
     Ok(NativeUi {
       processes: self.processes,
-      services: self.services.ok_or_else(|| "this step has no services".to_owned())?,
+      services: self.services()?,
       artifacts: self.folders.1,
     })
   }
 
-  /// `ui_open(name)`: the service's windows once it is the one the later calls reach.
+  /// The `browser` driver of the project's services.
+  fn web(&self) -> Result<WebUi<'_>, String> {
+    Ok(WebUi {
+      tabs: self.web,
+      services: self.services()?,
+      artifacts: self.folders.1,
+    })
+  }
+
+  fn services(&self) -> Result<&StepServices, String> {
+    self.services.ok_or_else(|| "this step has no services".to_owned())
+  }
+
+  /// `ui_open(name)`: the service's windows or page once it is the one the later calls reach.
   fn open(&self, name: &ServiceName, call: &UiCall) -> Result<Value, String> {
     if !is_qa_service(name) {
       let driver = self.driver(name)?;
-      if driver != UiDriver::Native {
-        return Err(Self::not_driven(name, driver));
-      }
-      let answer = self.native()?.open(name)?;
-      *self.opened.lock() = Some(name.clone());
+      let answer = match driver {
+        UiDriver::Native => self.native()?.open(name)?,
+        UiDriver::Browser => self.web()?.open(name)?,
+        UiDriver::None | UiDriver::Mcp => return Err(Self::not_driven(name, driver)),
+      };
+      *self.opened.lock() = Some((name.clone(), driver));
       return Ok(answer);
     }
     let pid = self
@@ -110,21 +129,34 @@ impl StepUi<'_> {
     let UiAnswer::Done(mut answer) = self.once(call)? else {
       return Err("the app answered no windows".to_owned());
     };
-    *self.opened.lock() = Some(name.clone());
+    *self.opened.lock() = Some((name.clone(), QA_SERVICE_DRIVER));
     answer["service"] = json!(name.as_str());
     answer["driver"] = json!(driver_name(QA_SERVICE_DRIVER));
     answer["pid"] = json!(pid);
     Ok(answer)
   }
 
-  /// A call on the service `ui_open` opened, through its driver; refused before one was.
+  /// A call on the service `ui_open` opened, through its driver; refused before one was. Only a web page waits for a
+  /// selector, a text or an address.
   fn on_opened(&self, call: &UiCall) -> Result<Value, String> {
     let opened = self.opened.lock().clone();
-    let Some(opened) = opened else {
+    let Some((opened, driver)) = opened else {
       return Err("no service's UI is open in this step: call ui_open(service) after starting it".to_owned());
     };
-    if !is_qa_service(&opened) {
-      return self.native()?.run(&opened, call);
+    if let UiCall::Wait { condition, .. } = call
+      && condition.is_page()
+      && driver != UiDriver::Browser
+    {
+      return Err(format!(
+        "the {} driver waits for idle or element: {} waits in a web page, which the browser driver opens",
+        driver_name(driver),
+        condition.as_str()
+      ));
+    }
+    match driver {
+      UiDriver::Browser => return self.web()?.run(&opened, call),
+      UiDriver::Native => return self.native()?.run(&opened, call),
+      UiDriver::Mcp | UiDriver::None => {}
     }
     match call {
       UiCall::Wait {
@@ -175,10 +207,12 @@ impl StepUi<'_> {
   fn not_driven(name: &ServiceName, driver: UiDriver) -> String {
     match driver {
       UiDriver::None => format!("the service `{name}` has no UI driver: read it with service_logs and its URL"),
-      UiDriver::Native => format!("the service `{name}` uses the native UI driver"),
       UiDriver::Mcp => format!(
         "the mcp driver reaches only the built-in `{QA_SERVICE}` service yet, not the project's service `{name}`"
       ),
+      UiDriver::Native | UiDriver::Browser => {
+        format!("the service `{name}` uses the {} UI driver", driver_name(driver))
+      }
     }
   }
 }
@@ -189,5 +223,6 @@ const fn driver_name(driver: UiDriver) -> &'static str {
     UiDriver::None => "none",
     UiDriver::Native => "native",
     UiDriver::Mcp => "mcp",
+    UiDriver::Browser => "browser",
   }
 }

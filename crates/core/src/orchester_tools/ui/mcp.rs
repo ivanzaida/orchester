@@ -75,8 +75,11 @@ pub fn request(call: &UiCall) -> AppRequest {
       condition: UiCondition::Idle,
       timeout_ms,
     } => ("lurq_wait", json!({"timeout_ms": timeout_ms})),
+    // A page's conditions are the browser driver's: the runner refuses them before an app is asked. Read as an element
+    // here, an app would wait for an element named so.
     UiCall::Wait {
-      condition: UiCondition::Element(query),
+      condition:
+        UiCondition::Element(query) | UiCondition::Selector(query) | UiCondition::Text(query) | UiCondition::Url(query),
       ..
     } => ("lurq_inspect", inspect(Some(query))),
   };
@@ -115,7 +118,7 @@ pub fn answer(call: &UiCall, result: &Value) -> Result<UiAnswer, String> {
       ..
     } => json!({"met": "idle"}),
     UiCall::Wait {
-      condition: UiCondition::Element(_),
+      condition: UiCondition::Element(_) | UiCondition::Selector(_) | UiCondition::Text(_) | UiCondition::Url(_),
       ..
     } => {
       let matches = elements(&payload["matches"]);

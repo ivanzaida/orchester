@@ -4,14 +4,16 @@
 //! `ui_act(ref, action)` clicks, types into, presses a key on, scrolls to or selects in one of them ([`UiAction`]);
 //! `ui_screenshot()` saves a PNG of its window in the run's storage and answers the path, which `read_file` shows as
 //! the image; `ui_logs()` answers its latest log lines; and `ui_wait(condition)` waits until it rendered or until an
-//! element appears ([`UiCondition`]). Every driver answers in this shape; the `mcp` driver ([`mcp`]) maps it onto an
-//! app's own lurq MCP tools.
+//! element appears ([`UiCondition`]), and for a web page until a selector matches, its text holds a query or its
+//! address does. Every driver answers in this shape; the `mcp` driver ([`mcp`]) maps it onto an app's own lurq MCP
+//! tools, and the `browser` driver's tab opens only the services' origins ([`origins`]).
 //!
 //! The rules hold for every driver: only an app this run started, never global input (an app's synthetic input
 //! reaches only its own window), never a whole-screen capture (only the app's window).
 
 mod catalog;
 pub mod mcp;
+pub mod origins;
 
 use std::num::NonZeroU32;
 
@@ -96,6 +98,30 @@ pub enum UiCondition {
   Idle,
   /// An element whose name, id or class holds this text is shown.
   Element(String),
+  /// A web page holds an element this CSS selector matches; only the `browser` driver reads a page's selectors.
+  Selector(String),
+  /// A web page's text holds this; only the `browser` driver reads a page's text.
+  Text(String),
+  /// A web page's address holds this; only the `browser` driver has an address.
+  Url(String),
+}
+
+impl UiCondition {
+  /// The condition's name, as a call gives it.
+  pub const fn as_str(&self) -> &'static str {
+    match self {
+      Self::Idle => "idle",
+      Self::Element(_) => "element",
+      Self::Selector(_) => "selector",
+      Self::Text(_) => "text",
+      Self::Url(_) => "url",
+    }
+  }
+
+  /// Whether only a web page can hold it: the `browser` driver's own conditions.
+  pub const fn is_page(&self) -> bool {
+    matches!(self, Self::Selector(_) | Self::Text(_) | Self::Url(_))
+  }
 }
 
 /// One call of a `ui_*` tool, read into its input.
@@ -279,7 +305,7 @@ fn act(input: &ActInput) -> Result<UiCall, String> {
   Ok(UiCall::Act { target, action })
 }
 
-/// A `ui_wait` call: `idle`, or `element` with the query of the element it waits for.
+/// A `ui_wait` call: `idle`, or `element`, `selector`, `text` or `url` with the query it waits for.
 fn wait(input: &WaitInput) -> Result<UiCall, String> {
   let timeout_ms = input.timeout_ms.map_or(DEFAULT_WAIT_MS, NonZeroU32::get);
   if timeout_ms > MAX_WAIT_MS {
@@ -289,8 +315,18 @@ fn wait(input: &WaitInput) -> Result<UiCall, String> {
     ("idle", None) => UiCondition::Idle,
     ("idle", Some(_)) => return Err("idle takes no query".to_owned()),
     ("element", Some(text)) => UiCondition::Element(query(text)?),
+    ("selector", Some(text)) => UiCondition::Selector(query(text)?),
+    ("text", Some(text)) => UiCondition::Text(query(text)?),
+    ("url", Some(text)) => UiCondition::Url(query(text)?),
     ("element", None) => return Err("element needs the query of the element to wait for".to_owned()),
-    (other, _) => return Err(format!("`{other}` is not a condition: idle or element")),
+    (condition @ ("selector" | "text" | "url"), None) => {
+      return Err(format!("{condition} needs the query it waits for"));
+    }
+    (other, _) => {
+      return Err(format!(
+        "`{other}` is not a condition: idle, element, selector, text or url"
+      ));
+    }
   };
   Ok(UiCall::Wait { condition, timeout_ms })
 }

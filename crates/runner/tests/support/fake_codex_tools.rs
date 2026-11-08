@@ -32,6 +32,9 @@ mod fake_skill_calls;
 #[path = "fake_tool_calls.rs"]
 mod fake_tool_calls;
 
+#[path = "fake_web_tools.rs"]
+mod fake_web_tools;
+
 const KEY: &str = "mcp_servers.Orchester.";
 /// How long the fake waits for the tools of Orchester's server; Codex waits 30 seconds. A relay the runner
 /// refuses lists no tools only after its connection failed, which takes Windows about two seconds.
@@ -196,6 +199,7 @@ fn named_after<'a>(prompt: &'a str, lead: &str) -> Option<&'a str> {
 /// service <other>." it then calls `start_service` of that one; with "Then drive its UI" it then calls the `ui_*` tools
 /// on it ([`drive_ui`]); with "Copy the native fixture.", "Then drive the native window" and "Then open its UI" it puts
 /// the fixture window in the worktree before the start and drives or opens it after ([`fake_native_tools`]); with
+/// "Then drive the web page" it drives the browser driver's fixture page ([`fake_web_tools`]); with
 /// "Then read outside" it then reads
 /// `deps-a/notes.txt` of the repository, which asks; with "Then wait for it to end" it calls `service_status` until the
 /// service is no longer ready; with "Then wait for a crash notice" it calls `service_status` until an answer carries a
@@ -221,6 +225,9 @@ fn services(server: &mut Prompt, worktree: &Path, prompt: &str) {
   }
   if prompt.contains("Then drive the native window") {
     fake_native_tools::drive(name, &mut |tool, arguments| report_call(server, tool, arguments));
+  }
+  if prompt.contains("Then drive the web page") {
+    fake_web_tools::drive(name, &mut |tool, arguments| report_call(server, tool, arguments));
   }
   if prompt.contains("Then open its UI") {
     report_call(server, "ui_open", &json!({"service": name}));

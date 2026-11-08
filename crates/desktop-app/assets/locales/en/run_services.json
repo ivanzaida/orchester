@@ -30,7 +30,8 @@
     "driver": {
       "none": "no UI",
       "native": "native",
-      "mcp": "mcp"
+      "mcp": "mcp",
+      "browser": "browser"
     },
     "port": ":{{port}}",
     "uptime": {

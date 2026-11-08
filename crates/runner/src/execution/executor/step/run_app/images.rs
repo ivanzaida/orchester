@@ -60,6 +60,15 @@ pub(in crate::execution::executor::step) fn save_pixels(
   keep(artifacts, &DynamicImage::ImageRgba8(image)).map_err(|error| error.to_string())
 }
 
+/// Saves the PNG `bytes` a UI driver captured, re-encoded, in the screenshots of the run's storage `artifacts`; its
+/// absolute path, with `/`.
+pub(in crate::execution::executor::step) fn save_png_bytes(artifacts: &Path, bytes: &[u8]) -> Result<String, String> {
+  let mut reader = ImageReader::with_format(Cursor::new(bytes), ImageFormat::Png);
+  reader.limits(decoding_limits());
+  let image = reader.decode().map_err(|_| AppError::Image.to_string())?;
+  keep(artifacts, &image).map_err(|error| error.to_string())
+}
+
 fn keep(artifacts: &Path, image: &DynamicImage) -> Result<String, AppError> {
   let folder = output_folder(artifacts)?;
   let mut file = tempfile::Builder::new()

@@ -116,6 +116,8 @@ pub(in crate::execution::executor::step) struct InvocationServices {
   /// The definitions the invocation's starts ran, each approved as its start's request named it: a person's Restart
   /// runs only these ([`order`]).
   ran: Mutex<Vec<ServiceApproval>>,
+  /// What ends with the invocation's services besides them, such as the browser driver's tabs.
+  on_end: Mutex<Vec<Box<dyn FnOnce() + Send>>>,
 }
 
 /// What a start brings up, a stack's services or a service with what it needs, and who asked for it.
@@ -174,6 +176,8 @@ struct Running {
   /// The container it is, when its per-run data is a database container: held to be removed when it drops.
   _container: Option<data::Container>,
   url: String,
+  /// Where `ui_open` starts, filled once its seed ran; `None` when the service does not say, so it starts at `url`.
+  ui_start: Result<Option<String>, String>,
   lease: PortLease,
   /// What its seed's requests captured, their secret values replaced.
   captured: seed::Captured,
@@ -252,7 +256,8 @@ impl Services {
     Arc::clone(self.invocations.lock().entry(invocation).or_default())
   }
 
-  /// `invocation` ended: its services stop and free their ports, and a start of its still under way gives up.
+  /// `invocation` ended: its services stop and free their ports, a start of its still under way gives up, and what
+  /// ends with them ends ([`StepServices::on_end`]).
   pub(in crate::execution) fn end(&self, invocation: InvocationId) {
     // Its tools hold its services and these: forgetting them breaks that cycle.
     self.tools.lock().remove(&invocation);
@@ -261,6 +266,10 @@ impl Services {
     };
     state.ended.store(true, Ordering::Release);
     stop_aside(std::mem::take(&mut *state.running.lock()));
+    let ending = std::mem::take(&mut *state.on_end.lock());
+    for end in ending {
+      end();
+    }
   }
 
   /// `invocation` waits for a person inside its turn: its services stop meanwhile, also one a start of its still
@@ -413,6 +422,36 @@ impl StepServices {
   /// The pid of the program of the service `name` while it runs in this invocation.
   pub(in crate::execution::executor::step) fn pid(&self, name: &ServiceName) -> Option<u32> {
     self.state.running.lock().get(name).map(|running| running.tree.pid())
+  }
+
+  /// Where `ui_open` of the service `name` starts while it runs in this invocation: its filled `ui_start`, else its
+  /// URL; why its `ui_start` could not be filled. `None` while it does not run.
+  pub(in crate::execution::executor::step) fn ui_place(&self, name: &ServiceName) -> Option<Result<String, String>> {
+    let running = self.state.running.lock();
+    let service = running.get(name)?;
+    Some(match &service.ui_start {
+      Ok(start) => Ok(start.clone().unwrap_or_else(|| service.url.clone())),
+      Err(why) => Err(format!(
+        "where ui_open starts for the service `{name}` cannot be filled: {why}"
+      )),
+    })
+  }
+
+  /// The URLs of the services running in this invocation.
+  pub(in crate::execution::executor::step) fn urls(&self) -> Vec<String> {
+    let running = self.state.running.lock();
+    running.values().map(|service| service.url.clone()).collect()
+  }
+
+  /// Runs `end` when the invocation's services end with it ([`Services::end`]); at once when they ended already.
+  pub(in crate::execution::executor::step) fn on_end(&self, end: Box<dyn FnOnce() + Send>) {
+    let mut ending = self.state.on_end.lock();
+    if self.state.ended() {
+      drop(ending);
+      end();
+      return;
+    }
+    ending.push(end);
   }
 
   /// The texts of the last `lines` kept lines of the service `name` the invocation started, oldest first, only those

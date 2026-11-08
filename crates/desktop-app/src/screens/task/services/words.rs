@@ -142,6 +142,7 @@ pub fn driver(ctx: &Ctx, driver: UiDriver) -> Arc<str> {
     UiDriver::None => "run_services.driver.none",
     UiDriver::Native => "run_services.driver.native",
     UiDriver::Mcp => "run_services.driver.mcp",
+    UiDriver::Browser => "run_services.driver.browser",
   })
 }
 

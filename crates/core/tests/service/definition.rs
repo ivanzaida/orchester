@@ -4,8 +4,8 @@ use orchester_core::{
   resource::{CommandArg, CommandError, VariableName},
   secret::SecretName,
   service::{
-    HttpPath, LogPattern, OwnedPath, ReadyCheck, ReadyTimeout, RelativeFolder, RunData, RunFolder, ServiceError,
-    ServiceName, ServiceValue, ServiceVariables, Stack, StackName, UiDriver,
+    HttpPath, LogPattern, OwnedPath, ReadyCheck, ReadyTimeout, RelativeFolder, RunData, RunFolder, Service,
+    ServiceError, ServiceName, ServiceValue, ServiceVariables, Stack, StackName, UiDriver,
   },
 };
 
@@ -200,9 +200,13 @@ fn service_readiness_checks_are_valid() {
 }
 
 #[test]
-fn service_ui_driver_is_none_native_or_mcp() {
-  for driver in [UiDriver::None, UiDriver::Native, UiDriver::Mcp] {
-    assert_eq!(service("app", &[]).with_ui_driver(driver).ui_driver(), driver);
+fn service_ui_driver_is_none_native_mcp_or_browser() {
+  for driver in [UiDriver::None, UiDriver::Native, UiDriver::Mcp, UiDriver::Browser] {
+    let service = service("app", &[]).with_ui_driver(driver);
+    assert_eq!(service.ui_driver(), driver);
+    let stored = serde_json::to_value(&service).expect("stored");
+    let read: Service = serde_json::from_value(stored).expect("read back");
+    assert_eq!(read.ui_driver(), driver);
   }
 }
 

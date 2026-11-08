@@ -14,7 +14,7 @@
 //! | one of the project's published services (`start_service`) or stacks (`start_stack`, with the service tools), network on | asks | asks |
 //! | stopping or looking at a service the step started (`stop_service`, `service_status`, `service_logs`), with `start_service` | runs | runs |
 //! | the built-in `desktop-qa` service (the QA app) and the `ui_*` tools that drive it, with `start_qa_app` | asks to start; the `ui_*` tools run | not offered |
-//! | the `ui_*` tools for a published service with the `native` driver, with `start_service` ([`StepTools::with_native_ui`]) | run | run |
+//! | the `ui_*` tools for a published service with the `native` or `browser` driver, with `start_service` ([`StepTools::with_service_ui`]) | run | run |
 //! | the service tools, network off or no published service | not offered | not offered |
 //! | one of the project's published test suites (`run_tests`), network on | asks at every call (no rules of their own yet) | the same |
 //! | a stored test's output (`test_output`), with `run_tests` | runs | runs |
@@ -238,10 +238,10 @@ impl StepTools {
   }
 
   /// These tools and the `ui_*` tools, right after the service tools, for a project that publishes a service with the
-  /// `native` UI driver: none when the step is not offered the service tools ([`Self::with_services`]), and nothing
-  /// more when the QA app already brought them. They run unasked, as for the QA app.
+  /// `native` or `browser` UI driver: none when the step is not offered the service tools ([`Self::with_services`]),
+  /// and nothing more when the QA app already brought them. They run unasked, as for the QA app.
   #[must_use]
-  pub fn with_native_ui(mut self) -> Self {
+  pub fn with_service_ui(mut self) -> Self {
     if self.policy(OrchesterTool::StartService).is_none() || self.policy(OrchesterTool::UiOpen).is_some() {
       return self;
     }
@@ -473,8 +473,9 @@ impl StepTools {
     } else if self.policy(OrchesterTool::UiOpen).is_some() {
       text.push_str(&format!(
         " See and use the windows of a service you started that has a UI with {}(name), then {} (elements with \
-         refs, roles, names and states), {}(ref, action) through the elements' own UI Automation patterns, {} (a PNG \
-         path of its window only, to open with read_file), {} and {}(condition).",
+         refs, roles, names and states), {}(ref, action) through the elements' own UI Automation patterns, or a web \
+         page's own input in a tab of Orchester's Browser that opens only your services' origins, {} (a PNG path of \
+         its window or page only, to open with read_file), {} and {}(condition).",
         OrchesterTool::UiOpen.called(claude),
         OrchesterTool::UiSnapshot.called(claude),
         OrchesterTool::UiAct.called(claude),

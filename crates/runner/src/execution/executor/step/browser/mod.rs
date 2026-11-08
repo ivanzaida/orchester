@@ -14,15 +14,15 @@
 //! Each call that acts on a page is reported to the person's *Browser* window once carried out, for *Agent is acting*
 //! ([`acted`]).
 
-mod act;
+pub(in crate::execution::executor::step) mod act;
 mod acted;
-mod keys;
+pub(in crate::execution::executor::step) mod keys;
 mod logs;
 mod navigation;
 mod page;
 mod person;
 mod script;
-mod shot;
+pub(in crate::execution::executor::step) mod shot;
 
 use std::{fmt::Write as _, path::PathBuf, sync::Arc};
 
@@ -42,7 +42,7 @@ use crate::browser::{BrowserError, PersonWait, ProjectBrowser, Tab, cdp::TargetI
 
 /// Why a browser call did not do what it asked. The message is the error result the agent gets.
 #[derive(Debug, Error)]
-enum ToolError {
+pub(in crate::execution::executor::step) enum ToolError {
   #[error(transparent)]
   Browser(#[from] BrowserError),
   /// What the page or the browser answered instead: an element without a box, an exception, an unknown key.

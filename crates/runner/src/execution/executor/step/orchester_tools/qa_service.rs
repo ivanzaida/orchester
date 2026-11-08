@@ -71,6 +71,7 @@ impl ToolHost {
       folders: (&self.worktree, &self.artifacts),
       qa: self.qa.as_ref(),
       services: self.services.as_ref(),
+      web: &self.web,
       root: &self.repository,
       opened: &self.ui_opened,
     }

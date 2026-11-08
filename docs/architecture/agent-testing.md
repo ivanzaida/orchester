@@ -28,8 +28,7 @@ that depend on each other (Orchester Platform: cloud server, cloud web, team ser
 5. New Orchester runs for this work use the Claude 2 pipelines.
 6. **First only programs Orchester starts itself** (the person, 2026-10-28): services, test suites, and the `native`
    and `mcp` drivers. Web pages are automated later through Orchester's own in-app Browser, not a separate headless
-   browser; the `browser` and `cdp` drivers below describe that later step and are not built now (ORC-256, ORC-260
-   deferred).
+   browser; the `browser` driver does so (ORC-256, built below), the `cdp` driver is not built (ORC-260 deferred).
 
 ## Concepts
 
@@ -117,7 +116,7 @@ Agents are told never to start servers or test runners by shell. `start_qa_app` 
 
 | Driver | Snapshot and act | Screenshot | Logs |
 | --- | --- | --- | --- |
-| `browser` | A headless browser per run over CDP: accessibility tree with refs, actions by ref; it may open only the run's own service origins | The page | Console errors and failed requests |
+| `browser` | A tab of the run's own in Orchester's in-app Browser (the project's headless browser, over CDP): accessibility tree with refs, actions by ref; it may open only the run's own service origins | The page | Console errors, failed requests and what was blocked |
 | `cdp` | Electron and WebView2 apps through their remote debugging port | The window's web content | Console |
 | `native` | Windows UI Automation; macOS Accessibility (AX). Actions through element patterns (invoke, value, toggle, scroll), never global input | Only that window (Windows: the window's capture; macOS: ScreenCaptureKit by window id) | stdout/stderr |
 | `mcp` | Apps with their own MCP (lurq, Orchester): the existing relay | Through the app | Through the app |
@@ -180,6 +179,33 @@ the window server's image of that one window (`CGWindowListCreateImage` with `kC
 `ui_wait("idle")` waits until the app answers an AX read within the timeout. Nothing of it has run on a Mac yet: it is
 checked with `cargo check` and `cargo clippy --target aarch64-apple-darwin`, and its pure parts by `orchester-exec`'s
 `tests/native_ui.rs`.
+
+Built (ORC-256): the `browser` driver (`UiDriver::Browser`, the runner's `execution::step::ui::browser`), through
+Orchester's own in-app Browser, not a browser of its own: a web service opens in a tab of the run's own in the
+project's headless browser the runner already drives over CDP (`docs/design/browser.md`), which the person may watch
+in the Browser window. So no dependency is added (AGENTS.md rule 17): the runner's own CDP client over
+`tokio-tungstenite` (`orchester_runner::browser::cdp`) is reused, and the browser is found as Settings › Browser
+finds it (`orchester_exec::browser::find`, or the program the person chose). A published service with it brings the
+`ui_*` tools (`StepTools::with_service_ui`). `ui_open` opens one tab per service, blank first, puts the origin guard
+in place (CDP `Fetch`: each request paused and let through only to an origin of a service the step runs, or for the
+page's own `data:`, `blob:` and `about:` content; any other host or scheme fails as blocked by the client —
+`orchester_core::orchester_tools::ui::origins`), then loads where the service's `ui_start` says, else its URL; the
+answer names the tab, its address and title, the allowed origins and what was blocked meanwhile. The allowed origins
+are those of the services running at each call. A snapshot is the page's accessibility tree, at most 300 elements 40
+deep, each ref the element's DOM node (`b` and its `backendNodeId`, stable while the node lives) with its role, name,
+states and value; `ui_act` clicks the element's centre, types (replacing a field's value), presses a key in it or the
+focused element (`Ctrl+A` style), scrolls it into view, or selects a `<select>` option by label, text or value (else
+sets a field's value), all through the tab's own input; a ref whose node is gone says so. `ui_wait` takes `idle`
+(loaded, two frames drawn), `element`, and for a web page `selector`, `text` and `url`; the other drivers refuse those
+three. `ui_screenshot` is the page or one element, re-encoded into the run's storage. `ui_logs` reads the page's
+console errors, its requests that failed or were answered 4xx/5xx, and the blocked requests (at most 200 kept), each
+blocked request said once; every answer also carries what was blocked since the last one. A missing browser answers
+`browser_unavailable` with what was looked for and what to install. The tabs close when the step's services end
+(`StepServices::on_end`), and with the run. Not built: the service editor's *browser* card (`cKQAD`; the driver is set
+over MCP, `save_service_draft`), the person's hold on a tab the agent drives (the browser tools' decision 16), and
+WebSocket connections, which `Fetch` does not pause. Tests: `cargo test -p orchester-runner --features test-agent
+--test browser_ui browser_ui` (a fixture page of the stand-in web server) and `cargo test -p orchester-core --test
+orchester_tools ui_browser_origins`.
 
 ## The Test step
 
@@ -298,8 +324,9 @@ secret values were replaced before the runner kept them. Restart, Start, Stop an
 (`Scheduler::services`): Stop stops a ready service as `stop_service` does and gives the start of a starting one up;
 Restart stops it and starts it again as published with what it needs, approved by the person's press, without waiting
 for an agent's start under way (a service both bring up at once is kept once). A URL opens in a new tab of the in-app
-Browser. Not built: *Services at once* slots in the stack line, and the `browser` driver's chip (the drivers are
-`none`, `native` and `mcp`). The QA seed's `run-services` scenario (with `-FakeAgents`) holds real services for it.
+Browser. Not built: *Services at once* slots in the stack line, and the design's look of the `browser` driver's chip
+(since ORC-256 it is the driver's name, as the others are). The QA seed's `run-services` scenario (with `-FakeAgents`)
+holds real services for it.
 
 Built (ORC-263): the stack editor (`iNxTM`) and the test suite editor (`uxYcD`) under Project settings › Services
 (`orchester-app`'s `screens::project_settings::services::{stack, suite}`, the workspace's `agent_testing::

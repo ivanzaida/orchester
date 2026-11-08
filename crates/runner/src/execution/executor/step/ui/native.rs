@@ -89,6 +89,11 @@ impl NativeUi<'_> {
         condition: UiCondition::Element(query),
         timeout_ms,
       } => self.wait_for(name, query, *timeout_ms),
+      // `super::StepUi::on_opened` answers a page's condition before it reaches a native window.
+      UiCall::Wait { condition, .. } => Err(format!(
+        "the native driver waits for idle or element, not {}",
+        condition.as_str()
+      )),
     }
   }
 

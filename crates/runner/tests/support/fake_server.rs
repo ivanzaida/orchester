@@ -1,14 +1,39 @@
 //! `listen <port>`: a stand-in web server for the service tests. It accepts connections on `127.0.0.1:<port>` until
 //! it is ended and answers every request by its path: `/moved` with `302 Found`, `/missing` with `404 Not Found`,
-//! `/api/…` as the seed tests' small JSON API ([`api`]), any other with `200 OK`. It prints `listening on <port>` once
-//! it accepts connections. `connect <port>` fails unless something accepts connections on `127.0.0.1:<port>`: a
-//! service that needs another checks it is ready.
+//! `/api/…` as the seed tests' small JSON API ([`api`]), `/app` with the browser driver's fixture page ([`APP`]), any
+//! other with `200 OK`. It prints `listening on <port>` once it accepts connections. `connect <port>` fails unless
+//! something accepts connections on `127.0.0.1:<port>`: a service that needs another checks it is ready.
 
 use std::{
   collections::BTreeMap,
   io::{BufRead, BufReader, Read, Write},
   net::{Ipv4Addr, TcpListener, TcpStream},
 };
+
+/// The browser driver's fixture page: a field, a list and Save, which says what was saved, logs a console error and
+/// asks for `/missing` (404) and for a page of another origin; an image and a link of another origin.
+const APP: &str = r#"<!doctype html>
+<html><head><title>Fixture app</title></head>
+<body>
+<h1>Fixture app</h1>
+<input id="title" aria-label="Title">
+<select id="priority" aria-label="Priority"><option>Low</option><option>High</option></select>
+<button id="save" onclick="save()">Save</button>
+<p id="status">Status: idle</p>
+<a id="away" href="https://example.com/away">Elsewhere</a>
+<img alt="" src="https://example.com/pixel.png">
+<script>
+function save() {
+  const status = document.getElementById("status");
+  status.textContent = "Saved: " + document.getElementById("title").value + " ("
+    + document.getElementById("priority").value + ")";
+  status.className = "saved";
+  console.error("save logged an error on purpose");
+  fetch("/missing");
+  fetch("https://example.com/track").catch(() => {});
+}
+</script>
+</body></html>"#;
 
 pub fn listen(port: Option<&str>) -> Result<(), String> {
   let port: u16 = port.and_then(|port| port.parse().ok()).ok_or("listen needs a port")?;
@@ -59,6 +84,7 @@ fn answer(stream: &TcpStream) {
   let (status, kind, body) = match path {
     "/moved" => ("302 Found\r\nLocation: /", "text/plain", "ok".to_owned()),
     "/missing" => ("404 Not Found", "text/plain", "ok".to_owned()),
+    "/app" => ("200 OK", "text/html; charset=utf-8", APP.to_owned()),
     _ if path.starts_with("/api/") => {
       let (status, body) = api(method, path, &headers, &String::from_utf8_lossy(&body));
       (status, "application/json", body)

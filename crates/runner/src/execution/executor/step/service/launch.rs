@@ -123,6 +123,7 @@ impl StepServices {
       Ok((output, captured)) => Ok(Running {
         tree,
         _container: container,
+        ui_start: values.ui_start(service).map_err(|error| error.to_string()),
         url,
         lease,
         captured,
