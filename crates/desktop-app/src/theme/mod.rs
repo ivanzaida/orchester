@@ -116,7 +116,7 @@ pub use self::{
   pipelines::{PipelinesSpacing, PipelinesText},
   project_settings::{ProjectSettingsSpacing, ProjectSettingsText},
   projects::{ProjectsSpacing, ProjectsText},
-  review::{REVIEW_TYPING_OPACITY, ReviewSpacing, ReviewText},
+  review::{REVIEW_TYPING_CYCLE, REVIEW_TYPING_OPACITY, REVIEW_TYPING_STEPS, ReviewSpacing, ReviewText},
   run_model::ModelText,
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
   settings::{SettingsSpacing, SettingsText},

@@ -4,6 +4,8 @@
 //! While Implement starts, its row says *Starting…* over three dots (`Message · waiting` `sXET0`); while it writes, its
 //! live activity in `success` and its words with a caret after them; then *Stop answering* with *Esc* under it. A sent
 //! comment links to the Conversation where Implement works on it; a stopped answer ends in *Answer stopped.*
+//! Implement's words are Markdown, drawn as the chats draw an agent's (`ui::chat::agent_text`) and selectable to copy;
+//! the person's stay as written, as a chat's without mentions do. The three dots move (`ui::typing`).
 //! Orchester's own message, on `warning_muted`, says why a question was not asked or a comment not sent (`Message ·
 //! Orchester` `gglnp`).
 
@@ -18,7 +20,10 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::review::{AgentWords, CommentState, ReviewMessage, Said, ThreadState};
+use orchester_core::{
+  id::ProjectId,
+  review::{AgentWords, CommentState, ReviewMessage, Said, ThreadState},
+};
 use orchester_workspace::{
   display::clock,
   tasks::review_threads::{failure_message, read::ThreadView},
@@ -36,18 +41,19 @@ use super::{
 };
 use crate::{
   routes::{ProjectPage, Route, TaskTab, TaskView},
-  theme::{ExtraRadius, ExtraSpacing, IconSize, REVIEW_TYPING_OPACITY, ReviewSpacing, ReviewText},
+  theme::{ExtraSpacing, IconSize, ReviewSpacing, ReviewText},
   ui::{
     avatar::{agent_avatar, initials, person_avatar},
     button::{ActionButton, ButtonKind},
+    chat::{self, agent_text, names::ProjectNames},
     icon::{Icon, icon},
     message::message_text,
     pressable::pressable,
+    typing::dots,
   },
 };
 
-/// A typing dot and the caret after words being written (`Dot` `h6EkpB`, `Caret` `ywXbg`).
-const DOT_SIZE: f32 = 6.0;
+/// The caret after words being written (`Caret` `ywXbg`).
 const CARET_WIDTH: f32 = 2.0;
 const CARET_HEIGHT: f32 = 14.0;
 
@@ -148,6 +154,22 @@ fn words(id: &str, text: &str) -> Element {
     .into()
 }
 
+/// Implement's words as the chats draw an agent's Markdown, selectable; `id` names them, as `words` does.
+fn agent_words(ctx: &mut Ctx, env: &Env, id: &str, text: &str) -> Element {
+  let links = chat::links(ctx);
+  agent_text(
+    ctx,
+    id,
+    &Arc::from(text),
+    (project(env), &ProjectNames::default()),
+    (&links, None),
+  )
+}
+
+fn project(env: &Env) -> ProjectId {
+  env.project.open.project.id()
+}
+
 fn you(ctx: &Ctx, id: &str, meta: Arc<str>) -> Who {
   let you = ctx.t("review_page.thread.you");
   Who {
@@ -228,7 +250,7 @@ fn conversation_link(ctx: &Ctx, env: &Env, id: &str) -> Element {
 /// Implement's words: while it writes, its activity and the words with a caret (three dots before the first); once
 /// written, when it answered or stopped, with *Answer stopped.* under a stopped answer.
 fn agent_message(
-  ctx: &Ctx,
+  ctx: &mut Ctx,
   env: &Env,
   (id, message, said): (&str, &ReviewMessage, &AgentWords),
   (stopped, answered): (bool, bool),
@@ -251,16 +273,16 @@ fn agent_message(
   };
   let body: Vec<Element> = match (said.writing, empty) {
     (true, true) => vec![dots(id)],
-    (true, false) => vec![streaming(id, message.body())],
+    (true, false) => vec![streaming(ctx, env, id, message.body())],
     (false, _) if stopped => vec![
-      words(&format!("{id}-body"), message.body()),
+      agent_words(ctx, env, &format!("{id}-body"), message.body()),
       Text::new(&ctx.t("review_page.thread.answerStopped"))
         .id(format!("{id}-stopped"))
         .variant(TypographyStyle::Description)
         .color(PaletteColor::TextMuted)
         .into(),
     ],
-    (false, _) => vec![words(&format!("{id}-body"), message.body())],
+    (false, _) => vec![agent_words(ctx, env, &format!("{id}-body"), message.body())],
   };
   frame(id, implement(ctx, env, id, meta), body, None)
 }
@@ -272,39 +294,19 @@ fn starting(ctx: &Ctx, env: &Env, id: &str) -> Element {
   frame(&id, implement(ctx, env, &id, meta), vec![dots(&id)], None)
 }
 
-/// Three dots, fading, while nothing was written yet.
-fn dots(id: &str) -> Element {
-  Row::new()
-    .id(format!("{id}-dots"))
-    .padding(Padding::new().top(SpacingSize::Xs).bottom(ExtraSpacing::Tight.role()))
-    .spacing(SpacingSize::Xs)
-    .align_items(Alignment::Center)
-    .with_children(REVIEW_TYPING_OPACITY.map(|opacity| -> Element {
-      Row::new()
-        .width(Dimension::Px(DOT_SIZE))
-        .height(Dimension::Px(DOT_SIZE))
-        .rounded(ExtraRadius::Full.role())
-        .background(PaletteColor::TextMuted)
-        .opacity(opacity)
-        .into()
-    }))
-    .into()
-}
-
 /// Words being written, the caret after them.
-fn streaming(id: &str, text: &str) -> Element {
+fn streaming(ctx: &mut Ctx, env: &Env, id: &str, text: &str) -> Element {
+  let words = agent_words(ctx, env, &format!("{id}-body"), text);
   Row::new()
     .id(format!("{id}-streaming"))
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Tight.role())
     .align_items(Alignment::End)
     .child(
-      Text::new(text)
-        .id(format!("{id}-body"))
-        .variant(ReviewText::Message.role())
-        .selectable(true)
+      Column::new()
         .flex_shrink(1.0)
-        .min_width(Dimension::Px(0.0)),
+        .min_width(Dimension::Px(0.0))
+        .child(words),
     )
     .child(
       Row::new()

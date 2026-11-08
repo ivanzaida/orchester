@@ -16,7 +16,7 @@ use crate::{
   root::{Root, RootProps},
   startup::{Launch, WindowPosition},
   system_icon, theme,
-  ui::{loader, skeleton},
+  ui::{loader, skeleton, typing},
 };
 
 /// For agents that drive the app over MCP while the person works in other windows: `1` opens the
@@ -44,6 +44,7 @@ pub fn open_showing(runtime: &Runtime, launch: &Launch, position: Option<WindowP
   tree.set_render_engine_factory(|| Box::new(WgpuRenderEngine::new()));
   loader::install(&mut tree);
   skeleton::install(&mut tree);
+  typing::install(&mut tree);
   hold_still(runtime);
   let link = WindowLink::default();
   link.attach_appearance(appearance.clone());

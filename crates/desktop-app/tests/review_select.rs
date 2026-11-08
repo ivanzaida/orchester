@@ -114,7 +114,12 @@ fn review_select_a_drag_over_a_threads_words_selects_them_and_opens_no_comment_b
     .tree
     .selected_text()
     .expect("the drag selects the thread's words");
-  assert_eq!(copied.trim(), words.trim(), "the words are copied whole");
+  // An answer's Markdown (ORC-963) breaks its list items into lines where the element's texts join with spaces.
+  assert_eq!(
+    copied.split_whitespace().collect::<Vec<_>>(),
+    words.split_whitespace().collect::<Vec<_>>(),
+    "the words are copied whole"
+  );
   assert!(
     window.texts("review-composer-text").is_none(),
     "a drag in a thread does not start the diff's selection of lines"

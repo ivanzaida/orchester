@@ -25,5 +25,6 @@ mod prompt_input;
 mod slash_argument;
 mod textarea_focus;
 mod todo_list;
+mod typing;
 mod virtualized_list;
 mod virtualized_list_follow;

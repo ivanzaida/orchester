@@ -255,9 +255,14 @@ pub fn hold_still(still: bool) {
   STILL.get_or_init(|| still);
 }
 
+/// Whether the operating system asks for reduced motion: what moves in the app (a pulse, the typing dots) stays still.
+pub fn is_still() -> bool {
+  STILL.get().copied().unwrap_or(false)
+}
+
 /// `skeleton`, pulsing unless the operating system asks for reduced motion.
 pub fn pulsing(skeleton: Column) -> Column {
-  if STILL.get().copied().unwrap_or(false) {
+  if is_still() {
     return skeleton;
   }
   let steps = Easing::Steps {
