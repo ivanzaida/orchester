@@ -16,17 +16,23 @@ use orchester_app::{
   routes::{ModuleTab, ProjectPage, ProjectSettingsTab, Route, TaskView},
   team::{
     act::Acting,
-    start::{StartTask, Started, Stop, start},
+    start::{StartTask, Started, start},
   },
   test_support::{Window, project_id},
 };
 use orchester_core::{
-  id::{ModuleId, ResourceId},
+  connection::{AgentConnection, AgentProvider},
+  id::{ConnectionId, ModuleId, ResourceId},
+  name::Name,
   project::TaskKey,
+  resource::ResourceKind,
   sharing::TaskRevision,
+  store::{ConnectionStore, ResourceStore},
+  time::Timestamp,
 };
+use orchester_store::ProjectDb;
 
-use super::{prepared, team::State};
+use super::{not_ready::on_task_after_setup, prepared, team::State};
 
 /// The modules the QA app's server sets, by their index: Webhooks v2, Billing exports and API rate limits.
 const WEBHOOKS: &str = "0191c7c0-0000-7000-8000-000000200000";
@@ -124,12 +130,39 @@ fn team_qa_work_release_lets_a_task_go_and_claim_takes_it_again() {
   says(&mut window, "task-team-claim-title", "Claimed by you");
 }
 
-/// Run takes the claim through the dispatcher and makes the start's choices through `team_work`: the module branch's
-/// tip here, then the bindings read from the team server's published versions, which the stand-in does not serve, so
-/// the start stops there before `work.start` (`team_work`'s own tests cover the start from there on).
+/// The team's Team quick fix runs Reviewer, which needs only a Claude Code connection on this computer: with one added
+/// the pipeline is ready here, so a start gets past the readiness it checks first (ORC-840) and takes the claim.
+fn ready_pipeline(root: &Path) -> ResourceId {
+  let mut db = ProjectDb::open(root).expect("the project database");
+  let connection = AgentConnection::new(
+    ConnectionId::generate(),
+    Name::new("Claude · QA").expect("a name"),
+    AgentProvider::ClaudeCodeCli,
+    std::env::current_exe().expect("a program that exists"),
+    Timestamp::now(),
+  )
+  .expect("a connection");
+  db.create_connection(&connection).expect("a connection");
+  db.resources(ResourceKind::Pipeline)
+    .expect("pipelines")
+    .into_iter()
+    .find(|pipeline| pipeline.name().as_str() == "Team quick fix")
+    .expect("the team's Team quick fix")
+    .id()
+}
+
+/// Run takes the claim through the dispatcher and makes the start's choices through `team_work`: the pipeline is
+/// checked ready here first, then the claim is taken, then the module branch's tip here is the start's base and
+/// `work.start` is asked (`team_work`'s own tests cover the start from there on).
 #[test]
 fn team_qa_work_run_takes_the_claim_and_makes_the_starts_choices() {
-  let (mut window, server) = on(State::Claims, task_route("KON-5"), "task-team-claim-title");
+  let pipeline = std::cell::Cell::new(None);
+  let (mut window, server, _) = on_task_after_setup(("team-not-ready", State::Claims), "KON-5", |root| {
+    pipeline.set(Some(ready_pipeline(root)));
+  });
+  window.until("the claim line", |window| {
+    window.texts("task-team-claim-title").is_some()
+  });
   says(&mut window, "task-team-claim-title", "Nobody holds KON-5");
   let services = window.launch.services().expect("the session started").clone();
   let root = window.data.repo("repo-kontur");
@@ -146,15 +179,20 @@ fn team_qa_work_run_takes_the_claim_and_makes_the_starts_choices() {
       TaskRevision::FIRST,
       "module/api-rate-limits".to_owned(),
     )),
-    pipeline: Some(ResourceId::generate()),
+    pipeline: pipeline.get(),
     project: "Kontur".to_owned(),
   };
   let claims = asked(&server, "claim.acquire");
   let means = (services.runners.clone(), services.programs.clone());
   let started = runtime.block_on(start(&Acting::of(&services), &source, means, request));
-  assert_eq!(started, Started::Stopped(Stop::NotReadable), "past the branch's tip");
+  // The stand-in takes the work but its run is not carried out on this computer, so the start waits for recovery.
+  assert_eq!(started, Started::Waiting);
   assert_eq!(asked(&server, "claim.acquire"), claims + 1);
-  assert_eq!(asked(&server, "work.start"), 0, "no start without its choices");
+  assert_eq!(
+    asked(&server, "work.start"),
+    1,
+    "the start asked the server for its work once"
+  );
   says(&mut window, "task-team-claim-title", "Claimed by you");
 }
 
