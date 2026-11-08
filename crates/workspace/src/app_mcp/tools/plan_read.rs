@@ -5,7 +5,6 @@
 use orchester_core::{
   id::{ProjectId, StepExecutionId},
   run::{Plan, PlanVersion, Run},
-  store::TaskStore,
 };
 use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
@@ -15,7 +14,7 @@ use serde_json::{Value, json};
 use super::{
   plans::{decided, excerpt},
   runs::find_run,
-  wire,
+  team, wire,
 };
 use crate::{
   app_mcp::{
@@ -27,6 +26,7 @@ use crate::{
   tasks::{
     detail::{RunView, run_view},
     plan::PlanReview,
+    recorded::task_of,
   },
 };
 
@@ -77,9 +77,9 @@ pub async fn get_plan(services: &Services, args: GetPlan) -> Result<Value, ToolE
 
 /// The link to `run`'s task's Conversation, where the plan cards are.
 fn conversation(db: &ProjectDb, run: &Run, project: ProjectId) -> Result<String, ToolError> {
-  let task = db
-    .task(run.task())?
-    .ok_or_else(|| ToolError::not_found(Missing::Task, run.task().to_string()))?;
+  let Some(task) = task_of(db, run.task())? else {
+    return Err(team::task_missing(db, run.task())?);
+  };
   Ok(Link::Task(project, task.key().clone(), TaskPage::Conversation).path())
 }
 

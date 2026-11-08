@@ -3,12 +3,7 @@
 //! agent wrote last ([`crate::tasks::last_words`]), and a wait is never unreadable. A step that waits on a question
 //! with suggested answers is listed with that question instead.
 
-use orchester_core::{
-  id::ProjectId,
-  question::AskedQuestions,
-  run::Run,
-  store::{RunStore, TaskStore},
-};
+use orchester_core::{id::ProjectId, question::AskedQuestions, run::Run, store::RunStore};
 use orchester_store::ProjectDb;
 use serde_json::{Value, json};
 
@@ -16,7 +11,7 @@ use super::wire;
 use crate::{
   app_mcp::error::ToolError,
   links::TaskPage,
-  tasks::{detail::run_store_error, last_words::waiting_words},
+  tasks::{detail::run_store_error, last_words::waiting_words, recorded},
 };
 
 /// The steps of `run` that wait for a message, each with what its agent wrote last and `link`, the task's
@@ -62,7 +57,7 @@ pub fn message_waits(
 pub fn project_message_waits(db: &ProjectDb, project: ProjectId, only: Option<&Run>) -> Result<Vec<Value>, ToolError> {
   let asked = db.waiting_questions()?;
   let mut waits = Vec::new();
-  for task in db.tasks()? {
+  for task in recorded::all(db)? {
     let latest = db.runs_of_task(task.id()).map_err(run_store_error)?.pop();
     let Some(Ok(run)) = latest else {
       continue;

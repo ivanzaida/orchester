@@ -15,6 +15,7 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
+use super::recorded::{self, task_of};
 use crate::messages::{self, Message};
 
 /// The holds on new starts as the Tasks screen shows them.
@@ -41,7 +42,7 @@ pub fn held_in(db: &ProjectDb) -> Result<HeldQueue, StoreError> {
       Some(group) => group
         .tasks()
         .iter()
-        .filter_map(|task| db.task(*task).ok().flatten())
+        .filter_map(|task| task_of(db, *task).ok().flatten())
         .map(|task| task.key().to_string())
         .collect(),
       None => Vec::new(),
@@ -70,11 +71,11 @@ pub fn held_work(db: &ProjectDb, group: Option<IdempotencyKey>) -> Result<HeldWo
         .unwrap_or_default();
       let mut tasks = Vec::new();
       for id in ids {
-        tasks.extend(db.task(id)?);
+        tasks.extend(task_of(db, id)?);
       }
       tasks
     }
-    None => db.tasks()?,
+    None => recorded::all(db)?,
   };
   let mut waiting = Vec::new();
   for task in tasks {

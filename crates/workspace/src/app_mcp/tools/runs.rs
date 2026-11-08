@@ -17,7 +17,7 @@ use orchester_core::{
 };
 use orchester_exec::programs::Programs;
 use orchester_ipc::Command;
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -96,7 +96,9 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Apart, ProjectI
   let (project, root) = (open.project.id(), open.repo_root);
   let db = ProjectDb::open(&root)?;
   let run = find_run(&db, &args.run)?;
-  let task = task_of(&db, run.task())?.ok_or_else(|| ToolError::from(StoreError::TaskNotFound(run.task())))?;
+  let Some(task) = task_of(&db, run.task())? else {
+    return Err(team::task_missing(&db, run.task())?);
+  };
   let conversation = Link::Task(project, task.key().clone(), TaskPage::Conversation).path();
   let waiting: Vec<ShownApproval> = pending(&db, &root)?
     .into_iter()
@@ -243,7 +245,12 @@ pub async fn control_run(services: &Services, args: InRun, control: Control) -> 
     let project = reading.project(&args.project)?;
     let db = ProjectDb::open(&project.repo_root)?;
     let run = find_run(&db, &args.run)?;
-    Ok((project, run, team::linked(&db)?))
+    let team = team::linked(&db)?;
+    // The window refuses work on a run the team server fenced; so does the tool, whether paused or interrupted.
+    if team && control == Control::Resume && team::fenced(&db, run.id())? {
+      return Err(team::fenced_refusal());
+    }
+    Ok((project, run, team))
   })
   .await?;
   let id = run.id();

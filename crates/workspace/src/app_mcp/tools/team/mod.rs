@@ -13,6 +13,10 @@ mod run;
 mod tasks;
 mod writes;
 
+use orchester_core::{
+  id::{RunId, TaskId},
+  task::identity::{TaskIdentity, TaskOwner},
+};
 use orchester_store::{ProjectDb, SharingLink};
 
 pub(super) use self::{
@@ -25,7 +29,7 @@ pub(super) use self::{
 use crate::{
   actions::Dispatcher,
   app_mcp::{
-    error::ToolError,
+    error::{Missing, ToolError},
     services::{Services, blocking},
   },
   messages::Message,
@@ -130,6 +134,37 @@ fn session_refused(error: &SharingError) -> ToolError {
 /// Whether the project of `db` is linked to a team server: for a tool that works inside the project's database.
 pub(super) fn linked(db: &ProjectDb) -> Result<bool, ToolError> {
   Ok(db.sharing()?.is_some())
+}
+
+/// The refusal for a run whose task `task` cannot be told here: not found for a local task; for a team task the run
+/// kept no inputs and no copy of the task is kept, so its key is unknown, which is not the task being missing.
+pub(super) fn task_missing(db: &ProjectDb, task: TaskId) -> Result<ToolError, ToolError> {
+  let team = matches!(
+    db.task_identity(task)?,
+    Some(TaskIdentity {
+      owner: TaskOwner::Team { .. },
+      ..
+    })
+  );
+  Ok(if team {
+    ToolError::refused(
+      "team_task_unrecorded",
+      vec![Message::new("appMcp.errors.teamTaskUnrecorded")],
+    )
+  } else {
+    ToolError::not_found(Missing::Task, task.to_string())
+  })
+}
+
+/// Whether the team server fenced team run `run` (taken over, membership removed, another device): the run goes on no
+/// more here, and a legacy run that kept no team record is not fenced.
+pub(super) fn fenced(db: &ProjectDb, run: RunId) -> Result<bool, ToolError> {
+  Ok(db.team_run(run)?.is_some_and(|team| team.fence.is_some()))
+}
+
+/// The refusal to work on a run the team server fenced, as the task page words it.
+pub(super) fn fenced_refusal() -> ToolError {
+  ToolError::refused("claim_fenced", vec![Message::new("claims.refused.fenced")])
 }
 
 /// A tool whose subject the team server owns and this version does not read or change there yet: refused for a team

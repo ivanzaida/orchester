@@ -212,8 +212,13 @@ where
 /// [`follow`] for a message to a team task's run. The run works under the claim the team server gave its work when it
 /// started (`team_work`), so no claim of the old sharing stream is taken, which would also cache the team task's
 /// definition here. Delivering and resuming go to the runner as they do elsewhere. Continuing an interrupted run and
-/// running the task again would start work without the team server's claim, so they stay queued with why.
-pub async fn follow_team((runners, runner): (&Runners, RunnerOf<'_>), stored: &Stored<'_>, then: Then) -> Sent {
+/// running the task again would start work without the team server's claim, so they stay queued with why, as does a
+/// message that would resume a run the team server fenced.
+pub async fn follow_team(
+  (runners, runner): (&Runners, RunnerOf<'_>),
+  stored: &Stored<'_>,
+  (then, fenced): (Then, bool),
+) -> Sent {
   let command = match then {
     Then::RaiseLimit => return Sent::AwaitsLimit,
     Then::ContinueInterrupted | Then::RunAgain => {
@@ -221,6 +226,7 @@ pub async fn follow_team((runners, runner): (&Runners, RunnerOf<'_>), stored: &S
         Message::new("appMcp.errors.teamProjectUnsupported").with("tool", "send_message".to_owned()),
       );
     }
+    Then::Resume if fenced => return Sent::Queued(Message::new("claims.refused.fenced")),
     Then::Deliver => Command::DeliverMessages { run: stored.run },
     Then::Resume => Command::ResumeRun { run: stored.run },
   };

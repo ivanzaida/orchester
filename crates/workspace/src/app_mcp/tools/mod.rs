@@ -221,10 +221,10 @@ const SPECS: &[Spec] = &[
                   else null), counts by state, and runs: each check's name, workflow, state (queued, running, passed, \
                   failed, cancelled, skipped), url and, for a failed GitHub Actions job, log_tail (the last 40 lines of \
                   its failed steps' log, null when gh gave none). The run's link is its task's page; the waiting \
-                  approvals, questions, messages and plans link to their cards on the task's Conversation. A team task's run 
-                  is read from this computer's own records of it, without the task's definition: task is the 
-                  key the run recorded when it started (the number is also how a run is named in every tool that 
-                  takes one).",
+                  approvals, questions, messages and plans link to their cards on the task's Conversation. A team task's run \
+                  is read from this computer's own records of it, without the task's definition: task is the key the run \
+                  recorded when it started (a run that kept none, whose task has no copy here either, is refused as \
+                  team_task_unrecorded).",
     schema: schema_for_type::<runs::InRun>,
     read_only: true,
   },
@@ -272,7 +272,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "resume_run",
-    description: "Resumes a paused run, or continues an interrupted one from its last checkpoint. On a team project a paused run resumes under the claim its work started with and takes no claim of the old sharing stream; an interrupted run is not continued from here (team_project_unsupported, as continue_run): a team task's work starts and goes on only through the team server.",
+    description: "Resumes a paused run, or continues an interrupted one from its last checkpoint. On a team project a paused run resumes under the claim its work started with and takes no claim of the old sharing stream; an interrupted run is not continued from here (team_project_unsupported, as continue_run): a team task's work starts and goes on only through the team server; a run the team server fenced is not resumed (claim_fenced).",
     schema: schema_for_type::<runs::InRun>,
     read_only: false,
   },
@@ -284,7 +284,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "send_message",
-    description: "Sends a message to the agents of a task's latest run, as the task's Conversation composer sends it in the run's state: to the agent at work (now or after its turn), as the answer to a waiting question or the changes a waiting plan needs, as a follow-up of a run ready for review, as instructions that continue a failed run or one waiting for a decision, resuming a paused or interrupted run, or running an ended task again with it. A run stopped at a limit keeps it until a person raises the limit. Refused when no agent reads it and the task does not run again. On a team project the message goes to the run under the claim its work started with; a message that would run the task again (team_run_again_unsupported) or continue an interrupted run (team_project_unsupported) is refused before it is stored, because a team task's work starts only through the team server.",
+    description: "Sends a message to the agents of a task's latest run, as the task's Conversation composer sends it in the run's state: to the agent at work (now or after its turn), as the answer to a waiting question or the changes a waiting plan needs, as a follow-up of a run ready for review, as instructions that continue a failed run or one waiting for a decision, resuming a paused or interrupted run, or running an ended task again with it. A run stopped at a limit keeps it until a person raises the limit. Refused when no agent reads it and the task does not run again. On a team project the message goes to the run under the claim its work started with; a message that would run the task again (team_run_again_unsupported) or continue an interrupted run (team_project_unsupported) is refused before it is stored, as is one that would resume a run the team server fenced (claim_fenced), because a team task's work starts only through the team server.",
     schema: schema_for_type::<messages::SendMessage>,
     read_only: false,
   },
@@ -398,7 +398,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_delivery",
-    description: "How delivery goes in a project over its last `days` local days (30 when left out, at most 366; today counted up to now), as its Delivery view beside Usage reads it, from what Orchester holds only, in tasks: throughput (tasks merged per day, per week past 31 days, in Orchester or found merged outside it by git, with their story points and how many had none); cycle time (first agent start to merge) and lead time (creation to merge) of each task merged in the range with their median, quartiles and 85th percentile in hours, and its attempts; where agent time goes (active hours per pipeline step, executions, how many were returned by a failure route or a person, the return percent, and attempts per delivered task); cumulative flow (tasks in each workflow status at the end of each day, Canceled left out); and forecasts of when the queued tasks and each open module (only `module`'s, by id or name, beside the queued tasks', when given) are likely delivered: a Monte Carlo over the tasks merged on the project's recent days, giving the 50% and 85% dates, the remaining tasks and the history it rests on (days and tasks merged); not_enough_history instead of dates when the history is too short, nothing_left when no work remains. No money estimates. `link` opens the Delivery view. For a team project's module the forecast is not computed on this computer: the module is read from its team server (module_not_found when it has none) and the call is refused as team_project_unsupported.",
+    description: "How delivery goes in a project over its last `days` local days (30 when left out, at most 366; today counted up to now), as its Delivery view beside Usage reads it, from what Orchester holds only, in tasks: throughput (tasks merged per day, per week past 31 days, in Orchester or found merged outside it by git, with their story points and how many had none); cycle time (first agent start to merge) and lead time (creation to merge) of each task merged in the range with their median, quartiles and 85th percentile in hours, and its attempts; where agent time goes (active hours per pipeline step, executions, how many were returned by a failure route or a person, the return percent, and attempts per delivered task); cumulative flow (tasks in each workflow status at the end of each day, Canceled left out); and forecasts of when the queued tasks and each open module (only `module`'s, by id or name, beside the queued tasks', when given) are likely delivered: a Monte Carlo over the tasks merged on the project's recent days, giving the 50% and 85% dates, the remaining tasks and the history it rests on (days and tasks merged); not_enough_history instead of dates when the history is too short, nothing_left when no work remains. No money estimates. `link` opens the Delivery view. On a team project nothing is computed from this computer's rows of its tasks, which are partial: the call is refused as team_project_unsupported, after a module named is read from its team server (module_not_found when it has none).",
     schema: schema_for_type::<delivery::GetDelivery>,
     read_only: true,
   },

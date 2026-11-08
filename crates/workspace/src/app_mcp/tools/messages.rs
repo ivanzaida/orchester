@@ -44,14 +44,29 @@ pub fn plan_person_only() -> ToolError {
   )
 }
 
-/// Whether the project is a team project, whose runs a message may not start again or continue from here: refused
-/// before the message is stored.
-fn team_checked(db: &orchester_store::ProjectDb, mode: &ComposerMode) -> Result<bool, ToolError> {
-  let team = team::linked(db)?;
-  if team {
-    team_refusal(mode)?;
+/// How a message reaches the run: through this computer's own runner and claims, or, for a team task's run, under the
+/// claim its work started with.
+#[derive(Clone, Copy)]
+enum Reach {
+  Local,
+  Team {
+    /// The team server fenced the run: it goes on no more here.
+    fenced: bool,
+  },
+}
+
+/// How the message reaches run `run`. A team task's run is not started again or continued from here, and a fenced one
+/// is not resumed: refused before the message is stored.
+fn reach_checked(db: &orchester_store::ProjectDb, mode: &ComposerMode, run: RunId) -> Result<Reach, ToolError> {
+  if !team::linked(db)? {
+    return Ok(Reach::Local);
   }
-  Ok(team)
+  let fenced = team::fenced(db, run)?;
+  if fenced && matches!(mode, ComposerMode::Resume { .. }) {
+    return Err(team::fenced_refusal());
+  }
+  team_refusal(mode)?;
+  Ok(Reach::Team { fenced })
 }
 
 /// What a message to a team task's run may not do: run the task again, or continue an interrupted run, which would
@@ -109,7 +124,7 @@ pub async fn send_message(
   let reading = services.clone();
   let (project, run) = (args.project.clone(), args.run.clone());
   let (timing, checked) = (args.timing, expected.map(str::to_owned));
-  let (project, prepared, team) = blocking(move || {
+  let (project, prepared, reach) = blocking(move || {
     let project = reading.project(&project)?;
     let db = orchester_store::ProjectDb::open(&project.repo_root)?;
     let named = find_run(&db, &run)?;
@@ -122,14 +137,14 @@ pub async fn send_message(
       way_of(&prepared.mode, timing),
       (checked.as_deref(), named.number().get()),
     )?;
-    let team = team_checked(&db, &prepared.mode)?;
+    let reach = reach_checked(&db, &prepared.mode, named.id())?;
     if let Some(kind) = prepared.decision_kind(Way::Primary) {
       // The Orchestrator's plan path below retains its stricter refusal.
       if !matches!(by, SentBy::Person(_)) && !matches!(prepared.mode, ComposerMode::PlanChanges { .. }) {
         kind.require(&reading.workspace)?;
       }
     }
-    Ok((project, prepared, team))
+    Ok((project, prepared, reach))
   })
   .await?;
   let run = prepared.run().expect("the run named is the task's latest");
@@ -183,7 +198,7 @@ pub async fn send_message(
     key,
     pipeline: &pipeline,
   };
-  let sent = followed(services, (&project, &stored), then, team).await;
+  let sent = followed(services, (&project, &stored), then, reach).await;
   let mut result = reply(&project, run, (action(&prepared.mode, way), sent), translate).await?;
   result["message"] = json!({ "id": message.to_string(), "attachments": [] });
   Ok(result)
@@ -191,10 +206,15 @@ pub async fn send_message(
 
 /// What follows the stored message. What became not ready between the check and the start leaves it queued, as the
 /// window's composer leaves it: the reply says it is queued, and why.
-async fn followed(services: &Services, (project, stored): (&OpenProject, &Stored<'_>), then: Then, team: bool) -> Sent {
+async fn followed(
+  services: &Services,
+  (project, stored): (&OpenProject, &Stored<'_>),
+  then: Then,
+  reach: Reach,
+) -> Sent {
   let runner = RunnerOf::Project(project);
-  if team {
-    return follow_team((&services.runners, runner), stored, then).await;
+  if let Reach::Team { fenced } = reach {
+    return follow_team((&services.runners, runner), stored, (then, fenced)).await;
   }
   let servers = (&services.runners, &services.servers, runner);
   follow(servers, (&services.workspace, &services.vault), stored, then).await
