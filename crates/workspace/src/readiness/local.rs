@@ -97,7 +97,7 @@ fn started_servers<'a>(profile: &AgentProfile, servers: &'a [McpServer]) -> Vec<
 
 /// What a run would find for `stdio`: the first candidate that is a file, which a fixed file must also have its place
 /// outside the repository. Nothing when there is no such file (the need then reports it as not found).
-fn program_found(
+pub(super) fn program_found(
   server: ConnectionId,
   stdio: &StdioServer,
   (repo_root, path): (&Path, Option<&OsStr>),

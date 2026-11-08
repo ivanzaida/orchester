@@ -9,6 +9,7 @@ mod groups;
 mod hub;
 mod local;
 mod local_archive;
+mod local_hub;
 mod pending;
 mod pipelines;
 mod reviewers;
