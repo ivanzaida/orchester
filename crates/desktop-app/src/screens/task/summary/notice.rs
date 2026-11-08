@@ -19,13 +19,17 @@ use orchester_workspace::{
     approvals::ShownApproval,
     delivery::Delivery,
     detail::{RunView, StepView, TaskDetail},
+    pause_wait::PauseWait,
     return_work,
     run::worktree_failure_message,
     slot_wait::waiting_steps,
   },
 };
 
-use crate::ui::{icon::Icon, message::message_text, notice::NoticeTone, status::Status};
+use crate::{
+  screens::task::pause_wait,
+  ui::{icon::Icon, message::message_text, notice::NoticeTone, status::Status},
+};
 
 /// What the run's last event says, before its action.
 pub struct Said {
@@ -152,10 +156,9 @@ fn running(ctx: &Ctx, run: &RunView, slot_waits: &[StepExecutionId]) -> Said {
   let branch = run.run.branch().as_str();
   let args = [("step", step.as_str()), ("agent", agent.as_str()), ("branch", branch)];
   if run.run.pause_requested() {
-    let text = (
-      ctx.t("summary.notice.pausingTitle"),
-      ctx.t_args("summary.notice.pausingBody", args),
-    );
+    let body = pause_wait::body(ctx, &PauseWait::of_run(run), branch)
+      .unwrap_or_else(|| ctx.t_args("summary.notice.pausingBody", args));
+    let text = (ctx.t("summary.notice.pausingTitle"), body);
     return Said::new(NoticeTone::Info, Icon::CirclePause, text);
   }
   if let Some(said) = waiting(ctx, run) {
