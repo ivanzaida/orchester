@@ -16,7 +16,8 @@
 //! Reach the frames in the Agents hub: M1 `oPF2o` Profiles › Reviewer with `team-hub-member-pick` (two Claude Code
 //! connections, so *Runs on* is a picker; Builder under `team-hub-member` has a missing part and its bar); M2 `dijUt`
 //! MCP servers › `pencil-design`; M3 `H9nUK6` MCP servers › `playwright` (off here); M4 `D8WX9` Instructions ›
-//! `Project rules`; M5 `ITxzr` Skills under `team-hub-member-no-skills`; M6 `yTVeE` Tools › `sentry-issues`.
+//! `Project rules`; M5 `ITxzr` Skills under `team-hub-member-no-skills`; M6 `yTVeE` Tools › `sentry-issues`. M1 as
+//! drawn, with the connection already picked and no bar, is Profiles › Reviewer under `team-hub-member-picked`.
 
 use std::{
   collections::{BTreeMap, BTreeSet},
@@ -31,14 +32,14 @@ use orchester_core::{
   resource::{
     AccessPolicy, AccessWindow, AgentProfile, AgentTargets, ApprovalMode, CommandAction, CommandArg, CommandProgram,
     DatabaseQuery, DeniedBehavior, HttpAuth, HttpMethod, HttpRequest, InjectionEvent, Instruction, InstructionScope,
-    ModelId, PromptText, ProviderSettings, ResourceBody, Skill, SkillFile, SkillFilePath, Slug, TeamAgentProfile,
-    TeamMcpServer, Tool, ToolAction, VersionNumber,
+    ModelId, PromptText, ProviderSettings, ResourceBody, ResourceKind, Skill, SkillFile, SkillFilePath, Slug,
+    TeamAgentProfile, TeamMcpServer, Tool, ToolAction, VersionNumber,
   },
   secret::SecretName,
   sharing::{SharedPerson, TaskRevision},
   store::{BlobStore, ResourceStore},
 };
-use orchester_store::CachedVersion;
+use orchester_store::{CachedVersion, ConnectionPick};
 use serde_json::{Value, json};
 
 use super::{connections, shared_config};
@@ -58,7 +59,7 @@ enum Here {
 /// `team-hub-pick`: [`seed`] with a second Claude Code connection, so Builder's connection is the person's to pick.
 pub fn pick(kontur: &mut Kontur) -> Result<(), SeedError> {
   seed(kontur)?;
-  second_connection(kontur)
+  second_connection(kontur).map(|_| ())
 }
 
 /// `team-hub-member`: the team of [`seed`] read by ivan, a member of the project who is not an admin, on the same
@@ -79,7 +80,29 @@ fn member_with(kontur: &mut Kontur, kinds: Kinds) -> Result<(), SeedError> {
 /// live picker for him (M1 `oPF2o`).
 pub fn member_pick(kontur: &mut Kontur) -> Result<(), SeedError> {
   member(kontur)?;
-  second_connection(kontur)
+  second_connection(kontur).map(|_| ())
+}
+
+/// `team-hub-member-picked`: [`member_pick`] where he has already picked `Claude · Home` for Reviewer, as the store
+/// keeps a person's pick, so Reviewer's *Runs on* shows the connection in its field and nothing is missing (M1
+/// `oPF2o` as drawn: no bar).
+pub fn member_picked(kontur: &mut Kontur) -> Result<(), SeedError> {
+  member(kontur)?;
+  let home = second_connection(kontur)?;
+  let reviewer = kontur
+    .db
+    .kept_resources(ResourceKind::AgentProfile)?
+    .into_iter()
+    .find(|profile| profile.slug().as_str() == "team-reviewer")
+    .ok_or_else(|| SeedError::Invalid("the seed has the team profile Reviewer".to_owned()))?;
+  kontur.db.set_connection_pick(
+    reviewer.id(),
+    ConnectionPick {
+      connection: home,
+      account: None,
+    },
+  )?;
+  Ok(())
 }
 
 /// `team-hub-member-no-skills`: [`member`] where the team has published no skill, so the Skills filter holds the one
@@ -89,7 +112,7 @@ pub fn member_no_skills(kontur: &mut Kontur) -> Result<(), SeedError> {
 }
 
 /// A second Claude Code connection, `Claude · Home`.
-fn second_connection(kontur: &mut Kontur) -> Result<(), SeedError> {
+fn second_connection(kontur: &mut Kontur) -> Result<ConnectionId, SeedError> {
   let program = kontur.repo.join(".orchester").join("qa-bin").join("claude-home");
   fs::write(&program, "").map_err(invalid)?;
   connections::cli(
@@ -101,8 +124,7 @@ fn second_connection(kontur: &mut Kontur) -> Result<(), SeedError> {
       &["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5"],
     ),
     kontur.ago(4),
-  )?;
-  Ok(())
+  )
 }
 
 /// `team-hub-no-connection`: [`seed`] on a computer with no Claude Code connection, so the team's profiles say what to

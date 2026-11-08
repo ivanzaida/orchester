@@ -22,6 +22,7 @@ use orchester_core::id::ProjectId;
 use orchester_workspace::{
   agents::team_tool::TeamToolSheet,
   readiness::{ReadinessStanding, Undecided},
+  sharing::team::TeamConfiguration,
 };
 
 use super::{
@@ -39,10 +40,8 @@ use crate::{
 #[derive(Clone, PartialEq)]
 pub(super) struct Props {
   pub project: ProjectId,
-  /// The person may change the team's resources: an admin of the team.
-  pub may_change: bool,
-  /// Who changes the team's resources, which a member reads.
-  pub admins: member::Admins,
+  /// The team's configuration: an admin may change its resources, and a member reads who the admins are.
+  pub team: TeamConfiguration,
   pub listing: Listing,
   pub entry: Entry,
   pub sheet: TeamToolSheet,
@@ -66,8 +65,7 @@ impl Component for ToolPanel {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let Props {
       project,
-      may_change,
-      admins,
+      team,
       listing,
       entry,
       sheet,
@@ -75,7 +73,9 @@ impl Component for ToolPanel {
     let now = Services::of(ctx).clock.now();
     let navigation = Navigation::of(ctx);
     let route = Route::Project(project, ProjectPage::Tool(entry.id, ToolTab::default()));
-    let head_edit = may_change.then(|| panel::edit_button(ctx, navigation.to(route.clone())));
+    let head_edit = team
+      .may_change
+      .then(|| panel::edit_button(ctx, navigation.to(route.clone())));
     let kind = ctx.t_args(
       "team_hub.tool.where",
       [("kind", from_team::kind(ctx, &sheet).to_string())],
@@ -90,10 +90,10 @@ impl Component for ToolPanel {
     let body = panel::body()
       .child(panel::head_of(&entry, (kind.to_string(), version), head_edit))
       .child(chips)
-      .with_children(member::lock_line(ctx, may_change, &admins))
+      .with_children(member::lock_line(ctx, &team))
       .child(from_team::section(ctx, &sheet))
       .child(computer::section(ctx, &entry, &sheet));
-    let bar = may_change.then(|| bar::edit(ctx, &entry, navigation.to(route)));
+    let bar = team.may_change.then(|| bar::edit(ctx, &entry, navigation.to(route)));
     panel::frame(&entry, body, bar)
   }
 }

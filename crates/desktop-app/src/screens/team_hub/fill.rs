@@ -13,7 +13,7 @@ use lurq::{
 };
 use orchester_core::{secret::SecretName, sharing::Missing};
 
-use super::rows::{self, Key, Sub};
+use super::rows::{self, Sub};
 use crate::{
   theme::{ControlHeight, ExtraSpacing, ExtraTypography, HubSpacing, HubText, IconSize},
   ui::icon::{Icon, icon},
@@ -63,7 +63,7 @@ pub(super) fn value_of(missing: &[Missing], name: &SecretName) -> Value {
 }
 
 /// One secret a resource takes: its name over *secret value*, and whether it has a value here.
-pub(super) fn secret_row(ctx: &Ctx, key: Key, name: &SecretName, value: Value) -> Row {
+pub(super) fn secret_row(ctx: &Ctx, name: &SecretName, value: Value) -> Row {
   let id = format!("team-hub-value-{name}");
   let (sub, shown): (Sub, Element) = match value {
     Value::Set => (
@@ -120,7 +120,7 @@ pub(super) fn secret_row(ctx: &Ctx, key: Key, name: &SecretName, value: Value) -
     .id(format!("{id}-label"))
     .variant(ExtraTypography::PropertyMono.role())
     .color(PaletteColor::TextSecondary);
-  rows::keyed_in(key, &id, label, Some(sub), shown)
+  rows::keyed(&id, label, Some(sub), shown)
 }
 
 /// How a resource stands, in the note's colors.

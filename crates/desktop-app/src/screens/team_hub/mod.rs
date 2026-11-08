@@ -245,7 +245,7 @@ fn hub_body(
   let id = project.open.project.id();
   let Some(selected) = listing.selected(view.filter, view.item) else {
     if !team.may_change {
-      return member::empty(ctx, view.filter, &member::Admins::of(team));
+      return member::empty(ctx, view.filter, team);
     }
     return EmptyState::new(
       "team-hub-empty",
@@ -267,8 +267,7 @@ fn hub_body(
   );
   let shown = panel::Shown {
     project: id,
-    may_change: team.may_change,
-    admins: member::Admins::of(team),
+    team,
     navigation,
   };
   let panel = detail(ctx, (project, team), (hub, listing, selected), (&shown, reading, retry));
@@ -300,12 +299,10 @@ fn detail(
   (shown, reading, retry): (&panel::Shown<'_>, bool, &Signal<u64>),
 ) -> Element {
   let id = project.open.project.id();
-  let (repo_root, may_change) = (project.open.repo_root.clone(), team.may_change);
-  let admins = member::Admins::of(team);
+  let repo_root = project.open.repo_root.clone();
   let plain = |sheet| plain::Props {
     project: id,
-    may_change,
-    admins: admins.clone(),
+    team: team.clone(),
     listing: listing.clone(),
     entry: selected.clone(),
     sheet,
@@ -317,8 +314,7 @@ fn detail(
         profile::Props {
           repo_root,
           project: id,
-          may_change,
-          admins: admins.clone(),
+          team: team.clone(),
           reading,
           listing: listing.clone(),
           entry: selected.clone(),
@@ -332,8 +328,7 @@ fn detail(
         mcp::Props {
           repo_root,
           project: id,
-          may_change,
-          admins: admins.clone(),
+          team: team.clone(),
           reading,
           reread: retry.clone(),
           listing: listing.clone(),
@@ -347,8 +342,7 @@ fn detail(
         ctx,
         tool::Props {
           project: id,
-          may_change,
-          admins: admins.clone(),
+          team: team.clone(),
           listing: listing.clone(),
           entry: selected.clone(),
           sheet: sheet.clone(),

@@ -76,10 +76,14 @@ pub enum HubText {
   PanelLabel,
   /// 16/600 `text_primary`, 1.3: a panel's resource name (`Title` `x5AOBx`).
   PanelTitle,
+  /// 14/600 `text_primary`, 1.3: what a kind with nothing published says (`Text` `jx0Ha` in M5 `ITxzr`).
+  EmptyTitle,
+  /// 12.5 `text_muted`, 1.45: what a member's empty state says under it (`Text` `dxKHH` in M5 `ITxzr`).
+  EmptyDetail,
 }
 
 impl HubText {
-  pub const ALL: [Self; 24] = [
+  pub const ALL: [Self; 26] = [
     Self::PageTitle,
     Self::Crumb,
     Self::GroupTitle,
@@ -104,6 +108,8 @@ impl HubText {
     Self::PanelHint,
     Self::PanelLabel,
     Self::PanelTitle,
+    Self::EmptyTitle,
+    Self::EmptyDetail,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -136,6 +142,8 @@ impl HubText {
       Self::PanelHint => "hub_panel_hint",
       Self::PanelLabel => "hub_panel_label",
       Self::PanelTitle => "hub_panel_title",
+      Self::EmptyTitle => "hub_empty_title",
+      Self::EmptyDetail => "hub_empty_detail",
     }
   }
 
@@ -165,6 +173,8 @@ impl HubText {
       Self::PanelHint => style(12.0, FontWeight::Normal, 1.2, 0.0, palette.text_muted),
       Self::PanelLabel => style(12.0, FontWeight::Medium, 1.2, 0.0, palette.text_muted),
       Self::PanelTitle => style(16.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
+      Self::EmptyTitle => style(14.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
+      Self::EmptyDetail => style(12.5, FontWeight::Normal, 1.45, 0.0, palette.text_muted),
     }
   }
 }
@@ -211,12 +221,10 @@ pub enum HubSpacing {
   /// 170: a panel row's key, the label over its sub (`Key` `P60rze` in `NDZXC`, `z3uHz` in `c3jU1R`, `XgW1K` in
   /// `u9Hcc`).
   Key,
-  /// 150: the key of *On this computer*'s rows of an MCP server (`Key` in `SpRvd` … `lSA4x`).
-  KeyNarrow,
 }
 
 impl HubSpacing {
-  pub const ALL: [Self; 20] = [
+  pub const ALL: [Self; 19] = [
     Self::Side,
     Self::HeadTop,
     Self::HeadBottom,
@@ -236,7 +244,6 @@ impl HubSpacing {
     Self::NewGap,
     Self::Actions,
     Self::Key,
-    Self::KeyNarrow,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -264,7 +271,6 @@ impl HubSpacing {
       Self::NewGap => "hub_new_gap",
       Self::Actions => "hub_actions",
       Self::Key => "hub_key",
-      Self::KeyNarrow => "hub_key_narrow",
     }
   }
 
@@ -284,7 +290,6 @@ impl HubSpacing {
       Self::NoteY => 4.0,
       Self::Actions => 56.0,
       Self::Key => 170.0,
-      Self::KeyNarrow => 150.0,
     }
   }
 }

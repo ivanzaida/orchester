@@ -19,7 +19,10 @@ use lurq::{
   node::Element,
 };
 use orchester_core::id::ProjectId;
-use orchester_workspace::agents::team_text::{Added, TeamInstructionSheet, TeamSkillSheet};
+use orchester_workspace::{
+  agents::team_text::{Added, TeamInstructionSheet, TeamSkillSheet},
+  sharing::team::TeamConfiguration,
+};
 
 use super::{
   bar,
@@ -45,10 +48,8 @@ pub(super) enum Sheet {
 #[derive(Clone, PartialEq)]
 pub(super) struct Props {
   pub project: ProjectId,
-  /// The person may change the team's resources: an admin of the team.
-  pub may_change: bool,
-  /// Who changes the team's resources, which a member reads.
-  pub admins: member::Admins,
+  /// The team's configuration: an admin may change its resources, and a member reads who the admins are.
+  pub team: TeamConfiguration,
   pub listing: Listing,
   pub entry: Entry,
   pub sheet: Sheet,
@@ -72,8 +73,7 @@ impl Component for PlainPanel {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let Props {
       project,
-      may_change,
-      admins,
+      team,
       listing,
       entry,
       sheet,
@@ -91,14 +91,14 @@ impl Component for PlainPanel {
         skill::sections(ctx, sheet),
       ),
     };
-    let route = may_change.then(|| editor(&entry, project, &sheet));
+    let route = team.may_change.then(|| editor(&entry, project, &sheet));
     let navigation = Navigation::of(ctx);
     let head_edit = route.clone().map(|route| panel::edit_button(ctx, navigation.to(route)));
     let version = words::published_line(ctx, now, &entry, published);
     let body = panel::body()
       .child(panel::head_of(&entry, (kind, version), head_edit))
       .child(chips(ctx, &listing, &entry, &sheet))
-      .with_children(member::lock_line(ctx, may_change, &admins))
+      .with_children(member::lock_line(ctx, &team))
       .with_children(shown)
       .child(on_this_computer(ctx, &sheet));
     let bar = route.map(|route| bar::edit(ctx, &entry, navigation.to(route)));

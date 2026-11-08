@@ -117,14 +117,10 @@ pub(super) fn filter(ctx: &Ctx, listing: Option<&Listing>, shown: &FilterShown, 
       Element::from(reading_mark(ctx))
     } else {
       Element::from(
-        Text::new(&ctx.t(if shown.may_change {
-          hint_key(shown.filter)
-        } else {
-          member::hint_key(shown.filter)
-        }))
-        .id("team-hub-filter-hint")
-        .variant(HubText::Hint.role())
-        .nowrap(),
+        Text::new(&ctx.t(hint_key(shown.filter, shown.may_change)))
+          .id("team-hub-filter-hint")
+          .variant(HubText::Hint.role())
+          .nowrap(),
       )
     })
 }
@@ -156,13 +152,21 @@ const fn label_key(filter: HubFilter) -> &'static str {
   }
 }
 
-const fn hint_key(filter: HubFilter) -> &'static str {
-  match filter {
-    HubFilter::All => "team_hub.hint.all",
-    HubFilter::Profiles => "team_hub.hint.profiles",
-    HubFilter::McpServers => "team_hub.hint.mcpServers",
-    HubFilter::Instructions => "team_hub.hint.instructions",
-    HubFilter::Skills => "team_hub.hint.skills",
-    HubFilter::Tools => "team_hub.hint.tools",
+/// The filter's hint for `filter`: an admin's, or for a member what the kind is and that they fill in only what is
+/// local.
+pub(super) const fn hint_key(filter: HubFilter, may_change: bool) -> &'static str {
+  match (may_change, filter) {
+    (true, HubFilter::All) => "team_hub.hint.all",
+    (true, HubFilter::Profiles) => "team_hub.hint.profiles",
+    (true, HubFilter::McpServers) => "team_hub.hint.mcpServers",
+    (true, HubFilter::Instructions) => "team_hub.hint.instructions",
+    (true, HubFilter::Skills) => "team_hub.hint.skills",
+    (true, HubFilter::Tools) => "team_hub.hint.tools",
+    (false, HubFilter::All) => "team_hub.member.hint.all",
+    (false, HubFilter::Profiles) => "team_hub.member.hint.profiles",
+    (false, HubFilter::McpServers) => "team_hub.member.hint.mcpServers",
+    (false, HubFilter::Instructions) => "team_hub.member.hint.instructions",
+    (false, HubFilter::Skills) => "team_hub.member.hint.skills",
+    (false, HubFilter::Tools) => "team_hub.member.hint.tools",
   }
 }

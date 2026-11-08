@@ -154,7 +154,7 @@ pub(crate) fn line(ctx: &Ctx, id: &str, team: &TeamConfiguration) -> Row {
 
 /// `dana-k (owner) and olha (server admin)`: the owners and the server's admins as last read. A server that does not
 /// name its admins leaves them by their role: `dana-k (owner) and the server's admins`.
-fn admins(ctx: &Ctx, team: &TeamConfiguration) -> String {
+pub(crate) fn admins(ctx: &Ctx, team: &TeamConfiguration) -> String {
   let named = |key: &str, names: &[Arc<str>]| {
     names
       .iter()

@@ -149,16 +149,22 @@ fn team_hub_mcp_c4_a_program_without_a_path_asks_for_it_and_says_what_the_team_h
   );
   // On this computer.
   assert_eq!(agents.text("team-hub-chip-here-label"), "Needs the program path here");
-  assert_eq!(agents.text("team-hub-path-sub"), "pencil-mcp here");
-  assert_eq!(agents.text("team-hub-path-value-text"), "Not set");
+  assert_eq!(agents.text("team-hub-path-sub"), "pencil-mcp on this computer");
+  assert_eq!(
+    agents.text("team-hub-path-value-text"),
+    "Not set · nothing is guessed or found by name"
+  );
   assert_eq!(agents.text("team-hub-value-PENCIL_TOKEN-words"), "Value set here");
   assert_eq!(agents.text("team-hub-here-switch"), "On: runs here may use it");
   assert_eq!(
     agents.text("team-hub-mcp-note-text"),
-    "Not ready here: set the program path."
+    "Not ready here: set the program path. Runs whose pipeline uses pencil-design don't start on this computer until then."
   );
   assert_eq!(agents.text("team-hub-fix-set-path"), "Set program path");
-  assert_eq!(agents.text("team-hub-actions-hint"), "Asked once on this computer");
+  assert_eq!(
+    agents.text("team-hub-actions-hint"),
+    "Kept on this computer · asked once"
+  );
   assert!(!agents.exists("team-hub-fix-check-again"));
 }
 
@@ -357,7 +363,7 @@ fn team_hub_mcp_automation_cannot_set_a_path_switch_on_or_add_a_value() {
 }
 
 #[test]
-fn team_hub_mcp_keys_are_170_wide_from_the_team_and_150_on_this_computer() {
+fn team_hub_mcp_keys_are_170_wide_from_the_team_and_on_this_computer() {
   let mut agents = Agents::new(true);
   team(&agents);
   let pencil = server(&agents, ("pencil-design", program_body()), Switch::On);
@@ -369,8 +375,8 @@ fn team_hub_mcp_keys_are_170_wide_from_the_team_and_150_on_this_computer() {
   };
   let (from_team, on_computer) = (key("team-hub-from-team-program"), key("team-hub-path"));
   assert!(
-    (from_team - on_computer - 20.0).abs() < 0.5,
-    "from the team {from_team}, on this computer {on_computer}"
+    (from_team - on_computer).abs() < 0.5,
+    "from the team {from_team}, on this computer {on_computer}: the same key column (A3 `yIsDi`, M2 `dijUt`)"
   );
 }
 

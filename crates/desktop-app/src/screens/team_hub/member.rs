@@ -4,81 +4,33 @@
 //! for a kind with nothing published, one empty state saying an admin adds it. Nothing disabled stands in for what a
 //! member lacks: the controls are not drawn, and the workspace refuses their writes as well.
 
-use std::sync::Arc;
-
 use lurq::{
-  app::ctx::Ctx,
+  app::{
+    ctx::Ctx,
+    theme::{BorderSize, PaletteColor, RadiusSize},
+  },
   components::{Column, Row, Text},
-  layout::{Alignment, layout_kind::Justify},
-  node::{Element, dimension::Dimension},
+  layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
+  node::{Element, border::Border, dimension::Dimension},
 };
 use orchester_workspace::sharing::team::TeamConfiguration;
 
 use crate::{
   routes::HubFilter,
-  team::lock::locked,
-  theme::HubText,
-  ui::{icon::Icon, state::EmptyState},
+  screens::hub::team::admins,
+  team::lock::flat,
+  theme::{ExtraSpacing, HubText},
+  ui::{icon::Icon, state::glyph_tile},
 };
 
-/// Who changes the team's resources: the project's owners, then the server's admins who are not among them, by their
-/// username there.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub(super) struct Admins {
-  owners: Arc<[Arc<str>]>,
-  server: Arc<[Arc<str>]>,
-}
-
-impl Admins {
-  pub(super) fn of(team: &TeamConfiguration) -> Self {
-    Self {
-      owners: team.owners.clone(),
-      server: team.admins.clone(),
-    }
-  }
-
-  /// `dana-k (owner) and olha (server admin)`; `None` while the members are not read or name nobody.
-  fn names(&self, ctx: &Ctx) -> Option<String> {
-    let named = |key: &str, name: &Arc<str>| ctx.t_args(key, [("name", &**name)]).to_string();
-    let all: Vec<String> = self
-      .owners
-      .iter()
-      .map(|name| named("team_hub.member.owner", name))
-      .chain(
-        self
-          .server
-          .iter()
-          .map(|name| named("team_hub.member.serverAdmin", name)),
-      )
-      .collect();
-    let (last, rest) = all.split_last()?;
-    Some(if rest.is_empty() {
-      last.clone()
-    } else {
-      ctx
-        .t_args(
-          "team_hub.member.and",
-          [
-            ("first", rest.join(&ctx.t("team_hub.member.separator"))),
-            ("last", last.clone()),
-          ],
-        )
-        .to_string()
-    })
-  }
-}
-
-/// *Only team admins change this: dana-k (owner) and olha (server admin).* under the chips of a member's panel; none
+/// *Only team admins change this: dana-k (Admin) and olha (Server admin).* under the chips of a member's panel; none
 /// for an admin.
-pub(super) fn lock_line(ctx: &Ctx, may_change: bool, admins: &Admins) -> Option<Row> {
-  if may_change {
+pub(super) fn lock_line(ctx: &Ctx, team: &TeamConfiguration) -> Option<Row> {
+  if team.may_change {
     return None;
   }
-  let words = match admins.names(ctx) {
-    Some(names) => ctx.t_args("team_hub.member.lock", [("admins", names)]),
-    None => ctx.t("team_hub.member.lockUnnamed"),
-  };
-  Some(locked("team-hub-member-lock", &words))
+  let words = ctx.t_args("team_hub.member.lock", [("admins", admins(ctx, team))]);
+  Some(flat("team-hub-member-lock", &words))
 }
 
 /// *· member* after the team's address in the head.
@@ -87,18 +39,6 @@ pub(super) fn role(ctx: &Ctx) -> Text {
     .id("team-hub-member-role")
     .variant(HubText::Hint.role())
     .nowrap()
-}
-
-/// The filter's hint for a member: what the kind is, and that they fill in only what is local.
-pub(super) const fn hint_key(filter: HubFilter) -> &'static str {
-  match filter {
-    HubFilter::All => "team_hub.member.hint.all",
-    HubFilter::Profiles => "team_hub.member.hint.profiles",
-    HubFilter::McpServers => "team_hub.member.hint.mcpServers",
-    HubFilter::Instructions => "team_hub.member.hint.instructions",
-    HubFilter::Skills => "team_hub.member.hint.skills",
-    HubFilter::Tools => "team_hub.member.hint.tools",
-  }
 }
 
 /// The glyph, title and detail of a kind with nothing published.
@@ -137,24 +77,40 @@ const fn empty_of(filter: HubFilter) -> (Icon, &'static str, &'static str) {
   }
 }
 
-/// What a member sees where the list and the panel would be when `filter` holds nothing (`M5` `ITxzr`): that an admin
-/// adds it, and who the admins are, with no *New* anywhere.
-pub(super) fn empty(ctx: &Ctx, filter: HubFilter, admins: &Admins) -> Element {
+/// What a member sees where the list and the panel would be when `filter` holds nothing (`Body` `lNzIn`, `Empty state`
+/// `Z3nzdX` in M5 `ITxzr`): in the outline the list and the panel stand in, that an admin adds it and who the admins
+/// are, with no *New* anywhere.
+pub(super) fn empty(ctx: &Ctx, filter: HubFilter, team: &TeamConfiguration) -> Element {
   let (glyph, title, detail) = empty_of(filter);
-  let state = EmptyState::new("team-hub-empty", glyph, ctx.t(title), ctx.t(detail))
-    .compact()
-    .unframed()
-    .centered();
-  let state = match admins.names(ctx) {
-    Some(names) => state.note(ctx.t_args("team_hub.member.empty.admins", [("admins", names)])),
-    None => state,
+  let line = |id: &str, words: &str, role: HubText| {
+    Text::new(words)
+      .id(id.to_owned())
+      .variant(role.role())
+      .text_align(TextAlign::Center)
   };
   Column::new()
     .id("team-hub-member-empty")
     .width(Dimension::Pct(100.0))
     .height(Dimension::Pct(100.0))
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(RadiusSize::Md)
+    .clip()
     .align_items(Alignment::Center)
     .justify(Justify::Center)
-    .child(state)
+    .child(
+      Column::new()
+        .id("team-hub-empty")
+        .describe("state", "empty")
+        .spacing(ExtraSpacing::Loose.role())
+        .align_items(Alignment::Center)
+        .child(glyph_tile("team-hub-empty", glyph))
+        .child(line("team-hub-empty-title", &ctx.t(title), HubText::EmptyTitle))
+        .child(line("team-hub-empty-detail", &ctx.t(detail), HubText::EmptyDetail))
+        .child(line(
+          "team-hub-empty-admins",
+          &ctx.t_args("team_hub.member.empty.admins", [("admins", admins(ctx, team))]),
+          HubText::Hint,
+        )),
+    )
     .into()
 }

@@ -4,6 +4,8 @@
 //! part still theirs, and one empty state for a kind nothing is published of.
 //! `cargo test -p orchester-app --test agents team_hub_member`.
 
+use std::collections::HashMap;
+
 use orchester_app::routes::{HubFilter, HubView, ProjectPage, Route};
 use orchester_core::{
   id::{ResourceId, UserId},
@@ -20,37 +22,52 @@ use super::{
   team_hub_profile::{builder, claude, show as show_profile},
 };
 
-const LOCK: &str = "Only team admins change this: dana-k (owner) and olha (server admin).";
+const LOCK: &str = "Only team admins change this: dana-k (Admin) and olha (Server admin).";
 
-/// The members of the project as the server last listed them: dana-k its owner, olha a member and the server's admin,
-/// and the person, ivan.
-fn name_the_admins(agents: &Agents) {
-  let person = |name: &str| (UserId::generate(), name.to_owned());
-  let ((dana, dana_name), (olha, olha_name), (ivan, ivan_name)) = (person("dana-k"), person("olha"), person("ivan"));
-  let member = |user, name: String, role| SharedMember {
-    user,
-    display_name: name.clone(),
-    username: name,
-    role,
-    added_at: Timestamp::from_unix_millis(1),
-  };
+/// The members of the project as the server last listed them: `owners`, the other `members`, and the person, ivan; and
+/// the server's admins, `server_admins`, who need not be among the members.
+fn name_members(agents: &Agents, (owners, members): (&[&str], &[&str]), server_admins: &[&str]) {
+  let mut users: HashMap<&str, UserId> = HashMap::new();
+  let ivan = UserId::generate();
+  let listed: Vec<SharedMember> = owners
+    .iter()
+    .map(|name| (*name, MemberRole::Owner))
+    .chain(members.iter().map(|name| (*name, MemberRole::Member)))
+    .map(|(name, role)| {
+      let user = *users.entry(name).or_insert_with(UserId::generate);
+      SharedMember {
+        user,
+        display_name: name.to_owned(),
+        username: name.to_owned(),
+        role,
+        added_at: Timestamp::from_unix_millis(1),
+      }
+    })
+    .chain([SharedMember {
+      user: ivan,
+      display_name: "ivan".to_owned(),
+      username: "ivan".to_owned(),
+      role: MemberRole::Member,
+      added_at: Timestamp::from_unix_millis(1),
+    }])
+    .collect();
+  let admins: Vec<ServerAdmin> = server_admins
+    .iter()
+    .map(|name| ServerAdmin {
+      user: *users.entry(name).or_insert_with(UserId::generate),
+      display_name: (*name).to_owned(),
+      username: (*name).to_owned(),
+    })
+    .collect();
   let mut db = ProjectDb::open(&agents.root).expect("database");
-  db.record_shared_members(
-    &[
-      member(dana, dana_name, MemberRole::Owner),
-      member(olha, olha_name.clone(), MemberRole::Member),
-      member(ivan, ivan_name, MemberRole::Member),
-    ],
-    Timestamp::from_unix_millis(2),
-    Some(ivan),
-  )
-  .expect("members");
-  db.record_server_admins(&[ServerAdmin {
-    user: olha,
-    display_name: olha_name.clone(),
-    username: olha_name,
-  }])
-  .expect("admins");
+  db.record_shared_members(&listed, Timestamp::from_unix_millis(2), Some(ivan))
+    .expect("members");
+  db.record_server_admins(&admins).expect("admins");
+}
+
+/// dana-k the owner, olha a member and the server's admin, and the person, ivan.
+fn name_the_admins(agents: &Agents) {
+  name_members(agents, (&["dana-k"], &["olha"]), &["olha"]);
 }
 
 /// The person is a member from here on: a member cannot make a team resource, so a test makes them first.
@@ -78,7 +95,7 @@ fn team_hub_member_every_panel_names_the_admins_in_one_line_and_has_no_control_o
     open(&mut agents, HubView::new(filter, Some(resource)));
     assert_eq!(lock(&mut agents), LOCK, "{filter:?}");
     assert!(
-      !agents.exists("team-hub-new") && !agents.exists("team-hub-edit") && !agents.exists("team-hub-action-edit"),
+      !agents.exists("team-hub-new") && !agents.exists("team-hub-edit"),
       "{filter:?}: no New and no Edit"
     );
   }
@@ -103,11 +120,35 @@ fn team_hub_member_a_profile_and_a_tool_name_the_admins_too() {
 }
 
 #[test]
-fn team_hub_member_says_only_that_admins_change_it_before_the_members_are_read() {
+fn team_hub_member_names_the_projects_admins_and_the_servers_before_the_members_are_read() {
   let mut agents = Agents::new(true);
   let [skill, ..] = team_as(&agents, Some(MemberRole::Member));
   open(&mut agents, HubView::new(HubFilter::Skills, Some(skill)));
-  assert_eq!(lock(&mut agents), "Only team admins change this.");
+  assert_eq!(
+    lock(&mut agents),
+    "Only team admins change this: the project's Admins and the Server admins."
+  );
+}
+
+#[test]
+fn team_hub_member_a_server_that_names_no_admins_leaves_them_by_their_role() {
+  let mut agents = Agents::new(true);
+  let [skill, ..] = team_as(&agents, Some(MemberRole::Member));
+  name_members(&agents, (&["dana-k"], &["olha"]), &[]);
+  open(&mut agents, HubView::new(HubFilter::Skills, Some(skill)));
+  assert_eq!(
+    lock(&mut agents),
+    "Only team admins change this: dana-k (Admin) and the Server admins."
+  );
+}
+
+#[test]
+fn team_hub_member_a_server_admin_who_is_not_a_member_of_the_project_is_named_too() {
+  let mut agents = Agents::new(true);
+  let [skill, ..] = team_as(&agents, Some(MemberRole::Member));
+  name_members(&agents, (&["dana-k"], &[]), &["olha"]);
+  open(&mut agents, HubView::new(HubFilter::Skills, Some(skill)));
+  assert_eq!(lock(&mut agents), LOCK);
 }
 
 #[test]
@@ -153,6 +194,73 @@ fn team_hub_member_a_kind_with_nothing_published_is_one_empty_state_and_no_new()
   ));
   agents.until("empty", |s| s.exists("team-hub-empty"));
   assert!(!agents.exists("team-hub-member-empty"));
+}
+
+/// Takes every resource of [`team_as`] off the team, so no kind holds anything.
+fn publish_nothing(agents: &Agents, resources: [ResourceId; 4]) {
+  let mut db = ProjectDb::open(&agents.root).expect("database");
+  for resource in resources {
+    db.set_resource_sharing(resource, None).expect("local");
+  }
+}
+
+#[test]
+fn team_hub_member_every_kind_with_nothing_published_says_an_admin_adds_it_inside_the_outline() {
+  let mut agents = Agents::new(true);
+  let resources = team_as(&agents, Some(MemberRole::Member));
+  publish_nothing(&agents, resources);
+  name_the_admins(&agents);
+  for (filter, title) in [
+    (HubFilter::All, "Nothing published yet"),
+    (HubFilter::Profiles, "No profiles yet"),
+    (HubFilter::McpServers, "No MCP servers yet"),
+    (HubFilter::Instructions, "No instructions yet"),
+    (HubFilter::Skills, "No skills yet"),
+    (HubFilter::Tools, "No tools yet"),
+  ] {
+    agents.window.navigation().go(Route::Project(
+      project_id(),
+      ProjectPage::hub(HubView::new(filter, None)),
+    ));
+    agents.until(title, |s| {
+      s.exists("team-hub-member-empty") && s.text("team-hub-empty-title") == title
+    });
+    assert!(
+      agents
+        .text("team-hub-empty-detail")
+        .starts_with("An admin of the team adds ")
+    );
+    assert_eq!(
+      agents.text("team-hub-empty-admins"),
+      "Admins: dana-k (Admin) and olha (Server admin)",
+      "{filter:?}"
+    );
+    assert!(
+      !agents.exists("team-hub-list") && !agents.exists("team-hub-new"),
+      "{filter:?}"
+    );
+  }
+}
+
+#[test]
+fn team_hub_member_the_palette_offers_no_new_pipeline_or_agent_but_an_admins_does() {
+  let offered = |role| {
+    let mut agents = Agents::new(true);
+    let [skill, ..] = team_as(&agents, Some(role));
+    open(&mut agents, HubView::new(HubFilter::Skills, Some(skill)));
+    agents.window.press("sidebar-jump");
+    agents
+      .window
+      .until("Jump to", |window| window.texts("jump-to").is_some());
+    agents.window.set("jump-to-field", "new");
+    agents
+      .window
+      .until("the actions", |window| window.texts("jump-to-group-actions").is_some());
+    ["new-task", "new-pipeline", "new-agent"]
+      .map(|action| agents.window.texts(&format!("jump-to-actions-{action}")).is_some())
+  };
+  assert_eq!(offered(MemberRole::Member), [true, false, false]);
+  assert_eq!(offered(MemberRole::Owner), [true, true, true]);
 }
 
 #[test]
