@@ -48,7 +48,7 @@
       "description": "The Orchestrator reads the project and acts through Orchester with your project's permissions: it creates tasks, starts and continues runs, and answers agents when you let it."
     },
     "composer": {
-      "placeholder": "Message the Orchestrator…",
+      "placeholder": "Ask the Orchestrator…",
       "notSetUp": "The Orchestrator can't answer yet: choose a Claude Code or Codex connection and a model for it.",
       "setUp": "Set up the Orchestrator",
       "readable": "Conversations stay readable; you can send once it is set up.",
@@ -440,7 +440,7 @@
         "after": "→ {{after}}",
         "afterUnreported": "{{before}} → size comes with the next reply"
       },
-      "placeholderCompacting": "Message the Orchestrator — send it once compacting ends…",
+      "placeholderCompacting": "Ask the Orchestrator — send it once compacting ends…",
       "sendWaits": "The conversation is being compacted: send once it's done.",
       "notStarted": "The conversation wasn't compacted"
     },
@@ -511,7 +511,7 @@
         "stoppedAtLimit": "{{task}} stopped at a limit ↗"
       },
       "failed": "Nothing was watched",
-      "personOnly": "Only you can start watching from the composer: a command sent by automation is not applied. The chips and the order stay.",
+      "personOnly": "Only you can start watching from the composer: a command sent by automation is not applied. The badge and your message stay.",
       "dismiss": "Dismiss",
       "picker": {
         "count": "{{shown}} of {{total}}",
@@ -521,7 +521,7 @@
         "ledIn": "Led in «{{title}}» ↗",
         "ledInUnnamed": "Led in another conversation ↗",
         "unreadable": "The tasks of {{project}} can't be read",
-        "unreadableNote": "{{reason}} Nothing was added; the chips you have stay.",
+        "unreadableNote": "{{reason}} Nothing was added; the badge keeps what you chose.",
         "tryAgain": "Try again"
       },
       "modules": {

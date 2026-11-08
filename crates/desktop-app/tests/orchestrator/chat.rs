@@ -55,7 +55,7 @@ fn orchestrator_answers_a_message_and_keeps_the_new_conversation() {
   assert!(meta.starts_with("· today "), "when it started, after the title: {meta}");
   assert_eq!(
     screen.text("orchestrator-input"),
-    "Message the Orchestrator…",
+    "Ask the Orchestrator…",
     "the draft is done with: the field shows its placeholder"
   );
   let answer = screen.text(&format!("orchestrator-answer-{turn}"));

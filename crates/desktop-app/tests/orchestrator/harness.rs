@@ -331,7 +331,7 @@ the agent logged: {agent}"
     self.until("the composer to be free", |screen| {
       screen
         .text("orchestrator-input")
-        .starts_with("Message the Orchestrator")
+        .starts_with("Ask the Orchestrator")
     });
     self.set("orchestrator-input", text);
     self.click("orchestrator-input");
