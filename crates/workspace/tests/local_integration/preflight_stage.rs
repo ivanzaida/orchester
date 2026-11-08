@@ -6,7 +6,7 @@ use std::{fs, path::Path};
 
 use orchester_core::integration::{PreflightCause, PreflightStage, local::LocalError};
 use orchester_exec::{local_git::IntegrationLease, programs::Programs};
-use orchester_workspace::tasks::integration::{IntegrationProblem, merge_in};
+use orchester_workspace::tasks::integration::{IntegrationProblem, cause_words, merge_in};
 
 use super::support::{Fixture, git};
 
@@ -181,4 +181,24 @@ fn preflight_stage_git_metadata_refuses_borrowed_objects() {
 
 fn path_text(path: &Path) -> String {
   path.to_str().expect("a UTF-8 test path").replace('\\', "/")
+}
+
+/// Git programs that had not stopped in time refuse the merge in plain words with what to do, not in the words of the
+/// process tracking, and an attempt keeps those words' key for its page to say.
+#[test]
+fn preflight_stage_programs_not_proved_stopped_are_told_in_plain_words() {
+  let refusal = preflight(
+    PreflightStage::CheckoutIdentity,
+    PreflightCause::State(LocalError::ProcessUncertain),
+  );
+  assert_eq!(refusal.message("").key, "localIntegration.preflight.processUncertain");
+  assert_eq!(
+    cause_words(&PreflightCause::State(LocalError::ProcessUncertain)),
+    "localIntegration.preflight.processUncertainCause"
+  );
+  assert_eq!(
+    cause_words(&PreflightCause::Held),
+    "held by another operation",
+    "another cause is kept as it is"
+  );
 }

@@ -259,7 +259,7 @@ fn composer_a_paused_run_offers_its_second_way_in_the_send_menu() {
     menu.contains("Send without resuming") && menu.contains("Waits until you resume the run"),
     "{menu}"
   );
-  assert!(menu.contains("Ctrl+Enter"), "{menu}");
+  assert!(!menu.contains("Ctrl+Enter"), "no key cap in the menu: {menu}");
   let width = window
     .tree
     .get_element_by_id_mut("composer-send-menu")

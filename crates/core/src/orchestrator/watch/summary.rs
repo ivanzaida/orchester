@@ -1,5 +1,5 @@
 //! What a subscription that ended by itself leaves in its conversation (ORC-764): the line that says why it ended
-//! (*Every task of Mobile release is Done — watching ended*) and, with *Let the Orchestrator answer agents* on, the one
+//! (*Every task of Mobile release is Done — watching ended*) and, with *Let the Orchestrator drive* on, the one
 //! Orchestrator turn it starts by itself to write the summary of its module or task. That turn changes nothing, as a
 //! daily report's does.
 
@@ -26,7 +26,7 @@ pub struct WatchSummary {
   pub since: Timestamp,
   /// The module's page or the task's Summary.
   pub link: String,
-  /// It starts one Orchestrator turn by itself, which writes the summary: *Let the Orchestrator answer agents* was on
+  /// It starts one Orchestrator turn by itself, which writes the summary: *Let the Orchestrator drive* was on
   /// and the Orchestrator had what it runs on when it was kept.
   #[serde(default, skip_serializing_if = "std::ops::Not::not")]
   pub automatic: bool,

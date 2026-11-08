@@ -10,6 +10,7 @@
 #[allow(dead_code, reason = "the seed's helpers serve every scenario; these tests seed one")]
 mod kontur;
 mod layout;
+mod merged;
 mod retries;
 #[path = "../support/mod.rs"]
 mod support;

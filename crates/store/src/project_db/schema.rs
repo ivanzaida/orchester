@@ -2,6 +2,7 @@
 //! migrations live in modules of their own, named after what they add.
 
 mod agent_accounts;
+mod agent_event_kinds;
 mod agent_files;
 mod agent_slots;
 mod api_providers;
@@ -102,6 +103,7 @@ mod stuck_runs;
 mod task_edits;
 mod task_groups;
 mod task_identities;
+mod task_pipeline_pin;
 mod team_delivery;
 mod team_delivery_waits;
 mod team_operations;

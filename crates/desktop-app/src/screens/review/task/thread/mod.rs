@@ -2,10 +2,10 @@
 //! from the diff's start past the numbers and the sign and 16 from its end, a box on `surface_raised` in its kind's
 //! stroke (a comment's `info`, a question's `success`), radius 6. Its head, 30 high on `surface_panel`, 14 at its
 //! sides: the kind's glyph and word in its color, the lines in Geist Mono 12 `text_muted`, then its state's tag and
-//! what can be done now (*Edit* and *Delete* while a comment is not sent, *Ask again* and *Resolve* once an answer
-//! ended, *Reply* and *Resolve* once a comment was addressed). Its messages follow ([`messages`]). Outdated threads
-//! fold into one line that opens them (*N outdated*), a resolved thread into a line of its own; an opened resolved
-//! thread can be reopened. The comment box is drawn by [`super::composer`].
+//! what can be done now (*Edit* and *Delete* while a comment is not sent, *Reply*, *Ask again* and *Resolve* once an
+//! answer ended, *Reply* and *Resolve* once a comment was addressed). Its messages follow ([`messages`]). Outdated
+//! threads fold into one line that opens them (*N outdated*), a resolved thread into a line of its own; an opened
+//! resolved thread can be reopened. The comment box is drawn by [`super::composer`].
 
 mod look;
 mod messages;
@@ -23,6 +23,7 @@ use lurq::{
 };
 use orchester_core::{
   conversation::MessageBody,
+  id::ReviewThreadId,
   review::{Said, ThreadKind, ThreadState},
 };
 use orchester_workspace::tasks::review_threads::read::ThreadView;
@@ -109,7 +110,7 @@ fn card(ctx: &mut Ctx, env: &Env, view: &ThreadView) -> Element {
     .into()
 }
 
-/// The box of a reply under an addressed comment, while it is open.
+/// The box of a reply under an answered question or an addressed comment, while it is open.
 fn replying(ctx: &mut Ctx, env: &Env, view: &ThreadView) -> Option<Element> {
   let reply = InThread::FollowUp(view.thread.id());
   (env.state.in_thread.get().0 == Some(reply)).then(|| {
@@ -166,25 +167,29 @@ fn actions(ctx: &mut Ctx, env: &Env, view: &ThreadView) -> Vec<Element> {
   match &view.state {
     ThreadState::NotSent | ThreadState::CouldNotSend(_) => unsent(ctx, env, view),
     ThreadState::Answered | ThreadState::AnswerStopped => vec![
+      reply(ctx, env, &id, thread),
       ask_again(ctx, env, view, (&format!("{id}-ask-again"), ButtonKind::Ghost)),
       resolve(ctx, env, (&id, thread), true),
     ],
-    ThreadState::Addressed { .. } => {
-      let state = env.state.clone();
-      let reply = ActionButton::new(
-        format!("{id}-reply"),
-        ButtonKind::Ghost,
-        ctx.t("review_page.thread.reply"),
-      )
-      .icon(Icon::Reply)
-      .snug()
-      .on_click(move || state.open_in_thread(InThread::FollowUp(thread), String::new()));
-      vec![reply.into(), resolve(ctx, env, (&id, thread), true)]
-    }
+    ThreadState::Addressed { .. } => vec![reply(ctx, env, &id, thread), resolve(ctx, env, (&id, thread), true)],
     ThreadState::Outdated { .. } => vec![resolve(ctx, env, (&id, thread), true)],
     ThreadState::Resolved => vec![resolve(ctx, env, (&id, thread), false)],
     _ => Vec::new(),
   }
+}
+
+/// *Reply*: opens the box under the thread to write its next words.
+fn reply(ctx: &Ctx, env: &Env, id: &str, thread: ReviewThreadId) -> Element {
+  let state = env.state.clone();
+  ActionButton::new(
+    format!("{id}-reply"),
+    ButtonKind::Ghost,
+    ctx.t("review_page.thread.reply"),
+  )
+  .icon(Icon::Reply)
+  .snug()
+  .on_click(move || state.open_in_thread(InThread::FollowUp(thread), String::new()))
+  .into()
 }
 
 /// *Edit* and *Delete* of the comment not sent yet.
@@ -207,7 +212,7 @@ fn unsent(ctx: &mut Ctx, env: &Env, view: &ThreadView) -> Vec<Element> {
 }
 
 /// *Resolve* folds the thread; `false`: *Reopen* unfolds it.
-fn resolve(ctx: &Ctx, env: &Env, (id, thread): (&str, orchester_core::id::ReviewThreadId), resolve: bool) -> Element {
+fn resolve(ctx: &Ctx, env: &Env, (id, thread): (&str, ReviewThreadId), resolve: bool) -> Element {
   let (name, key, glyph) = if resolve {
     ("resolve", "review_page.thread.resolve", Icon::Check)
   } else {

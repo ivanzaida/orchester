@@ -2,16 +2,13 @@
 //! module design's events, *Parts · Lines* e): a run that made no progress for a while, a merge that hit conflicts,
 //! and the task a run waits on merged or closed without merging. Each is kept as a wait of the run
 //! ([`super::WaitKind::Event`]), so it goes to the conversation that last dealt with its task and starts a turn by
-//! itself as a wait does, unless the Orchestrator's own doing raised it ([`TaskEventKind::raised_by`]).
+//! itself as a wait does (ORC-909: whatever raised it).
 
 use std::num::NonZeroU32;
 
 use serde::{Deserialize, Serialize};
 
-use super::{
-  change::Change,
-  chat::{ActionOutcome, ChatAction, ChatEntry, EntryKind},
-};
+use super::chat::{ChatEntry, EntryKind};
 use crate::{
   id::{RunId, TaskId},
   time::Timestamp,
@@ -42,40 +39,6 @@ pub enum TaskEventKind {
     run: Option<RunId>,
   },
 }
-
-impl TaskEventKind {
-  /// Whether `action` raised this event of run `run`: carried out (by the chat itself, or applied by a person), its
-  /// own message, answer, continuation or resume of a run that then stalls, or its own merge of the waited task's
-  /// run, or cancel of it; for a merge conflict, its own merge of the run that was refused at conflicts
-  /// (`merge_failed`, which is how a merge that hits conflicts ends: one that went through cannot conflict). A run the
-  /// chat started that stalls is news to the conversation that leads its task, so a start does not count.
-  pub(super) fn raised_by(self, action: &ChatAction, run: RunId) -> bool {
-    let change = action.change.as_ref().map(|change| &change.change);
-    let done = action.outcome.answered();
-    match self {
-      Self::NoProgress { .. } => {
-        done
-          && (action.resumed == Some(run)
-            || change.is_some_and(|change| change.run() == Some(run) && change.carries_run_on()))
-      }
-      Self::MergeConflict => {
-        let conflicted = matches!(&action.outcome, ActionOutcome::Refused { code, .. } if code == MERGE_FAILED);
-        conflicted && matches!(change, Some(Change::Merge { run: merged, .. }) if *merged == run)
-      }
-      Self::WaitedMerged { run: waited, .. } => {
-        done && matches!(change, Some(Change::Merge { run: merged, .. }) if *merged == waited)
-      }
-      Self::WaitedClosed { run: waited, .. } => {
-        done
-          && waited
-            .is_some_and(|waited| matches!(change, Some(Change::Cancel { run: canceled, .. }) if *canceled == waited))
-      }
-    }
-  }
-}
-
-/// The code merge_run refuses with when merging a run stopped, at conflicts among others.
-const MERGE_FAILED: &str = "merge_failed";
 
 /// The no-progress event of a run whose last progress was at `last`, at `now`, by the project's setting `minutes`
 /// ([`super::WatchSettings::no_progress_minutes`]: `None` when it is off): one once the run made none for that many

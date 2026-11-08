@@ -35,7 +35,6 @@ pub(super) fn editor(ctx: &mut Ctx, answering: &Answering<'_>) -> Vec<Element> {
     ButtonKind::Secondary,
     ctx.t("cards.approval.message.back"),
   )
-  .key(ctx.t("cards.approval.inline.escape"))
   .in_form();
   let back = if matches!(open, Err(true)) {
     back.disabled()
@@ -49,7 +48,6 @@ pub(super) fn editor(ctx: &mut Ctx, answering: &Answering<'_>) -> Vec<Element> {
     ctx.t("cards.approval.inline.send"),
   )
   .icon(Icon::ArrowUp)
-  .key(ctx.t("cards.approval.inline.enter"))
   .in_form();
   let sending = match (&open, send.clone()) {
     (Err(true), _) => sending.loading(),

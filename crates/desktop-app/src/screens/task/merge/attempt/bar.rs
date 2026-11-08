@@ -92,7 +92,7 @@ impl AttemptScreen {
     standing: Standing,
     (actions, conflicts): (&Actions, Option<&Conflicts<'_>>),
   ) -> Option<Element> {
-    if standing == Standing::Merged {
+    if standing.is_merged() {
       return None;
     }
     let mut words = self.words(ctx, shown, standing);
@@ -163,7 +163,7 @@ impl AttemptScreen {
       Standing::GitStopped => simple(ctx, (glyph, color), "merges.page.bar.gitStoppedBody"),
       Standing::Interrupted => simple(ctx, (glyph, color), "merges.page.bar.interruptedBody"),
       Standing::Moved => simple(ctx, (glyph, color), "merges.page.bar.movedBody"),
-      Standing::NotMerged | Standing::Merged => {
+      Standing::NotMerged | Standing::Merged | Standing::MergedOutside => {
         let held = page.last().is_some_and(|last| last.attempt.cause() == Some(HELD));
         simple(
           ctx,

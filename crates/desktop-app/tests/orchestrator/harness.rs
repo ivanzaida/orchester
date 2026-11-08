@@ -29,7 +29,6 @@ use orchester_core::{
 };
 use orchester_exec::programs::Programs;
 use orchester_store::{AppDb, ProjectDb};
-use orchester_workspace::workspace::OrchestratorConsent;
 
 use super::{
   connections,
@@ -459,14 +458,14 @@ the agent logged: {agent}"
       .get()
   }
 
-  /// The person's *Let the Orchestrator publish drafts*, *answer agents* or *merge runs* (`consent`) in the project.
-  pub fn let_orchestrator(&self, consent: OrchestratorConsent, allowed: bool) {
+  /// The person's *Let the Orchestrator drive* in the project.
+  pub fn let_orchestrator_drive(&self, allowed: bool) {
     self
       .window
       .launch
       .workspace()
       .expect("the session started")
-      .set_orchestrator_allows(&self.root, consent, allowed)
+      .set_orchestrator_drives(&self.root, allowed)
       .expect("the person's choice is kept");
   }
 

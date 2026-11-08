@@ -84,10 +84,7 @@ fn ask(fixture: &mut Fixture, run: &mut Run) {
 fn turn(fixture: &Fixture) -> WaitTurn {
   let (root, programs) = (fixture.repo.path(), Programs::processes());
   let checks = check_merges_in((root, &programs), &HashSet::new()).expect("checked");
-  let switches = Switches {
-    answers: true,
-    ..Switches::default()
-  };
+  let switches = Switches { drives: true };
   follow_in((root, fixture.db.project().id(), &programs), &checks, (switches, true))
     .expect("followed")
     .turn

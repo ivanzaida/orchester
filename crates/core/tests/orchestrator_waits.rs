@@ -10,7 +10,7 @@ use orchester_core::{
     ActionOutcome, AgentWait, ChatAction, ChatEntry, EntryKind, TurnMode, TurnState, WaitKind,
     change::{Change, ProposedChange},
     instructions::{ProjectReads, system_prompt, wait_prompt},
-    wait::{dealt_with, raised_by_own},
+    wait::dealt_with,
   },
   run::Answerer,
   time::Timestamp,
@@ -28,7 +28,6 @@ fn wait(run: RunId, kind: WaitKind) -> AgentWait {
     place: None,
     others: 0,
     link: "/project/p/tasks/KON-12/conversation".to_owned(),
-    own: false,
     automatic: false,
     continuing: None,
     merging: None,
@@ -71,54 +70,6 @@ fn answered(run: RunId, message: bool, outcome: ActionOutcome) -> EntryKind {
     })),
     ..ChatAction::new(tool, Some("KON-12".to_owned()), outcome)
   })
-}
-
-#[test]
-fn orchestrator_wait_raised_by_its_own_answer_is_known() {
-  let run = RunId::generate();
-  assert!(
-    !raised_by_own(&[], &wait(run, WaitKind::Message)),
-    "nothing answered yet"
-  );
-  let sent = [entry(1, answered(run, true, ActionOutcome::Done))];
-  assert!(
-    raised_by_own(&sent, &wait(run, WaitKind::Message)),
-    "the chat sent the run's agents a message itself"
-  );
-  let applied = [entry(1, answered(run, false, ActionOutcome::Applied))];
-  assert!(
-    raised_by_own(&applied, &wait(run, WaitKind::Message)),
-    "the person applied the chat's answer"
-  );
-  let proposed = [entry(1, answered(run, false, ActionOutcome::Waits))];
-  assert!(
-    !raised_by_own(&proposed, &wait(run, WaitKind::Message)),
-    "a proposal sent nothing"
-  );
-  let other = RunId::generate();
-  assert!(
-    !raised_by_own(&sent, &wait(other, WaitKind::Message)),
-    "another run's answer raises nothing here"
-  );
-}
-
-#[test]
-fn orchestrator_wait_after_a_newer_wait_of_the_run_is_not_its_own() {
-  let run = RunId::generate();
-  let entries = [
-    entry(1, answered(run, true, ActionOutcome::Done)),
-    entry(
-      2,
-      EntryKind::Wait {
-        wait: wait(run, WaitKind::Message),
-        turn: None,
-      },
-    ),
-  ];
-  assert!(
-    !raised_by_own(&entries, &wait(run, WaitKind::Message)),
-    "the agent asked again after the chat's answer; the next wait follows that one, not the answer"
-  );
 }
 
 /// An action of tool `tool` on task `task`, done.
@@ -227,8 +178,8 @@ fn orchestrator_wait_prompt_names_the_wait_and_the_rules() {
     }
   }
   assert!(
-    wait_prompt(&wait(run, WaitKind::Plan)).contains("a plan's decision is the person's"),
-    "a plan stays the person's"
+    wait_prompt(&wait(run, WaitKind::Plan)).contains("a plan's decision follows decide_plan's rules"),
+    "a plan follows decide_plan's rules"
   );
 }
 
@@ -240,12 +191,11 @@ fn orchestrator_system_prompt_answers_only_what_follows_plainly_and_merges_only_
     "only when the answer follows plainly from the task's brief and criteria, the project's docs and AGENTS.md, or \
      what the person already said in this chat",
     "Otherwise tell the person what the agent asks, with its options and your recommendation",
-    "Let the Orchestrator answer agents",
-    "Merge a run only when the person asked in this chat for that run's merge",
-    "Let the Orchestrator merge runs",
+    "Let the Orchestrator drive",
+    "merge a run when the person asked for its merge",
     "needs_decision or merge_failed",
-    "Always tell the person what you answered, sent or merged, with its link.",
-    "You never approve tool requests, decide plans",
+    "Always tell the person what you answered, sent, decided or merged, with its link.",
+    "Approving tool requests (decide_approval) and deciding plans (decide_plan) follow those tools' rules",
   ] {
     assert!(prompt.contains(rule), "the system prompt says: {rule}");
   }

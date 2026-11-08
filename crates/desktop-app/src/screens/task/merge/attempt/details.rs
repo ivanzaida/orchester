@@ -69,11 +69,11 @@ pub(super) fn details(ctx: &Ctx, page: &AttemptPage, status: &str) -> String {
   );
   if let Some(base) = &page.run.base {
     let into = match &page.into_head {
-      Some(head) => ctx.t_args(
+      Some(head) if !page.is_merged() => ctx.t_args(
         "merges.page.properties.intoValue",
         [("branch", base.as_str()), ("revision", head.as_str())],
       ),
-      None => base.as_str().into(),
+      _ => base.as_str().into(),
     };
     lines.push(ctx.t_args("merges.page.details.into", [("into", into)]).to_string());
   }

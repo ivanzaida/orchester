@@ -45,7 +45,7 @@ again later for their own rows (ORC-336 Rows 13–14). The 200 px gap under `huj
   ORC-323's toolbar at the right of the name row: Copy and …. The … menu holds *Rewind to here* and *Fork from here* on
   every message. Event lines, digests and cards have none.
 - **Edit.** On any of your messages: *Edit*, a double-click on the bubble, or ↑ in an empty composer for your last message.
-  The bubble becomes a field in place. Ctrl Enter sends and Esc cancels. While you edit, the messages that sending would
+  The bubble becomes a field in place. Ctrl Enter sends and Esc cancels (2026-11-08, ORC-910: the app draws no key caps for them, as for every key badge in a button or beside a send control). While you edit, the messages that sending would
   drop are dimmed under a line that counts them. The field's foot says the same.
 - **Drop confirmation.** If messages follow, *Send* opens the dialog. The title gives the count. The lines say how many are
   yours and how many are the Orchestrator's, name what stays, and point to Fork. *Drop {n} and send* is the primary

@@ -1,9 +1,10 @@
 //! How a run that waits for a person's decision goes on, which the Orchestrator's agent asks for with `continue_run`
-//! (`docs/design/orchestrator-toolset.md`, "Decisions" 5): only one more retry (`allow_retry`), a return to an
-//! earlier agent step with a note (`return_to`), or, for a run whose merge stopped at conflicts, *Ask an agent to
-//! resolve* (`resolve_conflicts`), checked as the tool checks them and always proposed to the person, who applies it
-//! through the same tool. Raising limits or budgets, resuming after the daily budget and accepting a step stay the
-//! person's: the chat's call is refused.
+//! (`docs/design/orchestrator-toolset.md`, "Decisions" 5): one more retry (`allow_retry`), a return to an earlier
+//! agent step with a note (`return_to`), or, for a run whose merge stopped at conflicts, *Ask an agent to resolve*
+//! (`resolve_conflicts`), checked as the tool checks them and kept as a change: proposed to the person, who applies it
+//! through the same tool, while the chat does not drive, and carried out by the chat itself while it does. Raising
+//! limits or budgets, resuming after the daily budget and accepting a step are never cards: while the chat drives its
+//! call goes to the tool as it is, and while it does not it is refused as the person's.
 
 use std::path::Path;
 
@@ -85,6 +86,19 @@ pub(super) fn continue_change(
     choice,
   };
   Ok((ProposedChange { subject, change }, task))
+}
+
+/// Whether `continue_run` with `arguments` takes a choice a card can carry ([`continue_change`]); any other choice,
+/// or arguments that do not parse, is the tool's to carry out or refuse.
+pub(in crate::orchestrator) fn kept_as_change(arguments: &JsonObject) -> bool {
+  serde_json::from_value::<ContinueRun>(Value::Object(arguments.clone())).is_ok_and(|asked| {
+    matches!(
+      asked.choice,
+      app_mcp::ContinueChoice::AllowRetry
+        | app_mcp::ContinueChoice::ReturnTo { .. }
+        | app_mcp::ContinueChoice::ResolveConflicts { .. }
+    )
+  })
 }
 
 /// A choice the chat may not propose: it is the person's.

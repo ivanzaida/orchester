@@ -6,7 +6,7 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 
-use super::{IntegrationError, LocalIntegration};
+use super::{IntegrationError, LocalIntegration, settle::settled};
 
 struct Journal {
   root: PathBuf,
@@ -42,9 +42,12 @@ impl LocalIntegration {
       && !process.finished
     {
       let identity = process.identity.ok_or(LocalError::Reconcile)?;
-      if !orchester_exec::local_git::family::reconcile_stopped(&identity)? {
-        return Err(LocalError::ProcessUncertain.into());
-      }
+      settled(
+        || match orchester_exec::local_git::family::reconcile_stopped(&identity)? {
+          true => Ok(()),
+          false => Err(LocalError::ProcessUncertain.into()),
+        },
+      )?;
       // Parent absence alone never reconciles descendants. Legacy receipts stay visibly uncertain.
       self.ensure_authorized()?;
       self.db.finish_local_process(self.run.id(), process.sequence)?;

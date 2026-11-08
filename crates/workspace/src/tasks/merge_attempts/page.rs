@@ -15,7 +15,7 @@ use orchester_core::{
   merge_queue::{Left, QueueState},
   project::TaskKey,
   revision::Revision,
-  run::{BranchName, Run, RunNumber},
+  run::{BranchName, Run, RunNumber, RunStatus},
   store::{MergeStore, ResourceStore, RunStore},
 };
 use orchester_exec::programs::Programs;
@@ -27,7 +27,12 @@ use super::{
 };
 use crate::{
   merge_queue::{BaseState, checkout_base},
-  tasks::{changes::GIT, data::ProjectTasks, detail::run_store_error},
+  tasks::{
+    changes::GIT,
+    data::ProjectTasks,
+    delivery::{self, Delivery},
+    detail::run_store_error,
+  },
 };
 
 /// One run's merge attempts and what its page says beside them.
@@ -48,6 +53,9 @@ pub struct AttemptPage {
   pub attempts: Vec<RecordedAttempt>,
   /// The run's merge, once recorded.
   pub merge: Option<RunMerge>,
+  /// What became of the run's work when Orchester recorded no merge of it: merged into its base branch outside
+  /// Orchester (a fast-forward by a person, say), as git proves it, the way `get_run`'s `merge` tells it.
+  pub delivery: Delivery,
   /// Whether Orchester tries the merge again by itself, while its last attempt did not land.
   pub retrying: Option<Retrying>,
   /// The merge queue stopped delivering the run until someone acts on what stopped it: *Try again* puts it back in
@@ -64,6 +72,11 @@ impl AttemptPage {
   /// The attempt the page is about: the last one.
   pub fn last(&self) -> Option<&RecordedAttempt> {
     self.attempts.first()
+  }
+
+  /// Whether the run's work is in its base branch: merged and recorded by Orchester, or merged outside it.
+  pub fn is_merged(&self) -> bool {
+    self.merge.is_some() || self.delivery.merged_into().is_some()
   }
 }
 
@@ -94,10 +107,15 @@ pub fn attempt_page(
   };
   let attempts = db.merge_attempts(run.id())?;
   let merge = db.run_merge(run.id())?;
+  let delivery = if merge.is_none() && run.status() == &RunStatus::Succeeded {
+    delivery::of_run(programs, root, &run)
+  } else {
+    Delivery::Waiting
+  };
   let last = attempts
     .first()
     .map(|last| last.attempt.outcome())
-    .filter(|outcome| merge.is_none() && !outcome.landed());
+    .filter(|outcome| merge.is_none() && !outcome.landed() && delivery.merged_into().is_none());
   let retrying = match last {
     Some(_) => retrying(&db, &run)?,
     None => None,
@@ -125,6 +143,7 @@ pub fn attempt_page(
     checkout: checkout_base(root, programs),
     attempts,
     merge,
+    delivery,
     retrying,
     queue_stopped,
     awaiting_approval,

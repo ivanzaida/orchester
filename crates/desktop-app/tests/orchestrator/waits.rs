@@ -15,11 +15,11 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
-use orchester_workspace::{tasks::outside::Outside, workspace::OrchestratorConsent};
+use orchester_workspace::tasks::outside::Outside;
 
 use super::{
   harness::{Orchestrator, Setup},
-  proposal::{outcomes, proposal_card},
+  proposal::outcomes,
 };
 
 /// The waits of the project's latest conversation, each with the message its turn was started under.
@@ -64,7 +64,7 @@ fn waits_for_message(screen: &Orchestrator, key: &str) -> bool {
 #[test]
 fn orchestrator_wait_turn_is_answered_to_its_end() {
   let mut screen = Orchestrator::new(Setup::Ready);
-  screen.let_orchestrator(OrchestratorConsent::AnswerAgents, true);
+  screen.let_orchestrator_drive(true);
   let delivery = screen.delivery();
   let key = screen.draft_with(
     delivery,
@@ -73,13 +73,11 @@ fn orchestrator_wait_turn_is_answered_to_its_end() {
   );
   screen.go(OrchestratorChat::New);
   screen.send(&format!(r#"Call run_task {{"project":"Kontur","key":"{key}"}}"#));
-  screen.until("the proposed start", |screen| {
-    outcomes(screen).first().is_some_and(|outcome| outcome.is_proposed())
+  // While the chat drives, `run_task` starts the run at once: no card waits for the person.
+  screen.until("the started run", |screen| {
+    outcomes(screen).first().is_some_and(|outcome| !outcome.is_proposed())
   });
   screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
-  let card = proposal_card(&screen);
-  screen.until("its buttons", |screen| screen.exists(&format!("{card}-start")));
-  screen.click(&format!("{card}-start"));
   screen.until("the step waiting for a message", |screen| {
     waits_for_message(screen, &key)
   });

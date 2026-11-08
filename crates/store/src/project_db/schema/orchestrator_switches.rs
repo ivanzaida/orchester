@@ -15,3 +15,11 @@ CREATE TABLE orchestrator_switches (
 ) STRICT;
 INSERT INTO orchestrator_switches (id) VALUES (1);
 ";
+
+/// The six switches became one (ORC-909): a project that let the Orchestrator answer agents lets it drive, one that
+/// did not (or never said) does not, and takes the application-wide value once it is read. The six old columns stay in
+/// the table unread: SQLite cannot drop a column a CHECK names without rebuilding the table.
+pub(super) const DRIVE_MIGRATION: &str = r"
+ALTER TABLE orchestrator_switches ADD COLUMN drives INTEGER CHECK (drives IN (0, 1));
+UPDATE orchestrator_switches SET drives = answers_agents WHERE id = 1;
+";

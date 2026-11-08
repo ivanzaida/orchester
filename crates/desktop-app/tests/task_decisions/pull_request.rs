@@ -265,14 +265,9 @@ fn decision_create_pull_request_pushes_and_opens_a_draft_review_pr_opens_it() {
   page.until_says("task-pull-request-opened", "Pull request #143 opened as a draft.");
   assert!(!page.in_more("task-create-pull-request"), "a run has one pull request");
   assert!(!page.locked("task-review-pull-request"));
-  let keys = if cfg!(target_os = "macos") {
-    "⌘↵"
-  } else {
-    "Ctrl+Enter"
-  };
   assert_eq!(
     page.text("task-ready-actions"),
-    format!("Merge {keys} Review changes Close without merging Review PR"),
+    "Merge Review changes Close without merging Review PR",
     "Review PR, a fourth action, once the run has a pull request"
   );
   let run = latest_run(&page, READY);

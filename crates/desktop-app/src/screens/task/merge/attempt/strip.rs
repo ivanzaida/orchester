@@ -14,8 +14,12 @@ use crate::{
   ui::icon::{Icon, icon},
 };
 
-/// The strip under `id`: `glyph` in `color`, `title` and `words`.
-pub(super) fn strip(id: &str, (glyph, color): (Icon, PaletteColor), (title, words): (&str, &str)) -> Element {
+/// The strip under `id`, its words under `words_id`: `glyph` in `color`, `title` and `words`.
+pub(super) fn strip(
+  (id, words_id): (&str, &str),
+  (glyph, color): (Icon, PaletteColor),
+  (title, words): (&str, &str),
+) -> Element {
   Row::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
@@ -43,7 +47,7 @@ pub(super) fn strip(id: &str, (glyph, color): (Icon, PaletteColor), (title, word
         )
         .child(
           Text::new(words)
-            .id("merge-attempt-explanation")
+            .id(words_id.to_owned())
             .variant(AttemptText::Explanation.role())
             .width(Dimension::Pct(100.0)),
         ),

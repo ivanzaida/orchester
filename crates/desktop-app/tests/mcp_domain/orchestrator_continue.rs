@@ -24,7 +24,6 @@ use orchester_workspace::{
     proposal::{self, Decision},
     tools::ChatScope,
   },
-  workspace::OrchestratorConsent,
 };
 use serde_json::{Value, json};
 
@@ -95,18 +94,7 @@ fn chat_continue_is_a_proposal_the_person_dismisses() {
     run.status()
   );
   let scope = chat(&served, &mut db);
-  // No switch lets the chat decide how a run that waits for a decision goes on, not even continuing interrupted runs.
-  for consent in [
-    OrchestratorConsent::AnswerAgents,
-    OrchestratorConsent::MergeRuns,
-    OrchestratorConsent::ContinueInterrupted,
-  ] {
-    served
-      .services()
-      .workspace
-      .set_orchestrator_allows(&scope.root, consent, true)
-      .expect("the person turned it on");
-  }
+  // While the chat does not drive, it only proposes how a run that waits for a decision goes on.
   let number = run.number().get().to_string();
   let told = chat_call(&mut served, &scope, "continue_run", retry(&number)).expect("proposed");
   assert_eq!(told["waits_for_person"], true, "{told}");

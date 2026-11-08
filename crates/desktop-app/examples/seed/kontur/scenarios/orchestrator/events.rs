@@ -154,7 +154,6 @@ fn event(ran: &Ran, (kind, at): (TaskEventKind, Timestamp), name: &str) -> Kept 
       agent: None,
       link: format!("/tasks/{task}"),
       task,
-      own: false,
       automatic: true,
       continuing: None,
       merging: None,

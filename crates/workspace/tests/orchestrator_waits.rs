@@ -101,10 +101,7 @@ fn project(fixture: &Fixture) -> ProjectId {
 fn follow(fixture: &Fixture, answers: bool) -> Followed {
   let (root, programs) = (fixture.repo.path(), Programs::processes());
   let checks = check_merges_in((root, &programs), &HashSet::new()).expect("checked");
-  let switches = Switches {
-    answers,
-    ..Switches::default()
-  };
+  let switches = Switches { drives: answers };
   follow_at(
     (root, project(fixture), &programs),
     &checks,
@@ -305,7 +302,7 @@ fn answered_by_chat(fixture: &mut Fixture, run: &Run) -> Chat {
 }
 
 #[test]
-fn orchestrator_waits_raised_by_its_own_answer_start_no_turn() {
+fn orchestrator_waits_raised_by_its_own_answer_start_a_turn_while_it_drives() {
   let mut fixture = Fixture::new();
   ready(&mut fixture);
   let mut run = working(&mut fixture);
@@ -313,13 +310,13 @@ fn orchestrator_waits_raised_by_its_own_answer_start_no_turn() {
   // The agent got the chat's message and asks again.
   ask(&mut fixture, &mut run);
   let followed = follow(&fixture, true);
-  assert!(followed.kept && followed.turn.is_none(), "{followed:?}");
+  assert!(followed.kept && followed.turn.is_some(), "{followed:?}");
   let (wait, turn) = &waits(&fixture)[0];
-  assert!(wait.own && !wait.automatic && turn.is_none(), "{wait:?}");
+  assert!(wait.automatic && turn.is_some(), "{wait:?}");
 }
 
 #[test]
-fn orchestrator_waits_raised_by_its_own_answer_in_an_older_conversation_start_no_turn() {
+fn orchestrator_waits_raised_by_its_own_answer_in_an_older_conversation_start_a_turn_there() {
   let mut fixture = Fixture::new();
   ready(&mut fixture);
   let mut run = working(&mut fixture);
@@ -338,13 +335,13 @@ fn orchestrator_waits_raised_by_its_own_answer_in_an_older_conversation_start_no
     .expect("ended");
   ask(&mut fixture, &mut run);
   let followed = follow(&fixture, true);
-  assert!(followed.kept && followed.turn.is_none(), "{followed:?}");
+  assert_eq!(followed.turn.map(|turn| turn.chat), Some(older.id()), "{followed:?}");
   assert!(
     waits_in(&fixture, newer.id()).is_empty(),
     "the newer conversation never dealt with ORC-1"
   );
   let (wait, turn) = &waits_in(&fixture, older.id())[0];
-  assert!(wait.own && !wait.automatic && turn.is_none(), "{wait:?}");
+  assert!(wait.automatic && turn.is_some(), "{wait:?}");
 }
 
 #[test]
@@ -353,10 +350,7 @@ fn orchestrator_waits_start_a_turn_only_once_the_runner_attached() {
   ready(&mut fixture);
   let mut run = working(&mut fixture);
   ask(&mut fixture, &mut run);
-  let answering = Switches {
-    answers: true,
-    ..Switches::default()
-  };
+  let answering = Switches { drives: true };
   let detached = follow_in(
     (fixture.repo.path(), project(&fixture), &Programs::processes()),
     &MergeChecks::default(),
@@ -550,7 +544,7 @@ fn orchestrator_waits_start_their_turn_in_their_conversation_while_another_think
 }
 
 #[test]
-fn orchestrator_waits_raised_by_its_own_answer_start_no_turn_in_the_conversation_that_dealt_with_them_since() {
+fn orchestrator_waits_raised_by_its_own_answer_start_a_turn_in_the_conversation_that_dealt_with_them_since() {
   let mut fixture = Fixture::new();
   ready(&mut fixture);
   let mut run = working(&mut fixture);
@@ -559,14 +553,11 @@ fn orchestrator_waits_raised_by_its_own_answer_start_no_turn_in_the_conversation
   let since = acted_on(&mut fixture, "ORC-1", 40);
   ask(&mut fixture, &mut run);
   let followed = follow(&fixture, true);
-  assert!(followed.kept && followed.turn.is_none(), "{followed:?}");
+  assert_eq!(followed.turn.map(|turn| turn.chat), Some(since.id()), "{followed:?}");
   assert!(
     waits_in(&fixture, answering.id()).is_empty(),
     "the newer conversation dealt with ORC-1 last"
   );
   let (wait, turn) = &waits_in(&fixture, since.id())[0];
-  assert!(
-    wait.own && !wait.automatic && turn.is_none(),
-    "the answer in the other conversation raised it: {wait:?}"
-  );
+  assert!(wait.automatic && turn.is_some(), "{wait:?}");
 }

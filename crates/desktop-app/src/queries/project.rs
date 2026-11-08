@@ -16,7 +16,6 @@ use orchester_workspace::{
   project_settings::{self as settings_store, RepositoryRead, Settings},
   secrets::data::ProjectSecrets,
   sources::{check::Place, listed::Listed, project as sources},
-  workspace::OrchestratorConsent,
 };
 
 use super::Session;
@@ -65,15 +64,11 @@ pub async fn estimates(session: Session, root: PathBuf) -> Result<bool, Message>
   .await
 }
 
-/// A switch of what the project's Orchestrator may do itself (Orchestrator).
+/// Whether the project lets its Orchestrator drive (Orchestrator).
 #[lurq::query(stale_time = "24h", gc_time = "24h")]
-pub async fn orchestrator_allows(
-  session: Session,
-  root: PathBuf,
-  consent: OrchestratorConsent,
-) -> Result<bool, Message> {
-  stored((session, root), "orchestrator switch", move |services, root| {
-    services.workspace.orchestrator_allows(root, consent)
+pub async fn orchestrator_drives(session: Session, root: PathBuf) -> Result<bool, Message> {
+  stored((session, root), "orchestrator switch", |services, root| {
+    services.workspace.orchestrator_drives(root)
   })
   .await
 }

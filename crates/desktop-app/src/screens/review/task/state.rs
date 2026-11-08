@@ -116,6 +116,8 @@ pub(super) struct ReviewState {
   pub hovered: Arc<Mutex<Hovered>>,
   pub in_thread: Signal<Held<Option<InThread>>>,
   pub in_thread_text: Signal<String>,
+  /// What a reply under a question's answer writes: a question again, unless the person chose a comment.
+  pub in_thread_kind: Signal<Held<ThreadKind>>,
   /// The field of the box inside a thread, which takes the focus when the box opens.
   pub in_thread_field: BoxField,
   /// Files folded or unfolded by hand, by path; the others fold once they are marked *Viewed*.
@@ -158,6 +160,7 @@ impl ReviewState {
       hovered: Arc::default(),
       in_thread: ctx.signal(Held(None)),
       in_thread_text: ctx.signal(String::new()),
+      in_thread_kind: ctx.signal(Held(ThreadKind::Question)),
       in_thread_field: BoxField::default(),
       folded: ctx.signal(Held(BTreeMap::new())),
       opened: ctx.signal(Held(BTreeSet::new())),
@@ -219,9 +222,11 @@ impl ReviewState {
     }
   }
 
-  /// Opens a box inside a thread with `text`; its field takes the focus.
+  /// Opens a box inside a thread with `text`, a question again unless the thread says otherwise; its field takes the
+  /// focus.
   pub fn open_in_thread(&self, what: InThread, text: String) {
     self.in_thread_text.set(text);
+    self.in_thread_kind.set(Held(ThreadKind::Question));
     self.in_thread_field.open();
     self.in_thread.set(Held(Some(what)));
   }

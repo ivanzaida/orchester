@@ -18,6 +18,7 @@ mod facts;
 pub(crate) mod head;
 mod left;
 pub(crate) mod lines;
+mod merged;
 pub(crate) mod read;
 mod reading;
 mod retry;
@@ -282,16 +283,21 @@ impl AttemptScreen {
     let watch = merging.then(|| watch::watch(ctx, page.run.run, &self.again));
     let conflicts = self.conflicts(shown, page);
     let bar = self.bar(ctx, shown, standing, (&actions, conflicts.as_ref()));
-    let what = if standing == Standing::Merged {
+    let what = if standing.is_merged() {
       "merges.page.whatHappened"
     } else {
       "merges.page.whatStopped"
     };
-    let strip = strip::strip(
-      "merge-attempt-what",
-      standing.strip_glyph(),
-      (&ctx.t(what), &standing::explanation(ctx, page, standing, shown.base())),
-    );
+    let later = merged::later(page, standing);
+    let strip = if later.is_some() {
+      merged::banner(ctx, page)
+    } else {
+      strip::strip(
+        ("merge-attempt-what", "merge-attempt-explanation"),
+        standing.strip_glyph(),
+        (&ctx.t(what), &standing::explanation(ctx, page, standing, shown.base())),
+      )
+    };
     let sections = self.sections(ctx, shown, standing, conflicts.as_ref());
     let mut elements = vec![
       head::wrapping_title(
@@ -385,6 +391,9 @@ impl AttemptScreen {
     if let (Standing::Conflicts, Some(conflicts)) = (standing, conflicts) {
       let review = shown.review(ctx);
       sections.push(conflicts.section(ctx, review));
+    }
+    if let Some(last) = merged::later(page, standing) {
+      sections.extend(merged::history(ctx, page, last, shown.base()));
     }
     if standing == Standing::LeftChanged && !page.left_changed.is_empty() {
       sections.push(left::section(ctx, &page.left_changed));

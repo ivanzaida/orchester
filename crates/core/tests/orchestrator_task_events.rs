@@ -1,16 +1,14 @@
 //! The Orchestrator chat follows events of its project's runs besides waits and ends (ORC-755): a run that made no
 //! progress for a while, by a pure rule that fires once per stall; a merge that hit conflicts; and the task a run
 //! waits on merged or closed without merging. Each is a wait entry with its own turn prompt, which carries the order of
-//! the conversation that leads the task; an event the Orchestrator's own doing raised starts no turn.
+//! the conversation that leads the task.
 
 use orchester_core::{
   id::{RunId, TaskId},
   orchestrator::{
-    ActionOutcome, AgentWait, ChatAction, ChatEntry, EntryKind, TaskEvent, TaskEventKind, WaitKind, WatchSettings,
-    change::{Change, ProposedChange},
+    AgentWait, ChatEntry, EntryKind, TaskEvent, TaskEventKind, WaitKind, WatchSettings,
     instructions::{event_prompt, wait_prompt},
     task_event::{no_progress, raised_stall},
-    wait::raised_by_own,
   },
   time::Timestamp,
 };
@@ -33,7 +31,6 @@ fn happened(run: RunId, kind: TaskEventKind) -> AgentWait {
     others: 0,
     agent: None,
     link: "/project/p/tasks/KON-41/summary".to_owned(),
-    own: false,
     automatic: false,
     continuing: None,
     merging: None,
@@ -56,29 +53,6 @@ fn kept(seq: i64, wait: &AgentWait) -> ChatEntry {
       turn: None,
     },
   )
-}
-
-/// The chat's `change`, by tool `tool`, gone as `outcome`.
-fn acted(tool: &str, change: Change, outcome: ActionOutcome) -> ChatEntry {
-  entry(
-    1,
-    EntryKind::Action(ChatAction {
-      change: Some(Box::new(ProposedChange {
-        subject: "Webhooks v2".to_owned(),
-        change,
-      })),
-      ..ChatAction::new(tool, Some("KON-41".to_owned()), outcome)
-    }),
-  )
-}
-
-fn merge(run: RunId) -> Change {
-  Change::Merge {
-    run,
-    number: 1,
-    checkpoint: None,
-    into: None,
-  }
 }
 
 fn stalled() -> TaskEventKind {
@@ -136,120 +110,6 @@ fn task_event_no_progress_raised_for_a_run_is_read_from_its_kept_events() {
 }
 
 #[test]
-fn task_event_raised_by_the_orchestrators_own_doing_starts_no_turn() {
-  let (run, waited) = (RunId::generate(), RunId::generate());
-  let task = TaskId::generate();
-  let message = Change::Message {
-    run,
-    number: 17,
-    text: "Go on.".to_owned(),
-    now: false,
-    then: None,
-    sent_as: None,
-  };
-  let cancel = |run| Change::Cancel { run, number: 1 };
-  let refused = |code: &str| ActionOutcome::Refused {
-    code: code.to_owned(),
-    reason: "Merging stopped at conflicts in src/hooks.rs.".to_owned(),
-  };
-  let cases = [
-    (
-      stalled(),
-      acted("send_message", message.clone(), ActionOutcome::Done),
-      true,
-    ),
-    (stalled(), acted("send_message", message, ActionOutcome::Waits), false),
-    (
-      TaskEventKind::MergeConflict,
-      acted("merge_run", merge(run), refused("merge_failed")),
-      true,
-    ),
-    (
-      TaskEventKind::MergeConflict,
-      acted("merge_run", merge(run), refused("needs_decision")),
-      false,
-    ),
-    (
-      TaskEventKind::MergeConflict,
-      acted("merge_run", merge(run), ActionOutcome::Dismissed),
-      false,
-    ),
-    (
-      TaskEventKind::MergeConflict,
-      acted("merge_run", merge(run), ActionOutcome::Done),
-      false,
-    ),
-    (
-      TaskEventKind::MergeConflict,
-      acted("merge_run", merge(waited), refused("merge_failed")),
-      false,
-    ),
-    (
-      TaskEventKind::WaitedMerged { task, run: waited },
-      acted("merge_run", merge(waited), ActionOutcome::Done),
-      true,
-    ),
-    (
-      TaskEventKind::WaitedMerged { task, run: waited },
-      acted("merge_run", merge(run), ActionOutcome::Done),
-      false,
-    ),
-    (
-      TaskEventKind::WaitedClosed {
-        task,
-        run: Some(waited),
-      },
-      acted("cancel_run", cancel(waited), ActionOutcome::Done),
-      true,
-    ),
-    (
-      TaskEventKind::WaitedClosed { task, run: None },
-      acted("cancel_run", cancel(waited), ActionOutcome::Done),
-      false,
-    ),
-  ];
-  for (kind, action, own) in cases {
-    assert_eq!(
-      raised_by_own(std::slice::from_ref(&action), &happened(run, kind)),
-      own,
-      "{kind:?} after {:?}",
-      action.kind
-    );
-  }
-}
-
-#[test]
-fn task_event_after_a_newer_wait_of_the_run_or_its_start_is_not_own() {
-  let run = RunId::generate();
-  let entries = [
-    acted(
-      "merge_run",
-      merge(run),
-      ActionOutcome::Refused {
-        code: "merge_failed".to_owned(),
-        reason: "Merging stopped at conflicts.".to_owned(),
-      },
-    ),
-    kept(2, &happened(run, TaskEventKind::MergeConflict)),
-  ];
-  assert!(
-    !raised_by_own(&entries, &happened(run, TaskEventKind::MergeConflict)),
-    "the conflict of a later merge follows the event kept since, not the chat's merge"
-  );
-  let started = [entry(
-    1,
-    EntryKind::Action(ChatAction {
-      started: Some(run),
-      ..ChatAction::new("run_task", Some("KON-41".to_owned()), ActionOutcome::Done)
-    }),
-  )];
-  assert!(
-    !raised_by_own(&started, &happened(run, stalled())),
-    "a run the chat started that stalls is news to the conversation that leads it"
-  );
-}
-
-#[test]
 fn task_event_prompt_says_what_happened_and_the_order_of_the_leading_conversation() {
   let run = RunId::generate();
   let task = TaskId::generate();
@@ -291,7 +151,7 @@ fn task_event_prompt_says_what_happened_and_the_order_of_the_leading_conversatio
     );
     assert!(unled.contains(says) && unled.contains(todo), "{kind:?}: {unled}");
     assert!(
-      unled.contains("Let the Orchestrator answer agents is on") && !unled.contains("leads the task"),
+      unled.contains("Let the Orchestrator drive is on") && !unled.contains("leads the task"),
       "{kind:?}: {unled}"
     );
   }

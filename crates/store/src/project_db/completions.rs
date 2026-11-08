@@ -26,8 +26,10 @@ impl ProjectDb {
     completion: &RunCompletion,
     report: Option<&RunArtifact>,
   ) -> Result<(), StoreError> {
-    let transaction = self.connection.transaction()?;
     let run = completion.run;
+    // Read before the write transaction, as a merge does (ORC-914).
+    let (task, effort) = super::task_effort::of_run(&self.connection, run)?;
+    let transaction = self.connection.transaction()?;
     let status = super::runs::stored_status(&transaction, run)?.ok_or(StoreError::RunNotFound(run))?;
     if completed(&transaction, run)? {
       return Err(StoreError::AlreadyCompleted(run));
@@ -36,7 +38,6 @@ impl ProjectDb {
       return Err(StoreError::NotCompletable(run));
     }
     record(&transaction, completion, report)?;
-    let task = task_of(&transaction, run)?;
     // A team run's completion is its own record: the team server keeps its task's status, and whether a completed
     // team run makes its task Done is open (D4).
     if !super::run_inputs::is_team_run(&transaction, run)? {
@@ -47,7 +48,7 @@ impl ProjectDb {
         completion.completed_at,
       )?;
     }
-    super::task_effort::record(&transaction, task, completion.completed_at)?;
+    super::task_effort::record(&transaction, task, &effort, completion.completed_at)?;
     transaction.commit()?;
     Ok(())
   }

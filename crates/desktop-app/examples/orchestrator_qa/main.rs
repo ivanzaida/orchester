@@ -162,12 +162,12 @@ fn main() -> Result<(), Box<dyn Error>> {
   let chosen = !matches!(state, State::NotReady | State::SettingsNoConnection);
   let prepared = data::prepare(root.path(), fakes, (chosen, state != State::SettingsNoConnection))?;
   if state == State::Changes {
-    // A profile draft that widens is proposed while the person lets the Orchestrator publish drafts: its card says so.
-    orchester_store::AppDb::open(&prepared.database)?.set_orchestrator_publishes_drafts(true)?;
+    // A profile draft that widens is refused while the person lets the Orchestrator drive: its card says so.
+    orchester_store::ProjectDb::open(&prepared.repo)?.set_orchestrator_drives(true)?;
   }
   if state == State::Git {
-    // As the person turned it on in Settings; the window's own switch takes only a person's click.
-    orchester_store::AppDb::open(&prepared.database)?.set_orchestrator_writes_git(true)?;
+    // As the person turned it on in Project settings; the window's own switch takes only a person's click.
+    orchester_store::ProjectDb::open(&prepared.repo)?.set_orchestrator_drives(true)?;
     let notes = prepared.repo.join("notes");
     std::fs::create_dir_all(&notes)?;
     std::fs::write(notes.join("qa.txt"), "Written for the Orchestrator's git QA.\n")?;

@@ -1,7 +1,7 @@
 //! The top card of a task page whose run waits to be merged (ORC-731; `Review · redesign`, Row 4: 01i `k9GBy`, 01j
 //! `k4C0Es`) in the app's real window, on the QA seed's `task-merge-card-*` scenarios (`examples/seed`): *Ready to
-//! merge* with Merge and its key cap, Review changes opening the run's review page and Close without merging, the
-//! header's Merge with the same cap, and ⌘↵ (Ctrl+Enter elsewhere) merging from another tab; a merge refused before Git
+//! merge* with Merge (no key cap), Review changes opening the run's review page and Close without merging, the
+//! header's Merge, and ⌘↵ (Ctrl+Enter elsewhere) merging from another tab; a merge refused before Git
 //! turns the card to *Not merged into main* with what stopped it, Try again and Open in Review to the attempt page, and
 //! the header to Not merged; conflicts offer Resolve, which opens the attempt page; Create pull request is in *More
 //! actions*. Needs `git`, as the seed does. `cargo test -p orchester-app --test task_merge_card task_merge_card`.
@@ -32,12 +32,6 @@ use crate::{
 const GIT_WORK: Duration = Duration::from_secs(60);
 /// The seeded task of every scenario, as the design names it.
 const TITLE: &str = "Add retry to webhook sender";
-/// The keys the cap shows on this platform.
-const KEYS: &str = if cfg!(target_os = "macos") {
-  "⌘↵"
-} else {
-  "Ctrl+Enter"
-};
 /// Why Merge waits while a merge waits in the run's worktree.
 const WAITS_RESOLVING: &str =
   "Merge waits while Orchester merges into the run's worktree for you to resolve its conflicts.";
@@ -187,7 +181,7 @@ fn task_merge_card_ready_offers_merge_review_changes_and_close() {
     format!("{} · every step passed · run {}", page.key, page.run.1.get())
   );
   assert_eq!(page.window.text("task-merge-label"), "Merge");
-  assert_eq!(page.window.text("task-merge-key"), KEYS);
+  assert!(!page.has("task-merge-key"), "no key cap in the button");
   assert_eq!(page.window.text("task-review-changes-label"), "Review changes");
   assert_eq!(
     page.window.text("task-close-without-merging-label"),
@@ -195,7 +189,7 @@ fn task_merge_card_ready_offers_merge_review_changes_and_close() {
   );
   assert_eq!(
     page.window.text("task-ready-actions"),
-    format!("Merge {KEYS} Review changes Close without merging"),
+    "Merge Review changes Close without merging",
     "the card draws exactly 01i's actions"
   );
   for gone in [
@@ -206,9 +200,9 @@ fn task_merge_card_ready_offers_merge_review_changes_and_close() {
   ] {
     assert!(!page.has(gone), "{gone} is not on the card");
   }
-  // The header's Merge carries the cap too, on the Summary as on every tab.
+  // The header's Merge is as plain as the card's, on the Summary as on every tab.
   assert_eq!(page.window.text("task-primary-merge-label"), "Merge");
-  assert_eq!(page.window.text("task-primary-merge-key"), KEYS);
+  assert!(!page.has("task-primary-merge-key"), "no key cap in the button");
   page.window.press("task-review-changes");
   let route = page.review_page();
   page.window.until("the run's review page", |window| {
@@ -281,7 +275,7 @@ fn task_merge_card_refused_says_why_and_opens_the_attempt_page() {
     "one line of what stopped it, as the attempt page says it: {body}"
   );
   assert_eq!(page.window.text("task-merge-label"), "Try again");
-  assert_eq!(page.window.text("task-merge-key"), KEYS);
+  assert!(!page.has("task-merge-key"), "no key cap in the button");
   assert_eq!(page.window.text("task-open-in-review-label"), "Open in Review");
   assert!(page.has("task-close-without-merging"));
   assert!(
@@ -290,7 +284,7 @@ fn task_merge_card_refused_says_why_and_opens_the_attempt_page() {
     page.window.text("task-status")
   );
   assert_eq!(page.window.text("task-primary-merge-label"), "Try again");
-  assert_eq!(page.window.text("task-primary-merge-key"), KEYS);
+  assert!(!page.has("task-primary-merge-key"), "no key cap in the button");
   page.window.until_within(GIT_WORK, "Properties' Merge row", |window| {
     window
       .texts("task-property-merge-label")
@@ -310,7 +304,7 @@ fn task_merge_card_refused_says_why_and_opens_the_attempt_page() {
 fn task_merge_card_conflicts_resolve_on_the_attempt_page() {
   let mut page = Page::open("task-merge-card-conflicts", "Conflicts with main");
   assert_eq!(page.window.text("task-merge-label"), "Resolve");
-  assert_eq!(page.window.text("task-merge-key"), KEYS);
+  assert!(!page.has("task-merge-key"), "no key cap in the button");
   assert_eq!(page.window.text("task-notice-body"), "Conflicts with main in 2 files.");
   assert!(page.window.text("task-status").starts_with("Not merged"));
   page.window.press("task-merge");

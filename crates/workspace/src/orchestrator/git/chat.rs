@@ -1,6 +1,7 @@
 //! The git tools in the chat: they work in the chat's own project only; a write reads the person's switch *Let the
-//! Orchestrator write with git* when it is called, and is refused in a turn nobody asked for (`person_only`, or
-//! `report_turn` in a day's report's turn); a proposal of what can lose work is a card in any turn. Every write and
+//! Orchestrator drive* when it is called, and is refused in a day's report's turn (`report_turn`) and, while the
+//! chat does not drive, in a turn nobody asked for (`person_only`); a proposal of what can lose work is a card in any
+//! turn. Every write and
 //! proposal is kept in the conversation as an action with what ran and what git said, so the person sees it; a read
 //! is not.
 
@@ -16,9 +17,8 @@ use super::{Called, Kind, Timeouts, call as call_git, command::refused};
 use crate::{
   app_mcp::{Services, ToolError, Translate, blocking},
   messages::Message,
-  orchestrator::{change, guard, keep, own_project::in_own_project, tools::ChatScope},
+  orchestrator::{acts::drives, change, guard, keep, own_project::in_own_project, tools::ChatScope},
   runner::Runners,
-  workspace::OrchestratorConsent,
 };
 
 /// Calls git tool `name`, a `kind` of tool, with `arguments` in `scope`; a write or proposal is kept in the
@@ -38,8 +38,8 @@ pub(in crate::orchestrator) async fn call(
     };
   }
   let called = async {
-    asked_in_turn(scope, kind).await?;
-    let writes = allows(services, scope).await?;
+    let writes = drives(services, scope).await?;
+    asked_in_turn(scope, kind, writes).await?;
     run(services, scope, (name, arguments), writes).await
   }
   .await;
@@ -75,7 +75,7 @@ pub(in crate::orchestrator) async fn call(
   result
 }
 
-/// Runs git tool `name` with `arguments` in `scope`'s project, `writes` the person's switch: in a run's worktree
+/// Runs git tool `name` with `arguments` in `scope`'s project, `writes` whether the chat drives: in a run's worktree
 /// through the project's runner.
 async fn run(
   services: &Services,
@@ -97,8 +97,9 @@ async fn run(
 }
 
 /// Refused for a write in a turn nobody asked for: a day's report's turn changes nothing (`report_turn`), and a turn
-/// a wait or a run's end started writes nothing (`person_only`). A proposal is a card the person applies in any turn.
-async fn asked_in_turn(scope: &ChatScope, kind: Kind) -> Result<(), ToolError> {
+/// a wait or a run's end started writes nothing (`person_only`) unless the chat `drives`. A proposal is a card the
+/// person applies in any turn.
+async fn asked_in_turn(scope: &ChatScope, kind: Kind, drives: bool) -> Result<(), ToolError> {
   if !scope.on_its_own || kind == Kind::Propose {
     return Ok(());
   }
@@ -108,13 +109,10 @@ async fn asked_in_turn(scope: &ChatScope, kind: Kind) -> Result<(), ToolError> {
       Message::new("orchestrator.tools.reportChangesNothing"),
     ));
   }
+  if drives {
+    return Ok(());
+  }
   Err(refused("person_only", Message::new("orchestrator.git.onItsOwn")))
-}
-
-/// Whether the person lets the Orchestrator write with git in `scope`'s project.
-async fn allows(services: &Services, scope: &ChatScope) -> Result<bool, ToolError> {
-  let (workspace, root) = (services.workspace().clone(), scope.root.clone());
-  blocking(move || Ok(workspace.orchestrator_allows(&root, OrchestratorConsent::WriteGit)?)).await
 }
 
 /// How a write went, as its action keeps it.

@@ -1,6 +1,6 @@
-//! *Deny with a message* (`Deny message` `YsB30`, `Answers` `zSxlY` and `Keys` `xIRh8` in `D2fdTQ`): in place of
+//! *Deny with a message* (`Deny message` `YsB30`, `Answers` `zSxlY` in `D2fdTQ`): in place of
 //! the answers, *Message to Builder* in 11.5 `text_muted`, a text area 64 high, and what the agent is told in 11
-//! `text_muted`, 6 apart; then *Back* and *Deny and send message* at the right, and which keys do the same. The agent
+//! `text_muted`, 6 apart; then *Back* and *Deny and send message* at the right. The agent
 //! gets the words as the denial's reason; Codex, whose decline carries no words, declines in its own and gets them as
 //! the next message of its turn, which the card says. *Deny and send message* waits for words, at most
 //! [`DenialNote::MAX_CHARS`] of them; Ctrl+Enter (⌘ Enter on macOS) in the field sends, Esc there goes back.
@@ -97,15 +97,10 @@ pub(super) fn editor(ctx: &mut Ctx, answering: &Answering<'_>) -> Vec<Element> {
     .child(Spacer::new().flex(1.0))
     .child(back)
     .child(sending);
-  let keys = Text::new(&ctx.t_args("cards.approval.message.keys", [("keys", &*send_keys(ctx))]))
-    .id(format!("{id}-message-keys"))
-    .variant(TypographyStyle::Caption)
-    .width(Dimension::Pct(100.0));
   let mut parts: Vec<Element> = vec![block.into(), row.into()];
   if answering.decisions.busy() && answering.sending().is_none() {
     parts.push(held(ctx, id));
   }
-  parts.push(keys.into());
   parts
 }
 
@@ -171,15 +166,6 @@ fn told_words(request: &PendingToolApproval, note: Option<&DenialNote>) -> Strin
 /// Codex asks, and declines in its own words: a call of Orchester's tools is refused with the message itself.
 fn codex_declines(answering: &Answering<'_>) -> bool {
   answering.shown.is_some_and(|shown| shown.choices.codex) && answering.request.server != orchester_tools::SERVER
-}
-
-/// The keys that deny and send, as this platform names them.
-fn send_keys(ctx: &Ctx) -> std::sync::Arc<str> {
-  ctx.t(if cfg!(target_os = "macos") {
-    "cards.approval.message.cmdEnter"
-  } else {
-    "cards.approval.message.ctrlEnter"
-  })
 }
 
 /// Esc returns to the answers; Enter sends in 06b, Ctrl+Enter (or ⌘ Enter) in the older editor.

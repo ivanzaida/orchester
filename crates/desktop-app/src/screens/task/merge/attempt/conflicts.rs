@@ -249,22 +249,16 @@ impl Conflicts<'_> {
     let conflicts = self
       .resolving
       .and_then(|resolving| resolving.review.as_ref()?.conflicts.as_ref());
-    let rows: Vec<Element> = self
-      .files
-      .iter()
-      .enumerate()
-      .map(|(index, path)| {
-        let count = conflicts.map_or(0, |conflicts| count_in(conflicts, path));
-        file_row(ctx, index, (path, count), index + 1 == self.files.len())
-      })
-      .collect();
-    let list = Column::new()
-      .id("merge-attempt-conflicting-files")
-      .width(Dimension::Pct(100.0))
-      .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .rounded(RadiusSize::Md)
-      .clip()
-      .with_children(rows);
+    let entries = self.files.iter().map(|path| {
+      let count = conflicts.map_or(0, |conflicts| count_in(conflicts, path));
+      let words = if count == 0 {
+        ctx.t("merges.page.conflicted")
+      } else {
+        tag_words(ctx, count)
+      };
+      (path.as_str(), words, PaletteColor::Danger)
+    });
+    let list = files_list(entries);
     let open = link(
       "merge-attempt-open-in-review",
       (Icon::ArrowRight, &ctx.t("merges.page.openInReview")),
@@ -375,14 +369,28 @@ impl Conflicts<'_> {
   }
 }
 
-/// A conflicting file: its glyph, its path and how many conflicts it holds; *Conflicted* while the review's read of
-/// the diff, which says where they are, is not there (`count` 0).
-fn file_row(ctx: &Ctx, index: usize, (path, count): (&str, usize), last: bool) -> Element {
-  let words = if count == 0 {
-    ctx.t("merges.page.conflicted")
-  } else {
-    tag_words(ctx, count)
-  };
+/// The files of a section in one outline, each with its glyph, its path and its words, both in `color`: a conflicting
+/// file says how many conflicts it holds, or *Conflicted* while the review's read of the diff, which says where they
+/// are, is not there; a file that conflicted before the run was merged says *Conflicted then*.
+pub(super) fn files_list<'a>(entries: impl Iterator<Item = (&'a str, Arc<str>, PaletteColor)>) -> Element {
+  let entries: Vec<_> = entries.collect();
+  let last = entries.len();
+  let rows: Vec<Element> = entries
+    .into_iter()
+    .enumerate()
+    .map(|(index, entry)| file_row(index, entry, index + 1 == last))
+    .collect();
+  Column::new()
+    .id("merge-attempt-conflicting-files")
+    .width(Dimension::Pct(100.0))
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(RadiusSize::Md)
+    .clip()
+    .with_children(rows)
+    .into()
+}
+
+fn file_row(index: usize, (path, words, color): (&str, Arc<str>, PaletteColor), last: bool) -> Element {
   let mut row = Row::new()
     .id(format!("merge-attempt-conflict-{index}"))
     .width(Dimension::Pct(100.0))
@@ -390,7 +398,7 @@ fn file_row(ctx: &Ctx, index: usize, (path, count): (&str, usize), last: bool) -
     .padding(Padding::horizontal(ExtraSpacing::Inset.role()))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::GitCompareArrows, IconSize::Md, PaletteColor::Danger))
+    .child(icon(Icon::GitCompareArrows, IconSize::Md, color.clone()))
     .child(
       Text::new(path)
         .variant(ExtraTypography::PropertyMono.role())
@@ -402,7 +410,7 @@ fn file_row(ctx: &Ctx, index: usize, (path, count): (&str, usize), last: bool) -
       Text::new(&words)
         .id(format!("merge-attempt-conflict-{index}-count"))
         .variant(ExtraTypography::Property.role())
-        .color(PaletteColor::Danger)
+        .color(color)
         .nowrap(),
     );
   if !last {

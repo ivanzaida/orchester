@@ -2,7 +2,7 @@ use std::{path::Path, time::Duration};
 
 use orchester_core::{command::Command, integration::GitCause};
 
-use super::{LocalGit, LocalGitError};
+use super::{LocalGit, LocalGitError, execute::Leftovers};
 
 pub(super) struct GitOutput {
   pub code: Option<i32>,
@@ -97,16 +97,22 @@ impl LocalGit {
         "commit" | "merge" | "restore" | "checkout-index" | "hook" | "update-ref"
       )
     }) || (index.is_none() && args.contains(&"update-index"));
+    let leftovers = if mutation {
+      Leftovers::Uncertain
+    } else {
+      Leftovers::Stopped
+    };
     super::execute::invoke(
       &command,
       input,
-      Duration::from_secs(60 * 60),
+      (Duration::from_secs(60 * 60), leftovers),
       true,
       if mutation { self.journal.as_deref() } else { None },
     )
   }
 
   pub fn check_command(&self, command: &Command, timeout: Duration) -> Result<Option<i32>, LocalGitError> {
-    Ok(super::execute::invoke(command, None, timeout, false, self.journal.as_deref())?.code)
+    let run = (timeout, Leftovers::Uncertain);
+    Ok(super::execute::invoke(command, None, run, false, self.journal.as_deref())?.code)
   }
 }

@@ -194,7 +194,8 @@
         "conflictsOne": "Conflicts · 1 file",
         "conflictsOther": "Conflicts · {{count}} files",
         "notRecorded": "Not recorded · {{time}}",
-        "merged": "Merged · {{time}}"
+        "merged": "Merged · {{time}}",
+        "mergedOutside": "Merged outside"
       },
       "base": {
         "label": "Base",

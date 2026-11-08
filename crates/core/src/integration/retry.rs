@@ -1,12 +1,13 @@
 //! Which merges Orchester tries again by itself, and when (`crates/desktop-app/design/orchester.pen`, board
 //! `Review · redesign`, 09j): one that did not land for a cause that passes by itself — the project's integration lease
 //! another operation holds, a file another program holds open, the project database busy — is tried again up to
-//! [`RETRIES`] times, [`delay_before`] each try. A lasting cause, such as a disk's I/O error, Git refusing or a
+//! [`RETRIES`] times, [`delay_before`] each try; so is one whose Git programs were not proved stopped yet, which a try
+//! a moment later finds stopped, or still refuses. A lasting cause, such as a disk's I/O error, Git refusing or a
 //! checkout that is not the one recorded, waits for a person.
 
 use std::{num::NonZeroU32, time::Duration};
 
-use super::{GitError, MergeError, PreflightCause};
+use super::{GitError, MergeError, PreflightCause, local::LocalError};
 use crate::command::CommandError;
 
 /// The most tries Orchester makes of a merge after the one that was asked for.
@@ -46,10 +47,12 @@ pub fn held_by_another_program(code: i32) -> bool {
 }
 
 impl PreflightCause {
-  /// Whether the cause passes by itself: the lease another operation holds, or a file another program holds open.
+  /// Whether the cause passes by itself: the lease another operation holds, a file another program holds open, or Git
+  /// programs that were not proved stopped yet. The refusal came before any Git program that writes ran, and a try
+  /// proves them stopped again before it changes anything.
   pub fn passes(&self) -> bool {
     match self {
-      Self::Held => true,
+      Self::Held | Self::State(LocalError::ProcessUncertain) => true,
       Self::Io { code: Some(code), .. } => held_by_another_program(*code),
       Self::Git(cause) => held_words(cause.tail()),
       Self::Io { code: None, .. } | Self::State(_) | Self::Reason(_) => false,
