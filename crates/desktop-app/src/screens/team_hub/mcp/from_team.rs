@@ -16,7 +16,7 @@ use crate::{
 pub(super) fn section(ctx: &Ctx, sheet: &TeamMcpSheet) -> Column {
   let note = Text::new(&ctx.t("team_hub.profile.fromTeamNote"))
     .id("team-hub-from-team-note")
-    .variant(HubText::Hint.role())
+    .variant(HubText::PanelHint.role())
     .nowrap();
   let mut rows = match &sheet.runs {
     McpRuns::Program {

@@ -70,6 +70,8 @@ pub struct ActionButton {
   small: bool,
   /// 26 high instead of 28, as an action of a review thread (`SYiTG`).
   snug: bool,
+  /// 30 high instead of 28, as the pinned action of a hub panel (`Edit` `psiyx` in `hDhr8`).
+  pinned: bool,
   /// 36 high with a 13/500 label.
   large: bool,
   /// Large and not primary, with a primary's room at each side.
@@ -109,6 +111,7 @@ impl ActionButton {
       in_heading: false,
       small: false,
       snug: false,
+      pinned: false,
       large: false,
       roomy: false,
       bounded: false,
@@ -256,6 +259,13 @@ impl ActionButton {
     self
   }
 
+  /// 30 high, its icon and label as a button's: the action pinned at the bottom of a hub panel (`Edit` `psiyx` in
+  /// `hDhr8`).
+  pub fn pinned(mut self) -> Self {
+    self.pinned = true;
+    self
+  }
+
   /// 36 high, its label 13/500: the welcome's actions (`rDzhV`, `fZDtO`).
   pub fn large(mut self) -> Self {
     self.large = true;
@@ -343,6 +353,8 @@ impl ActionButton {
       (ControlHeight::Sm, IconSize::Md, TypographyStyle::Button)
     } else if self.snug {
       (ControlHeight::Snug, IconSize::Md, TypographyStyle::Button)
+    } else if self.pinned {
+      (ControlHeight::Row, IconSize::Md, TypographyStyle::Button)
     } else if self.large {
       (
         ControlHeight::Lg,
