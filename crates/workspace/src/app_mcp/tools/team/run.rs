@@ -171,8 +171,8 @@ async fn started(team: &Team, outcome: StartOutcome) -> Result<Value, ToolError>
       "team_start_waiting",
       vec![Message::new("appMcp.errors.teamStartWaiting")],
     )),
-    StartOutcome::Refused(error, _) if error.code() == AuthorityErrorCode::BundleMissing => {
-      Err(bundle_missing::refused(team, error.details()).await)
+    StartOutcome::Refused(error, claim) if error.code() == AuthorityErrorCode::BundleMissing => {
+      Err(bundle_missing::refused(team, error.details(), claim).await)
     }
     StartOutcome::Refused(error, _) => Err(authority_refused(&error)),
     StartOutcome::Failed(StartFailure::BundleSchema { read, built }, _) => Err(bundle_schema(Schemas { read, built })),

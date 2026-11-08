@@ -63,7 +63,7 @@ pub use self::{
   error::TeamWorkError,
   heartbeat::Heartbeat,
   here::{TeamHere, team_here},
-  last::{LastStart, last_start},
+  last::{LastStart, last_start, start_seen},
   open::{OpenStarts, OpenStartsError, recover_open_starts},
   release::ClaimEnd,
   reports::Reported,

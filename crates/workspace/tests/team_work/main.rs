@@ -27,6 +27,7 @@ mod last_start;
 mod reports;
 mod start;
 mod start_alone;
+mod start_notices;
 mod start_release;
 mod team_commands;
 mod team_deliveries;
@@ -56,6 +57,7 @@ use orchester_core::{
   store::{ConnectionStore, RunStore},
   time::Timestamp,
 };
+use orchester_ipc::Rejection;
 use orchester_store::{AppDb, ProjectDb};
 use orchester_workspace::{
   actions::{Accepted, Action, ActionOutcome, ClaimAction, Dispatcher, Intent, TeamOutcome, WorkAction},
@@ -337,6 +339,8 @@ enum Hiccup {
   Unavailable,
   /// The runner starts the run and its answer is lost.
   StartsThenLost,
+  /// The runner refuses to run it (`Rejection::Busy`): nothing is started.
+  Refuses,
 }
 
 /// Records and starts the run of accepted inputs as the runner does, by the operation's one run key, without
@@ -409,6 +413,7 @@ impl TeamRunner for StoreRunner {
           runner.record(operation);
           Err(RunRequestError::Request(RequestError::Lost))
         }
+        Some(Hiccup::Refuses) => Err(RunRequestError::Rejected(Rejection::Busy)),
         None => Ok(runner.record(operation)),
       }
     }

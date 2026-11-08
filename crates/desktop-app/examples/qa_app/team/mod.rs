@@ -6,6 +6,7 @@
 
 pub mod drive;
 mod member;
+mod recorded_start;
 mod state;
 #[path = "../../sign_in_qa/window.rs"]
 pub mod window;
@@ -117,7 +118,10 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
     | State::EditConflict
     | State::NotReadyHere
     | State::StartFailed
-    | State::StartRecovered => {
+    | State::StartRecovered
+    | State::StartWaiting
+    | State::StartRunnerRefused
+    | State::StartPastFailure => {
       let ids = task_ids(services)?;
       let role = member::serve_as(&server, state, (&ids, &team_pipelines(services, state)?));
       let (kontur, id) = join_linked_as(&server, (services, runtime), (TasksAnswer::Serve, role))?;
@@ -127,6 +131,7 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
           server.authority_bundle_fault(BundleFault::Unavailable);
           server.authority_bundle_fault_after(BundleFault::Newer, state::START_ANSWERS_AFTER);
         }
+        State::StartWaiting => server.authority_bundle_fault(BundleFault::Unavailable),
         _ => {}
       }
       work::after_join(state, (&server, id), (services, runtime), (&kontur, &ids))?;
@@ -166,7 +171,11 @@ fn team_pipelines(services: &Services, state: State) -> Result<member::TeamPipel
   let (feature, quick) = match state {
     State::NotReadyHere => ("team-delivery", "team-quick-fix"),
     // Every task is on Team quick fix, which is ready here: only the bundle fails.
-    State::StartFailed | State::StartRecovered => ("team-quick-fix", "team-quick-fix"),
+    State::StartFailed
+    | State::StartRecovered
+    | State::StartWaiting
+    | State::StartRunnerRefused
+    | State::StartPastFailure => ("team-quick-fix", "team-quick-fix"),
     _ => ("feature-delivery", "quick-fix"),
   };
   let mut db = ProjectDb::open(&kontur(services)?)?;

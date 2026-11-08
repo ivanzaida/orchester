@@ -21,7 +21,7 @@ use crate::{
     last_start::team_last_start,
     outage,
     pages::{TeamModule, TeamTask, team_module_list, team_task},
-    start::Started,
+    start::Recorded,
     view::{self, Standing},
   },
 };
@@ -38,7 +38,7 @@ pub struct TeamTaskShown {
   pub server: Option<String>,
   /// The task's newest start as this computer's records tell it, once read: a start that waited and was settled later
   /// by recovery says why it did not run.
-  pub last_start: Option<Started>,
+  pub last_start: Option<Recorded>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for TeamTaskShown {}

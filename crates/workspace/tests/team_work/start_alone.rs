@@ -19,7 +19,7 @@ use crate::{
 };
 
 /// Carrying on the open starts did not bring one to its end.
-const NOTHING_SETTLED: OpenStarts = OpenStarts { settled: false };
+const NOTHING_SETTLED: OpenStarts = OpenStarts { changed: false };
 
 /// A runner that holds the start at its last boundary until the test lets it go on.
 #[derive(Clone)]
@@ -128,7 +128,7 @@ async fn team_work_alone_a_start_waiting_for_the_server_is_left_waiting_until_it
   server.set_down(false);
   assert_eq!(
     work.carry_on_open(checkout.vault()).await.expect("tried"),
-    OpenStarts { settled: true }
+    OpenStarts { changed: true }
   );
   assert!(checkout.db().open_team_starts().expect("open").is_empty());
 }
@@ -157,7 +157,7 @@ async fn team_work_alone_recovery_leaves_the_project_to_a_run_that_holds_its_tur
 
   assert_eq!(
     work.carry_on_open(checkout.vault()).await.expect("tried"),
-    OpenStarts { settled: true }
+    OpenStarts { changed: true }
   );
 }
 

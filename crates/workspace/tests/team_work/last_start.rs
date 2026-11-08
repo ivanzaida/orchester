@@ -39,7 +39,7 @@ async fn team_work_last_start_reads_back_a_failure_recovery_settled_with_its_cla
   }
 
   let carried = work.carry_on_open(checkout.vault()).await.expect("carried on");
-  assert_eq!(carried, OpenStarts { settled: true });
+  assert_eq!(carried, OpenStarts { changed: true });
   let Some(LastStart::Settled(StartOutcome::Failed(failure, claim))) =
     last_start(checkout.root(), server.task).expect("read")
   else {
@@ -113,7 +113,7 @@ async fn team_work_last_start_says_a_record_it_cannot_read_and_carries_on_nothin
   ));
   assert_eq!(
     work.carry_on_open(checkout.vault()).await.expect("tried"),
-    OpenStarts { settled: false }
+    OpenStarts { changed: false }
   );
   assert!(matches!(
     last_start(checkout.root(), server.task).expect("read"),

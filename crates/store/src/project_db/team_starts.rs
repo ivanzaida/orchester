@@ -78,6 +78,10 @@ pub struct TeamStart {
   pub refusal: Option<String>,
   /// Why the start failed here, as JSON the workspace writes, at [`TeamStartStage::Failed`].
   pub failure: Option<String>,
+  /// The runner's last refusal of the start's kept inputs, as JSON the workspace writes, while the start waits for it.
+  pub runner_refusal: Option<String>,
+  /// The person has seen what the settled start came to ([`ProjectDb::mark_team_start_seen`]).
+  pub seen: bool,
 }
 
 impl ProjectDb {
@@ -132,6 +136,36 @@ impl ProjectDb {
       )
       .optional()?
       .transpose()
+  }
+
+  /// Keeps `refusal`, as the workspace wrote it, as the runner's last answer to the start under `operation`; `None`
+  /// when the runner did not refuse it this time. Only a start that is not settled keeps one.
+  pub fn keep_team_start_runner_refusal(
+    &mut self,
+    operation: OperationId,
+    refusal: Option<&str>,
+  ) -> Result<(), StoreError> {
+    let updated = self.connection.execute(
+      "UPDATE team_starts SET runner_refusal = ?2 WHERE operation_id = ?1 \
+       AND stage IN ('requested', 'accepted', 'inputs_stored')",
+      params![operation.to_string(), refusal],
+    )?;
+    ensure_updated(&self.connection, operation, updated)
+  }
+
+  /// Marks that the person has seen what the settled start under `operation` came to, so the task's page does not
+  /// tell it again in every window. Marking it again changes nothing; a start that is not refused or failed is
+  /// [`StoreError::TeamStartStage`].
+  pub fn mark_team_start_seen(&mut self, operation: OperationId, at: Timestamp) -> Result<(), StoreError> {
+    let known = load(&self.connection, operation)?.ok_or(StoreError::TeamStartNotFound(operation))?;
+    if !matches!(known.stage, TeamStartStage::Refused | TeamStartStage::Failed) {
+      return Err(out_of_order(&known));
+    }
+    self.connection.execute(
+      "INSERT OR IGNORE INTO team_start_seen (operation_id, seen_at) VALUES (?1, ?2)",
+      params![operation.to_string(), at.unix_millis()],
+    )?;
+    Ok(())
   }
 
   /// Keeps the work the receipt of `operation` names and its bundle's hash, before anything else is done with them.
@@ -285,8 +319,9 @@ fn out_of_order(start: &TeamStart) -> StoreError {
   }
 }
 
-const SELECT: &str =
-  "SELECT operation_id, task_id, request, stage, work_id, bundle_sha256, run_id, refusal, failure FROM team_starts";
+const SELECT: &str = "SELECT operation_id, task_id, request, stage, work_id, bundle_sha256, run_id, refusal, failure, \
+  runner_refusal, EXISTS (SELECT 1 FROM team_start_seen WHERE team_start_seen.operation_id = team_starts.operation_id) \
+  FROM team_starts";
 
 pub(super) fn load(connection: &Connection, operation: OperationId) -> Result<Option<TeamStart>, StoreError> {
   connection
@@ -305,7 +340,8 @@ fn read(row: &Row<'_>) -> rusqlite::Result<Result<TeamStart, StoreError>> {
     (row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?);
   let (work, bundle, run, refusal): (Option<String>, Option<String>, Option<String>, Option<String>) =
     (row.get(4)?, row.get(5)?, row.get(6)?, row.get(7)?);
-  let failure: Option<String> = row.get(8)?;
+  let (failure, runner_refusal, seen): (Option<String>, Option<String>, bool) =
+    (row.get(8)?, row.get(9)?, row.get(10)?);
   Ok((|| {
     let work = match (work, bundle) {
       (Some(work), Some(bundle)) => Some((
@@ -324,6 +360,8 @@ fn read(row: &Row<'_>) -> rusqlite::Result<Result<TeamStart, StoreError>> {
       run: run.map(|run| parse("team start run", &run)).transpose()?,
       refusal,
       failure,
+      runner_refusal,
+      seen,
     })
   })())
 }

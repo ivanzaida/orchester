@@ -18,9 +18,10 @@ use orchester_core::id::ClaimId;
 use orchester_exec::programs::Programs;
 use orchester_workspace::{
   actions::{Action, ClaimAction},
+  background,
   runner::Runners,
   sharing::device,
-  team_work::ClaimEnd,
+  team_work::{self, ClaimEnd},
 };
 
 use super::{TaskContext, team::TeamTaskShown};
@@ -30,7 +31,8 @@ use crate::{
   services::Services,
   team::{
     act::{Acted, Acting},
-    start::{StartTask, Started, Stop, start},
+    invalidation::Stale,
+    start::{Recorded, StartTask, Started, Stop, Telling, start},
   },
   ui::{
     button::{ActionButton, ButtonKind},
@@ -49,6 +51,8 @@ pub enum TeamAsk {
   TakeOver,
   Release,
   Run,
+  /// Dismiss the notice of a start that was settled for good: the page does not tell it again.
+  Dismiss,
 }
 
 /// What came of it.
@@ -162,6 +166,7 @@ async fn carry_out(
       let action = Action::Claim(ClaimAction::Release { authority });
       TeamAnswer::Acted(ask, acting.act(source, action).await.0)
     }
+    TeamAsk::Dismiss => TeamAnswer::Acted(ask, dismissed(&acting, shown).await),
     TeamAsk::TakeOver => {
       let Some(observed) = claim.map(|claim| claim.id) else {
         return TeamAnswer::Acted(ask, Acted::Failed);
@@ -182,6 +187,22 @@ async fn carry_out(
       let request = start_task(shown, held, project);
       TeamAnswer::Started(ask, start(&acting, source, (runners, programs), request).await)
     }
+  }
+}
+
+/// Marks the task's newest start, settled for good, as seen, and reads the task's start again.
+async fn dismissed(acting: &Acting, shown: &TeamTaskShown) -> Acted {
+  let (root, task) = (shown.source.root().to_owned(), shown.task.task.id());
+  match background::run(move || team_work::start_seen(&root, task)).await {
+    Ok(Ok(())) => {
+      Stale::EVERY.apply(&acting.team.client());
+      Acted::Done
+    }
+    Ok(Err(error)) => {
+      tracing::warn!(%error, "the notice of a team start cannot be dismissed");
+      Acted::Failed
+    }
+    Err(_) => Acted::Failed,
   }
 }
 
@@ -331,10 +352,30 @@ fn published(task: &TaskContext) -> Option<(String, String)> {
   }
 }
 
+/// What the page tells of the task's start, and why.
+pub struct StartStanding {
+  pub ask: TeamAsk,
+  pub started: Started,
+  /// The notice tells a start that was settled for good and that the person has not dismissed: it offers *Dismiss*.
+  pub dismiss: bool,
+}
+
+impl StartStanding {
+  fn of(ask: TeamAsk, recorded: &Recorded) -> Self {
+    Self {
+      ask,
+      started: recorded.started.clone(),
+      dismiss: recorded.telling != Telling::Standing && matches!(recorded.started, Started::Stopped(_)),
+    }
+  }
+}
+
 /// What the page tells of the task's start: the person's last ask in this window, unless that said the start waits,
 /// which recovery may have settled since, or there is none, as in a window opened after it did. Then the project's
-/// record of the task's newest start tells ([`TeamTaskShown::last_start`]), for a task this computer can still run.
-pub fn start_standing(ctx: &mut Ctx, task: &TaskContext) -> Option<(TeamAsk, Started)> {
+/// record of the task's newest start tells ([`TeamTaskShown::last_start`]), for a task this computer can still run: a
+/// start that waits, or that the runner refused, for as long as it does; one settled for good once, until the person
+/// dismisses it, runs the task again or updates what made it fail ([`Telling`]).
+pub fn start_standing(ctx: &mut Ctx, task: &TaskContext) -> Option<StartStanding> {
   let state = TeamControls::of(ctx)?.action.state().get();
   if state.is_pending() {
     return None;
@@ -343,33 +384,59 @@ pub fn start_standing(ctx: &mut Ctx, task: &TaskContext) -> Option<(TeamAsk, Sta
   match state.data {
     Some(TeamAnswer::Acted(..)) => None,
     Some(TeamAnswer::Started(ask, Started::Waiting)) => match recorded {
-      Some(Started::Run(_)) => None,
-      Some(settled @ Started::Stopped(_)) => Some((ask, settled.clone())),
-      Some(Started::Waiting) | None => Some((ask, Started::Waiting)),
+      Some(Recorded {
+        started: Started::Run(_),
+        ..
+      }) => None,
+      Some(
+        settled @ Recorded {
+          started: Started::Stopped(_),
+          ..
+        },
+      ) => Some(StartStanding::of(ask, settled)),
+      Some(Recorded {
+        started: Started::Waiting,
+        ..
+      })
+      | None => Some(StartStanding {
+        ask,
+        started: Started::Waiting,
+        dismiss: false,
+      }),
     },
-    Some(TeamAnswer::Started(ask, started)) => Some((ask, started)),
+    Some(TeamAnswer::Started(ask, started)) => Some(StartStanding {
+      ask,
+      started,
+      dismiss: false,
+    }),
     None => recorded
-      .filter(|recorded| !matches!(recorded, Started::Run(_)) && can_run(task))
-      .map(|recorded| (TeamAsk::Run, recorded.clone())),
+      .filter(|recorded| {
+        !matches!(recorded.started, Started::Run(_)) && recorded.telling != Telling::Told && can_run(task)
+      })
+      .map(|recorded| StartStanding::of(TeamAsk::Run, recorded)),
   }
 }
 
 /// What the last ask came to, when it did not do what was asked (`DpoZG` in `02f`), with Try again; or what became of
-/// the start that was left waiting ([`start_standing`]).
+/// the start that was left waiting ([`start_standing`]): the information notice `xnJyn` while it waits, which retries
+/// by itself.
 pub fn refusal(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
   let controls = TeamControls::of(ctx)?;
   if controls.action.state().get().is_pending() {
     return None;
   }
   let key = task.key.to_string();
-  let (ask, body, started) = match controls.action.state().get().data {
-    Some(TeamAnswer::Acted(ask, acted)) => (ask, acted_words(ctx, task, ask, &acted)?, false),
+  let (ask, body, started, dismiss) = match controls.action.state().get().data {
+    Some(TeamAnswer::Acted(ask, acted)) => (ask, acted_words(ctx, task, ask, &acted)?, false, false),
     _ => {
-      let (ask, started) = start_standing(ctx, task)?;
-      let body = started_words(ctx, task, ask, &started)?;
+      let standing = start_standing(ctx, task)?;
+      if standing.started == Started::Waiting {
+        return Some(starting(ctx, &key));
+      }
+      let body = started_words(ctx, task, standing.ask, &standing.started)?;
       // Once the claim was the person's, what did not happen is the run's start.
-      let stopped = matches!(&started, Started::Stopped(stop) if !matches!(stop, Stop::Claim(_)));
-      (ask, body, stopped)
+      let stopped = matches!(&standing.started, Started::Stopped(stop) if !matches!(stop, Stop::Claim(_)));
+      (standing.ask, body, stopped, standing.dismiss)
     }
   };
   let title = match ask {
@@ -378,9 +445,10 @@ pub fn refusal(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
     TeamAsk::TakeOver => "summary.team.refused.takeOverTitle",
     TeamAsk::Release => "summary.team.refused.releaseTitle",
     TeamAsk::Run => "summary.team.refused.runTitle",
+    TeamAsk::Dismiss => "summary.team.refused.dismissTitle",
   };
   let open = controls.taking_over.clone();
-  let again = controls;
+  let again = controls.clone();
   let retry = ActionButton::new(
     "task-team-refused-again",
     ButtonKind::Secondary,
@@ -391,14 +459,37 @@ pub fn refusal(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
     TeamAsk::TakeOver => open.set(true),
     ask => again.run(ask),
   });
-  let notice = Notice::new(
+  let mut notice = Notice::new(
     "task-team-refused",
     NoticeTone::Danger,
     ctx.t_args(title, [("task", key.as_str())]),
   )
   .body(body)
   .action(retry);
+  if dismiss {
+    let dismissing = controls;
+    notice = notice.action(
+      ActionButton::new(
+        "task-team-refused-dismiss",
+        ButtonKind::Secondary,
+        ctx.t("summary.team.refused.dismiss"),
+      )
+      .on_click(move || dismissing.run(TeamAsk::Dismiss)),
+    );
+  }
   Some(notice.into())
+}
+
+/// The notice of a start that waits for the team server or the runner (`Notice/Info` `xnJyn`): not a failure, and with
+/// nothing to press, since the project asks again by itself.
+fn starting(ctx: &Ctx, key: &str) -> Element {
+  Notice::new(
+    "task-team-starting",
+    NoticeTone::Info,
+    ctx.t_args("summary.team.refused.startingTitle", [("task", key)]),
+  )
+  .body(ctx.t("summary.team.refused.waiting"))
+  .into()
 }
 
 /// Why a claim command did not do what was asked; `None` when it did.
@@ -439,8 +530,11 @@ fn started_words(ctx: &Ctx, task: &TaskContext, ask: TeamAsk, started: &Started)
     Stop::Claim(acted) => return acted_words(ctx, task, ask, acted),
     Stop::NotReady => ctx.t("summary.team.refused.notReady"),
     // A start refused as invalid is the server's own reason, not an agent at work.
-    Stop::Refused(AuthorityErrorCode::Invalid) => ctx.t("summary.team.refused.other"),
-    Stop::Refused(code) => refused_words(ctx, *code),
+    Stop::Refused(AuthorityErrorCode::Invalid, _) => ctx.t("summary.team.refused.other"),
+    Stop::Refused(code, claim) => {
+      let why = refused_words(ctx, *code);
+      claim.map_or(why.clone(), |claim| with_claim(ctx, &why, claim))
+    }
     Stop::BranchNotFound(branch) => ctx.t_args("summary.team.refused.branch", [("branch", branch.as_str())]),
     // The Summary's card lists each part with its fix (`not_ready`), not a notice.
     Stop::NotReadyHere(_) => return None,
