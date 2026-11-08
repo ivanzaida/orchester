@@ -13,7 +13,7 @@ use lurq::{
 use orchester_core::id::{ProjectId, ResourceId};
 use orchester_workspace::sharing::team::TeamConfiguration;
 
-use super::model::Listing;
+use super::{member, model::Listing};
 use crate::{
   navigation::Navigation,
   routes::{HubFilter, HubView, ProjectPage, Route},
@@ -49,6 +49,9 @@ pub(super) fn head(ctx: &Ctx, team: &TeamConfiguration, new: Option<Element>) ->
         .nowrap(),
     );
   }
+  if !team.may_change {
+    at_right = at_right.child(member::role(ctx));
+  }
   Row::new()
     .id("team-hub-head")
     .width(Dimension::Pct(100.0))
@@ -78,6 +81,8 @@ pub(super) struct FilterShown {
   pub selected: Option<ResourceId>,
   /// The list is read again: what it counts is the last answer.
   pub reading: bool,
+  /// The person may change the team's resources: an admin of the team; a member reads another hint.
+  pub may_change: bool,
 }
 
 /// The filter: a segment per kind with its count, and what the open one holds. `listing` is `None` before there is an
@@ -112,7 +117,7 @@ pub(super) fn filter(ctx: &Ctx, listing: Option<&Listing>, shown: &FilterShown, 
       Element::from(reading_mark(ctx))
     } else {
       Element::from(
-        Text::new(&ctx.t(hint_key(shown.filter)))
+        Text::new(&ctx.t(hint_key(shown.filter, shown.may_change)))
           .id("team-hub-filter-hint")
           .variant(HubText::Hint.role())
           .nowrap(),
@@ -147,13 +152,21 @@ const fn label_key(filter: HubFilter) -> &'static str {
   }
 }
 
-const fn hint_key(filter: HubFilter) -> &'static str {
-  match filter {
-    HubFilter::All => "team_hub.hint.all",
-    HubFilter::Profiles => "team_hub.hint.profiles",
-    HubFilter::McpServers => "team_hub.hint.mcpServers",
-    HubFilter::Instructions => "team_hub.hint.instructions",
-    HubFilter::Skills => "team_hub.hint.skills",
-    HubFilter::Tools => "team_hub.hint.tools",
+/// The filter's hint for `filter`: an admin's, or for a member what the kind is and that they fill in only what is
+/// local.
+const fn hint_key(filter: HubFilter, may_change: bool) -> &'static str {
+  match (may_change, filter) {
+    (true, HubFilter::All) => "team_hub.hint.all",
+    (true, HubFilter::Profiles) => "team_hub.hint.profiles",
+    (true, HubFilter::McpServers) => "team_hub.hint.mcpServers",
+    (true, HubFilter::Instructions) => "team_hub.hint.instructions",
+    (true, HubFilter::Skills) => "team_hub.hint.skills",
+    (true, HubFilter::Tools) => "team_hub.hint.tools",
+    (false, HubFilter::All) => "team_hub.member.hint.all",
+    (false, HubFilter::Profiles) => "team_hub.member.hint.profiles",
+    (false, HubFilter::McpServers) => "team_hub.member.hint.mcpServers",
+    (false, HubFilter::Instructions) => "team_hub.member.hint.instructions",
+    (false, HubFilter::Skills) => "team_hub.member.hint.skills",
+    (false, HubFilter::Tools) => "team_hub.member.hint.tools",
   }
 }

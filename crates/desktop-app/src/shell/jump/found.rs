@@ -114,8 +114,16 @@ impl Entry {
   }
 }
 
-/// The results for `query` in the tab's `project`, whose tasks and modules are `tasks` once read.
-pub fn find(ctx: &Ctx, project: Option<ProjectId>, tasks: Option<&ProjectTasks>, query: &str) -> Vec<Found> {
+/// The results for `query` in the tab's `project`, whose tasks and modules are `tasks` once read. `may_change`: the
+/// person may change the project's configuration (not a member of a team's project), which New pipeline and New agent
+/// make.
+pub fn find(
+  ctx: &Ctx,
+  project: Option<ProjectId>,
+  may_change: bool,
+  tasks: Option<&ProjectTasks>,
+  query: &str,
+) -> Vec<Found> {
   let query = query.trim().to_lowercase();
   let mut found = Vec::new();
   if let (Some(project), Some(tasks), false) = (project, tasks, query.is_empty()) {
@@ -135,7 +143,12 @@ pub fn find(ctx: &Ctx, project: Option<ProjectId>, tasks: Option<&ProjectTasks>,
   }
   pages.extend(app_pages(ctx));
   found.extend(matching(Group::Pages, pages, &query, PAGES_SHOWN));
-  found.extend(matching(Group::Actions, actions(ctx, project), &query, ACTIONS_SHOWN));
+  found.extend(matching(
+    Group::Actions,
+    actions(ctx, project.map(|project| (project, may_change))),
+    &query,
+    ACTIONS_SHOWN,
+  ));
   found
 }
 
@@ -384,11 +397,11 @@ fn app_pages(ctx: &Ctx) -> Vec<Entry> {
   std::iter::once(all).chain(tabs).collect()
 }
 
-/// What can be started from anywhere: the project's new task, module, pipeline and agent profile, then a new tab
-/// and Add project.
-fn actions(ctx: &Ctx, project: Option<ProjectId>) -> Vec<Entry> {
+/// What can be started from anywhere: the project's new task and module, and where the person may change its
+/// configuration (`project`'s second part) its new pipeline and agent profile, then a new tab and Add project.
+fn actions(ctx: &Ctx, project: Option<(ProjectId, bool)>) -> Vec<Entry> {
   let mut entries = Vec::new();
-  if let Some(project) = project {
+  if let Some((project, may_change)) = project {
     let at = |page: ProjectPage| Target::Route(Route::Project(project, page));
     entries.extend([
       (
@@ -403,19 +416,23 @@ fn actions(ctx: &Ctx, project: Option<ProjectId>) -> Vec<Entry> {
         "shell.jump.actions.newModule",
         at(ProjectPage::NewModule),
       ),
-      (
-        "new-pipeline",
-        Icon::Plus,
-        "shell.jump.actions.newPipeline",
-        at(ProjectPage::NewPipeline),
-      ),
-      (
-        "new-agent",
-        Icon::Plus,
-        "shell.jump.actions.newAgent",
-        at(ProjectPage::NewAgent(AgentTab::default())),
-      ),
     ]);
+    if may_change {
+      entries.extend([
+        (
+          "new-pipeline",
+          Icon::Plus,
+          "shell.jump.actions.newPipeline",
+          at(ProjectPage::NewPipeline),
+        ),
+        (
+          "new-agent",
+          Icon::Plus,
+          "shell.jump.actions.newAgent",
+          at(ProjectPage::NewAgent(AgentTab::default())),
+        ),
+      ]);
+    }
   }
   entries.extend([
     ("new-tab", Icon::AppWindow, "shell.jump.actions.newTab", Target::NewTab),

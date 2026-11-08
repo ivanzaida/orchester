@@ -65,7 +65,7 @@
       "decisionConnection": "Needs a connection here",
       "mcpUndecided": "Switch it on or off on this computer",
       "mcpOff": "{{server}} is not switched on here",
-      "programHere": "Set its program path here",
+      "programHere": "Set its program path on this computer",
       "programOf": "Set the program path of {{server}}",
       "secret": "Secret {{name}} has no value here",
       "localProgram": "The program of {{server}} is not found here",
@@ -90,6 +90,45 @@
       "usedBy": "used by {{names}}",
       "usedByNone": "No profile uses it yet",
       "publishNext": "Publishing makes {{version}} for the whole team"
+    },
+    "member": {
+      "role": "· member",
+      "lock": "Only team admins change this: {{admins}}.",
+      "hint": {
+        "all": "All of it is the team's; you fill in only what is local",
+        "profiles": "Profiles are the team's; you fill in only what is local",
+        "mcpServers": "MCP servers are the team's; you fill in only what is local",
+        "instructions": "Instructions are the team's; you fill in only what is local",
+        "skills": "Skills are the team's; you fill in only what is local",
+        "tools": "Tools are the team's; you fill in only what is local"
+      },
+      "empty": {
+        "admins": "Admins: {{admins}}",
+        "all": {
+          "title": "Nothing published yet",
+          "detail": "An admin of the team adds agents, MCP servers, instructions, skills and tools; once published they appear here for everyone."
+        },
+        "profiles": {
+          "title": "No profiles yet",
+          "detail": "An admin of the team adds profiles; once published they appear here for everyone."
+        },
+        "mcpServers": {
+          "title": "No MCP servers yet",
+          "detail": "An admin of the team adds MCP servers; once published they appear here for everyone."
+        },
+        "instructions": {
+          "title": "No instructions yet",
+          "detail": "An admin of the team adds instructions; once published they appear here for everyone."
+        },
+        "skills": {
+          "title": "No skills yet",
+          "detail": "An admin of the team adds skills; once published they appear here for everyone."
+        },
+        "tools": {
+          "title": "No tools yet",
+          "detail": "An admin of the team adds tools; once published they appear here for everyone."
+        }
+      }
     },
     "empty": {
       "title": "Nothing here yet",
@@ -143,6 +182,7 @@
       "connectionVersion": "{{cli}} · {{name}} · {{program}} {{version}}",
       "noneOfKind": "No {{cli}} connection here",
       "pickNeeded": "Choose a {{cli}} connection here",
+      "programHere": "Set its program path here",
       "programSet": "Ready · program path set",
       "programGone": "The program is not at its path any more",
       "remote": "Ready · remote",
@@ -208,7 +248,7 @@
         "runsAs": "Runs as",
         "runsAsProgram": "A program on each computer",
         "program": "Program",
-        "programSub": "a name; each computer sets its path",
+        "programSub": "a name, not a path",
         "arguments": "Arguments",
         "folder": "Folder",
         "folderWorktree": "The run's worktree",
@@ -223,8 +263,8 @@
       },
       "path": {
         "label": "Program path",
-        "sub": "{{program}} here",
-        "notSet": "Not set",
+        "sub": "{{program}} on this computer",
+        "notSet": "Not set · nothing is guessed or found by name",
         "found": "found · {{date}}",
         "gone": "No file there",
         "choose": "Choose…"
@@ -244,7 +284,7 @@
         "ready": "Ready here: runs on this computer may use {{name}}.",
         "off": "Off here: runs on this computer don't use {{name}}.",
         "undecided": "Not ready here: switch {{name}} on or off for this computer.",
-        "setPath": "Not ready here: set the program path.",
+        "setPath": "Not ready here: set the program path. Runs whose pipeline uses {{name}} don't start on this computer until then.",
         "gone": "Not ready here: no file at {{path}}. Runs that use {{name}} don't start until it is there again.",
         "secret": "Not ready here: {{name}} needs a value.",
         "unreadable": "Not ready here: this computer's keychain can't say whether {{name}} has a value.",
@@ -257,9 +297,9 @@
         "addValue": "Add value",
         "turnOn": "Turn on here",
         "changePath": "Change path",
-        "setPathHint": "Asked once on this computer",
+        "setPathHint": "Kept on this computer · asked once",
         "addValueHint": "Stored in this computer's secret store",
-        "turnOnHint": "Only you can turn it on here",
+        "turnOnHint": "Only on this computer · you confirm it in the window",
         "changePathHint": "Nothing missing on this computer"
       }
     },

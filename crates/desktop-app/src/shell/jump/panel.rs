@@ -24,6 +24,7 @@ use super::found::{Found, Group, Target, find};
 use crate::{
   navigation::{Navigation, link::Open, press::OpenIn, shortcuts::Keys},
   project::{ProjectState, Projects},
+  screens::hub,
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, ShellText},
   ui::{
     icon::{Icon, icon},
@@ -56,7 +57,15 @@ pub(super) fn palette(ctx: &mut Ctx, navigation: &Navigation, state: &State) -> 
     _ => None,
   });
   let query = state.query.get();
-  let found = find(ctx, project, tasks.as_ref().and_then(|tasks| tasks.ready()), &query);
+  let may_change =
+    project.is_none_or(|project| hub::team::may_change(projects.feed(project).team.get().configuration().as_ref()));
+  let found = find(
+    ctx,
+    project,
+    may_change,
+    tasks.as_ref().and_then(|tasks| tasks.ready()),
+    &query,
+  );
   let current = state.at.get().min(found.len().saturating_sub(1));
   let opens: Vec<Open> = found
     .iter()

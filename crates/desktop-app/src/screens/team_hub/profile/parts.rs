@@ -138,7 +138,7 @@ fn problem_state(ctx: &Ctx, listing: &Listing, server: ResourceId, part: &Missin
     Missing::McpProgram {
       problem: ProgramProblem::NotSet,
       ..
-    } => ctx.t("team_hub.line.programHere"),
+    } => ctx.t("team_hub.ready.programHere"),
     Missing::McpProgram {
       problem: ProgramProblem::FileGone(_),
       ..

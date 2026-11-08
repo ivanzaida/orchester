@@ -225,11 +225,6 @@ fn hub_panel_sizes_match_the_design() {
       170.0,
       "a panel row's key is 170 wide (P60rze, z3uHz)",
     ),
-    (
-      theme::HubSpacing::KeyNarrow,
-      150.0,
-      "an MCP server's On this computer rows have 150 (SpRvd)",
-    ),
   ] {
     assert_eq!(app.theme().spacing_value(role.role()), Dimension::Px(value), "{why}");
     assert_eq!(role.value(), value, "{why}");

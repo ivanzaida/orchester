@@ -25,7 +25,7 @@ use crate::{
     actions::Busy,
     fill::{self, Tone},
     model::{Entry, Listing},
-    rows::{self, Key, Sub},
+    rows::{self, Sub},
     words as list_words,
   },
   theme::{HubText, IconSize},
@@ -56,12 +56,7 @@ pub(super) fn section(ctx: &Ctx, view: &View<'_>) -> Column {
   let mut rows = Vec::new();
   rows.extend(path_row(ctx, view));
   for name in &view.sheet.secrets {
-    rows.push(fill::secret_row(
-      ctx,
-      Key::Narrow,
-      name,
-      fill::value_of(view.missing, name),
-    ));
+    rows.push(fill::secret_row(ctx, name, fill::value_of(view.missing, name)));
   }
   rows.push(here_row(ctx, view));
   rows::on_this_computer(ctx, rows, Some(note(ctx, view).into()))
@@ -126,13 +121,7 @@ fn path_row(ctx: &Ctx, view: &View<'_>) -> Option<Row> {
         .child(choose(ctx, view)),
     ),
   };
-  Some(rows::row_in(
-    Key::Narrow,
-    id,
-    &ctx.t("team_hub.mcp.path.label"),
-    Some(sub),
-    value,
-  ))
+  Some(rows::row(id, &ctx.t("team_hub.mcp.path.label"), Some(sub), value))
 }
 
 fn choose(ctx: &Ctx, view: &View<'_>) -> Element {
@@ -166,13 +155,7 @@ fn here_row(ctx: &Ctx, view: &View<'_>) -> Row {
     }
     Busy::Taking | Busy::Reading => toggle,
   };
-  rows::row_in(
-    Key::Narrow,
-    "team-hub-here",
-    &ctx.t("team_hub.mcp.here.label"),
-    None,
-    toggle,
-  )
+  rows::row("team-hub-here", &ctx.t("team_hub.mcp.here.label"), None, toggle)
 }
 
 /// What stands under the rows, in the color of how the server stands.
@@ -190,7 +173,7 @@ fn note(ctx: &Ctx, view: &View<'_>) -> Row {
     Some(Missing::McpProgram {
       problem: ProgramProblem::NotSet,
       ..
-    }) => (Tone::Warning, ctx.t("team_hub.mcp.note.setPath")),
+    }) => (Tone::Warning, ctx.t_args("team_hub.mcp.note.setPath", [("name", name)])),
     Some(Missing::McpProgram {
       problem: ProgramProblem::FileGone(path),
       ..

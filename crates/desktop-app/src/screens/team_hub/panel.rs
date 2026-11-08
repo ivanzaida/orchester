@@ -17,10 +17,13 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ProjectId;
-use orchester_workspace::readiness::{Group, ReadinessStanding};
+use orchester_workspace::{
+  readiness::{Group, ReadinessStanding},
+  sharing::team::TeamConfiguration,
+};
 
 use super::{
-  bar,
+  bar, member,
   model::{Entry, Kind, Listing},
   words,
 };
@@ -38,8 +41,7 @@ use crate::{
 /// What the panel needs besides the resource.
 pub(super) struct Shown<'a> {
   pub project: ProjectId,
-  /// The person may change the team's resources: an admin of the team.
-  pub may_change: bool,
+  pub team: &'a TeamConfiguration,
   pub navigation: &'a Navigation,
 }
 
@@ -47,6 +49,7 @@ pub(super) fn panel(ctx: &Ctx, listing: &Listing, entry: &Entry, shown: &Shown<'
   let body = body()
     .child(head(ctx, entry, None))
     .child(chips(ctx, listing, entry))
+    .with_children(member::lock_line(ctx, shown.team))
     .with_children(readiness(ctx, listing, entry));
   frame(entry, body, actions(ctx, entry, shown)).into()
 }
@@ -239,7 +242,7 @@ pub(super) fn editor(entry: &Entry, project: ProjectId) -> Option<Route> {
 /// The pinned actions: Edit for an admin, where the kind has an editor; no bar when there is nothing to do, and
 /// nothing disabled in its place (`Member view`, notes rule 15).
 fn actions(ctx: &Ctx, entry: &Entry, shown: &Shown<'_>) -> Option<Element> {
-  let route = editor(entry, shown.project).filter(|_| shown.may_change)?;
+  let route = editor(entry, shown.project).filter(|_| shown.team.may_change)?;
   let open: Open = shown.navigation.to(route);
   let edit = ActionButton::new("team-hub-edit", ButtonKind::Primary, ctx.t("team_hub.panel.edit"))
     .icon(Icon::Pencil)

@@ -27,11 +27,12 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::{ProjectId, ResourceId};
-use orchester_workspace::agents::team_mcp::TeamMcpSheet;
+use orchester_workspace::{agents::team_mcp::TeamMcpSheet, sharing::team::TeamConfiguration};
 
 use self::fix::{Bar, Fix, Step};
 use super::{
   actions::Actions,
+  member,
   model::{Entry, Listing},
   panel, secret,
 };
@@ -46,6 +47,8 @@ use crate::{
 pub(super) struct Props {
   pub repo_root: PathBuf,
   pub project: ProjectId,
+  /// The team's configuration: an admin may change its resources, and a member reads who the admins are.
+  pub team: TeamConfiguration,
   /// The hub is read again: what shows is the last answer, and a fix would act on it.
   pub reading: bool,
   /// Reads the hub again, as *Check again* asks.
@@ -61,6 +64,7 @@ impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
     self.repo_root == other.repo_root
       && self.project == other.project
+      && self.team == other.team
       && self.reading == other.reading
       && self.listing == other.listing
       && self.entry == other.entry
@@ -136,6 +140,7 @@ impl Component for McpPanel {
         None,
       ))
       .child(chips)
+      .with_children(member::lock_line(ctx, &props.team))
       .child(from_team::section(ctx, sheet))
       .child(computer::section(ctx, &view))
       .with_children(self.failure(ctx));
