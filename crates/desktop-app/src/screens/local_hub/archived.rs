@@ -153,7 +153,11 @@ fn notice(ctx: &Ctx, entry: &Entry, stopped: &[StoppedRun]) -> Column {
       .collect();
     let named: Vec<&str> = runs.iter().map(String::as_str).collect();
     ctx.t_args(
-      "local_hub.archived.stopped",
+      if stopped.len() == 1 {
+        "local_hub.archived.stoppedOne"
+      } else {
+        "local_hub.archived.stopped"
+      },
       [
         ("count", stopped.len().to_string()),
         (

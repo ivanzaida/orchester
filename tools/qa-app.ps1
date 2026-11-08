@@ -86,6 +86,15 @@
 # good in an earlier window (the bundle schema one ahead: "Update Orchester…", Try again and Dismiss). Dismiss, or a
 # later window, tells it no more.
 #
+# -Scenario local-hub is Kontur's Agents hub (`Agents · v2` L1-L14, ORC-842): the local project's master-detail with
+# its profiles (Builder and Reviewer choose kontur-docs), its MCP servers (pencil-design has no program on this computer,
+# one is off, one remote) and a filter with *Archived*. Open the Agents page: MCP servers lists them with no version
+# (L2), a server is edited in place with Save and Cancel (L8; a save that fails stays in place, L12). -Scenario
+# local-hub-archive adds a run working on Feature delivery: the panel's ... menu > Archive on Builder or Reviewer
+# lists what names it and the run that will stop (L11), which only a person's press confirms. -Scenario
+# local-hub-archived is Reviewer, postgres-dev and a skill already archived with the runs they stopped: the Archived
+# filter lists them (L13) and an archived one's panel has Restore (L14).
+#
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes
 # only cargo's target folder: never inside an installed Orchester (a folder with orchester.exe beside orchester.db),
