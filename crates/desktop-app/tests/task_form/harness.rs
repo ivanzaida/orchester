@@ -12,6 +12,7 @@ use orchester_core::{
   task::{Task, TaskDetails},
 };
 use orchester_store::ProjectDb;
+use orchester_workspace::tasks::data::ProjectTasks;
 
 use crate::{
   kontur::{self, SeedRequest, scenarios},
@@ -230,6 +231,17 @@ impl Form {
 }
 
 impl Form {
+  /// Tells the window the project's tasks were saved and waits until the tasks it shows are ones read since, `read`
+  /// holding of them. The feed keeps the tasks last read while it reads again, and a read already under way when the
+  /// database changed ends with the earlier data, so a form opened at once would start from that.
+  pub fn until_tasks_read(&mut self, read: impl Fn(&ProjectTasks) -> bool) {
+    let feed = self.window.projects().feed(self.project);
+    feed.saved();
+    self.window.until("the project's tasks read again", |_| {
+      feed.tasks.get().ready().is_some_and(&read)
+    });
+  }
+
   /// Changes the task `key` in the project's database, as automation or another app would, and has the
   /// window read the project's tasks again.
   pub fn change_elsewhere(&mut self, key: &str, change: impl FnOnce(&mut TaskDetails)) {
