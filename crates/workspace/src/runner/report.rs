@@ -9,7 +9,7 @@ use std::{
 };
 
 use orchester_core::{
-  id::{RunId, TaskId},
+  id::{ChatId, RunId, TaskId},
   run::{PlanVersion, RunNumber},
 };
 use orchester_ipc::{
@@ -20,7 +20,7 @@ use parking_lot::Mutex;
 use tokio::sync::watch;
 
 use super::{
-  changes::RunChanges,
+  changes::{ChatChanges, RunChanges},
   state::{RunnerEvent, RunnerState},
 };
 use crate::{
@@ -213,6 +213,8 @@ pub(super) struct RunCounters {
   pub(super) runs: RunChanges,
   /// A conversation of the Orchestrator chat changed.
   pub(super) chats: watch::Sender<u64>,
+  /// What `chats` counts, for each followed conversation by itself.
+  pub(super) chat: ChatChanges,
   /// The answers sent from this window that the project's tasks were not read back with yet.
   pub(super) answers: watch::Sender<PendingAnswers>,
 }
@@ -241,6 +243,7 @@ impl Shared {
         changes: watch::Sender::new(0),
         runs: RunChanges::default(),
         chats: watch::Sender::new(0),
+        chat: ChatChanges::default(),
         answers: watch::Sender::new(PendingAnswers::default()),
       })
       .clone()
@@ -320,10 +323,11 @@ impl Reporter {
     }
   }
 
-  /// A conversation of the Orchestrator chat changed: the chat reads it again.
-  pub(super) fn chat_changed(&self) {
+  /// Conversation `chat` of the Orchestrator chat changed: the chat reads it again.
+  pub(super) fn chat_changed(&self, chat: ChatId) {
     if let Some(counters) = self.counters() {
       counters.chats.send_modify(|revision| *revision += 1);
+      counters.chat.changed(Some(chat));
     }
   }
 

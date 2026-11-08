@@ -195,8 +195,8 @@ impl Session {
         reporter.run_changed(None);
         true
       }
-      Some(Ok(Some(Event::ChatChanged { .. }))) => {
-        reporter.chat_changed();
+      Some(Ok(Some(Event::ChatChanged { chat }))) => {
+        reporter.chat_changed(chat);
         true
       }
       Some(Ok(Some(Event::AgentActivity { run, .. }))) => {

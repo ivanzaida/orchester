@@ -40,6 +40,7 @@ use orchester_workspace::{
 
 use self::chip::{ChipProps, Hold, LeadChipView};
 use crate::{
+  project::settled_read::settled_read,
   services::Services,
   theme::{ExtraRadius, ExtraSpacing, IconSize, OrchestratorText},
   ui::{
@@ -244,33 +245,31 @@ impl Leads {
   }
 }
 
-/// What `props.chat` leads, read off the UI thread again whenever a conversation or the project's tasks change; the
-/// last reading stays while it is read again. `None` until it is read, and while it cannot be.
+/// What `props.chat` leads, read off the UI thread again whenever the conversation changed or the project's tasks
+/// change, never beside a reading that has not ended (`settled_read`); the last reading stays while it is read again.
+/// `None` until it is read, and while it cannot be.
 fn read(ctx: &mut Ctx, props: &LeadsProps) -> Option<Led> {
   let services = Services::of(ctx);
-  let revision = super::data::revision(ctx, &services.runners, &props.root);
+  let own = super::data::own_changes(ctx, (&services.runners, &props.root), Some(props.chat.id()));
   let hold = services.hold;
-  let deps = (props.root.clone(), props.chat.id(), revision, props.saves);
-  let state = ctx
-    .future(deps, move |(root, chat, ..)| {
-      let hold = hold.clone();
-      async move {
-        hold.released().await;
-        background::run(move || {
-          let read = ProjectDb::open_read_only(&root).and_then(|db| WatchReads::read(&db, &root));
-          read
-            .map(|reads| Led(Arc::new(reads.chat_leads(chat))))
-            .map_err(|error| {
-              tracing::error!(%error, "cannot read what the conversation leads");
-              messages::store_error(&error)
-            })
-        })
-        .await
-        .and_then(|read| read)
-      }
-    })
-    .state()
-    .get();
+  let deps = (props.root.clone(), props.chat.id(), own, props.saves);
+  let state = settled_read(ctx, "orchestrator leads", deps, move |(root, chat, ..)| {
+    let hold = hold.clone();
+    async move {
+      hold.released().await;
+      background::run(move || {
+        let read = ProjectDb::open_read_only(&root).and_then(|db| WatchReads::read(&db, &root));
+        read
+          .map(|reads| Led(Arc::new(reads.chat_leads(chat))))
+          .map_err(|error| {
+            tracing::error!(%error, "cannot read what the conversation leads");
+            messages::store_error(&error)
+          })
+      })
+      .await
+      .and_then(|read| read)
+    }
+  });
   state.data.filter(|_| state.error.is_none())
 }
 
