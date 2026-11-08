@@ -154,6 +154,13 @@ language, compares destinations with members' computers and has no previous thre
 do not widen. Older servers may omit the flag; API readers default it to false and still compare permissions locally
 before applying a version.
 
+**Which versions widen, for every kind (OP-205a, decided 2026-11-08).** A version's `widens` is `true` when it grants
+more than the version before it by core's `SharedBody` rule for its kind (`TeamMcpServer`, `TeamAgentProfile`,
+`TeamReviewer` and `Tool`; a tool widens when, for example, its program, arguments, address or access policy grant
+more), and also when core cannot read its body, on itself and on the version after it; it is `false` for instructions,
+skills and pipelines. A server before OP-205a sends `false` for every tool version. The team server's web app shows the
+server's flag and computes none of its own.
+
 The existing stream carries reviewer metadata in `snapshot.begin.resources` and the existing `resource.published`,
 `resource.renamed` and `resource.archived` deltas. A publication carries the resource with its new `latest`;
 members read the body and stored flag through the versions endpoint. No additional event kind is introduced.
