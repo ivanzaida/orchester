@@ -61,7 +61,7 @@ const fn label_key(filter: HubFilter) -> &'static str {
     HubFilter::Instructions => "team_hub.new.instructions",
     HubFilter::Skills => "team_hub.new.skills",
     HubFilter::Tools => "team_hub.new.tools",
-    HubFilter::All => "team_hub.new.all",
+    HubFilter::All | HubFilter::Archived => "team_hub.new.all",
   }
 }
 

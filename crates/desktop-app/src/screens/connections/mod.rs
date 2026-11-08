@@ -15,12 +15,12 @@
 mod account;
 mod add_agent;
 mod add_decision;
-mod data;
+pub(in crate::screens) mod data;
 mod decision;
 mod edit_agent;
 mod inspector;
 mod list;
-mod mcp_form;
+pub(in crate::screens) mod mcp_form;
 mod native_form;
 mod page;
 mod provider_form;

@@ -275,6 +275,7 @@ fn hub_params(page: &ProjectPage) -> Vec<(&'static str, String)> {
   };
   let mut params = vec![("filter", view.filter.name().to_owned())];
   params.extend(view.item.map(|item| ("item", item.to_string())));
+  params.extend(view.server.map(|server| ("server", server.to_string())));
   params
 }
 

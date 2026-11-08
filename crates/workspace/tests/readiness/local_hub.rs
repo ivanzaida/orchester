@@ -119,6 +119,7 @@ fn readiness_local_hub_lists_instructions_and_skills_and_what_was_archived() {
     .iter()
     .map(|found| (found.what, found.kind, found.name.as_str()))
     .collect();
+  assert!(read.archived().iter().all(|found| found.stopped.is_empty()));
   assert_eq!(
     archived,
     [

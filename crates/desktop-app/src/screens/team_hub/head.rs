@@ -171,7 +171,7 @@ fn reading_mark(ctx: &Ctx) -> Row {
 
 const fn label_key(filter: HubFilter) -> &'static str {
   match filter {
-    HubFilter::All => "team_hub.filter.all",
+    HubFilter::All | HubFilter::Archived => "team_hub.filter.all",
     HubFilter::Profiles => "team_hub.filter.profiles",
     HubFilter::McpServers => "team_hub.filter.mcpServers",
     HubFilter::Instructions => "team_hub.filter.instructions",
@@ -184,13 +184,13 @@ const fn label_key(filter: HubFilter) -> &'static str {
 /// local.
 const fn hint_key(filter: HubFilter, may_change: bool) -> &'static str {
   match (may_change, filter) {
-    (true, HubFilter::All) => "team_hub.hint.all",
+    (true, HubFilter::All | HubFilter::Archived) => "team_hub.hint.all",
     (true, HubFilter::Profiles) => "team_hub.hint.profiles",
     (true, HubFilter::McpServers) => "team_hub.hint.mcpServers",
     (true, HubFilter::Instructions) => "team_hub.hint.instructions",
     (true, HubFilter::Skills) => "team_hub.hint.skills",
     (true, HubFilter::Tools) => "team_hub.hint.tools",
-    (false, HubFilter::All) => "team_hub.member.hint.all",
+    (false, HubFilter::All | HubFilter::Archived) => "team_hub.member.hint.all",
     (false, HubFilter::Profiles) => "team_hub.member.hint.profiles",
     (false, HubFilter::McpServers) => "team_hub.member.hint.mcpServers",
     (false, HubFilter::Instructions) => "team_hub.member.hint.instructions",

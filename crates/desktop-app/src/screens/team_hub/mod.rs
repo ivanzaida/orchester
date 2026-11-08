@@ -12,25 +12,25 @@
 //! last answer as current. Before the project is known to be shared the page is [`unread`]'s.
 
 mod actions;
-mod archive;
-mod bar;
+pub(in crate::screens) mod archive;
+pub(in crate::screens) mod bar;
 mod create;
 mod fill;
 mod head;
-mod list;
+pub(in crate::screens) mod list;
 mod mcp;
 mod member;
 mod model;
-mod panel;
+pub(in crate::screens) mod panel;
 mod plain;
 mod profile;
-mod row;
+pub(in crate::screens) mod row;
 mod rows;
 mod secret;
 mod taken_back;
 mod tool;
 pub(super) mod unread;
-mod words;
+pub(in crate::screens) mod words;
 
 use lurq::{
   app::{

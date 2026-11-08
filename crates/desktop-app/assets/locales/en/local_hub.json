@@ -1,0 +1,108 @@
+{
+  "local_hub": {
+    "title": "Agents",
+    "local": "Local project · only on this computer",
+    "share": "Share with a team…",
+    "reading": "Reading…",
+    "rereading": "Reading…",
+    "loadFailed": "The agents of this project couldn't be read",
+    "new": {
+      "profiles": "New agent",
+      "mcpServers": "New MCP server",
+      "instructions": "New instruction",
+      "skills": "New skill",
+      "tools": "New tool"
+    },
+    "filter": {
+      "all": "All",
+      "profiles": "Profiles",
+      "mcpServers": "MCP servers",
+      "instructions": "Instructions",
+      "skills": "Skills",
+      "tools": "Tools",
+      "archived": "Archived"
+    },
+    "hint": {
+      "all": "Everything in this project, kept on this computer",
+      "profiles": "Your agent profiles, kept on this computer",
+      "mcpServers": "Your MCP servers, kept on this computer",
+      "instructions": "Your instructions, kept on this computer",
+      "skills": "Your skills, kept on this computer",
+      "tools": "Your tools, kept on this computer",
+      "archived": "Hidden from lists and pickers · Restore brings one back"
+    },
+    "group": {
+      "needs": "Needs you",
+      "ready": "Ready",
+      "off": "Off",
+      "archived": "Archived"
+    },
+    "empty": {
+      "title": "Nothing of this kind yet",
+      "detail": "This project has none yet. New adds one."
+    },
+    "line": {
+      "archived": "Archived {{date}}, {{time}}",
+      "connectionNone": "No {{cli}} connection",
+      "connectionPick": "Choose a {{cli}} connection",
+      "many": "{{count}} things missing",
+      "off": "Off",
+      "offRuns": "Off · {{names}} run without it",
+      "on": "On",
+      "onUsed": "On · used by {{names}}",
+      "programHere": "Set its program path",
+      "programOf": "Set the program path of {{server}}",
+      "ready": "Ready",
+      "runsOn": "{{cli}} · {{connection}}",
+      "saveRefused": "Couldn't save · unsaved changes",
+      "secret": "Secret {{name}} has no value",
+      "undecided": "Can't tell yet whether it is ready",
+      "unsaved": "Unsaved changes · {{rest}}"
+    },
+    "chip": {
+      "archived": "Archived",
+      "off": "Off",
+      "ready": "Ready",
+      "unsaved": "Unsaved changes"
+    },
+    "panel": {
+      "connection": "Runs on",
+      "edit": "Edit",
+      "editHint": "Opens its editor: edits are saved as a draft, and Publish makes the next version",
+      "mcpServers": "MCP servers",
+      "usedBy": "used by {{names}}"
+    },
+    "readiness": {
+      "title": "Ready?",
+      "missing": "{{count}} missing"
+    },
+    "mcp": {
+      "cancel": "Cancel",
+      "gone": "This MCP server is no longer in the project.",
+      "on": "On",
+      "onHint": "Runs may use it",
+      "onlyHere": "Only on this computer",
+      "refusedBody": "Nothing was saved, not even the other fields. Your edits stay in the form. {{reason}}",
+      "refusedTitle": "Couldn't save {{name}}",
+      "save": "Save",
+      "saveHint": "Save applies the changes to this project at once; Cancel puts back what was saved",
+      "unsavedBody": "Not saved yet. Save applies the changes to this project at once; Cancel puts back what was saved."
+    },
+    "archive": {
+      "action": "Archive",
+      "more": "More"
+    },
+    "archived": {
+      "emptyTitle": "Nothing archived",
+      "emptyDetail": "Archiving takes a resource out of the lists and pickers. It shows up here, and Restore brings it back.",
+      "nothingTitle": "Pick an archived resource",
+      "nothingDetail": "Archived resources are hidden from lists and pickers, and the runs that pinned them were stopped. Pick one to see what archiving did and to restore it.",
+      "restore": "Restore {{name}}",
+      "restoreHint": "Back in lists and pickers at once · stopped runs stay stopped",
+      "run": "{{key}} · {{title}}",
+      "stopped": "Archiving stopped {{count}} runs that pinned it, {{runs}}. Restore puts {{name}} back in the lists and pickers as it was; those runs stay stopped, so run them again to use it.",
+      "stoppedNone": "Archiving stopped no runs. Restore puts {{name}} back in the lists and pickers as it was.",
+      "title": "Archived: hidden from lists and pickers"
+    }
+  }
+}

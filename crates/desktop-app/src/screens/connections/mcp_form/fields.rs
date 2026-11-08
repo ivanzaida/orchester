@@ -44,7 +44,7 @@ const SECRETS_MENU_WIDTH: f32 = 300.0;
 
 /// The page's fields.
 #[derive(Clone)]
-pub(super) struct Fields {
+pub(in crate::screens) struct Fields {
   name: Signal<String>,
   transport: Signal<TransportChoice>,
   program: Signal<String>,
@@ -63,7 +63,7 @@ pub(super) struct Fields {
 
 impl Fields {
   /// The fields, filled with `text`.
-  pub(super) fn new(ctx: &mut Ctx, text: &McpServerText) -> Self {
+  pub(in crate::screens) fn new(ctx: &mut Ctx, text: &McpServerText) -> Self {
     Self {
       name: ctx.signal(text.name.clone()),
       transport: ctx.signal(text.transport),
@@ -81,7 +81,7 @@ impl Fields {
   }
 
   /// The fields as typed.
-  pub(super) fn text(&self) -> McpServerText {
+  pub(in crate::screens) fn text(&self) -> McpServerText {
     McpServerText {
       name: self.name.get(),
       transport: self.transport.get(),
@@ -97,7 +97,7 @@ impl Fields {
 
   /// The page's groups, and the warning line of what adding a server widens (`adding`); an error shows under a field
   /// that holds something, and under every field once a save was `tried`.
-  pub(super) fn sections(
+  pub(in crate::screens) fn sections(
     &self,
     ctx: &mut Ctx,
     (listed, errors): (&ProjectConnections, &McpServerErrors),

@@ -47,7 +47,7 @@ impl Kind {
   /// The kind the filter holds; `None` for All, which holds them all.
   pub(super) const fn of_filter(filter: HubFilter) -> Option<Self> {
     match filter {
-      HubFilter::All => None,
+      HubFilter::All | HubFilter::Archived => None,
       HubFilter::Profiles => Some(Self::Profile),
       HubFilter::McpServers => Some(Self::McpServer),
       HubFilter::Instructions => Some(Self::Instruction),

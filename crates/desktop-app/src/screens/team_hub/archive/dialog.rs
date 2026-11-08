@@ -16,7 +16,7 @@ use lurq::{
 };
 use orchester_api::{SharedResourceKind, UsedBy, UsedByResource, UsedByRun};
 
-use super::{Failed, Props, ReadFailed, words};
+use super::{Failed, ReadFailed, words};
 use crate::{
   theme::{ARCHIVE_DIALOG_WIDTH, ArchiveText, DialogSpacing, ExtraRadius, ExtraSpacing},
   ui::{
@@ -29,11 +29,20 @@ use crate::{
   },
 };
 
+/// What the confirmation is about.
+pub(in crate::screens) struct DialogProps {
+  pub name: Arc<str>,
+  /// Whether a profile that names the resource stays not ready once it is archived.
+  pub blocks_profiles: bool,
+  /// A local project's confirmation: its own words, no admins and no other people's runs.
+  pub local: bool,
+}
+
 /// What *Archive and stop N runs* does.
-pub(super) type Confirm = Arc<dyn Fn() + Send + Sync>;
+pub(in crate::screens) type Confirm = Arc<dyn Fn() + Send + Sync>;
 
 /// What the confirmation shows now.
-pub(super) struct State {
+pub(in crate::screens) struct State {
   /// What uses the resource: none while it is read; the failure when it could not be.
   pub read: Option<Result<UsedBy, ReadFailed>>,
   /// The archive was asked for and has not answered.
@@ -46,9 +55,9 @@ pub(super) struct State {
 
 /// The confirmation over the window while `open` holds. `retry` reads what uses the resource again; `confirm` asks for
 /// the archive.
-pub(super) fn dialog(
+pub(in crate::screens) fn dialog(
   ctx: &mut Ctx,
-  props: &Props,
+  props: &DialogProps,
   state: State,
   (open, retry, confirm): (&Signal<bool>, &Signal<u64>, Confirm),
 ) -> Element {
@@ -68,20 +77,27 @@ pub(super) fn dialog(
         .variant(ArchiveText::Title.role()),
     )
     .child(
-      Text::new(&ctx.t_args("team_archive.body", [("name", name)]))
-        .id("team-hub-archive-body")
-        .variant(ArchiveText::Body.role())
-        .width(Dimension::Pct(100.0)),
+      Text::new(&ctx.t_args(
+        if props.local {
+          "local_archive.body"
+        } else {
+          "team_archive.body"
+        },
+        [("name", name)],
+      ))
+      .id("team-hub-archive-body")
+      .variant(ArchiveText::Body.role())
+      .width(Dimension::Pct(100.0)),
     );
   let stops = match &state.read {
     Some(Ok(used)) => {
       dialog = dialog
         .child(used_by(ctx, &used.resources))
-        .child(runs(ctx, &used.runs))
+        .child(runs(ctx, props.local, &used.runs))
         .with_children(
           props
             .blocks_profiles
-            .then(|| note(ctx, (name, &used.resources)))
+            .then(|| note(ctx, props.local, (name, &used.resources)))
             .flatten(),
         );
       Some(used.runs.len())
@@ -172,7 +188,7 @@ fn used_by(ctx: &Ctx, resources: &[UsedByResource]) -> Column {
   group(ctx, "team-hub-archive-used", &heading, rows, "team_archive.nothingUses")
 }
 
-fn runs(ctx: &Ctx, runs: &[UsedByRun]) -> Column {
+fn runs(ctx: &Ctx, local: bool, runs: &[UsedByRun]) -> Column {
   let rows = runs
     .iter()
     .enumerate()
@@ -194,13 +210,20 @@ fn runs(ctx: &Ctx, runs: &[UsedByRun]) -> Column {
       .into()
     })
     .collect();
-  let heading = ctx.t_args("team_archive.runs", [("count", runs.len().to_string())]);
+  let heading = ctx.t_args(
+    if local {
+      "local_archive.runs"
+    } else {
+      "team_archive.runs"
+    },
+    [("count", runs.len().to_string())],
+  );
   group(ctx, "team-hub-archive-runs", &heading, rows, "team_archive.noRuns")
 }
 
 /// What stays not ready: the profiles that name the resource, until it is taken out of them or restored; none when no
 /// profile does.
-fn note(ctx: &Ctx, (name, used): (&str, &[UsedByResource])) -> Option<Text> {
+fn note(ctx: &Ctx, local: bool, (name, used): (&str, &[UsedByResource])) -> Option<Text> {
   let profiles: Vec<&str> = used
     .iter()
     .filter(|used| used.kind == SharedResourceKind::AgentProfile)
@@ -209,10 +232,11 @@ fn note(ctx: &Ctx, (name, used): (&str, &[UsedByResource])) -> Option<Text> {
   if profiles.is_empty() {
     return None;
   }
-  let key = if profiles.len() == 1 {
-    "team_archive.note.one"
-  } else {
-    "team_archive.note.many"
+  let key = match (local, profiles.len() == 1) {
+    (false, true) => "team_archive.note.one",
+    (false, false) => "team_archive.note.many",
+    (true, true) => "local_archive.note.one",
+    (true, false) => "local_archive.note.many",
   };
   let names = words::listed(ctx, &profiles);
   Some(

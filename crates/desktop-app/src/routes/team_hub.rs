@@ -2,12 +2,13 @@
 //! shows, kept in its route (`/project/<id>/agents?filter=mcp_servers&item=<id>`), or the form that creates a resource
 //! of the filter's kind (`…?filter=mcp_servers&new=1`, A7–A12).
 
-use orchester_core::id::ResourceId;
+use orchester_core::id::{ConnectionId, ResourceId};
 
 use super::{RouteError, query::Params};
 
 const FILTER: &str = "filter";
 const ITEM: &str = "item";
+const SERVER: &str = "server";
 const NEW: &str = "new";
 
 /// Which kinds the hub's list shows; All is the one it opens on.
@@ -20,9 +21,12 @@ pub enum HubFilter {
   Instructions,
   Skills,
   Tools,
+  /// What a local project archived (`Agents · Archived` L13 `MXma9`); only a local project's hub offers it.
+  Archived,
 }
 
 impl HubFilter {
+  /// The filters a team project's hub offers.
   pub const ALL: [Self; 6] = [
     Self::All,
     Self::Profiles,
@@ -30,6 +34,17 @@ impl HubFilter {
     Self::Instructions,
     Self::Skills,
     Self::Tools,
+  ];
+
+  /// The filters a local project's hub offers: the team's and *Archived*.
+  pub const LOCAL: [Self; 7] = [
+    Self::All,
+    Self::Profiles,
+    Self::McpServers,
+    Self::Instructions,
+    Self::Skills,
+    Self::Tools,
+    Self::Archived,
   ];
 
   /// The filter's name in a path's query and in the filter's element ids.
@@ -41,12 +56,13 @@ impl HubFilter {
       Self::Instructions => "instructions",
       Self::Skills => "skills",
       Self::Tools => "tools",
+      Self::Archived => "archived",
     }
   }
 
   /// The filter named `name`, as [`Self::name`] spells it.
   pub fn from_name(name: &str) -> Option<Self> {
-    Self::ALL.into_iter().find(|filter| filter.name() == name)
+    Self::LOCAL.into_iter().find(|filter| filter.name() == name)
   }
 }
 
@@ -55,6 +71,9 @@ impl HubFilter {
 pub struct HubView {
   pub filter: HubFilter,
   pub item: Option<ResourceId>,
+  /// The local MCP server the panel shows: a local server is a connection with its own id, not a resource
+  /// (`docs/design/team-configuration.md` rule 12); only a local project's hub has one.
+  pub server: Option<ConnectionId>,
   /// The panel is the form that creates a resource of the filter's kind, which only a kind has (not All).
   pub adding: bool,
 }
@@ -64,6 +83,17 @@ impl HubView {
     Self {
       filter,
       item,
+      server: None,
+      adding: false,
+    }
+  }
+
+  /// The hub on the local MCP server `server`, under `filter`.
+  pub const fn on_server(filter: HubFilter, server: ConnectionId) -> Self {
+    Self {
+      filter,
+      item: None,
+      server: Some(server),
       adding: false,
     }
   }
@@ -73,6 +103,7 @@ impl HubView {
     Self {
       filter,
       item: None,
+      server: None,
       adding: true,
     }
   }
@@ -80,19 +111,30 @@ impl HubView {
   /// `path` with the filter and the item the hub is not opened on.
   pub(super) fn path(self, path: String) -> String {
     let item = self.item.map(|item| item.to_string());
+    let server = self.server.map(|server| server.to_string());
     let filter = (self.filter != HubFilter::default()).then(|| self.filter.name());
     let adding = self.adding.then_some("1");
-    super::with_query(path, &[(FILTER, filter), (ITEM, item.as_deref()), (NEW, adding)])
+    super::with_query(
+      path,
+      &[
+        (FILTER, filter),
+        (ITEM, item.as_deref()),
+        (SERVER, server.as_deref()),
+        (NEW, adding),
+      ],
+    )
   }
 
   pub(super) fn take(params: &mut Params) -> Result<Self, RouteError> {
     let filter = params.take_or_default(FILTER, HubFilter::from_name)?;
     let item = params.take_parsed(ITEM)?;
+    let server = params.take_parsed(SERVER)?;
     // A form has no resource, and only a kind has a form.
     let adding = params.take(NEW)?.is_some_and(|new| new == "1") && filter != HubFilter::All;
     Ok(Self {
       filter,
       item: item.filter(|_| !adding),
+      server: server.filter(|_| !adding),
       adding,
     })
   }

@@ -10,10 +10,10 @@ use orchester_core::{
   id::{ConnectionId, ResourceId},
   resource::{AgentProfile, Instruction, Pipeline, ResourceKind, Skill, Tool, ToolKind, VersionNumber},
   secret::SecretVault,
-  store::{ConnectionStore, McpServerStore, ResourceStore},
+  store::{ConnectionStore, McpServerStore, ResourceStore, TaskStore},
   time::Timestamp,
 };
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{ArchiveStop, ProjectDb, StoreError};
 
 use super::team_hub::Form;
 use crate::{
@@ -52,6 +52,16 @@ pub struct LocalArchived {
   pub kind: ResourceKind,
   pub name: String,
   pub at: Timestamp,
+  /// The runs its archive stopped, oldest first.
+  pub stopped: Vec<StoppedRun>,
+}
+
+/// A run an archive stopped, by its task.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct StoppedRun {
+  /// The task's key, *KON-9*.
+  pub key: String,
+  pub title: String,
 }
 
 /// The resources the hub of a local project lists, and how they stand on this computer.
@@ -246,6 +256,7 @@ fn archived(db: &ProjectDb) -> Result<Vec<LocalArchived>, StoreError> {
         kind,
         name: resource.name().to_string(),
         at,
+        stopped: stopped(db, &db.archive_stops_of_resource(resource.id())?)?,
       });
     }
   }
@@ -257,11 +268,26 @@ fn archived(db: &ProjectDb) -> Result<Vec<LocalArchived>, StoreError> {
         kind: ResourceKind::McpServer,
         name: server.name().to_string(),
         at,
+        stopped: stopped(db, &db.archive_stops_of_mcp_server(id)?)?,
       });
     }
   }
   archived.sort_by(|a, b| b.at.cmp(&a.at).then_with(|| a.name.cmp(&b.name)));
   Ok(archived)
+}
+
+/// The tasks of the runs `stops` names; a task the project no longer has is left out.
+fn stopped(db: &ProjectDb, stops: &[ArchiveStop]) -> Result<Vec<StoppedRun>, StoreError> {
+  let mut runs = Vec::new();
+  for stop in stops {
+    if let Some(task) = db.task(stop.task)? {
+      runs.push(StoppedRun {
+        key: task.key().to_string(),
+        title: task.details().title.to_string(),
+      });
+    }
+  }
+  Ok(runs)
 }
 
 /// Whether a server is reached at an address, from its transport.
