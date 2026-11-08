@@ -4,15 +4,18 @@
 //! `/unwatch` or × on a header chip ([`stop_in`]), and `/watching` (06 `Ff7AD`, [`watching_in`]). The app applies
 //! them itself, with no agent turn and nothing spent, also while a turn of the conversation is under way: each keeps
 //! the person's command and its lines as entries of the
-//! conversation, and the line another conversation is owed in that one. The agent has no tool for any of this; only
-//! the person subscribes. A target closed or deleted meanwhile is refused with [`WatchError`], whose
-//! [`WatchError::message`] the composer shows.
+//! conversation, and the line another conversation is owed in that one. Only the person subscribes: with a command,
+//! or by asking the Orchestrator in words, whose `watch` and `unwatch` tools ([`tool`], ORC-893) apply the same
+//! watch and stop for its conversation only ([`watch_asked_in`], [`StopBy::Request`]) and never take a target over.
+//! A target closed or deleted meanwhile is refused with [`WatchError`], whose [`WatchError::message`] the composer
+//! shows.
 
 mod asked;
 mod read;
 mod start;
 mod stop;
 mod take;
+pub(super) mod tool;
 
 use orchester_core::{
   orchestrator::{
@@ -26,7 +29,7 @@ use thiserror::Error;
 
 pub use self::{
   asked::watching_in,
-  start::{Watched, watch_in},
+  start::{Watched, watch_asked_in, watch_in},
   stop::{StopBy, StopWhat, Unwatched, stop_in},
   take::{TakenHere, leave_there_in, take_over_in},
 };

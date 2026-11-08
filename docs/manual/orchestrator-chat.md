@@ -116,7 +116,7 @@ Related: *Let automation answer approvals* and *Let automation change agent perm
 *Daily report from the Orchestrator* (Settings › Notifications), *Let Orchester estimate story points* (Project settings
 › Runs › Estimates).
 
-## Chat-only tools (25)
+## Chat-only tools (27)
 
 ### `init_repository`
 
@@ -152,7 +152,7 @@ Refusals: `own_task`, `other_project`, `not_waiting_for_person` (a tool call's a
 What ends the wait, read by the waits follower:
 
 - **The waited task's run is merged into the waiting run's base branch** — a *waited task merged* event of the
-  waiting task, kept in the conversation that leads it (else by the usual rule). With *Let the Orchestrator
+  waiting task, kept in the conversation that leads it (in none when no conversation leads it). With *Let the Orchestrator
   drive* on it starts a turn there, which tells the run's agents with `send_message` (by the tool's rules as for any
   message); when the run goes on, the base-moved path merges the base branch into its worktree.
 - **The waited task is canceled, or closed without that merge** (a merge into another branch counts as closed) — a
@@ -165,6 +165,25 @@ What ends the wait, read by the waits follower:
   waits for a message gets one telling it to go on; a plan waiting for a decision goes on once the person decides it.
   No agent turn starts.
 - **The waiting run ends** — the wait ends without a word.
+
+### `watch` and `unwatch`
+
+When the person asks in words in this conversation ("watch ORC-889 and ORC-890", "follow the Docs module", "stop
+watching Docs"), the chat subscribes or unsubscribes **this conversation** with the same watch and stop the
+[commands](#the-commands) apply, by the same rules: the most specific subscription wins, and stopping cancels and
+pauses nothing. No command bubble is kept: the conversation shows the usual line with a quiet *at your request*
+(*Leading Docs · 4 tasks at your request — …*, *Stopped watching Docs at your request — nothing is canceled or
+paused*), and History's *Leads …* and the header's chips change as for a command. A target another conversation leads
+is **not taken over**: `watch` answers it under `led_elsewhere` with that conversation's title, and the conversation
+shows the [already-led card](#already-led-elsewhere), where only the person chooses *Take it here* (with the order
+their words gave) or *Open that conversation*.
+
+Parameters of `watch`: `targets` (req.: task keys, module names or ids, `without_module`, `project`), `order` (the
+person's words for their events; left out, the default order), `project` (the chat's own). It answers `started`,
+`already_here`, `led_elsewhere` and `gone`. Parameters of `unwatch`: `targets`, or `all: true`; it answers `stopped`
+and `left_open`. Refusals: `event_turn` (a turn Orchester started by itself: the agent never subscribes on its own),
+`target_not_found`, `other_project`, `gone`, `not_watched`, `led_elsewhere` (unwatch of what another conversation
+leads), `no_target`; a turn that plans refuses both, as every change.
 
 ### MCP server tools
 
@@ -208,19 +227,23 @@ resolution holds the checkout, and `operation_in_progress` during a merge or reb
 
 ## Turns the Orchestrator starts itself
 
-Every event of a task below is kept as **one entry** in exactly one conversation, chosen by the **routing rule**:
+Only subscriptions route the events of a task. By the **routing rule**, each event below is kept as **one entry** in
+the conversation that **leads the task** through a subscription (see [Watching](#watching)): the task's own, else its
+module's (or *Tasks without a module*'s, for a task with none), else the whole project's (*Everything in* the
+project).
 
-1. the conversation that **leads the task** through a subscription (see [Watching](#watching)): the task's own, else
-   its module's (or *Tasks without a module*'s, for a task with none), else the whole project's;
-2. with no subscription covering the task, the conversation that last dealt with the task or its run;
-3. else the project's latest conversation, else a new one, titled after the task and what waits.
+An event of a task **no conversation leads goes to no conversation** and starts no turn, even when a conversation
+dealt with the task before: it stays where it always shows outside the chat — the task's page, *Needs you*, the
+Overview and the notifications. No conversation is ever opened for an event. While such an event still stands, a
+subscription that starts later takes it into its conversation. To get every event into one conversation, watch
+*Everything in* the project there (`/watch-module`). Entries kept before stay in their conversations' history.
 
 A watched task's events never reach another conversation, whoever dealt with it before. With *Let the Orchestrator
 drive* on, each entry also starts **one** turn there by itself — never while another turn of that conversation thinks
 (it waits for that turn to end) and only while what it is about still stands; whoever started the run and whatever
 raised the event, the Orchestrator's own answer, message, merge or cancel included. With the switch off the entry only
 links to its card. Such a turn is
-marked `[Orchester]`; in a conversation that leads something it is told the subscription the event came through and
+marked `[Orchester]`; it is told the subscription the event came through and
 the order that applies (see [Orders](#orders)).
 
 - **Waits** — when an agent asks a question with suggested answers, a step waits for a message, or a plan waits for a
@@ -253,9 +276,11 @@ the order that applies (see [Orders](#orders)).
 ## Watching
 
 A conversation **leads** what the person tells it to watch: its subscriptions decide where the events of their tasks
-go (the routing rule above). Subscriptions are **the person's alone**: the app applies the commands itself, and the
-agent has no tool that subscribes or stops — it only sees its subscriptions and their orders, in its standing
-instructions and in every turn an event starts. A watch command sent by automation (synthetic input) is not applied.
+go (the routing rule above). Subscriptions are **the person's alone**: the person subscribes with the commands, which
+the app applies itself, or by asking the Orchestrator in words, whose [`watch` and `unwatch`](#watch-and-unwatch)
+apply the same for this conversation only, never on the agent's own initiative and never in a turn Orchester started.
+The agent sees its subscriptions and their orders in its standing instructions and in every turn an event starts. A
+watch command sent by automation (synthetic input) is not applied.
 
 ### The commands
 
@@ -318,9 +343,9 @@ the line *… is now led in «…»*). Only a person chooses on the card: synthe
   stops that subscription.
 - History shows *Leads …* on a conversation that leads something.
 - A module's Summary and a task's Summary properties show **Led in** with the leading conversation.
-- Stopping (× or *Stop watching*) ends the subscription at once and **cancels or pauses nothing**: the line *Stopped
-  watching …* lists what was left open (waiting, running, queued, stopped at a limit), which goes back to the usual
-  rule.
+- Stopping (×, *Stop watching*, or asking the Orchestrator in words) ends the subscription at once and **cancels or
+  pauses nothing**: the line *Stopped watching …* lists what was left open (waiting, running, queued, stopped at a
+  limit); its later events go to the conversation of a less specific subscription that covers it, or to none.
 
 ### Ending
 

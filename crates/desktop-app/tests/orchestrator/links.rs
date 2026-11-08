@@ -478,8 +478,16 @@ fn orchestrator_reply_draws_labelled_links_as_a_grid_and_any_other_list_as_a_lis
     long.width > 100.0 && long.height < 80.0,
     "the detail keeps room beside a long address: {long:?}"
   );
-  // Shift+Tab from the message field: the plain list's KON-2, then the grid's #42, whose ring nothing clips.
+  // Shift+Tab from the message field: the answer's *Fork* and *Copy*, then the plain list's KON-2, then the grid's #42,
+  // whose ring nothing clips.
   focus_message_field(&mut screen);
+  for control in ["-fork", "-copy"] {
+    shift_tab(&mut screen);
+    assert!(
+      focused_id(&mut screen).is_some_and(|id| id.ends_with(control)),
+      "Shift+Tab reaches the answer's {control} control before its links"
+    );
+  }
   shift_tab(&mut screen);
   assert_eq!(shift_tab(&mut screen).as_deref(), Some("#42 Delivery log"));
   let rings = rings(&mut screen);

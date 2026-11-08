@@ -1,11 +1,14 @@
 //! The Orchestrator chat follows the runs that stall (ORC-767) as it follows its agents' waits ([`super::waits`]):
 //! when a run an agent works on made no progress (no run event such as a step change, no transcript event such as a
-//! tool call, no agent launch) for the project's *A run without progress for* minutes, a conversation keeps one
-//! *no progress* event for it ([`TaskEventKind::NoProgress`]), routed and starting its turn as a wait does. The event
-//! is kept by the run and the time of its last progress, so it is raised once per stall and progress again re-arms
-//! it. A run that waits for a person, is queued (pending, or waiting for an agent slot or a workspace), paused, asked
-//! to pause or held on another task never stalls; with the setting off nothing is raised. No timer of its own: the
-//! follower reads the stalls each time it follows, and the app follows again by [`next_stall_in`].
+//! tool call, no agent launch, no decision on a tool request or answer to a question) for the project's *A run without
+//! progress for* minutes, a conversation keeps one *no progress* event for it ([`TaskEventKind::NoProgress`]), routed
+//! and starting its turn as a wait does. The event is kept by the run and the time of its last progress, so it is
+//! raised once per stall and progress again re-arms it; it stands until then, and reads as settled after
+//! ([`settled`]). A run that waits for a person (a step waiting for a message or a plan decision, a tool request or a
+//! question waiting for them, ORC-894), is queued (pending, or waiting for an agent slot or a workspace), paused, asked
+//! to pause or held on another task never stalls: its clock starts again once it no longer waits. With the setting off
+//! nothing is raised. No timer of its own: the follower reads the stalls each time it follows, and the app follows
+//! again by [`next_stall_in`].
 
 use std::{collections::HashSet, path::Path};
 
@@ -19,6 +22,7 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, StoreError};
 
+use super::chat::StallSettled;
 use crate::{
   links::{Link, TaskPage},
   messages::{self, Message},
@@ -101,11 +105,31 @@ fn working(db: &ProjectDb) -> Result<Vec<(Task, Run, Timestamp)>, StoreError> {
   Ok(working)
 }
 
-/// The runs held: waiting on another task, or for a workspace.
+/// The runs held: waiting on another task or for a workspace, or whose agent waits for a decision on its tool request
+/// (a person's, or auto mode's reviewer's) or for the answer to its question, while its step still runs.
 fn held(db: &ProjectDb) -> Result<HashSet<RunId>, StoreError> {
   let mut held: HashSet<RunId> = db.active_run_waits()?.into_iter().map(|kept| kept.wait.run()).collect();
   held.extend(db.workspace_waits()?.into_iter().map(|(run, _)| run));
+  held.extend(
+    db.pending_tool_approvals_all()?
+      .into_iter()
+      .map(|approval| approval.run),
+  );
+  held.extend(db.waiting_questions()?.into_iter().map(|asked| asked.request.run()));
   Ok(held)
+}
+
+/// What became of `run` (`None`: the project no longer keeps it) since its stall without progress since `since`, once
+/// that stall no longer stands: that it ended (or is gone), when it progressed again, or that it waits now without
+/// progress since (for a person, in a queue, paused or held). Blocks on SQLite.
+pub(super) fn settled(db: &ProjectDb, run: Option<&Run>, since: Timestamp) -> Result<StallSettled, StoreError> {
+  let Some(run) = run.filter(|run| !run.status().is_terminal()) else {
+    return Ok(StallSettled::Ended);
+  };
+  Ok(match db.run_progressed_after(run.id(), since)? {
+    Some(at) => StallSettled::Moving(at),
+    None => StallSettled::Waits,
+  })
 }
 
 /// The no-progress `event` of `task`'s run `run`, as the conversation keeps it: named after the step an agent works

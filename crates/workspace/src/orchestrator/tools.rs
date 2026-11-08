@@ -28,6 +28,7 @@ use super::{
   repository::{self, INIT_REPOSITORY},
   told,
   waits_on::{self, WAIT_ON_TASK},
+  watch::tool as watch_tool,
 };
 use crate::{
   app_mcp::{self, Services, ToolError, Translate, blocking},
@@ -105,8 +106,11 @@ pub const TOOLS: [&str; 58] = [
 /// the person applies ([`super::repository`]), working with git in it ([`super::git`]), changing the project's
 /// MCP servers, a card the person applies for whatever widens ([`super::mcp_servers`]), applying a proposal the
 /// person approved in their own words ([`super::approval`]), answering with a plan in plan-only mode
-/// ([`super::plan`]), and making a waiting run wait on another task ([`super::waits_on`]).
-pub const CHAT_TOOLS: [&str; 25] = [
+/// ([`super::plan`]), making a waiting run wait on another task ([`super::waits_on`]), and watching and stopping
+/// watching at the person's request in words ([`watch_tool`]).
+pub const CHAT_TOOLS: [&str; 27] = [
+  watch_tool::WATCH,
+  watch_tool::UNWATCH,
   INIT_REPOSITORY,
   APPLY_PROPOSAL,
   PROPOSE_PLAN,
@@ -176,6 +180,7 @@ pub fn listed(drives: bool) -> Vec<Tool> {
     .chain([repository::tool(), approval::tool(), plan::tool(), waits_on::tool()])
     .chain(git::tools())
     .chain(mcp_servers::tools())
+    .chain(watch_tool::tools())
     .collect()
 }
 
@@ -233,6 +238,9 @@ pub async fn call(
   }
   if mcp_servers::is_tool(name) {
     return mcp_servers::call((services, translate, runners), scope, name, arguments).await;
+  }
+  if watch_tool::is_tool(name) {
+    return watch_tool::call(runners, scope, name, arguments).await;
   }
   if name == APPLY_PROPOSAL {
     return approval::call((services, translate, runners), scope, arguments).await;

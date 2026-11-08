@@ -210,8 +210,8 @@ fn orchestrator_tools_say_which_interrupted_runs_resume_run_continues() {
     "runner_failure storage_contention",
     "interrupted_again",
     "(storage_contention)",
-    "is continued with continue_run",
-    "one the person canceled",
+    "continue_run decides it",
+    "One the person canceled",
     "whose worktree is gone",
   ] {
     assert!(

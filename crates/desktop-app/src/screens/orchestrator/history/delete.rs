@@ -12,7 +12,6 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    events::is_synthetic_input,
   },
   core::Signal,
   node::Element,
@@ -23,6 +22,7 @@ use orchester_workspace::{background, messages::Message, orchestrator::chat::del
 
 use super::{Deleting, Rows};
 use crate::{
+  mcp::qa_person::QaPerson,
   navigation::Navigation,
   routes::{OrchestratorChat, ProjectPage, Route},
   services::Services,
@@ -66,6 +66,8 @@ struct DeleteView {
   /// Synthetic input (an MCP client's) asked to delete and was refused: the dialog says only a person deletes.
   refused: Signal<bool>,
   delete: DeleteAction,
+  /// Whether deleting takes synthetic input as the person's: in a QA copy only.
+  qa_person: QaPerson,
 }
 
 impl Component for DeleteView {
@@ -106,7 +108,12 @@ impl Component for DeleteView {
       }
       asked.set(Deleting(None));
     });
-    Self { open, refused, delete }
+    Self {
+      open,
+      refused,
+      delete,
+      qa_person: QaPerson::of(ctx),
+    }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -185,11 +192,12 @@ impl Component for DeleteView {
 
 impl DeleteView {
   /// Deletes `chat` of the project at `root`, a person's press or Enter only: what goes cannot be brought back, and no
-  /// MCP tool deletes a conversation either, so synthetic input (an MCP client's) is refused and the dialog says so.
+  /// MCP tool deletes a conversation either, so synthetic input (an MCP client's) is refused outside a QA copy
+  /// (`mcp::qa_person`) and the dialog says so.
   fn confirm(&self, root: Arc<Path>, chat: ChatId) -> impl Fn() + Clone + Send + Sync + 'static {
-    let (delete, refused) = (self.delete.clone(), self.refused.clone());
+    let (delete, refused, qa_person) = (self.delete.clone(), self.refused.clone(), self.qa_person.clone());
     move || {
-      if is_synthetic_input() {
+      if qa_person.refuses_input() {
         tracing::warn!("synthetic input asked to delete a conversation; not taken");
         refused.set(true);
         return;

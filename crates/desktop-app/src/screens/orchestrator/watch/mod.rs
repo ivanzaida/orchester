@@ -43,8 +43,8 @@ use orchester_workspace::display;
 pub(super) use self::{
   ended::line as ended_line,
   facts::WatchFacts,
-  module::{MODULE, WatchAction, follow, module_command, problem, watch_action},
-  task::{TASK, task_command},
+  module::{WatchAction, follow, module_command, problem, watch_action},
+  task::task_command,
 };
 use super::timeline::TurnEnv;
 use crate::{
@@ -71,10 +71,12 @@ pub(super) fn row(
   }
 }
 
-/// What a line says: its icon in its color, its words, and what it adds after them.
+/// What a line says: its icon in its color, its words, the quiet tag after them (*at your request*, ORC-893), and
+/// what it adds after them.
 struct Said {
   glyph: (Icon, PaletteColor),
   words: Arc<str>,
+  tag: Option<Arc<str>>,
   aside: Option<Arc<str>>,
 }
 
@@ -92,6 +94,14 @@ fn line_row(id: &str, outcome: &'static str, said: Said, end: Option<Element>) -
       .into(),
     None => Spacer::new().flex(1.0).into(),
   };
+  // The tag never gives way to the words or the aside: it says who asked for the change.
+  let tag = said.tag.map(|tag| {
+    Text::new(&tag)
+      .id(format!("{id}-tag"))
+      .variant(OrchestratorText::LineAside.role())
+      .nowrap()
+      .flex_shrink(0.0)
+  });
   Row::new()
     .id(id.to_owned())
     .describe("outcome", outcome)
@@ -110,6 +120,7 @@ fn line_row(id: &str, outcome: &'static str, said: Said, end: Option<Element>) -
         .flex_shrink(1.0)
         .min_width(Dimension::Px(0.0)),
     )
+    .with_children(tag)
     .child(fill)
     .with_children(end)
 }

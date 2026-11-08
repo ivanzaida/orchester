@@ -114,7 +114,7 @@ pub struct Leader {
 /// Who leads a module or a task: *Led in*.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LedIn {
-  /// No subscription covers it: its events go to the usual conversation.
+  /// No subscription covers it: its events go to no conversation.
   Nobody,
   Chat(Box<Leader>),
 }

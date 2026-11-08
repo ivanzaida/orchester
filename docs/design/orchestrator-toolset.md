@@ -61,15 +61,15 @@ drive*, and says what changed.**
      (`decided_by` automation) and the task's Conversation shows it as sent by the Orchestrator. A message that would
      decide the plan a run waits on is refused: plan decisions stay the person's.
    - The chat follows the agents of its project: when an agent asks a question, waits for a message or its plan waits
-     for a decision, a conversation gets an entry linking to its card: the one that last dealt with that task or its
-     run (decided by the person on 2026-10-17): the conversation whose newest entry about them is the newest, where an
-     entry about them is an action the Orchestrator took on the task or run (done, proposed, refused or dismissed) or
-     an earlier wait of the task. When no conversation dealt with it, the project's latest conversation gets it, or a
-     new one titled after the wait while the project has none; waits of different tasks may so land in different
-     conversations. With *Let the Orchestrator answer agents* on, the wait also starts one Orchestrator turn by itself
-     in its conversation: at most one per wait, never while another turn of that conversation runs (it waits for that
-     turn to end; a turn of another conversation does not hold it), and none for a wait the Orchestrator's own answer
-     raised. In that turn the Orchestrator answers only what follows plainly from the task's brief and criteria, the
+     for a decision, a conversation gets an entry linking to its card: the one that leads the task through a
+     subscription (`docs/design/orchestrator-watch.md`, Routing). A wait of a task no conversation leads goes to no
+     conversation and starts no turn, and no conversation is opened for a wait (decided by the person on 2026-11-07,
+     ORC-895, replacing the rule of 2026-10-17: the conversation that last dealt with the task, else the latest
+     one). With *Let the Orchestrator drive* on (ORC-909 replaced the six switches), the wait also starts one
+     Orchestrator turn by itself in its conversation: at most one per wait, never while another turn of that
+     conversation runs (it waits for that turn to end; a turn of another conversation does not hold it), whoever raised
+     it, and none for a tool request, which stays the person's.
+     In that turn the Orchestrator answers only what follows plainly from the task's brief and criteria, the
      project's docs and AGENTS.md, or what the person already said in the chat; otherwise it tells the person what is
      asked, with options and its recommendation.
    - The chat may merge a run (`merge_run`): a proposal card by default; with the person-only switch *Let the

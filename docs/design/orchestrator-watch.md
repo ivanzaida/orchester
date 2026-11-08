@@ -138,8 +138,9 @@ From `MvWyD` (frames 01–06, unchanged):
    It can watch several, each with its own order: the text after the chips. A command without text takes the default
    order from Project settings › Orchestrator.
 3. **Routing.** An event of a task goes to exactly one conversation: the one with the most specific subscription.
-   That is the task, then the module (or the tasks without a module), then the project. With no subscription, the
-   usual rule applies. A watched task's events never reach another conversation.
+   That is the task, then the module (or the tasks without a module), then the project. With no subscription, it goes
+   to no conversation and starts no turn (decided by the person on 2026-11-07, ORC-895); no conversation is opened
+   for an event. A watched task's events never reach another conversation.
 4. **Already led.** Choosing a target that another conversation leads applies the rest of the command and shows the
    card: *Open that conversation* or *Take it here*. A task inside a module led elsewhere is not a conflict: the task
    subscription wins, and the module's conversation gets a line.

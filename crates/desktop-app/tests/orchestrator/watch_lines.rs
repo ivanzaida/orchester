@@ -95,6 +95,7 @@ fn entries(module: &NamedTarget, (task, key): (NamedTarget, &str), checklist: &C
       already_here: Vec::new(),
       led_elsewhere: Vec::new(),
       gone: Vec::new(),
+      at_request: None,
     }),
     line(WatchLine::NowLedIn {
       target: task,
@@ -108,6 +109,7 @@ fn entries(module: &NamedTarget, (task, key): (NamedTarget, &str), checklist: &C
         task: key.to_owned(),
         work: OpenWork::Queued,
       }],
+      at_request: None,
     }),
   ]
 }
@@ -127,6 +129,10 @@ fn assert_command(screen: &mut Orchestrator, (command, leading): (&str, &str)) {
   assert_eq!(
     screen.text(&format!("{leading}-aside")),
     "— their waits, run ends, conflicts, limits and stalls start a turn here"
+  );
+  assert!(
+    !screen.exists(&format!("{leading}-tag")),
+    "a command's line has no *at your request*"
   );
 }
 

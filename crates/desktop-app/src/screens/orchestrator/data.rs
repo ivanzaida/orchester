@@ -2,14 +2,19 @@
 //! shown and the names of the projects the app knows (for what a link to another project's place says), each again
 //! whenever the project's runner or the chat's tools change a conversation; the conversation shown, and what it
 //! watches (`/watching`, `super::watching`), also whenever a run changes state or the project's tasks are saved (a
-//! merge in Orchester among them), which may end a wait it keeps.
+//! merge in Orchester among them), which may end a wait it keeps; and the conversation shown also as the runs'
+//! transcripts grow while a stall of a run stands in it, which settles once that run progresses (ORC-894).
 
 use std::{
   path::{Path, PathBuf},
   sync::Arc,
+  time::Duration,
 };
 
-use lurq::app::ctx::{Ctx, StreamEmitter};
+use lurq::{
+  app::ctx::{Ctx, StreamEmitter},
+  core::Signal,
+};
 use orchester_core::id::ChatId;
 use orchester_store::ProjectDb;
 use orchester_workspace::{
@@ -77,13 +82,21 @@ pub(super) struct Reads {
   pub(super) watching: Option<Read<Arc<Watching>>>,
 }
 
-/// Reads what the screen of the project at `root` shows for `chat`, its tasks saved `saves` times so far.
-pub(super) fn read(ctx: &mut Ctx, (root, saves): (&Path, u64), chat: OrchestratorChat) -> Reads {
+/// Reads what the screen of the project at `root` shows for `chat`, its tasks saved `saves` times so far; `stalled`
+/// holds whether a stall stood in the conversation as it was last read.
+pub(super) fn read(
+  ctx: &mut Ctx,
+  (root, saves): (&Path, u64),
+  (chat, stalled): (OrchestratorChat, &Signal<bool>),
+) -> Reads {
   let services = Services::of(ctx);
   let revision = revision(ctx, &services.runners, root);
   // A run that changes state, or that Orchester merged (a save of the tasks), may end a wait the conversation keeps:
   // it is read again to say so.
   let states = counted(ctx, (&services.runners, root), Runners::states_of) + saves;
+  // A stall the conversation keeps settles once its run progresses, which only its transcript may tell (ORC-894):
+  // while one stands, the conversation is read again on the runs' transcripts too, at most once per `STALL_PACE`.
+  let progressed = progress(ctx, (services.runners.clone(), root.to_path_buf(), stalled.get()));
   let hold = services.hold;
   let setup = read_with(
     ctx,
@@ -108,7 +121,11 @@ pub(super) fn read(ctx: &mut Ctx, (root, saves): (&Path, u64), chat: Orchestrato
   // The conversation shown follows its own changes, not those of the others the Orchestrator answers in.
   let own = own_changes(ctx, (&services.runners, root), target);
   // Read on every pass, a new conversation's too, so the screen's hooks keep their order.
-  let read = conversation(ctx, (root.to_path_buf(), target, (own, states)), &hold);
+  let read = conversation(ctx, (root.to_path_buf(), target, (own, states + progressed)), &hold);
+  let stands = matches!(&read, Shown::Chat(view) if view.stall_stands());
+  if stalled.get_untracked() != stands {
+    stalled.set(stands);
+  }
   let watching = watching(ctx, (root.to_path_buf(), target, (own, states)), &hold);
   let names = ProjectNames::read(ctx, services.workspace, revision);
   let shown = match (chat, target) {
@@ -171,6 +188,35 @@ pub(in crate::screens) fn own_changes(ctx: &mut Ctx, (runners, root): (&Runners,
           return;
         }
         tokio::time::sleep(TRANSCRIPT_PACE).await;
+        if updates.changed().await.is_err() {
+          return;
+        }
+      }
+    },
+  );
+  count.state().get().data.unwrap_or(0)
+}
+
+/// How long the count of the runs' transcript changes stays put after it moved, while a stall stands: reading the
+/// conversation again takes more than a transcript's view does, and a stall that settles a little later is still told.
+const STALL_PACE: Duration = Duration::from_secs(2);
+
+/// How often project `root`'s runs or their transcripts changed, followed only while `follow` (a stall stands); `0`
+/// before.
+fn progress(ctx: &mut Ctx, deps: (Runners, PathBuf, bool)) -> u64 {
+  let count = ctx.stream(
+    deps,
+    |(runners, root, follow), emitter: StreamEmitter<u64, ()>| async move {
+      if !follow {
+        return;
+      }
+      let mut updates = runners.changes_of(&root);
+      loop {
+        let revision = *updates.borrow_and_update();
+        if !emitter.emit(revision) {
+          return;
+        }
+        tokio::time::sleep(STALL_PACE).await;
         if updates.changed().await.is_err() {
           return;
         }

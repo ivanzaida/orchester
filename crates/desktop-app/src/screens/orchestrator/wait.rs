@@ -1,6 +1,7 @@
 //! A wait of an agent of the project in the Orchestrator's conversation (`2 · Agent wait` `GIsJh` in `Orchestrator
 //! cards · redesign` `zuvUi`; `docs/design/orchestrator-toolset.md`, "Decisions" 5): the event line of what the agent
-//! waits for (a question, a reply, a plan to decide), the task and the run, when it was noticed and *Open ↗* its card
+//! waits for (a question, a reply, a plan or a tool request to decide), the task and the run, when it was noticed and
+//! *Open ↗* its card
 //! on the task's Conversation, with a status chip: *Waits for you*, *Orchestrator is reading* (the loader), *Answered
 //! by the Orchestrator*, *Answered by you*, or *No longer waits* once it was dealt with elsewhere (the workspace reads
 //! which waits still stand). What the Orchestrator said or did with it nests under it as a quote
@@ -49,7 +50,7 @@ impl Status {
   /// for one that started none) and what that turn's answer did (`answer`).
   pub(super) fn of(wait: &AgentWait, stands: bool, turn: Option<&TurnState>, answer: &[Part]) -> Self {
     let thinking = matches!(turn, Some(TurnState::Thinking));
-    if wait.kind == WaitKind::Plan {
+    if matches!(wait.kind, WaitKind::Plan | WaitKind::Approval) {
       return if stands { Self::Waits } else { Self::Gone };
     }
     if thinking {
@@ -145,6 +146,8 @@ pub(super) const fn look(kind: WaitKind, named: bool) -> (Icon, &'static str) {
     (WaitKind::Question, false) => (Icon::CircleHelp, "orchestrator.wait.what.questionAnyone"),
     (WaitKind::Message, true) => (Icon::MessageCircle, "orchestrator.wait.what.message"),
     (WaitKind::Message, false) => (Icon::MessageCircle, "orchestrator.wait.what.messageAnyone"),
+    (WaitKind::Approval, true) => (Icon::ShieldAlert, "orchestrator.wait.what.approval"),
+    (WaitKind::Approval, false) => (Icon::ShieldAlert, "orchestrator.wait.what.approvalAnyone"),
     (WaitKind::Plan, true) => (Icon::Map, "orchestrator.wait.what.plan"),
     (WaitKind::Plan, false) | (WaitKind::Ended(_) | WaitKind::Event(_), _) => {
       (Icon::Map, "orchestrator.wait.what.planAnyone")
@@ -157,15 +160,18 @@ const fn kind_name(kind: WaitKind) -> &'static str {
     WaitKind::Question => "question",
     WaitKind::Message => "message",
     WaitKind::Plan => "plan",
+    WaitKind::Approval => "approval",
     WaitKind::Ended(_) => "run_end",
     WaitKind::Event(_) => "event",
   }
 }
 
 /// What happens with `wait`: the Orchestrator answers it by itself (in the turn it `turned`, or after the turn under
-/// way), its own answer raised it so it waits for the person, or the person's switch is off.
+/// way), its own answer raised it so it waits for the person, or the person's switch is off. A tool request is always
+/// the person's.
 const fn effect(wait: &AgentWait, turned: bool) -> &'static str {
   match (wait.kind, wait.automatic, turned) {
+    (WaitKind::Approval, ..) => "orchestrator.wait.effectApproval",
     (WaitKind::Plan, true, _) => "orchestrator.wait.effectPlanRead",
     (WaitKind::Plan, false, _) => "orchestrator.wait.effectPlan",
     (_, true, true) => "orchestrator.wait.effectAnswering",

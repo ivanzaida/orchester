@@ -16,7 +16,6 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    events::is_synthetic_input,
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Spacer, Text, TextOverflow},
@@ -34,6 +33,7 @@ use orchester_workspace::{display, orchestrator::send::SendError, workspace::Ope
 
 use super::{ApproveAction, Approving, Changing, DismissAction, approve_action, dismiss_action};
 use crate::{
+  mcp::qa_person::QaPerson,
   screens::orchestrator::{
     decision::{self, FACT_KEY_WIDTH},
     line::{Chip, ChipTone, LineLink, chip_element, link_element, nested},
@@ -99,6 +99,8 @@ pub(in crate::screens::orchestrator) struct PlanCard {
   refused: Signal<bool>,
   /// A folded plan's steps are open under its line.
   open: Signal<bool>,
+  /// Whether *Approve and do it* takes synthetic input as the person's: in a QA copy only.
+  qa_person: QaPerson,
 }
 
 impl Component for PlanCard {
@@ -110,6 +112,7 @@ impl Component for PlanCard {
       dismiss: dismiss_action(ctx),
       refused: ctx.signal(false),
       open: ctx.signal(false),
+      qa_person: QaPerson::of(ctx),
     }
   }
 
@@ -240,6 +243,7 @@ impl PlanCard {
     deciding: Deciding,
   ) -> [ActionButton; 3] {
     let (action, refused, seq) = (self.approve.clone(), self.refused.clone(), props.seq);
+    let qa_person = self.qa_person.clone();
     let approving = Approving {
       project: deciding.project.clone(),
       chat: deciding.chat,
@@ -247,7 +251,7 @@ impl PlanCard {
       by: Answerer::Person,
     };
     let approve = approve.on_click(move || {
-      if is_synthetic_input() {
+      if qa_person.refuses_input() {
         tracing::warn!("synthetic input reached the approval of a plan of the Orchestrator; not taken");
         refused.set(true);
         return;

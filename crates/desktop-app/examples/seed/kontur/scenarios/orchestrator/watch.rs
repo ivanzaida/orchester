@@ -4,8 +4,9 @@
 //! modules with its order and the subscription line (04). *Billing*, in History, holds its own command, then *Billing
 //! is now led in «…»* (a), *KON-… is now led in «Release checklist»* (b), *Stopped watching Search index* with two
 //! tasks left open (c), and *Every task of Mobile release is Done* with the summary turn it started (d). *Release
-//! checklist*, in History, holds a `/watch-task` without an order. The modules hold drafts, so the subscription line
-//! counts their tasks.
+//! checklist*, in History, holds a `/watch-task` without an order. *Search index, asked in words*, in History, holds
+//! the lines the Orchestrator's watch tools kept at the person's request (ORC-893). The modules hold drafts, so the
+//! subscription line counts their tasks.
 
 use orchester_core::{
   id::{ChatId, ModuleId},
@@ -13,7 +14,7 @@ use orchester_core::{
   name::Name,
   orchestrator::{
     Chat, ChatEvent, Subscription, WatchTarget,
-    watch::{EndReason, NamedTarget, OpenTask, OpenWork, WatchCommand, WatchLine, WatchSummary},
+    watch::{AtRequest, EndReason, NamedTarget, OpenTask, OpenWork, WatchCommand, WatchLine, WatchSummary},
   },
   task::{Task, organization::ChangeActor},
   time::Timestamp,
@@ -36,6 +37,7 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
     name: Some(modules.billing_tasks[0].key().to_string()),
   };
   watched(kontur, &checklist, (vec![task.clone()], ""), checklist.started())?;
+  asked(kontur, &modules.search)?;
   billing(kontur, &modules, (&leading, &checklist, task))?;
   let both = vec![modules.webhooks, modules.search];
   watched(kontur, &leading, (both, ORDER), leading.started())
@@ -69,7 +71,7 @@ impl Modules {
 }
 
 /// Module `name`, open, with a draft of each of `titles`.
-fn module(
+pub(super) fn module(
   kontur: &mut Kontur,
   catalogue: &Catalogue,
   name: &str,
@@ -101,7 +103,7 @@ fn module(
 }
 
 /// The person's /watch of `targets` with `order` in `chat` at `at`, and the subscription line it wrote.
-fn watched(
+pub(super) fn watched(
   kontur: &mut Kontur,
   chat: &Chat,
   (targets, order): (Vec<NamedTarget>, &str),
@@ -116,9 +118,37 @@ fn watched(
     already_here: Vec::new(),
     led_elsewhere: Vec::new(),
     gone: Vec::new(),
+    at_request: None,
   };
   let entries = [ChatEvent::WatchCommand { command }, ChatEvent::Watch { line }];
   kontur.db.keep_watch_entries(chat, &entries, at)?;
+  Ok(())
+}
+
+/// *Search index, asked in words*, in History (ORC-893): the person asked the Orchestrator to follow Search index and
+/// later to stop, and its `watch` and `unwatch` tools kept only the lines, each *at your request*.
+fn asked(kontur: &mut Kontur, search: &NamedTarget) -> Result<(), SeedError> {
+  let chat = Chat::named(ChatId::generate(), "Search index, asked in words", kontur.ago(80));
+  let at_request = || Some(AtRequest::default());
+  let leading = WatchLine::Watching {
+    started: vec![search.clone()],
+    already_here: Vec::new(),
+    led_elsewhere: Vec::new(),
+    gone: Vec::new(),
+    at_request: at_request(),
+  };
+  kontur
+    .db
+    .keep_watch_entries(&chat, &[ChatEvent::Watch { line: leading }], chat.started())?;
+  let stopped = WatchLine::Stopped {
+    targets: vec![search.clone()],
+    left_open: Vec::new(),
+    at_request: at_request(),
+  };
+  let at = kontur.ago(70);
+  kontur
+    .db
+    .keep_watch_entries(&chat, &[ChatEvent::Watch { line: stopped }], at)?;
   Ok(())
 }
 
@@ -158,6 +188,7 @@ fn billing(
       left_open(&modules.billing_tasks[1], OpenWork::StoppedAtLimit),
       left_open(&modules.billing_tasks[0], OpenWork::Queued),
     ],
+    at_request: None,
   };
   let stop = [
     ChatEvent::WatchCommand {

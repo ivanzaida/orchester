@@ -54,6 +54,7 @@ use self::runs::Control;
 pub(crate) use self::{
   continue_run::{Choice as ContinueChoice, ContinueRun, Offered as ContinueOffered, offered as continue_offered},
   messages::{SendTiming, plan_person_only, refusal as outgoing_refusal, sent_as},
+  modules::find_module,
   pipeline_copy::duplicate_pipeline_draft,
   questions::{check_answer, waiting_request},
   queue_hold::not_in_group,

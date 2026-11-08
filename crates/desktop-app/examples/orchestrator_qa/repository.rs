@@ -20,10 +20,7 @@ use orchester_core::{
 use orchester_store::ProjectDb;
 use orchester_workspace::{i18n::NAMESPACE, messages::Message};
 
-use super::{
-  data::{Part, Turn, ago, keep},
-  proposals::elsewhere,
-};
+use super::data::{Part, Turn, ago, keep};
 
 /// The `.gitignore` the chat proposes.
 const GITIGNORE: &str = ".orchester/\nnode_modules/\ndist/\n*.log\n";
@@ -87,9 +84,7 @@ pub fn conversation(prepared: &super::data::Prepared, i18n: &I18n) -> Result<Cha
     parts: cards.into_iter().map(|card| Part::Action(Box::new(card))).collect(),
     end: TurnState::Answered,
   }];
-  let chat = keep(&mut db, ChatId::generate(), connection, turns)?;
-  elsewhere(&mut db)?;
-  Ok(chat)
+  keep(&mut db, ChatId::generate(), connection, turns)
 }
 
 /// The chat's `init_repository` proposing `change` for Kontur, gone as `outcome`.

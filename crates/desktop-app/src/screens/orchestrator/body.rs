@@ -299,9 +299,9 @@ fn queued_problem(ctx: &mut Ctx, view: &View) -> Option<Element> {
 }
 
 /// What sending does now: nothing while the Orchestrator has nothing to run on, busy while a message or its files are
-/// on their way, and otherwise the draft, with the skill its chip holds, goes to conversation `chat` (a new one when
-/// `None`) as a turn of its own, or, while the Orchestrator answers (`thinking`), after the answer, now or after
-/// stopping it.
+/// on their way, and otherwise the draft, with the skill its chip holds and the badges it holds, goes to conversation
+/// `chat` (a new one when `None`) as a turn of its own, or, while the Orchestrator answers (`thinking`), after the
+/// answer, now or after stopping it. A badge that holds a choice is something to send on its own.
 fn sending_state(
   ctx: &Ctx,
   view: &View,
@@ -316,7 +316,7 @@ fn sending_state(
     return Sending::Held(ctx.t("orchestrator.composer.notReady"));
   }
   let way = |how| view.send_draft(project, (chat, how));
-  if view.draft.get().trim().is_empty() && view.attached.attached.get().0.is_empty() {
+  if view.draft.get().trim().is_empty() && view.attached.attached.get().0.is_empty() && !view.slash.holds_choices() {
     return Sending::Empty {
       why: ctx.t("orchestrator.composer.sendEmpty"),
       press: way(thinking.then_some(WhileAnswering::AfterAnswer)),

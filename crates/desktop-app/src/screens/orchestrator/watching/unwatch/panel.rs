@@ -1,12 +1,13 @@
-//! The `/unwatch` picker's panel (`Unwatch picker` `eK1DB` in `Parts · /unwatch` `NtsXc`), drawn as the /watch
-//! pickers draw their rows (`super::super::super::watch::panel`): a `Menu` panel 560 wide. Under the head *Watched
-//! here* with how many subscriptions it shows at its end (*1 of 3* once something is typed), a 28 high row for each:
-//! its 14 icon in `text_secondary`, its name in 12 `text_primary` with the letters that match what was typed in 600,
-//! its kind and since when in 11 `text_muted` filling the row, and at its end what is still open there in 11: in
-//! `warning` while something waits for the person or is stopped at a limit, `text_muted` otherwise, *nothing open* when
-//! nothing is. A row that is a chip already adds *Added* with its check. Then a `border` line and *All of them*
-//! (`eye-off`, *stop watching everything here*, *cancels nothing*), and the keys with *Type to filter* at their end.
-//! The focused row is on `hover`.
+//! The `/unwatch` picker's panel (`Unwatch picker` `eK1DB` in `Parts · /unwatch` `NtsXc`; v2 as `r7kka` in `P1`
+//! `QXPDY`, ORC-889), drawn as the /watch pickers draw their rows (`super::super::super::watch::panel`): a `Menu` panel
+//! 560 wide. At its top its own search field, *Search what this conversation watches*; under the head *Watched here*
+//! with how many subscriptions it shows at its end (*1 of 3* once something is typed), a 28 high row for each in a
+//! list that scrolls after 8: its 14 icon in `text_secondary`, its name in 12 `text_primary` with the letters that
+//! match what was typed in 600, its kind and since when in 11 `text_muted` filling the row, and at its end what is
+//! still open there in 11: in `warning` while something waits for the person or is stopped at a limit, `text_muted`
+//! otherwise, *nothing open* when nothing is. A row the badge holds already adds *Added* with its check. Then a
+//! `border` line and *All of them* (`eye-off`, *stop watching everything here*, *cancels nothing*), and the keys. The
+//! focused row is on `hover`.
 
 use std::sync::Arc;
 
@@ -26,13 +27,13 @@ use orchester_workspace::{
 
 use super::super::answer::{since, target_name};
 use crate::{
-  screens::orchestrator::watch::panel::{keys, line, matched_label},
+  screens::orchestrator::watch::panel::{PICK_KEYS, keys, line, list, matched_label},
   theme::{ExtraColor, ExtraSpacing, IconSize, SlashText},
   ui::{
     icon::{Icon, icon},
     menu::{menu_panel, separator},
     message::message_text,
-    slash::Choice,
+    slash::{Choice, PickerSearch},
   },
 };
 
@@ -43,7 +44,7 @@ const WIDTH: f32 = 560.0;
 pub(super) struct Shown<'a> {
   /// What names the composer: the picker's elements are named after it.
   pub(super) id: &'a str,
-  /// The words typed after the chips.
+  /// The words typed in the picker's search.
   pub(super) filter: &'a str,
   /// The subscriptions whose name holds them, in order, with the chip each becomes.
   pub(super) offered: &'a [(&'a WatchedSubscription, Choice)],
@@ -57,8 +58,8 @@ pub(super) struct Shown<'a> {
   pub(super) total: usize,
 }
 
-/// The panel with its rows, *All of them* and the keys.
-pub(super) fn panel(ctx: &Ctx, shown: &Shown<'_>) -> Element {
+/// The panel with its search, its rows, *All of them* and the keys.
+pub(super) fn panel(ctx: &mut Ctx, shown: &Shown<'_>, search: &PickerSearch) -> Element {
   let count = if shown.filter.is_empty() {
     Arc::from(shown.total.to_string())
   } else {
@@ -70,34 +71,42 @@ pub(super) fn panel(ctx: &Ctx, shown: &Shown<'_>) -> Element {
       ],
     )
   };
-  let mut content = vec![heading(ctx, shown.id, Some(count))];
+  let mut content = vec![search_field(ctx, shown.id, search), heading(ctx, shown.id, Some(count))];
   if shown.offered.is_empty() {
     content.push(said(
       &format!("{}-unwatch-nothing", shown.id),
       &ctx.t_args("orchestrator.watch.unwatch.nothing", [("query", shown.filter)]),
     ));
   }
-  for (at, (watched, choice)) in shown.offered.iter().enumerate() {
-    let (open, warn) = open_work(ctx, watched);
-    let end = Text::new(&open)
-      .id(format!("{}-unwatch-{}-open", shown.id, choice.key))
-      .variant(TypographyStyle::Caption)
-      .color(if warn {
-        PaletteColor::Warning
-      } else {
-        PaletteColor::TextMuted
-      })
-      .flex_shrink(0.0)
-      .nowrap();
-    let meta = ctx.t_args(
-      "orchestrator.watch.unwatch.meta",
-      [
-        ("kind", message_text(ctx, &watched.target.kind)),
-        ("since", since(ctx, watched.since)),
-      ],
-    );
-    let row = row(ctx, shown, (at, choice), (&meta, end.into()));
-    content.push(row.describe("target", target_name(watched.target.target)).into());
+  let rows: Vec<Element> = shown
+    .offered
+    .iter()
+    .enumerate()
+    .map(|(at, (watched, choice))| {
+      let (open, warn) = open_work(ctx, watched);
+      let end = Text::new(&open)
+        .id(format!("{}-unwatch-{}-open", shown.id, choice.key))
+        .variant(TypographyStyle::Caption)
+        .color(if warn {
+          PaletteColor::Warning
+        } else {
+          PaletteColor::TextMuted
+        })
+        .flex_shrink(0.0)
+        .nowrap();
+      let meta = ctx.t_args(
+        "orchestrator.watch.unwatch.meta",
+        [
+          ("kind", message_text(ctx, &watched.target.kind)),
+          ("since", since(ctx, watched.since)),
+        ],
+      );
+      let row = row(ctx, (shown, search), (at, choice), (&meta, end.into()));
+      row.describe("target", target_name(watched.target.target)).into()
+    })
+    .collect();
+  if !rows.is_empty() {
+    content.push(list(ctx, &format!("{}-unwatch-list", shown.id), rows));
   }
   content.push(separator(ctx));
   let cancels = Text::new(&ctx.t("orchestrator.watch.unwatch.cancelsNothing"))
@@ -107,7 +116,7 @@ pub(super) fn panel(ctx: &Ctx, shown: &Shown<'_>) -> Element {
   let all_meta = ctx.t("orchestrator.watch.unwatch.allMeta");
   let all = row(
     ctx,
-    shown,
+    (shown, search),
     (shown.offered.len(), shown.all),
     (&all_meta, cancels.into()),
   );
@@ -116,9 +125,9 @@ pub(super) fn panel(ctx: &Ctx, shown: &Shown<'_>) -> Element {
   frame(shown.id, content)
 }
 
-/// What the conversation watches cannot be shown: the head, `why` in 11 `text_muted`, and the keys.
-pub(super) fn unshown(ctx: &Ctx, id: &str, why: Option<&Message>) -> Element {
-  let mut content = vec![heading(ctx, id, None)];
+/// What the conversation watches cannot be shown: the search, the head, `why` in 11 `text_muted`, and the keys.
+pub(super) fn unshown(ctx: &mut Ctx, (id, search): (&str, &PickerSearch), why: Option<&Message>) -> Element {
+  let mut content = vec![search_field(ctx, id, search), heading(ctx, id, None)];
   let words = match why {
     Some(why) => ctx.t_args(
       "orchestrator.watch.unwatch.unreadable",
@@ -136,6 +145,12 @@ fn frame(id: &str, content: Vec<Element>) -> Element {
     .width(Dimension::Px(WIDTH))
     .with_children(content)
     .into()
+}
+
+/// The picker's own search field, `{id}-unwatch-search`.
+fn search_field(ctx: &mut Ctx, id: &str, search: &PickerSearch) -> Element {
+  let words = ctx.t("orchestrator.watch.unwatch.search");
+  search.field(ctx, &format!("{id}-unwatch-search"), (words, None))
 }
 
 /// The head *Watched here*, with `count` at its end.
@@ -181,8 +196,13 @@ fn said(id: &str, words: &str) -> Element {
 }
 
 /// Row `at` of `choice`: its icon, name, `meta` and `end`; *Added* with its check once it is a chip; on `hover` while
-/// it has the focus.
-fn row(ctx: &Ctx, shown: &Shown<'_>, (at, choice): (usize, &Choice), (meta, end): (&str, Element)) -> Row {
+/// it has the focus, which `search` keeps in view.
+fn row(
+  ctx: &Ctx,
+  (shown, search): (&Shown<'_>, &PickerSearch),
+  (at, choice): (usize, &Choice),
+  (meta, end): (&str, Element),
+) -> Row {
   let focused = shown.focused == Some(at);
   let added = shown.taken.contains(&choice.key);
   let added = added.then(|| {
@@ -216,7 +236,7 @@ fn row(ctx: &Ctx, shown: &Shown<'_>, (at, choice): (usize, &Choice), (meta, end)
     .child(end)
     .with_children(added);
   if focused {
-    row.background(ExtraColor::Hover.role())
+    search.keep_in_view(row.background(ExtraColor::Hover.role()))
   } else {
     row
   }
@@ -259,12 +279,12 @@ fn open_work(ctx: &Ctx, watched: &WatchedSubscription) -> (Arc<str>, bool) {
   (joined, warn)
 }
 
-/// The keys: *↑ ↓ Move*, *Enter Add*, *Esc Close*, and *Type to filter* at their end.
+/// The keys: *↑ ↓ Move*, *Enter Pick and close*, *Shift Enter Add another*, *Esc Close*; the composer's send stops
+/// what the badge holds (ORC-890).
 fn footer(ctx: &Ctx, id: &str) -> Element {
   keys(
     ctx,
     (&format!("{id}-unwatch"), &format!("{id}-unwatch-key")),
-    &[("move", "move"), ("enter", "add"), ("esc", "close")],
-    Some(ctx.t("orchestrator.watch.unwatch.filter")),
+    &PICK_KEYS,
   )
 }

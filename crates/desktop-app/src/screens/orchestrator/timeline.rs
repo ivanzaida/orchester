@@ -43,10 +43,7 @@ use super::{
 use crate::{
   theme::{DROPPED_OPACITY, OrchestratorSpacing, chat_scrollbar},
   ui::{
-    chat::{
-      follow::{Follow, jump_room},
-      names::ProjectNames,
-    },
+    chat::{follow::Follow, names::ProjectNames},
     markdown::LinkHandler,
   },
 };
@@ -144,8 +141,9 @@ impl PartialEq for TurnRow {
 
 impl lurq::app::component::DevtoolsInspectable for TurnRow {}
 
-/// A row of the list: a turn, a digest of waits for the person, a note under the last turn, or the room under the
-/// last one while *Jump to latest* floats over the chat's foot, so the turn can scroll clear of it.
+/// A row of the list: a turn, a digest of waits for the person, or a note under the last turn. No room is added under
+/// the last row while *Jump to latest* floats over the chat's foot: the list's end stays where it is whether the pill
+/// shows or not, and the pill hides once that end is in view.
 #[derive(Clone, PartialEq)]
 enum Line {
   /// A turn; `first` is the list's first row, which keeps the chat's top room over it.
@@ -159,7 +157,6 @@ enum Line {
   },
   /// Words under the last turn in 12 `text_muted` (`Note` `JHr2a` in `02 Not set up` `Wd5CL`).
   Note(Arc<str>),
-  JumpRoom,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Line {}
@@ -170,7 +167,6 @@ impl Line {
       Self::Turn { row, .. } => row.turn.key(),
       Self::Digest { digest, .. } => digest.id.clone(),
       Self::Note(_) => "orchestrator-note".to_owned(),
-      Self::JumpRoom => "orchestrator-jump-room".to_owned(),
     }
   }
 }
@@ -190,9 +186,6 @@ pub(super) fn list(
   let following = follow.following.get();
   let mut lines = gathered(rows);
   lines.extend(note.map(Line::Note));
-  if !following {
-    lines.push(Line::JumpRoom);
-  }
   let scrollbar = chat_scrollbar(&ctx.theme().scrollbar());
   let list = follow
     .list(VirtualizedList::new_shared(ctx, Arc::new(lines)), arrived, reveal)
@@ -311,7 +304,6 @@ impl Component for TurnView {
         ),
         false,
       ),
-      Line::JumpRoom => jump_room(),
     }
   }
 }
