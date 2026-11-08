@@ -76,8 +76,7 @@ pub struct CreatePipeline {
 pub async fn get_pipeline(services: &Services, args: InPipeline, translate: &Translate) -> Result<Value, ToolError> {
   let services = services.clone();
   let (project, opened) = blocking(move || {
-    let open = services.project(&args.project)?;
-    let db = ProjectDb::open(&open.repo_root)?;
+    let (open, db) = services.read_project(&args.project)?;
     let id = pipeline_named(&db, &args.pipeline)?;
     Ok((open.project.id(), opened(&db, id, &args.pipeline)?))
   })

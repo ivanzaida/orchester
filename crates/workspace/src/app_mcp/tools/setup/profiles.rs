@@ -83,10 +83,9 @@ pub async fn list_profiles(services: &Services, args: InProjects, translate: &Tr
 pub async fn get_profile(services: &Services, args: InProfile) -> Result<Value, ToolError> {
   let services = services.clone();
   blocking(move || {
-    let open = services.project(&args.project)?;
+    let (open, db) = services.read_project(&args.project)?;
     let id = profile_named(&ProjectAgents::load_in(&open.repo_root)?, &args.profile)?.id;
     let mut profile = profile_with_revision(&open, id)?;
-    let db = ProjectDb::open_read_only(&open.repo_root)?;
     let readiness = readiness_json::read(&services, &db, &open.repo_root)?;
     profile["readiness"] = readiness_json::resource_of(&readiness, id);
     Ok(json!({ "profile": profile }))

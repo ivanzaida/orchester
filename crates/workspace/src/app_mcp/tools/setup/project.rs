@@ -146,8 +146,7 @@ fn summary(open: &OpenProject) -> Value {
 pub async fn get_project(services: &Services, args: InProject) -> Result<Value, ToolError> {
   let services = services.clone();
   blocking(move || {
-    let open = services.project(&args.project)?;
-    let db = ProjectDb::open(&open.repo_root)?;
+    let (open, db) = services.read_project(&args.project)?;
     let mut project = summary(&open);
     let resources = |kind| db.resources(kind).map(|listed| listed.len());
     let settings = json!({

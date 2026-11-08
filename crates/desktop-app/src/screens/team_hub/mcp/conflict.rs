@@ -17,7 +17,7 @@ use orchester_core::{id::VersionId, time::Timestamp};
 use orchester_workspace::{
   agents::{team_mcp_conflict::Newer, team_mcp_edit::McpEdit, team_mcp_merge::Verdict},
   display,
-  messages::Message,
+  sharing::team_edit::EditRefused,
 };
 
 use super::{
@@ -258,7 +258,7 @@ impl McpPanel {
       if input_may_decide(gate.as_ref(), Guarded::PermissionWidening) {
         discard.run(outbox);
       } else {
-        failure.set(Some(Message::new("sharing.errors.personOnly")));
+        failure.set(Some(EditRefused::person_only_message()));
       }
     });
     Dialog::new(

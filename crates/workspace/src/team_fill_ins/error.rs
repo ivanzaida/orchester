@@ -62,6 +62,11 @@ pub enum FillInError {
 }
 
 impl FillInError {
+  /// A secret's value that was typed blank is refused where it is typed, before anything is sent here.
+  pub fn blank_value_message() -> Message {
+    Message::new("teamFillIns.errors.valueBlank")
+  }
+
   /// What to tell the person.
   pub fn message(&self) -> Message {
     match self {
