@@ -3,6 +3,8 @@
     "title": "Agents",
     "local": "Local project · only on this computer",
     "share": "Share with a team…",
+    "memory": "Memory",
+    "import": "Import",
     "reading": "Reading…",
     "rereading": "Reading…",
     "loadFailed": "The agents of this project couldn't be read",

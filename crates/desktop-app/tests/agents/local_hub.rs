@@ -87,6 +87,35 @@ fn local_hub_head_offers_share_with_a_team_and_new_of_the_filter() {
 }
 
 #[test]
+fn local_hub_head_reaches_memory_and_the_import_of_the_kind_the_filter_holds() {
+  let mut agents = Agents::new(true);
+  open(&mut agents, HubView::new(HubFilter::Profiles, None));
+  assert_eq!(agents.text("local-hub-memory"), "Memory");
+  assert_eq!(agents.text("local-hub-import"), "Import");
+  open(&mut agents, HubView::new(HubFilter::McpServers, None));
+  assert!(agents.exists("local-hub-memory"));
+  assert!(
+    !agents.exists("local-hub-import"),
+    "an MCP server is not imported from the repository"
+  );
+  open(&mut agents, HubView::new(HubFilter::Profiles, None));
+  agents.click("local-hub-import");
+  assert_eq!(
+    agents.window.navigation().route_now(),
+    Route::Project(
+      project_id(),
+      ProjectPage::Import(orchester_app::routes::ImportTab::Agents)
+    )
+  );
+  open(&mut agents, HubView::new(HubFilter::Profiles, None));
+  agents.click("local-hub-memory");
+  assert_eq!(
+    agents.window.navigation().route_now(),
+    Route::Project(project_id(), ProjectPage::Memory(None))
+  );
+}
+
+#[test]
 fn local_hub_server_panel_edits_in_place_with_save_and_cancel_and_no_versions() {
   let mut agents = Agents::new(true);
   let docs = server(&agents, "docs");

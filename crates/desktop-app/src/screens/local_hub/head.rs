@@ -1,6 +1,7 @@
 //! The hub's head and filter in a local project (`Header`, `Filter` in L2): *Agents* with, at its right, that the
 //! project is only on this computer, *Share with a team…* (which opens the Sharing tab of Project settings, the
-//! existing Share flow) and *New* of the kind the filter holds; then the kinds and *Archived* as a segmented control
+//! existing Share flow), *Memory* and *Import* (the pages the old hub's tabs and head led to, which the design does not
+//! draw in this head) and *New* of the kind the filter holds; then the kinds and *Archived* as a segmented control
 //! with their counts and a line saying what the filter holds.
 
 use lurq::{
@@ -19,7 +20,8 @@ use super::model::{Listing, view_of};
 use crate::{
   navigation::Navigation,
   routes::{
-    AgentTab, HubFilter, InstructionsTab, InstructionsView, NewConnection, ProjectPage, ProjectSettingsTab, Route,
+    AgentTab, HubFilter, ImportTab, InstructionsTab, InstructionsView, NewConnection, ProjectPage, ProjectSettingsTab,
+    Route,
   },
   theme::{ExtraSpacing, HubSpacing, HubText, IconSize},
   ui::{
@@ -41,6 +43,14 @@ pub(super) fn head(ctx: &Ctx, project: ProjectId, filter: HubFilter, navigation:
       project,
       ProjectPage::Settings(ProjectSettingsTab::Sharing),
     )));
+  let memory = ActionButton::new("local-hub-memory", ButtonKind::Ghost, ctx.t("local_hub.memory"))
+    .icon(Icon::Brain)
+    .opens(navigation.to(Route::Project(project, ProjectPage::Memory(None))));
+  let import = import_of(filter).map(|page| {
+    ActionButton::new("local-hub-import", ButtonKind::Ghost, ctx.t("local_hub.import"))
+      .icon(Icon::Download)
+      .opens(navigation.to(Route::Project(project, page)))
+  });
   let new = new_of(filter).map(|(page, words)| {
     ActionButton::new("local-hub-new", ButtonKind::Primary, ctx.t(words))
       .icon(Icon::Plus)
@@ -76,8 +86,23 @@ pub(super) fn head(ctx: &Ctx, project: ProjectId, filter: HubFilter, navigation:
             ),
         )
         .child(share)
+        .child(memory)
+        .with_children(import)
         .with_children(new),
     )
+}
+
+/// The page that imports what the kind `filter` holds from the repository; none under Archived and MCP servers, which
+/// have nothing to import.
+fn import_of(filter: HubFilter) -> Option<ProjectPage> {
+  Some(match filter {
+    HubFilter::All => ProjectPage::Import(ImportTab::All),
+    HubFilter::Profiles => ProjectPage::Import(ImportTab::Agents),
+    HubFilter::Instructions => ProjectPage::Instructions(InstructionsView::Import),
+    HubFilter::Skills => ProjectPage::ImportSkills,
+    HubFilter::Tools => ProjectPage::Import(ImportTab::Tools),
+    HubFilter::McpServers | HubFilter::Archived => return None,
+  })
 }
 
 /// The page that makes a new one of the kind `filter` holds, and the words of its button; none under All and Archived.
