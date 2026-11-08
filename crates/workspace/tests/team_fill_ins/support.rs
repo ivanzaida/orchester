@@ -20,7 +20,6 @@ use orchester_core::{
 };
 use orchester_store::{
   AppDb, CachedVersion, ConnectionPick, ProjectDb, ReferenceTarget, ResourceSharing, SharingLink, StoredServer,
-  VersionReference,
 };
 use orchester_workspace::{tasks::outside::Outside, workspace::Workspace};
 use parking_lot::Mutex;
@@ -77,9 +76,6 @@ pub struct Team {
   pub codex: ConnectionId,
   /// A team profile whose newest version names the Claude Code CLI kind.
   pub claude_profile: ResourceId,
-  /// A team profile whose newest version was cached before the team configuration model and names a connection of the
-  /// Claude Code role.
-  pub legacy_profile: ResourceId,
   /// A team profile whose newest version names no connection: its CLI kind is not known.
   pub open_profile: ResourceId,
   pub local_profile: ResourceId,
@@ -102,7 +98,7 @@ pub fn profile() -> AgentProfile {
   )
 }
 
-pub fn cached<B>(local_body: B, references: Vec<VersionReference>) -> CachedVersion<B> {
+pub fn cached<B>(local_body: B, references: Vec<ReferenceTarget>) -> CachedVersion<B> {
   CachedVersion {
     number: VersionNumber::FIRST,
     published_at: Timestamp::from_unix_millis(20),
@@ -123,7 +119,7 @@ pub fn team_resource<B: orchester_core::resource::ResourceBody>(
   db: &mut ProjectDb,
   slug: &str,
   body: B,
-  references: Vec<VersionReference>,
+  references: Vec<ReferenceTarget>,
 ) -> ResourceId {
   let id = db
     .create_resource(
@@ -212,18 +208,8 @@ impl Team {
     share(&mut db, server);
     let claude = connection(&mut db, &root, AgentProvider::ClaudeCodeCli, "claude");
     let codex = connection(&mut db, &root, AgentProvider::CodexCli, "codex");
-    let cli_kind = VersionReference {
-      target: ReferenceTarget::CliKind(AgentProvider::ClaudeCodeCli),
-      name: String::new(),
-      role: None,
-    };
+    let cli_kind = ReferenceTarget::CliKind(AgentProvider::ClaudeCodeCli);
     let claude_profile = team_resource(&mut db, "claude-builder", profile(), vec![cli_kind]);
-    let legacy = VersionReference {
-      target: ReferenceTarget::Connection(ConnectionId::generate()),
-      name: "Claude".to_owned(),
-      role: Some("claude_code_cli".to_owned()),
-    };
-    let legacy_profile = team_resource(&mut db, "legacy-builder", profile(), vec![legacy]);
     let open_profile = team_resource(&mut db, "open-builder", profile(), Vec::new());
     let program_server = team_resource(
       &mut db,
@@ -256,7 +242,6 @@ impl Team {
       claude,
       codex,
       claude_profile,
-      legacy_profile,
       open_profile,
       local_profile,
       program_server,

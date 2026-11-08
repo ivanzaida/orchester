@@ -57,12 +57,11 @@ pub struct More {
 
 /// The page head; in a shared project `shared`, the team's version and where it stands here, says what the
 /// permissions say otherwise (`Sub` `Du8OB` in 02), and a member has `versions` at its end in the menu's place
-/// (`Versions` `EGuXw` in 03). `glyph` stands in the tile for the connection's own mark: the team's API connection
-/// missing on this computer (04).
+/// (`Versions` `EGuXw` in 03).
 pub fn head(
   ctx: &mut Ctx,
   (fields, listed): (&Fields, &ProjectAgents),
-  (more, glyph): (Option<More>, Option<Icon>),
+  more: Option<More>,
   (shared, versions): (Option<Row>, Option<Element>),
 ) -> Element {
   let role = fields.role.get();
@@ -110,10 +109,7 @@ pub fn head(
     .width(Dimension::Pct(100.0))
     .spacing(lurq::app::theme::SpacingSize::Md)
     .align_items(Alignment::Center)
-    .child(tile(
-      glyph.unwrap_or_else(|| entries::provider_glyph(fields.connection(listed))),
-      true,
-    ))
+    .child(tile(entries::provider_glyph(fields.connection(listed)), true))
     .child(
       Column::new()
         .flex(1.0)

@@ -11,9 +11,7 @@ use std::{
 use orchester_core::{
   blob::ContentHash,
   connection::{AgentConnection, AgentProvider},
-  id::{
-    ClaimId, ConnectionId, ModuleId, OperationId, ProjectId, ResourceId, SecretId, ServerId, TaskId, VersionId, WorkId,
-  },
+  id::{ClaimId, ConnectionId, ModuleId, OperationId, ProjectId, ResourceId, ServerId, TaskId, VersionId, WorkId},
   name::Name,
   permission::StepPermissions,
   resource::{
@@ -24,8 +22,8 @@ use orchester_core::{
     BranchName, CommitId, PinnedVersion, PublishedVersions, RunSnapshot,
     bundle::{CanonicalExecutionInputs, ExecutionProfile, PinnedBodies, ResourceLabel},
     inputs::{
-      BoundReference, BundleContent, InputsError, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, RunInputs,
-      TaskAtStart, TeamAcceptance,
+      BundleContent, InputsError, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, RunInputs, TaskAtStart,
+      TeamAcceptance,
     },
   },
   sharing::TaskRevision,
@@ -155,11 +153,8 @@ fn bound(fixture: &Fixture) -> LocalBindings {
       required_cli: None,
       mcp_servers: Vec::new(),
     }],
-    references: vec![BoundReference::Secret {
-      named: SecretId::generate(),
-      local: SecretId::generate(),
-    }],
     team_mcp: Vec::new(),
+    local_mcp: Vec::new(),
   }
 }
 
@@ -215,22 +210,16 @@ fn run_inputs_label_pinned_resources_from_the_canonical_inputs() {
 #[test]
 fn run_inputs_resolve_a_profile_on_its_binding_and_the_task_at_start() {
   let fixture = fixture();
-  let server = ConnectionId::generate();
-  let mut bindings = LocalBindings {
-    references: vec![BoundReference::McpServer {
-      named: ConnectionId::generate(),
-      local: server,
-    }],
-    ..bound(&fixture)
-  };
-  bindings.profiles[0].mcp_servers = vec![server];
+  let bindings = bound(&fixture);
   let inputs = RunInputs::new(content(&fixture, team()), bindings.clone(), LocalConsent::default()).expect("inputs");
   let pinned = inputs.bundle().inputs().profiles()[0].pinned();
   let profile = inputs.profile(pinned).expect("the pinned profile");
   assert_eq!(profile.connection(), bindings.profiles[0].connection);
   assert_eq!(profile.role().as_str(), "Reviewer");
-  assert_eq!(profile.mcp_servers().ids(), [server]);
-  assert_eq!(inputs.bound_mcp_servers().ids().len(), 1);
+  assert!(
+    profile.mcp_servers().ids().is_empty(),
+    "this profile names no MCP server"
+  );
   let other = PinnedVersion {
     version: VersionId::generate(),
     ..pinned
@@ -345,13 +334,10 @@ fn run_inputs_keep_local_bindings_out_of_the_canonical_content() {
     !text.contains(&connection),
     "a local connection is not canonical content"
   );
-  let BoundReference::Secret { named, local } = &bindings.references[0] else {
-    panic!("a secret reference");
-  };
   let value = serde_json::to_value(&bindings).expect("serializes");
-  assert_eq!(
-    value["references"][0],
-    json!({"kind": "secret", "named": named, "local": local})
+  assert!(
+    value.get("references").is_none(),
+    "no reference of a publisher's computer is bound"
   );
   let inputs = RunInputs::new(content.clone(), bindings, LocalConsent::default()).expect("inputs");
   assert_eq!(inputs.bundle(), &content);

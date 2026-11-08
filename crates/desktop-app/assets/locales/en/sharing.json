@@ -571,89 +571,7 @@
       "versionBody": "{{server}} refuses Orchester {{current}}: a team server and a desktop of different versions don't talk to each other. Update Orchester to see and run {{project}}'s tasks again; your local projects work as before, and runs here keep their worktrees.",
       "checkUpdates": "Check for updates"
     },
-    "bindings": {
-      "title": "On this computer",
-      "count": "{{count}} references · {{need}} need you",
-      "countAllBound": "{{count}} references · all chosen here",
-      "lead": "What the team's versions need that is yours. You choose it here and can change any of it; the server only knows its name and kind.",
-      "connections": "Connections",
-      "servers": "MCP servers",
-      "secrets": "Secrets",
-      "note": "Only you bind MCP servers and secrets: the Orchestrator, tools and automation can't. A binding stays until you change it; later versions that keep the reference reuse it.",
-      "nobody": "named by no version now",
-      "separator": ", ",
-      "version": "{{name}} v{{version}}",
-      "tool": "Tool “{{name}}”",
-      "titled": "{{kind}} “{{name}}”",
-      "detailed": "{{name}} · {{detail}}",
-      "projectSecret": "project secret",
-      "kind": {
-        "claude_code_cli": "Claude Code",
-        "codex_cli": "Codex",
-        "anthropic_api": "API",
-        "openai_api": "API",
-        "github": "GitHub"
-      },
-      "aConnection": {
-        "claude_code_cli": "a Claude Code connection",
-        "codex_cli": "a Codex connection",
-        "anthropic_api": "an API connection",
-        "openai_api": "an API connection",
-        "github": "a GitHub connection"
-      },
-      "hint": {
-        "connection": "{{role}} · {{needs}}",
-        "connectionAccounts": "{{role}} · {{needs}} · {{count}} {{kind}} accounts here",
-        "connectionMissing": "{{role}} · missing on this computer · {{names}} can't run here",
-        "noAccount": "{{role}} · {{needs}} · no account for it on this computer",
-        "noAccountOf": "{{role}} · {{needs}} · no {{kind}} account on this computer",
-        "missing": "{{needs}} · missing on this computer",
-        "found": "{{needs}} · found “{{local}}” here by name",
-        "confirmed": "{{needs}} · confirmed {{date}}"
-      },
-      "byName": "by name",
-      "byRole": "by role",
-      "chosenHere": "chosen here",
-      "change": "Change",
-      "confirm": "Confirm…",
-      "waits": "Waits for you",
-      "chooseConnection": "Choose a connection",
-      "chooseServer": "Choose an MCP server",
-      "chooseSecret": "Choose a secret",
-      "anotherRole": "another role",
-      "addAccount": "Add an account…",
-      "noneHere": "None on this computer",
-      "noneHereReason": "Add one in Connections or Environment first",
-      "serverHere": "MCP server on this computer",
-      "secretHere": "Secret on this computer",
-      "personOnly": "Only you can confirm this; the Orchestrator and tools can't.",
-      "later": "Change or remove it later in Sharing › On this computer.",
-      "cancel": "Cancel",
-      "server": {
-        "title": "Use “{{local}}” for {{name}} on this computer?",
-        "agents": "Agents of {{needs}} can call its tools in their runs here.",
-        "signIn": "It works with your own sign-in to it; nothing about it is sent to the server.",
-        "use": "Use for {{name}}"
-      },
-      "secret": {
-        "title": "Give a secret to {{name}} on this computer?",
-        "sends": "{{needs}} uses it when it runs here.",
-        "stays": "The value stays on this computer. The server only knows the name {{name}}.",
-        "use": "Use this secret"
-      }
-    },
     "config": {
-      "missing": {
-        "connection": "Missing on this computer: connection “{{name}}”",
-        "connectionOf": "Missing on this computer: {{kind}} connection “{{name}}”",
-        "server": "Missing on this computer: MCP server “{{name}}”",
-        "secret": "Missing on this computer: secret “{{name}}”",
-        "several": "Missing on this computer: {{count}} references",
-        "bodyConnection": "Pipelines that use {{resource}} can't run here until you choose {{connection}} ({{role}}) on this computer.",
-        "body": "Pipelines that use {{resource}} can't run here until you choose what it names on this computer.",
-        "bodyPipeline": "{{resource}} can't run here until you choose what its steps name on this computer.",
-        "choose": "Choose on this computer…"
-      },
       "widens": {
         "title": "v{{version}} widens what agents may do here",
         "body": "{{publisher}} published v{{version}}. Runs on this computer keep the version before it until you use v{{version}} here.",
@@ -675,11 +593,6 @@
           "mcpServer": "An MCP server it did not give its agents",
           "secret": "A secret it did not use",
           "tool": "A tool it did not give its agents",
-          "serverNamed": "MCP server {{name}}",
-          "secretNamed": "Secret {{name}}",
-          "boundHere": "{{what}} · bound here to “{{local}}”",
-          "foundHere": "{{what}} · found “{{local}}” here by name",
-          "missingHere": "{{what}} · missing on this computer",
           "command": "A command it did not run",
           "address": "Another address its requests go to",
           "method": "Another request method",
@@ -791,25 +704,7 @@
       }
     },
     "runsHere": {
-      "label": "Runs here use",
-      "yours": "Yours",
-      "hint": "Your connection and account on this computer",
-      "hintFound": "Your connection and account on this computer · {{found}}",
-      "noAccount": "Missing on this computer: no {{cli}} account here · {{resource}} can't run here",
-      "note": "Runs here use stays on this computer and is never sent to the team.",
-      "noteNoAccount": "Add an account… opens Settings › Accounts. Runs here use stays on this computer and is never sent.",
-      "choose": "Choose a connection",
-      "head": "runs here: {{connection}}",
-      "cantRun": "Can't run here",
-      "missing": "Missing on this computer",
       "usesVersion": "Runs here use v{{version}}"
-    },
-    "member": {
-      "cli": "Agent CLI",
-      "cliHint": "The team's choice in {{profile}} v{{version}} · admins change it",
-      "modelHint": "The team's choice · from {{cli}}'s list",
-      "effortHint": "The team's choice",
-      "apiHint": "API “{{name}}” · {{role}}"
     }
   }
 }

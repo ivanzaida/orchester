@@ -99,8 +99,8 @@ fn team_mcp_an_admin_shares_a_pipeline_of_their_own_for_the_team() {
   let kept = db.resource(local).expect("read").expect("kept");
   assert_eq!(
     kept.slug().as_str(),
-    "delivery-local",
-    "the local one gave way, kept as it is"
+    "delivery",
+    "the local one is kept as it is, with its slug"
   );
 }
 

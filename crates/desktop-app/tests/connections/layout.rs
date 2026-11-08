@@ -2,7 +2,7 @@
 //! window width, every row's name inside it, and a connection's page with its head's actions on one line.
 
 use lurq::core::ElementRect;
-use orchester_core::store::{ConnectionStore, McpServerStore};
+use orchester_core::store::ConnectionStore;
 
 use super::harness::Seeded;
 
@@ -13,16 +13,14 @@ const COLUMN: f32 = 720.0;
 fn rows(seeded: &Seeded) -> Vec<(String, String)> {
   let db = seeded.db();
   let connections = db.connections().expect("connections read");
-  let servers = db.mcp_servers().expect("servers read");
   connections
     .iter()
-    .map(|connection| (connection.id(), connection.name().as_str().to_owned()))
-    .chain(
-      servers
-        .iter()
-        .map(|server| (server.id(), server.name().as_str().to_owned())),
-    )
-    .map(|(id, name)| (format!("connection-row-{id}"), name))
+    .map(|connection| {
+      (
+        format!("connection-row-{}", connection.id()),
+        connection.name().as_str().to_owned(),
+      )
+    })
     .collect()
 }
 
@@ -50,7 +48,7 @@ fn connections_groups_keep_the_column_and_their_names_at_960_and_1440() {
     let list = bounds(&mut seeded, "connections-list");
     assert!(list.width <= COLUMN + 0.5, "at {width}: {list:?}");
     let rows = rows(&seeded);
-    assert_eq!(rows.len(), 6, "the scenario's connections");
+    assert_eq!(rows.len(), 3, "the scenario's connections");
     for (row, name) in rows {
       let label = bounds(&mut seeded, &format!("{row}-label"));
       assert!(

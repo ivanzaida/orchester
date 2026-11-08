@@ -8,7 +8,7 @@ use orchester_core::{
   id::ResourceId,
   resource::{AgentTargets, Instruction, InstructionScope, Pipeline, Skill, Tool},
 };
-use orchester_store::{ReferenceTarget, VersionReference};
+use orchester_store::ReferenceTarget;
 
 /// A kind whose body names no resource: a team profile, MCP server or reviewer names what it uses in its references.
 pub(super) fn never<B>(_: &B, _: ResourceId) -> bool {
@@ -17,10 +17,10 @@ pub(super) fn never<B>(_: &B, _: ResourceId) -> bool {
 
 /// Whether one of `references` is a team resource with `target`'s server id. The reference's kind is not compared with
 /// the target's: a reference of the wrong kind is refused when published, not read here.
-pub(super) fn referenced(references: &[VersionReference], target: ResourceId) -> bool {
+pub(super) fn referenced(references: &[ReferenceTarget], target: ResourceId) -> bool {
   references
     .iter()
-    .any(|reference| matches!(reference.target, ReferenceTarget::TeamResource { id, .. } if id == target))
+    .any(|reference| matches!(reference, ReferenceTarget::TeamResource { id, .. } if *id == target))
 }
 
 /// A pipeline names its steps' executors, an agent profile or a tool, and the profile its Deliver step integrates

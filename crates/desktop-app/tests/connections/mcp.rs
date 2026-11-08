@@ -159,10 +159,7 @@ fn connections_mcp_server_is_removed_in_place() {
   seeded.click("connection-remove");
   seeded.click("connection-confirm-remove");
   seeded.until("the server removed", |seeded| {
-    seeded.server("sentry").is_none()
-      && seeded.selected().is_none()
-      && seeded.exists("connections-mcp")
-      && !seeded.text("connections-mcp").contains("sentry")
+    seeded.server("sentry").is_none() && seeded.selected().is_none() && seeded.exists("connections-list")
   });
 }
 

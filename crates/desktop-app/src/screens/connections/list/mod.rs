@@ -1,8 +1,7 @@
-//! Project settings › Connections (`05 Connections` `dk46o`, nothing yet `07` `WYCDL`): the project's agent providers,
-//! GitHub and MCP servers as groups of rows, each row opening its connection's page (`05b` `PGwka`,
-//! [`super::inspector`]); Add provider and Add MCP server at their groups' heads; an MCP server's switch in its row,
-//! its question asked in place under the group. Its other states: the connections being read, and reading failing.
-//! Work on a connection reads them all again once done.
+//! Project settings › Connections (`05 Connections` `dk46o`, nothing yet `07` `WYCDL`): the project's agent providers
+//! and GitHub as groups of rows, each row opening its connection's page (`05b` `PGwka`, [`super::inspector`]); Add
+//! provider at its group's head. MCP servers live in the Agents hub, not here. Its other states: the connections being
+//! read, and reading failing. Work on a connection reads them all again once done.
 
 mod empty;
 mod reading;
@@ -24,7 +23,7 @@ use parking_lot::Mutex;
 
 use super::{
   data::{self, Entry},
-  inspector::{self, Actions, Asks, Confirm, Inspecting, Tested},
+  inspector::{self, Actions, Confirm, Inspecting, Tested},
   work::{self, Start, Work, WorkAction},
 };
 use crate::{
@@ -137,17 +136,10 @@ impl Component for ConnectionsScreen {
     if let Some(entry) = chosen {
       return kit::scroll(self.page(ctx, &project, (&listed, &accounts), entry, (&work, unread)));
     }
-    if data::entries(&listed).is_empty() && listed.decisions.is_empty() {
+    if listed.connections.is_empty() && listed.github.is_empty() && listed.decisions.is_empty() {
       return kit::scroll(empty::page(ctx, &project, &self.recheck));
     }
-    let asks = self.asks(&project, &listed);
-    kit::scroll(rows::groups(
-      ctx,
-      &project,
-      &listed,
-      (&accounts, &asks),
-      (self.running.get().0, self.asking.get().0),
-    ))
+    kit::scroll(rows::groups(ctx, &project, &listed, &accounts))
   }
 }
 
@@ -223,19 +215,6 @@ impl ConnectionsScreen {
         work: piece,
         spec,
       });
-    })
-  }
-
-  /// What the list's switches and questions do, each on the server it is about.
-  fn asks(&self, project: &ShownProject, listed: &ProjectConnections) -> rows::ListAsks {
-    let start = self.starter(project, listed);
-    let asking = self.asking.clone();
-    Arc::new(move |id: ConnectionId| {
-      let asking = asking.clone();
-      Asks {
-        start: start.clone(),
-        confirm: Arc::new(move |confirm| asking.set(Asking(confirm.map(|confirm| (id, confirm))))),
-      }
     })
   }
 

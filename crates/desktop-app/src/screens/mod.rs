@@ -33,7 +33,6 @@ mod review;
 mod reviewer_trouble;
 mod secrets;
 pub(crate) mod settings;
-mod shared_config;
 mod skills;
 pub(crate) mod task;
 mod task_close;

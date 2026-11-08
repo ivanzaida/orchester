@@ -13,7 +13,7 @@ use super::{
   needs::{Entry, Profile, Reviewer},
   standing::Undecided,
 };
-use crate::sharing::sync::{is_local_form, team_form};
+use crate::sharing::sync::team_form;
 
 /// The team's profiles, each read in the team's form. A version the server holds is read from the body it sent: the
 /// local body is the connection this computer resolved, not what the profile asks. A version published here that waits
@@ -164,10 +164,6 @@ pub(crate) fn body(
 }
 
 fn from_server(profile: ResourceId, server_body: Value) -> Result<TeamAgentProfile, Undecided> {
-  if is_local_form(&server_body) {
-    tracing::debug!(%profile, "a profile version cached before the team configuration model is not in the team's form");
-    return Err(Undecided::NotTeamForm);
-  }
   serde_json::from_value::<TeamAgentProfile>(server_body).map_err(|error| {
     tracing::warn!(%profile, %error, "the team's profile version is not a team profile body this version can read");
     Undecided::NotTeamForm

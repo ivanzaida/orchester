@@ -213,8 +213,8 @@ pub(crate) fn pins(db: &ProjectDb, snapshot: &RunSnapshot, resource: &Resource) 
     };
     let chooses = cached.references.iter().any(|reference| {
       matches!(
-        reference.target,
-        ReferenceTarget::TeamResource { kind: ResourceKind::McpServer, id } if id == resource.id()
+        reference,
+        ReferenceTarget::TeamResource { kind: ResourceKind::McpServer, id } if *id == resource.id()
       )
     });
     if chooses {

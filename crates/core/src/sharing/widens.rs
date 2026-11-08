@@ -59,12 +59,11 @@ pub fn widens<B: SharedBody>(previous: Option<&B>, next: &B) -> Vec<VersionWiden
   next.widenings_over(previous)
 }
 
-/// A profile body that names the publisher's connection and MCP servers by local id, which only versions cached before
-/// the team configuration model have; team versions are [`TeamAgentProfile`]s. ORC-845 removes this with the bindings.
+/// The local body of a team profile ([`AgentProfile::from_team`]), which runs on the connection this computer picked
+/// for it; the server's body is a [`TeamAgentProfile`].
 impl SharedBody for AgentProfile {
   /// A first version is compared with permissions that grant nothing: read-only, no command, network off and no MCP
-  /// server. Unlike the person gate, it does not fit them to the profile's connection, which a body names by the
-  /// publisher's id.
+  /// server. Unlike the person gate, it does not fit them to the profile's connection, which this computer picks.
   fn widenings_over(&self, previous: Option<&Self>) -> Vec<VersionWidening> {
     let servers = |profile: &Self| profile.mcp_servers().clone();
     let mut widenings = permission_widenings(self.permissions(), previous.map(AgentProfile::permissions));

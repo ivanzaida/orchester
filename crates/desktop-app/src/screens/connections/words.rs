@@ -1,8 +1,6 @@
 //! What Connections calls things: each status as an icon and a word in its tone (`Status cell` `xy4z6`,
 //! the states of `uBsQM` and `O1jDI`), the providers' names, and the line under a connection's name.
 
-use std::path::Path;
-
 use lurq::app::{ctx::Ctx, theme::PaletteColor};
 use orchester_core::connection::{AgentConnection, AgentProvider, ConnectionAccount, ConnectionStatus, GitHubState};
 
@@ -196,12 +194,4 @@ pub(super) fn checked_version(connection: &AgentConnection) -> Option<&str> {
     orchester_core::connection::CheckResult::Available { version, .. } => Some(version),
     _ => None,
   }
-}
-
-/// The file name of `program`, as a row names an MCP program (`Program · npx`).
-pub(super) fn program_name(program: &str) -> &str {
-  Path::new(program)
-    .file_name()
-    .and_then(|name| name.to_str())
-    .unwrap_or(program)
 }

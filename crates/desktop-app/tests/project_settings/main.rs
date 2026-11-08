@@ -1,5 +1,4 @@
 //! Project settings in the real headless window: states, autosaves and person-only questions.
-mod bindings;
 mod decision_reviewer;
 mod domain;
 mod environment;

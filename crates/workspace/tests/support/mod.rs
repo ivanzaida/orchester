@@ -32,7 +32,7 @@ use orchester_core::{
   time::Timestamp,
   tokens::TokenBudget,
 };
-use orchester_store::{CachedVersion, ProjectDb, ReferenceTarget, ResourceSharing, VersionReference};
+use orchester_store::{CachedVersion, ProjectDb, ReferenceTarget, ResourceSharing};
 use tempfile::TempDir;
 
 pub fn at(millis: i64) -> Timestamp {
@@ -573,16 +573,12 @@ fn keep_as_team_profile(
 }
 
 /// The references of a team profile version that chooses the team MCP servers `servers`.
-fn team_server_references(servers: &[ResourceId]) -> Vec<VersionReference> {
+fn team_server_references(servers: &[ResourceId]) -> Vec<ReferenceTarget> {
   servers
     .iter()
-    .map(|&id| VersionReference {
-      target: ReferenceTarget::TeamResource {
-        kind: ResourceKind::McpServer,
-        id,
-      },
-      name: String::new(),
-      role: None,
+    .map(|&id| ReferenceTarget::TeamResource {
+      kind: ResourceKind::McpServer,
+      id,
     })
     .collect()
 }

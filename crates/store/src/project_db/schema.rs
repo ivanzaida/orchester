@@ -74,6 +74,7 @@ mod qa_slots;
 mod questions;
 mod queue_holds;
 mod recovery;
+mod remove_bindings;
 mod removed_resources;
 mod reported_windows;
 mod request_answers;

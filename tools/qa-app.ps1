@@ -51,12 +51,6 @@
 # stand-in cloud names as the account's, with an invite to its project Billing, for Join a team (navigate to
 # join_team). The QA app (--join-team) prints the server's address and its codes to app.log: one joins, any other is
 # wrong; an address where nothing listens (http://127.0.0.1:9) does not answer.
-# -Scenario shared-config-here is Kontur seen by a member, with the team's cached versions and what they name here
-# (Shared configuration · redesign, UC5xk): Sharing › On this computer with every kind of row, the missing bars on Explorer,
-# Report crash and Feature delivery, Reviewer's v5 waiting for Use v5 here, Builder's Runs here use. A click opens the
-# pickers and the Confirm… and secret modals; choosing a connection and confirming stay a person's. shared-config-chosen
-# has Work chosen here; shared-config-no-claude has no Claude Code connection.
-#
 # -Scenario picker-readiness-team and picker-readiness reach New task's Pipeline menu with readiness (`New task · pipeline
 # picker shows readiness`, R2 `P6aAoZ` for the team project, L10 `PMi6Q` for the local one): open New task, fill it, open
 # the Pipeline chip and choose Team delivery (2 things missing here) or Design pass (2 things missing) for the bar's line

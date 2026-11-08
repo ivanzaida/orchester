@@ -23,7 +23,7 @@ use orchester_core::{
   time::Timestamp,
   tokens::TokenBudget,
 };
-use orchester_store::{CachedVersion, ProjectDb, ReferenceTarget, ResourceSharing, VersionReference};
+use orchester_store::{CachedVersion, ProjectDb, ReferenceTarget, ResourceSharing};
 use orchester_workspace::sharing::NotArchived;
 use serde_json::json;
 
@@ -254,13 +254,9 @@ fn pin_run(db: &mut ProjectDb, server: ResourceId) -> (RunId, TaskId) {
     },
     server_body: json!({}),
     hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
-    references: vec![VersionReference {
-      target: ReferenceTarget::TeamResource {
-        kind: ResourceKind::McpServer,
-        id: server,
-      },
-      name: String::new(),
-      role: None,
+    references: vec![ReferenceTarget::TeamResource {
+      kind: ResourceKind::McpServer,
+      id: server,
     }],
     local_body: published.body().clone(),
     waits_here: false,

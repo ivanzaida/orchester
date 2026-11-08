@@ -5,7 +5,7 @@
 //! run, and its Deliver step's integrator, must be the team's already: a pipeline that names one of this computer's own
 //! is refused, naming it, since the team's copy would name what the server does not have. Every member's agents may
 //! then run it, so it is a person's decision unless a person lets automation change agent permissions. The local
-//! pipeline stays as it is, hidden, but for its slug, which it gives way to the team's.
+//! pipeline stays as it is, hidden, its slug shared with the copy while the project is the team's.
 
 use orchester_core::{
   resource::{Pipeline, Resource, ResourceKind},
