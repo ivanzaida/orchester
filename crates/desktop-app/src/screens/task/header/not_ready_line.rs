@@ -1,9 +1,10 @@
 //! The status line while the person's last Run was refused because the task's pipeline is not ready on this computer
 //! (`Status line` `g9ufW` in R1 `Ku0qu` for a team project, in L9 `f5CEX` for a local one): the task's state and why in
 //! the warning tone (`Not started · not ready on this computer`), then in `text_muted` when Run was pressed and, when
-//! the task has an earlier run that ended, when it ended (`Run pressed 15:40 · run 8 ended 15:21`). It reads as the
-//! Summary's card does, by the same re-read of what is missing ([`not_ready::missing_now`]), so the line is the
-//! ordinary one again once the card goes.
+//! the task has an earlier run that ended, when it ended (`Run pressed 15:40 · run 8 ended 15:21`). A refusal recorded
+//! before this window opened has no press time here: the line leaves that part out. It shows whenever the Summary's
+//! card does and reads as the card does, by the same re-read of what is missing ([`not_ready::missing_now`]), so the
+//! line is the ordinary one again once the card goes.
 
 use std::sync::Arc;
 
@@ -26,8 +27,8 @@ use crate::screens::task::{
 #[derive(Clone, PartialEq)]
 pub struct LineProps {
   card: CardProps,
-  /// When the refused Run was pressed.
-  pressed: Timestamp,
+  /// When the refused Run was pressed in this window; none for a refusal recorded before it.
+  pressed: Option<Timestamp>,
   /// The ordinary line says the run's approval mode.
   mode: bool,
 }
@@ -38,7 +39,7 @@ impl DevtoolsInspectable for LineProps {}
 /// found complete; `None` when the ordinary line applies.
 pub fn shown(ctx: &mut Ctx, task: &TaskContext, mode: bool) -> Option<Element> {
   let refusal = not_ready::refused(ctx, task)?;
-  let pressed = not_ready::pressed(ctx, task)?;
+  let pressed = not_ready::pressed(ctx, task);
   Some(ctx.mount_keyed::<NotReadyLine>(
     "task-not-ready-line",
     LineProps {
@@ -73,27 +74,26 @@ impl Component for NotReadyLine {
       ctx.t("task.status.notReady")
     };
     let line = line(ctx, task, props.pressed);
-    run_line::not_ready(ctx, task, (words, &line))
+    run_line::not_ready(ctx, task, (words, line.as_deref()))
   }
 }
 
-/// `Run pressed 15:40`, and `run 8 ended 15:21` after it when the task's latest run ended.
-fn line(ctx: &Ctx, task: &TaskContext, pressed: Timestamp) -> Arc<str> {
-  let pressed = display::clock(pressed);
-  let ended = task
-    .detail
-    .run
-    .as_ref()
-    .and_then(|run| run.finished_at.map(|at| (run.run.number(), at)));
-  match ended {
-    Some((number, at)) => ctx.t_args(
+/// `Run pressed 15:40`, and `run 8 ended 15:21` after it when the task's latest run ended; either alone when only
+/// that is known, none when neither is.
+fn line(ctx: &Ctx, task: &TaskContext, pressed: Option<Timestamp>) -> Option<Arc<str>> {
+  let pressed = pressed.map(display::clock);
+  let ended = task.detail.run.as_ref().and_then(|run| {
+    run
+      .finished_at
+      .map(|at| (run.run.number().get().to_string(), display::clock(at)))
+  });
+  match (pressed, ended) {
+    (Some(pressed), Some((run, ended))) => Some(ctx.t_args(
       "task.runLine.notReadyAfterRun",
-      [
-        ("pressed", pressed),
-        ("run", number.get().to_string()),
-        ("ended", display::clock(at)),
-      ],
-    ),
-    None => ctx.t_args("task.runLine.notReadyPressed", [("pressed", pressed)]),
+      [("pressed", pressed), ("run", run), ("ended", ended)],
+    )),
+    (Some(pressed), None) => Some(ctx.t_args("task.runLine.notReadyPressed", [("pressed", pressed)])),
+    (None, Some((run, ended))) => Some(ctx.t_args("task.runLine.notReadyEnded", [("run", run), ("ended", ended)])),
+    (None, None) => None,
   }
 }

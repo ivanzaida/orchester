@@ -4,19 +4,31 @@
 //!
 //! `cargo test -p orchester-app --test team_qa team_qa_not_ready`
 
+use std::path::Path;
+
 use orchester_api::test_support::team_server::TeamServer;
 use orchester_app::{
   routes::{HubFilter, ProjectPage, Route, TaskTab, TaskView},
   test_support::{Data, Window},
   ui::icon::Icon,
 };
-use orchester_core::{id::ProjectId, resource::ResourceKind, store::ResourceStore, time::Timestamp};
+use orchester_core::{
+  id::ProjectId,
+  resource::ResourceKind,
+  run::RunEventKind,
+  secret::{SecretName, SecretValue},
+  store::{ResourceStore, RunStore, TaskStore},
+  time::Timestamp,
+};
 use orchester_store::{AppDb, ProjectDb};
 use orchester_workspace::display;
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
 
-use super::team::{self, State};
+use super::{
+  start_failed::WITHIN,
+  team::{self, State},
+};
 
 pub(super) fn task_route(project: ProjectId, key: &str) -> Route {
   let key = key.parse().expect("a task key");
@@ -35,7 +47,17 @@ fn on_kon_5() -> (Window, TeamServer, ProjectId) {
 
 /// The window on the seed's `scenario` joined to the stand-in team server in `state`, with the real runner; on the task
 /// `key` once Run shows.
-pub(super) fn on_task((scenario, state): (&str, State), key: &str) -> (Window, TeamServer, ProjectId) {
+pub(super) fn on_task(setup: (&str, State), key: &str) -> (Window, TeamServer, ProjectId) {
+  on_task_after_setup(setup, key, |_| {})
+}
+
+/// [`on_task`] with `before_open` run on the project's folder once the state is set up and before the window opens on
+/// the task: what the project recorded before this window.
+fn on_task_after_setup(
+  (scenario, state): (&str, State),
+  key: &str,
+  before_open: impl FnOnce(&Path),
+) -> (Window, TeamServer, ProjectId) {
   let dir = TempDir::new().expect("a temporary folder");
   let request = crate::kontur::SeedRequest {
     data_dir: dir.path().to_path_buf(),
@@ -49,6 +71,7 @@ pub(super) fn on_task((scenario, state): (&str, State), key: &str) -> (Window, T
   let launch = data.launch_with(runner_programs::programs().runner.clone());
   let services = launch.services().expect("the session started");
   let server = team::prepare(state, services, data.runtime.handle()).expect("the state is set up");
+  before_open(&data.repo("repo-kontur"));
   let mut window = Window::of(data, launch);
   window.navigation().go(task_route(seeded.project, key));
   window.until("Run", |window| window.texts("task-run").is_some());
@@ -213,5 +236,150 @@ fn team_qa_not_ready_header_line_names_the_computer_and_when_run_was_pressed() {
   assert!(
     pressed == said(before) || pressed == said(after),
     "the minute Run was pressed, with no earlier run to name: {pressed}"
+  );
+}
+
+/// Takes KON-5 over from mara, which starts a new run that is refused as not ready here, until the card shows.
+fn taken_over(window: &mut Window) {
+  window.until("Take over", |window| window.texts("task-team-take-over").is_some());
+  window.press("task-team-take-over");
+  window.until("the question", |window| window.texts("task-take-over-title").is_some());
+  window.press("task-take-over-confirm");
+  window.until("the not-ready card", |window| window.texts("task-not-ready").is_some());
+}
+
+/// The KON-5 of `team-not-ready-ended` joined to the team server: the window on it.
+fn on_kon_5_after_run() -> (Window, TeamServer, ProjectId) {
+  on_task(("team-not-ready-ended", State::NotReadyAfterRun), "KON-5")
+}
+
+/// When KON-5's cancelled run ended, as the project's events record it.
+fn cancelled_at(window: &Window) -> Timestamp {
+  let db = ProjectDb::open(&window.data.repo("repo-kontur")).expect("the project");
+  let task = db
+    .tasks()
+    .expect("tasks")
+    .into_iter()
+    .find(|task| task.key().to_string() == "KON-5")
+    .expect("KON-5");
+  let run = db
+    .runs_of_task(task.id())
+    .expect("runs")
+    .remove(0)
+    .expect("a readable run");
+  db.events(run.id())
+    .expect("events")
+    .iter()
+    .find(|event| matches!(event.kind(), RunEventKind::Cancelled))
+    .map(|event| event.at())
+    .expect("the run was cancelled")
+}
+
+/// The person gives the team's secret `GITHUB_TOKEN` a value on this computer.
+fn give_secret_value(window: &Window) {
+  let services = window.launch.services().expect("services");
+  ProjectDb::open(&window.data.repo("repo-kontur"))
+    .expect("the project")
+    .set_team_secret_value(
+      services.vault.get(),
+      &SecretName::new("GITHUB_TOKEN").expect("a secret name"),
+      &SecretValue::new("ghp_not-a-real-token-7d2e".to_owned()).expect("a value"),
+    )
+    .expect("the value is kept");
+}
+
+#[test]
+fn team_qa_not_ready_header_line_says_when_the_earlier_run_ended() {
+  let (mut window, _server, _) = on_kon_5_after_run();
+  let before = Timestamp::now();
+  taken_over(&mut window);
+  let after = Timestamp::now();
+  settle(&mut window);
+  let ended = display::clock(cancelled_at(&window));
+  let said = |at| format!("Run pressed {} · run 8 ended {ended}", display::clock(at));
+  let line = window.text("task-run-line");
+  assert!(line == said(before) || line == said(after), "{line}");
+  assert_eq!(
+    window.text("task-status-label"),
+    "Not started · not ready on this computer"
+  );
+}
+
+/// A refusal the project recorded before this window opened (a start that failed for good as not ready here) shows the
+/// card, and the line says nothing of a press this window never saw.
+#[test]
+fn team_qa_not_ready_header_line_of_a_refusal_recorded_before_the_window_leaves_the_press_out() {
+  let failure = r#"{"failure":{"kind":"not_ready_here","reason":{"pipeline":"Team delivery","missing":[{"missing":{"kind":"secret","name":"GITHUB_TOKEN"},"name":"GITHUB_TOKEN"}]}},"claim":"released"}"#;
+  let (mut window, _server, _) =
+    on_task_after_setup(("team-start-past-failure", State::StartPastFailure), "KON-5", |root| {
+      rusqlite::Connection::open(root.join(".orchester/orchester.db"))
+        .expect("open")
+        .execute_batch(&format!(
+          "DROP TRIGGER team_starts_keep_request; UPDATE team_starts SET failure = '{failure}'"
+        ))
+        .expect("the recorded start failed as not ready here");
+    });
+  window.until_within(WITHIN, "the card or a notice", |window| {
+    window.texts("task-not-ready").is_some() || window.texts("task-team-refused").is_some()
+  });
+  assert!(
+    window.texts("task-not-ready").is_some(),
+    "{:?}",
+    window.texts("task-team-refused")
+  );
+  settle(&mut window);
+  assert_eq!(
+    window.text("task-status-label"),
+    "Not started · not ready on this computer"
+  );
+  assert!(
+    window.texts("task-run-line").is_none(),
+    "no press time is known: {:?}",
+    window.texts("task-run-line")
+  );
+}
+
+#[test]
+fn team_qa_not_ready_header_line_goes_back_once_the_card_finds_nothing_missing_on_each_tab() {
+  let (mut window, _server, project) = on_kon_5_after_run();
+  taken_over(&mut window);
+  settle(&mut window);
+  assert_eq!(
+    rows(&mut window),
+    ["pencil-design", "Secret GITHUB_TOKEN"],
+    "the program and the secret are all this computer lacks"
+  );
+  assert_eq!(
+    window.text("task-status-label"),
+    "Not started · not ready on this computer"
+  );
+
+  // The person fixes both and comes back to the task, as the card's fixes lead them to.
+  set_pencil_path(&window);
+  give_secret_value(&window);
+  let key = "KON-5".parse().expect("a task key");
+  let page = |view| Route::Project(project, ProjectPage::task(Clone::clone(&key), view, false));
+  window.navigation().go(Route::Project(project, ProjectPage::Agents));
+  window.pass();
+  window.navigation().go(page(TaskView::of(TaskTab::Conversation)));
+  window.until("the notice goes", |window| {
+    window.texts("task-not-ready-notice").is_none()
+  });
+  settle(&mut window);
+  assert_normal_line(&mut window);
+
+  window.navigation().go(page(TaskView::Summary));
+  window.until("the card goes", |window| window.texts("task-not-ready").is_none());
+  settle(&mut window);
+  assert_normal_line(&mut window);
+}
+
+/// The ordinary line of KON-5, whose latest run is the cancelled one.
+fn assert_normal_line(window: &mut Window) {
+  assert_eq!(window.text("task-status-label"), "Canceled");
+  assert!(
+    window.text("task-run-line").starts_with("Run 8"),
+    "{}",
+    window.text("task-run-line")
   );
 }

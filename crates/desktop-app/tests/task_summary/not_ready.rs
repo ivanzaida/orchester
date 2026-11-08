@@ -185,11 +185,17 @@ fn task_not_ready_header_line_says_the_run_was_refused_and_when_it_was_pressed()
 #[test]
 fn task_not_ready_header_line_goes_back_once_the_card_finds_nothing_missing() {
   let (mut page, key) = refused_task();
+  // The person follows a fix, sets it and comes back, so the header is shown anew and asks again.
+  page.click("task-not-ready-row-0-fix");
   fix_everything(&page);
   page.show(&key, TaskView::of(TaskTab::Conversation));
-  page.wait("the notice to be asked again", |window| {
-    window.texts("task-not-ready-notice").is_none()
+  page.wait("the notice and the line to be asked again", |window| {
+    window.texts("task-not-ready-notice").is_none() && window.text("task-status-label") == "Draft"
   });
   assert_eq!(page.text("task-run-line"), "No runs yet", "the draft's own line again");
+
+  page.show(&key, TaskView::Summary);
+  page.wait("the card to go", |window| window.texts("task-not-ready").is_none());
+  assert_eq!(page.text("task-run-line"), "No runs yet", "also on the Summary");
   assert_eq!(page.text("task-status-label"), "Draft");
 }

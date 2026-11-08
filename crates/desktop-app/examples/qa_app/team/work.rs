@@ -61,6 +61,10 @@ const HELD_HERE: [u32; 4] = [12, 21, 14, 24];
 /// The team runs of `team-claims` the server fenced, by their task's number, with why.
 const FENCED: [(u32, &str); 2] = [(11, "claim_lost"), (23, "session_mismatch")];
 
+/// The task of `team-not-ready-ended`: its run on this computer ended, mara's claim on it is stale, and Team delivery,
+/// which a Take over starts anew, is not ready here.
+const NOT_READY_TASK: u32 = 5;
+
 /// The index of Webhooks v2 among the modules, which KON-12 is in.
 const WEBHOOKS: usize = 0;
 /// The index of Billing exports among the modules, the person's on this computer.
@@ -91,6 +95,12 @@ pub fn task(state: State, task: &mut AuthorityTask) {
   match state {
     // KON-12 has no work yet: its start here makes it.
     State::TeamRunning if task.number == 12 => task.work = None,
+    // KON-5's claim is mara's and stale: Take over starts a new run, which is refused as not ready here.
+    State::NotReadyAfterRun if task.number == NOT_READY_TASK => {
+      task.claim = claim(MARA, 22, true);
+      task.work = Some("paused");
+      task.assignee = task.claim.map(|claim| claim.holder);
+    }
     State::Claims => {
       if let Some((_, claim, work)) = CLAIMS.iter().find(|(number, ..)| *number == task.number) {
         task.claim = *claim;
@@ -182,6 +192,7 @@ pub fn after_join(
         }
       }
     }
+    State::NotReadyAfterRun => teams(&[NOT_READY_TASK])?,
     State::ModuleWork | State::AdminWork => {
       take(Subject::Module {
         id: module_id(BILLING)?,

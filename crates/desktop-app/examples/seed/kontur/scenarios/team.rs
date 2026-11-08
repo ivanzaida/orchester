@@ -199,6 +199,23 @@ pub fn not_ready_here(kontur: &mut Kontur) -> Result<(), SeedError> {
   write_marker(kontur, State::NotReadyHere)
 }
 
+/// As [`not_ready_here`], with a Claude Code connection, so Team delivery lacks only the program path of
+/// `pencil-design` and the value of `GITHUB_TOKEN`, and KON-5 having a run on this computer that was cancelled at
+/// Implement, run 8 (the run counter as in a project whose earlier runs ended), while mara's claim on it is stale
+/// (`team-not-ready-ended`): a Take over starts a new run, which is refused as not ready here, and the header's line
+/// says when run 8 ended beside when Take over was pressed (`Status line` `g9ufW`, ORC-840b).
+pub fn not_ready_after_run(kontur: &mut Kontur) -> Result<(), SeedError> {
+  super::picker_readiness::team_work(kontur)?;
+  claude_connection(kontur)?;
+  git::branch(&kontur.repo, "module/api-rate-limits", git::MAIN)?;
+  Connection::open(kontur.database())?.execute("UPDATE counters SET next = 8 WHERE name = 'run'", [])?;
+  with_runs(
+    kontur,
+    &[(5, "Rotate API keys from settings", Shape::Cancelled("implement"), 90)],
+  )?;
+  write_marker(kontur, State::NotReadyAfterRun)
+}
+
 /// As [`not_ready_here`], with every task of the stand-in server on Team quick fix, which is ready here, and the server
 /// a release ahead of this computer (`team-start-failed`): KON-5 (API rate limits) is pressed Run; the server builds
 /// the start in a bundle schema this computer does not read, so the start fails for good, the claim is released and the
@@ -237,6 +254,14 @@ pub fn start_past_failure(kontur: &mut Kontur) -> Result<(), SeedError> {
 fn start_ready_here(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
   super::picker_readiness::team_work(kontur)?;
   // Team quick fix runs Reviewer, which needs a Claude Code connection here; with one it is ready.
+  claude_connection(kontur)?;
+  // KON-5's module branch, which a team start finds in the checkout before it asks whether the pipeline is ready.
+  git::branch(&kontur.repo, "module/api-rate-limits", git::MAIN)?;
+  write_marker(kontur, state)
+}
+
+/// The Claude Code connection `Claude · Kontur`, which the team's profiles run on without asking.
+fn claude_connection(kontur: &mut Kontur) -> Result<(), SeedError> {
   let bin = kontur.repo.join(".orchester").join("qa-bin");
   let program = bin.join("claude");
   fs::create_dir_all(&bin).map_err(io(&bin))?;
@@ -247,10 +272,8 @@ fn start_ready_here(kontur: &mut Kontur, state: State) -> Result<(), SeedError> 
     ("Claude · Kontur", AgentProvider::ClaudeCodeCli, program),
     ("2.1.89", SignIn::SignedIn, &["claude-sonnet-5-5"]),
     at,
-  )?;
-  // KON-5's module branch, which a team start finds in the checkout before it asks whether the pipeline is ready.
-  git::branch(&kontur.repo, "module/api-rate-limits", git::MAIN)?;
-  write_marker(kontur, state)
+  )
+  .map(|_| ())
 }
 
 /// The team's resources of `team-hub` for a copy that joins the stand-in team server as an Admin, which holds the

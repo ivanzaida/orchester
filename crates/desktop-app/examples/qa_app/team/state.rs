@@ -78,6 +78,10 @@ pub enum State {
   /// and Team quick fix, and Team delivery is not ready on this computer (ORC-840, `Task · Run · not ready here`
   /// R1 `Ku0qu`).
   NotReadyHere,
+  /// As [`Self::NotReadyHere`], with a Claude Code connection, and KON-5 having a run on this computer that was
+  /// cancelled (run 8) while mara's claim on it is stale: *Take over* starts a new run, which is refused as not ready
+  /// here, and the header's line says when run 8 ended (ORC-840b, `Status line` `g9ufW`).
+  NotReadyAfterRun,
   /// As [`Self::NotReadyHere`], with every task on Team quick fix, which is ready here, and the server a release ahead
   /// of this computer: a start builds its bundle in a schema this computer does not read, so a start fails for good,
   /// releases the claim and the task page says why (ORC-885).
@@ -133,7 +137,7 @@ pub enum State {
 pub const START_ANSWERS_AFTER: std::time::Duration = std::time::Duration::from_secs(90);
 
 impl State {
-  pub const ALL: [Self; 42] = [
+  pub const ALL: [Self; 43] = [
     Self::Join,
     Self::WrongCode,
     Self::ExpiredCode,
@@ -162,6 +166,7 @@ impl State {
     Self::TeamRunning,
     Self::EditConflict,
     Self::NotReadyHere,
+    Self::NotReadyAfterRun,
     Self::StartFailed,
     Self::TeamEdit,
     Self::TeamEditDemoted,
@@ -209,6 +214,7 @@ impl State {
       Self::TeamRunning => "team-running",
       Self::EditConflict => "team-edit-conflict",
       Self::NotReadyHere => "team-not-ready",
+      Self::NotReadyAfterRun => "team-not-ready-ended",
       Self::StartFailed => "team-start-failed",
       Self::TeamEdit => "team-edit",
       Self::TeamEditDemoted => "team-edit-demoted",
@@ -230,7 +236,12 @@ impl State {
   pub const fn runs_here(self) -> bool {
     matches!(
       self,
-      Self::OutageRunning | Self::MemberRunning | Self::ModuleOutage | Self::Claims | Self::TeamRunning
+      Self::OutageRunning
+        | Self::MemberRunning
+        | Self::ModuleOutage
+        | Self::Claims
+        | Self::TeamRunning
+        | Self::NotReadyAfterRun
     )
   }
 

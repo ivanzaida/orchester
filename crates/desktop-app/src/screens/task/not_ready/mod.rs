@@ -31,7 +31,7 @@ use self::words::{Glyph, Words};
 use super::{
   TaskContext,
   header::controls::{RunControls, RunRefused},
-  team_controls,
+  team_controls::{self, TeamControls},
 };
 use crate::{
   navigation::{Navigation, link::Open},
@@ -61,7 +61,8 @@ pub fn refused(ctx: &mut Ctx, task: &TaskContext) -> Option<NotReadyHere> {
   }
 }
 
-/// When the person pressed the Run that [`refused`] says was refused.
+/// When the person pressed the Run that [`refused`] says was refused, in this window: none for a team task's refusal
+/// that the project had recorded before it opened.
 pub fn pressed(ctx: &mut Ctx, task: &TaskContext) -> Option<Timestamp> {
   if task.team.is_some() {
     return TeamControls::of(ctx)?.pressed.get().map(|pressed| pressed.0);

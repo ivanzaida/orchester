@@ -120,7 +120,8 @@
       "unreadable": "Run {{run}} · could not be read",
       "unreadableUnnumbered": "Its latest run could not be read",
       "notReadyPressed": "Run pressed {{pressed}}",
-      "notReadyAfterRun": "Run pressed {{pressed}} · run {{run}} ended {{ended}}"
+      "notReadyAfterRun": "Run pressed {{pressed}} · run {{run}} ended {{ended}}",
+      "notReadyEnded": "Run {{run}} ended {{ended}}"
     },
     "run": {
       "mode": {
