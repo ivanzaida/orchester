@@ -96,6 +96,8 @@ impl SecretVault for MemoryVault {
 struct Checkout {
   dir: TempDir,
   services: app_mcp::Services,
+  /// The servers the tools use, to call the workspace as a window does.
+  servers: Servers,
   workspace: Workspace,
   /// The keychain the tools read: the team's secret values and the server tokens.
   vault: Arc<MemoryVault>,
@@ -177,6 +179,7 @@ impl Checkout {
     let vault = Arc::new(MemoryVault::default());
     let version = orchester_api::releases::ReleaseVersion::parse("0.5.0").expect("a release version");
     let servers = Servers::new(workspace.clone(), Vault::with(vault.clone()), version);
+    let servers_here = servers.clone();
     if let Some(server) = server {
       let id = runtime.block_on(add_server(&servers, server));
       if signed_in {
@@ -203,6 +206,7 @@ impl Checkout {
     Self {
       dir,
       services,
+      servers: servers_here,
       workspace,
       vault,
       runtime,

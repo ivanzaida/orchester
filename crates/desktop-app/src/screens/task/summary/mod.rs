@@ -26,7 +26,7 @@ mod run_facts;
 pub(crate) mod runs;
 mod steps;
 mod team;
-mod team_run;
+pub(in crate::screens::task) mod team_run;
 mod version;
 
 use lurq::{

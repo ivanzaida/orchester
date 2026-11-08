@@ -124,10 +124,17 @@ impl UndecidedPart {
 
 /// What to do about `why`, naming `resource`; a pipeline's member says what the member is undecided for.
 fn undecided_message(why: &Undecided, resource: &str) -> Message {
-  let (key, server) = match why {
+  let (key, extra) = match why {
     Undecided::NotTeamForm => ("notReadyHere.undecidedNotTeamForm", None),
     Undecided::CannotBePublished(_) => ("notReadyHere.undecidedCannotBePublished", None),
     Undecided::ChoosesMcpServer(server) => ("notReadyHere.undecidedChoosesMcpServer", Some(server.to_string())),
+    Undecided::ChoosesArchivedMcpServer(_, name) => {
+      ("notReadyHere.undecidedChoosesArchivedMcpServer", Some(name.clone()))
+    }
+    Undecided::UsesArchivedTool(_, name) => ("notReadyHere.undecidedUsesArchivedTool", Some(name.clone())),
+    Undecided::UsesArchivedInstruction(_, name) => {
+      ("notReadyHere.undecidedUsesArchivedInstruction", Some(name.clone()))
+    }
     Undecided::RunsUnknown(_) => ("notReadyHere.undecidedRunsUnknown", None),
     Undecided::ConnectionGone(_) => ("notReadyHere.undecidedConnectionGone", None),
     Undecided::TeamToolSecretById(_) => ("notReadyHere.undecidedTeamToolSecretById", None),
@@ -136,9 +143,10 @@ fn undecided_message(why: &Undecided, resource: &str) -> Message {
     Undecided::Member { why, .. } => return undecided_message(why, resource),
   };
   let message = Message::new(key).with("resource", resource.to_owned());
-  match server {
-    Some(server) => message.with("server", server),
-    None => message,
+  match (why, extra) {
+    (Undecided::ChoosesMcpServer(_), Some(server)) => message.with("server", server),
+    (_, Some(name)) => message.with("name", name),
+    (_, None) => message,
   }
 }
 
@@ -147,6 +155,9 @@ fn undecided_code(why: &Undecided) -> &'static str {
     Undecided::NotTeamForm => "not_team_form",
     Undecided::CannotBePublished(_) => "cannot_be_published",
     Undecided::ChoosesMcpServer(_) => "chooses_mcp_server",
+    Undecided::ChoosesArchivedMcpServer(..) => "chooses_archived_mcp_server",
+    Undecided::UsesArchivedTool(..) => "uses_archived_tool",
+    Undecided::UsesArchivedInstruction(..) => "uses_archived_instruction",
     Undecided::RunsUnknown(_) => "runs_unknown",
     Undecided::ConnectionGone(_) => "connection_gone",
     Undecided::TeamToolSecretById(_) => "team_tool_secret_by_id",

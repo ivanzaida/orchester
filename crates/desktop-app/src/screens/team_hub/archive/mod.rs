@@ -1,13 +1,15 @@
-//! Archive in a resource's panel (`…` in the head of `A23 · Archive · used by · confirmation` `Pnpbe`, local `L11`
-//! `dS97b`; `docs/design/team-configuration.md`, decision 11): the head's … menu holds *Archive*, which opens a modal
-//! over the page that says what names the resource (*Used by*) and the runs that will stop, read from the team server
-//! (or, in a local project, from the project's database). Archiving is never refused for being used. *Archive and
-//! stop N runs* asks the team server to archive the resource; the runs that pin it stop on every computer when the
-//! server's event stream says so ([`orchester_workspace::sharing::sync`]), and each task names the resource and who
-//! archived it (A22, [`crate::screens::task`]).
+//! Archive in a resource's panel (`…` in the head of `A23 · Archive · used by · confirmation` `Pnpbe`;
+//! `docs/design/team-configuration.md`, decision 11): the head's … menu holds *Archive*, which opens a modal over the
+//! page that says what names the resource (*Used by*) and the runs that will stop, read from the team server. Archiving
+//! is never refused for being used. *Archive and stop N runs* reads what uses it once more and, if the runs that stop
+//! are not the ones the list showed, keeps the modal open with the new list; otherwise it asks the team server to
+//! archive the resource. The runs that pin it stop on every computer when the server's event stream says so
+//! ([`orchester_workspace::sharing::sync`]), and each task names the resource and who archived it (A22,
+//! [`crate::screens::task`]).
 //!
 //! Opening the confirmation is anyone's, automation's included: it changes nothing. Confirming it is a person's alone,
-//! as every other change that stops work is ([`PersonOnly`]); only an admin of the team has *Archive*.
+//! as every other change that stops work is ([`PersonOnly`], and the workspace refuses automation again); only an
+//! admin of the team has *Archive*.
 
 mod dialog;
 mod words;
@@ -17,15 +19,17 @@ use std::{path::PathBuf, sync::Arc};
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
-    ctx::{Ctx, FutureAction},
+    ctx::{Ctx, FutureAction, FutureState},
   },
   components::Column,
   core::{ElementRef, Signal},
   node::{Element, dimension::Dimension},
 };
-use orchester_api::UsedBy;
-use orchester_core::id::ResourceId;
-use orchester_workspace::{messages::Message, sharing::project::NotArchived, used_by::UsedByError};
+use orchester_api::{UsedBy, UsedByRun};
+use orchester_core::{id::ResourceId, run::Answerer};
+use orchester_workspace::{
+  messages::Message, readiness::archive_blocks_profiles, sharing::project::NotArchived, used_by::UsedByError,
+};
 
 use super::model::Entry;
 use crate::{
@@ -46,6 +50,9 @@ pub(super) struct Props {
   pub root: PathBuf,
   pub resource: ResourceId,
   pub name: Arc<str>,
+  /// Whether a profile that names the resource stays not ready once it is archived
+  /// ([`orchester_workspace::readiness::archive_blocks_profiles`]).
+  pub blocks_profiles: bool,
 }
 impl DevtoolsInspectable for Props {}
 
@@ -58,6 +65,7 @@ pub(super) fn menu(ctx: &mut Ctx, root: &std::path::Path, entry: &Entry, may_cha
         root: root.to_path_buf(),
         resource: entry.id,
         name: Arc::from(entry.name.as_str()),
+        blocks_profiles: archive_blocks_profiles(entry.kind.core()),
       },
     )
   })
@@ -82,6 +90,10 @@ pub(super) enum Failed {
   /// The team server refused it with its error `code`.
   Refused(String),
   Said(Message),
+  /// What uses it could not be read again before archiving, so nothing was sent.
+  Unread(ReadFailed),
+  /// The runs that stop are not the ones the list showed: the list is read again, and nothing was archived.
+  RunsChanged,
 }
 impl DevtoolsInspectable for Failed {}
 
@@ -93,7 +105,8 @@ struct ArchiveMenu {
   open: Signal<bool>,
   /// Read again, as *Try again* asks.
   retry: Signal<u64>,
-  archive: FutureAction<(), (), Failed>,
+  /// Archives it unless the runs it stops changed since the list showed them (`runs`).
+  archive: FutureAction<Vec<UsedByRun>, (), Failed>,
   person: PersonOnly,
 }
 
@@ -103,16 +116,29 @@ impl Component for ArchiveMenu {
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<Props>().clone();
     let services = Services::of(ctx);
-    let archive = ctx.future_action(move |(): ()| {
+    let retry = ctx.signal(0_u64);
+    let again = retry.clone();
+    let archive = ctx.future_action(move |shown: Vec<UsedByRun>| {
       let (services, root, resource) = (services.clone(), props.root.clone(), props.resource);
+      let again = again.clone();
       async move {
+        let used = services.servers.used_by(&root, resource).await.map_err(|error| {
+          Failed::Unread(ReadFailed {
+            not_reached: error.is_not_reached(),
+          })
+        })?;
+        if used.runs != shown {
+          again.update(|count| *count += 1);
+          return Err(Failed::RunsChanged);
+        }
         services
           .servers
-          .archive_resource(&root, resource)
+          .archive_resource(&root, resource, Answerer::Person)
           .await
           .map_err(|refused| match refused {
             NotArchived::Refused { code } => Failed::Refused(code),
             NotArchived::Failed(message) => Failed::Said(message),
+            NotArchived::PersonOnly => Failed::Said(NotArchived::person_only_message()),
           })
       }
     });
@@ -128,7 +154,7 @@ impl Component for ArchiveMenu {
       menu: ctx.signal(false),
       anchor: ctx.element_ref(),
       open,
-      retry: ctx.signal(0),
+      retry,
       archive,
       person: PersonOnly::new(ctx),
     }
@@ -137,9 +163,11 @@ impl Component for ArchiveMenu {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
     let item = MenuItem::new("team-hub-archive", ctx.t("team_archive.action"), {
-      let (open, retry) = (self.open.clone(), self.retry.clone());
+      let (open, retry, archive) = (self.open.clone(), self.retry.clone(), self.archive.state());
       move || {
         retry.update(|count| *count += 1);
+        // A refusal of an earlier confirmation is not this one's.
+        archive.set(FutureState::idle());
         open.set(true);
       }
     })
@@ -200,9 +228,14 @@ impl ArchiveMenu {
     let read = self.read(ctx, props);
     let archiving = self.archive.state().get();
     let (action, person) = (self.archive.clone(), self.person.clone());
+    let shown = read
+      .as_ref()
+      .and_then(|read| read.as_ref().ok())
+      .map(|used| used.runs.clone())
+      .unwrap_or_default();
     let confirm: dialog::Confirm = Arc::new(move || {
       if person.allows(CONFIRM) {
-        action.run(());
+        action.run(shown.clone());
       }
     });
     dialog::dialog(

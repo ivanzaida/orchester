@@ -193,8 +193,13 @@ pub fn after_join(
       }
     }
     State::NotReadyAfterRun => teams(&[NOT_READY_TASK])?,
-    // KON-12 is the team's task whose run 8 an archive stopped: the Summary names the resource, as the team's.
-    State::TeamArchived => teams(&[12])?,
+    // KON-12 is the team's task whose run 8 an archive stopped: the Summary names the resource, as the team's. This
+    // computer holds its claim, as the person who ran it does; otherwise the page says another computer has it and
+    // Run again has nothing to take (A22 `pUu78` shows no such notice).
+    State::TeamArchived => {
+      teams(&[12])?;
+      take(task_subject(ids, 12)?)?;
+    }
     State::ModuleWork | State::AdminWork => {
       take(Subject::Module {
         id: module_id(BILLING)?,

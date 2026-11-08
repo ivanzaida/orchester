@@ -1,4 +1,4 @@
-//! The confirmation itself (`Dialog` `MdjVb` in `A23` `Pnpbe`, `QP42W` in local `L11` `dS97b`): the question, what
+//! The confirmation itself (`Dialog` `MdjVb` in `A23` `Pnpbe`): the question, what
 //! archiving does, the resources that name it and the runs that will stop in two lists, what stays not ready, and
 //! *Cancel* and the danger *Archive and stop N runs*.
 
@@ -78,7 +78,12 @@ pub(super) fn dialog(
       dialog = dialog
         .child(used_by(ctx, &used.resources))
         .child(runs(ctx, &used.runs))
-        .with_children(note(ctx, (name, &used.resources)));
+        .with_children(
+          props
+            .blocks_profiles
+            .then(|| note(ctx, (name, &used.resources)))
+            .flatten(),
+        );
       Some(used.runs.len())
     }
     Some(Err(failed)) => {
@@ -252,6 +257,12 @@ fn failure(ctx: &Ctx, failed: &Failed, name: &str) -> Element {
       other => ctx.t_args("team_archive.refused.other", [("code", other)]),
     },
     Failed::Said(message) => message_text(ctx, message),
+    Failed::Unread(read) => ctx.t(if read.not_reached {
+      "team_archive.notReached"
+    } else {
+      "team_archive.readFailed"
+    }),
+    Failed::RunsChanged => ctx.t("team_archive.refused.runsChanged"),
   };
   field_error("team-hub-archive-error", &words).into()
 }

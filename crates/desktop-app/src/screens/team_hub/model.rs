@@ -63,6 +63,16 @@ impl Kind {
     }
   }
 
+  pub(super) const fn core(self) -> ResourceKind {
+    match self {
+      Self::Profile => ResourceKind::AgentProfile,
+      Self::McpServer => ResourceKind::McpServer,
+      Self::Tool => ResourceKind::Tool,
+      Self::Instruction => ResourceKind::Instruction,
+      Self::Skill => ResourceKind::Skill,
+    }
+  }
+
   /// The kind's name in element ids.
   pub(super) const fn name(self) -> &'static str {
     match self {

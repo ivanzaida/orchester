@@ -19,7 +19,7 @@ use orchester_core::{
   id::{ClaimId, OperationId, ProjectId, WorkEventId, WorkId},
   project::{Project, ProjectKey},
   resource::ResourceKind,
-  store::ResourceStore,
+  store::{ResourceStore, TaskStore},
   task::Task,
   time::Timestamp,
 };
@@ -353,7 +353,7 @@ pub fn archive(kontur: &mut Kontur) -> Result<(), SeedError> {
 /// computer's lists as the server's archive does. The task's Summary says which resource and who archived it, and
 /// Builder, which still names it, cannot run.
 pub fn archived(kontur: &mut Kontur) -> Result<(), SeedError> {
-  super::team_hub::resources(kontur)?;
+  super::picker_readiness::team_work(kontur)?;
   Connection::open(kontur.database())?.execute("UPDATE counters SET next = 8 WHERE name = 'run'", [])?;
   with_runs(
     kontur,
@@ -363,6 +363,12 @@ pub fn archived(kontur: &mut Kontur) -> Result<(), SeedError> {
     "SELECT id, task_id FROM runs ORDER BY number DESC LIMIT 1",
     [],
     |row| Ok((row.get(0)?, row.get(1)?)),
+  )?;
+  on_team_delivery(
+    kontur,
+    task
+      .parse()
+      .map_err(|_| SeedError::Invalid("the seed's task is an id".to_owned()))?,
   )?;
   let pencil = kontur
     .db
@@ -383,6 +389,27 @@ pub fn archived(kontur: &mut Kontur) -> Result<(), SeedError> {
     }),
   })?;
   write_marker(kontur, State::TeamArchived)
+}
+
+/// KON-12 moved from the catalogue's pipeline, which a team project does not offer, to the team's Team delivery
+/// (Builder, then Reviewer), so a Run again reads the profiles of the team and says what keeps them from running; its
+/// run 8 is still the one the catalogue's Feature delivery made.
+fn on_team_delivery(kontur: &mut Kontur, task: orchester_core::id::TaskId) -> Result<(), SeedError> {
+  let delivery = kontur
+    .db
+    .resources(ResourceKind::Pipeline)?
+    .into_iter()
+    .find(|resource| resource.name().as_str() == "Team delivery")
+    .ok_or_else(|| SeedError::Invalid("the seed has the team pipeline Team delivery".to_owned()))?;
+  let mut found = kontur
+    .db
+    .task(task)?
+    .ok_or_else(|| SeedError::Invalid("the seed has KON-12".to_owned()))?;
+  let mut details = found.details().clone();
+  details.pipeline = Some(delivery.id());
+  found.edit(details, true).map_err(|_| SeedError::TaskChanged)?;
+  kontur.db.save_task(&found)?.saved().ok_or(SeedError::TaskChanged)?;
+  Ok(())
 }
 
 /// KON-12's run interrupted at Implement, on the live catalogue's Feature delivery with a brief that keeps

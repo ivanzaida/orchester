@@ -30,6 +30,11 @@
 //!   left out, as a run leaves it out. Such a server is not a resource of its own, and its variables' secrets are not
 //!   read. A tool that sends or connects with a project secret is ready only when the keychain has that secret's value,
 //!   which it is asked about without reading the value; a keychain that cannot say is [`Undecided::SecretUnreadable`].
+//! - A team profile that names a team tool or instruction the team archived is [`Undecided::UsesArchivedTool`] or
+//!   [`Undecided::UsesArchivedInstruction`], as one that chooses an archived MCP server is
+//!   [`Undecided::ChoosesArchivedMcpServer`] (one not synced yet is [`Undecided::ChoosesMcpServer`]): Run again is
+//!   refused until an admin restores it or the profile stops naming it. A skill it names cannot be told archived (this
+//!   computer keeps none of the team's), so it does not block ([`archive_blocks_profiles`]).
 //! - A tool of a team project names no secret by name until ORC-830, so one that holds none asks nothing. One that
 //!   holds a project secret by id is [`Undecided::TeamToolSecretById`]: it is not assumed ready.
 //!
@@ -77,7 +82,7 @@ pub use self::{
   not_ready::{MissingPart, NotReadyHere, NotReadyPart, UndecidedPart},
   programs::McpPrograms,
   project::{PipelineReadiness, ProjectReadiness, ResourceReadiness},
-  standing::{Group, ReadinessStanding, Undecided},
+  standing::{Group, ReadinessStanding, Undecided, archive_blocks_profiles},
 };
 use crate::workspace::Workspace;
 

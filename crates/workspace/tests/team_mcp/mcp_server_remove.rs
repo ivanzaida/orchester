@@ -15,7 +15,7 @@ use orchester_core::{
     StepKind,
   },
   revision::Revision,
-  run::{BranchName, NewRun, PublishedVersions, RunSnapshot},
+  run::{Answerer, BranchName, NewRun, PublishedVersions, RunSnapshot},
   sharing::SharedPerson,
   store::{ResourceStore, RunStore, TaskStore},
   task::{TaskDetails, TaskLimits},
@@ -23,6 +23,7 @@ use orchester_core::{
   tokens::TokenBudget,
 };
 use orchester_store::{CachedVersion, ProjectDb, ReferenceTarget, ResourceSharing, VersionReference};
+use orchester_workspace::sharing::NotArchived;
 use serde_json::json;
 
 use super::{
@@ -296,4 +297,29 @@ fn started_run(db: &mut ProjectDb, snapshot: RunSnapshot) -> (RunId, TaskId) {
   let events = run.start_step(execution, at(11)).expect("start step");
   db.append_events(&run, &events).expect("append");
   (run.id(), task)
+}
+
+#[test]
+fn team_mcp_an_archive_asked_by_automation_is_refused_before_anything_is_sent() {
+  let (server, seen) = start(Answers {
+    used_by: Some(json!({ "resources": [], "runs": [] })),
+    ..Answers::default()
+  });
+  let checkout = admin(&server);
+  checkout.call("add_mcp_server", &docs()).expect("created");
+  let id = checkout.db().resources(ResourceKind::McpServer).expect("servers")[0].id();
+
+  let refused = checkout
+    .runtime
+    .block_on(
+      checkout
+        .servers
+        .archive_resource(checkout.root(), id, Answerer::Automation),
+    )
+    .expect_err("a person's alone");
+
+  assert_eq!(refused, NotArchived::PersonOnly);
+  assert_eq!(seen.lock().calls, ["create"], "nothing was read or archived");
+  let still = checkout.db().resources(ResourceKind::McpServer).expect("servers");
+  assert_eq!(still.len(), 1, "the server is as it was");
 }

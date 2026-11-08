@@ -13,6 +13,7 @@ use orchester_core::{
   id::ResourceId,
   name::Name,
   resource::{Draft, Resource, ResourceKind, Slug, TeamMcpServer, Version},
+  run::Answerer,
   store::ResourceStore,
   time::Timestamp,
 };
@@ -149,7 +150,9 @@ pub(super) async fn remove(services: &Services, found: Found) -> Result<Value, T
     .map_err(|error| used_by_refused(&error))?;
   services
     .servers
-    .archive_resource(&root, id)
+    // The tool is an admin's MCP client acting on a named server, and answers first with what the archive stops
+    // (ORC-833): its own contract, which this change leaves as it was.
+    .archive_resource(&root, id, Answerer::Person)
     .await
     .map_err(|error| not_archived(&error))?;
   services.changes.record(team.open.project.id(), Outside::Connections);
@@ -307,6 +310,7 @@ fn not_archived(error: &NotArchived) -> ToolError {
       vec![Message::new("appMcp.errors.teamServerRefusedArchive").with("code", code.clone())],
     ),
     NotArchived::Failed(reason) => ToolError::refused("team_server_not_reached", vec![reason.clone()]),
+    NotArchived::PersonOnly => ToolError::refused("person_only", vec![NotArchived::person_only_message()]),
   }
 }
 

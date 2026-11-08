@@ -306,6 +306,9 @@ pub struct TaskDetail {
   pub first_agent: Option<Arc<str>>,
   /// The archive of a team resource that stopped the latest run (A22 `pUu78`), with the resource and who archived it.
   pub archive_stop: Option<orchester_store::ArchiveStop>,
+  /// Whether the resource of [`Self::archive_stop`] is still archived here; it is not once an admin restored it, and
+  /// not known for a stop recorded before the resource was named.
+  pub archived_still: bool,
 }
 
 impl TaskDetail {
@@ -405,7 +408,7 @@ impl TaskDetail {
       None => super::first_agent::first_agent(&db, &task)?,
       Some(_) => None,
     };
-    let archive_stop = latest.as_ref().map_or(Ok(None), |run| db.archive_stop_of(run.id()))?;
+    let (archive_stop, archived_still) = archive_stop_of(&db, latest.as_ref())?;
     let mut run = latest.map(|run| run_view(&db, run)).transpose()?;
     if let Some(view) = &mut run {
       view.worktree_not_removed = super::worktree_left::not_removed(&db, repo_root, view.id())?;
@@ -421,6 +424,7 @@ impl TaskDetail {
       first_agent,
       run_task,
       archive_stop,
+      archived_still,
       merge,
       queue,
       history,
@@ -458,8 +462,24 @@ impl TaskDetail {
       shared: None,
       first_agent: None,
       archive_stop: None,
+      archived_still: false,
     }
   }
+}
+
+/// The archive that stopped `latest`, the task's latest run, and whether its resource is still archived here.
+fn archive_stop_of(
+  db: &ProjectDb,
+  latest: Option<&Run>,
+) -> Result<(Option<orchester_store::ArchiveStop>, bool), StoreError> {
+  let Some(stop) = latest.map(|run| db.archive_stop_of(run.id())).transpose()?.flatten() else {
+    return Ok((None, false));
+  };
+  let still = match &stop.archived {
+    Some(archived) => db.resource_removed_at(archived.id)?.is_some(),
+    None => false,
+  };
+  Ok((Some(stop), still))
 }
 
 /// The keys of `task`'s unfinished blocking tasks that are in the project: a shared project's first download brings its

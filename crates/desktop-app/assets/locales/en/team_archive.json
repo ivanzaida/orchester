@@ -36,6 +36,7 @@
     "retry": "Try again",
     "refused": {
       "notAdmin": "Only team admins archive the team's resources: the team server refused it.",
+      "runsChanged": "The runs it stops changed while this list was open. The list shows them now; archive again once you have read it.",
       "conflict": "{{name}} changed on the team server since this page read it. Nothing was archived; look at it again.",
       "other": "The team server refused it ({{code}}). Nothing was archived."
     }
