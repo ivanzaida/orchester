@@ -1,15 +1,16 @@
 //! This computer's catalog for a shared project's web editor (`docs/architecture/server.md`, "Reporting", row 75):
-//! its agent connections and MCP servers by kind, name and role, and the model ids per connection role, as core's
-//! [`sharing::catalog`] builds them. While the project's stream is open, the catalog is sent when it connects and then
-//! read again every [`CATALOG_CHECK`], sent whenever it changed: a connection, an MCP server or a model list. The body
-//! is the whole state, so a report that fails costs nothing: the next check sends it again, and offline nothing waits.
+//! the agent roles its connections have (CLI kinds) and the model ids per role, as core's [`sharing::catalog`] builds
+//! them, with no connection or MCP server name. While the project's stream is open, the catalog is sent when it
+//! connects and then read again every [`CATALOG_CHECK`], sent whenever it changed: a connection's role or a model
+//! list. The body is the whole state, so a report that fails costs nothing: the next check sends it again, and offline
+//! nothing waits.
 
 use std::{convert::Infallible, path::Path, time::Duration};
 
-use orchester_api::{CatalogKind, CatalogReference, CatalogReport};
+use orchester_api::CatalogReport;
 use orchester_core::{
-  sharing::{self, CatalogEntryKind, LocalCatalog},
-  store::{ConnectionStore, McpServerStore},
+  sharing::{self, LocalCatalog},
+  store::ConnectionStore,
 };
 use orchester_store::ProjectDb;
 
@@ -39,23 +40,12 @@ pub(super) async fn keep_reported(source: &impl Source, root: &Path, every: Dura
 /// The catalog of the project at `root` as the server takes it.
 fn read(root: &Path) -> Result<CatalogReport, SharingError> {
   let db = ProjectDb::open(root)?;
-  Ok(report(&sharing::catalog(&db.connections()?, &db.mcp_servers()?)))
+  Ok(report(&sharing::catalog(&db.connections()?)))
 }
 
 fn report(catalog: &LocalCatalog) -> CatalogReport {
   CatalogReport {
-    references: catalog
-      .entries
-      .iter()
-      .map(|entry| CatalogReference {
-        kind: match entry.kind {
-          CatalogEntryKind::Connection => CatalogKind::Connection,
-          CatalogEntryKind::McpServer => CatalogKind::McpServer,
-        },
-        name: entry.name.clone(),
-        role: entry.role.map(str::to_owned),
-      })
-      .collect(),
+    cli_kinds: catalog.cli_kinds.iter().map(|kind| (*kind).to_owned()).collect(),
     models: catalog
       .models
       .iter()

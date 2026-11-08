@@ -164,7 +164,12 @@ impl Servers {
       background::run(move || -> Result<Shared, SharingError> {
         let link = ProjectDb::open(&root)?.sharing()?.ok_or(StoreError::NotShared)?;
         let discovery = write.then(|| discovery::write(&root, &address));
-        Ok(Shared { link, discovery })
+        Ok(Shared {
+          link,
+          discovery,
+          not_set: Vec::new(),
+          notes: Vec::new(),
+        })
       })
       .await
       .map_err(SharingError::from)??,

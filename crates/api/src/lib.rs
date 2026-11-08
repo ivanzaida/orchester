@@ -28,6 +28,7 @@ mod tasks;
 pub mod test_support;
 #[cfg(feature = "identity")]
 pub mod totp;
+mod used_by;
 pub mod v2;
 pub mod wire;
 
@@ -44,3 +45,4 @@ pub use resources::*;
 pub use roadmap::*;
 pub use server_admin::*;
 pub use tasks::*;
+pub use used_by::*;

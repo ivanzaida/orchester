@@ -11,6 +11,7 @@
 
 mod accounts;
 pub mod agents;
+mod archive;
 pub mod badge;
 mod browser;
 mod cards;
@@ -78,6 +79,7 @@ use lurq::{
 
 pub use self::{
   accounts::{AccountsSpacing, AccountsText},
+  archive::{ARCHIVE_DIALOG_WIDTH, ArchiveText},
   browser::{BrowserBorder, BrowserColor, BrowserSpacing, BrowserText},
   cards::{CardsSpacing, CardsText, NOT_CHOSEN_OPACITY, RISK_TRACK_HEIGHT},
   chat_links::ChatLinkLooks,
@@ -95,7 +97,7 @@ pub use self::{
   files::{FilesRadius, FilesText},
   fonts::mono_space,
   groups::GroupText,
-  hub::{HubSpacing, HubText},
+  hub::{HUB_NEW_MENU_WIDTH, HUB_READING_OPACITY, HubSpacing, HubText},
   import::{ImportSpacing, ImportText},
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   local_integration::LocalText,
@@ -127,7 +129,7 @@ pub use self::{
   slash::SlashText,
   sources::{SourcesSpacing, SourcesText},
   startup::{StartupSpacing, StartupText},
-  task::{TaskSpacing, TaskText},
+  task::{NOT_READY_ROW_HEIGHT, TaskRadius, TaskSpacing, TaskText},
   task_form::{TaskFormSpacing, TaskFormText, sources_scrollbar},
   tasks::{
     DROP_SCRIM_OPACITY, DROP_VEIL_OPACITY, HELD_CARD_OPACITY, SKELETON_DELAY, SKELETON_DIM, SKELETON_FADE,

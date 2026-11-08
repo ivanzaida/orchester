@@ -220,6 +220,7 @@ fn option(
     title,
     help,
     help_place: HelpPlace::UnderIcon,
+    status: None,
     chosen: picked,
     mono,
   }

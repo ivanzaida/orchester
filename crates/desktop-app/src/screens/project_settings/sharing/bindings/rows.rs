@@ -12,7 +12,7 @@ use lurq::{
 };
 use orchester_core::{connection::Connection, id::ConnectionId, sharing::ConnectionRole};
 use orchester_store::{Bound, BoundBy, BoundReference};
-use orchester_workspace::sharing::sync::{Here, HereReference, Standing, chosen_at};
+use orchester_workspace::sharing::sync::{BindingsHere, HereReference, Standing, chosen_at};
 
 use super::{Ask, bind_picked};
 use crate::{
@@ -89,7 +89,7 @@ impl Actions {
 }
 
 /// The rows of the references of `kind`.
-pub(super) fn rows(ctx: &mut Ctx, here: &Here, kind: Kind, actions: &Actions) -> Vec<Element> {
+pub(super) fn rows(ctx: &mut Ctx, here: &BindingsHere, kind: Kind, actions: &Actions) -> Vec<Element> {
   here
     .references
     .iter()
@@ -101,7 +101,7 @@ pub(super) fn rows(ctx: &mut Ctx, here: &Here, kind: Kind, actions: &Actions) ->
 
 fn row(
   ctx: &mut Ctx,
-  here: &Here,
+  here: &BindingsHere,
   reference: &HereReference,
   (kind, index): (Kind, usize),
   actions: &Actions,
@@ -122,7 +122,7 @@ fn row(
 }
 
 /// Who needs it and how it stands, and the tone that says it.
-fn hint(ctx: &Ctx, here: &Here, reference: &HereReference, needs: &str) -> (Arc<str>, Tone) {
+fn hint(ctx: &Ctx, here: &BindingsHere, reference: &HereReference, needs: &str) -> (Arc<str>, Tone) {
   let role = reference.binding.role.clone().unwrap_or_default();
   let kind = kind_of(ctx, reference.binding.role.as_deref());
   let accounts = here.connections_of(&role).len();
@@ -185,7 +185,7 @@ fn hint(ctx: &Ctx, here: &Here, reference: &HereReference, needs: &str) -> (Arc<
 fn bound(
   ctx: &mut Ctx,
   id: &str,
-  here: &Here,
+  here: &BindingsHere,
   reference: &HereReference,
   (local, by): (&str, BoundBy),
   actions: &Actions,
@@ -243,7 +243,7 @@ fn found(
 fn missing(
   ctx: &mut Ctx,
   id: &str,
-  here: &Here,
+  here: &BindingsHere,
   reference: &HereReference,
   needs: &str,
   actions: &Actions,
@@ -300,7 +300,7 @@ fn missing(
 fn connection_picker(
   ctx: &mut Ctx,
   id: &str,
-  here: &Here,
+  here: &BindingsHere,
   reference: &HereReference,
   opener: Opener,
   actions: &Actions,

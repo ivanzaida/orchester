@@ -1,9 +1,9 @@
 //! A stream resumed from a cursor that came without the snapshot, as Join leaves it: the team's configuration published
 //! before still reaches the cache.
 
-use orchester_api::{ReferenceTarget, SharedResourceKind};
+use orchester_api::SharedResourceKind;
 use orchester_core::{
-  id::{ConnectionId, ResourceId},
+  id::ResourceId,
   resource::{AgentProfile, Pipeline, VersionNumber},
   time::Timestamp,
 };
@@ -11,23 +11,18 @@ use orchester_store::SharedEvent;
 
 use super::{
   ALICE, BOB, LIVE, Member, TeamServer, Workspace,
-  config::{agent, builder, codex, latest, pipeline, reference, step},
+  config::{agent, codex, latest, pipeline, step, team_builder, team_references},
   seen_within,
 };
 
 #[tokio::test(flavor = "multi_thread")]
 async fn live_updates_a_stream_resumed_without_the_snapshot_keeps_the_configuration_published_before() {
   let server = TeamServer::start(&[(ALICE, "Alice Moreau"), (BOB, "Bob Lind")], &["Status bar"]);
-  let theirs = ConnectionId::generate();
   let (profile, delivery) = (ResourceId::generate(), ResourceId::generate());
   server.publish(
     (profile, SharedResourceKind::AgentProfile, "Builder"),
-    builder(theirs, &[]),
-    vec![reference(
-      ReferenceTarget::Connection { id: theirs },
-      "Work",
-      Some("codex_cli"),
-    )],
+    team_builder(&[]),
+    team_references(&[]),
   );
   server.publish(
     (delivery, SharedResourceKind::Pipeline, "Delivery"),

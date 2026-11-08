@@ -23,7 +23,7 @@ use orchester_core::{
   id::{ConnectionId, DecisionConnectionId, ProjectId, SecretId},
   memory::{ScreenUnavailable, SecretScreen},
   resource::CommandEnvironment,
-  secret::{Secret, SecretValue, SecretVault, VaultError},
+  secret::{Secret, SecretName, SecretValue, SecretVault, VaultError},
   store::{ConnectionStore, McpServerStore, SecretStore},
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -56,6 +56,10 @@ pub(crate) trait ComputerResources: Send + Sync {
 
   /// The value of `secret` of `project` in this computer's keychain; [`VaultError::NotFound`] when it holds none.
   fn secret_value(&self, project: ProjectId, secret: &Secret) -> Result<SecretValue, VaultError>;
+
+  /// The value this computer gave the team secret `name`, in its keychain; `None` when none is set. A team secret is
+  /// found by name, never by id.
+  fn team_secret_value(&self, name: &SecretName) -> Result<Option<SecretValue>, ComputerError>;
 
   /// The values of `secrets` of `project` in this computer's keychain, to keep them out of memory records, as
   /// [`SecretScreen::load`] reads them.
@@ -135,6 +139,10 @@ impl ComputerResources for LocalComputer {
 
   fn secret_value(&self, project: ProjectId, secret: &Secret) -> Result<SecretValue, VaultError> {
     self.vault.read(&secret.vault_key(project))
+  }
+
+  fn team_secret_value(&self, name: &SecretName) -> Result<Option<SecretValue>, ComputerError> {
+    self.read(|db| db.team_secret_value(self.vault.as_ref(), name))
   }
 
   fn secret_screen(&self, project: ProjectId, secrets: &[Secret]) -> Result<SecretScreen, ScreenUnavailable> {

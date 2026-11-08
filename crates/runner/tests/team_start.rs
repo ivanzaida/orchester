@@ -27,23 +27,21 @@ use orchester_api::{
 };
 use orchester_core::{
   id::{ClaimId, OperationId, RunId},
-  run::{
-    CommitId, RunStatus,
-    inputs::{LocalBindings, LocalConsent, ProfileBinding},
-  },
+  run::{CommitId, RunStatus},
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
   sharing::TaskRevision,
-  store::{ConnectionStore, RunStore},
+  store::RunStore,
 };
 use orchester_runner::execution::Scheduler;
 use orchester_store::{AppDb, ProjectDb};
 use orchester_workspace::{
   actions::{Accepted, Action, ActionOutcome, ClaimAction, Dispatcher, Intent, TeamOutcome, WorkAction},
+  readiness::McpPrograms,
   runner::{RequestError, RunRequestError},
   secrets::Vault,
   sharing::Servers,
   team_reads::TeamSession,
-  team_work::{StartChoices, StartOutcome, TeamRunner, TeamStartRequest, TeamWork},
+  team_work::{StartOutcome, StartTurn, TeamRunner, TeamStartRequest, TeamWork},
   workspace::Workspace,
 };
 use parking_lot::Mutex;
@@ -129,7 +127,7 @@ fn client(server: &TeamServer) -> Client {
 }
 
 /// The dispatcher of the person's session on `server` for the project at `root`, with the application data in `data`.
-fn dispatcher(root: &Path, data: &Path, server: &TeamServer) -> (Dispatcher, watch::Sender<u64>) {
+fn dispatcher(root: &Path, data: &Path, server: &TeamServer) -> (Dispatcher, Servers, watch::Sender<u64>) {
   let workspace = Workspace::new(AppDb::open(&data.join("orchester.db")).expect("database"));
   let version = orchester_api::releases::ReleaseVersion::parse("0.5.0").expect("a release version");
   let servers = Servers::new(workspace, Vault::with(Arc::new(NoVault)), version);
@@ -140,7 +138,11 @@ fn dispatcher(root: &Path, data: &Path, server: &TeamServer) -> (Dispatcher, wat
     (server.server, server.project),
     generation.subscribe(),
   );
-  (Dispatcher::new(root.to_path_buf(), servers, Some(session)), generation)
+  (
+    Dispatcher::new(root.to_path_buf(), servers.clone(), Some(session)),
+    servers,
+    generation,
+  )
 }
 
 async fn claim(dispatcher: &Dispatcher, server: &TeamServer) -> ClaimId {
@@ -157,9 +159,8 @@ async fn claim(dispatcher: &Dispatcher, server: &TeamServer) -> ClaimId {
   claim.id
 }
 
-/// The start from `base`, the profile bound to the project's Codex connection.
-fn request(root: &Path, server: &TeamServer, (claim, base): (ClaimId, &str), config: &Config) -> TeamStartRequest {
-  let connection = ProjectDb::open(root).expect("open").connections().expect("connections")[0].id();
+/// The start from `base`; the profile runs on the project's only Codex connection.
+fn request(server: &TeamServer, (claim, base): (ClaimId, &str)) -> TeamStartRequest {
   TeamStartRequest {
     operation: OperationId::generate(),
     work: WorkAction {
@@ -173,18 +174,7 @@ fn request(root: &Path, server: &TeamServer, (claim, base): (ClaimId, &str), con
       module: server.module,
       module_read: TaskRevision::FIRST,
     },
-    choices: StartChoices {
-      bindings: LocalBindings {
-        profiles: vec![ProfileBinding {
-          resource: config.profile,
-          connection,
-          account: None,
-          required_cli: None,
-        }],
-        references: Vec::new(),
-      },
-      consent: LocalConsent::default(),
-    },
+    programs: McpPrograms::default(),
   }
 }
 
@@ -201,33 +191,54 @@ async fn team_start_runs_in_the_runner_and_recovers_once_at_every_boundary() {
   let config = Config::new("Change README.md for {{task.id}}.");
   let server = TeamServer::start(config.clone());
   link(root, &server);
-  let (claiming, _claim_generation) = dispatcher(root, data.path(), &server);
+  let (claiming, _servers, _claim_generation) = dispatcher(root, data.path(), &server);
   let claim = claim(&claiming, &server).await;
-  let request = request(root, &server, (claim, &head), &config);
+  let request = request(&server, (claim, &head));
   let (scheduler, mut events) = support::scheduler(root);
   let runner = SchedulerRunner {
     scheduler: scheduler.clone(),
     hiccups: Arc::new(Mutex::new(vec![Hiccup::Unavailable, Hiccup::StartsThenLost])),
   };
-  let (dispatcher, _generation) = dispatcher(root, data.path(), &server);
+  let (dispatcher, servers, _generation) = dispatcher(root, data.path(), &server);
+  let turn = StartTurn::wait(&servers, root).await;
   let work = TeamWork::new(dispatcher, runner);
 
   // The work's answer is lost, then the bundle's file read is cut off, then the runner is not there, then it starts
   // the run and its answer is lost: each recovery goes on from where the start stopped.
   server.lose_next_response();
-  assert!(waiting(&work.start(request).await.expect("started")));
+  assert!(waiting(
+    &work.start_in(&turn, request, &NoVault).await.expect("started")
+  ));
+  drop(turn);
   server.drop_next_file();
   for _ in 0..3 {
-    let (_, outcome) = work.recover().await.expect("recovered").remove(0);
+    let (_, outcome) = work
+      .try_recover(&NoVault)
+      .await
+      .expect("recovered")
+      .expect("no start is under way")
+      .remove(0);
     let outcome = outcome.expect("carried on");
     assert!(waiting(&outcome), "{outcome:?}");
   }
-  let (_, started) = work.recover().await.expect("recovered").remove(0);
+  let (_, started) = work
+    .try_recover(&NoVault)
+    .await
+    .expect("recovered")
+    .expect("no start is under way")
+    .remove(0);
   let started = started.expect("carried on");
   let StartOutcome::Started(run) = started else {
     panic!("not started: {started:?}");
   };
-  assert!(work.recover().await.expect("recovered").is_empty());
+  assert!(
+    work
+      .try_recover(&NoVault)
+      .await
+      .expect("recovered")
+      .expect("no start is under way")
+      .is_empty()
+  );
 
   let done = wait_for(root, &mut events, run, |run| run.status().is_terminal()).await;
   assert_eq!(done.status(), &RunStatus::Succeeded);

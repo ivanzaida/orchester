@@ -23,6 +23,7 @@ mod edit;
 mod sources;
 mod starter;
 mod strictness;
+mod team;
 
 pub use self::{
   base_moves::{takes_base_moves, takes_base_moves_by_default},
@@ -33,6 +34,7 @@ pub use self::{
   sources::{PipelineSources, PipelineSourcesError},
   starter::{StarterAssignments, StarterStep, StarterStepText, feature_delivery},
   strictness::{Weaker, weaker_than},
+  team::{TeamExecutors, TeamPipelineError},
 };
 
 /// Stable key of a step within its pipeline, e.g. `implement`. Kept across versions so

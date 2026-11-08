@@ -263,6 +263,22 @@ Always `person_only` unless AP is on. Returns the server as `list_connections` l
 | `url`               | string \| null                 | —    | Remote server, `http://` or `https://`. Not with `program`.                                         |
 | `authorization`     | Authorization \| null          | no   | What a remote server is sent (see below).                                                           |
 | `exempt_tools`      | array<string> \| null          | no   | The server's tools that run without asking, for profiles that ask before MCP actions.              |
+| `variable_names`    | array<string> \| null          | no   | Team project only: the variables the program needs; each takes the team secret of the same name, so each is a secret name (capitals, digits, `_`). Not with `url`. |
+| `secret_headers`    | array<{header, secret, prefix?}> \| null | no | Team project only: the headers a remote server is sent a secret in: the `header` (`Authorization`, `X-API-Key`), the team `secret` by name and an optional plain-text `prefix` (`Bearer `, at most 32 characters). The value sent is the prefix followed by the secret's value. Not with `program`. |
+
+**In a team project** the MCP server is the team's resource, and only an admin changes it: a member is refused
+`not_admin` by all three tools, before anything else. `add_mcp_server` creates it as **v1** on the team server (no
+draft); it is `person_only` unless AP is on. Offline, the new server waits in the outbox and the answer carries
+`waiting_for_server: {code: "team_server_unreachable"}`; a server the team server refuses is taken back
+(`team_server_refused`). The team holds names only, so `program` must be a name looked up on the search path (`npx`;
+a path is refused as `team_path_refused`, as is an absolute `working_directory`), `environment` and `authorization`
+(values, secrets) are refused as `team_value_refused`, and the variables and secret headers are named in
+`variable_names` and `secret_headers` (each header names its secret and prefix; a variable that is not a secret name,
+a secret that is not one or a prefix that is not short plain text is `invalid_server`, and the answer repeats neither
+the secret nor the prefix); each computer sets the program's path and the values itself. The answer is the
+team server as `{id, name, team: true, published_version, launch, exempt_tools}`. In a project of this computer's
+own `variable_names` and `secret_headers` are refused (`field_not_applicable`) and nothing changes: its servers are
+plain rows of the project, without versions.
 
 **Authorization** (`scheme` selects the variant; each `secret` is an active project secret `NAME@environment`, never
 a value):
@@ -287,6 +303,21 @@ endpoint, an authorization that sends a different secret (another secret, scheme
 other than the harmless ones (removals included), a variable that takes a secret, and a tool added to
 `exempt_tools`. The judgement is made on the fields as given, before anything reads the disk.
 
+On a team's MCP server (id or name, in a team project) an admin's change that differs from the version this computer
+uses is saved as the draft and **published as the next version** on the team server at once (`published_version`,
+`waiting_for_server` while the server cannot be reached; a version the server refuses stays on this computer, unsent,
+and the call is refused as `team_server_refused`); a change that changes nothing publishes nothing and answers
+`unchanged: true`. What widens (another program or its arguments, another address, a tool added to `exempt_tools`, a
+different kind of server) is `person_only` unless AP is on. The server keeps its name (`name_not_editable`).
+`program` is the body's program name (`npx`), team data like the rest: changing it is `person_only` unless AP is on,
+and a path is `team_path_refused`. The program's path on this computer is set by a person in the window, never by a
+tool. `name` is the body's name and is not editable here (`name_not_editable`; rename the resource in the window). A
+draft of the server that differs from the version this computer uses is someone's unpublished edit and is never
+replaced: the call is refused as `draft_changed`. A remote server's `url` has no query or fragment (`team_value_refused`,
+in `add_mcp_server` too): a key in it would reach the team server and every member, so a secret goes in
+`secret_headers`. The Orchestrator chat's MCP server proposals do not read a team's MCP servers yet: in a team project
+every one is refused (`team_mcp_proposal_unsupported`) and the tools above are used directly.
+
 ### `remove_mcp_server` — changes data
 
 Removes a server from a project. Refused as `in_use` while a profile's draft or latest published version chooses it
@@ -295,6 +326,18 @@ settings.
 
 Parameters: `project` (string, req.), `server` (string, req.: id or name).
 
+A team's MCP server (id or name, in a team project) is **never archived by this tool**: archiving stops runs on every
+computer, so a person confirms it in Orchester's window (Agents › the server's … menu › *Archive*), and an admin's MCP
+client is refused as `person_only` with a preview of what the person would confirm:
+`{error: {code: "person_only", message, preview: {resource: {id, name, team: true}, used_by: {resources, runs},
+runs_stopping_here}}}`. `used_by` is the team server's list (the other resources whose latest version names it and the
+runs that have not ended and pin it, `docs/cloud-api.md`), and `runs_stopping_here` the runs `{run, task}` of this
+computer whose profile version chooses the server. They are the runs that **would** stop; nothing is changed. Tell the
+person to confirm in the window. A member is refused `not_admin` first, and the call is refused with `team_unavailable`,
+`team_read_failed` or `mcp_server_not_found` while what uses the server cannot be read. A server still waiting to be
+sent (made offline, never received) is refused as `team_mcp_server_not_sent` before anything is read: the team server
+knows nothing of it.
+
 ### `set_mcp_server_enabled` — changes data · gate AP when turning on
 
 Turns a server on or off for every profile that chooses it (inspector's *Turn on* / *Turn off*). Agents that start
@@ -302,6 +345,45 @@ from now on get it or work without it; agents at work keep what they started wit
 `person_only` unless AP is on.
 
 Parameters: `project` (req.), `server` (req.), `enabled` (boolean, req.).
+
+In a team project `server` can also be one of the team's MCP servers (id or name). Turning it off is accepted; turning
+it on is `person_only` always, also while AP is on, with nothing changed: only a person turns a team MCP server on
+here, in the window. Its fields, `program` (a name) included, are the team's, published as its next version by an
+admin with `update_mcp_server`.
+
+### `pick_profile_connection` — changes data · team project · gate AP for another account
+
+Chooses the connection a team profile runs on on this computer (the profile's *Connection* field in a team project).
+The pick is kept on this computer only; a connection added later changes nothing. Refused as `team_project_required`
+in a project that is not shared with a team, `profile_not_found` for a profile that is not the team's,
+`connection_does_not_fit` for a connection of another CLI kind than the profile names, and `person_only` for an
+`account` other than the profile's earlier pick unless AP is on.
+
+Parameters: `project` (req.), `profile` (req.: id or role of a team profile), `connection` (req.: id or name of an
+agent connection), `account` (id or name of an account of the connection's CLI; `default` is the CLI's Default).
+
+### `list_team_mcp_servers` — read-only · cross-project
+
+The team's MCP servers of a team project (a local project answers an empty list; `list_connections` lists the
+project's own servers, which a team project does not use). Each: `id`, `name`, `team: true`, `version` (the one this
+computer uses), `launch` (`kind: program` with the program's name, arguments, folder and variable names, or
+`kind: remote` with its address and secret headers by name; the same as `add_mcp_server` takes) and its
+[`readiness`](#readiness-here). A program's path on this computer and a secret's value are never listed.
+Parameter: `project` (string | null; left out, every project's, each naming its project).
+
+### `pick_reviewer_connection` — changes data · team project
+
+Chooses the connection a team reviewer runs on on this computer (the reviewer's *Connection* field in a team project),
+as `pick_profile_connection` does for a profile. A language reviewer takes an agent connection of the CLI kind its
+newest version names; a decision reviewer takes a decision connection. The pick is kept on this computer only. Refused
+as `team_project_required` in a project that is not shared with a team, `reviewer_not_found` for a reviewer that is not
+the team's, `connection_does_not_fit` for a connection of the other kind, `server_not_allowed` for a decision connection
+whose server the reviewer's destinations do not list (a server on this computer always is), `not_team_form` for a
+reviewer whose newest version names a connection (the earlier form; it is published again), and `person_only` for a
+decision connection whose server is not on this computer (it would send the project's requests there).
+
+Parameters: `project` (req.), `reviewer` (req.: id or name of a team reviewer), `connection` (req.: id or name of an
+agent connection, or of a decision connection for a decision reviewer).
 
 ---
 
@@ -314,19 +396,73 @@ its MCP servers. Pipeline steps run **published** profiles. Profiles are version
 ### `list_profiles` — read-only · cross-project
 
 Each profile: id, role, connection, model, effort, where it stands (`draft`, `stale_draft`, `published` with its
-version), and its link. Parameter: `project` (string | null).
+version), its [`readiness`](#readiness-here) on this computer, and its link. Parameter: `project` (string | null).
 
 ### `get_profile` — read-only
 
 One profile as its editor shows it (its draft if it has one, else its latest version): role, responsibilities, role
 instructions, connection, model, effort, permissions (repository access, extra writable folders, commands, network,
 approvals), MCP servers, where it stands, which published pipeline steps run it, its **`revision`** (for
-`save_profile_draft`'s `expected_revision`) and its link.
+`save_profile_draft`'s `expected_revision`), its [`readiness`](#readiness-here) on this computer and its link.
 
 | Parameter | Type   | Req. | Description                    |
 |-----------|--------|------|--------------------------------|
 | `project` | string | yes  | The project's id, or its name. |
 | `profile` | string | yes  | The profile's id, or its role. |
+
+### Readiness here
+
+`list_profiles`, `get_profile` and `list_team_mcp_servers` add `readiness`: whether the resource can be used on this
+computer, read from the version this computer uses (not from a draft), or exactly what is missing. It works in team and
+local projects; it is `null` for a resource with no version. Reading it checks this computer (program files, and in a
+local project the keychain, asked only whether the secret of each command tool that uses one has a value, never for the
+value), so it is read once per call. It is computed for the whole project on each call, also by `get_profile` for its one
+profile. Reading it opens the project's data only to read it: it migrates and writes nothing.
+
+```json
+{
+  "ready_here": false,
+  "group": "needs_you_here",
+  "version": 3,
+  "missing": [
+    { "kind": "connection", "cli": "codex_cli", "problem": "pick_needed",
+      "fix": { "tool": "pick_profile_connection", "gate": null } },
+    { "kind": "mcp_off", "server": { "id": "…", "name": "knowledge" },
+      "fix": { "tool": "set_mcp_server_enabled", "gate": "person" } },
+    { "kind": "mcp_program", "server": { "id": "…", "name": "knowledge" }, "problem": "not_set",
+      "fix": { "tool": null, "gate": "person" } },
+    { "kind": "secret", "name": "API_TOKEN", "fix": { "tool": null, "gate": "person" } }
+  ]
+}
+```
+
+- `ready_here` is `true` only when nothing is missing and the standing is decided.
+- `group`: `ready`; `needs_you_here` (something is missing, or it is undecided, or a team MCP server nobody has decided
+  on here is not switched on); `off_here` (a team MCP server switched off here — by a person or by automation, which
+  may turn off). A profile that chooses a server that is off is `needs_you_here`.
+- `missing` lists the parts in the order to fix them: connections, servers that are off, programs, secrets. Each has a
+  `kind` and a `fix`: `tool` is the tool that changes it (`null` when none does) and `gate` who may use it: `"person"`
+  for what only a person does in the app's window, `"ap"` when it needs *Let automation change agent permissions*,
+  `null` when automation may.
+
+| `kind` | Fields | Fix |
+|---|---|---|
+| `connection` | `cli`, `problem`: `none_of_kind` (no connection of that CLI: add one) or `pick_needed` (several, none picked for this profile) | `add_cli_connection` / `pick_profile_connection` |
+| `decision_connection` | `reviewer` (id), `problem`: `none_of_kind` (no decision connection: add one) or `pick_needed` (several, none picked for this reviewer) — a team decision reviewer | `save_decision_connection` / `pick_reviewer_connection` |
+| `mcp_off` | `server` `{id, name}` — a team MCP server not switched on here | `set_mcp_server_enabled`; turning on is `person_only` always, so `gate: "person"` |
+| `mcp_unsupported` | `server` `{id, name}`, `why`: `more_than_one_secret_header` — a team MCP server this app cannot run as defined | none: only the team can change the server |
+| `mcp_program` | `server`, `problem`: `not_set` or `file_gone` — the team MCP server's program path on this computer | none: a person chooses the file in the app |
+| `secret` | `name` — the team secret has no value here | none: a person gives it in the app |
+| `secret_unreadable` | `name` — the keychain did not say whether the team secret has a value here | none: try again; the keychain has to answer |
+| `local_mcp_program` | `server` `{id, name}`, `problem`: `not_found` (no such file on the `PATH` the agent starts with, or in the project) or `moved` (a fixed file now leads into the repository) — a local project's MCP server a profile chooses and that is turned on | `update_mcp_server` (another program widens: `gate: "ap"`); `not_found` may instead mean installing the program, which no tool does |
+| `local_secret` | `secret` `{id, name}` — a command tool's project secret has no value in the keychain | none: a person sets it in the app |
+| `undecided` | `why` — what cannot be known yet (see below) | `{"tool": null, "gate": null}`, except `connection_gone`: `save_profile_draft` (change the profile's connection, then `publish_profile`), and `secret_gone`: `{"tool": null, "gate": "person"}` (no tool adds a project secret) |
+
+`undecided` is not ready and not assumed to need nothing. `why`: `not_team_form` (a version cached before the team
+configuration model), `cannot_be_published` (`reason`: `duplicate`, `too_many`, `connection`, `local_mcp_server` or
+`writable_folders`), `chooses_mcp_server` (`server`: not synced yet here), `chooses_archived_mcp_server` (`server`, `name`: the team archived it), `uses_archived_tool` and `uses_archived_instruction` (`resource`, `name`: a profile names a tool or an instruction the team archived; Run again refuses until an admin restores it or the profile stops naming it), `runs_unknown` (`resource`),
+`connection_gone` (`connection`), `team_tool_secret_by_id`, `secret_gone`, `secret_unreadable` (`secret`: the keychain
+did not say) and `member` (`member` and its `cause`).
 
 ### `save_profile_draft` — changes data · gate AP for widening
 
@@ -647,9 +783,11 @@ A project's active secrets **by name and use only — never a value** (values st
 read). Each: id, name, kind, environment (a name is unique per environment, written `NAME@environment` where tools
 and MCP servers refer to it), `added_at`, `replaced_at`, and `used_by` (tools, MCP servers, agent connections whose
 API key it is, and the profiles whose draft or latest version chooses an MCP server using it, with that server),
-each with a link, plus the link to Project settings › Environment.
+each with a link, plus the link to Project settings › Environment. In a team project the team's secrets this computer
+has a value for follow as `{name, team: true, value_set: true}`; names nobody gave a value are not listed (the
+`secret` parts of a resource's `readiness` name them).
 
-Adding, replacing and archiving secrets are done by a person in the app. Parameter: `project` (string | null).
+Adding, replacing and archiving secrets, and giving a team secret its value, are done by a person in the app. Parameter: `project` (string | null).
 
 ---
 

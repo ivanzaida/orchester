@@ -1,9 +1,8 @@
-//! The project's command tools through the domain tools: made, saved and published as their editor does,
-//! the program found on the search path and kept as a fixed file outside the repository. A command step
-//! runs its program with the person's rights, network access and no sandbox, so making a tool, changing
-//! what it runs, publishing its first version and adding a step that calls it are a person's decisions
-//! while *Let automation change agent permissions* is off; its description, timeout and output limit are
-//! not.
+//! The project's command tools through the domain tools: a new one is created as v1 in one call (no draft), an existing
+//! one is saved as a draft and published as its editor does, the program found on the search path and kept as a fixed
+//! file outside the repository. A command step runs its program with the person's rights, network access and no
+//! sandbox, so making a tool (its first version), changing what it runs and adding a step that calls it are a person's
+//! decisions while *Let automation change agent permissions* is off; its description, timeout and output limit are not.
 
 use std::{
   env, fs,
@@ -63,16 +62,12 @@ fn domain_a_command_tool_is_made_and_published_once_a_person_lets_it() {
     Path::new(program).is_absolute() && Path::new(program).is_file(),
     "stored as the file found: {program}"
   );
-  assert_eq!(made["tool"]["state"]["state"], "draft");
+  assert_eq!(made["tool"]["state"]["state"], "published", "created as v1: {made}");
+  assert_eq!(made["tool"]["state"]["published_version"], 1, "{made}");
   assert_eq!(made["tool"]["command"]["timeout_secs"], 600);
   assert_eq!(made["tool"]["command"]["exit_codes"], json!([0]));
   served.let_automation_widen(false);
   let publish = json!({ "project": "Kontur", "tool": "check" });
-  assert_person_only(&served.refused("publish_tool", &publish));
-  served.let_automation_widen(true);
-  let published = served.ok("publish_tool", &publish);
-  assert_eq!(published["tool"]["state"]["published_version"], 1, "{published}");
-  served.let_automation_widen(false);
   let harmless = change(json!({
     "description": "Says hello.",
     "timeout_secs": 3600,
@@ -162,7 +157,6 @@ fn domain_a_command_step_with_a_failure_route_needs_a_person() {
   let mut served = served();
   served.let_automation_widen(true);
   served.ok("save_tool_draft", &check(json!({})));
-  served.ok("publish_tool", &json!({ "project": "Kontur", "tool": "Check" }));
   served.ok(
     "create_pipeline",
     &json!({ "project": "Kontur", "name": "Change", "from": "empty" }),

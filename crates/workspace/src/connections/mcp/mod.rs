@@ -23,6 +23,7 @@ use orchester_core::{
   secret::Secret,
 };
 
+pub(crate) use self::authorization::authorization_message;
 pub use self::{
   authorization::{AuthorizationChoice, AuthorizationText},
   save::{

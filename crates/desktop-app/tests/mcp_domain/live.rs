@@ -113,9 +113,11 @@ pub(super) fn set_up(served: &mut Served, repo: &Path, fake: &Path) {
       "permissions": { "repository": "write", "commands": "any_in_worktree", "network": "on" },
     }),
   );
-  assert_eq!(profile["profile"]["state"]["state"], "draft");
-  let published = served.ok("publish_profile", &json!({ "project": "Kontur", "profile": "Builder" }));
-  assert_eq!(published["profile"]["state"]["published_version"], 1);
+  assert_eq!(
+    profile["profile"]["state"]["state"], "published",
+    "created as v1: {profile}"
+  );
+  assert_eq!(profile["profile"]["state"]["published_version"], 1);
   served.ok(
     "create_pipeline",
     &json!({ "project": "Kontur", "name": "Delivery", "from": "empty" }),
@@ -237,7 +239,6 @@ fn domain_a_command_step_made_through_the_tools_checks_the_agents_work() {
     "arguments": ["grep", "--quiet", "hello"],
   });
   served.ok("save_tool_draft", &check);
-  served.ok("publish_tool", &json!({ "project": "Kontur", "tool": "Check" }));
   served.ok(
     "save_pipeline_draft",
     &json!({ "project": "Kontur", "pipeline": "Delivery", "steps": [

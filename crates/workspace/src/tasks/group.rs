@@ -13,11 +13,13 @@ use orchester_store::{ProjectDb, StoreError};
 
 use crate::{
   messages::{self, Message},
+  secrets::Vault,
   tasks::{
     data::ProjectTasks,
     list::missing_key,
     run::{check, preflight_message},
   },
+  workspace::Workspace,
 };
 
 pub fn problem_message(problem: &SelectionProblem) -> Message {
@@ -155,8 +157,11 @@ pub fn releasable(tasks: &ProjectTasks, selected: &BTreeSet<TaskId>) -> Vec<Task
 }
 
 /// Queues `group` after its review. A team project's tasks are never queued from this computer's copy of them: their
-/// work starts on the team server (`work.start`).
-pub fn queue(
+/// work starts on the team server (`work.start`). The runner starts the members one by one without asking whether
+/// each pipeline is ready on this computer, so every member is asked first and a group with one that is not is not
+/// queued, with a message for each (the runner-side check is a follow-up in `docs/plan.md`).
+pub async fn queue(
+  (workspace, vault): (&Workspace, &Vault),
   root: &Path,
   group: &TaskGroup,
   limits: orchester_core::task::TaskLimits,
@@ -204,6 +209,7 @@ pub fn queue(
   if !problems.is_empty() {
     return Err(problems);
   }
+  workspace.ready_group_to_start(root, vault, group.tasks()).await?;
   db.queue_task_group(group, Some(limits), reviewed)
     .map_err(|error| vec![messages::store_error(&error)])
 }

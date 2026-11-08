@@ -1,0 +1,85 @@
+//! What the panel of a team MCP server says in words that depend on its state: the head's line, its second chip, the
+//! day a path was set and what stands under the rows (`Chips`, `Note` in `C4` `SpRvd` … `C8` `lSA4x`).
+
+use std::sync::Arc;
+
+use lurq::app::ctx::Ctx;
+use orchester_core::{
+  sharing::{Missing, ProgramProblem},
+  time::Timestamp,
+};
+use orchester_workspace::{
+  agents::team_mcp::{Published, TeamMcpSheet},
+  display,
+  sharing::team::TeamConfiguration,
+};
+
+use crate::{
+  screens::team_hub::{
+    model::{Entry, Listing},
+    words::{self, date},
+  },
+  ui::chip::BadgeTone,
+};
+
+/// *v3 · published by dana-k · Oct 30*: what stands after *MCP server* in the head. An archived server says when the
+/// team archived it instead (A21): the stream says who archived it nowhere, so no one is named.
+pub(super) fn head_line(
+  ctx: &Ctx,
+  now: Timestamp,
+  entry: &Entry,
+  (sheet, team): (&TeamMcpSheet, &TeamConfiguration),
+) -> Option<String> {
+  let version = entry.number?.to_string();
+  if let Some(at) = entry.archived {
+    return Some(
+      ctx
+        .t_args(
+          "team_hub.mcp.headLineArchived",
+          [("version", version), ("time", display::clock(at))],
+        )
+        .to_string(),
+    );
+  }
+  // While a version published here waits, the version the head names is the team's, whose publisher the standing keeps.
+  let confirmed = || {
+    let confirmed = team.standing(entry.id)?.confirmed.as_ref()?;
+    Some(Published {
+      by: confirmed.publisher.clone()?,
+      at: confirmed.published_at,
+    })
+  };
+  Some(match sheet.published.clone().or_else(confirmed) {
+    Some(published) => ctx
+      .t_args(
+        "team_hub.mcp.headLine",
+        [
+          ("version", version),
+          ("by", published.by.clone()),
+          ("date", date(ctx, now, published.at).to_string()),
+        ],
+      )
+      .to_string(),
+    None => ctx
+      .t_args("team_hub.mcp.headLineUnpublished", [("version", version)])
+      .to_string(),
+  })
+}
+
+/// The program's problem here, when the server has one.
+pub(super) fn program_problem(missing: &[Missing]) -> Option<&ProgramProblem> {
+  missing.iter().find_map(|part| match part {
+    Missing::McpProgram { problem, .. } => Some(problem),
+    _ => None,
+  })
+}
+
+/// The panel's readiness chip: the line of the list, but for a program path, which the panel says in the design's
+/// words (`Chip · Needs the program path here` in `SpRvd`, `Program missing here` in `h2md5`).
+pub(super) fn chip(ctx: &Ctx, listing: &Listing, entry: &Entry, missing: &[Missing]) -> (Arc<str>, BadgeTone) {
+  match (missing, program_problem(missing)) {
+    ([_], Some(ProgramProblem::NotSet)) => (ctx.t("team_hub.mcp.chip.pathNotSet"), BadgeTone::Warning),
+    ([_], Some(ProgramProblem::FileGone(_))) => (ctx.t("team_hub.mcp.chip.pathGone"), BadgeTone::Danger),
+    _ => words::chip(ctx, listing, entry),
+  }
+}

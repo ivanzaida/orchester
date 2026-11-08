@@ -70,6 +70,7 @@ impl Derived {
     let mut resources: Vec<ResourceVersionRef> = (inputs.instructions().iter().map(version_ref))
       .chain(inputs.tools().iter().map(version_ref))
       .chain(inputs.skills().iter().map(version_ref))
+      .chain(inputs.mcp_servers().iter().map(version_ref))
       .collect();
     resources.sort();
     Self {

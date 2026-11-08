@@ -93,6 +93,8 @@ pub struct Notice {
   layout: NoticeLayout,
   /// Drawn as the redesigned screens draw it: no stroke, a smaller icon, its parts closer.
   flat: bool,
+  /// The title's style where it is not the notice's own.
+  title_style: Option<TypographyStyle>,
 }
 
 impl Notice {
@@ -108,6 +110,7 @@ impl Notice {
       actions: Vec::new(),
       layout: NoticeLayout::Inline,
       flat: false,
+      title_style: None,
     }
   }
 
@@ -121,6 +124,12 @@ impl Notice {
   /// information with a `danger` icon (`Notice · Couldn’t reach GitHub` in `PEBSm`).
   pub fn mark(mut self, color: PaletteColor) -> Self {
     self.mark = Some(color);
+    self
+  }
+
+  /// The title in `style` instead of the notice's own, where a design draws it otherwise.
+  pub fn title_style(mut self, style: TypographyStyle) -> Self {
+    self.title_style = Some(style);
     self
   }
 
@@ -192,7 +201,7 @@ impl From<Notice> for Element {
       .child(
         Text::new(&notice.title)
           .id(format!("{}-title", notice.id))
-          .variant(ExtraTypography::Strong.role()),
+          .variant(notice.title_style.unwrap_or_else(|| ExtraTypography::Strong.role())),
       )
       .with_children(notice.body.as_deref().map(|body| {
         Text::new(body)

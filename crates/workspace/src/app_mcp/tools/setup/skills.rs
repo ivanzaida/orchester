@@ -63,22 +63,25 @@ pub(super) const SPECS: &[Spec] = &[
   },
   Spec {
     name: "save_skill_draft",
-    description: "Saves a skill's draft as the Skills editor does; without `skill` a new skill is made under `name`, \
-                  its slug made from the name and unique in the project. With `skill` (id, name or slug) its draft is \
+    description: "Without `skill`, creates a new skill under `name` as its version 1 in one call (no draft; it returns \
+                  the published skill or a refusal, and in a team project only once the team server accepts it; \
+                  offline it waits in the outbox, waiting_for_server), its slug made from the name and unique in the \
+                  project. With `skill` (id, name or slug) its draft, a change to a skill that has a version, is \
                   replaced: a field left out keeps its value, and `name` renames it (its slug stays). A new skill \
-                  starts with no description, an empty body, the project as where it applies and no reference \
-                  files. Checked as the editor checks it: a name no other skill of the project has, ignoring case \
+                  starts with the project as where it applies and no reference files, and needs a description and a \
+                  body (blank_description, blank_body) and, unless a person turned on Let automation change agent \
+                  permissions, is refused as person_only, as publish_skill is. Checked as the editor checks it: a name no other skill of the project has, ignoring case \
                   (invalid_name, name_taken); `applies_in` project, agent_role (with `role`, a role of the project's \
                   profiles), pipeline (with `pipeline`) or step (with `pipeline` and `step`, an agent step: a tool \
                   step has no agent to load it, scope_unavailable); `files` replaces the reference files, each a \
                   `path` in the skill's folder (names separated by /: no absolute path, no . or .., no drive, not \
                   SKILL.md) with its text `content`, or without content to keep the skill's file at that path; at \
                   most 100 files of at most 1024 KiB each, each path once (invalid_files). The description and body \
-                  may be blank in a draft. With expected_revision, the revision get_skill or the last save returned, \
+                  may be blank in a draft of an existing skill. With expected_revision, the revision get_skill or the last save returned, \
                   the draft is saved only while it is unchanged, else refused as draft_changed; without it the save \
                   goes over a change a person or another agent saved meanwhile. A draft reaches no agent, so saving \
-                  is always open; the Skills page marks it as written by automation (draft_by_automation) until a \
-                  person saves it or it is published. Publish it with publish_skill.",
+                  is always open for an existing skill; the Skills page marks it as written by automation (draft_by_automation) \
+                  until a person saves it or it is published. Publish it with publish_skill.",
     schema: schema_for_type::<skill_input::SaveSkillDraft>,
     read_only: false,
   },

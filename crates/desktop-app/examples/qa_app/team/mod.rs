@@ -4,8 +4,11 @@
 //! What a person presses is in [`drive`], and for `team-clone` in the QA app's `team_clone`. Fixture data for QA, never
 //! shipped: an example is no part of the app's program.
 
+mod archive;
 pub mod drive;
+mod edit;
 mod member;
+mod recorded_start;
 mod state;
 #[path = "../../sign_in_qa/window.rs"]
 pub mod window;
@@ -20,7 +23,7 @@ use std::{
 use orchester_api::{
   Credential,
   client::{PlainHttp, ServerAddress},
-  test_support::team_server::{CODE, TasksAnswer, TeamServer, USERNAME},
+  test_support::team_server::{BundleFault, CODE, TasksAnswer, TeamServer, USERNAME},
 };
 use orchester_app::services::Services;
 use orchester_core::{
@@ -114,14 +117,52 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
     | State::AdminWork
     | State::VersionRefused
     | State::TeamRunning
-    | State::EditConflict => {
-      let ids = task_ids(services)?;
-      let role = member::serve_as(&server, state, (&ids, &team_pipelines(services)?));
-      let (kontur, id) = join_linked_as(&server, (services, runtime), (TasksAnswer::Serve, role))?;
-      work::after_join(state, (&server, id), (services, runtime), (&kontur, &ids))?;
-    }
+    | State::EditConflict
+    | State::NotReadyHere
+    | State::NotReadyAfterRun
+    | State::StartFailed
+    | State::StartRecovered
+    | State::TeamEdit
+    | State::TeamEditDemoted
+    | State::TeamEditOffline
+    | State::TeamEditRejects
+    | State::TeamEditPublished
+    | State::TeamEditRefusedAdmin
+    | State::TeamEditWaiting
+    | State::TeamEditRejected
+    | State::TeamEditVariables
+    | State::TeamCreateNameTaken
+    | State::TeamEditNewer
+    | State::TeamEditConflicting
+    | State::TeamEditConflictClean
+    | State::TeamEditArchived
+    | State::StartWaiting
+    | State::StartRunnerRefused
+    | State::StartPastFailure
+    | State::TeamArchive
+    | State::TeamArchived => joined(state, &server, services, runtime)?,
   }
   Ok(server)
+}
+
+/// A state of a member, an admin or their work: Kontur joined as the role `state` serves, then what it adds.
+fn joined(state: State, server: &TeamServer, services: &Services, runtime: &Handle) -> Result<(), Box<dyn Error>> {
+  let ids = task_ids(services)?;
+  let role = member::serve_as(server, state, (&ids, &team_pipelines(services, state)?));
+  let (kontur, id) = join_linked_as(server, (services, runtime), (TasksAnswer::Serve, role))?;
+  match state {
+    State::StartFailed => server.authority_newer_bundles(),
+    State::StartRecovered => {
+      server.authority_bundle_fault(BundleFault::Unavailable);
+      server.authority_bundle_fault_after(BundleFault::Newer, state::START_ANSWERS_AFTER);
+    }
+    State::StartWaiting => server.authority_bundle_fault(BundleFault::Unavailable),
+    _ => {}
+  }
+  work::after_join(state, (server, id), (services, runtime), (&kontur, &ids))?;
+  edit::prepare(state, (services, runtime), (server, &kontur))?;
+  archive::prepare(state, (server, &kontur))?;
+  Ok(())
 }
 
 /// The session's Kontur's folder.
@@ -150,7 +191,18 @@ fn task_ids(services: &Services) -> Result<HashMap<u32, String>, Box<dyn Error>>
 
 /// Kontur's Feature delivery and Quick fix as the team's pipelines, as Share leaves them (row 80): the tasks on the
 /// server name them by these ids. A Kontur without one, as the headless tests' is, names a team pipeline it lacks.
-fn team_pipelines(services: &Services) -> Result<member::TeamPipelines, Box<dyn Error>> {
+/// `team-not-ready` names the team's own Team delivery and Team quick fix instead.
+fn team_pipelines(services: &Services, state: State) -> Result<member::TeamPipelines, Box<dyn Error>> {
+  let (feature, quick) = match state {
+    State::NotReadyHere | State::NotReadyAfterRun => ("team-delivery", "team-quick-fix"),
+    // Every task is on Team quick fix, which is ready here: only the bundle fails.
+    State::StartFailed
+    | State::StartRecovered
+    | State::StartWaiting
+    | State::StartRunnerRefused
+    | State::StartPastFailure => ("team-quick-fix", "team-quick-fix"),
+    _ => ("feature-delivery", "quick-fix"),
+  };
   let mut db = ProjectDb::open(&kontur(services)?)?;
   let mut id_of = |slug: &str| -> Result<String, Box<dyn Error>> {
     let found = db
@@ -164,8 +216,8 @@ fn team_pipelines(services: &Services) -> Result<member::TeamPipelines, Box<dyn 
     Ok(pipeline.to_string())
   };
   Ok(member::TeamPipelines {
-    feature_delivery: id_of("feature-delivery")?,
-    quick_fix: id_of("quick-fix")?,
+    feature_delivery: id_of(feature)?,
+    quick_fix: id_of(quick)?,
   })
 }
 

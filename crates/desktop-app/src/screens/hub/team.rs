@@ -91,9 +91,10 @@ impl Said {
   }
 }
 
-/// The team's configuration of `project` while it is shared; `None` while it is local or not read yet.
+/// The team's configuration of `project` while it is shared; `None` while it is local or not read yet. A screen that
+/// must not take the unread for local reads [`TeamRead`] itself.
 pub(crate) fn of(project: &ShownProject) -> Option<TeamConfiguration> {
-  project.feed.team.get()
+  project.feed.team.get().configuration()
 }
 
 /// Whether the person may change `project`'s resources: always in a local project, an admin's in a shared one.
@@ -153,7 +154,7 @@ pub(crate) fn line(ctx: &Ctx, id: &str, team: &TeamConfiguration) -> Row {
 
 /// `dana-k (owner) and olha (server admin)`: the owners and the server's admins as last read. A server that does not
 /// name its admins leaves them by their role: `dana-k (owner) and the server's admins`.
-fn admins(ctx: &Ctx, team: &TeamConfiguration) -> String {
+pub(crate) fn admins(ctx: &Ctx, team: &TeamConfiguration) -> String {
   let named = |key: &str, names: &[Arc<str>]| {
     names
       .iter()
@@ -401,4 +402,18 @@ pub(crate) async fn send_published(services: &Services, root: &std::path::Path) 
   }
 }
 
-pub(crate) use super::waiting_bar::{Reread, waiting_bar};
+/// Sends the resource `id`, just created as v1 in the project at `root`, to its team server at once; nothing for a
+/// local project. A server that refuses it takes it back whole and the refusal says why nothing was created. One that
+/// cannot be reached leaves it waiting, which the editor's bar shows and which is sent when the server is back.
+pub(crate) async fn send_created(
+  services: &Services,
+  root: &std::path::Path,
+  id: ResourceId,
+) -> Result<(), orchester_workspace::messages::Message> {
+  match services.servers.send_created(root, id).await {
+    Ok(_) => Ok(()),
+    Err(refused) => Err(refused.message()),
+  }
+}
+
+pub(crate) use super::waiting_bar::{Reread, waiting_bar, waiting_bar_in};

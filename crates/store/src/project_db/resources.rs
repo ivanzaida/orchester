@@ -21,14 +21,20 @@ use crate::{
   rows::{corrupt, decode_body, decode_document, encode_json, parse},
 };
 
+mod kind;
+
+pub(in crate::project_db) use self::kind::{kind_text, parse_kind};
+
 const SELECT_RESOURCES: &str = "SELECT id, kind, slug, name, created_at FROM resources";
 /// The resources of kind `?1` the project offers (`docs/architecture/server.md` row 80, the person's decisions of
 /// 2026-11-05 and 2026-11-06): none removed (a team resource archived on the server is removed here); in a team
 /// project only the team's (`sharing = 'shared'`), an Admin's new resource until the server has it (no version yet, or
-/// versions waiting for the server none of which it refused), and every resource of a kind that is never the team's
-/// (`?2`). A person's own resources of a team project, kept *Not shared* at Join or published here and refused by the
-/// server, stay in the database as they are and are offered nowhere ([`ProjectDb::kept_resources`] reads them).
-const OFFERED: &str = "WHERE kind = ?1 AND id NOT IN (SELECT resource_id FROM removed_resources) AND (?2   OR NOT EXISTS (SELECT 1 FROM sharing) OR sharing IS 'shared'   OR NOT EXISTS (SELECT 1 FROM resource_versions WHERE resource_versions.resource_id = resources.id)   OR (EXISTS (SELECT 1 FROM shared_publishes WHERE shared_publishes.resource_id = resources.id)     AND NOT EXISTS (SELECT 1 FROM shared_publishes WHERE shared_publishes.resource_id = resources.id       AND shared_publishes.refused IS NOT NULL)))";
+/// versions waiting for the server none of which it refused), a resource created here whose first version is still
+/// unnumbered (even refused: the person's own work, kept for them to see and decide on, e.g. with a later version or a
+/// draft over it), and every resource of a kind that is never the team's (`?2`). A person's own resources of a team
+/// project, kept *Not shared* at Join or published here and refused by the server, stay in the database as they are
+/// and are offered nowhere ([`ProjectDb::kept_resources`] reads them).
+const OFFERED: &str = "WHERE kind = ?1 AND id NOT IN (SELECT resource_id FROM removed_resources) AND (?2   OR NOT EXISTS (SELECT 1 FROM sharing) OR sharing IS 'shared'   OR NOT EXISTS (SELECT 1 FROM resource_versions WHERE resource_versions.resource_id = resources.id)   OR EXISTS (SELECT 1 FROM shared_publishes WHERE shared_publishes.resource_id = resources.id AND shared_publishes.created = 1)   OR (EXISTS (SELECT 1 FROM shared_publishes WHERE shared_publishes.resource_id = resources.id)     AND NOT EXISTS (SELECT 1 FROM shared_publishes WHERE shared_publishes.resource_id = resources.id       AND shared_publishes.refused IS NOT NULL)))";
 
 /// A cached version of a shared resource reads as its local body, which this computer's bindings rewrite.
 const SELECT_VERSIONS: &str = "SELECT id, number, COALESCE(local_body, body), published_at FROM resource_versions \
@@ -215,33 +221,10 @@ impl ResourceStore for ProjectDb {
   ) -> Result<Resource, StoreError> {
     let body = encode(body)?;
     let transaction = self.connection.transaction()?;
-    shared_publishes::ensure_may_create(&transaction, B::KIND)?;
-    let taken: bool = transaction.query_row(
-      "SELECT EXISTS (SELECT 1 FROM resources WHERE kind = ?1 AND slug = ?2)",
-      params![kind_text(B::KIND), slug.as_str()],
-      |row| row.get(0),
-    )?;
-    if taken {
-      return Err(StoreError::DuplicateSlug {
-        kind: B::KIND,
-        slug: slug.as_str().to_owned(),
-      });
-    }
-    let resource = Resource::new(ResourceId::generate(), B::KIND, slug, name, now);
-    let id = resource.id().to_string();
-    transaction.execute(
-      "INSERT INTO resources (id, kind, slug, name, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
-      params![
-        id,
-        kind_text(B::KIND),
-        resource.slug().as_str(),
-        resource.name().as_str(),
-        now.unix_millis()
-      ],
-    )?;
+    let resource = super::new_resources::insert::<B>(&transaction, slug, name, now)?;
     transaction.execute(
       "INSERT INTO resource_drafts (resource_id, body, based_on, updated_at) VALUES (?1, ?2, NULL, ?3)",
-      params![id, body, now.unix_millis()],
+      params![resource.id().to_string(), body, now.unix_millis()],
     )?;
     transaction.commit()?;
     Ok(resource)
@@ -393,6 +376,7 @@ pub(super) fn save_draft<B: ResourceBody>(
   let body = encode(draft.body())?;
   check_kind::<B>(connection, resource)?;
   shared_publishes::ensure_may_change(connection, resource)?;
+  super::new_resources::ensure_has_version::<B>(connection, resource)?;
   let base = match draft.based_on() {
     Some(number) => load_versions::<B>(
       connection,
@@ -566,33 +550,4 @@ pub(crate) fn version_number(number: i64) -> Result<VersionNumber, StoreError> {
     .and_then(NonZeroU32::new)
     .map(VersionNumber::new)
     .ok_or_else(|| corrupt("version number", number))
-}
-
-pub(super) const fn kind_text(kind: ResourceKind) -> &'static str {
-  match kind {
-    ResourceKind::AgentProfile => "agent_profile",
-    ResourceKind::Instruction => "instruction",
-    ResourceKind::Pipeline => "pipeline",
-    ResourceKind::Tool => "tool",
-    ResourceKind::Skill => "skill",
-    ResourceKind::TestSuite => "test_suite",
-    ResourceKind::Service => "service",
-    ResourceKind::Stack => "stack",
-    ResourceKind::TeamReviewer => "team_reviewer",
-  }
-}
-
-pub(super) fn parse_kind(value: &str) -> Result<ResourceKind, StoreError> {
-  match value {
-    "agent_profile" => Ok(ResourceKind::AgentProfile),
-    "instruction" => Ok(ResourceKind::Instruction),
-    "pipeline" => Ok(ResourceKind::Pipeline),
-    "tool" => Ok(ResourceKind::Tool),
-    "skill" => Ok(ResourceKind::Skill),
-    "test_suite" => Ok(ResourceKind::TestSuite),
-    "service" => Ok(ResourceKind::Service),
-    "stack" => Ok(ResourceKind::Stack),
-    "team_reviewer" => Ok(ResourceKind::TeamReviewer),
-    other => Err(corrupt("resource kind", other)),
-  }
 }

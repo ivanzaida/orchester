@@ -35,6 +35,7 @@ pub fn serve_as(
 ) -> Option<MemberRole> {
   let standing = match state {
     State::Admin | State::AdminWork | State::EditConflict => Standing::Admin,
+    state if state.edits() || state.archives() => Standing::Admin,
     State::ServerAdmin => Standing::ServerAdmin,
     _ => Standing::Member,
   };
@@ -138,5 +139,6 @@ fn serve(
       .collect(),
   );
   server.authority_unavailable(unavailable);
-  server.require_version((state == State::VersionRefused).then_some(work::REQUIRED_VERSION));
+  let required = (state == State::VersionRefused).then(work::required_version);
+  server.require_version(required.as_deref());
 }

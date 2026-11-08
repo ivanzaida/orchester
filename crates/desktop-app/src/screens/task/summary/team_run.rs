@@ -64,7 +64,12 @@ pub fn reported(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
       .color(PaletteColor::TextMuted)
       .nowrap(),
   );
-  let line = event_line(ctx, task, (Icon::MonitorSmartphone, &event, "reported"), true);
+  let line = event_line(
+    ctx,
+    task,
+    (Icon::MonitorSmartphone, &event, "reported"),
+    (true, PaletteColor::TextMuted),
+  );
   Some(
     Column::new()
       .id("task-run")

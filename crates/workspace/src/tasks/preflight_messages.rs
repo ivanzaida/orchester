@@ -29,6 +29,7 @@ pub fn preflight_message(problem: &PreflightProblem) -> Message {
     PreflightProblem::ApprovalGate { step: key } => step("runs.preflight.approvalGate", key),
     PreflightProblem::ProfileNotPublished { step: key } => step("runs.preflight.profileNotPublished", key),
     PreflightProblem::ConnectionMissing { step: key } => step("runs.preflight.connectionMissing", key),
+    PreflightProblem::ConnectionNotPicked { step: key } => step("runs.preflight.connectionNotPicked", key),
     PreflightProblem::McpServerMissing { step: key } => step("runs.preflight.mcpServerMissing", key),
     PreflightProblem::SecretMissing { step: key } => step("runs.preflight.secretMissing", key),
     PreflightProblem::UnsupportedProvider { step: key } => step("runs.preflight.unsupportedProvider", key),

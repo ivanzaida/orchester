@@ -66,7 +66,8 @@ pub fn users_in(root: &Path, id: ResourceId, kind: ResourceKind) -> Result<Users
     | ResourceKind::TestSuite
     | ResourceKind::Service
     | ResourceKind::Stack
-    | ResourceKind::TeamReviewer => Ok(Users::Steps(Vec::new())),
+    | ResourceKind::TeamReviewer
+    | ResourceKind::McpServer => Ok(Users::Steps(Vec::new())),
   };
   users.map_err(|error| messages::store_error(&error))
 }
@@ -80,7 +81,8 @@ pub fn remove_in(root: &Path, id: ResourceId, mode: RemoveMode) -> Result<Remova
 }
 
 /// What removing a resource of `kind` changed besides its own list: a profile's or tool's removal resets pipeline
-/// drafts. No screen lists test suites, services or stacks yet.
+/// drafts, and a team MCP server's is listed by the Connections window. No screen lists test suites, services or
+/// stacks yet.
 pub const fn changed_by_removal(kind: ResourceKind) -> &'static [Outside] {
   match kind {
     ResourceKind::AgentProfile => &[Outside::Profiles, Outside::Pipelines],
@@ -88,6 +90,7 @@ pub const fn changed_by_removal(kind: ResourceKind) -> &'static [Outside] {
     ResourceKind::Instruction => &[Outside::Instructions],
     ResourceKind::Skill => &[Outside::Skills],
     ResourceKind::Pipeline => &[Outside::Pipelines],
+    ResourceKind::McpServer => &[Outside::Connections],
     ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack | ResourceKind::TeamReviewer => &[],
   }
 }

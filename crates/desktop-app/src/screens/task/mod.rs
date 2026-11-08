@@ -16,6 +16,7 @@
 //! the error until fresh data succeeds, so retained data cannot offer decisions. What the task's ended runs
 //! left in the repository is read beside it, for *Remove worktree* and Run again.
 
+mod archived;
 pub(crate) mod cards;
 pub(crate) mod changes;
 mod ci;
@@ -26,6 +27,7 @@ mod header;
 mod local_integration;
 mod memory;
 mod merge;
+mod not_ready;
 mod orchestrated;
 mod read;
 mod reading;
@@ -368,6 +370,9 @@ struct TaskFrame {
   /// The task's latest run while it ran when the task was last read: only then do its transcript's lines
   /// change the task, and only that run's.
   live: Signal<LiveRun>,
+  /// Whether the task as last read shows the card of a run an archive stopped, which follows the shared cache: a
+  /// restore of the resource there is applied by the stream and the card stops naming what still uses it.
+  archive_card: Signal<bool>,
   /// The latest run's pull request and its CI as last read, and what Fix CI and its switch do (`ci`).
   ci: Signal<ci::reader::Found>,
   ci_actions: ci::actions::CiActions,
@@ -415,6 +420,7 @@ impl Component for TaskFrame {
       },
       requested: ctx.signal(None),
       live: ctx.signal(LiveRun(None)),
+      archive_card: ctx.signal(false),
       ci: ctx.signal(ci::reader::Found::default()),
       ci_actions: ci::actions::CiActions::new(ctx, &props.project.feed),
       attempts: ctx.signal(merge::reader::Attempts::default()),
@@ -436,9 +442,7 @@ impl Component for TaskFrame {
     let feed = &props.project.feed;
     // A change of the merge queue changes where the task's run stands in its delivery (ORC-19).
     let queue = crate::project::merge_queue::changes(ctx, &props.project.open.repo_root);
-    // A run switched to Manual by an MCP client changes its mode chip and its Conversation.
-    let outside = feed.outside.get();
-    let saves = feed.revision.get() + outside.tasks + outside.runs + queue;
+    let saves = self.saves(feed, queue);
     let LiveRun(live) = self.live.get();
     let again = ReadAgain {
       changes: run_changes::of_shown_run(ctx, &props.project, live, live.is_some()),
@@ -460,6 +464,7 @@ impl Component for TaskFrame {
     if self.live.get_untracked() != live {
       self.live.set(live);
     }
+    self.follow_archive_card(&detail);
     let jobs = feed.job_state.get();
     let separator = ctx.t("task.listSeparator");
     let left = read::leftovers(

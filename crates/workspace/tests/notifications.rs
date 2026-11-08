@@ -43,7 +43,7 @@ use orchester_workspace::{
     sources::{self, MergeStop, Project, ProjectReading},
   },
   runner::state::{RunnerFailure, RunnerState},
-  tasks::{attention::SummaryCard, data::ProjectTasks, list::DecisionWhy},
+  tasks::{attention::SummaryCard, data::ProjectTasks, detail::TaskDetail, list::DecisionWhy},
 };
 use support::{Fixture, at};
 

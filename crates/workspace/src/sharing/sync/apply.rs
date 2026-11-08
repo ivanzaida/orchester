@@ -66,8 +66,12 @@ pub(super) enum Applied {
     resource: Box<SharedResource>,
     cursor: u64,
   },
-  /// The team's `resource` was archived: it is removed here, and the runs that use it are stopped.
-  Archived(ResourceId),
+  /// The team's `resource` was archived by `by` (the server's name for them): it is removed here, and the runs that use
+  /// it are stopped.
+  Archived {
+    resource: ResourceId,
+    by: String,
+  },
 }
 
 /// Where the stream continues: `None` the first time (no event has sequence 0), which gets the snapshot.
@@ -165,7 +169,10 @@ fn archived(db: &mut ProjectDb, delta: &Delta<ResourceArchived>) -> Result<Appli
   let changed = db.mark_shared_archived(resource, archived, Timestamp::now())?;
   db.take_shared_event(&SharedEvent::default(), delta.id, Timestamp::now())?;
   Ok(match (changed, archived) {
-    (true, true) => Applied::Archived(resource),
+    (true, true) => Applied::Archived {
+      resource,
+      by: delta.by.display_name.clone(),
+    },
     (true, false) => Applied::Changed,
     (false, _) => Applied::Unchanged,
   })

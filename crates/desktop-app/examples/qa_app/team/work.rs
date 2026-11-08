@@ -27,7 +27,7 @@ use orchester_workspace::actions::{
 };
 use tokio::runtime::Handle;
 
-use super::State;
+use super::{State, recorded_start};
 
 const MARA: Person = Person::Named("mara");
 const OLHA: Person = Person::Named("olha");
@@ -61,6 +61,10 @@ const HELD_HERE: [u32; 4] = [12, 21, 14, 24];
 /// The team runs of `team-claims` the server fenced, by their task's number, with why.
 const FENCED: [(u32, &str); 2] = [(11, "claim_lost"), (23, "session_mismatch")];
 
+/// The task of `team-not-ready-ended`: its run on this computer ended, mara's claim on it is stale, and Team delivery,
+/// which a Take over starts anew, is not ready here.
+const NOT_READY_TASK: u32 = 5;
+
 /// The index of Webhooks v2 among the modules, which KON-12 is in.
 const WEBHOOKS: usize = 0;
 /// The index of Billing exports among the modules, the person's on this computer.
@@ -70,8 +74,19 @@ const BILLING: usize = 1;
 /// stand-in takes as it takes any commit.
 const NO_HEAD: &str = "0000000000000000000000000000000000000000";
 
-/// The oldest desktop the server accepts in `team-version-refused`: the team server's minimum, above this app's own.
-pub const REQUIRED_VERSION: &str = "0.5.0";
+/// The oldest desktop the server accepts in `team-version-refused`: the team server's minimum, one minor above this
+/// app's own version so the refusal never goes stale when the app is released (`tests/team_qa/team_actions.rs` reads it
+/// the same way).
+pub fn required_version() -> String {
+  let own = env!("CARGO_PKG_VERSION");
+  let mut parts = own.split('.');
+  let major = parts.next().and_then(|part| part.parse::<u64>().ok());
+  let minor = parts.next().and_then(|part| part.parse::<u64>().ok());
+  let (Some(major), Some(minor)) = (major, minor) else {
+    panic!("the app's version {own} has a major and a minor number")
+  };
+  format!("{major}.{}.0", minor + 1)
+}
 
 /// The delivery of Webhooks v2 olha asked for in `team-admin-work` (04e `GujCo`): how long ago, and the module
 /// branch's commit onto the base's.
@@ -91,6 +106,12 @@ pub fn task(state: State, task: &mut AuthorityTask) {
   match state {
     // KON-12 has no work yet: its start here makes it.
     State::TeamRunning if task.number == 12 => task.work = None,
+    // KON-5's claim is mara's and stale: Take over starts a new run, which is refused as not ready here.
+    State::NotReadyAfterRun if task.number == NOT_READY_TASK => {
+      task.claim = claim(MARA, 22, true);
+      task.work = Some("paused");
+      task.assignee = task.claim.map(|claim| claim.holder);
+    }
     State::Claims => {
       if let Some((_, claim, work)) = CLAIMS.iter().find(|(number, ..)| *number == task.number) {
         task.claim = *claim;
@@ -182,11 +203,22 @@ pub fn after_join(
         }
       }
     }
+    State::NotReadyAfterRun => teams(&[NOT_READY_TASK])?,
+    // KON-12 is the team's task whose run 8 an archive stopped: the Summary names the resource, as the team's. This
+    // computer holds its claim, as the person who ran it does; otherwise the page says another computer has it and
+    // Run again has nothing to take (A22 `pUu78` shows no such notice).
+    State::TeamArchived => {
+      teams(&[12])?;
+      take(task_subject(ids, 12)?)?;
+    }
     State::ModuleWork | State::AdminWork => {
       take(Subject::Module {
         id: module_id(BILLING)?,
       })?;
       branch(root, "module/billing-exports")?;
+    }
+    State::StartWaiting | State::StartRunnerRefused | State::StartPastFailure => {
+      recorded_start::record(root, (id, project), (state, task_subject(ids, recorded_start::KON_5)?))?;
     }
     _ => {}
   }

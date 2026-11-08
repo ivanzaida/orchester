@@ -198,8 +198,12 @@ fn team_qa_tasks_an_outage_says_team_data_is_unavailable_instead_of_the_rows() {
   assert_eq!(window.text(UNAVAILABLE), "Team data is unavailable");
   // The server by its host, as `l6EMj` names orchester.acme.dev.
   let host = server.url().trim_start_matches("http://").to_owned();
-  let said = window.text("tasks-team-unavailable");
-  assert!(said.contains(&format!("{host} hasn't answered since")), "{said}");
+  // The card shows as soon as the reads fail; the server's name joins it when the project's link is read, a moment
+  // later.
+  let hasnt_answered = format!("{host} hasn't answered since");
+  window.until("the server's name in the card", |window| {
+    window.text("tasks-team-unavailable").contains(&hasnt_answered)
+  });
   assert!(window.texts(ROW).is_none(), "no task is shown as current");
   assert!(window.texts("tasks-views").is_none());
   assert!(window.texts("tasks-new-task").is_none());

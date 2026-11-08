@@ -66,8 +66,10 @@ pub(super) const SPECS: &[Spec] = &[
   },
   Spec {
     name: "save_tool_draft",
-    description: "Saves a command tool's draft as its editor does; without `tool` a new one is made under \
-                  `name`. On an existing tool a field left out keeps its value; a new tool needs `program` and \
+    description: "Without `tool`, creates a new command tool under `name` as its version 1 in one call (no draft; it \
+                  returns the published tool or a refusal, and in a team project only once the team server accepts \
+                  it; offline it waits in the outbox, waiting_for_server); with `tool`, saves its draft as its editor \
+                  does, which publish_tool publishes as its next version. On an existing tool a field left out keeps its value; a new tool needs `program` and \
                   otherwise gets no description, no arguments, timeout 600 seconds, exit code 0, no variables \
                   and output limit 256 KiB. The program is a name found on the search path (the tool's PATH, \
                   else the project's, else the app's; relative folders are skipped) or an absolute path to an \

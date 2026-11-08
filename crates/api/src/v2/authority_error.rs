@@ -1,8 +1,12 @@
 //! The team-authority refusal: `{operation_id?, code, details}`. Details are closed variants that never echo the
 //! request or carry credentials.
 
-use orchester_core::id::OperationId;
-use serde::{Deserialize, Serialize};
+use orchester_core::{
+  id::{OperationId, ResourceId},
+  resource::VersionNumber,
+};
+use serde::{Deserialize, Deserializer, Serialize};
+use serde_json::Value;
 use thiserror::Error;
 
 use crate::releases::ReleaseVersion;
@@ -26,6 +30,8 @@ pub enum AuthorityErrorCode {
   TransitionDenied,
   /// Carries the open decisions ([`ErrorDetails::DecisionRequired`]).
   DecisionRequired,
+  /// `work.start` could not build the work's execution bundle. Carries why, when the server says
+  /// ([`ErrorDetails::BundleMissing`]).
   BundleMissing,
   DeliveryNotAuthorized,
   /// The claim is the caller's, but held by another of their sessions than the one that sent the request.
@@ -83,8 +89,54 @@ pub enum DecisionId {
   D9,
 }
 
-/// The details of a refusal. Every code but `decision_required` and `unsupported_contract` has none (`{}` on the
-/// wire).
+/// What the team server could not build a bundle from: the closed set of reasons a `bundle_missing` can name. A kind
+/// this version does not know, or one that is not a string, reads as [`Self::Other`], so a server that learns a reason
+/// first is still understood.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BundleMissingKind {
+  /// The task's pipeline: `resource_id` is the pipeline.
+  PipelineMissing,
+  /// A file a pinned version holds is no longer there.
+  FileMissing,
+  /// The latest version of an agent profile is not a team profile body: `resource_id` is the profile and `version` its
+  /// latest version, to be published again as a team profile.
+  ProfileUnreadable,
+  /// A profile names a team MCP server that is archived: `resource_id` is the archived server.
+  McpServerArchived,
+  /// The body of a pinned version of another kind of resource cannot be read.
+  BodyUnreadable,
+  /// The bundle would be larger than the server builds.
+  BundleTooLarge,
+  #[default]
+  #[serde(other)]
+  Other,
+}
+
+fn kind_or_other<'de, D: Deserializer<'de>>(deserializer: D) -> Result<BundleMissingKind, D::Error> {
+  let value = Value::deserialize(deserializer)?;
+  // A value that is no known kind, whatever its type, is a kind this version does not know.
+  Ok(serde_json::from_value(value).unwrap_or_default())
+}
+
+/// `{kind, resource_id?, version?}`: why a `bundle_missing` refusal built no bundle. It names no path and carries no
+/// secret. Unlike the closed shapes around it, it ignores fields it does not know, so a reason that grows a field is
+/// still read by this version.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct BundleMissingReason {
+  /// Left out or not a known kind reads as [`BundleMissingKind::Other`].
+  #[serde(default, deserialize_with = "kind_or_other")]
+  pub kind: BundleMissingKind,
+  /// The resource the kind is about, when it is about one.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub resource_id: Option<ResourceId>,
+  /// The version of that resource, when the kind is about one.
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub version: Option<VersionNumber>,
+}
+
+/// The details of a refusal. Every code but `decision_required`, `unsupported_contract` and `bundle_missing` has none
+/// (`{}` on the wire), and `bundle_missing` has none when the server does not say why.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ErrorDetails {
   None,
@@ -95,6 +147,10 @@ pub enum ErrorDetails {
   UnsupportedContract {
     required_version: ReleaseVersion,
   },
+  /// `{reason}`: why the bundle could not be built.
+  BundleMissing {
+    reason: BundleMissingReason,
+  },
 }
 
 impl ErrorDetails {
@@ -104,6 +160,7 @@ impl ErrorDetails {
       Self::None => None,
       Self::DecisionRequired { .. } => Some(AuthorityErrorCode::DecisionRequired),
       Self::UnsupportedContract { .. } => Some(AuthorityErrorCode::UnsupportedContract),
+      Self::BundleMissing { .. } => Some(AuthorityErrorCode::BundleMissing),
     }
   }
 }
@@ -131,11 +188,15 @@ impl AuthorityError {
     code: AuthorityErrorCode,
     details: ErrorDetails,
   ) -> Result<Self, AuthorityErrorShapeError> {
-    let detailed = matches!(
+    let requires = matches!(
       code,
       AuthorityErrorCode::DecisionRequired | AuthorityErrorCode::UnsupportedContract
     );
-    if details.code() != detailed.then_some(code) {
+    let fits = match details.code() {
+      None => !requires,
+      Some(own) => own == code,
+    };
+    if !fits {
       return Err(AuthorityErrorShapeError::DetailsMismatch(code));
     }
     if matches!(&details, ErrorDetails::DecisionRequired { decisions } if decisions.is_empty()) {
@@ -177,17 +238,25 @@ struct DetailsWire {
   decisions: Option<Vec<DecisionId>>,
   #[serde(default, skip_serializing_if = "Option::is_none")]
   required_version: Option<ReleaseVersion>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  reason: Option<BundleMissingReason>,
 }
 
 impl TryFrom<Wire> for AuthorityError {
   type Error = AuthorityErrorShapeError;
 
   fn try_from(wire: Wire) -> Result<Self, Self::Error> {
-    let details = match (wire.details.decisions, wire.details.required_version) {
-      (None, None) => ErrorDetails::None,
-      (Some(decisions), None) => ErrorDetails::DecisionRequired { decisions },
-      (None, Some(required_version)) => ErrorDetails::UnsupportedContract { required_version },
-      (Some(_), Some(_)) => return Err(AuthorityErrorShapeError::DetailsMismatch(wire.code)),
+    let DetailsWire {
+      decisions,
+      required_version,
+      reason,
+    } = wire.details;
+    let details = match (decisions, required_version, reason) {
+      (None, None, None) => ErrorDetails::None,
+      (Some(decisions), None, None) => ErrorDetails::DecisionRequired { decisions },
+      (None, Some(required_version), None) => ErrorDetails::UnsupportedContract { required_version },
+      (None, None, Some(reason)) => ErrorDetails::BundleMissing { reason },
+      _ => return Err(AuthorityErrorShapeError::DetailsMismatch(wire.code)),
     };
     Self::new(wire.operation_id, wire.code, details)
   }
@@ -203,6 +272,10 @@ impl From<AuthorityError> for Wire {
       },
       ErrorDetails::UnsupportedContract { required_version } => DetailsWire {
         required_version: Some(required_version),
+        ..DetailsWire::default()
+      },
+      ErrorDetails::BundleMissing { reason } => DetailsWire {
+        reason: Some(reason),
         ..DetailsWire::default()
       },
     };

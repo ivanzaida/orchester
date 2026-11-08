@@ -65,8 +65,10 @@ Designed 2026-10-31. Web: `H:/projects/orchester-cloud/web/design/orchester-web.
   owner or a server admin, read by every member. Without one (R4 a) each member keeps the reviewer they chose in their
   Orchester.
 - **What it holds.** The kind (language or decision model), the connection as a reference (kind, name, role; each
-  computer binds it, the key never leaves the computer), the model from those members' computers reported for it, the
-  effort for a language model, the lowest threshold for a decision model, and the servers reviewed requests may go to:
+  computer binds it, the key never leaves the computer; **changed 2026-11-07, built as ORC-887:** a language model names
+  a CLI kind that each computer picks a connection for, like a team profile, and a decision model names no connection:
+  its kind implies a decision connection, which each computer picks too, so no field is added for it), the model from
+  those members' computers reported for it, the effort for a language model, the lowest threshold for a decision model, and the servers reviewed requests may go to:
   *Members' computers only* (127.0.0.1 or localhost) or *These servers* (a list of hosts).
 - **Reviews still run on members' computers.** The server stores the setting and its versions only: never a request, a
   verdict, a probability or a key. Nothing about reviews is added to what shared run progress reports.
@@ -75,7 +77,10 @@ Designed 2026-10-31. Web: `H:/projects/orchester-cloud/web/design/orchester-web.
   accepts. Raising the threshold, *Members' computers only*, or removing a server reaches members without a question.
 - **On the desktop** (08). The row shows *Set by the team · vN* with the connection and model locked; the member may
   raise the threshold above the team's, never lower it. An unbound reference sends every request to the person until it
-  is bound (08 c); binding to a server the team does not list is refused (08 d).
+  has a connection picked on this computer (08 c; ORC-887: *Needs you here* until a connection is picked); binding to a
+  server the team does not list is refused (08 d; `server_not_allowed`). **Built so far (ORC-887):** the pick, its
+  refusals and the reviewer's readiness exist. Binding the team's reviewer into a run is not built: a run still gets its
+  reviewer from the project's own setting, so a team reviewer's pick changes no review yet (`docs/plan.md`).
 - **Contract.** The resource kind, its fields and the widening rule go into `orchester-api` and `docs/cloud-api.md` here
   first; the server and web halves are the Orchester Platform project's.
 

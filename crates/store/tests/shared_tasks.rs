@@ -455,8 +455,7 @@ fn shared_tasks_make_local_keeps_every_cached_task() {
   let tasks = db.tasks().expect("tasks");
   assert_eq!(tasks.len(), 2);
   assert_eq!(tasks[1].key().to_string(), "ORC-41");
-  let delivery = db.resources(ResourceKind::Pipeline).expect("pipelines").remove(0).id();
-  assert_eq!(tasks[1].details().pipeline, Some(delivery));
+  assert_eq!(tasks[1].details().pipeline, None, "the team's pipeline is not kept");
   assert_eq!(db.shared_task_info(theirs.id).expect("info"), None);
   assert!(
     db.claims_held_by(theirs.claim.expect("claim").holder.id)

@@ -13,6 +13,7 @@ pub(super) mod export;
 mod module;
 mod more;
 pub(super) mod no_branch;
+mod not_ready_line;
 mod notices;
 mod primary;
 mod refusal;
@@ -110,6 +111,7 @@ impl Component for TaskHeader {
       runners,
       (open, feed),
       (self.confirming.clone(), self.no_branch.clone()),
+      (services.workspace.clone(), services.vault),
     );
     let pull_request = super::summary::pull_request_rows(ctx, &props.task, &self.menu.open);
     let latest_busy = detail
@@ -129,6 +131,7 @@ impl Component for TaskHeader {
     let mode = props.view.tab() != TaskTab::Conversation;
     let status_line = no_branch::status_line(ctx, &props.task, &self.no_branch, (&self.confirming, &self.remove))
       .or_else(|| team::status_line(ctx, &props.task))
+      .or_else(|| not_ready_line::shown(ctx, &props.task, mode))
       .unwrap_or_else(|| run_line::status_line(ctx, &props.task, mode));
     Column::new()
       .id("task-header")
@@ -146,6 +149,7 @@ impl Component for TaskHeader {
       .child(status_line)
       .with_children(module::field(ctx, &props.task))
       .with_children(notices::notices(ctx, &detail, props.stale.as_ref(), refused))
+      .with_children(super::not_ready::notice(ctx, &props.task, &props.view))
       .with_children(confirmation)
       .with_children(task_close::panel(
         ctx,
@@ -209,6 +213,13 @@ impl TaskHeader {
       (&self.confirming, &self.remove),
       (latest_busy, props.task.online),
     );
+    // A run an archive stopped is the page's one question: Run again is the header's button (A22 `pUu78`), not a row of
+    // the menu, unless a card's action is the primary one.
+    let (primary, run_again) = if primary.is_none() && detail.archive_stop.is_some() {
+      (run_again, None)
+    } else {
+      (primary, run_again)
+    };
     let held = if kept {
       Held {
         controls: Vec::new(),

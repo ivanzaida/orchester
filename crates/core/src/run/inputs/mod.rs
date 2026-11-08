@@ -12,11 +12,12 @@ use thiserror::Error;
 
 pub use self::{
   bundle::{BundleContent, InputsOrigin, RUN_INPUTS_FORMAT, TaskAtStart, TeamAcceptance},
-  local::{BoundReference, LocalBindings, LocalConsent, ProfileBinding},
+  local::{BoundReference, LocalBindings, LocalConsent, ProfileBinding, TeamMcpBinding},
+  resolve::team_mcp_id,
 };
 use crate::{
   connection::mcp::McpSelectionError,
-  id::ResourceId,
+  id::{ConnectionId, ResourceId},
   name::NameError,
   resource::{StepKey, VersionNumber},
   run::{PinnedVersion, RunSnapshot, bundle::PinnedBody},
@@ -36,11 +37,16 @@ pub enum InputsError {
   TaskTitle(NameError),
   #[error("agent profile {0} has no local binding")]
   MissingBinding(ResourceId),
+  /// A team MCP server is bound that the bundle does not pin.
+  #[error("team MCP server {0} is bound but the bundle does not pin it")]
+  UnpinnedTeamMcp(ResourceId),
   /// A binding names a profile the inputs do not pin, or a pinned profile twice.
   #[error("agent profile {0} is bound but not pinned once")]
   UnexpectedBinding(ResourceId),
   #[error("the bound MCP servers: {0}")]
   McpServers(McpSelectionError),
+  #[error("agent profile {profile} names MCP server {server}, which the inputs do not bind")]
+  UnboundMcpServer { profile: ResourceId, server: ConnectionId },
   #[error("{resource} {number} is accepted here but the inputs do not pin it")]
   AcceptedUnpinned {
     resource: ResourceId,
@@ -67,6 +73,9 @@ impl RunInputs {
   pub fn new(bundle: BundleContent, bindings: LocalBindings, consent: LocalConsent) -> Result<Self, InputsError> {
     check_bindings(&bundle, &bindings)?;
     resolve::mcp_servers(&bindings)?;
+    for binding in &bindings.profiles {
+      resolve::profile_mcp_servers(&bindings, binding)?;
+    }
     check_consent(&bundle, &consent)?;
     Ok(Self {
       bundle,
@@ -114,8 +123,16 @@ fn check_bindings(bundle: &BundleContent, bindings: &LocalBindings) -> Result<()
   if let Some(extra) = bound.iter().find(|resource| !pinned.contains(resource)) {
     return Err(InputsError::UnexpectedBinding(*extra));
   }
-  match pinned.iter().find(|resource| !bound.contains(resource)) {
-    Some(missing) => Err(InputsError::MissingBinding(*missing)),
+  if let Some(missing) = pinned.iter().find(|resource| !bound.contains(resource)) {
+    return Err(InputsError::MissingBinding(*missing));
+  }
+  let servers = bundle.inputs().mcp_servers();
+  match bindings
+    .team_mcp
+    .iter()
+    .find(|bound| !servers.iter().any(|pinned| pinned.pinned().resource == bound.server))
+  {
+    Some(unpinned) => Err(InputsError::UnpinnedTeamMcp(unpinned.server)),
     None => Ok(()),
   }
 }

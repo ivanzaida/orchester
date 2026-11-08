@@ -128,6 +128,9 @@
         "takeOverTitle": "Couldn't take over {{task}}",
         "releaseTitle": "Couldn't release {{task}}",
         "runTitle": "Couldn't start {{task}}'s run",
+        "startingTitle": "Starting {{task}}'s run…",
+        "dismissTitle": "Couldn't dismiss the notice about {{task}}'s run",
+        "dismiss": "Dismiss",
         "renewed": "{{holder}} renewed the claim at {{time}}, before your request reached the team server. The task stays with them; nothing started on this computer.",
         "conflict": "Someone else holds the claim now.",
         "moduleConflict": "Its module's claim covers it: only the module's holder claims it.",
@@ -144,11 +147,18 @@
         "failed": "It could not be carried out on this computer.",
         "other": "The team server refused it.",
         "waiting": "The run waits for the team server or the runner, and starts once they answer.",
+        "startUnreadable": "This start's record can't be read here — for example it was written by a newer Orchester — so it isn't carried on. Update Orchester on this computer, or run the task again.",
         "notReady": "The task names no module, or a pipeline this computer doesn't have.",
         "branch": "The module's branch {{branch}} isn't in this checkout.",
-        "bindings": "These agent profiles need a connection chosen on this computer: {{profiles}}.",
-        "mcpServers": "These MCP servers are not set up on this computer: {{servers}}. Bind them in Sharing › On this computer, then run again.",
-        "notReadable": "The team server's pipeline or one of its agent profiles can't be read."
+        "notReadable": "The team server's pipeline or one of its agent profiles can't be read.",
+        "bundleSchemaNewer": "The team server built this run in bundle schema {{built}}, and this app reads schema {{read}}. Update Orchester on this computer, then run it again. Nothing ran.",
+        "bundleSchemaOlder": "The team server built this run in bundle schema {{built}}, and this app reads schema {{read}}. The team server is older than this app: ask whoever runs it to update it. Nothing ran.",
+        "bundleUnreadable": "The team server answered this run's bundle with something this app can't read. If Orchester and the team server are on different releases, update them. Nothing ran.",
+        "bundleMismatch": "The bundle the team server answered isn't the one it announced for this run, so it wasn't used. Nothing ran. Run it again; if it happens again, tell a team Admin.",
+        "inputsFailed": "This computer couldn't make the run's inputs from the bundle the team server built, so nothing ran. Check the agent profiles' connections in Agents, then run it again.",
+        "claimReleased": "Your claim on the task was released.",
+        "claimKept": "Your claim on the task is kept, because another run here still needs it.",
+        "claimHeld": "The team server refused to release your claim on the task, so it may still be held."
       },
       "properties": {
         "assignee": "Assignee",
@@ -162,6 +172,84 @@
         "staleAt": "You · stale at {{time}}",
         "elsewhere": "You · other computer",
         "stale": "{{holder}} · stale"
+      }
+    },
+    "archived": {
+      "title": "Stopped: {{resource}} was archived",
+      "meta": "Run {{run}} · {{time}}",
+      "body": "{{who}} archived the team {{kind}} {{resource}} at {{time}}. Run {{run}} used it, so it was stopped; the worktree, changes and conversation are kept.",
+      "bodyUnnamed": "The team {{kind}} {{resource}} was archived at {{time}}. Run {{run}} used it, so it was stopped; the worktree, changes and conversation are kept.",
+      "archivedBy": "{{kind}} · archived by {{who}} · {{time}}",
+      "archivedUnnamed": "{{kind}} · archived · {{time}}",
+      "bodyLegacy": "{{resource}} was archived at {{time}}. Run {{run}} used it, so it was stopped; the worktree, changes and conversation are kept.",
+      "archivedLegacy": "archived · {{time}}",
+      "event": "{{step}} stopped: the team archived {{resource}}, which this run pinned.",
+      "eventNoStep": "The run stopped: the team archived {{resource}}, which it pinned.",
+      "profile": "{{name}} {{version}}",
+      "stillUses": "still uses {{resource}} · not ready anywhere until changed",
+      "open": "Open →",
+      "kind": {
+        "profile": "agent profile",
+        "pipeline": "pipeline",
+        "instruction": "instruction",
+        "skill": "skill",
+        "tool": "tool",
+        "mcp": "MCP server",
+        "reviewer": "reviewer",
+        "other": "resource"
+      }
+    },
+    "notReady": {
+      "title": "Not ready · nothing started",
+      "titleTeam": "Not ready on this computer · nothing started",
+      "titleAfterStart": "Not ready on this computer · nothing ran",
+      "metaOne": "{{pipeline}} · 1 thing missing",
+      "metaOther": "{{pipeline}} · {{count}} things missing",
+      "metaOneTeam": "{{pipeline}} · 1 thing missing here",
+      "metaOtherTeam": "{{pipeline}} · {{count}} things missing here",
+      "body": "Fix these and press Run again. Nothing is queued until then.",
+      "bodyTeam": "Fix these on this computer and press Run again. They stay here; the team's server and other computers are not changed.",
+      "bodyAfterStart": "The team server made the work for this start, but nothing ran, so your claim on the task was released. Fix these on this computer and press Run again; it claims the task again. They stay here; other computers are not changed.",
+      "bodyAfterStartKept": "The team server made the work for this start, but nothing ran. Your claim on the task is kept, because another run here still needs it. Fix these on this computer and press Run again. They stay here; other computers are not changed.",
+      "bodyAfterStartHeld": "The team server made the work for this start, but nothing ran, and it refused to release your claim on the task, so it may still be held. Fix these on this computer and press Run again. They stay here; other computers are not changed.",
+      "openAgents": "Open Agents · Needs you",
+      "openAgentsTeam": "Open Agents · Needs you here",
+      "footnote": "Each fix opens its field in Agents",
+      "footnoteTeam": "Runs start from the cached team versions, also offline",
+      "secretName": "Secret {{name}}",
+      "cli": {
+        "claude": "Claude Code",
+        "codex": "Codex",
+        "anthropicApi": "Anthropic API",
+        "openAiApi": "OpenAI API"
+      },
+      "need": {
+        "connectionNone": "no {{cli}} connection here · add one",
+        "connectionPick": "more than one {{cli}} connection here · choose one",
+        "decisionNone": "reviewer · no decision connection here · add one",
+        "decisionPick": "reviewer · several decision connections here · choose one",
+        "mcpOff": "MCP server · switched off on this computer",
+        "mcpMoreThanOneSecretHeader": "MCP server · takes more than one secret header · ask a team Admin",
+        "mcpProgramNotSet": "MCP server · set its program path",
+        "mcpProgramFileGone": "MCP server · its program is no longer at {{path}}",
+        "mcpProgramMoved": "MCP server · its program now leads into the repository or off this computer",
+        "secret": "no value yet",
+        "secretTeam": "no value on this computer",
+        "secretUnreadable": "the keychain did not say whether it has a value · unlock it"
+      },
+      "fix": {
+        "setPath": "Set path",
+        "chooseFile": "Choose file",
+        "addValue": "Add value",
+        "choose": "Choose",
+        "addConnection": "Add connection",
+        "switchOn": "Switch on",
+        "arrow": "{{fix}} →"
+      },
+      "notice": {
+        "body": "{{pipeline}} is not ready, so nothing was started. The Summary lists what is missing and how to fix it.",
+        "bodyTeam": "{{pipeline}} is not ready on this computer, so nothing was started. The Summary lists what is missing and how to fix it.",
+        "open": "Open Summary"
       }
     },
     "properties": {

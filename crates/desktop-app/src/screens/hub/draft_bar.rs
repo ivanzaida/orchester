@@ -107,6 +107,12 @@ impl DraftBar {
     self
   }
 
+  /// [`Self::action`] for an action that is there only sometimes.
+  pub(crate) fn actions(mut self, action: Option<impl Into<Element>>) -> Self {
+    self.actions.extend(action.map(Into::into));
+    self
+  }
+
   /// Puts the actions on a line under the words, at its end (`Actions` `lWkZn` in 02c, `CtBkw` in 02d).
   pub(crate) const fn actions_below(mut self) -> Self {
     self.below = true;

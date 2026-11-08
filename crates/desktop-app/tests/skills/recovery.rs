@@ -116,6 +116,8 @@ fn skills_create_withheld_real_result_keeps_reference_removal_inert() {
   s.go(ProjectPage::NewSkill);
   add(&mut s);
   s.set("skill-name", "checks");
+  s.set("skill-description", "Run checks.");
+  s.set("skill-body", "# Checks");
   s.click("skill-create");
   // No tick_futures: the real write result cannot reach the route completion yet.
   s.click("skill-remove-file-0");
@@ -134,7 +136,7 @@ fn skills_create_withheld_real_result_keeps_reference_removal_inert() {
   let listed = ProjectSkills::load_in(&s.repo).expect("skills");
   assert_eq!(listed.entries.len(), 1);
   assert_eq!(listed.entries[0].body.files().len(), 1);
-  assert!(listed.entries[0].state.published().is_none());
+  assert_eq!(listed.entries[0].state.published().expect("created as v1").get(), 1);
 }
 fn conflict(s: &mut Skills) -> orchester_core::id::ResourceId {
   let id = s.seed("checks", false);

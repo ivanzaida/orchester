@@ -12,6 +12,10 @@ pub(crate) fn read(_key: &VaultKey) -> Result<SecretValue, VaultError> {
   Err(VaultError::Unsupported)
 }
 
+pub(crate) fn exists(_key: &VaultKey) -> Result<bool, VaultError> {
+  Err(VaultError::Unsupported)
+}
+
 pub(crate) fn delete(_key: &VaultKey) -> Result<(), VaultError> {
   Err(VaultError::Unsupported)
 }

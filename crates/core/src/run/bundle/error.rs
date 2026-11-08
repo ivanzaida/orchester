@@ -38,6 +38,12 @@ pub enum BundleError {
   /// The pinned profiles must be exactly those of the agent steps, at the versions the steps pin.
   #[error("the pinned agent profiles are not those the steps run")]
   ProfilesMismatch,
+  /// A pinned profile names a team MCP server whose version was not given.
+  #[error("the body of MCP server {0}, which a pinned profile names, was not given")]
+  McpServerMissing(ResourceId),
+  /// The pinned MCP servers must be exactly those the pinned profiles name.
+  #[error("the pinned MCP servers are not those the pinned profiles name")]
+  McpServersMismatch,
   #[error("step `{0}` calls a tool the inputs do not pin")]
   ToolMissing(StepKey),
   #[error(

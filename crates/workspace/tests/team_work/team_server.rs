@@ -1,7 +1,7 @@
 //! A fake team server on loopback with the team server's routes and shapes for authorized work (its
 //! `http/workspace/mod.rs`, `bundles.rs`, `heartbeat.rs`, `docs/claim-authority.md`, `docs/module-branches.md`,
 //! `docs/work-reports.md`): one project with one task in a module, under `/api/v2/projects/{p}`. The commands with
-//! their receipts are in [`crate::team_commands`]; a work start names a schema-2 bundle, which carries the task's
+//! their receipts are in [`crate::team_commands`]; a work start names a schema-3 bundle, which carries the task's
 //! number and the pinned versions' labels. Reads: `GET …/bundles/{sha256}` and `GET …/bundles/{sha256}/files/{file}`
 //! for the claim's holder in its session (`409 claim_lost` otherwise), and `POST …/heartbeat` with D1's renewal rule.
 //! Each token is one member's session, [`ADMIN`] a workspace Admin's. A test can take the server down (every
@@ -109,6 +109,12 @@ pub struct State {
   pub down: bool,
   pub lose_next: bool,
   pub drop_next_file: bool,
+  /// The `schema_version` the next work start's receipt names its bundle with, when it is not the bundle's own.
+  pub receipt_schema: Option<u32>,
+  /// What the next work start's bundle read answers instead of the bundle: JSON that is no bundle.
+  pub bundle_body: Option<Value>,
+  /// The `details` every work start is refused `bundle_missing` with, when set: `{}` or `{reason:{…}}`.
+  pub bundle_missing: Option<Value>,
   /// Whether the work waits for a person: the heartbeat answers `decision_required [D1]`.
   pub waits_for_person: bool,
   pub works_made: usize,
@@ -154,6 +160,9 @@ impl TeamServer {
       down: false,
       lose_next: false,
       drop_next_file: false,
+      receipt_schema: None,
+      bundle_body: None,
+      bundle_missing: None,
       waits_for_person: false,
       works_made: 0,
       heartbeats: 0,
@@ -351,8 +360,14 @@ pub fn build_bundle(state: &mut State, claim: ClaimId, base_commit: &str) -> Val
   let bundle = state
     .config
     .bundle((state.project, subject), claim, state.module, base_commit);
-  let reference = bundle.bundle_ref().expect("a hash");
-  let wire = serde_json::to_value(&bundle).expect("a bundle");
+  let mut reference = bundle.bundle_ref().expect("a hash");
+  if let Some(schema) = state.receipt_schema.take() {
+    reference.schema_version = schema;
+  }
+  let wire = match state.bundle_body.take() {
+    Some(body) => body,
+    None => serde_json::to_value(&bundle).expect("a bundle"),
+  };
   state
     .bundles
     .insert(reference.sha256.as_str().to_owned(), (wire, claim));

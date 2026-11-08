@@ -133,6 +133,10 @@ impl Dispatcher {
     )
   }
 
+  pub(crate) const fn servers(&self) -> &Servers {
+    &self.servers
+  }
+
   /// The project's folder.
   pub(crate) fn root(&self) -> &std::path::Path {
     &self.root

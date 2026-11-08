@@ -369,7 +369,12 @@ async fn make(project: &OpenProject, services: &Services, change: &Change, actor
     ChangeKind::Status(status) => {
       background::run(move || write::set_status_in(&root, &servers, task, (status, actor))).await
     }
-    ChangeKind::Queue => background::run(move || write::queue_draft_in(&root, &servers, task, actor)).await,
+    ChangeKind::Queue => {
+      return services
+        .workspace
+        .queue_draft(&project.repo_root, (&services.vault, &services.servers), task, actor)
+        .await;
+    }
     ChangeKind::ReturnToDraft => background::run(move || write::return_to_draft_in(&root, &servers, task, actor)).await,
     ChangeKind::Priority(priority) => {
       background::run(move || write::organize_in(&root, &servers, (task, actor), |value| value.with_priority(priority)))
@@ -393,6 +398,13 @@ async fn run_again(
   (task, after, revision): (TaskId, RunId, Option<TaskRevision>),
   pipeline: &str,
 ) -> Result<(), Message> {
+  // A pipeline that is not ready here starts nothing: no claim is taken and no attempt counted. The task's page lists
+  // what is missing.
+  services
+    .workspace
+    .ready_to_start(&project.repo_root, &services.vault, task)
+    .await
+    .map_err(|refused| refused.short())?;
   let claim = services
     .servers
     .claim_for_work(&project.repo_root, task)

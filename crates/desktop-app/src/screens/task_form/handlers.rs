@@ -98,6 +98,8 @@ impl TaskForm {
       discard: self.discard_handler(),
       save_chosen: self.save_chosen_handler(props, view, save),
       back_to_editing: self.back_to_editing_handler(),
+      show_missing: self.nav.to_agents(),
+      retry_readiness: self.retry_readiness_handler(),
     }
   }
 
@@ -161,6 +163,12 @@ impl TaskForm {
   fn back_to_editing_handler(&self) -> Handler {
     let conflict = self.conflict.clone();
     Arc::new(move || conflict.set(None))
+  }
+
+  /// Retry after the pipelines' readiness could not be read: it is read again.
+  fn retry_readiness_handler(&self) -> Handler {
+    let retry = self.readiness_retry.clone();
+    Arc::new(move || retry.update(|asked| *asked += 1))
   }
 
   /// Discard changes: the fields show the version they were made on again (New task: empty), and
