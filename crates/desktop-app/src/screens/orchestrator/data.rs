@@ -230,12 +230,13 @@ fn conversation(ctx: &mut Ctx, (root, id, revision): ChatDeps, hold: &ReadHold) 
       let hold = hold.clone();
       async move {
         let Some(id) = id else {
-          return Ok(None);
+          return Ok((None, None));
         };
         hold.released().await;
         background::run(move || ChatView::load_in(&root, id))
           .await
           .and_then(|read| read)
+          .map(|view| (Some(id), view))
       }
     },
   );
@@ -243,8 +244,10 @@ fn conversation(ctx: &mut Ctx, (root, id, revision): ChatDeps, hold: &ReadHold) 
   match (state.data, state.error) {
     (_, Some(error)) if rejected => Shown::Failed(error),
     // A conversation read before stays while it is read again; another one's does not.
-    (Some(Some(view)), _) if Some(view.chat.id()) == id => Shown::Chat(Box::new(view)),
-    (Some(None), _) if !pending && id.is_some() => Shown::Missing,
+    (Some((_, Some(view))), _) if Some(view.chat.id()) == id => Shown::Chat(Box::new(view)),
+    // Only a reading of this conversation says it is missing: the one a render sees while the deps just changed is
+    // still the earlier conversation's (a new one's read nothing).
+    (Some((read_for, None)), _) if !pending && id.is_some() && read_for == id => Shown::Missing,
     (None, Some(error)) => Shown::Failed(error),
     _ => Shown::Loading,
   }
