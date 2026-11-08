@@ -24,6 +24,9 @@ const HELD: &str = "held by another operation";
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Standing {
   Merged,
+  /// Merged into its base branch without Orchester recording a merge, as git proves it; whatever the attempts were,
+  /// they are history.
+  MergedOutside,
   Retrying(Retrying),
   Conflicts,
   NotRecorded,
@@ -47,6 +50,9 @@ impl Standing {
       return Some(Self::Merged);
     }
     let last = &page.last()?.attempt;
+    if page.delivery.merged_into().is_some() {
+      return Some(Self::MergedOutside);
+    }
     if let Some(retrying) = page.retrying {
       return Some(Self::Retrying(retrying));
     }
@@ -70,10 +76,15 @@ impl Standing {
     })
   }
 
+  /// Whether the run's work is in its base branch.
+  pub(crate) const fn is_merged(self) -> bool {
+    matches!(self, Self::Merged | Self::MergedOutside)
+  }
+
   /// The status line's glyph and color.
   pub(crate) const fn glyph(self) -> (Icon, PaletteColor) {
     match self {
-      Self::Merged => (Icon::CircleCheck, PaletteColor::Success),
+      Self::Merged | Self::MergedOutside => (Icon::CircleCheck, PaletteColor::Success),
       Self::Retrying(_) => (Icon::RefreshCw, PaletteColor::Info),
       Self::AwaitingApproval => (Icon::CirclePause, PaletteColor::Warning),
       Self::Conflicts => (Icon::GitMerge, PaletteColor::Warning),
@@ -86,6 +97,7 @@ impl Standing {
   pub(super) const fn name(self) -> &'static str {
     match self {
       Self::Merged => "merged",
+      Self::MergedOutside => "merged_outside",
       Self::Retrying(_) => "retrying",
       Self::Conflicts => "conflicts",
       Self::NotRecorded => "not_recorded",
@@ -104,6 +116,7 @@ impl Standing {
   pub(crate) fn status(self, ctx: &Ctx, branch: &str) -> Arc<str> {
     let key = match self {
       Self::Merged => "merges.page.status.merged",
+      Self::MergedOutside => "merges.page.status.mergedOutside",
       Self::Retrying(_) => "merges.page.status.queueRetries",
       Self::Conflicts => "merges.page.status.conflicts",
       Self::NotRecorded => "merges.page.status.notRecorded",

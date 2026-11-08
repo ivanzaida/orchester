@@ -12,7 +12,7 @@ use lurq::{
     ctx::{Ctx, Interval},
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
-  components::{Column, Row, Text},
+  components::{Column, Row, Text, TextOverflow},
   core::Signal,
   layout::Alignment,
   node::{Element, dimension::Dimension},
@@ -66,7 +66,8 @@ pub(super) fn crumbs(ctx: &mut Ctx, project: &ShownProject, (key, run): (&TaskKe
     .into()
 }
 
-/// The title and, at the end of its row, `actions`: the ghost one, *Open task*, the primary one.
+/// The title, cut with an ellipsis before the actions, and at the end of its row `actions`: the ghost one, *Open task*,
+/// the primary one.
 pub(crate) fn title(title: &str, actions: Vec<Element>) -> Element {
   title_row(
     Text::new(title)
@@ -74,7 +75,8 @@ pub(crate) fn title(title: &str, actions: Vec<Element>) -> Element {
       .variant(TypographyStyle::Heading)
       .flex(1.0)
       .min_width(Dimension::Px(0.0))
-      .nowrap(),
+      .nowrap()
+      .text_overflow(TextOverflow::Elipsis),
     actions,
   )
 }

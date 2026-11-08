@@ -5,7 +5,8 @@
 //! the words of the stage that ended it, the conflicting files or the files left changed, the last attempt's *Checks*,
 //! and *Attempts*, newest first with Orchester's retries, each expanding into its own checks; at the right, the run's
 //! properties and links. The page is read from the run's attempts (`merge_attempts::page`) again whenever the project's
-//! tasks or runs change, the merge queue moves, a merge job ends, or a button here changed something.
+//! tasks or runs change, the merge queue moves, a merge job ends, or a button here changed something. A run merged
+//! after its last attempt (ORC-917) opens on a banner saying so, with that attempt below as history and no action.
 
 pub(crate) mod actions;
 mod attempts;
@@ -15,6 +16,7 @@ mod details;
 pub(crate) mod head;
 mod left;
 pub(crate) mod lines;
+mod merged;
 mod properties;
 pub(crate) mod read;
 mod retry;
@@ -58,7 +60,7 @@ use crate::{
   project::ShownProject,
   routes::{ProjectPage, Route, TaskTab, TaskView},
   services::Services,
-  theme::{AttemptSpacing, AttemptText, DeliverySpacing, ExtraSpacing, ExtraTypography, HubSpacing},
+  theme::{AttemptSpacing, DeliverySpacing, ExtraSpacing, ExtraTypography, HubSpacing},
   ui::{
     button::{ActionButton, ButtonKind},
     code_box::Copier,
@@ -361,7 +363,7 @@ impl AttemptScreen {
     };
     let actions = actions.clone();
     Some(match standing {
-      Standing::Merged | Standing::Retrying(Retrying { next: None }) => return None,
+      Standing::Merged | Standing::MergedOutside | Standing::Retrying(Retrying { next: None }) => return None,
       Standing::Retrying(_) => button("merge-attempt-try-now", "merges.action.tryNow", Icon::RotateCcw, ctx)
         .on_click(move || actions.try_now())
         .into(),
@@ -424,11 +426,6 @@ impl AttemptScreen {
   fn main(&self, ctx: &mut Ctx, shown: &Shown<'_>, standing: Standing) -> Element {
     let page = shown.page;
     let base = shown.base();
-    let what = if standing == Standing::Merged {
-      "merges.page.whatHappened"
-    } else {
-      "merges.page.whatStopped"
-    };
     let mut sections: Vec<Element> = Vec::new();
     sections.extend(self.failed.get().map(|reason| {
       Notice::new(
@@ -438,15 +435,7 @@ impl AttemptScreen {
       )
       .into()
     }));
-    sections.push(section(
-      "merge-attempt-what",
-      section_head("merge-attempt-what-head", &ctx.t(what), None),
-      Text::new(&standing::explanation(ctx, page, standing, base))
-        .id("merge-attempt-explanation")
-        .variant(AttemptText::Explanation.role())
-        .width(Dimension::Pct(100.0))
-        .into(),
-    ));
+    sections.extend(merged::what(ctx, page, standing, base));
     if let (Standing::Conflicts, Some(AttemptOutcome::Conflicts { files })) =
       (standing, page.last().map(|last| last.attempt.outcome()))
     {

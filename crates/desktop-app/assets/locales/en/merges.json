@@ -79,6 +79,7 @@
         "interrupted": "Ended with the app or the runner",
         "moved": "{{branch}} or the run's branch moved",
         "merged": "Merged into {{branch}}",
+        "mergedOutside": "Merged into {{branch}} outside Orchester",
         "retrying": "Retrying by itself · attempt {{attempt}} of {{of}} in {{seconds}} s",
         "retryingNow": "Retrying by itself · attempt {{attempt}} of {{of}} now",
         "queueRetries": "The merge queue tries again when it gets to the run"
@@ -105,6 +106,16 @@
       },
       "whatStopped": "What stopped it",
       "whatHappened": "What happened",
+      "history": "The last attempt",
+      "historyNote": "The run was merged later. This attempt stays here as history; nothing in it is left to fix.",
+      "banner": {
+        "merged": "Merged into {{branch}} at {{revision}}",
+        "mergeCommit": "As a merge commit",
+        "squash": "Squashed",
+        "fastForward": "As a fast-forward",
+        "outside": "Merged into {{branch}} outside Orchester",
+        "outsideBody": "The run's commits are in {{branch}}, merged with Git outside Orchester's merge flow. Orchester recorded no revision or time for it."
+      },
       "explain": {
         "held": "Another merge or local integration held this project's checkout when the merge was tried, so Orchester refused before Git ran: nothing was merged, and the run's branch and the checkout are as they were. Try again once it ends; a run in the merge queue waits for it by itself.",
         "refusedBeforeGit": "Orchester refused at {{stage}} before Git ran: {{cause}}. Nothing was merged, and the run's branch and the checkout are as they were. Try again once that is fixed.",
@@ -210,6 +221,7 @@
       },
       "conflicting": "Conflicting files",
       "conflicted": "Conflicted",
+      "conflictedThen": "Conflicted then",
       "stillChanged": "Still changed in your checkout",
       "holdsMerge": "Holds the merge's version",
       "resolve": {
