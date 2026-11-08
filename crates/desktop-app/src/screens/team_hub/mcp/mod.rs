@@ -32,6 +32,7 @@ use orchester_workspace::agents::team_mcp::TeamMcpSheet;
 use self::fix::{Bar, Fix, Step};
 use super::{
   actions::Actions,
+  member,
   model::{Entry, Listing},
   panel, secret,
 };
@@ -46,6 +47,10 @@ use crate::{
 pub(super) struct Props {
   pub repo_root: PathBuf,
   pub project: ProjectId,
+  /// The person may change the team's resources: an admin of the team.
+  pub may_change: bool,
+  /// Who changes the team's resources, which a member reads.
+  pub admins: member::Admins,
   /// The hub is read again: what shows is the last answer, and a fix would act on it.
   pub reading: bool,
   /// Reads the hub again, as *Check again* asks.
@@ -61,6 +66,8 @@ impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
     self.repo_root == other.repo_root
       && self.project == other.project
+      && self.may_change == other.may_change
+      && self.admins == other.admins
       && self.reading == other.reading
       && self.listing == other.listing
       && self.entry == other.entry
@@ -136,6 +143,7 @@ impl Component for McpPanel {
         None,
       ))
       .child(chips)
+      .with_children(member::lock_line(ctx, props.may_change, &props.admins))
       .child(from_team::section(ctx, sheet))
       .child(computer::section(ctx, &view))
       .with_children(self.failure(ctx));

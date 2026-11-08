@@ -20,7 +20,7 @@ use orchester_core::id::ProjectId;
 use orchester_workspace::readiness::{Group, ReadinessStanding};
 
 use super::{
-  bar,
+  bar, member,
   model::{Entry, Kind, Listing},
   words,
 };
@@ -40,6 +40,7 @@ pub(super) struct Shown<'a> {
   pub project: ProjectId,
   /// The person may change the team's resources: an admin of the team.
   pub may_change: bool,
+  pub admins: member::Admins,
   pub navigation: &'a Navigation,
 }
 
@@ -47,6 +48,7 @@ pub(super) fn panel(ctx: &Ctx, listing: &Listing, entry: &Entry, shown: &Shown<'
   let body = body()
     .child(head(ctx, entry, None))
     .child(chips(ctx, listing, entry))
+    .with_children(member::lock_line(ctx, shown.may_change, &shown.admins))
     .with_children(readiness(ctx, listing, entry));
   frame(entry, body, actions(ctx, entry, shown)).into()
 }

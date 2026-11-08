@@ -11,6 +11,12 @@
 //! The computer has one Claude Code connection (`Claude · Kontur`), so Builder runs on it without asking
 //! (`Agents · Profile` C1 `NDZXC`). `team-hub-pick` adds a second one, `Claude · Home`, so Builder asks which runs it
 //! (C2 `WPvZx`); `team-hub-no-connection` removes the Claude Code connection, so Builder says what to add (C3 `QOBF2`).
+//!
+//! `team-hub-member` is the same team for ivan, a member who is not an admin (`Agents · … · member` M1–M6, ORC-839).
+//! Reach the frames in the Agents hub: M1 `oPF2o` Profiles › Reviewer with `team-hub-member-pick` (two Claude Code
+//! connections, so *Runs on* is a picker; Builder under `team-hub-member` has a missing part and its bar); M2 `dijUt`
+//! MCP servers › `pencil-design`; M3 `H9nUK6` MCP servers › `playwright` (off here); M4 `D8WX9` Instructions ›
+//! `Project rules`; M5 `ITxzr` Skills under `team-hub-member-no-skills`; M6 `yTVeE` Tools › `sentry-issues`.
 
 use std::{
   collections::{BTreeMap, BTreeSet},
@@ -52,6 +58,38 @@ enum Here {
 /// `team-hub-pick`: [`seed`] with a second Claude Code connection, so Builder's connection is the person's to pick.
 pub fn pick(kontur: &mut Kontur) -> Result<(), SeedError> {
   seed(kontur)?;
+  second_connection(kontur)
+}
+
+/// `team-hub-member`: the team of [`seed`] read by ivan, a member of the project who is not an admin, on the same
+/// resources and the same computer (`Agents · … · member` M1–M6 `oPF2o`, `dijUt`, `H9nUK6`, `D8WX9`, `yTVeE`, ORC-839):
+/// no New, no Edit, the team's part read as values under the line naming the admins, and the computer's own part
+/// still his.
+pub fn member(kontur: &mut Kontur) -> Result<(), SeedError> {
+  member_with(kontur, Kinds::ALL)
+}
+
+fn member_with(kontur: &mut Kontur, kinds: Kinds) -> Result<(), SeedError> {
+  shared_config::member_over(kontur, |kontur| {
+    resources_with(kontur, &Mcp::default(), kinds).map(|_| ())
+  })
+}
+
+/// `team-hub-member-pick`: [`member`] with a second Claude Code connection, so the connection that runs Builder is a
+/// live picker for him (M1 `oPF2o`).
+pub fn member_pick(kontur: &mut Kontur) -> Result<(), SeedError> {
+  member(kontur)?;
+  second_connection(kontur)
+}
+
+/// `team-hub-member-no-skills`: [`member`] where the team has published no skill, so the Skills filter holds the one
+/// empty state that says an admin adds them (M5 `ITxzr`).
+pub fn member_no_skills(kontur: &mut Kontur) -> Result<(), SeedError> {
+  member_with(kontur, Kinds { skills: false })
+}
+
+/// A second Claude Code connection, `Claude · Home`.
+fn second_connection(kontur: &mut Kontur) -> Result<(), SeedError> {
   let program = kontur.repo.join(".orchester").join("qa-bin").join("claude-home");
   fs::write(&program, "").map_err(invalid)?;
   connections::cli(
@@ -103,17 +141,31 @@ pub(super) struct Mcp {
 /// [`seed`], which also names the id of each MCP server it made.
 pub(super) fn seed_with(kontur: &mut Kontur, mcp: &Mcp) -> Result<BTreeMap<&'static str, ResourceId>, SeedError> {
   shared_config::admin(kontur)?;
-  resources_with(kontur, mcp)
+  resources_with(kontur, mcp, Kinds::ALL)
+}
+
+/// Which kinds the team has published, of those a scenario may leave out.
+#[derive(Clone, Copy)]
+struct Kinds {
+  skills: bool,
+}
+
+impl Kinds {
+  const ALL: Self = Self { skills: true };
 }
 
 /// The team's servers, profiles, tools, instructions and skills of [`seed`], without the link to a team server and its
 /// members, which a QA copy that joins a stand-in server makes itself.
 pub(super) fn resources(kontur: &mut Kontur) -> Result<(), SeedError> {
-  resources_with(kontur, &Mcp::default()).map(|_| ())
+  resources_with(kontur, &Mcp::default(), Kinds::ALL).map(|_| ())
 }
 
-/// [`resources`] with the MCP servers' differences, naming the id of each MCP server it made.
-fn resources_with(kontur: &mut Kontur, mcp: &Mcp) -> Result<BTreeMap<&'static str, ResourceId>, SeedError> {
+/// [`resources`] with the MCP servers' differences and the kinds published, naming the id of each MCP server it made.
+fn resources_with(
+  kontur: &mut Kontur,
+  mcp: &Mcp,
+  kinds: Kinds,
+) -> Result<BTreeMap<&'static str, ResourceId>, SeedError> {
   let program = json!({"name": "pencil-design", "launch": {
     "kind": "program", "program": "pencil-mcp", "args": ["--stdio", "--app", "desktop"],
     "variables": mcp.pencil_variables
@@ -141,11 +193,11 @@ fn resources_with(kontur: &mut Kontur, mcp: &Mcp) -> Result<BTreeMap<&'static st
     }
     ids.insert(name, id);
   }
-  let plain = plain_resources(kontur)?;
+  let plain = plain_resources(kontur, kinds)?;
   let builder = Uses {
     servers: &[ids["github"], ids["pencil-design"]],
     instructions: &[plain.rules],
-    skills: &[plain.review],
+    skills: plain.review.as_slice(),
     tools: &[plain.cargo],
   };
   team_profile(kontur, "Builder", &builder, &["GITHUB_TOKEN"])?;
@@ -165,12 +217,13 @@ struct Uses<'a> {
 /// The ids of the instruction, the skill and the command tool the profiles use.
 struct Plain {
   rules: ResourceId,
-  review: ResourceId,
+  /// The skill, when the team has published skills.
+  review: Option<ResourceId>,
   cargo: ResourceId,
 }
 
 /// Instructions and skills, which need nothing of a computer, and the tools.
-fn plain_resources(kontur: &mut Kontur) -> Result<Plain, SeedError> {
+fn plain_resources(kontur: &mut Kontur, kinds: Kinds) -> Result<Plain, SeedError> {
   let rules = Instruction::new(
     PromptText::new("Work inside the task's worktree and keep each commit small.").map_err(invalid)?,
     AgentTargets::All,
@@ -179,20 +232,7 @@ fn plain_resources(kontur: &mut Kontur) -> Result<Plain, SeedError> {
   )
   .map_err(invalid)?;
   let rules = team_resource(kontur, "Project rules", &rules)?;
-  let checklist = b"- Every acceptance criterion has a test.\n- No unrelated change.\n";
-  let file = SkillFile {
-    path: SkillFilePath::new("references/checklist.md").map_err(invalid)?,
-    content: kontur.db.put_blob("text/markdown", checklist)?,
-    size: checklist.len() as u64,
-  };
-  let skill = Skill::new(
-    "Review a diff against the brief and the acceptance criteria.".into(),
-    "# Review a diff\nReport each finding with its file and line.".into(),
-    vec![file],
-    InstructionScope::Project,
-  )
-  .map_err(invalid)?;
-  let review = team_resource(kontur, "review-diff", &skill)?;
+  let review = kinds.skills.then(|| review_skill(kontur)).transpose()?;
   let command = CommandAction::new(
     CommandProgram::new("cargo").map_err(invalid)?,
     vec![CommandArg::new("check").map_err(invalid)?],
@@ -239,6 +279,24 @@ fn plain_resources(kontur: &mut Kontur) -> Result<Plain, SeedError> {
   let report = Tool::new("Orders per status.", ToolAction::DatabaseQuery(database), Some(policy)).map_err(invalid)?;
   team_resource(kontur, "orders-report", &report)?;
   Ok(Plain { rules, review, cargo })
+}
+
+/// The skill `review-diff`, which has a reference file.
+fn review_skill(kontur: &mut Kontur) -> Result<ResourceId, SeedError> {
+  let checklist = b"- Every acceptance criterion has a test.\n- No unrelated change.\n";
+  let file = SkillFile {
+    path: SkillFilePath::new("references/checklist.md").map_err(invalid)?,
+    content: kontur.db.put_blob("text/markdown", checklist)?,
+    size: checklist.len() as u64,
+  };
+  let skill = Skill::new(
+    "Review a diff against the brief and the acceptance criteria.".into(),
+    "# Review a diff\nReport each finding with its file and line.".into(),
+    vec![file],
+    InstructionScope::Project,
+  )
+  .map_err(invalid)?;
+  team_resource(kontur, "review-diff", &skill)
 }
 
 /// The team's profile `name` on Claude Code, choosing `servers` and needing the team secrets `secrets`; this computer

@@ -2,7 +2,7 @@
 //! A5; `docs/design/team-configuration.md`, "Per resource kind"): its head and chips, *From the team* (where it is
 //! added, which agents get it, who uses it and its text or files), *On this computer* (nothing: they are the same on
 //! every computer) and, pinned at the bottom, the admin's *Edit*. A person who may not change the team's resources
-//! reads it, with no bar and nothing disabled (`Member view`, notes rule 15; the member's own view is ORC-839).
+//! reads it, with no bar and nothing disabled (`Member view`, notes rule 15, [`super::member`]).
 
 mod instruction;
 mod skill;
@@ -24,6 +24,7 @@ use orchester_workspace::agents::team_text::{Added, TeamInstructionSheet, TeamSk
 use super::{
   bar,
   fill::nothing_here,
+  member,
   model::{Entry, Listing},
   panel, rows, words,
 };
@@ -46,6 +47,8 @@ pub(super) struct Props {
   pub project: ProjectId,
   /// The person may change the team's resources: an admin of the team.
   pub may_change: bool,
+  /// Who changes the team's resources, which a member reads.
+  pub admins: member::Admins,
   pub listing: Listing,
   pub entry: Entry,
   pub sheet: Sheet,
@@ -70,6 +73,7 @@ impl Component for PlainPanel {
     let Props {
       project,
       may_change,
+      admins,
       listing,
       entry,
       sheet,
@@ -94,6 +98,7 @@ impl Component for PlainPanel {
     let body = panel::body()
       .child(panel::head_of(&entry, (kind, version), head_edit))
       .child(chips(ctx, &listing, &entry, &sheet))
+      .with_children(member::lock_line(ctx, may_change, &admins))
       .with_children(shown)
       .child(on_this_computer(ctx, &sheet));
     let bar = route.map(|route| bar::edit(ctx, &entry, navigation.to(route)));

@@ -13,7 +13,7 @@ use lurq::{
 use orchester_core::id::{ProjectId, ResourceId};
 use orchester_workspace::sharing::team::TeamConfiguration;
 
-use super::model::Listing;
+use super::{member, model::Listing};
 use crate::{
   navigation::Navigation,
   routes::{HubFilter, HubView, ProjectPage, Route},
@@ -49,6 +49,9 @@ pub(super) fn head(ctx: &Ctx, team: &TeamConfiguration, new: Option<Element>) ->
         .nowrap(),
     );
   }
+  if !team.may_change {
+    at_right = at_right.child(member::role(ctx));
+  }
   Row::new()
     .id("team-hub-head")
     .width(Dimension::Pct(100.0))
@@ -78,6 +81,8 @@ pub(super) struct FilterShown {
   pub selected: Option<ResourceId>,
   /// The list is read again: what it counts is the last answer.
   pub reading: bool,
+  /// The person may change the team's resources: an admin of the team; a member reads another hint.
+  pub may_change: bool,
 }
 
 /// The filter: a segment per kind with its count, and what the open one holds. `listing` is `None` before there is an
@@ -112,10 +117,14 @@ pub(super) fn filter(ctx: &Ctx, listing: Option<&Listing>, shown: &FilterShown, 
       Element::from(reading_mark(ctx))
     } else {
       Element::from(
-        Text::new(&ctx.t(hint_key(shown.filter)))
-          .id("team-hub-filter-hint")
-          .variant(HubText::Hint.role())
-          .nowrap(),
+        Text::new(&ctx.t(if shown.may_change {
+          hint_key(shown.filter)
+        } else {
+          member::hint_key(shown.filter)
+        }))
+        .id("team-hub-filter-hint")
+        .variant(HubText::Hint.role())
+        .nowrap(),
       )
     })
 }

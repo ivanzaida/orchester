@@ -25,7 +25,7 @@ use orchester_workspace::{
 };
 
 use super::{
-  bar,
+  bar, member,
   model::{Entry, Listing},
   panel, words,
 };
@@ -41,6 +41,8 @@ pub(super) struct Props {
   pub project: ProjectId,
   /// The person may change the team's resources: an admin of the team.
   pub may_change: bool,
+  /// Who changes the team's resources, which a member reads.
+  pub admins: member::Admins,
   pub listing: Listing,
   pub entry: Entry,
   pub sheet: TeamToolSheet,
@@ -65,6 +67,7 @@ impl Component for ToolPanel {
     let Props {
       project,
       may_change,
+      admins,
       listing,
       entry,
       sheet,
@@ -87,6 +90,7 @@ impl Component for ToolPanel {
     let body = panel::body()
       .child(panel::head_of(&entry, (kind.to_string(), version), head_edit))
       .child(chips)
+      .with_children(member::lock_line(ctx, may_change, &admins))
       .child(from_team::section(ctx, &sheet))
       .child(computer::section(ctx, &entry, &sheet));
     let bar = may_change.then(|| bar::edit(ctx, &entry, navigation.to(route)));

@@ -112,7 +112,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 168] = [
+pub const ALL: [Scenario; 171] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -217,6 +217,9 @@ pub const ALL: [Scenario; 168] = [
   Scenario::of("team-hub", team_hub::seed),
   Scenario::of("team-hub-pick", team_hub::pick),
   Scenario::of("team-hub-no-connection", team_hub::no_connection),
+  Scenario::of("team-hub-member", team_hub::member),
+  Scenario::of("team-hub-member-pick", team_hub::member_pick),
+  Scenario::of("team-hub-member-no-skills", team_hub::member_no_skills),
   Scenario::of("team-hub-mcp-path-gone", team_hub_mcp::path_gone),
   Scenario::of("team-hub-mcp-secret", team_hub_mcp::secret),
   Scenario::of("team-hub-mcp-ready", team_hub_mcp::ready),

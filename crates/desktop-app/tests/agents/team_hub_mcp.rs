@@ -25,26 +25,26 @@ const VALUE: &str = "pcl_not-a-real-token-4c1e";
 
 /// How a server was switched here before the panel opens.
 #[derive(Clone, Copy)]
-enum Switch {
+pub(super) enum Switch {
   On,
   Undecided,
 }
 
-fn program_body() -> Value {
+pub(super) fn program_body() -> Value {
   json!({"name": "pencil-design", "launch": {
     "kind": "program", "program": "pencil-mcp", "args": ["--stdio", "--app", "desktop"],
     "variables": ["PENCIL_TOKEN"]
   }, "exempt_tools": ["get_screenshot", "batch_get"]})
 }
 
-fn remote_body() -> Value {
+pub(super) fn remote_body() -> Value {
   json!({"name": "copilot", "launch": {
     "kind": "remote", "url": "https://api.githubcopilot.com/mcp/",
     "secret_headers": [{"header": "Authorization", "secret": "GITHUB_TOKEN", "prefix": "Bearer "}]
   }})
 }
 
-fn server(agents: &Agents, (slug, body): (&str, Value), switch: Switch) -> ResourceId {
+pub(super) fn server(agents: &Agents, (slug, body): (&str, Value), switch: Switch) -> ResourceId {
   let parsed: TeamMcpServer = serde_json::from_value(body.clone()).expect("a team MCP server");
   let mut db = ProjectDb::open(&agents.root).expect("database");
   let id = cached(&mut db, (slug, slug), body, &parsed);
@@ -60,7 +60,7 @@ fn name(text: &str) -> SecretName {
 }
 
 /// Gives the secret `text` a value in the window's keychain stand-in.
-fn give_value(agents: &Agents, text: &str) {
+pub(super) fn give_value(agents: &Agents, text: &str) {
   let services = agents.window.launch.services().expect("services");
   ProjectDb::open(&agents.root)
     .expect("database")
@@ -72,7 +72,7 @@ fn give_value(agents: &Agents, text: &str) {
     .expect("kept");
 }
 
-fn team_server(agents: &Agents) -> ServerId {
+pub(super) fn team_server(agents: &Agents) -> ServerId {
   ProjectDb::open(&agents.root)
     .expect("database")
     .sharing()
@@ -93,20 +93,20 @@ fn set_path(agents: &Agents, server: ResourceId, path: &Path) {
     .expect("path");
 }
 
-fn program_file(agents: &Agents) -> std::path::PathBuf {
+pub(super) fn program_file(agents: &Agents) -> std::path::PathBuf {
   let path = agents.root.join("pencil-mcp");
   std::fs::write(&path, "#!/bin/sh\n").expect("a program");
   path
 }
 
-fn show(agents: &mut Agents, server: ResourceId) {
+pub(super) fn show(agents: &mut Agents, server: ResourceId) {
   open(agents, HubView::new(HubFilter::McpServers, Some(server)));
   agents.until("the server panel", |s| {
     s.exists("team-hub-from-team-runs") || s.exists("team-hub-from-team-url")
   });
 }
 
-fn switch_of(agents: &Agents, server: ResourceId) -> Option<bool> {
+pub(super) fn switch_of(agents: &Agents, server: ResourceId) -> Option<bool> {
   ProjectDb::open(&agents.root)
     .expect("database")
     .team_mcp_switch(server)

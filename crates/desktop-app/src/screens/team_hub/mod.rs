@@ -18,6 +18,7 @@ mod fill;
 mod head;
 mod list;
 mod mcp;
+mod member;
 mod model;
 mod panel;
 mod plain;
@@ -164,6 +165,7 @@ impl Component for TeamHubScreen {
       filter: view.filter,
       selected,
       reading,
+      may_change: team.may_change,
     };
     frame(ctx, (&team, listing.as_ref(), &shown), new, &navigation, (body, view))
   }
@@ -242,6 +244,9 @@ fn hub_body(
 ) -> Element {
   let id = project.open.project.id();
   let Some(selected) = listing.selected(view.filter, view.item) else {
+    if !team.may_change {
+      return member::empty(ctx, view.filter, &member::Admins::of(team));
+    }
     return EmptyState::new(
       "team-hub-empty",
       Icon::Users,
@@ -263,6 +268,7 @@ fn hub_body(
   let shown = panel::Shown {
     project: id,
     may_change: team.may_change,
+    admins: member::Admins::of(team),
     navigation,
   };
   let panel = detail(ctx, (project, team), (hub, listing, selected), (&shown, reading, retry));
@@ -295,9 +301,11 @@ fn detail(
 ) -> Element {
   let id = project.open.project.id();
   let (repo_root, may_change) = (project.open.repo_root.clone(), team.may_change);
+  let admins = member::Admins::of(team);
   let plain = |sheet| plain::Props {
     project: id,
     may_change,
+    admins: admins.clone(),
     listing: listing.clone(),
     entry: selected.clone(),
     sheet,
@@ -310,6 +318,7 @@ fn detail(
           repo_root,
           project: id,
           may_change,
+          admins: admins.clone(),
           reading,
           listing: listing.clone(),
           entry: selected.clone(),
@@ -323,6 +332,8 @@ fn detail(
         mcp::Props {
           repo_root,
           project: id,
+          may_change,
+          admins: admins.clone(),
           reading,
           reread: retry.clone(),
           listing: listing.clone(),
@@ -337,6 +348,7 @@ fn detail(
         tool::Props {
           project: id,
           may_change,
+          admins: admins.clone(),
           listing: listing.clone(),
           entry: selected.clone(),
           sheet: sheet.clone(),

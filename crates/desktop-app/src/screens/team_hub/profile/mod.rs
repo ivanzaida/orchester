@@ -33,6 +33,7 @@ use orchester_workspace::agents::team_profile::{ConnectionChoice, TeamProfileShe
 use self::fix::Fix;
 use super::{
   actions::Actions,
+  member,
   model::{Entry, Listing},
   panel, secret,
 };
@@ -50,6 +51,8 @@ pub(super) struct Props {
   pub project: ProjectId,
   /// The person may change the team's resources: an admin of the team.
   pub may_change: bool,
+  /// Who changes the team's resources, which a member reads.
+  pub admins: member::Admins,
   /// The hub is read again: what shows is the last answer, and a fix would act on it.
   pub reading: bool,
   pub listing: Listing,
@@ -122,6 +125,7 @@ impl Component for ProfilePanel {
       .spacing(HubSpacing::BodyTop.role())
       .child(panel::head(ctx, entry, self.edit(ctx, &props, &navigation)))
       .child(panel::chips(ctx, listing, entry))
+      .with_children(member::lock_line(ctx, props.may_change, &props.admins))
       .child(from_team::section(ctx, sheet))
       .child(computer::section(ctx, sheet, &self.chosen))
       .child(ready::section(ctx, &parts, missing.len(), (&press, busy)))
