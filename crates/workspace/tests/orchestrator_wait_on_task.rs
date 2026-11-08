@@ -232,10 +232,7 @@ impl Desktop {
   fn follow(&self, answers: bool) -> Followed {
     let (root, programs) = (self.fixture.repo.path(), Programs::processes());
     let checks = check_merges_in((root, &programs), &HashSet::new()).expect("checked");
-    let switches = Switches {
-      answers,
-      ..Switches::default()
-    };
+    let switches = Switches { drives: answers };
     follow_in((root, self.scope.project, &programs), &checks, (switches, true)).expect("followed")
   }
 }

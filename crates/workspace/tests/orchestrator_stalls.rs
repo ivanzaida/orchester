@@ -85,10 +85,7 @@ fn progress(fixture: &mut Fixture, run: &Run, at: Timestamp) {
 fn follow(fixture: &Fixture, answers: bool, now: Timestamp) -> Followed {
   let (root, programs) = (fixture.repo.path(), Programs::processes());
   let checks = check_merges_in((root, &programs), &HashSet::new()).expect("checked");
-  let switches = Switches {
-    answers,
-    ..Switches::default()
-  };
+  let switches = Switches { drives: answers };
   follow_at(
     (root, fixture.db.project().id(), &programs),
     &checks,

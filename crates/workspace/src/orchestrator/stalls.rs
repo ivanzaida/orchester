@@ -127,7 +127,6 @@ fn stalled_wait(project: ProjectId, (task, run): (&Task, &Run), event: TaskEvent
     others: 0,
     agent: None,
     link: Link::Task(project, task.key().clone(), TaskPage::Summary).path(),
-    own: false,
     automatic: false,
     continuing: None,
     merging: None,

@@ -87,13 +87,7 @@ fn project(fixture: &Fixture) -> ProjectId {
 
 /// Follows the ends with the project's runner attached, *Let the Orchestrator answer agents* on when `answers`.
 fn follow(fixture: &Fixture, answers: bool) -> Followed {
-  follow_with(
-    fixture,
-    Switches {
-      answers,
-      ..Switches::default()
-    },
-  )
+  follow_with(fixture, Switches { drives: answers })
 }
 
 /// Follows the ends with the project's runner attached, under `switches`.
@@ -236,7 +230,7 @@ fn run_ends_name_how_the_run_stopped_and_leave_out_what_is_no_end() {
 }
 
 #[test]
-fn run_ends_start_one_turn_with_their_prompt_while_answering_agents_is_on() {
+fn run_ends_start_one_turn_with_their_prompt_while_the_chat_drives() {
   let mut fixture = Fixture::new();
   ready(&mut fixture);
   let mut run = working(&mut fixture, "Add login");
@@ -244,12 +238,12 @@ fn run_ends_start_one_turn_with_their_prompt_while_answering_agents_is_on() {
   let started = follow(&fixture, true).turn.expect("the end starts a turn by itself");
   assert_eq!(follow(&fixture, true).turn, None, "one turn per end");
   let (wait, turn) = &waits(&fixture)[0];
-  assert!(wait.automatic && !wait.own, "{wait:?}");
+  assert!(wait.automatic, "{wait:?}");
   assert_eq!(turn.as_ref().map(|turn| turn.message), Some(started.message));
   let prompt = fixture.db.chat_turn(started.message).expect("read").expect("the turn");
   for part in [
     "Run #1 of ORC-1 (Add login) succeeded: its work is ready to merge",
-    "If the person asked you earlier in this conversation to merge this task's run",
+    "Merge this run once with merge_run (run #1)",
   ] {
     assert!(
       prompt.text.as_str().contains(part),
@@ -265,7 +259,7 @@ fn run_ends_start_one_turn_with_their_prompt_while_answering_agents_is_on() {
 }
 
 #[test]
-fn run_ends_the_chats_own_decision_led_to_start_no_turn() {
+fn run_ends_the_chats_own_decision_led_to_start_a_turn() {
   let mut fixture = Fixture::new();
   ready(&mut fixture);
   let mut run = working(&mut fixture, "Add login");
@@ -289,9 +283,9 @@ fn run_ends_the_chats_own_decision_led_to_start_no_turn() {
   let chat = acted(&mut fixture, &retried, 10);
   fail(&mut fixture, &mut run, StepFailure::ReportedFailed);
   let followed = follow(&fixture, true);
-  assert!(followed.kept && followed.turn.is_none(), "{followed:?}");
+  assert_eq!(followed.turn.map(|turn| turn.chat), Some(chat.id()), "{followed:?}");
   let (wait, turn) = &waits_in(&fixture, chat.id())[0];
-  assert!(wait.own && !wait.automatic && turn.is_none(), "{wait:?}");
+  assert!(wait.automatic && turn.is_some(), "{wait:?}");
 }
 
 #[test]
@@ -304,8 +298,8 @@ fn run_end_turns_name_what_the_person_chooses_for_a_run_that_stopped() {
   let prompt = fixture.db.chat_turn(started.message).expect("read").expect("the turn");
   for part in [
     "Run #1 of ORC-1 (Add login) stopped at the step Implement (its step could not check everything) and waits",
-    "continue_run",
-    "the person applies",
+    "Decide how it goes on with continue_run",
+    "accept the step as it is",
   ] {
     assert!(
       prompt.text.as_str().contains(part),
@@ -368,7 +362,7 @@ fn run_ends_keep_the_runs_the_daily_budget_stopped_at_once_as_one() {
 }
 
 #[test]
-fn run_ends_of_a_run_the_chat_started_start_no_turn() {
+fn run_ends_of_a_run_the_chat_started_start_a_turn() {
   let mut fixture = Fixture::new();
   ready(&mut fixture);
   let mut run = working(&mut fixture, "Add login");
@@ -380,9 +374,9 @@ fn run_ends_of_a_run_the_chat_started_start_no_turn() {
   let chat = acted(&mut fixture, &started, 10);
   fail(&mut fixture, &mut run, StepFailure::ReportedFailed);
   let followed = follow(&fixture, true);
-  assert!(followed.kept && followed.turn.is_none(), "{followed:?}");
+  assert_eq!(followed.turn.map(|turn| turn.chat), Some(chat.id()), "{followed:?}");
   let (wait, _) = &waits_in(&fixture, chat.id())[0];
-  assert!(wait.own && !wait.automatic, "{wait:?}");
+  assert!(wait.automatic, "{wait:?}");
 }
 
 #[test]
@@ -404,12 +398,8 @@ fn run_ends_leave_out_a_run_git_tells_merged_outside_or_with_nothing_to_merge() 
   assert_eq!(followed, Followed::default(), "never told as ready to merge");
 }
 
-/// Both of the person's switches a continuing turn needs: *answer agents* and *continue interrupted runs*.
-const CONTINUING: Switches = Switches {
-  answers: true,
-  continues: true,
-  merges: false,
-};
+/// The person's switch a continuing turn needs: *Let the Orchestrator drive*.
+const CONTINUING: Switches = Switches { drives: true };
 
 /// `run` interrupted for `cause` now.
 fn interrupt(fixture: &mut Fixture, run: &mut Run, cause: InterruptCause) {
@@ -433,7 +423,7 @@ fn prompt_of(fixture: &Fixture, followed: &Followed) -> String {
 }
 
 #[test]
-fn run_ends_of_a_crash_continue_the_run_once_with_both_switches_on() {
+fn run_ends_of_a_crash_continue_the_run_once_while_the_chat_drives() {
   let mut fixture = Fixture::new();
   ready(&mut fixture);
   interrupted(&mut fixture, "Add login", InterruptCause::Crashed);
@@ -443,8 +433,8 @@ fn run_ends_of_a_crash_continue_the_run_once_with_both_switches_on() {
   assert_eq!(wait.continuing, Some(Continuing::Continues), "{wait:?}");
   for part in [
     "Run #1 of ORC-1 (Add login) was interrupted",
-    "Let the Orchestrator continue interrupted runs",
-    "continue this run once with resume_run, from its last checkpoint",
+    "Let the Orchestrator drive is on",
+    "Continue this run once with resume_run, from its last checkpoint",
   ] {
     assert!(prompt.contains(part), "{part} in {prompt}");
   }
@@ -489,25 +479,11 @@ fn run_ends_of_a_run_interrupted_again_soon_leave_it_to_the_person() {
 fn run_ends_of_an_interruption_only_tell_the_person_without_the_switch_or_the_chats_right() {
   let mut fixture = Fixture::new();
   ready(&mut fixture);
-  interrupted(&mut fixture, "Add login", InterruptCause::Crashed);
-  // Answering agents alone: the turn tells the person, as before the switch.
-  let followed = follow(&fixture, true);
-  let prompt = prompt_of(&fixture, &followed);
-  assert_eq!(waits(&fixture)[0].0.continuing, None);
-  assert!(prompt.contains("goes on only when a person continues it"), "{prompt}");
-  assert!(!prompt.contains("resume_run"), "{prompt}");
-
-  let mut fixture = Fixture::new();
-  ready(&mut fixture);
   interrupted(&mut fixture, "Runner failed", InterruptCause::RunnerFailed);
   let mut gone = working(&mut fixture, "Worktree gone");
   interrupt(&mut fixture, &mut gone, InterruptCause::Crashed);
-  // Continuing alone starts no turn; with both on, these two stay the person's.
-  let alone = Switches {
-    continues: true,
-    ..Switches::default()
-  };
-  assert_eq!(follow_with(&fixture, alone).turn, None);
+  // With the switch off no turn starts; with it on, these two stay the person's.
+  assert_eq!(follow_with(&fixture, Switches::default()).turn, None);
   assert!(
     waits(&fixture)
       .iter()
@@ -549,7 +525,7 @@ fn run_ends_of_storage_contention_continue_once_until_more_than_three_runs_were_
   let followed = follow_with(&fixture, CONTINUING);
   let prompt = prompt_of(&fixture, &followed);
   assert_eq!(waits(&fixture)[0].0.continuing, Some(Continuing::Continues));
-  assert!(prompt.contains("continue this run once with resume_run"), "{prompt}");
+  assert!(prompt.contains("Continue this run once with resume_run"), "{prompt}");
   for title in ["Add logout", "Add search", "Add export"] {
     contended(&mut fixture, title);
   }

@@ -619,9 +619,9 @@ the turns in one column, and the composer at the foot.
    - A task's or module's subscription ends by itself once its tasks are Done or Canceled, with a summary turn. A task
      the chat creates outside what the conversation watches becomes a task subscription of it.
    - Only you subscribe: the commands are applied by the app, spend nothing, and the Orchestrator has no tool for them.
-6. More autonomy: the project's person-only switches in Project settings › Orchestrator (*The Orchestrator may*), and
+6. More autonomy: the project's person-only switch in Project settings › Orchestrator (*Let the Orchestrator drive*), and
    its *Watching* section (default order, *A run without progress for*); the daily report in Settings › Notifications.
-   Without *Let the Orchestrator answer agents*, events are kept as entries but start no turn.
+   Without *Let the Orchestrator drive*, events are kept as entries but start no turn.
 
 Details: [orchestrator-chat.md](orchestrator-chat.md) (*Watching*).
 

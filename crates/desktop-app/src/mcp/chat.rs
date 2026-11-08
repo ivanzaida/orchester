@@ -204,8 +204,17 @@ impl ServerHandler for ChatHandler {
     _request: Option<PaginatedRequestParams>,
     _context: RequestContext<lurq::mcp::rmcp::RoleServer>,
   ) -> Result<ListToolsResult, McpError> {
+    let tools = tools::listed_in(&self.services, &self.scope)
+      .await
+      .unwrap_or_else(|error| {
+        tracing::warn!(
+          ?error,
+          "cannot read whether the project lets the Orchestrator drive; its tools are listed as if it does not"
+        );
+        tools::listed(false)
+      });
     Ok(ListToolsResult {
-      tools: tools::listed(),
+      tools,
       ..ListToolsResult::default()
     })
   }

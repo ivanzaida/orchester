@@ -1,21 +1,15 @@
-//! The Orchestrator chat follows the ends of its project's runs and proposes how a stopped run goes on
-//! (`docs/design/orchestrator-toolset.md`, decision 5): an end or a wait the chat's own doing led to (its
-//! continuation, answer or message, its resume of the run; for an end its start of the run) starts no turn by itself,
-//! so the chat never takes up its own doing in a loop, but a run that succeeded always may; the prompt of an end's
-//! turn says what to do with each end, inviting a retry or a return only for a run that waits for a decision; and the
-//! system prompt names what the chat may propose for a stopped run and what a turn nobody asked for only proposes.
+//! The Orchestrator chat follows the ends of its project's runs and decides how a stopped run goes on
+//! (`docs/design/orchestrator-toolset.md`, decision 5, ORC-909): the prompt of an end's turn says what to do with each
+//! end, deciding with `continue_run` for a run that waits for a decision or stopped at a limit; and the system prompt
+//! names what the chat does while it drives and what it only proposes while it does not.
 
 use orchester_core::{
   id::{ProjectId, RunId},
   orchestrator::{
-    ActionOutcome, AgentWait, ChatAction, ChatEntry, Continuing, EntryKind, MergeLeft, Merging, RunEnd, StopReason,
-    WaitKind,
-    change::{Change, ContinueChoice, MessageThen, ProposedChange, StepName},
+    AgentWait, Continuing, MergeLeft, Merging, RunEnd, StopReason, WaitKind,
     instructions::{ProjectReads, system_prompt, wait_prompt},
-    wait::raised_by_own,
   },
   run::RunLimit,
-  time::Timestamp,
 };
 
 const STOPPED: RunEnd = RunEnd::Stopped {
@@ -34,202 +28,10 @@ fn ended(run: RunId, end: RunEnd) -> AgentWait {
     others: 0,
     agent: None,
     link: "/project/p/tasks/KON-12/summary".to_owned(),
-    own: false,
     automatic: false,
     continuing: None,
     merging: None,
   }
-}
-
-fn entry(seq: i64, kind: EntryKind) -> ChatEntry {
-  ChatEntry {
-    seq,
-    at: Timestamp::from_unix_millis(seq * 10),
-    kind,
-  }
-}
-
-fn kept(seq: i64, wait: &AgentWait) -> ChatEntry {
-  entry(
-    seq,
-    EntryKind::Wait {
-      wait: wait.clone(),
-      turn: None,
-    },
-  )
-}
-
-/// The chat's proposal to continue `run` with one more retry, gone as `outcome`.
-fn continued(run: RunId, outcome: ActionOutcome) -> EntryKind {
-  EntryKind::Action(ChatAction {
-    change: Some(Box::new(ProposedChange {
-      subject: "Sync contacts".to_owned(),
-      change: Change::Continue {
-        run,
-        number: 3,
-        attempt: 2,
-        step: Some(StepName {
-          place: 4,
-          name: "Review".to_owned(),
-        }),
-        why: Some(StopReason::RetriesExhausted { retries: 2 }),
-        choice: ContinueChoice::AllowRetry,
-      },
-    })),
-    ..ChatAction::new("continue_run", Some("KON-12".to_owned()), outcome)
-  })
-}
-
-/// The chat's message to `run`'s agents, sent.
-fn messaged(run: RunId) -> EntryKind {
-  EntryKind::Action(ChatAction {
-    change: Some(Box::new(ProposedChange {
-      subject: "Sync contacts".to_owned(),
-      change: Change::Message {
-        run,
-        number: 3,
-        text: "Keep the old export.".to_owned(),
-        now: false,
-        then: None,
-        sent_as: None,
-      },
-    })),
-    ..ChatAction::new("send_message", Some("KON-12".to_owned()), ActionOutcome::Done)
-  })
-}
-
-#[test]
-fn orchestrator_run_end_after_the_chats_own_decision_is_its_own() {
-  let run = RunId::generate();
-  let stopped = ended(run, STOPPED);
-  let failed = ended(run, RunEnd::Failed);
-  assert!(
-    !raised_by_own(std::slice::from_ref(&kept(1, &stopped)), &stopped),
-    "the run stopped on its own"
-  );
-  let applied = [kept(1, &stopped), entry(2, continued(run, ActionOutcome::Applied))];
-  assert!(
-    raised_by_own(&applied, &failed),
-    "the person applied the chat's retry, and the run failed after it"
-  );
-  let proposed = [kept(1, &stopped), entry(2, continued(run, ActionOutcome::Waits))];
-  assert!(!raised_by_own(&proposed, &failed), "a proposal changed nothing");
-  let dismissed = [kept(1, &stopped), entry(2, continued(run, ActionOutcome::Dismissed))];
-  assert!(
-    !raised_by_own(&dismissed, &failed),
-    "a dismissed proposal changed nothing"
-  );
-  let other = RunId::generate();
-  assert!(
-    !raised_by_own(&applied, &ended(other, RunEnd::Failed)),
-    "another run's decision raises nothing here"
-  );
-}
-
-#[test]
-fn orchestrator_run_end_after_the_chats_resume_or_start_of_that_run_is_its_own() {
-  let run = RunId::generate();
-  let resumed = |of: RunId| {
-    entry(
-      1,
-      EntryKind::Action(ChatAction {
-        resumed: Some(of),
-        ..ChatAction::new("resume_run", Some("KON-12".to_owned()), ActionOutcome::Done)
-      }),
-    )
-  };
-  let limited = ended(run, RunEnd::Limit { limit: RunLimit::Time });
-  assert!(raised_by_own(&[resumed(run)], &limited), "the chat resumed this run");
-  assert!(
-    !raised_by_own(&[resumed(RunId::generate())], &limited),
-    "a resume of another run of the task is not this run's"
-  );
-  assert!(
-    !raised_by_own(&[resumed(run), kept(2, &ended(run, STOPPED))], &limited),
-    "a resume suppresses only the run's next wait"
-  );
-  let started = [entry(
-    1,
-    EntryKind::Action(ChatAction {
-      started: Some(run),
-      auto_mode: true,
-      ..ChatAction::new("run_task", Some("KON-12".to_owned()), ActionOutcome::Done)
-    }),
-  )];
-  assert!(
-    raised_by_own(&started, &ended(run, RunEnd::Failed)),
-    "the chat started it"
-  );
-  let mut question = ended(run, STOPPED);
-  question.kind = WaitKind::Question;
-  assert!(
-    !raised_by_own(&started, &question),
-    "an agent's question in a run the chat started is not the chat's doing"
-  );
-}
-
-#[test]
-fn orchestrator_run_that_succeeded_is_never_the_chats_own() {
-  let run = RunId::generate();
-  let ready = ended(run, RunEnd::Succeeded);
-  for before in [continued(run, ActionOutcome::Applied), messaged(run)] {
-    assert!(
-      !raised_by_own(&[entry(1, before)], &ready),
-      "a success turn cannot loop"
-    );
-  }
-}
-
-/// The chat's message to `run`'s agents that moved the run as `then` says, applied by the person.
-fn moved(run: RunId, then: MessageThen) -> EntryKind {
-  EntryKind::Action(ChatAction {
-    change: Some(Box::new(ProposedChange {
-      subject: "Sync contacts".to_owned(),
-      change: Change::Message {
-        run,
-        number: 3,
-        text: "Use the cached export.".to_owned(),
-        now: false,
-        then: Some(then),
-        sent_as: None,
-      },
-    })),
-    ..ChatAction::new("send_message", Some("KON-12".to_owned()), ActionOutcome::Applied)
-  })
-}
-
-#[test]
-fn orchestrator_run_that_succeeded_after_the_chats_move_is_its_own() {
-  let run = RunId::generate();
-  let ready = ended(run, RunEnd::Succeeded);
-  assert!(
-    raised_by_own(&[entry(1, moved(run, MessageThen::FollowUp))], &ready),
-    "the chat's follow-up led to it: no turn, or the chat would follow it up again"
-  );
-  let next = RunId::generate();
-  let again = |started: Option<RunId>| {
-    let EntryKind::Action(action) = moved(run, MessageThen::RunAgain) else {
-      unreachable!("moved keeps an action")
-    };
-    entry(1, EntryKind::Action(ChatAction { started, ..action }))
-  };
-  for end in [RunEnd::Succeeded, RunEnd::Failed] {
-    assert!(
-      raised_by_own(&[again(Some(next))], &ended(next, end)),
-      "{end:?}: the run the chat's message started ended"
-    );
-  }
-  let later = RunId::generate();
-  assert!(
-    !raised_by_own(&[again(Some(next))], &ended(later, RunEnd::Failed)),
-    "a later run of the task a person started gets its turn"
-  );
-  let mut question = ended(next, RunEnd::Succeeded);
-  question.kind = WaitKind::Question;
-  assert!(
-    !raised_by_own(&[again(Some(next))], &question),
-    "an agent of the next run that asks is not the chat's doing"
-  );
 }
 
 #[test]
@@ -268,58 +70,60 @@ fn orchestrator_run_end_prompt_says_what_to_do_with_each_end() {
   for part in [
     "Run #3 of KON-12 (Sync contacts) succeeded: its work is ready to merge",
     "/project/p/tasks/KON-12/summary",
-    "Let the Orchestrator answer agents is on",
-    "If the person asked you earlier in this conversation",
-    "in this turn it only proposes the merge",
-    "Never merge a run nobody asked you to merge",
+    "Let the Orchestrator drive is on",
+    "Call merge_run for it only if the person asked you earlier in this conversation",
+    "never merge a run nobody asked you to merge",
   ] {
     assert!(ready.contains(part), "{part} in {ready}");
   }
   let stopped = wait_prompt(&ended(run, STOPPED));
   for part in [
     "stopped at the step Review (its step used up its 2 retries) and waits for a decision",
-    "continue_run (allow_retry or return_to)",
-    "the person applies it",
+    "Decide how it goes on with continue_run",
+    "accept the step as it is when its report found no real mismatch",
+    "return_to an earlier agent step with a note",
     "Start, resume, cancel or merge nothing",
   ] {
     assert!(stopped.contains(part), "{part} in {stopped}");
   }
   let failed = wait_prompt(&ended(run, RunEnd::Failed));
-  for part in [
-    "failed at the step Review",
-    "propose it with continue_run (return_to): the person applies it",
-    "Running the task again is the person's",
-  ] {
+  for part in ["failed at the step Review", "do it with continue_run (return_to)"] {
     assert!(failed.contains(part), "{part} in {failed}");
   }
   assert!(
     !failed.contains("allow_retry") && !failed.contains("merge_run"),
     "{failed}"
   );
-  for (end, says) in [
-    (
-      RunEnd::Limit {
-        limit: RunLimit::DailyBudget,
-      },
-      "stopped at the project's daily token budget",
-    ),
-    (RunEnd::Interrupted, "was interrupted"),
+  let limit = wait_prompt(&ended(
+    run,
+    RunEnd::Limit {
+      limit: RunLimit::DailyBudget,
+    },
+  ));
+  for part in [
+    "stopped at the project's daily token budget",
+    "Read the run first",
+    "Decide with continue_run: raise_limits or raise_step_budget",
+    "say by how much and why",
+    "Start, cancel or merge nothing",
   ] {
-    let prompt = wait_prompt(&ended(run, end));
-    for part in [
-      says,
-      "Read the run first",
-      "the choices they have on the task's Summary",
-      "are the person's, and continue_run offers you nothing for this run",
-      "Start, resume, cancel, continue or merge nothing",
-    ] {
-      assert!(prompt.contains(part), "{end:?}: {part} in {prompt}");
-    }
-    assert!(
-      !prompt.contains("allow_retry") && !prompt.contains("merge_run"),
-      "{end:?} invites no retry and no merge: {prompt}"
-    );
+    assert!(limit.contains(part), "{part} in {limit}");
   }
+  assert!(!limit.contains("merge_run"), "a limit invites no merge: {limit}");
+  let interrupted = wait_prompt(&ended(run, RunEnd::Interrupted));
+  for part in [
+    "was interrupted",
+    "Read the run first",
+    "the choices they have on the task's Summary",
+    "this interruption is not one you continue",
+    "Start, resume, cancel, continue or merge nothing",
+  ] {
+    assert!(interrupted.contains(part), "{part} in {interrupted}");
+  }
+  assert!(
+    !interrupted.contains("allow_retry") && !interrupted.contains("merge_run"),
+    "an interruption the chat may not continue invites no retry and no merge: {interrupted}"
+  );
   let batch = AgentWait {
     others: 2,
     ..ended(
@@ -358,23 +162,23 @@ fn orchestrator_run_end_prompt_of_contention_tells_the_person_and_continues_noth
     continuing: Some(Continuing::Continues),
     ..wait
   });
-  assert!(once.contains("continue this run once with resume_run"), "{once}");
+  assert!(once.contains("Continue this run once with resume_run"), "{once}");
 }
 
 #[test]
-fn orchestrator_system_prompt_proposes_only_a_retry_or_a_return() {
+fn orchestrator_system_prompt_decides_while_driving_and_proposes_otherwise() {
   let prompt = system_prompt("Kontur", ProjectId::generate(), ProjectReads::FileTools);
   for rule in [
-    "how a stopped run continues",
-    "continue_run proposes how a run that waits for a decision goes on: allow_retry",
-    "return_to (an earlier agent step, with a note for its agent; also for a run that ended",
-    "Raising limits or budgets, resuming after the daily budget and accepting a step are the person's",
-    "only when the person turned on Let the Orchestrator continue interrupted runs",
-    "one the runner stopped because the project database stayed busy",
-    "one the runner could not record for any other reason",
-    "one whose worktree is gone are the person's",
-    "In a turn Orchester started by itself (its message begins with [Orchester]), merge_run and run_task only \
-     propose",
+    "decide how a stopped run continues",
+    "Who decides: the project's switch Let the Orchestrator drive",
+    "you never tell the person to press a button a tool of yours can press",
+    "continue_run decides how a run that waits for a decision or stopped at a limit goes on",
+    "accept a step as it is when its report found no real mismatch",
+    "raise_limits or raise_step_budget",
+    "While the switch is off, allow_retry, return_to and resolve_conflicts are proposed to the person",
+    "from its last checkpoint, while Let the Orchestrator drive is on",
+    "one whose worktree is gone are refused",
+    "no turn starts by itself",
   ] {
     assert!(prompt.contains(rule), "the system prompt says: {rule}");
   }
@@ -390,9 +194,9 @@ fn orchestrator_run_ends_of_a_success_merge_it_once_or_say_why_it_is_left_to_the
   };
   let prompt = wait_prompt(&merging);
   for part in [
-    "Let the Orchestrator merge finished runs on its own",
-    "merge this run once with merge_run (run #3)",
-    "propose continue_run with resolve_conflicts for this run",
+    "Let the Orchestrator drive is on",
+    "Merge this run once with merge_run (run #3)",
+    "call continue_run with resolve_conflicts for this run",
     "do not call merge_run again",
     "needs_decision or scoped_integration_required",
     "leave the merge to them",
@@ -400,7 +204,7 @@ fn orchestrator_run_ends_of_a_success_merge_it_once_or_say_why_it_is_left_to_the
     assert!(prompt.contains(part), "{part} in {prompt}");
   }
   assert!(
-    !prompt.contains("Never merge a run nobody asked you to merge"),
+    !prompt.contains("never merge a run nobody asked you to merge"),
     "{prompt}"
   );
   let left = AgentWait {
@@ -413,7 +217,7 @@ fn orchestrator_run_ends_of_a_success_merge_it_once_or_say_why_it_is_left_to_the
   };
   let prompt = wait_prompt(&left);
   for part in [
-    "this run is left to them: unfinished tasks block its task (KON-3, KON-4)",
+    "This run is left to the person: unfinished tasks block its task (KON-3, KON-4)",
     "Do not merge it",
     "why it was not merged on its own",
     "Start, resume, cancel, continue or merge nothing",
@@ -433,8 +237,7 @@ fn orchestrator_run_ends_of_a_success_merge_it_once_or_say_why_it_is_left_to_the
   );
   let system = system_prompt("Kontur", ProjectId::generate(), ProjectReads::FileTools);
   assert!(
-    system
-      .contains("with one exception: when the person turned on Let the Orchestrator merge finished runs on its own"),
+    system.contains("Orchester's message for a run's success tells you to merge it on your own"),
     "{system}"
   );
 }

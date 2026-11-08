@@ -158,7 +158,6 @@ fn wait(kind: WaitKind, (task, title, number): (&str, &str, u32), agent: Option<
     others: 0,
     agent: agent.map(str::to_owned),
     link: format!("/tasks/{task}"),
-    own: false,
     automatic,
     continuing: None,
     merging: None,

@@ -1,9 +1,11 @@
 # The Orchestrator chat and its toolset
 
-Each project has an **Orchestrator** — a chat with an agent that can see everything in Orchester, change what is
-safe to change, and propose the rest as cards the person applies with a click. This page describes how the chat
-works, which tools its agent has, what it may do directly and what only as a proposal, and the switches that widen
-that.
+Each project has an **Orchestrator** — a chat with an agent that can see everything in Orchester. One person-only
+switch per project, **Let the Orchestrator drive** (Project settings › Orchestrator), decides how it works. **On**, the
+chat acts itself: it calls the same tools an outside agent gets from the app's MCP server, with the same rules and
+refusals, nothing becomes a card, and it is woken for every wait, stop, end and event. **Off**, it changes what is safe
+to change and proposes the rest as cards the person applies with a click, and no turn starts by itself. This page
+describes how the chat works, which tools its agent has and what it does directly and what only as a proposal.
 
 ## How a turn runs
 
@@ -28,18 +30,32 @@ that.
    in **every** project. Changes stay in the chat's own project (another → `other_project`).
 2. **Drafts are free** — tasks, modules, and drafts of pipelines, profiles, instructions, skills and tools are saved
    without asking.
-3. **Publishing** is a proposal card unless the person turned on *Let the Orchestrator publish drafts*. Widening what
-   agents may do additionally needs *Let automation change agent permissions*.
-4. **Starting runs** is a proposal card by default; while the project allows Autopilot (*Allow Autopilot for agents
-   in this project*, `get_approvals`) the chat starts them directly. **Canceling** a run is always a proposal.
-5. **Answering agents and merging** are proposals, or direct under the person's switches (below).
+3. **While it drives, the chat is a client of the app** — every change is made at once by the tool's own rules, and a
+   refusal is the tool's. Publishing, starting, canceling, pausing, resuming, continuing (accepting a step, raising
+   limits and budgets and resuming after the daily budget included), merging, answering agents and messaging their
+   runs, making the folder a git repository and writing with git all happen directly. Whatever only *Let automation …*
+   allows another client stays refused: what widens what agents may do is `person_only` without *Let automation change
+   agent permissions*; answering agents' questions and messages needs *Let automation answer approvals*, as for any
+   client.
+4. **While it does not drive, changes are cards** — publishing, starting a run (unless the project allows Autopilot),
+   canceling, merging, answering agents and continuing a stopped run are proposal cards, and no turn starts by itself.
 
-## Domain tools the chat has (60)
+## Domain tools the chat has
 
 Each goes through exactly the same tool an MCP client of the app calls ([mcp-tools-setup.md](mcp-tools-setup.md),
 [mcp-tools-work.md](mcp-tools-work.md)), so it is refused or carried out the same way.
 
-`list_projects`, `get_project`, `list_tasks`, `get_task`, `create_task`, `update_task`, `list_modules`, `get_module`,
+**While it drives**, the chat has every domain tool of the app except `add_project` and the app's `*_mcp_server` tools
+(the chat has its own): the reads, tasks and modules, runs (`run_task`, `pause_run`, `resume_run`, `cancel_run`,
+`continue_run` with every choice, `merge_run`, `complete_run`, `remove_worktree`, `return_to_draft`), questions and
+approvals (`answer_question`, `send_message`, `decide_plan`, `decide_approval`), queue holds, the pipeline, profile,
+instruction, skill, tool, service and stack drafts and their publication, connections and accounts, the project's
+settings the app lets automation change (Autopilot, reviewer, environment, limits, code index, repository agent
+files). Each keeps its own rules: `decide_approval` and `decide_plan` need *Let automation answer approvals*, and what
+only a person may do is `person_only`, as for an outside client.
+
+**While it does not drive**, it has these: `list_projects`, `get_project`, `list_tasks`, `get_task`, `create_task`,
+`update_task`, `list_modules`, `get_module`,
 `create_module`, `update_module`, `list_runs`, `get_run`, `get_changes`, `get_conversation`, `run_task`, `pause_run`,
 `resume_run`, `cancel_run`, `merge_run`, `continue_run`, `answer_question`, `send_message`, `list_approvals`,
 `list_questions`, `get_plan`, `hold_queue`, `release_queue`, `get_approvals`, `list_pipelines`, `get_pipeline`,
@@ -49,53 +65,56 @@ Each goes through exactly the same tool an MCP client of the app calls ([mcp-too
 `save_tool_draft`, `publish_tool`, `list_secrets`, `list_connections`, `list_accounts`, `list_models`, `get_usage`,
 `get_delivery`, `get_story_point_calibration`, `get_daily_report`.
 
-**Not available to the chat**: `decide_approval`, `decide_plan` (approvals and plan decisions stay the person's);
-`continue_run`'s `raise_limits`, `raise_step_budget`, `resume` and `accept`; project setup (`add_project`,
-`set_project_environment`, `set_repository_agent_files`, `update_project_limits`, `set_code_index`); connections
-(`add_cli_connection`, `set_api_provider`, `check_connection`, `set_connection_account`); `set_allow_autopilot`,
-`set_reviewer`, `set_run_manual` (and the retired auto mode tools), `remove_worktree`, `return_to_draft`; the app's
-`*_mcp_server` tools (the chat has its own);
-deleting anything.
+**Never available to the chat**: `add_project`; deleting anything; the app's `*_mcp_server` tools (the chat has its own
+`mcp_*` tools).
 
 ## Direct or proposal
 
-| Tool | In a person's turn | With switch / mode | In a turn the Orchestrator started itself | In a daily report's turn |
+| Tool | While it drives, in a person's turn | While it drives, in a turn the Orchestrator started itself | While it does not drive | In a daily report's turn |
 |---|---|---|---|---|
-| Reads | direct | — | direct | direct |
-| `create_task`, `update_task`, `create_module`, `update_module`, `save_*_draft` | direct | — | direct | refused `report_turn` |
-| `run_task` | proposal (refused `task_blocked` for a task marked Blocked) | direct while the project allows Autopilot | proposal | proposal |
-| `pause_run` | direct | — | proposal | proposal |
-| `resume_run` | direct for a paused run; an interrupted run only with *continue interrupted runs*; stopped at a limit, canceled or failed → `person_only` | — | proposal (see run ends) | proposal |
-| `hold_queue` | direct | — | direct | refused |
-| `release_queue` | direct | — | proposal | proposal |
-| `cancel_run` | always proposal | — | proposal | proposal |
-| `continue_run` | always proposal: only `allow_retry`, `return_to`, `resolve_conflicts` | — | proposal | proposal |
-| `merge_run` | proposal | direct with *Let the Orchestrator merge runs* | proposal (see auto-merge) | proposal |
-| `answer_question`, `send_message` | proposal | direct with *Let the Orchestrator answer agents* (a message that would move an idle run is always a proposal; deciding a waiting plan is refused `plan_decision_person_only`) | direct under the switch | proposal |
-| `publish_*` | proposal | direct with *Let the Orchestrator publish drafts*, unless the draft widens agents' permissions while *Let automation change agent permissions* is off | proposal | proposal |
+| Reads | direct | direct | direct | direct |
+| `create_task`, `update_task`, `create_module`, `update_module`, `save_*_draft` | direct | direct | direct | refused `report_turn` |
+| `run_task` | direct (refused `task_blocked` for a task marked Blocked) | direct | proposal; direct while the project allows Autopilot in a person's turn | refused `report_turn` |
+| `pause_run`, `release_queue` | direct | direct | direct in a person's turn; proposal in a turn it started itself | refused `report_turn` |
+| `resume_run` | direct for a paused run and for an interrupted one; stopped at a limit → `use_continue_run` (decide it with `continue_run`), canceled or failed → `person_only` | direct for a paused run; for an interrupted one only the run whose interruption started the turn, once, not within 10 minutes of the time before (`interrupted_again`) and not while more than 3 runs stopped on a busy database (`storage_contention`) | direct for a paused run; an interrupted one `person_only` | refused `report_turn` |
+| `hold_queue` | direct | direct | direct | refused |
+| `cancel_run` | direct | direct | proposal | refused `report_turn` |
+| `continue_run` | direct, every choice | direct, every choice | proposal: only `allow_retry`, `return_to`, `resolve_conflicts`; the other choices `person_only` | refused `report_turn` |
+| `merge_run` | direct | direct for a run the rule lets it (`left_to_person` otherwise; see auto-merge) | proposal | refused `report_turn` |
+| `answer_question`, `send_message` | direct (deciding a waiting plan is refused `plan_decision_person_only`) | direct | proposal | refused `report_turn` |
+| `publish_*` | direct, unless the draft widens agents' permissions while *Let automation change agent permissions* is off (`person_only`) | same | proposal | refused `report_turn` |
+| `init_repository`, `git_*` writes, `mcp_*` | direct (`git_*` that can lose work stay `git_propose` cards; `mcp_*` that widen need *Let automation change agent permissions*) | same | cards; git writes `write_off` | refused `report_turn` |
 
 Every change, proposal and refusal is kept in the conversation. A proposal card's *Apply* checks again
 (`changed_since_proposed`); automation's synthetic click on *Apply* is refused `person_only`. A turn the Orchestrator
 started itself is marked `[Orchester]`.
 
-## Person-only switches (Project settings › Orchestrator › The Orchestrator may)
+## The switch (Project settings › Orchestrator › Let the Orchestrator drive)
 
-Each project has its own. All off until a person turns them on; no tool and no synthetic input can change them.
-Settings › Automation › *The Orchestrator* names the open project's switches that are on and links to them. The window
-labels them shortly (*Publish drafts*, *Answer agents*, …); their full names, used below and in the logs, are *Let the
-Orchestrator …*.
+Each project has its own. Off until a person turns it on; no tool and no synthetic input can change it. It replaced six
+switches — *publish drafts*, *answer agents*, *merge runs*, *merge finished runs on its own*, *continue interrupted
+runs* and *write with git* — and a project that had *answer agents* on starts with it on. While it is on:
 
-| Switch | What it enables |
-|---|---|
-| **Let the Orchestrator publish drafts** | Publishes pipelines, profiles, instructions, skills and tools it drafts, without a card (widening still needs *Let automation change agent permissions*). |
-| **Let the Orchestrator answer agents** | `answer_question` / `send_message` directly. Also makes waits, run ends and the daily report **start an Orchestrator turn by itself**. |
-| **Let the Orchestrator merge runs** | `merge_run` merges runs the person asked it to merge. |
-| **Let the Orchestrator merge finished runs on its own** | With *merge runs* and *answer agents*: the turn a run's success starts merges it once, if the rule passes — latest run, every step passed (a person's accept counts, automation's does not), task not Blocked or blocked, new starts not held, task not *Don't merge automatically*, the main checkout needs no local integration. One at a time, in end order; conflicts → proposes `continue_run` `resolve_conflicts`. |
-| **Let the Orchestrator continue interrupted runs** | `resume_run` continues interrupted runs (crash, runner gone, *Quit now*, database busy) from the last checkpoint. With *answer agents*, an interruption's turn continues it once — not again within 10 minutes (`interrupted_again`), not while more than 3 runs stopped on a busy database within 10 minutes (`storage_contention`). |
-| **Let the Orchestrator write with git** | The git write tools below (otherwise `write_off`). |
+- The chat is woken for **every** wait of an agent, every run that stops, ends or succeeds and every event, **whoever
+  started the run** and whatever raised it (the chat's own answer included); there is no per-run or per-step limit on
+  its turns. A turn starts only while no other turn of its conversation thinks and the project's runner attached.
+- The turn a run's success starts **merges** it once if the rule passes — latest run, every step passed (a person's
+  accept counts, automation's does not), task not Blocked or blocked, new starts not held, task not *Don't merge
+  automatically*, the main checkout needs no local integration — one at a time, in end order; conflicts → it calls
+  `continue_run` `resolve_conflicts`. A task's own *Don't merge automatically* still keeps its runs from being merged
+  on their own.
+- The turn of an interrupted run's end **continues** it from the last checkpoint (crash, runner gone, *Quit now*,
+  database busy), unless it was interrupted again within 10 minutes of the time before (`interrupted_again`) or more
+  than 3 runs stopped on a busy database within 10 minutes (`storage_contention`).
+- It decides what a stopped step needs itself: it accepts when the step's report found no real mismatch and what it
+  could not check is unreachable, otherwise returns the work to the right step with a note or lets it retry, and
+  raises a limit or budget when the run is close to done and the work is worth it, saying by how much and why. It never
+  tells the person to press a button its tools can press.
+- A day's report and the summary of a watching that ended by itself start a turn that changes nothing (`report_turn`).
 
-Related: *Let automation change agent permissions* (Settings › Automation), *Daily report from the Orchestrator*
-(Settings › Notifications), *Let Orchester estimate story points* (Project settings › Runs › Estimates).
+Related: *Let automation answer approvals* and *Let automation change agent permissions* (Settings › Automation),
+*Daily report from the Orchestrator* (Settings › Notifications), *Let Orchester estimate story points* (Project settings
+› Runs › Estimates).
 
 ## Chat-only tools (25)
 
@@ -103,8 +122,8 @@ Related: *Let automation change agent permissions* (Settings › Automation), *D
 
 Proposes `git init` (branch from `init.defaultBranch`, else `main`) and a first commit *Initial commit* — or only the
 first commit for a repository without one. `.orchester/` is kept out via `.git/info/exclude`. Never adds a remote,
-pushes or changes git settings. **Always a card**; the card shows the branch, file count, the whole `.gitignore` and
-files that look like secrets (e.g. `.env`).
+pushes or changes git settings. While the chat drives it makes the repository at once; otherwise it is **a card**; the
+card shows the branch, file count, the whole `.gitignore` and files that look like secrets (e.g. `.env`).
 
 Parameters: `project` (req.), `first_commit` (req.: `files` | `empty`), `gitignore` (whole `.gitignore` text, written
 only where none exists). Refusals: `has_commits`, `gitignore_exists`, `git_not_found`, `folder_not_writable`,
@@ -133,8 +152,8 @@ Refusals: `own_task`, `other_project`, `not_waiting_for_person` (a tool call's a
 What ends the wait, read by the waits follower:
 
 - **The waited task's run is merged into the waiting run's base branch** — a *waited task merged* event of the
-  waiting task, kept in the conversation that leads it (else by the usual rule). With *Let the Orchestrator answer
-  agents* on it starts a turn there, which tells the run's agents with `send_message` (under the switches as for any
+  waiting task, kept in the conversation that leads it (else by the usual rule). With *Let the Orchestrator
+  drive* on it starts a turn there, which tells the run's agents with `send_message` (by the tool's rules as for any
   message); when the run goes on, the base-moved path merges the base branch into its worktree.
 - **The waited task is canceled, or closed without that merge** (a merge into another branch counts as closed) — a
   *waited task closed* event, routed the same way, whose turn tells the person and offers the choices (go on without
@@ -150,9 +169,11 @@ What ends the wait, read by the waits follower:
 ### MCP server tools
 
 `mcp_add_server`, `mcp_update_server`, `mcp_set_server_enabled`, `mcp_remove_server` take the same arguments as the
-app's `add_mcp_server`, `update_mcp_server`, `set_mcp_server_enabled`, `remove_mcp_server`. **Adding or widening is
-always a card.** Narrowing (turn off, remove one no profile chooses, drop exempt tools or authorization) is direct
-only in a person's turn while *Let automation change agent permissions* is on; otherwise a card.
+app's `add_mcp_server`, `update_mcp_server`, `set_mcp_server_enabled`, `remove_mcp_server`. **While the chat drives**
+each is made at once by the app's own rules (what widens is `person_only` unless *Let automation change agent
+permissions* is on). **Otherwise adding or widening is always a card.** Narrowing (turn off, remove one no profile
+chooses, drop exempt tools or authorization) is direct only in a person's turn while *Let automation change agent
+permissions* is on; otherwise a card.
 
 ### Git tools
 
@@ -180,8 +201,8 @@ writes time out after 5 minutes, network operations after 2; no credential promp
 | `git_fetch` | write, network | `remote`, `all`, `prune` |
 | `git_propose` | proposal | `operation.kind`: `reset` {`to`, `mode` hard/mixed/soft}, `clean` {`paths`, `directories`, `ignored`}, `delete_branch` {`branch`, `remote`?}, `force_push` {`remote`?, `branch`?} (`--force-with-lease`), `discard_changes` {`paths`}, `switch_discarding` {`branch`}, `rebase` {`onto`}, `delete_tag` {`tag`, `remote`?}, `abort_merge` — **always a click-only card**; work over 10 000 files or 256 MB is not proposed (`too_large`) |
 
-Writes need *Let the Orchestrator write with git*, never happen in a turn the Orchestrator started (`person_only`) or
-a report's turn (`report_turn`), and are refused `checkout_reserved` while local integration or a conflict
+Writes need *Let the Orchestrator drive* (otherwise `write_off`), never happen in a report's turn (`report_turn`) and,
+while the chat does not drive, in a turn the Orchestrator started (`person_only`), and are refused `checkout_reserved` while local integration or a conflict
 resolution holds the checkout, and `operation_in_progress` during a merge or rebase. Other codes: `git_not_found`,
 `not_a_repository`, `nothing_to_clean`, `nothing_in_progress`, `detached_head`, `changed_since_proposed`.
 
@@ -195,9 +216,10 @@ Every event of a task below is kept as **one entry** in exactly one conversation
 3. else the project's latest conversation, else a new one, titled after the task and what waits.
 
 A watched task's events never reach another conversation, whoever dealt with it before. With *Let the Orchestrator
-answer agents* on, each entry also starts **one** turn there by itself — never while another turn of that conversation
-thinks (it waits for that turn to end), only while what it is about still stands, and not when the Orchestrator's own
-answer, message, merge or cancel raised it. With the switch off the entry only links to its card. Such a turn is
+drive* on, each entry also starts **one** turn there by itself — never while another turn of that conversation thinks
+(it waits for that turn to end) and only while what it is about still stands; whoever started the run and whatever
+raised the event, the Orchestrator's own answer, message, merge or cancel included. With the switch off the entry only
+links to its card. Such a turn is
 marked `[Orchester]`; in a conversation that leads something it is told the subscription the event came through and
 the order that applies (see [Orders](#orders)).
 
@@ -206,8 +228,9 @@ the order that applies (see [Orders](#orders)).
   brief, criteria, docs, AGENTS.md or the person's words, otherwise tells the person the question with options and a
   recommendation.
 - **Run ends** — a task's latest run that succeeds, fails, stops for a decision, stops at a limit or is interrupted
-  gets one entry. The turn: success → says it is ready (merges only under the merge-finished rule); a decision wait →
-  may propose `continue_run`; failure/limit/interruption → explains the person's choices.
+  gets one entry. The turn: success → merges it under the merge rule above (or says why it is left to the person); a
+  decision wait or a limit → decides with `continue_run`; failure → may return the work to a step with `continue_run`
+  and explains; an interruption → continues it (see the switch) or explains the person's choices.
 - **No progress** — a run an agent works on that made no progress (no run event such as a step change, no transcript
   event such as a tool call, no agent launch) for the minutes of *A run without progress for* (Project settings ›
   Orchestrator › *Watching*; 20 by default, 1–240, or off). Raised once per stall; progress again re-arms it. A run
@@ -215,16 +238,16 @@ the order that applies (see [Orders](#orders)).
   stalls. The turn reads the run, tells the person what it was doing and their choices, and may send its agents a
   message; it starts, resumes, cancels or merges nothing. The entry links to the task's Summary.
 - **Merge conflict** — a merge of a task's run that stopped at conflicts (from the task page, `merge_run` or the merge
-  queue), once per attempt; only the newest attempt of a run still not merged. The turn proposes `continue_run`
+  queue), once per attempt; only the newest attempt of a run still not merged. The turn calls `continue_run`
   `resolve_conflicts` naming the files, or points to the Local integration page; it does not call `merge_run` again.
-  The Orchestrator's own merge that conflicted starts no turn.
+  The Orchestrator's own merge that conflicted starts its turn like any other, once the turn that merged ended.
 - **Waited task merged** and **waited task closed** — the task a run waits on through [`wait_on_task`](#wait_on_task)
   was merged into the run's base branch, or canceled or closed without that merge. See there.
 - **A subscription ended by itself** — see [Ending](#ending).
 - **Daily report** — at the time set in *Daily report from the Orchestrator*, each open project's latest conversation
   gets one *Daily report* entry per local day with activity (missed days are delivered at the next start, at most 7
-  back). With *answer agents* on, a turn adds a summary and recommendations and **changes nothing** (changes are only
-  proposed; anything else is refused `report_turn`). `get_daily_report` reads a day's report. The daily report is not
+  back). With *Let the Orchestrator drive* on, a turn adds a summary and recommendations and **changes nothing** (every change
+  is refused `report_turn`). `get_daily_report` reads a day's report. The daily report is not
   an event of a task: the routing rule does not apply to it.
 
 ## Watching
@@ -275,12 +298,12 @@ stops, the less specific one's conversation gets *… is led here again*.
 
 The **order** is the person's text after the chips: what they want done with the target's events. A command without
 text takes the project's **Default order for watching** (Project settings › Orchestrator › *Watching*, a multi-line
-field; empty by default, meaning no order: the person's switches decide). A subscription without its own text follows
+field; empty by default, meaning no order: the switch decides). A subscription without its own text follows
 the default order as it is when an event comes. Watching a target the conversation leads already with other text
 renews its order.
 
-An order is quoted to the agent as data and **can only narrow** what the person-only switches allow: whether it acts
-at once or only proposes stays as the switches and the tables above say, whatever the order's text says.
+An order is quoted to the agent as data and **can only narrow** what the person-only switch allows: whether it acts
+at once or only proposes stays as the switch and the tables above say, whatever the order's text says.
 
 ### Already led elsewhere
 
@@ -304,7 +327,7 @@ the line *… is now led in «…»*). Only a person chooses on the card: synthe
 A subscription **ends by itself** when its task is Done or Canceled, or when every task of its module is (a module
 with no task does not end). *Tasks without a module* and the whole project never end by themselves. Its conversation
 gets the line *Every task of Mobile release is Done — watching ended* (or *KON-41 is Done*, *… is Canceled*, *… is
-Done or Canceled*). With *Let the Orchestrator answer agents* on, one turn writes the module's or task's summary under
+Done or Canceled*). With *Let the Orchestrator drive* on, one turn writes the module's or task's summary under
 it and **changes nothing**, as a daily report's turn. A status changed anywhere ends it; reopening the task afterwards
 does not bring the subscription back.
 

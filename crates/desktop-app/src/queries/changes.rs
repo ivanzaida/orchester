@@ -6,10 +6,7 @@
 use std::path::Path;
 
 use lurq::query::QueryClient;
-use orchester_workspace::{
-  tasks::outside::{AppOutside, Outside},
-  workspace::OrchestratorConsent,
-};
+use orchester_workspace::tasks::outside::{AppOutside, Outside};
 
 use super::{Session, app, project};
 use crate::screens::settings::Consent;
@@ -131,9 +128,7 @@ pub fn invalidate(client: &QueryClient, session: &Session, root: &Path, read: Pr
     ProjectRead::Repository => client.invalidate(project::repository(session, root)),
     ProjectRead::Estimates => client.invalidate(project::estimates(session, root)),
     ProjectRead::Orchestrator => {
-      for consent in OrchestratorConsent::ALL {
-        client.invalidate(project::orchestrator_allows(session.clone(), root.clone(), consent));
-      }
+      client.invalidate(project::orchestrator_drives(session.clone(), root.clone()));
       client.invalidate(project::orchestrator_watch(session, root));
     }
     ProjectRead::Memory => client.invalidate(project::memory_settings(session, root)),

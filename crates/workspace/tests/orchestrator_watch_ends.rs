@@ -261,10 +261,7 @@ impl Desktop {
   fn follow(&self) -> Followed {
     let (root, programs) = (self.repo.path(), Programs::processes());
     let checks = check_merges_in((root, &programs), &HashSet::new()).expect("checked");
-    let switches = Switches {
-      answers: true,
-      ..Switches::default()
-    };
+    let switches = Switches { drives: true };
     follow_in((root, self.scope.project, &programs), &checks, (switches, true)).expect("followed")
   }
 

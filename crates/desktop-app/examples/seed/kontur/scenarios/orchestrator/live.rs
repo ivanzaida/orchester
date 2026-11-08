@@ -135,7 +135,6 @@ fn wait_of(kind: WaitKind, ran: &Ran, step: &str, agent: Option<&str>) -> AgentW
     agent: agent.map(str::to_owned),
     link: format!("/tasks/{key}"),
     task: key,
-    own: false,
     automatic: false,
     continuing: None,
     merging: None,

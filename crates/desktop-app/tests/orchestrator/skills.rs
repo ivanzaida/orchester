@@ -11,7 +11,7 @@ use orchester_core::{
   resource::Skill,
   store::ResourceStore,
 };
-use orchester_workspace::{skills::data::ProjectSkills, workspace::OrchestratorConsent};
+use orchester_workspace::skills::data::ProjectSkills;
 
 use super::{
   changes::{actions, call},
@@ -109,7 +109,7 @@ fn orchestrator_saves_a_skill_itself_and_the_person_publishes_it() {
 #[test]
 fn orchestrator_publishes_a_skill_itself_once_the_person_lets_it() {
   let mut screen = Orchestrator::new(Setup::Ready);
-  screen.let_orchestrator(OrchestratorConsent::PublishDrafts, true);
+  screen.let_orchestrator_drive(true);
   screen.go(OrchestratorChat::New);
   call(&mut screen, SAVE, 1);
   call(&mut screen, PUBLISH, 2);

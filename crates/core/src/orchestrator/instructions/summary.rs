@@ -38,7 +38,7 @@ pub fn watch_summary_prompt(summary: &WatchSummary) -> String {
     .unwrap_or_default();
   format!(
     "[Orchester] This conversation watched {what} ({link}), and its watching ended by itself: {why}.{order}\n\
-     Nobody asked you in this chat: Orchester started this turn because Let the Orchestrator answer agents is on. \
+     Nobody asked you in this chat: Orchester started this turn because Let the Orchestrator drive is on. \
      {read}. Then write a short summary of what was done, what was canceled and what is left for the person to look \
      at, each with its link. Change nothing: start, resume, pause, cancel, merge, continue, answer, send, publish, \
      create, update, hold and release nothing; what you recommend, the person does in the app.",

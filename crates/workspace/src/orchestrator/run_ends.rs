@@ -246,7 +246,6 @@ fn ended_wait(project: ProjectId, task: &Task, run: &Run, end: RunEnd) -> AgentW
     others: 0,
     agent: None,
     link: Link::Task(project, task.key().clone(), TaskPage::Summary).path(),
-    own: false,
     automatic: false,
     continuing: None,
     merging: None,

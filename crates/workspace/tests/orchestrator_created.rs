@@ -161,7 +161,6 @@ impl Desktop {
       place: None,
       others: 0,
       link: format!("/project/p/tasks/{task}/conversation"),
-      own: false,
       automatic: true,
       continuing: None,
       merging: None,

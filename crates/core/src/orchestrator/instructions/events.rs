@@ -9,7 +9,7 @@ use crate::orchestrator::{
 
 /// The prompt of the Orchestrator turn `event` of `wait`'s run started by itself. `order` is the order of the
 /// conversation that leads the task, in the person's words, when one leads it; without one the turn was started
-/// because the person lets the Orchestrator answer agents.
+/// because the person lets the Orchestrator drive.
 pub fn event_prompt(wait: &AgentWait, event: TaskEvent, order: Option<&str>) -> String {
   let run = format!(
     "run #{number} of {task} ({title})",
@@ -33,12 +33,12 @@ pub fn event_prompt(wait: &AgentWait, event: TaskEvent, order: Option<&str>) -> 
   let why = match order {
     Some(order) => format!(
       "Orchester started this turn because this conversation leads the task. Its order, in the person's words: \
-       \"{order}\". Do what the order asks about this event, within your rules and the person's switches; where it \
+       \"{order}\". Do what the order asks about this event, within your rules; where it \
        says nothing about it: {todo}",
       todo = todo(event.kind)
     ),
     None => format!(
-      "Orchester started this turn because Let the Orchestrator answer agents is on. {todo}",
+      "Orchester started this turn because Let the Orchestrator drive is on. {todo}",
       todo = todo(event.kind)
     ),
   };
@@ -57,7 +57,7 @@ const fn todo(kind: TaskEventKind) -> &'static str {
        may send one with send_message. Start, resume, cancel or merge nothing."
     }
     TaskEventKind::MergeConflict => {
-      "Read the run first (get_run): the merge names the conflicting files. Propose continue_run with \
+      "Read the run first (get_run): the merge names the conflicting files. Call continue_run with \
        resolve_conflicts for this run, naming the files, or point the person to the Local integration page; do not \
        call merge_run again. Tell the person what conflicts, with the link. Start, resume, cancel or merge nothing."
     }

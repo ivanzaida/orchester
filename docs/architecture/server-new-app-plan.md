@@ -450,7 +450,7 @@ gives these edits to the stream that owns those files (stream B).
 
 Rules for the chat: like the desktop, it has no admin action (row 63); it reads only the local cache, so it works offline and needs no token; it never takes or takes
 over a claim, resolves a conflict, discards a waiting change, binds a reference, presses *Use v<N> here*, publishes a
-shared resource directly (*Let the Orchestrator publish drafts* does not cover them), redeems or makes an invite or
+shared resource directly (*Let the Orchestrator drive* does not cover them), redeems or makes an invite or
 code, or starts Share, Join or Make local; a conflict is reported with a `link` to the task's conflict view.
 
 **Tests.** `crates/workspace/tests` (MCP tool tests over a shared project on loopback): each field above, a refusal

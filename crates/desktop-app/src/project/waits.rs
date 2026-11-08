@@ -33,7 +33,7 @@ use orchester_workspace::{
   },
   runner::Runners,
   tasks::outside::Outside,
-  workspace::{OpenProject, OrchestratorConsent},
+  workspace::OpenProject,
 };
 
 use crate::services::Services;
@@ -84,11 +84,8 @@ async fn follow_once(services: &Services, i18n: I18n, open: &OpenProject) -> Res
   let switches = {
     let (workspace, root) = (services.workspace.clone(), open.repo_root.clone());
     background::run(move || {
-      let allows = |consent| workspace.orchestrator_allows(&root, consent);
       Ok::<_, StoreError>(Switches {
-        answers: allows(OrchestratorConsent::AnswerAgents)?,
-        continues: allows(OrchestratorConsent::ContinueInterrupted)?,
-        merges: allows(OrchestratorConsent::MergeFinished)? && allows(OrchestratorConsent::MergeRuns)?,
+        drives: workspace.orchestrator_drives(&root)?,
       })
     })
     .await?
