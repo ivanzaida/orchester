@@ -8,6 +8,7 @@ mod codex_sandbox;
 mod failure;
 mod harness;
 mod hub;
+mod local_hub;
 mod models;
 mod project_sets;
 mod reads;
