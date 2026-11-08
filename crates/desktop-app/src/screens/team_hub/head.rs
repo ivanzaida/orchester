@@ -154,7 +154,7 @@ const fn label_key(filter: HubFilter) -> &'static str {
 
 /// The filter's hint for `filter`: an admin's, or for a member what the kind is and that they fill in only what is
 /// local.
-pub(super) const fn hint_key(filter: HubFilter, may_change: bool) -> &'static str {
+const fn hint_key(filter: HubFilter, may_change: bool) -> &'static str {
   match (may_change, filter) {
     (true, HubFilter::All) => "team_hub.hint.all",
     (true, HubFilter::Profiles) => "team_hub.hint.profiles",
