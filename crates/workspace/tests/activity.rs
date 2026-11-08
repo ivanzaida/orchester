@@ -295,3 +295,28 @@ fn activity_the_same_work_done_after_all_settles_its_failure() {
   log.finish(saved, at(3));
   assert!(matches!(log.slot(), Slot::Latest(event) if event.title().key == "save"));
 }
+
+/// A person who presses Try again on a refused merge sees the merge under way, not the refusal it replaces: the failure
+/// of the same work does not outrank its own retry, and comes back with its new reason if the retry fails too.
+#[test]
+fn activity_a_retry_under_way_replaces_the_failure_it_retries() {
+  let mut log = ActivityLog::default();
+  let refused = log.start(spec("merge"), Instant::now());
+  log.fail(refused, Message::new("refused"), at(1));
+  assert!(matches!(log.slot(), Slot::Failure(_)));
+  let other = log.start(spec("other"), Instant::now());
+  assert!(
+    matches!(log.slot(), Slot::Failure(event) if event.title().key == "merge"),
+    "other work leaves the failure"
+  );
+  log.cancel(other);
+  let retry = log.start(spec("merge"), Instant::now());
+  assert!(
+    matches!(log.slot(), Slot::Running { newest, .. } if newest.title().key == "merge"),
+    "{:?}",
+    log.slot()
+  );
+  log.fail(retry, Message::new("refused again"), at(2));
+  assert!(matches!(log.slot(), Slot::Failure(event) if event.title().key == "merge"));
+  assert_eq!(log.recent().len(), 2, "both refusals stay in the recent list");
+}

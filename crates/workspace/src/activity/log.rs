@@ -231,7 +231,11 @@ pub struct ActivityLog {
 }
 
 impl ActivityLog {
+  /// Starts `spec`'s work. An earlier failure of the same work is over for the slot while it is tried again: a failure
+  /// outranks running work, which would keep showing the refusal of a merge that is merging now. It comes back, with
+  /// its new reason, if the retry fails too.
   pub fn start(&mut self, spec: OperationSpec, now: Instant) -> OperationId {
+    self.settle_failures(&spec.failed, &spec.target, spec.project.as_deref());
     let id = self.next_id();
     self.running.push(Operation { id, spec, started: now });
     id

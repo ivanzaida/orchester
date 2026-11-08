@@ -114,3 +114,97 @@ fn local_integration_exited_parent_closed_pipe_descendant_is_stopped_without_kil
 fn local_integration_timeout_stops_owned_parent_and_inherited_pipe_writer_before_restart_receipt() {
   run_probe("waiting-parent");
 }
+
+/// A read of the checkout whose program left a writer behind: the writer is stopped with the job, and Git's own answer
+/// stands, as `rev-parse` of the preflight needs. Before, any process the job still held 200 ms after Git exited
+/// refused the merge as uncertain, which a busy machine does by tearing processes down late.
+#[test]
+fn local_integration_read_that_leaves_a_stopped_writer_keeps_gits_answer() {
+  let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-tests");
+  fs::create_dir_all(&scratch).expect("scratch");
+  let dir = tempfile::tempdir_in(scratch).expect("private probe");
+  let git_in = |args: &[&str]| {
+    assert!(
+      Process::new("git")
+        .args(args)
+        .current_dir(dir.path())
+        .output()
+        .expect("git")
+        .status
+        .success()
+    );
+  };
+  git_in(&["init", "-b", "main"]);
+  fs::create_dir(dir.path().join("scratch")).expect("scratch");
+  let slashed = |path: &std::path::Path| path.to_str().expect("path").replace(std::path::MAIN_SEPARATOR, "/");
+  let probe = slashed(std::path::Path::new(env!(
+    "CARGO_BIN_EXE_orchester-local-process-probe"
+  )));
+  let counter = slashed(&dir.path().join("owned-counter"));
+  git_in(&[
+    "config",
+    "alias.leave",
+    &format!("!\"{probe}\" closed-pipes \"{counter}\""),
+  ]);
+  let git = LocalGit::new(dir.path(), &dir.path().join("scratch")).expect("local");
+  let said = git.text(&["leave"]);
+  assert!(said.is_ok(), "{said:?}");
+  let length = fs::metadata(&counter).expect("the writer ran").len();
+  thread::sleep(Duration::from_millis(150));
+  assert_eq!(
+    length,
+    fs::metadata(&counter).expect("counter").len(),
+    "the writer it left was stopped"
+  );
+}
+
+/// A journal that cannot record a program's birth.
+#[derive(Default)]
+struct Unwritable {
+  finished: Mutex<bool>,
+}
+impl ProcessJournal for Unwritable {
+  fn begin(&self) -> Result<u64, LocalError> {
+    Ok(1)
+  }
+  fn started(&self, _: u64, _: Option<&ProcessIdentity>) -> Result<(), LocalError> {
+    Err(LocalError::Reconcile)
+  }
+  fn finished(&self, _: u64) -> Result<(), LocalError> {
+    *self.finished.lock() = true;
+    Ok(())
+  }
+}
+
+/// A program that was stopped before it ran, because its birth could not be recorded, ends its receipt: left
+/// unfinished, every later reconciliation of the run is refused as uncertain for as long as the app lives, and one
+/// without an identity can never be reconciled.
+#[test]
+fn local_integration_program_stopped_before_it_ran_ends_its_receipt() {
+  let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/orc-24-tests");
+  fs::create_dir_all(&scratch).expect("scratch");
+  let dir = tempfile::tempdir_in(scratch).expect("private probe");
+  assert!(
+    Process::new("git")
+      .args(["init", "-b", "main"])
+      .current_dir(dir.path())
+      .output()
+      .expect("git")
+      .status
+      .success()
+  );
+  fs::create_dir(dir.path().join("scratch")).expect("scratch");
+  let mut git = LocalGit::new(dir.path(), &dir.path().join("scratch")).expect("local");
+  let journal = Arc::new(Unwritable::default());
+  git.bind_journal(journal.clone());
+  let probe = env!("CARGO_BIN_EXE_orchester-local-process-probe");
+  let counter = dir.path().join("owned-counter");
+  let command = Command::new(std::path::Path::new(probe), ["writer", counter.to_str().expect("path")]);
+  let result = git.check_command(&command, Duration::from_secs(5));
+  assert!(
+    matches!(result, Err(LocalGitError::State(LocalError::Reconcile))),
+    "{result:?}"
+  );
+  assert!(!counter.exists(), "the program never ran");
+  assert!(*journal.finished.lock(), "its job is empty, so its receipt is finished");
+}
