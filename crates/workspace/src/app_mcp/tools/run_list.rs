@@ -10,7 +10,6 @@ use std::{
 use orchester_core::{
   id::{ProjectId, RunId, StepExecutionId},
   run::RunNumber,
-  store::TaskStore,
   task::Task,
   tokens::TokenBudget,
 };
@@ -23,7 +22,7 @@ use super::{
   across::{Across, across, needs_project},
   merge_queue::deliveries,
   tasks::find_task,
-  wire,
+  team, wire,
 };
 use crate::{
   app_mcp::{
@@ -35,6 +34,7 @@ use crate::{
   tasks::{
     delivery::settle_records,
     history::{RunRecord, runs_of},
+    recorded::{self, task_of},
     slot_wait::{slot_waits, waiting_steps},
   },
 };
@@ -68,12 +68,18 @@ pub async fn list_runs(services: &Services, args: ListRuns, translate: &Translat
       "`limit` is 1 to {MAX_LIMIT}, not {limit}"
     )));
   }
+  // A team task is the one its server read; this computer may have recorded no run of it.
+  let team = match (&args.project, &args.task) {
+    (Some(project), Some(named)) => team::read_task(services, project, named).await?,
+    _ => None,
+  };
   let reading = services.clone();
   let read = blocking(move || {
     let mut read = across(&reading, args.project.as_deref(), |_, db| {
-      let tasks = match &args.task {
-        Some(named) => vec![find_task(db, named)?],
-        None => db.tasks()?,
+      let tasks = match (&args.task, &team) {
+        (Some(_), Some(read)) => task_of(db, read.task.id)?.into_iter().collect(),
+        (Some(named), None) => vec![find_task(db, named)?],
+        (None, _) => recorded::all(db)?,
       };
       let tasks = tasks
         .into_iter()

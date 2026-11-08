@@ -155,3 +155,18 @@ pub(super) fn merge_refused() -> ToolError {
     vec![Message::new("appMcp.errors.teamDeliveryPending")],
   )
 }
+
+/// The team task `key` names (its key or its server id) as the team server reads it, when `project` is a team
+/// project; `None` for a local one. For a tool that lists what this computer recorded of the task: the server says
+/// which task it is, and whether it exists, so a task never run here is not mistaken for one that does not exist.
+pub(super) async fn read_task(
+  services: &Services,
+  project: &str,
+  key: &str,
+) -> Result<Option<orchester_api::v2::TaskRead>, ToolError> {
+  let Some(team) = of(services, project).await? else {
+    return Ok(None);
+  };
+  let reads = team.reads(services).await?;
+  tasks::find(&reads, key).await.map(Some)
+}

@@ -54,3 +54,20 @@ fn recorded(db: &ProjectDb, id: TaskId) -> Result<Option<Task>, StoreError> {
   }
   Ok(None)
 }
+
+/// The project's tasks as [`task_of`] gives them: the stored tasks (a team task as its runs recorded it) and the
+/// team tasks this computer keeps no definition of.
+pub fn all(db: &ProjectDb) -> Result<Vec<Task>, StoreError> {
+  let mut tasks = Vec::new();
+  for stored in db.tasks()? {
+    tasks.push(task_of(db, stored.id())?.unwrap_or(stored));
+  }
+  for id in db.team_task_ids()? {
+    if !tasks.iter().any(|task| task.id() == id)
+      && let Some(task) = task_of(db, id)?
+    {
+      tasks.push(task);
+    }
+  }
+  Ok(tasks)
+}

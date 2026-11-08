@@ -41,6 +41,7 @@ use crate::{
     changes::{ChangesError, Checkpointed, NotCheckpointed, RunRange, RunStage, not_checkpointed_in, run_changes_in},
     delivery::{self, Delivery},
     detail::run_store_error,
+    recorded::task_of,
     integration::{IntegrationProblem, integration_refusal, stage_message},
     integration_jobs::{JobState, MergeArgs, ProjectJobState},
     local_integration::{CheckoutHolder, IntegrationError, LegacyPolicy, LocalIntent, LocalOrigin, checkout_holder},
@@ -59,7 +60,7 @@ pub async fn get_changes(services: &Services, args: InRun) -> Result<Value, Tool
       let run = find_run(&db, &args.run)?;
       // The changes are read without their task; only the link needs it, so a task that cannot be read costs the
       // link alone.
-      let link = match db.task(run.task()) {
+      let link = match task_of(&db, run.task()) {
         Ok(task) => task.map(|task| Link::Task(open.project.id(), task.key().clone(), TaskPage::Changes).path()),
         Err(_) => None,
       };

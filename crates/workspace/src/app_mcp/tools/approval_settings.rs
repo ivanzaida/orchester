@@ -20,7 +20,7 @@ use orchester_core::{
       AutoModeSettings, ReviewerChoice, ReviewerUnavailable, default_review_model, resolve_reviewer, reviewer_kind,
     },
   },
-  store::{ConnectionStore, RunStore, TaskStore},
+  store::{ConnectionStore, RunStore},
 };
 use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
@@ -40,6 +40,7 @@ use crate::{
   tasks::{
     detail::run_store_error,
     outside::Outside,
+    recorded,
     run_approvals::{RunApprovalChange, apply_in, run_mode_in, unavailable_key},
   },
 };
@@ -334,7 +335,7 @@ fn approvals_json(db: &ProjectDb, project: ProjectId) -> Result<Value, ToolError
 /// now. A run that cannot be read is left out: it cannot be working.
 fn running(db: &ProjectDb, project: ProjectId) -> Result<Vec<Value>, ToolError> {
   let mut runs = Vec::new();
-  for task in db.tasks()? {
+  for task in recorded::all(db)? {
     for run in db
       .runs_of_task(task.id())
       .map_err(run_store_error)?

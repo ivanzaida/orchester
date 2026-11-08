@@ -64,6 +64,8 @@ limits, conflicts) always come to the person in both modes.
 
 A project's approvals. Parameter: `project` (req.). Answers `approvals` with:
 
+**Team projects:** the runs listed include a team task's runs, named by the key they recorded when they started.
+
 - `allow_autopilot` — *Allow Autopilot for agents in this project*.
 - `reviewer` — the connection, model and effort that review Manual's requests (`default` when no one chose another),
   or `unavailable` with why the project has none.
@@ -332,6 +334,10 @@ queue state, `null` if it never joined), what happened, tokens used and budget, 
 that cannot be read has no phase/state/tokens; its detail says why. While steps of a run wait for an agent slot, its
 detail ends by naming them (`… · Review waits for an agent slot`).
 
+**Team projects:** a team task's runs are listed from this computer's own records of them, with the task's key and
+title as the run recorded them when it started. A team task named by `task` (key or server id) is read from its team
+server first; one this computer ran nothing of lists no runs.
+
 | Parameter | Type            | Req. | Description                                   |
 |-----------|-----------------|------|-----------------------------------------------|
 | `project` | string \| null  | no   | Left out = every project.                     |
@@ -383,6 +389,10 @@ Parameters: `project` (req.), `run` (req.).
 - `pause_run`: pauses a run at its agents' next checkpoint.
 - `resume_run`: resumes a paused run, or continues an interrupted one from its last checkpoint.
 - `cancel_run`: cancels a run that has not ended.
+
+**Team projects:** `resume_run` resumes a paused run under the claim its work started with and takes no claim of the old
+sharing stream; an interrupted run is not continued from here (`team_project_unsupported`, as `continue_run`) because
+a team task's work starts and goes on only through the team server.
 
 Parameters (each): `project` (req.), `run` (req.). Runner refusals: `run_not_running`, `shutting_down`,
 `runner_unavailable`, `runner_reply_lost`, …
@@ -444,6 +454,9 @@ worked again in other worktrees since this was read. Parameters: `project`, `run
 to. Running runs go on; queued tasks wait and a start is refused until `release_queue` lets them go on. Both answer
 what holds now.
 
+**Team projects:** the task is read from its team server; its group is this computer's, so a team task in none is
+refused as `not_in_group`.
+
 | Parameter | Type           | Req. | Description                                                        |
 |-----------|----------------|------|--------------------------------------------------------------------|
 | `project` | string         | yes  |                                                                    |
@@ -467,6 +480,8 @@ review failed (`could_not_run`, `timed_out`, `unreadable`; absent for a request 
 lists every request of the run, oldest first, with `answered` (`kind`: `autopilot`, `profile`, `reviewer` with its
 `reason`, `person`; absent while it waits) and `came_to_you`.
 
+**Team projects:** a team task's approvals name the task by the key its run recorded when it started.
+
 Parameters: `project` (string | null), `run` (string | null — needs `project`).
 
 ### `decide_approval` — changes data · gate AA
@@ -486,6 +501,8 @@ Approves a waiting request once, or denies it. A denial may carry a `message` th
 Agents' questions waiting for an answer, oldest first: id, agent, when asked, whether the agent waits in its turn,
 the questions with suggested answers, run, task, link. Under `waiting_for_message`: steps of tasks' latest runs that
 wait for a message, each with what its agent wrote last (answer those with `send_message`).
+
+**Team projects:** a team task's questions name the task by the key its run recorded when it started.
 
 Parameters: `project` (string | null), `run` (string | null — needs `project`).
 
@@ -561,6 +578,9 @@ orchestrator), plans (text, waiting or not, decision), `run_continued` entries (
 `restarted`; step, note, attempt, author), `base_moved` notices and how each step ended. Each entry has author, step,
 run, time, `cursor` and link. Texts are stored text with secrets redacted.
 
+**Team projects:** the task is the one its team server reads (`team_unavailable` while it cannot be reached) and the
+conversation is this computer's record of its runs; a team task nothing ran for here has no entries.
+
 | Parameter | Type            | Req. | Description                                                      |
 |-----------|-----------------|------|------------------------------------------------------------------|
 | `project` | string          | yes  |                                                                  |
@@ -631,6 +651,9 @@ left out because their record is damaged. `estimates` (one project only) is the 
 
 How delivery goes in a project over its last `days` local days (default 30, max 366), as the *Delivery* view beside
 Usage reads it, in tasks (no money estimates):
+
+**Team projects:** the forecast of a team module is not computed on this computer: with `module`, the module is read
+from its team server (`module_not_found` when it has none) and the call is refused as `team_project_unsupported`.
 
 - **Throughput** — tasks merged per day (per week past 31 days), in Orchester or found merged outside by git, with
   their story points and how many had none.

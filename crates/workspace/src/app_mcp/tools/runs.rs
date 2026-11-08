@@ -30,7 +30,7 @@ use super::{
   message_waits::message_waits,
   orchestrated, plans,
   review::Reviewed,
-  wire,
+  team, wire,
   worktree::{worktree_left, worktree_state},
 };
 use crate::{
@@ -240,15 +240,23 @@ fn reviewer_tokens(reviews: &[ReviewRecord]) -> Value {
 
 pub async fn control_run(services: &Services, args: InRun, control: Control) -> Result<Value, ToolError> {
   let reading = services.clone();
-  let (project, run) = blocking(move || {
+  let (project, run, team) = blocking(move || {
     let project = reading.project(&args.project)?;
-    let run = find_run(&ProjectDb::open(&project.repo_root)?, &args.run)?;
-    Ok((project, run))
+    let db = ProjectDb::open(&project.repo_root)?;
+    let run = find_run(&db, &args.run)?;
+    Ok((project, run, team::linked(&db)?))
   })
   .await?;
   let id = run.id();
+  // A team task's work starts and goes on under the claim the team server gave it (team_work): continuing an
+  // interrupted run from here would take the old sharing stream's claim instead, so it is refused like continue_run.
+  // A paused run resumes under the claim its work started with, and takes none.
+  if team && control == Control::Resume && matches!(run.status(), RunStatus::Interrupted(_)) {
+    return Err(team::team_only_on_server("resume_run"));
+  }
   // Work on a shared task goes on only under the person's claim; Pause and Cancel need none.
   let claim = match control {
+    Control::Resume if team => WorkClaim::default(),
     Control::Resume => services
       .servers
       .claim_for_work(&project.repo_root, run.task())

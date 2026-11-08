@@ -799,6 +799,9 @@ What a run changed, as the task's *Changes* tab reads it: the files of its last 
 started from (path, change, additions, deletions), and what its worktree holds that no checkpoint has yet. Diffs too
 large to read give their size only. `link` is the task's Changes tab.
 
+**Team projects:** the run is found by its id or number whatever its task, and `link` names the task by the key the run
+recorded when it started.
+
 Parameters: `project` (req.), `run` (req.: id or number, `7` or `#7`).
 
 ### `merge_run` — changes data

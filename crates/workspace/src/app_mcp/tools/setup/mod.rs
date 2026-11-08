@@ -299,7 +299,7 @@ const SPECS: &[Spec] = &[
     description: "What a run changed, as the task's Changes tab reads it: the files of its last checkpoint against \
                   the base it started from (path, change, additions, deletions), and what its worktree holds that \
                   no checkpoint has yet. Diffs too large to read give their size only. `link` is its task's \
-                  Changes tab in the app, which shows the task's latest run.",
+                  Changes tab in the app, which shows the task's latest run. A team task's run is found by its id or number, and its link names the task by the key the run recorded when it started.",
     schema: schema_for_type::<super::runs::InRun>,
     read_only: true,
   },
