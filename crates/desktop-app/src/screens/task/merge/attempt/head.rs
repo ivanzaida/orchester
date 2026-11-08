@@ -1,8 +1,8 @@
-//! The top of the attempt page (09b `PVZKL`): the breadcrumb *← Tasks / KON-12 / Merge · run #8* (`A99gLf`), the
-//! task's title with the page's actions (`KOUkd`: a ghost action, *Open task*, and the primary action of how the run
-//! stands), and the status line (`E8U3x`): a 14 glyph and the status in 13/500 in `warning`, `info` or `success`, then
-//! the run, its attempts and the last one's time and asker in 12 `text_muted`. While Orchester waits to try again, the
-//! status counts down in a component of its own, so a second's tick renders nothing else.
+//! The top of the attempt page (`Review - v2` 13a `i0K3xB`): the breadcrumb *← Tasks / KON-12 / Merge · run 8*, the
+//! task's title, which wraps beside *Copy details* and never runs under it, and the status line: a 14 glyph and the
+//! status in 13/500 in `warning`, `danger`, `info` or `success`, then the run, its pipeline, its attempts and the last
+//! one's time and asker in 12 `text_muted`. While Orchester waits to try again, the status counts down in a component
+//! of its own, so a second's tick renders nothing else; the bar's title counts down in another.
 
 use std::{sync::Arc, time::Duration};
 
@@ -32,7 +32,7 @@ use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{ProjectPage, Route, TaskList, TaskView},
-  theme::{ExtraSpacing, ExtraTypography, IconSize},
+  theme::{AttemptText, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     breadcrumb::{Crumb, CrumbSeparator, breadcrumb},
     icon::{Icon, icon},
@@ -41,7 +41,7 @@ use crate::{
 
 const TICK: Duration = Duration::from_secs(1);
 
-/// *← Tasks / KON-12 / Merge · run #8*: Tasks opens the task list, the key the task's page.
+/// *← Tasks / KON-12 / Merge · run 8*: Tasks opens the task list, the key the task's page.
 pub(super) fn crumbs(ctx: &mut Ctx, project: &ShownProject, (key, run): (&TaskKey, u32)) -> Element {
   let navigation = Navigation::of(ctx);
   let id = project.open.project.id();
@@ -55,7 +55,7 @@ pub(super) fn crumbs(ctx: &mut Ctx, project: &ShownProject, (key, run): (&TaskKe
       navigation.to(Route::Project(id, ProjectPage::Task(key.clone(), TaskView::default()))),
     )
     .mono(),
-    Crumb::here(ctx.t_args("merges.page.crumb", [("run", run.to_string())])),
+    Crumb::here(ctx.t_args("merges.page.crumb", [("run", run.to_string())])).mono(),
   ];
   Row::new()
     .id("merge-attempt-crumbs-row")
@@ -93,6 +93,33 @@ pub(crate) fn title_row(title: impl Into<Element>, actions: Vec<Element>) -> Ele
     .into()
 }
 
+/// The title, which wraps in the room left beside `actions` (`Header` in 13c `zWlkp`): 16 from them, at their top.
+pub(super) fn wrapping_title(title: impl Into<Element>, actions: Vec<Element>) -> Element {
+  Row::new()
+    .id("merge-attempt-header")
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Lg)
+    .align_items(Alignment::Start)
+    .child(title)
+    .child(
+      Row::new()
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .with_children(actions),
+    )
+    .into()
+}
+
+/// The task's title as the header shows it: it wraps.
+pub(super) fn heading(title: &str) -> Element {
+  Text::new(title)
+    .id("merge-attempt-title")
+    .variant(AttemptText::Title.role())
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
+    .into()
+}
+
 /// The status line of `page`, whose run stands as `standing`; `watch`, what looks at Orchester's wait to try again
 /// while the run merges, renders nothing at its end.
 pub(super) fn status(
@@ -101,14 +128,15 @@ pub(super) fn status(
   (standing, base): (Standing, &str),
   watch: Option<Element>,
 ) -> Element {
-  let (glyph, color) = standing.glyph();
+  let (glyph, color) = standing.page_glyph();
   let meta = meta(ctx, page, standing, base);
   let words: Element = match standing {
-    Standing::Retrying(retrying) if retrying.next.is_some() => ctx.mount_keyed::<Countdown>(
-      "merge-attempt-countdown",
+    Standing::Retrying(retrying) if retrying.next.is_some() => countdown(
+      ctx,
       Next {
         last: page.last().map_or(MergeAsker::Person, |last| last.attempt.asked_by()),
         at: retrying.next,
+        place: Place::Status,
       },
     ),
     _ => status_text(&standing.status(ctx, base), color.clone()),
@@ -116,6 +144,7 @@ pub(super) fn status(
   Row::new()
     .id("merge-attempt-status")
     .describe("standing", standing.name())
+    .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(icon(glyph, IconSize::Md, color))
@@ -131,7 +160,7 @@ pub(super) fn status(
     .into()
 }
 
-fn status_text(text: &str, color: PaletteColor) -> Element {
+pub(super) fn status_text(text: &str, color: PaletteColor) -> Element {
   Text::new(text)
     .id("merge-attempt-status-text")
     .variant(ExtraTypography::Strong.role())
@@ -140,10 +169,17 @@ fn status_text(text: &str, color: PaletteColor) -> Element {
     .into()
 }
 
-/// *run #8 · 2 attempts · last at 12:41, by you from the task page*; a merged run names its commit, a run Orchester
-/// tries again that nothing was merged, one stopped while bringing the merge in that its base branch did not move.
+/// *run 8 · Feature delivery v3 · 2 attempts · last at 12:41, by you from the task page*; a merged run names its
+/// commit, a run Orchester tries again that nothing was merged, one stopped while bringing the merge in that its base
+/// branch did not move.
 fn meta(ctx: &Ctx, page: &AttemptPage, standing: Standing, base: &str) -> Arc<str> {
   let mut parts = vec![ctx.t_args("merges.page.meta.run", [("run", page.run.number.get().to_string())])];
+  if let (Some(name), version) = &page.pipeline {
+    parts.push(ctx.t_args(
+      "merges.page.meta.pipeline",
+      [("name", name.clone()), ("version", version.to_string())],
+    ));
+  }
   if let Standing::Retrying(_) = standing {
     parts.push(ctx.t("merges.page.meta.nothingMerged"));
     return super::lines::joined(ctx, &parts);
@@ -172,17 +208,36 @@ fn meta(ctx: &Ctx, page: &AttemptPage, standing: Standing, base: &str) -> Arc<st
   super::lines::joined(ctx, &parts)
 }
 
+/// Where a countdown stands: the status line, or the bar's title.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Place {
+  Status,
+  Bar,
+}
+
+/// What a countdown counts to.
 #[derive(Clone, Debug, PartialEq)]
-struct Next {
+pub(super) struct Next {
   /// Who asked for the last try.
-  last: MergeAsker,
+  pub last: MergeAsker,
   /// When Orchester tries next.
-  at: Option<Timestamp>,
+  pub at: Option<Timestamp>,
+  pub place: Place,
 }
 
 impl DevtoolsInspectable for Next {}
 
-/// *Retrying by itself · attempt 3 of 3 in 18 s*, counting down a second at a time.
+/// The countdown to Orchester's next try, in its own component so a tick renders nothing else.
+pub(super) fn countdown(ctx: &mut Ctx, next: Next) -> Element {
+  let key = match next.place {
+    Place::Status => "merge-attempt-countdown",
+    Place::Bar => "merge-attempt-bar-countdown",
+  };
+  ctx.mount_keyed::<Countdown>(key, next)
+}
+
+/// *Retrying by itself · attempt 3 of 3 in 18 s*, or the bar's *Orchester tries again in 18 s*, counting down a second
+/// at a time.
 struct Countdown {
   tick: Signal<u64>,
   _interval: Interval,
@@ -203,7 +258,7 @@ impl Component for Countdown {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let Next { last, at } = ctx.props::<Next>().clone();
+    let Next { last, at, place } = ctx.props::<Next>().clone();
     // Read so every tick renders the line again.
     self.tick.get();
     let attempt = match last {
@@ -214,14 +269,22 @@ impl Component for Countdown {
       ((at.unix_millis() - Timestamp::now().unix_millis()).max(0) + 999) / 1000
     });
     let (attempt, of) = (attempt.to_string(), RETRIES.to_string());
-    let text = if seconds == 0 {
-      ctx.t_args("merges.page.status.retryingNow", [("attempt", attempt), ("of", of)])
-    } else {
-      ctx.t_args(
+    let words = match (place, seconds) {
+      (Place::Status, 0) => ctx.t_args("merges.page.status.retryingNow", [("attempt", attempt), ("of", of)]),
+      (Place::Status, _) => ctx.t_args(
         "merges.page.status.retrying",
         [("attempt", attempt), ("of", of), ("seconds", seconds.to_string())],
-      )
+      ),
+      (Place::Bar, 0) => ctx.t("merges.page.bar.retryingNow"),
+      (Place::Bar, _) => ctx.t_args("merges.page.bar.retrying", [("seconds", seconds.to_string())]),
     };
-    Column::new().child(status_text(&text, PaletteColor::Info))
+    Column::new().child(match place {
+      Place::Status => status_text(&words, PaletteColor::Info),
+      Place::Bar => Text::new(&words)
+        .id("merge-attempt-bar-title")
+        .variant(ExtraTypography::Strong.role())
+        .nowrap()
+        .into(),
+    })
   }
 }

@@ -95,7 +95,7 @@ fn worktree_read(page: &mut Page) {
   page
     .window
     .until_within(super::MERGE_WAIT, "the run's worktree to be read", |window| {
-      window.texts("merge-attempt-ask-agent-reason").is_some()
+      window.texts("merge-attempt-bar-reason").is_some()
     });
 }
 
@@ -155,20 +155,9 @@ fn decision_resolve_a_conflict_offers_two_ways_and_the_editor_merges_into_the_wo
   worktree_read(&mut page);
   assert!(page.has("merge-attempt-resolve-in-editor"));
   assert!(page.has("merge-attempt-ask-agent"));
-  let program = match &stand_in_program(folder.path()) {
-    Editor::Named(program) => program.file_name().expect("a file").to_string_lossy().into_owned(),
-    other => panic!("a named stand-in, not {other:?}"),
-  };
-  let line = page.text("merge-attempt-resolve-editor");
-  assert!(
-    line.contains(&format!(
-      "merges main into the run's worktree and opens it with its conflicting files in {program}."
-    )),
-    "{line}"
-  );
   // Asking an agent goes to the runner, which is not connected here.
   assert!(page.locked("merge-attempt-ask-agent"));
-  assert_eq!(page.text("merge-attempt-ask-agent-reason"), OFFLINE);
+  assert_eq!(page.text("merge-attempt-bar-reason"), OFFLINE);
 
   resolve_in_editor(&mut page);
   let worktree = worktree(&page, &run);
@@ -291,7 +280,7 @@ fn decision_resolve_refuses_a_worktree_with_uncommitted_work() {
   // press or when the merge into the worktree starts.
   if !page.locked("merge-attempt-resolve-in-editor") {
     page.click("merge-attempt-resolve-in-editor");
-    page.until_says("merge-attempt-resolve-failed", "agent-notes.md");
+    page.until_says("merge-attempt-not-done", "agent-notes.md");
   }
   page.window.navigation().back();
   page
@@ -306,11 +295,11 @@ fn decision_resolve_without_an_editor_says_so() {
   let _checkout = checkout_page();
   let (mut page, ..) = conflicted(None);
   page.window.until("Resolve in editor", |window| {
-    window.texts("merge-attempt-resolve-editor").is_some()
+    window.texts("merge-attempt-bar-reason").is_some()
   });
   assert!(page.locked("merge-attempt-resolve-in-editor"));
   assert_eq!(
-    page.text("merge-attempt-resolve-editor"),
+    page.text("merge-attempt-bar-reason"),
     "No editor was found on this computer: install VS Code's code command, or name your editor in ORCHESTER_EDITOR."
   );
 }

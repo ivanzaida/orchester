@@ -36,6 +36,17 @@ pub fn begin(
   run: RunId,
   profile: Option<ResourceId>,
 ) -> Result<Command, ReviewRefusal> {
+  begin_by(root, worktrees, run, (profile, Answerer::Person))
+}
+
+/// [`begin`], the return decided by `by`: the attempt page's *Ask the agent to resolve* is a person's press, or
+/// automation's while a person lets it decide.
+pub fn begin_by(
+  root: &Path,
+  worktrees: &RunWorktrees,
+  run: RunId,
+  (profile, by): (Option<ResourceId>, Answerer),
+) -> Result<Command, ReviewRefusal> {
   let db = ProjectDb::open(root)?;
   let stored = waiting(&db, run)?;
   let conflicts = standing(&db, &stored)?.ok_or(ReviewRefusal::NoConflicts)?;
@@ -52,8 +63,7 @@ pub fn begin(
   if let Some(refusal) = return_work::refusal(&detail, view, &worktree) {
     return Err(ReviewRefusal::Returned(refusal));
   }
-  return_work::resolve_command(view, step, (&conflicts.files, None), (chosen, Answerer::Person))
-    .ok_or(ReviewRefusal::NoConflicts)
+  return_work::resolve_command(view, step, (&conflicts.files, None), (chosen, by)).ok_or(ReviewRefusal::NoConflicts)
 }
 
 /// Hands `command`, made by [`begin`], to the runner of `open`, starting it when the project has none. The refusal

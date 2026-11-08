@@ -10,7 +10,8 @@
 //!   merged; `held: false` lets the lease go, so the next try (or *Try now*) merges.
 //! - *Per-endpoint rate limits* (09e `s1jIpI`): a Feature delivery run the merge queue stopped, its attempt refused at
 //!   Project database; *Try again* puts it back in its place in the queue.
-//! - *Per-endpoint secrets* (09f `Q6yPN8`): conflicts in two files.
+//! - *Per-endpoint secrets* (09f `Q6yPN8`): conflicts in two files; and a run with a title long enough to wrap
+//!   (`LONG_TITLE`, 13c `zWlkp`).
 //! - *Delivery dashboard* (09g `i2rVv`): merged by Git, not recorded; the commit is in `main`, so *Record merge*
 //!   records it.
 //! - *Delivery log per endpoint* (09h `rzo3w`): merged on its third attempt, after automation's and the person's were
@@ -45,6 +46,8 @@ const IN_USE: &str = ".orchester/orchester.db-wal: The process cannot access the
 const GIT_STOPPED: &str = "Git stopped answering while it merged: `git merge --no-ff --no-edit orchester/kon-run` wrote nothing for 120 s and was stopped, and the temporary worktree was removed";
 /// How long Git wrote nothing in [`GIT_STOPPED`].
 const SILENT_SECONDS: u64 = 120;
+/// A title that wraps in the page's header beside *Copy details* and never runs under it (13c `zWlkp`).
+const LONG_TITLE: &str = "Add retry with exponential backoff and full jitter to the webhook sender, and keep every attempt visible in the endpoint's delivery log";
 
 /// Records the attempt of `run` at `at` that `asked` asked for, ended as `ended`, with the kind of its cause as the app
 /// keeps it.
@@ -72,6 +75,20 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
     kontur,
     quick,
     ("Per-endpoint secrets", 170),
+    (
+      AttemptOutcome::Conflicts {
+        files: vec![
+          "src/webhooks/retry.rs".to_owned(),
+          "src/webhooks/delivery.rs".to_owned(),
+        ],
+      },
+      None,
+    ),
+  )?;
+  not_merged(
+    kontur,
+    quick,
+    (LONG_TITLE, 120),
     (
       AttemptOutcome::Conflicts {
         files: vec![

@@ -18,7 +18,7 @@ use super::{
 use crate::ui::icon::Icon;
 
 /// The cause a preflight's integration lock gives when another operation holds it.
-const HELD: &str = "held by another operation";
+pub(super) const HELD: &str = "held by another operation";
 
 /// How the run stands after its last attempt, as its page and its task page's Merge row tell it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -90,6 +90,22 @@ impl Standing {
       Self::Conflicts => (Icon::GitMerge, PaletteColor::Warning),
       Self::LeftChanged => (Icon::TriangleAlert, PaletteColor::Warning),
       _ => (Icon::CircleAlert, PaletteColor::Warning),
+    }
+  }
+
+  /// The attempt page's status line's glyph and color: a merge that conflicts is `danger` there (13c `zWlkp`).
+  pub(super) const fn page_glyph(self) -> (Icon, PaletteColor) {
+    match self {
+      Self::Conflicts => (Icon::GitCompareArrows, PaletteColor::Danger),
+      _ => self.glyph(),
+    }
+  }
+
+  /// The glyph of the strip under the status line: what Orchester retries is a warning there, as it stopped.
+  pub(super) const fn strip_glyph(self) -> (Icon, PaletteColor) {
+    match self {
+      Self::Retrying(_) => (Icon::CircleAlert, PaletteColor::Warning),
+      _ => self.page_glyph(),
     }
   }
 

@@ -23,11 +23,18 @@ pub(crate) enum Read {
   Failed(Message),
 }
 
-/// Run `number` of the task `key` in `project`, as last read; the task page's Merge row reads it too.
+/// Run `number` of the task `key` in `project`, as last read; the task page's Merge row reads it too. The page last
+/// read is kept in the project's feed, and stands in while the first read of a mount is under way.
 pub(crate) fn read(ctx: &mut Ctx, project: &ShownProject, (key, number): (&TaskKey, RunNumber), again: u64) -> Read {
   let feed = &project.feed;
+  let kept = || {
+    feed
+      .merge_attempts
+      .with_untracked(|kept| kept.of(key, number))
+      .map_or(Read::Reading, Read::Ready)
+  };
   let Some(tasks) = feed.tasks.with(|tasks| tasks.ready().cloned()) else {
-    return Read::Reading;
+    return kept();
   };
   let root = project.open.repo_root.clone();
   let queue = crate::project::merge_queue::changes(ctx, &root);
@@ -53,8 +60,17 @@ pub(crate) fn read(ctx: &mut Ctx, project: &ShownProject, (key, number): (&TaskK
     return Read::Failed(error);
   }
   match loaded.data {
-    None => Read::Reading,
+    None => kept(),
     Some(None) => Read::Missing,
-    Some(Some(page)) => Read::Ready(Arc::new(page)),
+    Some(Some(page)) => {
+      let page = Arc::new(page);
+      let changed = feed
+        .merge_attempts
+        .with_untracked(|kept| kept.of(key, number).is_none_or(|last| last != page));
+      if changed {
+        feed.merge_attempts.update(|kept| kept.keep(key, number, &page));
+      }
+      Read::Ready(page)
+    }
   }
 }

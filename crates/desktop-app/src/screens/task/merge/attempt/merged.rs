@@ -1,11 +1,15 @@
 //! A run that was merged after the attempt the page opens on (the merge queue, a later attempt, the Orchestrator, or a
-//! person outside Orchester): the page says so first, in a success banner with the branch, the revision, and when and
-//! how, and shows the attempt as history, with no action to fix what no longer needs fixing. Orchester recorded no
-//! time of a merge made outside it, and the banner says so rather than guess; the revision it shows is the run's own
-//! head, which the branch holds.
+//! person outside Orchester; ORC-917): the page says so first, in the strip under the status line in `success`, with
+//! the branch, the revision, and when and how, and shows the attempt as history, with no action to fix what no longer
+//! needs fixing. There is no 13-series state for it: it is 13e's *What happened* strip over the usual Checks and
+//! Attempts, with *The last attempt* between them. Orchester recorded no time of a merge made outside it, and the strip
+//! says so rather than guess; the revision it shows is the run's own head, which the branch holds.
 
 use lurq::{
-  app::{ctx::Ctx, theme::SpacingSize},
+  app::{
+    ctx::Ctx,
+    theme::{PaletteColor, SpacingSize},
+  },
   components::{Column, Text},
   node::{Element, dimension::Dimension},
 };
@@ -20,46 +24,20 @@ use super::{
   lines::{attempt_line, joined, when},
   section, section_head,
   standing::Standing,
+  strip::strip,
   words::attempt_time,
 };
-use crate::{
-  theme::AttemptText,
-  ui::notice::{Notice, NoticeTone},
-};
-
-/// The first section of the main column: what stopped the last attempt, or what happened to a merged run; for a run
-/// merged after its last attempt, the banner and the attempt as history.
-pub(super) fn what(ctx: &Ctx, page: &AttemptPage, standing: Standing, base: &str) -> Vec<Element> {
-  if let Some(last) = later(page, standing) {
-    let mut sections = vec![banner(ctx, page)];
-    sections.extend(history(ctx, page, last, base));
-    return sections;
-  }
-  let head = if standing == Standing::Merged {
-    "merges.page.whatHappened"
-  } else {
-    "merges.page.whatStopped"
-  };
-  vec![section(
-    "merge-attempt-what",
-    section_head("merge-attempt-what-head", &ctx.t(head), None),
-    Text::new(&super::standing::explanation(ctx, page, standing, base))
-      .id("merge-attempt-explanation")
-      .variant(AttemptText::Explanation.role())
-      .width(Dimension::Pct(100.0))
-      .into(),
-  )]
-}
+use crate::{theme::AttemptText, ui::icon::Icon};
 
 /// The last attempt of `page`, whose run stands as `standing`, when the run was merged after it; `None` when the
 /// attempt itself landed or the run is not merged.
-fn later(page: &AttemptPage, standing: Standing) -> Option<&RecordedAttempt> {
+pub(super) fn later(page: &AttemptPage, standing: Standing) -> Option<&RecordedAttempt> {
   let last = page.last()?;
   (standing.is_merged() && !last.attempt.outcome().landed()).then_some(last)
 }
 
 /// *Merged into main at d08e094*, and under it how and when; for a merge made outside Orchester, that it was.
-fn banner(ctx: &Ctx, page: &AttemptPage) -> Element {
+pub(super) fn banner(ctx: &Ctx, page: &AttemptPage) -> Element {
   let (title, body) = match (&page.merge, page.delivery.merged_into()) {
     (Some(merge), _) => {
       let how = ctx.t(match merge.kind {
@@ -91,14 +69,16 @@ fn banner(ctx: &Ctx, page: &AttemptPage) -> Element {
       (ctx.t_args("merges.page.banner.outside", [("branch", branch)]), body)
     }
   };
-  Notice::new("merge-attempt-merged-banner", NoticeTone::Success, title)
-    .body(body)
-    .into()
+  strip(
+    ("merge-attempt-merged-banner", "merge-attempt-merged-banner-words"),
+    (Icon::CircleCheck, PaletteColor::Success),
+    (&title, &body),
+  )
 }
 
 /// The attempt as history: how it ended and that the run was merged later, and the files it conflicted on, which no
 /// longer wait to be resolved.
-fn history(ctx: &Ctx, page: &AttemptPage, last: &RecordedAttempt, base: &str) -> Vec<Element> {
+pub(super) fn history(ctx: &Ctx, page: &AttemptPage, last: &RecordedAttempt, base: &str) -> Vec<Element> {
   let seconds = super::attempts::to_the_second(&page.attempts);
   let count = checks::heading_count(ctx, (last.sequence, attempt_time(ctx, last.attempt.at(), seconds)));
   let words = |id: &str, text: &str| -> Element {
@@ -113,7 +93,7 @@ fn history(ctx: &Ctx, page: &AttemptPage, last: &RecordedAttempt, base: &str) ->
     section_head(
       "merge-attempt-history-head",
       &ctx.t("merges.page.history"),
-      Some(&count),
+      (Some(&count), None),
     ),
     Column::new()
       .width(Dimension::Pct(100.0))
@@ -126,14 +106,19 @@ fn history(ctx: &Ctx, page: &AttemptPage, last: &RecordedAttempt, base: &str) ->
       .into(),
   )];
   if let AttemptOutcome::Conflicts { files } = last.attempt.outcome() {
+    let then = ctx.t("merges.page.conflictedThen");
     sections.push(section(
       "merge-attempt-history-conflicts",
       section_head(
         "merge-attempt-conflicting-head",
         &ctx.t("merges.page.conflicting"),
-        Some(&files.len().to_string()),
+        (Some(&files.len().to_string()), None),
       ),
-      conflicts::files_list(ctx, files, "merges.page.conflictedThen"),
+      conflicts::files_list(
+        files
+          .iter()
+          .map(|file| (file.as_str(), then.clone(), PaletteColor::TextMuted)),
+      ),
     ));
   }
   sections

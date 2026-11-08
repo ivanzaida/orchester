@@ -81,7 +81,7 @@ fn merge_attempt_page_merged_later_shows_the_banner_and_the_attempt_as_history_w
     "the files stay as history, not as a live state"
   );
   assert_eq!(
-    page.window.text("merge-attempt-property-into-value"),
+    page.window.text("merge-attempt-fact-into-value"),
     "main",
     "Into names the branch, not today's tip"
   );
@@ -109,13 +109,13 @@ fn merge_attempt_page_merged_outside_orchester_shows_the_banner_and_no_fix_actio
   );
   let banner = page.window.text("merge-attempt-merged-banner");
   assert!(banner.contains("Merged into main outside Orchester"), "{banner}");
-  let head = page.window.text("merge-attempt-property-reviewed-value");
+  let head = page.window.text("merge-attempt-fact-reviewed-value");
   assert!(
     banner.contains(&format!("{head} is in main")),
     "the banner names the run's head that main holds: {banner}"
   );
   assert_history_without_fixes(&mut page);
-  assert_eq!(page.window.text("merge-attempt-property-into-value"), "main");
+  assert_eq!(page.window.text("merge-attempt-fact-into-value"), "main");
 }
 
 #[test]

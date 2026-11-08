@@ -22,7 +22,7 @@ use lurq::{
 use orchester_core::id::ResourceId;
 use orchester_workspace::tasks::review_threads::{agents::ReviewAgent, page::ReviewPage};
 
-use super::{Env, state::Held};
+use super::state::Held;
 use crate::{
   theme::{ControlHeight, ExtraSpacing, IconSize, ReviewText},
   ui::{
@@ -38,9 +38,11 @@ const MENU_WIDTH: f32 = 300.0;
 
 /// Where a field stands: the tray's or the conflict bar's. Each opens its own menu over itself.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Place {
+pub(in crate::screens) enum Place {
   Tray,
   Conflict,
+  /// The merge attempt page's bar (`Review - v2` 13c `zWlkp`).
+  Merge,
 }
 
 impl Place {
@@ -49,6 +51,7 @@ impl Place {
     match self {
       Self::Tray => "review-tray-agent",
       Self::Conflict => "review-conflict-agent",
+      Self::Merge => "merge-attempt-agent",
     }
   }
 }
@@ -71,10 +74,11 @@ impl Menu {
 
 /// The agent chosen for the run, shared by both fields: `None` is the run's own.
 #[derive(Clone)]
-pub(super) struct AgentChoice {
+pub(in crate::screens) struct AgentChoice {
   chosen: Signal<Held<Option<ResourceId>>>,
   tray: Menu,
   conflict: Menu,
+  merge: Menu,
 }
 
 impl AgentChoice {
@@ -83,6 +87,7 @@ impl AgentChoice {
       chosen: ctx.signal(Held(None)),
       tray: Menu::new(ctx),
       conflict: Menu::new(ctx),
+      merge: Menu::new(ctx),
     }
   }
 
@@ -90,6 +95,7 @@ impl AgentChoice {
     match place {
       Place::Tray => &self.tray,
       Place::Conflict => &self.conflict,
+      Place::Merge => &self.merge,
     }
   }
 
@@ -107,16 +113,20 @@ fn elsewhere(chosen: Option<ResourceId>, page: &ReviewPage) -> Option<ResourceId
 }
 
 /// The field at `place`, with its menu; `None` when the run has no agent step to return to.
-pub(super) fn field(ctx: &mut Ctx, env: &Env, place: Place) -> Option<Element> {
-  let own = env.page.implement.as_ref()?.own.as_ref()?;
-  let elsewhere = elsewhere(env.state.agent.chosen.get().0, &env.page);
+pub(in crate::screens) fn field(
+  ctx: &mut Ctx,
+  (page, choice): (&ReviewPage, &AgentChoice),
+  place: Place,
+) -> Option<Element> {
+  let own = page.implement.as_ref()?.own.as_ref()?;
+  let elsewhere = elsewhere(choice.chosen.get().0, page);
   let shown = elsewhere
-    .and_then(|id| env.page.agents.iter().find(|agent| agent.id == id))
+    .and_then(|id| page.agents.iter().find(|agent| agent.id == id))
     .unwrap_or(own);
-  let menu = env.state.agent.menu(place);
+  let menu = choice.menu(place);
   let id = place.id();
   let trigger = trigger(ctx, (id, menu), shown);
-  let panel = panel(ctx, env, (place, own), elsewhere.unwrap_or(own.id));
+  let panel = panel(ctx, (page, choice), (place, own), elsewhere.unwrap_or(own.id));
   Some(
     Column::new()
       .child(trigger)
@@ -179,12 +189,17 @@ fn trigger(ctx: &Ctx, (id, menu): (&str, &Menu), shown: &ReviewAgent) -> Element
 }
 
 /// The menu: its head, the profiles with `current` checked, a line and the note.
-fn panel(ctx: &mut Ctx, env: &Env, (place, own): (Place, &ReviewAgent), current: ResourceId) -> Element {
+fn panel(
+  ctx: &mut Ctx,
+  (page, choice): (&ReviewPage, &AgentChoice),
+  (place, own): (Place, &ReviewAgent),
+  current: ResourceId,
+) -> Element {
   let id = place.id();
-  let menu = env.state.agent.menu(place);
+  let menu = choice.menu(place);
   // The run's own agent stays a choice when its profile is no longer published.
-  let listed = env.page.agents.iter();
-  let agents: Vec<&ReviewAgent> = if env.page.agents.iter().any(|agent| agent.id == own.id) {
+  let listed = page.agents.iter();
+  let agents: Vec<&ReviewAgent> = if page.agents.iter().any(|agent| agent.id == own.id) {
     listed.collect()
   } else {
     std::iter::once(own).chain(listed).collect()
@@ -193,7 +208,7 @@ fn panel(ctx: &mut Ctx, env: &Env, (place, own): (Place, &ReviewAgent), current:
     .into_iter()
     .enumerate()
     .map(|(at, agent)| {
-      let chosen = env.state.agent.chosen.clone();
+      let chosen = choice.chosen.clone();
       let profile = agent.id;
       let detail: Arc<str> = if agent.id == own.id {
         ctx.t_args("review_page.agentField.own", [("model", agent.model.to_string())])

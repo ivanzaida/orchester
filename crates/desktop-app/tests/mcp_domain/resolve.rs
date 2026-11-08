@@ -90,30 +90,18 @@ fn domain_ask_an_agent_returns_the_conflicting_run_to_its_writing_step() {
   );
   conflicts_on_the_attempt_page(&mut served);
   served.until("the agent's step", |served| {
-    served.shows("merge-attempt-resolve-step") && served.shows("merge-attempt-ask-agent")
+    served.shows("merge-attempt-agent") && served.shows("merge-attempt-ask-agent")
   });
-  let options: Vec<String> = served
-    .tree
-    .get_element_by_id_mut("merge-attempt-resolve-step")
-    .and_then(|element| element.as_select())
-    .expect("the step select")
-    .labels()
-    .iter()
-    .map(ToString::to_string)
-    .collect();
-  assert_eq!(
-    options,
-    ["Implement · Builder"],
-    "only the step that may write is offered"
+  assert!(
+    super::tools_window::text(&mut served, "merge-attempt-agent-label").starts_with("Builder"),
+    "the field starts on the run's own agent"
   );
   // Returning a run decides for the person: an MCP client's press is refused until a person lets automation answer,
   // as `continue_run` is, and then recorded as automation's.
   served
     .click_by_client("merge-attempt-ask-agent")
     .expect("the press reaches the button");
-  served.until("the refusal", |served| {
-    served.shows("merge-attempt-resolve-person-only")
-  });
+  served.until("the refusal", |served| served.shows("merge-attempt-not-done"));
   assert_eq!(
     stored(&seeded, run.id()).attempts().len(),
     run.attempts().len(),
@@ -161,7 +149,7 @@ fn domain_window_input_merges_into_the_worktree_but_starts_no_editor_a_person_di
   conflicts_on_the_attempt_page(&mut served);
   // Once the run's worktree is read, *Ask an agent to resolve* says it waits for the runner, which is not here.
   served.until("the run's worktree read", |served| {
-    served.shows("merge-attempt-ask-agent-reason")
+    served.shows("merge-attempt-bar-reason")
   });
   served
     .click_by_client("merge-attempt-resolve-in-editor")
