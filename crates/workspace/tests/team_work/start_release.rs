@@ -53,7 +53,7 @@ async fn team_work_release_a_start_that_only_waits_keeps_its_claim() {
   let request = checkout.start_request(&server, claim);
 
   server.set_down(true);
-  let outcome = work.start(request, checkout.vault()).await.expect("started");
+  let outcome = checkout.start(&work, request).await.expect("started");
   assert!(matches!(outcome, StartOutcome::Waiting(_)), "{outcome:?}");
   assert_eq!(server.state().claim.as_ref().map(|held| held.id), Some(claim));
 }
@@ -70,14 +70,14 @@ async fn team_work_release_waits_for_the_server_before_it_settles_the_failure() 
   // The bundle's file read is cut off, so the start is accepted; then the bundle turns out to be unreadable here, a
   // lasting failure, but the release is not answered.
   server.drop_next_file();
-  work.start(request.clone(), checkout.vault()).await.expect("started");
+  checkout.start(&work, request.clone()).await.expect("started");
   {
     let mut state = server.state();
     let (bundle, _claim) = state.bundles.values_mut().next().expect("the start's bundle");
     *bundle = json!({"schema_version": EXECUTION_BUNDLE_SCHEMA});
   }
   cut.store(true, Ordering::SeqCst);
-  let waiting = work.start(request.clone(), checkout.vault()).await.expect("started");
+  let waiting = checkout.start(&work, request.clone()).await.expect("started");
   assert!(
     matches!(waiting, StartOutcome::Waiting(TeamStartStage::Accepted)),
     "{waiting:?}"
@@ -124,7 +124,7 @@ async fn team_work_release_opening_a_project_without_open_starts_asks_nothing() 
   )
   .await
   .expect("nothing to carry on");
-  assert_eq!(opened, OpenStarts::None);
+  assert_eq!(opened, OpenStarts::default());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -134,8 +134,8 @@ async fn team_work_release_an_open_start_without_a_server_session_is_kept_open()
   let claim = checkout.claim(&server, MEMBER).await;
   let (work, _generation) = checkout.work(&server, MEMBER, StoreRunner::new(checkout.root(), &[]));
   server.set_down(true);
-  work
-    .start(checkout.start_request(&server, claim), checkout.vault())
+  checkout
+    .start(&work, checkout.start_request(&server, claim))
     .await
     .expect("started");
 

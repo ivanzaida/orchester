@@ -59,7 +59,8 @@ pub fn to(
     | State::TeamRunning
     | State::EditConflict
     | State::NotReadyHere
-    | State::StartFailed => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
+    | State::StartFailed
+    | State::StartRecovered => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
   }
 }
 

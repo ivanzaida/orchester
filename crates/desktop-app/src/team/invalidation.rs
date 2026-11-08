@@ -10,6 +10,7 @@ use orchester_api::v2::QueryScope;
 use orchester_workspace::team_reads::{Changes, TeamProject, TeamReadError};
 
 use super::{
+  last_start::team_last_start,
   pages::{team_module, team_module_list, team_task},
   queries::{team_admins, team_capabilities, team_counts, team_modules, team_policy, team_tasks},
 };
@@ -62,6 +63,7 @@ impl Stale {
       client.invalidate(team_tasks::all());
       client.invalidate(team_counts::all());
       client.invalidate(team_task::all());
+      client.invalidate(team_last_start::all());
     }
     if self.workspace {
       client.invalidate(team_capabilities::all());

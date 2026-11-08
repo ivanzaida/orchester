@@ -331,21 +331,47 @@ fn published(task: &TaskContext) -> Option<(String, String)> {
   }
 }
 
-/// What the last ask came to, when it did not do what was asked (`DpoZG` in `02f`), with Try again.
-pub fn refusal(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
-  let controls = TeamControls::of(ctx)?;
-  let state = controls.action.state().get();
+/// What the page tells of the task's start: the person's last ask in this window, unless that said the start waits,
+/// which recovery may have settled since, or there is none, as in a window opened after it did. Then the project's
+/// record of the task's newest start tells ([`TeamTaskShown::last_start`]), for a task this computer can still run.
+pub fn start_standing(ctx: &mut Ctx, task: &TaskContext) -> Option<(TeamAsk, Started)> {
+  let state = TeamControls::of(ctx)?.action.state().get();
   if state.is_pending() {
     return None;
   }
-  let answer = state.data?;
+  let recorded = task.team.as_ref()?.last_start.as_ref();
+  match state.data {
+    Some(TeamAnswer::Acted(..)) => None,
+    Some(TeamAnswer::Started(ask, Started::Waiting)) => match recorded {
+      Some(Started::Run(_)) => None,
+      Some(settled @ Started::Stopped(_)) => Some((ask, settled.clone())),
+      Some(Started::Waiting) | None => Some((ask, Started::Waiting)),
+    },
+    Some(TeamAnswer::Started(ask, started)) => Some((ask, started)),
+    None => recorded
+      .filter(|recorded| !matches!(recorded, Started::Run(_)) && can_run(task))
+      .map(|recorded| (TeamAsk::Run, recorded.clone())),
+  }
+}
+
+/// What the last ask came to, when it did not do what was asked (`DpoZG` in `02f`), with Try again; or what became of
+/// the start that was left waiting ([`start_standing`]).
+pub fn refusal(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
+  let controls = TeamControls::of(ctx)?;
+  if controls.action.state().get().is_pending() {
+    return None;
+  }
   let key = task.key.to_string();
-  let (ask, body) = match &answer {
-    TeamAnswer::Acted(ask, acted) => (*ask, acted_words(ctx, task, *ask, acted)?),
-    TeamAnswer::Started(ask, started) => (*ask, started_words(ctx, task, *ask, started)?),
+  let (ask, body, started) = match controls.action.state().get().data {
+    Some(TeamAnswer::Acted(ask, acted)) => (ask, acted_words(ctx, task, ask, &acted)?, false),
+    _ => {
+      let (ask, started) = start_standing(ctx, task)?;
+      let body = started_words(ctx, task, ask, &started)?;
+      // Once the claim was the person's, what did not happen is the run's start.
+      let stopped = matches!(&started, Started::Stopped(stop) if !matches!(stop, Stop::Claim(_)));
+      (ask, body, stopped)
+    }
   };
-  // Once the claim was the person's, what did not happen is the run's start.
-  let started = matches!(&answer, TeamAnswer::Started(_, Started::Stopped(stop)) if !matches!(stop, Stop::Claim(_)));
   let title = match ask {
     _ if started => "summary.team.refused.runTitle",
     TeamAsk::Claim => "summary.team.refused.claimTitle",
@@ -419,7 +445,11 @@ fn started_words(ctx: &Ctx, task: &TaskContext, ask: TeamAsk, started: &Started)
     // The Summary's card lists each part with its fix (`not_ready`), not a notice.
     Stop::NotReadyHere(_) => return None,
     Stop::NotReadable => ctx.t("summary.team.refused.notReadable"),
-    Stop::BundleMissing(message) => message_text(ctx, message),
+    Stop::BundleMissing(message, claim) => match claim {
+      Some(claim) => with_claim(ctx, &message_text(ctx, message), *claim),
+      None => message_text(ctx, message),
+    },
+    Stop::StartUnreadable => ctx.t("summary.team.refused.startUnreadable"),
     Stop::BundleSchema { read, built, claim } => {
       let key = if built > read {
         "summary.team.refused.bundleSchemaNewer"

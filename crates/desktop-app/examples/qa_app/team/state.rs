@@ -82,10 +82,19 @@ pub enum State {
   /// of this computer: a start builds its bundle in a schema this computer does not read, so a start fails for good,
   /// releases the claim and the task page says why (ORC-885).
   StartFailed,
+  /// As [`Self::StartFailed`], with the server not answering a Run's `work.start` for [`START_ANSWERS_AFTER`] after the
+  /// window opens, and then answering as a server a release ahead: the start waits, the project's recovery carries it
+  /// on, the start fails for good, and the task page, which said the run starts once they answer, says why it did not
+  /// (ORC-885 follow-up).
+  StartRecovered,
 }
 
+/// How long after the window opens the server of [`State::StartRecovered`] answers a `work.start`; recovery then
+/// carries the waiting start on within a minute.
+pub const START_ANSWERS_AFTER: std::time::Duration = std::time::Duration::from_secs(90);
+
 impl State {
-  pub const ALL: [Self; 29] = [
+  pub const ALL: [Self; 30] = [
     Self::Join,
     Self::WrongCode,
     Self::ExpiredCode,
@@ -115,6 +124,7 @@ impl State {
     Self::EditConflict,
     Self::NotReadyHere,
     Self::StartFailed,
+    Self::StartRecovered,
   ];
 
   /// The seed's scenario of this state.
@@ -149,6 +159,7 @@ impl State {
       Self::EditConflict => "team-edit-conflict",
       Self::NotReadyHere => "team-not-ready",
       Self::StartFailed => "team-start-failed",
+      Self::StartRecovered => "team-start-recovered",
     }
   }
 

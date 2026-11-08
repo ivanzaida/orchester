@@ -17,8 +17,11 @@ use orchester_core::project::TaskKey;
 use crate::{
   project::ShownProject,
   team::{
-    TeamFailure, TeamSource, outage,
+    TeamFailure, TeamSource,
+    last_start::team_last_start,
+    outage,
     pages::{TeamModule, TeamTask, team_module_list, team_task},
+    start::Started,
     view::{self, Standing},
   },
 };
@@ -33,6 +36,9 @@ pub struct TeamTaskShown {
   pub module: Option<TeamModule>,
   pub source: TeamSource,
   pub server: Option<String>,
+  /// The task's newest start as this computer's records tell it, once read: a start that waited and was settled later
+  /// by recovery says why it did not run.
+  pub last_start: Option<Started>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for TeamTaskShown {}
@@ -74,12 +80,18 @@ pub(super) fn read(ctx: &mut Ctx, project: &ShownProject, key: &TaskKey) -> Team
     .task
     .module()
     .and_then(|id| modules.iter().find(|module| module.module.id() == id).cloned());
+  // Not waited for: the page shows without it, and the notice joins it once read.
+  let last_start = ctx
+    .query(team_last_start(source.clone(), task.task.id()))
+    .data()
+    .and_then(|last| (*last).clone());
   TeamPage::Ready(Arc::new(TeamTaskShown {
     task,
     standing,
     module,
     source,
     server,
+    last_start,
   }))
 }
 

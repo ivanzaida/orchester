@@ -72,6 +72,10 @@
 # release ahead of this computer: open KON-5 (API rate limits) and press Run. The start is claimed, the server builds it in
 # a bundle schema this computer does not read, the start fails for good and the claim is let go of: the Summary's notice
 # "Couldn't start KON-5's run" says to update Orchester (ORC-885).
+# -Scenario team-start-recovered is team-start-failed with a team server that does not answer a Run's start for the first
+# 90 seconds after the window opens (the start waits, and the Summary's notice says the run starts once they answer), then
+# answers a release ahead: press Run on KON-5 within those 90 seconds; the project's recovery carries the start on within
+# a minute more, and the same notice says to update Orchester and that the claim was released (ORC-885 follow-up).
 #
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes

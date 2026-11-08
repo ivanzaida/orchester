@@ -30,6 +30,7 @@ mod refusal;
 mod server_key;
 mod share_outcome;
 mod start_lock;
+pub(crate) use self::start_lock::StartTrouble;
 pub mod sync;
 pub mod team;
 mod team_created;
@@ -139,9 +140,9 @@ struct Inner {
   /// empty mutex per project folder the session started or recovered a team start in, so the map grows by a few bytes
   /// per project and not with the starts.
   starting: Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>,
-  /// The team starts whose record was found unreadable this session, so recovery says so once each
-  /// ([`Servers::first_unreadable_start`]).
-  unreadable_starts: Mutex<HashSet<orchester_core::id::OperationId>>,
+  /// The team starts recovery found in trouble this session, so it says so once each per trouble
+  /// ([`Servers::first_trouble`]).
+  told_starts: Mutex<HashSet<(orchester_core::id::OperationId, start_lock::StartTrouble)>>,
 }
 
 /// One signed-in server's connection and when to ask it again.
@@ -187,7 +188,7 @@ impl Servers {
         downloads: Mutex::new(HashMap::new()),
         taken_back: Mutex::new(HashMap::new()),
         starting: Mutex::new(HashMap::new()),
-        unreadable_starts: Mutex::new(HashSet::new()),
+        told_starts: Mutex::new(HashSet::new()),
       }),
     }
   }

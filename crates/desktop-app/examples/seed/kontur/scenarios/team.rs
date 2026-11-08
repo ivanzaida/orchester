@@ -204,6 +204,17 @@ pub fn not_ready_here(kontur: &mut Kontur) -> Result<(), SeedError> {
 /// the start in a bundle schema this computer does not read, so the start fails for good, the claim is released and the
 /// task page says why (ORC-885).
 pub fn start_failed(kontur: &mut Kontur) -> Result<(), SeedError> {
+  start_ready_here(kontur, State::StartFailed)
+}
+
+/// As [`start_failed`], with the server not answering the Run's start for a while (`team-start-recovered`): the start
+/// waits, and recovery carries it on when the server answers, so the page that said the run starts once they answer
+/// says why it did not.
+pub fn start_recovered(kontur: &mut Kontur) -> Result<(), SeedError> {
+  start_ready_here(kontur, State::StartRecovered)
+}
+
+fn start_ready_here(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
   super::picker_readiness::team_work(kontur)?;
   // Team quick fix runs Reviewer, which needs a Claude Code connection here; with one it is ready.
   let bin = kontur.repo.join(".orchester").join("qa-bin");
@@ -219,7 +230,7 @@ pub fn start_failed(kontur: &mut Kontur) -> Result<(), SeedError> {
   )?;
   // KON-5's module branch, which a team start finds in the checkout before it asks whether the pipeline is ready.
   git::branch(&kontur.repo, "module/api-rate-limits", git::MAIN)?;
-  write_marker(kontur, State::StartFailed)
+  write_marker(kontur, state)
 }
 
 /// KON-12's run interrupted at Implement, on the live catalogue's Feature delivery with a brief that keeps
