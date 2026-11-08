@@ -151,6 +151,42 @@ fn local_hub_server_panel_edits_in_place_with_save_and_cancel_and_no_versions() 
 }
 
 #[test]
+fn local_hub_a_save_that_is_refused_says_why_in_place_and_keeps_every_edit() {
+  let mut agents = Agents::new(true);
+  let docs = server(&agents, "docs");
+  show(&mut agents, docs);
+  let row = format!("local-hub-row-mcp-{docs}");
+  // A program found nowhere is not stored: the save is refused, after the person confirmed what it widens.
+  agents.set("connection-mcp-name", "docs-2");
+  agents.set("connection-mcp-program", "docs-mcp-found-nowhere");
+  agents.until("saveable", |s| s.exists(SAVE));
+  agents.click(SAVE);
+  agents.until("the question", |s| s.exists("local-hub-mcp-confirm-save-confirm"));
+  agents.press_until("local-hub-mcp-confirm-save-confirm", "refused", |s| {
+    s.exists("local-hub-mcp-refused")
+  });
+  assert!(agents.text("local-hub-mcp-refused").contains("Couldn't save docs"));
+  assert!(agents.text("local-hub-mcp-refused").contains("docs-mcp-found-nowhere"));
+  assert_eq!(agents.value("connection-mcp-name"), "docs-2", "what was typed stays");
+  assert_eq!(agents.value("connection-mcp-program"), "docs-mcp-found-nowhere");
+  agents.until("the row says so", |s| {
+    s.text(&format!("{row}-line")).contains("Couldn't save")
+  });
+  let db = ProjectDb::open(&agents.root).expect("database");
+  assert!(
+    McpServerStore::mcp_servers(&db)
+      .expect("servers")
+      .iter()
+      .all(|server| server.name().as_str() == "docs"),
+    "nothing was saved, not even the other fields"
+  );
+  // Cancel puts back what was saved.
+  agents.click(CANCEL);
+  agents.until("cancelled", |s| !s.exists("local-hub-mcp-refused"));
+  assert_eq!(agents.value("connection-mcp-name"), "docs");
+}
+
+#[test]
 fn local_hub_archive_an_mcp_server_then_restore_it_from_the_archived_view() {
   let mut agents = Agents::new(true);
   let docs = server(&agents, "docs");
