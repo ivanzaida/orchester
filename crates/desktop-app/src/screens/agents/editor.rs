@@ -235,11 +235,9 @@ impl Editor {
     let may_change = team::may_change(team);
     let shared::Parts {
       bars: shared_bars,
-      runs_here,
       here,
-      connection: connection_here,
     } = shared::parts(ctx, props);
-    let top = self.top(ctx, props, (state, team), (shared_bars, here, connection_here.as_ref()));
+    let top = self.top(ctx, props, (state, team), (shared_bars, here));
     let asking = Asking {
       pending: self.pending.clone(),
       allowed: self.allowed.clone(),
@@ -261,19 +259,16 @@ impl Editor {
       .filter(|_| !state.changed_outside)
       .zip(state.saved.as_ref())
       .map(|(error, entry)| (&entry.profile, field_hint(ctx, &error)));
-    let (runs_here, runs_note) = runs_here.unzip();
     let (role, connection) = if may_change {
-      let extra = runs_here.into_iter().chain(connection_asked).collect();
       (
         model::role(ctx, &self.fields, unsaved),
-        model::connection_model(ctx, &self.fields, &props.listed, (extra, runs_note)),
+        model::connection_model(ctx, &self.fields, &props.listed, connection_asked.into_iter().collect()),
       )
     } else {
-      let connection = match &connection_here {
-        Some(here) => model::connection_shared(ctx, &self.fields, here, (runs_here, runs_note)),
-        None => model::connection_read_only(ctx, &self.fields, &props.listed, (runs_here, runs_note)),
-      };
-      (model::role_read_only(ctx, &self.fields), connection)
+      (
+        model::role_read_only(ctx, &self.fields),
+        model::connection_read_only(ctx, &self.fields, &props.listed),
+      )
     };
     let context = Context {
       fields: &self.fields,

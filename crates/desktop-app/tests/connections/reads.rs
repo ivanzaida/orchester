@@ -22,9 +22,8 @@ fn settle(seeded: &mut Seeded) {
 #[test]
 fn connections_work_reads_the_list_through_its_query_and_the_status_bar_again() {
   let mut seeded = Seeded::new("connections");
-  seeded.list();
   let docs = seeded.server("kontur-docs").expect("kontur-docs");
-  seeded.click(&Seeded::row(docs.id()));
+  seeded.open(docs.id());
   settle(&mut seeded);
   let reads = Reads::count();
   seeded.click("connection-switch");

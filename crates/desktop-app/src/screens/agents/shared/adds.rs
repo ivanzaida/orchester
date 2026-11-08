@@ -10,8 +10,6 @@ use lurq::{
   node::{dimension::Dimension, padding::Padding},
 };
 use orchester_core::{permission::widening::Widening, sharing::VersionWidening};
-use orchester_store::BoundReference;
-use orchester_workspace::sharing::sync::{HereReference, Standing};
 
 use super::Waiting;
 use crate::{
@@ -19,63 +17,38 @@ use crate::{
   ui::icon::{Icon, icon},
 };
 
-/// What a version adds, one line each with a plus (`uOQNr` in 02d): first each MCP server and secret it names by
-/// name with how it stands here, *MCP server github · bound here to “GitHub (remote)”*, then the rest.
+/// What a version adds, one line each with a plus (`uOQNr` in 02d).
 pub(super) fn adds_list(ctx: &Ctx, waiting: &Waiting) -> Column {
-  let mut named: Vec<String> = Vec::new();
-  let mut rest: Vec<String> = Vec::new();
-  for add in &waiting.adds {
-    let of_kind = |reference: &&HereReference| match add {
-      VersionWidening::McpServer => matches!(reference.binding.reference, BoundReference::McpServer { .. }),
-      VersionWidening::Secret => matches!(reference.binding.reference, BoundReference::Secret { .. }),
-      _ => false,
-    };
-    let references: Vec<&HereReference> = waiting.added.iter().filter(of_kind).collect();
-    if references.is_empty() {
-      rest.push(ctx.t(adds_key(add)).to_string());
-    } else {
-      named.extend(references.into_iter().map(|reference| named_add(ctx, reference)));
-    }
-  }
-  named.dedup();
   Column::new()
     .id("agent-widens-adds")
     .width(Dimension::Pct(100.0))
     .padding(Padding::new().top(ExtraSpacing::Snug.role()))
     .spacing(SpacingSize::Xs)
-    .with_children(named.into_iter().chain(rest).enumerate().map(|(index, words)| {
-      Row::new()
-        .id(format!("agent-widens-add-{index}"))
-        .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(icon(
-          Icon::Plus,
-          crate::theme::IconSize::Sm,
-          PaletteColor::TextSecondary,
-        ))
-        .child(
-          Text::new(&words)
-            .variant(HubText::Status.role())
-            .flex(1.0)
-            .min_width(Dimension::Px(0.0)),
-        )
-    }))
-}
-
-/// An MCP server or secret a version adds, by name, with how it stands on this computer.
-fn named_add(ctx: &Ctx, reference: &HereReference) -> String {
-  let key = match reference.binding.reference {
-    BoundReference::Secret { .. } => "sharing.config.widens.adds.secretNamed",
-    _ => "sharing.config.widens.adds.serverNamed",
-  };
-  let what = ctx.t_args(key, [("name", reference.binding.name.as_str())]).to_string();
-  let (key, local) = match &reference.standing {
-    Standing::Bound { local, .. } => ("sharing.config.widens.adds.boundHere", local.clone()),
-    Standing::Found { name, .. } => ("sharing.config.widens.adds.foundHere", name.clone()),
-    Standing::Missing => ("sharing.config.widens.adds.missingHere", String::new()),
-  };
-  ctx.t_args(key, [("what", what), ("local", local)]).to_string()
+    .with_children(
+      waiting
+        .adds
+        .iter()
+        .map(|add| ctx.t(adds_key(add)))
+        .enumerate()
+        .map(|(index, words)| {
+          Row::new()
+            .id(format!("agent-widens-add-{index}"))
+            .width(Dimension::Pct(100.0))
+            .spacing(SpacingSize::Sm)
+            .align_items(Alignment::Center)
+            .child(icon(
+              Icon::Plus,
+              crate::theme::IconSize::Sm,
+              PaletteColor::TextSecondary,
+            ))
+            .child(
+              Text::new(&words)
+                .variant(HubText::Status.role())
+                .flex(1.0)
+                .min_width(Dimension::Px(0.0)),
+            )
+        }),
+    )
 }
 
 /// The few words that say what a version adds (`Add` rows in `uOQNr`).

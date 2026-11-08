@@ -1,7 +1,7 @@
 //! Connections with nothing yet (`07` `WYCDL`): *Connect an agent*, then a row per way to connect one — each CLI as
 //! found on this computer's search path or chosen on the start page, saying which, with Add when it is, Check again
 //! when it is not (only a copy found there, or that file, can be chosen), and a CLI on an API provider; GitHub not
-//! linked, unavailable with why; and no MCP server yet with its Add.
+//! linked, unavailable with why.
 
 use std::sync::Arc;
 
@@ -108,7 +108,6 @@ pub(super) fn page(ctx: &mut Ctx, project: &ShownProject, recheck: &Signal<u64>)
     .child(Group::new("connections-agents", ctx.t("connections.groups.agentProviders")).rows(rows))
     .child(super::super::decision::listed(ctx, project, &[]))
     .child(github_group(ctx))
-    .child(mcp_group(ctx, add(NewConnection::McpServer)))
     .into()
 }
 
@@ -141,28 +140,6 @@ fn github_group(ctx: &Ctx) -> Group {
       ctx.t("connections.github.emptyShort"),
     )
     .action(reason),
-  )
-}
-
-/// No MCP server yet, with its Add.
-fn mcp_group(ctx: &Ctx, add: Open) -> Group {
-  Group::new("connections-mcp", ctx.t("connections.groups.mcpServers")).row(
-    EmptyRow::new(
-      "connections-mcp-empty",
-      Icon::Server,
-      ctx.t("connections.mcp.emptyTitle"),
-      ctx.t("connections.mcp.emptyDetailShort"),
-    )
-    .action(
-      ActionButton::new(
-        "connections-mcp-empty-add",
-        ButtonKind::Ghost,
-        ctx.t("connections.groups.add"),
-      )
-      .icon(Icon::Plus)
-      .compact()
-      .opens(add),
-    ),
   )
 }
 

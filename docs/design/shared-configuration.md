@@ -180,8 +180,8 @@ their pane replaced; the modals follow `05d · Delete connection` (`D3c8ht`). Co
   settings · redesign*). In 08d and 08e the parallel checks and the last access row (*Permissions*) are hidden so the
   pane shows no clipped content. Exports: `.tmp/design/ORC-402/<node id>.png`.
 - Copy: `sharing.config.*` (library states, the bars, conflict, widens, missing, the read-only line),
-  `sharing.bindings.*` (On this computer, the picker, the two confirmations, *Change*, *chosen here*; the binding
-  code and these words go with ORC-845),
+  `sharing.bindings.*` (On this computer, the picker, the two confirmations, *Change*, *chosen here*; removed with ORC-844
+  and ORC-845),
   `sharing.sends.*` (updated), `sharing.runs_here.*` (ORC-401: *Runs here use*, *Yours*, *The team's choice*, the
   note, *Add an account…*, the missing line, the admin's draft line), `sharing.local_pipelines.*` (ORC-402: the
   groups, *Where it lives*, the mark and the *Not shared* line, *Publish for the team* and its modal, the task's

@@ -26,17 +26,17 @@ mod kind;
 pub(in crate::project_db) use self::kind::{kind_text, parse_kind};
 
 const SELECT_RESOURCES: &str = "SELECT id, kind, slug, name, created_at FROM resources";
-/// The resources of kind `?1` the project offers (`docs/architecture/server.md` row 80, the person's decisions of
-/// 2026-11-05 and 2026-11-06): none removed (a team resource archived on the server is removed here); in a team
-/// project only the team's (`sharing = 'shared'`), an Admin's new resource until the server has it (no version yet, or
-/// versions waiting for the server none of which it refused), a resource created here whose first version is still
-/// unnumbered (even refused: the person's own work, kept for them to see and decide on, e.g. with a later version or a
-/// draft over it), and every resource of a kind that is never the team's (`?2`). A person's own resources of a team
-/// project, kept *Not shared* at Join or published here and refused by the server, stay in the database as they are
-/// and are offered nowhere ([`ProjectDb::kept_resources`] reads them).
+/// The resources of kind `?1` the project offers (`docs/design/team-configuration.md`, edge cases 2 and 3): none
+/// removed (a team resource archived on the server is removed here); in a team project only the team's (`sharing =
+/// 'shared'`), an Admin's new resource until the server has it (no version yet, or versions waiting for the server none
+/// of which it refused), a resource created here whose first version is still unnumbered (even refused: the person's
+/// own work, kept for them to see and decide on, e.g. with a later version or a draft over it), and every resource of a
+/// kind that is never the team's (`?2`). A person's own resources of a team project, kept *Not shared* at Join or
+/// published here and refused by the server, stay in the database as they are and are offered nowhere
+/// ([`ProjectDb::kept_resources`] reads them).
 const OFFERED: &str = "WHERE kind = ?1 AND id NOT IN (SELECT resource_id FROM removed_resources) AND (?2   OR NOT EXISTS (SELECT 1 FROM sharing) OR sharing IS 'shared'   OR NOT EXISTS (SELECT 1 FROM resource_versions WHERE resource_versions.resource_id = resources.id)   OR EXISTS (SELECT 1 FROM shared_publishes WHERE shared_publishes.resource_id = resources.id AND shared_publishes.created = 1)   OR (EXISTS (SELECT 1 FROM shared_publishes WHERE shared_publishes.resource_id = resources.id)     AND NOT EXISTS (SELECT 1 FROM shared_publishes WHERE shared_publishes.resource_id = resources.id       AND shared_publishes.refused IS NOT NULL)))";
 
-/// A cached version of a shared resource reads as its local body, which this computer's bindings rewrite.
+/// A cached version of a shared resource reads as its local body, which a team profile's connection pick rewrites.
 const SELECT_VERSIONS: &str = "SELECT id, number, COALESCE(local_body, body), published_at FROM resource_versions \
                                LEFT JOIN shared_version_bodies ON version_id = id";
 

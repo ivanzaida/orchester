@@ -1,25 +1,17 @@
 //! The local connections, MCP servers and secrets a body of this computer names (`docs/architecture/server.md`,
 //! "Shared configuration"). A team resource never carries them (`docs/design/team-configuration.md`: it refers to
 //! other team resources by server id, to secrets by name and to a CLI kind, never to an id from a computer), so a body
-//! that [`named`] finds any in is refused as a team body. Versions cached before the team configuration model still
-//! hold the publisher's ids with a [`Binding`] to this computer's entities each; [`resolve`] writes those bindings into
-//! such a body. The walks are `import`'s reference walk: an id is found and replaced as a JSON string wherever the body
-//! holds it.
-
-use std::collections::{HashMap, HashSet};
+//! that [`named`] finds any in is refused as a team body. The walk is `import`'s reference walk: an id is found as a
+//! JSON string wherever the body holds it.
 
 use serde_json::Value;
-use thiserror::Error;
 use uuid::Uuid;
 
 use super::ConnectionRole;
 use crate::{
   connection::{Connection, mcp::McpServer},
   id::{ConnectionId, SecretId},
-  import::{
-    Entity,
-    references::{self, Remap},
-  },
+  import::{Entity, references},
   secret::{Secret, SecretKind},
 };
 
@@ -36,15 +28,6 @@ impl ReferenceKind {
       Self::Connection => "connection",
       Self::McpServer => "mcp_server",
       Self::Secret => "secret",
-    }
-  }
-
-  const fn of(entity: Entity) -> Option<Self> {
-    match entity {
-      Entity::Connection(_) => Some(Self::Connection),
-      Entity::McpServer(_) => Some(Self::McpServer),
-      Entity::Secret(_) => Some(Self::Secret),
-      Entity::Resource(_) => None,
     }
   }
 }
@@ -126,35 +109,6 @@ impl Reference {
   }
 }
 
-#[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]
-#[error("a {} reference is bound only to a local entity of that kind", .0.as_str())]
-pub struct BindingKindError(ReferenceKind);
-
-/// The local connection, MCP server or secret a reference means on this computer.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Binding {
-  reference: Reference,
-  local: Entity,
-}
-
-impl Binding {
-  /// `local` must be of the reference's kind.
-  pub fn new(reference: Reference, local: Entity) -> Result<Self, BindingKindError> {
-    if ReferenceKind::of(local) != Some(reference.kind()) {
-      return Err(BindingKindError(reference.kind()));
-    }
-    Ok(Self { reference, local })
-  }
-
-  pub const fn reference(&self) -> &Reference {
-    &self.reference
-  }
-
-  pub const fn local(&self) -> Entity {
-    self.local
-  }
-}
-
 /// The connections, MCP servers and secrets of one computer, whose ids a body written there holds.
 #[derive(Clone, Copy, Debug)]
 pub struct LocalEntities<'a> {
@@ -183,27 +137,4 @@ pub fn named(body: &Value, entities: LocalEntities<'_>) -> Vec<Reference> {
     .into_iter()
     .filter_map(|uuid| entities.reference(uuid))
     .collect()
-}
-
-/// `body` with the id of every reference `bindings` bind replaced by the local id, the body runs on this computer pin.
-/// A reference without a binding keeps the publisher's id, which matches nothing here, so preflight reports it missing.
-/// Only versions cached before the team configuration model need it; ORC-845 removes it with the bindings.
-pub fn resolve(body: Value, bindings: &[Binding]) -> Value {
-  rewrite(
-    body,
-    bindings
-      .iter()
-      .map(|binding| (binding.reference.entity().uuid(), binding.local.uuid())),
-  )
-}
-
-/// `body` with each id of `ids` replaced by the id it maps to. Keys stay as they are: a map keyed by ids holds shared
-/// resources, which keep their ids on every computer.
-fn rewrite(body: Value, ids: impl Iterator<Item = (Uuid, Uuid)>) -> Value {
-  Remap {
-    values: ids.collect(),
-    keys: HashMap::new(),
-    known: HashSet::new(),
-  }
-  .rewrite(body)
 }

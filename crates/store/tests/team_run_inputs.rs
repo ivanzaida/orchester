@@ -8,6 +8,8 @@ mod support;
 mod accepted;
 #[path = "team_run_inputs/mcp_bindings.rs"]
 mod mcp_bindings;
+#[path = "team_run_inputs/older_bindings.rs"]
+mod older_bindings;
 #[path = "team_run_inputs/pinned_server.rs"]
 mod pinned_server;
 
@@ -19,10 +21,7 @@ use orchester_core::{
     AgentProvider,
     plan_limits::{LimitReading, PlanLimits},
   },
-  id::{
-    ClaimId, ConnectionId, IdempotencyKey, ModuleId, OperationId, ProjectId, ResourceId, SecretId, ServerId, TaskId,
-    WorkId,
-  },
+  id::{ClaimId, ConnectionId, IdempotencyKey, ModuleId, OperationId, ProjectId, ResourceId, ServerId, TaskId, WorkId},
   integration::base::RunBaseSource,
   permission::StepPermissions,
   project::{Project, ProjectKey},
@@ -35,8 +34,7 @@ use orchester_core::{
     BranchName, CommitId, NewRun, PublishedVersions, RunSnapshot, StepExecutor,
     bundle::{CanonicalExecutionInputs, ExecutionProfile, PinnedBodies, ResourceLabel},
     inputs::{
-      BoundReference, BundleContent, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, RunInputs, TaskAtStart,
-      TeamAcceptance,
+      BundleContent, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, RunInputs, TaskAtStart, TeamAcceptance,
     },
   },
   sharing::TaskRevision,
@@ -172,7 +170,7 @@ impl Team {
     }
   }
 
-  fn inputs(&self, origin: InputsOrigin, references: Vec<BoundReference>) -> RunInputs {
+  fn inputs(&self, origin: InputsOrigin) -> RunInputs {
     let task = TaskAtStart {
       title: "Say hello".into(),
       brief: "Greet the team.".into(),
@@ -193,8 +191,8 @@ impl Team {
         required_cli: None,
         mcp_servers: Vec::new(),
       }],
-      references,
       team_mcp: Vec::new(),
+      local_mcp: Vec::new(),
     };
     RunInputs::new(content, bindings, LocalConsent::default()).expect("inputs")
   }
@@ -252,7 +250,7 @@ fn team_run_inputs_execute_and_read_back_without_the_task_definition() {
   );
   assert_eq!(team.db.task(id).expect("read"), None, "no definition is kept");
 
-  let inputs = team.inputs(accepted(task, OperationId::generate()), Vec::new());
+  let inputs = team.inputs(accepted(task, OperationId::generate()));
   let mut run = team
     .db
     .create_run_with_inputs(IdempotencyKey::generate(), team.new_run(id), &inputs, (at(6), None))
@@ -290,7 +288,7 @@ fn team_run_inputs_are_accepted_once_for_their_team_task() {
   let task = team.task();
   let id = team.db.record_team_task(task, revision(3)).expect("identity");
   let operation = OperationId::generate();
-  let inputs = team.inputs(accepted(task, operation), Vec::new());
+  let inputs = team.inputs(accepted(task, operation));
   let key = IdempotencyKey::generate();
   let run = team
     .db
@@ -310,7 +308,7 @@ fn team_run_inputs_are_accepted_once_for_their_team_task() {
   let elsewhere = team.db.create_run_with_inputs(
     IdempotencyKey::generate(),
     team.new_run(other),
-    &team.inputs(accepted(task, OperationId::generate()), Vec::new()),
+    &team.inputs(accepted(task, OperationId::generate())),
     (at(8), None),
   );
   assert!(
@@ -347,11 +345,11 @@ fn team_run_inputs_a_local_task_keeps_its_id_from_a_team_task() {
 }
 
 #[test]
-fn team_run_inputs_never_change_and_their_references_hold() {
+fn team_run_inputs_never_change_and_their_keys_hold() {
   let mut team = team_project();
   let task = team.task();
   let id = team.db.record_team_task(task, revision(3)).expect("identity");
-  let inputs = team.inputs(accepted(task, OperationId::generate()), Vec::new());
+  let inputs = team.inputs(accepted(task, OperationId::generate()));
   let run = team
     .db
     .create_run_with_inputs(IdempotencyKey::generate(), team.new_run(id), &inputs, (at(6), None))
@@ -402,15 +400,11 @@ fn strings(value: &Value, found: &mut Vec<String>) {
 }
 
 #[test]
-fn team_run_inputs_name_secrets_by_id_only() {
+fn team_run_inputs_keep_this_computers_bindings_as_ids_only() {
   let mut team = team_project();
   let task = team.task();
   let id = team.db.record_team_task(task, revision(3)).expect("identity");
-  let (named, local) = (SecretId::generate(), SecretId::generate());
-  let inputs = team.inputs(
-    accepted(task, OperationId::generate()),
-    vec![BoundReference::Secret { named, local }],
-  );
+  let inputs = team.inputs(accepted(task, OperationId::generate()));
   let run = team
     .db
     .create_run_with_inputs(IdempotencyKey::generate(), team.new_run(id), &inputs, (at(6), None))
@@ -429,10 +423,9 @@ fn team_run_inputs_name_secrets_by_id_only() {
   for body in [&bindings, &consent] {
     strings(&serde_json::from_str(body).expect("json"), &mut found);
   }
-  assert!(found.contains(&named.to_string()) && found.contains(&local.to_string()));
+  assert!(!found.is_empty());
   for text in found {
-    let is_id = text.parse::<SecretId>().is_ok();
-    assert!(is_id || text == "secret", "only ids and kinds are stored: {text}");
+    assert!(text.parse::<ConnectionId>().is_ok(), "only ids are stored: {text}");
   }
 }
 
@@ -501,8 +494,8 @@ fn local_inputs(db: &ProjectDb, snapshot: &RunSnapshot) -> RunInputs {
         mcp_servers: Vec::new(),
       })
       .collect(),
-    references: Vec::new(),
     team_mcp: Vec::new(),
+    local_mcp: Vec::new(),
   };
   RunInputs::new(content, bindings, LocalConsent::default()).expect("inputs")
 }
@@ -565,7 +558,7 @@ fn team_run_inputs_cli_requirement_round_trips_and_older_json_stays_readable() {
   let id = team.db.record_team_task(task, revision(3)).expect("identity");
   for required_cli in [None, Some(orchester_core::connection::AgentProvider::CodexCli)] {
     let operation = OperationId::generate();
-    let original = team.inputs(accepted(task, operation), Vec::new());
+    let original = team.inputs(accepted(task, operation));
     let mut bindings = original.bindings().clone();
     bindings.profiles[0].required_cli = required_cli;
     let inputs = RunInputs::new(original.bundle().clone(), bindings, original.consent().clone()).expect("inputs");

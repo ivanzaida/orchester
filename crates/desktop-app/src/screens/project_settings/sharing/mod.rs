@@ -6,7 +6,6 @@
 //! linked project shows where it lives, its discovery file, its members read-only with *Manage members and invites*
 //! (the server admin, in the browser), *Make local* and *Leave* ([`linked`]).
 
-mod bindings;
 mod confirm;
 mod join;
 mod link;
@@ -89,8 +88,6 @@ pub(super) struct Facts {
   /// The servers a first link to which moves this project into the account: it is this computer's, and they are the
   /// account's.
   pub moves_on: Vec<orchester_core::id::ServerId>,
-  /// The team's versions name references this computer binds: the page shows *On this computer*.
-  pub references: bool,
 }
 
 impl DevtoolsInspectable for Facts {}
@@ -236,7 +233,6 @@ fn read(
     .then(|| linked::joined::read(workspace, db.project().id()))
     .flatten();
   let tasks = db.tasks().map_err(local)?.len();
-  let references = !db.reference_bindings().map_err(local)?.is_empty();
   let linked_discovery = link
     .as_ref()
     .and_then(|link| link.address.as_deref())
@@ -258,6 +254,5 @@ fn read(
     joined,
     joined_note,
     moves_on,
-    references,
   })
 }

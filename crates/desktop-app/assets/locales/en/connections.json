@@ -17,15 +17,12 @@
       "all": "All connections",
       "agentProviders": "Agent providers",
       "github": "GitHub",
-      "mcpServers": "MCP servers",
       "unknownCount": "—"
     },
     "menu": {
       "agent": "Agent provider",
       "agentDetail": "Codex CLI, Claude Code CLI, Anthropic API or OpenAI API",
-      "github": "GitHub connection",
-      "mcp": "MCP server",
-      "mcpDetail": "A program on this computer, or a remote server"
+      "github": "GitHub connection"
     },
     "columns": {
       "connection": "CONNECTION",
@@ -36,8 +33,7 @@
     "type": {
       "provider": "Provider",
       "native": "Native",
-      "github": "GitHub",
-      "mcp": "MCP"
+      "github": "GitHub"
     },
     "usage": {
       "one": "1 agent",
@@ -61,8 +57,7 @@
     },
     "notice": {
       "providers": "Each agent can use a different provider. Choose the connection and model in each agent profile; one pipeline can mix providers.",
-      "github": "Pull requests and the Create pull request tool reach GitHub only through gh. Its accounts are shared by every project on this computer; {{project}} records the one it expects.",
-      "mcp": "Agents run without your own CLI configuration, so the MCP servers they get are the ones {{project}} adds here. Each agent profile chooses which of them its agents get."
+      "github": "Pull requests and the Create pull request tool reach GitHub only through gh. Its accounts are shared by every project on this computer; {{project}} records the one it expects."
     },
     "ownership": "Connections belong to {{project}}. A CLI connection runs on one of your accounts, which every project shares; {{project}} records which account each connection runs on.",
     "emptyTitle": "No connections yet",
@@ -382,9 +377,6 @@
       "emptyShort": "Pull requests need gh signed in on this computer; Orchester uses it as it is."
     },
     "mcp": {
-      "add": "Add MCP server",
-      "emptyTitle": "No MCP servers yet",
-      "emptyDetail": "Agents run without your own CLI configuration, so the MCP servers they get are the ones {{project}} adds here. An agent profile chooses which of them its agents get.",
       "row": {
         "stdio": "Program · {{program}}",
         "http": "Remote MCP · {{host}}"
@@ -526,13 +518,10 @@
         "keep": "Keep it off"
       },
       "editShort": "Edit",
-      "emptyDetailShort": "A program on this computer or a remote server that agents may use.",
       "noVariables": "None",
       "notUsedShort": "no profile chooses it yet",
       "openSecrets": "Open Secrets",
       "removeServer": "Remove server",
-      "rowUnused": "{{what}} · no profile chooses it yet",
-      "rowUsed": "{{what}} · used by {{profiles}}",
       "runsAs": "Runs as",
       "sendsGroup": "Sends",
       "serverGroup": "Server",
@@ -679,11 +668,9 @@
     },
     "groups": {
       "add": "Add",
-      "addMcp": "Add MCP server",
       "addProvider": "Add provider",
       "agentProviders": "Agent providers",
-      "github": "GitHub",
-      "mcpServers": "MCP servers"
+      "github": "GitHub"
     }
   }
 }

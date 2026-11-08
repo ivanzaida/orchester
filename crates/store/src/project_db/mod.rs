@@ -77,7 +77,6 @@ mod questions;
 mod queue_holds;
 mod read_only;
 mod rebases;
-mod reference_bindings;
 mod removal_records;
 mod removals;
 mod repository;
@@ -173,7 +172,6 @@ pub use self::{
   },
   question_records::QuestionRecord,
   read_only::ReadOnlyProjectDb,
-  reference_bindings::{Bound, BoundBy, BoundReference, ReferenceBinding},
   removal_records::RemovalRecord,
   removals::DraftChange,
   resolutions::ResolutionStart,
@@ -187,7 +185,7 @@ pub use self::{
   shared_publishes::{PublishState, WaitingPublish},
   shared_standing::{ConfirmedVersion, SharedStanding, WaitingVersion},
   shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},
-  shared_versions::{CachedVersion, NamingVersion, ReferenceTarget, ResourceSharing, VersionReference},
+  shared_versions::{CachedVersion, ReferenceTarget, ResourceSharing},
   sharing::SharingLink,
   step_records::StepRecord,
   task_deletion::TaskDeletionFacts,
