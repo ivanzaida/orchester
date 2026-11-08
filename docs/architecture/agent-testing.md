@@ -191,7 +191,13 @@ in place (CDP `Fetch`: each request paused and let through only to an origin of 
 page's own `data:`, `blob:` and `about:` content; any other host or scheme fails as blocked by the client —
 `orchester_core::orchester_tools::ui::origins`), then loads where the service's `ui_start` says, else its URL; the
 answer names the tab, its address and title, the allowed origins and what was blocked meanwhile. The allowed origins
-are those of the services running at each call. A snapshot is the page's accessibility tree, at most 300 elements 40
+are those of the services running at each call. The guard covers what the page starts too: the tab auto-attaches to
+its workers, service workers and frames of other processes, each held at its start until the same guard is on it
+(a dedicated worker's requests are its page's). It cannot attach to a new window a page opens, so none opens: each
+document of the tab is answered whole (`Fetch.fulfillRequest`, as the browser reads again only the headers of an
+answer given that way) with a `Content-Security-Policy: sandbox` that allows all but popups, and the browser's
+refusal of `window.open` or `target=_blank` is on the page's console, which `ui_logs` reads. A snapshot is the
+page's accessibility tree, at most 300 elements 40
 deep, each ref the element's DOM node (`b` and its `backendNodeId`, stable while the node lives) with its role, name,
 states and value; `ui_act` clicks the element's centre, types (replacing a field's value), presses a key in it or the
 focused element (`Ctrl+A` style), scrolls it into view, or selects a `<select>` option by label, text or value (else

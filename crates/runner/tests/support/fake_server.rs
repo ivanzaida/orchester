@@ -1,8 +1,9 @@
 //! `listen <port>`: a stand-in web server for the service tests. It accepts connections on `127.0.0.1:<port>` until
 //! it is ended and answers every request by its path: `/moved` with `302 Found`, `/missing` with `404 Not Found`,
-//! `/api/…` as the seed tests' small JSON API ([`api`]), `/app` with the browser driver's fixture page ([`APP`]), any
-//! other with `200 OK`. It prints `listening on <port>` once it accepts connections. `connect <port>` fails unless
-//! something accepts connections on `127.0.0.1:<port>`: a service that needs another checks it is ready.
+//! `/api/…` as the seed tests' small JSON API ([`api`]), `/app` with the browser driver's fixture page ([`APP`]) and
+//! `/worker.js` with its workers' script ([`WORKER`]), any other with `200 OK`. It prints `listening on <port>` once
+//! it accepts connections. `connect <port>` fails unless something accepts connections on `127.0.0.1:<port>`: a
+//! service that needs another checks it is ready.
 
 use std::{
   collections::BTreeMap,
@@ -11,7 +12,8 @@ use std::{
 };
 
 /// The browser driver's fixture page: a field, a list and Save, which says what was saved, logs a console error and
-/// asks for `/missing` (404) and for a page of another origin; an image and a link of another origin.
+/// asks for `/missing` (404) and for a page of another origin; an image and a link of another origin, a link that
+/// opens another origin in a new tab, and a worker and a service worker that ask for another origin.
 const APP: &str = r#"<!doctype html>
 <html><head><title>Fixture app</title></head>
 <body>
@@ -21,8 +23,11 @@ const APP: &str = r#"<!doctype html>
 <button id="save" onclick="save()">Save</button>
 <p id="status">Status: idle</p>
 <a id="away" href="https://example.com/away">Elsewhere</a>
+<a id="popup" href="https://example.com/popup" target="_blank">New tab</a>
 <img alt="" src="https://example.com/pixel.png">
 <script>
+new Worker("/worker.js");
+navigator.serviceWorker.register("/worker.js").catch((error) => console.error("no service worker: " + error));
 function save() {
   const status = document.getElementById("status");
   status.textContent = "Saved: " + document.getElementById("title").value + " ("
@@ -34,6 +39,10 @@ function save() {
 }
 </script>
 </body></html>"#;
+
+/// The fixture page's workers' script: each asks for another origin, the service worker as `from-service-worker`.
+const WORKER: &str = r#"const who = self.registration ? "service-worker" : "worker";
+fetch("https://example.com/from-" + who).catch(() => {});"#;
 
 pub fn listen(port: Option<&str>) -> Result<(), String> {
   let port: u16 = port.and_then(|port| port.parse().ok()).ok_or("listen needs a port")?;
@@ -85,6 +94,7 @@ fn answer(stream: &TcpStream) {
     "/moved" => ("302 Found\r\nLocation: /", "text/plain", "ok".to_owned()),
     "/missing" => ("404 Not Found", "text/plain", "ok".to_owned()),
     "/app" => ("200 OK", "text/html; charset=utf-8", APP.to_owned()),
+    "/worker.js" => ("200 OK", "text/javascript", WORKER.to_owned()),
     _ if path.starts_with("/api/") => {
       let (status, body) = api(method, path, &headers, &String::from_utf8_lossy(&body));
       (status, "application/json", body)

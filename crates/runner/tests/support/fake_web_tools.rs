@@ -2,8 +2,8 @@
 //! tools, for `tests/browser_ui.rs`: "Then drive the web page" opens the service, waits for its address, finds the
 //! page's elements by the snapshot's roles and names, looks for Save by a query, types a title, chooses a priority,
 //! presses Tab in the field, clicks Save, waits for the text, a selector and idle, takes a screenshot of the page and
-//! one of Save, reads the log, clicks the link to another origin and reads the log until it reports the blocked page,
-//! then acts on a ref of no element.
+//! one of Save, reads the log, clicks the link that opens another origin in a new tab and the link to another origin,
+//! each time reading the log until it reports the blocked page, then acts on a ref of no element.
 
 use std::{thread, time::Duration};
 
@@ -34,10 +34,11 @@ pub fn drive(name: &str, call: &mut dyn FnMut(&str, &Value) -> Option<String>) {
     .and_then(|text| serde_json::from_str::<Value>(&text).ok())
     .unwrap_or_default();
   let tree = &snapshot["tree"];
-  let (Some(title), Some(priority), Some(save), Some(away)) = (
+  let (Some(title), Some(priority), Some(save), Some(popup), Some(away)) = (
     find(tree, "textbox", "Title"),
     find(tree, "combobox", "Priority"),
     find(tree, "button", "Save"),
+    find(tree, "link", "New tab"),
     find(tree, "link", "Elsewhere"),
   ) else {
     eprintln!("orchester-web: the snapshot lacks the fixture's elements: {snapshot}");
@@ -57,13 +58,20 @@ pub fn drive(name: &str, call: &mut dyn FnMut(&str, &Value) -> Option<String>) {
   call("ui_screenshot", &json!({}));
   call("ui_screenshot", &json!({"ref": save}));
   call("ui_logs", &json!({"lines": 50}));
-  call("ui_act", &json!({"ref": away, "action": "click"}));
+  click_until_blocked(call, &popup, "example.com/popup");
+  click_until_blocked(call, &away, "example.com/away");
+  call("ui_act", &json!({"ref": "b999999", "action": "click"}));
+}
+
+/// Clicks `link` and reads the log's lines about the other origin until they report `blocked`, or gives up after
+/// [`LOOKS`] reads.
+fn click_until_blocked(call: &mut dyn FnMut(&str, &Value) -> Option<String>, link: &str, blocked: &str) {
+  call("ui_act", &json!({"ref": link, "action": "click"}));
   for _ in 0..LOOKS {
-    let logged = call("ui_logs", &json!({"lines": 50, "filter": "blocked"})).unwrap_or_default();
-    if logged.contains("example.com/away") {
-      break;
+    let logged = call("ui_logs", &json!({"lines": 50, "filter": "example.com"})).unwrap_or_default();
+    if logged.contains(blocked) {
+      return;
     }
     thread::sleep(Duration::from_millis(250));
   }
-  call("ui_act", &json!({"ref": "b999999", "action": "click"}));
 }

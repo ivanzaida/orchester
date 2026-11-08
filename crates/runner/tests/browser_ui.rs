@@ -4,8 +4,9 @@
 //! its `ui_start` says, in a tab of the run's own; the snapshot is the page's accessibility tree with refs of DOM
 //! nodes; typing, choosing, a key and a click go by ref; `ui_wait` waits for an address, a text, a selector and idle;
 //! screenshots are saved in the run's storage; `ui_logs` reads the console error and the failed request; requests and
-//! a navigation to another origin are blocked and reported; a ref of no element says so; and the tab is gone once the
-//! step ended. Where no browser is found that test says so and checks nothing. A browser that cannot be used answers
+//! a navigation to another origin, a new tab the page opens on another origin and its worker's request to another
+//! origin are blocked and reported; a ref of no element says so; and the tab is gone once the step ended. Where no
+//! browser is found that test says so and checks nothing. A browser that cannot be used answers
 //! `ui_open` with what to install. Needs `git`. Run with `cargo test -p orchester-runner --features test-agent --test
 //! browser_ui browser_ui`.
 
@@ -184,6 +185,18 @@ async fn browser_ui_drives_the_fixture_page_by_refs_and_blocks_other_origins() {
   assert!(
     away.contains("blocked GET https://example.com/away (Document)"),
     "the navigation to another origin is blocked and reported: {away}"
+  );
+  assert!(
+    away.contains("Blocked opening 'https://example.com/popup' in a new window"),
+    "the page opens no new tab, which the guard would not be on: {away}"
+  );
+  assert!(
+    away.contains("blocked GET https://example.com/from-worker ("),
+    "the request of the page's worker to another origin is blocked too: {away}"
+  );
+  assert!(
+    away.contains("blocked GET https://example.com/from-service-worker ("),
+    "the request of the page's service worker to another origin is blocked too: {away}"
   );
   let gone = error(answered, "ui_act", 0);
   assert!(gone.contains("b999999 is no longer in the page"), "{gone}");

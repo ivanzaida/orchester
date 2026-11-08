@@ -129,16 +129,16 @@ impl WebUi<'_> {
     tab
   }
 
-  /// Puts the origin guard in place on the tab `target`: its requests pause until the guard answers them.
+  /// Puts the origin guard in place on the tab `target` and on what its page starts ([`guard::guard`]).
   async fn guard(&self, target: &TargetId) -> Result<(), String> {
-    let (browser, run) = (&self.tabs.browser, self.tabs.run);
-    let tab = browser.tab(run, Some(target)).await.map_err(|error| said(&error))?;
-    let follower = browser.tab(run, Some(target)).await.map_err(|error| said(&error))?;
-    tokio::spawn(guard::follow(tab.events(), follower, Arc::clone(&self.tabs.guard)));
-    tab
-      .call("Fetch.enable", json!({}))
+    let tab = self
+      .tabs
+      .browser
+      .tab(self.tabs.run, Some(target))
       .await
-      .map(drop)
+      .map_err(|error| said(&error))?;
+    guard::guard(&tab, &self.tabs.guard)
+      .await
       .map_err(|error| format!("the tab's requests cannot be guarded: {error}"))
   }
 
