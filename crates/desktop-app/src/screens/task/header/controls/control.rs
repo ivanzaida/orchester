@@ -43,6 +43,8 @@ pub struct Control {
   pub offer: Offer,
   /// The keys that do the same, which its menu row shows.
   pub shortcut: Option<Arc<str>>,
+  /// What a control under way waits for, in place of "under way" in its menu row and as its button's tooltip.
+  pub hint: Option<Arc<str>>,
 }
 
 impl Control {
@@ -55,7 +57,15 @@ impl Control {
       kind,
       offer,
       shortcut: None,
+      hint: None,
     }
+  }
+
+  /// The control under way, saying what it waits for.
+  #[must_use]
+  pub fn waiting_for(mut self, hint: Arc<str>) -> Self {
+    self.hint = Some(hint);
+    self
   }
 
   pub const fn reason(&self) -> Option<&Reason> {
@@ -86,7 +96,10 @@ impl Control {
         MenuItem::new(id, label, move || run())
       }
       Offer::Ready(Press::Open(to)) => MenuItem::opens(id, label, to.clone()),
-      Offer::Pending => MenuItem::unavailable(id, label, ctx.t("task.more.underWay")).without_lock(),
+      Offer::Pending => {
+        let under_way = self.hint.clone().unwrap_or_else(|| ctx.t("task.more.underWay"));
+        MenuItem::unavailable(id, label, under_way).without_lock()
+      }
       Offer::Disabled => MenuItem::unavailable(id, label, ctx.t("task.more.waits")).without_lock(),
       Offer::Unavailable(reason) => MenuItem::unavailable(id, label, reason.full.clone()),
     };

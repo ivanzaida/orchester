@@ -135,6 +135,13 @@
       "start": "Start run",
       "pause": "Pause run",
       "pausing": "Pausing…",
+      "pausingFor": {
+        "agent": "Pausing once {{agent}} finishes {{step}}",
+        "command": "Pausing once {{step}}'s command ends · {{tool}}",
+        "commandUnnamed": "Pausing once {{step}}'s command ends",
+        "steps": "Pausing once {{steps}} end",
+        "none": "Pausing at the next checkpoint"
+      },
       "resume": "Resume run",
       "continue": "Continue run",
       "cancel": "Cancel run",

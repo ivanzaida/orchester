@@ -242,7 +242,7 @@ impl Worker {
         && !matches!((awaiting, self.app_server()), (Awaiting::Codex(request), Some(app)) if app.has_other_active_tools(request))
     });
     // A question waits like a tool decision: the agent can stop there once nothing else runs.
-    let pending_safe = approval_safe || (watch.question.is_some() && self.checkpoint_safe(watch));
+    let pending_safe = approval_safe || self.question_safe(watch);
     if watch.after_command.is_some() && (self.checkpoint_safe(watch) || pending_safe) {
       watch.stop = watch.after_command.take();
     } else if watch.pause_requested && pending_safe {
@@ -297,6 +297,21 @@ impl Worker {
       self.driver.end();
     }
     Ok(())
+  }
+
+  /// A question waits in the agent's turn and nothing else runs. Claude Code's own `ask_question` call is still open
+  /// while the question waits, so it does not count as running work, as an approval's call does not.
+  fn question_safe(&self, watch: &Watch) -> bool {
+    let asking = |item: &String| match &self.driver {
+      Driver::Process {
+        transport: Transport::Claude(claude),
+        ..
+      } => claude.is_question_call(item),
+      _ => false,
+    };
+    watch.question.is_some()
+      && watch.commands.iter().all(asking)
+      && !self.app_server().is_some_and(AppServerSession::has_active_tools)
   }
 
   fn checkpoint_safe(&self, watch: &Watch) -> bool {

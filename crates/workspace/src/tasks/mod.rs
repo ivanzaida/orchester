@@ -49,6 +49,7 @@ pub mod moves;
 pub mod needs_you;
 pub mod outside;
 pub mod overview;
+pub mod pause_wait;
 pub mod permissions;
 pub mod plan;
 pub mod plan_limit;

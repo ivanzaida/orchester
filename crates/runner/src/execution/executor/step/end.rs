@@ -51,8 +51,9 @@ impl RunTask {
     match finished.stopped {
       // Carried out once every agent has ended; the work stays uncommitted in the worktree.
       Some(StopCause::Requested | StopCause::Abandoned) => Ok(()),
-      // No tool decision was sent: save the session's work without completing its step.
-      Some(StopCause::Paused) => self.save(execution, &active, "saved while awaiting a tool decision"),
+      // The agent waited for a person's decision or answer, which stays unanswered: save the session's work without
+      // completing its step.
+      Some(StopCause::Paused) => self.save(execution, &active, "saved at a pause while a person was asked"),
       // The execution stays open: it continues where it stopped once the disk has room and the run resumes.
       Some(StopCause::LowDisk) => self.save(execution, &active, "saved for low disk space"),
       // The execution stays open and continues its session with the person's message.

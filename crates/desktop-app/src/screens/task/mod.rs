@@ -27,6 +27,7 @@ mod local_integration;
 mod memory;
 pub(crate) mod merge;
 mod orchestrated;
+mod pause_wait;
 mod queue_words;
 mod read;
 mod reading;

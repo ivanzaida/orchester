@@ -43,6 +43,10 @@ impl RunTask {
   /// guard looks at its own interval ([`RunTask::check_disk_while_working`]): an agent that ends with its verdict is
   /// not stopped for low disk space first.
   pub(super) fn held_back(&mut self) -> Result<Option<bool>, ExecutionError> {
+    // A run to pause starts nothing, so it has no workspace or room to wait for: it settles once its agents ended.
+    if self.run.pause_requested() {
+      return Ok(None);
+    }
     let ended = std::mem::take(&mut self.ended_since_disk_look);
     if !ended && !self.has_steps_to_start() {
       return Ok(None);
