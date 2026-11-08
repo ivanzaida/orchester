@@ -53,7 +53,7 @@
       "anotherMerge": "Another run of this project is merging."
     },
     "page": {
-      "crumb": "Merge · run #{{run}}",
+      "crumb": "Merge · run {{run}}",
       "reading": "Reading the run's merge attempts…",
       "readFailed": "The run's merge attempts cannot be read",
       "readFailedBody": "Orchester could not read this run's merge attempts: {{reason}}",
@@ -84,7 +84,8 @@
         "queueRetries": "The merge queue tries again when it gets to the run"
       },
       "meta": {
-        "run": "run #{{run}}",
+        "run": "run {{run}}",
+        "pipeline": "{{name}} v{{version}}",
         "attemptsOne": "1 attempt",
         "attemptsOther": "{{count}} attempts",
         "lastAt": "last at {{time}}, {{by}}",
@@ -111,13 +112,13 @@
         "refusedInQueue": "The merge queue tried the merge, and Orchester refused at {{stage}} before Git ran: {{cause}}. Nothing was merged. Fix that, or wait for it, then Try again: the run goes back to its place in the merge queue.",
         "refusedAt": "{{stage}} refused the merge: {{cause}}. Nothing was merged.",
         "queueStopped": "The merge queue stopped before the merge began: {{cause}}. Nothing was merged. Try again puts the run back in its place in the queue.",
-        "conflictsOne": "Git could not merge the run's branch into {{branch}} on its own: both changed the same lines in 1 file. Nothing was merged; Git's merge was aborted, so {{branch}} and the checkout are as they were. Resolve the conflicts in the run's worktree, or ask an agent to.",
-        "conflictsOther": "Git could not merge the run's branch into {{branch}} on its own: both changed the same lines in {{count}} files. Nothing was merged; Git's merge was aborted, so {{branch}} and the checkout are as they were. Resolve the conflicts in the run's worktree, or ask an agent to.",
+        "conflictsOne": "Git could not merge the run's branch into {{branch}} on its own: both changed the same lines in 1 file. Nothing was merged; Git's merge was aborted, so {{branch}} and the checkout are as they were.",
+        "conflictsOther": "Git could not merge the run's branch into {{branch}} on its own: both changed the same lines in {{count}} files. Nothing was merged; Git's merge was aborted, so {{branch}} and the checkout are as they were.",
         "notRecorded": "Git merged the run into {{branch}} as {{revision}}, but Orchester could not record it: {{cause}}. Your code is in {{branch}}. Record merge saves the merge Git made, marks the task done and clears the run's worktree; it does not merge again.",
         "gitStopped": "Git could not finish {{stage}}: {{cause}}. Orchester stopped it, with every program it started, and removed its temporary worktree. Your checkout and {{branch}} were not touched: the merge commit is made beside them. Try again once the disk answers.",
         "gitSilent": "Git wrote nothing for {{time}} at {{stage}}, most likely because the disk stopped answering. Orchester stopped it, with every program it started, and removed its temporary worktree. Your checkout and {{branch}} were not touched: the merge commit is made beside them. Try again once the disk answers.",
-        "leftChangedOne": "Git stopped part way while it brought the finished merge into your checkout, and {{branch}} did not move. Orchester put back what it could; 1 file still holds the merge's version. Put it back, then Try again. Nothing you changed yourself is touched.",
-        "leftChangedOther": "Git stopped part way while it brought the finished merge into your checkout, and {{branch}} did not move. Orchester put back what it could; {{count}} files still hold the merge's version. Put them back, then Try again. Nothing you changed yourself is touched.",
+        "leftChangedOne": "Git stopped part way while it brought the finished merge into your checkout, and {{branch}} did not move. Orchester put back what it could; 1 file still holds the merge's version. Nothing you changed yourself is touched.",
+        "leftChangedOther": "Git stopped part way while it brought the finished merge into your checkout, and {{branch}} did not move. Orchester put back what it could; {{count}} files still hold the merge's version. Nothing you changed yourself is touched.",
         "leftChangedPutBack": "Git stopped part way while it brought the finished merge into your checkout, and {{branch}} did not move. The files it left changed are put back: your checkout matches {{branch}} again, so Try again merges the run. Nothing you changed yourself was touched.",
         "interrupted": "The app or the runner ended while the merge was at {{stage}}: {{cause}}. Orchester cleared what the merge left when it started again, and nothing was merged. Try again.",
         "moved": "{{branch}} or the run's branch moved since the run was checked: {{cause}}. Nothing was merged; Try again merges the run as it is now.",
@@ -133,6 +134,7 @@
       "checks": "Checks",
       "checksOf": "attempt {{number}} · {{time}}",
       "passed": "{{count}} checks passed",
+      "notReached": "{{count}} checks not reached",
       "show": "Show",
       "hide": "Hide",
       "stage": {
@@ -186,7 +188,6 @@
         "secondOne": "1 second",
         "secondsOther": "{{count}} seconds"
       },
-      "stepOption": "{{number}} {{step}} · {{agent}}",
       "attempts": "Attempts",
       "attempt": {
         "refusedAt": "Refused at {{stage}} · {{cause}}",
@@ -213,15 +214,9 @@
       "stillChanged": "Still changed in your checkout",
       "holdsMerge": "Holds the merge's version",
       "resolve": {
-        "opensNamed": "Resolve in editor merges {{branch}} into the run's worktree and opens it with its conflicting files in {{program}}.",
-        "opensVsCode": "Resolve in editor merges {{branch}} into the run's worktree and opens it with its conflicting files in VS Code.",
-        "opensFolder": "Resolve in editor merges {{branch}} into the run's worktree and opens its folder: VS Code was not found, so the conflicting files are not opened in an editor.",
         "notLatest": "Only the task's latest run is resolved here: open the task to see where it stands."
       },
       "properties": {
-        "run": "Run",
-        "runValue": "#{{run}} · {{pipeline}} v{{version}}",
-        "runNoPipeline": "#{{run}}",
         "branch": "Branch",
         "reviewedAt": "Reviewed at",
         "into": "Into",
@@ -235,7 +230,6 @@
         "detached": "a detached HEAD",
         "folder": "Folder",
         "none": "—",
-        "openKey": "Open {{key}}",
         "logFolder": "Runner log folder"
       },
       "details": {
@@ -249,7 +243,33 @@
         "reviewed": "Reviewed at: {{revision}}",
         "merged": "Merged as: {{revision}}"
       },
-      "openReview": "Open review"
+      "openReview": "Open review",
+      "openInReview": "Open in Review",
+      "bar": {
+        "askAgent": "Ask the agent to resolve",
+        "nothingMerged": "Nothing was merged",
+        "heldBody": "Try again runs every check from 01 once the other operation ends.",
+        "refusedBody": "Try again runs every check from 01 once what refused is fixed.",
+        "gitStoppedBody": "Try again starts from check 01 once the disk answers.",
+        "interruptedBody": "Try again runs every check from 01 again.",
+        "movedBody": "Try again merges the run as it is now, from check 01.",
+        "putBackBody": "Your checkout matches {{branch}} again, so Try again merges the run.",
+        "queueStopped": "The merge queue stopped this run",
+        "queueStoppedBody": "Try again puts it back in the merge queue where it was; it merges when its turn comes.",
+        "notRecorded": "Your code is in {{branch}}, Orchester has not recorded it",
+        "notRecordedBody": "Until then the run stays Ready to merge and the merge queue leaves it alone.",
+        "retrying": "Orchester tries again in {{seconds}} s",
+        "retryingNow": "Orchester tries again now",
+        "retryingBody": "If the last attempt is refused too, the run shows Not merged and waits for you.",
+        "queueRetriesBody": "Nothing was merged so far. Stop retrying leaves the run Not merged.",
+        "awaitingBody": "It merges from the merge queue once you approve it there.",
+        "conflictsOne": "{{count}} file conflicts with {{branch}}",
+        "conflictsOther": "{{count}} files conflict with {{branch}}",
+        "conflictsBody": "Resolve in editor merges {{branch}} into the run's worktree and opens it; the agent merges {{branch}} in and resolves them, then it's back for your review.",
+        "leftOne": "1 file still holds the merge's version",
+        "leftOther": "{{count}} files still hold the merge's version",
+        "leftBody": "Try again waits until these files match {{branch}} again. Put files back restores them; files you changed yourself are never touched."
+      }
     }
   }
 }

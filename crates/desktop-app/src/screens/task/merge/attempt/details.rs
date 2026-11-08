@@ -9,11 +9,10 @@ use orchester_workspace::tasks::merge_attempts::page::AttemptPage;
 
 use super::{
   lines::cause,
-  standing::Standing,
   words::{asked, attempt_time, stage_name},
 };
 
-/// The details of `page`, whose run stands as `standing`, its status line's words `status`.
+/// The details of `page`, its status line's words `status`.
 pub(super) fn details(ctx: &Ctx, page: &AttemptPage, status: &str) -> String {
   let mut lines = vec![
     ctx
@@ -93,14 +92,4 @@ pub(super) fn details(ctx: &Ctx, page: &AttemptPage, status: &str) -> String {
     );
   }
   lines.join("\n")
-}
-
-/// Whether the page offers *Copy details* as its ghost action: every standing but those whose ghost action moves the
-/// run on, *Stop retrying* while Orchester waits to try again and *Open folder* while files are left changed.
-pub(super) const fn offered(standing: Standing, files_left: bool) -> bool {
-  match standing {
-    Standing::Retrying(retrying) => retrying.next.is_none(),
-    Standing::LeftChanged => !files_left,
-    _ => true,
-  }
 }

@@ -2,7 +2,8 @@
 
 use std::sync::Arc;
 
-use orchester_core::project::TaskKey;
+use orchester_core::{project::TaskKey, run::RunNumber};
+use orchester_workspace::tasks::merge_attempts::page::AttemptPage;
 
 /// The tasks whose review shows *All changes* where the branch moved after the head reviewed; the others show *Since
 /// your review*. Kept while the window lives.
@@ -27,5 +28,30 @@ impl ShowingAll {
     } else {
       tasks.retain(|shown| shown != task);
     }
+  }
+}
+
+/// The merge attempts of runs as last read, so a page for a run opened again shows them at once while it reads them
+/// anew (`Review - v2` rule 26 `rwJfp`). One page per run, the last read; kept while the window lives.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct KeptAttempts(Arc<Vec<(TaskKey, RunNumber, Arc<AttemptPage>)>>);
+
+impl lurq::app::component::DevtoolsInspectable for KeptAttempts {}
+
+impl KeptAttempts {
+  /// The page last read for run `number` of `task`.
+  pub fn of(&self, task: &TaskKey, number: RunNumber) -> Option<Arc<AttemptPage>> {
+    self
+      .0
+      .iter()
+      .find(|(key, run, _)| key == task && *run == number)
+      .map(|(_, _, page)| page.clone())
+  }
+
+  /// `page` is what was last read for run `number` of `task`.
+  pub fn keep(&mut self, task: &TaskKey, number: RunNumber, page: &Arc<AttemptPage>) {
+    let pages = Arc::make_mut(&mut self.0);
+    pages.retain(|(key, run, _)| key != task || *run != number);
+    pages.push((task.clone(), number, page.clone()));
   }
 }

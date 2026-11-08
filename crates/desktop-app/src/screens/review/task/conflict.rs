@@ -135,7 +135,7 @@ pub(super) fn bar(ctx: &mut Ctx, env: &Env) -> Option<Element> {
   let base = base_name(ctx, conflicts);
   let title = counted_with_base(ctx, conflicts.files.len(), &base);
   let body = ctx.t_args("review_page.conflict.bar.body", [("base", &*base)]);
-  let agent = agent_field::field(ctx, env, Place::Conflict);
+  let agent = agent_field::field(ctx, (&env.page, &env.state.agent), Place::Conflict);
   Some(
     Row::new()
       .id("review-conflict-bar")
@@ -174,7 +174,7 @@ pub(super) fn bar(ctx: &mut Ctx, env: &Env) -> Option<Element> {
 }
 
 /// The base branch's name, or *its base branch* when the run recorded none.
-pub(super) fn base_name(ctx: &Ctx, conflicts: &ReviewConflicts) -> Arc<str> {
+pub(in crate::screens) fn base_name(ctx: &Ctx, conflicts: &ReviewConflicts) -> Arc<str> {
   match &conflicts.base {
     Some(base) => Arc::from(base.as_str()),
     None => ctx.t("review_page.conflict.baseBranch"),
@@ -231,7 +231,7 @@ fn resolve(ctx: &Ctx, env: &Env) -> Element {
 }
 
 /// How many conflicts `path` shows in its head: its regions, or one for a file that conflicts without lines to show.
-pub(super) fn count_in(conflicts: &ReviewConflicts, path: &str) -> usize {
+pub(in crate::screens) fn count_in(conflicts: &ReviewConflicts, path: &str) -> usize {
   if !conflicts.conflicts_in(path) {
     return 0;
   }
@@ -239,7 +239,7 @@ pub(super) fn count_in(conflicts: &ReviewConflicts, path: &str) -> usize {
 }
 
 /// *2 conflicts* for the head of a file.
-pub(super) fn tag_words(ctx: &Ctx, count: usize) -> Arc<str> {
+pub(in crate::screens) fn tag_words(ctx: &Ctx, count: usize) -> Arc<str> {
   counted(
     ctx,
     ("review_page.diff.conflictsOne", "review_page.diff.conflictsOther"),

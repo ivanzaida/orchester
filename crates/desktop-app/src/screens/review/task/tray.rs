@@ -197,7 +197,7 @@ fn words(ctx: &Ctx, tray: &Tray) -> (Icon, PaletteColor, Arc<str>, PaletteColor,
 /// it (`Discard`, `Send to Implement (3)` in 02 `gSMiI`).
 fn buttons(ctx: &mut Ctx, env: &Env, tray: &Tray) -> Vec<Element> {
   let agent = match tray {
-    Tray::Idle(_) | Tray::Failed(_) => agent_field::field(ctx, env, Place::Tray),
+    Tray::Idle(_) | Tray::Failed(_) => agent_field::field(ctx, (&env.page, &env.state.agent), Place::Tray),
     Tray::Waiting(_) | Tray::Sending(_) => None,
   };
   let ctx = &*ctx;

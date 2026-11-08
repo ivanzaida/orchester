@@ -14,11 +14,11 @@
 
 mod actions;
 mod agent;
-mod agent_field;
+pub(in crate::screens) mod agent_field;
 mod approve;
 mod approved;
 mod composer;
-mod conflict;
+pub(in crate::screens) mod conflict;
 mod crumbs;
 mod diff;
 mod files;

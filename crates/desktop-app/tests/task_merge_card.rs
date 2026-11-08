@@ -302,7 +302,7 @@ fn task_merge_card_refused_says_why_and_opens_the_attempt_page() {
     window.navigation().route_now() == route
   });
   page.window.until_within(GIT_WORK, "the attempt page", |window| {
-    window.texts("merge-attempt-status").is_some()
+    window.texts("merge-attempt-status-text").is_some()
   });
 }
 

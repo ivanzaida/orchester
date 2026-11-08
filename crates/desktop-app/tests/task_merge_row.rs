@@ -206,7 +206,7 @@ fn task_merge_row_stays_beside_the_not_merged_card_and_opens_the_attempt_page() 
   page.words();
   page.window.press("task-merge-row");
   page.window.until_within(GIT_WORK, "the run's attempt page", |window| {
-    window.texts("merge-attempt-status").is_some()
+    window.texts("merge-attempt-status-text").is_some()
   });
   let run = page
     .db
