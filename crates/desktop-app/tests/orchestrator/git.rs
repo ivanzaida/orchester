@@ -52,7 +52,7 @@ fn orchestrator_git_write_waits_for_the_switch_and_shows_what_ran() {
   screen.until("why", |screen| {
     screen
       .text(&format!("{card}-reason"))
-      .contains("Let the Orchestrator write with git")
+      .contains("Let the Orchestrator drive is off")
   });
   assert_eq!(
     ask(&screen, &["log", "-1", "--format=%s"]),

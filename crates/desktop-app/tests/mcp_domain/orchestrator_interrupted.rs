@@ -150,7 +150,12 @@ fn chat_never_continues_a_limit_a_cancel_a_runner_failure_or_a_gone_worktree() {
     for (title, key) in refused {
       let (_, run) = task_run(&db, title);
       let error = chat_call(&mut served, &scope, "resume_run", resume(&run)).expect_err("the person's");
-      assert_eq!(refusal(&error), ("person_only", key), "{title}, switches on: {allowed}");
+      // A limit is decided with `continue_run`, which the chat takes while it drives.
+      let expected = match (allowed, key) {
+        (true, key) if key == limit => ("use_continue_run", "orchestrator.tools.resumeUseContinue"),
+        (_, key) => ("person_only", key),
+      };
+      assert_eq!(refusal(&error), expected, "{title}, drives: {allowed}");
     }
   }
   assert_eq!(
@@ -204,10 +209,6 @@ fn chat_turn_of_an_interruption_continues_only_its_run_once_and_not_again_soon()
   };
   let [(_, crashed), (_, lost), _] = interruptions(&mut db);
   turn_of_end(&mut db, &own, (&seeded, &crashed), RunEnd::Interrupted);
-  allow(&served, &seeded.repo, true);
-  // Without answering agents on, no turn is the person's to start by itself.
-  let refused = chat_call(&mut served, &own, "resume_run", resume(&crashed)).expect_err("answer agents is off");
-  assert_eq!(refusal(&refused).0, "person_only");
   allow(&served, &seeded.repo, true);
   let other = chat_call(&mut served, &own, "resume_run", resume(&lost)).expect_err("not this turn's run");
   assert_eq!(refusal(&other), ("person_only", "orchestrator.tools.resumePersonOnly"));

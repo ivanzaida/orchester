@@ -30,7 +30,7 @@ fn kept_refusal(db: &ProjectDb, scope: &ChatScope) -> String {
 }
 
 #[test]
-fn chat_git_writes_wait_for_the_switch_and_never_run_in_a_turn_nobody_asked_for() {
+fn chat_git_writes_wait_for_the_switch_and_never_run_in_a_report_turn() {
   let (mut served, seeded) = Served::seeded("tasks");
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
   let scope = chat(&served, &mut db);
@@ -43,19 +43,27 @@ fn chat_git_writes_wait_for_the_switch_and_never_run_in_a_turn_nobody_asked_for(
   assert!(read["branch"].is_string(), "{read}");
   let kept = actions(&db, &scope).len();
 
-  allow(&served, &seeded.repo);
   let on_its_own = ChatScope {
     on_its_own: true,
     ..scope.clone()
   };
-  let refused = chat_call(&mut served, &on_its_own, "git_commit", commit).expect_err("refused");
-  assert_eq!(refusal(&refused), "person_only");
+  let refused = chat_call(&mut served, &on_its_own, "git_commit", commit.clone()).expect_err("refused");
+  assert_eq!(
+    refusal(&refused),
+    "person_only",
+    "while the chat does not drive, a turn it started writes nothing"
+  );
   assert_eq!(kept_refusal(&db, &scope), "person_only");
   assert_eq!(
     actions(&db, &scope).len(),
     kept + 1,
     "the read kept nothing, the refusal is kept"
   );
+
+  // While it drives, a turn it started writes too: the call reaches git, which has nothing to commit here.
+  allow(&served, &seeded.repo);
+  let reached = chat_call(&mut served, &on_its_own, "git_commit", commit).expect_err("nothing to commit");
+  assert_eq!(refusal(&reached), "nothing_to_commit");
 
   let report = ChatScope {
     chat: report_turn(&mut db, &scope),

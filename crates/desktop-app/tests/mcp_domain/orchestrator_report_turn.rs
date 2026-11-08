@@ -57,11 +57,10 @@ fn refusal(error: &ToolError) -> &str {
 }
 
 #[test]
-fn chat_report_turn_only_proposes_even_with_answer_agents_on() {
+fn chat_report_turn_only_proposes_while_it_does_not_drive_and_changes_nothing_while_it_does() {
   let (mut served, seeded) = Served::seeded("tasks");
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
   let (task, run) = task_run(&db, ASKING);
-  allow(&served, &seeded.repo);
   served
     .services()
     .workspace
@@ -79,6 +78,13 @@ fn chat_report_turn_only_proposes_even_with_answer_agents_on() {
   assert_eq!(told["waits_for_person"], true, "{told}");
   assert_eq!(db.messages(task.id()).expect("messages").len(), before, "nothing sent");
   assert_eq!(actions(&db, &scope).pop().expect("kept").outcome, ActionOutcome::Waits);
+
+  // While the chat drives, a report's turn changes nothing at all: not even a card.
+  allow(&served, &seeded.repo);
+  let message = json!({ "project": "Kontur", "run": run.id().to_string(), "text": "Keep the HubSpot owner." });
+  let refused = chat_call(&mut served, &scope, "send_message", message).expect_err("refused");
+  assert_eq!(refusal(&refused), "report_turn");
+  assert_eq!(db.messages(task.id()).expect("messages").len(), before, "nothing sent");
 
   let held = chat_call(&mut served, &scope, "hold_queue", json!({ "project": "Kontur" })).expect_err("refused");
   assert_eq!(refusal(&held), "report_turn");

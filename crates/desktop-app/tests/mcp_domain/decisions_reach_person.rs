@@ -111,7 +111,7 @@ fn decisions_reach_person_orchestrator_answer_is_proposed_under_autopilot_until_
 }
 
 #[test]
-fn decisions_reach_person_orchestrator_proposes_how_a_waiting_run_goes_on_under_autopilot() {
+fn decisions_reach_person_orchestrator_proposes_how_a_waiting_run_goes_on_until_it_drives() {
   let (mut served, seeded) = Served::seeded("tasks");
   autopilot(&seeded.repo);
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
@@ -123,7 +123,6 @@ fn decisions_reach_person_orchestrator_proposes_how_a_waiting_run_goes_on_under_
     .workspace
     .set_automation_answers_approvals(true)
     .expect("consent");
-  allow(&served, &seeded.repo);
   let retry = json!({ "project": "Kontur", "run": run.id().to_string(), "choice": { "kind": "allow_retry" } });
   let told = chat_call(&mut served, &scope, "continue_run", retry).expect("proposed");
   assert_eq!(told["waits_for_person"], true, "{told}");
@@ -138,4 +137,20 @@ fn decisions_reach_person_orchestrator_proposes_how_a_waiting_run_goes_on_under_
   );
   let after = db.run(run.id()).expect("read").expect("the run").last_sequence();
   assert_eq!(after, before, "the run still waits for the person");
+
+  // While the chat drives, every choice goes to the tool: no card, and nothing is the person's alone.
+  allow(&served, &seeded.repo);
+  let raise = json!({
+    "project": "Kontur", "run": run.id().to_string(),
+    "choice": { "kind": "raise_limits", "budget_tokens": null, "time_limit_minutes": null },
+  });
+  let driven = chat_call(&mut served, &scope, "continue_run", raise);
+  assert!(
+    !matches!(&driven, Err(ToolError::Refused { code, .. }) if code == "person_only"),
+    "{driven:?}"
+  );
+  assert!(
+    !matches!(&driven, Ok(told) if told["waits_for_person"] == true),
+    "{driven:?}"
+  );
 }

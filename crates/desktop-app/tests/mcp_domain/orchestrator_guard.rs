@@ -1,7 +1,8 @@
-//! What the Orchestrator chat does not do itself (`docs/design/orchestrator-toolset.md`, decision 5), on the seeded
-//! Kontur: in a turn a wait or a run's end started by itself, `merge_run` and `run_task` only propose, even with *Let
-//! the Orchestrator merge runs* on and Autopilot allowed; `resume_run` refuses a run stopped at a limit or interrupted,
-//! which only the person resumes; and a hold or a release of new starts that would change nothing is refused.
+//! What the Orchestrator chat does not do itself (`docs/design/orchestrator-toolset.md`, decision 5, ORC-909), on the
+//! seeded Kontur: while it does not drive, in a turn a wait or a run's end started by itself, `merge_run` and
+//! `run_task` only propose, even with Autopilot allowed, and while it drives they are carried out; `resume_run`
+//! refuses a run stopped at a limit or interrupted while it does not drive; and a hold or a release of new starts that
+//! would change nothing is refused.
 
 use orchester_core::{
   id::IdempotencyKey,
@@ -36,7 +37,7 @@ fn refusal(error: &ToolError) -> &str {
 }
 
 #[test]
-fn chat_turn_on_its_own_only_proposes_a_merge_or_a_start() {
+fn chat_turn_on_its_own_merges_and_starts_while_it_drives() {
   let (mut served, seeded) = Served::seeded("tasks");
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
   let (_, run) = task_run(&db, READY);
@@ -46,6 +47,38 @@ fn chat_turn_on_its_own_only_proposes_a_merge_or_a_start() {
     .workspace
     .set_orchestrator_drives(&seeded.repo, true)
     .expect("the person turned it on");
+  let scope = ChatScope {
+    on_its_own: true,
+    ..scope
+  };
+  let merge = json!({ "project": "Kontur", "run": run.id().to_string() });
+  let told = chat_call(&mut served, &scope, "merge_run", merge).expect("merged");
+  assert_eq!(told.get("waits_for_person"), None, "{told}");
+  assert!(db.run_merge(run.id()).expect("read").is_some(), "merged");
+  let kept = actions(&db, &scope).pop().expect("it");
+  assert_eq!(kept.outcome, ActionOutcome::Done);
+  assert!(kept.on_its_own, "kept as done on its own");
+  let draft = db
+    .tasks()
+    .expect("tasks")
+    .into_iter()
+    .find(|task| task.details().title.as_str() == "Drop the legacy sync worker")
+    .expect("the ready draft");
+  let start = json!({ "project": "Kontur", "key": draft.key().to_string() });
+  // Without Autopilot too: this session has no runner, so the tool answers as it does for any client, never a card.
+  let started = chat_call(&mut served, &scope, "run_task", start);
+  assert!(
+    !matches!(&started, Ok(told) if told["waits_for_person"] == true),
+    "not proposed: {started:?}"
+  );
+}
+
+#[test]
+fn chat_turn_on_its_own_only_proposes_a_merge_or_a_start_while_it_does_not_drive() {
+  let (mut served, seeded) = Served::seeded("tasks");
+  let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
+  let (_, run) = task_run(&db, READY);
+  let scope = chat(&served, &mut db);
   db.save_allow_autopilot(AllowAutopilot::ON).expect("Autopilot allowed");
   // The tools of a turn a run's end started by itself.
   let scope = ChatScope {

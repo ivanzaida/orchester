@@ -1,9 +1,9 @@
-//! What the Orchestrator chat's `send_message` does to a run (`docs/design/orchestrator-toolset.md`, decision 5), on
-//! the seeded Kontur's task states: a message to a run none of whose agents waits or works moves it (follows it up,
-//! continues, resumes, continues an interrupted run, waits for a raised limit, runs the task again), which is the
-//! person's, so it is always proposed, even with *Let the Orchestrator answer agents* and automation's consent on; one
-//! to an agent that waits for an answer is sent at once. And in a turn a wait or a run's end started by itself, a
-//! pause, a resume, a release of new starts and a publication are only proposed.
+//! What the Orchestrator chat's `send_message` does to a run (`docs/design/orchestrator-toolset.md`, decision 5,
+//! ORC-909), on the seeded Kontur's task states: a message to a run none of whose agents waits or works moves it
+//! (follows it up, continues, resumes, continues an interrupted run, waits for a raised limit, runs the task again).
+//! While the chat does not drive it is always proposed, with automation's consent on; while it drives it is sent at
+//! once, as one to an agent that waits for an answer is. And in a turn a wait or a run's end started by itself, a
+//! pause, a resume, a release of new starts and a publication are only proposed while the chat does not drive.
 
 use orchester_core::{
   orchestrator::{ActionOutcome, EntryKind},
@@ -34,14 +34,23 @@ fn titled(seeded: &Seeded, state: &str) -> String {
     .clone()
 }
 
-/// The seeded `task-states` project served, the chat's switches and automation's consent on, and a conversation.
+/// The seeded `task-states` project served, the chat driving and automation's consent on, and a conversation.
 fn switched_on() -> (Served, Seeded, ProjectDb, ChatScope) {
+  fixture(true)
+}
+
+/// The same with the chat not driving: what it changes is a card.
+fn switched_off() -> (Served, Seeded, ProjectDb, ChatScope) {
+  fixture(false)
+}
+
+fn fixture(drives: bool) -> (Served, Seeded, ProjectDb, ChatScope) {
   let (served, seeded) = Served::seeded("task-states");
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
   let workspace = &served.services().workspace;
   workspace
-    .set_orchestrator_drives(&seeded.repo, true)
-    .expect("the person turned it on");
+    .set_orchestrator_drives(&seeded.repo, drives)
+    .expect("the person chose it");
   workspace
     .set_automation_answers_approvals(true)
     .expect("decision consent");
@@ -54,8 +63,8 @@ fn message(run: &str) -> Value {
 }
 
 #[test]
-fn chat_message_that_moves_a_run_is_always_proposed() {
-  let (mut served, seeded, db, scope) = switched_on();
+fn chat_message_that_moves_a_run_is_proposed_while_it_does_not_drive() {
+  let (mut served, seeded, db, scope) = switched_off();
   for (state, then) in [
     ("ready for review", "follow_up"),
     ("waits after retries", "continue"),
@@ -79,6 +88,24 @@ fn chat_message_that_moves_a_run_is_always_proposed() {
 }
 
 #[test]
+fn chat_message_that_moves_a_run_is_sent_at_once_while_it_drives() {
+  let (mut served, seeded, db, scope) = switched_on();
+  for state in ["ready for review", "interrupted", "cancelled"] {
+    let (_, run) = task_run(&db, &titled(&seeded, state));
+    let result = chat_call(&mut served, &scope, "send_message", message(&run.id().to_string()));
+    if let Ok(told) = &result {
+      assert_eq!(told.get("waits_for_person"), None, "{state}: not proposed: {told}");
+    }
+    // This session has no runner: the tool queues the message or refuses as it does for any client, never a card.
+    assert_ne!(
+      actions(&db, &scope).pop().expect("kept").outcome,
+      ActionOutcome::Waits,
+      "{state}: {result:?}"
+    );
+  }
+}
+
+#[test]
 fn chat_message_to_an_agent_that_waits_is_sent_at_once() {
   let (mut served, seeded, db, scope) = switched_on();
   let (_, run) = task_run(&db, &titled(&seeded, "question waiting"));
@@ -91,7 +118,7 @@ fn chat_message_to_an_agent_that_waits_is_sent_at_once() {
 
 #[test]
 fn chat_turn_on_its_own_proposes_pausing_resuming_releasing_and_publishing() {
-  let (mut served, seeded, db, scope) = switched_on();
+  let (mut served, seeded, db, scope) = switched_off();
   let own = ChatScope {
     on_its_own: true,
     ..scope
@@ -166,7 +193,7 @@ fn refused_with(db: &ProjectDb, scope: &ChatScope) -> String {
 
 #[test]
 fn chat_message_applied_after_its_run_moved_on_is_refused() {
-  let (mut served, seeded, mut db, scope) = switched_on();
+  let (mut served, seeded, mut db, scope) = switched_off();
   let (_, mut run) = task_run(&db, &titled(&seeded, "interrupted"));
   let told = chat_call(&mut served, &scope, "send_message", message(&run.id().to_string())).expect("proposed");
   assert_eq!(told["proposed"]["message"]["then"], "continue_interrupted", "{told}");
@@ -179,7 +206,7 @@ fn chat_message_applied_after_its_run_moved_on_is_refused() {
 
 #[test]
 fn chat_resume_applied_after_its_run_was_interrupted_is_refused() {
-  let (mut served, seeded, mut db, scope) = switched_on();
+  let (mut served, seeded, mut db, scope) = switched_off();
   let own = ChatScope {
     on_its_own: true,
     ..scope

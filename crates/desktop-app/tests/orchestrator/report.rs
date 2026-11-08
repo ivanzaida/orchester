@@ -92,7 +92,7 @@ fn orchestrator_report_kept_to_start_a_turn_says_the_orchestrator_adds_a_summary
   screen.until("its sections", |screen| screen.exists(&format!("{card}-sections")));
   let shown = screen.text(&card);
   assert!(
-    shown.contains("Let the Orchestrator answer agents is on: the Orchestrator adds a summary")
+    shown.contains("Let the Orchestrator drive is on: the Orchestrator adds a summary")
       || shown.contains("adds a short summary and its recommendations below"),
     "{shown}"
   );
