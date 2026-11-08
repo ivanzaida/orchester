@@ -388,6 +388,15 @@ impl AttemptScreen {
       )
       .into()
     }));
+    let nothing = conflicts.is_some_and(Conflicts::nothing_to_resolve);
+    sections.extend(nothing.then(|| {
+      Notice::new(
+        "merge-attempt-nothing-to-resolve",
+        NoticeTone::Info,
+        ctx.t_args("merges.nothingToResolve", [("branch", shown.base())]),
+      )
+      .into()
+    }));
     if let (Standing::Conflicts, Some(conflicts)) = (standing, conflicts) {
       let review = shown.review(ctx);
       sections.push(conflicts.section(ctx, review));

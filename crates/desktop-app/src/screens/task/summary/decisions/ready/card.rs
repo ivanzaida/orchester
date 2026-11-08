@@ -374,9 +374,15 @@ fn left_behind(ctx: &Ctx, left: &Leftovers) -> Arc<str> {
       .join(&separator)
   };
   let (unmerged, merged) = (names(false), names(true));
-  match left.worktrees.len() {
-    1 => ctx.t("decisions.ready.left.worktreeOne"),
-    count if count > 1 => ctx.t_args("decisions.ready.left.worktreeOther", [("count", count.to_string())]),
+  let staying = left.staying();
+  match (staying.with_changes, staying.unfinished) {
+    (1, 0) => ctx.t("decisions.ready.left.worktreeOne"),
+    (count, 0) if count > 1 => ctx.t_args("decisions.ready.left.worktreeOther", [("count", count.to_string())]),
+    (0, 1) => ctx.t("decisions.ready.left.unfinishedOne"),
+    (with_changes, unfinished) if with_changes + unfinished > 0 => ctx.t_args(
+      "decisions.ready.left.unfinishedOther",
+      [("count", (with_changes + unfinished).to_string())],
+    ),
     _ if !unmerged.is_empty() => ctx.t_args("decisions.ready.left.branches", [("branches", unmerged)]),
     _ if !merged.is_empty() => ctx.t_args("decisions.ready.left.mergedBranches", [("branches", merged)]),
     _ => ctx.t("decisions.ready.left.nothing"),

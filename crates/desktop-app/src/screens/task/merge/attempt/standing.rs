@@ -29,6 +29,9 @@ pub(crate) enum Standing {
   MergedOutside,
   Retrying(Retrying),
   Conflicts,
+  /// The last attempt stopped on conflicts, and the run's branch holds its base branch now: an agent or a person merged
+  /// the base in since, so merging the run cannot conflict and *Try again* merges it.
+  Resolved,
   NotRecorded,
   /// Git stopped part way through bringing the merge in; the files still left changed decide what moves it on.
   LeftChanged,
@@ -62,6 +65,9 @@ impl Standing {
     if page.awaiting_approval {
       return Some(Self::AwaitingApproval);
     }
+    if page.base_held {
+      return Some(Self::Resolved);
+    }
     Some(match last.outcome() {
       AttemptOutcome::Merged { .. } => Self::Merged,
       AttemptOutcome::Conflicts { .. } => Self::Conflicts,
@@ -88,6 +94,7 @@ impl Standing {
       Self::Retrying(_) => (Icon::RefreshCw, PaletteColor::Info),
       Self::AwaitingApproval => (Icon::CirclePause, PaletteColor::Warning),
       Self::Conflicts => (Icon::GitMerge, PaletteColor::Warning),
+      Self::Resolved => (Icon::GitMerge, PaletteColor::Info),
       Self::LeftChanged => (Icon::TriangleAlert, PaletteColor::Warning),
       _ => (Icon::CircleAlert, PaletteColor::Warning),
     }
@@ -116,6 +123,7 @@ impl Standing {
       Self::MergedOutside => "merged_outside",
       Self::Retrying(_) => "retrying",
       Self::Conflicts => "conflicts",
+      Self::Resolved => "resolved",
       Self::NotRecorded => "not_recorded",
       Self::LeftChanged => "left_changed",
       Self::GitStopped => "git_stopped",
@@ -135,6 +143,7 @@ impl Standing {
       Self::MergedOutside => "merges.page.status.mergedOutside",
       Self::Retrying(_) => "merges.page.status.queueRetries",
       Self::Conflicts => "merges.page.status.conflicts",
+      Self::Resolved => "merges.page.status.resolved",
       Self::NotRecorded => "merges.page.status.notRecorded",
       Self::LeftChanged => "merges.page.status.leftChanged",
       Self::GitStopped => "merges.page.status.gitStopped",
@@ -161,6 +170,7 @@ pub(super) fn explanation(ctx: &Ctx, page: &AttemptPage, standing: Standing, bra
     (Standing::Retrying(Retrying { next: Some(_) }), _) => ("merges.page.explain.retrying", None, None),
     (Standing::Retrying(_), _) => ("merges.page.explain.queueRetries", None, None),
     (Standing::AwaitingApproval, _) => ("merges.page.explain.awaitingApproval", None, None),
+    (Standing::Resolved, _) => ("merges.page.explain.resolved", None, None),
     (Standing::LeftChanged, _) if page.left_changed.is_empty() => {
       ("merges.page.explain.leftChangedPutBack", None, None)
     }

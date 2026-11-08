@@ -26,7 +26,7 @@ const FIX_ACTIONS: [&str; 6] = [
 ];
 
 /// The run of the task titled `title` in `page`'s project.
-fn run_of(page: &Page, title: &str) -> orchester_core::run::Run {
+pub(super) fn run_of(page: &Page, title: &str) -> orchester_core::run::Run {
   let db = ProjectDb::open(&page.repo).expect("the project database");
   let task = db
     .tasks()

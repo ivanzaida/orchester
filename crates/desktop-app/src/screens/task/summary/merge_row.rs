@@ -94,7 +94,7 @@ impl Shown {
       Standing::NotRecorded => Self::NotRecorded(at),
       Standing::LeftChanged => Self::LeftChanged,
       Standing::GitStopped => Self::GitStopped(at),
-      Standing::AwaitingApproval => Self::Waits,
+      Standing::AwaitingApproval | Standing::Resolved => Self::Waits,
       Standing::QueueStopped | Standing::Interrupted | Standing::Moved | Standing::NotMerged => Self::NotMerged(at),
     })
   }
