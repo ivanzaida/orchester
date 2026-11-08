@@ -25,7 +25,6 @@ use lurq::{
   app::{
     component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction, FutureState},
-    events::is_synthetic_input,
   },
   core::Signal,
   node::Element,
@@ -51,6 +50,7 @@ use parking_lot::Mutex;
 pub(super) use self::dialog::dialog;
 use super::View;
 use crate::{
+  mcp::qa_person::QaPerson,
   services::Services,
   ui::{
     button::{ActionButton, ButtonKind},
@@ -141,6 +141,8 @@ pub(super) struct Rewinding {
   pub(super) action: RewindAction,
   /// Keeps a fork ([`fork`]).
   pub(super) fork: fork::ForkAction,
+  /// Whether going back takes synthetic input as the person's: in a QA copy only.
+  qa_person: QaPerson,
 }
 
 impl Rewinding {
@@ -184,6 +186,7 @@ impl Rewinding {
       refused: ctx.signal(false),
       action,
       fork: fork::action(ctx),
+      qa_person: QaPerson::of(ctx),
     }
   }
 
@@ -284,7 +287,11 @@ impl Rewinding {
       if self.refuse() {
         return;
       }
-      self.run(project, (chat, point), Some(outgoing(chat, words, (mode, plan_only))));
+      self.run(
+        project,
+        (chat, point),
+        Some(self.outgoing(chat, words, (mode, plan_only))),
+      );
       return;
     }
     self.refused.set(false);
@@ -303,7 +310,7 @@ impl Rewinding {
     if self.pending() || self.refuse() {
       return;
     }
-    let edit = asked.edit.clone().map(|words| outgoing(asked.chat, words, mode));
+    let edit = asked.edit.clone().map(|words| self.outgoing(asked.chat, words, mode));
     self.run(project, (asked.chat, asked.point), edit);
   }
 
@@ -312,15 +319,16 @@ impl Rewinding {
     self.action.state().get_untracked().is_pending()
   }
 
-  /// Refuses synthetic input (an MCP client's): what a rewind drops cannot be brought back and no MCP tool rewinds
-  /// either, so only a person goes back, and the screen says so. Whether it refused.
+  /// Refuses synthetic input (an MCP client's) outside a QA copy (`mcp::qa_person`): what a rewind drops cannot be
+  /// brought back and no MCP tool rewinds either, so only a person goes back, and the screen says so. Whether it
+  /// refused.
   fn refuse(&self) -> bool {
-    let synthetic = is_synthetic_input();
-    if synthetic {
+    let refused = self.qa_person.refuses_input();
+    if refused {
       tracing::warn!("synthetic input asked to rewind a conversation; not taken");
     }
-    self.refused.set(synthetic);
-    synthetic
+    self.refused.set(refused);
+    refused
   }
 
   /// Goes back, unless a rewind is already under way: a second Send or Enter never replaces the first.
@@ -335,19 +343,19 @@ impl Rewinding {
       edit,
     });
   }
-}
 
-/// The edit `words` as a new message of `chat`, sent by the person or automation, going `(mode, plan_only)`.
-fn outgoing(chat: ChatId, words: String, (mode, plan_only): (TurnMode, bool)) -> Outgoing {
-  Outgoing {
-    chat,
-    message: ChatMessageId::generate(),
-    text: words,
-    attachments: Vec::new(),
-    skill: None,
-    sent_by: super::sender(),
-    mode,
-    plan_only,
+  /// The edit `words` as a new message of `chat`, sent by the person or automation, going `(mode, plan_only)`.
+  fn outgoing(&self, chat: ChatId, words: String, (mode, plan_only): (TurnMode, bool)) -> Outgoing {
+    Outgoing {
+      chat,
+      message: ChatMessageId::generate(),
+      text: words,
+      attachments: Vec::new(),
+      skill: None,
+      sent_by: super::sender(&self.qa_person),
+      mode,
+      plan_only,
+    }
   }
 }
 
