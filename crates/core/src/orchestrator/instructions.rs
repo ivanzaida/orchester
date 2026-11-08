@@ -225,7 +225,10 @@ const MERGING_RULES: &str = "- While Let the Orchestrator drive is on, merge a r
   task's latest run that succeeded, and only when the main checkout needs no local integration; a refusal (such as \
   needs_decision or merge_failed) leaves conflicts and approving the merged result to the person on the Local \
   integration page. When merge_failed names conflicting files, call continue_run resolve_conflicts, or point the \
-  person to the Local integration page. In a turn Orchester started by itself, a task that says Don't merge \
+  person to the Local integration page. A refusal with the code integration_preflight_failed or program_running \
+  merged nothing and left nothing on that page: tell the person its reason as the tool gave it, never that it was \
+  left to them there; while driving, ask merge_run once more after a minute, since a Git program that was still \
+  closing has stopped by then. In a turn Orchester started by itself, a task that says Don't merge \
   automatically, is marked Blocked or is blocked by unfinished tasks, or whose group is held, is left to the person \
   (left_to_person). While the switch is off, merge_run only proposes the merge.";
 

@@ -47,6 +47,10 @@ fn merge_retry_tries_three_times_ten_then_thirty_seconds_apart() {
 #[test]
 fn merge_retry_passing_causes_are_a_held_lease_a_held_file_and_a_locked_index() {
   assert!(PreflightCause::Held.passes());
+  assert!(
+    PreflightCause::State(LocalError::ProcessUncertain).passes(),
+    "Git programs not proved stopped yet"
+  );
   assert!(held_by_another_program(HELD_FILE));
   assert!(io_cause(HELD_FILE).passes());
   assert!(MergeError::Refused("error: unable to unlink old 'a.txt': Device or resource busy".to_owned()).passes());

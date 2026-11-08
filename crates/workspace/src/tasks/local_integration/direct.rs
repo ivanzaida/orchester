@@ -19,7 +19,7 @@ use orchester_core::{
 use orchester_exec::local_git::IntegrationLease;
 use orchester_store::{ProjectDb, StoreError};
 
-use super::IntegrationError;
+use super::{IntegrationError, settle::wait_while};
 use crate::tasks::detail::run_store_error;
 
 /// The local integration that holds the shared checkout.
@@ -27,23 +27,38 @@ use crate::tasks::detail::run_store_error;
 pub enum CheckoutHolder {
   /// The run's own.
   ThisRun,
+  /// A Git program of the run's own local integration is journaled as running, and the integration holds nothing
+  /// else: there is nothing for a person to finish in Local integration, only the program to end.
+  RunningProgram,
   /// Another run's, of the task `task`.
   OtherRun { task: TaskKey },
-}
-
-/// Whether a local integration holds the shared checkout ([`checkout_holder`]).
-pub(crate) fn managed_checkout(db: &ProjectDb, run: RunId) -> Result<bool, StoreError> {
-  Ok(checkout_holder(db, run)?.is_some())
 }
 
 /// Which local integration holds the shared checkout, if any: one that started work it must finish or put back
 /// (`LocalOperation::reserves_checkout`), or whose Git process has not finished, as local integration itself checks
 /// before it begins. A review that only read the checkout, also one paused since, holds nothing and does not stand in
 /// the way of the run's direct merge; historical finished records do not reserve the checkout forever.
+///
+/// A run's own Git program that is journaled as running is given a moment to end first, as it does when a merge is
+/// asked the moment the run's last program is closing; one that is really running outlasts the wait.
 pub(crate) fn checkout_holder(db: &ProjectDb, run: RunId) -> Result<Option<CheckoutHolder>, StoreError> {
+  wait_while(
+    || holder_now(db, run),
+    |holder| matches!(holder, Ok(Some(CheckoutHolder::RunningProgram))),
+  )
+}
+
+fn holder_now(db: &ProjectDb, run: RunId) -> Result<Option<CheckoutHolder>, StoreError> {
   let holders = holders(db)?;
   if holders.contains(&run) {
-    return Ok(Some(CheckoutHolder::ThisRun));
+    let reserves = db
+      .local_operation(run)?
+      .is_some_and(|operation| operation.reserves_checkout());
+    return Ok(Some(if reserves {
+      CheckoutHolder::ThisRun
+    } else {
+      CheckoutHolder::RunningProgram
+    }));
   }
   let Some(other) = holders.first() else {
     return Ok(None);

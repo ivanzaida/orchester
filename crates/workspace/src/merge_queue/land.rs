@@ -194,9 +194,9 @@ fn not_landed(problem: IntegrationProblem) -> Landed {
       current: current.map(|branch| branch.as_str().to_owned()),
     }),
     IntegrationProblem::Merge(MergeError::InProgress) => Landed::Blocked(Blocked::InProgress),
-    IntegrationProblem::HeldLocally(CheckoutHolder::ThisRun | CheckoutHolder::OtherRun { .. }) => {
-      Landed::Blocked(Blocked::HeldLocally)
-    }
+    IntegrationProblem::HeldLocally(
+      CheckoutHolder::ThisRun | CheckoutHolder::RunningProgram | CheckoutHolder::OtherRun { .. },
+    ) => Landed::Blocked(Blocked::HeldLocally),
     // Another merge or local integration holds the checkout's integration lease now: the run waits for it, and
     // delivery goes on by itself once it is free.
     IntegrationProblem::Preflight {

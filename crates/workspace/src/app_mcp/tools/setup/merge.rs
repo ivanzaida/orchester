@@ -43,7 +43,7 @@ use crate::{
     detail::run_store_error,
     integration::{IntegrationProblem, integration_refusal, stage_message},
     integration_jobs::{JobState, MergeArgs, ProjectJobState},
-    local_integration::{IntegrationError, LegacyPolicy, LocalIntent, LocalOrigin, managed_checkout},
+    local_integration::{CheckoutHolder, IntegrationError, LegacyPolicy, LocalIntent, LocalOrigin, checkout_holder},
     merge_attempts::{self, Asked},
     outside::Outside,
   },
@@ -257,7 +257,11 @@ fn start(
   let run = find_run(&db, &args.run)?;
   ready(&db, &run, (&open.repo_root, &services.programs))?;
   let jobs = services.jobs.of(open.project.id());
-  if managed_checkout(&db, run.id())? || jobs.state().local_decision_pending() {
+  let holder = checkout_holder(&db, run.id())?;
+  if holder == Some(CheckoutHolder::RunningProgram) {
+    return Err(refused("program_running", "localIntegration.programRunning"));
+  }
+  if holder.is_some() || jobs.state().local_decision_pending() {
     LocalOrigin::AuthenticatedDomain
       .authorize(LocalIntent::ReviewedDecision)
       .map_err(|_| refused("needs_decision", "localIntegration.personRequired"))?;
