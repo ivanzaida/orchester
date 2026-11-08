@@ -533,8 +533,12 @@ delivery has no base merge (`report`, `outside`, `changes_or_report` without a p
 `completes_on_success`), and a `delivered` `delivery.report` of the task's module for work that `succeeded`. The
 task's pipeline gives the delivery (the bundle's `Deliverable`); no field is added to the task.
 
-**Open for the platform (OP):** whether a closed task may be claimed or started (this contract does not say; the stand-in
-does not refuse it); whether the runner shares a `patch` artifact exactly when the run committed changes (the rule for
+**A closed task is not claimed or started** (decided 2026-11-09): until an Admin reopens it, `claim.acquire`,
+`claim.take_over` and `work.start` of a Done or Canceled task are refused `409 transition_denied`, and its
+capabilities deny `claim.acquire` and `claim.take_over` with the same reason. **Reopening sets the task's work aside**:
+a delivery marks Done only a task whose work started after its last reopen has succeeded.
+
+**Open for the platform (OP):** whether the runner shares a `patch` artifact exactly when the run committed changes (the rule for
 `changes_or_report` relies on it); what an Admin's Done to Canceled (and back) is, which this contract leaves an Admin's
 without a capability action.
 

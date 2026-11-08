@@ -1018,8 +1018,8 @@ Admin's as it was.
 | Step | Refusal |
 | --- | --- |
 | the task is the project's | `404 not_found` |
+| the patch is on the task's revision | `409 revision_conflict {current}`, as for every task edit. It comes before the permission, because what a caller may do is read against the task as it is: a holder who retries a Done that was already applied (a lost answer) meets the conflict and the task as it is, not `not_admin` |
 | the caller may make the patch | `403 not_admin` when a holder could not have made the patch either (it changes something only an Admin may); `409 not_holder {claim}` when it is a holder's patch and the caller is neither the holder nor an Admin (`claim` is the task's own claim as `SharedClaim`, `null` when it has none or only its module has one) |
-| the patch is on the task's revision | `409 revision_conflict {current}`, as for every task edit |
 | the new `blocked_reason` is not empty after trimming | `422 organization {reason:"missing_reason"}` |
 | a close (`Complete` or `Cancel`) while the task's latest work runs, or waits for a person, with an accepted report | `422 organization {reason:"stop_run_first"}`: the run is stopped first, as `claim.release` and Canceled already require |
 | the other rules of a task edit | unchanged (`release`, `module`, tags, links) |
@@ -1034,6 +1034,18 @@ no run (running, no accepted report) is moved to `failed` with no reason, as `cl
 state stays as it is. A reopened task is free: it has no claim and takes one as any task does. The holder learns of it by
 the events below, by a heartbeat that names the claim (`lost`), and by `claim_lost` on a later report.
 
+**A closed task is not claimed or started.** Until an Admin reopens it, a Done or Canceled task cannot be taken into
+work: `claim.acquire` and `claim.take_over` of it, and `work.start` of it, are refused `409 transition_denied` (an
+existing code: the subject's state does not have the action), whoever asks and whatever claim the task shows, and before
+the claim is looked at. The task's capabilities say the same: `claim.acquire` and `claim.take_over` are denied with
+`transition_denied` (told before `claim_required` and `module_required`). `claim.release`, the heartbeat and
+`work.report` are not changed by it. A task that is reopened can be claimed and started as any task.
+
+**Reopening sets the work aside.** A reopened task has no work: the work it had, whatever its state, no longer counts
+for a Done by itself. The next `work.start` (under a new claim) makes new work, and only that work's success counts. A
+delivery that is accepted after a reopen therefore marks the task Done only when a work of it started after the reopen
+has succeeded; the work from before the close is never read again.
+
 **Done by itself.** Two things mark a task Done without a patch, each in the transaction that accepts it, with the claim
 released as above, `updated.by` the person who reported, and an organization history entry with `actor:"orchester"`:
 
@@ -1042,8 +1054,9 @@ released as above, `updated.by` the person who reported, and an organization his
   choice, else its pipeline's) is `report` or `outside`, or `changes_or_report` and the report shares no `patch` artifact
   (the run made no changes). A `changes` delivery, and `changes_or_report` with a patch, are not Done by their success.
 - *Changes, on the accepted delivery of their module.* A `delivery.report` with outcome `delivered` that the server
-  accepts marks Done every task of that module that is not Done or Canceled and whose latest work `succeeded` (its
-  changes are in the module branch that went to base). A requested, waiting or failed delivery marks nothing, and a task
+  accepts marks Done every task of that module that is not Done or Canceled and whose latest work `succeeded`, a work
+  that started after the task's last reopen if it was reopened (its changes are in the module branch that went to
+  base). A requested, waiting or failed delivery marks nothing, and a task
   whose work did not succeed is left as it is.
 
 A succeeded run never marks a task whose work delivers changes (`docs/design/team-authority.md`, D4). Neither automatic
@@ -1071,10 +1084,16 @@ listed.
 - The task's organization history gets one entry per change, `actor` as the patch sent it (`person`) or `orchester` for
   Done by itself.
 
-**Stand-in.** `orchester_api::test_support::team_server` implements all of this for the task patch, the capabilities,
-`work.report` and `delivery.report`, for the tasks that `authority_tasks` sets (`TeamServer::authority_delivers(number,
-Deliverable)` says what a task's work delivers; changes without a say). The v1 tasks carry no claim: an Admin closes
-them. Tests: `crates/api/tests/team_lifecycle`.
+**Stand-in.** `orchester_api::test_support::team_server` implements for the tasks that `authority_tasks` sets
+(`TeamServer::authority_delivers(number, Deliverable)` says what a task's work delivers; changes without a say; a
+workflow name that is no workflow status is refused when the tasks are set): the task patch with its order and refusals,
+the claim's release on a close, the work set aside on a reopen, the refusal to claim or start a closed task, the five
+capability actions, Done by itself on `work.report` and `delivery.report` (a report whose artifacts cannot be read is
+`422 invalid` and changes nothing), and the S11 invalidation batches with their module and release scopes. It leaves
+out, and the contract text above stays for the real server: the `/api/v1` events (`task.changed`, `task.claim`; the
+stand-in has no `/api/v1` event stream), the organization history of a task (it keeps none, so no entry with
+`actor:"person"` or `"orchester"` is written; only a release's moves are kept). The v1 tasks carry no claim: an
+Admin closes them. Tests: `crates/api/tests/team_lifecycle`.
 
 **Not changed here.** The desktop still refuses these changes for a team task (`decision_required` D4) until its actions
 and MCP tools take this path (S12 step 3).
