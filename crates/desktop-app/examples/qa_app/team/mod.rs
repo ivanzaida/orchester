@@ -118,6 +118,7 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
     | State::TeamRunning
     | State::EditConflict
     | State::NotReadyHere
+    | State::NotReadyAfterRun
     | State::StartFailed
     | State::StartRecovered
     | State::TeamEdit
@@ -184,7 +185,7 @@ fn task_ids(services: &Services) -> Result<HashMap<u32, String>, Box<dyn Error>>
 /// `team-not-ready` names the team's own Team delivery and Team quick fix instead.
 fn team_pipelines(services: &Services, state: State) -> Result<member::TeamPipelines, Box<dyn Error>> {
   let (feature, quick) = match state {
-    State::NotReadyHere => ("team-delivery", "team-quick-fix"),
+    State::NotReadyHere | State::NotReadyAfterRun => ("team-delivery", "team-quick-fix"),
     // Every task is on Team quick fix, which is ready here: only the bundle fails.
     State::StartFailed
     | State::StartRecovered

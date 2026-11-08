@@ -19,17 +19,19 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
+use orchester_core::time::Timestamp;
 use orchester_workspace::{
   readiness::{NotReadyHere, NotReadyPart},
   team_work::ClaimEnd,
 };
 
 pub use self::notice::notice;
+pub(super) use self::reread::{CardProps, missing_now};
 use self::words::{Glyph, Words};
 use super::{
   TaskContext,
   header::controls::{RunControls, RunRefused},
-  team_controls,
+  team_controls::{self, TeamControls},
 };
 use crate::{
   navigation::{Navigation, link::Open},
@@ -57,6 +59,15 @@ pub fn refused(ctx: &mut Ctx, task: &TaskContext) -> Option<NotReadyHere> {
     RunRefused::NotReadyHere(refusal) => Some(refusal),
     RunRefused::Message(_) => None,
   }
+}
+
+/// When the person pressed the Run that [`refused`] says was refused, in this window: none for a team task's refusal
+/// that the project had recorded before it opened.
+pub fn pressed(ctx: &mut Ctx, task: &TaskContext) -> Option<Timestamp> {
+  if task.team.is_some() {
+    return TeamControls::of(ctx)?.pressed.get().map(|pressed| pressed.0);
+  }
+  RunControls::of(ctx).requested.get().map(|requested| requested.at)
 }
 
 /// The card the Summary shows for the last refusal of `task`'s start, if it was for not being ready here. The card

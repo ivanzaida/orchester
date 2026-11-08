@@ -45,7 +45,7 @@ fn seed_team_scenarios_leave_the_marker_of_their_state() {
     let tasks = seed.db().tasks().expect("tasks").len();
     let expected = match state {
       State::Claims => 6,
-      State::TeamRunning => 1,
+      State::TeamRunning | State::NotReadyAfterRun => 1,
       state if state.runs_here() => 2,
       _ => 0,
     };
@@ -102,10 +102,15 @@ fn seed_team_scenarios_with_runs_here_start_as_the_qa_app_starts_them() {
       Err(error) => panic!("{state:?} starts: {error}"),
     };
     let db = seed.db();
+    let key = if state == State::NotReadyAfterRun {
+      "KON-5"
+    } else {
+      "KON-12"
+    };
     let owner = db
-      .task_identity(by_key(&db)["KON-12"].id())
+      .task_identity(by_key(&db)[key].id())
       .expect("the identity reads")
-      .expect("KON-12 has an identity")
+      .unwrap_or_else(|| panic!("{key} has an identity"))
       .owner;
     let claimed = state != State::OutageRunning;
     assert_eq!(matches!(owner, TaskOwner::Team { .. }), claimed, "{state:?}");
@@ -131,6 +136,20 @@ fn seed_team_scenarios_with_runs_here_start_as_the_qa_app_starts_them() {
     }
     launch.end();
   }
+}
+
+/// `team-not-ready-ended`: KON-5's earlier run on this computer is run 8, cancelled.
+#[test]
+fn seed_team_not_ready_ended_cancels_kon_5s_run_8() {
+  let seed = Seed::of("team-not-ready-ended");
+  let db = seed.db();
+  assert_eq!(phase(&db, "KON-5"), Some(TaskPhase::Cancelled));
+  let runs = db.runs_of_task(by_key(&db)["KON-5"].id()).expect("the runs");
+  let numbers: Vec<u32> = runs
+    .iter()
+    .map(|run| run.as_ref().expect("a readable run").number().get())
+    .collect();
+  assert_eq!(numbers, [8]);
 }
 
 /// 03 `hWXxr`: KON-11's run, interrupted and taken over by mara, stopped for good. Nothing continues or resumes it, in

@@ -8,7 +8,8 @@
 //! Interrupted · can't continue `circle-pause`, Completed, Complete, Succeeded and Ready for review `circle-check`,
 //! Merged `git-merge`, Ready to merge `git-merge` in `warning` (`mEvfK`), Not merged `triangle-alert` (`kxMAN`), Failed
 //! `circle-x`, Unreadable `circle-help`, Waiting `clock`,
-//! Not started `circle-dashed`, Blocked `ban`, Paused `circle-pause` in `warning` (Usage `Q1gYMm`); Backlog
+//! Not started `circle-dashed`, Not ready `circle-alert` in `warning` (a Run refused for the computer, R1 `Ku0qu`),
+//! Blocked `ban`, Paused `circle-pause` in `warning` (Usage `Q1gYMm`); Backlog
 //! `circle-dashed`, Todo `circle` (`AiCwO`), In progress `circle-dot-dashed`, In review `eye`, Done
 //! `circle-check`; High, Medium and Low `signal-*`, No priority `minus`. The boards draw no Canceled,
 //! Skipped or Urgent: they take `circle-slash`, `skip-forward` and `circle-alert` (`warning`). A status
@@ -70,6 +71,8 @@ pub enum Status {
   Complete,
   Skipped,
   NotStarted,
+  /// A task whose Run was refused because its pipeline is not ready on this computer (`Status` `ev3VX` in R1 `Ku0qu`).
+  NotReady,
   CantContinue,
   Blocked,
 }
@@ -97,7 +100,7 @@ impl Tone {
 }
 
 impl Status {
-  pub const ALL: [Self; 25] = [
+  pub const ALL: [Self; 26] = [
     Self::Draft,
     Self::Queued,
     Self::Running,
@@ -121,6 +124,7 @@ impl Status {
     Self::Complete,
     Self::Skipped,
     Self::NotStarted,
+    Self::NotReady,
     Self::CantContinue,
     Self::Blocked,
   ];
@@ -179,6 +183,7 @@ impl Status {
       // design shows `circle-help` (`Run icon` in `XEQuo` rows of `C2E5Po`).
       Self::Unreadable => Icon::CircleHelp,
       Self::Skipped => Icon::SkipForward,
+      Self::NotReady => Icon::CircleAlert,
       Self::Blocked => Icon::Ban,
     }
   }
@@ -195,7 +200,8 @@ impl Status {
       | Self::Interrupted
       | Self::CantContinue
       | Self::ReadyToMerge
-      | Self::NotMerged => Tone::Warning,
+      | Self::NotMerged
+      | Self::NotReady => Tone::Warning,
       Self::Completed | Self::Complete | Self::Succeeded | Self::ReadyForReview => Tone::Success,
       Self::Failed | Self::Unreadable => Tone::Danger,
     }
@@ -232,6 +238,7 @@ impl Status {
       Self::Complete => "ui.status.complete",
       Self::Skipped => "ui.status.skipped",
       Self::NotStarted => "ui.status.notStarted",
+      Self::NotReady => "ui.status.notReady",
       Self::CantContinue => "ui.status.cantContinue",
       Self::Blocked => "ui.status.blocked",
     }

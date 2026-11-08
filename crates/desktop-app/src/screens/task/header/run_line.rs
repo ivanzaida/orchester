@@ -73,21 +73,38 @@ pub fn status_line(ctx: &mut Ctx, task: &TaskContext, mode: bool) -> Element {
     }
   };
   let mode = if mode { super::run_mode::mode(ctx, task) } else { None };
-  let points = detail.task.estimate().map(|estimate| points(ctx, estimate));
+  let chip = chip.render(ctx);
+  let line = run_line(ctx, detail);
+  row(ctx, task, chip, Some(&line), mode)
+}
+
+/// The line while the person's last Run was refused as not ready on this computer (`Status line` `g9ufW` in R1
+/// `Ku0qu`, L9 `f5CEX`): `words` in the warning tone, `line`, if any, after them in `text_muted`. The task has no run
+/// to say the approval mode of.
+pub(super) fn not_ready(ctx: &mut Ctx, task: &TaskContext, (words, line): (Arc<str>, Option<&str>)) -> Element {
+  let chip = StatusChip::new("task-status", Status::NotReady)
+    .words(words)
+    .render(ctx);
+  row(ctx, task, chip, line, None)
+}
+
+/// The row: the status `chip`, `line` after it, the run's approval mode and the task's story points.
+fn row(ctx: &mut Ctx, task: &TaskContext, chip: Element, line: Option<&str>, mode: Option<Element>) -> Element {
+  let points = task.detail.task.estimate().map(|estimate| points(ctx, estimate));
   Row::new()
     .id("task-status-row")
     .width(Dimension::Pct(100.0))
     .min_width(Dimension::Px(0.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(chip.render(ctx))
-    .child(
-      Text::new(&run_line(ctx, detail))
+    .child(chip)
+    .with_children(line.map(|line| {
+      Text::new(line)
         .id("task-run-line")
         .variant(TypographyStyle::Description)
         .color(PaletteColor::TextMuted)
-        .nowrap(),
-    )
+        .nowrap()
+    }))
     .with_children(mode)
     .with_children(points)
     .into()

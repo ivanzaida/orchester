@@ -59,6 +59,7 @@ pub fn to(
     | State::TeamRunning
     | State::EditConflict
     | State::NotReadyHere
+    | State::NotReadyAfterRun
     | State::StartFailed
     | State::StartRecovered
     | State::TeamEdit
