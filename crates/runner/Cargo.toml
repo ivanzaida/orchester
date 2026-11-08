@@ -430,6 +430,10 @@ name = "browser_ui"
 required-features = ["test-agent"]
 
 [[test]]
+name = "cdp_ui"
+required-features = ["test-agent"]
+
+[[test]]
 name = "disk_guard"
 required-features = ["test-agent"]
 

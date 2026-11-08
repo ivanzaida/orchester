@@ -7,6 +7,7 @@
 //! checks their needs against the published services ([`PublishNeeds`]).
 
 mod approval;
+pub mod cdp;
 mod crash;
 mod definition;
 mod error;

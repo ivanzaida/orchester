@@ -7,7 +7,9 @@
 //! interface (UI Automation, macOS Accessibility), only in the windows of its processes the run may reach; on macOS
 //! each of its calls first answers a missing Accessibility or Screen Recording permission. The `browser` driver
 //! ([`browser`]) opens a web service in a tab of the run's own in Orchester's Browser, which reaches only the origins
-//! of the services the step started. A project's service with another driver, or none, answers why it cannot be opened.
+//! of the services the step started; the `cdp` driver attaches to an Electron or WebView2 app's own windows through
+//! its debugging port, only when a process of the service's own tree listens on it, and not on macOS. A project's
+//! service with another driver, or none, answers why it cannot be opened.
 
 mod browser;
 mod native;
@@ -32,8 +34,11 @@ use orchester_exec::{native_ui, run_processes::RunProcesses};
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 
-pub(in crate::execution::executor::step) use self::browser::WebTabs;
-use self::{browser::WebUi, native::NativeUi};
+pub(in crate::execution::executor::step) use self::browser::{AppTabs, WebTabs};
+use self::{
+  browser::{AppUi, WebUi},
+  native::NativeUi,
+};
 use super::{
   qa_app::StepQa,
   run_app,
@@ -47,10 +52,12 @@ pub(in crate::execution::executor::step) struct StepUi<'a> {
   pub(in crate::execution::executor::step) folders: (&'a Path, &'a Path),
   /// The invocation's QA app, the `desktop-qa` service.
   pub(in crate::execution::executor::step) qa: Option<&'a StepQa>,
-  /// The invocation's services, which the `native` and `browser` drivers reach.
+  /// The invocation's services, which the `native`, `browser` and `cdp` drivers reach.
   pub(in crate::execution::executor::step) services: Option<&'a StepServices>,
   /// The `browser` driver's tabs of the invocation.
   pub(in crate::execution::executor::step) web: &'a WebTabs,
+  /// The apps the `cdp` driver attached to in the invocation.
+  pub(in crate::execution::executor::step) apps: &'a AppTabs,
   /// The project's repository, whose published services say their drivers.
   pub(in crate::execution::executor::step) root: &'a Path,
   /// The service `ui_open` opened last, with its driver.
@@ -100,6 +107,16 @@ impl StepUi<'_> {
     })
   }
 
+  /// The `cdp` driver of the project's services.
+  fn app(&self) -> Result<AppUi<'_>, String> {
+    Ok(AppUi {
+      apps: self.apps,
+      processes: self.processes,
+      services: self.services()?,
+      artifacts: self.folders.1,
+    })
+  }
+
   fn services(&self) -> Result<&StepServices, String> {
     self.services.ok_or_else(|| "this step has no services".to_owned())
   }
@@ -111,6 +128,7 @@ impl StepUi<'_> {
       let answer = match driver {
         UiDriver::Native => self.native()?.open(name)?,
         UiDriver::Browser => self.web()?.open(name)?,
+        UiDriver::Cdp => self.app()?.open(name)?,
         UiDriver::None | UiDriver::Mcp => return Err(Self::not_driven(name, driver)),
       };
       *self.opened.lock() = Some((name.clone(), driver));
@@ -136,8 +154,8 @@ impl StepUi<'_> {
     Ok(answer)
   }
 
-  /// A call on the service `ui_open` opened, through its driver; refused before one was. Only a web page waits for a
-  /// selector, a text or an address.
+  /// A call on the service `ui_open` opened, through its driver; refused before one was. Only web content — a web
+  /// page, an Electron or WebView2 app's window — waits for a selector, a text or an address.
   fn on_opened(&self, call: &UiCall) -> Result<Value, String> {
     let opened = self.opened.lock().clone();
     let Some((opened, driver)) = opened else {
@@ -145,16 +163,17 @@ impl StepUi<'_> {
     };
     if let UiCall::Wait { condition, .. } = call
       && condition.is_page()
-      && driver != UiDriver::Browser
+      && !matches!(driver, UiDriver::Browser | UiDriver::Cdp)
     {
       return Err(format!(
-        "the {} driver waits for idle or element: {} waits in a web page, which the browser driver opens",
+        "the {} driver waits for idle or element: {} waits in web content, which the browser and cdp drivers open",
         driver_name(driver),
         condition.as_str()
       ));
     }
     match driver {
       UiDriver::Browser => return self.web()?.run(&opened, call),
+      UiDriver::Cdp => return self.app()?.run(&opened, call),
       UiDriver::Native => return self.native()?.run(&opened, call),
       UiDriver::Mcp | UiDriver::None => {}
     }
@@ -210,7 +229,7 @@ impl StepUi<'_> {
       UiDriver::Mcp => format!(
         "the mcp driver reaches only the built-in `{QA_SERVICE}` service yet, not the project's service `{name}`"
       ),
-      UiDriver::Native | UiDriver::Browser => {
+      UiDriver::Native | UiDriver::Browser | UiDriver::Cdp => {
         format!("the service `{name}` uses the {} UI driver", driver_name(driver))
       }
     }
@@ -224,5 +243,6 @@ const fn driver_name(driver: UiDriver) -> &'static str {
     UiDriver::Native => "native",
     UiDriver::Mcp => "mcp",
     UiDriver::Browser => "browser",
+    UiDriver::Cdp => "cdp",
   }
 }

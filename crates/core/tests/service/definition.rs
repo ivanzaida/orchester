@@ -200,8 +200,14 @@ fn service_readiness_checks_are_valid() {
 }
 
 #[test]
-fn service_ui_driver_is_none_native_mcp_or_browser() {
-  for driver in [UiDriver::None, UiDriver::Native, UiDriver::Mcp, UiDriver::Browser] {
+fn service_ui_driver_is_none_native_mcp_browser_or_cdp() {
+  for driver in [
+    UiDriver::None,
+    UiDriver::Native,
+    UiDriver::Mcp,
+    UiDriver::Browser,
+    UiDriver::Cdp,
+  ] {
     let service = service("app", &[]).with_ui_driver(driver);
     assert_eq!(service.ui_driver(), driver);
     let stored = serde_json::to_value(&service).expect("stored");

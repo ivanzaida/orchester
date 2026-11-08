@@ -196,6 +196,9 @@ pub enum DefinitionUiDriver {
   Mcp,
   /// A web app, in a tab of the run's own in Orchester's Browser that opens only the step's services' origins.
   Browser,
+  /// An Electron or WebView2 app through its remote debugging port, `{{port}}`: an Electron app's arguments include
+  /// `--remote-debugging-port={{port}}`; a WebView2 app gets it from Orchester. Not on macOS.
+  Cdp,
 }
 
 pub(super) async fn save_service_draft(services: &Services, args: SaveServiceDraft) -> Result<Value, ToolError> {

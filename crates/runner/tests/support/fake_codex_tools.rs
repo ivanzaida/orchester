@@ -21,6 +21,9 @@ mod fake_app_tools;
 #[path = "fake_browser_tools.rs"]
 mod fake_browser_tools;
 
+#[path = "fake_cdp_tools.rs"]
+mod fake_cdp_tools;
+
 #[path = "fake_native_tools.rs"]
 mod fake_native_tools;
 
@@ -199,7 +202,9 @@ fn named_after<'a>(prompt: &'a str, lead: &str) -> Option<&'a str> {
 /// service <other>." it then calls `start_service` of that one; with "Then drive its UI" it then calls the `ui_*` tools
 /// on it ([`drive_ui`]); with "Copy the native fixture.", "Then drive the native window" and "Then open its UI" it puts
 /// the fixture window in the worktree before the start and drives or opens it after ([`fake_native_tools`]); with
-/// "Then drive the web page" it drives the browser driver's fixture page ([`fake_web_tools`]); with
+/// "Then drive the web page" it drives the browser driver's fixture page ([`fake_web_tools`]); with "Copy the launcher
+/// fixture.", "Then drive the app window" and "Then open the UI of <other>." it puts the launcher in the worktree
+/// before the start and drives the app's window or opens the other service after ([`fake_cdp_tools`]); with
 /// "Then read outside" it then reads
 /// `deps-a/notes.txt` of the repository, which asks; with "Then wait for it to end" it calls `service_status` until the
 /// service is no longer ready; with "Then wait for a crash notice" it calls `service_status` until an answer carries a
@@ -212,6 +217,9 @@ fn services(server: &mut Prompt, worktree: &Path, prompt: &str) {
   let look = prompt.contains("Then look at the service");
   if prompt.contains("Copy the native fixture.") {
     fake_native_tools::copy_fixture(worktree);
+  }
+  if prompt.contains("Copy the launcher fixture.") {
+    fake_cdp_tools::copy_launcher(worktree);
   }
   match stack {
     Some(stack) => report_call(server, "start_stack", &json!({"name": stack})),
@@ -229,8 +237,14 @@ fn services(server: &mut Prompt, worktree: &Path, prompt: &str) {
   if prompt.contains("Then drive the web page") {
     fake_web_tools::drive(name, &mut |tool, arguments| report_call(server, tool, arguments));
   }
+  if prompt.contains("Then drive the app window") {
+    fake_cdp_tools::drive(name, &mut |tool, arguments| report_call(server, tool, arguments));
+  }
   if prompt.contains("Then open its UI") {
     report_call(server, "ui_open", &json!({"service": name}));
+  }
+  if let Some(other) = named_after(prompt, "Then open the UI of ") {
+    report_call(server, "ui_open", &json!({"service": other}));
   }
   if prompt.contains("Then read outside") {
     read_outside(server, worktree);

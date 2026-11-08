@@ -15,6 +15,7 @@
 //! the runner closes it as it exits, and a runner killed with SIGKILL leaves it running, as it leaves agents
 //! (`AGENTS.md`, rule 0).
 
+pub mod app;
 pub mod cdp;
 mod log;
 mod process;
@@ -84,6 +85,9 @@ pub enum BrowserError {
   /// A page's element, such as a `<select>` list, could not be read or set.
   #[error("the page's element: {0}")]
   Element(String),
+  /// An app's debugging port does not say where its browser listens ([`app::AppBrowser`]).
+  #[error("the app's debugging port {port} does not answer as CDP: {why}")]
+  AppPort { port: u16, why: String },
 }
 
 /// What a running browser's connection listens to ([`ProjectBrowser::listening`]).

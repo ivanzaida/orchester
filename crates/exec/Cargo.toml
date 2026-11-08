@@ -80,7 +80,8 @@ win32job.workspace = true
 # the window's own rendering into memory (`PrintWindow`). Already built for the app and lurq's renderer, so it adds no
 # crate; only its features grow.
 windows = { workspace = true, features = ["Win32_System_Ole", "Win32_System_Variant", "Win32_Storage_Xps", "Win32_UI_Accessibility"] }
-windows-sys = { workspace = true, features = ["Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Ioctl", "Win32_System_JobObjects", "Win32_Security", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell", "Win32_System_Registry", "Win32_System_Com"] }
+# The process listening on a service's debugging port (`listener`) comes from the TCP table (`Win32_NetworkManagement_IpHelper`).
+windows-sys = { workspace = true, features = ["Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Ioctl", "Win32_System_JobObjects", "Win32_Security", "Win32_System_Diagnostics_ToolHelp", "Win32_System_Threading", "Win32_UI_WindowsAndMessaging", "Win32_UI_Shell", "Win32_System_Registry", "Win32_System_Com", "Win32_NetworkManagement_IpHelper"] }
 
 [dev-dependencies]
 tempfile.workspace = true

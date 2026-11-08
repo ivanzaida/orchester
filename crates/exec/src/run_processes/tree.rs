@@ -16,6 +16,8 @@ pub struct RunTree {
   reached: Vec<platform::Process>,
   /// The others, each with why it is not reached.
   refused: Vec<String>,
+  /// The pids of every process of the tree, reached or not.
+  all: Vec<u32>,
 }
 
 impl RunTree {
@@ -27,6 +29,12 @@ impl RunTree {
   /// Why each of the tree's other processes is not reached, one line each, naming its pid and program only.
   pub fn refused(&self) -> &[String] {
     &self.refused
+  }
+
+  /// Whether `pid` is the program or one of the processes it started, reached or not: a process of the tree the run
+  /// started, as a WebView2 app's browser process is, though its executable is the system's.
+  pub fn holds(&self, pid: u32) -> bool {
+    self.all.contains(&pid)
   }
 }
 
@@ -58,6 +66,7 @@ impl RunProcesses {
     let mut tree = RunTree {
       reached: Vec::new(),
       refused: Vec::new(),
+      all: found.iter().map(|process| process.info.pid).collect(),
     };
     for process in found {
       match self.validate(&process, &protected) {

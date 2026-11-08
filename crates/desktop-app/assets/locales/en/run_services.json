@@ -31,7 +31,8 @@
       "none": "no UI",
       "native": "native",
       "mcp": "mcp",
-      "browser": "browser"
+      "browser": "browser",
+      "cdp": "cdp"
     },
     "port": ":{{port}}",
     "uptime": {

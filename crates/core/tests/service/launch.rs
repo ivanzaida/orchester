@@ -9,7 +9,10 @@ use orchester_core::{
   id::RunId,
   resource::{CommandArg, CommandEnvironment, VariableName},
   secret::SecretName,
-  service::{RelativeFolder, RunValues, ServiceValue, ServiceVariables},
+  service::{
+    RelativeFolder, RunValues, Service, ServiceName, ServiceValue, ServiceVariables, UiDriver,
+    cdp::{CdpUnsupported, WEBVIEW2_ARGUMENTS, cdp_supported},
+  },
 };
 
 use super::service;
@@ -126,4 +129,66 @@ fn service_search_path_prefers_its_own_then_the_projects() {
     .expect("variables"),
   );
   assert_eq!(own.search_path(&project, inherited), Some(OsString::from("/own/bin")));
+}
+
+/// The value of `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS` the process of `service` gets on `platform`, if any.
+fn webview2_arguments(service: &Service, platform: Platform) -> Option<String> {
+  let process = service
+    .process(
+      (Path::new("C:/apps/app.exe"), Path::new("/runs/1")),
+      (Vec::new(), &CommandEnvironment::default()),
+      platform,
+      &values(),
+    )
+    .expect("filled");
+  process
+    .command
+    .env()
+    .iter()
+    .find(|(name, _)| name == WEBVIEW2_ARGUMENTS)
+    .map(|(_, value)| value.clone())
+}
+
+/// A service with the `cdp` driver gets its own port as a WebView2 app's debugging port on Windows, after the browser
+/// arguments its own variable gives; no other service gets it, and macOS, which has no WebView2, sets nothing.
+#[test]
+fn service_cdp_process_gets_the_webview2_debugging_port() {
+  let app = service("app", &[]).with_ui_driver(UiDriver::Cdp);
+  assert_eq!(
+    webview2_arguments(&app, Platform::Windows).as_deref(),
+    Some("--remote-debugging-port=4100")
+  );
+  assert_eq!(webview2_arguments(&app, Platform::MacOs), None);
+  let own = app.with_variables(
+    ServiceVariables::new(BTreeMap::from([(
+      variable(WEBVIEW2_ARGUMENTS),
+      ServiceValue::Plain("--lang=fr".to_owned()),
+    )]))
+    .expect("variables"),
+  );
+  assert_eq!(
+    webview2_arguments(&own, Platform::Windows).as_deref(),
+    Some("--lang=fr --remote-debugging-port=4100"),
+    "the service's own arguments are kept, the port after them"
+  );
+  for driver in [UiDriver::None, UiDriver::Native, UiDriver::Browser, UiDriver::Mcp] {
+    let other = service("app", &[]).with_ui_driver(driver);
+    assert_eq!(webview2_arguments(&other, Platform::Windows), None, "{driver:?}");
+  }
+}
+
+/// WKWebView on macOS has no debugging port: the `cdp` driver says so and points to the native driver there.
+#[test]
+fn service_cdp_driver_on_macos_says_to_use_the_native_driver() {
+  let name = ServiceName::new("desktop").expect("a name");
+  assert_eq!(cdp_supported(Platform::Windows, &name), Ok(()));
+  let refused = cdp_supported(Platform::MacOs, &name);
+  assert_eq!(refused, Err(CdpUnsupported(name)));
+  let said = refused.expect_err("refused").to_string();
+  assert!(said.contains("`desktop` uses the cdp UI driver"), "{said}");
+  assert!(said.contains("WKWebView on macOS has none"), "{said}");
+  assert!(
+    said.contains("use the native driver for this service on macOS"),
+    "{said}"
+  );
 }

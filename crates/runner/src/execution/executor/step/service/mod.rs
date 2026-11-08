@@ -424,6 +424,11 @@ impl StepServices {
     self.state.running.lock().get(name).map(|running| running.tree.pid())
   }
 
+  /// The port of the service `name`, `{{port}}`, while it runs in this invocation.
+  pub(in crate::execution::executor::step) fn port(&self, name: &ServiceName) -> Option<u16> {
+    self.state.running.lock().get(name).map(|running| running.lease.port())
+  }
+
   /// Where `ui_open` of the service `name` starts while it runs in this invocation: its filled `ui_start`, else its
   /// URL; why its `ui_start` could not be filled. `None` while it does not run.
   pub(in crate::execution::executor::step) fn ui_place(&self, name: &ServiceName) -> Option<Result<String, String>> {

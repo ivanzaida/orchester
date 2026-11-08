@@ -26,6 +26,9 @@ pub enum UiDriver {
   /// A web app, in a tab of the run's own in Orchester's Browser, driven over CDP: it opens only the origins of the
   /// services the step started.
   Browser,
+  /// An Electron or WebView2 app, driven over CDP through the remote debugging port it listens on, `{{port}}`
+  /// ([`super::cdp`]). Not on macOS, whose WKWebView has none.
+  Cdp,
 }
 
 /// Where `ui_open` starts, e.g. `{{url}}/teams/{{seed.team_id}}` or an app's route; its placeholders are kept as

@@ -6,11 +6,13 @@
 //! started and every other navigation and request is blocked and reported. The snapshot is the page's accessibility
 //! tree with refs of DOM nodes ([`snapshot`]); actions go by ref through the tab's own input ([`act`]); `ui_wait`
 //! also takes a selector, a text or an address ([`wait`]); screenshots are saved in the run's storage; `ui_logs` is the
-//! page's console errors, its failed requests and what was blocked. The tabs close with the step's services.
+//! page's console errors, its failed requests and what was blocked. The tabs close with the step's services. The
+//! `cdp` driver ([`app`]) uses the same page tools on an Electron or WebView2 app's own windows.
 //!
 //! The browser tools' calls are async, the `ui_*` calls run off the async workers: each call blocks on its own work.
 
 mod act;
+mod app;
 mod guard;
 mod snapshot;
 mod wait;
@@ -22,6 +24,8 @@ use parking_lot::Mutex;
 use serde_json::{Value, json};
 use tokio::runtime::Handle;
 
+pub(in crate::execution::executor::step) use self::app::AppTabs;
+pub(super) use self::app::AppUi;
 use self::{guard::Guard, snapshot::Snapshot};
 use super::super::service::StepServices;
 use crate::browser::{BrowserError, ProjectBrowser, Request, Tab, cdp::TargetId};

@@ -16,6 +16,8 @@
 //!   `spawn-sleeper-into <file>` writes the copy's pid to `<file>` instead;
 //! - `listen <port>`: a stand-in web server on `127.0.0.1:<port>` until it is ended (`fake_server`);
 //! - `connect <port>`: fails unless something accepts connections on `127.0.0.1:<port>`;
+//! - `launch <program> <arguments…>`: starts `<program>` with every argument after it as its child, its output its own,
+//!   and exits as it does once it ended: an app's launcher, such as `npm start` for an Electron app;
 //! - `sleep <seconds>`: sleeps;
 //! - `exit <code>`: exits with `<code>`.
 //!
@@ -80,6 +82,7 @@ fn main() -> ExitCode {
       "listen" => fake_server::listen(rest.next()),
       "connect" => fake_server::connect(rest.next()),
       "sleep" => sleep(rest.next()),
+      "launch" => return launch(&rest.collect::<Vec<_>>()),
       "exit" => return ExitCode::from(rest.next().and_then(|code| code.parse().ok()).unwrap_or(2)),
       other => Err(format!("unknown action {other}")),
     };
@@ -165,6 +168,21 @@ fn spawn_sleeper(file: Option<&str>) -> Result<(), String> {
   }
   println!("child pid: {}", child.id());
   std::io::stdout().flush().map_err(|error| error.to_string())
+}
+
+/// Starts `program` with `arguments` as a child and exits as it does once it ended; 2 when it cannot be started.
+fn launch(command: &[&str]) -> ExitCode {
+  let Some((program, arguments)) = command.split_first() else {
+    eprintln!("launch needs a program");
+    return ExitCode::from(2);
+  };
+  match std::process::Command::new(program).args(arguments).status() {
+    Ok(status) => ExitCode::from(status.code().and_then(|code| u8::try_from(code).ok()).unwrap_or(1)),
+    Err(error) => {
+      eprintln!("{program} did not start: {error}");
+      ExitCode::from(2)
+    }
+  }
 }
 
 fn sleep(seconds: Option<&str>) -> Result<(), String> {

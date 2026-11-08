@@ -8,7 +8,10 @@ use std::{
   path::{Path, PathBuf},
 };
 
-use super::{PlaceholderError, RunValues, Seed, Service, ServiceValue};
+use super::{
+  PlaceholderError, RunValues, Seed, Service, ServiceValue, UiDriver,
+  cdp::{WEBVIEW2_ARGUMENTS, webview2_arguments},
+};
 use crate::{
   command::Command,
   connection::invocation::{Platform, agent_environment},
@@ -54,7 +57,8 @@ impl Service {
   /// in [`Self::folder_in`] `worktree`, with the allowed part of `environment`, then the variables the project adds
   /// (`project`), then the service's plain ones filled by `values`; each replaces one of the same name. On Windows the
   /// process is also told not to start programs from its current directory by name, as a command tool is
-  /// ([`NO_CURRENT_DIRECTORY_IN_EXE_PATH`]).
+  /// ([`NO_CURRENT_DIRECTORY_IN_EXE_PATH`]), and a service with the `cdp` UI driver gets its own port as a WebView2
+  /// app's debugging port ([`WEBVIEW2_ARGUMENTS`]), after the arguments the service's own variable gives.
   pub fn process(
     &self,
     (program, worktree): (&Path, &Path),
@@ -63,7 +67,13 @@ impl Service {
     values: &RunValues,
   ) -> Result<ServiceProcess, PlaceholderError> {
     let arguments = values.arguments(self)?;
-    self.process_of((program, arguments, worktree), (environment, project), platform, values)
+    let debugging = (self.ui_driver() == UiDriver::Cdp).then(|| values.port());
+    self.process_of(
+      (program, arguments, worktree),
+      (environment, project),
+      (platform, debugging),
+      values,
+    )
   }
 
   /// The process of the seed command: `program` (a file its [`crate::resource::CommandProgram::candidates`] found)
@@ -81,15 +91,21 @@ impl Service {
     }
     let arguments = values.seed_arguments(self)?;
     self
-      .process_of((program, arguments, worktree), (environment, project), platform, values)
+      .process_of(
+        (program, arguments, worktree),
+        (environment, project),
+        (platform, None),
+        values,
+      )
       .map(Some)
   }
 
+  /// The process of `program`; `debugging`, the WebView2 debugging port it is given on Windows.
   fn process_of(
     &self,
     (program, arguments, worktree): (&Path, Vec<String>, &Path),
     (environment, project): (impl IntoIterator<Item = (OsString, OsString)>, &CommandEnvironment),
-    platform: Platform,
+    (platform, debugging): (Platform, Option<u16>),
     values: &RunValues,
   ) -> Result<ServiceProcess, PlaceholderError> {
     let mut variables = agent_environment(environment);
@@ -106,6 +122,13 @@ impl Service {
       let (name, value) = NO_CURRENT_DIRECTORY_IN_EXE_PATH;
       variables.retain(|(existing, _)| !existing.eq_ignore_ascii_case(name));
       variables.push((name.to_owned(), value.to_owned()));
+      if let Some(port) = debugging {
+        let own = variables
+          .iter()
+          .position(|(existing, _)| existing.eq_ignore_ascii_case(WEBVIEW2_ARGUMENTS))
+          .map(|at| variables.remove(at).1);
+        variables.push((WEBVIEW2_ARGUMENTS.to_owned(), webview2_arguments(own.as_deref(), port)));
+      }
     }
     let command = Command::new(program, arguments)
       .with_current_dir(&self.folder_in(worktree))

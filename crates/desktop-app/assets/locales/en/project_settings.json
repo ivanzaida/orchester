@@ -467,7 +467,8 @@
         "none": "no UI",
         "native": "native",
         "mcp": "mcp",
-        "browser": "browser"
+        "browser": "browser",
+        "cdp": "cdp"
       },
       "layer": {
         "lint": "lint",

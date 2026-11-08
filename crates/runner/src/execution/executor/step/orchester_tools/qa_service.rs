@@ -72,6 +72,7 @@ impl ToolHost {
       qa: self.qa.as_ref(),
       services: self.services.as_ref(),
       web: &self.web,
+      apps: &self.apps,
       root: &self.repository,
       opened: &self.ui_opened,
     }

@@ -39,7 +39,7 @@ impl Scheduler {
 pub(in crate::execution::executor::step) struct ServiceNames {
   /// Their names, which the step's service tools take.
   pub(in crate::execution::executor::step) names: Vec<ServiceName>,
-  /// Whether one of them has the `native` or `browser` UI driver, which the `ui_*` tools drive.
+  /// Whether one of them has the `native`, `browser` or `cdp` UI driver, which the `ui_*` tools drive.
   pub(in crate::execution::executor::step) driven_ui: bool,
 }
 
@@ -50,9 +50,12 @@ impl RunTask {
       published(&self.root).map_err(|error| problem(format!("cannot read the project's services: {error}")))?;
     Ok(ServiceNames {
       names: services.iter().map(|service| service.name().clone()).collect(),
-      driven_ui: services
-        .iter()
-        .any(|service| matches!(service.ui_driver(), UiDriver::Native | UiDriver::Browser)),
+      driven_ui: services.iter().any(|service| {
+        matches!(
+          service.ui_driver(),
+          UiDriver::Native | UiDriver::Browser | UiDriver::Cdp
+        )
+      }),
     })
   }
 

@@ -22,6 +22,7 @@ pub(super) fn driver(ctx: &Ctx, driver: UiDriver) -> Arc<str> {
     UiDriver::Native => "project_settings.services.driver.native",
     UiDriver::Mcp => "project_settings.services.driver.mcp",
     UiDriver::Browser => "project_settings.services.driver.browser",
+    UiDriver::Cdp => "project_settings.services.driver.cdp",
   })
 }
 

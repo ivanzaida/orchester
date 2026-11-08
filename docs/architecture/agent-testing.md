@@ -28,7 +28,8 @@ that depend on each other (Orchester Platform: cloud server, cloud web, team ser
 5. New Orchester runs for this work use the Claude 2 pipelines.
 6. **First only programs Orchester starts itself** (the person, 2026-10-28): services, test suites, and the `native`
    and `mcp` drivers. Web pages are automated later through Orchester's own in-app Browser, not a separate headless
-   browser; the `browser` driver does so (ORC-256, built below), the `cdp` driver is not built (ORC-260 deferred).
+   browser; the `browser` driver does so (ORC-256, built below), and the `cdp` driver reaches an Electron or WebView2
+   app a service started through its own debugging port (ORC-260, built below).
 
 ## Concepts
 
@@ -212,6 +213,27 @@ over MCP, `save_service_draft`), the person's hold on a tab the agent drives (th
 WebSocket connections, which `Fetch` does not pause. Tests: `cargo test -p orchester-runner --features test-agent
 --test browser_ui browser_ui` (a fixture page of the stand-in web server) and `cargo test -p orchester-core --test
 orchester_tools ui_browser_origins`.
+
+Built (ORC-260): the `cdp` driver (`UiDriver::Cdp`, `orchester_core::service::cdp`, the runner's
+`execution::step::ui::browser::app` and `browser::app`). Its remote debugging port is the service's own leased port,
+`{{port}}`: an Electron app's arguments include `--remote-debugging-port={{port}}`, and on Windows the service's
+process gets `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=<port>` for a WebView2 app, after the
+arguments the service's own variable of that name gives (`Service::process`). `ui_open` first asks the system's TCP
+table which process listens on `127.0.0.1:<port>` (`orchester_exec::listener`, `GetExtendedTcpTable`) and refuses
+unless it is the service's program or a process it started (`RunTree::holds`) — not the executable-inside-the-worktree
+rule of the native driver, because a WebView2 app's browser process is the system's `msedgewebview2.exe`; a port held
+by any other process is refused with its pid, and so is every target of it. It then reads the port's `/json/version`,
+connects over the runner's CDP client and attaches to the app's first page target (its window); the answer names the
+pid, the port, the window and every window listed. The other `ui_*` calls are the browser driver's page tools on that
+window: the accessibility snapshot with `b` refs, actions by ref, `ui_wait` with `idle`, `element`, `selector`, `text`
+and `url`, and the screenshot of its web content; `ui_logs` is its console (every level). Nothing in the app's browser
+is guarded or blocked: it is the app's, not Orchester's. A closed connection (the app exited) asks for `ui_open`
+again. On macOS every call answers that WKWebView has no debugging port and the native driver is the one to use
+(`CdpUnsupported`); off Windows the listener cannot be told. Not built: the service editor's *cdp* card (the driver is
+set over MCP, `save_service_draft`) and choosing among several windows (`ui_open` takes the first). Tests: `cargo test
+-p orchester-runner --features test-agent --test cdp_ui cdp_ui` (headless Chrome or Edge started by a launcher in the
+worktree with `--remote-debugging-port={{port}}`, as the stand-in of an Electron app; and a port another service's tree
+listens on, refused) and `cargo test -p orchester-core --test service service_cdp`.
 
 ## The Test step
 

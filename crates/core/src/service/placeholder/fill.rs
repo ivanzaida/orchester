@@ -60,6 +60,11 @@ impl RunValues {
     self
   }
 
+  /// `{{port}}`: the service's own port.
+  pub const fn port(&self) -> u16 {
+    self.own.port
+  }
+
   /// What a seed request's answer gave `name`, for the requests after it and the place `ui_open` starts.
   pub fn capture(&mut self, name: FieldName, value: String) {
     self.captured.insert(name, value);

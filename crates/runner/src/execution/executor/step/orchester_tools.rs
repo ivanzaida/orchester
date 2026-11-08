@@ -57,7 +57,7 @@ use super::{
   start::problem,
   suite::StepSuites,
   tool_files::ToolFiles,
-  ui::WebTabs,
+  ui::{AppTabs, WebTabs},
 };
 use crate::{approval_relay::TOOLS_FLAG, git::Git, private_file};
 
@@ -153,6 +153,8 @@ pub(in super::super) struct ToolHost {
   ui_opened: Mutex<Option<(ServiceName, UiDriver)>>,
   /// The `browser` UI driver's tabs of the invocation, in the project's browser.
   web: WebTabs,
+  /// The apps the `cdp` UI driver attached to in the invocation.
+  apps: AppTabs,
   /// The invocation's services (`start_service`, `stop_service`, `service_status`, `service_logs`); `None` while the
   /// host is being made.
   services: Option<StepServices>,
@@ -517,6 +519,7 @@ impl RunTask {
       qa: None,
       ui_opened: Mutex::new(None),
       web: WebTabs::new(Arc::clone(&self.browser), self.run.id()),
+      apps: AppTabs::default(),
       services: None,
       suites: None,
       browser: None,
