@@ -29,6 +29,7 @@ pub mod project;
 mod refusal;
 mod server_key;
 mod share_outcome;
+mod start_lock;
 pub mod sync;
 pub mod team;
 mod team_created;
@@ -134,6 +135,13 @@ struct Inner {
   /// The new resources of each checkout the team server refused after they were sent later, which the hub tells the
   /// person until they dismiss it.
   taken_back: Mutex<HashMap<PathBuf, Vec<TakenBack>>>,
+  /// The projects' team starts, one at a time each ([`Servers::start_lock`]). An entry is never removed: it is one
+  /// empty mutex per project folder the session started or recovered a team start in, so the map grows by a few bytes
+  /// per project and not with the starts.
+  starting: Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>,
+  /// The team starts whose record was found unreadable this session, so recovery says so once each
+  /// ([`Servers::first_unreadable_start`]).
+  unreadable_starts: Mutex<HashSet<orchester_core::id::OperationId>>,
 }
 
 /// One signed-in server's connection and when to ask it again.
@@ -178,6 +186,8 @@ impl Servers {
         work_asked: Mutex::new(HashMap::new()),
         downloads: Mutex::new(HashMap::new()),
         taken_back: Mutex::new(HashMap::new()),
+        starting: Mutex::new(HashMap::new()),
+        unreadable_starts: Mutex::new(HashSet::new()),
       }),
     }
   }

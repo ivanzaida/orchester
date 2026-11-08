@@ -115,10 +115,14 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
     | State::VersionRefused
     | State::TeamRunning
     | State::EditConflict
-    | State::NotReadyHere => {
+    | State::NotReadyHere
+    | State::StartFailed => {
       let ids = task_ids(services)?;
       let role = member::serve_as(&server, state, (&ids, &team_pipelines(services, state)?));
       let (kontur, id) = join_linked_as(&server, (services, runtime), (TasksAnswer::Serve, role))?;
+      if state == State::StartFailed {
+        server.authority_newer_bundles();
+      }
       work::after_join(state, (&server, id), (services, runtime), (&kontur, &ids))?;
     }
   }
@@ -155,6 +159,8 @@ fn task_ids(services: &Services) -> Result<HashMap<u32, String>, Box<dyn Error>>
 fn team_pipelines(services: &Services, state: State) -> Result<member::TeamPipelines, Box<dyn Error>> {
   let (feature, quick) = match state {
     State::NotReadyHere => ("team-delivery", "team-quick-fix"),
+    // Every task is on Team quick fix, which is ready here: only the bundle fails.
+    State::StartFailed => ("team-quick-fix", "team-quick-fix"),
     _ => ("feature-delivery", "quick-fix"),
   };
   let mut db = ProjectDb::open(&kontur(services)?)?;

@@ -10,7 +10,11 @@
 //!   run. A crash or an outage at any boundary is carried on from it ([`TeamWork::recover`]); the operation and the
 //!   runner's start are idempotent, so a retry never makes a second work or run. A bundle that can never become the
 //!   run's inputs here, or whose pinned versions need what this computer lacks, settles the start failed
-//!   ([`StartFailure`]). Nothing new starts without the server.
+//!   ([`StartFailure`]), and so does a start the server refuses `bundle_missing`: either way the claim is released
+//!   first ([`release`]), so teammates are not kept from the task, and a server that cannot be reached for the release
+//!   keeps the start waiting. A project carries on one start at a time, so a Run and the recovery of the open starts
+//!   never work the same one at once. Nothing new starts without the server. A project's open starts are carried on
+//!   when it is opened ([`recover_open_starts`]).
 //! - **Reports** ([`reports`]). Each change of a team run's outcome is queued once in the project database, with its
 //!   event id and the run's next sequence, then sent in order until the server acknowledges it by id. A server that
 //!   cannot be reached or refuses for now keeps the rest waiting, in order. Its answers that the authority is gone
@@ -29,13 +33,17 @@
 
 mod branch;
 mod bundle;
+mod bundle_missing;
 pub mod delivery;
 mod error;
 mod heartbeat;
 mod here;
+mod open;
+mod release;
 mod reports;
 mod runner;
 mod start;
+mod turn;
 
 use orchester_api::{
   client::AuthorityCallError,
@@ -46,15 +54,19 @@ use orchester_store::{ProjectDb, TeamFence, WorkReportState};
 
 pub use self::{
   branch::{BranchNotFound, branch_tip},
+  bundle_missing::bundle_missing_message,
   delivery::{
     DeliveryProgress, DeliveryStatus, ModuleDeliveries, RecoveredDeliveries, TeamDeliveryRequest, TeamDeliveryState,
   },
   error::TeamWorkError,
   heartbeat::Heartbeat,
   here::{TeamHere, team_here},
+  open::{OpenStarts, OpenStartsError, recover_open_starts},
+  release::ClaimEnd,
   reports::Reported,
   runner::{ProjectRunner, TeamRunner},
   start::{Recovered, StartFailure, StartOutcome, TeamStartRequest},
+  turn::StartTurn,
 };
 use crate::actions::{Dispatcher, retryable};
 

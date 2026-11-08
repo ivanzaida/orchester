@@ -54,7 +54,7 @@ async fn accepted() -> Accepted {
 
 /// The start under `held` is failed with `expected`, kept so, and made no inputs and no run.
 async fn assert_failed(held: &Accepted, outcome: StartOutcome, expected: &StartFailure) {
-  let StartOutcome::Failed(failure) = outcome else {
+  let StartOutcome::Failed(failure, _) = outcome else {
     panic!("not failed: {outcome:?}");
   };
   assert_eq!(&failure, expected);
@@ -64,7 +64,7 @@ async fn assert_failed(held: &Accepted, outcome: StartOutcome, expected: &StartF
   assert_eq!(kept.stage, TeamStartStage::Failed);
   assert!(db.accepted_team_inputs(operation).expect("read").is_none());
   assert!(db.open_team_starts().expect("open").is_empty(), "nothing left open");
-  let StartOutcome::Failed(again) = held
+  let StartOutcome::Failed(again, _) = held
     .work
     .start(held.request.clone(), held.checkout.vault())
     .await
@@ -73,15 +73,12 @@ async fn assert_failed(held: &Accepted, outcome: StartOutcome, expected: &StartF
     panic!("the failure is kept");
   };
   assert_eq!(&again, expected);
-  assert!(
-    held
-      .work
-      .recover(held.checkout.vault())
-      .await
-      .expect("recovered")
-      .is_empty()
-  );
+  assert!(crate::recovered(&held.work, &held.checkout).await.is_empty());
   assert_eq!(held.runner.asked(), 0, "the runner was never asked");
+  assert!(
+    held.server.state().claim.is_none(),
+    "the claim was released with the failure"
+  );
 }
 
 fn set_body(held: &Accepted, body: impl FnOnce(&mut Value)) {
@@ -140,7 +137,7 @@ async fn team_work_bundle_unreadable_json_fails_the_start_and_recovery_passes_it
   set_body(&held, |bundle| {
     *bundle = json!({"schema_version": EXECUTION_BUNDLE_SCHEMA})
   });
-  let recovered = held.work.recover(held.checkout.vault()).await.expect("recovered");
+  let recovered = crate::recovered(&held.work, &held.checkout).await;
   assert_eq!(recovered.len(), 1, "one open start");
   let outcome = recovered.into_iter().next().expect("one").1.expect("carried on");
   assert_failed(&held, outcome, &StartFailure::BundleUnreadable).await;

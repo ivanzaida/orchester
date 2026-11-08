@@ -15,6 +15,7 @@ pub mod state;
 use std::fs;
 
 use orchester_core::{
+  connection::{AgentProvider, SignIn},
   id::{ClaimId, OperationId, ProjectId, WorkEventId, WorkId},
   project::{Project, ProjectKey},
   task::Task,
@@ -196,6 +197,29 @@ pub fn not_ready_here(kontur: &mut Kontur) -> Result<(), SeedError> {
   // KON-5's module branch, which a team start finds in the checkout before it asks whether the pipeline is ready.
   git::branch(&kontur.repo, "module/api-rate-limits", git::MAIN)?;
   write_marker(kontur, State::NotReadyHere)
+}
+
+/// As [`not_ready_here`], with every task of the stand-in server on Team quick fix, which is ready here, and the server
+/// a release ahead of this computer (`team-start-failed`): KON-5 (API rate limits) is pressed Run; the server builds
+/// the start in a bundle schema this computer does not read, so the start fails for good, the claim is released and the
+/// task page says why (ORC-885).
+pub fn start_failed(kontur: &mut Kontur) -> Result<(), SeedError> {
+  super::picker_readiness::team_work(kontur)?;
+  // Team quick fix runs Reviewer, which needs a Claude Code connection here; with one it is ready.
+  let bin = kontur.repo.join(".orchester").join("qa-bin");
+  let program = bin.join("claude");
+  fs::create_dir_all(&bin).map_err(io(&bin))?;
+  fs::write(&program, "").map_err(io(&program))?;
+  let at = kontur.ago(4);
+  super::connections::cli(
+    kontur,
+    ("Claude · Kontur", AgentProvider::ClaudeCodeCli, program),
+    ("2.1.89", SignIn::SignedIn, &["claude-sonnet-5-5"]),
+    at,
+  )?;
+  // KON-5's module branch, which a team start finds in the checkout before it asks whether the pipeline is ready.
+  git::branch(&kontur.repo, "module/api-rate-limits", git::MAIN)?;
+  write_marker(kontur, State::StartFailed)
 }
 
 /// KON-12's run interrupted at Implement, on the live catalogue's Feature delivery with a brief that keeps

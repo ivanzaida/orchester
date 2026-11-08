@@ -8,6 +8,21 @@ use serde_json::{Value, json};
 
 use super::{Authority, AuthorityClaim, AuthorityTask, Person, commands::Refused, listing};
 
+/// How the stand-in fails to give a `work.start` a bundle the desktop can use.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum BundleFault {
+  /// The bundle is built in a schema one newer than the desktop reads.
+  Newer,
+  /// The bundle is built in a schema one older than the desktop reads.
+  Older,
+  /// The bundle the receipt names is answered with JSON that is no execution bundle.
+  Unreadable,
+  /// The server cannot build the bundle: `work.start` is refused `bundle_missing`.
+  Missing,
+  /// The server cannot be asked for the work now: `work.start` is answered `unavailable`, and the start waits.
+  Unavailable,
+}
+
 /// `work.start` of the task the authority names, under the person's current claim of it and with no work yet.
 pub(super) fn start(authority: &mut Authority, command: &Value) -> Result<Value, Refused> {
   let named = &command["authority"];
@@ -17,12 +32,25 @@ pub(super) fn start(authority: &mut Authority, command: &Value) -> Result<Value,
   if !named["work_id"].is_null() {
     return Err((409, "claim_lost"));
   }
+  let fault = authority.bundle_fault;
+  match fault {
+    Some(BundleFault::Missing) => return Err((409, "bundle_missing")),
+    Some(BundleFault::Unavailable) => return Err((503, "unavailable")),
+    _ => {}
+  }
   let (task, claim) = held(authority, named)?;
   if task.work == Some("running") {
     return Err((409, "transition_denied"));
   }
   task.work = Some("running");
-  let work = listing::work_read((&listing::task_id(task), task.number), claim, "running");
+  let id = listing::task_id(task);
+  let mut work = listing::work_read((&id, task.number), claim, "running");
+  authority.reported.retain(|reported| *reported != id);
+  match fault {
+    Some(BundleFault::Newer) => work["bundle"]["schema_version"] = json!(crate::v2::EXECUTION_BUNDLE_SCHEMA + 1),
+    Some(BundleFault::Older) => work["bundle"]["schema_version"] = json!(crate::v2::EXECUTION_BUNDLE_SCHEMA - 1),
+    Some(BundleFault::Unreadable | BundleFault::Missing | BundleFault::Unavailable) | None => {}
+  }
   let bundle = work["bundle"].clone();
   Ok(json!({"kind": "work", "work": work, "bundle": bundle,
     "effects": [{"kind": "start", "work_id": work["id"], "bundle": bundle}]}))
@@ -51,6 +79,9 @@ pub(super) fn report(authority: &mut Authority, command: &Value) -> Result<Value
     task.claim = None;
   }
   let mut work = listing::work_read((&id, task.number), claim, state);
+  if !authority.reported.contains(&id) {
+    authority.reported.push(id);
+  }
   work["runs"] = json!([command["run_id"]]);
   let bundle = work["bundle"].clone();
   Ok(json!({"kind": "work", "work": work, "bundle": bundle, "effects": []}))

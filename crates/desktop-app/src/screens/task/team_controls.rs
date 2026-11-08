@@ -20,6 +20,7 @@ use orchester_workspace::{
   actions::{Action, ClaimAction},
   runner::Runners,
   sharing::device,
+  team_work::ClaimEnd,
 };
 
 use super::{TaskContext, team::TeamTaskShown};
@@ -418,12 +419,35 @@ fn started_words(ctx: &Ctx, task: &TaskContext, ask: TeamAsk, started: &Started)
     // The Summary's card lists each part with its fix (`not_ready`), not a notice.
     Stop::NotReadyHere(_) => return None,
     Stop::NotReadable => ctx.t("summary.team.refused.notReadable"),
+    Stop::BundleMissing(message) => message_text(ctx, message),
+    Stop::BundleSchema { read, built, claim } => {
+      let key = if built > read {
+        "summary.team.refused.bundleSchemaNewer"
+      } else {
+        "summary.team.refused.bundleSchemaOlder"
+      };
+      let why = ctx.t_args(key, [("read", read.to_string()), ("built", built.to_string())]);
+      with_claim(ctx, &why, *claim)
+    }
+    Stop::BundleUnreadable(claim) => with_claim(ctx, &ctx.t("summary.team.refused.bundleUnreadable"), *claim),
+    Stop::BundleMismatch(claim) => with_claim(ctx, &ctx.t("summary.team.refused.bundleMismatch"), *claim),
+    Stop::InputsFailed(claim) => with_claim(ctx, &ctx.t("summary.team.refused.inputsFailed"), *claim),
     Stop::Runner(messages) => messages.first().map_or_else(
       || ctx.t("summary.team.refused.failed"),
       |message| message_text(ctx, message),
     ),
     Stop::Failed => ctx.t("summary.team.refused.failed"),
   })
+}
+
+/// `why` a start failed for good, then what became of the task's claim.
+fn with_claim(ctx: &Ctx, why: &str, claim: ClaimEnd) -> Arc<str> {
+  let key = match claim {
+    ClaimEnd::Released => "summary.team.refused.claimReleased",
+    ClaimEnd::Kept => "summary.team.refused.claimKept",
+    ClaimEnd::Held => "summary.team.refused.claimHeld",
+  };
+  format!("{why} {}", ctx.t(key)).into()
 }
 
 /// A refusal's code as the page says it.

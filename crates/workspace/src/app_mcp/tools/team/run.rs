@@ -37,7 +37,8 @@ use crate::{
   tasks::run::start_messages,
   team_reads::{TeamReadError, listed::TeamPipelines},
   team_work::{
-    self, BranchNotFound, ProjectRunner, StartFailure, StartOutcome, TeamStartRequest, TeamWork, TeamWorkError,
+    self, BranchNotFound, ProjectRunner, StartFailure, StartOutcome, StartTurn, TeamStartRequest, TeamWork,
+    TeamWorkError,
   },
 };
 
@@ -95,6 +96,9 @@ pub(in crate::app_mcp::tools) async fn run_task(
   let (id, read) = (task.task.id, task.task.revision);
   let module_read = module_read.module.revision;
   let outcome = on_worker(move || async move {
+    // The project's turn comes before the claim: the recovery of its other starts would otherwise release the claim
+    // this one takes while its own start is not recorded yet.
+    let turn = StartTurn::wait(dispatcher.servers(), dispatcher.root()).await;
     let claim_id = acquire(&dispatcher, Subject::Task { id }, start_failed).await?;
     let work = WorkAction {
       authority: AuthorityRef {
@@ -113,7 +117,7 @@ pub(in crate::app_mcp::tools) async fn run_task(
       programs,
     };
     TeamWork::new(dispatcher, runner)
-      .start(request, start_vault.get())
+      .start_in(&turn, request, start_vault.get())
       .await
       .map_err(work_refused)
   })
@@ -171,15 +175,15 @@ async fn started(team: &Team, outcome: StartOutcome) -> Result<Value, ToolError>
       Err(bundle_missing::refused(team, error.details()).await)
     }
     StartOutcome::Refused(error) => Err(authority_refused(&error)),
-    StartOutcome::Failed(StartFailure::BundleSchema { read, built }) => Err(bundle_schema(Schemas { read, built })),
-    StartOutcome::Failed(StartFailure::BundleUnreadable) => Err(ToolError::refused(
+    StartOutcome::Failed(StartFailure::BundleSchema { read, built }, _) => Err(bundle_schema(Schemas { read, built })),
+    StartOutcome::Failed(StartFailure::BundleUnreadable, _) => Err(ToolError::refused(
       "team_bundle_unreadable",
       vec![Message::new("appMcp.errors.teamBundleUnreadable")],
     )),
-    StartOutcome::Failed(StartFailure::NotReadyHere { pipeline, missing }) => {
-      Err(ToolError::NotReadyHere(NotReadyHere::after_start(pipeline, missing)))
-    }
-    StartOutcome::Failed(failure) => {
+    StartOutcome::Failed(StartFailure::NotReadyHere { pipeline, missing }, claim) => Err(ToolError::NotReadyHere(
+      NotReadyHere::after_start(pipeline, missing, claim),
+    )),
+    StartOutcome::Failed(failure, _) => {
       tracing::warn!(?failure, "a team start failed for good");
       Err(start_failed())
     }

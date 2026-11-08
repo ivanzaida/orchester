@@ -17,7 +17,7 @@ use tokio::runtime::Runtime;
 
 use super::team::{self, State};
 
-fn task_route(project: ProjectId, key: &str) -> Route {
+pub(super) fn task_route(project: ProjectId, key: &str) -> Route {
   let key = key.parse().expect("a task key");
   Route::Project(project, ProjectPage::task(key, TaskView::Summary, false))
 }
@@ -29,11 +29,17 @@ mod runner_programs;
 /// module branch of KON-5), joined to the stand-in team server with the real runner, which Run needs to be pressable;
 /// on KON-5 once Run shows.
 fn on_kon_5() -> (Window, TeamServer, ProjectId) {
+  on_task(("team-not-ready", State::NotReadyHere), "KON-5")
+}
+
+/// The window on the seed's `scenario` joined to the stand-in team server in `state`, with the real runner; on the task
+/// `key` once Run shows.
+pub(super) fn on_task((scenario, state): (&str, State), key: &str) -> (Window, TeamServer, ProjectId) {
   let dir = TempDir::new().expect("a temporary folder");
   let request = crate::kontur::SeedRequest {
     data_dir: dir.path().to_path_buf(),
     repo: dir.path().join("repo-kontur"),
-    scenario: crate::kontur::scenarios::named("team-not-ready").expect("a known scenario"),
+    scenario: crate::kontur::scenarios::named(scenario).expect("a known scenario"),
     fake_codex: None,
     now: Timestamp::now(),
   };
@@ -41,9 +47,9 @@ fn on_kon_5() -> (Window, TeamServer, ProjectId) {
   let data = Data::at(dir, Runtime::new().expect("tokio runtime"));
   let launch = data.launch_with(runner_programs::programs().runner.clone());
   let services = launch.services().expect("the session started");
-  let server = team::prepare(State::NotReadyHere, services, data.runtime.handle()).expect("the state is set up");
+  let server = team::prepare(state, services, data.runtime.handle()).expect("the state is set up");
   let mut window = Window::of(data, launch);
-  window.navigation().go(task_route(seeded.project, "KON-5"));
+  window.navigation().go(task_route(seeded.project, key));
   window.until("Run", |window| window.texts("task-run").is_some());
   (window, server, seeded.project)
 }

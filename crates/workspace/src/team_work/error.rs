@@ -10,6 +10,14 @@ use orchester_store::{RunStoreError, StoreError};
 
 use crate::{actions::ActionError, readiness::MissingPart};
 
+impl TeamWorkError {
+  /// Whether trying again changes nothing: the recorded start itself cannot be read, which only a newer Orchester or a
+  /// person can mend. Every other error may pass (the database was busy, the server answered strangely).
+  pub const fn is_permanent(&self) -> bool {
+    matches!(self, Self::Unreadable(_))
+  }
+}
+
 /// Why a team start, its reports, its heartbeat or a module delivery could not go on. A server that cannot be reached
 /// or refuses for now is no error: the outcome says so, and the work goes on from where it stands.
 #[derive(Debug, thiserror::Error)]
