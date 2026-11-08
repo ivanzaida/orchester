@@ -77,16 +77,31 @@ pub(super) fn open_read_only(project: &RegisteredProject) -> Result<ReadOnlyProj
   })
 }
 
-/// `read` of `project`, its database opened only to read it.
-fn read_one<T>(
-  project: &RegisteredProject,
-  read: &mut impl FnMut(&OpenProject, &ProjectDb) -> Result<T, ToolError>,
-) -> Result<(OpenProject, T), ToolError> {
+/// `project` with its database, opened only to read it ([`open_read_only`]).
+pub(super) fn open_reading(project: &RegisteredProject) -> Result<(OpenProject, ReadOnlyProjectDb), ToolError> {
   let db = open_read_only(project)?;
   let open = OpenProject {
     project: db.project().clone(),
     repo_root: project.repo_root.clone(),
   };
+  Ok((open, db))
+}
+
+impl Services {
+  /// [`Self::project`] for a tool that only reads, with the database it reads: opened only to read it, so a project
+  /// this version has not opened yet is refused (`project_not_opened_yet`) and left as it is.
+  pub(super) fn read_project(&self, named: &str) -> Result<(OpenProject, ReadOnlyProjectDb), ToolError> {
+    let projects = self.workspace.projects()?;
+    open_reading(self.shown(&projects, named)?)
+  }
+}
+
+/// `read` of `project`, its database opened only to read it.
+fn read_one<T>(
+  project: &RegisteredProject,
+  read: &mut impl FnMut(&OpenProject, &ProjectDb) -> Result<T, ToolError>,
+) -> Result<(OpenProject, T), ToolError> {
+  let (open, db) = open_reading(project)?;
   let found = read(&open, &db)?;
   Ok((open, found))
 }

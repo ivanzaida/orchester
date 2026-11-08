@@ -56,13 +56,7 @@ pub(super) async fn of(services: &Services, named: &str) -> Result<Option<Team>,
 pub(super) async fn of_reading(services: &Services, named: &str) -> Result<Option<Team>, ToolError> {
   let (services, named) = (services.clone(), named.to_owned());
   blocking(move || {
-    let projects = services.workspace.projects()?;
-    let registered = services.shown(&projects, &named)?;
-    let db = super::across::open_read_only(registered)?;
-    let open = OpenProject {
-      project: db.project().clone(),
-      repo_root: registered.repo_root.clone(),
-    };
+    let (open, db) = services.read_project(&named)?;
     Ok(db.sharing()?.map(|link| Team { open, link }))
   })
   .await

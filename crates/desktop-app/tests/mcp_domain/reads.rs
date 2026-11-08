@@ -383,6 +383,29 @@ fn database(repo: &str) -> std::path::PathBuf {
   Path::new(repo).join(".orchester").join("orchester.db")
 }
 
+/// The arguments of `tool` that name `project` and give every other required one a value its schema takes, none of
+/// them one that exists.
+fn arguments_naming(tool: &str, schema: &Value, project: &str) -> Value {
+  let mut arguments = serde_json::Map::new();
+  arguments.insert("project".to_owned(), json!(project));
+  for required in schema["required"].as_array().map_or(&[][..], Vec::as_slice) {
+    let property = required.as_str().expect("a property's name");
+    if property == "project" {
+      continue;
+    }
+    let value = match schema["properties"][property]["type"].as_str() {
+      Some("string") => json!("1"),
+      Some("integer") => json!(1),
+      Some("boolean") => json!(true),
+      other => panic!("{tool}: required `{property}` of type {other:?}: give the test a value for it"),
+    };
+    arguments.insert(property.to_owned(), value);
+  }
+  Value::Object(arguments)
+}
+
+/// A read-only tool (by its annotation) that names a project this version has not opened yet leaves it as it is, so
+/// no read tool added later can migrate one.
 #[test]
 fn domain_reads_leave_a_project_this_version_has_not_opened_untouched() {
   let (mut served, _) = Served::seeded("empty");
@@ -429,6 +452,18 @@ fn domain_reads_leave_a_project_this_version_has_not_opened_untouched() {
     );
     let named = served.refused(tool, &json!({ "project": "Old" }));
     assert_eq!(named["code"], "project_not_opened_yet", "{tool}: {named}");
+  }
+  for tool in served.tools() {
+    if tool["annotations"]["readOnlyHint"] != true {
+      continue;
+    }
+    let name = tool["name"].as_str().expect("a tool's name");
+    // The window's own tools (screenshots, the tree) and the lists of the app's own data name no project.
+    if tool["inputSchema"]["properties"].get("project").is_none() {
+      continue;
+    }
+    let named = served.refused(name, &arguments_naming(name, &tool["inputSchema"], "Old"));
+    assert_eq!(named["code"], "project_not_opened_yet", "{name}: {named}");
   }
   assert_eq!(
     fs::read(&file).expect("the database file"),
