@@ -8,7 +8,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
   components::{Row, Text},
-  layout::Alignment,
+  layout::{Alignment, text_style::TextAlign},
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 
@@ -48,7 +48,7 @@ pub(super) fn bar(buttons: Vec<Element>, hint: Option<String>) -> Element {
 
 /// [`bar`] with `hint` in `color`: the form that creates a resource says in `danger` why Create cannot be pressed.
 pub(super) fn bar_saying(buttons: Vec<Element>, hint: Option<(String, PaletteColor)>) -> Element {
-  Row::new()
+  let bar = Row::new()
     .id("team-hub-actions")
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(HubSpacing::Actions.value()))
@@ -57,14 +57,19 @@ pub(super) fn bar_saying(buttons: Vec<Element>, hint: Option<(String, PaletteCol
     .align_items(Alignment::Center)
     .background(PaletteColor::SurfacePanel)
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .with_children(buttons)
-    .child(Row::new().flex(1.0))
-    .with_children(hint.map(|(hint, color)| {
+    .with_children(buttons);
+  // The hint takes what the buttons leave and wraps, so a long one is never cut at the panel's edge.
+  match hint {
+    Some((hint, color)) => bar.child(
       Text::new(&hint)
         .id("team-hub-actions-hint")
         .variant(HubText::PanelHint.role())
         .color(color)
-        .nowrap()
-    }))
-    .into()
+        .text_align(TextAlign::Right)
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0)),
+    ),
+    None => bar.child(Row::new().flex(1.0)),
+  }
+  .into()
 }

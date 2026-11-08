@@ -369,8 +369,7 @@ impl ValueRows<'_> {
       "team_new.mcp.runsAs",
       (false, ctx.t("team_new.mcp.runsProgram").to_string()),
     );
-    // The program is a name, said in words as the design has it; identifiers (arguments, variables) stay mono.
-    self.add_words("program", "team_new.mcp.program", (program != was.0, program.clone()));
+    self.add("program", "team_new.mcp.program", (program != was.0, program.clone()));
     self.add(
       "arguments",
       "team_new.mcp.arguments",

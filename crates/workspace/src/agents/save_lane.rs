@@ -2,6 +2,10 @@
 //! and does not wait for the last one before it starts the next, so two saves of one draft can be on the pool at once
 //! and finish in either order; the one that finishes last would win with older text, or throw away a draft the newer
 //! save just wrote. A lane gives every save a ticket when it starts and lets only the newest ticket write, alone.
+//!
+//! A save that is skipped leaves its text to a newer one, so a newer save must always reach the pool: whoever takes a
+//! ticket submits its save to the pool in the same step, and never from a future that can be dropped first.
+//! [`crate::sharing::Servers::save_lane`] keeps one lane per resource, so it outlives the panel that started the saves.
 
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -23,11 +27,6 @@ impl SaveLane {
   /// A save starts: the ones that started before it are out of date.
   pub fn start(&self) -> Ticket {
     Ticket(self.started.fetch_add(1, Ordering::SeqCst) + 1)
-  }
-
-  /// Whether any save started on this lane.
-  pub fn used(&self) -> bool {
-    self.started.load(Ordering::SeqCst) > 0
   }
 
   /// Runs `save` alone, unless a save started after `ticket`'s: then what `save` writes is already out of date, and

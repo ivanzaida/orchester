@@ -264,18 +264,31 @@ fn team_qa_hub_edit_create_a_name_the_team_server_has_is_a_field_error_and_nothi
     "The team's server refused: the name figma-local is taken"
   );
   // The refusal says it is the server's word; once this computer reads the team's list again, which then holds the
-  // name, the field and the bar say it as they say any name the team has. Either is the right words at that moment.
-  let field = window.text("team-new-mcp-name-row-sub");
-  assert!(
-    field == "Taken in the team · from the server"
-      || field == "The team already has an MCP server named figma-local · pick another name",
-    "{field}"
+  // name, the field and the bar say it as they say any name the team has. Each moment has its own pair of words, read
+  // in one frame: a field of one moment with the hint of the other is a defect.
+  let pair = |window: &mut Window| {
+    let said = |window: &mut Window, id: &str| window.texts(id).map(|lines| lines.join(" "));
+    (
+      said(window, "team-new-mcp-name-row-sub"),
+      said(window, "team-hub-actions-hint"),
+    )
+  };
+  let (told, read_again) = (
+    (
+      "Taken in the team · from the server",
+      "Change the name, then Create again",
+    ),
+    (
+      "The team already has an MCP server named figma-local · pick another name",
+      "Fix the name to create it",
+    ),
   );
-  let hint = window.text("team-hub-actions-hint");
-  assert!(
-    hint == "Change the name, then Create again" || hint == "Fix the name to create it",
-    "{hint}"
-  );
+  window.until("the field and the hint to say the same moment", |window| {
+    let (field, hint) = pair(window);
+    [told, read_again]
+      .iter()
+      .any(|(want_field, want_hint)| field.as_deref() == Some(want_field) && hint.as_deref() == Some(want_hint))
+  });
   assert_eq!(
     db(&window).resources(ResourceKind::McpServer).expect("resources").len(),
     before

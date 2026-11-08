@@ -4,10 +4,19 @@
 //! text, or thrown away when the older fields equal the version's own; and the text *Publish for the team* sends is the
 //! last typed.
 //!
+//! The lane that orders them belongs to the resource, not to the panel, and the last typed text is written even when
+//! the panel is gone a frame after the typing; a save the store refused is tried again, and *Publish for the team*
+//! sends what was typed whatever an older save is doing.
+//!
 //! `cargo test -p orchester-app --features test-support --test team_qa team_qa_hub_edit_race`
 
-use std::{sync::Arc, thread, time::Duration};
+use std::{
+  sync::{Arc, mpsc},
+  thread::{self, JoinHandle},
+  time::{Duration, Instant},
+};
 
+use orchester_app::routes::{ProjectPage, Route};
 use orchester_core::id::ResourceId;
 use orchester_workspace::{
   agents::{
@@ -18,9 +27,36 @@ use orchester_workspace::{
 };
 
 use super::{
-  hub_edit::{draft_of, on_pencil_until},
+  hub_edit::{ARGUMENTS, PUBLISH, draft_of, on_pencil_until},
   team::State,
 };
+
+/// A save that holds a lane's turn until it is released, as a slow disk would: every save started meanwhile waits.
+struct Stalled {
+  release: mpsc::Sender<()>,
+  holder: JoinHandle<()>,
+}
+
+impl Stalled {
+  fn on(lane: &Arc<SaveLane>) -> Self {
+    let (entered, started) = mpsc::channel();
+    let (release, released) = mpsc::channel::<()>();
+    let lane = lane.clone();
+    let holder = thread::spawn(move || {
+      lane.run_newest(|| {
+        entered.send(()).expect("the test waits");
+        released.recv().expect("the test releases");
+      });
+    });
+    started.recv().expect("the save holds the lane");
+    Self { release, holder }
+  }
+
+  fn release(self) {
+    self.release.send(()).expect("the holder waits");
+    self.holder.join().expect("the holder ended");
+  }
+}
 
 /// `published` with `arguments` as its program's arguments.
 fn with_arguments(published: &NewTeamMcpServer, arguments: &[&str]) -> NewTeamMcpServer {
@@ -110,4 +146,147 @@ fn team_qa_hub_edit_race_publish_saves_the_last_typed_text_after_any_older_save(
   assert!(matches!(saved, Ok(Saved::Draft(_))), "{saved:?}");
   assert!(late.is_none(), "the older autosave writes nothing after the press");
   assert_eq!(draft_of(&window, pencil), Some(vec!["--last".to_owned()]));
+}
+
+#[test]
+fn team_qa_hub_edit_race_the_lane_outlives_the_panel_so_a_stale_save_of_a_closed_panel_loses() {
+  let (window, _server, (_, pencil)) = on_pencil_until(("team-edit", State::TeamEdit), "team-hub-edit");
+  let root = window.data.repo("repo-kontur");
+  let servers = window.launch.services().expect("the session").servers.clone();
+  let published = published_fields(&root, pencil);
+  let typed = with_arguments(&published, &["--typed"]);
+  let before = draft_of(&window, pencil);
+  let (first_panel, second_panel) = (servers.save_lane(&root, pencil), servers.save_lane(&root, pencil));
+  assert!(
+    Arc::ptr_eq(&first_panel, &second_panel),
+    "every panel of the resource shares one lane"
+  );
+
+  // The first panel's save of the fields it opened with is on the pool and stalled; the panel is closed, a second one
+  // opens and what is typed there is saved: it must come after the stalled one, which would undo it.
+  let stale = first_panel.start();
+  let (entered, started) = mpsc::channel();
+  let (release, released) = mpsc::channel::<()>();
+  let stale_root = root.clone();
+  let stalled = thread::spawn(move || {
+    first_panel.run_if_newest(stale, || {
+      entered.send(()).expect("the test waits");
+      released.recv().expect("the test releases");
+      team_mcp_edit::save(&stale_root, pencil, &published)
+    })
+  });
+  started.recv().expect("the stale save holds the lane");
+  let newest = second_panel.start();
+  let newer = thread::spawn(move || second_panel.run_if_newest(newest, || team_mcp_edit::save(&root, pencil, &typed)));
+  thread::sleep(Duration::from_millis(50));
+  assert_eq!(
+    draft_of(&window, pencil),
+    before,
+    "the newer save waits for the lane's turn"
+  );
+  release.send(()).expect("the stale save waits");
+  stalled.join().expect("the stale save ran");
+  newer
+    .join()
+    .expect("the newer save ran")
+    .expect("it was not skipped")
+    .expect("saved");
+
+  assert_eq!(draft_of(&window, pencil), Some(vec!["--typed".to_owned()]));
+}
+
+#[test]
+fn team_qa_hub_edit_race_the_last_typed_text_is_written_when_the_panel_is_gone_a_frame_later() {
+  let (mut window, _server, (project, pencil)) = on_pencil_until(("team-edit", State::TeamEdit), "team-hub-edit");
+  let root = window.data.repo("repo-kontur");
+  let servers = window.launch.services().expect("the session").servers.clone();
+  let stalled = Stalled::on(&servers.save_lane(&root, pencil));
+  window.press("team-hub-edit");
+  window.until("the form", |window| window.texts(PUBLISH).is_some());
+  // Two keystrokes, then the person leaves before the newest save's answer was awaited: the panel is unmounted.
+  window.set(ARGUMENTS, "--first");
+  window.set(ARGUMENTS, "--last");
+  window.navigation().go(Route::Project(project, ProjectPage::Merges));
+  window.until("the panel to go", |window| window.texts("team-hub-panel").is_none());
+  stalled.release();
+
+  window.until("the last text in the draft", |window| {
+    draft_of(window, pencil) == Some(vec!["--last".to_owned()])
+  });
+}
+
+#[test]
+fn team_qa_hub_edit_race_publish_sends_what_was_typed_while_an_older_save_is_stalled() {
+  let (mut window, server, (_, pencil)) = on_pencil_until(("team-edit", State::TeamEdit), "team-hub-edit");
+  let root = window.data.repo("repo-kontur");
+  let servers = window.launch.services().expect("the session").servers.clone();
+  let before = draft_of(&window, pencil);
+  let stalled = Stalled::on(&servers.save_lane(&root, pencil));
+  window.press("team-hub-edit");
+  window.until("the form", |window| window.texts(PUBLISH).is_some());
+  window.set(ARGUMENTS, "--last");
+  // Pressed at once: no autosave has written anything, and the press takes its turn in the lane behind the stalled
+  // save, so nothing is sent from a draft an older save may still change.
+  window.press(PUBLISH);
+  let pressed = Instant::now();
+  window.until("the press to wait its turn", |_| {
+    pressed.elapsed() > Duration::from_millis(400)
+  });
+  let numbered = || {
+    server
+      .resources("kontur")
+      .iter()
+      .any(|(resource, versions)| resource["name"] == "pencil-design" && versions.len() > 1)
+  };
+  assert!(!numbered(), "nothing is sent while an older save holds the lane");
+  assert_eq!(draft_of(&window, pencil), before, "and nothing was written meanwhile");
+  stalled.release();
+
+  window.until("the server to number it", |_| {
+    server
+      .resources("kontur")
+      .iter()
+      .any(|(resource, versions)| resource["name"] == "pencil-design" && versions.len() == 2)
+  });
+  let sent = server
+    .resources("kontur")
+    .into_iter()
+    .find(|(resource, _)| resource["name"] == "pencil-design")
+    .map(|(_, versions)| format!("{:?}", versions.last()))
+    .expect("the resource");
+  assert!(sent.contains("--last"), "{sent}");
+}
+
+/// Makes the project's database refuse writes, or lets it write again.
+#[cfg(unix)]
+fn writable(root: &std::path::Path, yes: bool) {
+  use std::os::unix::fs::PermissionsExt;
+  let folder = root.join(".orchester");
+  for entry in std::fs::read_dir(&folder).expect("the project's folder") {
+    let path = entry.expect("an entry").path();
+    if path.is_file() {
+      let mode = if yes { 0o644 } else { 0o444 };
+      std::fs::set_permissions(&path, std::fs::Permissions::from_mode(mode)).expect("permissions");
+    }
+  }
+}
+
+#[cfg(unix)]
+#[test]
+fn team_qa_hub_edit_race_a_newest_save_the_store_refused_is_told_and_tried_again() {
+  let (mut window, _server, (_, pencil)) = on_pencil_until(("team-edit", State::TeamEdit), "team-hub-edit");
+  let root = window.data.repo("repo-kontur");
+  window.press("team-hub-edit");
+  window.until("the form", |window| window.texts(PUBLISH).is_some());
+  writable(&root, false);
+  window.set(ARGUMENTS, "--typed");
+  window.until("the refusal told", |window| {
+    window.texts("team-hub-edit-save-error").is_some()
+  });
+  writable(&root, true);
+
+  // Nothing is typed again: the save is tried again by itself.
+  window.until_within(Duration::from_secs(15), "the draft kept after the retry", |window| {
+    draft_of(window, pencil) == Some(vec!["--typed".to_owned()])
+  });
 }

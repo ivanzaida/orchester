@@ -27,6 +27,7 @@ mod password;
 mod place;
 pub mod project;
 mod refusal;
+mod save_lanes;
 mod send_lane;
 mod server_key;
 mod share_outcome;
@@ -144,6 +145,8 @@ struct Inner {
   starting: Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>,
   /// The projects' sends of the outbox, one at a time each ([`Servers::send_lane`]).
   sending: Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>,
+  /// The saves of each resource's draft, ordered per resource ([`Servers::save_lane`]).
+  saving: Mutex<HashMap<(PathBuf, orchester_core::id::ResourceId), Arc<crate::agents::save_lane::SaveLane>>>,
   /// The team starts recovery found in trouble this session, so it says so once each per trouble
   /// ([`Servers::first_trouble`]).
   told_starts: Mutex<HashSet<(orchester_core::id::OperationId, start_lock::StartTrouble)>>,
@@ -193,6 +196,7 @@ impl Servers {
         taken_back: Mutex::new(HashMap::new()),
         starting: Mutex::new(HashMap::new()),
         sending: Mutex::new(HashMap::new()),
+        saving: Mutex::new(HashMap::new()),
         told_starts: Mutex::new(HashSet::new()),
       }),
     }

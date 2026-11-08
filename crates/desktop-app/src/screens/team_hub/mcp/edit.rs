@@ -4,7 +4,13 @@
 //! answer in place. A refusal keeps the draft and what was typed; waiting for a server that cannot be reached is not
 //! one.
 
-use std::{path::PathBuf, sync::Arc};
+use std::{
+  path::PathBuf,
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+  },
+};
 
 use lurq::{
   app::ctx::{Ctx, FutureAction, FutureState},
@@ -15,18 +21,16 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_workspace::{
-  agents::{
-    save_lane::SaveLane,
-    team_mcp_edit::{self, EditError, McpEdit, Saved},
-  },
+  agents::{save_lane::SaveLane, team_mcp_edit::McpEdit},
   app_mcp::setup::NewTeamMcpServer,
-  background,
   messages::Message,
   sharing::team_edit::{EditRefused, Edited},
-  tasks::outside::Outside,
 };
 
-use super::edit_actions as actions;
+use super::{
+  edit_actions as actions,
+  edit_save::{Answer, Save},
+};
 use crate::{screens::team_hub::create::McpFields, services::Services};
 
 /// A press of *Publish for the team*: the fields as typed, whether a person (or automation they let decide) pressed,
@@ -55,8 +59,11 @@ pub(super) struct Edit {
   /// Why the last *Discard draft* or *Cancel sending* did nothing (it is being sent right now, the server numbered it
   /// meanwhile, a run uses it, the person is no admin any more): until the next press.
   pub failure: Signal<Option<Message>>,
-  /// Orders this resource's saves of the draft ([`SaveLane`]), which *Publish for the team* joins.
+  /// Orders this resource's saves of the draft ([`SaveLane`]), which *Publish for the team* joins. Shared with every
+  /// panel of the resource, so a save of one that was closed is ordered against the next one's.
   lane: Arc<SaveLane>,
+  /// This panel asked for a save of its form.
+  asked: AtomicBool,
   /// The folder of the project, the project and the resource that are edited.
   target: (PathBuf, ProjectId, ResourceId),
 }
@@ -69,7 +76,8 @@ impl Edit {
       McpFields::of(ctx, start)
     });
     let editing = ctx.signal(edit.is_some_and(|edit| edit.draft.is_some()));
-    let lane = Arc::new(SaveLane::default());
+    let (root, _, id) = &target;
+    let lane = services.servers.save_lane(root, *id);
     let edit = Self {
       fields,
       editing,
@@ -80,6 +88,7 @@ impl Edit {
       cancel_created: actions::cancel_created(ctx, &services, &target),
       failure: ctx.signal(None),
       lane,
+      asked: AtomicBool::new(false),
       target,
     };
     edit.follow(ctx);
@@ -141,39 +150,33 @@ impl Edit {
   /// Keeps `input` as the draft while the form is open (`Draft saved` in A13), and tells the screens that read drafts
   /// when a draft appears or goes; nothing for `None`. `had_draft`: the panel's last read held a draft. `published`:
   /// the fields the form was opened with, which an input that still equals them needs no save for. Saves go through the
-  /// lane: only the newest one writes, so a save that is late never undoes a newer one.
+  /// resource's lane ([`SaveLane`]): only the newest one writes, so a save that is late never undoes a newer one,
+  /// whichever panel started it. A save is on the blocking pool from the moment it starts ([`Save`]), so it writes
+  /// even when this panel is closed first, and one the store refused is told and tried again.
   pub(super) fn autosave(
     &self,
     ctx: &mut Ctx,
     (had_draft, published): (bool, Option<&NewTeamMcpServer>),
     input: Option<NewTeamMcpServer>,
-  ) -> Result<Option<Saved>, EditError> {
+  ) -> Answer {
     let services = Services::of(ctx);
-    let (root, project, id) = self.target.clone();
-    // The form opens with nothing to save; once a save started, one that goes back to the fields saves, to drop a
-    // draft.
-    let input = input.filter(|input| had_draft || published != Some(input) || self.lane.used());
+    // The form opens with nothing to save; once this panel asked for a save, one that goes back to the fields saves, to
+    // drop a draft.
+    let input = input.filter(|input| had_draft || published != Some(input) || self.asked.load(Ordering::SeqCst));
+    self.asked.fetch_or(input.is_some(), Ordering::SeqCst);
+    let (lane, target) = (self.lane.clone(), self.target.clone());
     let state = ctx
-      .future((root, had_draft, input), {
-        let lane = self.lane.clone();
-        move |(root, had_draft, input)| {
-          let (services, lane) = (services.clone(), lane.clone());
-          let ticket = input.as_ref().map(|_| lane.start());
-          async move {
-            let (Some(input), Some(ticket)) = (input, ticket) else {
-              return Ok(None);
-            };
-            let saved = background::run(move || lane.run_if_newest(ticket, || team_mcp_edit::save(&root, id, &input)))
-              .await
-              .map_err(EditError::Store)?;
-            // A newer save started meanwhile and writes what is typed now.
-            let Some(saved) = saved.transpose()? else {
-              return Ok(None);
-            };
-            if matches!(saved, Saved::Draft(_)) != had_draft {
-              services.changes.record(project, Outside::Connections);
+      .stream((had_draft, input), move |(had_draft, input), emitter| {
+        let started = input.map(|input| {
+          let shared = (lane.clone(), services.runtime.clone(), services.changes.clone());
+          Save::start(shared, target.clone(), (had_draft, input))
+        });
+        async move {
+          match started {
+            Some((save, job)) => save.settle(job, &emitter).await,
+            None => {
+              emitter.emit(None);
             }
-            Ok(Some(saved))
           }
         }
       })

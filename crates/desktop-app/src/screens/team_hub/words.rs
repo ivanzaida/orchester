@@ -115,7 +115,7 @@ fn lead(ctx: &Ctx, entry: &Entry) -> Option<Said> {
     None if entry.draft => {
       let number = entry.number?;
       let text = if entry.read_only {
-        draft_then(ctx, number, "team_hub.edit.line.refused")
+        draft_then(ctx, number, "team_hub.edit.line.readOnly")
       } else {
         ctx.t_args("team_hub.edit.chip.draft", [("version", number.to_string())])
       };

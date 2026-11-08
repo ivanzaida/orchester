@@ -390,6 +390,7 @@
         "joined": "{{lead}} · {{words}}",
         "waiting": "Waiting to send · {{version}}",
         "refused": "publish refused",
+        "readOnly": "read-only here",
         "met": "someone published first",
         "notCreated": "Not created · publish refused"
       },

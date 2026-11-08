@@ -28,9 +28,7 @@ const PROGRAM: Spec = Spec::new("mcp-program", "team_new.mcp.program")
   .sub("team_new.mcp.programSub")
   .required();
 /// The edit's rows say it shorter (A13 `WMtxm`).
-const PROGRAM_EDIT: Spec = Spec::new("mcp-program", "team_new.mcp.program")
-  .sub("team_hub.mcp.fromTeam.programSub")
-  .required();
+const PROGRAM_EDIT: Spec = Spec::new("mcp-program", "team_new.mcp.program").sub("team_hub.mcp.fromTeam.programSub");
 const VARIABLES_EDIT: Spec = Spec::new("mcp-variables", "team_new.mcp.variables").sub("team_hub.edit.variablesSub");
 const ARGUMENTS: Spec = Spec::new("mcp-arguments", "team_new.mcp.arguments").sub("team_new.mcp.argumentsSub");
 const FOLDER: Spec = Spec::new("mcp-folder", "team_new.mcp.folder");

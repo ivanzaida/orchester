@@ -251,7 +251,7 @@ fn team_qa_hub_edit_the_list_says_the_outbox_first_and_what_the_computer_needs_a
     "team-hub-edit-not-admin-title",
   );
   window.until("the row", |window| window.texts(&row(pencil)).is_some());
-  assert_eq!(window.text(&row(pencil)), "Your draft on v1 · publish refused");
+  assert_eq!(window.text(&row(pencil)), "Your draft on v1 · read-only here");
 
   let (mut window, _server, (_, pencil)) = on_pencil_until(
     ("team-edit-rejected", State::TeamEditRejected),
