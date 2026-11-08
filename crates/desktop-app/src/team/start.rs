@@ -23,7 +23,7 @@ use orchester_workspace::{
   runner::{RunRequestError, Runners},
   tasks::run::start_messages,
   team_work::{
-    self, BranchNotFound, ClaimEnd, ProjectRunner, StartFailure, StartOutcome, TeamStartRequest, TeamWork,
+    self, BranchNotFound, ClaimEnd, ProjectRunner, StartFailure, StartOutcome, StartTurn, TeamStartRequest, TeamWork,
     TeamWorkError, bundle_missing_message,
   },
 };
@@ -113,6 +113,9 @@ pub async fn start(
     Ok(checked) => checked,
     Err(stop) => return Started::Stopped(stop),
   };
+  // The project's turn comes before the claim: the recovery of its other starts would otherwise release the claim
+  // this Run takes (or already holds) while its own start is not recorded yet.
+  let turn = StartTurn::wait(&acting.servers, &root).await;
   let (task, read) = request.task;
   let claim = match request.claim {
     Some(claim) => claim,
@@ -146,7 +149,7 @@ pub async fn start(
     programs: mcp_programs,
   };
   let runner = ProjectRunner::new(runners, root.clone(), request.project);
-  let started = carry_out(acting, source, (runner, root), start).await;
+  let started = carry_out(acting, source, (runner, root), (start, turn)).await;
   // The server answered, and may have let go of the claim: the task is read again, so a Run pressed next does not
   // name the claim it released.
   Stale::EVERY.apply(&acting.team.client());
@@ -180,12 +183,13 @@ async fn checked(
   .map_err(|_| Stop::Failed)?
 }
 
-/// The start through the team work, on a worker: its futures hold the project database across their awaits.
+/// The start through the team work, in the project's `turn`, on a worker: its futures hold the project database across
+/// their awaits.
 async fn carry_out(
   acting: &Acting,
   source: &TeamSource,
   (runner, root): (ProjectRunner, PathBuf),
-  start: TeamStartRequest,
+  (start, turn): (TeamStartRequest, StartTurn),
 ) -> Started {
   let (servers, key, runtime) = (acting.servers.clone(), source.key(), acting.runtime.clone());
   let vault = acting.vault.clone();
@@ -197,7 +201,7 @@ async fn carry_out(
         .map_err(|_| Stop::Claim(Acted::SignedOut))?;
       let dispatcher = Dispatcher::new(root.clone(), servers, Some(session));
       let outcome = TeamWork::new(dispatcher, runner)
-        .start(start, vault.get())
+        .start_in(&turn, start, vault.get())
         .await
         .map_err(|error| work_failed(&error))?;
       Ok(started(outcome, &root))

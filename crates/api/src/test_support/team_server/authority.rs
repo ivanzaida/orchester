@@ -105,6 +105,11 @@ pub(super) struct Authority {
   unavailable: bool,
   /// How every `work.start` fails to give the desktop a bundle it can use, when it does.
   bundle_fault: Option<BundleFault>,
+  /// The ids of the tasks whose current work has an accepted report: a run is under it.
+  reported: Vec<String>,
+  /// Whether `claim.release` is refused for any running work, as a server older than the rule that lets a holder
+  /// release work that started no run.
+  refuses_running_releases: bool,
   /// The oldest desktop version the server accepts; any while `None`.
   required: Option<ReleaseVersion>,
   /// Each committed change: its cursor and the scopes it invalidates.
@@ -219,6 +224,12 @@ impl TeamServer {
   /// of the desktop does: the start can never become a run here, whatever the desktop does.
   pub fn authority_newer_bundles(&self) {
     self.authority_bundle_fault(BundleFault::Newer);
+  }
+
+  /// A `claim.release` of running work is refused `invalid` whatever the work, as a server older than the rule that
+  /// lets the holder release work that has no accepted report.
+  pub fn authority_refuses_running_releases(&self) {
+    self.state.lock().authority.refuses_running_releases = true;
   }
 
   /// Every `work.start` fails as `fault` says, whatever the desktop does.
@@ -438,7 +449,9 @@ pub(super) fn serve(stream: &mut TcpStream, (line, headers, body): (&str, &str, 
       let (status, answer) = execution::heartbeat(&mut state.lock().authority, body);
       respond(stream, status, &answer);
     }
-    ("GET", bundle) if bundle.starts_with("bundles/") => {
+    ("GET", bundle)
+      if bundle.starts_with("bundles/") && state.lock().authority.bundle_fault == Some(BundleFault::Unreadable) =>
+    {
       respond(stream, 200, &json!({"files": "not an execution bundle"}))
     }
     ("GET", "policy") => respond(stream, 200, &commands::policy(&state.lock().authority)),

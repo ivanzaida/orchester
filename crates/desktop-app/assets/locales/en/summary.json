@@ -153,7 +153,7 @@
         "bundleMismatch": "The bundle the team server answered isn't the one it announced for this run, so it wasn't used. Nothing ran. Run it again; if it happens again, tell a team Admin.",
         "inputsFailed": "This computer couldn't make the run's inputs from the bundle the team server built, so nothing ran. Check the agent profiles' connections in Agents, then run it again.",
         "claimReleased": "Your claim on the task was released.",
-        "claimKept": "Your claim on the task is kept, because another run here still works under it.",
+        "claimKept": "Your claim on the task is kept, because another run here still needs it.",
         "claimHeld": "The team server refused to release your claim on the task, so it may still be held."
       },
       "properties": {
@@ -181,7 +181,7 @@
       "body": "Fix these and press Run again. Nothing is queued until then.",
       "bodyTeam": "Fix these on this computer and press Run again. They stay here; the team's server and other computers are not changed.",
       "bodyAfterStart": "The team server made the work for this start, but nothing ran, so your claim on the task was released. Fix these on this computer and press Run again; it claims the task again. They stay here; other computers are not changed.",
-      "bodyAfterStartKept": "The team server made the work for this start, but nothing ran. Your claim on the task is kept, because another run here still works under it. Fix these on this computer and press Run again. They stay here; other computers are not changed.",
+      "bodyAfterStartKept": "The team server made the work for this start, but nothing ran. Your claim on the task is kept, because another run here still needs it. Fix these on this computer and press Run again. They stay here; other computers are not changed.",
       "bodyAfterStartHeld": "The team server made the work for this start, but nothing ran, and it refused to release your claim on the task, so it may still be held. Fix these on this computer and press Run again. They stay here; other computers are not changed.",
       "openAgents": "Open Agents · Needs you",
       "openAgentsTeam": "Open Agents · Needs you here",

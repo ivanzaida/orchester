@@ -16,13 +16,15 @@ use crate::{
 /// What carrying on a project's open starts left.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OpenStarts {
-  /// No start of the project is open, or the project is local.
+  /// The project is local: it has no team start, now or later.
+  Local,
+  /// No start of the team project is open now; a Run may leave one later.
   None,
-  /// Every open start was carried on as far as it goes, or stands at a refusal of the runner that only a person's next
-  /// try changes.
+  /// Every open start was carried on as far as it goes, or stands at a refusal of the runner or a record that cannot
+  /// be read, which only a person's next try or a newer Orchester changes.
   Settled,
   /// A start waits for the team server or the runner, which could not be reached or taken it now, is under way, or
-  /// could not be carried on: ask again later.
+  /// could not be carried on for now: ask again later.
   Waiting,
 }
 
@@ -38,19 +40,19 @@ pub enum OpenStartsError {
 /// Carries on the starts of the project at `root`, named `name`, that are not settled yet, in a team session of the
 /// project's server. A server this computer is signed out of or cannot reach leaves them [`OpenStarts::Waiting`], and
 /// so does a start that is under way (a Run holds the project's one start at a time) or one that could not be carried
-/// on. Blocks on SQLite and holds the project database across awaits: run it on a worker of the runtime.
+/// on for now. Blocks on SQLite and holds the project database across awaits: run it on a worker of the runtime.
 pub async fn recover_open_starts(
   (servers, runners): (&Servers, Runners),
   (root, name): (&Path, &str),
   vault: &dyn SecretVault,
 ) -> Result<OpenStarts, OpenStartsError> {
   let db = ProjectDb::open(root).map_err(TeamWorkError::from)?;
-  let (Some(link), false) = (
-    db.sharing().map_err(TeamWorkError::from)?,
-    db.open_team_starts().map_err(TeamWorkError::from)?.is_empty(),
-  ) else {
-    return Ok(OpenStarts::None);
+  let Some(link) = db.sharing().map_err(TeamWorkError::from)? else {
+    return Ok(OpenStarts::Local);
   };
+  if db.open_team_starts().map_err(TeamWorkError::from)?.is_empty() {
+    return Ok(OpenStarts::None);
+  }
   drop(db);
   let session = match servers.team_session(link.server, link.project).await {
     Ok(session) => session,
@@ -77,7 +79,14 @@ impl<R: TeamRunner> TeamWork<R> {
       match outcome {
         Ok(StartOutcome::Waiting(_) | StartOutcome::RunnerUnavailable(_)) => left = OpenStarts::Waiting,
         Ok(_) => {}
-        // Its record is kept, so a later try may carry it on (the database was busy, the server answered strangely).
+        // Its record is kept. One that cannot be read is the same every time: it is said once and left to a newer
+        // Orchester, not tried again every minute.
+        Err(error) if error.is_permanent() => {
+          if self.dispatcher.servers().first_unreadable_start(operation) {
+            tracing::warn!(%error, %operation, "an open team start cannot be read, and is left");
+          }
+        }
+        // The database was busy, or the server answered strangely: a later try may carry it on.
         Err(error) => {
           tracing::warn!(%error, %operation, "an open team start could not go on, and is tried again");
           left = OpenStarts::Waiting;

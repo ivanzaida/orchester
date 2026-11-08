@@ -43,6 +43,7 @@ mod release;
 mod reports;
 mod runner;
 mod start;
+mod turn;
 
 use orchester_api::{
   client::AuthorityCallError,
@@ -50,7 +51,6 @@ use orchester_api::{
 };
 use orchester_core::{id::RunId, run::RunStatus, store::RunStore};
 use orchester_store::{ProjectDb, TeamFence, WorkReportState};
-use tokio::sync::OwnedMutexGuard;
 
 pub use self::{
   branch::{BranchNotFound, branch_tip},
@@ -66,6 +66,7 @@ pub use self::{
   reports::Reported,
   runner::{ProjectRunner, TeamRunner},
   start::{Recovered, StartFailure, StartOutcome, TeamStartRequest},
+  turn::StartTurn,
 };
 use crate::actions::{Dispatcher, retryable};
 
@@ -116,26 +117,6 @@ impl<R> TeamWork<R> {
 
   fn db(&self) -> Result<ProjectDb, TeamWorkError> {
     Ok(ProjectDb::open(self.dispatcher.root())?)
-  }
-
-  /// The project's one start at a time, waited for.
-  async fn alone(&self) -> OwnedMutexGuard<()> {
-    self
-      .dispatcher
-      .servers()
-      .start_lock(self.dispatcher.root())
-      .lock_owned()
-      .await
-  }
-
-  /// The project's one start at a time, if no start has it.
-  fn try_alone(&self) -> Option<OwnedMutexGuard<()>> {
-    self
-      .dispatcher
-      .servers()
-      .start_lock(self.dispatcher.root())
-      .try_lock_owned()
-      .ok()
   }
 }
 

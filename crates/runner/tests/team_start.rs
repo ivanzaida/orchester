@@ -204,16 +204,33 @@ async fn team_start_runs_in_the_runner_and_recovers_once_at_every_boundary() {
   assert!(waiting(&work.start(request, &NoVault).await.expect("started")));
   server.drop_next_file();
   for _ in 0..3 {
-    let (_, outcome) = work.recover(&NoVault).await.expect("recovered").remove(0);
+    let (_, outcome) = work
+      .try_recover(&NoVault)
+      .await
+      .expect("recovered")
+      .expect("no start is under way")
+      .remove(0);
     let outcome = outcome.expect("carried on");
     assert!(waiting(&outcome), "{outcome:?}");
   }
-  let (_, started) = work.recover(&NoVault).await.expect("recovered").remove(0);
+  let (_, started) = work
+    .try_recover(&NoVault)
+    .await
+    .expect("recovered")
+    .expect("no start is under way")
+    .remove(0);
   let started = started.expect("carried on");
   let StartOutcome::Started(run) = started else {
     panic!("not started: {started:?}");
   };
-  assert!(work.recover(&NoVault).await.expect("recovered").is_empty());
+  assert!(
+    work
+      .try_recover(&NoVault)
+      .await
+      .expect("recovered")
+      .expect("no start is under way")
+      .is_empty()
+  );
 
   let done = wait_for(root, &mut events, run, |run| run.status().is_terminal()).await;
   assert_eq!(done.status(), &RunStatus::Succeeded);

@@ -1,12 +1,14 @@
 //! One start of a project at a time (ORC-885): the person's Run and the recovery of the project's open starts never
-//! carry on the same start together, and recovery tries again later after what it could not carry on.
+//! carry on the same start together; a Run takes the project's turn before its claim; and recovery tries again later
+//! after what it could not carry on for now, but not after a record it cannot read.
 
 use std::sync::Arc;
 
 use orchester_core::id::{OperationId, RunId};
+use orchester_store::StoreError;
 use orchester_workspace::{
   runner::RunRequestError,
-  team_work::{OpenStarts, StartOutcome, TeamRunner, TeamWork},
+  team_work::{OpenStarts, StartOutcome, StartTurn, TeamRunner, TeamWork, TeamWorkError},
 };
 use tokio::sync::Notify;
 
@@ -129,7 +131,43 @@ async fn team_work_alone_a_start_waiting_for_the_server_is_left_waiting_until_it
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn team_work_alone_a_start_that_could_not_be_carried_on_is_tried_again() {
+async fn team_work_alone_recovery_leaves_the_project_to_a_run_that_holds_its_turn_before_its_claim() {
+  let server = TeamServer::start(Config::new("Append one line."));
+  let checkout = Checkout::linked(&server);
+  let claim = checkout.claim(&server, MEMBER).await;
+  let (work, _generation) = checkout.work(&server, MEMBER, StoreRunner::new(checkout.root(), &[]));
+  server.set_down(true);
+  work
+    .start(checkout.start_request(&server, claim), checkout.vault())
+    .await
+    .expect("waits");
+  server.set_down(false);
+
+  // A Run took the turn and is about to claim the task: the recovery of the open start does not run meanwhile.
+  let turn = StartTurn::wait(&checkout.servers, checkout.root()).await;
+  assert_eq!(
+    work.carry_on_open(checkout.vault()).await.expect("tried"),
+    OpenStarts::Waiting
+  );
+  assert_eq!(checkout.db().open_team_starts().expect("open").len(), 1, "left alone");
+  drop(turn);
+
+  assert_eq!(
+    work.carry_on_open(checkout.vault()).await.expect("tried"),
+    OpenStarts::Settled
+  );
+}
+
+#[test]
+fn team_work_alone_only_a_record_that_cannot_be_read_is_never_tried_again() {
+  assert!(TeamWorkError::Unreadable(OperationId::generate()).is_permanent());
+  assert!(!TeamWorkError::NotATask.is_permanent());
+  assert!(!TeamWorkError::NotAWork(OperationId::generate()).is_permanent());
+  assert!(!TeamWorkError::from(StoreError::TeamStartNotFound(OperationId::generate())).is_permanent());
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn team_work_alone_a_record_that_cannot_be_read_is_left_and_not_tried_every_round() {
   let server = TeamServer::start(Config::new("Append one line."));
   let checkout = Checkout::linked(&server);
   let claim = checkout.claim(&server, MEMBER).await;
@@ -147,8 +185,12 @@ async fn team_work_alone_a_start_that_could_not_be_carried_on_is_tried_again() {
 
   assert_eq!(
     work.carry_on_open(checkout.vault()).await.expect("tried"),
-    OpenStarts::Waiting,
-    "an error of one start does not end the retries"
+    OpenStarts::Settled,
+    "a record that reads the same every time is not asked for again"
   );
-  assert_eq!(checkout.db().open_team_starts().expect("open").len(), 1, "still open");
+  assert_eq!(
+    checkout.db().open_team_starts().expect("open").len(),
+    1,
+    "kept, still open"
+  );
 }

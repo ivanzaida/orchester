@@ -27,7 +27,7 @@ fn stage(checkout: &Checkout, outcome: &StartOutcome) -> TeamStartStage {
 
 /// The one open start's outcome after recovery.
 async fn recover_one(work: &TeamWork<StoreRunner>, checkout: &Checkout) -> StartOutcome {
-  let mut recovered = work.recover(checkout.vault()).await.expect("recovered");
+  let mut recovered = crate::recovered(work, checkout).await;
   assert_eq!(recovered.len(), 1, "one open start");
   recovered.remove(0).1.expect("carried on")
 }
@@ -104,10 +104,7 @@ async fn team_work_start_recovers_once_from_every_boundary() {
     panic!("not started: {started:?}");
   };
   assert_eq!(runner.asked(), 3);
-  assert!(
-    work.recover(checkout.vault()).await.expect("recovered").is_empty(),
-    "nothing left open"
-  );
+  assert!(crate::recovered(&work, &checkout).await.is_empty(), "nothing left open");
   let StartOutcome::Started(again) = work.start(request, checkout.vault()).await.expect("started") else {
     panic!("the same request carries on the recorded start");
   };
@@ -184,7 +181,7 @@ async fn team_work_start_failed_here_holds_back_no_later_start() {
   assert!(matches!(waiting, StartOutcome::RunnerUnavailable(_)), "{waiting:?}");
 
   // Recovered after a restart: the older start fails here for good, and the newer one still starts.
-  let recovered = work.recover(checkout.vault()).await.expect("recovered");
+  let recovered = crate::recovered(&work, &checkout).await;
   let outcomes: Vec<_> = recovered
     .into_iter()
     .map(|(operation, outcome)| (operation, outcome.expect("carried on")))
@@ -209,10 +206,7 @@ async fn team_work_start_failed_here_holds_back_no_later_start() {
   let failed = db.team_start(unbound.operation).expect("read").expect("kept");
   assert_eq!(failed.stage, TeamStartStage::Failed);
   assert!(db.accepted_team_inputs(unbound.operation).expect("read").is_none());
-  assert!(
-    work.recover(checkout.vault()).await.expect("recovered").is_empty(),
-    "nothing left open"
-  );
+  assert!(crate::recovered(&work, &checkout).await.is_empty(), "nothing left open");
   assert_eq!(db.run_of_operation(bound.operation).expect("read"), Some(run));
   assert_eq!(runner.asked(), 2, "only the newer start's run");
   assert_eq!(

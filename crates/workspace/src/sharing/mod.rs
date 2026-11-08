@@ -132,8 +132,13 @@ struct Inner {
   work_asked: Mutex<HashMap<orchester_core::id::TaskId, Timestamp>>,
   /// The checkouts whose first download after a join or a link is under way, failed or ended (`project::download`).
   downloads: Mutex<HashMap<PathBuf, project::download::Mark>>,
-  /// The projects' team starts, one at a time each ([`Servers::start_lock`]).
+  /// The projects' team starts, one at a time each ([`Servers::start_lock`]). An entry is never removed: it is one
+  /// empty mutex per project folder the session started or recovered a team start in, so the map grows by a few bytes
+  /// per project and not with the starts.
   starting: Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>,
+  /// The team starts whose record was found unreadable this session, so recovery says so once each
+  /// ([`Servers::first_unreadable_start`]).
+  unreadable_starts: Mutex<HashSet<orchester_core::id::OperationId>>,
 }
 
 /// One signed-in server's connection and when to ask it again.
@@ -178,6 +183,7 @@ impl Servers {
         work_asked: Mutex::new(HashMap::new()),
         downloads: Mutex::new(HashMap::new()),
         starting: Mutex::new(HashMap::new()),
+        unreadable_starts: Mutex::new(HashSet::new()),
       }),
     }
   }

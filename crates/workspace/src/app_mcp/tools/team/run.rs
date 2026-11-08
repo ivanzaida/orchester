@@ -37,7 +37,8 @@ use crate::{
   tasks::run::start_messages,
   team_reads::{TeamReadError, listed::TeamPipelines},
   team_work::{
-    self, BranchNotFound, ProjectRunner, StartFailure, StartOutcome, TeamStartRequest, TeamWork, TeamWorkError,
+    self, BranchNotFound, ProjectRunner, StartFailure, StartOutcome, StartTurn, TeamStartRequest, TeamWork,
+    TeamWorkError,
   },
 };
 
@@ -95,6 +96,9 @@ pub(in crate::app_mcp::tools) async fn run_task(
   let (id, read) = (task.task.id, task.task.revision);
   let module_read = module_read.module.revision;
   let outcome = on_worker(move || async move {
+    // The project's turn comes before the claim: the recovery of its other starts would otherwise release the claim
+    // this one takes while its own start is not recorded yet.
+    let turn = StartTurn::wait(dispatcher.servers(), dispatcher.root()).await;
     let claim_id = acquire(&dispatcher, Subject::Task { id }, start_failed).await?;
     let work = WorkAction {
       authority: AuthorityRef {
@@ -113,7 +117,7 @@ pub(in crate::app_mcp::tools) async fn run_task(
       programs,
     };
     TeamWork::new(dispatcher, runner)
-      .start(request, start_vault.get())
+      .start_in(&turn, request, start_vault.get())
       .await
       .map_err(work_refused)
   })

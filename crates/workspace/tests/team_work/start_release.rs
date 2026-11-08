@@ -91,13 +91,18 @@ async fn team_work_release_waits_for_the_server_before_it_settles_the_failure() 
 
   // The server answers again: recovery settles the failure and the claim is let go of.
   cut.store(false, Ordering::SeqCst);
-  let mut recovered = work.recover(checkout.vault()).await.expect("recovered");
+  let mut recovered = crate::recovered(&work, &checkout).await;
   assert_eq!(recovered.len(), 1);
   let StartOutcome::Failed(failure, _) = recovered.remove(0).1.expect("carried on") else {
     panic!("not failed");
   };
   assert_eq!(failure, StartFailure::BundleUnreadable);
   assert!(server.state().claim.is_none(), "released");
+  assert_eq!(
+    server.state().works.last().map(|work| work.state.as_str()),
+    Some("failed"),
+    "the release ended the work, which has no report"
+  );
   assert!(checkout.db().open_team_starts().expect("open").is_empty());
   assert_eq!(runner.asked(), 0, "no run was asked for");
 }

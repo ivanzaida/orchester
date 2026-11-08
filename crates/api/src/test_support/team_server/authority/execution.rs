@@ -43,7 +43,9 @@ pub(super) fn start(authority: &mut Authority, command: &Value) -> Result<Value,
     return Err((409, "transition_denied"));
   }
   task.work = Some("running");
-  let mut work = listing::work_read((&listing::task_id(task), task.number), claim, "running");
+  let id = listing::task_id(task);
+  let mut work = listing::work_read((&id, task.number), claim, "running");
+  authority.reported.retain(|reported| *reported != id);
   match fault {
     Some(BundleFault::Newer) => work["bundle"]["schema_version"] = json!(crate::v2::EXECUTION_BUNDLE_SCHEMA + 1),
     Some(BundleFault::Older) => work["bundle"]["schema_version"] = json!(crate::v2::EXECUTION_BUNDLE_SCHEMA - 1),
@@ -77,6 +79,9 @@ pub(super) fn report(authority: &mut Authority, command: &Value) -> Result<Value
     task.claim = None;
   }
   let mut work = listing::work_read((&id, task.number), claim, state);
+  if !authority.reported.contains(&id) {
+    authority.reported.push(id);
+  }
   work["runs"] = json!([command["run_id"]]);
   let bundle = work["bundle"].clone();
   Ok(json!({"kind": "work", "work": work, "bundle": bundle, "effects": []}))

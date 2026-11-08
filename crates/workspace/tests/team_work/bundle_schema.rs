@@ -73,14 +73,7 @@ async fn assert_failed(held: &Accepted, outcome: StartOutcome, expected: &StartF
     panic!("the failure is kept");
   };
   assert_eq!(&again, expected);
-  assert!(
-    held
-      .work
-      .recover(held.checkout.vault())
-      .await
-      .expect("recovered")
-      .is_empty()
-  );
+  assert!(crate::recovered(&held.work, &held.checkout).await.is_empty());
   assert_eq!(held.runner.asked(), 0, "the runner was never asked");
   assert!(
     held.server.state().claim.is_none(),
@@ -144,7 +137,7 @@ async fn team_work_bundle_unreadable_json_fails_the_start_and_recovery_passes_it
   set_body(&held, |bundle| {
     *bundle = json!({"schema_version": EXECUTION_BUNDLE_SCHEMA})
   });
-  let recovered = held.work.recover(held.checkout.vault()).await.expect("recovered");
+  let recovered = crate::recovered(&held.work, &held.checkout).await;
   assert_eq!(recovered.len(), 1, "one open start");
   let outcome = recovered.into_iter().next().expect("one").1.expect("carried on");
   assert_failed(&held, outcome, &StartFailure::BundleUnreadable).await;

@@ -1,8 +1,9 @@
 //! Carries on the team starts an open project left unsettled (ORC-885, `orchester_workspace::team_work`): a start waits
 //! at its boundary while the team server or the runner cannot take it, and goes on from it by itself. Without this a
 //! start waits for the person's next Run; the page says "starts once they answer". Mounted with the project's feed, so
-//! it goes on while the project's tabs are inactive, and asked again every [`RETRY`] while a start still waits for the
-//! server or the runner. A local project, and one with no open start, asks nothing. Renders nothing.
+//! it goes on while the project's tabs are inactive, and asks again every [`RETRY`] for as long as the project is a
+//! team project: a Run that ends waiting later is carried on too, not only the starts found when the project opened.
+//! While nothing is open each ask is one read of the project's database. A local project asks nothing. Renders nothing.
 
 use std::{path::PathBuf, time::Duration};
 
@@ -19,8 +20,12 @@ use tokio::runtime::Handle;
 
 use crate::services::Services;
 
-/// How long a start that waits for the team server or the runner is left before it is carried on again.
+/// How long the project is left before its open starts are looked at again.
+#[cfg(not(feature = "test-support"))]
 const RETRY: Duration = Duration::from_secs(60);
+/// Short in the QA windows, so a test sees a start carried on without waiting a minute.
+#[cfg(feature = "test-support")]
+const RETRY: Duration = Duration::from_secs(2);
 
 /// Carries on `open`'s unsettled team starts. Renders nothing.
 pub(super) fn follow(ctx: &mut Ctx, open: &OpenProject) {
@@ -34,7 +39,18 @@ pub(super) fn follow(ctx: &mut Ctx, open: &OpenProject) {
     deps,
     |(open, (servers, runners), vault), emitter: StreamEmitter<(), ()>| async move {
       let name = open.project.name().as_str().to_owned();
-      while carried_on(&open.repo_root, (&servers, &runners), &vault, &name).await {
+      let mut said = None;
+      loop {
+        match carried_on(&open.repo_root, (&servers, &runners), &vault, &name).await {
+          Ok(OpenStarts::Local) => break,
+          Ok(_) => said = None,
+          // Said once while it lasts, not every round.
+          Err(error) if said.as_ref() != Some(&error) => {
+            tracing::warn!(%error, "the project's open team starts could not be carried on");
+            said = Some(error);
+          }
+          Err(_) => {}
+        }
         tokio::time::sleep(RETRY).await;
       }
       // The stream lives while its emitter does: lurq stops a stream whose emitter is gone.
@@ -43,14 +59,14 @@ pub(super) fn follow(ctx: &mut Ctx, open: &OpenProject) {
   );
 }
 
-/// Carries the starts on once, on a worker: the futures hold the project database across their awaits. Whether one
-/// still waits for the team server or the runner, and so is to be carried on again.
+/// Carries the starts on once, on a worker: the futures hold the project database across their awaits. What is left of
+/// them, or why they could not be looked at.
 async fn carried_on(
   root: &std::path::Path,
   (servers, runners): (&Servers, &Runners),
   vault: &Vault,
   name: &str,
-) -> bool {
+) -> Result<OpenStarts, String> {
   let (root, name): (PathBuf, String) = (root.to_owned(), name.to_owned());
   let (servers, runners, vault) = (servers.clone(), runners.clone(), vault.clone());
   // The stream runs on the app's runtime, which the worker blocks on.
@@ -60,18 +76,9 @@ async fn carried_on(
   })
   .await;
   match carried {
-    Ok(Ok(OpenStarts::Waiting)) => true,
-    Ok(Ok(OpenStarts::None | OpenStarts::Settled)) => false,
-    Ok(Err(error)) => {
-      tracing::warn!(%error, "the project's open team starts could not be carried on");
-      false
-    }
-    Err(error) => {
-      tracing::warn!(
-        ?error,
-        "the worker that carries on the project's open team starts ended without an answer"
-      );
-      false
-    }
+    Ok(carried) => carried.map_err(|error| error.to_string()),
+    Err(error) => Err(format!(
+      "the worker that carries on the project's open team starts ended without an answer: {error:?}"
+    )),
   }
 }

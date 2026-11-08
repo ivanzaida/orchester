@@ -22,6 +22,7 @@ use super::{
   Answer, TeamRunner, TeamWork, TeamWorkError,
   bundle::{self, Expected},
   release::{ClaimEnd, Released},
+  turn::StartTurn,
 };
 use crate::{
   actions::{Accepted, Action, ActionOutcome, Intent, Refusal, TeamOutcome, WorkAction, team_task},
@@ -142,24 +143,30 @@ impl<R: TeamRunner> TeamWork<R> {
   /// Starts the work `request` asks for: recorded here first, then carried on as far as it goes now. Sending the same
   /// request again carries on the recorded start; the same operation with another request is refused. `vault` is
   /// asked whether this computer has the team secrets the pinned MCP servers take, when the bundle is checked. One
-  /// start of a project is carried on at a time: this one waits for another, and recovery leaves it alone.
+  /// start of a project is carried on at a time: this one waits for another, and recovery leaves it alone. A caller
+  /// that takes a claim for the start first holds the turn from before it ([`StartTurn::wait`], [`Self::start_in`]).
   pub async fn start(&self, request: TeamStartRequest, vault: &dyn SecretVault) -> Result<StartOutcome, TeamWorkError> {
-    let _alone = self.alone().await;
+    let turn = StartTurn::wait(self.dispatcher.servers(), self.dispatcher.root()).await;
+    self.start_in(&turn, request, vault).await
+  }
+
+  /// [`Self::start`] in the project's `turn`, which the caller took before it claimed the task: the recovery of other
+  /// starts cannot release that claim before this start is recorded. `turn` is the one of this dispatcher's project.
+  pub async fn start_in(
+    &self,
+    _turn: &StartTurn,
+    request: TeamStartRequest,
+    vault: &dyn SecretVault,
+  ) -> Result<StartOutcome, TeamWorkError> {
     let record = self.record(request)?;
     self.carry_on(record, vault).await
   }
 
-  /// Carries on every start not settled yet, oldest first, e.g. after a restart. Each goes on its own: one that cannot
-  /// be carried on now holds back none after it. Waits for a start of the project that is under way.
-  pub async fn recover(&self, vault: &dyn SecretVault) -> Result<Recovered, TeamWorkError> {
-    let _alone = self.alone().await;
-    self.recover_alone(vault).await
-  }
-
-  /// [`Self::recover`] unless a start of the project is under way, which carries itself on: then `None`, and the
-  /// caller asks again later.
+  /// Carries on every start not settled yet, oldest first, e.g. after a restart, unless a start of the project is
+  /// under way, which carries itself on: then `None`, and the caller asks again later. Each goes on its own: one that
+  /// cannot be carried on now holds back none after it.
   pub async fn try_recover(&self, vault: &dyn SecretVault) -> Result<Option<Recovered>, TeamWorkError> {
-    let Some(_alone) = self.try_alone() else {
+    let Some(_turn) = StartTurn::try_take(self.dispatcher.servers(), self.dispatcher.root()) else {
       return Ok(None);
     };
     self.recover_alone(vault).await.map(Some)

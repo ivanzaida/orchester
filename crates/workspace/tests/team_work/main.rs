@@ -63,7 +63,7 @@ use orchester_workspace::{
   secrets::Vault,
   sharing::Servers,
   team_reads::TeamSession,
-  team_work::{StartOutcome, TeamRunner, TeamStartRequest, TeamWork},
+  team_work::{Recovered, StartOutcome, TeamRunner, TeamStartRequest, TeamWork},
   workspace::Workspace,
 };
 use parking_lot::Mutex;
@@ -282,6 +282,15 @@ async fn started(checkout: &Checkout, server: &TeamServer) -> (TeamWork<StoreRun
     panic!("not started: {outcome:?}");
   };
   (work, run, generation)
+}
+
+/// Every open start of `work`'s project carried on, as the recovery of the open starts does; no start is under way.
+async fn recovered(work: &TeamWork<StoreRunner>, checkout: &Checkout) -> Recovered {
+  work
+    .try_recover(checkout.vault())
+    .await
+    .expect("recovered")
+    .expect("no start is under way")
 }
 
 /// Another member takes the task's claim `observed` over, in their own session.

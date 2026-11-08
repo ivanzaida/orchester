@@ -24,7 +24,7 @@ use crate::actions::{Action, ActionOutcome, ClaimAction, Intent, Refusal, TeamOu
 pub enum ClaimEnd {
   /// The server let go of the claim, or has none of this computer's to let go of any more.
   Released,
-  /// A team run here, or another open start, still works under the claim, so it was not let go of.
+  /// A team run here that still needs the claim, or another open start, goes on under it, so it was not let go of.
   Kept,
   /// The server refused the release for good (`forbidden`, `membership_revoked`, …): the claim may still be held, and
   /// the person's next try is up to the server.
@@ -41,9 +41,9 @@ pub(super) enum Released {
 }
 
 impl<R> TeamWork<R> {
-  /// Releases the task claim `authority` names for the start `operation`, unless a team run that still works or
-  /// reports, or another open start here, goes on under the same claim: letting go of it would fence their work
-  /// ([`ClaimEnd::Kept`]). A claim the server says is gone (`claim_lost`) leaves nothing to let go of; any other
+  /// Releases the task claim `authority` names for the start `operation`, unless a team run that still works, reports
+  /// or can be recovered, or another open start here, goes on under the same claim: letting go of it would fence their
+  /// work ([`ClaimEnd::Kept`]). A claim the server says is gone (`claim_lost`) leaves nothing to let go of; any other
   /// refusal for good is [`ClaimEnd::Held`]. One whose answer was lost is sent again when the start goes on; the server
   /// then answers the claim is not this computer's, which is the same end.
   pub(super) async fn release_claim(
@@ -92,14 +92,17 @@ impl<R> TeamWork<R> {
   }
 }
 
-/// Whether `run` still executes, or has an outcome the server was not told yet: a run the server fenced reports nothing
+/// Whether `run` still needs the claim: it executes, has an outcome the server was not told yet, or failed in a way a
+/// person can recover it from here. A recovered run goes on under its claim, which a release would have taken from it
+/// (`claim_lost`), and a start that was refused made no newer work to fence it; so the claim is kept while a recovery
+/// is possible, and is let go of only once the run is fenced or ended for good. A run the server fenced reports nothing
 /// more, and one that ended with every report answered needs the claim no more.
 fn works_or_reports(db: &ProjectDb, run: &TeamRun) -> Result<bool, TeamWorkError> {
   if run.fence.is_some() {
     return Ok(false);
   }
   let status = db.run(run.run)?.ok_or(StoreError::RunNotFound(run.run))?;
-  if !status.status().is_terminal() {
+  if !status.status().is_terminal() || status.recovery_step(None).is_some() {
     return Ok(true);
   }
   // The outcome is queued before it is sent: it is unsent while the last one queued is another, or a report waits.

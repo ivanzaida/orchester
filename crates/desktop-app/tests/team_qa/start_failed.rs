@@ -20,10 +20,17 @@ use super::{
 /// KON-5 on `team-start-failed`, with the server's start failing as `fault` says (the state's own newer schema when
 /// `None`), Run pressed once the runner shows, and the notice up.
 fn run_pressed(fault: Option<BundleFault>) -> (Window, TeamServer) {
+  run_pressed_on(|server| {
+    if let Some(fault) = fault {
+      server.authority_bundle_fault(fault);
+    }
+  })
+}
+
+/// [`run_pressed`] with the server set up by `setup` first.
+fn run_pressed_on(setup: impl FnOnce(&TeamServer)) -> (Window, TeamServer) {
   let (mut window, server, _) = on_task(("team-start-failed", State::StartFailed), "KON-5");
-  if let Some(fault) = fault {
-    server.authority_bundle_fault(fault);
-  }
+  setup(&server);
   press_run(&mut window);
   window.until("the notice", |window| window.texts("task-team-refused").is_some());
   (window, server)
@@ -66,6 +73,20 @@ fn team_qa_start_failed_says_the_bundle_schema_and_lets_the_claim_go() {
   assert!(!body.contains("could not be carried out"), "{body}");
   assert_eq!(asked(&server, "work.start"), 1, "the server made the work once");
   assert_eq!(asked(&server, "claim.release"), 1, "the claim was let go of");
+}
+
+#[test]
+fn team_qa_start_failed_a_server_that_refuses_to_release_running_work_says_the_claim_may_still_be_held() {
+  let (mut window, server) = run_pressed_on(TeamServer::authority_refuses_running_releases);
+
+  let body = notice(&mut window);
+  assert!(body.contains("Update Orchester on this computer"), "{body}");
+  assert!(
+    body.contains("The team server refused to release your claim on the task, so it may still be held."),
+    "{body}"
+  );
+  assert!(!body.contains("Your claim on the task was released"), "{body}");
+  assert_eq!(asked(&server, "claim.release"), 1, "the release was asked for once");
 }
 
 #[test]
@@ -145,6 +166,39 @@ fn team_qa_start_failed_a_start_that_waited_is_carried_on_when_the_project_is_op
   let Window { data, launch, .. } = window;
   let mut window = Window::of(data, launch);
   window.navigation().go(task_route(project, "KON-5"));
+  window.until_within(Duration::from_secs(30), "the start is carried on", |_| {
+    ProjectDb::open(&root)
+      .expect("open")
+      .open_team_starts()
+      .expect("open")
+      .is_empty()
+  });
+  assert_eq!(asked(&server, "claim.release"), 1, "the failed start let the claim go");
+  assert_eq!(asked(&server, "work.start"), 1, "the same start went on, not a new one");
+}
+
+#[test]
+fn team_qa_start_failed_a_run_that_waits_after_recovery_went_idle_is_carried_on_without_reopening() {
+  let (mut window, server, _project) = on_task(("team-start-failed", State::StartFailed), "KON-5");
+  let root = window.data.repo("repo-kontur");
+  // Nothing was open when the project opened: the first look at its starts is over, and recovery idles.
+  assert!(
+    ProjectDb::open(&root)
+      .expect("open")
+      .open_team_starts()
+      .expect("open")
+      .is_empty()
+  );
+  server.authority_bundle_fault(BundleFault::Unavailable);
+  press_run(&mut window);
+  window.until("the start waits", |window| {
+    window
+      .texts("task-team-refused")
+      .is_some_and(|texts| texts.join(" ").contains("starts once they answer"))
+  });
+
+  // The server answers again: the same window, with no new press of Run, carries the start on.
+  server.authority_bundle_fault(BundleFault::Newer);
   window.until_within(Duration::from_secs(30), "the start is carried on", |_| {
     ProjectDb::open(&root)
       .expect("open")
