@@ -7,6 +7,15 @@ use orchester_core::id::OperationId;
 
 use super::Servers;
 
+/// What recovery found wrong with a start, which it says once each per session.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub(crate) enum StartTrouble {
+  /// The start's record cannot be read.
+  Unreadable,
+  /// The start could not go on for now: the database was busy, or the server answered strangely.
+  Retrying,
+}
+
 impl Servers {
   /// The lock of the project at `root`, held across the awaits of a team start. Every holder of these `Servers` that
   /// names the same folder gets the same lock.
@@ -14,8 +23,8 @@ impl Servers {
     self.inner.starting.lock().entry(root.to_owned()).or_default().clone()
   }
 
-  /// Whether this is the first time this session that the record of start `operation` was found unreadable.
-  pub(crate) fn first_unreadable_start(&self, operation: OperationId) -> bool {
-    self.inner.unreadable_starts.lock().insert(operation)
+  /// Whether this is the first time this session that start `operation` was found in `trouble`.
+  pub(crate) fn first_trouble(&self, operation: OperationId, trouble: StartTrouble) -> bool {
+    self.inner.told_starts.lock().insert((operation, trouble))
   }
 }

@@ -237,6 +237,16 @@ impl TeamServer {
     self.state.lock().authority.bundle_fault = Some(fault);
   }
 
+  /// Every `work.start` fails as `fault` says once `after` has passed, in place of what it did before: a team server
+  /// that did not answer a Run and answers it later.
+  pub fn authority_bundle_fault_after(&self, fault: BundleFault, after: Duration) {
+    let state = self.state.clone();
+    thread::spawn(move || {
+      thread::sleep(after);
+      state.lock().authority.bundle_fault = Some(fault);
+    });
+  }
+
   /// [`Self::authority_unavailable`] `after` the first task read was answered: an outage in a session that read the
   /// tasks already.
   pub fn authority_unavailable_once_read(&self, after: Duration) {

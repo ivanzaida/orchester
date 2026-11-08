@@ -64,7 +64,7 @@ async fn failing_second_start(
 ) -> StartOutcome {
   let request = checkout.start_request(server, claim);
   server.drop_next_file();
-  let waiting = work.start(request.clone(), checkout.vault()).await.expect("started");
+  let waiting = checkout.start(work, request.clone()).await.expect("started");
   assert!(
     matches!(waiting, StartOutcome::Waiting(TeamStartStage::Accepted)),
     "{waiting:?}"
@@ -72,7 +72,7 @@ async fn failing_second_start(
   for (bundle, _claim) in server.state().bundles.values_mut() {
     *bundle = json!({"schema_version": EXECUTION_BUNDLE_SCHEMA});
   }
-  work.start(request, checkout.vault()).await.expect("carried on")
+  checkout.start(work, request).await.expect("carried on")
 }
 
 /// The server no longer runs the work of the first start (it ended it on its side), so it takes another under the

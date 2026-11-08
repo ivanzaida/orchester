@@ -37,7 +37,7 @@ async fn accepted() -> Accepted {
   let (work, generation) = checkout.work(&server, MEMBER, runner.clone());
   let request = checkout.start_request(&server, claim);
   server.drop_next_file();
-  let cut = work.start(request.clone(), checkout.vault()).await.expect("started");
+  let cut = checkout.start(&work, request.clone()).await.expect("started");
   assert!(
     matches!(cut, StartOutcome::Waiting(TeamStartStage::Accepted)),
     "{cut:?}"
@@ -65,8 +65,8 @@ async fn assert_failed(held: &Accepted, outcome: StartOutcome, expected: &StartF
   assert!(db.accepted_team_inputs(operation).expect("read").is_none());
   assert!(db.open_team_starts().expect("open").is_empty(), "nothing left open");
   let StartOutcome::Failed(again, _) = held
-    .work
-    .start(held.request.clone(), held.checkout.vault())
+    .checkout
+    .start(&held.work, held.request.clone())
     .await
     .expect("carried on")
   else {
@@ -98,7 +98,7 @@ async fn team_work_bundle_schema_of_the_receipt_fails_the_start_before_the_bundl
   let request = checkout.start_request(&server, claim);
 
   server.state().receipt_schema = Some(OLDER);
-  let outcome = work.start(request.clone(), checkout.vault()).await.expect("started");
+  let outcome = checkout.start(&work, request.clone()).await.expect("started");
   let held = Accepted {
     server,
     checkout,
@@ -120,8 +120,8 @@ async fn team_work_bundle_schema_of_the_answered_bundle_fails_the_start() {
   let held = accepted().await;
   set_body(&held, |bundle| bundle["schema_version"] = json!(OLDER));
   let outcome = held
-    .work
-    .start(held.request.clone(), held.checkout.vault())
+    .checkout
+    .start(&held.work, held.request.clone())
     .await
     .expect("carried on");
   let expected = StartFailure::BundleSchema {
@@ -148,8 +148,8 @@ async fn team_work_bundle_unreachable_server_still_waits_at_the_boundary() {
   let held = accepted().await;
   held.server.set_down(true);
   let down = held
-    .work
-    .start(held.request.clone(), held.checkout.vault())
+    .checkout
+    .start(&held.work, held.request.clone())
     .await
     .expect("carried on");
   assert!(
@@ -159,8 +159,8 @@ async fn team_work_bundle_unreachable_server_still_waits_at_the_boundary() {
   assert_eq!(held.checkout.db().open_team_starts().expect("open").len(), 1);
   held.server.set_down(false);
   let after = held
-    .work
-    .start(held.request.clone(), held.checkout.vault())
+    .checkout
+    .start(&held.work, held.request.clone())
     .await
     .expect("carried on");
   assert!(

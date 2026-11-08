@@ -147,7 +147,7 @@ fn take_over(state: &mut State, token: &str, command: &Value) -> Result<Value, R
 
 /// Releases the task's claim the authority names, the caller's own. The latest work of the claim, when it runs, is
 /// stopped first (`invalid`, the claim's `AgentWorking`) if the server accepted a report of it; one that never had a
-/// report started no run, and the release ends it `failed` (`start_failed`).
+/// report started no run, and the release moves it to `failed` with no reason stored, as the real server does.
 fn release(state: &mut State, token: &str, command: &Value) -> Result<Value, Refused> {
   let authority = &command["authority"];
   let claim: ClaimId = serde_json::from_value(authority["claim_id"].clone()).expect("a claim id");

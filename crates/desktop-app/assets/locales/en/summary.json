@@ -144,6 +144,7 @@
         "failed": "It could not be carried out on this computer.",
         "other": "The team server refused it.",
         "waiting": "The run waits for the team server or the runner, and starts once they answer.",
+        "startUnreadable": "This start was recorded by a newer Orchester, which this one can't read, so it isn't carried on. Update Orchester on this computer, or run the task again.",
         "notReady": "The task names no module, or a pipeline this computer doesn't have.",
         "branch": "The module's branch {{branch}} isn't in this checkout.",
         "notReadable": "The team server's pipeline or one of its agent profiles can't be read.",

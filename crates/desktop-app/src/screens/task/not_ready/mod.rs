@@ -29,7 +29,7 @@ use self::words::{Glyph, Words};
 use super::{
   TaskContext,
   header::controls::{RunControls, RunRefused},
-  team_controls::{TeamAnswer, TeamControls},
+  team_controls,
 };
 use crate::{
   navigation::{Navigation, link::Open},
@@ -48,9 +48,8 @@ use crate::{
 /// task's start through its server, or a local project's run control.
 pub fn refused(ctx: &mut Ctx, task: &TaskContext) -> Option<NotReadyHere> {
   if task.team.is_some() {
-    let answer = TeamControls::of(ctx)?.action.state().get().data?;
-    return match answer {
-      TeamAnswer::Started(_, Started::Stopped(Stop::NotReadyHere(refusal))) => Some(refusal),
+    return match team_controls::start_standing(ctx, task)?.1 {
+      Started::Stopped(Stop::NotReadyHere(refusal)) => Some(refusal),
       _ => None,
     };
   }

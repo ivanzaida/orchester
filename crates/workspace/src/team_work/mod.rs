@@ -14,7 +14,8 @@
 //!   first ([`release`]), so teammates are not kept from the task, and a server that cannot be reached for the release
 //!   keeps the start waiting. A project carries on one start at a time, so a Run and the recovery of the open starts
 //!   never work the same one at once. Nothing new starts without the server. A project's open starts are carried on
-//!   when it is opened ([`recover_open_starts`]).
+//!   when it is opened ([`recover_open_starts`]), and what a task's newest start came to is read back for its page
+//!   ([`last_start`]): a start that waited and was settled later says why it did not run.
 //! - **Reports** ([`reports`]). Each change of a team run's outcome is queued once in the project database, with its
 //!   event id and the run's next sequence, then sent in order until the server acknowledges it by id. A server that
 //!   cannot be reached or refuses for now keeps the rest waiting, in order. Its answers that the authority is gone
@@ -38,6 +39,7 @@ pub mod delivery;
 mod error;
 mod heartbeat;
 mod here;
+mod last;
 mod open;
 mod release;
 mod reports;
@@ -61,6 +63,7 @@ pub use self::{
   error::TeamWorkError,
   heartbeat::Heartbeat,
   here::{TeamHere, team_here},
+  last::{LastStart, last_start},
   open::{OpenStarts, OpenStartsError, recover_open_starts},
   release::ClaimEnd,
   reports::Reported,

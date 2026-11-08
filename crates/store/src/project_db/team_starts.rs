@@ -121,6 +121,19 @@ impl ProjectDb {
     rows.map(|row| row?).collect()
   }
 
+  /// The newest start recorded for `task`, wherever it stands: what the task's page tells of its last start.
+  pub fn latest_team_start(&self, task: TaskId) -> Result<Option<TeamStart>, StoreError> {
+    self
+      .connection
+      .query_row(
+        &format!("{SELECT} WHERE task_id = ?1 ORDER BY created_at DESC, operation_id DESC LIMIT 1"),
+        [task.to_string()],
+        read,
+      )
+      .optional()?
+      .transpose()
+  }
+
   /// Keeps the work the receipt of `operation` names and its bundle's hash, before anything else is done with them.
   /// Keeping the same again changes nothing; another work is [`StoreError::OperationMismatch`].
   pub fn accept_team_start(
