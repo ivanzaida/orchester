@@ -4,7 +4,7 @@ use orchester_core::id::TaskId;
 use orchester_store::{RunStoreError, StoreError};
 use thiserror::Error;
 
-use crate::team_reads::TeamReadError;
+use crate::{sharing::SharingError, team_reads::TeamReadError};
 
 #[derive(Debug, Error)]
 pub enum UsedByError {
@@ -25,6 +25,9 @@ pub enum UsedByError {
   /// reached.
   #[error(transparent)]
   Team(TeamReadError),
+  /// This computer has no session of the project's server: nobody signed in, or the server is gone from Settings.
+  #[error(transparent)]
+  Session(SharingError),
   #[error(transparent)]
   Store(#[from] StoreError),
   #[error(transparent)]

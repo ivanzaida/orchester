@@ -97,6 +97,8 @@
       "unchanged": "not run again",
       "conflict": "conflict",
       "notReadyHere": "Not started · not ready on this computer",
+      "stoppedArchivedAt": "Stopped at {{step}} · {{resource}} was archived",
+      "stoppedArchived": "Stopped · {{resource}} was archived",
       "notReady": "Not started · not ready"
     },
     "points": {

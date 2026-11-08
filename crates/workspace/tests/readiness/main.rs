@@ -3,6 +3,7 @@
 //!
 //! `cargo test -p orchester-workspace --test readiness readiness`
 
+mod archived;
 mod follows;
 mod groups;
 mod hub;

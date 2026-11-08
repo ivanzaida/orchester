@@ -3,6 +3,8 @@
 
 #[path = "theme/appearance.rs"]
 mod appearance;
+#[path = "theme/archive.rs"]
+mod archive;
 #[path = "theme/browser.rs"]
 mod browser;
 #[path = "theme/cards.rs"]

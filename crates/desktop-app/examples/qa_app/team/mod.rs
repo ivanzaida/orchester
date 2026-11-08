@@ -4,6 +4,7 @@
 //! What a person presses is in [`drive`], and for `team-clone` in the QA app's `team_clone`. Fixture data for QA, never
 //! shipped: an example is no part of the app's program.
 
+mod archive;
 pub mod drive;
 mod edit;
 mod member;
@@ -133,7 +134,9 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
     | State::TeamCreateNameTaken
     | State::StartWaiting
     | State::StartRunnerRefused
-    | State::StartPastFailure => joined(state, &server, services, runtime)?,
+    | State::StartPastFailure
+    | State::TeamArchive
+    | State::TeamArchived => joined(state, &server, services, runtime)?,
   }
   Ok(server)
 }
@@ -154,6 +157,7 @@ fn joined(state: State, server: &TeamServer, services: &Services, runtime: &Hand
   }
   work::after_join(state, (server, id), (services, runtime), (&kontur, &ids))?;
   edit::prepare(state, (services, runtime), (server, &kontur))?;
+  archive::prepare(state, (server, &kontur))?;
   Ok(())
 }
 

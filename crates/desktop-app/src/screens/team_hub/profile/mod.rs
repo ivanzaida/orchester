@@ -36,7 +36,7 @@ use orchester_workspace::{
 use self::fix::Fix;
 use super::{
   actions::Actions,
-  member,
+  archive, member,
   model::{Entry, Listing},
   panel, secret,
 };
@@ -117,6 +117,10 @@ impl Component for ProfilePanel {
       sheet,
       connection: &connection,
     };
+    let head_end = panel::with_more(
+      self.edit(ctx, &props, &navigation),
+      archive::menu(ctx, &props.repo_root, entry, props.team.may_change),
+    );
     let body = Column::new()
       .width(Dimension::Pct(100.0))
       .padding(Padding::symmetric(
@@ -124,7 +128,7 @@ impl Component for ProfilePanel {
         HubSpacing::BodyTop.role(),
       ))
       .spacing(HubSpacing::BodyTop.role())
-      .child(panel::head(ctx, entry, self.edit(ctx, &props, &navigation)))
+      .child(panel::head(ctx, entry, head_end))
       .child(panel::chips(ctx, listing, entry))
       .with_children(member::lock_line(ctx, &props.team))
       .child(from_team::section(ctx, sheet))

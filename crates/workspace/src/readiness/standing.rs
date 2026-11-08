@@ -2,7 +2,7 @@
 
 use orchester_core::{
   id::{ConnectionId, ResourceId, SecretId},
-  resource::TeamProfileError,
+  resource::{ResourceKind, TeamProfileError},
   sharing::{Missing, Readiness},
 };
 
@@ -17,8 +17,17 @@ pub enum Undecided {
   /// so it cannot be published either: this says why (writable folders, a local MCP server that is no team one, a
   /// connection that is no agent connection).
   CannotBePublished(TeamProfileError),
-  /// A team profile chooses an MCP server the team does not offer here: archived, or not synced yet.
+  /// A team profile chooses an MCP server the team does not offer here: not synced yet (an archived one is
+  /// [`Self::ChoosesArchivedMcpServer`]).
   ChoosesMcpServer(ResourceId),
+  /// A team profile chooses an MCP server the team archived; see [`Self::UsesArchivedTool`]. The server's id and name.
+  ChoosesArchivedMcpServer(ResourceId, String),
+  /// A team profile names a team tool the team archived: the server refuses a run on an archived resource, so the
+  /// profile cannot run until an admin restores the tool or the profile stops naming it (edge case 8). The tool's id
+  /// and its name.
+  UsesArchivedTool(ResourceId, String),
+  /// A team profile names a team instruction the team archived; see [`Self::UsesArchivedTool`].
+  UsesArchivedInstruction(ResourceId, String),
   /// A pipeline runs a profile or tool, or merges with an integrator, that this computer has no version of.
   RunsUnknown(ResourceId),
   /// A local profile runs on a connection that is not an agent connection of the project.
@@ -33,6 +42,17 @@ pub enum Undecided {
   /// A pipeline runs the profile or tool `id` (or merges with it), which is undecided for `why`: the pipeline is, and
   /// the first member that is says which.
   Member { id: ResourceId, why: Box<Undecided> },
+}
+
+/// Whether a team profile that still names an archived resource of `kind` cannot run here: an MCP server, a tool or an
+/// instruction ([`Undecided::ChoosesArchivedMcpServer`], [`Undecided::UsesArchivedTool`],
+/// [`Undecided::UsesArchivedInstruction`]). A skill does not, because this computer keeps none of the team's and cannot
+/// tell an archived one; no other kind is named by a profile.
+pub const fn archive_blocks_profiles(kind: ResourceKind) -> bool {
+  matches!(
+    kind,
+    ResourceKind::McpServer | ResourceKind::Tool | ResourceKind::Instruction
+  )
 }
 
 /// Ready, what is missing, or why that cannot be known.

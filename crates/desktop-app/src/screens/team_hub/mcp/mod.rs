@@ -43,7 +43,7 @@ use self::{
 };
 use super::{
   actions::Actions,
-  member,
+  archive, member,
   model::{Entry, Listing},
   panel, secret,
 };
@@ -150,6 +150,10 @@ impl Component for McpPanel {
     let computer = parts.computer.then(|| computer::section(ctx, &view));
     let (above, from_team, bar) = (parts.above, parts.from_team, parts.bar);
     let edit_button = (mode == Mode::Plain).then(|| self.edit_button(ctx, &props)).flatten();
+    let more = (mode == Mode::Plain)
+      .then(|| archive::menu(ctx, &props.repo_root, entry, props.team.may_change))
+      .flatten();
+    let edit_button = panel::with_more(edit_button, more);
     let body = Column::new()
       .width(Dimension::Pct(100.0))
       .padding(Padding::symmetric(

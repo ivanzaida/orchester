@@ -462,6 +462,18 @@ pub fn profile(cli: AgentProvider, servers: &[ResourceId], secrets: &[&str]) -> 
   .expect("distinct secrets")
 }
 
+/// A team instruction every agent gets.
+pub fn instruction() -> orchester_core::resource::Instruction {
+  use orchester_core::resource::{AgentTargets, InjectionEvent, Instruction, InstructionScope};
+  Instruction::new(
+    PromptText::new("Follow the standards.").expect("prompt"),
+    AgentTargets::All,
+    BTreeSet::from([InjectionEvent::Start]),
+    InstructionScope::Project,
+  )
+  .expect("an instruction")
+}
+
 /// A pipeline whose agent steps run `profiles` in turn, merged with `integrator`.
 pub fn pipeline(profiles: &[Option<ResourceId>], integrator: Option<ResourceId>) -> Pipeline {
   use orchester_core::resource::{DeliverMode, DeliverStep, MergeMethod};

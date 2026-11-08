@@ -213,6 +213,13 @@ impl TaskHeader {
       (&self.confirming, &self.remove),
       (latest_busy, props.task.online),
     );
+    // A run an archive stopped is the page's one question: Run again is the header's button (A22 `pUu78`), not a row of
+    // the menu, unless a card's action is the primary one.
+    let (primary, run_again) = if primary.is_none() && detail.archive_stop.is_some() {
+      (run_again, None)
+    } else {
+      (primary, run_again)
+    };
     let held = if kept {
       Held {
         controls: Vec::new(),

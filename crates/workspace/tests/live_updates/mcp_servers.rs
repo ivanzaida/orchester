@@ -136,7 +136,7 @@ async fn live_updates_an_archived_team_mcp_server_leaves_the_list_and_stops_its_
   .await;
   assert_eq!(
     member.archived.lock().expect("archived").as_slice(),
-    [knowledge],
+    [(knowledge, Some("Alice Moreau".to_owned()))],
     "its runs are stopped once"
   );
   assert!(
@@ -148,7 +148,7 @@ async fn live_updates_an_archived_team_mcp_server_leaves_the_list_and_stops_its_
   seen_within(LIVE, "the MCP server is back", || listed(&workspace, knowledge)).await;
   assert_eq!(
     member.archived.lock().expect("archived").as_slice(),
-    [knowledge],
+    [(knowledge, Some("Alice Moreau".to_owned()))],
     "a restore stops nothing"
   );
   assert!(workspace.db().mcp_servers().expect("read").is_empty());

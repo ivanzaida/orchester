@@ -73,6 +73,13 @@ pub enum ToolError {
   AmbiguousProject(String),
   /// Orchester refused, as it refuses a person in the app: `code` names the refusal.
   Refused { code: String, reasons: Vec<Message> },
+  /// Orchester refused, and says what the person would confirm: `preview` is what a client reads typed (an archive of a
+  /// team resource names what uses it and the runs that would stop).
+  Previewed {
+    code: String,
+    reasons: Vec<Message>,
+    preview: Value,
+  },
   /// A start that starts nothing because its pipeline is not ready on this computer (`not_ready_here`): the parts, each
   /// with its fix, which a client reads typed.
   NotReadyHere(NotReadyHere),
@@ -90,6 +97,15 @@ impl ToolError {
     Self::Refused {
       code: code.into(),
       reasons,
+    }
+  }
+
+  /// A refusal that carries `preview`, what the person would confirm.
+  pub fn previewed(code: impl Into<String>, reasons: Vec<Message>, preview: Value) -> Self {
+    Self::Previewed {
+      code: code.into(),
+      reasons,
+      preview,
     }
   }
 
@@ -119,7 +135,7 @@ impl ToolError {
       Self::InvalidArguments(_) => "invalid_arguments",
       Self::NotFound { missing, .. } => missing.code(),
       Self::AmbiguousProject(_) => "project_ambiguous",
-      Self::Refused { code, .. } => code,
+      Self::Refused { code, .. } | Self::Previewed { code, .. } => code,
       Self::NotReadyHere(_) => "not_ready_here",
     }
   }
@@ -136,6 +152,16 @@ impl ToolError {
       Self::Refused { reasons, .. } => {
         let reasons: Vec<String> = reasons.iter().map(&translate).collect();
         (reasons.join("\n"), reasons)
+      }
+      Self::Previewed { reasons, preview, .. } => {
+        let reasons: Vec<String> = reasons.iter().map(&translate).collect();
+        let error = json!({
+          "code": self.code(),
+          "message": reasons.join("\n"),
+          "reasons": reasons,
+          "preview": preview,
+        });
+        return json!({ "error": error });
       }
       Self::NotReadyHere(refusal) => {
         let reasons: Vec<String> = refusal.messages().iter().map(&translate).collect();

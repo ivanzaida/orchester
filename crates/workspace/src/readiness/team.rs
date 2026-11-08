@@ -92,7 +92,54 @@ fn profile_needs(
   version: &Version<AgentProfile>,
   (waiting, servers): (&[WaitingPublish], &[McpNeed]),
 ) -> Result<Result<Needs, Undecided>, StoreError> {
-  Ok(body(db, profile, version, waiting)?.and_then(|team| with_servers(profile, &team, servers)))
+  let team = match body(db, profile, version, waiting)? {
+    Ok(team) => team,
+    Err(undecided) => return Ok(Err(undecided)),
+  };
+  if let Some(archived) = uses_archived(db, &team)? {
+    return Ok(Err(archived));
+  }
+  match with_servers(profile, &team, servers) {
+    Err(Undecided::ChoosesMcpServer(server)) => Ok(Err(named_if_archived(db, server)?)),
+    other => Ok(other),
+  }
+}
+
+/// A server a profile chooses that is not among the team's: archived (removed here) when this computer still holds it,
+/// else one it has not synced.
+fn named_if_archived(db: &ProjectDb, server: ResourceId) -> Result<Undecided, StoreError> {
+  if db.resource_removed_at(server)?.is_some()
+    && let Some(resource) = db.resource(server)?
+  {
+    return Ok(Undecided::ChoosesArchivedMcpServer(
+      server,
+      resource.name().as_str().to_owned(),
+    ));
+  }
+  Ok(Undecided::ChoosesMcpServer(server))
+}
+
+/// A team tool or instruction the profile names that the team archived (removed here). A skill the profile names
+/// cannot be told: this computer keeps no skill of the team (`sharing::sync::config`), so it cannot tell an archived
+/// one from a live one.
+fn uses_archived(db: &ProjectDb, team: &TeamAgentProfile) -> Result<Option<Undecided>, StoreError> {
+  if let Some((id, name)) = first_archived(db, team.tools())? {
+    return Ok(Some(Undecided::UsesArchivedTool(id, name)));
+  }
+  Ok(first_archived(db, team.instruction_resources())?.map(|(id, name)| Undecided::UsesArchivedInstruction(id, name)))
+}
+
+/// The first of `ids` that is archived (removed here) and still held, with its name.
+fn first_archived(db: &ProjectDb, ids: &[ResourceId]) -> Result<Option<(ResourceId, String)>, StoreError> {
+  for id in ids {
+    if db.resource_removed_at(*id)?.is_none() {
+      continue;
+    }
+    if let Some(resource) = db.resource(*id)? {
+      return Ok(Some((*id, resource.name().as_str().to_owned())));
+    }
+  }
+  Ok(None)
 }
 
 /// What the team's `version` of `profile` says, in the team's form: read from the body the server sent, or, for one

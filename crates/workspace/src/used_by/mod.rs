@@ -5,9 +5,11 @@
 //! computes the same from its database ([`local`]), by the same rule for "names" ([`names`]) and the same order. The
 //! window's modal and automation read it; it only reads.
 
+mod cli;
 mod error;
 mod local;
 mod names;
+mod servers;
 mod team;
 
 use std::path::Path;
@@ -16,7 +18,7 @@ pub use orchester_api::{UsedBy, UsedByResource, UsedByRun};
 use orchester_core::id::ResourceId;
 use orchester_store::{ProjectDb, SharingLink};
 
-pub use self::error::UsedByError;
+pub use self::{cli::profile_cli, error::UsedByError};
 use crate::{background, team_reads::TeamSession};
 
 /// What uses `resource` in the project at `root`: asked of the server through `team`, the session the person is signed

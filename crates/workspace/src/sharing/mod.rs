@@ -220,6 +220,13 @@ impl Servers {
     self.inner.shared.send_modify(|count| *count += 1);
   }
 
+  /// What the event stream does once it applied a delta to a project's cache: wakes [`Self::subscribe_shared`]. For a
+  /// test that writes the cache as the stream would (the stand-in team server sends no `events`).
+  #[cfg(feature = "test-support")]
+  pub fn announce_shared_change_for_test(&self) {
+    self.shared_changed();
+  }
+
   fn subscribe_sync(&self) -> watch::Receiver<u64> {
     self.inner.sync.subscribe()
   }

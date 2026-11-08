@@ -2,12 +2,16 @@
 //! archived (`PATCH …/resources/{resource}`, made on the revision this computer has) and every computer follows through
 //! its event stream, where the runs that pin the resource stop ([`crate::sharing::sync`]). Nothing is marked here
 //! first: the stream's `resource.archived` is what stops the runs, and it stops them only for a mark that is new.
-//! While the server cannot be reached nothing is sent and the archive fails at once; it has no outbox.
+//! While the server cannot be reached nothing is sent and the archive fails at once; it has no outbox. It stops work on
+//! every computer, so it is a person's alone: automation is refused before anything is sent.
 
 use std::path::Path;
 
 use orchester_api::{ErrorCode, ResourcePatch};
-use orchester_core::id::{IdempotencyKey, ResourceId};
+use orchester_core::{
+  id::{IdempotencyKey, ResourceId},
+  run::Answerer,
+};
 use orchester_store::{ProjectDb, ResourceSharing, StoreError};
 
 use super::ProjectServer;
@@ -25,11 +29,29 @@ pub enum NotArchived {
   Refused { code: String },
   /// It could not be sent, e.g. the server cannot be reached.
   Failed(Message),
+  /// Automation asked: it stops runs on every computer, so only a person archives. Nothing was sent.
+  PersonOnly,
+}
+
+impl NotArchived {
+  /// What a person-only refusal says.
+  pub fn person_only_message() -> Message {
+    Message::new("appMcp.errors.teamArchivePersonOnly")
+  }
 }
 
 impl Servers {
-  /// Archives the team resource `resource` of the project at `repo_root` on the team server.
-  pub async fn archive_resource(&self, repo_root: &Path, resource: ResourceId) -> Result<(), NotArchived> {
+  /// Archives the team resource `resource` of the project at `repo_root` on the team server, as `by` asks: automation
+  /// is refused ([`NotArchived::PersonOnly`]) without reading or sending anything.
+  pub async fn archive_resource(
+    &self,
+    repo_root: &Path,
+    resource: ResourceId,
+    by: Answerer,
+  ) -> Result<(), NotArchived> {
+    if by == Answerer::Automation {
+      return Err(NotArchived::PersonOnly);
+    }
     let (servers, root) = (self.clone(), repo_root.to_owned());
     let prepared = background::run(move || prepare(&servers, &root, resource))
       .await

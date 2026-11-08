@@ -148,7 +148,7 @@ use rusqlite::{Connection, params};
 pub use self::{
   approval_records::ApprovalRecord,
   approval_rules::DecisionCounts,
-  archive_stops::ArchiveStop,
+  archive_stops::{ArchiveStop, Archived},
   attachments::{AttachmentOwner, attachment_file},
   auto_mode::AutoModeSave,
   automatic_status::{AutomaticStatus, NotSent, UnsentStatus},
