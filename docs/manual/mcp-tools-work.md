@@ -64,14 +64,14 @@ limits, conflicts) always come to the person in both modes.
 
 A project's approvals. Parameter: `project` (req.). Answers `approvals` with:
 
-**Team projects:** the runs listed include a team task's runs, named by the key they recorded when they started.
-
 - `allow_autopilot` — *Allow Autopilot for agents in this project*.
 - `reviewer` — the connection, model and effort that review Manual's requests (`default` when no one chose another),
   or `unavailable` with why the project has none.
 - `runs` — each run of the project that has not ended: `id`, `number`, `task`, `link`, and `approval_mode`: `{"mode":
   "autopilot"}`, or `{"mode": "manual", "because": …}` with `profile` (its profile is Manual), `project` (the project
   does not allow Autopilot) or `run` (the run was switched to Manual), the first that says so.
+
+**Team projects:** the runs listed include a team task's runs, named by the key they recorded when they started.
 
 ### `set_allow_autopilot` — changes data · person only to turn on
 
@@ -348,9 +348,6 @@ server first; one this computer ran nothing of lists no runs.
 
 The complete state of a run:
 
-A run is named by its id or its number, whatever its task; a **team task's** run is read from this computer's own
-records of it, without the task's definition (`task` is the key the run recorded when it started).
-
 - **Steps**, **state** and **tokens** (the reviewer's included and shown apart), **active time**. A step's
   `status` is its `state` and `waits_for`: while it is `waiting`, what for; `agent_slot` on a `pending` step that is
   ready and held back only because every agent slot is in use (raising *Agents at once* starts it), which the online
@@ -382,6 +379,10 @@ records of it, without the task's definition (`task` is the key the run recorded
   `worktree_removed`, `branch_deleted`) or `removed`; plus `since`, `resyncs`, `approved_at`, `checked_on`.
 - Links: the run links to its task's page; waits link to their cards on the task's Conversation.
 
+A run is named by its id or its number, whatever its task. **Team projects:** a team task's run is read from this
+computer's own records of it, without the task's definition (`task` is the key the run recorded when it started); a
+run that kept none, whose task has no copy here either, is refused as `team_task_unrecorded`.
+
 Parameters: `project` (req.), `run` (req.).
 
 ### `pause_run` / `resume_run` / `cancel_run` — changes data
@@ -392,7 +393,8 @@ Parameters: `project` (req.), `run` (req.).
 
 **Team projects:** `resume_run` resumes a paused run under the claim its work started with and takes no claim of the old
 sharing stream; an interrupted run is not continued from here (`team_project_unsupported`, as `continue_run`) because
-a team task's work starts and goes on only through the team server.
+a team task's work starts and goes on only through the team server. A run the team server fenced (taken over, membership
+removed, another device) is not resumed: `claim_fenced`, as the task page refuses it.
 
 Parameters (each): `project` (req.), `run` (req.). Runner refusals: `run_not_running`, `shutting_down`,
 `runner_unavailable`, `runner_reply_lost`, …
@@ -560,7 +562,8 @@ message until a person raises the limit. Refused when no agent reads it and the 
 On a **team project** the message goes to the run under the claim its work started with (no claim of the old sharing
 stream is taken). A message that would run the task again (`team_run_again_unsupported`) or continue an interrupted
 run (`team_project_unsupported`) is refused before it is stored: a team task's work starts only through the team
-server (`run_task`).
+server (`run_task`). A message that would resume a run the team server fenced is refused as `claim_fenced` before it
+is stored; one that follows a stored message into a fenced run stays queued, with why.
 
 | Parameter | Type                          | Req. | Description                                                                                       |
 |-----------|-------------------------------|------|---------------------------------------------------------------------------------------------------|
@@ -652,9 +655,6 @@ left out because their record is damaged. `estimates` (one project only) is the 
 How delivery goes in a project over its last `days` local days (default 30, max 366), as the *Delivery* view beside
 Usage reads it, in tasks (no money estimates):
 
-**Team projects:** the forecast of a team module is not computed on this computer: with `module`, the module is read
-from its team server (`module_not_found` when it has none) and the call is refused as `team_project_unsupported`.
-
 - **Throughput** — tasks merged per day (per week past 31 days), in Orchester or found merged outside by git, with
   their story points and how many had none.
 - **Cycle time** (first agent start → merge) and **lead time** (creation → merge) per merged task, with median,
@@ -664,6 +664,10 @@ from its team server (`module_not_found` when it has none) and the call is refus
 - **Cumulative flow** — tasks per workflow status at each day's end (Canceled left out).
 - **Forecasts** — Monte Carlo over recently merged tasks for the queued tasks and each open module: 50% and 85%
   dates, remaining tasks, the history used; or `not_enough_history` / `nothing_left`.
+
+**Team projects:** nothing of this is computed from this computer's rows, which hold only part of a team's tasks, so the
+call is refused as `team_project_unsupported`; with `module`, the module is read from its team server first
+(`module_not_found` when it has none).
 
 Parameters: `project` (req.), `days` (integer | null), `module` (string | null — only that module's forecast beside
 the queued work's).
