@@ -1,41 +1,54 @@
 //! What the projects' runners report as changed, counted per project and per run, for the screens that read runs
 //! again when they change.
 
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::{collections::HashMap, hash::Hash, path::Path, sync::Arc};
 
-use orchester_core::id::RunId;
+use orchester_core::id::{ChatId, RunId};
 use parking_lot::Mutex;
 use tokio::sync::watch;
 
 use super::Runners;
 
-/// The change counts of one project's runs that something follows ([`Runners::run_changes_of`]).
+/// The change counts of one project's runs or conversations that something follows ([`Runners::run_changes_of`],
+/// [`Runners::chat_changes_of`]).
 ///
-/// A run's count lives only while a receiver of it does: it is made by the first subscription, and once all its
-/// receivers are gone it is dropped the next time the project's run counts are touched (a change, a subscription).
-/// So the map never holds more runs than are followed, plus those dropped since that last touch, however many runs
-/// a long session reports. A run subscribed to again starts a new count, which is harmless: readers follow when a
-/// count moves, never its value.
-#[derive(Clone, Default)]
-pub(super) struct RunChanges {
-  runs: Arc<Mutex<HashMap<RunId, watch::Sender<u64>>>>,
+/// A count lives only while a receiver of it does: it is made by the first subscription, and once all its receivers
+/// are gone it is dropped the next time the project's counts of the kind are touched (a change, a subscription). So
+/// the map never holds more keys than are followed, plus those dropped since that last touch, however many runs or
+/// conversations a long session reports. A key subscribed to again starts a new count, which is harmless: readers
+/// follow when a count moves, never its value.
+#[derive(Clone)]
+pub(super) struct Followed<K> {
+  counts: Arc<Mutex<HashMap<K, watch::Sender<u64>>>>,
 }
 
-impl RunChanges {
-  fn subscribe(&self, run: RunId) -> watch::Receiver<u64> {
-    let mut runs = self.runs.lock();
-    runs.retain(|_, count| count.receiver_count() > 0);
-    runs.entry(run).or_insert_with(|| watch::Sender::new(0)).subscribe()
+/// The change counts of the project's runs.
+pub(super) type RunChanges = Followed<RunId>;
+
+/// The change counts of the project's conversations.
+pub(super) type ChatChanges = Followed<ChatId>;
+
+impl<K> Default for Followed<K> {
+  fn default() -> Self {
+    Self { counts: Arc::default() }
+  }
+}
+
+impl<K: Eq + Hash> Followed<K> {
+  pub(super) fn subscribe(&self, key: K) -> watch::Receiver<u64> {
+    let mut counts = self.counts.lock();
+    counts.retain(|_, count| count.receiver_count() > 0);
+    counts.entry(key).or_insert_with(|| watch::Sender::new(0)).subscribe()
   }
 
-  /// Run `run` changed; `None` for a change that does not say which run, which counts for every run.
-  pub(super) fn changed(&self, run: Option<RunId>) {
-    let mut runs = self.runs.lock();
-    runs.retain(|_, count| count.receiver_count() > 0);
+  /// `key` changed; `None` for a change that does not say which, which counts for every key.
+  pub(super) fn changed(&self, key: Option<K>) {
+    let mut counts = self.counts.lock();
+    counts.retain(|_, count| count.receiver_count() > 0);
     let bump = |count: &watch::Sender<u64>| count.send_modify(|revision| *revision += 1);
-    match run {
-      Some(run) => runs.get(&run).into_iter().for_each(bump),
-      None => runs.values().for_each(bump),
+    match key {
+      Some(key) => counts.get(&key).into_iter().for_each(bump),
+      None => counts.values().for_each(bump),
     }
   }
 }

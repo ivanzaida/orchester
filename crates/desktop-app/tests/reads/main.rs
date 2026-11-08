@@ -9,6 +9,7 @@
 )]
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
+mod orchestrator;
 mod screens;
 #[path = "../support/mod.rs"]
 mod support;
