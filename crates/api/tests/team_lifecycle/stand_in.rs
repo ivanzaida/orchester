@@ -144,11 +144,17 @@ fn team_lifecycle_the_holder_marks_done_and_the_claim_is_released() {
     [complete, cancel, reopen, triage, block],
     "a closed task offers a holder nothing"
   );
+  let (status, again) = team.patch_on(&before, 1, &json!({"workflow": "done"}));
+  assert_eq!(
+    (status, again["error"].as_str(), workflow(&again["current"])),
+    (409, Some("revision_conflict"), "done"),
+    "the holder's retry of the applied change reads the task as it is, not a refusal of the role"
+  );
   let (status, again) = team.patch(1, &json!({"workflow": "done"}));
   assert_eq!(
     (status, again["error"].as_str()),
     (403, Some("not_admin")),
-    "the empty change is an Admin's, as it was"
+    "the empty change on the current revision is an Admin's, as it was"
   );
   assert_eq!(workflow(&team.task(2)), "in_progress", "another task is untouched");
 }

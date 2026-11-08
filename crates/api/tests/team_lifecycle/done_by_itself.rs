@@ -45,16 +45,16 @@ fn team_lifecycle_a_successful_run_alone_marks_only_work_without_a_base_merge() 
 fn team_lifecycle_an_accepted_delivery_marks_the_modules_succeeded_work_done() {
   let mut tasks: Vec<AuthorityTask> = (1..=4).map(|number| task(number, "in_progress", Some(YOU))).collect();
   tasks[1].work = Some("running");
-  tasks[2].workflow = "canceled";
   for task in &mut tasks {
     task.module = Some(0);
   }
-  let team = Team::start(Standing::Member, tasks);
+  let team = Team::start(Standing::Admin, tasks);
   team.server.authority_modules(vec![module(Some(YOU))]);
   team.server.automatic_merge(true);
   for number in [1, 3, 4] {
     run(&team, number, &json!({"kind": "succeeded"}), &patch_artifact());
   }
+  assert_eq!(team.patch(3, &json!({"workflow": "canceled"})).0, 200);
   assert_eq!(
     (1..=4)
       .map(|number| workflow(&team.task(number)).to_owned())

@@ -38,6 +38,9 @@ pub(super) fn start(authority: &mut Authority, command: &Value) -> Result<Value,
     Some(BundleFault::Unavailable) => return Err((503, "unavailable")),
     _ => {}
   }
+  if lifecycle::closed(authority, named["subject"]["id"].as_str().unwrap_or_default()) {
+    return Err((409, "transition_denied"));
+  }
   let (task, claim) = held(authority, named)?;
   if task.work == Some("running") {
     return Err((409, "transition_denied"));
@@ -74,6 +77,11 @@ pub(super) fn report(authority: &mut Authority, command: &Value) -> Result<Value
     (Some("cancelled"), _) => "cancelled",
     _ => return Err((422, "invalid")),
   };
+  let artifacts = if state == "succeeded" {
+    lifecycle::artifacts(&command["artifacts"])?
+  } else {
+    Vec::new()
+  };
   task.work = Some(state);
   if state == "cancelled" {
     task.claim = None;
@@ -83,7 +91,7 @@ pub(super) fn report(authority: &mut Authority, command: &Value) -> Result<Value
     authority.reported.push(id.clone());
   }
   if state == "succeeded" {
-    lifecycle::succeeded(authority, &id, &command["artifacts"])?;
+    lifecycle::succeeded(authority, &id, &artifacts);
   }
   work["runs"] = json!([command["run_id"]]);
   let bundle = work["bundle"].clone();

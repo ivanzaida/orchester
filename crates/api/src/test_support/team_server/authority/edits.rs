@@ -128,16 +128,16 @@ fn patch(state: &mut State, (project, task): ((&str, &str), &str), body: &str) -
   else {
     return (404, json!({"error": "not_found", "message": "refused"}));
   };
-  let request = match lifecycle::permitted(&state.authority, &current, &patch.changes) {
-    Ok(request) => request,
-    Err(refusal) => return refusal,
-  };
   if current["revision"].as_u64() != Some(patch.revision.get()) {
     return (
       409,
       json!({"error": "revision_conflict", "message": "refused", "current": current}),
     );
   }
+  let request = match lifecycle::permitted(&state.authority, &current, &patch.changes) {
+    Ok(request) => request,
+    Err(refusal) => return refusal,
+  };
   let asked = serde_json::to_value(&patch.changes).unwrap_or(Value::Null);
   if let Err(refusal) = lifecycle::checked(&state.authority, &current, (&request, &asked)) {
     return refusal;
@@ -159,6 +159,9 @@ fn patch(state: &mut State, (project, task): ((&str, &str), &str), body: &str) -
   change(&mut state.authority, &current, (fields, Person::You));
   if request.closes() {
     lifecycle::release(&mut state.authority, task);
+  }
+  if request.reopens() {
+    lifecycle::reopened(&mut state.authority, task);
   }
   let actor = patch.changes.actor.unwrap_or(ChangeActor::Person);
   roadmap::record_move(&mut state.authority, &current, &asked, actor);

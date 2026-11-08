@@ -11,7 +11,7 @@ use orchester_api::{
   test_support::team_server::{AuthorityClaim, AuthorityModule, AuthorityTask, CODE, Person, Standing, TeamServer},
   v2::{Action, DenialReason, LifecycleAction, TaskRead},
 };
-use orchester_core::id::{OperationId, RunId, WorkEventId};
+use orchester_core::id::{IdempotencyKey, OperationId, ReleaseId, RunId, WorkEventId};
 use serde_json::{Value, json};
 
 pub const YOU: AuthorityClaim = AuthorityClaim {
@@ -151,6 +151,17 @@ impl Team {
     self.v2("POST", "commands", &body)
   }
 
+  /// A planned release, made by the Admin the caller is.
+  pub fn create_release(&self) -> ReleaseId {
+    let id = ReleaseId::generate();
+    let body = json!({"idempotency_key": IdempotencyKey::generate(), "id": id,
+      "release": {"name": "0.4.0", "description": "", "planned": "2026-11-15"}});
+    let path = format!("/api/v1/projects/{}/releases", self.project);
+    let (status, answer) = self.call("POST", &path, &body, &[]);
+    assert_eq!(status, 201, "{answer}");
+    id
+  }
+
   /// Every batch the stand-in committed, as the subscription replays them: the scopes of each.
   pub fn batches(&self) -> Vec<Vec<Value>> {
     let path = format!("/api/v2/projects/{}/subscription", self.project);
@@ -185,6 +196,13 @@ pub fn lifecycle(task: &Value) -> Vec<(LifecycleAction, Option<DenialReason>)> {
       (action, capability.reason())
     })
     .collect()
+}
+
+/// Why the task's capability `action` (its wire name) is denied; `None` when it is allowed.
+pub fn denied<'a>(task: &'a Value, action: &str) -> Option<&'a str> {
+  let listed = task["capabilities"]["actions"].as_array().expect("actions");
+  let found = listed.iter().find(|capability| capability["action"] == action);
+  found.expect("the action is listed")["reason"].as_str()
 }
 
 pub fn claim_id(generation: u8, number: u32) -> String {

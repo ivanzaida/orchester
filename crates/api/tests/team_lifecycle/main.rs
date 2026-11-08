@@ -4,6 +4,7 @@
 //!
 //! `cargo test -p orchester-api --features test-support --test team_lifecycle team_lifecycle_`
 
+mod closed;
 mod done_by_itself;
 mod shapes;
 mod stand_in;

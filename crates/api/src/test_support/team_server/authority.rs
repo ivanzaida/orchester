@@ -192,6 +192,7 @@ impl TeamServer {
 
   /// The `/api/v2` reads give `tasks` in place of the project's v1 tasks; the change is committed as one batch.
   pub fn authority_tasks(&self, tasks: Vec<AuthorityTask>) {
+    lifecycle::check_names(&tasks);
     let mut state = self.state.lock();
     state.authority.tasks = Some(tasks);
     state.authority.commit(vec![json!({"kind": "task_list"})]);

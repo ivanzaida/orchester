@@ -164,6 +164,12 @@ impl LifecycleRequest {
   pub fn closes(&self) -> bool {
     self.actions.iter().any(|action| action.closes())
   }
+
+  /// Whether the patch reopens the task: the server sets the work it had aside, so that only a work started after the
+  /// reopen counts for a Done by itself.
+  pub fn reopens(&self) -> bool {
+    self.actions.contains(&LifecycleAction::Reopen)
+  }
 }
 
 /// Whether an accepted `succeeded` work report marks its task Done by itself. Work that delivers changes does not: its

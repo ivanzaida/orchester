@@ -111,6 +111,37 @@ fn running(authority: &Authority, id: &str) -> bool {
     && authority.reported.iter().any(|reported| reported == id)
 }
 
+/// Whether the task `id` is Done or Canceled: it cannot be claimed or started until an Admin reopens it.
+pub(super) fn closed(authority: &Authority, id: &str) -> bool {
+  authority
+    .tasks
+    .iter()
+    .flatten()
+    .find(|task| task_id(task) == id)
+    .is_some_and(|task| workflow(authority, id, task.workflow).is_closed())
+}
+
+/// Refuses tasks whose workflow name is no workflow status: a stand-in set up wrongly is told when it is set up.
+pub(super) fn check_names(tasks: &[super::AuthorityTask]) {
+  for task in tasks {
+    assert!(
+      wire::Workflow::deserialize(Value::from(task.workflow)).is_ok(),
+      "task {} has the workflow {:?}, which is no workflow status",
+      task.number,
+      task.workflow
+    );
+  }
+}
+
+/// A reopened task has no work: the work it had does not count for a Done by itself, and the next work starts anew
+/// under a new claim.
+pub(super) fn reopened(authority: &mut Authority, id: &str) {
+  if let Some(task) = authority.tasks.iter_mut().flatten().find(|task| task_id(task) == id) {
+    task.work = None;
+  }
+  authority.reported.retain(|reported| reported != id);
+}
+
 /// Releases the closed task's own claim; its work that started no run is given up (`failed`), as `claim.release` does.
 pub(super) fn release(authority: &mut Authority, id: &str) {
   let Some(task) = authority.tasks.iter_mut().flatten().find(|task| task_id(task) == id) else {
@@ -130,7 +161,8 @@ pub(super) fn workflow(authority: &Authority, id: &str, set: &str) -> WorkflowSt
     .and_then(|edited| edited.field("workflow"))
     .and_then(Value::as_str)
     .unwrap_or(set);
-  wire::Workflow::deserialize(Value::from(name)).unwrap_or_default()
+  wire::Workflow::deserialize(Value::from(name))
+    .expect("a workflow name that `authority_tasks` checked, or one a typed task patch set")
 }
 
 /// The lifecycle actions in the capabilities of the task `id` that is `set` before any change here.
@@ -146,10 +178,14 @@ pub(super) fn actions(authority: &Authority, (id, set): (&str, &str)) -> Vec<Val
     .collect()
 }
 
+/// The artifacts a report names, read before the report changes anything: `422 invalid` when they are no artifacts.
+pub(super) fn artifacts(named: &Value) -> Result<Vec<ArtifactRef>, Refused> {
+  Vec::<ArtifactRef>::deserialize(named).map_err(|_| (422, "invalid"))
+}
+
 /// The work of the task `id` reported `succeeded` with `artifacts`: the task is Done by itself when it delivers no
 /// changes to base.
-pub(super) fn succeeded(authority: &mut Authority, id: &str, artifacts: &Value) -> Result<(), Refused> {
-  let artifacts = Vec::<ArtifactRef>::deserialize(artifacts).map_err(|_| (422, "invalid"))?;
+pub(super) fn succeeded(authority: &mut Authority, id: &str, artifacts: &[ArtifactRef]) {
   let number = authority
     .tasks
     .iter()
@@ -157,10 +193,9 @@ pub(super) fn succeeded(authority: &mut Authority, id: &str, artifacts: &Value) 
     .find(|task| task_id(task) == id)
     .map(|task| task.number);
   let delivery = number.and_then(|number| authority.delivers.get(&number)).copied();
-  if completes_on_success(delivery.unwrap_or_default(), &artifacts) {
+  if completes_on_success(delivery.unwrap_or_default(), artifacts) {
     done_by_itself(authority, id);
   }
-  Ok(())
 }
 
 /// The module at `index` delivered to base: each of its open tasks whose work succeeded is Done by itself.
