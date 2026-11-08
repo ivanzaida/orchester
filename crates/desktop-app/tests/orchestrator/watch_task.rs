@@ -89,8 +89,9 @@ fn row(screen: &Orchestrator, id: TaskId) -> String {
   format!("orchestrator-composer-watch-task-{}", key(screen, id))
 }
 
-/// *Watch tasks* chosen in the slash menu, the second command `/watch` matches (↓ from *Watch modules*): the
-/// command's badge and its picker.
+/// *Watch tasks* chosen in the slash menu by its own name `/watch-task`, the one command it matches and so the
+/// focused one: the command's badge and its picker. (An ↓ after `/watch` raced the menu's first focus and was lost
+/// under load.)
 fn open_picker(screen: &mut Orchestrator) {
   screen
     .window
@@ -98,14 +99,12 @@ fn open_picker(screen: &mut Orchestrator) {
     .get_element_by_id_mut(INPUT)
     .expect("the message field")
     .focus();
-  screen.set(INPUT, "/watch");
+  screen.set(INPUT, "/watch-task");
   let command = "orchestrator-composer-slash-watch-task";
-  screen.until("Watch tasks", |screen| {
-    screen.exists(command) && screen.text(command).contains("Only these tasks' events")
-  });
-  screen.key(("ArrowDown", "ArrowDown"), false);
   screen.until("the focus on Watch tasks", |screen| {
-    screen.text(command).contains("Enter")
+    screen.exists(command)
+      && screen.text(command).contains("Only these tasks' events")
+      && screen.text(command).contains("Enter")
   });
   screen.key(("Enter", "Enter"), false);
   screen.until("the picker", |screen| screen.exists(PICKER) && screen.exists(BADGE));

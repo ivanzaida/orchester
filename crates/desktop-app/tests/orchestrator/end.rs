@@ -43,6 +43,7 @@ fn watch_tail(screen: &mut Orchestrator) -> String {
         already_here: Vec::new(),
         led_elsewhere: Vec::new(),
         gone: Vec::new(),
+        at_request: None,
       },
     },
   ];
