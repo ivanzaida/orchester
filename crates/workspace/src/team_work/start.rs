@@ -21,7 +21,7 @@ use serde::{Deserialize, Serialize};
 use super::{
   Answer, TeamRunner, TeamWork, TeamWorkError,
   bundle::{self, Expected},
-  release::Released,
+  release::{ClaimEnd, Released},
 };
 use crate::{
   actions::{Accepted, Action, ActionOutcome, Intent, Refusal, TeamOutcome, WorkAction, team_task},
@@ -50,8 +50,9 @@ pub enum StartOutcome {
   /// The server refused the start for good: it made no work, or the authority the bundle was built for is gone. A
   /// `bundle_missing` refusal released the claim with it.
   Refused(AuthorityError),
-  /// The accepted bundle can never become the run's inputs here; the start goes no further.
-  Failed(StartFailure),
+  /// The accepted bundle can never become the run's inputs here; the start goes no further. The claim is let go of
+  /// unless it cannot be ([`ClaimEnd`]).
+  Failed(StartFailure, ClaimEnd),
   /// The runner refused to run it on this computer; the accepted inputs stay kept for another try.
   RunnerRefused(Rejection),
   /// The runner could not be asked now; the start goes on from the kept inputs.
@@ -73,7 +74,7 @@ pub enum StartFailure {
   /// The accepted bundle does not make the run's inputs here.
   Inputs(String),
   /// The versions the bundle pins need something this computer lacks (`not_ready_here`); nothing ran. The server made
-  /// the work for the start; the claim was released with the failure.
+  /// the work for the start.
   NotReadyHere {
     pipeline: String,
     missing: Vec<MissingPart>,
@@ -98,6 +99,13 @@ impl StartFailure {
       _ => None,
     }
   }
+}
+
+/// What a failed start keeps: why, and what became of its claim.
+#[derive(Serialize, Deserialize)]
+struct KeptFailure {
+  failure: StartFailure,
+  claim: ClaimEnd,
 }
 
 /// Each open start's operation with where it stands after recovery, or why it could not be carried on now.
@@ -133,15 +141,31 @@ type Step = Result<TeamStart, StartOutcome>;
 impl<R: TeamRunner> TeamWork<R> {
   /// Starts the work `request` asks for: recorded here first, then carried on as far as it goes now. Sending the same
   /// request again carries on the recorded start; the same operation with another request is refused. `vault` is
-  /// asked whether this computer has the team secrets the pinned MCP servers take, when the bundle is checked.
+  /// asked whether this computer has the team secrets the pinned MCP servers take, when the bundle is checked. One
+  /// start of a project is carried on at a time: this one waits for another, and recovery leaves it alone.
   pub async fn start(&self, request: TeamStartRequest, vault: &dyn SecretVault) -> Result<StartOutcome, TeamWorkError> {
+    let _alone = self.alone().await;
     let record = self.record(request)?;
     self.carry_on(record, vault).await
   }
 
   /// Carries on every start not settled yet, oldest first, e.g. after a restart. Each goes on its own: one that cannot
-  /// be carried on now holds back none after it.
+  /// be carried on now holds back none after it. Waits for a start of the project that is under way.
   pub async fn recover(&self, vault: &dyn SecretVault) -> Result<Recovered, TeamWorkError> {
+    let _alone = self.alone().await;
+    self.recover_alone(vault).await
+  }
+
+  /// [`Self::recover`] unless a start of the project is under way, which carries itself on: then `None`, and the
+  /// caller asks again later.
+  pub async fn try_recover(&self, vault: &dyn SecretVault) -> Result<Option<Recovered>, TeamWorkError> {
+    let Some(_alone) = self.try_alone() else {
+      return Ok(None);
+    };
+    self.recover_alone(vault).await.map(Some)
+  }
+
+  async fn recover_alone(&self, vault: &dyn SecretVault) -> Result<Recovered, TeamWorkError> {
     let open = self.db()?.open_team_starts()?;
     let mut outcomes = Vec::with_capacity(open.len());
     for start in open {
@@ -330,13 +354,17 @@ impl<R: TeamRunner> TeamWork<R> {
     error: TeamWorkError,
   ) -> Result<StartOutcome, TeamWorkError> {
     let failure = StartFailure::lasting(&error).ok_or(error)?;
-    if self.release_claim(operation, authority).await? == Released::Waits {
+    let Released::Ended(claim) = self.release_claim(operation, authority).await? else {
       return Ok(StartOutcome::Waiting(TeamStartStage::Accepted));
-    }
+    };
     // A failure is a kind and a message: it serializes to JSON without fail.
-    let text = serde_json::to_string(&failure).expect("a start failure serializes");
+    let text = serde_json::to_string(&KeptFailure {
+      failure: failure.clone(),
+      claim,
+    })
+    .expect("a start failure serializes");
     self.db()?.fail_team_start(operation, &text, Timestamp::now())?;
-    Ok(StartOutcome::Failed(failure))
+    Ok(StartOutcome::Failed(failure, claim))
   }
 }
 
@@ -356,8 +384,8 @@ fn failed(record: &TeamStart) -> Result<StartOutcome, TeamWorkError> {
     .failure
     .as_deref()
     .ok_or(TeamWorkError::Unreadable(record.operation))?;
-  let failure = serde_json::from_str(text).map_err(|_| TeamWorkError::Unreadable(record.operation))?;
-  Ok(StartOutcome::Failed(failure))
+  let kept: KeptFailure = serde_json::from_str(text).map_err(|_| TeamWorkError::Unreadable(record.operation))?;
+  Ok(StartOutcome::Failed(kept.failure, kept.claim))
 }
 
 /// Settles the operation completed once its local effect happened: the start's run is recorded.

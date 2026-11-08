@@ -7,7 +7,10 @@ use orchester_core::{
   run::Answerer,
   secret::{SecretValue, SecretVault},
 };
-use orchester_workspace::readiness::{NotReadyHere, NotReadyPart, ReadinessError, StartReadiness};
+use orchester_workspace::{
+  readiness::{NotReadyHere, NotReadyPart, ReadinessError, StartReadiness},
+  team_work::ClaimEnd,
+};
 use serde_json::Value;
 
 use crate::{
@@ -250,8 +253,12 @@ fn readiness_start_a_remote_server_with_several_secret_headers_is_not_ready_for_
 
 #[test]
 fn readiness_start_a_refusal_after_the_server_made_the_work_says_so_in_its_lead() {
-  let after = NotReadyHere::after_start("delivery", Vec::new());
+  let after = NotReadyHere::after_start("delivery", Vec::new(), ClaimEnd::Released);
   assert_eq!(after.messages()[0].key, "notReadyHere.refusedAfterStart");
+  let kept = NotReadyHere::after_start("delivery", Vec::new(), ClaimEnd::Kept);
+  assert_eq!(kept.messages()[0].key, "notReadyHere.refusedAfterStartKept");
+  let held = NotReadyHere::after_start("delivery", Vec::new(), ClaimEnd::Held);
+  assert_eq!(held.messages()[0].key, "notReadyHere.refusedAfterStartHeld");
 }
 
 #[test]

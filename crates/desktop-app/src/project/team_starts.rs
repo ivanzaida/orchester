@@ -66,6 +66,12 @@ async fn carried_on(
       tracing::warn!(%error, "the project's open team starts could not be carried on");
       false
     }
-    Err(_) => false,
+    Err(error) => {
+      tracing::warn!(
+        ?error,
+        "the worker that carries on the project's open team starts ended without an answer"
+      );
+      false
+    }
   }
 }

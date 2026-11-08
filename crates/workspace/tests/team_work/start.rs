@@ -191,7 +191,7 @@ async fn team_work_start_failed_here_holds_back_no_later_start() {
     .collect();
   assert_eq!(outcomes.len(), 2, "{outcomes:?}");
   assert_eq!(outcomes[0].0, unbound.operation);
-  let StartOutcome::Failed(failure) = &outcomes[0].1 else {
+  let StartOutcome::Failed(failure, _) = &outcomes[0].1 else {
     panic!("not failed: {outcomes:?}");
   };
   assert!(matches!(failure, StartFailure::NotReadyHere { .. }), "{failure:?}");
@@ -201,7 +201,7 @@ async fn team_work_start_failed_here_holds_back_no_later_start() {
   };
 
   // The failure is kept: the same request answers it again, recovery passes it by, and no run was asked for it.
-  let StartOutcome::Failed(kept) = work.start(unbound.clone(), checkout.vault()).await.expect("carried on") else {
+  let StartOutcome::Failed(kept, _) = work.start(unbound.clone(), checkout.vault()).await.expect("carried on") else {
     panic!("the failure is kept");
   };
   assert_eq!(&kept, failure);

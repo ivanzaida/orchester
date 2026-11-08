@@ -34,6 +34,7 @@ use serde_json::{Value, json};
 pub use self::{
   commands::Plan,
   delivery::{Authorized as DeliveryAuthorized, PendingDelivery},
+  execution::BundleFault,
   work::{AuthorityClaim, AuthorityModule, Person, STALE_AFTER_MINUTES},
 };
 use super::{State, TasksAnswer, TeamServer, USER, first_download};
@@ -102,8 +103,8 @@ pub(super) struct Authority {
   tasks: Option<Vec<AuthorityTask>>,
   modules: Option<Vec<AuthorityModule>>,
   unavailable: bool,
-  /// Whether the bundle a `work.start` names is built in a schema newer than this contract's.
-  newer_bundles: bool,
+  /// How every `work.start` fails to give the desktop a bundle it can use, when it does.
+  bundle_fault: Option<BundleFault>,
   /// The oldest desktop version the server accepts; any while `None`.
   required: Option<ReleaseVersion>,
   /// Each committed change: its cursor and the scopes it invalidates.
@@ -217,7 +218,12 @@ impl TeamServer {
   /// Every `work.start` names its bundle in a schema one newer than the desktop reads, as a team server a release ahead
   /// of the desktop does: the start can never become a run here, whatever the desktop does.
   pub fn authority_newer_bundles(&self) {
-    self.state.lock().authority.newer_bundles = true;
+    self.authority_bundle_fault(BundleFault::Newer);
+  }
+
+  /// Every `work.start` fails as `fault` says, whatever the desktop does.
+  pub fn authority_bundle_fault(&self, fault: BundleFault) {
+    self.state.lock().authority.bundle_fault = Some(fault);
   }
 
   /// [`Self::authority_unavailable`] `after` the first task read was answered: an outage in a session that read the
@@ -431,6 +437,9 @@ pub(super) fn serve(stream: &mut TcpStream, (line, headers, body): (&str, &str, 
     ("POST", "heartbeat") => {
       let (status, answer) = execution::heartbeat(&mut state.lock().authority, body);
       respond(stream, status, &answer);
+    }
+    ("GET", bundle) if bundle.starts_with("bundles/") => {
+      respond(stream, 200, &json!({"files": "not an execution bundle"}))
     }
     ("GET", "policy") => respond(stream, 200, &commands::policy(&state.lock().authority)),
     ("PATCH", "policy") => {

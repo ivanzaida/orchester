@@ -12,8 +12,9 @@
 //!   run's inputs here, or whose pinned versions need what this computer lacks, settles the start failed
 //!   ([`StartFailure`]), and so does a start the server refuses `bundle_missing`: either way the claim is released
 //!   first ([`release`]), so teammates are not kept from the task, and a server that cannot be reached for the release
-//!   keeps the start waiting. Nothing new starts without the server. A project's open starts are carried on when it is
-//!   opened ([`recover_open_starts`]).
+//!   keeps the start waiting. A project carries on one start at a time, so a Run and the recovery of the open starts
+//!   never work the same one at once. Nothing new starts without the server. A project's open starts are carried on
+//!   when it is opened ([`recover_open_starts`]).
 //! - **Reports** ([`reports`]). Each change of a team run's outcome is queued once in the project database, with its
 //!   event id and the run's next sequence, then sent in order until the server acknowledges it by id. A server that
 //!   cannot be reached or refuses for now keeps the rest waiting, in order. Its answers that the authority is gone
@@ -49,6 +50,7 @@ use orchester_api::{
 };
 use orchester_core::{id::RunId, run::RunStatus, store::RunStore};
 use orchester_store::{ProjectDb, TeamFence, WorkReportState};
+use tokio::sync::OwnedMutexGuard;
 
 pub use self::{
   branch::{BranchNotFound, branch_tip},
@@ -60,6 +62,7 @@ pub use self::{
   heartbeat::Heartbeat,
   here::{TeamHere, team_here},
   open::{OpenStarts, OpenStartsError, recover_open_starts},
+  release::ClaimEnd,
   reports::Reported,
   runner::{ProjectRunner, TeamRunner},
   start::{Recovered, StartFailure, StartOutcome, TeamStartRequest},
@@ -113,6 +116,26 @@ impl<R> TeamWork<R> {
 
   fn db(&self) -> Result<ProjectDb, TeamWorkError> {
     Ok(ProjectDb::open(self.dispatcher.root())?)
+  }
+
+  /// The project's one start at a time, waited for.
+  async fn alone(&self) -> OwnedMutexGuard<()> {
+    self
+      .dispatcher
+      .servers()
+      .start_lock(self.dispatcher.root())
+      .lock_owned()
+      .await
+  }
+
+  /// The project's one start at a time, if no start has it.
+  fn try_alone(&self) -> Option<OwnedMutexGuard<()>> {
+    self
+      .dispatcher
+      .servers()
+      .start_lock(self.dispatcher.root())
+      .try_lock_owned()
+      .ok()
   }
 }
 

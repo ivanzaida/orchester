@@ -71,8 +71,10 @@ what is local by nature: connections, program paths, secret values.
   `run_task` answers `not_ready_here` with the parts typed (a kind with the ids and names it is about; a path only
   for the person's own program whose file is gone; never a value), each with a message that says the fix. The
   pinned versions are checked again once the bundle is read, since the team server may pin newer ones; a start they
-  do not fit settles failed with the same parts, and its first line says that the server made the work and the claim
-  is still held (nothing ran). A team secret counts as set only when its row is there and the keychain still holds
+  do not fit settles failed with the same parts, and its first line says that the server made the work and what
+  became of the claim (nothing ran): a lasting failure releases it, so teammates can take the task, and the person's
+  next Run claims it again; it is kept only while a run of the same claim still works or has an outcome unsent, and
+  said so when the server refused the release. A team secret counts as set only when its row is there and the keychain still holds
   its value, asked without reading the value or prompting; a keychain that cannot say is a part of its own
   (`secret_unreadable`), not a value assumed set. The CLI is given one header per remote server, so a remote server
   with more than one secret header is a part (`mcp_unsupported`) of the server and of every profile that chooses it,

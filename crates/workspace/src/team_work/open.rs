@@ -6,7 +6,7 @@ use std::path::Path;
 use orchester_core::secret::SecretVault;
 use orchester_store::ProjectDb;
 
-use super::{ProjectRunner, StartOutcome, TeamWork, TeamWorkError};
+use super::{ProjectRunner, StartOutcome, TeamRunner, TeamWork, TeamWorkError};
 use crate::{
   actions::Dispatcher,
   runner::Runners,
@@ -21,7 +21,8 @@ pub enum OpenStarts {
   /// Every open start was carried on as far as it goes, or stands at a refusal of the runner that only a person's next
   /// try changes.
   Settled,
-  /// A start waits for the team server or the runner, which could not be reached or taken it now: ask again later.
+  /// A start waits for the team server or the runner, which could not be reached or taken it now, is under way, or
+  /// could not be carried on: ask again later.
   Waiting,
 }
 
@@ -35,8 +36,9 @@ pub enum OpenStartsError {
 }
 
 /// Carries on the starts of the project at `root`, named `name`, that are not settled yet, in a team session of the
-/// project's server. A server this computer is signed out of or cannot reach leaves them [`OpenStarts::Waiting`].
-/// Blocks on SQLite and holds the project database across awaits: run it on a worker of the runtime.
+/// project's server. A server this computer is signed out of or cannot reach leaves them [`OpenStarts::Waiting`], and
+/// so does a start that is under way (a Run holds the project's one start at a time) or one that could not be carried
+/// on. Blocks on SQLite and holds the project database across awaits: run it on a worker of the runtime.
 pub async fn recover_open_starts(
   (servers, runners): (&Servers, Runners),
   (root, name): (&Path, &str),
@@ -57,14 +59,31 @@ pub async fn recover_open_starts(
   };
   let dispatcher = Dispatcher::new(root.to_owned(), servers.clone(), Some(session));
   let runner = ProjectRunner::new(runners, root.to_owned(), name.to_owned());
-  let recovered = TeamWork::new(dispatcher, runner).recover(vault).await?;
-  let mut left = OpenStarts::Settled;
-  for (operation, outcome) in recovered {
-    match outcome {
-      Ok(StartOutcome::Waiting(_) | StartOutcome::RunnerUnavailable(_)) => left = OpenStarts::Waiting,
-      Ok(_) => {}
-      Err(error) => tracing::warn!(%error, %operation, "an open team start could not go on"),
+  TeamWork::new(dispatcher, runner)
+    .carry_on_open(vault)
+    .await
+    .map_err(Into::into)
+}
+
+impl<R: TeamRunner> TeamWork<R> {
+  /// Carries on the project's open starts one by one, and says what is left of them.
+  pub async fn carry_on_open(&self, vault: &dyn SecretVault) -> Result<OpenStarts, TeamWorkError> {
+    let Some(recovered) = self.try_recover(vault).await? else {
+      // A start of the project is under way, e.g. the person's Run: it carries itself on.
+      return Ok(OpenStarts::Waiting);
+    };
+    let mut left = OpenStarts::Settled;
+    for (operation, outcome) in recovered {
+      match outcome {
+        Ok(StartOutcome::Waiting(_) | StartOutcome::RunnerUnavailable(_)) => left = OpenStarts::Waiting,
+        Ok(_) => {}
+        // Its record is kept, so a later try may carry it on (the database was busy, the server answered strangely).
+        Err(error) => {
+          tracing::warn!(%error, %operation, "an open team start could not go on, and is tried again");
+          left = OpenStarts::Waiting;
+        }
+      }
     }
+    Ok(left)
   }
-  Ok(left)
 }

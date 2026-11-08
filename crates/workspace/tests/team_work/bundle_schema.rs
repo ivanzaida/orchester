@@ -54,7 +54,7 @@ async fn accepted() -> Accepted {
 
 /// The start under `held` is failed with `expected`, kept so, and made no inputs and no run.
 async fn assert_failed(held: &Accepted, outcome: StartOutcome, expected: &StartFailure) {
-  let StartOutcome::Failed(failure) = outcome else {
+  let StartOutcome::Failed(failure, _) = outcome else {
     panic!("not failed: {outcome:?}");
   };
   assert_eq!(&failure, expected);
@@ -64,7 +64,7 @@ async fn assert_failed(held: &Accepted, outcome: StartOutcome, expected: &StartF
   assert_eq!(kept.stage, TeamStartStage::Failed);
   assert!(db.accepted_team_inputs(operation).expect("read").is_none());
   assert!(db.open_team_starts().expect("open").is_empty(), "nothing left open");
-  let StartOutcome::Failed(again) = held
+  let StartOutcome::Failed(again, _) = held
     .work
     .start(held.request.clone(), held.checkout.vault())
     .await

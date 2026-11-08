@@ -24,7 +24,7 @@ mod authority;
 mod first_download;
 mod resources;
 pub use authority::{
-  AuthorityClaim, AuthorityModule, AuthorityTask, DeliveryAuthorized, PendingDelivery, Person, Plan,
+  AuthorityClaim, AuthorityModule, AuthorityTask, BundleFault, DeliveryAuthorized, PendingDelivery, Person, Plan,
   STALE_AFTER_MINUTES, Standing,
 };
 use first_download::TaskPages;

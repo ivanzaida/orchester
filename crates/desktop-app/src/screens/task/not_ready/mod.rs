@@ -19,7 +19,10 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_workspace::readiness::{NotReadyHere, NotReadyPart};
+use orchester_workspace::{
+  readiness::{NotReadyHere, NotReadyPart},
+  team_work::ClaimEnd,
+};
 
 pub use self::notice::notice;
 use self::words::{Glyph, Words};
@@ -83,10 +86,12 @@ fn card_of(ctx: &mut Ctx, task: &TaskContext, refusal: &NotReadyHere) -> Element
     .enumerate()
     .map(|(index, part)| row(ctx, (index, part), (team, index + 1 == refusal.parts().len()), &open))
     .collect::<Vec<_>>();
-  let body = match (team, refusal.after_server_started()) {
-    (_, true) => "summary.notReady.bodyAfterStart",
-    (true, false) => "summary.notReady.bodyTeam",
-    (false, false) => "summary.notReady.body",
+  let body = match (team, refusal.claim_end()) {
+    (_, Some(ClaimEnd::Released)) => "summary.notReady.bodyAfterStart",
+    (_, Some(ClaimEnd::Kept)) => "summary.notReady.bodyAfterStartKept",
+    (_, Some(ClaimEnd::Held)) => "summary.notReady.bodyAfterStartHeld",
+    (true, None) => "summary.notReady.bodyTeam",
+    (false, None) => "summary.notReady.body",
   };
   card("task-not-ready", CardSurface::Attention)
     .rounded(TaskRadius::NotReadyCard.role())

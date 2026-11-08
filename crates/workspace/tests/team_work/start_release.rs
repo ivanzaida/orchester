@@ -93,7 +93,7 @@ async fn team_work_release_waits_for_the_server_before_it_settles_the_failure() 
   cut.store(false, Ordering::SeqCst);
   let mut recovered = work.recover(checkout.vault()).await.expect("recovered");
   assert_eq!(recovered.len(), 1);
-  let StartOutcome::Failed(failure) = recovered.remove(0).1.expect("carried on") else {
+  let StartOutcome::Failed(failure, _) = recovered.remove(0).1.expect("carried on") else {
     panic!("not failed");
   };
   assert_eq!(failure, StartFailure::BundleUnreadable);

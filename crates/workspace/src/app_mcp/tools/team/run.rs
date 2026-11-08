@@ -171,15 +171,15 @@ async fn started(team: &Team, outcome: StartOutcome) -> Result<Value, ToolError>
       Err(bundle_missing::refused(team, error.details()).await)
     }
     StartOutcome::Refused(error) => Err(authority_refused(&error)),
-    StartOutcome::Failed(StartFailure::BundleSchema { read, built }) => Err(bundle_schema(Schemas { read, built })),
-    StartOutcome::Failed(StartFailure::BundleUnreadable) => Err(ToolError::refused(
+    StartOutcome::Failed(StartFailure::BundleSchema { read, built }, _) => Err(bundle_schema(Schemas { read, built })),
+    StartOutcome::Failed(StartFailure::BundleUnreadable, _) => Err(ToolError::refused(
       "team_bundle_unreadable",
       vec![Message::new("appMcp.errors.teamBundleUnreadable")],
     )),
-    StartOutcome::Failed(StartFailure::NotReadyHere { pipeline, missing }) => {
-      Err(ToolError::NotReadyHere(NotReadyHere::after_start(pipeline, missing)))
-    }
-    StartOutcome::Failed(failure) => {
+    StartOutcome::Failed(StartFailure::NotReadyHere { pipeline, missing }, claim) => Err(ToolError::NotReadyHere(
+      NotReadyHere::after_start(pipeline, missing, claim),
+    )),
+    StartOutcome::Failed(failure, _) => {
       tracing::warn!(?failure, "a team start failed for good");
       Err(start_failed())
     }

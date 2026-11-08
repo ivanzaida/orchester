@@ -17,7 +17,7 @@ use tokio::runtime::Runtime;
 
 use super::team::{self, State};
 
-fn task_route(project: ProjectId, key: &str) -> Route {
+pub(super) fn task_route(project: ProjectId, key: &str) -> Route {
   let key = key.parse().expect("a task key");
   Route::Project(project, ProjectPage::task(key, TaskView::Summary, false))
 }

@@ -61,7 +61,10 @@ pub(super) fn command(authority: &mut Authority, project: &str, body: &str) -> (
     }
     Err((status, code)) => (status, refusal(Some(&operation), code)),
   };
-  authority.operations.push((operation, identity, status, answer.clone()));
+  // A server that was unavailable kept nothing of the command: the same operation is sent again as new.
+  if status != 503 {
+    authority.operations.push((operation, identity, status, answer.clone()));
+  }
   (status, answer)
 }
 
@@ -203,6 +206,14 @@ fn release(authority: &mut Authority, command: &Value) -> Result<Value, Refused>
     _ => return Err((409, "claim_lost")),
   };
   *claim = None;
+  // The release fences the work made under the claim: the task takes a new start.
+  if let Some(task) = authority
+    .tasks
+    .as_mut()
+    .and_then(|tasks| tasks.iter_mut().find(|task| subject["id"] == task_id(task)))
+  {
+    task.work = None;
+  }
   Ok(json!({"kind": "released", "subject": subject, "released_claim_id": released.id(number), "effects": []}))
 }
 

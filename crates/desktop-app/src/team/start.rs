@@ -23,14 +23,15 @@ use orchester_workspace::{
   runner::{RunRequestError, Runners},
   tasks::run::start_messages,
   team_work::{
-    self, BranchNotFound, ProjectRunner, StartFailure, StartOutcome, TeamStartRequest, TeamWork, TeamWorkError,
-    bundle_missing_message,
+    self, BranchNotFound, ClaimEnd, ProjectRunner, StartFailure, StartOutcome, TeamStartRequest, TeamWork,
+    TeamWorkError, bundle_missing_message,
   },
 };
 
 use super::{
   TeamSource,
   act::{Acted, Acting},
+  invalidation::Stale,
 };
 
 /// What the start of a team task's work needs.
@@ -74,23 +75,23 @@ pub enum Stop {
   BranchNotFound(String),
   /// The pipeline is not ready on this computer: what is missing, each part with its fix, which the task's Summary
   /// lists. Before the server was asked for anything nothing was claimed; a version the server pinned that this
-  /// computer is not ready for is found after it made the work ([`NotReadyHere::after_server_started`]).
+  /// computer is not ready for is found after it made the work ([`NotReadyHere::claim_end`] says what became of the
+  /// claim).
   NotReadyHere(NotReadyHere),
   /// The team server could not read the pipeline or a profile, or they have no published version.
   NotReadable,
   /// The team server built no bundle for the start (`bundle_missing`) and says why, as a message that tells what to
-  /// do; no work was made and the claim was released.
+  /// do; no work was made.
   BundleMissing(Message),
   /// The bundle the server built is in a schema this computer does not read (`read`); the older of the two is
-  /// updated. The claim was released.
-  BundleSchema { read: u32, built: u32 },
-  /// The server answered something for the bundle that this computer cannot read. The claim was released.
-  BundleUnreadable,
-  /// The bundle or one of its files is not the one the server announced. The claim was released.
-  BundleMismatch,
-  /// The bundle does not make the run's inputs on this computer (a profile without a connection, …). The claim was
-  /// released.
-  InputsFailed,
+  /// updated. The claim ended as `claim` says.
+  BundleSchema { read: u32, built: u32, claim: ClaimEnd },
+  /// The server answered something for the bundle that this computer cannot read.
+  BundleUnreadable(ClaimEnd),
+  /// The bundle or one of its files is not the one the server announced.
+  BundleMismatch(ClaimEnd),
+  /// The bundle does not make the run's inputs on this computer (a profile without a connection, …).
+  InputsFailed(ClaimEnd),
   /// The runner refused the run.
   Runner(Vec<Message>),
   /// It could not be carried out here.
@@ -145,7 +146,11 @@ pub async fn start(
     programs: mcp_programs,
   };
   let runner = ProjectRunner::new(runners, root.clone(), request.project);
-  carry_out(acting, source, (runner, root), start).await
+  let started = carry_out(acting, source, (runner, root), start).await;
+  // The server answered, and may have let go of the claim: the task is read again, so a Run pressed next does not
+  // name the claim it released.
+  Stale::EVERY.apply(&acting.team.client());
+  started
 }
 
 /// The start's base, the module branch's tip here, and the program paths set for the team's MCP servers; or why the
@@ -213,7 +218,7 @@ fn started(outcome: StartOutcome, root: &Path) -> Started {
     StartOutcome::Started(run) => Started::Run(run),
     StartOutcome::Waiting(_) => Started::Waiting,
     StartOutcome::Refused(error) => Started::Stopped(refused(&error, root)),
-    StartOutcome::Failed(failure) => Started::Stopped(failed(failure)),
+    StartOutcome::Failed(failure, claim) => Started::Stopped(failed(failure, claim)),
     StartOutcome::RunnerRefused(rejection) => {
       Started::Stopped(Stop::Runner(start_messages(&RunRequestError::Rejected(rejection))))
     }
@@ -240,20 +245,20 @@ fn refused(error: &AuthorityError, root: &Path) -> Stop {
 }
 
 /// Why a start that failed for good did not start, as the page says it.
-fn failed(failure: StartFailure) -> Stop {
+fn failed(failure: StartFailure, claim: ClaimEnd) -> Stop {
   match failure {
     StartFailure::NotReadyHere { pipeline, missing } => {
-      Stop::NotReadyHere(NotReadyHere::after_start(pipeline, missing))
+      Stop::NotReadyHere(NotReadyHere::after_start(pipeline, missing, claim))
     }
-    StartFailure::BundleSchema { read, built } => Stop::BundleSchema { read, built },
-    StartFailure::BundleUnreadable => Stop::BundleUnreadable,
+    StartFailure::BundleSchema { read, built } => Stop::BundleSchema { read, built, claim },
+    StartFailure::BundleUnreadable => Stop::BundleUnreadable(claim),
     StartFailure::Bundle(why) => {
       tracing::warn!(%why, "a team start's bundle is not the announced one");
-      Stop::BundleMismatch
+      Stop::BundleMismatch(claim)
     }
     StartFailure::Inputs(why) => {
       tracing::warn!(%why, "a team start's bundle does not make the run's inputs");
-      Stop::InputsFailed
+      Stop::InputsFailed(claim)
     }
   }
 }

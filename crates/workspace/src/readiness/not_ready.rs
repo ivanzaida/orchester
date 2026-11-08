@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 
 use super::{PipelineReadiness, ProjectReadiness, ReadinessStanding, ResourceReadiness, Undecided};
-use crate::messages::Message;
+use crate::{messages::Message, team_work::ClaimEnd};
 
 /// One part a pipeline lacks, with the name of the profile, reviewer or MCP server it is about (the secret's own name
 /// for a secret). Kept with a start that failed on it, so it is serializable.
@@ -184,8 +184,9 @@ impl NotReadyPart {
 enum Found {
   /// Before the team server was asked for anything: no claim, no work, no attempt.
   BeforeClaim,
-  /// After `work.start`, from the versions the server pinned: the work and the claim exist, and nothing ran.
-  AfterStart,
+  /// After `work.start`, from the versions the server pinned: the server made the work, nothing ran, and the claim
+  /// was let go of, kept for another run, or could not be.
+  AfterStart(ClaimEnd),
 }
 
 /// A pipeline that does not start on this computer, and the parts that keep it from starting.
@@ -231,13 +232,13 @@ impl NotReadyHere {
   }
 
   /// `pipeline` (by name), whose versions the team server pinned for a start it accepted lack `missing`, which is not
-  /// empty: the work and the claim exist, though nothing ran.
-  pub fn after_start(pipeline: impl Into<String>, missing: Vec<MissingPart>) -> Self {
+  /// empty: the server made the work, though nothing ran; `claim` says what became of the task's claim.
+  pub fn after_start(pipeline: impl Into<String>, missing: Vec<MissingPart>, claim: ClaimEnd) -> Self {
     Self {
       pipeline: pipeline.into(),
       number: None,
       parts: missing.into_iter().map(NotReadyPart::Missing).collect(),
-      found: Found::AfterStart,
+      found: Found::AfterStart(claim),
     }
   }
 
@@ -258,7 +259,9 @@ impl NotReadyHere {
   pub fn messages(&self) -> Vec<Message> {
     let lead = match self.found {
       Found::BeforeClaim => "notReadyHere.refused",
-      Found::AfterStart => "notReadyHere.refusedAfterStart",
+      Found::AfterStart(ClaimEnd::Released) => "notReadyHere.refusedAfterStart",
+      Found::AfterStart(ClaimEnd::Kept) => "notReadyHere.refusedAfterStartKept",
+      Found::AfterStart(ClaimEnd::Held) => "notReadyHere.refusedAfterStartHeld",
     };
     std::iter::once(Message::new(lead).with("pipeline", self.pipeline.clone()))
       .chain(self.parts.iter().map(NotReadyPart::message))
@@ -270,10 +273,18 @@ impl NotReadyHere {
     Message::new("notReadyHere.refusedShort").with("pipeline", self.pipeline.clone())
   }
 
-  /// The team server made the work and holds the claim, though nothing ran: the start was found not ready after it
-  /// was accepted ([`Self::after_start`]).
+  /// What became of the task's claim when the start was found not ready after the team server accepted it
+  /// ([`Self::after_start`]); `None` for a refusal before any claim.
+  pub const fn claim_end(&self) -> Option<ClaimEnd> {
+    match self.found {
+      Found::AfterStart(claim) => Some(claim),
+      Found::BeforeClaim => None,
+    }
+  }
+
+  /// The team server made the work, though nothing ran: the start was found not ready after it was accepted.
   pub const fn after_server_started(&self) -> bool {
-    matches!(self.found, Found::AfterStart)
+    self.claim_end().is_some()
   }
 
   /// The parts as a client reads them: a kind with the ids and names it is about, never a value.

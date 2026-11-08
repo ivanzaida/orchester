@@ -29,6 +29,7 @@ pub mod project;
 mod refusal;
 mod server_key;
 mod share_outcome;
+mod start_lock;
 pub mod sync;
 pub mod team;
 mod team_created;
@@ -131,6 +132,8 @@ struct Inner {
   work_asked: Mutex<HashMap<orchester_core::id::TaskId, Timestamp>>,
   /// The checkouts whose first download after a join or a link is under way, failed or ended (`project::download`).
   downloads: Mutex<HashMap<PathBuf, project::download::Mark>>,
+  /// The projects' team starts, one at a time each ([`Servers::start_lock`]).
+  starting: Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>,
 }
 
 /// One signed-in server's connection and when to ask it again.
@@ -174,6 +177,7 @@ impl Servers {
         sharing_now: Mutex::new(HashSet::new()),
         work_asked: Mutex::new(HashMap::new()),
         downloads: Mutex::new(HashMap::new()),
+        starting: Mutex::new(HashMap::new()),
       }),
     }
   }

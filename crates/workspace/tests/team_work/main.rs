@@ -15,6 +15,7 @@ mod http;
 
 mod bundle_missing;
 mod bundle_schema;
+mod claim_end;
 mod completion;
 mod delivery;
 mod delivery_recovery;
@@ -24,6 +25,7 @@ mod heartbeat;
 mod here;
 mod reports;
 mod start;
+mod start_alone;
 mod start_release;
 mod team_commands;
 mod team_deliveries;
