@@ -158,6 +158,13 @@ pub fn save(root: &Path, id: ResourceId, fields: &NewTeamMcpServer) -> Result<Sa
   Ok(Saved::Draft(now))
 }
 
+/// The fields of the latest version of team MCP server `id`, which the form shows again once its draft went; `None` for
+/// a server the form cannot hold ([`of`]).
+pub fn published(root: &Path, id: ResourceId) -> Result<Option<NewTeamMcpServer>, EditError> {
+  let db = ProjectDb::open(root)?;
+  Ok(of(&db, id)?.map(|edit| edit.published))
+}
+
 /// Throws away the draft of team MCP server `id`, so its latest version is the resource again.
 pub fn discard(root: &Path, id: ResourceId) -> Result<(), EditError> {
   let mut db = ProjectDb::open(root)?;

@@ -4,7 +4,7 @@
 //! answer in place. A refusal keeps the draft and what was typed; waiting for a server that cannot be reached is not
 //! one.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use lurq::{
   app::ctx::{Ctx, FutureAction, FutureState},
@@ -19,16 +19,20 @@ use orchester_workspace::{
   agents::team_mcp_edit::{self, EditError, McpEdit, Saved},
   app_mcp::setup::NewTeamMcpServer,
   background,
-  messages::Message,
+  messages::{self, Message},
   sharing::team_edit::{EditRefused, Edited},
   tasks::outside::Outside,
 };
 
 use crate::{screens::team_hub::create::McpFields, services::Services};
 
-/// A press of *Publish for the team*: the fields as typed, and whether a person (or automation they let decide)
-/// pressed.
-pub(super) type Publish = FutureAction<(NewTeamMcpServer, bool), Edited, EditRefused>;
+/// A press of *Publish for the team*: the fields as typed, whether a person (or automation they let decide) pressed,
+/// and the version in the outbox that the team server refused, which goes back to being the draft first.
+pub(super) type Publish = FutureAction<(NewTeamMcpServer, bool, Option<VersionId>), Edited, EditRefused>;
+
+/// A press of *Discard draft*: the fields of the version the form shows again, and the refused version in the outbox
+/// that goes back to being the draft first, in which case the form shows the version the team has.
+pub(super) type Discard = FutureAction<(NewTeamMcpServer, Option<VersionId>), NewTeamMcpServer, Message>;
 
 /// What the panel keeps of an edit.
 pub(super) struct Edit {
@@ -40,7 +44,7 @@ pub(super) struct Edit {
   pub refused: Signal<Option<(EditRefused, Timestamp)>>,
   pub publish: Publish,
   /// *Discard draft*, given the fields of the version it is edited from, which the form shows again.
-  pub discard: FutureAction<NewTeamMcpServer, NewTeamMcpServer, Message>,
+  pub discard: Discard,
   /// *Cancel sending*: takes the version waiting in the outbox back as the draft.
   pub cancel: FutureAction<VersionId, (), Message>,
   /// *Cancel sending* of a new resource waiting in the outbox: takes it back as if never created.
@@ -65,33 +69,40 @@ impl Edit {
     let refused = ctx.signal(None);
     let publish = {
       let (services, root) = (services.clone(), root.clone());
-      ctx.future_action(move |(fields, decided): (NewTeamMcpServer, bool)| {
-        let (services, root) = (services.clone(), root.clone());
-        async move {
-          if !decided {
-            return Err(EditRefused::person_only());
+      ctx.future_action(
+        move |(fields, decided, refused): (NewTeamMcpServer, bool, Option<VersionId>)| {
+          let (services, root) = (services.clone(), root.clone());
+          async move {
+            if !decided {
+              return Err(EditRefused::person_only());
+            }
+            if let Some(version) = refused {
+              services
+                .servers
+                .reopen_draft(&root, ResourceKind::McpServer, version)
+                .await
+                .map_err(EditRefused::Failed)?;
+            }
+            let kept = root.clone();
+            background::run(move || team_mcp_edit::save(&kept, id, &fields))
+              .await
+              .map_err(EditRefused::Failed)?
+              .map_err(|error| EditRefused::Failed(failed(error)))?;
+            let settled = services.servers.publish_mcp_edit(&root, id).await;
+            services.changes.record(project, Outside::Connections);
+            settled
           }
-          let kept = root.clone();
-          background::run(move || team_mcp_edit::save(&kept, id, &fields))
-            .await
-            .map_err(EditRefused::Failed)?
-            .map_err(|error| EditRefused::Failed(failed(error)))?;
-          let settled = services.servers.publish_mcp_edit(&root, id).await;
-          services.changes.record(project, Outside::Connections);
-          settled
-        }
-      })
+        },
+      )
     };
     let discard = {
       let (services, root) = (services.clone(), root.clone());
-      ctx.future_action(move |published: NewTeamMcpServer| {
+      ctx.future_action(move |(published, refused): (NewTeamMcpServer, Option<VersionId>)| {
         let (services, root) = (services.clone(), root.clone());
         async move {
-          let result = background::run(move || team_mcp_edit::discard(&root, id))
-            .await?
-            .map_err(failed);
+          let result = discard_draft(&services, &root, id, (published, refused)).await;
           services.changes.record(project, Outside::Connections);
-          result.map(|()| published)
+          result
         }
       })
     };
@@ -138,6 +149,8 @@ impl Edit {
     ctx.watch(&self.publish.state(), move |state| {
       if state.is_pending() {
         refused.set(None);
+        // A refused version goes back to being the draft first: the form stays while that happens.
+        editing.set(true);
       } else if state.is_fulfilled() {
         editing.set(false);
       } else if let Some(error) = state.error.clone() {
@@ -213,6 +226,34 @@ impl Edit {
       _ => Ok(state.data.flatten()),
     }
   }
+}
+
+/// Throws the draft of `id` away, after the refused version `refused` in the outbox went back to being it; the fields
+/// the form shows again are the version's own: `published`, or, once a refused version is gone, the team's.
+async fn discard_draft(
+  services: &Services,
+  root: &Path,
+  id: ResourceId,
+  (published, refused): (NewTeamMcpServer, Option<VersionId>),
+) -> Result<NewTeamMcpServer, Message> {
+  if let Some(version) = refused {
+    services
+      .servers
+      .reopen_draft(root, ResourceKind::McpServer, version)
+      .await?;
+  }
+  let kept = root.to_owned();
+  background::run(move || team_mcp_edit::discard(&kept, id))
+    .await?
+    .map_err(failed)?;
+  if refused.is_none() {
+    return Ok(published);
+  }
+  let kept = root.to_owned();
+  background::run(move || team_mcp_edit::published(&kept, id))
+    .await?
+    .map_err(failed)?
+    .ok_or_else(messages::interrupted)
 }
 
 /// What a draft that could not be read or saved says.

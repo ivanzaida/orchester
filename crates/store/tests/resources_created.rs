@@ -305,3 +305,31 @@ fn a_first_version_published_from_a_draft_is_never_taken_back() {
   );
   assert_eq!(db.resources(ResourceKind::Pipeline).unwrap().len(), 1);
 }
+
+#[test]
+fn a_created_version_the_server_refused_keeps_its_resource_listed_with_the_work_over_it() {
+  let (_repo, mut db) = team_repo();
+  let (kept, v1) = db
+    .create_published(slug("kept"), name("Kept"), &instruction("One."), at(2))
+    .expect("created");
+  db.save_draft(
+    kept.id(),
+    &Draft::new(instruction("Two."), Some(VersionNumber::FIRST), at(3)),
+  )
+  .expect("a draft over v1");
+  // A resource published from a draft that the server refused is not created here: it stays hidden.
+  let flow = db
+    .create_resource(slug("flow"), name("Flow"), &pipeline(), at(4))
+    .expect("a draft")
+    .id();
+  let flow_version = db.publish_draft::<Pipeline>(flow, at(5)).expect("published").id();
+
+  db.record_publish_refused(v1.id(), "name_taken").expect("refused");
+  db.record_publish_refused(flow_version, "name_taken").expect("refused");
+
+  let listed = db.resources(ResourceKind::Instruction).unwrap();
+  assert_eq!(listed.len(), 1, "the person's refused work stays visible: {listed:?}");
+  assert_eq!(listed[0].id(), kept.id());
+  assert!(db.draft::<Instruction>(kept.id()).unwrap().is_some());
+  assert!(db.resources(ResourceKind::Pipeline).unwrap().is_empty());
+}

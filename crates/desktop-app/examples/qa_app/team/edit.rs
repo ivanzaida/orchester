@@ -6,7 +6,7 @@
 //! press leaves behind, which no MCP client can press: they are made here through the workspace's own calls (the same a
 //! press makes), so the store and the outbox hold what they hold after one. Fixture data for QA, never shipped.
 
-use std::{error::Error, path::Path};
+use std::{error::Error, fs, path::Path};
 
 use orchester_api::{
   ResourceCreate, SharedResourceKind, VersionContent,
@@ -16,6 +16,7 @@ use orchester_app::services::Services;
 use orchester_core::{
   id::{IdempotencyKey, ResourceId},
   resource::{ResourceKind, TeamMcpServer, VersionNumber},
+  run::Answerer,
   sharing::MemberRole,
   store::ResourceStore,
   time::Timestamp,
@@ -97,6 +98,9 @@ fn result(
   (services, runtime): (&Services, &Handle),
   (server, root): (&TeamServer, &Path),
 ) -> Result<(), Box<dyn Error>> {
+  if state.program_set() {
+    set_program(services, root)?;
+  }
   match state {
     State::TeamEditPublished => {
       let edited = edit(services, runtime, root)?;
@@ -167,6 +171,20 @@ fn named(name: &str) -> NewTeamMcpServer {
     },
     exempt_tools: Vec::new(),
   }
+}
+
+/// The program path of `pencil-design` set on this computer, as a person's *Choose…* leaves it (an empty file of the QA
+/// folder of programs).
+fn set_program(services: &Services, root: &Path) -> Result<(), Box<dyn Error>> {
+  let file = root.join(".orchester").join("qa-bin").join("pencil-mcp");
+  let folder = file.parent().ok_or("the QA folder of programs")?;
+  fs::create_dir_all(folder)?;
+  fs::write(&file, "")?;
+  services
+    .workspace
+    .set_team_mcp_program(root, pencil(root)?, &file, Answerer::Person)
+    .map_err(said)?;
+  Ok(())
 }
 
 /// The seed's `pencil-design`.

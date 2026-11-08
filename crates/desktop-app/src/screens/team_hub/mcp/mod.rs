@@ -17,6 +17,7 @@ mod edit_view;
 mod fix;
 mod from_team;
 mod modes;
+mod refused;
 mod words;
 
 use std::{path::PathBuf, sync::Arc};
@@ -162,11 +163,11 @@ impl Component for McpPanel {
       .child(panel::head_saying(
         ctx,
         entry,
-        words::head_line(ctx, now, entry, sheet),
+        words::head_line(ctx, now, entry, (sheet, &props.team)),
         edit_button,
       ))
-      .child(chips)
       .with_children(above)
+      .child(chips)
       .with_children(self.action_failure(ctx))
       .with_children(member::lock_line(ctx, &props.team).filter(|_| mode != Mode::ReadOnly))
       .child(from_team)

@@ -69,7 +69,7 @@ async fn live_updates_a_pipeline_naming_a_profile_the_team_lacks_is_refused_and_
   };
   assert_eq!(standing(&alice.workspace.db(), bad), Some(PublishState::Waiting));
 
-  alice.store(&server, |store| store.send_waiting()).await.expect("sent");
+  alice.send_waiting(&server).await.expect("sent");
 
   let db = alice.workspace.db();
   assert_eq!(
@@ -81,10 +81,7 @@ async fn live_updates_a_pipeline_naming_a_profile_the_team_lacks_is_refused_and_
   assert_eq!(standing(&db, good), None, "the others were still sent");
   assert_eq!(server.versions_of(good).len(), 1);
 
-  alice
-    .store(&server, |store| store.send_waiting())
-    .await
-    .expect("nothing to send");
+  alice.send_waiting(&server).await.expect("nothing to send");
   assert_eq!(standing(&alice.workspace.db(), bad), refused("pipeline_names_non_team"));
 }
 
@@ -113,7 +110,7 @@ async fn live_updates_a_profile_with_writable_folders_is_refused_and_leaves_the_
   };
   assert_eq!(standing(&alice.workspace.db(), stuck), Some(PublishState::Waiting));
 
-  alice.store(&server, |store| store.send_waiting()).await.expect("sent");
+  alice.send_waiting(&server).await.expect("sent");
 
   let db = alice.workspace.db();
   assert_eq!(standing(&db, stuck), refused("writable_folders_stay"));
@@ -139,7 +136,7 @@ async fn live_updates_a_version_waits_while_the_server_cannot_be_reached() {
   };
   alice.go_offline(true);
 
-  let offline = alice.store(&server, |store| store.send_waiting()).await;
+  let offline = alice.send_waiting(&server).await;
 
   assert!(matches!(offline, Err(SharingError::Offline)), "{offline:?}");
   let db = alice.workspace.db();
@@ -151,7 +148,7 @@ async fn live_updates_a_version_waits_while_the_server_cannot_be_reached() {
   );
 
   alice.go_offline(false);
-  alice.store(&server, |store| store.send_waiting()).await.expect("sent");
+  alice.send_waiting(&server).await.expect("sent");
   let db = alice.workspace.db();
   assert_eq!(standing(&db, good), None);
   assert_eq!(standing(&db, bad), refused("pipeline_names_non_team"));

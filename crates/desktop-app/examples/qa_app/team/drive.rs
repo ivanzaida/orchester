@@ -69,6 +69,7 @@ pub fn to(
     | State::TeamEditRefusedAdmin
     | State::TeamEditWaiting
     | State::TeamEditRejected
+    | State::TeamEditVariables
     | State::TeamCreateNameTaken => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
   }
 }

@@ -81,6 +81,17 @@ fn typed(window: &mut Window) {
       .texts("team-hub-edit-draft-status")
       .is_some_and(|said| said.join(" ").contains("saved"))
   });
+  // What the panel says is the save's answer; the database holds it once that came.
+  let pencil = db(window)
+    .resources(ResourceKind::McpServer)
+    .expect("resources")
+    .into_iter()
+    .find(|resource| resource.name().as_str() == "pencil-design")
+    .expect("the seed's pencil-design")
+    .id();
+  window.until("the draft in the database", |window| {
+    draft_of(window, pencil).is_some_and(|args| args == ["--stdio", "--app", "desktop", "--no-telemetry"])
+  });
 }
 
 pub(super) fn draft_of(window: &Window, id: ResourceId) -> Option<Vec<String>> {
@@ -96,10 +107,10 @@ pub(super) fn draft_of(window: &Window, id: ResourceId) -> Option<Vec<String>> {
 fn team_qa_hub_edit_keeps_a_draft_and_publishing_makes_the_next_version() {
   let (mut window, server, (_, pencil)) = on_pencil(("team-edit", State::TeamEdit));
   typed(&mut window);
-  assert_eq!(
-    draft_of(&window, pencil).as_deref(),
-    Some(&["--stdio", "--app", "desktop", "--no-telemetry"].map(str::to_owned)[..])
-  );
+  let typed_arguments = ["--stdio", "--app", "desktop", "--no-telemetry"].map(str::to_owned);
+  window.until("the draft to hold what was typed", |window| {
+    draft_of(window, pencil).as_deref() == Some(&typed_arguments[..])
+  });
   let said = window.text("team-hub-edit-draft-sub");
   assert!(said.starts_with("Arguments changed"), "{said}");
   assert!(said.contains("publishing makes v2"), "{said}");

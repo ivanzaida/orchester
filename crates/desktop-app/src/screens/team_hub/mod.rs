@@ -139,7 +139,7 @@ impl Component for TeamHubScreen {
     // failed, and a read under way marks what shows as the last answer.
     let reading = loaded.is_pending();
     let hub = loaded.data.as_ref().filter(|_| failed.is_none());
-    let listing = hub.map(|hub| Listing::of(hub, &team.standings));
+    let listing = hub.map(|hub| Listing::of(hub, &team));
     let navigation = Navigation::of(ctx);
     // A form has no resource chosen: the filter's links go to the kind's list.
     let selected = listing

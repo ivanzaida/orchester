@@ -127,6 +127,7 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
     | State::TeamEditRefusedAdmin
     | State::TeamEditWaiting
     | State::TeamEditRejected
+    | State::TeamEditVariables
     | State::TeamCreateNameTaken => {
       let ids = task_ids(services)?;
       let role = member::serve_as(&server, state, (&ids, &team_pipelines(services, state)?));
