@@ -1,8 +1,7 @@
 //! The Orchestrator's composer (`Composer` `Nv6kV` in `01 Conversation` `wRSL4`): one box — `surface_input` in a
 //! `border_strong` stroke (`border_focus` while the field has the focus), radius 10, 10 over it, 10 at its end, 8
 //! under it and 12 at its start, 10 between the message and its bar — whose bar holds, 6 apart, *Attach* (a 24 square
-//! with a `paperclip`, which opens the system's picker); the runs-on chip ([`super::runs_on`]); *Ctrl Enter* in Geist
-//! Mono 11 `text_muted`; and the 28 `accent` square that sends (`arrow-up`), faded while there is nothing to send.
+//! with a `paperclip`, which opens the system's picker); the runs-on chip ([`super::runs_on`]); and the 28 `accent` square that sends (`arrow-up`), faded while there is nothing to send.
 //! While the Orchestrator answers the composer stays usable (ORC-92): the square sends after the answer, and a chevron
 //! beside it opens the other ways of sending ([`super::send_menu`]); Esc stops the answer. Until the Orchestrator is
 //! set up (`02 Not set up` `Wd5CL`) the box is on `surface_panel` in a `border` stroke, says it can't answer yet, the
@@ -20,7 +19,7 @@ use lurq::{
     events::KeyboardEvent,
     theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Button, Column, Row, Spacer, Text, TextInput},
+  components::{Button, Column, Row, Spacer, TextInput},
   core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
@@ -32,10 +31,7 @@ use super::{
 };
 use crate::{
   services::attachment_picker::AttachmentPicker,
-  theme::{
-    ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, OrchestratorSpacing,
-    OrchestratorText,
-  },
+  theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, IconSize, OrchestratorSpacing, OrchestratorText},
   ui::{
     attachments::tray::{self, PutBack},
     composer::message_scrollbar,
@@ -151,7 +147,7 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, mut composer: ComposerBox<'_>
   );
   let end: Vec<Element> = match composer.set_up {
     Some(set_up) => vec![set_up],
-    None => vec![keys(ctx).into(), send(ctx, view, composer.sending)],
+    None => vec![send(ctx, view, composer.sending)],
   };
   let bar = Row::new()
     .id("orchestrator-composer-bar")
@@ -193,18 +189,6 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, mut composer: ComposerBox<'_>
     .child(tray::drop_target(boxed, &view.attached))
     .with_children(tray::refusals(ctx, ATTACHMENTS, &view.attached))
     .with_children(composer.menus)
-}
-
-/// *Ctrl Enter* (*⌘ Enter* on macOS), the keys that send.
-fn keys(ctx: &Ctx) -> Text {
-  Text::new(&ctx.t(if cfg!(target_os = "macos") {
-    "orchestrator.keys.cmdEnter"
-  } else {
-    "orchestrator.keys.ctrlEnter"
-  }))
-  .id("orchestrator-keys")
-  .variant(ExtraTypography::MonoNote.role())
-  .nowrap()
 }
 
 /// The message field, in 13 on 17 lines: it grows with its lines up to [`MAX_LINES`]; a paste of an image, files or

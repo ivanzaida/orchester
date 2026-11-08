@@ -1,7 +1,7 @@
 //! The send button while the Orchestrator answers (ORC-92), as the task's composer splits it (`Send button/split`
 //! `wPMDa`): the 28 `accent` square sends *after this answer*, the default; a line and a chevron (`KkfI8`, `ZFD5V`)
 //! open the send menu over it, whose rows (`Menu item/detail` `j6ZUhL`) are the three ways of sending while it answers:
-//! *Send after this answer* (chosen, Ctrl/Cmd+Enter), *Send now* and *Stop and send*, each with what it does. The
+//! *Send after this answer* (chosen), *Send now* and *Stop and send*, each with what it does. The
 //! design draws no menu for the chat; it is the task composer's, with the chat's words.
 
 use std::sync::Arc;
@@ -71,11 +71,7 @@ pub(super) fn split(
   .describe("a11y_name", label.clone())
   .child(face);
   let tip = match ways {
-    Some(_) => Tooltip::new("orchestrator-send", label).shortcut(ctx.t(if cfg!(target_os = "macos") {
-      "orchestrator.keys.cmdEnter"
-    } else {
-      "orchestrator.keys.ctrlEnter"
-    })),
+    Some(_) => Tooltip::new("orchestrator-send", label),
     None => Tooltip::new("orchestrator-send", empty.clone()),
   };
   let square = tip.wrap(ctx, square);
@@ -117,13 +113,8 @@ pub(super) fn split(
     .into()
 }
 
-/// The send menu over the button: *Send after this answer* (chosen, Ctrl/Cmd+Enter), *Send now*, *Stop and send*.
+/// The send menu over the button: *Send after this answer* (chosen), *Send now*, *Stop and send*.
 fn menu(ctx: &mut Ctx, ways: &Ways, (open, anchor): (&Signal<bool>, &ElementRef)) -> Element {
-  let keys = ctx.t(if cfg!(target_os = "macos") {
-    "orchestrator.keys.cmdEnter"
-  } else {
-    "orchestrator.keys.ctrlEnter"
-  });
   let item = |id: &str, (label, detail): (&str, &str), press: &Press| {
     let press = press.clone();
     MenuItem::new(id, ctx.t(label), move || press()).detail(ctx.t(detail))
@@ -136,8 +127,7 @@ fn menu(ctx: &mut Ctx, ways: &Ways, (open, anchor): (&Signal<bool>, &ElementRef)
     ),
     &ways.after_answer,
   )
-  .chosen(true)
-  .shortcut(keys);
+  .chosen(true);
   let now = item(
     "orchestrator-send-now",
     ("orchestrator.composer.now", "orchestrator.composer.nowDetail"),

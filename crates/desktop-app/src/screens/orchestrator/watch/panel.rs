@@ -294,7 +294,7 @@ pub(super) fn led_in(ctx: &Ctx, led: LedIn<'_>, color: PaletteColor) -> Element 
     .into()
 }
 
-/// The keys (`Keys` `T0Gkl`, `HXrVq`): *↑ ↓ Move*, *Enter Add*, *Backspace Remove the last*, *Ctrl Enter Watch* and
+/// The keys (`Keys` `T0Gkl`, `HXrVq`): *↑ ↓ Move*, *Enter Add*, *Backspace Remove the last* and
 /// *Esc Close* while there are rows (`rows`), *Esc Close* alone otherwise.
 pub(super) fn footer(ctx: &Ctx, (id, picker): (&str, Picker), rows: bool) -> Element {
   let prefix = picker.prefix();
@@ -303,22 +303,12 @@ pub(super) fn footer(ctx: &Ctx, (id, picker): (&str, Picker), rows: bool) -> Ele
       ("move", "move"),
       ("enter", "add"),
       ("backspace", "removeLast"),
-      (apply_key(), "watch"),
       ("esc", "close"),
     ]
   } else {
     &[("esc", "close")]
   };
   keys(ctx, (&format!("{id}-{prefix}"), &format!("{prefix}-key")), hints, None)
-}
-
-/// The cap of the keys that apply a command: *Cmd Enter* on macOS, *Ctrl Enter* elsewhere.
-pub(in crate::screens::orchestrator) const fn apply_key() -> &'static str {
-  if cfg!(target_os = "macos") {
-    "cmdEnter"
-  } else {
-    "ctrlEnter"
-  }
 }
 
 /// A picker's keys under a `border` line, named `{id}-keys`: each cap (`orchestrator.watch.keys.*`, named `cap_id`)

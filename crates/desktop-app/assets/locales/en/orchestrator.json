@@ -64,10 +64,6 @@
       "stopAndSendDetail": "Stops this answer, then sends it as the next message",
       "options": "More ways to send"
     },
-    "keys": {
-      "ctrlEnter": "Ctrl Enter",
-      "cmdEnter": "⌘ Enter"
-    },
     "waitsOn": {
       "waits": "{{task}} · #{{run}} waits on {{waited}}",
       "stillWaits": "{{task}} · #{{run}} still waits on {{waited}}",
@@ -202,8 +198,6 @@
       },
       "send": "Send",
       "cancel": "Cancel",
-      "keySend": "sends",
-      "keyCancel": "cancels",
       "blank": "Write the message first",
       "confirm": {
         "title": {
@@ -596,16 +590,12 @@
         "move": "↑ ↓",
         "enter": "Enter",
         "backspace": "Backspace",
-        "ctrlEnter": "Ctrl Enter",
-        "cmdEnter": "Cmd Enter",
         "esc": "Esc"
       },
       "hint": {
         "move": "Move",
         "add": "Add",
         "removeLast": "Remove the last",
-        "watch": "Watch",
-        "stop": "Stop",
         "close": "Close"
       },
       "led": {

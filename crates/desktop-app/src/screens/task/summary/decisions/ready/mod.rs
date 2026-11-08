@@ -1,6 +1,6 @@
 //! A run whose every step passed waits to be merged (ORC-731; `Review · redesign`, Row 4 `XHQpC`), and what merging
 //! makes of it (`Task · Summary · merge states` `kxMAN`). The top card of the Summary ([`card`]) is *Ready to merge*
-//! (01i `k9GBy`) with *Merge* and its key cap, *Review changes*, which opens the run's review page, and *Close without
+//! (01i `k9GBy`) with *Merge*, *Review changes*, which opens the run's review page, and *Close without
 //! merging*; once a merge did not land it turns to the warning card (01j `k4C0Es`): the outcome, what stopped it in
 //! one line, the attempt page's primary action and *Open in Review* (`crate::screens::task::merge`). The run's pull
 //! request is created from the header's *More actions* ([`pull_request`]); once it has one, the card says so and

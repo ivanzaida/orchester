@@ -66,14 +66,9 @@ fn card_deny_with_a_message_opens_its_editor_in_place_of_the_answers() {
     text(&mut window, &format!("{card}-message-send")),
     "Deny and send message"
   );
-  let keys = if cfg!(target_os = "macos") {
-    "⌘ Enter"
-  } else {
-    "Ctrl+Enter"
-  };
-  assert_eq!(
-    text(&mut window, &format!("{card}-message-keys")),
-    format!("{keys} denies and sends · Esc goes back to the answers")
+  assert!(
+    !shown(&mut window, &format!("{card}-message-keys")),
+    "no line names the keys that deny and send"
   );
   for gone in ["-deny-tells", "-answers", "-similar", "-deny-message-reason"] {
     assert!(

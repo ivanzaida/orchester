@@ -18,8 +18,8 @@ fn orchestrator_new_conversation_starts_with_suggestions_that_fill_the_prompt() 
     "{runs_on}"
   );
   assert!(
-    screen.text("orchestrator-keys").ends_with(" Enter"),
-    "the keys that send, in the bar"
+    !screen.exists("orchestrator-keys"),
+    "the bar shows no keys that send"
   );
   assert!(
     !screen.exists("orchestrator-footer") && !screen.exists("orchestrator-under-composer"),
