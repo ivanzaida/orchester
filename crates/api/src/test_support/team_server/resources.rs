@@ -12,7 +12,7 @@
 
 mod used_by;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, thread, time::Duration};
 
 use orchester_core::{resource::TeamMcpServer, sharing::widens};
 use parking_lot::Mutex;
@@ -27,10 +27,18 @@ use crate::{ReferenceTarget, ResourceCreate, ResourcePatch, SharedResourceKind, 
 #[derive(Default)]
 pub(super) struct Store {
   projects: HashMap<String, Project>,
+  /// How long a create or publish takes to be answered, once [`TeamServer::slow_resource_writes`] said so.
+  write_delay: Duration,
 }
 
 #[derive(Default)]
 struct Project {
+  /// Every create and publish is refused `403 not_admin`, once [`TeamServer::refuse_writes_as_not_admin`] said so,
+  /// though the project still lists the person as an admin: their role changed since this computer read it.
+  not_admin: bool,
+  /// The reason (`body`, `references`, `shape`) every create and publish is refused for with `422 invalid`, once
+  /// [`TeamServer::reject_content`] said so.
+  rejects: Option<String>,
   resources: Vec<Stored>,
   /// The first answer of each idempotency key.
   answers: HashMap<String, (u16, Value)>,
@@ -73,11 +81,85 @@ impl TeamServer {
   }
 }
 
+impl TeamServer {
+  /// Every create, publish and patch of a resource is answered only after `delay` from now on, as a server that is slow
+  /// to answer does; reads are not.
+  pub fn slow_resource_writes(&self, delay: Duration) {
+    self.state.lock().resources.write_delay = delay;
+  }
+
+  /// Every create and publish of the project at `slug` is refused from now on as the contract's `422 invalid` with
+  /// `reason` (`body`, `references` or `shape`), as a server that checks the content of a version does.
+  pub fn reject_content(&self, slug: &str, reason: &str) {
+    let mut state = self.state.lock();
+    let Some(id) = state
+      .projects
+      .iter()
+      .find(|project| project["slug"] == slug)
+      .and_then(|project| project["id"].as_str().map(str::to_owned))
+    else {
+      return;
+    };
+    state.resources.projects.entry(id).or_default().rejects = Some(reason.to_owned());
+  }
+
+  /// Every create and publish of the project at `slug` is refused from now on as `403 not_admin`, while its member list
+  /// still names the person an admin: they were demoted after this computer last read it.
+  pub fn refuse_writes_as_not_admin(&self, slug: &str) {
+    let mut state = self.state.lock();
+    let Some(id) = state
+      .projects
+      .iter()
+      .find(|project| project["slug"] == slug)
+      .and_then(|project| project["id"].as_str().map(str::to_owned))
+    else {
+      return;
+    };
+    state.resources.projects.entry(id).or_default().not_admin = true;
+  }
+
+  /// The server of the project at `slug` already holds `create` and its versions up to `latest`, each with the body of
+  /// the first, as when teammates published them before this computer joined.
+  ///
+  /// # Panics
+  /// When the project is not shared or the stand-in refuses `create`.
+  pub fn hold_resource(&self, slug: &str, create: &ResourceCreate, latest: u32) {
+    let mut state = self.state.lock();
+    let id = state
+      .projects
+      .iter()
+      .find(|project| project["slug"] == slug)
+      .and_then(|project| project["id"].as_str().map(str::to_owned))
+      .expect("the stand-in shares the project");
+    let held = state.resources.projects.entry(id).or_default();
+    let (status, _) = held.create(&serde_json::to_string(create).expect("a create serializes"));
+    assert_eq!(status, 201, "the stand-in takes the resource");
+    for number in 2..=latest {
+      let publish = VersionPublish {
+        idempotency_key: orchester_core::id::IdempotencyKey::generate(),
+        based_on: std::num::NonZeroU32::new(number - 1).map(orchester_core::resource::VersionNumber::new),
+        body: create.version.body.clone(),
+        references: create.version.references.clone(),
+      };
+      let (status, _) = held.publish(
+        &create.id.to_string(),
+        &serde_json::to_string(&publish).expect("a publish serializes"),
+      );
+      assert_eq!(status, 201, "the stand-in takes version {number}");
+    }
+  }
+}
+
 /// The answer to a request under `/api/v1/projects/{p}/resources` of one of `state`'s projects, for the `path` (method
 /// first) and `query` and the `body`; `None` for any other request.
 pub(super) fn answer((path, query): (&str, &str), body: &str, state: &Mutex<State>) -> Option<(&'static str, Value)> {
   let (verb, rest) = path.split_once(" /api/v1/projects/")?;
   let (project, part) = rest.split_once("/resources")?;
+  let delay = state.lock().resources.write_delay;
+  if verb != "GET" && !delay.is_zero() {
+    // Before the lock is taken: the rest of the stand-in keeps answering meanwhile.
+    thread::sleep(delay);
+  }
   let mut state = state.lock();
   if !state.projects.iter().any(|known| known["id"] == project) {
     return None;
@@ -91,7 +173,7 @@ pub(super) fn answer((path, query): (&str, &str), body: &str, state: &Mutex<Stat
       .map(|rest| rest.split_once('/').unwrap_or((rest, ""))),
   ) {
     ("GET", None) => (200, json!({"resources": held.list(), "cursor": held.cursor})),
-    ("POST" | "PATCH", _) if !writes => (403, error("not_admin")),
+    ("POST" | "PATCH", _) if !writes || held.not_admin => (403, error("not_admin")),
     ("POST", None) => held.create(body),
     ("PATCH", Some((resource, ""))) => held.patch(resource, body),
     ("GET", Some((resource, "versions"))) => held.versions(resource, query),
@@ -124,6 +206,9 @@ impl Project {
     let key = create.idempotency_key.to_string();
     if let Some(first) = self.answers.get(&key) {
       return first.clone();
+    }
+    if let Some(reason) = self.rejects.clone() {
+      return invalid(&reason);
     }
     let kind = serde_json::to_value(create.kind).unwrap_or(Value::Null);
     let id = serde_json::to_value(create.id).unwrap_or(Value::Null);
@@ -182,6 +267,9 @@ impl Project {
     let key = publish.idempotency_key.to_string();
     if let Some(first) = self.answers.get(&key) {
       return first.clone();
+    }
+    if let Some(reason) = self.rejects.clone() {
+      return invalid(&reason);
     }
     let references_hold = self.references_hold(&publish.references);
     let attribution = self.changed();

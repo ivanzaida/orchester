@@ -2,9 +2,7 @@
 //! New in the head and Edit in the panel, and how its route stays on the resource shown (`Agents · v2` `acFkz`, A1–A6,
 //! ORC-831). `cargo test -p orchester-app --test agents team_hub`.
 
-use orchester_app::routes::{
-  AgentTab, HubFilter, HubView, InstructionsTab, InstructionsView, ProjectPage, Route, ToolTab,
-};
+use orchester_app::routes::{AgentTab, HubFilter, HubView, ProjectPage, Route, ToolTab};
 use orchester_core::{id::ResourceId, sharing::MemberRole};
 
 use super::{
@@ -52,54 +50,43 @@ fn team_hub_edit_opens_the_editor_of_a_profile_and_of_a_tool() {
 }
 
 #[test]
-fn team_hub_new_opens_the_create_page_of_the_kind_the_filter_names() {
+fn team_hub_new_opens_the_form_of_the_kind_the_filter_names_in_the_panel() {
   let mut agents = Agents::new(true);
   team(&agents);
-  let pages = [
-    (
-      HubFilter::Profiles,
-      "New agent",
-      ProjectPage::NewAgent(AgentTab::default()),
-    ),
-    (
-      HubFilter::Instructions,
-      "New instruction",
-      ProjectPage::Instructions(InstructionsView::new_rule(InstructionsTab::default())),
-    ),
-    (HubFilter::Skills, "New skill", ProjectPage::NewSkill),
-    (HubFilter::Tools, "New tool", ProjectPage::NewTool),
+  let forms = [
+    (HubFilter::Profiles, "New agent"),
+    (HubFilter::McpServers, "New MCP server"),
+    (HubFilter::Instructions, "New instruction"),
+    (HubFilter::Skills, "New skill"),
+    (HubFilter::Tools, "New tool"),
   ];
-  for (filter, label, page) in pages {
+  for (filter, label) in forms {
     // The filter may hold nothing (no profile is the team's here): the head is there all the same.
     agents.window.navigation().go(hub(filter, None));
     agents.until("the head", |s| {
       s.exists("team-hub-new") && s.text("team-hub-new") == label
     });
     agents.click("team-hub-new");
-    let created = at(page);
-    agents.until("the create page", |s| s.window.navigation().route_now() == created);
+    let form = at(ProjectPage::hub(HubView::adding(filter)));
+    agents.until("the form", |s| s.window.navigation().route_now() == form);
   }
 }
 
 #[test]
-fn team_hub_has_no_new_for_a_kind_without_a_create_page_and_a_menu_of_the_others_under_all() {
+fn team_hub_has_a_menu_of_the_kinds_under_all() {
   let mut agents = Agents::new(true);
   team(&agents);
-  // An MCP server has no create page yet: no New, and nothing disabled in its place.
-  open(&mut agents, HubView::new(HubFilter::McpServers, None));
-  assert!(!agents.exists("team-hub-new"));
   open(&mut agents, HubView::default());
   assert_eq!(agents.text("team-hub-new"), "New");
   assert!(!agents.exists("team-hub-new-menu"));
   agents.click("team-hub-new");
   agents.until("the menu", |s| s.exists("team-hub-new-menu"));
-  for kind in ["profiles", "instructions", "skills", "tools"] {
+  for kind in ["profiles", "mcp_servers", "instructions", "skills", "tools"] {
     assert!(agents.exists(&format!("team-hub-new-{kind}")), "{kind}");
   }
-  assert!(!agents.exists("team-hub-new-mcp_servers"));
   agents.click("team-hub-new-skills");
-  let created = at(ProjectPage::NewSkill);
-  agents.until("New skill", |s| s.window.navigation().route_now() == created);
+  let form = at(ProjectPage::hub(HubView::adding(HubFilter::Skills)));
+  agents.until("New skill", |s| s.window.navigation().route_now() == form);
 }
 
 #[test]

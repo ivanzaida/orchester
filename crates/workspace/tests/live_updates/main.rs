@@ -29,6 +29,7 @@ mod share_team_form;
 #[path = "../support/mod.rs"]
 mod support;
 mod team_copy;
+mod team_created;
 mod team_refused;
 mod widening;
 

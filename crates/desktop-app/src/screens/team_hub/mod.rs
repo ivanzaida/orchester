@@ -18,6 +18,7 @@ mod fill;
 mod head;
 mod list;
 mod mcp;
+mod member;
 mod model;
 mod panel;
 mod plain;
@@ -25,6 +26,7 @@ mod profile;
 mod row;
 mod rows;
 mod secret;
+mod taken_back;
 mod tool;
 pub(super) mod unread;
 mod words;
@@ -43,12 +45,17 @@ use orchester_workspace::{
   agents::team_hub::TeamHub, background, messages::Message, sharing::team::TeamConfiguration, tasks::outside::Outside,
 };
 
-use self::{create::NewMenu, head::FilterShown, model::Listing};
+use self::{
+  create::NewMenu,
+  head::FilterShown,
+  model::{Kind, Listing},
+};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
   routes::{HubView, ProjectPage, Route},
   services::Services,
+  team::reached::Reached,
   theme::{HUB_READING_OPACITY, HubSpacing},
   ui::{
     failure::{Failure, LastFailure},
@@ -132,10 +139,12 @@ impl Component for TeamHubScreen {
     // failed, and a read under way marks what shows as the last answer.
     let reading = loaded.is_pending();
     let hub = loaded.data.as_ref().filter(|_| failed.is_none());
-    let listing = hub.map(Listing::of);
+    let listing = hub.map(|hub| Listing::of(hub, &team.standings));
     let navigation = Navigation::of(ctx);
+    // A form has no resource chosen: the filter's links go to the kind's list.
     let selected = listing
       .as_ref()
+      .filter(|_| !view.adding)
       .and_then(|listing| listing.selected(view.filter, view.item))
       .map(|entry| entry.id);
     let body = match (failed, hub.zip(listing.as_ref())) {
@@ -159,13 +168,26 @@ impl Component for TeamHubScreen {
       .may_change
       .then(|| create::new_button(ctx, (id, view.filter), (&navigation, &self.new_menu)))
       .flatten();
+    let draft_saved = selected
+      .and_then(|chosen| listing.as_ref().and_then(|listing| listing.find(chosen)))
+      .is_some_and(|entry| entry.draft);
     let shown = FilterShown {
       project: id,
       filter: view.filter,
       selected,
       reading,
+      may_change: team.may_change,
+      draft_saved,
     };
-    frame(ctx, (&team, listing.as_ref(), &shown), new, &navigation, (body, view))
+    let told = taken_back::notices(ctx, &team, &project.open.repo_root);
+    let unreached = Services::of(ctx).team.reached().of(&project.open.repo_root) == Some(Reached::Unanswered);
+    frame(
+      ctx,
+      (&team, listing.as_ref(), &shown),
+      (new, unreached),
+      &navigation,
+      (body, told, view),
+    )
   }
 }
 
@@ -201,9 +223,9 @@ fn keep_route_on_shown(
 fn frame(
   ctx: &mut Ctx,
   (team, listing, shown): (&TeamConfiguration, Option<&Listing>, &FilterShown),
-  new: Option<Element>,
+  (new, unreached): (Option<Element>, bool),
   navigation: &Navigation,
-  (body, view): (Element, HubView),
+  (body, told, view): (Element, Vec<Element>, HubView),
 ) -> Element {
   Column::new()
     .id("screen-team-hub")
@@ -218,8 +240,9 @@ fn frame(
         .right(HubSpacing::Side.role()),
     )
     .spacing(crate::theme::ExtraSpacing::Inset.role())
-    .child(head::head(ctx, team, new))
+    .child(head::head(ctx, team, (new, unreached, shown.draft_saved)))
     .child(head::filter(ctx, listing, shown, navigation))
+    .with_children(told)
     .child(
       Column::new()
         .id("team-hub-body")
@@ -241,7 +264,13 @@ fn hub_body(
   (reading, retry): (bool, &Signal<u64>),
 ) -> Element {
   let id = project.open.project.id();
-  let Some(selected) = listing.selected(view.filter, view.item) else {
+  // Only an admin creates: a member who follows a link to a form sees the kind's list.
+  let adding = Kind::of_filter(view.filter).filter(|_| view.adding && team.may_change);
+  let selected = listing.selected(view.filter, view.item).filter(|_| adding.is_none());
+  if selected.is_none() && adding.is_none() {
+    if !team.may_change {
+      return member::empty(ctx, view.filter, team);
+    }
     return EmptyState::new(
       "team-hub-empty",
       Icon::Users,
@@ -249,23 +278,37 @@ fn hub_body(
       ctx.t("team_hub.empty.detail"),
     )
     .into();
-  };
+  }
   let list = list::list(
     ctx,
     listing,
     &list::Shown {
       project: id,
       filter: view.filter,
-      selected: Some(selected),
+      selected,
+      adding,
       navigation,
     },
   );
-  let shown = panel::Shown {
-    project: id,
-    may_change: team.may_change,
-    navigation,
+  let panel = match (adding, selected) {
+    (Some(kind), _) => create::panel(
+      ctx,
+      create::Props {
+        repo_root: project.open.repo_root.clone(),
+        project: id,
+        kind,
+        listing: listing.clone(),
+        team: team.clone(),
+      },
+    ),
+    (None, Some(selected)) => resource_panel(
+      ctx,
+      (project, team, hub),
+      (listing, selected),
+      (navigation, reading, retry),
+    ),
+    (None, None) => return Element::from(Row::new()),
   };
-  let panel = detail(ctx, (project, team), (hub, listing, selected), (&shown, reading, retry));
   Row::new()
     .id("team-hub-master-detail")
     .describe("state", if reading { "reading" } else { "read" })
@@ -286,6 +329,22 @@ fn hub_body(
     .into()
 }
 
+/// The panel of the resource `selected`: its kind's own, or the frame the kinds without one share.
+fn resource_panel(
+  ctx: &mut Ctx,
+  (project, team, hub): (&ShownProject, &TeamConfiguration, &TeamHub),
+  (listing, selected): (&Listing, &model::Entry),
+  (navigation, reading, retry): (&Navigation, bool, &Signal<u64>),
+) -> Element {
+  let id = project.open.project.id();
+  let shown = panel::Shown {
+    project: id,
+    team,
+    navigation,
+  };
+  detail(ctx, (project, team), (hub, listing, selected), (&shown, reading, retry))
+}
+
 /// The panel of `selected`: the one of its kind where the team holds what it shows, else the frame every kind has.
 fn detail(
   ctx: &mut Ctx,
@@ -294,10 +353,10 @@ fn detail(
   (shown, reading, retry): (&panel::Shown<'_>, bool, &Signal<u64>),
 ) -> Element {
   let id = project.open.project.id();
-  let (repo_root, may_change) = (project.open.repo_root.clone(), team.may_change);
+  let repo_root = project.open.repo_root.clone();
   let plain = |sheet| plain::Props {
     project: id,
-    may_change,
+    team: team.clone(),
     listing: listing.clone(),
     entry: selected.clone(),
     sheet,
@@ -309,7 +368,7 @@ fn detail(
         profile::Props {
           repo_root,
           project: id,
-          may_change,
+          team: team.clone(),
           reading,
           listing: listing.clone(),
           entry: selected.clone(),
@@ -323,6 +382,7 @@ fn detail(
         mcp::Props {
           repo_root,
           project: id,
+          team: team.clone(),
           reading,
           reread: retry.clone(),
           listing: listing.clone(),
@@ -336,7 +396,7 @@ fn detail(
         ctx,
         tool::Props {
           project: id,
-          may_change,
+          team: team.clone(),
           listing: listing.clone(),
           entry: selected.clone(),
           sheet: sheet.clone(),

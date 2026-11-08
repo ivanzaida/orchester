@@ -46,7 +46,7 @@ pub use self::{
   state::SyncState,
   stream::{Clock, Source, Stopped, SystemClock, follow},
 };
-use super::{Behalf, Connection, Servers, SharingError, project::ProjectServer};
+use super::{Behalf, Connection, Servers, SharingError, project::ProjectServer, send_lane::send_turn};
 use crate::{background, runner::Runners};
 
 /// Runs until the window closes, as a task on the app runtime that `Root` starts and aborts when it drops.
@@ -164,13 +164,17 @@ impl Live {
   async fn send_published(&self) {
     let project = self.project.clone();
     let shared = project.link().project;
+    let root = project.repo_root().to_owned();
+    let servers = self.servers.clone();
     let sent = background::run(move || {
+      let lane = servers.send_lane(project.repo_root());
+      let _sending = send_turn(&lane);
       let db = orchester_store::ProjectDb::open(project.repo_root())?;
       RemoteResourceStore::new(db, project)?.send_waiting()
     })
     .await;
     match sent {
-      Ok(Ok(())) => {}
+      Ok(Ok(taken)) => self.servers.note_taken_back(&root, taken),
       Ok(Err(error)) => tracing::warn!(%error, project = %shared, "versions published here wait to be sent"),
       Err(_) => tracing::debug!(project = %shared, "sending versions published here was interrupted"),
     }

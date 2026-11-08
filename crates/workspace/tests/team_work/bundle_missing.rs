@@ -24,22 +24,26 @@ async fn refused_with(details: Value) -> (StartOutcome, Checkout, StoreRunner) {
   let (work, _generation) = checkout.work(&server, MEMBER, runner.clone());
   let request = checkout.start_request(&server, claim);
   server.state().bundle_missing = Some(details);
-  let outcome = work.start(request.clone(), checkout.vault()).await.expect("started");
+  let outcome = checkout.start(&work, request.clone()).await.expect("started");
   let kept = checkout
     .db()
     .team_start(request.operation)
     .expect("read")
     .expect("kept");
   assert_eq!(kept.stage, TeamStartStage::Refused);
-  let StartOutcome::Refused(again) = work.start(request, checkout.vault()).await.expect("carried on") else {
+  let StartOutcome::Refused(again, _) = checkout.start(&work, request).await.expect("carried on") else {
     panic!("the refusal is kept");
   };
-  let StartOutcome::Refused(first) = &outcome else {
+  let StartOutcome::Refused(first, _) = &outcome else {
     panic!("not refused: {outcome:?}");
   };
   assert_eq!(&again, first, "kept as the server sent it");
   assert!(checkout.db().open_team_starts().expect("open").is_empty());
   assert_eq!(runner.asked(), 0, "the runner was never asked");
+  assert!(
+    server.state().claim.is_none(),
+    "the claim was released with the refusal"
+  );
   (outcome, checkout, runner)
 }
 
@@ -53,7 +57,7 @@ async fn team_work_bundle_missing_keeps_the_reason_the_server_gives() {
     "body_unreadable",
   ] {
     let details = json!({"reason": {"kind": kind, "resource_id": profile, "version": 2}});
-    let (StartOutcome::Refused(error), ..) = refused_with(details).await else {
+    let (StartOutcome::Refused(error, _), ..) = refused_with(details).await else {
       panic!("{kind}: not refused");
     };
     assert_eq!(error.code(), AuthorityErrorCode::BundleMissing, "{kind}");
@@ -68,7 +72,7 @@ async fn team_work_bundle_missing_keeps_the_reason_the_server_gives() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn team_work_bundle_missing_unknown_kind_reads_as_other() {
   let details = json!({"reason": {"kind": "quota_exceeded", "limit": 3}});
-  let (StartOutcome::Refused(error), ..) = refused_with(details).await else {
+  let (StartOutcome::Refused(error, _), ..) = refused_with(details).await else {
     panic!("not refused");
   };
   let ErrorDetails::BundleMissing { reason } = error.details() else {
@@ -79,7 +83,7 @@ async fn team_work_bundle_missing_unknown_kind_reads_as_other() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn team_work_bundle_missing_without_a_reason_is_refused_as_before() {
-  let (StartOutcome::Refused(error), ..) = refused_with(json!({})).await else {
+  let (StartOutcome::Refused(error, _), ..) = refused_with(json!({})).await else {
     panic!("not refused");
   };
   assert_eq!(error.code(), AuthorityErrorCode::BundleMissing);

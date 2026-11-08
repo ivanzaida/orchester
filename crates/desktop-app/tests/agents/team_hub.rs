@@ -242,10 +242,10 @@ fn team_hub_pins_edit_for_an_admin_where_the_kind_has_an_editor() {
   let [skill, _, github, _] = team(&agents);
   open(&mut agents, HubView::new(HubFilter::All, Some(skill)));
   assert!(agents.exists("team-hub-actions") && agents.exists("team-hub-edit"));
-  // An MCP server has no editor yet, so no Edit and nothing disabled in its place; its bar is the fix of what this
-  // computer lacks (nobody has decided on `github` here: switching it on).
+  // An MCP server is edited in its panel (Edit in its head, ORC-836); its bar stays the fix of what this computer
+  // lacks (nobody has decided on `github` here: switching it on).
   open(&mut agents, HubView::new(HubFilter::All, Some(github)));
-  assert!(agents.exists("team-hub-fix-switch-on") && !agents.exists("team-hub-edit"));
+  assert!(agents.exists("team-hub-fix-switch-on") && agents.exists("team-hub-edit"));
 }
 
 #[test]

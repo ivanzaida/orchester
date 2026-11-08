@@ -15,6 +15,7 @@ mod http;
 
 mod bundle_missing;
 mod bundle_schema;
+mod claim_end;
 mod completion;
 mod delivery;
 mod delivery_recovery;
@@ -22,8 +23,12 @@ mod fill_ins;
 mod fixture;
 mod heartbeat;
 mod here;
+mod last_start;
 mod reports;
 mod start;
+mod start_alone;
+mod start_notices;
+mod start_release;
 mod team_commands;
 mod team_deliveries;
 mod team_server;
@@ -52,6 +57,7 @@ use orchester_core::{
   store::{ConnectionStore, RunStore},
   time::Timestamp,
 };
+use orchester_ipc::Rejection;
 use orchester_store::{AppDb, ProjectDb};
 use orchester_workspace::{
   actions::{Accepted, Action, ActionOutcome, ClaimAction, Dispatcher, Intent, TeamOutcome, WorkAction},
@@ -60,7 +66,7 @@ use orchester_workspace::{
   secrets::Vault,
   sharing::Servers,
   team_reads::TeamSession,
-  team_work::{StartOutcome, TeamRunner, TeamStartRequest, TeamWork},
+  team_work::{Recovered, StartOutcome, StartTurn, TeamRunner, TeamStartRequest, TeamWork, TeamWorkError},
   workspace::Workspace,
 };
 use parking_lot::Mutex;
@@ -233,6 +239,27 @@ impl Checkout {
     claim.id
   }
 
+  /// `work`'s start of `request` in the project's turn, which a caller takes before it claims the task, with this
+  /// checkout's keychain.
+  async fn start<R: TeamRunner>(
+    &self,
+    work: &TeamWork<R>,
+    request: TeamStartRequest,
+  ) -> Result<StartOutcome, TeamWorkError> {
+    self.start_with(work, request, self.vault()).await
+  }
+
+  /// [`Self::start`] with `vault` asked about the team secrets.
+  async fn start_with<R: TeamRunner>(
+    &self,
+    work: &TeamWork<R>,
+    request: TeamStartRequest,
+    vault: &dyn SecretVault,
+  ) -> Result<StartOutcome, TeamWorkError> {
+    let turn = StartTurn::wait(&self.servers, self.root()).await;
+    work.start_in(&turn, request, vault).await
+  }
+
   /// The start of the task's work under `claim`; the profile runs on this project's only Codex connection.
   fn start_request(&self, server: &TeamServer, claim: ClaimId) -> TeamStartRequest {
     TeamStartRequest {
@@ -274,11 +301,20 @@ async fn started(checkout: &Checkout, server: &TeamServer) -> (TeamWork<StoreRun
   let claim = checkout.claim(server, MEMBER).await;
   let request = checkout.start_request(server, claim);
   let (work, generation) = checkout.work(server, MEMBER, StoreRunner::new(checkout.root(), &[]));
-  let outcome = work.start(request, checkout.vault()).await.expect("started");
+  let outcome = checkout.start(&work, request).await.expect("started");
   let StartOutcome::Started(run) = outcome else {
     panic!("not started: {outcome:?}");
   };
   (work, run, generation)
+}
+
+/// Every open start of `work`'s project carried on, as the recovery of the open starts does; no start is under way.
+async fn recovered(work: &TeamWork<StoreRunner>, checkout: &Checkout) -> Recovered {
+  work
+    .try_recover(checkout.vault())
+    .await
+    .expect("recovered")
+    .expect("no start is under way")
 }
 
 /// Another member takes the task's claim `observed` over, in their own session.
@@ -303,6 +339,8 @@ enum Hiccup {
   Unavailable,
   /// The runner starts the run and its answer is lost.
   StartsThenLost,
+  /// The runner refuses to run it (`Rejection::Busy`): nothing is started.
+  Refuses,
 }
 
 /// Records and starts the run of accepted inputs as the runner does, by the operation's one run key, without
@@ -375,6 +413,7 @@ impl TeamRunner for StoreRunner {
           runner.record(operation);
           Err(RunRequestError::Request(RequestError::Lost))
         }
+        Some(Hiccup::Refuses) => Err(RunRequestError::Rejected(Rejection::Busy)),
         None => Ok(runner.record(operation)),
       }
     }

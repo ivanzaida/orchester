@@ -154,6 +154,13 @@ language, compares destinations with members' computers and has no previous thre
 do not widen. Older servers may omit the flag; API readers default it to false and still compare permissions locally
 before applying a version.
 
+**Which versions widen, for every kind (OP-205a, decided 2026-11-08).** A version's `widens` is `true` when it grants
+more than the version before it by core's `SharedBody` rule for its kind (`TeamMcpServer`, `TeamAgentProfile`,
+`TeamReviewer` and `Tool`; a tool widens when, for example, its program, arguments, address or access policy grant
+more), and also when core cannot read its body, on itself and on the version after it; it is `false` for instructions,
+skills and pipelines. A server before OP-205a sends `false` for every tool version. The team server's web app shows the
+server's flag and computes none of its own.
+
 The existing stream carries reviewer metadata in `snapshot.begin.resources` and the existing `resource.published`,
 `resource.renamed` and `resource.archived` deltas. A publication carries the resource with its new `latest`;
 members read the body and stored flag through the versions endpoint. No additional event kind is introduced.
@@ -806,6 +813,9 @@ change. Unknown kinds and fields are refused; the server answers a kind it does 
   `delivery.authorize {subject,claim_id,branch,source_commit,base_commit}` (Admin; a module subject), since P4
   `work.report` with `WorkReport`'s fields (below), and since P4c `delivery.request` and `delivery.report` ("Team
   authority P4 module delivery").
+- `claim.release` by the holder: refused `422 invalid` while the claim's latest work runs and has an accepted report;
+  allowed while it runs with none, moving that work to `failed` with no reason stored (see "Start" in Team authority P4
+  work).
 - Expected revisions: the module's for `module.branch.set`, the task's and its module's for `work.start`, the
   subject's for `assignment.set` (the desktop sends it), none for the others, whose claims fence them by id.
 - Values, tagged by `kind`, each with `effects`: `task {task:SharedTask}` (until `TaskRead` is published there),
@@ -868,7 +878,36 @@ The desktop's team work (`orchester_workspace::team_work`) uses them so:
   the operation and the runner's start are idempotent, so a retry never makes a second work or run. A refusal of the
   start or of its bundle (`claim_lost`) is kept and starts nothing. A bundle that can never become the run's inputs
   here (it is not the one the receipt names, or the caller's bindings do not fit it) settles the start `failed`, kept
-  with the reason; recovery carries each open start on its own, so one such start holds back no other.
+  with the reason; recovery carries each open start on its own, so one such start holds back no other. A start that
+  fails for good (those, and the pinned versions needing what this computer lacks) or that the server refuses
+  `bundle_missing` lets go of its claim first (`claim.release`, unless a run here that has not ended for good, has an
+  outcome unsent or can still be recovered by a person, or another open start, uses the same claim: the failure then
+  says the claim is kept), so teammates can take the task at once instead of after the claim goes stale; a server that
+  cannot be reached for the release keeps the start waiting. The work the server made for such a start is not reported:
+  `work.report` is a run's own (`run_id`, `sequence`, and `ExecutionFailure` names no start failure), and no run was
+  made. **`claim.release` of a claim whose latest work runs** (the state `work.start` leaves it in): the holder may
+  release it when no report of that work was ever accepted, as the work started no run; the release moves the work to
+  `failed`, stores no reason for it, and keeps its row. A running work with at least one accepted report is refused
+  `422 invalid` (the claim's `AgentWorking`: stop the run first), as an agent at work is. A team server older than this
+  rule refuses any running work the same way, so a start that failed after `work.start` ends **Held** for it: the
+  desktop shows that the server refused to release the claim, so it may still be held (any other refusal for good,
+  such as `forbidden`, is Held too, and `claim_lost` is a claim that is already gone, which is released). A project's
+  open starts are carried on when it is opened, one start of a project at a time (a Run takes the project's turn before
+  it claims the task and waits for the recovery's, and the recovery leaves a Run's alone). Every open project is looked
+  at again every minute, whether it is a team project or not: a local project has no link to a team server, so the ask
+  is one read of its database and nothing is sent, and a project shared later is carried on from the next round. What
+  could not be carried on is tried again, and so is a start a later Run leaves waiting. A start record that cannot be
+  read (e.g. written by a newer Orchester) stays open: it is said once in the log and asked again with the others, and
+  the task's page says that the record cannot be read here. A transient error of a start is logged once per start and
+  session. The runner's refusal of a start's kept inputs keeps the start open and is kept with it, replaced by each
+  later answer of the runner and dropped by a round that cannot reach the team server or is signed out of it (the runner
+  is not asked then, so the page says the start waits); it is logged once per start and session, and the task's page
+  says what the runner said, as it does for a Run that met the refusal at once. What recovery settles (a run started, a refusal or a failure for
+  good) is read back for the task's page, which says why the start did not run as a Run that settled at once would,
+  with what became of the claim; a `bundle_missing` refusal keeps the outcome of its claim release with it. A window
+  that asked for nothing tells a start settled for good once: until the person dismisses the notice, runs the task
+  again, or what made it fail no longer holds (a bundle schema this Orchester now reads). A dismissal marks the start the
+  page showed, never a newer one that replaced it.
 - **Inputs.** The task's number and each pinned version's label (`{slug,name}`) are the bundle's (schema 2, with the
   team MCP servers of schema 3); the
   start's caller supplies only the local bindings and consent, and each pinned profile must be bound to a connection

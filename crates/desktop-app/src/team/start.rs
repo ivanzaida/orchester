@@ -7,14 +7,15 @@
 //! asks the project's runner for the run of the accepted inputs. A start the server or the runner cannot take now waits
 //! and is carried on by recovery; the page says so.
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
-use orchester_api::v2::{AuthorityErrorCode, AuthorityRef, Subject};
+use orchester_api::v2::{AuthorityError, AuthorityErrorCode, AuthorityRef, ErrorDetails, Subject};
 use orchester_core::{
   id::{ClaimId, ModuleId, OperationId, ResourceId, RunId, TaskId},
   sharing::TaskRevision,
 };
 use orchester_exec::programs::Programs;
+use orchester_ipc::Rejection;
 use orchester_workspace::{
   actions::{Action, ClaimAction, Dispatcher, WorkAction},
   background,
@@ -23,13 +24,15 @@ use orchester_workspace::{
   runner::{RunRequestError, Runners},
   tasks::run::start_messages,
   team_work::{
-    self, BranchNotFound, ProjectRunner, StartFailure, StartOutcome, TeamStartRequest, TeamWork, TeamWorkError,
+    self, BranchNotFound, ClaimEnd, LastStart, NewestStart, ProjectRunner, StartFailure, StartOutcome, StartTurn,
+    TeamStartRequest, TeamWork, TeamWorkError, bundle_missing_message,
   },
 };
 
 use super::{
   TeamSource,
   act::{Acted, Acting},
+  invalidation::Stale,
 };
 
 /// What the start of a team task's work needs.
@@ -67,18 +70,33 @@ pub enum Stop {
   Claim(Acted),
   /// The task is in no module, or names no pipeline this computer has.
   NotReady,
-  /// The server refused the start for good.
-  Refused(AuthorityErrorCode),
+  /// The server refused the start for good; what became of the claim when the refusal released it.
+  Refused(AuthorityErrorCode, Option<ClaimEnd>),
   /// The module's branch is not in this checkout.
   BranchNotFound(String),
   /// The pipeline is not ready on this computer: what is missing, each part with its fix, which the task's Summary
   /// lists. Before the server was asked for anything nothing was claimed; a version the server pinned that this
-  /// computer is not ready for is found after it made the work ([`NotReadyHere::after_server_started`]).
+  /// computer is not ready for is found after it made the work ([`NotReadyHere::claim_end`] says what became of the
+  /// claim).
   NotReadyHere(NotReadyHere),
   /// The team server could not read the pipeline or a profile, or they have no published version.
   NotReadable,
+  /// The team server built no bundle for the start (`bundle_missing`) and says why, as a message that tells what to
+  /// do; no work was made. The claim ended as `claim` says.
+  BundleMissing(Message, Option<ClaimEnd>),
+  /// The bundle the server built is in a schema this computer does not read (`read`); the older of the two is
+  /// updated. The claim ended as `claim` says.
+  BundleSchema { read: u32, built: u32, claim: ClaimEnd },
+  /// The server answered something for the bundle that this computer cannot read.
+  BundleUnreadable(ClaimEnd),
+  /// The bundle or one of its files is not the one the server announced.
+  BundleMismatch(ClaimEnd),
+  /// The bundle does not make the run's inputs on this computer (a profile without a connection, …).
+  InputsFailed(ClaimEnd),
   /// The runner refused the run.
   Runner(Vec<Message>),
+  /// The start's record was written by a newer Orchester: this one cannot carry it on, and leaves it open.
+  StartUnreadable,
   /// It could not be carried out here.
   Failed,
 }
@@ -98,6 +116,9 @@ pub async fn start(
     Ok(checked) => checked,
     Err(stop) => return Started::Stopped(stop),
   };
+  // The project's turn comes before the claim: the recovery of its other starts would otherwise release the claim
+  // this Run takes (or already holds) while its own start is not recorded yet.
+  let turn = StartTurn::wait(&acting.servers, &root).await;
   let (task, read) = request.task;
   let claim = match request.claim {
     Some(claim) => claim,
@@ -131,7 +152,11 @@ pub async fn start(
     programs: mcp_programs,
   };
   let runner = ProjectRunner::new(runners, root.clone(), request.project);
-  carry_out(acting, source, (runner, root), start).await
+  let started = carry_out(acting, source, (runner, root), (start, turn)).await;
+  // The server answered, and may have let go of the claim: the task is read again, so a Run pressed next does not
+  // name the claim it released.
+  Stale::EVERY.apply(&acting.team.client());
+  started
 }
 
 /// The start's base, the module branch's tip here, and the program paths set for the team's MCP servers; or why the
@@ -161,12 +186,13 @@ async fn checked(
   .map_err(|_| Stop::Failed)?
 }
 
-/// The start through the team work, on a worker: its futures hold the project database across their awaits.
+/// The start through the team work, in the project's `turn`, on a worker: its futures hold the project database across
+/// their awaits.
 async fn carry_out(
   acting: &Acting,
   source: &TeamSource,
   (runner, root): (ProjectRunner, PathBuf),
-  start: TeamStartRequest,
+  (start, turn): (TeamStartRequest, StartTurn),
 ) -> Started {
   let (servers, key, runtime) = (acting.servers.clone(), source.key(), acting.runtime.clone());
   let vault = acting.vault.clone();
@@ -176,37 +202,121 @@ async fn carry_out(
         .team_session(key.server, key.project)
         .await
         .map_err(|_| Stop::Claim(Acted::SignedOut))?;
-      let dispatcher = Dispatcher::new(root, servers, Some(session));
-      TeamWork::new(dispatcher, runner)
-        .start(start, vault.get())
+      let dispatcher = Dispatcher::new(root.clone(), servers, Some(session));
+      let outcome = TeamWork::new(dispatcher, runner)
+        .start_in(&turn, start, vault.get())
         .await
-        .map_err(|error| work_failed(&error))
+        .map_err(|error| work_failed(&error))?;
+      Ok(started(outcome, &root))
     })
   })
   .await;
   match outcome {
-    Ok(Ok(outcome)) => started(outcome),
+    Ok(Ok(started)) => started,
     Ok(Err(stop)) => Started::Stopped(stop),
     Err(_) => Started::Stopped(Stop::Failed),
   }
 }
 
-fn started(outcome: StartOutcome) -> Started {
+/// A task's newest start as the project's records tell it, and whether the page tells it to a window that asked for
+/// nothing.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Recorded {
+  /// The start this is the record of, which a dismissal names.
+  pub operation: OperationId,
+  pub started: Started,
+  pub telling: Telling,
+}
+
+impl lurq::app::component::DevtoolsInspectable for Recorded {}
+
+/// How a recorded start is told to a window that asked for nothing.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Telling {
+  /// The start is not settled, or its run started: what it waits for, or what the run is, stands for as long as it
+  /// holds.
+  Standing,
+  /// Settled for good, and not told yet: the page tells it once, until the person dismisses it or runs the task again.
+  Once,
+  /// Settled for good and told, or its reason no longer holds: the page does not tell it again.
+  Told,
+}
+
+/// Where the task's newest start stands as the project's records tell it, e.g. after recovery settled one that
+/// waited; as [`started`] reads the cached name of a resource a refusal names. Blocks on SQLite.
+pub fn recorded(NewestStart { operation, last }: NewestStart, root: &Path) -> Recorded {
+  let (started, telling) = match last {
+    LastStart::Open => (Started::Waiting, Telling::Standing),
+    LastStart::RunnerRefused(rejection) => (runner_refused(rejection), Telling::Standing),
+    LastStart::Settled(outcome) => {
+      let telling = if matches!(outcome, StartOutcome::Started(_)) {
+        Telling::Standing
+      } else {
+        Telling::Once
+      };
+      (started(outcome, root), telling)
+    }
+    LastStart::Told(outcome) => (started(outcome, root), Telling::Told),
+    LastStart::Unreadable => (Started::Stopped(Stop::StartUnreadable), Telling::Standing),
+  };
+  Recorded {
+    operation,
+    started,
+    telling,
+  }
+}
+
+fn runner_refused(rejection: Rejection) -> Started {
+  Started::Stopped(Stop::Runner(start_messages(&RunRequestError::Rejected(rejection))))
+}
+
+/// Where `outcome` leaves the start, as the page says it; reads the cached name of a resource a refusal names from the
+/// project at `root`. Blocks on SQLite.
+fn started(outcome: StartOutcome, root: &Path) -> Started {
   match outcome {
     StartOutcome::Started(run) => Started::Run(run),
     StartOutcome::Waiting(_) => Started::Waiting,
-    StartOutcome::Refused(error) => Started::Stopped(Stop::Refused(error.code())),
-    StartOutcome::Failed(StartFailure::NotReadyHere { pipeline, missing }) => {
-      Started::Stopped(Stop::NotReadyHere(NotReadyHere::after_start(pipeline, missing)))
-    }
-    StartOutcome::Failed(failure) => {
-      tracing::warn!(?failure, "a team start failed for good");
-      Started::Stopped(Stop::Failed)
-    }
-    StartOutcome::RunnerRefused(rejection) => {
-      Started::Stopped(Stop::Runner(start_messages(&RunRequestError::Rejected(rejection))))
-    }
+    StartOutcome::Refused(error, claim) => Started::Stopped(refused(&error, claim, root)),
+    StartOutcome::Failed(failure, claim) => Started::Stopped(failed(failure, claim)),
+    StartOutcome::RunnerRefused(rejection) => runner_refused(rejection),
     StartOutcome::RunnerUnavailable(_) => Started::Waiting,
+  }
+}
+
+/// Why a start the server refused for good did not start, as the page says it.
+fn refused(error: &AuthorityError, claim: Option<ClaimEnd>, root: &Path) -> Stop {
+  if error.code() != AuthorityErrorCode::BundleMissing {
+    return Stop::Refused(error.code(), claim);
+  }
+  let reason = match error.details() {
+    ErrorDetails::BundleMissing { reason } => Some(reason),
+    _ => None,
+  };
+  match bundle_missing_message(root, reason) {
+    Ok(message) => Stop::BundleMissing(message, claim),
+    Err(error) => {
+      tracing::warn!(%error, "the resource a bundle_missing refusal names cannot be read");
+      Stop::Refused(AuthorityErrorCode::BundleMissing, claim)
+    }
+  }
+}
+
+/// Why a start that failed for good did not start, as the page says it.
+fn failed(failure: StartFailure, claim: ClaimEnd) -> Stop {
+  match failure {
+    StartFailure::NotReadyHere { pipeline, missing } => {
+      Stop::NotReadyHere(NotReadyHere::after_start(pipeline, missing, claim))
+    }
+    StartFailure::BundleSchema { read, built } => Stop::BundleSchema { read, built, claim },
+    StartFailure::BundleUnreadable => Stop::BundleUnreadable(claim),
+    StartFailure::Bundle(why) => {
+      tracing::warn!(%why, "a team start's bundle is not the announced one");
+      Stop::BundleMismatch(claim)
+    }
+    StartFailure::Inputs(why) => {
+      tracing::warn!(%why, "a team start's bundle does not make the run's inputs");
+      Stop::InputsFailed(claim)
+    }
   }
 }
 

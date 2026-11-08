@@ -5,7 +5,9 @@
 //! shipped: an example is no part of the app's program.
 
 pub mod drive;
+mod edit;
 mod member;
+mod recorded_start;
 mod state;
 #[path = "../../sign_in_qa/window.rs"]
 pub mod window;
@@ -20,7 +22,7 @@ use std::{
 use orchester_api::{
   Credential,
   client::{PlainHttp, ServerAddress},
-  test_support::team_server::{CODE, TasksAnswer, TeamServer, USERNAME},
+  test_support::team_server::{BundleFault, CODE, TasksAnswer, TeamServer, USERNAME},
 };
 use orchester_app::services::Services;
 use orchester_core::{
@@ -115,14 +117,42 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
     | State::VersionRefused
     | State::TeamRunning
     | State::EditConflict
-    | State::NotReadyHere => {
-      let ids = task_ids(services)?;
-      let role = member::serve_as(&server, state, (&ids, &team_pipelines(services, state)?));
-      let (kontur, id) = join_linked_as(&server, (services, runtime), (TasksAnswer::Serve, role))?;
-      work::after_join(state, (&server, id), (services, runtime), (&kontur, &ids))?;
-    }
+    | State::NotReadyHere
+    | State::StartFailed
+    | State::StartRecovered
+    | State::TeamEdit
+    | State::TeamEditDemoted
+    | State::TeamEditOffline
+    | State::TeamEditRejects
+    | State::TeamEditPublished
+    | State::TeamEditRefusedAdmin
+    | State::TeamEditWaiting
+    | State::TeamEditRejected
+    | State::TeamCreateNameTaken
+    | State::StartWaiting
+    | State::StartRunnerRefused
+    | State::StartPastFailure => joined(state, &server, services, runtime)?,
   }
   Ok(server)
+}
+
+/// A state of a member, an admin or their work: Kontur joined as the role `state` serves, then what it adds.
+fn joined(state: State, server: &TeamServer, services: &Services, runtime: &Handle) -> Result<(), Box<dyn Error>> {
+  let ids = task_ids(services)?;
+  let role = member::serve_as(server, state, (&ids, &team_pipelines(services, state)?));
+  let (kontur, id) = join_linked_as(server, (services, runtime), (TasksAnswer::Serve, role))?;
+  match state {
+    State::StartFailed => server.authority_newer_bundles(),
+    State::StartRecovered => {
+      server.authority_bundle_fault(BundleFault::Unavailable);
+      server.authority_bundle_fault_after(BundleFault::Newer, state::START_ANSWERS_AFTER);
+    }
+    State::StartWaiting => server.authority_bundle_fault(BundleFault::Unavailable),
+    _ => {}
+  }
+  work::after_join(state, (server, id), (services, runtime), (&kontur, &ids))?;
+  edit::prepare(state, (services, runtime), (server, &kontur))?;
+  Ok(())
 }
 
 /// The session's Kontur's folder.
@@ -155,6 +185,12 @@ fn task_ids(services: &Services) -> Result<HashMap<u32, String>, Box<dyn Error>>
 fn team_pipelines(services: &Services, state: State) -> Result<member::TeamPipelines, Box<dyn Error>> {
   let (feature, quick) = match state {
     State::NotReadyHere => ("team-delivery", "team-quick-fix"),
+    // Every task is on Team quick fix, which is ready here: only the bundle fails.
+    State::StartFailed
+    | State::StartRecovered
+    | State::StartWaiting
+    | State::StartRunnerRefused
+    | State::StartPastFailure => ("team-quick-fix", "team-quick-fix"),
     _ => ("feature-delivery", "quick-fix"),
   };
   let mut db = ProjectDb::open(&kontur(services)?)?;

@@ -25,26 +25,26 @@ const VALUE: &str = "pcl_not-a-real-token-4c1e";
 
 /// How a server was switched here before the panel opens.
 #[derive(Clone, Copy)]
-enum Switch {
+pub(super) enum Switch {
   On,
   Undecided,
 }
 
-fn program_body() -> Value {
+pub(super) fn program_body() -> Value {
   json!({"name": "pencil-design", "launch": {
     "kind": "program", "program": "pencil-mcp", "args": ["--stdio", "--app", "desktop"],
     "variables": ["PENCIL_TOKEN"]
   }, "exempt_tools": ["get_screenshot", "batch_get"]})
 }
 
-fn remote_body() -> Value {
+pub(super) fn remote_body() -> Value {
   json!({"name": "copilot", "launch": {
     "kind": "remote", "url": "https://api.githubcopilot.com/mcp/",
     "secret_headers": [{"header": "Authorization", "secret": "GITHUB_TOKEN", "prefix": "Bearer "}]
   }})
 }
 
-fn server(agents: &Agents, (slug, body): (&str, Value), switch: Switch) -> ResourceId {
+pub(super) fn server(agents: &Agents, (slug, body): (&str, Value), switch: Switch) -> ResourceId {
   let parsed: TeamMcpServer = serde_json::from_value(body.clone()).expect("a team MCP server");
   let mut db = ProjectDb::open(&agents.root).expect("database");
   let id = cached(&mut db, (slug, slug), body, &parsed);
@@ -60,7 +60,7 @@ fn name(text: &str) -> SecretName {
 }
 
 /// Gives the secret `text` a value in the window's keychain stand-in.
-fn give_value(agents: &Agents, text: &str) {
+pub(super) fn give_value(agents: &Agents, text: &str) {
   let services = agents.window.launch.services().expect("services");
   ProjectDb::open(&agents.root)
     .expect("database")
@@ -72,7 +72,7 @@ fn give_value(agents: &Agents, text: &str) {
     .expect("kept");
 }
 
-fn team_server(agents: &Agents) -> ServerId {
+pub(super) fn team_server(agents: &Agents) -> ServerId {
   ProjectDb::open(&agents.root)
     .expect("database")
     .sharing()
@@ -93,20 +93,20 @@ fn set_path(agents: &Agents, server: ResourceId, path: &Path) {
     .expect("path");
 }
 
-fn program_file(agents: &Agents) -> std::path::PathBuf {
+pub(super) fn program_file(agents: &Agents) -> std::path::PathBuf {
   let path = agents.root.join("pencil-mcp");
   std::fs::write(&path, "#!/bin/sh\n").expect("a program");
   path
 }
 
-fn show(agents: &mut Agents, server: ResourceId) {
+pub(super) fn show(agents: &mut Agents, server: ResourceId) {
   open(agents, HubView::new(HubFilter::McpServers, Some(server)));
   agents.until("the server panel", |s| {
     s.exists("team-hub-from-team-runs") || s.exists("team-hub-from-team-url")
   });
 }
 
-fn switch_of(agents: &Agents, server: ResourceId) -> Option<bool> {
+pub(super) fn switch_of(agents: &Agents, server: ResourceId) -> Option<bool> {
   ProjectDb::open(&agents.root)
     .expect("database")
     .team_mcp_switch(server)
@@ -149,16 +149,22 @@ fn team_hub_mcp_c4_a_program_without_a_path_asks_for_it_and_says_what_the_team_h
   );
   // On this computer.
   assert_eq!(agents.text("team-hub-chip-here-label"), "Needs the program path here");
-  assert_eq!(agents.text("team-hub-path-sub"), "pencil-mcp here");
-  assert_eq!(agents.text("team-hub-path-value-text"), "Not set");
+  assert_eq!(agents.text("team-hub-path-sub"), "pencil-mcp on this computer");
+  assert_eq!(
+    agents.text("team-hub-path-value-text"),
+    "Not set · nothing is guessed or found by name"
+  );
   assert_eq!(agents.text("team-hub-value-PENCIL_TOKEN-words"), "Value set here");
   assert_eq!(agents.text("team-hub-here-switch"), "On: runs here may use it");
   assert_eq!(
     agents.text("team-hub-mcp-note-text"),
-    "Not ready here: set the program path."
+    "Not ready here: set the program path. Runs whose pipeline uses pencil-design don't start on this computer until then."
   );
   assert_eq!(agents.text("team-hub-fix-set-path"), "Set program path");
-  assert_eq!(agents.text("team-hub-actions-hint"), "Asked once on this computer");
+  assert_eq!(
+    agents.text("team-hub-actions-hint"),
+    "Kept on this computer · asked once"
+  );
   assert!(!agents.exists("team-hub-fix-check-again"));
 }
 
@@ -357,7 +363,7 @@ fn team_hub_mcp_automation_cannot_set_a_path_switch_on_or_add_a_value() {
 }
 
 #[test]
-fn team_hub_mcp_keys_are_170_wide_from_the_team_and_150_on_this_computer() {
+fn team_hub_mcp_keys_are_170_wide_from_the_team_and_on_this_computer() {
   let mut agents = Agents::new(true);
   team(&agents);
   let pencil = server(&agents, ("pencil-design", program_body()), Switch::On);
@@ -369,8 +375,8 @@ fn team_hub_mcp_keys_are_170_wide_from_the_team_and_150_on_this_computer() {
   };
   let (from_team, on_computer) = (key("team-hub-from-team-program"), key("team-hub-path"));
   assert!(
-    (from_team - on_computer - 20.0).abs() < 0.5,
-    "from the team {from_team}, on this computer {on_computer}"
+    (from_team - on_computer).abs() < 0.5,
+    "from the team {from_team}, on this computer {on_computer}: the same key column (A3 `yIsDi`, M2 `dijUt`)"
   );
 }
 

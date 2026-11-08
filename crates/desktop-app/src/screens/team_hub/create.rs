@@ -1,6 +1,17 @@
-//! The head's New (`+ New` in `Header` `NRqwv`, A1), for an admin of the team: under a kind's filter it opens the page
-//! that creates that kind, under All a menu of the kinds that have one. A kind with no create page yet (an MCP server,
-//! ORC-835) has no New, and nothing disabled in its place.
+//! The head's New (`+ New` in `Header` `NRqwv`, A1), for an admin of the team: under a kind's filter it opens that
+//! kind's form in the panel (A7–A12: [`panel`]), under All a menu of the kinds. A form has only Create and Cancel: no
+//! draft, Create makes v1 (`docs/design/team-configuration.md`, decision 6).
+
+mod fields;
+mod instruction;
+mod kinds;
+mod mcp;
+mod notices;
+mod panel;
+mod profile;
+mod skill;
+mod tool;
+mod work;
 
 use lurq::{
   app::ctx::Ctx,
@@ -11,9 +22,15 @@ use lurq::{
 };
 use orchester_core::id::ProjectId;
 
+pub(super) use self::{
+  kinds::new_row,
+  mcp::{EditView, Fields as McpFields},
+  panel::{Props, panel},
+};
+use super::model::Kind;
 use crate::{
   navigation::Navigation,
-  routes::{AgentTab, HubFilter, InstructionsTab, InstructionsView, ProjectPage, Route},
+  routes::{HubFilter, HubView, ProjectPage, Route},
   theme::HUB_NEW_MENU_WIDTH,
   ui::{
     button::{ActionButton, ButtonKind},
@@ -23,45 +40,28 @@ use crate::{
   },
 };
 
-/// The filters whose kind has a create page, in the order of the All menu.
-const CREATABLE: [HubFilter; 4] = [
+/// The filters whose kind a form creates, in the order of the All menu.
+const CREATABLE: [HubFilter; 5] = [
   HubFilter::Profiles,
+  HubFilter::McpServers,
   HubFilter::Instructions,
   HubFilter::Skills,
   HubFilter::Tools,
 ];
 
-/// The page that creates the kind `filter` holds; `None` under All and for a kind with no create page.
-const fn page(filter: HubFilter) -> Option<ProjectPage> {
-  match filter {
-    HubFilter::Profiles => Some(ProjectPage::NewAgent(AgentTab::Profile)),
-    HubFilter::Instructions => Some(ProjectPage::Instructions(InstructionsView::new_rule(
-      InstructionsTab::Project,
-    ))),
-    HubFilter::Skills => Some(ProjectPage::NewSkill),
-    HubFilter::Tools => Some(ProjectPage::NewTool),
-    HubFilter::All | HubFilter::McpServers => None,
-  }
+/// The hub that shows the form of the kind `filter` holds.
+fn form_route(project: ProjectId, filter: HubFilter) -> Route {
+  Route::Project(project, ProjectPage::hub(HubView::adding(filter)))
 }
 
 const fn label_key(filter: HubFilter) -> &'static str {
   match filter {
     HubFilter::Profiles => "team_hub.new.profiles",
+    HubFilter::McpServers => "team_new.new.mcpServers",
     HubFilter::Instructions => "team_hub.new.instructions",
     HubFilter::Skills => "team_hub.new.skills",
     HubFilter::Tools => "team_hub.new.tools",
-    HubFilter::All | HubFilter::McpServers => "team_hub.new.all",
-  }
-}
-
-/// A menu row's words: what the kind is, as the panel names it.
-const fn kind_key(filter: HubFilter) -> &'static str {
-  match filter {
-    HubFilter::Profiles => "team_hub.kind.where.profile",
-    HubFilter::Instructions => "team_hub.kind.where.instruction",
-    HubFilter::Skills => "team_hub.kind.where.skill",
-    HubFilter::Tools => "team_hub.kind.where.tool",
-    HubFilter::All | HubFilter::McpServers => "team_hub.kind.where.mcp",
+    HubFilter::All => "team_hub.new.all",
   }
 }
 
@@ -71,7 +71,7 @@ pub(super) struct NewMenu {
   pub anchor: ElementRef,
 }
 
-/// New for `filter`; `None` for a filter whose kind has no create page.
+/// New for `filter`: its form, or under All a menu of the kinds.
 pub(super) fn new_button(
   ctx: &mut Ctx,
   (project, filter): (ProjectId, HubFilter),
@@ -80,11 +80,10 @@ pub(super) fn new_button(
   if filter == HubFilter::All {
     return Some(all(ctx, project, navigation, menu));
   }
-  let page = page(filter)?;
   Some(
     ActionButton::new("team-hub-new", ButtonKind::Primary, ctx.t(label_key(filter)))
       .icon(Icon::Plus)
-      .opens(navigation.to(Route::Project(project, page)))
+      .opens(navigation.to(form_route(project, filter)))
       .into(),
   )
 }
@@ -92,12 +91,12 @@ pub(super) fn new_button(
 fn all(ctx: &mut Ctx, project: ProjectId, navigation: &Navigation, menu: &NewMenu) -> Element {
   let mut panel = menu_panel("team-hub-new-menu").width(Dimension::Px(HUB_NEW_MENU_WIDTH));
   for filter in CREATABLE {
-    let Some(page) = page(filter) else { continue };
+    let Some(kind) = Kind::of_filter(filter) else { continue };
     panel = panel.child(
       MenuItem::opens(
         format!("team-hub-new-{}", filter.name()),
-        ctx.t(kind_key(filter)),
-        navigation.to(Route::Project(project, page)),
+        ctx.t(kind.where_key()),
+        navigation.to(form_route(project, filter)),
       )
       .render(ctx, &menu.open),
     );

@@ -1,7 +1,6 @@
 //! The boxes of the panels' sections (`Rows` `tQ5pu`, `YTWxX`, `MH6ZR` in `Agents · Profile` `NDZXC`; `Rows` in `C4`
-//! `SpRvd`): a row is its key (a label over an optional sub), 170 wide (150 in an MCP server's *On this computer*), and
-//! its value, 12 apart, 8 over and under them and 12 at the sides; the rows stand in one `border` outline, radius `md`,
-//! each ruled from the next.
+//! `SpRvd`): a row is its key (a label over an optional sub), 170 wide, and its value, 12 apart, 8 over and under them
+//! and 12 at the sides; the rows stand in one `border` outline, radius `md`, each ruled from the next.
 
 use std::sync::Arc;
 
@@ -25,15 +24,15 @@ use crate::{
 #[derive(Clone, Copy)]
 pub(super) enum Key {
   Wide,
-  /// The key of the rows of an MCP server's *On this computer*.
-  Narrow,
+  /// The key of a create form's rows.
+  Form,
 }
 
 impl Key {
   fn width(self) -> f32 {
     match self {
       Self::Wide => HubSpacing::Key.value(),
-      Self::Narrow => HubSpacing::KeyNarrow.value(),
+      Self::Form => HubSpacing::KeyForm.value(),
     }
   }
 }
@@ -109,8 +108,13 @@ pub(super) fn row_in(key: Key, id: &str, label: &str, sub: Option<Sub>, value: i
   )
 }
 
-/// [`row_in`] whose key is `label`, already a text: a name that is an identifier, in mono.
-pub(super) fn keyed_in(key: Key, id: &str, label: Text, sub: Option<Sub>, value: impl Into<Element>) -> Row {
+/// [`row`] whose key is `label`, already a text: a name that is an identifier, in mono.
+pub(super) fn keyed(id: &str, label: Text, sub: Option<Sub>, value: impl Into<Element>) -> Row {
+  keyed_in(Key::Wide, id, label, sub, value)
+}
+
+/// [`keyed`] whose key is `key` wide.
+fn keyed_in(key: Key, id: &str, label: Text, sub: Option<Sub>, value: impl Into<Element>) -> Row {
   let key = Column::new()
     .width(Dimension::Px(key.width()))
     .flex_shrink(0.0)

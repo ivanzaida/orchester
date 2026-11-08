@@ -10,6 +10,14 @@ use orchester_store::{RunStoreError, StoreError};
 
 use crate::{actions::ActionError, readiness::MissingPart};
 
+impl TeamWorkError {
+  /// Whether trying again changes nothing: the recorded start itself cannot be read, which only a newer Orchester or a
+  /// person can mend. Every other error may pass (the database was busy, the server answered strangely).
+  pub const fn is_permanent(&self) -> bool {
+    matches!(self, Self::Unreadable(_))
+  }
+}
+
 /// Why a team start, its reports, its heartbeat or a module delivery could not go on. A server that cannot be reached
 /// or refuses for now is no error: the outcome says so, and the work goes on from where it stands.
 #[derive(Debug, thiserror::Error)]
@@ -51,6 +59,9 @@ pub enum TeamWorkError {
   /// The recorded request or receipt of the start cannot be read back.
   #[error("the record of team start {0} cannot be read")]
   Unreadable(OperationId),
+  /// The start a person dismissed is not the newest of its task any more: a later one replaced what the page showed.
+  #[error("team start {0} is no longer the newest start of its task")]
+  StartSuperseded(OperationId),
   /// The server answered the start's operation with something other than a work.
   #[error("the server answered team start {0} with no work")]
   NotAWork(OperationId),

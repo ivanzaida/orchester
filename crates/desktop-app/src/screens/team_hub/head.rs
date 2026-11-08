@@ -13,7 +13,7 @@ use lurq::{
 use orchester_core::id::{ProjectId, ResourceId};
 use orchester_workspace::sharing::team::TeamConfiguration;
 
-use super::model::Listing;
+use super::{member, model::Listing};
 use crate::{
   navigation::Navigation,
   routes::{HubFilter, HubView, ProjectPage, Route},
@@ -28,16 +28,26 @@ use crate::{
 /// The head's height (`Header` `NRqwv`).
 const HEAD_HEIGHT: f32 = 32.0;
 
-/// *Agents*, and at its right the team the project is shared with and, for an admin, New.
-pub(super) fn head(ctx: &Ctx, team: &TeamConfiguration, new: Option<Element>) -> Row {
+/// *Agents*, and at its right the team the project is shared with and, for an admin, New. `unreached`: the team server
+/// did not answer the last read, which the head says in place of *Team* (`Publish while offline` A16 `x3ywL`). `saved`:
+/// the panel's resource has a draft kept on this computer, which the head says before *Team* (`✓ Draft saved`, A13).
+pub(super) fn head(ctx: &Ctx, team: &TeamConfiguration, (new, unreached, saved): (Option<Element>, bool, bool)) -> Row {
+  let (glyph, color, words) = if unreached {
+    (Icon::CloudOff, PaletteColor::Warning, "team_hub.unreached")
+  } else {
+    (Icon::Users, PaletteColor::TextMuted, "team_hub.team")
+  };
   let mut at_right = Row::new()
     .id("team-hub-team")
+    .describe("reached", (!unreached).to_string())
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Users, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Base, color.clone()))
     .child(
-      Text::new(&ctx.t("team_hub.team"))
+      Text::new(&ctx.t(words))
+        .id("team-hub-team-label")
         .variant(HubText::Hint.role())
+        .color(if unreached { color } else { PaletteColor::TextMuted })
         .nowrap(),
     );
   if let Some((_, host)) = &team.server {
@@ -48,6 +58,9 @@ pub(super) fn head(ctx: &Ctx, team: &TeamConfiguration, new: Option<Element>) ->
         .color(PaletteColor::TextSecondary)
         .nowrap(),
     );
+  }
+  if !team.may_change {
+    at_right = at_right.child(member::role(ctx));
   }
   Row::new()
     .id("team-hub-head")
@@ -65,8 +78,24 @@ pub(super) fn head(ctx: &Ctx, team: &TeamConfiguration, new: Option<Element>) ->
       Row::new()
         .spacing(HubSpacing::NewGap.role())
         .align_items(Alignment::Center)
+        .with_children(saved.then(|| draft_saved(ctx)))
         .child(at_right)
         .with_children(new),
+    )
+}
+
+/// *✓ Draft saved* (`Draft saved` in `Header` of A13 `WMtxm`).
+fn draft_saved(ctx: &Ctx) -> Row {
+  Row::new()
+    .id("team-hub-draft-saved")
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(icon(Icon::Check, IconSize::Base, PaletteColor::TextMuted))
+    .child(
+      Text::new(&ctx.t("team_hub.draftSaved"))
+        .id("team-hub-draft-saved-label")
+        .variant(HubText::Hint.role())
+        .nowrap(),
     )
 }
 
@@ -78,6 +107,10 @@ pub(super) struct FilterShown {
   pub selected: Option<ResourceId>,
   /// The list is read again: what it counts is the last answer.
   pub reading: bool,
+  /// The person may change the team's resources: an admin of the team; a member reads another hint.
+  pub may_change: bool,
+  /// The resource the panel shows has a draft kept on this computer.
+  pub draft_saved: bool,
 }
 
 /// The filter: a segment per kind with its count, and what the open one holds. `listing` is `None` before there is an
@@ -112,7 +145,7 @@ pub(super) fn filter(ctx: &Ctx, listing: Option<&Listing>, shown: &FilterShown, 
       Element::from(reading_mark(ctx))
     } else {
       Element::from(
-        Text::new(&ctx.t(hint_key(shown.filter)))
+        Text::new(&ctx.t(hint_key(shown.filter, shown.may_change)))
           .id("team-hub-filter-hint")
           .variant(HubText::Hint.role())
           .nowrap(),
@@ -147,13 +180,21 @@ const fn label_key(filter: HubFilter) -> &'static str {
   }
 }
 
-const fn hint_key(filter: HubFilter) -> &'static str {
-  match filter {
-    HubFilter::All => "team_hub.hint.all",
-    HubFilter::Profiles => "team_hub.hint.profiles",
-    HubFilter::McpServers => "team_hub.hint.mcpServers",
-    HubFilter::Instructions => "team_hub.hint.instructions",
-    HubFilter::Skills => "team_hub.hint.skills",
-    HubFilter::Tools => "team_hub.hint.tools",
+/// The filter's hint for `filter`: an admin's, or for a member what the kind is and that they fill in only what is
+/// local.
+const fn hint_key(filter: HubFilter, may_change: bool) -> &'static str {
+  match (may_change, filter) {
+    (true, HubFilter::All) => "team_hub.hint.all",
+    (true, HubFilter::Profiles) => "team_hub.hint.profiles",
+    (true, HubFilter::McpServers) => "team_hub.hint.mcpServers",
+    (true, HubFilter::Instructions) => "team_hub.hint.instructions",
+    (true, HubFilter::Skills) => "team_hub.hint.skills",
+    (true, HubFilter::Tools) => "team_hub.hint.tools",
+    (false, HubFilter::All) => "team_hub.member.hint.all",
+    (false, HubFilter::Profiles) => "team_hub.member.hint.profiles",
+    (false, HubFilter::McpServers) => "team_hub.member.hint.mcpServers",
+    (false, HubFilter::Instructions) => "team_hub.member.hint.instructions",
+    (false, HubFilter::Skills) => "team_hub.member.hint.skills",
+    (false, HubFilter::Tools) => "team_hub.member.hint.tools",
   }
 }

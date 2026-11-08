@@ -7,6 +7,8 @@
 //! `cargo test -p orchester-app --test team_qa team_qa`
 
 mod first_download;
+mod hub_edit;
+mod hub_unsent;
 #[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(dead_code, reason = "the seed's helpers the other scenarios use")]
 #[allow(
@@ -15,9 +17,12 @@ mod first_download;
 )]
 mod kontur;
 mod not_ready;
+mod start_failed;
+mod start_notices;
 #[path = "../../examples/qa_app/team/mod.rs"]
 mod team;
 mod team_actions;
+mod team_create;
 mod team_edit;
 mod team_pages;
 mod team_tasks;

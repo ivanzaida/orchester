@@ -2,6 +2,8 @@
   "team_hub": {
     "title": "Agents",
     "team": "Team",
+    "draftSaved": "Draft saved",
+    "unreached": "Team server not reachable · retrying",
     "reading": "Reading the team's configuration…",
     "loadFailed": "The team's configuration couldn't be read",
     "filter": {
@@ -15,7 +17,7 @@
     "hint": {
       "all": "All of it is the team's; each computer fills in only what is local",
       "profiles": "Profiles are the team's; each computer fills in only what is local",
-      "mcpServers": "The team's MCP servers; each computer sets the program path and secret values",
+      "mcpServers": "MCP servers are the team's; each computer fills in only what is local",
       "instructions": "Instructions are the team's; each computer fills in only what is local",
       "skills": "Skills are the team's; each computer fills in only what is local",
       "tools": "Tools are the team's; each computer fills in only what is local"
@@ -52,11 +54,16 @@
       "instructions": "Instructions have nothing to fill in on a computer, so they are always ready here.",
       "skills": "Skills have nothing to fill in on a computer, so they are always ready here."
     },
+    "takenBack": {
+      "title": "{{name}} was not created",
+      "dismiss": "Dismiss"
+    },
     "line": {
       "ready": "Ready here",
       "withVersion": "{{words}} · {{version}}",
       "everyRun": "Added to every run",
       "toolUsedBy": "{{kind}} · used by {{names}}",
+      "waiting": "Waiting to send to the team server",
       "off": "Off on this computer",
       "undecided": "Can't tell yet whether it is ready here",
       "many": "{{count}} things missing here",
@@ -65,7 +72,7 @@
       "decisionConnection": "Needs a connection here",
       "mcpUndecided": "Switch it on or off on this computer",
       "mcpOff": "{{server}} is not switched on here",
-      "programHere": "Set its program path here",
+      "programHere": "Set its program path on this computer",
       "programOf": "Set the program path of {{server}}",
       "secret": "Secret {{name}} has no value here",
       "localProgram": "The program of {{server}} is not found here",
@@ -90,6 +97,45 @@
       "usedBy": "used by {{names}}",
       "usedByNone": "No profile uses it yet",
       "publishNext": "Publishing makes {{version}} for the whole team"
+    },
+    "member": {
+      "role": "· member",
+      "lock": "Only team admins change this: {{admins}}.",
+      "hint": {
+        "all": "All of it is the team's; you fill in only what is local",
+        "profiles": "Profiles are the team's; you fill in only what is local",
+        "mcpServers": "MCP servers are the team's; you fill in only what is local",
+        "instructions": "Instructions are the team's; you fill in only what is local",
+        "skills": "Skills are the team's; you fill in only what is local",
+        "tools": "Tools are the team's; you fill in only what is local"
+      },
+      "empty": {
+        "admins": "Admins: {{admins}}",
+        "all": {
+          "title": "Nothing published yet",
+          "detail": "An admin of the team adds agents, MCP servers, instructions, skills and tools; once published they appear here for everyone."
+        },
+        "profiles": {
+          "title": "No profiles yet",
+          "detail": "An admin of the team adds profiles; once published they appear here for everyone."
+        },
+        "mcpServers": {
+          "title": "No MCP servers yet",
+          "detail": "An admin of the team adds MCP servers; once published they appear here for everyone."
+        },
+        "instructions": {
+          "title": "No instructions yet",
+          "detail": "An admin of the team adds instructions; once published they appear here for everyone."
+        },
+        "skills": {
+          "title": "No skills yet",
+          "detail": "An admin of the team adds skills; once published they appear here for everyone."
+        },
+        "tools": {
+          "title": "No tools yet",
+          "detail": "An admin of the team adds tools; once published they appear here for everyone."
+        }
+      }
     },
     "empty": {
       "title": "Nothing here yet",
@@ -143,6 +189,7 @@
       "connectionVersion": "{{cli}} · {{name}} · {{program}} {{version}}",
       "noneOfKind": "No {{cli}} connection here",
       "pickNeeded": "Choose a {{cli}} connection here",
+      "programHere": "Set its program path here",
       "programSet": "Ready · program path set",
       "programGone": "The program is not at its path any more",
       "remote": "Ready · remote",
@@ -208,7 +255,7 @@
         "runsAs": "Runs as",
         "runsAsProgram": "A program on each computer",
         "program": "Program",
-        "programSub": "a name; each computer sets its path",
+        "programSub": "a name, not a path",
         "arguments": "Arguments",
         "folder": "Folder",
         "folderWorktree": "The run's worktree",
@@ -223,8 +270,8 @@
       },
       "path": {
         "label": "Program path",
-        "sub": "{{program}} here",
-        "notSet": "Not set",
+        "sub": "{{program}} on this computer",
+        "notSet": "Not set · nothing is guessed or found by name",
         "found": "found · {{date}}",
         "gone": "No file there",
         "choose": "Choose…"
@@ -244,7 +291,7 @@
         "ready": "Ready here: runs on this computer may use {{name}}.",
         "off": "Off here: runs on this computer don't use {{name}}.",
         "undecided": "Not ready here: switch {{name}} on or off for this computer.",
-        "setPath": "Not ready here: set the program path.",
+        "setPath": "Not ready here: set the program path. Runs whose pipeline uses {{name}} don't start on this computer until then.",
         "gone": "Not ready here: no file at {{path}}. Runs that use {{name}} don't start until it is there again.",
         "secret": "Not ready here: {{name}} needs a value.",
         "unreadable": "Not ready here: this computer's keychain can't say whether {{name}} has a value.",
@@ -257,9 +304,9 @@
         "addValue": "Add value",
         "turnOn": "Turn on here",
         "changePath": "Change path",
-        "setPathHint": "Asked once on this computer",
+        "setPathHint": "Kept on this computer · asked once",
         "addValueHint": "Stored in this computer's secret store",
-        "turnOnHint": "Only you can turn it on here",
+        "turnOnHint": "Only on this computer · you confirm it in the window",
         "changePathHint": "Nothing missing on this computer"
       }
     },
@@ -329,6 +376,79 @@
       "note": {
         "byId": "This tool names its secret by id; it can't be filled in here yet. Ask a team admin to publish {{name}} again."
       }
+    },
+    "edit": {
+      "mark": "changed in your draft",
+      "chip": {
+        "draft": "Your draft on {{version}}",
+        "waiting": "Waiting to send",
+        "draftNotPublished": "Your draft · not published",
+        "notPublished": "Not published"
+      },
+      "line": {
+        "draft": "{{draft}} · {{words}}"
+      },
+      "draft": {
+        "saved": "Draft on {{version}} · saved {{time}} · only on this computer",
+        "nothingKept": "Editing {{version}} · nothing changed yet",
+        "unsaved": "Draft on {{version}} · not saved yet",
+        "changes": "{{fields}} changed · publishing makes {{next}} for the whole team; On this computer is never sent",
+        "nothing": "Nothing changed yet · publishing makes {{next}} for the whole team; On this computer is never sent"
+      },
+      "rejected": {
+        "title": "The team's server refused {{version}}",
+        "body": "{{reason}} Your draft is kept; fix the reason, then publish again."
+      },
+      "rejectedHere": {
+        "title": "Not sent: this computer found the team can't take {{version}}"
+      },
+      "superseded": {
+        "title": "Someone published {{version}} first"
+      },
+      "failed": {
+        "title": "Couldn't publish {{version}}"
+      },
+      "notAdmin": {
+        "title": "The team's server refused: you are no longer an admin",
+        "body": "Your draft of {{name}} stays on this computer; only an Admin can publish it. Ask an Admin: {{admins}}."
+      },
+      "notAdminHere": {
+        "title": "You are no longer an admin of the team"
+      },
+      "waiting": {
+        "title": "Waiting to send · retries when the server is back",
+        "body": "The server has not answered. Your draft will be published as {{next}} when it does; until the server accepts it, nobody else's runs use it and {{current}} stays the team's."
+      },
+      "waitingCreated": {
+        "body": "The server has not answered. {{name}} stays here as waiting to send and is created for the team when it does; until then nobody else's runs use it. Cancel sending takes it back as if it was never created."
+      },
+      "copy": {
+        "program": "program: {{value}}",
+        "argument": "argument: {{value}}",
+        "folder": "folder: {{value}}",
+        "variable": "variable: {{value}}",
+        "url": "url: {{value}}",
+        "header": "header: {{name}} <- {{secret}}",
+        "exempt": "run without asking: {{value}}"
+      },
+      "cancelSending": "Cancel sending",
+      "copyChanges": "Copy my changes",
+      "copied": "Copied",
+      "copyFailed": "Couldn't copy",
+      "bar": {
+        "publish": "Publish for the team",
+        "discard": "Discard draft",
+        "discardMine": "Discard my draft",
+        "refused": "Refused {{time}} · fix the reason, then publish again",
+        "admins": "Only admins publish · {{admins}}",
+        "nothingPublished": "Nothing is published until the server accepts it",
+        "askAdmin": "Ask an Admin: {{admins}}"
+      },
+      "fromTeamEditing": "· editing · publishing sends it to every computer",
+      "fromTeamWaiting": "· your draft on {{version}} · locked while it waits to send",
+      "fromTeamWaitingCreated": "· waiting to be created · locked while it waits to send",
+      "fromTeamReadOnly": "· your draft on {{version}} · read-only now",
+      "queued": "queued {{time}}"
     }
   }
 }

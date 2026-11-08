@@ -28,11 +28,15 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::{ConnectionId, ProjectId, ResourceId};
-use orchester_workspace::agents::team_profile::{ConnectionChoice, TeamProfileSheet};
+use orchester_workspace::{
+  agents::team_profile::{ConnectionChoice, TeamProfileSheet},
+  sharing::team::TeamConfiguration,
+};
 
 use self::fix::Fix;
 use super::{
   actions::Actions,
+  member,
   model::{Entry, Listing},
   panel, secret,
 };
@@ -48,8 +52,8 @@ use crate::{
 pub(super) struct Props {
   pub repo_root: PathBuf,
   pub project: ProjectId,
-  /// The person may change the team's resources: an admin of the team.
-  pub may_change: bool,
+  /// The team's configuration: an admin may change its resources, and a member reads who the admins are.
+  pub team: TeamConfiguration,
   /// The hub is read again: what shows is the last answer, and a fix would act on it.
   pub reading: bool,
   pub listing: Listing,
@@ -122,6 +126,7 @@ impl Component for ProfilePanel {
       .spacing(HubSpacing::BodyTop.role())
       .child(panel::head(ctx, entry, self.edit(ctx, &props, &navigation)))
       .child(panel::chips(ctx, listing, entry))
+      .with_children(member::lock_line(ctx, &props.team))
       .child(from_team::section(ctx, sheet))
       .child(computer::section(ctx, sheet, &self.chosen))
       .child(ready::section(ctx, &parts, missing.len(), (&press, busy)))
@@ -241,7 +246,7 @@ impl ProfilePanel {
 
   /// *Edit* in the head, which an admin has where the kind has an editor.
   fn edit(&self, ctx: &Ctx, props: &Props, navigation: &Navigation) -> Option<Element> {
-    let route = panel::editor(&props.entry, props.project).filter(|_| props.may_change)?;
+    let route = panel::editor(&props.entry, props.project).filter(|_| props.team.may_change)?;
     Some(panel::edit_button(ctx, navigation.to(route)))
   }
 

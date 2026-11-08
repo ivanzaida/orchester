@@ -17,10 +17,13 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ProjectId;
-use orchester_workspace::readiness::{Group, ReadinessStanding};
+use orchester_workspace::{
+  readiness::{Group, ReadinessStanding},
+  sharing::team::TeamConfiguration,
+};
 
 use super::{
-  bar,
+  bar, member,
   model::{Entry, Kind, Listing},
   words,
 };
@@ -38,8 +41,7 @@ use crate::{
 /// What the panel needs besides the resource.
 pub(super) struct Shown<'a> {
   pub project: ProjectId,
-  /// The person may change the team's resources: an admin of the team.
-  pub may_change: bool,
+  pub team: &'a TeamConfiguration,
   pub navigation: &'a Navigation,
 }
 
@@ -47,6 +49,7 @@ pub(super) fn panel(ctx: &Ctx, listing: &Listing, entry: &Entry, shown: &Shown<'
   let body = body()
     .child(head(ctx, entry, None))
     .child(chips(ctx, listing, entry))
+    .with_children(member::lock_line(ctx, shown.team))
     .with_children(readiness(ctx, listing, entry));
   frame(entry, body, actions(ctx, entry, shown)).into()
 }
@@ -92,6 +95,13 @@ pub(super) fn head_saying(ctx: &Ctx, entry: &Entry, version: Option<String>, end
 
 /// [`head_saying`] with `kind` in the place of what the resource is: *Tool · HTTP request*.
 pub(super) fn head_of(entry: &Entry, (kind, version): (String, Option<String>), end: Option<Element>) -> Row {
+  let version = version.or_else(|| entry.number.map(|number| number.to_string()));
+  head_named(&entry.name, (kind, version), end)
+}
+
+/// The head of a resource called `name`: `kind` and `version` over it, and at its end what `end` puts there. The form
+/// that creates a resource draws it with its name still to come.
+pub(super) fn head_named(name: &str, (kind, version): (String, Option<String>), end: Option<Element>) -> Row {
   let mut where_ = Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
@@ -101,9 +111,9 @@ pub(super) fn head_of(entry: &Entry, (kind, version): (String, Option<String>), 
         .variant(HubText::PanelWhere.role())
         .nowrap(),
     );
-  if let Some(number) = version.or_else(|| entry.number.map(|number| number.to_string())) {
+  if let Some(version) = version {
     where_ = where_.child(
-      Text::new(&number)
+      Text::new(&version)
         .id("team-hub-panel-version")
         .variant(HubText::PanelHint.role())
         .nowrap(),
@@ -119,7 +129,7 @@ pub(super) fn head_of(entry: &Entry, (kind, version): (String, Option<String>), 
         .spacing(SpacingSize::Xs)
         .child(where_)
         .child(
-          Text::new(&entry.name)
+          Text::new(name)
             .id("team-hub-panel-title")
             .variant(HubText::PanelTitle.role()),
         ),
@@ -147,6 +157,12 @@ pub(super) fn chips_saying(
   (words, tone): (Arc<str>, BadgeTone),
   end: Option<Arc<str>>,
 ) -> Row {
+  chips_of(ctx, entry, vec![(words, tone)], end)
+}
+
+/// [`chips_saying`] with any number of chips after *Team · vN*: an admin's draft is one of them (`Chips` in A13
+/// `WMtxm`).
+pub(super) fn chips_of(ctx: &Ctx, entry: &Entry, badges: Vec<(Arc<str>, BadgeTone)>, end: Option<Arc<str>>) -> Row {
   let team = match entry.number {
     Some(number) => ctx.t_args("team_hub.chip.team", [("version", number.to_string())]),
     None => ctx.t("team_hub.chip.teamUnnumbered"),
@@ -156,7 +172,14 @@ pub(super) fn chips_saying(
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(badge("team-hub-chip-team", BadgeTone::Neutral, &team))
-    .child(badge("team-hub-chip-here", tone, &words))
+    .with_children(badges.into_iter().enumerate().map(|(index, (words, tone))| {
+      let id = if index == 0 {
+        "team-hub-chip-here".to_owned()
+      } else {
+        format!("team-hub-chip-{index}")
+      };
+      badge(&id, tone, &words)
+    }))
     .child(Row::new().flex(1.0))
     .with_children(end.map(|end| {
       Text::new(&end)
@@ -239,7 +262,7 @@ pub(super) fn editor(entry: &Entry, project: ProjectId) -> Option<Route> {
 /// The pinned actions: Edit for an admin, where the kind has an editor; no bar when there is nothing to do, and
 /// nothing disabled in its place (`Member view`, notes rule 15).
 fn actions(ctx: &Ctx, entry: &Entry, shown: &Shown<'_>) -> Option<Element> {
-  let route = editor(entry, shown.project).filter(|_| shown.may_change)?;
+  let route = editor(entry, shown.project).filter(|_| shown.team.may_change)?;
   let open: Open = shown.navigation.to(route);
   let edit = ActionButton::new("team-hub-edit", ButtonKind::Primary, ctx.t("team_hub.panel.edit"))
     .icon(Icon::Pencil)

@@ -63,6 +63,7 @@ mod tasks_unreadable;
 pub mod team;
 mod team_hub;
 mod team_hub_mcp;
+mod team_hub_waiting;
 mod todo_lists;
 mod unreadable_db;
 mod usage;
@@ -112,7 +113,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 168] = [
+pub const ALL: [Scenario; 187] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -217,9 +218,14 @@ pub const ALL: [Scenario; 168] = [
   Scenario::of("team-hub", team_hub::seed),
   Scenario::of("team-hub-pick", team_hub::pick),
   Scenario::of("team-hub-no-connection", team_hub::no_connection),
+  Scenario::of("team-hub-member", team_hub::member),
+  Scenario::of("team-hub-member-pick", team_hub::member_pick),
+  Scenario::of("team-hub-member-picked", team_hub::member_picked),
+  Scenario::of("team-hub-member-no-skills", team_hub::member_no_skills),
   Scenario::of("team-hub-mcp-path-gone", team_hub_mcp::path_gone),
   Scenario::of("team-hub-mcp-secret", team_hub_mcp::secret),
   Scenario::of("team-hub-mcp-ready", team_hub_mcp::ready),
+  Scenario::of("team-hub-waiting", team_hub_waiting::waiting),
   Scenario::of("picker-readiness", picker_readiness::local),
   Scenario::of("picker-readiness-team", picker_readiness::team),
   Scenario::of("pipelines", pipelines::seed),
@@ -277,6 +283,20 @@ pub const ALL: [Scenario; 168] = [
   Scenario::with_fake_codex("team-running", team::team_running),
   Scenario::of("team-edit-conflict", team::edit_conflict),
   Scenario::of("team-not-ready", team::not_ready_here),
+  Scenario::of("team-edit", team::edit),
+  Scenario::of("team-edit-demoted", team::edit_demoted),
+  Scenario::of("team-edit-offline", team::edit_offline),
+  Scenario::of("team-edit-rejects", team::edit_rejects),
+  Scenario::of("team-edit-published", team::edit_published),
+  Scenario::of("team-edit-refused-admin", team::edit_refused_admin),
+  Scenario::of("team-edit-waiting", team::edit_waiting),
+  Scenario::of("team-edit-rejected", team::edit_rejected),
+  Scenario::of("team-create-name-taken", team::create_name_taken),
+  Scenario::of("team-start-failed", team::start_failed),
+  Scenario::of("team-start-recovered", team::start_recovered),
+  Scenario::of("team-start-waiting", team::start_waiting),
+  Scenario::of("team-start-runner-refused", team::start_runner_refused),
+  Scenario::of("team-start-past-failure", team::start_past_failure),
   Scenario::of("modules-base-branch", modules::base_branch),
   Scenario::of("loading-states", loading_states::seed),
   Scenario::of("storage-low-disk", storage::low_disk),

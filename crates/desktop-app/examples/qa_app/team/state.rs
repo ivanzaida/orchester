@@ -78,10 +78,62 @@ pub enum State {
   /// and Team quick fix, and Team delivery is not ready on this computer (ORC-840, `Task · Run · not ready here`
   /// R1 `Ku0qu`).
   NotReadyHere,
+  /// As [`Self::NotReadyHere`], with every task on Team quick fix, which is ready here, and the server a release ahead
+  /// of this computer: a start builds its bundle in a schema this computer does not read, so a start fails for good,
+  /// releases the claim and the task page says why (ORC-885).
+  StartFailed,
+  /// An Admin on the Agents hub's team MCP servers, which the stand-in team server holds too (`Agents · MCP server ·
+  /// admin · draft` A13 `WMtxm`, ORC-836): *Edit* a server, type, *Publish for the team* makes its next version. The
+  /// server also holds an MCP server named `figma-local` that this computer has not read, so *New MCP server* with
+  /// that name is refused as taken (A15 `dLqHC`).
+  TeamEdit,
+  /// As [`Self::TeamEdit`], the server no longer taking this person's writes: *Publish for the team* is refused as
+  /// no longer an admin, and the page turns read-only with the draft kept (A14 `gTLx6`).
+  TeamEditDemoted,
+  /// As [`Self::TeamEdit`], the server not answering: *Publish for the team* waits in the outbox (A16 `x3ywL`).
+  TeamEditOffline,
+  /// As [`Self::TeamEdit`], the server rejecting the content of every version sent: *Publish for the team* says why and
+  /// keeps the draft (A17 `rJbPm`).
+  TeamEditRejects,
+  /// As [`Self::TeamEdit`], after the press of *Publish for the team* the server accepted: v2 is the team's, the draft
+  /// became the version (A13 `WMtxm`'s result). Made without a press.
+  TeamEditPublished,
+  /// As [`Self::TeamEdit`], after a *Publish for the team* the server refused as no longer an admin, and the next read
+  /// made the person a member: the page is read-only with the draft kept (A14 `gTLx6`). Made without a press.
+  TeamEditRefusedAdmin,
+  /// As [`Self::TeamEdit`], after a *Publish for the team* made while the server could not be reached: v2 waits in the
+  /// outbox with *Cancel sending*, the server still not answering (A16 `x3ywL`). Made without a press.
+  TeamEditWaiting,
+  /// As [`Self::TeamEdit`], after a version that waited for the server and was sent once it answered, and that it
+  /// rejected as not a valid content: the outbox holds it refused, and the panel says why and how to take it back as a
+  /// draft (A17 `rJbPm`, as it stands once the person left the panel). Made without a press.
+  TeamEditRejected,
+  /// As [`Self::TeamEdit`], after a new MCP server named `figma-local` that waited for the server and was refused as
+  /// the name being taken once it answered: taken back whole, and the hub says what and why (A15 `dLqHC`, as it stands
+  /// once the person left the form). Made without a press.
+  TeamCreateNameTaken,
+  /// As [`Self::StartFailed`], with the server not answering a Run's `work.start` for [`START_ANSWERS_AFTER`] after the
+  /// window opens, and then answering as a server a release ahead: the start waits, the project's recovery carries it
+  /// on, the start fails for good, and the task page, which said the run starts once they answer, says why it did not
+  /// (ORC-885 follow-up).
+  StartRecovered,
+  /// As [`Self::StartFailed`], with KON-5's start already recorded as a server that does not answer leaves it, and the
+  /// bundle never answered: the task page says the run is starting, in an information notice (ORC-885c).
+  StartWaiting,
+  /// As [`Self::StartFailed`], with KON-5's start recorded at the runner, which refuses it when recovery asks, so the
+  /// task page says what the runner said without a press of Run (ORC-885c).
+  StartRunnerRefused,
+  /// As [`Self::StartFailed`], with KON-5's start recorded as an earlier window left it, failed for good and not
+  /// dismissed: the task page tells it once (ORC-885c).
+  StartPastFailure,
 }
 
+/// How long after the window opens the server of [`State::StartRecovered`] answers a `work.start`; recovery then
+/// carries the waiting start on within a minute.
+pub const START_ANSWERS_AFTER: std::time::Duration = std::time::Duration::from_secs(90);
+
 impl State {
-  pub const ALL: [Self; 28] = [
+  pub const ALL: [Self; 42] = [
     Self::Join,
     Self::WrongCode,
     Self::ExpiredCode,
@@ -110,6 +162,20 @@ impl State {
     Self::TeamRunning,
     Self::EditConflict,
     Self::NotReadyHere,
+    Self::StartFailed,
+    Self::TeamEdit,
+    Self::TeamEditDemoted,
+    Self::TeamEditOffline,
+    Self::TeamEditRejects,
+    Self::TeamEditPublished,
+    Self::TeamEditRefusedAdmin,
+    Self::TeamEditWaiting,
+    Self::TeamEditRejected,
+    Self::TeamCreateNameTaken,
+    Self::StartRecovered,
+    Self::StartWaiting,
+    Self::StartRunnerRefused,
+    Self::StartPastFailure,
   ];
 
   /// The seed's scenario of this state.
@@ -143,6 +209,20 @@ impl State {
       Self::TeamRunning => "team-running",
       Self::EditConflict => "team-edit-conflict",
       Self::NotReadyHere => "team-not-ready",
+      Self::StartFailed => "team-start-failed",
+      Self::TeamEdit => "team-edit",
+      Self::TeamEditDemoted => "team-edit-demoted",
+      Self::TeamEditOffline => "team-edit-offline",
+      Self::TeamEditRejects => "team-edit-rejects",
+      Self::TeamEditPublished => "team-edit-published",
+      Self::TeamEditRefusedAdmin => "team-edit-refused-admin",
+      Self::TeamEditWaiting => "team-edit-waiting",
+      Self::TeamEditRejected => "team-edit-rejected",
+      Self::TeamCreateNameTaken => "team-create-name-taken",
+      Self::StartRecovered => "team-start-recovered",
+      Self::StartWaiting => "team-start-waiting",
+      Self::StartRunnerRefused => "team-start-runner-refused",
+      Self::StartPastFailure => "team-start-past-failure",
     }
   }
 
@@ -151,6 +231,22 @@ impl State {
     matches!(
       self,
       Self::OutageRunning | Self::MemberRunning | Self::ModuleOutage | Self::Claims | Self::TeamRunning
+    )
+  }
+
+  /// Whether the state is of the hub's edit of the team's resources, whose server holds them.
+  pub const fn edits(self) -> bool {
+    matches!(
+      self,
+      Self::TeamEdit
+        | Self::TeamEditDemoted
+        | Self::TeamEditOffline
+        | Self::TeamEditRejects
+        | Self::TeamEditPublished
+        | Self::TeamEditRefusedAdmin
+        | Self::TeamEditWaiting
+        | Self::TeamEditRejected
+        | Self::TeamCreateNameTaken
     )
   }
 

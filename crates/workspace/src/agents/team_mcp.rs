@@ -15,7 +15,11 @@ use orchester_core::{
 };
 use orchester_store::{McpServerProgram, ProjectDb, StoreError};
 
-use super::{team_profile::TeamProfileSheet, team_sheets};
+use super::{
+  team_mcp_edit::{self, McpEdit},
+  team_profile::TeamProfileSheet,
+  team_sheets,
+};
 
 /// Who published the version this computer uses, and when.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -72,6 +76,8 @@ pub struct TeamMcpSheet {
   pub switch: Option<bool>,
   /// `None` while the server has not confirmed the version this computer uses.
   pub published: Option<Published>,
+  /// What an admin's edit starts from; `None` for a server the edit form cannot hold.
+  pub edit: Option<McpEdit>,
 }
 
 /// A sheet for each team MCP server that has a version cached here. `profiles` are the team's profile sheets by
@@ -112,13 +118,14 @@ pub(super) fn sheets(
           }),
         switch: db.team_mcp_switch(resource.id())?,
         published,
+        edit: team_mcp_edit::of(db, resource.id())?,
       },
     ));
   }
   Ok(sheets)
 }
 
-fn runs(launch: &TeamMcpLaunch) -> McpRuns {
+pub(super) fn runs(launch: &TeamMcpLaunch) -> McpRuns {
   match launch {
     TeamMcpLaunch::Program(program) => McpRuns::Program {
       program: program.program().as_str().to_owned(),

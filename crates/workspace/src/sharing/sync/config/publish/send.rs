@@ -27,13 +27,16 @@ use crate::sharing::{
     cache_profile, cache_version, reference, resource as kept_resource,
     team_body::{self, Publication},
   },
+  team_created::{TakenBack, refusal},
+  team_edit,
 };
 
 impl<S: ConfigServer> RemoteResourceStore<S> {
   /// Sends every version published here that waits, e.g. once the server can be reached again. One the server did not
-  /// take, or this computer knows it cannot, is recorded on it and logged; the others are still sent. Fails, sending
-  /// nothing more, when the server cannot be reached.
-  pub fn send_waiting(&mut self) -> Result<(), SharingError> {
+  /// take, or this computer knows it cannot, is recorded on it and logged; the others are still sent. A new resource
+  /// whose lone first version is refused is taken back whole, as one refused at once is, and returned with why. Fails,
+  /// sending nothing more, when the server cannot be reached.
+  pub fn send_waiting(&mut self) -> Result<Vec<TakenBack>, SharingError> {
     let mut resources: Vec<ResourceId> = Vec::new();
     for waiting in self.db.waiting_publishes()? {
       if waiting.state == PublishState::Waiting && !resources.contains(&waiting.resource) {
@@ -41,17 +44,56 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
       }
     }
     if resources.is_empty() {
-      return Ok(());
+      return Ok(Vec::new());
     }
     self.server.writable()?;
+    let mut taken_back = Vec::new();
     for resource in resources {
       match self.send_resource(resource) {
         Ok(()) => {}
-        Err(error) if unreached(&error) => return Err(error),
-        Err(error) => tracing::warn!(%error, %resource, "the server did not take a version published here"),
+        Err(error) if error.unreached() => return Err(error),
+        Err(error) => {
+          tracing::warn!(%error, %resource, "the server did not take a version published here");
+          match self.take_back(resource, &error) {
+            Ok(taken) => taken_back.extend(taken),
+            // The others are still sent; this one stays as it is, refused, for the waiting bar to show.
+            Err(failure) => {
+              tracing::warn!(%failure, %resource, "a new resource the server refused could not be taken back")
+            }
+          }
+        }
       }
     }
-    Ok(())
+    Ok(taken_back)
+  }
+
+  /// Takes back the new `resource` when `error` left its first version refused, as read now, and nothing else of the
+  /// person's goes with it ([`orchester_store::ProjectDb::discard_created`]); what it was and why. Nothing when that
+  /// version still waits, or the resource holds more (a later version, a draft, a version the server numbered): it
+  /// stays refused for the admin to decide on.
+  fn take_back(&mut self, resource: ResourceId, error: &SharingError) -> Result<Option<TakenBack>, SharingError> {
+    let refused = self.db.waiting_publishes()?.into_iter().find(|waiting| {
+      waiting.resource == resource && waiting.created && !matches!(waiting.state, PublishState::Waiting)
+    });
+    let Some(refused) = refused else {
+      return Ok(None);
+    };
+    let found = self
+      .db
+      .resource(resource)?
+      .ok_or(StoreError::ResourceNotFound(resource))?;
+    match self.db.discard_created(resource) {
+      Ok(()) => {}
+      Err(StoreError::AlreadyNumbered(_) | StoreError::HoldsMore(_)) => return Ok(None),
+      Err(failure) => return Err(failure.into()),
+    }
+    Ok(Some(TakenBack {
+      project: self.db.project().id(),
+      resource,
+      name: found.name().as_str().to_owned(),
+      kind: found.kind(),
+      reason: refusal(Some(refused.state), Some(error)).message(),
+    }))
   }
 
   /// Sends the waiting versions of the one new `resource` and fails with why it was not sent, so its creator learns
@@ -153,7 +195,9 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
           Err(SharingError::VersionConflict { latest })
         }
         (Some(code), _) => {
-          self.db.record_publish_refused(waiting.version, &code_text(code))?;
+          // The reason of a `422 invalid` goes with the code: it says what the person is to fix.
+          let recorded = team_edit::recorded(code, error.details());
+          self.db.record_publish_refused(waiting.version, &recorded)?;
           Err(match code {
             ErrorCode::NotAdmin => SharingError::NotAdmin,
             _ => SharingError::Client(error),
@@ -336,19 +380,4 @@ const fn refusal_code(error: &SharingError) -> Option<&'static str> {
     SharingError::WritableFoldersStay { .. } => Some("writable_folders_stay"),
     _ => None,
   }
-}
-
-/// Whether `error` says the server was not reached, so the version waits.
-fn unreached(error: &SharingError) -> bool {
-  match error {
-    SharingError::Offline | SharingError::SignedOut => true,
-    SharingError::Client(error) => error.code().is_none(),
-    _ => false,
-  }
-}
-
-/// The server's error code as it writes it.
-fn code_text(code: ErrorCode) -> String {
-  let quoted = serde_json::to_string(&code).expect("an error code serializes as a string");
-  quoted.trim_matches('"').to_owned()
 }

@@ -19,7 +19,9 @@ use orchester_store::ProjectDb;
 use serde_json::{Value, json};
 
 use super::{
-  Team, bundle_missing, on_worker,
+  Team,
+  bundle_missing::{self, claim_message},
+  on_worker,
   outcome::{accepted, action_refused, authority_refused},
   read, read_refused,
   tasks::find,
@@ -37,7 +39,8 @@ use crate::{
   tasks::run::start_messages,
   team_reads::{TeamReadError, listed::TeamPipelines},
   team_work::{
-    self, BranchNotFound, ProjectRunner, StartFailure, StartOutcome, TeamStartRequest, TeamWork, TeamWorkError,
+    self, BranchNotFound, ClaimEnd, ProjectRunner, StartFailure, StartOutcome, StartTurn, TeamStartRequest, TeamWork,
+    TeamWorkError,
   },
 };
 
@@ -95,6 +98,9 @@ pub(in crate::app_mcp::tools) async fn run_task(
   let (id, read) = (task.task.id, task.task.revision);
   let module_read = module_read.module.revision;
   let outcome = on_worker(move || async move {
+    // The project's turn comes before the claim: the recovery of its other starts would otherwise release the claim
+    // this one takes while its own start is not recorded yet.
+    let turn = StartTurn::wait(dispatcher.servers(), dispatcher.root()).await;
     let claim_id = acquire(&dispatcher, Subject::Task { id }, start_failed).await?;
     let work = WorkAction {
       authority: AuthorityRef {
@@ -113,7 +119,7 @@ pub(in crate::app_mcp::tools) async fn run_task(
       programs,
     };
     TeamWork::new(dispatcher, runner)
-      .start(request, start_vault.get())
+      .start_in(&turn, request, start_vault.get())
       .await
       .map_err(work_refused)
   })
@@ -167,21 +173,26 @@ async fn started(team: &Team, outcome: StartOutcome) -> Result<Value, ToolError>
       "team_start_waiting",
       vec![Message::new("appMcp.errors.teamStartWaiting")],
     )),
-    StartOutcome::Refused(error) if error.code() == AuthorityErrorCode::BundleMissing => {
-      Err(bundle_missing::refused(team, error.details()).await)
+    StartOutcome::Refused(error, claim) if error.code() == AuthorityErrorCode::BundleMissing => {
+      Err(bundle_missing::refused(team, error.details(), claim).await)
     }
-    StartOutcome::Refused(error) => Err(authority_refused(&error)),
-    StartOutcome::Failed(StartFailure::BundleSchema { read, built }) => Err(bundle_schema(Schemas { read, built })),
-    StartOutcome::Failed(StartFailure::BundleUnreadable) => Err(ToolError::refused(
+    StartOutcome::Refused(error, _) => Err(authority_refused(&error)),
+    StartOutcome::Failed(StartFailure::BundleSchema { read, built }, claim) => {
+      Err(bundle_schema(Schemas { read, built }, claim))
+    }
+    StartOutcome::Failed(StartFailure::BundleUnreadable, claim) => Err(ToolError::refused(
       "team_bundle_unreadable",
-      vec![Message::new("appMcp.errors.teamBundleUnreadable")],
+      vec![Message::new("appMcp.errors.teamBundleUnreadable"), claim_message(claim)],
     )),
-    StartOutcome::Failed(StartFailure::NotReadyHere { pipeline, missing }) => {
-      Err(ToolError::NotReadyHere(NotReadyHere::after_start(pipeline, missing)))
-    }
-    StartOutcome::Failed(failure) => {
+    StartOutcome::Failed(StartFailure::NotReadyHere { pipeline, missing }, claim) => Err(ToolError::NotReadyHere(
+      NotReadyHere::after_start(pipeline, missing, claim),
+    )),
+    StartOutcome::Failed(failure, claim) => {
       tracing::warn!(?failure, "a team start failed for good");
-      Err(start_failed())
+      Err(ToolError::refused(
+        "team_start_failed",
+        vec![Message::new("appMcp.errors.teamStartFailed"), claim_message(claim)],
+      ))
     }
     StartOutcome::RunnerRefused(rejection) => {
       let error = RunRequestError::Rejected(rejection);
@@ -201,7 +212,7 @@ struct Schemas {
 }
 
 /// The bundle is built in another schema than this computer reads: the older of the two is updated.
-fn bundle_schema(Schemas { read, built }: Schemas) -> ToolError {
+fn bundle_schema(Schemas { read, built }: Schemas, claim: ClaimEnd) -> ToolError {
   let key = if built > read {
     "appMcp.errors.teamBundleSchemaNewer"
   } else {
@@ -213,6 +224,7 @@ fn bundle_schema(Schemas { read, built }: Schemas) -> ToolError {
       Message::new(key)
         .with("read", read.to_string())
         .with("built", built.to_string()),
+      claim_message(claim),
     ],
   )
 }

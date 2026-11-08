@@ -136,9 +136,10 @@ pub struct SharedVersion {
   pub references: Vec<ReferenceTarget>,
   pub based_on: Option<VersionNumber>,
   pub published: Attribution,
-  /// Computed and kept by the server, never supplied by a publisher. For team reviewers, uses
-  /// [`orchester_core::resource::TeamReviewer::widens_over`] against the preceding version (or `None` for v1).
-  /// Absent on older servers; clients must still compare permissions locally before applying a version.
+  /// Computed by the server, never supplied by a publisher: core's `SharedBody` rule for the kind (team MCP servers,
+  /// team agent profiles, team reviewers and tools) against the preceding version, or `true` for a body core cannot
+  /// read; `false` for instructions, skills and pipelines (`docs/cloud-api.md`, "Which versions widen"). Absent on
+  /// older servers; clients must still compare permissions locally before applying a version.
   #[serde(default)]
   pub widens: bool,
 }

@@ -58,7 +58,21 @@ pub fn to(
     | State::VersionRefused
     | State::TeamRunning
     | State::EditConflict
-    | State::NotReadyHere => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
+    | State::NotReadyHere
+    | State::StartFailed
+    | State::StartRecovered
+    | State::TeamEdit
+    | State::TeamEditDemoted
+    | State::TeamEditOffline
+    | State::TeamEditRejects
+    | State::TeamEditPublished
+    | State::TeamEditRefusedAdmin
+    | State::TeamEditWaiting
+    | State::TeamEditRejected
+    | State::TeamCreateNameTaken
+    | State::StartWaiting
+    | State::StartRunnerRefused
+    | State::StartPastFailure => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
   }
 }
 

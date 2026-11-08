@@ -38,20 +38,39 @@ struct Team {
 
 /// As dana-k, the project's owner: her draft, a version waiting for the server and one that met olha's.
 pub fn admin(kontur: &mut Kontur) -> Result<(), SeedError> {
-  let team = shared(kontur, MemberRole::Owner)?;
+  let team = shared(kontur, (MemberRole::Owner, Person::Dana))?;
   admin_states(kontur, &team)
 }
 
 /// As ivan, a member, who reads every resource of the team.
 pub fn member(kontur: &mut Kontur) -> Result<(), SeedError> {
-  shared(kontur, MemberRole::Member).map(|_| ())
+  shared(kontur, (MemberRole::Member, Person::Ivan)).map(|_| ())
 }
 
-/// The catalogue, linked to the team server's project with the person in `role`, every resource the team's. A member's
+/// As ivan, a member, over what `resources` makes of the team's configuration: a member cannot make a team resource,
+/// so it is made while the project is still linked in the owner's role, which is dropped for ivan's afterwards.
+pub fn member_over(
+  kontur: &mut Kontur,
+  resources: impl FnOnce(&mut Kontur) -> Result<(), SeedError>,
+) -> Result<(), SeedError> {
+  shared(kontur, (MemberRole::Owner, Person::Ivan))?;
+  resources(kontur)?;
+  kontur.db.record_sharing_state(Some(MemberRole::Member), None, None)?;
+  Ok(())
+}
+
+/// Who the computer's person is on the team server.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Person {
+  Dana,
+  Ivan,
+}
+
+/// The catalogue, linked to the team server's project with the person in `role`, every resource the team's. Ivan's
 /// computer has no drafts of the team's: the catalogue's are dropped, and a resource never published with them.
-fn shared(kontur: &mut Kontur, role: MemberRole) -> Result<Team, SeedError> {
+fn shared(kontur: &mut Kontur, (role, who): (MemberRole, Person)) -> Result<Team, SeedError> {
   connections::seed(kontur)?;
-  if role == MemberRole::Member {
+  if who == Person::Ivan {
     drop_drafts::<AgentProfile>(kontur)?;
     drop_drafts::<Pipeline>(kontur)?;
     drop_drafts::<Instruction>(kontur)?;
@@ -63,11 +82,7 @@ fn shared(kontur: &mut Kontur, role: MemberRole) -> Result<Team, SeedError> {
     olha: person("olha"),
     ivan: person("ivan"),
   };
-  let me = if role == MemberRole::Owner {
-    &team.dana
-  } else {
-    &team.ivan
-  };
+  let me = if who == Person::Dana { &team.dana } else { &team.ivan };
   let server = server(kontur, me)?;
   let link = SharingLink {
     server,

@@ -20,7 +20,10 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_core::time::Timestamp;
-use orchester_workspace::readiness::{NotReadyHere, NotReadyPart};
+use orchester_workspace::{
+  readiness::{NotReadyHere, NotReadyPart},
+  team_work::ClaimEnd,
+};
 
 pub use self::notice::notice;
 pub(super) use self::reread::{CardProps, missing_now};
@@ -28,7 +31,7 @@ use self::words::{Glyph, Words};
 use super::{
   TaskContext,
   header::controls::{RunControls, RunRefused},
-  team_controls::{TeamAnswer, TeamControls},
+  team_controls,
 };
 use crate::{
   navigation::{Navigation, link::Open},
@@ -47,9 +50,8 @@ use crate::{
 /// task's start through its server, or a local project's run control.
 pub fn refused(ctx: &mut Ctx, task: &TaskContext) -> Option<NotReadyHere> {
   if task.team.is_some() {
-    let answer = TeamControls::of(ctx)?.action.state().get().data?;
-    return match answer {
-      TeamAnswer::Started(_, Started::Stopped(Stop::NotReadyHere(refusal))) => Some(refusal),
+    return match team_controls::start_standing(ctx, task)?.started {
+      Started::Stopped(Stop::NotReadyHere(refusal)) => Some(refusal),
       _ => None,
     };
   }
@@ -93,10 +95,12 @@ fn card_of(ctx: &mut Ctx, task: &TaskContext, refusal: &NotReadyHere) -> Element
     .enumerate()
     .map(|(index, part)| row(ctx, (index, part), (team, index + 1 == refusal.parts().len()), &open))
     .collect::<Vec<_>>();
-  let body = match (team, refusal.after_server_started()) {
-    (_, true) => "summary.notReady.bodyAfterStart",
-    (true, false) => "summary.notReady.bodyTeam",
-    (false, false) => "summary.notReady.body",
+  let body = match (team, refusal.claim_end()) {
+    (_, Some(ClaimEnd::Released)) => "summary.notReady.bodyAfterStart",
+    (_, Some(ClaimEnd::Kept)) => "summary.notReady.bodyAfterStartKept",
+    (_, Some(ClaimEnd::Held)) => "summary.notReady.bodyAfterStartHeld",
+    (true, None) => "summary.notReady.bodyTeam",
+    (false, None) => "summary.notReady.body",
   };
   card("task-not-ready", CardSurface::Attention)
     .rounded(TaskRadius::NotReadyCard.role())

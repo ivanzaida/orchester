@@ -16,7 +16,12 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, SharedStanding};
 
-use super::{Servers, SharingError, project::ProjectServer, sync::RemoteResourceStore};
+use super::{
+  Servers, SharingError, TakenBack,
+  project::ProjectServer,
+  send_lane::{between_sends, send_turn},
+  sync::RemoteResourceStore,
+};
 use crate::{
   background,
   messages::{self, Message},
@@ -39,6 +44,8 @@ pub struct TeamConfiguration {
   pub me: Option<Arc<str>>,
   /// How each of the team's resources stands here.
   pub standings: Arc<BTreeMap<ResourceId, SharedStanding>>,
+  /// The new resources the team server refused after they were sent later, taken back; told until dismissed.
+  pub taken_back: Arc<[TakenBack]>,
 }
 
 impl TeamConfiguration {
@@ -97,6 +104,7 @@ impl Servers {
       admins,
       me,
       standings: Arc::new(standings),
+      taken_back: self.taken_back(repo_root).into(),
     }))
   }
 
@@ -111,18 +119,24 @@ impl Servers {
   /// *Publish mine as vN*: `version`, published here at `repo_root` and met by a version someone published from the
   /// same base, is sent again as the next version after it. Fails with what to tell the person.
   pub async fn publish_again(&self, repo_root: &Path, version: VersionId) -> Result<(), Message> {
-    self.sending(repo_root, move |store| store.publish_again(version)).await
+    self
+      .sending(repo_root, move |store| {
+        store.publish_again(version).map(|()| Vec::new())
+      })
+      .await
   }
 
   /// *Open my draft on vN*: `version` of a resource of `kind`, published here at `repo_root` and met by a version
   /// someone published from the same base, is taken back, and the resource's draft is edited from that version
   /// ([`ProjectDb::reopen_draft`]). Nothing is sent. Fails with what to tell the person.
   pub async fn reopen_draft(&self, repo_root: &Path, kind: ResourceKind, version: VersionId) -> Result<(), Message> {
-    let root = repo_root.to_owned();
+    let (servers, root) = (self.clone(), repo_root.to_owned());
     background::run(move || {
-      let mut db = ProjectDb::open(&root)?;
+      let lane = servers.send_lane(&root);
+      let _between = between_sends(&lane)?;
+      let mut db = ProjectDb::open(&root).map_err(|error| messages::store_error(&error))?;
       let now = Timestamp::now();
-      match kind {
+      let reopened = match kind {
         ResourceKind::AgentProfile => db.reopen_draft::<AgentProfile>(version, now),
         ResourceKind::Pipeline => db.reopen_draft::<Pipeline>(version, now),
         ResourceKind::Instruction => db.reopen_draft::<Instruction>(version, now),
@@ -132,10 +146,10 @@ impl Servers {
         ResourceKind::McpServer => db.reopen_draft::<orchester_core::resource::TeamMcpServer>(version, now),
         // Agent testing's kinds are never the team's, so none of their versions waits for the server.
         ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => Ok(()),
-      }
+      };
+      reopened.map_err(|error| messages::store_error(&error))
     })
-    .await?
-    .map_err(|error| messages::store_error(&error))?;
+    .await??;
     self.shared_changed();
     Ok(())
   }
@@ -144,10 +158,12 @@ impl Servers {
   async fn sending(
     &self,
     repo_root: &Path,
-    send: impl FnOnce(&mut RemoteResourceStore<ProjectServer>) -> Result<(), SharingError> + Send + 'static,
+    send: impl FnOnce(&mut RemoteResourceStore<ProjectServer>) -> Result<Vec<TakenBack>, SharingError> + Send + 'static,
   ) -> Result<(), Message> {
     let (servers, root) = (self.clone(), repo_root.to_owned());
     let sent = background::run(move || {
+      let lane = servers.send_lane(&root);
+      let _sending = send_turn(&lane);
       let server = match ProjectServer::open(&servers, &root) {
         Ok(Some(server)) => server,
         Ok(None) => return Ok(()),
@@ -158,7 +174,11 @@ impl Servers {
         .map_err(SharingError::from)
         .and_then(|db| RemoteResourceStore::new(db, server));
       match store.and_then(|mut store| send(&mut store)) {
-        Ok(()) | Err(SharingError::Offline | SharingError::VersionConflict { .. }) => Ok(()),
+        Ok(taken) => {
+          servers.note_taken_back(&root, taken);
+          Ok(())
+        }
+        Err(SharingError::Offline | SharingError::VersionConflict { .. }) => Ok(()),
         Err(error) => Err(said(&error, Some(&address))),
       }
     })
