@@ -18,6 +18,9 @@ const NAME: Spec = Spec::new("skill-name", "team_new.skill.name")
 const DESCRIPTION: Spec = Spec::new("skill-description", "team_new.skill.description").required();
 const FILES: Spec = Spec::new("skill-files", "team_new.skill.files").sub("team_new.skill.filesSub");
 
+/// The description field is at least 64 high (`Input` in A11 `p4aSf`).
+const DESCRIPTION_AREA: f32 = 64.0;
+
 pub(super) struct Fields {
   name: Signal<String>,
   description: Signal<String>,
@@ -36,19 +39,20 @@ impl Fields {
     let name_says = name_error(ctx, shown, &name, "team_new.skill.nameTaken");
     let description_says = (shown.tried && description.trim().is_empty()).then_some(Error::Required);
     let rows = vec![
-      fields::text_row(
+      fields::name_row(
         ctx,
+        shown,
         &NAME,
         name_says.as_ref(),
         (&self.name, "team_new.skill.namePlaceholder"),
-        (Look::Mono, shown.locked),
+        Look::Mono,
       ),
       fields::text_row(
         ctx,
         &DESCRIPTION,
         description_says.as_ref(),
         (&self.description, "team_new.skill.descriptionPlaceholder"),
-        (Look::Area, shown.locked),
+        (Look::Area(DESCRIPTION_AREA), shown.locked),
       ),
       fields::row(
         ctx,

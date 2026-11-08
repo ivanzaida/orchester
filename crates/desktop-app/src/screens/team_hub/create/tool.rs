@@ -53,12 +53,13 @@ impl Fields {
     let command = self.kind.get() == COMMAND;
     let name_says = name_error(ctx, shown, &name, "team_new.tool.nameTaken");
     let mut rows = vec![
-      fields::text_row(
+      fields::name_row(
         ctx,
+        shown,
         &NAME,
         name_says.as_ref(),
         (&self.name, "team_new.tool.namePlaceholder"),
-        (Look::Mono, shown.locked),
+        Look::Mono,
       ),
       fields::row(
         ctx,

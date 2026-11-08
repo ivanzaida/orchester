@@ -8,7 +8,7 @@ use orchester_core::{
   id::ResourceId,
   resource::{ResourceKind, VersionNumber},
 };
-use orchester_store::SharedStanding;
+use orchester_store::{PublishState, SharedStanding};
 use orchester_workspace::{
   agents::{
     team_hub::{Form, TeamHub},
@@ -259,11 +259,16 @@ impl Listing {
 }
 
 /// Whether the resource was created here and no version of it was ever numbered by the team server: its first version
-/// is still in the outbox.
+/// is still in the outbox, waiting to be sent. One the server refused (or met a version from the same base) keeps its
+/// number and its readiness standing: it waits for the admin's decision, not for the server.
 fn waits_to_be_sent(standings: &BTreeMap<ResourceId, SharedStanding>, id: ResourceId) -> bool {
-  standings
-    .get(&id)
-    .is_some_and(|standing| standing.confirmed.is_none() && !standing.waiting.is_empty())
+  standings.get(&id).is_some_and(|standing| {
+    standing.confirmed.is_none()
+      && standing
+        .waiting
+        .first()
+        .is_some_and(|first| first.state == PublishState::Waiting)
+  })
 }
 
 fn reach(hub: &TeamHub, id: ResourceId, kind: ResourceKind) -> Option<Reach> {

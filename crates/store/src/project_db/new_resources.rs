@@ -117,26 +117,37 @@ impl ProjectDb {
     Ok((resource, version))
   }
 
-  /// Takes back the resource `resource` that [`ProjectDb::create_published`] made, whose only version the server has
-  /// not numbered, e.g. because it refused it: the resource and its version are deleted, as if never created. A
-  /// resource with a version the server numbered is left ([`StoreError::AlreadyNumbered`]): it is the team's now.
+  /// Takes back the resource `resource` that [`ProjectDb::create_published`] made, e.g. because the team server refused
+  /// its only version: the resource and its version are deleted, as if never created. Only a resource that holds just
+  /// that version is taken back: one with a version the server numbered is left ([`StoreError::AlreadyNumbered`]), it
+  /// is the team's now, and one with a later version or a draft, or not created here, is left too
+  /// ([`StoreError::HoldsMore`]), so nothing of the person's is lost.
   pub fn discard_created(&mut self, resource: ResourceId) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
     // The versions go before their rows in `shared_publishes`, which the delete trigger reads.
     transaction.pragma_update(None, "defer_foreign_keys", true)?;
+    let id = resource.to_string();
     let confirmed: bool = transaction.query_row(
       "SELECT EXISTS (SELECT 1 FROM resource_versions WHERE resource_id = ?1 \
        AND id NOT IN (SELECT version_id FROM shared_publishes))",
-      [resource.to_string()],
+      [&id],
       |row| row.get(0),
     )?;
     if confirmed {
       return Err(StoreError::AlreadyNumbered(resource));
     }
-    let id = resource.to_string();
+    let lone: bool = transaction.query_row(
+      "SELECT (SELECT COUNT(*) FROM resource_versions WHERE resource_id = ?1) = 1 \
+       AND EXISTS (SELECT 1 FROM shared_publishes WHERE resource_id = ?1 AND created = 1) \
+       AND NOT EXISTS (SELECT 1 FROM resource_drafts WHERE resource_id = ?1)",
+      [&id],
+      |row| row.get(0),
+    )?;
+    if !lone {
+      return Err(StoreError::HoldsMore(resource));
+    }
     transaction.execute("DELETE FROM resource_versions WHERE resource_id = ?1", [&id])?;
     transaction.execute("DELETE FROM shared_publishes WHERE resource_id = ?1", [&id])?;
-    transaction.execute("DELETE FROM resource_drafts WHERE resource_id = ?1", [&id])?;
     transaction.execute("DELETE FROM resources WHERE id = ?1", [&id])?;
     transaction.commit()?;
     Ok(())

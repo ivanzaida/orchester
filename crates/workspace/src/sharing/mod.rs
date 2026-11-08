@@ -48,7 +48,7 @@ use orchester_api::{
   releases::ReleaseVersion,
 };
 use orchester_core::{
-  id::ServerId,
+  id::{ResourceId, ServerId},
   secret::{SecretValue, VaultError, VaultKey},
   time::Timestamp,
 };
@@ -75,7 +75,7 @@ pub use self::{
   team_created::{Created, NotCreated, TakenBack},
   trust::{ConfirmedPin, PresentedCertificate, Trust},
 };
-use crate::{background, secrets::Vault, workspace::Workspace};
+use crate::{background, removal::changed_by_removal, secrets::Vault, workspace::Workspace};
 
 /// A server in the list with its connection; `connection` is `None` while nobody is signed in there
 /// from this computer.
@@ -210,24 +210,39 @@ impl Servers {
     self.inner.taken_back.lock().get(root).cloned().unwrap_or_default()
   }
 
-  /// The person has read why the new resources of the project at `root` were taken back.
-  pub fn dismiss_taken_back(&self, root: &Path) {
-    self.inner.taken_back.lock().remove(root);
+  /// The person has read why the new resource `resource` of the project at `root` was taken back; what was told of
+  /// it, if it still was.
+  pub fn dismiss_taken_back(&self, root: &Path, resource: ResourceId) -> Option<TakenBack> {
+    let mut told = self.inner.taken_back.lock();
+    let list = told.get_mut(root)?;
+    let at = list.iter().position(|taken| taken.resource == resource)?;
+    let dismissed = list.remove(at);
+    if list.is_empty() {
+      told.remove(root);
+    }
+    drop(told);
     self.shared_changed();
+    Some(dismissed)
   }
 
-  /// Keeps `taken` for the hub to tell the person.
+  /// Keeps `taken` for the hub to tell the person, once for each resource, and tells the screens that list its kind
+  /// that it is gone.
   pub(crate) fn note_taken_back(&self, root: &Path, taken: Vec<TakenBack>) {
     if taken.is_empty() {
       return;
     }
-    self
-      .inner
-      .taken_back
-      .lock()
-      .entry(root.to_owned())
-      .or_default()
-      .extend(taken);
+    for gone in &taken {
+      for change in changed_by_removal(gone.kind) {
+        self.inner.workspace.changes.record(gone.project, *change);
+      }
+    }
+    let mut told = self.inner.taken_back.lock();
+    let list = told.entry(root.to_owned()).or_default();
+    for gone in taken {
+      list.retain(|known| known.resource != gone.resource);
+      list.push(gone);
+    }
+    drop(told);
     self.shared_changed();
   }
 

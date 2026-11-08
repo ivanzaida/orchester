@@ -13,7 +13,7 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Row, ScrollVertical, Text},
-  core::Signal,
+  core::{ElementRef, Signal},
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
@@ -94,6 +94,10 @@ struct NewPanel {
   tried: Signal<bool>,
   work: Work,
   gate: Option<InputGate>,
+  /// The name field, which has the focus when the form opens (the design draws it focused).
+  first: ElementRef,
+  /// The form has not given the focus to its name field yet.
+  focus_first: Signal<bool>,
 }
 
 impl Component for NewPanel {
@@ -119,6 +123,8 @@ impl Component for NewPanel {
       tried: ctx.signal(false),
       work,
       gate: ctx.use_context::<InputGate>(),
+      first: ElementRef::default(),
+      focus_first: ctx.signal(true),
     }
   }
 
@@ -129,6 +135,10 @@ impl Component for NewPanel {
       kind,
       listing,
     } = ctx.props::<Props>().clone();
+    if self.focus_first.get() {
+      ctx.focus(&self.first);
+      self.focus_first.set(false);
+    }
     let state = self.work.state().get();
     let pending = state.is_pending();
     let waiting = state
@@ -143,6 +153,7 @@ impl Component for NewPanel {
       tried: self.tried.get(),
       locked: pending || waiting,
       agents: agents.as_ref(),
+      first: &self.first,
     };
     let body = self.form.body(ctx, &shown);
     let team = rows::section(

@@ -23,6 +23,9 @@ const TEXT: Spec = Spec::new("instruction-text", "team_new.instruction.text")
   .sub("team_new.instruction.textSub")
   .required();
 
+/// The text field is at least 180 high (`Input` `sTxOp` in A10 `hGdGu`).
+const TEXT_AREA: f32 = 180.0;
+
 pub(super) struct Fields {
   name: Signal<String>,
   text: Signal<String>,
@@ -55,12 +58,13 @@ impl Fields {
       })
       .flatten();
     let rows = vec![
-      fields::text_row(
+      fields::name_row(
         ctx,
+        shown,
         &NAME,
         name_says.as_ref(),
         (&self.name, "team_new.instruction.namePlaceholder"),
-        (Look::Plain, shown.locked),
+        Look::Plain,
       ),
       fields::row(
         ctx,
@@ -73,7 +77,7 @@ impl Fields {
         &TEXT,
         text_says.as_ref(),
         (&self.text, "team_new.instruction.textPlaceholder"),
-        (Look::Area, shown.locked),
+        (Look::Area(TEXT_AREA), shown.locked),
       ),
     ];
     Body {

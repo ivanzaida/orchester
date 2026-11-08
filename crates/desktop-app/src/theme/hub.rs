@@ -213,10 +213,12 @@ pub enum HubSpacing {
   Key,
   /// 150: the key of *On this computer*'s rows of an MCP server (`Key` in `SpRvd` … `lSA4x`).
   KeyNarrow,
+  /// 190: the key of a create form's rows (`Key` `G7irn` in A10 `hGdGu`, `iS1Ix` in A8 `vPoTQ`).
+  KeyForm,
 }
 
 impl HubSpacing {
-  pub const ALL: [Self; 20] = [
+  pub const ALL: [Self; 21] = [
     Self::Side,
     Self::HeadTop,
     Self::HeadBottom,
@@ -237,6 +239,7 @@ impl HubSpacing {
     Self::Actions,
     Self::Key,
     Self::KeyNarrow,
+    Self::KeyForm,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -265,6 +268,7 @@ impl HubSpacing {
       Self::Actions => "hub_actions",
       Self::Key => "hub_key",
       Self::KeyNarrow => "hub_key_narrow",
+      Self::KeyForm => "hub_key_form",
     }
   }
 
@@ -285,6 +289,7 @@ impl HubSpacing {
       Self::Actions => 56.0,
       Self::Key => 170.0,
       Self::KeyNarrow => 150.0,
+      Self::KeyForm => 190.0,
     }
   }
 }

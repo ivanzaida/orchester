@@ -29,8 +29,10 @@ pub(super) fn notices(ctx: &mut Ctx, team: &TeamConfiguration, root: &Path) -> V
     .iter()
     .enumerate()
     .map(|(index, taken)| {
-      let (servers, root) = (services.servers.clone(), root.clone());
-      notice(ctx, index, taken, move || servers.dismiss_taken_back(&root))
+      let (servers, root, resource) = (services.servers.clone(), root.clone(), taken.resource);
+      notice(ctx, index, taken, move || {
+        servers.dismiss_taken_back(&root, resource);
+      })
     })
     .collect()
 }

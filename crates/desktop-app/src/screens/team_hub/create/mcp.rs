@@ -25,7 +25,8 @@ const PROGRAM: Spec = Spec::new("mcp-program", "team_new.mcp.program")
   .sub("team_new.mcp.programSub")
   .required();
 const ARGUMENTS: Spec = Spec::new("mcp-arguments", "team_new.mcp.arguments").sub("team_new.mcp.argumentsSub");
-const FOLDER: Spec = Spec::new("mcp-folder", "team_new.mcp.folder").sub("team_new.mcp.folderSub");
+const FOLDER: Spec = Spec::new("mcp-folder", "team_new.mcp.folder");
+const FOLDER_PATH: Spec = Spec::new("mcp-folder-path", "team_new.mcp.folderPath").sub("team_new.mcp.folderPathSub");
 const EXEMPT: Spec = Spec::new("mcp-exempt", "team_new.mcp.exempt").sub("team_new.mcp.exemptSub");
 const VARIABLES: Spec = Spec::new("mcp-variables", "team_new.mcp.variables").sub("team_new.mcp.variablesSub");
 const URL: Spec = Spec::new("mcp-url", "team_new.mcp.url")
@@ -34,6 +35,10 @@ const URL: Spec = Spec::new("mcp-url", "team_new.mcp.url")
 const HEADER: Spec = Spec::new("mcp-header", "team_new.mcp.header").sub("team_new.mcp.headerSub");
 const SECRET: Spec = Spec::new("mcp-secret", "team_new.mcp.secret").sub("team_new.mcp.secretSub");
 const PREFIX: Spec = Spec::new("mcp-prefix", "team_new.mcp.prefix").sub("team_new.mcp.prefixSub");
+
+/// A server starts in the run's worktree, or in a folder inside it: the team body holds no other folder.
+const WORKTREE: &str = "worktree";
+const INSIDE: &str = "inside";
 
 const PROGRAM_RUN: &str = "program";
 const RUNS: [(&str, &str); 2] = [
@@ -46,6 +51,7 @@ pub(super) struct Fields {
   runs: Signal<String>,
   program: Signal<String>,
   arguments: Signal<String>,
+  folder_choice: Signal<String>,
   folder: Signal<String>,
   exempt: Signal<String>,
   variables: Signal<String>,
@@ -53,6 +59,15 @@ pub(super) struct Fields {
   header: Signal<String>,
   secret: Signal<String>,
   prefix: Signal<String>,
+}
+
+/// The tool names a single-line field holds: separated by spaces or commas, none empty.
+fn names(text: &str) -> Vec<String> {
+  text
+    .split(|char: char| char.is_whitespace() || char == ',')
+    .filter(|name| !name.is_empty())
+    .map(str::to_owned)
+    .collect()
 }
 
 /// The lines of a list field, each trimmed, none empty.
@@ -72,6 +87,7 @@ impl Fields {
       runs: ctx.signal(PROGRAM_RUN.to_owned()),
       program: ctx.signal(String::new()),
       arguments: ctx.signal(String::new()),
+      folder_choice: ctx.signal(WORKTREE.to_owned()),
       folder: ctx.signal(String::new()),
       exempt: ctx.signal(String::new()),
       variables: ctx.signal(String::new()),
@@ -88,7 +104,11 @@ impl Fields {
       Runs::Program {
         program: self.program.get().trim().to_owned(),
         arguments: lines(&self.arguments.get()),
-        folder: self.folder.get().trim().to_owned(),
+        folder: if self.folder_choice.get() == INSIDE {
+          self.folder.get().trim().to_owned()
+        } else {
+          String::new()
+        },
         variables: lines(&self.variables.get()),
       }
     } else {
@@ -105,7 +125,7 @@ impl Fields {
     NewTeamMcpServer {
       name: self.name.get().trim().to_owned(),
       runs,
-      exempt_tools: lines(&self.exempt.get()),
+      exempt_tools: names(&self.exempt.get()),
     }
   }
 
@@ -152,12 +172,13 @@ impl Fields {
       Some(Invalid::Name(message)) if shown.tried => Some(Error::Said(message.clone())),
       _ => None,
     });
-    fields::text_row(
+    fields::name_row(
       ctx,
+      shown,
       &NAME,
       says.as_ref(),
       (&self.name, "team_new.mcp.namePlaceholder"),
-      (Look::Mono, shown.locked),
+      Look::Plain,
     )
   }
 
@@ -194,7 +215,7 @@ impl Fields {
       _ => None,
     });
     let locked = shown.locked;
-    vec![
+    let mut rows = vec![
       fields::text_row(
         ctx,
         &PROGRAM,
@@ -209,21 +230,41 @@ impl Fields {
         (&self.arguments, "team_new.mcp.argumentsPlaceholder"),
         (Look::Lines, locked),
       ),
-      fields::text_row(
+      self.folder_row(ctx, locked),
+    ];
+    if self.folder_choice.get() == INSIDE {
+      rows.push(fields::text_row(
         ctx,
-        &FOLDER,
+        &FOLDER_PATH,
         folder.as_ref(),
-        (&self.folder, "team_new.mcp.folderPlaceholder"),
+        (&self.folder, "team_new.mcp.folderPathPlaceholder"),
         (Look::Mono, locked),
-      ),
-      fields::text_row(
-        ctx,
-        &VARIABLES,
-        None,
-        (&self.variables, "team_new.mcp.variablesPlaceholder"),
-        (Look::Lines, locked),
-      ),
-    ]
+      ));
+    }
+    rows.push(fields::text_row(
+      ctx,
+      &VARIABLES,
+      None,
+      (&self.variables, "team_new.mcp.variablesPlaceholder"),
+      (Look::Lines, locked),
+    ));
+    rows
+  }
+
+  /// Where the server starts: in the run's worktree, as the design's select says, or in a folder inside it.
+  fn folder_row(&self, ctx: &Ctx, locked: bool) -> Row {
+    let options = vec![
+      (WORKTREE.to_owned(), ctx.t("team_new.mcp.folderWorktree").to_string()),
+      (INSIDE.to_owned(), ctx.t("team_new.mcp.folderInside").to_string()),
+    ];
+    let select = fields::select(
+      ctx,
+      &FOLDER,
+      &self.folder_choice,
+      options,
+      ("team_new.mcp.folderWorktree", false, locked),
+    );
+    fields::row(ctx, &FOLDER, None, select)
   }
 
   fn remote_rows(&self, ctx: &mut Ctx, shown: &Shown<'_>, invalid: Option<&Invalid>) -> Vec<Row> {
@@ -271,7 +312,7 @@ impl Fields {
       &EXEMPT,
       None,
       (&self.exempt, "team_new.mcp.exemptPlaceholder"),
-      (Look::Lines, shown.locked),
+      (Look::Plain, shown.locked),
     )
   }
 }

@@ -27,6 +27,8 @@ pub(super) enum Key {
   Wide,
   /// The key of the rows of an MCP server's *On this computer*.
   Narrow,
+  /// The key of a create form's rows.
+  Form,
 }
 
 impl Key {
@@ -34,6 +36,7 @@ impl Key {
     match self {
       Self::Wide => HubSpacing::Key.value(),
       Self::Narrow => HubSpacing::KeyNarrow.value(),
+      Self::Form => HubSpacing::KeyForm.value(),
     }
   }
 }

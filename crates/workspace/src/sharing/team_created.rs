@@ -5,7 +5,11 @@
 
 use std::path::Path;
 
-use orchester_core::{id::ResourceId, resource::ResourceKind};
+use orchester_core::{
+  id::{ProjectId, ResourceId},
+  resource::ResourceKind,
+  store::ResourceStore,
+};
 use orchester_store::{ProjectDb, PublishState};
 
 use super::{Servers, SharingError, project::ProjectServer, sync::RemoteResourceStore, team::said};
@@ -65,10 +69,12 @@ fn settle(servers: &Servers, root: &Path, resource: ResourceId) -> Result<Create
   }
   let sent = send(servers, root, resource);
   let state = waiting_state(&db, resource).map_err(|error| failed(&error.into()))?;
+  if state.is_none() {
+    return settled_elsewhere(servers, root, &db, resource);
+  }
   let outcome = match (state, sent) {
-    (None, _) => return Ok(Created::Accepted),
     (Some(PublishState::Waiting), Ok(())) => return Ok(Created::Waiting),
-    (Some(PublishState::Waiting), Err(error)) if unreached(&error) => return Ok(Created::Waiting),
+    (Some(PublishState::Waiting), Err(error)) if error.unreached() => return Ok(Created::Waiting),
     (state, Err(error)) => refusal(state, Some(&error)),
     (state, Ok(())) => refusal(state, None),
   };
@@ -76,6 +82,28 @@ fn settle(servers: &Servers, root: &Path, resource: ResourceId) -> Result<Create
   db.discard_created(resource)
     .map_err(|error| NotCreated::Failed(messages::store_error(&error)))?;
   Err(outcome)
+}
+
+/// The new `resource` no longer waits though this form's send did not number it: a pass of the outbox sent it first
+/// ([`RemoteResourceStore::send_waiting`]), and either the server took it (created) or refused it and it was taken
+/// back, which this form tells, so the hub's notice for it goes.
+fn settled_elsewhere(
+  servers: &Servers,
+  root: &Path,
+  db: &ProjectDb,
+  resource: ResourceId,
+) -> Result<Created, NotCreated> {
+  let kept = db
+    .resource(resource)
+    .map_err(|error| NotCreated::Failed(messages::store_error(&error)))?;
+  if kept.is_some() {
+    return Ok(Created::Accepted);
+  }
+  Err(NotCreated::Failed(
+    servers
+      .dismiss_taken_back(root, resource)
+      .map_or_else(messages::interrupted, |taken| taken.reason),
+  ))
 }
 
 /// Why the new resource whose first version stands as `state` after `sent` failed was not created.
@@ -99,6 +127,8 @@ pub(crate) fn refusal(state: Option<PublishState>, sent: Option<&SharingError>) 
 /// or the server back): it is taken back whole, like one refused at once, and this says what and why.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TakenBack {
+  pub project: ProjectId,
+  pub resource: ResourceId,
   pub name: String,
   pub kind: ResourceKind,
   pub reason: Message,
@@ -120,15 +150,6 @@ fn waiting_state(db: &ProjectDb, resource: ResourceId) -> Result<Option<PublishS
       .find(|waiting| waiting.resource == resource)
       .map(|waiting| waiting.state),
   )
-}
-
-/// Whether `error` says the server was not reached, so the resource waits.
-fn unreached(error: &SharingError) -> bool {
-  match error {
-    SharingError::Offline | SharingError::SignedOut => true,
-    SharingError::Client(error) => error.code().is_none(),
-    _ => false,
-  }
 }
 
 impl NotCreated {

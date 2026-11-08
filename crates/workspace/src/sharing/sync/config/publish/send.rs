@@ -33,7 +33,7 @@ use crate::sharing::{
 impl<S: ConfigServer> RemoteResourceStore<S> {
   /// Sends every version published here that waits, e.g. once the server can be reached again. One the server did not
   /// take, or this computer knows it cannot, is recorded on it and logged; the others are still sent. A new resource
-  /// whose first version is refused is taken back whole, as one refused at once is, and returned with why. Fails,
+  /// whose lone first version is refused is taken back whole, as one refused at once is, and returned with why. Fails,
   /// sending nothing more, when the server cannot be reached.
   pub fn send_waiting(&mut self) -> Result<Vec<TakenBack>, SharingError> {
     let mut resources: Vec<ResourceId> = Vec::new();
@@ -48,14 +48,17 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
     self.server.writable()?;
     let mut taken_back = Vec::new();
     for resource in resources {
-      let created = self.is_new(resource)?;
       match self.send_resource(resource) {
         Ok(()) => {}
-        Err(error) if unreached(&error) => return Err(error),
+        Err(error) if error.unreached() => return Err(error),
         Err(error) => {
           tracing::warn!(%error, %resource, "the server did not take a version published here");
-          if created {
-            taken_back.extend(self.take_back(resource, &error)?);
+          match self.take_back(resource, &error) {
+            Ok(taken) => taken_back.extend(taken),
+            // The others are still sent; this one stays as it is, refused, for the waiting bar to show.
+            Err(failure) => {
+              tracing::warn!(%failure, %resource, "a new resource the server refused could not be taken back")
+            }
           }
         }
       }
@@ -63,26 +66,14 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
     Ok(taken_back)
   }
 
-  /// Whether `resource` was created here as its first version ([`orchester_store::ProjectDb::create_published`]), which
-  /// the team server has not numbered: it never had a draft, so taking it back loses no work.
-  fn is_new(&self, resource: ResourceId) -> Result<bool, SharingError> {
-    Ok(
-      self
-        .db
-        .waiting_publishes()?
-        .iter()
-        .any(|waiting| waiting.resource == resource && waiting.created),
-    )
-  }
-
-  /// Takes the new `resource` back when `error` left its first version refused; what it was and why, or nothing when
-  /// that version still waits.
+  /// Takes back the new `resource` when `error` left its first version refused, as read now, and nothing else of the
+  /// person's goes with it ([`orchester_store::ProjectDb::discard_created`]); what it was and why. Nothing when that
+  /// version still waits, or the resource holds more (a later version, a draft, a version the server numbered): it
+  /// stays refused for the admin to decide on.
   fn take_back(&mut self, resource: ResourceId, error: &SharingError) -> Result<Option<TakenBack>, SharingError> {
-    let refused = self
-      .db
-      .waiting_publishes()?
-      .into_iter()
-      .find(|waiting| waiting.resource == resource && waiting.state != PublishState::Waiting);
+    let refused = self.db.waiting_publishes()?.into_iter().find(|waiting| {
+      waiting.resource == resource && waiting.created && !matches!(waiting.state, PublishState::Waiting)
+    });
     let Some(refused) = refused else {
       return Ok(None);
     };
@@ -90,8 +81,14 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
       .db
       .resource(resource)?
       .ok_or(StoreError::ResourceNotFound(resource))?;
-    self.db.discard_created(resource)?;
+    match self.db.discard_created(resource) {
+      Ok(()) => {}
+      Err(StoreError::AlreadyNumbered(_) | StoreError::HoldsMore(_)) => return Ok(None),
+      Err(failure) => return Err(failure.into()),
+    }
     Ok(Some(TakenBack {
+      project: self.db.project().id(),
+      resource,
       name: found.name().as_str().to_owned(),
       kind: found.kind(),
       reason: refusal(Some(refused.state), Some(error)).message(),
@@ -379,15 +376,6 @@ const fn refusal_code(error: &SharingError) -> Option<&'static str> {
     SharingError::PipelineNamesNonTeam { .. } => Some("pipeline_names_non_team"),
     SharingError::WritableFoldersStay { .. } => Some("writable_folders_stay"),
     _ => None,
-  }
-}
-
-/// Whether `error` says the server was not reached, so the version waits.
-fn unreached(error: &SharingError) -> bool {
-  match error {
-    SharingError::Offline | SharingError::SignedOut => true,
-    SharingError::Client(error) => error.code().is_none(),
-    _ => false,
   }
 }
 

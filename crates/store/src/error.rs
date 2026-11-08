@@ -64,6 +64,10 @@ pub enum StoreError {
   /// changed.
   #[error("resource {0} has a version the team server numbered; it is the team's now")]
   AlreadyNumbered(ResourceId),
+  /// The resource holds more than the version created here (a later version or a draft), or was not created here, so
+  /// taking it back would lose someone's work. Nothing was changed.
+  #[error("resource {0} holds more than the version created here; it is not taken back")]
+  HoldsMore(ResourceId),
   /// A value cannot be represented in the database, e.g. a number beyond its 64-bit integers.
   #[error("{0} cannot be stored")]
   Unrepresentable(&'static str),

@@ -78,12 +78,13 @@ impl Fields {
     let cli_says = (shown.tried && connection.is_none()).then_some(Error::Required);
     let model_says = (shown.tried && model.is_none()).then_some(Error::Required);
     let mut rows = vec![
-      fields::text_row(
+      fields::name_row(
         ctx,
+        shown,
         &NAME,
         name_says.as_ref(),
         (&self.name, "team_new.profile.namePlaceholder"),
-        (Look::Plain, shown.locked),
+        Look::Plain,
       ),
       fields::text_row(
         ctx,

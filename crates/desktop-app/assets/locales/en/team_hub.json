@@ -15,7 +15,7 @@
     "hint": {
       "all": "All of it is the team's; each computer fills in only what is local",
       "profiles": "Profiles are the team's; each computer fills in only what is local",
-      "mcpServers": "The team's MCP servers; each computer sets the program path and secret values",
+      "mcpServers": "MCP servers are the team's; each computer fills in only what is local",
       "instructions": "Instructions are the team's; each computer fills in only what is local",
       "skills": "Skills are the team's; each computer fills in only what is local",
       "tools": "Tools are the team's; each computer fills in only what is local"
@@ -53,7 +53,7 @@
       "skills": "Skills have nothing to fill in on a computer, so they are always ready here."
     },
     "takenBack": {
-      "title": "{{name}} was not created: the team server refused it",
+      "title": "{{name}} was not created",
       "dismiss": "Dismiss"
     },
     "line": {

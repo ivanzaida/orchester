@@ -4,12 +4,22 @@
 //!
 //! `cargo test -p orchester-app --test team_qa team_qa_create`
 
+use std::{collections::BTreeSet, num::NonZeroU32};
+
 use orchester_api::test_support::team_server::{Standing, TeamServer};
 use orchester_app::{
   routes::{HubFilter, HubView, InstructionsTab, InstructionsView, ProjectPage, Route},
   test_support::{Window, project_id},
 };
-use orchester_core::{id::ResourceId, resource::ResourceKind, store::ResourceStore};
+use orchester_core::{
+  id::ResourceId,
+  name::Name,
+  resource::{
+    AgentTargets, InjectionEvent, Instruction, InstructionScope, PromptText, ResourceKind, Slug, VersionNumber,
+  },
+  store::ResourceStore,
+  time::Timestamp,
+};
 use orchester_store::ProjectDb;
 
 use super::{prepared, team::State};
@@ -223,11 +233,11 @@ fn team_qa_create_the_old_instruction_window_makes_nothing_the_server_refused() 
 
 const WAITING_LINE: &str = "Waiting to send to the team server";
 
-/// The id of the instruction `name` this computer holds.
+/// The id of the instruction `name` this computer holds, one the team server refused too.
 fn instruction(window: &Window, name: &str) -> ResourceId {
   ProjectDb::open(&window.data.repo("repo-kontur"))
     .expect("database")
-    .resources(ResourceKind::Instruction)
+    .kept_resources(ResourceKind::Instruction)
     .expect("resources")
     .iter()
     .find(|resource| resource.name().as_str() == name)
@@ -338,4 +348,38 @@ fn team_qa_create_the_old_instruction_window_keeps_it_waiting_and_it_is_sent_whe
       .iter()
       .any(|(resource, versions)| resource["name"] == "Working agreement" && versions.len() == 1)
   });
+}
+
+#[test]
+fn team_qa_create_a_first_version_met_by_a_teammates_keeps_its_number_and_is_not_listed_as_waiting_to_send() {
+  let (mut window, _server) = prepared(State::Admin);
+  {
+    let mut db = ProjectDb::open(&window.data.repo("repo-kontur")).expect("database");
+    let body = Instruction::new(
+      PromptText::new("Write them for customers.").expect("a prompt"),
+      AgentTargets::All,
+      BTreeSet::from([InjectionEvent::Start]),
+      InstructionScope::Project,
+    )
+    .expect("an instruction");
+    let (_, version) = db
+      .create_published(
+        Slug::new("release-notes").expect("a slug"),
+        Name::new("Release notes").expect("a name"),
+        &body,
+        Timestamp::now(),
+      )
+      .expect("created here");
+    // A teammate published a version meanwhile: the admin decides, and the row is still listed (a refused one is not).
+    let latest = VersionNumber::new(NonZeroU32::new(2).expect("above zero"));
+    db.record_publish_conflict(version.id(), latest).expect("a conflict");
+  }
+  let row = format!("team-hub-row-{}-line", instruction(&window, "Release notes"));
+  window.navigation().go(instructions_list());
+  window.until("its row", |window| window.texts(&row).is_some());
+  assert_ne!(
+    window.text(&row),
+    WAITING_LINE,
+    "the server refused it; it does not wait for the server"
+  );
 }

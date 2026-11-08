@@ -7,7 +7,8 @@ use std::sync::Arc;
 use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
   components::{Row, SelectOption},
-  core::Signal,
+  core::{ElementRef, Signal},
+  layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_workspace::{agents::data::ProjectAgents, messages::Message};
@@ -15,7 +16,7 @@ use orchester_workspace::{agents::data::ProjectAgents, messages::Message};
 use super::{
   super::{
     model::{Kind, Listing},
-    rows::{self, Sub},
+    rows::{self, Key, Sub},
   },
   work::Make,
 };
@@ -36,6 +37,8 @@ pub(super) struct Shown<'a> {
   pub locked: bool,
   /// What this computer has to offer a profile (its connections); `None` while it is read.
   pub agents: Option<&'a ProjectAgents>,
+  /// The name field, which has the focus when the form opens (`Name` is focused in A7–A12).
+  pub first: &'a ElementRef,
 }
 
 /// What a kind's form gives the panel.
@@ -116,27 +119,30 @@ pub(super) fn row(ctx: &Ctx, spec: &Spec, error: Option<&Error>, control: impl I
     (None, Some(sub)) => Some(Sub::quiet(ctx.t(sub))),
     (None, None) => None,
   };
-  rows::row(&format!("team-new-{}-row", spec.id), &label, sub, control)
+  rows::row_in(Key::Form, &format!("team-new-{}-row", spec.id), &label, sub, control)
 }
 
 /// How a text control looks.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq)]
 pub(super) enum Look {
   Plain,
   /// An identifier, a program or a list of them, in Geist Mono.
   Mono,
   /// Several lines in Geist Mono.
   Lines,
-  /// A paragraph of prose.
-  Area,
+  /// A paragraph of prose, at least this high (`Input` `sTxOp` is 180 in A10, 64 in A11): the row's key stays at the
+  /// top.
+  Area(f32),
 }
 
-/// A text field of `spec` typing into `value`, with `placeholder` (a key) while it is empty.
+/// A text field of `spec` typing into `value`, with `placeholder` (a key) while it is empty; `first` is the form's
+/// name field, which `first` finds to focus it.
 pub(super) fn text(
   ctx: &mut Ctx,
   spec: &Spec,
   (value, placeholder): (Signal<String>, &'static str),
   (look, invalid, locked): (Look, bool, bool),
+  first: Option<&ElementRef>,
 ) -> Element {
   let mut input = FieldInput::new(spec.control(), ctx.t(spec.label), value)
     .placeholder(ctx.t(placeholder))
@@ -145,8 +151,11 @@ pub(super) fn text(
     Look::Plain => input,
     Look::Mono => input.mono(),
     Look::Lines => input.compact_text_area().mono(),
-    Look::Area => input.text_area(),
+    Look::Area(height) => input.text_area().area_height(height),
   };
+  if let Some(first) = first {
+    input = input.element(first.clone());
+  }
   if invalid {
     input = input.invalid();
   }
@@ -164,8 +173,48 @@ pub(super) fn text_row(
   (value, placeholder): (&Signal<String>, &'static str),
   (look, locked): (Look, bool),
 ) -> Row {
-  let control = text(ctx, spec, (value.clone(), placeholder), (look, error.is_some(), locked));
-  row(ctx, spec, error, control)
+  text_row_with(ctx, spec, error, (value, placeholder), (look, locked, None))
+}
+
+/// [`text_row`] of the form's name field, which has the focus when the form opens.
+pub(super) fn name_row(
+  ctx: &mut Ctx,
+  shown: &Shown<'_>,
+  spec: &Spec,
+  error: Option<&Error>,
+  (value, placeholder): (&Signal<String>, &'static str),
+  look: Look,
+) -> Row {
+  text_row_with(
+    ctx,
+    spec,
+    error,
+    (value, placeholder),
+    (look, shown.locked, Some(shown.first)),
+  )
+}
+
+fn text_row_with(
+  ctx: &mut Ctx,
+  spec: &Spec,
+  error: Option<&Error>,
+  (value, placeholder): (&Signal<String>, &'static str),
+  (look, locked, first): (Look, bool, Option<&ElementRef>),
+) -> Row {
+  let control = text(
+    ctx,
+    spec,
+    (value.clone(), placeholder),
+    (look, error.is_some(), locked),
+    first,
+  );
+  let row = row(ctx, spec, error, control);
+  // A tall field has its key at the top, as the design draws it; the rest are centered.
+  if matches!(look, Look::Area(_)) {
+    row.align_items(Alignment::Start)
+  } else {
+    row
+  }
 }
 
 /// A segmented choice: `options` are (value, label key); choosing one sets `value` to it.
