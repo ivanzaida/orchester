@@ -80,6 +80,19 @@ pub(super) fn db(window: &Window) -> ProjectDb {
   ProjectDb::open(&window.data.repo("repo-kontur")).expect("database")
 }
 
+/// From now on this computer cannot keep the number the team server gives a version published here, as when its disk
+/// refuses the write: a send reaches the server, which numbers the version, and then fails here, so the version stays
+/// in the outbox, a failure that is not the server being out of reach.
+pub(super) fn fail_keeping_the_servers_number(window: &Window) {
+  rusqlite::Connection::open(window.data.repo("repo-kontur").join(".orchester/orchester.db"))
+    .expect("the project database")
+    .execute_batch(
+      "CREATE TRIGGER fail_keeping_the_servers_number BEFORE DELETE ON shared_publishes \
+       BEGIN SELECT RAISE(ABORT, 'the write failed'); END;",
+    )
+    .expect("the failing write");
+}
+
 /// Edit pressed and the arguments typed: the draft is kept once the panel says so.
 fn typed(window: &mut Window) {
   window.press("team-hub-edit");

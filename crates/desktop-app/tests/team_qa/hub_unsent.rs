@@ -25,7 +25,7 @@ use orchester_workspace::{
 };
 
 use super::{
-  hub_edit::{ARGUMENTS, PUBLISH, db, draft_of, on_pencil_until},
+  hub_edit::{ARGUMENTS, PUBLISH, db, draft_of, fail_keeping_the_servers_number, on_pencil_until},
   team::State,
 };
 
@@ -380,10 +380,9 @@ fn team_qa_hub_edit_an_unknown_reason_of_invalid_is_kept_as_plain_invalid() {
 
 #[test]
 fn team_qa_hub_edit_a_send_that_failed_here_after_the_server_may_have_answered_stays_queued() {
-  let (window, _server, (_, pencil)) = on_pencil_until(("team-edit", State::TeamEdit), TEAM_CHIP);
+  let (window, server, (_, pencil)) = on_pencil_until(("team-edit", State::TeamEdit), TEAM_CHIP);
   let services = window.launch.services().expect("the session");
   let root = window.data.repo("repo-kontur");
-  // The server this project is shared on is gone from Settings: the send fails on this computer, not for being offline.
   let mut fields = pencil_fields(&window, pencil);
   if let Runs::Program { arguments, .. } = &mut fields.runs {
     *arguments = vec!["--once".to_owned()];
@@ -395,20 +394,25 @@ fn team_qa_hub_edit_a_send_that_failed_here_after_the_server_may_have_answered_s
     orchester_core::resource::VersionNumber::FIRST,
   )
   .expect("the draft");
-  let link = db(&window).sharing().expect("read").expect("linked");
-  let app = rusqlite::Connection::open(window.data.database()).expect("the application database");
-  app
-    .execute("DELETE FROM servers WHERE id = ?1", [link.server.to_string()])
-    .expect("the server is removed");
+  // The server is reached and numbers the version, then keeping its number fails on this computer: the send failed
+  // here after the server answered.
+  fail_keeping_the_servers_number(&window);
   let published = window
     .data
     .runtime
     .block_on(services.servers.publish_mcp_edit(&root, pencil));
   assert!(matches!(published, Err(EditRefused::Failed(_))), "{published:?}");
+  assert!(
+    server
+      .resources("kontur")
+      .iter()
+      .any(|(resource, versions)| resource["id"] == pencil.to_string() && versions.len() == 2),
+    "the server numbered the version"
+  );
   assert_eq!(
     db(&window).waiting_publishes().expect("outbox").len(),
     1,
-    "the version stays queued: a retry is idempotent, and the server may hold it"
+    "the version stays queued: a retry is idempotent, and the server holds it"
   );
   assert!(
     draft_of(&window, pencil).is_none(),
