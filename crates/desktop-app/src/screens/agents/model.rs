@@ -2,8 +2,6 @@
 //! name and responsibility fields and the role instructions inline, then the connection, the model and the reasoning
 //! effort as dropdowns of one width (01d). *Other model id…* opens the Model id row under Model (01e); a model that
 //! lists no efforts has no effort row.
-mod member;
-
 use std::sync::Arc;
 
 use lurq::{
@@ -14,7 +12,6 @@ use lurq::{
   components::{Column, Row, Text},
   node::{Element, dimension::Dimension, padding::Padding},
 };
-pub(super) use member::connection_shared;
 use orchester_core::{
   connection::{AgentConnection, ProviderEffortError, provider_effort},
   resource::{AgentProfile, ModelId},
@@ -161,14 +158,8 @@ pub(super) fn role_read_only(ctx: &Ctx, fields: &Fields) -> Element {
 }
 
 /// The Connection & model section as a member reads it (`Connection & model` `qjWQP` in 03): the connection, the
-/// model and the effort as plain text, then the member's own *Runs here use* row with `note_under` under the section
-/// before the assignment note (06).
-pub(super) fn connection_read_only(
-  ctx: &mut Ctx,
-  fields: &Fields,
-  listed: &ProjectAgents,
-  (runs_here, note_under): (Option<Element>, Option<Element>),
-) -> Element {
+/// model and the effort as plain text, then the assignment note.
+pub(super) fn connection_read_only(ctx: &mut Ctx, fields: &Fields, listed: &ProjectAgents) -> Element {
   let connection = fields.connection(listed);
   let accounts = crate::services::accounts::listed(ctx);
   let readings = crate::services::plan_limits::account_readings(ctx);
@@ -205,7 +196,6 @@ pub(super) fn connection_read_only(
       .into(),
     );
   }
-  rows.extend(runs_here);
   Column::new()
     .id("agent-model-section")
     .width(Dimension::Pct(100.0))
@@ -215,7 +205,6 @@ pub(super) fn connection_read_only(
       head("agent-model-group", &ctx.t("agents.connectionModel"), None, None),
       boxed("agent-model-rows", rows),
     ))
-    .with_children(note_under)
     .child(note(
       "agent-assignment-note",
       Icon::Info,
@@ -242,14 +231,8 @@ fn value(id: &str, text: &str, code: bool) -> Element {
     .into()
 }
 
-/// The section, with `extra` rows after the effort (a shared profile's *Runs here use*, what a change asks) and
-/// `note` under it before the assignment note.
-pub(super) fn connection_model(
-  ctx: &mut Ctx,
-  fields: &Fields,
-  listed: &ProjectAgents,
-  (extra, note_under): (Vec<Element>, Option<Element>),
-) -> Element {
+/// The section, with `extra` rows after the effort (what a change asks).
+pub(super) fn connection_model(ctx: &mut Ctx, fields: &Fields, listed: &ProjectAgents, extra: Vec<Element>) -> Element {
   let connection = fields.connection(listed);
   let on_provider = connection.is_some_and(|c| c.api_provider().is_some());
   let (model_hint, effort_hint) = if on_provider {
@@ -321,7 +304,6 @@ pub(super) fn connection_model(
         &ctx.t("agents.connectionReset"),
       )
     }))
-    .with_children(note_under)
     .child(note(
       "agent-assignment-note",
       Icon::Info,

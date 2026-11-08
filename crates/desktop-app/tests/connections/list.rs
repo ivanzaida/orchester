@@ -26,10 +26,6 @@ fn connections_groups_list_each_kind_with_its_add() {
       "connections-github",
       &["GitHub", "gh · github.com", "signed in as ivanzaida"][..],
     ),
-    (
-      "connections-mcp",
-      &["MCP servers", "kontur-docs", "sentry", "mcp.sentry.dev"][..],
-    ),
   ] {
     let text = seeded.text(group);
     for word in words {
@@ -37,7 +33,10 @@ fn connections_groups_list_each_kind_with_its_add() {
     }
   }
   assert_eq!(seeded.text("connections-add-agent"), "Add provider");
-  assert_eq!(seeded.text("connections-add-mcp"), "Add MCP server");
+  assert!(
+    !seeded.exists("connections-mcp") && !seeded.exists("connections-add-mcp"),
+    "MCP servers live in the Agents hub, not in Connections"
+  );
   assert!(
     !seeded.exists("project-settings-save-status"),
     "Connections saves per action"
@@ -123,7 +122,7 @@ fn connections_row_opens_the_connections_page_with_a_crumb_back() {
 }
 
 /// Without connections the tab says how to connect an agent: each CLI as found on the search path, a CLI on an API
-/// provider, GitHub not linked with why, and MCP servers with their Add.
+/// provider, and GitHub not linked with why.
 #[test]
 fn connections_without_any_offer_each_way_to_connect() {
   let mut seeded = Seeded::new("empty");
@@ -132,14 +131,10 @@ fn connections_without_any_offer_each_way_to_connect() {
     seeded.exists("connections-empty") && !seeded.text("connections-agents").contains("Looking")
   });
   let empty = seeded.text("connections-empty");
-  for words in ["Claude Code CLI", "Codex CLI", "No MCP servers yet"] {
+  for words in ["Claude Code CLI", "Codex CLI"] {
     assert!(empty.contains(words), "{words} in {empty}");
   }
-  for action in [
-    "connections-way-api-add",
-    "connections-add-reason",
-    "connections-mcp-empty-add",
-  ] {
+  for action in ["connections-way-api-add", "connections-add-reason"] {
     assert!(seeded.exists(action), "{action}");
   }
 }

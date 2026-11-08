@@ -383,7 +383,6 @@
     },
     "mcp": {
       "add": "Add MCP server",
-      "emptyTitle": "No MCP servers yet",
       "emptyDetail": "Agents run without your own CLI configuration, so the MCP servers they get are the ones {{project}} adds here. An agent profile chooses which of them its agents get.",
       "row": {
         "stdio": "Program · {{program}}",
@@ -526,13 +525,10 @@
         "keep": "Keep it off"
       },
       "editShort": "Edit",
-      "emptyDetailShort": "A program on this computer or a remote server that agents may use.",
       "noVariables": "None",
       "notUsedShort": "no profile chooses it yet",
       "openSecrets": "Open Secrets",
       "removeServer": "Remove server",
-      "rowUnused": "{{what}} · no profile chooses it yet",
-      "rowUsed": "{{what}} · used by {{profiles}}",
       "runsAs": "Runs as",
       "sendsGroup": "Sends",
       "serverGroup": "Server",
@@ -679,11 +675,9 @@
     },
     "groups": {
       "add": "Add",
-      "addMcp": "Add MCP server",
       "addProvider": "Add provider",
       "agentProviders": "Agent providers",
-      "github": "GitHub",
-      "mcpServers": "MCP servers"
+      "github": "GitHub"
     }
   }
 }
