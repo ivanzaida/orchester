@@ -13,7 +13,7 @@ use std::time::{Duration, Instant};
 use orchester_app::test_support::Window;
 use orchester_core::{
   id::ResourceId,
-  resource::{ResourceKind, TeamMcpServer},
+  resource::{ResourceKind, TeamMcpServer, VersionNumber},
   sharing::MemberRole,
   store::ResourceStore,
   time::Timestamp,
@@ -152,6 +152,63 @@ fn team_qa_hub_edit_a_rejected_version_in_the_outbox_is_the_refused_form_and_fix
 }
 
 #[test]
+fn team_qa_hub_edit_a_refused_form_publishes_when_it_differs_from_the_teams_version_not_from_the_refused_one() {
+  let (mut window, _server, (_, pencil)) = on_pencil_until(
+    ("team-edit-rejected", State::TeamEditRejected),
+    "team-hub-edit-refused-title",
+  );
+  // Typing the team's own arguments back is no change to publish: the hint says it would only revert.
+  let team = db(&window)
+    .version::<TeamMcpServer>(pencil, VersionNumber::FIRST)
+    .expect("read")
+    .expect("the team's v1");
+  let team_arguments: Vec<String> = match serde_json::to_value(team.body()).expect("a body")["launch"]["args"].clone() {
+    serde_json::Value::Array(args) => args.iter().filter_map(|arg| arg.as_str().map(str::to_owned)).collect(),
+    _ => Vec::new(),
+  };
+  window.set(ARGUMENTS, &team_arguments.join("\n"));
+  window.until("the hint to say it would revert", |window| {
+    window
+      .texts("team-hub-actions-hint")
+      .is_some_and(|said| said.join(" ").contains("only revert v2"))
+  });
+  window.press(PUBLISH);
+  assert_eq!(
+    db(&window).waiting_publishes().expect("outbox").len(),
+    1,
+    "nothing was sent: the refused version is still in the outbox"
+  );
+  // The refused version's own body, unedited, differs from the team's: it publishes again (and is refused again here).
+  window.set(ARGUMENTS, "--stdio\n--app\ndesktop\n--no-telemetry");
+  window.until("the hint to say fix and publish again", |window| {
+    window
+      .texts("team-hub-actions-hint")
+      .is_some_and(|said| said.join(" ").contains("fix the reason, then publish again"))
+  });
+  window.press(PUBLISH);
+  window.until("the version to be the draft again", |window| {
+    db(window).waiting_publishes().expect("outbox").is_empty() && draft_of(window, pencil).is_some()
+  });
+}
+
+#[test]
+fn team_qa_hub_edit_a_refused_form_keeps_what_is_typed_as_the_draft() {
+  let (mut window, _server, (_, pencil)) = on_pencil_until(
+    ("team-edit-rejected", State::TeamEditRejected),
+    "team-hub-edit-refused-title",
+  );
+  window.set(ARGUMENTS, "--typed-here");
+  window.until("the draft in the database", |window| {
+    draft_of(window, pencil) == Some(vec!["--typed-here".to_owned()])
+  });
+  assert_eq!(
+    db(&window).waiting_publishes().expect("outbox").len(),
+    1,
+    "the refused version stays in the outbox until it is published again or discarded"
+  );
+}
+
+#[test]
 fn team_qa_hub_edit_discarding_a_rejected_version_goes_back_to_the_team_s_version() {
   let (mut window, _server, (_, pencil)) = on_pencil_until(
     ("team-edit-rejected", State::TeamEditRejected),
@@ -202,6 +259,49 @@ fn team_qa_hub_edit_the_list_says_the_outbox_first_and_what_the_computer_needs_a
   );
   window.until("the row", |window| window.texts(&row(pencil)).is_some());
   assert_eq!(window.text(&row(pencil)), "Your draft on v1 · publish refused");
+}
+
+/// The top of the element `id` in the window, when it is laid out.
+fn top(window: &mut Window, id: &str) -> Option<f32> {
+  window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .map(|bounds| bounds.y)
+}
+
+#[test]
+fn team_qa_hub_edit_a_version_that_waits_or_was_refused_is_listed_under_needs_you_here() {
+  for (scenario, state, shown) in [
+    (
+      "team-edit-waiting",
+      State::TeamEditWaiting,
+      "team-hub-edit-waiting-title",
+    ),
+    (
+      "team-edit-rejected",
+      State::TeamEditRejected,
+      "team-hub-edit-refused-title",
+    ),
+    (
+      "team-edit-refused-admin",
+      State::TeamEditRefusedAdmin,
+      "team-hub-edit-not-admin-title",
+    ),
+  ] {
+    let (mut window, _server, (_, pencil)) = on_pencil_until((scenario, state), shown);
+    let row = format!("team-hub-row-{pencil}");
+    window.until("the row", |window| top(window, &row).is_some());
+    let (row, needs) = (
+      top(&mut window, &row).expect("its row"),
+      top(&mut window, "team-hub-section-needs"),
+    );
+    let ready = top(&mut window, "team-hub-section-ready").unwrap_or(f32::MAX);
+    assert!(
+      needs.is_some_and(|needs| needs < row) && row < ready,
+      "{scenario}: the row ({row}) is between the Needs you here section ({needs:?}) and the Ready here one ({ready})"
+    );
+  }
 }
 
 #[test]

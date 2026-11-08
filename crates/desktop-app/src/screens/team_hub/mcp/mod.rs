@@ -13,6 +13,7 @@
 mod computer;
 mod copy_changes;
 mod edit;
+mod edit_actions;
 mod edit_view;
 mod fix;
 mod from_team;
@@ -140,12 +141,7 @@ impl Component for McpPanel {
       switch: self.switch(entry.id),
     };
     let mode = self.mode(&props);
-    let kept = Edit::autosave(
-      ctx,
-      (props.repo_root.clone(), props.project, entry.id),
-      sheet.edit.as_ref().is_some_and(|edit| edit.draft.is_some()),
-      self.to_keep(mode),
-    );
+    let kept = self.autosave(ctx, &props, mode);
     let parts = self
       .parts(ctx, &props, (mode, &kept))
       .unwrap_or_else(|| self.plain_parts(ctx, &props, (busy, &press)));

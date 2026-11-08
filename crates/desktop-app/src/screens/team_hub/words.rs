@@ -56,7 +56,7 @@ pub(super) fn line(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Said {
   let Some(lead) = lead(ctx, entry) else {
     return said;
   };
-  let text = if entry.group == Group::NeedsYouHere {
+  let text = if entry.here == Group::NeedsYouHere {
     ctx.t_args(
       "team_hub.edit.line.joined",
       [("lead", lead.text.to_string()), ("words", mid_line(&said.text))],
@@ -67,6 +67,19 @@ pub(super) fn line(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Said {
   Said {
     text,
     color: lead.color,
+  }
+}
+
+/// The color a row's start and its first words have: *Waiting to send* is information, a version the server refused is
+/// a failure, one that met another version or a draft that cannot be published (the person is no admin) a warning.
+/// `None` for a row with no version of the person's own.
+pub(super) const fn lead_tone(entry: &Entry) -> Option<PaletteColor> {
+  match entry.outbox {
+    Some(Outbox::Sending { .. }) => Some(PaletteColor::Info),
+    Some(Outbox::Stuck { refused: true, .. }) => Some(PaletteColor::Danger),
+    Some(Outbox::Stuck { refused: false, .. }) => Some(PaletteColor::Warning),
+    None if entry.draft => Some(PaletteColor::Warning),
+    None => None,
   }
 }
 
@@ -141,7 +154,7 @@ fn mid_line(words: &str) -> String {
 }
 
 fn state_line(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Said {
-  match entry.group {
+  match entry.here {
     Group::NeedsYouHere => Said {
       text: needs(ctx, listing, entry),
       color: if has_no_connection(entry).is_some() {
@@ -248,7 +261,7 @@ pub(super) fn missing(ctx: &Ctx, listing: &Listing, entry: &Entry, part: &Missin
 /// The readiness chip of the panel: what it says and its tone.
 pub(super) fn chip(ctx: &Ctx, listing: &Listing, entry: &Entry) -> (Arc<str>, crate::ui::chip::BadgeTone) {
   use crate::ui::chip::BadgeTone;
-  match entry.group {
+  match entry.here {
     Group::NeedsYouHere => match has_no_connection(entry) {
       Some(cli) => (
         ctx.t_args("team_hub.chip.noConnection", [("cli", &*ctx.t(cli_key(cli)))]),

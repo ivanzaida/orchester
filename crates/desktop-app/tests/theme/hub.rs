@@ -18,6 +18,8 @@ fn hub_panel_roles_follow_the_design() {
     (HubText::PanelHint, 12.0, 1.2, FontWeight::Normal, "Geist"),
     (HubText::PanelLabel, 12.0, 1.2, FontWeight::Medium, "Geist"),
     (HubText::PanelTitle, 16.0, 1.3, FontWeight::SemiBold, "Geist"),
+    // What a banner of an edit says first (`Title` `n1Nv7` in A14, `w6McZ` in A16, `rHijY` in A17).
+    (HubText::NoticeTitle, 12.5, 1.4, FontWeight::SemiBold, "Geist"),
   ] {
     let style = theme.typography_style(role.role());
     assert_eq!(
@@ -40,6 +42,7 @@ fn hub_panel_roles_follow_the_design() {
     (HubText::PanelHint, PaletteColor::TextMuted),
     (HubText::PanelLabel, PaletteColor::TextMuted),
     (HubText::PanelTitle, PaletteColor::TextPrimary),
+    (HubText::NoticeTitle, PaletteColor::TextPrimary),
   ] {
     assert_eq!(theme.typography_style(role.role()).color, palette(color), "{role:?}");
   }

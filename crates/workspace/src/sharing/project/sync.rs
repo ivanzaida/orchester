@@ -97,7 +97,8 @@ impl ProjectServer {
     })
     .await??;
     self.servers.note_taken_back(&self.repo_root, taken);
-    // The read went on whatever the send said, as before: only the pass's answer is kept.
+    // The versions the send took back are told whatever else it said, so none goes unnoticed; a failed send is then the
+    // pass's answer, and nothing after it (the screens' re-read) runs.
     sent?;
     self.servers.shared_changed();
     Ok(Synced::Read)

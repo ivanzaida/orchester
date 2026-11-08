@@ -17,6 +17,16 @@ use super::{
 };
 use crate::StoreError;
 
+/// What [`ProjectDb::settle_draft`] does with a resource's draft.
+pub enum DraftChange<B> {
+  /// The draft stays as it is.
+  Keep,
+  /// This draft is kept instead.
+  Replace(Draft<B>),
+  /// The draft is thrown away; the version in use is the resource again.
+  Discard,
+}
+
 const LIVE: &str = "id NOT IN (SELECT resource_id FROM removed_resources)";
 
 impl ProjectDb {
@@ -42,6 +52,36 @@ impl ProjectDb {
     )?;
     transaction.commit()?;
     Ok(latest.number())
+  }
+
+  /// Settles the draft of `resource` from the draft and the version this computer uses, both read in the write
+  /// transaction that applies the answer, so a save and a discard that race never act on what the other just changed.
+  /// A resource never published is [`StoreError::NotPublished`].
+  pub fn settle_draft<B: ResourceBody>(
+    &mut self,
+    resource: ResourceId,
+    decide: impl FnOnce(Option<&Draft<B>>, &Version<B>) -> Result<DraftChange<B>, StoreError>,
+  ) -> Result<(), StoreError> {
+    let transaction = self
+      .connection
+      .transaction_with_behavior(TransactionBehavior::Immediate)?;
+    check_kind::<B>(&transaction, resource)?;
+    let draft = load_draft::<B>(&transaction, resource)?;
+    let latest = used_here::<B>(&transaction, resource)?.ok_or(StoreError::NotPublished(resource))?;
+    match decide(draft.as_ref(), &latest)? {
+      DraftChange::Keep => return Ok(()),
+      DraftChange::Replace(replacement) => {
+        save_draft(&transaction, resource, &replacement)?;
+      }
+      DraftChange::Discard => {
+        transaction.execute(
+          "DELETE FROM resource_drafts WHERE resource_id = ?1",
+          [resource.to_string()],
+        )?;
+      }
+    }
+    transaction.commit()?;
+    Ok(())
   }
 
   /// When resource `id` was removed; `None` while it is not.

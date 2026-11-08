@@ -445,6 +445,7 @@
         "discard": "Discard draft",
         "discardMine": "Discard my draft",
         "refused": "Refused {{time}} · fix the reason, then publish again",
+        "refusedSame": "Refused {{time}} · same as the team's version: publishing would only revert {{version}}",
         "admins": "Only admins publish · {{admins}}",
         "nothingPublished": "Nothing is published until the server accepts it",
         "askAdmin": "Ask an Admin: {{admins}}"

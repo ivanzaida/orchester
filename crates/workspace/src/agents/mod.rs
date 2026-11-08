@@ -7,6 +7,7 @@ pub mod form;
 pub mod hub;
 pub mod permissions;
 pub mod prompts;
+pub mod save_lane;
 pub mod servers;
 pub mod team_hub;
 pub mod team_mcp;

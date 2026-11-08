@@ -29,6 +29,7 @@ use crate::{
       rows::{self, Sub},
     },
   },
+  theme::HubText,
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
@@ -96,6 +97,7 @@ pub(super) fn refusal(ctx: &Ctx, refused: &EditRefused, entry: &Entry) -> Elemen
       ),
     )
     .icon(Icon::CircleX)
+    .title_style(HubText::NoticeTitle.role())
     .body(ctx.t_args(
       "team_hub.edit.rejected.body",
       [("reason", message_text(ctx, &refusal.message()).to_string())],
@@ -109,6 +111,7 @@ pub(super) fn refusal(ctx: &Ctx, refused: &EditRefused, entry: &Entry) -> Elemen
       ctx.t_args("team_hub.edit.superseded.title", [("version", latest.to_string())]),
     )
     .icon(Icon::CircleX)
+    .title_style(HubText::NoticeTitle.role())
     .body(message_text(ctx, &refused.message()))
     .stacked()
     .flat()
@@ -119,6 +122,7 @@ pub(super) fn refusal(ctx: &Ctx, refused: &EditRefused, entry: &Entry) -> Elemen
       ctx.t_args("team_hub.edit.failed.title", [("version", version)]),
     )
     .icon(Icon::CircleX)
+    .title_style(HubText::NoticeTitle.role())
     .body(message_text(ctx, message))
     .stacked()
     .flat()
@@ -144,6 +148,7 @@ pub(super) fn not_admin(
     }),
   )
   .icon(Icon::ShieldX)
+  .title_style(HubText::NoticeTitle.role())
   .body(ctx.t_args(
     "team_hub.edit.notAdmin.body",
     [("name", name.to_owned()), ("admins", admins(ctx, team))],
@@ -167,7 +172,8 @@ pub(super) fn waiting(
     NoticeTone::Info,
     ctx.t("team_hub.edit.waiting.title"),
   )
-  .icon(Icon::CloudUpload);
+  .icon(Icon::CloudUpload)
+  .title_style(HubText::NoticeTitle.role());
   let notice = match created {
     Some(name) => notice.body(ctx.t_args("team_hub.edit.waitingCreated.body", [("name", name)])),
     None => {
@@ -254,19 +260,31 @@ pub(super) struct EditBar<'a> {
   pub discard: ActionButton,
   /// When the last press was refused: the hint says so in `danger`.
   pub refused_at: Option<Timestamp>,
+  /// The version a publish of what the form holds would only revert, when it is the team's own again: the hint says
+  /// so after the refusal (A17).
+  pub reverts: Option<String>,
   pub team: &'a TeamConfiguration,
 }
 
 impl EditBar<'_> {
   pub(super) fn render(self, ctx: &Ctx) -> Element {
-    let hint = match self.refused_at {
-      Some(at) => (
+    let hint = match (self.refused_at, self.reverts) {
+      (Some(at), Some(version)) => (
+        ctx
+          .t_args(
+            "team_hub.edit.bar.refusedSame",
+            [("time", display::clock(at)), ("version", version)],
+          )
+          .to_string(),
+        PaletteColor::Danger,
+      ),
+      (Some(at), None) => (
         ctx
           .t_args("team_hub.edit.bar.refused", [("time", display::clock(at))])
           .to_string(),
         PaletteColor::Danger,
       ),
-      None => (
+      (None, _) => (
         ctx
           .t_args("team_hub.edit.bar.admins", [("admins", admins(ctx, self.team))])
           .to_string(),
@@ -351,7 +369,8 @@ impl ValueRows<'_> {
       "team_new.mcp.runsAs",
       (false, ctx.t("team_new.mcp.runsProgram").to_string()),
     );
-    self.add("program", "team_new.mcp.program", (program != was.0, program.clone()));
+    // The program is a name, said in words as the design has it; identifiers (arguments, variables) stay mono.
+    self.add_words("program", "team_new.mcp.program", (program != was.0, program.clone()));
     self.add(
       "arguments",
       "team_new.mcp.arguments",

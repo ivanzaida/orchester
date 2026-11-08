@@ -3,10 +3,11 @@
 //! red with its reason, the form of the refused version, and the bar of an edit. *Publish for the team* takes the
 //! version back as the draft and sends what is typed; *Discard draft* takes it back and drops it.
 
-use orchester_core::{id::VersionId, time::Timestamp};
+use orchester_core::{id::VersionId, resource::VersionNumber, time::Timestamp};
 use orchester_store::PublishState;
 use orchester_workspace::{
   agents::team_mcp_edit::McpEdit,
+  readiness::Group,
   sharing::team_edit::{EditRefused, Refusal},
 };
 
@@ -40,7 +41,9 @@ impl McpPanel {
       ctx,
       &EditView {
         listing: &props.listing,
-        published: &edit.published,
+        // What is typed changes the team's version, which the refused one did not: it is what the rows are marked
+        // against and what publishing would only revert to.
+        published: edit.team.as_ref().unwrap_or(&edit.published),
         locked: pending,
       },
     );
@@ -49,7 +52,13 @@ impl McpPanel {
       Some((said, _)) => said,
       None => EditRefused::Refused(Refusal::of_code(code)),
     };
-    let publishable = form.valid && !form.changed.is_empty() && !pending;
+    let reverts = form.changed.is_empty();
+    let publishable = form.valid && !reverts && !pending;
+    let refused_version = props
+      .entry
+      .number
+      .and_then(VersionNumber::next)
+      .map_or_else(String::new, |next| next.to_string());
     let bar = EditBar {
       publish: self.publish_button(ctx, (fields.input(), Some(version)), publishable, pending),
       discard: self.discard_button(
@@ -59,20 +68,24 @@ impl McpPanel {
         (edit, Some(version)),
       ),
       refused_at: Some(at),
+      reverts: reverts.then_some(refused_version),
       team: &props.team,
     }
     .render(ctx);
     let number = props.entry.number.unwrap_or(edit.number);
     let note = ctx.t("team_hub.edit.fromTeamEditing");
+    let mut badges = vec![(
+      ctx.t_args("team_hub.edit.chip.draft", [("version", number.to_string())]),
+      BadgeTone::Warning,
+    )];
+    // The version that was not taken is what this panel is about: the readiness chip comes only when something is
+    // missing.
+    if props.entry.here == Group::NeedsYouHere {
+      badges.push(readiness_chip(ctx, props));
+    }
     Some(Parts {
       chips: Chips {
-        badges: vec![
-          (
-            ctx.t_args("team_hub.edit.chip.draft", [("version", number.to_string())]),
-            BadgeTone::Warning,
-          ),
-          readiness_chip(ctx, props),
-        ],
+        badges,
         end: panel::used_by(ctx, &props.sheet.used_by),
       },
       above: vec![edit_view::refusal(ctx, &said, &props.entry)],

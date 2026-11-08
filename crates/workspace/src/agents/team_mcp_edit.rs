@@ -12,7 +12,7 @@ use orchester_core::{
   store::ResourceStore,
   time::Timestamp,
 };
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{DraftChange, ProjectDb, StoreError};
 
 use super::team_mcp::{McpRuns, runs};
 use crate::{
@@ -25,8 +25,12 @@ use crate::{
 pub struct McpEdit {
   /// The version it is edited from.
   pub number: VersionNumber,
-  /// The version this computer uses, as the form holds it.
+  /// The version this computer uses, as the form holds it: while a version published here waits in the outbox, that
+  /// one.
   pub published: NewTeamMcpServer,
+  /// The latest version the team server numbered, as the form holds it: what an edit changes while a version of the
+  /// person's own waits in the outbox, and what it would only revert to. `None` for a resource that has none yet.
+  pub team: Option<NewTeamMcpServer>,
   /// The draft kept here, if there is one.
   pub draft: Option<McpDraft>,
 }
@@ -123,39 +127,68 @@ pub(super) fn of(db: &ProjectDb, id: ResourceId) -> Result<Option<McpEdit>, Stor
     },
     None => None,
   };
+  let team = team_fields(db, id)?;
   Ok(Some(McpEdit {
     number: latest.number(),
     published,
+    team,
     draft,
   }))
 }
 
+/// The fields of the latest version of `id` that the team server numbered; `None` when there is none, or the form
+/// cannot hold it.
+fn team_fields(db: &ProjectDb, id: ResourceId) -> Result<Option<NewTeamMcpServer>, StoreError> {
+  let unsent: Vec<_> = db
+    .waiting_publishes()?
+    .into_iter()
+    .filter(|publish| publish.resource == id)
+    .map(|publish| publish.version)
+    .collect();
+  Ok(
+    db.versions::<TeamMcpServer>(id)?
+      .iter()
+      .rfind(|version| !unsent.contains(&version.id()))
+      .and_then(|version| fields_of(version.body())),
+  )
+}
+
 /// Keeps `fields` as the draft of team MCP server `id` over the version it is edited from; the draft goes when they are
-/// that version's own. Refused unless the person may change the team's resources.
+/// that version's own. Refused unless the person may change the team's resources. One store transaction reads the
+/// draft and the version and writes the answer, so a save that races another never undoes what the other wrote.
 pub fn save(root: &Path, id: ResourceId, fields: &NewTeamMcpServer) -> Result<Saved, EditError> {
   let mut db = ProjectDb::open(root)?;
-  let latest = db
-    .latest_version::<TeamMcpServer>(id)?
-    .ok_or(StoreError::NotPublished(id))?;
   let taken: Vec<_> = team_mcp_names(root)?
     .into_iter()
     .filter(|name| name.as_str() != fields.name)
     .collect();
   let body = team_mcp_server(fields, &taken).map_err(EditError::Invalid)?;
-  if &body == latest.body() {
-    discard_in(&mut db, id)?;
-    return Ok(Saved::Unchanged);
-  }
-  // The same draft again keeps the time it was saved at.
-  if let Some(kept) = db.draft::<TeamMcpServer>(id)?
-    && kept.body() == &body
-    && kept.based_on() == Some(latest.number())
-  {
-    return Ok(Saved::Draft(kept.updated_at()));
-  }
-  let now = Timestamp::now();
-  db.update_draft::<TeamMcpServer>(id, |_, _| Ok(Draft::new(body.clone(), Some(latest.number()), now)))?;
-  Ok(Saved::Draft(now))
+  let mut saved = Saved::Unchanged;
+  db.settle_draft::<TeamMcpServer>(id, |kept, latest| {
+    if &body == latest.body() {
+      return Ok(if kept.is_some() {
+        DraftChange::Discard
+      } else {
+        DraftChange::Keep
+      });
+    }
+    // The same draft again keeps the time it was saved at.
+    if let Some(kept) = kept
+      && kept.body() == &body
+      && kept.based_on() == Some(latest.number())
+    {
+      saved = Saved::Draft(kept.updated_at());
+      return Ok(DraftChange::Keep);
+    }
+    let now = Timestamp::now();
+    saved = Saved::Draft(now);
+    Ok(DraftChange::Replace(Draft::new(
+      body.clone(),
+      Some(latest.number()),
+      now,
+    )))
+  })?;
+  Ok(saved)
 }
 
 /// The fields of the latest version of team MCP server `id`, which the form shows again once its draft went; `None` for
@@ -168,13 +201,12 @@ pub fn published(root: &Path, id: ResourceId) -> Result<Option<NewTeamMcpServer>
 /// Throws away the draft of team MCP server `id`, so its latest version is the resource again.
 pub fn discard(root: &Path, id: ResourceId) -> Result<(), EditError> {
   let mut db = ProjectDb::open(root)?;
-  Ok(discard_in(&mut db, id)?)
-}
-
-fn discard_in(db: &mut ProjectDb, id: ResourceId) -> Result<(), StoreError> {
-  let Some(draft) = db.draft::<TeamMcpServer>(id)? else {
-    return Ok(());
-  };
-  db.discard_draft_matching::<TeamMcpServer>(id, draft.body())?;
+  db.settle_draft::<TeamMcpServer>(id, |kept, _| {
+    Ok(if kept.is_some() {
+      DraftChange::Discard
+    } else {
+      DraftChange::Keep
+    })
+  })?;
   Ok(())
 }

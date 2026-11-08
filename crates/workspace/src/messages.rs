@@ -108,6 +108,7 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::AlreadyShared => Message::new("sharing.errors.alreadyShared"),
     StoreError::DraftChanged(_) => Message::new("errors.draftChanged"),
     StoreError::VersionInUse(_) => Message::new("sharing.errors.versionInUse"),
+    StoreError::HoldsMore(_) => Message::new("sharing.errors.holdsMore"),
     StoreError::NotPublished(_) => Message::new("errors.neverPublished"),
     StoreError::NoFirstVersion(_) => Message::new("errors.noFirstVersion"),
     StoreError::Sqlite(_) if error.is_locked() => Message::new("errors.databaseLocked"),
@@ -116,7 +117,6 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::Io { .. }
     | StoreError::Corrupt { .. }
     | StoreError::AlreadyNumbered(_)
-    | StoreError::HoldsMore(_)
     | StoreError::TaskNotFound(_)
     | StoreError::RunNotFound(_)
     | StoreError::EmptyBatch

@@ -218,7 +218,10 @@ fn team_qa_hub_edit_offline_waits_in_the_outbox_and_can_be_cancelled() {
   window.until("the draft to come back", |window| window.texts(PUBLISH).is_some());
   assert!(db(&window).waiting_publishes().expect("outbox").is_empty());
   assert!(draft_of(&window, pencil).is_some(), "what was typed is the draft again");
-  assert_eq!(window.text("team-hub-chip-team"), "Team · v1");
+  // The chip reads the hub again after the version went: until then it still names the version that was taken back.
+  window.until("the team's version again", |window| {
+    window.text("team-hub-chip-team") == "Team · v1"
+  });
 }
 
 #[test]
@@ -260,11 +263,18 @@ fn team_qa_hub_edit_create_a_name_the_team_server_has_is_a_field_error_and_nothi
     window.text("team-new-refused-title"),
     "The team's server refused: the name figma-local is taken"
   );
+  // The refusal says it is the server's word; once this computer reads the team's list again, which then holds the
+  // name, the field and the bar say it as they say any name the team has. Either is the right words at that moment.
   let field = window.text("team-new-mcp-name-row-sub");
-  assert_eq!(field, "Taken in the team · from the server");
-  assert_eq!(
-    window.text("team-hub-actions-hint"),
-    "Change the name, then Create again"
+  assert!(
+    field == "Taken in the team · from the server"
+      || field == "The team already has an MCP server named figma-local · pick another name",
+    "{field}"
+  );
+  let hint = window.text("team-hub-actions-hint");
+  assert!(
+    hint == "Change the name, then Create again" || hint == "Fix the name to create it",
+    "{hint}"
   );
   assert_eq!(
     db(&window).resources(ResourceKind::McpServer).expect("resources").len(),

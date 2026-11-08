@@ -137,7 +137,11 @@ pub(super) struct Entry {
   pub cli: Option<AgentProvider>,
   /// Who gets an instruction, a skill or a tool; `None` for the other kinds and for one with no sheet.
   pub reach: Option<Reach>,
+  /// Where the list puts it: what the person has to decide about it, a version of their own that waits or was not
+  /// taken, comes before how it stands on this computer.
   pub group: Group,
+  /// How it stands on this computer, whatever its version in the outbox says.
+  pub here: Group,
   /// How it stands here; `None` for an instruction or a skill, which need nothing.
   pub standing: Option<ReadinessStanding>,
   /// What the outbox holds of it: a version published here that the team server has not numbered.
@@ -219,7 +223,8 @@ impl Listing {
         form: hub.form(found.resource()),
         cli: hub.profile(found.resource()).map(|sheet| sheet.cli),
         reach: reach(hub, found.resource(), found.kind()),
-        group: found.group(),
+        group: listed_in(found.group(), outbox(found.resource()), read_only(draft)),
+        here: found.group(),
         standing: Some(found.standing().clone()),
         outbox: outbox(found.resource()),
         draft,
@@ -235,7 +240,8 @@ impl Listing {
         form: None,
         cli: None,
         reach: reach(hub, found.id, found.kind),
-        group: Group::Ready,
+        group: listed_in(Group::Ready, outbox(found.id), false),
+        here: Group::Ready,
         standing: None,
         outbox: outbox(found.id),
         draft: false,
@@ -280,6 +286,16 @@ impl Listing {
   /// A resource of the team, wherever the filter stands.
   pub(super) fn find(&self, id: ResourceId) -> Option<&Entry> {
     self.entries.iter().find(|entry| entry.id == id)
+  }
+}
+
+/// The group of the list a resource stands in: one with a version in the outbox, or a draft its person cannot publish,
+/// needs them here whatever else it needs (`Section · Needs you here` in A14 `gTLx6`, A16 `x3ywL`, A17 `rJbPm`).
+fn listed_in(here: Group, outbox: Option<Outbox>, read_only: bool) -> Group {
+  if outbox.is_some() || read_only {
+    Group::NeedsYouHere
+  } else {
+    here
   }
 }
 

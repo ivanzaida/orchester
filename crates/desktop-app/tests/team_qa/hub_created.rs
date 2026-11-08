@@ -63,31 +63,7 @@ fn team_qa_hub_edit_a_created_send_that_failed_here_after_the_server_may_have_an
 
 #[test]
 fn team_qa_hub_edit_a_created_resource_that_waits_is_cancelled_from_the_hub_panel() {
-  let (mut window, server, (project, _)) = on_pencil_until(("team-edit", State::TeamEdit), TEAM_CHIP);
-  server.set_down(true);
-  let services = window.launch.services().expect("the session").clone();
-  let root = window.data.repo("repo-kontur");
-  let made = create_team_mcp_server(
-    &root,
-    &team_mcp_server(&new_server("fresh-one"), &team_mcp_names(&root).expect("names")).expect("a server"),
-  )
-  .expect("made");
-  let created = window
-    .data
-    .runtime
-    .block_on(services.servers.send_created(&root, made))
-    .expect("kept in the outbox");
-  assert_eq!(created, orchester_workspace::sharing::Created::Waiting);
-  window.until("the list to hold it", |window| {
-    window.texts(&format!("team-hub-row-{made}-line")).is_some()
-  });
-  window.navigation().go(Route::Project(
-    project,
-    ProjectPage::hub(HubView::new(HubFilter::McpServers, Some(made))),
-  ));
-  window.until("the waiting panel of the new server", |window| {
-    window.texts("team-hub-edit-waiting-title").is_some()
-  });
+  let (mut window, _server, made) = waiting_created("fresh-one");
   assert!(window.texts("team-hub-edit").is_none());
   window.press("team-hub-edit-cancel");
   window.until("the new server to go", |window| {
@@ -170,6 +146,8 @@ fn team_qa_hub_edit_a_created_server_refused_later_with_work_over_it_stays_liste
   window.until("the reason", |window| {
     window.texts("team-hub-edit-send-error").is_some()
   });
+  let said = window.text("team-hub-edit-send-error");
+  assert!(said.contains("discard the draft first"), "{said}");
   assert!(
     db(&window)
       .resources(ResourceKind::McpServer)

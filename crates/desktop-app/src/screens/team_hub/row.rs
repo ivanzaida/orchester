@@ -84,7 +84,14 @@ fn mark(ctx: &Ctx, entry: &Entry) -> Element {
   }
 }
 
-const fn glyph_color(entry: &Entry) -> PaletteColor {
+/// What a row's glyph says: in what the person has to decide about a version of theirs (waiting, refused), the color
+/// its first words have (A14 `gTLx6`, A16 `x3ywL`, A17 `rJbPm`), else how the resource stands here.
+fn glyph_color(entry: &Entry) -> PaletteColor {
+  if entry.group == Group::NeedsYouHere
+    && let Some(tone) = words::lead_tone(entry)
+  {
+    return tone;
+  }
   match (entry.group, entry.kind) {
     (Group::NeedsYouHere, _) => PaletteColor::Warning,
     (Group::OffHere, _) => PaletteColor::TextMuted,
