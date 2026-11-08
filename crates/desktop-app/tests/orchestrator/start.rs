@@ -17,10 +17,7 @@ fn orchestrator_new_conversation_starts_with_suggestions_that_fill_the_prompt() 
     runs_on.starts_with("Claude Code · ") && runs_on.ends_with(" · haiku"),
     "{runs_on}"
   );
-  assert!(
-    !screen.exists("orchestrator-keys"),
-    "the bar shows no keys that send"
-  );
+  assert!(!screen.exists("orchestrator-keys"), "the bar shows no keys that send");
   assert!(
     !screen.exists("orchestrator-footer") && !screen.exists("orchestrator-under-composer"),
     "no keys line and no footer under the composer"

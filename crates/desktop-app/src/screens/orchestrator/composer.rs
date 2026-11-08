@@ -1,15 +1,16 @@
 //! The Orchestrator's composer (`Composer` `Nv6kV` in `01 Conversation` `wRSL4`): one box — `surface_input` in a
 //! `border_strong` stroke (`border_focus` while the field has the focus), radius 10, 10 over it, 10 at its end, 8
 //! under it and 12 at its start, 10 between the message and its bar — whose bar holds, 6 apart, *Attach* (a 24 square
-//! with a `paperclip`, which opens the system's picker); the runs-on chip ([`super::runs_on`]); and the 28 `accent` square that sends (`arrow-up`), faded while there is nothing to send.
-//! While the Orchestrator answers the composer stays usable (ORC-92): the square sends after the answer, and a chevron
-//! beside it opens the other ways of sending ([`super::send_menu`]); Esc stops the answer. Until the Orchestrator is
-//! set up (`02 Not set up` `Wd5CL`) the box is on `surface_panel` in a `border` stroke, says it can't answer yet, the
-//! chip reads *Not set up* and *Set up the Orchestrator* takes the keys' and the square's place. The files attached
-//! show as chips over the message (`ui::attachments::tray`); a paste of an image, files or long text attaches them,
-//! and so does a drop on the box; why the files last given were not attached shows under it. The draft and its files
-//! stay until its message is kept; a failed send keeps them. A skill chosen in the slash menu shows as a chip before
-//! the message (`07c` `f0b717`, `ui::slash`) and goes with it (ORC-634); its tooltip says how it reaches the agent.
+//! with a `paperclip`, which opens the system's picker); the runs-on chip ([`super::runs_on`]); and the 28 `accent`
+//! square that sends (`arrow-up`), faded while there is nothing to send. While the Orchestrator answers the composer
+//! stays usable (ORC-92): the square sends after the answer, and a chevron beside it opens the other ways of sending
+//! ([`super::send_menu`]); Esc stops the answer. Until the Orchestrator is set up (`02 Not set up` `Wd5CL`) the box is
+//! on `surface_panel` in a `border` stroke, says it can't answer yet, the chip reads *Not set up* and *Set up the
+//! Orchestrator* takes the keys' and the square's place. The files attached show as chips over the message
+//! (`ui::attachments::tray`); a paste of an image, files or long text attaches them, and so does a drop on the box; why
+//! the files last given were not attached shows under it. The draft and its files stay until its message is kept; a
+//! failed send keeps them. A skill chosen in the slash menu shows as a chip before the message (`07c` `f0b717`,
+//! `ui::slash`) and goes with it (ORC-634); its tooltip says how it reaches the agent.
 
 use std::sync::Arc;
 

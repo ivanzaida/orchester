@@ -240,10 +240,7 @@ fn card_decision_review_denial_editor_keeps_controls_inside_the_compact_field() 
     window.tree.get_element_by_id(&format!("{card}-message")).is_some()
   });
   assert_eq!(text(&mut window, &format!("{card}-message-back")), "Back");
-  assert_eq!(
-    text(&mut window, &format!("{card}-message-send")),
-    "Deny and send"
-  );
+  assert_eq!(text(&mut window, &format!("{card}-message-send")), "Deny and send");
   assert_eq!(
     text(&mut window, &format!("{card}-message-told")),
     "Builder is told this and goes on; Deny never fails the step"

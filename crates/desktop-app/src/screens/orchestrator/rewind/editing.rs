@@ -2,9 +2,10 @@
 //! a `border_focus` stroke, radius 10, 14 by 10 inside, its parts 10 apart) holding the words in 13 `text_primary`,
 //! over its foot (`b38Jmu`): a 13 `message-square-x` in `warning` and *Sending drops the 3 messages after this one*
 //! in 11.5 `text_secondary`, then *Cancel* and *Send*, 24 high. The design draws *Ctrl Enter sends* and *Esc cancels*
-//! under the field (`Keys` `qSilt`); the app does not show them. Ctrl Enter (⌘ Enter on macOS) sends and Esc cancels in the field too. The messages
-//! sending drops are dimmed to 40 % under the line *These 3 messages go when you send* (`Drop line` `JRQTc`): a
-//! `border_strong` line at each side of a 12 `arrow-down` and the words in 11 `text_muted`, 10 apart.
+//! under the field (`Keys` `qSilt`); the app does not show them. Ctrl Enter (⌘ Enter on macOS) sends and Esc cancels in
+//! the field too. The messages sending drops are dimmed to 40 % under the line *These 3 messages go when you send*
+//! (`Drop line` `JRQTc`): a `border_strong` line at each side of a 12 `arrow-down` and the words in 11 `text_muted`, 10
+//! apart.
 
 use std::sync::Arc;
 
