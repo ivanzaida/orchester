@@ -28,6 +28,7 @@ use crate::sharing::{
     team_body::{self, Publication},
   },
   team_created::{TakenBack, refusal},
+  team_edit,
 };
 
 impl<S: ConfigServer> RemoteResourceStore<S> {
@@ -194,7 +195,9 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
           Err(SharingError::VersionConflict { latest })
         }
         (Some(code), _) => {
-          self.db.record_publish_refused(waiting.version, &code_text(code))?;
+          // The reason of a `422 invalid` goes with the code: it says what the person is to fix.
+          let recorded = team_edit::recorded(code, error.details());
+          self.db.record_publish_refused(waiting.version, &recorded)?;
           Err(match code {
             ErrorCode::NotAdmin => SharingError::NotAdmin,
             _ => SharingError::Client(error),
@@ -377,10 +380,4 @@ const fn refusal_code(error: &SharingError) -> Option<&'static str> {
     SharingError::WritableFoldersStay { .. } => Some("writable_folders_stay"),
     _ => None,
   }
-}
-
-/// The server's error code as it writes it.
-fn code_text(code: ErrorCode) -> String {
-  let quoted = serde_json::to_string(&code).expect("an error code serializes as a string");
-  quoted.trim_matches('"').to_owned()
 }

@@ -5,6 +5,7 @@
 //! shipped: an example is no part of the app's program.
 
 pub mod drive;
+mod edit;
 mod member;
 mod state;
 #[path = "../../sign_in_qa/window.rs"]
@@ -116,7 +117,11 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
     | State::TeamRunning
     | State::EditConflict
     | State::NotReadyHere
-    | State::StartFailed => {
+    | State::StartFailed
+    | State::TeamEdit
+    | State::TeamEditDemoted
+    | State::TeamEditOffline
+    | State::TeamEditRejects => {
       let ids = task_ids(services)?;
       let role = member::serve_as(&server, state, (&ids, &team_pipelines(services, state)?));
       let (kontur, id) = join_linked_as(&server, (services, runtime), (TasksAnswer::Serve, role))?;
@@ -124,6 +129,9 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
         server.authority_newer_bundles();
       }
       work::after_join(state, (&server, id), (services, runtime), (&kontur, &ids))?;
+      if state.edits() {
+        edit::after_join(state, &server, &kontur)?;
+      }
     }
   }
   Ok(server)

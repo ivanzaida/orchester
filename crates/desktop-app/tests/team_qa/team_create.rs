@@ -81,10 +81,9 @@ fn team_qa_create_a_server_that_refuses_it_is_said_in_place_and_nothing_is_made(
   server.stand_as(Standing::Member);
   window.press("team-hub-new-create");
   window.until("the refusal", |window| window.texts("team-new-refused").is_some());
-  assert!(
-    window.text("team-new-refused").contains("not_admin"),
-    "{}",
-    window.text("team-new-refused")
+  assert_eq!(
+    window.text("team-new-refused-title"),
+    "The team's server refused: you are no longer an admin"
   );
   assert_eq!(window.text("team-hub-panel-title"), "New instruction");
   assert!(

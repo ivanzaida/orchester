@@ -6,6 +6,7 @@ mod fields;
 mod instruction;
 mod kinds;
 mod mcp;
+mod notices;
 mod panel;
 mod profile;
 mod skill;
@@ -23,6 +24,7 @@ use orchester_core::id::ProjectId;
 
 pub(super) use self::{
   kinds::new_row,
+  mcp::{EditView, Fields as McpFields},
   panel::{Props, panel},
 };
 use super::model::Kind;

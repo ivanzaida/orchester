@@ -222,6 +222,36 @@ pub fn start_failed(kontur: &mut Kontur) -> Result<(), SeedError> {
   write_marker(kontur, State::StartFailed)
 }
 
+/// The team's resources of `team-hub` for a copy that joins the stand-in team server as an Admin, which holds the
+/// team's MCP servers (`team-edit`, `team-edit-demoted`, `team-edit-offline`, `team-edit-rejects`, ORC-836): `Agents ›
+/// MCP servers`, *Edit* a server (`Agents · MCP server · admin · draft` A13 `WMtxm`).
+pub fn edit(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEdit)
+}
+
+/// As [`edit`], the server no longer taking the person's writes: *Publish for the team* is refused as no longer an
+/// admin, and the page turns read-only with the draft kept (A14 `gTLx6`).
+pub fn edit_demoted(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditDemoted)
+}
+
+/// As [`edit`], the server not answering: *Publish for the team* waits in the outbox, with *Cancel sending* (A16
+/// `x3ywL`).
+pub fn edit_offline(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditOffline)
+}
+
+/// As [`edit`], the server rejecting the content of what is sent: the refusal says why and the draft is kept (A17
+/// `rJbPm`).
+pub fn edit_rejects(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditRejects)
+}
+
+fn edit_in(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
+  super::team_hub::resources(kontur)?;
+  write_marker(kontur, state)
+}
+
 /// KON-12's run interrupted at Implement, on the live catalogue's Feature delivery with a brief that keeps
 /// `orchester-fake-codex` working: Continue run takes it on, Running at 03 Implement with Pause run (`01c` `Tb55G`).
 pub fn team_running(kontur: &mut Kontur) -> Result<(), SeedError> {

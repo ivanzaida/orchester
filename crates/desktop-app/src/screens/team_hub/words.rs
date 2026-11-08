@@ -48,8 +48,28 @@ pub(super) struct Said {
   pub color: PaletteColor,
 }
 
-/// The line under a row's name.
+/// The line under a row's name: what a computer needs, after *Your draft on v3* when an admin's draft is kept.
 pub(super) fn line(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Said {
+  let said = state_line(ctx, listing, entry);
+  let Some(number) = entry.number.filter(|_| entry.draft) else {
+    return said;
+  };
+  let draft = ctx.t_args("team_hub.edit.chip.draft", [("version", number.to_string())]);
+  let text = if entry.group == Group::Ready {
+    draft
+  } else {
+    ctx.t_args(
+      "team_hub.edit.line.draft",
+      [("draft", draft.to_string()), ("words", said.text.to_string())],
+    )
+  };
+  Said {
+    text,
+    color: PaletteColor::Warning,
+  }
+}
+
+fn state_line(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Said {
   if entry.waiting {
     return Said {
       text: ctx.t("team_hub.line.waiting"),

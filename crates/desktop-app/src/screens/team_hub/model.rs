@@ -142,6 +142,8 @@ pub(super) struct Entry {
   /// Created here and not yet taken by the team server, which could not be reached: it waits in the outbox to be sent
   /// and has no version number of the team's yet.
   pub waiting: bool,
+  /// An admin's draft of the next version is kept on this computer (an MCP server's, so far).
+  pub draft: bool,
 }
 
 impl Entry {
@@ -194,13 +196,16 @@ impl Listing {
         id: found.resource(),
         kind: Kind::of(found.kind())?,
         name: found.name().to_owned(),
-        number: Some(found.number()).filter(|_| !waiting(found.resource())),
+        number: shown_number(standings, found.resource(), Some(found.number())),
         form: hub.form(found.resource()),
         cli: hub.profile(found.resource()).map(|sheet| sheet.cli),
         reach: reach(hub, found.resource(), found.kind()),
         group: found.group(),
         standing: Some(found.standing().clone()),
         waiting: waiting(found.resource()),
+        draft: hub
+          .mcp_server(found.resource())
+          .is_some_and(|sheet| sheet.edit.as_ref().is_some_and(|edit| edit.draft.is_some())),
       })
     });
     let plain = hub.plain().iter().filter_map(|found| {
@@ -208,13 +213,14 @@ impl Listing {
         id: found.id,
         kind: Kind::of(found.kind)?,
         name: found.name.clone(),
-        number: found.number.filter(|_| !waiting(found.id)),
+        number: shown_number(standings, found.id, found.number),
         form: None,
         cli: None,
         reach: reach(hub, found.id, found.kind),
         group: Group::Ready,
         standing: None,
         waiting: waiting(found.id),
+        draft: false,
       })
     });
     let mut entries: Vec<Entry> = readiness.chain(plain).collect();
@@ -269,6 +275,27 @@ fn waits_to_be_sent(standings: &BTreeMap<ResourceId, SharedStanding>, id: Resour
         .first()
         .is_some_and(|first| first.state == PublishState::Waiting)
   })
+}
+
+/// The version number a row and a panel say: the version the team server numbered. A version published here that waits
+/// for the server is not yet the team's, so an edit's is the number before it, and a new resource's first has none.
+fn shown_number(
+  standings: &BTreeMap<ResourceId, SharedStanding>,
+  id: ResourceId,
+  local: Option<VersionNumber>,
+) -> Option<VersionNumber> {
+  let Some(standing) = standings.get(&id) else {
+    return local;
+  };
+  let sending = standing
+    .waiting
+    .iter()
+    .any(|waiting| waiting.state == PublishState::Waiting);
+  match (&standing.confirmed, sending) {
+    (Some(confirmed), true) => Some(confirmed.number),
+    (None, true) => None,
+    _ => local,
+  }
 }
 
 fn reach(hub: &TeamHub, id: ResourceId, kind: ResourceKind) -> Option<Reach> {

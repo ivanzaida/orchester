@@ -1,0 +1,332 @@
+//! Which of its states the panel of a team MCP server is in, and what each puts in the panel (`Agents · MCP server ·
+//! admin · draft` A13 `WMtxm`, A14 `gTLx6`, A16 `x3ywL`, A17 `rJbPm`): a form over the team's part with a draft note
+//! and *Publish for the team* (editing), the same part read-only with *Cancel sending* (a version waits for the team
+//! server), or read-only with *Discard my draft* (the person is not an admin any more).
+
+use std::sync::Arc;
+
+use lurq::{
+  app::ctx::Ctx,
+  components::{Column, Row, Text},
+  node::Element,
+};
+use orchester_core::{id::VersionId, time::Timestamp};
+use orchester_store::PublishState;
+use orchester_workspace::{
+  agents::team_mcp_edit::{McpEdit, Saved},
+  app_mcp::setup::NewTeamMcpServer,
+  messages::Message,
+  sharing::team_edit::{EditRefused, Refusal},
+};
+
+use super::{
+  McpPanel, Props,
+  edit_view::{self, EditBar, Kept},
+  fix::{Bar, Step},
+  from_team, words,
+};
+use crate::{
+  mcp::input_gate::{Guarded, input_may_decide},
+  screens::team_hub::{actions::Busy, create::EditView, panel, rows},
+  theme::HubText,
+  ui::{
+    button::{ActionButton, ButtonKind},
+    chip::BadgeTone,
+    icon::Icon,
+    pressable::Press,
+  },
+};
+
+/// What the panel is doing with the team's part.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Mode {
+  /// Nothing is edited: the part is values, and an admin has *Edit*.
+  Plain,
+  /// An admin edits it as a form.
+  Editing,
+  /// A version published here waits in the outbox for the team server, which could not be reached (`queued` at).
+  Waiting { version: VersionId, queued: Timestamp },
+  /// A draft is kept, and the person may not publish it: the team server refused as they are no longer an admin.
+  ReadOnly,
+}
+
+/// The chips after *Team · vN*: their words and what stands at their end.
+pub(super) struct Chips {
+  pub badges: Vec<(Arc<str>, BadgeTone)>,
+  pub end: Option<Arc<str>>,
+}
+
+/// What a state puts in the panel besides its head.
+pub(super) struct Parts {
+  pub chips: Chips,
+  /// What stands over *From the team*: the draft's note and what the server answered.
+  pub above: Vec<Element>,
+  pub from_team: Column,
+  /// *On this computer* follows *From the team*.
+  pub computer: bool,
+  pub bar: Option<Element>,
+}
+
+impl McpPanel {
+  pub(super) fn mode(&self, props: &Props) -> Mode {
+    let standing = props.team.standing(props.entry.id);
+    let waiting = standing
+      .filter(|standing| standing.confirmed.is_some())
+      .and_then(|standing| standing.waiting.first())
+      .filter(|waiting| waiting.state == PublishState::Waiting);
+    if let Some(waiting) = waiting {
+      return Mode::Waiting {
+        version: waiting.version,
+        queued: waiting.published_at,
+      };
+    }
+    let Some(edit) = &props.sheet.edit else {
+      return Mode::Plain;
+    };
+    let not_admin = matches!(
+      self.edit.refused.get(),
+      Some((EditRefused::Refused(Refusal::NotAdmin), _))
+    );
+    if edit.draft.is_some() && (!props.team.may_change || not_admin) {
+      Mode::ReadOnly
+    } else if props.team.may_change && self.edit.editing.get() {
+      Mode::Editing
+    } else {
+      Mode::Plain
+    }
+  }
+
+  /// The input the draft keeps while the form is open; none in any other state, nor while a publish is taken or the
+  /// draft is being discarded, which a save meanwhile would bring back.
+  pub(super) fn to_keep(&self, mode: Mode) -> Option<NewTeamMcpServer> {
+    let busy = self.edit.publish.state().get().is_pending() || self.edit.discard.state().get().is_pending();
+    let open = matches!(mode, Mode::Editing) && !busy;
+    self.edit.fields.as_ref().filter(|_| open).map(|fields| fields.input())
+  }
+
+  /// What the state adds to the panel; `None` for the plain panel. `kept` is how the autosave ended.
+  pub(super) fn parts(
+    &self,
+    ctx: &mut Ctx,
+    props: &Props,
+    (mode, kept): (Mode, &Result<Option<Saved>, Message>),
+  ) -> Option<Parts> {
+    let edit = props.sheet.edit.as_ref()?;
+    match mode {
+      Mode::Plain => None,
+      Mode::Editing => self.editing(ctx, props, edit, kept),
+      Mode::Waiting { version, queued } => Some(self.waiting(ctx, props, edit, (version, queued))),
+      Mode::ReadOnly => self.read_only(ctx, props, edit),
+    }
+  }
+
+  fn editing(
+    &self,
+    ctx: &mut Ctx,
+    props: &Props,
+    edit: &McpEdit,
+    kept: &Result<Option<Saved>, Message>,
+  ) -> Option<Parts> {
+    let fields = self.edit.fields.as_ref()?;
+    let pending = self.edit.publish.state().get().is_pending();
+    let form = fields.edit(
+      ctx,
+      &EditView {
+        listing: &props.listing,
+        published: &edit.published,
+        locked: pending,
+      },
+    );
+    let input = fields.input();
+    let kept = match kept {
+      Ok(Some(Saved::Draft(at))) => Kept::At(*at),
+      Ok(Some(Saved::Unchanged)) => Kept::Nothing,
+      Ok(None) => edit
+        .draft
+        .as_ref()
+        .map_or(Kept::Nothing, |draft| Kept::At(draft.saved_at)),
+      Err(_) => Kept::Not,
+    };
+    let refused = self.edit.refused.get();
+    let mut above = vec![edit_view::draft_note(ctx, edit.number, (kept, &form.changed))];
+    above.extend(
+      refused
+        .as_ref()
+        .map(|(refused, _)| edit_view::refusal(ctx, refused, &props.entry)),
+    );
+    let publishable = form.valid && !form.changed.is_empty() && !pending;
+    let bar = EditBar {
+      publish: self.publish_button(ctx, input, publishable, pending),
+      discard: self.discard_button(ctx, "team-hub-edit-discard", "team_hub.edit.bar.discard", edit),
+      refused_at: refused.as_ref().map(|(_, at)| *at),
+      team: &props.team,
+    }
+    .render(ctx);
+    let note = ctx.t("team_hub.edit.fromTeamEditing");
+    let mut chips = vec![(
+      ctx.t_args("team_hub.edit.chip.draft", [("version", edit.number.to_string())]),
+      BadgeTone::Warning,
+    )];
+    chips.push(readiness_chip(ctx, props));
+    Some(Parts {
+      chips: Chips {
+        badges: chips,
+        end: panel::used_by(ctx, &props.sheet.used_by),
+      },
+      above,
+      from_team: section(ctx, vec![note_text("team-hub-from-team-note", &note).into()], form.rows),
+      computer: true,
+      bar: Some(bar),
+    })
+  }
+
+  fn waiting(&self, ctx: &mut Ctx, props: &Props, edit: &McpEdit, (version, queued): (VersionId, Timestamp)) -> Parts {
+    let taking = self.edit.cancel.state().get().is_pending();
+    let cancel = |id: &str| {
+      let action = self.edit.cancel.clone();
+      edit_view::cancel_sending(
+        ctx,
+        id,
+        (
+          Some(Arc::new(move || action.run(version)) as Arc<dyn Fn() + Send + Sync>),
+          taking,
+        ),
+      )
+    };
+    let words = ctx.t_args("team_hub.edit.fromTeamWaiting", [("version", edit.number.to_string())]);
+    let rows = edit_view::read_only_rows(ctx, &edit.published, &edit.published);
+    Parts {
+      chips: Chips {
+        badges: vec![(ctx.t("team_hub.edit.chip.waiting"), BadgeTone::Info)],
+        end: Some(edit_view::queued(ctx, queued)),
+      },
+      above: vec![edit_view::waiting(
+        ctx,
+        props.entry.number,
+        cancel("team-hub-edit-cancel-notice"),
+      )],
+      from_team: section(ctx, vec![note_text("team-hub-from-team-note", &words).into()], rows),
+      computer: false,
+      bar: Some(edit_view::waiting_bar(ctx, cancel("team-hub-edit-cancel").pinned())),
+    }
+  }
+
+  fn read_only(&self, ctx: &mut Ctx, props: &Props, edit: &McpEdit) -> Option<Parts> {
+    let draft = edit.draft.as_ref()?;
+    let copy = super::copy_changes::button(ctx, edit_view::changes_text(&draft.fields));
+    let words = ctx.t_args("team_hub.edit.fromTeamReadOnly", [("version", edit.number.to_string())]);
+    let rows = edit_view::read_only_rows(ctx, &draft.fields, &edit.published);
+    Some(Parts {
+      chips: Chips {
+        badges: vec![(ctx.t("team_hub.edit.chip.draftNotPublished"), BadgeTone::Warning)],
+        end: panel::used_by(ctx, &props.sheet.used_by),
+      },
+      above: vec![edit_view::not_admin(ctx, (&props.entry.name, &props.team), copy)],
+      from_team: section(ctx, vec![note_text("team-hub-from-team-note", &words).into()], rows),
+      computer: false,
+      bar: Some(edit_view::read_only_bar(
+        ctx,
+        self.discard_button(ctx, "team-hub-edit-discard", "team_hub.edit.bar.discardMine", edit),
+        &props.team,
+      )),
+    })
+  }
+
+  /// The panel that edits nothing: the readiness chip, the team's part as values and the fix of the first missing part
+  /// pinned at the bottom.
+  pub(super) fn plain_parts(
+    &self,
+    ctx: &mut Ctx,
+    props: &Props,
+    (busy, press): (Busy, &dyn Fn(&Step) -> Press),
+  ) -> Parts {
+    let Props {
+      listing, entry, sheet, ..
+    } = props;
+    let missing = entry.standing.as_ref().map_or(&[][..], |standing| standing.missing());
+    Parts {
+      chips: Chips {
+        badges: vec![words::chip(ctx, listing, entry, missing)],
+        end: panel::used_by(ctx, &sheet.used_by),
+      },
+      above: Vec::new(),
+      from_team: from_team::section(ctx, sheet),
+      computer: true,
+      bar: Bar {
+        missing,
+        changes_path: sheet.program.is_some().then_some(entry.id),
+        busy,
+        press,
+      }
+      .render(ctx),
+    }
+  }
+
+  /// *Publish for the team*: a person's press (or automation's where they let it change what agents may do) sends the
+  /// fields as typed.
+  fn publish_button(&self, ctx: &Ctx, input: NewTeamMcpServer, publishable: bool, pending: bool) -> ActionButton {
+    let button = ActionButton::new(
+      "team-hub-edit-publish",
+      ButtonKind::Primary,
+      ctx.t("team_hub.edit.bar.publish"),
+    )
+    .icon(Icon::Upload)
+    .pinned();
+    if pending {
+      return button.loading();
+    }
+    if !publishable {
+      return button.disabled();
+    }
+    let (publish, gate) = (self.edit.publish.clone(), self.gate.clone());
+    button.on_click(move || {
+      let decided = input_may_decide(gate.as_ref(), Guarded::PermissionWidening);
+      publish.run((input.clone(), decided));
+    })
+  }
+
+  /// *Discard draft*: the draft goes and the form shows the version again.
+  fn discard_button(&self, ctx: &Ctx, id: &str, key: &str, edit: &McpEdit) -> ActionButton {
+    let button = edit_view::discard_button(ctx, id, key);
+    if self.edit.discard.state().get().is_pending() {
+      return button.loading();
+    }
+    let (discard, published) = (self.edit.discard.clone(), edit.published.clone());
+    button.on_click(move || discard.run(published.clone()))
+  }
+
+  /// *Edit* in the head of an admin's panel.
+  pub(super) fn edit_button(&self, ctx: &Ctx, props: &Props) -> Option<Element> {
+    props.team.may_change.then_some(())?;
+    props.sheet.edit.as_ref()?;
+    let editing = self.edit.editing.clone();
+    Some(
+      ActionButton::new("team-hub-edit", ButtonKind::Ghost, ctx.t("team_hub.panel.edit"))
+        .icon(Icon::Pencil)
+        .on_click(move || editing.set(true))
+        .into(),
+    )
+  }
+}
+
+/// The panel's readiness chip, as it says it besides the draft's.
+fn readiness_chip(ctx: &Ctx, props: &Props) -> (Arc<str>, BadgeTone) {
+  let missing = props
+    .entry
+    .standing
+    .as_ref()
+    .map_or(&[][..], |standing| standing.missing());
+  super::words::chip(ctx, &props.listing, &props.entry, missing)
+}
+
+fn note_text(id: &str, words: &str) -> Text {
+  Text::new(words)
+    .id(id.to_owned())
+    .variant(HubText::PanelHint.role())
+    .nowrap()
+}
+
+/// *From the team* over `rows`, with `after` on its line.
+fn section(ctx: &Ctx, after: Vec<Element>, rows: Vec<Row>) -> Column {
+  rows::section("team-hub-from-team", &ctx.t("team_hub.profile.fromTeam"), after, rows)
+}

@@ -59,7 +59,11 @@ pub fn to(
     | State::TeamRunning
     | State::EditConflict
     | State::NotReadyHere
-    | State::StartFailed => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
+    | State::StartFailed
+    | State::TeamEdit
+    | State::TeamEditDemoted
+    | State::TeamEditOffline
+    | State::TeamEditRejects => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
   }
 }
 

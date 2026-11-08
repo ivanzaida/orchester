@@ -58,6 +58,23 @@ impl Servers {
   }
 }
 
+impl Servers {
+  /// *Cancel sending*: the new resource `resource` of the project at `repo_root`, which waits in the outbox for a team
+  /// server that could not be reached, is taken back as if never created. Fails with what to tell the person when the
+  /// server took it meanwhile, or the resource holds more than that version.
+  pub async fn cancel_created(&self, repo_root: &Path, resource: ResourceId) -> Result<(), Message> {
+    let root = repo_root.to_owned();
+    background::run(move || {
+      ProjectDb::open(&root)?.discard_created(resource)?;
+      Ok::<(), orchester_store::StoreError>(())
+    })
+    .await?
+    .map_err(|error| messages::store_error(&error))?;
+    self.shared_changed();
+    Ok(())
+  }
+}
+
 fn settle(servers: &Servers, root: &Path, resource: ResourceId) -> Result<Created, NotCreated> {
   let failed = |error: &SharingError| NotCreated::Failed(said(error, None));
   let mut db = ProjectDb::open(root).map_err(|error| failed(&error.into()))?;

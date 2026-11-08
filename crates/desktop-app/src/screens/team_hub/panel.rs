@@ -157,6 +157,12 @@ pub(super) fn chips_saying(
   (words, tone): (Arc<str>, BadgeTone),
   end: Option<Arc<str>>,
 ) -> Row {
+  chips_of(ctx, entry, vec![(words, tone)], end)
+}
+
+/// [`chips_saying`] with any number of chips after *Team · vN*: an admin's draft is one of them (`Chips` in A13
+/// `WMtxm`).
+pub(super) fn chips_of(ctx: &Ctx, entry: &Entry, badges: Vec<(Arc<str>, BadgeTone)>, end: Option<Arc<str>>) -> Row {
   let team = match entry.number {
     Some(number) => ctx.t_args("team_hub.chip.team", [("version", number.to_string())]),
     None => ctx.t("team_hub.chip.teamUnnumbered"),
@@ -166,7 +172,14 @@ pub(super) fn chips_saying(
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(badge("team-hub-chip-team", BadgeTone::Neutral, &team))
-    .child(badge("team-hub-chip-here", tone, &words))
+    .with_children(badges.into_iter().enumerate().map(|(index, (words, tone))| {
+      let id = if index == 0 {
+        "team-hub-chip-here".to_owned()
+      } else {
+        format!("team-hub-chip-{index}")
+      };
+      badge(&id, tone, &words)
+    }))
     .child(Row::new().flex(1.0))
     .with_children(end.map(|end| {
       Text::new(&end)

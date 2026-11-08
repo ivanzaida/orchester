@@ -33,6 +33,7 @@ mod start_lock;
 pub mod sync;
 pub mod team;
 mod team_created;
+pub mod team_edit;
 pub mod team_join;
 mod team_session;
 pub mod trust;

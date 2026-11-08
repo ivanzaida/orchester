@@ -82,10 +82,23 @@ pub enum State {
   /// of this computer: a start builds its bundle in a schema this computer does not read, so a start fails for good,
   /// releases the claim and the task page says why (ORC-885).
   StartFailed,
+  /// An Admin on the Agents hub's team MCP servers, which the stand-in team server holds too (`Agents · MCP server ·
+  /// admin · draft` A13 `WMtxm`, ORC-836): *Edit* a server, type, *Publish for the team* makes its next version. The
+  /// server also holds an MCP server named `figma-local` that this computer has not read, so *New MCP server* with
+  /// that name is refused as taken (A15 `dLqHC`).
+  TeamEdit,
+  /// As [`Self::TeamEdit`], the server no longer taking this person's writes: *Publish for the team* is refused as
+  /// no longer an admin, and the page turns read-only with the draft kept (A14 `gTLx6`).
+  TeamEditDemoted,
+  /// As [`Self::TeamEdit`], the server not answering: *Publish for the team* waits in the outbox (A16 `x3ywL`).
+  TeamEditOffline,
+  /// As [`Self::TeamEdit`], the server rejecting the content of every version sent: *Publish for the team* says why and
+  /// keeps the draft (A17 `rJbPm`).
+  TeamEditRejects,
 }
 
 impl State {
-  pub const ALL: [Self; 29] = [
+  pub const ALL: [Self; 33] = [
     Self::Join,
     Self::WrongCode,
     Self::ExpiredCode,
@@ -115,6 +128,10 @@ impl State {
     Self::EditConflict,
     Self::NotReadyHere,
     Self::StartFailed,
+    Self::TeamEdit,
+    Self::TeamEditDemoted,
+    Self::TeamEditOffline,
+    Self::TeamEditRejects,
   ];
 
   /// The seed's scenario of this state.
@@ -149,6 +166,10 @@ impl State {
       Self::EditConflict => "team-edit-conflict",
       Self::NotReadyHere => "team-not-ready",
       Self::StartFailed => "team-start-failed",
+      Self::TeamEdit => "team-edit",
+      Self::TeamEditDemoted => "team-edit-demoted",
+      Self::TeamEditOffline => "team-edit-offline",
+      Self::TeamEditRejects => "team-edit-rejects",
     }
   }
 
@@ -157,6 +178,14 @@ impl State {
     matches!(
       self,
       Self::OutageRunning | Self::MemberRunning | Self::ModuleOutage | Self::Claims | Self::TeamRunning
+    )
+  }
+
+  /// Whether the state is of the hub's edit of the team's resources, whose server holds them.
+  pub const fn edits(self) -> bool {
+    matches!(
+      self,
+      Self::TeamEdit | Self::TeamEditDemoted | Self::TeamEditOffline | Self::TeamEditRejects
     )
   }
 

@@ -84,10 +84,10 @@ impl Fields {
         ),
       ));
     }
-    let off = match (command, fields::taken(shown, &name)) {
-      (false, _) => Some("team_new.tool.kindOff"),
-      (true, Some(_)) => Some(fields::FIX_NAME),
-      (true, None) => None,
+    let off = if command {
+      fields::off(shown, &name)
+    } else {
+      Some("team_new.tool.kindOff")
     };
     Body {
       rows,

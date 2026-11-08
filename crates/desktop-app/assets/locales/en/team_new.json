@@ -17,15 +17,21 @@
     "goesOnCreate": "· goes to the team's server on Create",
     "required": "{{label}} · required",
     "errors": {
-      "required": "Required: fill this in to create it"
+      "required": "Required: fill this in to create it",
+      "takenByServer": "Taken in the team · from the server"
     },
     "bar": {
       "create": "Create",
       "cancel": "Cancel",
       "hint": "Create publishes v1 for the team once the server accepts it",
-      "fixName": "Fix the name to create it"
+      "fixName": "Fix the name to create it",
+      "changeName": "Change the name, then Create again"
     },
-    "waiting": "The team server could not be reached. This computer keeps the new resource, which the list shows as waiting to send, and sends it when the team server answers. Cancel closes this form.",
+    "waiting": {
+      "title": "Waiting to send · retries when the server is back",
+      "body": "The team server has not answered. This computer keeps the new resource, which the list shows as waiting to send, and sends it when the server answers; until then nothing is published. Cancel closes this form and keeps it waiting.",
+      "cancel": "Cancel sending"
+    },
     "computer": {
       "profile": "Each computer then picks the connection that runs it, asked only when it has several of its CLI kind.",
       "mcpProgram": "Each computer then sets the program's path and the values of its variables. A remote URL needs only the values of its secret headers.",
@@ -134,6 +140,23 @@
       "unavailableValue": "An HTTP request and a database query name secrets by name, which a new tool cannot yet. Create a command.",
       "kindOff": "Choose Command to create it"
     },
-    "personOnly": "Only a person creates this: it adds to what agents may do. Press Create yourself; input from an MCP client is refused unless a person lets automation change agent permissions."
+    "personOnly": "Only a person creates this: it adds to what agents may do. Press Create yourself; input from an MCP client is refused unless a person lets automation change agent permissions.",
+    "refused": {
+      "nameTaken": {
+        "title": "The team's server refused: the name {{name}} is taken",
+        "body": "Someone on the team published a resource of this kind with this name. Pick another name and Create again; nothing was created."
+      },
+      "notAdmin": {
+        "title": "The team's server refused: you are no longer an admin",
+        "body": "Nothing was created, and what you typed stays in this form. Only an Admin can create it. Ask an Admin: {{admins}}."
+      },
+      "rejected": {
+        "title": "The team's server refused {{name}}",
+        "body": "{{reason}} Nothing was created; fix the reason and Create again."
+      },
+      "failed": {
+        "title": "Nothing was created"
+      }
+    }
   }
 }

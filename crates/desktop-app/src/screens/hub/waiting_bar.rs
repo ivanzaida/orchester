@@ -24,7 +24,7 @@ use orchester_store::{PublishState, SharedStanding, WaitingVersion};
 use orchester_workspace::{
   background, display,
   messages::{self, Message},
-  sharing::{compare, team::TeamConfiguration},
+  sharing::{compare, team::TeamConfiguration, team_edit::Refusal},
   tasks::outside::Outside,
 };
 
@@ -197,6 +197,14 @@ impl Component for WaitingBar {
           ctx.t("sharing.config.bar.tryAgain"),
           Act::Send,
         );
+        // A version that edited an earlier one goes back to being the draft; a first version has none to go back to.
+        let cancel = props.waiting.based_on.is_some().then(|| {
+          self.button(
+            (format!("{id}-cancel-sending"), ButtonKind::Secondary, Icon::X),
+            ctx.t("sharing.config.bar.cancelSending"),
+            Act::Reopen(props.waiting.version),
+          )
+        });
         DraftBar::new(
           format!("{id}-not-sent"),
           Standing::NotSent,
@@ -204,16 +212,29 @@ impl Component for WaitingBar {
         )
         .sub(ctx.t_args("sharing.config.bar.notSentBody", [("host", host)]))
         .action(retry)
+        .actions(cancel)
         .into()
       }
       PublishState::Conflict { latest } => self.conflict(ctx, &props, *latest),
-      PublishState::Refused { .. } => DraftBar::new(
-        format!("{id}-refused"),
-        Standing::Attention,
-        ctx.t_args("sharing.config.bar.refused", [("host", host), ("time", time)]),
-      )
-      .sub(ctx.t("sharing.config.bar.refusedBody"))
-      .into(),
+      PublishState::Refused { code } => {
+        // What the server said, in words: the draft comes back to be changed, and then published again.
+        let reason = message_text(ctx, &Refusal::of_code(code).message());
+        let take_back = props.waiting.based_on.is_some().then(|| {
+          self.button(
+            (format!("{id}-take-back"), ButtonKind::Secondary, Icon::Undo2),
+            ctx.t("sharing.config.bar.takeBack"),
+            Act::Reopen(props.waiting.version),
+          )
+        });
+        DraftBar::new(
+          format!("{id}-refused"),
+          Standing::Attention,
+          ctx.t_args("sharing.config.bar.refused", [("host", host), ("time", time)]),
+        )
+        .sub(ctx.t_args("sharing.config.bar.refusedWhy", [("reason", reason.to_string())]))
+        .actions(take_back)
+        .into()
+      }
     };
     let failure = state
       .error

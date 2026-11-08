@@ -84,7 +84,7 @@ impl Fields {
       rows,
       computer: "team_new.computer.instruction",
       make: checked.make,
-      off: fields::taken(shown, &name).map(|_| fields::FIX_NAME),
+      off: fields::off(shown, &name),
     }
   }
 }

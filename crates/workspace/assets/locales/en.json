@@ -2101,6 +2101,17 @@
     }
   },
   "sharing": {
+    "edit": {
+      "refused": {
+        "nameTaken": "Another resource of this kind in the team has this name.",
+        "body": "The team's server does not accept its content: a program's path, a secret's value or an id of this computer has no place in the team's form.",
+        "references": "It names a team resource the server does not have or has archived.",
+        "shape": "The team's server could not read it as a version.",
+        "archived": "The team archived this resource, so it takes no new version.",
+        "changed": "Someone published v{{version}} from the same version first; your draft is now on v{{version}}.",
+        "other": "The team's server refused it ({{code}})."
+      }
+    },
     "errors": {
       "serverOnly": "This change is made on the server for a shared project, and this screen cannot send it there yet.",
       "notShared": "This project's task list is not shared.",

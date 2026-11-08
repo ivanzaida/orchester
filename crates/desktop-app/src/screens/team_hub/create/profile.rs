@@ -112,7 +112,7 @@ impl Fields {
       rows,
       computer: "team_new.computer.profile",
       make: connection.and_then(|c| self.made(c, model)),
-      off: fields::taken(shown, &name).map(|_| fields::FIX_NAME),
+      off: fields::off(shown, &name),
     }
   }
 

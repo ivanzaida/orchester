@@ -28,16 +28,25 @@ use crate::{
 /// The head's height (`Header` `NRqwv`).
 const HEAD_HEIGHT: f32 = 32.0;
 
-/// *Agents*, and at its right the team the project is shared with and, for an admin, New.
-pub(super) fn head(ctx: &Ctx, team: &TeamConfiguration, new: Option<Element>) -> Row {
+/// *Agents*, and at its right the team the project is shared with and, for an admin, New. `unreached`: the team server
+/// did not answer the last read, which the head says in place of *Team* (`Publish while offline` A16 `x3ywL`).
+pub(super) fn head(ctx: &Ctx, team: &TeamConfiguration, (new, unreached): (Option<Element>, bool)) -> Row {
+  let (glyph, color, words) = if unreached {
+    (Icon::CloudOff, PaletteColor::Warning, "team_hub.unreached")
+  } else {
+    (Icon::Users, PaletteColor::TextMuted, "team_hub.team")
+  };
   let mut at_right = Row::new()
     .id("team-hub-team")
+    .describe("reached", (!unreached).to_string())
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
-    .child(icon(Icon::Users, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Base, color.clone()))
     .child(
-      Text::new(&ctx.t("team_hub.team"))
+      Text::new(&ctx.t(words))
+        .id("team-hub-team-label")
         .variant(HubText::Hint.role())
+        .color(if unreached { color } else { PaletteColor::TextMuted })
         .nowrap(),
     );
   if let Some((_, host)) = &team.server {
