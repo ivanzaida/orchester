@@ -61,9 +61,7 @@ impl Workspace {
   }
 }
 
-/// The role of the CLI kind the newest cached version of `profile` names; `None` when it names none. A version cached
-/// before the team configuration model names a connection of a role instead, which still counts until the store drops
-/// those references (ORC-845).
+/// The role of the CLI kind the newest cached version of `profile` names; `None` when it names none.
 fn profile_role(db: &ProjectDb, profile: ResourceId) -> Result<Option<ConnectionRole>, StoreError> {
   let Some(latest) = db.latest_version::<AgentProfile>(profile)? else {
     return Ok(None);
@@ -71,9 +69,8 @@ fn profile_role(db: &ProjectDb, profile: ResourceId) -> Result<Option<Connection
   let Some(cached) = db.cached_version::<AgentProfile>(profile, latest.number())? else {
     return Ok(None);
   };
-  Ok(cached.references.iter().find_map(|reference| match &reference.target {
+  Ok(cached.references.iter().find_map(|reference| match reference {
     ReferenceTarget::CliKind(cli) => Some(ConnectionRole::Agent(*cli)),
-    ReferenceTarget::Connection(_) => reference.role.as_deref().and_then(ConnectionRole::parse),
     _ => None,
   }))
 }

@@ -1,5 +1,5 @@
-//! A run's profiles each get only the MCP servers their own binding names (team authority §7), not every server the
-//! run binds.
+//! A run's profiles each get only the team MCP servers their own binding names (team authority §7), not every server
+//! the run binds.
 
 use std::{
   collections::{BTreeMap, BTreeSet},
@@ -13,14 +13,14 @@ use orchester_core::{
   permission::StepPermissions,
   resource::{
     AgentProfile, Deliverable, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey,
-    StepKind, Version, VersionNumber,
+    StepKind, TeamMcpServer, Version, VersionNumber,
   },
   run::{
     BranchName, CommitId, PublishedVersions, RunSnapshot,
     bundle::{CanonicalExecutionInputs, ExecutionProfile, PinnedBodies, ResourceLabel},
     inputs::{
-      BoundReference, BundleContent, InputsError, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, RunInputs,
-      TaskAtStart, TeamAcceptance, TeamMcpBinding,
+      BundleContent, InputsError, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, RunInputs, TaskAtStart,
+      TeamAcceptance, TeamMcpBinding, team_mcp_id,
     },
   },
   sharing::TaskRevision,
@@ -66,8 +66,34 @@ fn label(slug: &str) -> ResourceLabel {
   ResourceLabel::new(Slug::new(slug).expect("slug"), Name::new(slug).expect("name"))
 }
 
-/// Inputs of a two-step pipeline run by two profiles, with the profiles' ids.
-fn two_profiles() -> (CanonicalExecutionInputs, [ResourceId; 2]) {
+/// The team MCP servers a run's profiles choose from: their resource ids, and the pinned versions.
+fn team_servers() -> ([ResourceId; 3], Vec<(ResourceId, Version<TeamMcpServer>)>) {
+  let ids = [ResourceId::generate(), ResourceId::generate(), ResourceId::generate()];
+  let pinned = ids
+    .iter()
+    .zip(["docs", "issues", "shared"])
+    .map(|(id, name)| {
+      let server = serde_json::from_value(serde_json::json!({
+        "name": name,
+        "launch": {"kind": "remote", "url": "http://127.0.0.1:9/mcp"}
+      }))
+      .expect("a remote server");
+      (*id, version(1, server))
+    })
+    .collect();
+  (ids, pinned)
+}
+
+/// `profile` as the bundle carries it, naming the team MCP servers `servers`.
+fn naming(profile: &AgentProfile, servers: &[ResourceId]) -> ExecutionProfile {
+  let mut body = serde_json::to_value(ExecutionProfile::of(profile)).expect("a body");
+  body["mcp_servers"] = serde_json::to_value(servers).expect("ids");
+  serde_json::from_value(body).expect("a profile that names team MCP servers")
+}
+
+/// Inputs of a two-step pipeline run by two profiles, with the profiles' ids, and the three team MCP servers it pins.
+fn two_profiles() -> (CanonicalExecutionInputs, [ResourceId; 2], [ResourceId; 3]) {
+  let (servers, pinned_servers) = team_servers();
   let ids = [ResourceId::generate(), ResourceId::generate()];
   let pipeline = version(
     1,
@@ -88,19 +114,27 @@ fn two_profiles() -> (CanonicalExecutionInputs, [ResourceId; 2]) {
   let bodies = PinnedBodies {
     profiles: &profiles
       .values()
-      .map(|version| (version.id(), ExecutionProfile::of(version.body())))
+      .zip([&servers[..2], &servers[1..]])
+      .map(|(version, named)| (version.id(), naming(version.body(), named)))
       .collect::<Vec<_>>(),
     instructions: &[],
     tools: &[],
     skills: &[],
-    mcp_servers: &[],
+    mcp_servers: &pinned_servers,
     labels: &[
       (pipeline.id(), label("flow")),
       (profiles[&ids[0]].id(), label("first")),
       (profiles[&ids[1]].id(), label("second")),
+      (pinned_servers[0].1.id(), label("docs")),
+      (pinned_servers[1].1.id(), label("issues")),
+      (pinned_servers[2].1.id(), label("shared")),
     ],
   };
-  (CanonicalExecutionInputs::pin(&snapshot, bodies).expect("inputs"), ids)
+  (
+    CanonicalExecutionInputs::pin(&snapshot, bodies).expect("inputs"),
+    ids,
+    servers,
+  )
 }
 
 fn binding(resource: ResourceId, mcp_servers: Vec<ConnectionId>) -> ProfileBinding {
@@ -113,11 +147,8 @@ fn binding(resource: ResourceId, mcp_servers: Vec<ConnectionId>) -> ProfileBindi
   }
 }
 
-fn reference(local: ConnectionId) -> BoundReference {
-  BoundReference::McpServer {
-    named: ConnectionId::generate(),
-    local,
-  }
+fn team_binding(server: ResourceId) -> TeamMcpBinding {
+  TeamMcpBinding { server, program: None }
 }
 
 fn make(canonical: &CanonicalExecutionInputs, bindings: LocalBindings) -> Result<RunInputs, InputsError> {
@@ -171,34 +202,27 @@ fn servers_of(inputs: &RunInputs, resource: ResourceId) -> Vec<ConnectionId> {
 
 #[test]
 fn each_profile_gets_only_the_mcp_servers_it_names() {
-  let (canonical, ids) = two_profiles();
-  let (docs, issues, shared) = (
-    ConnectionId::generate(),
-    ConnectionId::generate(),
-    ConnectionId::generate(),
-  );
+  let (canonical, ids, servers) = two_profiles();
+  let [docs, issues, shared] = servers.map(team_mcp_id);
   let bindings = LocalBindings {
     profiles: vec![
       binding(ids[0], vec![docs, shared]),
       binding(ids[1], vec![issues, shared]),
     ],
-    references: vec![reference(docs), reference(issues), reference(shared)],
-    team_mcp: Vec::new(),
+    team_mcp: servers.map(team_binding).to_vec(),
   };
   let inputs = make(&canonical, bindings).expect("inputs");
   assert_eq!(servers_of(&inputs, ids[0]), [docs, shared]);
   assert_eq!(servers_of(&inputs, ids[1]), [issues, shared]);
-  assert_eq!(inputs.bound_mcp_servers().ids(), [docs, issues, shared]);
 }
 
 #[test]
 fn a_profile_naming_no_server_gets_none_even_when_others_are_bound() {
-  let (canonical, ids) = two_profiles();
-  let docs = ConnectionId::generate();
+  let (canonical, ids, servers) = two_profiles();
+  let docs = team_mcp_id(servers[0]);
   let bindings = LocalBindings {
     profiles: vec![binding(ids[0], vec![docs]), binding(ids[1], Vec::new())],
-    references: vec![reference(docs)],
-    team_mcp: Vec::new(),
+    team_mcp: vec![team_binding(servers[0])],
   };
   let inputs = make(&canonical, bindings).expect("inputs");
   assert_eq!(servers_of(&inputs, ids[0]), [docs]);
@@ -207,12 +231,11 @@ fn a_profile_naming_no_server_gets_none_even_when_others_are_bound() {
 
 #[test]
 fn a_profile_cannot_name_a_server_the_inputs_do_not_bind() {
-  let (canonical, ids) = two_profiles();
+  let (canonical, ids, servers) = two_profiles();
   let stray = ConnectionId::generate();
   let bindings = LocalBindings {
     profiles: vec![binding(ids[0], vec![stray]), binding(ids[1], Vec::new())],
-    references: Vec::new(),
-    team_mcp: Vec::new(),
+    team_mcp: servers.map(team_binding).to_vec(),
   };
   assert_eq!(
     make(&canonical, bindings).expect_err("refused"),
@@ -225,15 +248,11 @@ fn a_profile_cannot_name_a_server_the_inputs_do_not_bind() {
 
 #[test]
 fn a_team_mcp_server_the_bundle_does_not_pin_cannot_be_bound() {
-  let (canonical, ids) = two_profiles();
+  let (canonical, ids, _) = two_profiles();
   let stray = ResourceId::generate();
   let bindings = LocalBindings {
     profiles: vec![binding(ids[0], Vec::new()), binding(ids[1], Vec::new())],
-    references: Vec::new(),
-    team_mcp: vec![TeamMcpBinding {
-      server: stray,
-      program: None,
-    }],
+    team_mcp: vec![team_binding(stray)],
   };
   assert_eq!(
     make(&canonical, bindings).expect_err("refused"),

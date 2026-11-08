@@ -158,7 +158,6 @@ impl From<&SharingError> for DownloadFailure {
       | SharingError::NotAdmin
       | SharingError::VersionConflict { .. }
       | SharingError::PersonOnly
-      | SharingError::ConnectionKindMismatch { .. }
       | SharingError::LocalEntitiesNamed { .. }
       | SharingError::PipelineNamesNonTeam { .. }
       | SharingError::WritableFoldersStay { .. }

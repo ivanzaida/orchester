@@ -18,10 +18,13 @@ use rusqlite::{Connection, OptionalExtension, params};
 use super::{ProjectDb, task_identities};
 use crate::{
   RunStoreError, StoreError,
-  rows::{corrupt, decode_json, encode_json, parse},
+  rows::{corrupt, decode_body, decode_document, decode_json, encode_json, parse},
 };
 
-const BINDINGS_SCHEMA: u32 = 1;
+/// Schema 1 also held the references the run's bodies named by the publisher's ids, bound to this computer's
+/// connections, MCP servers and secrets; the team configuration model names none (`docs/design/team-configuration.md`),
+/// so schema 2 does not, and a run recorded with schema 1 reads without them.
+const BINDINGS_SCHEMA: u32 = 2;
 const CONSENT_SCHEMA: u32 = 1;
 
 /// Team inputs the server accepted, for the run of team task `task` the runner has not started yet.
@@ -60,9 +63,26 @@ impl Encoded {
     if hash.as_str() != self.sha256 {
       return Err(corrupt("run bundle", "its content does not have its hash"));
     }
-    let bindings: LocalBindings = decode_json("run bindings", BINDINGS_SCHEMA, &self.bindings)?;
+    let bindings = decode_bindings(&self.bindings)?;
     let consent: LocalConsent = decode_json("run consent", CONSENT_SCHEMA, &self.consent)?;
     RunInputs::new(bundle, bindings, consent).map_err(|error| corrupt("run inputs", error))
+  }
+}
+
+fn decode_bindings(text: &str) -> Result<LocalBindings, StoreError> {
+  const WHAT: &str = "run bindings";
+  match decode_document(WHAT, text)? {
+    (BINDINGS_SCHEMA, body) => decode_body(WHAT, body),
+    (1, mut body) => {
+      if let Some(fields) = body.as_object_mut() {
+        fields.remove("references");
+      }
+      decode_body(WHAT, body)
+    }
+    (schema, _) => Err(corrupt(
+      WHAT,
+      format!("schema {schema} is not the supported schema {BINDINGS_SCHEMA}"),
+    )),
   }
 }
 

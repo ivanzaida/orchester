@@ -1,5 +1,5 @@
-//! The cache of a shared project's configuration: resources marked as the server's, versions kept with the server's
-//! body and the local one, and this computer's bindings of their references.
+//! The cache of a shared project's configuration: resources marked as the server's, and versions kept with the server's
+//! body and the local one, with the references they name.
 //! `cargo test -p orchester-store --test shared_configuration shared_configuration`.
 
 mod support;
@@ -9,7 +9,7 @@ use std::{collections::BTreeSet, path::Path};
 use orchester_core::{
   blob::ContentHash,
   connection::AgentProvider,
-  id::{ConnectionId, ResourceId, SecretId, UserId},
+  id::{ResourceId, UserId},
   resource::{
     AgentProfile, AgentTargets, InjectionEvent, Instruction, InstructionScope, PromptText, ResourceKind, Slug,
     VersionNumber,
@@ -18,10 +18,7 @@ use orchester_core::{
   sharing::{SharedPerson, TaskRevision},
   store::ResourceStore,
 };
-use orchester_store::{
-  Bound, BoundBy, BoundReference, CachedVersion, ProjectDb, ReferenceBinding, ReferenceTarget, ResourceSharing,
-  StoreError, VersionReference,
-};
+use orchester_store::{CachedVersion, ProjectDb, ReferenceTarget, ResourceSharing, StoreError};
 use rusqlite::Connection;
 use serde_json::json;
 
@@ -48,7 +45,7 @@ fn revision(value: u64) -> TaskRevision {
   TaskRevision::try_from(value).expect("a revision")
 }
 
-fn cached<B>(local_body: B, references: Vec<VersionReference>) -> CachedVersion<B> {
+fn cached<B>(local_body: B, references: Vec<ReferenceTarget>) -> CachedVersion<B> {
   CachedVersion {
     number: VersionNumber::FIRST,
     published_at: at(20),
@@ -65,46 +62,19 @@ fn database(repo: &Path) -> Connection {
   Connection::open(repo.join(".orchester").join("orchester.db")).expect("open")
 }
 
-/// A reference of each kind a version names: a computer's ids as versions cached before the team model kept them, a
-/// CLI kind, team resources by server id and a secret by name.
-fn named_references() -> Vec<VersionReference> {
+/// A reference of each kind a version names: a CLI kind, team resources by server id and a secret by name.
+fn named_references() -> Vec<ReferenceTarget> {
   vec![
-    VersionReference {
-      target: ReferenceTarget::Connection(ConnectionId::generate()),
-      name: "Claude".to_owned(),
-      role: Some("claude_cli".to_owned()),
+    ReferenceTarget::CliKind(AgentProvider::CodexCli),
+    ReferenceTarget::TeamResource {
+      kind: ResourceKind::McpServer,
+      id: ResourceId::generate(),
     },
-    VersionReference {
-      target: ReferenceTarget::Secret(SecretId::generate()),
-      name: "GitHub token".to_owned(),
-      role: None,
+    ReferenceTarget::TeamResource {
+      kind: ResourceKind::Tool,
+      id: ResourceId::generate(),
     },
-    VersionReference {
-      target: ReferenceTarget::CliKind(AgentProvider::CodexCli),
-      name: String::new(),
-      role: None,
-    },
-    VersionReference {
-      target: ReferenceTarget::TeamResource {
-        kind: ResourceKind::McpServer,
-        id: ResourceId::generate(),
-      },
-      name: String::new(),
-      role: None,
-    },
-    VersionReference {
-      target: ReferenceTarget::TeamResource {
-        kind: ResourceKind::Tool,
-        id: ResourceId::generate(),
-      },
-      name: String::new(),
-      role: None,
-    },
-    VersionReference {
-      target: ReferenceTarget::SecretName(SecretName::new("STAGING_TOKEN").expect("a secret name")),
-      name: String::new(),
-      role: None,
-    },
+    ReferenceTarget::SecretName(SecretName::new("STAGING_TOKEN").expect("a secret name")),
   ]
 }
 
@@ -138,7 +108,7 @@ fn shared_configuration_caches_a_version_with_both_bodies() {
     Some(&version)
   );
 
-  // A binding changes the local body only; the server's stays as the server keeps it.
+  // A team profile's connection pick changes the local body only; the server's stays as the server keeps it.
   let rebound = instruction("Use the other local connection.");
   assert!(
     db.rewrite_local_body(id, VersionNumber::FIRST, &rebound)
@@ -213,63 +183,6 @@ fn shared_configuration_keeps_a_version_published_here_and_names_its_publisher_o
 }
 
 #[test]
-fn shared_configuration_sets_and_changes_a_binding() {
-  let (_repo, mut db, _run, _execution) = started_run();
-  assert!(db.reference_bindings().expect("bindings").is_empty());
-  let reference = ConnectionId::generate();
-  let unbound = ReferenceBinding {
-    reference: BoundReference::McpServer { reference, bound: None },
-    name: "GitHub".to_owned(),
-    role: None,
-    changed_at: at(30),
-  };
-  db.set_reference_binding(&unbound).expect("unbound");
-  assert_eq!(db.reference_bindings().expect("bindings"), vec![unbound.clone()]);
-
-  let local = ConnectionId::generate();
-  let bound = ReferenceBinding {
-    reference: BoundReference::McpServer {
-      reference,
-      bound: Some(Bound {
-        local,
-        by: BoundBy::Person,
-      }),
-    },
-    changed_at: at(31),
-    ..unbound.clone()
-  };
-  db.set_reference_binding(&bound).expect("bound");
-  assert_eq!(db.reference_bindings().expect("bindings"), vec![bound]);
-
-  let secret = ReferenceBinding {
-    reference: BoundReference::Secret {
-      reference: SecretId::generate(),
-      bound: Some(Bound {
-        local: SecretId::generate(),
-        by: BoundBy::Name,
-      }),
-    },
-    name: "Deploy token".to_owned(),
-    role: Some("deployment_token".to_owned()),
-    changed_at: at(32),
-  };
-  db.set_reference_binding(&secret).expect("secret");
-  let rebound = ReferenceBinding {
-    reference: BoundReference::McpServer {
-      reference,
-      bound: Some(Bound {
-        local: ConnectionId::generate(),
-        by: BoundBy::Role,
-      }),
-    },
-    changed_at: at(33),
-    ..unbound
-  };
-  db.set_reference_binding(&rebound).expect("rebound");
-  assert_eq!(db.reference_bindings().expect("bindings"), vec![rebound, secret]);
-}
-
-#[test]
 fn shared_configuration_marks_a_resource_shared() {
   let (repo, mut db, _run, _execution) = started_run();
   let builder = db
@@ -307,40 +220,46 @@ fn shared_configuration_marks_a_resource_shared() {
   );
 }
 
-/// Row 80: in a team project only the team's pipelines are offered, so a team pipeline wins its slug from one of this
-/// computer's own, which is kept with a free slug; other kinds still refuse a clash.
+/// A team resource is identified by its server id, so it arrives with the slug the server gave it whether or not one of
+/// this computer's own has it, and the computer's own stays as it is (`docs/design/team-configuration.md`, edge cases 2
+/// and 3). Two live team resources of one slug are the server's to sort out.
 #[test]
-fn shared_configuration_a_team_pipeline_takes_its_slug_from_a_local_one() {
+fn shared_configuration_a_team_resource_keeps_its_slug_beside_a_local_one() {
   let (_repo, mut db, _run, _execution) = started_run();
   let body = orchester_core::resource::Pipeline::new(vec![]).expect("an empty pipeline");
   let own = db
     .create_resource(Slug::new("review").expect("slug"), name("Review"), &body, at(10))
     .expect("a local pipeline")
     .id();
-  let team = ResourceId::generate();
-  let resource = orchester_core::resource::Resource::new(
-    team,
-    orchester_core::resource::ResourceKind::Pipeline,
-    Slug::new("review").expect("slug"),
-    name("Review"),
-    at(20),
+  let team_resource = |kind, slug: &str, at_ms| {
+    orchester_core::resource::Resource::new(
+      ResourceId::generate(),
+      kind,
+      Slug::new(slug).expect("slug"),
+      name("Review"),
+      at(at_ms),
+    )
+  };
+  let slug = |db: &ProjectDb, id| db.resource(id).expect("read").expect("kept").slug().as_str().to_owned();
+
+  let team = team_resource(ResourceKind::Pipeline, "review", 20);
+  db.keep_shared_resource(&team, revision(1)).expect("the team's arrives");
+  assert_eq!(
+    (slug(&db, team.id()), slug(&db, own)),
+    ("review".into(), "review".into())
   );
-  db.keep_shared_resource(&resource, revision(1))
-    .expect("the team's wins");
-  let slug = |id| db.resource(id).expect("read").expect("kept").slug().as_str().to_owned();
-  assert_eq!(slug(team), "review");
-  assert_eq!(slug(own), "review-local");
   assert_eq!(
     db.resource_sharing(own).expect("read"),
     None,
-    "still this computer's own"
+    "still this computer's own, untouched"
+  );
+  assert_eq!(
+    db.resource_sharing(team.id()).expect("read"),
+    Some(ResourceSharing::Shared(revision(1)))
   );
 
-  // An agent profile of the team arrives the same way; the local one keeps everything but its slug.
-  let profile = db
-    .resources(orchester_core::resource::ResourceKind::AgentProfile)
-    .expect("profiles")
-    .remove(0);
+  // Every kind arrives the same way.
+  let profile = db.resources(ResourceKind::AgentProfile).expect("profiles").remove(0);
   let team_profile = orchester_core::resource::Resource::new(
     ResourceId::generate(),
     profile.kind(),
@@ -350,33 +269,19 @@ fn shared_configuration_a_team_pipeline_takes_its_slug_from_a_local_one() {
   );
   db.keep_shared_resource(&team_profile, revision(1))
     .expect("the team's arrives");
-  let slug = |id| db.resource(id).expect("read").expect("kept").slug().as_str().to_owned();
-  assert_eq!(slug(team_profile.id()), profile.slug().as_str());
-  assert_eq!(slug(profile.id()), format!("{}-local", profile.slug().as_str()));
+  assert_eq!(slug(&db, team_profile.id()), profile.slug().as_str());
+  assert_eq!(slug(&db, profile.id()), profile.slug().as_str());
 
-  // A team resource restored on the server takes its slug back from one archived here.
-  db.mark_shared_archived(team, true, at(40)).expect("archived");
-  let restored = orchester_core::resource::Resource::new(
-    ResourceId::generate(),
-    orchester_core::resource::ResourceKind::Pipeline,
-    Slug::new("review").expect("slug"),
-    name("Review"),
-    at(50),
-  );
+  // A team resource restored on the server under a new id arrives while the archived one is kept here.
+  db.mark_shared_archived(team.id(), true, at(40)).expect("archived");
+  let restored = team_resource(ResourceKind::Pipeline, "review", 50);
   db.keep_shared_resource(&restored, revision(1))
     .expect("the restored one arrives");
-  let slug = |id| db.resource(id).expect("read").expect("kept").slug().as_str().to_owned();
-  assert_eq!(slug(restored.id()), "review");
-  assert_eq!(slug(team), "review-local-2");
+  assert_eq!(slug(&db, restored.id()), "review");
+  assert_eq!(slug(&db, team.id()), "review");
 
-  // Two live team resources of one slug are the server's to sort out: refused, as before.
-  let other = orchester_core::resource::Resource::new(
-    ResourceId::generate(),
-    orchester_core::resource::ResourceKind::Pipeline,
-    Slug::new("review").expect("slug"),
-    name("Review"),
-    at(60),
-  );
+  // Two live team resources of one slug are the server's to sort out: refused.
+  let other = team_resource(ResourceKind::Pipeline, "review", 60);
   assert!(matches!(
     db.keep_shared_resource(&other, revision(1)),
     Err(StoreError::DuplicateSlug { .. })
@@ -457,7 +362,6 @@ fn shared_configuration_migration_runs_forward() {
     db.latest_version::<AgentProfile>(builder).expect("latest"),
     Some(published.clone())
   );
-  assert!(db.reference_bindings().expect("bindings").is_empty());
   db.set_resource_sharing(builder, Some(ResourceSharing::Shared(revision(1))))
     .expect("shared");
   db.cache_shared_version(builder, &cached(published.body().clone(), Vec::new()))

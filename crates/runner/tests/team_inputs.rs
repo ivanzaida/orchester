@@ -305,7 +305,6 @@ impl Team {
         required_cli,
         mcp_servers: team_mcp.iter().map(|bound| team_mcp_id(bound.server)).collect(),
       }],
-      references: Vec::new(),
       team_mcp,
     };
     let inputs = RunInputs::new(content, bindings, LocalConsent::default()).expect("inputs");

@@ -128,7 +128,7 @@ what is local by nature: connections, program paths, secret values.
 Rows 30, 52, 74, 75 and 80 of `docs/architecture/server.md` (resource bodies with foreign references, local
 pipelines in a team project, the reference bindings of *On this computer*, slug-taking), which ORC-847 rewrote; the
 decisions of 2026-11-06 are rows 81–92 there and those of 2026-11-07 rows 93 to 95. The code that binds references
-and hides local resources by slug is removed by ORC-845.
+and hides local resources by slug was removed by ORC-845.
 
 ## Decided 2026-11-07 (the person)
 

@@ -387,25 +387,18 @@ async fn live_updates_make_local_keeps_no_copy_of_the_teams_configuration_and_pa
     vec![named],
   );
   let bob = bob_caches(&server, &[alice.style, tone]).await;
-  let naming = |resource| KeptTarget::TeamResource {
-    kind: ResourceKind::Skill,
-    id: resource,
-  };
   assert_eq!(
     bob
       .db()
-      .versions_naming(&naming(alice.skill))
+      .cached_version::<Instruction>(tone, orchester_core::resource::VersionNumber::FIRST)
       .expect("read")
-      .iter()
-      .map(|version| version.resource)
-      .collect::<Vec<_>>(),
-    [tone],
+      .expect("cached")
+      .references,
+    [KeptTarget::TeamResource {
+      kind: ResourceKind::Skill,
+      id: alice.skill,
+    }],
     "Tone's reference is cached"
-  );
-  assert_eq!(
-    bob.db().reference_bindings().expect("read"),
-    [],
-    "a team reference binds nothing"
   );
   let (delivery, builder) = alice.delivery();
   let run = alice.run();
@@ -445,9 +438,6 @@ async fn live_updates_make_local_keeps_no_copy_of_the_teams_configuration_and_pa
       .is_some(),
     "with its draft"
   );
-  let db = bob.db();
-  assert_eq!(db.reference_bindings().expect("read"), []);
-  assert_eq!(db.versions_naming(&naming(alice.skill)).expect("read"), []);
   assert_eq!(
     on_server(&server, alice.style).len(),
     2,

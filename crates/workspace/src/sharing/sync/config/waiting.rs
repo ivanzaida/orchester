@@ -1,7 +1,8 @@
 //! A teammate's version that widens what this computer's agents may do (`docs/architecture/server.md`, row 35, "A
 //! teammate's version that widens"): it is cached, but runs keep the version this computer used before it until the
 //! person's *Use v<N> here* ([`use_here`]). Core decides with [`widens`], over the local bodies, which name the same
-//! bindings; a version this computer published itself never waits, and one that does not widen applies at once.
+//! connections and MCP servers; a version this computer published itself never waits, and one that does not widen
+//! applies at once.
 
 use std::path::Path;
 

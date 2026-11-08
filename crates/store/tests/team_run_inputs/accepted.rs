@@ -9,7 +9,7 @@ fn team_run_inputs_are_kept_by_their_operation_until_their_run_starts() {
   let task = team.task();
   let id = team.db.record_team_task(task, revision(3)).expect("identity");
   let operation = OperationId::generate();
-  let inputs = team.inputs(accepted(task, operation), Vec::new());
+  let inputs = team.inputs(accepted(task, operation));
   assert_eq!(team.db.accepted_team_inputs(operation).expect("read"), None);
   team.db.accept_team_inputs(id, &inputs, at(5)).expect("kept");
   team
@@ -22,13 +22,13 @@ fn team_run_inputs_are_kept_by_their_operation_until_their_run_starts() {
   };
   assert_eq!(team.db.accepted_team_inputs(operation).expect("read"), Some(kept));
 
-  let other = team.inputs(accepted(task, operation), Vec::new());
+  let other = team.inputs(accepted(task, operation));
   let refused = team.db.accept_team_inputs(id, &other, at(7));
   assert!(
     matches!(refused, Err(RunStoreError::InputsMismatch { .. })),
     "{refused:?}"
   );
-  let local = team.inputs(InputsOrigin::Local, Vec::new());
+  let local = team.inputs(InputsOrigin::Local);
   let refused = team.db.accept_team_inputs(id, &local, at(7));
   assert!(
     matches!(refused, Err(RunStoreError::InputsMismatch { .. })),
@@ -59,7 +59,7 @@ fn team_run_inputs_name_the_task_in_usage_and_plan_limits_without_its_definition
   let mut team = team_project();
   let task = team.task();
   let id = team.db.record_team_task(task, revision(3)).expect("identity");
-  let inputs = team.inputs(accepted(task, OperationId::generate()), Vec::new());
+  let inputs = team.inputs(accepted(task, OperationId::generate()));
   let mut run = team
     .db
     .create_run_with_inputs(IdempotencyKey::generate(), team.new_run(id), &inputs, (at(6), None))

@@ -8,13 +8,13 @@ use serde::{Deserialize, Serialize};
 
 use crate::{
   connection::AgentProvider,
-  id::{AgentAccountId, ConnectionId, ResourceId, SecretId},
+  id::{AgentAccountId, ConnectionId, ResourceId},
   run::{PinnedVersion, bundle::ResolvedStepPermissions},
 };
 
 /// `{resource, connection, account?, required_cli?, mcp_servers?}`: the local connection and account a pinned profile
-/// runs with, the CLI kind its shared reference requires, and the local MCP servers its version names (each also bound
-/// in [`LocalBindings::references`]).
+/// runs with, the CLI kind its shared reference requires, and the team MCP servers its version names (each also bound
+/// in [`LocalBindings::team_mcp`], under [`team_mcp_id`](super::team_mcp_id)).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProfileBinding {
@@ -24,19 +24,9 @@ pub struct ProfileBinding {
   /// The shared reference's required CLI; absent in runs recorded before kind validation and in local runs.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub required_cli: Option<AgentProvider>,
-  /// The local MCP servers this profile's agents get, and only this profile's; none for a profile that names none.
+  /// The MCP servers this profile's agents get, and only this profile's; none for a profile that names none.
   #[serde(default, skip_serializing_if = "Vec::is_empty")]
   pub mcp_servers: Vec<ConnectionId>,
-}
-
-/// A connection, MCP server or secret the canonical bodies name by the publisher's id, bound to this computer's.
-/// Removed by ORC-845 with the bindings.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
-pub enum BoundReference {
-  Connection { named: ConnectionId, local: ConnectionId },
-  McpServer { named: ConnectionId, local: ConnectionId },
-  Secret { named: SecretId, local: SecretId },
 }
 
 /// `{server, program?}`: where this computer runs a team MCP server the run's profiles name, as filled in when the run
@@ -51,14 +41,12 @@ pub struct TeamMcpBinding {
   pub program: Option<PathBuf>,
 }
 
-/// `{profiles, references, team_mcp?}`: how this computer binds the run's inputs. `references` is removed by ORC-845
-/// with the bindings.
+/// `{profiles, team_mcp?}`: how this computer binds the run's inputs.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LocalBindings {
   /// One per pinned agent profile.
   pub profiles: Vec<ProfileBinding>,
-  pub references: Vec<BoundReference>,
   /// One per pinned team MCP server; left out while empty, which is every local run's.
   #[serde(default, skip_serializing_if = "Vec::is_empty")]
   pub team_mcp: Vec<TeamMcpBinding>,

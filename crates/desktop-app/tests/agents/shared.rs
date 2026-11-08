@@ -14,7 +14,7 @@ use orchester_core::{
   store::{ConnectionStore, ResourceStore},
   time::Timestamp,
 };
-use orchester_store::{CachedVersion, ProjectDb, ReferenceTarget, ResourceSharing, SharingLink, VersionReference};
+use orchester_store::{CachedVersion, ProjectDb, ReferenceTarget, ResourceSharing, SharingLink};
 
 use super::harness::Agents;
 
@@ -50,11 +50,7 @@ fn shared_v2(agents: &Agents, id: ResourceId) {
   db.start_sharing(&link, &[], (&[], &HashMap::new())).expect("linked");
   db.set_resource_sharing(id, Some(ResourceSharing::Shared(TaskRevision::FIRST)))
     .expect("the team's profile");
-  let cli = VersionReference {
-    target: ReferenceTarget::CliKind(AgentProvider::CodexCli),
-    name: String::new(),
-    role: None,
-  };
+  let cli = ReferenceTarget::CliKind(AgentProvider::CodexCli);
   db.cache_shared_version(
     id,
     &cached(
@@ -65,13 +61,9 @@ fn shared_v2(agents: &Agents, id: ResourceId) {
     ),
   )
   .expect("v1 cached");
-  let server = VersionReference {
-    target: ReferenceTarget::TeamResource {
-      kind: ResourceKind::McpServer,
-      id: docs,
-    },
-    name: String::new(),
-    role: None,
+  let server = ReferenceTarget::TeamResource {
+    kind: ResourceKind::McpServer,
+    id: docs,
   };
   db.cache_shared_version(
     id,
@@ -89,7 +81,7 @@ fn shared_v2(agents: &Agents, id: ResourceId) {
 fn cached(
   number: VersionNumber,
   (team, local): (&TeamAgentProfile, AgentProfile),
-  references: Vec<VersionReference>,
+  references: Vec<ReferenceTarget>,
   waits_here: bool,
 ) -> CachedVersion<AgentProfile> {
   CachedVersion {

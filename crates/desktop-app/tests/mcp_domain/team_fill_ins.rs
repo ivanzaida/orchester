@@ -11,7 +11,7 @@ use std::{
 use orchester_core::{
   account::AccountCli,
   blob::ContentHash,
-  connection::{DecisionConnection, DecisionServerUrl},
+  connection::{AgentProvider, DecisionConnection, DecisionServerUrl},
   id::{AgentAccountId, ConnectionId, DecisionConnectionId, ProjectId, ResourceId, ServerId, UserId},
   name::Name,
   project::ProjectKey,
@@ -23,9 +23,7 @@ use orchester_core::{
   store::ResourceStore,
   time::Timestamp,
 };
-use orchester_store::{
-  AppDb, CachedVersion, ProjectDb, ReferenceTarget, ResourceSharing, SharingLink, VersionReference,
-};
+use orchester_store::{AppDb, CachedVersion, ProjectDb, ReferenceTarget, ResourceSharing, SharingLink};
 use orchester_workspace::tasks::outside::Outside;
 use serde_json::{Value, json};
 
@@ -71,8 +69,13 @@ pub(super) fn team_as(standing: MemberRole) -> Team {
     (&[], &HashMap::new()),
   )
   .expect("shared");
-  let codex_profile = team_resource(&mut db, "codex-builder", profile(), vec![role("codex_cli")]);
-  let claude_profile = team_resource(&mut db, "claude-builder", profile(), vec![role("claude_code_cli")]);
+  let codex_profile = team_resource(&mut db, "codex-builder", profile(), vec![cli(AgentProvider::CodexCli)]);
+  let claude_profile = team_resource(
+    &mut db,
+    "claude-builder",
+    profile(),
+    vec![cli(AgentProvider::ClaudeCodeCli)],
+  );
   let program_server = team_resource(
     &mut db,
     "knowledge",
@@ -110,20 +113,16 @@ fn profile() -> AgentProfile {
   )
 }
 
-/// The reference a team profile's version has to the CLI kind `role`.
-fn role(role: &str) -> VersionReference {
-  VersionReference {
-    target: ReferenceTarget::Connection(ConnectionId::generate()),
-    name: role.to_owned(),
-    role: Some(role.to_owned()),
-  }
+/// The reference a team profile's version has to the CLI kind `provider`.
+fn cli(provider: AgentProvider) -> ReferenceTarget {
+  ReferenceTarget::CliKind(provider)
 }
 
 fn team_resource<B: ResourceBody>(
   db: &mut ProjectDb,
   slug: &str,
   body: B,
-  references: Vec<VersionReference>,
+  references: Vec<ReferenceTarget>,
 ) -> ResourceId {
   let id = db
     .create_resource(

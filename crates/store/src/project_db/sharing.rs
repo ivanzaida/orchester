@@ -88,8 +88,7 @@ impl ProjectDb {
   /// its own. The tasks kept *Not shared* when it
   /// joined return to the list after the highest number; they are returned with their keys. The server's resources
   /// go with their drafts, cached versions and versions not sent yet: the project keeps no copy of the team's
-  /// configuration and leaves with its own resources only ([`super::team_leaving`]). Runs keep their own snapshots. The
-  /// bindings of the references the versions named on their publishers' computers go.
+  /// configuration and leaves with its own resources only ([`super::team_leaving`]). Runs keep their own snapshots.
   pub fn make_local(&mut self) -> Result<Vec<ReturnedTask>, StoreError> {
     let transaction = self.connection.transaction()?;
     if link(&transaction)?.is_none() {
@@ -109,7 +108,6 @@ impl ProjectDb {
        DELETE FROM shared_automatic_status;
        DELETE FROM shared_members;
        DELETE FROM shared_server_admins;
-       DELETE FROM reference_bindings;
        UPDATE resources SET sharing = NULL, server_revision = NULL WHERE sharing IS NOT NULL;
        DELETE FROM sharing;
        UPDATE modules SET revision = NULL;

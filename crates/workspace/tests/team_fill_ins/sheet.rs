@@ -74,10 +74,6 @@ fn team_fill_ins_a_profile_sheet_lists_the_connections_of_its_cli_kind_and_runs_
   );
   assert_eq!(sheet.runs_on().map(|choice| choice.id), Some(team.claude));
   assert_eq!(sheet.picked, None);
-  assert!(
-    hub.profile(team.legacy_profile).is_none(),
-    "a version cached before the model has no sheet"
-  );
   assert!(hub.profile(team.remote_server).is_none(), "only profiles have one");
 }
 

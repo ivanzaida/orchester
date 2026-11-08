@@ -4,10 +4,10 @@
 
 use std::path::Path;
 
-use super::{BoundReference, InputsError, InputsOrigin, LocalBindings, ProfileBinding, RunInputs};
+use super::{InputsError, InputsOrigin, LocalBindings, ProfileBinding, RunInputs};
 use crate::{
   connection::{Connection, mcp::McpServerSelection},
-  id::{ConnectionId, ResourceId, SecretId, TaskId},
+  id::{ConnectionId, ResourceId, TaskId},
   permission::AgentPermissions,
   project::{ProjectKey, TaskKey},
   resource::{AgentProfile, Instruction, StepKey, TeamMcpServer, Tool},
@@ -23,19 +23,14 @@ pub fn team_mcp_id(server: ResourceId) -> ConnectionId {
   ConnectionId::from_uuid(server.as_uuid())
 }
 
-/// The MCP servers the bindings bind, in their order, over all profiles. Which server a profile gives its agents is
-/// this computer's choice: a local bundle names none, and a team bundle names the team servers of its profiles
+/// The MCP servers the bindings bind, in their order, over all profiles: the team servers of the profiles
 /// (`CanonicalExecutionInputs::mcp_servers`), which this computer binds to a program and values of its own
 /// ([`LocalBindings::team_mcp`]).
 pub(super) fn mcp_servers(bindings: &LocalBindings) -> Result<McpServerSelection, InputsError> {
   let servers = bindings
-    .references
+    .team_mcp
     .iter()
-    .filter_map(|reference| match reference {
-      BoundReference::McpServer { local, .. } => Some(*local),
-      BoundReference::Connection { .. } | BoundReference::Secret { .. } => None,
-    })
-    .chain(bindings.team_mcp.iter().map(|bound| team_mcp_id(bound.server)))
+    .map(|bound| team_mcp_id(bound.server))
     .collect();
   McpServerSelection::new(servers).map_err(InputsError::McpServers)
 }
@@ -117,21 +112,6 @@ impl RunInputs {
       .map(|narrowed| &narrowed.permissions)
   }
 
-  /// The local connections the bindings run on: each profile's, and each connection reference's.
-  pub fn bound_connections(&self) -> Vec<ConnectionId> {
-    let references = self.bindings.references.iter().filter_map(|reference| match reference {
-      BoundReference::Connection { local, .. } => Some(*local),
-      BoundReference::McpServer { .. } | BoundReference::Secret { .. } => None,
-    });
-    self
-      .bindings
-      .profiles
-      .iter()
-      .map(|binding| binding.connection)
-      .chain(references)
-      .collect()
-  }
-
   /// The program this computer runs the team MCP server selected as `id` with, and the pinned version of the server;
   /// `None` when `id` is no team MCP server of this run. The program is `None` for a remote server.
   pub fn team_mcp_server(&self, id: ConnectionId) -> Option<(&TeamMcpServer, Option<&Path>)> {
@@ -156,24 +136,6 @@ impl RunInputs {
       .team_mcp
       .iter()
       .map(|bound| team_mcp_id(bound.server))
-      .collect()
-  }
-
-  /// The local MCP servers the bindings bind for the run, over all its profiles.
-  pub fn bound_mcp_servers(&self) -> McpServerSelection {
-    mcp_servers(&self.bindings).expect("the bound MCP servers were checked when the inputs were made")
-  }
-
-  /// The local secrets the bindings name; their values are looked up when an agent or tool starts, never kept here.
-  pub fn bound_secrets(&self) -> Vec<SecretId> {
-    self
-      .bindings
-      .references
-      .iter()
-      .filter_map(|reference| match reference {
-        BoundReference::Secret { local, .. } => Some(*local),
-        BoundReference::Connection { .. } | BoundReference::McpServer { .. } => None,
-      })
       .collect()
   }
 

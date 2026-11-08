@@ -215,11 +215,7 @@ async fn live_updates_a_profile_published_on_the_server_is_cached_with_its_refer
   );
   assert_eq!(kept.publisher.name, "Alice Moreau");
   assert_eq!(
-    kept
-      .references
-      .iter()
-      .map(|kept| kept.target.clone())
-      .collect::<Vec<_>>(),
+    kept.references,
     [
       KeptTarget::CliKind(AgentProvider::CodexCli),
       KeptTarget::TeamResource {
@@ -229,11 +225,6 @@ async fn live_updates_a_profile_published_on_the_server_is_cached_with_its_refer
       KeptTarget::SecretName(SecretName::new("DOCS_TOKEN").expect("a secret name")),
     ],
     "the references as the server sent them"
-  );
-  assert_eq!(
-    workspace.db().reference_bindings().expect("bindings"),
-    [],
-    "nothing is bound to this computer's entities"
   );
 
   server.publish((profile, SharedResourceKind::AgentProfile, "Builder"), body, references);
@@ -245,35 +236,5 @@ async fn live_updates_a_profile_published_on_the_server_is_cached_with_its_refer
     workspace.link().cursor == server.cursor()
   })
   .await;
-  stream.abort();
-}
-
-/// A profile cached before the team configuration model names the publisher's connection and is read as it is, until
-/// ORC-845 removes the bindings.
-#[tokio::test(flavor = "multi_thread")]
-async fn live_updates_a_profile_cached_before_the_team_configuration_model_is_read_as_it_is() {
-  let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
-  let (theirs, profile) = (ConnectionId::generate(), ResourceId::generate());
-  server.publish(
-    (profile, SharedResourceKind::AgentProfile, "Builder"),
-    builder(theirs, &[]),
-    Vec::new(),
-  );
-  let workspace = Workspace::linked(&server);
-  let stream = workspace.follow(Member::of(&server, ALICE));
-  let cached = || {
-    let db = workspace.db();
-    db.cached_version::<AgentProfile>(profile, VersionNumber::FIRST)
-      .ok()
-      .flatten()
-  };
-  seen_within(LIVE, "the legacy profile", || cached().is_some()).await;
-
-  let kept = cached().expect("cached");
-  assert_eq!(
-    kept.local_body.connection(),
-    theirs,
-    "the publisher's connection, bound or not"
-  );
   stream.abort();
 }
