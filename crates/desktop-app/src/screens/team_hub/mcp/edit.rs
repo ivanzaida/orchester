@@ -4,7 +4,13 @@
 //! answer in place. A refusal keeps the draft and what was typed; waiting for a server that cannot be reached is not
 //! one.
 
-use std::path::PathBuf;
+use std::{
+  path::PathBuf,
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+  },
+};
 
 use lurq::{
   app::ctx::{Ctx, FutureAction, FutureState},
@@ -12,23 +18,28 @@ use lurq::{
 };
 use orchester_core::{
   id::{ProjectId, ResourceId, VersionId},
-  resource::ResourceKind,
   time::Timestamp,
 };
 use orchester_workspace::{
-  agents::team_mcp_edit::{self, EditError, McpEdit, Saved},
+  agents::{save_lane::SaveLane, team_mcp_edit::McpEdit},
   app_mcp::setup::NewTeamMcpServer,
-  background,
   messages::Message,
   sharing::team_edit::{EditRefused, Edited},
-  tasks::outside::Outside,
 };
 
+use super::{
+  edit_actions as actions,
+  edit_save::{Answer, Save},
+};
 use crate::{screens::team_hub::create::McpFields, services::Services};
 
-/// A press of *Publish for the team*: the fields as typed, and whether a person (or automation they let decide)
-/// pressed.
-pub(super) type Publish = FutureAction<(NewTeamMcpServer, bool), Edited, EditRefused>;
+/// A press of *Publish for the team*: the fields as typed, whether a person (or automation they let decide) pressed,
+/// and the version in the outbox that the team server refused, which goes back to being the draft first.
+pub(super) type Publish = FutureAction<(NewTeamMcpServer, bool, Option<VersionId>), Edited, EditRefused>;
+
+/// A press of *Discard draft*: the fields of the version the form shows again, and the refused version in the outbox
+/// that goes back to being the draft first, in which case the form shows the version the team has.
+pub(super) type Discard = FutureAction<(NewTeamMcpServer, Option<VersionId>), NewTeamMcpServer, Message>;
 
 /// What the panel keeps of an edit.
 pub(super) struct Edit {
@@ -40,7 +51,7 @@ pub(super) struct Edit {
   pub refused: Signal<Option<(EditRefused, Timestamp)>>,
   pub publish: Publish,
   /// *Discard draft*, given the fields of the version it is edited from, which the form shows again.
-  pub discard: FutureAction<NewTeamMcpServer, NewTeamMcpServer, Message>,
+  pub discard: Discard,
   /// *Cancel sending*: takes the version waiting in the outbox back as the draft.
   pub cancel: FutureAction<VersionId, (), Message>,
   /// *Cancel sending* of a new resource waiting in the outbox: takes it back as if never created.
@@ -48,84 +59,37 @@ pub(super) struct Edit {
   /// Why the last *Discard draft* or *Cancel sending* did nothing (it is being sent right now, the server numbered it
   /// meanwhile, a run uses it, the person is no admin any more): until the next press.
   pub failure: Signal<Option<Message>>,
+  /// Orders this resource's saves of the draft ([`SaveLane`]), which *Publish for the team* joins. Shared with every
+  /// panel of the resource, so a save of one that was closed is ordered against the next one's.
+  lane: Arc<SaveLane>,
+  /// This panel asked for a save of its form.
+  asked: AtomicBool,
+  /// The folder of the project, the project and the resource that are edited.
+  target: (PathBuf, ProjectId, ResourceId),
 }
 
 impl Edit {
-  pub(super) fn new(
-    ctx: &mut Ctx,
-    (root, project, id): (PathBuf, ProjectId, ResourceId),
-    edit: Option<&McpEdit>,
-  ) -> Self {
+  pub(super) fn new(ctx: &mut Ctx, target: (PathBuf, ProjectId, ResourceId), edit: Option<&McpEdit>) -> Self {
     let services = Services::of(ctx);
     let fields = edit.map(|edit| {
       let start = edit.draft.as_ref().map_or(&edit.published, |draft| &draft.fields);
       McpFields::of(ctx, start)
     });
     let editing = ctx.signal(edit.is_some_and(|edit| edit.draft.is_some()));
-    let refused = ctx.signal(None);
-    let publish = {
-      let (services, root) = (services.clone(), root.clone());
-      ctx.future_action(move |(fields, decided): (NewTeamMcpServer, bool)| {
-        let (services, root) = (services.clone(), root.clone());
-        async move {
-          if !decided {
-            return Err(EditRefused::person_only());
-          }
-          let kept = root.clone();
-          background::run(move || team_mcp_edit::save(&kept, id, &fields))
-            .await
-            .map_err(EditRefused::Failed)?
-            .map_err(|error| EditRefused::Failed(failed(error)))?;
-          let settled = services.servers.publish_mcp_edit(&root, id).await;
-          services.changes.record(project, Outside::Connections);
-          settled
-        }
-      })
-    };
-    let discard = {
-      let (services, root) = (services.clone(), root.clone());
-      ctx.future_action(move |published: NewTeamMcpServer| {
-        let (services, root) = (services.clone(), root.clone());
-        async move {
-          let result = background::run(move || team_mcp_edit::discard(&root, id))
-            .await?
-            .map_err(failed);
-          services.changes.record(project, Outside::Connections);
-          result.map(|()| published)
-        }
-      })
-    };
-    let cancel = {
-      let (services, root) = (services.clone(), root.clone());
-      ctx.future_action(move |version: VersionId| {
-        let (services, root) = (services.clone(), root.clone());
-        async move {
-          let result = services
-            .servers
-            .reopen_draft(&root, ResourceKind::McpServer, version)
-            .await;
-          services.changes.record(project, Outside::Connections);
-          result
-        }
-      })
-    };
-    let cancel_created = ctx.future_action(move |(): ()| {
-      let (services, root) = (services.clone(), root.clone());
-      async move {
-        let result = services.servers.cancel_created(&root, id).await;
-        services.changes.record(project, Outside::Connections);
-        result
-      }
-    });
+    let (root, _, id) = &target;
+    let lane = services.servers.save_lane(root, *id);
     let edit = Self {
       fields,
       editing,
-      refused,
-      publish,
-      discard,
-      cancel,
-      cancel_created,
+      refused: ctx.signal(None),
+      publish: actions::publish(ctx, &services, &target, &lane),
+      discard: actions::discard(ctx, &services, &target, &lane),
+      cancel: actions::cancel(ctx, &services, &target),
+      cancel_created: actions::cancel_created(ctx, &services, &target),
       failure: ctx.signal(None),
+      lane,
+      asked: AtomicBool::new(false),
+      target,
     };
     edit.follow(ctx);
     edit
@@ -138,6 +102,8 @@ impl Edit {
     ctx.watch(&self.publish.state(), move |state| {
       if state.is_pending() {
         refused.set(None);
+        // A refused version goes back to being the draft first: the form stays while that happens.
+        editing.set(true);
       } else if state.is_fulfilled() {
         editing.set(false);
       } else if let Some(error) = state.error.clone() {
@@ -182,28 +148,36 @@ impl Edit {
   }
 
   /// Keeps `input` as the draft while the form is open (`Draft saved` in A13), and tells the screens that read drafts
-  /// when a draft appears or goes; nothing for `None`. `had_draft`: the panel's last read held a draft.
+  /// when a draft appears or goes; nothing for `None`. `had_draft`: the panel's last read held a draft. `published`:
+  /// the fields the form was opened with, which an input that still equals them needs no save for. Saves go through the
+  /// resource's lane ([`SaveLane`]): only the newest one writes, so a save that is late never undoes a newer one,
+  /// whichever panel started it. A save is on the blocking pool from the moment it starts ([`Save`]), so it writes
+  /// even when this panel is closed first, and one the store refused is told and tried again.
   pub(super) fn autosave(
+    &self,
     ctx: &mut Ctx,
-    (root, project, id): (PathBuf, ProjectId, ResourceId),
-    had_draft: bool,
+    (had_draft, published): (bool, Option<&NewTeamMcpServer>),
     input: Option<NewTeamMcpServer>,
-  ) -> Result<Option<Saved>, EditError> {
+  ) -> Answer {
     let services = Services::of(ctx);
+    // The form opens with nothing to save; once this panel asked for a save, one that goes back to the fields saves, to
+    // drop a draft.
+    let input = input.filter(|input| had_draft || published != Some(input) || self.asked.load(Ordering::SeqCst));
+    self.asked.fetch_or(input.is_some(), Ordering::SeqCst);
+    let (lane, target) = (self.lane.clone(), self.target.clone());
     let state = ctx
-      .future((root, had_draft, input), move |(root, had_draft, input)| {
-        let services = services.clone();
+      .stream((had_draft, input), move |(had_draft, input), emitter| {
+        let started = input.map(|input| {
+          let shared = (lane.clone(), services.runtime.clone(), services.changes.clone());
+          Save::start(shared, target.clone(), (had_draft, input))
+        });
         async move {
-          let Some(input) = input else {
-            return Ok(None);
-          };
-          let saved = background::run(move || team_mcp_edit::save(&root, id, &input))
-            .await
-            .map_err(EditError::Store)??;
-          if matches!(saved, Saved::Draft(_)) != had_draft {
-            services.changes.record(project, Outside::Connections);
+          match started {
+            Some((save, job)) => save.settle(job, &emitter).await,
+            None => {
+              emitter.emit(None);
+            }
           }
-          Ok(Some(saved))
         }
       })
       .state()
@@ -212,14 +186,6 @@ impl Edit {
       Some(error) if !state.is_pending() => Err(error),
       _ => Ok(state.data.flatten()),
     }
-  }
-}
-
-/// What a draft that could not be read or saved says.
-fn failed(error: EditError) -> Message {
-  match error {
-    EditError::Store(message) => message,
-    EditError::Invalid(invalid) => invalid.message(),
   }
 }
 

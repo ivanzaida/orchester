@@ -77,7 +77,7 @@ impl ProjectServer {
       Some(_) => None,
     };
     let changes: Vec<_> = modules.changes.iter().map(convert::cached_change).collect();
-    let taken = background::run(move || -> Result<_, SharingError> {
+    let (taken, sent) = background::run(move || -> Result<_, SharingError> {
       let publishing = server.clone();
       let mut store = RemoteTaskStore::new(ProjectDb::open(server.repo_root())?, server)?;
       store.db.cache_module_changes(&changes)?;
@@ -91,10 +91,15 @@ impl ProjectServer {
       let lane = servers.send_lane(publishing.repo_root());
       let _sending = send_turn(&lane);
       let db = ProjectDb::open(publishing.repo_root())?;
-      RemoteResourceStore::new(db, publishing)?.send_waiting()
+      let mut taken = Vec::new();
+      let sent = RemoteResourceStore::new(db, publishing)?.send_waiting(&mut taken);
+      Ok((taken, sent))
     })
     .await??;
     self.servers.note_taken_back(&self.repo_root, taken);
+    // The versions the send took back are told whatever else it said, so none goes unnoticed; a failed send is then the
+    // pass's answer, and nothing after it (the screens' re-read) runs.
+    sent?;
     self.servers.shared_changed();
     Ok(Synced::Read)
   }

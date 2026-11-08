@@ -29,6 +29,7 @@ use crate::{
       rows::{self, Sub},
     },
   },
+  theme::HubText,
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
@@ -96,11 +97,13 @@ pub(super) fn refusal(ctx: &Ctx, refused: &EditRefused, entry: &Entry) -> Elemen
       ),
     )
     .icon(Icon::CircleX)
+    .title_style(HubText::NoticeTitle.role())
     .body(ctx.t_args(
       "team_hub.edit.rejected.body",
       [("reason", message_text(ctx, &refusal.message()).to_string())],
     ))
     .stacked()
+    .flat()
     .into(),
     EditRefused::Changed { latest } => Notice::new(
       "team-hub-edit-refused",
@@ -108,8 +111,10 @@ pub(super) fn refusal(ctx: &Ctx, refused: &EditRefused, entry: &Entry) -> Elemen
       ctx.t_args("team_hub.edit.superseded.title", [("version", latest.to_string())]),
     )
     .icon(Icon::CircleX)
+    .title_style(HubText::NoticeTitle.role())
     .body(message_text(ctx, &refused.message()))
     .stacked()
+    .flat()
     .into(),
     EditRefused::Failed(message) => Notice::new(
       "team-hub-edit-refused",
@@ -117,8 +122,10 @@ pub(super) fn refusal(ctx: &Ctx, refused: &EditRefused, entry: &Entry) -> Elemen
       ctx.t_args("team_hub.edit.failed.title", [("version", version)]),
     )
     .icon(Icon::CircleX)
+    .title_style(HubText::NoticeTitle.role())
     .body(message_text(ctx, message))
     .stacked()
+    .flat()
     .into(),
   }
 }
@@ -141,11 +148,13 @@ pub(super) fn not_admin(
     }),
   )
   .icon(Icon::ShieldX)
+  .title_style(HubText::NoticeTitle.role())
   .body(ctx.t_args(
     "team_hub.edit.notAdmin.body",
     [("name", name.to_owned()), ("admins", admins(ctx, team))],
   ))
   .stacked()
+  .flat()
   .action(copy)
   .into()
 }
@@ -163,7 +172,8 @@ pub(super) fn waiting(
     NoticeTone::Info,
     ctx.t("team_hub.edit.waiting.title"),
   )
-  .icon(Icon::CloudUpload);
+  .icon(Icon::CloudUpload)
+  .title_style(HubText::NoticeTitle.role());
   let notice = match created {
     Some(name) => notice.body(ctx.t_args("team_hub.edit.waitingCreated.body", [("name", name)])),
     None => {
@@ -174,7 +184,7 @@ pub(super) fn waiting(
       notice.body(ctx.t_args("team_hub.edit.waiting.body", [("next", next), ("current", current)]))
     }
   };
-  notice.stacked().action(cancel).into()
+  notice.stacked().flat().action(cancel).into()
 }
 
 /// *Cancel sending* (A16): takes the version waiting in the outbox back as the draft; `press` is its action while it
@@ -250,19 +260,31 @@ pub(super) struct EditBar<'a> {
   pub discard: ActionButton,
   /// When the last press was refused: the hint says so in `danger`.
   pub refused_at: Option<Timestamp>,
+  /// The version a publish of what the form holds would only revert, when it is the team's own again: the hint says
+  /// so after the refusal (A17).
+  pub reverts: Option<String>,
   pub team: &'a TeamConfiguration,
 }
 
 impl EditBar<'_> {
   pub(super) fn render(self, ctx: &Ctx) -> Element {
-    let hint = match self.refused_at {
-      Some(at) => (
+    let hint = match (self.refused_at, self.reverts) {
+      (Some(at), Some(version)) => (
+        ctx
+          .t_args(
+            "team_hub.edit.bar.refusedSame",
+            [("time", display::clock(at)), ("version", version)],
+          )
+          .to_string(),
+        PaletteColor::Danger,
+      ),
+      (Some(at), None) => (
         ctx
           .t_args("team_hub.edit.bar.refused", [("time", display::clock(at))])
           .to_string(),
         PaletteColor::Danger,
       ),
-      None => (
+      (None, _) => (
         ctx
           .t_args("team_hub.edit.bar.admins", [("admins", admins(ctx, self.team))])
           .to_string(),
@@ -307,8 +329,27 @@ struct ValueRows<'a> {
 }
 
 impl ValueRows<'_> {
-  /// One row: `label` over *changed in your draft* when `changed`, and `value`.
+  /// One row: `label` over *changed in your draft* when `changed`, and `value` in mono, as an identifier is.
   fn add(&mut self, id: &str, label: &str, (changed, value): (bool, String)) {
+    self.push(
+      id,
+      label,
+      changed,
+      rows::mono(&format!("team-hub-edit-{id}-value"), &value),
+    );
+  }
+
+  /// [`Self::add`] for a value that is words (*A program on each computer*), in the sans.
+  fn add_words(&mut self, id: &str, label: &str, (changed, value): (bool, String)) {
+    self.push(
+      id,
+      label,
+      changed,
+      rows::words(&format!("team-hub-edit-{id}-value"), &value),
+    );
+  }
+
+  fn push(&mut self, id: &str, label: &str, changed: bool, value: lurq::components::Text) {
     let sub = changed.then(|| Sub {
       words: self.ctx.t("team_hub.edit.mark"),
       color: PaletteColor::Warning,
@@ -317,13 +358,13 @@ impl ValueRows<'_> {
       &format!("team-hub-edit-{id}"),
       &self.ctx.t(label),
       sub,
-      rows::mono(&format!("team-hub-edit-{id}-value"), &value),
+      value,
     ));
   }
 
   fn program(&mut self, (program, arguments, folder): ProgramOf<'_>, was: ProgramOf<'_>) {
     let ctx = self.ctx;
-    self.add(
+    self.add_words(
       "runs",
       "team_new.mcp.runsAs",
       (false, ctx.t("team_new.mcp.runsProgram").to_string()),
@@ -334,12 +375,15 @@ impl ValueRows<'_> {
       "team_new.mcp.arguments",
       (arguments != was.1, arguments.join(" ")),
     );
-    let folder_words = if folder.is_empty() {
-      ctx.t("team_new.mcp.folderWorktree").to_string()
+    if folder.is_empty() {
+      self.add_words(
+        "folder",
+        "team_new.mcp.folder",
+        (folder != was.2, ctx.t("team_new.mcp.folderWorktree").to_string()),
+      );
     } else {
-      folder.clone()
-    };
-    self.add("folder", "team_new.mcp.folder", (folder != was.2, folder_words));
+      self.add("folder", "team_new.mcp.folder", (folder != was.2, folder.clone()));
+    }
   }
 
   /// The variables the server needs, after the tools it may run without asking (A13).

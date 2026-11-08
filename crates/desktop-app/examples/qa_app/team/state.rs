@@ -112,6 +112,9 @@ pub enum State {
   /// rejected as not a valid content: the outbox holds it refused, and the panel says why and how to take it back as a
   /// draft (A17 `rJbPm`, as it stands once the person left the panel). Made without a press.
   TeamEditRejected,
+  /// As [`Self::TeamEdit`], the server `pencil-design` needing a variable, `PENCIL_TOKEN`: the edit form has its
+  /// *Variables it needs* row, and the panel the secret to fill in (A13 `WMtxm`).
+  TeamEditVariables,
   /// As [`Self::TeamEdit`], after a new MCP server named `figma-local` that waited for the server and was refused as
   /// the name being taken once it answered: taken back whole, and the hub says what and why (A15 `dLqHC`, as it stands
   /// once the person left the form). Made without a press.
@@ -137,7 +140,7 @@ pub enum State {
 pub const START_ANSWERS_AFTER: std::time::Duration = std::time::Duration::from_secs(90);
 
 impl State {
-  pub const ALL: [Self; 43] = [
+  pub const ALL: [Self; 44] = [
     Self::Join,
     Self::WrongCode,
     Self::ExpiredCode,
@@ -176,6 +179,7 @@ impl State {
     Self::TeamEditRefusedAdmin,
     Self::TeamEditWaiting,
     Self::TeamEditRejected,
+    Self::TeamEditVariables,
     Self::TeamCreateNameTaken,
     Self::StartRecovered,
     Self::StartWaiting,
@@ -224,6 +228,7 @@ impl State {
       Self::TeamEditRefusedAdmin => "team-edit-refused-admin",
       Self::TeamEditWaiting => "team-edit-waiting",
       Self::TeamEditRejected => "team-edit-rejected",
+      Self::TeamEditVariables => "team-edit-variables",
       Self::TeamCreateNameTaken => "team-create-name-taken",
       Self::StartRecovered => "team-start-recovered",
       Self::StartWaiting => "team-start-waiting",
@@ -257,7 +262,17 @@ impl State {
         | Self::TeamEditRefusedAdmin
         | Self::TeamEditWaiting
         | Self::TeamEditRejected
+        | Self::TeamEditVariables
         | Self::TeamCreateNameTaken
+    )
+  }
+
+  /// Whether the person set the program path of `pencil-design` on this computer before the state: its row then says
+  /// only what the outbox says, as the design's rows of A14 `gTLx6`, A16 `x3ywL` and A17 `rJbPm` do.
+  pub const fn program_set(self) -> bool {
+    matches!(
+      self,
+      Self::TeamEditRefusedAdmin | Self::TeamEditWaiting | Self::TeamEditRejected
     )
   }
 

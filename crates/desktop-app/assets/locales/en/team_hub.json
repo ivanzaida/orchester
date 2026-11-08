@@ -240,8 +240,8 @@
       "tools": "New tool"
     },
     "mcp": {
-      "headLine": "{{version}} · {{form}} · published by {{by}} · {{date}}",
-      "headLineUnpublished": "{{version}} · {{form}}",
+      "headLine": "{{version}} · published by {{by}} · {{date}}",
+      "headLineUnpublished": "{{version}}",
       "date": {
         "today": "today",
         "thisYear": "{{month}} {{day}}",
@@ -379,6 +379,7 @@
     },
     "edit": {
       "mark": "changed in your draft",
+      "variablesSub": "names only, never values",
       "chip": {
         "draft": "Your draft on {{version}}",
         "waiting": "Waiting to send",
@@ -386,7 +387,12 @@
         "notPublished": "Not published"
       },
       "line": {
-        "draft": "{{draft}} · {{words}}"
+        "joined": "{{lead}} · {{words}}",
+        "waiting": "Waiting to send · {{version}}",
+        "refused": "publish refused",
+        "readOnly": "read-only here",
+        "met": "someone published first",
+        "notCreated": "Not created · publish refused"
       },
       "draft": {
         "saved": "Draft on {{version}} · saved {{time}} · only on this computer",
@@ -440,6 +446,7 @@
         "discard": "Discard draft",
         "discardMine": "Discard my draft",
         "refused": "Refused {{time}} · fix the reason, then publish again",
+        "refusedSame": "Refused {{time}} · same as the team's version: publishing would only revert {{version}}",
         "admins": "Only admins publish · {{admins}}",
         "nothingPublished": "Nothing is published until the server accepts it",
         "askAdmin": "Ask an Admin: {{admins}}"

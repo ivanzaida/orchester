@@ -747,7 +747,9 @@
         "refusedHere": "Not sent · this computer found the team can't take this version · {{time}}",
         "cancelSending": "Cancel sending",
         "takeBack": "Take it back as a draft",
-        "refusedWhy": "{{reason}} Your new runs use it here. It isn't sent again on its own: take it back as a draft, change it and publish again."
+        "discardNew": "Discard it",
+        "refusedWhy": "{{reason}} Your new runs use it here. It isn't sent again on its own: take it back as a draft, change it and publish again.",
+        "refusedNewWhy": "{{reason}} It was never created for the team and isn't sent again on its own: discard it, then create it again."
       },
       "compare": {
         "title": "v{{latest}} and yours",

@@ -309,21 +309,37 @@ pub fn edit_published(kontur: &mut Kontur) -> Result<(), SeedError> {
 }
 
 /// As [`edit`], after a *Publish for the team* refused as no longer an admin, the person a member now: the page is
-/// read-only with the draft kept (`team-edit-refused-admin`, A14 `gTLx6`).
+/// read-only with the draft kept (`team-edit-refused-admin`, A14 `gTLx6`). The program path of `pencil-design` is set,
+/// so its row says only *Your draft on v1 · publish refused*.
 pub fn edit_refused_admin(kontur: &mut Kontur) -> Result<(), SeedError> {
   edit_in(kontur, State::TeamEditRefusedAdmin)
 }
 
 /// As [`edit`], after a *Publish for the team* made while the server could not be reached: v2 waits in the outbox, with
-/// *Cancel sending* (`team-edit-waiting`, A16 `x3ywL`).
+/// *Cancel sending* (`team-edit-waiting`, A16 `x3ywL`). The program path is set, so the row says only *Waiting to send
+/// · v2*.
 pub fn edit_waiting(kontur: &mut Kontur) -> Result<(), SeedError> {
   edit_in(kontur, State::TeamEditWaiting)
 }
 
 /// As [`edit`], a version that waited and that the server rejected once it answered: the outbox holds it refused, with
-/// the reason and *Take it back as a draft* (`team-edit-rejected`, A17 `rJbPm`).
+/// the reason, the form of the refused version and *Publish for the team* (`team-edit-rejected`, A17 `rJbPm`). The
+/// program path is set, so the row says only *Your draft on v1 · publish refused*.
 pub fn edit_rejected(kontur: &mut Kontur) -> Result<(), SeedError> {
   edit_in(kontur, State::TeamEditRejected)
+}
+
+/// As [`edit`], `pencil-design` needing the variable `PENCIL_TOKEN`: the edit form has *Variables it needs* (A13
+/// `WMtxm`).
+pub fn edit_variables(kontur: &mut Kontur) -> Result<(), SeedError> {
+  super::team_hub::resources_mcp(
+    kontur,
+    &super::team_hub::Mcp {
+      pencil_variables: &["PENCIL_TOKEN"],
+      figma_program: false,
+    },
+  )?;
+  write_marker(kontur, State::TeamEditVariables)
 }
 
 /// As [`edit`], a new MCP server `figma-local` that waited and that the server refused as the name being taken once it

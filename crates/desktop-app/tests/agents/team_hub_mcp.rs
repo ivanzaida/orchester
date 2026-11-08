@@ -131,7 +131,7 @@ fn team_hub_mcp_c4_a_program_without_a_path_asks_for_it_and_says_what_the_team_h
   // From the team: how it runs, by names and never a path or a value.
   assert_eq!(agents.text("team-hub-panel-title"), "pencil-design");
   let version = agents.text("team-hub-panel-version");
-  assert!(version.starts_with("v1 · program · published by Olena · "), "{version}");
+  assert!(version.starts_with("v1 · published by Olena · "), "{version}");
   assert_eq!(
     agents.text("team-hub-from-team-runs-value"),
     "A program on each computer"

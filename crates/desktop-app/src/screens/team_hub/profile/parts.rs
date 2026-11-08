@@ -131,7 +131,7 @@ const fn secret_of(part: &Missing) -> Option<&SecretName> {
 /// A missing part of a server or a secret, in words that fit its row.
 fn problem_state(ctx: &Ctx, listing: &Listing, server: ResourceId, part: &Missing) -> State {
   let words = match part {
-    Missing::McpOff { .. } if listing.find(server).is_some_and(|found| found.group == Group::OffHere) => {
+    Missing::McpOff { .. } if listing.find(server).is_some_and(|found| found.here == Group::OffHere) => {
       ctx.t("team_hub.ready.switchedOff")
     }
     Missing::McpOff { .. } => ctx.t("team_hub.line.mcpUndecided"),

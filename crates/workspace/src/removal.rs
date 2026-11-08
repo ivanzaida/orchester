@@ -81,7 +81,8 @@ pub fn remove_in(root: &Path, id: ResourceId, mode: RemoveMode) -> Result<Remova
 }
 
 /// What removing a resource of `kind` changed besides its own list: a profile's or tool's removal resets pipeline
-/// drafts. No screen lists test suites, services or stacks yet.
+/// drafts, and a team MCP server's is listed by the Connections window. No screen lists test suites, services or
+/// stacks yet.
 pub const fn changed_by_removal(kind: ResourceKind) -> &'static [Outside] {
   match kind {
     ResourceKind::AgentProfile => &[Outside::Profiles, Outside::Pipelines],
@@ -89,11 +90,8 @@ pub const fn changed_by_removal(kind: ResourceKind) -> &'static [Outside] {
     ResourceKind::Instruction => &[Outside::Instructions],
     ResourceKind::Skill => &[Outside::Skills],
     ResourceKind::Pipeline => &[Outside::Pipelines],
-    ResourceKind::TestSuite
-    | ResourceKind::Service
-    | ResourceKind::Stack
-    | ResourceKind::TeamReviewer
-    | ResourceKind::McpServer => &[],
+    ResourceKind::McpServer => &[Outside::Connections],
+    ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack | ResourceKind::TeamReviewer => &[],
   }
 }
 

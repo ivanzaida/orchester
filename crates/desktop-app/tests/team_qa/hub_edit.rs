@@ -81,6 +81,17 @@ fn typed(window: &mut Window) {
       .texts("team-hub-edit-draft-status")
       .is_some_and(|said| said.join(" ").contains("saved"))
   });
+  // What the panel says is the save's answer; the database holds it once that came.
+  let pencil = db(window)
+    .resources(ResourceKind::McpServer)
+    .expect("resources")
+    .into_iter()
+    .find(|resource| resource.name().as_str() == "pencil-design")
+    .expect("the seed's pencil-design")
+    .id();
+  window.until("the draft in the database", |window| {
+    draft_of(window, pencil).is_some_and(|args| args == ["--stdio", "--app", "desktop", "--no-telemetry"])
+  });
 }
 
 pub(super) fn draft_of(window: &Window, id: ResourceId) -> Option<Vec<String>> {
@@ -96,10 +107,10 @@ pub(super) fn draft_of(window: &Window, id: ResourceId) -> Option<Vec<String>> {
 fn team_qa_hub_edit_keeps_a_draft_and_publishing_makes_the_next_version() {
   let (mut window, server, (_, pencil)) = on_pencil(("team-edit", State::TeamEdit));
   typed(&mut window);
-  assert_eq!(
-    draft_of(&window, pencil).as_deref(),
-    Some(&["--stdio", "--app", "desktop", "--no-telemetry"].map(str::to_owned)[..])
-  );
+  let typed_arguments = ["--stdio", "--app", "desktop", "--no-telemetry"].map(str::to_owned);
+  window.until("the draft to hold what was typed", |window| {
+    draft_of(window, pencil).as_deref() == Some(&typed_arguments[..])
+  });
   let said = window.text("team-hub-edit-draft-sub");
   assert!(said.starts_with("Arguments changed"), "{said}");
   assert!(said.contains("publishing makes v2"), "{said}");
@@ -207,7 +218,10 @@ fn team_qa_hub_edit_offline_waits_in_the_outbox_and_can_be_cancelled() {
   window.until("the draft to come back", |window| window.texts(PUBLISH).is_some());
   assert!(db(&window).waiting_publishes().expect("outbox").is_empty());
   assert!(draft_of(&window, pencil).is_some(), "what was typed is the draft again");
-  assert_eq!(window.text("team-hub-chip-team"), "Team · v1");
+  // The chip reads the hub again after the version went: until then it still names the version that was taken back.
+  window.until("the team's version again", |window| {
+    window.text("team-hub-chip-team") == "Team · v1"
+  });
 }
 
 #[test]
@@ -249,12 +263,32 @@ fn team_qa_hub_edit_create_a_name_the_team_server_has_is_a_field_error_and_nothi
     window.text("team-new-refused-title"),
     "The team's server refused: the name figma-local is taken"
   );
-  let field = window.text("team-new-mcp-name-row-sub");
-  assert_eq!(field, "Taken in the team · from the server");
-  assert_eq!(
-    window.text("team-hub-actions-hint"),
-    "Change the name, then Create again"
+  // The refusal says it is the server's word; once this computer reads the team's list again, which then holds the
+  // name, the field and the bar say it as they say any name the team has. Each moment has its own pair of words, read
+  // in one frame: a field of one moment with the hint of the other is a defect.
+  let pair = |window: &mut Window| {
+    let said = |window: &mut Window, id: &str| window.texts(id).map(|lines| lines.join(" "));
+    (
+      said(window, "team-new-mcp-name-row-sub"),
+      said(window, "team-hub-actions-hint"),
+    )
+  };
+  let (told, read_again) = (
+    (
+      "Taken in the team · from the server",
+      "Change the name, then Create again",
+    ),
+    (
+      "The team already has an MCP server named figma-local · pick another name",
+      "Fix the name to create it",
+    ),
   );
+  window.until("the field and the hint to say the same moment", |window| {
+    let (field, hint) = pair(window);
+    [told, read_again]
+      .iter()
+      .any(|(want_field, want_hint)| field.as_deref() == Some(want_field) && hint.as_deref() == Some(want_hint))
+  });
   assert_eq!(
     db(&window).resources(ResourceKind::McpServer).expect("resources").len(),
     before

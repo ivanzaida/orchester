@@ -8,22 +8,19 @@
 //!
 //! `cargo test -p orchester-app --features test-support --test team_qa team_qa_hub_edit`
 
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use orchester_app::{
-  routes::{HubFilter, HubView, ProjectPage, Route},
-  test_support::Window,
-};
+use orchester_app::test_support::Window;
 use orchester_core::{
   id::ResourceId,
-  resource::{ResourceKind, TeamMcpServer},
+  resource::{ResourceKind, TeamMcpServer, VersionNumber},
   sharing::MemberRole,
   store::ResourceStore,
   time::Timestamp,
 };
 use orchester_store::PublishState;
 use orchester_workspace::{
-  app_mcp::setup::{NewTeamMcpServer, Runs, create_team_mcp_server, team_mcp_names, team_mcp_server},
+  app_mcp::setup::{NewTeamMcpServer, Runs},
   sharing::team_edit::{EditRefused, Edited},
 };
 
@@ -116,20 +113,26 @@ fn team_qa_hub_edit_cancel_sending_says_why_it_cannot_be_taken_back() {
 }
 
 #[test]
-fn team_qa_hub_edit_a_rejected_version_in_the_outbox_shows_why_and_is_taken_back() {
+fn team_qa_hub_edit_a_rejected_version_in_the_outbox_is_the_refused_form_and_fixing_it_publishes_again() {
   let (mut window, _server, (_, pencil)) = on_pencil_until(
     ("team-edit-rejected", State::TeamEditRejected),
-    "team-hub-edit-refused-status",
+    "team-hub-edit-refused-title",
   );
-  let status = window.text("team-hub-edit-refused-status");
-  assert!(status.contains("didn't take this version"), "{status}");
-  let why = window.text("team-hub-edit-refused-sub");
+  assert_eq!(
+    window.text("team-hub-edit-refused-title"),
+    "The team's server refused v2",
+    "red, as the design says it, and not the waiting bar"
+  );
+  let why = window.text("team-hub-edit-refused-body");
   assert!(why.contains("does not accept its content"), "{why}");
+  assert!(window.texts("team-hub-edit-refused-status").is_none());
+  assert!(window.texts("team-hub-edit").is_none(), "no Edit on top of it");
+  assert!(window.texts(PUBLISH).is_some() && window.texts("team-hub-edit-discard").is_some());
   assert!(
-    window.texts("team-hub-edit").is_none(),
-    "no Edit on top of a version that was not taken"
+    window.texts(ARGUMENTS).is_some(),
+    "the refused version is a form to fix"
   );
-  assert!(window.texts("team-hub-edit-take-back").is_some());
+  assert!(window.text("team-hub-actions-hint").starts_with("Refused "));
   assert_eq!(
     db(&window).waiting_publishes().expect("outbox")[0].state,
     PublishState::Refused {
@@ -137,14 +140,183 @@ fn team_qa_hub_edit_a_rejected_version_in_the_outbox_shows_why_and_is_taken_back
     }
   );
 
-  window.press("team-hub-edit-take-back");
-  window.until("the draft to come back as a form", |window| {
-    window.texts(PUBLISH).is_some()
+  window.set(ARGUMENTS, "--fixed");
+  window.press(PUBLISH);
+  // The server still rejects the content: the version is the draft again, with what was typed, and the reason stays.
+  window.until("the refusal in place, the version the draft again", |window| {
+    db(window).waiting_publishes().expect("outbox").is_empty()
+      && draft_of(window, pencil) == Some(vec!["--fixed".to_owned()])
+      && window.texts("team-hub-edit-refused-title").is_some()
+      && window.texts(PUBLISH).is_some()
   });
-  assert!(db(&window).waiting_publishes().expect("outbox").is_empty());
+}
+
+#[test]
+fn team_qa_hub_edit_a_refused_form_publishes_when_it_differs_from_the_teams_version_not_from_the_refused_one() {
+  let (mut window, _server, (_, pencil)) = on_pencil_until(
+    ("team-edit-rejected", State::TeamEditRejected),
+    "team-hub-edit-refused-title",
+  );
+  // Typing the team's own arguments back is no change to publish: the hint says it would only revert.
+  let team = db(&window)
+    .version::<TeamMcpServer>(pencil, VersionNumber::FIRST)
+    .expect("read")
+    .expect("the team's v1");
+  let team_arguments: Vec<String> = match serde_json::to_value(team.body()).expect("a body")["launch"]["args"].clone() {
+    serde_json::Value::Array(args) => args.iter().filter_map(|arg| arg.as_str().map(str::to_owned)).collect(),
+    _ => Vec::new(),
+  };
+  window.set(ARGUMENTS, &team_arguments.join("\n"));
+  window.until("the hint to say it would revert", |window| {
+    window
+      .texts("team-hub-actions-hint")
+      .is_some_and(|said| said.join(" ").contains("only revert v2"))
+  });
+  window.press(PUBLISH);
+  assert_eq!(
+    db(&window).waiting_publishes().expect("outbox").len(),
+    1,
+    "nothing was sent: the refused version is still in the outbox"
+  );
+  // The refused version's own body, unedited, differs from the team's: it publishes again (and is refused again here).
+  window.set(ARGUMENTS, "--stdio\n--app\ndesktop\n--no-telemetry");
+  window.until("the hint to say fix and publish again", |window| {
+    window
+      .texts("team-hub-actions-hint")
+      .is_some_and(|said| said.join(" ").contains("fix the reason, then publish again"))
+  });
+  window.press(PUBLISH);
+  window.until("the version to be the draft again", |window| {
+    db(window).waiting_publishes().expect("outbox").is_empty() && draft_of(window, pencil).is_some()
+  });
+}
+
+#[test]
+fn team_qa_hub_edit_a_refused_form_keeps_what_is_typed_as_the_draft() {
+  let (mut window, _server, (_, pencil)) = on_pencil_until(
+    ("team-edit-rejected", State::TeamEditRejected),
+    "team-hub-edit-refused-title",
+  );
+  window.set(ARGUMENTS, "--typed-here");
+  window.until("the draft in the database", |window| {
+    draft_of(window, pencil) == Some(vec!["--typed-here".to_owned()])
+  });
+  assert_eq!(
+    db(&window).waiting_publishes().expect("outbox").len(),
+    1,
+    "the refused version stays in the outbox until it is published again or discarded"
+  );
+}
+
+#[test]
+fn team_qa_hub_edit_discarding_a_rejected_version_goes_back_to_the_team_s_version() {
+  let (mut window, _server, (_, pencil)) = on_pencil_until(
+    ("team-edit-rejected", State::TeamEditRejected),
+    "team-hub-edit-refused-title",
+  );
+  window.press("team-hub-edit-discard");
+  window.until("nothing of it kept", |window| {
+    db(window).waiting_publishes().expect("outbox").is_empty() && draft_of(window, pencil).is_none()
+  });
+  window.until("the plain panel on the team's version", |window| {
+    window.texts("team-hub-edit").is_some() && window.texts(PUBLISH).is_none() && window.text(TEAM_CHIP) == "Team · v1"
+  });
+  // Edit starts again from the team's version, not from the refused one.
+  window.press("team-hub-edit");
+  window.until("the form", |window| window.texts(PUBLISH).is_some());
+  let arguments = window.text(ARGUMENTS);
+  assert!(!arguments.contains("--no-telemetry"), "{arguments}");
+}
+
+#[test]
+fn team_qa_hub_edit_the_list_says_the_outbox_first_and_what_the_computer_needs_after_it() {
+  let row = |id: ResourceId| format!("team-hub-row-{id}-line");
+  let (mut window, _server, (_, pencil)) = on_pencil_until(("team-edit-waiting", State::TeamEditWaiting), TEAM_CHIP);
+  window.until("the row", |window| window.texts(&row(pencil)).is_some());
+  assert_eq!(window.text(&row(pencil)), "Waiting to send · v2");
+  assert_eq!(window.text(TEAM_CHIP), "Team · v1");
+  // Without its program path the row says what is missing after it.
+  let services = window.launch.services().expect("the session");
+  let root = window.data.repo("repo-kontur");
+  services
+    .workspace
+    .clear_team_mcp_program(&root, pencil)
+    .expect("cleared");
+  window.until("the need after the outbox", |window| {
+    window.text(&row(pencil)) == "Waiting to send · v2 · set its program path on this computer"
+  });
+
+  let (mut window, _server, (_, pencil)) = on_pencil_until(
+    ("team-edit-refused-admin", State::TeamEditRefusedAdmin),
+    "team-hub-edit-not-admin-title",
+  );
+  window.until("the row", |window| window.texts(&row(pencil)).is_some());
+  assert_eq!(window.text(&row(pencil)), "Your draft on v1 · read-only here");
+
+  let (mut window, _server, (_, pencil)) = on_pencil_until(
+    ("team-edit-rejected", State::TeamEditRejected),
+    "team-hub-edit-refused-title",
+  );
+  window.until("the row", |window| window.texts(&row(pencil)).is_some());
+  assert_eq!(window.text(&row(pencil)), "Your draft on v1 · publish refused");
+}
+
+/// The top of the element `id` in the window, when it is laid out.
+fn top(window: &mut Window, id: &str) -> Option<f32> {
+  window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .map(|bounds| bounds.y)
+}
+
+#[test]
+fn team_qa_hub_edit_a_version_that_waits_or_was_refused_is_listed_under_needs_you_here() {
+  for (scenario, state, shown) in [
+    (
+      "team-edit-waiting",
+      State::TeamEditWaiting,
+      "team-hub-edit-waiting-title",
+    ),
+    (
+      "team-edit-rejected",
+      State::TeamEditRejected,
+      "team-hub-edit-refused-title",
+    ),
+    (
+      "team-edit-refused-admin",
+      State::TeamEditRefusedAdmin,
+      "team-hub-edit-not-admin-title",
+    ),
+  ] {
+    let (mut window, _server, (_, pencil)) = on_pencil_until((scenario, state), shown);
+    let row = format!("team-hub-row-{pencil}");
+    window.until("the row", |window| top(window, &row).is_some());
+    let (row, needs) = (
+      top(&mut window, &row).expect("its row"),
+      top(&mut window, "team-hub-section-needs"),
+    );
+    let ready = top(&mut window, "team-hub-section-ready").unwrap_or(f32::MAX);
+    assert!(
+      needs.is_some_and(|needs| needs < row) && row < ready,
+      "{scenario}: the row ({row}) is between the Needs you here section ({needs:?}) and the Ready here one ({ready})"
+    );
+  }
+}
+
+#[test]
+fn team_qa_hub_edit_the_edit_form_has_the_variables_the_server_needs() {
+  let (mut window, _server, _) = on_pencil_until(("team-edit-variables", State::TeamEditVariables), "team-hub-edit");
+  window.press("team-hub-edit");
+  window.until("the form", |window| window.texts(PUBLISH).is_some());
   assert!(
-    draft_of(&window, pencil).is_some(),
-    "what was published is the draft again"
+    window.texts("team-new-mcp-variables").is_some(),
+    "its row is in the form"
+  );
+  assert!(window.text("team-new-mcp-variables").contains("PENCIL_TOKEN"));
+  assert_eq!(
+    window.text("team-new-mcp-variables-row-sub"),
+    "names only, never values"
   );
 }
 
@@ -152,7 +324,7 @@ fn team_qa_hub_edit_a_rejected_version_in_the_outbox_shows_why_and_is_taken_back
 fn team_qa_hub_edit_a_stuck_version_blocks_a_publish_on_top_and_says_so() {
   let (window, server, (_, pencil)) = on_pencil_until(
     ("team-edit-rejected", State::TeamEditRejected),
-    "team-hub-edit-refused-status",
+    "team-hub-edit-refused-title",
   );
   server.reject_content("kontur", "");
   let services = window.launch.services().expect("the session");
@@ -230,7 +402,6 @@ fn team_qa_hub_edit_a_send_that_failed_here_after_the_server_may_have_answered_s
     draft_of(&window, pencil).is_none(),
     "it was not taken back as the draft"
   );
-  let _ = Edited::Waiting;
 }
 
 #[test]
@@ -251,10 +422,15 @@ fn team_qa_hub_edit_a_send_in_flight_is_not_cancelled_and_is_numbered() {
       .runtime
       .spawn(async move { servers.publish_mcp_edit(&root, pencil).await })
   };
+  let deadline = Instant::now() + Duration::from_secs(20);
   let version = loop {
     if let Some(waiting) = db(&window).waiting_publishes().expect("outbox").first() {
       break waiting.version;
     }
+    assert!(
+      Instant::now() < deadline,
+      "the publish never put its version in the outbox"
+    );
     std::thread::sleep(Duration::from_millis(10));
   };
   let cancelled = window
@@ -278,44 +454,6 @@ fn team_qa_hub_edit_a_send_in_flight_is_not_cancelled_and_is_numbered() {
     2,
     "numbered once, and the app still has it"
   );
-}
-
-#[test]
-fn team_qa_hub_edit_a_created_resource_that_waits_is_cancelled_from_the_hub_panel() {
-  let (mut window, server, (project, _)) = on_pencil_until(("team-edit", State::TeamEdit), TEAM_CHIP);
-  server.set_down(true);
-  let services = window.launch.services().expect("the session").clone();
-  let root = window.data.repo("repo-kontur");
-  let made = create_team_mcp_server(
-    &root,
-    &team_mcp_server(&new_server("fresh-one"), &team_mcp_names(&root).expect("names")).expect("a server"),
-  )
-  .expect("made");
-  let created = window
-    .data
-    .runtime
-    .block_on(services.servers.send_created(&root, made))
-    .expect("kept in the outbox");
-  assert_eq!(created, orchester_workspace::sharing::Created::Waiting);
-  window.until("the list to hold it", |window| {
-    window.texts(&format!("team-hub-row-{made}-line")).is_some()
-  });
-  window.navigation().go(Route::Project(
-    project,
-    ProjectPage::hub(HubView::new(HubFilter::McpServers, Some(made))),
-  ));
-  window.until("the waiting panel of the new server", |window| {
-    window.texts("team-hub-edit-waiting-title").is_some()
-  });
-  assert!(window.texts("team-hub-edit").is_none());
-  window.press("team-hub-edit-cancel");
-  window.until("the new server to go", |window| {
-    db(window)
-      .resources(ResourceKind::McpServer)
-      .expect("resources")
-      .iter()
-      .all(|resource| resource.id() != made)
-  });
 }
 
 #[test]
@@ -369,27 +507,4 @@ fn pencil_fields(window: &Window, id: ResourceId) -> NewTeamMcpServer {
     .expect("an edit")
     .published
     .clone()
-}
-
-/// A new team MCP server of `name` that runs a program.
-fn new_server(name: &str) -> NewTeamMcpServer {
-  NewTeamMcpServer {
-    name: name.to_owned(),
-    runs: Runs::Program {
-      program: "npx".to_owned(),
-      arguments: vec!["fresh".to_owned()],
-      folder: String::new(),
-      variables: Vec::new(),
-    },
-    exempt_tools: Vec::new(),
-  }
-}
-
-/// The body kept for `id`, to look at a version's number.
-#[allow(dead_code, reason = "reads a version's body when a test needs it")]
-fn latest(window: &Window, id: ResourceId) -> Option<TeamMcpServer> {
-  db(window)
-    .latest_version::<TeamMcpServer>(id)
-    .expect("read")
-    .map(|version| version.body().clone())
 }

@@ -8,7 +8,10 @@ use orchester_core::{
   sharing::{Missing, ProgramProblem},
   time::Timestamp,
 };
-use orchester_workspace::agents::team_mcp::{McpRuns, TeamMcpSheet};
+use orchester_workspace::{
+  agents::team_mcp::{Published, TeamMcpSheet},
+  sharing::team::TeamConfiguration,
+};
 
 use crate::{
   screens::team_hub::{
@@ -18,30 +21,35 @@ use crate::{
   ui::chip::BadgeTone,
 };
 
-/// *v3 · program · published by dana-k · Oct 30*: what stands after *MCP server* in the head.
-pub(super) fn head_line(ctx: &Ctx, now: Timestamp, entry: &Entry, sheet: &TeamMcpSheet) -> Option<String> {
+/// *v3 · published by dana-k · Oct 30*: what stands after *MCP server* in the head.
+pub(super) fn head_line(
+  ctx: &Ctx,
+  now: Timestamp,
+  entry: &Entry,
+  (sheet, team): (&TeamMcpSheet, &TeamConfiguration),
+) -> Option<String> {
   let version = entry.number?.to_string();
-  let form = ctx.t(match sheet.runs {
-    McpRuns::Program { .. } => "team_hub.form.program",
-    McpRuns::Remote { .. } => "team_hub.form.remote",
-  });
-  Some(match &sheet.published {
+  // While a version published here waits, the version the head names is the team's, whose publisher the standing keeps.
+  let confirmed = || {
+    let confirmed = team.standing(entry.id)?.confirmed.as_ref()?;
+    Some(Published {
+      by: confirmed.publisher.clone()?,
+      at: confirmed.published_at,
+    })
+  };
+  Some(match sheet.published.clone().or_else(confirmed) {
     Some(published) => ctx
       .t_args(
         "team_hub.mcp.headLine",
         [
           ("version", version),
-          ("form", form.to_string()),
           ("by", published.by.clone()),
           ("date", date(ctx, now, published.at).to_string()),
         ],
       )
       .to_string(),
     None => ctx
-      .t_args(
-        "team_hub.mcp.headLineUnpublished",
-        [("version", version), ("form", form.to_string())],
-      )
+      .t_args("team_hub.mcp.headLineUnpublished", [("version", version)])
       .to_string(),
   })
 }

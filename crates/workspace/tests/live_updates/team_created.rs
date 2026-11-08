@@ -98,7 +98,7 @@ async fn live_updates_a_lone_created_v1_the_server_refuses_later_is_taken_back_a
   let (server, _alice, bob) = team();
   let rule = created(&mut bob.workspace.db(), "release-notes");
 
-  let taken = bob.store(&server, |store| store.send_waiting()).await.expect("sent");
+  let taken = bob.send_waiting(&server).await.expect("sent");
 
   assert_eq!(taken.len(), 1, "{taken:?}");
   let TakenBack {
@@ -126,7 +126,7 @@ async fn live_updates_a_refused_v1_with_a_later_version_or_a_draft_on_it_keeps_b
     (later, drafted)
   };
 
-  let taken = bob.store(&server, |store| store.send_waiting()).await.expect("sent");
+  let taken = bob.send_waiting(&server).await.expect("sent");
 
   assert!(taken.is_empty(), "nothing was taken back: {taken:?}");
   let db = bob.workspace.db();
@@ -159,10 +159,7 @@ async fn live_updates_a_v1_the_server_numbered_keeps_its_resource_when_v2_is_ref
   };
   server.refuse_versions(true);
 
-  let taken = alice
-    .store(&server, |store| store.send_waiting())
-    .await
-    .expect("the pass went on");
+  let taken = alice.send_waiting(&server).await.expect("the pass went on");
 
   assert!(taken.is_empty(), "{taken:?}");
   let db = alice.workspace.db();
@@ -197,7 +194,7 @@ async fn live_updates_a_first_version_published_from_a_draft_is_not_taken_back_w
     flow
   };
 
-  let taken = alice.store(&server, |store| store.send_waiting()).await.expect("sent");
+  let taken = alice.send_waiting(&server).await.expect("sent");
 
   assert!(taken.is_empty(), "{taken:?}");
   let db = alice.workspace.db();

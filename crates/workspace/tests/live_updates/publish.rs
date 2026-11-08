@@ -32,7 +32,7 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, PublishState, ResourceSharing, WaitingPublish};
 use orchester_workspace::sharing::{
-  SharingError, compare,
+  SharingError, TakenBack, compare,
   sync::{ConfigServer, RemoteResourceStore},
 };
 use serde_json::Value;
@@ -170,6 +170,16 @@ impl Computer {
     .expect("the store's work")
   }
 
+  /// Sends what waits in the outbox: the new resources the pass took back, or why it stopped.
+  pub(super) async fn send_waiting(&self, server: &TeamServer) -> Result<Vec<TakenBack>, SharingError> {
+    self
+      .store(server, |store| {
+        let mut taken = Vec::new();
+        store.send_waiting(&mut taken).map(|()| taken)
+      })
+      .await
+  }
+
   /// Saves a draft of `text` on version `on` of `resource` and publishes it.
   async fn publish(
     &self,
@@ -275,7 +285,7 @@ async fn live_updates_an_owner_publishes_online_and_offline_and_the_offline_vers
   assert_eq!(on_server(&server, style).len(), 2, "nothing was sent");
 
   alice.go_offline(false);
-  let sent = alice.store(&server, |store| store.send_waiting()).await;
+  let sent = alice.send_waiting(&server).await;
   sent.expect("sent on reconnect");
   assert_eq!(alice.waiting(), []);
   assert_eq!(alice.publisher(style, 3).as_deref(), Some("Alice Moreau"));
