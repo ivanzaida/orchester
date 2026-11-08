@@ -217,7 +217,9 @@ pub async fn follow_team((runners, runner): (&Runners, RunnerOf<'_>), stored: &S
   let command = match then {
     Then::RaiseLimit => return Sent::AwaitsLimit,
     Then::ContinueInterrupted | Then::RunAgain => {
-      return Sent::Queued(Message::new("appMcp.errors.teamProjectUnsupported").with("tool", "send_message".to_owned()));
+      return Sent::Queued(
+        Message::new("appMcp.errors.teamProjectUnsupported").with("tool", "send_message".to_owned()),
+      );
     }
     Then::Deliver => Command::DeliverMessages { run: stored.run },
     Then::Resume => Command::ResumeRun { run: stored.run },

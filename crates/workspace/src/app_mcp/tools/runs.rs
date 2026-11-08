@@ -96,8 +96,7 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Apart, ProjectI
   let (project, root) = (open.project.id(), open.repo_root);
   let db = ProjectDb::open(&root)?;
   let run = find_run(&db, &args.run)?;
-  let task = task_of(&db, run.task())?
-    .ok_or_else(|| ToolError::from(StoreError::TaskNotFound(run.task())))?;
+  let task = task_of(&db, run.task())?.ok_or_else(|| ToolError::from(StoreError::TaskNotFound(run.task())))?;
   let conversation = Link::Task(project, task.key().clone(), TaskPage::Conversation).path();
   let waiting: Vec<ShownApproval> = pending(&db, &root)?
     .into_iter()

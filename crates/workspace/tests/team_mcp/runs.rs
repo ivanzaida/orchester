@@ -28,7 +28,9 @@ fn team_mcp_get_run_reads_a_run_without_the_task_row() {
       .expect("the run by its number");
     assert_eq!(by_number["id"], id.as_str());
   }
-  let missing = team.checkout.refused("get_run", &json!({"project": "Kontur", "run": "999"}));
+  let missing = team
+    .checkout
+    .refused("get_run", &json!({"project": "Kontur", "run": "999"}));
   assert_eq!(missing, "run_not_found");
 }
 
@@ -74,7 +76,9 @@ fn team_mcp_conversation_run_lists_and_approvals_name_a_team_task_without_its_ro
     assert_eq!(runs[0]["task"]["title"], "Say hello");
   }
   assert_eq!(
-    team.checkout.refused("list_runs", &json!({"project": "Kontur", "task": "KON-99"})),
+    team
+      .checkout
+      .refused("list_runs", &json!({"project": "Kontur", "task": "KON-99"})),
     "task_not_found"
   );
 

@@ -26,8 +26,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 
 pub use super::approval_choices::{AlwaysBlocked, AlwaysShown, ApprovalChoices, CommandAlways, SimilarShown};
-use super::changes::run_worktree;
-use super::recorded::task_of;
+use super::{changes::run_worktree, recorded::task_of};
 use crate::messages::Message;
 
 /// What made a request ask, as the dialog names it beside its category (`Cv2MG` in `kpuQj`): the

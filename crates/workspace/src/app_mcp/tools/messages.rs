@@ -26,7 +26,7 @@ use crate::{
   tasks::{
     conversation::{
       SendError,
-      composer::ComposerMode,
+      composer::{ComposerMode, Then},
       follow::{RunnerOf, Sent, Stored, follow, follow_team},
       outgoing::{OutgoingError, Prepared, Way, plan_changes, prepare_in, store_answer_in, store_by_orchestrator_in},
     },
@@ -44,8 +44,18 @@ pub fn plan_person_only() -> ToolError {
   )
 }
 
-/// What a message to a team task's run may not do: run the task again, or continue an interrupted run, which would start
-/// its work from this computer without the team server's claim and work start.
+/// Whether the project is a team project, whose runs a message may not start again or continue from here: refused
+/// before the message is stored.
+fn team_checked(db: &orchester_store::ProjectDb, mode: &ComposerMode) -> Result<bool, ToolError> {
+  let team = team::linked(db)?;
+  if team {
+    team_refusal(mode)?;
+  }
+  Ok(team)
+}
+
+/// What a message to a team task's run may not do: run the task again, or continue an interrupted run, which would
+/// start its work from this computer without the team server's claim and work start.
 fn team_refusal(mode: &ComposerMode) -> Result<(), ToolError> {
   match mode {
     ComposerMode::RunAgain => Err(team_run_again()),
@@ -112,12 +122,7 @@ pub async fn send_message(
       way_of(&prepared.mode, timing),
       (checked.as_deref(), named.number().get()),
     )?;
-    // Running a team task again would start its work from this computer's copy, without the team server's claim and
-    // work start: refused before the message is stored, run_task starts it through the server.
-    let team = team::linked(&db)?;
-    if team {
-      team_refusal(&prepared.mode)?;
-    }
+    let team = team_checked(&db, &prepared.mode)?;
     if let Some(kind) = prepared.decision_kind(Way::Primary) {
       // The Orchestrator's plan path below retains its stricter refusal.
       if !matches!(by, SentBy::Person(_)) && !matches!(prepared.mode, ComposerMode::PlanChanges { .. }) {
@@ -178,18 +183,21 @@ pub async fn send_message(
     key,
     pipeline: &pipeline,
   };
-  let runner = (&services.runners, &services.servers, RunnerOf::Project(&project));
-  let ready = (&services.workspace, &services.vault);
-  // What became not ready between the check and the start leaves the stored message queued, as the window's composer
-  // leaves it: the reply says it is queued, and why.
-  let sent = if team {
-    follow_team((&services.runners, runner.2), &stored, then).await
-  } else {
-    follow(runner, ready, &stored, then).await
-  };
+  let sent = followed(services, (&project, &stored), then, team).await;
   let mut result = reply(&project, run, (action(&prepared.mode, way), sent), translate).await?;
   result["message"] = json!({ "id": message.to_string(), "attachments": [] });
   Ok(result)
+}
+
+/// What follows the stored message. What became not ready between the check and the start leaves it queued, as the
+/// window's composer leaves it: the reply says it is queued, and why.
+async fn followed(services: &Services, (project, stored): (&OpenProject, &Stored<'_>), then: Then, team: bool) -> Sent {
+  let runner = RunnerOf::Project(project);
+  if team {
+    return follow_team((&services.runners, runner), stored, then).await;
+  }
+  let servers = (&services.runners, &services.servers, runner);
+  follow(servers, (&services.workspace, &services.vault), stored, then).await
 }
 
 /// `Ok` when the pipeline of `task` is ready to start here; else the parts it lacks, or why that could not be read.

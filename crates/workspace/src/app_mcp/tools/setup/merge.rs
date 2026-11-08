@@ -41,12 +41,12 @@ use crate::{
     changes::{ChangesError, Checkpointed, NotCheckpointed, RunRange, RunStage, not_checkpointed_in, run_changes_in},
     delivery::{self, Delivery},
     detail::run_store_error,
-    recorded::task_of,
     integration::{IntegrationProblem, integration_refusal, stage_message},
     integration_jobs::{JobState, MergeArgs, ProjectJobState},
     local_integration::{CheckoutHolder, IntegrationError, LegacyPolicy, LocalIntent, LocalOrigin, checkout_holder},
     merge_attempts::{self, Asked},
     outside::Outside,
+    recorded::task_of,
   },
 };
 
