@@ -3,21 +3,21 @@
 //! last checkpoint, as the page's Continue does in Resume's place; Resume and Continue take a shared task's claim
 //! first.
 
-use std::path::Path;
+use std::{num::NonZeroU32, path::Path};
 
 use orchester_core::{
   id::{ProjectId, RunId, StepExecutionId},
   run::{
-    Plan, Run, RunStatus,
+    Plan, Run, RunNumber, RunStatus,
     review::{ReviewRecord, reviews_usage},
   },
-  store::{MergeStore, RunStore, TaskStore},
+  store::{MergeStore, RunStore},
   time::Timestamp,
   tokens::TokenBudget,
 };
 use orchester_exec::programs::Programs;
 use orchester_ipc::Command;
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, StoreError};
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -46,6 +46,7 @@ use crate::{
     detail::{RunView, StepView, run_store_error, run_view},
     history,
     plan::PlanReview,
+    recorded::task_of,
     run::control_message,
     slot_wait::slot_waits,
   },
@@ -95,9 +96,8 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Apart, ProjectI
   let (project, root) = (open.project.id(), open.repo_root);
   let db = ProjectDb::open(&root)?;
   let run = find_run(&db, &args.run)?;
-  let task = db
-    .task(run.task())?
-    .ok_or_else(|| ToolError::not_found(Missing::Task, run.task().to_string()))?;
+  let task = task_of(&db, run.task())?
+    .ok_or_else(|| ToolError::from(StoreError::TaskNotFound(run.task())))?;
   let conversation = Link::Task(project, task.key().clone(), TaskPage::Conversation).path();
   let waiting: Vec<ShownApproval> = pending(&db, &root)?
     .into_iter()
@@ -293,20 +293,13 @@ pub fn find_run(db: &ProjectDb, named: &str) -> Result<Run, ToolError> {
       .map_err(run_store_error)?
       .ok_or_else(|| ToolError::not_found(Missing::Run, named));
   }
-  let number: u32 = named
+  let number = named
     .trim_start_matches('#')
-    .parse()
+    .parse::<NonZeroU32>()
     .map_err(|_| ToolError::not_found(Missing::Run, named))?;
-  for task in db.tasks()?.iter().chain(&db.not_shared_tasks()?) {
-    for listed in db.runs_of_task(task.id()).map_err(run_store_error)? {
-      if let Ok(run) = listed
-        && run.number().get() == number
-      {
-        return Ok(run);
-      }
-    }
-  }
-  Err(ToolError::not_found(Missing::Run, named))
+  db.run_with_number(RunNumber::new(number))
+    .map_err(run_store_error)?
+    .ok_or_else(|| ToolError::not_found(Missing::Run, named))
 }
 
 /// The run's decided plans, oldest first, each with its step and who decided it, as the plan cards

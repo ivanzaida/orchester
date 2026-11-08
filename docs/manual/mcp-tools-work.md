@@ -342,6 +342,9 @@ detail ends by naming them (`… · Review waits for an agent slot`).
 
 The complete state of a run:
 
+A run is named by its id or its number, whatever its task; a **team task's** run is read from this computer's own
+records of it, without the task's definition (`task` is the key the run recorded when it started).
+
 - **Steps**, **state** and **tokens** (the reviewer's included and shown apart), **active time**. A step's
   `status` is its `state` and `waits_for`: while it is `waiting`, what for; `agent_slot` on a `pending` step that is
   ready and held back only because every agent slot is in use (raising *Agents at once* starts it), which the online
@@ -536,6 +539,11 @@ the agent at work (now or after its turn), as the answer to a waiting question o
 as a follow-up of a run ready for review, as instructions that continue a failed run or one waiting for a decision,
 resuming a paused or interrupted run, or running an ended task again with it. A run stopped at a limit keeps the
 message until a person raises the limit. Refused when no agent reads it and the task does not run again.
+
+On a **team project** the message goes to the run under the claim its work started with (no claim of the old sharing
+stream is taken). A message that would run the task again (`team_run_again_unsupported`) or continue an interrupted
+run (`team_project_unsupported`) is refused before it is stored: a team task's work starts only through the team
+server (`run_task`).
 
 | Parameter | Type                          | Req. | Description                                                                                       |
 |-----------|-------------------------------|------|---------------------------------------------------------------------------------------------------|

@@ -208,3 +208,29 @@ where
     }
   }
 }
+
+/// [`follow`] for a message to a team task's run. The run works under the claim the team server gave its work when it
+/// started (`team_work`), so no claim of the old sharing stream is taken, which would also cache the team task's
+/// definition here. Delivering and resuming go to the runner as they do elsewhere. Continuing an interrupted run and
+/// running the task again would start work without the team server's claim, so they stay queued with why.
+pub async fn follow_team((runners, runner): (&Runners, RunnerOf<'_>), stored: &Stored<'_>, then: Then) -> Sent {
+  let command = match then {
+    Then::RaiseLimit => return Sent::AwaitsLimit,
+    Then::ContinueInterrupted | Then::RunAgain => {
+      return Sent::Queued(Message::new("appMcp.errors.teamProjectUnsupported").with("tool", "send_message".to_owned()));
+    }
+    Then::Deliver => Command::DeliverMessages { run: stored.run },
+    Then::Resume => Command::ResumeRun { run: stored.run },
+  };
+  match runner.control(runners, command).await {
+    Ok(()) => Sent::Taken,
+    // A blocked run keeps the message; the runner delivers it once the blocking tasks finish.
+    Err(RunRequestError::Rejected(Rejection::RunAgainBlocked {
+      block: RunAgainBlock::TaskBlocked,
+    })) => Sent::Queued(Message::new("tasks.blocked.messageKept")),
+    Err(error) => {
+      tracing::warn!(%error, "the runner did not take the message");
+      Sent::Queued(control_message(&error))
+    }
+  }
+}

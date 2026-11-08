@@ -221,7 +221,10 @@ const SPECS: &[Spec] = &[
                   else null), counts by state, and runs: each check's name, workflow, state (queued, running, passed, \
                   failed, cancelled, skipped), url and, for a failed GitHub Actions job, log_tail (the last 40 lines of \
                   its failed steps' log, null when gh gave none). The run's link is its task's page; the waiting \
-                  approvals, questions, messages and plans link to their cards on the task's Conversation.",
+                  approvals, questions, messages and plans link to their cards on the task's Conversation. A team task's run 
+                  is read from this computer's own records of it, without the task's definition: task is the 
+                  key the run recorded when it started (the number is also how a run is named in every tool that 
+                  takes one).",
     schema: schema_for_type::<runs::InRun>,
     read_only: true,
   },
@@ -281,7 +284,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "send_message",
-    description: "Sends a message to the agents of a task's latest run, as the task's Conversation composer sends it in the run's state: to the agent at work (now or after its turn), as the answer to a waiting question or the changes a waiting plan needs, as a follow-up of a run ready for review, as instructions that continue a failed run or one waiting for a decision, resuming a paused or interrupted run, or running an ended task again with it. A run stopped at a limit keeps it until a person raises the limit. Refused when no agent reads it and the task does not run again.",
+    description: "Sends a message to the agents of a task's latest run, as the task's Conversation composer sends it in the run's state: to the agent at work (now or after its turn), as the answer to a waiting question or the changes a waiting plan needs, as a follow-up of a run ready for review, as instructions that continue a failed run or one waiting for a decision, resuming a paused or interrupted run, or running an ended task again with it. A run stopped at a limit keeps it until a person raises the limit. Refused when no agent reads it and the task does not run again. On a team project the message goes to the run under the claim its work started with; a message that would run the task again (team_run_again_unsupported) or continue an interrupted run (team_project_unsupported) is refused before it is stored, because a team task's work starts only through the team server.",
     schema: schema_for_type::<messages::SendMessage>,
     read_only: false,
   },

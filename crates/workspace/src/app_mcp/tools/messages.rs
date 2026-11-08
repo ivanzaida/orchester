@@ -27,7 +27,7 @@ use crate::{
     conversation::{
       SendError,
       composer::ComposerMode,
-      follow::{RunnerOf, Sent, Stored, follow},
+      follow::{RunnerOf, Sent, Stored, follow, follow_team},
       outgoing::{OutgoingError, Prepared, Way, plan_changes, prepare_in, store_answer_in, store_by_orchestrator_in},
     },
     outside::Outside,
@@ -42,6 +42,16 @@ pub fn plan_person_only() -> ToolError {
     "plan_decision_person_only",
     vec![Message::new("orchestrator.tools.planPersonOnly")],
   )
+}
+
+/// What a message to a team task's run may not do: run the task again, or continue an interrupted run, which would start
+/// its work from this computer without the team server's claim and work start.
+fn team_refusal(mode: &ComposerMode) -> Result<(), ToolError> {
+  match mode {
+    ComposerMode::RunAgain => Err(team_run_again()),
+    ComposerMode::Resume { interrupted: true } => Err(team::team_only_on_server("send_message")),
+    _ => Ok(()),
+  }
 }
 
 /// A message that would run a team task again: its work starts only through the team server.
@@ -89,7 +99,7 @@ pub async fn send_message(
   let reading = services.clone();
   let (project, run) = (args.project.clone(), args.run.clone());
   let (timing, checked) = (args.timing, expected.map(str::to_owned));
-  let (project, prepared) = blocking(move || {
+  let (project, prepared, team) = blocking(move || {
     let project = reading.project(&project)?;
     let db = orchester_store::ProjectDb::open(&project.repo_root)?;
     let named = find_run(&db, &run)?;
@@ -104,8 +114,9 @@ pub async fn send_message(
     )?;
     // Running a team task again would start its work from this computer's copy, without the team server's claim and
     // work start: refused before the message is stored, run_task starts it through the server.
-    if matches!(prepared.mode, ComposerMode::RunAgain) && team::linked(&db)? {
-      return Err(team_run_again());
+    let team = team::linked(&db)?;
+    if team {
+      team_refusal(&prepared.mode)?;
     }
     if let Some(kind) = prepared.decision_kind(Way::Primary) {
       // The Orchestrator's plan path below retains its stricter refusal.
@@ -113,7 +124,7 @@ pub async fn send_message(
         kind.require(&reading.workspace)?;
       }
     }
-    Ok((project, prepared))
+    Ok((project, prepared, team))
   })
   .await?;
   let run = prepared.run().expect("the run named is the task's latest");
@@ -171,7 +182,11 @@ pub async fn send_message(
   let ready = (&services.workspace, &services.vault);
   // What became not ready between the check and the start leaves the stored message queued, as the window's composer
   // leaves it: the reply says it is queued, and why.
-  let sent = follow(runner, ready, &stored, then).await;
+  let sent = if team {
+    follow_team((&services.runners, runner.2), &stored, then).await
+  } else {
+    follow(runner, ready, &stored, then).await
+  };
   let mut result = reply(&project, run, (action(&prepared.mode, way), sent), translate).await?;
   result["message"] = json!({ "id": message.to_string(), "attachments": [] });
   Ok(result)

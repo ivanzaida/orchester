@@ -57,6 +57,7 @@ mod preflight_messages;
 pub mod progress;
 mod project_runs;
 pub mod question;
+pub mod recorded;
 pub mod raise;
 pub mod ready_to_run;
 mod requirements;
