@@ -97,16 +97,28 @@ fn schema_version(connection: &Connection) -> Result<u32, rusqlite::Error> {
   connection.pragma_query_value(None, "user_version", |row| row.get(0))
 }
 
-fn apply(connection: &mut Connection, migrations: &[&str]) -> Result<(), StoreError> {
-  let found = schema_version(connection)?;
-  let supported = u32::try_from(migrations.len()).expect("fewer than 2^32 migrations");
+/// Whether a database at schema `found` still has migrations to apply, or is refused as written by a newer build.
+fn behind(found: u32, supported: u32) -> Result<bool, StoreError> {
   if found > supported {
     return Err(StoreError::SchemaTooNew { found, supported });
   }
-  if found == supported {
+  Ok(found < supported)
+}
+
+fn apply(connection: &mut Connection, migrations: &[&str]) -> Result<(), StoreError> {
+  let supported = u32::try_from(migrations.len()).expect("fewer than 2^32 migrations");
+  // Without the write lock this read can only be stale towards an older schema: a version never goes back. So a
+  // database already at `supported` needs no lock, and one that looks behind is read again under the lock.
+  if !behind(schema_version(connection)?, supported)? {
     return Ok(());
   }
   let transaction = connection.transaction()?;
+  // Another opener, in this process or another, that waited for the lock before us has migrated by now: its commit
+  // moved `user_version`, so the migrations to apply are those after the version read with the lock held.
+  let found = schema_version(&transaction)?;
+  if !behind(found, supported)? {
+    return Ok(());
+  }
   for migration in &migrations[found as usize..] {
     transaction.execute_batch(migration)?;
   }
