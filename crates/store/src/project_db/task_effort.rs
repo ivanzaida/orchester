@@ -3,12 +3,12 @@
 
 use orchester_core::{
   connection::stream::AgentEvent,
-  id::TaskId,
+  id::{RunId, TaskId},
   run::TokenUsage,
   task::estimate::calibration::{CalibrationRecord, TaskEffort},
   time::Timestamp,
 };
-use rusqlite::{Transaction, params};
+use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
 use super::{
   ProjectDb,
@@ -86,10 +86,26 @@ impl ProjectDb {
   }
 }
 
-/// Keeps what `task` took over all its runs beside the points it has now, as merged at `merged_at`, in the
+/// What the task of `run` took, read in `connection` and not in a write transaction: it reads the transcripts of all
+/// the task's runs, which a transaction that records a merge or a completion must not wait for (ORC-914).
+pub(super) fn of_run(connection: &Connection, run: RunId) -> Result<(TaskId, TaskEffort), StoreError> {
+  let task: Option<String> = connection
+    .query_row("SELECT task_id FROM runs WHERE id = ?1", [run.to_string()], |row| {
+      row.get(0)
+    })
+    .optional()?;
+  let task = parse("task id", &task.ok_or(StoreError::RunNotFound(run))?)?;
+  Ok((task, measure(connection, task)?))
+}
+
+/// Keeps `effort`, what `task` took over all its runs, beside the points it has now, as merged at `merged_at`, in the
 /// transaction that records the merge.
-pub(super) fn record(transaction: &Transaction<'_>, task: TaskId, merged_at: Timestamp) -> Result<(), StoreError> {
-  let effort = measure(transaction, task)?;
+pub(super) fn record(
+  transaction: &Transaction<'_>,
+  task: TaskId,
+  effort: &TaskEffort,
+  merged_at: Timestamp,
+) -> Result<(), StoreError> {
   let estimate = estimates::load(transaction, task)?;
   transaction.execute(
     "INSERT INTO task_effort (task_id, merged_at, points, source, tokens, active_ms, attempts, runs) \
@@ -112,9 +128,9 @@ pub(super) fn record(transaction: &Transaction<'_>, task: TaskId, merged_at: Tim
 
 /// What `task`'s runs took: the tokens of its agents' turns and of auto mode's reviews of their requests, the
 /// active time of its agents (waits for a person left out), its attempts and its runs.
-fn measure(transaction: &Transaction<'_>, task: TaskId) -> Result<TaskEffort, StoreError> {
+fn measure(connection: &Connection, task: TaskId) -> Result<TaskEffort, StoreError> {
   let id = task.to_string();
-  let mut statement = transaction.prepare(&format!(
+  let mut statement = connection.prepare(&format!(
     "SELECT payload FROM agent_events WHERE kind = 'turn_completed' AND run_id IN ({TASK_RUNS})"
   ))?;
   let payloads = statement
@@ -132,7 +148,7 @@ fn measure(transaction: &Transaction<'_>, task: TaskId) -> Result<TaskEffort, St
       }
     }
   }
-  let reviewed: [i64; 3] = transaction.query_row(
+  let reviewed: [i64; 3] = connection.query_row(
     &format!(
       "SELECT COALESCE(SUM(input_tokens), 0), COALESCE(SUM(cached_input_tokens), 0), COALESCE(SUM(output_tokens), 0) \
        FROM reviewer_usage WHERE input_tokens IS NOT NULL AND run_id IN ({TASK_RUNS})"
@@ -146,7 +162,7 @@ fn measure(transaction: &Transaction<'_>, task: TaskId) -> Result<TaskEffort, St
     cached_input: count(reviewed[1])?,
     output: count(reviewed[2])?,
   };
-  let (active_ms, attempts, runs): (i64, i64, i64) = transaction.query_row(
+  let (active_ms, attempts, runs): (i64, i64, i64) = connection.query_row(
     &format!(
       "SELECT \
          (SELECT COALESCE(SUM(MAX(0, ended_at - started_at - inactive_ms)), 0) FROM invocations \
