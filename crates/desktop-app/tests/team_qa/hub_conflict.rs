@@ -289,10 +289,7 @@ fn team_qa_hub_conflict_discard_asks_first_and_then_throws_the_draft_away() {
     "Discard your draft of pencil-design?"
   );
   let body = window.text("team-hub-conflict-discard-body");
-  assert!(
-    body.contains("Arguments") && body.contains("Variables it needs"),
-    "{body}"
-  );
+  assert!(body.contains("Arguments and Variables it needs"), "{body}");
   assert!(body.contains("v2 stays as olha published it"), "{body}");
   window.press(&format!("{DISCARD_DIALOG}-cancel"));
   window.until("the modal to close", |window| window.texts(DISCARD_DIALOG).is_none());
@@ -368,6 +365,11 @@ fn team_qa_hub_conflict_an_archived_server_keeps_the_draft_and_restore_brings_it
   );
   assert_eq!(window.text("team-hub-chip-here"), "Archived");
   assert_eq!(window.text("team-hub-chip-1"), "Your draft on v1");
+  let head = window.text("team-hub-panel-version");
+  assert!(
+    head.starts_with("v1 · archived ") && !head.contains("published by"),
+    "the head says when it was archived, not who published it: {head}"
+  );
   assert!(
     window.texts("team-hub-section-archived").is_some(),
     "listed apart, under Archived"

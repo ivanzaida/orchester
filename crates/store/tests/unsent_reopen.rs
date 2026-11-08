@@ -194,6 +194,36 @@ fn a_draft_taken_back_on_its_base_stays_edited_from_the_version_it_was_edited_fr
 }
 
 #[test]
+fn a_draft_taken_back_on_its_base_walks_past_a_base_that_was_not_sent_either() {
+  let (_repo, mut db, rule, _first_edit) = team_with_waiting_edit();
+  // The person edited again from their own v2, which still waits: v3 is based on a version the server never numbered.
+  db.save_draft(
+    rule,
+    &Draft::new(
+      instruction("Three."),
+      Some(VersionNumber::new(std::num::NonZeroU32::new(2).expect("two"))),
+      at(6),
+    ),
+  )
+  .expect("a draft");
+  let second_edit = db
+    .publish_draft::<Instruction>(rule, at(7))
+    .expect("published here again");
+  teammate_publishes(&mut db, rule, "Theirs.");
+
+  db.reopen_draft_on_its_base::<Instruction>(second_edit.id(), at(8))
+    .expect("taken back");
+
+  let draft = db.draft::<Instruction>(rule).expect("read").expect("a draft");
+  assert_eq!(draft.body(), &instruction("Three."));
+  assert_eq!(
+    draft.based_on(),
+    Some(VersionNumber::FIRST),
+    "edited from v1, the last version the server numbered that its chain was edited from, not from the team's newer one"
+  );
+}
+
+#[test]
 fn an_archived_resource_with_a_draft_is_listed_with_when_it_went() {
   let (_repo, mut db, rule, edit) = team_with_waiting_edit();
   db.reopen_draft::<Instruction>(edit, at(6)).expect("taken back");
@@ -220,6 +250,34 @@ fn an_archived_resource_with_a_draft_is_listed_with_when_it_went() {
   assert_eq!(draft_text(&db, rule), Some(instruction("Two.")), "the draft is kept");
 
   assert!(db.mark_shared_archived(rule, false, at(10)).expect("restored"));
+  assert!(
+    db.archived_with_draft(orchester_core::resource::ResourceKind::Instruction)
+      .expect("read")
+      .is_empty()
+  );
+}
+
+#[test]
+fn the_archived_mark_and_the_revision_the_server_gave_are_kept_together() {
+  let (_repo, mut db, rule, edit) = team_with_waiting_edit();
+  db.reopen_draft::<Instruction>(edit, at(6)).expect("taken back");
+  db.set_resource_sharing(
+    rule,
+    Some(ResourceSharing::Shared(TaskRevision::try_from(1).expect("revision"))),
+  )
+  .expect("the team's");
+  assert!(db.mark_shared_archived(rule, true, at(9)).expect("archived"));
+  let second = TaskRevision::try_from(2).expect("revision");
+
+  assert!(
+    db.mark_shared_archived_at(rule, false, second, at(10))
+      .expect("restored")
+  );
+
+  assert_eq!(
+    db.resource_sharing(rule).expect("read"),
+    Some(ResourceSharing::Shared(second))
+  );
   assert!(
     db.archived_with_draft(orchester_core::resource::ResourceKind::Instruction)
       .expect("read")

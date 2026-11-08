@@ -103,6 +103,21 @@ impl TeamServer {
     state.resources.projects.entry(id).or_default().rejects = Some(reason.to_owned());
   }
 
+  /// Takes the creates and publishes of the project at `slug` again after [`TeamServer::reject_content`]: the content
+  /// was fixed, or the server's rule changed.
+  pub fn accept_content(&self, slug: &str) {
+    let mut state = self.state.lock();
+    let Some(id) = state
+      .projects
+      .iter()
+      .find(|project| project["slug"] == slug)
+      .and_then(|project| project["id"].as_str().map(str::to_owned))
+    else {
+      return;
+    };
+    state.resources.projects.entry(id).or_default().rejects = None;
+  }
+
   /// Every create and publish of the project at `slug` is refused from now on as `403 not_admin`, while its member list
   /// still names the person an admin: they were demoted after this computer last read it.
   pub fn refuse_writes_as_not_admin(&self, slug: &str) {
@@ -254,10 +269,10 @@ impl Project {
     self.resources.iter_mut().find(|stored| stored.id() == resource)
   }
 
-  /// Counts one change and says when it happened.
+  /// Counts one change and says when it happened: now, as a server stamps what it numbers.
   fn changed(&mut self) -> Value {
     self.cursor += 1;
-    json!({"by": Person::You.wire(), "at": i64::try_from(self.cursor).unwrap_or(i64::MAX)})
+    json!({"by": Person::You.wire(), "at": now_millis()})
   }
 
   fn create(&mut self, body: &str) -> (u16, Value) {
@@ -477,4 +492,14 @@ fn status_line(status: u16) -> &'static str {
     409 => "409 Conflict",
     _ => "422 Unprocessable Entity",
   }
+}
+
+/// The time of now, as the contract's unix milliseconds.
+fn now_millis() -> i64 {
+  std::time::SystemTime::now()
+    .duration_since(std::time::UNIX_EPOCH)
+    .ok()
+    .and_then(|since| i64::try_from(since.as_millis()).ok())
+    // A clock before 1970 has no time to give a version; zero is what such a clock reads.
+    .unwrap_or_default()
 }

@@ -34,6 +34,9 @@ pub struct McpEdit {
   /// The latest version the team server numbered, as the form holds it: what an edit changes while a version of the
   /// person's own waits in the outbox, and what it would only revert to. `None` for a resource that has none yet.
   pub team: Option<NewTeamMcpServer>,
+  /// The number of that version: what a draft is edited from while a version of the person's own, which the team
+  /// server has not numbered, is the latest here. `None` when `team` is.
+  pub team_number: Option<VersionNumber>,
   /// The draft kept here, if there is one.
   pub draft: Option<McpDraft>,
   /// What the team published since the version the draft, or the version of the person's own that met it, was edited
@@ -138,10 +141,12 @@ pub(super) fn of(db: &ProjectDb, id: ResourceId) -> Result<Option<McpEdit>, Stor
   };
   let team = team_version(db, id)?;
   let newer = team_mcp_conflict::newer(db, id, team.as_ref(), draft.as_ref())?;
+  let (team_number, team) = team.unzip();
   Ok(Some(McpEdit {
     number: latest.number(),
     published,
-    team: team.map(|(_, fields)| fields),
+    team,
+    team_number,
     draft,
     newer,
   }))
@@ -168,7 +173,9 @@ fn team_version(db: &ProjectDb, id: ResourceId) -> Result<Option<(VersionNumber,
 /// when they are that version's own, or the latest's. `base` is older than the latest when the team published since
 /// the form was opened: the draft then says so, which is what the merge needs to tell who changed what. Refused unless
 /// the person may change the team's resources. One store transaction reads the draft and the version and writes the
-/// answer, so a save that races another never undoes what the other wrote.
+/// answer, so a save that races another never undoes what the other wrote. A `base` above the latest version can only
+/// be the number of a version of the person's own that was taken back since the form was opened: the draft is edited
+/// from the latest then.
 pub fn save(root: &Path, id: ResourceId, fields: &NewTeamMcpServer, base: VersionNumber) -> Result<Saved, EditError> {
   let mut db = ProjectDb::open(root)?;
   let taken: Vec<_> = team_mcp_names(root)?
@@ -182,6 +189,7 @@ pub fn save(root: &Path, id: ResourceId, fields: &NewTeamMcpServer, base: Versio
     .map(|version| version.body().clone());
   let mut saved = Saved::Unchanged;
   db.settle_draft::<TeamMcpServer>(id, |kept, latest| {
+    let base = base.min(latest.number());
     let own = if base == latest.number() {
       Some(latest.body())
     } else {

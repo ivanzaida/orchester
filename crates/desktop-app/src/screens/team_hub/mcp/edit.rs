@@ -69,14 +69,14 @@ pub(super) struct Edit {
   /// *Discard draft*.
   pub discard: Discard,
   /// *Cancel sending*: takes the version waiting in the outbox back as the draft.
-  pub cancel: FutureAction<VersionId, (), Message>,
+  pub cancel: FutureAction<VersionId, Option<Based>, Message>,
   /// *Cancel sending* of a new resource waiting in the outbox: takes it back as if never created.
   pub cancel_created: FutureAction<(), (), Message>,
   /// *Rebase my draft on vN* (A19).
   pub rebase: Rebase,
   /// *Open vN*: the version of the person's own in the outbox that met the team's, if there is one, goes back to
   /// being the draft, and the page shows the team's version.
-  pub open_new: FutureAction<Option<VersionId>, (), Message>,
+  pub open_new: FutureAction<Option<VersionId>, Option<Based>, Message>,
   /// *Restore* a resource the team archived (A21).
   pub restore: Restore,
   /// What the person picked for each field both changed, which *Rebase* asks for.
@@ -169,11 +169,12 @@ impl Edit {
       }
     });
     self.follow_conflict(ctx);
-    let (editing, refused) = (self.editing.clone(), self.refused.clone());
+    let (editing, refused, base) = (self.editing.clone(), self.refused.clone(), self.base.clone());
     ctx.watch(&self.cancel.state(), move |state| {
       if state.is_fulfilled() {
         refused.set(None);
         editing.set(true);
+        keep_base(&base, state.data.as_ref().and_then(Option::as_ref));
       }
     });
     self.follow_failures(ctx);
@@ -195,11 +196,13 @@ impl Edit {
       }
     });
     let (editing, refused, reset) = (self.editing.clone(), self.refused.clone(), self.reset());
+    let base = self.base.clone();
     ctx.watch(&self.open_new.state(), move |state| {
       if state.is_fulfilled() {
         editing.set(false);
         refused.set(None);
         reset();
+        keep_base(&base, state.data.as_ref().and_then(Option::as_ref));
       }
     });
     let (editing, refused, comparing) = (self.editing.clone(), self.refused.clone(), self.comparing.clone());
@@ -295,23 +298,35 @@ impl Edit {
 }
 
 /// The version a form is edited from when it opens: the one a draft was edited from, which is older than the team's
-/// latest when the team published since; else the version this computer uses. `None` for a server the form cannot hold.
-fn opened_on(edit: Option<&McpEdit>) -> Option<Based> {
+/// latest when the team published since; else the latest the team server numbered. `None` for a server the form cannot
+/// hold.
+pub(super) fn opened_on(edit: Option<&McpEdit>) -> Option<Based> {
   let edit = edit?;
+  // The latest version here is the person's own while one waits in the outbox or was refused: a draft is not edited
+  // from that, but from the latest the team server numbered, which a refused version taken back as the draft is edited
+  // from too.
+  let confirmed = edit.team.as_ref().unwrap_or(&edit.published);
   Some(match (&edit.newer, &edit.draft) {
     (Some(newer), _) => Based {
       number: newer.base_number,
-      fields: newer.base.clone().unwrap_or_else(|| edit.published.clone()),
+      fields: newer.base.clone().unwrap_or_else(|| confirmed.clone()),
     },
     (None, Some(draft)) => Based {
       number: draft.based_on,
-      fields: edit.published.clone(),
+      fields: confirmed.clone(),
     },
     (None, None) => Based {
-      number: edit.number,
-      fields: edit.published.clone(),
+      number: edit.team_number.unwrap_or(edit.number),
+      fields: confirmed.clone(),
     },
   })
+}
+
+/// The form is edited from `based` from now on, when a read of the server said so.
+fn keep_base(base: &Mutex<Option<Based>>, based: Option<&Based>) {
+  if let Some(based) = based {
+    *base.lock() = Some(based.clone());
+  }
 }
 
 /// Starts a press with no failure to tell, and keeps why it ended in none.

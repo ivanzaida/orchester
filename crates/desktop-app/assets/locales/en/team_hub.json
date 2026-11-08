@@ -243,6 +243,7 @@
     "mcp": {
       "headLine": "{{version}} · published by {{by}} · {{date}}",
       "headLineUnpublished": "{{version}}",
+      "headLineArchived": "{{version}} · archived {{time}}",
       "date": {
         "today": "today",
         "thisYear": "{{month}} {{day}}",

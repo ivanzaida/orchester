@@ -357,11 +357,22 @@ pub(super) fn unresolved(newer: &Newer, picks: &Picks) -> Vec<McpField> {
   })
 }
 
-/// The names of `fields` as the form calls them, apart by commas.
+/// The names of `fields` as the form calls them, in a sentence: apart by commas, the last after *and*.
 pub(super) fn names(ctx: &Ctx, fields: &[McpField]) -> String {
-  fields
+  let named: Vec<String> = fields
     .iter()
     .map(|field| ctx.t(label_key(*field)).to_string())
-    .collect::<Vec<_>>()
-    .join(", ")
+    .collect();
+  match named.split_last() {
+    Some((last, rest)) if !rest.is_empty() => ctx
+      .t_args(
+        "sharing.config.and",
+        [
+          ("first", rest.join(&ctx.t("sharing.config.separator"))),
+          ("last", last.clone()),
+        ],
+      )
+      .to_string(),
+    _ => named.concat(),
+  }
 }

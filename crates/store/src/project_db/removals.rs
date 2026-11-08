@@ -7,6 +7,7 @@ use orchester_core::{
     Draft, Pipeline, Removal, RemoveMode, Resource, ResourceBody, ResourceKind, Version, VersionNumber,
     pipeline_step_users,
   },
+  sharing::TaskRevision,
   time::Timestamp,
 };
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
@@ -14,6 +15,7 @@ use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use super::{
   ProjectDb,
   resources::{check_kind, kind_text, load_draft, load_resources, save_draft},
+  shared_versions::{ResourceSharing, set_sharing},
   used_versions::used_here,
 };
 use crate::StoreError;
@@ -113,21 +115,41 @@ impl ProjectDb {
   /// (`RemoteResourceStore` refuses), so restoring undoes only the server's archive. Whether anything changed; a
   /// resource this computer does not keep as the team's (a skill, or one kept *Not shared*) changes nothing.
   pub fn mark_shared_archived(&mut self, id: ResourceId, archived: bool, now: Timestamp) -> Result<bool, StoreError> {
-    let changed = if archived {
-      self.connection.execute(
-        "INSERT INTO removed_resources (resource_id, removed_at) SELECT id, ?2 FROM resources \
-         WHERE id = ?1 AND sharing = 'shared' ON CONFLICT (resource_id) DO NOTHING",
-        params![id.to_string(), now.unix_millis()],
-      )?
-    } else {
-      self.connection.execute(
-        "DELETE FROM removed_resources WHERE resource_id = ?1 \
-         AND resource_id IN (SELECT id FROM resources WHERE sharing = 'shared')",
-        [id.to_string()],
-      )?
-    };
-    Ok(changed > 0)
+    set_archived(&self.connection, id, archived, now)
   }
+
+  /// As [`ProjectDb::mark_shared_archived`], and keeps the revision the server gave the resource with it, in one
+  /// transaction: a failure in between leaves neither the mark nor the revision changed.
+  pub fn mark_shared_archived_at(
+    &mut self,
+    id: ResourceId,
+    archived: bool,
+    revision: TaskRevision,
+    now: Timestamp,
+  ) -> Result<bool, StoreError> {
+    let transaction = self.connection.transaction()?;
+    let changed = set_archived(&transaction, id, archived, now)?;
+    set_sharing(&transaction, id, Some(ResourceSharing::Shared(revision)))?;
+    transaction.commit()?;
+    Ok(changed)
+  }
+}
+
+fn set_archived(connection: &Connection, id: ResourceId, archived: bool, now: Timestamp) -> Result<bool, StoreError> {
+  let changed = if archived {
+    connection.execute(
+      "INSERT INTO removed_resources (resource_id, removed_at) SELECT id, ?2 FROM resources \
+       WHERE id = ?1 AND sharing = 'shared' ON CONFLICT (resource_id) DO NOTHING",
+      params![id.to_string(), now.unix_millis()],
+    )?
+  } else {
+    connection.execute(
+      "DELETE FROM removed_resources WHERE resource_id = ?1 \
+       AND resource_id IN (SELECT id FROM resources WHERE sharing = 'shared')",
+      [id.to_string()],
+    )?
+  };
+  Ok(changed > 0)
 }
 
 pub(super) fn remove(

@@ -76,22 +76,7 @@ pub struct CachedVersion<B> {
 impl ProjectDb {
   /// Marks resource `id` as the server's or as kept local, or clears the mark (`None`) when the project is local again.
   pub fn set_resource_sharing(&mut self, id: ResourceId, sharing: Option<ResourceSharing>) -> Result<(), StoreError> {
-    let (text, revision) = match sharing {
-      Some(ResourceSharing::Shared(revision)) => (
-        Some("shared"),
-        Some(tokens_column("resource revision", revision.get())?),
-      ),
-      Some(ResourceSharing::NotShared) => (Some("not_shared"), None),
-      None => (None, None),
-    };
-    let changed = self.connection.execute(
-      "UPDATE resources SET sharing = ?2, server_revision = ?3 WHERE id = ?1",
-      params![id.to_string(), text, revision],
-    )?;
-    if changed == 0 {
-      return Err(StoreError::ResourceNotFound(id));
-    }
-    Ok(())
+    set_sharing(&self.connection, id, sharing)
   }
 
   pub fn resource_sharing(&self, id: ResourceId) -> Result<Option<ResourceSharing>, StoreError> {
@@ -294,6 +279,29 @@ pub struct NamingVersion {
   pub resource: ResourceId,
   pub kind: ResourceKind,
   pub number: VersionNumber,
+}
+
+pub(super) fn set_sharing(
+  connection: &Connection,
+  id: ResourceId,
+  sharing: Option<ResourceSharing>,
+) -> Result<(), StoreError> {
+  let (text, revision) = match sharing {
+    Some(ResourceSharing::Shared(revision)) => (
+      Some("shared"),
+      Some(tokens_column("resource revision", revision.get())?),
+    ),
+    Some(ResourceSharing::NotShared) => (Some("not_shared"), None),
+    None => (None, None),
+  };
+  let changed = connection.execute(
+    "UPDATE resources SET sharing = ?2, server_revision = ?3 WHERE id = ?1",
+    params![id.to_string(), text, revision],
+  )?;
+  if changed == 0 {
+    return Err(StoreError::ResourceNotFound(id));
+  }
+  Ok(())
 }
 
 /// Whether resource `id` is the server's or kept local; `None` for a resource of this computer's own.

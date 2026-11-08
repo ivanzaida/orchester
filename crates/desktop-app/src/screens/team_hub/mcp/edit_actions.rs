@@ -29,7 +29,7 @@ use orchester_workspace::{
   tasks::outside::Outside,
 };
 
-use super::edit::{Discard, Publish, Rebase, Restore};
+use super::edit::{Discard, Publish, Rebase, Restore, opened_on};
 use crate::services::Services;
 
 type Target = (PathBuf, ProjectId, ResourceId);
@@ -78,17 +78,35 @@ pub(super) fn discard(ctx: &mut Ctx, services: &Services, target: &Target, lane:
   })
 }
 
-/// *Cancel sending*: the version waiting in the outbox goes back to being the draft.
-pub(super) fn cancel(ctx: &mut Ctx, services: &Services, target: &Target) -> FutureAction<VersionId, (), Message> {
-  let (services, (root, project, _)) = (services.clone(), target.clone());
+/// *Cancel sending*: the version waiting in the outbox goes back to being the draft; the form is then edited from the
+/// version the team server numbered, which is what a save or a publish names.
+pub(super) fn cancel(
+  ctx: &mut Ctx,
+  services: &Services,
+  target: &Target,
+) -> FutureAction<VersionId, Option<Based>, Message> {
+  let (services, (root, project, id)) = (services.clone(), target.clone());
   ctx.future_action(move |version: VersionId| {
     let (services, root) = (services.clone(), root.clone());
     async move {
-      let result = services.servers.reopen_mcp_draft(&root, version).await;
+      let result = match services.servers.reopen_mcp_draft(&root, version).await {
+        Ok(()) => reopened_base(&root, id).await,
+        Err(message) => Err(message),
+      };
       services.changes.record(project, Outside::Connections);
       result
     }
   })
+}
+
+/// What the form is edited from after a version of the outbox went back to being the draft; `None` for a server the
+/// form cannot hold.
+async fn reopened_base(root: &Path, id: ResourceId) -> Result<Option<Based>, Message> {
+  let kept = root.to_owned();
+  let edit = background::run(move || team_mcp_edit::read(&kept, id))
+    .await?
+    .map_err(failed)?;
+  Ok(opened_on(edit.as_ref()))
 }
 
 /// *Cancel sending* of a new resource: it is taken back as if never created.
@@ -159,14 +177,17 @@ pub(super) fn open_new(
   ctx: &mut Ctx,
   services: &Services,
   target: &Target,
-) -> FutureAction<Option<VersionId>, (), Message> {
-  let (services, (root, project, _)) = (services.clone(), target.clone());
+) -> FutureAction<Option<VersionId>, Option<Based>, Message> {
+  let (services, (root, project, id)) = (services.clone(), target.clone());
   ctx.future_action(move |outbox: Option<VersionId>| {
     let (services, root) = (services.clone(), root.clone());
     async move {
       let result = match outbox {
-        Some(version) => services.servers.reopen_mcp_draft(&root, version).await,
-        None => Ok(()),
+        Some(version) => match services.servers.reopen_mcp_draft(&root, version).await {
+          Ok(()) => reopened_base(&root, id).await,
+          Err(message) => Err(message),
+        },
+        None => Ok(None),
       };
       services.changes.record(project, Outside::Connections);
       result

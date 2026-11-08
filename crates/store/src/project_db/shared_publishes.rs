@@ -281,15 +281,22 @@ enum DraftBase {
   Kept,
 }
 
-/// The number of the version `version` was edited from, when that is one the server numbered.
+/// The number of the version `version` was edited from, when that is one the server numbered. A base that waits for the
+/// server itself (a version published on top of another one that was not sent) is followed to the version it was
+/// edited from, until one the server numbered.
 fn confirmed_base(connection: &Connection, version: VersionId) -> Result<Option<i64>, StoreError> {
   Ok(
     connection
       .query_row(
-        "SELECT base.number FROM shared_publishes \
-         JOIN resource_versions AS base ON base.id = shared_publishes.base_version_id \
-         WHERE shared_publishes.version_id = ?1 \
-         AND base.id NOT IN (SELECT version_id FROM shared_publishes)",
+        "WITH RECURSIVE chain(base_version_id) AS ( \
+           SELECT base_version_id FROM shared_publishes WHERE version_id = ?1 \
+           UNION \
+           SELECT shared_publishes.base_version_id FROM shared_publishes \
+           JOIN chain ON shared_publishes.version_id = chain.base_version_id \
+         ) \
+         SELECT base.number FROM chain \
+         JOIN resource_versions AS base ON base.id = chain.base_version_id \
+         WHERE base.id NOT IN (SELECT version_id FROM shared_publishes)",
         [version.to_string()],
         |row| row.get(0),
       )

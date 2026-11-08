@@ -17,7 +17,11 @@ use std::{
 };
 
 use orchester_app::routes::{ProjectPage, Route};
-use orchester_core::id::ResourceId;
+use orchester_core::{
+  id::ResourceId,
+  resource::{TeamMcpServer, VersionNumber},
+  store::ResourceStore,
+};
 use orchester_workspace::{
   agents::{
     save_lane::SaveLane,
@@ -27,7 +31,7 @@ use orchester_workspace::{
 };
 
 use super::{
-  hub_edit::{ARGUMENTS, PUBLISH, draft_of, on_pencil_until},
+  hub_edit::{ARGUMENTS, PUBLISH, db, draft_of, on_pencil_until},
   team::State,
 };
 
@@ -324,4 +328,68 @@ fn team_qa_hub_edit_race_a_newest_save_the_store_refused_is_told_and_tried_again
   window.until_within(Duration::from_secs(15), "the draft kept after the retry", |window| {
     draft_of(window, pencil) == Some(vec!["--typed".to_owned()])
   });
+}
+
+#[test]
+fn team_qa_hub_edit_race_an_autosave_queued_before_rebase_never_overwrites_the_merged_draft() {
+  let (window, _server, (_, pencil)) = on_pencil_until(
+    ("team-edit-conflict-clean", State::TeamEditConflictClean),
+    "team-hub-compare",
+  );
+  let root = window.data.repo("repo-kontur");
+  let servers = window.launch.services().expect("the session").servers.clone();
+  let lane = servers.save_lane(&root, pencil);
+  let v2 = VersionNumber::FIRST.next().expect("a second version");
+  let stale_fields = with_arguments(&published_fields(&root, pencil), &["--stale"]);
+  let before_rebase = draft_of(&window, pencil);
+  // The person's version met the team's v2 and waits in the outbox: the rebase takes it back as the draft.
+  let outbox = db(&window).waiting_publishes().expect("outbox")[0].version;
+
+  // An autosave of the fields typed before the press is queued behind a save that is slow to finish.
+  let stalled = Stalled::on(&lane);
+  let ticket = lane.start();
+  let queued = {
+    let root = root.clone();
+    thread::spawn(move || {
+      lane.run_if_newest(ticket, || {
+        team_mcp_edit::save(&root, pencil, &stale_fields, VersionNumber::FIRST)
+      })
+    })
+  };
+  let rebasing = {
+    let handle = window.data.runtime.handle().clone();
+    thread::spawn(move || handle.block_on(servers.rebase_mcp_draft(&root, pencil, (Some(outbox), v2), Vec::new())))
+  };
+  thread::sleep(Duration::from_millis(200));
+  assert_eq!(
+    draft_of(&window, pencil),
+    before_rebase,
+    "the rebase takes its turn in the lane, behind the save that holds it"
+  );
+  stalled.release();
+
+  let based = rebasing.join().expect("the rebase ran").expect("rebased");
+  assert!(
+    queued.join().expect("the autosave ran").is_none(),
+    "the rebase started after the autosave, which is out of date from then on"
+  );
+  assert_eq!(based.number, v2);
+  let kept = db(&window)
+    .draft::<TeamMcpServer>(pencil)
+    .expect("read")
+    .expect("the merged draft");
+  assert_eq!(
+    kept.based_on(),
+    Some(v2),
+    "the draft is the merge, not the autosave's text"
+  );
+  assert_eq!(
+    draft_of(&window, pencil),
+    Some(
+      ["--stdio", "--app", "desktop", "--port", "3845"]
+        .map(str::to_owned)
+        .to_vec()
+    ),
+    "the merge of the person's version with the team's"
+  );
 }

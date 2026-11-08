@@ -108,9 +108,8 @@ fn prepare(
 fn keep(root: &Path, restored: &SharedResource) -> Result<(), Message> {
   let failed = |error: &StoreError| crate::messages::store_error(error);
   let mut db = ProjectDb::open(root).map_err(|error| failed(&error))?;
-  db.mark_shared_archived(restored.id, restored.archived, Timestamp::now())
-    .map_err(|error| failed(&error))?;
-  db.set_resource_sharing(restored.id, Some(ResourceSharing::Shared(restored.revision)))
+  db.mark_shared_archived_at(restored.id, restored.archived, restored.revision, Timestamp::now())
+    .map(drop)
     .map_err(|error| failed(&error))
 }
 

@@ -1,7 +1,9 @@
 //! The two changes of an admin's edit of a team MCP server that take a version of their own back out of the outbox:
 //! taking it back as the draft it was written as, still edited from the version it was edited from (so a version the
 //! team published meanwhile can be told apart from what the person changed), and rebasing that draft on the team's
-//! newer version ([`crate::agents::team_mcp_conflict::rebase`]). Neither runs while a send of the outbox is under way.
+//! newer version ([`crate::agents::team_mcp_conflict::rebase`]). Neither runs while a send of the outbox is under way,
+//! and both write the draft through the resource's save lane ([`Servers::save_lane`]), so an autosave that started
+//! before cannot overwrite what they wrote.
 
 use std::path::Path;
 
@@ -32,8 +34,22 @@ impl Servers {
       let lane = servers.send_lane(&root);
       let _between = between_sends(&lane)?;
       let mut db = ProjectDb::open(&root).map_err(|error| messages::store_error(&error))?;
-      db.reopen_draft_on_its_base::<TeamMcpServer>(version, Timestamp::now())
-        .map_err(|error| messages::store_error(&error))
+      // A version the outbox does not hold has no resource to order against; the store says why it cannot be taken
+      // back.
+      let resource = db
+        .waiting_publishes()
+        .map_err(|error| messages::store_error(&error))?
+        .into_iter()
+        .find(|waiting| waiting.version == version)
+        .map(|waiting| waiting.resource);
+      let mut reopen = || {
+        db.reopen_draft_on_its_base::<TeamMcpServer>(version, Timestamp::now())
+          .map_err(|error| messages::store_error(&error))
+      };
+      match resource {
+        Some(resource) => servers.save_lane(&root, resource).run_newest(reopen),
+        None => reopen(),
+      }
     })
     .await??;
     self.shared_changed();
@@ -56,8 +72,10 @@ impl Servers {
     let based = background::run(move || {
       let lane = servers.send_lane(&root);
       let _between = between_sends(&lane)?;
-      team_mcp_conflict::rebase(&root, resource, (outbox, expected), &picks)
-        .map_err(team_mcp_conflict::RebaseError::message)
+      servers.save_lane(&root, resource).run_newest(|| {
+        team_mcp_conflict::rebase(&root, resource, (outbox, expected), &picks)
+          .map_err(team_mcp_conflict::RebaseError::message)
+      })
     })
     .await??;
     self.shared_changed();

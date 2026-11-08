@@ -375,3 +375,21 @@ fn team_mcp_conflict_publishing_a_draft_on_an_older_version_is_stale_and_sends_n
   assert!(db.waiting_publishes().expect("outbox").is_empty());
   assert!(draft_fields(repo.path(), figma).is_some(), "the draft is kept");
 }
+
+#[test]
+fn team_mcp_conflict_a_save_over_a_base_that_is_gone_is_edited_from_the_latest_and_the_edit_names_the_team_s_number() {
+  let v1 = fields(&["--stdio"], &["get_figma_data"]);
+  let (repo, figma) = team_with_figma(&v1);
+  assert_eq!(edit_of(repo.path(), figma).team_number, Some(number(1)));
+  let mine = fields(&["--stdio", "--port", "3845"], &["get_figma_data"]);
+
+  // The form was opened while a version of the person's own, v2, waited; it was taken back since: v2 is no version.
+  let saved = team_mcp_edit::save(repo.path(), figma, &mine, number(2));
+
+  assert!(matches!(saved, Ok(Saved::Draft(_))), "{saved:?}");
+  assert_eq!(
+    draft_fields(repo.path(), figma),
+    Some((mine, number(1))),
+    "a draft is never edited from a number above the latest version"
+  );
+}
