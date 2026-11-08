@@ -389,6 +389,11 @@ Parameters (each): `project` (req.), `run` (req.). Runner refusals: `run_not_run
 Continues a run that **stopped** with one of the choices its task page offers for how it stopped. Every limit value
 is given explicitly (no maximum); nothing raises or lifts a limit by itself.
 
+The Orchestrator chat calls this tool like any client, with one difference: while the project's *Let the Orchestrator
+drive* is on, every choice is allowed for the chat without *Let automation answer approvals* (accepting a step, raising
+limits and budgets, resuming after the daily budget, and the retry, return and resolve choices); while it is off,
+only `allow_retry`, `return_to` and `resolve_conflicts` are proposed to the person as cards.
+
 | Parameter | Type   | Req. | Description             |
 |-----------|--------|------|-------------------------|
 | `project` | string | yes  |                         |
