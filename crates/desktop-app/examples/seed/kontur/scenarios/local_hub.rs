@@ -4,18 +4,30 @@
 //! - `local-hub`: the hub on All; *MCP servers* lists the servers (L2), a server is edited in place (L8, L12).
 //! - `local-hub-archive`: the same with two runs working on Feature delivery, so *Archive* on Builder or Reviewer lists
 //!   what names it and the runs that will stop (L11).
+//! - `local-hub-claude`: the same with Claude Code connections to choose from for a profile, Writer on Claude 2 (L1).
 //! - `local-hub-archived`: the same after archiving Reviewer, a skill and postgres-dev, each with the runs it stopped
 //!   (L13, L14).
 
 use orchester_core::{
-  connection::mcp::{McpEnvironment, McpServer, McpServerName, McpServerSelection, McpTransport, StdioServer},
+  connection::{
+    AgentProvider, SignIn,
+    mcp::{McpEnvironment, McpServer, McpServerName, McpServerSelection, McpTransport, StdioServer},
+  },
   id::{ConnectionId, ResourceId, RunId, TaskId},
-  resource::{AgentProfile, CommandProgram, Draft, ResourceKind},
+  permission::{AgentPermissions, CommandPermission, NetworkAccess},
+  resource::{
+    AgentProfile, CommandProgram, Draft, InstructionScope, ModelId, PromptText, ProviderSettings, RepositoryAccess,
+    ResourceKind,
+  },
   store::{McpServerStore, ResourceStore},
 };
 use orchester_store::{ArchiveStop, Archived};
 use rusqlite::Connection;
 
+use super::{
+  agents_library::{instruction, publish, skill},
+  connections,
+};
 use crate::kontur::{
   Kontur, SeedError,
   catalogue::Catalogue,
@@ -50,7 +62,63 @@ fn base(kontur: &mut Kontur) -> Result<Catalogue, SeedError> {
   .map_err(|error| invalid(&error))?;
   kontur.db.create_mcp_server(&pencil)?;
   choose_docs(kontur)?;
+  publish(
+    kontur,
+    "Project rules",
+    vec![instruction("Keep each change small.", InstructionScope::Project)?],
+  )?;
+  publish(
+    kontur,
+    "run-checks",
+    vec![skill(
+      "Runs the project's checks before a commit.",
+      "Run `cargo test` and fix what fails.",
+      InstructionScope::Project,
+    )?],
+  )?;
   Ok(catalogue)
+}
+
+/// `local-hub-claude`: Writer runs on the Claude Code connection Claude 2, and Home is another one to choose; each
+/// connection was checked at a version of its own, so the pick lists them apart (L1).
+pub fn claude(kontur: &mut Kontur) -> Result<(), SeedError> {
+  base(kontur)?;
+  let bin = kontur.repo.join(".orchester").join("qa-bin");
+  let program = |file: &str| -> Result<std::path::PathBuf, SeedError> {
+    let path = bin.join(file);
+    std::fs::write(&path, "").map_err(|error| invalid(&error))?;
+    Ok(path)
+  };
+  let at = kontur.ago(4);
+  let models = ["claude-opus-5-5", "claude-sonnet-5-5"];
+  let (work, programs) = (program("claude-2")?, program("claude-home")?);
+  let claude_2 = connections::cli(
+    kontur,
+    ("Claude 2", AgentProvider::ClaudeCodeCli, work),
+    ("2.1.173", SignIn::SignedIn, &models),
+    at,
+  )?;
+  connections::cli(
+    kontur,
+    ("Home", AgentProvider::ClaudeCodeCli, programs),
+    ("2.1.170", SignIn::SignedIn, &models),
+    at,
+  )?;
+  let writer = AgentProfile::new(
+    name("Writer"),
+    "Writes the release notes.".to_owned(),
+    PromptText::new("Writes the release notes from the merged tasks.").map_err(|error| invalid(&error))?,
+    claude_2,
+    ModelId::new("claude-sonnet-5-5").map_err(|error| invalid(&error))?,
+    ProviderSettings::default(),
+  )
+  .with_permissions(AgentPermissions::new(
+    RepositoryAccess::ReadOnly,
+    CommandPermission::AnyInWorktree,
+    NetworkAccess::Off,
+  ));
+  publish(kontur, "Writer", vec![writer])?;
+  Ok(())
 }
 
 /// Builder and Reviewer choose kontur-docs from their next version on, so the server says who uses it.

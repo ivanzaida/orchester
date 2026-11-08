@@ -195,6 +195,7 @@ const NAMES: [&str; 198] = [
   "team-start-past-failure",
   "local-hub",
   "local-hub-archive",
+  "local-hub-claude",
   "local-hub-archived",
   "team-archive",
   "team-archived",

@@ -208,7 +208,7 @@ impl Component for ToolEditor {
       .id("tool-editor")
       .width(Dimension::Pct(100.0))
       .spacing(HubSpacing::Sections.role())
-      .child(head::crumb(ctx, &p))
+      .with_children(head::crumb(ctx, &p))
       .child(head::head(
         ctx,
         &p,
@@ -246,7 +246,13 @@ impl Component for ToolEditor {
         (busy || self.asking.get().0.is_some() || !may_change, read_only),
         widening,
       ));
-    hub::item_body("tool-page", pane, Some(inspector::inspector(ctx, &p).into()))
+    let side = inspector::inspector(ctx, &p).into();
+    hub::editor_body(
+      ctx,
+      "tool-page",
+      (pane.into(), hub::PANE_WIDTH),
+      (side, hub::SIDE_WIDTH),
+    )
   }
 }
 

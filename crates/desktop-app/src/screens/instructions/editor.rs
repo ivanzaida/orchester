@@ -38,7 +38,10 @@ use super::{
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
   project::ShownProject,
-  screens::hub::team,
+  screens::hub::{
+    hosted::{self, Hosted},
+    team,
+  },
   theme::{HubSpacing, HubText},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -198,6 +201,10 @@ impl Component for Editor {
     if self.panel.get() == Panel::Full {
       return panel;
     }
+    if Hosted::is(ctx) {
+      let side = (self.panel.get() != Panel::Hidden).then_some(panel);
+      return hosted::body("instruction-editor", pane, side);
+    }
     let row = Row::new()
       .id("instruction-editor")
       .width(Dimension::Pct(100.0))
@@ -277,7 +284,11 @@ impl Editor {
       .with_children(super::editor_notes::warning(ctx, &self.fields, availability))
       .with_children(saved.is_none().then(|| self.foot(ctx, props, busy)));
     if saved.is_some() {
-      return pane.height(Dimension::Pct(100.0)).into();
+      return if Hosted::is(ctx) {
+        pane.into()
+      } else {
+        pane.height(Dimension::Pct(100.0)).into()
+      };
     }
     // A new rule's page is taller than a short window: it scrolls, and its prompt keeps its least height (02e). Alone,
     // it keeps the hub's column (`Pane` in 02e) and the whole page scrolls ([`Self::render`]); beside a panel, only it.
@@ -318,7 +329,7 @@ impl Editor {
       return Column::new()
         .width(Dimension::Pct(100.0))
         .spacing(HubSpacing::Row.role())
-        .child(page_head::crumb(ctx, &props.selection, true))
+        .with_children(page_head::crumb(ctx, &props.selection, true))
         .child(page_head::head(
           ctx,
           (&title, &sub, "instruction-save-status"),
@@ -359,7 +370,7 @@ impl Editor {
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(HubSpacing::Row.role())
-      .child(page_head::crumb(ctx, &props.selection, false))
+      .with_children(page_head::crumb(ctx, &props.selection, false))
       .child(page_head::head(
         ctx,
         (&title, &sub, "instruction-sub"),

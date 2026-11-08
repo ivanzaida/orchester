@@ -151,9 +151,9 @@ fn local_hub_archive_a_profile_lists_it_as_archived() {
   let mut agents = Agents::new(true);
   let id: ResourceId = agents.profile(true);
   open(&mut agents, HubView::new(HubFilter::Profiles, Some(id)));
-  agents.until("the panel", |s| s.exists("local-hub-more"));
-  agents.click("local-hub-more");
-  agents.click("local-hub-archive");
+  agents.until("the editor in the panel", |s| s.exists("agent-more"));
+  agents.click("agent-more");
+  agents.click("agent-archive");
   agents.press_until("team-hub-archive-confirm", "archived", |s| {
     s.listed().profile(id).is_none()
   });
@@ -166,4 +166,22 @@ fn local_hub_archive_a_profile_lists_it_as_archived() {
       .len(),
     0
   );
+}
+
+#[test]
+fn local_hub_profile_panel_is_the_editor_with_its_draft_and_none_of_the_old_page() {
+  let mut agents = Agents::new(true);
+  let id: ResourceId = agents.profile(true);
+  open(&mut agents, HubView::new(HubFilter::Profiles, Some(id)));
+  agents.until("the editor in the panel", |s| s.exists("agent-role"));
+  for page in ["agents-hub-title", "agent-crumb", "agents-failed"] {
+    assert!(!agents.exists(page), "{page} belongs to the old page");
+  }
+  agents.set("agent-responsibility", "Changed in the hub");
+  agents.until("saved as a draft", |s| {
+    s.listed().profile(id).expect("profile").profile.responsibilities() == "Changed in the hub"
+  });
+  agents.saved();
+  assert!(agents.exists("agent-publish"), "Publish vN is the editor's own");
+  assert!(agents.exists("agent-more"), "so is its Archive menu");
 }

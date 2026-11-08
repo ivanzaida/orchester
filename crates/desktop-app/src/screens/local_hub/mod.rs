@@ -13,6 +13,7 @@
 
 pub(in crate::screens) mod archive;
 mod archived;
+mod editing;
 mod head;
 mod list;
 mod mcp;
@@ -120,7 +121,7 @@ impl Component for LocalHubScreen {
           ctx,
           (&project, hub, listing),
           (&view, &shown),
-          (&navigation, reading),
+          reading,
           selected.as_ref(),
         )
       }
@@ -205,7 +206,7 @@ impl LocalHubScreen {
     ctx: &mut Ctx,
     (project, hub, listing): (&ShownProject, &LocalHub, &Listing),
     (view, shown): (&HubView, &list::Shown<'_>),
-    (navigation, reading): (&Navigation, bool),
+    reading: bool,
     selected: Option<&Entry>,
   ) -> Element {
     if listing.count(view.filter) == 0 {
@@ -217,7 +218,7 @@ impl LocalHubScreen {
       return EmptyState::new("local-hub-empty", Icon::Bot, ctx.t(title), ctx.t(detail)).into();
     }
     let list = list::list(ctx, listing, shown);
-    let panel = self.panel(ctx, (project, hub), selected, navigation);
+    let panel = self.panel(ctx, (project, hub), selected);
     Row::new()
       .id("local-hub-master-detail")
       .describe("state", if reading { "reading" } else { "read" })
@@ -239,13 +240,7 @@ impl LocalHubScreen {
   }
 
   /// The panel of `selected`: an archived entry's, an MCP server's, or the frame the other kinds share.
-  fn panel(
-    &self,
-    ctx: &mut Ctx,
-    (project, hub): (&ShownProject, &LocalHub),
-    selected: Option<&Entry>,
-    navigation: &Navigation,
-  ) -> Element {
+  fn panel(&self, ctx: &mut Ctx, (project, hub): (&ShownProject, &LocalHub), selected: Option<&Entry>) -> Element {
     let Some(entry) = selected else {
       return archived::nothing_picked(ctx);
     };
@@ -278,13 +273,11 @@ impl LocalHubScreen {
           unsaved: self.unsaved.clone(),
         },
       ),
-      Archivable::Resource(_) => panel::panel(
+      Archivable::Resource(_) => editing::panel(
         ctx,
-        entry,
-        &panel::Shown {
-          project: id,
-          root: &project.open.repo_root,
-          navigation,
+        editing::Props {
+          project: project.clone(),
+          entry: entry.clone(),
         },
       ),
     }

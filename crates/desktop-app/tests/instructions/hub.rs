@@ -1,9 +1,10 @@
 //! Instructions in the Agents hub: one list in the order prompts assemble them, and a new rule that chooses its
 //! scope on its page.
+use orchester_app::routes::{HubFilter, HubView, ProjectPage, Route};
 use orchester_core::{resource::InstructionScope, store::ResourceStore};
 use orchester_store::ProjectDb;
 
-use super::{harness::Instructions, preview::seed_preview};
+use super::{harness::Instructions, preview::seed_preview, support::project_id};
 
 #[test]
 fn instructions_list_follows_the_prompts_order() {
@@ -159,4 +160,38 @@ fn instructions_discard_draft_returns_to_the_published_version() {
     let entry = s.entry(id);
     !entry.state.has_draft() && entry.body.text().as_str() == "Published text"
   });
+}
+
+#[test]
+fn instructions_are_edited_in_the_hubs_panel_and_their_side_panel_stays_there() {
+  let mut screen = Instructions::new();
+  seed_preview(&screen);
+  let id = screen.rule("Standards", "Published text", InstructionScope::Project, true);
+  let hub = Route::Project(
+    project_id(),
+    ProjectPage::AgentsHub(HubView::new(HubFilter::Instructions, Some(id))),
+  );
+  screen.window.navigation().go(hub.clone());
+  screen.until("the editor in the panel", |s| s.exists("instruction-prompt"));
+  assert!(
+    screen.exists("local-hub-filter"),
+    "the hub's list stands beside the editor"
+  );
+  for page in ["instruction-library", "instruction-crumb", "agents-hub-title"] {
+    assert!(!screen.exists(page), "{page} belongs to the old page");
+  }
+  assert!(!screen.exists("instruction-panel"), "no side panel until one is chosen");
+  screen.set("instruction-prompt", "Changed in the hub");
+  screen.until("the draft saved", |s| s.entry(id).state.has_draft());
+  screen.until("a draft to preview", |s| s.exists("instruction-publish"));
+  screen.click("instruction-publish");
+  screen.until("published", |s| !s.entry(id).state.has_draft());
+  screen.until("the preview button", |s| s.exists("instruction-preview-prompt"));
+  screen.click("instruction-preview-prompt");
+  screen.until("the preview beside the rule", |s| s.exists("instruction-panel"));
+  assert_eq!(
+    screen.window.navigation().route_now(),
+    hub,
+    "choosing a panel does not leave the hub"
+  );
 }

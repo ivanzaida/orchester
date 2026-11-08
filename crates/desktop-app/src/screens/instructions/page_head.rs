@@ -19,6 +19,7 @@ use super::{
 use crate::{
   screens::hub::{
     draft_bar::{DraftBar, Standing},
+    hosted::Hosted,
     page_head::MORE_MENU_WIDTH,
     parts::tile,
     team,
@@ -32,24 +33,29 @@ use crate::{
   },
 };
 
-/// ← Instructions, or ← Instructions / New instruction on a new rule.
-pub fn crumb(ctx: &Ctx, selection: &Selection, new: bool) -> Element {
+/// ← Instructions, or ← Instructions / New instruction on a new rule; none in the hub's panel.
+pub fn crumb(ctx: &mut Ctx, selection: &Selection, new: bool) -> Option<Element> {
+  if Hosted::is(ctx) {
+    return None;
+  }
   let back = opening(selection.to(View::default()))
     .id("instruction-crumb")
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
     .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::TextMuted))
     .child(Text::new(&ctx.t("hub.tabs.instructions")).variant(HubText::Crumb.role()));
-  Row::new()
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center)
-    .child(back)
-    .with_children(new.then(|| {
-      Text::new(&ctx.t("instructions.crumbNew"))
-        .variant(HubText::Crumb.role())
-        .color(PaletteColor::TextSecondary)
-    }))
-    .into()
+  Some(
+    Row::new()
+      .spacing(ExtraSpacing::Snug.role())
+      .align_items(Alignment::Center)
+      .child(back)
+      .with_children(new.then(|| {
+        Text::new(&ctx.t("instructions.crumbNew"))
+          .variant(HubText::Crumb.role())
+          .color(PaletteColor::TextSecondary)
+      }))
+      .into(),
+  )
 }
 
 /// The … menu under the head: Archive.

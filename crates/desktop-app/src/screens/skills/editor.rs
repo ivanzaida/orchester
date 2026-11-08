@@ -151,7 +151,7 @@ impl Component for Editor {
       .id("skill-top")
       .width(Dimension::Pct(100.0))
       .spacing(HubSpacing::Row.role())
-      .child(self.crumb(ctx, &p, baseline.as_ref()))
+      .with_children(self.crumb(ctx, &p, baseline.as_ref()))
       .child(self.page_head(ctx, &p, baseline.as_ref(), &title))
       .with_children(self.leave_question(ctx, busy))
       .with_children(self.archive_question(ctx, &p, baseline.as_ref()));
@@ -180,7 +180,7 @@ impl Component for Editor {
         }
       }));
     let side = inspector::panel(ctx, &p.page, baseline.as_ref());
-    hub::page_body("skill-page", (pane.into(), MAIN_WIDTH), (side, SIDE_WIDTH))
+    hub::editor_body(ctx, "skill-page", (pane.into(), MAIN_WIDTH), (side, SIDE_WIDTH))
   }
 }
 impl Editor {

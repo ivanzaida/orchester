@@ -94,6 +94,10 @@
 # lists what names it and the run that will stop (L11), which only a person's press confirms. -Scenario
 # local-hub-archived is Reviewer, postgres-dev and a skill already archived with the runs they stopped: the Archived
 # filter lists them (L13) and an archived one's panel has Restore (L14).
+# -Scenario local-hub-claude is local-hub with three Claude Code connections (Claude 2, Home and Claude · Kontur, each checked
+# at a version of its own) and Writer, a profile on Claude 2: Agents > Profiles > Writer, and the Connection select of its
+# panel lists the connections to choose from (L1). Every kind of local-hub has an instruction (Project rules) and a skill
+# (run-checks) so each panel, which is the editor the kind has, can be edited in place.
 #
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes

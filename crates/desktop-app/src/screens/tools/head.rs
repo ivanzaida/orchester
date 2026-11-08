@@ -12,6 +12,7 @@ use crate::{
   routes::{ProjectPage, Route, ToolTab},
   screens::hub::{
     draft_bar::{DraftBar, Standing},
+    hosted::Hosted,
     page_head::{self, More},
     team,
   },
@@ -21,15 +22,19 @@ use crate::{
   },
 };
 
-pub(super) fn crumb(ctx: &mut Ctx, p: &EditorProps) -> Element {
+/// ← Tools; none in the hub's panel.
+pub(super) fn crumb(ctx: &mut Ctx, p: &EditorProps) -> Option<Element> {
+  if Hosted::is(ctx) {
+    return None;
+  }
   let tools = Navigation::of(ctx).to(Route::Project(p.project.open.project.id(), ProjectPage::Tools));
   let new = ctx.t("tools.newTitle");
-  page_head::crumb(
+  Some(page_head::crumb(
     ctx,
     "tool-crumbs",
     (&ctx.t("hub.tabs.tools"), tools),
     p.entry.is_none().then_some(&*new),
-  )
+  ))
 }
 
 /// The head: `title`, then the kind, whether it runs and how many steps call it; in a shared project `shared`, the
