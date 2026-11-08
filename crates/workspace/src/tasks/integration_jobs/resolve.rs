@@ -52,6 +52,9 @@ pub struct ResolveJob {
   pub state: JobState,
   /// After the merge stopped at conflicts: whether the editor opened.
   pub editor: Option<EditorOpened>,
+  /// The base branch merged into the worktree without a conflict, or was in the run's branch already: there was
+  /// nothing to open an editor on.
+  pub nothing_to_resolve: bool,
   /// Counts the operations that ended, so what the worktree holds is read again after each.
   pub ended: u64,
 }
@@ -91,6 +94,7 @@ impl RunJobs {
     self.update(|state| {
       if step == ResolveStep::Start {
         state.resolve.editor = None;
+        state.resolve.nothing_to_resolve = false;
       }
       state.resolve.step = Some(step.clone());
       state.resolve.state = JobState::Running;
@@ -109,6 +113,7 @@ impl RunJobs {
 
   fn resolve_now(&self, step: ResolveStep, args: ResolveArgs) {
     let (root, run, worktrees) = (&args.open.repo_root, args.run, &args.worktrees);
+    let starting = step == ResolveStep::Start;
     let (outcome, editor) = match step {
       ResolveStep::Start => match resolve::start(worktrees, root, run) {
         Ok(Started::Conflicts(files)) => (
@@ -134,6 +139,8 @@ impl RunJobs {
         // The run's branch holds the base branch now: the merge into it that conflicted is behind.
         Ok(true) => {
           state.resolve.state = JobState::Succeeded;
+          // Merged from *Resolve in editor*: nothing conflicted, so no editor opened and the page says so.
+          state.resolve.nothing_to_resolve = starting;
           state.merge = JobState::Idle;
           state.conflicts.clear();
           state.continues_locally = false;

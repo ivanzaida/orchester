@@ -291,6 +291,19 @@ impl Conflicts<'_> {
     asked.error.filter(|_| !pending)
   }
 
+  /// Whether *Resolve in editor* found nothing to resolve: git merged the base branch without a conflict, or the run's
+  /// branch held it already, so no editor was opened.
+  pub(super) fn nothing_to_resolve(&self) -> bool {
+    self
+      .project
+      .feed
+      .job_state
+      .get()
+      .run(self.run)
+      .resolve
+      .nothing_to_resolve
+  }
+
   /// The bar's actions: *Resolve in editor*, the agent field and *Ask the agent to resolve*.
   pub(super) fn actions(&self, ctx: &mut Ctx) -> Vec<Element> {
     let review = self.resolving.and_then(|resolving| resolving.review.as_ref());

@@ -10,7 +10,7 @@ use orchester_core::{
   integration::{
     RunMerge,
     attempt::{AttemptOutcome, RecordedAttempt},
-    branch_head,
+    branch_head, is_ancestor,
   },
   merge_queue::{Left, QueueState},
   project::TaskKey,
@@ -66,6 +66,9 @@ pub struct AttemptPage {
   pub awaiting_approval: bool,
   /// The files the last attempt's bring-in left changed in the checkout and that are not put back yet.
   pub left_changed: Vec<String>,
+  /// The last attempt stopped on conflicts, and the run's branch holds the base branch's head now (an agent or a
+  /// person merged it in since): merging the run into the base cannot conflict, so there is nothing left to resolve.
+  pub base_held: bool,
 }
 
 impl AttemptPage {
@@ -127,6 +130,9 @@ pub fn attempt_page(
   let queue_stopped = matches!(queue, Some(QueueState::Left(Left::Stopped { .. })));
   let awaiting_approval = queue == Some(QueueState::WaitingForApproval);
   let left_changed = left_changed((root, programs), &run, last);
+  let base_held = matches!(last, Some(AttemptOutcome::Conflicts { .. }))
+    && run.status() == &RunStatus::Succeeded
+    && base_held((root, programs), &run);
   Ok(Some(AttemptPage {
     run: MergeRun {
       task: task.id(),
@@ -148,7 +154,28 @@ pub fn attempt_page(
     queue_stopped,
     awaiting_approval,
     left_changed,
+    base_held,
   }))
+}
+
+/// Whether `run`'s branch holds the head of its base branch, as git tells; `false` when either branch is not there or
+/// git cannot tell (the log says why), which leaves the conflicts standing.
+fn base_held((root, programs): (&Path, &Programs), run: &Run) -> bool {
+  let Some(base) = run.base_branch() else {
+    return false;
+  };
+  let (runner, git) = (programs.runner(), Path::new(GIT));
+  let held = branch_head(&runner, git, (root, base)).and_then(|base_head| {
+    let branch_tip = branch_head(&runner, git, (root, run.branch()))?;
+    match (base_head, branch_tip) {
+      (Some(base_head), Some(branch_tip)) => is_ancestor(&runner, git, (root, &base_head, &branch_tip)),
+      _ => Ok(false),
+    }
+  });
+  held.unwrap_or_else(|error| {
+    tracing::warn!(%error, run = %run.id(), "cannot tell whether the run's branch holds its base branch");
+    false
+  })
 }
 
 /// The files the bring-in of `run`'s `last` attempt, which did not land, left changed and that are not put back yet;

@@ -213,6 +213,13 @@ pub fn start(
   }
   let title = format!("Merge {} into {}", base.as_str(), branch.as_str());
   let base = format!("refs/heads/{}", base.as_str());
+  // Nothing to merge, and git would make no merge commit: the run's branch holds the base branch already.
+  if git.is_ancestor(&base, "HEAD")? {
+    return Ok(Started::Merged(MergedIn {
+      base: revision(&git, &base)?,
+      tip: revision(&git, "HEAD")?,
+    }));
+  }
   let output = git.output(&["merge", "--no-ff", "--no-edit", "-m", &title, "--end-of-options", &base])?;
   if output.success() {
     return Ok(Started::Merged(merged_in(&git)?));
@@ -360,16 +367,18 @@ fn literal(path: &str) -> String {
 
 /// The merge commit at the worktree's `HEAD` and the base commit it merged in, its second parent.
 fn merged_in<R: CommandRunner>(git: &Git<'_, R>) -> Result<MergedIn, GitError> {
-  let revision = |name: &str| {
-    let commit = git.stdout(&["rev-parse", "--verify", "--end-of-options", name])?;
-    Revision::new(&commit).map_err(|_| GitError::Unrecognized {
-      expected: "a commit",
-      detail: commit,
-    })
-  };
   Ok(MergedIn {
-    base: revision("HEAD^2")?,
-    tip: revision("HEAD")?,
+    base: revision(git, "HEAD^2")?,
+    tip: revision(git, "HEAD")?,
+  })
+}
+
+/// The commit `name` points at in the worktree.
+fn revision<R: CommandRunner>(git: &Git<'_, R>, name: &str) -> Result<Revision, GitError> {
+  let commit = git.stdout(&["rev-parse", "--verify", "--end-of-options", name])?;
+  Revision::new(&commit).map_err(|_| GitError::Unrecognized {
+    expected: "a commit",
+    detail: commit,
   })
 }
 

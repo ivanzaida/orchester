@@ -1,6 +1,7 @@
 {
   "merges": {
     "notDone": "Not done: {{reason}}",
+    "nothingToResolve": "Nothing to resolve: {{branch}} is in the run's branch now and merges into it without a conflict, so no editor was opened. Try again merges the run.",
     "separator": " · ",
     "stage": {
       "policy": "Policy",
@@ -73,6 +74,7 @@
         "queueStopped": "Stopped in the merge queue",
         "awaitingApproval": "Waiting for your approval in the merge queue",
         "conflicts": "Conflicts with {{branch}}",
+        "resolved": "Ready to merge into {{branch}}",
         "notRecorded": "Merged by Git, not recorded",
         "gitStopped": "Git stopped answering",
         "leftChanged": "Stopped while bringing the merge in",
@@ -138,6 +140,7 @@
         "retrying": "Orchester could not merge: {{cause}}. That usually passes in seconds, so Orchester tries again by itself. Nothing was merged so far; the checkout and {{branch}} are as they were.",
         "queueRetries": "Orchester could not merge: {{cause}}. The merge queue tries again when it gets to the run; nothing was merged so far.",
         "awaitingApproval": "The merge queue took the run back and checked it again on {{branch}}; it waits for your approval there, and merges from there once you approve it. Nothing was merged so far.",
+        "resolved": "The last attempt stopped on conflicts with {{branch}}. The run's branch holds {{branch}} now, so merging it does not conflict any more. Nothing was merged so far.",
         "merged": "Merged into {{branch}} as {{revision}} on attempt {{attempt}}.",
         "mergedAfterOne": "Merged into {{branch}} as {{revision}} on attempt {{attempt}}. The attempt before it did not land, and nothing of it stayed behind.",
         "mergedAfterOther": "Merged into {{branch}} as {{revision}} on attempt {{attempt}}. The {{count}} attempts before it did not land, and nothing of theirs stayed behind.",
@@ -276,6 +279,8 @@
         "retryingBody": "If the last attempt is refused too, the run shows Not merged and waits for you.",
         "queueRetriesBody": "Nothing was merged so far. Stop retrying leaves the run Not merged.",
         "awaitingBody": "It merges from the merge queue once you approve it there.",
+        "resolved": "{{branch}} is already in the run's branch",
+        "resolvedBody": "Its conflicts are resolved, so Try again merges the run into {{branch}} without conflicts.",
         "conflictsOne": "{{count}} file conflicts with {{branch}}",
         "conflictsOther": "{{count}} files conflict with {{branch}}",
         "conflictsBody": "Resolve in editor merges {{branch}} into the run's worktree and opens it; the agent merges {{branch}} in and resolves them, then it's back for your review.",

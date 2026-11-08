@@ -3,12 +3,28 @@
 //! merge a person ended themselves ends it when the worktree is read again. Git in the worktree runs as the runner runs
 //! it, here in the test's process through the protocol's messages.
 
-use std::{fs, path::Path};
+use std::{
+  fs,
+  path::Path,
+  sync::{Arc, mpsc},
+  time::Duration,
+};
 
-use orchester_core::integration::resolve::Started;
+use orchester_core::{
+  id::ProjectId,
+  integration::resolve::Started,
+  name::Name,
+  project::{Project, ProjectKey},
+};
 use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
-use orchester_workspace::tasks::resolve::{self, RunWorktrees};
+use orchester_workspace::{
+  tasks::{
+    integration_jobs::{EditorOpened, JobState, ProjectJobs, ResolveArgs, ResolveJob, ResolveStep},
+    resolve::{self, RunWorktrees},
+  },
+  workspace::OpenProject,
+};
 
 use super::support::{Fixture, git};
 
@@ -106,4 +122,68 @@ fn local_integration_resolve_continue_commits_and_ends_the_resolution() {
   assert_eq!(resolution(root, &fixture), None);
   let main = git(root, &["rev-parse", "main"]);
   git(&fixture.task_root, &["merge-base", "--is-ancestor", &main, "HEAD"]);
+}
+
+/// The job *Resolve in editor* starts on the run of `fixture`, ended: how it left the run's resolve job.
+fn resolve_started(fixture: &Fixture) -> ResolveJob {
+  let root = fixture.root();
+  let project = Project::new(
+    ProjectId::generate(),
+    ProjectKey::new("TEST").expect("project key"),
+    Name::new("Test project").expect("name"),
+  );
+  let open = OpenProject {
+    project,
+    repo_root: root.to_path_buf(),
+  };
+  let jobs = ProjectJobs::default().of(open.project.id()).of(fixture.run);
+  let (ended, waiting) = mpsc::channel();
+  let args = ResolveArgs {
+    open,
+    run: fixture.run,
+    worktrees: worktrees(root),
+    editor: Err(EditorOpened::NoEditor),
+    changed: Arc::new(move || ended.send(()).expect("the test waits for the job")),
+  };
+  assert!(jobs.start_resolving(ResolveStep::Start, args), "the job began");
+  waiting
+    .recv_timeout(Duration::from_secs(60))
+    .expect("the job ended in time");
+  jobs.state().resolve
+}
+
+#[test]
+fn local_integration_resolve_in_editor_on_a_branch_that_holds_the_base_says_nothing_conflicts() {
+  // Main did not move since the run started: its head is in the run's branch, as after an agent merged it in.
+  let fixture = Fixture::recorded(false, "resolve-", "task", Some("delivered task\n"));
+  let before = git(&fixture.task_root, &["rev-parse", "HEAD"]);
+  let job = resolve_started(&fixture);
+  assert_eq!(job.state, JobState::Succeeded);
+  assert!(job.nothing_to_resolve, "the person is told there is nothing to resolve");
+  assert_eq!(job.editor, None, "no editor opens on a merge that is not there");
+  assert_eq!(
+    git(&fixture.task_root, &["rev-parse", "HEAD"]),
+    before,
+    "git changed nothing"
+  );
+  assert_eq!(resolution(fixture.root(), &fixture), None);
+}
+
+#[test]
+fn local_integration_resolve_in_editor_on_a_base_that_merges_cleanly_says_nothing_conflicts() {
+  let fixture = Fixture::recorded(false, "resolve-", "task", Some("delivered task\n"));
+  fs::write(fixture.root().join("other.txt"), "main's other file\n").expect("write");
+  git(fixture.root(), &["add", "other.txt"]);
+  git(fixture.root(), &["commit", "-m", "main's other change"]);
+  let before = git(&fixture.task_root, &["rev-parse", "HEAD"]);
+  let job = resolve_started(&fixture);
+  assert_eq!(job.state, JobState::Succeeded);
+  assert!(job.nothing_to_resolve);
+  assert_eq!(job.editor, None);
+  assert_ne!(
+    git(&fixture.task_root, &["rev-parse", "HEAD"]),
+    before,
+    "git merged main in"
+  );
+  assert_eq!(resolution(fixture.root(), &fixture), None);
 }

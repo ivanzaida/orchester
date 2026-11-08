@@ -5,7 +5,7 @@
 
 use std::{fs, path::Path};
 
-use orchester_core::integration::{FOLDER_ENTRIES_READ, FolderListing, KeepReason, clean_up, leftovers};
+use orchester_core::integration::{FOLDER_ENTRIES_READ, FolderListing, KeepReason, Staying, clean_up, leftovers};
 
 use crate::{
   cleanup::repo_with_leftovers,
@@ -136,4 +136,49 @@ fn deny_listing(dir: &Path, deny: bool) {
   use std::os::unix::fs::PermissionsExt;
   let mode = if deny { 0o000 } else { 0o755 };
   fs::set_permissions(dir, fs::Permissions::from_mode(mode)).expect("the folder's mode changes");
+}
+
+/// How the worktrees still on disk stay (ORC-920): a folder git forgot after a removal that did not finish is not
+/// "changes nobody committed", and a folder that is gone stays no more.
+#[test]
+fn staying_worktrees_are_told_by_why_they_stay() {
+  let (repo, run) = repo_with_leftovers(Ending::Interrupted);
+  let folder = repo.root.join(".orchester/worktrees").join(run.id().to_string());
+  let staying = || {
+    leftovers(&Processes, &git_program(), &repo.root, &run)
+      .expect("read")
+      .staying()
+  };
+  // The interrupted run's other worktrees are clean and stay too: they are counted apart from the changes.
+  let before = staying();
+  assert_eq!(before.with_changes, 0);
+  let others = before.unfinished - 1;
+
+  fs::write(folder.join("notes.md"), "not committed\n").expect("uncommitted work");
+  assert_eq!(
+    staying(),
+    Staying {
+      with_changes: 1,
+      unfinished: others
+    }
+  );
+
+  let folder = forget_own(&repo, &run);
+  fs::write(folder.join("remains.txt"), "what the removal left\n").expect("a file left behind");
+  assert_eq!(
+    staying(),
+    Staying {
+      with_changes: 0,
+      unfinished: others + 1
+    }
+  );
+
+  fs::remove_dir_all(&folder).expect("the folder is deleted");
+  assert_eq!(
+    staying(),
+    Staying {
+      with_changes: 0,
+      unfinished: others
+    }
+  );
 }

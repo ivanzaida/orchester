@@ -34,7 +34,7 @@ use thiserror::Error;
 
 pub use self::{
   cleanup::{
-    Cleanup, CleanupError, KeepReason, LeftBranch, LeftWorktree, Leftovers, ListedWorktree, WORKTREES_DIR,
+    Cleanup, CleanupError, KeepReason, LeftBranch, LeftWorktree, Leftovers, ListedWorktree, Staying, WORKTREES_DIR,
     WorktreeOwner, clean_up, clean_up_all, clean_up_worktrees, leftovers, leftovers_of, parse_worktree_list,
   },
   drift::{Drift, MAX_LANDED, branch_head, commit_subject, drift},

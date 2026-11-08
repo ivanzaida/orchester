@@ -137,6 +137,11 @@ impl AttemptScreen {
         body: ctx.t("merges.page.bar.awaitingBody"),
       },
       Standing::Conflicts => conflicts_words(ctx, page, base, (glyph, color)),
+      Standing::Resolved => Words {
+        glyph: (glyph, color),
+        title: title(&ctx.t_args("merges.page.bar.resolved", [("branch", base)])),
+        body: ctx.t_args("merges.page.bar.resolvedBody", [("branch", base)]),
+      },
       Standing::NotRecorded => Words {
         glyph: (Icon::Database, PaletteColor::Warning),
         title: title(&ctx.t_args("merges.page.bar.notRecorded", [("branch", base)])),

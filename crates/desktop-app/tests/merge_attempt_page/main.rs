@@ -11,6 +11,7 @@
 mod kontur;
 mod layout;
 mod merged;
+mod resolved;
 mod retries;
 #[path = "../support/mod.rs"]
 mod support;
