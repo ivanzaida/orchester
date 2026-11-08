@@ -6,7 +6,7 @@
 //! nothing, and a project this version has not opened yet (its data waits for a migration) stays untouched, for
 //! an older build of the app to keep opening it. It is listed as unreadable until a person opens it.
 
-use orchester_store::{ProjectDb, RegisteredProject, StoreError};
+use orchester_store::{ProjectDb, ReadOnlyProjectDb, RegisteredProject, StoreError};
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -64,19 +64,25 @@ pub(super) fn across<T>(
   Ok(across)
 }
 
-/// `read` of `project`, its database opened only to read it.
-fn read_one<T>(
-  project: &RegisteredProject,
-  read: &mut impl FnMut(&OpenProject, &ProjectDb) -> Result<T, ToolError>,
-) -> Result<(OpenProject, T), ToolError> {
+/// `project`'s database, opened only to read it: a project this version has not opened yet is refused and left as it
+/// is.
+pub(super) fn open_read_only(project: &RegisteredProject) -> Result<ReadOnlyProjectDb, ToolError> {
   there(project)?;
-  let db = ProjectDb::open_read_only(&project.repo_root).map_err(|error| match error {
+  ProjectDb::open_read_only(&project.repo_root).map_err(|error| match error {
     StoreError::SchemaTooOld { .. } => ToolError::refused(
       "project_not_opened_yet",
       vec![Message::new("appMcp.errors.projectNotOpenedYet").with("project", project.name.as_str().to_owned())],
     ),
     other => other.into(),
-  })?;
+  })
+}
+
+/// `read` of `project`, its database opened only to read it.
+fn read_one<T>(
+  project: &RegisteredProject,
+  read: &mut impl FnMut(&OpenProject, &ProjectDb) -> Result<T, ToolError>,
+) -> Result<(OpenProject, T), ToolError> {
+  let db = open_read_only(project)?;
   let open = OpenProject {
     project: db.project().clone(),
     repo_root: project.repo_root.clone(),

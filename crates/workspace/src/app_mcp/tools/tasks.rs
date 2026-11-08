@@ -115,7 +115,7 @@ pub async fn get_calibration(services: &Services, args: GetCalibration) -> Resul
 
 pub async fn list_tasks(services: &Services, args: ListTasks, translate: &Translate) -> Result<Value, ToolError> {
   if let Some(named) = &args.project
-    && let Some(team) = team::of(services, named).await?
+    && let Some(team) = team::of_reading(services, named).await?
   {
     let filters = orchester_api::v2::TaskFilters {
       statuses: args.status.into_iter().map(Into::into).collect(),
