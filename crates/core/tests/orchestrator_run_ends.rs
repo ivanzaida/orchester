@@ -6,13 +6,10 @@
 use orchester_core::{
   id::{ProjectId, RunId},
   orchestrator::{
-    ActionOutcome, AgentWait, ChatAction, ChatEntry, Continuing, EntryKind, MergeLeft, Merging, RunEnd, StopReason,
-    WaitKind,
-    change::{Change, ContinueChoice, ProposedChange, StepName},
+    AgentWait, Continuing, MergeLeft, Merging, RunEnd, StopReason, WaitKind,
     instructions::{ProjectReads, system_prompt, wait_prompt},
   },
   run::RunLimit,
-  time::Timestamp,
 };
 
 const STOPPED: RunEnd = RunEnd::Stopped {
@@ -90,10 +87,7 @@ fn orchestrator_run_end_prompt_says_what_to_do_with_each_end() {
     assert!(stopped.contains(part), "{part} in {stopped}");
   }
   let failed = wait_prompt(&ended(run, RunEnd::Failed));
-  for part in [
-    "failed at the step Review",
-    "do it with continue_run (return_to)",
-  ] {
+  for part in ["failed at the step Review", "do it with continue_run (return_to)"] {
     assert!(failed.contains(part), "{part} in {failed}");
   }
   assert!(

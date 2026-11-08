@@ -1,9 +1,10 @@
 //! What the Orchestrator chat's `resume_run` may do with a run (`docs/design/orchestrator-toolset.md`, decision 5):
 //! resume one a pause stopped; continue one a crash, the runner going away, *Quit now* or the project database staying
-//! busy (ORC-75) interrupted, from its last checkpoint, while the person lets the Orchestrator drive; and nothing else that stopped: a limit, a person's cancel, the runner failing to record it for
-//! any other reason, or for one it did not record, and its worktree gone leave the run to the person. A turn an interrupted run's end started by itself continues the run once, unless the run was
-//! interrupted again soon after the time before ([`Continuing::after`]), or, for the database staying busy, too many
-//! runs of the project were so lately ([`Continuing::after_contention`]).
+//! busy (ORC-75) interrupted, from its last checkpoint, while the person lets the Orchestrator drive; and nothing else
+//! that stopped: a limit, a person's cancel, the runner failing to record it for any other reason, or for one it did
+//! not record, and its worktree gone leave the run to the person. A turn an interrupted run's end started by itself
+//! continues the run once, unless the run was interrupted again soon after the time before ([`Continuing::after`]), or,
+//! for the database staying busy, too many runs of the project were so lately ([`Continuing::after_contention`]).
 
 use std::time::Duration;
 

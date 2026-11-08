@@ -200,8 +200,8 @@ fn orchestrator_links_only_with_the_links_its_tools_returned() {
   );
 }
 
-/// ORC-89: the chat adds and changes MCP servers at once while it drives and as cards otherwise, names secrets only, and says
-/// where a program it suggests came from.
+/// ORC-89: the chat adds and changes MCP servers at once while it drives and as cards otherwise, names secrets only,
+/// and says where a program it suggests came from.
 #[test]
 fn orchestrator_prompt_proposes_mcp_servers_and_names_secrets_only() {
   for reads in [ProjectReads::FileTools, ProjectReads::GitTools] {

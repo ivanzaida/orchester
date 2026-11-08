@@ -49,7 +49,7 @@ fn orchestrator_drives_migration_turns_it_on_where_answer_agents_was_on() {
       .expect("open the old database")
       .execute("UPDATE orchestrator_switches SET answers_agents = ?1", [answers])
       .expect("what the project held");
-    let mut upgraded = ProjectDb::open(old.path()).expect("migrate");
+    let upgraded = ProjectDb::open(old.path()).expect("migrate");
     assert_eq!(schema_version(&path), latest);
     assert_eq!(upgraded.run(run.id()).expect("read").expect("run"), run, "{answers:?}");
     assert_eq!(upgraded.orchestrator_drives().expect("read"), expected, "{answers:?}");

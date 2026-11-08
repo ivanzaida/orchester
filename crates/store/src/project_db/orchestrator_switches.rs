@@ -9,9 +9,13 @@ use crate::StoreError;
 impl ProjectDb {
   /// Whether the project lets the Orchestrator drive; `None` until it is written for the project.
   pub fn orchestrator_drives(&self) -> Result<Option<bool>, StoreError> {
-    Ok(self
-      .connection
-      .query_row("SELECT drives FROM orchestrator_switches WHERE id = 1", [], |row| row.get(0))?)
+    Ok(
+      self
+        .connection
+        .query_row("SELECT drives FROM orchestrator_switches WHERE id = 1", [], |row| {
+          row.get(0)
+        })?,
+    )
   }
 
   pub fn set_orchestrator_drives(&mut self, drives: bool) -> Result<(), StoreError> {

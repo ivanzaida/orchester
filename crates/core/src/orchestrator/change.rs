@@ -1,7 +1,7 @@
 //! A change the Orchestrator's agent proposed that only a person carries out, while the project's switch *Let the
-//! Orchestrator drive* is off (`docs/design/orchestrator-toolset.md`, "Decisions" 3 to 5): publishing a draft, canceling a
-//! run, merging one, answering an agent's question, sending a run's agents a message, continuing a run that waits
-//! for a person's decision, making the project's folder a git repository, a git operation that can lose work or
+//! Orchestrator drive* is off (`docs/design/orchestrator-toolset.md`, "Decisions" 3 to 5): publishing a draft,
+//! canceling a run, merging one, answering an agent's question, sending a run's agents a message, continuing a run that
+//! waits for a person's decision, making the project's folder a git repository, a git operation that can lose work or
 //! adding or widening an MCP server; and, while the switch is on, what the chat carried out itself, kept so the person
 //! sees it. It holds what the person reads before *Apply* and what *Apply* would change; a
 //! draft saved again, a version published meanwhile or a run with newer work needs a fresh proposal.

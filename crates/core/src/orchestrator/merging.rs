@@ -1,6 +1,7 @@
 //! Whether the Orchestrator turn a task's run success starts by itself merges the run (ORC-69,
-//! `docs/design/orchestrator-toolset.md`, decision 5): with *Let the Orchestrator drive* on, a run that passes the chat's rule (`orchester_workspace::orchestrator::
-//! auto_merge`) is merged once in that turn; one that does not is left to the person, the turn telling them why.
+//! `docs/design/orchestrator-toolset.md`, decision 5): with *Let the Orchestrator drive* on, a run that passes the
+//! chat's rule (`orchester_workspace::orchestrator:: auto_merge`) is merged once in that turn; one that does not is
+//! left to the person, the turn telling them why.
 
 use serde::{Deserialize, Serialize};
 
