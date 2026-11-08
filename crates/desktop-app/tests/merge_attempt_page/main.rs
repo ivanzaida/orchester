@@ -9,6 +9,7 @@
 #[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(dead_code, reason = "the seed's helpers serve every scenario; these tests seed one")]
 mod kontur;
+mod merged;
 mod retries;
 #[path = "../support/mod.rs"]
 mod support;

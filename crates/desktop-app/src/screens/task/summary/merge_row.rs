@@ -68,6 +68,8 @@ enum Shown {
   Conflicts(usize),
   NotRecorded(Timestamp),
   Merged(Timestamp),
+  /// Merged by git outside Orchester, which recorded no time for it.
+  MergedOutside,
 }
 
 impl Shown {
@@ -80,6 +82,7 @@ impl Shown {
     let at = last.map_or_else(Timestamp::now, |attempt| attempt.at());
     Some(match standing {
       Standing::Merged => Self::Merged(page.merge.as_ref().map_or(at, |merge| merge.merged_at)),
+      Standing::MergedOutside => Self::MergedOutside,
       Standing::Retrying(_) => Self::Retrying(match last.map(|attempt| attempt.asked_by()) {
         Some(MergeAsker::Retry { number }) => number.get().saturating_add(1).min(RETRIES),
         _ => 1,
@@ -112,6 +115,7 @@ impl Shown {
       Self::Conflicts(_) => Standing::Conflicts.glyph(),
       Self::NotRecorded(_) => Standing::NotRecorded.glyph(),
       Self::Merged(_) => Standing::Merged.glyph(),
+      Self::MergedOutside => Standing::MergedOutside.glyph(),
     }
   }
 
@@ -126,6 +130,7 @@ impl Shown {
       Self::Conflicts(_) => "conflicts",
       Self::NotRecorded(_) => "not_recorded",
       Self::Merged(_) => "merged",
+      Self::MergedOutside => "merged_outside",
     }
   }
 
@@ -147,6 +152,7 @@ impl Shown {
       ),
       Self::NotRecorded(at) => timed("summary.properties.merge.notRecorded", at),
       Self::Merged(at) => timed("summary.properties.merge.merged", at),
+      Self::MergedOutside => ctx.t("summary.properties.merge.mergedOutside"),
     }
   }
 }

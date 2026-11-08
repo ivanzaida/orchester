@@ -225,19 +225,7 @@ pub(super) struct Conflicts<'a> {
 impl Conflicts<'_> {
   /// *Conflicting files* with their rows, then *Ask an agent to resolve* and the editor's line.
   pub(super) fn render(&self, ctx: &mut Ctx) -> Element {
-    let rows: Vec<Element> = self
-      .files
-      .iter()
-      .enumerate()
-      .map(|(index, path)| file_row(ctx, index, path, index + 1 == self.files.len()))
-      .collect();
-    let list = Column::new()
-      .id("merge-attempt-conflicting-files")
-      .width(Dimension::Pct(100.0))
-      .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .rounded(RadiusSize::Md)
-      .clip()
-      .with_children(rows);
+    let list = files_list(ctx, self.files, "merges.page.conflicted");
     let failure = match &self.project.feed.job_state.get().run(self.run).resolve.state {
       JobState::Failed(message) => Some(field_error("merge-attempt-resolve-failed", &message_text(ctx, message))),
       _ => None,
@@ -409,8 +397,25 @@ impl Conflicts<'_> {
   }
 }
 
-/// A conflicting file: its glyph, its path and *Conflicted*.
-fn file_row(ctx: &Ctx, index: usize, path: &str, last: bool) -> Element {
+/// The rows of the conflicting `files` in one outline, each ending in the words `state` names.
+pub(super) fn files_list(ctx: &Ctx, files: &[String], state: &str) -> Element {
+  let rows: Vec<Element> = files
+    .iter()
+    .enumerate()
+    .map(|(index, path)| file_row(ctx, (index, index + 1 == files.len()), path, state))
+    .collect();
+  Column::new()
+    .id("merge-attempt-conflicting-files")
+    .width(Dimension::Pct(100.0))
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(RadiusSize::Md)
+    .clip()
+    .with_children(rows)
+    .into()
+}
+
+/// A conflicting file: its glyph, its path and the words `state` names.
+fn file_row(ctx: &Ctx, (index, last): (usize, bool), path: &str, state: &str) -> Element {
   let mut row = Row::new()
     .id(format!("merge-attempt-conflict-{index}"))
     .width(Dimension::Pct(100.0))
@@ -426,7 +431,7 @@ fn file_row(ctx: &Ctx, index: usize, path: &str, last: bool) -> Element {
         .nowrap(),
     )
     .child(
-      Text::new(&ctx.t("merges.page.conflicted"))
+      Text::new(&ctx.t(state))
         .variant(ExtraTypography::Property.role())
         .color(PaletteColor::Warning)
         .nowrap(),

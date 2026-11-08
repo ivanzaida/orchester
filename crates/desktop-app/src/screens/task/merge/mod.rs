@@ -54,7 +54,9 @@ impl Merge {
       return None;
     }
     Some(match task.attempt.as_deref().and_then(Standing::of) {
-      None | Some(Standing::Merged | Standing::Retrying(_) | Standing::AwaitingApproval) => Self::Ready,
+      None | Some(Standing::Merged | Standing::MergedOutside | Standing::Retrying(_) | Standing::AwaitingApproval) => {
+        Self::Ready
+      }
       Some(standing) => Self::NotMerged(standing),
     })
   }

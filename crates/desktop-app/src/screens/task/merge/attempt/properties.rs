@@ -126,14 +126,15 @@ fn run(ctx: &Ctx, page: &AttemptPage) -> Arc<str> {
   }
 }
 
-/// *master @ 73b2c9c*: the branch the run merges into and where it is now; `none` without one.
+/// *master @ 73b2c9c*: the branch the run merges into and where it is now; `none` without one. Once the run is merged
+/// only the branch: where it is now says nothing of the base an attempt saw.
 fn into(ctx: &Ctx, page: &AttemptPage, none: Arc<str>) -> Arc<str> {
   match (&page.run.base, &page.into_head) {
-    (Some(base), Some(head)) => ctx.t_args(
+    (Some(base), Some(head)) if !page.is_merged() => ctx.t_args(
       "merges.page.properties.intoValue",
       [("branch", base.as_str()), ("revision", short_revision(head.as_str()))],
     ),
-    (Some(base), None) => Arc::from(base.as_str()),
+    (Some(base), _) => Arc::from(base.as_str()),
     (None, _) => none,
   }
 }
