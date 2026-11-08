@@ -1,5 +1,5 @@
-//! The parts a local project's panels share (`Detail` in L1, L2): the frame (the body scrolling over the action pinned at
-//! its bottom), the chips under a head (how the entry stands, who uses it) and *Ready?*, what the entry's readiness
+//! The parts a local project's panels share (`Detail` in L1, L2): the frame (the body scrolling over the action pinned
+//! at its bottom), the chips under a head (how the entry stands, who uses it) and *Ready?*, what the entry's readiness
 //! lacks. An MCP server's panel is [`super::mcp`], an archived entry's [`super::archived`], a profile's, tool's,
 //! instruction's and skill's [`super::editing`].
 

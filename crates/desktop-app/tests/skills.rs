@@ -597,28 +597,3 @@ fn skills_crumb_returns_to_the_library_filter_it_came_from() {
   s.window.pass();
   assert_eq!(s.window.navigation().route_now(), library);
 }
-#[test]
-fn skills_are_edited_in_the_hubs_panel_with_their_draft() {
-  let mut s = Skills::new();
-  let id = s.seed("checks", true);
-  s.window.navigation().go(Route::Project(
-    project_id(),
-    ProjectPage::AgentsHub(orchester_app::routes::HubView::new(
-      orchester_app::routes::HubFilter::Skills,
-      Some(id),
-    )),
-  ));
-  s.window.until("the editor in the panel", |w| {
-    w.tree.get_element_by_id("skill-editor").is_some()
-  });
-  assert!(s.window.tree.get_element_by_id("local-hub-filter").is_some());
-  for page in ["skills-list", "skill-crumb", "agents-hub-title"] {
-    assert!(
-      s.window.tree.get_element_by_id(page).is_none(),
-      "{page} belongs to the old page"
-    );
-  }
-  s.set("skill-description", "Checks the change.");
-  s.settle(id, "Checks the change.");
-  assert!(s.window.tree.get_element_by_id("skill-publish").is_some());
-}

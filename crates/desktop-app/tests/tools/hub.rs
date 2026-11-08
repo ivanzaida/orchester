@@ -1,5 +1,5 @@
-//! A local project's Agents hub hosts the tool's editor as its panel (`Agents · v2` L1, rule 11): the list beside it, none
-//! of the old page around it, and the draft, Publish and Archive as the editor has them.
+//! A local project's Agents hub hosts the tool's editor as its panel (`Agents · v2` L1, rule 11): the list beside it,
+//! none of the old page around it, and the draft, Publish and Archive as the editor has them.
 use orchester_app::routes::{HubFilter, HubView, ProjectPage, Route};
 use orchester_core::{resource::Tool, store::ResourceStore};
 use orchester_store::ProjectDb;

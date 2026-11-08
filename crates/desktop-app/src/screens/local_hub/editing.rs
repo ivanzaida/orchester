@@ -1,7 +1,7 @@
-//! The panel of a profile, instruction, skill or tool in a local project (`Detail` in L1; `docs/design/team-configuration.md`
-//! rule 11): the editor the kind has, hosted in the hub's panel ([`Hosted`]), so every field is edited where the list
-//! is, with the local draft, *Publish vN*, *Versions* and *Archive* as the editor has them; under it, *Ready?* says what
-//! the entry still lacks on this computer.
+//! The panel of a profile, instruction, skill or tool in a local project (`Detail` in L1;
+//! `docs/design/team-configuration.md` rule 11): the editor the kind has, hosted in the hub's panel ([`Hosted`]), so
+//! every field is edited where the list is, with the local draft, *Publish vN*, *Versions* and *Archive* as the editor
+//! has them; under it, *Ready?* says what the entry still lacks on this computer.
 
 use lurq::{
   app::{

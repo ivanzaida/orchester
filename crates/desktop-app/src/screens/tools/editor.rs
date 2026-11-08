@@ -246,14 +246,19 @@ impl Component for ToolEditor {
         (busy || self.asking.get().0.is_some() || !may_change, read_only),
         widening,
       ));
-    let side = inspector::inspector(ctx, &p).into();
-    hub::editor_body(
-      ctx,
-      "tool-page",
-      (pane.into(), hub::PANE_WIDTH),
-      (side, hub::SIDE_WIDTH),
-    )
+    page(ctx, &p, pane)
   }
+}
+
+/// The pane with the inspector beside it, or under it in the hub's panel.
+fn page(ctx: &mut Ctx, p: &EditorProps, pane: Column) -> Element {
+  let side = inspector::inspector(ctx, p).into();
+  hub::editor_body(
+    ctx,
+    "tool-page",
+    (pane.into(), hub::PANE_WIDTH),
+    (side, hub::SIDE_WIDTH),
+  )
 }
 
 /// *Missing on this computer* (`04` `w0Evp`): a shared tool that names a secret or an MCP server not bound here.
