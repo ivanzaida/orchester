@@ -71,8 +71,6 @@
       "resolve": "Resolve",
       "recordMerge": "Record merge",
       "putFilesBack": "Put files back",
-      "keysCmd": "⌘↵",
-      "keysCtrl": "Ctrl+Enter",
       "noBranch": "Merge needs the branch your checkout had when the run started, which this run didn't record.",
       "noBranchShort": "No branch to merge into",
       "waits": {

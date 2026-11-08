@@ -17,7 +17,7 @@ fn card_decision_review_names_probability_threshold_and_risk() {
     );
     assert_eq!(text(&mut window, &format!("{card}-review-risk-probability")), "0.78");
     assert!(window.tree.get_element_by_id(&format!("{card}-came")).is_none());
-    assert_eq!(text(&mut window, &format!("{card}-approve")), "Allow once 1");
+    assert_eq!(text(&mut window, &format!("{card}-approve")), "Allow once");
   }
 }
 
@@ -85,9 +85,9 @@ fn card_decision_review_shell_keeps_question_answers_and_footer_in_design_order(
     assert!(allow.y < deny.y && deny.y < meta.y);
     assert_eq!(
       text(&mut window, &format!("{card}-deny-message")),
-      "Deny and tell Builder… 4"
+      "Deny and tell Builder…"
     );
-    assert_eq!(text(&mut window, &format!("{card}-more-answers")), "More 5");
+    assert_eq!(text(&mut window, &format!("{card}-more-answers")), "More");
     for suffix in ["copy", "reply", "fold"] {
       assert!(
         window.tree.get_element_by_id(&format!("{card}-{suffix}")).is_some(),
@@ -122,11 +122,11 @@ fn card_decision_review_wider_answer_keeps_confirmation_and_automation_guard() {
   });
   assert_eq!(
     text(&mut window, &format!("{card}-similar")),
-    "Allow similar in this run 2"
+    "Allow similar in this run"
   );
   assert_eq!(
     text(&mut window, &format!("{card}-everything")),
-    "Allow all in this run 3"
+    "Allow all in this run"
   );
   click(&mut window, &format!("{card}-similar"));
   assert!(window.tree.get_element_by_id(&format!("{card}-widen")).is_some());
@@ -239,11 +239,8 @@ fn card_decision_review_denial_editor_keeps_controls_inside_the_compact_field() 
   window.until("denial field", |window| {
     window.tree.get_element_by_id(&format!("{card}-message")).is_some()
   });
-  assert_eq!(text(&mut window, &format!("{card}-message-back")), "Back Esc");
-  assert_eq!(
-    text(&mut window, &format!("{card}-message-send")),
-    "Deny and send Enter"
-  );
+  assert_eq!(text(&mut window, &format!("{card}-message-back")), "Back");
+  assert_eq!(text(&mut window, &format!("{card}-message-send")), "Deny and send");
   assert_eq!(
     text(&mut window, &format!("{card}-message-told")),
     "Builder is told this and goes on; Deny never fails the step"

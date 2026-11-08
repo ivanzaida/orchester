@@ -5,7 +5,7 @@
 //! passed* and the run, then how much the run changes onto its branch. Once a merge did not land it is `warning` and
 //! `triangle-alert`: the outcome as the run's attempt page titles it, the task, the stage it stopped at and when, then
 //! the attempt in one line as the attempt page says it. Its actions: the merge's
-//! (`crate::screens::task::merge`) with its key cap; *Review changes* (`file-diff`), or *Open in Review*
+//! (`crate::screens::task::merge`); *Review changes* (`file-diff`), or *Open in Review*
 //! (`arrow-up-right`) once a merge did not land, which open the run's merge attempts under its task, its review page
 //! before any attempt and its attempt page after; *Close without merging* (`circle-check-big`), which marks the task
 //! done as *More actions* does; then *Review PR* once the run has a pull request. Under them why the merge waits, why

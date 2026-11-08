@@ -22,7 +22,6 @@ pub(in super::super) fn answers(ctx: &mut Ctx, answering: &Answering<'_>, hint: 
     "approve",
     ctx.t("cards.approval.inline.once"),
   )
-  .key("1")
   .element_ref(answering.once.clone());
   let once_hint = hint.clone();
   let once_words = ctx.t("cards.approval.inline.onceCovers");
@@ -62,9 +61,9 @@ fn actions(
     [("agent", answering.request.agent.as_str())],
   );
   let deny = if answering.request.native.is_some() {
-    button(answering, Given::Deny, "deny", ctx.t("cards.approval.deny")).key("4")
+    button(answering, Given::Deny, "deny", ctx.t("cards.approval.deny"))
   } else {
-    message_button(answering, label).key("4")
+    message_button(answering, label)
   };
   let deny_hint = hint.clone();
   let deny = deny.element_ref(focus[3].clone()).on_focus(move || deny_hint.set(None));
@@ -77,7 +76,6 @@ fn actions(
     ctx.t("cards.approval.inline.more"),
   )
   .icon(if open { Icon::ChevronUp } else { Icon::ChevronDown })
-  .key("5")
   .in_form()
   .element_ref(focus[4].clone())
   .on_focus(move || more_hint.set(None))
@@ -174,15 +172,14 @@ fn wider_button(
   focus: &ElementRef,
 ) -> Option<Element> {
   let covers = covers.ok()?;
-  let (key, number) = if given == Given::ApproveSimilar {
-    ("cards.approval.inline.similar", "2")
+  let key = if given == Given::ApproveSimilar {
+    "cards.approval.inline.similar"
   } else {
-    ("cards.approval.inline.everything", "3")
+    "cards.approval.inline.everything"
   };
   let hint = hint.clone();
   Some(
     button(answering, given, wider_name(given), ctx.t(key))
-      .key(number)
       .element_ref(focus.clone())
       .on_focus(move || hint.set(Some(covers.clone())))
       .into(),
