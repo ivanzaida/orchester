@@ -233,7 +233,16 @@ fn team_qa_actions_a_member_reads_automatic_merge_with_a_lock() {
 fn team_qa_actions_a_server_that_refuses_this_version_names_the_version_it_needs() {
   let (mut window, _server) = on(State::VersionRefused, sharing(), "sharing-version-refused");
   let said = window.text("sharing-version-refused");
-  assert!(said.contains("This team server needs Orchester 0.5.0"), "{said}");
-  let current = format!("refuses Orchester {}", env!("CARGO_PKG_VERSION"));
+  // The stand-in needs one minor above this app's own version (`examples/qa_app/team/work.rs`).
+  let own = env!("CARGO_PKG_VERSION");
+  let minor: u64 = own
+    .split('.')
+    .nth(1)
+    .and_then(|part| part.parse().ok())
+    .expect("a minor number");
+  let major = own.split('.').next().expect("a major number");
+  let needed = format!("This team server needs Orchester {major}.{}.0", minor + 1);
+  assert!(said.contains(&needed), "{said}");
+  let current = format!("refuses Orchester {own}");
   assert!(said.contains(&current), "{said}");
 }

@@ -53,7 +53,7 @@ pub(super) fn on_task(setup: (&str, State), key: &str) -> (Window, TeamServer, P
 
 /// [`on_task`] with `before_open` run on the project's folder once the state is set up and before the window opens on
 /// the task: what the project recorded before this window.
-fn on_task_after_setup(
+pub(super) fn on_task_after_setup(
   (scenario, state): (&str, State),
   key: &str,
   before_open: impl FnOnce(&Path),

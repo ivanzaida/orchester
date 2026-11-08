@@ -11,6 +11,7 @@ use orchester_core::{
   sharing::MemberRole,
   store::ResourceStore,
 };
+use orchester_store::PublishState;
 use serde_json::{Value, json};
 
 use super::team_fill_ins::{Team, team_as};
@@ -73,16 +74,18 @@ fn domain_team_mcp_server_add_is_a_persons_unless_automation_may_widen() {
   assert_eq!(refused["code"], "person_only", "{refused}");
   assert_eq!(servers(&team), 1, "nothing was created");
 
-  // Let through the gate, it reaches the team server; this project's link names none, so the new server is taken back.
+  // Let through the gate, it has no team server to reach: this project's link names none this computer is signed in
+  // to, so the new server is kept as v1 waiting to be sent (as an unreachable server keeps it), and the answer says so.
   team.served.let_automation_widen(true);
-  let refused = team.served.refused("add_mcp_server", &npx("docs"));
-  assert_eq!(refused["code"], "team_server_not_reached", "{refused}");
+  let made = team.served.ok("add_mcp_server", &npx("docs"));
   assert_eq!(
-    servers(&team),
-    1,
-    "a server the team server did not take is not created"
+    made["server"]["waiting_for_server"]["code"], "team_server_unreachable",
+    "{made}"
   );
-  assert!(team.db().waiting_publishes().expect("the outbox").is_empty());
+  assert_eq!(servers(&team), 2, "the server is kept, waiting for the team server");
+  let waiting = team.db().waiting_publishes().expect("the outbox");
+  assert_eq!(waiting.len(), 1, "{waiting:?}");
+  assert!(waiting[0].created && waiting[0].state == PublishState::Waiting);
 }
 
 #[test]
@@ -153,11 +156,9 @@ fn domain_team_mcp_server_refuses_a_key_in_the_url_and_says_where_a_secret_goes(
   assert_eq!(servers(&team), 1, "nothing was created");
   assert_eq!(latest(&team), 1, "nothing was published");
 
-  let plain = team
-    .served
-    .refused("add_mcp_server", &remote("https://mcp.example.org/x"));
+  let plain = team.served.ok("add_mcp_server", &remote("https://mcp.example.org/x"));
   assert_eq!(
-    plain["code"], "team_server_not_reached",
+    plain["server"]["waiting_for_server"]["code"], "team_server_unreachable",
     "a clean URL gets as far as the team server: {plain}"
   );
 }
