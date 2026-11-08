@@ -109,6 +109,11 @@ fn merge_attempt_page_merged_outside_orchester_shows_the_banner_and_no_fix_actio
   );
   let banner = page.window.text("merge-attempt-merged-banner");
   assert!(banner.contains("Merged into main outside Orchester"), "{banner}");
+  let head = page.window.text("merge-attempt-property-reviewed-value");
+  assert!(
+    banner.contains(&format!("{head} is in main")),
+    "the banner names the run's head that main holds: {banner}"
+  );
   assert_history_without_fixes(&mut page);
   assert_eq!(page.window.text("merge-attempt-property-into-value"), "main");
 }

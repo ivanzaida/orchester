@@ -1,7 +1,8 @@
 //! A run that was merged after the attempt the page opens on (the merge queue, a later attempt, the Orchestrator, or a
 //! person outside Orchester): the page says so first, in a success banner with the branch, the revision, and when and
-//! how, and shows the attempt as history, with no action to fix what no longer needs fixing. Orchester recorded
-//! neither revision nor time of a merge made outside it, and the banner says so rather than guess.
+//! how, and shows the attempt as history, with no action to fix what no longer needs fixing. Orchester recorded no
+//! time of a merge made outside it, and the banner says so rather than guess; the revision it shows is the run's own
+//! head, which the branch holds.
 
 use lurq::{
   app::{ctx::Ctx, theme::SpacingSize},
@@ -23,10 +24,7 @@ use super::{
 };
 use crate::{
   theme::AttemptText,
-  ui::{
-    icon::Icon,
-    notice::{Notice, NoticeTone},
-  },
+  ui::notice::{Notice, NoticeTone},
 };
 
 /// The first section of the main column: what stopped the last attempt, or what happened to a merged run; for a run
@@ -82,14 +80,18 @@ fn banner(ctx: &Ctx, page: &AttemptPage) -> Element {
     }
     (None, into) => {
       let branch = into.unwrap_or_default();
-      (
-        ctx.t_args("merges.page.banner.outside", [("branch", branch)]),
-        ctx.t_args("merges.page.banner.outsideBody", [("branch", branch)]),
-      )
+      // The run's own head is in the branch; only the time of the merge is unknown.
+      let body = match &page.reviewed {
+        Some(head) => ctx.t_args(
+          "merges.page.banner.outsideHead",
+          [("branch", branch), ("revision", short_revision(head.as_str()))],
+        ),
+        None => ctx.t_args("merges.page.banner.outsideBody", [("branch", branch)]),
+      };
+      (ctx.t_args("merges.page.banner.outside", [("branch", branch)]), body)
     }
   };
   Notice::new("merge-attempt-merged-banner", NoticeTone::Success, title)
-    .icon(Icon::GitMerge)
     .body(body)
     .into()
 }

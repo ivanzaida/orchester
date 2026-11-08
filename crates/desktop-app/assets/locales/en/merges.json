@@ -114,7 +114,8 @@
         "squash": "Squashed",
         "fastForward": "As a fast-forward",
         "outside": "Merged into {{branch}} outside Orchester",
-        "outsideBody": "The run's commits are in {{branch}}, merged with Git outside Orchester's merge flow. Orchester recorded no revision or time for it."
+        "outsideBody": "The run's commits are in {{branch}}, merged with Git outside Orchester's merge flow. Orchester recorded no revision or time for it.",
+        "outsideHead": "{{revision}} is in {{branch}}, merged with Git outside Orchester's merge flow. Orchester recorded no time for it."
       },
       "explain": {
         "held": "Another merge or local integration held this project's checkout when the merge was tried, so Orchester refused before Git ran: nothing was merged, and the run's branch and the checkout are as they were. Try again once it ends; a run in the merge queue waits for it by itself.",
