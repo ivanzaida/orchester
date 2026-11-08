@@ -17,6 +17,8 @@
       "integrationLock": "Orchester could not take this project's integration lock ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
       "projectDatabase": "Orchester could not hold this project's database and SQLite's files beside it ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
       "scratchFolder": "Orchester could not prepare its local integration folder under .orchester ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
+      "processUncertain": "Orchester could not confirm that the Git programs it ran had all stopped (the computer may be very busy, or a program from an earlier merge is still closing), so it did not touch the checkout: nothing was merged, and the branch and the checkout are unchanged. Try again in a minute; if it keeps refusing, close and reopen Orchester.",
+      "processUncertainCause": "Git's programs had not stopped in time, so Orchester could not tell what they were still doing",
       "checkoutIdentity": "Orchester could not prove which checkout and Git directory the merge would change ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
       "gitMetadata": "Orchester could not hold this repository's Git metadata while Git runs ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
       "existingResult": "Orchester could not tell whether Git already holds this run's work ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
