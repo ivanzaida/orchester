@@ -12,6 +12,7 @@ use orchester_app::{
 };
 use orchester_core::{id::ProjectId, resource::ResourceKind, store::ResourceStore, time::Timestamp};
 use orchester_store::{AppDb, ProjectDb};
+use orchester_workspace::display;
 use tempfile::TempDir;
 use tokio::runtime::Runtime;
 
@@ -188,4 +189,23 @@ fn team_qa_not_ready_card_follows_the_team_start_until_the_team_parts_are_fixed(
   });
   settle(&mut window);
   assert_eq!(rows(&mut window), ["Builder", "Reviewer", "Secret GITHUB_TOKEN"]);
+}
+
+#[test]
+fn team_qa_not_ready_header_line_names_the_computer_and_when_run_was_pressed() {
+  let (mut window, _server, _) = on_kon_5();
+  let before = Timestamp::now();
+  refused(&mut window);
+  let after = Timestamp::now();
+  settle(&mut window);
+  assert_eq!(
+    window.text("task-status-label"),
+    "Not started · not ready on this computer"
+  );
+  let pressed = window.text("task-run-line");
+  let said = |at| format!("Run pressed {}", display::clock(at));
+  assert!(
+    pressed == said(before) || pressed == said(after),
+    "the minute Run was pressed, with no earlier run to name: {pressed}"
+  );
 }

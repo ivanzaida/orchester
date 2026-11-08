@@ -43,7 +43,7 @@ impl DevtoolsInspectable for Standing {}
 
 /// What the pipeline lacks now, read again as the person's last start read it: `None` once nothing is missing, the
 /// refusal as it was while it is read, when it could not be, and when the team server's versions caused it.
-fn missing_now(ctx: &mut Ctx, props: &CardProps) -> Option<NotReadyHere> {
+pub fn missing_now(ctx: &mut Ctx, props: &CardProps) -> Option<NotReadyHere> {
   let CardProps { task, refusal } = props.clone();
   let outside = task.project.feed.outside.get();
   let changed = (

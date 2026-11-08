@@ -14,7 +14,7 @@ use lurq::{
   node::Element,
 };
 use orchester_api::v2::{AuthorityErrorCode, AuthorityRef, Subject};
-use orchester_core::id::ClaimId;
+use orchester_core::{id::ClaimId, time::Timestamp};
 use orchester_exec::programs::Programs;
 use orchester_workspace::{
   actions::{Action, ClaimAction},
@@ -22,7 +22,7 @@ use orchester_workspace::{
   sharing::device,
 };
 
-use super::{TaskContext, team::TeamTaskShown};
+use super::{TaskContext, header::controls::Pressed, team::TeamTaskShown};
 use crate::{
   project::ShownProject,
   screens::settings::orchester::{PersonOnly, moment},
@@ -69,6 +69,8 @@ const TAKE_OVER: &str = "task-take-over-confirm";
 pub struct TakingOver {
   /// The question is open.
   pub open: Signal<bool>,
+  /// When the person last asked for a start, which the header's not-ready line says (`not_ready`).
+  pub pressed: Signal<Option<Pressed>>,
   /// Taking another member's stale claim over ends their authority, which only a person decides: no MCP tool takes a
   /// claim over either.
   pub person: PersonOnly,
@@ -78,6 +80,7 @@ impl TakingOver {
   pub fn new(ctx: &mut Ctx) -> Self {
     Self {
       open: ctx.signal(false),
+      pressed: ctx.signal(None),
       person: PersonOnly::new(ctx),
     }
   }
@@ -89,6 +92,8 @@ pub struct TeamControls {
   pub action: TeamAction,
   /// Take over's question is open.
   pub taking_over: Signal<bool>,
+  /// When the person last asked for a start.
+  pub pressed: Signal<Option<Pressed>>,
   person: PersonOnly,
 }
 
@@ -100,6 +105,7 @@ impl TeamControls {
   /// `ask` once no other is under way.
   pub fn run(&self, ask: TeamAsk) {
     if !self.action.state().get_untracked().is_pending() {
+      self.pressed.set(Some(Pressed(Timestamp::now())));
       self.action.run(ask);
     }
   }
@@ -129,6 +135,7 @@ pub fn provide(ctx: &mut Ctx, (project, shown): (&ShownProject, Option<Arc<TeamT
   ctx.provide(TeamControls {
     action,
     taking_over: taking_over.open.clone(),
+    pressed: taking_over.pressed.clone(),
     person: taking_over.person.clone(),
   });
 }

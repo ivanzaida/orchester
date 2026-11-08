@@ -7,8 +7,12 @@ use orchester_app::{
   routes::{ProjectPage, Route, TaskTab, TaskView},
   ui::icon::Icon,
 };
-use orchester_core::store::{McpServerStore, RunStore, TaskStore};
+use orchester_core::{
+  store::{McpServerStore, RunStore, TaskStore},
+  time::Timestamp,
+};
 use orchester_store::ProjectDb;
+use orchester_workspace::display;
 
 use crate::Page;
 
@@ -156,4 +160,36 @@ fn task_not_ready_on_another_tab_the_notice_asks_again_too_and_goes_with_the_car
   page.wait("the Summary's card to be asked again", |window| {
     window.texts("task-not-ready").is_none()
   });
+}
+
+/// The header's status line: `Not started · not ready`, then when Run was pressed (`Status line` `g9ufW` in L9
+/// `f5CEX`, which names no computer for a local project).
+#[test]
+fn task_not_ready_header_line_says_the_run_was_refused_and_when_it_was_pressed() {
+  let before = Timestamp::now();
+  let mut page = refused();
+  let after = Timestamp::now();
+  assert_eq!(page.text("task-status-label"), "Not started · not ready");
+  let pressed = page.text("task-run-line");
+  let said = |at| format!("Run pressed {}", display::clock(at));
+  assert!(
+    pressed == said(before) || pressed == said(after),
+    "the minute Run was pressed, with no earlier run to name: {pressed}"
+  );
+  assert!(
+    !page.text("task-status-row").contains("computer"),
+    "a local project's words"
+  );
+}
+
+#[test]
+fn task_not_ready_header_line_goes_back_once_the_card_finds_nothing_missing() {
+  let (mut page, key) = refused_task();
+  fix_everything(&page);
+  page.show(&key, TaskView::of(TaskTab::Conversation));
+  page.wait("the notice to be asked again", |window| {
+    window.texts("task-not-ready-notice").is_none()
+  });
+  assert_eq!(page.text("task-run-line"), "No runs yet", "the draft's own line again");
+  assert_eq!(page.text("task-status-label"), "Draft");
 }

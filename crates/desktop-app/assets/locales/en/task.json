@@ -95,7 +95,9 @@
       "failed": "reported failed",
       "unverified": "could not check everything",
       "unchanged": "not run again",
-      "conflict": "conflict"
+      "conflict": "conflict",
+      "notReadyHere": "Not started · not ready on this computer",
+      "notReady": "Not started · not ready"
     },
     "points": {
       "person": "{{count}} pt",
@@ -116,7 +118,9 @@
       "draft": "No runs yet",
       "queued": "Queued · its run has not started",
       "unreadable": "Run {{run}} · could not be read",
-      "unreadableUnnumbered": "Its latest run could not be read"
+      "unreadableUnnumbered": "Its latest run could not be read",
+      "notReadyPressed": "Run pressed {{pressed}}",
+      "notReadyAfterRun": "Run pressed {{pressed}} · run {{run}} ended {{ended}}"
     },
     "run": {
       "mode": {
