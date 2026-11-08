@@ -6,7 +6,13 @@
 //!
 //! `cargo test -p orchester-app --features test-support --test team_qa team_qa_start_notices`
 
+use std::{
+  path::Path,
+  time::{Duration, Instant},
+};
+
 use orchester_app::test_support::Window;
+use orchester_core::id::OperationId;
 
 use super::{
   not_ready::on_task,
@@ -107,4 +113,69 @@ fn team_qa_start_notices_a_failure_settled_earlier_is_told_once_and_dismissed() 
     window.texts("task-team-refused")
   );
   assert!(window.texts("task-team-starting").is_none());
+}
+
+/// Records a start of KON-5 newer than the one the project holds, as `stage` and `failure` say, copying its request.
+fn record_newer_start(root: &Path, (stage, failure): (&str, Option<&str>)) {
+  let created = orchester_core::time::Timestamp::now().unix_millis();
+  rusqlite::Connection::open(root.join(".orchester/orchester.db"))
+    .expect("open")
+    .execute(
+      "INSERT INTO team_starts (operation_id, task_id, request, stage, work_id, bundle_sha256, failure, created_at, \
+       updated_at) SELECT ?1, task_id, request, ?2, work_id, bundle_sha256, ?3, ?4, ?4 FROM team_starts \
+       ORDER BY created_at DESC LIMIT 1",
+      rusqlite::params![OperationId::generate().to_string(), stage, failure, created],
+    )
+    .expect("a newer start");
+}
+
+fn seen_marks(root: &Path) -> i64 {
+  rusqlite::Connection::open(root.join(".orchester/orchester.db"))
+    .expect("open")
+    .query_row("SELECT COUNT(*) FROM team_start_seen", [], |row| row.get(0))
+    .expect("count")
+}
+
+fn failure_of(root: &Path) -> String {
+  rusqlite::Connection::open(root.join(".orchester/orchester.db"))
+    .expect("open")
+    .query_row("SELECT failure FROM team_starts", [], |row| row.get(0))
+    .expect("the failure")
+}
+
+#[test]
+fn team_qa_start_notices_dismissing_marks_the_start_on_screen_and_not_a_newer_one() {
+  let (mut window, _server, _project) = on_task(("team-start-past-failure", State::StartPastFailure), "KON-5");
+  let root = window.data.repo("repo-kontur");
+  window.until_within(WITHIN, "the failure", |window| notice_says(window, "Update Orchester"));
+
+  // Another start of the task failed meanwhile, which the page does not show yet.
+  record_newer_start(&root, ("failed", Some(&failure_of(&root))));
+  window.press("task-team-refused-dismiss");
+  let calm = Instant::now() + Duration::from_secs(3);
+  window.until_within(WITHIN, "the page settles", |_| Instant::now() > calm);
+
+  assert_eq!(seen_marks(&root), 0, "the newer start was not marked seen");
+  assert!(
+    notice_says(&mut window, "Update Orchester"),
+    "the newer start tells its own failure, which nobody has seen"
+  );
+}
+
+#[test]
+fn team_qa_start_notices_a_notice_after_a_dismissal_shows_in_the_same_window() {
+  let (mut window, _server, _project) = on_task(("team-start-past-failure", State::StartPastFailure), "KON-5");
+  let root = window.data.repo("repo-kontur");
+  window.until_within(WITHIN, "the failure", |window| notice_says(window, "Update Orchester"));
+  window.press("task-team-refused-dismiss");
+  window.until_within(WITHIN, "the notice goes", |window| {
+    window.texts("task-team-refused").is_none()
+  });
+  window.until_within(WITHIN, "the start is marked seen", |_| seen_marks(&root) == 1);
+
+  // Recovery finds a new start the runner refuses: the same window tells it, as it would without the dismissal.
+  record_newer_start(&root, ("inputs_stored", None));
+  window.until_within(WITHIN, "the runner's refusal", |window| {
+    notice_says(window, "The runner reported a problem while starting the run")
+  });
 }

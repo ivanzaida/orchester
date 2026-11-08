@@ -19,7 +19,9 @@ use orchester_store::ProjectDb;
 use serde_json::{Value, json};
 
 use super::{
-  Team, bundle_missing, on_worker,
+  Team,
+  bundle_missing::{self, claim_message},
+  on_worker,
   outcome::{accepted, action_refused, authority_refused},
   read, read_refused,
   tasks::find,
@@ -37,7 +39,7 @@ use crate::{
   tasks::run::start_messages,
   team_reads::{TeamReadError, listed::TeamPipelines},
   team_work::{
-    self, BranchNotFound, ProjectRunner, StartFailure, StartOutcome, StartTurn, TeamStartRequest, TeamWork,
+    self, BranchNotFound, ClaimEnd, ProjectRunner, StartFailure, StartOutcome, StartTurn, TeamStartRequest, TeamWork,
     TeamWorkError,
   },
 };
@@ -175,17 +177,22 @@ async fn started(team: &Team, outcome: StartOutcome) -> Result<Value, ToolError>
       Err(bundle_missing::refused(team, error.details(), claim).await)
     }
     StartOutcome::Refused(error, _) => Err(authority_refused(&error)),
-    StartOutcome::Failed(StartFailure::BundleSchema { read, built }, _) => Err(bundle_schema(Schemas { read, built })),
-    StartOutcome::Failed(StartFailure::BundleUnreadable, _) => Err(ToolError::refused(
+    StartOutcome::Failed(StartFailure::BundleSchema { read, built }, claim) => {
+      Err(bundle_schema(Schemas { read, built }, claim))
+    }
+    StartOutcome::Failed(StartFailure::BundleUnreadable, claim) => Err(ToolError::refused(
       "team_bundle_unreadable",
-      vec![Message::new("appMcp.errors.teamBundleUnreadable")],
+      vec![Message::new("appMcp.errors.teamBundleUnreadable"), claim_message(claim)],
     )),
     StartOutcome::Failed(StartFailure::NotReadyHere { pipeline, missing }, claim) => Err(ToolError::NotReadyHere(
       NotReadyHere::after_start(pipeline, missing, claim),
     )),
-    StartOutcome::Failed(failure, _) => {
+    StartOutcome::Failed(failure, claim) => {
       tracing::warn!(?failure, "a team start failed for good");
-      Err(start_failed())
+      Err(ToolError::refused(
+        "team_start_failed",
+        vec![Message::new("appMcp.errors.teamStartFailed"), claim_message(claim)],
+      ))
     }
     StartOutcome::RunnerRefused(rejection) => {
       let error = RunRequestError::Rejected(rejection);
@@ -205,7 +212,7 @@ struct Schemas {
 }
 
 /// The bundle is built in another schema than this computer reads: the older of the two is updated.
-fn bundle_schema(Schemas { read, built }: Schemas) -> ToolError {
+fn bundle_schema(Schemas { read, built }: Schemas, claim: ClaimEnd) -> ToolError {
   let key = if built > read {
     "appMcp.errors.teamBundleSchemaNewer"
   } else {
@@ -217,6 +224,7 @@ fn bundle_schema(Schemas { read, built }: Schemas) -> ToolError {
       Message::new(key)
         .with("read", read.to_string())
         .with("built", built.to_string()),
+      claim_message(claim),
     ],
   )
 }

@@ -56,6 +56,10 @@ fn team_mcp_bundle_schema_older_than_this_app_names_the_server_as_the_one_to_upd
     "appMcp.errors.teamBundleSchemaOlder",
     (EXECUTION_BUNDLE_SCHEMA, older),
   );
+  assert!(
+    error.to_string().contains("appMcp.errors.teamClaimReleased"),
+    "the answer says what became of the claim: {error}"
+  );
   assert_eq!(server.state().works_made, 1);
 }
 
@@ -80,5 +84,9 @@ fn team_mcp_bundle_that_is_json_but_no_bundle_is_refused_unreadable() {
   assert!(
     error.to_string().contains("appMcp.errors.teamBundleUnreadable"),
     "{error}"
+  );
+  assert!(
+    error.to_string().contains("appMcp.errors.teamClaimReleased"),
+    "the answer says what became of the claim: {error}"
   );
 }

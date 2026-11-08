@@ -139,16 +139,18 @@ impl ProjectDb {
   }
 
   /// Keeps `refusal`, as the workspace wrote it, as the runner's last answer to the start under `operation`; `None`
-  /// when the runner did not refuse it this time. Only a start that is not settled keeps one.
+  /// when the runner did not refuse it this time, or was not asked. Only a start that is not settled keeps one. The
+  /// start's `updated_at` is its last change, so it moves with this.
   pub fn keep_team_start_runner_refusal(
     &mut self,
     operation: OperationId,
     refusal: Option<&str>,
+    at: Timestamp,
   ) -> Result<(), StoreError> {
     let updated = self.connection.execute(
-      "UPDATE team_starts SET runner_refusal = ?2 WHERE operation_id = ?1 \
+      "UPDATE team_starts SET runner_refusal = ?2, updated_at = ?3 WHERE operation_id = ?1 \
        AND stage IN ('requested', 'accepted', 'inputs_stored')",
-      params![operation.to_string(), refusal],
+      params![operation.to_string(), refusal, at.unix_millis()],
     )?;
     ensure_updated(&self.connection, operation, updated)
   }

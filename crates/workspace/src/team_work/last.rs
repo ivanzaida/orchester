@@ -5,7 +5,10 @@
 use std::path::Path;
 
 use orchester_api::v2::EXECUTION_BUNDLE_SCHEMA;
-use orchester_core::{id::TaskId, time::Timestamp};
+use orchester_core::{
+  id::{OperationId, TaskId},
+  time::Timestamp,
+};
 use orchester_ipc::Rejection;
 use orchester_store::{ProjectDb, TeamStart, TeamStartStage};
 
@@ -13,6 +16,13 @@ use super::{
   StartFailure, StartOutcome, TeamWorkError,
   start::{KeptStart, failed, refused},
 };
+
+/// A task's newest start: which it is, and where it stands.
+#[derive(Debug)]
+pub struct NewestStart {
+  pub operation: OperationId,
+  pub last: LastStart,
+}
 
 /// Where a task's newest start stands.
 #[derive(Debug)]
@@ -33,7 +43,7 @@ pub enum LastStart {
 }
 
 /// The newest start of the task `task` in the project at `root`; `None` when the task has none. Blocks on SQLite.
-pub fn last_start(root: &Path, task: TaskId) -> Result<Option<LastStart>, TeamWorkError> {
+pub fn last_start(root: &Path, task: TaskId) -> Result<Option<NewestStart>, TeamWorkError> {
   let Some(record) = ProjectDb::open(root)?.latest_team_start(task)? else {
     return Ok(None);
   };
@@ -47,10 +57,14 @@ pub fn last_start(root: &Path, task: TaskId) -> Result<Option<LastStart>, TeamWo
     TeamStartStage::Failed => failed(&record).map(|outcome| settled(&record, outcome)),
     TeamStartStage::Requested | TeamStartStage::Accepted | TeamStartStage::InputsStored => open(&record),
   };
-  match read {
-    Err(error) if error.is_permanent() => Ok(Some(LastStart::Unreadable)),
-    read => read.map(Some),
-  }
+  let last = match read {
+    Err(error) if error.is_permanent() => LastStart::Unreadable,
+    read => read?,
+  };
+  Ok(Some(NewestStart {
+    operation: record.operation,
+    last,
+  }))
 }
 
 /// A settled start as the page tells it: told already when the person has seen it or its reason no longer holds.
@@ -79,13 +93,17 @@ fn open(record: &TeamStart) -> Result<LastStart, TeamWorkError> {
   })
 }
 
-/// Marks that the person has seen what the newest start of the task `task` came to, if it is settled for good, so the
-/// task's page does not tell it again in every window ([`LastStart::Told`]). A task whose newest start is not
-/// settled, or has none, is left as it is. Blocks on SQLite.
-pub fn start_seen(root: &Path, task: TaskId) -> Result<(), TeamWorkError> {
+/// Marks that the person has seen what the start `operation`, the newest of the task `task` when the page showed it,
+/// came to, if it is settled for good, so the task's page does not tell it again in every window
+/// ([`LastStart::Told`]). A start that is not settled is left as it is. A start that a later one has replaced is
+/// [`TeamWorkError::StartSuperseded`]: what the person saw is not marked as seen of the newer start. Blocks on SQLite.
+pub fn start_seen(root: &Path, task: TaskId, operation: OperationId) -> Result<(), TeamWorkError> {
   let mut db = ProjectDb::open(root)?;
-  let Some(record) = db.latest_team_start(task)? else {
-    return Ok(());
+  let Some(record) = db
+    .latest_team_start(task)?
+    .filter(|record| record.operation == operation)
+  else {
+    return Err(TeamWorkError::StartSuperseded(operation));
   };
   if matches!(record.stage, TeamStartStage::Refused | TeamStartStage::Failed) {
     db.mark_team_start_seen(record.operation, Timestamp::now())?;

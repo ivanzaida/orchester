@@ -26,7 +26,8 @@ pub(super) async fn refused(team: &Team, details: &ErrorDetails, claim: Option<C
   }
 }
 
-fn claim_message(claim: ClaimEnd) -> Message {
+/// What became of the task's claim when a start ended without a run.
+pub(super) fn claim_message(claim: ClaimEnd) -> Message {
   Message::new(match claim {
     ClaimEnd::Released => "appMcp.errors.teamClaimReleased",
     ClaimEnd::Kept => "appMcp.errors.teamClaimKept",

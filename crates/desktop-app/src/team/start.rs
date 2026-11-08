@@ -24,8 +24,8 @@ use orchester_workspace::{
   runner::{RunRequestError, Runners},
   tasks::run::start_messages,
   team_work::{
-    self, BranchNotFound, ClaimEnd, LastStart, ProjectRunner, StartFailure, StartOutcome, StartTurn, TeamStartRequest,
-    TeamWork, TeamWorkError, bundle_missing_message,
+    self, BranchNotFound, ClaimEnd, LastStart, NewestStart, ProjectRunner, StartFailure, StartOutcome, StartTurn,
+    TeamStartRequest, TeamWork, TeamWorkError, bundle_missing_message,
   },
 };
 
@@ -222,6 +222,8 @@ async fn carry_out(
 /// nothing.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Recorded {
+  /// The start this is the record of, which a dismissal names.
+  pub operation: OperationId,
   pub started: Started,
   pub telling: Telling,
 }
@@ -242,7 +244,7 @@ pub enum Telling {
 
 /// Where the task's newest start stands as the project's records tell it, e.g. after recovery settled one that
 /// waited; as [`started`] reads the cached name of a resource a refusal names. Blocks on SQLite.
-pub fn recorded(last: LastStart, root: &Path) -> Recorded {
+pub fn recorded(NewestStart { operation, last }: NewestStart, root: &Path) -> Recorded {
   let (started, telling) = match last {
     LastStart::Open => (Started::Waiting, Telling::Standing),
     LastStart::RunnerRefused(rejection) => (runner_refused(rejection), Telling::Standing),
@@ -257,7 +259,11 @@ pub fn recorded(last: LastStart, root: &Path) -> Recorded {
     LastStart::Told(outcome) => (started(outcome, root), Telling::Told),
     LastStart::Unreadable => (Started::Stopped(Stop::StartUnreadable), Telling::Standing),
   };
-  Recorded { started, telling }
+  Recorded {
+    operation,
+    started,
+    telling,
+  }
 }
 
 fn runner_refused(rejection: Rejection) -> Started {

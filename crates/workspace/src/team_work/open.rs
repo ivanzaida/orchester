@@ -3,7 +3,7 @@
 
 use std::{collections::HashMap, path::Path};
 
-use orchester_core::{id::OperationId, secret::SecretVault};
+use orchester_core::{id::OperationId, secret::SecretVault, time::Timestamp};
 use orchester_store::ProjectDb;
 
 use super::{ProjectRunner, StartOutcome, TeamRunner, TeamWork, TeamWorkError};
@@ -51,7 +51,7 @@ pub async fn recover_open_starts(
   drop(db);
   let session = match servers.team_session(link.server, link.project).await {
     Ok(session) => session,
-    Err(SharingError::Offline | SharingError::SignedOut) => return Ok(OpenStarts::default()),
+    Err(SharingError::Offline | SharingError::SignedOut) => return forget_runner_refusals(root).map_err(Into::into),
     Err(error) => return Err(error.into()),
   };
   let dispatcher = Dispatcher::new(root.to_owned(), servers.clone(), Some(session));
@@ -60,6 +60,22 @@ pub async fn recover_open_starts(
     .carry_on_open(vault)
     .await
     .map_err(Into::into)
+}
+
+/// The open starts of the project at `root` wait for the team server, which cannot be reached or has this computer
+/// signed out, so the runner is not asked this round: what it refused the last time no longer says where they stand,
+/// and the page says that they wait. Says whether some start's kept refusal was dropped, which the page is told to read
+/// again. Blocks on SQLite.
+pub fn forget_runner_refusals(root: &Path) -> Result<OpenStarts, TeamWorkError> {
+  let mut db = ProjectDb::open(root)?;
+  let mut changed = false;
+  for start in db.open_team_starts()? {
+    if start.runner_refusal.is_some() {
+      db.keep_team_start_runner_refusal(start.operation, None, Timestamp::now())?;
+      changed = true;
+    }
+  }
+  Ok(OpenStarts { changed })
 }
 
 impl<R: TeamRunner> TeamWork<R> {
