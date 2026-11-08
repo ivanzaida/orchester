@@ -49,8 +49,8 @@ pub enum StartOutcome {
   /// The server cannot be reached, or refused for now: the start waits at this boundary and goes on from it.
   Waiting(TeamStartStage),
   /// The server refused the start for good: it made no work, or the authority the bundle was built for is gone. A
-  /// `bundle_missing` refusal released the claim with it.
-  Refused(AuthorityError),
+  /// `bundle_missing` refusal released the claim with it, and says what became of it.
+  Refused(AuthorityError, Option<ClaimEnd>),
   /// The accepted bundle can never become the run's inputs here; the start goes no further. The claim is let go of
   /// unless it cannot be ([`ClaimEnd`]).
   Failed(StartFailure, ClaimEnd),
@@ -140,18 +140,12 @@ impl KeptStart {
 type Step = Result<TeamStart, StartOutcome>;
 
 impl<R: TeamRunner> TeamWork<R> {
-  /// Starts the work `request` asks for: recorded here first, then carried on as far as it goes now. Sending the same
-  /// request again carries on the recorded start; the same operation with another request is refused. `vault` is
-  /// asked whether this computer has the team secrets the pinned MCP servers take, when the bundle is checked. One
-  /// start of a project is carried on at a time: this one waits for another, and recovery leaves it alone. A caller
-  /// that takes a claim for the start first holds the turn from before it ([`StartTurn::wait`], [`Self::start_in`]).
-  pub async fn start(&self, request: TeamStartRequest, vault: &dyn SecretVault) -> Result<StartOutcome, TeamWorkError> {
-    let turn = StartTurn::wait(self.dispatcher.servers(), self.dispatcher.root()).await;
-    self.start_in(&turn, request, vault).await
-  }
-
-  /// [`Self::start`] in the project's `turn`, which the caller took before it claimed the task: the recovery of other
-  /// starts cannot release that claim before this start is recorded. `turn` is the one of this dispatcher's project.
+  /// Starts the work `request` asks for in the project's `turn`, which the caller took before it claimed the task: the
+  /// recovery of other starts cannot release that claim before this start is recorded. `turn` is the one of this
+  /// dispatcher's project ([`StartTurn::wait`]). The start is recorded here first, then carried on as far as it goes
+  /// now. Sending the same request again carries on the recorded start; the same operation with another request is
+  /// refused. `vault` is asked whether this computer has the team secrets the pinned MCP servers take, when the bundle
+  /// is checked. One start of a project is carried on at a time, and recovery leaves this one alone.
   pub async fn start_in(
     &self,
     _turn: &StartTurn,
@@ -334,22 +328,26 @@ impl<R: TeamRunner> TeamWork<R> {
   }
 
   /// Settles the start under `operation` refused as the server did. A refusal that the bundle cannot be built
-  /// (`bundle_missing`) leaves the claim held with no work made, so it is released first: while the server cannot be
-  /// reached for that, the start waits at `Requested`, where the same operation answers the same refusal again.
+  /// (`bundle_missing`) leaves the claim held with no work made, so it is released first, and what became of the claim
+  /// is kept with the refusal: while the server cannot be reached for that, the start waits at `Requested`, where the
+  /// same operation answers the same refusal again.
   async fn refuse(
     &self,
     (operation, authority): (OperationId, AuthorityRef),
     error: AuthorityError,
   ) -> Result<StartOutcome, TeamWorkError> {
-    if error.code() == AuthorityErrorCode::BundleMissing
-      && self.release_claim(operation, authority).await? == Released::Waits
-    {
-      return Ok(StartOutcome::Waiting(TeamStartStage::Requested));
-    }
+    let claim = if error.code() == AuthorityErrorCode::BundleMissing {
+      match self.release_claim(operation, authority).await? {
+        Released::Waits => return Ok(StartOutcome::Waiting(TeamStartStage::Requested)),
+        Released::Ended(claim) => Some(claim),
+      }
+    } else {
+      None
+    };
     // A refusal serializes to JSON without fail: it holds no map with non-string keys.
-    let text = serde_json::to_string(&error).expect("a refusal serializes");
+    let text = serde_json::to_string(&KeptRefusal::of(&error, claim)).expect("a refusal serializes");
     self.db()?.refuse_team_start(operation, &text, Timestamp::now())?;
-    Ok(StartOutcome::Refused(error))
+    Ok(StartOutcome::Refused(error, claim))
   }
 
   /// Settles the accepted start under `operation` failed when `error` lasts, after the claim is released; any other
@@ -375,18 +373,42 @@ impl<R: TeamRunner> TeamWork<R> {
   }
 }
 
+/// What a refused start keeps: the server's refusal, and what became of the claim when the refusal released it. A
+/// refusal kept before the claim's end was kept with it is the bare refusal.
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+enum KeptRefusal {
+  Ended { refusal: AuthorityError, claim: ClaimEnd },
+  Bare(AuthorityError),
+}
+
+impl KeptRefusal {
+  fn of(error: &AuthorityError, claim: Option<ClaimEnd>) -> Self {
+    match claim {
+      Some(claim) => Self::Ended {
+        refusal: error.clone(),
+        claim,
+      },
+      None => Self::Bare(error.clone()),
+    }
+  }
+}
+
 /// The refusal kept with a refused start.
-fn refused(record: &TeamStart) -> Result<StartOutcome, TeamWorkError> {
+pub(super) fn refused(record: &TeamStart) -> Result<StartOutcome, TeamWorkError> {
   let text = record
     .refusal
     .as_deref()
     .ok_or(TeamWorkError::Unreadable(record.operation))?;
-  let error = serde_json::from_str(text).map_err(|_| TeamWorkError::Unreadable(record.operation))?;
-  Ok(StartOutcome::Refused(error))
+  let kept: KeptRefusal = serde_json::from_str(text).map_err(|_| TeamWorkError::Unreadable(record.operation))?;
+  Ok(match kept {
+    KeptRefusal::Ended { refusal, claim } => StartOutcome::Refused(refusal, Some(claim)),
+    KeptRefusal::Bare(refusal) => StartOutcome::Refused(refusal, None),
+  })
 }
 
 /// The failure kept with a failed start.
-fn failed(record: &TeamStart) -> Result<StartOutcome, TeamWorkError> {
+pub(super) fn failed(record: &TeamStart) -> Result<StartOutcome, TeamWorkError> {
   let text = record
     .failure
     .as_deref()

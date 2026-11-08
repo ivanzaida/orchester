@@ -1,6 +1,6 @@
 //! One start of a project at a time (ORC-885): the person's Run and the recovery of the project's open starts never
 //! carry on the same start together; a Run takes the project's turn before its claim; and recovery tries again later
-//! after what it could not carry on for now, but not after a record it cannot read.
+//! after what it could not carry on for now, and leaves a record it cannot read open, settling nothing.
 
 use std::sync::Arc;
 
@@ -17,6 +17,9 @@ use crate::{
   fixture::Config,
   team_server::{MEMBER, TeamServer},
 };
+
+/// Carrying on the open starts did not bring one to its end.
+const NOTHING_SETTLED: OpenStarts = OpenStarts { settled: false };
 
 /// A runner that holds the start at its last boundary until the test lets it go on.
 #[derive(Clone)]
@@ -54,7 +57,7 @@ async fn team_work_alone_recovery_leaves_a_start_that_is_under_way_to_its_run() 
   let recovering = TeamWork::new(dispatcher, gated.clone());
 
   let request = checkout.start_request(&server, claim);
-  let start = running.start(request, checkout.vault());
+  let start = checkout.start(&running, request);
   let meanwhile = async {
     gated.asked.notified().await;
     assert_eq!(
@@ -68,7 +71,7 @@ async fn team_work_alone_recovery_leaves_a_start_that_is_under_way_to_its_run() 
     );
     assert_eq!(
       recovering.carry_on_open(checkout.vault()).await.expect("tried"),
-      OpenStarts::Waiting
+      NOTHING_SETTLED
     );
     gated.go.notify_one();
   };
@@ -78,7 +81,7 @@ async fn team_work_alone_recovery_leaves_a_start_that_is_under_way_to_its_run() 
   assert_eq!(runner.asked(), 1, "the runner was asked once");
   assert_eq!(
     recovering.carry_on_open(checkout.vault()).await.expect("tried"),
-    OpenStarts::Settled,
+    NOTHING_SETTLED,
     "nothing is left to carry on once the start ended"
   );
 }
@@ -94,8 +97,8 @@ async fn team_work_alone_two_sends_of_one_start_make_one_run() {
   let request = checkout.start_request(&server, claim);
 
   let (one, other) = tokio::join!(
-    first.start(request.clone(), checkout.vault()),
-    second.start(request.clone(), checkout.vault())
+    checkout.start(&first, request.clone()),
+    checkout.start(&second, request.clone())
   );
   let (StartOutcome::Started(one), StartOutcome::Started(other)) = (one.expect("one"), other.expect("other")) else {
     panic!("both start");
@@ -111,21 +114,21 @@ async fn team_work_alone_a_start_waiting_for_the_server_is_left_waiting_until_it
   let claim = checkout.claim(&server, MEMBER).await;
   let (work, _generation) = checkout.work(&server, MEMBER, StoreRunner::new(checkout.root(), &[]));
   server.set_down(true);
-  work
-    .start(checkout.start_request(&server, claim), checkout.vault())
+  checkout
+    .start(&work, checkout.start_request(&server, claim))
     .await
     .expect("waits");
 
   assert_eq!(
     work.carry_on_open(checkout.vault()).await.expect("tried"),
-    OpenStarts::Waiting
+    NOTHING_SETTLED
   );
   assert_eq!(checkout.db().open_team_starts().expect("open").len(), 1);
 
   server.set_down(false);
   assert_eq!(
     work.carry_on_open(checkout.vault()).await.expect("tried"),
-    OpenStarts::Settled
+    OpenStarts { settled: true }
   );
   assert!(checkout.db().open_team_starts().expect("open").is_empty());
 }
@@ -137,8 +140,8 @@ async fn team_work_alone_recovery_leaves_the_project_to_a_run_that_holds_its_tur
   let claim = checkout.claim(&server, MEMBER).await;
   let (work, _generation) = checkout.work(&server, MEMBER, StoreRunner::new(checkout.root(), &[]));
   server.set_down(true);
-  work
-    .start(checkout.start_request(&server, claim), checkout.vault())
+  checkout
+    .start(&work, checkout.start_request(&server, claim))
     .await
     .expect("waits");
   server.set_down(false);
@@ -147,19 +150,19 @@ async fn team_work_alone_recovery_leaves_the_project_to_a_run_that_holds_its_tur
   let turn = StartTurn::wait(&checkout.servers, checkout.root()).await;
   assert_eq!(
     work.carry_on_open(checkout.vault()).await.expect("tried"),
-    OpenStarts::Waiting
+    NOTHING_SETTLED
   );
   assert_eq!(checkout.db().open_team_starts().expect("open").len(), 1, "left alone");
   drop(turn);
 
   assert_eq!(
     work.carry_on_open(checkout.vault()).await.expect("tried"),
-    OpenStarts::Settled
+    OpenStarts { settled: true }
   );
 }
 
 #[test]
-fn team_work_alone_only_a_record_that_cannot_be_read_is_never_tried_again() {
+fn team_work_alone_only_a_record_that_cannot_be_read_is_permanent() {
   assert!(TeamWorkError::Unreadable(OperationId::generate()).is_permanent());
   assert!(!TeamWorkError::NotATask.is_permanent());
   assert!(!TeamWorkError::NotAWork(OperationId::generate()).is_permanent());
@@ -167,14 +170,14 @@ fn team_work_alone_only_a_record_that_cannot_be_read_is_never_tried_again() {
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn team_work_alone_a_record_that_cannot_be_read_is_left_and_not_tried_every_round() {
+async fn team_work_alone_a_record_that_cannot_be_read_is_left_open_and_settles_nothing() {
   let server = TeamServer::start(Config::new("Append one line."));
   let checkout = Checkout::linked(&server);
   let claim = checkout.claim(&server, MEMBER).await;
   let (work, _generation) = checkout.work(&server, MEMBER, StoreRunner::new(checkout.root(), &[]));
   server.set_down(true);
-  work
-    .start(checkout.start_request(&server, claim), checkout.vault())
+  checkout
+    .start(&work, checkout.start_request(&server, claim))
     .await
     .expect("waits");
   rusqlite::Connection::open(checkout.root().join(".orchester/orchester.db"))
@@ -185,8 +188,8 @@ async fn team_work_alone_a_record_that_cannot_be_read_is_left_and_not_tried_ever
 
   assert_eq!(
     work.carry_on_open(checkout.vault()).await.expect("tried"),
-    OpenStarts::Settled,
-    "a record that reads the same every time is not asked for again"
+    NOTHING_SETTLED,
+    "a record that cannot be read settles nothing"
   );
   assert_eq!(
     checkout.db().open_team_starts().expect("open").len(),

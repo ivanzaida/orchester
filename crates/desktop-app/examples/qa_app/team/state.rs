@@ -95,10 +95,19 @@ pub enum State {
   /// As [`Self::TeamEdit`], the server rejecting the content of every version sent: *Publish for the team* says why and
   /// keeps the draft (A17 `rJbPm`).
   TeamEditRejects,
+  /// As [`Self::StartFailed`], with the server not answering a Run's `work.start` for [`START_ANSWERS_AFTER`] after the
+  /// window opens, and then answering as a server a release ahead: the start waits, the project's recovery carries it
+  /// on, the start fails for good, and the task page, which said the run starts once they answer, says why it did not
+  /// (ORC-885 follow-up).
+  StartRecovered,
 }
 
+/// How long after the window opens the server of [`State::StartRecovered`] answers a `work.start`; recovery then
+/// carries the waiting start on within a minute.
+pub const START_ANSWERS_AFTER: std::time::Duration = std::time::Duration::from_secs(90);
+
 impl State {
-  pub const ALL: [Self; 33] = [
+  pub const ALL: [Self; 34] = [
     Self::Join,
     Self::WrongCode,
     Self::ExpiredCode,
@@ -132,6 +141,7 @@ impl State {
     Self::TeamEditDemoted,
     Self::TeamEditOffline,
     Self::TeamEditRejects,
+    Self::StartRecovered,
   ];
 
   /// The seed's scenario of this state.
@@ -170,6 +180,7 @@ impl State {
       Self::TeamEditDemoted => "team-edit-demoted",
       Self::TeamEditOffline => "team-edit-offline",
       Self::TeamEditRejects => "team-edit-rejects",
+      Self::StartRecovered => "team-start-recovered",
     }
   }
 

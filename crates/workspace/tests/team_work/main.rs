@@ -23,6 +23,7 @@ mod fill_ins;
 mod fixture;
 mod heartbeat;
 mod here;
+mod last_start;
 mod reports;
 mod start;
 mod start_alone;
@@ -63,7 +64,7 @@ use orchester_workspace::{
   secrets::Vault,
   sharing::Servers,
   team_reads::TeamSession,
-  team_work::{Recovered, StartOutcome, TeamRunner, TeamStartRequest, TeamWork},
+  team_work::{Recovered, StartOutcome, StartTurn, TeamRunner, TeamStartRequest, TeamWork, TeamWorkError},
   workspace::Workspace,
 };
 use parking_lot::Mutex;
@@ -236,6 +237,27 @@ impl Checkout {
     claim.id
   }
 
+  /// `work`'s start of `request` in the project's turn, which a caller takes before it claims the task, with this
+  /// checkout's keychain.
+  async fn start<R: TeamRunner>(
+    &self,
+    work: &TeamWork<R>,
+    request: TeamStartRequest,
+  ) -> Result<StartOutcome, TeamWorkError> {
+    self.start_with(work, request, self.vault()).await
+  }
+
+  /// [`Self::start`] with `vault` asked about the team secrets.
+  async fn start_with<R: TeamRunner>(
+    &self,
+    work: &TeamWork<R>,
+    request: TeamStartRequest,
+    vault: &dyn SecretVault,
+  ) -> Result<StartOutcome, TeamWorkError> {
+    let turn = StartTurn::wait(&self.servers, self.root()).await;
+    work.start_in(&turn, request, vault).await
+  }
+
   /// The start of the task's work under `claim`; the profile runs on this project's only Codex connection.
   fn start_request(&self, server: &TeamServer, claim: ClaimId) -> TeamStartRequest {
     TeamStartRequest {
@@ -277,7 +299,7 @@ async fn started(checkout: &Checkout, server: &TeamServer) -> (TeamWork<StoreRun
   let claim = checkout.claim(server, MEMBER).await;
   let request = checkout.start_request(server, claim);
   let (work, generation) = checkout.work(server, MEMBER, StoreRunner::new(checkout.root(), &[]));
-  let outcome = work.start(request, checkout.vault()).await.expect("started");
+  let outcome = checkout.start(&work, request).await.expect("started");
   let StartOutcome::Started(run) = outcome else {
     panic!("not started: {outcome:?}");
   };

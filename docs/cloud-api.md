@@ -807,7 +807,8 @@ change. Unknown kinds and fields are refused; the server answers a kind it does 
   `work.report` with `WorkReport`'s fields (below), and since P4c `delivery.request` and `delivery.report` ("Team
   authority P4 module delivery").
 - `claim.release` by the holder: refused `422 invalid` while the claim's latest work runs and has an accepted report;
-  allowed while it runs with none, ending that work `failed` (`start_failed`) (see "Start" in Team authority P4 work).
+  allowed while it runs with none, moving that work to `failed` with no reason stored (see "Start" in Team authority P4
+  work).
 - Expected revisions: the module's for `module.branch.set`, the task's and its module's for `work.start`, the
   subject's for `assignment.set` (the desktop sends it), none for the others, whose claims fence them by id.
 - Values, tagged by `kind`, each with `effects`: `task {task:SharedTask}` (until `TaskRead` is published there),
@@ -878,8 +879,8 @@ The desktop's team work (`orchester_workspace::team_work`) uses them so:
   cannot be reached for the release keeps the start waiting. The work the server made for such a start is not reported:
   `work.report` is a run's own (`run_id`, `sequence`, and `ExecutionFailure` names no start failure), and no run was
   made. **`claim.release` of a claim whose latest work runs** (the state `work.start` leaves it in): the holder may
-  release it when no report of that work was ever accepted, as the work started no run; the release ends the work
-  `failed`, reason `start_failed`, and keeps its row. A running work with at least one accepted report is refused
+  release it when no report of that work was ever accepted, as the work started no run; the release moves the work to
+  `failed`, stores no reason for it, and keeps its row. A running work with at least one accepted report is refused
   `422 invalid` (the claim's `AgentWorking`: stop the run first), as an agent at work is. A team server older than this
   rule refuses any running work the same way, so a start that failed after `work.start` ends **Held** for it: the
   desktop shows that the server refused to release the claim, so it may still be held (any other refusal for good,
@@ -887,7 +888,11 @@ The desktop's team work (`orchester_workspace::team_work`) uses them so:
   open starts are carried on when it is opened, one start of a project at a time (a Run takes the project's turn before
   it claims the task and waits for the recovery's, and the recovery leaves a Run's alone), and looked at again every
   minute for as long as the project is a team project: what could not be carried on is tried again, and so is a start a
-  later Run leaves waiting. A start record that cannot be read is left open and said once, not tried again.
+  later Run leaves waiting. A start record that cannot be read (e.g. written by a newer Orchester) stays open: it is said once in the log and asked
+  again with the others, and the task's page says that a newer Orchester recorded the start; a transient error of a
+  start is logged once per start and session. What recovery settles (a run started, a refusal or a failure for good) is
+  read back for the task's page, which says why the start did not run as a Run that settled at once would, with what
+  became of the claim; a `bundle_missing` refusal keeps the outcome of its claim release with it.
 - **Inputs.** The task's number and each pinned version's label (`{slug,name}`) are the bundle's (schema 2, with the
   team MCP servers of schema 3); the
   start's caller supplies only the local bindings and consent, and each pinned profile must be bound to a connection

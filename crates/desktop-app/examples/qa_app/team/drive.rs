@@ -60,6 +60,7 @@ pub fn to(
     | State::EditConflict
     | State::NotReadyHere
     | State::StartFailed
+    | State::StartRecovered
     | State::TeamEdit
     | State::TeamEditDemoted
     | State::TeamEditOffline

@@ -198,9 +198,9 @@ fn take(authority: &mut Authority, kind: &str, command: &Value) -> Result<Value,
 
 /// `claim.release` of the claim the authority names, the person's own. The release is refused as `invalid` (the claim's
 /// `AgentWorking`) while the task's latest work runs with an accepted report: a run is under it, and it is stopped
-/// first. A running work that never had one started no run, so the holder may let go of it: the work ends `failed`
-/// (`start_failed`), and the task's row stays. A server older than this rule refuses any running work
-/// ([`crate::test_support::team_server::TeamServer::authority_refuses_running_releases`]).
+/// first. A running work that never had one started no run, so the holder may let go of it: the work moves to `failed`
+/// and, as on the real server, no reason is stored for it; the task's row stays. A server older than this rule refuses
+/// any running work ([`crate::test_support::team_server::TeamServer::authority_refuses_running_releases`]).
 fn release(authority: &mut Authority, command: &Value) -> Result<Value, Refused> {
   let subject = command["authority"]["subject"].clone();
   let number = subject_number(authority, &subject).ok_or((404, "not_found"))?;

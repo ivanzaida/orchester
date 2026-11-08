@@ -1,9 +1,11 @@
 //! Carries on the team starts an open project left unsettled (ORC-885, `orchester_workspace::team_work`): a start waits
 //! at its boundary while the team server or the runner cannot take it, and goes on from it by itself. Without this a
 //! start waits for the person's next Run; the page says "starts once they answer". Mounted with the project's feed, so
-//! it goes on while the project's tabs are inactive, and asks again every [`RETRY`] for as long as the project is a
-//! team project: a Run that ends waiting later is carried on too, not only the starts found when the project opened.
-//! While nothing is open each ask is one read of the project's database. A local project asks nothing. Renders nothing.
+//! it goes on while the project's tabs are inactive, and asks again every [`RETRY`] for as long as the project is open:
+//! a Run that ends waiting later is carried on too, not only the starts found when the project opened, and so is one of
+//! a project that was local when the window mounted and is shared since. While nothing is open each ask is one read of
+//! the project's database. A start that recovery settles changes what the task's page tells, and the team reads are
+//! made stale to read it. Renders nothing.
 
 use std::{path::PathBuf, time::Duration};
 
@@ -18,7 +20,7 @@ use orchester_workspace::{
 };
 use tokio::runtime::Handle;
 
-use crate::services::Services;
+use crate::{services::Services, team::invalidation::Stale};
 
 /// How long the project is left before its open starts are looked at again.
 #[cfg(not(feature = "test-support"))]
@@ -33,17 +35,25 @@ pub(super) fn follow(ctx: &mut Ctx, open: &OpenProject) {
   let deps = (
     open.clone(),
     (services.servers.clone(), services.runners.clone()),
-    services.vault,
+    (services.vault, services.team),
   );
   ctx.stream(
     deps,
-    |(open, (servers, runners), vault), emitter: StreamEmitter<(), ()>| async move {
+    |(open, (servers, runners), (vault, team)), emitter: StreamEmitter<(), ()>| async move {
+      // The stream lives while its emitter does: lurq stops a stream whose emitter is gone, so the future holds it for
+      // as long as this loop asks again, which is as long as the project is open.
+      let _held = emitter;
       let name = open.project.name().as_str().to_owned();
       let mut said = None;
       loop {
         match carried_on(&open.repo_root, (&servers, &runners), &vault, &name).await {
-          Ok(OpenStarts::Local) => break,
-          Ok(_) => said = None,
+          Ok(carried) => {
+            said = None;
+            if carried.settled {
+              // The claim may have been released, and the page tells why the start did not run.
+              Stale::EVERY.apply(&team.client());
+            }
+          }
           // Said once while it lasts, not every round.
           Err(error) if said.as_ref() != Some(&error) => {
             tracing::warn!(%error, "the project's open team starts could not be carried on");
@@ -53,8 +63,6 @@ pub(super) fn follow(ctx: &mut Ctx, open: &OpenProject) {
         }
         tokio::time::sleep(RETRY).await;
       }
-      // The stream lives while its emitter does: lurq stops a stream whose emitter is gone.
-      drop(emitter);
     },
   );
 }

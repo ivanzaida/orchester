@@ -23,8 +23,8 @@ use orchester_workspace::{
   runner::{RunRequestError, Runners},
   tasks::run::start_messages,
   team_work::{
-    self, BranchNotFound, ClaimEnd, ProjectRunner, StartFailure, StartOutcome, StartTurn, TeamStartRequest, TeamWork,
-    TeamWorkError, bundle_missing_message,
+    self, BranchNotFound, ClaimEnd, LastStart, ProjectRunner, StartFailure, StartOutcome, StartTurn, TeamStartRequest,
+    TeamWork, TeamWorkError, bundle_missing_message,
   },
 };
 
@@ -81,8 +81,8 @@ pub enum Stop {
   /// The team server could not read the pipeline or a profile, or they have no published version.
   NotReadable,
   /// The team server built no bundle for the start (`bundle_missing`) and says why, as a message that tells what to
-  /// do; no work was made.
-  BundleMissing(Message),
+  /// do; no work was made. The claim ended as `claim` says.
+  BundleMissing(Message, Option<ClaimEnd>),
   /// The bundle the server built is in a schema this computer does not read (`read`); the older of the two is
   /// updated. The claim ended as `claim` says.
   BundleSchema { read: u32, built: u32, claim: ClaimEnd },
@@ -94,6 +94,8 @@ pub enum Stop {
   InputsFailed(ClaimEnd),
   /// The runner refused the run.
   Runner(Vec<Message>),
+  /// The start's record was written by a newer Orchester: this one cannot carry it on, and leaves it open.
+  StartUnreadable,
   /// It could not be carried out here.
   Failed,
 }
@@ -215,13 +217,23 @@ async fn carry_out(
   }
 }
 
+/// Where the task's newest start stands as the project's records tell it, e.g. after recovery settled one that
+/// waited; as [`started`] reads the cached name of a resource a refusal names. Blocks on SQLite.
+pub fn recorded(last: LastStart, root: &Path) -> Started {
+  match last {
+    LastStart::Open => Started::Waiting,
+    LastStart::Settled(outcome) => started(outcome, root),
+    LastStart::Unreadable => Started::Stopped(Stop::StartUnreadable),
+  }
+}
+
 /// Where `outcome` leaves the start, as the page says it; reads the cached name of a resource a refusal names from the
 /// project at `root`. Blocks on SQLite.
 fn started(outcome: StartOutcome, root: &Path) -> Started {
   match outcome {
     StartOutcome::Started(run) => Started::Run(run),
     StartOutcome::Waiting(_) => Started::Waiting,
-    StartOutcome::Refused(error) => Started::Stopped(refused(&error, root)),
+    StartOutcome::Refused(error, claim) => Started::Stopped(refused(&error, claim, root)),
     StartOutcome::Failed(failure, claim) => Started::Stopped(failed(failure, claim)),
     StartOutcome::RunnerRefused(rejection) => {
       Started::Stopped(Stop::Runner(start_messages(&RunRequestError::Rejected(rejection))))
@@ -231,7 +243,7 @@ fn started(outcome: StartOutcome, root: &Path) -> Started {
 }
 
 /// Why a start the server refused for good did not start, as the page says it.
-fn refused(error: &AuthorityError, root: &Path) -> Stop {
+fn refused(error: &AuthorityError, claim: Option<ClaimEnd>, root: &Path) -> Stop {
   if error.code() != AuthorityErrorCode::BundleMissing {
     return Stop::Refused(error.code());
   }
@@ -240,7 +252,7 @@ fn refused(error: &AuthorityError, root: &Path) -> Stop {
     _ => None,
   };
   match bundle_missing_message(root, reason) {
-    Ok(message) => Stop::BundleMissing(message),
+    Ok(message) => Stop::BundleMissing(message, claim),
     Err(error) => {
       tracing::warn!(%error, "the resource a bundle_missing refusal names cannot be read");
       Stop::Refused(AuthorityErrorCode::BundleMissing)

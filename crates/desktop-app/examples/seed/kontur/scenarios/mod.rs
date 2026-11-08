@@ -113,7 +113,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 178] = [
+pub const ALL: [Scenario; 179] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -288,6 +288,7 @@ pub const ALL: [Scenario; 178] = [
   Scenario::of("team-edit-offline", team::edit_offline),
   Scenario::of("team-edit-rejects", team::edit_rejects),
   Scenario::of("team-start-failed", team::start_failed),
+  Scenario::of("team-start-recovered", team::start_recovered),
   Scenario::of("modules-base-branch", modules::base_branch),
   Scenario::of("loading-states", loading_states::seed),
   Scenario::of("storage-low-disk", storage::low_disk),

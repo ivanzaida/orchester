@@ -103,7 +103,7 @@ async fn team_work_fill_ins_a_ready_start_binds_the_picked_connection_programs_a
   let operation = request.operation;
   let runner = StoreRunner::new(checkout.root(), &[]);
   let (work, _generation) = checkout.work(&server, MEMBER, runner.clone());
-  let outcome = work.start(request, checkout.vault()).await.expect("started");
+  let outcome = checkout.start(&work, request).await.expect("started");
   let StartOutcome::Started(run) = outcome else {
     panic!("not started: {outcome:?}");
   };
@@ -158,7 +158,7 @@ async fn team_work_fill_ins_a_bundle_that_pins_what_is_missing_here_fails_with_t
   let runner = StoreRunner::new(checkout.root(), &[]);
   let (work, _generation) = checkout.work(&server, MEMBER, runner.clone());
 
-  let outcome = work.start(request.clone(), checkout.vault()).await.expect("carried on");
+  let outcome = checkout.start(&work, request.clone()).await.expect("carried on");
   let StartOutcome::Failed(StartFailure::NotReadyHere { pipeline, missing }, _) = outcome else {
     panic!("not failed as not ready: {outcome:?}");
   };
@@ -198,7 +198,7 @@ async fn team_work_fill_ins_a_bundle_that_pins_what_is_missing_here_fails_with_t
       .is_none(),
     "no inputs were kept"
   );
-  let again = work.start(request, checkout.vault()).await.expect("carried on");
+  let again = checkout.start(&work, request).await.expect("carried on");
   assert!(
     matches!(again, StartOutcome::Failed(StartFailure::NotReadyHere { .. }, _)),
     "the failure is kept: {again:?}"
@@ -223,7 +223,7 @@ async fn team_work_fill_ins_several_connections_without_a_pick_are_not_ready() {
   let request = checkout.start_request(&server, claim);
   let (work, _generation) = checkout.work(&server, MEMBER, StoreRunner::new(checkout.root(), &[]));
 
-  let outcome = work.start(request, checkout.vault()).await.expect("carried on");
+  let outcome = checkout.start(&work, request).await.expect("carried on");
   let StartOutcome::Failed(StartFailure::NotReadyHere { missing, .. }, _) = outcome else {
     panic!("not failed as not ready: {outcome:?}");
   };
@@ -256,7 +256,7 @@ async fn start_failed_with(vault: &dyn SecretVault) -> (Vec<Missing>, Vec<&'stat
   let runner = StoreRunner::new(checkout.root(), &[]);
   let (work, _generation) = checkout.work(&server, MEMBER, runner.clone());
 
-  let outcome = work.start(request, vault).await.expect("carried on");
+  let outcome = checkout.start_with(&work, request, vault).await.expect("carried on");
   let StartOutcome::Failed(StartFailure::NotReadyHere { pipeline, missing }, claim) = outcome else {
     panic!("not failed as not ready: {outcome:?}");
   };
@@ -342,7 +342,7 @@ async fn team_work_fill_ins_a_remote_server_with_several_secret_headers_is_unsup
   let request = checkout.start_request(&server, claim);
   let (work, _generation) = checkout.work(&server, MEMBER, StoreRunner::new(checkout.root(), &[]));
 
-  let outcome = work.start(request, checkout.vault()).await.expect("carried on");
+  let outcome = checkout.start(&work, request).await.expect("carried on");
   let StartOutcome::Failed(StartFailure::NotReadyHere { missing, .. }, _) = outcome else {
     panic!("not failed as not ready: {outcome:?}");
   };
@@ -387,7 +387,7 @@ async fn stale_pick_failure(claude: usize) -> Missing {
   let request = checkout.start_request(&server, claim);
   let (work, _generation) = checkout.work(&server, MEMBER, StoreRunner::new(checkout.root(), &[]));
 
-  let outcome = work.start(request, checkout.vault()).await.expect("carried on");
+  let outcome = checkout.start(&work, request).await.expect("carried on");
   let StartOutcome::Failed(StartFailure::NotReadyHere { missing, .. }, _) = outcome else {
     panic!("a stale pick is a not-ready part, not a generic input error: {outcome:?}");
   };

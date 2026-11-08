@@ -21,7 +21,7 @@ use std::{
 use orchester_api::{
   Credential,
   client::{PlainHttp, ServerAddress},
-  test_support::team_server::{CODE, TasksAnswer, TeamServer, USERNAME},
+  test_support::team_server::{BundleFault, CODE, TasksAnswer, TeamServer, USERNAME},
 };
 use orchester_app::services::Services;
 use orchester_core::{
@@ -118,6 +118,7 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
     | State::EditConflict
     | State::NotReadyHere
     | State::StartFailed
+    | State::StartRecovered
     | State::TeamEdit
     | State::TeamEditDemoted
     | State::TeamEditOffline
@@ -125,8 +126,13 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
       let ids = task_ids(services)?;
       let role = member::serve_as(&server, state, (&ids, &team_pipelines(services, state)?));
       let (kontur, id) = join_linked_as(&server, (services, runtime), (TasksAnswer::Serve, role))?;
-      if state == State::StartFailed {
-        server.authority_newer_bundles();
+      match state {
+        State::StartFailed => server.authority_newer_bundles(),
+        State::StartRecovered => {
+          server.authority_bundle_fault(BundleFault::Unavailable);
+          server.authority_bundle_fault_after(BundleFault::Newer, state::START_ANSWERS_AFTER);
+        }
+        _ => {}
       }
       work::after_join(state, (&server, id), (services, runtime), (&kontur, &ids))?;
       if state.edits() {
@@ -168,7 +174,7 @@ fn team_pipelines(services: &Services, state: State) -> Result<member::TeamPipel
   let (feature, quick) = match state {
     State::NotReadyHere => ("team-delivery", "team-quick-fix"),
     // Every task is on Team quick fix, which is ready here: only the bundle fails.
-    State::StartFailed => ("team-quick-fix", "team-quick-fix"),
+    State::StartFailed | State::StartRecovered => ("team-quick-fix", "team-quick-fix"),
     _ => ("feature-delivery", "quick-fix"),
   };
   let mut db = ProjectDb::open(&kontur(services)?)?;
