@@ -255,8 +255,13 @@ impl Form {
       .saved()
       .expect("no conflict");
     assert!(saved.revision().get() > task.revision().get());
-    self.window.projects().feed(self.project).saved();
-    self.window.pass();
+    let (id, revision) = (task.id(), saved.revision());
+    self.until_tasks_read(|tasks| {
+      tasks
+        .tasks
+        .iter()
+        .any(|read| read.id() == id && read.revision() == revision)
+    });
   }
 
   /// Changes the task `key` in the project's database without telling the window, as another app on
