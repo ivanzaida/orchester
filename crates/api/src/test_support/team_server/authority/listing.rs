@@ -5,7 +5,7 @@
 use orchester_core::time::Timestamp;
 use serde_json::{Value, json};
 
-use super::{AuthorityClaim, AuthorityTask, State, capabilities, commands, edits, work};
+use super::{AuthorityClaim, AuthorityTask, State, capabilities, commands, edits, lifecycle, work};
 use crate::{
   test_support::team_server::{
     TasksAnswer, USER,
@@ -106,6 +106,10 @@ fn authority_task(task: &AuthorityTask, (project, key): (&str, &str), state: &St
   let module_held = module_claim.map(|(claim, _)| claim.holder);
   read["capabilities"] =
     commands::task_capabilities(&state.authority, (project, &id), (task.claim.as_ref(), module_held));
+  let lifecycle = lifecycle::actions(&state.authority, (&id, task.workflow));
+  if let Some(actions) = read["capabilities"]["actions"].as_array_mut() {
+    actions.extend(lifecycle);
+  }
   read
 }
 

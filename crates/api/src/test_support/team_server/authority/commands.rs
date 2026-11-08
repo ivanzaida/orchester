@@ -10,7 +10,7 @@
 use serde_json::{Value, json};
 
 use super::{
-  Authority, AuthorityClaim, Person, Standing, delivery, execution,
+  Authority, AuthorityClaim, Person, Standing, delivery, execution, lifecycle,
   listing::task_id,
   work::{BranchChange, module_id, module_number},
 };
@@ -174,6 +174,13 @@ fn take(authority: &mut Authority, kind: &str, command: &Value) -> Result<Value,
     return Err((409, "module_claim_conflict"));
   }
   let number = subject_number(authority, &subject).ok_or((404, "not_found"))?;
+  if subject["kind"] == "task"
+    && subject["id"]
+      .as_str()
+      .is_some_and(|id| lifecycle::closed(authority, id))
+  {
+    return Err((409, "transition_denied"));
+  }
   authority.issued = authority.issued.wrapping_add(1);
   let fresh = AuthorityClaim {
     generation: ISSUED_FROM.wrapping_add(authority.issued),
@@ -270,6 +277,12 @@ pub(super) fn task_capabilities(
     }
     (Some(claim), None) => claim_rights(claim),
     (None, None) => (None, Some("claim_required"), Some("claim_required")),
+  };
+  // A closed task cannot be claimed until an Admin reopens it; the state is told before the caller.
+  let (acquire, take_over) = if lifecycle::closed(authority, id) {
+    (Some("transition_denied"), Some("transition_denied"))
+  } else {
+    (acquire, take_over)
   };
   capabilities(authority, project, &subject, [acquire, take_over, release], false)
 }

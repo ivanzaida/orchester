@@ -15,6 +15,7 @@ mod commands;
 mod delivery;
 pub(super) mod edits;
 mod execution;
+mod lifecycle;
 mod listing;
 pub(super) mod roadmap;
 mod stream;
@@ -28,6 +29,7 @@ use std::{
   time::{Duration, Instant},
 };
 
+use orchester_core::resource::Deliverable;
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 
@@ -141,6 +143,8 @@ pub(super) struct Authority {
   /// before the next one asked here.
   edits: HashMap<String, edits::Edited>,
   edit_first: Option<edits::FirstChange>,
+  /// What the work of the task with a number delivers; changes without a say.
+  delivers: HashMap<u32, Deliverable>,
   /// The releases Admins made, with their changelogs and every move of a task into or out of one.
   releases: roadmap::Releases,
 }
@@ -188,6 +192,7 @@ impl TeamServer {
 
   /// The `/api/v2` reads give `tasks` in place of the project's v1 tasks; the change is committed as one batch.
   pub fn authority_tasks(&self, tasks: Vec<AuthorityTask>) {
+    lifecycle::check_names(&tasks);
     let mut state = self.state.lock();
     state.authority.tasks = Some(tasks);
     state.authority.commit(vec![json!({"kind": "task_list"})]);
