@@ -39,6 +39,7 @@ pub(super) fn summary(ctx: &Ctx, env: &Env) -> Option<Element> {
     .id("review-summary-text")
     .variant(TypographyStyle::Description)
     .color(PaletteColor::TextSecondary)
+    .selectable(true)
     .flex(1.0)
     .min_width(Dimension::Px(0.0))
     .nowrap()

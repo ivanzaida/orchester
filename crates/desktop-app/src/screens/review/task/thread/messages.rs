@@ -138,11 +138,12 @@ fn frame(id: &str, who: Who, body: Vec<Element>, tint: Option<PaletteColor>) -> 
   }
 }
 
-/// Words of a message, wrapping.
+/// Words of a message, wrapping and selectable, so the person can copy them.
 fn words(id: &str, text: &str) -> Element {
   Text::new(text)
     .id(id.to_owned())
     .variant(ReviewText::Message.role())
+    .selectable(true)
     .width(Dimension::Pct(100.0))
     .into()
 }
@@ -301,6 +302,7 @@ fn streaming(id: &str, text: &str) -> Element {
       Text::new(text)
         .id(format!("{id}-body"))
         .variant(ReviewText::Message.role())
+        .selectable(true)
         .flex_shrink(1.0)
         .min_width(Dimension::Px(0.0)),
     )
