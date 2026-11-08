@@ -1,7 +1,7 @@
 //! What the review page keeps while it shows: the comment box's lines, kind and words, the line a drag over lines
 //! started on, the line under the pointer, the thread whose follow-up or edit is open, the fields that take the focus
-//! when their box opens, the files folded or unfolded by hand, the folds opened, the file the list scrolls to, and why
-//! the latest change was not made.
+//! when their box opens, the box a kept change closes once the review read shows it, the files folded or unfolded by
+//! hand, the folds opened, the file the list scrolls to, and why the latest change was not made.
 
 use std::{
   collections::{BTreeMap, BTreeSet},
@@ -92,6 +92,16 @@ pub(super) enum InThread {
   Edit(ReviewMessageId),
 }
 
+/// The box a change's words were written in, which closes once the change was kept and the review read shows it; it
+/// stays open, its words with it, when the change was refused.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Closes {
+  /// The comment box under the chosen lines.
+  Box,
+  /// The box inside a thread.
+  InThread,
+}
+
 /// The page's own state, shared by its parts.
 #[derive(Clone)]
 pub(super) struct ReviewState {
@@ -118,6 +128,8 @@ pub(super) struct ReviewState {
   pub failure: Signal<Option<Message>>,
   /// Counts the changes made here: the review is read again after each.
   pub written: Signal<u64>,
+  /// The box of a change that was kept, and the count of `written` whose read shows the change.
+  closing: Arc<Mutex<Option<(Closes, u64)>>>,
   /// *Discard* asks whether every comment not sent goes.
   pub discarding: Signal<bool>,
   /// *Approve and merge* asks first, while comments wait unsent.
@@ -152,6 +164,7 @@ impl ReviewState {
       chosen: ctx.signal(Held(None)),
       failure: ctx.signal(None),
       written,
+      closing: Arc::default(),
       discarding: ctx.signal(false),
       approving: ctx.signal(false),
       agent: AgentChoice::new(ctx),
@@ -176,6 +189,33 @@ impl ReviewState {
     self.composing.set(Held(None));
     if sent {
       self.text.set(String::new());
+    }
+  }
+
+  /// A change was kept and the review is read again: the box it was written in (`closes`) stays, its words with it,
+  /// until that read is in ([`Self::settle`]), so its place is never empty.
+  pub fn kept(&self, closes: Option<Closes>) {
+    let count = self.written.get_untracked() + 1;
+    if let Some(closes) = closes {
+      *self.closing.lock() = Some((closes, count));
+    }
+    self.written.set(count);
+  }
+
+  /// The review read for the `read`th change is in: the box of a change kept by then closes, its thread standing in
+  /// the same frame.
+  pub fn settle(&self, read: u64) {
+    let closes = {
+      let mut closing = self.closing.lock();
+      match *closing {
+        Some((closes, count)) if read >= count => closing.take().map(|_| closes),
+        _ => None,
+      }
+    };
+    match closes {
+      Some(Closes::Box) => self.close(true),
+      Some(Closes::InThread) => self.close_in_thread(),
+      None => {}
     }
   }
 

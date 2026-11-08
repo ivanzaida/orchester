@@ -30,8 +30,8 @@ use orchester_workspace::tasks::review_threads::read::ThreadView;
 
 use super::{
   Env,
-  actions::{Closes, Kept, Write},
-  state::{BoxField, Composing, Held, InThread},
+  actions::{Kept, Write},
+  state::{BoxField, Closes, Composing, Held, InThread},
   words::lines,
 };
 use crate::{
