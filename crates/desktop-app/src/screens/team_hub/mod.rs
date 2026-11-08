@@ -55,6 +55,7 @@ use crate::{
   project::ShownProject,
   routes::{HubView, ProjectPage, Route},
   services::Services,
+  team::reached::Reached,
   theme::{HUB_READING_OPACITY, HubSpacing},
   ui::{
     failure::{Failure, LastFailure},
@@ -167,18 +168,23 @@ impl Component for TeamHubScreen {
       .may_change
       .then(|| create::new_button(ctx, (id, view.filter), (&navigation, &self.new_menu)))
       .flatten();
+    let draft_saved = selected
+      .and_then(|chosen| listing.as_ref().and_then(|listing| listing.find(chosen)))
+      .is_some_and(|entry| entry.draft);
     let shown = FilterShown {
       project: id,
       filter: view.filter,
       selected,
       reading,
       may_change: team.may_change,
+      draft_saved,
     };
     let told = taken_back::notices(ctx, &team, &project.open.repo_root);
+    let unreached = Services::of(ctx).team.reached().of(&project.open.repo_root) == Some(Reached::Unanswered);
     frame(
       ctx,
       (&team, listing.as_ref(), &shown),
-      new,
+      (new, unreached),
       &navigation,
       (body, told, view),
     )
@@ -217,7 +223,7 @@ fn keep_route_on_shown(
 fn frame(
   ctx: &mut Ctx,
   (team, listing, shown): (&TeamConfiguration, Option<&Listing>, &FilterShown),
-  new: Option<Element>,
+  (new, unreached): (Option<Element>, bool),
   navigation: &Navigation,
   (body, told, view): (Element, Vec<Element>, HubView),
 ) -> Element {
@@ -234,7 +240,7 @@ fn frame(
         .right(HubSpacing::Side.role()),
     )
     .spacing(crate::theme::ExtraSpacing::Inset.role())
-    .child(head::head(ctx, team, new))
+    .child(head::head(ctx, team, (new, unreached, shown.draft_saved)))
     .child(head::filter(ctx, listing, shown, navigation))
     .with_children(told)
     .child(
@@ -292,6 +298,7 @@ fn hub_body(
         project: id,
         kind,
         listing: listing.clone(),
+        team: team.clone(),
       },
     ),
     (None, Some(selected)) => resource_panel(

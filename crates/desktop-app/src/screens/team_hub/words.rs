@@ -48,8 +48,40 @@ pub(super) struct Said {
   pub color: PaletteColor,
 }
 
-/// The line under a row's name.
+/// The line under a row's name: what a computer needs, after *Your draft on v3* when an admin's draft is kept.
 pub(super) fn line(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Said {
+  let said = state_line(ctx, listing, entry);
+  let Some(number) = entry.number.filter(|_| entry.draft) else {
+    return said;
+  };
+  let draft = ctx.t_args("team_hub.edit.chip.draft", [("version", number.to_string())]);
+  let text = if entry.group == Group::Ready {
+    draft
+  } else {
+    ctx.t_args(
+      "team_hub.edit.line.draft",
+      [("draft", draft.to_string()), ("words", mid_line(&said.text))],
+    )
+  };
+  Said {
+    text,
+    color: PaletteColor::Warning,
+  }
+}
+
+/// `words` as the end of a line that began otherwise: a sentence's capital goes (*Your draft on v3 · set its program
+/// path here*), but a name or an acronym keeps its own (`GITHUB_TOKEN`).
+fn mid_line(words: &str) -> String {
+  let mut chars = words.chars();
+  match (chars.next(), chars.next()) {
+    (Some(first), Some(second)) if first.is_uppercase() && second.is_lowercase() => {
+      first.to_lowercase().chain([second]).chain(chars).collect()
+    }
+    _ => words.to_owned(),
+  }
+}
+
+fn state_line(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Said {
   if entry.waiting {
     return Said {
       text: ctx.t("team_hub.line.waiting"),

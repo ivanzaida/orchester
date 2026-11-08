@@ -233,6 +233,67 @@ fn start_ready_here(kontur: &mut Kontur, state: State) -> Result<(), SeedError> 
   write_marker(kontur, state)
 }
 
+/// The team's resources of `team-hub` for a copy that joins the stand-in team server as an Admin, which holds the
+/// team's MCP servers (`team-edit`, `team-edit-demoted`, `team-edit-offline`, `team-edit-rejects`, ORC-836): `Agents ›
+/// MCP servers`, *Edit* a server (`Agents · MCP server · admin · draft` A13 `WMtxm`).
+pub fn edit(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEdit)
+}
+
+/// As [`edit`], the server no longer taking the person's writes: *Publish for the team* is refused as no longer an
+/// admin, and the page turns read-only with the draft kept (A14 `gTLx6`).
+pub fn edit_demoted(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditDemoted)
+}
+
+/// As [`edit`], the server not answering: *Publish for the team* waits in the outbox, with *Cancel sending* (A16
+/// `x3ywL`).
+pub fn edit_offline(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditOffline)
+}
+
+/// As [`edit`], the server rejecting the content of what is sent: the refusal says why and the draft is kept (A17
+/// `rJbPm`).
+pub fn edit_rejects(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditRejects)
+}
+
+/// As [`edit`], after *Publish for the team* made `pencil-design`'s next version and the server numbered it: v2 is the
+/// team's and the draft became it (`team-edit-published`, the result of A13 `WMtxm`). The QA app makes it without a
+/// press.
+pub fn edit_published(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditPublished)
+}
+
+/// As [`edit`], after a *Publish for the team* refused as no longer an admin, the person a member now: the page is
+/// read-only with the draft kept (`team-edit-refused-admin`, A14 `gTLx6`).
+pub fn edit_refused_admin(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditRefusedAdmin)
+}
+
+/// As [`edit`], after a *Publish for the team* made while the server could not be reached: v2 waits in the outbox, with
+/// *Cancel sending* (`team-edit-waiting`, A16 `x3ywL`).
+pub fn edit_waiting(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditWaiting)
+}
+
+/// As [`edit`], a version that waited and that the server rejected once it answered: the outbox holds it refused, with
+/// the reason and *Take it back as a draft* (`team-edit-rejected`, A17 `rJbPm`).
+pub fn edit_rejected(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditRejected)
+}
+
+/// As [`edit`], a new MCP server `figma-local` that waited and that the server refused as the name being taken once it
+/// answered: taken back whole, and the hub says what and why (`team-create-name-taken`, A15 `dLqHC`).
+pub fn create_name_taken(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamCreateNameTaken)
+}
+
+fn edit_in(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
+  super::team_hub::resources(kontur)?;
+  write_marker(kontur, state)
+}
+
 /// KON-12's run interrupted at Implement, on the live catalogue's Feature delivery with a brief that keeps
 /// `orchester-fake-codex` working: Continue run takes it on, Running at 03 Implement with Pause run (`01c` `Tb55G`).
 pub fn team_running(kontur: &mut Kontur) -> Result<(), SeedError> {

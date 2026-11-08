@@ -133,11 +133,13 @@ impl ProjectDb {
     Ok(())
   }
 
-  /// *Open my draft on vN*: `version`, published here and met by a version someone published from the same base, is
+  /// *Open my draft on vN*, and what a refused or cancelled publish does: `version`, published here and not numbered
+  /// by the server (met by a version someone published from the same base, refused, or still waiting to be sent), is
   /// taken back, with the versions of its resource published here after it; the server numbered none of them. The
   /// resource's draft, the one kept here or else the newest version taken back, is then edited from the latest version
   /// the server numbered; nothing is merged. A version a run or a task here uses stays
-  /// ([`StoreError::VersionInUse`]); nothing is changed then.
+  /// ([`StoreError::VersionInUse`]); nothing is changed then. A resource whose first version this is has no version
+  /// to edit from ([`ProjectDb::discard_created`] takes that back instead).
   pub fn reopen_draft<B: ResourceBody + Clone>(
     &mut self,
     version: VersionId,
@@ -150,16 +152,16 @@ impl ProjectDb {
       .query_row(
         "SELECT mine.resource_id, mine.number FROM shared_publishes \
          JOIN resource_versions AS mine ON mine.id = shared_publishes.version_id \
-         WHERE shared_publishes.version_id = ?1 AND shared_publishes.conflict_latest IS NOT NULL",
+         WHERE shared_publishes.version_id = ?1",
         [version.to_string()],
         |row| Ok((row.get(0)?, row.get(1)?)),
       )
       .optional()?
-      .ok_or_else(|| corrupt("version in conflict", version))?;
+      .ok_or_else(|| corrupt("unsent version", version))?;
     let resource: ResourceId = parse("resource id", &resource)?;
     check_kind::<B>(&transaction, resource)?;
     ensure_may_change(&transaction, resource)?;
-    let latest = latest_confirmed(&transaction, resource)?.ok_or_else(|| corrupt("version in conflict", version))?;
+    let latest = latest_confirmed(&transaction, resource)?.ok_or_else(|| corrupt("unsent version", version))?;
     let taken = load_versions::<B>(
       &transaction,
       "WHERE resource_id = ?1 AND number >= ?2 AND id IN (SELECT version_id FROM shared_publishes) ORDER BY number",
@@ -174,7 +176,7 @@ impl ProjectDb {
       Some(draft) => draft.body().clone(),
       None => taken
         .last()
-        .ok_or_else(|| corrupt("version in conflict", version))?
+        .ok_or_else(|| corrupt("unsent version", version))?
         .body()
         .clone(),
     };

@@ -744,7 +744,10 @@
         "openDraft": "Open my draft on v{{latest}}",
         "publishMine": "Publish mine as v{{next}}",
         "refused": "{{host}} didn't take this version · {{time}}",
-        "refusedBody": "Your new runs use it here. It isn't sent again on its own: change it and publish again."
+        "refusedHere": "Not sent · this computer found the team can't take this version · {{time}}",
+        "cancelSending": "Cancel sending",
+        "takeBack": "Take it back as a draft",
+        "refusedWhy": "{{reason}} Your new runs use it here. It isn't sent again on its own: take it back as a draft, change it and publish again."
       },
       "compare": {
         "title": "v{{latest}} and yours",

@@ -17,7 +17,7 @@ use orchester_store::{CachedModule, ProjectDb};
 use super::{ProjectServer, convert, organization::tag, store::RemoteTaskStore};
 use crate::{
   background,
-  sharing::{ProjectAddress, SharingError, sync::RemoteResourceStore},
+  sharing::{ProjectAddress, SharingError, send_lane::send_turn, sync::RemoteResourceStore},
 };
 
 /// What a sync found on the server.
@@ -66,7 +66,7 @@ impl ProjectServer {
     self.store_parts(&tags, cached, hint).await?;
     self.servers.download_parts_read(&self.repo_root, round);
     self.read_tasks(round).await?;
-    let server = self.clone();
+    let (server, servers) = (self.clone(), self.servers.clone());
     // A link made before API 3 learns the project's address, its identity since, from the server; one on another
     // server is not kept, and the tasks are synced all the same. This repeats at every read, so it is not a warning.
     let address = match self.link.address {
@@ -88,6 +88,8 @@ impl ProjectServer {
         store.db.record_project_address(&address)?;
       }
       super::automatic::send(&mut store)?;
+      let lane = servers.send_lane(publishing.repo_root());
+      let _sending = send_turn(&lane);
       let db = ProjectDb::open(publishing.repo_root())?;
       RemoteResourceStore::new(db, publishing)?.send_waiting()
     })

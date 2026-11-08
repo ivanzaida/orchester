@@ -12,7 +12,14 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, PublishState};
 
-use super::{Servers, SharingError, project::ProjectServer, sync::RemoteResourceStore, team::said};
+use super::{
+  Servers, SharingError,
+  project::ProjectServer,
+  send_lane::{between_sends, send_turn},
+  sync::RemoteResourceStore,
+  team::said,
+  team_edit::Refusal,
+};
 use crate::{
   background,
   messages::{self, Message},
@@ -56,10 +63,30 @@ impl Servers {
     self.shared_changed();
     settled
   }
+
+  /// *Cancel sending*: the new resource `resource` of the project at `repo_root`, which waits in the outbox for a team
+  /// server that could not be reached, is taken back as if never created. Fails with what to tell the person when it is
+  /// being sent right now, the server took it meanwhile, or the resource holds more than that version.
+  pub async fn cancel_created(&self, repo_root: &Path, resource: ResourceId) -> Result<(), Message> {
+    let (servers, root) = (self.clone(), repo_root.to_owned());
+    background::run(move || {
+      let lane = servers.send_lane(&root);
+      let _between = between_sends(&lane)?;
+      let mut db = ProjectDb::open(&root).map_err(|error| messages::store_error(&error))?;
+      db.discard_created(resource)
+        .map_err(|error| messages::store_error(&error))
+    })
+    .await??;
+    self.shared_changed();
+    Ok(())
+  }
 }
 
 fn settle(servers: &Servers, root: &Path, resource: ResourceId) -> Result<Created, NotCreated> {
   let failed = |error: &SharingError| NotCreated::Failed(said(error, None));
+  // Nothing else sends or takes back what waits meanwhile: a cancel would delete a resource the server then numbers.
+  let lane = servers.send_lane(root);
+  let _sending = send_turn(&lane);
   let mut db = ProjectDb::open(root).map_err(|error| failed(&error.into()))?;
   if waiting_state(&db, resource)
     .map_err(|error| failed(&error.into()))?
@@ -153,10 +180,17 @@ fn waiting_state(db: &ProjectDb, resource: ResourceId) -> Result<Option<PublishS
 }
 
 impl NotCreated {
-  /// Why it was not created, in words: the team server's own code, or why this computer did not send it.
+  /// Why it was not created, in words: what the team server refused it for where that is one of the refusals a person
+  /// can act on (the name is taken), else its own code, or why this computer did not send it.
   pub fn message(&self) -> Message {
     match self {
-      Self::Refused { code } => Message::new("appMcp.errors.teamServerRefused").with("code", code.clone()),
+      Self::Refused { code } => match Refusal::of_code(code) {
+        // A version conflict says which version, which a new resource has none of.
+        Refusal::Changed | Refusal::Other(_) => {
+          Message::new("appMcp.errors.teamServerRefused").with("code", code.clone())
+        }
+        refusal => refusal.message(),
+      },
       Self::NamesLocal(reason) | Self::NamesNonTeam(reason) | Self::Failed(reason) => reason.clone(),
     }
   }

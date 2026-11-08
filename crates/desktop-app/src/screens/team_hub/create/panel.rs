@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
-    ctx::Ctx,
+    ctx::{Ctx, FutureAction},
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Row, ScrollVertical, Text},
@@ -17,12 +17,17 @@ use lurq::{
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
-use orchester_core::id::ProjectId;
-use orchester_workspace::{agents::data::ProjectAgents, background};
+use orchester_core::id::{ProjectId, ResourceId};
+use orchester_workspace::{
+  agents::data::ProjectAgents,
+  background,
+  messages::Message,
+  sharing::{team::TeamConfiguration, team_edit::Refusal},
+};
 
 use super::{
   fields::{Body, Shown},
-  instruction, kinds, mcp, profile, skill, tool,
+  instruction, kinds, mcp, notices, profile, skill, tool,
   work::{self, Failed, Press, Work},
 };
 use crate::{
@@ -34,13 +39,13 @@ use crate::{
     model::{Kind, Listing},
     panel as shared, rows,
   },
+  services::Services,
   theme::{HubSpacing, HubText, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
     icon::{Icon, icon},
     message::message_text,
-    tinted_note::{person_only, tinted_note},
   },
 };
 
@@ -50,6 +55,8 @@ pub(in crate::screens::team_hub) struct Props {
   pub project: ProjectId,
   pub kind: Kind,
   pub listing: Listing,
+  /// The team's configuration: who the admins are, which a refusal for a role that changed says.
+  pub team: TeamConfiguration,
 }
 impl DevtoolsInspectable for Props {}
 
@@ -93,6 +100,8 @@ struct NewPanel {
   /// Create was pressed: a required field that is empty says so.
   tried: Signal<bool>,
   work: Work,
+  /// *Cancel sending*: takes back the new resource that waits in the outbox, and the form goes with it.
+  cancel: FutureAction<ResourceId, (), Message>,
   gate: Option<InputGate>,
   /// The name field, which has the focus when the form opens (the design draws it focused).
   first: ElementRef,
@@ -118,10 +127,24 @@ impl Component for NewPanel {
         navigation.replace(shown);
       }
     });
+    let cancel = {
+      let (servers, root) = (Services::of(ctx).servers, props.repo_root.clone());
+      ctx.future_action(move |id: ResourceId| {
+        let (servers, root) = (servers.clone(), root.clone());
+        async move { servers.cancel_created(&root, id).await }
+      })
+    };
+    let back = Navigation::of(ctx);
+    ctx.watch(&cancel.state(), move |state| {
+      if state.is_fulfilled() {
+        back.replace(Route::Project(project, ProjectPage::hub(HubView::new(filter, None))));
+      }
+    });
     Self {
       form: Form::new(ctx, props.kind),
       tried: ctx.signal(false),
       work,
+      cancel,
       gate: ctx.use_context::<InputGate>(),
       first: ElementRef::default(),
       focus_first: ctx.signal(true),
@@ -134,6 +157,7 @@ impl Component for NewPanel {
       project,
       kind,
       listing,
+      team,
     } = ctx.props::<Props>().clone();
     if self.focus_first.get() {
       ctx.focus(&self.first);
@@ -144,30 +168,23 @@ impl Component for NewPanel {
     let waiting = state
       .data
       .as_ref()
-      .is_some_and(|made| made.waiting && state.is_fulfilled());
+      .filter(|made| made.waiting && state.is_fulfilled())
+      .map(|made| made.id);
     let refused = state.error.filter(|_| !pending);
+    let refused_name = taken_by_server(refused.as_ref());
     let agents = self.agents(ctx, kind, &repo_root);
     let shown = Shown {
       kind,
       listing: &listing,
       tried: self.tried.get(),
-      locked: pending || waiting,
+      locked: pending || waiting.is_some(),
       agents: agents.as_ref(),
       first: &self.first,
+      refused_name: refused_name.as_deref(),
+      published: None,
     };
     let body = self.form.body(ctx, &shown);
-    let team = rows::section(
-      "team-new-team",
-      &ctx.t("team_new.forTeam"),
-      vec![
-        Text::new(&ctx.t("team_new.goesOnCreate"))
-          .id("team-new-team-hint")
-          .variant(HubText::Hint.role())
-          .nowrap()
-          .into(),
-      ],
-      body.rows,
-    );
+    let for_team = for_team(ctx, body.rows);
     let navigation = Navigation::of(ctx);
     let content = Column::new()
       .id("team-new-form")
@@ -178,9 +195,10 @@ impl Component for NewPanel {
       ))
       .spacing(HubSpacing::BodyTop.role())
       .child(head(ctx, kind))
-      .child(team)
-      .child(computer(ctx, body.computer))
-      .with_children(refusal(ctx, refused.as_ref(), waiting));
+      .with_children(self.refusal(ctx, refused.as_ref(), waiting, &team))
+      .with_children(self.cancel_failure(ctx))
+      .child(for_team)
+      .child(computer(ctx, body.computer));
     let scroll = ScrollVertical::new(content)
       .id("team-hub-panel-scroll")
       .width(Dimension::Pct(100.0))
@@ -189,7 +207,7 @@ impl Component for NewPanel {
     let bar = self.bar(
       ctx,
       &body.make,
-      (body.off, pending || waiting),
+      (body.off, pending || waiting.is_some()),
       (project, kind),
       &navigation,
     );
@@ -206,6 +224,40 @@ impl Component for NewPanel {
 }
 
 impl NewPanel {
+  /// Why nothing was created, or that it waits for the team server: in place, under the note.
+  fn refusal(
+    &self,
+    ctx: &Ctx,
+    refused: Option<&Failed>,
+    waiting: Option<ResourceId>,
+    team: &TeamConfiguration,
+  ) -> Option<Element> {
+    if let Some(id) = waiting {
+      let cancel = ActionButton::new(
+        "team-new-cancel-sending",
+        ButtonKind::Secondary,
+        ctx.t("team_new.waiting.cancel"),
+      )
+      .icon(Icon::X);
+      let action = self.cancel.clone();
+      let cancel = if action.state().get().is_pending() {
+        cancel.loading()
+      } else {
+        cancel.on_click(move || action.run(id))
+      };
+      return Some(notices::waiting(ctx, cancel));
+    }
+    refused.map(|failed| notices::refused(ctx, failed, team))
+  }
+
+  /// Why *Cancel sending* did nothing: it is being sent right now, the server took the resource meanwhile, or the
+  /// resource holds more than its first version.
+  fn cancel_failure(&self, ctx: &Ctx) -> Option<Element> {
+    let state = self.cancel.state().get();
+    let why = state.error.as_ref().filter(|_| state.is_rejected())?;
+    Some(field_error("team-new-cancel-error", &message_text(ctx, why)).into())
+  }
+
   /// This computer's connections, which the profile form's CLI and model choices come from.
   fn agents(&self, ctx: &mut Ctx, kind: Kind, root: &Path) -> Option<ProjectAgents> {
     if kind != Kind::Profile {
@@ -272,6 +324,30 @@ impl NewPanel {
   }
 }
 
+/// A name the team server said is taken, which the list this computer holds did not have.
+fn taken_by_server(refused: Option<&Failed>) -> Option<String> {
+  match refused {
+    Some(Failed::Refused(Refusal::NameTaken, name)) => Some(name.clone()),
+    _ => None,
+  }
+}
+
+/// *For the team*: what the team holds, the same on every computer, as the rows of the kind's form.
+fn for_team(ctx: &Ctx, rows: Vec<Row>) -> Column {
+  rows::section(
+    "team-new-team",
+    &ctx.t("team_new.forTeam"),
+    vec![
+      Text::new(&ctx.t("team_new.goesOnCreate"))
+        .id("team-new-team-hint")
+        .variant(HubText::Hint.role())
+        .nowrap()
+        .into(),
+    ],
+    rows,
+  )
+}
+
 /// The head: what it is and that it is not created yet over its title (`Head` in A7).
 fn head(ctx: &Ctx, kind: Kind) -> Row {
   shared::head_named(
@@ -303,22 +379,4 @@ fn computer(ctx: &Ctx, key: &str) -> Row {
         .flex(1.0)
         .min_width(Dimension::Px(0.0)),
     )
-}
-
-/// Why nothing was created, or that it waits for the team server: in place, under the note.
-fn refusal(ctx: &Ctx, refused: Option<&Failed>, waiting: bool) -> Option<Element> {
-  if waiting {
-    return Some(
-      tinted_note(
-        "team-new-waiting",
-        (Icon::Clock, PaletteColor::Warning),
-        &ctx.t("team_new.waiting"),
-      )
-      .into(),
-    );
-  }
-  Some(match refused? {
-    Failed::PersonOnly => person_only("team-new-person-only", &ctx.t("team_new.personOnly")).into(),
-    Failed::Said(reason) => field_error("team-new-refused", &message_text(ctx, reason)).into(),
-  })
 }

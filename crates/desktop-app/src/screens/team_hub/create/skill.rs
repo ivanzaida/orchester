@@ -65,7 +65,7 @@ impl Fields {
       rows,
       computer: "team_new.computer.skill",
       make: made(&name, &description),
-      off: fields::taken(shown, &name).map(|_| fields::FIX_NAME),
+      off: fields::off(shown, &name),
     }
   }
 }

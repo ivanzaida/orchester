@@ -81,10 +81,9 @@ fn team_qa_create_a_server_that_refuses_it_is_said_in_place_and_nothing_is_made(
   server.stand_as(Standing::Member);
   window.press("team-hub-new-create");
   window.until("the refusal", |window| window.texts("team-new-refused").is_some());
-  assert!(
-    window.text("team-new-refused").contains("not_admin"),
-    "{}",
-    window.text("team-new-refused")
+  assert_eq!(
+    window.text("team-new-refused-title"),
+    "The team's server refused: you are no longer an admin"
   );
   assert_eq!(window.text("team-hub-panel-title"), "New instruction");
   assert!(
@@ -221,7 +220,12 @@ fn team_qa_create_the_old_instruction_window_makes_nothing_the_server_refused() 
   window.until("the refusal", |window| {
     window.texts("instruction-write-error").is_some()
   });
-  assert!(window.text("instruction-write-error").contains("not_admin"));
+  let said = window.text("instruction-write-error");
+  assert!(
+    said.contains("Only the project's owner or the server's admin"),
+    "{said}"
+  );
+  assert!(!said.contains("not_admin"), "no raw code: {said}");
   assert_eq!(held(&window), before);
   assert!(
     !server
@@ -297,6 +301,25 @@ fn team_qa_create_a_server_that_cannot_be_reached_keeps_it_waiting_to_send_and_s
   window.until("it is no longer waiting", |window| {
     window.texts(&row).is_some_and(|text| text[0] != WAITING_LINE)
   });
+}
+
+#[test]
+fn team_qa_create_cancel_sending_says_why_it_cannot_take_the_waiting_one_back() {
+  let (mut window, server) = filled(State::Admin);
+  server.set_down(true);
+  window.press("team-hub-new-create");
+  window.until("the waiting note", |window| window.texts("team-new-waiting").is_some());
+  // The project's database is out of reach for the press, as when the disk fails.
+  let file = window.data.repo("repo-kontur").join(".orchester").join("orchester.db");
+  let aside = file.with_extension("aside");
+  std::fs::rename(&file, &aside).expect("moved aside");
+  window.press("team-new-cancel-sending");
+  window.until("the reason", |window| window.texts("team-new-cancel-error").is_some());
+  std::fs::rename(&aside, &file).expect("put back");
+  assert!(
+    window.texts("team-new-waiting").is_some(),
+    "the form stays where it was"
+  );
 }
 
 #[test]

@@ -24,7 +24,7 @@ use orchester_workspace::{
   connections::mcp::Allowed,
   instructions::editor as instructions,
   messages::{Message, store_error},
-  sharing::Created,
+  sharing::{Created, NotCreated, team_edit::Refusal},
   skills::editor as skills,
   tasks::outside::Outside,
   tools::editor::{self as tools, Edit},
@@ -43,6 +43,16 @@ pub(super) enum Make {
 }
 
 impl Make {
+  /// The name it makes the resource under.
+  fn name(&self) -> String {
+    match self {
+      Self::Profile(profile) => profile.role().as_str().to_owned(),
+      Self::McpServer(input) => input.name.clone(),
+      Self::Instruction(name, _) | Self::Tool(name, _) => name.as_str().to_owned(),
+      Self::Skill(name, _) => name.clone(),
+    }
+  }
+
   /// The screens that show what it makes.
   const fn outside(&self) -> Outside {
     match self {
@@ -82,7 +92,9 @@ pub(super) struct Press {
 pub(super) enum Failed {
   /// It adds to what agents may do, which only a person decides, and a person did not press Create.
   PersonOnly,
-  /// The workspace or the team server refused it.
+  /// The team server refused it, with the name it was made under.
+  Refused(Refusal, String),
+  /// The workspace refused it, or it could not be sent for a reason other than being offline.
   Said(Message),
 }
 impl DevtoolsInspectable for Failed {}
@@ -95,6 +107,7 @@ pub(super) fn work(ctx: &mut Ctx, (root, project): (PathBuf, ProjectId)) -> Work
     let (services, root) = (services.clone(), root.clone());
     async move {
       let outside = request.make.outside();
+      let name = request.make.name();
       let local = root.clone();
       let id = background::run(move || make_in(&local, request))
         .await
@@ -110,6 +123,7 @@ pub(super) fn work(ctx: &mut Ctx, (root, project): (PathBuf, ProjectId)) -> Work
             waiting: created == Created::Waiting,
           })
         }
+        Err(NotCreated::Refused { code }) => Err(Failed::Refused(Refusal::of_code(&code), name)),
         Err(refused) => Err(Failed::Said(refused.message())),
       }
     }

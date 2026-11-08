@@ -4,6 +4,8 @@
 //! Each computer then sets the program's path and the values. The fields are checked by the rules `add_mcp_server`
 //! applies, so a path or a value has nowhere to go.
 
+mod edit;
+
 use lurq::{app::ctx::Ctx, components::Row, core::Signal};
 use orchester_core::connection::mcp::McpServerName;
 use orchester_workspace::{
@@ -11,6 +13,7 @@ use orchester_workspace::{
   messages::Message,
 };
 
+pub(in crate::screens::team_hub) use self::edit::EditView;
 use super::{
   fields::{self, Body, Error, Look, Shown, Spec, name_error},
   work::Make,
@@ -46,7 +49,8 @@ const RUNS: [(&str, &str); 2] = [
   ("remote", "team_new.mcp.runsRemote"),
 ];
 
-pub(super) struct Fields {
+#[derive(Clone)]
+pub(in crate::screens::team_hub) struct Fields {
   name: Signal<String>,
   runs: Signal<String>,
   program: Signal<String>,
@@ -68,6 +72,11 @@ fn names(text: &str) -> Vec<String> {
     .filter(|name| !name.is_empty())
     .map(str::to_owned)
     .collect()
+}
+
+/// `lines` as a list field holds them, one to a line.
+fn lines_text(lines: &[String]) -> String {
+  lines.join("\n")
 }
 
 /// The lines of a list field, each trimmed, none empty.
@@ -99,7 +108,7 @@ impl Fields {
   }
 
   /// What the fields describe, as the form of the team server takes it.
-  fn input(&self) -> NewTeamMcpServer {
+  pub(in crate::screens::team_hub) fn input(&self) -> NewTeamMcpServer {
     let runs = if self.runs.get() == PROGRAM_RUN {
       Runs::Program {
         program: self.program.get().trim().to_owned(),
@@ -149,12 +158,14 @@ impl Fields {
         fields::choice(ctx, &RUNS_AS, &self.runs, &RUNS, shown.locked),
       ),
     ];
-    rows.extend(if program {
-      self.program_rows(ctx, shown, invalid.as_ref())
+    if program {
+      rows.extend(self.program_rows(ctx, shown, invalid.as_ref()));
+      rows.push(self.exempt_row(ctx, shown));
+      rows.push(self.variables_row(ctx, shown));
     } else {
-      self.remote_rows(ctx, shown, invalid.as_ref())
-    });
-    rows.push(self.exempt_row(ctx, shown));
+      rows.extend(self.remote_rows(ctx, shown, invalid.as_ref()));
+      rows.push(self.exempt_row(ctx, shown));
+    }
     Body {
       rows,
       computer: if program {
@@ -163,7 +174,7 @@ impl Fields {
         "team_new.computer.mcpRemote"
       },
       make: checked.ok().map(|_| Make::McpServer(Box::new(input))),
-      off: fields::taken(shown, &name).map(|_| fields::FIX_NAME),
+      off: fields::off(shown, &name),
     }
   }
 
@@ -214,19 +225,20 @@ impl Fields {
       Invalid::Folder(message) => Some(message),
       _ => None,
     });
+    let marks = Marks::of(&self.input(), shown.published);
     let locked = shown.locked;
     let mut rows = vec![
       fields::text_row(
         ctx,
         &PROGRAM,
-        program.as_ref(),
+        marks.on(program, marks.program).as_ref(),
         (&self.program, "team_new.mcp.programPlaceholder"),
         (Look::Mono, locked),
       ),
       fields::text_row(
         ctx,
         &ARGUMENTS,
-        None,
+        marks.on(None, marks.arguments).as_ref(),
         (&self.arguments, "team_new.mcp.argumentsPlaceholder"),
         (Look::Lines, locked),
       ),
@@ -236,19 +248,24 @@ impl Fields {
       rows.push(fields::text_row(
         ctx,
         &FOLDER_PATH,
-        folder.as_ref(),
+        marks.on(folder, marks.folder).as_ref(),
         (&self.folder, "team_new.mcp.folderPathPlaceholder"),
         (Look::Mono, locked),
       ));
     }
-    rows.push(fields::text_row(
+    rows
+  }
+
+  /// The variables the server needs, one name per line, after the tools it may run without asking (A13).
+  fn variables_row(&self, ctx: &mut Ctx, shown: &Shown<'_>) -> Row {
+    let marks = Marks::of(&self.input(), shown.published);
+    fields::text_row(
       ctx,
       &VARIABLES,
-      None,
+      marks.on(None, marks.variables).as_ref(),
       (&self.variables, "team_new.mcp.variablesPlaceholder"),
-      (Look::Lines, locked),
-    ));
-    rows
+      (Look::Lines, shown.locked),
+    )
   }
 
   /// Where the server starts: in the run's worktree, as the design's select says, or in a folder inside it.
@@ -273,33 +290,34 @@ impl Fields {
       Invalid::Url(message) => Some(message),
       _ => None,
     });
+    let marks = Marks::of(&self.input(), shown.published);
     let locked = shown.locked;
     vec![
       fields::text_row(
         ctx,
         &URL,
-        url.as_ref(),
+        marks.on(url, marks.url).as_ref(),
         (&self.url, "team_new.mcp.urlPlaceholder"),
         (Look::Mono, locked),
       ),
       fields::text_row(
         ctx,
         &HEADER,
-        None,
+        marks.on(None, marks.header).as_ref(),
         (&self.header, "team_new.mcp.headerPlaceholder"),
         (Look::Mono, locked),
       ),
       fields::text_row(
         ctx,
         &SECRET,
-        None,
+        marks.on(None, marks.secret).as_ref(),
         (&self.secret, "team_new.mcp.secretPlaceholder"),
         (Look::Mono, locked),
       ),
       fields::text_row(
         ctx,
         &PREFIX,
-        None,
+        marks.on(None, marks.prefix).as_ref(),
         (&self.prefix, "team_new.mcp.prefixPlaceholder"),
         (Look::Mono, locked),
       ),
@@ -307,12 +325,119 @@ impl Fields {
   }
 
   fn exempt_row(&self, ctx: &mut Ctx, shown: &Shown<'_>) -> Row {
+    let marks = Marks::of(&self.input(), shown.published);
     fields::text_row(
       ctx,
       &EXEMPT,
-      None,
+      marks.on(None, marks.exempt).as_ref(),
       (&self.exempt, "team_new.mcp.exemptPlaceholder"),
-      (Look::Plain, shown.locked),
+      (Look::Mono, shown.locked),
     )
+  }
+}
+
+/// Which fields of an edit differ from the version it starts from; none for a form that creates.
+#[derive(Default)]
+struct Marks {
+  runs: bool,
+  program: bool,
+  arguments: bool,
+  folder: bool,
+  variables: bool,
+  url: bool,
+  header: bool,
+  secret: bool,
+  prefix: bool,
+  exempt: bool,
+}
+
+impl Marks {
+  fn of(input: &NewTeamMcpServer, published: Option<&NewTeamMcpServer>) -> Self {
+    let Some(published) = published else {
+      return Self::default();
+    };
+    let mut marks = Self {
+      exempt: input.exempt_tools != published.exempt_tools,
+      ..Self::default()
+    };
+    match (&input.runs, &published.runs) {
+      (
+        Runs::Program {
+          program,
+          arguments,
+          folder,
+          variables,
+        },
+        Runs::Program {
+          program: was_program,
+          arguments: was_arguments,
+          folder: was_folder,
+          variables: was_variables,
+        },
+      ) => {
+        marks.program = program != was_program;
+        marks.arguments = arguments != was_arguments;
+        marks.folder = folder != was_folder;
+        marks.variables = variables != was_variables;
+      }
+      (
+        Runs::Remote { url, header },
+        Runs::Remote {
+          url: was_url,
+          header: was_header,
+        },
+      ) => {
+        marks.url = url != was_url;
+        let (name, secret, prefix) = header.as_ref().map_or((None, None, None), |h| {
+          (Some(&h.name), Some(&h.secret), Some(&h.prefix))
+        });
+        let (was_name, was_secret, was_prefix) = was_header.as_ref().map_or((None, None, None), |h| {
+          (Some(&h.name), Some(&h.secret), Some(&h.prefix))
+        });
+        marks.header = name != was_name;
+        marks.secret = secret != was_secret;
+        marks.prefix = prefix != was_prefix;
+      }
+      // Another way of running: every field of the new one is new.
+      (Runs::Program { .. }, Runs::Remote { .. }) => {
+        marks.runs = true;
+        marks.program = true;
+        marks.arguments = true;
+        marks.folder = true;
+        marks.variables = true;
+      }
+      (Runs::Remote { .. }, Runs::Program { .. }) => {
+        marks.runs = true;
+        marks.url = true;
+        marks.header = true;
+        marks.secret = true;
+        marks.prefix = true;
+      }
+    }
+    marks
+  }
+
+  /// The labels (keys) of the changed fields, in the order of the rows.
+  fn labels(&self) -> Vec<&'static str> {
+    [
+      (self.runs, RUNS_AS.label),
+      (self.program, PROGRAM.label),
+      (self.arguments, ARGUMENTS.label),
+      (self.folder, FOLDER_PATH.label),
+      (self.variables, VARIABLES.label),
+      (self.url, URL.label),
+      (self.header, HEADER.label),
+      (self.secret, SECRET.label),
+      (self.prefix, PREFIX.label),
+      (self.exempt, EXEMPT.label),
+    ]
+    .into_iter()
+    .filter_map(|(changed, label)| changed.then_some(label))
+    .collect()
+  }
+
+  /// `error` of a field, else *changed in your draft* when `changed`.
+  fn on(&self, error: Option<Error>, changed: bool) -> Option<Error> {
+    error.or_else(|| changed.then_some(Error::Changed))
   }
 }

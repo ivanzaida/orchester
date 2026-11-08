@@ -11,8 +11,12 @@
 //! Turning it off is always taken.
 
 mod computer;
+mod copy_changes;
+mod edit;
+mod edit_view;
 mod fix;
 mod from_team;
+mod modes;
 mod words;
 
 use std::{path::PathBuf, sync::Arc};
@@ -29,7 +33,11 @@ use lurq::{
 use orchester_core::id::{ProjectId, ResourceId};
 use orchester_workspace::{agents::team_mcp::TeamMcpSheet, sharing::team::TeamConfiguration};
 
-use self::fix::{Bar, Fix, Step};
+use self::{
+  edit::Edit,
+  fix::{Fix, Step},
+  modes::Mode,
+};
 use super::{
   actions::Actions,
   member,
@@ -37,6 +45,7 @@ use super::{
   panel, secret,
 };
 use crate::{
+  mcp::input_gate::InputGate,
   screens::settings::orchester::PersonOnly,
   services::Services,
   theme::HubSpacing,
@@ -85,6 +94,9 @@ struct McpPanel {
   actions: Actions,
   secret: secret::Entry,
   person: PersonOnly,
+  /// An admin's edit of the team's part.
+  edit: Edit,
+  gate: Option<InputGate>,
 }
 
 impl Component for McpPanel {
@@ -96,6 +108,12 @@ impl Component for McpPanel {
       actions: Actions::new(ctx, &props.repo_root),
       secret: secret::Entry::new(ctx),
       person: PersonOnly::new(ctx),
+      edit: Edit::new(
+        ctx,
+        (props.repo_root.clone(), props.project, props.entry.id),
+        props.sheet.edit.as_ref(),
+      ),
+      gate: ctx.use_context::<InputGate>(),
     };
     panel.secret.follow_save(ctx, &panel.actions.add_value);
     panel
@@ -120,12 +138,20 @@ impl Component for McpPanel {
       choose: press(&Step::Fix(Fix::ChoosePath(entry.id))),
       switch: self.switch(entry.id),
     };
-    let chips = panel::chips_saying(
+    let mode = self.mode(&props);
+    let kept = Edit::autosave(
       ctx,
-      entry,
-      words::chip(ctx, listing, entry, missing),
-      panel::used_by(ctx, &sheet.used_by),
+      (props.repo_root.clone(), props.project, entry.id),
+      sheet.edit.as_ref().is_some_and(|edit| edit.draft.is_some()),
+      self.to_keep(mode),
     );
+    let parts = self
+      .parts(ctx, &props, (mode, &kept))
+      .unwrap_or_else(|| self.plain_parts(ctx, &props, (busy, &press)));
+    let chips = panel::chips_of(ctx, entry, parts.chips.badges, parts.chips.end);
+    let computer = parts.computer.then(|| computer::section(ctx, &view));
+    let (above, from_team, bar) = (parts.above, parts.from_team, parts.bar);
+    let edit_button = (mode == Mode::Plain).then(|| self.edit_button(ctx, &props)).flatten();
     let body = Column::new()
       .width(Dimension::Pct(100.0))
       .padding(Padding::symmetric(
@@ -137,25 +163,20 @@ impl Component for McpPanel {
         ctx,
         entry,
         words::head_line(ctx, now, entry, sheet),
-        None,
+        edit_button,
       ))
       .child(chips)
-      .with_children(member::lock_line(ctx, &props.team))
-      .child(from_team::section(ctx, sheet))
-      .child(computer::section(ctx, &view))
+      .with_children(above)
+      .with_children(self.action_failure(ctx))
+      .with_children(member::lock_line(ctx, &props.team).filter(|_| mode != Mode::ReadOnly))
+      .child(from_team)
+      .with_children(computer)
       .with_children(self.failure(ctx));
     let scroll = ScrollVertical::new(body)
       .id("team-hub-panel-scroll")
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .min_height(Dimension::Px(0.0));
-    let bar = Bar {
-      missing,
-      changes_path: sheet.program.is_some().then_some(entry.id),
-      busy,
-      press: &press,
-    }
-    .render(ctx);
     let dialog = self.secret.dialog(
       ctx,
       secret::Entry::save_by(&self.actions.add_value, &self.person),

@@ -11,7 +11,7 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_workspace::{agents::data::ProjectAgents, messages::Message};
+use orchester_workspace::{agents::data::ProjectAgents, app_mcp::setup::NewTeamMcpServer, messages::Message};
 
 use super::{
   super::{
@@ -39,6 +39,11 @@ pub(super) struct Shown<'a> {
   pub agents: Option<&'a ProjectAgents>,
   /// The name field, which has the focus when the form opens (`Name` is focused in A7–A12).
   pub first: &'a ElementRef,
+  /// The name the team server refused as taken, though the list had no resource of it.
+  pub refused_name: Option<&'a str>,
+  /// The version an edit starts from: the form is an edit of it, a field that differs says so, and the name is not
+  /// in it. `None` for a form that creates.
+  pub published: Option<&'a NewTeamMcpServer>,
 }
 
 /// What a kind's form gives the panel.
@@ -88,10 +93,13 @@ impl Spec {
 }
 
 /// What a field's error says: `team_new.errors.required` for an empty required field once Create was pressed.
-pub(super) enum Error {
+pub(in crate::screens::team_hub) enum Error {
   Required,
   Said(Message),
   Words(Arc<str>),
+  /// The field of an edit differs from the version it starts from (*changed in your draft*): a note in `warning`, not
+  /// an error.
+  Changed,
 }
 
 impl Error {
@@ -100,6 +108,20 @@ impl Error {
       Self::Required => ctx.t("team_new.errors.required"),
       Self::Said(message) => message_text(ctx, message),
       Self::Words(words) => words.clone(),
+      Self::Changed => ctx.t("team_hub.edit.mark"),
+    }
+  }
+
+  /// Whether the field is wrong, which turns it `danger`.
+  const fn is_error(&self) -> bool {
+    !matches!(self, Self::Changed)
+  }
+
+  const fn color(&self) -> PaletteColor {
+    if self.is_error() {
+      PaletteColor::Danger
+    } else {
+      PaletteColor::Warning
     }
   }
 }
@@ -114,7 +136,7 @@ pub(super) fn row(ctx: &Ctx, spec: &Spec, error: Option<&Error>, control: impl I
   let sub = match (error, spec.sub) {
     (Some(error), _) => Some(Sub {
       words: error.words(ctx),
-      color: PaletteColor::Danger,
+      color: error.color(),
     }),
     (None, Some(sub)) => Some(Sub::quiet(ctx.t(sub))),
     (None, None) => None,
@@ -205,7 +227,7 @@ fn text_row_with(
     ctx,
     spec,
     (value.clone(), placeholder),
-    (look, error.is_some(), locked),
+    (look, error.is_some_and(Error::is_error), locked),
     first,
   );
   let row = row(ctx, spec, error, control);
@@ -280,14 +302,33 @@ pub(super) fn taken(shown: &Shown<'_>, name: &str) -> Option<String> {
     .map(|entry| entry.name.clone())
 }
 
-/// A name field's error: the name is the team's already (always, so Create stays off with the reason, A9), or it is
-/// empty once Create was pressed. `taken_key` says the first, with the name.
+/// Whether the team server refused `name` as taken (A15 `dLqHC`): the list this computer holds did not have it.
+fn taken_by_server(shown: &Shown<'_>, name: &str) -> bool {
+  shown
+    .refused_name
+    .is_some_and(|refused| refused.eq_ignore_ascii_case(name.trim()))
+}
+
+/// A name field's error: the name is the team's already (always, so Create stays off with the reason, A9), the team
+/// server said so (A15), or it is empty once Create was pressed. `taken_key` says the first, with the name.
 pub(super) fn name_error(ctx: &Ctx, shown: &Shown<'_>, name: &str, taken_key: &'static str) -> Option<Error> {
   if let Some(found) = taken(shown, name) {
     return Some(Error::Words(ctx.t_args(taken_key, [("name", found.as_str())])));
   }
+  if taken_by_server(shown, name) {
+    return Some(Error::Words(ctx.t("team_new.errors.takenByServer")));
+  }
   (shown.tried && name.trim().is_empty()).then_some(Error::Required)
 }
 
-/// The bar's words while Create stays off because the name is the team's already.
-pub(super) const FIX_NAME: &str = "team_new.bar.fixName";
+/// Why Create stays off before it is pressed because of the name, as a key said at the bar's end: it is the team's
+/// already, or the team server said so.
+pub(super) fn off(shown: &Shown<'_>, name: &str) -> Option<&'static str> {
+  if taken(shown, name).is_some() {
+    Some("team_new.bar.fixName")
+  } else if taken_by_server(shown, name) {
+    Some("team_new.bar.changeName")
+  } else {
+    None
+  }
+}

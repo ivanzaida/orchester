@@ -113,7 +113,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 175] = [
+pub const ALL: [Scenario; 184] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -283,6 +283,15 @@ pub const ALL: [Scenario; 175] = [
   Scenario::with_fake_codex("team-running", team::team_running),
   Scenario::of("team-edit-conflict", team::edit_conflict),
   Scenario::of("team-not-ready", team::not_ready_here),
+  Scenario::of("team-edit", team::edit),
+  Scenario::of("team-edit-demoted", team::edit_demoted),
+  Scenario::of("team-edit-offline", team::edit_offline),
+  Scenario::of("team-edit-rejects", team::edit_rejects),
+  Scenario::of("team-edit-published", team::edit_published),
+  Scenario::of("team-edit-refused-admin", team::edit_refused_admin),
+  Scenario::of("team-edit-waiting", team::edit_waiting),
+  Scenario::of("team-edit-rejected", team::edit_rejected),
+  Scenario::of("team-create-name-taken", team::create_name_taken),
   Scenario::of("team-start-failed", team::start_failed),
   Scenario::of("team-start-recovered", team::start_recovered),
   Scenario::of("modules-base-branch", modules::base_branch),

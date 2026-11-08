@@ -27,6 +27,7 @@ mod password;
 mod place;
 pub mod project;
 mod refusal;
+mod send_lane;
 mod server_key;
 mod share_outcome;
 mod start_lock;
@@ -34,6 +35,7 @@ pub(crate) use self::start_lock::StartTrouble;
 pub mod sync;
 pub mod team;
 mod team_created;
+pub mod team_edit;
 pub mod team_join;
 mod team_session;
 pub mod trust;
@@ -140,6 +142,8 @@ struct Inner {
   /// empty mutex per project folder the session started or recovered a team start in, so the map grows by a few bytes
   /// per project and not with the starts.
   starting: Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>,
+  /// The projects' sends of the outbox, one at a time each ([`Servers::send_lane`]).
+  sending: Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>,
   /// The team starts recovery found in trouble this session, so it says so once each per trouble
   /// ([`Servers::first_trouble`]).
   told_starts: Mutex<HashSet<(orchester_core::id::OperationId, start_lock::StartTrouble)>>,
@@ -188,6 +192,7 @@ impl Servers {
         downloads: Mutex::new(HashMap::new()),
         taken_back: Mutex::new(HashMap::new()),
         starting: Mutex::new(HashMap::new()),
+        sending: Mutex::new(HashMap::new()),
         told_starts: Mutex::new(HashSet::new()),
       }),
     }

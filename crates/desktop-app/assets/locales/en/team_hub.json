@@ -2,6 +2,8 @@
   "team_hub": {
     "title": "Agents",
     "team": "Team",
+    "draftSaved": "Draft saved",
+    "unreached": "Team server not reachable · retrying",
     "reading": "Reading the team's configuration…",
     "loadFailed": "The team's configuration couldn't be read",
     "filter": {
@@ -374,6 +376,79 @@
       "note": {
         "byId": "This tool names its secret by id; it can't be filled in here yet. Ask a team admin to publish {{name}} again."
       }
+    },
+    "edit": {
+      "mark": "changed in your draft",
+      "chip": {
+        "draft": "Your draft on {{version}}",
+        "waiting": "Waiting to send",
+        "draftNotPublished": "Your draft · not published",
+        "notPublished": "Not published"
+      },
+      "line": {
+        "draft": "{{draft}} · {{words}}"
+      },
+      "draft": {
+        "saved": "Draft on {{version}} · saved {{time}} · only on this computer",
+        "nothingKept": "Editing {{version}} · nothing changed yet",
+        "unsaved": "Draft on {{version}} · not saved yet",
+        "changes": "{{fields}} changed · publishing makes {{next}} for the whole team; On this computer is never sent",
+        "nothing": "Nothing changed yet · publishing makes {{next}} for the whole team; On this computer is never sent"
+      },
+      "rejected": {
+        "title": "The team's server refused {{version}}",
+        "body": "{{reason}} Your draft is kept; fix the reason, then publish again."
+      },
+      "rejectedHere": {
+        "title": "Not sent: this computer found the team can't take {{version}}"
+      },
+      "superseded": {
+        "title": "Someone published {{version}} first"
+      },
+      "failed": {
+        "title": "Couldn't publish {{version}}"
+      },
+      "notAdmin": {
+        "title": "The team's server refused: you are no longer an admin",
+        "body": "Your draft of {{name}} stays on this computer; only an Admin can publish it. Ask an Admin: {{admins}}."
+      },
+      "notAdminHere": {
+        "title": "You are no longer an admin of the team"
+      },
+      "waiting": {
+        "title": "Waiting to send · retries when the server is back",
+        "body": "The server has not answered. Your draft will be published as {{next}} when it does; until the server accepts it, nobody else's runs use it and {{current}} stays the team's."
+      },
+      "waitingCreated": {
+        "body": "The server has not answered. {{name}} stays here as waiting to send and is created for the team when it does; until then nobody else's runs use it. Cancel sending takes it back as if it was never created."
+      },
+      "copy": {
+        "program": "program: {{value}}",
+        "argument": "argument: {{value}}",
+        "folder": "folder: {{value}}",
+        "variable": "variable: {{value}}",
+        "url": "url: {{value}}",
+        "header": "header: {{name}} <- {{secret}}",
+        "exempt": "run without asking: {{value}}"
+      },
+      "cancelSending": "Cancel sending",
+      "copyChanges": "Copy my changes",
+      "copied": "Copied",
+      "copyFailed": "Couldn't copy",
+      "bar": {
+        "publish": "Publish for the team",
+        "discard": "Discard draft",
+        "discardMine": "Discard my draft",
+        "refused": "Refused {{time}} · fix the reason, then publish again",
+        "admins": "Only admins publish · {{admins}}",
+        "nothingPublished": "Nothing is published until the server accepts it",
+        "askAdmin": "Ask an Admin: {{admins}}"
+      },
+      "fromTeamEditing": "· editing · publishing sends it to every computer",
+      "fromTeamWaiting": "· your draft on {{version}} · locked while it waits to send",
+      "fromTeamWaitingCreated": "· waiting to be created · locked while it waits to send",
+      "fromTeamReadOnly": "· your draft on {{version}} · read-only now",
+      "queued": "queued {{time}}"
     }
   }
 }

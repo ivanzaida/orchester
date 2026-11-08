@@ -111,6 +111,7 @@ fn text(ctx: &Ctx, listing: &Listing, entry: &Entry, id: &str) -> Column {
         .id(format!("{id}-line"))
         .variant(HubText::RowLine.role())
         .color(said.color)
+        .width(Dimension::Pct(100.0))
         .nowrap()
         .text_overflow(TextOverflow::Elipsis),
     )

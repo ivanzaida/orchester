@@ -16,7 +16,12 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, SharedStanding};
 
-use super::{Servers, SharingError, TakenBack, project::ProjectServer, sync::RemoteResourceStore};
+use super::{
+  Servers, SharingError, TakenBack,
+  project::ProjectServer,
+  send_lane::{between_sends, send_turn},
+  sync::RemoteResourceStore,
+};
 use crate::{
   background,
   messages::{self, Message},
@@ -125,11 +130,13 @@ impl Servers {
   /// someone published from the same base, is taken back, and the resource's draft is edited from that version
   /// ([`ProjectDb::reopen_draft`]). Nothing is sent. Fails with what to tell the person.
   pub async fn reopen_draft(&self, repo_root: &Path, kind: ResourceKind, version: VersionId) -> Result<(), Message> {
-    let root = repo_root.to_owned();
+    let (servers, root) = (self.clone(), repo_root.to_owned());
     background::run(move || {
-      let mut db = ProjectDb::open(&root)?;
+      let lane = servers.send_lane(&root);
+      let _between = between_sends(&lane)?;
+      let mut db = ProjectDb::open(&root).map_err(|error| messages::store_error(&error))?;
       let now = Timestamp::now();
-      match kind {
+      let reopened = match kind {
         ResourceKind::AgentProfile => db.reopen_draft::<AgentProfile>(version, now),
         ResourceKind::Pipeline => db.reopen_draft::<Pipeline>(version, now),
         ResourceKind::Instruction => db.reopen_draft::<Instruction>(version, now),
@@ -139,10 +146,10 @@ impl Servers {
         ResourceKind::McpServer => db.reopen_draft::<orchester_core::resource::TeamMcpServer>(version, now),
         // Agent testing's kinds are never the team's, so none of their versions waits for the server.
         ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => Ok(()),
-      }
+      };
+      reopened.map_err(|error| messages::store_error(&error))
     })
-    .await?
-    .map_err(|error| messages::store_error(&error))?;
+    .await??;
     self.shared_changed();
     Ok(())
   }
@@ -155,6 +162,8 @@ impl Servers {
   ) -> Result<(), Message> {
     let (servers, root) = (self.clone(), repo_root.to_owned());
     let sent = background::run(move || {
+      let lane = servers.send_lane(&root);
+      let _sending = send_turn(&lane);
       let server = match ProjectServer::open(&servers, &root) {
         Ok(Some(server)) => server,
         Ok(None) => return Ok(()),
