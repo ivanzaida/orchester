@@ -8,7 +8,6 @@ use std::{fs, process::Command};
 use lurq::app::events::with_synthetic_input;
 use orchester_app::routes::OrchestratorChat;
 use orchester_core::orchestrator::ActionOutcome;
-use orchester_workspace::workspace::OrchestratorConsent;
 
 use super::{
   harness::{Orchestrator, Setup, git},
@@ -61,7 +60,7 @@ fn orchestrator_git_write_waits_for_the_switch_and_shows_what_ran() {
     "nothing was committed"
   );
 
-  screen.let_orchestrator(OrchestratorConsent::WriteGit, true);
+  screen.let_orchestrator_drive(true);
   let card = acted(&mut screen, commit, |outcome| *outcome == ActionOutcome::Done);
   assert_eq!(screen.text(&format!("{card}-title")), "Ran git commit");
   screen.click(&format!("{card}-line"));

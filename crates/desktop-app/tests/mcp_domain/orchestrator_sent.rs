@@ -31,7 +31,6 @@ use orchester_workspace::{
     composer::ComposerMode,
     orchestrator::{ProposalState, proposals},
   },
-  workspace::OrchestratorConsent,
 };
 use serde_json::{Value, json};
 
@@ -112,7 +111,7 @@ fn sent_directly_names_the_orchestrator_and_how_it_went_out() {
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
   let (task, run) = task_run(&db, ASKING);
   let scope = chat(&served, &mut db);
-  allow(&served, &seeded.repo, OrchestratorConsent::AnswerAgents);
+  allow(&served, &seeded.repo);
   // The message answers the agent's question: automation decides it only with the person's consent.
   served
     .services()

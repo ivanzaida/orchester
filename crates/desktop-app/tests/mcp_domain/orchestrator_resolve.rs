@@ -20,7 +20,6 @@ use orchester_workspace::{
   app_mcp::ToolError,
   orchestrator::{proposal::Decision, tools::ChatScope},
   tasks::{detail::TaskDetail, return_work},
-  workspace::OrchestratorConsent,
 };
 use serde_json::{Value, json};
 
@@ -62,7 +61,7 @@ fn merge_conflicts(served: &mut Served, scope: &ChatScope, number: u32) -> ToolE
   served
     .services()
     .workspace
-    .set_orchestrator_allows(&scope.root, OrchestratorConsent::MergeRuns, true)
+    .set_orchestrator_drives(&scope.root, true)
     .expect("the person lets the chat merge");
   let merge = json!({ "project": "Kontur", "run": number.to_string() });
   chat_call(served, scope, "merge_run", merge).expect_err("the merge conflicts")

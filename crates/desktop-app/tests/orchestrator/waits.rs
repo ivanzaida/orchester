@@ -15,7 +15,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
-use orchester_workspace::{tasks::outside::Outside, workspace::OrchestratorConsent};
+use orchester_workspace::tasks::outside::Outside;
 
 use super::{
   harness::{Orchestrator, Setup},
@@ -64,7 +64,7 @@ fn waits_for_message(screen: &Orchestrator, key: &str) -> bool {
 #[test]
 fn orchestrator_wait_turn_is_answered_to_its_end() {
   let mut screen = Orchestrator::new(Setup::Ready);
-  screen.let_orchestrator(OrchestratorConsent::AnswerAgents, true);
+  screen.let_orchestrator_drive(true);
   let delivery = screen.delivery();
   let key = screen.draft_with(
     delivery,

@@ -8,7 +8,7 @@ use std::path::Path;
 
 use orchester_core::{run::AllowAutopilot, store::RunStore};
 use orchester_store::ProjectDb;
-use orchester_workspace::{app_mcp::ToolError, workspace::OrchestratorConsent};
+use orchester_workspace::app_mcp::ToolError;
 use serde_json::{Value, json};
 
 use super::{
@@ -96,7 +96,7 @@ fn decisions_reach_person_orchestrator_answer_is_proposed_under_autopilot_until_
   let told = chat_call(&mut served, &scope, "answer_question", answer.clone()).expect("proposed");
   assert_eq!(told["waits_for_person"], true, "{told}");
   assert!(db.questions(run.id()).expect("questions")[0].waits());
-  allow(&served, &seeded.repo, OrchestratorConsent::AnswerAgents);
+  allow(&served, &seeded.repo);
   served
     .services()
     .workspace
@@ -123,13 +123,7 @@ fn decisions_reach_person_orchestrator_proposes_how_a_waiting_run_goes_on_under_
     .workspace
     .set_automation_answers_approvals(true)
     .expect("consent");
-  for consent in [
-    OrchestratorConsent::AnswerAgents,
-    OrchestratorConsent::MergeRuns,
-    OrchestratorConsent::ContinueInterrupted,
-  ] {
-    allow(&served, &seeded.repo, consent);
-  }
+  allow(&served, &seeded.repo);
   let retry = json!({ "project": "Kontur", "run": run.id().to_string(), "choice": { "kind": "allow_retry" } });
   let told = chat_call(&mut served, &scope, "continue_run", retry).expect("proposed");
   assert_eq!(told["waits_for_person"], true, "{told}");

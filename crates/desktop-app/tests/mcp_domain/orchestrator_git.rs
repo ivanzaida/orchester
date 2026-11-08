@@ -5,7 +5,7 @@
 
 use orchester_core::orchestrator::{ActionOutcome, change::Change};
 use orchester_store::ProjectDb;
-use orchester_workspace::{app_mcp::ToolError, orchestrator::tools::ChatScope, workspace::OrchestratorConsent};
+use orchester_workspace::{app_mcp::ToolError, orchestrator::tools::ChatScope};
 use serde_json::json;
 
 use super::{
@@ -43,7 +43,7 @@ fn chat_git_writes_wait_for_the_switch_and_never_run_in_a_turn_nobody_asked_for(
   assert!(read["branch"].is_string(), "{read}");
   let kept = actions(&db, &scope).len();
 
-  allow(&served, &seeded.repo, OrchestratorConsent::WriteGit);
+  allow(&served, &seeded.repo);
   let on_its_own = ChatScope {
     on_its_own: true,
     ..scope.clone()

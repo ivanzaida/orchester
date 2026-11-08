@@ -17,7 +17,7 @@ use orchester_core::{
   tokens::TokenBudget,
 };
 use orchester_store::ProjectDb;
-use orchester_workspace::{app_mcp::ToolError, orchestrator::tools::ChatScope, workspace::OrchestratorConsent};
+use orchester_workspace::{app_mcp::ToolError, orchestrator::tools::ChatScope};
 use serde_json::{Value, json};
 
 use super::{
@@ -41,12 +41,12 @@ pub(super) fn refusal(error: &ToolError) -> (&str, &str) {
   }
 }
 
-/// The person's choice of `consent` in the project at `repo`.
-pub(super) fn allow(served: &Served, repo: &std::path::Path, consent: OrchestratorConsent, allowed: bool) {
+/// The person's choice of *Let the Orchestrator drive* in the project at `repo`.
+pub(super) fn allow(served: &Served, repo: &std::path::Path, allowed: bool) {
   served
     .services()
     .workspace
-    .set_orchestrator_allows(repo, consent, allowed)
+    .set_orchestrator_drives(repo, allowed)
     .expect("the person chose it");
 }
 
@@ -89,7 +89,7 @@ fn chat_continues_a_crash_a_lost_runner_and_quit_now_only_with_the_persons_switc
       "{cause:?} while the switch is off"
     );
   }
-  allow(&served, &seeded.repo, OrchestratorConsent::ContinueInterrupted, true);
+  allow(&served, &seeded.repo, true);
   for (cause, run) in &runs {
     // This session's runner cannot start: the call reached it, to continue the run from its last checkpoint.
     let asked = chat_call(&mut served, &scope, "resume_run", resume(run)).expect_err("no runner here");
@@ -146,8 +146,7 @@ fn chat_never_continues_a_limit_a_cancel_a_runner_failure_or_a_gone_worktree() {
     (CRASHED, "orchestrator.tools.continueWorktreeGone"),
   ];
   for allowed in [false, true] {
-    allow(&served, &seeded.repo, OrchestratorConsent::ContinueInterrupted, allowed);
-    allow(&served, &seeded.repo, OrchestratorConsent::AnswerAgents, allowed);
+    allow(&served, &seeded.repo, allowed);
     for (title, key) in refused {
       let (_, run) = task_run(&db, title);
       let error = chat_call(&mut served, &scope, "resume_run", resume(&run)).expect_err("the person's");
@@ -174,7 +173,6 @@ pub(super) fn turn_of_end(db: &mut ProjectDb, scope: &ChatScope, (seeded, run): 
     others: 0,
     agent: None,
     link: format!("/project/{}/tasks", seeded.project),
-    own: false,
     automatic: true,
     continuing: None,
     merging: None,
@@ -206,11 +204,11 @@ fn chat_turn_of_an_interruption_continues_only_its_run_once_and_not_again_soon()
   };
   let [(_, crashed), (_, lost), _] = interruptions(&mut db);
   turn_of_end(&mut db, &own, (&seeded, &crashed), RunEnd::Interrupted);
-  allow(&served, &seeded.repo, OrchestratorConsent::ContinueInterrupted, true);
+  allow(&served, &seeded.repo, true);
   // Without answering agents on, no turn is the person's to start by itself.
   let refused = chat_call(&mut served, &own, "resume_run", resume(&crashed)).expect_err("answer agents is off");
   assert_eq!(refusal(&refused).0, "person_only");
-  allow(&served, &seeded.repo, OrchestratorConsent::AnswerAgents, true);
+  allow(&served, &seeded.repo, true);
   let other = chat_call(&mut served, &own, "resume_run", resume(&lost)).expect_err("not this turn's run");
   assert_eq!(refusal(&other), ("person_only", "orchestrator.tools.resumePersonOnly"));
   let asked = chat_call(&mut served, &own, "resume_run", resume(&crashed)).expect_err("no runner here");
@@ -255,7 +253,7 @@ fn chat_continues_an_interrupted_run_through_the_real_runner_as_its_own_action()
   let mut served = Served::start(folder, &seeded.app_database, runner);
   let scope = chat(&served, &mut db);
   let (_, crashed) = task_run(&db, CRASHED);
-  allow(&served, &seeded.repo, OrchestratorConsent::ContinueInterrupted, true);
+  allow(&served, &seeded.repo, true);
   let told = chat_call(&mut served, &scope, "resume_run", resume(&crashed)).expect("continued");
   assert_ne!(told["run"]["status"]["state"], "interrupted", "{told}");
   let action = actions(&db, &scope).pop().expect("kept");

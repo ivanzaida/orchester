@@ -36,7 +36,6 @@ fn wait_of(kind: WaitKind, run: &Run, task: &str) -> AgentWait {
     others: 0,
     agent: Some("Builder".to_owned()),
     link: format!("/tasks/{task}"),
-    own: false,
     automatic: true,
     continuing: None,
     merging: None,

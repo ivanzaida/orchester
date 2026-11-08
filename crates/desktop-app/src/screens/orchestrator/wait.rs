@@ -170,7 +170,6 @@ const fn effect(wait: &AgentWait, turned: bool) -> &'static str {
     (WaitKind::Plan, false, _) => "orchestrator.wait.effectPlan",
     (_, true, true) => "orchestrator.wait.effectAnswering",
     (_, true, false) => "orchestrator.wait.effectQueued",
-    (_, false, _) if wait.own => "orchestrator.wait.effectOwn",
     (_, false, _) => "orchestrator.wait.effectWaits",
   }
 }

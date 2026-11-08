@@ -14,10 +14,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
-use orchester_workspace::{
-  orchestrator::{proposal::Decision, tools::ChatScope},
-  workspace::OrchestratorConsent,
-};
+use orchester_workspace::orchestrator::{proposal::Decision, tools::ChatScope};
 use serde_json::{Value, json};
 
 use super::{
@@ -42,15 +39,9 @@ fn switched_on() -> (Served, Seeded, ProjectDb, ChatScope) {
   let (served, seeded) = Served::seeded("task-states");
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
   let workspace = &served.services().workspace;
-  for consent in [
-    OrchestratorConsent::AnswerAgents,
-    OrchestratorConsent::MergeRuns,
-    OrchestratorConsent::PublishDrafts,
-  ] {
-    workspace
-      .set_orchestrator_allows(&seeded.repo, consent, true)
-      .expect("the person turned it on");
-  }
+  workspace
+    .set_orchestrator_drives(&seeded.repo, true)
+    .expect("the person turned it on");
   workspace
     .set_automation_answers_approvals(true)
     .expect("decision consent");

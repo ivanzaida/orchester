@@ -1,11 +1,9 @@
-//! The Orchestrator merges a finished run on its own only behind the person's switches (ORC-69,
+//! The Orchestrator merges a finished run on its own only while the person lets it drive (ORC-69, ORC-909,
 //! `docs/design/orchestrator-toolset.md`, decision 5), on the seeded Kontur: in the turn a run's success started by
-//! itself, `merge_run` of that run proposes the merge while *Let the Orchestrator merge finished runs on its own* is
-//! off, and merges it at once with it, *merge runs* and *answer agents* on, kept as the chat's action *on its own*;
-//! it merges once per end, only the run whose success started the turn, and a run the rule leaves to the person by
-//! then (here: a task that says *Don't merge automatically*) is refused, naming why. The task's conversation names the
-//! Orchestrator as the merge's author; a merge that stops at conflicts is the end's one try and the resolution is
-//! proposed.
+//! itself, `merge_run` proposes the merge while *Let the Orchestrator drive* is off, and merges it at once with it,
+//! kept as the chat's action *on its own*; a run the rule leaves to the person (here: a task that says *Don't merge
+//! automatically*) is refused, naming why. The task's conversation names the Orchestrator as the merge's author; a
+//! merge that stops at conflicts is refused naming the resolution, which the chat then decides itself.
 
 use orchester_core::{
   id::ChatMessageId,
@@ -16,7 +14,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
-use orchester_workspace::{app_mcp::ToolError, orchestrator::tools::ChatScope, workspace::OrchestratorConsent};
+use orchester_workspace::{app_mcp::ToolError, orchestrator::tools::ChatScope};
 use serde_json::{Value, json};
 
 use super::{
@@ -46,7 +44,6 @@ fn turn_of_success(db: &mut ProjectDb, scope: &ChatScope, (seeded, run): (&Seede
     others: 0,
     agent: None,
     link: format!("/project/{}/tasks", seeded.project),
-    own: false,
     automatic: true,
     continuing: None,
     merging: Some(Merging::Merges),
@@ -83,13 +80,11 @@ fn chat_merges_the_run_whose_success_started_the_turn_on_its_own_once() {
   let own = own_turn(&served, &mut db);
   let (task, run) = task_run(&db, READY);
   turn_of_success(&mut db, &own, (&seeded, &run));
-  allow(&served, &seeded.repo, OrchestratorConsent::MergeRuns);
-  allow(&served, &seeded.repo, OrchestratorConsent::AnswerAgents);
   let told = chat_call(&mut served, &own, "merge_run", merge(&run)).expect("proposed");
   assert_eq!(told["waits_for_person"], true, "the switch is off: {told}");
   assert!(db.run_merge(run.id()).expect("read").is_none(), "nothing merged");
 
-  allow(&served, &seeded.repo, OrchestratorConsent::MergeFinished);
+  allow(&served, &seeded.repo);
   let merged = chat_call(&mut served, &own, "merge_run", merge(&run)).expect("merged on its own");
   assert_eq!(merged["merge"]["run"], run.id().to_string(), "{merged}");
   assert!(db.run_merge(run.id()).expect("read").is_some(), "the run is merged");
@@ -100,9 +95,8 @@ fn chat_merges_the_run_whose_success_started_the_turn_on_its_own_once() {
   let again = chat_call(&mut served, &own, "merge_run", merge(&run));
   assert!(
     !matches!(&again, Ok(told) if told.get("merge").is_some()),
-    "one automatic merge per end: {again:?}"
+    "a run merged is not merged again: {again:?}"
   );
-  assert!(!actions(&db, &own).pop().expect("kept").on_its_own);
 
   // The task's conversation attributes the merge to the Orchestrator, on its own (ORC-45's attribution).
   let key = task.key().to_string();
@@ -137,13 +131,7 @@ fn chat_leaves_a_success_its_rule_does_not_let_it_merge_to_the_person() {
   let own = own_turn(&served, &mut db);
   let (task, run) = task_run(&db, READY);
   turn_of_success(&mut db, &own, (&seeded, &run));
-  for consent in [
-    OrchestratorConsent::MergeRuns,
-    OrchestratorConsent::AnswerAgents,
-    OrchestratorConsent::MergeFinished,
-  ] {
-    allow(&served, &seeded.repo, consent);
-  }
+  allow(&served, &seeded.repo);
   db.update_task_organization(task.id(), ChangeActor::Person, Timestamp::now(), |value| {
     value.with_no_automatic_merge(true)
   })
@@ -163,19 +151,13 @@ fn chat_leaves_a_success_its_rule_does_not_let_it_merge_to_the_person() {
 const CONFLICTING: &str = "ready for review, conflicts with main";
 
 #[test]
-fn chat_merge_on_its_own_that_conflicts_is_the_one_try_and_proposes_the_resolution() {
+fn chat_merge_on_its_own_that_conflicts_names_the_resolution_and_decides_it_itself() {
   let (mut served, seeded) = Served::seeded("decisions");
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
   let own = own_turn(&served, &mut db);
   let (_, run) = super::resolve::latest(&seeded, CONFLICTING);
   turn_of_success(&mut db, &own, (&seeded, &run));
-  for consent in [
-    OrchestratorConsent::MergeRuns,
-    OrchestratorConsent::AnswerAgents,
-    OrchestratorConsent::MergeFinished,
-  ] {
-    allow(&served, &seeded.repo, consent);
-  }
+  allow(&served, &seeded.repo);
   let refused = chat_call(&mut served, &own, "merge_run", merge(&run)).expect_err("the merge conflicts");
   let ToolError::Refused { code, reasons } = &refused else {
     panic!("a refusal: {refused:?}");
@@ -196,15 +178,16 @@ fn chat_merge_on_its_own_that_conflicts_is_the_one_try_and_proposes_the_resoluti
     "the refusal is kept"
   );
 
-  let again = chat_call(&mut served, &own, "merge_run", merge(&run)).expect("only proposed");
-  assert_eq!(
-    again["waits_for_person"], true,
-    "the refusal was the end's one try: {again}"
-  );
   let resolve = json!({
     "project": "Kontur", "run": run.number().get().to_string(), "choice": { "kind": "resolve_conflicts" },
   });
-  let proposed = chat_call(&mut served, &own, "continue_run", resolve).expect("proposed");
-  assert_eq!(proposed["waits_for_person"], true, "a card for the person: {proposed}");
-  assert_eq!(proposed["proposed"]["continue"]["choice"]["kind"], "resolve_conflicts");
+  // The chat decides it itself: the tool is called, no card waits (this session has no runner to carry it out).
+  let decided = chat_call(&mut served, &own, "continue_run", resolve);
+  assert!(
+    !matches!(&decided, Ok(told) if told["waits_for_person"] == true),
+    "no card for the person: {decided:?}"
+  );
+  let kept = actions(&db, &own).pop().expect("kept");
+  assert_eq!(kept.tool, "continue_run");
+  assert_ne!(kept.outcome, ActionOutcome::Waits, "not a proposal");
 }
