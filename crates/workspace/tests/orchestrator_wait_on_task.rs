@@ -411,6 +411,8 @@ fn wait_on_task_merged_into_the_runs_base_starts_a_turn_in_the_leading_conversat
 #[test]
 fn wait_on_task_canceled_or_closed_without_the_merge_tells_the_conversation_and_ends_the_wait() {
   let mut desktop = Desktop::new();
+  let everything = Subscription::new(desktop.scope.chat, WatchTarget::Project, "", at(11));
+  desktop.fixture.db.start_subscription(&everything).expect("watching");
   let (_, canceled_run) = desktop.waiting("Retry failed deliveries");
   let (_, elsewhere_run) = desktop.waiting("Card form");
   let canceled = desktop.fixture.task("Shared rate limiter", at(41));

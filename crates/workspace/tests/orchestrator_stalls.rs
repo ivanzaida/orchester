@@ -2,7 +2,8 @@
 //! (ORC-767, `orchestrator::stalls`): kept by the waits' follower at the time it is given, once per stall, re-armed by
 //! progress, starting a turn only under *Let the Orchestrator answer agents*; never for a run that waits for a person
 //! (a tool request among them: its clock starts again from the decision, ORC-894), is queued, paused or held, and
-//! never with the setting off. A stall stands until its run progresses, waits or ends, and then reads as settled.
+//! never with the setting off; kept in no conversation while nobody leads its task. A stall stands until its run
+//! progresses, waits or ends, and then reads as settled.
 //! `cargo test -p orchester-workspace --test orchestrator_stalls stalls`.
 
 mod support;
@@ -127,6 +128,7 @@ fn stalled_since(since: Timestamp, at: Timestamp) -> WaitKind {
 #[test]
 fn stalls_raise_one_event_after_the_set_minutes_and_progress_rearms_it() {
   let mut fixture = Fixture::new();
+  fixture.everything(minute(-2));
   let run = running(&mut fixture, "Add login");
   assert_eq!(follow(&fixture, false, minute(19)), Followed::default(), "not yet");
   assert!(follow(&fixture, false, minute(20)).kept, "20 minutes without progress");
@@ -155,6 +157,7 @@ fn stalls_raise_one_event_after_the_set_minutes_and_progress_rearms_it() {
 #[test]
 fn stalls_start_a_turn_only_under_answer_agents() {
   let mut fixture = Fixture::new();
+  fixture.everything(minute(-2));
   ready(&mut fixture);
   running(&mut fixture, "Add login");
   let turn = follow(&fixture, true, minute(20))
@@ -181,6 +184,7 @@ fn stalls_start_a_turn_only_under_answer_agents() {
 #[test]
 fn stalls_are_never_raised_for_waiting_queued_paused_or_held_runs() {
   let mut fixture = Fixture::new();
+  fixture.everything(minute(-2));
   let mut asking = running(&mut fixture, "Add login");
   let execution = asking.current_attempt().expect("attempt").executions()[0].id();
   let invocation = fixture
@@ -251,8 +255,22 @@ fn stalls_are_not_raised_with_the_setting_off() {
 }
 
 #[test]
+fn stalls_of_a_task_nobody_leads_go_to_no_conversation_and_start_no_turn() {
+  let mut fixture = Fixture::new();
+  ready(&mut fixture);
+  running(&mut fixture, "Add login");
+  assert_eq!(follow(&fixture, true, minute(20)), Followed::default());
+  assert!(stalls(&fixture).is_empty());
+  assert!(
+    fixture.db.chats().expect("History").is_empty(),
+    "no conversation opened"
+  );
+}
+
+#[test]
 fn stalls_tell_when_following_again_may_raise_one() {
   let mut fixture = Fixture::new();
+  fixture.everything(minute(-2));
   assert_eq!(
     next_stall_in(fixture.repo.path(), minute(0)),
     Ok(None),
@@ -323,6 +341,7 @@ fn stall_chat(fixture: &Fixture) -> ChatId {
 #[test]
 fn stalls_are_not_raised_while_a_tool_request_waits_and_count_again_from_its_decision() {
   let mut fixture = Fixture::new();
+  fixture.everything(minute(-2));
   let run = running(&mut fixture, "Add login");
   let request = request_approval(&mut fixture, &run, (minute(1), minute(2)));
   assert_eq!(
@@ -365,6 +384,7 @@ fn stalls_are_not_raised_while_a_tool_request_waits_and_count_again_from_its_dec
 #[test]
 fn stalls_settle_once_their_run_progresses_waits_or_ends() {
   let mut fixture = Fixture::new();
+  fixture.everything(minute(-2));
   let run = running(&mut fixture, "Add login");
   assert!(follow(&fixture, false, minute(20)).kept);
   let chat = stall_chat(&fixture);
@@ -381,6 +401,7 @@ fn stalls_settle_once_their_run_progresses_waits_or_ends() {
   );
 
   let mut fixture = Fixture::new();
+  fixture.everything(minute(-2));
   let run = running(&mut fixture, "Add login");
   assert!(follow(&fixture, false, minute(20)).kept);
   let chat = stall_chat(&fixture);
@@ -392,6 +413,7 @@ fn stalls_settle_once_their_run_progresses_waits_or_ends() {
   );
 
   let mut fixture = Fixture::new();
+  fixture.everything(minute(-2));
   let mut run = running(&mut fixture, "Add login");
   assert!(follow(&fixture, false, minute(20)).kept);
   let chat = stall_chat(&fixture);

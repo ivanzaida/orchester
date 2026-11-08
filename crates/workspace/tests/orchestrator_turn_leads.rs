@@ -1,7 +1,8 @@
 //! Every turn of a conversation that leads something is told what it leads, from the store (ORC-769): a turn a wait
 //! started by itself gets the conversation's subscriptions, the one its event came through and the order that
 //! applies (the person's text, else the project's default order); a person's turn gets the subscriptions in its
-//! standing instructions; a conversation that leads nothing keeps its prompts unchanged.
+//! standing instructions; a conversation that leads nothing keeps its system prompt unchanged (and gets no event,
+//! ORC-895).
 //! `cargo test -p orchester-workspace --test orchestrator_turn_leads turn_leads`.
 
 mod support;
@@ -17,8 +18,8 @@ use orchester_core::{
   module::{ModuleDetails, ModuleState},
   name::Name,
   orchestrator::{
-    Chat, EntryKind, OrchestratorSettings, Subscription, TurnState, WatchSettings, WatchTarget,
-    instructions::{ProjectReads, system_prompt, wait_prompt},
+    Chat, OrchestratorSettings, Subscription, TurnState, WatchSettings, WatchTarget,
+    instructions::{ProjectReads, system_prompt},
   },
   resource::ModelId,
   run::{Run, WaitReason},
@@ -201,23 +202,7 @@ fn turn_leads_of_a_subscription_without_an_order_take_the_projects_default_order
 fn turn_leads_of_a_conversation_that_leads_nothing_leave_its_prompts_unchanged() {
   let mut fixture = Fixture::new();
   ready(&mut fixture);
-  let login = fixture.task("Add login", at(40));
-  let mut run = fixture.started_run(login, at(50));
   let chat = talking(&mut fixture, "Anything else?", 10);
-  ask(&mut fixture, &mut run);
-  let started = turn(&fixture);
-  assert_eq!(started.chat, chat.id());
-  let wait = fixture
-    .db
-    .chat_entries(chat.id())
-    .expect("entries")
-    .into_iter()
-    .find_map(|entry| match entry.kind {
-      EntryKind::Wait { wait, .. } => Some(wait),
-      _ => None,
-    })
-    .expect("the wait");
-  assert_eq!(prompt(&fixture, started), wait_prompt(&wait));
   let project = fixture.db.project().id();
   let leads = fixture.db.chat_leads(chat.id()).expect("read");
   assert!(leads.is_empty());

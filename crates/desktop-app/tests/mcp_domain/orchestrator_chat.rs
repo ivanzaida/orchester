@@ -3,8 +3,8 @@
 //! (`get_conversation`); the chat's `merge_run` and `send_message` are proposals until the person's switch lets the
 //! chat do them, then done at once and kept as its actions, a message named the Orchestrator's in the task's
 //! conversation; a message that would decide a plan is refused; an action names its task by its key, however the
-//! call named the task or its run, and so deals with the run's next wait; and an opened project's waits are kept in the
-//! Orchestrator's conversation, each with its card, starting no turn while no runner attaches.
+//! call named the task or its run; and an opened project's waits are kept in the conversation that leads their tasks,
+//! each with its card, starting no turn while no runner attaches.
 
 use std::{path::PathBuf, thread, time::Duration};
 
@@ -16,8 +16,8 @@ use orchester_core::{
   id::{ChatId, ChatMessageId, ConnectionId},
   name::Name,
   orchestrator::{
-    ActionOutcome, Chat, ChatAction, EntryKind, OrchestratorSettings, TurnState, WaitKind, change::Change,
-    wait::dealt_with,
+    ActionOutcome, Chat, ChatAction, EntryKind, OrchestratorSettings, Subscription, TurnState, WaitKind, WatchTarget,
+    change::Change,
   },
   resource::ModelId,
   run::Run,
@@ -271,7 +271,7 @@ fn chat_action_names_its_task_by_its_key_however_the_call_named_it() {
 }
 
 #[test]
-fn chat_action_naming_a_run_by_its_number_deals_with_its_next_wait() {
+fn chat_action_naming_a_run_by_its_number_names_its_task_and_its_wait_goes_to_the_leader_only() {
   let (mut served, seeded) = Served::seeded("tasks");
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
   let (task, run) = task_run(&db, ASKING);
@@ -282,42 +282,18 @@ fn chat_action_naming_a_run_by_its_number_deals_with_its_next_wait() {
   assert!(refused.is_err(), "a message needs its text: {refused:?}");
   let kept: Vec<Option<String>> = actions(&db, &dealt).into_iter().map(|action| action.task).collect();
   assert_eq!(kept, [Some(task.key().to_string())], "the run's task, by its key");
-  let newer = chat(&served, &mut db);
-  // The run's wait the window keeps once it followed the opened project, as its next one is: waited for, as the
-  // window follows on its own time.
-  let kept_wait = |db: &ProjectDb| {
-    db.chats().expect("History").iter().any(|listing| {
-      db.chat_entries(listing.chat.id())
-        .expect("entries")
-        .iter()
-        .any(|entry| matches!(&entry.kind, EntryKind::Wait { wait, .. } if wait.run == run.id()))
-    })
+  // Only a subscription brings the run's wait into a conversation, whichever one dealt with the run (ORC-895): waited
+  // for, as the window follows on its own time.
+  let leading = watch_everything(&mut db);
+  let waits_in = |db: &ProjectDb, chat: ChatId| {
+    db.chat_entries(chat)
+      .expect("entries")
+      .into_iter()
+      .filter(|entry| matches!(&entry.kind, EntryKind::Wait { wait, .. } if wait.run == run.id()))
+      .count()
   };
-  served.until("the run's wait kept", |_| kept_wait(&db));
-  let mut entries = Vec::new();
-  for listing in db.chats().expect("History") {
-    let id = listing.chat.id();
-    entries.extend(
-      db.chat_entries(id)
-        .expect("entries")
-        .into_iter()
-        .map(|entry| (id, entry)),
-    );
-  }
-  let next = entries
-    .iter()
-    .find_map(|(_, entry)| match &entry.kind {
-      EntryKind::Wait { wait, .. } if wait.run == run.id() => Some(wait.clone()),
-      _ => None,
-    })
-    .expect("the run's wait");
-  let about = entries.iter().map(|(chat, entry)| (*chat, entry));
-  assert_eq!(
-    dealt_with(about, &next),
-    Some(dealt.chat),
-    "the conversation that named the run, though {} is newer",
-    newer.chat
-  );
+  served.until("the run's wait kept", |_| waits_in(&db, leading) == 1);
+  assert_eq!(waits_in(&db, dealt.chat), 0, "not the conversation that named the run");
 }
 
 #[test]
@@ -437,11 +413,23 @@ fn kept_waits(db: &ProjectDb) -> Vec<(String, Option<ChatMessageId>)> {
     .collect()
 }
 
+/// A new conversation of the project at `db` that watches everything in it: only subscriptions bring the waits into
+/// a conversation (ORC-895).
+fn watch_everything(db: &mut ProjectDb) -> ChatId {
+  let now = Timestamp::now();
+  let chat = Chat::named(ChatId::generate(), "Everything", now);
+  db.keep_watch_entries(&chat, &[], now).expect("the conversation");
+  let everything = Subscription::new(chat.id(), WatchTarget::Project, "", now);
+  db.start_subscription(&everything).expect("watching");
+  chat.id()
+}
+
 #[test]
 fn chat_starts_no_wait_turn_while_no_runner_attaches() {
   let (folder, seeded) = Served::seed("tasks", None);
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
   orchestrator_ready(&mut db, seeded.repo.join("claude.exe"));
+  watch_everything(&mut db);
   // The person turned *Let the Orchestrator answer agents* on in an earlier session: the project's waits are followed
   // from the start of this one.
   AppDb::open(&seeded.app_database)
@@ -483,8 +471,9 @@ fn chat_starts_no_wait_turn_while_no_runner_attaches() {
 #[test]
 fn chat_keeps_the_waits_of_a_project_it_opens_with_their_cards() {
   let (mut served, seeded) = Served::seeded("tasks");
+  let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
+  watch_everything(&mut db);
   served.tasks_feed(seeded.project);
-  let db = ProjectDb::open(&seeded.repo).expect("the project's data");
   let kinds = |db: &ProjectDb| -> Vec<(WaitKind, String)> {
     let Some(chat) = db.latest_chat().expect("read") else {
       return Vec::new();
@@ -502,11 +491,17 @@ fn chat_keeps_the_waits_of_a_project_it_opens_with_their_cards() {
     let kept = kinds(&db);
     kept.contains(&(WaitKind::Message, ASKING.to_owned())) && kept.contains(&(WaitKind::Plan, PLANNING.to_owned()))
   });
-  let kept = kinds(&db).len();
+  let kept = kinds(&db);
   for _ in 0..20 {
     served.pass();
   }
-  assert_eq!(kinds(&db).len(), kept, "each wait is kept once");
+  // The conversation watches everything: a run that stalls meanwhile is kept there too, but no wait twice.
+  let now = kinds(&db);
+  assert!(kept.iter().all(|wait| now.contains(wait)), "{kept:?} in {now:?}");
+  assert!(
+    now.iter().enumerate().all(|(at, wait)| !now[..at].contains(wait)),
+    "each wait is kept once: {now:?}"
+  );
   let chat = db.latest_chat().expect("read").expect("a conversation");
   let seq = db
     .chat_entries(chat)

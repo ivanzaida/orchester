@@ -1,10 +1,10 @@
 //! An agent of the chat's project waits for a person (`docs/design/orchestrator-toolset.md`, "Decisions" 5): it asked
 //! a question with suggested answers, its step waits for a message, or its plan waits for a decision; or a task's
-//! latest run ended or stopped ([`RunEnd`]), or something happened to it ([`TaskEvent`]). The Orchestrator's
-//! conversation keeps one entry per wait, linking to its card, in the conversation that last dealt with its task
-//! ([`dealt_with`]); with *Let the Orchestrator answer agents* on, the wait also starts one Orchestrator turn by
-//! itself, unless the Orchestrator's own answer, message or decision raised it, so the chat and an agent never answer
-//! each other in a loop.
+//! latest run ended or stopped ([`RunEnd`]), or something happened to it ([`TaskEvent`]). The conversation that leads
+//! the wait's task by a subscription keeps one entry per wait, linking to its card ([`super::Subscriptions::leading`]);
+//! a task no conversation leads keeps its waits out of every conversation. With *Let the Orchestrator answer agents*
+//! on, a kept wait also starts one Orchestrator turn by itself, unless the Orchestrator's own answer, message or
+//! decision raised it, so the chat and an agent never answer each other in a loop.
 
 use serde::{Deserialize, Serialize};
 
@@ -16,7 +16,7 @@ use super::{
   task_event::TaskEvent,
 };
 use crate::{
-  id::{ChatId, RunId},
+  id::RunId,
   run::{Run, RunLimit, RunStatus, Stuck},
 };
 
@@ -211,37 +211,4 @@ fn own_doing(action: &ChatAction, wait: &AgentWait) -> bool {
 
 const fn is_zero(count: &u32) -> bool {
   *count == 0
-}
-
-/// The conversation that last dealt with `wait`'s task, among `entries`, those of every conversation, each with the
-/// conversation it was kept in: the one whose newest entry about the task or the waiting run is the newest of all
-/// (by `seq`, the order entries were kept in). An entry is about them when it is an action the Orchestrator took on
-/// the task (named by its key, in any case) or on the run (an answer, a message, a cancel or a merge of it, or its
-/// start), whether it was done, proposed, refused or dismissed, or a wait of the task kept before. `None` when no
-/// conversation dealt with it: the wait then goes to the project's latest conversation.
-pub fn dealt_with<'a>(entries: impl IntoIterator<Item = (ChatId, &'a ChatEntry)>, wait: &AgentWait) -> Option<ChatId> {
-  entries
-    .into_iter()
-    .filter(|(_, entry)| is_about(&entry.kind, wait))
-    .max_by_key(|(_, entry)| entry.seq)
-    .map(|(chat, _)| chat)
-}
-
-/// Whether `kind` is about `wait`'s task or run.
-fn is_about(kind: &EntryKind, wait: &AgentWait) -> bool {
-  let task = |key: &str| key.eq_ignore_ascii_case(&wait.task);
-  match kind {
-    EntryKind::Wait { wait: kept, .. } => kept.run == wait.run || task(&kept.task),
-    EntryKind::Action(action) => {
-      action.task.as_deref().is_some_and(task)
-        || action.started == Some(wait.run)
-        || action.change.as_ref().and_then(|change| change.change.run()) == Some(wait.run)
-    }
-    EntryKind::Person { .. }
-    | EntryKind::Reply { .. }
-    | EntryKind::Event(_)
-    | EntryKind::Report { .. }
-    | EntryKind::WatchEnded { .. }
-    | EntryKind::Plan(_) => false,
-  }
 }

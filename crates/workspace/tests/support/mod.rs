@@ -10,12 +10,13 @@ use std::{
 };
 
 use orchester_core::{
-  id::{ConnectionId, IdempotencyKey, ProjectId, ResourceId, TaskId},
+  id::{ChatId, ConnectionId, IdempotencyKey, ProjectId, ResourceId, TaskId},
   memory::{
     AgentProvenance, AgentWrite, Confidence, Memory, MemoryContent, MemoryKind, MemoryScope, MemorySettings,
     SecretScreen,
   },
   name::Name,
+  orchestrator::{Chat, Subscription, WatchTarget},
   permission::StepPermissions,
   project::{Project, ProjectKey},
   resource::{
@@ -409,6 +410,21 @@ impl Fixture {
   /// Stores `events`, which `run` just recorded.
   pub fn record(&mut self, run: &Run, events: &[RunEvent]) {
     self.db.append_events(run, events).expect("append");
+  }
+
+  /// `chat`, kept with it when it is new, watches everything in the project from `since` on: the events of every
+  /// task no more specific subscription leads go to it, and only subscriptions route events (ORC-895).
+  pub fn watch_everything(&mut self, chat: &Chat, since: Timestamp) {
+    self.db.keep_watch_entries(chat, &[], since).expect("conversation");
+    let subscription = Subscription::new(chat.id(), WatchTarget::Project, "", since);
+    self.db.start_subscription(&subscription).expect("watching");
+  }
+
+  /// A new conversation titled "Everything", started at `since`, that watches everything in the project.
+  pub fn everything(&mut self, since: Timestamp) -> Chat {
+    let chat = Chat::named(ChatId::generate(), "Everything", since);
+    self.watch_everything(&chat, since);
+    chat
   }
 }
 

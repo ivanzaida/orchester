@@ -16,7 +16,7 @@ use orchester_store::ProjectDb;
 
 use super::{
   data::{Part, Turn, ago, keep},
-  proposals::{elsewhere, latest_runs, pick_ready},
+  proposals::{latest_runs, pick_ready},
 };
 
 /// What the chat adds for the agent.
@@ -65,7 +65,5 @@ pub fn conversation(prepared: &super::data::Prepared) -> Result<ChatId, Box<dyn 
     parts: vec![Part::Action(Box::new(action))],
     end: TurnState::Answered,
   }];
-  let chat = keep(&mut db, ChatId::generate(), connection, turns)?;
-  elsewhere(&mut db)?;
-  Ok(chat)
+  keep(&mut db, ChatId::generate(), connection, turns)
 }

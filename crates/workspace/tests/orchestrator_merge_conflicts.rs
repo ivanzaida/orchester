@@ -217,6 +217,8 @@ fn merge_conflict_the_queue_left_for_a_person_is_an_event_of_its_task() {
   let mut fixture = Fixture::new();
   let chat = dealt_with(&mut fixture, "ORC-1", 10);
   let run = succeeded(&mut fixture, "Add login");
+  let watching = Subscription::new(chat.id(), WatchTarget::Task(run.task()), "", at(11));
+  fixture.db.start_subscription(&watching).expect("watching");
   let now = Timestamp::now();
   fixture
     .db
@@ -244,6 +246,7 @@ fn merge_conflict_the_queue_left_for_a_person_is_an_event_of_its_task() {
 fn merge_conflict_of_the_orchestrators_own_merge_starts_no_second_turn() {
   let mut fixture = Fixture::new();
   ready(&mut fixture);
+  fixture.everything(at(5));
   let run = succeeded(&mut fixture, "Add login");
   let turn = follow(&fixture, MERGING)
     .turn

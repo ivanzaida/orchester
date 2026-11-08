@@ -2,7 +2,12 @@
 //! keeps them by, so following the project keeps nothing new; and the runs-on picker's sign-ins, with their checks and
 //! plan reads, are in the application database. `orchestrator-leads` has its subscriptions standing.
 
-use orchester_core::{account::AccountState, id::ChatId, orchestrator::WatchTarget};
+use orchester_core::{
+  account::AccountState,
+  id::ChatId,
+  orchestrator::{Chat, Subscription, WatchTarget},
+  time::Timestamp,
+};
 use orchester_exec::programs::Programs;
 use orchester_store::AppDb;
 use orchester_workspace::orchestrator::{
@@ -44,6 +49,14 @@ fn seed_orchestrator_keeps_waits_that_stand_under_the_followers_keys() {
     vec![EndMoved::Merged],
     "the end of the run merged since no longer waits: its line is neutral"
   );
+  // Only subscriptions route the waits (ORC-895): with everything watched, a wait kept under another key would be
+  // kept again.
+  let mut db = seed.db();
+  let now = Timestamp::now();
+  let everything = Chat::named(ChatId::generate(), "Everything", now);
+  db.keep_watch_entries(&everything, &[], now).expect("the conversation");
+  let watching = Subscription::new(everything.id(), WatchTarget::Project, "", now);
+  db.start_subscription(&watching).expect("watching");
   let followed = follow_in(
     (seed.repo(), seed.seeded.project, &Programs::processes()),
     &MergeChecks::default(),

@@ -606,7 +606,10 @@ the turns in one column, and the composer at the foot.
 4. **New** starts a conversation ("What should we plan?" with four suggestions); **History** lists earlier ones (search,
    *Today*, *Yesterday*, *Earlier*; *Leads …* on a conversation that watches something).
 5. **Watch.** A conversation *leads* what you tell it to watch, and the events of those tasks — waits, run ends, no
-   progress, merge conflicts, a waited task merged or closed — come to it and to no other conversation:
+   progress, merge conflicts, a waited task merged or closed — come to it and to no other conversation. Only
+   subscriptions bring events into the chat: an event of a task no conversation leads goes to no conversation and
+   starts no turn (it stays on the task's page, in *Needs you*, the Overview and the notifications), and no
+   conversation is opened for one. Watch *Everything in* the project to get every event into one conversation:
    - **/watch-module** (*Watch modules*) picks modules, *Tasks without a module* or *Everything in* the project;
      **/watch-task** (*Watch tasks*) picks tasks. Text after the chips is the subscription's **order**; without text
      the project's *Default order for watching* applies. An order only narrows what your switches allow.

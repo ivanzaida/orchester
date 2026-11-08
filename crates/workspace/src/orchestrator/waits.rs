@@ -1,15 +1,14 @@
 //! The Orchestrator chat follows the project's agents (ORC-42, `docs/design/orchestrator-toolset.md`, decision 5):
 //! each time an agent of a task's latest run asks a question with suggested answers, its step waits for a message,
 //! its plan waits for a decision, or its tool request came to the person (ORC-894), each time a task's latest run ends
-//! or stops ([`super::run_ends`]), and each time
-//! merging a task's run stops at conflicts ([`super::merge_conflicts`]), a conversation keeps one entry for that wait,
-//! linking to its card (a run's end or a merge's conflicts: its task's Summary): the one that
-//! leads the task through a subscription when the wait is kept ([`orchester_core::orchestrator::Subscriptions::
-//! leading`], ORC-761), else the one that last dealt with the wait's task or run
-//! ([`orchester_core::orchestrator::wait::dealt_with`]), else the project's latest conversation, or a new one while
-//! the project has none, whatever the switches. With *Let the Orchestrator answer agents* on, a wait
-//! the Orchestrator's own answer, message or decision on how the run continues did not raise, and not a tool request
-//! ([`WaitKind::starts_turns`]), also starts one Orchestrator turn by itself in its conversation
+//! or stops ([`super::run_ends`]), and each time merging a task's run stops at conflicts ([`super::merge_conflicts`]),
+//! the conversation that leads the task through a subscription when the wait is kept
+//! ([`orchester_core::orchestrator::Subscriptions::leading`], ORC-761) keeps one entry for that wait, linking to its
+//! card (a run's end or a merge's conflicts: its task's Summary), whatever the switches. A wait of a task no
+//! conversation leads goes to no conversation and starts no turn (ORC-895): only subscriptions route the waits, and
+//! none opens a conversation. With *Let the Orchestrator answer agents* on, a kept wait the Orchestrator's own answer,
+//! message or decision on how the run continues did not raise, and not a tool request ([`WaitKind::starts_turns`]),
+//! also starts one Orchestrator turn by itself in its conversation
 //! ([`orchester_core::orchestrator::instructions::wait_prompt`]), at most one per wait, never while another turn of
 //! that conversation thinks (it waits for that turn to end; a turn of another conversation does not hold it), only
 //! while the wait still waits, and only once the project's runner attached. With *Let the Orchestrator continue
@@ -32,8 +31,8 @@ use orchester_core::{
   conversation::{Message as TaskMessage, Sender},
   id::{ChatId, ChatMessageId, ProjectId, StepExecutionId},
   orchestrator::{
-    AgentWait, Chat, ChatEntry, ChatResume, Continuing, EntryKind, Merging, RunEnd, Subscriptions, WaitKind,
-    wait::{dealt_with, raised_by_own},
+    AgentWait, ChatEntry, ChatResume, Continuing, EntryKind, Merging, RunEnd, Subscriptions, WaitKind,
+    wait::raised_by_own,
   },
   question::AskedQuestions,
   run::{CompletedBy, PendingToolApproval, Plan},
@@ -230,29 +229,38 @@ fn complete_on_its_own(db: &ProjectDb, reading: &Reading) -> Result<bool, StoreE
 }
 
 /// Keeps each of the `new` waits in the conversation that leads its task through a subscription that has not ended
-/// ([`leader`]), whatever conversation dealt with it; for a task nobody leads, in the conversation that last dealt
-/// with it ([`dealt_with`]), else in the project's latest conversation, or in one the first such wait opens while the
-/// project has none. Each starts a turn by itself when *answer agents* is on and the Orchestrator's own answer, given
-/// in any conversation, did not raise it, such a turn of an interrupted run's end continues the run as [`continuing`]
-/// tells, and one of a run's success merges it as [`super::auto_merge::merging_in`] tells. Whether it kept one.
+/// ([`leader`]), whatever conversation dealt with it (ORC-895). A wait of a task nobody leads is kept in no
+/// conversation and starts no turn: it stays on its task's page, in Needs you, the Overview and the notifications,
+/// and is looked at again while it stands, so a subscription that starts later takes it. No conversation is opened
+/// for a wait. Each kept wait starts a turn by itself when *answer agents* is on and the Orchestrator's own answer,
+/// given in any conversation, did not raise it, such a turn of an interrupted run's end continues the run as
+/// [`continuing`] tells, and one of a run's success merges it as [`super::auto_merge::merging_in`] tells. Whether it
+/// kept one.
 fn keep_new(
   (db, root): (&mut ProjectDb, &Path),
   new: &[&(String, AgentWait)],
   switches: Switches,
 ) -> Result<bool, StoreError> {
-  if new.is_empty() {
+  let subscriptions = db.active_subscriptions()?;
+  if new.is_empty() || subscriptions.as_slice().is_empty() {
     return Ok(false);
   }
-  let conversations = conversations(db)?;
-  let subscriptions = db.active_subscriptions()?;
-  let mut entries: Vec<ChatEntry> = conversations.iter().flat_map(|(_, entries)| entries.clone()).collect();
-  entries.sort_by_key(|entry| entry.seq);
-  let mut latest = match db.latest_chat()? {
-    Some(id) => db.chat(id)?,
-    None => None,
-  };
+  let mut led = Vec::new();
+  for &pair in new {
+    if let Some(chat) = leader(db, &subscriptions, &pair.1)? {
+      led.push((chat, pair));
+    }
+  }
+  if led.is_empty() {
+    return Ok(false);
+  }
+  let entries = every_entry(db)?;
   let mut kept_any = false;
-  for (key, wait) in new {
+  for (leading, (key, wait)) in led {
+    // Deleting a conversation ends its subscriptions, so a leader is always kept; one gone meanwhile keeps nothing.
+    let Some(chat) = db.chat(leading)? else {
+      continue;
+    };
     let own = raised_by_own(&entries, wait);
     // Kept whatever the switch: the switch only decides whether it starts a turn by itself (ORC-894).
     let automatic = switches.answers && !own && wait.kind.starts_turns();
@@ -273,31 +281,15 @@ fn keep_new(
       merging,
       ..wait.clone()
     };
-    let of = |id: ChatId| conversations.iter().find(|(chat, _)| chat.id() == id);
-    let routed = match leader(db, &subscriptions, wait)?.and_then(of) {
-      Some(led) => Some(led),
-      None => {
-        let about = conversations
-          .iter()
-          .flat_map(|(chat, entries)| entries.iter().map(|entry| (chat.id(), entry)));
-        dealt_with(about, wait).and_then(of)
-      }
-    };
-    let chat = match routed {
-      Some((chat, _)) => chat,
-      None => &*latest.get_or_insert_with(|| Chat::named(ChatId::generate(), &opening_title(wait), Timestamp::now())),
-    };
-    kept_any |= db.keep_agent_wait(chat, (key, &kept), Timestamp::now())?;
+    kept_any |= db.keep_agent_wait(&chat, (key, &kept), Timestamp::now())?;
   }
   Ok(kept_any)
 }
 
 /// The conversation that leads the task of `wait`'s run as the project's active `subscriptions` tell, now
-/// ([`Subscriptions::leading`]); `None` while none covers it, or its run or task is gone.
+/// ([`Subscriptions::leading`]: the task's own, then its module's or that of the tasks without a module, then the
+/// whole project's); `None` while none covers it, or its run or task is gone.
 fn leader(db: &ProjectDb, subscriptions: &Subscriptions, wait: &AgentWait) -> Result<Option<ChatId>, StoreError> {
-  if subscriptions.as_slice().is_empty() {
-    return Ok(None);
-  }
   let Some(run) = db.run(wait.run).map_err(run_store_error)? else {
     return Ok(None);
   };
@@ -375,20 +367,14 @@ fn merges(wait: &AgentWait) -> bool {
   wait.merging == Some(Merging::Merges)
 }
 
-/// The title of a conversation `wait` opens: its task and what waits.
-fn opening_title(wait: &AgentWait) -> String {
-  format!("{} · {}", wait.task, wait.title)
-}
-
-/// Every conversation of the project, with its entries.
-fn conversations(db: &ProjectDb) -> Result<Vec<(Chat, Vec<ChatEntry>)>, StoreError> {
-  db.chats()?
-    .into_iter()
-    .map(|listing| {
-      let entries = db.chat_entries(listing.chat.id())?;
-      Ok((listing.chat, entries))
-    })
-    .collect()
+/// The entries of every conversation of the project, in the order they were kept.
+fn every_entry(db: &ProjectDb) -> Result<Vec<ChatEntry>, StoreError> {
+  let mut entries = Vec::new();
+  for listing in db.chats()? {
+    entries.extend(db.chat_entries(listing.chat.id())?);
+  }
+  entries.sort_by_key(|entry| entry.seq);
+  Ok(entries)
 }
 
 /// Whether `execution`'s latest invocation ended because a person stopped its turn (*Stop turn*).

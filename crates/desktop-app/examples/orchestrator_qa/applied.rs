@@ -3,7 +3,7 @@
 //! window opens: a follow-up of the seed's run ready for review (`ExRt1` `gOzsF`), and, after the person applied the
 //! chat's cancel of a run at work, a message that ran that task again, whose card shows the run it started. The
 //! project's daily budget is lifted first, as Runs › Limits does, so the runner takes both. The waits and
-//! run ends that follow land in another conversation ([`super::proposals::elsewhere`]).
+//! run ends that follow land in no conversation: the conversation leads nothing (ORC-895).
 
 use std::error::Error;
 
@@ -89,7 +89,6 @@ pub fn conversation(
   let cancel = json!({ "project": "Kontur", "run": going.id().to_string() });
   asking.ask_and_apply("Cancel the run at work.", ("cancel_run", cancel))?;
   asking.ask_and_apply("Run that task again with the 429 case.", ("send_message", text(&going)))?;
-  super::proposals::elsewhere(&mut ProjectDb::open(&prepared.repo)?)?;
   Ok(asking.scope.chat)
 }
 
