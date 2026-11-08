@@ -175,7 +175,6 @@
     "cancel": "Cancel",
     "previewDescription": "Description",
     "emptyFirstDetail": "A skill is know-how an agent loads when a task needs it: a name and a description it is chosen by, a Markdown body and reference files. Write the first one for {{project}}.",
-    "emptyNewNote": "Create publishes v1 for all of {{project}} at once; later changes are drafts until you publish them.",
     "emptyOwnership": "Until you import them, agents read repository files only while Project settings › Context › Repository agent files is on. Codex reads AGENTS.md and .agents/skills; Native agents load repository skills; Claude Code loads neither.",
     "repositorySettings": "Project settings › Context › Repository agent files",
     "repositoryCount": "{{count}} items",

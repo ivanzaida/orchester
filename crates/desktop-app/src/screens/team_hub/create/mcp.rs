@@ -27,6 +27,9 @@ const RUNS_AS: Spec = Spec::new("mcp-runs-as", "team_new.mcp.runsAs");
 const PROGRAM: Spec = Spec::new("mcp-program", "team_new.mcp.program")
   .sub("team_new.mcp.programSub")
   .required();
+/// The edit's rows say it shorter (A13 `WMtxm`).
+const PROGRAM_EDIT: Spec = Spec::new("mcp-program", "team_new.mcp.program").sub("team_hub.mcp.fromTeam.programSub");
+const VARIABLES_EDIT: Spec = Spec::new("mcp-variables", "team_new.mcp.variables").sub("team_hub.edit.variablesSub");
 const ARGUMENTS: Spec = Spec::new("mcp-arguments", "team_new.mcp.arguments").sub("team_new.mcp.argumentsSub");
 const FOLDER: Spec = Spec::new("mcp-folder", "team_new.mcp.folder");
 const FOLDER_PATH: Spec = Spec::new("mcp-folder-path", "team_new.mcp.folderPath").sub("team_new.mcp.folderPathSub");
@@ -107,6 +110,12 @@ impl Fields {
     }
   }
 
+  /// A folder inside the run's worktree is chosen and its path is empty: that is the worktree, which the other choice
+  /// says.
+  pub(in crate::screens::team_hub) fn folder_missing(&self) -> bool {
+    self.runs.get() == PROGRAM_RUN && self.folder_choice.get() == INSIDE && self.folder.get().trim().is_empty()
+  }
+
   /// What the fields describe, as the form of the team server takes it.
   pub(in crate::screens::team_hub) fn input(&self) -> NewTeamMcpServer {
     let runs = if self.runs.get() == PROGRAM_RUN {
@@ -173,7 +182,10 @@ impl Fields {
       } else {
         "team_new.computer.mcpRemote"
       },
-      make: checked.ok().map(|_| Make::McpServer(Box::new(input))),
+      make: checked
+        .ok()
+        .filter(|_| !self.folder_missing())
+        .map(|_| Make::McpServer(Box::new(input))),
       off: fields::off(shown, &name),
     }
   }
@@ -221,7 +233,7 @@ impl Fields {
       Invalid::Program(message) => Some(message),
       _ => None,
     });
-    let folder = Self::says(shown, invalid, (false, false), |found| match found {
+    let folder = Self::says(shown, invalid, (false, self.folder_missing()), |found| match found {
       Invalid::Folder(message) => Some(message),
       _ => None,
     });
@@ -230,7 +242,11 @@ impl Fields {
     let mut rows = vec![
       fields::text_row(
         ctx,
-        &PROGRAM,
+        if shown.published.is_some() {
+          &PROGRAM_EDIT
+        } else {
+          &PROGRAM
+        },
         marks.on(program, marks.program).as_ref(),
         (&self.program, "team_new.mcp.programPlaceholder"),
         (Look::Mono, locked),
@@ -261,7 +277,11 @@ impl Fields {
     let marks = Marks::of(&self.input(), shown.published);
     fields::text_row(
       ctx,
-      &VARIABLES,
+      if shown.published.is_some() {
+        &VARIABLES_EDIT
+      } else {
+        &VARIABLES
+      },
       marks.on(None, marks.variables).as_ref(),
       (&self.variables, "team_new.mcp.variablesPlaceholder"),
       (Look::Lines, shown.locked),

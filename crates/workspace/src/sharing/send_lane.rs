@@ -12,8 +12,11 @@ use crate::messages::Message;
 impl Servers {
   /// The lane of the project at `root`, which every holder of these `Servers` that names the same folder shares. An
   /// entry is never removed: it is one empty mutex per project folder that sent, so the map does not grow with sends.
+  /// The folder is named by its real path, so a symlinked path and the folder itself share one lane.
   pub(crate) fn send_lane(&self, root: &Path) -> Arc<Mutex<()>> {
-    self.inner.sending.lock().entry(root.to_owned()).or_default().clone()
+    // A folder that cannot be resolved (it is gone) has nothing to send; its own path then names its lane.
+    let key = root.canonicalize().unwrap_or_else(|_| root.to_owned());
+    self.inner.sending.lock().entry(key).or_default().clone()
   }
 }
 

@@ -143,7 +143,7 @@ async fn live_updates_an_admins_own_pipeline_shared_for_the_team_becomes_a_team_
     [copy],
     "the team's, waiting for the server"
   );
-  alice.store(&server, |store| store.send_waiting()).await.expect("sent");
+  alice.send_waiting(&server).await.expect("sent");
 
   let db = alice.workspace.db();
   assert!(matches!(
@@ -208,7 +208,7 @@ async fn live_updates_a_task_goes_up_naming_its_team_pipeline_by_id() {
     .copy_for_the_team::<Pipeline>(local, Timestamp::now())
     .expect("copied for the team")
     .id();
-  alice.store(&server, |store| store.send_waiting()).await.expect("sent");
+  alice.send_waiting(&server).await.expect("sent");
 
   let db = alice.workspace.db();
   assert_eq!(team_pipeline_id(&db, Some(team)).expect("read"), Some(team.to_string()));
@@ -246,7 +246,7 @@ async fn live_updates_a_team_project_offers_only_what_its_server_has_live() {
     .copy_for_the_team::<Pipeline>(local, Timestamp::now())
     .expect("copied for the team")
     .id();
-  alice.store(&server, |store| store.send_waiting()).await.expect("sent");
+  alice.send_waiting(&server).await.expect("sent");
   let offered = |db: &ProjectDb| -> Vec<ResourceId> {
     published_pipelines(db)
       .expect("the pipelines")

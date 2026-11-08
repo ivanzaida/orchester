@@ -110,6 +110,8 @@ enum Act {
   PublishAgain(VersionId),
   /// *Open my draft on vN*.
   Reopen(VersionId),
+  /// *Discard it*: the new resource whose first version the server did not take is taken back as if never created.
+  DiscardNew,
 }
 
 impl DevtoolsInspectable for Act {}
@@ -181,6 +183,7 @@ impl Component for WaitingBar {
           Act::Send => services.servers.send_published(&root).await?,
           Act::PublishAgain(version) => services.servers.publish_again(&root, version).await?,
           Act::Reopen(version) => services.servers.reopen_draft(&root, resource, version).await?,
+          Act::DiscardNew => services.servers.cancel_created(&root, props.resource.1).await?,
         }
         // The library's screens read the resource again: with the number the server gave it, or its draft.
         services.changes.record(project, kind);
@@ -240,13 +243,26 @@ impl Component for WaitingBar {
         // What was said, in words: the draft comes back to be changed, and then published again.
         let refusal = Refusal::of_code(code);
         let reason = message_text(ctx, &refusal.message());
-        let take_back = props.waiting.based_on.is_some().then(|| {
-          self.button(
-            (format!("{id}-take-back"), ButtonKind::Secondary, Icon::Undo2),
-            ctx.t("sharing.config.bar.takeBack"),
-            Act::Reopen(props.waiting.version),
-          )
-        });
+        // A version that edited an earlier one goes back to being the draft; a new resource's first has none, so the
+        // way out is to take the resource back as if never created.
+        let (way_out, way_out_words) = match props.waiting.based_on {
+          Some(_) => (
+            self.button(
+              (format!("{id}-take-back"), ButtonKind::Secondary, Icon::Undo2),
+              ctx.t("sharing.config.bar.takeBack"),
+              Act::Reopen(props.waiting.version),
+            ),
+            "sharing.config.bar.refusedWhy",
+          ),
+          None => (
+            self.button(
+              (format!("{id}-discard-new"), ButtonKind::Secondary, Icon::Trash2),
+              ctx.t("sharing.config.bar.discardNew"),
+              Act::DiscardNew,
+            ),
+            "sharing.config.bar.refusedNewWhy",
+          ),
+        };
         // This computer found the team cannot take it: nothing reached the server, so it did not refuse anything.
         let title = if refusal.is_local() {
           ctx.t_args("sharing.config.bar.refusedHere", [("time", time)])
@@ -254,8 +270,8 @@ impl Component for WaitingBar {
           ctx.t_args("sharing.config.bar.refused", [("host", host), ("time", time)])
         };
         DraftBar::new(format!("{id}-refused"), Standing::Attention, title)
-          .sub(ctx.t_args("sharing.config.bar.refusedWhy", [("reason", reason.to_string())]))
-          .actions(take_back)
+          .sub(ctx.t_args(way_out_words, [("reason", reason.to_string())]))
+          .actions(Some(way_out))
           .into()
       }
     };

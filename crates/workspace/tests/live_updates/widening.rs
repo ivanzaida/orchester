@@ -217,7 +217,7 @@ async fn live_updates_a_teammates_widening_version_waits_while_the_owners_own_ve
     team_references(&[]),
   );
   alice.go_offline(false);
-  let sent = alice.store(&team.server, |store| store.send_waiting()).await;
+  let sent = alice.send_waiting(&team.server).await;
   sent.expect("the conflict is recorded on the version");
   let sending = workspace.db().waiting_publishes().expect("read");
   assert_eq!(

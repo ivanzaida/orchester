@@ -140,7 +140,7 @@ impl Component for TeamHubScreen {
     // failed, and a read under way marks what shows as the last answer.
     let reading = loaded.is_pending();
     let hub = loaded.data.as_ref().filter(|_| failed.is_none());
-    let listing = hub.map(|hub| Listing::of(hub, &team.standings));
+    let listing = hub.map(|hub| Listing::of(hub, &team));
     let navigation = Navigation::of(ctx);
     // A form has no resource chosen: the filter's links go to the kind's list.
     let selected = listing
@@ -169,9 +169,10 @@ impl Component for TeamHubScreen {
       .may_change
       .then(|| create::new_button(ctx, (id, view.filter), (&navigation, &self.new_menu)))
       .flatten();
+    // A draft nobody can publish, and a version in the outbox, are not *saved* work of an editor that is open.
     let draft_saved = selected
       .and_then(|chosen| listing.as_ref().and_then(|listing| listing.find(chosen)))
-      .is_some_and(|entry| entry.draft);
+      .is_some_and(|entry| entry.draft && !entry.read_only && entry.outbox.is_none());
     let shown = FilterShown {
       project: id,
       filter: view.filter,

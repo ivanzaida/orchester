@@ -34,9 +34,9 @@ use crate::sharing::{
 impl<S: ConfigServer> RemoteResourceStore<S> {
   /// Sends every version published here that waits, e.g. once the server can be reached again. One the server did not
   /// take, or this computer knows it cannot, is recorded on it and logged; the others are still sent. A new resource
-  /// whose lone first version is refused is taken back whole, as one refused at once is, and returned with why. Fails,
-  /// sending nothing more, when the server cannot be reached.
-  pub fn send_waiting(&mut self) -> Result<Vec<TakenBack>, SharingError> {
+  /// whose lone first version is refused is taken back whole, as one refused at once is, and pushed on `taken_back`
+  /// with why, also when the pass stops early. Fails, sending nothing more, when the server cannot be reached.
+  pub fn send_waiting(&mut self, taken_back: &mut Vec<TakenBack>) -> Result<(), SharingError> {
     let mut resources: Vec<ResourceId> = Vec::new();
     for waiting in self.db.waiting_publishes()? {
       if waiting.state == PublishState::Waiting && !resources.contains(&waiting.resource) {
@@ -44,10 +44,9 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
       }
     }
     if resources.is_empty() {
-      return Ok(Vec::new());
+      return Ok(());
     }
     self.server.writable()?;
-    let mut taken_back = Vec::new();
     for resource in resources {
       match self.send_resource(resource) {
         Ok(()) => {}
@@ -64,7 +63,7 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
         }
       }
     }
-    Ok(taken_back)
+    Ok(())
   }
 
   /// Takes back the new `resource` when `error` left its first version refused, as read now, and nothing else of the

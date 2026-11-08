@@ -53,7 +53,9 @@ pub enum NotCreated {
 impl Servers {
   /// Sends the new resource `resource` of the project at `repo_root`, created as a version waiting for the server
   /// ([`ProjectDb::create_published`]), and settles it: accepted, waiting in the outbox while the server cannot be
-  /// reached, or taken back when the server refused it or it could not be sent. A local project's has nothing to send.
+  /// reached, or taken back when the server refused it or this computer found it cannot be sent. A send that failed
+  /// otherwise (the server may have answered) leaves it waiting and fails with why. A local project's has nothing to
+  /// send.
   pub async fn send_created(&self, repo_root: &Path, resource: ResourceId) -> Result<Created, NotCreated> {
     let (servers, root) = (self.clone(), repo_root.to_owned());
     let settled = background::run(move || settle(&servers, &root, resource))
@@ -99,12 +101,19 @@ fn settle(servers: &Servers, root: &Path, resource: ResourceId) -> Result<Create
   if state.is_none() {
     return settled_elsewhere(servers, root, &db, resource);
   }
+  let still_waiting = state == Some(PublishState::Waiting);
   let outcome = match (state, sent) {
     (Some(PublishState::Waiting), Ok(())) => return Ok(Created::Waiting),
     (Some(PublishState::Waiting), Err(error)) if error.unreached() => return Ok(Created::Waiting),
     (state, Err(error)) => refusal(state, Some(&error)),
     (state, Ok(())) => refusal(state, None),
   };
+  // A send that failed for another reason than the server being out of reach may have been answered: the version stays
+  // in the outbox, a retry is idempotent, and what went wrong is told. Taking it back could delete a resource the
+  // server holds. What this computer found it cannot send at all (`NamesLocal`, `NamesNonTeam`) reached no server.
+  if still_waiting && matches!(outcome, NotCreated::Failed(_)) {
+    return Err(outcome);
+  }
   // The resource that could not be taken back stays as it was, so that, not the server's answer, is what to tell.
   db.discard_created(resource)
     .map_err(|error| NotCreated::Failed(messages::store_error(&error)))?;

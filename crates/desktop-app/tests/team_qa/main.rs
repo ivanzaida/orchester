@@ -8,7 +8,9 @@
 
 mod first_download;
 mod hub_archive;
+mod hub_created;
 mod hub_edit;
+mod hub_edit_race;
 mod hub_unsent;
 #[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(dead_code, reason = "the seed's helpers the other scenarios use")]

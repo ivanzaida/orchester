@@ -13,10 +13,13 @@
 mod computer;
 mod copy_changes;
 mod edit;
+mod edit_actions;
+mod edit_save;
 mod edit_view;
 mod fix;
 mod from_team;
 mod modes;
+mod refused;
 mod words;
 
 use std::{path::PathBuf, sync::Arc};
@@ -139,12 +142,7 @@ impl Component for McpPanel {
       switch: self.switch(entry.id),
     };
     let mode = self.mode(&props);
-    let kept = Edit::autosave(
-      ctx,
-      (props.repo_root.clone(), props.project, entry.id),
-      sheet.edit.as_ref().is_some_and(|edit| edit.draft.is_some()),
-      self.to_keep(mode),
-    );
+    let kept = self.autosave(ctx, &props, mode);
     let parts = self
       .parts(ctx, &props, (mode, &kept))
       .unwrap_or_else(|| self.plain_parts(ctx, &props, (busy, &press)));
@@ -166,11 +164,11 @@ impl Component for McpPanel {
       .child(panel::head_saying(
         ctx,
         entry,
-        words::head_line(ctx, now, entry, sheet),
+        words::head_line(ctx, now, entry, (sheet, &props.team)),
         edit_button,
       ))
-      .child(chips)
       .with_children(above)
+      .child(chips)
       .with_children(self.action_failure(ctx))
       .with_children(member::lock_line(ctx, &props.team).filter(|_| mode != Mode::ReadOnly))
       .child(from_team)

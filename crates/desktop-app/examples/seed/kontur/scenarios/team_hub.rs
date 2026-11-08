@@ -182,6 +182,11 @@ pub(super) fn resources(kontur: &mut Kontur) -> Result<(), SeedError> {
   resources_with(kontur, &Mcp::default(), Kinds::ALL).map(|_| ())
 }
 
+/// [`resources`] with the MCP servers' differences `mcp`.
+pub(super) fn resources_mcp(kontur: &mut Kontur, mcp: &Mcp) -> Result<(), SeedError> {
+  resources_with(kontur, mcp, Kinds::ALL).map(|_| ())
+}
+
 /// [`resources`] with the MCP servers' differences and the kinds published, naming the id of each MCP server it made.
 fn resources_with(
   kontur: &mut Kontur,

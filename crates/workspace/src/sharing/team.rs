@@ -113,16 +113,14 @@ impl Servers {
   /// met a version someone published from the same base waits for the admin's decision; both show on its editor, so
   /// neither fails here. Fails with what to tell the person.
   pub async fn send_published(&self, repo_root: &Path) -> Result<(), Message> {
-    self.sending(repo_root, |store| store.send_waiting()).await
+    self.sending(repo_root, |store, taken| store.send_waiting(taken)).await
   }
 
   /// *Publish mine as vN*: `version`, published here at `repo_root` and met by a version someone published from the
   /// same base, is sent again as the next version after it. Fails with what to tell the person.
   pub async fn publish_again(&self, repo_root: &Path, version: VersionId) -> Result<(), Message> {
     self
-      .sending(repo_root, move |store| {
-        store.publish_again(version).map(|()| Vec::new())
-      })
+      .sending(repo_root, move |store, _| store.publish_again(version))
       .await
   }
 
@@ -158,7 +156,9 @@ impl Servers {
   async fn sending(
     &self,
     repo_root: &Path,
-    send: impl FnOnce(&mut RemoteResourceStore<ProjectServer>) -> Result<Vec<TakenBack>, SharingError> + Send + 'static,
+    send: impl FnOnce(&mut RemoteResourceStore<ProjectServer>, &mut Vec<TakenBack>) -> Result<(), SharingError>
+    + Send
+    + 'static,
   ) -> Result<(), Message> {
     let (servers, root) = (self.clone(), repo_root.to_owned());
     let sent = background::run(move || {
@@ -173,11 +173,12 @@ impl Servers {
       let store = ProjectDb::open(&root)
         .map_err(SharingError::from)
         .and_then(|db| RemoteResourceStore::new(db, server));
-      match store.and_then(|mut store| send(&mut store)) {
-        Ok(taken) => {
-          servers.note_taken_back(&root, taken);
-          Ok(())
-        }
+      // What the pass took back is told also when it stopped early.
+      let mut taken = Vec::new();
+      let sent = store.and_then(|mut store| send(&mut store, &mut taken));
+      servers.note_taken_back(&root, taken);
+      match sent {
+        Ok(()) => Ok(()),
         Err(SharingError::Offline | SharingError::VersionConflict { .. }) => Ok(()),
         Err(error) => Err(said(&error, Some(&address))),
       }

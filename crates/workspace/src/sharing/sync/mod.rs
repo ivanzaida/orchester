@@ -166,15 +166,22 @@ impl Live {
     let shared = project.link().project;
     let root = project.repo_root().to_owned();
     let servers = self.servers.clone();
-    let sent = background::run(move || {
+    let sent = background::run(move || -> Result<_, SharingError> {
       let lane = servers.send_lane(project.repo_root());
       let _sending = send_turn(&lane);
       let db = orchester_store::ProjectDb::open(project.repo_root())?;
-      RemoteResourceStore::new(db, project)?.send_waiting()
+      let mut taken = Vec::new();
+      let sent = RemoteResourceStore::new(db, project)?.send_waiting(&mut taken);
+      Ok((taken, sent))
     })
     .await;
     match sent {
-      Ok(Ok(taken)) => self.servers.note_taken_back(&root, taken),
+      Ok(Ok((taken, sent))) => {
+        self.servers.note_taken_back(&root, taken);
+        if let Err(error) = sent {
+          tracing::warn!(%error, project = %shared, "versions published here wait to be sent");
+        }
+      }
       Ok(Err(error)) => tracing::warn!(%error, project = %shared, "versions published here wait to be sent"),
       Err(_) => tracing::debug!(project = %shared, "sending versions published here was interrupted"),
     }

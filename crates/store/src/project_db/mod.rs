@@ -175,6 +175,7 @@ pub use self::{
   read_only::ReadOnlyProjectDb,
   reference_bindings::{Bound, BoundBy, BoundReference, ReferenceBinding},
   removal_records::RemovalRecord,
+  removals::DraftChange,
   resolutions::ResolutionStart,
   resources::ResourceUpdate,
   run_ends::EndedRun,

@@ -15,6 +15,7 @@ use orchester_workspace::{
     team_text::Added,
   },
   readiness::{Group, ReadinessStanding},
+  sharing::team::TeamConfiguration,
 };
 
 use crate::{routes::HubFilter, ui::icon::Icon};
@@ -146,14 +147,31 @@ pub(super) struct Entry {
   pub cli: Option<AgentProvider>,
   /// Who gets an instruction, a skill or a tool; `None` for the other kinds and for one with no sheet.
   pub reach: Option<Reach>,
+  /// Where the list puts it: what the person has to decide about it, a version of their own that waits or was not
+  /// taken, comes before how it stands on this computer.
   pub group: Group,
+  /// How it stands on this computer, whatever its version in the outbox says.
+  pub here: Group,
   /// How it stands here; `None` for an instruction or a skill, which need nothing.
   pub standing: Option<ReadinessStanding>,
-  /// Created here and not yet taken by the team server, which could not be reached: it waits in the outbox to be sent
-  /// and has no version number of the team's yet.
-  pub waiting: bool,
+  /// What the outbox holds of it: a version published here that the team server has not numbered.
+  pub outbox: Option<Outbox>,
   /// An admin's draft of the next version is kept on this computer (an MCP server's, so far).
   pub draft: bool,
+  /// The draft cannot be published by this person: they are not an admin (any more).
+  pub read_only: bool,
+}
+
+/// How the first version of a resource in the outbox stands (`Line` in `Item · figma` A14 `gTLx6`, A16 `x3ywL`, A17
+/// `rJbPm`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Outbox {
+  /// It waits for the team server, which could not be reached; `next` is the version it will be, none for the first
+  /// version of a new resource.
+  Sending { next: Option<VersionNumber> },
+  /// The team server did not take it: it refused it (`refused`), or it met a version someone published from the same
+  /// base. `team` is the version the team has, none when nothing of it was numbered.
+  Stuck { refused: bool, team: Option<VersionNumber> },
 }
 
 impl Entry {
@@ -199,9 +217,14 @@ pub(super) struct Listing {
 
 impl Listing {
   /// Every resource the hub lists, in the order of the list: by group, then kind, then name.
-  pub(super) fn of(hub: &TeamHub, standings: &BTreeMap<ResourceId, SharedStanding>) -> Self {
-    let waiting = |id| waits_to_be_sent(standings, id);
+  pub(super) fn of(hub: &TeamHub, team: &TeamConfiguration) -> Self {
+    let standings = &*team.standings;
+    let outbox = |id| outbox_of(standings, id);
+    let read_only = |draft: bool| draft && !team.may_change;
     let readiness = hub.readiness().resources().iter().filter_map(|found| {
+      let draft = hub
+        .mcp_server(found.resource())
+        .is_some_and(|sheet| sheet.edit.as_ref().is_some_and(|edit| edit.draft.is_some()));
       Some(Entry {
         id: found.resource(),
         kind: Kind::of(found.kind())?,
@@ -210,12 +233,12 @@ impl Listing {
         form: hub.form(found.resource()),
         cli: hub.profile(found.resource()).map(|sheet| sheet.cli),
         reach: reach(hub, found.resource(), found.kind()),
-        group: found.group(),
+        group: listed_in(found.group(), outbox(found.resource()), read_only(draft)),
+        here: found.group(),
         standing: Some(found.standing().clone()),
-        waiting: waiting(found.resource()),
-        draft: hub
-          .mcp_server(found.resource())
-          .is_some_and(|sheet| sheet.edit.as_ref().is_some_and(|edit| edit.draft.is_some())),
+        outbox: outbox(found.resource()),
+        draft,
+        read_only: read_only(draft),
       })
     });
     let plain = hub.plain().iter().filter_map(|found| {
@@ -227,10 +250,12 @@ impl Listing {
         form: None,
         cli: None,
         reach: reach(hub, found.id, found.kind),
-        group: Group::Ready,
+        group: listed_in(Group::Ready, outbox(found.id), false),
+        here: Group::Ready,
         standing: None,
-        waiting: waiting(found.id),
+        outbox: outbox(found.id),
         draft: false,
+        read_only: false,
       })
     });
     let mut entries: Vec<Entry> = readiness.chain(plain).collect();
@@ -274,21 +299,34 @@ impl Listing {
   }
 }
 
-/// Whether the resource was created here and no version of it was ever numbered by the team server: its first version
-/// is still in the outbox, waiting to be sent. One the server refused (or met a version from the same base) keeps its
-/// number and its readiness standing: it waits for the admin's decision, not for the server.
-fn waits_to_be_sent(standings: &BTreeMap<ResourceId, SharedStanding>, id: ResourceId) -> bool {
-  standings.get(&id).is_some_and(|standing| {
-    standing.confirmed.is_none()
-      && standing
-        .waiting
-        .first()
-        .is_some_and(|first| first.state == PublishState::Waiting)
+/// The group of the list a resource stands in: one with a version in the outbox, or a draft its person cannot publish,
+/// needs them here whatever else it needs (`Section · Needs you here` in A14 `gTLx6`, A16 `x3ywL`, A17 `rJbPm`).
+fn listed_in(here: Group, outbox: Option<Outbox>, read_only: bool) -> Group {
+  if outbox.is_some() || read_only {
+    Group::NeedsYouHere
+  } else {
+    here
+  }
+}
+
+/// How the first version of `id` in the outbox stands, if one is there: it waits for the server, or the server did not
+/// take it (refused, or it met another version) and it waits for the admin's decision.
+fn outbox_of(standings: &BTreeMap<ResourceId, SharedStanding>, id: ResourceId) -> Option<Outbox> {
+  let standing = standings.get(&id)?;
+  let first = standing.waiting.first()?;
+  let team = standing.confirmed.as_ref().map(|confirmed| confirmed.number);
+  Some(match first.state {
+    PublishState::Waiting => Outbox::Sending {
+      next: team.and_then(VersionNumber::next),
+    },
+    PublishState::Refused { .. } => Outbox::Stuck { refused: true, team },
+    PublishState::Conflict { .. } => Outbox::Stuck { refused: false, team },
   })
 }
 
-/// The version number a row and a panel say: the version the team server numbered. A version published here that waits
-/// for the server is not yet the team's, so an edit's is the number before it, and a new resource's first has none.
+/// The version number a row and a panel say: the version the team server numbered. A version published here that the
+/// server has not numbered (it waits, or the server did not take it) is not yet the team's, so an edit's is the number
+/// before it, and a new resource's first has none.
 fn shown_number(
   standings: &BTreeMap<ResourceId, SharedStanding>,
   id: ResourceId,
@@ -297,13 +335,9 @@ fn shown_number(
   let Some(standing) = standings.get(&id) else {
     return local;
   };
-  let sending = standing
-    .waiting
-    .iter()
-    .any(|waiting| waiting.state == PublishState::Waiting);
-  match (&standing.confirmed, sending) {
-    (Some(confirmed), true) => Some(confirmed.number),
-    (None, true) => None,
+  match (&standing.confirmed, standing.waiting.is_empty()) {
+    (Some(confirmed), false) => Some(confirmed.number),
+    (None, false) => None,
     _ => local,
   }
 }

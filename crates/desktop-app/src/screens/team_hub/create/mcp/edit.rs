@@ -107,9 +107,12 @@ impl Fields {
       self.remote_rows(ctx, &shown, invalid.as_ref())
     });
     rows.push(self.exempt_row(ctx, &shown));
+    if program {
+      rows.push(self.variables_row(ctx, &shown));
+    }
     Edited {
       rows,
-      valid: checked.is_ok(),
+      valid: checked.is_ok() && !self.folder_missing(),
       changed: marks.labels(),
     }
   }
