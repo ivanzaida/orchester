@@ -18,6 +18,7 @@ mod not_ready;
 #[path = "../../examples/qa_app/team/mod.rs"]
 mod team;
 mod team_actions;
+mod team_create;
 mod team_edit;
 mod team_pages;
 mod team_tasks;

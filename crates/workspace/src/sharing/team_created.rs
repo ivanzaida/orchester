@@ -5,11 +5,18 @@
 
 use std::path::Path;
 
-use orchester_core::id::ResourceId;
+use orchester_core::{
+  id::{ProjectId, ResourceId},
+  resource::ResourceKind,
+  store::ResourceStore,
+};
 use orchester_store::{ProjectDb, PublishState};
 
 use super::{Servers, SharingError, project::ProjectServer, sync::RemoteResourceStore, team::said};
-use crate::{background, messages::Message};
+use crate::{
+  background,
+  messages::{self, Message},
+};
 
 /// How a new resource of a project stands once [`Servers::send_created`] ran.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -42,9 +49,12 @@ impl Servers {
   /// reached, or taken back when the server refused it or it could not be sent. A local project's has nothing to send.
   pub async fn send_created(&self, repo_root: &Path, resource: ResourceId) -> Result<Created, NotCreated> {
     let (servers, root) = (self.clone(), repo_root.to_owned());
-    background::run(move || settle(&servers, &root, resource))
+    let settled = background::run(move || settle(&servers, &root, resource))
       .await
-      .map_err(NotCreated::Failed)?
+      .map_err(NotCreated::Failed)?;
+    // How the team's resources stand here changed: a new one waits for the server, or was taken back.
+    self.shared_changed();
+    settled
   }
 }
 
@@ -59,26 +69,69 @@ fn settle(servers: &Servers, root: &Path, resource: ResourceId) -> Result<Create
   }
   let sent = send(servers, root, resource);
   let state = waiting_state(&db, resource).map_err(|error| failed(&error.into()))?;
+  if state.is_none() {
+    return settled_elsewhere(servers, root, &db, resource);
+  }
   let outcome = match (state, sent) {
-    (None, _) => return Ok(Created::Accepted),
     (Some(PublishState::Waiting), Ok(())) => return Ok(Created::Waiting),
-    (Some(PublishState::Waiting), Err(error)) if unreached(&error) => return Ok(Created::Waiting),
+    (Some(PublishState::Waiting), Err(error)) if error.unreached() => return Ok(Created::Waiting),
+    (state, Err(error)) => refusal(state, Some(&error)),
+    (state, Ok(())) => refusal(state, None),
+  };
+  // The resource that could not be taken back stays as it was, so that, not the server's answer, is what to tell.
+  db.discard_created(resource)
+    .map_err(|error| NotCreated::Failed(messages::store_error(&error)))?;
+  Err(outcome)
+}
+
+/// The new `resource` no longer waits though this form's send did not number it: a pass of the outbox sent it first
+/// ([`RemoteResourceStore::send_waiting`]), and either the server took it (created) or refused it and it was taken
+/// back, which this form tells, so the hub's notice for it goes.
+fn settled_elsewhere(
+  servers: &Servers,
+  root: &Path,
+  db: &ProjectDb,
+  resource: ResourceId,
+) -> Result<Created, NotCreated> {
+  let kept = db
+    .resource(resource)
+    .map_err(|error| NotCreated::Failed(messages::store_error(&error)))?;
+  if kept.is_some() {
+    return Ok(Created::Accepted);
+  }
+  Err(NotCreated::Failed(
+    servers
+      .dismiss_taken_back(root, resource)
+      .map_or_else(messages::interrupted, |taken| taken.reason),
+  ))
+}
+
+/// Why the new resource whose first version stands as `state` after `sent` failed was not created.
+pub(crate) fn refusal(state: Option<PublishState>, sent: Option<&SharingError>) -> NotCreated {
+  match (state, sent) {
     // This computer found the team cannot take it and recorded it as refused ([`RemoteResourceStore::send_created`]).
-    (_, Err(error @ (SharingError::LocalEntitiesNamed { .. } | SharingError::WritableFoldersStay { .. }))) => {
-      NotCreated::NamesLocal(said(&error, None))
+    (_, Some(error @ (SharingError::LocalEntitiesNamed { .. } | SharingError::WritableFoldersStay { .. }))) => {
+      NotCreated::NamesLocal(said(error, None))
     }
-    (_, Err(error @ SharingError::PipelineNamesNonTeam { .. })) => NotCreated::NamesNonTeam(said(&error, None)),
-    (Some(PublishState::Waiting), Err(error)) => NotCreated::Failed(said(&error, None)),
+    (_, Some(error @ SharingError::PipelineNamesNonTeam { .. })) => NotCreated::NamesNonTeam(said(error, None)),
+    (Some(PublishState::Waiting) | None, Some(error)) => NotCreated::Failed(said(error, None)),
     (Some(PublishState::Refused { code }), _) => NotCreated::Refused { code },
     (Some(PublishState::Conflict { .. }), _) => NotCreated::Refused {
       code: "version_conflict".to_owned(),
     },
-  };
-  if let Err(error) = db.discard_created(resource) {
-    // The server's answer is what the caller needs; the resource that could not be taken back stays as it was.
-    tracing::warn!(%resource, %error, "a refused new team resource could not be taken back");
+    (Some(PublishState::Waiting) | None, None) => NotCreated::Failed(messages::interrupted()),
   }
-  Err(outcome)
+}
+
+/// A new team resource the team server refused when it was sent later, after the person had left the form (a restart,
+/// or the server back): it is taken back whole, like one refused at once, and this says what and why.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TakenBack {
+  pub project: ProjectId,
+  pub resource: ResourceId,
+  pub name: String,
+  pub kind: ResourceKind,
+  pub reason: Message,
 }
 
 /// Sends the new `resource` of the project at `root` to its server, failing with why it was not taken; nothing for a
@@ -99,11 +152,12 @@ fn waiting_state(db: &ProjectDb, resource: ResourceId) -> Result<Option<PublishS
   )
 }
 
-/// Whether `error` says the server was not reached, so the resource waits.
-fn unreached(error: &SharingError) -> bool {
-  match error {
-    SharingError::Offline | SharingError::SignedOut => true,
-    SharingError::Client(error) => error.code().is_none(),
-    _ => false,
+impl NotCreated {
+  /// Why it was not created, in words: the team server's own code, or why this computer did not send it.
+  pub fn message(&self) -> Message {
+    match self {
+      Self::Refused { code } => Message::new("appMcp.errors.teamServerRefused").with("code", code.clone()),
+      Self::NamesLocal(reason) | Self::NamesNonTeam(reason) | Self::Failed(reason) => reason.clone(),
+    }
   }
 }

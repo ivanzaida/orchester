@@ -132,6 +132,15 @@ impl SharingError {
     }
   }
 
+  /// Whether the server was not reached, so what was being sent waits to be sent again.
+  pub fn unreached(&self) -> bool {
+    match self {
+      Self::Offline | Self::SignedOut => true,
+      Self::Client(error) => error.code().is_none(),
+      _ => false,
+    }
+  }
+
   /// What to tell the person, about the server at `address`.
   pub fn message(&self, address: &ServerAddress) -> Message {
     match self {

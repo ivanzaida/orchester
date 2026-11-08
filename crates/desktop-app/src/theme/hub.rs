@@ -221,10 +221,12 @@ pub enum HubSpacing {
   /// 170: a panel row's key, the label over its sub (`Key` `P60rze` in `NDZXC`, `z3uHz` in `c3jU1R`, `XgW1K` in
   /// `u9Hcc`).
   Key,
+  /// 190: the key of a create form's rows (`Key` `G7irn` in A10 `hGdGu`, `iS1Ix` in A8 `vPoTQ`).
+  KeyForm,
 }
 
 impl HubSpacing {
-  pub const ALL: [Self; 19] = [
+  pub const ALL: [Self; 20] = [
     Self::Side,
     Self::HeadTop,
     Self::HeadBottom,
@@ -244,6 +246,7 @@ impl HubSpacing {
     Self::NewGap,
     Self::Actions,
     Self::Key,
+    Self::KeyForm,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -271,6 +274,7 @@ impl HubSpacing {
       Self::NewGap => "hub_new_gap",
       Self::Actions => "hub_actions",
       Self::Key => "hub_key",
+      Self::KeyForm => "hub_key_form",
     }
   }
 
@@ -290,6 +294,7 @@ impl HubSpacing {
       Self::NoteY => 4.0,
       Self::Actions => 56.0,
       Self::Key => 170.0,
+      Self::KeyForm => 190.0,
     }
   }
 }

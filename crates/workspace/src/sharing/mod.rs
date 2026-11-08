@@ -48,7 +48,7 @@ use orchester_api::{
   releases::ReleaseVersion,
 };
 use orchester_core::{
-  id::ServerId,
+  id::{ResourceId, ServerId},
   secret::{SecretValue, VaultError, VaultKey},
   time::Timestamp,
 };
@@ -72,10 +72,10 @@ pub use self::{
   project::NotArchived,
   refusal::{ShareRefusal, ShareRefusalReason, TeamMcpProblem},
   share_outcome::{NotSet, ShareNote},
-  team_created::{Created, NotCreated},
+  team_created::{Created, NotCreated, TakenBack},
   trust::{ConfirmedPin, PresentedCertificate, Trust},
 };
-use crate::{background, secrets::Vault, workspace::Workspace};
+use crate::{background, removal::changed_by_removal, secrets::Vault, workspace::Workspace};
 
 /// A server in the list with its connection; `connection` is `None` while nobody is signed in there
 /// from this computer.
@@ -131,6 +131,9 @@ struct Inner {
   work_asked: Mutex<HashMap<orchester_core::id::TaskId, Timestamp>>,
   /// The checkouts whose first download after a join or a link is under way, failed or ended (`project::download`).
   downloads: Mutex<HashMap<PathBuf, project::download::Mark>>,
+  /// The new resources of each checkout the team server refused after they were sent later, which the hub tells the
+  /// person until they dismiss it.
+  taken_back: Mutex<HashMap<PathBuf, Vec<TakenBack>>>,
 }
 
 /// One signed-in server's connection and when to ask it again.
@@ -174,6 +177,7 @@ impl Servers {
         sharing_now: Mutex::new(HashSet::new()),
         work_asked: Mutex::new(HashMap::new()),
         downloads: Mutex::new(HashMap::new()),
+        taken_back: Mutex::new(HashMap::new()),
       }),
     }
   }
@@ -198,6 +202,48 @@ impl Servers {
 
   fn subscribe_sync(&self) -> watch::Receiver<u64> {
     self.inner.sync.subscribe()
+  }
+
+  /// The new resources of the project at `root` that the team server refused when they were sent later, taken back
+  /// whole ([`TakenBack`]).
+  pub fn taken_back(&self, root: &Path) -> Vec<TakenBack> {
+    self.inner.taken_back.lock().get(root).cloned().unwrap_or_default()
+  }
+
+  /// The person has read why the new resource `resource` of the project at `root` was taken back; what was told of
+  /// it, if it still was.
+  pub fn dismiss_taken_back(&self, root: &Path, resource: ResourceId) -> Option<TakenBack> {
+    let mut told = self.inner.taken_back.lock();
+    let list = told.get_mut(root)?;
+    let at = list.iter().position(|taken| taken.resource == resource)?;
+    let dismissed = list.remove(at);
+    if list.is_empty() {
+      told.remove(root);
+    }
+    drop(told);
+    self.shared_changed();
+    Some(dismissed)
+  }
+
+  /// Keeps `taken` for the hub to tell the person, once for each resource, and tells the screens that list its kind
+  /// that it is gone.
+  pub(crate) fn note_taken_back(&self, root: &Path, taken: Vec<TakenBack>) {
+    if taken.is_empty() {
+      return;
+    }
+    for gone in &taken {
+      for change in changed_by_removal(gone.kind) {
+        self.inner.workspace.changes.record(gone.project, *change);
+      }
+    }
+    let mut told = self.inner.taken_back.lock();
+    let list = told.entry(root.to_owned()).or_default();
+    for gone in taken {
+      list.retain(|known| known.resource != gone.resource);
+      list.push(gone);
+    }
+    drop(told);
+    self.shared_changed();
   }
 
   /// Whether the project at `root` is being shared now: its tasks take no change meanwhile.

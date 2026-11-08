@@ -19,6 +19,9 @@ mod mcp_server_specs;
 mod mcp_server_text;
 mod mcp_servers;
 mod merge;
+pub use self::team_mcp_window::{
+  Header, Invalid, NewTeamMcpServer, Runs, create_team_mcp_server, team_mcp_names, team_mcp_server,
+};
 pub(crate) use self::{
   mcp_preview::preview as preview_mcp,
   mcp_servers::{AddMcpServer, InServer, SetMcpServerEnabled, UpdateMcpServer},
@@ -41,6 +44,7 @@ mod team_fill_ins;
 mod team_mcp_body;
 mod team_mcp_list;
 mod team_mcp_servers;
+mod team_mcp_window;
 mod team_pipeline;
 mod tool_input;
 mod tool_program;

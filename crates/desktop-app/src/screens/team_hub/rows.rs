@@ -20,6 +20,23 @@ use crate::{
   ui::chip::{BadgeTone, badge},
 };
 
+/// How wide a row's key is (`Key` `P60rze` in `NDZXC`, `Key` in `SpRvd` … `lSA4x`).
+#[derive(Clone, Copy)]
+pub(super) enum Key {
+  Wide,
+  /// The key of a create form's rows.
+  Form,
+}
+
+impl Key {
+  fn width(self) -> f32 {
+    match self {
+      Self::Wide => HubSpacing::Key.value(),
+      Self::Form => HubSpacing::KeyForm.value(),
+    }
+  }
+}
+
 /// What a row's label says under it, and the color it says it in.
 pub(super) struct Sub {
   pub words: Arc<str>,
@@ -75,7 +92,13 @@ pub(super) fn section(id: &str, label: &str, after: Vec<Element>, rows: Vec<Row>
 
 /// One row: `label` over `sub`, and `value` beside them.
 pub(super) fn row(id: &str, label: &str, sub: Option<Sub>, value: impl Into<Element>) -> Row {
-  keyed(
+  row_in(Key::Wide, id, label, sub, value)
+}
+
+/// [`row`] whose key is `key` wide.
+pub(super) fn row_in(key: Key, id: &str, label: &str, sub: Option<Sub>, value: impl Into<Element>) -> Row {
+  keyed_in(
+    key,
     id,
     Text::new(label)
       .id(format!("{id}-label"))
@@ -87,8 +110,13 @@ pub(super) fn row(id: &str, label: &str, sub: Option<Sub>, value: impl Into<Elem
 
 /// [`row`] whose key is `label`, already a text: a name that is an identifier, in mono.
 pub(super) fn keyed(id: &str, label: Text, sub: Option<Sub>, value: impl Into<Element>) -> Row {
+  keyed_in(Key::Wide, id, label, sub, value)
+}
+
+/// [`keyed`] whose key is `key` wide.
+fn keyed_in(key: Key, id: &str, label: Text, sub: Option<Sub>, value: impl Into<Element>) -> Row {
   let key = Column::new()
-    .width(Dimension::Px(HubSpacing::Key.value()))
+    .width(Dimension::Px(key.width()))
     .flex_shrink(0.0)
     .spacing(ExtraSpacing::Tight.role())
     .child(label)

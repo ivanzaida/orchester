@@ -2,20 +2,25 @@
 //! body that cannot be published creates nothing, and a draft is only ever saved over a resource that holds a version
 //! or a draft already.
 
-use std::{collections::BTreeSet, fs};
+use std::{
+  collections::{BTreeSet, HashMap},
+  fs,
+};
 
 use orchester_core::{
-  id::{ProjectId, ResourceId},
+  id::{ProjectId, ResourceId, ServerId},
   name::Name,
+  permission::StepPermissions,
   project::{Project, ProjectKey},
   resource::{
-    AgentTargets, Draft, InjectionEvent, Instruction, InstructionScope, PromptText, PublishError, ResourceKind, Slug,
-    TeamMcpServer, VersionNumber,
+    AgentTargets, Draft, InjectionEvent, Instruction, InstructionScope, Pipeline, PromptText, PublishError,
+    RepositoryAccess, ResourceKind, Slug, Step, StepKey, StepKind, TeamMcpServer, VersionNumber,
   },
+  sharing::MemberRole,
   store::ResourceStore,
   time::Timestamp,
 };
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{ProjectDb, SharingLink, StoreError};
 use tempfile::TempDir;
 
 fn project_repo() -> (TempDir, ProjectDb) {
@@ -166,4 +171,137 @@ fn a_draft_is_refused_for_a_team_mcp_server_that_holds_nothing() {
 
   assert!(matches!(refused, Err(StoreError::NoFirstVersion(refused)) if refused == id));
   assert!(db.draft::<TeamMcpServer>(id).unwrap().is_none());
+}
+
+/// A pipeline of one step, which has a draft before it has a version.
+fn pipeline() -> Pipeline {
+  let step = Step {
+    key: StepKey::new("implement").expect("key"),
+    name: name("Implement"),
+    kind: StepKind::Agent {
+      profile: Some(ResourceId::generate()),
+      repository: RepositoryAccess::Write,
+      model: None,
+      permissions: StepPermissions::default(),
+    },
+    instructions: PromptText::new("Say hello.").expect("prompt"),
+    depends_on: BTreeSet::new(),
+    approval_gate: false,
+    on_failure: None,
+    budget: None,
+  };
+  Pipeline::new(vec![step]).expect("a pipeline")
+}
+
+/// A team project in which the person is an owner: what they publish waits for the server.
+fn team_repo() -> (TempDir, ProjectDb) {
+  let (repo, mut db) = project_repo();
+  let link = SharingLink {
+    server: ServerId::generate(),
+    project: ProjectId::generate(),
+    key: ProjectKey::new("ORC").expect("key"),
+    role: Some(MemberRole::Owner),
+    joined_at: at(1),
+    cursor: 0,
+    last_synced_at: at(1),
+    removed_at: None,
+    address: Some("https://team.example/orchester".to_owned()),
+  };
+  db.start_sharing(&link, &[], (&[], &HashMap::new())).expect("shared");
+  (repo, db)
+}
+
+#[test]
+fn a_team_resource_is_marked_created_here_and_a_draft_published_for_the_first_time_is_not() {
+  let (_repo, mut db) = team_repo();
+  let (rule, _) = db
+    .create_published(slug("rule"), name("Rule"), &instruction("One."), at(2))
+    .expect("created");
+  let draft = db
+    .create_resource(slug("flow"), name("Flow"), &pipeline(), at(3))
+    .expect("a draft")
+    .id();
+  db.publish_draft::<Pipeline>(draft, at(4))
+    .expect("published from a draft");
+
+  let outbox = db.waiting_publishes().expect("the outbox");
+
+  let created = |resource: ResourceId| {
+    outbox
+      .iter()
+      .find(|waiting| waiting.resource == resource)
+      .map(|w| w.created)
+  };
+  assert_eq!(created(rule.id()), Some(true), "created as v1: it never had a draft");
+  assert_eq!(created(draft), Some(false), "a draft's work is not taken back");
+}
+
+#[test]
+fn a_lone_created_version_is_taken_back_whole() {
+  let (_repo, mut db) = team_repo();
+  let (resource, _) = db
+    .create_published(slug("rule"), name("Rule"), &instruction("One."), at(2))
+    .expect("created");
+
+  db.discard_created(resource.id()).expect("taken back");
+
+  assert!(db.resources(ResourceKind::Instruction).unwrap().is_empty());
+  assert!(db.waiting_publishes().unwrap().is_empty());
+  assert!(db.slugs(ResourceKind::Instruction).unwrap().is_empty());
+}
+
+#[test]
+fn a_created_version_with_a_draft_or_a_later_version_is_left_for_the_admin() {
+  let (_repo, mut db) = team_repo();
+  let (drafted, _) = db
+    .create_published(slug("drafted"), name("Drafted"), &instruction("One."), at(2))
+    .expect("created");
+  db.save_draft(
+    drafted.id(),
+    &Draft::new(instruction("Two."), Some(VersionNumber::FIRST), at(3)),
+  )
+  .expect("a draft over v1");
+  let (later, _) = db
+    .create_published(slug("later"), name("Later"), &instruction("One."), at(4))
+    .expect("created");
+  db.save_draft(
+    later.id(),
+    &Draft::new(instruction("Two."), Some(VersionNumber::FIRST), at(5)),
+  )
+  .expect("a draft over v1");
+  db.publish_draft::<Instruction>(later.id(), at(6)).expect("v2");
+
+  for resource in [drafted.id(), later.id()] {
+    let refused = db.discard_created(resource);
+    assert!(
+      matches!(refused, Err(StoreError::HoldsMore(held)) if held == resource),
+      "{refused:?}"
+    );
+  }
+
+  assert_eq!(db.resources(ResourceKind::Instruction).unwrap().len(), 2);
+  assert!(
+    db.draft::<Instruction>(drafted.id()).unwrap().is_some(),
+    "the draft is kept"
+  );
+  assert_eq!(db.versions::<Instruction>(later.id()).unwrap().len(), 2, "v2 is kept");
+}
+
+#[test]
+fn a_first_version_published_from_a_draft_is_never_taken_back() {
+  let (_repo, mut db) = team_repo();
+  let flow = db
+    .create_resource(slug("flow"), name("Flow"), &pipeline(), at(2))
+    .expect("a draft")
+    .id();
+  db.publish_draft::<Pipeline>(flow, at(3))
+    .expect("published from a draft");
+
+  let refused = db.discard_created(flow);
+
+  assert!(
+    matches!(refused, Err(StoreError::HoldsMore(held)) if held == flow),
+    "{refused:?}"
+  );
+  assert_eq!(db.resources(ResourceKind::Pipeline).unwrap().len(), 1);
 }

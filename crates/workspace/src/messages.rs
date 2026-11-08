@@ -116,6 +116,7 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::Io { .. }
     | StoreError::Corrupt { .. }
     | StoreError::AlreadyNumbered(_)
+    | StoreError::HoldsMore(_)
     | StoreError::TaskNotFound(_)
     | StoreError::RunNotFound(_)
     | StoreError::EmptyBatch

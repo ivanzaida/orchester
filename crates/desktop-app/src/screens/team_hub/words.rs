@@ -50,6 +50,12 @@ pub(super) struct Said {
 
 /// The line under a row's name.
 pub(super) fn line(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Said {
+  if entry.waiting {
+    return Said {
+      text: ctx.t("team_hub.line.waiting"),
+      color: PaletteColor::Warning,
+    };
+  }
   match entry.group {
     Group::NeedsYouHere => Said {
       text: needs(ctx, listing, entry),

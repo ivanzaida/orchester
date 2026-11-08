@@ -47,6 +47,8 @@ pub struct WaitingPublish {
   /// The number of the version it was edited from; `None` for a resource's first version.
   pub based_on: Option<VersionNumber>,
   pub state: PublishState,
+  /// Its resource was created here as this first version ([`ProjectDb::create_published`]), with no draft before it.
+  pub created: bool,
 }
 
 impl ProjectDb {
@@ -80,7 +82,7 @@ impl ProjectDb {
   pub fn waiting_publishes(&self) -> Result<Vec<WaitingPublish>, StoreError> {
     let mut statement = self.connection.prepare(
       "SELECT shared_publishes.version_id, shared_publishes.resource_id, resources.kind, mine.number, \
-       shared_publishes.idempotency_key, base.number, shared_publishes.conflict_latest, shared_publishes.refused \
+       shared_publishes.idempotency_key, base.number, shared_publishes.conflict_latest, shared_publishes.refused, shared_publishes.created \
        FROM shared_publishes \
        JOIN resource_versions AS mine ON mine.id = shared_publishes.version_id \
        JOIN resources ON resources.id = shared_publishes.resource_id \
@@ -98,6 +100,7 @@ impl ProjectDb {
           based_on: row.get(5)?,
           conflict: row.get(6)?,
           refused: row.get(7)?,
+          created: row.get(8)?,
         })
       })?
       .collect::<Result<Vec<_>, _>>()?;
@@ -384,6 +387,7 @@ struct WaitingRow {
   based_on: Option<i64>,
   conflict: Option<i64>,
   refused: Option<String>,
+  created: bool,
 }
 
 impl WaitingRow {
@@ -404,6 +408,7 @@ impl WaitingRow {
       key: parse("idempotency key", &self.key)?,
       based_on: self.based_on.map(version_number).transpose()?,
       state,
+      created: self.created,
     })
   }
 }

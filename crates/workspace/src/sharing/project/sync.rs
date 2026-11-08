@@ -77,7 +77,7 @@ impl ProjectServer {
       Some(_) => None,
     };
     let changes: Vec<_> = modules.changes.iter().map(convert::cached_change).collect();
-    background::run(move || -> Result<(), SharingError> {
+    let taken = background::run(move || -> Result<_, SharingError> {
       let publishing = server.clone();
       let mut store = RemoteTaskStore::new(ProjectDb::open(server.repo_root())?, server)?;
       store.db.cache_module_changes(&changes)?;
@@ -92,6 +92,7 @@ impl ProjectServer {
       RemoteResourceStore::new(db, publishing)?.send_waiting()
     })
     .await??;
+    self.servers.note_taken_back(&self.repo_root, taken);
     self.servers.shared_changed();
     Ok(Synced::Read)
   }

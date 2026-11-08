@@ -63,6 +63,7 @@ mod tasks_unreadable;
 pub mod team;
 mod team_hub;
 mod team_hub_mcp;
+mod team_hub_waiting;
 mod todo_lists;
 mod unreadable_db;
 mod usage;
@@ -112,7 +113,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 172] = [
+pub const ALL: [Scenario; 173] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -224,6 +225,7 @@ pub const ALL: [Scenario; 172] = [
   Scenario::of("team-hub-mcp-path-gone", team_hub_mcp::path_gone),
   Scenario::of("team-hub-mcp-secret", team_hub_mcp::secret),
   Scenario::of("team-hub-mcp-ready", team_hub_mcp::ready),
+  Scenario::of("team-hub-waiting", team_hub_waiting::waiting),
   Scenario::of("picker-readiness", picker_readiness::local),
   Scenario::of("picker-readiness-team", picker_readiness::team),
   Scenario::of("pipelines", pipelines::seed),

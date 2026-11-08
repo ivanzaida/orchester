@@ -26,6 +26,7 @@ mod profile;
 mod row;
 mod rows;
 mod secret;
+mod taken_back;
 mod tool;
 pub(super) mod unread;
 mod words;
@@ -44,7 +45,11 @@ use orchester_workspace::{
   agents::team_hub::TeamHub, background, messages::Message, sharing::team::TeamConfiguration, tasks::outside::Outside,
 };
 
-use self::{create::NewMenu, head::FilterShown, model::Listing};
+use self::{
+  create::NewMenu,
+  head::FilterShown,
+  model::{Kind, Listing},
+};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
@@ -133,10 +138,12 @@ impl Component for TeamHubScreen {
     // failed, and a read under way marks what shows as the last answer.
     let reading = loaded.is_pending();
     let hub = loaded.data.as_ref().filter(|_| failed.is_none());
-    let listing = hub.map(Listing::of);
+    let listing = hub.map(|hub| Listing::of(hub, &team.standings));
     let navigation = Navigation::of(ctx);
+    // A form has no resource chosen: the filter's links go to the kind's list.
     let selected = listing
       .as_ref()
+      .filter(|_| !view.adding)
       .and_then(|listing| listing.selected(view.filter, view.item))
       .map(|entry| entry.id);
     let body = match (failed, hub.zip(listing.as_ref())) {
@@ -167,7 +174,14 @@ impl Component for TeamHubScreen {
       reading,
       may_change: team.may_change,
     };
-    frame(ctx, (&team, listing.as_ref(), &shown), new, &navigation, (body, view))
+    let told = taken_back::notices(ctx, &team, &project.open.repo_root);
+    frame(
+      ctx,
+      (&team, listing.as_ref(), &shown),
+      new,
+      &navigation,
+      (body, told, view),
+    )
   }
 }
 
@@ -205,7 +219,7 @@ fn frame(
   (team, listing, shown): (&TeamConfiguration, Option<&Listing>, &FilterShown),
   new: Option<Element>,
   navigation: &Navigation,
-  (body, view): (Element, HubView),
+  (body, told, view): (Element, Vec<Element>, HubView),
 ) -> Element {
   Column::new()
     .id("screen-team-hub")
@@ -222,6 +236,7 @@ fn frame(
     .spacing(crate::theme::ExtraSpacing::Inset.role())
     .child(head::head(ctx, team, new))
     .child(head::filter(ctx, listing, shown, navigation))
+    .with_children(told)
     .child(
       Column::new()
         .id("team-hub-body")
@@ -243,7 +258,10 @@ fn hub_body(
   (reading, retry): (bool, &Signal<u64>),
 ) -> Element {
   let id = project.open.project.id();
-  let Some(selected) = listing.selected(view.filter, view.item) else {
+  // Only an admin creates: a member who follows a link to a form sees the kind's list.
+  let adding = Kind::of_filter(view.filter).filter(|_| view.adding && team.may_change);
+  let selected = listing.selected(view.filter, view.item).filter(|_| adding.is_none());
+  if selected.is_none() && adding.is_none() {
     if !team.may_change {
       return member::empty(ctx, view.filter, team);
     }
@@ -254,23 +272,36 @@ fn hub_body(
       ctx.t("team_hub.empty.detail"),
     )
     .into();
-  };
+  }
   let list = list::list(
     ctx,
     listing,
     &list::Shown {
       project: id,
       filter: view.filter,
-      selected: Some(selected),
+      selected,
+      adding,
       navigation,
     },
   );
-  let shown = panel::Shown {
-    project: id,
-    team,
-    navigation,
+  let panel = match (adding, selected) {
+    (Some(kind), _) => create::panel(
+      ctx,
+      create::Props {
+        repo_root: project.open.repo_root.clone(),
+        project: id,
+        kind,
+        listing: listing.clone(),
+      },
+    ),
+    (None, Some(selected)) => resource_panel(
+      ctx,
+      (project, team, hub),
+      (listing, selected),
+      (navigation, reading, retry),
+    ),
+    (None, None) => return Element::from(Row::new()),
   };
-  let panel = detail(ctx, (project, team), (hub, listing, selected), (&shown, reading, retry));
   Row::new()
     .id("team-hub-master-detail")
     .describe("state", if reading { "reading" } else { "read" })
@@ -289,6 +320,22 @@ fn hub_body(
     )
     .child(panel)
     .into()
+}
+
+/// The panel of the resource `selected`: its kind's own, or the frame the kinds without one share.
+fn resource_panel(
+  ctx: &mut Ctx,
+  (project, team, hub): (&ShownProject, &TeamConfiguration, &TeamHub),
+  (listing, selected): (&Listing, &model::Entry),
+  (navigation, reading, retry): (&Navigation, bool, &Signal<u64>),
+) -> Element {
+  let id = project.open.project.id();
+  let shown = panel::Shown {
+    project: id,
+    team,
+    navigation,
+  };
+  detail(ctx, (project, team), (hub, listing, selected), (&shown, reading, retry))
 }
 
 /// The panel of `selected`: the one of its kind where the team holds what it shows, else the frame every kind has.

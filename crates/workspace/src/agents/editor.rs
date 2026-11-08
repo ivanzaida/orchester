@@ -91,6 +91,32 @@ pub fn apply(root: &Path, request: &Request) -> Result<Outcome, Message> {
   Ok(Outcome::Saved(id))
 }
 
+/// Creates the new `profile` as v1 with every widening and prompt change it asks accepted, which only a person decides:
+/// refused unless `decided` says one pressed Create (or let automation change what agents may do). Refused as
+/// [`apply`] refuses it otherwise.
+pub fn create_decided(root: &Path, profile: AgentProfile, decided: bool) -> Result<ResourceId, Message> {
+  if !decided {
+    return Err(Message::new("appMcp.errors.promptPersonOnly"));
+  }
+  let mut request = Request {
+    existing: None,
+    profile,
+    action: Action::Save,
+    allowed: Vec::new(),
+    prompt_decided: true,
+  };
+  match apply(root, &request)? {
+    Outcome::Saved(id) => Ok(id),
+    Outcome::Confirm(reasons) => {
+      request.allowed = reasons;
+      match apply(root, &request)? {
+        Outcome::Saved(id) => Ok(id),
+        Outcome::Confirm(_) => Err(Message::new("errors.draftChanged")),
+      }
+    }
+  }
+}
+
 /// What the stored draft of `entry` already widens over the latest published version: allowed when it was saved, so
 /// an autosave of later edits asks only about what widens beyond it. A profile without a draft widens nothing.
 pub fn approved_in(root: &Path, entry: &ProfileEntry) -> Result<Vec<Message>, Message> {

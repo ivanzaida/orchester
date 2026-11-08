@@ -95,6 +95,13 @@ pub(super) fn head_saying(ctx: &Ctx, entry: &Entry, version: Option<String>, end
 
 /// [`head_saying`] with `kind` in the place of what the resource is: *Tool · HTTP request*.
 pub(super) fn head_of(entry: &Entry, (kind, version): (String, Option<String>), end: Option<Element>) -> Row {
+  let version = version.or_else(|| entry.number.map(|number| number.to_string()));
+  head_named(&entry.name, (kind, version), end)
+}
+
+/// The head of a resource called `name`: `kind` and `version` over it, and at its end what `end` puts there. The form
+/// that creates a resource draws it with its name still to come.
+pub(super) fn head_named(name: &str, (kind, version): (String, Option<String>), end: Option<Element>) -> Row {
   let mut where_ = Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
@@ -104,9 +111,9 @@ pub(super) fn head_of(entry: &Entry, (kind, version): (String, Option<String>), 
         .variant(HubText::PanelWhere.role())
         .nowrap(),
     );
-  if let Some(number) = version.or_else(|| entry.number.map(|number| number.to_string())) {
+  if let Some(version) = version {
     where_ = where_.child(
-      Text::new(&number)
+      Text::new(&version)
         .id("team-hub-panel-version")
         .variant(HubText::PanelHint.role())
         .nowrap(),
@@ -122,7 +129,7 @@ pub(super) fn head_of(entry: &Entry, (kind, version): (String, Option<String>), 
         .spacing(SpacingSize::Xs)
         .child(where_)
         .child(
-          Text::new(&entry.name)
+          Text::new(name)
             .id("team-hub-panel-title")
             .variant(HubText::PanelTitle.role()),
         ),

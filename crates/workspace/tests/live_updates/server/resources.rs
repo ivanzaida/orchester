@@ -48,6 +48,12 @@ impl TeamServer {
     self.state().admins.push(token.to_owned());
   }
 
+  /// Answers every version published on a resource the server has `403 not_admin` while `refuse` holds; a new
+  /// resource is still created.
+  pub fn refuse_versions(&self, refuse: bool) {
+    self.state().refuse_versions = refuse;
+  }
+
   /// The versions of `resource` the server has, oldest first.
   pub fn versions_of(&self, resource: ResourceId) -> Vec<SharedVersion> {
     let state = self.state();
