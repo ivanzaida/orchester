@@ -562,8 +562,9 @@ message until a person raises the limit. Refused when no agent reads it and the 
 On a **team project** the message goes to the run under the claim its work started with (no claim of the old sharing
 stream is taken). A message that would run the task again (`team_run_again_unsupported`) or continue an interrupted
 run (`team_project_unsupported`) is refused before it is stored: a team task's work starts only through the team
-server (`run_task`). A message that would resume a run the team server fenced is refused as `claim_fenced` before it
-is stored; one that follows a stored message into a fenced run stays queued, with why.
+server (`run_task`). A run the team server fenced (taken over, membership removed, carried on elsewhere) takes no
+message in any state, a plan's changes included: it is refused as `claim_fenced` before anything
+is stored.
 
 | Parameter | Type                          | Req. | Description                                                                                       |
 |-----------|-------------------------------|------|---------------------------------------------------------------------------------------------------|

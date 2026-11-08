@@ -27,7 +27,7 @@ use crate::{
     conversation::{
       SendError,
       composer::{ComposerMode, Then},
-      follow::{RunnerOf, Sent, Stored, follow, follow_team},
+      follow::{RunnerOf, Sent, StartsWork, Stored, TeamThen, follow, follow_team},
       outgoing::{OutgoingError, Prepared, Way, plan_changes, prepare_in, store_answer_in, store_by_orchestrator_in},
     },
     outside::Outside,
@@ -49,34 +49,32 @@ pub fn plan_person_only() -> ToolError {
 #[derive(Clone, Copy)]
 enum Reach {
   Local,
-  Team {
-    /// The team server fenced the run: it goes on no more here.
-    fenced: bool,
-  },
+  Team(TeamThen),
 }
 
-/// How the message reaches run `run`. A team task's run is not started again or continued from here, and a fenced one
-/// is not resumed: refused before the message is stored.
-fn reach_checked(db: &orchester_store::ProjectDb, mode: &ComposerMode, run: RunId) -> Result<Reach, ToolError> {
+/// How the message sent `way` in `mode` reaches run `run`. On a project linked to a team server a run the team server
+/// fenced takes no message at all, in any state, and no run is started again or continued from here: refused before
+/// the message is stored.
+fn reach_checked(
+  db: &orchester_store::ProjectDb,
+  (mode, way): (&ComposerMode, Way),
+  run: RunId,
+) -> Result<Reach, ToolError> {
   if !team::linked(db)? {
     return Ok(Reach::Local);
   }
-  let fenced = team::fenced(db, run)?;
-  if fenced && matches!(mode, ComposerMode::Resume { .. }) {
-    return Err(team::fenced_refusal());
-  }
-  team_refusal(mode)?;
-  Ok(Reach::Team { fenced })
-}
-
-/// What a message to a team task's run may not do: run the task again, or continue an interrupted run, which would
-/// start its work from this computer without the team server's claim and work start.
-fn team_refusal(mode: &ComposerMode) -> Result<(), ToolError> {
-  match mode {
-    ComposerMode::RunAgain => Err(team_run_again()),
-    ComposerMode::Resume { interrupted: true } => Err(team::team_only_on_server("send_message")),
-    _ => Ok(()),
-  }
+  team::refuse_fenced(db, run)?;
+  // A mode with no way of sending this way stores nothing, and a plan's changes go to the runner as a decision: nothing
+  // follows from here.
+  let Some(then) = way.then_in(mode) else {
+    return Ok(Reach::Local);
+  };
+  TeamThen::try_from(then)
+    .map(Reach::Team)
+    .map_err(|starts| match starts {
+      StartsWork::RunAgain => team_run_again(),
+      StartsWork::ContinueInterrupted => team::team_only_on_server("send_message"),
+    })
 }
 
 /// A message that would run a team task again: its work starts only through the team server.
@@ -137,7 +135,7 @@ pub async fn send_message(
       way_of(&prepared.mode, timing),
       (checked.as_deref(), named.number().get()),
     )?;
-    let reach = reach_checked(&db, &prepared.mode, named.id())?;
+    let reach = reach_checked(&db, (&prepared.mode, way_of(&prepared.mode, timing)), named.id())?;
     if let Some(kind) = prepared.decision_kind(Way::Primary) {
       // The Orchestrator's plan path below retains its stricter refusal.
       if !matches!(by, SentBy::Person(_)) && !matches!(prepared.mode, ComposerMode::PlanChanges { .. }) {
@@ -213,8 +211,8 @@ async fn followed(
   reach: Reach,
 ) -> Sent {
   let runner = RunnerOf::Project(project);
-  if let Reach::Team { fenced } = reach {
-    return follow_team((&services.runners, runner), stored, (then, fenced)).await;
+  if let Reach::Team(team_then) = reach {
+    return follow_team((&services.runners, runner), stored, team_then).await;
   }
   let servers = (&services.runners, &services.servers, runner);
   follow(servers, (&services.workspace, &services.vault), stored, then).await

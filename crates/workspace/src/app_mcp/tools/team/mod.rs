@@ -156,14 +156,23 @@ pub(super) fn task_missing(db: &ProjectDb, task: TaskId) -> Result<ToolError, To
   })
 }
 
-/// Whether the team server fenced team run `run` (taken over, membership removed, another device): the run goes on no
-/// more here, and a legacy run that kept no team record is not fenced.
-pub(super) fn fenced(db: &ProjectDb, run: RunId) -> Result<bool, ToolError> {
-  Ok(db.team_run(run)?.is_some_and(|team| team.fence.is_some()))
+/// Whether `run` is a team task's run, by its own team record: a local task's run in a team project, and a legacy run
+/// that kept no record, are not.
+pub(super) fn is_team_run(db: &ProjectDb, run: RunId) -> Result<bool, ToolError> {
+  Ok(db.team_run(run)?.is_some())
+}
+
+/// Refuses work on a run the team server fenced (taken over, membership removed, carried on elsewhere): it goes on no
+/// more here. A run that kept no team record is not fenced.
+pub(super) fn refuse_fenced(db: &ProjectDb, run: RunId) -> Result<(), ToolError> {
+  if db.team_run(run)?.is_some_and(|team| team.fence.is_some()) {
+    return Err(fenced_refusal());
+  }
+  Ok(())
 }
 
 /// The refusal to work on a run the team server fenced, as the task page words it.
-pub(super) fn fenced_refusal() -> ToolError {
+fn fenced_refusal() -> ToolError {
   ToolError::refused("claim_fenced", vec![Message::new("claims.refused.fenced")])
 }
 

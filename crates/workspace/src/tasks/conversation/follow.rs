@@ -209,26 +209,43 @@ where
   }
 }
 
-/// [`follow`] for a message to a team task's run. The run works under the claim the team server gave its work when it
-/// started (`team_work`), so no claim of the old sharing stream is taken, which would also cache the team task's
-/// definition here. Delivering and resuming go to the runner as they do elsewhere. Continuing an interrupted run and
-/// running the task again would start work without the team server's claim, so they stay queued with why, as does a
-/// message that would resume a run the team server fenced.
-pub async fn follow_team(
-  (runners, runner): (&Runners, RunnerOf<'_>),
-  stored: &Stored<'_>,
-  (then, fenced): (Then, bool),
-) -> Sent {
-  let command = match then {
-    Then::RaiseLimit => return Sent::AwaitsLimit,
-    Then::ContinueInterrupted | Then::RunAgain => {
-      return Sent::Queued(
-        Message::new("appMcp.errors.teamProjectUnsupported").with("tool", "send_message".to_owned()),
-      );
+/// What follows a message to a team task's run. The run works under the claim the team server gave its work when it
+/// started (`team_work`), so only what goes on under that claim follows from here.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TeamThen {
+  Deliver,
+  Resume,
+  RaiseLimit,
+}
+
+/// What would start a team task's work from this computer, without the team server's claim and work start.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StartsWork {
+  ContinueInterrupted,
+  RunAgain,
+}
+
+impl TryFrom<Then> for TeamThen {
+  type Error = StartsWork;
+
+  fn try_from(then: Then) -> Result<Self, StartsWork> {
+    match then {
+      Then::Deliver => Ok(Self::Deliver),
+      Then::Resume => Ok(Self::Resume),
+      Then::RaiseLimit => Ok(Self::RaiseLimit),
+      Then::ContinueInterrupted => Err(StartsWork::ContinueInterrupted),
+      Then::RunAgain => Err(StartsWork::RunAgain),
     }
-    Then::Resume if fenced => return Sent::Queued(Message::new("claims.refused.fenced")),
-    Then::Deliver => Command::DeliverMessages { run: stored.run },
-    Then::Resume => Command::ResumeRun { run: stored.run },
+  }
+}
+
+/// [`follow`] for a message to an unfenced team task's run: no claim of the old sharing stream is taken, which would
+/// also cache the team task's definition here. Delivering and resuming go to the runner as they do elsewhere.
+pub async fn follow_team((runners, runner): (&Runners, RunnerOf<'_>), stored: &Stored<'_>, then: TeamThen) -> Sent {
+  let command = match then {
+    TeamThen::RaiseLimit => return Sent::AwaitsLimit,
+    TeamThen::Deliver => Command::DeliverMessages { run: stored.run },
+    TeamThen::Resume => Command::ResumeRun { run: stored.run },
   };
   match runner.control(runners, command).await {
     Ok(()) => Sent::Taken,

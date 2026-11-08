@@ -245,10 +245,12 @@ pub async fn control_run(services: &Services, args: InRun, control: Control) -> 
     let project = reading.project(&args.project)?;
     let db = ProjectDb::open(&project.repo_root)?;
     let run = find_run(&db, &args.run)?;
-    let team = team::linked(&db)?;
-    // The window refuses work on a run the team server fenced; so does the tool, whether paused or interrupted.
-    if team && control == Control::Resume && team::fenced(&db, run.id())? {
-      return Err(team::fenced_refusal());
+    let mut team = false;
+    if control == Control::Resume {
+      // The window refuses work on a run the team server fenced, whether paused or interrupted; Pause and Cancel stay
+      // allowed. A run without a team record (a local task's, in a team project) is a local run.
+      team::refuse_fenced(&db, run.id())?;
+      team = team::is_team_run(&db, run.id())?;
     }
     Ok((project, run, team))
   })
@@ -257,7 +259,7 @@ pub async fn control_run(services: &Services, args: InRun, control: Control) -> 
   // A team task's work starts and goes on under the claim the team server gave it (team_work): continuing an
   // interrupted run from here would take the old sharing stream's claim instead, so it is refused like continue_run.
   // A paused run resumes under the claim its work started with, and takes none.
-  if team && control == Control::Resume && matches!(run.status(), RunStatus::Interrupted(_)) {
+  if team && matches!(run.status(), RunStatus::Interrupted(_)) {
     return Err(team::team_only_on_server("resume_run"));
   }
   // Work on a shared task goes on only under the person's claim; Pause and Cancel need none.
