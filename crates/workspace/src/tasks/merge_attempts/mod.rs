@@ -16,7 +16,7 @@ use orchester_core::{
   id::RunId,
   integration::{
     GitError, MergeError,
-    attempt::{AttemptOutcome, AttemptStage, CauseKind, MergeAsker, MergeAttempt, MergeVia, OpenAttempt, cause_text},
+    attempt::{AttemptOutcome, AttemptStage, CauseKind, MergeAsker, MergeAttempt, MergeVia, OpenAttempt},
     clear_interrupted,
   },
   time::Timestamp,
@@ -26,7 +26,7 @@ use orchester_store::{ProjectDb, StoreError};
 
 use super::{
   changes::GIT,
-  integration::{IntegrationProblem, Merged},
+  integration::{IntegrationProblem, Merged, cause_words},
 };
 
 /// Who asked for a merge, and from where.
@@ -198,7 +198,7 @@ fn outcome_of(problem: &IntegrationProblem, stage: AttemptStage) -> (AttemptOutc
   match problem {
     IntegrationProblem::Preflight { stage, cause } => (
       AttemptOutcome::Refused { stage: (*stage).into() },
-      Some(cause_text(cause)),
+      Some(cause_words(cause)),
     ),
     IntegrationProblem::Merge(error) => merge_outcome(error, stage),
     IntegrationProblem::NotRecorded { merge, problem } => (

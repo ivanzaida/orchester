@@ -33,7 +33,7 @@ use orchester_exec::{
   programs::Programs,
 };
 use orchester_store::{ProjectDb, StoreError};
-pub use preflight::stage_message;
+pub use preflight::{cause_words, stage_message};
 pub(crate) use preflight::{hold, integration_refusal};
 pub(crate) use words::git_message;
 pub use words::{file_list, unread_entry};
