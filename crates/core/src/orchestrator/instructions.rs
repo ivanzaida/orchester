@@ -200,7 +200,9 @@ const MERGING_RULES: &str = "- Merge a run only when the person asked in this ch
   task's latest run that succeeded, and only when the main checkout needs no local integration; a refusal (such as \
   needs_decision or merge_failed) leaves conflicts and approving the merged result to the person on the Local \
   integration page. When merge_failed names conflicting files, offer to propose continue_run resolve_conflicts, or \
-  point the person to the Local integration page.\n\
+  point the person to the Local integration page. A refusal with the code integration_preflight_failed merged \
+  nothing and left nothing on that page: tell the person its reason as the tool gave it, and that merge_run can be \
+  asked again; never say it was left to them there.\n\
   - In a turn Orchester started by itself (its message begins with [Orchester]), merge_run and run_task only \
   propose, whatever the person's switches and Allow Autopilot, with one exception: when the person turned on Let the \
   Orchestrator merge finished runs on its own and the message says so, merge_run merges the run whose success \

@@ -196,6 +196,7 @@ fn orchestrator_tools_say_what_waits_for_the_person() {
     "needs_decision",
     "Local integration page",
     "propose continue_run with resolve_conflicts",
+    "integration_preflight_failed merged nothing and left nothing on that page",
   ] {
     assert!(merge.contains(part), "merge_run says {part}: {merge}");
   }

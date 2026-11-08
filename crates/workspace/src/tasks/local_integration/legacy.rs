@@ -8,7 +8,12 @@ use orchester_core::{id::RunId, integration::local::ContainedResult, store::RunS
 use orchester_exec::local_git::LocalGit;
 use orchester_store::ProjectDb;
 
-use super::{IntegrationError, direct::managed_checkout, view::Redaction};
+use super::{
+  IntegrationError,
+  direct::{CheckoutHolder, checkout_holder},
+  settle::settled,
+  view::Redaction,
+};
 use crate::{messages::Message, secrets::Vault};
 
 #[derive(Clone)]
@@ -32,10 +37,18 @@ impl LegacyPolicy {
       _owner: owner,
     })
   }
+  /// What the policy needs known before a merge: refuses a checkout or metadata it cannot allow, and tells whether Git
+  /// holds the run's work already. Waits a moment for Git programs that are still closing, as a run that just ended
+  /// leaves.
   pub fn preflight(&self) -> Result<Option<ContainedResult>, IntegrationError> {
+    settled(|| self.read_checkout())
+  }
+  fn read_checkout(&self) -> Result<Option<ContainedResult>, IntegrationError> {
     let db = ProjectDb::open(&self.root)?;
-    if managed_checkout(&db, self.run)? {
-      return Err(super::LocalError::ApprovalRequired.into());
+    match checkout_holder(&db, self.run)? {
+      None => {}
+      Some(CheckoutHolder::RunningProgram) => return Err(super::LocalError::ForeignOperation.into()),
+      Some(_) => return Err(super::LocalError::ApprovalRequired.into()),
     }
     let run = db
       .run(self.run)
