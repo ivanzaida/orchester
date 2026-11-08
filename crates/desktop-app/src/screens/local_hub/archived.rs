@@ -7,10 +7,11 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, FutureAction},
-    theme::SpacingSize,
+    theme::{PaletteColor, SpacingSize},
   },
   components::{Column, Text},
-  node::{Element, dimension::Dimension},
+  layout::{Alignment, layout_kind::Justify, text_style::TextAlign},
+  node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{id::ProjectId, time::Timestamp};
 use orchester_workspace::{agents::local_hub::StoppedRun, local_archive, messages::Message};
@@ -26,26 +27,46 @@ use crate::{
     panel::{body, head_named},
   },
   services::Services,
-  theme::HubText,
+  theme::{HubText, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     chip::BadgeTone,
-    icon::Icon,
+    icon::{Icon, icon},
     message::message_text,
-    state::EmptyState,
   },
 };
 
-/// The panel while nothing archived is picked.
+/// The panel while nothing archived is picked (`Nothing picked` `gd374` in L13): a 20 glyph, the title and the line
+/// under it, centered in the panel with no tile of their own.
 pub(super) fn nothing_picked(ctx: &Ctx) -> Element {
-  EmptyState::new(
-    "local-hub-archived-none",
-    Icon::Archive,
-    ctx.t("local_hub.archived.nothingTitle"),
-    ctx.t("local_hub.archived.nothingDetail"),
-  )
-  .into()
+  Column::new()
+    .id("local-hub-archived-none")
+    .flex(1.0)
+    .min_width(Dimension::Px(0.0))
+    .height(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(NOTHING_PICKED_SIDES, 0.0))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .justify(Justify::Center)
+    .child(icon(Icon::Archive, IconSize::Panel, PaletteColor::TextMuted))
+    .child(
+      Text::new(&ctx.t("local_hub.archived.nothingTitle"))
+        .id("local-hub-archived-none-title")
+        .variant(HubText::RowName.role())
+        .color(PaletteColor::TextSecondary),
+    )
+    .child(
+      Text::new(&ctx.t("local_hub.archived.nothingDetail"))
+        .id("local-hub-archived-none-line")
+        .variant(HubText::ListNote.role())
+        .width(Dimension::Pct(100.0))
+        .text_align(TextAlign::Center),
+    )
+    .into()
 }
+
+/// The panel's room at each side of the explanation (`gd374`).
+const NOTHING_PICKED_SIDES: f32 = 60.0;
 
 #[derive(Clone, PartialEq)]
 pub(super) struct Props {
