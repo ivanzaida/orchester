@@ -29,6 +29,8 @@ use orchester_workspace::{
 };
 use tokio::runtime::Handle;
 
+mod conflict;
+
 use super::State;
 
 /// The team's MCP server this computer has not read, which the server holds under the name a new server may not take.
@@ -150,12 +152,15 @@ fn result(
       runtime.block_on(services.servers.send_published(root)).map_err(said)?;
       Ok(())
     }
+    State::TeamEditNewer | State::TeamEditConflicting | State::TeamEditConflictClean | State::TeamEditArchived => {
+      conflict::prepare(state, (services, runtime), (server, root))
+    }
     _ => Ok(()),
   }
 }
 
 /// An error of the workspace's typed answers (none of which is a `std::error::Error`) as the QA app reports it.
-fn said(error: impl std::fmt::Debug) -> String {
+pub(super) fn said(error: impl std::fmt::Debug) -> String {
   format!("{error:?}")
 }
 
@@ -188,7 +193,7 @@ fn set_program(services: &Services, root: &Path) -> Result<(), Box<dyn Error>> {
 }
 
 /// The seed's `pencil-design`.
-fn pencil(root: &Path) -> Result<ResourceId, Box<dyn Error>> {
+pub(super) fn pencil(root: &Path) -> Result<ResourceId, Box<dyn Error>> {
   Ok(
     ProjectDb::open(root)?
       .resources(ResourceKind::McpServer)?
@@ -211,7 +216,8 @@ fn draft(services: &Services, root: &Path, pencil: ResourceId) -> Result<(), Box
   if let Runs::Program { arguments, .. } = &mut fields.runs {
     *arguments = ARGUMENTS.map(str::to_owned).to_vec();
   }
-  team_mcp_edit::save(root, pencil, &fields).map_err(|error| format!("the draft was not kept: {error:?}"))?;
+  team_mcp_edit::save(root, pencil, &fields, orchester_core::resource::VersionNumber::FIRST)
+    .map_err(|error| format!("the draft was not kept: {error:?}"))?;
   Ok(())
 }
 

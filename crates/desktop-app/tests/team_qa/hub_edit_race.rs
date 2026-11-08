@@ -85,9 +85,18 @@ fn team_qa_hub_edit_race_a_late_stale_autosave_never_undoes_a_newer_draft() {
   let stale = lane.start();
   let newest = lane.start();
 
-  let wrote = lane.run_if_newest(newest, || team_mcp_edit::save(&root, pencil, &typed));
+  let wrote = lane.run_if_newest(newest, || {
+    team_mcp_edit::save(&root, pencil, &typed, orchester_core::resource::VersionNumber::FIRST)
+  });
   assert!(matches!(wrote, Some(Ok(Saved::Draft(_)))), "{wrote:?}");
-  let late = lane.run_if_newest(stale, || team_mcp_edit::save(&root, pencil, &published));
+  let late = lane.run_if_newest(stale, || {
+    team_mcp_edit::save(
+      &root,
+      pencil,
+      &published,
+      orchester_core::resource::VersionNumber::FIRST,
+    )
+  });
 
   assert!(late.is_none(), "an out-of-date save writes nothing");
   assert_eq!(draft_of(&window, pencil), Some(vec!["--typed".to_owned()]));
@@ -108,11 +117,25 @@ fn team_qa_hub_edit_race_saves_that_overlap_on_threads_leave_the_newest_draft() 
     let (old_wait, new_wait) = if round % 2 == 0 { (2, 0) } else { (0, 2) };
     let old = thread::spawn(move || {
       thread::sleep(Duration::from_millis(old_wait));
-      old_lane.run_if_newest(stale, || team_mcp_edit::save(&old_root, pencil, &old_fields))
+      old_lane.run_if_newest(stale, || {
+        team_mcp_edit::save(
+          &old_root,
+          pencil,
+          &old_fields,
+          orchester_core::resource::VersionNumber::FIRST,
+        )
+      })
     });
     let new = thread::spawn(move || {
       thread::sleep(Duration::from_millis(new_wait));
-      new_lane.run_if_newest(newest, || team_mcp_edit::save(&new_root, pencil, &new_fields))
+      new_lane.run_if_newest(newest, || {
+        team_mcp_edit::save(
+          &new_root,
+          pencil,
+          &new_fields,
+          orchester_core::resource::VersionNumber::FIRST,
+        )
+      })
     });
     new
       .join()
@@ -140,8 +163,11 @@ fn team_qa_hub_edit_race_publish_saves_the_last_typed_text_after_any_older_save(
   // An autosave of older text started before *Publish for the team* was pressed and has not reached the database.
   let stale = lane.start();
 
-  let saved = lane.run_newest(|| team_mcp_edit::save(&root, pencil, &last));
-  let late = lane.run_if_newest(stale, || team_mcp_edit::save(&root, pencil, &older));
+  let saved =
+    lane.run_newest(|| team_mcp_edit::save(&root, pencil, &last, orchester_core::resource::VersionNumber::FIRST));
+  let late = lane.run_if_newest(stale, || {
+    team_mcp_edit::save(&root, pencil, &older, orchester_core::resource::VersionNumber::FIRST)
+  });
 
   assert!(matches!(saved, Ok(Saved::Draft(_))), "{saved:?}");
   assert!(late.is_none(), "the older autosave writes nothing after the press");
@@ -172,12 +198,21 @@ fn team_qa_hub_edit_race_the_lane_outlives_the_panel_so_a_stale_save_of_a_closed
     first_panel.run_if_newest(stale, || {
       entered.send(()).expect("the test waits");
       released.recv().expect("the test releases");
-      team_mcp_edit::save(&stale_root, pencil, &published)
+      team_mcp_edit::save(
+        &stale_root,
+        pencil,
+        &published,
+        orchester_core::resource::VersionNumber::FIRST,
+      )
     })
   });
   started.recv().expect("the stale save holds the lane");
   let newest = second_panel.start();
-  let newer = thread::spawn(move || second_panel.run_if_newest(newest, || team_mcp_edit::save(&root, pencil, &typed)));
+  let newer = thread::spawn(move || {
+    second_panel.run_if_newest(newest, || {
+      team_mcp_edit::save(&root, pencil, &typed, orchester_core::resource::VersionNumber::FIRST)
+    })
+  });
   thread::sleep(Duration::from_millis(50));
   assert_eq!(
     draft_of(&window, pencil),

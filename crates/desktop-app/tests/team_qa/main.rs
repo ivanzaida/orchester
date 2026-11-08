@@ -7,6 +7,7 @@
 //! `cargo test -p orchester-app --test team_qa team_qa`
 
 mod first_download;
+mod hub_conflict;
 mod hub_created;
 mod hub_edit;
 mod hub_edit_race;

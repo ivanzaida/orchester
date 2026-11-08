@@ -6,7 +6,10 @@
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 use lurq::app::ctx::StreamEmitter;
-use orchester_core::id::{ProjectId, ResourceId};
+use orchester_core::{
+  id::{ProjectId, ResourceId},
+  resource::VersionNumber,
+};
 use orchester_workspace::{
   agents::{
     save_lane::{SaveLane, Ticket},
@@ -33,6 +36,8 @@ pub(super) struct Save {
   /// The panel's last read held a draft.
   had_draft: bool,
   input: NewTeamMcpServer,
+  /// The version the input is edited from.
+  base: VersionNumber,
   ticket: Ticket,
 }
 
@@ -41,7 +46,7 @@ impl Save {
   pub(super) fn start(
     (lane, runtime, changes): (Arc<SaveLane>, Handle, OutsideChanges),
     target: (PathBuf, ProjectId, ResourceId),
-    (had_draft, input): (bool, NewTeamMcpServer),
+    (had_draft, input, base): (bool, NewTeamMcpServer, VersionNumber),
   ) -> (Self, JoinHandle<Answer>) {
     let ticket = lane.start();
     let save = Self {
@@ -51,6 +56,7 @@ impl Save {
       target,
       had_draft,
       input,
+      base,
       ticket,
     };
     let job = save.write();
@@ -60,11 +66,11 @@ impl Save {
   /// The write of this save, again with the place it already has: a retry that a newer save passed skips itself.
   fn write(&self) -> JoinHandle<Answer> {
     let (lane, changes, input) = (self.lane.clone(), self.changes.clone(), self.input.clone());
-    let ticket = self.ticket;
+    let (ticket, base) = (self.ticket, self.base);
     let ((root, project, id), had_draft) = (self.target.clone(), self.had_draft);
     self.runtime.spawn_blocking(move || {
       let saved = lane
-        .run_if_newest(ticket, || team_mcp_edit::save(&root, id, &input))
+        .run_if_newest(ticket, || team_mcp_edit::save(&root, id, &input, base))
         .transpose()?;
       if saved.is_some_and(|saved| matches!(saved, Saved::Draft(_)) != had_draft) {
         changes.record(project, Outside::Connections);

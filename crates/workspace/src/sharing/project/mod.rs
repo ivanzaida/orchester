@@ -25,6 +25,7 @@ mod make_local;
 mod members;
 mod modules;
 pub(super) mod organization;
+mod restore_resource;
 mod share;
 pub mod share_task;
 pub mod state;
@@ -52,6 +53,7 @@ pub use self::{
   join::{JoinFailed, JoinReview, Joined, ReviewTask, SimilarTask},
   make_local::{ClaimRelease, MadeLocal, MakeLocalPlan},
   members::{MemberChange, MembersRead, ProjectMembers},
+  restore_resource::NotRestored,
   share::{IdentityProblem, LinkFirst, ShareError, SharePlan, Shared, plan, repository_identity},
 };
 use super::{Behalf, Connection, ServerEntry, Servers, SharingError};

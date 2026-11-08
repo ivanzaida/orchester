@@ -118,6 +118,67 @@ impl TeamServer {
     state.resources.projects.entry(id).or_default().not_admin = true;
   }
 
+  /// A teammate, `by`, publishes `body` as the next version of the resource `resource` of the project at `slug`, from
+  /// the version it has now, as when someone else published while this computer's admin edited: the server numbers it
+  /// and attributes it to `by`.
+  ///
+  /// # Panics
+  /// When the project is not shared, the server does not hold the resource or refuses the version.
+  pub fn publish_as(&self, slug: &str, resource: orchester_core::id::ResourceId, body: Value, by: &'static str) {
+    let mut state = self.state.lock();
+    let id = state
+      .projects
+      .iter()
+      .find(|project| project["slug"] == slug)
+      .and_then(|project| project["id"].as_str().map(str::to_owned))
+      .expect("the stand-in shares the project");
+    let held = state.resources.projects.entry(id).or_default();
+    let key = resource.to_string();
+    let stored = held.find(&key).expect("the stand-in holds the resource");
+    let latest = stored
+      .latest()
+      .and_then(|version| version["number"].as_u64())
+      .expect("a version");
+    let publish = VersionPublish {
+      idempotency_key: orchester_core::id::IdempotencyKey::generate(),
+      based_on: u32::try_from(latest)
+        .ok()
+        .and_then(std::num::NonZeroU32::new)
+        .map(orchester_core::resource::VersionNumber::new),
+      body,
+      references: Vec::new(),
+    };
+    let (status, _) = held.publish(&key, &serde_json::to_string(&publish).expect("a publish serializes"));
+    assert_eq!(status, 201, "the stand-in takes the teammate's version");
+    let stored = held.find(&key).expect("the stand-in holds the resource");
+    let teammate = Person::Named(by).wire();
+    if let Some(version) = stored.versions.last_mut() {
+      version["published"]["by"] = teammate.clone();
+    }
+    stored.resource["updated"]["by"] = teammate;
+  }
+
+  /// A teammate archives the resource `resource` of the project at `slug`: the server refuses new versions of it.
+  ///
+  /// # Panics
+  /// When the project is not shared or the server does not hold the resource.
+  pub fn archive(&self, slug: &str, resource: orchester_core::id::ResourceId) {
+    let mut state = self.state.lock();
+    let id = state
+      .projects
+      .iter()
+      .find(|project| project["slug"] == slug)
+      .and_then(|project| project["id"].as_str().map(str::to_owned))
+      .expect("the stand-in shares the project");
+    let held = state.resources.projects.entry(id).or_default();
+    let stored = held
+      .find(&resource.to_string())
+      .expect("the stand-in holds the resource");
+    let revision = stored.resource["revision"].as_u64().unwrap_or(1);
+    stored.resource["archived"] = json!(true);
+    stored.resource["revision"] = json!(revision + 1);
+  }
+
   /// The server of the project at `slug` already holds `create` and its versions up to `latest`, each with the body of
   /// the first, as when teammates published them before this computer joined.
   ///

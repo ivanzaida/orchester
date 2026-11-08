@@ -25,7 +25,8 @@
     "group": {
       "needs": "Needs you here",
       "ready": "Ready here",
-      "off": "Off here"
+      "off": "Off here",
+      "archived": "Archived"
     },
     "kind": {
       "tag": {
@@ -392,7 +393,10 @@
         "refused": "publish refused",
         "readOnly": "read-only here",
         "met": "someone published first",
-        "notCreated": "Not created · publish refused"
+        "notCreated": "Not created · publish refused",
+        "archived": "Archived {{time}} · your draft is kept",
+        "conflict": "Conflict with {{version}} · publish refused",
+        "behind": "Your draft on {{base}} · {{latest}} is out"
       },
       "draft": {
         "saved": "Draft on {{version}} · saved {{time}} · only on this computer",
@@ -456,6 +460,80 @@
       "fromTeamWaitingCreated": "· waiting to be created · locked while it waits to send",
       "fromTeamReadOnly": "· your draft on {{version}} · read-only now",
       "queued": "queued {{time}}"
+    },
+    "newer": {
+      "line": "{{who}} published {{version}} at {{time}} · your draft is based on {{base}}",
+      "lineUnknown": "{{version}} was published · your draft is based on {{base}}",
+      "viewChanges": "View changes"
+    },
+    "conflict": {
+      "title": "The team's server refused: {{version}} was published while you edited",
+      "body": "Compare field by field. Rebase keeps the fields only you changed, takes {{who}}'s for the rest, and asks where you both changed the same field. Your draft is kept until you choose.",
+      "theTeam": "the team",
+      "chip": {
+        "one": "Conflict · {{count}} field both changed",
+        "other": "Conflict · {{count}} fields both changed"
+      },
+      "refusedAt": "refused {{time}}",
+      "bar": {
+        "rebase": "Rebase my draft on {{version}}",
+        "open": "Open {{version}}",
+        "gives": "Rebase gives a draft on {{version}} to publish",
+        "pick": "Pick Mine or Theirs for {{fields}} to rebase"
+      },
+      "discard": {
+        "title": "Discard your draft of {{name}}?",
+        "keep": "Keep my draft",
+        "confirm": "Discard draft",
+        "body": "Your changes to {{fields}} are lost on this computer. {{version}} stays as {{who}} published it.",
+        "bodyPlain": "Your draft is lost on this computer. {{version}} stays as {{who}} published it."
+      }
+    },
+    "compare": {
+      "label": "Compare",
+      "counts": "· {{counts}}",
+      "count": {
+        "both": "{{count}} both changed",
+        "theirs": "{{count}} theirs",
+        "mine": "{{count}} yours"
+      },
+      "none": "None",
+      "head": {
+        "field": "Field · base {{version}}",
+        "theirs": "Theirs · {{version}} · {{who}} {{time}}",
+        "theirsPlain": "Theirs · {{version}}",
+        "yours": "Yours · draft on {{version}}",
+        "result": "Result"
+      },
+      "base": "{{version}}: {{value}}",
+      "result": {
+        "both": "Both changed · pick",
+        "theirs": "Takes theirs",
+        "mine": "Keeps yours",
+        "same": "Same in both"
+      },
+      "pick": {
+        "mine": "Mine",
+        "theirs": "Theirs"
+      }
+    },
+    "archived": {
+      "title": "The team's server refused: {{name}} was archived at {{time}}",
+      "body": "Archived resources can't get new versions, and runs that pinned it were stopped. Your draft on {{version}} is kept on this computer; restore {{name}} to publish it.",
+      "chip": "Archived",
+      "at": "archived {{time}}",
+      "fromTeam": "· your draft on {{version}} · read-only while archived",
+      "discard": "Your draft of {{name}} is lost on this computer. The team's {{name}} stays archived.",
+      "bar": {
+        "restore": "Restore {{name}}",
+        "hint": "Restore brings back {{version}} for everyone · admins only"
+      },
+      "restore": {
+        "title": "Restore {{name}}?",
+        "body": "{{name}} comes back for everyone on the team; the runs that were stopped stay stopped. Your draft on {{draft}} stays on this computer; publish it once {{name}} is back.",
+        "confirm": "Restore",
+        "cancel": "Cancel"
+      }
     }
   }
 }

@@ -61,12 +61,7 @@ impl McpPanel {
       .map_or_else(String::new, |next| next.to_string());
     let bar = EditBar {
       publish: self.publish_button(ctx, (fields.input(), Some(version)), publishable, pending),
-      discard: self.discard_button(
-        ctx,
-        "team-hub-edit-discard",
-        "team_hub.edit.bar.discard",
-        (edit, Some(version)),
-      ),
+      discard: self.discard_button(ctx, "team-hub-edit-discard", "team_hub.edit.bar.discard", Some(version)),
       refused_at: Some(at),
       reverts: reverts.then_some(refused_version),
       team: &props.team,
@@ -92,6 +87,7 @@ impl McpPanel {
       from_team: section(ctx, vec![note_text("team-hub-from-team-note", &note).into()], form.rows),
       computer: true,
       bar: Some(bar),
+      dialogs: Vec::new(),
     })
   }
 }

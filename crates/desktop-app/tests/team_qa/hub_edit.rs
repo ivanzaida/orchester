@@ -52,10 +52,19 @@ pub(super) fn on_pencil_until(
   let services = launch.services().expect("the session started");
   let server = team::prepare(state, services, data.runtime.handle()).expect("the state is set up");
   let mut window = Window::of(data, launch);
-  let pencil = db(&window)
+  // A server the team archived while its draft is kept is listed apart, which the state of ORC-837's A21 holds.
+  let kept = db(&window);
+  let pencil = kept
     .resources(ResourceKind::McpServer)
     .expect("resources")
     .into_iter()
+    .chain(
+      kept
+        .archived_with_draft(ResourceKind::McpServer)
+        .expect("archived resources")
+        .into_iter()
+        .map(|(resource, _)| resource),
+    )
     .find(|resource| resource.name().as_str() == "pencil-design")
     .expect("the seed's pencil-design")
     .id();

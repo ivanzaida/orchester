@@ -10,21 +10,26 @@ use std::{
 use lurq::app::ctx::{Ctx, FutureAction};
 use orchester_core::{
   id::{ProjectId, ResourceId, VersionId},
-  resource::ResourceKind,
+  resource::VersionNumber,
 };
 use orchester_workspace::{
   agents::{
     save_lane::SaveLane,
+    team_mcp_conflict::Based,
     team_mcp_edit::{self, EditError},
+    team_mcp_merge::{McpField, Pick},
   },
   app_mcp::setup::NewTeamMcpServer,
   background,
   messages::{self, Message},
-  sharing::team_edit::{EditRefused, Edited},
+  sharing::{
+    NotRestored,
+    team_edit::{EditRefused, Edited},
+  },
   tasks::outside::Outside,
 };
 
-use super::edit::{Discard, Publish};
+use super::edit::{Discard, Publish, Rebase, Restore};
 use crate::services::Services;
 
 type Target = (PathBuf, ProjectId, ResourceId);
@@ -34,7 +39,7 @@ type Target = (PathBuf, ProjectId, ResourceId);
 pub(super) fn publish(ctx: &mut Ctx, services: &Services, target: &Target, lane: &Arc<SaveLane>) -> Publish {
   let (services, (root, project, id), lane) = (services.clone(), target.clone(), lane.clone());
   ctx.future_action(
-    move |(fields, decided, refused): (NewTeamMcpServer, bool, Option<VersionId>)| {
+    move |(fields, base, decided, refused): (NewTeamMcpServer, VersionNumber, bool, Option<VersionId>)| {
       let (services, root, lane) = (services.clone(), root.clone(), lane.clone());
       async move {
         if !decided {
@@ -43,12 +48,12 @@ pub(super) fn publish(ctx: &mut Ctx, services: &Services, target: &Target, lane:
         if let Some(version) = refused {
           services
             .servers
-            .reopen_draft(&root, ResourceKind::McpServer, version)
+            .reopen_mcp_draft(&root, version)
             .await
             .map_err(EditRefused::Failed)?;
         }
         let kept = root.clone();
-        background::run(move || lane.run_newest(|| team_mcp_edit::save(&kept, id, &fields)))
+        background::run(move || lane.run_newest(|| team_mcp_edit::save(&kept, id, &fields, base)))
           .await
           .map_err(EditRefused::Failed)?
           .map_err(|error| EditRefused::Failed(failed(error)))?;
@@ -63,10 +68,10 @@ pub(super) fn publish(ctx: &mut Ctx, services: &Services, target: &Target, lane:
 /// *Discard draft*: through the lane too, so an autosave that started before the press cannot write the draft back.
 pub(super) fn discard(ctx: &mut Ctx, services: &Services, target: &Target, lane: &Arc<SaveLane>) -> Discard {
   let (services, (root, project, id), lane) = (services.clone(), target.clone(), lane.clone());
-  ctx.future_action(move |(published, refused): (NewTeamMcpServer, Option<VersionId>)| {
+  ctx.future_action(move |refused: Option<VersionId>| {
     let (services, root, lane) = (services.clone(), root.clone(), lane.clone());
     async move {
-      let result = discard_draft(&services, &root, id, (published, refused), lane).await;
+      let result = discard_draft(&services, &root, id, refused, lane).await;
       services.changes.record(project, Outside::Connections);
       result
     }
@@ -79,10 +84,7 @@ pub(super) fn cancel(ctx: &mut Ctx, services: &Services, target: &Target) -> Fut
   ctx.future_action(move |version: VersionId| {
     let (services, root) = (services.clone(), root.clone());
     async move {
-      let result = services
-        .servers
-        .reopen_draft(&root, ResourceKind::McpServer, version)
-        .await;
+      let result = services.servers.reopen_mcp_draft(&root, version).await;
       services.changes.record(project, Outside::Connections);
       result
     }
@@ -102,33 +104,95 @@ pub(super) fn cancel_created(ctx: &mut Ctx, services: &Services, target: &Target
   })
 }
 
-/// Throws the draft of `id` away, after the refused version `refused` in the outbox went back to being it; the fields
-/// the form shows again are the version's own: `published`, or, once a refused version is gone, the team's.
+/// Throws the draft of `id` away, after the version of the outbox `refused` went back to being it; the form shows the
+/// version this computer uses again: its number and fields.
 async fn discard_draft(
   services: &Services,
   root: &Path,
   id: ResourceId,
-  (published, refused): (NewTeamMcpServer, Option<VersionId>),
+  refused: Option<VersionId>,
   lane: Arc<SaveLane>,
-) -> Result<NewTeamMcpServer, Message> {
+) -> Result<Based, Message> {
   if let Some(version) = refused {
-    services
-      .servers
-      .reopen_draft(root, ResourceKind::McpServer, version)
-      .await?;
+    services.servers.reopen_mcp_draft(root, version).await?;
   }
   let kept = root.to_owned();
   background::run(move || lane.run_newest(|| team_mcp_edit::discard(&kept, id)))
     .await?
     .map_err(failed)?;
-  if refused.is_none() {
-    return Ok(published);
-  }
   let kept = root.to_owned();
-  background::run(move || team_mcp_edit::published(&kept, id))
+  let edit = background::run(move || team_mcp_edit::read(&kept, id))
     .await?
     .map_err(failed)?
-    .ok_or_else(messages::interrupted)
+    .ok_or_else(messages::interrupted)?;
+  Ok(Based {
+    number: edit.number,
+    fields: edit.published,
+  })
+}
+
+/// *Rebase my draft on vN*: the merge of the draft with the team's version, over the version the draft was edited from,
+/// with what was picked for each field both changed. Only a person (or automation they let decide) rebases.
+pub(super) fn rebase(ctx: &mut Ctx, services: &Services, target: &Target) -> Rebase {
+  let (services, (root, project, id)) = (services.clone(), target.clone());
+  ctx.future_action(
+    move |(outbox, expected, picks, decided): (Option<VersionId>, VersionNumber, Vec<(McpField, Pick)>, bool)| {
+      let (services, root) = (services.clone(), root.clone());
+      async move {
+        if !decided {
+          return Err(Message::new("sharing.errors.personOnly"));
+        }
+        let result = services
+          .servers
+          .rebase_mcp_draft(&root, id, (outbox, expected), picks)
+          .await;
+        services.changes.record(project, Outside::Connections);
+        result
+      }
+    },
+  )
+}
+
+/// *Open vN*: the version of the person's own in the outbox that met the team's goes back to being the draft, which is
+/// kept, so the page can show the team's version.
+pub(super) fn open_new(
+  ctx: &mut Ctx,
+  services: &Services,
+  target: &Target,
+) -> FutureAction<Option<VersionId>, (), Message> {
+  let (services, (root, project, _)) = (services.clone(), target.clone());
+  ctx.future_action(move |outbox: Option<VersionId>| {
+    let (services, root) = (services.clone(), root.clone());
+    async move {
+      let result = match outbox {
+        Some(version) => services.servers.reopen_mcp_draft(&root, version).await,
+        None => Ok(()),
+      };
+      services.changes.record(project, Outside::Connections);
+      result
+    }
+  })
+}
+
+/// *Restore*: the team's server brings the archived resource back for everyone. Only a person (or automation they let
+/// decide) restores, and only an admin: the server says so otherwise.
+pub(super) fn restore(ctx: &mut Ctx, services: &Services, target: &Target) -> Restore {
+  let (services, (root, project, id)) = (services.clone(), target.clone());
+  ctx.future_action(move |decided: bool| {
+    let (services, root) = (services.clone(), root.clone());
+    async move {
+      if !decided {
+        return Err(Message::new("sharing.errors.personOnly"));
+      }
+      let result = services
+        .servers
+        .restore_resource(&root, id)
+        .await
+        .map_err(NotRestored::message);
+      services.changes.record(project, Outside::Connections);
+      result
+    }
+  })
 }
 
 /// What a draft that could not be read or saved says.

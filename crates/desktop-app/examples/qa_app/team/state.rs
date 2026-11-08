@@ -119,6 +119,21 @@ pub enum State {
   /// the name being taken once it answered: taken back whole, and the hub says what and why (A15 `dLqHC`, as it stands
   /// once the person left the form). Made without a press.
   TeamCreateNameTaken,
+  /// As [`Self::TeamEdit`], with a draft of `pencil-design` kept on v1 and olha's v2 published meanwhile and read here
+  /// (`team-edit-newer`, A18 `bk4i9`): one quiet line says so, with *View changes*. Made without a press.
+  TeamEditNewer,
+  /// As [`Self::TeamEditNewer`], after a *Publish for the team* that the server answered with the conflict (olha's v2
+  /// was there first): the outbox holds the version that met v2, and the page compares v1, v2 and the draft, with the
+  /// arguments both changed (`team-edit-conflicting`, A19 `DV8OI`, and A20 `CAPhQ` once *Discard my draft* is pressed).
+  /// Made without a press.
+  TeamEditConflicting,
+  /// As [`Self::TeamEditConflicting`], with no field both changed, so *Rebase* needs no pick
+  /// (`team-edit-conflict-clean`).
+  TeamEditConflictClean,
+  /// As [`Self::TeamEdit`], olha archived `pencil-design` while the draft was kept, and the *Publish for the team*
+  /// that followed was refused: the draft stays and *Restore* is the way back (`team-edit-archived`, A21 `yqYj9`).
+  /// Made without a press.
+  TeamEditArchived,
   /// As [`Self::StartFailed`], with the server not answering a Run's `work.start` for [`START_ANSWERS_AFTER`] after the
   /// window opens, and then answering as a server a release ahead: the start waits, the project's recovery carries it
   /// on, the start fails for good, and the task page, which said the run starts once they answer, says why it did not
@@ -140,7 +155,7 @@ pub enum State {
 pub const START_ANSWERS_AFTER: std::time::Duration = std::time::Duration::from_secs(90);
 
 impl State {
-  pub const ALL: [Self; 44] = [
+  pub const ALL: [Self; 48] = [
     Self::Join,
     Self::WrongCode,
     Self::ExpiredCode,
@@ -181,6 +196,10 @@ impl State {
     Self::TeamEditRejected,
     Self::TeamEditVariables,
     Self::TeamCreateNameTaken,
+    Self::TeamEditNewer,
+    Self::TeamEditConflicting,
+    Self::TeamEditConflictClean,
+    Self::TeamEditArchived,
     Self::StartRecovered,
     Self::StartWaiting,
     Self::StartRunnerRefused,
@@ -230,6 +249,10 @@ impl State {
       Self::TeamEditRejected => "team-edit-rejected",
       Self::TeamEditVariables => "team-edit-variables",
       Self::TeamCreateNameTaken => "team-create-name-taken",
+      Self::TeamEditNewer => "team-edit-newer",
+      Self::TeamEditConflicting => "team-edit-conflicting",
+      Self::TeamEditConflictClean => "team-edit-conflict-clean",
+      Self::TeamEditArchived => "team-edit-archived",
       Self::StartRecovered => "team-start-recovered",
       Self::StartWaiting => "team-start-waiting",
       Self::StartRunnerRefused => "team-start-runner-refused",
@@ -264,6 +287,10 @@ impl State {
         | Self::TeamEditRejected
         | Self::TeamEditVariables
         | Self::TeamCreateNameTaken
+        | Self::TeamEditNewer
+        | Self::TeamEditConflicting
+        | Self::TeamEditConflictClean
+        | Self::TeamEditArchived
     )
   }
 
@@ -272,7 +299,13 @@ impl State {
   pub const fn program_set(self) -> bool {
     matches!(
       self,
-      Self::TeamEditRefusedAdmin | Self::TeamEditWaiting | Self::TeamEditRejected
+      Self::TeamEditRefusedAdmin
+        | Self::TeamEditWaiting
+        | Self::TeamEditRejected
+        | Self::TeamEditNewer
+        | Self::TeamEditConflicting
+        | Self::TeamEditConflictClean
+        | Self::TeamEditArchived
     )
   }
 

@@ -352,7 +352,13 @@ fn team_qa_hub_edit_an_unknown_reason_of_invalid_is_kept_as_plain_invalid() {
   if let Runs::Program { arguments, .. } = &mut fields.runs {
     *arguments = vec!["--odd".to_owned()];
   }
-  orchester_workspace::agents::team_mcp_edit::save(&root, pencil, &fields).expect("the draft");
+  orchester_workspace::agents::team_mcp_edit::save(
+    &root,
+    pencil,
+    &fields,
+    orchester_core::resource::VersionNumber::FIRST,
+  )
+  .expect("the draft");
   db(&window)
     .publish_draft::<TeamMcpServer>(pencil, Timestamp::now())
     .expect("published here, waiting");
@@ -382,7 +388,13 @@ fn team_qa_hub_edit_a_send_that_failed_here_after_the_server_may_have_answered_s
   if let Runs::Program { arguments, .. } = &mut fields.runs {
     *arguments = vec!["--once".to_owned()];
   }
-  orchester_workspace::agents::team_mcp_edit::save(&root, pencil, &fields).expect("the draft");
+  orchester_workspace::agents::team_mcp_edit::save(
+    &root,
+    pencil,
+    &fields,
+    orchester_core::resource::VersionNumber::FIRST,
+  )
+  .expect("the draft");
   let link = db(&window).sharing().expect("read").expect("linked");
   let app = rusqlite::Connection::open(window.data.database()).expect("the application database");
   app
@@ -413,7 +425,13 @@ fn team_qa_hub_edit_a_send_in_flight_is_not_cancelled_and_is_numbered() {
   if let Runs::Program { arguments, .. } = &mut fields.runs {
     *arguments = vec!["--slow".to_owned()];
   }
-  orchester_workspace::agents::team_mcp_edit::save(&root, pencil, &fields).expect("the draft");
+  orchester_workspace::agents::team_mcp_edit::save(
+    &root,
+    pencil,
+    &fields,
+    orchester_core::resource::VersionNumber::FIRST,
+  )
+  .expect("the draft");
   server.slow_resource_writes(Duration::from_millis(1500));
   let sending = {
     let (servers, root) = (services.servers.clone(), root.clone());

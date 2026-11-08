@@ -72,6 +72,10 @@ pub fn to(
     | State::TeamEditRejected
     | State::TeamEditVariables
     | State::TeamCreateNameTaken
+    | State::TeamEditNewer
+    | State::TeamEditConflicting
+    | State::TeamEditConflictClean
+    | State::TeamEditArchived
     | State::StartWaiting
     | State::StartRunnerRefused
     | State::StartPastFailure => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),

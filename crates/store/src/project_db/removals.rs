@@ -4,7 +4,8 @@
 use orchester_core::{
   id::ResourceId,
   resource::{
-    Draft, Pipeline, Removal, RemoveMode, ResourceBody, ResourceKind, Version, VersionNumber, pipeline_step_users,
+    Draft, Pipeline, Removal, RemoveMode, Resource, ResourceBody, ResourceKind, Version, VersionNumber,
+    pipeline_step_users,
   },
   time::Timestamp,
 };
@@ -87,6 +88,24 @@ impl ProjectDb {
   /// When resource `id` was removed; `None` while it is not.
   pub fn resource_removed_at(&self, id: ResourceId) -> Result<Option<Timestamp>, StoreError> {
     removed_at(&self.connection, id)
+  }
+
+  /// The team's resources of `kind` that the server archived and that still keep a draft of this computer's, each with
+  /// when it was removed here: the draft stays to copy, discard, or publish once the resource is restored.
+  pub fn archived_with_draft(&self, kind: ResourceKind) -> Result<Vec<(Resource, Timestamp)>, StoreError> {
+    let archived = load_resources(
+      &self.connection,
+      "WHERE kind = ?1 AND sharing = 'shared' AND id IN (SELECT resource_id FROM removed_resources) \
+       AND id IN (SELECT resource_id FROM resource_drafts) ORDER BY slug",
+      [kind_text(kind)],
+    )?;
+    archived
+      .into_iter()
+      .map(|resource| {
+        let at = removed_at(&self.connection, resource.id())?.ok_or(StoreError::ResourceNotFound(resource.id()))?;
+        Ok((resource, at))
+      })
+      .collect()
   }
 
   /// Follows the server's archived mark of the team's resource `id`: archived, it is removed here as of `now`, so no

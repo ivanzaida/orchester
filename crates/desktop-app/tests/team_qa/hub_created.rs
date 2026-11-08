@@ -115,7 +115,13 @@ fn team_qa_hub_edit_a_created_server_refused_later_with_work_over_it_stays_liste
   if let Runs::Program { arguments, .. } = &mut fields.runs {
     *arguments = vec!["--more".to_owned()];
   }
-  orchester_workspace::agents::team_mcp_edit::save(&root, made, &fields).expect("a draft over v1");
+  orchester_workspace::agents::team_mcp_edit::save(
+    &root,
+    made,
+    &fields,
+    orchester_core::resource::VersionNumber::FIRST,
+  )
+  .expect("a draft over v1");
   server.reject_content("kontur", "body");
   server.set_down(false);
   let services = window.launch.services().expect("the session").clone();

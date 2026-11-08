@@ -155,6 +155,7 @@ icons! {
   GitFork => '\u{e28d}',
   GitMerge => '\u{e0e4}',
   GitPullRequest => '\u{e0e5}',
+  GitPullRequestArrow => '\u{e555}',
   GitPullRequestClosed => '\u{e35a}',
   GitPullRequestDraft => '\u{e35b}',
   Globe => '\u{e0e8}',

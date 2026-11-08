@@ -5,15 +5,17 @@
 //! ([`Edited::Waiting`], A16 `x3ywL`; cancelling takes it back as a draft); one that refuses it takes it back as the
 //! draft, which is kept, and says why ([`EditRefused`]). A send that failed on this computer after the server may have
 //! answered leaves the version in the outbox, whose retry is idempotent, and says so. One send of a project's outbox at
-//! a time ([`Servers::send_lane`]). Nothing here is merged with a version someone published meanwhile.
+//! a time ([`Servers::send_lane`]). Nothing here is merged with a version someone published meanwhile: that is the
+//! person's, field by field ([`crate::agents::team_mcp_conflict`]).
 
 mod refusal;
+mod reopen;
 
 use std::path::Path;
 
 use orchester_core::{
   id::{ResourceId, VersionId},
-  resource::{TeamMcpServer, VersionNumber},
+  resource::{PublishError, TeamMcpServer, VersionNumber},
   store::ResourceStore,
   time::Timestamp,
 };
@@ -95,6 +97,11 @@ fn settle(servers: &Servers, root: &Path, resource: ResourceId) -> Result<Edited
   let version = match db.publish_draft::<TeamMcpServer>(resource, Timestamp::now()) {
     Ok(version) => version.id(),
     Err(StoreError::NotAdmin) => return Err(EditRefused::Refused(Refusal::NotAdminHere)),
+    // The team published since the draft was edited, and this computer has read it: nothing was sent, and the draft is
+    // kept as it is, edited from the version it was edited from.
+    Err(StoreError::Publish(PublishError::StaleDraft {
+      latest: Some(latest), ..
+    })) => return Err(EditRefused::Changed { latest }),
     Err(error) => return Err(failed(&error)),
   };
   let sent = send(servers, root, resource);
@@ -126,9 +133,10 @@ fn blocked() -> EditRefused {
   EditRefused::Failed(Message::new("sharing.edit.blocked"))
 }
 
-/// Nothing shows as published: the version the server did not take goes back to being the draft, which is kept.
+/// Nothing shows as published: the version the server did not take goes back to being the draft, which is kept, still
+/// edited from the version it was edited from: when the team published meanwhile, the draft says so.
 fn taken_back(db: &mut ProjectDb, version: VersionId, refused: EditRefused) -> Result<Edited, EditRefused> {
-  db.reopen_draft::<TeamMcpServer>(version, Timestamp::now())
+  db.reopen_draft_on_its_base::<TeamMcpServer>(version, Timestamp::now())
     .map_err(|error| EditRefused::Failed(messages::store_error(&error)))?;
   Err(refused)
 }

@@ -13,11 +13,11 @@ use orchester_core::{
   name::Name,
   project::{Project, ProjectKey},
   resource::{AgentTargets, Draft, InjectionEvent, Instruction, InstructionScope, PromptText, Slug, VersionNumber},
-  sharing::{MemberRole, SharedPerson},
+  sharing::{MemberRole, SharedPerson, TaskRevision},
   store::ResourceStore,
   time::Timestamp,
 };
-use orchester_store::{CachedVersion, ProjectDb, PublishState, SharingLink};
+use orchester_store::{CachedVersion, ProjectDb, PublishState, ResourceSharing, SharingLink};
 use tempfile::TempDir;
 
 const HASH: &str = "5f1d6b0f0e2b9a8c7d6e5f4a3b2c1d0e9f8a7b6c5d4e3f2a1b0c9d8e7f6a5b4c";
@@ -137,4 +137,92 @@ fn a_version_the_server_refused_goes_back_to_being_the_draft() {
 
   assert!(db.waiting_publishes().expect("outbox").is_empty());
   assert_eq!(draft_text(&db, rule), Some(instruction("Two.")));
+}
+
+/// A teammate's v2 reaches this computer while the person's own v2 still waits (it takes number 3 meanwhile).
+fn teammate_publishes(db: &mut ProjectDb, rule: ResourceId, text: &str) {
+  let cached = CachedVersion {
+    number: VersionNumber::new(std::num::NonZeroU32::new(2).expect("two")),
+    published_at: at(7),
+    publisher: SharedPerson {
+      id: UserId::generate(),
+      name: "olha".to_owned(),
+    },
+    server_body: serde_json::to_value(instruction(text)).expect("a body"),
+    hash: ContentHash::new(HASH).expect("hash"),
+    references: Vec::new(),
+    local_body: instruction(text),
+    waits_here: false,
+  };
+  db.cache_shared_version::<Instruction>(rule, &cached).expect("cached");
+}
+
+#[test]
+fn a_version_that_met_another_is_taken_back_as_a_draft_on_the_latest_unless_its_base_is_kept() {
+  let (_repo, mut db, rule, edit) = team_with_waiting_edit();
+  teammate_publishes(&mut db, rule, "Theirs.");
+  db.record_publish_conflict(edit, VersionNumber::new(std::num::NonZeroU32::new(2).expect("two")))
+    .expect("recorded");
+
+  db.reopen_draft::<Instruction>(edit, at(8)).expect("taken back");
+  let draft = db.draft::<Instruction>(rule).expect("read").expect("a draft");
+  assert_eq!(
+    draft.based_on(),
+    Some(VersionNumber::new(std::num::NonZeroU32::new(2).expect("two"))),
+    "the plain take-back says the draft is edited from the latest"
+  );
+}
+
+#[test]
+fn a_draft_taken_back_on_its_base_stays_edited_from_the_version_it_was_edited_from() {
+  let (_repo, mut db, rule, edit) = team_with_waiting_edit();
+  teammate_publishes(&mut db, rule, "Theirs.");
+  db.record_publish_conflict(edit, VersionNumber::new(std::num::NonZeroU32::new(2).expect("two")))
+    .expect("recorded");
+
+  db.reopen_draft_on_its_base::<Instruction>(edit, at(8))
+    .expect("taken back");
+
+  let draft = db.draft::<Instruction>(rule).expect("read").expect("a draft");
+  assert_eq!(draft.body(), &instruction("Two."), "what the person wrote is kept");
+  assert_eq!(
+    draft.based_on(),
+    Some(VersionNumber::FIRST),
+    "and still says it was edited from v1, so a merge can tell what the team changed since"
+  );
+  assert!(db.waiting_publishes().expect("outbox").is_empty());
+}
+
+#[test]
+fn an_archived_resource_with_a_draft_is_listed_with_when_it_went() {
+  let (_repo, mut db, rule, edit) = team_with_waiting_edit();
+  db.reopen_draft::<Instruction>(edit, at(6)).expect("taken back");
+  assert!(
+    db.archived_with_draft(orchester_core::resource::ResourceKind::Instruction)
+      .expect("read")
+      .is_empty(),
+    "a live resource is not archived"
+  );
+
+  db.set_resource_sharing(
+    rule,
+    Some(ResourceSharing::Shared(TaskRevision::try_from(1).expect("revision"))),
+  )
+  .expect("the team's");
+  assert!(db.mark_shared_archived(rule, true, at(9)).expect("archived"));
+
+  let archived = db
+    .archived_with_draft(orchester_core::resource::ResourceKind::Instruction)
+    .expect("read");
+  assert_eq!(archived.len(), 1);
+  assert_eq!(archived[0].0.id(), rule);
+  assert_eq!(archived[0].1, at(9));
+  assert_eq!(draft_text(&db, rule), Some(instruction("Two.")), "the draft is kept");
+
+  assert!(db.mark_shared_archived(rule, false, at(10)).expect("restored"));
+  assert!(
+    db.archived_with_draft(orchester_core::resource::ResourceKind::Instruction)
+      .expect("read")
+      .is_empty()
+  );
 }
