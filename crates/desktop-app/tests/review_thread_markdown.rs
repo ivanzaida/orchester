@@ -124,10 +124,13 @@ fn drawn(window: &mut Window) -> Vec<(f32, RichTextSpan)> {
     .collect()
 }
 
+/// The run that is exactly `words`, else the first that holds them: a short code run such as `5` would otherwise be
+/// found inside a clock or a count drawn before the answer.
 fn span_of<'a>(drawn: &'a [(f32, RichTextSpan)], words: &str) -> &'a (f32, RichTextSpan) {
   drawn
     .iter()
-    .find(|(_, span)| span.text.contains(words))
+    .find(|(_, span)| span.text.trim() == words)
+    .or_else(|| drawn.iter().find(|(_, span)| span.text.contains(words)))
     .unwrap_or_else(|| {
       panic!(
         "{words:?} is drawn in a run of its own: {:?}",
