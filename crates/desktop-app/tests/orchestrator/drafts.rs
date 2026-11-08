@@ -14,7 +14,7 @@ use super::{
 };
 
 /// What an empty field shows, a new conversation's too.
-const PLACEHOLDER: &str = "Message the Orchestrator…";
+const PLACEHOLDER: &str = "Ask the Orchestrator…";
 
 /// Leaves the Orchestrator for the Tasks list.
 pub(super) fn leave(screen: &mut Orchestrator) {

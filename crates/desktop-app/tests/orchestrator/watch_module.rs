@@ -336,7 +336,7 @@ fn orchestrator_watch_module_typed_after_picking_is_a_message_and_enter_sends_it
     !screen.exists(PICKER) && badge_words(screen, BADGE) == "Watch · Webhooks v2"
   });
   assert!(
-    screen.text(INPUT).contains("Message the Orchestrator…"),
+    screen.text(INPUT).contains("Ask the Orchestrator…"),
     "the normal placeholder: {}",
     screen.text(INPUT)
   );
