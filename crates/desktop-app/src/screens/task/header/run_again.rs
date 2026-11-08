@@ -345,8 +345,9 @@ pub fn confirmation(ctx: &mut Ctx, confirm: &Confirmation) -> Element {
     )
     .child(properties(ctx, confirm))
     .with_children(option(ctx, confirm))
-    .with_children(errors.iter().map(|error| {
+    .with_children(errors.iter().enumerate().map(|(index, error)| {
       Text::new(&message_text(ctx, error))
+        .id(format!("task-run-again-refusal-{index}"))
         .variant(ExtraTypography::Note.role())
         .color(PaletteColor::Danger)
         .width(Dimension::Pct(100.0))

@@ -2,7 +2,8 @@
 //! resources (`docs/design/team-configuration.md`, "Who owns what"), which only an admin changes: a member is refused
 //! `not_admin` before anything else. Adding creates v1 on the team server ([`create_published_server`], settled as
 //! every new team resource is, [`settle`]); updating saves a draft and publishes the next version at once; removing
-//! archives the resource on the server after reading what uses it (decision 11: never refused for being used). A new
+//! reads what uses the resource and answers `person_only` with that preview (decision 11): archiving stops runs on
+//! every computer, so a person confirms it in the window ([`NotArchived::PersonOnly`]). A new
 //! server, and a version that widens what agents may do ([`team_mcp_body::widenings`]), are a person's decision
 //! unless a person lets automation change agent permissions. A `program` here is the body's program name (`npx`), team
 //! data like the rest, so it widens like any other change; the program's path on this computer is a person's alone
@@ -147,17 +148,15 @@ pub(super) async fn remove(services: &Services, found: Found) -> Result<Value, T
   let used = used_by(&root, Some(&session), id)
     .await
     .map_err(|error| used_by_refused(&error))?;
-  services
-    .servers
-    .archive_resource(&root, id)
-    .await
-    .map_err(|error| not_archived(&error))?;
-  services.changes.record(team.open.project.id(), Outside::Connections);
-  Ok(json!({
-    "removed": { "id": id.to_string(), "name": resource.name().as_str(), "team": true, "archived": true },
-    "used_by": serde_json::to_value(&used).expect("what uses a resource is plain data and serializes"),
-    "runs_stopping_here": stopping,
-  }))
+  Err(ToolError::previewed(
+    "person_only",
+    vec![NotArchived::person_only_message()],
+    json!({
+      "resource": { "id": id.to_string(), "name": resource.name().as_str(), "team": true },
+      "used_by": serde_json::to_value(&used).expect("what uses a resource is plain data and serializes"),
+      "runs_stopping_here": stopping,
+    }),
+  ))
 }
 
 /// Refused as `not_admin` unless the person may change the team's configuration.
@@ -298,16 +297,6 @@ fn not_taken(code: &str) -> ToolError {
     "team_server_refused",
     vec![Message::new("appMcp.errors.teamServerRefusedVersion").with("code", code.to_owned())],
   )
-}
-
-fn not_archived(error: &NotArchived) -> ToolError {
-  match error {
-    NotArchived::Refused { code } => ToolError::refused(
-      "team_server_refused",
-      vec![Message::new("appMcp.errors.teamServerRefusedArchive").with("code", code.clone())],
-    ),
-    NotArchived::Failed(reason) => ToolError::refused("team_server_not_reached", vec![reason.clone()]),
-  }
 }
 
 /// What uses the server could not be read: nothing is archived, since the answer must say what stops.

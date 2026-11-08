@@ -9,7 +9,7 @@
 mod computer;
 mod from_team;
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
   app::{
@@ -26,7 +26,7 @@ use orchester_workspace::{
 };
 
 use super::{
-  bar, member,
+  archive, bar, member,
   model::{Entry, Listing},
   panel, words,
 };
@@ -39,6 +39,7 @@ use crate::{
 
 #[derive(Clone, PartialEq)]
 pub(super) struct Props {
+  pub repo_root: PathBuf,
   pub project: ProjectId,
   /// The team's configuration: an admin may change its resources, and a member reads who the admins are.
   pub team: TeamConfiguration,
@@ -64,6 +65,7 @@ impl Component for ToolPanel {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let Props {
+      repo_root,
       project,
       team,
       listing,
@@ -73,9 +75,12 @@ impl Component for ToolPanel {
     let now = Services::of(ctx).clock.now();
     let navigation = Navigation::of(ctx);
     let route = Route::Project(project, ProjectPage::Tool(entry.id, ToolTab::default()));
-    let head_edit = team
-      .may_change
-      .then(|| panel::edit_button(ctx, navigation.to(route.clone())));
+    let head_edit = panel::with_more(
+      team
+        .may_change
+        .then(|| panel::edit_button(ctx, navigation.to(route.clone()))),
+      archive::menu(ctx, &repo_root, &entry, team.may_change),
+    );
     let kind = ctx.t_args(
       "team_hub.tool.where",
       [("kind", from_team::kind(ctx, &sheet).to_string())],

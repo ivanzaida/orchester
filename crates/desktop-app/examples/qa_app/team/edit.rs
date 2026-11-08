@@ -75,7 +75,7 @@ fn after_join(state: State, server: &TeamServer, root: &Path) -> Result<(), Box<
   Ok(())
 }
 
-fn hold(server: &TeamServer, (id, slug, name): (ResourceId, &str, &str), body: serde_json::Value) {
+pub(super) fn hold(server: &TeamServer, (id, slug, name): (ResourceId, &str, &str), body: serde_json::Value) {
   let create = ResourceCreate {
     idempotency_key: IdempotencyKey::generate(),
     id,

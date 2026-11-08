@@ -29,6 +29,8 @@ pub enum CardSurface {
   Attention,
   /// No fill, in a `warning` stroke: the step of a page that waits for the person.
   Pending,
+  /// `surface_raised` in a `danger` stroke: something stopped (`Run state · Stopped · archived` `pLdtd`).
+  Stopped,
 }
 
 impl CardSurface {
@@ -40,6 +42,7 @@ impl CardSurface {
       Self::Decision => (None, PaletteColor::BorderStrong),
       Self::Attention => (Some(PaletteColor::SurfaceRaised), PaletteColor::Warning),
       Self::Pending => (None, PaletteColor::Warning),
+      Self::Stopped => (Some(PaletteColor::SurfaceRaised), PaletteColor::Danger),
     }
   }
 }

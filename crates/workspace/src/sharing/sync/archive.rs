@@ -15,7 +15,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_ipc::Command;
-use orchester_store::{ArchiveStop, ProjectDb, ReferenceTarget, RunStoreError, StoreError};
+use orchester_store::{ArchiveStop, Archived, ProjectDb, ReferenceTarget, RunStoreError, StoreError};
 
 use crate::{background, runner::Runners, tasks::run::control_message, workspace::OpenProject};
 
@@ -32,6 +32,7 @@ pub enum ArchiveError {
 pub struct Pinning {
   project: OpenProject,
   resource: Name,
+  kind: ResourceKind,
   runs: Vec<(RunId, TaskId)>,
 }
 
@@ -47,9 +48,9 @@ impl Pinning {
   }
 }
 
-/// Cancels every run of the project at `root` that pins `resource`, archived on the server, and records each one
-/// cancelled.
-pub(super) async fn stop_runs(runners: &Runners, root: &Path, resource: ResourceId) {
+/// Cancels every run of the project at `root` that pins `resource`, archived on the server by `by` (when the server
+/// said), and records each one cancelled.
+pub(super) async fn stop_runs(runners: &Runners, root: &Path, (resource, by): (ResourceId, Option<&str>)) {
   let owned = root.to_owned();
   let pinning = match background::run(move || pinning(&owned, resource)).await {
     Ok(Ok(Some(pinning))) => pinning,
@@ -75,6 +76,11 @@ pub(super) async fn stop_runs(runners: &Runners, root: &Path, resource: Resource
       task,
       resource: pinning.resource.clone(),
       stopped_at: Timestamp::now(),
+      archived: Some(Archived {
+        id: resource,
+        kind: pinning.kind,
+        by: by.map(str::to_owned),
+      }),
     };
     let owned = root.to_owned();
     match background::run(move || record(&owned, &stop)).await {
@@ -116,6 +122,7 @@ pub fn pinning(root: &Path, resource: ResourceId) -> Result<Option<Pinning>, Arc
       repo_root: root.to_owned(),
     },
     resource: kept.name().clone(),
+    kind: kept.kind(),
     runs,
   }))
 }

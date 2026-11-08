@@ -26,11 +26,12 @@ fn team_hub_gives_a_member_neither_new_nor_edit() {
   open(&mut agents, HubView::new(HubFilter::Profiles, Some(profile)));
   assert_eq!(agents.text("team-hub-panel-title"), "Builder");
   assert!(!agents.exists("team-hub-new") && !agents.exists("team-hub-edit"));
+  assert!(!agents.exists("team-hub-more"), "a member has no … menu, so no Archive");
   // Nothing disabled in their place: no bar either.
   assert!(!agents.exists("team-hub-actions"));
   open(&mut agents, HubView::new(HubFilter::Tools, Some(tool)));
   assert_eq!(agents.text("team-hub-panel-title"), "Checks");
-  assert!(!agents.exists("team-hub-new") && !agents.exists("team-hub-edit"));
+  assert!(!agents.exists("team-hub-new") && !agents.exists("team-hub-edit") && !agents.exists("team-hub-more"));
   open(&mut agents, HubView::default());
   assert!(!agents.exists("team-hub-new"));
 }

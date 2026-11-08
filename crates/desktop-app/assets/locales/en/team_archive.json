@@ -1,0 +1,44 @@
+{
+  "team_archive": {
+    "more": "More",
+    "action": "Archive",
+    "title": "Archive {{name}}?",
+    "body": "{{name}} leaves every list and no new run can use it. Its versions stay readable, and an admin can restore it.",
+    "usedBy": "USED BY · {{count}}",
+    "runs": "RUNS THAT WILL STOP · {{count}}",
+    "nothingUses": "Nothing names it.",
+    "noRuns": "No run that has not ended uses it.",
+    "row": "{{name}} · {{kind}}",
+    "kind": {
+      "profile": "agent profile",
+      "pipeline": "pipeline",
+      "instruction": "instruction",
+      "skill": "skill",
+      "tool": "tool",
+      "mcp": "MCP server",
+      "reviewer": "reviewer"
+    },
+    "names": {
+      "two": "{{first}} and {{second}}",
+      "more": "{{rest}} and {{last}}"
+    },
+    "note": {
+      "one": "{{names}} stays not ready on every computer until an admin removes {{name}} from it or restores it.",
+      "many": "{{names}} stay not ready on every computer until an admin removes {{name}} from them or restores it."
+    },
+    "cancel": "Cancel",
+    "confirm": "Archive",
+    "confirmOne": "Archive and stop 1 run",
+    "confirmMany": "Archive and stop {{count}} runs",
+    "reading": "Reading what uses it…",
+    "readFailed": "What uses it could not be read, so it cannot be archived now.",
+    "notReached": "The team server could not be reached, so what uses it is not known and nothing can be archived now.",
+    "retry": "Try again",
+    "refused": {
+      "notAdmin": "Only team admins archive the team's resources: the team server refused it.",
+      "runsChanged": "The runs it stops changed while this list was open. The list shows them now; archive again once you have read it.",
+      "conflict": "{{name}} changed on the team server since this page read it. Nothing was archived; look at it again.",
+      "other": "The team server refused it ({{code}}). Nothing was archived."
+    }
+  }
+}

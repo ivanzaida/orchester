@@ -62,6 +62,7 @@
       "merged": "Merged",
       "failed": "Failed",
       "canceled": "Canceled",
+      "stopped": "Stopped",
       "unreadable": "Unreadable",
       "waiting": "Waiting",
       "working": "Working",

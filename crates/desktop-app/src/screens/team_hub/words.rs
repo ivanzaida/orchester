@@ -13,7 +13,7 @@ use orchester_core::{
 use orchester_workspace::{
   agents::{team_hub::Form, team_mcp::Published},
   display,
-  readiness::{Group, ReadinessStanding},
+  readiness::{Group, ReadinessStanding, Undecided},
 };
 
 use super::model::{Entry, Kind, Listing, Outbox, Reach};
@@ -251,7 +251,29 @@ pub(super) fn needs(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Arc<str> {
       [only] => missing(ctx, listing, entry, only),
       many => ctx.t_args("team_hub.line.many", [("count", many.len().to_string())]),
     },
-    Some(ReadinessStanding::Undecided(_) | ReadinessStanding::Ready) | None => ctx.t("team_hub.line.undecided"),
+    Some(ReadinessStanding::Undecided(why)) => undecided(ctx, why),
+    Some(ReadinessStanding::Ready) | None => ctx.t("team_hub.line.undecided"),
+  }
+}
+
+/// Why a resource cannot be said to be ready here: the archived resource it names, else that nobody can tell yet. A
+/// pipeline says it of the first member that is undecided.
+fn undecided(ctx: &Ctx, why: &Undecided) -> Arc<str> {
+  match why {
+    Undecided::ChoosesArchivedMcpServer(_, name)
+    | Undecided::UsesArchivedTool(_, name)
+    | Undecided::UsesArchivedInstruction(_, name) => {
+      ctx.t_args("team_hub.line.namesArchived", [("name", name.clone())])
+    }
+    Undecided::Member { why, .. } => undecided(ctx, why),
+    Undecided::NotTeamForm
+    | Undecided::CannotBePublished(_)
+    | Undecided::ChoosesMcpServer(_)
+    | Undecided::RunsUnknown(_)
+    | Undecided::ConnectionGone(_)
+    | Undecided::TeamToolSecretById(_)
+    | Undecided::SecretGone(_)
+    | Undecided::SecretUnreadable(_) => ctx.t("team_hub.line.undecided"),
   }
 }
 

@@ -55,15 +55,25 @@ pub struct LiveSteps<'a> {
   pub waiting: &'a [(Arc<str>, Timestamp)],
   /// The executions the runner says wait for an agent slot.
   pub slot_waits: &'a [StepExecutionId],
-  /// The team server fenced the run: the step it stands at is where it stopped for good.
-  pub fenced: bool,
+  /// Why the run stopped for good, if it did: the step it stands at is where it stopped.
+  pub stopped: Option<Stopped>,
+}
+
+/// Why a run stopped for good at its step.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Stopped {
+  /// The team server fenced it.
+  Fenced,
+  /// The team archived a resource it pinned (`03 Implement` in A22 `pUu78`).
+  Archived,
 }
 
 /// The rail of `run`'s steps at `now`, the step with key `current` drawn as the one the run stands at: a `circle-stop`
-/// in `danger` on `danger_muted` once the run was fenced (`03 Implement` in 03 `hWXxr`).
+/// in `danger` on `danger_muted` once the run was fenced (`03 Implement` in 03 `hWXxr`), a `circle-x` in the same
+/// tones once an archive stopped it (A22 `pUu78`).
 pub fn rail(ctx: &mut Ctx, run: &RunView, live: &LiveSteps<'_>, current: Option<Arc<str>>, now: Timestamp) -> Element {
   let rows = rows(run, live, now);
-  let stopped = live.fenced;
+  let stopped = live.stopped;
   ctx.mount_keyed::<LiveRail>("task-steps-rail", RailProps { rows, current, stopped })
 }
 
@@ -97,8 +107,8 @@ fn rows(run: &RunView, live: &LiveSteps<'_>, now: Timestamp) -> Vec<StepRow> {
 struct RailProps {
   rows: Vec<StepRow>,
   current: Option<Arc<str>>,
-  /// The run stopped for good at `current`.
-  stopped: bool,
+  /// Why the run stopped for good at `current`.
+  stopped: Option<Stopped>,
 }
 
 impl lurq::app::component::DevtoolsInspectable for RailProps {}
@@ -108,8 +118,8 @@ impl lurq::app::component::DevtoolsInspectable for RailProps {}
 enum Stands {
   Elsewhere,
   Here,
-  /// The run stopped for good at the step: the team server fenced it.
-  StoppedHere,
+  /// The run stopped for good at the step.
+  StoppedHere(Stopped),
 }
 
 /// The rail, its tooltips' active agent time going on while their agents work.
@@ -150,8 +160,8 @@ impl Component for LiveRail {
       }
       let stands = match (current.as_deref() == Some(row.key()), stopped) {
         (false, _) => Stands::Elsewhere,
-        (true, false) => Stands::Here,
-        (true, true) => Stands::StoppedHere,
+        (true, None) => Stands::Here,
+        (true, Some(why)) => Stands::StoppedHere(why),
       };
       rail = rail.child(chip(ctx, row, stands, now));
     }
@@ -171,7 +181,8 @@ fn chip(ctx: &mut Ctx, row: &StepRow, stands: Stands, now: Timestamp) -> Element
   let progress = &row.progress;
   let here = stands != Stands::Elsewhere;
   let (glyph, color) = match (row.waits_since, unjudged(progress.state)) {
-    _ if stands == Stands::StoppedHere => (Icon::CircleStop, PaletteColor::Danger),
+    _ if stands == Stands::StoppedHere(Stopped::Fenced) => (Icon::CircleStop, PaletteColor::Danger),
+    _ if stands == Stands::StoppedHere(Stopped::Archived) => (Icon::CircleX, PaletteColor::Danger),
     (None, Some(glyph)) => (glyph, PaletteColor::Warning),
     (Some(_), _) => (Status::NeedsInput.icon(), Status::NeedsInput.color()),
     (None, None) => (status(progress.state).icon(), status(progress.state).color()),
@@ -213,7 +224,7 @@ fn chip(ctx: &mut Ctx, row: &StepRow, stands: Stands, now: Timestamp) -> Element
   let chip = match stands {
     Stands::Elsewhere => chip,
     Stands::Here => chip.background(PaletteColor::WarningMuted),
-    Stands::StoppedHere => chip.background(PaletteColor::DangerMuted),
+    Stands::StoppedHere(_) => chip.background(PaletteColor::DangerMuted),
   };
   Tooltip::new(format!("{id}-tip"), detail).wrap(ctx, chip)
 }

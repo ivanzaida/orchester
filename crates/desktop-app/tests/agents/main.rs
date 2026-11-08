@@ -18,6 +18,7 @@ mod states;
 mod support;
 mod team_hub;
 mod team_hub_admin;
+mod team_hub_archive;
 mod team_hub_create;
 mod team_hub_mcp;
 mod team_hub_member;

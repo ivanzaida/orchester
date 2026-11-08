@@ -23,7 +23,7 @@ fn listed(workspace: &Workspace, resource: ResourceId) -> bool {
   profiles.iter().any(|kept| kept.id() == resource)
 }
 
-fn archived(member: &Member) -> Vec<ResourceId> {
+fn archived(member: &Member) -> Vec<(ResourceId, Option<String>)> {
   member.archived.lock().expect("archived").clone()
 }
 
@@ -46,7 +46,11 @@ async fn live_updates_an_archived_profile_leaves_the_list_and_stops_its_runs_unt
 
   server.archive(profile, true);
   seen_within(LIVE, "the profile leaves the list", || !listed(&workspace, profile)).await;
-  assert_eq!(archived(&member), [profile], "its runs are stopped once");
+  assert_eq!(
+    archived(&member),
+    [(profile, Some("Alice Moreau".to_owned()))],
+    "its runs are stopped once, and the stream says who archived it"
+  );
   assert!(
     workspace.db().resource_removed_at(profile).expect("read").is_some(),
     "removed here, so no new run pins it"
@@ -62,7 +66,11 @@ async fn live_updates_an_archived_profile_leaves_the_list_and_stops_its_runs_unt
 
   server.archive(profile, false);
   seen_within(LIVE, "the profile is back", || listed(&workspace, profile)).await;
-  assert_eq!(archived(&member), [profile], "a restore stops nothing");
+  assert_eq!(
+    archived(&member),
+    [(profile, Some("Alice Moreau".to_owned()))],
+    "a restore stops nothing"
+  );
   following.abort();
 }
 
@@ -86,6 +94,10 @@ async fn live_updates_a_snapshot_keeps_an_archived_profile_out_of_the_list() {
   };
   seen_within(LIVE, "the snapshot's other profile", || listed(&workspace, other)).await;
   assert!(!listed(&workspace, profile), "archived before this computer joined");
-  assert_eq!(archived(&member), [profile], "kept as archived, its runs are checked");
+  assert_eq!(
+    archived(&member),
+    [(profile, None)],
+    "kept as archived, its runs are checked, and a snapshot does not say who archived it"
+  );
   following.abort();
 }

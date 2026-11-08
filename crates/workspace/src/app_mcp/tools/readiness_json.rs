@@ -170,6 +170,21 @@ fn undecided_json(why: &Undecided) -> Value {
       part["why"] = json!("chooses_mcp_server");
       part["server"] = json!(server.to_string());
     }
+    Undecided::ChoosesArchivedMcpServer(id, name) => {
+      part["why"] = json!("chooses_archived_mcp_server");
+      part["server"] = json!(id.to_string());
+      part["name"] = json!(name);
+    }
+    Undecided::UsesArchivedTool(id, name) => {
+      part["why"] = json!("uses_archived_tool");
+      part["resource"] = json!(id.to_string());
+      part["name"] = json!(name);
+    }
+    Undecided::UsesArchivedInstruction(id, name) => {
+      part["why"] = json!("uses_archived_instruction");
+      part["resource"] = json!(id.to_string());
+      part["name"] = json!(name);
+    }
     Undecided::RunsUnknown(id) => {
       part["why"] = json!("runs_unknown");
       part["resource"] = json!(id.to_string());
