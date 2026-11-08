@@ -137,8 +137,6 @@ fn orchestrator_watch_task_picker_lists_tasks_their_status_and_who_leads_them() 
     "Move",
     "Add",
     "Remove the last",
-    "Ctrl Enter",
-    "Watch",
     "Close",
   ] {
     assert!(shown.contains(words), "{words}: {shown}");

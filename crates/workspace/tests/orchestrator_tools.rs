@@ -1,7 +1,7 @@
 //! The Orchestrator chat's tools (`docs/design/orchestrator-toolset.md`): one list of names, of which the chat lists
-//! those the app has, so a name whose tool another change still builds is not listed and breaks nothing, and the
-//! chat's own; what only a person decides is not among them; and the tools that wait for the person, or the
-//! person's switch, say so.
+//! those the app has while it does not drive, so a name whose tool another change still builds is not listed and
+//! breaks nothing, and the chat's own; while it drives it has every domain tool of the app but a few; and the tools
+//! that wait for the person while it does not drive say so.
 
 use orchester_core::orchestrator::change::Publishing;
 use orchester_workspace::{
@@ -30,7 +30,7 @@ fn orchestrator_tools_list_the_named_tools_the_app_has() {
   for name in CHAT_TOOLS {
     assert!(!app.iter().any(|tool| tool == name), "{name} is the chat's own");
   }
-  let mut shown: Vec<String> = listed().into_iter().map(|tool| tool.name.to_string()).collect();
+  let mut shown: Vec<String> = listed(false).into_iter().map(|tool| tool.name.to_string()).collect();
   let mut wanted: Vec<String> = expected.iter().map(|name| (*name).to_owned()).collect();
   shown.sort();
   wanted.sort();
@@ -53,7 +53,7 @@ fn orchestrator_tools_list_the_named_tools_the_app_has() {
     assert!(shown.iter().any(|tool| tool == name), "{name} is listed");
   }
   let read_only = |name: &str| {
-    listed()
+    listed(false)
       .into_iter()
       .find(|tool| tool.name == name)
       .and_then(|tool| tool.annotations.and_then(|hints| hints.read_only_hint))
@@ -66,7 +66,59 @@ fn orchestrator_tools_list_the_named_tools_the_app_has() {
 }
 
 #[test]
-fn orchestrator_tools_leave_what_a_person_decides_out() {
+fn orchestrator_tools_while_driving_are_every_domain_tool_of_the_app_but_a_few() {
+  let driving: Vec<String> = listed(true).into_iter().map(|tool| tool.name.to_string()).collect();
+  let resting: Vec<String> = listed(false).into_iter().map(|tool| tool.name.to_string()).collect();
+  for name in &resting {
+    assert!(driving.contains(name), "{name} is listed while the chat drives too");
+  }
+  for name in [
+    "decide_approval",
+    "decide_plan",
+    "remove_worktree",
+    "set_run_manual",
+    "update_project_limits",
+  ] {
+    assert!(
+      driving.iter().any(|tool| tool == name),
+      "{name} is listed while driving"
+    );
+    assert!(
+      !resting.iter().any(|tool| tool == name),
+      "{name} is not listed otherwise"
+    );
+  }
+  for name in [
+    "add_project",
+    "add_mcp_server",
+    "update_mcp_server",
+    "remove_mcp_server",
+    "set_mcp_server_enabled",
+  ] {
+    assert!(!driving.iter().any(|tool| tool == name), "{name} is not the chat's");
+  }
+  for name in CHAT_TOOLS {
+    assert!(driving.iter().any(|tool| tool == name), "{name} is the chat's own");
+  }
+  let app = app_tools();
+  for name in &app {
+    let left_out = [
+      "add_project",
+      "add_mcp_server",
+      "update_mcp_server",
+      "remove_mcp_server",
+      "set_mcp_server_enabled",
+    ];
+    assert_eq!(
+      driving.contains(name),
+      !left_out.contains(&name.as_str()),
+      "{name}: every domain tool of the app but the few"
+    );
+  }
+}
+
+#[test]
+fn orchestrator_tools_while_not_driving_leave_what_a_person_decides_out() {
   for name in [
     "decide_approval",
     "decide_plan",
@@ -106,13 +158,13 @@ fn orchestrator_tools_say_mcp_server_changes_are_cards_the_person_applies() {
     "mcp_remove_server",
   ] {
     assert!(CHAT_TOOLS.contains(&name), "{name} is the chat's own");
-    let told = listed()
+    let told = listed(false)
       .into_iter()
       .find(|tool| tool.name == name)
       .and_then(|tool| tool.description.map(|told| told.into_owned()))
       .unwrap_or_else(|| panic!("{name} is listed with a description"));
     for part in [
-      "is always a card in this conversation that the person applies",
+      "is a card in this conversation that the person applies or dismisses while Let the Orchestrator drive is off",
       "only while the person turned on Let automation change agent permissions",
       "NAME@environment",
       "never type or ask for a secret's value",
@@ -122,7 +174,7 @@ fn orchestrator_tools_say_mcp_server_changes_are_cards_the_person_applies() {
       assert!(told.contains(part), "{name} says {part}: {told}");
     }
   }
-  let add = listed()
+  let add = listed(false)
     .into_iter()
     .find(|tool| tool.name == "mcp_add_server")
     .and_then(|tool| tool.description.map(|told| told.into_owned()))
@@ -135,28 +187,43 @@ fn orchestrator_tools_say_mcp_server_changes_are_cards_the_person_applies() {
 
 #[test]
 fn orchestrator_tools_say_which_interrupted_runs_resume_run_continues() {
-  let resume = listed()
+  let resume = listed(false)
     .into_iter()
     .find(|tool| tool.name == "resume_run")
     .and_then(|tool| tool.description.map(|told| told.into_owned()))
     .expect("resume_run is listed with a description");
   for part in [
     "a crash, the runner going away or Quit now",
-    "runner_failure storage_contention",
-    "Let the Orchestrator continue interrupted runs",
-    "interrupted_again",
-    "(storage_contention)",
+    "continued by the person on the task's Summary",
     "one the person canceled",
     "whose worktree is gone",
     "person_only",
   ] {
     assert!(resume.contains(part), "resume_run says {part}: {resume}");
   }
+  let driving = listed(true)
+    .into_iter()
+    .find(|tool| tool.name == "resume_run")
+    .and_then(|tool| tool.description.map(|told| told.into_owned()))
+    .expect("resume_run is listed with a description");
+  for part in [
+    "runner_failure storage_contention",
+    "interrupted_again",
+    "(storage_contention)",
+    "is continued with continue_run",
+    "one the person canceled",
+    "whose worktree is gone",
+  ] {
+    assert!(
+      driving.contains(part),
+      "resume_run says {part} while driving: {driving}"
+    );
+  }
 }
 
 #[test]
 fn orchestrator_tools_say_continue_run_is_proposed_and_resolves_conflicts() {
-  let continued = listed()
+  let continued = listed(false)
     .into_iter()
     .find(|tool| tool.name == "continue_run")
     .and_then(|tool| tool.description.map(|told| told.into_owned()))
@@ -165,7 +232,6 @@ fn orchestrator_tools_say_continue_run_is_proposed_and_resolves_conflicts() {
     "only allow_retry, return_to and resolve_conflicts",
     "a run whose merge stopped at conflicts (merge_failed)",
     "proposes it to the person",
-    "no switch lets you continue a run yourself",
     "raise_limits, raise_step_budget, resume and accept are the person's",
     "person_only",
     "merge_not_conflicted",
@@ -177,7 +243,7 @@ fn orchestrator_tools_say_continue_run_is_proposed_and_resolves_conflicts() {
 
 #[test]
 fn orchestrator_tools_say_what_waits_for_the_person() {
-  let tools = listed();
+  let tools = listed(false);
   let description = |name: &str| {
     tools
       .iter()
@@ -191,26 +257,35 @@ fn orchestrator_tools_say_what_waits_for_the_person() {
   let merge = description("merge_run");
   for part in [
     "proposes the merge to the person",
-    "Let the Orchestrator merge runs",
-    "only for a run the person asked you in this chat to merge",
+    "Call it only for a run the person asked you in this chat to merge",
     "needs_decision",
     "Local integration page",
     "propose continue_run with resolve_conflicts",
-    "integration_preflight_failed merged nothing and left nothing on that page",
+    "program_running merged nothing and left nothing on that page",
   ] {
     assert!(merge.contains(part), "merge_run says {part}: {merge}");
   }
-  for name in ["run_task", "merge_run"] {
-    let told = description(name);
-    assert!(
-      told.contains("never in a turn Orchester started by itself: there it only proposes"),
-      "{name}: {told}"
-    );
-  }
+  let told = description("run_task");
   assert!(
-    description("send_message").contains("is always proposed: moving a run is the person's"),
-    "a message that moves a run waits for the person"
+    told.contains("never in a turn Orchester started by itself: there it only proposes"),
+    "run_task: {told}"
   );
+  let driving = |name: &str| {
+    listed(true)
+      .into_iter()
+      .find(|tool| tool.name == name)
+      .and_then(|tool| tool.description.map(|told| told.into_owned()))
+      .unwrap_or_else(|| panic!("{name} is listed with a description"))
+  };
+  assert!(driving("run_task").contains("Starts the run at once"));
+  let merge = driving("merge_run");
+  for part in [
+    "Merges at once",
+    "left_to_person",
+    "continue_run with resolve_conflicts",
+  ] {
+    assert!(merge.contains(part), "merge_run says {part} while driving: {merge}");
+  }
   for name in ["pause_run", "release_queue"] {
     let told = description(name);
     assert!(
@@ -218,7 +293,6 @@ fn orchestrator_tools_say_what_waits_for_the_person() {
       "{name}: {told}"
     );
   }
-  assert!(description("publish_pipeline").contains("never in a turn Orchester started by itself"));
   let resume = description("resume_run");
   for part in ["resumes a run a pause stopped", "interrupted", "person_only"] {
     assert!(resume.contains(part), "resume_run says {part}: {resume}");
@@ -227,7 +301,6 @@ fn orchestrator_tools_say_what_waits_for_the_person() {
     let told = description(name);
     for part in [
       "proposes it to the person",
-      "Let the Orchestrator answer agents",
       "recorded as automation's",
       "plan_decision_person_only",
     ] {
@@ -240,7 +313,7 @@ fn orchestrator_tools_say_what_waits_for_the_person() {
     if tools.iter().any(|tool| tool.name == kind.tool()) {
       let told = description(kind.tool());
       assert!(
-        told.contains("Let the Orchestrator publish drafts")
+        told.contains("proposes the publication to the person")
           && told.contains("Let automation change agent permissions"),
         "{}: {told}",
         kind.tool()
@@ -252,7 +325,7 @@ fn orchestrator_tools_say_what_waits_for_the_person() {
 #[test]
 fn orchestrator_tools_say_which_releases_are_refused_before_they_are_proposed() {
   let description = |name: &str| {
-    listed()
+    listed(false)
       .into_iter()
       .find(|tool| tool.name == name)
       .and_then(|tool| tool.description.map(|told| told.into_owned()))
@@ -277,7 +350,7 @@ fn orchestrator_tools_say_which_releases_are_refused_before_they_are_proposed() 
 
 #[test]
 fn orchestrator_tools_read_approvals_which_run_task_names() {
-  let tools = listed();
+  let tools = listed(false);
   let get = tools
     .iter()
     .find(|tool| tool.name == "get_approvals")
@@ -316,7 +389,7 @@ fn orchestrator_tools_judge_what_every_person_only_publication_widens() {
 
 #[test]
 fn orchestrator_tools_say_a_duplicate_is_saved_as_a_draft() {
-  let told = listed()
+  let told = listed(false)
     .into_iter()
     .find(|tool| tool.name == "duplicate_pipeline")
     .and_then(|tool| tool.description.map(|description| description.to_string()))
@@ -326,7 +399,7 @@ fn orchestrator_tools_say_a_duplicate_is_saved_as_a_draft() {
 
 #[test]
 fn orchestrator_tools_say_init_repository_is_always_the_persons_to_apply() {
-  let tool = listed()
+  let tool = listed(false)
     .into_iter()
     .find(|tool| tool.name == "init_repository")
     .expect("init_repository is listed");
@@ -354,7 +427,7 @@ fn orchestrator_tools_say_init_repository_is_always_the_persons_to_apply() {
 #[test]
 fn orchestrator_tools_say_wait_on_task_is_done_at_once_and_what_it_refuses() {
   assert!(CHAT_TOOLS.contains(&"wait_on_task"));
-  let tool = listed()
+  let tool = listed(false)
     .into_iter()
     .find(|tool| tool.name == "wait_on_task")
     .expect("wait_on_task is listed");

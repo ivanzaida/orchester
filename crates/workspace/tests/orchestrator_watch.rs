@@ -430,7 +430,7 @@ fn watch_commands_are_no_tool_of_the_agent() {
 }
 
 fn orchestrator_workspace_tools() -> Vec<String> {
-  orchester_workspace::orchestrator::tools::listed()
+  orchester_workspace::orchestrator::tools::listed(true)
     .into_iter()
     .map(|tool| tool.name.to_string())
     .collect()

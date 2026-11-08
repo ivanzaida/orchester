@@ -15,7 +15,7 @@ Two other MCP surfaces exist and are documented separately: the tools agents get
 |---|---|---|---|
 | **The app's MCP server** (this page) | Your own agent CLIs (Claude Code, Codex), QA and design-verification agents | `orchester` → `mcp__orchester__*` | `lurq_*` window tools, `app_state`, `navigate`, `set_theme`, `sign_in_state`, `hold_reads`, `hold_hand_offs`, `hold_integration` and `set_update_state` (debug) and 80 domain tools |
 | **The runner's relay**, one per agent invocation | Agents inside runs | `Orchester` (capital O) → `mcp__Orchester__*` in Claude Code, bare names in Codex | Run tools (`read_file`, `edit_file`, `run_check`, `start_qa_app`, …), `approve`, `ask_question` |
-| **The Orchestrator chat's server**, one per chat turn | The project's Orchestrator chat agent | `orchester` | 60 domain tools + 23 chat-only tools (git, MCP servers, `init_repository`, `apply_proposal`) |
+| **The Orchestrator chat's server**, one per chat turn | The project's Orchestrator chat agent | `orchester` | 60 domain tools while the project's *Let the Orchestrator drive* is off, every domain tool of the app but `add_project` and the `*_mcp_server` ones while it is on, + the chat-only tools (git, MCP servers, `init_repository`, `apply_proposal`) |
 
 Agents inside runs **never** reach the app's server: Claude Code runs use `--strict-mcp-config`, Codex runs turn off
 the user's `orchester` server, and neither inherits the token. Runs drive only QA copies of the app they start
@@ -117,7 +117,7 @@ automation may do; nothing over MCP or synthetic input can flip them:
 
 Allowing Autopilot in a project (`set_allow_autopilot` true) is a person's alone, whatever these switches say: it is
 always `person_only` over MCP. Turning it off and switching a run to Manual (`set_run_manual`) are narrowings, always
-taken. Further person-only switches concern the Orchestrator chat (see [orchestrator-chat.md](orchestrator-chat.md)).
+taken. A further person-only switch, *Let the Orchestrator drive* (Project settings › Orchestrator), concerns the Orchestrator chat (see [orchestrator-chat.md](orchestrator-chat.md)).
 
 ### The input gate (applied to every call, in order)
 

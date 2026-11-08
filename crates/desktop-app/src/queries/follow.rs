@@ -13,7 +13,7 @@ use lurq::{
 use orchester_workspace::{
   app_updates::{AppUpdates, UpdateState},
   tasks::outside::{AppOutsideCounts, OutsideChanges, OutsideCounts},
-  workspace::{OpenProject, OrchestratorConsent, Workspace},
+  workspace::{OpenProject, Workspace},
 };
 use parking_lot::Mutex;
 
@@ -250,9 +250,7 @@ fn prefetch_project(ctx: &mut Ctx, session: &Session, open: &OpenProject) {
   }
   ctx.query(project::repository(s.clone(), r.clone()));
   ctx.query(project::estimates(s.clone(), r.clone()));
-  for consent in OrchestratorConsent::ALL {
-    ctx.query(project::orchestrator_allows(s.clone(), r.clone(), consent));
-  }
+  ctx.query(project::orchestrator_drives(s.clone(), r.clone()));
   ctx.query(project::orchestrator_watch(s.clone(), r.clone()));
   ctx.query(project::memory_settings(s.clone(), r.clone()));
   ctx.query(project::variables(s.clone(), r.clone()));

@@ -224,12 +224,6 @@
       "discard": "Discard changes",
       "keepEditing": "Keep editing"
     },
-    "keys": {
-      "ctrlEnter": "Ctrl Enter",
-      "cmdEnter": "⌘ Enter",
-      "ctrlS": "Ctrl S",
-      "cmdS": "⌘ S"
-    },
     "reasons": {
       "create": "To create, {{what}}.",
       "createAndRun": "To create, {{what}}. To run, also {{more}}.",

@@ -36,7 +36,6 @@ fn wait(kind: WaitKind, (task, number): (&str, u32), automatic: bool) -> AgentWa
     others: 0,
     agent: Some("Builder".to_owned()),
     link: format!("/tasks/{task}"),
-    own: false,
     automatic,
     continuing: None,
     merging: None,

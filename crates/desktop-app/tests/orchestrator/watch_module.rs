@@ -159,8 +159,6 @@ fn orchestrator_watch_module_picker_lists_modules_who_leads_them_and_the_whole_t
     "Move",
     "Add",
     "Remove the last",
-    "Ctrl Enter",
-    "Watch",
     "Close",
   ] {
     assert!(shown.contains(words), "{words}: {shown}");

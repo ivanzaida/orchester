@@ -22,8 +22,6 @@
     },
     "failed": "Your message was not sent: {{reason}} It stays here.",
     "keys": {
-      "cmdEnter": "Cmd+Enter",
-      "ctrlEnter": "Ctrl+Enter",
       "enter": "Enter"
     },
     "mention": {

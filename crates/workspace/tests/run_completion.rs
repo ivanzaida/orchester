@@ -249,11 +249,7 @@ fn completion_the_orchestrator_completes_a_report_run_on_its_own_as_it_would_mer
     .db
     .update_task_organization(task, ChangeActor::Person, Timestamp::now(), opted_out)
     .expect("organized");
-  let merging = Switches {
-    answers: true,
-    continues: false,
-    merges: true,
-  };
+  let merging = Switches { drives: true };
   assert!(
     !follow(merging).completed,
     "Don't merge automatically keeps it for the person"

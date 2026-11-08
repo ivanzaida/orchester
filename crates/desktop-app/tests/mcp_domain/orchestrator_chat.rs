@@ -25,11 +25,10 @@ use orchester_core::{
   task::Task,
   time::Timestamp,
 };
-use orchester_store::{AppDb, ProjectDb};
+use orchester_store::ProjectDb;
 use orchester_workspace::{
   app_mcp::{self, ToolError, Translate},
   orchestrator::tools::{self, ChatScope},
-  workspace::OrchestratorConsent,
 };
 use serde_json::{Value, json};
 
@@ -120,12 +119,12 @@ pub(super) fn actions(db: &ProjectDb, scope: &ChatScope) -> Vec<ChatAction> {
     .collect()
 }
 
-/// The person turns `consent` on in the project at `repo`.
-pub(super) fn allow(served: &Served, repo: &std::path::Path, consent: OrchestratorConsent) {
+/// The person turns *Let the Orchestrator drive* on in the project at `repo`.
+pub(super) fn allow(served: &Served, repo: &std::path::Path) {
   served
     .services()
     .workspace
-    .set_orchestrator_allows(repo, consent, true)
+    .set_orchestrator_drives(repo, true)
     .expect("the person turned it on");
 }
 
@@ -204,7 +203,7 @@ fn chat_merge_is_a_proposal_until_the_person_lets_the_orchestrator_merge() {
   );
   assert_eq!(actions(&db, &scope)[0].outcome, ActionOutcome::Waits);
 
-  allow(&served, &seeded.repo, OrchestratorConsent::MergeRuns);
+  allow(&served, &seeded.repo);
   let merged = chat_call(&mut served, &scope, "merge_run", merge).expect("merged at once");
   assert_eq!(merged["merge"]["run"], run.id().to_string(), "{merged}");
   assert!(db.run_merge(run.id()).expect("read").is_some(), "the run is merged");
@@ -234,7 +233,7 @@ fn chat_message_is_a_proposal_until_the_person_lets_the_orchestrator_answer() {
     Some(Change::Message { text, .. }) if text == "Keep the HubSpot owner."
   ));
 
-  allow(&served, &seeded.repo, OrchestratorConsent::AnswerAgents);
+  allow(&served, &seeded.repo);
   let refused = chat_call(&mut served, &scope, "send_message", answer.clone()).expect_err("decision consent required");
   assert!(matches!(&refused, ToolError::Refused { code, .. } if code == "automation_not_allowed"));
   served
@@ -326,7 +325,7 @@ fn chat_message_that_would_decide_a_plan_is_refused() {
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
   let (_, run) = task_run(&db, PLANNING);
   let scope = chat(&served, &mut db);
-  allow(&served, &seeded.repo, OrchestratorConsent::AnswerAgents);
+  allow(&served, &seeded.repo);
   let refused = chat_call(
     &mut served,
     &scope,
@@ -375,7 +374,7 @@ fn chat_answer_is_a_proposal_until_the_person_lets_the_orchestrator_answer() {
     Some(Change::Answer { request: named, choices, .. }) if named == request && choices == ["In the top bar"]
   ));
 
-  allow(&served, &seeded.repo, OrchestratorConsent::AnswerAgents);
+  allow(&served, &seeded.repo);
   let refused =
     chat_call(&mut served, &scope, "answer_question", answer.clone()).expect_err("global consent is required too");
   assert!(matches!(&refused, ToolError::Refused { code, .. } if code == "automation_not_allowed"));
@@ -442,12 +441,9 @@ fn chat_starts_no_wait_turn_while_no_runner_attaches() {
   let (folder, seeded) = Served::seed("tasks", None);
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
   orchestrator_ready(&mut db, seeded.repo.join("claude.exe"));
-  // The person turned *Let the Orchestrator answer agents* on in an earlier session: the project's waits are followed
-  // from the start of this one.
-  AppDb::open(&seeded.app_database)
-    .expect("the app's database")
-    .set_orchestrator_answers_agents(true)
-    .expect("the person's choice is kept");
+  // The person turned *Let the Orchestrator drive* on in an earlier session: the project's waits are followed from
+  // the start of this one.
+  db.set_orchestrator_drives(true).expect("the person's choice is kept");
   let runner = folder.path().join("no-runner").join("orchester-runner");
   let mut served = Served::start(folder, &seeded.app_database, runner);
   served.tasks_feed(seeded.project);

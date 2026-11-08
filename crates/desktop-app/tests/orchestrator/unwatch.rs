@@ -163,8 +163,6 @@ fn orchestrator_unwatch_picker_lists_only_what_this_conversation_watches_with_it
     "cancels nothing",
     "Move",
     "Add",
-    "Ctrl Enter",
-    "Stop",
     "Close",
     "Type to filter",
   ] {

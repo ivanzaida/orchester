@@ -37,12 +37,8 @@ use orchester_workspace::orchestrator::{
 };
 use support::{Fixture, at};
 
-/// Every switch a turn that merges on its own needs: *answer agents*, and *merge finished runs* with *merge runs*.
-const MERGING: Switches = Switches {
-  answers: true,
-  continues: false,
-  merges: true,
-};
+/// The switch a turn that merges on its own needs: *Let the Orchestrator drive*.
+const MERGING: Switches = Switches { drives: true };
 
 /// A checked, signed-in Claude Code connection, published as what the Orchestrator runs on.
 fn ready(fixture: &mut Fixture) {
@@ -240,29 +236,16 @@ fn auto_merge_counts_a_step_a_person_accepted_and_not_one_automation_accepted() 
 }
 
 #[test]
-fn auto_merge_marks_a_success_only_with_every_switch_on() {
-  for (switches, said) in [
-    (
-      Switches {
-        merges: false,
-        ..MERGING
-      },
-      "merge finished runs or merge runs off",
-    ),
-    (
-      Switches {
-        answers: false,
-        ..MERGING
-      },
-      "answer agents off: no turn at all",
-    ),
-  ] {
-    let mut fixture = Fixture::new();
-    ready(&mut fixture);
-    succeeded(&mut fixture, "Add login");
-    follow(&fixture, switches);
-    assert_eq!(waits(&fixture)[0].0.merging, None, "{said}");
-  }
+fn auto_merge_marks_a_success_only_while_the_chat_drives() {
+  let mut fixture = Fixture::new();
+  ready(&mut fixture);
+  succeeded(&mut fixture, "Add login");
+  follow(&fixture, Switches::default());
+  assert_eq!(
+    waits(&fixture)[0].0.merging,
+    None,
+    "Let the Orchestrator drive is off: no turn at all"
+  );
   let mut fixture = Fixture::new();
   ready(&mut fixture);
   let (_, run) = succeeded(&mut fixture, "Add login");
@@ -282,7 +265,7 @@ fn auto_merge_marks_a_success_only_with_every_switch_on() {
     .text;
   assert!(
     prompt.as_str().contains(&format!(
-      "merge this run once with merge_run (run #{})",
+      "Merge this run once with merge_run (run #{})",
       run.number().get()
     )),
     "{}",
@@ -364,24 +347,7 @@ fn auto_merge_turns_start_one_at_a_time_in_the_order_the_runs_ended() {
 
 #[test]
 fn auto_merge_holds_back_no_turn_that_does_not_merge() {
-  let mut fixture = Fixture::new();
-  ready(&mut fixture);
-  let first_task = fixture.task("Add login", at(40));
-  let second_task = fixture.task("Add logout", at(41));
-  dealt_with(&mut fixture, "ORC-1", 10);
-  let second_chat = dealt_with(&mut fixture, "ORC-2", 20);
-  let mut first = fixture.started_run(first_task, at(50));
-  let mut second = fixture.started_run(second_task, at(51));
-  fixture.succeed(&mut first, Timestamp::now());
-  fixture.succeed(&mut second, Timestamp::now());
-  let answering = Switches {
-    merges: false,
-    ..MERGING
-  };
-  follow(&fixture, answering).turn.expect("the first end's turn");
-  let next = follow(&fixture, answering).turn.expect("the second starts beside it");
-  assert_eq!(next.chat, second_chat.id());
-  // An end that the rule leaves to the person does not wait for a merge either.
+  // An end that the rule leaves to the person does not wait for a merge.
   let mut fixture = Fixture::new();
   ready(&mut fixture);
   let first_task = fixture.task("Add login", at(40));

@@ -1,15 +1,15 @@
-//! A switch of *The Orchestrator may* (`Publish drafts` `dPSKs` … `Write with git` `VOnlw` in `S03`): the project's
-//! own choice of what its Orchestrator chat does itself (ORC-594), read through its query, which the project's loader
-//! read as the project opened, and saved off the UI thread; until it is first read and while it saves, the switch
-//! cannot be flipped. Only a person flips it: the row refuses lurq's synthetic input and says so under itself, and
-//! while it is mounted the app's MCP server refuses window input (`mcp::input_gate`). Off holds in the project from
-//! the person's click, before the save runs and if it fails.
+//! *Let the Orchestrator drive* (the row of `S03` that replaced the six switches `Publish drafts` … `Write with git`,
+//! ORC-909): the project's own choice of whether its Orchestrator chat acts itself (ORC-594), read through its query,
+//! which the project's loader read as the project opened, and saved off the UI thread; until it is first read and
+//! while it saves, the switch cannot be flipped. Only a person flips it: the row refuses lurq's synthetic input and
+//! says so under itself, and while it is mounted the app's MCP server refuses window input (`mcp::input_gate`). Off
+//! holds in the project from the person's click, before the save runs and if it fails.
 
 use std::path::PathBuf;
 
 use lurq::{
   app::{
-    component::{Component, DevtoolsInspectable},
+    component::Component,
     ctx::{Ctx, FutureAction},
     events::{InputSource, input_source},
   },
@@ -19,7 +19,7 @@ use lurq::{
 use orchester_workspace::{
   background,
   messages::{self, Message},
-  workspace::{OrchestratorConsent, Workspace},
+  workspace::Workspace,
 };
 
 use super::super::{Status, TabProps, kit::SettingRow};
@@ -37,86 +37,11 @@ use crate::{
   },
 };
 
-#[derive(Clone)]
-pub(super) struct Props {
-  /// The tab's props, its status the row's own section of the page's save status.
-  pub tab: TabProps,
-  pub consent: OrchestratorConsent,
-}
-
-impl PartialEq for Props {
-  fn eq(&self, other: &Self) -> bool {
-    self.tab == other.tab && self.consent == other.consent
-  }
-}
-
-impl DevtoolsInspectable for Props {}
-
-/// The keys of what a switch's row says: its label, its one line and its (i).
-struct Words {
-  label: &'static str,
-  hint: &'static str,
-  info: &'static str,
-}
-
 /// The switch's element id, which its row's parts extend.
-pub(super) const fn id(consent: OrchestratorConsent) -> &'static str {
-  match consent {
-    OrchestratorConsent::PublishDrafts => "settings-orchestrator-publish-drafts",
-    OrchestratorConsent::AnswerAgents => "settings-orchestrator-answer-agents",
-    OrchestratorConsent::MergeRuns => "settings-orchestrator-merge-runs",
-    OrchestratorConsent::MergeFinished => "settings-orchestrator-merge-finished",
-    OrchestratorConsent::ContinueInterrupted => "settings-orchestrator-continue-interrupted",
-    OrchestratorConsent::WriteGit => "settings-orchestrator-write-git",
-  }
-}
-
-const fn words(consent: OrchestratorConsent) -> Words {
-  match consent {
-    OrchestratorConsent::PublishDrafts => Words {
-      label: "project_settings.orchestrator.publishDrafts.label",
-      hint: "project_settings.orchestrator.publishDrafts.hint",
-      info: "project_settings.orchestrator.publishDrafts.info",
-    },
-    OrchestratorConsent::AnswerAgents => Words {
-      label: "project_settings.orchestrator.answerAgents.label",
-      hint: "project_settings.orchestrator.answerAgents.hint",
-      info: "project_settings.orchestrator.answerAgents.info",
-    },
-    OrchestratorConsent::MergeRuns => Words {
-      label: "project_settings.orchestrator.mergeRuns.label",
-      hint: "project_settings.orchestrator.mergeRuns.hint",
-      info: "project_settings.orchestrator.mergeRuns.info",
-    },
-    OrchestratorConsent::MergeFinished => Words {
-      label: "project_settings.orchestrator.mergeFinished.label",
-      hint: "project_settings.orchestrator.mergeFinished.hint",
-      info: "project_settings.orchestrator.mergeFinished.info",
-    },
-    OrchestratorConsent::ContinueInterrupted => Words {
-      label: "project_settings.orchestrator.continueInterrupted.label",
-      hint: "project_settings.orchestrator.continueInterrupted.hint",
-      info: "project_settings.orchestrator.continueInterrupted.info",
-    },
-    OrchestratorConsent::WriteGit => Words {
-      label: "project_settings.orchestrator.writeGit.label",
-      hint: "project_settings.orchestrator.writeGit.hint",
-      info: "project_settings.orchestrator.writeGit.info",
-    },
-  }
-}
+pub(super) const ID: &str = "settings-orchestrator-drive";
 
 /// Its name in the developer log.
-const fn logged(consent: OrchestratorConsent) -> &'static str {
-  match consent {
-    OrchestratorConsent::PublishDrafts => "Let the Orchestrator publish drafts",
-    OrchestratorConsent::AnswerAgents => "Let the Orchestrator answer agents",
-    OrchestratorConsent::MergeRuns => "Let the Orchestrator merge runs",
-    OrchestratorConsent::MergeFinished => "Let the Orchestrator merge finished runs on its own",
-    OrchestratorConsent::ContinueInterrupted => "Let the Orchestrator continue interrupted runs",
-    OrchestratorConsent::WriteGit => "Let the Orchestrator write with git",
-  }
-}
+const LOGGED: &str = "Let the Orchestrator drive";
 
 type SaveAction = FutureAction<bool, bool, Message>;
 
@@ -131,14 +56,14 @@ pub(super) struct Switch {
 }
 
 impl Component for Switch {
-  type Props = Props;
+  type Props = TabProps;
 
   fn create(ctx: &mut Ctx) -> Self {
-    let Props { tab, consent } = ctx.props::<Props>().clone();
+    let tab = ctx.props::<TabProps>().clone();
     let gate = ctx
       .use_context::<InputGate>()
       .expect("the session's window provides the MCP input gate");
-    let save = save_action(ctx, tab.project.open.repo_root.clone(), consent);
+    let save = save_action(ctx, tab.project.open.repo_root.clone());
     let status = tab.status;
     ctx.watch(&save.state(), move |state| {
       status.set(match (state.is_pending(), &state.error) {
@@ -156,13 +81,12 @@ impl Component for Switch {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let Props { tab, consent } = ctx.props::<Props>().clone();
-    let (id, words) = (id(consent), words(consent));
+    let tab = ctx.props::<TabProps>().clone();
     let root = tab.project.open.repo_root;
     let session = Session::of(ctx);
     let workspace = session.0.workspace.clone();
     let state = self.save.state().get();
-    let read = queries::state(&ctx.query(project::orchestrator_allows(session, root.clone(), consent)));
+    let read = queries::state(&ctx.query(project::orchestrator_drives(session, root.clone())));
     let fixed = state.is_pending() || read.is_pending();
     // The person's choice until the stored value is it again; the stored value until they choose, or once a save
     // failed.
@@ -179,9 +103,15 @@ impl Component for Switch {
       .get()
       .data
       .is_some();
-    let switch = Toggle::new(id, ToggleKind::Switch, shown.unwrap_or(false), ctx.t(words.label)).hide_label();
+    let switch = Toggle::new(
+      ID,
+      ToggleKind::Switch,
+      shown.unwrap_or(false),
+      ctx.t("project_settings.orchestrator.drive.label"),
+    )
+    .hide_label();
     let switch = if shown.is_some() && !fixed && armed {
-      self.listen(switch, (workspace, root), consent)
+      self.listen(switch, (workspace, root))
     } else {
       switch
     };
@@ -199,49 +129,44 @@ impl Component for Switch {
     .map(|(key, reason)| {
       let reason = message_text(ctx, reason);
       Element::from(field_error(
-        &format!("{id}-error"),
+        &format!("{ID}-error"),
         &ctx.t_args(key, [("reason", &*reason)]),
       ))
     });
     let blocked = self.blocked.get().then(|| {
       Element::from(field_error(
-        &format!("{id}-blocked"),
+        &format!("{ID}-blocked"),
         &ctx.t("project_settings.orchestrator.blocked"),
       ))
     });
-    // What the Orchestrator does once it may publish, then why the row cannot be read, was not saved or did not take
-    // a change.
-    let said = (consent == OrchestratorConsent::PublishDrafts && shown == Some(true)).then(|| {
+    // What the Orchestrator does once it drives, then why the row cannot be read, was not saved or did not take a
+    // change.
+    let said = (shown == Some(true)).then(|| {
       Element::from(status_line(
-        &format!("{id}-on"),
+        &format!("{ID}-on"),
         Icon::MessagesSquare,
-        &ctx.t("project_settings.orchestrator.publishDrafts.on"),
+        &ctx.t("project_settings.orchestrator.drive.on"),
       ))
     });
-    let row = SettingRow::new(id, ctx.t(words.label))
-      .hint(ctx.t(words.hint))
-      .info(ctx.t(words.info))
+    SettingRow::new(ID, ctx.t("project_settings.orchestrator.drive.label"))
+      .hint(ctx.t("project_settings.orchestrator.drive.hint"))
+      .info(ctx.t("project_settings.orchestrator.drive.info"))
       .control(control)
       .under_all(said)
       .under_all(problem)
-      .under_all(blocked);
-    let row = if consent == OrchestratorConsent::MergeFinished {
-      row.dependent()
-    } else {
-      row
-    };
-    row.render(ctx)
+      .under_all(blocked)
+      .render(ctx)
   }
 }
 
 impl Switch {
   /// `switch`, saving what a person chooses for the project at `root`. Synthetic input never changes it.
-  fn listen(&self, switch: Toggle, (workspace, root): (Workspace, PathBuf), consent: OrchestratorConsent) -> Toggle {
+  fn listen(&self, switch: Toggle, (workspace, root): (Workspace, PathBuf)) -> Toggle {
     let (saved, blocked, save) = (self.saved.clone(), self.blocked.clone(), self.save.clone());
     switch.on_change(move |chosen| {
       if input_source() == InputSource::Synthetic {
         tracing::warn!(
-          setting = logged(consent),
+          setting = LOGGED,
           "synthetic input reached a person's setting; not taken"
         );
         blocked.set(true);
@@ -250,7 +175,7 @@ impl Switch {
       blocked.set(false);
       if !chosen {
         // Off holds from the person's click, before the save runs and if it fails.
-        workspace.revoke_orchestrator_consent(&root, consent);
+        workspace.revoke_orchestrator_drive(&root);
       }
       saved.set(Some(chosen));
       save.run(chosen);
@@ -258,18 +183,18 @@ impl Switch {
   }
 }
 
-/// Saves the `consent` the person chose for the project at `root`; the workspace counts the change, which reads the
-/// project's switches again (`queries`).
-fn save_action(ctx: &mut Ctx, root: PathBuf, consent: OrchestratorConsent) -> SaveAction {
+/// Saves the choice the person made for the project at `root`; the workspace counts the change, which reads the
+/// project's switch again (`queries`).
+fn save_action(ctx: &mut Ctx, root: PathBuf) -> SaveAction {
   let workspace = Services::of(ctx).workspace;
-  ctx.future_action(move |allowed: bool| {
+  ctx.future_action(move |drives: bool| {
     let (workspace, root) = (workspace.clone(), root.clone());
     async move {
-      background::run(move || workspace.set_orchestrator_allows(&root, consent, allowed))
+      background::run(move || workspace.set_orchestrator_drives(&root, drives))
         .await?
-        .map(|()| allowed)
+        .map(|()| drives)
         .map_err(|error| {
-          tracing::error!(%error, setting = logged(consent), "a person's setting was not saved");
+          tracing::error!(%error, setting = LOGGED, "a person's setting was not saved");
           messages::store_error(&error)
         })
     }

@@ -24,7 +24,6 @@ fn wait(kind: WaitKind) -> AgentWait {
     place: None,
     others: 0,
     link: "/project/p/tasks/KON-12/conversation".to_owned(),
-    own: false,
     automatic: true,
     continuing: None,
     merging: None,

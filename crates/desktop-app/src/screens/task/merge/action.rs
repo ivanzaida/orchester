@@ -1,5 +1,5 @@
 //! The action that moves the run's merge on (`Merge` `j9nGlG` in 01i, `Bnjrk` in 01j), the same on the top card and
-//! as the header's primary action, its keys in a cap after its label: *Merge* while the run waits to be merged; once a
+//! as the header's primary action, with no key cap: *Merge* while the run waits to be merged; once a
 //! merge did not land, the attempt page's primary action (`Cjprb`): *Resolve* for
 //! conflicts, which opens the run's attempt page, where they are resolved; *Record merge* for a merge Git made and
 //! Orchester did not record; *Put files back* for files a stopped bring-in left changed; *Try again* else, which puts
@@ -21,7 +21,7 @@ use orchester_workspace::tasks::{
   integration_jobs::{JobState, MergeArgs, ResolveStep},
 };
 
-use super::{Merge, keys};
+use super::Merge;
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route},
@@ -58,14 +58,14 @@ enum Work {
   Requeue,
 }
 
-/// The action of `task`'s latest run as `merge` stands, its keys with it. While a merge waits in the run's worktree for
+/// The action of `task`'s latest run as `merge` stands. While a merge waits in the run's worktree for
 /// the person to finish it, as the frame read it, the action that merges waits: the same for the top card, the header
 /// and ⌘↵.
 pub fn action(ctx: &mut Ctx, task: &TaskContext, merge: Merge) -> Option<MergeAction> {
   let run = task.detail.run.as_ref()?;
   let page = task.attempt.as_deref();
   let in_worktree = task.merge_in_worktree();
-  let mut action = match merge {
+  let action = match merge {
     Merge::NotMerged(Standing::Conflicts) if !in_worktree && !resolved(task, run) => resolve(ctx, task, run),
     Merge::NotMerged(Standing::NotRecorded) if !in_worktree => work(ctx, task, run, Work::Record),
     Merge::NotMerged(Standing::LeftChanged) if page.is_some_and(|page| !page.left_changed.is_empty()) => {
@@ -77,7 +77,6 @@ pub fn action(ctx: &mut Ctx, task: &TaskContext, merge: Merge) -> Option<MergeAc
     Merge::NotMerged(_) => merging(ctx, task, run, ("task.merge.tryAgain", Icon::RotateCcw), in_worktree),
     Merge::Ready => merging(ctx, task, run, ("task.merge.label", Icon::GitMerge), in_worktree),
   };
-  action.control.shortcut = Some(keys(ctx));
   Some(action)
 }
 

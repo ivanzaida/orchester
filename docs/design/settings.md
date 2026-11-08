@@ -18,11 +18,13 @@ path and value in the frames is illustrative (Kontur, dana-k, KON), never shippe
   - General (`S01` `O5TkIl`): the project and its repository. *Repository agent files* moves to Context.
   - Runs (`S02` `d2dUrR`): Approvals (Allow Autopilot, Reviewer, Approved for every run), Estimates, Limits. Limits
     says a task's run budget and time limit and a step's budget override these defaults. Environment moves out.
-  - Orchestrator (`S03` `B9RMAb`, new): *The Orchestrator may* — publish drafts, answer agents, merge runs, merge
-    finished runs on its own, continue interrupted runs, write with git — **moved from Settings › Automation and made
-    per project** (person's decision 2). Still the person's alone in the window. Existing app-wide values are copied
-    into every project once; a new project starts with all off. Answering agents still also needs *Let automation
-    answer approvals*, which stays per computer and shows here read-only with *Open*.
+  - Orchestrator (`S03` `B9RMAb`, new): the Orchestrator's switches — first six (publish drafts, answer agents, merge
+    runs, merge finished runs on its own, continue interrupted runs, write with git), **moved from Settings ›
+    Automation and made per project** (person's decision 2) — and since 2026-11-08 (ORC-909) **one**, *Let the
+    Orchestrator drive*: on, the chat acts itself with the app's tools and no proposal cards; off, it proposes. Still
+    the person's alone in the window. A project that had *Answer agents* on starts with it on; a new project starts
+    off. Answering agents' questions and messages still also needs *Let automation answer approvals*, which stays per
+    computer and shows here read-only with *Open*. (The board still draws the six rows until the design follows.)
   - Context (`S04` `zZ3QY`): everything agents get besides the worktree — Sources, Repository agent files, Code
     index, and **Memory** (saving of task and project records, records and tokens per invocation), **moved from the
     Memory page's Settings tab** (person's decision 3). The Memory page loses that tab and links to Context (`S15`
@@ -39,8 +41,9 @@ path and value in the frames is illustrative (Kontur, dana-k, KON), never shippe
 - **Settings, tab by tab:** General (`S08` `ei7iI`), Notifications (`S09` `GZXXS`), Accounts (`S10` `AHGWO`), Browser
   (`S12` `cgicZ`) and Orchester Cloud (`S13` `C5P3xN`) are unchanged but for the six-tab row, which the older boards
   drew without Browser.
-- **Settings › Automation** (`S11` `grpLX`) keeps the MCP server, the window and Approvals and permissions; in place of
-  *The Orchestrator may* one row says each project sets its own and opens Project settings.
+- **Settings › Automation** (`S11` `grpLX`) keeps the MCP server, the window and Approvals and permissions. It had a
+  group, *The Orchestrator*, with one row that said each project sets its own and opened Project settings; ORC-909
+  removed it, since the Orchestrator has one switch, in Project settings.
 
 ## Duplicates removed
 

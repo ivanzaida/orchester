@@ -28,6 +28,9 @@ give keeps the turn from starting, with the secret's name.
 
 ## Decisions
 
+**Decisions 3, 5 and 9 below describe six switches; decision 14 replaced them with one, *Let the Orchestrator
+drive*, and says what changed.**
+
 1. **Reading is open.** The Orchestrator reads everything in every project the app knows: tasks, runs, changes,
    approvals, questions, plans, tasks' conversations, pipelines, agent profiles, instructions, skills, tools, secrets
    (names and use only), connections, accounts, models, usage and pull requests. Cross-project reads are allowed
@@ -612,3 +615,39 @@ What may be approved in the chat, by kind (`Change::click_only`, and the publica
 | Git's work that can lose work (`git_propose`: reset, clean, branch or tag deletion, forced push, discard, rebase, aborting a merge) | **click only** | destructive git stays a click |
 
 Refusal codes: `not_persons_turn`, `automation_input`, `not_pending`, `click_only`, and the card's own refusals.
+
+## 14. Let the Orchestrator drive (ORC-909, decided by the person on 2026-11-07/08)
+
+One person-only switch per project, **Let the Orchestrator drive** (Project settings › Orchestrator), replaces the six
+switches of decisions 3, 5 and 9 — *publish drafts*, *answer agents*, *merge runs*, *merge finished runs on its own*,
+*continue interrupted runs* and *write with git* — and those decisions read as follows from now on. A project that had
+*answer agents* on starts with it on (`orchestrator_switches.drives`, copied from the application-wide value once for a
+project with none of its own; the application-wide values are no longer shown or set anywhere).
+
+- **On, the chat is a client of the app.** It has every domain tool the app's MCP server gives an outside client but
+  `add_project` and the app's `*_mcp_server` tools (the chat has its own, which call them), and each call goes to the
+  same tool with the same rules and refusals. Nothing becomes a card: `run_task`, `cancel_run`, `pause_run`,
+  `resume_run`, `continue_run` (every choice, accepting a step, raising limits and budgets and resuming after the daily
+  budget included), `merge_run`, `answer_question`, `send_message` (a message may move an idle run), the publications,
+  `init_repository`, the git writes and the `mcp_*` tools are carried out at once and kept in the conversation as the
+  chat's own actions, recorded as automation's. What a person's *Let automation …* switch allows another client the
+  chat's switch allows for the stopped run's decisions (`continue_run`) and for what a publication changes in agents'
+  prompts; what widens what agents may do is still `person_only` without *Let automation change agent permissions*,
+  and `decide_approval`, `decide_plan`, `answer_question` and `send_message` still need *Let automation answer
+  approvals*, as for any client. What can lose work in git stays `git_propose`, a click-only card.
+- **It is woken for everything.** A wait of an agent, a run's stop (a limit, a step waiting for a decision), end or
+  success, a stall, a merge conflict and a waited task's merge or close start an Orchestrator turn by themselves, whoever
+  started the run and whatever raised them — the rule that the chat's own answer, message, decision, resume or start
+  raised no turn (`raised_by_own`) is gone — and no per-run or per-step limit stops them. The turn of an interruption
+  continues the run, still unless it was interrupted again within 10 minutes or the database is under contention, which
+  only protects the run and the database from a loop; the turn of a success merges the run by the rule of decision 5
+  (a task's own *Don't merge automatically* keeps it), or says why it is left to the person.
+- **Instructions.** The chat decides and acts itself while it drives and never tells the person to press a button its
+  tools can press: it accepts a step when its report found no real mismatch and what it could not check is unreachable,
+  otherwise returns the work to the right step with a note or lets it retry; it raises a limit or budget when the run
+  is close to done and the work is worth it, saying by how much and why.
+- **Off, as before the switches were given.** What changes something is a proposal card (a start unless the project
+  allows Autopilot, a cancel, a merge, an answer or message, a publication, how a stopped run goes on, the first commit)
+  and a git write is refused `write_off`; nothing starts a turn by itself, so a wait, a run's end and the daily report
+  only keep their entries. In a turn a day's report or a watching that ended started, the chat changes nothing
+  whichever way the switch is (`report_turn`).

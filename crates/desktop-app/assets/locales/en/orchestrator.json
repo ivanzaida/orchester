@@ -64,10 +64,6 @@
       "stopAndSendDetail": "Stops this answer, then sends it as the next message",
       "options": "More ways to send"
     },
-    "keys": {
-      "ctrlEnter": "Ctrl Enter",
-      "cmdEnter": "⌘ Enter"
-    },
     "waitsOn": {
       "waits": "{{task}} · #{{run}} waits on {{waited}}",
       "stillWaits": "{{task}} · #{{run}} still waits on {{waited}}",
@@ -202,8 +198,6 @@
       },
       "send": "Send",
       "cancel": "Cancel",
-      "keySend": "sends",
-      "keyCancel": "cancels",
       "blank": "Write the message first",
       "confirm": {
         "title": {
@@ -456,9 +450,8 @@
         "answeredByYou": "Answered by you",
         "gone": "No longer waits"
       },
-      "effectAnswering": "Let the Orchestrator answer agents is on, so the Orchestrator reads what the agent asked and answers it, or tells you what it asks with its recommendation.",
-      "effectQueued": "Let the Orchestrator answer agents is on: the Orchestrator reads it after the turn under way ends, while it still waits.",
-      "effectOwn": "The agent asks again after the Orchestrator's own answer, so it waits for you: the Orchestrator doesn't answer it by itself.",
+      "effectAnswering": "Let the Orchestrator drive is on, so the Orchestrator reads what the agent asked and answers it, or tells you what it asks with its recommendation.",
+      "effectQueued": "Let the Orchestrator drive is on: the Orchestrator reads it after the turn under way ends, while it still waits.",
       "effectWaits": "It waits for you on its card. Ask the Orchestrator here to read it, or answer it on the task's Conversation.",
       "effectPlan": "Deciding a plan is yours, on its card. Ask the Orchestrator here to read it with you.",
       "effectPlanRead": "Deciding a plan is yours, on its card. The Orchestrator reads it and tells you what it proposes.",
@@ -596,16 +589,12 @@
         "move": "↑ ↓",
         "enter": "Enter",
         "backspace": "Backspace",
-        "ctrlEnter": "Ctrl Enter",
-        "cmdEnter": "Cmd Enter",
         "esc": "Esc"
       },
       "hint": {
         "move": "Move",
         "add": "Add",
         "removeLast": "Remove the last",
-        "watch": "Watch",
-        "stop": "Stop",
         "close": "Close"
       },
       "led": {
@@ -939,10 +928,10 @@
         "effectApplied": "Agents read v{{version}} from their next step.",
         "effectAppliedKeeping": "Agents read v{{version}} from their next step. The {{count}} runs under way keep v{{before}} until they finish.",
         "effectAppliedKeepingOne": "Agents read v{{version}} from their next step. The run under way keeps v{{before}} until it finishes.",
-        "effectDone": "Let the Orchestrator publish drafts is on, so the chat published it without asking. Agents read v{{version}} from their next step.",
-        "effectDoneKeeping": "Let the Orchestrator publish drafts is on, so the chat published it without asking. Agents read v{{version}} from their next step; runs under way keep v{{before}}.",
+        "effectDone": "Let the Orchestrator drive is on, so the chat published it without asking. Agents read v{{version}} from their next step.",
+        "effectDoneKeeping": "Let the Orchestrator drive is on, so the chat published it without asking. Agents read v{{version}} from their next step; runs under way keep v{{before}}.",
         "effectDismissed": "You dismissed it. Nothing was published; the draft stays in {{place}}.",
-        "widens": "This draft widens what {{name}} may do, so it waits for you even though Let the Orchestrator publish drafts is on. Let automation change agent permissions is off.",
+        "widens": "This draft widens what {{name}} may do, so it waits for you even though Let the Orchestrator drive is on. Let automation change agent permissions is off.",
         "widensWaits": "This draft widens what {{name}} may do. Check what it widens before you publish it.",
         "accept": "Publish v{{version}}",
         "openDraft": "Open draft",
@@ -971,8 +960,8 @@
         "effectWaits": "Nothing is merged yet. Merge merges it as Merge in the task's review does, after the same checks.",
         "effectMerged": "{{into}} moved forward to {{revision}}.",
         "onItsOwn": "on its own",
-        "effectOnItsOwn": "Merged by the Orchestrator on its own, as you let it merge finished runs: {{into}} moved forward to {{revision}}.",
-        "effectOnItsOwnPlain": "Merged by the Orchestrator on its own, as you let it merge finished runs.",
+        "effectOnItsOwn": "Merged by the Orchestrator on its own, as you let it drive: {{into}} moved forward to {{revision}}.",
+        "effectOnItsOwnPlain": "Merged by the Orchestrator on its own, as you let it drive.",
         "outsideTitle": "Run #{{run}} of {{task}} is in {{into}} already",
         "outsideState": "merged without Orchester",
         "effectOutside": "{{into}} holds this run’s work already: it was merged without Orchester. Nothing is merged again.",
@@ -1178,12 +1167,12 @@
         "limitDailyMore": "Stopped at the daily budget · {{count}} more runs",
         "limitGroupMore": "Stopped at their group's budget · {{count}} more runs"
       },
-      "effectReadyAnswering": "Let the Orchestrator answer agents is on, so the Orchestrator tells you it is ready, and merges it only if you asked it to here.",
-      "effectAnswering": "Let the Orchestrator answer agents is on, so the Orchestrator reads the run and tells you what happened and the choices you have.",
-      "effectContinuing": "Let the Orchestrator continue interrupted runs is on too, so the Orchestrator continues the run once from its last checkpoint and tells you.",
+      "effectReadyAnswering": "Let the Orchestrator drive is on, so the Orchestrator tells you it is ready, and merges it only if you asked it to here.",
+      "effectAnswering": "Let the Orchestrator drive is on, so the Orchestrator reads the run, decides how it goes on where it can, and tells you what happened.",
+      "effectContinuing": "Let the Orchestrator drive is on, so the Orchestrator continues the run once from its last checkpoint and tells you.",
       "effectInterruptedAgain": "It was interrupted again within 10 minutes of the time before, so the Orchestrator leaves it to you and tells you what happened and the choices you have.",
-      "effectMerging": "Let the Orchestrator merge finished runs on its own is on too, so the Orchestrator merges the run once and tells you; conflicts it proposes to send back to an agent, anything else it leaves to you.",
-      "effectMergeLeft": "Let the Orchestrator merge finished runs on its own is on, but this run is yours to merge: {{why}}. The Orchestrator tells you it is ready.",
+      "effectMerging": "Let the Orchestrator drive is on, so the Orchestrator merges the run once and tells you; conflicts it sends back to an agent, anything else it leaves to you.",
+      "effectMergeLeft": "Let the Orchestrator drive is on, but this run is yours to merge: {{why}}. The Orchestrator tells you it is ready.",
       "mergeLeft": {
         "notReady": "it is no longer the task's latest run that succeeded",
         "stepNotPassed": "its step {{step}} has not passed",
@@ -1195,8 +1184,7 @@
         "deliveredByQueue": "its pipeline ends in a Deliver step, so the merge queue delivers it"
       },
       "effectContention": "The project database stayed busy for more than 3 runs within 10 minutes, so the Orchestrator continues none of them by itself: it tells you, and running fewer agents at once helps.",
-      "effectQueued": "Let the Orchestrator answer agents is on: the Orchestrator reads it after the turn under way ends, while the run still stands so.",
-      "effectOwn": "It followed the Orchestrator's own decision on this run, so it waits for you: the Orchestrator doesn't take it up by itself.",
+      "effectQueued": "Let the Orchestrator drive is on: the Orchestrator reads it after the turn under way ends, while the run still stands so.",
       "effectWaits": "It waits for you on the task's Summary. Ask the Orchestrator here to read it with you.",
       "moved": {
         "merged": "No longer waits: Orchester merged the run.",
@@ -1219,8 +1207,8 @@
         "waiting": "wait for you",
         "tokens": "tokens"
       },
-      "effectSummary": "Let the Orchestrator answer agents is on, so the Orchestrator reads the report and adds a short summary and its recommendations below. It changes nothing: what it recommends is yours to do.",
-      "effectQueued": "Let the Orchestrator answer agents is on: the Orchestrator adds a summary and its recommendations after the turn under way ends.",
+      "effectSummary": "Let the Orchestrator drive is on, so the Orchestrator reads the report and adds a short summary and its recommendations below. It changes nothing: what it recommends is yours to do.",
+      "effectQueued": "Let the Orchestrator drive is on: the Orchestrator adds a summary and its recommendations after the turn under way ends.",
       "asOf": "Runs, waits and the queue as they stood at {{time}}.",
       "section": {
         "done": "What was done",

@@ -119,7 +119,8 @@ rows while nothing is watched, the modules and tasks with their states, and the 
   - A task's workflow status is the word in 11 `text_muted` (*In progress*, *Todo*, *Done*), as the @ menu shows it,
     no longer a chip. KON-47's note became *nothing to watch* so that it does not repeat *Done*.
   - The keys are `Kbd` caps with their words: *↑ ↓ Move*, *Enter Add*, *Backspace Remove the last*, *Ctrl Enter
-    Watch* (or *Stop*), and *Esc Close*. The /unwatch picker has *Type to filter* at the end.
+    Watch* (or *Stop*), and *Esc Close*. (2026-11-08, ORC-910: the app shows no *Ctrl Enter* cap; the shortcut works.)
+    The /unwatch picker has *Type to filter* at the end.
 
 ## What the design decides
 

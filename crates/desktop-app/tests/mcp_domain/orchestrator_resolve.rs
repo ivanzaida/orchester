@@ -20,7 +20,6 @@ use orchester_workspace::{
   app_mcp::ToolError,
   orchestrator::{proposal::Decision, tools::ChatScope},
   tasks::{detail::TaskDetail, return_work},
-  workspace::OrchestratorConsent,
 };
 use serde_json::{Value, json};
 
@@ -57,15 +56,22 @@ fn code(error: &ToolError) -> &str {
   }
 }
 
-/// The chat merges run `number` of `scope`'s project, as the person asked; the merge stops at conflicts.
+/// The chat merges run `number` of `scope`'s project while it drives; the merge stops at conflicts.
 fn merge_conflicts(served: &mut Served, scope: &ChatScope, number: u32) -> ToolError {
   served
     .services()
     .workspace
-    .set_orchestrator_allows(&scope.root, OrchestratorConsent::MergeRuns, true)
+    .set_orchestrator_drives(&scope.root, true)
     .expect("the person lets the chat merge");
   let merge = json!({ "project": "Kontur", "run": number.to_string() });
-  chat_call(served, scope, "merge_run", merge).expect_err("the merge conflicts")
+  let refused = chat_call(served, scope, "merge_run", merge).expect_err("the merge conflicts");
+  // The resolution is a proposal while the chat does not drive: the person turns it off again.
+  served
+    .services()
+    .workspace
+    .set_orchestrator_drives(&scope.root, false)
+    .expect("the person turned it off");
+  refused
 }
 
 /// The newest action of `scope`'s conversation.

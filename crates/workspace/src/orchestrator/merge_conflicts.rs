@@ -4,9 +4,9 @@
 //! client's, or the Orchestrator's own) and the merge queue's landing record an attempt that ended at conflicts; the
 //! merge queue's sync that left the run at conflicts for a person is its own attempt, by when the run left. Only the
 //! newest attempt of a run that is still not merged is news, and none from before the chat followed its project's runs
-//! ([`ProjectDb::run_ends_since`]). The Orchestrator's own merge that conflicted starts no turn
-//! ([`orchester_core::orchestrator::wait::raised_by_own`]): its action is kept only once its tool call returned, so
-//! a conflict `merge_run` met while a turn about its run still thinks waits for that turn to end before it is kept.
+//! ([`ProjectDb::run_ends_since`]). The Orchestrator's own merge that conflicted starts a turn like any other
+//! (ORC-909): a conflict `merge_run` met while a turn about its run still thinks waits for that turn to end before it
+//! is kept, so the turn that merged is not met by a second one about the same call.
 
 use std::collections::HashSet;
 
@@ -81,7 +81,6 @@ fn conflict_wait(
     others: 0,
     agent: None,
     link: Link::Task(project, task.key().clone(), TaskPage::Summary).path(),
-    own: false,
     automatic: false,
     continuing: None,
     merging: None,
