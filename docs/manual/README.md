@@ -20,7 +20,7 @@ This manual describes the current app (`crates/desktop-app`, binary `orchester`,
 | [user-guide.md](user-guide.md) | The window, every screen, and the workflows from adding a project to merging a run |
 | [settings.md](settings.md) | Every app and project setting with its default |
 | [install-and-platforms.md](install-and-platforms.md) | Installing, data locations, Windows/macOS differences, known gaps, what is not built yet |
-| [orchestrator-chat.md](orchestrator-chat.md) | The project's Orchestrator chat: what it may do directly, what it proposes, its switches and its 83 tools |
+| [orchestrator-chat.md](orchestrator-chat.md) | The project's Orchestrator chat: what it may do directly, what it proposes, its switches and its 85 tools |
 | [mcp-server.md](mcp-server.md) | Orchester's MCP server: connecting, tokens, scopes, permission gates, errors, the window tools (`app_state`, `navigate`, `lurq_*`) |
 | [mcp-tools-setup.md](mcp-tools-setup.md) | MCP reference — project setup tools (project, connections, accounts, MCP servers, profiles, pipelines, instructions, skills, tools, secrets, merging) |
 | [mcp-tools-work.md](mcp-tools-work.md) | MCP reference — work tools (tasks, modules, runs, queue, approvals, questions, plans, messages, pull requests, usage, delivery, reports) |

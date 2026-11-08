@@ -22,9 +22,11 @@ use rmcp::{
 use serde_json::{Value, json};
 
 use super::{
-  change, keep,
+  change,
+  consent::changes_permissions,
+  keep,
   own_project::in_own_project,
-  tools::{ChatScope, app_tool, changes_permissions},
+  tools::{ChatScope, app_tool},
 };
 use crate::{
   app_mcp::{

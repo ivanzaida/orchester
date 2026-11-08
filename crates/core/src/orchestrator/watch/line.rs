@@ -50,13 +50,21 @@ pub struct OpenTask {
   pub work: OpenWork,
 }
 
+/// A change the person asked the Orchestrator for in words, which its `watch` or `unwatch` tool applied with no command
+/// of theirs kept before the line (ORC-893): the order a watch was asked with, blank for the project's default.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AtRequest {
+  #[serde(default, skip_serializing_if = "String::is_empty")]
+  pub order: String,
+}
+
 /// A line about what the conversation watches.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "line", rename_all = "snake_case")]
 pub enum WatchLine {
   /// After a /watch: what the conversation leads from now on, what it led already (its order renewed when the command
   /// gave another one), what other conversations lead (kept nowhere: the card offers them), and what was closed or
-  /// deleted meanwhile.
+  /// deleted meanwhile; `at_request` when the person asked for it in words instead.
   Watching {
     started: Vec<NamedTarget>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -65,6 +73,8 @@ pub enum WatchLine {
     led_elsewhere: Vec<LedElsewhere>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     gone: Vec<NamedTarget>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    at_request: Option<AtRequest>,
   },
   /// In the conversation that lost `target`: *X is now led in «title»*, conversation `chat`. `taken_over` when the
   /// person took it with *Take it here*; otherwise a subscription inside what this conversation watches (a task of its
@@ -88,10 +98,13 @@ pub enum WatchLine {
     chat: ChatId,
     title: String,
   },
-  /// A person's stop: what it ended and what it left open. Nothing was canceled or paused.
+  /// A person's stop: what it ended and what it left open. Nothing was canceled or paused. `at_request` when the
+  /// person asked for it in words instead of with /unwatch or ×.
   Stopped {
     targets: Vec<NamedTarget>,
     left_open: Vec<OpenTask>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    at_request: Option<AtRequest>,
   },
   /// In the conversation whose less specific subscription covers `target` again, once conversation `from` (titled
   /// `title` then) stopped leading it: its events come here again.

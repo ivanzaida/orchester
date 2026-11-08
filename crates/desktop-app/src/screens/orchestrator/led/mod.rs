@@ -52,11 +52,15 @@ pub(super) struct LedCards {
   pub(super) cards: Vec<LedCard>,
 }
 
-/// The cards of `entry` of `shown`, a /watch's line that names targets other conversations lead; `None` for another
-/// entry.
+/// The cards of `entry` of `shown`, a /watch's line that names targets other conversations lead, or the line of a
+/// watch the person asked the Orchestrator for in words; `None` for another entry.
 pub(super) fn cards(entry: &ChatEntry, shown: &ChatView) -> Option<LedCards> {
   let EntryKind::Event(ChatEvent::Watch {
-    line: WatchLine::Watching { led_elsewhere, .. },
+    line: WatchLine::Watching {
+      led_elsewhere,
+      at_request,
+      ..
+    },
   }) = &entry.kind
   else {
     return None;
@@ -64,19 +68,25 @@ pub(super) fn cards(entry: &ChatEntry, shown: &ChatView) -> Option<LedCards> {
   if led_elsewhere.is_empty() {
     return None;
   }
-  // The command is kept just before its line; blank when it gave no order, as the subscription keeps it then.
-  let order = shown
-    .entries
-    .iter()
-    .filter(|kept| kept.seq < entry.seq)
-    .filter_map(|kept| match &kept.kind {
-      EntryKind::Event(ChatEvent::WatchCommand {
-        command: WatchCommand::Watch { order, .. },
-      }) => Some(order.clone()),
-      _ => None,
-    })
-    .next_back()
-    .unwrap_or_default();
+  // A watch asked in words keeps its order in its line; a command is kept just before its line, blank when it gave
+  // no order, as the subscription keeps it then.
+  let order = at_request.as_ref().map_or_else(
+    || {
+      shown
+        .entries
+        .iter()
+        .filter(|kept| kept.seq < entry.seq)
+        .filter_map(|kept| match &kept.kind {
+          EntryKind::Event(ChatEvent::WatchCommand {
+            command: WatchCommand::Watch { order, .. },
+          }) => Some(order.clone()),
+          _ => None,
+        })
+        .next_back()
+        .unwrap_or_default()
+    },
+    |asked| asked.order.clone(),
+  );
   let cards = led_elsewhere
     .iter()
     .map(|led| LedCard {

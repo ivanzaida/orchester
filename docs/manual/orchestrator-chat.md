@@ -97,7 +97,7 @@ Orchestrator …*.
 Related: *Let automation change agent permissions* (Settings › Automation), *Daily report from the Orchestrator*
 (Settings › Notifications), *Let Orchester estimate story points* (Project settings › Runs › Estimates).
 
-## Chat-only tools (25)
+## Chat-only tools (27)
 
 ### `init_repository`
 
@@ -146,6 +146,25 @@ What ends the wait, read by the waits follower:
   waits for a message gets one telling it to go on; a plan waiting for a decision goes on once the person decides it.
   No agent turn starts.
 - **The waiting run ends** — the wait ends without a word.
+
+### `watch` and `unwatch`
+
+When the person asks in words in this conversation ("watch ORC-889 and ORC-890", "follow the Docs module", "stop
+watching Docs"), the chat subscribes or unsubscribes **this conversation** with the same watch and stop the
+[commands](#the-commands) apply, by the same rules: the most specific subscription wins, and stopping cancels and
+pauses nothing. No command bubble is kept: the conversation shows the usual line with a quiet *at your request*
+(*Leading Docs · 4 tasks at your request — …*, *Stopped watching Docs at your request — nothing is canceled or
+paused*), and History's *Leads …* and the header's chips change as for a command. A target another conversation leads
+is **not taken over**: `watch` answers it under `led_elsewhere` with that conversation's title, and the conversation
+shows the [already-led card](#already-led-elsewhere), where only the person chooses *Take it here* (with the order
+their words gave) or *Open that conversation*.
+
+Parameters of `watch`: `targets` (req.: task keys, module names or ids, `without_module`, `project`), `order` (the
+person's words for their events; left out, the default order), `project` (the chat's own). It answers `started`,
+`already_here`, `led_elsewhere` and `gone`. Parameters of `unwatch`: `targets`, or `all: true`; it answers `stopped`
+and `left_open`. Refusals: `event_turn` (a turn Orchester started by itself: the agent never subscribes on its own),
+`target_not_found`, `other_project`, `gone`, `not_watched`, `led_elsewhere` (unwatch of what another conversation
+leads), `no_target`; a turn that plans refuses both, as every change.
 
 ### MCP server tools
 
@@ -234,9 +253,11 @@ marked `[Orchester]`; it is told the subscription the event came through and the
 ## Watching
 
 A conversation **leads** what the person tells it to watch: its subscriptions decide where the events of their tasks
-go (the routing rule above). Subscriptions are **the person's alone**: the app applies the commands itself, and the
-agent has no tool that subscribes or stops — it only sees its subscriptions and their orders, in its standing
-instructions and in every turn an event starts. A watch command sent by automation (synthetic input) is not applied.
+go (the routing rule above). Subscriptions are **the person's alone**: the person subscribes with the commands, which
+the app applies itself, or by asking the Orchestrator in words, whose [`watch` and `unwatch`](#watch-and-unwatch)
+apply the same for this conversation only, never on the agent's own initiative and never in a turn Orchester started.
+The agent sees its subscriptions and their orders in its standing instructions and in every turn an event starts. A
+watch command sent by automation (synthetic input) is not applied.
 
 ### The commands
 
@@ -299,9 +320,9 @@ the line *… is now led in «…»*). Only a person chooses on the card: synthe
   stops that subscription.
 - History shows *Leads …* on a conversation that leads something.
 - A module's Summary and a task's Summary properties show **Led in** with the leading conversation.
-- Stopping (× or *Stop watching*) ends the subscription at once and **cancels or pauses nothing**: the line *Stopped
-  watching …* lists what was left open (waiting, running, queued, stopped at a limit); its later events go to the
-  conversation of a less specific subscription that covers it, or to none.
+- Stopping (×, *Stop watching*, or asking the Orchestrator in words) ends the subscription at once and **cancels or
+  pauses nothing**: the line *Stopped watching …* lists what was left open (waiting, running, queued, stopped at a
+  limit); its later events go to the conversation of a less specific subscription that covers it, or to none.
 
 ### Ending
 

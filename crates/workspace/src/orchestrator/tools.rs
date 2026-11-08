@@ -24,7 +24,6 @@ use orchester_core::{
   },
   run::Answerer,
 };
-use orchester_store::ProjectDb;
 use rmcp::model::{JsonObject, Tool};
 use serde_json::Value;
 
@@ -36,6 +35,7 @@ use super::{
     self,
     control::{self, QueueCall, RELEASE_QUEUE, RESUME_RUN, ToldTo},
   },
+  consent::{allows, allows_autopilot, changes_permissions},
   created::{self, CREATE_TASK},
   duplicate, git, guard,
   keep::{self, HOLD_QUEUE, Named},
@@ -46,9 +46,10 @@ use super::{
   repository::{self, INIT_REPOSITORY},
   told,
   waits_on::{self, WAIT_ON_TASK},
+  watch::tool as watch_tool,
 };
 use crate::{
-  app_mcp::{self, Services, ToolError, Translate, blocking},
+  app_mcp::{self, Services, ToolError, Translate},
   runner::Runners,
   workspace::OrchestratorConsent,
 };
@@ -127,8 +128,11 @@ pub const TOOLS: [&str; 60] = [
 /// the person applies ([`super::repository`]), working with git in it ([`super::git`]), changing the project's
 /// MCP servers, a card the person applies for whatever widens ([`super::mcp_servers`]), applying a proposal the
 /// person approved in their own words ([`super::approval`]), answering with a plan in plan-only mode
-/// ([`super::plan`]), and making a waiting run wait on another task ([`super::waits_on`]).
-pub const CHAT_TOOLS: [&str; 25] = [
+/// ([`super::plan`]), making a waiting run wait on another task ([`super::waits_on`]), and watching and stopping
+/// watching at the person's request in words ([`watch_tool`]).
+pub const CHAT_TOOLS: [&str; 27] = [
+  watch_tool::WATCH,
+  watch_tool::UNWATCH,
   INIT_REPOSITORY,
   APPLY_PROPOSAL,
   PROPOSE_PLAN,
@@ -187,6 +191,7 @@ pub fn listed() -> Vec<Tool> {
     .chain([repository::tool(), approval::tool(), plan::tool(), waits_on::tool()])
     .chain(git::tools())
     .chain(mcp_servers::tools())
+    .chain(watch_tool::tools())
     .collect()
 }
 
@@ -239,6 +244,9 @@ pub async fn call(
   }
   if mcp_servers::is_tool(name) {
     return mcp_servers::call((services, translate, runners), scope, name, arguments).await;
+  }
+  if watch_tool::is_tool(name) {
+    return watch_tool::call(runners, scope, name, arguments).await;
   }
   if name == APPLY_PROPOSAL {
     return approval::call((services, translate, runners), scope, arguments).await;
@@ -560,24 +568,6 @@ async fn publish(
       ..Kept::default()
     },
   })
-}
-
-/// Whether `scope`'s project allows Autopilot, which only a person turns on: the chat then starts runs itself.
-async fn allows_autopilot(scope: &ChatScope) -> Result<bool, ToolError> {
-  let root = scope.root.clone();
-  blocking(move || Ok(ProjectDb::open(&root)?.allow_autopilot()?.is_on())).await
-}
-
-/// Whether the person lets the Orchestrator chat do what `consent` names itself in `scope`'s project.
-async fn allows(services: &Services, scope: &ChatScope, consent: OrchestratorConsent) -> Result<bool, ToolError> {
-  let (workspace, root) = (services.workspace().clone(), scope.root.clone());
-  blocking(move || Ok(workspace.orchestrator_allows(&root, consent)?)).await
-}
-
-/// Whether the person lets automation widen what agents may do.
-pub(super) async fn changes_permissions(services: &Services) -> Result<bool, ToolError> {
-  let workspace = services.workspace().clone();
-  blocking(move || Ok(workspace.automation_changes_permissions()?)).await
 }
 
 /// Calls the app's tool `name`, of either of its lists, with `arguments`.
