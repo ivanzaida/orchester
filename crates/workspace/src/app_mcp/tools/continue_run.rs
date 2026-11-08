@@ -424,7 +424,7 @@ fn resolve_conflicts(
       if !writing.iter().any(|step| step.key == shown.key) {
         return Err(ToolError::refused(
           "step_cannot_write",
-          vec![Message::new("appMcp.errors.stepCannotWrite").with("step", shown.name.to_string())],
+          vec![Message::new("appMcp.errors.mergeStepCannotWrite").with("step", shown.name.to_string())],
         ));
       }
       shown.key.clone()

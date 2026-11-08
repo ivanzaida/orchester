@@ -158,7 +158,7 @@ pub(super) fn rebase(ctx: &mut Ctx, services: &Services, target: &Target) -> Reb
       let (services, root) = (services.clone(), root.clone());
       async move {
         if !decided {
-          return Err(Message::new("sharing.errors.personOnly"));
+          return Err(EditRefused::person_only_message());
         }
         let result = services
           .servers
@@ -203,7 +203,7 @@ pub(super) fn restore(ctx: &mut Ctx, services: &Services, target: &Target) -> Re
     let (services, root) = (services.clone(), root.clone());
     async move {
       if !decided {
-        return Err(Message::new("sharing.errors.personOnly"));
+        return Err(EditRefused::person_only_message());
       }
       let result = services
         .servers

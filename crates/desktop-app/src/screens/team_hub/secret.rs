@@ -16,7 +16,7 @@ use lurq::{
   node::Element,
 };
 use orchester_core::secret::{SecretName, SecretValue};
-use orchester_workspace::messages::Message;
+use orchester_workspace::{messages::Message, team_fill_ins::FillInError};
 use zeroize::Zeroize;
 
 use crate::{
@@ -158,7 +158,7 @@ impl Entry {
         self.error.set(None);
         save(name.clone(), value);
       }
-      Err(_) => self.error.set(Some(Message::new("teamFillIns.errors.valueBlank"))),
+      Err(_) => self.error.set(Some(FillInError::blank_value_message())),
     }
   }
 }

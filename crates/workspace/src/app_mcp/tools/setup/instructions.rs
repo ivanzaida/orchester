@@ -14,7 +14,7 @@ use orchester_core::{
   resource::{AgentTargets, InjectionEvent, Instruction, InstructionScope, PublishError, StepKey},
   store::ResourceStore,
 };
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::StoreError;
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -140,8 +140,7 @@ pub async fn list_instructions(
 pub async fn get_instruction(services: &Services, args: InInstruction) -> Result<Value, ToolError> {
   let services = services.clone();
   blocking(move || {
-    let open = services.project(&args.project)?;
-    let db = ProjectDb::open(&open.repo_root)?;
+    let (open, db) = services.read_project(&args.project)?;
     let data = ProjectInstructions::load(&db)?;
     let entry = entry_named(&data, &args.instruction)?;
     let versions: Vec<Value> = db
