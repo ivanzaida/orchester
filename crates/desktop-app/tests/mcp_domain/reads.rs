@@ -184,8 +184,10 @@ fn domain_reads_mark_the_requests_auto_mode_is_reviewing() {
       (action, approval["reviewing"].as_bool().expect("reviewing or not"))
     })
     .collect();
+  // The scenario's own three requests come first; since ebf308eed it also seeds the decision reviews' requests after
+  // them, none of which is under review.
   assert_eq!(
-    marked,
+    marked[..3],
     [
       ("tail -n 3 CHANGELOG.md", true),
       ("cargo update -p reqwest", false),
@@ -193,6 +195,12 @@ fn domain_reads_mark_the_requests_auto_mode_is_reviewing() {
     ],
     "{approvals}"
   );
+  let reviewing: Vec<&str> = marked
+    .iter()
+    .filter(|(_, under)| *under)
+    .map(|(action, _)| *action)
+    .collect();
+  assert_eq!(reviewing, ["tail -n 3 CHANGELOG.md"], "{approvals}");
   let reviewing = list(&approvals, "approvals")
     .iter()
     .find(|approval| approval["reviewing"] == true)
