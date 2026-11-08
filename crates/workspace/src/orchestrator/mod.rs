@@ -4,7 +4,8 @@
 //! folder a git repository, work with git in it, change its MCP servers and apply a proposal the person approved in
 //! their own words, the waits of the
 //! project's agents and the ends of its runs it follows, the project's daily report, and the person's watch commands
-//! it applies itself (`watch`). The project's runner runs the agent; the app serves its tools.
+//! it applies itself, or its agent's `watch` and `unwatch` at the person's request (`watch`). The project's runner
+//! runs the agent; the app serves its tools.
 
 pub mod approval;
 pub mod auto_merge;
@@ -12,6 +13,7 @@ mod blocked;
 mod change;
 pub mod chat;
 pub mod compact;
+mod consent;
 mod created;
 mod duplicate;
 mod events;
