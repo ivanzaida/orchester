@@ -107,27 +107,49 @@ pub(super) fn new_box(ctx: &mut Ctx, env: &Env) -> Element {
     .into()
 }
 
-/// The box inside `view`: a comment's new words, or a reply to it.
+/// The box inside `view`: a comment's new words, a reply to an addressed comment, or the next words under a question's
+/// answer: a question again, or, chosen in its head, a comment on the question's lines.
 pub(super) fn in_thread_box(ctx: &mut Ctx, env: &Env, view: &ThreadView, what: InThread) -> Element {
   let id = format!("review-thread-{}-box", view.thread.id());
   let text = env.state.in_thread_text.get();
-  let send = sendable(env, &text).then(|| in_thread(env, view, what));
-  let (label, glyph) = match what {
-    InThread::Edit(_) => ("review_page.composer.save", Icon::Check),
-    InThread::FollowUp(_) => ("review_page.composer.addComment", Icon::MessageSquarePlus),
+  let continues_question = view.thread.kind() == ThreadKind::Question && matches!(what, InThread::FollowUp(_));
+  let kind = if continues_question {
+    env.state.in_thread_kind.get().0
+  } else {
+    ThreadKind::Comment
+  };
+  let send = sendable(env, &text).then(|| in_thread(env, view, (what, kind)));
+  let (label, glyph, button, hint) = match (what, kind) {
+    (InThread::Edit(_), _) => (
+      "review_page.composer.save",
+      Icon::Check,
+      ButtonKind::Secondary,
+      "review_page.composer.editHint",
+    ),
+    (InThread::FollowUp(_), ThreadKind::Question) => (
+      "review_page.composer.askImplement",
+      Icon::Send,
+      ButtonKind::Primary,
+      "review_page.composer.questionHint",
+    ),
+    (InThread::FollowUp(_), ThreadKind::Comment) => (
+      "review_page.composer.addComment",
+      Icon::MessageSquarePlus,
+      ButtonKind::Secondary,
+      "review_page.composer.replyHint",
+    ),
   };
   let submit = submit(
-    ActionButton::new(format!("{id}-send"), ButtonKind::Secondary, ctx.t(label)).icon(glyph),
+    ActionButton::new(format!("{id}-send"), button, ctx.t(label)).icon(glyph),
     send.as_ref(),
     env.writes.busy(),
   );
   let close = env.state.clone();
-  let hint = match what {
-    InThread::Edit(_) => ctx.t("review_page.composer.editHint"),
-    InThread::FollowUp(_) => ctx.t("review_page.composer.replyHint"),
-  };
+  let hint = ctx.t(hint);
+  let switch = continues_question.then(|| kind_switch(ctx, &id, &env.state.in_thread_kind, kind));
   Column::new()
     .id(id.clone())
+    .describe("kind", kind.as_str())
     .width(Dimension::Pct(100.0))
     .background(PaletteColor::SurfaceRaised)
     .border(Border::inside(BorderSize::Sm, PaletteColor::BorderFocus))
@@ -136,11 +158,12 @@ pub(super) fn in_thread_box(ctx: &mut Ctx, env: &Env, view: &ThreadView, what: I
       let state = env.state.clone();
       move || state.close_in_thread()
     }))
+    .with_children(switch)
     .child(field(
       ctx,
       (&format!("{id}-text"), &env.state.in_thread_field),
       &env.state.in_thread_text,
-      &ctx.t("review_page.composer.commentPlaceholder"),
+      &placeholder(ctx, kind),
     ))
     .child(foot(ctx, (&id, &hint), move || close.close_in_thread(), submit))
     .into()
@@ -153,26 +176,9 @@ fn sendable(env: &Env, text: &str) -> bool {
 
 /// The head: *Comment* / *Question*, the lines, and *New*.
 fn head(ctx: &Ctx, env: &Env, composing: &Composing, kind: ThreadKind) -> Row {
-  let segment = |id: &str, key: &str, value: ThreadKind| {
-    let chosen = env.state.kind.clone();
-    Segment::new(id.to_owned(), SegmentFace::Text(ctx.t(key)), kind == value, move || {
-      chosen.set(Held(value));
-    })
-  };
   let mode = segmented(
     "review-composer-kind",
-    [
-      segment(
-        "review-composer-comment",
-        "review_page.thread.comment",
-        ThreadKind::Comment,
-      ),
-      segment(
-        "review-composer-question",
-        "review_page.thread.question",
-        ThreadKind::Question,
-      ),
-    ],
+    kind_segments(ctx, "review-composer", &env.state.kind, kind),
     Focus::Keyboard,
   );
   Row::new()
@@ -199,6 +205,43 @@ fn head(ctx: &Ctx, env: &Env, composing: &Composing, kind: ThreadKind) -> Row {
         .color(PaletteColor::TextMuted)
         .nowrap(),
     )
+}
+
+/// The *Comment* / *Question* segments, whose ids start with `id`, choosing in `chosen`.
+fn kind_segments(ctx: &Ctx, id: &str, chosen: &Signal<Held<ThreadKind>>, kind: ThreadKind) -> [Segment; 2] {
+  let segment = |name: &str, key: &str, value: ThreadKind| {
+    let chosen = chosen.clone();
+    Segment::new(
+      format!("{id}-{name}"),
+      SegmentFace::Text(ctx.t(key)),
+      kind == value,
+      move || {
+        chosen.set(Held(value));
+      },
+    )
+  };
+  [
+    segment("comment", "review_page.thread.comment", ThreadKind::Comment),
+    segment("question", "review_page.thread.question", ThreadKind::Question),
+  ]
+}
+
+/// The head of a box inside a thread under a question's answer: *Comment* / *Question* alone.
+fn kind_switch(ctx: &Ctx, id: &str, chosen: &Signal<Held<ThreadKind>>, kind: ThreadKind) -> Element {
+  Row::new()
+    .id(format!("{id}-head"))
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Px(HEAD_HEIGHT))
+    .padding(Padding::horizontal(ExtraSpacing::Inset.role()))
+    .align_items(Alignment::Center)
+    .background(PaletteColor::SurfacePanel)
+    .border_bottom(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .child(segmented(
+      &format!("{id}-kind"),
+      kind_segments(ctx, id, chosen, kind),
+      Focus::Keyboard,
+    ))
+    .into()
 }
 
 fn placeholder(ctx: &Ctx, kind: ThreadKind) -> Arc<str> {
@@ -339,19 +382,30 @@ fn new_thread(env: &Env, composing: &Composing, kind: ThreadKind) -> Arc<dyn Fn(
   })
 }
 
-/// Sends what the box inside `view` holds.
-fn in_thread(env: &Env, view: &ThreadView, what: InThread) -> Arc<dyn Fn() + std::marker::Send + Sync> {
+/// Sends what the box inside `view` holds, written as `kind`: under a question, its words go to Implement in the same
+/// thread, or wait in the tray as a new comment on its lines.
+fn in_thread(
+  env: &Env,
+  view: &ThreadView,
+  (what, kind): (InThread, ThreadKind),
+) -> Arc<dyn Fn() + std::marker::Send + Sync> {
   let (writes, text, thread) = (env.writes.clone(), env.state.in_thread_text.clone(), view.thread.id());
+  let lines =
+    (view.thread.kind() == ThreadKind::Question).then(|| (view.thread.anchor().clone(), view.thread.head().clone()));
   Arc::new(move || {
     let Ok(body) = MessageBody::new(&text.get_untracked()) else {
       tracing::warn!("the words written in a thread could not be kept");
       return;
     };
-    let write = match what {
-      InThread::Edit(message) => Kept::Edit(message, body),
-      InThread::FollowUp(_) => Kept::Reply(thread, body),
+    let write = match (what, kind, &lines) {
+      (InThread::Edit(message), ..) => Write::Keep(Kept::Edit(message, body)),
+      (InThread::FollowUp(_), ThreadKind::Question, Some(_)) => Write::AskAgain(thread, body),
+      (InThread::FollowUp(_), ThreadKind::Comment, Some((anchor, head))) => {
+        Write::Keep(Kept::Comment(anchor.clone(), head.clone(), body))
+      }
+      (InThread::FollowUp(_), _, None) => Write::Keep(Kept::Reply(thread, body)),
     };
-    writes.run_closing(Write::Keep(write), Closes::InThread);
+    writes.run_closing(write, Closes::InThread);
   })
 }
 
