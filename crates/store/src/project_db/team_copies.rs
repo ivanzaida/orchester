@@ -1,8 +1,9 @@
 //! A team copy of a pipeline of this computer's own (`docs/architecture/server.md` row 80): an Admin shares one of
 //! their own local pipelines for the team as a new team resource, with a new id, whose first version is the local
 //! one's newest. It waits for the server like any first version an admin publishes ([`super::shared_publishes`]) and
-//! creates the resource there when it is sent. The local pipeline is kept as it is but for its slug, which it gives
-//! way to the team's ([`super::shared_versions`]).
+//! creates the resource there when it is sent. The local pipeline is kept as it is, its slug shared with the copy while the
+//! project is the team's; a copy that never reached the server takes a free slug when the project leaves the team
+//! ([`super::team_leaving`]).
 
 use orchester_core::{
   id::ResourceId,
