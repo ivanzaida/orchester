@@ -161,7 +161,7 @@ pub(super) async fn remove(services: &Services, found: Found) -> Result<Value, T
 }
 
 /// Refused as `not_admin` unless the person may change the team's configuration.
-pub(super) fn require_admin(db: &ProjectDb) -> Result<(), ToolError> {
+fn require_admin(db: &ProjectDb) -> Result<(), ToolError> {
   if db.may_change_configuration()? {
     Ok(())
   } else {

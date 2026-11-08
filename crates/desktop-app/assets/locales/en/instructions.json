@@ -46,7 +46,7 @@
     "unsaved": "Unsaved changes",
     "saving": "Saving draft…",
     "publish": "Publish v{{version}}",
-    "createDraft": "Create",
+    "create": "Create",
     "retry": "Try again",
     "publishNote": "Publishing applies to new runs. Active runs keep v{{version}}.",
     "publishedNotice": "Published v{{version}}. New runs use it; active runs keep the versions they started with.",
@@ -284,7 +284,7 @@
     "markdown": "Markdown",
     "promptPlaceholder": "Write the rule in Markdown…",
     "insertVariable": "Insert variable",
-    "newFooter": "Edits save as a draft. Publishing makes the rule apply to new runs.",
+    "newFooter": "Create makes v1, which applies to new runs. After that, edits save as a draft.",
     "scopeNote": "The scope is chosen here because the library no longer has a tab per scope.",
     "promptNote": "Missing values are flagged before the agent starts. Secret values stay out of agent prompts, variable previews and copied instructions."
   }

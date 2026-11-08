@@ -108,6 +108,11 @@ impl ProjectDb {
       None,
       now,
     )?;
+    // A project that is not shared waits for no server, so no row says it.
+    transaction.execute(
+      "UPDATE shared_publishes SET created = 1 WHERE version_id = ?1",
+      [version.id().to_string()],
+    )?;
     transaction.commit()?;
     Ok((resource, version))
   }

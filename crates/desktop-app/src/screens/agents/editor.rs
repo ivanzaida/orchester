@@ -346,7 +346,7 @@ impl Editor {
   }
 
   fn create_button(&self, ctx: &Ctx, state: &State) -> ActionButton {
-    let button = ActionButton::new("agent-create", ButtonKind::Primary, ctx.t("agents.createDraft")).icon(Icon::Check);
+    let button = ActionButton::new("agent-create", ButtonKind::Primary, ctx.t("agents.create")).icon(Icon::Check);
     if state.busy {
       return button.loading();
     }

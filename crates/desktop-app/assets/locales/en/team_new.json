@@ -25,7 +25,7 @@
       "hint": "Create publishes v1 for the team once the server accepts it",
       "fixName": "Fix the name to create it"
     },
-    "waiting": "The team server could not be reached. This computer keeps the new resource and sends it when the server is back, so do not create it again. Cancel leaves this form.",
+    "waiting": "The team server could not be reached. This computer keeps the new resource, which the list shows as waiting to send, and sends it when the team server answers. Cancel closes this form.",
     "computer": {
       "profile": "Each computer then picks the connection that runs it, asked only when it has several of its CLI kind.",
       "mcpProgram": "Each computer then sets the program's path and the values of its variables.",

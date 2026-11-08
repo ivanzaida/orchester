@@ -27,13 +27,15 @@ use crate::sharing::{
     cache_profile, cache_version, reference, resource as kept_resource,
     team_body::{self, Publication},
   },
+  team_created::{TakenBack, refusal},
 };
 
 impl<S: ConfigServer> RemoteResourceStore<S> {
   /// Sends every version published here that waits, e.g. once the server can be reached again. One the server did not
-  /// take, or this computer knows it cannot, is recorded on it and logged; the others are still sent. Fails, sending
-  /// nothing more, when the server cannot be reached.
-  pub fn send_waiting(&mut self) -> Result<(), SharingError> {
+  /// take, or this computer knows it cannot, is recorded on it and logged; the others are still sent. A new resource
+  /// whose first version is refused is taken back whole, as one refused at once is, and returned with why. Fails,
+  /// sending nothing more, when the server cannot be reached.
+  pub fn send_waiting(&mut self) -> Result<Vec<TakenBack>, SharingError> {
     let mut resources: Vec<ResourceId> = Vec::new();
     for waiting in self.db.waiting_publishes()? {
       if waiting.state == PublishState::Waiting && !resources.contains(&waiting.resource) {
@@ -41,17 +43,59 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
       }
     }
     if resources.is_empty() {
-      return Ok(());
+      return Ok(Vec::new());
     }
     self.server.writable()?;
+    let mut taken_back = Vec::new();
     for resource in resources {
+      let created = self.is_new(resource)?;
       match self.send_resource(resource) {
         Ok(()) => {}
         Err(error) if unreached(&error) => return Err(error),
-        Err(error) => tracing::warn!(%error, %resource, "the server did not take a version published here"),
+        Err(error) => {
+          tracing::warn!(%error, %resource, "the server did not take a version published here");
+          if created {
+            taken_back.extend(self.take_back(resource, &error)?);
+          }
+        }
       }
     }
-    Ok(())
+    Ok(taken_back)
+  }
+
+  /// Whether `resource` was created here as its first version ([`orchester_store::ProjectDb::create_published`]), which
+  /// the team server has not numbered: it never had a draft, so taking it back loses no work.
+  fn is_new(&self, resource: ResourceId) -> Result<bool, SharingError> {
+    Ok(
+      self
+        .db
+        .waiting_publishes()?
+        .iter()
+        .any(|waiting| waiting.resource == resource && waiting.created),
+    )
+  }
+
+  /// Takes the new `resource` back when `error` left its first version refused; what it was and why, or nothing when
+  /// that version still waits.
+  fn take_back(&mut self, resource: ResourceId, error: &SharingError) -> Result<Option<TakenBack>, SharingError> {
+    let refused = self
+      .db
+      .waiting_publishes()?
+      .into_iter()
+      .find(|waiting| waiting.resource == resource && waiting.state != PublishState::Waiting);
+    let Some(refused) = refused else {
+      return Ok(None);
+    };
+    let found = self
+      .db
+      .resource(resource)?
+      .ok_or(StoreError::ResourceNotFound(resource))?;
+    self.db.discard_created(resource)?;
+    Ok(Some(TakenBack {
+      name: found.name().as_str().to_owned(),
+      kind: found.kind(),
+      reason: refusal(Some(refused.state), Some(error)).message(),
+    }))
   }
 
   /// Sends the waiting versions of the one new `resource` and fails with why it was not sent, so its creator learns

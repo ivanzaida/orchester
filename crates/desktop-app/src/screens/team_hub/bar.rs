@@ -43,6 +43,11 @@ pub(super) fn edit(ctx: &Ctx, entry: &Entry, open: Open) -> Element {
 
 /// The bar with `buttons` at its start and `hint` at its end; the kind's panels each say what they put in them.
 pub(super) fn bar(buttons: Vec<Element>, hint: Option<String>) -> Element {
+  bar_saying(buttons, hint.map(|hint| (hint, PaletteColor::TextMuted)))
+}
+
+/// [`bar`] with `hint` in `color`: the form that creates a resource says in `danger` why Create cannot be pressed.
+pub(super) fn bar_saying(buttons: Vec<Element>, hint: Option<(String, PaletteColor)>) -> Element {
   Row::new()
     .id("team-hub-actions")
     .width(Dimension::Pct(100.0))
@@ -54,10 +59,11 @@ pub(super) fn bar(buttons: Vec<Element>, hint: Option<String>) -> Element {
     .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .with_children(buttons)
     .child(Row::new().flex(1.0))
-    .with_children(hint.map(|hint| {
+    .with_children(hint.map(|(hint, color)| {
       Text::new(&hint)
         .id("team-hub-actions-hint")
         .variant(HubText::PanelHint.role())
+        .color(color)
         .nowrap()
     }))
     .into()

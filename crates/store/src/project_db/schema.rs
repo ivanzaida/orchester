@@ -22,6 +22,7 @@ mod code_index;
 mod command_approvals;
 mod context_use;
 mod conversation;
+mod created_here;
 mod creation_snapshots;
 mod decision_authors;
 mod decision_connections;

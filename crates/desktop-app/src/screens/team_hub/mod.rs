@@ -25,6 +25,7 @@ mod profile;
 mod row;
 mod rows;
 mod secret;
+mod taken_back;
 mod tool;
 pub(super) mod unread;
 mod words;
@@ -136,7 +137,7 @@ impl Component for TeamHubScreen {
     // failed, and a read under way marks what shows as the last answer.
     let reading = loaded.is_pending();
     let hub = loaded.data.as_ref().filter(|_| failed.is_none());
-    let listing = hub.map(Listing::of);
+    let listing = hub.map(|hub| Listing::of(hub, &team.standings));
     let navigation = Navigation::of(ctx);
     // A form has no resource chosen: the filter's links go to the kind's list.
     let selected = listing
@@ -171,7 +172,14 @@ impl Component for TeamHubScreen {
       selected,
       reading,
     };
-    frame(ctx, (&team, listing.as_ref(), &shown), new, &navigation, (body, view))
+    let told = taken_back::notices(ctx, &team, &project.open.repo_root);
+    frame(
+      ctx,
+      (&team, listing.as_ref(), &shown),
+      new,
+      &navigation,
+      (body, told, view),
+    )
   }
 }
 
@@ -209,7 +217,7 @@ fn frame(
   (team, listing, shown): (&TeamConfiguration, Option<&Listing>, &FilterShown),
   new: Option<Element>,
   navigation: &Navigation,
-  (body, view): (Element, HubView),
+  (body, told, view): (Element, Vec<Element>, HubView),
 ) -> Element {
   Column::new()
     .id("screen-team-hub")
@@ -226,6 +234,7 @@ fn frame(
     .spacing(crate::theme::ExtraSpacing::Inset.role())
     .child(head::head(ctx, team, new))
     .child(head::filter(ctx, listing, shown, navigation))
+    .with_children(told)
     .child(
       Column::new()
         .id("team-hub-body")

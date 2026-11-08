@@ -10,7 +10,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize, TypographyStyle},
+    theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Row, ScrollVertical, Text},
   core::Signal,
@@ -30,10 +30,11 @@ use crate::{
   navigation::Navigation,
   routes::{HubView, ProjectPage, Route},
   screens::team_hub::{
+    bar,
     model::{Kind, Listing},
-    rows,
+    panel as shared, rows,
   },
-  theme::{ExtraSpacing, HubSpacing, HubText, IconSize},
+  theme::{HubSpacing, HubText, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
@@ -42,9 +43,6 @@ use crate::{
     tinted_note::{person_only, tinted_note},
   },
 };
-
-/// The pinned actions' height (`Actions` `x3uhYJ`).
-const ACTIONS_HEIGHT: f32 = 56.0;
 
 #[derive(Clone, PartialEq)]
 pub(in crate::screens::team_hub) struct Props {
@@ -223,8 +221,9 @@ impl NewPanel {
     (project, kind): (ProjectId, Kind),
     navigation: &Navigation,
   ) -> Element {
-    let create =
-      ActionButton::new("team-hub-new-create", ButtonKind::Primary, ctx.t("team_new.bar.create")).icon(Icon::Plus);
+    let create = ActionButton::new("team-hub-new-create", ButtonKind::Primary, ctx.t("team_new.bar.create"))
+      .icon(Icon::Plus)
+      .pinned();
     let create = if busy && self.work.state().get().is_pending() {
       create.loading()
     } else if busy || off.is_some() {
@@ -244,7 +243,8 @@ impl NewPanel {
       "team-hub-new-cancel",
       ButtonKind::Secondary,
       ctx.t("team_new.bar.cancel"),
-    );
+    )
+    .pinned();
     let cancel = if self.work.state().get().is_pending() {
       cancel.disabled()
     } else {
@@ -253,62 +253,23 @@ impl NewPanel {
         ProjectPage::hub(HubView::new(kind.filter(), None)),
       )))
     };
-    let (hint, color) = match off {
-      Some(why) => (ctx.t(why), PaletteColor::Danger),
-      None => (ctx.t("team_new.bar.hint"), PaletteColor::TextMuted),
+    let hint = match off {
+      Some(why) => (ctx.t(why).to_string(), PaletteColor::Danger),
+      None => (ctx.t("team_new.bar.hint").to_string(), PaletteColor::TextMuted),
     };
-    Row::new()
-      .id("team-hub-actions")
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Px(ACTIONS_HEIGHT))
-      .padding(Padding::horizontal(HubSpacing::Sections.role()))
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .background(PaletteColor::SurfacePanel)
-      .border_top(Border::inside(BorderSize::Sm, PaletteColor::Border))
-      .child(create)
-      .child(cancel)
-      .child(Row::new().flex(1.0))
-      .child(
-        Text::new(&hint)
-          .id("team-hub-actions-hint")
-          .variant(HubText::Hint.role())
-          .color(color)
-          .nowrap(),
-      )
-      .into()
+    bar::bar_saying(vec![create.into(), cancel.into()], Some(hint))
   }
 }
 
 /// The head: what it is and that it is not created yet over its title (`Head` in A7).
 fn head(ctx: &Ctx, kind: Kind) -> Row {
-  Row::new().width(Dimension::Pct(100.0)).child(
-    Column::new()
-      .flex(1.0)
-      .min_width(Dimension::Px(0.0))
-      .spacing(ExtraSpacing::Tight.role())
-      .child(
-        Row::new()
-          .spacing(ExtraSpacing::Snug.role())
-          .align_items(Alignment::Center)
-          .child(
-            Text::new(&ctx.t(kind.where_key()))
-              .id("team-hub-panel-kind")
-              .variant(HubText::Status.role())
-              .nowrap(),
-          )
-          .child(
-            Text::new(&ctx.t("team_new.notCreatedYet"))
-              .id("team-hub-panel-version")
-              .variant(HubText::Hint.role())
-              .nowrap(),
-          ),
-      )
-      .child(
-        Text::new(&ctx.t(kinds::title_key(kind)))
-          .id("team-hub-panel-title")
-          .variant(TypographyStyle::Title),
-      ),
+  shared::head_named(
+    &ctx.t(kinds::title_key(kind)),
+    (
+      ctx.t(kind.where_key()).to_string(),
+      Some(ctx.t("team_new.notCreatedYet").to_string()),
+    ),
+    None,
   )
 }
 

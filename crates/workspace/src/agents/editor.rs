@@ -91,9 +91,13 @@ pub fn apply(root: &Path, request: &Request) -> Result<Outcome, Message> {
   Ok(Outcome::Saved(id))
 }
 
-/// Creates the new `profile` as v1 with every widening it asks accepted: the person who pressed Create decided them,
-/// which the caller has checked. Refused as [`apply`] refuses it otherwise.
-pub fn create_decided(root: &Path, profile: AgentProfile) -> Result<ResourceId, Message> {
+/// Creates the new `profile` as v1 with every widening and prompt change it asks accepted, which only a person decides:
+/// refused unless `decided` says one pressed Create (or let automation change what agents may do). Refused as
+/// [`apply`] refuses it otherwise.
+pub fn create_decided(root: &Path, profile: AgentProfile, decided: bool) -> Result<ResourceId, Message> {
+  if !decided {
+    return Err(Message::new("appMcp.errors.promptPersonOnly"));
+  }
   let mut request = Request {
     existing: None,
     profile,

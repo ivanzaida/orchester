@@ -9,8 +9,8 @@ use orchester_store::{ProjectDb, StoreError};
 
 use super::{
   mcp_server_input::{SecretHeader, ServerFields},
-  team_mcp_body::new_server,
-  team_mcp_servers::{create_published_server, require_admin, team_names},
+  team_mcp_body::{Field, Refusal, new_server_at},
+  team_mcp_servers::{create_published_server, team_names},
 };
 use crate::{app_mcp::error::ToolError, messages::Message};
 
@@ -96,7 +96,7 @@ pub fn team_mcp_server(input: &NewTeamMcpServer, taken: &[McpServerName]) -> Res
       );
     }
   }
-  new_server(fields, taken).map_err(|error| Box::new(invalid(error)))
+  new_server_at(fields, taken).map_err(|refusal| Box::new(invalid(refusal)))
 }
 
 impl Invalid {
@@ -115,20 +115,24 @@ impl Invalid {
   }
 }
 
-fn invalid(error: ToolError) -> Invalid {
-  let ToolError::Refused { code, mut reasons } = error else {
+fn invalid(refusal: Refusal) -> Invalid {
+  let Refusal {
+    error: ToolError::Refused { mut reasons, .. },
+    field,
+  } = refusal
+  else {
     return Invalid::Form(vec![Message::new("errors.storage")]);
   };
   if reasons.is_empty() {
     return Invalid::Form(reasons);
   }
   let first = reasons.remove(0);
-  match code.as_str() {
-    "name_taken" => Invalid::Name(first),
-    "team_path_refused" if first.key.contains("Folder") => Invalid::Folder(first),
-    "team_path_refused" => Invalid::Program(first),
-    "team_value_refused" => Invalid::Url(first),
-    _ => {
+  match field {
+    Some(Field::Name) => Invalid::Name(first),
+    Some(Field::Folder) => Invalid::Folder(first),
+    Some(Field::Program) => Invalid::Program(first),
+    Some(Field::Url) => Invalid::Url(first),
+    None => {
       reasons.insert(0, first);
       Invalid::Form(reasons)
     }
@@ -139,6 +143,8 @@ fn invalid(error: ToolError) -> Invalid {
 /// the team's configuration.
 pub fn create_team_mcp_server(root: &std::path::Path, server: &TeamMcpServer) -> Result<ResourceId, StoreError> {
   let mut db = ProjectDb::open(root)?;
-  require_admin(&db).map_err(|_| StoreError::NotAdmin)?;
+  if !db.may_change_configuration()? {
+    return Err(StoreError::NotAdmin);
+  }
   create_published_server(&mut db, server, Timestamp::now())
 }

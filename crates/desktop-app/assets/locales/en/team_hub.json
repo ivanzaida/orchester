@@ -52,11 +52,16 @@
       "instructions": "Instructions have nothing to fill in on a computer, so they are always ready here.",
       "skills": "Skills have nothing to fill in on a computer, so they are always ready here."
     },
+    "takenBack": {
+      "title": "{{name}} was not created: the team server refused it",
+      "dismiss": "Dismiss"
+    },
     "line": {
       "ready": "Ready here",
       "withVersion": "{{words}} · {{version}}",
       "everyRun": "Added to every run",
       "toolUsedBy": "{{kind}} · used by {{names}}",
+      "waiting": "Waiting to send to the team server",
       "off": "Off on this computer",
       "undecided": "Can't tell yet whether it is ready here",
       "many": "{{count}} things missing here",

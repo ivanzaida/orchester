@@ -164,13 +164,14 @@ impl Live {
   async fn send_published(&self) {
     let project = self.project.clone();
     let shared = project.link().project;
+    let root = project.repo_root().to_owned();
     let sent = background::run(move || {
       let db = orchester_store::ProjectDb::open(project.repo_root())?;
       RemoteResourceStore::new(db, project)?.send_waiting()
     })
     .await;
     match sent {
-      Ok(Ok(())) => {}
+      Ok(Ok(taken)) => self.servers.note_taken_back(&root, taken),
       Ok(Err(error)) => tracing::warn!(%error, project = %shared, "versions published here wait to be sent"),
       Err(_) => tracing::debug!(project = %shared, "sending versions published here was interrupted"),
     }

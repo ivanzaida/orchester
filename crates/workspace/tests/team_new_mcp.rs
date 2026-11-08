@@ -4,7 +4,7 @@
 //! `cargo test -p orchester-workspace --test team_new_mcp team_new_mcp`.
 
 use orchester_core::{connection::mcp::McpServerName, resource::TeamMcpLaunch};
-use orchester_workspace::agents::team_new_mcp::{Header, Invalid, NewTeamMcpServer, Runs, team_mcp_server};
+use orchester_workspace::app_mcp::setup::{Header, Invalid, NewTeamMcpServer, Runs, team_mcp_server};
 
 fn program(name: &str, program: &str) -> NewTeamMcpServer {
   NewTeamMcpServer {

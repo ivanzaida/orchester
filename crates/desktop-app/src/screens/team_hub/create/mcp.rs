@@ -7,7 +7,7 @@
 use lurq::{app::ctx::Ctx, components::Row, core::Signal};
 use orchester_core::connection::mcp::McpServerName;
 use orchester_workspace::{
-  agents::team_new_mcp::{Header, Invalid, NewTeamMcpServer, Runs, team_mcp_server},
+  app_mcp::setup::{Header, Invalid, NewTeamMcpServer, Runs, team_mcp_server},
   messages::Message,
 };
 

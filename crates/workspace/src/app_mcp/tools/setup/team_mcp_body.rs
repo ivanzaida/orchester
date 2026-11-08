@@ -27,8 +27,40 @@ use crate::{
   messages::Message,
 };
 
+/// The field of the new server's form a refusal is about.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Field {
+  Name,
+  Program,
+  Folder,
+  Url,
+}
+
+/// Why a server was not made: the tools' refusal, and the field it is about when it is about one.
+pub(super) struct Refusal {
+  pub(super) error: ToolError,
+  pub(super) field: Option<Field>,
+}
+
+impl From<ToolError> for Refusal {
+  fn from(error: ToolError) -> Self {
+    Self { error, field: None }
+  }
+}
+
+impl From<Refusal> for ToolError {
+  fn from(refusal: Refusal) -> Self {
+    refusal.error
+  }
+}
+
 /// A new team server from `fields`, its name not one of `taken`.
 pub(super) fn new_server(fields: ServerFields, taken: &[McpServerName]) -> Result<TeamMcpServer, ToolError> {
+  new_server_at(fields, taken).map_err(ToolError::from)
+}
+
+/// [`new_server`], a refusal naming the field it is about: what the window's form says beside it.
+pub(super) fn new_server_at(fields: ServerFields, taken: &[McpServerName]) -> Result<TeamMcpServer, Refusal> {
   built(McpServerText::new_server(), fields, (None, taken))
 }
 
@@ -41,7 +73,7 @@ pub(super) fn changed_server(before: &TeamMcpServer, mut fields: ServerFields) -
       Message::new("appMcp.errors.teamMcpNameNotEditable"),
     ));
   }
-  built(text_of(before), fields, (Some(before), &[]))
+  built(text_of(before), fields, (Some(before), &[])).map_err(ToolError::from)
 }
 
 /// Why `after` widens over `before`, the version this computer uses: what a person's gate asks about.
@@ -147,9 +179,10 @@ fn built(
   text: McpServerText,
   mut fields: ServerFields,
   (before, taken): (Option<&TeamMcpServer>, &[McpServerName]),
-) -> Result<TeamMcpServer, ToolError> {
+) -> Result<TeamMcpServer, Refusal> {
   if let Some(field) = values_given(&fields) {
-    return Err(refused(
+    return Err(refused_at(
+      Field::Url,
       "team_value_refused",
       Message::new("appMcp.errors.teamMcpValueRefused").with("field", field.to_owned()),
     ));
@@ -157,12 +190,15 @@ fn built(
   let (variables, headers) = (fields.variable_names.take(), fields.secret_headers.take());
   let text = filled(text, fields, &[])?;
   let draft = text.draft(taken, &[]).map_err(|errors| {
-    let code = match &errors.name {
-      Some(name) if name.key == NAME_TAKEN => "name_taken",
-      _ => "invalid_server",
+    let (code, field) = match &errors.name {
+      Some(name) if name.key == NAME_TAKEN => ("name_taken", Some(Field::Name)),
+      _ => ("invalid_server", None),
     };
     let reasons: Vec<Message> = errors.in_order().into_iter().flatten().cloned().collect();
-    ToolError::refused(code, reasons)
+    Refusal {
+      error: ToolError::refused(code, reasons),
+      field,
+    }
   })?;
   let launch = match draft.transport {
     McpTransport::Stdio(stdio) => {
@@ -277,31 +313,43 @@ fn header(name: &str) -> Result<McpHeaderName, ToolError> {
 }
 
 /// The body's own refusals: a path, an absolute folder or a name listed twice. The rest is checked before.
-fn body_refusal(error: &TeamMcpServerError) -> ToolError {
+fn body_refusal(error: &TeamMcpServerError) -> Refusal {
   match error {
-    TeamMcpServerError::ProgramPath(program) => refused(
+    TeamMcpServerError::ProgramPath(program) => refused_at(
+      Field::Program,
       "team_path_refused",
       Message::new("appMcp.errors.teamMcpProgramIsPath").with("program", program.clone()),
     ),
-    TeamMcpServerError::AbsoluteFolder(folder) => refused(
+    TeamMcpServerError::AbsoluteFolder(folder) => refused_at(
+      Field::Folder,
       "team_path_refused",
       Message::new("appMcp.errors.teamMcpFolderIsAbsolute").with("folder", folder.clone()),
     ),
-    TeamMcpServerError::UrlQuery => refused(
+    TeamMcpServerError::UrlQuery => refused_at(
+      Field::Url,
       "team_value_refused",
       Message::new("appMcp.errors.teamMcpUrlQuery").with("field", "url".to_owned()),
     ),
     TeamMcpServerError::VariableNotSecret(name) => refused(
       "invalid_server",
       Message::new("appMcp.errors.teamMcpVariableNotSecret").with("name", name.clone()),
-    ),
+    )
+    .into(),
     TeamMcpServerError::Duplicate(name) => refused(
       "invalid_server",
       Message::new("appMcp.errors.teamMcpDuplicate").with("name", name.clone()),
-    ),
+    )
+    .into(),
     // Name, program, arguments, folder, URL, header, secret and prefix were checked as the page checks them before the
     // body was made.
-    _ => refused("invalid_server", Message::new("appMcp.errors.teamMcpInvalid")),
+    _ => refused("invalid_server", Message::new("appMcp.errors.teamMcpInvalid")).into(),
+  }
+}
+
+fn refused_at(field: Field, code: &str, reason: Message) -> Refusal {
+  Refusal {
+    error: refused(code, reason),
+    field: Some(field),
   }
 }
 

@@ -9,7 +9,7 @@ use orchester_app::{
   routes::{HubFilter, HubView, InstructionsTab, InstructionsView, ProjectPage, Route},
   test_support::{Window, project_id},
 };
-use orchester_core::{resource::ResourceKind, store::ResourceStore};
+use orchester_core::{id::ResourceId, resource::ResourceKind, store::ResourceStore};
 use orchester_store::ProjectDb;
 
 use super::{prepared, team::State};
@@ -219,4 +219,123 @@ fn team_qa_create_the_old_instruction_window_makes_nothing_the_server_refused() 
       .iter()
       .any(|(resource, _)| resource["name"] == "Working agreement")
   );
+}
+
+const WAITING_LINE: &str = "Waiting to send to the team server";
+
+/// The id of the instruction `name` this computer holds.
+fn instruction(window: &Window, name: &str) -> ResourceId {
+  ProjectDb::open(&window.data.repo("repo-kontur"))
+    .expect("database")
+    .resources(ResourceKind::Instruction)
+    .expect("resources")
+    .iter()
+    .find(|resource| resource.name().as_str() == name)
+    .unwrap_or_else(|| panic!("{name} is held"))
+    .id()
+}
+
+fn instructions_list() -> Route {
+  Route::Project(
+    project_id(),
+    ProjectPage::hub(HubView::new(HubFilter::Instructions, None)),
+  )
+}
+
+/// The waiting instruction `name` listed in the hub, its row's line read.
+fn waiting_row(window: &mut Window, name: &str) -> String {
+  let row = format!("team-hub-row-{}-line", instruction(window, name));
+  window.navigation().go(instructions_list());
+  window.until("its row", |window| {
+    window.texts(&row).is_some_and(|text| text.join(" ") == WAITING_LINE)
+  });
+  window.text(&row)
+}
+
+/// Sends what waits to the team server, as it does once the server answers.
+fn send_waiting(window: &Window) {
+  let services = window.launch.services().expect("the session started");
+  let root = window.data.repo("repo-kontur");
+  // The refusal of a version, if any, is what the hub tells; this is only the send.
+  let _ = window.data.runtime.block_on(services.servers.send_published(&root));
+}
+
+#[test]
+fn team_qa_create_a_server_that_cannot_be_reached_keeps_it_waiting_to_send_and_sends_it_when_back() {
+  let (mut window, server) = filled(State::Admin);
+  let before = held(&window);
+  server.set_down(true);
+  window.press("team-hub-new-create");
+  window.until("the waiting note", |window| window.texts("team-new-waiting").is_some());
+  assert!(window.text("team-new-waiting").contains("waiting to send"));
+  assert_eq!(held(&window), before + 1, "this computer keeps it");
+  assert_eq!(
+    waiting_row(&mut window, "Release notes"),
+    WAITING_LINE,
+    "the list shows it as waiting, not as published"
+  );
+  server.set_down(false);
+  // The session sends it on reconnecting; here it is sent until the session has seen the server answer.
+  window.until("the server to take it", |window| {
+    send_waiting(window);
+    server
+      .resources("kontur")
+      .iter()
+      .any(|(resource, versions)| resource["name"] == "Release notes" && versions.len() == 1)
+  });
+  let row = format!("team-hub-row-{}-line", instruction(&window, "Release notes"));
+  window.until("it is no longer waiting", |window| {
+    window.texts(&row).is_some_and(|text| text[0] != WAITING_LINE)
+  });
+}
+
+#[test]
+fn team_qa_create_a_waiting_one_the_server_refuses_later_is_taken_back_and_the_hub_says_why() {
+  let (mut window, server) = filled(State::Admin);
+  let before = held(&window);
+  server.set_down(true);
+  window.press("team-hub-new-create");
+  window.until("the waiting note", |window| window.texts("team-new-waiting").is_some());
+  assert_eq!(waiting_row(&mut window, "Release notes"), WAITING_LINE);
+  // The server is back and no longer takes this person's writes.
+  server.stand_as(Standing::Member);
+  server.set_down(false);
+  window.until("the notice", |window| {
+    send_waiting(window);
+    window.texts("team-hub-taken-back-0").is_some()
+  });
+  assert_eq!(held(&window), before, "a refused new resource is taken back whole");
+  assert!(window.text("team-hub-taken-back-0").contains("Release notes"));
+  window.press("team-hub-taken-back-dismiss-0");
+  window.until("the notice gone", |window| {
+    window.texts("team-hub-taken-back-0").is_none()
+  });
+}
+
+#[test]
+fn team_qa_create_the_old_instruction_window_keeps_it_waiting_and_it_is_sent_when_the_server_is_back() {
+  let (mut window, server) = old_rule();
+  let before = held(&window);
+  server.set_down(true);
+  click(&mut window, "instruction-create");
+  window.until("it is kept", |window| held(window) == before + 1);
+  let outbox = ProjectDb::open(&window.data.repo("repo-kontur"))
+    .expect("database")
+    .waiting_publishes()
+    .expect("the outbox");
+  assert_eq!(outbox.len(), 1, "its v1 waits in the outbox");
+  assert!(
+    server
+      .resources("kontur")
+      .iter()
+      .all(|(resource, _)| resource["name"] != "Working agreement")
+  );
+  server.set_down(false);
+  window.until("the server to take it", |window| {
+    send_waiting(window);
+    server
+      .resources("kontur")
+      .iter()
+      .any(|(resource, versions)| resource["name"] == "Working agreement" && versions.len() == 1)
+  });
 }

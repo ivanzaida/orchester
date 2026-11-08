@@ -47,8 +47,6 @@ pub(super) const fn title_key(kind: Kind) -> &'static str {
 
 /// The group *New* and its row, over the list's groups.
 pub(in crate::screens::team_hub) fn new_row(ctx: &Ctx, kind: Kind) -> Element {
-  // The new resource is the group's only row.
-  let one = 1;
   let row = inert(Button::empty())
     .id("team-hub-row-new")
     .width(Dimension::Pct(100.0))
@@ -97,7 +95,8 @@ pub(in crate::screens::team_hub) fn new_row(ctx: &Ctx, kind: Kind) -> Element {
             .nowrap(),
         )
         .child(
-          Text::new(&one.to_string())
+          // The new resource is the group's only row.
+          Text::new(&1.to_string())
             .id("team-hub-section-new-count")
             .variant(HubText::Hint.role())
             .nowrap(),

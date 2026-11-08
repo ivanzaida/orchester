@@ -1,6 +1,7 @@
 //! The form of a new skill (`Agents · New skill` A11 `p4aSf`): its name, its description and its files. A skill is the
-//! team's whole: nothing is filled in on a computer afterwards. Its SKILL.md is made from the description; the other
-//! files and which CLIs load it are not in this form yet, and it says so rather than offering what it cannot make.
+//! team's whole: nothing is filled in on a computer afterwards. Its SKILL.md is made from the description (the front
+//! matter) over a title; the other files and which CLIs load it are not in this form yet, and it says so rather than
+//! offering what it cannot make.
 
 use lurq::{app::ctx::Ctx, core::Signal};
 use orchester_core::resource::{InstructionScope, Skill};
@@ -65,14 +66,16 @@ impl Fields {
   }
 }
 
-/// The skill the fields make: its SKILL.md is its description, and it has no other file.
+/// The skill the fields make: the description is the skill's own and goes to the front matter of its SKILL.md, whose
+/// Markdown starts as a title over the skill's name (a skill cannot be published with a blank one), and it has no
+/// other file.
 fn made(name: &str, description: &str) -> Option<Make> {
   if name.trim().is_empty() || description.trim().is_empty() {
     return None;
   }
   let skill = Skill::new(
     description.trim().to_owned(),
-    description.trim().to_owned(),
+    format!("# {}\n", name.trim()),
     Vec::new(),
     InstructionScope::Project,
   )

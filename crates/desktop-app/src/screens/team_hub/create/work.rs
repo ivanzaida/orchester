@@ -1,8 +1,9 @@
 //! What Create does, off the UI thread: the resource is made as its first version, v1 with no draft, and sent to the
-//! team server at once ([`Servers::send_created`](orchester_workspace::sharing::Servers::send_created)). It counts as
-//! created only once the server takes it: a server that refuses it takes it back whole, and the refusal comes back for
-//! the form to say in place. A server that cannot be reached leaves it waiting in the outbox, which the form says too.
-//! The screens that read the resources are told only after that, so none shows one the server did not take.
+//! team server at once ([`Servers::send_created`](orchester_workspace::sharing::Servers::send_created)). A server that
+//! refuses it takes it back whole, and the refusal comes back for the form to say in place. A server that cannot be
+//! reached leaves it kept in the outbox, which the form says too and the list shows as waiting to send; it is sent when
+//! the server answers. The screens that read the resources are told once the answer is known, so none shows one the
+//! server refused.
 
 use std::path::{Path, PathBuf};
 
@@ -17,10 +18,8 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_workspace::{
-  agents::{
-    editor::create_decided,
-    team_new_mcp::{self, NewTeamMcpServer},
-  },
+  agents::editor::create_decided,
+  app_mcp::setup::{NewTeamMcpServer, create_team_mcp_server, team_mcp_names, team_mcp_server},
   background,
   connections::mcp::Allowed,
   instructions::editor as instructions,
@@ -66,7 +65,7 @@ impl Make {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Made {
   pub id: ResourceId,
-  /// The team server could not be reached: the resource waits in the outbox and is sent when it can be.
+  /// The team server could not be reached: the resource is kept in the outbox and sent when it can be.
   pub waiting: bool,
 }
 impl DevtoolsInspectable for Made {}
@@ -102,13 +101,15 @@ pub(super) fn work(ctx: &mut Ctx, (root, project): (PathBuf, ProjectId)) -> Work
         .map_err(Failed::Said)??;
       let settled = services.servers.send_created(&root, id).await;
       match settled {
-        Ok(Created::Accepted) => {
-          // Told only now, so no screen shows a resource the team server did not take.
+        // Told once the answer is known, so no screen shows a resource the team server refused. One kept in the
+        // outbox is read as waiting to send, not as published.
+        Ok(created) => {
           services.changes.record(project, outside);
-          Ok(Made { id, waiting: false })
+          Ok(Made {
+            id,
+            waiting: created == Created::Waiting,
+          })
         }
-        // It waits in the outbox, sent when the server is back: nothing shows it as created before.
-        Ok(Created::Waiting) => Ok(Made { id, waiting: true }),
         Err(refused) => Err(Failed::Said(refused.message())),
       }
     }
@@ -122,11 +123,11 @@ fn make_in(root: &Path, request: Press) -> Result<ResourceId, Failed> {
   }
   let said = Failed::Said;
   match request.make {
-    Make::Profile(profile) => create_decided(root, *profile).map_err(said),
+    Make::Profile(profile) => create_decided(root, *profile, request.decided).map_err(said),
     Make::McpServer(input) => {
-      let taken = team_new_mcp::team_mcp_names(root).map_err(|error| said(store_error(&error)))?;
-      let server = team_new_mcp::team_mcp_server(&input, &taken).map_err(|invalid| said(invalid.message()))?;
-      team_new_mcp::create_team_mcp_server(root, &server).map_err(|error| said(store_error(&error)))
+      let taken = team_mcp_names(root).map_err(|error| said(store_error(&error)))?;
+      let server = team_mcp_server(&input, &taken).map_err(|invalid| said(invalid.message()))?;
+      create_team_mcp_server(root, &server).map_err(|error| said(store_error(&error)))
     }
     Make::Instruction(name, body) => instructions::create_in(root, name, &body)
       .map(|entry| entry.id)
