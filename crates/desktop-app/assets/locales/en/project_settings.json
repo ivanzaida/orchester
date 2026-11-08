@@ -225,7 +225,6 @@
     "confirm": "Save this change",
     "keep": "Keep editing",
     "indexHeading": "Code index",
-    "memory": "Memory",
     "memoryOnlyYou": "Only you, here in the window",
     "memoryTaskHint": "Handoffs, decisions and warnings agents record while they work on one task",
     "memoryProjectHint": "Facts and decisions agents record for every task of {{project}}",
