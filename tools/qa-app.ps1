@@ -98,6 +98,10 @@
 # at a version of its own) and Writer, a profile on Claude 2: Agents > Profiles > Writer, and the Connection select of its
 # panel lists the connections to choose from (L1). Every kind of local-hub has an instruction (Project rules) and a skill
 # (run-checks) so each panel, which is the editor the kind has, can be edited in place.
+# A save the store refuses (L12) is reached in local-hub too: MCP servers > pencil-design, change its Program to a name found
+# nowhere, press Save and then Save in the question (a person's press: the program widens what agents may do). The refusal
+# stands in place above the form, the row says Couldn't save, nothing is saved and what was typed stays. The design's cause,
+# the system's secret store refusing a value, has no field in the panel to come from yet (see the report of ORC-842).
 #
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes
