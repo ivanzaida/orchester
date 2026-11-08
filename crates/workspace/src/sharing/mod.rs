@@ -74,7 +74,7 @@ pub use self::{
   offer::OfferedProject,
   password::{PASSWORD_CHARS, PasswordProblem, password_problem},
   place::{Place, Places},
-  project::NotArchived,
+  project::{NotArchived, NotRestored},
   refusal::{ShareRefusal, ShareRefusalReason, TeamMcpProblem},
   share_outcome::{NotSet, ShareNote},
   team_created::{Created, NotCreated, TakenBack},

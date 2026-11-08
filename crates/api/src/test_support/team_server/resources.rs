@@ -103,6 +103,21 @@ impl TeamServer {
     state.resources.projects.entry(id).or_default().rejects = Some(reason.to_owned());
   }
 
+  /// Takes the creates and publishes of the project at `slug` again after [`TeamServer::reject_content`]: the content
+  /// was fixed, or the server's rule changed.
+  pub fn accept_content(&self, slug: &str) {
+    let mut state = self.state.lock();
+    let Some(id) = state
+      .projects
+      .iter()
+      .find(|project| project["slug"] == slug)
+      .and_then(|project| project["id"].as_str().map(str::to_owned))
+    else {
+      return;
+    };
+    state.resources.projects.entry(id).or_default().rejects = None;
+  }
+
   /// Every create and publish of the project at `slug` is refused from now on as `403 not_admin`, while its member list
   /// still names the person an admin: they were demoted after this computer last read it.
   pub fn refuse_writes_as_not_admin(&self, slug: &str) {
@@ -116,6 +131,67 @@ impl TeamServer {
       return;
     };
     state.resources.projects.entry(id).or_default().not_admin = true;
+  }
+
+  /// A teammate, `by`, publishes `body` as the next version of the resource `resource` of the project at `slug`, from
+  /// the version it has now, as when someone else published while this computer's admin edited: the server numbers it
+  /// and attributes it to `by`.
+  ///
+  /// # Panics
+  /// When the project is not shared, the server does not hold the resource or refuses the version.
+  pub fn publish_as(&self, slug: &str, resource: orchester_core::id::ResourceId, body: Value, by: &'static str) {
+    let mut state = self.state.lock();
+    let id = state
+      .projects
+      .iter()
+      .find(|project| project["slug"] == slug)
+      .and_then(|project| project["id"].as_str().map(str::to_owned))
+      .expect("the stand-in shares the project");
+    let held = state.resources.projects.entry(id).or_default();
+    let key = resource.to_string();
+    let stored = held.find(&key).expect("the stand-in holds the resource");
+    let latest = stored
+      .latest()
+      .and_then(|version| version["number"].as_u64())
+      .expect("a version");
+    let publish = VersionPublish {
+      idempotency_key: orchester_core::id::IdempotencyKey::generate(),
+      based_on: u32::try_from(latest)
+        .ok()
+        .and_then(std::num::NonZeroU32::new)
+        .map(orchester_core::resource::VersionNumber::new),
+      body,
+      references: Vec::new(),
+    };
+    let (status, _) = held.publish(&key, &serde_json::to_string(&publish).expect("a publish serializes"));
+    assert_eq!(status, 201, "the stand-in takes the teammate's version");
+    let stored = held.find(&key).expect("the stand-in holds the resource");
+    let teammate = Person::Named(by).wire();
+    if let Some(version) = stored.versions.last_mut() {
+      version["published"]["by"] = teammate.clone();
+    }
+    stored.resource["updated"]["by"] = teammate;
+  }
+
+  /// A teammate archives the resource `resource` of the project at `slug`: the server refuses new versions of it.
+  ///
+  /// # Panics
+  /// When the project is not shared or the server does not hold the resource.
+  pub fn archive(&self, slug: &str, resource: orchester_core::id::ResourceId) {
+    let mut state = self.state.lock();
+    let id = state
+      .projects
+      .iter()
+      .find(|project| project["slug"] == slug)
+      .and_then(|project| project["id"].as_str().map(str::to_owned))
+      .expect("the stand-in shares the project");
+    let held = state.resources.projects.entry(id).or_default();
+    let stored = held
+      .find(&resource.to_string())
+      .expect("the stand-in holds the resource");
+    let revision = stored.resource["revision"].as_u64().unwrap_or(1);
+    stored.resource["archived"] = json!(true);
+    stored.resource["revision"] = json!(revision + 1);
   }
 
   /// The server of the project at `slug` already holds `create` and its versions up to `latest`, each with the body of
@@ -193,10 +269,10 @@ impl Project {
     self.resources.iter_mut().find(|stored| stored.id() == resource)
   }
 
-  /// Counts one change and says when it happened.
+  /// Counts one change and says when it happened: now, as a server stamps what it numbers.
   fn changed(&mut self) -> Value {
     self.cursor += 1;
-    json!({"by": Person::You.wire(), "at": i64::try_from(self.cursor).unwrap_or(i64::MAX)})
+    json!({"by": Person::You.wire(), "at": now_millis()})
   }
 
   fn create(&mut self, body: &str) -> (u16, Value) {
@@ -416,4 +492,14 @@ fn status_line(status: u16) -> &'static str {
     409 => "409 Conflict",
     _ => "422 Unprocessable Entity",
   }
+}
+
+/// The time of now, as the contract's unix milliseconds.
+fn now_millis() -> i64 {
+  std::time::SystemTime::now()
+    .duration_since(std::time::UNIX_EPOCH)
+    .ok()
+    .and_then(|since| i64::try_from(since.as_millis()).ok())
+    // A clock before 1970 has no time to give a version; zero is what such a clock reads.
+    .unwrap_or_default()
 }

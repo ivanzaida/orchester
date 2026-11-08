@@ -56,6 +56,13 @@ pub(super) fn line(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Said {
   let Some(lead) = lead(ctx, entry) else {
     return said;
   };
+  // An archived resource has no standing here to say after what stands first.
+  if entry.archived.is_some() {
+    return Said {
+      text: lead.text,
+      color: lead.color,
+    };
+  }
   let text = if entry.here == Group::NeedsYouHere {
     ctx.t_args(
       "team_hub.edit.line.joined",
@@ -74,7 +81,11 @@ pub(super) fn line(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Said {
 /// a failure, one that met another version or a draft that cannot be published (the person is no admin) a warning.
 /// `None` for a row with no version of the person's own.
 pub(super) const fn lead_tone(entry: &Entry) -> Option<PaletteColor> {
+  if entry.archived.is_some() {
+    return Some(PaletteColor::Danger);
+  }
   match entry.outbox {
+    Some(Outbox::Stuck { refused: false, .. }) if entry.behind.is_some() => Some(PaletteColor::Danger),
     Some(Outbox::Sending { .. }) => Some(PaletteColor::Info),
     Some(Outbox::Stuck { refused: true, .. }) => Some(PaletteColor::Danger),
     Some(Outbox::Stuck { refused: false, .. }) => Some(PaletteColor::Warning),
@@ -87,7 +98,21 @@ pub(super) const fn lead_tone(entry: &Entry) -> Option<PaletteColor> {
 /// not take it, or a draft is kept (and cannot be published when the person is no admin).
 fn lead(ctx: &Ctx, entry: &Entry) -> Option<Said> {
   let said = |text: Arc<str>, color| Some(Said { text, color });
+  if let Some(at) = entry.archived {
+    return said(
+      ctx.t_args("team_hub.edit.line.archived", [("time", display::clock(at))]),
+      PaletteColor::Danger,
+    );
+  }
   match entry.outbox {
+    // Met a version the team published from the same base: the page compares them (A19 `DV8OI`).
+    Some(Outbox::Stuck { refused: false, .. }) if entry.behind.is_some() => {
+      let behind = entry.behind?;
+      said(
+        ctx.t_args("team_hub.edit.line.conflict", [("version", behind.latest.to_string())]),
+        PaletteColor::Danger,
+      )
+    }
     Some(Outbox::Sending { next: Some(next) }) => said(
       ctx.t_args("team_hub.edit.line.waiting", [("version", next.to_string())]),
       PaletteColor::Info,
@@ -110,6 +135,16 @@ fn lead(ctx: &Ctx, entry: &Entry) -> Option<Said> {
           |team| draft_then(ctx, team, key),
         ),
         color,
+      )
+    }
+    None if entry.draft && entry.behind.is_some() && !entry.read_only => {
+      let behind = entry.behind?;
+      said(
+        ctx.t_args(
+          "team_hub.edit.line.behind",
+          [("base", behind.base.to_string()), ("latest", behind.latest.to_string())],
+        ),
+        PaletteColor::Warning,
       )
     }
     None if entry.draft => {

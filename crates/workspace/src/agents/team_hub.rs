@@ -9,6 +9,7 @@ use orchester_core::{
   resource::{ResourceKind, TeamMcpLaunch, TeamMcpServer, Tool, ToolKind, VersionNumber},
   secret::SecretVault,
   store::ResourceStore,
+  time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
 
@@ -33,6 +34,18 @@ pub struct Plain {
   pub number: Option<VersionNumber>,
 }
 
+/// A team MCP server the team archived while its draft is kept here (`Agents · MCP server · admin · draft` A21
+/// `yqYj9`): the hub lists it apart, with the draft, until it is restored or the draft goes.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Archived {
+  pub id: ResourceId,
+  pub name: String,
+  /// The version this computer used last.
+  pub number: VersionNumber,
+  /// When it was archived, as this computer learned it.
+  pub at: Timestamp,
+}
+
 /// What an MCP server or a tool is, which a row of the hub names after its name (`Tag` in `Item` of `Agents · MCP
 /// servers` `yIsDi`, `Agents · Tools` `u9Hcc`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -51,6 +64,7 @@ pub enum Form {
 pub struct TeamHub {
   readiness: ProjectReadiness,
   plain: Vec<Plain>,
+  archived: Vec<Archived>,
   forms: Vec<(ResourceId, Form)>,
   profiles: Vec<(ResourceId, TeamProfileSheet)>,
   mcp_servers: Vec<(ResourceId, TeamMcpSheet)>,
@@ -67,6 +81,11 @@ impl TeamHub {
   /// The team's instructions, then its skills, each by name.
   pub fn plain(&self) -> &[Plain] {
     &self.plain
+  }
+
+  /// The team's MCP servers archived while a draft of them is kept here.
+  pub fn archived(&self) -> &[Archived] {
+    &self.archived
   }
 
   /// What the team holds of the profile `resource` and what this computer fills in for it; `None` for any other
@@ -123,10 +142,32 @@ impl TeamHub {
   }
 }
 
+/// The archived team MCP servers that keep a draft here.
+fn archived(db: &ProjectDb) -> Result<Vec<Archived>, StoreError> {
+  let mut archived = Vec::new();
+  for (resource, at) in db.archived_with_draft(ResourceKind::McpServer)? {
+    if let Some(version) = db.latest_version::<TeamMcpServer>(resource.id())? {
+      archived.push(Archived {
+        id: resource.id(),
+        name: resource.name().to_string(),
+        number: version.number(),
+        at,
+      });
+    }
+  }
+  Ok(archived)
+}
+
 /// What each MCP server and tool of the project is, from its latest version.
 fn forms(db: &ProjectDb) -> Result<Vec<(ResourceId, Form)>, StoreError> {
   let mut forms = Vec::new();
-  for resource in db.resources(ResourceKind::McpServer)? {
+  let mut servers = db.resources(ResourceKind::McpServer)?;
+  servers.extend(
+    db.archived_with_draft(ResourceKind::McpServer)?
+      .into_iter()
+      .map(|(resource, _)| resource),
+  );
+  for resource in servers {
     if let Some(version) = db.latest_version::<TeamMcpServer>(resource.id())? {
       let form = match version.body().launch() {
         TeamMcpLaunch::Program(_) => Form::McpProgram,
@@ -179,9 +220,11 @@ impl Workspace {
       Some(link) => self.db.lock().mcp_server_programs(link.server)?,
       None => Vec::new(),
     };
+    let archived = archived(&db)?;
     Ok(TeamHub {
       readiness,
       plain,
+      archived,
       forms: forms(&db)?,
       mcp_servers: team_mcp::sheets(&db, &programs, &profiles)?,
       tools: team_tool::sheets(&db, &profiles)?,

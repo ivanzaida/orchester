@@ -7,11 +7,13 @@ use orchester_core::{
   connection::AgentProvider,
   id::ResourceId,
   resource::{ResourceKind, VersionNumber},
+  time::Timestamp,
 };
 use orchester_store::{PublishState, SharedStanding};
 use orchester_workspace::{
   agents::{
     team_hub::{Form, TeamHub},
+    team_mcp_conflict::Newer,
     team_text::Added,
   },
   readiness::{Group, ReadinessStanding},
@@ -160,6 +162,19 @@ pub(super) struct Entry {
   pub draft: bool,
   /// The draft cannot be published by this person: they are not an admin (any more).
   pub read_only: bool,
+  /// The team published since the version the draft, or the version of the person's own that met it, was edited from.
+  pub behind: Option<Behind>,
+  /// When the team archived it, while a draft of it is kept here: it stands apart, under *Archived*.
+  pub archived: Option<Timestamp>,
+}
+
+/// What the team published past the version an edit was made from (A18 `bk4i9`, A19 `DV8OI`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct Behind {
+  /// The version the edit was made from.
+  pub base: VersionNumber,
+  /// The team's latest.
+  pub latest: VersionNumber,
 }
 
 /// How the first version of a resource in the outbox stands (`Line` in `Item · figma` A14 `gTLx6`, A16 `x3ywL`, A17
@@ -222,9 +237,8 @@ impl Listing {
     let outbox = |id| outbox_of(standings, id);
     let read_only = |draft: bool| draft && !team.may_change;
     let readiness = hub.readiness().resources().iter().filter_map(|found| {
-      let draft = hub
-        .mcp_server(found.resource())
-        .is_some_and(|sheet| sheet.edit.as_ref().is_some_and(|edit| edit.draft.is_some()));
+      let edit = hub.mcp_server(found.resource()).and_then(|sheet| sheet.edit.as_ref());
+      let draft = edit.is_some_and(|edit| edit.draft.is_some());
       Some(Entry {
         id: found.resource(),
         kind: Kind::of(found.kind())?,
@@ -239,6 +253,8 @@ impl Listing {
         outbox: outbox(found.resource()),
         draft,
         read_only: read_only(draft),
+        behind: edit.and_then(|edit| edit.newer.as_ref()).map(behind),
+        archived: None,
       })
     });
     let plain = hub.plain().iter().filter_map(|found| {
@@ -256,10 +272,37 @@ impl Listing {
         outbox: outbox(found.id),
         draft: false,
         read_only: false,
+        behind: None,
+        archived: None,
       })
     });
-    let mut entries: Vec<Entry> = readiness.chain(plain).collect();
-    entries.sort_by_cached_key(|entry| (group_rank(entry.group), entry.kind as u8, entry.name.to_lowercase()));
+    // A server the team archived while a draft of it is kept stands apart, after the groups.
+    let archived = hub.archived().iter().map(|found| Entry {
+      id: found.id,
+      kind: Kind::McpServer,
+      name: found.name.clone(),
+      number: Some(found.number),
+      form: hub.form(found.id),
+      cli: None,
+      reach: None,
+      group: Group::NeedsYouHere,
+      here: Group::NeedsYouHere,
+      standing: None,
+      outbox: None,
+      draft: true,
+      read_only: !team.may_change,
+      behind: None,
+      archived: Some(found.at),
+    });
+    let mut entries: Vec<Entry> = readiness.chain(plain).chain(archived).collect();
+    entries.sort_by_cached_key(|entry| {
+      (
+        entry.archived.is_some(),
+        group_rank(entry.group),
+        entry.kind as u8,
+        entry.name.to_lowercase(),
+      )
+    });
     Self { entries }
   }
 
@@ -278,7 +321,14 @@ impl Listing {
 
   /// The resources of `group` that `filter` holds.
   pub(super) fn group(&self, filter: HubFilter, group: Group) -> impl Iterator<Item = &Entry> {
-    self.shown(filter).filter(move |entry| entry.group == group)
+    self
+      .shown(filter)
+      .filter(move |entry| entry.archived.is_none() && entry.group == group)
+  }
+
+  /// The archived resources that `filter` holds, whose drafts are kept here.
+  pub(super) fn archived(&self, filter: HubFilter) -> impl Iterator<Item = &Entry> {
+    self.shown(filter).filter(|entry| entry.archived.is_some())
   }
 
   /// Whether `filter` holds the resource `id`.
@@ -296,6 +346,13 @@ impl Listing {
   /// A resource of the team, wherever the filter stands.
   pub(super) fn find(&self, id: ResourceId) -> Option<&Entry> {
     self.entries.iter().find(|entry| entry.id == id)
+  }
+}
+
+fn behind(newer: &Newer) -> Behind {
+  Behind {
+    base: newer.base_number,
+    latest: newer.number,
   }
 }
 

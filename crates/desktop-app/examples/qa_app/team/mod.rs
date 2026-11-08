@@ -132,6 +132,10 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
     | State::TeamEditRejected
     | State::TeamEditVariables
     | State::TeamCreateNameTaken
+    | State::TeamEditNewer
+    | State::TeamEditConflicting
+    | State::TeamEditConflictClean
+    | State::TeamEditArchived
     | State::StartWaiting
     | State::StartRunnerRefused
     | State::StartPastFailure

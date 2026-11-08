@@ -67,6 +67,15 @@ pub(super) enum Mode {
   Refused { version: VersionId, at: Timestamp },
   /// A draft is kept, and the person may not publish it: the team server refused as they are no longer an admin.
   ReadOnly,
+  /// The team published since the version the draft was edited from, and the page compares them (A19): a publish was
+  /// refused as a conflict (`refused_at`), a version of the person's own in the outbox met the team's (`outbox`), or
+  /// *View changes* asked for it.
+  Conflict {
+    outbox: Option<VersionId>,
+    refused_at: Option<Timestamp>,
+  },
+  /// The team archived the server while the draft is kept (A21).
+  Archived { at: Timestamp },
 }
 
 /// The chips after *Team · vN*: their words and what stands at their end.
@@ -84,14 +93,33 @@ pub(super) struct Parts {
   /// *On this computer* follows *From the team*.
   pub computer: bool,
   pub bar: Option<Element>,
+  /// The modals the state may open, over the page.
+  pub dialogs: Vec<Element>,
 }
 
 impl McpPanel {
   pub(super) fn mode(&self, props: &Props) -> Mode {
+    if let Some(at) = props.entry.archived {
+      return Mode::Archived { at };
+    }
     let standing = props.team.standing(props.entry.id);
     if let Some(unsent) = standing.and_then(|standing| standing.waiting.first().map(|first| (standing, first))) {
       let (standing, first) = unsent;
       return match first.state {
+        PublishState::Conflict { .. }
+          if props.team.may_change
+            && props
+              .sheet
+              .edit
+              .as_ref()
+              .and_then(|edit| edit.newer.as_ref())
+              .is_some_and(|newer| newer.from_outbox == Some(first.version)) =>
+        {
+          Mode::Conflict {
+            outbox: Some(first.version),
+            refused_at: Some(first.published_at),
+          }
+        }
         PublishState::Waiting => Mode::Waiting {
           version: first.version,
           queued: first.published_at,
@@ -111,8 +139,15 @@ impl McpPanel {
       self.edit.refused.get(),
       Some((EditRefused::Refused(Refusal::NotAdmin | Refusal::NotAdminHere), _))
     );
+    let conflict = edit.newer.is_some() && props.team.may_change && !not_admin;
+    let refused = self.edit.refused.get();
     if edit.draft.is_some() && (!props.team.may_change || not_admin) {
       Mode::ReadOnly
+    } else if conflict && (self.edit.comparing.get() || matches!(&refused, Some((EditRefused::Changed { .. }, _)))) {
+      Mode::Conflict {
+        outbox: None,
+        refused_at: refused.map(|(_, at)| at),
+      }
     } else if props.team.may_change && self.edit.editing.get() {
       Mode::Editing
     } else {
@@ -132,14 +167,9 @@ impl McpPanel {
   /// Keeps what the form holds as the draft ([`Edit::autosave`]); how it ended.
   pub(super) fn autosave(&self, ctx: &mut Ctx, props: &Props, mode: Mode) -> Result<Option<Saved>, EditError> {
     let edit = props.sheet.edit.as_ref();
-    self.edit.autosave(
-      ctx,
-      (
-        edit.is_some_and(|edit| edit.draft.is_some()),
-        edit.map(|edit| &edit.published),
-      ),
-      self.to_keep(mode),
-    )
+    self
+      .edit
+      .autosave(ctx, edit.is_some_and(|edit| edit.draft.is_some()), self.to_keep(mode))
   }
 
   /// What the state adds to the panel; `None` for the plain panel. `kept` is how the autosave ended.
@@ -155,6 +185,8 @@ impl McpPanel {
     let edit = props.sheet.edit.as_ref()?;
     match mode {
       Mode::Plain | Mode::Stuck => None,
+      Mode::Conflict { outbox, refused_at } => self.conflict(ctx, props, edit, (outbox, refused_at)),
+      Mode::Archived { at } => self.archived(ctx, props, edit, at),
       Mode::Refused { version, at } => self.refused(ctx, props, edit, (version, at)),
       Mode::Editing => self.editing(ctx, props, edit, kept),
       Mode::Waiting {
@@ -174,12 +206,15 @@ impl McpPanel {
     saved: &Result<Option<Saved>, EditError>,
   ) -> Option<Parts> {
     let fields = self.edit.fields.as_ref()?;
+    let based = self.edit.base.lock().clone()?;
     let pending = self.edit.publish.state().get().is_pending();
     let form = fields.edit(
       ctx,
       &EditView {
         listing: &props.listing,
-        published: &edit.published,
+        // What is marked *changed in your draft* is what differs from the version the form was opened on, not from a
+        // newer one the team published since.
+        published: &based.fields,
         locked: pending,
       },
     );
@@ -194,7 +229,12 @@ impl McpPanel {
       Err(_) => Kept::Not,
     };
     let refused = self.edit.refused.get();
-    let mut above = vec![edit_view::draft_note(ctx, edit.number, (kept, &form.changed))];
+    let mut above: Vec<Element> = edit
+      .newer
+      .iter()
+      .map(|newer| self.newer_line(ctx, newer, true))
+      .collect();
+    above.push(edit_view::draft_note(ctx, based.number, (kept, &form.changed)));
     // Fields that do not make a server yet are said by their rows; a draft the disk or the role would not keep is said
     // here, with why.
     if let Err(EditError::Store(why)) = saved {
@@ -208,7 +248,7 @@ impl McpPanel {
     let publishable = form.valid && !form.changed.is_empty() && !pending;
     let bar = EditBar {
       publish: self.publish_button(ctx, (input, None), publishable, pending),
-      discard: self.discard_button(ctx, "team-hub-edit-discard", "team_hub.edit.bar.discard", (edit, None)),
+      discard: self.discard_button(ctx, "team-hub-edit-discard", "team_hub.edit.bar.discard", None),
       refused_at: refused.as_ref().map(|(_, at)| *at),
       reverts: None,
       team: &props.team,
@@ -216,7 +256,7 @@ impl McpPanel {
     .render(ctx);
     let note = ctx.t("team_hub.edit.fromTeamEditing");
     let mut chips = vec![(
-      ctx.t_args("team_hub.edit.chip.draft", [("version", edit.number.to_string())]),
+      ctx.t_args("team_hub.edit.chip.draft", [("version", based.number.to_string())]),
       BadgeTone::Warning,
     )];
     chips.push(readiness_chip(ctx, props));
@@ -229,6 +269,7 @@ impl McpPanel {
       from_team: section(ctx, vec![note_text("team-hub-from-team-note", &note).into()], form.rows),
       computer: true,
       bar: Some(bar),
+      dialogs: Vec::new(),
     })
   }
 
@@ -268,6 +309,7 @@ impl McpPanel {
       from_team: section(ctx, vec![note_text("team-hub-from-team-note", &words).into()], rows),
       computer: false,
       bar: Some(edit_view::waiting_bar(ctx, cancel("team-hub-edit-cancel").pinned())),
+      dialogs: Vec::new(),
     }
   }
 
@@ -298,6 +340,7 @@ impl McpPanel {
       from_team: from_team::section(ctx, &props.sheet),
       computer: true,
       bar: None,
+      dialogs: Vec::new(),
     }
   }
 
@@ -324,14 +367,10 @@ impl McpPanel {
       computer: false,
       bar: Some(edit_view::read_only_bar(
         ctx,
-        self.discard_button(
-          ctx,
-          "team-hub-edit-discard",
-          "team_hub.edit.bar.discardMine",
-          (edit, None),
-        ),
+        self.discard_button(ctx, "team-hub-edit-discard", "team_hub.edit.bar.discardMine", None),
         &props.team,
       )),
+      dialogs: Vec::new(),
     })
   }
 
@@ -362,6 +401,7 @@ impl McpPanel {
         press,
       }
       .render(ctx),
+      dialogs: Vec::new(),
     }
   }
 
@@ -387,28 +427,25 @@ impl McpPanel {
     if !publishable {
       return button.disabled();
     }
-    let (publish, gate) = (self.edit.publish.clone(), self.gate.clone());
+    let (publish, gate, base) = (self.edit.publish.clone(), self.gate.clone(), self.edit.base.clone());
     button.on_click(move || {
       let decided = input_may_decide(gate.as_ref(), Guarded::PermissionWidening);
-      publish.run((input.clone(), decided, refused));
+      // A form with no base has nothing to save over: nothing is sent.
+      if let Some(based) = base.lock().clone() {
+        publish.run((input.clone(), based.number, decided, refused));
+      }
     })
   }
 
   /// *Discard draft*: the draft goes and the form shows the version again; the refused version in the outbox, when
   /// there is one, goes back to being the draft first, and the form shows the team's version.
-  pub(super) fn discard_button(
-    &self,
-    ctx: &Ctx,
-    id: &str,
-    key: &str,
-    (edit, refused): (&McpEdit, Option<VersionId>),
-  ) -> ActionButton {
+  pub(super) fn discard_button(&self, ctx: &Ctx, id: &str, key: &str, refused: Option<VersionId>) -> ActionButton {
     let button = edit_view::discard_button(ctx, id, key);
     if self.edit.discard.state().get().is_pending() {
       return button.loading();
     }
-    let (discard, published) = (self.edit.discard.clone(), edit.published.clone());
-    button.on_click(move || discard.run((published.clone(), refused)))
+    let discard = self.edit.discard.clone();
+    button.on_click(move || discard.run(refused))
   }
 
   /// Why the last *Discard draft* or *Cancel sending* did nothing, under the notices; `None` before one failed.

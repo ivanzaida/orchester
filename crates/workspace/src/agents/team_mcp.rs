@@ -80,15 +80,24 @@ pub struct TeamMcpSheet {
   pub edit: Option<McpEdit>,
 }
 
-/// A sheet for each team MCP server that has a version cached here. `profiles` are the team's profile sheets by
-/// resource, which say who uses it; `programs` the paths this computer set for the team server.
+/// A sheet for each team MCP server that has a version cached here, and each archived one that keeps a draft.
+/// `profiles` are the team's profile sheets by resource, which say who uses it; `programs` the paths this computer set
+/// for the team server.
 pub(super) fn sheets(
   db: &ProjectDb,
   programs: &[McpServerProgram],
   profiles: &[(ResourceId, TeamProfileSheet)],
 ) -> Result<Vec<(ResourceId, TeamMcpSheet)>, StoreError> {
   let mut sheets = Vec::new();
-  for resource in db.resources(orchester_core::resource::ResourceKind::McpServer)? {
+  // An archived server whose draft is kept here is shown too: the draft stays to copy, discard or publish once the
+  // server is restored.
+  let mut resources = db.resources(orchester_core::resource::ResourceKind::McpServer)?;
+  resources.extend(
+    db.archived_with_draft(orchester_core::resource::ResourceKind::McpServer)?
+      .into_iter()
+      .map(|(resource, _)| resource),
+  );
+  for resource in resources {
     let Some(version) = db.latest_version::<TeamMcpServer>(resource.id())? else {
       continue;
     };

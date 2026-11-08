@@ -83,10 +83,17 @@ pub enum HubText {
   EmptyTitle,
   /// 12.5 `text_muted`, 1.45: what a member's empty state says under it (`Text` `dxKHH` in M5 `ITxzr`).
   EmptyDetail,
+  /// 12 `text_secondary`, 1.4: a field's name in the comparison of a conflict (`Text` `CgI3H` in A19 `DV8OI`).
+  CompareField,
+  /// Geist Mono 11.5 `text_muted`, 1.35: the base's value under the field's name (`Text` `dwkJy` in A19).
+  CompareBase,
+  /// Geist Mono 12 `text_primary`, 1.45: a version's value in a cell of the comparison (`Text` `MHVDH` in A19); the
+  /// side a result does not take is `text_muted`.
+  CompareCell,
 }
 
 impl HubText {
-  pub const ALL: [Self; 27] = [
+  pub const ALL: [Self; 30] = [
     Self::PageTitle,
     Self::Crumb,
     Self::GroupTitle,
@@ -114,6 +121,9 @@ impl HubText {
     Self::NoticeTitle,
     Self::EmptyTitle,
     Self::EmptyDetail,
+    Self::CompareField,
+    Self::CompareBase,
+    Self::CompareCell,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -149,6 +159,9 @@ impl HubText {
       Self::NoticeTitle => "hub_notice_title",
       Self::EmptyTitle => "hub_empty_title",
       Self::EmptyDetail => "hub_empty_detail",
+      Self::CompareField => "hub_compare_field",
+      Self::CompareBase => "hub_compare_base",
+      Self::CompareCell => "hub_compare_cell",
     }
   }
 
@@ -181,6 +194,9 @@ impl HubText {
       Self::NoticeTitle => style(12.5, FontWeight::SemiBold, 1.4, 0.0, palette.text_primary),
       Self::EmptyTitle => style(14.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
       Self::EmptyDetail => style(12.5, FontWeight::Normal, 1.45, 0.0, palette.text_muted),
+      Self::CompareField => style(12.0, FontWeight::Normal, 1.4, 0.0, palette.text_secondary),
+      Self::CompareBase => mono(style(11.5, FontWeight::Normal, 1.35, 0.0, palette.text_muted)),
+      Self::CompareCell => mono(style(12.0, FontWeight::Normal, 1.45, 0.0, palette.text_primary)),
     }
   }
 }
@@ -229,10 +245,18 @@ pub enum HubSpacing {
   Key,
   /// 190: the key of a create form's rows (`Key` `G7irn` in A10 `hGdGu`, `iS1Ix` in A8 `vPoTQ`).
   KeyForm,
+  /// 130: the field column of the comparison of a conflict (`Field` `ht9l0` in A19 `DV8OI`).
+  CompareKey,
+  /// 150: its result column (`Result` `n5P6EH` in A19).
+  CompareResult,
+  /// 9: over and under a row of the comparison (`Compare · Arguments` `y2CGmu` in A19).
+  CompareY,
+  /// 12: a row of the comparison from its sides and its cells apart (`Compare · head` `fEqfS` in A19).
+  CompareSide,
 }
 
 impl HubSpacing {
-  pub const ALL: [Self; 20] = [
+  pub const ALL: [Self; 24] = [
     Self::Side,
     Self::HeadTop,
     Self::HeadBottom,
@@ -253,6 +277,10 @@ impl HubSpacing {
     Self::Actions,
     Self::Key,
     Self::KeyForm,
+    Self::CompareKey,
+    Self::CompareResult,
+    Self::CompareY,
+    Self::CompareSide,
   ];
 
   pub fn role(self) -> SpacingSize {
@@ -281,6 +309,10 @@ impl HubSpacing {
       Self::Actions => "hub_actions",
       Self::Key => "hub_key",
       Self::KeyForm => "hub_key_form",
+      Self::CompareKey => "hub_compare_key",
+      Self::CompareResult => "hub_compare_result",
+      Self::CompareY => "hub_compare_y",
+      Self::CompareSide => "hub_compare_side",
     }
   }
 
@@ -301,6 +333,10 @@ impl HubSpacing {
       Self::Actions => 56.0,
       Self::Key => 170.0,
       Self::KeyForm => 190.0,
+      Self::CompareKey => 130.0,
+      Self::CompareResult => 150.0,
+      Self::CompareY => 9.0,
+      Self::CompareSide => 12.0,
     }
   }
 }

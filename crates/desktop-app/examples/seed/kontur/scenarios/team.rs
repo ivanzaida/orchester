@@ -350,6 +350,32 @@ pub fn create_name_taken(kontur: &mut Kontur) -> Result<(), SeedError> {
   edit_in(kontur, State::TeamCreateNameTaken)
 }
 
+/// As [`edit`], with a draft of `pencil-design` kept on v1 and olha's v2 published meanwhile and read here: one quiet
+/// line says so, with *View changes* (`team-edit-newer`, A18 `bk4i9`). The QA app makes it without a press.
+pub fn edit_newer(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditNewer)
+}
+
+/// As [`edit_newer`], after a *Publish for the team* that the server answered with the conflict: the page compares v1,
+/// olha's v2 and the draft field by field, the arguments both changed (`team-edit-conflicting`, A19 `DV8OI`; *Discard
+/// my draft* opens A20 `CAPhQ`). The QA app makes it without a press.
+pub fn edit_conflicting(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditConflicting)
+}
+
+/// As [`edit_conflicting`], with no field both changed, so *Rebase my draft* needs no pick
+/// (`team-edit-conflict-clean`).
+pub fn edit_conflict_clean(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditConflictClean)
+}
+
+/// As [`edit`], olha archived `pencil-design` while the draft was kept and the *Publish for the team* that followed was
+/// refused: the draft stays, *Restore* is the way back (`team-edit-archived`, A21 `yqYj9`). The QA app makes it without
+/// a press.
+pub fn edit_archived(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditArchived)
+}
+
 fn edit_in(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
   super::team_hub::resources(kontur)?;
   write_marker(kontur, state)

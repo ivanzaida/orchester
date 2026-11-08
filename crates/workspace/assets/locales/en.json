@@ -2121,7 +2121,16 @@
         "changed": "Someone published v{{version}} from the same version first; your draft is now on v{{version}}.",
         "other": "The team's server refused it ({{code}})."
       },
-      "blocked": "An earlier version of this wasn't taken by the team's server, so this one waits behind it and is not sent. Take that one back as a draft first."
+      "blocked": "An earlier version of this wasn't taken by the team's server, so this one waits behind it and is not sent. Take that one back as a draft first.",
+      "rebase": {
+        "unresolved": "Pick Mine or Theirs for each field you both changed, then rebase.",
+        "changed": "The team or your draft changed since this comparison, so it is read again. Compare once more, then rebase.",
+        "nothingNewer": "The team has nothing newer than the version your draft is based on."
+      },
+      "restore": {
+        "notAdmin": "Only an admin of the team can restore a resource.",
+        "refused": "The team's server did not restore it ({{code}})."
+      }
     },
     "errors": {
       "serverOnly": "This change is made on the server for a shared project, and this screen cannot send it there yet.",

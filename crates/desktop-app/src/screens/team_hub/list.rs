@@ -51,6 +51,17 @@ pub(super) fn list(ctx: &lurq::app::ctx::Ctx, listing: &Listing, shown: &Shown<'
         .with_children(entries.into_iter().map(|entry| row(ctx, listing, entry, shown))),
     )
   });
+  let archived: Vec<&Entry> = listing.archived(shown.filter).collect();
+  let archived = (!archived.is_empty()).then(|| {
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .child(section_named(
+        ctx,
+        ("archived", "team_hub.group.archived", PaletteColor::TextMuted),
+        archived.len(),
+      ))
+      .with_children(archived.into_iter().map(|entry| row(ctx, listing, entry, shown)))
+  });
   let groups = Column::new()
     .id("team-hub-list")
     .width(Dimension::Pct(100.0))
@@ -58,6 +69,7 @@ pub(super) fn list(ctx: &lurq::app::ctx::Ctx, listing: &Listing, shown: &Shown<'
     .spacing(SpacingSize::Sm)
     .with_children(shown.adding.map(|kind| create::new_row(ctx, kind)))
     .with_children(groups)
+    .with_children(archived)
     .with_children(note(ctx, shown.filter));
   ScrollVertical::new(groups)
     .id("team-hub-list-scroll")
@@ -67,11 +79,19 @@ pub(super) fn list(ctx: &lurq::app::ctx::Ctx, listing: &Listing, shown: &Shown<'
 }
 
 fn section(ctx: &lurq::app::ctx::Ctx, group: Group, count: usize) -> Row {
-  let (name, key, color) = match group {
-    Group::NeedsYouHere => ("needs", "team_hub.group.needs", PaletteColor::Warning),
-    Group::Ready => ("ready", "team_hub.group.ready", PaletteColor::TextMuted),
-    Group::OffHere => ("off", "team_hub.group.off", PaletteColor::TextMuted),
-  };
+  section_named(
+    ctx,
+    match group {
+      Group::NeedsYouHere => ("needs", "team_hub.group.needs", PaletteColor::Warning),
+      Group::Ready => ("ready", "team_hub.group.ready", PaletteColor::TextMuted),
+      Group::OffHere => ("off", "team_hub.group.off", PaletteColor::TextMuted),
+    },
+    count,
+  )
+}
+
+/// A section's title row: its name in element ids, its words' key and the color of its count.
+fn section_named(ctx: &lurq::app::ctx::Ctx, (name, key, color): (&str, &str, PaletteColor), count: usize) -> Row {
   Row::new()
     .id(format!("team-hub-section-{name}"))
     .width(Dimension::Pct(100.0))

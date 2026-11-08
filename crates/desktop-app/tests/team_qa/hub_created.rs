@@ -1,6 +1,6 @@
 //! A new MCP server made in the hub while the team server cannot be reached, and what becomes of its first version in
 //! the outbox (`Agents · v2` A15 `dLqHC`, A16 `x3ywL`, ORC-835, ORC-836): it waits and can be cancelled from the panel;
-//! a send that failed here after the server may have answered keeps it queued; one the server refused later, with the
+//! a send that failed here after the server answered keeps it queued; one the server refused later, with the
 //! person's work over it, stays listed, with the way out its waiting bar offers.
 //!
 //! `cargo test -p orchester-app --features test-support --test team_qa team_qa_hub_edit`
@@ -20,7 +20,7 @@ use orchester_workspace::{
 };
 
 use super::{
-  hub_edit::{db, on_pencil_until},
+  hub_edit::{db, fail_keeping_the_servers_number, on_pencil_until},
   team::State,
 };
 
@@ -29,16 +29,12 @@ const TEAM_CHIP: &str = "team-hub-chip-team";
 
 #[test]
 fn team_qa_hub_edit_a_created_send_that_failed_here_after_the_server_may_have_answered_stays_queued() {
-  let (window, _server, _) = on_pencil_until(("team-edit", State::TeamEdit), TEAM_CHIP);
+  let (window, server, _) = on_pencil_until(("team-edit", State::TeamEdit), TEAM_CHIP);
   let services = window.launch.services().expect("the session");
   let root = window.data.repo("repo-kontur");
-  // The server this project is shared on is gone from Settings before the server is made, so no pass of the app's own
-  // sends it first: the send fails on this computer, not for being offline.
-  let link = db(&window).sharing().expect("read").expect("linked");
-  let app = rusqlite::Connection::open(window.data.database()).expect("the application database");
-  app
-    .execute("DELETE FROM servers WHERE id = ?1", [link.server.to_string()])
-    .expect("the server is removed");
+  // The server is reached and numbers the version, then keeping its number fails on this computer: the send failed
+  // here after the server answered.
+  fail_keeping_the_servers_number(&window);
   let made = create_team_mcp_server(
     &root,
     &team_mcp_server(&new_server("fresh-four"), &team_mcp_names(&root).expect("names")).expect("a server"),
@@ -46,10 +42,17 @@ fn team_qa_hub_edit_a_created_send_that_failed_here_after_the_server_may_have_an
   .expect("made");
   let created = window.data.runtime.block_on(services.servers.send_created(&root, made));
   assert!(matches!(created, Err(NotCreated::Failed(_))), "{created:?}");
+  assert!(
+    server
+      .resources("kontur")
+      .iter()
+      .any(|(resource, _)| resource["id"] == made.to_string()),
+    "the server holds the new resource"
+  );
   assert_eq!(
     db(&window).waiting_publishes().expect("outbox").len(),
     1,
-    "the version stays queued: a retry is idempotent, and the server may hold it"
+    "the version stays queued: a retry is idempotent, and the server holds it"
   );
   assert!(
     db(&window)
@@ -115,7 +118,13 @@ fn team_qa_hub_edit_a_created_server_refused_later_with_work_over_it_stays_liste
   if let Runs::Program { arguments, .. } = &mut fields.runs {
     *arguments = vec!["--more".to_owned()];
   }
-  orchester_workspace::agents::team_mcp_edit::save(&root, made, &fields).expect("a draft over v1");
+  orchester_workspace::agents::team_mcp_edit::save(
+    &root,
+    made,
+    &fields,
+    orchester_core::resource::VersionNumber::FIRST,
+  )
+  .expect("a draft over v1");
   server.reject_content("kontur", "body");
   server.set_down(false);
   let services = window.launch.services().expect("the session").clone();

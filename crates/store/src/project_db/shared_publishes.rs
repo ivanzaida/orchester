@@ -145,6 +145,26 @@ impl ProjectDb {
     version: VersionId,
     now: Timestamp,
   ) -> Result<(), StoreError> {
+    self.reopen::<B>(version, now, DraftBase::Latest)
+  }
+
+  /// As [`ProjectDb::reopen_draft`], the draft staying edited from the version `version` was edited from, which is
+  /// older than the latest the server numbered when someone published meanwhile: the three-way merge of the draft with
+  /// that version needs it, and a draft claiming the latest would publish over it unseen.
+  pub fn reopen_draft_on_its_base<B: ResourceBody + Clone>(
+    &mut self,
+    version: VersionId,
+    now: Timestamp,
+  ) -> Result<(), StoreError> {
+    self.reopen::<B>(version, now, DraftBase::Kept)
+  }
+
+  fn reopen<B: ResourceBody + Clone>(
+    &mut self,
+    version: VersionId,
+    now: Timestamp,
+    base: DraftBase,
+  ) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
     // The versions go before their rows in `shared_publishes`, which the delete trigger reads.
     transaction.pragma_update(None, "defer_foreign_keys", true)?;
@@ -162,6 +182,10 @@ impl ProjectDb {
     check_kind::<B>(&transaction, resource)?;
     ensure_may_change(&transaction, resource)?;
     let latest = latest_confirmed(&transaction, resource)?.ok_or_else(|| corrupt("unsent version", version))?;
+    let based_on = match base {
+      DraftBase::Latest => latest,
+      DraftBase::Kept => confirmed_base(&transaction, version)?.map_or(latest, |base| base.min(latest)),
+    };
     let taken = load_versions::<B>(
       &transaction,
       "WHERE resource_id = ?1 AND number >= ?2 AND id IN (SELECT version_id FROM shared_publishes) ORDER BY number",
@@ -187,7 +211,7 @@ impl ProjectDb {
         [kept.id().to_string()],
       )?;
     }
-    let draft = Draft::new(body, Some(version_number(latest)?), now);
+    let draft = Draft::new(body, Some(version_number(based_on)?), now);
     save_draft(&transaction, resource, &draft)?;
     transaction.commit()?;
     Ok(())
@@ -246,6 +270,38 @@ impl ProjectDb {
     }
     Ok(())
   }
+}
+
+/// The version a taken-back draft stays edited from.
+#[derive(Clone, Copy)]
+enum DraftBase {
+  /// The latest version the server numbered.
+  Latest,
+  /// The one the version was edited from.
+  Kept,
+}
+
+/// The number of the version `version` was edited from, when that is one the server numbered. A base that waits for the
+/// server itself (a version published on top of another one that was not sent) is followed to the version it was
+/// edited from, until one the server numbered.
+fn confirmed_base(connection: &Connection, version: VersionId) -> Result<Option<i64>, StoreError> {
+  Ok(
+    connection
+      .query_row(
+        "WITH RECURSIVE chain(base_version_id) AS ( \
+           SELECT base_version_id FROM shared_publishes WHERE version_id = ?1 \
+           UNION \
+           SELECT shared_publishes.base_version_id FROM shared_publishes \
+           JOIN chain ON shared_publishes.version_id = chain.base_version_id \
+         ) \
+         SELECT base.number FROM chain \
+         JOIN resource_versions AS base ON base.id = chain.base_version_id \
+         WHERE base.id NOT IN (SELECT version_id FROM shared_publishes)",
+        [version.to_string()],
+        |row| row.get(0),
+      )
+      .optional()?,
+  )
 }
 
 /// Whether the person may change a shared project's team configuration; `None` while the project is local.

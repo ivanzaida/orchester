@@ -25,7 +25,7 @@ use crate::{
   theme::{ExtraColor, ExtraSpacing, HubText, IconSize},
   ui::{
     agent_mark::AgentMark,
-    icon::icon,
+    icon::{Icon, icon},
     pressable::{inert, opening},
   },
 };
@@ -78,6 +78,9 @@ pub(super) fn row(ctx: &Ctx, listing: &Listing, entry: &Entry, shown: &Shown<'_>
 
 /// The glyph at a row's start: a profile's CLI's own mark, else the glyph of what the resource is.
 fn mark(ctx: &Ctx, entry: &Entry) -> Element {
+  if entry.archived.is_some() {
+    return icon(Icon::Archive, IconSize::Lg, PaletteColor::Danger).into();
+  }
   match entry.cli {
     Some(cli) => AgentMark::of(cli).render(ctx, IconSize::Lg),
     None => icon(entry.glyph(), IconSize::Lg, glyph_color(entry)).into(),
