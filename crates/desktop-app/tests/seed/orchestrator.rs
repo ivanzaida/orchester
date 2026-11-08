@@ -1,6 +1,6 @@
 //! The `orchestrator` scenario: its waits stand as the conversation reads them, under the keys the app's follower
 //! keeps them by, so following the project keeps nothing new; and the runs-on picker's sign-ins, with their checks and
-//! plan reads, are in the application database.
+//! plan reads, are in the application database. `orchestrator-leads` has its subscriptions standing.
 
 use orchester_core::{
   account::AccountState,
@@ -16,6 +16,7 @@ use orchester_workspace::orchestrator::{
 };
 
 use super::Seed;
+use crate::kontur::scenarios::orchestrator::leads;
 
 /// The conversation of `seed` titled `title`, as the screen reads it.
 fn conversation(seed: &Seed, title: &str) -> ChatView {
@@ -84,4 +85,49 @@ fn seed_orchestrator_adds_the_pickers_sign_ins_with_their_plan_use() {
   assert_eq!(state("Work"), (AccountState::SignedIn, true));
   assert_eq!(state("Personal"), (AccountState::SignedIn, true));
   assert_eq!(state("Client"), (AccountState::NotSignedIn, false));
+}
+
+#[test]
+fn seed_orchestrator_leads_has_led_modules_a_task_the_project_and_an_already_led_target() {
+  let seed = Seed::of("orchestrator-leads");
+  let db = seed.db();
+  let leading = conversation(&seed, leads::LEADING);
+  let billing = conversation(&seed, leads::BILLING);
+  let subscriptions = db.active_subscriptions().expect("the subscriptions");
+  let led: Vec<(WatchTarget, &str)> = subscriptions
+    .of_chat(leading.chat.id())
+    .map(|subscription| (subscription.target(), subscription.order().unwrap_or("")))
+    .collect();
+  assert_eq!(led.len(), 3, "a module, a task and the project: {led:?}");
+  assert!(
+    led
+      .iter()
+      .any(|(target, order)| matches!(target, WatchTarget::Module(_)) && *order == leads::WEBHOOKS_ORDER),
+    "Webhooks v2 with its order: {led:?}"
+  );
+  assert!(
+    led.iter().any(|(target, _)| matches!(target, WatchTarget::Task(_))),
+    "the task: {led:?}"
+  );
+  let project = subscriptions.of(WatchTarget::Project).expect("the project is led");
+  assert_eq!(project.chat(), leading.chat.id());
+  assert_eq!(project.order(), None, "the project's default order applies");
+  let other: Vec<_> = subscriptions.of_chat(billing.chat.id()).collect();
+  assert_eq!(other.len(), 1, "Billing is led in the other conversation");
+  assert!(matches!(other[0].target(), WatchTarget::Module(_)));
+  assert_eq!(other[0].order(), Some(leads::BILLING_ORDER));
+  assert_eq!(
+    db.orchestrator_watch().expect("watch settings").default_order(),
+    leads::DEFAULT_ORDER
+  );
+  let latest = db.chats().expect("the conversations");
+  let newest = latest
+    .iter()
+    .max_by_key(|listing| listing.last)
+    .expect("a conversation");
+  assert_eq!(
+    newest.chat.id(),
+    leading.chat.id(),
+    "the Orchestrator opens on the leading conversation"
+  );
 }

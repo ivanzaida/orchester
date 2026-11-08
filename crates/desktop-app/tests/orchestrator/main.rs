@@ -41,6 +41,7 @@ mod open_long;
 mod paste;
 mod plan_only;
 mod proposal;
+mod qa_person;
 mod queue;
 mod reading;
 mod references;
