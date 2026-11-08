@@ -6,6 +6,7 @@
 //! project's agents and the ends of its runs it follows, the project's daily report, and the person's watch commands
 //! it applies itself (`watch`). The project's runner runs the agent; the app serves its tools.
 
+mod acts;
 pub mod approval;
 pub mod auto_merge;
 mod blocked;

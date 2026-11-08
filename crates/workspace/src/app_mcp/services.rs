@@ -41,9 +41,10 @@ pub struct Services {
   /// of the Orchestrator chat): what it widens is theirs to decide, as in the window, not *Let automation change agent
   /// permissions*, but only for the draft they decided on and what they were shown it widens.
   pub(super) person: Option<Arc<PersonDecision>>,
-  /// The Orchestrator chat publishes under the person's *Let the Orchestrator publish drafts*, which covers what a
-  /// publication changes in agents' prompts (`docs/design/orchestrator-toolset.md`, decision 3), never what it widens.
-  pub(super) chat_publishes: bool,
+  /// The Orchestrator chat drives under the person's *Let the Orchestrator drive*, which covers what a publication
+  /// changes in agents' prompts (`docs/design/orchestrator-toolset.md`, decision 3), never what it widens, and the
+  /// decisions on a stopped run that *Let automation answer approvals* covers for another client.
+  pub(super) chat_drives: bool,
 }
 
 /// What a person decided: to publish the draft saved at `saved`, as version `version` (`draft`; `None` for a change
@@ -73,7 +74,7 @@ impl Services {
       jobs,
       ci_reads: CiReads::default(),
       person: None,
-      chat_publishes: false,
+      chat_drives: false,
     }
   }
 
@@ -85,18 +86,23 @@ impl Services {
     self
   }
 
-  /// These services for a publication the Orchestrator chat makes itself ([`Self::chat_publishes`]). Only the chat
-  /// asks for it, once it read that the person turned on *Let the Orchestrator publish drafts*.
+  /// These services for the calls of the Orchestrator chat while it drives ([`Self::chat_drives`]). Only the chat asks
+  /// for it, once it read that the person turned on *Let the Orchestrator drive*.
   #[must_use]
-  pub(crate) const fn published_by_chat(mut self) -> Self {
-    self.chat_publishes = true;
+  pub(crate) const fn driven_by_chat(mut self) -> Self {
+    self.chat_drives = true;
     self
   }
 
-  /// Whether a person decided what the publication changes in agents' prompts: they applied it, or let the chat
-  /// publish it.
+  /// Whether the Orchestrator chat drives: the person's switch lets it decide what a stopped run needs (accepting a
+  /// step, raising limits) that only a person's *Let automation answer approvals* lets another client decide.
+  pub(super) const fn chat_drives(&self) -> bool {
+    self.chat_drives
+  }
+
+  /// Whether a person decided what the publication changes in agents' prompts: they applied it, or let the chat drive.
   pub(super) fn prompt_decided(&self) -> bool {
-    self.person.is_some() || self.chat_publishes
+    self.person.is_some() || self.chat_drives
   }
 
   /// Refused unless no person decided the call, or the draft of `resource` is the one they decided on: saved when

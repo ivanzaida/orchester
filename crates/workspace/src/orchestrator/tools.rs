@@ -1,48 +1,30 @@
 //! The domain tools the Orchestrator's agent gets (`docs/design/orchestrator-toolset.md`): a part of Orchester's own
 //! MCP tools ([`crate::app_mcp`]). Each call goes through the same tool an MCP client of the app calls, so it is
-//! refused or carried out exactly as for that client: what only a person decides stays refused (`person_only`),
-//! approvals and plan decisions stay with people and runs start through the scheduling checks. It reads every
-//! project; a change that names another project is refused before it reaches the tool, and a change is given the
-//! chat's project by its id, never by a name. Publishing a draft, canceling, merging a run, answering an agent's
-//! question, sending a run's agents a message and deciding how a stopped run goes on wait for the person
-//! ([`super::change`]) unless the person's switch lets the chat do it itself (publishing, merging, answering; never
-//! canceling or deciding how a stopped run goes on), and so does starting a run unless the project allows Autopilot
-//! ([`super::proposal`]). An interrupted run is continued only under the person's switch ([`super::guard`]), and a
-//! finished run is merged in a turn nobody asked for only under the person's switches ([`super::auto_merge`]). The
-//! chat's own `init_repository` is always the person's to apply ([`super::repository`]); its git tools read always,
-//! write under the person's switch and only propose what can lose work ([`super::git`]); its MCP server tools only
-//! propose what widens what agents may do ([`super::mcp_servers`]). What the agent changed, or tried to, is kept in
-//! its conversation as an action; what it reads of each tool that works otherwise here is [`super::told`]'s.
+//! refused or carried out exactly as for that client: what only a person decides stays refused (`person_only`) and
+//! runs start through the scheduling checks. It reads every project; a change that names another project is refused
+//! before it reaches the tool, and a change is given the chat's project by its id, never by a name. While the
+//! project's switch *Let the Orchestrator drive* is on, the chat has every domain tool of the app and each change is
+//! carried out at once; while it is off, publishing a draft, canceling, merging a run, answering an agent's question,
+//! sending a run's agents a message and deciding how a stopped run goes on wait for the person ([`super::change`]),
+//! and so does starting a run unless the project allows Autopilot ([`super::proposal`]) ([`super::acts`]). The chat's
+//! own `init_repository` makes the project a git repository ([`super::repository`]); its git tools read always and
+//! write while the chat drives, and only propose what can lose work ([`super::git`]); its MCP server tools only
+//! propose what widens what agents may do while it does not drive ([`super::mcp_servers`]). What the agent changed, or
+//! tried to, is kept in its conversation as an action; what it reads of each tool that works otherwise here is
+//! [`super::told`]'s.
 
 use std::path::PathBuf;
 
-use orchester_core::{
-  id::{ChatId, ProjectId, RunId},
-  orchestrator::{
-    ActionOutcome, ChatAction,
-    change::{ProposedChange, Publishing},
-  },
-  run::Answerer,
-};
-use orchester_store::ProjectDb;
+use orchester_core::id::{ChatId, ProjectId};
 use rmcp::model::{JsonObject, Tool};
 use serde_json::Value;
 
 use super::{
+  acts::{act_and_keep, drives},
   approval::{self, APPLY_PROPOSAL},
-  auto_merge::{self, MergeAs},
-  blocked,
-  change::{
-    self,
-    control::{self, QueueCall, RELEASE_QUEUE, RESUME_RUN, ToldTo},
-  },
-  created::{self, CREATE_TASK},
-  duplicate, git, guard,
-  keep::{self, HOLD_QUEUE, Named},
-  leads, mcp_servers,
+  duplicate, git, guard, leads, mcp_servers,
   own_project::{in_own_project, own_project_by_id},
   plan::{self, PROPOSE_PLAN},
-  proposal,
   repository::{self, INIT_REPOSITORY},
   told,
   waits_on::{self, WAIT_ON_TASK},
@@ -50,16 +32,14 @@ use super::{
 use crate::{
   app_mcp::{self, Services, ToolError, Translate, blocking},
   runner::Runners,
-  workspace::OrchestratorConsent,
 };
 
-/// The tools of the chat, by name: reading every project's work, setup and tasks' conversations, task drafts and
-/// drafts of what agents run on, making and changing modules (drafts-level: they only organize tasks), pausing and
-/// resuming a run, holding and releasing new starts, and what waits for the person or the person's switch: starting
-/// a run, publishing a draft, canceling and merging a run, answering an agent's question, sending a run's agents a
-/// message and continuing a run that waits for a person's decision. Approvals, plan decisions, project setup,
-/// connections, MCP servers, the environment and what removes work are not among them. A name whose tool the app
-/// does not have (yet) is not listed ([`listed`]).
+/// The tools of the chat while it does not drive, by name: reading every project's work, setup and tasks'
+/// conversations, task drafts and drafts of what agents run on, making and changing modules (drafts-level: they only
+/// organize tasks), pausing and resuming a run, holding and releasing new starts, and what waits for the person:
+/// starting a run, publishing a draft, canceling and merging a run, answering an agent's question, sending a run's
+/// agents a message and continuing a run that waits for a person's decision. While it drives, it has every other tool
+/// of the app too ([`listed`]). A name whose tool the app does not have (yet) is not listed.
 pub const TOOLS: [&str; 58] = [
   "list_projects",
   "get_project",
@@ -156,28 +136,39 @@ pub const CHAT_TOOLS: [&str; 25] = [
 
 /// The tool whose call starts a run, or proposes it.
 pub(super) const RUN_TASK: &str = "run_task";
-/// The tool whose calls always wait for the person.
+/// The tool whose calls wait for the person unless the chat drives.
 pub(super) const CANCEL_RUN: &str = "cancel_run";
-/// The tool whose calls wait for the person unless *Let the Orchestrator merge runs* is on.
 pub(in crate::orchestrator) const MERGE_RUN: &str = "merge_run";
-/// The tool whose calls always wait for the person, and only for a retry, a return to an earlier step or an agent's
-/// resolution of a merge's conflicts.
+/// The tool whose calls wait for the person unless the chat drives; while it does not, only for a retry, a return to
+/// an earlier step or an agent's resolution of a merge's conflicts.
 pub(super) const CONTINUE_RUN: &str = "continue_run";
-/// The tools whose calls wait for the person unless *Let the Orchestrator answer agents* is on.
 pub(super) const ANSWER_QUESTION: &str = "answer_question";
 pub(super) const SEND_MESSAGE: &str = "send_message";
 /// The tool whose copy the chat saves as a draft before it publishes it by the publication rule.
 pub(super) const DUPLICATE_PIPELINE: &str = "duplicate_pipeline";
 
-/// The chat's tools as `tools/list` answers: those of [`TOOLS`] the app has, each told how it works in the chat, and
-/// the chat's own ([`CHAT_TOOLS`]).
-pub fn listed() -> Vec<Tool> {
+/// The app's tools the chat does not get even while it drives: creating a project is no work of one project's chat,
+/// and the chat has MCP server tools of its own ([`mcp_servers::NAMES`]) that apply the app's.
+const NOT_DRIVEN: [&str; 5] = [
+  "add_project",
+  "add_mcp_server",
+  "update_mcp_server",
+  "set_mcp_server_enabled",
+  "remove_mcp_server",
+];
+
+/// The chat's tools as `tools/list` answers: those of [`TOOLS`] the app has, and, while the chat `drives`, every other
+/// domain tool of the app but [`NOT_DRIVEN`]; each told how it works in the chat, and the chat's own ([`CHAT_TOOLS`]).
+pub fn listed(drives: bool) -> Vec<Tool> {
   app_mcp::listed()
     .into_iter()
     .chain(app_mcp::setup::listed())
-    .filter(|tool| TOOLS.contains(&tool.name.as_ref()))
+    .filter(|tool| {
+      let name = tool.name.as_ref();
+      TOOLS.contains(&name) || (drives && !NOT_DRIVEN.contains(&name))
+    })
     .map(|mut tool| {
-      if let Some(told) = told::in_chat(&tool) {
+      if let Some(told) = told::in_chat(&tool, drives) {
         tool.description = Some(told.into());
       }
       tool
@@ -186,6 +177,11 @@ pub fn listed() -> Vec<Tool> {
     .chain(git::tools())
     .chain(mcp_servers::tools())
     .collect()
+}
+
+/// The chat's tools in `scope` as `tools/list` answers: [`listed`] for whether the project lets the chat drive.
+pub async fn listed_in(services: &Services, scope: &ChatScope) -> Result<Vec<Tool>, ToolError> {
+  Ok(listed(drives(services, scope).await?))
 }
 
 /// Whether the chat's tool `name` only reads, as its listing says; one the chat does not have changes something.
@@ -214,14 +210,14 @@ pub struct ChatScope {
 /// Calls the chat's tool `name` with `arguments` in `scope`; a change it made, proposed or refused is kept in the
 /// conversation (a proposal it applied for the person, on its card), and `runners` tell the chat it changed. In a turn
 /// that plans, every tool that changes something is refused before it is reached, and the refusal kept
-/// ([`super::plan`]).
+/// ([`super::plan`]). The tools it has depend on whether the project lets it drive ([`listed`]).
 pub async fn call(
   (services, translate, runners): (&Services, &Translate, &Runners),
   scope: &ChatScope,
   name: &str,
   mut arguments: JsonObject,
 ) -> Result<Value, ToolError> {
-  let tools = listed();
+  let tools = listed(drives(services, scope).await?);
   if !tools.iter().any(|tool| tool.name == name) {
     return Err(no_tool(name));
   }
@@ -254,322 +250,6 @@ pub async fn call(
     return duplicate::duplicate((services, translate, runners), scope, arguments).await;
   }
   act_and_keep((services, translate, runners), scope, name, &arguments).await
-}
-
-/// Carries out or proposes the change `name` with `arguments`, given the chat's project, and keeps its action in the
-/// conversation.
-pub(super) async fn act_and_keep(
-  (services, translate, runners): (&Services, &Translate, &Runners),
-  scope: &ChatScope,
-  name: &str,
-  arguments: &JsonObject,
-) -> Result<Value, ToolError> {
-  let acted = act((services, translate), scope, name, arguments).await;
-  let Acted { mut result, kept } = acted;
-  let outcome = match (&result, kept.waits) {
-    (Ok(_), Some(waits)) => waits,
-    (Ok(_), None) => ActionOutcome::Done,
-    (Err(error), _) => keep::refusal(error, translate),
-  };
-  let named = kept.task.map(Named::Task).or_else(|| keep::named_task(arguments));
-  let named = named.or_else(|| result.as_ref().ok().and_then(keep::created_task));
-  // A hold that held new starts keeps what it held, for its card.
-  let held = (name == HOLD_QUEUE && outcome == ActionOutcome::Done).then(|| keep::arguments_task(&named));
-  // A task created outside what the conversation watches comes back to it, unless another one leads it.
-  let watch = match (&mut result, name == CREATE_TASK && outcome == ActionOutcome::Done) {
-    (Ok(told), true) => created::watch_created(scope, told).await,
-    _ => None,
-  };
-  let action = ChatAction {
-    change: kept.change.map(Box::new),
-    started: kept.started,
-    resumed: kept.resumed,
-    auto_mode: kept.auto_mode,
-    on_its_own: kept.on_its_own,
-    watch,
-    ..ChatAction::new(name, None, outcome)
-  };
-  keep::keep(scope, (named, held), action).await;
-  runners.chat_changed(&scope.root);
-  result
-}
-
-/// What a change did: what the agent is told, and what its action keeps.
-struct Acted {
-  result: Result<Value, ToolError>,
-  kept: Kept,
-}
-
-impl Acted {
-  fn done(result: Result<Value, ToolError>) -> Self {
-    Self {
-      result,
-      kept: Kept::default(),
-    }
-  }
-}
-
-/// What an action keeps beyond the call: how it waits for the person when it does, the key of the task it names,
-/// what it publishes, cancels or merges, the run it started, and whether it was done without asking because auto
-/// mode is on, or merged on its own because the person lets the Orchestrator merge finished runs.
-#[derive(Default)]
-struct Kept {
-  waits: Option<ActionOutcome>,
-  task: Option<String>,
-  change: Option<ProposedChange>,
-  started: Option<RunId>,
-  resumed: Option<RunId>,
-  auto_mode: bool,
-  on_its_own: bool,
-}
-
-/// Carries out the change `name` with `arguments` in `scope`, or proposes it to the person.
-async fn act(
-  (services, translate): (&Services, &Translate),
-  scope: &ChatScope,
-  name: &str,
-  arguments: &JsonObject,
-) -> Acted {
-  // In a turn nobody asked for, what would change how runs go on or what agents run on is only proposed; in one a
-  // day's report started, every change is, or refused.
-  let proposes = match guard::only_proposed(scope, name).await {
-    Ok(proposes) => proposes,
-    Err(error) => return Acted::done(Err(error)),
-  };
-  let acted = match name {
-    // Only the turn of a run's success merges on its own; a report's turn finds no such wait and proposes.
-    MERGE_RUN if scope.on_its_own => merge_on_its_own((services, translate), scope, arguments).await,
-    _ if proposes => propose_change((services, translate), scope, name, arguments).await,
-    RUN_TASK => start((services, translate), scope, arguments).await,
-    // Making a repository writes to the project's folder: always the person's, whatever auto mode and the switches.
-    CANCEL_RUN | CONTINUE_RUN | INIT_REPOSITORY => propose_change((services, translate), scope, name, arguments).await,
-    MERGE_RUN => {
-      switched(
-        (services, translate),
-        scope,
-        (name, arguments),
-        OrchestratorConsent::MergeRuns,
-      )
-      .await
-    }
-    RESUME_RUN => resume((services, translate), scope, arguments).await,
-    ANSWER_QUESTION | SEND_MESSAGE => {
-      switched(
-        (services, translate),
-        scope,
-        (name, arguments),
-        OrchestratorConsent::AnswerAgents,
-      )
-      .await
-    }
-    _ if Publishing::of_tool(name).is_some() => publish((services, translate), scope, name, arguments).await,
-    // A hold or a release that changed nothing is refused, so its card shows no change that did not happen.
-    HOLD_QUEUE | RELEASE_QUEUE => {
-      let call = if name == HOLD_QUEUE {
-        QueueCall::Hold
-      } else {
-        QueueCall::Release(ToldTo::Agent)
-      };
-      let task = arguments.get("task").and_then(Value::as_str);
-      let told = match app_tool((services, translate), name, arguments.clone()).await {
-        Ok(told) => control::queue_changed(told, call, (scope, task)).await,
-        refused => refused,
-      };
-      Ok(Acted::done(told))
-    }
-    _ => Ok(Acted::done(
-      app_tool((services, translate), name, arguments.clone()).await,
-    )),
-  };
-  acted.unwrap_or_else(|error| Acted::done(Err(error)))
-}
-
-/// A merge, an answer or a message: proposed to the person, unless the person's switch `consent` lets the chat do it;
-/// then done at once, exactly as it was checked ([`change::apply`]: a merge merges only the commit checked), and kept
-/// as the chat's own action.
-async fn switched(
-  (services, translate): (&Services, &Translate),
-  scope: &ChatScope,
-  (name, arguments): (&str, &JsonObject),
-  consent: OrchestratorConsent,
-) -> Result<Acted, ToolError> {
-  if !allows(services, scope, consent).await? {
-    return propose_change((services, translate), scope, name, arguments).await;
-  }
-  let (change, task) = change::subject((scope, services), name, arguments).await?;
-  // A message that moves a run none of whose agents waits or works is the person's to send.
-  if change.change.moves_run() {
-    return Ok(proposed(translate, change, task));
-  }
-  let result = change::apply((services, translate), scope, &change, &[], Answerer::Automation).await;
-  Ok(Acted {
-    result,
-    kept: Kept {
-      task,
-      change: Some(change),
-      ..Kept::default()
-    },
-  })
-}
-
-/// `merge_run` in a turn nobody asked for: proposed, unless the person lets the Orchestrator merge finished runs on its
-/// own (with *merge runs* and *answer agents*) and the turn is the one the run's success started to merge it
-/// ([`auto_merge::merge_as`]); then merged at once, exactly as it was checked, and kept as the chat's own action on
-/// its own. A `merge_failed` names the next step as any merge of the chat's does ([`change::apply`]).
-async fn merge_on_its_own(
-  (services, translate): (&Services, &Translate),
-  scope: &ChatScope,
-  arguments: &JsonObject,
-) -> Result<Acted, ToolError> {
-  let switched_on = allows(services, scope, OrchestratorConsent::MergeFinished).await?
-    && allows(services, scope, OrchestratorConsent::MergeRuns).await?
-    && allows(services, scope, OrchestratorConsent::AnswerAgents).await?;
-  if auto_merge::merge_as(scope, arguments, switched_on).await? == MergeAs::Propose {
-    return propose_change((services, translate), scope, MERGE_RUN, arguments).await;
-  }
-  let (change, task) = change::subject((scope, services), MERGE_RUN, arguments).await?;
-  let result = change::apply((services, translate), scope, &change, &[], Answerer::Automation).await;
-  Ok(Acted {
-    result,
-    kept: Kept {
-      task,
-      change: Some(change),
-      on_its_own: true,
-      ..Kept::default()
-    },
-  })
-}
-
-/// `run_task`: a start proposed to the person, or, while the project allows Autopilot, the run started; refused for a
-/// task marked Blocked.
-async fn start(
-  (services, translate): (&Services, &Translate),
-  scope: &ChatScope,
-  arguments: &JsonObject,
-) -> Result<Acted, ToolError> {
-  blocked::marked(scope, arguments.get("key").and_then(Value::as_str)).await?;
-  // In a turn nobody asked for, a start is only proposed.
-  if scope.on_its_own || !allows_autopilot(scope).await? {
-    let (told, proposal) = proposal::propose((services, translate), scope, arguments).await?;
-    return Ok(Acted {
-      result: Ok(told),
-      kept: Kept {
-        waits: Some(ActionOutcome::Proposed(Box::new(proposal.start))),
-        task: Some(proposal.key),
-        ..Kept::default()
-      },
-    });
-  }
-  let result = app_tool((services, translate), RUN_TASK, arguments.clone()).await;
-  let result = match result {
-    Err(error) => Err(blocked::named(scope, arguments.get("key").and_then(Value::as_str), error).await),
-    told => told,
-  };
-  let started = result
-    .as_ref()
-    .ok()
-    .and_then(|told| told.pointer("/run/id"))
-    .and_then(Value::as_str)
-    .and_then(|id| id.parse::<RunId>().ok());
-  Ok(Acted {
-    result,
-    kept: Kept {
-      started,
-      auto_mode: true,
-      ..Kept::default()
-    },
-  })
-}
-
-/// `resume_run`: proposed, done or refused as [`guard::resume_as`] tells; done, it resumes the run or continues an
-/// interrupted one from its last checkpoint through the same tool as the task page's controls, and the run is kept.
-async fn resume(
-  (services, translate): (&Services, &Translate),
-  scope: &ChatScope,
-  arguments: &JsonObject,
-) -> Result<Acted, ToolError> {
-  let switches = guard::ResumeSwitches {
-    continues: allows(services, scope, OrchestratorConsent::ContinueInterrupted).await?,
-    answers: allows(services, scope, OrchestratorConsent::AnswerAgents).await?,
-  };
-  let run = match guard::resume_as(scope, arguments, switches).await? {
-    guard::Resume::Propose => return propose_change((services, translate), scope, RESUME_RUN, arguments).await,
-    guard::Resume::Now(run) => run,
-  };
-  let result = app_tool((services, translate), RESUME_RUN, arguments.clone()).await;
-  let resumed = result.is_ok().then_some(run);
-  Ok(Acted {
-    result,
-    kept: Kept {
-      resumed,
-      ..Kept::default()
-    },
-  })
-}
-
-/// A cancel, merge, publication, answer, message or continuation the person applies.
-async fn propose_change(
-  (services, translate): (&Services, &Translate),
-  scope: &ChatScope,
-  name: &str,
-  arguments: &JsonObject,
-) -> Result<Acted, ToolError> {
-  let (change, task) = change::subject((scope, services), name, arguments).await?;
-  Ok(proposed(translate, change, task))
-}
-
-/// `change`, of task `task`, proposed to the person: what the agent is told, and what its action keeps.
-fn proposed(translate: &Translate, change: ProposedChange, task: Option<String>) -> Acted {
-  Acted {
-    result: Ok(change::told(translate, &change)),
-    kept: Kept {
-      waits: Some(ActionOutcome::Waits),
-      task,
-      change: Some(change),
-      ..Kept::default()
-    },
-  }
-}
-
-/// A publication: proposed to the person, unless they let the Orchestrator publish drafts; then published, unless
-/// it widens what agents may do while *Let automation change agent permissions* is off. Their switch covers what the
-/// publication changes in agents' prompts ([`crate::prompt_changes`]), which the tool otherwise refuses.
-async fn publish(
-  (services, translate): (&Services, &Translate),
-  scope: &ChatScope,
-  name: &str,
-  arguments: &JsonObject,
-) -> Result<Acted, ToolError> {
-  if !allows(services, scope, OrchestratorConsent::PublishDrafts).await? {
-    return propose_change((services, translate), scope, name, arguments).await;
-  }
-  let (change, _) = change::subject((scope, services), name, arguments).await?;
-  if !change::widens(scope, &change).await?.is_empty() && !changes_permissions(services).await? {
-    return propose_change((services, translate), scope, name, arguments).await;
-  }
-  // The tool is given the draft that was checked, by its id: a name could name another one by now.
-  let (tool, arguments) = change::tool_arguments(scope, &change);
-  let chat = services.clone().published_by_chat();
-  let result = app_tool((&chat, translate), tool, arguments).await;
-  Ok(Acted {
-    result,
-    kept: Kept {
-      change: Some(change),
-      ..Kept::default()
-    },
-  })
-}
-
-/// Whether `scope`'s project allows Autopilot, which only a person turns on: the chat then starts runs itself.
-async fn allows_autopilot(scope: &ChatScope) -> Result<bool, ToolError> {
-  let root = scope.root.clone();
-  blocking(move || Ok(ProjectDb::open(&root)?.allow_autopilot()?.is_on())).await
-}
-
-/// Whether the person lets the Orchestrator chat do what `consent` names itself in `scope`'s project.
-async fn allows(services: &Services, scope: &ChatScope, consent: OrchestratorConsent) -> Result<bool, ToolError> {
-  let (workspace, root) = (services.workspace().clone(), scope.root.clone());
-  blocking(move || Ok(workspace.orchestrator_allows(&root, consent)?)).await
 }
 
 /// Whether the person lets automation widen what agents may do.

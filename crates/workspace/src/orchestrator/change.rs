@@ -1,16 +1,15 @@
 //! Publishing a draft, canceling a run, merging one, answering an agent's question, sending a run's agents a message
 //! and deciding how a run that waits for a person goes on wait for the person when the Orchestrator's agent asks for
-//! them (`docs/design/orchestrator-toolset.md`, "Decisions" 3 to 5), unless the person's switch lets the chat do it
-//! itself: *Let the Orchestrator publish drafts*, *merge runs* or *answer agents* (none lets it continue a run). The
-//! agent's call checks what it names and changes nothing: the conversation keeps the proposed change and the agent is
-//! told it waits. The person applies it through the same tool any client of the app calls, as their own decision (what
-//! it widens is theirs to decide, as in the window), or dismisses it ([`super::proposal::decide`]); a draft saved again
-//! or published meanwhile, or a run with a newer checkpoint, is refused and needs a fresh proposal. An answer or a
-//! message is sent as the chat's, recorded as automation's when the chat sends it itself and as the person's when they
-//! apply it (ORC-45).
+//! them (`docs/design/orchestrator-toolset.md`, "Decisions" 3 to 5), unless the person's switch *Let the Orchestrator
+//! drive* lets the chat do it itself ([`super::acts`]). The agent's call checks what it names and changes nothing: the
+//! conversation keeps the proposed change and the agent is told it waits. The person applies it through the same tool
+//! any client of the app calls, as their own decision (what it widens is theirs to decide, as in the window), or
+//! dismisses it ([`super::proposal::decide`]); a draft saved again or published meanwhile, or a run with a newer
+//! checkpoint, is refused and needs a fresh proposal. An answer or a message is sent as the chat's, recorded as
+//! automation's when the chat sends it itself and as the person's when they apply it (ORC-45).
 
 mod answer;
-mod continuation;
+pub(super) mod continuation;
 pub(super) mod control;
 
 use std::path::{Path, PathBuf};

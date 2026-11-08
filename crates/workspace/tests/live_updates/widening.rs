@@ -349,7 +349,7 @@ fn live_updates_no_mcp_tool_uses_a_version_here_or_binds_a_reference() {
   let names: Vec<String> = app_mcp::listed()
     .into_iter()
     .chain(app_mcp::setup::listed())
-    .chain(tools::listed())
+    .chain(tools::listed(true))
     .map(|tool| tool.name.to_string())
     .collect();
   assert!(!names.is_empty());

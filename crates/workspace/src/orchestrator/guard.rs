@@ -1,16 +1,17 @@
-//! What the Orchestrator chat does not do itself (`docs/design/orchestrator-toolset.md`, decision 5), so that it never
-//! takes up its own doing in a loop and never decides what is the person's: in a turn a wait or a run's end started by
-//! itself ([`super::tools::ChatScope::on_its_own`]) nobody asked for anything, so a merge, a start, a pause, a resume,
-//! a release of new starts and a publication are only proposed, whatever the person's switches and auto mode; in one a
-//! day's report started (ORC-47), or a subscription that ended by itself to have its summary written (ORC-764), the
-//! chat changes nothing at all: every change a card carries is proposed, whatever
-//! the person's switches, and any other is refused; a message that moves a run none of whose agents waits or works (a
-//! follow-up, a continuation, a resume, the task run again) is always proposed; a run stopped at a limit, canceled, or
-//! interrupted with its worktree gone or by the runner failing to record it for any reason but the database staying
-//! busy is resumed or continued by the person only; and one a crash, the runner going away, *Quit now* or the
-//! database staying busy (ORC-75) interrupted is continued from the chat only under *Let the Orchestrator continue
-//! interrupted runs*: in a turn nobody asked for, only the run whose interruption started the turn, once, not when it
-//! was interrupted again soon after the time before, and not while the database is under contention.
+//! What the Orchestrator chat does not do itself (`docs/design/orchestrator-toolset.md`, decision 5). While the
+//! project's switch *Let the Orchestrator drive* is on, the chat acts in every turn as a client of the app does: a
+//! merge, a start, a pause, a resume, a release of new starts and a publication are carried out, not proposed; only in
+//! a turn a day's report started (ORC-47), or a subscription that ended by itself to have its summary written
+//! (ORC-764), the chat changes nothing at all: every change is refused (`report_turn`). While it is off, in a turn a
+//! wait or a run's end started by itself ([`super::tools::ChatScope::on_its_own`]) nobody asked for anything, so a
+//! merge, a start, a pause, a release of new starts and a publication are only proposed, and in a report's turn every
+//! change a card carries is proposed and any other is refused; the changes a person alone applies are always cards
+//! ([`needs_person`]). A run stopped at a limit, canceled, or interrupted with its worktree gone or by the runner
+//! failing to record it for any reason but the database staying busy is resumed or continued by the person only
+//! (`continue_run` continues one stopped at a limit); and one a crash, the runner going away, *Quit now* or the
+//! database staying busy (ORC-75) interrupted is continued from the chat only while it drives: in a turn nobody asked
+//! for, only the run whose interruption started the turn, once, not when it was interrupted again soon after the time
+//! before, and not while the database is under contention.
 
 use orchester_core::{
   id::RunId,
@@ -39,16 +40,17 @@ use crate::{
 };
 
 /// Whether the chat's call of `name` in `scope` is only proposed as a change because nobody asked for anything in its
-/// turn; a start is then proposed as a start ([`super::tools`]), and a resume as [`resume_as`] tells. In a turn a
-/// day's report started, every change a card carries is proposed, and any other is refused (`report_turn`): a task, a
-/// draft, a copy of a pipeline or a hold of new starts.
-pub(super) async fn only_proposed(scope: &ChatScope, name: &str) -> Result<bool, ToolError> {
+/// turn, while it does not `drive`; a start is then proposed as a start ([`super::tools`]), and a resume as
+/// [`resume_as`] tells. In a turn a day's report started, every change a card carries is proposed (not while it
+/// drives), and any other is refused (`report_turn`): a task, a draft, a copy of a pipeline or a hold of new starts,
+/// and every change while it drives.
+pub(super) async fn only_proposed(scope: &ChatScope, name: &str, drives: bool) -> Result<bool, ToolError> {
   if !scope.on_its_own {
     return Ok(false);
   }
-  // A start is proposed by `run_task` itself in any turn nobody asked for.
-  if name != RUN_TASK && in_report_turn(scope).await? {
-    return if card_carries(name) {
+  // A start is proposed by `run_task` itself in any turn nobody asked for, while the chat does not drive.
+  if (name != RUN_TASK || drives) && in_report_turn(scope).await? {
+    return if !drives && card_carries(name) {
       Ok(true)
     } else {
       Err(ToolError::refused(
@@ -57,7 +59,7 @@ pub(super) async fn only_proposed(scope: &ChatScope, name: &str) -> Result<bool,
       ))
     };
   }
-  Ok(matches!(name, MERGE_RUN | PAUSE_RUN | RELEASE_QUEUE) || Publishing::of_tool(name).is_some())
+  Ok(!drives && (matches!(name, MERGE_RUN | PAUSE_RUN | RELEASE_QUEUE) || Publishing::of_tool(name).is_some()))
 }
 
 /// Whether the turn under way in `scope`'s conversation is the one a day's report, or a subscription that ended by
@@ -68,6 +70,15 @@ pub(super) async fn in_report_turn(scope: &ChatScope) -> Result<bool, ToolError>
   }
   let (root, chat) = (scope.root.clone(), scope.chat);
   blocking(move || Ok(thinking_report(&ProjectDb::open(&root)?.chat_entries(chat)?))).await
+}
+
+/// Whether a change of the chat's tool `name` is always a card while the chat does not drive, in any turn: the person
+/// applies it ([`super::change::subject`]).
+pub(super) fn needs_person(name: &str) -> bool {
+  matches!(
+    name,
+    MERGE_RUN | CANCEL_RUN | CONTINUE_RUN | ANSWER_QUESTION | SEND_MESSAGE | INIT_REPOSITORY
+  ) || Publishing::of_tool(name).is_some()
 }
 
 /// Whether the person applies a change of the chat's tool `name` from a card ([`super::change::subject`]).
@@ -105,21 +116,11 @@ pub(super) enum Resume {
   Now(RunId),
 }
 
-/// The person's switches a resume reads: *Let the Orchestrator continue interrupted runs* and *answer agents*.
-#[derive(Clone, Copy, Debug)]
-pub(super) struct ResumeSwitches {
-  pub(super) continues: bool,
-  pub(super) answers: bool,
-}
-
-/// What `resume_run` with `arguments` does in `scope` under `switches`; refused (`person_only`) for a run that is the
-/// person's to resume or continue, and in a turn nobody asked for, (`interrupted_again`) for one interrupted again
-/// soon and (`storage_contention`) for one the database staying busy interrupted while it is under contention.
-pub(super) async fn resume_as(
-  scope: &ChatScope,
-  arguments: &JsonObject,
-  switches: ResumeSwitches,
-) -> Result<Resume, ToolError> {
+/// What `resume_run` with `arguments` does in `scope` while the chat does or does not `drive`; refused (`person_only`)
+/// for a run that is the person's to resume or continue, and in a turn nobody asked for, (`interrupted_again`) for one
+/// interrupted again soon and (`storage_contention`) for one the database staying busy interrupted while it is under
+/// contention.
+pub(super) async fn resume_as(scope: &ChatScope, arguments: &JsonObject, drives: bool) -> Result<Resume, ToolError> {
   let named = arguments
     .get("run")
     .and_then(Value::as_str)
@@ -145,7 +146,7 @@ pub(super) async fn resume_as(
     })
   })
   .await?;
-  read.decide(scope.on_its_own, switches)
+  read.decide(scope.on_its_own, drives)
 }
 
 /// What a turn nobody asked for does about `run`, which `cause` interrupted and the chat may continue: once, unless
@@ -176,17 +177,19 @@ struct Read {
 }
 
 impl Read {
-  fn decide(&self, on_its_own: bool, switches: ResumeSwitches) -> Result<Resume, ToolError> {
+  fn decide(&self, on_its_own: bool, drives: bool) -> Result<Resume, ToolError> {
     match self.resume {
-      ChatResume::PersonOnly(stop) => Err(self.refused("person_only", stopped_key(stop))),
-      ChatResume::Paused | ChatResume::Other if on_its_own => Ok(Resume::Propose),
-      ChatResume::Paused | ChatResume::Other => Ok(Resume::Now(self.run)),
-      ChatResume::Interrupted(_) if !switches.continues => {
-        Err(self.refused("person_only", "orchestrator.tools.resumePersonOnly"))
+      // A limit is decided with `continue_run`, which the chat takes while it drives.
+      ChatResume::PersonOnly(PersonsStop::Limit(_)) if drives => {
+        Err(self.refused("use_continue_run", "orchestrator.tools.resumeUseContinue"))
       }
+      ChatResume::PersonOnly(stop) => Err(self.refused("person_only", stopped_key(stop))),
+      ChatResume::Paused | ChatResume::Other if on_its_own && !drives => Ok(Resume::Propose),
+      ChatResume::Paused | ChatResume::Other => Ok(Resume::Now(self.run)),
+      ChatResume::Interrupted(_) if !drives => Err(self.refused("person_only", "orchestrator.tools.resumePersonOnly")),
       ChatResume::Interrupted(_) if !on_its_own => Ok(Resume::Now(self.run)),
       // A turn nobody asked for continues only the run whose interruption started it.
-      ChatResume::Interrupted(_) if !switches.answers || !self.started_by_its_interruption() => {
+      ChatResume::Interrupted(_) if !self.started_by_its_interruption() => {
         Err(self.refused("person_only", "orchestrator.tools.resumePersonOnly"))
       }
       ChatResume::Interrupted(_) => match self.continuing {

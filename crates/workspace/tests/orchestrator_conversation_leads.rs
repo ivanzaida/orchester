@@ -240,13 +240,19 @@ fn conversation_leads_are_read_only_and_only_the_chat_gets_them() {
   desktop.watches(desktop.scope.chat, WatchTarget::Project, "");
   let told = desktop.app("get_conversation", json!({ "project": "Kontur", "task": card }));
   assert!(told.get("subscriptions").is_none(), "an app client gets none: {told}");
-  let named: Vec<String> = tools::listed().into_iter().map(|tool| tool.name.to_string()).collect();
-  assert!(
-    !named
-      .iter()
-      .any(|name| name.contains("watch") || name.contains("subscri") || name.contains("lead")),
-    "no chat tool changes a subscription: {named:?}"
-  );
+  for drives in [false, true] {
+    let changing: Vec<String> = tools::listed(drives)
+      .into_iter()
+      .filter(|tool| tool.annotations.as_ref().and_then(|hints| hints.read_only_hint) != Some(true))
+      .map(|tool| tool.name.to_string())
+      .collect();
+    assert!(
+      !changing
+        .iter()
+        .any(|name| name.contains("watch") || name.contains("subscri") || name.contains("lead")),
+      "no chat tool changes a subscription (driving: {drives}): {changing:?}"
+    );
+  }
   let told = desktop.chat("get_conversation", json!({ "project": "Kontur", "task": card }));
   assert_eq!(
     told["subscriptions"]["leads"][0]["order_applies"], "none",
