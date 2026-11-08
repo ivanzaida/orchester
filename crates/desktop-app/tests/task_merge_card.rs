@@ -1,7 +1,7 @@
 //! The top card of a task page whose run waits to be merged (ORC-731; `Review · redesign`, Row 4: 01i `k9GBy`, 01j
 //! `k4C0Es`) in the app's real window, on the QA seed's `task-merge-card-*` scenarios (`examples/seed`): *Ready to
-//! merge* with Merge and its key cap, Review changes opening the run's review page and Close without merging, the
-//! header's Merge with the same cap, and ⌘↵ (Ctrl+Enter elsewhere) merging from another tab; a merge refused before Git
+//! merge* with Merge (no key cap), Review changes opening the run's review page and Close without merging, the
+//! header's Merge, and ⌘↵ (Ctrl+Enter elsewhere) merging from another tab; a merge refused before Git
 //! turns the card to *Not merged into main* with what stopped it, Try again and Open in Review to the attempt page, and
 //! the header to Not merged; conflicts offer Resolve, which opens the attempt page; Create pull request is in *More
 //! actions*. Needs `git`, as the seed does. `cargo test -p orchester-app --test task_merge_card task_merge_card`.
