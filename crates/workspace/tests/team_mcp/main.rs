@@ -33,6 +33,7 @@ mod reads;
 mod ready;
 mod runs;
 mod share;
+mod team_controls;
 mod team_runs;
 mod tools;
 

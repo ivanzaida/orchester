@@ -118,6 +118,11 @@ fn team_mcp_delivery_of_a_team_module_is_refused_not_missing() {
   let (server, _seen) = crate::tools::server();
   let checkout = crate::Checkout::new(Some(&server), &[]);
 
+  // Without a module nothing is computed from the rows this computer keeps of a team's tasks.
+  assert_eq!(
+    checkout.refused("get_delivery", &json!({"project": "Kontur"})),
+    "team_project_unsupported"
+  );
   let webhooks = json!({"project": "Kontur", "module": "webhooks"});
   assert_eq!(checkout.refused("get_delivery", &webhooks), "team_project_unsupported");
   let unknown = json!({"project": "Kontur", "module": "nothing"});

@@ -3,14 +3,14 @@
 
 use orchester_core::{
   connection::AgentProvider,
-  id::RunId,
+  id::{RunId, StepExecutionId},
   integration::base::RunBaseSource,
   revision::Revision,
   run::{BranchName, NewRun, Run, RunEvent, RunStatus},
-  store::{RunStore, TaskStore},
+  store::{ConversationStore, RunStore, TaskStore},
   time::Timestamp,
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, TeamFence};
 use serde_json::json;
 
 use crate::{Checkout, team_server::TeamServer, tools::server};
@@ -86,5 +86,32 @@ impl Started {
     let events = transition(&mut run, Timestamp::now());
     db.append_events(&run, &events).expect("recorded");
     run.status().clone()
+  }
+}
+
+impl Started {
+  /// The first step of the run starts, then `next` puts it in the state a person or an agent answers.
+  pub(crate) fn step_into(&self, next: impl FnOnce(&mut Run, StepExecutionId, Timestamp) -> Vec<RunEvent>) {
+    self.settle(|run, now| {
+      let execution = run.current_attempt().expect("attempt").executions()[0].id();
+      let mut events = run.start_step(execution, now).expect("step started");
+      events.extend(next(run, execution, now));
+      events
+    });
+  }
+
+  /// The team server fenced the run: it goes on no more here.
+  pub(crate) fn fence(&self) {
+    self
+      .checkout
+      .db()
+      .fence_team_run(self.run, TeamFence::ClaimLost, Timestamp::now())
+      .expect("fenced");
+  }
+
+  /// How many messages the team task's conversation keeps.
+  pub(crate) fn messages(&self) -> usize {
+    let task = self.checkout.db().run(self.run).expect("read").expect("run").task();
+    self.checkout.db().messages(task).expect("messages").len()
   }
 }
