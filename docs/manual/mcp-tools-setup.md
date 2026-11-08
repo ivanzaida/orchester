@@ -326,15 +326,15 @@ settings.
 
 Parameters: `project` (string, req.), `server` (string, req.: id or name).
 
-A team's MCP server (id or name, in a team project) is **archived** on the team server instead, by an admin, and is
-never refused for being used. The answer first reads what uses it and gives
-`{removed: {id, name, team: true, archived: true}, used_by: {resources, runs}, runs_stopping_here}`: `used_by` is the
-team server's list (the other resources whose latest version names it and the runs that have not ended and pin it,
-`docs/cloud-api.md`), and `runs_stopping_here` the runs `{run, task}` of this computer whose profile version chooses
-the server. They are the runs that **will** stop, not runs that stopped: this computer cancels them when the team
-server's archive event reaches it, just after the answer. Nothing is archived (and the call is refused with
-`team_unavailable`, `team_read_failed` or `mcp_server_not_found`) while what uses the server cannot be read, and
-`team_server_refused` or `team_server_not_reached` when the archive itself is not taken. A server still waiting to be
+A team's MCP server (id or name, in a team project) is **never archived by this tool**: archiving stops runs on every
+computer, so a person confirms it in Orchester's window (Agents › the server's … menu › *Archive*), and an admin's MCP
+client is refused as `person_only` with a preview of what the person would confirm:
+`{error: {code: "person_only", message, preview: {resource: {id, name, team: true}, used_by: {resources, runs},
+runs_stopping_here}}}`. `used_by` is the team server's list (the other resources whose latest version names it and the
+runs that have not ended and pin it, `docs/cloud-api.md`), and `runs_stopping_here` the runs `{run, task}` of this
+computer whose profile version chooses the server. They are the runs that **would** stop; nothing is changed. Tell the
+person to confirm in the window. A member is refused `not_admin` first, and the call is refused with `team_unavailable`,
+`team_read_failed` or `mcp_server_not_found` while what uses the server cannot be read. A server still waiting to be
 sent (made offline, never received) is refused as `team_mcp_server_not_sent` before anything is read: the team server
 knows nothing of it.
 
@@ -460,7 +460,7 @@ profile. Reading it opens the project's data only to read it: it migrates and wr
 
 `undecided` is not ready and not assumed to need nothing. `why`: `not_team_form` (a version cached before the team
 configuration model), `cannot_be_published` (`reason`: `duplicate`, `too_many`, `connection`, `local_mcp_server` or
-`writable_folders`), `chooses_mcp_server` (`server`: the team does not offer it here), `runs_unknown` (`resource`),
+`writable_folders`), `chooses_mcp_server` (`server`: not synced yet here), `chooses_archived_mcp_server` (`server`, `name`: the team archived it), `uses_archived_tool` and `uses_archived_instruction` (`resource`, `name`: a profile names a tool or an instruction the team archived; Run again refuses until an admin restores it or the profile stops naming it), `runs_unknown` (`resource`),
 `connection_gone` (`connection`), `team_tool_secret_by_id`, `secret_gone`, `secret_unreadable` (`secret`: the keychain
 did not say) and `member` (`member` and its `cause`).
 

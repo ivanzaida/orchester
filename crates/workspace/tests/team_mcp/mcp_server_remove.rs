@@ -1,7 +1,8 @@
 //! Removing a team MCP server against the fake team server of [`super::mcp_servers`]: the tool reads what uses the
-//! server, archives it on the server, and reports the runs of this computer that will stop, without claiming they
-//! stopped; it archives nothing while what uses it cannot be read, and refuses a server the team server has not
-//! received yet.
+//! server and answers `person_only` with that preview and the runs of this computer that would stop, archiving
+//! nothing, since an archive stops runs on every computer and a person confirms it in the window; a person's archive
+//! is sent to the team server and a refusal of it is reported; the tool reads what uses it first, and refuses a server
+//! the team server has not received yet.
 
 use std::{collections::BTreeMap, time::Duration};
 
@@ -33,7 +34,7 @@ use super::{
 use crate::{Checkout, Standing};
 
 #[test]
-fn team_mcp_a_remove_reads_what_uses_the_server_then_archives_it() {
+fn team_mcp_a_remove_reads_what_uses_the_server_and_answers_person_only_with_the_preview() {
   let used_by = json!({
     "resources": [{ "kind": "agent_profile", "id": "01a183cf-b73c-71db-8a62-bd509770cd01", "name": "Builder", "version": 3 }],
     "runs": [{ "task_key": "KON-12", "run": "01a183cf-b73c-71db-8a62-bd509770cd02" }],
@@ -45,23 +46,70 @@ fn team_mcp_a_remove_reads_what_uses_the_server_then_archives_it() {
   let checkout = admin(&server);
   checkout.call("add_mcp_server", &docs()).expect("created");
 
-  let removed = checkout
+  let refused = checkout
     .call("remove_mcp_server", &json!({ "project": "Kontur", "server": "docs" }))
-    .expect("archived");
+    .expect_err("a person's to confirm");
 
-  assert_eq!(removed["removed"]["name"], "docs", "{removed}");
-  assert_eq!(removed["removed"]["archived"], true, "{removed}");
-  assert_eq!(removed["used_by"]["resources"][0]["name"], "Builder", "{removed}");
-  assert_eq!(removed["used_by"]["runs"][0]["task_key"], "KON-12", "{removed}");
-  assert_eq!(removed["runs_stopping_here"], json!([]), "{removed}");
+  let error = &refused["error"];
+  assert_eq!(error["code"], "person_only", "{refused}");
+  assert!(
+    error["message"].as_str().is_some_and(|text| !text.is_empty()),
+    "{refused}"
+  );
+  assert_eq!(error["preview"]["resource"]["name"], "docs", "{refused}");
+  assert_eq!(
+    error["preview"]["used_by"]["resources"][0]["name"], "Builder",
+    "{refused}"
+  );
+  assert_eq!(
+    error["preview"]["used_by"]["runs"][0]["task_key"], "KON-12",
+    "{refused}"
+  );
+  assert_eq!(error["preview"]["runs_stopping_here"], json!([]), "{refused}");
   let seen = seen.lock();
   assert_eq!(
     seen.calls,
-    ["create", "used-by", "archive"],
-    "what uses it is read first"
+    ["create", "used-by"],
+    "what uses it is read, nothing is archived"
   );
+  assert!(seen.patched.is_empty());
+}
+
+#[test]
+fn team_mcp_a_persons_archive_is_sent_to_the_team_server_and_its_refusal_is_reported() {
+  let (server, seen) = start(Answers::default());
+  let checkout = admin(&server);
+  checkout.call("add_mcp_server", &docs()).expect("created");
+  let id = checkout.db().resources(ResourceKind::McpServer).expect("servers")[0].id();
+
+  checkout
+    .runtime
+    .block_on(checkout.servers.archive_resource(checkout.root(), id, Answerer::Person))
+    .expect("a person archives");
+
+  let seen = seen.lock();
+  assert_eq!(seen.calls, ["create", "archive"]);
   assert_eq!(seen.patched[0]["archived"], true);
   assert_eq!(seen.patched[0]["revision"], 1);
+  drop(seen);
+
+  let (server, _) = start(Answers {
+    archive: Some((403, "not_admin")),
+    ..Answers::default()
+  });
+  let checkout = admin(&server);
+  checkout.call("add_mcp_server", &docs()).expect("created");
+  let id = checkout.db().resources(ResourceKind::McpServer).expect("servers")[0].id();
+  let refused = checkout
+    .runtime
+    .block_on(checkout.servers.archive_resource(checkout.root(), id, Answerer::Person))
+    .expect_err("refused by the team server");
+  assert_eq!(
+    refused,
+    NotArchived::Refused {
+      code: "not_admin".to_owned()
+    }
+  );
 }
 
 #[test]
@@ -93,21 +141,8 @@ fn team_mcp_a_remove_of_a_server_the_team_server_has_not_received_says_so() {
 }
 
 #[test]
-fn team_mcp_a_remove_archives_nothing_while_what_uses_it_cannot_be_read_or_the_server_refuses() {
+fn team_mcp_a_remove_answers_nothing_while_what_uses_it_cannot_be_read() {
   let nothing = || json!({ "resources": [], "runs": [] });
-  let (server, seen) = start(Answers {
-    used_by: Some(nothing()),
-    archive: Some((403, "not_admin")),
-    ..Answers::default()
-  });
-  let checkout = admin(&server);
-  checkout.call("add_mcp_server", &docs()).expect("created");
-  let refused = checkout
-    .call("remove_mcp_server", &json!({ "project": "Kontur", "server": "docs" }))
-    .expect_err("refused");
-  assert_eq!(refused["error"]["code"], "team_server_refused", "{refused}");
-  assert_eq!(seen.lock().calls, ["create", "used-by", "archive"]);
-
   let (server, seen) = start(Answers::default());
   let checkout = admin(&server);
   checkout.call("add_mcp_server", &docs()).expect("created");
@@ -133,7 +168,7 @@ fn team_mcp_a_remove_archives_nothing_while_what_uses_it_cannot_be_read_or_the_s
 }
 
 #[test]
-fn team_mcp_a_remove_names_the_runs_of_this_computer_that_will_stop_without_claiming_they_stopped() {
+fn team_mcp_a_remove_names_the_runs_of_this_computer_that_would_stop_and_stops_none() {
   let (server, seen) = start(Answers {
     used_by: Some(json!({ "resources": [], "runs": [] })),
     ..Answers::default()
@@ -152,19 +187,20 @@ fn team_mcp_a_remove_names_the_runs_of_this_computer_that_will_stop_without_clai
   );
   let (run, task) = pinned.expect("a run");
 
-  let removed = checkout
+  let refused = checkout
     .call(
       "remove_mcp_server",
       &json!({ "project": "Kontur", "server": knowledge.to_string() }),
     )
-    .expect("archived");
+    .expect_err("a person's to confirm");
 
+  assert_eq!(refused["error"]["code"], "person_only", "{refused}");
   assert_eq!(
-    removed["runs_stopping_here"],
+    refused["error"]["preview"]["runs_stopping_here"],
     json!([{ "run": run.to_string(), "task": task.to_string() }]),
-    "{removed}"
+    "{refused}"
   );
-  assert_eq!(seen.lock().calls, ["used-by", "archive"]);
+  assert_eq!(seen.lock().calls, ["used-by"]);
   let state = checkout
     .db()
     .unfinished_runs()
@@ -174,7 +210,7 @@ fn team_mcp_a_remove_names_the_runs_of_this_computer_that_will_stop_without_clai
     .count();
   assert_eq!(
     state, 1,
-    "the run is still running: the stream's archive event stops it, not this answer"
+    "the run is still running: only the archive a person confirms stops it"
   );
 }
 

@@ -8,11 +8,18 @@
 
 use lurq::app::events::with_synthetic_input;
 use orchester_api::test_support::team_server::{Person, PinnedRun, RunReport, TeamServer};
-use orchester_app::{test_support::Window, ui::icon::Icon};
+use orchester_app::{
+  routes::{HubFilter, HubView, ProjectPage, Route},
+  test_support::Window,
+  ui::icon::Icon,
+};
 use orchester_core::{
   id::{ProjectId, ResourceId, RunId},
-  resource::VersionNumber,
+  resource::{ResourceKind, VersionNumber},
+  store::ResourceStore,
+  time::Timestamp,
 };
+use orchester_store::ProjectDb;
 
 use super::{
   hub_edit::on_pencil_until,
@@ -305,5 +312,64 @@ fn team_qa_hub_archive_a_stop_recorded_before_the_resource_was_named_says_only_i
   assert!(
     window.texts("task-archived-profile-0").is_none(),
     "without a resource nothing is said to use it"
+  );
+}
+
+#[test]
+fn team_qa_hub_archive_the_task_page_reads_again_after_a_restore_and_drops_what_still_uses_it() {
+  let (mut window, server, _) = on_task(("team-archived", State::TeamArchived), "KON-12");
+  window.until("the profile that still uses it", |window| {
+    window.texts("task-archived-profile-0").is_some()
+  });
+  let pencil = server
+    .resources("kontur")
+    .into_iter()
+    .find(|(resource, _)| resource["name"] == "pencil-design")
+    .and_then(|(resource, _)| resource["id"].as_str().and_then(|id| id.parse::<ResourceId>().ok()))
+    .expect("the stand-in's pencil-design");
+
+  // What the event stream does for the server's restore: the cache takes it, then the shared cache wakes its readers.
+  let root = window.data.repo("repo-kontur");
+  ProjectDb::open(&root)
+    .expect("the project database")
+    .mark_shared_archived(pencil, false, Timestamp::now())
+    .expect("restored here");
+  window
+    .launch
+    .services()
+    .expect("the session")
+    .servers
+    .announce_shared_change_for_test();
+
+  window.until("the card without what still uses it", |window| {
+    window.texts("task-archived-profile-0").is_none()
+  });
+  assert!(
+    window.texts("task-archived-resource").is_some(),
+    "the stop stays on the card, which lists the resource alone"
+  );
+}
+
+#[test]
+fn team_qa_hub_archive_a_profile_that_names_an_archived_server_says_so_in_the_hub() {
+  let (mut window, _server, project) = on_task(("team-archived", State::TeamArchived), "KON-12");
+  window.navigation().go(Route::Project(
+    project,
+    ProjectPage::hub(HubView::new(HubFilter::Profiles, None)),
+  ));
+  let builder = ProjectDb::open(&window.data.repo("repo-kontur"))
+    .expect("the project database")
+    .resources(ResourceKind::AgentProfile)
+    .expect("profiles")
+    .into_iter()
+    .find(|resource| resource.name().as_str() == "Builder")
+    .expect("the seed's Builder")
+    .id();
+  let line = format!("team-hub-row-{builder}-line");
+  window.until("Builder's line", |window| window.texts(&line).is_some());
+  assert_eq!(
+    window.text(&line),
+    "Names pencil-design, which the team archived",
+    "not the 'cannot tell yet' of an undecided resource"
   );
 }

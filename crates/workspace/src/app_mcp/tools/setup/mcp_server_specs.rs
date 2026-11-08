@@ -69,14 +69,13 @@ pub(super) const SPECS: &[Spec] = &[
     description: "Removes an MCP server from a project. Refused as in_use while an agent profile's draft or latest \
                   published version chooses it (the reasons name their roles): switch them first, or turn the \
                   server off with set_mcp_server_enabled, which keeps its settings. A team's MCP server (in a team \
-                  project, by id or name) is archived on the team server instead, admins only (a member is refused \
-                  not_admin), and never refused for being used: the answer first reads what uses it, `used_by` \
-                  { resources, runs } as the team server lists them (the runs that have not ended and pin it), and \
-                  `runs_stopping_here`, the runs on this computer whose profile version chooses it. They are the \
-                  runs that will stop, not runs that have stopped: this computer cancels them when the team \
-                  server's archive reaches it, right after the answer, and the other computers do the same. Nothing \
-                  is archived while the team server cannot be reached or what uses it cannot be read, nor a server \
-                  the team server has not received yet (team_mcp_server_not_sent).",
+                  project, by id or name) is never archived by this tool, admins only (a member is refused \
+                  not_admin): archiving stops runs on every computer, so a person confirms it in Orchester's \
+                  window. The tool answers person_only with a `preview`: `used_by` { resources, runs } as the team \
+                  server lists them (the runs that have not ended and pin it), and `runs_stopping_here`, the runs on \
+                  this computer whose profile version chooses it, which are the runs that would stop. Tell the \
+                  person to confirm in the window; nothing is changed. Refused first while what uses it cannot be \
+                  read, and for a server the team server has not received yet (team_mcp_server_not_sent).",
     schema: schema_for_type::<mcp_servers::InServer>,
     read_only: false,
   },
