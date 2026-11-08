@@ -356,6 +356,10 @@ name = "questions"
 required-features = ["test-agent"]
 
 [[test]]
+name = "pause_states"
+required-features = ["test-agent"]
+
+[[test]]
 name = "unverified"
 required-features = ["test-agent"]
 

@@ -1176,7 +1176,7 @@ apply to both W1Dq6 and IyJ5a and require a fresh independent visual comparison.
 | Status (icon) | Last column |
 | --- | --- |
 | Queued (clock-3) | *Waiting for its run to start* |
-| Running (loader) | *Agent at work*; after Pause run until the checkpoint settles: *Pausing at the next checkpoint* (the label stays *Running*) |
+| Running (loader) | *Agent at work*; after Pause run until the checkpoint settles: *Pausing at the next checkpoint* (the label stays *Running*); what Pause does in each state, and what the header says it waits for, is in `docs/design/run-pause.md` |
 | Needs input (message-circle) | *Waiting for you* |
 | Paused (pause) | *Paused at 4b92ad0*; before any checkpoint *Paused before its first checkpoint* |
 | Stopped at limit (octagon-pause) | *Raise the limit to continue*; stopped by the daily budget *Waits for the daily token budget* |
