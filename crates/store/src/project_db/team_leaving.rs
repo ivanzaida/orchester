@@ -75,9 +75,10 @@ fn delete_guards(transaction: &Transaction<'_>) -> Result<Vec<(String, String)>,
 }
 
 /// Gives every resource that shares its kind's slug with an older one a free slug of its kind, the way a new resource
-/// picks one (`-2`, `-3`, …): a team project lets a team resource, or a copy of a pipeline of this computer's own waiting
-/// for the server, share the slug of the local one it came from, and the copy that never reached the server is a local
-/// resource once the project is not the team's. Every kind is held to one resource to a slug, archived ones included.
+/// picks one (`-2`, `-3`, …): a team project lets a team resource, or a copy of a pipeline of this computer's own
+/// waiting for the server, share the slug of the local one it came from, and the copy that never reached the server is
+/// a local resource once the project is not the team's. Every kind is held to one resource to a slug, archived ones
+/// included.
 pub(super) fn separate_slugs(transaction: &Transaction<'_>) -> Result<(), StoreError> {
   let later = load_resources(
     transaction,

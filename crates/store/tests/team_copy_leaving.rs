@@ -5,7 +5,10 @@
 
 mod support;
 
-use std::{collections::BTreeSet, collections::HashMap, fs};
+use std::{
+  collections::{BTreeSet, HashMap},
+  fs,
+};
 
 use orchester_core::{
   id::{ProjectId, ResourceId, ServerId},

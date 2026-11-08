@@ -88,8 +88,9 @@ impl ProjectDb {
   /// its own. The tasks kept *Not shared* when it
   /// joined return to the list after the highest number; they are returned with their keys. The server's resources
   /// go with their drafts, cached versions and versions not sent yet: the project keeps no copy of the team's
-  /// configuration and leaves with its own resources only ([`super::team_leaving`]), a copy of a pipeline of its own that
-  /// never reached the server taking a free slug beside the pipeline it was copied from. Runs keep their own snapshots.
+  /// configuration and leaves with its own resources only ([`super::team_leaving`]), a copy of a pipeline of its own
+  /// that never reached the server taking a free slug beside the pipeline it was copied from. Runs keep their own
+  /// snapshots.
   pub fn make_local(&mut self) -> Result<Vec<ReturnedTask>, StoreError> {
     let transaction = self.connection.transaction()?;
     if link(&transaction)?.is_none() {
