@@ -2,20 +2,18 @@
 //! the rules in `TnKP9`), through `/watch-module`: the list is capped at 8 rows and scrolls, the focused row kept in
 //! view, *Also* and the keys under it; the modules with nothing left to watch hide behind one row that counts them
 //! while the search is empty, and a search finds them faded; Enter picks the focused row and closes the picker, Shift
-//! Enter adds it and keeps the picker open, Esc closes it and keeps the chips.
+//! Enter adds it and keeps the picker open, Esc closes it and keeps the badge (ORC-890).
 
 use orchester_core::id::ModuleId;
 
-use super::watch_module::{CHIP, Kontur, PICKER, SEARCH, done, kontur_with, module, open_picker, row};
+use super::watch_module::{BADGE, Kontur, PICKER, SEARCH, badge_words, done, kontur_with, module, open_picker, row};
 
 const LIST_SCROLL: &str = "orchestrator-composer-watch-module-list-scroll";
 const FINISHED: &str = "orchestrator-composer-watch-module-finished";
 const KEYS: &str = "orchestrator-composer-watch-module-keys";
 const ALSO: &str = "orchestrator-composer-watch-module-also";
-
-fn chip(id: ModuleId) -> String {
-  format!("orchestrator-composer-choice-{id}")
-}
+/// The badge once both open modules are in it.
+const BOTH: &str = "Watch · Webhooks v2, Billing";
 
 #[test]
 fn orchestrator_watch_picker_capped_list_scrolls_with_the_focused_row_in_view() {
@@ -138,7 +136,7 @@ fn orchestrator_watch_picker_enter_picks_and_closes_shift_enter_adds_and_keeps_o
 
   screen.shift_key(("Enter", "Enter"));
   screen.until("Webhooks v2 added", |screen| {
-    screen.exists(&chip(webhooks)) && screen.text(&row(webhooks)).contains("Added")
+    badge_words(screen, BADGE) == "Watch · Webhooks v2" && screen.text(&row(webhooks)).contains("Added")
   });
   assert!(screen.exists(PICKER), "Shift Enter keeps the picker open");
   screen.until("the focus on Billing", |screen| {
@@ -146,17 +144,13 @@ fn orchestrator_watch_picker_enter_picks_and_closes_shift_enter_adds_and_keeps_o
   });
 
   screen.key(("Enter", "Enter"), false);
-  screen.until("Billing a chip and the picker closed", |screen| {
-    screen.exists(&chip(billing)) && !screen.exists(PICKER)
+  screen.until("Billing in the badge and the picker closed", |screen| {
+    !screen.exists(PICKER) && badge_words(screen, BADGE) == BOTH
   });
-  assert!(screen.exists(&chip(webhooks)), "both chips");
 
-  screen.click(CHIP);
+  screen.click(BADGE);
   screen.until("the picker again", |screen| screen.exists(PICKER));
   screen.key(("Escape", "Escape"), false);
   screen.until("Esc closes it", |screen| !screen.exists(PICKER));
-  assert!(
-    screen.exists(&chip(webhooks)) && screen.exists(&chip(billing)),
-    "the chips stay"
-  );
+  assert_eq!(badge_words(&mut screen, BADGE), BOTH, "the badge stays");
 }

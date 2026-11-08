@@ -1,8 +1,8 @@
 //! The QA gate (ORC-899, `orchester_app::mcp::qa_person`): in a QA copy, which turns it on, the MCP client counts as
-//! the person for the Orchestrator's person-only actions, so a synthetic Ctrl Enter applies a /watch and a synthetic
-//! press of *Take it here* moves the subscription. A session that does not turn it on, as the installed app's never
-//! does, refuses both; only `examples/qa_app` turns it on. Synthetic Shift+Enter and Ctrl+Home reach the composer's
-//! field.
+//! the person for the Orchestrator's person-only actions, so a synthetic Enter sends the message with a /watch badge's
+//! watch (ORC-890) and a synthetic press of *Take it here* moves the subscription. A session that does not turn it on,
+//! as the installed app's never does, refuses both; only `examples/qa_app` turns it on. Synthetic Shift+Enter and
+//! Ctrl+Home reach the composer's field.
 
 use lurq::app::events::with_synthetic_input;
 use orchester_app::routes::OrchestratorChat;
@@ -11,7 +11,7 @@ use orchester_core::orchestrator::WatchTarget;
 use super::{
   harness::{Orchestrator, Setup},
   led::{card, leader, led},
-  watch_module::{CHIP, Kontur, kontur_with, open_picker, row},
+  watch_module::{BADGE, Kontur, kontur_with, messages, webhooks_chosen},
 };
 
 const INPUT: &str = "orchestrator-input";
@@ -48,7 +48,7 @@ fn synthetic_key(screen: &mut Orchestrator, key: &str, (shift, ctrl): (bool, boo
 }
 
 #[test]
-fn orchestrator_qa_person_applies_a_synthetic_ctrl_enter_watch_in_a_qa_copy() {
+fn orchestrator_qa_person_applies_a_synthetic_enter_watch_in_a_qa_copy() {
   let Kontur {
     mut screen,
     here,
@@ -56,15 +56,10 @@ fn orchestrator_qa_person_applies_a_synthetic_ctrl_enter_watch_in_a_qa_copy() {
     ..
   } = kontur_with(|_| {});
   as_qa_copy(&screen);
-  open_picker(&mut screen);
-  screen.until("the modules", |screen| screen.exists(&row(webhooks)));
-  screen.key(("Enter", "Enter"), false);
-  screen.until("the chip", |screen| {
-    screen.exists(&format!("orchestrator-composer-choice-{webhooks}"))
-  });
+  webhooks_chosen(&mut screen, webhooks);
   screen.set(INPUT, "Ask before merging.");
 
-  with_synthetic_input(|| screen.key(("Enter", "Enter"), true));
+  with_synthetic_input(|| screen.key(("Enter", "Enter"), false));
   screen.until("the subscription", |screen| {
     screen
       .db()
@@ -81,7 +76,9 @@ fn orchestrator_qa_person_applies_a_synthetic_ctrl_enter_watch_in_a_qa_copy() {
     !screen.exists("orchestrator-watch-problem"),
     "no person-only notice in a QA copy"
   );
-  screen.until("the chips to go", |screen| !screen.exists(CHIP));
+  screen.until("the message sent and the badge gone", |screen| {
+    !screen.exists(BADGE) && messages(screen, here).iter().any(|text| text == "Ask before merging.")
+  });
 }
 
 #[test]

@@ -467,10 +467,10 @@ impl View {
     started
   }
 
-  /// Sends the draft with its files, as the message it was last sent as when neither changed since, to conversation
-  /// `chat` (a new one when `None`), as a turn of its own or, while the Orchestrator answers, `how` the person chose;
-  /// nothing while files are still being read. The send menu closes, and the chat goes to its end and follows it again
-  /// (`ui::chat::follow`).
+  /// Sends the draft with its files (as last sent when neither changed) to conversation `chat` (a new one when `None`),
+  /// as a turn of its own or, while the Orchestrator answers, `how` the person chose; nothing while files are read.
+  /// The composer's badges apply first, to that conversation with the draft's words (`ui::slash`, ORC-890): a refused
+  /// one keeps the draft; with nothing written they go alone. The menu closes; the chat follows its end again.
   fn send_draft(
     &self,
     project: &ShownProject,
@@ -482,12 +482,14 @@ impl View {
       let text = view.draft.get_untracked();
       let attachments = view.attached.held();
       let reading = view.attached.reading.get_untracked() > 0;
-      if (text.trim().is_empty() && attachments.is_empty()) || reading || view.send.state().get_untracked().is_pending()
-      {
+      if reading || view.send.state().get_untracked().is_pending() {
+        return;
+      }
+      let to = chat.unwrap_or_else(ChatId::generate);
+      if !view.slash.apply_held(&text, Some(to)) || (text.trim().is_empty() && attachments.is_empty()) {
         return;
       }
       view.menu.set(false);
-      let to = chat.unwrap_or_else(ChatId::generate);
       let on = view.plan_only.on_now(Some(from));
       let sent_as = (sender(&view.qa_person), view.plan_only.mode(on), on);
       let skill = view.skill.get_untracked().and_then(|skill| skill.chosen());
@@ -566,9 +568,8 @@ impl View {
   }
 }
 
-/// Who sends the message the press under way sends: automation driving the window (lurq's synthetic input), whose
-/// message never approves a proposal for the person, or the person; in a QA copy the MCP client's is the person's
-/// (`qa_person`).
+/// Who sends the message the press under way sends: automation driving the window (lurq's synthetic input, but the
+/// person's in a QA copy, `qa_person`), whose message never approves a proposal for the person, or the person.
 fn sender(qa_person: &QaPerson) -> Answerer {
   if qa_person.refuses_input() {
     Answerer::Automation

@@ -384,7 +384,8 @@ pub(super) fn led_in(ctx: &Ctx, led: LedIn<'_>, color: PaletteColor) -> Element 
     .into()
 }
 
-/// The keys ([`PICK_KEYS`]) while there are rows (`rows`), *Esc Close* alone otherwise.
+/// The keys ([`PICK_KEYS`]) while there are rows (`rows`), *Esc Close* alone otherwise. The badge is applied by the
+/// composer's send, with no keys of its own (ORC-890).
 pub(super) fn footer(ctx: &Ctx, (id, picker): (&str, Picker), rows: bool) -> Element {
   let prefix = picker.prefix();
   let hints: &[(&str, &str)] = if rows { &PICK_KEYS } else { &CLOSE_KEY };

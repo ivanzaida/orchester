@@ -68,6 +68,7 @@ mod waits_on;
 mod watch_asked;
 mod watch_lines;
 mod watch_module;
+mod watch_new_chat;
 mod watch_picker;
 mod watch_task;
 mod watching;

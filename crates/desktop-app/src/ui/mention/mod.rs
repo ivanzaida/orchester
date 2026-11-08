@@ -84,6 +84,14 @@ impl MentionField {
     self.controller.element_ref()
   }
 
+  /// Whether the caret stands at the start of the text with nothing selected.
+  pub fn caret_at_start(&self) -> bool {
+    self
+      .controller
+      .selection()
+      .is_ok_and(|selection| selection.caret == 0 && selection.anchor.is_none_or(|anchor| anchor == 0))
+  }
+
   /// The mentions of `text`, the field's value now, drawn as chips.
   pub fn tokens(text: &str) -> InputTokens {
     let chips = find(text)

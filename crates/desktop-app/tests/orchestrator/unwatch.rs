@@ -1,9 +1,9 @@
-//! `/unwatch` (ORC-774, `Parts · /unwatch` `NtsXc`; its picker v2, ORC-889, as `P1` `QXPDY`): *Stop watching* opens
-//! its picker while the conversation leads something. The picker has its own search field and lists only what this
-//! conversation watches (*Watched here · 3*), each with its kind, since when and what is still open there, then *All
-//! of them*, and the keys. Enter adds the focused row as a chip and closes the picker; Ctrl Enter stops the chips'
-//! subscriptions at once and keeps the person's `/unwatch`; *All of them* stops everything; automation's Ctrl Enter
-//! stops nothing.
+//! `/unwatch` (ORC-774, `Parts · /unwatch` `NtsXc`; its picker v2, ORC-889, as `P1` `QXPDY`; the badge ORC-890, P5
+//! `ijspu`): *Stop watching* opens its picker while the conversation leads something. The picker has its own search
+//! field and lists only what this conversation watches (*Watched here · 3*), each with its kind, since when and what
+//! is still open there, then *All of them*, and the keys. Enter adds the focused row to the *Stop watching* badge and
+//! closes the picker; then Enter stops the badge's subscriptions and keeps the person's `/unwatch`, a message written
+//! with it optional; *All of them* stops everything; automation's Enter stops nothing.
 //! `cargo test -p orchester-app --test orchestrator unwatch`.
 
 use lurq::app::events::with_synthetic_input;
@@ -26,12 +26,13 @@ use orchester_workspace::orchestrator::watch::watch_in;
 use super::{
   harness::{Orchestrator, Setup},
   history::kept,
+  watch_module::badge_words,
 };
 
 const INPUT: &str = "orchestrator-input";
 const PICKER: &str = "orchestrator-composer-unwatch-picker";
+const BADGE: &str = "orchestrator-composer-badge-unwatch";
 const SEARCH: &str = "orchestrator-composer-unwatch-search";
-const CHIP: &str = "orchestrator-composer-command-chip";
 const COMMAND: &str = "orchestrator-composer-slash-unwatch";
 
 /// A task titled `title`, with no pipeline.
@@ -107,7 +108,8 @@ fn watched() -> Watched {
   }
 }
 
-/// *Stop watching* chosen in the slash menu, where it takes the focus: the command chip and its picker.
+/// *Stop watching* chosen in the slash menu with `/unwatch`, its own name, where it takes the focus: the command's
+/// badge and its picker.
 fn open_picker(screen: &mut Orchestrator) {
   screen
     .window
@@ -115,12 +117,18 @@ fn open_picker(screen: &mut Orchestrator) {
     .get_element_by_id_mut(INPUT)
     .expect("the message field")
     .focus();
-  screen.set(INPUT, "/stop");
+  screen.set(INPUT, "/unwatch");
   screen.until("Stop watching to run", |screen| {
     screen.exists(COMMAND) && screen.text(COMMAND).contains("Enter")
   });
   screen.key(("Enter", "Enter"), false);
-  screen.until("the picker", |screen| screen.exists(PICKER) && screen.exists(CHIP));
+  screen.until("the picker", |screen| screen.exists(PICKER) && screen.exists(BADGE));
+}
+
+/// The focused row added to the badge with Enter, which closes the picker.
+fn pick(screen: &mut Orchestrator) {
+  screen.key(("Enter", "Enter"), false);
+  screen.until("the picker closed", |screen| !screen.exists(PICKER));
 }
 
 fn row(key: impl std::fmt::Display) -> String {
@@ -172,6 +180,7 @@ fn orchestrator_unwatch_picker_lists_only_what_this_conversation_watches_with_it
   ] {
     assert!(shown.contains(words), "{words}: {shown}");
   }
+  assert!(!shown.contains("Ctrl Enter"), "no Ctrl Enter: {shown}");
   assert!(
     !shown.contains("Tasks without a module"),
     "another conversation's subscription is not listed: {shown}"
@@ -205,7 +214,7 @@ fn orchestrator_unwatch_picker_lists_only_what_this_conversation_watches_with_it
 }
 
 #[test]
-fn orchestrator_unwatch_ctrl_enter_stops_the_chosen_and_all_of_them_stops_the_rest() {
+fn orchestrator_unwatch_enter_stops_the_chosen_and_all_of_them_stops_the_rest() {
   let Watched {
     mut screen,
     here,
@@ -218,12 +227,10 @@ fn orchestrator_unwatch_ctrl_enter_stops_the_chosen_and_all_of_them_stops_the_re
   screen.until("the subscriptions", |screen| {
     screen.exists(&row(format!("module-{webhooks}")))
   });
+  pick(&mut screen);
+  assert_eq!(badge_words(&mut screen, BADGE), "Stop watching · Webhooks v2");
+  assert_eq!(screen.text("orchestrator-keys"), "Enter", "Enter sends now");
   screen.key(("Enter", "Enter"), false);
-  let chip = format!("orchestrator-composer-choice-module-{webhooks}");
-  screen.until("the chip, the picker closed", |screen| {
-    screen.exists(&chip) && !screen.exists(PICKER)
-  });
-  screen.key(("Enter", "Enter"), true);
   screen.until("Webhooks v2 to stop", |screen| {
     !led(screen, here).contains(&WatchTarget::Module(webhooks))
   });
@@ -232,7 +239,7 @@ fn orchestrator_unwatch_ctrl_enter_stops_the_chosen_and_all_of_them_stops_the_re
   let mut expected = vec![WatchTarget::Module(search), WatchTarget::Task(own)];
   expected.sort_by_key(|target| format!("{target:?}"));
   assert_eq!(left, expected, "only the chosen one stops");
-  screen.until("the chips to go", |screen| !screen.exists(CHIP));
+  screen.until("the badge to go", |screen| !screen.exists(BADGE));
   let kept: Vec<EntryKind> = screen
     .db()
     .chat_entries(here)
@@ -249,17 +256,27 @@ fn orchestrator_unwatch_ctrl_enter_stops_the_chosen_and_all_of_them_stops_the_re
     )),
     "the person's /unwatch is kept: {kept:?}"
   );
+  assert_eq!(
+    kept
+      .iter()
+      .filter(|kind| matches!(kind, EntryKind::Person { .. }))
+      .count(),
+    1,
+    "with nothing written, no message goes: {kept:?}"
+  );
 
   open_picker(&mut screen);
   screen.until("the two left", |screen| {
     screen.text(PICKER).replace('\u{a0}', " ").contains("Watched here 2")
   });
-  // Search index, the task, then All of them.
+  // Search index, the task, then All of them; Enter picks it and closes the picker.
   screen.key(("ArrowDown", "ArrowDown"), false);
   screen.key(("ArrowDown", "ArrowDown"), false);
   screen.key(("Enter", "Enter"), false);
-  screen.until("the chip", |screen| screen.exists("orchestrator-composer-choice-all"));
-  screen.key(("Enter", "Enter"), true);
+  screen.until("All of them in the badge, the picker closed", |screen| {
+    !screen.exists(PICKER) && badge_words(screen, BADGE) == "Stop watching · All of them"
+  });
+  screen.key(("Enter", "Enter"), false);
   screen.until("everything here to stop", |screen| led(screen, here).is_empty());
   assert_eq!(
     led(&screen, other),
@@ -269,7 +286,7 @@ fn orchestrator_unwatch_ctrl_enter_stops_the_chosen_and_all_of_them_stops_the_re
 }
 
 #[test]
-fn orchestrator_unwatch_refuses_synthetic_ctrl_enter_and_keeps_the_chips() {
+fn orchestrator_unwatch_refuses_synthetic_enter_and_keeps_the_badge() {
   let Watched {
     mut screen,
     here,
@@ -280,15 +297,17 @@ fn orchestrator_unwatch_refuses_synthetic_ctrl_enter_and_keeps_the_chips() {
   screen.until("the subscriptions", |screen| {
     screen.exists(&row(format!("module-{webhooks}")))
   });
-  screen.key(("Enter", "Enter"), false);
-  let chip = format!("orchestrator-composer-choice-module-{webhooks}");
-  screen.until("the chip", |screen| screen.exists(&chip));
+  pick(&mut screen);
 
-  with_synthetic_input(|| screen.key(("Enter", "Enter"), true));
+  with_synthetic_input(|| screen.key(("Enter", "Enter"), false));
   let problem = "orchestrator-watching-problem";
   screen.until("the person-only notice", |screen| {
     screen.exists(problem) && screen.text(problem).contains("Only a person stops watching")
   });
   assert_eq!(led(&screen, here).len(), 3, "synthetic input stops nothing");
-  assert!(screen.exists(CHIP) && screen.exists(&chip), "the chips stay");
+  assert_eq!(
+    badge_words(&mut screen, BADGE),
+    "Stop watching · Webhooks v2",
+    "the badge stays"
+  );
 }

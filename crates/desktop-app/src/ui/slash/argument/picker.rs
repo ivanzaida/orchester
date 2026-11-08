@@ -1,4 +1,4 @@
-//! The picker of the command a composer's chip holds, over the composer's box as the slash menu opens: its left edge at
+//! The picker of a command a composer's badge holds, over the composer's box as the slash menu opens: its left edge at
 //! the box's and its bottom 8 over it. What it offers and how its panel looks are the command's
 //! ([`super::ArgumentPicker`]); here it is placed, its search field takes the focus once it opens, a press outside it
 //! closes it, its focus starts on the first row that can be chosen whenever the search or the rows change, and the
@@ -22,6 +22,7 @@ use crate::ui::slash::SlashField;
 #[derive(Clone)]
 struct Props {
   id: &'static str,
+  command: &'static str,
   field: SlashField,
   anchor: ElementRef,
 }
@@ -29,23 +30,24 @@ struct Props {
 /// Compared by what it shows; the anchor is the composer's for as long as it is shown.
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
-    self.id == other.id && self.field == other.field
+    self.id == other.id && self.command == other.command && self.field == other.field
   }
 }
 
 impl DevtoolsInspectable for Props {}
 
-/// The picker of the command `command` that the chip of the composer `id` holds, over its box `anchor`; one component
-/// for each command, so each picker keeps what it reads.
+/// The picker of the command `command` whose badge the composer `id` holds, over its box `anchor`; one component for
+/// each command, so each picker keeps what it reads.
 pub(in crate::ui::slash) fn picker(
   ctx: &mut Ctx,
   (id, field, anchor): (&'static str, &SlashField, &ElementRef),
-  command: &str,
+  command: &'static str,
 ) -> Element {
   ctx.mount_keyed::<Picker>(
     &format!("{id}-argument-{command}"),
     Props {
       id,
+      command,
       field: field.clone(),
       anchor: anchor.clone(),
     },
@@ -91,14 +93,19 @@ impl Component for Picker {
     let field = &props.field;
     if !self.open.get() {
       field.forget_choices();
-      field.set_picking(false);
+      field.set_picking(None);
       return Element::new();
     }
-    let choices = field.argument.get().map(|held| held.choices).unwrap_or_default();
+    let choices = field.argument.with(|held| {
+      held
+        .iter()
+        .find(|badge| badge.command == props.command)
+        .map(|badge| badge.choices.clone())
+        .unwrap_or_default()
+    });
     let filter = field.search.get();
     let focus = field.choice_focus.get();
-    let picker = field.taking.lock().as_ref().map(|taking| taking.picker.clone());
-    let Some(picker) = picker else {
+    let Some(picker) = field.taking_of(props.command).map(|taking| taking.picker) else {
       field.forget_choices();
       return Element::new();
     };

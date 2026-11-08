@@ -5,9 +5,9 @@
 //! list that scrolls after 8: its 14 icon in `text_secondary`, its name in 12 `text_primary` with the letters that
 //! match what was typed in 600, its kind and since when in 11 `text_muted` filling the row, and at its end what is
 //! still open there in 11: in `warning` while something waits for the person or is stopped at a limit, `text_muted`
-//! otherwise, *nothing open* when nothing is. A row that is a chip already adds *Added* with its check. Then a `border`
-//! line and *All of them* (`eye-off`, *stop watching everything here*, *cancels nothing*), and the keys. The focused
-//! row is on `hover`.
+//! otherwise, *nothing open* when nothing is. A row the badge holds already adds *Added* with its check. Then a
+//! `border` line and *All of them* (`eye-off`, *stop watching everything here*, *cancels nothing*), and the keys. The
+//! focused row is on `hover`.
 
 use std::sync::Arc;
 
@@ -279,7 +279,8 @@ fn open_work(ctx: &Ctx, watched: &WatchedSubscription) -> (Arc<str>, bool) {
   (joined, warn)
 }
 
-/// The keys: *↑ ↓ Move*, *Enter Pick and close*, *Shift Enter Add another*, *Esc Close*.
+/// The keys: *↑ ↓ Move*, *Enter Pick and close*, *Shift Enter Add another*, *Esc Close*; the composer's send stops
+/// what the badge holds (ORC-890).
 fn footer(ctx: &Ctx, id: &str) -> Element {
   keys(
     ctx,

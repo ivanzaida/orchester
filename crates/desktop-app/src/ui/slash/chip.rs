@@ -14,7 +14,7 @@ use lurq::{
     events::mouse_event::MouseEvent,
     theme::{BorderSize, PaletteColor, SpacingSize},
   },
-  components::{Button, Row, Text},
+  components::{Button, Column, Row, Text},
   core::{ElementRef, Signal},
   layout::Alignment,
   node::{CursorIcon, Element, Style, border::Border, dimension::Dimension, padding::Padding},
@@ -64,24 +64,23 @@ impl SkillReach {
 /// The widest the composer chip's tooltip runs before it wraps (`Label` `xuZ4N` in `mhanX`, `07` `QnPRC`).
 const SKILL_TIP_WIDTH: f32 = 360.0;
 
-/// `field`, the composer's message field, after the chips `slash` holds: the command with an argument and its choices
-/// ([`super::argument`]), and the skill, in the composer named `id`, whose message reaches its agent as `reach` says;
-/// the skill chip's tooltip keeps clear of `frame`, the composer's box. The field keeps its place in the tree either
-/// way, and with it its focus.
+/// `field`, the composer's message field, under the badges of the commands `slash` holds, pinned in a row of their own
+/// ([`super::argument`], 10 over the message), and after the skill chip, in the composer named `id`, whose message
+/// reaches its agent as `reach` says; the skill chip's tooltip keeps clear of `frame`, the composer's box. The field
+/// keeps its place in the tree either way, and with it its focus.
 pub fn with_chips(
   ctx: &mut Ctx,
   (id, reach, frame): (&str, SkillReach, &ElementRef),
   slash: &SlashField,
   field: Element,
 ) -> Element {
-  let command = argument::chips(ctx, id, slash);
+  let badges = argument::badges(ctx, id, slash);
   let chip = skill_chip(ctx, (id, reach, frame), &slash.skill);
-  Row::new()
+  let line = Row::new()
     .id(format!("{id}-skill-line"))
     .width(Dimension::Pct(100.0))
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Start)
-    .with_children(command)
     .with_children(chip)
     .child(
       Row::new()
@@ -89,7 +88,13 @@ pub fn with_chips(
         .flex(1.0)
         .min_width(Dimension::Px(0.0))
         .child(field),
-    )
+    );
+  Column::new()
+    .id(format!("{id}-message-area"))
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Loose.role())
+    .with_children(badges)
+    .child(line)
     .into()
 }
 

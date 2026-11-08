@@ -66,7 +66,8 @@
     },
     "keys": {
       "ctrlEnter": "Ctrl Enter",
-      "cmdEnter": "⌘ Enter"
+      "cmdEnter": "⌘ Enter",
+      "enter": "Enter"
     },
     "waitsOn": {
       "waits": "{{task}} · #{{run}} waits on {{waited}}",
@@ -524,7 +525,6 @@
         "tryAgain": "Try again"
       },
       "modules": {
-        "placeholder": "Search modules — then write what to do with their events",
         "search": "Search modules",
         "section": "Modules",
         "also": "Also",
@@ -556,7 +556,6 @@
         "nothingLeft": "Nothing left to watch"
       },
       "tasks": {
-        "placeholder": "Search tasks by key or title — then write what to do with their events",
         "search": "Search tasks",
         "section": "Tasks",
         "nothing": "No task matches “{{query}}”",
