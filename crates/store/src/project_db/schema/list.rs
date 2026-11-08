@@ -462,11 +462,7 @@ CREATE TABLE run_merges (
   super::import::MIGRATION,
   super::mcp::MIGRATION,
   super::agent_files::MIGRATION,
-  r"
--- New queued tasks pin the selected published pipeline version. Existing queued rows have no
--- recoverable selection and remain NULL until the user explicitly resolves them.
-ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 0);
-",
+  super::task_pipeline_pin::MIGRATION,
   super::task_edits::MIGRATION,
   super::tool_approvals::ACTIVE_TIME_MIGRATION,
   super::tool_approvals::MIGRATION,
@@ -596,4 +592,5 @@ ALTER TABLE tasks ADD COLUMN pipeline_version INTEGER CHECK (pipeline_version > 
   super::run_waits_on::ANSWERED_MIGRATION,
   super::run_waits_on::DROPPED_MIGRATION,
   super::chosen_profiles::MIGRATION,
+  super::agent_event_kinds::MIGRATION,
 ];
