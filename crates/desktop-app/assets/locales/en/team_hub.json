@@ -68,6 +68,7 @@
       "off": "Off on this computer",
       "undecided": "Can't tell yet whether it is ready here",
       "namesArchived": "Names {{name}}, which the team archived",
+      "namesArchivedLocal": "Names {{name}}, which was archived",
       "many": "{{count}} things missing here",
       "connectionNone": "No {{cli}} connection on this computer",
       "connectionPick": "Choose a {{cli}} connection here",

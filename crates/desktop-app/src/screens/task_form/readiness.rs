@@ -258,6 +258,8 @@ const fn undecided_key(why: &Undecided) -> &'static str {
     Undecided::UsesArchivedTool(..) => "task_form.readiness.undecided.usesArchivedTool",
     Undecided::UsesArchivedInstruction(..) => "task_form.readiness.undecided.usesArchivedInstruction",
     Undecided::RunsUnknown(_) => "task_form.readiness.undecided.runsUnknown",
+    Undecided::RunsArchived(..) => "task_form.readiness.undecided.runsArchived",
+    Undecided::ChoosesArchivedLocalMcpServer(..) => "task_form.readiness.undecided.choosesArchivedLocalMcpServer",
     Undecided::ConnectionGone(_) => "task_form.readiness.undecided.connectionGone",
     Undecided::TeamToolSecretById(_) => "task_form.readiness.undecided.teamToolSecretById",
     Undecided::SecretGone(_) => "task_form.readiness.undecided.secretGone",

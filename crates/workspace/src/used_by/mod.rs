@@ -15,7 +15,7 @@ mod team;
 use std::path::Path;
 
 pub use orchester_api::{UsedBy, UsedByResource, UsedByRun};
-use orchester_core::id::ResourceId;
+use orchester_core::id::{ConnectionId, ResourceId};
 use orchester_store::{ProjectDb, SharingLink};
 
 pub use self::{cli::profile_cli, error::UsedByError};
@@ -40,6 +40,16 @@ pub async fn used_by(root: &Path, team: Option<&TeamSession>, resource: Resource
     }
     Some(link) => team::used_by(team, &link, resource).await,
   }
+}
+
+/// What uses the local MCP server `server` in the project at `root`: the profiles that choose it and the runs that use
+/// it. A local MCP server has no team and no versions, so this is read from the project's database alone. Blocks on the
+/// project database: run it on the application's runtime.
+pub async fn used_by_mcp_server(root: &Path, server: ConnectionId) -> Result<UsedBy, UsedByError> {
+  let owned = root.to_owned();
+  background::run(move || local::used_by_mcp_server(&owned, server))
+    .await
+    .map_err(|_| UsedByError::Interrupted)?
 }
 
 /// Whether `session` is the one `link` names.

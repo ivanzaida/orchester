@@ -7,11 +7,11 @@
 use std::path::Path;
 
 use orchester_core::{
-  id::{ResourceId, RunId, TaskId},
+  id::{ConnectionId, ResourceId, RunId, TaskId},
   name::Name,
   resource::{AgentProfile, Resource, ResourceKind},
   run::{RunSnapshot, StepExecutor},
-  store::ResourceStore,
+  store::{McpServerStore, ResourceStore},
   time::Timestamp,
 };
 use orchester_ipc::Command;
@@ -37,6 +37,11 @@ pub struct Pinning {
 }
 
 impl Pinning {
+  /// What was archived: a resource's kind, or an MCP server.
+  pub const fn kind(&self) -> ResourceKind {
+    self.kind
+  }
+
   /// The archived resource's name, as the *Stopped* notification names it.
   pub fn resource(&self) -> &Name {
     &self.resource
@@ -62,13 +67,25 @@ pub(super) async fn stop_runs(runners: &Runners, root: &Path, (resource, by): (R
     // The blocking pool is shutting down with the window.
     Err(_) => return,
   };
+  let archived = Archived {
+    id: resource,
+    kind: pinning.kind,
+    by: by.map(str::to_owned),
+  };
+  stop(runners, root, pinning, Some(archived)).await;
+}
+
+/// Cancels the runs `pinning` names through the project's runner and records each one cancelled, with what was
+/// archived when it is a resource (a local MCP server is no resource). The runs it cancelled.
+pub(crate) async fn stop(runners: &Runners, root: &Path, pinning: Pinning, archived: Option<Archived>) -> Vec<RunId> {
+  let mut stopped = Vec::new();
   for (run, task) in pinning.runs {
     if let Err(error) = runners
       .control_run_in(&pinning.project, Command::CancelRun { run })
       .await
     {
       let message = control_message(&error);
-      tracing::warn!(?message, %run, %resource, "cannot stop a run that pins an archived resource");
+      tracing::warn!(?message, %run, resource = %pinning.resource, "cannot stop a run that pins an archived resource");
       continue;
     }
     let stop = ArchiveStop {
@@ -76,20 +93,18 @@ pub(super) async fn stop_runs(runners: &Runners, root: &Path, (resource, by): (R
       task,
       resource: pinning.resource.clone(),
       stopped_at: Timestamp::now(),
-      archived: Some(Archived {
-        id: resource,
-        kind: pinning.kind,
-        by: by.map(str::to_owned),
-      }),
+      archived: archived.clone(),
     };
+    stopped.push(run);
     let owned = root.to_owned();
     match background::run(move || record(&owned, &stop)).await {
       Ok(Ok(())) => {}
       Ok(Err(error)) => tracing::error!(%error, %run, "cannot record a run stopped by an archived resource"),
       // The blocking pool is shutting down with the window.
-      Err(_) => return,
+      Err(_) => return stopped,
     }
   }
+  stopped
 }
 
 fn record(root: &Path, stop: &ArchiveStop) -> Result<(), StoreError> {
@@ -125,6 +140,56 @@ pub fn pinning(root: &Path, resource: ResourceId) -> Result<Option<Pinning>, Arc
     kind: kept.kind(),
     runs,
   }))
+}
+
+/// The runs that have not ended and pin the local MCP server `server`; `None` when the project does not keep it.
+pub fn pinning_mcp_server(root: &Path, server: ConnectionId) -> Result<Option<Pinning>, ArchiveError> {
+  let db = ProjectDb::open(root)?;
+  let Some(kept) = db.mcp_server(server)? else {
+    return Ok(None);
+  };
+  let mut runs = Vec::new();
+  for listed in db.unfinished_runs()? {
+    match listed {
+      Ok(run) => {
+        if pins_mcp_server(&db, run.snapshot(), server)? {
+          runs.push((run.id(), run.task()));
+        }
+      }
+      Err(unreadable) => tracing::warn!(
+        ?unreadable,
+        "an unreadable run is not checked against an archived MCP server"
+      ),
+    }
+  }
+  Ok(Some(Pinning {
+    project: OpenProject {
+      project: db.project().clone(),
+      repo_root: root.to_owned(),
+    },
+    resource: Name::new(kept.name().as_str()).expect("an MCP server's name is a valid name"),
+    kind: ResourceKind::McpServer,
+    runs,
+  }))
+}
+
+/// Whether a run with `snapshot` uses the local MCP server `server`: a run pins no server of its own, it uses the
+/// servers its pinned profile versions choose.
+pub(crate) fn pins_mcp_server(
+  db: &ProjectDb,
+  snapshot: &RunSnapshot,
+  server: ConnectionId,
+) -> Result<bool, StoreError> {
+  for step in snapshot.steps() {
+    let StepExecutor::Agent { profile, .. } = step.executor() else {
+      continue;
+    };
+    let version = db.version::<AgentProfile>(profile.resource, profile.number)?;
+    if version.is_some_and(|version| version.body().mcp_servers().ids().contains(&server)) {
+      return Ok(true);
+    }
+  }
+  Ok(false)
 }
 
 /// Whether a run with `snapshot` pins `resource`: the one rule for the runs an archive stops, also read by the used-by

@@ -8,6 +8,7 @@ mod follows;
 mod groups;
 mod hub;
 mod local;
+mod local_archive;
 mod pending;
 mod pipelines;
 mod reviewers;

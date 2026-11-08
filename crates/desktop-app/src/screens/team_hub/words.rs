@@ -265,6 +265,9 @@ fn undecided(ctx: &Ctx, why: &Undecided) -> Arc<str> {
     | Undecided::UsesArchivedInstruction(_, name) => {
       ctx.t_args("team_hub.line.namesArchived", [("name", name.clone())])
     }
+    Undecided::RunsArchived(_, name) | Undecided::ChoosesArchivedLocalMcpServer(_, name) => {
+      ctx.t_args("team_hub.line.namesArchivedLocal", [("name", name.clone())])
+    }
     Undecided::Member { why, .. } => undecided(ctx, why),
     Undecided::NotTeamForm
     | Undecided::CannotBePublished(_)

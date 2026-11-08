@@ -16,7 +16,7 @@ use orchester_core::{
   },
   store::{McpServerStore, ResourceStore},
 };
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{ArchiveStop, ProjectDb, StoreError};
 use support::{at, name};
 use tempfile::TempDir;
 
@@ -146,4 +146,26 @@ fn local_archive_goes_with_a_deleted_mcp_server() {
   db.archive_mcp_server(docs, at(7)).expect("archive");
   db.delete_unused_mcp_server(docs, &|_| Ok(Vec::new())).expect("delete");
   assert!(db.archived_mcp_servers().expect("archived").is_empty());
+}
+
+#[test]
+fn local_archive_remembers_which_runs_an_archive_stopped() {
+  let (_repo, mut db, run, _) = support::started_run();
+  let docs = server(&mut db, "docs");
+  let stop = ArchiveStop {
+    run: run.id(),
+    task: run.task(),
+    resource: name("docs"),
+    stopped_at: at(8),
+    archived: None,
+  };
+  db.record_archive_stop(&stop).expect("stop");
+  assert!(db.archive_stops_of_mcp_server(docs).expect("none yet").is_empty());
+  db.record_mcp_server_stop(run.id(), docs).expect("noted");
+  assert_eq!(db.archive_stops_of_mcp_server(docs).expect("stops"), vec![stop]);
+  assert!(
+    db.archive_stops_of_resource(ResourceId::generate())
+      .expect("none")
+      .is_empty()
+  );
 }

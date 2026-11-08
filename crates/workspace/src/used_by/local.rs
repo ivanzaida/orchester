@@ -10,14 +10,15 @@ use std::{num::NonZeroU32, path::Path};
 
 use orchester_api::SharedResourceKind;
 use orchester_core::{
-  id::ResourceId,
-  resource::{AgentProfile, Resource, ResourceBody, TeamMcpServer, TeamReviewer, VersionNumber},
-  store::{ResourceStore, TaskStore},
+  id::{ConnectionId, ResourceId},
+  resource::{AgentProfile, Resource, ResourceBody, ResourceKind, TeamMcpServer, TeamReviewer, VersionNumber},
+  run::RunSnapshot,
+  store::{McpServerStore, ResourceStore, TaskStore},
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, StoreError};
 
 use super::{UsedBy, UsedByError, UsedByResource, UsedByRun, names};
-use crate::sharing::sync::pins;
+use crate::sharing::sync::{pins, pins_mcp_server};
 
 pub(super) fn used_by(root: &Path, resource: ResourceId) -> Result<UsedBy, UsedByError> {
   let db = ProjectDb::open(root)?;
@@ -26,6 +27,33 @@ pub(super) fn used_by(root: &Path, resource: ResourceId) -> Result<UsedBy, UsedB
   Ok(UsedBy {
     resources: resources(&db, resource)?,
     runs: runs(&db, &kept)?,
+  })
+}
+
+/// A local MCP server's answer: the profiles whose latest version chooses it, and the runs that use it (a run uses the
+/// servers its pinned profile versions choose). A local MCP server is a connection, not a versioned resource, so it has
+/// its own typed id.
+pub(super) fn used_by_mcp_server(root: &Path, server: ConnectionId) -> Result<UsedBy, UsedByError> {
+  let db = ProjectDb::open(root)?;
+  db.mcp_server(server)?.ok_or(UsedByError::NotFound)?;
+  let mut profiles = Vec::new();
+  for resource in db.resources(ResourceKind::AgentProfile)? {
+    let Some(latest) = db.latest_version::<AgentProfile>(resource.id())? else {
+      continue;
+    };
+    if latest.body().mcp_servers().ids().contains(&server) {
+      profiles.push(UsedByResource {
+        kind: SharedResourceKind::AgentProfile,
+        id: resource.id(),
+        name: resource.name().to_string(),
+        version: latest.number(),
+      });
+    }
+  }
+  profiles.sort_by_cached_key(|used| (used.name.to_lowercase(), used.id.to_string()));
+  Ok(UsedBy {
+    resources: profiles,
+    runs: runs_where(&db, |snapshot| pins_mcp_server(&db, snapshot, server))?,
   })
 }
 
@@ -105,10 +133,19 @@ fn referenced<B: ResourceBody>(
 /// The runs that have not ended and pin `target` by the rule an archive stops runs by ([`pins`]). A run that cannot
 /// be read is logged and left out, as it is when the archive stops runs (`crate::sharing::sync`).
 fn runs(db: &ProjectDb, target: &Resource) -> Result<Vec<UsedByRun>, UsedByError> {
+  runs_where(db, |snapshot| pins(db, snapshot, target))
+}
+
+/// The runs that have not ended and whose snapshot `pinned` says uses the target, by the task key's number and then
+/// the run id.
+fn runs_where(
+  db: &ProjectDb,
+  pinned: impl Fn(&RunSnapshot) -> Result<bool, StoreError>,
+) -> Result<Vec<UsedByRun>, UsedByError> {
   let mut found: Vec<(NonZeroU32, UsedByRun)> = Vec::new();
   for listed in db.unfinished_runs()? {
     let run = match listed {
-      Ok(run) if pins(db, run.snapshot(), target)? => run,
+      Ok(run) if pinned(run.snapshot())? => run,
       Ok(_) => continue,
       Err(unreadable) => {
         tracing::warn!(

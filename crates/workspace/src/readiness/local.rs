@@ -33,6 +33,7 @@ use super::{
 /// resources, and a server the project no longer has is left to the run, which says it is missing.
 pub(super) fn profiles(db: &ProjectDb, repo_root: &Path) -> Result<Vec<Profile>, StoreError> {
   let servers = db.mcp_servers()?;
+  let archived: Vec<ConnectionId> = db.archived_mcp_servers()?.into_iter().map(|(id, _)| id).collect();
   let path = db
     .project_environment()?
     .get("PATH")
@@ -61,11 +62,21 @@ pub(super) fn profiles(db: &ProjectDb, repo_root: &Path) -> Result<Vec<Profile>,
         .filter_map(|(server, stdio)| program_found(server.id(), stdio, (repo_root, path.as_deref())))
         .collect();
       entry.needs = Ok(Needs::local_profile(resource.id(), provider, &named));
+      if let Some(gone) = archived_choice(version.body(), &servers, &archived) {
+        entry.needs = Err(gone);
+      }
       pick = Some(own);
     }
     profiles.push(Profile { entry, pick });
   }
   Ok(profiles)
+}
+
+/// Why `profile` cannot run when it chooses a server that was archived: the first one it names.
+fn archived_choice(profile: &AgentProfile, servers: &[McpServer], archived: &[ConnectionId]) -> Option<Undecided> {
+  let id = profile.mcp_servers().ids().iter().find(|id| archived.contains(id))?;
+  let name = servers.iter().find(|server| server.id() == *id)?.name().to_string();
+  Some(Undecided::ChoosesArchivedLocalMcpServer(*id, name))
 }
 
 /// The servers `profile` chooses that a run starts as a program: turned on, and with a program to start.

@@ -148,6 +148,7 @@ struct PipelineEntry {
 }
 
 fn pipelines(db: &ProjectDb, entries: &[Entry]) -> Result<Vec<PipelineEntry>, ReadinessError> {
+  let archived = archived_executors(db)?;
   let mut pipelines = Vec::new();
   for resource in db.resources(ResourceKind::Pipeline)? {
     let Some(version) = db.latest_version::<Pipeline>(resource.id())? else {
@@ -157,7 +158,7 @@ fn pipelines(db: &ProjectDb, entries: &[Entry]) -> Result<Vec<PipelineEntry>, Re
       resource: resource.id(),
       name: resource.name().as_str().to_owned(),
       number: version.number(),
-      needs: union(version.body(), entries),
+      needs: union(version.body(), (entries, &archived)),
     });
   }
   Ok(pipelines)
@@ -166,7 +167,7 @@ fn pipelines(db: &ProjectDb, entries: &[Entry]) -> Result<Vec<PipelineEntry>, Re
 /// The needs of every profile or tool `pipeline` runs, in step order and then the integrator. One that is undecided, or
 /// that this computer has no version of, decides the pipeline: it cannot start, and the first such member is named
 /// ([`Undecided::Member`]). The other members' missing parts are not read while one is undecided.
-fn union(pipeline: &Pipeline, entries: &[Entry]) -> Result<Needs, Undecided> {
+fn union(pipeline: &Pipeline, (entries, archived): (&[Entry], &[(ResourceId, String)])) -> Result<Needs, Undecided> {
   let integrator = pipeline.deliver().and_then(|deliver| deliver.integrator());
   let executors = pipeline
     .steps()
@@ -178,11 +179,32 @@ fn union(pipeline: &Pipeline, entries: &[Entry]) -> Result<Needs, Undecided> {
     let entry = entries
       .iter()
       .find(|entry| entry.resource == executor)
-      .ok_or(Undecided::RunsUnknown(executor))?;
+      .ok_or_else(|| unlisted(executor, archived))?;
     parts.push(entry.needs.clone().map_err(|why| Undecided::Member {
       id: executor,
       why: Box::new(why),
     })?);
   }
   Ok(Needs::union(parts))
+}
+
+/// The profiles and tools archived here, which a step may still name: a pipeline keeps naming what is archived.
+fn archived_executors(db: &ProjectDb) -> Result<Vec<(ResourceId, String)>, ReadinessError> {
+  let mut archived = Vec::new();
+  for kind in [ResourceKind::AgentProfile, ResourceKind::Tool] {
+    for (resource, _) in db.archived_local_resources(kind)? {
+      archived.push((resource.id(), resource.name().as_str().to_owned()));
+    }
+  }
+  Ok(archived)
+}
+
+/// Why a step's executor has no entry: it was archived (and is named), or this computer has no version of it.
+fn unlisted(executor: ResourceId, archived: &[(ResourceId, String)]) -> Undecided {
+  archived
+    .iter()
+    .find(|(id, _)| *id == executor)
+    .map_or(Undecided::RunsUnknown(executor), |(id, name)| {
+      Undecided::RunsArchived(*id, name.clone())
+    })
 }

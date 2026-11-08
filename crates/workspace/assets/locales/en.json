@@ -9,6 +9,10 @@
     },
     "baseBranchGone": "{{branch}} no longer exists in the repository. Choose another base branch; nothing was saved."
   },
+  "localArchive": {
+    "runsUnreadable": "The runs that use it could not be read, so nothing was archived. Try again.",
+    "gone": "This project no longer has it, so there is nothing to archive."
+  },
   "localIntegration": {
     "sensitiveOutcome": "Integration details are unavailable under the current sensitive-data policy. Inspect the actual recorded outcome before continuing.",
     "preflight": {
@@ -2269,6 +2273,8 @@
     "undecidedUsesArchivedTool": "{{resource}} names the team tool {{name}}, which the team archived, so it cannot run until an admin restores {{name}} or removes it from {{resource}}.",
     "undecidedUsesArchivedInstruction": "{{resource}} names the team instruction {{name}}, which the team archived, so it cannot run until an admin restores {{name}} or removes it from {{resource}}.",
     "undecidedRunsUnknown": "The pipeline runs {{resource}}, which this computer has no version of yet. Wait for it to sync, or ask a team Admin.",
+    "undecidedRunsArchived": "The pipeline {{resource}} runs {{name}}, which was archived, so it cannot start until {{name}} is restored or a step runs another.",
+    "undecidedChoosesArchivedLocalMcpServer": "{{resource}} chooses the MCP server {{name}}, which was archived, so it cannot run until {{name}} is restored or {{resource}} stops choosing it.",
     "undecidedConnectionGone": "{{resource}} runs on a connection this project no longer has. Choose another connection for it.",
     "undecidedTeamToolSecretById": "The tool {{resource}} holds a project secret by id, which the team cannot name, so it is not known whether this computer has its value. Ask a team Admin to publish it again.",
     "undecidedSecretGone": "The tool {{resource}} uses a secret this project no longer has or has archived. Choose another secret for it.",
