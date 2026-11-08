@@ -108,6 +108,13 @@ fn seed_orchestrator_leads_has_led_modules_a_task_the_project_and_an_already_led
     leads::DEFAULT_ORDER
   );
   let latest = db.chats().expect("the conversations");
-  let newest = latest.iter().max_by_key(|listing| listing.last).expect("a conversation");
-  assert_eq!(newest.chat.id(), leading.chat.id(), "the Orchestrator opens on the leading conversation");
+  let newest = latest
+    .iter()
+    .max_by_key(|listing| listing.last)
+    .expect("a conversation");
+  assert_eq!(
+    newest.chat.id(),
+    leading.chat.id(),
+    "the Orchestrator opens on the leading conversation"
+  );
 }

@@ -1,7 +1,8 @@
-//! The QA gate (ORC-899, `orchester_app::mcp::qa_person`): in a QA copy, which turns it on, the MCP client counts as the
-//! person for the Orchestrator's person-only actions, so a synthetic Ctrl Enter applies a /watch and a synthetic press
-//! of *Take it here* moves the subscription. A session that does not turn it on, as the installed app's never does,
-//! refuses both; only `examples/qa_app` turns it on. Synthetic Shift+Enter and Ctrl+Home reach the composer's field.
+//! The QA gate (ORC-899, `orchester_app::mcp::qa_person`): in a QA copy, which turns it on, the MCP client counts as
+//! the person for the Orchestrator's person-only actions, so a synthetic Ctrl Enter applies a /watch and a synthetic
+//! press of *Take it here* moves the subscription. A session that does not turn it on, as the installed app's never
+//! does, refuses both; only `examples/qa_app` turns it on. Synthetic Shift+Enter and Ctrl+Home reach the composer's
+//! field.
 
 use lurq::app::events::with_synthetic_input;
 use orchester_app::routes::OrchestratorChat;
@@ -9,7 +10,7 @@ use orchester_core::orchestrator::WatchTarget;
 
 use super::{
   harness::{Orchestrator, Setup},
-  led::{card, led, leader},
+  led::{card, leader, led},
   watch_module::{CHIP, Kontur, kontur_with, open_picker, row},
 };
 
@@ -116,19 +117,43 @@ fn orchestrator_qa_person_is_off_outside_a_qa_copy_and_refuses_a_synthetic_take_
 
   with_synthetic_input(|| screen.click(&take));
   screen.until("the refusal", |screen| screen.exists(&format!("{card}-person-only")));
-  assert_eq!(leader(&screen, billing), Some(theirs.id()), "automation's press moves nothing");
+  assert_eq!(
+    leader(&screen, billing),
+    Some(theirs.id()),
+    "automation's press moves nothing"
+  );
+}
+
+/// Every `.rs` file under `dir`, recursively.
+fn sources(dir: &std::path::Path, found: &mut Vec<std::path::PathBuf>) {
+  for entry in std::fs::read_dir(dir).unwrap_or_else(|_| panic!("{}", dir.display())) {
+    let path = entry.expect("an entry").path();
+    if path.is_dir() {
+      sources(&path, found);
+    } else if path.extension().is_some_and(|extension| extension == "rs") {
+      found.push(path);
+    }
+  }
 }
 
 #[test]
 fn orchestrator_qa_person_is_turned_on_by_the_qa_copy_only() {
   let crate_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-  let read = |path: &str| std::fs::read_to_string(crate_dir.join(path)).unwrap_or_else(|_| panic!("{path}"));
-  let turn_on = "count_mcp_client_as_person()";
-  assert!(read("examples/qa_app/main.rs").contains(turn_on), "the QA copy turns it on");
-  for program in ["src/main.rs", "src/window.rs", "src/startup/launch.rs"] {
+  let read = |path: &std::path::Path| std::fs::read_to_string(path).unwrap_or_else(|_| panic!("{}", path.display()));
+  let turn_on = ".count_mcp_client_as_person()";
+  assert!(
+    read(&crate_dir.join("examples/qa_app/main.rs")).contains(turn_on),
+    "the QA copy turns it on"
+  );
+  // The installed app and a normal start run only the crate's own code: no file of it turns the gate on.
+  let mut found = Vec::new();
+  sources(&crate_dir.join("src"), &mut found);
+  assert!(found.len() > 100, "the crate's sources were read");
+  for program in found {
     assert!(
-      !read(program).contains(turn_on),
-      "{program}, which the installed app runs, never turns it on"
+      !read(&program).contains(turn_on),
+      "{}, which the installed app runs, never turns it on",
+      program.display()
     );
   }
 }

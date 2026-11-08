@@ -37,7 +37,7 @@ use super::super::super::{
   orchestrated::open_chat,
 };
 use crate::{
-  theme::IconSize,
+  theme::{ExtraSpacing, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     chat::{Avatar, chat_row, delivery_line},
@@ -105,14 +105,27 @@ impl ProposalRow {
       ProposalState::Applying => (Icon::LoaderCircle, ctx.t("conversation.orchestrator.proposal.applying")),
       _ => (Icon::Hand, ctx.t("conversation.orchestrator.proposal.waits")),
     };
-    let mut body = said(ctx, id, &proposal.proposed);
-    body.push(delivery_line(
+    let mut text = said(ctx, id, &proposal.proposed);
+    text.push(delivery_line(
       &format!("{id}-state"),
       (glyph, PaletteColor::TextMuted),
       &words,
     ));
-    body.push(self.actions(ctx, id, props));
-    body.extend(self.notes(ctx, id));
+    // The text, the buttons and the notes are the card's sections, as far apart as the timeline's cards draw theirs
+    // (`Head / Body / Actions` 10 apart in `04c` `vO7CW`, `Decision cards` `z4nfb`).
+    let body = Column::new()
+      .id(format!("{id}-body"))
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Loose.role())
+      .child(
+        Column::new()
+          .id(format!("{id}-said"))
+          .width(Dimension::Pct(100.0))
+          .spacing(ExtraSpacing::Fine.role())
+          .with_children(text),
+      )
+      .child(self.actions(ctx, id, props))
+      .with_children(self.notes(ctx, id));
     Column::new()
       .id(id.to_owned())
       .width(Dimension::Pct(100.0))
@@ -120,7 +133,7 @@ impl ProposalRow {
         format!("{id}-row"),
         Avatar::Orchestrator,
         (&name, &time),
-        body,
+        vec![body.into()],
       ))
   }
 

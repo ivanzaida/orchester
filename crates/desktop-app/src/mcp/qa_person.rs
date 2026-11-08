@@ -2,8 +2,8 @@
 //! Orchestrator's person-only actions, so a verifier reaches what a person's press reaches. A synthetic press (lurq's
 //! `lurq_interact`, an MCP client's) of *Stop watching*, *Take it here* or *Leave it there*, *Start* on a proposed run,
 //! *Approve and do it*, *Apply* on a proposed change, going back, deleting a conversation, and a command applied from
-//! the composer (`/watch-module`, `/watch-task` with Ctrl Enter) go through as a person's, and a message it sends is the
-//! person's.
+//! the composer (`/watch-module`, `/watch-task` with Ctrl Enter) go through as a person's, and a message it sends is
+//! the person's.
 //!
 //! Only `examples/qa_app` (the program `tools/qa-app.ps1` starts) turns it on, once, before its window opens
 //! ([`QaPerson::count_mcp_client_as_person`]); the installed app (`src/main.rs`), a normal debug start and the tests

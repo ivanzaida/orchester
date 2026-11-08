@@ -287,7 +287,11 @@ impl Rewinding {
       if self.refuse() {
         return;
       }
-      self.run(project, (chat, point), Some(self.outgoing(chat, words, (mode, plan_only))));
+      self.run(
+        project,
+        (chat, point),
+        Some(self.outgoing(chat, words, (mode, plan_only))),
+      );
       return;
     }
     self.refused.set(false);

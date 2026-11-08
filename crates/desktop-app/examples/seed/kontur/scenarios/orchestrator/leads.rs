@@ -1,12 +1,12 @@
 //! `orchestrator-leads` (ORC-899): the `orchestrator` scenario with subscriptions that stand, so a verifier reaches
-//! what a conversation that leads shows: the header's Leads chips, `/watching` and `/unwatch` with their pickers, and the
-//! card of a target another conversation leads. *Lead Webhooks v2, a task and Kontur*, the one the Orchestrator opens
-//! on, leads the module Webhooks v2 with an order of its own, the task *Shared rate limiter* (no module) and everything
-//! in the project with no order of its own, so the project's default order (Project settings › Orchestrator ›
-//! *Watching*) applies to it. *Billing and invoices*, in History, leads the module Billing: a `/watch-module` of Billing
-//! from the first conversation shows the already-led card (*Take it here* / *Open that conversation*). Search index is
-//! led by none, for a /watch that starts one. Each conversation holds the /watch command and the line the app wrote for
-//! it.
+//! what a conversation that leads shows: the header's Leads chips, `/watching` and `/unwatch` with their pickers, and
+//! the card of a target another conversation leads. *Lead Webhooks v2, a task and Kontur*, the one the Orchestrator
+//! opens on, leads the module Webhooks v2 with an order of its own, the task *Shared rate limiter* (no module) and
+//! everything in the project with no order of its own, so the project's default order (Project settings › Orchestrator
+//! › *Watching*) applies to it. *Billing and invoices*, in History, leads the module Billing: a `/watch-module` of
+//! Billing from the first conversation shows the already-led card (*Take it here* / *Open that conversation*). Search
+//! index is led by none, for a /watch that starts one. Each conversation holds the /watch command and the line the app
+//! wrote for it.
 
 use orchester_core::{
   id::ChatId,
@@ -64,7 +64,12 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   lead(kontur, &other, (&billing, BILLING_ORDER))?;
 
   let leading = Chat::named(ChatId::generate(), LEADING, kontur.ago(8));
-  watched(kontur, &leading, (vec![webhooks.clone()], WEBHOOKS_ORDER), leading.started())?;
+  watched(
+    kontur,
+    &leading,
+    (vec![webhooks.clone()], WEBHOOKS_ORDER),
+    leading.started(),
+  )?;
   lead(kontur, &leading, (&webhooks, WEBHOOKS_ORDER))?;
   let at = kontur.ago(6);
   watched(kontur, &leading, (vec![task.clone(), project.clone()], ""), at)?;
