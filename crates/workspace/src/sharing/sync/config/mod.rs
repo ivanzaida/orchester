@@ -91,7 +91,7 @@ pub(super) async fn sync(source: &impl Source, root: &Path, resource: SharedReso
     "a shared resource is kept"
   );
   if blocking(root, move |root| cache(root, &resource, &versions)).await? {
-    source.archived(id).await;
+    source.archived(id, None).await;
   }
   Ok(())
 }

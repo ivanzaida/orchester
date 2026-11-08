@@ -253,8 +253,8 @@ impl Source for Live {
       .await
   }
 
-  async fn archived(&self, resource: ResourceId) {
-    archive::stop_runs(&self.runners, self.project.repo_root(), resource).await;
+  async fn archived(&self, resource: ResourceId, by: Option<&str>) {
+    archive::stop_runs(&self.runners, self.project.repo_root(), (resource, by)).await;
     self.servers.shared_changed();
   }
 

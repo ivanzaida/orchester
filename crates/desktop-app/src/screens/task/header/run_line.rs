@@ -72,6 +72,10 @@ pub fn status_line(ctx: &mut Ctx, task: &TaskContext, mode: bool) -> Element {
       }
     }
   };
+  let chip = match super::super::archived::status_reason(ctx, task) {
+    Some(reason) => chip.detail(reason),
+    None => chip,
+  };
   let mode = if mode { super::run_mode::mode(ctx, task) } else { None };
   let chip = chip.render(ctx);
   let line = run_line(ctx, detail);

@@ -7,7 +7,7 @@
 mod instruction;
 mod skill;
 
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
   app::{
@@ -25,7 +25,7 @@ use orchester_workspace::{
 };
 
 use super::{
-  bar,
+  archive, bar,
   fill::nothing_here,
   member,
   model::{Entry, Listing},
@@ -47,6 +47,7 @@ pub(super) enum Sheet {
 
 #[derive(Clone, PartialEq)]
 pub(super) struct Props {
+  pub repo_root: PathBuf,
   pub project: ProjectId,
   /// The team's configuration: an admin may change its resources, and a member reads who the admins are.
   pub team: TeamConfiguration,
@@ -72,6 +73,7 @@ impl Component for PlainPanel {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let Props {
+      repo_root,
       project,
       team,
       listing,
@@ -93,7 +95,10 @@ impl Component for PlainPanel {
     };
     let route = team.may_change.then(|| editor(&entry, project, &sheet));
     let navigation = Navigation::of(ctx);
-    let head_edit = route.clone().map(|route| panel::edit_button(ctx, navigation.to(route)));
+    let head_edit = panel::with_more(
+      route.clone().map(|route| panel::edit_button(ctx, navigation.to(route))),
+      archive::menu(ctx, &repo_root, &entry, team.may_change),
+    );
     let version = words::published_line(ctx, now, &entry, published);
     let body = panel::body()
       .child(panel::head_of(&entry, (kind, version), head_edit))

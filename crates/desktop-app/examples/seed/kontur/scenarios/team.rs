@@ -18,10 +18,12 @@ use orchester_core::{
   connection::{AgentProvider, SignIn},
   id::{ClaimId, OperationId, ProjectId, WorkEventId, WorkId},
   project::{Project, ProjectKey},
+  resource::ResourceKind,
+  store::ResourceStore,
   task::Task,
   time::Timestamp,
 };
-use orchester_store::{AppDb, ProjectDb};
+use orchester_store::{AppDb, ArchiveStop, Archived, ProjectDb};
 use rusqlite::{Connection, params};
 
 use self::state::{FILE, State};
@@ -335,6 +337,52 @@ pub fn create_name_taken(kontur: &mut Kontur) -> Result<(), SeedError> {
 fn edit_in(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
   super::team_hub::resources(kontur)?;
   write_marker(kontur, state)
+}
+
+/// An Admin on the hub's team MCP servers, which the stand-in team server holds with Builder, that names
+/// `pencil-design` (`team-archive`, A23 `Pnpbe`, ORC-838): *Agents › MCP servers › pencil-design*, the … menu's
+/// *Archive*, which opens the confirmation. Opening it is a press an MCP client may make (`team-hub-more`, then
+/// `team-hub-archive`); confirming it is a person's.
+pub fn archive(kontur: &mut Kontur) -> Result<(), SeedError> {
+  super::team_hub::resources(kontur)?;
+  write_marker(kontur, State::TeamArchive)
+}
+
+/// What the confirmation of [`archive`] leaves behind (`team-archived`, A22 `pUu78`): KON-12's run 8, cancelled at
+/// Implement, recorded as stopped when dana-k archived `pencil-design`, which the QA app then takes out of this
+/// computer's lists as the server's archive does. The task's Summary says which resource and who archived it, and
+/// Builder, which still names it, cannot run.
+pub fn archived(kontur: &mut Kontur) -> Result<(), SeedError> {
+  super::team_hub::resources(kontur)?;
+  Connection::open(kontur.database())?.execute("UPDATE counters SET next = 8 WHERE name = 'run'", [])?;
+  with_runs(
+    kontur,
+    &[(12, "Add retry to webhook sender", Shape::Cancelled("implement"), 60)],
+  )?;
+  let (run, task): (String, String) = Connection::open(kontur.database())?.query_row(
+    "SELECT id, task_id FROM runs ORDER BY number DESC LIMIT 1",
+    [],
+    |row| Ok((row.get(0)?, row.get(1)?)),
+  )?;
+  let pencil = kontur
+    .db
+    .resources(ResourceKind::McpServer)?
+    .into_iter()
+    .find(|resource| resource.name().as_str() == "pencil-design")
+    .ok_or_else(|| SeedError::Invalid("the seed has the team MCP server pencil-design".to_owned()))?;
+  let invalid = |what: &str| SeedError::Invalid(format!("the seed's {what} is an id"));
+  kontur.db.record_archive_stop(&ArchiveStop {
+    run: run.parse().map_err(|_| invalid("run"))?,
+    task: task.parse().map_err(|_| invalid("task"))?,
+    resource: pencil.name().clone(),
+    stopped_at: kontur.ago(60),
+    archived: Some(Archived {
+      id: pencil.id(),
+      kind: ResourceKind::McpServer,
+      by: Some("dana-k".to_owned()),
+    }),
+  })?;
+  write_marker(kontur, State::TeamArchived)
 }
 
 /// KON-12's run interrupted at Implement, on the live catalogue's Feature delivery with a brief that keeps

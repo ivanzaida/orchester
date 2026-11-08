@@ -65,7 +65,7 @@ impl Source for Unreachable {
     Err(SharingError::Offline)
   }
 
-  async fn archived(&self, _: ResourceId) {}
+  async fn archived(&self, _: ResourceId, _: Option<&str>) {}
 
   fn changed(&self) {}
 

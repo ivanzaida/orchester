@@ -7,6 +7,7 @@
 //! `cargo test -p orchester-app --test team_qa team_qa`
 
 mod first_download;
+mod hub_archive;
 mod hub_edit;
 mod hub_unsent;
 #[path = "../../examples/seed/kontur/mod.rs"]

@@ -16,6 +16,7 @@
 //! the error until fresh data succeeds, so retained data cannot offer decisions. What the task's ended runs
 //! left in the repository is read beside it, for *Remove worktree* and Run again.
 
+mod archived;
 pub(crate) mod cards;
 pub(crate) mod changes;
 mod ci;

@@ -137,6 +137,21 @@ pub(super) fn head_named(name: &str, (kind, version): (String, Option<String>), 
     .with_children(end)
 }
 
+/// What a head puts at its end: `edit`, then the … menu `more` an admin has, 8 apart.
+pub(super) fn with_more(edit: Option<Element>, more: Option<Element>) -> Option<Element> {
+  match (edit, more) {
+    (Some(edit), Some(more)) => Some(
+      Row::new()
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .child(edit)
+        .child(more)
+        .into(),
+    ),
+    (edit, more) => edit.or(more),
+  }
+}
+
 /// *Edit* in a head (`Edit` in `Agents · All · admin` `t4mtQL`).
 pub(super) fn edit_button(ctx: &Ctx, open: Open) -> Element {
   ActionButton::new("team-hub-edit", ButtonKind::Ghost, ctx.t("team_hub.panel.edit"))

@@ -12,6 +12,7 @@
 //! last answer as current. Before the project is known to be shared the page is [`unread`]'s.
 
 mod actions;
+mod archive;
 mod bar;
 mod create;
 mod fill;
@@ -355,6 +356,7 @@ fn detail(
   let id = project.open.project.id();
   let repo_root = project.open.repo_root.clone();
   let plain = |sheet| plain::Props {
+    repo_root: repo_root.clone(),
     project: id,
     team: team.clone(),
     listing: listing.clone(),
@@ -395,6 +397,7 @@ fn detail(
       tool::panel(
         ctx,
         tool::Props {
+          repo_root,
           project: id,
           team: team.clone(),
           listing: listing.clone(),

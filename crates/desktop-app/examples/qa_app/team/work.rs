@@ -193,6 +193,8 @@ pub fn after_join(
       }
     }
     State::NotReadyAfterRun => teams(&[NOT_READY_TASK])?,
+    // KON-12 is the team's task whose run 8 an archive stopped: the Summary names the resource, as the team's.
+    State::TeamArchived => teams(&[12])?,
     State::ModuleWork | State::AdminWork => {
       take(Subject::Module {
         id: module_id(BILLING)?,

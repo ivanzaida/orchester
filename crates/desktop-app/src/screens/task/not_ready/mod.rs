@@ -163,7 +163,7 @@ fn head(ctx: &Ctx, refusal: &NotReadyHere, team: bool) -> Row {
 }
 
 /// The rows in one outline.
-fn rows_box(rows: Vec<Element>) -> Column {
+pub(super) fn rows_box(rows: Vec<Element>) -> Column {
   Column::new()
     .id("task-not-ready-rows")
     .width(Dimension::Pct(100.0))

@@ -8,6 +8,7 @@
 mod error;
 mod local;
 mod names;
+mod servers;
 mod team;
 
 use std::path::Path;

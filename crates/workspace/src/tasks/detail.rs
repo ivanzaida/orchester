@@ -304,6 +304,8 @@ pub struct TaskDetail {
   pub shared: Option<orchester_store::SharedTaskInfo>,
   /// Before the task has a run: the agent its run would start with.
   pub first_agent: Option<Arc<str>>,
+  /// The archive of a team resource that stopped the latest run (A22 `pUu78`), with the resource and who archived it.
+  pub archive_stop: Option<orchester_store::ArchiveStop>,
 }
 
 impl TaskDetail {
@@ -403,6 +405,7 @@ impl TaskDetail {
       None => super::first_agent::first_agent(&db, &task)?,
       Some(_) => None,
     };
+    let archive_stop = latest.as_ref().map_or(Ok(None), |run| db.archive_stop_of(run.id()))?;
     let mut run = latest.map(|run| run_view(&db, run)).transpose()?;
     if let Some(view) = &mut run {
       view.worktree_not_removed = super::worktree_left::not_removed(&db, repo_root, view.id())?;
@@ -417,6 +420,7 @@ impl TaskDetail {
       result,
       first_agent,
       run_task,
+      archive_stop,
       merge,
       queue,
       history,
@@ -453,6 +457,7 @@ impl TaskDetail {
       unsent_status: None,
       shared: None,
       first_agent: None,
+      archive_stop: None,
     }
   }
 }

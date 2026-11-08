@@ -1,0 +1,292 @@
+//! The confirmation itself (`Dialog` `MdjVb` in `A23` `Pnpbe`, `QP42W` in local `L11` `dS97b`): the question, what
+//! archiving does, the resources that name it and the runs that will stop in two lists, what stays not ready, and
+//! *Cancel* and the danger *Archive and stop N runs*.
+
+use std::sync::Arc;
+
+use lurq::{
+  app::{
+    ctx::Ctx,
+    theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize},
+  },
+  components::{Column, Row, Text},
+  core::Signal,
+  layout::{Alignment, layout_kind::Justify},
+  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+};
+use orchester_api::{SharedResourceKind, UsedBy, UsedByResource, UsedByRun};
+
+use super::{Failed, Props, ReadFailed, words};
+use crate::{
+  theme::{ARCHIVE_DIALOG_WIDTH, ArchiveText, DialogSpacing, ExtraRadius, ExtraSpacing},
+  ui::{
+    button::{ActionButton, ButtonKind},
+    dialog::over_window,
+    field::field_error,
+    icon::Icon,
+    message::message_text,
+    state::loading,
+  },
+};
+
+/// What *Archive and stop N runs* does.
+pub(super) type Confirm = Arc<dyn Fn() + Send + Sync>;
+
+/// What the confirmation shows now.
+pub(super) struct State {
+  /// What uses the resource: none while it is read; the failure when it could not be.
+  pub read: Option<Result<UsedBy, ReadFailed>>,
+  /// The archive was asked for and has not answered.
+  pub archiving: bool,
+  /// Why the archive did nothing.
+  pub failed: Option<Failed>,
+  /// Why a press by automation did nothing.
+  pub person_refused: Option<Element>,
+}
+
+/// The confirmation over the window while `open` holds. `retry` reads what uses the resource again; `confirm` asks for
+/// the archive.
+pub(super) fn dialog(
+  ctx: &mut Ctx,
+  props: &Props,
+  state: State,
+  (open, retry, confirm): (&Signal<bool>, &Signal<u64>, Confirm),
+) -> Element {
+  let name = props.name.as_ref();
+  let mut dialog = Column::new()
+    .id("team-hub-archive-dialog")
+    .width(Dimension::Px(ARCHIVE_DIALOG_WIDTH))
+    .padding(Padding::all(DialogSpacing::Side.role()))
+    .spacing(DialogSpacing::Parts.role())
+    .background(PaletteColor::SurfaceRaised)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::BorderStrong))
+    .rounded(ExtraRadius::Tile.role())
+    .box_shadow(ShadowStyle::Lg)
+    .child(
+      Text::new(&ctx.t_args("team_archive.title", [("name", name)]))
+        .id("team-hub-archive-title")
+        .variant(ArchiveText::Title.role()),
+    )
+    .child(
+      Text::new(&ctx.t_args("team_archive.body", [("name", name)]))
+        .id("team-hub-archive-body")
+        .variant(ArchiveText::Body.role())
+        .width(Dimension::Pct(100.0)),
+    );
+  let stops = match &state.read {
+    Some(Ok(used)) => {
+      dialog = dialog
+        .child(used_by(ctx, &used.resources))
+        .child(runs(ctx, &used.runs))
+        .with_children(note(ctx, (name, &used.resources)));
+      Some(used.runs.len())
+    }
+    Some(Err(failed)) => {
+      dialog = dialog.child(read_failed(ctx, *failed, retry));
+      None
+    }
+    None => {
+      dialog = dialog.child(loading("team-hub-archive-reading", &ctx.t("team_archive.reading")));
+      None
+    }
+  };
+  let failure = state.failed.as_ref().map(|failed| failure(ctx, failed, name));
+  let dialog = dialog
+    .with_children(failure)
+    .with_children(state.person_refused)
+    .child(buttons(ctx, stops, state.archiving, (open, confirm)));
+  over_window("team-hub-archive-dialog", dialog, open, None)
+}
+
+/// A list's heading over its rows in one outline (`Used by` `pC90U`, `Runs that stop` `SWl1b`).
+fn group(ctx: &Ctx, id: &str, heading: &str, rows: Vec<Element>, nothing: &str) -> Column {
+  let list = Column::new()
+    .id(format!("{id}-list"))
+    .width(Dimension::Pct(100.0))
+    .background(PaletteColor::SurfacePanel)
+    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
+    .rounded(RadiusSize::Md)
+    .clip();
+  let list = if rows.is_empty() {
+    list.child(row(
+      format!("{id}-none"),
+      Text::new(&ctx.t(nothing)).variant(ArchiveText::Holder.role()),
+      None,
+    ))
+  } else {
+    list.with_children(rows)
+  };
+  Column::new()
+    .id(id.to_owned())
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Snug.role())
+    .child(
+      Text::new(heading)
+        .id(format!("{id}-heading"))
+        .variant(ArchiveText::Heading.role()),
+    )
+    .child(list)
+}
+
+/// One row: what it names at its start and `detail` at its end (`Row` `y7PyW`).
+fn row(id: String, name: Text, detail: Option<Text>) -> Row {
+  Row::new()
+    .id(id)
+    .width(Dimension::Pct(100.0))
+    .padding(Padding::symmetric(ExtraSpacing::Loose.role(), SpacingSize::Sm))
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .justify(Justify::SpaceBetween)
+    .child(name)
+    .with_children(detail)
+}
+
+fn used_by(ctx: &Ctx, resources: &[UsedByResource]) -> Column {
+  let rows = resources
+    .iter()
+    .enumerate()
+    .map(|(index, used)| {
+      let kind = ctx.t(words::kind_key(used.kind));
+      let id = format!("team-hub-archive-used-{index}");
+      row(
+        id.clone(),
+        Text::new(&ctx.t_args("team_archive.row", [("name", used.name.as_str()), ("kind", &kind)]))
+          .id(format!("{id}-name"))
+          .variant(ArchiveText::Name.role()),
+        Some(
+          // A version number reads as the team's own pins say it: `v4`.
+          Text::new(&used.version.to_string())
+            .id(format!("{id}-version"))
+            .variant(ArchiveText::Version.role()),
+        ),
+      )
+      .into()
+    })
+    .collect();
+  let heading = ctx.t_args("team_archive.usedBy", [("count", resources.len().to_string())]);
+  group(ctx, "team-hub-archive-used", &heading, rows, "team_archive.nothingUses")
+}
+
+fn runs(ctx: &Ctx, runs: &[UsedByRun]) -> Column {
+  let rows = runs
+    .iter()
+    .enumerate()
+    .map(|(index, run)| {
+      let id = format!("team-hub-archive-run-{index}");
+      // The server names who holds each run's task, who is told it stopped.
+      let holder = run.holder.as_ref().map(|holder| {
+        Text::new(&holder.display_name)
+          .id(format!("{id}-holder"))
+          .variant(ArchiveText::Holder.role())
+      });
+      row(
+        id.clone(),
+        Text::new(&run.task_key)
+          .id(format!("{id}-name"))
+          .variant(ArchiveText::Name.role()),
+        holder,
+      )
+      .into()
+    })
+    .collect();
+  let heading = ctx.t_args("team_archive.runs", [("count", runs.len().to_string())]);
+  group(ctx, "team-hub-archive-runs", &heading, rows, "team_archive.noRuns")
+}
+
+/// What stays not ready: the profiles that name the resource, until it is taken out of them or restored; none when no
+/// profile does.
+fn note(ctx: &Ctx, (name, used): (&str, &[UsedByResource])) -> Option<Text> {
+  let profiles: Vec<&str> = used
+    .iter()
+    .filter(|used| used.kind == SharedResourceKind::AgentProfile)
+    .map(|used| used.name.as_str())
+    .collect();
+  if profiles.is_empty() {
+    return None;
+  }
+  let key = if profiles.len() == 1 {
+    "team_archive.note.one"
+  } else {
+    "team_archive.note.many"
+  };
+  let names = words::listed(ctx, &profiles);
+  Some(
+    Text::new(&ctx.t_args(key, [("names", &*names), ("name", name)]))
+      .id("team-hub-archive-note")
+      .variant(ArchiveText::Note.role())
+      .width(Dimension::Pct(100.0)),
+  )
+}
+
+/// What uses the resource could not be read: nothing is archived without it, and the person may read it again.
+fn read_failed(ctx: &Ctx, failed: ReadFailed, retry: &Signal<u64>) -> Column {
+  let words = if failed.not_reached {
+    "team_archive.notReached"
+  } else {
+    "team_archive.readFailed"
+  };
+  let again = retry.clone();
+  Column::new()
+    .id("team-hub-archive-read-failed")
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .child(field_error("team-hub-archive-read-error", &ctx.t(words)))
+    .child(
+      ActionButton::new(
+        "team-hub-archive-retry",
+        ButtonKind::Secondary,
+        ctx.t("team_archive.retry"),
+      )
+      .icon(Icon::RotateCcw)
+      .small()
+      .on_click(move || again.update(|count| *count += 1)),
+    )
+}
+
+/// Why the team server did not archive it.
+fn failure(ctx: &Ctx, failed: &Failed, name: &str) -> Element {
+  let words = match failed {
+    Failed::Refused(code) => match code.as_str() {
+      "not_admin" => ctx.t("team_archive.refused.notAdmin"),
+      "revision_conflict" => ctx.t_args("team_archive.refused.conflict", [("name", name)]),
+      other => ctx.t_args("team_archive.refused.other", [("code", other)]),
+    },
+    Failed::Said(message) => message_text(ctx, message),
+  };
+  field_error("team-hub-archive-error", &words).into()
+}
+
+/// *Cancel* and *Archive and stop N runs* (`Buttons` `P2WoD`); the action is not offered before what uses the resource
+/// is known, which says how many runs it stops.
+fn buttons(ctx: &Ctx, stops: Option<usize>, archiving: bool, (open, confirm): (&Signal<bool>, Confirm)) -> Row {
+  let shut = open.clone();
+  let cancel = ActionButton::new(
+    "team-hub-archive-cancel",
+    ButtonKind::Secondary,
+    ctx.t("team_archive.cancel"),
+  )
+  .in_form()
+  .on_click(move || shut.set(false));
+  let label = match stops {
+    Some(0) | None => ctx.t("team_archive.confirm"),
+    Some(1) => ctx.t("team_archive.confirmOne"),
+    Some(count) => ctx.t_args("team_archive.confirmMany", [("count", count.to_string())]),
+  };
+  let archive = ActionButton::new("team-hub-archive-confirm", ButtonKind::Danger, label)
+    .icon(Icon::Archive)
+    .in_form();
+  let archive = if archiving {
+    archive.loading()
+  } else if stops.is_none() {
+    archive.disabled()
+  } else {
+    archive.on_click(move || confirm())
+  };
+  Row::new()
+    .id("team-hub-archive-buttons")
+    .width(Dimension::Pct(100.0))
+    .spacing(SpacingSize::Sm)
+    .justify(Justify::End)
+    .child(cancel)
+    .child(archive)
+}
