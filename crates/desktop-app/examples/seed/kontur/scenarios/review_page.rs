@@ -236,7 +236,7 @@ fn questions() -> Vec<Spec> {
         ),
         (
           words(false, None),
-          "The budget counts every attempt, the first included, so 5 means four retries.",
+          "The budget counts **every attempt**, the first included, so `5` means four retries:\n\n- the first try\n  - then up to four retries\n- `delay_for()` caps each wait",
         ),
       ],
       false,

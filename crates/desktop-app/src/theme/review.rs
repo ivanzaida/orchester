@@ -1,7 +1,7 @@
 //! Values of a run's review page (ORC-697; 09i `wLyFt` of `Review · redesign`, and the thread and tray states of
 //! `RBR9O`): its threads under their lines, their tags and messages.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use lurq::{
   app::theme::{SpacingSize, Theme, ThemePalette, TypographyStyle},
@@ -10,8 +10,13 @@ use lurq::{
 
 use super::typography::style;
 
-/// The three dots while Implement starts, fading from the first (`Typing` `D231t`).
+/// The three dots while Implement starts, fading from the first (`Typing` `D231t`); with reduced motion they stay so.
 pub const REVIEW_TYPING_OPACITY: [f32; 3] = [1.0, 0.6, 0.3];
+/// The dots move: each one fades from the first's opacity to the last's and back once a cycle, a third of a cycle
+/// behind the one before it. The design draws them still. The cycle steps through [`REVIEW_TYPING_STEPS`] poses, so
+/// lurq draws a frame only when the pose changes.
+pub const REVIEW_TYPING_CYCLE: Duration = Duration::from_millis(1200);
+pub const REVIEW_TYPING_STEPS: u32 = 12;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ReviewText {

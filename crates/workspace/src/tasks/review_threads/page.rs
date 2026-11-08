@@ -86,12 +86,33 @@ pub struct ReviewPage {
 }
 
 impl ReviewPage {
-  /// The step's agent as the threads name it: *Implement · Builder*.
+  /// The step's agent as the threads name it: *Implement · Builder*, the step and its agent; see [`agent_name`].
   pub fn agent(&self) -> Option<(&str, Option<&str>)> {
     self
       .implement
       .as_ref()
-      .map(|implement| (&*implement.name, implement.agent.as_deref()))
+      .map(|implement| agent_name(&implement.name, implement.agent.as_deref()))
+  }
+}
+
+/// What names the step `step` whose agent is `agent`: the step and its agent, or, when the agent's name already begins
+/// with the step's (a profile *Implement · Claude 2 · fast* on the step *Implement*), the agent alone, so the step's
+/// name reads once. The step alone while the agent is gone.
+pub fn agent_name<'a>(step: &'a str, agent: Option<&'a str>) -> (&'a str, Option<&'a str>) {
+  let Some(agent) = agent else {
+    return (step, None);
+  };
+  let begins_with_step = agent
+    .get(..step.len())
+    .is_some_and(|start| start.eq_ignore_ascii_case(step))
+    && agent[step.len()..]
+      .chars()
+      .next()
+      .is_none_or(|next| !next.is_alphanumeric());
+  if begins_with_step {
+    (agent, None)
+  } else {
+    (step, Some(agent))
   }
 }
 
