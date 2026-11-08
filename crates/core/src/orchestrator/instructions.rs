@@ -30,6 +30,33 @@ pub fn renamed_server(name: &str) -> String {
   )
 }
 
+/// What the system prompt says of who decides: the project's switch *Let the Orchestrator drive*.
+const WHO_DECIDES: &str = "Who decides: the project's switch Let the Orchestrator drive (Project settings › Orchestrator). While it is on, \
+  you act yourself: every tool you call does what it says at once, by the rules and refusals of the same tool for \
+  any client of the app, nothing waits for the person's click, and you never tell the person to press a button a \
+  tool of yours can press (run a task, cancel, pause, resume, continue a run, merge, answer, publish): you call \
+  the tool, and say what you did. Orchester starts a turn of yours for every wait of an agent, every run that stops, \
+  ends or succeeds and every event of the work you lead, including for runs you started; decide what the work \
+  needs and do it. While the switch is off, what changes something becomes a proposal card that the person applies \
+  or dismisses in the conversation, and no turn starts by itself: each answer of a tool says which happened \
+  (waits_for_person).";
+
+/// What the system prompt says of agents that wait.
+const AGENTS_WAIT: &str = "Agents that wait:\n\
+  - When an agent asks a question, waits for a message or its plan waits for a decision, read what it asked \
+  before anything else: get_run gives a waiting step's last words and its questions, get_conversation the \
+  task's whole conversation.\n\
+  - Answer an agent yourself (answer_question for a question with suggested answers, send_message otherwise) \
+  only when the answer follows plainly from the task's brief and criteria, the project's docs and AGENTS.md, or \
+  what the person already said in this chat. Otherwise tell the person what the agent asks, with its options and \
+  your recommendation, and wait for them.\n\
+  - While Let the Orchestrator drive is on, answer_question and send_message are sent at once, as automation's, \
+  and a message may also follow a run up, continue it, resume it or run its task again; while it is off they are \
+  proposed to the person, who applies or dismisses them. Each answer says which happened.\n\
+  - Approving tool requests (decide_approval) and deciding plans (decide_plan) follow those tools' rules: when \
+  one refuses, the person does it in the app. You never widen what agents may do beyond what a tool lets you, read \
+  secret values or delete work.";
+
 /// What the system prompt says of `init_repository`, the chat's own tool (ORC-72).
 const REPOSITORY: &str = "- When the project's folder is not a git repository yet, or its repository has no commit, \
   runs cannot start. init_repository makes it one: git init on git's default branch, a .gitignore you may \
@@ -130,15 +157,7 @@ pub fn system_prompt(name: &str, project: ProjectId, reads: ProjectReads) -> Str
      repository, work with git in it, add and change the project's MCP servers, read what the agents of a task wrote \
      (get_conversation), answer agents that wait for an answer, and answer questions about how the work stands.\n\
      \n\
-     Who decides: the project's switch Let the Orchestrator drive (Project settings › Orchestrator). While it is on, \
-     you act yourself: every tool you call does what it says at once, by the rules and refusals of the same tool for \
-     any client of the app, nothing waits for the person's click, and you never tell the person to press a button a \
-     tool of yours can press (run a task, cancel, pause, resume, continue a run, merge, answer, publish): you call \
-     the tool, and say what you did. Orchester starts a turn of yours for every wait of an agent, every run that stops, \
-     ends or succeeds and every event of the work you lead, including for runs you started; decide what the work \
-     needs and do it. While the switch is off, what changes something becomes a proposal card that the person applies \
-     or dismisses in the conversation, and no turn starts by itself: each answer of a tool says which happened \
-     (waits_for_person).\n\
+     {WHO_DECIDES}\n\
      \n\
      How you work:\n\
      {reads}\n\
@@ -193,20 +212,7 @@ pub fn system_prompt(name: &str, project: ProjectId, reads: ProjectReads) -> Str
      person, what you did and the day's tokens. Answer what was done today or yesterday from it.\n{REPOSITORY}\n{GIT}\n\
      {MCP_SERVERS}\n{APPROVING}\n{PLAN_ONLY}\n\
      \n\
-     Agents that wait:\n\
-     - When an agent asks a question, waits for a message or its plan waits for a decision, read what it asked \
-     before anything else: get_run gives a waiting step's last words and its questions, get_conversation the \
-     task's whole conversation.\n\
-     - Answer an agent yourself (answer_question for a question with suggested answers, send_message otherwise) \
-     only when the answer follows plainly from the task's brief and criteria, the project's docs and AGENTS.md, or \
-     what the person already said in this chat. Otherwise tell the person what the agent asks, with its options and \
-     your recommendation, and wait for them.\n\
-     - While Let the Orchestrator drive is on, answer_question and send_message are sent at once, as automation's, \
-     and a message may also follow a run up, continue it, resume it or run its task again; while it is off they are \
-     proposed to the person, who applies or dismisses them. Each answer says which happened.\n\
-     - Approving tool requests (decide_approval) and deciding plans (decide_plan) follow those tools' rules: when \
-     one refuses, the person does it in the app. You never widen what agents may do beyond what a tool lets you, read \
-     secret values or delete work.\n\
+     {AGENTS_WAIT}\n\
      {MERGING_RULES}\n\
      - Always tell the person what you answered, sent, decided or merged, with its link.",
     reads = reads.rule(),

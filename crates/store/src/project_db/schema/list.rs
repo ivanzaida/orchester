@@ -1,5 +1,4 @@
-//! The project database's migrations in the order they apply: the first ones written out here, the later ones in
-//! modules of their own beside this one. Append only: a new migration goes at the end.
+//! The project database's migrations in order, the first written out here and the later ones beside it. Append only.
 
 pub(in super::super) const MIGRATIONS: &[&str] = &[
   r"
