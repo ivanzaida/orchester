@@ -179,3 +179,23 @@ fn team_qa_start_notices_a_notice_after_a_dismissal_shows_in_the_same_window() {
     notice_says(window, "The runner reported a problem while starting the run")
   });
 }
+
+#[test]
+fn team_qa_start_notices_a_notice_after_a_claim_the_server_took_shows_in_the_same_window() {
+  let (mut window, server, _project) = on_task(("team-start-past-failure", State::StartPastFailure), "KON-5");
+  let root = window.data.repo("repo-kontur");
+  window.until_within(WITHIN, "the failure", |window| notice_says(window, "Update Orchester"));
+
+  // The person claims the task in this window, and the server takes it: that says nothing more of the start.
+  window.until_within(WITHIN, "Claim", |window| pressable(window, "task-team-claim-take"));
+  window.press("task-team-claim-take");
+  window.until_within(WITHIN, "the claim", |_| {
+    server.commands().iter().any(|asked| asked == "claim.acquire")
+  });
+
+  // Recovery finds a new start the runner refuses: the same window tells it.
+  record_newer_start(&root, ("inputs_stored", None));
+  window.until_within(WITHIN, "the runner's refusal", |window| {
+    notice_says(window, "The runner reported a problem while starting the run")
+  });
+}

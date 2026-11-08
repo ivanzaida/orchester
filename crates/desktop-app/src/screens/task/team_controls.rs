@@ -38,6 +38,7 @@ use crate::{
   team::{
     act::{Acted, Acting},
     invalidation::Stale,
+    pages::TeamClaim,
     start::{StartTask, Started, Stop, start},
   },
   ui::{
@@ -127,15 +128,16 @@ impl TeamControls {
     self.action.state().get().is_pending()
   }
 
-  /// The answer to the last ask, unless it tells nothing more: a dismissal that was carried out leaves the page to tell
-  /// what the project's records say next, as in a window that asked for nothing.
+  /// The answer to the last ask, unless it tells nothing more: a claim action the server took (Claim, Take over's
+  /// claim, Release, Dismiss) says nothing to tell, and leaves the page to tell what the project's records say of the
+  /// start next, as in a window that asked for nothing.
   fn told(&self) -> Option<TeamAnswer> {
     self
       .action
       .state()
       .get()
       .data
-      .filter(|answer| !matches!(answer, TeamAnswer::Acted(TeamAsk::Dismiss, Acted::Done)))
+      .filter(|answer| !matches!(answer, TeamAnswer::Acted(_, Acted::Done)))
   }
 }
 
@@ -206,12 +208,27 @@ async fn carry_out(
       }
     }
     TeamAsk::Run => {
-      let held = claim
-        .filter(|claim| claim.here && !claim.under_module)
-        .map(|claim| claim.id);
+      let held = held_here(shown, claim).await;
       let request = start_task(shown, held, project);
       TeamAnswer::Started(ask, start(&acting, source, (runners, programs), request).await)
     }
+  }
+}
+
+/// The claim this computer holds on the task and can start under: the page's claim, if this computer's own records
+/// still say it holds it. The page's read of the task is refreshed asynchronously after a start let the claim go, so a
+/// Run pressed at once would otherwise name a claim already released; a claim whose records cannot be read is not
+/// reused, and the start takes a fresh one.
+async fn held_here(shown: &TeamTaskShown, claim: Option<&TeamClaim>) -> Option<ClaimId> {
+  let claim = claim.filter(|claim| claim.here && !claim.under_module)?;
+  let root = shown.source.root().to_owned();
+  match background::run(move || team_work::team_here(&root)).await {
+    Ok(Ok(here)) => here.holds(claim.id).then_some(claim.id),
+    Ok(Err(error)) => {
+      tracing::warn!(%error, "this computer's team claims cannot be read for a start");
+      None
+    }
+    Err(_) => None,
   }
 }
 
