@@ -139,5 +139,6 @@ fn serve(
       .collect(),
   );
   server.authority_unavailable(unavailable);
-  server.require_version((state == State::VersionRefused).then_some(work::REQUIRED_VERSION));
+  let required = (state == State::VersionRefused).then(work::required_version);
+  server.require_version(required.as_deref());
 }

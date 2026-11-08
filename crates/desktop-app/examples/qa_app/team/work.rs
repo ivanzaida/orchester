@@ -74,8 +74,19 @@ const BILLING: usize = 1;
 /// stand-in takes as it takes any commit.
 const NO_HEAD: &str = "0000000000000000000000000000000000000000";
 
-/// The oldest desktop the server accepts in `team-version-refused`: the team server's minimum, above this app's own.
-pub const REQUIRED_VERSION: &str = "0.5.0";
+/// The oldest desktop the server accepts in `team-version-refused`: the team server's minimum, one minor above this
+/// app's own version so the refusal never goes stale when the app is released (`tests/team_qa/team_actions.rs` reads it
+/// the same way).
+pub fn required_version() -> String {
+  let own = env!("CARGO_PKG_VERSION");
+  let mut parts = own.split('.');
+  let major = parts.next().and_then(|part| part.parse::<u64>().ok());
+  let minor = parts.next().and_then(|part| part.parse::<u64>().ok());
+  let (Some(major), Some(minor)) = (major, minor) else {
+    panic!("the app's version {own} has a major and a minor number")
+  };
+  format!("{major}.{}.0", minor + 1)
+}
 
 /// The delivery of Webhooks v2 olha asked for in `team-admin-work` (04e `GujCo`): how long ago, and the module
 /// branch's commit onto the base's.

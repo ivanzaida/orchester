@@ -132,10 +132,12 @@ impl SharingError {
     }
   }
 
-  /// Whether the server was not reached, so what was being sent waits to be sent again.
+  /// Whether the server was not reached, so what was being sent waits to be sent again. A project whose server is not
+  /// in the list has none to reach, like one nobody is signed in to: nothing went anywhere, and what waits is sent
+  /// once the server is back.
   pub fn unreached(&self) -> bool {
     match self {
-      Self::Offline | Self::SignedOut => true,
+      Self::Offline | Self::SignedOut | Self::ServerMissing => true,
       Self::Client(error) => error.code().is_none(),
       _ => false,
     }
