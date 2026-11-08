@@ -263,3 +263,21 @@ fn a_team_mcp_server_the_bundle_does_not_pin_cannot_be_bound() {
     InputsError::UnpinnedTeamMcp(stray)
   );
 }
+
+#[test]
+fn a_profile_gets_the_local_servers_an_older_run_bound_beside_the_team_servers() {
+  let (canonical, ids, servers) = two_profiles();
+  let local = ConnectionId::generate();
+  let docs = team_mcp_id(servers[0]);
+  let bindings = LocalBindings {
+    profiles: vec![binding(ids[0], vec![local, docs]), binding(ids[1], Vec::new())],
+    team_mcp: vec![team_binding(servers[0])],
+    local_mcp: vec![local],
+  };
+  let inputs = make(&canonical, bindings).expect("inputs");
+  assert_eq!(servers_of(&inputs, ids[0]), [local, docs]);
+  assert!(
+    inputs.team_mcp_server(local).is_none(),
+    "a local server of this computer is no team server"
+  );
+}
