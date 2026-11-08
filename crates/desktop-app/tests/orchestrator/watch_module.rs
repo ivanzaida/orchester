@@ -192,7 +192,7 @@ fn watched(screen: &Orchestrator, module: ModuleId) -> bool {
 }
 
 /// Webhooks v2 added to the badge with Enter in the open picker, which closes it.
-fn webhooks_chosen(screen: &mut Orchestrator, webhooks: ModuleId) {
+pub(super) fn webhooks_chosen(screen: &mut Orchestrator, webhooks: ModuleId) {
   open_picker(screen);
   screen.until("the modules", |screen| screen.exists(&row(webhooks)));
   screen.key(("Enter", "Enter"), false);

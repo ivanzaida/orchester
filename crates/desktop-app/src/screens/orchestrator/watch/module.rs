@@ -13,7 +13,6 @@ use lurq::{
   app::{
     component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction, FutureState},
-    events::is_synthetic_input,
   },
   core::Signal,
   node::Element,
@@ -208,11 +207,12 @@ fn named_module(choice: &Choice) -> Option<NamedTarget> {
 /// starts is kept as the message's send keeps it, with the new conversation's *Plan only* switch, so whichever of the
 /// two writes it first, it plans as the person set it. Only a person's keys apply it: the order is kept as the
 /// person's own words, which the agent follows, and no subscription records who asked for it, so synthetic input (an
-/// MCP client's) is refused with a notice, and the badge and the message stay.
+/// MCP client's) is refused with a notice outside a QA copy (`mcp::qa_person`), and the badge and the message stay.
 pub(super) fn apply(view: &View, root: PathBuf, named: fn(&Choice) -> Option<NamedTarget>) -> Apply {
-  let (of, action, plan_only) = (view.of.clone(), view.watching.clone(), view.plan_only.clone());
+  let (of, action) = (view.of.clone(), view.watching.clone());
+  let (plan_only, qa_person) = (view.plan_only.clone(), view.qa_person.clone());
   Arc::new(move |applied: Applied| {
-    if is_synthetic_input() {
+    if qa_person.refuses_input() {
       tracing::warn!("synthetic input asked to watch; not taken");
       let refused = Message::new(PERSON_ONLY);
       action.state().set(FutureState::rejected(refused, None));

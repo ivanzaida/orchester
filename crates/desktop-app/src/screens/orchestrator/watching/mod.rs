@@ -16,7 +16,6 @@ use lurq::{
   app::{
     component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction, FutureState},
-    events::is_synthetic_input,
   },
   core::Signal,
   node::Element,
@@ -38,6 +37,7 @@ use orchester_workspace::{
 pub(super) use self::answer::row;
 use super::data::{Read, Reads};
 use crate::{
+  mcp::qa_person::QaPerson,
   services::Services,
   ui::{
     button::{ActionButton, ButtonKind},
@@ -88,6 +88,8 @@ pub(super) struct WhatIWatch {
   /// The last stop came from automation and was not taken.
   refused: Signal<bool>,
   held: Signal<Held>,
+  /// Whether a stop takes synthetic input as the person's: in a QA copy only.
+  qa_person: QaPerson,
 }
 
 /// What a `/watching` row shows of the live state: what the conversation leads (`None` for a new one), whether a
@@ -141,6 +143,7 @@ impl WhatIWatch {
       stop,
       refused: ctx.signal(false),
       held: ctx.signal(Held::default()),
+      qa_person: QaPerson::of(ctx),
     }
   }
 
@@ -164,10 +167,10 @@ impl WhatIWatch {
 
   /// Stops `what` that conversation `chat` of the project at `root` watches, `by` the person: whether it started. A
   /// stop is a person's press only: stopping stays the person's command in the conversation and no MCP tool stops a
-  /// subscription either, so synthetic input (an MCP client's) is refused, the subscriptions go on and the notice over
-  /// the composer says so. Nothing starts while a stop is under way.
+  /// subscription either, so synthetic input (an MCP client's) is refused outside a QA copy (`mcp::qa_person`), the
+  /// subscriptions go on and the notice over the composer says so. Nothing starts while a stop is under way.
   fn stop_by_person(&self, (root, chat): (PathBuf, ChatId), what: StopWhat, by: StopBy) -> bool {
-    if is_synthetic_input() {
+    if self.qa_person.refuses_input() {
       tracing::warn!("synthetic input asked to stop watching; not taken");
       self.refused.set(true);
       return false;

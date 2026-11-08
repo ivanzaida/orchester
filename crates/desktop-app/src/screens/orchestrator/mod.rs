@@ -61,7 +61,7 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    events::{KeyboardEvent, is_synthetic_input},
+    events::KeyboardEvent,
   },
   components::{Column, Stack},
   core::{ElementRef, Signal},
@@ -91,6 +91,7 @@ use self::{
   timeline::OpenedPlans,
 };
 use crate::{
+  mcp::qa_person::QaPerson,
   navigation::Navigation,
   project::ShownProject,
   routes::{OrchestratorChat, ProjectPage, Route},
@@ -184,6 +185,8 @@ struct View {
   what_i_watch: watching::WhatIWatch,
   /// The header, which a Leads chip's tooltip hangs under (`leads`).
   head: ElementRef,
+  /// Whether the screen's person-only actions take synthetic input as the person's: in a QA copy only.
+  qa_person: QaPerson,
   /// A stall of a run stands in the conversation shown, as it was last read (`data::read`, ORC-894).
   stalled: Signal<bool>,
 }
@@ -233,6 +236,7 @@ impl Component for OrchestratorScreen {
       watching: watch::watch_action(ctx),
       what_i_watch: watching::WhatIWatch::new(ctx),
       head: ElementRef::new(),
+      qa_person: QaPerson::of(ctx),
       stalled: ctx.signal(false),
     };
     rewind::watch(ctx, &view);
@@ -463,11 +467,10 @@ impl View {
     started
   }
 
-  /// Sends the draft with its files, as the message it was last sent as when neither changed since, to conversation
-  /// `chat` (a new one when `None`), as a turn of its own or, while the Orchestrator answers, `how` the person chose;
-  /// nothing while files are still being read. The composer's badges are applied first, to the same conversation with
-  /// the draft's words (`ui::slash`, ORC-890): a refused one keeps the draft, and with nothing written they go alone.
-  /// The send menu closes, and the chat goes to its end and follows it again (`ui::chat::follow`).
+  /// Sends the draft with its files (as last sent when neither changed) to conversation `chat` (a new one when `None`),
+  /// as a turn of its own or, while the Orchestrator answers, `how` the person chose; nothing while files are read.
+  /// The composer's badges apply first, to that conversation with the draft's words (`ui::slash`, ORC-890): a refused
+  /// one keeps the draft; with nothing written they go alone. The menu closes; the chat follows its end again.
   fn send_draft(
     &self,
     project: &ShownProject,
@@ -488,7 +491,7 @@ impl View {
       }
       view.menu.set(false);
       let on = view.plan_only.on_now(Some(from));
-      let sent_as = (sender(), view.plan_only.mode(on), on);
+      let sent_as = (sender(&view.qa_person), view.plan_only.mode(on), on);
       let skill = view.skill.get_untracked().and_then(|skill| skill.chosen());
       let outgoing = draft::sending(project.project.id(), from, (to, text, attachments, skill), sent_as);
       view.outgoing.set(Some(outgoing.clone()));
@@ -522,7 +525,7 @@ impl View {
           text: text.to_string(),
           attachments: Vec::new(),
           skill: None,
-          sent_by: sender(),
+          sent_by: sender(&view.qa_person),
           mode: view.plan_only.mode(on),
           plan_only: on,
         },
@@ -565,10 +568,10 @@ impl View {
   }
 }
 
-/// Who sends the message the press under way sends: automation driving the window (lurq's synthetic input), whose
-/// message never approves a proposal for the person, or the person.
-fn sender() -> Answerer {
-  if is_synthetic_input() {
+/// Who sends the message the press under way sends: automation driving the window (lurq's synthetic input, but the
+/// person's in a QA copy, `qa_person`), whose message never approves a proposal for the person, or the person.
+fn sender(qa_person: &QaPerson) -> Answerer {
+  if qa_person.refuses_input() {
     Answerer::Automation
   } else {
     Answerer::Person
