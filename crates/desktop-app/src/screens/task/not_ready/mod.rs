@@ -48,7 +48,7 @@ use crate::{
 /// task's start through its server, or a local project's run control.
 pub fn refused(ctx: &mut Ctx, task: &TaskContext) -> Option<NotReadyHere> {
   if task.team.is_some() {
-    return match team_controls::start_standing(ctx, task)?.1 {
+    return match team_controls::start_standing(ctx, task)?.started {
       Started::Stopped(Stop::NotReadyHere(refusal)) => Some(refusal),
       _ => None,
     };

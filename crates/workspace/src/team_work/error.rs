@@ -59,6 +59,9 @@ pub enum TeamWorkError {
   /// The recorded request or receipt of the start cannot be read back.
   #[error("the record of team start {0} cannot be read")]
   Unreadable(OperationId),
+  /// The start a person dismissed is not the newest of its task any more: a later one replaced what the page showed.
+  #[error("team start {0} is no longer the newest start of its task")]
+  StartSuperseded(OperationId),
   /// The server answered the start's operation with something other than a work.
   #[error("the server answered team start {0} with no work")]
   NotAWork(OperationId),

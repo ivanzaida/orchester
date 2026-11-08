@@ -60,15 +60,22 @@ fn asked(server: &TeamServer, kind: &str) -> usize {
 const NEWER_SCHEMA: &str = "Update Orchester on this computer";
 const CLAIM_RELEASED: &str = "Your claim on the task was released.";
 const WAITS: &str = "starts once they answer";
-const WITHIN: Duration = Duration::from_secs(30);
+pub(super) const WITHIN: Duration = Duration::from_secs(30);
 
-fn notice_says(window: &mut Window, words: &str) -> bool {
+pub(super) fn notice_says(window: &mut Window, words: &str) -> bool {
   window
     .texts("task-team-refused")
     .is_some_and(|texts| texts.join(" ").contains(words))
 }
 
-fn open_starts(root: &Path) -> usize {
+/// The information notice of a start that waits (`Notice/Info` `xnJyn`), which says the run starts once they answer.
+pub(super) fn starting(window: &mut Window) -> bool {
+  window
+    .texts("task-team-starting")
+    .is_some_and(|texts| texts.join(" ").contains(WAITS))
+}
+
+pub(super) fn open_starts(root: &Path) -> usize {
   ProjectDb::open(root)
     .expect("open")
     .open_team_starts()
@@ -77,23 +84,23 @@ fn open_starts(root: &Path) -> usize {
 }
 
 /// Run pressed while the server cannot be asked for the work: the start waits, and the page says so.
-fn waiting_run() -> (Window, TeamServer, ProjectId) {
+pub(super) fn waiting_run() -> (Window, TeamServer, ProjectId) {
   let (mut window, server, project) = on_task(("team-start-failed", State::StartFailed), "KON-5");
   server.authority_bundle_fault(BundleFault::Unavailable);
   press_run(&mut window);
-  window.until("the start waits", |window| notice_says(window, WAITS));
+  window.until("the start waits", starting);
   (window, server, project)
 }
 
 /// The same data and session, mounted anew.
-fn reopened(window: Window, project: ProjectId) -> Window {
+pub(super) fn reopened(window: Window, project: ProjectId) -> Window {
   let Window { data, launch, .. } = window;
   let window = Window::of(data, launch);
   window.navigation().go(task_route(project, "KON-5"));
   window
 }
 
-fn notice(window: &mut Window) -> String {
+pub(super) fn notice(window: &mut Window) -> String {
   window.texts("task-team-refused").expect("the notice").join(" ")
 }
 
@@ -198,7 +205,7 @@ fn team_qa_start_failed_a_start_that_waited_is_carried_on_when_the_project_is_op
   window.until_within(WITHIN, "the page says why", |window| {
     notice_says(window, NEWER_SCHEMA) && notice_says(window, CLAIM_RELEASED)
   });
-  assert!(!notice_says(&mut window, WAITS), "{}", notice(&mut window));
+  assert!(!starting(&mut window), "the page still says the run is starting");
   assert_eq!(asked(&server, "claim.release"), 1, "the failed start let the claim go");
   assert_eq!(asked(&server, "work.start"), 1, "the same start went on, not a new one");
 }
@@ -211,7 +218,7 @@ fn team_qa_start_failed_a_run_that_waits_after_recovery_went_idle_is_carried_on_
   assert_eq!(open_starts(&root), 0);
   server.authority_bundle_fault(BundleFault::Unavailable);
   press_run(&mut window);
-  window.until("the start waits", |window| notice_says(window, WAITS));
+  window.until("the start waits", starting);
 
   // The server answers again: the same window, with no new press of Run, carries the start on, and the notice that
   // said the run starts once they answer now says why it did not.
@@ -220,7 +227,7 @@ fn team_qa_start_failed_a_run_that_waits_after_recovery_went_idle_is_carried_on_
   window.until_within(WITHIN, "the page says why", |window| {
     notice_says(window, NEWER_SCHEMA) && notice_says(window, CLAIM_RELEASED)
   });
-  assert!(!notice_says(&mut window, WAITS), "{}", notice(&mut window));
+  assert!(!starting(&mut window), "the page still says the run is starting");
   assert_eq!(asked(&server, "claim.release"), 1, "the failed start let the claim go");
   assert_eq!(asked(&server, "work.start"), 1, "the same start went on, not a new one");
 }
@@ -276,7 +283,7 @@ fn team_qa_start_failed_a_start_record_a_newer_orchester_wrote_is_said_on_the_pa
 
   let mut window = reopened(window, project);
   window.until_within(WITHIN, "the page says it", |window| {
-    notice_says(window, "recorded by a newer Orchester")
+    notice_says(window, "record can't be read here")
   });
   assert_eq!(open_starts(&root), 1, "the record is left open");
 }

@@ -893,13 +893,21 @@ The desktop's team work (`orchester_workspace::team_work`) uses them so:
   desktop shows that the server refused to release the claim, so it may still be held (any other refusal for good,
   such as `forbidden`, is Held too, and `claim_lost` is a claim that is already gone, which is released). A project's
   open starts are carried on when it is opened, one start of a project at a time (a Run takes the project's turn before
-  it claims the task and waits for the recovery's, and the recovery leaves a Run's alone), and looked at again every
-  minute for as long as the project is a team project: what could not be carried on is tried again, and so is a start a
-  later Run leaves waiting. A start record that cannot be read (e.g. written by a newer Orchester) stays open: it is said once in the log and asked
-  again with the others, and the task's page says that a newer Orchester recorded the start; a transient error of a
-  start is logged once per start and session. What recovery settles (a run started, a refusal or a failure for good) is
-  read back for the task's page, which says why the start did not run as a Run that settled at once would, with what
-  became of the claim; a `bundle_missing` refusal keeps the outcome of its claim release with it.
+  it claims the task and waits for the recovery's, and the recovery leaves a Run's alone). Every open project is looked
+  at again every minute, whether it is a team project or not: a local project has no link to a team server, so the ask
+  is one read of its database and nothing is sent, and a project shared later is carried on from the next round. What
+  could not be carried on is tried again, and so is a start a later Run leaves waiting. A start record that cannot be
+  read (e.g. written by a newer Orchester) stays open: it is said once in the log and asked again with the others, and
+  the task's page says that the record cannot be read here. A transient error of a start is logged once per start and
+  session. The runner's refusal of a start's kept inputs keeps the start open and is kept with it, replaced by each
+  later answer of the runner and dropped by a round that cannot reach the team server or is signed out of it (the runner
+  is not asked then, so the page says the start waits); it is logged once per start and session, and the task's page
+  says what the runner said, as it does for a Run that met the refusal at once. What recovery settles (a run started, a refusal or a failure for
+  good) is read back for the task's page, which says why the start did not run as a Run that settled at once would,
+  with what became of the claim; a `bundle_missing` refusal keeps the outcome of its claim release with it. A window
+  that asked for nothing tells a start settled for good once: until the person dismisses the notice, runs the task
+  again, or what made it fail no longer holds (a bundle schema this Orchester now reads). A dismissal marks the start the
+  page showed, never a newer one that replaced it.
 - **Inputs.** The task's number and each pinned version's label (`{slug,name}`) are the bundle's (schema 2, with the
   team MCP servers of schema 3); the
   start's caller supplies only the local bindings and consent, and each pinned profile must be bound to a connection

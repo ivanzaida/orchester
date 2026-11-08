@@ -18,6 +18,7 @@ mod hub_unsent;
 mod kontur;
 mod not_ready;
 mod start_failed;
+mod start_notices;
 #[path = "../../examples/qa_app/team/mod.rs"]
 mod team;
 mod team_actions;

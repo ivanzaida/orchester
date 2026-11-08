@@ -20,7 +20,10 @@ async fn team_work_last_start_reads_back_a_failure_recovery_settled_with_its_cla
   let (work, _generation) = checkout.work(&server, MEMBER, StoreRunner::new(checkout.root(), &[]));
   let request = checkout.start_request(&server, claim);
   assert!(
-    last_start(checkout.root(), server.task).expect("read").is_none(),
+    last_start(checkout.root(), server.task)
+      .expect("read")
+      .map(|newest| newest.last)
+      .is_none(),
     "no start yet"
   );
 
@@ -29,7 +32,9 @@ async fn team_work_last_start_reads_back_a_failure_recovery_settled_with_its_cla
   let waiting = checkout.start(&work, request).await.expect("started");
   assert!(matches!(waiting, StartOutcome::Waiting(_)), "{waiting:?}");
   assert!(matches!(
-    last_start(checkout.root(), server.task).expect("read"),
+    last_start(checkout.root(), server.task)
+      .expect("read")
+      .map(|newest| newest.last),
     Some(LastStart::Open)
   ));
   {
@@ -39,9 +44,10 @@ async fn team_work_last_start_reads_back_a_failure_recovery_settled_with_its_cla
   }
 
   let carried = work.carry_on_open(checkout.vault()).await.expect("carried on");
-  assert_eq!(carried, OpenStarts { settled: true });
-  let Some(LastStart::Settled(StartOutcome::Failed(failure, claim))) =
-    last_start(checkout.root(), server.task).expect("read")
+  assert_eq!(carried, OpenStarts { changed: true });
+  let Some(LastStart::Settled(StartOutcome::Failed(failure, claim))) = last_start(checkout.root(), server.task)
+    .expect("read")
+    .map(|newest| newest.last)
   else {
     panic!("the failure is read back");
   };
@@ -68,8 +74,9 @@ async fn team_work_last_start_keeps_what_became_of_the_claim_of_a_bundle_missing
     Some(ClaimEnd::Released),
     "the refusal says the claim was let go of"
   );
-  let Some(LastStart::Settled(StartOutcome::Refused(again, ended))) =
-    last_start(checkout.root(), server.task).expect("read")
+  let Some(LastStart::Settled(StartOutcome::Refused(again, ended))) = last_start(checkout.root(), server.task)
+    .expect("read")
+    .map(|newest| newest.last)
   else {
     panic!("the refusal is read back");
   };
@@ -85,7 +92,9 @@ async fn team_work_last_start_keeps_what_became_of_the_claim_of_a_bundle_missing
     .await
     .expect("waits");
   assert!(matches!(
-    last_start(checkout.root(), server.task).expect("read"),
+    last_start(checkout.root(), server.task)
+      .expect("read")
+      .map(|newest| newest.last),
     Some(LastStart::Open)
   ));
 }
@@ -108,15 +117,19 @@ async fn team_work_last_start_says_a_record_it_cannot_read_and_carries_on_nothin
   server.set_down(false);
 
   assert!(matches!(
-    last_start(checkout.root(), server.task).expect("read"),
+    last_start(checkout.root(), server.task)
+      .expect("read")
+      .map(|newest| newest.last),
     Some(LastStart::Unreadable)
   ));
   assert_eq!(
     work.carry_on_open(checkout.vault()).await.expect("tried"),
-    OpenStarts { settled: false }
+    OpenStarts { changed: false }
   );
   assert!(matches!(
-    last_start(checkout.root(), server.task).expect("read"),
+    last_start(checkout.root(), server.task)
+      .expect("read")
+      .map(|newest| newest.last),
     Some(LastStart::Unreadable)
   ));
 }

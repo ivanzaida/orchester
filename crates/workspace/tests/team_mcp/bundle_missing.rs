@@ -60,6 +60,10 @@ fn team_mcp_bundle_missing_names_the_profile_to_publish_again() {
     "{error}"
   );
   assert!(!error.contains(&profile.to_string()), "{error}");
+  assert!(
+    error.contains("appMcp.errors.teamClaimReleased"),
+    "the answer says what became of the claim: {error}"
+  );
 }
 
 #[test]

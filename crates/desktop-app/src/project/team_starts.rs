@@ -49,8 +49,9 @@ pub(super) fn follow(ctx: &mut Ctx, open: &OpenProject) {
         match carried_on(&open.repo_root, (&servers, &runners), &vault, &name).await {
           Ok(carried) => {
             said = None;
-            if carried.settled {
-              // The claim may have been released, and the page tells why the start did not run.
+            if carried.changed {
+              // The claim may have been released, and the page tells why the start did not run, or what the runner
+              // said.
               Stale::EVERY.apply(&team.client());
             }
           }

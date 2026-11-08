@@ -27,7 +27,7 @@ use orchester_workspace::actions::{
 };
 use tokio::runtime::Handle;
 
-use super::State;
+use super::{State, recorded_start};
 
 const MARA: Person = Person::Named("mara");
 const OLHA: Person = Person::Named("olha");
@@ -187,6 +187,9 @@ pub fn after_join(
         id: module_id(BILLING)?,
       })?;
       branch(root, "module/billing-exports")?;
+    }
+    State::StartWaiting | State::StartRunnerRefused | State::StartPastFailure => {
+      recorded_start::record(root, (id, project), (state, task_subject(ids, recorded_start::KON_5)?))?;
     }
     _ => {}
   }

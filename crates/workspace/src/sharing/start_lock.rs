@@ -14,6 +14,8 @@ pub(crate) enum StartTrouble {
   Unreadable,
   /// The start could not go on for now: the database was busy, or the server answered strangely.
   Retrying,
+  /// The runner refused the start's kept inputs, and is asked again each round.
+  RunnerRefused,
 }
 
 impl Servers {

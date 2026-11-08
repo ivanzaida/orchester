@@ -214,6 +214,26 @@ pub fn start_recovered(kontur: &mut Kontur) -> Result<(), SeedError> {
   start_ready_here(kontur, State::StartRecovered)
 }
 
+/// As [`start_failed`], with KON-5's start already recorded when the QA app joins the team, as the server's not
+/// answering it leaves it (`team-start-waiting`): the bundle is never answered, recovery goes on asking, and the task
+/// page says the run is starting, in an information notice with nothing to press (ORC-885c).
+pub fn start_waiting(kontur: &mut Kontur) -> Result<(), SeedError> {
+  start_ready_here(kontur, State::StartWaiting)
+}
+
+/// As [`start_failed`], with KON-5's start recorded at the runner when the QA app joins the team
+/// (`team-start-runner-refused`): the runner, which keeps no inputs for it, refuses it when recovery asks, and the task
+/// page says what the runner said without a press of Run (ORC-885c).
+pub fn start_runner_refused(kontur: &mut Kontur) -> Result<(), SeedError> {
+  start_ready_here(kontur, State::StartRunnerRefused)
+}
+
+/// As [`start_failed`], with KON-5's start recorded as an earlier window left it, failed for good and not dismissed
+/// (`team-start-past-failure`): the task page tells it once, with Try again and Dismiss (ORC-885c).
+pub fn start_past_failure(kontur: &mut Kontur) -> Result<(), SeedError> {
+  start_ready_here(kontur, State::StartPastFailure)
+}
+
 fn start_ready_here(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
   super::picker_readiness::team_work(kontur)?;
   // Team quick fix runs Reviewer, which needs a Claude Code connection here; with one it is ready.

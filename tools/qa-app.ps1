@@ -76,6 +76,15 @@
 # 90 seconds after the window opens (the start waits, and the Summary's notice says the run starts once they answer), then
 # answers a release ahead: press Run on KON-5 within those 90 seconds; the project's recovery carries the start on within
 # a minute more, and the same notice says to update Orchester and that the claim was released (ORC-885 follow-up).
+# While it waits the Summary shows the information notice "Starting KON-5's run…" (`Notice/Info` `xnJyn`), which has no
+# Try again: the project asks again by itself (ORC-885c).
+# -Scenario team-start-waiting, -Scenario team-start-runner-refused and -Scenario team-start-past-failure are
+# team-start-failed with KON-5's start already recorded when the window opens, so the notice is up on KON-5 with no
+# press of Run (ORC-885c): the first with a team server that never answers the start's bundle ("Starting KON-5's run…",
+# nothing to press); the second with a start the runner refuses when the project opens (the Danger notice with the
+# runner's words and Try again, no Dismiss, as a Run that met the refusal would); the third with a start that failed for
+# good in an earlier window (the bundle schema one ahead: "Update Orchester…", Try again and Dismiss). Dismiss, or a
+# later window, tells it no more.
 #
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes

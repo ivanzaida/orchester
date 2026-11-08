@@ -318,8 +318,21 @@ impl<R: TeamRunner> TeamWork<R> {
   async fn start_run(&self, operation: OperationId) -> Result<StartOutcome, TeamWorkError> {
     let run = match self.runner.start_accepted_run(operation).await {
       Ok(run) => run,
-      Err(RunRequestError::Rejected(rejection)) => return Ok(StartOutcome::RunnerRefused(rejection)),
-      Err(RunRequestError::Request(error)) => return Ok(StartOutcome::RunnerUnavailable(error)),
+      Err(RunRequestError::Rejected(rejection)) => {
+        // The task's page tells it too, also when no window asked: the start is asked again every round.
+        // A rejection serializes to JSON without fail: it is a tagged enum of plain data.
+        let text = serde_json::to_string(&rejection).expect("a runner rejection serializes");
+        self
+          .db()?
+          .keep_team_start_runner_refusal(operation, Some(&text), Timestamp::now())?;
+        return Ok(StartOutcome::RunnerRefused(rejection));
+      }
+      Err(RunRequestError::Request(error)) => {
+        self
+          .db()?
+          .keep_team_start_runner_refusal(operation, None, Timestamp::now())?;
+        return Ok(StartOutcome::RunnerUnavailable(error));
+      }
     };
     let mut db = self.db()?;
     db.record_team_start_run(operation, run, Timestamp::now())?;

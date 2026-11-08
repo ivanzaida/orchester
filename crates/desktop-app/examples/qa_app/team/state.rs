@@ -117,6 +117,15 @@ pub enum State {
   /// on, the start fails for good, and the task page, which said the run starts once they answer, says why it did not
   /// (ORC-885 follow-up).
   StartRecovered,
+  /// As [`Self::StartFailed`], with KON-5's start already recorded as a server that does not answer leaves it, and the
+  /// bundle never answered: the task page says the run is starting, in an information notice (ORC-885c).
+  StartWaiting,
+  /// As [`Self::StartFailed`], with KON-5's start recorded at the runner, which refuses it when recovery asks, so the
+  /// task page says what the runner said without a press of Run (ORC-885c).
+  StartRunnerRefused,
+  /// As [`Self::StartFailed`], with KON-5's start recorded as an earlier window left it, failed for good and not
+  /// dismissed: the task page tells it once (ORC-885c).
+  StartPastFailure,
 }
 
 /// How long after the window opens the server of [`State::StartRecovered`] answers a `work.start`; recovery then
@@ -124,7 +133,7 @@ pub enum State {
 pub const START_ANSWERS_AFTER: std::time::Duration = std::time::Duration::from_secs(90);
 
 impl State {
-  pub const ALL: [Self; 39] = [
+  pub const ALL: [Self; 42] = [
     Self::Join,
     Self::WrongCode,
     Self::ExpiredCode,
@@ -164,6 +173,9 @@ impl State {
     Self::TeamEditRejected,
     Self::TeamCreateNameTaken,
     Self::StartRecovered,
+    Self::StartWaiting,
+    Self::StartRunnerRefused,
+    Self::StartPastFailure,
   ];
 
   /// The seed's scenario of this state.
@@ -208,6 +220,9 @@ impl State {
       Self::TeamEditRejected => "team-edit-rejected",
       Self::TeamCreateNameTaken => "team-create-name-taken",
       Self::StartRecovered => "team-start-recovered",
+      Self::StartWaiting => "team-start-waiting",
+      Self::StartRunnerRefused => "team-start-runner-refused",
+      Self::StartPastFailure => "team-start-past-failure",
     }
   }
 

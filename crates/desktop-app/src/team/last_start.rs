@@ -8,12 +8,12 @@ use orchester_workspace::{background, team_work};
 
 use super::{
   source::{TeamFailure, TeamSource},
-  start::{Started, recorded},
+  start::{Recorded, recorded},
 };
 
 /// The newest start of the task `task`, `None` when this computer never started it.
 #[lurq::query(stale_time = "30s", gc_time = "5m")]
-pub async fn team_last_start(source: TeamSource, task: TaskId) -> Result<Option<Started>, TeamFailure> {
+pub async fn team_last_start(source: TeamSource, task: TaskId) -> Result<Option<Recorded>, TeamFailure> {
   let root = source.root().to_owned();
   let read =
     background::run(move || team_work::last_start(&root, task).map(|last| last.map(|last| recorded(last, &root))))
