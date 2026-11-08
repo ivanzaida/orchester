@@ -1,7 +1,8 @@
-//! What the /watch-module picker offers (`R1s1o` in 02 `c8pALl`): the project's open modules whose name holds the words
-//! after the chips, then the tasks without a module and the whole project, as `WatchCatalog::modules` lists them for
-//! the conversation shown ([`super::catalog`]). A module already chosen, or with nothing left to watch, cannot be
-//! chosen; one another conversation leads can, and the command returns it for the card.
+//! What the /watch-module picker offers (`R1s1o` in 02 `c8pALl`, v2 `r7kka` in `P1` `QXPDY`): the project's open
+//! modules whose name holds the words typed in its search, then the tasks without a module and the whole project, as
+//! `WatchCatalog::modules` lists them for the conversation shown ([`super::catalog`]). A module already chosen, or with
+//! nothing left to watch, cannot be chosen; one another conversation leads can, and the command returns it for the
+//! card. While the search is empty, the modules with nothing left to watch are hidden behind one row that counts them.
 
 use lurq::{app::ctx::Ctx, core::Signal};
 use orchester_core::orchestrator::WatchTarget;
@@ -11,7 +12,7 @@ use super::{
   catalog::CatalogReader,
   module::{key_of, target_of},
   panel::Picker,
-  rows::{self, Shown},
+  rows::{self, Counts, Shown},
 };
 use crate::{
   navigation::Navigation,
@@ -43,10 +44,12 @@ impl ModulePicker {
       chat: self.catalog.chat(),
       added: &added,
     };
-    let total = modules_in(&catalog.modules("", choosing));
+    let all = catalog.modules("", choosing);
     let entries = catalog.modules(asked.filter, choosing);
+    let hide = asked.filter.trim().is_empty();
     let offered: Vec<(&ModuleEntry, Choice)> = entries
       .iter()
+      .filter(|entry| !(hide && finished(entry)))
       .filter_map(|entry| Some((entry, self.choice(ctx, entry)?)))
       .collect();
     let rows = offered
@@ -58,18 +61,26 @@ impl ModulePicker {
         )
       })
       .collect();
-    let panel = rows::panel(
-      ctx,
-      &Shown {
-        id: asked.id,
-        project: self.catalog.project,
-        filter: asked.filter,
-        offered: &offered,
-        focused: asked.focused,
-        total,
-        navigation,
+    let counts = Counts {
+      open: all.iter().filter(|entry| is_module(entry) && !finished(entry)).count(),
+      added: asked.taken.len(),
+      total: all.iter().filter(|entry| is_module(entry)).count(),
+      hidden: if hide {
+        entries.iter().filter(|entry| finished(entry)).count()
+      } else {
+        0
       },
-    );
+    };
+    let shown = Shown {
+      id: asked.id,
+      project: self.catalog.project,
+      filter: asked.filter,
+      offered: &offered,
+      focused: asked.focused,
+      counts,
+      navigation,
+    };
+    let panel = rows::panel(ctx, &shown, asked.search);
     Offer { rows, panel }
   }
 
@@ -100,10 +111,12 @@ impl ArgumentPicker for ModulePicker {
   }
 }
 
-/// How many of `entries` are modules.
-fn modules_in(entries: &[ModuleEntry]) -> usize {
-  entries
-    .iter()
-    .filter(|entry| matches!(entry.target, WatchTarget::Module(_)))
-    .count()
+/// `entry` is a module, not the tasks without one or the whole project.
+const fn is_module(entry: &ModuleEntry) -> bool {
+  matches!(entry.target, WatchTarget::Module(_))
+}
+
+/// `entry` is a module with nothing left to watch: the empty search hides it.
+const fn finished(entry: &ModuleEntry) -> bool {
+  is_module(entry) && entry.faded.is_some()
 }

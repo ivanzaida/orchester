@@ -1,7 +1,8 @@
 //! Events of tasks' runs (ORC-755) in the conversation (ORC-779; `Parts · Lines` e `c9YRv` and `04 · Leading two
 //! modules` `OKtX2` in `Orchestrator watch · redesign`): each one bordered line 34 high with what happened, the task
 //! and the run, the task's module and its one link; a task the run waits on is named by its key and its run. The
-//! answer of a turn an event or a wait started by itself carries a tag of what started it.
+//! answer of a turn an event or a wait started by itself carries a tag of what started it. A stall settles in the
+//! open conversation once its run progresses, and a tool request that came to the person is a wait line (ORC-894).
 
 use orchester_app::routes::OrchestratorChat;
 use orchester_core::{
@@ -12,15 +13,16 @@ use orchester_core::{
   orchestrator::{AgentWait, Chat, EntryKind, TaskEvent, TaskEventKind, TurnState, WaitKind},
   resource::ModelId,
   run::Run,
-  store::TaskStore,
+  store::{ActivityStore, TaskStore},
   task::organization::ChangeActor,
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
+use orchester_workspace::display;
 
 use super::{
   harness::{Orchestrator, Setup},
-  standing::waiting,
+  standing::{entry_of, follow, started, waiting},
 };
 
 /// The wait of `kind` of `run`, of task `task`.
@@ -133,7 +135,11 @@ fn orchestrator_task_events_are_bordered_lines_and_their_turns_say_what_started_
     assert!((screen.bounds(line).height - 34.0).abs() < 0.5, "{line} is one 34 line");
     assert_eq!(screen.text(&format!("{line}-module")), "Webhooks v2", "{line}");
   }
-  assert_eq!(screen.text(&format!("{stall}-title")), "No progress for 20 min");
+  // Its run waits for a message, and made no progress since: the stall is past, and says so (ORC-894).
+  assert_eq!(
+    screen.text(&format!("{stall}-title")),
+    "No progress for 20 min · waits now"
+  );
   assert_eq!(
     screen.text(&format!("{stall}-target")),
     format!("{key} · #{}", waits.number().get())
@@ -158,5 +164,61 @@ fn orchestrator_task_events_are_bordered_lines_and_their_turns_say_what_started_
   assert!(
     screen.exists(&format!("orchestrator-wait-{asked_turn}-chip")),
     "a wait keeps its line and its chip"
+  );
+}
+
+#[test]
+fn orchestrator_task_events_a_stall_settles_in_the_open_conversation_once_its_run_progresses() {
+  let mut screen = Orchestrator::new(Setup::NoRunner);
+  let delivery = screen.delivery();
+  let hour_ago = Timestamp::from_unix_millis(Timestamp::now().unix_millis() - 60 * 60_000);
+  let (run, execution) = started(&screen, (delivery, "Retry failed deliveries"), hour_ago);
+  follow(&screen);
+  let seq = entry_of(&screen, &run);
+  screen.go(OrchestratorChat::Latest);
+  let title = format!("orchestrator-wait-wait-{seq}-title");
+  screen.until("the stall", |screen| screen.exists(&title));
+  assert_eq!(screen.text(&title), "No progress for 20 min", "it stands");
+  // The agent is launched again: only the run's transcript tells, no run changes state.
+  let now = Timestamp::now();
+  screen
+    .db()
+    .start_invocation(run.id(), execution, &ModelId::new("haiku").expect("model"), now)
+    .expect("launched");
+  let services = screen.window.launch.services().expect("the session started");
+  services.runners.count_change_for_test(&screen.root, None, false);
+  let moving = format!("No progress for 20 min · moving again {}", display::clock(now));
+  screen.until("the stall settled", |screen| screen.text(&title) == moving);
+}
+
+#[test]
+fn orchestrator_task_events_a_tool_request_is_a_wait_line_for_the_person() {
+  let mut screen = Orchestrator::new(Setup::NoRunner);
+  let delivery = screen.delivery();
+  let (asks, _) = waiting(&screen, delivery, "Sign in");
+  let mut db = screen.db();
+  let key = key_of(&db, &asks);
+  let chat = conversation(&mut db);
+  let approval = AgentWait {
+    automatic: false,
+    ..wait_of(WaitKind::Approval, &asks, &key)
+  };
+  let seq = keep(&mut db, &chat, ("approval", &approval));
+  drop(db);
+  screen.go(OrchestratorChat::Chat(chat.id()));
+  let line = format!("orchestrator-wait-wait-{seq}");
+  screen.until("the tool request's line", |screen| screen.exists(&line));
+  assert_eq!(
+    screen.text(&format!("{line}-title")),
+    "Builder waits for a tool approval"
+  );
+  assert_eq!(
+    screen.text(&format!("{line}-target")),
+    format!("{key} · #{}", asks.number().get())
+  );
+  assert_eq!(
+    screen.text(&format!("{line}-open")),
+    "Open ↗",
+    "to its card on the task's Conversation"
   );
 }

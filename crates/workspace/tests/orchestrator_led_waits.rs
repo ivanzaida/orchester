@@ -1,8 +1,9 @@
 //! The waits and run ends of a task a conversation leads (ORC-761, `orchestrator::waits`): with a subscription that
 //! has not ended covering the task, its waits are kept, and start their turn, in the leading conversation only (the
-//! task's own subscription before its module's), even when another conversation dealt with the task since; a task
-//! nobody leads, or whose subscription ended before its wait was kept, keeps the rule of the conversation that last
-//! dealt with it, else the latest one.
+//! task's own subscription before its module's, the whole project's last), even when another conversation dealt
+//! with the task since; a task nobody leads, or whose subscription ended before its wait was kept, keeps its waits in
+//! no conversation, starts no turn and opens none (ORC-895). A tool request that came to the person is kept in the
+//! leading conversation too, whatever *Let the Orchestrator answer agents* says, and starts no turn (ORC-894).
 //! `cargo test -p orchester-workspace --test orchestrator_led_waits led_waits`.
 
 mod support;
@@ -22,14 +23,17 @@ use orchester_core::{
     WaitKind, WaitTurn, WatchTarget,
   },
   resource::ModelId,
-  run::{Run, StepFailure, WaitReason},
+  run::{DecidedBy, PendingToolApproval, Run, StepFailure, WaitReason},
   store::{ActivityStore, ConnectionStore, ConversationStore},
   task::organization::ChangeActor,
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
 use orchester_store::ProjectDb;
-use orchester_workspace::orchestrator::waits::{Followed, Switches, check_merges_in, follow_in};
+use orchester_workspace::orchestrator::{
+  chat::ChatView,
+  waits::{Followed, Switches, check_merges_in, follow_in},
+};
 use support::{Fixture, at};
 
 /// A checked, signed-in Claude Code connection, published as what the Orchestrator runs on.
@@ -220,8 +224,9 @@ fn led_waits_and_run_ends_go_to_the_task_subscription_before_the_module_one() {
 }
 
 #[test]
-fn led_waits_of_a_task_nobody_leads_keep_the_conversation_that_dealt_with_it() {
+fn led_waits_of_a_task_nobody_leads_go_to_no_conversation_and_start_no_turn() {
   let mut fixture = Fixture::new();
+  ready(&mut fixture);
   let login = fixture.task("Add login", at(40));
   let zoom = fixture.task("Plan zoom", at(41));
   let avatars = fixture.task("Add avatars", at(42));
@@ -235,23 +240,125 @@ fn led_waits_of_a_task_nobody_leads_keep_the_conversation_that_dealt_with_it() {
   ask(&mut fixture, &mut login_run);
   fail(&mut fixture, &mut zoom_run);
   ask(&mut fixture, &mut avatars_run);
-  assert!(follow(&fixture, false).kept);
+  let followed = follow(&fixture, true);
+  assert!(followed.kept, "{followed:?}");
   assert_eq!(
-    tasks_in(&fixture, &dealt),
-    ["ORC-1"],
-    "the conversation that dealt with it"
+    followed.turn.map(|turn| turn.chat),
+    Some(watching.id()),
+    "only the led task's end starts a turn"
   );
-  assert_eq!(
-    tasks_in(&fixture, &latest),
-    ["ORC-3"],
-    "nobody dealt with it: the latest one"
+  assert!(
+    tasks_in(&fixture, &dealt).is_empty(),
+    "not the conversation that dealt with ORC-1"
   );
+  assert!(tasks_in(&fixture, &latest).is_empty(), "nor the latest one");
   assert_eq!(tasks_in(&fixture, &watching), ["ORC-2"], "the led task's end");
   assert_eq!(fixture.db.chats().expect("History").len(), 3, "no conversation opened");
+  let turns = fixture.db.automatic_waits_without_turn().expect("read");
+  assert!(turns.is_empty(), "no other wait waits for a turn: {turns:?}");
+}
+
+/// `run`'s agent asks at `at(30)` to run a command, and the request came to the person; its id.
+fn request_approval(fixture: &mut Fixture, run: &Run) -> String {
+  let execution = run.current_attempt().expect("attempt").executions()[0].id();
+  let invocation = fixture
+    .db
+    .start_invocation(run.id(), execution, &ModelId::new("gpt-5.5").expect("model"), at(21))
+    .expect("invocation")
+    .id;
+  let request = PendingToolApproval {
+    id: format!("{invocation}:call_1"),
+    run: run.id(),
+    execution,
+    invocation,
+    agent: "Builder".to_owned(),
+    command: true,
+    scope: None,
+    server: "command".to_owned(),
+    action: "ls ~/.cargo/registry/src/".to_owned(),
+    target: None,
+    requested_at: at(30),
+    native: None,
+  };
+  fixture.db.request_tool_approval(&request).expect("the request waits");
+  request.id
 }
 
 #[test]
-fn led_waits_whose_subscription_ended_before_they_were_kept_keep_todays_rule() {
+fn led_waits_keep_a_tool_request_for_the_person_in_the_leading_conversation_whatever_answer_agents_says() {
+  for answers in [false, true] {
+    let mut fixture = Fixture::new();
+    ready(&mut fixture);
+    let task = fixture.task("Add login", at(40));
+    let run = fixture.started_run(task, at(50));
+    let leading = talking(&mut fixture, "Look after ORC-1", 10);
+    watch(&mut fixture, &leading, WatchTarget::Task(task), 11);
+    let elsewhere = acted_on(&mut fixture, "ORC-1", 20);
+    let request = request_approval(&mut fixture, &run);
+    let followed = follow(&fixture, answers);
+    assert!(followed.kept, "answer agents {answers}: {followed:?}");
+    assert_eq!(followed.turn, None, "a tool request is the person's: no turn by itself");
+    assert!(tasks_in(&fixture, &elsewhere).is_empty(), "nowhere else");
+    let kept = waits_in(&fixture, &leading);
+    assert_eq!(kept.len(), 1, "{kept:?}");
+    let (wait, turn) = &kept[0];
+    assert_eq!((wait.kind, wait.task.as_str()), (WaitKind::Approval, "ORC-1"));
+    assert!(!wait.automatic && turn.is_none(), "{wait:?}");
+    assert!(wait.link.ends_with("/conversation"), "its card: {}", wait.link);
+    let shown = ChatView::load_in(fixture.repo.path(), leading.id())
+      .expect("read")
+      .expect("kept");
+    let seq = shown
+      .entries
+      .iter()
+      .find(|entry| matches!(entry.kind, EntryKind::Wait { .. }))
+      .expect("the wait")
+      .seq;
+    assert!(shown.standing.contains(&seq), "it waits for the person");
+    assert_eq!(follow(&fixture, answers), Followed::default(), "kept once");
+    let claimed = fixture
+      .db
+      .claim_tool_approval(run.id(), &request, DecidedBy::Person, at(80))
+      .expect("approved");
+    assert!(claimed);
+    let shown = ChatView::load_in(fixture.repo.path(), leading.id())
+      .expect("read")
+      .expect("kept");
+    assert!(!shown.standing.contains(&seq), "decided: it no longer waits");
+  }
+}
+
+#[test]
+fn led_waits_of_tasks_no_more_specific_subscription_leads_go_to_the_whole_project() {
+  let mut fixture = Fixture::new();
+  let login = fixture.task("Add login", at(40));
+  let zoom = fixture.task("Plan zoom", at(41));
+  let avatars = fixture.task("Add avatars", at(42));
+  let mut login_run = fixture.started_run(login, at(50));
+  let mut zoom_run = fixture.started_run(zoom, at(51));
+  let mut avatars_run = fixture.started_run(avatars, at(52));
+  let accounts = module(&mut fixture, "Accounts", &[login]);
+  let by_module = talking(&mut fixture, "Look after Accounts", 5);
+  let by_task = talking(&mut fixture, "Look after ORC-2", 6);
+  let everything = talking(&mut fixture, "Everything", 7);
+  watch(&mut fixture, &by_module, WatchTarget::Module(accounts), 8);
+  watch(&mut fixture, &by_task, WatchTarget::Task(zoom), 9);
+  watch(&mut fixture, &everything, WatchTarget::Project, 10);
+  ask(&mut fixture, &mut login_run);
+  fail(&mut fixture, &mut zoom_run);
+  ask(&mut fixture, &mut avatars_run);
+  assert!(follow(&fixture, false).kept);
+  assert_eq!(tasks_in(&fixture, &by_module), ["ORC-1"], "the module's subscription");
+  assert_eq!(tasks_in(&fixture, &by_task), ["ORC-2"], "the task's own subscription");
+  assert_eq!(
+    tasks_in(&fixture, &everything),
+    ["ORC-3"],
+    "what no more specific subscription takes"
+  );
+}
+
+#[test]
+fn led_waits_whose_subscription_ended_before_they_were_kept_go_to_no_conversation() {
   let mut fixture = Fixture::new();
   ready(&mut fixture);
   let task = fixture.task("Add login", at(40));
@@ -266,7 +373,10 @@ fn led_waits_whose_subscription_ended_before_they_were_kept_keep_todays_rule() {
     .stop_subscription(leading.id(), WatchTarget::Task(task), at(70))
     .expect("stopped");
   assert!(stopped.is_some());
-  let turn = follow(&fixture, true).turn.expect("the wait starts a turn by itself");
-  assert_eq!(turn.chat, dealt.id(), "the conversation that last dealt with ORC-1");
+  assert_eq!(follow(&fixture, true), Followed::default(), "kept nowhere, no turn");
   assert!(tasks_in(&fixture, &leading).is_empty(), "it no longer leads ORC-1");
+  assert!(
+    tasks_in(&fixture, &dealt).is_empty(),
+    "nor does the conversation that last dealt with ORC-1"
+  );
 }

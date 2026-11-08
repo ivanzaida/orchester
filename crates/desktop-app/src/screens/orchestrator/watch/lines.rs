@@ -44,13 +44,16 @@ pub(super) fn line(
 ) -> Option<Element> {
   let element = match line {
     WatchLine::Watching {
-      started, already_here, ..
+      started,
+      already_here,
+      at_request,
+      ..
     } => {
       let led: Vec<&NamedTarget> = started.iter().chain(already_here).collect();
       if led.is_empty() {
         return None;
       }
-      leading(ctx, id, &led, &env.watch)
+      leading(ctx, id, (&led, at_request.is_some()), &env.watch)
     }
     WatchLine::NowLedIn {
       target,
@@ -74,15 +77,24 @@ pub(super) fn line(
       );
       line_row(id, "led_here_again", moved(ctx, target, keys, title), time(id, at)).into()
     }
-    WatchLine::Stopped { targets, left_open } => stopped(ctx, id, (targets, left_open), (at, env.project)),
+    WatchLine::Stopped {
+      targets,
+      left_open,
+      at_request,
+    } => stopped(ctx, id, (targets, left_open, at_request.is_some()), (at, env.project)),
     // A target left where another conversation leads it shows in its card's place (`super::super::led`).
     WatchLine::LeftThere { .. } => return None,
   };
   Some(element)
 }
 
-/// *Leading* the targets `led`, each module with how many tasks it holds now.
-fn leading(ctx: &Ctx, id: &str, led: &[&NamedTarget], facts: &WatchFacts) -> Element {
+/// The quiet tag of a change the person asked the Orchestrator for in words (ORC-893); `None` for a command's.
+fn at_request(ctx: &Ctx, asked: bool) -> Option<Arc<str>> {
+  asked.then(|| ctx.t("orchestrator.watch.atRequest"))
+}
+
+/// *Leading* the targets `led`, each module with how many tasks it holds now, tagged when `asked` in words.
+fn leading(ctx: &Ctx, id: &str, (led, asked): (&[&NamedTarget], bool), facts: &WatchFacts) -> Element {
   let names: Vec<Arc<str>> = led
     .iter()
     .map(|named| {
@@ -103,6 +115,7 @@ fn leading(ctx: &Ctx, id: &str, led: &[&NamedTarget], facts: &WatchFacts) -> Ele
   let said = Said {
     glyph: (Icon::Eye, PaletteColor::TextMuted),
     words: ctx.t_args("orchestrator.watch.leading", [("targets", joined(ctx, &names))]),
+    tag: at_request(ctx, asked),
     aside: Some(ctx.t("orchestrator.watch.leadingAside")),
   };
   line_row(id, "leading", said, None).into()
@@ -128,6 +141,7 @@ fn now_led_in(
   let said = Said {
     glyph: (Icon::ArrowRightLeft, PaletteColor::TextMuted),
     words: ctx.t_args("orchestrator.watch.nowLedIn", [("target", &*name), ("title", title)]),
+    tag: None,
     aside: Some(aside),
   };
   let route = Route::Project(project, ProjectPage::Orchestrator(OrchestratorChat::Chat(chat)));
@@ -146,16 +160,17 @@ fn moved(ctx: &Ctx, target: &NamedTarget, (words, aside): (&str, &str), title: &
   Said {
     glyph: (Icon::ArrowRightLeft, PaletteColor::TextMuted),
     words: ctx.t_args(words, [("target", &*name)]),
+    tag: None,
     aside: Some(ctx.t_args(aside, [("title", title)])),
   }
 }
 
 /// *Stopped watching* `targets` (all of them when it names none), kept at `at`, with what it left open under it, each
-/// a link to its task in `project`.
+/// a link to its task in `project`; tagged when `asked` in words.
 fn stopped(
   ctx: &mut Ctx,
   id: &str,
-  (targets, left_open): (&[NamedTarget], &[OpenTask]),
+  (targets, left_open, asked): (&[NamedTarget], &[OpenTask], bool),
   (at, project): (Option<Timestamp>, ProjectId),
 ) -> Element {
   let names: Vec<Arc<str>> = targets.iter().map(|named| target_name(ctx, named)).collect();
@@ -172,6 +187,7 @@ fn stopped(
   let said = Said {
     glyph: (Icon::EyeOff, PaletteColor::TextMuted),
     words,
+    tag: at_request(ctx, asked),
     aside: Some(aside),
   };
   let row = line_row(&format!("{id}-line"), "stopped", said, time(id, at));

@@ -34,7 +34,7 @@ fn conversation(db: &mut ProjectDb, text: &str) -> Chat {
 
 /// Module *Billing*, led by *Billing and invoices*, which a /watch in *Webhooks v2* named too: that conversation, this
 /// one and the module.
-fn led(screen: &Orchestrator) -> (Chat, Chat, WatchTarget) {
+pub(super) fn led(screen: &Orchestrator) -> (Chat, Chat, WatchTarget) {
   let mut db = screen.db();
   let details =
     ModuleDetails::new(Name::new("Billing").expect("name"), "", (None, None), ModuleState::Open).expect("details");
@@ -53,7 +53,7 @@ fn led(screen: &Orchestrator) -> (Chat, Chat, WatchTarget) {
 }
 
 /// The conversation that leads `target`.
-fn leader(screen: &Orchestrator, target: WatchTarget) -> Option<ChatId> {
+pub(super) fn leader(screen: &Orchestrator, target: WatchTarget) -> Option<ChatId> {
   let db = screen.db();
   db.active_subscriptions()
     .expect("subscriptions")
@@ -76,7 +76,7 @@ fn lines(screen: &Orchestrator, chat: ChatId) -> Vec<WatchLine> {
 }
 
 /// The id of the first card of `chat`'s /watch line.
-fn card(screen: &Orchestrator, chat: ChatId) -> String {
+pub(super) fn card(screen: &Orchestrator, chat: ChatId) -> String {
   let seq = screen
     .db()
     .chat_entries(chat)

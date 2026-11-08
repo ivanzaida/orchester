@@ -296,6 +296,19 @@ the agent logged: {agent}"
     self.window.pass();
   }
 
+  /// A key pressed with Shift where the focus is.
+  pub fn shift_key(&mut self, (key, code): (&str, &str)) {
+    self
+      .window
+      .tree
+      .key_down(key.to_owned(), code.to_owned(), true, false, false);
+    self
+      .window
+      .tree
+      .key_up(key.to_owned(), code.to_owned(), true, false, false);
+    self.window.pass();
+  }
+
   /// Where `id` is laid out.
   pub fn bounds(&mut self, id: &str) -> lurq::core::ElementRect {
     self
@@ -315,9 +328,7 @@ the agent logged: {agent}"
   /// sent before is done with: the field shows its placeholder again.
   pub fn send(&mut self, text: &str) {
     self.until("the composer to be free", |screen| {
-      screen
-        .text("orchestrator-input")
-        .starts_with("Message the Orchestrator")
+      screen.text("orchestrator-input").starts_with("Ask the Orchestrator")
     });
     self.set("orchestrator-input", text);
     self.click("orchestrator-input");

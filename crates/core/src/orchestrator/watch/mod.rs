@@ -1,9 +1,9 @@
 //! What the project's Orchestrator conversations watch (`/watch-task`, `/watch-module`): each subscription names a
 //! conversation, a target and the person's order for it. An event of a task goes to exactly one conversation, the
 //! most specific subscription that covers the task ([`Subscriptions::leading`]): the task's own, then its module's (or
-//! the one of tasks without a module, for a task with none), then the project's. With none, callers keep the rule of
-//! [`super::wait::dealt_with`], else the project's latest conversation. One conversation leads each target at most,
-//! which [`Subscriptions`] keeps, so two subscriptions never tie.
+//! the one of tasks without a module, for a task with none), then the project's. With none, the event goes to no
+//! conversation (ORC-895). One conversation leads each target at most, which [`Subscriptions`] keeps, so two
+//! subscriptions never tie.
 //!
 //! The rules that need no store beside them (the orchestrator-watch design frame "What the design decides", rows
 //! Ending and Created tasks): when a subscription ends by itself ([`ending`]) and what its conversation keeps of that
@@ -27,7 +27,7 @@ pub use self::{
   created::{Created, CreatedWatch, created_task, created_task_watch, event_subscription},
   ended::WatchEnd,
   ending::{EndReason, Ending, NeverEnds, TargetTasks},
-  line::{LedElsewhere, NamedTarget, OpenTask, WatchCommand, WatchLine},
+  line::{AtRequest, LedElsewhere, NamedTarget, OpenTask, WatchCommand, WatchLine},
   stop::{LeftOpen, OpenWork},
   summary::WatchSummary,
 };

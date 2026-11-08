@@ -5,8 +5,8 @@
 use std::collections::BTreeMap;
 
 use orchester_core::{
-  id::{IdempotencyKey, ResourceId, StepExecutionId},
-  orchestrator::EntryKind,
+  id::{ChatId, IdempotencyKey, ResourceId, StepExecutionId},
+  orchestrator::{Chat, EntryKind, Subscription, WatchTarget},
   resource::{AgentProfile, Pipeline, StepKind},
   revision::Revision,
   run::{BranchName, NewRun, PublishedVersions, Run, RunSnapshot, WaitReason},
@@ -20,6 +20,16 @@ use super::harness::Orchestrator;
 
 /// A run of a new task titled `title` on `pipeline`, its one step waiting for a message; the run and that step.
 pub fn waiting(screen: &Orchestrator, pipeline: ResourceId, title: &str) -> (Run, StepExecutionId) {
+  let now = Timestamp::now();
+  let (mut run, execution) = started(screen, (pipeline, title), now);
+  let events = run.wait_step(execution, WaitReason::Message, now).expect("waits");
+  screen.db().append_events(&run, &events).expect("kept");
+  (run, execution)
+}
+
+/// A run of a new task titled `title` on `pipeline`, started at `now`, its one step at work since; the run and that
+/// step.
+pub fn started(screen: &Orchestrator, (pipeline, title): (ResourceId, &str), now: Timestamp) -> (Run, StepExecutionId) {
   let mut db = screen.db();
   let version = db
     .latest_version::<Pipeline>(pipeline)
@@ -60,14 +70,11 @@ pub fn waiting(screen: &Orchestrator, pipeline: ResourceId, title: &str) -> (Run
     budget: None,
     max_duration: None,
   };
-  let now = Timestamp::now();
   let mut run = db.create_run(IdempotencyKey::generate(), new, now).expect("run");
   let events = run.start(now).expect("started");
   db.append_events(&run, &events).expect("kept");
   let execution = run.current_attempt().expect("attempt").executions()[0].id();
   let events = run.start_step(execution, now).expect("step started");
-  db.append_events(&run, &events).expect("kept");
-  let events = run.wait_step(execution, WaitReason::Message, now).expect("waits");
   db.append_events(&run, &events).expect("kept");
   (run, execution)
 }
@@ -79,8 +86,22 @@ pub fn answered_on_task_page(screen: &Orchestrator, (run, execution): &mut (Run,
 }
 
 /// Keeps the waits that are new in the conversations, as the app's follower does, with *Let the Orchestrator answer
-/// agents* off.
+/// agents* off. Only subscriptions bring waits into a conversation (ORC-895): the first time, a conversation that
+/// watches everything in the project is opened, as the person would watch *Everything in* the project there.
 pub fn follow(screen: &Orchestrator) {
+  let mut db = screen.db();
+  if db
+    .active_subscriptions()
+    .expect("read")
+    .of(WatchTarget::Project)
+    .is_none()
+  {
+    let now = Timestamp::now();
+    let chat = Chat::named(ChatId::generate(), "Everything", now);
+    db.keep_watch_entries(&chat, &[], now).expect("the conversation");
+    let everything = Subscription::new(chat.id(), WatchTarget::Project, "", now);
+    db.start_subscription(&everything).expect("watching");
+  }
   let programs = Programs::processes();
   follow_in(
     (&screen.root, screen.project, &programs),

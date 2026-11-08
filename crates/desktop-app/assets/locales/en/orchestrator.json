@@ -48,7 +48,7 @@
       "description": "The Orchestrator reads the project and acts through Orchester with your project's permissions: it creates tasks, starts and continues runs, and answers agents when you let it."
     },
     "composer": {
-      "placeholder": "Message the Orchestrator…",
+      "placeholder": "Ask the Orchestrator…",
       "notSetUp": "The Orchestrator can't answer yet: choose a Claude Code or Codex connection and a model for it.",
       "setUp": "Set up the Orchestrator",
       "readable": "Conversations stay readable; you can send once it is set up.",
@@ -279,6 +279,9 @@
     },
     "event": {
       "noProgress": "No progress for {{minutes}} min",
+      "noProgressMoving": "No progress for {{minutes}} min · moving again {{time}}",
+      "noProgressWaits": "No progress for {{minutes}} min · waits now",
+      "noProgressEnded": "No progress for {{minutes}} min · the run ended",
       "conflictModule": "Merge conflict in the module branch",
       "conflict": "Merge conflict in the base branch",
       "mergedInto": "Merged into {{branch}}",
@@ -430,7 +433,7 @@
         "after": "→ {{after}}",
         "afterUnreported": "{{before}} → size comes with the next reply"
       },
-      "placeholderCompacting": "Message the Orchestrator — send it once compacting ends…",
+      "placeholderCompacting": "Ask the Orchestrator — send it once compacting ends…",
       "sendWaits": "The conversation is being compacted: send once it's done.",
       "notStarted": "The conversation wasn't compacted"
     },
@@ -441,7 +444,9 @@
         "message": "{{agent}} waits for a reply",
         "messageAnyone": "An agent waits for a reply",
         "plan": "{{agent}}'s plan waits for a decision",
-        "planAnyone": "A plan waits for a decision"
+        "planAnyone": "A plan waits for a decision",
+        "approval": "{{agent}} waits for a tool approval",
+        "approvalAnyone": "An agent waits for a tool approval"
       },
       "status": {
         "waits": "Waits for you",
@@ -455,6 +460,7 @@
       "effectWaits": "It waits for you on its card. Ask the Orchestrator here to read it, or answer it on the task's Conversation.",
       "effectPlan": "Deciding a plan is yours, on its card. Ask the Orchestrator here to read it with you.",
       "effectPlanRead": "Deciding a plan is yours, on its card. The Orchestrator reads it and tells you what it proposes.",
+      "effectApproval": "Approving a tool request is yours, on its card in the task's Conversation: the Orchestrator doesn't decide it, whatever Let the Orchestrator answer agents says.",
       "effectGone": "It was dealt with on the task's page, or its run went on: the agent no longer waits."
     },
     "watch": {
@@ -473,6 +479,7 @@
         "more": "{{first}}, {{next}}"
       },
       "leading": "Leading {{targets}}",
+      "atRequest": "at your request",
       "leadingAside": "— their waits, run ends, conflicts, limits and stalls start a turn here",
       "nowLedIn": "{{target}} is now led in «{{title}}»",
       "nowLedInAside": "— its events start turns there",
@@ -496,22 +503,28 @@
         "stoppedAtLimit": "{{task}} stopped at a limit ↗"
       },
       "failed": "Nothing was watched",
-      "personOnly": "Only you can start watching from the composer: a command sent by automation is not applied. The chips and the order stay.",
+      "personOnly": "Only you can start watching from the composer: a command sent by automation is not applied. The badge and your message stay.",
       "dismiss": "Dismiss",
       "picker": {
         "count": "{{shown}} of {{total}}",
+        "open": "{{count}} open",
+        "openAdded": "{{count}} open · {{added}} added",
         "added": "Added",
         "ledIn": "Led in «{{title}}» ↗",
         "ledInUnnamed": "Led in another conversation ↗",
         "unreadable": "The tasks of {{project}} can't be read",
-        "unreadableNote": "{{reason}} Nothing was added; the chips you have stay.",
+        "unreadableNote": "{{reason}} Nothing was added; the badge keeps what you chose.",
         "tryAgain": "Try again"
       },
       "modules": {
-        "placeholder": "Search modules — then write what to do with their events",
+        "search": "Search modules",
         "section": "Modules",
         "also": "Also",
         "nothing": "No module matches “{{query}}”",
+        "finished": {
+          "one": "1 finished module · type to find it",
+          "other": "{{count}} finished modules · type to find them"
+        },
         "withoutModule": "Tasks without a module",
         "project": "Everything in {{project}}",
         "projectMeta": "What no other subscription takes",
@@ -535,9 +548,13 @@
         "nothingLeft": "Nothing left to watch"
       },
       "tasks": {
-        "placeholder": "Search tasks by key or title — then write what to do with their events",
+        "search": "Search tasks",
         "section": "Tasks",
         "nothing": "No task matches “{{query}}”",
+        "finished": {
+          "one": "1 done task · type to find it",
+          "other": "{{count}} done tasks · type to find them"
+        },
         "inModule": "{{title}} · {{module}}",
         "withoutModule": "{{title}} · no module",
         "ledHere": "Watched here",
@@ -548,6 +565,7 @@
         "nothingToWatch": "nothing to watch"
       },
       "unwatch": {
+        "search": "Search what this conversation watches",
         "section": "Watched here",
         "count": "{{shown}} of {{total}}",
         "nothing": "Nothing watched here matches “{{query}}”",
@@ -558,7 +576,6 @@
         "all": "All of them",
         "allMeta": "stop watching everything here",
         "cancelsNothing": "cancels nothing",
-        "filter": "Type to filter",
         "open": {
           "waits": {
             "one": "1 waits for you",
@@ -588,13 +605,13 @@
       "keys": {
         "move": "↑ ↓",
         "enter": "Enter",
-        "backspace": "Backspace",
+        "shiftEnter": "Shift Enter",
         "esc": "Esc"
       },
       "hint": {
         "move": "Move",
-        "add": "Add",
-        "removeLast": "Remove the last",
+        "pick": "Pick and close",
+        "addAnother": "Add another",
         "close": "Close"
       },
       "led": {

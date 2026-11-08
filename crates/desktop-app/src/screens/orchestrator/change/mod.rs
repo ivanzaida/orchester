@@ -25,7 +25,6 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, Timeout},
-    events::is_synthetic_input,
   },
   components::Row,
   core::Signal,
@@ -51,6 +50,7 @@ use super::{
   decision,
 };
 use crate::{
+  mcp::qa_person::QaPerson,
   navigation::Navigation,
   services::Services,
   theme::SKELETON_DELAY,
@@ -106,6 +106,8 @@ pub(super) struct ChangeCard {
   slow: Signal<bool>,
   /// Started only while the card's facts are read.
   delay: Timeout,
+  /// Whether the accept takes synthetic input as the person's: in a QA copy only.
+  qa_person: QaPerson,
 }
 
 impl Component for ChangeCard {
@@ -121,6 +123,7 @@ impl Component for ChangeCard {
       details: ctx.signal(false),
       slow,
       delay,
+      qa_person: QaPerson::of(ctx),
     }
   }
 
@@ -264,13 +267,14 @@ impl ChangeCard {
       (true, _) => (start.disabled(), dismiss.disabled()),
       (false, None) => (start.disabled(), self.dismiss(dismiss, deciding(Decision::Dismiss))),
       (false, Some(widens)) => {
-        let (decide, refused, accepting) = (
+        let (decide, refused, accepting, qa_person) = (
           self.decide.clone(),
           self.refused.clone(),
           deciding(Decision::Accept { widens }),
+          self.qa_person.clone(),
         );
         let start = start.on_click(move || {
-          if is_synthetic_input() {
+          if qa_person.refuses_input() {
             tracing::warn!("synthetic input reached a change the Orchestrator proposed; not taken");
             refused.set(true);
             return;

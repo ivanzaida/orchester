@@ -28,6 +28,7 @@ pub(in crate::screens::orchestrator) fn line(
   let said = Said {
     glyph: (Icon::Flag, color),
     words: message_text(ctx, &ended_line(summary)),
+    tag: None,
     aside: Some(message_text(ctx, &ended_aside(summary))),
   };
   line_row(id, "ended", said, time(id, at)).into()

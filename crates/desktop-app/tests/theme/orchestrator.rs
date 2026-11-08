@@ -279,6 +279,14 @@ fn slash_menu_roles_follow_the_design() {
       PaletteColor::TextSecondary,
       "Geist Mono",
     ),
+    // A command picker's own search (`slpmj` in `P1` `QXPDY`).
+    (
+      SlashText::Search,
+      12.5,
+      FontWeight::Normal,
+      PaletteColor::TextPrimary,
+      "Geist",
+    ),
   ] {
     let style = theme.typography_style(role.role());
     assert_eq!(

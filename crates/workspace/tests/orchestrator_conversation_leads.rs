@@ -247,9 +247,9 @@ fn conversation_leads_are_read_only_and_only_the_chat_gets_them() {
       .map(|tool| tool.name.to_string())
       .collect();
     assert!(
-      !changing
-        .iter()
-        .any(|name| name.contains("watch") || name.contains("subscri") || name.contains("lead")),
+      !changing.iter().any(|name| name != "watch"
+        && name != "unwatch"
+        && ["watch", "subscri", "lead"].iter().any(|part| name.contains(part))),
       "no chat tool changes a subscription (driving: {drives}): {changing:?}"
     );
   }
