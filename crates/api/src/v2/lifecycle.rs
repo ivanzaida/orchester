@@ -113,8 +113,8 @@ pub struct LifecycleRequest {
 impl LifecycleRequest {
   /// The lifecycle actions in `changes` and whether it asks for anything else. A change of the workflow status to the
   /// status it has, and of the blocked reason to the reason it has, are no change; every other field the patch names
-  /// is a change, equal or not. `actor` is no change. A workflow change that is no action ([`LifecycleAction::of_workflow`])
-  /// is something else, an Admin's.
+  /// is a change, equal or not. `actor` is no change. A workflow change that is no action
+  /// ([`LifecycleAction::of_workflow`]) is something else, an Admin's.
   pub fn of(current: &TaskContent, changes: &TaskChanges) -> Self {
     let mut actions = Vec::new();
     let mut other = false;

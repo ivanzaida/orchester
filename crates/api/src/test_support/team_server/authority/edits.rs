@@ -9,7 +9,7 @@ use orchester_core::{task::organization::ChangeActor, time::Timestamp};
 use parking_lot::Mutex;
 use serde_json::{Map, Value, json};
 
-use super::{Authority, Person, Standing, listing, roadmap};
+use super::{Authority, Person, lifecycle, listing, roadmap};
 use crate::{TaskPatch, test_support::team_server::State};
 
 /// `PATCH /api/v1/projects/{p}/tasks/{t}` as `path` names it (method first), with `body`: the status line and the
@@ -43,7 +43,7 @@ pub(in crate::test_support::team_server) fn answer(
 }
 
 /// The fields of a task's content a change sets when it names them: absent or `null` leaves them.
-const SET: [&str; 6] = ["title", "brief", "criteria", "priority", "tags", "blocking"];
+const SET: [&str; 7] = ["title", "brief", "criteria", "workflow", "priority", "tags", "blocking"];
 /// The fields a change may set to `null`: present, they take what it gives.
 const NULLABLE: [&str; 3] = ["module", "release", "blocked_reason"];
 
@@ -54,6 +54,18 @@ pub(super) struct Edited {
   fields: Map<String, Value>,
   by: Person,
   at: i64,
+}
+
+impl Edited {
+  /// The task's revision after the changes made here.
+  pub(super) const fn revision(&self) -> u64 {
+    self.revision
+  }
+
+  /// What was changed of the task's field `name`, when it was.
+  pub(super) fn field(&self, name: &str) -> Option<&Value> {
+    self.fields.get(name)
+  }
 }
 
 /// Someone else's change of the task numbered `number`, made just before the next change asked here.
@@ -101,9 +113,6 @@ pub(super) fn applied(authority: &Authority, mut task: Value) -> Value {
 
 /// `PATCH …/tasks/{task}` of the project `(id, key)` with `body`: the task as changed, or the refusal.
 fn patch(state: &mut State, (project, task): ((&str, &str), &str), body: &str) -> (u16, Value) {
-  if state.authority.standing == Standing::Member {
-    return (403, json!({"error": "not_admin", "message": "refused"}));
-  }
   let Ok(patch) = serde_json::from_str::<TaskPatch>(body) else {
     return (422, json!({"error": "invalid", "message": "refused"}));
   };
@@ -119,6 +128,10 @@ fn patch(state: &mut State, (project, task): ((&str, &str), &str), body: &str) -
   else {
     return (404, json!({"error": "not_found", "message": "refused"}));
   };
+  let request = match lifecycle::permitted(&state.authority, &current, &patch.changes) {
+    Ok(request) => request,
+    Err(refusal) => return refusal,
+  };
   if current["revision"].as_u64() != Some(patch.revision.get()) {
     return (
       409,
@@ -126,6 +139,9 @@ fn patch(state: &mut State, (project, task): ((&str, &str), &str), body: &str) -
     );
   }
   let asked = serde_json::to_value(&patch.changes).unwrap_or(Value::Null);
+  if let Err(refusal) = lifecycle::checked(&state.authority, &current, (&request, &asked)) {
+    return refusal;
+  }
   if let Some(refusal) = roadmap::refused_move(&state.authority, &current, &asked) {
     return refusal;
   }
@@ -141,6 +157,9 @@ fn patch(state: &mut State, (project, task): ((&str, &str), &str), body: &str) -
     }
   }
   change(&mut state.authority, &current, (fields, Person::You));
+  if request.closes() {
+    lifecycle::release(&mut state.authority, task);
+  }
   let actor = patch.changes.actor.unwrap_or(ChangeActor::Person);
   roadmap::record_move(&mut state.authority, &current, &asked, actor);
   let changed = listing::tasks(project, state)
@@ -152,8 +171,9 @@ fn patch(state: &mut State, (project, task): ((&str, &str), &str), body: &str) -
 /// Lays `fields` over the task `read`, at its next revision in `by`'s name, committed as one batch.
 pub(super) fn change(authority: &mut Authority, read: &Value, (fields, by): (Map<String, Value>, Person)) {
   let id = read["id"].as_str().unwrap_or_default().to_owned();
+  let scopes = scopes(read, &id, fields.contains_key("workflow"));
   let revision = read["revision"].as_u64().unwrap_or(1) + 1;
-  let edited = authority.edits.entry(id.clone()).or_insert_with(|| Edited {
+  let edited = authority.edits.entry(id).or_insert_with(|| Edited {
     revision,
     fields: Map::new(),
     by,
@@ -163,5 +183,27 @@ pub(super) fn change(authority: &mut Authority, read: &Value, (fields, by): (Map
   edited.revision = revision;
   edited.by = by;
   edited.at = Timestamp::now().unix_millis();
-  authority.commit(vec![json!({"kind": "task_list"}), json!({"kind": "task", "task": id})]);
+  authority.commit(scopes);
+}
+
+/// What a change of task `id` invalidates: the list and the task, and, when it moved the task between statuses, the
+/// progress of the module and the release the task `read` names.
+fn scopes(read: &Value, id: &str, status_moved: bool) -> Vec<Value> {
+  let mut scopes = vec![json!({"kind": "task_list"}), json!({"kind": "task", "task": id})];
+  if !status_moved {
+    return scopes;
+  }
+  if let Some(module) = read["module"].as_str() {
+    scopes.extend([
+      json!({"kind": "module_list"}),
+      json!({"kind": "module", "module": module}),
+    ]);
+  }
+  if let Some(release) = read["release"].as_str() {
+    scopes.extend([
+      json!({"kind": "release_list"}),
+      json!({"kind": "release", "release": release}),
+    ]);
+  }
+  scopes
 }

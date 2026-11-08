@@ -6,7 +6,7 @@
 
 use serde_json::{Value, json};
 
-use super::{Authority, AuthorityClaim, AuthorityTask, Person, commands::Refused, listing};
+use super::{Authority, AuthorityClaim, AuthorityTask, Person, commands::Refused, lifecycle, listing};
 
 /// How the stand-in fails to give a `work.start` a bundle the desktop can use.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -80,7 +80,10 @@ pub(super) fn report(authority: &mut Authority, command: &Value) -> Result<Value
   }
   let mut work = listing::work_read((&id, task.number), claim, state);
   if !authority.reported.contains(&id) {
-    authority.reported.push(id);
+    authority.reported.push(id.clone());
+  }
+  if state == "succeeded" {
+    lifecycle::succeeded(authority, &id, &command["artifacts"])?;
   }
   work["runs"] = json!([command["run_id"]]);
   let bundle = work["bundle"].clone();

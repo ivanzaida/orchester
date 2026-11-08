@@ -15,6 +15,7 @@ mod commands;
 mod delivery;
 pub(super) mod edits;
 mod execution;
+mod lifecycle;
 mod listing;
 pub(super) mod roadmap;
 mod stream;
@@ -28,6 +29,7 @@ use std::{
   time::{Duration, Instant},
 };
 
+use orchester_core::resource::Deliverable;
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 
@@ -141,6 +143,8 @@ pub(super) struct Authority {
   /// before the next one asked here.
   edits: HashMap<String, edits::Edited>,
   edit_first: Option<edits::FirstChange>,
+  /// What the work of the task with a number delivers; changes without a say.
+  delivers: HashMap<u32, Deliverable>,
   /// The releases Admins made, with their changelogs and every move of a task into or out of one.
   releases: roadmap::Releases,
 }
