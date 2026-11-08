@@ -168,12 +168,16 @@ impl Component for TeamHubScreen {
       .may_change
       .then(|| create::new_button(ctx, (id, view.filter), (&navigation, &self.new_menu)))
       .flatten();
+    let draft_saved = selected
+      .and_then(|chosen| listing.as_ref().and_then(|listing| listing.find(chosen)))
+      .is_some_and(|entry| entry.draft);
     let shown = FilterShown {
       project: id,
       filter: view.filter,
       selected,
       reading,
       may_change: team.may_change,
+      draft_saved,
     };
     let told = taken_back::notices(ctx, &team, &project.open.repo_root);
     let unreached = Services::of(ctx).team.reached().of(&project.open.repo_root) == Some(Reached::Unanswered);
@@ -236,7 +240,7 @@ fn frame(
         .right(HubSpacing::Side.role()),
     )
     .spacing(crate::theme::ExtraSpacing::Inset.role())
-    .child(head::head(ctx, team, (new, unreached)))
+    .child(head::head(ctx, team, (new, unreached, shown.draft_saved)))
     .child(head::filter(ctx, listing, shown, navigation))
     .with_children(told)
     .child(

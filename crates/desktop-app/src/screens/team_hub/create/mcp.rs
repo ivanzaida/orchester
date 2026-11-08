@@ -158,12 +158,14 @@ impl Fields {
         fields::choice(ctx, &RUNS_AS, &self.runs, &RUNS, shown.locked),
       ),
     ];
-    rows.extend(if program {
-      self.program_rows(ctx, shown, invalid.as_ref())
+    if program {
+      rows.extend(self.program_rows(ctx, shown, invalid.as_ref()));
+      rows.push(self.exempt_row(ctx, shown));
+      rows.push(self.variables_row(ctx, shown));
     } else {
-      self.remote_rows(ctx, shown, invalid.as_ref())
-    });
-    rows.push(self.exempt_row(ctx, shown));
+      rows.extend(self.remote_rows(ctx, shown, invalid.as_ref()));
+      rows.push(self.exempt_row(ctx, shown));
+    }
     Body {
       rows,
       computer: if program {
@@ -251,14 +253,19 @@ impl Fields {
         (Look::Mono, locked),
       ));
     }
-    rows.push(fields::text_row(
+    rows
+  }
+
+  /// The variables the server needs, one name per line, after the tools it may run without asking (A13).
+  fn variables_row(&self, ctx: &mut Ctx, shown: &Shown<'_>) -> Row {
+    let marks = Marks::of(&self.input(), shown.published);
+    fields::text_row(
       ctx,
       &VARIABLES,
       marks.on(None, marks.variables).as_ref(),
       (&self.variables, "team_new.mcp.variablesPlaceholder"),
-      (Look::Lines, locked),
-    ));
-    rows
+      (Look::Lines, shown.locked),
+    )
   }
 
   /// Where the server starts: in the run's worktree, as the design's select says, or in a folder inside it.
@@ -324,7 +331,7 @@ impl Fields {
       &EXEMPT,
       marks.on(None, marks.exempt).as_ref(),
       (&self.exempt, "team_new.mcp.exemptPlaceholder"),
-      (Look::Plain, shown.locked),
+      (Look::Mono, shown.locked),
     )
   }
 }

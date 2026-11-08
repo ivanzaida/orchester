@@ -2107,10 +2107,17 @@
         "body": "The team's server does not accept its content: a program's path, a secret's value or an id of this computer has no place in the team's form.",
         "references": "It names a team resource the server does not have or has archived.",
         "shape": "The team's server could not read it as a version.",
+        "catalog": "The team's server does not accept the list of agent tools and models this computer reported with it.",
+        "unspecified": "The team's server says its content is not valid, without saying why.",
         "archived": "The team archived this resource, so it takes no new version.",
+        "notAdminHere": "You are no longer an admin of the team, so only an admin can publish it. Nothing was sent.",
+        "localEntities": "It names connections, MCP servers or secrets that belong to this computer only, so the team can't take it. Nothing was sent.",
+        "pipelineNonTeam": "It uses a profile or tool that isn't one of the team's resources, so the team can't take it. Nothing was sent.",
+        "writableFolders": "Its writable folders are folders of this computer, so they stay here and are not shared. Remove them to share it. Nothing was sent.",
         "changed": "Someone published v{{version}} from the same version first; your draft is now on v{{version}}.",
         "other": "The team's server refused it ({{code}})."
-      }
+      },
+      "blocked": "An earlier version of this wasn't taken by the team's server, so this one waits behind it and is not sent. Take that one back as a draft first."
     },
     "errors": {
       "serverOnly": "This change is made on the server for a shared project, and this screen cannot send it there yet.",
@@ -2136,6 +2143,7 @@
       "versionInUse": "Runs or tasks here use the version you published, so it stays; nothing was changed. Publish yours as the next version instead.",
       "versionConflict": "Someone published v{{version}} from the same version meanwhile. Open your draft on v{{version}}, or publish yours as the next version.",
       "personOnly": "Only a person can do this in the window: it changes what agents may do on this computer. Nothing was changed.",
+      "beingSent": "It is being sent right now. Try again in a moment.",
       "localEntitiesNamed": "The team can't take this: it names {{names}}, which belong to this computer only. Nothing was sent.",
       "pipelineNamesNonTeam": "The team can't take this pipeline: it uses {{name}}, which isn't one of the team's resources. Nothing was sent.",
       "writableFoldersStay": "The team can't take this profile: its writable folders ({{folders}}) are folders of this computer, so they stay here and are not shared. Remove them from the profile to share it. Nothing was sent.",

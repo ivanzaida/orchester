@@ -60,12 +60,24 @@ pub(super) fn line(ctx: &Ctx, listing: &Listing, entry: &Entry) -> Said {
   } else {
     ctx.t_args(
       "team_hub.edit.line.draft",
-      [("draft", draft.to_string()), ("words", said.text.to_string())],
+      [("draft", draft.to_string()), ("words", mid_line(&said.text))],
     )
   };
   Said {
     text,
     color: PaletteColor::Warning,
+  }
+}
+
+/// `words` as the end of a line that began otherwise: a sentence's capital goes (*Your draft on v3 · set its program
+/// path here*), but a name or an acronym keeps its own (`GITHUB_TOKEN`).
+fn mid_line(words: &str) -> String {
+  let mut chars = words.chars();
+  match (chars.next(), chars.next()) {
+    (Some(first), Some(second)) if first.is_uppercase() && second.is_lowercase() => {
+      first.to_lowercase().chain([second]).chain(chars).collect()
+    }
+    _ => words.to_owned(),
   }
 }
 

@@ -4,7 +4,10 @@
 //! on vN* and *Publish mine as vN+1* (`Conflict bar` `n9GgD` in 02c `JZFlA`); or refused by the server. Nothing is
 //! merged.
 
-use std::{path::PathBuf, sync::Arc};
+use std::{
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
 use lurq::{
   app::{
@@ -52,6 +55,23 @@ pub(crate) type Reread = Arc<dyn Fn() + Send + Sync>;
 pub(crate) fn waiting_bar(
   ctx: &mut Ctx,
   project: &ShownProject,
+  standing: (&TeamConfiguration, &SharedStanding),
+  (id, kind): (&str, Outside),
+  reread: Reread,
+) -> Option<Element> {
+  waiting_bar_in(
+    ctx,
+    (&project.open.repo_root, project.open.project.id()),
+    standing,
+    (id, kind),
+    reread,
+  )
+}
+
+/// [`waiting_bar`] for a panel that has the project's folder and id, not its shown project.
+pub(crate) fn waiting_bar_in(
+  ctx: &mut Ctx,
+  (root, project): (&Path, ProjectId),
   (team, standing): (&TeamConfiguration, &SharedStanding),
   (id, kind): (&str, Outside),
   reread: Reread,
@@ -65,8 +85,8 @@ pub(crate) fn waiting_bar(
       &format!("{id}-waiting-{}", waiting.version),
       WaitingProps {
         id: id.into(),
-        root: project.open.repo_root.clone(),
-        project: project.open.project.id(),
+        root: root.to_owned(),
+        project,
         host: team.server.as_ref().map(|(_, host)| host.clone()),
         confirmed: standing
           .confirmed
@@ -217,8 +237,9 @@ impl Component for WaitingBar {
       }
       PublishState::Conflict { latest } => self.conflict(ctx, &props, *latest),
       PublishState::Refused { code } => {
-        // What the server said, in words: the draft comes back to be changed, and then published again.
-        let reason = message_text(ctx, &Refusal::of_code(code).message());
+        // What was said, in words: the draft comes back to be changed, and then published again.
+        let refusal = Refusal::of_code(code);
+        let reason = message_text(ctx, &refusal.message());
         let take_back = props.waiting.based_on.is_some().then(|| {
           self.button(
             (format!("{id}-take-back"), ButtonKind::Secondary, Icon::Undo2),
@@ -226,14 +247,16 @@ impl Component for WaitingBar {
             Act::Reopen(props.waiting.version),
           )
         });
-        DraftBar::new(
-          format!("{id}-refused"),
-          Standing::Attention,
-          ctx.t_args("sharing.config.bar.refused", [("host", host), ("time", time)]),
-        )
-        .sub(ctx.t_args("sharing.config.bar.refusedWhy", [("reason", reason.to_string())]))
-        .actions(take_back)
-        .into()
+        // This computer found the team cannot take it: nothing reached the server, so it did not refuse anything.
+        let title = if refusal.is_local() {
+          ctx.t_args("sharing.config.bar.refusedHere", [("time", time)])
+        } else {
+          ctx.t_args("sharing.config.bar.refused", [("host", host), ("time", time)])
+        };
+        DraftBar::new(format!("{id}-refused"), Standing::Attention, title)
+          .sub(ctx.t_args("sharing.config.bar.refusedWhy", [("reason", reason.to_string())]))
+          .actions(take_back)
+          .into()
       }
     };
     let failure = state

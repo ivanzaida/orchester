@@ -43,7 +43,9 @@ use crate::{
   theme::{HubSpacing, HubText, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
+    field::field_error,
     icon::{Icon, icon},
+    message::message_text,
   },
 };
 
@@ -194,6 +196,7 @@ impl Component for NewPanel {
       .spacing(HubSpacing::BodyTop.role())
       .child(head(ctx, kind))
       .with_children(self.refusal(ctx, refused.as_ref(), waiting, &team))
+      .with_children(self.cancel_failure(ctx))
       .child(for_team)
       .child(computer(ctx, body.computer));
     let scroll = ScrollVertical::new(content)
@@ -245,6 +248,14 @@ impl NewPanel {
       return Some(notices::waiting(ctx, cancel));
     }
     refused.map(|failed| notices::refused(ctx, failed, team))
+  }
+
+  /// Why *Cancel sending* did nothing: it is being sent right now, the server took the resource meanwhile, or the
+  /// resource holds more than its first version.
+  fn cancel_failure(&self, ctx: &Ctx) -> Option<Element> {
+    let state = self.cancel.state().get();
+    let why = state.error.as_ref().filter(|_| state.is_rejected())?;
+    Some(field_error("team-new-cancel-error", &message_text(ctx, why)).into())
   }
 
   /// This computer's connections, which the profile form's CLI and model choices come from.

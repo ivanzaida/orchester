@@ -64,7 +64,12 @@ pub fn to(
     | State::TeamEdit
     | State::TeamEditDemoted
     | State::TeamEditOffline
-    | State::TeamEditRejects => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
+    | State::TeamEditRejects
+    | State::TeamEditPublished
+    | State::TeamEditRefusedAdmin
+    | State::TeamEditWaiting
+    | State::TeamEditRejected
+    | State::TeamCreateNameTaken => Err(format!("{state:?} opens the app's own window, with nothing to press").into()),
   }
 }
 

@@ -7,7 +7,7 @@
 use std::path::PathBuf;
 
 use lurq::{
-  app::ctx::{Ctx, FutureAction},
+  app::ctx::{Ctx, FutureAction, FutureState},
   core::Signal,
 };
 use orchester_core::{
@@ -43,6 +43,11 @@ pub(super) struct Edit {
   pub discard: FutureAction<NewTeamMcpServer, NewTeamMcpServer, Message>,
   /// *Cancel sending*: takes the version waiting in the outbox back as the draft.
   pub cancel: FutureAction<VersionId, (), Message>,
+  /// *Cancel sending* of a new resource waiting in the outbox: takes it back as if never created.
+  pub cancel_created: FutureAction<(), (), Message>,
+  /// Why the last *Discard draft* or *Cancel sending* did nothing (it is being sent right now, the server numbered it
+  /// meanwhile, a run uses it, the person is no admin any more): until the next press.
+  pub failure: Signal<Option<Message>>,
 }
 
 impl Edit {
@@ -90,13 +95,24 @@ impl Edit {
         }
       })
     };
-    let cancel = ctx.future_action(move |version: VersionId| {
+    let cancel = {
+      let (services, root) = (services.clone(), root.clone());
+      ctx.future_action(move |version: VersionId| {
+        let (services, root) = (services.clone(), root.clone());
+        async move {
+          let result = services
+            .servers
+            .reopen_draft(&root, ResourceKind::McpServer, version)
+            .await;
+          services.changes.record(project, Outside::Connections);
+          result
+        }
+      })
+    };
+    let cancel_created = ctx.future_action(move |(): ()| {
       let (services, root) = (services.clone(), root.clone());
       async move {
-        let result = services
-          .servers
-          .reopen_draft(&root, ResourceKind::McpServer, version)
-          .await;
+        let result = services.servers.cancel_created(&root, id).await;
         services.changes.record(project, Outside::Connections);
         result
       }
@@ -108,6 +124,8 @@ impl Edit {
       publish,
       discard,
       cancel,
+      cancel_created,
+      failure: ctx.signal(None),
     };
     edit.follow(ctx);
     edit
@@ -144,6 +162,23 @@ impl Edit {
         editing.set(true);
       }
     });
+    self.follow_failures(ctx);
+  }
+
+  /// Keeps why a *Discard draft* or a *Cancel sending* did nothing, which is told where the press was.
+  fn follow_failures(&self, ctx: &mut Ctx) {
+    let failure = self.failure.clone();
+    ctx.watch(&self.discard.state(), {
+      let failure = failure.clone();
+      move |state| settle_failure(&failure, state)
+    });
+    ctx.watch(&self.cancel.state(), {
+      let failure = failure.clone();
+      move |state| settle_failure(&failure, state)
+    });
+    ctx.watch(&self.cancel_created.state(), move |state| {
+      settle_failure(&failure, state)
+    });
   }
 
   /// Keeps `input` as the draft while the form is open (`Draft saved` in A13), and tells the screens that read drafts
@@ -153,7 +188,7 @@ impl Edit {
     (root, project, id): (PathBuf, ProjectId, ResourceId),
     had_draft: bool,
     input: Option<NewTeamMcpServer>,
-  ) -> Result<Option<Saved>, Message> {
+  ) -> Result<Option<Saved>, EditError> {
     let services = Services::of(ctx);
     let state = ctx
       .future((root, had_draft, input), move |(root, had_draft, input)| {
@@ -163,8 +198,8 @@ impl Edit {
             return Ok(None);
           };
           let saved = background::run(move || team_mcp_edit::save(&root, id, &input))
-            .await?
-            .map_err(failed)?;
+            .await
+            .map_err(EditError::Store)??;
           if matches!(saved, Saved::Draft(_)) != had_draft {
             services.changes.record(project, Outside::Connections);
           }
@@ -185,5 +220,14 @@ fn failed(error: EditError) -> Message {
   match error {
     EditError::Store(message) => message,
     EditError::Invalid(invalid) => invalid.message(),
+  }
+}
+
+/// Starts a press with no failure to tell, and keeps why it ended in none.
+fn settle_failure<T>(failure: &Signal<Option<Message>>, state: &FutureState<T, Message>) {
+  if state.is_pending() {
+    failure.set(None);
+  } else if state.is_rejected() {
+    failure.set(state.error.clone());
   }
 }

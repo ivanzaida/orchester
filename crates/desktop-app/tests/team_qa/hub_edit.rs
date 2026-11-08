@@ -24,12 +24,20 @@ use tokio::runtime::Runtime;
 
 use super::team::{self, State};
 
-const ARGUMENTS: &str = "team-new-mcp-arguments";
-const PUBLISH: &str = "team-hub-edit-publish";
+pub(super) const ARGUMENTS: &str = "team-new-mcp-arguments";
+pub(super) const PUBLISH: &str = "team-hub-edit-publish";
 
 /// The window on the seed's `scenario` joined to the stand-in team server in `state`, on the hub's MCP servers with
-/// `pencil-design` open.
-fn on_pencil((scenario, state): (&str, State)) -> (Window, TeamServer, (ProjectId, ResourceId)) {
+/// `pencil-design` open, once its *Edit* shows.
+fn on_pencil(of: (&str, State)) -> (Window, TeamServer, (ProjectId, ResourceId)) {
+  on_pencil_until(of, "team-hub-edit")
+}
+
+/// [`on_pencil`], once the panel's element `shown` has its text.
+pub(super) fn on_pencil_until(
+  (scenario, state): (&str, State),
+  shown: &str,
+) -> (Window, TeamServer, (ProjectId, ResourceId)) {
   let dir = TempDir::new().expect("a temporary folder");
   let request = crate::kontur::SeedRequest {
     data_dir: dir.path().to_path_buf(),
@@ -55,11 +63,11 @@ fn on_pencil((scenario, state): (&str, State)) -> (Window, TeamServer, (ProjectI
     seeded.project,
     ProjectPage::hub(HubView::new(HubFilter::McpServers, Some(pencil))),
   ));
-  window.until("the panel", |window| window.texts("team-hub-edit").is_some());
+  window.until("the panel", |window| window.texts(shown).is_some());
   (window, server, (seeded.project, pencil))
 }
 
-fn db(window: &Window) -> ProjectDb {
+pub(super) fn db(window: &Window) -> ProjectDb {
   ProjectDb::open(&window.data.repo("repo-kontur")).expect("database")
 }
 
@@ -75,7 +83,7 @@ fn typed(window: &mut Window) {
   });
 }
 
-fn draft_of(window: &Window, id: ResourceId) -> Option<Vec<String>> {
+pub(super) fn draft_of(window: &Window, id: ResourceId) -> Option<Vec<String>> {
   db(window).draft::<TeamMcpServer>(id).expect("read").map(|draft| {
     match serde_json::to_value(draft.body()).expect("a body")["launch"]["args"].clone() {
       serde_json::Value::Array(args) => args.iter().filter_map(|arg| arg.as_str().map(str::to_owned)).collect(),

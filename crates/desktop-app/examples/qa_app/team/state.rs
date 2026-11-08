@@ -95,6 +95,23 @@ pub enum State {
   /// As [`Self::TeamEdit`], the server rejecting the content of every version sent: *Publish for the team* says why and
   /// keeps the draft (A17 `rJbPm`).
   TeamEditRejects,
+  /// As [`Self::TeamEdit`], after the press of *Publish for the team* the server accepted: v2 is the team's, the draft
+  /// became the version (A13 `WMtxm`'s result). Made without a press.
+  TeamEditPublished,
+  /// As [`Self::TeamEdit`], after a *Publish for the team* the server refused as no longer an admin, and the next read
+  /// made the person a member: the page is read-only with the draft kept (A14 `gTLx6`). Made without a press.
+  TeamEditRefusedAdmin,
+  /// As [`Self::TeamEdit`], after a *Publish for the team* made while the server could not be reached: v2 waits in the
+  /// outbox with *Cancel sending*, the server still not answering (A16 `x3ywL`). Made without a press.
+  TeamEditWaiting,
+  /// As [`Self::TeamEdit`], after a version that waited for the server and was sent once it answered, and that it
+  /// rejected as not a valid content: the outbox holds it refused, and the panel says why and how to take it back as a
+  /// draft (A17 `rJbPm`, as it stands once the person left the panel). Made without a press.
+  TeamEditRejected,
+  /// As [`Self::TeamEdit`], after a new MCP server named `figma-local` that waited for the server and was refused as
+  /// the name being taken once it answered: taken back whole, and the hub says what and why (A15 `dLqHC`, as it stands
+  /// once the person left the form). Made without a press.
+  TeamCreateNameTaken,
   /// As [`Self::StartFailed`], with the server not answering a Run's `work.start` for [`START_ANSWERS_AFTER`] after the
   /// window opens, and then answering as a server a release ahead: the start waits, the project's recovery carries it
   /// on, the start fails for good, and the task page, which said the run starts once they answer, says why it did not
@@ -107,7 +124,7 @@ pub enum State {
 pub const START_ANSWERS_AFTER: std::time::Duration = std::time::Duration::from_secs(90);
 
 impl State {
-  pub const ALL: [Self; 34] = [
+  pub const ALL: [Self; 39] = [
     Self::Join,
     Self::WrongCode,
     Self::ExpiredCode,
@@ -141,6 +158,11 @@ impl State {
     Self::TeamEditDemoted,
     Self::TeamEditOffline,
     Self::TeamEditRejects,
+    Self::TeamEditPublished,
+    Self::TeamEditRefusedAdmin,
+    Self::TeamEditWaiting,
+    Self::TeamEditRejected,
+    Self::TeamCreateNameTaken,
     Self::StartRecovered,
   ];
 
@@ -180,6 +202,11 @@ impl State {
       Self::TeamEditDemoted => "team-edit-demoted",
       Self::TeamEditOffline => "team-edit-offline",
       Self::TeamEditRejects => "team-edit-rejects",
+      Self::TeamEditPublished => "team-edit-published",
+      Self::TeamEditRefusedAdmin => "team-edit-refused-admin",
+      Self::TeamEditWaiting => "team-edit-waiting",
+      Self::TeamEditRejected => "team-edit-rejected",
+      Self::TeamCreateNameTaken => "team-create-name-taken",
       Self::StartRecovered => "team-start-recovered",
     }
   }
@@ -196,7 +223,15 @@ impl State {
   pub const fn edits(self) -> bool {
     matches!(
       self,
-      Self::TeamEdit | Self::TeamEditDemoted | Self::TeamEditOffline | Self::TeamEditRejects
+      Self::TeamEdit
+        | Self::TeamEditDemoted
+        | Self::TeamEditOffline
+        | Self::TeamEditRejects
+        | Self::TeamEditPublished
+        | Self::TeamEditRefusedAdmin
+        | Self::TeamEditWaiting
+        | Self::TeamEditRejected
+        | Self::TeamCreateNameTaken
     )
   }
 

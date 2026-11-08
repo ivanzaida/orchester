@@ -167,6 +167,7 @@ impl Component for McpPanel {
       ))
       .child(chips)
       .with_children(above)
+      .with_children(self.action_failure(ctx))
       .with_children(member::lock_line(ctx, &props.team).filter(|_| mode != Mode::ReadOnly))
       .child(from_team)
       .with_children(computer)

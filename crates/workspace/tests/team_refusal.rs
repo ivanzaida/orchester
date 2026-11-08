@@ -3,7 +3,7 @@
 //!
 //! `cargo test -p orchester-workspace --test team_refusal`
 
-use orchester_workspace::sharing::team_edit::{Refusal, Rejection};
+use orchester_workspace::sharing::team_edit::{Local, Refusal, Rejection};
 
 #[test]
 fn team_refusal_reads_the_codes_a_person_can_act_on() {
@@ -24,14 +24,44 @@ fn team_refusal_reads_the_reason_of_an_invalid_content() {
 }
 
 #[test]
+fn team_refusal_reads_an_invalid_content_without_a_known_reason_as_not_saying_why() {
+  assert_eq!(Refusal::of_code("invalid"), Refusal::Rejected(Rejection::Unspecified));
+  assert_eq!(
+    Refusal::of_code("invalid:catalog"),
+    Refusal::Rejected(Rejection::Catalog)
+  );
+  assert_eq!(
+    Refusal::of_code("invalid:left-over-reason"),
+    Refusal::Rejected(Rejection::Unspecified)
+  );
+}
+
+#[test]
+fn team_refusal_reads_the_codes_this_computer_recorded_itself_as_its_own() {
+  assert_eq!(
+    Refusal::of_code("local_entities_named"),
+    Refusal::Local(Local::Entities)
+  );
+  assert_eq!(
+    Refusal::of_code("pipeline_names_non_team"),
+    Refusal::Local(Local::NamesNonTeam)
+  );
+  assert_eq!(
+    Refusal::of_code("writable_folders_stay"),
+    Refusal::Local(Local::WritableFolders)
+  );
+  assert!(Refusal::Local(Local::Entities).is_local() && Refusal::NotAdminHere.is_local());
+  assert!(!Refusal::NotAdmin.is_local() && !Refusal::NameTaken.is_local());
+  assert_eq!(
+    Refusal::Local(Local::WritableFolders).message().key,
+    "sharing.edit.refused.writableFolders"
+  );
+}
+
+#[test]
 fn team_refusal_names_any_other_code_and_never_guesses() {
-  assert_eq!(Refusal::of_code("invalid"), Refusal::Other("invalid".to_owned()));
   assert_eq!(
     Refusal::of_code("rate_limited"),
     Refusal::Other("rate_limited".to_owned())
-  );
-  assert_eq!(
-    Refusal::of_code("invalid:catalog"),
-    Refusal::Other("invalid:catalog".to_owned())
   );
 }

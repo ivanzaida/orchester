@@ -86,7 +86,14 @@ pub(super) fn refusal(ctx: &Ctx, refused: &EditRefused, entry: &Entry) -> Elemen
     EditRefused::Refused(refusal) => Notice::new(
       "team-hub-edit-refused",
       NoticeTone::Danger,
-      ctx.t_args("team_hub.edit.rejected.title", [("version", version)]),
+      ctx.t_args(
+        if refusal.is_local() {
+          "team_hub.edit.rejectedHere.title"
+        } else {
+          "team_hub.edit.rejected.title"
+        },
+        [("version", version)],
+      ),
     )
     .icon(Icon::CircleX)
     .body(ctx.t_args(
@@ -117,12 +124,21 @@ pub(super) fn refusal(ctx: &Ctx, refused: &EditRefused, entry: &Entry) -> Elemen
 }
 
 /// *The team's server refused: you are no longer an admin*: the person who pressed Publish is not an admin any more,
-/// and the page is read-only, with the draft kept here and `copy` to keep what was typed (A14).
-pub(super) fn not_admin(ctx: &Ctx, (name, team): (&str, &TeamConfiguration), copy: Element) -> Element {
+/// and the page is read-only, with the draft kept here and `copy` to keep what was typed (A14). `by_server`: the server
+/// said it; else this computer knows it from the last read of the members, and nothing was sent.
+pub(super) fn not_admin(
+  ctx: &Ctx,
+  (name, team): (&str, &TeamConfiguration),
+  (by_server, copy): (bool, Element),
+) -> Element {
   Notice::new(
     "team-hub-edit-not-admin",
     NoticeTone::Danger,
-    ctx.t("team_hub.edit.notAdmin.title"),
+    ctx.t(if by_server {
+      "team_hub.edit.notAdmin.title"
+    } else {
+      "team_hub.edit.notAdminHere.title"
+    }),
   )
   .icon(Icon::ShieldX)
   .body(ctx.t_args(
@@ -135,22 +151,30 @@ pub(super) fn not_admin(ctx: &Ctx, (name, team): (&str, &TeamConfiguration), cop
 }
 
 /// *Waiting to send · retries when the server is back*, and *Cancel sending* (A16): the server could not be reached, so
-/// the version waits in the outbox and is sent once it answers.
-pub(super) fn waiting(ctx: &Ctx, number: Option<VersionNumber>, cancel: ActionButton) -> Element {
-  let next = number
-    .and_then(VersionNumber::next)
-    .map_or_else(String::new, |next| next.to_string());
-  let current = number.map_or_else(String::new, |number| number.to_string());
-  Notice::new(
+/// the version waits in the outbox and is sent once it answers. A new resource (`created`) has no version of the team's
+/// to stay: it is created when the server answers, and cancelling takes it back as if never made.
+pub(super) fn waiting(
+  ctx: &Ctx,
+  (number, created): (Option<VersionNumber>, Option<&str>),
+  cancel: ActionButton,
+) -> Element {
+  let notice = Notice::new(
     "team-hub-edit-waiting",
     NoticeTone::Info,
     ctx.t("team_hub.edit.waiting.title"),
   )
-  .icon(Icon::CloudUpload)
-  .body(ctx.t_args("team_hub.edit.waiting.body", [("next", next), ("current", current)]))
-  .stacked()
-  .action(cancel)
-  .into()
+  .icon(Icon::CloudUpload);
+  let notice = match created {
+    Some(name) => notice.body(ctx.t_args("team_hub.edit.waitingCreated.body", [("name", name)])),
+    None => {
+      let next = number
+        .and_then(VersionNumber::next)
+        .map_or_else(String::new, |next| next.to_string());
+      let current = number.map_or_else(String::new, |number| number.to_string());
+      notice.body(ctx.t_args("team_hub.edit.waiting.body", [("next", next), ("current", current)]))
+    }
+  };
+  notice.stacked().action(cancel).into()
 }
 
 /// *Cancel sending* (A16): takes the version waiting in the outbox back as the draft; `press` is its action while it
@@ -174,7 +198,8 @@ pub(super) fn cancel_sending(
 }
 
 /// The draft as text: one line per field, never a secret's value (the draft holds names only).
-pub(super) fn changes_text(draft: &NewTeamMcpServer) -> String {
+pub(super) fn changes_text(ctx: &Ctx, draft: &NewTeamMcpServer) -> String {
+  let line = |key: &str, value: &str| ctx.t_args(key, [("value", value)]).to_string();
   let mut lines = vec![draft.name.clone()];
   match &draft.runs {
     Runs::Program {
@@ -183,22 +208,37 @@ pub(super) fn changes_text(draft: &NewTeamMcpServer) -> String {
       folder,
       variables,
     } => {
-      lines.push(format!("program: {program}"));
-      lines.extend(arguments.iter().map(|argument| format!("argument: {argument}")));
+      lines.push(line("team_hub.edit.copy.program", program));
+      lines.extend(
+        arguments
+          .iter()
+          .map(|argument| line("team_hub.edit.copy.argument", argument)),
+      );
       if !folder.is_empty() {
-        lines.push(format!("folder: {folder}"));
+        lines.push(line("team_hub.edit.copy.folder", folder));
       }
-      lines.extend(variables.iter().map(|variable| format!("variable: {variable}")));
+      lines.extend(
+        variables
+          .iter()
+          .map(|variable| line("team_hub.edit.copy.variable", variable)),
+      );
     }
     Runs::Remote { url, header } => {
-      lines.push(format!("url: {url}"));
+      lines.push(line("team_hub.edit.copy.url", url));
       if let Some(header) = header {
-        lines.push(format!("header: {} <- {}", header.name, header.secret));
+        lines.push(
+          ctx
+            .t_args(
+              "team_hub.edit.copy.header",
+              [("name", header.name.as_str()), ("secret", header.secret.as_str())],
+            )
+            .to_string(),
+        );
       }
     }
   }
   if !draft.exempt_tools.is_empty() {
-    lines.push(format!("run without asking: {}", draft.exempt_tools.join(", ")));
+    lines.push(line("team_hub.edit.copy.exempt", &draft.exempt_tools.join(", ")));
   }
   lines.join("\n")
 }
@@ -281,7 +321,7 @@ impl ValueRows<'_> {
     ));
   }
 
-  fn program(&mut self, (program, arguments, folder, variables): ProgramOf<'_>, was: ProgramOf<'_>) {
+  fn program(&mut self, (program, arguments, folder): ProgramOf<'_>, was: ProgramOf<'_>) {
     let ctx = self.ctx;
     self.add(
       "runs",
@@ -300,7 +340,12 @@ impl ValueRows<'_> {
       folder.clone()
     };
     self.add("folder", "team_new.mcp.folder", (folder != was.2, folder_words));
-    if !variables.is_empty() || !was.3.is_empty() {
+  }
+
+  /// The variables the server needs, after the tools it may run without asking (A13).
+  fn variables(&mut self, variables: &[String], was: &[String]) {
+    let ctx = self.ctx;
+    if !variables.is_empty() || !was.is_empty() {
       let lines: Vec<String> = variables
         .iter()
         .map(|name| {
@@ -312,7 +357,7 @@ impl ValueRows<'_> {
       self.add(
         "variables",
         "team_new.mcp.variables",
-        (variables != was.3, lines.join(", ")),
+        (variables != was, lines.join(", ")),
       );
     }
   }
@@ -332,31 +377,33 @@ impl ValueRows<'_> {
   }
 }
 
-type ProgramOf<'a> = (&'a String, &'a Vec<String>, &'a String, &'a Vec<String>);
+type ProgramOf<'a> = (&'a String, &'a Vec<String>, &'a String);
 type RemoteOf<'a> = (&'a String, &'a Option<Header>);
 
 /// The team's part as values: the fields of `shown` where a form cannot be used (the draft of a person who is no longer
 /// an admin, A14, and the version that waits to be sent, A16), each that differs from `published` saying so.
 pub(super) fn read_only_rows(ctx: &Ctx, shown: &NewTeamMcpServer, published: &NewTeamMcpServer) -> Vec<Row> {
   let mut values = ValueRows { ctx, rows: Vec::new() };
+  // The variables come after the tools it may run without asking, as the form has them (A13).
+  let mut variables = None;
   match (&shown.runs, &published.runs) {
     (
       Runs::Program {
         program,
         arguments,
         folder,
-        variables,
+        variables: now,
       },
       Runs::Program {
         program: was_program,
         arguments: was_arguments,
         folder: was_folder,
-        variables: was_variables,
+        variables: was,
       },
-    ) => values.program(
-      (program, arguments, folder, variables),
-      (was_program, was_arguments, was_folder, was_variables),
-    ),
+    ) => {
+      values.program((program, arguments, folder), (was_program, was_arguments, was_folder));
+      variables = Some((now, was));
+    }
     (
       Runs::Remote { url, header },
       Runs::Remote {
@@ -381,6 +428,9 @@ pub(super) fn read_only_rows(ctx: &Ctx, shown: &NewTeamMcpServer, published: &Ne
         shown.exempt_tools.join(", "),
       ),
     );
+  }
+  if let Some((now, was)) = variables {
+    values.variables(now, was);
   }
   values.rows
 }

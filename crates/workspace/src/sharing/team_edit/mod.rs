@@ -2,9 +2,10 @@
 //! `WMtxm`, `docs/design/team-configuration.md` decision 6): the draft becomes the next version and is sent to the team
 //! server at once, and the answer is the panel's, in place. The version counts as published only once the server has
 //! numbered it ([`Edited::Published`]). A server that cannot be reached leaves it in the outbox, sent when it answers
-//! ([`Edited::Waiting`], A16 `x3ywL`; cancelling takes it back as a draft); one that refuses it, or a send that fails,
-//! takes it back as the draft, which is kept, and says why ([`EditRefused`]). Nothing here is merged with a version
-//! someone published meanwhile.
+//! ([`Edited::Waiting`], A16 `x3ywL`; cancelling takes it back as a draft); one that refuses it takes it back as the
+//! draft, which is kept, and says why ([`EditRefused`]). A send that failed on this computer after the server may have
+//! answered leaves the version in the outbox, whose retry is idempotent, and says so. One send of a project's outbox at
+//! a time ([`Servers::send_lane`]). Nothing here is merged with a version someone published meanwhile.
 
 mod refusal;
 
@@ -16,11 +17,13 @@ use orchester_core::{
   store::ResourceStore,
   time::Timestamp,
 };
-use orchester_store::{ProjectDb, PublishState, StoreError};
+use orchester_store::{ProjectDb, PublishState, StoreError, WaitingPublish};
 
 pub(super) use self::refusal::recorded;
-pub use self::refusal::{Refusal, Rejection};
-use super::{Servers, SharingError, project::ProjectServer, sync::RemoteResourceStore, team::said};
+pub use self::refusal::{Local, Refusal, Rejection};
+use super::{
+  Servers, SharingError, project::ProjectServer, send_lane::send_turn, sync::RemoteResourceStore, team::said,
+};
 use crate::{
   background,
   messages::{self, Message},
@@ -38,11 +41,12 @@ pub enum Edited {
 /// Why an edit is not published; the draft is kept.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum EditRefused {
-  /// The team server (or this computer, which knows it) refused it.
+  /// The team server, or this computer, which knows the team cannot take it, refused it.
   Refused(Refusal),
   /// Someone published `latest` from the same version first; the draft is now edited from it.
   Changed { latest: VersionNumber },
-  /// It could not be sent for a reason other than being offline.
+  /// It could not be sent for a reason other than being offline. A version that was already published waits in the
+  /// outbox all the same, and is shown there.
   Failed(Message),
 }
 
@@ -78,32 +82,64 @@ impl Servers {
 
 fn settle(servers: &Servers, root: &Path, resource: ResourceId) -> Result<Edited, EditRefused> {
   let failed = |error: &StoreError| EditRefused::Failed(messages::store_error(error));
+  // Nothing else sends or takes back what waits meanwhile: a cancel would delete a version the server then numbers.
+  let lane = servers.send_lane(root);
+  let _sending = send_turn(&lane);
   let mut db = ProjectDb::open(root).map_err(|error| failed(&error))?;
+  if unsent(&db, resource)
+    .map_err(|error| failed(&error))?
+    .is_some_and(|first| first.state != PublishState::Waiting)
+  {
+    return Err(blocked());
+  }
   let version = match db.publish_draft::<TeamMcpServer>(resource, Timestamp::now()) {
     Ok(version) => version.id(),
-    Err(StoreError::NotAdmin) => return Err(EditRefused::Refused(Refusal::NotAdmin)),
+    Err(StoreError::NotAdmin) => return Err(EditRefused::Refused(Refusal::NotAdminHere)),
     Err(error) => return Err(failed(&error)),
   };
   let sent = send(servers, root, resource);
   let state = waiting_state(&db, version).map_err(|error| failed(&error))?;
-  let unreached = matches!(&sent, Err(error) if error.unreached());
   match (state, sent) {
     (None, _) => confirmed(&db, resource),
-    (Some(PublishState::Waiting), Ok(())) => Ok(Edited::Waiting(version)),
-    (Some(PublishState::Waiting), Err(_)) if unreached => Ok(Edited::Waiting(version)),
-    (state, sent) => {
-      let refused = match (state, sent) {
-        (Some(PublishState::Refused { code }), _) => EditRefused::Refused(Refusal::of_code(&code)),
-        (Some(PublishState::Conflict { latest }), _) => EditRefused::Changed { latest },
-        (_, Err(error)) => EditRefused::Failed(said(&error, None)),
-        (_, Ok(())) => EditRefused::Failed(messages::interrupted()),
-      };
-      // Nothing shows as published: the version goes back to being the draft.
-      db.reopen_draft::<TeamMcpServer>(version, Timestamp::now())
-        .map_err(|error| failed(&error))?;
-      Err(refused)
+    (Some(PublishState::Waiting), Ok(())) => queued(&db, resource, version),
+    (Some(PublishState::Waiting), Err(error)) if error.unreached() => Ok(Edited::Waiting(version)),
+    // The server may have answered: a retry is idempotent, so the version stays in the outbox, and what went wrong is
+    // told. Taking it back here could delete a version the server holds.
+    (Some(PublishState::Waiting), Err(error)) => Err(EditRefused::Failed(said(&error, None))),
+    (Some(PublishState::Refused { code }), _) => {
+      taken_back(&mut db, version, EditRefused::Refused(Refusal::of_code(&code)))
     }
+    (Some(PublishState::Conflict { latest }), _) => taken_back(&mut db, version, EditRefused::Changed { latest }),
   }
+}
+
+/// A send that did not take `version` and did not fail: it waits, unless an earlier version of the resource, which a
+/// send stops at, was not taken meanwhile.
+fn queued(db: &ProjectDb, resource: ResourceId, version: VersionId) -> Result<Edited, EditRefused> {
+  match unsent(db, resource).map_err(|error| EditRefused::Failed(messages::store_error(&error)))? {
+    Some(first) if first.version != version => Err(blocked()),
+    _ => Ok(Edited::Waiting(version)),
+  }
+}
+
+fn blocked() -> EditRefused {
+  EditRefused::Failed(Message::new("sharing.edit.blocked"))
+}
+
+/// Nothing shows as published: the version the server did not take goes back to being the draft, which is kept.
+fn taken_back(db: &mut ProjectDb, version: VersionId, refused: EditRefused) -> Result<Edited, EditRefused> {
+  db.reopen_draft::<TeamMcpServer>(version, Timestamp::now())
+    .map_err(|error| EditRefused::Failed(messages::store_error(&error)))?;
+  Err(refused)
+}
+
+/// The first version of `resource` that waits for the server, oldest first.
+fn unsent(db: &ProjectDb, resource: ResourceId) -> Result<Option<WaitingPublish>, StoreError> {
+  Ok(
+    db.waiting_publishes()?
+      .into_iter()
+      .find(|waiting| waiting.resource == resource),
+  )
 }
 
 /// The number the server gave the version just published: the newest this computer keeps.

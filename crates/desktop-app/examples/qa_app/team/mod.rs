@@ -122,7 +122,12 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
     | State::TeamEdit
     | State::TeamEditDemoted
     | State::TeamEditOffline
-    | State::TeamEditRejects => {
+    | State::TeamEditRejects
+    | State::TeamEditPublished
+    | State::TeamEditRefusedAdmin
+    | State::TeamEditWaiting
+    | State::TeamEditRejected
+    | State::TeamCreateNameTaken => {
       let ids = task_ids(services)?;
       let role = member::serve_as(&server, state, (&ids, &team_pipelines(services, state)?));
       let (kontur, id) = join_linked_as(&server, (services, runtime), (TasksAnswer::Serve, role))?;
@@ -135,9 +140,7 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
         _ => {}
       }
       work::after_join(state, (&server, id), (services, runtime), (&kontur, &ids))?;
-      if state.edits() {
-        edit::after_join(state, &server, &kontur)?;
-      }
+      edit::prepare(state, (services, runtime), (&server, &kontur))?;
     }
   }
   Ok(server)

@@ -1,7 +1,9 @@
 //! Which of its states the panel of a team MCP server is in, and what each puts in the panel (`Agents · MCP server ·
 //! admin · draft` A13 `WMtxm`, A14 `gTLx6`, A16 `x3ywL`, A17 `rJbPm`): a form over the team's part with a draft note
 //! and *Publish for the team* (editing), the same part read-only with *Cancel sending* (a version waits for the team
-//! server), or read-only with *Discard my draft* (the person is not an admin any more).
+//! server), the waiting bar of a version the server did not take or that met another (stuck, with its way out), or
+//! read-only with *Discard my draft* (the person is not an admin any more). No version published here is edited on top
+//! of: while one is in the outbox the page offers no *Edit*.
 
 use std::sync::Arc;
 
@@ -13,10 +15,10 @@ use lurq::{
 use orchester_core::{id::VersionId, time::Timestamp};
 use orchester_store::PublishState;
 use orchester_workspace::{
-  agents::team_mcp_edit::{McpEdit, Saved},
+  agents::team_mcp_edit::{EditError, McpEdit, Saved},
   app_mcp::setup::NewTeamMcpServer,
-  messages::Message,
   sharing::team_edit::{EditRefused, Refusal},
+  tasks::outside::Outside,
 };
 
 use super::{
@@ -27,12 +29,17 @@ use super::{
 };
 use crate::{
   mcp::input_gate::{Guarded, input_may_decide},
-  screens::team_hub::{actions::Busy, create::EditView, panel, rows},
+  screens::{
+    hub::team::waiting_bar_in,
+    team_hub::{actions::Busy, create::EditView, panel, rows},
+  },
   theme::HubText,
   ui::{
     button::{ActionButton, ButtonKind},
     chip::BadgeTone,
+    field::field_error,
     icon::Icon,
+    message::message_text,
     pressable::Press,
   },
 };
@@ -44,8 +51,16 @@ pub(super) enum Mode {
   Plain,
   /// An admin edits it as a form.
   Editing,
-  /// A version published here waits in the outbox for the team server, which could not be reached (`queued` at).
-  Waiting { version: VersionId, queued: Timestamp },
+  /// A version published here waits in the outbox for the team server, which could not be reached (`queued` at); a
+  /// `created` resource has no version of the team's yet, and cancelling takes it back whole.
+  Waiting {
+    version: VersionId,
+    queued: Timestamp,
+    created: bool,
+  },
+  /// The first version in the outbox was not taken: the server refused it, this computer found the team cannot take it,
+  /// or it met a version someone published from the same base. It waits for the person's decision.
+  Stuck,
   /// A draft is kept, and the person may not publish it: the team server refused as they are no longer an admin.
   ReadOnly,
 }
@@ -70,14 +85,15 @@ pub(super) struct Parts {
 impl McpPanel {
   pub(super) fn mode(&self, props: &Props) -> Mode {
     let standing = props.team.standing(props.entry.id);
-    let waiting = standing
-      .filter(|standing| standing.confirmed.is_some())
-      .and_then(|standing| standing.waiting.first())
-      .filter(|waiting| waiting.state == PublishState::Waiting);
-    if let Some(waiting) = waiting {
-      return Mode::Waiting {
-        version: waiting.version,
-        queued: waiting.published_at,
+    if let Some(unsent) = standing.and_then(|standing| standing.waiting.first().map(|first| (standing, first))) {
+      let (standing, first) = unsent;
+      return match first.state {
+        PublishState::Waiting => Mode::Waiting {
+          version: first.version,
+          queued: first.published_at,
+          created: standing.confirmed.is_none(),
+        },
+        PublishState::Conflict { .. } | PublishState::Refused { .. } => Mode::Stuck,
       };
     }
     let Some(edit) = &props.sheet.edit else {
@@ -85,7 +101,7 @@ impl McpPanel {
     };
     let not_admin = matches!(
       self.edit.refused.get(),
-      Some((EditRefused::Refused(Refusal::NotAdmin), _))
+      Some((EditRefused::Refused(Refusal::NotAdmin | Refusal::NotAdminHere), _))
     );
     if edit.draft.is_some() && (!props.team.may_change || not_admin) {
       Mode::ReadOnly
@@ -109,13 +125,20 @@ impl McpPanel {
     &self,
     ctx: &mut Ctx,
     props: &Props,
-    (mode, kept): (Mode, &Result<Option<Saved>, Message>),
+    (mode, kept): (Mode, &Result<Option<Saved>, EditError>),
   ) -> Option<Parts> {
+    if mode == Mode::Stuck {
+      return Some(self.stuck(ctx, props));
+    }
     let edit = props.sheet.edit.as_ref()?;
     match mode {
-      Mode::Plain => None,
+      Mode::Plain | Mode::Stuck => None,
       Mode::Editing => self.editing(ctx, props, edit, kept),
-      Mode::Waiting { version, queued } => Some(self.waiting(ctx, props, edit, (version, queued))),
+      Mode::Waiting {
+        version,
+        queued,
+        created,
+      } => Some(self.waiting(ctx, props, edit, (version, queued, created))),
       Mode::ReadOnly => self.read_only(ctx, props, edit),
     }
   }
@@ -125,7 +148,7 @@ impl McpPanel {
     ctx: &mut Ctx,
     props: &Props,
     edit: &McpEdit,
-    kept: &Result<Option<Saved>, Message>,
+    saved: &Result<Option<Saved>, EditError>,
   ) -> Option<Parts> {
     let fields = self.edit.fields.as_ref()?;
     let pending = self.edit.publish.state().get().is_pending();
@@ -138,7 +161,7 @@ impl McpPanel {
       },
     );
     let input = fields.input();
-    let kept = match kept {
+    let kept = match saved {
       Ok(Some(Saved::Draft(at))) => Kept::At(*at),
       Ok(Some(Saved::Unchanged)) => Kept::Nothing,
       Ok(None) => edit
@@ -149,6 +172,11 @@ impl McpPanel {
     };
     let refused = self.edit.refused.get();
     let mut above = vec![edit_view::draft_note(ctx, edit.number, (kept, &form.changed))];
+    // Fields that do not make a server yet are said by their rows; a draft the disk or the role would not keep is said
+    // here, with why.
+    if let Err(EditError::Store(why)) = saved {
+      above.push(field_error("team-hub-edit-save-error", &message_text(ctx, why)).into());
+    }
     above.extend(
       refused
         .as_ref()
@@ -180,20 +208,28 @@ impl McpPanel {
     })
   }
 
-  fn waiting(&self, ctx: &mut Ctx, props: &Props, edit: &McpEdit, (version, queued): (VersionId, Timestamp)) -> Parts {
-    let taking = self.edit.cancel.state().get().is_pending();
+  fn waiting(
+    &self,
+    ctx: &mut Ctx,
+    props: &Props,
+    edit: &McpEdit,
+    (version, queued, created): (VersionId, Timestamp, bool),
+  ) -> Parts {
+    let taking = self.edit.cancel.state().get().is_pending() || self.edit.cancel_created.state().get().is_pending();
     let cancel = |id: &str| {
-      let action = self.edit.cancel.clone();
-      edit_view::cancel_sending(
-        ctx,
-        id,
-        (
-          Some(Arc::new(move || action.run(version)) as Arc<dyn Fn() + Send + Sync>),
-          taking,
-        ),
-      )
+      let (action, created_action) = (self.edit.cancel.clone(), self.edit.cancel_created.clone());
+      let run: Arc<dyn Fn() + Send + Sync> = if created {
+        Arc::new(move || created_action.run(()))
+      } else {
+        Arc::new(move || action.run(version))
+      };
+      edit_view::cancel_sending(ctx, id, (Some(run), taking))
     };
-    let words = ctx.t_args("team_hub.edit.fromTeamWaiting", [("version", edit.number.to_string())]);
+    let words = if created {
+      ctx.t("team_hub.edit.fromTeamWaitingCreated")
+    } else {
+      ctx.t_args("team_hub.edit.fromTeamWaiting", [("version", edit.number.to_string())])
+    };
     let rows = edit_view::read_only_rows(ctx, &edit.published, &edit.published);
     Parts {
       chips: Chips {
@@ -202,7 +238,7 @@ impl McpPanel {
       },
       above: vec![edit_view::waiting(
         ctx,
-        props.entry.number,
+        (props.entry.number, created.then_some(props.entry.name.as_str())),
         cancel("team-hub-edit-cancel-notice"),
       )],
       from_team: section(ctx, vec![note_text("team-hub-from-team-note", &words).into()], rows),
@@ -211,9 +247,43 @@ impl McpPanel {
     }
   }
 
+  /// The first version in the outbox was not taken (refused, or met another version): the waiting bar says why and
+  /// offers the way out, which an edit on top of it would only hide; the team's part shows as it is.
+  fn stuck(&self, ctx: &mut Ctx, props: &Props) -> Parts {
+    let editing = self.edit.editing.clone();
+    // A draft taken back is the form's again.
+    let reread: Arc<dyn Fn() + Send + Sync> = Arc::new(move || editing.set(true));
+    let bar = props.team.standing(props.entry.id).and_then(|standing| {
+      waiting_bar_in(
+        ctx,
+        (&props.repo_root, props.project),
+        (&props.team, standing),
+        ("team-hub-edit", Outside::Connections),
+        reread,
+      )
+    });
+    Parts {
+      chips: Chips {
+        badges: vec![
+          (ctx.t("team_hub.edit.chip.notPublished"), BadgeTone::Warning),
+          readiness_chip(ctx, props),
+        ],
+        end: panel::used_by(ctx, &props.sheet.used_by),
+      },
+      above: bar.into_iter().collect(),
+      from_team: from_team::section(ctx, &props.sheet),
+      computer: true,
+      bar: None,
+    }
+  }
+
   fn read_only(&self, ctx: &mut Ctx, props: &Props, edit: &McpEdit) -> Option<Parts> {
     let draft = edit.draft.as_ref()?;
-    let copy = super::copy_changes::button(ctx, edit_view::changes_text(&draft.fields));
+    let copy = super::copy_changes::button(ctx, edit_view::changes_text(ctx, &draft.fields));
+    let by_server = matches!(
+      self.edit.refused.get(),
+      Some((EditRefused::Refused(Refusal::NotAdmin), _))
+    );
     let words = ctx.t_args("team_hub.edit.fromTeamReadOnly", [("version", edit.number.to_string())]);
     let rows = edit_view::read_only_rows(ctx, &draft.fields, &edit.published);
     Some(Parts {
@@ -221,7 +291,11 @@ impl McpPanel {
         badges: vec![(ctx.t("team_hub.edit.chip.draftNotPublished"), BadgeTone::Warning)],
         end: panel::used_by(ctx, &props.sheet.used_by),
       },
-      above: vec![edit_view::not_admin(ctx, (&props.entry.name, &props.team), copy)],
+      above: vec![edit_view::not_admin(
+        ctx,
+        (&props.entry.name, &props.team),
+        (by_server, copy),
+      )],
       from_team: section(ctx, vec![note_text("team-hub-from-team-note", &words).into()], rows),
       computer: false,
       bar: Some(edit_view::read_only_bar(
@@ -293,6 +367,12 @@ impl McpPanel {
     }
     let (discard, published) = (self.edit.discard.clone(), edit.published.clone());
     button.on_click(move || discard.run(published.clone()))
+  }
+
+  /// Why the last *Discard draft* or *Cancel sending* did nothing, under the notices; `None` before one failed.
+  pub(super) fn action_failure(&self, ctx: &Ctx) -> Option<Element> {
+    let why = self.edit.failure.get()?;
+    Some(field_error("team-hub-edit-action-error", &message_text(ctx, &why)).into())
   }
 
   /// *Edit* in the head of an admin's panel.

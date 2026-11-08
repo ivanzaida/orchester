@@ -12,7 +12,7 @@
 
 mod used_by;
 
-use std::collections::HashMap;
+use std::{collections::HashMap, thread, time::Duration};
 
 use orchester_core::{resource::TeamMcpServer, sharing::widens};
 use parking_lot::Mutex;
@@ -27,6 +27,8 @@ use crate::{ReferenceTarget, ResourceCreate, ResourcePatch, SharedResourceKind, 
 #[derive(Default)]
 pub(super) struct Store {
   projects: HashMap<String, Project>,
+  /// How long a create or publish takes to be answered, once [`TeamServer::slow_resource_writes`] said so.
+  write_delay: Duration,
 }
 
 #[derive(Default)]
@@ -80,6 +82,12 @@ impl TeamServer {
 }
 
 impl TeamServer {
+  /// Every create, publish and patch of a resource is answered only after `delay` from now on, as a server that is slow
+  /// to answer does; reads are not.
+  pub fn slow_resource_writes(&self, delay: Duration) {
+    self.state.lock().resources.write_delay = delay;
+  }
+
   /// Every create and publish of the project at `slug` is refused from now on as the contract's `422 invalid` with
   /// `reason` (`body`, `references` or `shape`), as a server that checks the content of a version does.
   pub fn reject_content(&self, slug: &str, reason: &str) {
@@ -147,6 +155,11 @@ impl TeamServer {
 pub(super) fn answer((path, query): (&str, &str), body: &str, state: &Mutex<State>) -> Option<(&'static str, Value)> {
   let (verb, rest) = path.split_once(" /api/v1/projects/")?;
   let (project, part) = rest.split_once("/resources")?;
+  let delay = state.lock().resources.write_delay;
+  if verb != "GET" && !delay.is_zero() {
+    // Before the lock is taken: the rest of the stand-in keeps answering meanwhile.
+    thread::sleep(delay);
+  }
   let mut state = state.lock();
   if !state.projects.iter().any(|known| known["id"] == project) {
     return None;

@@ -29,8 +29,9 @@ use crate::{
 const HEAD_HEIGHT: f32 = 32.0;
 
 /// *Agents*, and at its right the team the project is shared with and, for an admin, New. `unreached`: the team server
-/// did not answer the last read, which the head says in place of *Team* (`Publish while offline` A16 `x3ywL`).
-pub(super) fn head(ctx: &Ctx, team: &TeamConfiguration, (new, unreached): (Option<Element>, bool)) -> Row {
+/// did not answer the last read, which the head says in place of *Team* (`Publish while offline` A16 `x3ywL`). `saved`:
+/// the panel's resource has a draft kept on this computer, which the head says before *Team* (`✓ Draft saved`, A13).
+pub(super) fn head(ctx: &Ctx, team: &TeamConfiguration, (new, unreached, saved): (Option<Element>, bool, bool)) -> Row {
   let (glyph, color, words) = if unreached {
     (Icon::CloudOff, PaletteColor::Warning, "team_hub.unreached")
   } else {
@@ -77,8 +78,24 @@ pub(super) fn head(ctx: &Ctx, team: &TeamConfiguration, (new, unreached): (Optio
       Row::new()
         .spacing(HubSpacing::NewGap.role())
         .align_items(Alignment::Center)
+        .with_children(saved.then(|| draft_saved(ctx)))
         .child(at_right)
         .with_children(new),
+    )
+}
+
+/// *✓ Draft saved* (`Draft saved` in `Header` of A13 `WMtxm`).
+fn draft_saved(ctx: &Ctx) -> Row {
+  Row::new()
+    .id("team-hub-draft-saved")
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(icon(Icon::Check, IconSize::Base, PaletteColor::TextMuted))
+    .child(
+      Text::new(&ctx.t("team_hub.draftSaved"))
+        .id("team-hub-draft-saved-label")
+        .variant(HubText::Hint.role())
+        .nowrap(),
     )
 }
 
@@ -92,6 +109,8 @@ pub(super) struct FilterShown {
   pub reading: bool,
   /// The person may change the team's resources: an admin of the team; a member reads another hint.
   pub may_change: bool,
+  /// The resource the panel shows has a draft kept on this computer.
+  pub draft_saved: bool,
 }
 
 /// The filter: a segment per kind with its count, and what the open one holds. `listing` is `None` before there is an

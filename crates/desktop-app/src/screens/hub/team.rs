@@ -416,4 +416,4 @@ pub(crate) async fn send_created(
   }
 }
 
-pub(crate) use super::waiting_bar::{Reread, waiting_bar};
+pub(crate) use super::waiting_bar::{Reread, waiting_bar, waiting_bar_in};
