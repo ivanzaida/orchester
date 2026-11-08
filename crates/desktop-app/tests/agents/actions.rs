@@ -1,5 +1,5 @@
 //! A profile's page saves its draft on its own; a widening change is asked at its field before it is saved, and
-//! Publish asks again only for what was not allowed yet; Discard draft and Remove are asked in place.
+//! Publish asks again only for what was not allowed yet; Discard draft and Archive are asked in place.
 use std::collections::BTreeSet;
 
 use orchester_core::{
@@ -19,7 +19,7 @@ use super::harness::Agents;
 fn agents_create_publishes_the_first_version() {
   let mut screen = Agents::new(true);
   screen.go();
-  screen.click("agents-new");
+  screen.click("local-hub-new");
   screen.until("the new profile's editor", |s| s.exists("agent-role"));
   screen.set("agent-role", "Reviewer");
   screen.set("agent-instructions", "Review the implementation.");
@@ -39,7 +39,7 @@ fn agents_create_publishes_the_first_version() {
 fn agents_create_with_role_instructions_is_refused_for_synthetic_input() {
   let mut screen = Agents::new(true);
   screen.go();
-  screen.click("agents-new");
+  screen.click("local-hub-new");
   screen.until("the new profile's editor", |s| s.exists("agent-role"));
   screen.set("agent-role", "Reviewer");
   screen.set("agent-instructions", "Review the implementation.");
@@ -159,7 +159,7 @@ fn agents_discard_draft_is_asked_in_place() {
 }
 
 #[test]
-fn agents_remove_an_unused_profile() {
+fn agents_archive_a_profile_nothing_uses() {
   let mut screen = Agents::new(true);
   let id = screen.profile(true);
   screen.open(id);
@@ -171,89 +171,51 @@ fn agents_remove_an_unused_profile() {
     .and_then(|e| e.bounds())
     .expect("menu laid out");
   assert!(menu.width < 300.0, "the … menu stays beside its button: {menu:?}");
-  screen.click("agent-remove");
-  screen.until("question", |s| s.exists("hub-remove-confirm"));
+  screen.click("agent-archive");
+  screen.until("the confirmation, with what uses it read", |s| {
+    s.exists("team-hub-archive-confirm") && s.exists("team-hub-archive-used-list")
+  });
   assert!(
-    screen.text("hub-remove").contains("No pipeline step uses it"),
+    screen.text("team-hub-archive-body").contains("leaves every list"),
     "{}",
-    screen.text("hub-remove")
+    screen.text("team-hub-archive-body")
   );
-  screen.press_until("hub-remove-confirm", "removed", |s| {
-    s.listed().profile(id).is_none() && s.exists("agents-new")
+  screen.press_until("team-hub-archive-confirm", "archived", |s| {
+    s.listed().profile(id).is_none() && s.exists("local-hub-filter")
   });
 }
 
 #[test]
-fn agents_remove_and_reset_a_profile_a_pipeline_step_uses() {
+fn agents_archive_a_profile_a_pipeline_step_uses_leaves_the_step_naming_it() {
   let mut screen = Agents::new(true);
   let id = screen.profile(true);
   let pipeline = assigned_pipeline(&screen, id);
   screen.open(id);
   screen.click("agent-more");
-  screen.click("agent-remove");
-  screen.until("question with its users", |s| {
-    s.exists("hub-remove-confirm") && s.text("hub-remove").contains("Delivery v1 · 01 Implement")
+  screen.click("agent-archive");
+  screen.until("the confirmation lists the pipeline", |s| {
+    s.exists("team-hub-archive-confirm") && s.exists("team-hub-archive-used-0-name")
   });
-  assert!(screen.text("hub-remove-confirm").contains("Remove and reset"));
-  screen.click("hub-remove-keep");
-  assert!(!screen.exists("hub-remove-confirm"), "Keep it closes the question");
-  assert!(screen.listed().profile(id).is_some(), "Keep it keeps the profile");
+  assert!(screen.text("team-hub-archive-used-0-name").contains("Delivery"));
+  screen.click("team-hub-archive-cancel");
+  assert!(!screen.exists("team-hub-archive-confirm"), "Cancel closes the question");
+  assert!(screen.listed().profile(id).is_some(), "Cancel keeps the profile");
   screen.click("agent-more");
-  screen.click("agent-remove");
-  screen.until("asked again", |s| {
-    s.exists("hub-remove") && s.text("hub-remove").contains("Delivery v1")
+  screen.click("agent-archive");
+  screen.press_until("team-hub-archive-confirm", "archived", |s| {
+    s.listed().profile(id).is_none() && s.exists("local-hub-filter")
   });
-  screen.press_until("hub-remove-confirm", "removed", |s| {
-    s.listed().profile(id).is_none() && s.exists("agents-new")
-  });
+  // The step keeps naming the profile, in the draft and in v1: readiness says the pipeline is not ready instead.
   let db = ProjectDb::open(&screen.root).expect("database");
-  let draft = db.draft::<Pipeline>(pipeline).expect("draft").expect("the reset draft");
   assert!(
-    matches!(&draft.body().steps()[0].kind, StepKind::Agent { profile: None, .. }),
-    "the step lost its profile"
+    db.draft::<Pipeline>(pipeline).expect("draft").is_none(),
+    "no pipeline is reset"
   );
   let published = db.latest_version::<Pipeline>(pipeline).expect("latest").expect("v1");
   assert!(
     matches!(&published.body().steps()[0].kind, StepKind::Agent { profile: Some(p), .. } if *p == id),
-    "v1 stays as it ran"
+    "the step still names the profile"
   );
-}
-
-#[test]
-fn agents_remove_and_reset_asks_again_when_another_pipeline_started_using_it() {
-  let mut screen = Agents::new(true);
-  let id = screen.profile(true);
-  let delivery = assigned_pipeline(&screen, id);
-  screen.open(id);
-  screen.click("agent-more");
-  screen.click("agent-remove");
-  screen.until("question with its users", |s| {
-    s.exists("hub-remove-confirm") && s.text("hub-remove").contains("Delivery v1 · 01 Implement")
-  });
-  // While the question shows only Delivery, Review starts running the profile. One press: the question has read
-  // its users, so it takes it.
-  let review = assigned_pipeline_as(&screen, id, ("review", "Review"));
-  screen.click("hub-remove-confirm");
-  screen.until("asked again with Review", |s| {
-    s.exists("hub-remove") && s.text("hub-remove").contains("Review v1 · 01 Implement")
-  });
-  assert!(screen.listed().profile(id).is_some(), "nothing is removed");
-  let db = ProjectDb::open(&screen.root).expect("database");
-  for pipeline in [delivery, review] {
-    assert!(
-      db.draft::<Pipeline>(pipeline).expect("draft").is_none(),
-      "no pipeline is reset"
-    );
-  }
-  screen.press_until("hub-remove-confirm", "removed", |s| {
-    s.listed().profile(id).is_none() && s.exists("agents-new")
-  });
-  for pipeline in [delivery, review] {
-    assert!(
-      db.draft::<Pipeline>(pipeline).expect("draft").is_some(),
-      "both are reset"
-    );
-  }
 }
 
 /// A published Delivery pipeline whose one step runs `profile`.

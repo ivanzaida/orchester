@@ -1,9 +1,8 @@
-//! Archive in a local resource's panel (`…` in the head of `Agents · Archive · used by · confirmation` L11): the head's
-//! menu holds *Archive*, which opens a modal over the page that says what names the resource (*Used by*) and the runs
-//! of the project that will stop, read from the project's database. Archiving is never refused for being used.
-//! *Archive and stop N runs* reads what uses it once more and, if the runs that stop are not the ones the list showed,
-//! keeps the modal open with the new list; otherwise it archives the resource and cancels those runs. It leaves the
-//! lists and pickers; *Archived* lists it and restores it ([`super::archived`]).
+//! The confirmation of archiving a local resource (`Agents · Archive · used by · confirmation` L11): a modal over the
+//! page that says what names the resource (*Used by*) and the runs of the project that will stop, read from the
+//! project's database. *Archive and stop N runs* reads what uses it once more and, if the runs that stop are not the
+//! ones the list showed, keeps the modal open with the new list; otherwise it archives the resource and cancels those
+//! runs. It leaves the lists and pickers; *Archived* lists it and restores it ([`super::super::archived`]).
 //!
 //! Opening the confirmation is anyone's, automation's included: it changes nothing. Confirming it is a person's alone,
 //! as every other change that stops work is.
@@ -13,11 +12,10 @@ use std::{path::PathBuf, sync::Arc};
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
-    ctx::{Ctx, FutureAction, FutureState},
+    ctx::{Ctx, FutureAction},
   },
-  components::Column,
-  core::{ElementRef, Signal},
-  node::{Element, dimension::Dimension},
+  core::Signal,
+  node::Element,
 };
 use orchester_api::{UsedBy, UsedByRun};
 use orchester_core::{id::ProjectId, resource::ResourceKind, run::Answerer};
@@ -29,7 +27,6 @@ use orchester_workspace::{
 
 use crate::{
   screens::{
-    hub::page_head::MORE_MENU_WIDTH,
     settings::orchester::PersonOnly,
     team_hub::archive::{
       Failed, ReadFailed,
@@ -37,30 +34,38 @@ use crate::{
     },
   },
   services::Services,
-  ui::{
-    icon::Icon,
-    icon_button::IconButton,
-    menu::{MenuItem, menu_at_end, menu_panel},
-  },
 };
 
 /// The id the person-only check of the confirmation's *Archive* is made under.
 const CONFIRM: &str = "local-hub-archive-confirm";
 
-#[derive(Clone, PartialEq)]
-pub(super) struct Props {
+type Handler = Arc<dyn Fn() + Send + Sync>;
+
+/// What the confirmation is about, and what follows it.
+#[derive(Clone)]
+pub(in crate::screens) struct Props {
   pub root: PathBuf,
   pub project: ProjectId,
   pub what: Archivable,
   pub kind: ResourceKind,
   pub name: Arc<str>,
+  /// The confirmation was left without archiving.
+  pub on_keep: Handler,
+  /// It was archived; the changes are recorded already.
+  pub on_archived: Handler,
+}
+impl PartialEq for Props {
+  fn eq(&self, other: &Self) -> bool {
+    (&self.root, self.project, self.what, self.kind, &self.name)
+      == (&other.root, other.project, other.what, other.kind, &other.name)
+  }
 }
 impl DevtoolsInspectable for Props {}
 
-/// The … menu of a panel's head for the entry `props` names, with the confirmation it opens.
-pub(super) fn menu(ctx: &mut Ctx, props: Props) -> Element {
-  let key = format!("local-hub-archive-{:?}", props.what);
-  ctx.mount_keyed::<ArchiveMenu>(&key, props)
+/// The confirmation for the entry `props` names.
+pub(in crate::screens) fn question(ctx: &mut Ctx, props: Props) -> Element {
+  let key = format!("local-hub-archive-confirm-{:?}", props.what);
+  ctx.mount_keyed::<Confirmation>(&key, props)
 }
 
 /// What uses the resource, as the project's database answered.
@@ -68,11 +73,8 @@ pub(super) fn menu(ctx: &mut Ctx, props: Props) -> Element {
 struct Used(UsedBy);
 impl DevtoolsInspectable for Used {}
 
-struct ArchiveMenu {
-  /// The … menu.
-  menu: Signal<bool>,
-  anchor: ElementRef,
-  /// The confirmation.
+struct Confirmation {
+  /// The modal; leaving it ends the question.
   open: Signal<bool>,
   /// Read again, as *Try again* asks.
   retry: Signal<u64>,
@@ -89,7 +91,7 @@ async fn read(root: PathBuf, what: Archivable, services: &Services) -> Result<Us
   }
 }
 
-impl Component for ArchiveMenu {
+impl Component for Confirmation {
   type Props = Props;
 
   fn create(ctx: &mut Ctx) -> Self {
@@ -97,6 +99,7 @@ impl Component for ArchiveMenu {
     let services = Services::of(ctx);
     let retry = ctx.signal(0_u64);
     let again = retry.clone();
+    let (archived, keep) = (props.on_archived.clone(), props.on_keep.clone());
     let archive = ctx.future_action(move |shown: Vec<UsedByRun>| {
       let (services, props, again) = (services.clone(), props.clone(), again.clone());
       async move {
@@ -121,17 +124,19 @@ impl Component for ArchiveMenu {
         Ok(())
       }
     });
-    let open = ctx.signal(false);
-    // An archived resource closes the confirmation; a refusal stays in it, with what it says.
-    let shut = open.clone();
+    let open = ctx.signal(true);
+    // An archived resource ends the question; a refusal stays in it, with what it says.
     ctx.watch(&archive.state(), move |state| {
       if state.is_fulfilled() {
-        shut.set(false);
+        archived();
+      }
+    });
+    ctx.watch(&open, move |open| {
+      if !open {
+        keep();
       }
     });
     Self {
-      menu: ctx.signal(false),
-      anchor: ctx.element_ref(),
       open,
       retry,
       archive,
@@ -141,51 +146,23 @@ impl Component for ArchiveMenu {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
-    let item = MenuItem::new("local-hub-archive", ctx.t("local_hub.archive.action"), {
-      let (open, retry, archive) = (self.open.clone(), self.retry.clone(), self.archive.state());
-      move || {
-        retry.update(|count| *count += 1);
-        // A refusal of an earlier confirmation is not this one's.
-        archive.set(FutureState::idle());
-        open.set(true);
-      }
-    })
-    .icon(Icon::Archive)
-    .render(ctx, &self.menu);
-    let toggle = self.menu.clone();
-    let button = IconButton::new("local-hub-more", Icon::Ellipsis, ctx.t("local_hub.archive.more"))
-      .small()
-      .element(self.anchor.clone())
-      .on_click(move || toggle.update(|open| *open = !*open))
-      .render(ctx);
-    let panel = menu_panel("local-hub-more-menu")
-      .width(Dimension::Px(MORE_MENU_WIDTH))
-      .child(item);
-    let confirmation = self.confirmation(ctx, &props);
-    Column::new()
-      .child(button)
-      .child(menu_at_end(self.anchor.clone(), self.menu.clone(), panel))
-      .child(confirmation)
+    self.confirmation(ctx, &props)
   }
 }
 
-impl ArchiveMenu {
-  /// What uses the resource, read while the confirmation is open; a closed one reads nothing.
+impl Confirmation {
+  /// What uses the resource.
   fn read(&self, ctx: &mut Ctx, props: &Props) -> Option<Result<UsedBy, ReadFailed>> {
     let services = Services::of(ctx);
-    let (open, retry) = (self.open.get(), self.retry.get());
     let state = ctx
       .future(
-        (props.root.clone(), props.what, open, retry),
-        move |(root, what, open, _)| {
+        (props.root.clone(), props.what, self.retry.get()),
+        move |(root, what, _)| {
           let services = services.clone();
           async move {
-            if !open {
-              return Ok(None);
-            }
             read(root, what, &services)
               .await
-              .map(|used| Some(Used(used)))
+              .map(Used)
               .map_err(|error: UsedByError| ReadFailed {
                 not_reached: error.is_not_reached(),
               })
@@ -194,7 +171,7 @@ impl ArchiveMenu {
       )
       .state()
       .get();
-    match (state.data.as_ref().and_then(Option::as_ref), &state.error) {
+    match (&state.data, &state.error) {
       (Some(used), _) if !state.is_pending() => Some(Ok(used.0.clone())),
       (_, Some(failed)) if !state.is_pending() => Some(Err(*failed)),
       _ => None,

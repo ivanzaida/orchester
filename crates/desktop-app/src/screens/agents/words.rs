@@ -8,33 +8,8 @@ use orchester_core::{
   permission::{AgentPermissions, CommandPermission, NetworkAccess},
   resource::RepositoryAccess,
 };
-use orchester_workspace::agents::data::VersionState;
 
 use crate::services::accounts::Accounts;
-
-/// A version's state in a list row: `Published v4`, `v2 · Draft v3 saved`, `Draft v1 · not published`.
-pub fn list_version(ctx: &Ctx, state: VersionState) -> Arc<str> {
-  match state {
-    VersionState::Draft { published: None } => ctx.t("agents.firstDraft"),
-    VersionState::Draft {
-      published: Some(version),
-    } => ctx.t_args(
-      "agents.draft",
-      [
-        ("version", version.get().to_string()),
-        ("next", version.get().saturating_add(1).to_string()),
-      ],
-    ),
-    VersionState::StaleDraft { based_on, published } => ctx.t_args(
-      "agents.stale",
-      [
-        ("base", based_on.map_or(0, |v| v.get()).to_string()),
-        ("version", published.map_or(0, |v| v.get()).to_string()),
-      ],
-    ),
-    VersionState::Published(version) => ctx.t_args("agents.published", [("version", version.get().to_string())]),
-  }
-}
 
 /// An effort as the app words it: Low, Medium and High in words, the CLI's own levels as it takes them.
 pub fn effort(ctx: &Ctx, effort: &str) -> Arc<str> {

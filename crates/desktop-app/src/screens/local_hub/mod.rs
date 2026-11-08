@@ -11,7 +11,7 @@
 //! never on a timer: a tool's or a server's secret is looked up in the keychain. While it is read again the page shows
 //! the last answer dimmed with *Reading…*, and a read that failed shows its failure and no counts.
 
-mod archive;
+pub(in crate::screens) mod archive;
 mod archived;
 mod head;
 mod list;

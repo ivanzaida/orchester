@@ -1,5 +1,5 @@
 //! The top of a skill's page (`03b Skill` `QbDWX`): the crumb back to Skills, the head with the skill's name, scope
-//! and origin and the … menu with Remove, and the draft bar — what the skill is now (*Draft written by automation ·
+//! and origin and the … menu with Archive, and the draft bar — what the skill is now (*Draft written by automation ·
 //! Published v3*), what publishing does, Discard draft and Publish (Create on a new skill).
 use std::sync::Arc;
 
@@ -66,9 +66,9 @@ impl Editor {
       More {
         open: self.more.clone(),
         anchor: self.anchor.clone(),
-        remove: Arc::new(move || {
+        archive: Arc::new(move || {
           open.set(false);
-          ask.set(Ask::Remove);
+          ask.set(Ask::Archive);
         }),
       }
     });

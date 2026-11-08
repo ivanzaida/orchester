@@ -122,7 +122,7 @@ impl Listing {
         what: Archivable::Resource(found.id),
         kind: found.kind,
         name: found.name.clone(),
-        number: Some(found.number),
+        number: found.number,
         form: None,
         cli: None,
         group: Group::Ready,

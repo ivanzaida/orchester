@@ -64,7 +64,7 @@ fn instructions_a_new_rule_chooses_its_scope_on_its_page() {
 }
 
 #[test]
-fn instructions_a_removed_rule_leaves_a_removed_line_in_its_group() {
+fn instructions_an_archived_rule_leaves_an_archived_line_in_its_group() {
   let mut screen = Instructions::new();
   let id = screen.rule("Old rule", "Old text", InstructionScope::Project, true);
   screen.list();
@@ -72,27 +72,27 @@ fn instructions_a_removed_rule_leaves_a_removed_line_in_its_group() {
   screen.click(&format!("instruction-{id}"));
   screen.until("the rule's page", |s| s.exists("instruction-more"));
   screen.click("instruction-more");
-  screen.click("instruction-remove");
-  screen.until("asked in place", |s| s.exists("hub-remove-confirm"));
+  screen.click("instruction-archive");
+  screen.until("asked in place", |s| s.exists("team-hub-archive-confirm"));
   assert!(
-    screen.text("hub-remove").contains("No agent gets it"),
+    screen.text("team-hub-archive-body").contains("leaves every list"),
     "{}",
-    screen.text("hub-remove")
+    screen.text("team-hub-archive-body")
   );
-  // Remove takes the press once the question has read who uses the rule.
-  screen.until("removed, with its line", |s| {
-    if let Some(mut confirm) = s.window.tree.get_element_by_id_mut("hub-remove-confirm") {
+  // Archive takes the press once the question has read what uses the rule.
+  screen.until("archived, with its line", |s| {
+    if let Some(mut confirm) = s.window.tree.get_element_by_id_mut("team-hub-archive-confirm") {
       confirm.click();
     }
     s.window.pass();
-    s.exists("instruction-library") && s.text("instruction-library").contains("Removed Old rule")
+    s.exists("instruction-library") && s.text("instruction-library").contains("Archived Old rule")
   });
   assert!(screen.listed().entry(id).is_none(), "the rule is no longer listed");
-  assert!(!screen.exists("hub-remove-confirm"), "no other prompt");
+  assert!(!screen.exists("team-hub-archive-confirm"), "no other prompt");
 }
 
 #[test]
-fn instructions_remove_refuses_an_mcp_clients_press() {
+fn instructions_archive_refuses_an_mcp_clients_press() {
   let mut screen = Instructions::new();
   let id = screen.rule(
     "Never push to main",
@@ -107,24 +107,24 @@ fn instructions_remove_refuses_an_mcp_clients_press() {
   screen.click(&format!("instruction-{id}"));
   screen.until("the rule's page", |s| s.exists("instruction-more"));
   screen.click("instruction-more");
-  screen.click("instruction-remove");
-  screen.until("asked in place", |s| s.exists("hub-remove-confirm"));
-  // An MCP client's press, without the person's consent, removes nothing and says it is a person's.
+  screen.click("instruction-archive");
+  screen.until("asked in place", |s| s.exists("team-hub-archive-confirm"));
+  // An MCP client's press archives nothing and says it is a person's.
   screen.until("refused", |s| {
-    if s.window.tree.get_element_by_id("hub-remove-confirm").is_some() {
+    if s.window.tree.get_element_by_id("team-hub-archive-confirm").is_some() {
       lurq::app::events::with_synthetic_input(|| {
-        if let Some(mut confirm) = s.window.tree.get_element_by_id_mut("hub-remove-confirm") {
+        if let Some(mut confirm) = s.window.tree.get_element_by_id_mut("team-hub-archive-confirm") {
           confirm.click();
         }
       });
     }
     s.window.pass();
-    s.text("hub-remove").contains("Only a person removes this here")
+    s.exists("local-hub-archive-confirm-person-only")
   });
   assert!(screen.listed().entry(id).is_some(), "the rule stays");
-  // The person's own press removes it.
-  screen.until("removed", |s| {
-    if let Some(mut confirm) = s.window.tree.get_element_by_id_mut("hub-remove-confirm") {
+  // The person's own press archives it.
+  screen.until("archived", |s| {
+    if let Some(mut confirm) = s.window.tree.get_element_by_id_mut("team-hub-archive-confirm") {
       confirm.click();
     }
     s.window.pass();

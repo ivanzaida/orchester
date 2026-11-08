@@ -1,11 +1,11 @@
 //! What a skill's page asks and tells in place: publishing (*Publish v4?*, which only the person answers), leaving
-//! with unsaved changes, Discard draft in place of the draft bar, Remove under the head, a write that failed with its
+//! with unsaved changes, Discard draft in place of the draft bar, Archive under the head, a write that failed with its
 //! retry, and reloading the saved draft.
 use std::sync::Arc;
 
 use lurq::{app::ctx::Ctx, node::Element};
 use orchester_core::resource::{ResourceKind, Skill};
-use orchester_workspace::{skills::data::SkillEntry, tasks::outside::Outside};
+use orchester_workspace::{local_archive::Archivable, skills::data::SkillEntry, tasks::outside::Outside};
 
 use super::{
   super::{
@@ -16,10 +16,12 @@ use super::{
 };
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
-  screens::hub::{
-    discard,
-    question::{Question, Weight},
-    removal,
+  screens::{
+    hub::{
+      discard,
+      question::{Question, Weight},
+    },
+    local_hub::archive,
   },
   ui::{
     button::{ActionButton, ButtonKind},
@@ -115,19 +117,20 @@ impl Editor {
     ))
   }
 
-  /// Remove, asked under the head; the list opens once it is removed.
-  pub(super) fn remove_question(&self, ctx: &mut Ctx, p: &Props, entry: Option<&SkillEntry>) -> Option<Element> {
-    let entry = entry.filter(|_| self.ask.get() == Ask::Remove)?;
+  /// Archive, asked under the head; the list opens once it is archived.
+  pub(super) fn archive_question(&self, ctx: &mut Ctx, p: &Props, entry: Option<&SkillEntry>) -> Option<Element> {
+    let entry = entry.filter(|_| self.ask.get() == Ask::Archive)?;
     let (keep, dirty, panel) = (self.ask.clone(), self.dirty.clone(), p.page.view.panel.clone());
-    Some(removal::question(
+    Some(archive::confirm::question(
       ctx,
-      removal::RemoveProps {
-        project: p.page.project.clone(),
-        resource: entry.id,
+      archive::confirm::Props {
+        root: p.page.project.open.repo_root.clone(),
+        project: p.page.project.open.project.id(),
+        what: Archivable::Resource(entry.id),
         kind: ResourceKind::Skill,
         name: entry.name.clone(),
         on_keep: Arc::new(move || keep.set(Ask::Nothing)),
-        on_removed: Arc::new(move || {
+        on_archived: Arc::new(move || {
           dirty.set(false);
           panel.close(panel.library());
         }),

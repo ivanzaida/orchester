@@ -80,7 +80,7 @@ impl DevtoolsInspectable for Props {}
 pub enum Ask {
   Nothing,
   Discard,
-  Remove,
+  Archive,
 }
 impl DevtoolsInspectable for Ask {}
 

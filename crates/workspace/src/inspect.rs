@@ -23,7 +23,6 @@ macro_rules! markers {
     impl $inspect for crate::app_mcp::setup::NewTeamMcpServer {}
     impl $inspect for crate::sharing::team_edit::EditRefused {}
     impl $inspect for crate::sharing::team_edit::Edited {}
-    impl $inspect for crate::removal::Users {}
     impl $inspect for crate::agents::form::ModelSelection {}
     impl $inspect for crate::clock::Clock {}
     impl $inspect for crate::close::CloseFlow {}

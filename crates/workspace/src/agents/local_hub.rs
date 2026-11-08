@@ -22,13 +22,15 @@ use crate::{
   workspace::Workspace,
 };
 
-/// An instruction or a skill of the project.
+/// A resource of the project that needs nothing of this computer to be ready: an instruction or a skill, or a profile
+/// or a tool that has only a draft so far, which no pipeline can run yet.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LocalPlain {
   pub id: ResourceId,
   pub kind: ResourceKind,
   pub name: String,
-  pub number: VersionNumber,
+  /// The latest published version; `None` while it has only a draft.
+  pub number: Option<VersionNumber>,
 }
 
 /// What a row and a panel of a local profile say beyond how it stands: the CLI it runs with, the connection it runs on,
@@ -90,7 +92,7 @@ impl LocalHub {
     self.mcp_servers.iter().find(|found| found.id() == id)
   }
 
-  /// The instructions, then the skills, each by name.
+  /// The instructions, then the skills, then the profiles and tools that have only a draft, each by name.
   pub fn plain(&self) -> &[LocalPlain] {
     &self.plain
   }
@@ -154,14 +156,23 @@ impl Workspace {
 
 fn plain(db: &ProjectDb) -> Result<Vec<LocalPlain>, StoreError> {
   let mut plain = Vec::new();
-  for kind in [ResourceKind::Instruction, ResourceKind::Skill] {
+  for kind in [
+    ResourceKind::Instruction,
+    ResourceKind::Skill,
+    ResourceKind::AgentProfile,
+    ResourceKind::Tool,
+  ] {
     let mut of_kind = Vec::new();
     for resource in db.resources(kind)? {
       let number = match kind {
         ResourceKind::Instruction => db.latest_version::<Instruction>(resource.id())?.map(|v| v.number()),
-        _ => db.latest_version::<Skill>(resource.id())?.map(|v| v.number()),
+        ResourceKind::Skill => db.latest_version::<Skill>(resource.id())?.map(|v| v.number()),
+        ResourceKind::AgentProfile => db.latest_version::<AgentProfile>(resource.id())?.map(|v| v.number()),
+        _ => db.latest_version::<Tool>(resource.id())?.map(|v| v.number()),
       };
-      if let Some(number) = number {
+      // A profile or tool with a version is listed with how it stands here (`readiness`).
+      let draft_only = number.is_none();
+      if draft_only || matches!(kind, ResourceKind::Instruction | ResourceKind::Skill) {
         of_kind.push(LocalPlain {
           id: resource.id(),
           kind,

@@ -10,6 +10,7 @@ use orchester_core::{
     AgentTargets, InjectionEvent, Instruction, InstructionScope, PromptText, ResourceKind, Skill, VersionNumber,
   },
   sharing::{LocalProgramProblem, Missing},
+  store::ResourceStore,
 };
 use orchester_workspace::{
   agents::local_hub::LocalHub,
@@ -103,8 +104,8 @@ fn readiness_local_hub_lists_instructions_and_skills_and_what_was_archived() {
       .map(|found| (found.kind, found.number))
       .collect::<Vec<_>>(),
     [
-      (ResourceKind::Instruction, VersionNumber::FIRST),
-      (ResourceKind::Skill, VersionNumber::FIRST)
+      (ResourceKind::Instruction, Some(VersionNumber::FIRST)),
+      (ResourceKind::Skill, Some(VersionNumber::FIRST))
     ]
   );
   assert!(read.archived().is_empty());
@@ -182,5 +183,49 @@ fn readiness_local_hub_a_server_needs_the_value_of_each_secret_its_variables_tak
     hub(&fixture).mcp_server(server.id()).expect("listed").standing(),
     &ReadinessStanding::Ready,
     "read again, the value that was set counts"
+  );
+}
+
+#[test]
+fn readiness_local_hub_lists_a_profile_that_has_only_a_draft_apart_from_the_ones_readiness_stands() {
+  let fixture = Fixture::local();
+  let connection = fixture.connection(CLAUDE, "Claude 1");
+  let published = fixture.own("builder", &profile_on(connection, &[]));
+  let draft = {
+    let mut db = fixture.db();
+    db.create_resource(
+      orchester_core::resource::Slug::new("sketch").expect("slug"),
+      crate::support::name("sketch"),
+      &profile_on(connection, &[]),
+      at(10),
+    )
+    .expect("a draft only")
+    .id()
+  };
+
+  let read = hub(&fixture);
+  let plain: Vec<_> = read
+    .plain()
+    .iter()
+    .map(|found| (found.id, found.kind, found.number))
+    .collect();
+  assert_eq!(
+    plain,
+    [(draft, ResourceKind::AgentProfile, None)],
+    "a profile with no published version is listed as a draft, not as ready"
+  );
+  assert!(
+    read
+      .readiness()
+      .resources()
+      .iter()
+      .any(|found| found.resource() == published)
+  );
+  assert!(
+    read
+      .readiness()
+      .resources()
+      .iter()
+      .all(|found| found.resource() != draft)
   );
 }

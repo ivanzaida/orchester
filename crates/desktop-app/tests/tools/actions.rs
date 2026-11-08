@@ -111,19 +111,19 @@ fn tools_discard_draft_returns_to_the_published_version() {
 }
 
 #[test]
-fn tools_remove_an_unused_tool() {
+fn tools_archive_an_unused_tool() {
   let mut t = Tools::new();
   let id = t.seed("Checks", true);
   t.edit(id);
   t.click("tool-more");
-  t.click("tool-remove");
-  t.wait_for("hub-remove-confirm");
-  assert!(t.text("hub-remove").contains("No pipeline step uses it"));
-  // Remove is pressable once the question has read who uses the tool.
+  t.click("tool-archive");
+  t.wait_for("team-hub-archive-confirm");
+  assert!(t.text("team-hub-archive-body").contains("leaves every list"));
+  // Archive is pressable once the question has read what uses the tool.
   t.window.until("the list", |w| {
     w.tree.tick_futures();
     w.pass();
-    if let Some(mut confirm) = w.tree.get_element_by_id_mut("hub-remove-confirm") {
+    if let Some(mut confirm) = w.tree.get_element_by_id_mut("team-hub-archive-confirm") {
       confirm.click();
     }
     w.pass();

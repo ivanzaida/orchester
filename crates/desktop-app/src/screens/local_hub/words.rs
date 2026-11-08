@@ -101,6 +101,10 @@ fn state(ctx: &Ctx, entry: &Entry) -> Said {
     text,
     color: PaletteColor::TextMuted,
   };
+  // Only an MCP server has no version at all; any other kind without one has only a draft.
+  if entry.number.is_none() && entry.kind != ResourceKind::McpServer {
+    return muted(ctx.t("local_hub.line.draft"));
+  }
   match (entry.group, &entry.standing) {
     (Group::OffHere, _) => muted(off(ctx, entry)),
     (Group::NeedsYouHere, Some(standing)) => Said {

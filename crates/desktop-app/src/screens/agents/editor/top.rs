@@ -8,7 +8,9 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::resource::{AgentProfile, ResourceKind};
-use orchester_workspace::{agents::data::ProfileEntry, sharing::team::TeamConfiguration, tasks::outside::Outside};
+use orchester_workspace::{
+  agents::data::ProfileEntry, local_archive::Archivable, sharing::team::TeamConfiguration, tasks::outside::Outside,
+};
 
 use super::{
   super::{
@@ -19,7 +21,10 @@ use super::{
   Ask, Editor, Props, State,
 };
 use crate::{
-  screens::hub::{discard, removal, team},
+  screens::{
+    hub::{discard, team},
+    local_hub::archive,
+  },
   theme::HubSpacing,
   ui::icon::Icon,
 };
@@ -43,9 +48,9 @@ impl Editor {
       .map(|_| page_head::More {
         open: self.more.clone(),
         anchor: self.anchor.clone(),
-        remove: {
+        archive: {
           let ask = self.ask.clone();
-          std::sync::Arc::new(move || ask.set(Ask::Remove))
+          std::sync::Arc::new(move || ask.set(Ask::Archive))
         },
       });
     let shared = team.zip(state.saved.as_ref()).and_then(|(team, entry)| {
@@ -76,23 +81,24 @@ impl Editor {
         (shared, versions),
       ))
       .with_children(bars)
-      .with_children(self.remove_question(ctx, props, state))
+      .with_children(self.archive_question(ctx, props, state))
       .child(self.bar_or_question(ctx, props, (state, team)))
       .with_children(self.notices(ctx, props, state))
   }
 
-  fn remove_question(&self, ctx: &mut Ctx, props: &Props, state: &State) -> Option<Element> {
-    let entry = state.saved.as_ref().filter(|_| self.ask.get() == Ask::Remove)?;
+  fn archive_question(&self, ctx: &mut Ctx, props: &Props, state: &State) -> Option<Element> {
+    let entry = state.saved.as_ref().filter(|_| self.ask.get() == Ask::Archive)?;
     let (keep, nav) = (self.ask.clone(), props.nav.clone());
-    Some(removal::question(
+    Some(archive::confirm::question(
       ctx,
-      removal::RemoveProps {
-        project: props.project.clone(),
-        resource: entry.id,
+      archive::confirm::Props {
+        root: props.project.open.repo_root.clone(),
+        project: props.project.open.project.id(),
+        what: Archivable::Resource(entry.id),
         kind: ResourceKind::AgentProfile,
         name: entry.profile.role().as_str().into(),
         on_keep: std::sync::Arc::new(move || keep.set(Ask::Nothing)),
-        on_removed: std::sync::Arc::new(move || nav.removed()),
+        on_archived: std::sync::Arc::new(move || nav.archived()),
       },
     ))
   }

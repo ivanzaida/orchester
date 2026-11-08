@@ -52,7 +52,7 @@ pub(super) struct Shown<'a> {
 pub(super) fn panel(ctx: &mut Ctx, entry: &Entry, shown: &Shown<'_>) -> Element {
   let more = archive::menu(
     ctx,
-    archive::Props {
+    archive::Target {
       root: shown.root.to_path_buf(),
       project: shown.project,
       what: entry.what,

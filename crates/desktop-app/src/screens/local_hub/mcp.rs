@@ -258,7 +258,7 @@ impl Component for Editor {
     let entry = &props.entry;
     let more = archive::menu(
       ctx,
-      archive::Props {
+      archive::Target {
         root: props.project.open.repo_root.clone(),
         project: props.project.open.project.id(),
         what,

@@ -43,6 +43,7 @@
     },
     "line": {
       "archived": "Archived {{date}}, {{time}}",
+      "draft": "Draft · not published yet",
       "connectionNone": "No {{cli}} connection",
       "connectionPick": "Choose a {{cli}} connection",
       "many": "{{count}} things missing",
