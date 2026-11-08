@@ -95,7 +95,14 @@ const PROPOSE_CHANGE: &str = "In this chat it changes nothing itself: it checks 
 
 /// What the agent reads first of `merge_run`.
 const PROPOSE_MERGE: &str = "In this chat it checks the run and proposes the merge to the person, who applies or \
-  dismisses it in the conversation. Call it only for a run the person asked you in this chat to merge. The merge   keeps the rules below: only a task's latest run that succeeded, and only when the main checkout needs no local   integration; a refusal (needs_decision, merge_failed) leaves conflict choices and approving the merged result to   the person on the Local integration page. When merge_failed names conflicting files, the next step is to propose   continue_run with resolve_conflicts, which sends the run back to an agent that may write to resolve them; or the   person resolves them on the Local integration page. A refusal with the code integration_preflight_failed or   program_running merged nothing and left nothing on that page: tell the person its reason as the tool gave it, and   that merge_run can be asked again; never say it was left to them there.";
+  dismisses it in the conversation. Call it only for a run the person asked you in this chat to merge. The merge \
+  keeps the rules below: only a task's latest run that succeeded, and only when the main checkout needs no local \
+  integration; a refusal (needs_decision, merge_failed) leaves conflict choices and approving the merged result to \
+  the person on the Local integration page. When merge_failed names conflicting files, the next step is to propose \
+  continue_run with resolve_conflicts, which sends the run back to an agent that may write to resolve them; or the \
+  person resolves them on the Local integration page. A refusal with the code integration_preflight_failed or \
+  program_running merged nothing and left nothing on that page: tell the person its reason as the tool gave it, and \
+  that merge_run can be asked again; never say it was left to them there.";
 
 /// What the agent reads first of `resume_run`.
 const RESUME_PAUSED: &str = "In this chat it resumes a run a pause stopped, and in a turn Orchester started by itself \
