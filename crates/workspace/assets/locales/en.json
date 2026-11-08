@@ -1683,7 +1683,6 @@
       "teamOnlyField": "{{field}} is a field of a team project's MCP server only: it names what each computer of a team fills in. In a project of this computer's own a server has environment and authorization instead.",
       "teamServerRefusedVersion": "The team server did not accept the new version ({{code}}). It stays on this computer, unsent, until a person decides what to do with it in Orchester's window.",
       "teamArchivePersonOnly": "Only a person archives a team's resource: it stops runs on every computer, so it is confirmed in Orchester's window.",
-      "teamServerRefusedArchive": "The team server did not archive the MCP server ({{code}}), so nothing was changed.",
       "secretNotFound": "This project has no secret {{secret}} that is not archived.",
       "notAnAgentCli": "{{connection}} runs no agent CLI, so it runs on no API provider.",
       "secretAmbiguous": "More than one secret is named {{secret}}; name it by its id (list_secrets).",

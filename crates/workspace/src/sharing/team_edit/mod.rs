@@ -55,7 +55,12 @@ pub enum EditRefused {
 impl EditRefused {
   /// What a press that only a person may make says when automation made it: nothing was sent.
   pub fn person_only() -> Self {
-    Self::Failed(Message::new("sharing.errors.personOnly"))
+    Self::Failed(Self::person_only_message())
+  }
+
+  /// What a press that only a person may make says when automation made it, for a caller that has no [`EditRefused`].
+  pub fn person_only_message() -> Message {
+    Message::new("sharing.errors.personOnly")
   }
 
   /// Why, in words, for a caller that has one place to say it.
