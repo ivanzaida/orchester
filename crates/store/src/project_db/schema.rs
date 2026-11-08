@@ -39,6 +39,7 @@ mod initial;
 mod invocation_permissions;
 mod joining;
 mod list;
+mod local_archive;
 mod local_integration;
 mod mcp;
 mod memory;
