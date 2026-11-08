@@ -172,7 +172,11 @@ fn bindings(db: &ProjectDb, bundle: &ExecutionBundle, programs: &McpPrograms) ->
       }
     })
     .collect();
-  Ok(LocalBindings { profiles, team_mcp })
+  Ok(LocalBindings {
+    profiles,
+    team_mcp,
+    local_mcp: Vec::new(),
+  })
 }
 
 /// The subject a start's authority names, which must be a task's.

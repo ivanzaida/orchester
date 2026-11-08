@@ -154,6 +154,7 @@ fn bound(fixture: &Fixture) -> LocalBindings {
       mcp_servers: Vec::new(),
     }],
     team_mcp: Vec::new(),
+    local_mcp: Vec::new(),
   }
 }
 

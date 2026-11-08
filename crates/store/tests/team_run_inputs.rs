@@ -192,6 +192,7 @@ impl Team {
         mcp_servers: Vec::new(),
       }],
       team_mcp: Vec::new(),
+      local_mcp: Vec::new(),
     };
     RunInputs::new(content, bindings, LocalConsent::default()).expect("inputs")
   }
@@ -494,6 +495,7 @@ fn local_inputs(db: &ProjectDb, snapshot: &RunSnapshot) -> RunInputs {
       })
       .collect(),
     team_mcp: Vec::new(),
+    local_mcp: Vec::new(),
   };
   RunInputs::new(content, bindings, LocalConsent::default()).expect("inputs")
 }

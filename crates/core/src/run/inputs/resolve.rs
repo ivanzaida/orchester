@@ -23,14 +23,15 @@ pub fn team_mcp_id(server: ResourceId) -> ConnectionId {
   ConnectionId::from_uuid(server.as_uuid())
 }
 
-/// The MCP servers the bindings bind, in their order, over all profiles: the team servers of the profiles
-/// (`CanonicalExecutionInputs::mcp_servers`), which this computer binds to a program and values of its own
-/// ([`LocalBindings::team_mcp`]).
+/// The MCP servers the bindings bind, in their order, over all profiles: the local servers an older run bound
+/// ([`LocalBindings::local_mcp`]), then the team servers of the profiles (`CanonicalExecutionInputs::mcp_servers`),
+/// which this computer binds to a program and values of its own ([`LocalBindings::team_mcp`]).
 pub(super) fn mcp_servers(bindings: &LocalBindings) -> Result<McpServerSelection, InputsError> {
   let servers = bindings
-    .team_mcp
+    .local_mcp
     .iter()
-    .map(|bound| team_mcp_id(bound.server))
+    .copied()
+    .chain(bindings.team_mcp.iter().map(|bound| team_mcp_id(bound.server)))
     .collect();
   McpServerSelection::new(servers).map_err(InputsError::McpServers)
 }

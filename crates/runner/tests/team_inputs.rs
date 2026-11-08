@@ -306,6 +306,7 @@ impl Team {
         mcp_servers: team_mcp.iter().map(|bound| team_mcp_id(bound.server)).collect(),
       }],
       team_mcp,
+      local_mcp: Vec::new(),
     };
     let inputs = RunInputs::new(content, bindings, LocalConsent::default()).expect("inputs");
     ProjectDb::open(self.root())

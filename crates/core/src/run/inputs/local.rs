@@ -41,7 +41,7 @@ pub struct TeamMcpBinding {
   pub program: Option<PathBuf>,
 }
 
-/// `{profiles, team_mcp?}`: how this computer binds the run's inputs.
+/// `{profiles, team_mcp?, local_mcp?}`: how this computer binds the run's inputs.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LocalBindings {
@@ -50,6 +50,10 @@ pub struct LocalBindings {
   /// One per pinned team MCP server; left out while empty, which is every local run's.
   #[serde(default, skip_serializing_if = "Vec::is_empty")]
   pub team_mcp: Vec<TeamMcpBinding>,
+  /// The MCP servers of this computer a run recorded before the team configuration model bound for its profiles (they
+  /// were references then); the run starts them by id as it did. A run started since binds none: left out while empty.
+  #[serde(default, skip_serializing_if = "Vec::is_empty")]
+  pub local_mcp: Vec<ConnectionId>,
 }
 
 /// `{accepted, narrowed}`: what a person on this computer decided for the run.

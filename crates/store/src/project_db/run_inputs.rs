@@ -5,7 +5,7 @@
 //! ([`ProjectDb::accept_team_inputs`]), so the runner starts it from what was kept, never from a task's definition.
 
 use orchester_core::{
-  id::{OperationId, RunId, TaskId},
+  id::{ConnectionId, OperationId, RunId, TaskId},
   run::{
     bundle::canonical_bytes,
     inputs::{BundleContent, InputsOrigin, LocalBindings, LocalConsent, RunInputs, TeamAcceptance},
@@ -14,6 +14,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use rusqlite::{Connection, OptionalExtension, params};
+use serde::Deserialize;
 
 use super::{ProjectDb, task_identities};
 use crate::{
@@ -23,7 +24,8 @@ use crate::{
 
 /// Schema 1 also held the references the run's bodies named by the publisher's ids, bound to this computer's
 /// connections, MCP servers and secrets; the team configuration model names none (`docs/design/team-configuration.md`),
-/// so schema 2 does not, and a run recorded with schema 1 reads without them.
+/// so schema 2 does not. A run recorded with schema 1 reads without its connection and secret references; the MCP
+/// servers it bound stay, as [`LocalBindings::local_mcp`], because its profiles choose them.
 const BINDINGS_SCHEMA: u32 = 2;
 const CONSENT_SCHEMA: u32 = 1;
 
@@ -69,15 +71,34 @@ impl Encoded {
   }
 }
 
+/// A reference of schema 1's bindings, as far as a run reads it now: only the local MCP server is kept.
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum OlderReference {
+  Connection {},
+  McpServer { local: ConnectionId },
+  Secret {},
+}
+
 fn decode_bindings(text: &str) -> Result<LocalBindings, StoreError> {
   const WHAT: &str = "run bindings";
   match decode_document(WHAT, text)? {
     (BINDINGS_SCHEMA, body) => decode_body(WHAT, body),
     (1, mut body) => {
-      if let Some(fields) = body.as_object_mut() {
-        fields.remove("references");
+      let references = body.as_object_mut().and_then(|fields| fields.remove("references"));
+      let older: Vec<OlderReference> = references
+        .map(|found| decode_body(WHAT, found))
+        .transpose()?
+        .unwrap_or_default();
+      let mut bindings: LocalBindings = decode_body(WHAT, body)?;
+      for reference in older {
+        if let OlderReference::McpServer { local } = reference
+          && !bindings.local_mcp.contains(&local)
+        {
+          bindings.local_mcp.push(local);
+        }
       }
-      decode_body(WHAT, body)
+      Ok(bindings)
     }
     (schema, _) => Err(corrupt(
       WHAT,
