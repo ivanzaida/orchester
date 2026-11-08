@@ -426,3 +426,25 @@ fn candidates_follow_the_path_order() {
   );
   assert!(executable_candidates(AgentProvider::CodexCli.program_name().expect("a CLI"), None).is_empty());
 }
+
+#[test]
+fn cli_of_model_names_the_family_a_model_belongs_to() {
+  use orchester_core::connection::AgentProvider;
+  assert_eq!(
+    AgentProvider::cli_of_model("claude-opus-5-5"),
+    Some(AgentProvider::ClaudeCodeCli)
+  );
+  assert_eq!(
+    AgentProvider::cli_of_model("Sonnet"),
+    Some(AgentProvider::ClaudeCodeCli)
+  );
+  assert_eq!(
+    AgentProvider::cli_of_model("claude-sonnet-5-5[1m]"),
+    Some(AgentProvider::ClaudeCodeCli)
+  );
+  assert_eq!(
+    AgentProvider::cli_of_model("gpt-5.2-codex"),
+    Some(AgentProvider::CodexCli)
+  );
+  assert_eq!(AgentProvider::cli_of_model("mystery-1"), None);
+}

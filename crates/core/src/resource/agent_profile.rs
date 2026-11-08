@@ -142,6 +142,13 @@ impl AgentProfile {
     self
   }
 
+  /// The profile run on `connection` instead.
+  #[must_use]
+  pub const fn with_connection(mut self, connection: ConnectionId) -> Self {
+    self.connection = connection;
+    self
+  }
+
   #[must_use]
   pub fn with_mcp_servers(mut self, servers: McpServerSelection) -> Self {
     self.mcp_servers = servers;

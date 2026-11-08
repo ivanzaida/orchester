@@ -10,7 +10,7 @@ const CLAUDE_WINDOW: u64 = 200_000;
 /// The context window of a Claude model chosen with Claude Code's `[1m]` suffix.
 const CLAUDE_LONG_WINDOW: u64 = 1_000_000;
 /// Claude Code's model aliases, which name a Claude model of [`CLAUDE_WINDOW`].
-const CLAUDE_ALIASES: [&str; 4] = ["opus", "sonnet", "haiku", "opusplan"];
+pub(super) const CLAUDE_ALIASES: [&str; 4] = ["opus", "sonnet", "haiku", "opusplan"];
 
 /// One reading: `used` tokens of a `window` that is `None` while nobody reported one and the table knows no limit
 /// for the model.

@@ -6,16 +6,16 @@
 use std::path::Path;
 
 use orchester_core::{
-  connection::{AgentProvider, ConnectionKind, mcp::McpTransport},
+  connection::{AgentProvider, ConnectionKind, REASONING_EFFORT, mcp::McpTransport},
   id::{ConnectionId, ResourceId},
   resource::{AgentProfile, Instruction, Pipeline, ResourceKind, Skill, Tool, ToolKind, VersionNumber},
-  secret::SecretVault,
-  store::{ConnectionStore, McpServerStore, ResourceStore, TaskStore},
+  secret::{SecretName, SecretVault},
+  store::{ConnectionStore, McpServerStore, ResourceStore, SecretStore, TaskStore},
   time::Timestamp,
 };
 use orchester_store::{ArchiveStop, ProjectDb, StoreError};
 
-use super::team_hub::Form;
+use super::{team_hub::Form, team_profile::ConnectionChoice};
 use crate::{
   local_archive::Archivable,
   readiness::{LocalMcpReadiness, ProjectReadiness, ReadinessError},
@@ -37,13 +37,27 @@ pub struct LocalPlain {
 /// the MCP servers it chooses and the pipelines whose steps run it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct LocalProfile {
-  /// The CLI it runs with; `None` when the connection it names is gone or is not an agent connection.
+  /// The CLI it runs with: its connection's, and while that is gone the one its model belongs to
+  /// ([`AgentProvider::cli_of_model`]); `None` when the connection is no agent connection or the model names no CLI.
   pub cli: Option<AgentProvider>,
   /// The connection it runs on, by its name; `None` when the project no longer has it.
   pub connection: Option<String>,
   pub mcp_servers: Vec<(ConnectionId, String)>,
   /// The pipelines, by name, whose latest version has a step that runs it.
   pub pipelines: Vec<String>,
+  pub model: String,
+  /// The reasoning effort it sets; `None` leaves it to the CLI.
+  pub effort: Option<String>,
+  /// The connections of this project that run its CLI, by name.
+  pub connections: Vec<ConnectionChoice>,
+  /// The connection it names, while it is one of [`Self::connections`].
+  pub current: Option<ConnectionId>,
+  /// When its latest version was published.
+  pub published_at: Timestamp,
+  /// Whether it has edits that are not published, which the editor holds.
+  pub draft: bool,
+  /// The project secrets the MCP servers it chooses take their values from, by name.
+  pub secrets: Vec<SecretName>,
 }
 
 /// A local resource or MCP server that was archived.
@@ -189,16 +203,19 @@ fn plain(db: &ProjectDb) -> Result<Vec<LocalPlain>, StoreError> {
 
 fn profiles(db: &ProjectDb) -> Result<Vec<(ResourceId, LocalProfile)>, StoreError> {
   let servers = db.mcp_servers()?;
+  let connections = db.connections()?;
   let pipelines = latest_pipelines(db)?;
   let mut profiles = Vec::new();
   for resource in db.resources(ResourceKind::AgentProfile)? {
     let Some(version) = db.latest_version::<AgentProfile>(resource.id())? else {
       continue;
     };
-    let connection = db.connection(version.body().connection())?;
-    let cli = match connection.as_ref().map(orchester_core::connection::Connection::kind) {
+    let body = version.body();
+    let connection = connections.iter().find(|found| found.id() == body.connection());
+    let cli = match connection.map(orchester_core::connection::Connection::kind) {
       Some(ConnectionKind::Agent(cli)) => Some(*cli),
-      _ => None,
+      Some(_) => None,
+      None => AgentProvider::cli_of_model(body.model().as_str()),
     };
     let mut running: Vec<String> = pipelines
       .iter()
@@ -206,24 +223,64 @@ fn profiles(db: &ProjectDb) -> Result<Vec<(ResourceId, LocalProfile)>, StoreErro
       .map(|(name, _)| name.clone())
       .collect();
     running.sort_by_key(|name| name.to_lowercase());
+    let chosen: Vec<_> = body
+      .mcp_servers()
+      .ids()
+      .iter()
+      .filter_map(|id| servers.iter().find(|server| server.id() == *id))
+      .collect();
+    let of_kind: Vec<ConnectionChoice> = connections
+      .iter()
+      .filter(|found| matches!(found.kind(), ConnectionKind::Agent(provider) if Some(*provider) == cli))
+      .map(|found| ConnectionChoice {
+        id: found.id(),
+        name: found.name().to_string(),
+        version: found.version().map(str::to_owned),
+      })
+      .collect();
     profiles.push((
       resource.id(),
       LocalProfile {
         cli,
         connection: connection.map(|connection| connection.name().to_string()),
-        mcp_servers: version
-          .body()
-          .mcp_servers()
-          .ids()
+        mcp_servers: chosen
           .iter()
-          .filter_map(|id| servers.iter().find(|server| server.id() == *id))
           .map(|server| (server.id(), server.name().to_string()))
           .collect(),
         pipelines: running,
+        model: body.model().as_str().to_owned(),
+        effort: body
+          .settings()
+          .iter()
+          .find_map(|(key, value)| (key == REASONING_EFFORT).then(|| value.to_owned())),
+        current: of_kind
+          .iter()
+          .find(|choice| choice.id == body.connection())
+          .map(|choice| choice.id),
+        connections: of_kind,
+        published_at: version.published_at(),
+        draft: db.draft::<AgentProfile>(resource.id())?.is_some(),
+        secrets: secret_names(db, &chosen)?,
       },
     ));
   }
   Ok(profiles)
+}
+
+/// The names of the project secrets the variables of `servers` take, each once, in the order the servers come.
+fn secret_names(
+  db: &ProjectDb,
+  servers: &[&orchester_core::connection::mcp::McpServer],
+) -> Result<Vec<SecretName>, StoreError> {
+  let mut names: Vec<SecretName> = Vec::new();
+  for id in servers.iter().flat_map(|server| server.environment().secrets()) {
+    if let Some(secret) = db.secret(id)?
+      && !names.contains(secret.name())
+    {
+      names.push(secret.name().clone());
+    }
+  }
+  Ok(names)
 }
 
 fn latest_pipelines(db: &ProjectDb) -> Result<Vec<(String, Pipeline)>, StoreError> {

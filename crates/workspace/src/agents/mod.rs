@@ -5,6 +5,7 @@ pub mod editor;
 pub mod folders;
 pub mod form;
 pub mod hub;
+pub mod local_connection;
 pub mod local_hub;
 pub mod permissions;
 pub mod prompts;

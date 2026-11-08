@@ -1056,6 +1056,12 @@
       "networkOffDetail": "Package installs and web requests fail while network access is off.",
       "networkHostsDetail": "Only the listed hosts can be reached.",
       "networkOnDetail": "Commands and web tools can reach the network."
+    },
+    "localConnection": {
+      "gone": "This project no longer has the profile, so no connection was chosen.",
+      "draftFirst": "The profile has edits that are not published. Open its editor to choose the connection with them, or discard them first; nothing was changed.",
+      "notOfKind": "That is not a connection of the profile's CLI in this project, so nothing was changed.",
+      "widens": "Using that connection would widen what the profile's agents may do. Open the profile's editor to confirm it; nothing was changed."
     }
   },
   "connections": {
