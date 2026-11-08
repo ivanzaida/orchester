@@ -1028,10 +1028,17 @@ claim's holder or an Admin; Cancel, reopen and Backlog ↔ Todo by an Admin only
 the delivery of the task's work. Today every lifecycle change of a team task is refused (`decision_required` D4), so a
 team task can never be closed. Order:
 
-1. **Contract** (`orchester-api`, `docs/cloud-api.md`): the lifecycle change of a team task, its capabilities
-   (`Capabilities.actions`) and refusals; the task's Done on an accepted delivery as an event. Here first, then move
-   the pin in `ivanzaida/orchester-platform`.
-2. **Server** (platform repository): the route, enforced from the caller's claim and role; Done on accepted delivery.
+1. **Contract** (`orchester-api`, `docs/cloud-api.md`) — built on branch `claude/d4-contract`: no new route; the
+   lifecycle is the `workflow` and `blocked_reason` of the existing task patch, decided by `v2::LifecycleAction` /
+   `LifecycleRequest`, reported as the capability actions `task.complete`, `task.cancel`, `task.reopen`, `task.triage`
+   and `task.block` (new `DenialReason::transition_denied`), refused with the existing `not_admin`, `not_holder`,
+   `revision_conflict` and `organization` (`stop_run_first`); closing releases the claim; Done by itself on a succeeded
+   report/outside run and on an accepted module delivery; the events are the existing `task.changed`, `task.claim` and
+   the S11 scopes (`docs/cloud-api.md` "Team authority task lifecycle"). The stand-in implements it
+   (`crates/api/tests/team_lifecycle`). Move the pin in `ivanzaida/orchester-platform` after the merge.
+2. **Server** (platform repository): the patch's check by the caller's claim and role, the claim release, the capability
+   actions, Done on a succeeded report and on an accepted delivery, from that contract; open questions in
+   `docs/architecture/server.md` "Team authority S12 contract".
 3. **App and MCP:** `update_task` `workflow_status`, `create_task`'s status and `return_to_draft` take the team path
    instead of refusing D4; *Mark as done*, *Cancel task* and reopen on the task page and the Tasks list for a team
    task, by capability (needs a design step first: D4 was drawn as "no Done action"). Update

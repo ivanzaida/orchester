@@ -170,7 +170,7 @@ joins, the cloud link and the removal of passwords (S1c). Orchester Cloud (C1) d
 | 93 | The old local profile format is dropped | A profile in the older form (naming a connection, a computer's MCP server or a secret by an id of that computer) has no compatibility on the desktop or on the team server and gets no special message: it is republished in the team's form (ORC-820; the migration of existing server versions is OP-200). ORC-846, which would have read the old form, is closed as won't do | user (2026-11-07) |
 | 94 | Needs you here and Off here | A team MCP server that nobody has decided on at this computer is *Needs you here* (it is missing "switched on"), and a profile that chooses it is missing the same part; only one a person switched off, or an automation did, is *Off here* (ORC-824, `crates/workspace/src/readiness/`). Both are not ready, and neither should start a run; refusing the run (`not_ready_here`) is not built yet: ORC-826 (team) and ORC-827 (local) are in progress | user (2026-11-07) |
 | 95 | A team reviewer names a CLI kind, each computer picks its connection | The team's reviewer (`team_reviewer`) names its CLI kind like a team agent profile, and each computer picks the connection it runs on, once, as for a profile (row 30). **Built (ORC-887):** a language reviewer's body is `{ kind: "language", cli, model, effort }` and a decision reviewer's names no connection (`docs/cloud-api.md`, "Team server reviewer resource"); the version's `references` are the CLI kind (a decision reviewer's are empty). The pick is kept per reviewer in `team_connection_picks`, an agent connection of that CLI kind for a language reviewer and a decision connection for a decision reviewer (sending requests to a server that is not on this computer is a person's alone, `person_only` over MCP). A reviewer without a connection is *Needs you here* (`Missing::Connection`, `Missing::DecisionConnection`) like a profile. A body of the earlier form (it names a connection) is not read, with no upgrade: the reviewer is published again. A decision pick is refused (`server_not_allowed`) when the reviewer's destinations do not list the connection's server. **Not built:** no team run uses the pick yet. A run gets its reviewer from the project's own setting (`AutoModeSettings.reviewer`), the execution bundle pins no reviewer, and nothing turns a project's reviewer setting into a team reviewer; binding the team's reviewer into a run is a plan item (`docs/plan.md`, "The team reviewer in a team run"). The decision reviewer's design notes (`docs/design/decision-reviewer.md`) say the same | user (2026-11-07; ORC-887) |
-| 96 | Closing and reopening a team task (D4) | Who changes a team task's lifecycle status, enforced by the team server's task route from the caller's capabilities: **Done** — the person who holds the task's current effective claim, or an Admin; **Canceled** — an Admin only; **reopening** a Done or Canceled task (to Backlog or Todo) and moving a task between **Backlog and Todo** — an Admin only. A task also becomes Done by itself when the server accepts the delivery of its work (its module's delivery into base); a run's success alone marks nothing for work that delivers changes. Report and outside deliverables, which have no base merge, are Done when their run succeeds. Closing (Done or Canceled) releases the task's claim; a reopened task is free. The manual Blocked is set and cleared by the claim's holder or an Admin. Not built yet: the contract (`orchester-api`), the server route, the app's actions and the MCP tools `update_task`, `create_task` and `return_to_draft`, which still refuse as `decision_required` (D4) (`docs/plan.md` S12) | user (2026-11-08: "a team task may be marked done by whoever worked on it, holding its claim, or by an admin"; cancel, reopen and Backlog/Todo: Admin only; Done by itself after delivery, for report and outside work when the run succeeds; closing releases the claim; manual Blocked: claim holder or Admin) |
+| 96 | Closing and reopening a team task (D4) | Who changes a team task's lifecycle status, enforced by the team server's task route from the caller's capabilities: **Done** — the person who holds the task's current effective claim, or an Admin; **Canceled** — an Admin only; **reopening** a Done or Canceled task (to Backlog or Todo) and moving a task between **Backlog and Todo** — an Admin only. A task also becomes Done by itself when the server accepts the delivery of its work (its module's delivery into base); a run's success alone marks nothing for work that delivers changes. Report and outside deliverables, which have no base merge, are Done when their run succeeds. Closing (Done or Canceled) releases the task's claim; a reopened task is free. The manual Blocked is set and cleared by the claim's holder or an Admin. The contract is built, with no new route: the lifecycle is the `workflow` and `blocked_reason` of the existing task patch, decided by `orchester-api` `v2::LifecycleAction` and reported as the task's capability actions `task.complete`, `task.cancel`, `task.reopen`, `task.triage` and `task.block` ([below](#team-authority-s12-contract-d4), `docs/cloud-api.md` "Team authority task lifecycle", the stand-in). Not built yet: the server's enforcement, the app's actions and the MCP tools `update_task`, `create_task` and `return_to_draft`, which still refuse as `decision_required` (D4) (`docs/plan.md` S12) | user (2026-11-08: "a team task may be marked done by whoever worked on it, holding its claim, or by an admin"; cancel, reopen and Backlog/Todo: Admin only; Done by itself after delivery, for report and outside work when the run succeeds; closing releases the claim; manual Blocked: claim holder or Admin) |
 
 ## Processes and crates
 
@@ -483,8 +483,8 @@ anything else is `SequenceRegressed`. Core adds `id::WorkEventId`, the event id 
 `ArtifactRef`s with an `ArtifactKind` of `report`, `patch` or `log`); `v2::WorkEvent::Changed` is the `work.changed`
 delta with `{work:WorkRead}`. Refusals reuse `claim_lost` for a stale generation and add `session_mismatch`,
 `sequence_regressed` and `membership_revoked`; a duplicate is answered with the original result. An execution
-success is not permission to mark the task Done: no human-wait or task-completion outcome exists until D1, D4 and D8
-are decided (D4 decided 2026-11-08, row 96, not built yet). OP-152 implements routes, fencing and storage in the platform repository; these types alone implement
+success is not permission for a person to mark the task Done, and no human-wait outcome exists until D1 and D8 are
+decided; what the server marks Done by itself on a success is D4's rule ([S12](#team-authority-s12-contract-d4)). OP-152 implements routes, fencing and storage in the platform repository; these types alone implement
 none.
 
 ## Team authority S11 contract (ORC-660 / OP-154)
@@ -508,6 +508,35 @@ events at or below `R` are already in it. A client may therefore subscribe befor
 change. A `reset` drops every cached read, which is read again at or after its cursor. `PageCursor` stays opaque: page
 cursors are not ordered. OP-154 implements the route, replay and enforcement in the platform repository; these types
 alone implement none.
+
+## Team authority S12 contract (D4)
+
+Closing and reopening a team task (row 96). The wire rules are in [cloud-api.md](../cloud-api.md#team-authority-task-lifecycle);
+the rule itself is `orchester_api::v2::LifecycleAction` and `LifecycleRequest`, which the server calls rather than
+re-deriving, so the platform, the stand-in and a desktop preview decide alike.
+
+**One route, not a new one.** The lifecycle is two fields of the task patch (`workflow`, `blocked_reason`) that
+`PATCH /api/v1/projects/{p}/tasks/{t}` already takes. Reasons for extending it: the revision rule, the `409
+revision_conflict {current}` and the dispatcher's recovery by reading the task already hold for it; it keeps one writer
+of those fields (a command would be a second path that sets them, with a receipt the definition routes do not keep);
+and its refusals are the `/api/v1` ones that exist (`not_admin`, `not_holder`, `revision_conflict`, `organization`).
+What changes is who may send the patch: a patch that only marks a task Done and/or sets or clears its blocked reason is
+the holder's of the task's effective claim as well as an Admin's; every other patch is the Admin's as before. A closed
+task has no claim: closing (by anyone) releases the task's own claim in the patch's transaction, a module's claim stays.
+
+**Capabilities.** Five actions on a task's `capabilities.actions`, with `transition_denied` (new `DenialReason`: the task's
+status does not have the action) told before `role_required` / `claim_required`. The desktop shows or hides actions from
+them and from nothing cached about the role.
+
+**Done by itself** is the server's rule on two accepted facts, not a caller's change: a `succeeded` `work.report` whose
+delivery has no base merge (`report`, `outside`, `changes_or_report` without a patch artifact:
+`completes_on_success`), and a `delivered` `delivery.report` of the task's module for work that `succeeded`. The
+task's pipeline gives the delivery (the bundle's `Deliverable`); no field is added to the task.
+
+**Open for the platform (OP):** whether a closed task may be claimed or started (this contract does not say; the stand-in
+does not refuse it); whether the runner shares a `patch` artifact exactly when the run committed changes (the rule for
+`changes_or_report` relies on it); what an Admin's Done to Canceled (and back) is, which this contract leaves an Admin's
+without a capability action.
 
 ## Claims
 
