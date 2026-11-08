@@ -12,7 +12,6 @@ use orchester_core::{
   question::{AskedQuestions, QuestionState},
   run::Answerer,
 };
-use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -62,9 +61,9 @@ pub struct GetConversation {
 pub async fn get_conversation(services: &Services, args: GetConversation) -> Result<Value, ToolError> {
   let services = services.clone();
   blocking(move || {
-    let open = services.project(&args.project)?;
+    let (open, db) = services.read_project(&args.project)?;
     let (project, root) = (open.project.id(), open.repo_root);
-    let task = find_task(&ProjectDb::open(&root)?, &args.task)?;
+    let task = find_task(&db, &args.task)?;
     let detail = TaskDetail::load_in(&root, task.id())?;
     let link = Link::Task(project, task.key().clone(), TaskPage::Conversation).path();
     let (items, proposed, merged) = items(&root, &detail)?;

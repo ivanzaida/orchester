@@ -9,7 +9,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::time::Timestamp;
-use orchester_workspace::{agents::team_mcp_edit::McpEdit, display, messages::Message};
+use orchester_workspace::{agents::team_mcp_edit::McpEdit, display, sharing::team_edit::EditRefused};
 
 use super::{
   McpPanel, Props, edit_view,
@@ -153,7 +153,7 @@ impl McpPanel {
       if input_may_decide(gate.as_ref(), Guarded::PermissionWidening) {
         restore.run(true);
       } else {
-        failure.set(Some(Message::new("sharing.errors.personOnly")));
+        failure.set(Some(EditRefused::person_only_message()));
       }
     });
     let draft = edit

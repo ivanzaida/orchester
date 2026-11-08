@@ -126,13 +126,12 @@ pub fn nullable<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Option<Opt
 }
 
 pub async fn list_modules(services: &Services, args: ListModules) -> Result<Value, ToolError> {
-  if let Some(team) = team::of(services, &args.project).await? {
+  if let Some(team) = team::of_reading(services, &args.project).await? {
     return team::list_modules(services, &team).await;
   }
   let services = services.clone();
   blocking(move || {
-    let open = services.project(&args.project)?;
-    let db = ProjectDb::open(&open.repo_root)?;
+    let (open, db) = services.read_project(&args.project)?;
     let listed = summaries(&db.modules()?, &db.tasks()?);
     let project = open.project.id();
     Ok(json!({
@@ -144,13 +143,12 @@ pub async fn list_modules(services: &Services, args: ListModules) -> Result<Valu
 }
 
 pub async fn get_module(services: &Services, args: GetModule) -> Result<Value, ToolError> {
-  if let Some(team) = team::of(services, &args.project).await? {
+  if let Some(team) = team::of_reading(services, &args.project).await? {
     return team::get_module(services, &team, &args.module).await;
   }
   let services = services.clone();
   blocking(move || {
-    let open = services.project(&args.project)?;
-    let db = ProjectDb::open(&open.repo_root)?;
+    let (open, db) = services.read_project(&args.project)?;
     let module = find_module(&db, &args.module)?;
     let page = ModulePage::read(&db, module.id(), orchester_core::time::Timestamp::now())?
       .ok_or_else(|| ToolError::not_found(Missing::Module, &args.module))?;

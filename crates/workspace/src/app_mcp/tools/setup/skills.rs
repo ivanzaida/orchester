@@ -141,7 +141,7 @@ async fn list_skills(services: &Services, args: InProjects, translate: &Translat
 async fn get_skill(services: &Services, args: InSkill) -> Result<Value, ToolError> {
   let services = services.clone();
   blocking(move || {
-    let open = services.project(&args.project)?;
+    let (open, _) = services.read_project(&args.project)?;
     let id = skill_named(&ProjectSkills::load_in(&open.repo_root)?, &args.skill)?.id;
     Ok(json!({ "skill": skill_json(&open.repo_root, id, open.project.id())? }))
   })

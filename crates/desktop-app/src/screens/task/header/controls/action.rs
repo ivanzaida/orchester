@@ -148,7 +148,7 @@ async fn work_claim(
     })
     .await??;
     match team {
-      Some(team) if team.fence.is_some() => return Err(Message::new("claims.refused.fenced")),
+      Some(team) if team.fence.is_some() => return Err(messages::run_fenced()),
       Some(_) => return Ok(WorkClaim::default()),
       None => {}
     }

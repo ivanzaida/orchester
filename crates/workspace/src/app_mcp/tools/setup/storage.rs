@@ -68,7 +68,7 @@ pub(super) async fn call(services: &Services, name: &str, arguments: Value) -> R
 async fn get_storage(services: &Services, args: InProject) -> Result<Value, ToolError> {
   let services = services.clone();
   blocking(move || {
-    let open = services.project(&args.project)?;
+    let (open, _) = services.read_project(&args.project)?;
     let root = open.repo_root.clone();
     let folders = ExecutorFolders::new(services.runners, open);
     let read = storage::read_local(&root, &folders).map_err(|error| match error {

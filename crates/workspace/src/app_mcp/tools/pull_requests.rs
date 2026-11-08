@@ -142,7 +142,7 @@ pub async fn get_pull_request(services: &Services, args: GetPullRequest) -> Resu
   let services = services.clone();
   let number = args.number;
   let (project, list, listed, ci) = blocking(move || {
-    let project = services.project(&args.project)?;
+    let (project, _) = services.read_project(&args.project)?;
     let list = if args.refresh {
       refreshed(&services, &project)?
     } else {

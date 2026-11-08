@@ -251,8 +251,7 @@ pub async fn check_connection(services: &Services, args: InConnection) -> Result
 pub async fn list_models(services: &Services, args: InConnection) -> Result<Value, ToolError> {
   let services = services.clone();
   blocking(move || {
-    let open = services.project(&args.project)?;
-    let db = ProjectDb::open(&open.repo_root)?;
+    let (open, db) = services.read_project(&args.project)?;
     let decisions = db.decision_connections()?;
     let connections = db.connections()?;
     let id = model_connection_id(&connections, &decisions, &args.connection)?;

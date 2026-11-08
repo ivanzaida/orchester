@@ -18,6 +18,8 @@ use orchester_core::{
 use orchester_store::ProjectDb;
 use orchester_workspace::{
   app_mcp::ToolError,
+  i18n::{FALLBACK_LOCALE, LOCALES},
+  messages::Message,
   orchestrator::{proposal::Decision, tools::ChatScope},
   tasks::{detail::TaskDetail, return_work},
   workspace::OrchestratorConsent,
@@ -155,6 +157,27 @@ fn chat_merge_failed_names_the_resolution_and_proposes_it_with_run_step_files_an
   assert_eq!(code, "changed_since_proposed");
 }
 
+/// The words of `message` in the workspace's fallback locale, its values filled in.
+fn english(message: &Message) -> String {
+  let (_, contents) = LOCALES
+    .iter()
+    .find(|(locale, _)| *locale == FALLBACK_LOCALE)
+    .expect("the fallback locale is shipped");
+  let locale: Value = serde_json::from_str(contents).expect("the locale is JSON");
+  let words = message
+    .key
+    .strip_prefix("appMcp.")
+    .expect("an MCP message")
+    .split('.')
+    .fold(&locale["appMcp"], |at, part| &at[part])
+    .as_str()
+    .unwrap_or_else(|| panic!("{} has words", message.key))
+    .to_owned();
+  message.args.iter().fold(words, |words, (name, value)| {
+    words.replace(&format!("{{{{{name}}}}}"), value)
+  })
+}
+
 #[test]
 fn chat_resolution_refuses_what_the_task_page_would_not_offer() {
   let (mut served, seeded) = Served::seeded("decisions");
@@ -186,6 +209,20 @@ fn chat_resolution_refuses_what_the_task_page_would_not_offer() {
   )
   .expect_err("it may not write");
   assert_eq!(code(&refused), "step_cannot_write", "{refused:?}");
+  let ToolError::Refused { reasons, .. } = &refused else {
+    panic!("a refusal: {refused:?}");
+  };
+  let [reason] = reasons.as_slice() else {
+    panic!("one reason: {reasons:?}");
+  };
+  assert_eq!(
+    english(reason),
+    format!(
+      "The agent of {} may not write in the run’s worktree, so it cannot resolve the conflicts. Name a step whose agent may write, or leave the step out for the one that implemented the work.",
+      reading.name
+    ),
+    "the refusal says why this step cannot, not why another refusal happened"
+  );
   let refused = chat_call(&mut served, &scope, "continue_run", resolve(number, Some("deploy"))).expect_err("no step");
   assert_eq!(code(&refused), "step_not_offered", "{refused:?}");
 

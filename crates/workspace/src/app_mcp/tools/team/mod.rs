@@ -51,6 +51,17 @@ pub(super) async fn of(services: &Services, named: &str) -> Result<Option<Team>,
   .await
 }
 
+/// [`of`] for a read that changes nothing: the project's database is opened only to read it, so a project this
+/// version has not opened yet is refused (`project_not_opened_yet`) and left as it is.
+pub(super) async fn of_reading(services: &Services, named: &str) -> Result<Option<Team>, ToolError> {
+  let (services, named) = (services.clone(), named.to_owned());
+  blocking(move || {
+    let (open, db) = services.read_project(&named)?;
+    Ok(db.sharing()?.map(|link| Team { open, link }))
+  })
+  .await
+}
+
 impl Team {
   /// A session of the team server, signed in for the project's link; refused when it cannot be made.
   pub(super) async fn session(&self, services: &Services) -> Result<TeamSession, ToolError> {

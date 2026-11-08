@@ -150,7 +150,7 @@ async fn list_tools(services: &Services, args: InProjects, translate: &Translate
 async fn get_tool(services: &Services, args: InTool) -> Result<Value, ToolError> {
   let services = services.clone();
   blocking(move || {
-    let open = services.project(&args.project)?;
+    let (open, _) = services.read_project(&args.project)?;
     let id = tool_named(&ProjectTools::load_in(&open.repo_root)?, &args.tool)?.id;
     let (tools, revision) = tools_with_revision(&open.repo_root, id)?;
     let entry = tools
