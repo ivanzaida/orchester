@@ -278,7 +278,12 @@ impl Component for ReviewScreen {
       project, page, waiting, ..
     } = ctx.props::<BodyProps>().clone();
     let key = (page.run.key.clone(), page.run.number);
-    let live = read::live(ctx, &project, page.run.run, self.state.written.get());
+    let written = self.state.written.get();
+    let live = read::live(ctx, &project, page.run.run, written);
+    if live.settled {
+      // The box of a change kept closes in the frame that shows its thread.
+      self.state.settle(written);
+    }
     let wanted = since::moved(&page).is_some() && since::wanted(&project, &key.0);
     let shown = Shown::of(read::since(
       ctx,
@@ -291,6 +296,7 @@ impl Component for ReviewScreen {
       return Element::from(frame.child(self.nothing(ctx, &page)));
     };
     let review = live
+      .review
       .filter(|review| review.head == page.review.head)
       .unwrap_or_else(|| self.page_review(&page));
     let env = Env {

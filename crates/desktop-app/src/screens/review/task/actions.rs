@@ -9,10 +9,7 @@
 
 use std::{path::PathBuf, sync::Arc};
 
-use lurq::{
-  app::ctx::{Ctx, FutureAction},
-  core::Signal,
-};
+use lurq::app::ctx::{Ctx, FutureAction};
 use orchester_core::{
   conversation::MessageBody,
   id::{ResourceId, ReviewMessageId, ReviewThreadId, RunId},
@@ -34,7 +31,7 @@ use orchester_workspace::{
 };
 use parking_lot::Mutex;
 
-use super::state::ReviewState;
+use super::state::{Closes, ReviewState};
 use crate::{
   project::{ShownProject, hold::ReadHold},
   services::Services,
@@ -88,26 +85,18 @@ struct Reach {
   runners: Runners,
   open: OpenProject,
   run: RunId,
-  written: Signal<u64>,
+  state: ReviewState,
+  /// The box the change under way was written in, until it is kept.
+  closes: Arc<Mutex<Option<Closes>>>,
   /// Holds a hand-off to the runner while QA captures it (`hold_hand_offs`).
   hand_offs: ReadHold,
-}
-
-/// The box a change's words were written in, which closes once the change was kept; it stays open, its words with
-/// it, when the change was refused.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Closes {
-  /// The comment box under the chosen lines.
-  Box,
-  /// The box inside a thread.
-  InThread,
 }
 
 /// The page's changes, one at a time: one asked for while another runs is refused, so none is dropped half-way.
 #[derive(Clone)]
 pub(super) struct Writes {
   action: FutureAction<Write, Landed, Message>,
-  /// The box the change under way was written in.
+  /// The box the change under way was written in, until it is kept.
   closes: Arc<Mutex<Option<Closes>>>,
 }
 
@@ -120,37 +109,34 @@ impl PartialEq for Writes {
 impl Writes {
   pub fn new(ctx: &mut Ctx, project: &ShownProject, run: RunId, state: &ReviewState) -> Self {
     let services = Services::of(ctx);
+    let closes: Arc<Mutex<Option<Closes>>> = Arc::default();
     let reach = Reach {
       root: project.open.repo_root.clone(),
       programs: services.programs,
       runners: services.runners,
       open: project.open.clone(),
       run,
-      written: state.written.clone(),
+      state: state.clone(),
+      closes: closes.clone(),
       hand_offs: services.hand_offs,
     };
     let action = ctx.future_action(move |write: Write| {
       let reach = reach.clone();
       async move { apply(&reach, write).await.map_err(|refusal| refusal.message()) }
     });
-    let closes: Arc<Mutex<Option<Closes>>> = Arc::default();
     let (state, feed, closing) = (state.clone(), project.feed.clone(), closes.clone());
     ctx.watch(&action.state(), move |landed| {
       if landed.is_pending() {
         return;
       }
-      state.written.update(|count| *count += 1);
       let closes = closing.lock().take();
       if let Some(error) = &landed.error {
+        state.written.update(|count| *count += 1);
         state.failure.set(Some(error.clone()));
         return;
       }
       state.failure.set(None);
-      match closes {
-        Some(Closes::Box) => state.close(true),
-        Some(Closes::InThread) => state.close_in_thread(),
-        None => {}
-      }
+      state.kept(closes);
       match landed.data {
         Some(Landed::Approved) => {
           // A merge ran: the project's tasks and merges are read again.
@@ -245,9 +231,10 @@ async fn apply(reach: &Reach, write: Write) -> Result<Landed, ReviewRefusal> {
   }
 }
 
-/// What was kept before its hand-off to the runner is read again; the hand-off goes once QA does not hold it.
+/// What was kept before its hand-off to the runner is read again, the box it was written in closing once that read
+/// shows it; the hand-off goes once QA does not hold it.
 async fn shown(reach: &Reach) {
-  reach.written.update(|count| *count += 1);
+  reach.state.kept(reach.closes.lock().take());
   reach.hand_offs.released().await;
 }
 

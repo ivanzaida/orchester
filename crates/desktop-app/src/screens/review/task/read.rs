@@ -65,9 +65,16 @@ pub(in crate::screens::review) fn read(ctx: &mut Ctx, project: &ShownProject, ke
   }
 }
 
-/// `run`'s review as last read, read again on every change of the project's runs and of the page (`written`); `None`
-/// until read, and when it cannot be read (the page's own read says why).
-pub(super) fn live(ctx: &mut Ctx, project: &ShownProject, run: RunId, written: u64) -> Option<Arc<Review>> {
+/// The run's review as last read, and whether that read is done.
+pub(super) struct Live {
+  /// `None` until read, and when it cannot be read (the page's own read says why).
+  pub review: Option<Arc<Review>>,
+  /// The read for the page's latest change is done, so `review` shows it (or could not be read): no read is under way.
+  pub settled: bool,
+}
+
+/// `run`'s review as last read, read again on every change of the project's runs and of the page (`written`).
+pub(super) fn live(ctx: &mut Ctx, project: &ShownProject, run: RunId, written: u64) -> Live {
   let feed = &project.feed;
   let root = project.open.repo_root.clone();
   let changes = (feed.changes.get(), feed.states.get(), feed.saves.get(), written);
@@ -87,7 +94,10 @@ pub(super) fn live(ctx: &mut Ctx, project: &ShownProject, run: RunId, written: u
     })
     .state()
     .get();
-  loaded.data.map(|Held(review)| review)
+  Live {
+    settled: !loaded.is_pending(),
+    review: loaded.data.map(|Held(review)| review),
+  }
 }
 
 /// What the page reads of the commits after the head reviewed.
