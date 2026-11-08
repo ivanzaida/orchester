@@ -1021,6 +1021,33 @@ but no run uses them: a run gets its reviewer from the project's own `AutoModeSe
   Define working behavior and data sources before adding controls; do not add inert placeholders.
   Evidence: `.tmp/verify/u9/report.md`.
 
+### S12 · Closing team tasks (D4) and the MCP tools on team projects (non-UI first, then UI)
+
+D4 is decided (2026-11-08, `docs/architecture/server.md` row 96, `docs/design/team-authority.md`): Done by the
+claim's holder or an Admin; Cancel, reopen and Backlog ↔ Todo by an Admin only; Done by itself when the server accepts
+the delivery of the task's work. Today every lifecycle change of a team task is refused (`decision_required` D4), so a
+team task can never be closed. Order:
+
+1. **Contract** (`orchester-api`, `docs/cloud-api.md`): the lifecycle change of a team task, its capabilities
+   (`Capabilities.actions`) and refusals; the task's Done on an accepted delivery as an event. Here first, then move
+   the pin in `ivanzaida/orchester-platform`.
+2. **Server** (platform repository): the route, enforced from the caller's claim and role; Done on accepted delivery.
+3. **App and MCP:** `update_task` `workflow_status`, `create_task`'s status and `return_to_draft` take the team path
+   instead of refusing D4; *Mark as done*, *Cancel task* and reopen on the task page and the Tasks list for a team
+   task, by capability (needs a design step first: D4 was drawn as "no Done action"). Update
+   `docs/manual/mcp-tools-work.md` (the D4 refusal) and the tools' descriptions.
+4. **Team tasks in the other MCP tools** (found 2026-11-08, independent of D4): tools that look a team task up in this
+   computer's cached copy of shared tasks instead of the team server answer `task_not_found` or leave team runs out
+   when the copy is missing — `get_run` (`app_mcp/tools/runs.rs` `read_run` needs the task row), `send_message` in
+   every mode (`TaskDetail::load_in`), `get_conversation`, `list_runs`, `get_approvals`, `hold_queue` /
+   `release_queue` with a task, `get_delivery` with a team module; a run named by its number is never found for a
+   team task without the copy (`find_run`). `resume_run` takes the old v1 claim and continues an interrupted run
+   locally while `continue_run` is refused for team projects. Resolve team tasks through the server as `get_task`
+   does, and give each tool an answer or an explicit refusal.
+
+Decided as well (2026-11-08): closing releases the claim; report and outside work is Done when its run succeeds; the
+manual Blocked is set and cleared by the claim's holder or an Admin. Work in `module/team-lifecycle` (both repositories).
+
 ## Later
 
 - **macOS:** build, install and smoke-test on a Mac (`docs/stable-build.md`, macOS section). All macOS code is only

@@ -133,7 +133,12 @@ target date, a tag rename, a board move between Backlog and Todo, and Automatic 
   (drawn in 02g, 02h). Still open: what renews a module claim. Drawn: the module line only says its tasks' runs
   don't renew it; the frame captions and these notes carry the decision id, the on-screen text doesn't.
 - **D4** — completing a task outside a run, manual blocked and reopen. Drawn: a succeeded run never marks the task
-  Done; there is no Done action.
+  Done; there is no Done action. **Decided** (the person, 2026-11-08, `docs/architecture/server.md` row 96): the person
+  holding the task's claim or an Admin marks it Done; only an Admin cancels it, reopens a Done or Canceled task, or
+  moves it between Backlog and Todo; a task becomes Done by itself when the server accepts the delivery of its work.
+  Closing (Done or Canceled) releases the task's claim. Report and outside work, which has no base merge, is Done when
+  its run succeeds. The manual Blocked is set and cleared by the claim's holder or an Admin. Not drawn or built yet
+  (`docs/plan.md` S12).
 - **D6** — default pipeline and the remaining field ownership. Drawn: the pipeline shown is the Admin's; members have
   no control to change it, and no new field ownership is drawn. **Decided for a task's pipeline** (the person,
   2026-11-05, `docs/architecture/server.md` row 80): a team task's pipeline is one of the team's pipelines, chosen by
