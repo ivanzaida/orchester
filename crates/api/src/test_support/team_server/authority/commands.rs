@@ -61,7 +61,10 @@ pub(super) fn command(authority: &mut Authority, project: &str, body: &str) -> (
     }
     Err((status, code)) => (status, refusal(Some(&operation), code)),
   };
-  authority.operations.push((operation, identity, status, answer.clone()));
+  // A server that was unavailable kept nothing of the command: the same operation is sent again as new.
+  if status != 503 {
+    authority.operations.push((operation, identity, status, answer.clone()));
+  }
   (status, answer)
 }
 
@@ -193,7 +196,11 @@ fn take(authority: &mut Authority, kind: &str, command: &Value) -> Result<Value,
   )
 }
 
-/// `claim.release` of the claim the authority names, the person's own.
+/// `claim.release` of the claim the authority names, the person's own. The release is refused as `invalid` (the claim's
+/// `AgentWorking`) while the task's latest work runs with an accepted report: a run is under it, and it is stopped
+/// first. A running work that never had one started no run, so the holder may let go of it: the work moves to `failed`
+/// and, as on the real server, no reason is stored for it; the task's row stays. A server older than this rule refuses
+/// any running work ([`crate::test_support::team_server::TeamServer::authority_refuses_running_releases`]).
 fn release(authority: &mut Authority, command: &Value) -> Result<Value, Refused> {
   let subject = command["authority"]["subject"].clone();
   let number = subject_number(authority, &subject).ok_or((404, "not_found"))?;
@@ -202,7 +209,21 @@ fn release(authority: &mut Authority, command: &Value) -> Result<Value, Refused>
     Some(held) if held.holder == Person::You && command["authority"]["claim_id"] == held.id(number) => held,
     _ => return Err((409, "claim_lost")),
   };
-  *claim = None;
+  let (older, reported) = (authority.refuses_running_releases, &authority.reported);
+  if let Some(task) = authority
+    .tasks
+    .as_mut()
+    .and_then(|tasks| tasks.iter_mut().find(|task| subject["id"] == task_id(task)))
+    && task.work == Some("running")
+  {
+    if older || reported.contains(&task_id(task)) {
+      return Err((422, "invalid"));
+    }
+    task.work = Some("failed");
+  }
+  if let Some(claim) = subject_claim(authority, &subject) {
+    *claim = None;
+  }
   Ok(json!({"kind": "released", "subject": subject, "released_claim_id": released.id(number), "effects": []}))
 }
 

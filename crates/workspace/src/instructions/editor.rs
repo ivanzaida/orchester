@@ -45,19 +45,22 @@ impl WriteError {
   }
 }
 
-/// Creates the first draft with its complete validated body in a single store operation.
+/// Creates the instruction as its first version, v1 with no draft, if every variable it uses has a value at each of its
+/// events. In a team project the version waits for the server (`Servers::send_created`).
 pub fn create_in(root: &Path, name: Name, body: &Instruction) -> Result<InstructionEntry, WriteError> {
+  if let Some(unavailable) = missing(body.text(), body.events()).first() {
+    return Err(WriteError::Unavailable(*unavailable));
+  }
   let mut db = ProjectDb::open(root)?;
   let taken = db.slugs(Instruction::KIND)?;
   let fallback = Slug::new("instruction").expect("the fallback slug is valid");
   let slug = Slug::unique_for(&name, &fallback, &taken);
-  let now = Timestamp::now();
-  let resource = db.create_resource(slug, name, body, now)?;
+  let (resource, version) = db.create_published(slug, name, body, Timestamp::now())?;
   Ok(committed(
     resource.id(),
     (resource.name().as_str().into(), resource.slug().as_str().into()),
-    Some(Draft::new(body.clone(), None, now)),
     None,
+    Some(&version),
   ))
 }
 /// Saves only while the body, latest version and draft timestamp still match what was opened.

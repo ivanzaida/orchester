@@ -1,7 +1,7 @@
 //! The fake team server's resources: a version published appends its `resource.published` ([`super::publishing`]),
 //! an archive or a restore its `resource.archived`, and a resource's versions are read one a page.
 
-use orchester_api::{Event, Reference, ResourceArchived, SharedResourceKind, SharedVersion, Versions};
+use orchester_api::{Event, ReferenceTarget, ResourceArchived, SharedResourceKind, SharedVersion, Versions};
 use orchester_core::{blob::ContentHash, id::ResourceId, resource::VersionNumber};
 use serde_json::Value;
 
@@ -14,7 +14,7 @@ impl TeamServer {
     &self,
     resource: (ResourceId, SharedResourceKind, &str),
     body: Value,
-    references: Vec<Reference>,
+    references: Vec<ReferenceTarget>,
   ) -> VersionNumber {
     let mut state = self.state();
     let by = state.members[0].1.clone();
@@ -46,6 +46,12 @@ impl TeamServer {
   /// `token`'s member changes the team's configuration from now on, as the server's admin does.
   pub fn make_admin(&self, token: &str) {
     self.state().admins.push(token.to_owned());
+  }
+
+  /// Answers every version published on a resource the server has `403 not_admin` while `refuse` holds; a new
+  /// resource is still created.
+  pub fn refuse_versions(&self, refuse: bool) {
+    self.state().refuse_versions = refuse;
   }
 
   /// The versions of `resource` the server has, oldest first.

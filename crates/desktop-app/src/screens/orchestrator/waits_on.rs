@@ -69,7 +69,14 @@ impl Component for WaitsOnLine {
     let dropping = ctx.future_action(move |by: Answerer| {
       let (services, open, run) = (services.clone(), props.open.clone(), props.row.run);
       async move {
-        drop_wait((&services.runners, &services.servers), &open, run, by).await?;
+        drop_wait(
+          (&services.runners, &services.servers),
+          (&services.workspace, &services.vault),
+          &open,
+          run,
+          by,
+        )
+        .await?;
         services.changes.record(open.project.id(), Outside::Tasks);
         Ok(())
       }

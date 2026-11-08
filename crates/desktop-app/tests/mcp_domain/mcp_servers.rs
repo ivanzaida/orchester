@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 use orchester_core::{
   id::SecretId,
   secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
-  store::SecretStore,
+  store::{McpServerStore, SecretStore},
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
@@ -322,4 +322,34 @@ fn domain_profile_mcp_selection_checks_enabled_added_disabled_kept_removed_and_m
     designer.profile.mcp_servers().ids().is_empty(),
     "rejections changed no stored selection"
   );
+}
+
+#[test]
+fn mcp_server_a_local_project_has_no_team_only_fields_and_keeps_plain_rows() {
+  let (mut served, repo) = served();
+  served.let_automation_widen(true);
+  for field in [
+    json!({ "variable_names": ["TOKEN"] }),
+    json!({ "secret_headers": [{ "header": "X-Key", "secret": "X_KEY" }] }),
+  ] {
+    let mut args = pencil();
+    if let (Value::Object(args), Value::Object(field)) = (&mut args, field.clone()) {
+      args.extend(field);
+    }
+    let refused = served.refused("add_mcp_server", &args);
+    assert_eq!(refused["code"], "field_not_applicable", "{field}: {refused}");
+  }
+  assert!(
+    ProjectDb::open(&repo)
+      .expect("open")
+      .mcp_servers()
+      .expect("servers")
+      .is_empty(),
+    "nothing was added"
+  );
+
+  // A local server is a plain row of the project: added at once, with no version on any team server.
+  let added = served.ok("add_mcp_server", &pencil());
+  assert_eq!(added["server"]["name"], "pencil-design", "{added}");
+  assert!(added["server"].get("published_version").is_none(), "{added}");
 }

@@ -23,7 +23,7 @@ use crate::{
   sharing::Servers,
   tasks::conversation::{
     composer::{ComposerMode, Then},
-    follow::{RunnerOf, Sent, Stored, follow},
+    follow::{Readiness, RunnerOf, Sent, Stored, follow},
     outgoing::{Context, OutgoingError, Way, prepare_in, store_answer_in},
   },
   workspace::OpenProject,
@@ -123,6 +123,7 @@ pub fn send_on_as(
 /// automation's under `allowed`) and lets `project`'s runner deliver it.
 pub async fn send_on(
   (runners, servers): (&Runners, &Servers),
+  ready: Readiness<'_>,
   project: &OpenProject,
   (task, id): (TaskId, SideQuestionId),
   (by, allowed): (
@@ -139,5 +140,13 @@ pub async fn send_on(
     key: sent.key,
     pipeline: &sent.pipeline,
   };
-  Ok(follow((runners, servers, RunnerOf::Project(project)), &stored, sent.then).await)
+  Ok(
+    follow(
+      (runners, servers, RunnerOf::Project(project)),
+      ready,
+      &stored,
+      sent.then,
+    )
+    .await,
+  )
 }

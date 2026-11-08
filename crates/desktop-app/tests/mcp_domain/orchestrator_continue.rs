@@ -71,12 +71,7 @@ fn newest_action(db: &ProjectDb, scope: &ChatScope) -> i64 {
 
 /// The code a refusal of the chat's tool carries.
 fn code(error: &ToolError) -> &str {
-  match error {
-    ToolError::Refused { code, .. } => code,
-    ToolError::InvalidArguments(_) => "invalid_arguments",
-    ToolError::NotFound { .. } => "not_found",
-    ToolError::AmbiguousProject(_) => "ambiguous_project",
-  }
+  error.code()
 }
 
 fn retry(run: &str) -> Value {

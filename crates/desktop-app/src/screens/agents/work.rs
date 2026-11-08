@@ -64,7 +64,7 @@ pub fn work(ctx: &mut Ctx) -> Work {
     let (root, services) = (root.clone(), services.clone());
     async move {
       let worked = root.clone();
-      let done = background::run(move || {
+      let (request, outcome) = background::run(move || {
         let mut request = request;
         if let Some(existing) = request.existing.as_ref() {
           for reason in editor::approved_in(&worked, existing)? {
@@ -74,17 +74,26 @@ pub fn work(ctx: &mut Ctx) -> Work {
           }
         }
         let outcome = editor::apply(&worked, &request)?;
-        let entry = match &outcome {
-          Outcome::Saved(id) => Some(editor::entry_in(&worked, *id)?),
-          Outcome::Confirm(_) => None,
-        };
-        Ok::<_, Message>(Done {
-          request,
-          outcome,
-          entry,
-        })
+        Ok::<_, Message>((request, outcome))
       })
       .await??;
+      // A new profile in a shared project is the team's only once its server takes it; one it refuses is taken back,
+      // and nothing of it is read or shown.
+      if let (Outcome::Saved(id), None) = (&outcome, &request.existing) {
+        team::send_created(&services, &root, *id).await?;
+      }
+      let entry = match &outcome {
+        Outcome::Saved(id) => {
+          let (read, id) = (root.clone(), *id);
+          Some(background::run(move || editor::entry_in(&read, id)).await??)
+        }
+        Outcome::Confirm(_) => None,
+      };
+      let done = Done {
+        request,
+        outcome,
+        entry,
+      };
       // A version published in a shared project goes to its team server at once (02).
       if matches!(done.outcome, Outcome::Saved(_))
         && matches!(done.request.action, Action::Publish | Action::PublishStale)

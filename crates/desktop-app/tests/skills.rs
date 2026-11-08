@@ -1,4 +1,6 @@
 //! Skills in the real headless app, with isolated project data and no agent process.
+#[path = "skills/draft_only.rs"]
+mod draft_only;
 #[path = "skills/recovery.rs"]
 mod recovery;
 mod support;
@@ -73,11 +75,10 @@ impl Skills {
       InstructionScope::Project,
     )
     .expect("skill");
-    let e = editor::save_in(&self.repo, None, name, &body).expect("create");
     if published {
-      editor::publish_in(&self.repo, &e).expect("publish");
+      return editor::save_in(&self.repo, None, name, &body).expect("create as v1").id;
     }
-    e.id
+    draft_only::create(&self.repo, name, &body)
   }
   fn entry(&self, id: ResourceId) -> orchester_workspace::skills::data::SkillEntry {
     ProjectSkills::load_in(&self.repo)
@@ -184,6 +185,8 @@ fn skills_new_edit_autosave_and_publish_keep_versions_separate() {
   assert!(s.text("skills-empty").contains("No skills in Kontur yet"));
   s.click("skills-new");
   s.set("skill-name", "run-checks");
+  s.set("skill-description", "Run checks after changing code.");
+  s.set("skill-body", "# Checks\nRun the checks.");
   s.click("skill-create");
   s.window.until("created skill editor", |w| {
     matches!(w.navigation().route_now(), Route::Project(_, ProjectPage::Skill(_)))
@@ -191,12 +194,13 @@ fn skills_new_edit_autosave_and_publish_keep_versions_separate() {
   let Route::Project(_, ProjectPage::Skill(id)) = s.window.navigation().route_now() else {
     panic!("editor route")
   };
+  // A new skill is created as v1 with no draft; editing it afterwards saves a draft over v1.
+  assert_eq!(s.entry(id).state.published().expect("created as v1").get(), 1);
+  assert!(!s.entry(id).state.has_draft());
   s.window.until("editor ready", |w| {
     w.tree.get_element_by_id("skill-description").is_some()
   });
-  s.set("skill-description", "Run checks after changing code.");
   s.set("skill-body", "# Checks\nRun the checks, then read their output.");
-  s.settle(id, "Run checks after changing code.");
   let root = s.repo.clone();
   s.window.until("body saved", move |_| {
     ProjectSkills::load_in(&root)
@@ -208,6 +212,7 @@ fn skills_new_edit_autosave_and_publish_keep_versions_separate() {
     w.texts("skill-save-status")
       .is_some_and(|t| t.join(" ").contains("Draft"))
   });
+  assert_eq!(s.entry(id).state.published().expect("v1 kept").get(), 1);
   s.click("skill-publish");
   s.window.until("person-only question armed", |w| {
     w.tree.tick_futures();
@@ -215,15 +220,15 @@ fn skills_new_edit_autosave_and_publish_keep_versions_separate() {
   });
   s.click("skill-confirm-confirm");
   let root = s.repo.clone();
-  s.window.until("published v1", move |_| {
+  s.window.until("published v2", move |_| {
     ProjectSkills::load_in(&root)
       .expect("skills")
       .entry(id)
-      .is_some_and(|e| e.state.published().is_some())
+      .is_some_and(|e| e.state.published().is_some_and(|v| v.get() == 2))
   });
   s.window.until("published editor", |w| {
     w.texts("skill-save-status")
-      .is_some_and(|t| t.join(" ").contains("Published v1"))
+      .is_some_and(|t| t.join(" ").contains("Published v2"))
   });
   let original = s.entry(id).body;
   s.set("skill-description", "New instructions for later runs.");

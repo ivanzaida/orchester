@@ -13,20 +13,28 @@
 #[path = "../actions/http.rs"]
 mod http;
 
+mod bundle_missing;
+mod bundle_schema;
+mod claim_end;
 mod completion;
 mod delivery;
 mod delivery_recovery;
+mod fill_ins;
 mod fixture;
 mod heartbeat;
 mod here;
+mod last_start;
 mod reports;
 mod start;
+mod start_alone;
+mod start_notices;
+mod start_release;
 mod team_commands;
 mod team_deliveries;
 mod team_server;
 
 use std::{
-  collections::VecDeque,
+  collections::{HashMap, VecDeque},
   fs,
   path::{Path, PathBuf},
   sync::Arc,
@@ -43,33 +51,29 @@ use orchester_core::{
   name::Name,
   project::{Project, ProjectKey},
   revision::Revision,
-  run::{
-    BranchName, CommitId, NewRun, Run, RunError, RunEvent,
-    inputs::{InputsOrigin, LocalBindings, LocalConsent, ProfileBinding},
-  },
+  run::{BranchName, CommitId, NewRun, Run, RunError, RunEvent, inputs::InputsOrigin},
   secret::{SecretValue, SecretVault, VaultError, VaultKey},
   sharing::TaskRevision,
   store::{ConnectionStore, RunStore},
   time::Timestamp,
 };
+use orchester_ipc::Rejection;
 use orchester_store::{AppDb, ProjectDb};
 use orchester_workspace::{
   actions::{Accepted, Action, ActionOutcome, ClaimAction, Dispatcher, Intent, TeamOutcome, WorkAction},
+  readiness::McpPrograms,
   runner::{RequestError, RunRequestError},
   secrets::Vault,
   sharing::Servers,
   team_reads::TeamSession,
-  team_work::{StartChoices, StartOutcome, TeamRunner, TeamStartRequest, TeamWork},
+  team_work::{Recovered, StartOutcome, StartTurn, TeamRunner, TeamStartRequest, TeamWork, TeamWorkError},
   workspace::Workspace,
 };
 use parking_lot::Mutex;
 use tempfile::TempDir;
 use tokio::sync::watch;
 
-use self::{
-  fixture::Config,
-  team_server::{MEMBER, OTHER, TeamServer},
-};
+use self::team_server::{MEMBER, OTHER, TeamServer};
 
 /// No secret is read or kept here.
 struct NoVault;
@@ -88,11 +92,53 @@ impl SecretVault for NoVault {
   }
 }
 
+#[derive(Default)]
+/// Values kept in memory, so a start's check of the team secrets has a keychain to ask.
+struct MemoryVault(Mutex<HashMap<VaultKey, String>>);
+
+impl SecretVault for MemoryVault {
+  fn store(&self, key: &VaultKey, value: &SecretValue) -> Result<(), VaultError> {
+    self.0.lock().insert(key.clone(), value.expose().to_owned());
+    Ok(())
+  }
+
+  fn read(&self, key: &VaultKey) -> Result<SecretValue, VaultError> {
+    let value = self.0.lock().get(key).cloned().ok_or(VaultError::NotFound)?;
+    SecretValue::new(value).map_err(|_| VaultError::NotFound)
+  }
+
+  fn delete(&self, key: &VaultKey) -> Result<(), VaultError> {
+    self.0.lock().remove(key);
+    Ok(())
+  }
+}
+
+/// A keychain that is locked: it cannot say whether it has any value.
+struct LockedVault;
+
+impl SecretVault for LockedVault {
+  fn store(&self, _: &VaultKey, _: &SecretValue) -> Result<(), VaultError> {
+    Err(VaultError::AccessDenied("locked".to_owned()))
+  }
+
+  fn read(&self, _: &VaultKey) -> Result<SecretValue, VaultError> {
+    Err(VaultError::AccessDenied("locked".to_owned()))
+  }
+
+  fn exists(&self, _: &VaultKey) -> Result<bool, VaultError> {
+    Err(VaultError::AccessDenied("locked".to_owned()))
+  }
+
+  fn delete(&self, _: &VaultKey) -> Result<(), VaultError> {
+    Err(VaultError::AccessDenied("locked".to_owned()))
+  }
+}
+
 /// A team project in a folder of its own, linked to the fake server's project, with a Codex connection.
 struct Checkout {
   dir: TempDir,
+  vault: MemoryVault,
   servers: Servers,
-  connection: ConnectionId,
   _data: TempDir,
 }
 
@@ -135,18 +181,23 @@ impl Checkout {
     let workspace = Workspace::new(AppDb::open(&data.path().join("orchester.db")).expect("database"));
     Self {
       dir,
+      vault: MemoryVault::default(),
       servers: Servers::new(
         workspace,
         Vault::with(Arc::new(NoVault)),
         orchester_api::releases::ReleaseVersion::parse("0.5.0").expect("a release version"),
       ),
-      connection: codex.id(),
       _data: data,
     }
   }
 
   fn root(&self) -> &Path {
     self.dir.path()
+  }
+
+  /// The keychain the start asks about the team secrets; the fill-ins keep their values in it.
+  fn vault(&self) -> &MemoryVault {
+    &self.vault
   }
 
   fn db(&self) -> ProjectDb {
@@ -188,8 +239,29 @@ impl Checkout {
     claim.id
   }
 
-  /// The start of the task's work under `claim`, the profile bound to this project's Codex connection.
-  fn start_request(&self, server: &TeamServer, claim: ClaimId, config: &Config) -> TeamStartRequest {
+  /// `work`'s start of `request` in the project's turn, which a caller takes before it claims the task, with this
+  /// checkout's keychain.
+  async fn start<R: TeamRunner>(
+    &self,
+    work: &TeamWork<R>,
+    request: TeamStartRequest,
+  ) -> Result<StartOutcome, TeamWorkError> {
+    self.start_with(work, request, self.vault()).await
+  }
+
+  /// [`Self::start`] with `vault` asked about the team secrets.
+  async fn start_with<R: TeamRunner>(
+    &self,
+    work: &TeamWork<R>,
+    request: TeamStartRequest,
+    vault: &dyn SecretVault,
+  ) -> Result<StartOutcome, TeamWorkError> {
+    let turn = StartTurn::wait(&self.servers, self.root()).await;
+    work.start_in(&turn, request, vault).await
+  }
+
+  /// The start of the task's work under `claim`; the profile runs on this project's only Codex connection.
+  fn start_request(&self, server: &TeamServer, claim: ClaimId) -> TeamStartRequest {
     TeamStartRequest {
       operation: OperationId::generate(),
       work: WorkAction {
@@ -203,18 +275,7 @@ impl Checkout {
         module: server.module,
         module_read: TaskRevision::FIRST,
       },
-      choices: StartChoices {
-        bindings: LocalBindings {
-          profiles: vec![ProfileBinding {
-            resource: config.profile,
-            connection: self.connection,
-            account: None,
-            required_cli: None,
-          }],
-          references: Vec::new(),
-        },
-        consent: LocalConsent::default(),
-      },
+      programs: McpPrograms::default(),
     }
   }
 
@@ -238,14 +299,22 @@ fn client(server: &TeamServer) -> Client {
 /// The task claimed in the person's session and its work started: the team work, the run and the session's generation.
 async fn started(checkout: &Checkout, server: &TeamServer) -> (TeamWork<StoreRunner>, RunId, watch::Sender<u64>) {
   let claim = checkout.claim(server, MEMBER).await;
-  let config = server.state().config.clone();
-  let request = checkout.start_request(server, claim, &config);
+  let request = checkout.start_request(server, claim);
   let (work, generation) = checkout.work(server, MEMBER, StoreRunner::new(checkout.root(), &[]));
-  let outcome = work.start(request).await.expect("started");
+  let outcome = checkout.start(&work, request).await.expect("started");
   let StartOutcome::Started(run) = outcome else {
     panic!("not started: {outcome:?}");
   };
   (work, run, generation)
+}
+
+/// Every open start of `work`'s project carried on, as the recovery of the open starts does; no start is under way.
+async fn recovered(work: &TeamWork<StoreRunner>, checkout: &Checkout) -> Recovered {
+  work
+    .try_recover(checkout.vault())
+    .await
+    .expect("recovered")
+    .expect("no start is under way")
 }
 
 /// Another member takes the task's claim `observed` over, in their own session.
@@ -270,6 +339,8 @@ enum Hiccup {
   Unavailable,
   /// The runner starts the run and its answer is lost.
   StartsThenLost,
+  /// The runner refuses to run it (`Rejection::Busy`): nothing is started.
+  Refuses,
 }
 
 /// Records and starts the run of accepted inputs as the runner does, by the operation's one run key, without
@@ -342,6 +413,7 @@ impl TeamRunner for StoreRunner {
           runner.record(operation);
           Err(RunRequestError::Request(RequestError::Lost))
         }
+        Some(Hiccup::Refuses) => Err(RunRequestError::Rejected(Rejection::Busy)),
         None => Ok(runner.record(operation)),
       }
     }

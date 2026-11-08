@@ -128,9 +128,17 @@ fn fix_action(ctx: &mut Ctx) -> FutureAction<FixRequest, (), Message> {
         let runner = (&services.runners, &services.servers);
         let fixer = Fixer::Hand { by: request.by };
         let work = (request.task, request.run);
-        fix_ci(runner, &request.project, work, (request.read, request.lost), fixer)
-          .await
-          .map(|_| ())
+        let ready = (&services.workspace, &services.vault);
+        fix_ci(
+          runner,
+          ready,
+          &request.project,
+          work,
+          (request.read, request.lost),
+          fixer,
+        )
+        .await
+        .map(|_| ())
       };
       runtime.spawn(sending).await.map_err(|error| {
         tracing::error!(%error, "Fix CI did not finish");

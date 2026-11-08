@@ -67,7 +67,10 @@ fn codex_sandbox_off_over_mcp_is_person_only() {
   create.as_object_mut().expect("arguments").remove("profile");
   let created = served.ok("save_profile_draft", &create);
   assert_eq!(sandbox_of(&created), "on", "a new profile has it on: {created}");
-  served.ok("publish_profile", &publish);
+  assert_eq!(
+    created["profile"]["state"]["published_version"], 1,
+    "created as v1: {created}"
+  );
   served.let_automation_widen(false);
 
   let refused = served.refused("save_profile_draft", &save(Some("off")));

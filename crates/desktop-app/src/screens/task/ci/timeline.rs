@@ -179,6 +179,10 @@ fn fix_line(ctx: &mut Ctx, (share, id): (&CiShare, &str), event: &FixEvent, agen
         ],
       ),
     ),
+    FixEventKind::NotReady { .. } => (
+      (Icon::TriangleAlert, PaletteColor::Warning),
+      ctx.t_args("ci.event.notReady", [("failed", failed)]),
+    ),
     FixEventKind::Stopped { limit } => (
       (Icon::TriangleAlert, PaletteColor::Warning),
       ctx.t_args(

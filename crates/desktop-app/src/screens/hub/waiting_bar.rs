@@ -4,7 +4,10 @@
 //! on vN* and *Publish mine as vN+1* (`Conflict bar` `n9GgD` in 02c `JZFlA`); or refused by the server. Nothing is
 //! merged.
 
-use std::{path::PathBuf, sync::Arc};
+use std::{
+  path::{Path, PathBuf},
+  sync::Arc,
+};
 
 use lurq::{
   app::{
@@ -24,7 +27,7 @@ use orchester_store::{PublishState, SharedStanding, WaitingVersion};
 use orchester_workspace::{
   background, display,
   messages::{self, Message},
-  sharing::{compare, team::TeamConfiguration},
+  sharing::{compare, team::TeamConfiguration, team_edit::Refusal},
   tasks::outside::Outside,
 };
 
@@ -52,6 +55,23 @@ pub(crate) type Reread = Arc<dyn Fn() + Send + Sync>;
 pub(crate) fn waiting_bar(
   ctx: &mut Ctx,
   project: &ShownProject,
+  standing: (&TeamConfiguration, &SharedStanding),
+  (id, kind): (&str, Outside),
+  reread: Reread,
+) -> Option<Element> {
+  waiting_bar_in(
+    ctx,
+    (&project.open.repo_root, project.open.project.id()),
+    standing,
+    (id, kind),
+    reread,
+  )
+}
+
+/// [`waiting_bar`] for a panel that has the project's folder and id, not its shown project.
+pub(crate) fn waiting_bar_in(
+  ctx: &mut Ctx,
+  (root, project): (&Path, ProjectId),
   (team, standing): (&TeamConfiguration, &SharedStanding),
   (id, kind): (&str, Outside),
   reread: Reread,
@@ -65,8 +85,8 @@ pub(crate) fn waiting_bar(
       &format!("{id}-waiting-{}", waiting.version),
       WaitingProps {
         id: id.into(),
-        root: project.open.repo_root.clone(),
-        project: project.open.project.id(),
+        root: root.to_owned(),
+        project,
         host: team.server.as_ref().map(|(_, host)| host.clone()),
         confirmed: standing
           .confirmed
@@ -90,6 +110,8 @@ enum Act {
   PublishAgain(VersionId),
   /// *Open my draft on vN*.
   Reopen(VersionId),
+  /// *Discard it*: the new resource whose first version the server did not take is taken back as if never created.
+  DiscardNew,
 }
 
 impl DevtoolsInspectable for Act {}
@@ -161,6 +183,7 @@ impl Component for WaitingBar {
           Act::Send => services.servers.send_published(&root).await?,
           Act::PublishAgain(version) => services.servers.publish_again(&root, version).await?,
           Act::Reopen(version) => services.servers.reopen_draft(&root, resource, version).await?,
+          Act::DiscardNew => services.servers.cancel_created(&root, props.resource.1).await?,
         }
         // The library's screens read the resource again: with the number the server gave it, or its draft.
         services.changes.record(project, kind);
@@ -197,6 +220,14 @@ impl Component for WaitingBar {
           ctx.t("sharing.config.bar.tryAgain"),
           Act::Send,
         );
+        // A version that edited an earlier one goes back to being the draft; a first version has none to go back to.
+        let cancel = props.waiting.based_on.is_some().then(|| {
+          self.button(
+            (format!("{id}-cancel-sending"), ButtonKind::Secondary, Icon::X),
+            ctx.t("sharing.config.bar.cancelSending"),
+            Act::Reopen(props.waiting.version),
+          )
+        });
         DraftBar::new(
           format!("{id}-not-sent"),
           Standing::NotSent,
@@ -204,16 +235,45 @@ impl Component for WaitingBar {
         )
         .sub(ctx.t_args("sharing.config.bar.notSentBody", [("host", host)]))
         .action(retry)
+        .actions(cancel)
         .into()
       }
       PublishState::Conflict { latest } => self.conflict(ctx, &props, *latest),
-      PublishState::Refused { .. } => DraftBar::new(
-        format!("{id}-refused"),
-        Standing::Attention,
-        ctx.t_args("sharing.config.bar.refused", [("host", host), ("time", time)]),
-      )
-      .sub(ctx.t("sharing.config.bar.refusedBody"))
-      .into(),
+      PublishState::Refused { code } => {
+        // What was said, in words: the draft comes back to be changed, and then published again.
+        let refusal = Refusal::of_code(code);
+        let reason = message_text(ctx, &refusal.message());
+        // A version that edited an earlier one goes back to being the draft; a new resource's first has none, so the
+        // way out is to take the resource back as if never created.
+        let (way_out, way_out_words) = match props.waiting.based_on {
+          Some(_) => (
+            self.button(
+              (format!("{id}-take-back"), ButtonKind::Secondary, Icon::Undo2),
+              ctx.t("sharing.config.bar.takeBack"),
+              Act::Reopen(props.waiting.version),
+            ),
+            "sharing.config.bar.refusedWhy",
+          ),
+          None => (
+            self.button(
+              (format!("{id}-discard-new"), ButtonKind::Secondary, Icon::Trash2),
+              ctx.t("sharing.config.bar.discardNew"),
+              Act::DiscardNew,
+            ),
+            "sharing.config.bar.refusedNewWhy",
+          ),
+        };
+        // This computer found the team cannot take it: nothing reached the server, so it did not refuse anything.
+        let title = if refusal.is_local() {
+          ctx.t_args("sharing.config.bar.refusedHere", [("time", time)])
+        } else {
+          ctx.t_args("sharing.config.bar.refused", [("host", host), ("time", time)])
+        };
+        DraftBar::new(format!("{id}-refused"), Standing::Attention, title)
+          .sub(ctx.t_args(way_out_words, [("reason", reason.to_string())]))
+          .actions(Some(way_out))
+          .into()
+      }
     };
     let failure = state
       .error

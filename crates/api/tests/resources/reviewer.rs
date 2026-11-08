@@ -1,6 +1,6 @@
 use orchester_api::{
-  Event, ResourceCreate, ResourceCreated, Resources, SharedResourceKind, SharedVersion, UploadVersion, VersionContent,
-  VersionPublish, Versions,
+  Event, ReferenceTarget, ResourceCreate, ResourceCreated, Resources, SharedResourceKind, SharedVersion, UploadVersion,
+  VersionContent, VersionPublish, Versions,
 };
 use orchester_core::{id::ResourceId, resource::TeamReviewer};
 use serde_json::{Value, json};
@@ -10,7 +10,6 @@ use crate::fixtures::{key, resource, round_trip, user, version};
 fn decision(threshold: f64, hosts: &[&str]) -> Value {
   json!({
     "kind":"decision",
-    "connection":{"kind":"decision_connection","name":"Team decisions","role":"decision"},
     "model":"decision-1", "lowest_threshold":threshold,
     "destinations":{"kind":"hosts","hosts":hosts}
   })
@@ -20,12 +19,12 @@ fn decision(threshold: f64, hosts: &[&str]) -> Value {
 fn reviewer_resource_bodies_create_publish_and_read_with_core_shapes() {
   let id = ResourceId::generate();
   let language = json!({
-    "kind":"language", "connection":{"kind":"connection","name":"Team language","role":"codex_cli"},
-    "model":"language-1", "effort":"high"
+    "kind":"language", "cli":"codex_cli", "model":"language-1", "effort":"high"
   });
   for body in [language, decision(0.8, &["review.example.org"])] {
-    round_trip::<TeamReviewer>(&body);
-    let content = json!({"body":body,"references":[]});
+    let reviewer = round_trip::<TeamReviewer>(&body);
+    let references = serde_json::to_value(ReferenceTarget::of_reviewer(&reviewer)).expect("references");
+    let content = json!({"body":body,"references":references});
     round_trip::<VersionContent>(&content);
     let create: ResourceCreate = round_trip(&json!({
       "idempotency_key":key(),"id":id,"kind":"team_reviewer","slug":"reviewer","name":"Team reviewer",
@@ -33,11 +32,11 @@ fn reviewer_resource_bodies_create_publish_and_read_with_core_shapes() {
     }));
     assert_eq!(create.kind, SharedResourceKind::TeamReviewer);
     round_trip::<VersionPublish>(&json!({
-      "idempotency_key":key(),"based_on":1,"body":body,"references":[]
+      "idempotency_key":key(),"based_on":1,"body":body,"references":references
     }));
     let mut published = version(id, 2);
     published["body"] = body;
-    published["references"] = json!([]);
+    published["references"] = references;
     published["widens"] = json!(true);
     let read: SharedVersion = round_trip(&published);
     assert!(read.widens);
@@ -99,4 +98,26 @@ fn reviewer_resource_uses_existing_resource_deltas() {
       .extend(change.as_object().expect("change").clone());
     round_trip::<Event>(&json!({"kind":kind,"data":data}));
   }
+}
+
+#[test]
+fn reviewer_references_are_the_cli_kind_of_a_language_reviewer_and_none_for_a_decision_one() {
+  let language: TeamReviewer =
+    serde_json::from_value(json!({"kind":"language","cli":"claude_code_cli","model":"m-1","effort":null}))
+      .expect("body");
+  let decision: TeamReviewer = serde_json::from_value(decision(0.8, &[])).expect("body");
+  assert_eq!(
+    serde_json::to_value(ReferenceTarget::of_reviewer(&language)).expect("serialize"),
+    json!([{"type":"cli_kind","cli":"claude_code_cli"}])
+  );
+  assert!(ReferenceTarget::of_reviewer(&decision).is_empty());
+}
+
+#[test]
+fn reviewer_bodies_that_name_a_connection_are_not_read() {
+  let old = json!({
+    "kind":"language", "connection":{"kind":"connection","name":"Team language","role":"codex_cli"},
+    "model":"language-1", "effort":"high"
+  });
+  assert!(serde_json::from_value::<TeamReviewer>(old).is_err());
 }

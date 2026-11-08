@@ -108,7 +108,7 @@ impl AuthorizationText {
   }
 }
 
-fn authorization_message(error: &McpAuthorizationError) -> Message {
+pub(crate) fn authorization_message(error: &McpAuthorizationError) -> Message {
   match error {
     McpAuthorizationError::BlankUsername => Message::new("connections.mcp.errors.usernameRequired"),
     McpAuthorizationError::UsernameColon => Message::new("connections.mcp.errors.usernameColon"),

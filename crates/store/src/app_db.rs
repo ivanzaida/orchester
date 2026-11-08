@@ -10,6 +10,7 @@ mod browser;
 mod cloud;
 mod cloud_ended;
 mod cloud_joins;
+mod mcp_programs;
 mod owners;
 mod plan_reads;
 mod server_owners;
@@ -30,6 +31,7 @@ pub use self::{
   cloud::{StoredCloudAccount, StoredCloudAddress},
   cloud_ended::{CloudSignInEnd, EndedCloudSignIn},
   cloud_joins::AcceptedInvite,
+  mcp_programs::McpServerProgram,
   servers::{JoinedWith, ServerAccount, StoredServer},
 };
 use crate::{
@@ -91,6 +93,7 @@ CREATE TABLE ui_state (
   updates::MIGRATION,
   settings::BROWSER_WINDOW_MIGRATION,
   browser::MIGRATION,
+  mcp_programs::MIGRATION,
 ];
 
 /// Identifies the running session in the session log.

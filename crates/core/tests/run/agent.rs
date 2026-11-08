@@ -348,6 +348,52 @@ fn preflight_reports_tool_steps_unpublished_profiles_and_missing_pipelines() {
   assert_eq!(none, [PreflightProblem::PipelineNotPublished]);
 }
 
+/// A team profile with no connection picked here is told apart from one whose connection is gone: the person picks a
+/// connection, rather than finding one that was removed.
+#[test]
+fn preflight_asks_for_a_pick_on_a_team_profile_with_no_connection_here() {
+  let mut config = Config::feature_delivery();
+  let unpicked = *config.profiles.keys().next().expect("a profile");
+  let published = config.profiles.get_mut(&unpicked).expect("published");
+  let body = published.body();
+  let moved = AgentProfile::new(
+    body.role().clone(),
+    String::new(),
+    body.instructions().clone(),
+    AgentProfile::unresolved_connection(unpicked),
+    body.model().clone(),
+    ProviderSettings::default(),
+  );
+  *published = version(published.number().get(), moved);
+  let problems = preflight(PreflightInput {
+    pipeline: Some(config.pipeline_version.body()),
+    profiles: &config.profiles,
+    tools: &BTreeMap::new(),
+    connections: &[],
+    mcp_servers: &[],
+    secrets: &[],
+  });
+  let steps_of_unpicked: Vec<_> = config
+    .pipeline_version
+    .body()
+    .steps()
+    .iter()
+    .filter(|step| matches!(&step.kind, StepKind::Agent { profile: Some(profile), .. } if *profile == unpicked))
+    .map(|step| step.key.clone())
+    .collect();
+  assert!(!steps_of_unpicked.is_empty());
+  for step in steps_of_unpicked {
+    assert!(problems.contains(&PreflightProblem::ConnectionNotPicked { step: step.clone() }));
+    assert!(!problems.contains(&PreflightProblem::ConnectionMissing { step }));
+  }
+  assert!(
+    problems
+      .iter()
+      .any(|problem| matches!(problem, PreflightProblem::ConnectionMissing { .. })),
+    "another profile's missing connection is still said to be gone"
+  );
+}
+
 #[test]
 fn task_phase_follows_the_task_and_its_latest_run() {
   let draft = task("Brief.", &["Works"]);

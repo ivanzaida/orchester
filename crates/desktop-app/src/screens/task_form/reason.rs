@@ -12,6 +12,7 @@ use orchester_core::resource::Deliverable;
 use super::{
   conflict::field_key,
   delivers::delivered,
+  readiness,
   state::{Need, Phase, Subject, View},
 };
 use crate::ui::{icon::Icon, message::message_text};
@@ -34,6 +35,11 @@ pub enum Kind {
   Busy,
   /// What went wrong, e.g. the runner's refusal.
   Problem,
+  /// The chosen pipeline is not ready on this computer: its words in `warning`, and *Show* after them
+  /// (`Reason` `ACVRw` in `P6aAoZ`, `TSa5k` in `PMi6Q`).
+  NotReady,
+  /// Whether the chosen pipeline is ready could not be read: its words in `warning`, and *Retry* after them.
+  CannotTell,
   /// What the person should know: kept changes, Retry run.
   Note(Icon),
 }
@@ -45,6 +51,8 @@ impl Kind {
       Self::Ready => (Icon::CircleCheck, PaletteColor::TextMuted, "ready"),
       Self::Busy => (Icon::LoaderCircle, PaletteColor::TextMuted, "progress"),
       Self::Problem => (Icon::CircleAlert, PaletteColor::Warning, "problem"),
+      Self::NotReady => (Icon::CircleAlert, PaletteColor::Warning, "not-ready"),
+      Self::CannotTell => (Icon::CircleAlert, PaletteColor::Warning, "cannot-tell"),
       Self::Note(glyph) => (glyph, PaletteColor::TextMuted, "note"),
     }
   }
@@ -58,6 +66,9 @@ impl Need {
       Self::Brief => "task_form.reasons.need.brief",
       Self::Criteria => "task_form.reasons.need.criteria",
       Self::Pipeline => "task_form.reasons.need.pipeline",
+      Self::NotReady => "task_form.reasons.need.notReady",
+      Self::Reading => "task_form.reasons.need.reading",
+      Self::CannotTell => "task_form.reasons.need.cannotTell",
       Self::NoPipelines => "task_form.reasons.need.noPipelines",
       Self::Budget => "task_form.reasons.need.budget",
       Self::TimeLimit => "task_form.reasons.need.timeLimit",
@@ -73,6 +84,9 @@ impl Need {
       Self::Brief => "task_form.reasons.also.brief",
       Self::Criteria => "task_form.reasons.also.criteria",
       Self::Pipeline => "task_form.reasons.also.pipeline",
+      Self::NotReady => "task_form.reasons.also.notReady",
+      Self::Reading => "task_form.reasons.also.reading",
+      Self::CannotTell => "task_form.reasons.also.cannotTell",
       Self::NoPipelines => "task_form.reasons.also.noPipelines",
       Self::Budget => "task_form.reasons.also.budget",
       Self::TimeLimit => "task_form.reasons.also.timeLimit",
@@ -154,6 +168,9 @@ fn editing(ctx: &Ctx, view: &View) -> Option<Reason> {
     }
   }
   let run = view.run_needs();
+  if matches!(run[..], [Need::NotReady | Need::Reading | Need::CannotTell]) {
+    return readiness::reason(ctx, view);
+  }
   if !run.is_empty() {
     return blocked(needs_text(ctx, "task_form.reasons.run", &run));
   }

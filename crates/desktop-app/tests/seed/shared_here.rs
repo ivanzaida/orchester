@@ -1,6 +1,6 @@
 //! `shared-config-here` and its variants read back as Sharing › On this computer and a shared profile's page read them
-//! (`Here::read`, `sync::waiting`): every kind of reference and standing, Reviewer's v5 waiting with what it adds, and
-//! Builder's connection here.
+//! (`BindingsHere::read`, `sync::waiting`): every kind of reference and standing, Reviewer's v5 waiting with what it
+//! adds, and Builder's connection here.
 //! `cargo test -p orchester-app --test seed seed_shared_here`.
 
 use orchester_core::{
@@ -10,12 +10,12 @@ use orchester_core::{
   store::ResourceStore,
 };
 use orchester_store::{BoundBy, ProjectDb};
-use orchester_workspace::sharing::sync::{self, Here, Standing};
+use orchester_workspace::sharing::sync::{self, BindingsHere, Standing};
 
 use super::Seed;
 
 /// How each reference stands, by name, in the order the page lists them.
-fn standings(here: &Here) -> Vec<(&str, &str)> {
+fn standings(here: &BindingsHere) -> Vec<(&str, &str)> {
   here
     .references
     .iter()
@@ -46,7 +46,7 @@ fn profile(db: &ProjectDb, named: &str) -> ResourceId {
 #[test]
 fn seed_shared_here_names_every_kind_of_reference_and_a_version_that_widens() {
   let seed = Seed::of("shared-config-here");
-  let here = Here::read(seed.repo()).expect("read");
+  let here = BindingsHere::read(seed.repo()).expect("read");
   assert_eq!(
     standings(&here),
     [
@@ -114,9 +114,9 @@ fn seed_shared_here_names_every_kind_of_reference_and_a_version_that_widens() {
 
 #[test]
 fn seed_shared_here_variants_choose_work_here_or_have_no_claude_code() {
-  let chosen = Here::read(Seed::of("shared-config-chosen").repo()).expect("read");
+  let chosen = BindingsHere::read(Seed::of("shared-config-chosen").repo()).expect("read");
   assert!(standings(&chosen).contains(&("Work", "chosen")));
-  let none = Here::read(Seed::of("shared-config-no-claude").repo()).expect("read");
+  let none = BindingsHere::read(Seed::of("shared-config-no-claude").repo()).expect("read");
   assert!(standings(&none).contains(&("Work", "missing")));
   assert!(none.connections_of("claude_code_cli").is_empty());
   assert_eq!(none.needs_you(), chosen.needs_you() + 1);

@@ -181,34 +181,7 @@ impl Dialog {
       .clip()
       .child(body)
       .child(footer);
-    let shut = open.clone();
-    let scrim = pressable(move || shut.set(false))
-      .id(format!("{id}-scrim"))
-      .absolute(0.0, 0.0, Dimension::Pct(100.0), Dimension::Pct(100.0))
-      .background(ExtraColor::Scrim.role());
-    let layer = Stack::new()
-      .width(Dimension::Pct(100.0))
-      .flex(1.0)
-      .stack_align(StackAlignment::Center)
-      .child(scrim)
-      .child(dialog);
-    // The band above the scrim is the title bar's: the pointer passes through to its drag and window controls.
-    let window = Column::new()
-      .width(Dimension::Pct(100.0))
-      .height(Dimension::Pct(100.0))
-      .padding(Padding::new().top(Dimension::Px(TITLE_BAR_HEIGHT)))
-      .hit_test(HitTestBehavior::ContentOnly)
-      .child(layer);
-    let window = match enter {
-      Some((_, confirm)) => window.on_key_down(move |event: KeyboardEvent| {
-        if event.key == "Enter" && !event.text_input_focused && !event.composing {
-          event.prevent_default();
-          confirm();
-        }
-      }),
-      None => window,
-    };
-    Modal::new(window).target(ModalTarget::Root).open(open.clone()).into()
+    over_window(&id, dialog, open, enter.map(|(_, confirm)| confirm))
   }
 
   fn body(self) -> Column {
@@ -279,6 +252,44 @@ impl Dialog {
       .with_children(person)
       .with_children(self.under)
   }
+}
+
+/// `dialog` centred over the window under its title bar, on the `scrim`, while `open` holds; a press on the scrim sets
+/// it to `false`. `confirm` runs when Enter is pressed while no text field has the focus.
+pub fn over_window(
+  id: &str,
+  dialog: Column,
+  open: &Signal<bool>,
+  confirm: Option<Arc<dyn Fn() + Send + Sync>>,
+) -> Element {
+  let shut = open.clone();
+  let scrim = pressable(move || shut.set(false))
+    .id(format!("{id}-scrim"))
+    .absolute(0.0, 0.0, Dimension::Pct(100.0), Dimension::Pct(100.0))
+    .background(ExtraColor::Scrim.role());
+  let layer = Stack::new()
+    .width(Dimension::Pct(100.0))
+    .flex(1.0)
+    .stack_align(StackAlignment::Center)
+    .child(scrim)
+    .child(dialog);
+  // The band above the scrim is the title bar's: the pointer passes through to its drag and window controls.
+  let window = Column::new()
+    .width(Dimension::Pct(100.0))
+    .height(Dimension::Pct(100.0))
+    .padding(Padding::new().top(Dimension::Px(TITLE_BAR_HEIGHT)))
+    .hit_test(HitTestBehavior::ContentOnly)
+    .child(layer);
+  let window = match confirm {
+    Some(confirm) => window.on_key_down(move |event: KeyboardEvent| {
+      if event.key == "Enter" && !event.text_input_focused && !event.composing {
+        event.prevent_default();
+        confirm();
+      }
+    }),
+    None => window,
+  };
+  Modal::new(window).target(ModalTarget::Root).open(open.clone()).into()
 }
 
 /// What Enter does when it confirms, *Esc cancels*, *Cancel* and the actions.

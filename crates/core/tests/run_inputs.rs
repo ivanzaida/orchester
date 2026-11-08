@@ -22,7 +22,7 @@ use orchester_core::{
   },
   run::{
     BranchName, CommitId, PinnedVersion, PublishedVersions, RunSnapshot,
-    bundle::{CanonicalExecutionInputs, PinnedBodies, ResourceLabel},
+    bundle::{CanonicalExecutionInputs, ExecutionProfile, PinnedBodies, ResourceLabel},
     inputs::{
       BoundReference, BundleContent, InputsError, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, RunInputs,
       TaskAtStart, TeamAcceptance,
@@ -83,10 +83,14 @@ fn fixture() -> Fixture {
   };
   let snapshot = RunSnapshot::build(ResourceId::generate(), &pipeline, published).expect("snapshot");
   let bodies = PinnedBodies {
-    profiles: &profiles.values().cloned().collect::<Vec<_>>(),
+    profiles: &profiles
+      .values()
+      .map(|version| (version.id(), ExecutionProfile::of(version.body())))
+      .collect::<Vec<_>>(),
     instructions: &[],
     tools: &[],
     skills: &[],
+    mcp_servers: &[],
     labels: &[
       (pipeline.id(), label("review-flow", "Review flow")),
       (profiles[&profile].id(), label("reviewer", "Reviewer")),
@@ -149,11 +153,13 @@ fn bound(fixture: &Fixture) -> LocalBindings {
       connection: ConnectionId::generate(),
       account: None,
       required_cli: None,
+      mcp_servers: Vec::new(),
     }],
     references: vec![BoundReference::Secret {
       named: SecretId::generate(),
       local: SecretId::generate(),
     }],
+    team_mcp: Vec::new(),
   }
 }
 
@@ -209,19 +215,21 @@ fn run_inputs_label_pinned_resources_from_the_canonical_inputs() {
 #[test]
 fn run_inputs_resolve_a_profile_on_its_binding_and_the_task_at_start() {
   let fixture = fixture();
-  let bindings = LocalBindings {
+  let server = ConnectionId::generate();
+  let mut bindings = LocalBindings {
     references: vec![BoundReference::McpServer {
       named: ConnectionId::generate(),
-      local: ConnectionId::generate(),
+      local: server,
     }],
     ..bound(&fixture)
   };
+  bindings.profiles[0].mcp_servers = vec![server];
   let inputs = RunInputs::new(content(&fixture, team()), bindings.clone(), LocalConsent::default()).expect("inputs");
   let pinned = inputs.bundle().inputs().profiles()[0].pinned();
   let profile = inputs.profile(pinned).expect("the pinned profile");
   assert_eq!(profile.connection(), bindings.profiles[0].connection);
   assert_eq!(profile.role().as_str(), "Reviewer");
-  assert_eq!(profile.mcp_servers(), &inputs.bound_mcp_servers());
+  assert_eq!(profile.mcp_servers().ids(), [server]);
   assert_eq!(inputs.bound_mcp_servers().ids().len(), 1);
   let other = PinnedVersion {
     version: VersionId::generate(),

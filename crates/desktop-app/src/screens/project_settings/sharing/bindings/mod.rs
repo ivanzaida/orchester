@@ -23,7 +23,7 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_store::BoundReference;
-use orchester_workspace::{background, sharing::sync::Here};
+use orchester_workspace::{background, sharing::sync::BindingsHere};
 
 use crate::{
   project::ShownProject,
@@ -112,8 +112,8 @@ impl Component for OnThisComputer {
 
 /// What this computer has of the project's references at `root`: live, since the team's versions change on the server.
 #[lurq::query(stale_time = "0s", gc_time = "24h")]
-async fn references_here(_session: Session, root: PathBuf) -> Result<Here, Said> {
-  background::run(move || Here::read(&root))
+async fn references_here(_session: Session, root: PathBuf) -> Result<BindingsHere, Said> {
+  background::run(move || BindingsHere::read(&root))
     .await
     .map_err(|_| Said::new("cloud.errors.local"))?
     .map_err(|error| crate::screens::settings::orchester::sharing_said(&error))
@@ -121,7 +121,7 @@ async fn references_here(_session: Session, root: PathBuf) -> Result<Here, Said>
 
 impl OnThisComputer {
   /// The lead, the three groups, the note, and the modal while it asks.
-  fn section(&self, ctx: &mut Ctx, here: &Here) -> Element {
+  fn section(&self, ctx: &mut Ctx, here: &BindingsHere) -> Element {
     let actions = rows::Actions {
       bind: self.bind.clone(),
       person: self.person.clone(),
@@ -171,7 +171,7 @@ impl OnThisComputer {
 }
 
 /// *On this computer · 7 references · 3 need you*, and what it is.
-fn lead(ctx: &Ctx, here: &Here) -> Element {
+fn lead(ctx: &Ctx, here: &BindingsHere) -> Element {
   let count = [
     ("count", here.references.len().to_string()),
     ("need", here.needs_you().to_string()),

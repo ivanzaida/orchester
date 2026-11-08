@@ -17,21 +17,41 @@ use orchester_ipc::{Command, Rejection};
 use super::composer::Then;
 use crate::{
   messages::Message,
+  readiness::NotStarted,
   runner::{RunRequestError, Runners},
+  secrets::Vault,
   sharing::Servers,
   tasks::{run::control_message, run_again::request_messages},
-  workspace::OpenProject,
+  workspace::{OpenProject, Workspace},
 };
 
 /// A stored message: the runner took it, it ran the task again with this run, it stays queued because the runner
-/// could not be told or refused to go on, or it waits for the person to raise the run's limit.
+/// could not be told or refused to go on, it stays queued because running the task again is not possible here
+/// (the pipeline is not ready on this computer), or it waits for the person to raise the run's limit.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Sent {
   Taken,
   Started(RunId),
   Queued(Message),
+  /// Running the task again with the message started nothing: no claim was taken and no attempt counted.
+  NotReady(NotStarted),
   AwaitsLimit,
 }
+
+impl Sent {
+  /// A refused start as the queued message it left, for a place that shows one line of why a message waits.
+  #[must_use]
+  pub fn as_queued(self) -> Self {
+    match self {
+      Self::NotReady(refused) => Self::Queued(refused.short()),
+      other => other,
+    }
+  }
+}
+
+/// What a start that runs the task again asks before it queues, claims or starts anything: whether the task's pipeline
+/// is ready on this computer, read with the vault that holds the secrets' values.
+pub type Readiness<'a> = (&'a Workspace, &'a Vault);
 
 /// Which project's runner hears about the message: the one the window shows, or the one automation
 /// names, which starts if it has none.
@@ -97,14 +117,21 @@ impl RunnerOf<'_> {
 
 /// What follows `stored` as `then` says, through `runner`, for a sender that saw no revision of the task
 /// (automation): Run again runs the task as it is now.
-pub async fn follow(runner: (&Runners, &Servers, RunnerOf<'_>), stored: &Stored<'_>, then: Then) -> Sent {
-  follow_seen(runner, stored, (then, None)).await
+pub async fn follow(
+  runner: (&Runners, &Servers, RunnerOf<'_>),
+  ready: Readiness<'_>,
+  stored: &Stored<'_>,
+  then: Then,
+) -> Sent {
+  follow_seen(runner, ready, stored, (then, None)).await
 }
 
 /// [`follow`] for a person who wrote while the page showed the task at `revision`: Run again is refused once
-/// the task changed since.
+/// the task changed since. Run again starts a run, so it asks first whether the pipeline is ready here: one that is not
+/// starts nothing, takes no claim and counts no attempt, and the message stays queued ([`Sent::NotReady`]).
 pub async fn follow_seen(
   (runners, servers, runner): (&Runners, &Servers, RunnerOf<'_>),
+  (workspace, vault): Readiness<'_>,
   stored: &Stored<'_>,
   (then, revision): (Then, Option<TaskRevision>),
 ) -> Sent {
@@ -118,6 +145,9 @@ pub async fn follow_seen(
     }
     Then::ContinueInterrupted => go_on(claimed, || runner.continue_run(runners, stored.run), control_message).await,
     Then::RunAgain => {
+      if let Err(refused) = workspace.ready_to_start(stored.root, vault, stored.task).await {
+        return Sent::NotReady(refused);
+      }
       let refused = |error: &RunRequestError| {
         request_messages(error, stored.pipeline)
           .into_iter()

@@ -12,6 +12,7 @@ mod browser;
 mod kontur;
 mod markdown;
 mod menu;
+mod not_ready;
 mod page;
 #[path = "../support/mod.rs"]
 mod support;

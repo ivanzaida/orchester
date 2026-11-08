@@ -25,38 +25,127 @@ inference endpoint. The resource kind is `team_reviewer` (`SharedResourceKind::T
 `TeamReviewer`, with the same immutable, numbered versions as the other shared resource kinds:
 
 ```text
-language { kind: "language",
-           connection: { kind: "connection", name, role: AgentProvider },
-           model, effort: string | null }
-decision { kind: "decision",
-           connection: { kind: "decision_connection", name, role: "decision" },
-           model, lowest_threshold: number,
+language { kind: "language", cli: AgentProvider, model, effort: string | null }
+decision { kind: "decision", model, lowest_threshold: number,
            destinations: { kind: "members_computers" } | { kind: "hosts", hosts: [exact host] } }
 ```
 
-Connection references name a kind, name and role for each computer to bind locally. They carry no computer-local
-connection id, URL or credential. These named references are in the body; the version's separate `references`
-array is empty for a reviewer. Models are nonempty model identifiers; `lowest_threshold` is a finite probability
-from 0 through 1. A member may raise the effective threshold locally, never lower it. Decision destinations always
+**Built (ORC-887, decided 2026-11-07; row 95 of `docs/architecture/server.md`):** a team reviewer names no
+connection, as a team agent profile does not. A language reviewer names the CLI kind it runs with (`cli`:
+`claude_code_cli`, `codex_cli`, `anthropic_api` or `openai_api`); a decision reviewer names nothing, its `kind` implies
+a decision connection. Each computer picks the connection it runs on, once per reviewer, and the body holds no
+connection name, role, id, URL or credential. The body refuses any other field (`deny_unknown_fields`), so a body of the
+earlier form, which names a connection (`connection: { kind, name, role }`), is not a team reviewer: the desktop does
+not read it, and the reviewer is published again in the new form. There is no upgrade of the old form. The version's
+`references` repeat what the body names, as for a profile (`ReferenceTarget::of_reviewer`): a language reviewer's
+`[{ "type": "cli_kind", "cli": … }]`, and a decision reviewer's empty array. Models are nonempty model identifiers;
+`lowest_threshold` is a finite probability from 0 through 1. A member may raise the effective threshold locally, never lower it. Decision destinations always
 allow servers on the member's computer; `hosts` additionally allows exactly the listed remote DNS names or IP
 addresses, case insensitive, without wildcards, schemes, ports or paths. An empty list allows no remote server.
-Language reviewers carry effort instead of a threshold or decision destinations.
+Language reviewers carry effort instead of a threshold or decision destinations. The CLI kind a language reviewer
+names does not widen what a version allows (a profile's does not either): only added hosts and a lower threshold do.
+
+**Desktop use (2026-11-07):** a desktop reads the body, shows the reviewer's readiness and keeps each computer's pick
+(a decision pick is refused when `destinations` do not list the connection's server), but no team run uses the
+reviewer yet: a run gets its reviewer from the project's own setting, and the execution bundle pins none. Binding the
+team's reviewer into a run is not built (`docs/plan.md`).
 
 All paths below are under the team server's `/api/v1/projects/{project}`, with its normal project authentication:
 
 | Method and path | Access | Shape |
 | --- | --- | --- |
 | `GET /resources` | member | `Resources { resources: [SharedResource], cursor }`, including reviewer metadata and latest version number |
-| `POST /resources` | project owner or server admin | `ResourceCreate { idempotency_key, id, kind: "team_reviewer", slug, name, version: { body, references: [] } }`; `201 ResourceCreated { resource, version }` |
+| `POST /resources` | project owner or server admin | `ResourceCreate { idempotency_key, id, kind: "team_reviewer", slug, name, version: { body, references } }`, `references` being the body's CLI kind for a language reviewer and empty for a decision one; `201 ResourceCreated { resource, version }` |
 | `GET /resources/{resource}/versions?after=` | member | `Versions { versions: [SharedVersion], next? }`, oldest first, at most 64 versions or 1 MiB per page |
 | `POST /resources/{resource}/versions` | project owner or server admin | `VersionPublish { idempotency_key, based_on, body, references: [] }`; `201 { version: SharedVersion }` |
 | `PATCH /resources/{resource}` | project owner or server admin | existing rename/archive `ResourcePatch` |
+| `GET /resources/{resource}/used-by` | member, project owner or server admin (whoever may archive it reads it first) | `UsedBy { resources: [UsedByResource], runs: [UsedByRun] }`; `404 not_found` for a resource the project does not have, a malformed resource id, or a caller who can neither read nor archive; `200` also for an archived resource |
 
 A member's write returns `403 not_admin`. Publishing from a stale `based_on` returns `409 version_conflict`
 with the latest version. Uploading history at `POST /resources/import` uses the existing `UploadResource` and
 `UploadVersion` shapes and the same write access; the server computes each imported version's flag in number order.
 
-`SharedVersion` is `{ resource, number, body, hash, references, based_on, published, widens }`.
+`GET /resources/{resource}/used-by` (decision E of `docs/design/team-configuration.md`) is what the archive confirmation
+reads before an admin archives a resource; any member may read it, and so may everyone who may archive it
+(`PATCH …/resources/{resource}`: the project owner or a server admin, a member or not). It only reads: archiving still
+cancels the runs it lists (row 79 of `docs/architecture/server.md`). The answer is
+`UsedBy { resources: [UsedByResource { kind, id, name, version }], runs: [UsedByRun { task_key, run, holder? }] }`, and
+both lists are empty when nothing uses the resource.
+
+- **`resources`**: the other resources that are not archived and whose latest published version names this one, with
+  the version that names it. The resource asked about is never in its own list, even when its latest version names
+  itself. Ordered by `name` compared case-insensitively, then by `id`. A version *names* a resource by typed data, not
+  by a text scan: the ids in a free-text field, a prompt or a description name nothing. It names resource `R` when
+  - one of its `references` is a `TeamResource` with `R`'s server id, of any kind (a profile's MCP servers, tools,
+    skills and instructions are among them; a `CliKind` or a `SecretName` names no resource), or
+  - its body, read as the body type of its kind, holds `R`'s server resource id in one of these fields:
+    - pipeline: a step's executor, `steps[].kind.agent.profile` or `steps[].kind.tool.tool`, and the Deliver step's
+      `deliver.integrator`;
+    - instruction: `targets.profiles[]`, and `scope.pipeline.pipeline` or `scope.step.pipeline`;
+    - skill: `scope.pipeline.pipeline` or `scope.step.pipeline`;
+    - tool: the pipelines its access policy lists, the keys of `access.callers`;
+    - agent profile, team reviewer and MCP server: none, read from the body; a profile's body names what it uses
+      (`mcp_servers`, `tools`, `skills`, `instruction_resources`) and its `references` repeat that exactly.
+
+  A body that is no body of its kind names nothing. The reference's `kind` is not compared with `R`'s: a reference of
+  the wrong kind is refused when published, not read here.
+- **`runs`**: the runs that have not ended and whose execution bundle pins any version of the resource, as the team
+  server knows it from the bundle it built at `work.start` (`execution-bundles.md` of the platform): every pipeline,
+  agent profile, tool, instruction, skill and MCP server version the bundle pins, and no other. A run uses an MCP
+  server only through the profile versions it pins, and the bundle (schema 3, below) pins the team MCP server versions
+  those profile versions name, by server resource id (`inputs.mcp_servers`, also in the bundle's `resources`), so a run
+  is listed for an MCP server when its bundle pins it. A bundle of schema 2 pins none, but such a bundle is no longer
+  built or read (see "Known limit" under *Current work only*). The desktop's own archive already stops a run whose
+  pinned profile version chooses the server (`pins` in `crates/workspace/src/sharing/sync/archive.rs`), and its local
+  list follows that rule. A team reviewer has no runs.
+  - **When a run is listed**: the server learns a run id only from `work.report` (`WorkReport` carries `run_id`, no run
+    number), so a run is listed from the first work report the server accepted for it, and its last accepted report
+    decides: `progress` lists it; `succeeded`, `failed` (whatever its reason, `limit_reached` included) or `cancelled`
+    ends it, and a run that resumes with `progress` after a `limit_reached` is listed again. Known limit: work that was
+    started and has no accepted report yet is not listed. For a team project the list can therefore be narrower than
+    what a member's desktop stops on archive (a run with no report yet, a run paused at a limit). A run whose last accepted report is `progress` has not ended, nor has one that was interrupted or waits for
+    a person on the desktop; a run whose runner stopped without a terminal report stays listed too: a stale claim
+    (`stale_task_threshold`) does not end its run.
+  - **Current work only**: runs are listed only for each task's current work, the latest work started under the
+    task's current claim. The team server fences a work after a take-over, a release or a restart under the same claim
+    (`claim_lost`) and never accepts another report from it, so a run of a fenced earlier work could never end: it is
+    not listed, since it can no longer report and the archive confirmation lists the runs that will stop. A released
+    task (no claim) lists no runs. Known limit: a work whose bundle the server cannot read as the current schema (an
+    older-schema bundle, schema 2 or before) is not listed either, because its pins are not known; that does not fail the read.
+  - **Superseded**: within the current work, a run is superseded, and so has ended even when its own last report was
+    `progress`, by a run whose first accepted work report came after the first accepted report of the run asked
+    about, for the same work. Runs are ordered by the server's acceptance of their first report (the order of
+    `WorkRead.runs`), never by run id; a run whose first report arrives late is the newest.
+  - **Shape and order**: each is `{ task_key, run, holder? }`: the task's key (`KON-12`), the run's id, and the
+    `UserRef` who holds the task's claim now. The team server always sets `holder`, because only current work under
+    the current claim is listed; after a take-over it is the new holder. It stays optional because a local project's
+    runs have no claim holder: it is absent only for a local project's runs. There is no run number: the server has
+    none. Ordered by the number part of the task key, numerically (`KON-3` before `KON-12`), then by run id (a
+    stable tie-break that never decides which run is newer).
+- **Paging**: none. Both lists are returned whole: they are bounded by the project's resources and by its runs that
+  have not ended.
+- **Access and errors**: a member of the project reads it, and so does whoever may archive the resource (the project
+  owner, or a server admin without membership, as `PATCH …/resources/{resource}` allows). Access is checked first, and
+  one answer, `404 not_found`, serves a project the caller may not read, a resource the project does not have and an id
+  that is no resource id, so it tells an outsider nothing. (`GET …/versions` answers `400` for a malformed resource
+  id; used-by answers `404` for it, because the access check comes first. A malformed project id answers `400`, from
+  the route's id extractor, like the other project routes; the one `404` covers unknown or forbidden projects and
+  resources.) An archived resource answers `200` like any other, so an admin can check what still uses it before a
+  restore.
+
+The client call is `used_by`. The stand-in team server answers it from its own resources, applying the names-it rule
+above: the `TeamResource` references of every kind (a profile's MCP servers, tools, skills and instructions among them)
+and the body fields read with core's body types, and from the runs a test registers with `TeamServer::pin_run`: it
+builds no execution bundle, so the pins a test names stand in for the bundle's (an MCP server's id among them, as the
+bundle pins it), a pinned
+run is one whose first work report was accepted, and `last_report`, `work` (a task's highest pinned work is its current
+work, and a run of a lower work is fenced and not listed; within a work, a run pinned later supersedes the earlier ones,
+as the first accepted report orders them) and `claim_run_task` (a take-over, or a release, after which the task lists no
+runs) stand in for the accepted work reports and the task's claim. It lists whatever the pins name, an MCP server's id
+included. It has no non-member, so that `404` is not exercised there.
+
+`SharedVersion` is `{ resource, number, body, hash, references, based_on, published, widens }`, with `references` as the
+next section gives them.
 The server computes `widens: boolean` with ORC-570's `TeamReviewer::widens_over` and keeps it on that immutable
 version; it is never accepted from a publisher, including on import. Compare against the preceding published
 version, or no previous body for v1. Adding a remote host or lowering an existing decision threshold widens;
@@ -65,10 +154,224 @@ language, compares destinations with members' computers and has no previous thre
 do not widen. Older servers may omit the flag; API readers default it to false and still compare permissions locally
 before applying a version.
 
+**Which versions widen, for every kind (OP-205a, decided 2026-11-08).** A version's `widens` is `true` when it grants
+more than the version before it by core's `SharedBody` rule for its kind (`TeamMcpServer`, `TeamAgentProfile`,
+`TeamReviewer` and `Tool`; a tool widens when, for example, its program, arguments, address or access policy grant
+more), and also when core cannot read its body, on itself and on the version after it; it is `false` for instructions,
+skills and pipelines. A server before OP-205a sends `false` for every tool version. The team server's web app shows the
+server's flag and computes none of its own.
+
 The existing stream carries reviewer metadata in `snapshot.begin.resources` and the existing `resource.published`,
 `resource.renamed` and `resource.archived` deltas. A publication carries the resource with its new `latest`;
 members read the body and stored flag through the versions endpoint. No additional event kind is introduced.
 The platform server and web tasks must update their repository pin to the commit containing this contract.
+
+## Team resource references
+
+A team resource refers only to other team resources, by their server id, and to secrets, by name; it never carries an
+id or a path from somebody's computer (`docs/design/team-configuration.md`). A version's `references` (in
+`SharedVersion`, `VersionContent`, `UploadVersion` and `VersionPublish`) is a list of `ReferenceTarget`, each tagged by
+`type` and holding nothing else (the server refuses a reference with another field):
+
+```text
+// cli: "codex_cli" | "claude_code_cli" | "anthropic_api" | "openai_api"
+{ type: "cli_kind",      cli: AgentProvider }
+{ type: "team_resource", kind: SharedResourceKind, id }  // any of the seven kinds, as listed below
+{ type: "secret_name",   name }                          // core's `SecretName`, below
+```
+
+- **`cli_kind`** replaces the reference to a connection. A profile names the CLI it runs with; each computer runs it on
+  one of its own connections of that kind and the person picks when there are several. A version of another kind has
+  none, and **the server does not require one of a profile**: a computer that finds none in a profile it starts refuses
+  the start (`team_read_failed`).
+- **`team_resource`** replaces the references to an MCP server (by a computer's connection id) and to a tool. `id` is
+  the resource's id on the server, and `kind` its kind (`mcp_server`, `tool`, `skill`, `instruction`, `agent_profile`,
+  `pipeline`, `team_reviewer`; never agent testing's kinds). The server accepts it only for an existing resource of
+  that kind in the same project that is not archived (`422 invalid { reason: "references" }` for an unknown id, an id of
+  another kind or project, or an archived resource; a resource cannot name itself in its own v1, which it has not got
+  yet). The stand-in team server enforces this too.
+- **`secret_name`** replaces the reference to a secret by a computer's secret id. The server holds the name, never a
+  value; each computer fills in the value. The name follows core's `SecretName` rule: a capital letter, then capital
+  letters, digits and `_`, at most 128 characters. Surrounding whitespace is not part of the name: it is trimmed when
+  the reference is read, so the server stores and returns `STAGING_TOKEN` for `"  STAGING_TOKEN "`, and a name that
+  breaks the rule, or is blank, is a malformed request (`422 invalid { reason: "shape" }`).
+
+A version's `references` do not repeat a target: the same CLI kind, the same team resource (kind and id) or the same
+secret name twice, compared after the names are trimmed, is `422 invalid { reason: "references" }`. The list keeps the
+order it was sent in; the server neither sorts nor merges it, and `GET …/versions` returns it as published.
+
+A body holds none of these ids either: it has no connection, local MCP server or secret id, which the server refuses
+(`422 invalid { reason: "references" }` for a reference that does not hold, `{ reason: "body" }` for a body,
+`{ reason: "shape" }` for a request that does not parse, such as a reference with another field or a secret name that
+breaks the rule). The agent profile's body is the team's form since ORC-820 (below); the tool's body still names a
+secret by a computer's id and has no team form yet, so a desktop sends no such tool body (Share refuses it, below), and a
+server migration rewrites the versions that exist (OP-200, row 93 of `docs/architecture/server.md`). There is no compatibility window: a server
+and a desktop on different versions of this contract do not read each other's `references`.
+
+### Team agent profile body
+
+The body of a `agent_profile` version is core's `TeamAgentProfile`; the server reads it with that type, which refuses
+any other field (`deny_unknown_fields`), so a `connection`, a local MCP server id or a secret id has nowhere to go:
+
+```text
+{ role, responsibilities, instructions,        // as the local profile has them
+  cli: AgentProvider,                          // "codex_cli" | "claude_code_cli" | "anthropic_api" | "openai_api"
+  model, settings, permissions,                // as the local profile has them (effort is in settings)
+  mcp_servers?: [ResourceId], tools?: [ResourceId], skills?: [ResourceId],
+  instruction_resources?: [ResourceId],       // team resources by server id, each list distinct, at most 20
+  secrets?: [SecretName] }                     // the names this profile needs, distinct, never a value
+```
+
+The lists are left out while empty. `permissions` carries no `writable_folders`: they are paths of one computer, so a
+server refuses a body that has any (`TeamAgentProfile` fails to read it) and a desktop refuses to send a profile that
+has them; each computer keeps its own. **The body is the one source of truth; `references` repeat it exactly.** A
+profile version's `references` are, in this order: one `cli_kind` for `cli`; a `team_resource` of kind `mcp_server` for
+each of `mcp_servers`, of kind `tool` for each of `tools`, of kind `skill` for each of `skills`, and of kind
+`instruction` for each of `instruction_resources`, each list in the body's order; then a `secret_name` for each of
+`secrets`. The desktop builds the list with `orchester_api::ReferenceTarget::of_profile` and sends nothing else. A
+server **should** derive the references from the body with the same function, or refuse a version whose `references`
+differ from it (`422 invalid { reason: "references" }`), so a stored version cannot name something its body does not;
+it then also checks that each named id is an existing, not archived team resource of the kind (above). Used-by
+(above) keeps reading the references of a version. The stand-in team server keeps a profile's body as sent and checks
+the references as it does for every kind; it does not read the body as a `TeamAgentProfile`.
+
+A server computes `widens` for a profile with core's `SharedBody` rules for `TeamAgentProfile`: a version widens when
+its permissions are broader (as for a local profile), when it names a team MCP server the previous version did not, or
+when it needs a secret name the previous version did not; the first version is compared with permissions that grant
+nothing. Tools, skills and instructions are not counted. A bundle pins a profile as `ExecutionProfile::of_team`, the
+fields `ExecutionProfile::of` takes from a local profile (below).
+
+A desktop turns its own profile into this body with `TeamAgentProfile::from_local`: the CLI kind of the profile's
+connection, and each MCP server it chooses as the team MCP server that has its id; a connection that is not an agent
+connection of the computer, or an MCP server that is not a team resource, is refused on the desktop (nothing is sent;
+`local_entities_named` names the MCP server). A local profile chooses no tool, skill, instruction or secret, so a
+desktop sends those lists empty; the web editor and other clients set them. A computer runs a team profile on the
+connection of its CLI kind it was filled in with (`AgentProfile::from_team`); the lists a local profile has no field
+for stay in the cached version's server body.
+
+A **pipeline** names the profiles and tools it runs by their server resource ids in its body, and its `references` stay
+empty: the body is the one source of truth, which is also how used-by reads it (`steps[].kind.agent.profile`,
+`steps[].kind.tool.tool`, `deliver.integrator`). A team resource keeps the server's id on every computer, so the body
+is the same everywhere. The desktop sends a pipeline only when every id it names (profile, tool and integrator) is a
+team resource of the project (core's `Pipeline::check_team`; `SharingError::PipelineNamesNonTeam` otherwise, nothing
+sent, and the version is recorded as refused with the code `pipeline_names_non_team`); a
+step or Deliver step with no profile or tool chosen names nothing. The server (OP-199) should apply the same rule to a
+pipeline body: each of those ids must be an existing, not archived team resource of the right kind (`agent_profile`
+for a step's profile and the integrator, `tool` for a tool step) in the same project, else `422 invalid { reason:
+"body" }`. A Share import carries a pipeline's older versions as history: the server checks an imported
+resource's latest version like a publish; older versions are history and are not checked for named ids.
+
+The desktop's local projects keep their local ids; this shape is the team body's. The execution bundle carries none
+of these ids either: its `bindings` hold `{resource_id, role, cli, model}` of each pinned profile (below). The one
+exception is the profile's `mcp_servers`: a pinned team profile names the team MCP servers it uses by their server
+resource id, which are team resource ids and not a computer's, and the bundle pins those servers' versions (below).
+
+## Team server MCP server resource
+
+An MCP server is a team resource of kind `mcp_server` (`SharedResourceKind::McpServer`), with the same immutable,
+numbered versions and the same create, publish, rename and archive calls, access and errors as the reviewer above. Its
+body is core's `TeamMcpServer`; `references` is empty. The team holds only what is the same on every computer:
+
+```text
+{ name,                       // lowercase letters, digits, "-" and "_", starting with a letter
+  launch: { kind: "program",
+            program,          // a name looked up on the PATH ("npx"), never a path
+            args?: [string], working_directory?: string /* relative to the worktree */,
+            variables?: [secret name] }
+        | { kind: "remote", url,
+            secret_headers?: [{ header,   // header name, e.g. "Authorization" or "X-API-Key"
+                                secret,   // the team secret whose value it is sent: "GITHUB_TOKEN"
+                                prefix? }] }, // plain text the value starts with: "Bearer "
+
+  exempt_tools?: [tool name] } // tools that run without asking
+```
+
+The body has no other fields and the server refuses a body with one (`deny_unknown_fields`): no program path, no
+variable or secret value, no connection, secret or MCP server id of any computer. Each computer sets the path of a
+program, the values of the secrets and whether the server is on, itself.
+
+The body names the team secrets it takes, by `SecretName` (a capital letter, then capital letters, digits and
+underscores; the team server holds those names and no values). Each entry of `variables` is filled from the team secret
+of the same name, so it must be a valid secret name (`token` is refused: `TOKEN`). Each entry of `secret_headers` is
+sent `header: <prefix><value of secret>`; `prefix` is plain text of at most 32 characters, ASCII letters, spaces and `- _ . :` only
+(no digit), and is not a value (a response never repeats it). The entry has no other field (`deny_unknown_fields`),
+and a bare header name (`"X-API-Key"`, the shape before a header named its secret) is refused (`422 invalid`, reason
+`body`): which secret it takes is not guessed. A version stored in that shape (on a team server of the module branch
+before ORC-882) cannot be read by a desktop; an admin republishes the server, and a desktop that has not cached its
+older versions yet reads none of them until those versions are gone (no team server running a release ever stored the
+old shape). Two headers may take one secret. A server's secrets, in the order of its
+variables or headers, each once, are what readiness (`docs/design/team-configuration.md`) asks a computer for. Headers
+within `secret_headers` and names within `variables` are distinct, ignoring case. A working directory that is absolute is refused, as is a
+program that is not a bare name. A remote server's `url` has no query and no fragment (no `?` or `#`) and the server
+refuses one that has: a key in it (`?key=sk-…`) would reach the server and every member. A secret goes in a secret
+header, whose name is in `secret_headers` and whose value each computer fills in itself. The refusal does not repeat the
+URL.
+
+The server computes `widens` with core's `SharedBody` rules for this kind: a version widens when
+its program or arguments differ from the previous version's, its URL differs, it switches between a program and a
+remote server, or it adds a tool that runs without asking. The first version does not widen, because a person turns a
+team MCP server on at each computer. The stream carries it as it carries the other kinds: the metadata in
+`snapshot.begin.resources` and the `resource.published`, `resource.renamed` and `resource.archived` deltas, with
+`kind: "mcp_server"`; no new event kind. Libraries and pickers (`ResourceLibraryRequest`, `ResourcePickerRequest`)
+accept `"mcp_server"` as `kind`.
+
+### Share: a local project's configuration in the team's form
+
+`POST …/resources/import` (Share) carries every resource with all its versions. Before it sends anything the desktop
+puts each resource in the team's form and the **latest** version of each is entirely in it (older versions are history
+and are not checked by the server): a profile is a `TeamAgentProfile` (above), a pipeline and the kinds without a team
+form keep their bodies and must name nothing of the computer. Each local MCP server an uploaded profile chooses (in any
+version) becomes a team MCP server with **the local server's id as its resource id**, so the sharer's own profiles keep
+choosing it, one version 1 made when the local server was (names are unique in a project, so no two become one). Its
+body has the program's file name (`notes-mcp` for `/opt/tools/notes-mcp`; a name on the search path stays), the
+arguments, a relative folder, the **names** of its environment variables (plain and secret-valued alike; no value; each
+name must be a valid secret name, as a variable takes the team secret of its own name), its secret headers for a
+remote server as `{ header, secret, prefix? }` (a bearer token: `Authorization`, the local secret's name, prefix
+`"Bearer "`; a pasted Basic credential: `Authorization`, the secret, prefix `"Basic "`; a header: its own name and
+secret, no prefix), and its tools that run without asking. A profile's older version that chooses a server this
+computer no longer has, or one that cannot be a team server, leaves it out and the Share result says so; its newest
+version does not, and is refused.
+
+The desktop refuses the whole Share, before anything is sent, with `SharingError::ShareRefused` listing every resource
+at once (`ShareRefusal { resource, name, reason }`, one line per resource in the surfaced message): a profile with
+writable folders, a tool, instruction or skill whose body names a connection, MCP server or secret of this
+computer, a pipeline that runs a profile or tool it does not upload, and a local MCP server that cannot be a team one (a
+program inside the worktree, a file name that is not a program name, an absolute folder, a URL with a query or
+fragment, Basic authentication with a user name, a variable that is not a valid secret name, two servers that fill one
+team secret from different values).
+
+After the upload this computer fills in what it had, and the Share result (`Shared { not_set, notes, .. }`) says what
+it could not set or carried differently. Each profile's newest connection is its pick; each server that was on is on;
+the program of a stdio server is that team MCP server's program path for the team server (an absolute path as it was;
+a name on the search path looked up once on this computer, and `NotSet::McpProgramPath` when it is found nowhere); and
+the value of every team secret a server takes is kept under that secret's **name** (a variable `API_TOKEN` filled from
+the local secret `NOTES_TOKEN` is kept as `API_TOKEN`; a plain-text value such as `MODE=fast` is kept as the value of
+the team secret `MODE`, and `ShareNote::VariablesAreSecrets` says each member sets theirs; a pasted Basic credential is
+kept as the part after `Basic `). The values are read from the keychain before the upload and never leave the
+computer. Every fill-in is applied whatever happens to another; a secret with no value in the keychain and anything that
+could not be stored come back in `not_set`. A person who may not change the team's configuration uploads none of it and
+reads nothing of it.
+
+
+## Team server catalog
+
+What a shared project's web editor can pick (row 75 of `docs/architecture/server.md`) is the CLI kinds and the model ids
+per kind that the members' desktops report. The wire types are `orchester-api`'s `catalog.rs`; the client calls are
+`report_catalog`, `catalog_cli_kinds` and `catalog_models`. All paths are under the team server's
+`/api/v1/projects/{project}`.
+
+- `PUT …/catalog` (a member's device token): `{ cli_kinds: [role], models: { role: [model id] } }`, this device's
+  whole state, answered `204`. A `role` is `codex_cli`, `claude_code_cli`, `anthropic_api` or `openai_api`; at most 4
+  CLI kinds and 512 ids per role. `github` or an unknown role, in `cli_kinds` or as a `models` key, and a report over
+  the limits are `422 invalid { reason: "catalog" }` (`CatalogReport::check`); an unknown field is `422 invalid`.
+- `GET …/cli-kinds` (a member, also a browser sign-in): `{ cli_kinds: [role] }`, the union of the current reports,
+  sorted, once each. It replaces `GET …/references`, which listed connection and MCP server names.
+- `GET …/models`: `{ models: { role: [model id] } }`, the union per role, each sorted.
+
+No name of a connection or an MCP server is reported or kept. For one release after this contract, the team server
+still accepts the previous `PUT` body, `{ references: [{ kind, name, role }], models }`, and discards the names: it
+keeps the roles of the `connection` references that are agent roles as the CLI kinds. A desktop of this version sends
+only `cli_kinds`.
 
 ## Base
 
@@ -152,12 +455,31 @@ are refused in every shape below.
 - `OperationRead`: `{operation_id,state:"committed",response:CommandResult}` or
   `{operation_id,state:"rejected",error:AuthorityError}`.
 - `AuthorityError`: `{operation_id?,code,details}`; `operation_id` is left out when the refusal came before the
-  operation was read. `details` is `{}` for every code but `decision_required`, whose details are
-  `{decisions:["D1".."D9"]}` with at least one decision, and `unsupported_contract`, whose details are
+  operation was read. `details` is `{}` for every code but `bundle_missing` (below), `decision_required`, whose
+  details are `{decisions:["D1".."D9"]}` with at least one decision, and `unsupported_contract`, whose details are
   `{required_version:"0.4.0"}` (ORC-733): the oldest desktop version the server accepts, a `ReleaseVersion`
   (`MAJOR.MINOR.PATCH` with an optional `-pre` suffix, no build metadata), so the desktop can say which Orchester the
   server needs. A code with another code's details, or details of two codes, is refused. Details never echo the
   request or carry credentials.
+  `bundle_missing` (`work.start` could not build the work's execution bundle) has `{}` or, when the server says why,
+  `{reason:{kind,resource_id?,version?}}` (ORC-884). `kind` is `pipeline_missing` (`resource_id`: the pipeline),
+  `file_missing` (`resource_id`: the resource whose pinned version holds the missing file, when known),
+  `profile_unreadable` (`resource_id`: the agent profile, `version`: its latest version; the team server refuses a
+  profile whose stored latest version is not a team profile body, so its Admin publishes it again as a team profile; the
+  old local profile format is dropped), `mcp_server_archived` (`resource_id`: the archived team MCP server a profile
+  still names), `body_unreadable` (`resource_id`: a resource of another kind whose pinned body cannot be read),
+  `bundle_too_large` or `other`. A `kind` that is left out, is not a string or is one a reader does not know reads as
+  `other`, and `reason` ignores fields it does not know, unlike the closed shapes around it, so it can grow. It names
+  no path and carries no secret. A desktop older than the release that holds ORC-884 refuses `details` it does not
+  know and reads such an answer as no contract answer (it waits, as for a server it cannot reach). So the team server
+  (on the module branch that ships team configuration) raises its minimum desktop version to the first desktop release
+  that holds ORC-884; the bundle schema change of ORC-880/883 already requires that release, so no per-field gate is
+  needed. A server that cannot raise its minimum sends `{}` to a client older than that release, by
+  `Orchester-Client-Version`. The desktop settles the start refused and answers `run_task` `team_bundle_missing` with a
+  message per kind (`appMcp.errors.teamBundleMissing*`): for `profile_unreadable` "Publish agent profile <name> again as
+  a team profile", for `mcp_server_archived` the server by name and that a profile still uses it, for `file_missing` and
+  `body_unreadable` the resource by name; the name is the resource's cached name on that computer, or its id. A kind
+  that names a resource but comes without one gets the message of `other`.
 
 | Code | Status |
 | --- | --- |
@@ -249,9 +571,14 @@ starts work under a claim and never accepts one a client wrote. Unknown fields a
 
 - `ExecutionBundle`, in this field order:
   `{schema_version,project_id,subject,claim_id,module_id,branch,base_commit,definition_revision,task_number,task,pipeline,profiles,permissions,limits,delivery,resources,files,skill_files,bindings,inputs}`.
-  `schema_version` is `EXECUTION_BUNDLE_SCHEMA` (2), as `BundleRef.schema_version` names it; a bundle of another
-  version is refused, with no compatibility shim (2 added `task_number` and the pinned versions' `label`, so a
-  desktop and a server on different versions refuse each other's bundles). `module_id`, `branch`
+  `schema_version` is `EXECUTION_BUNDLE_SCHEMA` (3), as `BundleRef.schema_version` names it; a bundle of another
+  version is refused, with no compatibility shim (2 added `task_number` and the pinned versions' `label`; 3 added the
+  pinned team MCP servers and a team profile's `mcp_servers`, so a desktop and a server on different versions refuse
+  each other's bundles, and a schema-2 bundle is refused as `Schema(2)`). The desktop compares the start receipt's
+  `BundleRef.schema_version` with its own before it reads the bundle and settles the start failed (`bundle_schema`,
+  `read` and `built`); a bundle it reads of another schema, or JSON that is no bundle (`bundle_unreadable`), settles it
+  failed too, over MCP as `team_bundle_schema_mismatch` / `team_bundle_unreadable`. Only a failed call (no answer, a
+  body that is not JSON, a refusal) waits. `module_id`, `branch`
   and `base_commit` are S7's (below): the module the work is under, its module branch (`BranchName`) and the base
   branch's commit the work starts from (`CommitId`). `definition_revision` is the task's revision when the work
   started; `task_number` is the task's number in its project from 1 (the `7` of `ORC-7`, which names the run and its
@@ -260,22 +587,39 @@ starts work under a claim and never accepts one a client wrote. Unknown fields a
   `changes_or_report`: the task's own choice, else its pipeline's).
 - Derived from `inputs`, and refused on read when they differ: `pipeline` `{resource_id,version}`; `profiles`
   `[{role,resource_id,version}]`; `permissions` `[{step,permissions}]`, each agent step's profile permissions
-  narrowed by the step, in pipeline step order; `resources` `[{resource_id,version}]`, the pinned instructions, tools
-  and skills; `files` `[{sha256,size_bytes}]`, every file once; `skill_files`
+  narrowed by the step, in pipeline step order; `resources` `[{resource_id,version}]`, the pinned instructions, tools,
+  skills and team MCP servers; `files` `[{sha256,size_bytes}]`, every file once; `skill_files`
   `[{resource_id,files:[{path,sha256,size_bytes}]}]`. `version` is the published version number.
 - `bindings` `[{resource_id,role,cli,model}]`: one per pinned profile, with its role and model; `cli` is the agent
-  provider (`codex_cli`, `claude_code_cli`, …) the executing computer runs it with. Which account or connection runs it,
-  and every path, stays on that computer.
-- `inputs` (`CanonicalExecutionInputs`): `{pipeline,steps,profiles,instructions,tools,skills}`, each pinned version
-  `{resource,version,number,label,body}` with its published body. `label` (`ResourceLabel`) is `{slug,name}`, the
+  provider (`codex_cli`, `claude_code_cli`, …) the executing computer runs it with. `resource_id` is the profile's
+  server resource id; a binding holds no id of a computer's connection, MCP server or secret. Which account or
+  connection runs it, and every path, stays on that computer.
+- `inputs` (`CanonicalExecutionInputs`): `{pipeline,steps,profiles,instructions,tools,skills,mcp_servers?}`, each
+  pinned version `{resource,version,number,label,body}` with its published body. `label` (`ResourceLabel`) is `{slug,name}`, the
   resource's slug and name as the pinned version had them, which prompts and skill folders name it by: the slug is
   1–64 lowercase letters, digits and single inner hyphens, the name is not blank and at most 200 characters; a
   malformed label is refused. `steps` are the run snapshot's `[{key,executor}]` in
   pipeline order. The pipeline body lists no sources, a profile body is
-  `{role,responsibilities,instructions,model,settings,permissions}` without its connection, MCP servers or writable
-  folders, and a command tool never starts a program by an absolute path; such inputs are refused. Bodies name
-  secrets by id only.
-- Order: `steps` and `permissions` keep pipeline order; `profiles`, `bindings`, `resources`, `skill_files` and the
+  `{role,responsibilities,instructions,model,settings,permissions,mcp_servers?}` without its connection or writable
+  folders, and a command tool never starts a program by an absolute path; such inputs are refused. A tool body
+  still names its secret by id and has no team form yet, so Share refuses it (above); the tool body is to name
+  secrets by name (`secret_name`, above) when it gets one.
+- **MCP servers (schema 3).** `mcp_servers` are the team MCP servers the pinned profiles name, and exactly those: a
+  team profile's body lists them as `mcp_servers: [ResourceId]` (distinct, in the order the profile lists them; left
+  out while empty), and `inputs.mcp_servers` pins one version of each, `{resource,version,number,label,body}` with
+  `resource` the server's resource id and `body` core's `TeamMcpServer` as above (`{name,launch,exempt_tools?}`, which
+  the read refuses any other field of: no program path, no value of a variable or of a secret header, no connection,
+  no id of a computer). It is left out while empty. A profile that names a server the inputs do not pin, a pinned
+  server no profile names, a server pinned twice or a profile listing one twice is refused
+  (`BundleError::McpServerMissing`, `McpServersMismatch`, `Duplicate`). Which version of each server a bundle pins is
+  the server's choice when it builds the bundle (the latest published); `ExecutionProfile::of_team` carries the ids, and
+  `PinnedBodies.mcp_servers` the versions. A **local** run's inputs pin none and its profiles name none: a local
+  profile names the computer's own MCP servers, which are paths and values of that computer, and the computer resolves
+  them itself (`ExecutionProfile::bound`); local inputs keep the same bytes and hash as before, and the stored run
+  inputs (format 2) read as before. ORC-826 builds the desktop starting a team server with this computer's program path,
+  values and switch-on state when it runs the profile; today the team start looks a team MCP server up by its id among
+  the computer's own MCP servers as a stopgap (`team_work/choices.rs`, `McpHere`).
+- Order: `steps` and `permissions` keep pipeline order; `profiles`, `bindings`, `resources`, `skill_files`, `mcp_servers` and the
   pinned versions are read in any order and kept in resource id order, `files` in hash order, a skill's files in path
   order.
 - Hash: the lowercase hex SHA-256 of the bundle's canonical bytes, its compact JSON as `serde_json` writes it with the
@@ -469,6 +813,9 @@ change. Unknown kinds and fields are refused; the server answers a kind it does 
   `delivery.authorize {subject,claim_id,branch,source_commit,base_commit}` (Admin; a module subject), since P4
   `work.report` with `WorkReport`'s fields (below), and since P4c `delivery.request` and `delivery.report` ("Team
   authority P4 module delivery").
+- `claim.release` by the holder: refused `422 invalid` while the claim's latest work runs and has an accepted report;
+  allowed while it runs with none, moving that work to `failed` with no reason stored (see "Start" in Team authority P4
+  work).
 - Expected revisions: the module's for `module.branch.set`, the task's and its module's for `work.start`, the
   subject's for `assignment.set` (the desktop sends it), none for the others, whose claims fence them by id.
 - Values, tagged by `kind`, each with `effects`: `task {task:SharedTask}` (until `TaskRead` is published there),
@@ -531,8 +878,38 @@ The desktop's team work (`orchester_workspace::team_work`) uses them so:
   the operation and the runner's start are idempotent, so a retry never makes a second work or run. A refusal of the
   start or of its bundle (`claim_lost`) is kept and starts nothing. A bundle that can never become the run's inputs
   here (it is not the one the receipt names, or the caller's bindings do not fit it) settles the start `failed`, kept
-  with the reason; recovery carries each open start on its own, so one such start holds back no other.
-- **Inputs.** The task's number and each pinned version's label (`{slug,name}`) are the bundle's (schema 2); the
+  with the reason; recovery carries each open start on its own, so one such start holds back no other. A start that
+  fails for good (those, and the pinned versions needing what this computer lacks) or that the server refuses
+  `bundle_missing` lets go of its claim first (`claim.release`, unless a run here that has not ended for good, has an
+  outcome unsent or can still be recovered by a person, or another open start, uses the same claim: the failure then
+  says the claim is kept), so teammates can take the task at once instead of after the claim goes stale; a server that
+  cannot be reached for the release keeps the start waiting. The work the server made for such a start is not reported:
+  `work.report` is a run's own (`run_id`, `sequence`, and `ExecutionFailure` names no start failure), and no run was
+  made. **`claim.release` of a claim whose latest work runs** (the state `work.start` leaves it in): the holder may
+  release it when no report of that work was ever accepted, as the work started no run; the release moves the work to
+  `failed`, stores no reason for it, and keeps its row. A running work with at least one accepted report is refused
+  `422 invalid` (the claim's `AgentWorking`: stop the run first), as an agent at work is. A team server older than this
+  rule refuses any running work the same way, so a start that failed after `work.start` ends **Held** for it: the
+  desktop shows that the server refused to release the claim, so it may still be held (any other refusal for good,
+  such as `forbidden`, is Held too, and `claim_lost` is a claim that is already gone, which is released). A project's
+  open starts are carried on when it is opened, one start of a project at a time (a Run takes the project's turn before
+  it claims the task and waits for the recovery's, and the recovery leaves a Run's alone). Every open project is looked
+  at again every minute, whether it is a team project or not: a local project has no link to a team server, so the ask
+  is one read of its database and nothing is sent, and a project shared later is carried on from the next round. What
+  could not be carried on is tried again, and so is a start a later Run leaves waiting. A start record that cannot be
+  read (e.g. written by a newer Orchester) stays open: it is said once in the log and asked again with the others, and
+  the task's page says that the record cannot be read here. A transient error of a start is logged once per start and
+  session. The runner's refusal of a start's kept inputs keeps the start open and is kept with it, replaced by each
+  later answer of the runner and dropped by a round that cannot reach the team server or is signed out of it (the runner
+  is not asked then, so the page says the start waits); it is logged once per start and session, and the task's page
+  says what the runner said, as it does for a Run that met the refusal at once. What recovery settles (a run started, a refusal or a failure for
+  good) is read back for the task's page, which says why the start did not run as a Run that settled at once would,
+  with what became of the claim; a `bundle_missing` refusal keeps the outcome of its claim release with it. A window
+  that asked for nothing tells a start settled for good once: until the person dismisses the notice, runs the task
+  again, or what made it fail no longer holds (a bundle schema this Orchester now reads). A dismissal marks the start the
+  page showed, never a newer one that replaced it.
+- **Inputs.** The task's number and each pinned version's label (`{slug,name}`) are the bundle's (schema 2, with the
+  team MCP servers of schema 3); the
   start's caller supplies only the local bindings and consent, and each pinned profile must be bound to a connection
   of the CLI the bundle binds it to.
 - **Reports.** Each change of a team run's outcome (core's `ExecutionOutcome::of_status`) is queued once in

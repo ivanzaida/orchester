@@ -5,8 +5,9 @@
 //! (`GET /auth/me`), and the projects the person is a member of (`GET /projects`, by `?slug=` too). What a linked
 //! checkout's first download reads, and what a first link of a project sends (the workspace's `local_owner`), is in
 //! [`first_download`]; the reads of a team project straight from the server (`/api/v2`), and an Admin's writes of its
-//! tasks and releases, are in [`authority`]. It answers a wrong code and an expired one alike, `invalid_code`, as a
-//! real server does; it can have no place for a cloud identity, it can refuse a link, and it can stop answering.
+//! tasks and releases, are in [`authority`], and a project's resources and their versions in [`resources`]. It answers
+//! a wrong code and an expired one alike, `invalid_code`, as a real server does; it can have no place for a cloud
+//! identity, it can refuse a link, and it can stop answering.
 
 use std::{
   io::{Read, Write},
@@ -21,12 +22,14 @@ use serde_json::{Value, json};
 
 mod authority;
 mod first_download;
+mod resources;
 pub use authority::{
-  AuthorityClaim, AuthorityModule, AuthorityTask, DeliveryAuthorized, PendingDelivery, Person, Plan,
+  AuthorityClaim, AuthorityModule, AuthorityTask, BundleFault, DeliveryAuthorized, PendingDelivery, Person, Plan,
   STALE_AFTER_MINUTES, Standing,
 };
 use first_download::TaskPages;
 pub use first_download::TasksAnswer;
+pub use resources::{PinnedRun, RunReport};
 
 /// The server's name, as it gives it at `GET /server`, unless it is [`TeamServer::named`] otherwise.
 pub const NAME: &str = "Kontur team";
@@ -67,6 +70,8 @@ struct State {
   tasks_asked: usize,
   /// What the `/api/v2` surface answers.
   authority: authority::Authority,
+  /// The resources of every project.
+  resources: resources::Store,
 }
 
 pub struct TeamServer {
@@ -98,6 +103,7 @@ impl TeamServer {
       pages: None,
       tasks_asked: 0,
       authority: authority::Authority::new(),
+      resources: resources::Store::default(),
     }));
     let serving = state.clone();
     thread::spawn(move || {
@@ -271,6 +277,7 @@ fn route((path, query): (&str, &str), (headers, body): (&str, &str), state: &Mut
       None => ("200 OK", json!({"projects": state.lock().projects})),
     },
     _ => authority::edits::answer(path, body, state)
+      .or_else(|| resources::answer((path, query), body, state))
       .or_else(|| authority::roadmap::answer(path, body, state))
       .or_else(|| first_download::answer((path, query), state))
       .unwrap_or_else(|| ("404 Not Found", error("not_found"))),

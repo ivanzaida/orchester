@@ -38,7 +38,9 @@ use zeroize::Zeroize;
 pub use self::recorded::trust_for_tests;
 pub use self::{
   address::{AddressError, PlainHttp, ServerAddress},
-  authority::{Authority, AuthorityCallError, CLIENT_VERSION_HEADER, PolicyChange, Subscription, SubscriptionEnd},
+  authority::{
+    Authority, AuthorityCallError, BundleReadError, CLIENT_VERSION_HEADER, PolicyChange, Subscription, SubscriptionEnd,
+  },
   cloud::{CloudClient, SignInAnswer},
   cloud_address::CloudAddress,
   error::ClientError,

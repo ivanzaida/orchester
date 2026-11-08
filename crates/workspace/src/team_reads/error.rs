@@ -65,8 +65,7 @@ impl TeamReadError {
 impl From<AuthorityCallError> for TeamReadError {
   fn from(error: AuthorityCallError) -> Self {
     match error {
-      AuthorityCallError::Client(error) if error.is_connection() => Self::Unavailable { retry_after: None },
-      AuthorityCallError::Client(error) => common(error),
+      AuthorityCallError::Client(error) => error.into(),
       AuthorityCallError::Refused { error, retry_after, .. } => match (error.code(), error.details()) {
         (_, ErrorDetails::UnsupportedContract { required_version }) => Self::NeedsVersion {
           required: required_version.clone(),
@@ -82,18 +81,24 @@ impl From<AuthorityCallError> for TeamReadError {
   }
 }
 
-/// A failure in the `/api/v1` form, as the team server answers the failures common to every route.
-fn common(error: ClientError) -> TeamReadError {
-  match error {
-    ClientError::Api {
-      code: ErrorCode::Unauthorized,
-      ..
-    } => TeamReadError::SignedOut,
-    ClientError::Api {
-      code: ErrorCode::NotFound,
-      ..
-    } => TeamReadError::NotFound,
-    error => TeamReadError::Server(error),
+/// A failure of an `/api/v1` call: a server that cannot be reached, or the failures common to every route as the team
+/// server answers them in that form.
+impl From<ClientError> for TeamReadError {
+  fn from(error: ClientError) -> Self {
+    if error.is_connection() {
+      return Self::Unavailable { retry_after: None };
+    }
+    match error {
+      ClientError::Api {
+        code: ErrorCode::Unauthorized,
+        ..
+      } => Self::SignedOut,
+      ClientError::Api {
+        code: ErrorCode::NotFound,
+        ..
+      } => Self::NotFound,
+      error => Self::Server(error),
+    }
   }
 }
 

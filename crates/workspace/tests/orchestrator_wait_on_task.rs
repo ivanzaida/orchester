@@ -77,6 +77,8 @@ struct Desktop {
   services: app_mcp::Services,
   runners: Runners,
   servers: Servers,
+  workspace: Workspace,
+  vault: Vault,
   open: OpenProject,
   runtime: Runtime,
   scope: ChatScope,
@@ -98,9 +100,10 @@ impl Desktop {
       orchester_ipc::SessionEnd::Clean,
     );
     let version = orchester_api::releases::ReleaseVersion::parse("0.5.0").expect("a release version");
-    let servers = Servers::new(workspace.clone(), Vault::with(Arc::new(NoVault)), version);
+    let vault = Vault::with(Arc::new(NoVault));
+    let servers = Servers::new(workspace.clone(), vault.clone(), version);
     let services = app_mcp::Services::new(
-      workspace,
+      workspace.clone(),
       runners.clone(),
       servers.clone(),
       Programs::processes(),
@@ -119,6 +122,8 @@ impl Desktop {
       services,
       runners,
       servers,
+      workspace,
+      vault,
       open,
       runtime,
       scope,
@@ -138,9 +143,13 @@ impl Desktop {
 
   /// *Drop the wait* of `run`, pressed by `by`.
   fn drop_wait(&self, run: RunId, by: Answerer) -> Result<Option<Sent>, orchester_workspace::messages::Message> {
-    self
-      .runtime
-      .block_on(drop_wait((&self.runners, &self.servers), &self.open, run, by))
+    self.runtime.block_on(drop_wait(
+      (&self.runners, &self.servers),
+      (&self.workspace, &self.vault),
+      &self.open,
+      run,
+      by,
+    ))
   }
 
   fn db(&self) -> ProjectDb {

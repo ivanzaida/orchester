@@ -208,6 +208,7 @@ async fn record(project: &OpenProject, services: &crate::services::Services, cha
   };
   let activity = services.activity.start(spec);
   let published = matches!(change, Change::Publish(..));
+  let created = matches!(change, Change::Create(..));
   let root = project.repo_root.clone();
   let result = background::run(move || {
     let (saved, author) = match change {
@@ -224,6 +225,14 @@ async fn record(project: &OpenProject, services: &crate::services::Services, cha
   .await
   .map_err(Failure::Other)
   .and_then(|result| result.map_err(Failure::from));
+  // A new instruction in a shared project is the team's only once its server takes it; one it refuses is taken back.
+  let result = match result {
+    Ok(entry) if created => crate::screens::hub::team::send_created(services, &project.repo_root, entry.id)
+      .await
+      .map(|()| entry)
+      .map_err(Failure::Other),
+    other => other,
+  };
   match &result {
     Ok(_) => activity.finish(),
     Err(error) => activity.fail(error.message().clone()),

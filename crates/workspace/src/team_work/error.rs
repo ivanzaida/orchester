@@ -1,15 +1,22 @@
-use orchester_api::v2::BundleFileError;
+use orchester_api::v2::{BundleFileError, EXECUTION_BUNDLE_SCHEMA};
 use orchester_core::{
   blob::ContentHash,
-  connection::AgentProvider,
-  id::{OperationId, ResourceId, RunId},
+  id::{OperationId, RunId},
   integration::GitError,
   run::inputs::InputsError,
 };
 use orchester_exec::local_git::LocalGitError;
 use orchester_store::{RunStoreError, StoreError};
 
-use crate::actions::ActionError;
+use crate::{actions::ActionError, readiness::MissingPart};
+
+impl TeamWorkError {
+  /// Whether trying again changes nothing: the recorded start itself cannot be read, which only a newer Orchester or a
+  /// person can mend. Every other error may pass (the database was busy, the server answered strangely).
+  pub const fn is_permanent(&self) -> bool {
+    matches!(self, Self::Unreadable(_))
+  }
+}
 
 /// Why a team start, its reports, its heartbeat or a module delivery could not go on. A server that cannot be reached
 /// or refuses for now is no error: the outcome says so, and the work goes on from where it stands.
@@ -30,18 +37,31 @@ pub enum TeamWorkError {
     expected: ContentHash,
     reason: &'static str,
   },
+  /// The server built the start's bundle in another schema than this computer reads, so it can never be read here.
+  #[error("the bundle is built in schema {built}, and this computer reads schema {EXECUTION_BUNDLE_SCHEMA}")]
+  BundleSchema { built: u32 },
+  /// The server answered JSON for the start's bundle that is not an execution bundle of the schema this computer reads.
+  #[error("the bundle the server answered is not one this computer can read")]
+  BundleUnreadable,
   /// A bundle file the server answered is not the file the bundle pins.
   #[error(transparent)]
   BundleFile(#[from] BundleFileError),
   /// The accepted bundle with the caller's choices does not make a run's inputs.
   #[error("the accepted bundle does not make the run's inputs: {0}")]
   Inputs(#[from] InputsError),
-  /// A pinned profile is bound to a connection here that does not run the CLI the bundle binds it to.
-  #[error("agent profile {resource} is bound to a connection that is not {cli:?}")]
-  BindingCli { resource: ResourceId, cli: AgentProvider },
+  /// The versions the bundle pins need something this computer lacks, though the pipeline was ready here when the start
+  /// asked: the team server pinned newer versions than the cached ones.
+  #[error("the pipeline {pipeline} is not ready on this computer for the versions the bundle pins")]
+  NotReadyHere {
+    pipeline: String,
+    missing: Vec<MissingPart>,
+  },
   /// The recorded request or receipt of the start cannot be read back.
   #[error("the record of team start {0} cannot be read")]
   Unreadable(OperationId),
+  /// The start a person dismissed is not the newest of its task any more: a later one replaced what the page showed.
+  #[error("team start {0} is no longer the newest start of its task")]
+  StartSuperseded(OperationId),
   /// The server answered the start's operation with something other than a work.
   #[error("the server answered team start {0} with no work")]
   NotAWork(OperationId),

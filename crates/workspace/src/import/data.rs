@@ -126,6 +126,7 @@ pub fn import_error(error: &StoreError) -> Message {
     StoreError::ResourceNotFound(_)
     | StoreError::ConnectionNotFound(_)
     | StoreError::SecretNotFound(_)
+    | StoreError::Keychain(_)
     | StoreError::DuplicateSlug { .. } => Message::new("projectImport.errors.targetChanged"),
     other => messages::store_error(other),
   }
@@ -150,6 +151,7 @@ pub fn import_failure(error: &StoreError) -> ImportFailure {
     StoreError::ResourceNotFound(_)
     | StoreError::ConnectionNotFound(_)
     | StoreError::SecretNotFound(_)
+    | StoreError::Keychain(_)
     | StoreError::DuplicateSlug { .. } => ImportFailure::Changed,
     other => ImportFailure::Failed(messages::store_error(other)),
   }

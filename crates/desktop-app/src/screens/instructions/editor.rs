@@ -474,18 +474,14 @@ impl Editor {
         .ok()
         .and_then(|body| Name::new(&self.fields.name.get()).ok().map(|name| (name, body)));
       let valid = candidate.is_some();
-      let save = ActionButton::new(
-        "instruction-create",
-        ButtonKind::Primary,
-        ctx.t("instructions.createDraft"),
-      )
-      .icon(Icon::Check)
-      .on_click(move || {
-        if let Some((name, body)) = &candidate {
-          // Work::run tells whether an MCP client's input wrote it or presses Create.
-          work.run(Change::Create(name.clone(), body.clone(), Author::Person).into());
-        }
-      });
+      let save = ActionButton::new("instruction-create", ButtonKind::Primary, ctx.t("instructions.create"))
+        .icon(Icon::Check)
+        .on_click(move || {
+          if let Some((name, body)) = &candidate {
+            // Work::run tells whether an MCP client's input wrote it or presses Create.
+            work.run(Change::Create(name.clone(), body.clone(), Author::Person).into());
+          }
+        });
       return if busy {
         save.loading()
       } else if valid {

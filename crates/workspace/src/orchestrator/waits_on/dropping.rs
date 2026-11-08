@@ -24,7 +24,7 @@ use crate::{
   tasks::{
     conversation::{
       composer::{ComposerMode, Then},
-      follow::{RunnerOf, Sent, Stored, follow},
+      follow::{Readiness, RunnerOf, Sent, Stored, follow},
       outgoing::{Way, prepare_in, store_answer_in},
     },
     detail::run_store_error,
@@ -53,6 +53,7 @@ struct Told {
 /// longer waits on a task, and refused to automation (`by`): the drop is the person's, and its message goes as theirs.
 pub async fn drop_wait(
   (runners, servers): (&Runners, &Servers),
+  ready: Readiness<'_>,
   open: &OpenProject,
   run: RunId,
   by: Answerer,
@@ -73,7 +74,13 @@ pub async fn drop_wait(
     pipeline: &stored.pipeline,
   };
   Ok(Some(
-    follow((runners, servers, RunnerOf::Project(open)), &message, stored.then).await,
+    follow(
+      (runners, servers, RunnerOf::Project(open)),
+      ready,
+      &message,
+      stored.then,
+    )
+    .await,
   ))
 }
 

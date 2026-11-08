@@ -47,6 +47,8 @@ pub struct WaitingPublish {
   /// The number of the version it was edited from; `None` for a resource's first version.
   pub based_on: Option<VersionNumber>,
   pub state: PublishState,
+  /// Its resource was created here as this first version ([`ProjectDb::create_published`]), with no draft before it.
+  pub created: bool,
 }
 
 impl ProjectDb {
@@ -80,7 +82,7 @@ impl ProjectDb {
   pub fn waiting_publishes(&self) -> Result<Vec<WaitingPublish>, StoreError> {
     let mut statement = self.connection.prepare(
       "SELECT shared_publishes.version_id, shared_publishes.resource_id, resources.kind, mine.number, \
-       shared_publishes.idempotency_key, base.number, shared_publishes.conflict_latest, shared_publishes.refused \
+       shared_publishes.idempotency_key, base.number, shared_publishes.conflict_latest, shared_publishes.refused, shared_publishes.created \
        FROM shared_publishes \
        JOIN resource_versions AS mine ON mine.id = shared_publishes.version_id \
        JOIN resources ON resources.id = shared_publishes.resource_id \
@@ -98,6 +100,7 @@ impl ProjectDb {
           based_on: row.get(5)?,
           conflict: row.get(6)?,
           refused: row.get(7)?,
+          created: row.get(8)?,
         })
       })?
       .collect::<Result<Vec<_>, _>>()?;
@@ -130,15 +133,37 @@ impl ProjectDb {
     Ok(())
   }
 
-  /// *Open my draft on vN*: `version`, published here and met by a version someone published from the same base, is
+  /// *Open my draft on vN*, and what a refused or cancelled publish does: `version`, published here and not numbered
+  /// by the server (met by a version someone published from the same base, refused, or still waiting to be sent), is
   /// taken back, with the versions of its resource published here after it; the server numbered none of them. The
   /// resource's draft, the one kept here or else the newest version taken back, is then edited from the latest version
   /// the server numbered; nothing is merged. A version a run or a task here uses stays
-  /// ([`StoreError::VersionInUse`]); nothing is changed then.
+  /// ([`StoreError::VersionInUse`]); nothing is changed then. A resource whose first version this is has no version
+  /// to edit from ([`ProjectDb::discard_created`] takes that back instead).
   pub fn reopen_draft<B: ResourceBody + Clone>(
     &mut self,
     version: VersionId,
     now: Timestamp,
+  ) -> Result<(), StoreError> {
+    self.reopen::<B>(version, now, DraftBase::Latest)
+  }
+
+  /// As [`ProjectDb::reopen_draft`], the draft staying edited from the version `version` was edited from, which is
+  /// older than the latest the server numbered when someone published meanwhile: the three-way merge of the draft with
+  /// that version needs it, and a draft claiming the latest would publish over it unseen.
+  pub fn reopen_draft_on_its_base<B: ResourceBody + Clone>(
+    &mut self,
+    version: VersionId,
+    now: Timestamp,
+  ) -> Result<(), StoreError> {
+    self.reopen::<B>(version, now, DraftBase::Kept)
+  }
+
+  fn reopen<B: ResourceBody + Clone>(
+    &mut self,
+    version: VersionId,
+    now: Timestamp,
+    base: DraftBase,
   ) -> Result<(), StoreError> {
     let transaction = self.connection.transaction()?;
     // The versions go before their rows in `shared_publishes`, which the delete trigger reads.
@@ -147,16 +172,20 @@ impl ProjectDb {
       .query_row(
         "SELECT mine.resource_id, mine.number FROM shared_publishes \
          JOIN resource_versions AS mine ON mine.id = shared_publishes.version_id \
-         WHERE shared_publishes.version_id = ?1 AND shared_publishes.conflict_latest IS NOT NULL",
+         WHERE shared_publishes.version_id = ?1",
         [version.to_string()],
         |row| Ok((row.get(0)?, row.get(1)?)),
       )
       .optional()?
-      .ok_or_else(|| corrupt("version in conflict", version))?;
+      .ok_or_else(|| corrupt("unsent version", version))?;
     let resource: ResourceId = parse("resource id", &resource)?;
     check_kind::<B>(&transaction, resource)?;
     ensure_may_change(&transaction, resource)?;
-    let latest = latest_confirmed(&transaction, resource)?.ok_or_else(|| corrupt("version in conflict", version))?;
+    let latest = latest_confirmed(&transaction, resource)?.ok_or_else(|| corrupt("unsent version", version))?;
+    let based_on = match base {
+      DraftBase::Latest => latest,
+      DraftBase::Kept => confirmed_base(&transaction, version)?.map_or(latest, |base| base.min(latest)),
+    };
     let taken = load_versions::<B>(
       &transaction,
       "WHERE resource_id = ?1 AND number >= ?2 AND id IN (SELECT version_id FROM shared_publishes) ORDER BY number",
@@ -171,7 +200,7 @@ impl ProjectDb {
       Some(draft) => draft.body().clone(),
       None => taken
         .last()
-        .ok_or_else(|| corrupt("version in conflict", version))?
+        .ok_or_else(|| corrupt("unsent version", version))?
         .body()
         .clone(),
     };
@@ -182,7 +211,7 @@ impl ProjectDb {
         [kept.id().to_string()],
       )?;
     }
-    let draft = Draft::new(body, Some(version_number(latest)?), now);
+    let draft = Draft::new(body, Some(version_number(based_on)?), now);
     save_draft(&transaction, resource, &draft)?;
     transaction.commit()?;
     Ok(())
@@ -241,6 +270,38 @@ impl ProjectDb {
     }
     Ok(())
   }
+}
+
+/// The version a taken-back draft stays edited from.
+#[derive(Clone, Copy)]
+enum DraftBase {
+  /// The latest version the server numbered.
+  Latest,
+  /// The one the version was edited from.
+  Kept,
+}
+
+/// The number of the version `version` was edited from, when that is one the server numbered. A base that waits for the
+/// server itself (a version published on top of another one that was not sent) is followed to the version it was
+/// edited from, until one the server numbered.
+fn confirmed_base(connection: &Connection, version: VersionId) -> Result<Option<i64>, StoreError> {
+  Ok(
+    connection
+      .query_row(
+        "WITH RECURSIVE chain(base_version_id) AS ( \
+           SELECT base_version_id FROM shared_publishes WHERE version_id = ?1 \
+           UNION \
+           SELECT shared_publishes.base_version_id FROM shared_publishes \
+           JOIN chain ON shared_publishes.version_id = chain.base_version_id \
+         ) \
+         SELECT base.number FROM chain \
+         JOIN resource_versions AS base ON base.id = chain.base_version_id \
+         WHERE base.id NOT IN (SELECT version_id FROM shared_publishes)",
+        [version.to_string()],
+        |row| row.get(0),
+      )
+      .optional()?,
+  )
 }
 
 /// Whether the person may change a shared project's team configuration; `None` while the project is local.
@@ -384,6 +445,7 @@ struct WaitingRow {
   based_on: Option<i64>,
   conflict: Option<i64>,
   refused: Option<String>,
+  created: bool,
 }
 
 impl WaitingRow {
@@ -404,6 +466,7 @@ impl WaitingRow {
       key: parse("idempotency key", &self.key)?,
       based_on: self.based_on.map(version_number).transpose()?,
       state,
+      created: self.created,
     })
   }
 }

@@ -1,17 +1,25 @@
 //! What navigate makes of `route` modules: the list on a tab, New module, a module's page on a tab, or Edit module;
 //! of `route` new_task with `module`: New task in that module; and of `route` agents with `agent`: a profile's page or
-//! a new profile. A `tab` or `view` where it names nothing is refused, not left out.
+//! a new profile, or with `filter` and `item`: the Agents hub of a team project. A `tab` or `view` where it names
+//! nothing is refused, not left out.
 
 use orchester_core::id::{ModuleId, ResourceId};
 use serde_json::{Map, Value};
 
 use super::{ToolError, string, tab};
-use crate::routes::{AgentTab, ModuleListTab, ModuleTab, ProjectPage};
+use crate::routes::{AgentTab, HubFilter, HubView, ModuleListTab, ModuleTab, ProjectPage};
 
-/// The profiles' list; with `agent` new, a new profile; with a profile's id, its page.
+/// The profiles' list; with `agent` new, a new profile; with a profile's id, its page. A team project's list is the
+/// Agents hub: `filter` (all, profiles, mcp_servers, instructions, skills or tools) and `item`, a resource's id its
+/// panel shows.
 pub(super) fn agent_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
+  let (filter, item) = (string(args, "filter")?, string(args, "item")?);
   match string(args, "agent")? {
-    None => Ok(ProjectPage::Agents),
+    None => hub_page(filter, item),
+    Some(_) if filter.is_some() || item.is_some() => Err(ToolError::InvalidParam {
+      param: "agent",
+      reason: "a profile's page has no filter or item".to_owned(),
+    }),
     Some("new") => Ok(ProjectPage::NewAgent(AgentTab::default())),
     Some(agent) => agent
       .parse::<ResourceId>()
@@ -21,6 +29,26 @@ pub(super) fn agent_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolE
         reason: error.to_string(),
       }),
   }
+}
+
+/// The Agents hub on `filter` (All when left out) showing the resource `item`.
+fn hub_page(filter: Option<&str>, item: Option<&str>) -> Result<ProjectPage, ToolError> {
+  let filter = match filter {
+    None => HubFilter::default(),
+    Some(name) => HubFilter::from_name(name).ok_or_else(|| ToolError::UnknownTab {
+      name: name.to_owned(),
+      known: HubFilter::ALL.map(HubFilter::name).to_vec(),
+    })?,
+  };
+  let item = item
+    .map(|item| {
+      item.parse::<ResourceId>().map_err(|error| ToolError::InvalidParam {
+        param: "item",
+        reason: error.to_string(),
+      })
+    })
+    .transpose()?;
+  Ok(ProjectPage::hub(HubView::new(filter, item)))
 }
 
 /// The Modules list on `tab`; with `module` new or `view` new, New module; with a module's id, its page on `tab`, or

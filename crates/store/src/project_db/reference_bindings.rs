@@ -32,7 +32,8 @@ pub struct Bound<I> {
   pub by: BoundBy,
 }
 
-/// A reference by its id on the publisher's computer, with what it is bound to here; `None` while it is not.
+/// A reference by its id on the publisher's computer, with what it is bound to here; `None` while it is not. Removed
+/// by ORC-845 with the bindings.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum BoundReference {
   Connection {

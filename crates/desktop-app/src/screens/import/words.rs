@@ -267,7 +267,8 @@ const fn new_local(kind: Option<orchester_core::resource::ResourceKind>) -> &'st
       | ResourceKind::TestSuite
       | ResourceKind::Service
       | ResourceKind::Stack
-      | ResourceKind::TeamReviewer,
+      | ResourceKind::TeamReviewer
+      | ResourceKind::McpServer,
     )
     | None => "import.statusDetail.newTool",
   }

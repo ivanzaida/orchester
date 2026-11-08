@@ -5,8 +5,8 @@
 use std::num::NonZeroU32;
 
 use orchester_app::routes::{
-  AgentTab, InstructionsPanel, InstructionsTab, InstructionsView, PipelineView, ProjectPage, ProjectSettingsTab, Route,
-  SecretsPanel, SecretsView, SkillsFilter, StepPage,
+  AgentTab, HubFilter, HubView, InstructionsPanel, InstructionsTab, InstructionsView, PipelineView, ProjectPage,
+  ProjectSettingsTab, Route, SecretsPanel, SecretsView, SkillsFilter, StepPage,
 };
 use orchester_core::{
   resource::{StepKey, VersionNumber},
@@ -44,6 +44,9 @@ pub(super) fn view_routes() -> Vec<Route> {
     }
   }
   all.extend(SkillsFilter::ALL.map(|filter| at(ProjectPage::Skills(filter))));
+  all.extend(HubFilter::ALL.map(|filter| at(ProjectPage::hub(HubView::new(filter, None)))));
+  all.push(at(ProjectPage::hub(HubView::new(HubFilter::All, Some(id)))));
+  all.push(at(ProjectPage::hub(HubView::new(HubFilter::Tools, Some(id)))));
   all.extend(AgentTab::ALL.map(|tab| at(ProjectPage::Agent(id, tab))));
   all.extend(AgentTab::ALL.map(|tab| at(ProjectPage::NewAgent(tab))));
   for tab in InstructionsTab::ALL {
@@ -273,4 +276,23 @@ fn views_refuse_what_they_do_not_name() {
   ] {
     assert!(Route::parse(&path).is_err(), "{path} names no view");
   }
+}
+
+/// The Agents hub of a team project keeps its filter and the resource its panel shows; opened on its first filter with
+/// nothing chosen it is the Agents route itself.
+#[test]
+fn views_agents_hub_names_its_filter_and_resource() {
+  let root = format!("/project/{PROJECT}/agents");
+  assert_eq!(ProjectPage::hub(HubView::default()), ProjectPage::Agents);
+  assert_eq!(at(ProjectPage::Agents).path(), root);
+  let id = CONNECTION.parse().expect("a resource id");
+  assert_eq!(
+    at(ProjectPage::hub(HubView::new(HubFilter::McpServers, None))).path(),
+    format!("{root}?filter=mcp_servers")
+  );
+  assert_eq!(
+    at(ProjectPage::hub(HubView::new(HubFilter::Tools, Some(id)))).path(),
+    format!("{root}?filter=tools&item={CONNECTION}")
+  );
+  assert!(Route::parse(&format!("{root}?filter=pipelines")).is_err());
 }

@@ -27,7 +27,7 @@ use crate::{
   navigation::Navigation,
   routes::{Route, TaskTab, TaskView},
   screens::task::{
-    TaskContext,
+    TaskContext, archived,
     waits_on::{self, Place},
   },
   services::Services,
@@ -75,11 +75,24 @@ pub fn section(ctx: &mut Ctx, task: &TaskContext, run: Option<&RunView>) -> Elem
       },
     )
   });
-  // A team run whose authority the server fenced says it stopped, and what became of its reports (03 `hWXxr`); a run
-  // that waits on another task, that wait (09 `SLuUW`).
-  let event = match run.and_then(|run| team_run::stopped(ctx, task, run)) {
-    Some(text) => event_line(ctx, task, (Icon::CornerDownLeft, &text, "stopped"), true),
-    None => waits_on::row(ctx, (&task.detail, &task.project.open), Place::Summary)
+  // A team run whose authority the server fenced says it stopped, and what became of its reports (03 `hWXxr`); one an
+  // archive stopped says which resource did (A22 `pUu78`); a run that waits on another task, that wait (09 `SLuUW`).
+  let fenced = run.and_then(|run| team_run::stopped(ctx, task, run));
+  let archived = archived::event_words(ctx, task).filter(|_| run.is_some());
+  let event = match (fenced, archived) {
+    (Some(text), _) => event_line(
+      ctx,
+      task,
+      (Icon::CornerDownLeft, &text, "stopped"),
+      (true, PaletteColor::TextMuted),
+    ),
+    (None, Some(text)) => event_line(
+      ctx,
+      task,
+      (Icon::CircleX, &text, "stopped"),
+      (true, PaletteColor::Danger),
+    ),
+    (None, None) => waits_on::row(ctx, (&task.detail, &task.project.open), Place::Summary)
       .unwrap_or_else(|| last_event(ctx, task, run.is_some())),
   };
   section.child(event).with_children(browser).into()
@@ -94,10 +107,14 @@ fn rail(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> Element {
     .iter()
     .filter_map(|shown| Some((shown.step_key.clone()?, shown.approval.requested_at)))
     .collect();
-  let fenced = team_run::fence(task, run).is_some();
+  let stopped = if team_run::fence(task, run).is_some() {
+    Some(steps::Stopped::Fenced)
+  } else {
+    task.detail.archive_stop.is_some().then_some(steps::Stopped::Archived)
+  };
   // The step the run stands at, while it has not ended: the one it stopped at, else the one at work or last run; once
-  // fenced, the one it stopped in.
-  let current = if fenced {
+  // fenced or stopped by an archive, the one it stopped in.
+  let current = if stopped.is_some() {
     team_run::stopped_in(run)
   } else {
     (!run.run.status().is_terminal())
@@ -111,7 +128,7 @@ fn rail(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> Element {
     lost,
     waiting: &waiting,
     slot_waits: &slot_waits,
-    fenced,
+    stopped,
     waits_on: waits_on::holding(&task.detail).is_some(),
   };
   steps::rail(ctx, run, &live, current, now)
@@ -129,16 +146,21 @@ fn last_event(ctx: &mut Ctx, task: &TaskContext, here: bool) -> Element {
     );
     (said.icon, text)
   });
-  event_line(ctx, task, (glyph, &text, said.tone.name()), here)
+  event_line(
+    ctx,
+    task,
+    (glyph, &text, said.tone.name()),
+    (here, PaletteColor::TextMuted),
+  )
 }
 
-/// One bordered line: the event's `glyph`, its `text` and *Conversation →* when `link`; `tone` names it for the MCP
-/// tree.
+/// One bordered line: the event's `glyph` in `color`, its `text` and *Conversation →* when `link`; `tone` names it for
+/// the MCP tree.
 pub(super) fn event_line(
   ctx: &mut Ctx,
   task: &TaskContext,
   (glyph, text, tone): (Icon, &str, &str),
-  link: bool,
+  (link, color): (bool, PaletteColor),
 ) -> Element {
   let link = link.then(|| {
     let navigation = Navigation::of(ctx);
@@ -165,7 +187,7 @@ pub(super) fn event_line(
     .align_items(Alignment::Start)
     .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
     .rounded(RadiusSize::Md)
-    .child(icon(glyph, IconSize::Base, PaletteColor::TextMuted))
+    .child(icon(glyph, IconSize::Base, color))
     .child(
       Text::new(text)
         .id("task-event-text")

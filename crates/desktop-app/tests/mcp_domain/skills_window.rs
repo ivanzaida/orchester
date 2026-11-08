@@ -2,17 +2,42 @@
 //! Publishing a skill or a profile's new role text, and turning on the repository's agent files, reach agents'
 //! prompts, so an MCP client's press does it only under *Let automation change agent permissions* (ORC-30); a
 //! person's always does.
+use std::path::Path;
+
 use orchester_app::routes::{AgentTab, ProjectPage, ProjectSettingsTab, Route};
 use orchester_core::{
   agent_files::RepositoryAgentFiles,
-  resource::{InstructionScope, Skill},
+  name::Name,
+  resource::{InstructionScope, Skill, Slug},
   store::{ResourceStore, SettingsStore},
+  time::Timestamp,
 };
 use orchester_store::ProjectDb;
-use orchester_workspace::skills::editor;
+use orchester_workspace::skills::{
+  data::{ProjectSkills, SkillEntry},
+  editor,
+};
 use serde_json::json;
 
 use super::connections_window::controlled;
+
+/// A skill called `name` that holds a draft and no version, as an imported one does: the editors and tools create a
+/// skill as its first version, so only a store fixture makes this.
+fn draft_only(repo: &Path, name: &str, body: &Skill) -> SkillEntry {
+  let mut db = ProjectDb::open(repo).expect("db");
+  let id = db
+    .create_resource(
+      Slug::new(name).expect("a slug"),
+      Name::new(name).expect("a name"),
+      body,
+      Timestamp::now(),
+    )
+    .expect("a draft-only skill")
+    .id();
+  let skills = ProjectSkills::load_in(repo).expect("skills");
+  skills.entry(id).expect("listed").clone()
+}
+
 #[test]
 fn skills_window_publication_matches_ordinary_saved_domain_data_without_permission_consent() {
   let (mut s, project, repo) = controlled();
@@ -32,7 +57,7 @@ fn skills_window_publication_matches_ordinary_saved_domain_data_without_permissi
     InstructionScope::Project,
   )
   .expect("body");
-  let entry = editor::save_in(&repo, None, "checks", &body).expect("draft");
+  let entry = draft_only(&repo, "checks", &body);
   s.ok(
     "navigate",
     &json!({"route":"skills","project":project.to_string(),"skill":entry.id.to_string()}),
@@ -65,7 +90,7 @@ fn skills_window_publication_matches_ordinary_saved_domain_data_without_permissi
     .expect("version")
     .expect("published");
   assert_eq!(native.body(), &body);
-  let domain = editor::save_in(&repo, None, "domain-checks", &body).expect("domain draft");
+  let domain = draft_only(&repo, "domain-checks", &body);
   orchester_workspace::skills::data::publish_in(&repo, domain.id).expect("accepted direct publication");
   let direct = db
     .latest_version::<Skill>(domain.id)
@@ -204,7 +229,7 @@ fn skills_window_publish_retry_reviews_saved_snapshot_and_retains_actual_publish
     InstructionScope::Project,
   )
   .expect("body");
-  let entry = editor::save_in(&repo, None, "checks", &body).expect("draft");
+  let entry = draft_only(&repo, "checks", &body);
   s.ok(
     "navigate",
     &json!({"route":"skills","project":project.to_string(),"skill":entry.id.to_string()}),

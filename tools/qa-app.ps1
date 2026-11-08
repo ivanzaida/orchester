@@ -57,6 +57,35 @@
 # pickers and the Confirm… and secret modals; choosing a connection and confirming stay a person's. shared-config-chosen
 # has Work chosen here; shared-config-no-claude has no Claude Code connection.
 #
+# -Scenario picker-readiness-team and picker-readiness reach New task's Pipeline menu with readiness (`New task · pipeline
+# picker shows readiness`, R2 `P6aAoZ` for the team project, L10 `PMi6Q` for the local one): open New task, fill it, open
+# the Pipeline chip and choose Team delivery (2 things missing here) or Design pass (2 things missing) for the bar's line
+# with Create & run off; Team quick fix is Ready here, Quick fix and Feature delivery are Ready.
+# -Scenario picker-readiness also has KON-1, a draft with every detail on Design pass: open its Summary and press Run for the
+# not-ready card (`Task · Run · not ready`, L9 `f5CEX`), two MCP server programs to set, each fix opening its page.
+# -Scenario team-not-ready joins the stand-in team server with the team's resources of picker-readiness-team; its tasks run
+# Team delivery. Open KON-5 (API rate limits) and press Run for the team card (`Task · Run · not ready here`, R1 `Ku0qu`):
+# the program path of pencil-design, github's secret value and a connection are missing. Its fixes open the Agents hub on
+# the resource; a team MCP server's program path is set from the hub's MCP server panel, which ORC-833 builds, so
+# *Set path →* opens the server in the hub until then.
+# -Scenario team-start-failed is team-not-ready with every task on Team quick fix (ready here) and a team server a
+# release ahead of this computer: open KON-5 (API rate limits) and press Run. The start is claimed, the server builds it in
+# a bundle schema this computer does not read, the start fails for good and the claim is let go of: the Summary's notice
+# "Couldn't start KON-5's run" says to update Orchester (ORC-885).
+# -Scenario team-start-recovered is team-start-failed with a team server that does not answer a Run's start for the first
+# 90 seconds after the window opens (the start waits, and the Summary's notice says the run starts once they answer), then
+# answers a release ahead: press Run on KON-5 within those 90 seconds; the project's recovery carries the start on within
+# a minute more, and the same notice says to update Orchester and that the claim was released (ORC-885 follow-up).
+# While it waits the Summary shows the information notice "Starting KON-5's run…" (`Notice/Info` `xnJyn`), which has no
+# Try again: the project asks again by itself (ORC-885c).
+# -Scenario team-start-waiting, -Scenario team-start-runner-refused and -Scenario team-start-past-failure are
+# team-start-failed with KON-5's start already recorded when the window opens, so the notice is up on KON-5 with no
+# press of Run (ORC-885c): the first with a team server that never answers the start's bundle ("Starting KON-5's run…",
+# nothing to press); the second with a start the runner refuses when the project opens (the Danger notice with the
+# runner's words and Try again, no Dismiss, as a Run that met the refusal would); the third with a start that failed for
+# good in an earlier window (the bundle schema one ahead: "Update Orchester…", Try again and Dismiss). Dismiss, or a
+# later window, tells it no more.
+#
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes
 # only cargo's target folder: never inside an installed Orchester (a folder with orchester.exe beside orchester.db),

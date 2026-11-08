@@ -34,6 +34,7 @@ use serde_json::{Value, json};
 pub use self::{
   commands::Plan,
   delivery::{Authorized as DeliveryAuthorized, PendingDelivery},
+  execution::BundleFault,
   work::{AuthorityClaim, AuthorityModule, Person, STALE_AFTER_MINUTES},
 };
 use super::{State, TasksAnswer, TeamServer, USER, first_download};
@@ -98,10 +99,17 @@ pub struct AuthorityTask {
 /// What the stand-in's `/api/v2` surface answers.
 #[derive(Default)]
 pub(super) struct Authority {
-  standing: Standing,
+  pub(in crate::test_support::team_server) standing: Standing,
   tasks: Option<Vec<AuthorityTask>>,
   modules: Option<Vec<AuthorityModule>>,
   unavailable: bool,
+  /// How every `work.start` fails to give the desktop a bundle it can use, when it does.
+  bundle_fault: Option<BundleFault>,
+  /// The ids of the tasks whose current work has an accepted report: a run is under it.
+  reported: Vec<String>,
+  /// Whether `claim.release` is refused for any running work, as a server older than the rule that lets a holder
+  /// release work that started no run.
+  refuses_running_releases: bool,
   /// The oldest desktop version the server accepts; any while `None`.
   required: Option<ReleaseVersion>,
   /// Each committed change: its cursor and the scopes it invalidates.
@@ -210,6 +218,33 @@ impl TeamServer {
   /// Every `/api/v2` read and the subscription answer `503 unavailable` while `unavailable`; the open streams end.
   pub fn authority_unavailable(&self, unavailable: bool) {
     unavailable_now(&self.state, unavailable);
+  }
+
+  /// Every `work.start` names its bundle in a schema one newer than the desktop reads, as a team server a release ahead
+  /// of the desktop does: the start can never become a run here, whatever the desktop does.
+  pub fn authority_newer_bundles(&self) {
+    self.authority_bundle_fault(BundleFault::Newer);
+  }
+
+  /// A `claim.release` of running work is refused `invalid` whatever the work, as a server older than the rule that
+  /// lets the holder release work that has no accepted report.
+  pub fn authority_refuses_running_releases(&self) {
+    self.state.lock().authority.refuses_running_releases = true;
+  }
+
+  /// Every `work.start` fails as `fault` says, whatever the desktop does.
+  pub fn authority_bundle_fault(&self, fault: BundleFault) {
+    self.state.lock().authority.bundle_fault = Some(fault);
+  }
+
+  /// Every `work.start` fails as `fault` says once `after` has passed, in place of what it did before: a team server
+  /// that did not answer a Run and answers it later.
+  pub fn authority_bundle_fault_after(&self, fault: BundleFault, after: Duration) {
+    let state = self.state.clone();
+    thread::spawn(move || {
+      thread::sleep(after);
+      state.lock().authority.bundle_fault = Some(fault);
+    });
   }
 
   /// [`Self::authority_unavailable`] `after` the first task read was answered: an outage in a session that read the
@@ -423,6 +458,11 @@ pub(super) fn serve(stream: &mut TcpStream, (line, headers, body): (&str, &str, 
     ("POST", "heartbeat") => {
       let (status, answer) = execution::heartbeat(&mut state.lock().authority, body);
       respond(stream, status, &answer);
+    }
+    ("GET", bundle)
+      if bundle.starts_with("bundles/") && state.lock().authority.bundle_fault == Some(BundleFault::Unreadable) =>
+    {
+      respond(stream, 200, &json!({"files": "not an execution bundle"}))
     }
     ("GET", "policy") => respond(stream, 200, &commands::policy(&state.lock().authority)),
     ("PATCH", "policy") => {

@@ -7,6 +7,7 @@ use serde_json::{Value, json};
 
 use crate::{
   messages::{self, Message},
+  readiness::{NotReadyHere, ReadinessError},
   runner::{RequestError, RunRequestError},
 };
 
@@ -21,6 +22,7 @@ pub enum Missing {
   Plan,
   Pipeline,
   Profile,
+  Reviewer,
   Step,
   Connection,
   Instruction,
@@ -46,6 +48,7 @@ impl Missing {
       Self::Plan => "plan_not_found",
       Self::Pipeline => "pipeline_not_found",
       Self::Profile => "profile_not_found",
+      Self::Reviewer => "reviewer_not_found",
       Self::Step => "step_not_found",
       Self::Connection => "connection_not_found",
       Self::Instruction => "instruction_not_found",
@@ -71,6 +74,16 @@ pub enum ToolError {
   AmbiguousProject(String),
   /// Orchester refused, as it refuses a person in the app: `code` names the refusal.
   Refused { code: String, reasons: Vec<Message> },
+  /// Orchester refused, and says what the person would confirm: `preview` is what a client reads typed (an archive of a
+  /// team resource names what uses it and the runs that would stop).
+  Previewed {
+    code: String,
+    reasons: Vec<Message>,
+    preview: Value,
+  },
+  /// A start that starts nothing because its pipeline is not ready on this computer (`not_ready_here`): the parts, each
+  /// with its fix, which a client reads typed.
+  NotReadyHere(NotReadyHere),
 }
 
 impl ToolError {
@@ -85,6 +98,15 @@ impl ToolError {
     Self::Refused {
       code: code.into(),
       reasons,
+    }
+  }
+
+  /// A refusal that carries `preview`, what the person would confirm.
+  pub fn previewed(code: impl Into<String>, reasons: Vec<Message>, preview: Value) -> Self {
+    Self::Previewed {
+      code: code.into(),
+      reasons,
+      preview,
     }
   }
 
@@ -114,7 +136,8 @@ impl ToolError {
       Self::InvalidArguments(_) => "invalid_arguments",
       Self::NotFound { missing, .. } => missing.code(),
       Self::AmbiguousProject(_) => "project_ambiguous",
-      Self::Refused { code, .. } => code,
+      Self::Refused { code, .. } | Self::Previewed { code, .. } => code,
+      Self::NotReadyHere(_) => "not_ready_here",
     }
   }
 
@@ -131,8 +154,35 @@ impl ToolError {
         let reasons: Vec<String> = reasons.iter().map(&translate).collect();
         (reasons.join("\n"), reasons)
       }
+      Self::Previewed { reasons, preview, .. } => {
+        let reasons: Vec<String> = reasons.iter().map(&translate).collect();
+        let error = json!({
+          "code": self.code(),
+          "message": reasons.join("\n"),
+          "reasons": reasons,
+          "preview": preview,
+        });
+        return json!({ "error": error });
+      }
+      Self::NotReadyHere(refusal) => {
+        let reasons: Vec<String> = refusal.messages().iter().map(&translate).collect();
+        let error = json!({
+          "code": self.code(),
+          "message": reasons.join("\n"),
+          "reasons": reasons,
+          "parts": refusal.parts_json(),
+        });
+        return json!({ "error": error });
+      }
     };
     json!({ "error": { "code": self.code(), "message": message, "reasons": reasons } })
+  }
+}
+
+impl From<ReadinessError> for ToolError {
+  fn from(error: ReadinessError) -> Self {
+    tracing::warn!(%error, "the readiness of a pipeline could not be read for a start");
+    Self::refused("readiness_unreadable", vec![error.message()])
   }
 }
 

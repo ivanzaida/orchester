@@ -88,6 +88,11 @@ pub fn add_origin(root: &Path, url: &str) -> Result<(), GitError> {
   git(root, &["remote", "add", "origin", url]).map(drop)
 }
 
+/// Makes branch `name` at the head of `from` in the repository at `repo`, leaving the checkout as it is.
+pub fn branch(repo: &Path, name: &str, from: &str) -> Result<(), GitError> {
+  git(repo, &["branch", name, from]).map(drop)
+}
+
 /// Deletes branch `name` in the repository at `repo`, as Orchester's cleanup does after a merge.
 pub fn delete_branch(repo: &Path, name: &str) -> Result<(), GitError> {
   git(repo, &["branch", "-D", name]).map(drop)

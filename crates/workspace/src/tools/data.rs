@@ -178,7 +178,22 @@ fn tool_uses<S: ResourceStore>(store: &S) -> Result<Vec<ToolUse>, S::Error> {
   Ok(uses)
 }
 
-/// Creates a tool called `name` whose first draft is `tool`, under a slug made from its name.
+/// Creates a tool called `name` as its first version, v1 with no draft, under a slug made from its name. In a team
+/// project the version waits for the server (`Servers::send_created`).
+pub fn create_published_tool(
+  db: &mut ProjectDb,
+  name: &Name,
+  tool: &Tool,
+  now: Timestamp,
+) -> Result<ResourceId, StoreError> {
+  let taken: Vec<Slug> = db.slugs(ResourceKind::Tool)?;
+  let fallback = Slug::new(FALLBACK_SLUG).expect("the fallback slug is valid");
+  let slug = Slug::unique_for(name, &fallback, &taken);
+  Ok(db.create_published(slug, name.clone(), tool, now)?.0.id())
+}
+
+/// Creates a resource called `name` that holds `tool` as its draft only, under a slug made from its name: not how a
+/// tool is created (that is [`create_published_tool`]), but a way to set up a tool with a draft in tests and fixtures.
 pub fn create_tool<S: ResourceStore>(
   store: &mut S,
   name: &Name,
@@ -213,7 +228,7 @@ pub fn keep_draft_over_latest<S: ResourceStore>(store: &mut S, id: ResourceId, n
   Ok(())
 }
 
-/// A change to one tool, applied in the project database.
+/// A change to one tool, applied in the project database. A new tool is created as v1 with no draft.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ToolChange {
   Create(Name, Tool),
@@ -227,7 +242,7 @@ pub fn apply_in(repo_root: &Path, change: ToolChange) -> Result<ResourceId, Stor
   let mut db = ProjectDb::open(repo_root)?;
   let now = Timestamp::now();
   match change {
-    ToolChange::Create(name, tool) => create_tool(&mut db, &name, &tool, now),
+    ToolChange::Create(name, tool) => create_published_tool(&mut db, &name, &tool, now),
     ToolChange::SaveDraft(id, tool) => save_draft(&mut db, id, tool, now).map(|()| id),
     ToolChange::Publish(id) => db.publish_draft::<Tool>(id, now).map(|_| id),
     ToolChange::KeepDraft(id) => keep_draft_over_latest(&mut db, id, now).map(|()| id),

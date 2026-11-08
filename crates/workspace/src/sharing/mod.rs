@@ -26,9 +26,17 @@ mod owners;
 mod password;
 mod place;
 pub mod project;
+mod refusal;
+mod save_lanes;
+mod send_lane;
 mod server_key;
+mod share_outcome;
+mod start_lock;
+pub(crate) use self::start_lock::StartTrouble;
 pub mod sync;
 pub mod team;
+mod team_created;
+pub mod team_edit;
 pub mod team_join;
 mod team_session;
 pub mod trust;
@@ -45,7 +53,7 @@ use orchester_api::{
   releases::ReleaseVersion,
 };
 use orchester_core::{
-  id::ServerId,
+  id::{ResourceId, ServerId},
   secret::{SecretValue, VaultError, VaultKey},
   time::Timestamp,
 };
@@ -66,9 +74,13 @@ pub use self::{
   offer::OfferedProject,
   password::{PASSWORD_CHARS, PasswordProblem, password_problem},
   place::{Place, Places},
+  project::{NotArchived, NotRestored},
+  refusal::{ShareRefusal, ShareRefusalReason, TeamMcpProblem},
+  share_outcome::{NotSet, ShareNote},
+  team_created::{Created, NotCreated, TakenBack},
   trust::{ConfirmedPin, PresentedCertificate, Trust},
 };
-use crate::{background, secrets::Vault, workspace::Workspace};
+use crate::{background, removal::changed_by_removal, secrets::Vault, workspace::Workspace};
 
 /// A server in the list with its connection; `connection` is `None` while nobody is signed in there
 /// from this computer.
@@ -127,6 +139,20 @@ struct Inner {
   refused_claim_ends: Mutex<HashSet<(orchester_core::id::TaskId, orchester_core::id::RunId)>>,
   /// The checkouts whose first download after a join or a link is under way, failed or ended (`project::download`).
   downloads: Mutex<HashMap<PathBuf, project::download::Mark>>,
+  /// The new resources of each checkout the team server refused after they were sent later, which the hub tells the
+  /// person until they dismiss it.
+  taken_back: Mutex<HashMap<PathBuf, Vec<TakenBack>>>,
+  /// The projects' team starts, one at a time each ([`Servers::start_lock`]). An entry is never removed: it is one
+  /// empty mutex per project folder the session started or recovered a team start in, so the map grows by a few bytes
+  /// per project and not with the starts.
+  starting: Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>,
+  /// The projects' sends of the outbox, one at a time each ([`Servers::send_lane`]).
+  sending: Mutex<HashMap<PathBuf, Arc<tokio::sync::Mutex<()>>>>,
+  /// The saves of each resource's draft, ordered per resource ([`Servers::save_lane`]).
+  saving: Mutex<HashMap<(PathBuf, orchester_core::id::ResourceId), Arc<crate::agents::save_lane::SaveLane>>>,
+  /// The team starts recovery found in trouble this session, so it says so once each per trouble
+  /// ([`Servers::first_trouble`]).
+  told_starts: Mutex<HashSet<(orchester_core::id::OperationId, start_lock::StartTrouble)>>,
 }
 
 /// One signed-in server's connection and when to ask it again.
@@ -171,6 +197,11 @@ impl Servers {
         work_asked: Mutex::new(HashMap::new()),
         refused_claim_ends: Mutex::new(HashSet::new()),
         downloads: Mutex::new(HashMap::new()),
+        taken_back: Mutex::new(HashMap::new()),
+        starting: Mutex::new(HashMap::new()),
+        sending: Mutex::new(HashMap::new()),
+        saving: Mutex::new(HashMap::new()),
+        told_starts: Mutex::new(HashSet::new()),
       }),
     }
   }
@@ -193,8 +224,57 @@ impl Servers {
     self.inner.shared.send_modify(|count| *count += 1);
   }
 
+  /// What the event stream does once it applied a delta to a project's cache: wakes [`Self::subscribe_shared`]. For a
+  /// test that writes the cache as the stream would (the stand-in team server sends no `events`).
+  #[cfg(feature = "test-support")]
+  pub fn announce_shared_change_for_test(&self) {
+    self.shared_changed();
+  }
+
   fn subscribe_sync(&self) -> watch::Receiver<u64> {
     self.inner.sync.subscribe()
+  }
+
+  /// The new resources of the project at `root` that the team server refused when they were sent later, taken back
+  /// whole ([`TakenBack`]).
+  pub fn taken_back(&self, root: &Path) -> Vec<TakenBack> {
+    self.inner.taken_back.lock().get(root).cloned().unwrap_or_default()
+  }
+
+  /// The person has read why the new resource `resource` of the project at `root` was taken back; what was told of
+  /// it, if it still was.
+  pub fn dismiss_taken_back(&self, root: &Path, resource: ResourceId) -> Option<TakenBack> {
+    let mut told = self.inner.taken_back.lock();
+    let list = told.get_mut(root)?;
+    let at = list.iter().position(|taken| taken.resource == resource)?;
+    let dismissed = list.remove(at);
+    if list.is_empty() {
+      told.remove(root);
+    }
+    drop(told);
+    self.shared_changed();
+    Some(dismissed)
+  }
+
+  /// Keeps `taken` for the hub to tell the person, once for each resource, and tells the screens that list its kind
+  /// that it is gone.
+  pub(crate) fn note_taken_back(&self, root: &Path, taken: Vec<TakenBack>) {
+    if taken.is_empty() {
+      return;
+    }
+    for gone in &taken {
+      for change in changed_by_removal(gone.kind) {
+        self.inner.workspace.changes.record(gone.project, *change);
+      }
+    }
+    let mut told = self.inner.taken_back.lock();
+    let list = told.entry(root.to_owned()).or_default();
+    for gone in taken {
+      list.retain(|known| known.resource != gone.resource);
+      list.push(gone);
+    }
+    drop(told);
+    self.shared_changed();
   }
 
   /// Whether the project at `root` is being shared now: its tasks take no change meanwhile.

@@ -1,5 +1,6 @@
 use std::fmt;
 
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -14,8 +15,9 @@ pub enum SecretNameError {
 
 /// What a secret is called, e.g. `STAGING_DATABASE_URL`: a capital letter followed by capital
 /// letters, digits and underscores, as the design writes every secret. A name is user data, not a
-/// secret; it is shown and may be logged.
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// secret; it is shown and may be logged. On the wire it is a string, read back through [`SecretName::new`].
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
 pub struct SecretName(String);
 
 impl SecretName {
@@ -48,5 +50,19 @@ impl SecretName {
 impl fmt::Display for SecretName {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     f.write_str(&self.0)
+  }
+}
+
+impl TryFrom<String> for SecretName {
+  type Error = SecretNameError;
+
+  fn try_from(value: String) -> Result<Self, Self::Error> {
+    Self::new(&value)
+  }
+}
+
+impl From<SecretName> for String {
+  fn from(name: SecretName) -> Self {
+    name.0
   }
 }

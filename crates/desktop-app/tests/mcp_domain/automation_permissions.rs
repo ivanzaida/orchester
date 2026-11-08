@@ -23,7 +23,7 @@ fn question() -> (Served, std::path::PathBuf) {
     "tool-program",
     &std::env::current_exe().expect("test executable").to_string_lossy(),
   );
-  // Create draft is pressable once the program resolved; a client's press only asks.
+  // Create is pressable once the program resolved; a client's press only asks.
   s.until("command widening", |s| {
     if !s.shows("tool-confirm-confirm") {
       let _ = s.click_by_client("tool-create");
@@ -44,7 +44,7 @@ fn count(repo: &std::path::Path) -> usize {
 }
 
 #[test]
-fn domain_automation_policy_off_refuses_on_confirms_save_and_publish() {
+fn domain_automation_policy_off_refuses_on_confirms_creating_a_tool() {
   let (mut s, repo) = question();
   assert_eq!(
     s.click_by_client("tool-confirm-confirm").expect_err("off is protected")["code"],
@@ -54,14 +54,8 @@ fn domain_automation_policy_off_refuses_on_confirms_save_and_publish() {
   s.let_automation_widen(true);
   s.click_by_client("tool-confirm-confirm")
     .expect("saved opt-in permits this app review");
-  s.until("real draft saved", |_| count(&repo) == 1);
-  s.until("saved editor", |s| {
-    s.shows("tool-publish") && super::tools_window::text(s, "tool-draft-bar-status").contains("Draft")
-  });
-  s.click_by_client("tool-publish").expect("publish asks");
-  s.until("publication review", |s| s.shows("tool-confirm-confirm"));
-  s.click_by_client("tool-confirm-confirm")
-    .expect("opt-in also permits publication widening");
+  // A new tool is created as its first version, with no draft.
+  s.until("tool created", |_| count(&repo) == 1);
   let db = ProjectDb::open(&repo).expect("private project database");
   let id = ProjectTools::load(&db)
     .expect("tools list")

@@ -301,6 +301,7 @@ fn notifications_read_a_run_an_archived_resource_stopped_on_its_task() {
     task: run.task(),
     resource: orchester_core::name::Name::new("Builder").expect("valid name"),
     stopped_at,
+    archived: None,
   };
   assert!(
     sources::of_archive_stops(&project, &tasks, &[stop(at(15))], at(20)).is_empty(),
@@ -330,4 +331,49 @@ fn notifications_read_a_run_an_archived_resource_stopped_on_its_task() {
       ..
     }
   ));
+}
+
+#[test]
+fn notifications_an_archive_stop_names_the_resource_and_who_archived_it_on_the_tasks_detail() {
+  let mut fixture = Fixture::new();
+  let run = started(&mut fixture, "Add sign-out", 10);
+  let before = TaskDetail::load_in(fixture.repo.path(), run.task()).expect("detail");
+  assert_eq!(before.archive_stop, None, "no archive stopped it");
+
+  let resource = orchester_core::id::ResourceId::generate();
+  let stop = orchester_store::ArchiveStop {
+    run: run.id(),
+    task: run.task(),
+    resource: orchester_core::name::Name::new("pencil-design").expect("valid name"),
+    stopped_at: at(20),
+    archived: Some(orchester_store::Archived {
+      id: resource,
+      kind: orchester_core::resource::ResourceKind::McpServer,
+      by: Some("dana-k".to_owned()),
+    }),
+  };
+  fixture.db.record_archive_stop(&stop).expect("recorded");
+  let detail = TaskDetail::load_in(fixture.repo.path(), run.task()).expect("detail");
+  assert_eq!(
+    detail.archive_stop,
+    Some(stop),
+    "the resource, its kind and who archived it"
+  );
+
+  let old = orchester_store::ArchiveStop {
+    archived: None,
+    ..detail.archive_stop.expect("a stop")
+  };
+  let second = started(&mut fixture, "Add sign-in", 30);
+  let older = orchester_store::ArchiveStop {
+    run: second.id(),
+    task: second.task(),
+    ..old
+  };
+  fixture.db.record_archive_stop(&older).expect("recorded");
+  assert_eq!(
+    fixture.db.archive_stop_of(second.id()).expect("read"),
+    Some(older),
+    "a stop recorded before the confirmation named the resource still reads, with nobody named"
+  );
 }

@@ -1,6 +1,7 @@
 //! This computer's catalog through the stream (`docs/architecture/server.md`, "Reporting", row 75): reported to the
-//! fake server when the stream connects, again after a connection, an MCP server or a model list changed and not while
-//! nothing did, and holding only kinds, names, roles and model ids: no path, program, version, effort or sign-in.
+//! fake server when the stream connects, again after a connection's role or a model list changed and not while
+//! nothing did, and holding only CLI kinds and model ids: no connection or MCP server name, path, program, version,
+//! effort or sign-in.
 //!
 //! `cargo test -p orchester-workspace --test live_updates catalog`
 
@@ -20,7 +21,7 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 use orchester_workspace::sharing::sync::{Clock, follow};
-use serde_json::{Value, json};
+use serde_json::json;
 
 use super::{ALICE, LIVE, Member, TeamServer, Workspace, seen_within};
 
@@ -107,7 +108,7 @@ fn followed(workspace: &Workspace, server: &TeamServer) -> tokio::task::JoinHand
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn catalog_is_reported_on_connect_with_only_kinds_names_roles_and_model_ids() {
+async fn catalog_is_reported_on_connect_with_only_cli_kinds_and_model_ids() {
   let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &["Status bar"]);
   let workspace = Workspace::linked(&server);
   let mut db = workspace.db();
@@ -136,21 +137,19 @@ async fn catalog_is_reported_on_connect_with_only_kinds_names_roles_and_model_id
   assert_eq!(
     *report,
     json!({
-      "references": [
-        { "kind": "connection", "name": "Claude", "role": "claude_code_cli" },
-        { "kind": "connection", "name": "Codex", "role": "codex_cli" },
-        { "kind": "connection", "name": "Codex at home", "role": "codex_cli" },
-        { "kind": "mcp_server", "name": "docs", "role": null },
-      ],
+      "cli_kinds": ["claude_code_cli", "codex_cli"],
       "models": {
         "claude_code_cli": ["claude-opus-5-5"],
         "codex_cli": ["gpt-5.4", "gpt-5.5", "gpt-6"],
       },
     }),
-    "kinds, names and roles, and per role its connections' model ids, sorted and once each"
+    "the roles of the connections, and per role their model ids, sorted and once each"
   );
   let text = report.to_string();
   for private in [
+    "Claude",
+    "Codex",
+    "docs",
     "agent-cli",
     workspace.root.to_string_lossy().as_ref(),
     "secret-program",
@@ -165,7 +164,7 @@ async fn catalog_is_reported_on_connect_with_only_kinds_names_roles_and_model_id
 }
 
 #[tokio::test(flavor = "multi_thread")]
-async fn catalog_a_connection_mcp_server_or_model_list_change_is_reported_again() {
+async fn catalog_a_new_role_or_model_list_change_is_reported_again_and_an_mcp_server_is_not() {
   let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &["Status bar"]);
   let workspace = Workspace::linked(&server);
   let codex = connection(
@@ -181,16 +180,27 @@ async fn catalog_a_connection_mcp_server_or_model_list_change_is_reported_again(
   assert_eq!(server.catalogs().len(), 1, "nothing changed, nothing is sent again");
 
   mcp_server(&mut workspace.db(), "docs");
-  seen_within(LIVE, "the report after an MCP server", || server.catalogs().len() == 2).await;
-  assert_eq!(names(&server.catalogs()[1]), ["Codex", "docs"]);
+  connection(
+    &mut workspace.db(),
+    &workspace.root,
+    AgentProvider::CodexCli,
+    "Codex at home",
+    &["gpt-5.5"],
+  );
+  tokio::time::sleep(CHECK * 6).await;
+  assert_eq!(
+    server.catalogs().len(),
+    1,
+    "an MCP server, or a connection of a role with the same models, changes nothing the report holds"
+  );
 
   workspace
     .db()
     .record_connection_check(codex, LastCheck::Agent(check(&["gpt-5.5", "gpt-6"])))
     .expect("checked again");
-  seen_within(LIVE, "the report after a model list", || server.catalogs().len() == 3).await;
+  seen_within(LIVE, "the report after a model list", || server.catalogs().len() == 2).await;
   assert_eq!(
-    server.catalogs()[2]["models"],
+    server.catalogs()[1]["models"],
     json!({ "codex_cli": ["gpt-5.5", "gpt-6"] })
   );
 
@@ -201,22 +211,18 @@ async fn catalog_a_connection_mcp_server_or_model_list_change_is_reported_again(
     "Claude",
     &[],
   );
-  seen_within(LIVE, "the report after a connection", || server.catalogs().len() == 4).await;
-  assert_eq!(names(&server.catalogs()[3]), ["Claude", "Codex", "docs"]);
+  seen_within(LIVE, "the report after a connection of a new role", || {
+    server.catalogs().len() == 3
+  })
+  .await;
   assert_eq!(
-    server.catalogs()[3]["models"],
+    server.catalogs()[2]["cli_kinds"],
+    json!(["claude_code_cli", "codex_cli"])
+  );
+  assert_eq!(
+    server.catalogs()[2]["models"],
     json!({ "codex_cli": ["gpt-5.5", "gpt-6"] }),
     "a role whose connections list no model has no models"
   );
   stream.abort();
-}
-
-/// The names a report's references carry, in its order.
-fn names(report: &Value) -> Vec<&str> {
-  report["references"]
-    .as_array()
-    .expect("references")
-    .iter()
-    .map(|reference| reference["name"].as_str().expect("a name"))
-    .collect()
 }

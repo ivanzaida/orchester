@@ -1,6 +1,6 @@
 //! Sending the versions an admin published on this computer (`docs/architecture/server.md`, "Shared configuration",
 //! row 36): each resource's in the order they were published, each based on the version it was edited from, with
-//! the references of what its body names that is not shared. A resource's first version creates it on the server. A
+//! the references its body names. A resource's first version creates it on the server. A
 //! skill's parts the server does not have yet are uploaded by their hash, then the version is sent again. The server's
 //! number replaces the one the version had here; a version someone published from the same base meanwhile is cached
 //! with those before it, and the version waits for the admin's decision, as one the server refused does; the
@@ -12,28 +12,31 @@ use orchester_api::{
 use orchester_core::{
   blob::ContentHash,
   id::ResourceId,
-  resource::{AgentProfile, Instruction, Pipeline, ResourceBody, ResourceKind, Skill, Tool},
-  secret::SecretKind,
-  sharing::{ConnectionRole, LocalEntities, Published, Reference, for_publishing},
+  resource::{AgentProfile, Instruction, Pipeline, ResourceBody, ResourceKind, Skill, TeamReviewer, Tool},
+  sharing::LocalEntities,
   store::{BlobStore, ConnectionStore, McpServerStore, ResourceStore, SecretStore},
   time::Timestamp,
 };
-use orchester_store::{
-  CachedVersion, PublishState, ReferenceTarget, ResourceSharing, StoreError, VersionReference, WaitingPublish,
-};
+use orchester_store::{CachedVersion, PublishState, ResourceSharing, StoreError, WaitingPublish};
 
 use super::{ConfigServer, RemoteResourceStore};
 use crate::sharing::{
   SharingError,
   project::convert,
-  sync::config::{bindings, cache_version, reference, resource as kept_resource, shared_reference},
+  sync::config::{
+    cache_profile, cache_version, reference, resource as kept_resource,
+    team_body::{self, Publication},
+  },
+  team_created::{TakenBack, refusal},
+  team_edit,
 };
 
 impl<S: ConfigServer> RemoteResourceStore<S> {
   /// Sends every version published here that waits, e.g. once the server can be reached again. One the server did not
-  /// take is recorded on it and logged; the others are still sent. Fails, sending nothing more, when the server cannot
-  /// be reached.
-  pub fn send_waiting(&mut self) -> Result<(), SharingError> {
+  /// take, or this computer knows it cannot, is recorded on it and logged; the others are still sent. A new resource
+  /// whose lone first version is refused is taken back whole, as one refused at once is, and pushed on `taken_back`
+  /// with why, also when the pass stops early. Fails, sending nothing more, when the server cannot be reached.
+  pub fn send_waiting(&mut self, taken_back: &mut Vec<TakenBack>) -> Result<(), SharingError> {
     let mut resources: Vec<ResourceId> = Vec::new();
     for waiting in self.db.waiting_publishes()? {
       if waiting.state == PublishState::Waiting && !resources.contains(&waiting.resource) {
@@ -47,11 +50,56 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
     for resource in resources {
       match self.send_resource(resource) {
         Ok(()) => {}
-        Err(error) if unreached(&error) => return Err(error),
-        Err(error) => tracing::warn!(%error, %resource, "the server did not take a version published here"),
+        Err(error) if error.unreached() => return Err(error),
+        Err(error) => {
+          tracing::warn!(%error, %resource, "the server did not take a version published here");
+          match self.take_back(resource, &error) {
+            Ok(taken) => taken_back.extend(taken),
+            // The others are still sent; this one stays as it is, refused, for the waiting bar to show.
+            Err(failure) => {
+              tracing::warn!(%failure, %resource, "a new resource the server refused could not be taken back")
+            }
+          }
+        }
       }
     }
     Ok(())
+  }
+
+  /// Takes back the new `resource` when `error` left its first version refused, as read now, and nothing else of the
+  /// person's goes with it ([`orchester_store::ProjectDb::discard_created`]); what it was and why. Nothing when that
+  /// version still waits, or the resource holds more (a later version, a draft, a version the server numbered): it
+  /// stays refused for the admin to decide on.
+  fn take_back(&mut self, resource: ResourceId, error: &SharingError) -> Result<Option<TakenBack>, SharingError> {
+    let refused = self.db.waiting_publishes()?.into_iter().find(|waiting| {
+      waiting.resource == resource && waiting.created && !matches!(waiting.state, PublishState::Waiting)
+    });
+    let Some(refused) = refused else {
+      return Ok(None);
+    };
+    let found = self
+      .db
+      .resource(resource)?
+      .ok_or(StoreError::ResourceNotFound(resource))?;
+    match self.db.discard_created(resource) {
+      Ok(()) => {}
+      Err(StoreError::AlreadyNumbered(_) | StoreError::HoldsMore(_)) => return Ok(None),
+      Err(failure) => return Err(failure.into()),
+    }
+    Ok(Some(TakenBack {
+      project: self.db.project().id(),
+      resource,
+      name: found.name().as_str().to_owned(),
+      kind: found.kind(),
+      reason: refusal(Some(refused.state), Some(error)).message(),
+    }))
+  }
+
+  /// Sends the waiting versions of the one new `resource` and fails with why it was not sent, so its creator learns
+  /// it (`crate::sharing::team_created`); fails sending nothing when the server cannot be reached.
+  pub fn send_created(&mut self, resource: ResourceId) -> Result<(), SharingError> {
+    self.server.writable()?;
+    self.send_resource(resource)
   }
 
   /// Sends the waiting versions of `resource`, oldest first, until one is not taken.
@@ -70,14 +118,40 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
     }
   }
 
+  /// Sends `waiting`. A version this computer knows the team cannot take ([`refusal_code`]) is recorded as refused,
+  /// like one the server refused, instead of waiting to be retried: editing it or the team's resources makes a new
+  /// version, and *Publish again* is the admin's decision.
   fn send_one(&mut self, waiting: &WaitingPublish) -> Result<(), SharingError> {
+    let sent = self.dispatch(waiting);
+    if let Err(error) = &sent
+      && let Some(code) = refusal_code(error)
+    {
+      self.db.record_publish_refused(waiting.version, code)?;
+    }
+    sent
+  }
+
+  fn dispatch(&mut self, waiting: &WaitingPublish) -> Result<(), SharingError> {
     match waiting.kind {
-      ResourceKind::Pipeline => self.send_kind::<Pipeline>(waiting),
-      ResourceKind::AgentProfile => self.send_kind::<AgentProfile>(waiting),
+      ResourceKind::Pipeline => {
+        self.check_team_pipeline(waiting)?;
+        self.send_kind::<Pipeline>(waiting)
+      }
+      ResourceKind::AgentProfile => {
+        let publication = self.profile_publication(waiting)?;
+        self.send_publication::<AgentProfile>(waiting, &publication)
+      }
       ResourceKind::Instruction => self.send_kind::<Instruction>(waiting),
       ResourceKind::Skill => self.send_kind::<Skill>(waiting),
       ResourceKind::Tool => self.send_kind::<Tool>(waiting),
-      ResourceKind::TeamReviewer => self.send_kind::<orchester_core::resource::TeamReviewer>(waiting),
+      ResourceKind::TeamReviewer => {
+        let version = self
+          .db
+          .version::<TeamReviewer>(waiting.resource, waiting.number)?
+          .ok_or(StoreError::ResourceNotFound(waiting.resource))?;
+        self.send_publication::<TeamReviewer>(waiting, &team_body::reviewer(version.body())?)
+      }
+      ResourceKind::McpServer => self.send_kind::<orchester_core::resource::TeamMcpServer>(waiting),
       // The store never records a version of agent testing's kinds, which stay on this computer.
       ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => Err(
         StoreError::Corrupt {
@@ -89,9 +163,28 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
     }
   }
 
+  /// A pipeline names its profiles and tools by their server ids, so it may name only what the team has
+  /// ([`team_body::check_pipeline`]).
+  fn check_team_pipeline(&self, waiting: &WaitingPublish) -> Result<(), SharingError> {
+    let version = self
+      .db
+      .version::<Pipeline>(waiting.resource, waiting.number)?
+      .ok_or(StoreError::ResourceNotFound(waiting.resource))?;
+    let team = team_body::team_executors(&self.db)?;
+    team_body::check_pipeline(&self.db, waiting.resource, version.body(), &team)
+  }
+
   fn send_kind<B: ResourceBody + Clone>(&mut self, waiting: &WaitingPublish) -> Result<(), SharingError> {
-    let published = self.publication::<B>(waiting)?;
-    match self.deliver(waiting, &published) {
+    let publication = self.publication::<B>(waiting)?;
+    self.send_publication::<B>(waiting, &publication)
+  }
+
+  fn send_publication<B: ResourceBody + Clone>(
+    &mut self,
+    waiting: &WaitingPublish,
+    publication: &Publication,
+  ) -> Result<(), SharingError> {
+    match self.deliver(waiting, publication) {
       Ok((resource, version)) => self.confirm::<B>(waiting, resource.as_ref(), &version),
       Err(SharingError::Client(error)) => match (error.code(), error.details()) {
         (Some(ErrorCode::VersionConflict), Some(SharingErrorDetails::Version { latest })) => {
@@ -101,7 +194,9 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
           Err(SharingError::VersionConflict { latest })
         }
         (Some(code), _) => {
-          self.db.record_publish_refused(waiting.version, &code_text(code))?;
+          // The reason of a `422 invalid` goes with the code: it says what the person is to fix.
+          let recorded = team_edit::recorded(code, error.details());
+          self.db.record_publish_refused(waiting.version, &recorded)?;
           Err(match code {
             ErrorCode::NotAdmin => SharingError::NotAdmin,
             _ => SharingError::Client(error),
@@ -113,8 +208,9 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
     }
   }
 
-  /// `waiting`'s body in the publisher's ids, with a reference for each connection, MCP server and secret it names.
-  fn publication<B: ResourceBody>(&self, waiting: &WaitingPublish) -> Result<Published, SharingError> {
+  /// `waiting`'s body of a kind not in the team's form yet, which must name nothing of this computer
+  /// ([`team_body::unchanged`]).
+  fn publication<B: ResourceBody>(&self, waiting: &WaitingPublish) -> Result<Publication, SharingError> {
     let version = self
       .db
       .version::<B>(waiting.resource, waiting.number)?
@@ -123,31 +219,32 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
       what: "resource body",
       detail: error.to_string(),
     })?;
-    let base = match waiting.based_on {
-      Some(number) => self.db.cached_version::<B>(waiting.resource, number)?,
-      None => None,
-    };
-    let base: Vec<Reference> = base
-      .map(|base| base.references.iter().filter_map(base_reference).collect())
-      .unwrap_or_default();
     let (connections, mcp_servers, secrets) = (self.db.connections()?, self.db.mcp_servers()?, self.db.secrets()?);
     let entities = LocalEntities {
       connections: &connections,
       mcp_servers: &mcp_servers,
       secrets: &secrets,
     };
-    let bound = bindings::bound(&self.db.reference_bindings()?, &connections);
-    Ok(for_publishing(body, entities, &base, &bound))
+    team_body::unchanged(waiting.resource, body, entities)
   }
 
-  /// Sends `waiting` as `published`, uploading the skill parts the server asks for first; the resource when the
+  /// `waiting`'s profile as the team holds it ([`team_body::profile`]).
+  fn profile_publication(&self, waiting: &WaitingPublish) -> Result<Publication, SharingError> {
+    let version = self
+      .db
+      .version::<AgentProfile>(waiting.resource, waiting.number)?
+      .ok_or(StoreError::ResourceNotFound(waiting.resource))?;
+    team_body::profile(&self.db, waiting.resource, version.body())
+  }
+
+  /// Sends `waiting` with `body`, uploading the skill parts the server asks for first; the resource when the
   /// version created it, and the version as the server numbered it.
   fn deliver(
     &self,
     waiting: &WaitingPublish,
-    published: &Published,
+    publication: &Publication,
   ) -> Result<(Option<SharedResource>, SharedVersion), SharingError> {
-    match self.attempt(waiting, published) {
+    match self.attempt(waiting, publication) {
       Err(SharingError::Client(error)) if error.code() == Some(ErrorCode::MissingFiles) => {
         let Some(SharingErrorDetails::Files { hashes }) = error.details() else {
           return Err(SharingError::InvalidAnswer("missing files"));
@@ -155,7 +252,7 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
         for hash in hashes.clone() {
           self.upload(hash)?;
         }
-        self.attempt(waiting, published)
+        self.attempt(waiting, publication)
       }
       answer => answer,
     }
@@ -164,11 +261,11 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
   fn attempt(
     &self,
     waiting: &WaitingPublish,
-    published: &Published,
+    publication: &Publication,
   ) -> Result<(Option<SharedResource>, SharedVersion), SharingError> {
     let content = VersionContent {
-      body: published.body.clone(),
-      references: published.references.iter().map(shared_reference).collect(),
+      body: publication.body.clone(),
+      references: publication.references.clone(),
     };
     let on_server = matches!(
       self.db.resource_sharing(waiting.resource)?,
@@ -258,15 +355,13 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
       after = Some(next);
     }
     for version in &versions {
-      let bound = bindings::bind_new(&mut self.db, &version.references)?;
       match kind {
-        ResourceKind::Pipeline => cache_version::<Pipeline>(&mut self.db, version, &bound)?,
-        ResourceKind::AgentProfile => cache_version::<AgentProfile>(&mut self.db, version, &bound)?,
-        ResourceKind::Instruction => cache_version::<Instruction>(&mut self.db, version, &bound)?,
-        ResourceKind::Tool => cache_version::<Tool>(&mut self.db, version, &bound)?,
-        ResourceKind::TeamReviewer => {
-          cache_version::<orchester_core::resource::TeamReviewer>(&mut self.db, version, &bound)?
-        }
+        ResourceKind::Pipeline => cache_version::<Pipeline>(&mut self.db, version)?,
+        ResourceKind::AgentProfile => cache_profile(&mut self.db, version)?,
+        ResourceKind::Instruction => cache_version::<Instruction>(&mut self.db, version)?,
+        ResourceKind::Tool => cache_version::<Tool>(&mut self.db, version)?,
+        ResourceKind::TeamReviewer => cache_version::<TeamReviewer>(&mut self.db, version)?,
+        ResourceKind::McpServer => cache_version::<orchester_core::resource::TeamMcpServer>(&mut self.db, version)?,
         // Skills are left out above, and agent testing's kinds are never shared.
         ResourceKind::Skill | ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => {}
       }
@@ -275,37 +370,13 @@ impl<S: ConfigServer> RemoteResourceStore<S> {
   }
 }
 
-/// Whether `error` says the server was not reached, so the version waits.
-fn unreached(error: &SharingError) -> bool {
+/// The code a version is recorded as refused with when this computer itself finds the team cannot take it: its body
+/// names what the team does not have, so sending it again would only fail the same way.
+const fn refusal_code(error: &SharingError) -> Option<&'static str> {
   match error {
-    SharingError::Offline | SharingError::SignedOut => true,
-    SharingError::Client(error) => error.code().is_none(),
-    _ => false,
-  }
-}
-
-/// The server's error code as it writes it.
-fn code_text(code: ErrorCode) -> String {
-  let quoted = serde_json::to_string(&code).expect("an error code serializes as a string");
-  quoted.trim_matches('"').to_owned()
-}
-
-/// A reference of the version a body was edited from, as core turns local ids back into it; `None` for a shared tool,
-/// which is a resource, and for a role this version does not know.
-fn base_reference(kept: &VersionReference) -> Option<Reference> {
-  let name = kept.name.clone();
-  match kept.target {
-    ReferenceTarget::Connection(id) => Some(Reference::Connection {
-      id,
-      name,
-      role: ConnectionRole::parse(kept.role.as_deref()?)?,
-    }),
-    ReferenceTarget::McpServer(id) => Some(Reference::McpServer { id, name }),
-    ReferenceTarget::Secret(id) => Some(Reference::Secret {
-      id,
-      name,
-      role: kept.role.as_deref()?.parse::<SecretKind>().ok()?,
-    }),
-    ReferenceTarget::Tool(_) => None,
+    SharingError::LocalEntitiesNamed { .. } => Some("local_entities_named"),
+    SharingError::PipelineNamesNonTeam { .. } => Some("pipeline_names_non_team"),
+    SharingError::WritableFoldersStay { .. } => Some("writable_folders_stay"),
+    _ => None,
   }
 }

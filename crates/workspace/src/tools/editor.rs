@@ -11,7 +11,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, ResourceUpdate, StoreError};
 
 use super::{
-  data::{ProjectTools, ToolEntry, create_tool},
+  data::{ProjectTools, ToolEntry, create_published_tool},
   program::fixed_program,
   widening::changes,
 };
@@ -146,7 +146,7 @@ fn apply(db: &mut ProjectDb, root: &Path, mut edit: Edit, allowed: &Allowed) -> 
     }
     let listed = ProjectTools::load(db)?;
     new_name(&listed, name.as_str()).map_err(EditorError::Message)?;
-    return Ok(create_tool(db, name, tool, Timestamp::now())?);
+    return Ok(create_published_tool(db, name, tool, Timestamp::now())?);
   }
   apply_existing(db, &edit, allowed)
 }

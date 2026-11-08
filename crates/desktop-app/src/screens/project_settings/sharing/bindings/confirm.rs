@@ -10,7 +10,7 @@ use lurq::{
   node::Element,
 };
 use orchester_store::{Bound, BoundBy, BoundReference};
-use orchester_workspace::sharing::sync::Here;
+use orchester_workspace::sharing::sync::BindingsHere;
 
 use super::{Ask, rows::Actions};
 use crate::{
@@ -35,7 +35,7 @@ struct Offered {
 }
 
 /// The modal asking about `ask`.
-pub(super) fn dialog(ctx: &Ctx, here: &Here, ask: &Ask, actions: &Actions) -> Element {
+pub(super) fn dialog(ctx: &Ctx, here: &BindingsHere, ask: &Ask, actions: &Actions) -> Element {
   let chosen = actions.chosen.get();
   let detailed = |name: &str, detail: &str| -> String {
     ctx
@@ -206,7 +206,7 @@ fn chosen(reference: BoundReference, local: &str) -> Option<BoundReference> {
 }
 
 /// The role, the secret's kind, of the reference `ask` is about: found by its kind and id, whatever it is bound to.
-fn here_role(here: &Here, ask: &Ask) -> Option<String> {
+fn here_role(here: &BindingsHere, ask: &Ask) -> Option<String> {
   here
     .references
     .iter()

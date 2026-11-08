@@ -6,7 +6,7 @@
 use std::{net::TcpStream, num::NonZeroU32};
 
 use orchester_api::{
-  Attribution, Event, Reference, ResourceCreate, ResourcePublished, ResourcesImport, SharedResource,
+  Attribution, Event, ReferenceTarget, ResourceCreate, ResourcePublished, ResourcesImport, SharedResource,
   SharedResourceKind, SharedVersion, UserRef, VersionPublish,
 };
 use orchester_core::{blob::ContentHash, id::ResourceId, resource::VersionNumber, sharing::TaskRevision};
@@ -23,7 +23,7 @@ impl State {
     by: &UserRef,
     (id, kind, name): (ResourceId, SharedResourceKind, &str),
     body: Value,
-    references: Vec<Reference>,
+    references: Vec<ReferenceTarget>,
   ) -> SharedVersion {
     let published = Attribution {
       by: by.clone(),

@@ -43,15 +43,14 @@ fn body(text: &str) -> Instruction {
 #[test]
 fn instructions_checked_save_and_publish_return_the_committed_version() {
   let root = project();
-  let draft = editor::create_in(
+  let published = editor::create_in(
     root.path(),
     Name::new("Standards").expect("valid instruction fixture"),
     &body("Original"),
   )
   .expect("valid instruction fixture");
-  let published = editor::publish_in(root.path(), &draft).expect("valid instruction fixture");
   assert_eq!(published.state.published().expect("valid instruction fixture").get(), 1);
-  assert!(!published.state.has_draft());
+  assert!(!published.state.has_draft(), "a new instruction has no draft");
   let saved = editor::save_in(root.path(), &published, body("Draft")).expect("valid instruction fixture");
   assert_eq!(saved.based_on(), published.state.published());
   assert_eq!(saved.body.text().as_str(), "Draft");
@@ -68,7 +67,6 @@ fn instructions_repeating_the_published_body_discards_the_draft() {
     &body("Original"),
   )
   .expect("valid instruction fixture");
-  let original = editor::publish_in(root.path(), &original).expect("valid instruction fixture");
   let changed = editor::save_in(root.path(), &original, body("Changed")).expect("valid instruction fixture");
   let reverted = editor::save_in(root.path(), &changed, body("Original")).expect("valid instruction fixture");
   assert!(matches!(reverted.state, VersionState::Published(_)));
@@ -106,12 +104,27 @@ fn instructions_delayed_save_and_publish_refuse_another_writers_draft() {
 #[test]
 fn instructions_stale_and_blank_drafts_remain_saved_after_publication_is_refused() {
   let root = project();
-  let blank = editor::create_in(
+  let refused = editor::create_in(
     root.path(),
     Name::new("Blank").expect("valid instruction fixture"),
     &body(""),
   )
+  .expect_err("a blank instruction is not created");
+  assert!(!refused.needs_reload());
+  assert!(
+    ProjectInstructions::load_in(root.path())
+      .expect("valid instruction fixture")
+      .entries
+      .is_empty(),
+    "nothing was created"
+  );
+  let created = editor::create_in(
+    root.path(),
+    Name::new("Blank").expect("valid instruction fixture"),
+    &body("Text"),
+  )
   .expect("valid instruction fixture");
+  let blank = editor::save_in(root.path(), &created, body("")).expect("a blank draft is saved");
   let blank_error = editor::publish_in(root.path(), &blank).expect_err("blank publication is refused");
   assert!(!blank_error.needs_reload());
   let initial = editor::create_in(
@@ -120,7 +133,6 @@ fn instructions_stale_and_blank_drafts_remain_saved_after_publication_is_refused
     &body("Original"),
   )
   .expect("valid instruction fixture");
-  editor::publish_in(root.path(), &initial).expect("valid instruction fixture");
   ProjectDb::open(root.path())
     .expect("valid instruction fixture")
     .save_draft(initial.id, &Draft::new(body("Stale"), None, Timestamp::now()))
@@ -156,21 +168,32 @@ fn instructions_publication_depends_on_the_rules_events_not_on_a_preview() {
       .expect("valid instruction fixture")
   };
   let task = create("Task", &body_at("Working on {{task.title}}", &[InjectionEvent::Start]));
-  let published = editor::publish_in(root.path(), &task).expect("a task's title has a value whenever an agent starts");
-  assert_eq!(published.state.published().map(|version| version.get()), Some(1));
+  assert_eq!(
+    task.state.published().map(|version| version.get()),
+    Some(1),
+    "a task's title has a value whenever an agent starts"
+  );
 
   let resume = create(
     "Resume",
     &body_at("Compare {{run.revision}}", &[InjectionEvent::Resume]),
   );
-  editor::publish_in(root.path(), &resume).expect("a resumed agent has the run's latest checkpoint");
+  assert_eq!(
+    resume.state.published().map(|version| version.get()),
+    Some(1),
+    "a resumed agent has the run's latest checkpoint"
+  );
 
   let both = body_at(
     "Compare {{run.revision}}",
     &[InjectionEvent::Start, InjectionEvent::Resume],
   );
-  let start = create("Start", &both);
-  let refused = editor::publish_in(root.path(), &start).expect_err("no checkpoint before an agent's start");
+  let refused = editor::create_in(
+    root.path(),
+    Name::new("Start").expect("valid instruction fixture"),
+    &both,
+  )
+  .expect_err("no checkpoint before an agent's start");
   assert!(matches!(
     refused,
     editor::WriteError::Unavailable(Unavailable {
@@ -180,6 +203,13 @@ fn instructions_publication_depends_on_the_rules_events_not_on_a_preview() {
   ));
   assert_eq!(refused.message().key, "instructions.errors.variableUnavailableAtStart");
   assert!(!refused.needs_reload());
+  let listed = ProjectInstructions::load_in(root.path()).expect("valid instruction fixture");
+  assert_eq!(listed.entries.len(), 2, "the refused instruction was not created");
+
+  // A draft over a version is checked when it is published.
+  let drafted = editor::save_in(root.path(), &task, both).expect("a draft is saved whatever its text says");
+  let refused = editor::publish_in(root.path(), &drafted).expect_err("no checkpoint before an agent's start");
+  assert!(matches!(refused, editor::WriteError::Unavailable(_)));
   let unpublished = ProjectInstructions::load_in(root.path()).expect("valid instruction fixture");
-  assert_eq!(unpublished.entry(start.id), Some(&start), "the draft stays as it was");
+  assert_eq!(unpublished.entry(task.id), Some(&drafted), "the draft stays as it was");
 }

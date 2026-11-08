@@ -47,6 +47,7 @@ mod message_records;
 mod messages;
 mod modules;
 mod native;
+mod new_resources;
 mod notice_records;
 mod orchestrator;
 mod orchestrator_compactions;
@@ -124,6 +125,8 @@ mod task_snapshots;
 mod tasks;
 mod team_copies;
 mod team_deliveries;
+mod team_fill_ins;
+mod team_leaving;
 mod team_operations;
 mod team_runs;
 mod team_starts;
@@ -150,7 +153,7 @@ use rusqlite::{Connection, params};
 pub use self::{
   approval_records::ApprovalRecord,
   approval_rules::DecisionCounts,
-  archive_stops::ArchiveStop,
+  archive_stops::{ArchiveStop, Archived},
   attachments::{AttachmentOwner, attachment_file},
   auto_mode::AutoModeSave,
   automatic_status::{AutomaticStatus, NotSent, UnsentStatus},
@@ -177,6 +180,7 @@ pub use self::{
   read_only::ReadOnlyProjectDb,
   reference_bindings::{Bound, BoundBy, BoundReference, ReferenceBinding},
   removal_records::RemovalRecord,
+  removals::DraftChange,
   resolutions::ResolutionStart,
   resources::ResourceUpdate,
   run_ends::EndedRun,
@@ -194,6 +198,7 @@ pub use self::{
   step_records::StepRecord,
   task_deletion::TaskDeletionFacts,
   team_deliveries::{DeliveryMerge, DeliveryReport, TeamDelivery, TeamDeliveryStage},
+  team_fill_ins::ConnectionPick,
   team_operations::{NewTeamOperation, TeamOperation, TeamOperationState, TeamSettlement},
   team_runs::{AcceptedWork, NewWorkReport, TeamFence, TeamRun, WorkReportEntry, WorkReportState},
   team_starts::{TeamStart, TeamStartStage},

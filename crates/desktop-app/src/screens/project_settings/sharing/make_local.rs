@@ -247,6 +247,11 @@ fn pairs(ctx: &Ctx, plan: &MakeLocalPlan, names: &[(&'static str, String); 4]) -
       "sharing.makeLocal.othersKey",
       ctx.t("sharing.makeLocal.others").to_string(),
     ),
+    line(
+      "sharing-make-local-configuration",
+      "sharing.makeLocal.configurationKey",
+      ctx.t("sharing.makeLocal.configuration").to_string(),
+    ),
   ];
   if plan.not_shared > 0 {
     rows.push(line(

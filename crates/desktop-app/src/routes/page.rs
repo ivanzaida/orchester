@@ -13,8 +13,8 @@ use orchester_workspace::{
 };
 
 use super::{
-  AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, IMPORT, ImportTab, InstructionsView, JoinTarget, MERGE,
-  MERGE_QUEUE, MERGES, MODULES, MemoryTab, ModuleListTab, ModuleTab, NEW, NewConnection, ORCHESTRATOR,
+  AgentTab, CONNECTIONS, ConnectionsView, EDIT, FilesView, HubView, IMPORT, ImportTab, InstructionsView, JoinTarget,
+  MERGE, MERGE_QUEUE, MERGES, MODULES, MemoryTab, ModuleListTab, ModuleTab, NEW, NewConnection, ORCHESTRATOR,
   OrchestratorChat, OverviewTab, PULL_REQUESTS, PipelineView, ProjectSettingsTab, REVIEW, RouteError, SETTINGS, Screen,
   SecretsView, SkillsFilter, TAB, TASKS, TaskList, TaskView, ToolTab,
   files::FILES,
@@ -74,7 +74,10 @@ pub enum ProjectPage {
   /// A pipeline's page showing a published version, read-only, picked in Versions, with what its column
   /// shows; never the publish review.
   PipelineVersion(ResourceId, VersionNumber, PipelineView),
+  /// The Agents hub on its first filter, with its first resource open.
   Agents,
+  /// The Agents hub of a team project on a filter or with a resource open, never the one [`Self::Agents`] is.
+  AgentsHub(HubView),
   NewAgent(AgentTab),
   Agent(ResourceId, AgentTab),
   Instructions(InstructionsView),
@@ -166,6 +169,15 @@ impl ProjectPage {
     })
   }
 
+  /// The Agents hub on `view`: [`Self::Agents`] for the view it opens on.
+  pub fn hub(view: HubView) -> Self {
+    if view == HubView::default() {
+      Self::Agents
+    } else {
+      Self::AgentsHub(view)
+    }
+  }
+
   pub const fn screen(&self) -> Screen {
     match self {
       Self::Overview(_) => Screen::Overview,
@@ -184,7 +196,7 @@ impl ProjectPage {
       | Self::CopyPipeline(_)
       | Self::Pipeline(..)
       | Self::PipelineVersion(..) => Screen::Pipelines,
-      Self::Agents | Self::NewAgent(_) | Self::Agent(..) => Screen::Agents,
+      Self::Agents | Self::AgentsHub(_) | Self::NewAgent(_) | Self::Agent(..) => Screen::Agents,
       Self::Instructions(_) => Screen::Instructions,
       Self::Memory(_) => Screen::Memory,
       Self::Skills(_) | Self::NewSkill | Self::Skill(_) | Self::ImportSkills => Screen::Skills,
@@ -237,6 +249,7 @@ impl ProjectPage {
       ),
       Self::Pipeline(id, view) => view.path(format!("{project_root}/pipelines/{id}"), None),
       Self::PipelineVersion(id, version, view) => view.path(format!("{project_root}/pipelines/{id}"), Some(*version)),
+      Self::AgentsHub(view) => view.path(segment(Screen::Agents)),
       Self::NewAgent(tab) => with_query(format!("{project_root}/agents/{NEW}"), &[tab.param()]),
       Self::Agent(id, tab) => with_query(format!("{project_root}/agents/{id}"), &[tab.param()]),
       Self::Instructions(view) => view.path(segment(Screen::Instructions)),
@@ -316,6 +329,7 @@ impl ProjectPage {
           (Some(version), view) => Ok(Self::PipelineVersion(id, version, view)),
         }
       }
+      ["agents"] => HubView::take(params).map(Self::hub),
       ["agents", NEW] => AgentTab::take(params).map(Self::NewAgent),
       ["agents", id] => {
         let id = id.parse().map_err(|_| RouteError::NoScreen)?;

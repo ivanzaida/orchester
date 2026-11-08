@@ -15,12 +15,15 @@ pub mod state;
 use std::fs;
 
 use orchester_core::{
+  connection::{AgentProvider, SignIn},
   id::{ClaimId, OperationId, ProjectId, WorkEventId, WorkId},
   project::{Project, ProjectKey},
+  resource::ResourceKind,
+  store::{ResourceStore, TaskStore},
   task::Task,
   time::Timestamp,
 };
-use orchester_store::{AppDb, ProjectDb};
+use orchester_store::{AppDb, ArchiveStop, Archived, ProjectDb};
 use rusqlite::{Connection, params};
 
 use self::state::{FILE, State};
@@ -185,6 +188,270 @@ pub fn version_refused(kontur: &mut Kontur) -> Result<(), SeedError> {
 /// An Admin editing KON-12, whose first save meets olha's change of its priority first (`05` `LmxUY`).
 pub fn edit_conflict(kontur: &mut Kontur) -> Result<(), SeedError> {
   mark(kontur, State::EditConflict)
+}
+
+/// As [`member`], with the team's servers, profiles and pipelines of `picker-readiness-team`; the stand-in server's
+/// tasks are on Team delivery and Team quick fix. KON-5, in API rate limits, runs Team delivery, which needs the
+/// program path of `pencil-design`, `github`'s secret and a connection: its Run is refused `not_ready_here` and its
+/// Summary lists them (`Task · Run · not ready here`, R1 `Ku0qu`).
+pub fn not_ready_here(kontur: &mut Kontur) -> Result<(), SeedError> {
+  super::picker_readiness::team_work(kontur)?;
+  // KON-5's module branch, which a team start finds in the checkout before it asks whether the pipeline is ready.
+  git::branch(&kontur.repo, "module/api-rate-limits", git::MAIN)?;
+  write_marker(kontur, State::NotReadyHere)
+}
+
+/// As [`not_ready_here`], with a Claude Code connection, so Team delivery lacks only the program path of
+/// `pencil-design` and the value of `GITHUB_TOKEN`, and KON-5 having a run on this computer that was cancelled at
+/// Implement, run 8 (the run counter as in a project whose earlier runs ended), while mara's claim on it is stale
+/// (`team-not-ready-ended`): a Take over starts a new run, which is refused as not ready here, and the header's line
+/// says when run 8 ended beside when Take over was pressed (`Status line` `g9ufW`, ORC-840b).
+pub fn not_ready_after_run(kontur: &mut Kontur) -> Result<(), SeedError> {
+  super::picker_readiness::team_work(kontur)?;
+  claude_connection(kontur)?;
+  git::branch(&kontur.repo, "module/api-rate-limits", git::MAIN)?;
+  Connection::open(kontur.database())?.execute("UPDATE counters SET next = 8 WHERE name = 'run'", [])?;
+  with_runs(
+    kontur,
+    &[(5, "Rotate API keys from settings", Shape::Cancelled("implement"), 90)],
+  )?;
+  write_marker(kontur, State::NotReadyAfterRun)
+}
+
+/// As [`not_ready_here`], with every task of the stand-in server on Team quick fix, which is ready here, and the server
+/// a release ahead of this computer (`team-start-failed`): KON-5 (API rate limits) is pressed Run; the server builds
+/// the start in a bundle schema this computer does not read, so the start fails for good, the claim is released and the
+/// task page says why (ORC-885).
+pub fn start_failed(kontur: &mut Kontur) -> Result<(), SeedError> {
+  start_ready_here(kontur, State::StartFailed)
+}
+
+/// As [`start_failed`], with the server not answering the Run's start for a while (`team-start-recovered`): the start
+/// waits, and recovery carries it on when the server answers, so the page that said the run starts once they answer
+/// says why it did not.
+pub fn start_recovered(kontur: &mut Kontur) -> Result<(), SeedError> {
+  start_ready_here(kontur, State::StartRecovered)
+}
+
+/// As [`start_failed`], with KON-5's start already recorded when the QA app joins the team, as the server's not
+/// answering it leaves it (`team-start-waiting`): the bundle is never answered, recovery goes on asking, and the task
+/// page says the run is starting, in an information notice with nothing to press (ORC-885c).
+pub fn start_waiting(kontur: &mut Kontur) -> Result<(), SeedError> {
+  start_ready_here(kontur, State::StartWaiting)
+}
+
+/// As [`start_failed`], with KON-5's start recorded at the runner when the QA app joins the team
+/// (`team-start-runner-refused`): the runner, which keeps no inputs for it, refuses it when recovery asks, and the task
+/// page says what the runner said without a press of Run (ORC-885c).
+pub fn start_runner_refused(kontur: &mut Kontur) -> Result<(), SeedError> {
+  start_ready_here(kontur, State::StartRunnerRefused)
+}
+
+/// As [`start_failed`], with KON-5's start recorded as an earlier window left it, failed for good and not dismissed
+/// (`team-start-past-failure`): the task page tells it once, with Try again and Dismiss (ORC-885c).
+pub fn start_past_failure(kontur: &mut Kontur) -> Result<(), SeedError> {
+  start_ready_here(kontur, State::StartPastFailure)
+}
+
+fn start_ready_here(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
+  super::picker_readiness::team_work(kontur)?;
+  // Team quick fix runs Reviewer, which needs a Claude Code connection here; with one it is ready.
+  claude_connection(kontur)?;
+  // KON-5's module branch, which a team start finds in the checkout before it asks whether the pipeline is ready.
+  git::branch(&kontur.repo, "module/api-rate-limits", git::MAIN)?;
+  write_marker(kontur, state)
+}
+
+/// The Claude Code connection `Claude · Kontur`, which the team's profiles run on without asking.
+fn claude_connection(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let bin = kontur.repo.join(".orchester").join("qa-bin");
+  let program = bin.join("claude");
+  fs::create_dir_all(&bin).map_err(io(&bin))?;
+  fs::write(&program, "").map_err(io(&program))?;
+  let at = kontur.ago(4);
+  super::connections::cli(
+    kontur,
+    ("Claude · Kontur", AgentProvider::ClaudeCodeCli, program),
+    ("2.1.89", SignIn::SignedIn, &["claude-sonnet-5-5"]),
+    at,
+  )
+  .map(|_| ())
+}
+
+/// The team's resources of `team-hub` for a copy that joins the stand-in team server as an Admin, which holds the
+/// team's MCP servers (`team-edit`, `team-edit-demoted`, `team-edit-offline`, `team-edit-rejects`, ORC-836): `Agents ›
+/// MCP servers`, *Edit* a server (`Agents · MCP server · admin · draft` A13 `WMtxm`).
+pub fn edit(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEdit)
+}
+
+/// As [`edit`], the server no longer taking the person's writes: *Publish for the team* is refused as no longer an
+/// admin, and the page turns read-only with the draft kept (A14 `gTLx6`).
+pub fn edit_demoted(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditDemoted)
+}
+
+/// As [`edit`], the server not answering: *Publish for the team* waits in the outbox, with *Cancel sending* (A16
+/// `x3ywL`).
+pub fn edit_offline(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditOffline)
+}
+
+/// As [`edit`], the server rejecting the content of what is sent: the refusal says why and the draft is kept (A17
+/// `rJbPm`).
+pub fn edit_rejects(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditRejects)
+}
+
+/// As [`edit`], after *Publish for the team* made `pencil-design`'s next version and the server numbered it: v2 is the
+/// team's and the draft became it (`team-edit-published`, the result of A13 `WMtxm`). The QA app makes it without a
+/// press.
+pub fn edit_published(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditPublished)
+}
+
+/// As [`edit`], after a *Publish for the team* refused as no longer an admin, the person a member now: the page is
+/// read-only with the draft kept (`team-edit-refused-admin`, A14 `gTLx6`). The program path of `pencil-design` is set,
+/// so its row says only *Your draft on v1 · publish refused*.
+pub fn edit_refused_admin(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditRefusedAdmin)
+}
+
+/// As [`edit`], after a *Publish for the team* made while the server could not be reached: v2 waits in the outbox, with
+/// *Cancel sending* (`team-edit-waiting`, A16 `x3ywL`). The program path is set, so the row says only *Waiting to send
+/// · v2*.
+pub fn edit_waiting(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditWaiting)
+}
+
+/// As [`edit`], a version that waited and that the server rejected once it answered: the outbox holds it refused, with
+/// the reason, the form of the refused version and *Publish for the team* (`team-edit-rejected`, A17 `rJbPm`). The
+/// program path is set, so the row says only *Your draft on v1 · publish refused*.
+pub fn edit_rejected(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditRejected)
+}
+
+/// As [`edit`], `pencil-design` needing the variable `PENCIL_TOKEN`: the edit form has *Variables it needs* (A13
+/// `WMtxm`).
+pub fn edit_variables(kontur: &mut Kontur) -> Result<(), SeedError> {
+  super::team_hub::resources_mcp(
+    kontur,
+    &super::team_hub::Mcp {
+      pencil_variables: &["PENCIL_TOKEN"],
+      figma_program: false,
+    },
+  )?;
+  write_marker(kontur, State::TeamEditVariables)
+}
+
+/// As [`edit`], a new MCP server `figma-local` that waited and that the server refused as the name being taken once it
+/// answered: taken back whole, and the hub says what and why (`team-create-name-taken`, A15 `dLqHC`).
+pub fn create_name_taken(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamCreateNameTaken)
+}
+
+/// As [`edit`], with a draft of `pencil-design` kept on v1 and olha's v2 published meanwhile and read here: one quiet
+/// line says so, with *View changes* (`team-edit-newer`, A18 `bk4i9`). The QA app makes it without a press.
+pub fn edit_newer(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditNewer)
+}
+
+/// As [`edit_newer`], after a *Publish for the team* that the server answered with the conflict: the page compares v1,
+/// olha's v2 and the draft field by field, the arguments both changed (`team-edit-conflicting`, A19 `DV8OI`; *Discard
+/// my draft* opens A20 `CAPhQ`). The QA app makes it without a press.
+pub fn edit_conflicting(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditConflicting)
+}
+
+/// As [`edit_conflicting`], with no field both changed, so *Rebase my draft* needs no pick
+/// (`team-edit-conflict-clean`).
+pub fn edit_conflict_clean(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditConflictClean)
+}
+
+/// As [`edit`], olha archived `pencil-design` while the draft was kept and the *Publish for the team* that followed was
+/// refused: the draft stays, *Restore* is the way back (`team-edit-archived`, A21 `yqYj9`). The QA app makes it without
+/// a press.
+pub fn edit_archived(kontur: &mut Kontur) -> Result<(), SeedError> {
+  edit_in(kontur, State::TeamEditArchived)
+}
+
+fn edit_in(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
+  super::team_hub::resources(kontur)?;
+  write_marker(kontur, state)
+}
+
+/// An Admin on the hub's team MCP servers, which the stand-in team server holds with Builder, that names
+/// `pencil-design` (`team-archive`, A23 `Pnpbe`, ORC-838): *Agents › MCP servers › pencil-design*, the … menu's
+/// *Archive*, which opens the confirmation. Opening it is a press an MCP client may make (`team-hub-more`, then
+/// `team-hub-archive`); confirming it is a person's.
+pub fn archive(kontur: &mut Kontur) -> Result<(), SeedError> {
+  super::team_hub::resources(kontur)?;
+  write_marker(kontur, State::TeamArchive)
+}
+
+/// What the confirmation of [`archive`] leaves behind (`team-archived`, A22 `pUu78`): KON-12's run 8, cancelled at
+/// Implement, recorded as stopped when dana-k archived `pencil-design`, which the QA app then takes out of this
+/// computer's lists as the server's archive does. The task's Summary says which resource and who archived it, and
+/// Builder, which still names it, cannot run.
+pub fn archived(kontur: &mut Kontur) -> Result<(), SeedError> {
+  super::picker_readiness::team_work(kontur)?;
+  Connection::open(kontur.database())?.execute("UPDATE counters SET next = 8 WHERE name = 'run'", [])?;
+  with_runs(
+    kontur,
+    &[(12, "Add retry to webhook sender", Shape::Cancelled("implement"), 60)],
+  )?;
+  let (run, task): (String, String) = Connection::open(kontur.database())?.query_row(
+    "SELECT id, task_id FROM runs ORDER BY number DESC LIMIT 1",
+    [],
+    |row| Ok((row.get(0)?, row.get(1)?)),
+  )?;
+  on_team_delivery(
+    kontur,
+    task
+      .parse()
+      .map_err(|_| SeedError::Invalid("the seed's task is an id".to_owned()))?,
+  )?;
+  let pencil = kontur
+    .db
+    .resources(ResourceKind::McpServer)?
+    .into_iter()
+    .find(|resource| resource.name().as_str() == "pencil-design")
+    .ok_or_else(|| SeedError::Invalid("the seed has the team MCP server pencil-design".to_owned()))?;
+  let invalid = |what: &str| SeedError::Invalid(format!("the seed's {what} is an id"));
+  kontur.db.record_archive_stop(&ArchiveStop {
+    run: run.parse().map_err(|_| invalid("run"))?,
+    task: task.parse().map_err(|_| invalid("task"))?,
+    resource: pencil.name().clone(),
+    stopped_at: kontur.ago(60),
+    archived: Some(Archived {
+      id: pencil.id(),
+      kind: ResourceKind::McpServer,
+      by: Some("dana-k".to_owned()),
+    }),
+  })?;
+  write_marker(kontur, State::TeamArchived)
+}
+
+/// KON-12 moved from the catalogue's pipeline, which a team project does not offer, to the team's Team delivery
+/// (Builder, then Reviewer), so a Run again reads the profiles of the team and says what keeps them from running; its
+/// run 8 is still the one the catalogue's Feature delivery made.
+fn on_team_delivery(kontur: &mut Kontur, task: orchester_core::id::TaskId) -> Result<(), SeedError> {
+  let delivery = kontur
+    .db
+    .resources(ResourceKind::Pipeline)?
+    .into_iter()
+    .find(|resource| resource.name().as_str() == "Team delivery")
+    .ok_or_else(|| SeedError::Invalid("the seed has the team pipeline Team delivery".to_owned()))?;
+  let mut found = kontur
+    .db
+    .task(task)?
+    .ok_or_else(|| SeedError::Invalid("the seed has KON-12".to_owned()))?;
+  let mut details = found.details().clone();
+  details.pipeline = Some(delivery.id());
+  found.edit(details, true).map_err(|_| SeedError::TaskChanged)?;
+  kontur.db.save_task(&found)?.saved().ok_or(SeedError::TaskChanged)?;
+  Ok(())
 }
 
 /// KON-12's run interrupted at Implement, on the live catalogue's Feature delivery with a brief that keeps

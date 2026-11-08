@@ -32,6 +32,7 @@ use super::{
 use crate::{
   agents::data::profiles,
   messages::{self, Message},
+  sharing::sync::refresh_team_profiles,
 };
 
 /// A profile that runs on a connection, or gives its agents an MCP server, for the read-only "Used by"
@@ -244,11 +245,8 @@ impl SaveError {
 
 /// Adds or updates the connection in `draft` with its check. An edited connection keeps its account; a new one is on
 /// Default.
-pub fn save<S>(store: &mut S, draft: ConnectionDraft, now: Timestamp) -> Result<ConnectionId, SaveError>
-where
-  S: ConnectionStore<Error = StoreError>,
-{
-  save_with(store, draft, (None, None), now)
+pub fn save(db: &mut ProjectDb, draft: ConnectionDraft, now: Timestamp) -> Result<ConnectionId, SaveError> {
+  save_with(db, draft, (None, None), now)
 }
 
 /// Adds or updates the connection in `draft` on `account`, with its check, which was made on that account
@@ -267,16 +265,14 @@ pub fn save_on_account_in(
 }
 
 /// Adds or updates the connection in `draft` with its check. `account` and `provider`, when given, replace what it
-/// runs on: an account of its CLI, or an API provider (`Some(None)`: none, back to the account).
-pub(super) fn save_with<S>(
-  store: &mut S,
+/// runs on: an account of its CLI, or an API provider (`Some(None)`: none, back to the account). The team profiles of
+/// the project run on the connections as they are now ([`refresh_team_profiles`]).
+pub(super) fn save_with(
+  store: &mut ProjectDb,
   draft: ConnectionDraft,
   (account, provider): (Option<ConnectionAccount>, Option<Option<ApiProvider>>),
   now: Timestamp,
-) -> Result<ConnectionId, SaveError>
-where
-  S: ConnectionStore<Error = StoreError>,
-{
+) -> Result<ConnectionId, SaveError> {
   if !draft.check.result.is_verified() {
     return Err(SaveError::NotVerified);
   }
@@ -291,6 +287,7 @@ where
     runs_on(&mut connection, account, provider)?;
     connection.record_check(draft.check)?;
     store.create_connection(&connection)?;
+    refresh_team_profiles(store)?;
     return Ok(connection.id());
   };
   let stored = store.connection(id)?.ok_or(StoreError::ConnectionNotFound(id))?;
@@ -300,6 +297,7 @@ where
   runs_on(&mut connection, account, provider)?;
   connection.record_check(draft.check)?;
   store.save_connection(&connection)?;
+  refresh_team_profiles(store)?;
   Ok(id)
 }
 

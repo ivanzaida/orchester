@@ -2,6 +2,8 @@
 //! reading, and `set_connection_account` moves a connection to another account only while a person lets automation
 //! widen; so do a profile saved on a connection of another account and auto mode's reviewer chosen on one.
 
+use std::path::Path;
+
 use orchester_core::{
   account::{AccountCli, AccountFolder, AgentAccount},
   connection::{
@@ -76,9 +78,9 @@ fn domain_accounts_are_listed_and_chosen_for_a_connection_by_a_person_only() {
   );
 }
 
-/// Adds `cli`'s account `name` to the application database of `seeded`, in a folder made for it.
-fn add_account(seeded: &Seeded, cli: AccountCli, name: &str) -> AgentAccount {
-  let folder = seeded.app_database.with_file_name(format!("{}-{name}", cli.as_str()));
+/// Adds `cli`'s account `name` to the application database at `app_database`, in a folder made for it.
+pub(super) fn add_account(app_database: &Path, cli: AccountCli, name: &str) -> AgentAccount {
+  let folder = app_database.with_file_name(format!("{}-{name}", cli.as_str()));
   std::fs::create_dir_all(&folder).expect("the account's folder");
   let account = AgentAccount::new(
     AgentAccountId::generate(),
@@ -88,7 +90,7 @@ fn add_account(seeded: &Seeded, cli: AccountCli, name: &str) -> AgentAccount {
     Timestamp::now(),
   )
   .expect("an account");
-  AppDb::open(&seeded.app_database)
+  AppDb::open(app_database)
     .expect("the app database")
     .add_agent_account(&account)
     .expect("added");
@@ -117,14 +119,14 @@ fn connect(seeded: &Seeded, (name, provider): (&str, AgentProvider), account: &A
 #[test]
 fn domain_profiles_and_the_reviewer_move_to_another_account_only_when_a_person_lets_automation_widen() {
   let (mut served, seeded) = Served::seeded("connections");
-  let client = add_account(&seeded, AccountCli::Codex, "Client");
-  let lab = add_account(&seeded, AccountCli::ClaudeCode, "Lab");
+  let client = add_account(&seeded.app_database, AccountCli::Codex, "Client");
+  let lab = add_account(&seeded.app_database, AccountCli::ClaudeCode, "Lab");
   connect(&seeded, ("Codex · Client", AgentProvider::CodexCli), &client);
   connect(&seeded, ("Claude · Lab", AgentProvider::ClaudeCodeCli), &lab);
   served.let_automation_widen(false);
   let profile = |role: &str, connection: &str| json!({ "project": "Kontur", "role": role, "connection": connection, "model": "gpt-5.5" });
+  // A new profile is created as v1; the moves below are drafts over it.
   served.ok("save_profile_draft", &profile("Runner", "Codex · Kontur"));
-  served.ok("publish_profile", &json!({ "project": "Kontur", "profile": "Runner" }));
   let refused = served.refused("save_profile_draft", &profile("Client runner", "Codex · Client"));
   assert_eq!(
     refused["code"], "person_only",
@@ -158,8 +160,8 @@ fn domain_profiles_and_the_reviewer_move_to_another_account_only_when_a_person_l
 #[test]
 fn domain_accounts_list_each_ones_latest_plan_limits_with_source_and_age() {
   let (mut served, seeded) = Served::seeded("connections");
-  let client = add_account(&seeded, AccountCli::Codex, "Client");
-  let lab = add_account(&seeded, AccountCli::ClaudeCode, "Lab");
+  let client = add_account(&seeded.app_database, AccountCli::Codex, "Client");
+  let lab = add_account(&seeded.app_database, AccountCli::ClaudeCode, "Lab");
   let now = Timestamp::now().unix_millis();
   let window = |minutes, percent, resets: i64| {
     LimitWindow::new(
