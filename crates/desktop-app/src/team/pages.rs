@@ -113,8 +113,6 @@ pub struct TeamTask {
   pub claim: Option<TeamClaim>,
   pub work: Option<ExecutionState>,
   pub abilities: Abilities,
-  /// Who changed the task last and when, whatever the change was.
-  pub updated: TeamAttribution,
   /// How and when the server says a Done or Canceled task was closed; `None` while it is open, and also when the
   /// server does not say (an older one never does), so the card names no person and no time.
   pub closed: Option<TeamClosed>,
@@ -318,7 +316,6 @@ fn team_task_of(read: &TaskRead, pipelines: &listed::TeamPipelines, who: &Who) -
     claim: read.effective_claim.as_ref().map(|read| claim(read, who)),
     work: read.work.as_ref().map(|work| work.state),
     abilities: abilities(&read.capabilities, Subject::Task { id: read.task.id }),
-    updated: attribution(&read.task.updated, who.you),
     closed: read.closed.as_ref().map(|closure| TeamClosed {
       how: match &closure.how {
         ClosedHow::Person { by } => TeamClosedHow::Person(person(by, who.you)),
