@@ -59,7 +59,11 @@ enum About {
 pub fn status_line(ctx: &mut Ctx, task: &TaskContext, mode: bool) -> Element {
   let detail = &task.detail;
   let status = detail.task.organization().status();
-  if status.is_closed() && detail.latest_unreadable.is_none() && detail.phase() == TaskPhase::Draft {
+  // A closed task waits for nothing: one submitted without a run reads closed as a draft does.
+  if status.is_closed()
+    && detail.latest_unreadable.is_none()
+    && matches!(detail.phase(), TaskPhase::Draft | TaskPhase::Queued)
+  {
     return closed(ctx, task, status);
   }
   let chip = match crate::screens::task::ci::header::status(ctx, task) {

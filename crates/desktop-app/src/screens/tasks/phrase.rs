@@ -29,6 +29,8 @@ pub(crate) struct Phrase {
   pub glyph_color: PaletteColor,
   pub words: Arc<str>,
   pub color: PaletteColor,
+  /// It says the task's closed status ([`closed`]) rather than where a run or a wait stands.
+  pub closed: bool,
 }
 
 impl Phrase {
@@ -96,6 +98,7 @@ fn waits(ctx: &Ctx, need: &NeedItem, tasks: &ProjectTasks) -> Phrase {
     glyph_color: color.clone(),
     words,
     color,
+    closed: false,
   }
 }
 
@@ -162,17 +165,22 @@ fn stands(ctx: &Ctx, row: &TaskRow) -> Phrase {
     glyph_color,
     words,
     color,
+    closed: false,
   }
 }
 
 /// A task closed as Done or Canceled that no run speaks for: its status as the workflow says it, in the glyph and
 /// words of the Done and Canceled status everywhere else, never *Ready to queue* or an open circle. A task whose run
-/// speaks (a merged one, a failed one) says that instead.
-pub(super) fn closed(ctx: &Ctx, row: &TaskRow) -> Option<Phrase> {
+/// speaks (a merged one, a failed one) says that instead. A closed task waits for nothing, so one submitted without a
+/// run reads closed too; one its group will not start says that ([`ReadinessKind::Held`]).
+fn closed(ctx: &Ctx, row: &TaskRow) -> Option<Phrase> {
   let status = row.organization.status();
   let unspoken = matches!(
     row.readiness,
-    ReadinessKind::Ready | ReadinessKind::Missing | ReadinessKind::Blocked | ReadinessKind::Run(TaskPhase::Draft)
+    ReadinessKind::Ready
+      | ReadinessKind::Missing
+      | ReadinessKind::Blocked
+      | ReadinessKind::Run(TaskPhase::Draft | TaskPhase::Queued)
   );
   if !status.is_closed() || !unspoken {
     return None;
@@ -183,6 +191,7 @@ pub(super) fn closed(ctx: &Ctx, row: &TaskRow) -> Option<Phrase> {
     glyph_color,
     words: ctx.t(workflow_key(status)),
     color: PaletteColor::TextMuted,
+    closed: true,
   })
 }
 
