@@ -3,6 +3,8 @@
 //! stale. What a team task's records need — its key, its title, its brief — they get from the inputs its newest run
 //! started with (`RunInputs`), which never change. A local task's definition is its stored row.
 
+use std::collections::HashSet;
+
 use orchester_core::{
   id::TaskId,
   project::TaskKey,
@@ -22,9 +24,15 @@ use super::detail::run_store_error;
 /// of the old sharing stream — is the row the stream cached; one with no run here is not defined by any record of this
 /// computer. `None` when no record defines it.
 pub fn task_of(db: &ProjectDb, id: TaskId) -> Result<Option<Task>, StoreError> {
-  if !is_team(db, id)? {
-    return db.task(id);
+  if is_team(db, id)? {
+    team_task_of(db, id)
+  } else {
+    db.task(id)
   }
+}
+
+/// [`task_of`] for the team task `id`.
+fn team_task_of(db: &ProjectDb, id: TaskId) -> Result<Option<Task>, StoreError> {
   let runs = db.runs_of_task(id).map_err(run_store_error)?;
   if let Some(task) = recorded(db, id, &runs)? {
     return Ok(Some(task));
@@ -68,13 +76,36 @@ fn recorded(db: &ProjectDb, id: TaskId, runs: &[ListedRun<RunStoreError>]) -> Re
 /// team tasks this computer keeps no definition of but their runs. A team task no record of this computer defines is
 /// left out; its runs, if any, are [`unrecorded_runs`].
 pub fn all(db: &ProjectDb) -> Result<Vec<Task>, StoreError> {
+  among(db, |_| true)
+}
+
+/// [`all`] of only the tasks in `ids`, in the same order: what a reading that knows which tasks it needs pays for, not
+/// the runs of every team task.
+pub fn of(db: &ProjectDb, ids: &HashSet<TaskId>) -> Result<Vec<Task>, StoreError> {
+  among(db, |id| ids.contains(&id))
+}
+
+/// [`all`] of the tasks `wanted` names. One query names the team tasks, so a local task costs no read beyond its stored
+/// row, and a team task not wanted costs none of its runs.
+fn among(db: &ProjectDb, wanted: impl Fn(TaskId) -> bool) -> Result<Vec<Task>, StoreError> {
+  let team = db.team_task_ids()?;
   let mut tasks = Vec::new();
+  let mut stored_ids = HashSet::new();
   for stored in db.tasks()? {
-    tasks.extend(task_of(db, stored.id())?);
+    stored_ids.insert(stored.id());
+    if !wanted(stored.id()) {
+      continue;
+    }
+    if team.contains(&stored.id()) {
+      tasks.extend(team_task_of(db, stored.id())?);
+    } else {
+      tasks.push(stored);
+    }
   }
-  for id in db.team_task_ids()? {
-    if !tasks.iter().any(|task| task.id() == id)
-      && let Some(task) = task_of(db, id)?
+  for id in team {
+    if wanted(id)
+      && !stored_ids.contains(&id)
+      && let Some(task) = team_task_of(db, id)?
     {
       tasks.push(task);
     }
