@@ -252,9 +252,9 @@ fn start(
   let open = services.project(&args.project)?;
   let db = ProjectDb::open(&open.repo_root)?;
   let run = find_run(&db, &args.run)?;
-  // A team task's run (by its own team record) goes into its module's branch, and only the module's delivery takes it
+  // A team task's run (told by the run itself) goes into its module's branch, and only the module's delivery takes it
   // to the base branch; a local task's run in a team project merges here.
-  if team::is_team_run(&db, run.id())? {
+  if team::is_team_run(&db, &run)? {
     return Err(team::merge_refused());
   }
   ready(&db, &run, (&open.repo_root, &services.programs))?;

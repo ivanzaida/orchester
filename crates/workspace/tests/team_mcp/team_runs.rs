@@ -24,6 +24,16 @@ pub(crate) struct Started {
 }
 
 pub(crate) fn started() -> Started {
+  started_with(true)
+}
+
+/// [`started`] for a runner that crashed after creating the run and before recording it as the team start's: the run
+/// keeps the accepted inputs and no team record.
+pub(crate) fn started_without_record() -> Started {
+  started_with(false)
+}
+
+fn started_with(record: bool) -> Started {
   let (server, _seen) = server();
   let config = server.state().config.clone();
   let checkout = Checkout::prepared(Some(&server), &[], |db| {
@@ -34,7 +44,7 @@ pub(crate) fn started() -> Started {
     checkout.refused("run_task", &json!({"project": "Kontur", "key": "KON-7"})),
     "runner_unavailable"
   );
-  let run = record_run(&mut checkout.db());
+  let run = record_run(&mut checkout.db(), record);
   assert!(
     checkout.db().tasks().expect("tasks").is_empty(),
     "the team task has no definition here"
@@ -42,8 +52,9 @@ pub(crate) fn started() -> Started {
   Started { checkout, server, run }
 }
 
-/// Records the run of the one team start the way the runner does, and starts it.
-fn record_run(db: &mut ProjectDb) -> RunId {
+/// Records the run of the one team start the way the runner does, and starts it; with `record`, records it as the
+/// start's run too.
+fn record_run(db: &mut ProjectDb, record: bool) -> RunId {
   let operation = db.open_team_starts().expect("starts")[0].operation;
   let accepted = db
     .accepted_team_inputs(operation)
@@ -73,8 +84,10 @@ fn record_run(db: &mut ProjectDb) -> RunId {
     .expect("the run");
   let started = run.start(Timestamp::now()).expect("started");
   db.append_events(&run, &started).expect("recorded");
-  db.record_team_start_run(operation, run.id(), Timestamp::now())
-    .expect("the team run");
+  if record {
+    db.record_team_start_run(operation, run.id(), Timestamp::now())
+      .expect("the team run");
+  }
   run.id()
 }
 

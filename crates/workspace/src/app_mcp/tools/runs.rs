@@ -248,9 +248,9 @@ pub async fn control_run(services: &Services, args: InRun, control: Control) -> 
     let mut team = false;
     if control == Control::Resume {
       // The window refuses work on a run the team server fenced, whether paused or interrupted; Pause and Cancel stay
-      // allowed. A run without a team record (a local task's, in a team project) is a local run.
+      // allowed. A run of a local task, in a team project too, is a local run.
       team::refuse_fenced(&db, run.id())?;
-      team = team::is_team_run(&db, run.id())?;
+      team = team::is_team_run(&db, &run)?;
     }
     Ok((project, run, team))
   })

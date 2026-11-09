@@ -62,6 +62,31 @@ pub fn is_team(db: &ProjectDb, id: TaskId) -> Result<bool, StoreError> {
   ))
 }
 
+/// Where a run's work goes: told by the run itself, not by whether its project is linked to a team server.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RunRoute {
+  /// A local task's run: merged, continued and messaged on this computer.
+  Local,
+  /// A team task's run with its team record: its work is reported under the claim it started with.
+  Team,
+  /// A team task's run with no team record, a legacy run from before team runs were recorded or one whose start
+  /// stopped before its record was written: no claim or work to report under, so it takes neither route.
+  TeamUnrecorded,
+}
+
+/// The route of `run`: a team task's run when it has a team record, its task is owned by the team server, or it was
+/// created with inputs the team server accepted; a local run otherwise.
+pub fn route_of_run(db: &ProjectDb, run: &Run) -> Result<RunRoute, StoreError> {
+  if db.team_run(run.id())?.is_some() {
+    return Ok(RunRoute::Team);
+  }
+  Ok(if is_team(db, run.task())? || db.has_team_inputs(run.id())? {
+    RunRoute::TeamUnrecorded
+  } else {
+    RunRoute::Local
+  })
+}
+
 /// The task as the newest of its `runs` that kept inputs recorded it.
 fn recorded(db: &ProjectDb, id: TaskId, runs: &[ListedRun<RunStoreError>]) -> Result<Option<Task>, StoreError> {
   for run in runs.iter().rev().filter_map(|listed| listed.as_ref().ok()) {

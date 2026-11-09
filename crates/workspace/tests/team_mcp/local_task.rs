@@ -131,6 +131,13 @@ fn team_mcp_continue_run_of_a_team_run_is_refused_by_its_team_record() {
     "run": run,
     "choice": {"kind": "raise_limits", "budget_tokens": null, "time_limit_minutes": null},
   });
+  // Automation without the person's consent gets the person-only refusal first, before any run is looked up.
+  assert_eq!(team.checkout.refused("continue_run", &raise), "automation_not_allowed");
+  team
+    .checkout
+    .workspace
+    .set_automation_answers_approvals(true)
+    .expect("the switch");
   assert_eq!(team.checkout.refused("continue_run", &raise), "decision_required");
 }
 

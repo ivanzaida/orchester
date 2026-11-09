@@ -23,7 +23,11 @@ use super::tools::ChatScope;
 use crate::{
   app_mcp::{ToolError, blocking, find_run},
   messages::Message,
-  tasks::{detail::run_store_error, hold, recorded},
+  tasks::{
+    detail::run_store_error,
+    hold,
+    recorded::{self, RunRoute, route_of_run},
+  },
 };
 
 /// Whether the turn of run `run`'s success merges the run on its own, or why it is left to the person. Blocks on
@@ -43,8 +47,9 @@ pub fn completes_in(db: &ProjectDb, run: RunId) -> Result<bool, StoreError> {
   let Some(found) = db.run(run).map_err(run_store_error)? else {
     return Ok(false);
   };
-  // A team task's run goes into its module's branch and is delivered with the module, never completed from here.
-  if db.team_run(run)?.is_some() {
+  // A team task's run (told by the run itself) goes into its module's branch and is delivered with the module, never
+  // completed from here.
+  if route_of_run(db, &found)? != RunRoute::Local {
     return Ok(false);
   }
   let Some(task) = recorded::task_of(db, found.task())? else {
@@ -70,7 +75,7 @@ fn left(db: &ProjectDb, run: RunId, merge: Merge) -> Result<Option<MergeLeft>, S
   };
   // A team task's run is delivered with its module (`merge_run` requests that), which is not the chat's to do on its
   // own: left to the person.
-  if db.team_run(run.id())?.is_some() {
+  if route_of_run(db, &run)? != RunRoute::Local {
     return Ok(Some(MergeLeft::TeamDelivery));
   }
   let Some(task) = recorded::task_of(db, run.task())? else {

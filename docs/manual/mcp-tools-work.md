@@ -582,10 +582,11 @@ as a follow-up of a run ready for review, as instructions that continue a failed
 resuming a paused or interrupted run, or running an ended task again with it. A run stopped at a limit keeps the
 message until a person raises the limit. Refused when no agent reads it and the task does not run again.
 
-On a **team project** the message to a **team task's run** (told by the run's own team record: a local task's run in a
-team-linked project behaves as on a local project) goes to the run under the claim its work started with (no claim of
-the old sharing stream is taken). A team run whose task has no definition here (no inputs kept, no cached copy) is
-refused as `team_task_unrecorded`. A message that would run the task again (`team_run_again_unsupported`) or continue an interrupted
+On a **team project** the message to a **team task's run** (told by the run itself: its team record, its task's team
+identity or its team inputs; a local task's run in a team-linked project behaves as on a local project) goes to
+the run under the claim its work started with (no claim of the old sharing stream is taken). A team run whose task has no definition here (no inputs kept, no cached copy) is
+refused as `team_task_unrecorded`; one that kept no team record, as `team_run_unrecorded`. A message that would run
+the task again (`team_run_again_unsupported`) or continue an interrupted
 run (`team_project_unsupported`) is refused before it is stored: a team task's work starts only through the team
 server (`run_task`). A run the team server fenced (taken over, membership removed, carried on elsewhere) takes no
 message in any state, a plan's changes included: it is refused as `claim_fenced` before anything
