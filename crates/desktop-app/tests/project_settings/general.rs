@@ -67,7 +67,6 @@ fn project_settings_context_shows_and_saves_repository_agent_files() {
   page.click("settings-files-loads");
   page.until("What each CLI loads", |p| p.exists("settings-files-panel"));
   assert!(page.text("settings-files-claude-values").contains("none"));
-  assert!(page.text("settings-import-reason").contains("not built"));
 }
 
 #[test]

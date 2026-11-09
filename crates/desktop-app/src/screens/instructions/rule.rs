@@ -58,7 +58,7 @@ impl Fields {
           "instruction-targets-field",
           &ctx.t("instructions.apply"),
           Some(&hint),
-          self.targets_field(ctx, data, invalid),
+          self.targets_select(ctx, data, (invalid, Dimension::Px(CONTROL_WIDTH))),
         )
         .into(),
       );
@@ -69,7 +69,7 @@ impl Fields {
         "instruction-event-field",
         &ctx.t("instructions.inject"),
         inject_hint.as_deref(),
-        self.event_field(ctx, existing),
+        self.events_choice(ctx, existing),
       )
       .into(),
     );
@@ -115,8 +115,9 @@ impl Fields {
   }
 
   /// Agent start · Agent resume · Start & resume; while the rule is being created the choice stays as it is. A saved
-  /// role rule names its agents in the last one; a new rule's reads as drawn in 02e.
-  fn event_field(&self, ctx: &Ctx, existing: bool) -> Element {
+  /// role rule names its agents in the last one; a new rule's reads as drawn in 02e. The Agents hub's panel of a local
+  /// instruction draws it too.
+  pub(in crate::screens) fn events_choice(&self, ctx: &Ctx, existing: bool) -> Element {
     let role = existing && matches!(self.scope.get(), ScopeChoice::AgentRole(_));
     let chosen = self.events.get();
     let segments = Events::ALL.into_iter().map(|event| {
@@ -209,9 +210,26 @@ impl Fields {
     }
   }
 
-  /// All agents, or the roles and profiles it names, in one 300 select (`ofaBF` in `EsJ8r`): what it names on one
-  /// line, then the chevron; its menu names more or fewer.
-  fn targets_field(&self, ctx: &Ctx, data: &ProjectInstructions, invalid: bool) -> Element {
+  /// All agents, or the roles and profiles it names, in one select `width` wide (300 in `ofaBF` in `EsJ8r`): what it
+  /// names on one line, then the chevron; its menu names more or fewer. The Agents hub's panel of a local instruction
+  /// draws it too.
+  /// Whom the instruction is given to, as words: the choices `targets_select` shows, for a place that only shows them.
+  pub(in crate::screens) fn targets_words(&self, ctx: &Ctx, data: &ProjectInstructions) -> String {
+    let chosen = self.targets.get();
+    target_choices(ctx, data)
+      .into_iter()
+      .filter(|(target, _)| chosen.contains(target))
+      .map(|(_, label)| label.to_string())
+      .collect::<Vec<_>>()
+      .join(", ")
+  }
+
+  pub(in crate::screens) fn targets_select(
+    &self,
+    ctx: &Ctx,
+    data: &ProjectInstructions,
+    (invalid, width): (bool, Dimension),
+  ) -> Element {
     let options = target_choices(ctx, data)
       .into_iter()
       .map(|(target, label)| SelectOption::new(target, label));
@@ -254,7 +272,7 @@ impl Fields {
           .child(icon(Icon::ChevronDown, IconSize::Md, PaletteColor::TextMuted))
       });
     Row::new()
-      .width(Dimension::Px(CONTROL_WIDTH))
+      .width(width)
       .flex_shrink(0.0)
       .opacity(if self.frozen.get() {
         crate::theme::DISABLED_OPACITY

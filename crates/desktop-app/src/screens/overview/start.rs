@@ -1,8 +1,8 @@
 //! A new project's getting-started list (`Start` `ru9Gh` in 03 `ArvFR`): in the digest's frame, its head *Set up Kontur
 //! to run tasks* with *N of 4 done*, then a 60 high line per step (`orchester_workspace::overview::start`): a
 //! `circle-check` in `success` once done, else a `circle-dashed`; the step in 13/500 (`text_secondary` once done) over
-//! what was found in 12 `text_muted`; and the link to where it is done. Under the list, the Import resources hint. What
-//! is done is read off the UI thread, again whenever a screen or automation saved agents, pipelines or connections.
+//! what was found in 12 `text_muted`; and the link to where it is done. What is done is read off the UI thread, again
+//! whenever a screen or automation saved agents, pipelines or connections.
 
 use std::path::PathBuf;
 
@@ -30,7 +30,7 @@ use super::{
 use crate::{
   navigation::{Navigation, link::Open},
   project::ShownProject,
-  routes::{ConnectionsView, ImportTab, ProjectPage, Route},
+  routes::{ConnectionsView, ProjectPage, Route},
   theme::{ExtraSpacing, ExtraTypography, IconSize, OverviewText},
   ui::{
     failure::LastFailure,
@@ -128,9 +128,7 @@ impl Component for GettingStarted {
     Column::new()
       .id("overview-start")
       .width(Dimension::Px(WIDTH))
-      .spacing(SpacingSize::Lg)
       .child(list)
-      .child(import_hint(ctx, props.project))
   }
 }
 
@@ -199,26 +197,4 @@ fn destination(ctx: &mut Ctx, project: ProjectId, step: StartStep) -> (std::sync
     StartStep::Task => ("overview.start.newTask", ProjectPage::NewTask),
   };
   (ctx.t(key), Navigation::of(ctx).to(Route::Project(project, page)))
-}
-
-/// *Agent files already in the repository … come in as drafts.* with *Import resources ↗*.
-fn import_hint(ctx: &mut Ctx, project: ProjectId) -> Row {
-  let open = Navigation::of(ctx).to(Route::Project(project, ProjectPage::Import(ImportTab::All)));
-  Row::new()
-    .id("overview-start-import")
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::horizontal(ExtraSpacing::Inset.role()))
-    .spacing(ExtraSpacing::Loose.role())
-    .align_items(Alignment::Center)
-    .child(icon(Icon::Download, IconSize::Base, PaletteColor::TextMuted))
-    .child(
-      muted(&ctx.t("overview.start.import"))
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0)),
-    )
-    .child(link(
-      "overview-start-import-open",
-      &ctx.t("overview.start.importLink"),
-      Press::Open(open),
-    ))
 }

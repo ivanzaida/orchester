@@ -74,13 +74,6 @@ impl AgentsNav {
   pub fn agents(&self) -> Open {
     self.navigation.to(Route::Project(self.project, ProjectPage::Agents))
   }
-  /// What opens Import resources on its Agents tab (`G69AHh`).
-  pub fn import(&self) -> Open {
-    self.navigation.to(Route::Project(
-      self.project,
-      ProjectPage::Import(crate::routes::ImportTab::Agents),
-    ))
-  }
   /// The profile a new profile's first save created, in place of the new profile.
   pub fn saved(&self, id: ResourceId) {
     let tab = match self.navigation.route_now() {

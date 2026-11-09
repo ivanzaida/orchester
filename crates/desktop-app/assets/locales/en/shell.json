@@ -126,8 +126,7 @@
       "newConnection": "Add connection",
       "editConnection": "Edit connection",
       "projectSettings": "Project settings",
-      "files": "Files",
-      "importResources": "Import resources"
+      "files": "Files"
     },
     "notFound": {
       "title": "Nothing here",

@@ -1,27 +1,10 @@
 {
   "team_hub": {
-    "title": "Agents",
     "team": "Team",
     "draftSaved": "Draft saved",
     "unreached": "Team server not reachable · retrying",
     "reading": "Reading the team's configuration…",
     "loadFailed": "The team's configuration couldn't be read",
-    "filter": {
-      "all": "All",
-      "profiles": "Profiles",
-      "mcpServers": "MCP servers",
-      "instructions": "Instructions",
-      "skills": "Skills",
-      "tools": "Tools"
-    },
-    "hint": {
-      "all": "All of it is the team's; each computer fills in only what is local",
-      "profiles": "Profiles are the team's; each computer fills in only what is local",
-      "mcpServers": "MCP servers are the team's; each computer fills in only what is local",
-      "instructions": "Instructions are the team's; each computer fills in only what is local",
-      "skills": "Skills are the team's; each computer fills in only what is local",
-      "tools": "Tools are the team's; each computer fills in only what is local"
-    },
     "group": {
       "needs": "Needs you here",
       "ready": "Ready here",
@@ -99,20 +82,11 @@
     "panel": {
       "edit": "Edit",
       "usedBy": "used by {{names}}",
-      "usedByNone": "No profile uses it yet",
-      "publishNext": "Publishing makes {{version}} for the whole team"
+      "usedByNone": "No profile uses it yet"
     },
     "member": {
       "role": "· member",
       "lock": "Only team admins change this: {{admins}}.",
-      "hint": {
-        "all": "All of it is the team's; you fill in only what is local",
-        "profiles": "Profiles are the team's; you fill in only what is local",
-        "mcpServers": "MCP servers are the team's; you fill in only what is local",
-        "instructions": "Instructions are the team's; you fill in only what is local",
-        "skills": "Skills are the team's; you fill in only what is local",
-        "tools": "Tools are the team's; you fill in only what is local"
-      },
       "empty": {
         "admins": "Admins: {{admins}}",
         "all": {
@@ -140,10 +114,6 @@
           "detail": "An admin of the team adds tools; once published they appear here for everyone."
         }
       }
-    },
-    "empty": {
-      "title": "Nothing here yet",
-      "detail": "Nothing of this kind is published for the team yet."
     },
     "cli": {
       "claude": "Claude Code",
@@ -238,14 +208,6 @@
       "placeholder": "Paste the value",
       "cancel": "Cancel",
       "save": "Save value"
-    },
-    "rereading": "Reading…",
-    "new": {
-      "all": "New",
-      "profiles": "New agent",
-      "instructions": "New instruction",
-      "skills": "New skill",
-      "tools": "New tool"
     },
     "mcp": {
       "headLine": "{{version}} · published by {{by}} · {{date}}",

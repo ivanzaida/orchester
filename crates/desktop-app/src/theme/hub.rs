@@ -12,12 +12,6 @@ use lurq::{
 
 use super::typography::{mono, style};
 
-/// The list and the panel of the team's Agents hub while its read is under way again: what shows is the last answer.
-pub const HUB_READING_OPACITY: f32 = 0.6;
-
-/// The width of the menu All's New opens (`Menu` in `t4mtQL`).
-pub const HUB_NEW_MENU_WIDTH: f32 = 220.0;
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum HubText {
   /// 17/600 `text_primary`: an opened item's title in its page head (`WeZzq` in `O355d`).

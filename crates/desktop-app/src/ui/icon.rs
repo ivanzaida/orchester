@@ -374,7 +374,6 @@ pub const fn screen_icon(screen: Screen) -> Icon {
     Screen::EditConnection => Icon::Pencil,
     Screen::ProjectSettings => Icon::SlidersHorizontal,
     Screen::Files => Icon::FolderTree,
-    Screen::ImportResources => Icon::Download,
   }
 }
 

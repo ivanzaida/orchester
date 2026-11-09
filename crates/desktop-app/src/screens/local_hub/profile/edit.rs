@@ -1,7 +1,7 @@
-//! What the select rows and the draft bar of a local profile's panel do: each change of a field saves the profile's
-//! draft and *Publish vN* publishes it ([`orchester_workspace::agents::local_edit`], the editor's own rules). A change
-//! that widens what its agents may do asks first, in the panel, and only a person's press answers it; a refusal says
-//! why in place. Each write ends with the screens that read the profiles reading them again.
+//! What the bar of a local profile's panel does: *Save* publishes what the panel holds (its choices, made by
+//! [`super::choices`]) as the next version at once ([`local_edit::save`]). A save that widens what its agents may do
+//! asks first, in the panel, and only a person's press answers it; a refusal says why in place. A save ends with the
+//! screens that read the profiles reading them again.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -10,17 +10,18 @@ use lurq::{
     component::DevtoolsInspectable,
     ctx::{Ctx, FutureAction},
   },
-  core::Signal,
+  core::{Ref, Signal},
   node::Element,
 };
 use orchester_core::{
   id::{ProjectId, ResourceId},
-  time::Timestamp,
+  resource::AgentProfile,
 };
 use orchester_workspace::{
   agents::{
     editor::Outcome,
-    local_edit::{self, Edit},
+    local_edit::{self, Held},
+    local_hub::LocalProfile,
     widening::answers_in_persons_place,
   },
   background,
@@ -35,23 +36,26 @@ use crate::{
   ui::{icon::Icon, message::message_text},
 };
 
-/// What a press asks the workspace to do.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) enum Do {
-  /// Change one field of the draft.
-  Edit(Edit),
-  /// Publish the draft the panel showed, saved at `shown`: another draft is refused.
-  Publish { shown: Timestamp },
+/// What the panel holds of the profile: `None` while it holds what is stored.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(super) struct Holding(pub Option<Held>);
+impl DevtoolsInspectable for Holding {}
+
+impl Holding {
+  /// The body the next choice is made on, and Save publishes: `None` for what is stored.
+  pub(super) fn body(&self) -> Option<AgentProfile> {
+    self.0.as_ref().map(|held| held.body.clone())
+  }
 }
 
-/// A write and what the person already allowed it to widen.
+/// A save and what the person already allowed it to widen.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Ask {
-  pub what: Do,
+  pub held: Option<AgentProfile>,
   pub allowed: Vec<Message>,
 }
 
-/// A write that ended, and what the workspace said of it.
+/// A save that ended, and what the workspace said of it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Done {
   pub ask: Ask,
@@ -59,10 +63,10 @@ pub(super) struct Done {
 }
 impl DevtoolsInspectable for Done {}
 
-/// A write that waits for the person: what it widens beyond what they allowed.
+/// A save that waits for the person: what it widens beyond what they allowed.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct Asked {
-  /// The write with everything it widens allowed, which the confirm runs.
+  /// The save with everything it widens allowed, which the confirm runs.
   pub ask: Ask,
   pub reasons: Vec<Message>,
 }
@@ -71,38 +75,54 @@ impl DevtoolsInspectable for Asked {}
 
 pub(super) type Pending = Signal<Option<Asked>>;
 pub(super) type Save = FutureAction<Ask, Done, Message>;
-
-/// Saves a field of the draft of the profile `id` in the project at `root`, or publishes the draft.
+/// Publishes what the panel holds of the profile `id` in the project at `root`.
 pub(super) fn save(ctx: &mut Ctx, root: PathBuf, id: ResourceId) -> Save {
   ctx.future_action(move |ask: Ask| {
     let (root, asked) = (root.clone(), ask.clone());
     async move {
-      let outcome = background::run(move || match &asked.what {
-        Do::Edit(edit) => local_edit::edit(&root, id, edit, &asked.allowed),
-        Do::Publish { shown } => local_edit::publish(&root, id, *shown, &asked.allowed),
-      })
-      .await??;
+      let outcome = background::run(move || local_edit::save(&root, id, asked.held.as_ref(), &asked.allowed)).await??;
       Ok(Done { ask, outcome })
     }
   })
 }
 
-/// What follows a write that ended: a saved one is recorded for the screens that read the profiles, a widening is
-/// asked, and `settled` counts it so that every select shows what is stored again.
-pub(super) fn follow(ctx: &mut Ctx, save: &Save, pending: &Pending, settled: &Signal<u64>, project: ProjectId) {
+/// What a save, and the panel's state, that `follow` looks after.
+pub(super) struct Followed {
+  pub pending: Pending,
+  pub held: Signal<Holding>,
+  /// The profile as the hub lists it now, which the panel keeps current.
+  pub now: Ref<Option<LocalProfile>>,
+  /// The profile as the hub listed it when a save ended: the panel shows what it held until the hub lists another.
+  pub when: Ref<Option<LocalProfile>>,
+}
+
+/// What follows a save that ended: a published one is recorded for the screens that read the profiles, and the panel
+/// holds it as nothing changed; a widening is asked.
+pub(super) fn follow(ctx: &mut Ctx, save: &Save, followed: &Followed, project: ProjectId) {
   let changes = Services::of(ctx).changes;
-  let (pending, settled) = (pending.clone(), settled.clone());
+  let Followed {
+    pending,
+    held,
+    now,
+    when,
+  } = followed;
+  let (pending, held, now, when) = (pending.clone(), held.clone(), now.clone(), when.clone());
   ctx.watch(&save.state(), move |state| {
     if state.is_pending() {
       return;
     }
-    settled.update(|count| *count += 1);
     let Some(done) = state.data.clone().filter(|_| state.is_fulfilled()) else {
       return;
     };
     match done.outcome {
       Outcome::Saved(_) => {
         pending.set(None);
+        when.set(now.get());
+        held.update(|holding| {
+          if let Some(held) = holding.0.as_mut() {
+            held.changed = false;
+          }
+        });
         for change in [Outside::Profiles, Outside::Pipelines] {
           changes.record(project, change);
         }
@@ -125,23 +145,15 @@ pub(super) fn follow(ctx: &mut Ctx, save: &Save, pending: &Pending, settled: &Si
   });
 }
 
-/// The question of a write that widens, in the panel: what it widens, *Allow* and *Keep editing*.
-pub(super) fn question(
-  ctx: &mut Ctx,
-  asked: &Asked,
-  (save, pending): (&Save, &Pending),
-  settled: &Signal<u64>,
-) -> Element {
+/// The question of a save that widens, in the panel: what it widens, *Allow* and *Keep editing*.
+pub(super) fn question(ctx: &mut Ctx, asked: &Asked, (save, pending): (&Save, &Pending)) -> Element {
   let automation = if answers_in_persons_place(&asked.reasons) {
     Guarded::ApprovalWidening
   } else {
     Guarded::PermissionWidening
   };
   let reasons: Vec<Arc<str>> = asked.reasons.iter().map(|reason| message_text(ctx, reason)).collect();
-  let (keep, confirm) = (
-    (pending.clone(), settled.clone()),
-    (save.clone(), pending.clone(), asked.ask.clone()),
-  );
+  let (keep, confirm) = (pending.clone(), (save.clone(), pending.clone(), asked.ask.clone()));
   let props = WidenProps {
     id: "local-hub-profile-confirm".into(),
     look: WidenLook::Band,
@@ -151,10 +163,7 @@ pub(super) fn question(
     reasons: reasons.into(),
     confirm: ctx.t("local_hub.edit.allow"),
     keep: ctx.t("local_hub.edit.keep"),
-    on_keep: Arc::new(move || {
-      keep.0.set(None);
-      keep.1.update(|count| *count += 1);
-    }),
+    on_keep: Arc::new(move || keep.set(None)),
     on_confirm: Arc::new(move || {
       confirm.1.set(None);
       confirm.0.run(confirm.2.clone());

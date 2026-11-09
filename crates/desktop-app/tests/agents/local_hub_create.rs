@@ -192,19 +192,24 @@ fn local_hub_create_new_opens_the_form_of_each_kind_with_only_create_and_cancel(
   assert_eq!(agents.text("team-hub-actions-hint"), "Create adds it on this computer");
 }
 
+/// All and Archived hold no one kind: their *New* makes an agent profile, its form at once, with no menu between.
 #[test]
-fn local_hub_create_under_all_a_menu_offers_every_kind() {
+fn local_hub_create_under_all_and_archived_new_opens_the_profile_form() {
   let mut agents = Agents::new(true);
-  open(&mut agents, HubView::default());
-  agents.click("local-hub-new");
-  agents.until("the menu", |s| s.exists("local-hub-new-menu-panel"));
-  for (filter, ..) in KINDS {
-    assert!(agents.exists(&format!("local-hub-new-{}", filter.name())), "{filter:?}");
+  for filter in [HubFilter::All, HubFilter::Archived] {
+    open(&mut agents, HubView::new(filter, None));
+    assert_eq!(agents.text("local-hub-new"), "New agent", "{}", filter.name());
+    agents.click("local-hub-new");
+    agents.until("the profile's form", |s| {
+      s.window.navigation().route_now() == form_route(HubFilter::Profiles) && s.exists("local-hub-new-create")
+    });
+    assert_eq!(
+      agents.text("team-hub-panel-title"),
+      "New agent profile",
+      "{}",
+      filter.name()
+    );
   }
-  agents.click("local-hub-new-instructions");
-  agents.until("the form", |s| {
-    s.window.navigation().route_now() == form_route(HubFilter::Instructions)
-  });
 }
 
 #[test]

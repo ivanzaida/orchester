@@ -42,12 +42,6 @@ impl PersonOnly {
     self.allows_as(id, Guarded::Sharing)
   }
 
-  /// [`Self::allows`] for an action that widens what agents may do, which automation takes only while the person lets
-  /// it change agent permissions.
-  pub fn allows_widening(&self, id: &str) -> bool {
-    self.allows_as(id, Guarded::PermissionWidening)
-  }
-
   /// [`Self::allows`] for *It matches* under a check code, which only a person compares with the server's console.
   pub fn confirms_code(&self, id: &str) -> bool {
     self.allows_as(id, Guarded::CheckCode)

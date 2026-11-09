@@ -224,7 +224,7 @@ fn imported_sections(ctx: &mut Ctx, editing: &Editing) -> Vec<Element> {
   ) else {
     return Vec::new();
   };
-  crate::screens::import::imported::sections(ctx, (project.project.id(), project.project.name().as_str()), &imported)
+  super::imported::sections(ctx, (project.project.id(), project.project.name().as_str()), &imported)
 }
 
 pub fn published(ctx: &Ctx, editing: &Editing) -> std::sync::Arc<str> {

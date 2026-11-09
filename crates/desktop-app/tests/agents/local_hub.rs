@@ -83,53 +83,70 @@ fn local_hub_counts_each_kind_and_lists_a_server_without_a_version() {
   assert!(line.contains("program path"), "{line}");
 }
 
+/// The head says the project is local and holds one *New <kind>*: the open tab's kind, a profile under All and
+/// Archived, as wide on every tab; a press opens that kind's form in the hub.
 #[test]
-fn local_hub_head_offers_share_with_a_team_and_new_of_the_filter() {
+fn local_hub_new_says_the_open_tabs_kind_and_opens_its_form() {
   let mut agents = Agents::new(true);
-  open(&mut agents, HubView::new(HubFilter::McpServers, None));
-  assert_eq!(agents.text("local-hub-share"), "Share with a team…");
-  assert_eq!(agents.text("local-hub-new"), "New MCP server");
-  open(&mut agents, HubView::new(HubFilter::Archived, None));
-  assert_eq!(
-    agents.text("local-hub-new"),
-    "New",
-    "no one kind is made under Archived: New offers each"
-  );
-  agents.click("local-hub-new");
-  agents.click("local-hub-new-instructions");
-  assert_eq!(
-    agents.window.navigation().route_now(),
-    Route::Project(project_id(), ProjectPage::hub(HubView::adding(HubFilter::Instructions))),
-    "the form of the hub"
+  let mut widths = Vec::new();
+  for (filter, words, made) in [
+    (HubFilter::All, "New agent", HubFilter::Profiles),
+    (HubFilter::Profiles, "New agent", HubFilter::Profiles),
+    (HubFilter::McpServers, "New MCP server", HubFilter::McpServers),
+    (HubFilter::Instructions, "New instruction", HubFilter::Instructions),
+    (HubFilter::Skills, "New skill", HubFilter::Skills),
+    (HubFilter::Tools, "New tool", HubFilter::Tools),
+    (HubFilter::Archived, "New agent", HubFilter::Profiles),
+  ] {
+    open(&mut agents, HubView::new(filter, None));
+    assert_eq!(agents.text("local-hub-local-label"), "Local");
+    assert_eq!(agents.text("local-hub-new"), words, "{}", filter.name());
+    widths.push(
+      agents
+        .window
+        .tree
+        .get_element_by_id_mut("local-hub-new")
+        .and_then(|button| button.bounds())
+        .expect("New is laid out")
+        .width,
+    );
+    agents.click("local-hub-new");
+    assert_eq!(
+      agents.window.navigation().route_now(),
+      Route::Project(project_id(), ProjectPage::hub(HubView::adding(made))),
+      "New under {} opens the form of the hub",
+      filter.name()
+    );
+  }
+  assert!(
+    widths.iter().all(|width| (width - widths[0]).abs() < 0.5),
+    "New keeps one width: {widths:?}"
   );
 }
 
+/// A tab that holds nothing is one empty state across the body, with *New <kind>* that opens its form; Archived has
+/// no action.
 #[test]
-fn local_hub_head_reaches_memory_and_the_import_of_the_kind_the_filter_holds() {
+fn local_hub_an_empty_tab_says_what_the_kind_is_and_offers_its_form() {
   let mut agents = Agents::new(true);
-  open(&mut agents, HubView::new(HubFilter::Profiles, None));
-  assert_eq!(agents.text("local-hub-memory"), "Memory");
-  assert_eq!(agents.text("local-hub-import"), "Import");
-  open(&mut agents, HubView::new(HubFilter::McpServers, None));
-  assert!(agents.exists("local-hub-memory"));
+  open(&mut agents, HubView::new(HubFilter::Skills, None));
+  assert!(agents.exists("local-hub-empty-body") && !agents.exists("local-hub-master-detail"));
+  assert_eq!(agents.text("local-hub-empty-title"), "No skills yet");
+  assert_eq!(
+    agents.text("local-hub-empty-detail"),
+    "Instructions and files an agent loads when its task calls for them."
+  );
+  assert_eq!(agents.text("local-hub-empty-new"), "New skill");
+  agents.click("local-hub-empty-new");
+  assert_eq!(
+    agents.window.navigation().route_now(),
+    Route::Project(project_id(), ProjectPage::hub(HubView::adding(HubFilter::Skills)))
+  );
+  open(&mut agents, HubView::new(HubFilter::Archived, None));
+  assert_eq!(agents.text("local-hub-empty-title"), "Nothing archived");
   assert!(
-    !agents.exists("local-hub-import"),
-    "an MCP server is not imported from the repository"
-  );
-  open(&mut agents, HubView::new(HubFilter::Profiles, None));
-  agents.click("local-hub-import");
-  assert_eq!(
-    agents.window.navigation().route_now(),
-    Route::Project(
-      project_id(),
-      ProjectPage::Import(orchester_app::routes::ImportTab::Agents)
-    )
-  );
-  open(&mut agents, HubView::new(HubFilter::Profiles, None));
-  agents.click("local-hub-memory");
-  assert_eq!(
-    agents.window.navigation().route_now(),
-    Route::Project(project_id(), ProjectPage::Memory(None))
+    !agents.exists("local-hub-empty-new"),
+    "archiving starts from a resource"
   );
 }
 
@@ -311,15 +328,10 @@ fn local_hub_a_profile_whose_connection_is_gone_asks_which_of_its_kind_runs_it()
   for part in [
     "local-hub-profile-pick",
     "local-hub-profile-model-pick",
-    "local-hub-profile-more-settings",
     "local-hub-profile-versions",
   ] {
     assert!(agents.exists(part), "{part} is the panel's own");
   }
-  assert!(
-    !agents.exists("team-hub-edit"),
-    "the profile has no Edit button: its fields are in place"
-  );
   for page in ["agent-role", "agent-crumb", "agents-hub-title"] {
     assert!(!agents.exists(page), "{page} belongs to the editor's page");
   }
@@ -424,9 +436,7 @@ fn local_hub_archiving_an_instruction_from_its_panel_stays_in_the_hub() {
     id
   };
   open(&mut agents, HubView::new(HubFilter::Instructions, Some(id)));
-  agents.until("its panel", |s| {
-    s.exists("local-hub-more") && s.exists("local-hub-edit")
-  });
+  agents.until("its panel", |s| s.exists("local-hub-more"));
   agents.click("local-hub-more");
   agents.click("local-hub-archive");
   agents.press_until("team-hub-archive-confirm", "archived", |s| {

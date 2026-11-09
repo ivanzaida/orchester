@@ -10,7 +10,7 @@
 //! here, and Run again is refused by the missing runner; `mcp_domain`'s `board` queues a complete draft and asks with
 //! the real runner. `cargo test -p orchester-app --test tasks_list tasks_board_`.
 
-use orchester_app::routes::{ImportTab, ProjectPage, Route, TaskList, TaskListTab};
+use orchester_app::routes::{ProjectPage, Route, TaskList, TaskListTab};
 use orchester_core::{
   store::{RunStore, TaskStore},
   task::{Task, TaskStatus, organization::WorkflowStatus},
@@ -88,7 +88,7 @@ fn tasks_board_the_layout_switch_shows_the_columns_and_is_kept_for_the_project()
   seeded
     .window
     .navigation()
-    .go(Route::Project(seeded.project, ProjectPage::Import(ImportTab::All)));
+    .go(Route::Project(seeded.project, ProjectPage::Pipelines));
   seeded.window.pass();
   seeded.go(TaskList::new(TaskListTab::All));
   seeded.until("the board again", |seeded| seeded.laid_out("tasks-board-columns"));

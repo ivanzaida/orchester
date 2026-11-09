@@ -309,6 +309,29 @@ pub fn save_checked_in(
   };
   stored(&db, id)
 }
+/// Publishes `name` and `body` as the next version of the skill `before` at once, as the Agents hub's Save does: saved
+/// as its draft over exactly `before` (the name at once, as every save does), then published. Refused before anything
+/// is stored when the body could not be published (a blank description or body). All or nothing for the body: the draft
+/// the save made is thrown away when the publication is refused; a draft `before` already had stays, holding `body`.
+pub fn save_and_publish_in(
+  root: &Path,
+  before: &SkillEntry,
+  name: &str,
+  body: &Skill,
+) -> Result<SkillEntry, WriteError> {
+  if let Some(refusal) = unpublishable(body) {
+    return Err(refusal.into());
+  }
+  let drafted = save_checked_in(root, (Some(before), name, body), Timestamp::now())?;
+  let published = publish_checked_in(root, &drafted);
+  if published.is_err() && !before.state.has_draft() {
+    // The refusal is what the person is told; a draft that could not be thrown away is listed, and its panel shows it.
+    if let Err(error) = ProjectDb::open(root).and_then(|mut db| db.discard_draft_matching(drafted.id, &drafted.body)) {
+      tracing::error!(%error, "cannot discard the draft of a skill whose publication was refused");
+    }
+  }
+  published
+}
 /// Publishes only the reviewed saved draft and published version, checked atomically against storage.
 pub fn publish_in(root: &Path, entry: &SkillEntry) -> Result<SkillEntry, Message> {
   publish_checked_in(root, entry).map_err(|error| error.message())

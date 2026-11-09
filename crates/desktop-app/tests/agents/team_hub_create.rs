@@ -113,20 +113,18 @@ fn team_hub_create_new_opens_the_form_of_each_kind_in_the_panel_with_only_create
   }
 }
 
+/// All holds no one kind: its *New agent* opens the profile's form in the panel at once, with no menu between.
 #[test]
-fn team_hub_create_under_all_a_menu_offers_every_kind_with_a_form() {
+fn team_hub_create_under_all_new_opens_the_profile_form() {
   let mut agents = Agents::new(true);
   team(&agents);
   open(&mut agents, HubView::default());
+  assert_eq!(agents.text("team-hub-new"), "New agent");
   agents.click("team-hub-new");
-  agents.until("the menu", |s| s.exists("team-hub-new-menu"));
-  for (filter, ..) in KINDS {
-    assert!(agents.exists(&format!("team-hub-new-{}", filter.name())), "{filter:?}");
-  }
-  agents.click("team-hub-new-mcp_servers");
-  agents.until("the MCP server's form", |s| {
-    s.window.navigation().route_now() == form_route(HubFilter::McpServers)
+  agents.until("the profile's form", |s| {
+    s.window.navigation().route_now() == form_route(HubFilter::Profiles) && s.exists("team-hub-new-create")
   });
+  assert_eq!(agents.text("team-hub-panel-title"), "New agent profile");
 }
 
 #[test]
@@ -251,8 +249,7 @@ fn team_hub_create_a_member_has_no_new_and_no_form() {
   let mut agents = Agents::new(true);
   team_as(&agents, Some(MemberRole::Member));
   // A kind the team holds nothing of shows its empty state, which has the head and the filter all the same.
-  let shown =
-    |s: &mut Agents| s.exists("team-hub-filter") && !s.exists("team-hub-loading") && !s.exists("team-hub-reading");
+  let shown = |s: &mut Agents| s.exists("team-hub-filter") && !s.exists("team-hub-loading");
   for (filter, ..) in KINDS {
     agents.window.navigation().go(hub_route(filter));
     agents.until("the hub", shown);

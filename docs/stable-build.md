@@ -30,7 +30,10 @@ powershell -File tools/install.ps1
 ```
 
 - Builds `orchester-app` and `orchester-runner` in one release build into
-  `%LOCALAPPDATA%\Orchester\build` (not the repository's `target/`) and copies `orchester.exe`
+  `orchester-build` beside the repository (e.g. `H:\projects\orchester-build`: on the repository's drive, not the
+  system drive, and not the repository's `target/`), with the `local-release` profile
+  (`Cargo.toml`: the release profile made incremental, in 256 codegen units, so a small change rebuilds in
+  minutes; CI's releases keep `release`), and copies `orchester.exe`
   and `orchester-runner.exe` into `%LOCALAPPDATA%\Orchester\app`. Fonts, icons and locales are
   compiled into the executables; at runtime they need only the Visual C++ runtime, which the MSVC
   toolchain has already installed (the programs CI releases have it linked in).

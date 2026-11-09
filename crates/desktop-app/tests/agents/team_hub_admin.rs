@@ -1,8 +1,8 @@
 //! What the Agents hub of a team project gives the person who may change the team's resources and the one who may not:
-//! New in the head and Edit in the panel, and how its route stays on the resource shown (`Agents · v2` `acFkz`, A1–A6,
-//! ORC-831). `cargo test -p orchester-app --test agents team_hub`.
+//! *New <kind>* in the head and the … menu in the panel, and how its route stays on the resource shown (`Agents · v2`
+//! `acFkz`, A1–A6, ORC-831). `cargo test -p orchester-app --test agents team_hub`.
 
-use orchester_app::routes::{AgentTab, HubFilter, HubView, ProjectPage, Route, ToolTab};
+use orchester_app::routes::{HubFilter, HubView, ProjectPage, Route};
 use orchester_core::{id::ResourceId, sharing::MemberRole};
 
 use super::{
@@ -36,18 +36,21 @@ fn team_hub_gives_a_member_neither_new_nor_edit() {
   assert!(!agents.exists("team-hub-new"));
 }
 
+/// An admin's panels of a profile and a tool have the … menu and no Edit that leaves for the editor's page; a tool's
+/// panel pins nothing.
 #[test]
-fn team_hub_edit_opens_the_editor_of_a_profile_and_of_a_tool() {
+fn team_hub_an_admins_profile_and_tool_panels_link_to_no_editor_page() {
   let mut agents = Agents::new(true);
   let (profile, tool) = team_with_profile_and_tool(&agents, Some(MemberRole::Owner));
   open(&mut agents, HubView::new(HubFilter::Profiles, Some(profile)));
-  agents.click("team-hub-edit");
-  let editor = at(ProjectPage::Agent(profile, AgentTab::default()));
-  agents.until("the profile's editor", |s| s.window.navigation().route_now() == editor);
+  assert_eq!(agents.text("team-hub-panel-title"), "Builder");
+  assert!(agents.exists("team-hub-more") && agents.exists("team-hub-new"));
+  assert!(!agents.exists("team-hub-edit") && !agents.exists("team-hub-action-edit"));
   open(&mut agents, HubView::new(HubFilter::Tools, Some(tool)));
-  agents.click("team-hub-edit");
-  let editor = at(ProjectPage::Tool(tool, ToolTab::default()));
-  agents.until("the tool's editor", |s| s.window.navigation().route_now() == editor);
+  assert_eq!(agents.text("team-hub-panel-title"), "Checks");
+  assert!(agents.exists("team-hub-more"));
+  assert!(!agents.exists("team-hub-edit") && !agents.exists("team-hub-action-edit"));
+  assert!(!agents.exists("team-hub-actions"));
 }
 
 #[test]
@@ -73,21 +76,29 @@ fn team_hub_new_opens_the_form_of_the_kind_the_filter_names_in_the_panel() {
   }
 }
 
+/// All holds no one kind: its *New* makes an agent profile, and opens that form at once, with no menu between. The
+/// button keeps one width on every tab, its longest words'.
 #[test]
-fn team_hub_has_a_menu_of_the_kinds_under_all() {
+fn team_hub_new_under_all_makes_an_agent_profile_and_keeps_its_width() {
   let mut agents = Agents::new(true);
   team(&agents);
+  let width = |agents: &mut Agents| {
+    agents
+      .window
+      .tree
+      .get_element_by_id_mut("team-hub-new")
+      .and_then(|button| button.bounds())
+      .expect("New is laid out")
+      .width
+  };
+  open(&mut agents, HubView::new(HubFilter::McpServers, None));
+  let mcp = width(&mut agents);
   open(&mut agents, HubView::default());
-  assert_eq!(agents.text("team-hub-new"), "New");
-  assert!(!agents.exists("team-hub-new-menu"));
+  assert_eq!(agents.text("team-hub-new"), "New agent");
+  assert!((width(&mut agents) - mcp).abs() < 0.5, "New keeps one width");
   agents.click("team-hub-new");
-  agents.until("the menu", |s| s.exists("team-hub-new-menu"));
-  for kind in ["profiles", "mcp_servers", "instructions", "skills", "tools"] {
-    assert!(agents.exists(&format!("team-hub-new-{kind}")), "{kind}");
-  }
-  agents.click("team-hub-new-skills");
-  let form = at(ProjectPage::hub(HubView::adding(HubFilter::Skills)));
-  agents.until("New skill", |s| s.window.navigation().route_now() == form);
+  let form = at(ProjectPage::hub(HubView::adding(HubFilter::Profiles)));
+  agents.until("New agent profile", |s| s.window.navigation().route_now() == form);
 }
 
 #[test]

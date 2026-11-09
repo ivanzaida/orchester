@@ -2,7 +2,6 @@
 mod automation;
 mod clipboard;
 mod design_states;
-mod discovery;
 mod events;
 mod harness;
 mod hub;
@@ -13,7 +12,6 @@ mod preview;
 mod publication_layout;
 mod reads;
 mod recovery;
-mod repository;
 mod saving;
 mod states;
 #[path = "../support/mod.rs"]

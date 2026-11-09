@@ -134,26 +134,6 @@ fn instructions_stale_draft_is_visible_and_cannot_publish() {
     1
   );
 }
-#[test]
-fn instructions_import_reviews_repository_and_only_creates_drafts() {
-  let mut screen = Instructions::new();
-  std::fs::write(screen.root.join("AGENTS.md"), "Keep changes small.").expect("valid instruction fixture");
-  std::fs::write(screen.root.join("CLAUDE.md"), "@AGENTS.md").expect("valid instruction fixture");
-  screen.go();
-  screen.click("instructions-import");
-  screen.until("scan", |s| s.exists("instruction-import-create"));
-  assert!(screen.text("instruction-import-review").contains("nothing to import"));
-  screen.click("instruction-import-create");
-  screen.until("imported", |s| s.exists("instruction-import-result"));
-  let listed = screen.listed();
-  assert_eq!(listed.entries.len(), 1);
-  assert!(listed.entries[0].state.has_draft());
-  assert!(listed.entries[0].state.published().is_none());
-  assert_eq!(
-    std::fs::read_to_string(screen.root.join("AGENTS.md")).expect("valid instruction fixture"),
-    "Keep changes small."
-  );
-}
 
 #[test]
 fn instructions_all_scope_tabs_show_their_editor_and_save_timing() {

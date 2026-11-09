@@ -53,7 +53,6 @@
     "mcpLimit": "The maximum number of MCP servers is selected.",
     "description": "Each profile is a role for pipeline steps: what the agent is for, the connection and model it runs on, and what it may do.",
     "new": "New agent",
-    "import": "Import agents",
     "reading": "Reading agent profiles…",
     "loadFailed": "Agent profiles couldn’t be read",
     "retry": "Try again",

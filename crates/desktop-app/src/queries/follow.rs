@@ -12,6 +12,7 @@ use lurq::{
 };
 use orchester_workspace::{
   app_updates::{AppUpdates, UpdateState},
+  sharing::team::TeamConfiguration,
   tasks::outside::{AppOutsideCounts, OutsideChanges, OutsideCounts},
   workspace::{OpenProject, Workspace},
 };
@@ -24,6 +25,7 @@ use super::{
 };
 use crate::{
   project::Projects,
+  services::Services,
   screens::settings::{Consent, orchester},
 };
 
@@ -187,16 +189,22 @@ pub struct ProjectProps(pub OpenProject);
 
 impl DevtoolsInspectable for ProjectProps {}
 
-/// A project's change counts and its runs' state count, as its reads last saw them.
-#[derive(Clone, Copy, PartialEq, Eq)]
+/// A project's change counts, its runs' state count and its team's configuration, as its reads last saw them.
+#[derive(Clone, PartialEq)]
 struct ProjectSeen {
   outside: OutsideCounts,
   runs: u64,
+  /// The team's configuration while the project is shared and it was read; `None` otherwise.
+  team: Option<TeamConfiguration>,
+  /// How often a shared project's cache changed: every event the team server's stream applied, an archive or a
+  /// restore among them, which leave the configuration as it was.
+  shared: u64,
 }
 
 /// Reads an open project's settings from the moment it is open and keeps them current: automation's recorded changes
-/// and the screens' own, and its runs starting and ending, invalidate what they touched. Mounted by the project's
-/// loader beside its feed.
+/// and the screens' own, its runs starting and ending, and its team's configuration read again (the team server's
+/// events, `super::changes::TEAM`) invalidate what they touched, the Agents hub's reads among them. Mounted by the
+/// project's loader beside its feed.
 pub struct ProjectReads {
   seen: Mutex<Option<ProjectSeen>>,
 }
@@ -212,11 +220,14 @@ impl Component for ProjectReads {
     let ProjectProps(open) = ctx.props::<ProjectProps>().clone();
     let session = Session::of(ctx);
     let feed = Projects::of(ctx).feed(open.project.id());
+    let servers = Services::of(ctx).servers;
     let now = ProjectSeen {
       outside: feed.outside.get(),
       runs: feed.states.get(),
+      team: feed.team.get().configuration(),
+      shared: crate::project::shared_changes(ctx, &servers),
     };
-    let before = self.seen.lock().replace(now);
+    let before = self.seen.lock().replace(now.clone());
     if let Some(before) = before {
       let client = ctx.query_client();
       let root = &open.repo_root;
@@ -232,6 +243,9 @@ impl Component for ProjectReads {
       }
       if now.runs != before.runs {
         invalidate(changes::RUNS);
+      }
+      if now.team != before.team || now.shared != before.shared {
+        invalidate(changes::TEAM);
       }
     }
     prefetch_project(ctx, &session, &open);
