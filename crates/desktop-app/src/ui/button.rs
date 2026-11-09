@@ -6,9 +6,9 @@
 //! not allowed shows a lock in place of its icon as well (`Create multiple` `Q9aeZ`), and says why
 //! beside it through [`super::unavailable::with_reason`].
 //!
-//! An answer of a decision card has its key in a cap after its label, 8 from it (`Button · Yes, all four` `n2JId`);
-//! one with a consequence is as wide as its parent, its label and the consequence under it at its start, 8 over and
-//! under and 12 at its sides, the cap 12 after them (`Option · Skip the exports` `wWuSM`).
+//! An answer of a decision card with a consequence is as wide as its parent, its label and the consequence under it at
+//! its start, 8 over and under and 12 at its sides (`Option · Skip the exports` `wWuSM`). No button draws the keys that
+//! press it in a cap; the caller handles them.
 
 mod kind;
 
@@ -25,7 +25,6 @@ use lurq::{
 
 use super::{
   icon::{Icon, icon},
-  kbd::key_cap,
   pressable::{Focus, Press, inert},
 };
 use crate::{
@@ -83,8 +82,6 @@ pub struct ActionButton {
   applied: bool,
   /// What it holds is refused: its outline in `danger`.
   invalid: bool,
-  /// The key that presses it, in a cap after its label.
-  key: Option<Arc<str>>,
   /// As wide as its parent, its words at its start, 8 over and under them.
   stacked: bool,
   /// What a press leads to, under its label, in a stacked button.
@@ -118,7 +115,6 @@ impl ActionButton {
       held: false,
       applied: false,
       invalid: false,
-      key: None,
       stacked: false,
       consequence: None,
       element: None,
@@ -141,12 +137,6 @@ impl ActionButton {
   /// Updates supporting copy when the keyboard focuses this answer (06b I8MyfC).
   pub fn on_focus(mut self, handler: impl Fn() + Send + Sync + 'static) -> Self {
     self.on_focus = Some(Arc::new(handler));
-    self
-  }
-
-  /// `keys` press it: their cap follows the label (`Kbd` in `n2JId`); the caller handles the keys.
-  pub fn key(mut self, keys: impl Into<Arc<str>>) -> Self {
-    self.key = Some(keys.into());
     self
   }
 
@@ -430,14 +420,13 @@ impl ActionButton {
     frame
   }
 
-  /// The label in `color`; stacked, the label and the consequence under it; then the key's cap.
+  /// The label in `color`; stacked, the label and the consequence under it.
   fn slot(&self, color: PaletteColor) -> Element {
     let (_, _, role) = self.metrics();
     let label = Text::new(&self.label)
       .id(format!("{}-label", self.id))
       .color(color)
       .nowrap();
-    let cap = self.key.as_ref().map(|keys| key_cap(&format!("{}-key", self.id), keys));
     if self.stacked {
       let words = self.consequence.as_ref().map(|consequence| {
         let words = Text::new(consequence)
@@ -457,14 +446,7 @@ impl ActionButton {
         .spacing(ExtraSpacing::Tight.role())
         .child(label.variant(ExtraTypography::ButtonStacked.role()))
         .with_children(words);
-      return Row::new()
-        .flex(1.0)
-        .min_width(Dimension::Px(0.0))
-        .spacing(SpacingSize::Md)
-        .align_items(Alignment::Center)
-        .child(text)
-        .with_children(cap)
-        .into();
+      return text.into();
     }
     let label = label.variant(role);
     let label = if self.bounded {
@@ -480,15 +462,7 @@ impl ActionButton {
     } else {
       label
     };
-    match cap {
-      Some(cap) => Row::new()
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(label)
-        .child(cap)
-        .into(),
-      None => label.into(),
-    }
+    label.into()
   }
 }
 

@@ -10,7 +10,7 @@ use std::sync::Arc;
 use lurq::{app::ctx::Ctx, node::Element};
 use orchester_core::{
   id::ProjectId,
-  orchestrator::{ActionOutcome, ChatAction},
+  orchestrator::{ActionOutcome, ChatAction, watch::CreatedWatch},
   project::TaskKey,
   time::Timestamp,
 };
@@ -80,12 +80,18 @@ pub(super) fn line(
     press: Press::Open(navigation.to(route)),
   });
   let target = (!task.is_empty()).then(|| -> Arc<str> {
-    match action.approved_in {
-      Some(_) => ctx.t_args(
+    match (&action.approved_in, &action.watch) {
+      (Some(_), _) => ctx.t_args(
         "orchestrator.line.targetBy",
         [("target", task), ("by", &*ctx.t("orchestrator.line.byYouInChat"))],
       ),
-      None => task.into(),
+      // A task created outside what the conversation watches (ORC-765): it comes back here, or is led elsewhere.
+      (None, Some(CreatedWatch::WatchedHere)) => ctx.t_args("orchestrator.line.watchedHere", [("target", task)]),
+      (None, Some(CreatedWatch::LedElsewhere { title, .. })) => ctx.t_args(
+        "orchestrator.line.ledElsewhere",
+        [("target", task), ("chat", title.as_str())],
+      ),
+      (None, None) => task.into(),
     }
   });
   let line = match &action.outcome {

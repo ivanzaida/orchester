@@ -1,5 +1,5 @@
 //! Every merge attempt is recorded (ORC-361): who asked, from where, what came of it, why it did not land and how
-//! each stage went, against a real repository; and what Review › Merges reads of them. `cargo test -p
+//! each stage went, against a real repository; and what the attempt page reads of them. `cargo test -p
 //! orchester-workspace --test local_integration merge_attempts`.
 
 use std::{fs, num::NonZeroU32, path::PathBuf, sync::Arc, time::Duration};

@@ -12,7 +12,7 @@ use orchester_core::{
     CodexSandbox, EffectiveApprovalMode, FolderBounds, ManualReason, ResolvedFolder, capability::EnforcedPermissions,
   },
   resource::{AgentProfile, ModelId, Step, StepKey, StepKind},
-  run::{ModelChoice, PinnedVersion, StepExecutor},
+  run::{ModelChoice, PinnedVersion, StepExecution},
   store::ActivityStore,
 };
 
@@ -126,17 +126,14 @@ impl RunTask {
     execution: StepExecutionId,
   ) -> Result<ModelId, crate::execution::executor::step::ExecutionError> {
     let not_agent = crate::execution::executor::step::ExecutionError::NotAnAgentStep(execution);
-    let Some(step) = self
+    let Some(((_, model), step)) = self
       .run
-      .execution(execution)
-      .and_then(|execution| self.run.snapshot().step(execution.step()))
+      .executing_agent(execution)
+      .zip(self.run.execution(execution).map(StepExecution::step))
     else {
       return Err(not_agent);
     };
-    let StepExecutor::Agent { model, .. } = step.executor() else {
-      return Err(not_agent);
-    };
-    let chosen = self.db.step_model(self.run.id(), step.key())?;
+    let chosen = self.db.step_model(self.run.id(), step)?;
     Ok(chosen.map_or_else(|| model.clone(), |chosen| chosen.model))
   }
 
@@ -156,9 +153,7 @@ impl RunTask {
       .body()
       .step(key)
       .expect("executions name snapshot steps");
-    let (StepKind::Agent { .. }, Some(StepExecutor::Agent { profile, model, .. })) =
-      (&step.kind, self.run.snapshot().step(key).map(|step| step.executor()))
-    else {
+    let (StepKind::Agent { .. }, Some((profile, model))) = (&step.kind, self.run.executing_agent(execution)) else {
       return Err(problem(format!("step `{key}` is not an agent step")));
     };
     Ok((step, profile, model))

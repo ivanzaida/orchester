@@ -6,7 +6,6 @@
 //! push or GitHub refusing to open it, on the card with the recovery and Try again. GitHub is never reached.
 
 use std::{
-  num::NonZeroU64,
   sync::{
     Arc,
     atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -15,7 +14,6 @@ use std::{
   time::Duration,
 };
 
-use orchester_app::routes::{ProjectPage, Route};
 use orchester_core::{
   command::{Command, CommandError, CommandOutput, CommandRunner},
   connection::{GitHubCheck, GitHubCheckResult, GitHubConnection, GitHubHost, GitHubLogin, SignIn},
@@ -31,7 +29,6 @@ use orchester_core::{
 };
 use orchester_exec::{ProcessRunner, programs::Programs};
 use orchester_store::ProjectDb;
-use orchester_workspace::pull_requests::list::{PullRequestList, load_list_in};
 use parking_lot::Mutex;
 use serde_json::{Value, json};
 
@@ -268,14 +265,9 @@ fn decision_create_pull_request_pushes_and_opens_a_draft_review_pr_opens_it() {
   page.until_says("task-pull-request-opened", "Pull request #143 opened as a draft.");
   assert!(!page.in_more("task-create-pull-request"), "a run has one pull request");
   assert!(!page.locked("task-review-pull-request"));
-  let keys = if cfg!(target_os = "macos") {
-    "⌘↵"
-  } else {
-    "Ctrl+Enter"
-  };
   assert_eq!(
     page.text("task-ready-actions"),
-    format!("Merge {keys} Review changes Close without merging Review PR"),
+    "Merge Review changes Close without merging Review PR",
     "Review PR, a fourth action, once the run has a pull request"
   );
   let run = latest_run(&page, READY);
@@ -286,18 +278,6 @@ fn decision_create_pull_request_pushes_and_opens_a_draft_review_pr_opens_it() {
   );
   let body = request["body"].as_str().expect("a body");
   assert!(body.contains("## Acceptance criteria"), "{body}");
-  let PullRequestList::Linked(list) = load_list_in(&page.repo).expect("the pull requests") else {
-    panic!("the project is linked");
-  };
-  let linked = list
-    .find(143)
-    .and_then(|listed| listed.task.as_ref())
-    .expect("linked to its task");
-  assert_eq!(
-    linked.run,
-    run.id(),
-    "the Pull requests list links it to the task's run"
-  );
   // Another task's run, with Open as draft turned off, opens one ready for review: the row turns it off once a pull
   // request can be created.
   page.open(CONFLICTS, "task-merge");
@@ -311,15 +291,20 @@ fn decision_create_pull_request_pushes_and_opens_a_draft_review_pr_opens_it() {
   create(&mut page, &fake);
   page.until_says("task-pull-request-opened", "Pull request #143 opened.");
   assert_eq!(fake.request()["draft"], json!(false), "ready for review is asked for");
-  // The first run keeps its pull request, which Review PR opens.
+  // The first run keeps its pull request, which Review PR opens on GitHub in the browser, not in a page of the app.
   page.open(READY, "task-pull-request-opened");
+  let links = page.window.launch.services().expect("services").links.clone();
+  links.record_instead();
+  let route = page.window.navigation().route_now();
   page.click("task-review-pull-request");
+  page
+    .window
+    .until("the pull request's page to be opened", |_| !links.recorded().is_empty());
+  assert_eq!(links.recorded(), ["https://github.com/ivanzaida/kontur/pull/143"]);
   assert_eq!(
     page.window.navigation().route_now(),
-    Route::Project(
-      page.project,
-      ProjectPage::PullRequest(NonZeroU64::new(143).expect("a number"), None)
-    )
+    route,
+    "the window stays on the task"
   );
 }
 

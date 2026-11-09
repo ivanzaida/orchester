@@ -3,6 +3,7 @@
 //! Task rules themselves are `orchester_core::task`; this module only maps between them and what is
 //! on screen.
 
+pub mod active_runs;
 pub mod answering;
 mod approval_choices;
 pub mod approvals;
@@ -48,6 +49,7 @@ pub mod moves;
 pub mod needs_you;
 pub mod outside;
 pub mod overview;
+pub mod pause_wait;
 pub mod permissions;
 pub mod plan;
 pub mod plan_limit;
@@ -60,6 +62,7 @@ pub mod ready_to_run;
 mod requirements;
 pub mod resolve;
 pub mod return_work;
+pub mod review_list;
 pub mod review_threads;
 pub mod run;
 pub mod run_again;

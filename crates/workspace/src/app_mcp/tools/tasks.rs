@@ -16,7 +16,7 @@ use serde_json::{Value, json};
 use super::{
   Translate,
   across::across,
-  base_branch, team,
+  base_branch, team, watches,
   wire::{self, Delivers, Rank, Workflow, task_link},
   worktree::worktree_state,
 };
@@ -27,6 +27,7 @@ use crate::{
   },
   budget::whole_minutes,
   links::{Link, TaskPage},
+  orchestrator::watching::WatchReads,
   tasks::{
     browse::{self, PipelineFilter, Query, TaskSort},
     data::ProjectTasks,
@@ -185,7 +186,7 @@ pub async fn get_task(services: &Services, args: GetTask, translate: &Translate)
     return team::get_task(services, &team, &args.key).await;
   }
   let services = services.clone();
-  let (project, detail, (tags, pipeline, base_branch), worktrees) = blocking(move || {
+  let (project, detail, (tags, pipeline, base_branch, led_in), worktrees) = blocking(move || {
     let (open, db) = services.read_project(&args.project)?;
     let root = open.repo_root;
     let task = find_task(&db, &args.key)?;
@@ -193,13 +194,19 @@ pub async fn get_task(services: &Services, args: GetTask, translate: &Translate)
     let published = crate::tasks::data::published_pipelines(&db)?;
     let pipeline = PipelineLabel::of(task.details().pipeline, &published);
     let base_branch = base_branch::task_json(&db, &task)?;
+    let led_in = WatchReads::read_task_led_in(&db, &task)?;
     let detail = TaskDetail::load_settled(&root, task.id(), &services.programs)?;
     let worktrees = detail
       .history
       .iter()
       .map(|record| Ok((record.id, worktree_state(&db, &root, record.id)?)))
       .collect::<Result<HashMap<_, _>, ToolError>>()?;
-    Ok((open.project.id(), detail, (tags, pipeline, base_branch), worktrees))
+    Ok((
+      open.project.id(),
+      detail,
+      (tags, pipeline, base_branch, led_in),
+      worktrees,
+    ))
   })
   .await?;
   let task = &detail.task;
@@ -243,6 +250,7 @@ pub async fn get_task(services: &Services, args: GetTask, translate: &Translate)
     "phase": wire::phase(detail.phase()),
     "result": result_json(&detail),
     "runs": runs,
+    "led_in": watches::led_in_json(&led_in, translate),
     "link": link,
   }))
 }

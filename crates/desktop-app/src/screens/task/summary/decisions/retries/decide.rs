@@ -268,7 +268,11 @@ impl DecideCard<'_> {
     .fill_width();
     let decision = chosen
       .zip(ReviewNote::new(&self.note.get()).ok())
-      .map(|(step, note)| StuckDecision::ReturnTo { step, note });
+      .map(|(step, note)| StuckDecision::ReturnTo {
+        step,
+        note,
+        profile: None,
+      });
     let returning = match decision {
       Some(decision) => self.button(returning, decision, pending),
       None => match &self.offline {

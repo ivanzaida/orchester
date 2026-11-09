@@ -29,7 +29,7 @@ use orchester_app::{
   root::Start,
   routes::{OverviewTab, ProjectPage, Route, routes},
   shell::sidebar::{
-    running::{RowState, RunningRow, running_list, under_way},
+    running::{RowState, RunningRow, rows, running_list},
     switcher::{FolderRefusal, open_folder},
   },
   theme::{self, Mode},
@@ -40,7 +40,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_exec::programs::Programs;
-use orchester_workspace::tasks::{data::ProjectTasks, integration_jobs::ProjectJobs};
+use orchester_workspace::tasks::{active_runs, data::ProjectTasks, integration_jobs::ProjectJobs};
 use support::{Data, Window, add_project, project_id};
 
 fn overview(project: ProjectId) -> Route {
@@ -122,8 +122,6 @@ fn sidebar_lists_six_places_then_configure_and_the_usage_card_and_goes_to_them()
   );
   // What the sidebar held before lives in a hub, Project settings, the switcher's menu or the usage card now.
   for screen in [
-    "merge_queue",
-    "pull_requests",
     "usage",
     "instructions",
     "memory",
@@ -138,10 +136,10 @@ fn sidebar_lists_six_places_then_configure_and_the_usage_card_and_goes_to_them()
     let item = format!("nav-{screen}");
     assert!(window.texts(&item).is_none(), "{item} left the sidebar");
   }
-  // Every entry opens its own screen (`tests/orchestrator/`, `tests/merge_queue.rs`, `tests/sidebar_places/`).
+  // Every entry opens its own screen (`tests/orchestrator/`, `tests/sidebar_places/`).
   for (item, screen, title) in [
     ("nav-orchestrator", "screen-orchestrator", "Orchestrator"),
-    ("nav-review", "screen-merge_queue", "Review"),
+    ("nav-review", "screen-review", "Review"),
     ("nav-modules", "screen-modules", "Modules"),
     ("nav-agents", "agents-hub", "Agents"),
   ] {
@@ -355,9 +353,9 @@ fn seeded() -> (Data, std::path::PathBuf) {
 #[test]
 fn sidebar_running_list_takes_the_runs_under_way_and_stops_them_without_a_runner() {
   let (_data, repo) = seeded();
-  let tasks = ProjectTasks::load(&repo, &Programs::processes()).expect("the tasks read");
+  let runs = active_runs::load(&repo).expect("the runs under way read");
   let rows = |online| -> Vec<(String, RowState)> {
-    under_way(&tasks, online)
+    rows(&runs, online)
       .into_iter()
       .map(|run| (run.key.to_string(), run.state))
       .collect()
@@ -382,6 +380,28 @@ fn sidebar_running_list_takes_the_runs_under_way_and_stops_them_without_a_runner
     "a run waiting for the person still waits"
   );
   assert_eq!(working.len(), stopped.len(), "the same runs, only their state differs");
+}
+
+/// The runs the Running list shows are the ones the tasks' reading finds under way, in its order, from the runs alone.
+#[test]
+fn sidebar_running_runs_read_alone_are_the_ones_the_tasks_find_under_way() {
+  let (_data, repo) = seeded();
+  let tasks = ProjectTasks::load(&repo, &Programs::processes()).expect("the tasks read");
+  let expected: Vec<(String, TaskPhase)> = tasks
+    .tasks
+    .iter()
+    .filter_map(|task| {
+      let phase = tasks.phases.get(&task.id())?.phase()?;
+      phase.is_active().then(|| (task.key().to_string(), phase))
+    })
+    .collect();
+  let read: Vec<(String, TaskPhase)> = active_runs::load(&repo)
+    .expect("the runs under way read")
+    .into_iter()
+    .map(|run| (run.key.to_string(), run.phase))
+    .collect();
+  assert!(!read.is_empty(), "the scenario has runs under way");
+  assert_eq!(read, expected);
 }
 
 #[test]
@@ -447,8 +467,7 @@ fn lined(window: &mut Window, id: &str) -> bool {
 fn sidebar_in_a_short_window_scrolls_its_screens_and_runs_between_hairlines_and_keeps_the_usage_card() {
   const HEIGHT: f32 = 640.0;
   let (data, repo) = seeded();
-  let tasks = ProjectTasks::load(&repo, &Programs::processes()).expect("the tasks read");
-  let runs = under_way(&tasks, false);
+  let runs = rows(&active_runs::load(&repo).expect("the runs under way read"), false);
   let last = format!("running-{}", runs.last().expect("the scenario has runs under way").key);
   let launch = data.launch();
   let mut window = Window::of(data, launch);

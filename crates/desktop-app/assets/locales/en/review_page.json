@@ -3,39 +3,76 @@
     "reading": "Reading the run's review…",
     "readFailed": "The run's review can't be read",
     "readFailedBody": "{{reason}}",
+    "crumb": "{{key}} · run {{run}}",
+    "noRun": "Nothing to review for {{key}}",
+    "noRunBody": "The task has no run that waits for your review or was sent back from it.",
     "nothing": "Nothing to review yet",
     "nothingBody": "The run has no checkpoint, so its work has no diff to review.",
     "tooLarge": "Too large to review here",
     "tooLargeBody": "The run changes {{files}} files, more than Orchester reads. Review {{branch}} with git, then approve it from its task page.",
+    "pager": {
+      "position": "{{position}} of {{total}} waiting",
+      "rest": "{{total}} waiting",
+      "previous": "Previous waiting task",
+      "next": "Next waiting task"
+    },
     "openTask": "Open task",
     "approve": "Approve and merge",
     "separator": " · ",
     "status": {
       "waiting": "Waiting for your review",
       "changed": "Changed since your review",
-      "atWork": "Implement is changing the code",
+      "atWork": "With the agent",
+      "conflicts": "Conflicts with {{base}}",
+      "conflictsMetaOne": "approved by you {{time}} · nothing merged · 1 file conflicts",
+      "conflictsMetaOther": "approved by you {{time}} · nothing merged · {{count}} files conflict",
       "run": "run #{{run}}",
       "stepsPassed": "every step passed",
       "stepsOf": "{{passed}} of {{total}} steps passed",
       "sizeOne": "1 file, +{{added}} −{{removed}}",
       "sizeOther": "{{files}} files, +{{added}} −{{removed}}",
       "head": "head {{head}}",
-      "mergesQueue": "merges into {{branch}} through the merge queue once you approve",
-      "mergesInto": "merges into {{branch}} once you approve",
-      "mergesOnce": "merges once you approve"
+      "commitsAfterOne": "1 commit after {{reviewed}}",
+      "commitsAfterOther": "{{count}} commits after {{reviewed}}",
+      "into": "into {{branch}}"
+    },
+    "summary": {
+      "link": "Run summary →"
+    },
+    "approved": {
+      "merged": "Merged into {{branch}}",
+      "mergedNoBase": "Merged",
+      "merging": "Merging into {{branch}}",
+      "mergingNoBase": "Merging",
+      "by": "approved by you {{time}}",
+      "automatic": "merged without a person's approval",
+      "notRecorded": "who approved it is not recorded",
+      "queue": "the merge queue merges it in its turn",
+      "mergeCommit": "merge commit {{revision}}",
+      "squash": "squashed as {{revision}}",
+      "fastForward": "fast-forward to {{revision}}",
+      "alreadyMerged": "already in {{branch}} at {{revision}}"
     },
     "changed": {
-      "title": "Changed since your review",
-      "body": "The branch moved from {{reviewed}}, the head you reviewed, to {{head}}: {{commits}}. The diff shows {{head}}; look at it, then approve it.",
-      "commitsOne": "1 new commit",
-      "commitsOther": "{{count}} new commits",
-      "commit": "{{commit}}  {{subject}}  {{time}}",
-      "take": "I've reviewed the new commits",
-      "reason": "Changed since your review: review the new commits first."
+      "sinceOne": "1 commit since you reviewed at {{time}}.",
+      "sinceOther": "{{count}} commits since you reviewed at {{time}}.",
+      "sinceOneUntimed": "1 commit since you reviewed.",
+      "sinceOtherUntimed": "{{count}} commits since you reviewed.",
+      "outdatedOne": "1 of your comments is on a line they changed.",
+      "outdatedOther": "{{count}} of your comments are on lines they changed.",
+      "strip": "{{commits}} {{comments}}",
+      "all": "All changes",
+      "since": "Since your review",
+      "reading": "Reading what changed since your review…",
+      "nothing": "Nothing changed since your review",
+      "nothingBody": "The commits since then leave the files as they were. All changes shows the whole diff.",
+      "tooLarge": "Too large to show here",
+      "tooLargeBody": "The commits since your review change {{files}} files, more than Orchester reads. All changes shows the whole diff."
     },
     "files": {
       "title": "Files",
       "viewed": "{{viewed}} of {{total}} viewed",
+      "conflicting": "{{count}} conflicting",
       "added": "+{{count}}",
       "removed": "−{{count}}"
     },
@@ -48,6 +85,8 @@
       "questionsOne": "1 question",
       "questionsOther": "{{count}} questions",
       "outdated": "{{count}} outdated",
+      "conflictsOne": "1 conflict",
+      "conflictsOther": "{{count}} conflicts",
       "viewed": "Viewed",
       "hunk": "@@ -{{old}} +{{new}} @@",
       "hunkSection": "@@ -{{old}} +{{new}} @@ {{section}}",
@@ -56,6 +95,18 @@
       "unchanged": "Moved from {{path}} without changing its content.",
       "empty": "An empty file.",
       "omitted": "{{count}} more lines are not shown."
+    },
+    "conflict": {
+      "title": "Conflict",
+      "removed": "The base branch removed these lines.",
+      "baseBranch": "its base branch",
+      "bar": {
+        "titleOne": "1 file conflicts with {{base}}",
+        "titleOther": "{{count}} files conflict with {{base}}",
+        "body": "The agent merges {{base}} in and resolves them, then it's back for your review.",
+        "tryAgain": "Try merge again",
+        "resolve": "Ask the agent to resolve"
+      }
     },
     "thread": {
       "comment": "Comment",
@@ -94,11 +145,21 @@
       "notAsked": "Not asked",
       "notSent": "Not sent",
       "sending": "Sending…",
-      "sent": "Sent · Implement is changing the code",
+      "sent": "Sent",
+      "sentAt": "Sent {{time}}",
       "addressedIn": "Addressed in {{commit}}",
       "addressed": "Addressed",
       "resolved": "Resolved",
       "outdatedIn": "Outdated by {{commit}}"
+    },
+    "agent": {
+      "statusOne": "Implement is working on your comment",
+      "statusOther": "Implement is working on your {{count}} comments",
+      "sent": "sent {{time}}",
+      "titleOne": "Implement is working on 1 comment",
+      "titleOther": "Implement is working on {{count}} comments",
+      "body": "The task comes back here when it finishes; new comments wait until then.",
+      "open": "Open conversation"
     },
     "composer": {
       "new": "New",
@@ -112,6 +173,13 @@
       "addComment": "Add comment",
       "askImplement": "Ask Implement",
       "save": "Save"
+    },
+    "agentField": {
+      "name": "Agent for this step",
+      "value": "{{name}} · {{model}}",
+      "heading": "Implement runs with",
+      "own": "{{model}} · this run's agent",
+      "note": "Only this time: the task's pipeline keeps its agents."
     },
     "tray": {
       "unsentOne": "1 comment not sent",
@@ -127,7 +195,18 @@
       "failedDetail": "The send failed; nothing is lost. Your comments are kept.",
       "discard": "Discard",
       "send": "Send to Implement ({{count}})",
-      "tryAgain": "Try again"
+      "tryAgain": "Try again",
+      "waits": "Sent once the task is back from Implement."
+    },
+    "approveAsk": {
+      "titleOne": "1 comment isn't sent yet",
+      "titleOther": "{{count}} comments aren't sent yet",
+      "bodyOne": "Your comment on {{file}}, {{lines}}, has not reached the agent. Send it to Implement to have it addressed first, or approve and merge without it; the comment is then discarded.",
+      "bodyOther": "Your {{count}} comments have not reached the agent. Send them to Implement to have them addressed first, or approve and merge without them; the comments are then discarded.",
+      "cancel": "Cancel",
+      "withoutOne": "Approve without it",
+      "withoutOther": "Approve without them",
+      "send": "Send to Implement"
     },
     "discard": {
       "titleOne": "Discard the comment not sent?",

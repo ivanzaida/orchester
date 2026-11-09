@@ -58,6 +58,7 @@ fn return_ended_reopens_a_succeeded_run_from_the_step_with_the_note() {
     run.return_ended(
       &key("implement"),
       (&note(), Some(&conflicts())),
+      None,
       Answerer::Person,
       at(50),
     )
@@ -72,6 +73,7 @@ fn return_ended_reopens_a_succeeded_run_from_the_step_with_the_note() {
       return_to: key("implement"),
       note: note(),
       conflicts: Some(conflicts()),
+      profile: None,
     }
   );
   let steps: Vec<&str> = attempt
@@ -98,7 +100,7 @@ fn return_ended_reopens_a_succeeded_run_from_the_step_with_the_note() {
 #[test]
 fn return_ended_reopens_a_failed_run() {
   let mut logged = failed();
-  logged.apply(|run| run.return_ended(&key("plan"), (&note(), None), Answerer::Person, at(40)));
+  logged.apply(|run| run.return_ended(&key("plan"), (&note(), None), None, Answerer::Person, at(40)));
   assert_eq!(logged.run.status(), &RunStatus::Running);
   assert_eq!(
     logged.run.latest_execution(&key("plan")).map(|step| step.status()),
@@ -116,7 +118,7 @@ fn return_ended_refuses_a_run_that_has_not_ended_and_a_step_that_never_ran() {
   assert!(matches!(
     running
       .run
-      .return_ended(&key("plan"), (&note(), None), Answerer::Person, at(40)),
+      .return_ended(&key("plan"), (&note(), None), None, Answerer::Person, at(40)),
     Err(RunError::InvalidRunTransition { .. })
   ));
   assert_eq!(running.run, before);
@@ -126,7 +128,7 @@ fn return_ended_refuses_a_run_that_has_not_ended_and_a_step_that_never_ran() {
   assert_eq!(
     failed
       .run
-      .return_ended(&key("review"), (&note(), None), Answerer::Person, at(40)),
+      .return_ended(&key("review"), (&note(), None), None, Answerer::Person, at(40)),
     Err(RunError::NotAReturnTarget(key("review")))
   );
   assert_eq!(failed.run, before);
@@ -140,7 +142,7 @@ fn return_ended_a_cancelled_run_is_not_returned() {
   assert!(
     logged
       .run
-      .return_ended(&key("research"), (&note(), None), Answerer::Person, at(30))
+      .return_ended(&key("research"), (&note(), None), None, Answerer::Person, at(30))
       .is_err()
   );
 }

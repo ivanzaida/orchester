@@ -98,7 +98,7 @@ fn merge_retry_a_held_lease_is_tried_again_by_orchester_and_lands_once_free() {
   assert_eq!(
     not_merged[0].retrying.and_then(|retrying| retrying.next),
     Some(wait.at),
-    "Review › Merges tells when Orchester tries next"
+    "the attempt page tells when Orchester tries next"
   );
   drop(held);
   assert!(try_now(fixture.run), "Try now ends the wait");

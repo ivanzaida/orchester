@@ -1,8 +1,6 @@
 mod join_team;
-mod merges;
 mod modules;
-
-use std::num::NonZeroU64;
+mod task_merge;
 
 use lurq::mcp::{McpTool, Scope};
 use modules::{agent_page, module_page, new_task_page};
@@ -13,7 +11,6 @@ use orchester_core::{
 use orchester_workspace::{
   delivery::DeliveryPeriod,
   files::{LineRangeError, Version, VersionParseError},
-  pull_requests::list::PullRequestTab,
 };
 use serde_json::{Map, Value, json};
 
@@ -48,7 +45,7 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   UUID, as app_state reports it). overview, memory and import_resources also take `tab`; tasks `tab`, `q` (the \
   search) and `highlight` (a task key, as after Create), and shows the list or the board as last chosen for the \
   project (press tasks-layout-list or tasks-layout-board to switch); edit_task `key`; task `key`, `tab` (summary, \
-  conversation or changes), `view` for what a tab opens in \
+  conversation or changes), `run` (a run's number: that run's merge attempts under the task, which no `tab`, `view` or `file` goes with), `view` for what a tab opens in \
   its place (memory: the task's memory, from summary; local-integration: Local integration, which Try locally opens \
   from changes) and, on its changes tab, `file` with `from`; project_settings \
   `tab` (general, runs, orchestrator, context, connections, environment or sharing; secrets, the tab Environment was, still opens \
@@ -60,12 +57,10 @@ const DESCRIPTION: &str = "Take the active tab of the Orchester window to a rout
   account); each opens Project settings on that tab or page. agents, instructions, skills, tools and memory are the \
   five tabs of one Agents page (Profiles, Instructions, Skills, Tools, Memory), each its own route: agents takes \
   `agent` (a profile's id, or new) or, for a team project's hub, `filter` and `item`, skills takes \
-  `skill` (a skill id, new or import), tools takes tool (a tool id, or new), and its page's tab; merge_queue, \
-  pull_requests and merges are the tabs of one Review page, each its own route; merges takes `key` and `run` (a task's \
-  key and its run's number) for that run's merge attempts; orchestrator takes `chat` (a \
+  `skill` (a skill id, new or import), tools takes tool (a tool id, or new), and its page's tab; review is the list of tasks whose run finished and, with `key`, \
+  a task's review; orchestrator takes `chat` (a \
   conversation's id, or new; left out, the latest); files takes `file` (a path in the project; the tree alone when \
-  left out), `at` (checkout, the default, base, run:<run id> or rev:<commit>) and `line` (12 or 12-20); pull_requests \
-  takes `tab`, or `number` for one pull request (with `tab` feedback, its Agent feedback); usage takes `query`, the \
+  left out), `at` (checkout, the default, base, run:<run id> or rev:<commit>) and `line` (12 or 12-20); usage takes `query`, the \
   page's query as a link carries it, and \
   without `project` shows every project's usage; with `view` delivery and `period` a project's Delivery view beside \
   it; modules takes `tab` (open or closed), `view` new for New module, or `module`: new for New module, a module's id \
@@ -96,12 +91,11 @@ pub fn tool(link: WindowLink, lookup: Option<Lookup>) -> McpTool {
 fn schema() -> Value {
   let names: Vec<&str> = Screen::ALL.into_iter().map(Screen::name).collect();
   let tabs = format!(
-    "The screen's tab, the one it opens on when left out: settings automation, general, plan-limits, updates, \n     whats-new, notifications, accounts, browser, \n     orchester (Orchester Cloud), connect (Connect a server), invite (an invite's landing); overview {} (kept for old \n     links: the Overview shows every section on one page); tasks {}; \n     task {}; project_settings {}; pull_requests {}; memory {}; import_resources {}; modules {}, a module's page {}.",
+    "The screen's tab, the one it opens on when left out: settings automation, general, plan-limits, updates, \n     whats-new, notifications, accounts, browser, \n     orchester (Orchester Cloud), connect (Connect a server), invite (an invite's landing); overview {} (kept for old \n     links: the Overview shows every section on one page); tasks {}; \n     task {}; project_settings {}; memory {}; import_resources {}; modules {}, a module's page {}.",
     OverviewTab::ALL.map(OverviewTab::name).join(", "),
     TaskListTab::ALL.map(TaskListTab::name).join(", "),
     TaskTab::ALL.map(TaskTab::name).join(", "),
     SETTINGS_TABS.join(", "),
-    PullRequestTab::ALL.map(PullRequestTab::name).join(", "),
     MemoryTab::ALL.map(MemoryTab::name).join(", "),
     ImportTab::ALL.map(ImportTab::name).join(", "),
     ModuleListTab::ALL.map(ModuleListTab::name).join(", "),
@@ -118,8 +112,8 @@ fn schema() -> Value {
     "properties": {
       "route": { "type": "string", "enum": names },
       "project": { "type": "string", "description": "The project's id (a UUID), for every screen of a project." },
-      "key": { "type": "string", "description": "The task's key, e.g. KON-12, for task, edit_task and merges." },
-      "run": { "type": "string", "description": "merges: with `key`, the number of the run whose merge attempts to show, e.g. 8." },
+      "key": { "type": "string", "description": "The task's key, e.g. KON-12, for task, edit_task and review." },
+      "run": { "type": "string", "description": "task: with `key`, the number of the run whose merge attempts to show, e.g. 8." },
       "tab": { "type": "string", "description": tabs },
       "q": { "type": "string", "description": "tasks: the text searched for." },
       "highlight": { "type": "string", "description": "tasks: the key of the task to highlight, as after Create." },
@@ -138,7 +132,6 @@ fn schema() -> Value {
       "way": { "type": "string", "enum": ["cloud", "code", "projects", "folder"], "description": "join_team: the account's teams and invites (cloud, the default), the code page, a joined team's shared projects (projects, with `server`) or linking one of them to a folder (folder, with `server` and `project`, its slug)." },
       "at": { "type": "string", "description": "files: the version, checkout (the default), base, run:<run id> or rev:<commit>." },
       "line": { "type": "string", "description": "files: the line or lines to show, 12 or 12-20." },
-      "number": { "type": "string", "description": "pull_requests: the number of the pull request to open, e.g. 142; with tab feedback, on its Agent feedback." },
       "filter": { "type": "string", "enum": HubFilter::LOCAL.map(HubFilter::name), "description": "agents: the kinds the hub lists, all (the default), profiles, mcp_servers, instructions, skills or tools, and archived in a local project (a team project shows all instead)." },
       "item": { "type": "string", "description": "agents: the id of the resource the hub's panel shows; the first of the list when left out." },
       "server": { "type": "string", "description": "agents of a local project: the id of the local MCP server the hub's panel shows (its connection id), in place of `item`." },
@@ -210,11 +203,9 @@ fn screen_route(screen: Screen, args: &Map<String, Value>, lookup: Option<&Looku
     Screen::Tasks => ProjectPage::Tasks(task_list(args)?),
     Screen::NewTask => new_task_page(args)?,
     Screen::EditTask => ProjectPage::EditTask(key(args, "key")?),
-    Screen::Task => ProjectPage::Task(key(args, "key")?, task_view(args)?),
+    Screen::Task => task_merge::task_page(args)?,
     Screen::Modules => module_page(args)?,
-    Screen::MergeQueue => ProjectPage::MergeQueue,
-    Screen::PullRequests => pull_requests_page(args)?,
-    Screen::Merges => merges::merges_page(args)?,
+    Screen::Review => review_page(args)?,
     Screen::Usage => return usage_route(args),
     Screen::Pipelines => ProjectPage::Pipelines,
     Screen::Agents => agent_page(args)?,
@@ -273,14 +264,13 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::Overview | Screen::ImportResources => &["project", "tab"],
     Screen::Tasks => &["project", "tab", "q", "highlight"],
     Screen::EditTask => &["project", "key"],
-    Screen::Task => &["project", "key", "tab", "view", "file", "from"],
+    Screen::Task => task_merge::PARAMS,
     Screen::Connections => &["project", "selected", "decision"],
     Screen::Memory => &["project", "tab"],
     Screen::Tools => &["project", "tool", "tab"],
     Screen::Skills => &["project", "skill"],
     Screen::Orchestrator => &["project", "chat"],
     Screen::Files => &["project", "file", "at", "line"],
-    Screen::PullRequests => &["project", "tab", "number"],
     Screen::NewConnection => &["project", "kind"],
     Screen::EditConnection => &["project", "connection"],
     Screen::Usage => &["project", "query", "view", "period"],
@@ -288,10 +278,16 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::NewTask => &["project", "module"],
     Screen::ProjectSettings => &["project", "tab", "view"],
     Screen::Agents => &["project", "agent", "filter", "item", "server", "view"],
-    Screen::Merges => merges::PARAMS,
-    Screen::MergeQueue | Screen::Pipelines | Screen::Instructions | Screen::Secrets | Screen::OrchestratorSettings => {
-      &["project"]
-    }
+    Screen::Review => &["project", "key"],
+    Screen::Pipelines | Screen::Instructions | Screen::Secrets | Screen::OrchestratorSettings => &["project"],
+  }
+}
+
+/// Review's list, or with `key` the review of that task.
+fn review_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
+  match string(args, "key")? {
+    None => Ok(ProjectPage::Review),
+    Some(_) => Ok(ProjectPage::TaskReview(key(args, "key")?)),
   }
 }
 
@@ -438,36 +434,6 @@ pub(super) fn connection(args: &Map<String, Value>, param: &'static str) -> Resu
   value.parse().map_err(|error: uuid::Error| ToolError::InvalidParam {
     param,
     reason: format!("`{value}` is not a connection id ({error})"),
-  })
-}
-
-/// Pull request `number` on Files changed, or on Agent feedback with `tab` `feedback`; or the list on `tab`.
-fn pull_requests_page(args: &Map<String, Value>) -> Result<ProjectPage, ToolError> {
-  let Some(number) = string(args, "number")? else {
-    let known = PullRequestTab::ALL.map(PullRequestTab::name);
-    return Ok(ProjectPage::PullRequests(tab(args, PullRequestTab::from_name, &known)?));
-  };
-  let feedback = match string(args, "tab")? {
-    None => false,
-    Some("feedback") => true,
-    Some(_) => {
-      return Err(ToolError::InvalidParam {
-        param: "tab",
-        reason: "a pull request's own tabs are files (no tab) and feedback".to_owned(),
-      });
-    }
-  };
-  let number = number
-    .trim_start_matches('#')
-    .parse::<NonZeroU64>()
-    .map_err(|_| ToolError::InvalidParam {
-      param: "number",
-      reason: format!("`{number}` is not a pull request number"),
-    })?;
-  Ok(if feedback {
-    ProjectPage::PullRequestFeedback(number, None)
-  } else {
-    ProjectPage::PullRequest(number, None)
   })
 }
 

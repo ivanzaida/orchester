@@ -10,7 +10,7 @@ use orchester_core::{
   attachment::input::AttachedFile,
   conversation::{self, AgentMessage, Arrival, Delivery, Message, MessageBody},
   id::{ResourceId, StepExecutionId},
-  run::{Invocation, RunStatus, StepExecutor, StepFailure, StepOutcome, StepOutput},
+  run::{Invocation, RunStatus, StepFailure, StepOutcome, StepOutput},
   time::Timestamp,
 };
 use orchester_ipc::Event;
@@ -74,14 +74,7 @@ impl RunTask {
 
   /// The agent profile `execution`'s step runs on; `None` for a tool step.
   pub(super) fn profile_of(&self, execution: StepExecutionId) -> Option<ResourceId> {
-    self
-      .run
-      .execution(execution)
-      .and_then(|execution| self.run.snapshot().step(execution.step()))
-      .and_then(|step| match step.executor() {
-        StepExecutor::Agent { profile, .. } => Some(profile.resource),
-        StepExecutor::Tool { .. } => None,
-      })
+    self.run.executing_agent(execution).map(|(profile, _)| profile.resource)
   }
 
   /// People's messages queued for `execution`'s agent: to Orchestrator or to its profile, except

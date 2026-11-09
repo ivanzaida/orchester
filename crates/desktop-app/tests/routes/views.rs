@@ -14,7 +14,7 @@ use orchester_core::{
   secret::Environment,
 };
 
-use super::{CONNECTION, PROJECT, at, pull_request, thread};
+use super::{CONNECTION, PROJECT, at};
 
 const PANELS: [InstructionsPanel; 4] = [
   InstructionsPanel::Hidden,
@@ -280,18 +280,6 @@ fn views_refuse_what_they_do_not_name() {
   ] {
     assert!(Route::parse(&path).is_err(), "{path} names no view");
   }
-}
-
-/// A pull request's Agent feedback is its page with `tab=feedback`, and the thread open beside its list.
-#[test]
-fn views_pull_request_feedback_names_its_tab_and_thread() {
-  let root = format!("/project/{PROJECT}/pull-requests/142");
-  let feedback = |thread| at(ProjectPage::PullRequestFeedback(pull_request(), thread)).path();
-  assert_eq!(feedback(None), format!("{root}?tab=feedback"));
-  assert_eq!(
-    feedback(Some(thread())),
-    format!("{root}?tab=feedback&thread={CONNECTION}")
-  );
 }
 
 /// The Agents hub of a team project keeps its filter and the resource its panel shows; opened on its first filter with

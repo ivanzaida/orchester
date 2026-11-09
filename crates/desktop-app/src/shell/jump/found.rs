@@ -266,40 +266,20 @@ fn places(ctx: &Ctx, project: ProjectId) -> Vec<Entry> {
     .collect()
 }
 
-/// The Review hub's and the Agents hub's tabs. The Overview has no tabs: it shows every section on one page.
+/// The Agents hub's tabs. The Overview has no tabs: it shows every section on one page.
 fn hub_tabs(ctx: &Ctx, project: ProjectId) -> Vec<Entry> {
-  let at = |page: ProjectPage| Target::Route(Route::Project(project, page));
-  let review = word(ctx, "shell.screens.review");
-  let mut entries = vec![
-    Entry::new(
-      "merge-queue",
-      Place::Review.icon(),
-      within(ctx, &review, "shell.screens.mergeQueue"),
-      at(ProjectPage::MergeQueue),
-    ),
-    Entry::new(
-      "pull-requests",
-      Place::Review.icon(),
-      within(ctx, &review, "shell.screens.pullRequests"),
-      at(ProjectPage::PullRequests(Default::default())),
-    ),
-    Entry::new(
-      "merges",
-      Place::Review.icon(),
-      within(ctx, &review, "shell.screens.merges"),
-      at(ProjectPage::Merges),
-    ),
-  ];
   let agents = word(ctx, "shell.screens.agents");
-  entries.extend(HubTab::ALL.into_iter().map(|tab| {
-    Entry::new(
-      format!("agents-{}", tab.name()),
-      Place::Agents.icon(),
-      within(ctx, &agents, tab.label_key()),
-      Target::Route(tab.route(project)),
-    )
-  }));
-  entries
+  HubTab::ALL
+    .into_iter()
+    .map(|tab| {
+      Entry::new(
+        format!("agents-{}", tab.name()),
+        Place::Agents.icon(),
+        within(ctx, &agents, tab.label_key()),
+        Target::Route(tab.route(project)),
+      )
+    })
+    .collect()
 }
 
 /// Project settings' tabs, Connections and Environment among them; Ctrl+, (Cmd+,) opens its first.

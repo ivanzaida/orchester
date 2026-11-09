@@ -1,43 +1,13 @@
-//! Orchestrator (`S03` `X8mFTS`): the tab after Runs with *The Orchestrator may*'s six switches, each the project's own
-//! and flipped only by a person, and *Let automation answer approvals* read-only with *Open* to Settings › Automation.
+//! Orchestrator (`S03` `X8mFTS`): the tab after Runs with *Let the Orchestrator drive*, the project's own switch,
+//! flipped only by a person (ORC-909: it replaced six), and *Let automation answer approvals* read-only with *Open* to
+//! Settings › Automation.
 use orchester_app::routes::Route;
-use orchester_workspace::workspace::OrchestratorConsent;
 
 use super::harness::Settings;
 
-/// Each switch's element id, its label and the consent it saves.
-const SWITCHES: [(&str, &str, OrchestratorConsent); 6] = [
-  (
-    "settings-orchestrator-publish-drafts",
-    "Publish drafts",
-    OrchestratorConsent::PublishDrafts,
-  ),
-  (
-    "settings-orchestrator-answer-agents",
-    "Answer agents",
-    OrchestratorConsent::AnswerAgents,
-  ),
-  (
-    "settings-orchestrator-merge-runs",
-    "Merge runs",
-    OrchestratorConsent::MergeRuns,
-  ),
-  (
-    "settings-orchestrator-merge-finished",
-    "Merge finished runs on its own",
-    OrchestratorConsent::MergeFinished,
-  ),
-  (
-    "settings-orchestrator-continue-interrupted",
-    "Continue interrupted runs",
-    OrchestratorConsent::ContinueInterrupted,
-  ),
-  (
-    "settings-orchestrator-write-git",
-    "Write with git",
-    OrchestratorConsent::WriteGit,
-  ),
-];
+/// The switch's element id and its label.
+const SWITCH: &str = "settings-orchestrator-drive";
+const LABEL: &str = "Let the Orchestrator drive";
 
 /// Project settings on its Orchestrator tab.
 fn orchestrator() -> Settings {
@@ -68,11 +38,7 @@ fn project_settings_orchestrator_is_the_tab_after_runs() {
     runs < orchestrator && orchestrator < context,
     "{runs} {orchestrator} {context}"
   );
-  assert!(
-    page
-      .text("settings-orchestrator-may-head")
-      .contains("The Orchestrator may")
-  );
+  assert!(page.text("settings-orchestrator-may-head").contains("Driving"));
   assert!(
     page
       .text("settings-orchestrator-may-head")
@@ -81,18 +47,12 @@ fn project_settings_orchestrator_is_the_tab_after_runs() {
   assert!(
     page
       .text("settings-orchestrator-may-foot")
-      .starts_with("Off: the Orchestrator proposes it")
+      .starts_with("Off: the Orchestrator proposes each change")
   );
-  // Merge finished runs on its own needs the two above it: it starts further in.
-  let (merge, finished) = (
-    left(&mut page, "settings-orchestrator-merge-runs-label"),
-    left(&mut page, "settings-orchestrator-merge-finished-label"),
-  );
-  assert_eq!(finished - merge, 26.0);
 }
 
 #[test]
-fn project_settings_orchestrator_switches_are_the_projects_and_only_a_persons() {
+fn project_settings_orchestrator_has_one_switch_which_is_the_projects_and_only_a_persons() {
   let mut page = orchestrator();
   let workspace = page.window.launch.workspace().expect("session").clone();
   let repo = page.repo.clone();
@@ -100,29 +60,40 @@ fn project_settings_orchestrator_switches_are_the_projects_and_only_a_persons() 
     page.window.link.input_gate().protecting(),
     "MCP window input is refused"
   );
-  for (switch, label, consent) in SWITCHES {
-    page.until("the switch read", |p| p.exists(&format!("{switch}-mark")));
-    assert!(page.text(&format!("{switch}-row")).contains(label));
-    assert!(!page.switch_on(switch), "{label} is off until turned on");
-    page.until("automation's change refused", |p| {
-      lurq::app::events::with_synthetic_input(|| p.click(switch));
-      p.exists(&format!("{switch}-blocked"))
-    });
-    assert!(!workspace.orchestrator_allows(&repo, consent).expect("read"));
-    page.until("the person's choice saved for the project", |p| {
-      let stored = workspace.orchestrator_allows(&repo, consent).expect("read");
-      if !stored {
-        p.click(switch);
-      }
-      stored
-    });
-    page.until("the switch to show it", |p| p.switch_on(switch));
+  for old in [
+    "publish-drafts",
+    "answer-agents",
+    "merge-runs",
+    "merge-finished",
+    "continue-interrupted",
+    "write-git",
+  ] {
+    assert!(
+      !page.exists(&format!("settings-orchestrator-{old}-row")),
+      "the {old} switch is folded into Let the Orchestrator drive"
+    );
   }
+  page.until("the switch read", |p| p.exists(&format!("{SWITCH}-mark")));
+  assert!(page.text(&format!("{SWITCH}-row")).contains(LABEL));
+  assert!(!page.switch_on(SWITCH), "{LABEL} is off until turned on");
+  page.until("automation's change refused", |p| {
+    lurq::app::events::with_synthetic_input(|| p.click(SWITCH));
+    p.exists(&format!("{SWITCH}-blocked"))
+  });
+  assert!(!workspace.orchestrator_drives(&repo).expect("read"));
+  page.until("the person's choice saved for the project", |p| {
+    let stored = workspace.orchestrator_drives(&repo).expect("read");
+    if !stored {
+      p.click(SWITCH);
+    }
+    stored
+  });
+  page.until("the switch to show it", |p| p.switch_on(SWITCH));
+  page.until("what it does said", |p| p.exists(&format!("{SWITCH}-on")));
   page.saved();
   // Off holds in the project from the person's click, before the save runs.
-  let (switch, _, consent) = SWITCHES[0];
-  page.click(switch);
-  assert!(!workspace.orchestrator_allows(&repo, consent).expect("read"));
+  page.click(SWITCH);
+  assert!(!workspace.orchestrator_drives(&repo).expect("read"));
 }
 
 #[test]

@@ -134,6 +134,9 @@ struct Inner {
   /// When work on each shared task last asked for its run claim this session, by this computer's clock: a claim
   /// asked for after its task's latest run ended is not that run's to end (`project::claim_ends`).
   work_asked: Mutex<HashMap<orchester_core::id::TaskId, Timestamp>>,
+  /// The claims whose end for a run the server refused with `409 Conflict` this session: not asked again
+  /// (`project::claim_ends`).
+  refused_claim_ends: Mutex<HashSet<(orchester_core::id::TaskId, orchester_core::id::RunId)>>,
   /// The checkouts whose first download after a join or a link is under way, failed or ended (`project::download`).
   downloads: Mutex<HashMap<PathBuf, project::download::Mark>>,
   /// The new resources of each checkout the team server refused after they were sent later, which the hub tells the
@@ -192,6 +195,7 @@ impl Servers {
         sync_states: Mutex::new(HashMap::new()),
         sharing_now: Mutex::new(HashSet::new()),
         work_asked: Mutex::new(HashMap::new()),
+        refused_claim_ends: Mutex::new(HashSet::new()),
         downloads: Mutex::new(HashMap::new()),
         taken_back: Mutex::new(HashMap::new()),
         starting: Mutex::new(HashMap::new()),

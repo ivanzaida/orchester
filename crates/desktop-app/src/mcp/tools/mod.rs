@@ -193,14 +193,8 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
         insert("highlight", &key.to_string());
       }
     }
-    ProjectPage::EditTask(key) => insert("key", &key.to_string()),
+    ProjectPage::EditTask(key) | ProjectPage::TaskReview(key) => insert("key", &key.to_string()),
     ProjectPage::Memory(Some(tab)) => insert("tab", tab.name()),
-    ProjectPage::PullRequests(tab) => insert("tab", tab.name()),
-    ProjectPage::PullRequest(number, _) => insert("number", &number.to_string()),
-    ProjectPage::PullRequestFeedback(number, _) => {
-      insert("number", &number.to_string());
-      insert("tab", "feedback");
-    }
     ProjectPage::Usage(query) => {
       let query = with_usage_query(String::new(), query);
       if let Some(query) = query.strip_prefix('?') {
@@ -250,6 +244,10 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
         insert("from", file.source().name());
       }
     }
+    ProjectPage::TaskMerge(key, number) => {
+      insert("key", &key.to_string());
+      insert("run", &number.get().to_string());
+    }
     page => {
       for (name, value) in other_params(page) {
         insert(name, &value);
@@ -258,12 +256,11 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
   }
 }
 
-/// The parameters `navigate` takes back for the places of Modules, the code viewer and a run's merge attempts.
+/// The parameters `navigate` takes back for the places of Modules and the code viewer.
 fn other_params(page: &ProjectPage) -> impl Iterator<Item = (&'static str, String)> {
   module_params(page)
     .into_iter()
     .chain(files_params(page))
-    .chain(merge_params(page))
     .chain(hub_params(page))
 }
 
@@ -278,14 +275,6 @@ fn hub_params(page: &ProjectPage) -> Vec<(&'static str, String)> {
   params.extend(view.item.map(|item| ("item", item.to_string())));
   params.extend(view.server.map(|server| ("server", server.to_string())));
   params
-}
-
-/// The parameters `navigate` takes back for a run's merge attempts: its task's `key` and its number, `run`.
-fn merge_params(page: &ProjectPage) -> Vec<(&'static str, String)> {
-  match page {
-    ProjectPage::MergeAttempt(key, number) => vec![("key", key.to_string()), ("run", number.get().to_string())],
-    _ => Vec::new(),
-  }
 }
 
 fn settings_view(page: &ProjectPage) -> &'static str {

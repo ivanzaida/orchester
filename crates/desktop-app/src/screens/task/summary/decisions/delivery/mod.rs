@@ -14,6 +14,7 @@ mod card;
 mod commits;
 pub(super) mod details;
 mod integrate;
+mod phases;
 mod resolve;
 mod rows;
 mod side;
@@ -365,7 +366,7 @@ impl View<'_> {
       ctx.t_args("delivery.task.left.title", [("base", base)]),
     )
     .icon(crate::ui::icon::Icon::TriangleAlert)
-    .body(crate::screens::merge_queue::words::left_reason(ctx, left));
+    .body(crate::screens::task::queue_words::left_reason(ctx, left));
     vec![notice.into(), self.stages(ctx, Stage::Waiting), self.columns(ctx, None)]
   }
 }

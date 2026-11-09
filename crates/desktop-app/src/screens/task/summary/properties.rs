@@ -137,8 +137,12 @@ pub fn column(ctx: &mut Ctx, task: &TaskContext, (section, more): (Option<Elemen
     property(
       "task-property-depends",
       &ctx.t("summary.properties.dependsOn"),
-      depends(ctx, task, tasks),
+      // While the run waits on a task, the task it waits on (09 `r0j4Y1`).
+      crate::screens::task::waits_on::depends_on(ctx, task).unwrap_or_else(|| depends(ctx, task, tasks)),
     ),
+  ]);
+  rows.extend(super::led_in::led_in_row(ctx, task));
+  rows.extend([
     property(
       "task-property-limits",
       &ctx.t("summary.properties.limits"),

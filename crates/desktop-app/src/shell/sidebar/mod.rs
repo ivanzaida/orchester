@@ -32,11 +32,12 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::id::ProjectId;
+use orchester_workspace::tasks::review_list::waiting_count;
 
 use self::{
   edges::Watch,
   place::Place,
-  running::{Running, RunningProps, under_way},
+  running::{Running, RunningProps},
   switcher::{Switcher, SwitcherProps},
   team_count::{TeamCount, team_count},
 };
@@ -140,8 +141,9 @@ struct Count {
 }
 
 /// The counts beside the places: how many tasks `project` has (a team project's Active tasks as its server counts
-/// them, `team_count`), a dash while they are read, and how many runs are in its merge queue beside Review, in
-/// `warning`. A count of none is left out, and so are all when the tasks cannot be read or the project is not open.
+/// them, `team_count`), a dash while they are read, and how many tasks wait for the person's review beside Review
+/// (`waiting_count`, which the Review list's first group holds), in `warning`. A count of none is left out, and so are
+/// all when the tasks cannot be read or the project is not open.
 fn counts(ctx: &mut Ctx, project: ProjectId) -> Vec<Count> {
   let projects = Projects::of(ctx);
   let Some(open) = projects.state(project).and_then(|state| state.open().cloned()) else {
@@ -165,8 +167,7 @@ fn counts(ctx: &mut Ctx, project: ProjectId) -> Vec<Count> {
   } else {
     shown(tasks.tasks.len())
   };
-  let in_queue = shown(orchester_workspace::merge_queue::in_queue(tasks.merge_queue.iter()));
-  let review = in_queue.map(|value| Count {
+  let review = shown(waiting_count(&tasks)).map(|value| Count {
     place: Place::Review,
     value,
     waiting: true,
@@ -189,21 +190,14 @@ impl Count {
   }
 }
 
-/// The project's runs under way, once its tasks are read.
+/// The project's runs under way, once they are read (`running::Running`).
 fn running(ctx: &mut Ctx, project: ProjectId) -> Option<Element> {
-  let projects = Projects::of(ctx);
-  let Some(ProjectState::Open(open)) = projects.state(project) else {
+  let Some(ProjectState::Open(open)) = Projects::of(ctx).state(project) else {
     return None;
   };
-  let feed = projects.feed(project);
-  let online = feed.runner_online(&open.repo_root);
-  let runs = feed
-    .tasks
-    .with(|tasks| tasks.ready().map(|tasks| under_way(tasks, online)))?;
   let props = RunningProps {
     project,
     repo_root: open.repo_root,
-    runs,
   };
   Some(ctx.mount_keyed::<Running>("running", props))
 }

@@ -14,6 +14,7 @@ mod browser_line;
 mod claim;
 mod decisions;
 mod empty;
+mod led_in;
 mod live;
 mod merge_row;
 mod notice;

@@ -280,3 +280,21 @@ fn resolve_markers_are_told_at_the_start_of_a_line_only() {
   assert!(holds_markers("a\n<<<<<<< HEAD\nb\n=======\nc\n>>>>>>> main\n"));
   assert!(!holds_markers("Title\n=======\n\nText with <<<<<<< inside.\n"));
 }
+
+#[test]
+fn resolve_start_on_a_branch_that_holds_the_base_merges_nothing_and_says_so() {
+  // The agent merged the base in already (ORC-920): git makes no merge commit, so there is no second parent to read.
+  let (repo, worktree) = appended();
+  git_in(&worktree, &["merge", "--quiet", "-X", "ours", "--no-edit", "main"]);
+  let tip = head(&worktree);
+  let started = start(&worktree).expect("nothing to merge is not a failure");
+  assert_eq!(
+    started,
+    Started::Merged(resolve::MergedIn {
+      base: Revision::new(&repo.head()).expect("a commit"),
+      tip: tip.clone(),
+    })
+  );
+  assert_eq!(head(&worktree), tip, "git changed nothing");
+  assert_eq!(resolve::resolution(&Processes, &git_program(), &worktree), Ok(None));
+}

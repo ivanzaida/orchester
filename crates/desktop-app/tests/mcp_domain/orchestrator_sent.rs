@@ -6,7 +6,10 @@
 //! question was answered meanwhile never read as sent; and an answer the chat gave names it on the question's card.
 //! `get_conversation`, `get_run` and `list_questions` say the same.
 
-use orchester_app::routes::{ProjectPage, Route, TaskTab, TaskView};
+use orchester_app::{
+  routes::{ProjectPage, Route, TaskTab, TaskView},
+  theme::ExtraSpacing,
+};
 use orchester_core::{
   conversation::Message,
   id::{ChatId, RunId},
@@ -31,7 +34,6 @@ use orchester_workspace::{
     composer::ComposerMode,
     orchestrator::{ProposalState, proposals},
   },
-  workspace::OrchestratorConsent,
 };
 use serde_json::{Value, json};
 
@@ -112,7 +114,7 @@ fn sent_directly_names_the_orchestrator_and_how_it_went_out() {
   let mut db = ProjectDb::open(&seeded.repo).expect("the project's data");
   let (task, run) = task_run(&db, ASKING);
   let scope = chat(&served, &mut db);
-  allow(&served, &seeded.repo, OrchestratorConsent::AnswerAgents);
+  allow(&served, &seeded.repo);
   // The message answers the agent's question: automation decides it only with the person's consent.
   served
     .services()
@@ -182,6 +184,23 @@ fn sent_proposal_waits_in_the_task_conversation_until_the_person_applies_it() {
   served.until("the proposal's row", |served| {
     served.tree.get_element_by_id(&format!("{row}-apply")).is_some()
   });
+  // Its buttons sit a card's section gap under its text, as the timeline's cards draw theirs (ORC-902).
+  let bounds = |served: &mut Served, id: String| {
+    served
+      .tree
+      .get_element_by_id_mut(&id)
+      .and_then(|element| element.bounds())
+  };
+  served.until("the proposal laid out", |served| {
+    bounds(served, format!("{row}-actions")).is_some()
+  });
+  let said = bounds(&mut served, format!("{row}-said")).expect("its text is laid out");
+  let buttons = bounds(&mut served, format!("{row}-actions")).expect("its buttons are laid out");
+  assert_eq!(
+    buttons.y - (said.y + said.height),
+    ExtraSpacing::Loose.value(),
+    "the gap over the buttons"
+  );
   served.click_by_person(&format!("{row}-apply"));
   served.until("the applied message", |_| sent(&db, task.id(), TEXT).is_some());
   let stored = sent(&db, task.id(), TEXT).expect("the message");

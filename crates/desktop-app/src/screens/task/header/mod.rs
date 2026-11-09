@@ -131,6 +131,7 @@ impl Component for TaskHeader {
     let mode = props.view.tab() != TaskTab::Conversation;
     let status_line = no_branch::status_line(ctx, &props.task, &self.no_branch, (&self.confirming, &self.remove))
       .or_else(|| team::status_line(ctx, &props.task))
+      .or_else(|| super::waits_on::status_line(ctx, &props.task))
       .or_else(|| not_ready_line::shown(ctx, &props.task, mode))
       .unwrap_or_else(|| run_line::status_line(ctx, &props.task, mode));
     Column::new()
@@ -197,8 +198,11 @@ impl TaskHeader {
     if props.task.team.is_some() && detail.run.is_none() {
       shown.moves = team::run(ctx, &props.task, ("task-run", "task.controls.run"));
     }
+    // A run that waits on another task has no primary action: the wait's row has what the person can do (09 `SLuUW`).
+    let waits_on = super::waits_on::holding(&detail).is_some();
     let primary = match team::take_over(ctx, &props.task) {
       Some(take_over) => Some(take_over),
+      None if waits_on => None,
       None => primary::primary(ctx, &props.task, &props.view, shown.moves.clone()),
     };
     // A team task's run at work here pauses from the primary action (01c `Tb55G`).

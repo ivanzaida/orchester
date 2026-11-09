@@ -2,13 +2,14 @@
 //! server to the chat's project, changing one, turning one on or off and removing one, through the same fields, rules
 //! and refusals as Orchester's own `add_mcp_server`, `update_mcp_server`, `set_mcp_server_enabled` and
 //! `remove_mcp_server` (Connections › MCP servers). Each call is read first as the tool would make it
-//! ([`crate::app_mcp::setup::preview_mcp`]): what widens what agents may do (a new server, another program, endpoint,
-//! authorization, variable or exempt tool, turning one on) is always a card only a person applies, in any turn and
-//! whatever the switches say; a change that only narrows (turning one off, removing one no profile chooses, dropping
-//! exempt tools or the authorization) is made at once only in a turn the person asked for and while they let
-//! automation change agent permissions, and is a card otherwise. A person's *Apply* reads it again and refuses it once
-//! anything it shows or stands on changed; the widening they were shown is theirs to decide, as in the window. A
-//! secret is only ever named (`NAME@environment`): no tool takes or shows its value.
+//! ([`crate::app_mcp::setup::preview_mcp`]): while the chat drives, the app's tool is called at once and refuses by its
+//! own rules (what widens what agents may do is `person_only` unless a person lets automation change agent
+//! permissions); otherwise what widens (a new server, another program, endpoint, authorization, variable or exempt
+//! tool, turning one on) is always a card only a person applies, and a change that only narrows (turning one off,
+//! removing one no profile chooses, dropping exempt tools or the authorization) is made at once only in a turn the
+//! person asked for and while they let automation change agent permissions, and is a card otherwise. A person's *Apply*
+//! reads it again and refuses it once anything it shows or stands on changed; the widening they were shown is theirs to
+//! decide, as in the window. A secret is only ever named (`NAME@environment`): no tool takes or shows its value.
 
 use orchester_core::orchestrator::{
   ActionOutcome, ChatAction,
@@ -22,6 +23,7 @@ use rmcp::{
 use serde_json::{Value, json};
 
 use super::{
+  acts::drives,
   change, keep,
   own_project::in_own_project,
   tools::{ChatScope, app_tool, changes_permissions},
@@ -47,8 +49,10 @@ pub const NAMES: [&str; 4] = [
 const RULES: &str = "Adding a server, or a change that widens what agents may do (another name, program, arguments, \
   folder or endpoint, another authorization that sends a secret, any variable but RUST_LOG, RUST_BACKTRACE, CI, \
   NO_COLOR, FORCE_COLOR, TZ, LANG and the LC_ ones, a variable that takes a secret, a tool added to exempt_tools, \
-  turning a server on), is always a card in this conversation that the person applies or dismisses, in any turn and \
-  whatever the person's switches say: nothing changes until they apply it, and you never apply it. The card shows the \
+  turning a server on), is a card in this conversation that the person applies or dismisses while Let the \
+  Orchestrator drive is off: nothing changes until they apply it, and you never apply it. While it is on, every call \
+  is made at once by the app's own rules: a change that widens is refused (person_only) unless a person turned on \
+  Let automation change agent permissions. The card shows the \
   server as applying leaves it: the program and its arguments or the URL, the authorization's scheme and which secret, \
   the variables' names, which tool calls run without asking, and a warning when the program is not found on this \
   computer's search path. A change that only narrows (turning a server off, removing one no profile chooses, dropping \
@@ -162,8 +166,11 @@ async fn act(
   let mcp = blocking(move || preview_mcp(&read, operation, &arguments))
     .await?
     .change;
-  // Nobody asked for anything in a turn Orchester started: even a narrowing waits for the person there.
-  let at_once = !mcp.widens && !scope.on_its_own && changes_permissions(services).await?;
+  // While the chat drives, the app's tool is called at once and refuses by its own rules (a widening is `person_only`
+  // unless a person lets automation change agent permissions). Otherwise nobody asked for anything in a turn Orchester
+  // started: even a narrowing waits for the person there.
+  let at_once =
+    drives(services, scope).await? || (!mcp.widens && !scope.on_its_own && changes_permissions(services).await?);
   let made = if at_once {
     Some(app_tool((services, translate), setup_tool(operation), mcp.arguments.clone()).await)
   } else {

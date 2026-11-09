@@ -172,6 +172,15 @@ impl ClaudeStream {
     std::mem::take(&mut self.replayed)
   }
 
+  /// Whether the call `item`, started and not yet answered, is one of Orchester's `ask_question`: the call a question
+  /// waiting in the agent's turn belongs to, which no result ends before the person answers.
+  pub fn is_question_call(&self, item: &str) -> bool {
+    self
+      .calls
+      .get(item)
+      .is_some_and(|call| crate::question::tool::is_claude_name(&call.tool))
+  }
+
   /// How many results the CLI printed: how many turns it ended.
   pub const fn results(&self) -> usize {
     self.results

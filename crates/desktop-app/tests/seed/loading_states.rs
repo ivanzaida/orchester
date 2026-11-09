@@ -1,14 +1,11 @@
 use orchester_core::store::TaskStore;
 use orchester_store::ProjectDb;
-use orchester_workspace::{
-  agents::data::ProjectAgents,
-  pull_requests::list::{PullRequestList, load_list_in},
-};
+use orchester_workspace::agents::data::ProjectAgents;
 
 use super::Seed;
 
 #[test]
-fn seed_loading_states_has_a_module_with_tasks_and_a_linked_pull_request_list() {
+fn seed_loading_states_has_a_module_with_tasks() {
   let seed = Seed::of("loading-states");
   let db = ProjectDb::open(seed.repo()).expect("the project's database");
   let modules = db.modules().expect("modules");
@@ -19,10 +16,6 @@ fn seed_loading_states_has_a_module_with_tasks_and_a_linked_pull_request_list() 
     .filter(|task| task.module() == Some(modules[0].id()))
     .count();
   assert_eq!(in_module, 2);
-  assert!(matches!(
-    load_list_in(seed.repo()).expect("the stored pull requests"),
-    PullRequestList::Linked(_)
-  ));
   assert!(ProjectAgents::for_screen(seed.repo()).is_ok());
 }
 

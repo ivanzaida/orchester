@@ -53,16 +53,19 @@ mod notice_records;
 mod orchestrator;
 mod orchestrator_compactions;
 mod orchestrator_fork;
+mod orchestrator_leads;
 mod orchestrator_plans;
 mod orchestrator_queue;
 mod orchestrator_reports;
 mod orchestrator_rewind;
 mod orchestrator_sent;
 mod orchestrator_settings;
+mod orchestrator_subscriptions;
 mod orchestrator_switches;
 mod orchestrator_titles;
 mod orchestrator_usage;
 mod orchestrator_waits;
+mod orchestrator_watch_summaries;
 mod organization;
 mod organized_drafts;
 mod owned_records;
@@ -92,6 +95,8 @@ mod run_connections;
 mod run_ends;
 mod run_inputs;
 mod run_models;
+mod run_progress;
+mod run_waits;
 mod runner_failures;
 mod runs;
 mod schema;
@@ -165,7 +170,7 @@ pub use self::{
   orchestrator_queue::StartedQueued,
   orchestrator_reports::KeptReport,
   orchestrator_rewind::ChatRewind,
-  orchestrator_switches::OrchestratorSwitch,
+  orchestrator_subscriptions::{KeptSubscription, WatchStart},
   orchestrator_titles::ChatDeletion,
   orchestrator_waits::KeptWait,
   owned_records::{
@@ -179,6 +184,7 @@ pub use self::{
   resources::ResourceUpdate,
   run_ends::EndedRun,
   run_inputs::AcceptedInputs,
+  run_waits::{KeptRunWait, RunWaitEnd, RunWaitEnded},
   runs::{RunBranch, RunLogRecord},
   shared_events::{SharedEvent, SharedSnapshot},
   shared_members::{ServerAdmin, SharedMember},

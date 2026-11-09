@@ -41,6 +41,25 @@ pub fn retry_checkpoint() -> Vec<(&'static str, String)> {
   ]
 }
 
+/// What lands on `main` after a run started from the first commit, in the lines KON-12's checkpoint changes: a merge
+/// of that checkpoint into `main` conflicts in these two files.
+pub fn main_moved_on() -> Vec<(&'static str, String)> {
+  vec![
+    ("src/webhooks/sender.rs", SENDER.replace(SENDER_BODY, MAIN_BODY)),
+    (
+      "src/webhooks/settings.rs",
+      SETTINGS.replace(
+        "  pub timeout_secs: u64,
+",
+        "  pub timeout_secs: u64,
+  /// Seconds an endpoint is paused after a delivery gave up.
+  pub pause_secs: u64,
+",
+      ),
+    ),
+  ]
+}
+
 /// What KON-12's Builder changed in its worktree since that checkpoint.
 pub fn retry_in_progress() -> Vec<(&'static str, String)> {
   vec![
@@ -84,6 +103,10 @@ const SENDER_BODY: &str = "    let response = self.client.post(&endpoint.url).bo
     Ok(Delivery::from_response(response))
 ";
 
+const MAIN_BODY: &str = "    let response = self.client.post(&endpoint.url).body(body).send().await?;
+    self.log.record(endpoint, response.status());
+    Ok(Delivery::from_response(response))
+";
 const RETRY_BODY: &str = "    let budget = endpoint.settings.retry_budget;
     let mut attempt = 0;
     loop {

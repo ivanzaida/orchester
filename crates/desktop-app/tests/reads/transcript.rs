@@ -95,7 +95,8 @@ fn reads_a_transcript_line_again_only_where_its_run_runs() {
   let state = ended.settle();
   assert_eq!(
     state,
-    counts(&[("project tasks", 1), ("project usage", 1), ("task", 1)])
+    counts(&[("project tasks", 1), ("project usage", 1), ("running", 1), ("task", 1)]),
+    "the sidebar's runs under way read again with it"
   );
   assert!(
     title(&mut ended).contains("CI caching, renamed"),

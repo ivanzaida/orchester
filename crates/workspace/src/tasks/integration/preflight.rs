@@ -4,7 +4,7 @@
 
 use std::{path::Path, sync::Arc};
 
-use orchester_core::integration::{PreflightCause, PreflightStage, local::LocalError};
+use orchester_core::integration::{PreflightCause, PreflightStage, attempt::cause_text, local::LocalError};
 use orchester_exec::local_git::{IntegrationLease, LocalGit, LocalGitError, owned::StoreOwnership, prepare_scratch};
 
 use super::IntegrationProblem;
@@ -77,6 +77,9 @@ pub(super) fn message(stage: PreflightStage, cause: &PreflightCause) -> Message 
   if *cause == PreflightCause::Held {
     return Message::new("localIntegration.preflight.integrationLockHeld");
   }
+  if *cause == not_proved_stopped() {
+    return Message::new("localIntegration.preflight.processUncertain");
+  }
   let key = match stage {
     PreflightStage::IntegrationLock => "localIntegration.preflight.integrationLock",
     PreflightStage::ProjectDatabase => "localIntegration.preflight.projectDatabase",
@@ -87,6 +90,21 @@ pub(super) fn message(stage: PreflightStage, cause: &PreflightCause) -> Message 
     PreflightStage::Policy => "localIntegration.preflight.policy",
   };
   Message::new(key).with("cause", cause.to_string())
+}
+
+/// The cause of a refusal because Git's programs were not proved stopped, whatever the stage: it names no file or Git
+/// answer, so it is told as a whole.
+fn not_proved_stopped() -> PreflightCause {
+  PreflightCause::State(LocalError::ProcessUncertain)
+}
+
+/// What an attempt keeps of `cause`: the key of its plain words when the person has to act on it, otherwise its text,
+/// which the attempt page says as the OS, Git or Orchester said it.
+pub fn cause_words(cause: &PreflightCause) -> String {
+  if *cause == not_proved_stopped() {
+    return "localIntegration.preflight.processUncertainCause".to_owned();
+  }
+  cause_text(cause)
 }
 
 /// Names `stage` alone, for an MCP client that is told no cause.

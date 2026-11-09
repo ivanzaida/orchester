@@ -60,6 +60,9 @@ pub enum Rejection {
   /// A merge waits in the run's worktree for a person to resolve it: the run does not continue until it is
   /// committed or aborted.
   WorktreeInMerge,
+  /// The agent profile chosen for a returned step cannot run in this run (protocol 53): the version is not one the run
+  /// can read (a shared run runs only the profiles its inputs pin) or the model it names is not the version's.
+  ProfileNotUsable,
   /// The run changed since it was read for the decision: nothing was decided.
   RunChangedMeanwhile,
   /// The run's worktree was removed, so its agent cannot continue there: a follow-up (Ask agent)

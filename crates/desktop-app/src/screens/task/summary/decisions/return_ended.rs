@@ -231,7 +231,7 @@ impl ReturnEnded {
       return button.disabled();
     };
     // The same return `continue_run`'s `return_to` sends, decided by whoever pressed.
-    let returned = |by| return_work::command(parts.run, step.clone(), (note.clone(), None), by);
+    let returned = |by| return_work::command(parts.run, step.clone(), (note.clone(), None), (None, by));
     let (person, automation) = (returned(Answerer::Person), returned(Answerer::Automation));
     let (action, asked) = (action.clone(), self.asked.clone());
     let (gate, person_only) = (self.gate.clone(), self.person_only.clone());

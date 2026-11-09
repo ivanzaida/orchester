@@ -303,7 +303,8 @@ Connections and secrets are never copied; importing never grants access.
 ### Project settings
 
 **General** (project, GitHub, base branch, base-moved notices), **Runs** (approvals: Allow Autopilot and the reviewer,
-approved-for-every-run rules, story-point estimates, limits), **Orchestrator** (what the chat may do on its own),
+approved-for-every-run rules, story-point estimates, limits), **Orchestrator** (what the chat may do on its own, and
+*Watching*: the default order and *A run without progress for*),
 **Context** (sources, repository agent files, code index, memory), **Connections**, **Environment** (variables and
 secrets), **Sharing** — see [settings.md](settings.md#2-project-settings-projectidsettings).
 
@@ -603,11 +604,33 @@ the turns in one column, and the composer at the foot.
 
    You can also approve a waiting proposal in words ("run it"), except click-only ones.
 4. **New** starts a conversation ("What should we plan?" with four suggestions); **History** lists earlier ones (search,
-   *Today*, *Yesterday*, *Earlier*).
-5. More autonomy: the project's person-only switches in Project settings › Orchestrator (*The Orchestrator may*); the
-   daily report in Settings › Notifications.
+   *Today*, *Yesterday*, *Earlier*; *Leads …* on a conversation that watches something).
+5. **Watch.** A conversation *leads* what you tell it to watch, and the events of those tasks — waits, run ends, no
+   progress, merge conflicts, a waited task merged or closed — come to it and to no other conversation. Only
+   subscriptions bring events into the chat: an event of a task no conversation leads goes to no conversation and
+   starts no turn (it stays on the task's page, in *Needs you*, the Overview and the notifications), and no
+   conversation is opened for one. Watch *Everything in* the project to get every event into one conversation:
+   - **/watch-module** (*Watch modules*) picks modules, *Tasks without a module* or *Everything in* the project;
+     **/watch-task** (*Watch tasks*) picks tasks. Text after the chips is the subscription's **order**; without text
+     the project's *Default order for watching* applies. An order only narrows what your switches allow.
+   - **/watching** (*What I watch*) shows what the conversation leads and what waits there, with *Stop watching*.
+     **/unwatch** (*Stop watching*) picks among what this conversation watches, or *All of them*; Ctrl Enter stops
+     them. × on a *Leads* chip in the header and the `/watching` answer stop one too. Stopping cancels and pauses
+     nothing.
+   - The most specific subscription wins: the task, then its module (or the tasks without a module), then the
+     project. A target another conversation leads shows a card: **Open that conversation** or **Take it here**.
+   - A task's or module's subscription ends by itself once its tasks are Done or Canceled, with a summary turn. A task
+     the chat creates outside what the conversation watches becomes a task subscription of it.
+   - Only you subscribe: with the commands, which the app applies itself and which spend nothing, or by asking the
+     Orchestrator in words ("watch ORC-12 and ORC-13", "follow the Docs module", "stop watching Docs"). It then
+     subscribes or unsubscribes this conversation with its `watch` and `unwatch` tools, by the same rules, and the line
+     says *at your request*; it never does so on its own or in a turn Orchester started, and a target another
+     conversation leads stays there until you choose on its card.
+6. More autonomy: the project's person-only switch in Project settings › Orchestrator (*Let the Orchestrator drive*), and
+   its *Watching* section (default order, *A run without progress for*); the daily report in Settings › Notifications.
+   Without *Let the Orchestrator drive*, events are kept as entries but start no turn.
 
-Details: [orchestrator-chat.md](orchestrator-chat.md).
+Details: [orchestrator-chat.md](orchestrator-chat.md) (*Watching*).
 
 ## 9. Code, pull requests and usage
 

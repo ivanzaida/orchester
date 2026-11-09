@@ -131,7 +131,8 @@ pub async fn continue_run(services: &Services, args: ContinueRun) -> Result<Valu
 }
 
 /// `continue_run` decided by `by`: automation's decision on a waiting run, or its raise of a limit that stopped one,
-/// needs the person's consent, while a person's (the Orchestrator chat's proposal a person applied) is recorded as
+/// needs the person's consent (the Orchestrator chat's switch *Let the Orchestrator drive* is that for the chat), while
+/// a person's (the Orchestrator chat's proposal a person applied) is recorded as
 /// theirs and needs none. A resume after the daily budget raises nothing: the runner refuses it while today's budget
 /// is still used up. A team task's limits are its Admin's (D6), so a raise is refused there; its other choices read
 /// the task from this computer's copy, so they are refused for a team project until its runs are read from their
@@ -153,7 +154,7 @@ pub(crate) async fn continue_as(services: &Services, args: ContinueRun, by: Answ
       Choice::RaiseLimits { .. } | Choice::RaiseStepBudget { .. } => Some(DecisionKind::Limit),
       Choice::Resume => None,
     };
-    if let Some(decision) = decision.filter(|_| by == Answerer::Automation) {
+    if let Some(decision) = decision.filter(|_| by == Answerer::Automation && !reading.chat_drives()) {
       decision.require(&reading.workspace)?;
     }
     let project = reading.project(&args.project)?;
@@ -280,7 +281,7 @@ fn request(
         return Err(ToolError::refused(refusal.code(), vec![refusal.message()]));
       }
       let (step, note) = return_target(view, (step, note), &number)?;
-      Request::Command(return_work::command(view, step, (note, None), by))
+      Request::Command(return_work::command(view, step, (note, None), (None, by)))
     }
     (_, Choice::ReturnTo { .. }) => {
       let refusal = return_work::ReturnRefusal::NotEnded;
@@ -351,7 +352,11 @@ fn decision(view: &RunView, (choice, by): (&Choice, Answerer), number: &str) -> 
     }
     Choice::ReturnTo { step, note } => {
       let (step, note) = return_target(view, (step, note), number)?;
-      Ok(StuckDecision::ReturnTo { step, note })
+      Ok(StuckDecision::ReturnTo {
+        step,
+        note,
+        profile: None,
+      })
     }
     _ => Err(refused("choice_not_offered", "appMcp.errors.choiceNotOffered", number)),
   }
@@ -430,7 +435,7 @@ fn resolve_conflicts(
       shown.key.clone()
     }
   };
-  let command = return_work::resolve_command(view, target, (&job.conflicts, note), by)
+  let command = return_work::resolve_command(view, target, (&job.conflicts, note), (None, by))
     .ok_or_else(|| ToolError::refused("no_base_branch", vec![Message::new("appMcp.errors.noBaseBranch")]))?;
   Ok(Request::Command(command))
 }

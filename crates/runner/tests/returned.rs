@@ -42,6 +42,7 @@ fn returned(root: &Path, run: RunId) -> WorkReturn {
     step: implement(),
     note: note(),
     conflicts: None,
+    profile: None,
     by: Answerer::Person,
     expected: read(root, run).last_sequence(),
   }
@@ -75,6 +76,7 @@ async fn returned_a_succeeded_run_works_again_from_the_step_with_the_note() {
       return_to: implement(),
       note: note(),
       conflicts: None,
+      profile: None,
     }
   );
   let db = ProjectDb::open(root).expect("open");

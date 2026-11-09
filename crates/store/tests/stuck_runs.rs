@@ -54,6 +54,7 @@ fn stuck_runs_round_trip_waiting_restarted_and_returned() {
   let decision = StuckDecision::ReturnTo {
     step: implement(),
     note: note.clone(),
+    profile: None,
   };
   let events = run.decide_stuck(&decision, at(20)).expect("returned");
   db.append_events(&run, &events).expect("stored decision");

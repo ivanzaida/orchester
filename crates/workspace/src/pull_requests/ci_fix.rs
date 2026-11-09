@@ -23,7 +23,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{
-  InboxError,
+  PullRequestError,
   ci::{PullRequestCi, ReadCi, run_pull_request},
 };
 use crate::{
@@ -354,7 +354,7 @@ pub struct AutoFixRun {
 
 /// The runs of the project at `root` whose *Fix CI automatically* is on and whose branch has a pull request the last
 /// sync stored. Blocks on SQLite.
-pub fn auto_fix_runs_in(root: &Path) -> Result<Vec<AutoFixRun>, InboxError> {
+pub fn auto_fix_runs_in(root: &Path) -> Result<Vec<AutoFixRun>, PullRequestError> {
   let db = ProjectDb::open(root)?;
   let mut runs = Vec::new();
   for id in db.runs_fixing_ci_automatically()? {

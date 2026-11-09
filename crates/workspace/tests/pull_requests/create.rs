@@ -21,10 +21,7 @@ use orchester_core::{
 use orchester_exec::programs::Programs;
 use orchester_workspace::{
   activity::Activity,
-  pull_requests::{
-    create::{CreateProblem, Readiness, Unavailable, UnpushedBase, create_in, readiness_in},
-    list::{PullRequestList, load_list_in},
-  },
+  pull_requests::create::{CreateProblem, Readiness, Unavailable, UnpushedBase, create_in, readiness_in},
   tasks::integration_jobs::{IntegrationJobs, PullRequestArgs, PullRequestJob},
   workspace::OpenProject,
 };
@@ -234,7 +231,10 @@ fn pull_request_readiness_says_why_a_run_cannot_have_one() {
     .expect("stored");
   assert_eq!(
     readiness(FakeGitHub::new(run.branch().as_str())),
-    Readiness::Open { number: 141 }
+    Readiness::Open {
+      number: 141,
+      url: "https://github.com/ivanzaida/kontur/pull/141".to_owned()
+    }
   );
 }
 
@@ -313,12 +313,17 @@ fn pull_request_creation_pushes_the_branch_opens_a_draft_and_links_it_to_the_tas
     ran[opened..].iter().any(|args| args.starts_with("pr list")),
     "a sync followed: {ran:?}"
   );
-  let PullRequestList::Linked(list) = load_list_in(fixture.repo.path()).expect("the list") else {
-    panic!("the project is linked");
-  };
-  let listed = list.find(143).expect("the sync stored it");
-  let task = listed.task.as_ref().expect("linked to its task");
-  assert_eq!((task.key.to_string(), task.run), ("KON-1".to_owned(), run.id()));
+  let stored = fixture
+    .db
+    .pull_requests(&repo())
+    .expect("the list reads")
+    .expect("the sync stored the list");
+  let found = stored
+    .pull_requests
+    .iter()
+    .find(|pull_request| pull_request.number() == 143)
+    .expect("the sync stored it");
+  assert_eq!(found.head(), run.branch(), "it is the pull request of the run's branch");
 }
 
 /// ORC-81: a run that started on the project's base branch `staging` asks for its pull request into `staging`, the
@@ -415,7 +420,10 @@ fn pull_request_creation_refuses_a_second_one_for_the_run() {
       &programs(&Arc::new(fake)),
       (run.id(), true, UnpushedBase::Refuse)
     ),
-    Err(CreateProblem::AlreadyOpen { number: Some(143) })
+    Err(CreateProblem::AlreadyOpen {
+      number: Some(143),
+      url: Some("https://github.com/ivanzaida/kontur/pull/143".to_owned())
+    })
   );
   fixture
     .db
@@ -438,7 +446,10 @@ fn pull_request_creation_refuses_a_second_one_for_the_run() {
       &programs(&fake),
       (run.id(), true, UnpushedBase::Refuse)
     ),
-    Err(CreateProblem::AlreadyOpen { number: Some(141) })
+    Err(CreateProblem::AlreadyOpen {
+      number: Some(141),
+      url: Some("https://github.com/ivanzaida/kontur/pull/141".to_owned())
+    })
   );
   assert!(
     fake.ran_one("push").is_none(),

@@ -50,7 +50,6 @@ mod permissions;
 pub mod pipelines;
 mod project_settings;
 mod projects;
-mod pull_requests;
 mod review;
 mod run_model;
 mod secrets;
@@ -69,6 +68,7 @@ mod tasks;
 mod todo_list;
 mod typography;
 pub mod usage;
+mod watching;
 
 use std::time::Duration;
 
@@ -109,7 +109,8 @@ pub use self::{
   needs_you::{NeedsYouRadius, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
   orchester::{OrchesterSpacing, OrchesterText},
   orchestrator::{
-    OrchestratorShadow, OrchestratorSpacing, OrchestratorText, beside_chat_lane, chat_scrollbar, picker_scrollbar,
+    LEADS_HINT_OPACITY, OrchestratorShadow, OrchestratorSpacing, OrchestratorText, beside_chat_lane, chat_scrollbar,
+    picker_scrollbar, watch_list_scrollbar,
   },
   overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
@@ -117,8 +118,7 @@ pub use self::{
   pipelines::{PipelinesSpacing, PipelinesText},
   project_settings::{ProjectSettingsSpacing, ProjectSettingsText},
   projects::{ProjectsSpacing, ProjectsText},
-  pull_requests::{PullRequestsSpacing, PullRequestsText},
-  review::{REVIEW_TYPING_OPACITY, ReviewSpacing, ReviewText},
+  review::{REVIEW_TYPING_CYCLE, REVIEW_TYPING_OPACITY, REVIEW_TYPING_STEPS, ReviewSpacing, ReviewText},
   run_model::ModelText,
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
   settings::{SettingsSpacing, SettingsText},
@@ -138,6 +138,7 @@ pub use self::{
   todo_list::TodoText,
   typography::{ExtraTypography, IconSize},
   usage::{UsageRadius, UsageSpacing, UsageText},
+  watching::{WatchingSpacing, WatchingText},
 };
 
 /// A control that cannot be used, faded as a whole: a button that is unavailable or disabled (`Create
@@ -179,7 +180,6 @@ pub fn install(app: &mut App, mode: Mode) {
   connections::install(theme);
   secrets::install(theme);
   projects::install(theme);
-  pull_requests::install(theme);
   shell::install(theme);
   skills::install(theme);
   lifecycle::install(theme);
@@ -204,6 +204,7 @@ pub fn install(app: &mut App, mode: Mode) {
   dialog::install(theme);
   permissions::install(theme);
   side_question::install(theme);
+  watching::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

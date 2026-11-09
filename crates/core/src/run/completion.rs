@@ -31,7 +31,7 @@ pub enum CompletedBy {
   /// An MCP client: through Orchester's MCP server (`complete_run`, or a change of the task's status), or with window
   /// input.
   Automation,
-  /// The Orchestrator, on its own, as it would merge the run (*Let the Orchestrator merge finished runs on its own*).
+  /// The Orchestrator, on its own, as it would merge the run (*Let the Orchestrator drive*).
   Orchestrator,
   /// A member of the shared project, who closed the task on its team server (ORC-150).
   Member,

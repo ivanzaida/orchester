@@ -1,5 +1,5 @@
 //! `review-page`: a run's review page (ORC-697, `Review · redesign` 09i `wLyFt` and the states of `RBR9O`), each run
-//! opened from its row in Review › Merges or at `/project/<id>/merges/<KEY>/<run>`. Answers under way are kept only
+//! opened from its row in Review or at `/project/<id>/review/<KEY>`. Answers under way are kept only
 //! while no runner drives the project: open it in a QA app started without a runner, or the runner ends them. State 8
 //! *Sending…* and the tray's sending state are a send under way: call the debug tool `hold_hand_offs` `held: true`,
 //! then *Send to Implement (1)* on *Sign webhook payloads* (or *Try again* on *Per-endpoint secrets*) keeps its
@@ -10,7 +10,8 @@
 //!   (the tray idle with it), a question asked with nothing from Implement yet (3), one Implement is answering (4), a
 //!   stopped answer (5), an answered question (6), a question not asked because the runner was not running (11), an
 //!   addressed comment (10) and a resolved comment; on `settings.rs`, a comment a later checkpoint outdated. The
-//!   migration is marked *Viewed*, so it shows folded.
+//!   migration is marked *Viewed*, so it shows folded. Its last step reported (ORC-797), so the page tells the first
+//!   sentence of that report with *Run summary →*; the other two runs reported nothing and show no row.
 //! - *Per-endpoint secrets*, waiting for review: two comments whose send the runner did not take (the tray failed).
 //! - *Delivery log per endpoint*: a run returned to Implement with a comment sent, Implement at work on it (9); its
 //!   Implement step wrote the run's last checkpoint, so the comment's Conversation link names it (*step 03 Implement*).
@@ -24,7 +25,8 @@ use orchester_core::{
     AgentWords, CommentState, QuestionState, ReviewFailure, ReviewMessage, ReviewThread, Said, ThreadKind, ThreadParts,
   },
   revision::Revision,
-  run::Run,
+  run::{Run, StepOutcome, StepOutput},
+  store::ActivityStore,
   task::Task,
   time::Timestamp,
 };
@@ -32,12 +34,15 @@ use orchester_core::{
 use crate::kontur::{Kontur, SeedError, catalogue::Published, files, run::Drive};
 
 const CRITERIA: [&str; 1] = ["The change is covered by tests."];
-const SENDER: &str = "src/webhooks/sender.rs";
+pub(super) const SENDER: &str = "src/webhooks/sender.rs";
 const SETTINGS: &str = "src/webhooks/settings.rs";
 const MIGRATION: &str = "migrations/0042_delivery_attempts.sql";
 /// The doc line of the retry budget the first checkpoint writes and the second rewrites.
 const BUDGET_DOC: &str = "  /// Attempts per delivery, the first included.";
 const BUDGET_DOC_AFTER: &str = "  /// Attempts per delivery, the first one included.";
+/// What the first run's last step reported: its first sentence is the page's summary row.
+const REPORT: &str = "## Retries\nDeliveries now retry with a capped, jittered backoff that honours Retry-After, and stop \
+                      after the settings' budget. Every attempt is logged, and a test covers the bound.";
 
 pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   let catalogue = kontur.delivering_catalogue()?;
@@ -48,12 +53,12 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
 }
 
 /// What a thread is seeded with: its kind, the lines and their code, the head they were read at, and its messages.
-struct Seeded {
-  kind: ThreadKind,
-  lines: (String, u32, u32, Vec<String>),
-  head: Revision,
-  messages: Vec<(Said, String)>,
-  resolved: bool,
+pub(super) struct Seeded {
+  pub kind: ThreadKind,
+  pub lines: (String, u32, u32, Vec<String>),
+  pub head: Revision,
+  pub messages: Vec<(Said, String)>,
+  pub resolved: bool,
 }
 
 fn every_thread(kontur: &mut Kontur, quick: &Published) -> Result<(), SeedError> {
@@ -74,6 +79,7 @@ fn every_thread(kontur: &mut Kontur, quick: &Published) -> Result<(), SeedError>
   drive.checkpoint("implement", &[(SETTINGS, settings)])?;
   drive.pass_with("implement", &[])?.pass_all()?;
   let run = drive.finish();
+  report(kontur, &run)?;
   let head = checkpoint(&run)?;
   let sender = added(&content(&work, SENDER)?);
   let line = |at: usize| -> Result<(String, u32, u32, Vec<String>), SeedError> {
@@ -114,6 +120,33 @@ fn every_thread(kontur: &mut Kontur, quick: &Published) -> Result<(), SeedError>
   Ok(())
 }
 
+/// The report the last step of `run` wrote.
+fn report(kontur: &mut Kontur, run: &Run) -> Result<(), SeedError> {
+  let step = run
+    .snapshot()
+    .body()
+    .steps()
+    .last()
+    .ok_or_else(|| SeedError::Invalid("the run has no steps".to_owned()))?
+    .key
+    .clone();
+  let execution = run
+    .latest_execution(&step)
+    .ok_or_else(|| SeedError::NoSuchStep(step.to_string()))?
+    .id();
+  let output = StepOutput {
+    run: run.id(),
+    execution,
+    step,
+    outcome: Some(StepOutcome::Done),
+    text: REPORT.to_owned(),
+    unverified: Vec::new(),
+    created_at: kontur.today_ago(30),
+  };
+  kontur.db.save_step_output(&output)?;
+  Ok(())
+}
+
 /// The lines of a file the run changed and their code, by the position of a line it added.
 type Lines<'a> = &'a dyn Fn(usize) -> Result<(String, u32, u32, Vec<String>), SeedError>;
 
@@ -142,7 +175,7 @@ fn threads_on_sender(head: &Revision, line: Lines<'_>) -> Result<Vec<Seeded>, Se
 }
 
 /// Implement's words, `writing` or written, doing `activity`.
-fn words(writing: bool, activity: Option<&str>) -> Said {
+pub(super) fn words(writing: bool, activity: Option<&str>) -> Said {
   Said::Agent(AgentWords {
     writing,
     activity: activity.map(str::to_owned),
@@ -203,7 +236,7 @@ fn questions() -> Vec<Spec> {
         ),
         (
           words(false, None),
-          "The budget counts every attempt, the first included, so 5 means four retries.",
+          "The budget counts **every attempt**, the first included, so `5` means four retries:\n\n- the first try\n  - then up to four retries\n- `delay_for()` caps each wait",
         ),
       ],
       false,
@@ -299,7 +332,7 @@ fn failed_send(kontur: &mut Kontur, quick: &Published) -> Result<(), SeedError> 
 }
 
 /// *Delivery log per endpoint*: its comment was sent, and Implement works on it.
-fn at_work(kontur: &mut Kontur, quick: &Published) -> Result<(), SeedError> {
+pub(super) fn at_work(kontur: &mut Kontur, quick: &Published) -> Result<(), SeedError> {
   let task = queued(
     kontur,
     quick,
@@ -333,7 +366,11 @@ fn at_work(kontur: &mut Kontur, quick: &Published) -> Result<(), SeedError> {
 }
 
 /// A queued task titled `title`, on `pipeline`, noted as left in `state`.
-fn queued(kontur: &mut Kontur, pipeline: &Published, (title, state): (&str, &'static str)) -> Result<Task, SeedError> {
+pub(super) fn queued(
+  kontur: &mut Kontur,
+  pipeline: &Published,
+  (title, state): (&str, &'static str),
+) -> Result<Task, SeedError> {
   let mut task = kontur.task((title, state, &CRITERIA), Some(pipeline), kontur.ago(600))?;
   kontur.seeded(&task, state);
   kontur.queue(&mut task, pipeline)?;
@@ -341,7 +378,7 @@ fn queued(kontur: &mut Kontur, pipeline: &Published, (title, state): (&str, &'st
 }
 
 /// Stores `seeded` on `run`, written at `at`.
-fn store(kontur: &mut Kontur, run: &Run, seeded: Seeded, at: Timestamp) -> Result<(), SeedError> {
+pub(super) fn store(kontur: &mut Kontur, run: &Run, seeded: Seeded, at: Timestamp) -> Result<(), SeedError> {
   let invalid = |error: String| SeedError::Invalid(error);
   let (path, start, end, excerpt) = seeded.lines;
   let line = |number| NonZeroU32::new(number).ok_or_else(|| invalid("a line 0".to_owned()));
@@ -373,7 +410,7 @@ const fn not_sent() -> Said {
 }
 
 /// `run`'s latest checkpoint.
-fn checkpoint(run: &Run) -> Result<Revision, SeedError> {
+pub(super) fn checkpoint(run: &Run) -> Result<Revision, SeedError> {
   run
     .last_checkpoint()
     .map(|checkpoint| checkpoint.revision().clone())
@@ -381,7 +418,7 @@ fn checkpoint(run: &Run) -> Result<Revision, SeedError> {
 }
 
 /// The content `work` gives the file at `path`.
-fn content(work: &[(&str, String)], path: &str) -> Result<String, SeedError> {
+pub(super) fn content(work: &[(&str, String)], path: &str) -> Result<String, SeedError> {
   work
     .iter()
     .find(|(file, _)| *file == path)
@@ -391,7 +428,7 @@ fn content(work: &[(&str, String)], path: &str) -> Result<String, SeedError> {
 
 /// The lines of `content` that the repository's first version of its file does not hold, by number from 1: the lines
 /// the run's diff adds.
-fn added(content: &str) -> Vec<(u32, String)> {
+pub(super) fn added(content: &str) -> Vec<(u32, String)> {
   let initial: Vec<String> = files::initial()
     .into_iter()
     .flat_map(|(_, text)| text.lines().map(str::to_owned).collect::<Vec<_>>())

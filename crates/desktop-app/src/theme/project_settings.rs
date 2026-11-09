@@ -30,10 +30,13 @@ pub enum ProjectSettingsText {
   /// Geist Mono 16/500 `text_primary`: an opened item's title that is an identifier, a secret's name (`CKPaZ` in
   /// `06b` `uCVIP`).
   MonoPageTitle,
+  /// 12.5 `text_primary`, 1.55: what a person writes in a row's text area, the default order for watching (`Value`
+  /// `SS8HK` in `gB7Kb`).
+  Written,
 }
 
 impl ProjectSettingsText {
-  pub const ALL: [Self; 8] = [
+  pub const ALL: [Self; 9] = [
     Self::GroupTitle,
     Self::Hint,
     Self::Value,
@@ -42,6 +45,7 @@ impl ProjectSettingsText {
     Self::MonoHint,
     Self::PageTitle,
     Self::MonoPageTitle,
+    Self::Written,
   ];
 
   pub fn role(self) -> TypographyStyle {
@@ -58,6 +62,7 @@ impl ProjectSettingsText {
       Self::MonoHint => "project_settings_mono_hint",
       Self::PageTitle => "project_settings_page_title",
       Self::MonoPageTitle => "project_settings_mono_page_title",
+      Self::Written => "project_settings_written",
     }
   }
 
@@ -79,6 +84,7 @@ impl ProjectSettingsText {
       Self::MonoHint => mono(style(12.0, FontWeight::Normal, LINE_16 / 12.0, 0.0, palette.text_muted)),
       Self::PageTitle => style(16.0, FontWeight::SemiBold, 1.3, 0.0, palette.text_primary),
       Self::MonoPageTitle => mono(style(16.0, FontWeight::Medium, 1.3, 0.0, palette.text_primary)),
+      Self::Written => style(12.5, FontWeight::Normal, 1.55, 0.0, palette.text_primary),
     }
   }
 }
@@ -98,19 +104,10 @@ pub enum ProjectSettingsSpacing {
   RowY,
   /// 14: a row's sides (`Pt6ry`).
   RowX,
-  /// 40: the start of a row whose setting needs the one above it (`Merge finished runs on its own` `k1WWv` in `S03`).
-  Dependent,
 }
 
 impl ProjectSettingsSpacing {
-  pub const ALL: [Self; 6] = [
-    Self::HeaderTop,
-    Self::Side,
-    Self::BodyTop,
-    Self::RowY,
-    Self::RowX,
-    Self::Dependent,
-  ];
+  pub const ALL: [Self; 5] = [Self::HeaderTop, Self::Side, Self::BodyTop, Self::RowY, Self::RowX];
 
   pub fn role(self) -> SpacingSize {
     SpacingSize::extra(self.name())
@@ -123,7 +120,6 @@ impl ProjectSettingsSpacing {
       Self::BodyTop => "project_settings_body_top",
       Self::RowY => "project_settings_row_y",
       Self::RowX => "project_settings_row_x",
-      Self::Dependent => "project_settings_dependent",
     }
   }
 
@@ -134,7 +130,6 @@ impl ProjectSettingsSpacing {
       Self::BodyTop => 22.0,
       Self::RowY => 11.0,
       Self::RowX => 14.0,
-      Self::Dependent => 40.0,
     }
   }
 }

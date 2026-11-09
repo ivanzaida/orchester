@@ -8,8 +8,7 @@
 mod support;
 
 use lurq::app::events::{MouseButton, ScrollPhase};
-use orchester_app::routes::{OverviewTab, ProjectPage, ProjectSettingsTab, Route};
-use orchester_workspace::workspace::OrchestratorConsent;
+use orchester_app::routes::Route;
 use support::Window;
 
 const SWITCH: &str = "settings-change-permissions";
@@ -174,76 +173,24 @@ fn press_element(window: &mut Window, id: &str) {
   window.pass();
 }
 
-/// *What the Orchestrator may do*, the row that points to each project's own switches.
-const ORCHESTRATOR: &str = "settings-orchestrator-may-do";
-/// The foot under its group, the tab's last part.
-const LAST: &str = "settings-orchestrator-foot";
+/// The tab's last row.
+const LAST: &str = "settings-change-permissions-row";
 
 #[test]
-fn settings_automation_names_the_open_projects_orchestrator_switches_and_opens_them() {
+fn settings_automation_has_no_row_for_the_orchestrator() {
   let mut window = Window::open();
-  let workspace = window.launch.workspace().expect("session").clone();
-  let kontur = workspace.projects().expect("the projects")[0].clone();
-  for consent in [
-    OrchestratorConsent::AnswerAgents,
-    OrchestratorConsent::MergeRuns,
-    OrchestratorConsent::ContinueInterrupted,
+  window.navigation().go(Route::Settings);
+  window.until("the last row", |window| window.tree.get_element_by_id(LAST).is_some());
+  for id in [
+    "settings-orchestrator",
+    "settings-orchestrator-may-do",
+    "settings-orchestrator-foot",
   ] {
-    workspace
-      .set_orchestrator_allows(&kontur.repo_root, consent, true)
-      .expect("on in Kontur");
+    assert!(
+      window.tree.get_element_by_id(id).is_none(),
+      "{id}: what the Orchestrator may do is set in each project's settings (Let the Orchestrator drive)"
+    );
   }
-  // Settings shows the project the tab was in last, once it opened there.
-  window
-    .navigation()
-    .go(Route::Project(kontur.id, ProjectPage::Overview(OverviewTab::default())));
-  window.until("Kontur open", |window| {
-    window
-      .projects()
-      .state_now(kontur.id)
-      .is_some_and(|state| state.open().is_some())
-  });
-  window.navigation().go(Route::Settings);
-  let hint = format!("{ORCHESTRATOR}-hint");
-  let named = format!(
-    "Each project sets its own · {}: answers agents, merges runs, continues interrupted runs",
-    kontur.name.as_str()
-  );
-  window.until("the project's switches named", |window| {
-    window.tree.get_element_by_id(&hint).is_some() && window.text(&hint) == named
-  });
-  assert_eq!(
-    window.text(&format!("{ORCHESTRATOR}-label")),
-    "What the Orchestrator may do"
-  );
-  assert_eq!(
-    window.text("settings-orchestrator-foot-text"),
-    "Each project's Orchestrator has its own switches, in Project settings › Orchestrator."
-  );
-  assert!(
-    window.tree.get_element_by_id("settings-publish-drafts").is_none(),
-    "no switch of the Orchestrator's is left here"
-  );
-  press_element(&mut window, &format!("{ORCHESTRATOR}-open"));
-  window.until("the project's Orchestrator tab", |window| {
-    window.navigation().route_now()
-      == Route::Project(kontur.id, ProjectPage::Settings(ProjectSettingsTab::Orchestrator))
-  });
-}
-
-#[test]
-fn settings_automation_with_no_project_open_says_each_project_sets_its_own() {
-  let mut window = Window::open();
-  window.navigation().open_tab();
-  window.pass();
-  window.navigation().go(Route::Settings);
-  let hint = format!("{ORCHESTRATOR}-hint");
-  window.until("the row", |window| window.tree.get_element_by_id(&hint).is_some());
-  assert_eq!(window.text(&hint), "Each project sets its own");
-  assert!(
-    window.tree.get_element_by_id(&format!("{ORCHESTRATOR}-open")).is_none(),
-    "no project to open"
-  );
 }
 
 /// The bottom of `id` as laid out.
@@ -389,7 +336,7 @@ fn settings_automation_opens_with_what_automation_may_always_do_and_locks_window
       .unwrap_or_else(|| panic!("{id} is laid out"))
       .y
   };
-  let order = [LOOK, WINDOW_CONTROL, APPROVALS, SWITCH, ORCHESTRATOR];
+  let order = [LOOK, WINDOW_CONTROL, APPROVALS, SWITCH];
   let tops: Vec<f32> = order.iter().map(|id| top(&mut window, id)).collect();
   assert!(tops.windows(2).all(|pair| pair[0] < pair[1]), "{order:?} at {tops:?}");
   assert!(

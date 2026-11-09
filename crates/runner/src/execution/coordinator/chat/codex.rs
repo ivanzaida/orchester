@@ -46,7 +46,7 @@ use orchester_core::{
   id::{AgentAccountId, ChatMessageId},
   orchestrator::{
     TurnFailure, TurnState,
-    instructions::{ProjectReads, SERVER, renamed_server, system_prompt},
+    instructions::{ProjectReads, SERVER, renamed_server},
   },
   permission::{CodexSandbox, NetworkAccess},
   resource::RepositoryAccess,
@@ -152,7 +152,7 @@ impl Turn {
       server,
       renamed,
       instructions,
-    } = self.server_names(&mcp, &prepared.project_name);
+    } = self.server_names(&mcp, &prepared);
     let skill = placed.as_ref().map(|(folder, words)| SetupSkill {
       skill: CodexChatSkill {
         root: folder.folder.clone(),
@@ -193,8 +193,9 @@ impl Turn {
   }
 
   /// The name Codex gets the chat's server of `mcp` by, the project's name of each server Codex gets by another, and
-  /// the system prompt of project `project_name`, which tells the agent a name apart.
-  fn server_names(&self, mcp: &CodexMcp, project_name: &str) -> ServerNames {
+  /// the system prompt of the project `prepared` names, with what the conversation leads, which tells the agent a name
+  /// apart.
+  fn server_names(&self, mcp: &CodexMcp, prepared: &Prepared) -> ServerNames {
     let server = mcp
       .servers()
       .first()
@@ -205,7 +206,9 @@ impl Turn {
       .iter()
       .map(|(server, name)| (name.clone(), server.to_string()))
       .collect();
-    let mut instructions = system_prompt(project_name, self.project, ProjectReads::GitTools);
+    let mut instructions = prepared
+      .leads
+      .system_prompt(&prepared.project_name, self.project, ProjectReads::GitTools);
     if server != SERVER {
       instructions.push('\n');
       instructions.push_str(&renamed_server(&server));

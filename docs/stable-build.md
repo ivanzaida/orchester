@@ -593,6 +593,22 @@ nothing; the script then stops before starting the app, with the seed's message.
 registry, never in `tools/qa-app.ps1`: the script names no scenarios, so its git blob, which the project rule
 *Approve for every run of this project* for `start_qa_app` is kept to, does not change with each new scenario.
 
+**QA copies count the MCP client as the person (the QA gate).** In a QA copy, the program `tools/qa-app.ps1`
+starts (`examples/qa_app`, copied as `orchester-app-qa`), the app's MCP client counts as the person for the
+Orchestrator's person-only actions, so design verification reaches what a person's press reaches: a synthetic Ctrl
+Enter applies a `/watch-module` or `/watch-task` from the composer; *Stop watching* (and × on a Leads chip),
+`/unwatch`, *Take it here* and *Open that conversation* on the card of a target another conversation leads, *Start* on
+a proposed run, *Approve and do it* on a plan, the accept of a proposed change, going back (Edit, *Rewind to here*)
+and deleting a conversation take a synthetic press as a person's; and a message the client sends from the composer is
+the person's. The gate is one place, `orchester_app::mcp::qa_person::QaPerson`, held by the session's services: off
+on every start, it is turned on only by `examples/qa_app` before its window opens. The installed app, `tools/run.ps1`
+and every other start never turn it on, so there these presses are still refused and say so; it is no environment
+variable or setting another program could set. It widens nothing else: Settings, permission and approval questions,
+the access token and pairing codes, sharing and sign-in, secrets, and the task pages' person-only controls keep their
+refusals in a QA copy too. `tests/orchestrator/qa_person.rs` covers it: in a session that turns it on the synthetic
+presses apply, in one that does not they are refused, and only `examples/qa_app` turns it on. The seed's
+`orchestrator-leads` scenario has subscriptions standing for these states (the design-verification skill names them).
+
 **The installed app's address.** Settings › Automation › *Orchester MCP server*. *Let agents connect to Orchester*
 is on by default. Off, nothing listens, the status bar shows *MCP off*, and the token stays stored for when you turn
 it on again. *Address* shows the address with *Copy*. Enter another port (1024 to 65535) and choose *Use port*: the

@@ -9,7 +9,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
   chat::{ActionOutcome, ChatAction, ChatEntry, ChatEvent, EntryKind},
-  instructions::{report_prompt, wait_prompt},
+  instructions::{report_prompt, wait_prompt, watch_summary_prompt},
   plan::{PlanState, TurnMode},
 };
 use crate::{id::ChatMessageId, time::Timestamp};
@@ -60,7 +60,7 @@ impl Dropped {
             dropped.mine += 1;
           }
         }
-        EntryKind::Wait { .. } | EntryKind::Report { .. } => {
+        EntryKind::Wait { .. } | EntryKind::Report { .. } | EntryKind::WatchEnded { .. } => {
           answering = true;
           dropped.theirs += 1;
         }
@@ -176,6 +176,7 @@ fn said(entry: &ChatEntry) -> Option<String> {
     }
     EntryKind::Wait { wait, .. } => first_line(&wait_prompt(wait)),
     EntryKind::Report { report, .. } => first_line(&report_prompt(report)),
+    EntryKind::WatchEnded { summary, .. } => first_line(&watch_summary_prompt(summary)),
     EntryKind::Event(ChatEvent::Rewound { dropped, .. }) => Some(format!(
       "Orchester: the person rewound the conversation here earlier; {dropped} messages were dropped."
     )),

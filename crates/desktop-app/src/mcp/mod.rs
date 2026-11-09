@@ -24,6 +24,7 @@ mod guard;
 pub mod input_gate;
 mod link;
 mod mode;
+pub mod qa_person;
 mod server;
 pub mod settings;
 mod status;

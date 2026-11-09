@@ -19,6 +19,9 @@ impl MergeStore for ProjectDb {
   type Error = StoreError;
 
   fn save_run_merge(&mut self, merge: &RunMerge) -> Result<(), StoreError> {
+    // Story points' calibration: what the task took, beside the points it had. Read before the write transaction, which
+    // holds the runner's writes off until it commits: the transcripts it reads are long (ORC-914).
+    let (task, effort) = super::task_effort::of_run(&self.connection, merge.run)?;
     let transaction = self.connection.transaction()?;
     // A run merges as it succeeded: not once it was reopened and works again (a follow-up, a return of its work), nor
     // while a merge waits in its worktree for a person.
@@ -42,12 +45,6 @@ impl MergeStore for ProjectDb {
     if inserted == 0 {
       return Err(StoreError::AlreadyMerged(merge.run));
     }
-    let task: String = transaction.query_row(
-      "SELECT task_id FROM runs WHERE id = ?1",
-      [merge.run.to_string()],
-      |row| row.get(0),
-    )?;
-    let task = crate::rows::parse("task id", &task)?;
     // A run of inputs the team server accepted never changes its task here: the server keeps the task's status, and
     // whether a merged team run makes its task Done is open (D4). A Done its claim's end recorded first, from git, and
     // did not send stays not sent (ORC-750).
@@ -61,8 +58,7 @@ impl MergeStore for ProjectDb {
         merge.merged_at,
       )?;
     }
-    // Story points' calibration: what the task took, beside the points it had.
-    super::task_effort::record(&transaction, task, merge.merged_at)?;
+    super::task_effort::record(&transaction, task, &effort, merge.merged_at)?;
     transaction.commit()?;
     Ok(())
   }

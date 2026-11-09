@@ -4,7 +4,8 @@
 //! conversations a person pinned, the latest pin first, under *Pinned* with an 11 pin 6 before it (`Pinned` `X981B` in
 //! `08c` `r4DVU`), then the others by when each last changed (*Today*, *Yesterday*, *Earlier*: Geist Mono 10.5
 //! `text_muted`, 10 over and 4 under), each a row ([`row`]) with its title (12.5/500, `text_primary` for the one shown,
-//! else `text_secondary`) over when and how many messages (11 `text_muted`), the one shown on `hover`; and at its foot
+//! else `text_secondary`) over when and how many messages (11 `text_muted`), or after an eye what it leads and when
+//! (`i687ei` c, [`meta`]), the one shown on `hover`; and at its foot
 //! over a `border` line, the way to the archived conversations while there are some (`Archived entry` `Z6bee` in `08`
 //! `q30JYF`: an archive glyph, *Archived* and their count, a chevron at its end) over a note. The archived ones are a
 //! view of their own ([`archived`], `08d` `qAfeu`); deleting one asks in a modal first ([`delete`], `08e` `I4xzOf`).
@@ -34,7 +35,10 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::ChatListing;
-use orchester_workspace::{orchestrator::chat::History, tasks::timeline::find::Needle};
+use orchester_workspace::{
+  orchestrator::{chat::History, watching::LeadCounts},
+  tasks::timeline::find::Needle,
+};
 
 use self::{
   row::ItemView,
@@ -188,7 +192,8 @@ impl PartialEq for Rows {
   }
 }
 
-/// A row of the list: a group's heading or a conversation, with what the search found in it while it searches.
+/// A row of the list: a group's heading or a conversation, with what the search found in it while it searches and
+/// what it leads.
 #[derive(Clone, PartialEq)]
 enum Item {
   Heading(Heading),
@@ -197,6 +202,7 @@ enum Item {
     current: bool,
     today: bool,
     matched: Option<Matched>,
+    leads: LeadCounts,
     rows: Rows,
   },
 }
@@ -232,8 +238,7 @@ pub(super) fn panel(
   let (head, list, foot) = if state.archived.get() {
     archived::parts(ctx, state, rows, (&archived, current))
   } else {
-    let listed: Option<Vec<&ChatListing>> = history.map(|history| history.listed().collect());
-    main_parts(ctx, state, rows, (listed.as_deref(), current), archived.len())
+    main_parts(ctx, state, rows, (history, current), archived.len())
   };
   Column::new()
     .id("orchestrator-history-panel")
@@ -256,14 +261,14 @@ pub(super) fn panel(
     .into()
 }
 
-/// History's list: its search field, and under it while it searches what it found, the conversations it lists
-/// (`chats`, none while they are read) and its foot, the way to the `archived` ones while there are some over the
-/// note. The messages of the conversations it lists are searched as the words in the field change.
+/// History's list: its search field, and under it while it searches what it found, the conversations `history` lists
+/// (none while they are read) and its foot, the way to the `archived` ones while there are some over the note. The
+/// messages of the conversations it lists are searched as the words in the field change.
 fn main_parts(
   ctx: &mut Ctx,
   state: &HistoryState,
   rows: &Rows,
-  (chats, current): (Option<&[&ChatListing]>, Option<ChatId>),
+  (history, current): (Option<&History>, Option<ChatId>),
   archived: usize,
 ) -> (Element, Element, Element) {
   let label = ctx.t("orchestrator.historyPanel.search");
@@ -272,8 +277,10 @@ fn main_parts(
     .placeholder(label)
     .render(ctx);
   let needle = Needle::new(&state.search.get());
-  let searched: Option<Searched> =
-    chats.map(|chats| chats.iter().map(|listing| (listing.chat.id(), listing.last)).collect());
+  let chats: Option<Vec<&ChatListing>> = history.map(|history| history.listed().collect());
+  let searched: Option<Searched> = chats
+    .as_ref()
+    .map(|chats| chats.iter().map(|listing| (listing.chat.id(), listing.last)).collect());
   let run = searched.clone().map(|chats| {
     let props = RunProps {
       root: rows.root.clone(),
@@ -286,10 +293,10 @@ fn main_parts(
   let search = needle
     .zip(searched)
     .map(|(needle, chats)| Search::of(needle, &chats, &state.outcome.get()));
-  let (list, status) = match chats {
+  let (list, status) = match history.zip(chats.as_deref()) {
     None => (reading(ctx), None),
-    Some(chats) => {
-      let items = items(chats, (current, rows), search.as_ref());
+    Some((history, chats)) => {
+      let items = items((chats, history), (current, rows), search.as_ref());
       let results = items.iter().filter(|item| matches!(item, Item::Chat { .. })).count();
       let status = search.as_ref().map(|search| search.status(ctx, results));
       let words = if chats.is_empty() {
@@ -463,30 +470,37 @@ fn search_words(search: &str) -> Vec<String> {
   search.split_whitespace().map(str::to_lowercase).collect()
 }
 
-/// The row of `listing` of the project `rows` name, `current` the one shown.
+/// The row of `listing` of the project `rows` name, `current` the one shown; an archived one says when it was archived
+/// rather than what it leads.
 fn chat_item(listing: &ChatListing, (current, rows): (Option<ChatId>, &Rows), today: Timestamp) -> Item {
-  found_item(listing, (current, rows), today, None)
+  found_item(listing, (current, rows), today, (None, LeadCounts::default()))
 }
 
-/// [`chat_item`] with what the search `matched` in it.
+/// [`chat_item`] with what the search `matched` in it and what it `leads`.
 fn found_item(
   listing: &ChatListing,
   (current, rows): (Option<ChatId>, &Rows),
   today: Timestamp,
-  matched: Option<Matched>,
+  (matched, leads): (Option<Matched>, LeadCounts),
 ) -> Item {
   Item::Chat {
     listing: Box::new(listing.clone()),
     current: current == Some(listing.chat.id()),
     today: Day::of(listing.last, today) == Day::Today,
     matched,
+    leads,
     rows: rows.clone(),
   }
 }
 
-/// The list's rows: `chats`, or while it searches those `search` found in their title or their messages, the pinned
-/// ones first, the latest pin first, and then the others under the day each last changed.
-fn items(chats: &[&ChatListing], shown: (Option<ChatId>, &Rows), search: Option<&Search>) -> Vec<Item> {
+/// The list's rows: `chats` of `history`, or while it searches those `search` found in their title or their messages,
+/// the pinned ones first, the latest pin first, and then the others under the day each last changed; each with what it
+/// leads.
+fn items(
+  (chats, history): (&[&ChatListing], &History),
+  shown: (Option<ChatId>, &Rows),
+  search: Option<&Search>,
+) -> Vec<Item> {
   let chats: Vec<(&ChatListing, Option<Matched>)> = chats
     .iter()
     .filter_map(|&listing| match search {
@@ -497,7 +511,10 @@ fn items(chats: &[&ChatListing], shown: (Option<ChatId>, &Rows), search: Option<
     })
     .collect();
   let today = Timestamp::now().local_day_start();
-  let item = |(listing, matched): (&ChatListing, Option<Matched>)| found_item(listing, shown, today, matched);
+  let item = |(listing, matched): (&ChatListing, Option<Matched>)| {
+    let leads = history.leads_of(listing.chat.id());
+    found_item(listing, shown, today, (matched, leads))
+  };
   let (mut pinned, others): (Vec<_>, Vec<_>) = chats.into_iter().partition(|(listing, _)| listing.pinned.is_some());
   pinned.sort_by_key(|(listing, _)| Reverse(listing.pinned));
   let mut items = Vec::new();

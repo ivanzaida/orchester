@@ -66,6 +66,11 @@ impl Params {
     }
   }
 
+  /// Drops every parameter left, for a path whose query no screen reads any more.
+  pub(super) fn clear(&mut self) {
+    self.0.clear();
+  }
+
   /// Fails on the first parameter no parser took.
   pub(super) fn finish(self) -> Result<(), RouteError> {
     match self.0.into_iter().next() {

@@ -55,7 +55,6 @@ mod orchestrator_sent;
 mod orchestrator_sent_as;
 mod person_decisions;
 mod pipeline_permissions;
-mod pull_requests;
 mod reads;
 mod reads_setup;
 mod resolve;
@@ -75,6 +74,7 @@ mod unverified;
 mod usage;
 #[path = "../mcp_stable/vault.rs"]
 mod vault;
+mod watches;
 mod window;
 mod worktree_removal;
 

@@ -33,7 +33,7 @@ use orchester_exec::{
   programs::Programs,
 };
 use orchester_store::{ProjectDb, StoreError};
-pub use preflight::stage_message;
+pub use preflight::{cause_words, stage_message};
 pub(crate) use preflight::{hold, integration_refusal};
 pub(crate) use words::git_message;
 pub use words::{file_list, unread_entry};
@@ -167,12 +167,13 @@ impl IntegrationProblem {
 
   /// Whether the merge stopped for a cause that passes by itself, which Orchester tries again
   /// ([`orchester_core::integration::retry`]): the project's integration lease another operation holds, a file
-  /// another program holds open, the project database busy.
+  /// another program holds open, the project database busy, a Git program of the run that is still closing.
   pub fn passes(&self) -> bool {
     match self {
       Self::Preflight { cause, .. } => cause.passes(),
       Self::Merge(error) => error.passes(),
       Self::Store(message) => crate::messages::failure_kind(message) == crate::messages::FailureKind::Busy,
+      Self::HeldLocally(CheckoutHolder::RunningProgram) => true,
       _ => false,
     }
   }
@@ -187,6 +188,7 @@ impl IntegrationProblem {
       Self::Store(message) => message.clone(),
       Self::AlreadyMerged => Message::new("runs.merge.failure.alreadyMerged"),
       Self::HeldLocally(CheckoutHolder::ThisRun) => Message::new("runs.merge.failure.heldLocally"),
+      Self::HeldLocally(CheckoutHolder::RunningProgram) => Message::new("runs.merge.failure.programRunning"),
       Self::HeldLocally(CheckoutHolder::OtherRun { task }) => {
         Message::new("runs.merge.failure.heldByOther").with("task", task.to_string())
       }

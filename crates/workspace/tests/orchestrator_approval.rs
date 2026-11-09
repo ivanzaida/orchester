@@ -455,7 +455,7 @@ fn chat_approval_lists_what_waits_and_never_applies_what_only_a_click_applies() 
 #[test]
 fn chat_approval_tool_says_when_it_applies_and_what_stays_a_click() {
   assert!(tools::CHAT_TOOLS.contains(&"apply_proposal"));
-  let told = tools::listed()
+  let told = tools::listed(false)
     .into_iter()
     .find(|tool| tool.name == "apply_proposal")
     .and_then(|tool| tool.description.map(|told| told.into_owned()))

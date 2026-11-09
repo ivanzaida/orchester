@@ -20,10 +20,10 @@ use orchester_workspace::{
 
 use super::{
   View,
-  data::{Reads, Shown, revision},
+  data::{Reads, Shown},
 };
 use crate::{
-  project::ShownProject,
+  project::{ShownProject, settled_read::settled_read},
   services::Services,
   ui::context_meter::{Compact, ContextMeterProps, MeterPlace, MeterReading, Over, context_meter},
 };
@@ -83,10 +83,13 @@ impl Component for ChatContext {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<ChatContextProps>().clone();
     let services = Services::of(ctx);
-    let changes = revision(ctx, &services.runners, &props.root);
+    let changes = super::data::own_changes(ctx, (&services.runners, &props.root), Some(props.chat));
     let hold = services.hold;
-    let state = ctx
-      .future((props.root.clone(), props.chat, changes), move |(root, chat, _)| {
+    let state = settled_read(
+      ctx,
+      "orchestrator context",
+      (props.root.clone(), props.chat, changes),
+      move |(root, chat, _)| {
         let hold = hold.clone();
         async move {
           hold.released().await;
@@ -94,9 +97,8 @@ impl Component for ChatContext {
             .await
             .and_then(|read| read)
         }
-      })
-      .state()
-      .get();
+      },
+    );
     // A read that failed keeps the reading last shown: the conversation, read from the same database, says why.
     let reading = state.data.map_or(props.read_with, |MeterReading(reading)| reading);
     context_meter(

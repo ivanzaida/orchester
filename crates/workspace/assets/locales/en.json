@@ -22,6 +22,8 @@
       "integrationLock": "Orchester could not take this project's integration lock ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
       "projectDatabase": "Orchester could not hold this project's database and SQLite's files beside it ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
       "scratchFolder": "Orchester could not prepare its local integration folder under .orchester ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
+      "processUncertain": "Orchester could not confirm that the Git programs it ran had all stopped (the computer may be very busy, or a program from an earlier merge is still closing), so it did not touch the checkout: nothing was merged, and the branch and the checkout are unchanged. Try again in a minute; if it keeps refusing, close and reopen Orchester.",
+      "processUncertainCause": "Git's programs had not stopped in time, so Orchester could not tell what they were still doing",
       "checkoutIdentity": "Orchester could not prove which checkout and Git directory the merge would change ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
       "gitMetadata": "Orchester could not hold this repository's Git metadata while Git runs ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
       "existingResult": "Orchester could not tell whether Git already holds this run's work ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
@@ -29,6 +31,7 @@
     },
     "externalResult": "Git contains all or part of this result already. Review the evidence in Local integration; no historical merge was recorded or repeated.",
     "personRequired": "A person reviews and approves the exact checked result in Local integration.",
+    "programRunning": "A Git program of this run’s local integration is still running in your checkout, so nothing was merged. Orchester waited a few seconds for it. Ask for the merge again in a minute; if it keeps refusing, open this run’s Local integration, which settles a program that is no longer running.",
     "running": "Integrating the local checkout for {{task}}"
   },
   "projectSettings": {
@@ -355,7 +358,6 @@
         "reviewComplete": "Review & complete",
         "openTask": "Open task",
         "openConflicts": "Open conflicts",
-        "openMergeQueue": "Open merge queue",
         "reviewRecords": "Review records"
       },
       "unavailable": {
@@ -730,6 +732,7 @@
         "alreadyMerged": "This run was merged already.",
         "notMergeable": "The run works again, or a merge waits in its worktree for you to resolve it, so its merge was not recorded.",
         "heldLocally": "This run’s local integration still holds work in your checkout. Finish it, cancel it or remove its kept originals in Local integration, then merge again. Nothing was merged.",
+        "programRunning": "A Git program of this run’s local integration is still running in your checkout, so nothing was merged. Orchester waited a few seconds for it and tries again by itself. If it keeps refusing, open this run’s Local integration, which settles a program that is no longer running.",
         "heldByOther": "The local integration of {{task}} holds work in your checkout. Finish it, cancel it or remove its kept originals in its Local integration, then merge again. Nothing was merged.",
         "anotherMerge": "Another merge is under way in this project. Merge this run once it is done.",
         "notRecorded": "Git merged the run into {{branch}}, but Orchester couldn’t record the merge. Merge again to record it.",
@@ -838,6 +841,7 @@
       "notEnded": "The run has not ended: only a run that succeeded or failed can be returned to a step.",
       "merged": "The run’s work was merged, so it is not returned to a step any more.",
       "worktreeInMerge": "A merge waits in the run’s worktree for you to resolve it. Continue or abort it first.",
+      "profileNotUsable": "The chosen agent profile cannot run in this run, so the step was not sent back. Choose another agent, or keep the run’s own.",
       "changedMeanwhile": "The run changed since this page read it, so nothing was decided. Look at it again, then decide.",
       "notInterrupted": "The run is not interrupted.",
       "notWaiting": "The run does not wait for your decision any more.",
@@ -919,54 +923,6 @@
       "git": "git could not read this version of the files.",
       "store": "The project's database cannot be read, so the run this page was opened from cannot be named.",
       "runner": "The project's runner did not answer, so the run's worktree cannot be read. Try again."
-    }
-  },
-  "pullRequests": {
-    "detail": {
-      "diffUnreadable": "The diff is not in a format Orchester can read. Open the pull request in GitHub; the log has the details."
-    },
-    "sync": {
-      "notSynced": "Pull requests not synced"
-    },
-    "openFailed": "The browser could not open the pull request.",
-    "notSynced": "Pull request #{{number}} is not among the pull requests the last sync read. Ask with refresh to read it from GitHub.",
-    "notRead": {
-      "rateLimited": "GitHub's rate limit holds requests back: pull request #{{number}} was not read. Ask again after the limit resets (paused_until).",
-      "unreachable": "GitHub could not be reached: pull request #{{number}} was not read. Ask again once GitHub can be reached.",
-      "failed": "Pull request #{{number}} could not be read from GitHub: check the project's GitHub connection in Connections."
-    },
-    "footer": {
-      "open": {
-        "one": "1 open pull request · From this project’s repository",
-        "other": "{{count}} open pull requests · From this project’s repository",
-        "part": "{{shown}} of {{count}} open pull requests · From this project’s repository",
-        "limited": "The {{count}} most recently updated open pull requests · From this project’s repository"
-      },
-      "merged": {
-        "one": "1 merged pull request · From this project’s repository",
-        "other": "{{count}} merged pull requests · From this project’s repository",
-        "part": "{{shown}} of {{count}} merged pull requests · From this project’s repository",
-        "limited": "{{count}} merged among the {{limit}} most recently updated closed pull requests · From this project’s repository"
-      },
-      "closed": {
-        "one": "1 closed pull request · From this project’s repository",
-        "other": "{{count}} closed pull requests · From this project’s repository",
-        "part": "{{shown}} of {{count}} closed pull requests · From this project’s repository",
-        "limited": "{{count}} closed among the {{limit}} most recently updated closed pull requests · From this project’s repository"
-      }
-    },
-    "feedback": {
-      "errors": {
-        "unlinked": "The project has no linked GitHub repository any more.",
-        "notFound": "The pull request or the thread is no longer among what Orchester read. Refresh the pull request.",
-        "noTask": "The pull request isn’t linked to a task, so no agent can be asked.",
-        "headMoved": "The pull request is now at {{revision}}. Choose where your request applies before you send it.",
-        "blank": "Write what you ask first.",
-        "notAnAgent": "That agent doesn’t work on the task any more. Choose another one.",
-        "closed": "The task doesn’t take requests in its current state; its page says why.",
-        "alreadySent": "The request already went to the agent, so it can’t be withdrawn. Reply in the thread instead.",
-        "invalid": "The thread could not be kept as written; the log has the details."
-      }
     }
   },
   "agents": {
@@ -1714,6 +1670,7 @@
       "secretNotFound": "This project has no secret {{secret}} that is not archived.",
       "notAnAgentCli": "{{connection}} runs no agent CLI, so it runs on no API provider.",
       "secretAmbiguous": "More than one secret is named {{secret}}; name it by its id (list_secrets).",
+      "conversationAmbiguous": "More than one Orchestrator conversation is titled {{conversation}}; name it by its id (get_watches without a conversation lists those that lead something).",
       "teamUnavailable": "The team server can't be reached now, so nothing was read or changed. Nothing is answered from this computer's copy; try again once it answers.",
       "teamNeedsVersion": "The team server needs Orchester {{version}} or later and refuses this version, so nothing was read or changed. A person updates Orchester from Settings › Updates.",
       "teamSignedOut": "This computer is signed out of the team server, so nothing was read or changed. A person signs in again from Settings › Servers.",
@@ -2348,6 +2305,99 @@
     }
   },
   "orchestrator": {
+    "watch": {
+      "noTarget": "Choose what to watch first.",
+      "gone": "Not applied · {{targets}} was closed or deleted meanwhile — nothing changed",
+      "notWatched": "Not applied · this conversation doesn't watch that — nothing changed",
+      "ledElsewhere": "Not applied · it's led in «{{title}}» now — nothing changed",
+      "alreadyHere": "This conversation leads it already.",
+      "eventTurn": "Not applied · Orchester started this turn by itself: what this conversation watches changes only when you ask — nothing changed",
+      "unknownTarget": "Not applied · nothing in this project answers to “{{target}}”: name a task by its key or a module by its name — nothing changed",
+      "target": {
+        "named": "{{name}}",
+        "gone": "Gone from the project",
+        "withoutModule": "Tasks without a module",
+        "project": "Every task of the project"
+      },
+      "kind": {
+        "task": "task",
+        "module": "module",
+        "withoutModule": "tasks without a module",
+        "project": "project"
+      },
+      "task": {
+        "state": {
+          "running": "Running",
+          "waits": "Needs input",
+          "queued": "Queued",
+          "stoppedAtLimit": "Stopped at limit",
+          "readyToMerge": "Ready to merge"
+        },
+        "note": {
+          "question": "its agent asks you",
+          "message": "its agent waits for your message",
+          "plan": "its plan waits for you",
+          "approval": "a tool request waits for you",
+          "decision": "its step waits for your decision",
+          "run": "its run waits for you",
+          "queued": "number {{position}} in the queue",
+          "limit": "only you can raise its limit",
+          "dailyBudget": "the project's daily budget is spent",
+          "readyToMerge": "you merge it"
+        },
+        "action": {
+          "answer": "Answer",
+          "decide": "Decide",
+          "summary": "Summary",
+          "review": "Review"
+        }
+      },
+      "rest": {
+        "one": "{{count}} more task with nothing under way",
+        "other": "{{count}} more tasks with nothing under way"
+      },
+      "total": {
+        "waits": {
+          "one": "{{count}} thing waits for you",
+          "other": "{{count}} things wait for you"
+        },
+        "limits": {
+          "one": "{{count}} run is stopped at a limit",
+          "other": "{{count}} runs are stopped at a limit"
+        },
+        "calm": "Nothing waits for you",
+        "nothing": "This conversation watches nothing yet"
+      },
+      "leads": {
+        "modules": {
+          "one": "{{count}} module",
+          "other": "{{count}} modules"
+        },
+        "tasks": {
+          "one": "{{count}} task",
+          "other": "{{count}} tasks"
+        },
+        "withoutModule": "the tasks without a module",
+        "project": "the whole project"
+      },
+      "ledIn": {
+        "nobody": "Nobody",
+        "chat": "«{{title}}»",
+        "viaModule": "«{{title}}» · via {{module}}",
+        "viaWithoutModule": "«{{title}}» · via the tasks without a module",
+        "viaProject": "«{{title}}» · via the whole project"
+      },
+      "ended": {
+        "moduleDone": "Every task of {{module}} is Done",
+        "moduleCanceled": "Every task of {{module}} is Canceled",
+        "moduleClosed": "Every task of {{module}} is Done or Canceled",
+        "taskDone": "{{task}} is Done",
+        "taskCanceled": "{{task}} is Canceled",
+        "aside": "— watching ended",
+        "asideModule": "— watching ended; the module's summary is below",
+        "asideTask": "— watching ended; the task's summary is below"
+      }
+    },
     "settings": {
       "connectionGone": "The Orchestrator's connection was removed. Choose another one.",
       "cliOnly": "The Orchestrator runs on Claude Code and Codex connections. This one runs a native agent on an API key; choose another one."
@@ -2427,6 +2477,15 @@
       "blocked": "{{task}} waits for {{blockers}} to finish. A start from the chat follows the queue's rules, so nothing started.",
       "markedBlocked": "{{task}} is marked Blocked: {{reason}}. The chat does not start or propose a task marked Blocked, so nothing started; the person can start it in the app."
     },
+    "waitsOn": {
+      "ownTask": "A run cannot wait on its own task. Nothing was changed.",
+      "otherProject": "A run waits only on a task of its own project. Nothing was changed.",
+      "notWaiting": "Run #{{run}} does not wait for a message or a decision: only such a run can wait on a task. Nothing was changed.",
+      "alreadyWaits": "Run #{{run}} already waits on {{task}}: a run waits on one task at a time. Nothing was changed.",
+      "noBaseBranch": "Run #{{run}} has no base branch its work merges into, so no task's merge can reach it. Nothing was changed.",
+      "dropGone": "The run no longer waits on that task: it went on, or its wait was dropped already.",
+      "onlyYou": "Only you can drop a run's wait: a press made by automation was not taken. Nothing was changed."
+    },
     "tools": {
       "otherProject": "The Orchestrator acts only in its own project.",
       "startWaits": "Nothing started yet: starting {{task}} on {{pipeline}} waits for the person, who starts or dismisses it in the conversation. Tell them it is ready to start.",
@@ -2437,6 +2496,7 @@
       "messageWaits": "Nothing is sent yet: your message to the agents of run #{{run}} waits for the person, who applies or dismisses it in the conversation. Tell them what you would send and why.",
       "planPersonOnly": "The run waits for a decision on its plan. Plan decisions are the person's: tell them what the plan proposes and what you recommend, and they decide it on the plan card.",
       "resumePersonOnly": "Run #{{run}} stopped at a limit or was interrupted: resuming or continuing it is the person's, on the task's Summary. Tell them what stopped it and what you recommend.",
+      "resumeUseContinue": "Run #{{run}} stopped at a limit: resume_run does not apply. Decide with continue_run: raise_limits, raise_step_budget, or resume after the daily budget, as the stop calls for.",
       "resumeCanceled": "Run #{{run}} was canceled: running the task again is the person's, on the task's Summary. Tell them what you recommend.",
       "continueRunnerFailed": "Run #{{run}} was interrupted because the runner could not record or carry it on: continuing it is the person's, on the task's Summary, once they know why. Tell them what stopped it.",
       "continueWorktreeGone": "Run #{{run}} was interrupted and its worktree is gone, so it cannot continue: running the task again is the person's, on the task's Summary.",
@@ -2459,7 +2519,7 @@
         "optedOut": "Run #{{run}} was not merged on its own: its task says Don't merge automatically. Nothing was merged; the merge is the person's.",
         "deliveredByQueue": "Run #{{run}} was not merged on its own: its pipeline ends in a Deliver step, so the merge queue delivers it, after the person's approval when the step asks for one."
       },
-      "reportChangesNothing": "A turn the daily report started changes nothing, and this change is not one the person can apply from a card. Nothing was changed: put it in your recommendations instead.",
+      "reportChangesNothing": "A turn the daily report or the end of a watch started changes nothing, and this change is not one the person can apply from a card. Nothing was changed: put it in your recommendations instead.",
       "planOnly": "Plan only is on: this turn takes no action. Nothing was changed: put it in your plan with propose_plan instead.",
       "notPlanOnly": "This turn does not plan: propose_plan works only for a message sent in plan-only mode. Nothing was kept.",
       "invalidPlan": "A plan has at least one step that says what will happen, and at most 20. Nothing was kept.",
@@ -2517,7 +2577,7 @@
       "authFailed": "{{command}} could not sign in to the remote: git never asks for a password or opens a sign-in window here. Sign in to git for this remote once in a terminal (a credential helper, gh auth login, or an SSH key), then ask again. git said: {{said}}",
       "wouldLoseWork": "{{command}} would overwrite uncommitted work, so git did not do it and nothing was lost. Commit the changes first, or the Orchestrator can propose discarding them for you to apply. git said: {{said}}",
       "authorUnknown": "git does not know who the commit's author is, so nothing was committed. Tell git once in a terminal: git config --global user.name \"Your Name\" and git config --global user.email \"you@example.com\". git said: {{said}}",
-      "writeOff": "The Orchestrator may not write with git: Let the Orchestrator write with git is off in Project settings › Orchestrator. Nothing was done; only the person can turn it on, there.",
+      "writeOff": "The Orchestrator may not write with git: Let the Orchestrator drive is off in Project settings › Orchestrator. Nothing was done; only the person can turn it on, there.",
       "onItsOwn": "Nobody asked for this in this turn, which Orchester started by itself, so git writes nothing in it. Nothing was done.",
       "runActive": "Run #{{run}} has not ended: its worktree is its agents' while it works, waits, is paused or interrupted, so git writes nothing there. Nothing was done.",
       "worktreeGone": "Run #{{run}} has no worktree any more. Nothing was done.",
@@ -2569,13 +2629,19 @@
     }
   },
   "review": {
+    "since": {
+      "notReviewed": "No head of this run was reviewed yet, so there is nothing to compare with. All changes shows its whole diff.",
+      "rewritten": "The branch was rewritten after the head you reviewed, so its changes since then can't be told apart. Review all changes again."
+    },
     "refused": {
       "notFound": "This review thread is gone. Read the run's review again.",
       "notWaiting": "This run no longer waits for review: it is at work, ended without success or was merged.",
       "implementAtWork": "Implement is at work on the comments you sent. Approve once you've reviewed its changes.",
       "changedSinceReview": "Changed since your review: the branch moved after the head you reviewed, so nothing was merged. Review it again.",
       "nothingToSend": "No comment waits to be sent.",
+      "noConflicts": "The merge no longer conflicts: the run changed since, or its merge was tried again. Read the review again.",
       "noImplementingStep": "This run has no step whose agent may change its code, so there is no Implement to ask.",
+      "profileNotPublished": "The agent you chose has no published version, so it cannot run this step. Publish it first, or choose another agent.",
       "notEditable": "Only a comment you haven't sent yet can be changed or deleted.",
       "notAnswered": "Ask again once Implement's answer has ended.",
       "notAddressed": "Reply once Implement has addressed the comment.",

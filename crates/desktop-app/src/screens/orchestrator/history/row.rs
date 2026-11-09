@@ -30,12 +30,15 @@ use orchester_store::ChatListing;
 use orchester_workspace::{
   background,
   messages::Message,
-  orchestrator::chat::{archive_in, pin_in, rename_in},
+  orchestrator::{
+    chat::{archive_in, pin_in, rename_in},
+    watching::LeadCounts,
+  },
 };
 
 use super::{
   Deleting, FOUND_ROW_HEIGHT, Item, OpenedAt, ROW_HEIGHT, Renaming, Rows,
-  meta::{meta, when},
+  meta::{self, when},
   search::{Matched, marks},
 };
 use crate::{
@@ -200,6 +203,7 @@ impl Component for ItemView {
         current,
         today,
         matched,
+        leads,
         rows,
       } => {
         if rows.renaming.get().0 == Some(listing.chat.id()) {
@@ -208,7 +212,7 @@ impl Component for ItemView {
           if self.seeded.get_untracked() {
             self.seeded.set(false);
           }
-          self.chat(ctx, (&listing, matched.as_ref()), (current, today), &rows)
+          self.chat(ctx, (&listing, matched.as_ref(), &leads), (current, today), &rows)
         }
       }
     }
@@ -234,12 +238,12 @@ impl ItemView {
     })
   }
 
-  /// The conversation's row: a press opens it, at the first match while the search `matched` its messages; a
-  /// right-click or its `⋯` button opens its menu.
+  /// The conversation's row, saying what it `leads`: a press opens it, at the first match while the search `matched`
+  /// its messages; a right-click or its `⋯` button opens its menu.
   fn chat(
     &self,
     ctx: &mut Ctx,
-    (listing, matched): (&ChatListing, Option<&Matched>),
+    (listing, matched, leads): (&ChatListing, Option<&Matched>, &LeadCounts),
     (current, today): (bool, bool),
     rows: &Rows,
   ) -> Element {
@@ -302,7 +306,7 @@ impl ItemView {
       row
     };
     let row = row
-      .child(self.words(ctx, (listing, matched), (current, today)))
+      .child(self.words(ctx, (listing, matched, leads), (current, today)))
       .with_children(more.then(|| self.unarchive(ctx, listing, rows)).flatten())
       .with_children(more.then(|| self.more(ctx, listing)));
     Column::new()
@@ -312,25 +316,30 @@ impl ItemView {
       .into()
   }
 
-  /// The title over when it last changed, or was archived, and how many messages it holds, or why a change of its
-  /// place did not happen; while the search `matched` it, the places in the title marked, the line of its messages
-  /// under it and where the matches are.
+  /// The title over when it last changed, or was archived, and how many messages it holds, or after the eye what it
+  /// `leads` and when it last changed, or why a change of its place did not happen; while the search `matched` it, the
+  /// places in the title marked, the line of its messages under it and where the matches are.
   fn words(
     &self,
     ctx: &Ctx,
-    (listing, matched): (&ChatListing, Option<&Matched>),
+    (listing, matched, leads): (&ChatListing, Option<&Matched>, &LeadCounts),
     (current, today): (bool, bool),
   ) -> Column {
-    let (meta, meta_color) = match (self.unchanged.get(), matched) {
+    let (meta, color, leading) = match (self.unchanged.get(), matched) {
       (Some(Unchanged { change, reason }), _) => {
         let reason = message_text(ctx, &reason);
-        (
-          ctx.t_args(change.refused_key(), [("reason", &*reason)]),
-          PaletteColor::Danger,
-        )
+        let said = ctx.t_args(change.refused_key(), [("reason", &*reason)]);
+        (said, PaletteColor::Danger, false)
       }
-      (None, Some(matched)) => (matched.meta(ctx, &when(ctx, listing, today)), PaletteColor::TextMuted),
-      (None, None) => (meta(ctx, listing, today), PaletteColor::TextMuted),
+      (None, Some(matched)) => (
+        matched.meta(ctx, &when(ctx, listing, today)),
+        PaletteColor::TextMuted,
+        false,
+      ),
+      (None, None) => match meta::leads(ctx, listing, leads, today) {
+        Some(leads) => (leads, PaletteColor::TextMuted, true),
+        None => (meta::meta(ctx, listing, today), PaletteColor::TextMuted, false),
+      },
     };
     let id = listing.chat.id();
     let title = Text::new(listing.chat.title())
@@ -354,15 +363,7 @@ impl ItemView {
       .spacing(ExtraSpacing::Tight.role())
       .child(title)
       .with_children(matched.and_then(|matched| matched.line(ctx, id)))
-      .child(
-        Text::new(&meta)
-          .id(format!("orchestrator-history-meta-{id}"))
-          .variant(OrchestratorText::HistoryMeta.role())
-          .color(meta_color)
-          .width(Dimension::Pct(100.0))
-          .nowrap()
-          .text_overflow(TextOverflow::Elipsis),
-      )
+      .child(meta::line(id, (&meta, color), leading))
   }
 
   /// The `⋯` button that opens the row's menu under it; pressed-looking while it holds the menu open.

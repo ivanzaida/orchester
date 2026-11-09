@@ -14,6 +14,23 @@
       "forkedToday": "· forked today {{time}}",
       "forkedOn": "· forked {{date}}"
     },
+    "leads": {
+      "label": "Leads",
+      "more": "+{{count}}",
+      "moreTip": "Also leads {{targets}}",
+      "stop": "Stop watching {{name}}",
+      "since": {
+        "today": "{{name}} · {{kind}} · since {{time}}",
+        "on": "{{name}} · {{kind}} · since {{date}}"
+      },
+      "order": {
+        "own": "“{{order}}”",
+        "projectDefault": "“{{order}}” · the project's default order",
+        "none": "No order of its own · your switches decide"
+      },
+      "hint": "× stops watching · /unwatch does the same",
+      "stopFailed": "Not stopped · {{reason}}"
+    },
     "export": {
       "what": "{{title}} · {{messages}} · {{when}}",
       "whatEmpty": "{{title}} · {{messages}}",
@@ -31,7 +48,7 @@
       "description": "The Orchestrator reads the project and acts through Orchester with your project's permissions: it creates tasks, starts and continues runs, and answers agents when you let it."
     },
     "composer": {
-      "placeholder": "Message the Orchestrator…",
+      "placeholder": "Ask the Orchestrator…",
       "notSetUp": "The Orchestrator can't answer yet: choose a Claude Code or Codex connection and a model for it.",
       "setUp": "Set up the Orchestrator",
       "readable": "Conversations stay readable; you can send once it is set up.",
@@ -47,9 +64,19 @@
       "stopAndSendDetail": "Stops this answer, then sends it as the next message",
       "options": "More ways to send"
     },
-    "keys": {
-      "ctrlEnter": "Ctrl Enter",
-      "cmdEnter": "⌘ Enter"
+    "waitsOn": {
+      "waits": "{{task}} · #{{run}} waits on {{waited}}",
+      "stillWaits": "{{task}} · #{{run}} still waits on {{waited}}",
+      "continued": "{{task}} · #{{run}} continued",
+      "noLonger": "{{task}} · #{{run}} no longer waits on {{waited}}",
+      "whenMerged": "It continues when {{waited}} is merged into {{branch}}",
+      "merged": "{{waited}} merged into {{branch}} at {{time}}",
+      "canceled": "{{waited}} was canceled at {{time}} — nothing will end this wait",
+      "closed": "{{waited}} was closed without merging — nothing will end this wait",
+      "dropped": "You dropped it at {{time}} · the run continued",
+      "over": "It went on without {{waited}} at {{time}}",
+      "drop": "Drop the wait",
+      "dropping": "Dropping…"
     },
     "runsOn": {
       "tip": "Acts with your project permissions: every action it takes is checked like the same action in the app.",
@@ -171,8 +198,6 @@
       },
       "send": "Send",
       "cancel": "Cancel",
-      "keySend": "sends",
-      "keyCancel": "cancels",
       "blank": "Write the message first",
       "confirm": {
         "title": {
@@ -248,7 +273,35 @@
       "byYou": "by you",
       "byYouInChat": "by you in the chat",
       "targetBy": "{{target}} · {{by}}",
+      "watchedHere": "{{target}} · watched here",
+      "ledElsewhere": "{{target}} · led in «{{chat}}»",
       "applying": "Being carried out"
+    },
+    "event": {
+      "noProgress": "No progress for {{minutes}} min",
+      "noProgressMoving": "No progress for {{minutes}} min · moving again {{time}}",
+      "noProgressWaits": "No progress for {{minutes}} min · waits now",
+      "noProgressEnded": "No progress for {{minutes}} min · the run ended",
+      "conflictModule": "Merge conflict in the module branch",
+      "conflict": "Merge conflict in the base branch",
+      "mergedInto": "Merged into {{branch}}",
+      "merged": "Merged into the base branch",
+      "closedInto": "Closed — will not be merged into {{branch}}",
+      "closed": "Closed — will not be merged",
+      "link": {
+        "run": "Run ↗",
+        "resolve": "Resolve ↗",
+        "changes": "Changes ↗"
+      }
+    },
+    "startedBy": {
+      "wait": "{{task}}'s wait",
+      "runEnd": "{{task}}'s run end",
+      "noProgress": "{{task}} made no progress",
+      "conflict": "{{task}}'s merge conflict",
+      "merged": "{{task}} merged",
+      "closed": "{{task}} closed",
+      "waited": "What {{task}} waits on"
     },
     "decision": {
       "showDetails": "Show details",
@@ -348,6 +401,29 @@
       "connection": "The Orchestrator runs on another connection now: this answer starts a new session and doesn't remember the earlier messages.",
       "account": "The Orchestrator's connection is on another account now: this answer starts a new session and doesn't remember the earlier messages."
     },
+    "watching": {
+      "applied": "Applied {{time}}",
+      "from": "Orchester",
+      "meta": "{{time}} · the live state, no agent turn",
+      "total": "This conversation leads {{leads}}. {{total}}.",
+      "only": "{{total}}.",
+      "and": "{{rest}} and {{last}}",
+      "comma": "{{rest}}, {{next}}",
+      "reading": "Reading what this conversation watches…",
+      "unreadable": "What this conversation watches can't be read: {{reason}}",
+      "head": {
+        "own": "{{kind}} · since {{since}} · “{{order}}”",
+        "same": "{{kind}} · since {{since}} · same order",
+        "projectDefault": "{{kind}} · since {{since}} · the default order “{{order}}”",
+        "none": "{{kind}} · since {{since}} · no order"
+      },
+      "stop": "Stop watching",
+      "keyRun": "{{key}} · #{{run}}",
+      "open": "{{action}} ↗",
+      "failed": "Not applied",
+      "personOnly": "Only a person stops watching here: input from an MCP client is not taken, and the subscription goes on.",
+      "dismiss": "Dismiss"
+    },
     "context": {
       "event": {
         "compacting": "Compacting the conversation",
@@ -357,7 +433,7 @@
         "after": "→ {{after}}",
         "afterUnreported": "{{before}} → size comes with the next reply"
       },
-      "placeholderCompacting": "Message the Orchestrator — send it once compacting ends…",
+      "placeholderCompacting": "Ask the Orchestrator — send it once compacting ends…",
       "sendWaits": "The conversation is being compacted: send once it's done.",
       "notStarted": "The conversation wasn't compacted"
     },
@@ -368,7 +444,9 @@
         "message": "{{agent}} waits for a reply",
         "messageAnyone": "An agent waits for a reply",
         "plan": "{{agent}}'s plan waits for a decision",
-        "planAnyone": "A plan waits for a decision"
+        "planAnyone": "A plan waits for a decision",
+        "approval": "{{agent}} waits for a tool approval",
+        "approvalAnyone": "An agent waits for a tool approval"
       },
       "status": {
         "waits": "Waits for you",
@@ -377,13 +455,176 @@
         "answeredByYou": "Answered by you",
         "gone": "No longer waits"
       },
-      "effectAnswering": "Let the Orchestrator answer agents is on, so the Orchestrator reads what the agent asked and answers it, or tells you what it asks with its recommendation.",
-      "effectQueued": "Let the Orchestrator answer agents is on: the Orchestrator reads it after the turn under way ends, while it still waits.",
-      "effectOwn": "The agent asks again after the Orchestrator's own answer, so it waits for you: the Orchestrator doesn't answer it by itself.",
+      "effectAnswering": "Let the Orchestrator drive is on, so the Orchestrator reads what the agent asked and answers it, or tells you what it asks with its recommendation.",
+      "effectQueued": "Let the Orchestrator drive is on: the Orchestrator reads it after the turn under way ends, while it still waits.",
       "effectWaits": "It waits for you on its card. Ask the Orchestrator here to read it, or answer it on the task's Conversation.",
       "effectPlan": "Deciding a plan is yours, on its card. Ask the Orchestrator here to read it with you.",
       "effectPlanRead": "Deciding a plan is yours, on its card. The Orchestrator reads it and tells you what it proposes.",
+      "effectApproval": "Approving a tool request is yours, on its card in the task's Conversation: the Orchestrator doesn't decide it, whatever Let the Orchestrator answer agents says.",
       "effectGone": "It was dealt with on the task's page, or its run went on: the agent no longer waits."
+    },
+    "watch": {
+      "applied": "Applied {{time}}",
+      "target": {
+        "withoutModule": "Tasks without a module",
+        "project": "Every task of the project",
+        "gone": "Gone from the project"
+      },
+      "counted": {
+        "one": "{{target}} · {{count}} task",
+        "other": "{{target}} · {{count}} tasks"
+      },
+      "join": {
+        "pair": "{{first}} and {{last}}",
+        "more": "{{first}}, {{next}}"
+      },
+      "leading": "Leading {{targets}}",
+      "atRequest": "at your request",
+      "leadingAside": "— their waits, run ends, conflicts, limits and stalls start a turn here",
+      "nowLedIn": "{{target}} is now led in «{{title}}»",
+      "nowLedInAside": "— its events start turns there",
+      "nowLedInTask": "— watched there as a task; the rest of {{module}} stays here",
+      "nowLedInTaskBare": "— watched there as a task; the rest stays here",
+      "tookOver": "{{target}} is now led here",
+      "tookOverAside": "— taken from «{{title}}»; its events start turns here",
+      "ledHereAgain": "{{target}} is led here again",
+      "ledHereAgainAside": "— «{{title}}» stopped watching it; its events start turns here",
+      "stopped": "Stopped watching {{targets}}",
+      "stoppedAll": "Stopped watching everything",
+      "leftOpen": {
+        "one": "— {{count}} left open goes back to the usual rule",
+        "other": "— {{count}} left open go back to the usual rule"
+      },
+      "nothingOpen": "— nothing is canceled or paused",
+      "open": {
+        "waits": "{{task}} waits for you ↗",
+        "runs": "{{task}} is running ↗",
+        "queued": "{{task}} queued ↗",
+        "stoppedAtLimit": "{{task}} stopped at a limit ↗"
+      },
+      "failed": "Nothing was watched",
+      "personOnly": "Only you can start watching from the composer: a command sent by automation is not applied. The badge and your message stay.",
+      "dismiss": "Dismiss",
+      "picker": {
+        "count": "{{shown}} of {{total}}",
+        "open": "{{count}} open",
+        "openAdded": "{{count}} open · {{added}} added",
+        "added": "Added",
+        "ledIn": "Led in «{{title}}» ↗",
+        "ledInUnnamed": "Led in another conversation ↗",
+        "unreadable": "The tasks of {{project}} can't be read",
+        "unreadableNote": "{{reason}} Nothing was added; the badge keeps what you chose.",
+        "tryAgain": "Try again"
+      },
+      "modules": {
+        "search": "Search modules",
+        "section": "Modules",
+        "also": "Also",
+        "nothing": "No module matches “{{query}}”",
+        "finished": {
+          "one": "1 finished module · type to find it",
+          "other": "{{count}} finished modules · type to find them"
+        },
+        "withoutModule": "Tasks without a module",
+        "project": "Everything in {{project}}",
+        "projectMeta": "What no other subscription takes",
+        "tasks": {
+          "one": "1 task",
+          "other": "{{count}} tasks"
+        },
+        "running": {
+          "none": "none running",
+          "some": "{{count}} running"
+        },
+        "waiting": {
+          "one": "1 waits for you",
+          "other": "{{count}} wait for you"
+        },
+        "meta": "{{tasks}} · {{running}}",
+        "metaWaiting": "{{tasks}} · {{running}} · {{waiting}}",
+        "allDone": "{{tasks}} · all done",
+        "allClosed": "{{tasks}} · all done or canceled",
+        "ledHere": "Watched here",
+        "nothingLeft": "Nothing left to watch"
+      },
+      "tasks": {
+        "search": "Search tasks",
+        "section": "Tasks",
+        "nothing": "No task matches “{{query}}”",
+        "finished": {
+          "one": "1 done task · type to find it",
+          "other": "{{count}} done tasks · type to find them"
+        },
+        "inModule": "{{title}} · {{module}}",
+        "withoutModule": "{{title}} · no module",
+        "ledHere": "Watched here",
+        "comesHere": "Comes here via {{module}}",
+        "comesHereModule": "Comes here via its module",
+        "comesHereWithoutModule": "Comes here via the tasks without a module",
+        "comesHereProject": "Comes here via the whole project",
+        "nothingToWatch": "nothing to watch"
+      },
+      "unwatch": {
+        "search": "Search what this conversation watches",
+        "section": "Watched here",
+        "count": "{{shown}} of {{total}}",
+        "nothing": "Nothing watched here matches “{{query}}”",
+        "reading": "Reading what this conversation watches…",
+        "unreadable": "What this conversation watches can't be read: {{reason}}",
+        "meta": "{{kind}} · since {{since}}",
+        "added": "Added",
+        "all": "All of them",
+        "allMeta": "stop watching everything here",
+        "cancelsNothing": "cancels nothing",
+        "open": {
+          "waits": {
+            "one": "1 waits for you",
+            "other": "{{count}} wait for you"
+          },
+          "stopped": {
+            "one": "1 stopped at a limit",
+            "other": "{{count}} stopped at a limit"
+          },
+          "readyToMerge": {
+            "one": "1 ready to merge",
+            "other": "{{count}} ready to merge"
+          },
+          "running": {
+            "one": "1 running",
+            "other": "{{count}} running"
+          },
+          "queued": {
+            "one": "1 queued",
+            "other": "{{count}} queued"
+          },
+          "join": "{{rest}} · {{next}}",
+          "idle": "nothing under way",
+          "nothing": "nothing open"
+        }
+      },
+      "keys": {
+        "move": "↑ ↓",
+        "enter": "Enter",
+        "shiftEnter": "Shift Enter",
+        "esc": "Esc"
+      },
+      "hint": {
+        "move": "Move",
+        "pick": "Pick and close",
+        "addAnother": "Add another",
+        "close": "Close"
+      },
+      "led": {
+        "title": "{{target}} is already led in «{{title}}»",
+        "note": "Since {{date}} {{time}}. Its waits and run ends start turns there. Taking it moves them here, and that conversation gets a line saying so.",
+        "open": "Open that conversation",
+        "take": "Take it here",
+        "personOnly": "Only a person chooses where a target is led: input from automation is refused here.",
+        "taken": "{{target}} is now led here",
+        "takenFrom": "— taken from «{{title}}», which got a line saying so",
+        "left": "{{target}} stays led in «{{title}}»",
+        "leftAside": "— you opened that conversation; nothing moved"
+      }
     },
     "held": {
       "projectTitle": "New starts held in {{project}}",
@@ -426,6 +667,8 @@
         "other": "{{count}} messages"
       },
       "meta": "{{when}} · {{messages}}",
+      "leads": "Leads {{what}} · {{when}}",
+      "leadsSeparator": ", ",
       "found": {
         "results": {
           "one": "Found in 1 conversation · titles and messages",
@@ -702,10 +945,10 @@
         "effectApplied": "Agents read v{{version}} from their next step.",
         "effectAppliedKeeping": "Agents read v{{version}} from their next step. The {{count}} runs under way keep v{{before}} until they finish.",
         "effectAppliedKeepingOne": "Agents read v{{version}} from their next step. The run under way keeps v{{before}} until it finishes.",
-        "effectDone": "Let the Orchestrator publish drafts is on, so the chat published it without asking. Agents read v{{version}} from their next step.",
-        "effectDoneKeeping": "Let the Orchestrator publish drafts is on, so the chat published it without asking. Agents read v{{version}} from their next step; runs under way keep v{{before}}.",
+        "effectDone": "Let the Orchestrator drive is on, so the chat published it without asking. Agents read v{{version}} from their next step.",
+        "effectDoneKeeping": "Let the Orchestrator drive is on, so the chat published it without asking. Agents read v{{version}} from their next step; runs under way keep v{{before}}.",
         "effectDismissed": "You dismissed it. Nothing was published; the draft stays in {{place}}.",
-        "widens": "This draft widens what {{name}} may do, so it waits for you even though Let the Orchestrator publish drafts is on. Let automation change agent permissions is off.",
+        "widens": "This draft widens what {{name}} may do, so it waits for you even though Let the Orchestrator drive is on. Let automation change agent permissions is off.",
         "widensWaits": "This draft widens what {{name}} may do. Check what it widens before you publish it.",
         "accept": "Publish v{{version}}",
         "openDraft": "Open draft",
@@ -734,8 +977,8 @@
         "effectWaits": "Nothing is merged yet. Merge merges it as Merge in the task's review does, after the same checks.",
         "effectMerged": "{{into}} moved forward to {{revision}}.",
         "onItsOwn": "on its own",
-        "effectOnItsOwn": "Merged by the Orchestrator on its own, as you let it merge finished runs: {{into}} moved forward to {{revision}}.",
-        "effectOnItsOwnPlain": "Merged by the Orchestrator on its own, as you let it merge finished runs.",
+        "effectOnItsOwn": "Merged by the Orchestrator on its own, as you let it drive: {{into}} moved forward to {{revision}}.",
+        "effectOnItsOwnPlain": "Merged by the Orchestrator on its own, as you let it drive.",
         "outsideTitle": "Run #{{run}} of {{task}} is in {{into}} already",
         "outsideState": "merged without Orchester",
         "effectOutside": "{{into}} holds this run’s work already: it was merged without Orchester. Nothing is merged again.",
@@ -941,12 +1184,12 @@
         "limitDailyMore": "Stopped at the daily budget · {{count}} more runs",
         "limitGroupMore": "Stopped at their group's budget · {{count}} more runs"
       },
-      "effectReadyAnswering": "Let the Orchestrator answer agents is on, so the Orchestrator tells you it is ready, and merges it only if you asked it to here.",
-      "effectAnswering": "Let the Orchestrator answer agents is on, so the Orchestrator reads the run and tells you what happened and the choices you have.",
-      "effectContinuing": "Let the Orchestrator continue interrupted runs is on too, so the Orchestrator continues the run once from its last checkpoint and tells you.",
+      "effectReadyAnswering": "Let the Orchestrator drive is on, so the Orchestrator tells you it is ready, and merges it only if you asked it to here.",
+      "effectAnswering": "Let the Orchestrator drive is on, so the Orchestrator reads the run, decides how it goes on where it can, and tells you what happened.",
+      "effectContinuing": "Let the Orchestrator drive is on, so the Orchestrator continues the run once from its last checkpoint and tells you.",
       "effectInterruptedAgain": "It was interrupted again within 10 minutes of the time before, so the Orchestrator leaves it to you and tells you what happened and the choices you have.",
-      "effectMerging": "Let the Orchestrator merge finished runs on its own is on too, so the Orchestrator merges the run once and tells you; conflicts it proposes to send back to an agent, anything else it leaves to you.",
-      "effectMergeLeft": "Let the Orchestrator merge finished runs on its own is on, but this run is yours to merge: {{why}}. The Orchestrator tells you it is ready.",
+      "effectMerging": "Let the Orchestrator drive is on, so the Orchestrator merges the run once and tells you; conflicts it sends back to an agent, anything else it leaves to you.",
+      "effectMergeLeft": "Let the Orchestrator drive is on, but this run is yours to merge: {{why}}. The Orchestrator tells you it is ready.",
       "mergeLeft": {
         "notReady": "it is no longer the task's latest run that succeeded",
         "stepNotPassed": "its step {{step}} has not passed",
@@ -958,8 +1201,7 @@
         "deliveredByQueue": "its pipeline ends in a Deliver step, so the merge queue delivers it"
       },
       "effectContention": "The project database stayed busy for more than 3 runs within 10 minutes, so the Orchestrator continues none of them by itself: it tells you, and running fewer agents at once helps.",
-      "effectQueued": "Let the Orchestrator answer agents is on: the Orchestrator reads it after the turn under way ends, while the run still stands so.",
-      "effectOwn": "It followed the Orchestrator's own decision on this run, so it waits for you: the Orchestrator doesn't take it up by itself.",
+      "effectQueued": "Let the Orchestrator drive is on: the Orchestrator reads it after the turn under way ends, while the run still stands so.",
       "effectWaits": "It waits for you on the task's Summary. Ask the Orchestrator here to read it with you.",
       "moved": {
         "merged": "No longer waits: Orchester merged the run.",
@@ -982,8 +1224,8 @@
         "waiting": "wait for you",
         "tokens": "tokens"
       },
-      "effectSummary": "Let the Orchestrator answer agents is on, so the Orchestrator reads the report and adds a short summary and its recommendations below. It changes nothing: what it recommends is yours to do.",
-      "effectQueued": "Let the Orchestrator answer agents is on: the Orchestrator adds a summary and its recommendations after the turn under way ends.",
+      "effectSummary": "Let the Orchestrator drive is on, so the Orchestrator reads the report and adds a short summary and its recommendations below. It changes nothing: what it recommends is yours to do.",
+      "effectQueued": "Let the Orchestrator drive is on: the Orchestrator adds a summary and its recommendations after the turn under way ends.",
       "asOf": "Runs, waits and the queue as they stood at {{time}}.",
       "section": {
         "done": "What was done",

@@ -10,12 +10,26 @@ use orchester_core::{
   conversation::Recipient,
   id::ResourceId,
   resource::{AgentProfile, Pipeline, StepKind},
+  run::Run,
   store::ResourceStore,
   task::Task,
 };
 use orchester_store::{ProjectDb, StoreError};
 
 use super::step_executors::reached;
+use crate::orchestrator::waits_on::{self, view::RunWaitView};
+
+/// What a task that has not run shows of its first agent, and what a task with a run waits on.
+pub(super) fn first_agent_or_waits_on(
+  db: &ProjectDb,
+  task: &Task,
+  latest: Option<&Run>,
+) -> Result<(Option<Arc<str>>, Option<RunWaitView>), StoreError> {
+  match latest {
+    None => Ok((first_agent(db, task)?, None)),
+    Some(run) => Ok((None, waits_on::view::read(db, run)?)),
+  }
+}
 
 /// The role of the first agent step of `task`'s pipeline; `None` without a pipeline, a published version,
 /// an agent step or its profile.

@@ -94,13 +94,28 @@ impl Runners {
     self.inner.shared.counters(root).chats.subscribe()
   }
 
-  /// Tells the readers of [`Self::chats_of`] that the desktop changed a conversation of project `root`.
+  /// [`Self::chats_of`] for conversation `chat` alone: changes whenever the runner reports that this conversation
+  /// changed, or the desktop changed a conversation without saying which ([`Self::chat_changed`]), and not for the
+  /// project's other conversations.
+  pub fn chat_changes_of(&self, root: &Path, chat: ChatId) -> watch::Receiver<u64> {
+    self.inner.shared.counters(root).chat.subscribe(chat)
+  }
+
+  /// Tells the readers of [`Self::chats_of`] and of every conversation's [`Self::chat_changes_of`] that the desktop
+  /// changed a conversation of project `root`.
   pub fn chat_changed(&self, root: &Path) {
-    self
-      .inner
-      .shared
-      .counters(root)
-      .chats
-      .send_modify(|revision| *revision += 1);
+    let counters = self.inner.shared.counters(root);
+    counters.chats.send_modify(|revision| *revision += 1);
+    counters.chat.changed(None);
+  }
+
+  /// Counts a change of conversation `chat` of project `root` as its runner reports it. For tests of what follows
+  /// the counts, which run no runner.
+  #[cfg(feature = "test-support")]
+  #[doc(hidden)]
+  pub fn count_chat_change_for_test(&self, root: &Path, chat: ChatId) {
+    let counters = self.inner.shared.counters(root);
+    counters.chats.send_modify(|revision| *revision += 1);
+    counters.chat.changed(Some(chat));
   }
 }

@@ -122,6 +122,8 @@ fn conversation() -> ChatView {
     todos: BTreeMap::new(),
     standing: Default::default(),
     moved: Default::default(),
+    events: Default::default(),
+    waits_on: Default::default(),
     context: None,
   }
 }

@@ -30,10 +30,11 @@ pub enum Missing {
   Tool,
   McpServer,
   Account,
-  PullRequest,
   Module,
   Service,
   Stack,
+  /// An Orchestrator conversation of the project.
+  Conversation,
 }
 
 impl Missing {
@@ -55,10 +56,10 @@ impl Missing {
       Self::Tool => "tool_not_found",
       Self::McpServer => "mcp_server_not_found",
       Self::Account => "account_not_found",
-      Self::PullRequest => "pull_request_not_found",
       Self::Module => "module_not_found",
       Self::Service => "service_not_found",
       Self::Stack => "stack_not_found",
+      Self::Conversation => "conversation_not_found",
     }
   }
 }

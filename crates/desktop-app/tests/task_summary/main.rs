@@ -16,6 +16,7 @@ mod not_ready;
 mod page;
 #[path = "../support/mod.rs"]
 mod support;
+mod waits_on;
 
 use lurq::{app::App, layout::text_style::FontWeight, node::dimension::Dimension};
 use orchester_app::{

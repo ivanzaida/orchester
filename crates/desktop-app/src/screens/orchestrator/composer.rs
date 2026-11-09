@@ -1,16 +1,16 @@
 //! The Orchestrator's composer (`Composer` `Nv6kV` in `01 Conversation` `wRSL4`): one box — `surface_input` in a
 //! `border_strong` stroke (`border_focus` while the field has the focus), radius 10, 10 over it, 10 at its end, 8
 //! under it and 12 at its start, 10 between the message and its bar — whose bar holds, 6 apart, *Attach* (a 24 square
-//! with a `paperclip`, which opens the system's picker); the runs-on chip ([`super::runs_on`]); *Ctrl Enter* in Geist
-//! Mono 11 `text_muted`; and the 28 `accent` square that sends (`arrow-up`), faded while there is nothing to send.
-//! While the Orchestrator answers the composer stays usable (ORC-92): the square sends after the answer, and a chevron
-//! beside it opens the other ways of sending ([`super::send_menu`]); Esc stops the answer. Until the Orchestrator is
-//! set up (`02 Not set up` `Wd5CL`) the box is on `surface_panel` in a `border` stroke, says it can't answer yet, the
-//! chip reads *Not set up* and *Set up the Orchestrator* takes the keys' and the square's place. The files attached
-//! show as chips over the message (`ui::attachments::tray`); a paste of an image, files or long text attaches them,
-//! and so does a drop on the box; why the files last given were not attached shows under it. The draft and its files
-//! stay until its message is kept; a failed send keeps them. A skill chosen in the slash menu shows as a chip before
-//! the message (`07c` `f0b717`, `ui::slash`) and goes with it (ORC-634); its tooltip says how it reaches the agent.
+//! with a `paperclip`, which opens the system's picker); the runs-on chip ([`super::runs_on`]); and the 28 `accent`
+//! square that sends (`arrow-up`), faded while there is nothing to send. While the Orchestrator answers the composer
+//! stays usable (ORC-92): the square sends after the answer, and a chevron beside it opens the other ways of sending
+//! ([`super::send_menu`]); Esc stops the answer. Until the Orchestrator is set up (`02 Not set up` `Wd5CL`) the box is
+//! on `surface_panel` in a `border` stroke, says it can't answer yet, the chip reads *Not set up* and *Set up the
+//! Orchestrator* takes the keys' and the square's place. The files attached show as chips over the message
+//! (`ui::attachments::tray`); a paste of an image, files or long text attaches them, and so does a drop on the box; why
+//! the files last given were not attached shows under it. The draft and its files stay until its message is kept; a
+//! failed send keeps them. A skill chosen in the slash menu shows as a chip before the message (`07c` `f0b717`,
+//! `ui::slash`) and goes with it (ORC-634); its tooltip says how it reaches the agent.
 
 use std::sync::Arc;
 
@@ -20,7 +20,7 @@ use lurq::{
     events::KeyboardEvent,
     theme::{BorderSize, FormTextRole, PaletteColor, RadiusSize, SpacingSize},
   },
-  components::{Button, Column, Row, Spacer, Text, TextInput},
+  components::{Button, Column, Row, Spacer, TextInput},
   core::Signal,
   layout::{Alignment, layout_kind::Justify},
   node::{Element, Style, border::Border, dimension::Dimension, padding::Padding},
@@ -32,17 +32,14 @@ use super::{
 };
 use crate::{
   services::attachment_picker::AttachmentPicker,
-  theme::{
-    ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, OrchestratorSpacing,
-    OrchestratorText,
-  },
+  theme::{ControlHeight, DISABLED_OPACITY, ExtraColor, ExtraSpacing, IconSize, OrchestratorSpacing, OrchestratorText},
   ui::{
     attachments::tray::{self, PutBack},
     composer::message_scrollbar,
     icon::{Icon, icon},
     mention::MentionField,
     pressable::{inert, pressable},
-    slash::{SkillReach, with_skill_chip},
+    slash::{SkillReach, with_chips},
     tooltip::Tooltip,
   },
 };
@@ -118,7 +115,9 @@ pub(super) struct PlanParts {
   pub(super) flip: Press,
 }
 
-/// The box, and why the files last given were not attached under it.
+/// The box, and why the files last given were not attached under it. With the badges of `/watch-module`,
+/// `/watch-task` or `/unwatch` over the message the field stays the normal chat input (P2 `WbHSt` in `Proposal · watch
+/// composer v2` `LRg3R`, ORC-890).
 pub(super) fn composer(ctx: &mut Ctx, view: &View, mut composer: ComposerBox<'_>) -> Column {
   let not_set_up = composer.set_up.is_some();
   let (fill, stroke) = match (not_set_up, composer.focused.get()) {
@@ -137,15 +136,15 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, mut composer: ComposerBox<'_>
     .take()
     .map_or((None, Vec::new()), |plan| (Some(plan.switch), plan.over));
   let field = field(ctx, view, &composer, (not_set_up, flip));
-  let field = with_skill_chip(
+  let field = with_chips(
     ctx,
     ("orchestrator-composer", composer.reach, &view.mention_anchor),
-    &view.skill,
+    &view.slash,
     field,
   );
   let end: Vec<Element> = match composer.set_up {
     Some(set_up) => vec![set_up],
-    None => vec![keys(ctx).into(), send(ctx, view, composer.sending)],
+    None => vec![send(ctx, view, composer.sending)],
   };
   let bar = Row::new()
     .id("orchestrator-composer-bar")
@@ -181,29 +180,23 @@ pub(super) fn composer(ctx: &mut Ctx, view: &View, mut composer: ComposerBox<'_>
     .with_children(attached)
     .child(field)
     .child(bar);
-  Column::new()
+  let spaced = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(SpacingSize::Sm)
     .child(tray::drop_target(boxed, &view.attached))
-    .with_children(tray::refusals(ctx, ATTACHMENTS, &view.attached))
+    .with_children(tray::refusals(ctx, ATTACHMENTS, &view.attached));
+  // The menus stay out of the spaced column: a closed one is an empty element, which takes a gap there, and an open
+  // one an overlay, which takes none, so the composer would move as one opens and closes (ORC-891).
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .child(spaced)
     .with_children(composer.menus)
-}
-
-/// *Ctrl Enter* (*⌘ Enter* on macOS), the keys that send.
-fn keys(ctx: &Ctx) -> Text {
-  Text::new(&ctx.t(if cfg!(target_os = "macos") {
-    "orchestrator.keys.cmdEnter"
-  } else {
-    "orchestrator.keys.ctrlEnter"
-  }))
-  .id("orchestrator-keys")
-  .variant(ExtraTypography::MonoNote.role())
-  .nowrap()
 }
 
 /// The message field, in 13 on 17 lines: it grows with its lines up to [`MAX_LINES`]; a paste of an image, files or
 /// long text attaches them instead of pasting words. Until the Orchestrator is set up its placeholder, saying so, is in
-/// `text_secondary`. Alt+P in it flips the *Plan only* switch as `flip` does, once it is set up.
+/// `text_secondary`. Alt+P in it flips the *Plan only* switch as `flip` does, once it is set up. Backspace at the start
+/// of the text removes the last badge.
 fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, (not_set_up, flip): (bool, Option<Press>)) -> Element {
   let theme = ctx.theme();
   let resolve = |color| {
@@ -218,6 +211,7 @@ fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, (not_set_up, flip):
     press: composer.sending.press(),
     stop: composer.stop.clone(),
     flip,
+    enter_sends: view.slash.holds_choices(),
     menu: view.menu.clone(),
     focused: composer.focused.clone(),
   };
@@ -244,7 +238,11 @@ fn field(ctx: &Ctx, view: &View, composer: &ComposerBox<'_>, (not_set_up, flip):
     .on_blur(move || lost.set(false))
     .on_key_down(move |event: KeyboardEvent| {
       // The slash and @ menus and the chips take their keys first: Enter chooses while a menu is open, Esc closes it.
-      if !slash.key(&event) && !mention.key(&event) {
+      let at_start = event.key == "Backspace" && mention.caret_at_start();
+      if slash.key(&event) || (at_start && slash.backspace_at_start(&event)) {
+        return;
+      }
+      if !mention.key(&event) {
         keys.down(&event);
       }
     })
@@ -261,14 +259,17 @@ struct Keys {
   stop: Option<Press>,
   /// Flips the *Plan only* switch (Alt+P, ⌥P on macOS).
   flip: Option<Press>,
+  /// A badge holds a choice: Enter alone sends, with the badges (ORC-890).
+  enter_sends: bool,
   menu: Signal<bool>,
   focused: Signal<bool>,
 }
 
 impl Keys {
-  /// Ctrl+Enter (Cmd+Enter) sends; Enter alone adds a line, as the field does by itself. Esc closes the send menu,
-  /// else stops the answer under way. Alt+P flips the *Plan only* switch: the design's Shift Tab moves the focus back
-  /// to the replies' links here, so the person chose Alt+P instead (ORC-646).
+  /// Ctrl+Enter (Cmd+Enter) sends; Enter alone adds a line, as the field does by itself, except while a badge holds a
+  /// choice: then Enter sends and Shift Enter adds the line. Esc closes the send menu, else stops the answer under way.
+  /// Alt+P flips the *Plan only* switch: the design's Shift Tab moves the focus back to the replies' links here, so the
+  /// person chose Alt+P instead (ORC-646).
   fn down(&self, event: &KeyboardEvent) {
     if event.key == "Escape" {
       if event.default_prevented() || !self.focused.get_untracked() {
@@ -296,7 +297,8 @@ impl Keys {
       }
       return;
     }
-    if event.key != "Enter" || !(event.ctrl || event.meta) || event.composing {
+    let plain_enter = self.enter_sends && !event.shift && !event.alt;
+    if event.key != "Enter" || !(event.ctrl || event.meta || plain_enter) || event.composing {
       return;
     }
     event.prevent_default();
