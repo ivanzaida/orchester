@@ -45,7 +45,7 @@ const SECRETS_MENU_WIDTH: f32 = 300.0;
 /// The page's fields.
 #[derive(Clone)]
 pub(in crate::screens) struct Fields {
-  name: Signal<String>,
+  pub(in crate::screens) name: Signal<String>,
   pub(in crate::screens) transport: Signal<TransportChoice>,
   pub(in crate::screens) program: Signal<String>,
   pub(in crate::screens) arguments: Signal<String>,

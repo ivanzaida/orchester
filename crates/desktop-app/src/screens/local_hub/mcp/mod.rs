@@ -8,6 +8,7 @@
 
 mod actions;
 mod editor;
+mod form;
 mod notes;
 mod rows;
 mod secrets;
@@ -26,6 +27,11 @@ use orchester_workspace::connections::mcp::McpServerText;
 
 use self::editor::EditorProps;
 pub(super) use self::editor::UnsavedSignal;
+pub(in crate::screens) use self::{
+  form::Form,
+  rows::{Look, switch_row},
+  secrets::{Mark, Pending, Taken, rows_of},
+};
 use super::model::Entry;
 use crate::{project::ShownProject, queries, screens::connections::data, theme::HubText, ui::state::loading};
 

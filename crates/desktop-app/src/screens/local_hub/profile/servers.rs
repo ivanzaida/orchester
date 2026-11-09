@@ -25,18 +25,18 @@ use crate::{
 };
 
 /// What a press on a server does: the server, and whether the profile chooses it from now on.
-pub(super) type Toggle = Arc<dyn Fn(ConnectionId, bool) + Send + Sync>;
+pub(in crate::screens) type Toggle = Arc<dyn Fn(ConnectionId, bool) + Send + Sync>;
 
 /// A server the menu lists and whether the profile chooses it.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct Item {
+pub(in crate::screens) struct Item {
   pub id: ConnectionId,
   pub name: String,
   pub chosen: bool,
 }
 
 #[derive(Clone)]
-pub(super) struct Props {
+pub(in crate::screens) struct Props {
   pub items: Vec<Item>,
   pub label: Arc<str>,
   /// An edit is under way: nothing is chosen until it ends.
@@ -52,7 +52,7 @@ impl PartialEq for Props {
 }
 impl DevtoolsInspectable for Props {}
 
-pub(super) fn add(ctx: &mut Ctx, props: Props) -> Element {
+pub(in crate::screens) fn add(ctx: &mut Ctx, props: Props) -> Element {
   ctx.mount_keyed::<AddServer>("local-hub-profile-add-server", props)
 }
 

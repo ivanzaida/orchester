@@ -42,7 +42,15 @@ impl Fields {
   pub(super) fn body(&self, ctx: &mut Ctx, shown: &Shown<'_>) -> Body {
     let (name, text) = (self.name.get(), self.text.get());
     let checked = check(&name, &text);
-    let name_says = name_error(ctx, shown, &name, "team_new.instruction.nameTaken").or_else(|| {
+    let name_says = name_error(
+      ctx,
+      shown,
+      &name,
+      shown
+        .mode
+        .words("team_new.instruction.nameTaken", "local_new.nameTaken.instruction"),
+    )
+    .or_else(|| {
       checked
         .name
         .clone()
@@ -85,6 +93,7 @@ impl Fields {
       computer: "team_new.computer.instruction",
       make: checked.make,
       off: fields::off(shown, &name),
+      overlay: None,
     }
   }
 }

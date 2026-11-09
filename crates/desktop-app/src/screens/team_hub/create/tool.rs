@@ -51,7 +51,12 @@ impl Fields {
   pub(super) fn body(&self, ctx: &mut Ctx, shown: &Shown<'_>) -> Body {
     let name = self.name.get();
     let command = self.kind.get() == COMMAND;
-    let name_says = name_error(ctx, shown, &name, "team_new.tool.nameTaken");
+    let name_says = name_error(
+      ctx,
+      shown,
+      &name,
+      shown.mode.words("team_new.tool.nameTaken", "local_new.nameTaken.tool"),
+    );
     let mut rows = vec![
       fields::name_row(
         ctx,
@@ -94,6 +99,7 @@ impl Fields {
       computer: "team_new.computer.tool",
       make,
       off,
+      overlay: None,
     }
   }
 

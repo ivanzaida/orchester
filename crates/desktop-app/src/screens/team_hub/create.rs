@@ -5,7 +5,9 @@
 mod fields;
 mod instruction;
 mod kinds;
+mod local_mcp;
 mod mcp;
+mod mode;
 mod notices;
 mod panel;
 mod profile;
@@ -22,9 +24,10 @@ use lurq::{
 };
 use orchester_core::id::ProjectId;
 
-pub(super) use self::{
+pub(super) use self::mcp::{EditView, Fields as McpFields};
+pub(in crate::screens) use self::{
   kinds::new_row,
-  mcp::{EditView, Fields as McpFields},
+  mode::Mode,
   panel::{Props, panel},
 };
 use super::model::Kind;

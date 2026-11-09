@@ -98,6 +98,7 @@
       "asProgram": "A program on this computer",
       "asRemote": "A remote server (HTTP)",
       "programNone": "Not set · nothing is guessed or found by name",
+      "programSub": "Path to the program",
       "choose": "Choose…",
       "found": "found",
       "moved": "found, but outside what a run may start",

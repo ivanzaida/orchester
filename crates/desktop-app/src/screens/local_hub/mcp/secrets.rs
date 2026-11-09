@@ -46,10 +46,15 @@ impl fmt::Debug for Typed {
 }
 
 /// The values typed in the panel and not saved yet, by secret.
-#[derive(Clone, Default)]
-pub(super) struct Pending(Arc<Mutex<Vec<(SecretId, Typed)>>>);
+#[derive(Clone, Debug, Default)]
+pub(in crate::screens) struct Pending(Arc<Mutex<Vec<(SecretId, Typed)>>>);
 
 impl Pending {
+  /// Whether both are the one store of typed values.
+  pub(in crate::screens) fn same_as(&self, other: &Self) -> bool {
+    Arc::ptr_eq(&self.0, &other.0)
+  }
+
   fn set(&self, secret: SecretId, value: &SecretValue) {
     let mut typed = self.0.lock();
     typed.retain(|(id, _)| *id != secret);
@@ -65,7 +70,7 @@ impl Pending {
   }
 
   /// A copy of each value typed, as what the save hands to the secret store.
-  pub(super) fn values(&self) -> Vec<(SecretId, SecretValue)> {
+  pub(in crate::screens) fn values(&self) -> Vec<(SecretId, SecretValue)> {
     self
       .0
       .lock()
@@ -78,7 +83,7 @@ impl Pending {
 
 /// A secret a server's variables take, and how it stands.
 #[derive(Clone)]
-pub(super) struct Taken {
+pub(in crate::screens) struct Taken {
   pub id: SecretId,
   pub name: SecretName,
   /// The secret store holds a value.
@@ -87,7 +92,7 @@ pub(super) struct Taken {
 
 /// How the save went for the secret's row.
 #[derive(Clone, Copy, PartialEq, Eq)]
-pub(super) enum Mark {
+pub(in crate::screens) enum Mark {
   None,
   /// The secret store refused its value.
   Refused,
@@ -95,7 +100,7 @@ pub(super) enum Mark {
 
 /// The dialog that asks for a value, and what it asks about.
 #[derive(Clone)]
-pub(super) struct Asking {
+pub(in crate::screens) struct Asking {
   pub pending: Pending,
   open: Signal<bool>,
   asked: Signal<Option<(SecretId, String)>>,
@@ -107,7 +112,7 @@ pub(super) struct Asking {
 }
 
 impl Asking {
-  pub(super) fn new(ctx: &mut Ctx) -> Self {
+  pub(in crate::screens) fn new(ctx: &mut Ctx) -> Self {
     let asking = Self {
       pending: Pending::default(),
       open: ctx.signal(false),
@@ -150,12 +155,12 @@ impl Asking {
   }
 
   /// Overwrites what was typed in the dialog.
-  pub(super) fn wipe(&self) {
+  pub(in crate::screens) fn wipe(&self) {
     self.value.update(Zeroize::zeroize);
   }
 
   /// The dialog while it is open.
-  pub(super) fn dialog(&self, ctx: &mut Ctx) -> Option<Element> {
+  pub(in crate::screens) fn dialog(&self, ctx: &mut Ctx) -> Option<Element> {
     let (_, name) = self.asked.get()?;
     self.typed.get();
     let field = FieldInput::new(
@@ -196,7 +201,11 @@ impl Asking {
 }
 
 /// A row for each secret, in the order the variables take them.
-pub(super) fn rows_of(ctx: &Ctx, asking: &Asking, (secrets, marked): (&[Taken], Mark)) -> Vec<lurq::components::Row> {
+pub(in crate::screens) fn rows_of(
+  ctx: &Ctx,
+  asking: &Asking,
+  (secrets, marked): (&[Taken], Mark),
+) -> Vec<lurq::components::Row> {
   asking.typed.get();
   secrets
     .iter()

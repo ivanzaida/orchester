@@ -15,7 +15,7 @@ mod draft;
 mod edit;
 mod pick;
 mod ready;
-mod servers;
+pub(in crate::screens) mod servers;
 mod table;
 
 use std::sync::Arc;

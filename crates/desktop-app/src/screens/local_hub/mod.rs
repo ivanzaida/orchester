@@ -17,11 +17,11 @@ mod editing;
 mod head;
 mod leave;
 mod list;
-mod mcp;
+pub(in crate::screens) mod mcp;
 mod model;
 mod new_menu;
 mod panel;
-mod profile;
+pub(in crate::screens) mod profile;
 mod row;
 mod words;
 
@@ -40,18 +40,19 @@ use orchester_workspace::{
   agents::local_hub::LocalHub, background, local_archive::Archivable, messages::Message, tasks::outside::Outside,
 };
 
+pub(in crate::screens) use self::model::view_of;
 use self::{
   archive::Asking,
   head::FilterShown,
   leave::Leave,
   mcp::UnsavedSignal,
-  model::{Entry, Listing, chosen, view_of},
+  model::{Entry, Listing, chosen},
 };
 use crate::{
   navigation::{Navigation, guard::LeaveGuard},
   project::ShownProject,
   routes::{HubFilter, HubView, ProjectPage, Route},
-  screens::team_hub::list::LIST_WIDTH,
+  screens::team_hub::{create, list::LIST_WIDTH, model::Kind},
   services::Services,
   theme::{HUB_READING_OPACITY, HubSpacing},
   ui::{
@@ -155,7 +156,7 @@ impl Component for LocalHubScreen {
     let body = match (failed, hub.zip(listing.as_ref())) {
       (Some((error, retrying)), _) => self.failure_page(ctx, &project, error, retrying),
       (None, Some((hub, listing))) => {
-        if !reading {
+        if !reading && !view.adding {
           keep_route_on_shown(&project, &view, selected.as_ref(), &navigation);
         }
         let shown = list::Shown {
@@ -165,6 +166,7 @@ impl Component for LocalHubScreen {
           leave: &leave,
           now,
           unsaved: self.unsaved.get(),
+          adding: Kind::of_filter(view.filter).filter(|_| view.adding),
         };
         self.hub_body(
           ctx,
@@ -268,7 +270,8 @@ impl LocalHubScreen {
     reading: bool,
     selected: Option<&Entry>,
   ) -> Element {
-    if listing.count(view.filter) == 0 {
+    let adding = shown.adding;
+    if listing.count(view.filter) == 0 && adding.is_none() {
       let (title, detail) = if view.filter == HubFilter::Archived {
         ("local_hub.archived.emptyTitle", "local_hub.archived.emptyDetail")
       } else {
@@ -277,7 +280,10 @@ impl LocalHubScreen {
       return EmptyState::new("local-hub-empty", Icon::Bot, ctx.t(title), ctx.t(detail)).into();
     }
     let list = list::list(ctx, listing, shown);
-    let panel = self.panel(ctx, (project, hub), (selected, reading));
+    let panel = match adding {
+      Some(kind) => self.form(ctx, project, listing, kind),
+      None => self.panel(ctx, (project, hub), (selected, reading)),
+    };
     Row::new()
       .id("local-hub-master-detail")
       .describe("state", if reading { "reading" } else { "read" })
@@ -296,6 +302,21 @@ impl LocalHubScreen {
       )
       .child(panel)
       .into()
+  }
+
+  /// The form that makes a new one of `kind` (`Agents · New agent profile` … `New tool`, L3–L7).
+  fn form(&self, ctx: &mut Ctx, project: &ShownProject, listing: &Listing, kind: Kind) -> Element {
+    create::panel(
+      ctx,
+      create::Props {
+        repo_root: project.open.repo_root.clone(),
+        project: project.open.project.id(),
+        kind,
+        mode: create::Mode::Local,
+        taken: listing.names_of(kind.core()),
+        team: None,
+      },
+    )
   }
 
   /// The panel of `selected`: an archived entry's, an MCP server's, or the frame the other kinds share.

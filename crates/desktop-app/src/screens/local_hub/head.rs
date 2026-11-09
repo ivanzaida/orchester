@@ -22,10 +22,7 @@ use super::{
   new_menu::new_menu,
 };
 use crate::{
-  routes::{
-    AgentTab, HubFilter, ImportTab, InstructionsTab, InstructionsView, NewConnection, ProjectPage, ProjectSettingsTab,
-    Route,
-  },
+  routes::{HubFilter, HubView, ImportTab, InstructionsView, ProjectPage, ProjectSettingsTab, Route},
   theme::{ExtraSpacing, HubSpacing, HubText, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -111,22 +108,18 @@ fn import_of(filter: HubFilter) -> Option<ProjectPage> {
   })
 }
 
-/// The page that makes a new one of the kind `filter` holds, and the words of its button; none under All and Archived.
-pub(super) const fn new_of(filter: HubFilter) -> Option<(ProjectPage, &'static str)> {
-  Some(match filter {
-    HubFilter::Profiles => (ProjectPage::NewAgent(AgentTab::Profile), "local_hub.new.profiles"),
-    HubFilter::McpServers => (
-      ProjectPage::NewConnection(NewConnection::McpServer),
-      "local_hub.new.mcpServers",
-    ),
-    HubFilter::Instructions => (
-      ProjectPage::Instructions(InstructionsView::new_rule(InstructionsTab::Project)),
-      "local_hub.new.instructions",
-    ),
-    HubFilter::Skills => (ProjectPage::NewSkill, "local_hub.new.skills"),
-    HubFilter::Tools => (ProjectPage::NewTool, "local_hub.new.tools"),
+/// The hub on the form that makes a new one of the kind `filter` holds, and the words of its button; none under All and
+/// Archived.
+pub(super) fn new_of(filter: HubFilter) -> Option<(ProjectPage, &'static str)> {
+  let words = match filter {
+    HubFilter::Profiles => "local_hub.new.profiles",
+    HubFilter::McpServers => "local_hub.new.mcpServers",
+    HubFilter::Instructions => "local_hub.new.instructions",
+    HubFilter::Skills => "local_hub.new.skills",
+    HubFilter::Tools => "local_hub.new.tools",
     HubFilter::All | HubFilter::Archived => return None,
-  })
+  };
+  Some((ProjectPage::hub(HubView::adding(filter)), words))
 }
 
 /// What the filter shows besides the counts.

@@ -36,7 +36,14 @@ impl Fields {
 
   pub(super) fn body(&self, ctx: &mut Ctx, shown: &Shown<'_>) -> Body {
     let (name, description) = (self.name.get(), self.description.get());
-    let name_says = name_error(ctx, shown, &name, "team_new.skill.nameTaken");
+    let name_says = name_error(
+      ctx,
+      shown,
+      &name,
+      shown
+        .mode
+        .words("team_new.skill.nameTaken", "local_new.nameTaken.skill"),
+    );
     let description_says = (shown.tried && description.trim().is_empty()).then_some(Error::Required);
     let rows = vec![
       fields::name_row(
@@ -66,6 +73,7 @@ impl Fields {
       computer: "team_new.computer.skill",
       make: made(&name, &description),
       off: fields::off(shown, &name),
+      overlay: None,
     }
   }
 }

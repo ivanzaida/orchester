@@ -8,7 +8,7 @@ use orchester_workspace::app_mcp::setup::{Header, NewTeamMcpServer, Runs, team_m
 
 use super::{Fields, INSIDE, Marks, PROGRAM_RUN, RUNS, RUNS_AS, WORKTREE, fields, lines_text};
 use crate::screens::team_hub::{
-  create::fields::Shown,
+  create::{fields::Shown, mode::Mode},
   model::{Kind, Listing},
 };
 
@@ -83,12 +83,18 @@ impl Fields {
     let checked = team_mcp_server(&input, &others);
     let invalid = checked.as_ref().err().map(|invalid| (**invalid).clone());
     let first = ElementRef::default();
+    let taken: Vec<String> = view
+      .listing
+      .shown(Kind::McpServer.filter())
+      .map(|entry| entry.name.clone())
+      .collect();
     let shown = Shown {
-      kind: Kind::McpServer,
-      listing: view.listing,
+      mode: Mode::Team,
+      taken: &taken,
       tried: true,
       locked: view.locked,
       agents: None,
+      connections: None,
       first: &first,
       refused_name: None,
       published: Some(view.published),

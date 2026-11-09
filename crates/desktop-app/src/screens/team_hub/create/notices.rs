@@ -3,22 +3,19 @@
 //! `rJbPm`): one notice in place, over the form, which keeps everything typed.
 
 use lurq::{app::ctx::Ctx, node::Element};
-use orchester_workspace::sharing::{team::TeamConfiguration, team_edit::Refusal};
+use orchester_workspace::sharing::team_edit::Refusal;
 
 use super::work::Failed;
-use crate::{
-  screens::hub::team::admins,
-  ui::{
-    button::ActionButton,
-    icon::Icon,
-    message::message_text,
-    notice::{Notice, NoticeTone},
-    tinted_note::person_only,
-  },
+use crate::ui::{
+  button::ActionButton,
+  icon::Icon,
+  message::message_text,
+  notice::{Notice, NoticeTone},
+  tinted_note::person_only,
 };
 
 /// Why the team server did not create the resource, or this computer did not send it.
-pub(super) fn refused(ctx: &Ctx, failed: &Failed, team: &TeamConfiguration) -> Element {
+pub(super) fn refused(ctx: &Ctx, failed: &Failed, admins: &str) -> Element {
   let danger = |id: &str, title: String| {
     Notice::new(id.to_owned(), NoticeTone::Danger, title)
       .icon(Icon::CircleX)
@@ -40,7 +37,7 @@ pub(super) fn refused(ctx: &Ctx, failed: &Failed, team: &TeamConfiguration) -> E
       ctx.t("team_new.refused.notAdmin.title"),
     )
     .icon(Icon::ShieldX)
-    .body(ctx.t_args("team_new.refused.notAdmin.body", [("admins", admins(ctx, team))]))
+    .body(ctx.t_args("team_new.refused.notAdmin.body", [("admins", admins)]))
     .stacked()
     .into(),
     Failed::Refused(refusal, name) => danger(

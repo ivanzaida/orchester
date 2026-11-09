@@ -32,18 +32,15 @@ use orchester_workspace::{
 };
 
 use super::{
-  Props,
-  actions::{self, Lines},
+  Props, actions,
+  form::Form,
   notes,
   rows::Look,
-  secrets::{Asking, Mark, Taken},
+  secrets::{Mark, Taken},
 };
 use crate::{
   screens::{
-    connections::{
-      mcp_form::fields::Fields,
-      widen::{WidenConfirm, WidenLook, WidenProps},
-    },
+    connections::widen::{WidenConfirm, WidenLook, WidenProps},
     local_hub::{
       archive,
       panel::{chips_of, frame},
@@ -118,20 +115,11 @@ pub(super) struct Editor {
   /// The field the last refused save is about.
   refused_field: Signal<Refusal>,
   pub(super) switch: FutureAction<bool, (), Message>,
-  /// Asks for the program's file; the field takes it.
-  pub(super) choose: FutureAction<(), Option<String>, Message>,
-  pub(super) fields: Fields,
+  pub(super) form: Form,
   /// A save was asked for: every field's error shows, also of fields left empty.
   tried: Signal<bool>,
   /// A save that widens what agents may do waits for the person's answer.
   confirming: Signal<bool>,
-  pub(super) asking: Asking,
-  /// The arguments in one line, as the panel draws them: split where there is a space.
-  pub(super) arguments_line: Signal<String>,
-  /// Whether an argument has a space in it, which one line cannot say: the arguments are one a line then.
-  pub(super) one_line_arguments: bool,
-  /// The tools that run without asking, in one line.
-  pub(super) tools_line: Signal<String>,
   /// What the list says of the edits, which this panel clears when it goes.
   unsaved: UnsavedSignal,
   server: ConnectionId,
@@ -144,21 +132,13 @@ impl Component for Editor {
     let props = ctx.props::<EditorProps>().clone();
     let services = Services::of(ctx);
     let refused_field = ctx.signal(Refusal::None);
-    let fields = Fields::new(ctx, &props.text);
-    let choose = actions::choose(ctx, fields.program.clone());
-    let lines = Lines::new(ctx, &fields, &props.text);
     Self {
       save: actions::save(ctx, &props, &services, &refused_field),
       refused_field,
       switch: actions::switch(ctx, &props, &services),
-      choose,
-      fields,
+      form: Form::new(ctx, &props.text),
       tried: ctx.signal(false),
       confirming: ctx.signal(false),
-      asking: Asking::new(ctx),
-      arguments_line: lines.arguments,
-      one_line_arguments: lines.one_line,
-      tools_line: lines.tools,
       unsaved: props.props.unsaved.clone(),
       server: props.server.id(),
     }
@@ -172,8 +152,8 @@ impl Component for Editor {
       listed,
       revision,
     } = ctx.props::<EditorProps>().clone();
-    let typed = self.fields.text();
-    let pending = &self.asking.pending;
+    let typed = self.form.fields.text();
+    let pending = &self.form.asking.pending;
     let changed = typed != text || !pending.is_empty();
     let taken: Vec<_> = listed
       .mcp_names
@@ -211,8 +191,9 @@ impl Component for Editor {
       },
       secrets: (&secrets, marked),
       program_refused: field == Some(Refusal::Program),
+      creating: false,
     };
-    let mut rows = self.server_rows(ctx, &look);
+    let mut rows = self.form.server_rows(ctx, &look);
     rows.extend(self.after_rows(ctx, &look, server.enabled()));
     let used =
       (!entry.used_by.is_empty()).then(|| ctx.t_args("local_hub.panel.usedBy", [("names", entry.used_by.join(", "))]));
@@ -234,7 +215,7 @@ impl Component for Editor {
         rows,
       ))
       .with_children(notes::not_ready(ctx, entry))
-      .with_children(self.asking.dialog(ctx));
+      .with_children(self.form.asking.dialog(ctx));
     let bar = self.bar(
       ctx,
       (&props, &server),
@@ -289,7 +270,6 @@ fn head(ctx: &mut Ctx, (props, server): (&Props, &McpServer), what: Archivable) 
 
 impl Drop for Editor {
   fn drop(&mut self) {
-    self.asking.wipe();
     // The panel is gone, with the edits: the list must not go on saying they are there.
     if self
       .unsaved
@@ -328,7 +308,7 @@ impl Editor {
       typed.url != saved.url || typed.authorization != saved.authorization,
       "connections.mcp.property.endpoint",
     );
-    for secret in secrets.iter().filter(|secret| self.asking.pending.has(secret.id)) {
+    for secret in secrets.iter().filter(|secret| self.form.asking.pending.has(secret.id)) {
       labels.push(ctx.t_args("local_hub.mcp.secretChanged", [("name", secret.name.to_string())]));
     }
     labels
@@ -346,7 +326,7 @@ impl Editor {
       root: props.project.open.repo_root.clone(),
       draft: draft.clone(),
       allowed: Allowed::These(Vec::new()),
-      values: self.asking.pending.clone(),
+      values: self.form.asking.pending.clone(),
     });
     if self.confirming.get()
       && let Some(start) = &start
@@ -397,7 +377,7 @@ impl Editor {
     };
     let button = match readiness.missing().first()? {
       Missing::LocalMcpProgram { .. } => {
-        let choose = self.choose.clone();
+        let choose = self.form.choose.clone();
         ActionButton::new(
           "local-hub-mcp-set-program",
           ButtonKind::Primary,
@@ -409,7 +389,7 @@ impl Editor {
       }
       Missing::LocalSecret { secret, name } => {
         let taken = secrets.iter().find(|taken| taken.id == *secret)?.clone();
-        let asking = self.asking.clone();
+        let asking = self.form.asking.clone();
         ActionButton::new(
           "local-hub-mcp-set-secret",
           ButtonKind::Primary,

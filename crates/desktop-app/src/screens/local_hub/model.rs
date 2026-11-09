@@ -178,6 +178,16 @@ impl Listing {
     Self { entries }
   }
 
+  /// The names the resources of `kind` have, the archived ones too: a new one takes another.
+  pub(super) fn names_of(&self, kind: ResourceKind) -> Vec<String> {
+    self
+      .entries
+      .iter()
+      .filter(|entry| entry.kind == kind)
+      .map(|entry| entry.name.clone())
+      .collect()
+  }
+
   /// The name of the entry `what`.
   pub(super) fn name_of(&self, what: Archivable) -> Option<&str> {
     self
@@ -204,6 +214,10 @@ impl Listing {
   /// The entry the panel shows: the one the route names while the filter holds it, else the first of the list; under
   /// Archived nothing is chosen until the person picks one (`Agents · Archived` L13).
   pub(super) fn selected(&self, view: &HubView) -> Option<&Entry> {
+    // A form has no entry.
+    if view.adding {
+      return None;
+    }
     let chosen = chosen(view);
     chosen
       .and_then(|what| self.shown(view.filter).find(|entry| entry.what == what))
@@ -230,7 +244,7 @@ pub(super) fn chosen(view: &HubView) -> Option<Archivable> {
 }
 
 /// The hub on `what` under `filter`.
-pub(super) fn view_of(filter: HubFilter, what: Option<Archivable>) -> HubView {
+pub(in crate::screens) fn view_of(filter: HubFilter, what: Option<Archivable>) -> HubView {
   match what {
     Some(Archivable::Resource(id)) => HubView::new(filter, Some(id)),
     Some(Archivable::McpServer(server)) => HubView::on_server(filter, server),
