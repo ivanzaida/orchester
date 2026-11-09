@@ -12,6 +12,7 @@ mod hub_conflict;
 mod hub_created;
 mod hub_edit;
 mod hub_edit_race;
+mod hub_profile_form;
 mod hub_unsent;
 mod hub_unsent_publish;
 #[path = "../../examples/seed/kontur/mod.rs"]

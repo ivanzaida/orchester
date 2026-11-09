@@ -378,7 +378,40 @@ pub fn edit_archived(kontur: &mut Kontur) -> Result<(), SeedError> {
 
 fn edit_in(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
   super::team_hub::resources(kontur)?;
+  forms_computer(kontur)?;
   write_marker(kontur, state)
+}
+
+/// The agent connections of the Kontur catalogue, signed in, so the hub's create forms offer a CLI and its models
+/// (`Agents · v2` A9): a copy that joins the stand-in team server in a state of the team's resources has no other.
+fn forms_computer(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let bin = kontur.repo.join(".orchester").join("qa-bin");
+  fs::create_dir_all(&bin).map_err(io(&bin))?;
+  let at = kontur.ago(4);
+  for (named, provider, file, models) in [
+    (
+      "Claude · Kontur",
+      AgentProvider::ClaudeCodeCli,
+      "claude",
+      &["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-4-5"][..],
+    ),
+    (
+      "Codex · Kontur",
+      AgentProvider::CodexCli,
+      "codex",
+      &["gpt-5.5", "gpt-5.4-mini"][..],
+    ),
+  ] {
+    let program = bin.join(file);
+    fs::write(&program, "").map_err(io(&program))?;
+    super::connections::cli(
+      kontur,
+      (named, provider, program),
+      ("2.1.89", SignIn::SignedIn, models),
+      at,
+    )?;
+  }
+  Ok(())
 }
 
 /// An Admin on the hub's team MCP servers, which the stand-in team server holds with Builder, that names
@@ -387,6 +420,7 @@ fn edit_in(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
 /// `team-hub-archive`); confirming it is a person's.
 pub fn archive(kontur: &mut Kontur) -> Result<(), SeedError> {
   super::team_hub::resources(kontur)?;
+  forms_computer(kontur)?;
   write_marker(kontur, State::TeamArchive)
 }
 
