@@ -29,6 +29,7 @@
       "existingResult": "Orchester could not tell whether Git already holds this run's work ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
       "policy": "The policy an automation's merge goes through could not check this merge ({{cause}}), so Orchester refused before Git ran: nothing was merged, and the branch and the checkout are unchanged."
     },
+    "teamRun": "This run belongs to a team task, so it is delivered with its module, not merged from here. Nothing was merged.",
     "externalResult": "Git contains all or part of this result already. Review the evidence in Local integration; no historical merge was recorded or repeated.",
     "personRequired": "A person reviews and approves the exact checked result in Local integration.",
     "programRunning": "A Git program of this run’s local integration is still running in your checkout, so nothing was merged. Orchester waited a few seconds for it. Ask for the merge again in a minute; if it keeps refusing, open this run’s Local integration, which settles a program that is no longer running.",
@@ -1696,6 +1697,14 @@
       "teamRefused": "The team server refused this ({{code}}). Nothing was changed.",
       "teamDecisionRequired": "Who may change this on a team project is not decided yet ({{decision}}), so nothing was sent.",
       "teamNothingToChange": "This changes nothing of what the team server holds.",
+      "teamNoQueue": "A team task has no queue or draft on this computer: the team server holds only its workflow status. To move it back to Backlog, an Admin sets workflow_status backlog with update_task. Nothing was changed.",
+      "teamNotHolder": "Only the person who holds this task's claim, or an Admin, can do this. The claim may have been taken over or released since the task was read; read it again. Nothing was changed.",
+      "teamLifecycleNotAdmin": "Only Admins cancel, reopen or move a team task. Nothing was changed.",
+      "teamLifecycleNotAdminWithDetails": "Only Admins change a team task's details or cancel, reopen or move it. Nothing was changed.",
+      "teamStopRunFirst": "This task's work is still running or waits for a person. Stop the run first; then the task can be marked Done or canceled. Nothing was changed.",
+      "teamMissingReason": "A blocked reason cannot be empty. Nothing was changed.",
+      "teamStatusNotOffered": "A team task cannot be moved from {{from}} to {{to}}. The claim's holder or an Admin marks it Done, an Admin cancels it, reopens it to Backlog or Todo and moves it between Backlog and Todo; In progress and In review follow the task's work. Nothing was sent.",
+      "teamStatusOnCreate": "A new team task starts in {{status}}. Create it, then change its status with update_task: the claim's holder or an Admin marks it Done, an Admin cancels it or moves it to Todo. Nothing was sent.",
       "teamActionFailed": "The change could not be carried out with the team server. Nothing was changed on this computer.",
       "teamFieldUnsupported": "A team task or module keeps no {{fields}} on its server in this version, so nothing was sent. Leave them out.",
       "teamModuleRequired": "A team task starts only in a module. An Admin puts it in one first.",
@@ -1721,7 +1730,9 @@
       "teamBundleMissingFile": "A file that a version of {{resource}} pins is gone from the team server, so it built no bundle. Ask a team Admin to publish {{resource}} again; nothing was started.",
       "teamBundleMissingBody": "The team server could not read the version of {{resource}} that this run pins, so it built no bundle. Ask a team Admin to publish {{resource}} again; nothing was started.",
       "teamBundleMissingTooLarge": "This run's bundle is larger than the team server builds; it takes a file of at most 8 MiB. Ask a team Admin to cut down the files the run pins; nothing was started.",
-      "teamRunAgain": "A team task runs again only through the team server: start its work with run_task. The message was not sent or kept."
+      "teamRunUnrecorded": "This is a team run whose start did not finish recording its team work on this computer: it has no team record, so it has no claim or work to report under. It is not merged, continued or messaged from here. Nothing was changed.",
+      "teamRunAgain": "A team task runs again only through the team server: start its work with run_task. The message was not sent or kept.",
+      "teamTaskUnrecorded": "This run belongs to a team task whose key this computer cannot tell: the run kept no record of the task when it started, and no copy of the task is kept here. Read the task from the team server (get_task) instead."
     },
     "githubConnectionName": "gh · {{host}}",
     "teamDelivered": "The module's branch was delivered into {{into}}, and the team server keeps it delivered.",
@@ -2353,6 +2364,7 @@
           "review": "Review"
         }
       },
+      "unreadable": "Can't read the status of a team task from the team server now — watching goes on and ends once it can be read",
       "rest": {
         "one": "{{count}} more task with nothing under way",
         "other": "{{count}} more tasks with nothing under way"
@@ -2518,7 +2530,9 @@
         "blockedByTasks": "Run #{{run}} was not merged on its own: unfinished tasks block its task ({{tasks}}). Nothing was merged; the merge is the person's.",
         "held": "Run #{{run}} was not merged on its own: new starts are held for its group or the project. Nothing was merged; the merge is the person's.",
         "optedOut": "Run #{{run}} was not merged on its own: its task says Don't merge automatically. Nothing was merged; the merge is the person's.",
-        "deliveredByQueue": "Run #{{run}} was not merged on its own: its pipeline ends in a Deliver step, so the merge queue delivers it, after the person's approval when the step asks for one."
+        "deliveredByQueue": "Run #{{run}} was not merged on its own: its pipeline ends in a Deliver step, so the merge queue delivers it, after the person's approval when the step asks for one.",
+        "teamDelivery": "Run #{{run}} was not merged on its own: it is a team task's run, which goes into its module's branch and reaches the base branch with the module's delivery. Nothing was merged; requesting that delivery is the person's.",
+        "teamUnrecorded": "Run #{{run}} was not merged on its own: it is a team run whose start did not finish recording its team work on this computer, so it can be neither merged nor delivered from here. Nothing was merged."
       },
       "reportChangesNothing": "A turn the daily report or the end of a watch started changes nothing, and this change is not one the person can apply from a card. Nothing was changed: put it in your recommendations instead.",
       "planOnly": "Plan only is on: this turn takes no action. Nothing was changed: put it in your plan with propose_plan instead.",

@@ -516,13 +516,18 @@ unknown field is refused. Times are milliseconds since the Unix epoch; days are 
 - `Capabilities`: `{project_id,revision,role:"member"|"admin"|"server_admin",actions:[ActionCapability],unresolved:[DecisionId]}`.
   `ActionCapability`: `{action,subject:Subject?,allowed,reason:DenialReason?}`; `reason` is `null` exactly when
   `allowed`. `action` is a command kind (dotted lowercase words, e.g. `claim.acquire`; `CommandKind`), `read`,
-  `export.shared` or `server.admin`. `DenialReason`: `role_required`, `claim_required`, `claim_lost`,
-  `module_required`, `decision_required`, `configuration_invalid`. Capabilities are advisory; commands check again.
+  `export.shared`, `server.admin` or a task lifecycle action (`task.complete`, `task.cancel`, `task.reopen`,
+  `task.triage`, `task.block`: "Team authority task lifecycle"). `DenialReason`: `role_required`, `claim_required`,
+  `claim_lost`, `module_required`, `decision_required`, `configuration_invalid`, `transition_denied`. Capabilities are
+  advisory; commands check again.
 - `ClaimRead`: `{subject,id,holder:UserRef,acquired_at,last_execution_heartbeat_at,stale_at,stale,parent_module_claim_id?}`.
 - `WorkRead`: `{id,subject,claim_id,revision,state,runs:[RunId],bundle:BundleRef,created_at,updated_at}`;
   `ExecutionState` is `running`, `paused`, `awaiting_human`, `succeeded`, `failed` or `cancelled` (proposed).
 - `TaskRead`: every `SharedTask` field (the content's fields inline) and `assignee:UserRef?`, `work:WorkRead?`,
-  `effective_claim:ClaimRead?`, `capabilities`. `workflow` stays apart from `work.state`.
+  `effective_claim:ClaimRead?`, `capabilities`. `workflow` stays apart from `work.state`. Two fields came with D4 and
+  are optional on the wire: `closed:TaskClosure?` and `blocked:Attribution?` (below, "Who closed it, who blocked it");
+  a server that has no record leaves them out, and so did every server before D4, so a reader treats a missing one as
+  unknown, not as "nobody".
 - `ModuleRead`: every `SharedModule` field (its fields inline) and `branch`, `assignee?`, `work?`, `effective_claim?`,
   `capabilities`, `pending_delivery:PendingDeliveryRead?`. A module's tasks are read with the task list's `modules`
   filter.
@@ -681,8 +686,9 @@ The public prerequisite for platform OP-152's S9b (`work.report`) is in core (`o
 - `ExecutionOutcome` (core): `{kind:"progress"}`, `{kind:"succeeded"}`, `{kind:"failed",reason}` or
   `{kind:"cancelled"}`. `reason` is an `ExecutionFailure`, a closed set without text, paths or local ids, named as the
   desktop's run states name them: `step_failed`, `retries_exhausted`, `worktree_not_created`, `limit_reached` or
-  `runner_failed`. An execution success is not permission to mark the task Done; human-wait entry and exit and the
-  task-completion effects have no outcome until D1, D4 and D8 are decided.
+  `runner_failed`. An execution success is no permission for a person to mark the task Done; what the server marks Done
+  by itself is in "Team authority task lifecycle" (D4). Human-wait entry and exit have no outcome until D1 and D8 are
+  decided.
 - `ArtifactRef`: `{sha256:ContentHash,kind,size_bytes}`, a secret-free shared artifact by the hash of its bytes, never
   a local path. `ArtifactKind` is `report` (a completed run's report), `patch` (the run's changes) or `log` (a step's
   captured output). The set is closed, so a reader refuses a kind it does not know: a new kind is a new variant in
@@ -704,8 +710,9 @@ The public prerequisite for platform OP-152's S9b (`work.report`) is in core (`o
   `{kind:"work.changed",data:{id,by,actor,at,work}}`. A client replaces its cached work and ignores one whose
   `work.revision` is not newer than its own.
 
-No D4/D8 completion or human-wait variant is added. Existing v1 contracts, the /api/v1 client and earlier v2 types are
-unchanged, apart from the new error codes.
+No human-wait variant is added, and the D4 Done is no outcome: the server derives it from a succeeded report ("Team
+authority task lifecycle"). Existing v1 contracts, the /api/v1 client and earlier v2 types are unchanged, apart from the
+new error codes.
 
 ## Team authority S11 subscriptions
 
@@ -826,11 +833,12 @@ change. Unknown kinds and fields are refused; the server answers a kind it does 
 
 Definitions are no commands. The desktop's dispatcher (`orchester_workspace::actions`) sends these actions to the
 server's own Admin-checked routes (Authority S3, its `docs/definition-authority.md` and `docs/workspace-policy.md`),
-which refuse a member with `403` (`not_admin` on the `/api/v1` routes):
+which refuse a member with `403` (`not_admin` on the `/api/v1` routes), except the task patch's lifecycle changes that
+the holder of the task's claim may make (below):
 
 | Dispatcher action | Route | Decided on |
 | --- | --- | --- |
-| Task edit, organization, move | `PATCH /api/v1/projects/{p}/tasks/{t}` `TaskPatch {revision,changes}` | the task's revision; `409 revision_conflict` carries the current task |
+| Task edit, organization, move; since S12 also the lifecycle (Done, Canceled, reopen, Backlog/Todo, Blocked), which the holder of the task's claim may make for Done and Blocked ("Team authority task lifecycle") | `PATCH /api/v1/projects/{p}/tasks/{t}` `TaskPatch {revision,changes}` | the task's revision; `409 revision_conflict` carries the current task |
 | Module create | `POST /api/v1/projects/{p}/modules` `ModuleCreate` | its `idempotency_key` and `id`, both the intent's operation id |
 | Module edit | `PATCH /api/v1/projects/{p}/modules/{m}` `ModulePatch` | the module's revision and the intent's key; `409 revision_conflict` carries the current module |
 | Tag create, rename, merge, delete | `POST …/tags`, `PATCH …/tags/{tag}`, `POST …/tags/{tag}/merge`, `DELETE …/tags/{tag}` | nothing: tags have no revision |
@@ -974,6 +982,172 @@ The desktop's module delivery (`orchester_workspace::team_work::ModuleDeliveries
   `authorization_operation_id` the Admin's `delivery.authorize` operation its caller names in `authorization`, else
   none (the automatic merge); it never authorizes. An open delivery of the module is carried on instead. Only a
   delivered module is its result; every other state is a refusal naming it.
+
+## Team authority task lifecycle
+
+Decision D4 (`docs/architecture/server.md` row 96, S12): who closes a team task, who cancels and reopens it, and when
+it becomes Done by itself. The contract is `orchester_api::v2::{LifecycleAction, LifecycleRequest, TaskCaller,
+completes_on_success}`, the capability action `Action::Task(LifecycleAction)` and `DenialReason::TransitionDenied`. It
+adds **no route and no command**: a lifecycle change is the `workflow` and `blocked_reason` of the task patch that the
+Admin-checked definition route already takes (`PATCH /api/v1/projects/{p}/tasks/{t}`, `TaskPatch {revision,changes}`,
+see "Team authority P2 commands"). That route keeps the revision rule, the `409 revision_conflict` that carries the task
+as it is and the dispatcher's recovery (read the subject, compare); a command would add a second path that sets the same
+two fields, and a receipt that the definition routes do not keep. What changes on the route is *who* may send a patch.
+
+**Who may.** The patch is read against the task as it is (`LifecycleRequest::of(current, changes)`). A `workflow` equal
+to the task's, a `blocked_reason` equal to the task's and `actor` are no change; every other field the patch names
+(`title`, `brief`, `criteria`, `pipeline`, `limits`, `status`, `priority`, `tags`, `blocking`, `module`, `release`) is a
+change, equal or not.
+
+| Change | Action (capability name) | From | Who |
+| --- | --- | --- | --- |
+| `workflow` to `done` | `Complete` (`task.complete`) | Backlog, Todo, In progress, In review | the holder of the task's effective claim, or an Admin |
+| `workflow` to `canceled` | `Cancel` (`task.cancel`) | the same | an Admin |
+| `workflow` to `backlog` or `todo` | `Reopen` (`task.reopen`) | Done, Canceled | an Admin |
+| `workflow` between `backlog` and `todo` | `Triage` (`task.triage`) | Backlog, Todo | an Admin |
+| `blocked_reason` set, changed or `null` | `Block` (`task.block`) | any status | the holder of the task's effective claim, or an Admin |
+| any other `workflow` change (Done to Canceled and back, to or from In progress or In review other than closing) | none | | an Admin, as before; D4 names nothing |
+| any other field | none | | an Admin, as before |
+
+*Admin* is a workspace Admin or a server admin (`CallerRole`). The *holder* is the person (not a session) who holds the
+task's current effective claim, its own or else its module's, fresh or stale: a stale claim is its holder's until someone
+takes it over. A patch is the holder's only when every change in it is `Complete` or `Block` and it changes nothing else
+(`LifecycleRequest::holder_may`); a patch of both, `{workflow:"done",blocked_reason:"…"}`, is. Anything else needs an
+Admin (`LifecycleRequest::permitted(TaskCaller {admin, holder})`). An empty patch, and one that changes nothing, is an
+Admin's as it was.
+
+**Order and refusals.** The route checks in this order, so a refused patch changes nothing:
+
+| Step | Refusal |
+| --- | --- |
+| the task is the project's | `404 not_found` |
+| the patch is on the task's revision | `409 revision_conflict {current}`, as for every task edit. It comes before the permission, because what a caller may do is read against the task as it is: a holder who retries a Done that was already applied (a lost answer) meets the conflict and the task as it is, not `not_admin` |
+| the caller may make the patch | `403 not_admin` when a holder could not have made the patch either (it changes something only an Admin may); `409 not_holder {claim}` when it is a holder's patch and the caller is neither the holder nor an Admin (`claim` is the task's own claim as `SharedClaim`, `null` when it has none or only its module has one) |
+| the new `blocked_reason` is not empty after trimming | `422 organization {reason:"missing_reason"}` |
+| a close (`Complete` or `Cancel`) while the task's latest work runs, or waits for a person, with an accepted report | `422 organization {reason:"stop_run_first"}`: the run is stopped first, as `claim.release` and Canceled already require |
+| the other rules of a task edit | unchanged (`release`, `module`, tags, links) |
+
+These are the route's `/api/v1` refusals (`SharingError`), so no code is added: `not_admin`, `not_holder`,
+`revision_conflict` and `organization` exist already. The authority envelope is not used on this route. A holder whose
+claim was taken over or released between the read and the write gets `not_holder`; the desktop reads the task again.
+
+**Closing releases the claim.** A patch that closes the task (Done or Canceled, by anyone) releases the task's **own**
+claim in the same transaction as the status change; the claim of its module is the module's and stays. Work that started
+no run (running, no accepted report) is moved to `failed` with no reason, as `claim.release` does; work in any other
+state stays as it is. A reopened task is free: it has no claim and takes one as any task does. The holder learns of it by
+the events below, by a heartbeat that names the claim (`lost`), and by `claim_lost` on a later report.
+
+**A closed task is not claimed or started.** Until an Admin reopens it, a Done or Canceled task cannot be taken into
+work: `claim.acquire` and `claim.take_over` of it, and `work.start` of it, are refused `409 transition_denied` (an
+existing code: the subject's state does not have the action), whoever asks and whatever claim the task shows, and before
+the claim is looked at. The task's capabilities say the same: `claim.acquire` and `claim.take_over` are denied with
+`transition_denied` (told before `claim_required` and `module_required`). `claim.release`, the heartbeat and
+`work.report` are not changed by it. A task that is reopened can be claimed and started as any task.
+
+**Reopening sets the work aside.** A reopened task has no work: the work it had, whatever its state, no longer counts
+for a Done by itself. The next `work.start` (under a new claim) makes new work, and only that work's success counts. A
+delivery that is accepted after a reopen therefore marks the task Done only when a work of it started after the reopen
+has succeeded; the work from before the close is never read again.
+
+**Done by itself.** Two things mark a task Done without a patch, each in the transaction that accepts it, with the claim
+released as above, `updated.by` the person who reported, and an organization history entry with `actor:"orchester"`:
+
+- *Report and outside work, on success.* An accepted `work.report` whose outcome is `succeeded` marks its task Done when
+  `completes_on_success(delivery, artifacts)`: the work's `delivery` (the execution bundle's `Deliverable`: the task's own
+  choice, else its pipeline's) is `report` or `outside`, or `changes_or_report` and the report shares no `patch` artifact
+  (the run made no changes). A `changes` delivery, and `changes_or_report` with a patch, are not Done by their success.
+- *Changes, on the accepted delivery of their module.* A `delivery.report` with outcome `delivered` that the server
+  accepts marks Done every task of that module that is not Done or Canceled and whose latest work `succeeded`, a work
+  that started after the task's last reopen if it was reopened (its changes are in the module branch that went to
+  base). A requested, waiting or failed delivery marks nothing, and a task
+  whose work did not succeed is left as it is.
+
+A succeeded run never marks a task whose work delivers changes (`docs/design/team-authority.md`, D4). Neither automatic
+Done needs an Admin or a holder: it is the server's rule, not a caller's change. Canceled and already Done tasks are not
+touched.
+
+**Who closed it, who blocked it.** `updated` is the task's last change by anyone: an Admin who renames a Done task
+becomes its `updated.by`. So the read carries two records of its own, on `TaskRead` and so on every row of the task list
+(`orchester_api::v2::{TaskClosure, ClosedHow}`; `blocked` is an `Attribution {by:UserRef,at}`). Both are optional: the
+server sends them when it has the record and **leaves the field out** when it has none (a reader also accepts `null`),
+and a server older than this contract never sends them. A desktop older than this contract refuses a task read that
+carries them (`TaskReadWire` is `deny_unknown_fields`) and reads it as no contract answer, so the team server sends
+them only once its minimum desktop version is the first desktop release that reads them (as for ORC-884 above); a
+server that cannot raise its minimum leaves both out for a client older than that release, by
+`Orchester-Client-Version`. A reader treats a missing `closed` on a Done or Canceled task,
+and a missing `blocked` on a task with a `blocked_reason`, as unknown: it shows the status without the "by whom".
+
+- `closed:{how,at}`, **present only while `workflow` is `done` or `canceled`.** `at` is when the server committed the
+  close, in milliseconds, and equals the `updated.at` of that change. `how` is tagged by `kind`:
+  - `person {by:UserRef}`: a task patch changed `workflow` to `done` or `canceled`. `by` is the **caller** of the patch:
+    the holder who marked their task Done, or the Admin who closed (or canceled) someone else's task. Never the task's
+    holder when an Admin closed it, never `updated.by` of a later edit. (The patch's `actor` is not part of it: an agent
+    acting for a person closes in that person's name.)
+  - `delivery {module:ModuleId,module_name:string}`: the task became Done by itself because its module's delivery was
+    accepted ("Done by itself", second kind). `module_name` is the module's name at that moment, so the line still reads
+    right after the module is renamed or deleted.
+  - `run {work:WorkId}`: the task became Done by itself because its work succeeded, as the work delivers no changes to
+    base (the first kind); `work` is the work whose `succeeded` report did it.
+- `blocked:{by,at}`, **present only while `blocked_reason` is set**: who set the current reason and when. It is set by
+  the patch that sets `blocked_reason` or changes it to another non-empty reason (`by` the caller, `at` that change's
+  time), and left alone by a patch whose `blocked_reason` equals the task's (that is no change), by every other edit of
+  the task, by closing, and by reopening: it follows the reason, not the status.
+
+When each is written, in the same transaction as the change and with the same revision bump (so a reader never sees the
+status without the record):
+
+| Change | `closed` | `blocked` |
+| --- | --- | --- |
+| patch `workflow` to `done` or `canceled`, from an open status (holder or Admin) | set: `person`, the caller, now | as it is |
+| patch `workflow` from `done` to `canceled`, or back (an Admin's) | replaced: `person`, the Admin, now | as it is |
+| patch `workflow` equal to the task's, or any other edit of a closed task | as it is | as it is |
+| patch `workflow` out of `done` or `canceled`: reopen to Backlog or Todo, or any other status | cleared | as it is |
+| accepted `work.report` `succeeded` that marks its task Done (Done by itself) | set: `run`, the work, now | as it is |
+| accepted `delivery.report` `delivered` that marks a task Done (Done by itself) | set: `delivery`, the module, now | as it is |
+| a task already Done or Canceled when a delivery is accepted | as it is (it is not touched) | as it is |
+| patch `blocked_reason` set, or changed to another reason | as it is | set: the caller, now |
+| patch `blocked_reason` to `null` | as it is | cleared |
+| patch `{workflow:"done",blocked_reason:"…"}` (a holder's single patch) | set | set, both at that patch's time |
+
+Closing does not clear a blocked reason and the record stays with it. A record is the server's, not the caller's: a
+patch cannot send `closed` or `blocked` (`TaskChanges` has neither, and an unknown field is refused as it is). The
+events are the ones above; the batch that closes or blocks invalidates `task_list` and `task {task}` as it does, so
+a watcher reads the record with the status.
+
+**Capabilities.** `TaskRead.capabilities.actions` (a listed task's too) lists the five actions with
+`subject:{kind:"task",id}`, each allowed or denied with a `DenialReason`, from `LifecycleAction::denial(workflow,
+TaskCaller)`: `transition_denied` first when the task's status does not have the action (`Complete` and `Cancel` on a
+closed task, `Reopen` on an open one, `Triage` outside Backlog and Todo; every status has `Block`); otherwise allowed when
+the caller is an Admin or, for `Complete` and `Block`, the holder; otherwise `claim_required` (`Complete`, `Block`) or
+`role_required` (`Cancel`, `Reopen`, `Triage`). The run's state is not part of it (`stop_run_first` is told on the write,
+and the task read carries the work). Capabilities are advisory: the route checks again with the caller's standing at the
+time of the write, never a role cached on the desktop. The Admin's other workflow changes are no D4 action and are not
+listed.
+
+**Events.** A closed or reopened task is an ordinary task change, so members receive what they already do:
+
+- `/api/v1` events: `task.changed` `{task,revision,base,workflow,…}` (with `blocked_reason` when it changed) and, when a
+  claim was released, `task.claim` `{task,claim:null,action:"released"}`; the claim action `completed` stays the old
+  merge's.
+- The S11 subscription: one `invalidated` batch per committed change with `task_list` and `task {task}`; when the status
+  changed, also `module_list` and `module {module}` for the task's module and `release_list` and `release {release}` for
+  its release (their progress and changelog count Done and Canceled). Done by itself is one batch with the same scopes.
+- The task's organization history gets one entry per change, `actor` as the patch sent it (`person`) or `orchester` for
+  Done by itself.
+
+**Stand-in.** `orchester_api::test_support::team_server` implements for the tasks that `authority_tasks` sets
+(`TeamServer::authority_delivers(number, Deliverable)` says what a task's work delivers; changes without a say; a
+workflow name that is no workflow status is refused when the tasks are set): the task patch with its order and refusals,
+the claim's release on a close, the work set aside on a reopen, the refusal to claim or start a closed task, the five
+capability actions, Done by itself on `work.report` and `delivery.report` (a report whose artifacts cannot be read is
+`422 invalid` and changes nothing), and the S11 invalidation batches with their module and release scopes. It leaves
+out, and the contract text above stays for the real server: the `/api/v1` events (`task.changed`, `task.claim`; the
+stand-in has no `/api/v1` event stream), the organization history of a task (it keeps none, so no entry with
+`actor:"person"` or `"orchester"` is written; only a release's moves are kept). The v1 tasks carry no claim: an
+Admin closes them. Tests: `crates/api/tests/team_lifecycle`.
+
+**Not changed here.** The desktop still refuses these changes for a team task (`decision_required` D4) until its actions
+and MCP tools take this path (S12 step 3).
 
 ## Team authority releases
 

@@ -44,6 +44,7 @@ use super::{
   detail::run_store_error,
   local_integration::CheckoutHolder,
   merge_attempts::{Asked, Attempt},
+  recorded::{RunRoute, route_of_run},
   run::control_message,
   worktree_removal::{Unremoved, WorktreeRemover},
 };
@@ -301,6 +302,7 @@ pub fn merge_in_as(
   asked: Asked,
 ) -> Result<Merged, IntegrationProblem> {
   let repo_root = worktrees.root();
+  refuse_team_run(repo_root, run)?;
   // Held until the attempt is recorded, so that no other merge takes its open attempt for one the app left.
   let held = preflight::hold(repo_root);
   let mut attempt = Attempt::begin((repo_root, programs), run, asked);
@@ -368,6 +370,24 @@ fn merge_held(
     temporary,
     cleanup,
   })
+}
+
+/// Refuses a run merged already or held back by a merge waiting in its worktree, then a team task's run (told by the
+/// run itself, with or without its team record): it goes into its module's branch and only the module's delivery takes
+/// it further, so it is never merged into the base branch from here, whoever asks. Said before the checkout is held and
+/// an attempt begins, so that no press records a stopped merge attempt for a merge that was never possible; the first
+/// refusal keeps its wording for a run that is merged or held and also a team run.
+fn refuse_team_run(repo_root: &Path, run: RunId) -> Result<(), IntegrationProblem> {
+  let db = ProjectDb::open(repo_root)?;
+  not_merged_or_held(&db, run)?;
+  let run = db
+    .run(run)
+    .map_err(run_store_error)?
+    .ok_or(IntegrationProblem::Store(Message::new("errors.storage")))?;
+  if route_of_run(&db, &run)? != RunRoute::Local {
+    return Err(IntegrationProblem::Store(Message::new("localIntegration.teamRun")));
+  }
+  Ok(())
 }
 
 /// Refuses `run` unless it may merge: not merged already nor held back by a merge waiting in its worktree, no local

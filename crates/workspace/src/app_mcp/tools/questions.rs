@@ -8,7 +8,7 @@
 use orchester_core::{
   id::ProjectId,
   question::{AnswerError, AskedQuestions, GivenAnswer, Question, QuestionTurn},
-  store::{RunStore, TaskStore},
+  store::RunStore,
 };
 use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
@@ -33,6 +33,7 @@ use crate::{
   tasks::{
     conversation::orchestrator::{Proposal, proposals, waiting_answer},
     question::{Answering, answer_error},
+    recorded::task_of,
     run::control_message,
   },
 };
@@ -125,7 +126,7 @@ fn with_run(db: &ProjectDb, asked: AskedQuestions) -> Result<Asked, ToolError> {
       proposed,
     });
   };
-  let task = match db.task(run.task()) {
+  let task = match task_of(db, run.task()) {
     Ok(task) => task.map(|task| task.key().to_string()),
     Err(_) => None,
   };

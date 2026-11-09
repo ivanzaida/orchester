@@ -8,11 +8,15 @@ use orchester_api::{
   releases::ReleaseVersion,
   v2::{AuthorityError, AuthorityErrorCode, ErrorDetails},
 };
+use orchester_core::task::organization::WorkflowStatus;
 use orchester_store::StoreError;
 
 use crate::{
-  actions::{Accepted, ActionError, PipelineRefusal, Refusal, TeamOutcome},
-  app_mcp::{error::ToolError, tools::task_write::write_error},
+  actions::{Accepted, ActionError, LifecycleRefusal, PipelineRefusal, Refusal, TeamOutcome},
+  app_mcp::{
+    error::ToolError,
+    tools::{task_write::write_error, wire::Workflow},
+  },
   messages::Message,
 };
 
@@ -55,7 +59,20 @@ fn refused(refusal: &Refusal, retryable: bool) -> ToolError {
     | Refusal::Superseded => changed(),
     Refusal::Route { code, .. } => coded(serde_json::to_value(code)),
     Refusal::TaskPipeline(refusal) => pipeline_refused(*refusal),
+    Refusal::TaskLifecycle(refusal) => lifecycle_refused(*refusal),
   }
+}
+
+/// The server refused to close, reopen or block a task (decision D4). Nothing was changed.
+fn lifecycle_refused(refusal: LifecycleRefusal) -> ToolError {
+  let (code, key) = match refusal {
+    LifecycleRefusal::NotHolder => ("not_holder", "appMcp.errors.teamNotHolder"),
+    LifecycleRefusal::NotAdmin => ("not_admin", "appMcp.errors.teamLifecycleNotAdmin"),
+    LifecycleRefusal::NotAdminWithDetails => ("not_admin", "appMcp.errors.teamLifecycleNotAdminWithDetails"),
+    LifecycleRefusal::StopRunFirst => ("stop_run_first", "appMcp.errors.teamStopRunFirst"),
+    LifecycleRefusal::MissingReason => ("missing_reason", "appMcp.errors.teamMissingReason"),
+  };
+  ToolError::refused(code, vec![Message::new(key)])
 }
 
 /// The server refused the pipeline a task names: none of the project's, or archived. Nothing was changed.
@@ -124,6 +141,11 @@ pub(super) fn team_pipeline_required(named: &str) -> ToolError {
   )
 }
 
+/// `status` as the tools name it.
+fn status_name(status: WorkflowStatus) -> String {
+  name(serde_json::to_value(Workflow::from(status)))
+}
+
 /// The dispatcher's refusal before anything was sent, or its failure.
 pub(super) fn action_refused(error: ActionError) -> ToolError {
   match error {
@@ -134,6 +156,18 @@ pub(super) fn action_refused(error: ActionError) -> ToolError {
       vec![Message::new("appMcp.errors.teamDecisionRequired").with("decision", format!("{decision:?}"))],
     ),
     ActionError::NotTeamPipeline(pipeline) => team_pipeline_required(&pipeline.to_string()),
+    ActionError::WorkflowNotOffered { from, to } => ToolError::refused(
+      "team_status_not_offered",
+      vec![
+        Message::new("appMcp.errors.teamStatusNotOffered")
+          .with("from", status_name(from))
+          .with("to", status_name(to)),
+      ],
+    ),
+    ActionError::StatusOnCreate(status) => ToolError::refused(
+      "team_status_on_create",
+      vec![Message::new("appMcp.errors.teamStatusOnCreate").with("status", status_name(status))],
+    ),
     ActionError::NothingToChange => ToolError::refused(
       "nothing_to_change",
       vec![Message::new("appMcp.errors.teamNothingToChange")],

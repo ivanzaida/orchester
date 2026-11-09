@@ -170,16 +170,27 @@ pub async fn tell(
     Ok(claim) => claim,
     Err(refusal) => return Sent::Queued(refusal.message()),
   };
-  match runner.control(runners, Command::DeliverMessages { run }).await {
-    Ok(()) => Sent::Taken,
-    // A blocked run keeps the message; the runner delivers it once the blocking tasks finish.
+  match deliver(runners, runner, Command::DeliverMessages { run }).await {
+    Ok(sent) => sent,
+    Err(queued) => {
+      claim.release(servers).await;
+      queued
+    }
+  }
+}
+
+/// Asks the runner to take `command`, which reads the stored message. A run blocked by other tasks keeps the message,
+/// which the runner delivers once they finish; what the runner refuses leaves it queued, with why: `Err` is that
+/// outcome, which the caller may still have to undo what it took.
+async fn deliver(runners: &Runners, runner: RunnerOf<'_>, command: Command) -> Result<Sent, Sent> {
+  match runner.control(runners, command).await {
+    Ok(()) => Ok(Sent::Taken),
     Err(RunRequestError::Rejected(Rejection::RunAgainBlocked {
       block: RunAgainBlock::TaskBlocked,
-    })) => Sent::Queued(Message::new("tasks.blocked.messageKept")),
+    })) => Ok(Sent::Queued(Message::new("tasks.blocked.messageKept"))),
     Err(error) => {
       tracing::warn!(%error, "the runner did not take the message");
-      claim.release(servers).await;
-      Sent::Queued(control_message(&error))
+      Err(Sent::Queued(control_message(&error)))
     }
   }
 }
@@ -206,5 +217,48 @@ where
       claim.release(servers).await;
       Sent::Queued(refused(&error))
     }
+  }
+}
+
+/// What follows a message to a team task's run. The run works under the claim the team server gave its work when it
+/// started (`team_work`), so only what goes on under that claim follows from here.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TeamThen {
+  Deliver,
+  Resume,
+  RaiseLimit,
+}
+
+/// What would start a team task's work from this computer, without the team server's claim and work start.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StartsWork {
+  ContinueInterrupted,
+  RunAgain,
+}
+
+impl TryFrom<Then> for TeamThen {
+  type Error = StartsWork;
+
+  fn try_from(then: Then) -> Result<Self, StartsWork> {
+    match then {
+      Then::Deliver => Ok(Self::Deliver),
+      Then::Resume => Ok(Self::Resume),
+      Then::RaiseLimit => Ok(Self::RaiseLimit),
+      Then::ContinueInterrupted => Err(StartsWork::ContinueInterrupted),
+      Then::RunAgain => Err(StartsWork::RunAgain),
+    }
+  }
+}
+
+/// [`follow`] for a message to an unfenced team task's run: no claim of the old sharing stream is taken, which would
+/// also cache the team task's definition here. Delivering and resuming go to the runner as they do elsewhere.
+pub async fn follow_team((runners, runner): (&Runners, RunnerOf<'_>), stored: &Stored<'_>, then: TeamThen) -> Sent {
+  let command = match then {
+    TeamThen::RaiseLimit => return Sent::AwaitsLimit,
+    TeamThen::Deliver => Command::DeliverMessages { run: stored.run },
+    TeamThen::Resume => Command::ResumeRun { run: stored.run },
+  };
+  match deliver(runners, runner, command).await {
+    Ok(sent) | Err(sent) => sent,
   }
 }

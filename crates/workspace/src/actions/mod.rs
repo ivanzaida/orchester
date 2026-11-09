@@ -33,7 +33,8 @@ pub use self::{
   },
   error::ActionError,
   outcome::{
-    Accepted, ActionOutcome, Current, Definition, LocalResult, PipelineRefusal, Receipt, Refusal, TeamOutcome,
+    Accepted, ActionOutcome, Current, Definition, LifecycleRefusal, LocalResult, PipelineRefusal, Receipt, Refusal,
+    TeamOutcome,
   },
 };
 use self::{

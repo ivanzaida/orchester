@@ -8,8 +8,8 @@
 use std::{collections::HashMap, sync::Arc};
 
 use orchester_api::v2::{
-  CallerRole, Capabilities, MAX_PAGE_LIMIT, ModuleListRequest, PageRequest, SearchText, TaskBoardCounts, TaskFilters,
-  TaskListRequest, TaskSort, WorkspacePolicy,
+  CallerRole, Capabilities, MAX_PAGE_LIMIT, ModuleListRequest, PageRequest, SearchText, Subject, TaskBoardCounts,
+  TaskFilters, TaskListRequest, TaskSort, WorkspacePolicy,
 };
 use orchester_core::{
   id::{ModuleId, ResourceId, TagId, TaskId},
@@ -30,7 +30,11 @@ use orchester_workspace::{
   },
 };
 
-use super::source::{TeamFailure, TeamSource};
+use super::{
+  lifecycle::Offered,
+  pages,
+  source::{TeamFailure, TeamSource},
+};
 
 /// The most pages of [`MAX_PAGE_LIMIT`] tasks one listing reads.
 pub const PAGES: usize = 10;
@@ -86,17 +90,20 @@ pub struct TeamTasks {
   pub former_keys: Arc<HashMap<TaskId, String>>,
   pub missing_pipelines: Arc<HashMap<TaskId, String>>,
   pub blocking: Arc<HashMap<TaskId, Vec<TaskId>>>,
+  /// What each task offers the person of its lifecycle, as its capabilities say.
+  pub offered: Arc<HashMap<TaskId, Offered>>,
   pub more: bool,
 }
 
 impl TeamTasks {
-  fn of(listed: ListedTasks, more: bool) -> Self {
+  fn of(listed: ListedTasks, offered: HashMap<TaskId, Offered>, more: bool) -> Self {
     Self {
       tasks: Arc::new(listed.tasks),
       updated: Arc::new(listed.updated),
       former_keys: Arc::new(listed.former_keys),
       missing_pipelines: Arc::new(listed.missing_pipelines),
       blocking: Arc::new(listed.blocking),
+      offered: Arc::new(offered),
       more,
     }
   }
@@ -212,8 +219,22 @@ fn listed(
   pipelines: &TeamPipelines,
   more: bool,
 ) -> Result<TeamTasks, TeamFailure> {
+  let offered = reads
+    .iter()
+    .map(|read| {
+      let offered = Offered {
+        abilities: pages::lifecycle(&read.capabilities, Subject::Task { id: read.task.id }),
+        revision: read.task.revision,
+        holder: read
+          .effective_claim
+          .as_ref()
+          .map(|claim| claim.holder.display_name.clone()),
+      };
+      (read.task.id, offered)
+    })
+    .collect();
   ListedTasks::of(reads, |pipeline| pipelines.id(pipeline))
-    .map(|listed| TeamTasks::of(listed, more))
+    .map(|listed| TeamTasks::of(listed, offered, more))
     .map_err(|error| {
       tracing::warn!(%error, "a team task cannot be shown");
       TeamFailure::Refused

@@ -130,6 +130,12 @@ impl ProjectDb {
     row.map(|row| row.decode()).transpose()
   }
 
+  /// Whether `run` was created with inputs the team server accepted: read without decoding them, so it holds for a run
+  /// whose team record was never written.
+  pub fn has_team_inputs(&self, run: RunId) -> Result<bool, StoreError> {
+    is_team_run(&self.connection, run)
+  }
+
   /// Keeps `inputs`, which the team server accepted for the team task whose identity is `task`, by the operation that
   /// accepted them, until the runner starts their run. Keeping the same inputs again changes nothing; other inputs for
   /// the same operation are refused, as are local inputs and inputs of another team task.

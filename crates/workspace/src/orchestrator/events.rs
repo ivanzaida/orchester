@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet};
 use orchester_core::{
   id::RunId,
   orchestrator::{ChatAction, ChatEntry, EntryKind, TaskEventKind},
-  store::{RunStore, TaskStore},
+  store::RunStore,
 };
 use orchester_store::{ProjectDb, StoreError};
 
@@ -18,7 +18,7 @@ use super::{
   stalls,
   waits_on::view::{self, RunWaitView},
 };
-use crate::tasks::detail::run_store_error;
+use crate::tasks::{detail::run_store_error, recorded::task_of};
 
 /// The facts of each event among `entries`, by entry, those whose seq is in `standing` still standing. What the
 /// project no longer keeps is left out of them. Blocks on SQLite.
@@ -37,7 +37,7 @@ pub(super) fn event_facts(
     };
     let run = db.run(wait.run).map_err(run_store_error)?;
     let task = match &run {
-      Some(run) => db.task(run.task())?,
+      Some(run) => task_of(db, run.task())?,
       None => None,
     };
     let module = match task.as_ref().and_then(|task| task.module()) {
@@ -98,7 +98,7 @@ fn waited(db: &ProjectDb, kind: TaskEventKind) -> Result<Option<WaitedTask>, Sto
     TaskEventKind::WaitedClosed { task, run } => (task, run),
     TaskEventKind::NoProgress { .. } | TaskEventKind::MergeConflict => return Ok(None),
   };
-  let Some(task) = db.task(task)? else {
+  let Some(task) = task_of(db, task)? else {
     return Ok(None);
   };
   let number = match run {

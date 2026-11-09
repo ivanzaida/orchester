@@ -12,7 +12,7 @@ use orchester_core::{
   orchestrator::ChatEntry,
   question::AskedQuestions,
   run::{PendingToolApproval, Run, RunStatus},
-  store::{MergeStore, RunStore, SettingsStore, TaskStore},
+  store::{MergeStore, RunStore, SettingsStore},
   task::Task,
   time::Timestamp,
   usage::{ProjectFacts, day_start},
@@ -23,6 +23,7 @@ use orchester_store::{ProjectDb, StoreError};
 use crate::tasks::{
   delivery::{Delivery, deliveries},
   detail::run_store_error,
+  recorded,
 };
 
 /// A task, its readable runs oldest first, and the merges of those runs.
@@ -73,7 +74,7 @@ impl DayFacts {
   /// The facts of `day` in `db`, read at `now`.
   pub(super) fn read(db: &ProjectDb, (day, now): (NaiveDate, Timestamp)) -> Result<Self, StoreError> {
     let mut tasks = Vec::new();
-    for task in db.tasks()? {
+    for task in recorded::all(db)? {
       // A run whose record cannot be read is left out: nothing it holds can be told.
       let runs: Vec<Run> = db
         .runs_of_task(task.id())

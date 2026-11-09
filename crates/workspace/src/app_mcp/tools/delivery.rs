@@ -11,7 +11,7 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{modules::find_module, wire};
+use super::{modules::find_module, team, wire};
 use crate::{
   app_mcp::{
     error::ToolError,
@@ -48,6 +48,19 @@ pub async fn get_delivery(services: &Services, args: GetDelivery) -> Result<Valu
     return Err(ToolError::InvalidArguments(format!(
       "days must be 1 to {LONGEST_DAYS}, not {days}"
     )));
+  }
+  // A team project's tasks and modules are its server's, and so is the work that is left in them: neither a forecast
+  // nor the rest of the view is computed from this computer's rows, which would be partial. A module is still told
+  // apart from one the server has not.
+  if let Some(team) = team::of(services, &args.project).await? {
+    let tool = match &args.module {
+      Some(named) => {
+        team::get_module(services, &team, named).await?;
+        "get_delivery with a module"
+      }
+      None => "get_delivery",
+    };
+    return Err(team::team_only_on_server(tool));
   }
   let services = services.clone();
   blocking(move || {

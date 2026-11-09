@@ -10,8 +10,9 @@
 //! Conflict`: it will not end that claim that way, so the end is not tried again for that run this session (ORC-896).
 //! A merged run's claim is completed only once its Done went to the server ([`ProjectServer::send_automatic_status`]),
 //! which needs the claim held; a run git found merged before a merge of it was recorded here, or with none, has its
-//! Done recorded first (ORC-750). A task whose latest run is a team run is left to its work reports
-//! ([`super::team_reports`]): it has no claim end and no heartbeat here.
+//! Done recorded first (ORC-750). A task whose latest run is a team run, or was created with the team inputs
+//! but kept no team record, is left to its work reports ([`super::team_reports`]): it has no claim end and no
+//! heartbeat here.
 
 use std::{collections::HashMap, path::Path};
 
@@ -31,7 +32,11 @@ use super::ProjectServer;
 use crate::{
   background,
   sharing::{Servers, SharingError},
-  tasks::{delivery, detail::run_store_error},
+  tasks::{
+    delivery,
+    detail::run_store_error,
+    recorded::{RunRoute, route_of_run},
+  },
 };
 
 /// Why a claim whose run ended was not ended on the server; the next sync tries again, except after `409 Conflict`.
@@ -105,8 +110,10 @@ impl HeldClaims {
     let mut latest = Vec::new();
     for task in db.claims_held_by(me)? {
       match Latest::read(&db, task)? {
-        // A team run settles its claim through its work reports.
-        Some(run) if db.team_run(run.run.id())?.is_some() => {}
+        // A team run settles its claim through its work reports. So does one created with the team inputs that kept no
+        // team record: it has no claim to settle under, and is not a local claim either. Its task is no mark of that: a
+        // task the sharing stream cached has the team's identity too, and its runs' claims are settled here.
+        Some(run) if route_of_run(&db, &run.run)? != RunRoute::Local => {}
         Some(run) => latest.push(run),
         None => held.kept.push(task),
       }

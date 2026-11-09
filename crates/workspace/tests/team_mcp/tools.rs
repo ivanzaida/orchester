@@ -4,13 +4,13 @@ use std::collections::BTreeMap;
 
 use orchester_core::{
   connection::{AgentConnection, AgentProvider},
-  id::{ConnectionId, IdempotencyKey},
+  id::{ConnectionId, IdempotencyKey, TaskId},
   integration::base::RunBaseSource,
   name::Name,
   resource::{AgentProfile, Pipeline, Slug},
   revision::Revision,
-  run::{BranchName, NewRun, PublishedVersions, RunSnapshot},
-  store::{ConnectionStore, ConversationStore, ResourceStore, RunStore, TaskStore},
+  run::{BranchName, InterruptCause, NewRun, PublishedVersions, Run, RunEvent, RunSnapshot},
+  store::{ConnectionStore, ResourceStore, RunStore, TaskStore},
   time::Timestamp,
 };
 
@@ -47,6 +47,14 @@ fn team_mcp_reads_come_from_the_team_server() {
   assert_eq!(task["module"], server.module.to_string());
   assert_eq!(task["revision"], 1);
   assert_eq!(task["team"], true);
+  // The server sends no record of who closed it or set a reason (an open task has none): both read as null.
+  assert!(task["closed"].is_null() && task["blocked"].is_null(), "{task}");
+  assert!(
+    task
+      .as_object()
+      .is_some_and(|task| task.contains_key("closed") && task.contains_key("blocked")),
+    "the fields are there, null, not left out: {task}"
+  );
   let by_id = checkout
     .call(
       "get_task",
@@ -85,6 +93,42 @@ fn team_mcp_reads_come_from_the_team_server() {
 }
 
 #[test]
+fn team_mcp_reads_say_who_closed_and_who_blocked_a_team_task() {
+  let (server, seen) = server();
+  let checkout = Checkout::new(Some(&server), &[]);
+  let person = json!({"id": "01a183cf-b73c-71db-8a62-bd509770cd4e", "display_name": "Dana"});
+  let read = || {
+    checkout
+      .call("get_task", &json!({"project": "Kontur", "key": "kon-7"}))
+      .expect("read")
+  };
+
+  seen.lock().task_fields = json!({
+    "workflow": "done",
+    "closed": {"how": {"kind": "person", "by": person}, "at": 1_700_000_000_000_i64}
+  });
+  let closed = read();
+  assert_eq!(
+    closed["closed"],
+    json!({"how": {"kind": "person", "by": person}, "at": 1_700_000_000_000_i64}),
+    "{closed}"
+  );
+  assert!(closed["blocked"].is_null(), "{closed}");
+
+  seen.lock().task_fields = json!({
+    "blocked_reason": "Waiting for the staging key",
+    "blocked": {"by": person, "at": 1_700_000_060_000_i64}
+  });
+  let blocked = read();
+  assert_eq!(
+    blocked["blocked"],
+    json!({"by": person, "at": 1_700_000_060_000_i64}),
+    "{blocked}"
+  );
+  assert!(blocked["closed"].is_null(), "{blocked}");
+}
+
+#[test]
 fn team_mcp_member_edit_is_refused_as_not_admin_and_changes_nothing() {
   let (server, seen) = server();
   let checkout = Checkout::new(Some(&server), &[]);
@@ -105,16 +149,23 @@ fn team_mcp_member_edit_is_refused_as_not_admin_and_changes_nothing() {
   assert_eq!(task["title"], "Say hello");
   assert!(checkout.db().tasks().expect("tasks").is_empty(), "nothing saved here");
 
-  // A run's or a person's workflow status, the pipeline and the limits wait for the team's decisions: not sent.
+  // A member is no holder here: the server refuses the close (the stand-in's rules are in `team_lifecycle`), and what
+  // was sent is the lifecycle change alone. The limits wait for D6 and are not sent.
   let done = json!({"project": "Kontur", "key": "KON-7", "workflow_status": "done"});
-  assert_eq!(checkout.refused("update_task", &done), "decision_required");
+  assert_eq!(checkout.refused("update_task", &done), "not_admin");
+  let sent = seen.lock().edited_changes.clone();
+  assert_eq!(sent["workflow"], "done");
+  assert!(
+    sent["title"].is_null() && sent["priority"].is_null(),
+    "the lifecycle change alone: {sent}"
+  );
   let budget = json!({"project": "Kontur", "key": "KON-7", "budget_tokens": 1000});
   assert_eq!(checkout.refused("update_task", &budget), "decision_required");
   let points = json!({"project": "Kontur", "key": "KON-7", "story_points": 3});
   assert_eq!(checkout.refused("update_task", &points), "team_field_unsupported");
-  assert_eq!(seen.lock().task_edits, 1, "none of them reached the server");
+  assert_eq!(seen.lock().task_edits, 2, "only the Done reached the server");
   let draft = json!({"project": "Kontur", "key": "KON-7"});
-  assert_eq!(checkout.refused("return_to_draft", &draft), "decision_required");
+  assert_eq!(checkout.refused("return_to_draft", &draft), "team_no_queue");
 }
 
 #[test]
@@ -122,11 +173,11 @@ fn team_mcp_an_update_with_a_refused_change_sends_nothing() {
   let (server, seen) = server();
   let checkout = Checkout::new(Some(&server), &[]);
 
-  // The title alone would go to the server; the workflow status waits for D4, so neither is sent.
-  let edit = json!({"project": "Kontur", "key": "KON-7", "title": "Say goodbye", "workflow_status": "done"});
-  assert_eq!(checkout.refused("update_task", &edit), "decision_required");
-  let create = json!({"project": "Kontur", "title": "Say goodbye", "workflow_status": "in_progress"});
-  assert_eq!(checkout.refused("create_task", &create), "decision_required");
+  // The title alone would go to the server; In progress is no lifecycle change of a team task, so neither is sent.
+  let edit = json!({"project": "Kontur", "key": "KON-7", "title": "Say goodbye", "workflow_status": "in_progress"});
+  assert_eq!(checkout.refused("update_task", &edit), "team_status_not_offered");
+  let create = json!({"project": "Kontur", "title": "Say goodbye", "workflow_status": "done"});
+  assert_eq!(checkout.refused("create_task", &create), "team_status_on_create");
   let seen = seen.lock();
   assert_eq!(seen.task_edits, 0, "no edit reached the server");
   assert_eq!(seen.task_creates, 0, "no task was created");
@@ -134,19 +185,19 @@ fn team_mcp_an_update_with_a_refused_change_sends_nothing() {
 
 #[test]
 fn team_mcp_a_message_does_not_run_a_team_task_again() {
-  let (server, _seen) = server();
-  // A task with a canceled run, kept from before the project was linked: a message would run it again.
-  let checkout = Checkout::prepared(Some(&server), &["Say hello"], canceled_run);
+  let team = crate::team_runs::started();
+  team.settle(|run, now| run.cancel(now).expect("canceled"));
 
-  let message = json!({"project": "Kontur", "run": "1", "text": "Try again."});
-  let error = checkout.call("send_message", &message).expect_err("refused");
+  // A canceled run of a team task: a message would run it again, which only the team server's work start may do.
+  let message = json!({"project": "Kontur", "run": team.run.to_string(), "text": "Try again."});
+  let error = team.checkout.call("send_message", &message).expect_err("refused");
   assert_eq!(error["error"]["code"], "team_run_again_unsupported", "{error}");
-  assert_eq!(server.state().works_made, 0, "nothing started");
-  let task = checkout.db().tasks().expect("tasks")[0].id();
-  assert!(
-    checkout.db().messages(task).expect("conversation").is_empty(),
-    "the message was not kept"
+  assert_eq!(
+    team.server.state().works_made,
+    1,
+    "nothing started beyond the task's first work"
   );
+  assert_eq!(team.messages(), 0, "the message was not kept");
 }
 
 /// A run of the project's first task with a one-step pipeline published here, started and canceled.
@@ -155,9 +206,35 @@ pub(crate) fn canceled_run(db: &mut orchester_store::ProjectDb) {
 }
 
 /// [`canceled_run`], started from `base_branch` as `base_source` says it was chosen.
-pub(crate) fn run_from(db: &mut orchester_store::ProjectDb, (base_branch, base_source): (Option<&str>, RunBaseSource)) {
-  let now = Timestamp::now();
+pub(crate) fn run_from(db: &mut orchester_store::ProjectDb, base: (Option<&str>, RunBaseSource)) {
+  ended_run(db, base, |run, now| run.cancel(now).expect("canceled"));
+}
+
+/// [`canceled_run`], with the run interrupted instead.
+pub(crate) fn interrupted_run(db: &mut orchester_store::ProjectDb) {
+  ended_run(db, (None, RunBaseSource::CheckedOut), |run, now| {
+    run.interrupt(InterruptCause::RunnerLost, now).expect("interrupted")
+  });
+}
+
+fn ended_run(
+  db: &mut orchester_store::ProjectDb,
+  base: (Option<&str>, RunBaseSource),
+  end: impl FnOnce(&mut Run, Timestamp) -> Vec<RunEvent>,
+) {
   let task = db.tasks().expect("tasks")[0].id();
+  let mut run = started_run(db, task, base);
+  let events = end(&mut run, Timestamp::now());
+  db.append_events(&run, &events).expect("ended run");
+}
+
+/// A run of `task` of the old sharing stream: started with a one-step pipeline published here, and with no inputs kept.
+pub(crate) fn started_run(
+  db: &mut orchester_store::ProjectDb,
+  task: TaskId,
+  (base_branch, base_source): (Option<&str>, RunBaseSource),
+) -> Run {
+  let now = Timestamp::now();
   let builder = crate::fixture::builder();
   let profile = db
     .create_resource(
@@ -202,8 +279,7 @@ pub(crate) fn run_from(db: &mut orchester_store::ProjectDb, (base_branch, base_s
   let mut run = db.create_run(IdempotencyKey::generate(), new, now).expect("run");
   let events = run.start(now).expect("started");
   db.append_events(&run, &events).expect("started run");
-  let events = run.cancel(now).expect("canceled");
-  db.append_events(&run, &events).expect("canceled run");
+  run
 }
 
 #[test]
@@ -323,4 +399,49 @@ fn team_mcp_local_projects_are_unchanged() {
   assert_eq!(titles, ["Sign in", "Sign out everywhere"]);
   let bindings = json!({"project": "Kontur", "key": "KON-1", "bindings": [{"profile": "x", "connection": "Codex"}]});
   assert_eq!(checkout.refused("run_task", &bindings), "invalid_arguments");
+}
+
+#[test]
+fn team_mcp_a_member_cancelling_is_refused_in_the_lifecycles_words() {
+  let (server, _) = server();
+  let checkout = Checkout::new(Some(&server), &[]);
+  let reasons = |args: serde_json::Value| {
+    let error = checkout.call("update_task", &args).expect_err("refused");
+    assert_eq!(error["error"]["code"], "not_admin", "{error}");
+    error["error"]["reasons"].clone()
+  };
+
+  let cancel = json!({"project": "Kontur", "key": "KON-7", "workflow_status": "canceled"});
+  assert_eq!(reasons(cancel), json!(["appMcp.errors.teamLifecycleNotAdmin"]));
+  let reopen = json!({"project": "Kontur", "key": "KON-7", "workflow_status": "backlog"});
+  assert_eq!(reasons(reopen), json!(["appMcp.errors.teamLifecycleNotAdmin"]));
+  // A definition edit is still the team configuration's refusal.
+  let edit = json!({"project": "Kontur", "key": "KON-7", "title": "Say goodbye"});
+  assert_eq!(reasons(edit), json!(["sharing.errors.notAdmin"]));
+}
+
+#[test]
+fn team_mcp_a_member_cancelling_with_other_changes_is_refused_by_the_change_the_server_met() {
+  let (server, seen) = server();
+  let checkout = Checkout::new(Some(&server), &[]);
+  let reasons = |args: serde_json::Value| {
+    let error = checkout.call("update_task", &args).expect_err("refused");
+    assert_eq!(error["error"]["code"], "not_admin", "{error}");
+    error["error"]["reasons"].clone()
+  };
+
+  // The details go on their own patch, before the organization's: the title is what the server refused, and the cancel
+  // was not sent.
+  let with_title = json!({"project": "Kontur", "key": "KON-7", "workflow_status": "canceled", "title": "Say goodbye"});
+  assert_eq!(reasons(with_title), json!(["sharing.errors.notAdmin"]));
+  assert_eq!(seen.lock().task_edits, 1, "only the title reached the server");
+  assert!(seen.lock().edited_changes["workflow"].is_null());
+
+  // The organization's fields share one patch, so the refusal does not say which of the two it met.
+  let with_priority = json!({"project": "Kontur", "key": "KON-7", "workflow_status": "canceled", "priority": "high"});
+  assert_eq!(
+    reasons(with_priority),
+    json!(["appMcp.errors.teamLifecycleNotAdminWithDetails"])
+  );
+  assert_eq!(seen.lock().edited_changes["workflow"], "canceled");
 }

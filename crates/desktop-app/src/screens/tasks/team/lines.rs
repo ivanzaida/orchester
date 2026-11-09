@@ -1,7 +1,8 @@
 //! The lines under a team project's Tasks header (`Shared line` `kY3Fg` and `Read-only line` `dLyl8` in 01b `zv7b6`;
-//! `zUEa1` in 01 `QdL7N`): where the project lives, that its tasks are read from the server and the person's role as
-//! the server says it (12, a 14 cloud, `·` between, *Sharing settings* at the end); and for a member, one calm line
-//! naming who changes the team's tasks (`crate::team::lock`).
+//! `zUEa1` in 01 `QdL7N`; T7 `lCoNt` and T8 `vdSWS` of `Task - v2` for the list): where the project lives, that its
+//! tasks are read from the server and the person's role as the server says it (12, a 14 cloud, `·` between, the
+//! board's with *Sharing settings* at the end); and one calm line under it, a member's naming what they do and who
+//! does the rest, an Admin's naming the Admins and what closing a task does (`crate::team::lock`).
 
 use lurq::{
   app::{
@@ -20,7 +21,7 @@ use crate::{
   navigation::Navigation,
   routes::{ProjectPage, ProjectSettingsTab, Route},
   screens::settings::orchester::shown_address,
-  team::lock::{lock_words, locked},
+  team::lock::{lock_words, locked, shielded},
   theme::IconSize,
   ui::{
     icon::{Icon, icon},
@@ -28,13 +29,35 @@ use crate::{
   },
 };
 
-/// *Team project on orchester.acme.dev/kontur · Read from the server · You're a member*, and *Sharing settings*.
+/// *Team project on orchester.acme.dev/kontur · Read from the server · You're a member*, and at its end *Sharing
+/// settings*: the board's line.
 pub(in crate::screens::tasks) fn team_line(
   ctx: &mut Ctx,
   project: ProjectId,
   (place, role): (&str, CallerRole),
 ) -> Row {
   let navigation = Navigation::of(ctx);
+  let settings = opening(navigation.to(Route::Project(
+    project,
+    ProjectPage::Settings(ProjectSettingsTab::Sharing),
+  )))
+  .id("tasks-team-settings")
+  .align_items(Alignment::Center)
+  .child(
+    Text::new(&ctx.t("tasks.shared.settings"))
+      .variant(TypographyStyle::Description)
+      .nowrap(),
+  );
+  facts(ctx, (place, role)).child(Spacer::new().flex(1.0)).child(settings)
+}
+
+/// The same line without *Sharing settings*, which the list's design leaves out (T7 `lCoNt`, T8 `vdSWS`).
+pub(in crate::screens::tasks) fn place_line(ctx: &Ctx, (place, role): (&str, CallerRole)) -> Row {
+  facts(ctx, (place, role))
+}
+
+/// Where the project lives, that its tasks are read from the server, and the person's role.
+fn facts(ctx: &Ctx, (place, role): (&str, CallerRole)) -> Row {
   let quiet = |words: &str| {
     Text::new(words)
       .variant(TypographyStyle::Description)
@@ -47,17 +70,6 @@ pub(in crate::screens::tasks) fn team_line(
     CallerRole::Admin => "tasks.team.role.admin",
     CallerRole::ServerAdmin => "tasks.team.role.serverAdmin",
   });
-  let settings = opening(navigation.to(Route::Project(
-    project,
-    ProjectPage::Settings(ProjectSettingsTab::Sharing),
-  )))
-  .id("tasks-team-settings")
-  .align_items(Alignment::Center)
-  .child(
-    Text::new(&ctx.t("tasks.shared.settings"))
-      .variant(TypographyStyle::Description)
-      .nowrap(),
-  );
   Row::new()
     .id("tasks-team-line")
     .width(Dimension::Pct(100.0))
@@ -75,12 +87,11 @@ pub(in crate::screens::tasks) fn team_line(
     .child(quiet(&ctx.t("tasks.team.fromServer")).id("tasks-team-from-server"))
     .child(dot())
     .child(quiet(&role).id("tasks-team-role"))
-    .child(Spacer::new().flex(1.0))
-    .child(settings)
 }
 
-/// *Only Admins change team tasks, modules and tags: dana-k (Admin) and olha (Server admin). You read, run and claim.*;
-/// on the board, that they move cards too. Without the admins' names until the members are read.
+/// *You read, run, claim and close what you hold. Only Admins create, cancel, reopen or move tasks: dana-k (Admin) and
+/// olha (Server admin).* (T7 `lCoNt`); on the board, that they move cards too. Without the Admins' names until the
+/// members are read.
 pub(in crate::screens::tasks) fn lock_line(ctx: &Ctx, admins: Option<&TeamAdmins>, board: bool) -> Row {
   let keys = if board {
     ("tasks.team.readOnlyBoard", "tasks.team.readOnlyBoardUnnamed")
@@ -88,4 +99,11 @@ pub(in crate::screens::tasks) fn lock_line(ctx: &Ctx, admins: Option<&TeamAdmins
     ("tasks.team.readOnly", "tasks.team.readOnlyUnnamed")
   };
   locked("tasks-team-read-only", &lock_words(ctx, admins, keys))
+}
+
+/// *Admins of this team: dana-k (Admin) and olha (Server admin). Closing a task ends the claim on it.* with a
+/// `shield-check` (T8 `vdSWS`); without the names until the members are read.
+pub(in crate::screens::tasks) fn admin_line(ctx: &Ctx, admins: Option<&TeamAdmins>) -> Row {
+  let words = lock_words(ctx, admins, ("tasks.team.adminLine", "tasks.team.adminLineUnnamed"));
+  shielded("tasks-team-admin-line", &words)
 }

@@ -155,7 +155,11 @@ Hard requirements:
 16. Never send input to the desktop globally (`SendKeys`, global mouse/keyboard injection) and never capture the
     whole screen: other windows belong to the user. Drive the app through its embedded MCP server
     (`lurq_interact`, `lurq_set_value`, `lurq_screenshot`); a native dialog of your own process may be driven only
-    by targeting that dialog window explicitly. Stop and report if that is not possible.
+    by targeting that dialog window explicitly. Exception (the person, 2026-11-09): a step a QA copy refuses to
+    MCP input as person-only (signing in, joining a team, and the like) may be done as a person in a QA copy you
+    started yourself, by sending input to that copy's own window only (found by its pid, e.g. Windows UI Automation
+    or messages to its HWND), never to other windows, never with global injection, and never in the installed app.
+    Otherwise stop and report if it is not possible.
 17. Dependencies go into `[workspace.dependencies]` and are pulled with `workspace = true`. Do not add a crate for
     something a few lines of code can do; state why a new dependency is needed.
 18. Before reporting work as done, run `powershell -File tools/check.ps1` and report its result. Report which tests

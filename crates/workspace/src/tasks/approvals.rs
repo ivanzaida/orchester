@@ -20,13 +20,13 @@ use orchester_core::{
     CameToPerson, PendingToolApproval, PinnedVersion, Run, RunNumber, StepExecutor,
     review::{Review, ReviewHold},
   },
-  store::{ActivityStore, ConnectionStore, ResourceStore, RunStore, TaskStore},
+  store::{ActivityStore, ConnectionStore, ResourceStore, RunStore},
   task::Task,
 };
 use orchester_store::{ProjectDb, StoreError};
 
 pub use super::approval_choices::{AlwaysBlocked, AlwaysShown, ApprovalChoices, CommandAlways, SimilarShown};
-use super::changes::run_worktree;
+use super::{changes::run_worktree, recorded::task_of};
 use crate::messages::Message;
 
 /// What made a request ask, as the dialog names it beside its category (`Cv2MG` in `kpuQj`): the
@@ -204,7 +204,7 @@ fn shown(db: &ProjectDb, repo_root: &Path, (approval, reviewing): (PendingToolAp
       provider == Some(AgentProvider::CodexCli),
     ),
   );
-  let task = run.as_ref().and_then(|run| db.task(run.task()).ok().flatten());
+  let task = run.as_ref().and_then(|run| task_of(db, run.task()).ok().flatten());
   // `.ok()`: an unreadable review only loses why auto mode left the request to the person.
   let review = db.tool_approval_review(approval.run, &approval.id).ok().flatten();
   // `.ok()`: an unreadable reason only loses the card's words for why it came to the person.

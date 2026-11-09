@@ -1021,6 +1021,50 @@ but no run uses them: a run gets its reviewer from the project's own `AutoModeSe
   Define working behavior and data sources before adding controls; do not add inert placeholders.
   Evidence: `.tmp/verify/u9/report.md`.
 
+### S12 · Closing team tasks (D4) and the MCP tools on team projects (non-UI first, then UI)
+
+D4 is decided (2026-11-08, `docs/architecture/server.md` row 96, `docs/design/team-authority.md`): Done by the
+claim's holder or an Admin; Cancel, reopen and Backlog ↔ Todo by an Admin only; Done by itself when the server accepts
+the delivery of the task's work. Today every lifecycle change of a team task is refused (`decision_required` D4), so a
+team task can never be closed. Order:
+
+1. **Contract** (`orchester-api`, `docs/cloud-api.md`) — built on branch `claude/d4-contract`: no new route; the
+   lifecycle is the `workflow` and `blocked_reason` of the existing task patch, decided by `v2::LifecycleAction` /
+   `LifecycleRequest`, reported as the capability actions `task.complete`, `task.cancel`, `task.reopen`, `task.triage`
+   and `task.block` (new `DenialReason::transition_denied`), refused with the existing `not_admin`, `not_holder`,
+   `revision_conflict` and `organization` (`stop_run_first`); closing releases the claim; Done by itself on a succeeded
+   report/outside run and on an accepted module delivery; the events are the existing `task.changed`, `task.claim` and
+   the S11 scopes (`docs/cloud-api.md` "Team authority task lifecycle"). The stand-in implements it
+   (`crates/api/tests/team_lifecycle`). Move the pin in `ivanzaida/orchester-platform` after the merge.
+2. **Server** (platform repository): the patch's check by the caller's claim and role, the claim release, the capability
+   actions, Done on a succeeded report and on an accepted delivery, from that contract; open questions in
+   `docs/architecture/server.md` "Team authority S12 contract".
+3. **App and MCP:** `update_task` `workflow_status`, `create_task`'s status and `return_to_draft` take the team path
+   instead of refusing D4; *Mark as done*, *Cancel task* and reopen on the task page and the Tasks list for a team
+   task, by capability (needs a design step first: D4 was drawn as "no Done action"). Update
+   `docs/manual/mcp-tools-work.md` (the D4 refusal) and the tools' descriptions. **Built** (branch `claude/d4-app`): the
+   dispatcher and the MCP tools (`update_task`'s `workflow_status` and `blocked_reason` through the task patch;
+   `team_status_not_offered`, `team_status_on_create`, `team_no_queue`, `not_holder`, `stop_run_first`), the task page
+   (Mark as done, Cancel task, Mark as blocked, Clear blocked, Reopen, the Done, Canceled and Blocked lines, one lock
+   line for a member) and the Tasks list's row menu. **Not built:** the board card's menu and drag by capability, the
+   status chip (the page is not yet the Task - v2 layout). **Built from the contract's records** (branch
+   `claude/d4-closed-by-app`): the cards name who closed or blocked a task and when, and *Done · delivered with module*
+   and *Done · its run succeeded* (`TaskRead`'s `closed` and `blocked`, which `get_task` carries; a task without a record
+   keeps the plain word). Not built: T11d's *Marking it done ended your claim.*, as the record does not say whether the
+   closer held the claim. The server sends the records only to desktops from 0.6.0, which this app's version
+   (`Cargo.toml`) has not reached yet.
+4. **Team tasks in the other MCP tools** (found 2026-11-08, independent of D4): tools that look a team task up in this
+   computer's cached copy of shared tasks instead of the team server answer `task_not_found` or leave team runs out
+   when the copy is missing — `get_run` (`app_mcp/tools/runs.rs` `read_run` needs the task row), `send_message` in
+   every mode (`TaskDetail::load_in`), `get_conversation`, `list_runs`, `get_approvals`, `hold_queue` /
+   `release_queue` with a task, `get_delivery` with a team module; a run named by its number is never found for a
+   team task without the copy (`find_run`). `resume_run` takes the old v1 claim and continues an interrupted run
+   locally while `continue_run` is refused for team projects. Resolve team tasks through the server as `get_task`
+   does, and give each tool an answer or an explicit refusal.
+
+Decided as well (2026-11-08): closing releases the claim; report and outside work is Done when its run succeeds; the
+manual Blocked is set and cleared by the claim's holder or an Admin. Work in `module/team-lifecycle` (both repositories).
+
 ## Later
 
 - **macOS:** build, install and smoke-test on a Mac (`docs/stable-build.md`, macOS section). All macOS code is only

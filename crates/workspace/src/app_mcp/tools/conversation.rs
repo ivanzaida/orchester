@@ -16,7 +16,7 @@ use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
 
-use super::{base_moved, orchestrated, plans, questions, tasks::find_task, wire};
+use super::{base_moved, orchestrated, plans, questions, tasks::find_task, team, wire};
 use crate::{
   app_mcp::{
     error::ToolError,
@@ -30,6 +30,7 @@ use crate::{
       outgoing::conversation_of,
     },
     detail::{RunView, TaskDetail},
+    recorded::task_of,
     timeline::{
       self, Item, ItemKind, Mark, RunEnd, Sources,
       load::{requests_in, transcript_in},
@@ -59,11 +60,22 @@ pub struct GetConversation {
 }
 
 pub async fn get_conversation(services: &Services, args: GetConversation) -> Result<Value, ToolError> {
+  let team = team::read_task(services, &args.project, &args.task).await?;
   let services = services.clone();
   blocking(move || {
     let (open, db) = services.read_project(&args.project)?;
     let (project, root) = (open.project.id(), open.repo_root);
-    let task = find_task(&db, &args.task)?;
+    // A team task is the one its server read, and this computer may have recorded nothing of it.
+    let (task, title) = match &team {
+      Some(read) => (task_of(&db, read.task.id)?, Some(read.task.content.title.clone())),
+      None => (Some(find_task(&db, &args.task)?), None),
+    };
+    let Some(task) = task else {
+      let read = team.as_ref().expect("only a team task can lack records here");
+      // Runs here that kept nothing of the task cannot be shown under it, which is not a task never run here.
+      team::refuse_unrecorded_runs(&db, read.task.id)?;
+      return Ok(unrecorded(project, read));
+    };
     let detail = TaskDetail::load_in(&root, task.id())?;
     let link = Link::Task(project, task.key().clone(), TaskPage::Conversation).path();
     let (items, proposed, merged) = items(&root, &detail)?;
@@ -93,7 +105,7 @@ pub async fn get_conversation(services: &Services, args: GetConversation) -> Res
     // The session the conversation's messages go to: its current step's.
     let current = run.and_then(RunView::current_step);
     Ok(json!({
-      "task": { "key": task.key().to_string(), "title": task.details().title.as_str() },
+      "task": { "key": task.key().to_string(), "title": title.as_deref().unwrap_or_else(|| task.details().title.as_str()) },
       "run": run.map(|run| json!({ "id": run.id().to_string(), "number": run.run.number().get() })),
       "entries": entries,
       "more": start > 0,
@@ -337,4 +349,18 @@ const fn run_end(end: &RunEnd) -> &'static str {
     RunEnd::Failed(_) => "failed",
     RunEnd::Cancelled => "cancelled",
   }
+}
+
+/// The conversation of a team task this computer recorded nothing of: no run was started here, so it has no entries.
+fn unrecorded(project: orchester_core::id::ProjectId, read: &orchester_api::v2::TaskRead) -> Value {
+  let task = &read.task;
+  json!({
+    "task": { "key": &task.key, "title": &task.content.title },
+    "run": null,
+    "entries": [],
+    "more": false,
+    "context_step": null,
+    "context": wire::context(None),
+    "link": wire::task_link(project, &task.key, TaskPage::Conversation),
+  })
 }

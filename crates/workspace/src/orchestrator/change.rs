@@ -20,7 +20,7 @@ use orchester_core::{
   resource::{AgentProfile, Instruction, Pipeline, ResourceBody, ResourceKind, Skill, Tool},
   revision::Revision,
   run::{Answerer, Run},
-  store::{ResourceStore, TaskStore},
+  store::ResourceStore,
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -39,6 +39,7 @@ use crate::{
   },
   display,
   messages::Message,
+  tasks::recorded::task_of,
 };
 
 /// What the agent's call of tool `name` with `arguments` in `scope` publishes, cancels, merges, answers, sends or
@@ -278,7 +279,7 @@ fn publication(root: &Path, kind: Publishing, named: &str) -> Result<ProposedCha
 
 /// The title of `run`'s task, what a change of the run names as its subject, and the task's key.
 fn run_subject(db: &ProjectDb, run: &Run) -> Result<(String, Option<String>), ToolError> {
-  let task = db.task(run.task())?;
+  let task = task_of(db, run.task())?;
   let subject = task
     .as_ref()
     .map(|task| task.details().title.as_str().to_owned())

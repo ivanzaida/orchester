@@ -800,6 +800,9 @@ What a run changed, as the task's *Changes* tab reads it: the files of its last 
 started from (path, change, additions, deletions), and what its worktree holds that no checkpoint has yet. Diffs too
 large to read give their size only. `link` is the task's Changes tab.
 
+**Team projects:** the run is found by its id or number whatever its task, and `link` names the task by the key the run
+recorded when it started.
+
 Parameters: `project` (req.), `run` (req.: id or number, `7` or `#7`).
 
 ### `merge_run` — changes data
@@ -810,6 +813,14 @@ Otherwise it refuses with `needs_decision` or `merge_failed`: preparing the chec
 the exact merged result are a person's, on the app's *Local integration* page. A run already merged (by Orchester,
 or outside it as git proves) is refused as `already_merged`. A run delivered by the **merge queue** is not merged by
 `merge_run`. After `merge_failed` at conflicts, `continue_run` with `resolve_conflicts` asks an agent to resolve them.
+A team run is told by the run itself, not by the project's link and not by its task: it has a team record, or it was
+created with the inputs the team server accepted. Such a run is never merged into the base branch here
+(`merge_run` requests its module's delivery instead), while a local task's run in a team-linked project merges, and
+`continue_run` continues, as in a local project. So do the runs of the old sharing stream (started under its claim,
+before team runs were recorded), even though the stream cached their task with a team identity: they have neither a
+team record nor team inputs and take the local route. A team run that kept inputs but no team record (its start
+stopped before the record was written) takes neither route: `merge_run`, `continue_run` and `resume_run` refuse it as
+`team_run_unrecorded`, and the task page's merge refuses it as a team run, recording no attempt.
 
 Parameters: `project` (req.), `run` (req.).
 

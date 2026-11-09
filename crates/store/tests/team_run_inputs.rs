@@ -255,6 +255,7 @@ fn team_run_inputs_execute_and_read_back_without_the_task_definition() {
     .db
     .create_run_with_inputs(IdempotencyKey::generate(), team.new_run(id), &inputs, (at(6), None))
     .expect("a team run");
+  assert!(team.db.has_team_inputs(run.id()).expect("read"), "a team bundle");
   let events = run.start(at(7)).expect("start");
   team.db.append_events(&run, &events).expect("it executes");
   drop(team.db);
@@ -536,6 +537,14 @@ fn team_run_inputs_a_local_run_keeps_its_inputs_and_rules() {
     )
     .expect("a local run");
   assert_eq!(db.run_inputs(recorded.id()).expect("read"), Some(inputs.clone()));
+  assert!(
+    !db.has_team_inputs(recorded.id()).expect("read"),
+    "local inputs are not a team bundle"
+  );
+  assert!(
+    !db.has_team_inputs(run.id()).expect("read"),
+    "a run without inputs has no team bundle"
+  );
   let started_with = db
     .task_for_run(queued.id(), recorded.id())
     .expect("read")

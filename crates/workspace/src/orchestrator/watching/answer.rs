@@ -43,6 +43,9 @@ pub struct WatchedSubscription {
   pub tasks: Vec<WatchedTask>,
   /// Its other open tasks, counted (*4 more tasks with nothing under way*); `None` when there are none.
   pub rest: Option<Message>,
+  /// Why the subscription waits though its work may be closed: the team server cannot be asked about a team task it
+  /// depends on now; `None` otherwise.
+  pub unreadable: Option<Message>,
 }
 
 /// A task of a subscription that has something going on.
@@ -134,6 +137,10 @@ impl WatchReads {
       order: self.order(subscription),
       tasks,
       rest: (rest > 0).then(|| counted(rest, ("orchestrator.watch.rest.one", "orchestrator.watch.rest.other"))),
+      unreadable: self
+        .team
+        .cannot_read(subscription.target())
+        .then(|| Message::new("orchestrator.watch.unreadable")),
     }
   }
 

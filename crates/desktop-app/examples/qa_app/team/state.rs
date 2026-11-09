@@ -66,6 +66,12 @@ pub enum State {
   /// taken branch, then running work, then someone else's change first; Automatic merge on, changed by someone else
   /// first; Billing exports the person's on this computer, its delivery to authorize.
   AdminWork,
+  /// An Admin on tasks the server records as closed or blocked, one of each way: Done by the person, by mara, with the
+  /// delivery of Webhooks v2 and by its run, Canceled by dana-k, Blocked by the person and by mara; KON-1 is Done with
+  /// no record (decision D4, `Task - v2` T4–T6, T11a–f).
+  ClosedAdmin,
+  /// As [`Self::ClosedAdmin`], the person a member: the closed tasks read with no Reopen and say who does.
+  ClosedMember,
   /// As [`Self::Member`], with the server refusing this version of Orchester (ORC-732, 07d `BDJKM`).
   VersionRefused,
   /// As [`Self::Member`], with KON-12's run interrupted at Implement, a team run under the claim this computer holds,
@@ -164,7 +170,7 @@ pub enum State {
 pub const START_ANSWERS_AFTER: std::time::Duration = std::time::Duration::from_secs(90);
 
 impl State {
-  pub const ALL: [Self; 50] = [
+  pub const ALL: [Self; 52] = [
     Self::Join,
     Self::WrongCode,
     Self::ExpiredCode,
@@ -189,6 +195,8 @@ impl State {
     Self::Claims,
     Self::ModuleWork,
     Self::AdminWork,
+    Self::ClosedAdmin,
+    Self::ClosedMember,
     Self::VersionRefused,
     Self::TeamRunning,
     Self::EditConflict,
@@ -244,6 +252,8 @@ impl State {
       Self::Claims => "team-claims",
       Self::ModuleWork => "team-module-work",
       Self::AdminWork => "team-admin-work",
+      Self::ClosedAdmin => "team-closed-admin",
+      Self::ClosedMember => "team-closed-member",
       Self::VersionRefused => "team-version-refused",
       Self::TeamRunning => "team-running",
       Self::EditConflict => "team-edit-conflict",

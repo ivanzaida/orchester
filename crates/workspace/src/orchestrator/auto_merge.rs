@@ -13,7 +13,7 @@ use orchester_core::{
   orchestrator::{MergeLeft, Merging},
   resource::WithoutCommits,
   run::{Run, RunStatus, attempt_starts, run_delivers},
-  store::{RunStore, TaskStore},
+  store::RunStore,
 };
 use orchester_store::{ProjectDb, StoreError};
 use rmcp::model::JsonObject;
@@ -23,13 +23,23 @@ use super::tools::ChatScope;
 use crate::{
   app_mcp::{ToolError, blocking, find_run},
   messages::Message,
-  tasks::{detail::run_store_error, hold},
+  tasks::{
+    detail::run_store_error,
+    hold,
+    recorded::{self, RunRoute, route_of_run},
+  },
 };
 
 /// Whether the turn of run `run`'s success merges the run on its own, or why it is left to the person. Blocks on
 /// SQLite.
 pub fn merging_in(db: &ProjectDb, run: RunId) -> Result<Merging, StoreError> {
-  Ok(match left(db, run, Merge::Branch)? {
+  let Some(found) = db.run(run).map_err(run_store_error)? else {
+    return Ok(Merging::Left {
+      why: MergeLeft::NotReady,
+    });
+  };
+  let route = route_of_run(db, &found)?;
+  Ok(match left(db, &found, route, Merge::Branch)? {
     Some(why) => Merging::Left { why },
     None => Merging::Merges,
   })
@@ -43,13 +53,19 @@ pub fn completes_in(db: &ProjectDb, run: RunId) -> Result<bool, StoreError> {
   let Some(found) = db.run(run).map_err(run_store_error)? else {
     return Ok(false);
   };
-  let Some(task) = db.task(found.task())? else {
+  // A team task's run (told by the run itself) goes into its module's branch and is delivered with the module, never
+  // completed from here.
+  let route = route_of_run(db, &found)?;
+  if route != RunRoute::Local {
+    return Ok(false);
+  }
+  let Some(task) = recorded::task_of(db, found.task())? else {
     return Ok(false);
   };
   if run_delivers(&task, &found).without_commits() != WithoutCommits::Completes || db.run_completion(run)?.is_some() {
     return Ok(false);
   }
-  Ok(left(db, run, Merge::Completion)?.is_none())
+  Ok(left(db, &found, route, Merge::Completion)?.is_none())
 }
 
 /// What the rule is asked about: a merge of the run's branch, which the merge queue may hold, or a completion.
@@ -59,18 +75,23 @@ enum Merge {
   Completion,
 }
 
-/// Why `run` is left to the person; `None` when the chat merges (or completes) it on its own.
-fn left(db: &ProjectDb, run: RunId, merge: Merge) -> Result<Option<MergeLeft>, StoreError> {
-  let Some(run) = db.run(run).map_err(run_store_error)? else {
+/// Why `run`, whose `route` the caller read, is left to the person; `None` when the chat merges (or completes) it on
+/// its own.
+fn left(db: &ProjectDb, run: &Run, route: RunRoute, merge: Merge) -> Result<Option<MergeLeft>, StoreError> {
+  // A team task's run is delivered with its module (`merge_run` requests that), which is not the chat's to do on its
+  // own: left to the person. One without a team record cannot be delivered at all.
+  match route {
+    RunRoute::Local => {}
+    RunRoute::Team => return Ok(Some(MergeLeft::TeamDelivery)),
+    RunRoute::TeamUnrecorded => return Ok(Some(MergeLeft::TeamUnrecorded)),
+  }
+  let Some(task) = recorded::task_of(db, run.task())? else {
     return Ok(Some(MergeLeft::NotReady));
   };
-  let Some(task) = db.task(run.task())? else {
-    return Ok(Some(MergeLeft::NotReady));
-  };
-  if !latest_succeeded(db, &run)? {
+  if !latest_succeeded(db, run)? {
     return Ok(Some(MergeLeft::NotReady));
   }
-  if merge == Merge::Branch && crate::merge_queue::delivered_by_queue(db, &run)? {
+  if merge == Merge::Branch && crate::merge_queue::delivered_by_queue(db, run)? {
     return Ok(Some(MergeLeft::DeliveredByQueue));
   }
   let organization = task.organization();
@@ -78,7 +99,7 @@ fn left(db: &ProjectDb, run: RunId, merge: Merge) -> Result<Option<MergeLeft>, S
     return Ok(Some(MergeLeft::OptedOut));
   }
   let starts = attempt_starts(&db.events(run.id()).map_err(run_store_error)?);
-  if let Some(steps) = MergeLeft::of_steps(&run, &starts) {
+  if let Some(steps) = MergeLeft::of_steps(run, &starts) {
     return Ok(Some(steps));
   }
   if let Some(reason) = organization.blocked_reason() {
@@ -88,7 +109,7 @@ fn left(db: &ProjectDb, run: RunId, merge: Merge) -> Result<Option<MergeLeft>, S
   }
   let mut blockers = Vec::new();
   for blocker in db.unfinished_blocking_tasks(task.id())? {
-    if let Some(blocker) = db.task(blocker)? {
+    if let Some(blocker) = recorded::task_of(db, blocker)? {
       blockers.push(blocker.key().to_string());
     }
   }
@@ -133,7 +154,8 @@ pub(super) async fn check(scope: &ChatScope, arguments: &JsonObject) -> Result<(
   blocking(move || {
     let db = ProjectDb::open(&root)?;
     let run = find_run(&db, &named)?;
-    match left(&db, run.id(), Merge::Branch)? {
+    let route = route_of_run(&db, &run)?;
+    match left(&db, &run, route, Merge::Branch)? {
       None => Ok(()),
       Some(why) => Err(ToolError::refused(
         "left_to_person",
@@ -164,5 +186,7 @@ pub fn left_message(why: &MergeLeft, number: u32) -> Message {
     MergeLeft::Held => Message::new("orchestrator.tools.mergeLeft.held").with("run", run),
     MergeLeft::OptedOut => Message::new("orchestrator.tools.mergeLeft.optedOut").with("run", run),
     MergeLeft::DeliveredByQueue => Message::new("orchestrator.tools.mergeLeft.deliveredByQueue").with("run", run),
+    MergeLeft::TeamDelivery => Message::new("orchestrator.tools.mergeLeft.teamDelivery").with("run", run),
+    MergeLeft::TeamUnrecorded => Message::new("orchestrator.tools.mergeLeft.teamUnrecorded").with("run", run),
   }
 }

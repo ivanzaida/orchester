@@ -32,7 +32,7 @@ use orchester_core::{
   orchestrator::{AgentWait, ChatEntry, ChatResume, Continuing, EntryKind, Merging, RunEnd, Subscriptions, WaitKind},
   question::AskedQuestions,
   run::{CompletedBy, PendingToolApproval, Plan},
-  store::{ConversationStore, RunStore, TaskStore, WorktreeStore},
+  store::{ConversationStore, RunStore, WorktreeStore},
   task::Task,
   time::Timestamp,
 };
@@ -47,6 +47,7 @@ use super::{
   run_ends::{Reading, current_ends, end_moved, merge_checks},
   settings::OrchestratorSetup,
   stalls::{current_stalls, is_stall},
+  team_status::TeamReading,
   waits_on::follow as waits_on,
   watch_ends,
 };
@@ -57,6 +58,7 @@ use crate::{
     changes::run_work_present,
     completion,
     detail::{RunView, run_store_error, run_view},
+    recorded::{self, task_of},
   },
 };
 
@@ -173,7 +175,7 @@ fn follow(
   let kept = keep_new((&mut db, reading.root), &new, switches)?;
   let completed = switches.drives && complete_on_its_own(&db, reading)?;
   // After the waits, so that a watched task's last run end is kept while its conversation still leads it.
-  let ended = watch_ends::end_closed(&mut db, ready, Timestamp::now())?;
+  let ended = watch_ends::end_closed(&mut db, TeamReading::of(reading.root), ready, Timestamp::now())?;
   let followed = Followed {
     kept: kept || ended,
     completed,
@@ -278,7 +280,7 @@ fn leader(db: &ProjectDb, subscriptions: &Subscriptions, wait: &AgentWait) -> Re
   let Some(run) = db.run(wait.run).map_err(run_store_error)? else {
     return Ok(None);
   };
-  let Some(task) = db.task(run.task())? else {
+  let Some(task) = task_of(db, run.task())? else {
     return Ok(None);
   };
   Ok(subscriptions.leading(task.id(), task.module()))
@@ -433,8 +435,8 @@ fn current_waits(db: &ProjectDb, project: ProjectId) -> Result<Vec<(String, Agen
   let mut approvals = db.pending_tool_approvals_all()?;
   approvals.retain(|approval| !reviewing.contains(&approval.id));
   let mut waits = Vec::new();
-  for task in db.tasks()? {
-    let Some(Ok(run)) = db.runs_of_task(task.id()).map_err(run_store_error)?.pop() else {
+  for (task, mut runs) in recorded::all_with_runs(db)? {
+    let Some(Ok(run)) = runs.pop() else {
       continue;
     };
     // A run that ended waits for no one.

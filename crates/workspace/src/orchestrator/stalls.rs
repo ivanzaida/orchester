@@ -16,7 +16,7 @@ use orchester_core::{
   id::{ProjectId, RunId},
   orchestrator::{AgentWait, TaskEvent, TaskEventKind, WaitKind, change::StepName, task_event::no_progress},
   run::{Run, TaskPhase},
-  store::{RunStore, TaskStore, WorkspaceStore},
+  store::{RunStore, WorkspaceStore},
   task::Task,
   time::Timestamp,
 };
@@ -26,7 +26,7 @@ use super::chat::StallSettled;
 use crate::{
   links::{Link, TaskPage},
   messages::{self, Message},
-  tasks::detail::run_store_error,
+  tasks::{detail::run_store_error, recorded::task_of},
 };
 
 const MINUTE_MILLIS: i64 = 60_000;
@@ -92,7 +92,7 @@ fn working(db: &ProjectDb) -> Result<Vec<(Task, Run, Timestamp)>, StoreError> {
     if held.contains(&run.id()) || run.pause_requested() || run.running_executions().is_empty() {
       continue;
     }
-    let Some(task) = db.task(run.task())? else {
+    let Some(task) = task_of(db, run.task())? else {
       continue;
     };
     if TaskPhase::of(&task, Some(&run), None) != TaskPhase::Running {

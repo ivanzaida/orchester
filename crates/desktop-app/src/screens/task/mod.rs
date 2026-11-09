@@ -503,6 +503,7 @@ impl Component for TaskFrame {
       stale,
     };
     let take_over = team_controls::take_over_dialog(ctx, &task);
+    let blocking = team_controls::blocking_dialog(ctx, &task);
     let body = tab(ctx, &props.view, task);
     Column::new()
       .id("task-frame")
@@ -514,6 +515,7 @@ impl Component for TaskFrame {
       .with_children(reader)
       .with_children(readers)
       .with_children(take_over)
+      .with_children(blocking)
       .into()
   }
 }

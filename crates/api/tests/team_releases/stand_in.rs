@@ -47,6 +47,7 @@ impl Team {
       assignee: None,
       claim: None,
       work: None,
+      blocked_reason: None,
     };
     server.authority_tasks(vec![task(1, "done"), task(2, "in_progress"), task(3, "canceled")]);
     let project = server.project("kontur").expect("the shared project").to_string();

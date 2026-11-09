@@ -82,6 +82,7 @@ use crate::{
   routes::{TaskList, TaskListTab},
   screens::task_close::{self, Closer},
   services::Services,
+  team::lock,
   theme::TasksSpacing,
 };
 
@@ -118,6 +119,8 @@ struct TasksScreen {
   placed: Mutex<Option<Placed>>,
   /// Closing, reopening and deleting tasks from their rows' menus, asked in place over the rows.
   closer: Closer,
+  /// Mark as blocked's question on a team project's list (decision D4).
+  team_actions: team::actions::Handles,
   /// List or Board, and the board's options, kept for the project.
   display: Signal<Display>,
 }
@@ -148,6 +151,7 @@ impl Component for TasksScreen {
       scroll: ScrollState::new(),
       placed: Mutex::new(None),
       closer: Closer::new(ctx, (props.project.open, props.project.feed), None),
+      team_actions: team::actions::Handles::new(ctx),
       display,
     }
   }
@@ -364,7 +368,15 @@ impl TasksScreen {
       needs: &reading.needs,
       highlight: highlight.as_deref(),
       shared: shown.shared.is_some() || shown.team.is_some(),
-      member: shown.team.is_some_and(team::TeamShown::member),
+      team: shown.team.map(|team| list::TeamSource {
+        offered: &team.offered,
+        admins: team
+          .admins
+          .as_deref()
+          .map(|admins| lock::plain_names(ctx, admins))
+          .unwrap_or_default()
+          .into(),
+      }),
     };
     let items = list::items(ctx, &source, &parts, &self.folded.get());
     // A new list for what narrows and orders the rows, and once a highlighted task the rows lacked comes: a list keeps

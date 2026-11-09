@@ -30,10 +30,15 @@ mod start_notices;
 #[path = "../../examples/qa_app/team/mod.rs"]
 mod team;
 mod team_actions;
+mod team_cached_task;
+mod team_closed_by;
 mod team_create;
 mod team_edit;
+mod team_lifecycle;
+mod team_lifecycle_menus;
 mod team_pages;
 mod team_tasks;
+mod team_unrecorded;
 mod team_work_actions;
 
 use lurq::app::events::with_synthetic_input;

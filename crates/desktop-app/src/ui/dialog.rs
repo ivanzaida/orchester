@@ -15,7 +15,7 @@ use lurq::{
   app::{
     ctx::Ctx,
     events::KeyboardEvent,
-    theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize},
+    theme::{BorderSize, PaletteColor, RadiusSize, ShadowStyle, SpacingSize, TypographyStyle},
   },
   components::{Column, Modal, ModalTarget, Row, Stack, Text},
   core::Signal,
@@ -31,7 +31,10 @@ use super::{
 };
 use crate::{
   chrome::TITLE_BAR_HEIGHT,
-  theme::{DIALOG_TILE, DIALOG_WIDTH, DialogSpacing, DialogText, ExtraColor, ExtraRadius, ExtraSpacing, IconSize},
+  theme::{
+    DIALOG_TILE, DIALOG_WIDTH, DialogSpacing, DialogText, ExtraColor, ExtraRadius, ExtraSpacing, ExtraTypography,
+    IconSize,
+  },
 };
 
 /// A line of what it does: its glyph is 18 high, as the line's first line is (`Icon box` `EyPBp`).
@@ -63,6 +66,16 @@ impl Tone {
   }
 }
 
+/// What a footer says at its start when it is a note's (`Footer` `qERFQ` in T13 `DWfta`, `Key` `e76anZ` in T14
+/// `uKVK2`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum FooterNote {
+  /// Why the action cannot be taken yet: a 12 `info` glyph and the words in 12 `text_muted`.
+  Unavailable(Arc<str>),
+  /// What Esc does, in Geist Mono 11 `text_muted`.
+  Keys(Arc<str>),
+}
+
 /// What Enter does in the dialog: its words beside the key, and the action.
 type Enter = (Arc<str>, Arc<dyn Fn() + Send + Sync>);
 
@@ -79,6 +92,8 @@ pub struct Dialog {
   cancel: Arc<str>,
   /// The footer without *Esc cancels*, its *Cancel* a ghost button with its ×.
   plain_footer: bool,
+  /// The footer's start in place of *Esc cancels*: why the action cannot be taken, or what Esc does in words.
+  note: Option<FooterNote>,
   enter: Option<Enter>,
   actions: Vec<ActionButton>,
   under: Vec<Element>,
@@ -98,6 +113,7 @@ impl Dialog {
       person_only: None,
       cancel: cancel.into(),
       plain_footer: false,
+      note: None,
       enter: None,
       actions: Vec::new(),
       under: Vec::new(),
@@ -124,6 +140,13 @@ impl Dialog {
 
   /// The footer without *Esc cancels*: a ghost *Cancel* with its ×, then the actions.
   pub fn plain_footer(mut self) -> Self {
+    self.plain_footer = true;
+    self
+  }
+
+  /// The footer in the plain form, with `note` at its start: a ghost *Cancel* with its ×, then the actions at its end.
+  pub fn footer_note(mut self, note: FooterNote) -> Self {
+    self.note = Some(note);
     self.plain_footer = true;
     self
   }
@@ -164,8 +187,9 @@ impl Dialog {
     let id = self.id.clone();
     let actions = std::mem::take(&mut self.actions);
     let enter = self.enter.take();
+    let note = self.note.take();
     let footer = if self.plain_footer {
-      plain_footer(&id, &self.cancel, actions, open)
+      plain_footer(&id, &self.cancel, (note, actions), open)
     } else {
       footer(ctx, &id, (&self.cancel, enter.as_ref()), actions, open)
     };
@@ -231,7 +255,7 @@ impl Dialog {
         .child(icon(Icon::Hand, IconSize::Base, PaletteColor::TextSecondary))
         .child(
           Text::new(words)
-            .variant(lurq::app::theme::TypographyStyle::Description)
+            .variant(TypographyStyle::Description)
             .color(PaletteColor::TextSecondary)
             .flex(1.0)
             .min_width(Dimension::Px(0.0)),
@@ -332,16 +356,55 @@ fn footer(
 }
 
 /// A ghost *Cancel* with its × and the actions, at the footer's end.
-fn plain_footer(id: &str, cancel: &str, actions: Vec<ActionButton>, open: &Signal<bool>) -> Row {
+fn plain_footer(
+  id: &str,
+  cancel: &str,
+  (note, actions): (Option<FooterNote>, Vec<ActionButton>),
+  open: &Signal<bool>,
+) -> Row {
   let shut = open.clone();
   let cancel = ActionButton::new(format!("{id}-cancel"), ButtonKind::Ghost, cancel)
     .icon(Icon::X)
     .in_form()
     .on_click(move || shut.set(false));
-  footer_row(id)
-    .justify(Justify::End)
+  let start = note.map(|note| note_start(id, note));
+  let row = footer_row(id);
+  let row = if start.is_some() {
+    row
+  } else {
+    row.justify(Justify::End)
+  };
+  row
+    .with_children(start)
     .child(cancel)
     .with_children(actions.into_iter().map(ActionButton::in_form))
+}
+
+/// A footer note, as wide as the room before the buttons.
+fn note_start(id: &str, note: FooterNote) -> Element {
+  match note {
+    FooterNote::Unavailable(reason) => Row::new()
+      .id(format!("{id}-unavailable"))
+      .flex(1.0)
+      .min_width(Dimension::Px(0.0))
+      .spacing(SpacingSize::Sm)
+      .align_items(Alignment::Center)
+      .describe("role", "unavailable-reason")
+      .child(icon(Icon::Info, IconSize::Sm, PaletteColor::TextMuted).flex_shrink(0.0))
+      .child(
+        Text::new(&reason)
+          .id(format!("{id}-unavailable-text"))
+          .variant(TypographyStyle::Description)
+          .flex(1.0)
+          .min_width(Dimension::Px(0.0)),
+      )
+      .into(),
+    FooterNote::Keys(words) => Row::new()
+      .id(format!("{id}-keys"))
+      .flex(1.0)
+      .child(Text::new(&words).variant(ExtraTypography::MonoNote.role()).nowrap())
+      .into(),
+  }
 }
 
 fn footer_row(id: &str) -> Row {

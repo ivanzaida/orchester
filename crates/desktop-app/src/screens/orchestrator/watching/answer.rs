@@ -20,6 +20,7 @@ use lurq::{
 use orchester_core::{orchestrator::WatchTarget, time::Timestamp};
 use orchester_workspace::{
   display,
+  messages::Message,
   orchestrator::watching::{Going, WatchOrder, WatchedSubscription, WatchedTask, Watching},
 };
 
@@ -159,17 +160,11 @@ fn list(ctx: &mut Ctx, id: &str, watching: &Watching, live: &Live) -> Element {
     for task in &watched.tasks {
       rows.push(task_row(ctx, id, task));
     }
+    if let Some(why) = &watched.unreadable {
+      rows.push(meta_line(ctx, format!("{id}-unreadable-{at}"), why));
+    }
     if let Some(rest) = &watched.rest {
-      rows.push(
-        line(Line::Under, REST_HEIGHT)
-          .id(format!("{id}-rest-{at}"))
-          .child(
-            Text::new(&message_text(ctx, rest))
-              .variant(WatchingText::Meta.role())
-              .nowrap(),
-          )
-          .into(),
-      );
+      rows.push(meta_line(ctx, format!("{id}-rest-{at}"), rest));
     }
     before = Some(&watched.order);
   }
@@ -180,6 +175,18 @@ fn list(ctx: &mut Ctx, id: &str, watching: &Watching, live: &Live) -> Element {
     .rounded(RadiusSize::Lg)
     .clip()
     .with_children(rows)
+    .into()
+}
+
+/// A row under a subscription's head that says `said` in 11 `text_muted`: the rest counted, or why it waits.
+fn meta_line(ctx: &Ctx, id: String, said: &Message) -> Element {
+  line(Line::Under, REST_HEIGHT)
+    .id(id)
+    .child(
+      Text::new(&message_text(ctx, said))
+        .variant(WatchingText::Meta.role())
+        .nowrap(),
+    )
     .into()
 }
 

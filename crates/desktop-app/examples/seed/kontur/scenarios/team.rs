@@ -549,7 +549,7 @@ fn origin(kontur: &Kontur) -> Result<(), SeedError> {
 }
 
 /// The catalogue and the marker naming `state`.
-fn mark(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
+pub(super) fn mark(kontur: &mut Kontur, state: State) -> Result<(), SeedError> {
   kontur.catalogue()?;
   write_marker(kontur, state)
 }

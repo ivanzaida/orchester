@@ -4,9 +4,10 @@
 use orchester_api::{
   Attribution, ModuleFields, SharedModule, SharedTask, TaskContent, UserRef,
   v2::{
-    Action, ActionCapability, BundleRef, CallerRole, Capabilities, ClaimRead, CommandKind, DEFAULT_PAGE_LIMIT,
-    DecisionId, DenialReason, EventCursor, ExecutionState, MAX_PAGE_LIMIT, ModuleRead, Page, PageCursor, PageRequest,
-    PageRequestError, PendingAuthorization, PendingDeliveryRead, Subject, TaskRead, WorkRead,
+    Action, ActionCapability, BundleRef, CallerRole, Capabilities, ClaimRead, ClosedHow, CommandKind,
+    DEFAULT_PAGE_LIMIT, DecisionId, DenialReason, EventCursor, ExecutionState, MAX_PAGE_LIMIT, ModuleRead, Page,
+    PageCursor, PageRequest, PageRequestError, PendingAuthorization, PendingDeliveryRead, Subject, TaskClosure,
+    TaskRead, WorkRead,
   },
 };
 use orchester_core::{
@@ -298,6 +299,8 @@ fn authority_reads_task_read_shape() {
     work: Some(work),
     effective_claim: Some(claim),
     capabilities,
+    closed: None,
+    blocked: None,
   };
   let attribution = |at| json!({"by":{"id":by.id,"display_name":"Ada"},"at":at});
   let wire = json!({
@@ -322,6 +325,41 @@ fn authority_reads_task_read_shape() {
   ] {
     refuses_missing_and_unknown::<TaskRead>(&wire, field);
   }
+  closure_and_block_records(read, wire);
+}
+
+/// `closed` and `blocked` are sent when the server has a record and left out when it has none; an older server leaves
+/// them out, and a `null` reads the same.
+fn closure_and_block_records(mut read: TaskRead, mut wire: Value) {
+  let (by, work) = (user(), WorkId::generate());
+  let module = ModuleId::generate();
+  for (how, how_wire) in [
+    (
+      ClosedHow::Person { by: by.clone() },
+      json!({"kind":"person","by":{"id":by.id,"display_name":"Ada"}}),
+    ),
+    (
+      ClosedHow::Delivery {
+        module,
+        module_name: "Checkout".to_owned(),
+      },
+      json!({"kind":"delivery","module":module,"module_name":"Checkout"}),
+    ),
+    (ClosedHow::Run { work }, json!({"kind":"run","work":work})),
+  ] {
+    read.closed = Some(TaskClosure { how, at: 7 });
+    wire["closed"] = json!({"how": how_wire, "at": 7});
+    roundtrip(&read, &wire);
+  }
+  read.blocked = Some(Attribution { by: by.clone(), at: 9 });
+  wire["blocked"] = json!({"by":{"id":by.id,"display_name":"Ada"},"at":9});
+  roundtrip(&read, &wire);
+  wire["closed"] = Value::Null;
+  wire["blocked"] = Value::Null;
+  let unknown: TaskRead = serde_json::from_value(wire.clone()).expect("null reads as no record");
+  assert_eq!((unknown.closed, unknown.blocked), (None, None));
+  wire["closed"] = json!({"how": {"kind":"magic"}, "at": 7});
+  assert!(serde_json::from_value::<TaskRead>(wire).is_err());
 }
 
 #[test]

@@ -2,18 +2,26 @@
 //! module branch is one commit ahead of it: the run's module is claimed and its delivery requested, which the server
 //! keeps waiting for an Admin's authorization (S12) unless an authorization is cited or the automatic merge is on; once
 //! an Admin authorized the waiting request, the next call takes the merge; a delivery whose merge waits is carried on,
-//! never requested again; a run outside a module, or a checkout on the module's own branch, has no delivery; and a
-//! local project's `merge_run` keeps its own path.
+//! never requested again; a checkout on the module's own branch has no delivery; and a run with no team record (a local
+//! task's, also in a team project) keeps `merge_run`'s own path.
 
-use orchester_core::{id::OperationId, integration::base::RunBaseSource};
+use orchester_core::id::OperationId;
 use orchester_exec::local_git::IntegrationLease;
 use serde_json::{Value, json};
 
 use crate::{
   Checkout, git,
+  team_runs::{Started, started},
   team_server::{MEMBER, MODULE_BRANCH},
-  tools::{canceled_run, run_from, server},
+  tools::{canceled_run, server},
 };
+
+/// A team task's run in its module, canceled: its work no longer runs here.
+fn ended() -> Started {
+  let team = started();
+  team.settle(|run, now| run.cancel(now).expect("canceled"));
+  team
+}
 
 fn merge() -> Value {
   json!({"project": "Kontur", "run": "1"})
@@ -46,11 +54,7 @@ fn assert_delivered(checkout: &Checkout, delivered: &Value) -> String {
 
 #[test]
 fn team_mcp_merge_run_requests_the_module_delivery() {
-  let (server, _seen) = server();
-  let module = server.module;
-  let checkout = Checkout::prepared(Some(&server), &["Say hello"], |db| {
-    run_from(db, (Some(MODULE_BRANCH), RunBaseSource::Module { module }));
-  });
+  let Started { checkout, server, .. } = ended();
 
   // Without an Admin's authorization or the automatic merge the server keeps the request waiting for an Admin.
   assert_eq!(checkout.refused("merge_run", &merge()), "delivery_awaiting_admin");
@@ -81,11 +85,7 @@ fn team_mcp_merge_run_requests_the_module_delivery() {
 
 #[test]
 fn team_mcp_merge_run_carries_on_a_waiting_delivery() {
-  let (server, _seen) = server();
-  let module = server.module;
-  let checkout = Checkout::prepared(Some(&server), &["Say hello"], |db| {
-    run_from(db, (Some(MODULE_BRANCH), RunBaseSource::Module { module }));
-  });
+  let Started { checkout, server, .. } = ended();
   server.state().automatic_merge = true;
 
   // Another merge holds the checkout: the server took the request, and the merge waits.
@@ -110,11 +110,7 @@ fn team_mcp_merge_run_carries_on_a_waiting_delivery() {
 
 #[test]
 fn team_mcp_merge_run_cites_an_admins_authorization() {
-  let (server, _seen) = server();
-  let module = server.module;
-  let checkout = Checkout::prepared(Some(&server), &["Say hello"], |db| {
-    run_from(db, (Some(MODULE_BRANCH), RunBaseSource::Module { module }));
-  });
+  let Started { checkout, server, .. } = ended();
   assert_eq!(checkout.refused("merge_run", &merge()), "delivery_awaiting_admin");
 
   // An Admin authorizes the waiting request of the module's claim on their own computer, under their own operation.
@@ -143,12 +139,16 @@ fn team_mcp_merge_run_cites_an_admins_authorization() {
 }
 
 #[test]
-fn team_mcp_merge_run_of_a_run_outside_a_module_is_refused() {
+fn team_mcp_merge_run_of_a_local_tasks_run_in_a_team_project_merges_locally() {
   let (server, _seen) = server();
-  // A run kept from before the project was linked, started on the checked-out branch.
+  // A run kept from before the project was linked: no team record, so it is a local run whatever the link says.
   let checkout = Checkout::prepared(Some(&server), &["Say hello"], canceled_run);
 
-  assert_eq!(checkout.refused("merge_run", &merge()), "module_required");
+  // The local merge's own checks answer: a canceled run is not ready to merge.
+  assert_eq!(checkout.refused("merge_run", &merge()), "run_not_ready");
+  let mut cited = merge();
+  cited["authorization"] = json!(OperationId::generate().to_string());
+  assert_eq!(checkout.refused("merge_run", &cited), "invalid_arguments");
   let state = server.state();
   assert_eq!(state.delivery_requests, 0, "nothing requested");
   assert!(state.module_claim.is_none(), "nothing claimed");
@@ -158,11 +158,7 @@ fn team_mcp_merge_run_of_a_run_outside_a_module_is_refused() {
 
 #[test]
 fn team_mcp_merge_run_on_the_module_branch_is_refused() {
-  let (server, _seen) = server();
-  let module = server.module;
-  let checkout = Checkout::prepared(Some(&server), &["Say hello"], |db| {
-    run_from(db, (Some(MODULE_BRANCH), RunBaseSource::Module { module }));
-  });
+  let Started { checkout, server, .. } = ended();
   server.state().automatic_merge = true;
   git(checkout.root(), &["switch", MODULE_BRANCH]);
 

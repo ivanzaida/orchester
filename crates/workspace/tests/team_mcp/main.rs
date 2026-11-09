@@ -24,15 +24,23 @@ mod bundle_missing;
 mod bundle_schema;
 mod created;
 mod delivery;
+mod local_task;
 mod mcp_server_remove;
 mod mcp_servers;
 mod not_ready;
+mod orchestrator;
 mod pipelines;
 mod readiness;
 mod reads;
 mod ready;
+mod run_routes;
+mod runs;
 mod share;
+mod team_controls;
+mod team_runs;
 mod tools;
+mod unrecorded;
+mod watch_ends;
 
 use std::{
   collections::HashMap,

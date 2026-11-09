@@ -10,13 +10,16 @@ use orchester_core::{
     AgentProfile, Draft, Instruction, InstructionScope, Pipeline, ResourceBody, Skill, Tool, ToolAction, Version,
   },
   run::{Run, StepExecutor},
-  store::{ConnectionStore, ResourceStore, RunStore, TaskStore},
+  store::{ConnectionStore, ResourceStore, RunStore},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{Detail, Place, Publication, text};
-use crate::{orchestrator::widening, tasks::detail::run_store_error};
+use crate::{
+  orchestrator::widening,
+  tasks::{detail::run_store_error, recorded},
+};
 
 /// The facts of publishing `resource`, of kind `of`, as version `version` from the draft saved at `saved`; `None`
 /// when the resource is gone.
@@ -222,7 +225,7 @@ fn keeping(db: &ProjectDb, (of, resource): (Publishing, ResourceId), before: u32
     }
   };
   let mut count = 0;
-  for task in db.tasks()?.into_iter().chain(db.not_shared_tasks()?) {
+  for task in recorded::all(db)?.into_iter().chain(db.not_shared_tasks()?) {
     // A run that cannot be read is not counted: its task page says it cannot be read.
     for run in db
       .runs_of_task(task.id())
@@ -232,6 +235,10 @@ fn keeping(db: &ProjectDb, (of, resource): (Publishing, ResourceId), before: u32
     {
       count += usize::from(!run.status().is_terminal() && pins(&run));
     }
+  }
+  // A team task no record of this computer defines still has runs that pin versions here.
+  for run in recorded::unrecorded_runs(db)? {
+    count += usize::from(!run.status().is_terminal() && pins(&run));
   }
   Ok(count)
 }

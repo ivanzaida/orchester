@@ -71,6 +71,8 @@ A project's approvals. Parameter: `project` (req.). Answers `approvals` with:
   "autopilot"}`, or `{"mode": "manual", "because": …}` with `profile` (its profile is Manual), `project` (the project
   does not allow Autopilot) or `run` (the run was switched to Manual), the first that says so.
 
+**Team projects:** the runs listed include a team task's runs, named by the key they recorded when they started.
+
 ### `set_allow_autopilot` — changes data · person only to turn on
 
 Turns the project's *Allow Autopilot for agents in this project* on or off. `false` is always taken: every agent of
@@ -143,6 +145,13 @@ its next run takes as things stand (`null` = whatever the checkout has checked o
 `led_in` is the Orchestrator conversation the task's events go to, as its *Led in* shows it (see
 [`get_watches`](#get_watches--read-only)), or `null` when no subscription covers it.
 
+A team task also carries `closed` and `blocked`, as the team server records them: `closed` is `{how, at}` while the task is
+Done or Canceled (`how` is `{kind: "person", by}` for the person whose patch closed it, `{kind: "delivery", module, module_name}`
+when its module's accepted delivery marked it Done, or `{kind: "run", work}` when its work's success did); `blocked` is
+`{by, at}` while it has a `blocked_reason`: who set the current reason. `at` is in milliseconds. Each is `null` when the
+server has no record, as every server before this contract has none; the Summary then says only *Done*, *Canceled* or
+*Blocked*.
+
 Parameters: `project` (req.), `key` (req.: key or id).
 
 ### `create_task` — changes data
@@ -183,7 +192,8 @@ nowhere; nothing is saved).
 id or name, sent as its resource id; a pipeline of this computer's own (or any that is not the team's) is refused as
 `team_pipeline_required`: only the team's pipelines run team tasks, and its Admins create and publish them. A team
 project offers none of this computer's own pipelines (`list_pipelines`, `get_pipeline`). Limits are refused as
-`decision_required` (D6), a workflow status other than the default as `decision_required` (D4), and what the server
+`decision_required` (D6), a workflow status other than the default (Backlog) as `team_status_on_create` (a team task is
+moved on afterwards with `update_task`), and what the server
 keeps nowhere (`story_points`, `tags`, `blocked_by`, `no_automatic_merge`, `delivers`, `base_branch`) as
 `team_field_unsupported`; nothing is sent then.
 
@@ -208,8 +218,17 @@ as `create_task` (all optional) plus `key` (req.). Specifics:
 - **`story_points`**: refused as `persons_points` when a person set them. After a brief/criteria change without
   points, Orchester re-estimates when the switch allows.
 - **Deleting a task** is a person's alone, in the app — no tool deletes one.
-- **Team project**: as `create_task` says; the change goes to the server's task route (Admins' today: a member gets
-  `not_admin`). Moving a team task to another team pipeline is a person's decision too (`person_only` unless AP is on).
+- **Team project**: as `create_task` says; the change goes to the server's task route, which allows an edit of the
+  details to Admins only (a member gets `not_admin`). Moving a team task to another team pipeline is a person's decision
+  too (`person_only` unless AP is on). The workflow status and `blocked_reason` are the task lifecycle (decision D4, one
+  `PATCH` of the task, decided on the caller's claim and role): `done` and `blocked_reason` (set, change, clear) are the
+  claim holder's or an Admin's; `canceled`, `backlog` and `todo` are an Admin's only, and `backlog` or `todo` reopens a
+  Done or Canceled task. Someone else gets `not_holder` (the change is a holder's) or `not_admin`. `done` and
+  `canceled` release the task's own claim and are refused as `stop_run_first` while its work runs; a closed task
+  cannot be claimed or started until an Admin reopens it. `in_progress`, `in_review` and Done to Canceled are no
+  lifecycle change and are refused as `team_status_not_offered`. A task also becomes Done by itself on the server (its
+  report/outside work succeeded, or its module's delivery was accepted); nothing in the tools sets that. A blank
+  `blocked_reason` is `invalid_organization` here and `missing_reason` from the server.
 
 ### `get_story_point_calibration` — read-only
 
@@ -222,7 +241,8 @@ its runs. These are the examples estimates read. The estimator's own requests ar
 
 Returns a **queued** task whose run never started to Draft (task list's *Return to drafts*) — only a task its group
 holds for good (a task of the group failed, the group's cap, refused by preflight or the runner, blocked or
-canceled). Parameters: `project`, `key` (both req.).
+canceled). Parameters: `project`, `key` (both req.). A team task has no queue or draft on the team server: refused as
+`team_no_queue`; an Admin moves it back to Backlog with `update_task` (`workflow_status: backlog`).
 
 ---
 
@@ -332,6 +352,15 @@ queue state, `null` if it never joined), what happened, tokens used and budget, 
 that cannot be read has no phase/state/tokens; its detail says why. While steps of a run wait for an agent slot, its
 detail ends by naming them (`… · Review waits for an agent slot`).
 
+**Team projects:** a team task's runs are listed from this computer's own records of them, with the task's key and
+title as the run recorded them when it started. A team task named by `task` (key or server id) is read from its team
+server first; one this computer ran nothing of lists no runs. A name the project has as a local task (made before the
+project was linked) is read here, signed in or not. A run of the old sharing stream that kept neither the inputs it
+started with nor a cached copy of its task has no key to be listed under: with no `task` it is listed with `task: null`
+and `unrecorded: true` (its id, number, state, tokens and time as stored; phase, detail, delivery and link are `null`;
+a run that cannot be read has its number and a `detail` saying so, and nothing else); asked for by `task` it is
+refused as `team_task_unrecorded`.
+
 | Parameter | Type            | Req. | Description                                   |
 |-----------|-----------------|------|-----------------------------------------------|
 | `project` | string \| null  | no   | Left out = every project.                     |
@@ -373,6 +402,10 @@ The complete state of a run:
   `worktree_removed`, `branch_deleted`) or `removed`; plus `since`, `resyncs`, `approved_at`, `checked_on`.
 - Links: the run links to its task's page; waits link to their cards on the task's Conversation.
 
+A run is named by its id or its number, whatever its task. **Team projects:** a team task's run is read from this
+computer's own records of it, without the task's definition (`task` is the key the run recorded when it started); a
+run that kept none, whose task has no copy here either, is refused as `team_task_unrecorded`.
+
 Parameters: `project` (req.), `run` (req.).
 
 ### `pause_run` / `resume_run` / `cancel_run` — changes data
@@ -380,6 +413,11 @@ Parameters: `project` (req.), `run` (req.).
 - `pause_run`: pauses a run at its agents' next checkpoint.
 - `resume_run`: resumes a paused run, or continues an interrupted one from its last checkpoint.
 - `cancel_run`: cancels a run that has not ended.
+
+**Team projects:** `resume_run` resumes a paused run under the claim its work started with and takes no claim of the old
+sharing stream; an interrupted run is not continued from here (`team_project_unsupported`, as `continue_run`) because
+a team task's work starts and goes on only through the team server. A run the team server fenced (taken over, membership
+removed, another device) is not resumed: `claim_fenced`, as the task page refuses it.
 
 Parameters (each): `project` (req.), `run` (req.). Runner refusals: `run_not_running`, `shutting_down`,
 `runner_unavailable`, `runner_reply_lost`, …
@@ -427,7 +465,8 @@ for a run that ended. Parameters: `project`, `run` — both required. Answers th
 Removes an ended run's worktree (task page's *Remove worktree*): committed work stays on the branches; only merged
 branches are deleted. Refused while the run works, while a merge or removal of its task runs, when the worktree holds
 uncommitted changes (a person decides that on the task page), when already removed, or `run_changed` when the run
-worked again in other worktrees since this was read. Parameters: `project`, `run`.
+worked again in other worktrees since this was read. A team task's run that kept no inputs, whose task has no copy
+here either, is refused first as `team_task_unrecorded`. Parameters: `project`, `run`.
 
 `get_changes`, `merge_run` and `complete_run` are in [setup › Ending a run's work](mcp-tools-setup.md#10-ending-a-runs-work).
 
@@ -440,6 +479,11 @@ worked again in other worktrees since this was read. Parameters: `project`, `run
 `hold_queue` holds **new starts** in the whole project, or — with `task` — in the reviewed group that task belongs
 to. Running runs go on; queued tasks wait and a start is refused until `release_queue` lets them go on. Both answer
 what holds now.
+
+**Team projects:** the task is read from its team server (a local task of the project is read here, signed in or
+not); its group is this computer's, so a team task in none is
+refused as `not_in_group`. A team task with no run on this computer is not part of this computer's hold queue:
+it is left out of what holds now.
 
 | Parameter | Type           | Req. | Description                                                        |
 |-----------|----------------|------|--------------------------------------------------------------------|
@@ -464,6 +508,10 @@ review failed (`could_not_run`, `timed_out`, `unreadable`; absent for a request 
 lists every request of the run, oldest first, with `answered` (`kind`: `autopilot`, `profile`, `reviewer` with its
 `reason`, `person`; absent while it waits) and `came_to_you`.
 
+**Team projects:** a team task's approvals name the task by the key its run recorded when it started; an unfinished run
+that recorded none and whose task has no copy here is listed in `runs` with `task: null`, `unrecorded: true` and no
+link.
+
 Parameters: `project` (string | null), `run` (string | null — needs `project`).
 
 ### `decide_approval` — changes data · gate AA
@@ -483,6 +531,9 @@ Approves a waiting request once, or denies it. A denial may carry a `message` th
 Agents' questions waiting for an answer, oldest first: id, agent, when asked, whether the agent waits in its turn,
 the questions with suggested answers, run, task, link. Under `waiting_for_message`: steps of tasks' latest runs that
 wait for a message, each with what its agent wrote last (answer those with `send_message`).
+
+**Team projects:** a team task's questions name the task by the key its run recorded when it started; the waits of a
+run that recorded none and whose task has no copy here are listed with `task: null`, `unrecorded: true` and no link.
 
 Parameters: `project` (string | null), `run` (string | null — needs `project`).
 
@@ -504,7 +555,8 @@ question, or an empty answer.
 
 A plan a gated step proposed, as its card shows it: version, step, agent, time, whole text, whether the run waits on
 it, its decision (`approved`, or `changes_requested` with note; `decided_by`, when), the step's versions (no text),
-run and link. Refused as `no_plan` / `plan_not_found`.
+run and link. Refused as `no_plan` / `plan_not_found`, and as `team_task_unrecorded` for a team task's run that kept no
+inputs and whose task has no copy here.
 
 | Parameter | Type            | Req. | Description                                                                                  |
 |-----------|-----------------|------|----------------------------------------------------------------------------------------------|
@@ -537,6 +589,17 @@ as a follow-up of a run ready for review, as instructions that continue a failed
 resuming a paused or interrupted run, or running an ended task again with it. A run stopped at a limit keeps the
 message until a person raises the limit. Refused when no agent reads it and the task does not run again.
 
+On a **team project** the message to a **team run** (told by the run itself: its team record or its team inputs, not its
+task; a local task's run and a run of the old sharing stream behave as on a local project) goes to the run under the
+claim its work started with (no claim of the old sharing stream is taken). A run of the old sharing stream whose task
+has no definition here (no inputs kept, no cached copy) is refused as `team_task_unrecorded`; a team run whose start
+did not finish recording its team record, as `team_run_unrecorded`. A message that would run
+the task again (`team_run_again_unsupported`) or continue an interrupted
+run (`team_project_unsupported`) is refused before it is stored: a team task's work starts only through the team
+server (`run_task`). A run the team server fenced (taken over, membership removed, carried on elsewhere) takes no
+message in any state, a plan's changes included: it is refused as `claim_fenced` before anything
+is stored.
+
 | Parameter | Type                          | Req. | Description                                                                                       |
 |-----------|-------------------------------|------|---------------------------------------------------------------------------------------------------|
 | `project` | string                        | yes  |                                                                                                   |
@@ -552,6 +615,10 @@ conversation, questions with suggested answers (options, state, answers, `answer
 orchestrator), plans (text, waiting or not, decision), `run_continued` entries (`returned`, `returned_with_note`,
 `restarted`; step, note, attempt, author), `base_moved` notices and how each step ended. Each entry has author, step,
 run, time, `cursor` and link. Texts are stored text with secrets redacted.
+
+**Team projects:** the task is the one its team server reads (`team_unavailable` while it cannot be reached; a task the
+project has as a local task is read here without the server) and the conversation is this computer's record of its runs; a team task nothing ran for here has no entries. A team task whose
+runs here recorded nothing of it is refused as `team_task_unrecorded`.
 
 | Parameter | Type            | Req. | Description                                                      |
 |-----------|-----------------|------|------------------------------------------------------------------|
@@ -633,6 +700,10 @@ Usage reads it, in tasks (no money estimates):
 - **Cumulative flow** — tasks per workflow status at each day's end (Canceled left out).
 - **Forecasts** — Monte Carlo over recently merged tasks for the queued tasks and each open module: 50% and 85%
   dates, remaining tasks, the history used; or `not_enough_history` / `nothing_left`.
+
+**Team projects:** nothing of this is computed from this computer's rows, which hold only part of a team's tasks, so the
+call is refused as `team_project_unsupported`; with `module`, the module is read from its team server first
+(`module_not_found` when it has none).
 
 Parameters: `project` (req.), `days` (integer | null), `module` (string | null — only that module's forecast beside
 the queued work's).

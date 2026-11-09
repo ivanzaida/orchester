@@ -63,6 +63,7 @@ mod tasks;
 mod tasks_memory;
 mod tasks_unreadable;
 pub mod team;
+mod team_closed;
 mod team_computer;
 mod team_hub;
 mod team_hub_mcp;
@@ -116,7 +117,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 199] = [
+pub const ALL: [Scenario; 201] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -280,6 +281,8 @@ pub const ALL: [Scenario; 199] = [
   Scenario::of("team-claims", team::claims),
   Scenario::of("team-module-work", team::module_work),
   Scenario::of("team-admin-work", team::admin_work),
+  Scenario::of("team-closed-admin", team_closed::admin),
+  Scenario::of("team-closed-member", team_closed::member),
   Scenario::of("team-version-refused", team::version_refused),
   Scenario::with_fake_codex("team-running", team::team_running),
   Scenario::of("team-edit-conflict", team::edit_conflict),

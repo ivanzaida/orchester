@@ -299,7 +299,7 @@ const SPECS: &[Spec] = &[
     description: "What a run changed, as the task's Changes tab reads it: the files of its last checkpoint against \
                   the base it started from (path, change, additions, deletions), and what its worktree holds that \
                   no checkpoint has yet. Diffs too large to read give their size only. `link` is its task's \
-                  Changes tab in the app, which shows the task's latest run.",
+                  Changes tab in the app, which shows the task's latest run. A team task's run is found by its id or number, and its link names the task by the key the run recorded when it started.",
     schema: schema_for_type::<super::runs::InRun>,
     read_only: true,
   },
@@ -310,14 +310,18 @@ const SPECS: &[Spec] = &[
                   integration of the run under way. Otherwise it refuses (needs_decision, merge_failed): preparing \
                   the checkout, conflict choices and approving the exact merged result are a person's, in the \
                   app's Local integration page. A run merged already, by Orchester or outside it as git proves \
-                  (its base branch holds the run's commits), is refused with already_merged. A team project's run \
-                  is never merged into the base branch itself: its work is in its module's branch, and merge_run \
-                  requests that module's delivery from the team server, under the module's claim (taken when nobody \
-                  holds it), from the module branch's tip onto the tip of the branch the checkout has checked out; \
-                  an open delivery of the module is carried on instead. An Admin's authorization or the team's \
-                  automatic merge decides it, never this tool: `authorization` names the operation id of an Admin's \
-                  delivery authorization of this branch at these commits for the request to cite; without either \
-                  the team server keeps the request waiting for an Admin. Only a delivered module is a result \
+                  (its base branch holds the run's commits), is refused with already_merged. A team task's run \
+                  (told by the run itself: its team record, or the team inputs it was created with whatever its \
+                  task is; a run of the old sharing stream, which has neither, and a local task's run in a team \
+                  project merge as above; a team run with no team record, whose start did not finish, is \
+                  refused with team_run_unrecorded) is never merged into the base branch itself: its work \
+                  is in its module's branch, and merge_run requests that module's delivery from the team server, \
+                  under the module's claim (taken when nobody holds it), from the module branch's tip onto the tip \
+                  of the branch the checkout has checked out; an open delivery of the module is carried \
+                  on instead. An Admin's authorization or the team's automatic merge decides it, never this tool: \
+                  `authorization` names the operation id of an Admin's delivery authorization of this branch at \
+                  these commits for the request to cite; without either the team server keeps the request waiting \
+                  for an Admin. Only a delivered module is a result \
                   (delivery with its merge_commit); otherwise it refuses with where the delivery stands: \
                   delivery_awaiting_admin (requested, waiting for an Admin to authorize it; call again once \
                   authorized), delivery_not_authorized (the cited authorization is not of this delivery), \

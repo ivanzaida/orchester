@@ -34,7 +34,7 @@ pub fn serve_as(
   (here, pipelines): (&HashMap<u32, String>, &TeamPipelines),
 ) -> Option<MemberRole> {
   let standing = match state {
-    State::Admin | State::AdminWork | State::EditConflict => Standing::Admin,
+    State::Admin | State::AdminWork | State::EditConflict | State::ClosedAdmin => Standing::Admin,
     state if state.edits() || state.archives() => Standing::Admin,
     State::ServerAdmin => Standing::ServerAdmin,
     _ => Standing::Member,
@@ -132,6 +132,7 @@ fn serve(
             generation: 0,
           }),
           work: (number == CLAIMED.0).then_some("running"),
+          blocked_reason: None,
         };
         work::task(state, &mut task);
         task
