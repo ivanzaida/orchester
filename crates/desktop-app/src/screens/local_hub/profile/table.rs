@@ -49,9 +49,9 @@ pub(super) struct Rows<'a> {
   /// The connection the person chose in the select, by id; empty while none is.
   pub chosen: &'a Signal<String>,
   pub on_edit: OnEdit,
-  /// How many choices and saves ended: a select remounts on what the panel holds after each.
-  pub settled: u64,
-  /// A choice or a save is under way, or the hub is read again: nothing is changed now.
+  /// A choice is being checked: the selects keep showing what the person chose.
+  pub choosing: bool,
+  /// A save or a cancel is under way: nothing is changed now.
   pub busy: bool,
   /// Where *Add* next to the connection goes: the accounts, where a connection of another account is made.
   pub add_connection: Open,
@@ -112,9 +112,9 @@ fn cli(ctx: &mut Ctx, rows: &Rows<'_>) -> Row {
       placeholder: Some(ctx.t("local_hub.profile.chooseCli").to_string()),
       mono: false,
       locked: rows.busy,
+      choosing: rows.choosing,
       on_pick,
     },
-    rows.settled,
   );
   rows::row("local-hub-profile-cli", &label, None, select)
 }
@@ -141,9 +141,9 @@ fn model(ctx: &mut Ctx, rows: &Rows<'_>) -> Row {
       placeholder: None,
       mono: true,
       locked: rows.busy || listed.is_empty(),
+      choosing: rows.choosing,
       on_pick,
     },
-    rows.settled,
   );
   rows::row("local-hub-profile-model", &label, None, select)
 }
@@ -173,9 +173,9 @@ fn effort(ctx: &mut Ctx, rows: &Rows<'_>) -> Row {
       placeholder: None,
       mono: false,
       locked: rows.busy || profile.options.efforts.is_empty(),
+      choosing: rows.choosing,
       on_pick,
     },
-    rows.settled,
   );
   rows::row("local-hub-profile-effort", &label, None, select)
 }

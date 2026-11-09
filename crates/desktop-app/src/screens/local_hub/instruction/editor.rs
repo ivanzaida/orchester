@@ -209,21 +209,14 @@ impl Editor {
       Some(Sub::quiet(ctx.t("local_hub.instruction.addedToSub"))),
       rows::words(&format!("{PREFIX}-added-value"), &added_to(ctx, scope, &data.pipelines)),
     )];
+    // Who gets an instruction is shown, not chosen here: a profile chooses what it is given (the person's decision of
+    // 2026-11-09).
     if matches!(scope, InstructionScope::Project | InstructionScope::Pipeline { .. }) {
-      let invalid = errors.is_some_and(FormErrors::targets_invalid);
-      let sub = if invalid {
-        Sub {
-          words: ctx.t("local_hub.instruction.appliesToRequired"),
-          color: PaletteColor::Danger,
-        }
-      } else {
-        Sub::quiet(ctx.t("local_hub.instruction.appliesToSub"))
-      };
       rows.push(rows::row(
         &format!("{PREFIX}-targets"),
         &ctx.t("local_hub.instruction.appliesTo"),
-        Some(sub),
-        self.fields.targets_select(ctx, data, (invalid, Dimension::Pct(100.0))),
+        None,
+        rows::words(&format!("{PREFIX}-targets-value"), &self.fields.targets_words(ctx, data)),
       ));
     }
     rows.push(rows::row(

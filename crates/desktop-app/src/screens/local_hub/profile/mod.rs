@@ -4,11 +4,13 @@
 //! ([`super::save_bar`]). The parts are the team profile's ([`crate::screens::team_hub::profile`]) over the local
 //! profile store. The profile is edited in place, as the design draws it ([`table`], [`pick`], [`servers`]): the CLI,
 //! the connection, the model, the reasoning effort and the MCP servers are selects, and each choice changes only what
-//! the panel holds ([`edit`]). *Save* publishes it as the next version at once; *Cancel* puts back what is stored.
+//! the panel holds, at once and without locking anything it shows ([`choices`]). *Save* publishes it as the next
+//! version at once ([`edit`]); *Cancel* puts back what is stored.
 //!
 //! A draft stored before (by the profile's page) opens as the panel's changes over the published version: *Save*
 //! publishes it, with what the panel changed on top, and *Cancel* throws it away.
 
+mod choices;
 mod edit;
 mod pick;
 mod ready;
@@ -42,6 +44,7 @@ use orchester_workspace::{
 };
 
 use self::{
+  choices::Choices,
   edit::{Ask, Followed, Holding},
   ready::Fix,
 };
@@ -76,28 +79,13 @@ pub(super) struct Props {
   pub id: ResourceId,
   pub profile: LocalProfile,
   pub hub: LocalHub,
-  /// The hub is read again: what shows is the last answer, and a choice would act on it.
-  pub reading: bool,
   /// What the list says of edits that are not saved, which the panel keeps.
   pub unsaved: UnsavedSignal,
 }
 impl PartialEq for Props {
   fn eq(&self, other: &Self) -> bool {
-    (
-      &self.project,
-      &self.entry,
-      self.id,
-      &self.profile,
-      &self.hub,
-      self.reading,
-    ) == (
-      &other.project,
-      &other.entry,
-      other.id,
-      &other.profile,
-      &other.hub,
-      other.reading,
-    )
+    (&self.project, &self.entry, self.id, &self.profile, &self.hub)
+      == (&other.project, &other.entry, other.id, &other.profile, &other.hub)
   }
 }
 impl DevtoolsInspectable for Props {}
@@ -115,16 +103,14 @@ struct ProfilePanel {
   chosen: Signal<String>,
   /// What the panel holds: `None` while it is what is stored.
   held: Signal<Holding>,
-  /// Makes a choice on what the panel holds.
-  choose: edit::Choose,
+  /// The choices on their way to what the panel holds.
+  choices: Choices,
   /// Publishes what the panel holds.
   save: edit::Save,
   /// Throws away the draft stored before, the one saved at the time it takes.
   cancel: FutureAction<Timestamp, (), Message>,
   /// What a save would widen, which waits for the person.
   pending: edit::Pending,
-  /// How many choices and saves ended: the selects show what the panel holds again after each.
-  settled: Signal<u64>,
   /// The connection the panel shows, which a choice in the select differs from.
   shown_connection: Ref<Option<ConnectionId>>,
   /// The profile as the hub lists it now, and when the last save ended ([`Followed`]).
@@ -141,34 +127,29 @@ impl Component for ProfilePanel {
     let root = props.project.open.repo_root.clone();
     let project = props.project.open.project.id();
     let held = ctx.signal(Holding::default());
-    let choose = edit::choose(ctx, root.clone(), props.id, &held);
     let save = edit::save(ctx, root.clone(), props.id);
-    let (pending, settled) = (ctx.signal(None), ctx.signal(0_u64));
+    let pending: edit::Pending = ctx.signal(None);
     let listed = (ctx.create_ref(None), ctx.create_ref(None));
     let followed = Followed {
       pending: pending.clone(),
       held: held.clone(),
       now: listed.0.clone(),
       when: listed.1.clone(),
-      settled: settled.clone(),
     };
     edit::follow(ctx, &save, &followed, project);
-    let cancel = cancel(ctx, (root, project, props.id), &settled);
-    let ended = settled.clone();
-    ctx.watch(&choose.state(), move |state| {
-      if !state.is_pending() {
-        ended.update(|count| *count += 1);
-      }
+    let saving = (save.clone(), pending.clone(), held.clone());
+    let choices = Choices::new(ctx, (root.clone(), props.id), &held, move || {
+      publish(&saving.0, &saving.1, saving.2.get_untracked().body());
     });
+    let cancel = cancel(ctx, (root, project, props.id));
     let current = props.profile.current;
     let this = Self {
       chosen: ctx.signal(current.map_or_else(String::new, |connection| connection.to_string())),
       held,
-      choose,
+      choices,
       save,
       cancel,
       pending,
-      settled,
       shown_connection: ctx.create_ref(current),
       listed,
       unsaved: props.unsaved,
@@ -185,30 +166,31 @@ impl Component for ProfilePanel {
       id,
       profile: listed,
       hub,
-      reading,
       ..
     } = ctx.props::<Props>().clone();
     let holding = self.holding(&listed);
     let shown = holding.0.as_ref().map_or(&listed, |held| &held.shown);
-    self.keep_select(shown);
-    let changed = listed.draft || holding.0.as_ref().is_some_and(|held| held.changed);
+    let choosing = self.choices.checking();
+    self.keep_select(shown, choosing);
+    // A choice under way is a change already: *Save* and *Cancel* take it at once, *Save* once it is held.
+    let changed = choosing || listed.draft || holding.0.as_ref().is_some_and(|held| held.changed);
     let refused = self.refusal();
     mark_unsaved(&self.unsaved, self.what, (changed, refused.is_some()));
     let parts = ready::parts(ctx, &hub, shown);
     let missing = ready::missing(&parts);
-    let busy = self.busy(reading);
+    let busy = self.busy();
     let navigation = Navigation::of(ctx);
-    let press = |fix: &Fix| self.press(fix, (&project, shown), (&holding, &navigation));
+    let press = |fix: &Fix| self.press(fix, (&project, shown), &navigation);
     let head_end = head_end(ctx, &project, &entry, (id, PREFIX));
     let widening = self
       .pending
       .get()
-      .map(|asked| edit::question(ctx, &asked, (&self.save, &self.pending), &self.settled));
+      .map(|asked| edit::question(ctx, &asked, (&self.save, &self.pending)));
     let rows = table::Rows {
       profile: shown,
       chosen: &self.chosen,
-      on_edit: self.on_edit(&holding),
-      settled: self.settled.get(),
+      on_edit: self.on_edit(),
+      choosing,
       busy: busy != Busy::Idle,
       add_connection: navigation.to(Route::Accounts(AccountsView::default())),
     };
@@ -240,7 +222,7 @@ impl Component for ProfilePanel {
       ctx,
       PREFIX,
       (
-        self.save_now(ctx, (&holding, changed), busy),
+        self.save_now(changed),
         (changed && busy == Busy::Idle).then(|| self.cancel_now(&listed)),
       ),
       save_bar::makes(ctx, entry.number),
@@ -273,37 +255,36 @@ impl ProfilePanel {
 
   /// A choice in the connection's select is a change of what the panel holds, unless it is the one it shows.
   fn follow_select(&self, ctx: &mut Ctx) {
-    let (shown, choose, held) = (self.shown_connection.clone(), self.choose.clone(), self.held.clone());
+    let (shown, choices, pending) = (
+      self.shown_connection.clone(),
+      self.choices.clone(),
+      self.pending.clone(),
+    );
     ctx.watch(&self.chosen, move |value| {
       let Ok(connection) = value.parse::<ConnectionId>() else {
         return;
       };
       if shown.get() != Some(connection) {
-        choose.run((held.get_untracked().body(), Edit::Connection(connection)));
+        clear(&pending);
+        choices.make(Edit::Connection(connection));
       }
     });
   }
 
-  /// The select shows the connection the panel shows, once no choice is being made.
-  fn keep_select(&self, shown: &LocalProfile) {
+  /// The select shows the connection the panel shows, once no choice is being checked.
+  fn keep_select(&self, shown: &LocalProfile, choosing: bool) {
     self.shown_connection.set(shown.current);
     let wanted = shown
       .current
       .map_or_else(String::new, |connection| connection.to_string());
-    if !self.choose.state().get().is_pending() && self.chosen.get_untracked() != wanted {
+    if !choosing && self.chosen.get_untracked() != wanted {
       self.chosen.set(wanted);
     }
   }
 
-  fn busy(&self, reading: bool) -> Busy {
-    let taking = [
-      self.choose.state().get().is_pending(),
-      self.save.state().get().is_pending(),
-      self.cancel.state().get().is_pending(),
-    ];
-    if reading {
-      Busy::Reading
-    } else if taking.contains(&true) {
+  /// A save or a cancel is under way: nothing is changed meanwhile. A choice being checked locks nothing.
+  fn busy(&self) -> Busy {
+    if self.save.state().get().is_pending() || self.cancel.state().get().is_pending() {
       Busy::Taking
     } else {
       Busy::Idle
@@ -311,49 +292,52 @@ impl ProfilePanel {
   }
 
   /// What changing a field does: makes the change on what the panel holds, dropping a question about a save.
-  fn on_edit(&self, holding: &Holding) -> table::OnEdit {
-    let (choose, pending, body) = (self.choose.clone(), self.pending.clone(), holding.body());
+  fn on_edit(&self) -> table::OnEdit {
+    let (choices, pending) = (self.choices.clone(), self.pending.clone());
     Arc::new(move |change| {
-      pending.set(None);
-      choose.run((body.clone(), change));
+      clear(&pending);
+      choices.make(change);
     })
   }
 
-  /// What *Save* does now: nothing while nothing differs or a choice is checked, else it publishes what the panel
-  /// holds.
-  fn save_now(&self, ctx: &Ctx, (holding, changed): (&Holding, bool), busy: Busy) -> Save {
+  /// What *Save* does now: nothing while nothing differs, else it publishes what the panel holds, once the choices
+  /// being checked are held.
+  fn save_now(&self, changed: bool) -> Save {
     if self.save.state().get().is_pending() {
       return Save::Saving;
     }
     if !changed {
       return Save::Unchanged;
     }
-    if busy != Busy::Idle {
-      return Save::Waits(ctx.t("local_hub.reading"));
-    }
-    let (save, pending, held) = (self.save.clone(), self.pending.clone(), holding.body());
+    let (choices, save, pending, held) = (
+      self.choices.clone(),
+      self.save.clone(),
+      self.pending.clone(),
+      self.held.clone(),
+    );
     Save::Ready(Press::run(move || {
-      pending.set(None);
-      save.run(Ask {
-        held: held.clone(),
-        allowed: Vec::new(),
-      });
+      if choices.waits() {
+        choices.save_after();
+      } else {
+        publish(&save, &pending, held.get_untracked().body());
+      }
     }))
   }
 
-  /// *Cancel*: the panel shows what is stored again at once; a draft stored before is thrown away too.
+  /// *Cancel*: the panel shows what is stored again at once, the choices being checked dropped; a draft stored before
+  /// is thrown away too.
   fn cancel_now(&self, listed: &LocalProfile) -> Press {
-    let (held, pending, settled, cancel) = (
+    let (held, pending, choices, cancel) = (
       self.held.clone(),
       self.pending.clone(),
-      self.settled.clone(),
+      self.choices.clone(),
       self.cancel.clone(),
     );
     let draft = listed.draft_saved_at;
     Press::run(move || {
+      choices.drop_all();
       held.set(Holding::default());
-      pending.set(None);
-      settled.update(|count| *count += 1);
+      clear(&pending);
       if let Some(saved) = draft {
         cancel.run(saved);
       }
@@ -362,12 +346,7 @@ impl ProfilePanel {
 
   /// What a press on `fix` does: a connection to use is a change of what the panel holds; the others open where the
   /// missing part is set.
-  fn press(
-    &self,
-    fix: &Fix,
-    (project, shown): (&ShownProject, &LocalProfile),
-    (holding, navigation): (&Holding, &Navigation),
-  ) -> Press {
+  fn press(&self, fix: &Fix, (project, shown): (&ShownProject, &LocalProfile), navigation: &Navigation) -> Press {
     match fix {
       Fix::UseConnection => {
         let target = self
@@ -376,10 +355,10 @@ impl ProfilePanel {
           .parse::<ConnectionId>()
           .ok()
           .or_else(|| shown.connections.first().map(|choice| choice.id));
-        let (choose, body) = (self.choose.clone(), holding.body());
+        let choices = self.choices.clone();
         Press::run(move || {
           if let Some(connection) = target {
-            choose.run((body.clone(), Edit::Connection(connection)));
+            choices.make(Edit::Connection(connection));
           }
         })
       }
@@ -393,29 +372,39 @@ impl ProfilePanel {
 
   /// Why the last choice, save or cancel did nothing, as the workspace said.
   fn refusal(&self) -> Option<Message> {
-    let (choose, save, cancel) = (
-      self.choose.state().get(),
-      self.save.state().get(),
-      self.cancel.state().get(),
-    );
-    choose
-      .error
-      .clone()
-      .filter(|_| choose.is_rejected())
+    let (save, cancel) = (self.save.state().get(), self.cancel.state().get());
+    self
+      .choices
+      .refusal()
       .or_else(|| save.error.clone().filter(|_| save.is_rejected()))
       .or_else(|| cancel.error.clone().filter(|_| cancel.is_rejected()))
   }
 }
 
+/// Publishes `held` (`None` for what is stored), dropping a question a save asked before.
+fn publish(save: &edit::Save, pending: &edit::Pending, held: Option<orchester_core::resource::AgentProfile>) {
+  clear(pending);
+  save.run(Ask {
+    held,
+    allowed: Vec::new(),
+  });
+}
+
+/// Drops the question a save asked, while one does: a signal set to what it holds would render again for nothing.
+fn clear(pending: &edit::Pending) {
+  if pending.get_untracked().is_some() {
+    pending.set(None);
+  }
+}
+
 /// Throws away the draft of the profile `id` saved at the time it takes, while it is still that one; the screens that
-/// show the profiles read them again, and the selects show what is stored.
+/// show the profiles read them again.
 fn cancel(
   ctx: &mut Ctx,
   (root, project, id): (std::path::PathBuf, orchester_core::id::ProjectId, ResourceId),
-  settled: &Signal<u64>,
 ) -> FutureAction<Timestamp, (), Message> {
   let changes = Services::of(ctx).changes;
-  let cancel = ctx.future_action(move |shown: Timestamp| {
+  ctx.future_action(move |shown: Timestamp| {
     let (root, changes) = (root.clone(), changes.clone());
     async move {
       background::run(move || local_edit::discard(&root, id, shown)).await??;
@@ -424,12 +413,5 @@ fn cancel(
       }
       Ok(())
     }
-  });
-  let settled = settled.clone();
-  ctx.watch(&cancel.state(), move |state| {
-    if !state.is_pending() {
-      settled.update(|count| *count += 1);
-    }
-  });
-  cancel
+  })
 }

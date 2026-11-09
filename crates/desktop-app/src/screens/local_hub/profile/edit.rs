@@ -1,8 +1,7 @@
-//! What the selects and the bar of a local profile's panel do: each choice is made on what the panel holds, by the
-//! editor's own rules, and nothing is stored ([`local_edit::hold`]); *Save* publishes what the panel holds as the next
-//! version at once ([`local_edit::save`]). A save that widens what its agents may do asks first, in the panel, and only
-//! a person's press answers it; a refusal says why in place. A save ends with the screens that read the profiles
-//! reading them again.
+//! What the bar of a local profile's panel does: *Save* publishes what the panel holds (its choices, made by
+//! [`super::choices`]) as the next version at once ([`local_edit::save`]). A save that widens what its agents may do
+//! asks first, in the panel, and only a person's press answers it; a refusal says why in place. A save ends with the
+//! screens that read the profiles reading them again.
 
 use std::{path::PathBuf, sync::Arc};
 
@@ -21,7 +20,7 @@ use orchester_core::{
 use orchester_workspace::{
   agents::{
     editor::Outcome,
-    local_edit::{self, Edit, Held},
+    local_edit::{self, Held},
     local_hub::LocalProfile,
     widening::answers_in_persons_place,
   },
@@ -76,25 +75,6 @@ impl DevtoolsInspectable for Asked {}
 
 pub(super) type Pending = Signal<Option<Asked>>;
 pub(super) type Save = FutureAction<Ask, Done, Message>;
-pub(super) type Choose = FutureAction<(Option<AgentProfile>, Edit), Holding, Message>;
-
-/// Makes a choice on what the panel holds of the profile `id` in the project at `root`; the panel then holds it.
-pub(super) fn choose(ctx: &mut Ctx, root: PathBuf, id: ResourceId, held: &Signal<Holding>) -> Choose {
-  let choose = ctx.future_action(move |(body, edit): (Option<AgentProfile>, Edit)| {
-    let root = root.clone();
-    async move {
-      background::run(move || local_edit::hold(&root, id, body.as_ref(), &edit).map(|held| Holding(Some(held)))).await?
-    }
-  });
-  let held = held.clone();
-  ctx.watch(&choose.state(), move |state| {
-    if let Some(now) = state.data.as_ref().filter(|_| state.is_fulfilled()) {
-      held.set(now.clone());
-    }
-  });
-  choose
-}
-
 /// Publishes what the panel holds of the profile `id` in the project at `root`.
 pub(super) fn save(ctx: &mut Ctx, root: PathBuf, id: ResourceId) -> Save {
   ctx.future_action(move |ask: Ask| {
@@ -114,8 +94,6 @@ pub(super) struct Followed {
   pub now: Ref<Option<LocalProfile>>,
   /// The profile as the hub listed it when a save ended: the panel shows what it held until the hub lists another.
   pub when: Ref<Option<LocalProfile>>,
-  /// Counts the saves that ended: every select shows what the panel holds again.
-  pub settled: Signal<u64>,
 }
 
 /// What follows a save that ended: a published one is recorded for the screens that read the profiles, and the panel
@@ -127,20 +105,12 @@ pub(super) fn follow(ctx: &mut Ctx, save: &Save, followed: &Followed, project: P
     held,
     now,
     when,
-    settled,
   } = followed;
-  let (pending, held, now, when, settled) = (
-    pending.clone(),
-    held.clone(),
-    now.clone(),
-    when.clone(),
-    settled.clone(),
-  );
+  let (pending, held, now, when) = (pending.clone(), held.clone(), now.clone(), when.clone());
   ctx.watch(&save.state(), move |state| {
     if state.is_pending() {
       return;
     }
-    settled.update(|count| *count += 1);
     let Some(done) = state.data.clone().filter(|_| state.is_fulfilled()) else {
       return;
     };
@@ -176,22 +146,14 @@ pub(super) fn follow(ctx: &mut Ctx, save: &Save, followed: &Followed, project: P
 }
 
 /// The question of a save that widens, in the panel: what it widens, *Allow* and *Keep editing*.
-pub(super) fn question(
-  ctx: &mut Ctx,
-  asked: &Asked,
-  (save, pending): (&Save, &Pending),
-  settled: &Signal<u64>,
-) -> Element {
+pub(super) fn question(ctx: &mut Ctx, asked: &Asked, (save, pending): (&Save, &Pending)) -> Element {
   let automation = if answers_in_persons_place(&asked.reasons) {
     Guarded::ApprovalWidening
   } else {
     Guarded::PermissionWidening
   };
   let reasons: Vec<Arc<str>> = asked.reasons.iter().map(|reason| message_text(ctx, reason)).collect();
-  let (keep, confirm) = (
-    (pending.clone(), settled.clone()),
-    (save.clone(), pending.clone(), asked.ask.clone()),
-  );
+  let (keep, confirm) = (pending.clone(), (save.clone(), pending.clone(), asked.ask.clone()));
   let props = WidenProps {
     id: "local-hub-profile-confirm".into(),
     look: WidenLook::Band,
@@ -201,10 +163,7 @@ pub(super) fn question(
     reasons: reasons.into(),
     confirm: ctx.t("local_hub.edit.allow"),
     keep: ctx.t("local_hub.edit.keep"),
-    on_keep: Arc::new(move || {
-      keep.0.set(None);
-      keep.1.update(|count| *count += 1);
-    }),
+    on_keep: Arc::new(move || keep.set(None)),
     on_confirm: Arc::new(move || {
       confirm.1.set(None);
       confirm.0.run(confirm.2.clone());

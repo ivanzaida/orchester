@@ -282,7 +282,7 @@ impl LocalHubScreen {
     let list = list::list(ctx, listing, shown);
     let panel = match adding {
       Some(kind) => self.form(ctx, project, listing, kind),
-      None => self.panel(ctx, (project, hub), (selected, reading)),
+      None => self.panel(ctx, (project, hub), selected),
     };
     agents::master_detail("local-hub", reading, (list, panel))
   }
@@ -303,12 +303,7 @@ impl LocalHubScreen {
   }
 
   /// The panel of `selected`: an archived entry's, an MCP server's, or the frame the other kinds share.
-  fn panel(
-    &self,
-    ctx: &mut Ctx,
-    (project, hub): (&ShownProject, &LocalHub),
-    (selected, reading): (Option<&Entry>, bool),
-  ) -> Element {
+  fn panel(&self, ctx: &mut Ctx, (project, hub): (&ShownProject, &LocalHub), selected: Option<&Entry>) -> Element {
     let Some(entry) = selected else {
       return archived::nothing_picked(ctx);
     };
@@ -347,7 +342,6 @@ impl LocalHubScreen {
             id,
             profile: profile.clone(),
             hub: hub.clone(),
-            reading,
             unsaved: self.unsaved.clone(),
           },
         ),
