@@ -91,13 +91,19 @@ impl TasksScreen {
     });
     let board = self.display.get().layout == Layout::Board;
     let mut lines: Vec<Element> = Vec::new();
-    // The board draws the team's line (01b `zv7b6`); the list does not (01 `QdL7N`).
-    if board {
-      lines.push(inset(team::team_line(ctx, id, (place, team.role))).into());
-    }
-    if team.member() {
-      lines.push(inset(team::lock_line(ctx, team.admins.as_deref(), board)).into());
-    }
+    // The board's line ends in *Sharing settings* (01b `zv7b6`); the list's does not (T7 `lCoNt`, T8 `vdSWS`).
+    let team_line = if board {
+      team::team_line(ctx, id, (place, team.role))
+    } else {
+      team::place_line(ctx, (place, team.role))
+    };
+    lines.push(inset(team_line).into());
+    let calm = if team.member() {
+      team::lock_line(ctx, team.admins.as_deref(), board)
+    } else {
+      team::admin_line(ctx, team.admins.as_deref())
+    };
+    lines.push(inset(calm).into());
     if team.more {
       let count = (PAGES * usize::from(MAX_PAGE_LIMIT)).to_string();
       let more = Text::new(&ctx.t_args("tasks.team.more", [("count", count)]))

@@ -51,7 +51,7 @@ pub(in crate::screens::tasks) struct RowTeam {
   pub organization: TaskOrganization,
   /// `None` until the list read the task's capabilities.
   pub offered: Option<Offered>,
-  /// Who changes the team's tasks, as the members read named them; empty until read, or for an Admin.
+  /// Who changes the team's tasks, as the members read named them; empty until read.
   pub admins: Arc<str>,
 }
 

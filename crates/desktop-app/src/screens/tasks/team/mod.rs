@@ -30,7 +30,7 @@ use orchester_workspace::{
   },
 };
 
-pub(super) use self::lines::{lock_line, team_line};
+pub(super) use self::lines::{admin_line, lock_line, place_line, team_line};
 use super::{cache::ViewCounts, header::Choices, shared::Shared, views::list_view};
 use crate::{
   project::ShownProject,
@@ -58,7 +58,7 @@ pub(super) struct TeamShown {
   pub tasks: ProjectTasks,
   pub counts: ViewCounts,
   pub role: CallerRole,
-  /// Who changes the team's tasks, as the members read named them; `None` until read, or for an Admin.
+  /// Who changes the team's tasks, as the members read named them; `None` until read.
   pub admins: Option<Arc<TeamAdmins>>,
   /// What each task offers the person of its lifecycle, as its capabilities say.
   pub offered: Arc<HashMap<TaskId, Offered>>,
@@ -115,9 +115,7 @@ pub(super) fn read(
   ) else {
     return Team::Reading;
   };
-  let admins = (capabilities.role == CallerRole::Member)
-    .then(|| ctx.query(team_admins(source.clone())).data())
-    .flatten();
+  let admins = ctx.query(team_admins(source.clone())).data();
   Team::Ready(Box::new(TeamShown {
     tasks: joined(local, &read, modules),
     counts: ViewCounts::of_server(&StatusCounts::of_board(&counted), &waiting),
