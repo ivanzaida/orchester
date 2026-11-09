@@ -55,8 +55,7 @@ pub async fn get_changes(services: &Services, args: InRun) -> Result<Value, Tool
   let (open, run, link, checkpointed) = {
     let services = services.clone();
     blocking(move || {
-      let open = services.project(&args.project)?;
-      let db = ProjectDb::open(&open.repo_root)?;
+      let (open, db) = services.read_project(&args.project)?;
       let run = find_run(&db, &args.run)?;
       // The changes are read without their task; only the link needs it, so a task that cannot be read costs the
       // link alone.

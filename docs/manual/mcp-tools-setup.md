@@ -448,6 +448,7 @@ profile. Reading it opens the project's data only to read it: it migrates and wr
 | `kind` | Fields | Fix |
 |---|---|---|
 | `connection` | `cli`, `problem`: `none_of_kind` (no connection of that CLI: add one) or `pick_needed` (several, none picked for this profile) | `add_cli_connection` / `pick_profile_connection` |
+| `connection_sign_in` | `cli`, `connection` (id) — the connection the profile runs on needs the CLI's sign-in and its last check found it signed out | none: a person signs in (Connections shows how); `fix: { "tool": null, "gate": "person" }` |
 | `decision_connection` | `reviewer` (id), `problem`: `none_of_kind` (no decision connection: add one) or `pick_needed` (several, none picked for this reviewer) — a team decision reviewer | `save_decision_connection` / `pick_reviewer_connection` |
 | `mcp_off` | `server` `{id, name}` — a team MCP server not switched on here | `set_mcp_server_enabled`; turning on is `person_only` always, so `gate: "person"` |
 | `mcp_unsupported` | `server` `{id, name}`, `why`: `more_than_one_secret_header` — a team MCP server this app cannot run as defined | none: only the team can change the server |

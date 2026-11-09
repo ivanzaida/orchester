@@ -1,0 +1,205 @@
+{
+  "local_hub": {
+    "title": "Agents",
+    "local": "Local project · only on this computer",
+    "share": "Share with a team…",
+    "memory": "Memory",
+    "import": "Import",
+    "reading": "Reading…",
+    "rereading": "Reading…",
+    "loadFailed": "The agents of this project couldn't be read",
+    "new": {
+      "profiles": "New agent",
+      "mcpServers": "New MCP server",
+      "instructions": "New instruction",
+      "skills": "New skill",
+      "tools": "New tool",
+      "any": "New"
+    },
+    "filter": {
+      "all": "All",
+      "profiles": "Profiles",
+      "mcpServers": "MCP servers",
+      "instructions": "Instructions",
+      "skills": "Skills",
+      "tools": "Tools",
+      "archived": "Archived"
+    },
+    "hint": {
+      "all": "Everything in this project, kept on this computer",
+      "profiles": "Your agent profiles, kept on this computer",
+      "mcpServers": "Your MCP servers, kept on this computer",
+      "instructions": "Your instructions, kept on this computer",
+      "skills": "Your skills, kept on this computer",
+      "tools": "Your tools, kept on this computer",
+      "archived": "Hidden from lists and pickers · Restore brings one back"
+    },
+    "group": {
+      "needs": "Needs you",
+      "ready": "Ready",
+      "off": "Off",
+      "archived": "Archived"
+    },
+    "empty": {
+      "title": "Nothing of this kind yet",
+      "detail": "This project has none yet. New adds one."
+    },
+    "line": {
+      "archived": "Archived {{date}}, {{time}}",
+      "draft": "Draft · not published yet",
+      "connectionNone": "No {{cli}} connection",
+      "connectionPick": "Choose a {{cli}} connection",
+      "connectionSignIn": "Sign in to {{cli}}",
+      "many": "{{count}} things missing",
+      "off": "Off",
+      "offRuns": "Off · {{names}} run without it",
+      "on": "On",
+      "onUsed": "On · used by {{names}}",
+      "programHere": "Set its program path",
+      "programOf": "Set the program path of {{server}}",
+      "ready": "Ready",
+      "runsOn": "{{cli}} · {{connection}}",
+      "saveRefused": "Couldn't save · unsaved changes",
+      "secret": "Secret {{name}} has no value",
+      "undecided": "Can't tell yet whether it is ready",
+      "unsaved": "Unsaved changes · {{rest}}"
+    },
+    "chip": {
+      "archived": "Archived",
+      "off": "Off",
+      "ready": "Ready",
+      "unsaved": "Unsaved changes",
+      "draft": "Unpublished edits",
+      "chooseConnection": "Choose a connection",
+      "addConnection": "Add a connection",
+      "needsProgram": "Needs the program path",
+      "needsSecret": "Needs a secret value"
+    },
+    "panel": {
+      "connection": "Runs on",
+      "edit": "Edit",
+      "editHint": "Opens its editor: edits are saved as a draft, and Publish makes the next version",
+      "mcpServers": "MCP servers",
+      "usedBy": "used by {{names}}",
+      "wasUsedBy": "was used by {{names}}"
+    },
+    "readiness": {
+      "title": "Ready?",
+      "missing": "{{count}} missing"
+    },
+    "mcp": {
+      "cancel": "Cancel",
+      "gone": "This MCP server is no longer in the project.",
+      "on": "On",
+      "onHint": "Runs may use it",
+      "onlyHere": "Only on this computer",
+      "save": "Save",
+      "added": "added {{date}}",
+      "runsAs": "Runs as",
+      "asProgram": "A program on this computer",
+      "asRemote": "A remote server (HTTP)",
+      "programNone": "Not set · nothing is guessed or found by name",
+      "programSub": "Path to the program",
+      "choose": "Choose…",
+      "found": "found",
+      "moved": "found, but outside what a run may start",
+      "pathTo": "path to {{program}}",
+      "changedSub": "changed, not saved yet",
+      "tools": "Run without asking",
+      "toolsNone": "None · each use asks",
+      "editingTitle": "Editing {{name}} · not saved yet",
+      "editingBody": "{{fields}} changed · Save applies them to this project at once; Cancel puts back what was saved",
+      "secretChanged": "{{name}} value",
+      "refusedTitle": "Couldn't save {{name}}: {{reason}}",
+      "refusedBody": "Nothing was saved, not even the other fields. Your edits stay in the form.",
+      "refusedSecretBody": "Nothing was saved, not even the other fields. Your edits stay in the form; allow Orchester to use the system's secret store, then Save again.",
+      "allowThenSave": "Allow access, then Save again",
+      "notReadyProgram": "Not ready: set the program path. Runs whose pipeline uses {{name}} don't start until then.",
+      "notReadySecret": "Not ready: {{secret}} has no value. Runs whose pipeline uses {{name}} don't start until then.",
+      "setProgram": "Set program path",
+      "setSecret": "Set value for {{name}}",
+      "askedOnce": "Asked once"
+    },
+    "archive": {
+      "action": "Archive",
+      "more": "More"
+    },
+    "archived": {
+      "emptyTitle": "Nothing archived",
+      "emptyDetail": "Archiving takes a resource out of the lists and pickers. It shows up here, and Restore brings it back.",
+      "nothingTitle": "Pick an archived resource",
+      "nothingDetail": "Archived resources are hidden from lists and pickers, and the runs that pinned them were stopped. Pick one to see what archiving did and to restore it.",
+      "restore": "Restore {{name}}",
+      "restoreHint": "Back in lists and pickers at once · stopped runs stay stopped",
+      "run": "{{key}} · {{title}}",
+      "stoppedOne": "Archiving stopped the run that pinned it, {{runs}}. Restore puts {{name}} back in the lists and pickers as it was; that run stays stopped, so run it again to use it.",
+      "stopped": "Archiving stopped {{count}} runs that pinned it, {{runs}}. Restore puts {{name}} back in the lists and pickers as it was; those runs stay stopped, so run them again to use it.",
+      "stoppedNone": "Archiving stopped no runs. Restore puts {{name}} back in the lists and pickers as it was.",
+      "title": "Archived: hidden from lists and pickers",
+      "readOnly": "· read-only until it is restored",
+      "takesSecret": "{{name}} ← secret {{secret}}"
+    },
+    "profile": {
+      "title": "Profile",
+      "connection": "Connection",
+      "ofItsKind": "{{count}} of its kind on this computer",
+      "effortDefault": "CLI default",
+      "none": "None",
+      "version": "{{version}} · published {{date}}",
+      "useHint": "Asked once per profile; a connection added later doesn't change it",
+      "openHint": "Opens the server's panel, where it is set",
+      "addValueAction": "Set {{server}}'s secret value",
+      "draftFirst": "Publish or discard the draft first",
+      "addServer": "Add",
+      "chooseCli": "Choose a CLI",
+      "moreSettings": "More settings…"
+    },
+    "draft": {
+      "saved": "Draft on {{version}} · saved {{time}} · only on this computer",
+      "sub": "Publishing makes {{next}} of {{name}}",
+      "publish": "Publish {{version}}",
+      "discard": "Discard draft",
+      "hint": "Runs keep the version they started on"
+    },
+    "edit": {
+      "widenTitle": "Allow these changes to the agent profile?",
+      "allow": "Allow and continue",
+      "keep": "Keep editing"
+    },
+    "ready": {
+      "ready": "Ready",
+      "noCli": "Its connection is gone, and {{model}} names no agent CLI to choose another of",
+      "connectionVersion": "{{cli}} · {{name}} · {{program}} {{version}}",
+      "noneOfKind": "No {{cli}} connection on this computer",
+      "onlyOne": "Its connection is gone · {{name}} is the only {{cli}} connection",
+      "pickAmong": "{{count}} {{cli}} connections · choose one",
+      "serverOff": "Off · its runs go without it",
+      "noValue": "No value set",
+      "valueSet": "Value set"
+    },
+    "secret": {
+      "field": "Value",
+      "placeholder": "Paste the value",
+      "blank": "Enter a value.",
+      "keep": "Use this value",
+      "cancel": "Cancel",
+      "title": "Replace the value of {{name}}",
+      "what": "The value goes to the system's secret store when you Save the server, and is never shown. Cancel puts nothing in it.",
+      "whatCreate": "The value goes to the system's secret store when you Create the server, and is never shown. Cancel puts nothing in it.",
+      "dots": "••••••••••••",
+      "none": "No value set",
+      "replace": "Replace",
+      "set": "Set value",
+      "never": "secret value · never shown",
+      "typed": "new value · not saved yet",
+      "refused": "not stored · the secret store refused it",
+      "missing": "no value yet"
+    },
+    "leave": {
+      "title": "Discard the unsaved changes to {{name}}?",
+      "what": "Opening another entry now puts {{name}} back as it was saved. Save it first to keep the changes.",
+      "keep": "Keep editing",
+      "discard": "Discard changes"
+    }
+  }
+}

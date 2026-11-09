@@ -52,6 +52,11 @@ impl LeaveGuard {
     self.0.destination.get().is_some()
   }
 
+  /// The departure being asked about, for an editor that follows it with a watch rather than in a render.
+  pub fn attempt(&self) -> Signal<Option<TabSet>> {
+    self.0.destination.clone()
+  }
+
   pub fn keep_editing(&self) {
     self.0.destination.set(None);
   }

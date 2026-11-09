@@ -7,7 +7,6 @@ use orchester_core::{
   time::Timestamp,
   usage::{DayRange, local_date},
 };
-use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -65,8 +64,7 @@ pub async fn get_delivery(services: &Services, args: GetDelivery) -> Result<Valu
   }
   let services = services.clone();
   blocking(move || {
-    let open = services.project(&args.project)?;
-    let db = ProjectDb::open(&open.repo_root)?;
+    let (open, db) = services.read_project(&args.project)?;
     let module = args
       .module
       .as_deref()

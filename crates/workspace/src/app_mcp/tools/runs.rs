@@ -92,9 +92,8 @@ type Apart = (Vec<ShownApproval>, Attempts, Reviewed);
 /// The run `args` names as its task page shows it but for its waiting requests, its merge attempts and its review,
 /// which come apart with its project.
 fn read_run(services: &Services, args: &InRun) -> Result<(Value, Apart, ProjectId), ToolError> {
-  let open = services.project(&args.project)?;
+  let (open, db) = services.read_project(&args.project)?;
   let (project, root) = (open.project.id(), open.repo_root);
-  let db = ProjectDb::open(&root)?;
   let run = find_run(&db, &args.run)?;
   let Some(task) = task_of(&db, run.task())? else {
     return Err(team::task_missing(&db, run.task())?);

@@ -6,7 +6,7 @@ use orchester_core::{
   id::{ChatId, ProjectId},
   orchestrator::WatchTarget,
 };
-use orchester_store::{ChatListing, ProjectDb};
+use orchester_store::ChatListing;
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -36,13 +36,12 @@ pub struct GetWatches {
 }
 
 pub async fn get_watches(services: &Services, args: GetWatches, translate: &Translate) -> Result<Value, ToolError> {
-  if team::of(services, &args.project).await?.is_some() {
+  if team::of_reading(services, &args.project).await?.is_some() {
     return Err(team::team_only_on_server("get_watches"));
   }
   let services = services.clone();
   let (project, read) = blocking(move || {
-    let open = services.project(&args.project)?;
-    let db = ProjectDb::open(&open.repo_root)?;
+    let (open, db) = services.read_project(&args.project)?;
     let chats = db.chats()?;
     let reads = WatchReads::read(&db, &open.repo_root)?;
     let shown: Vec<(ChatId, String, Watching)> = match &args.conversation {

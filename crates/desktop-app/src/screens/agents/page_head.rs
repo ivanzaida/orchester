@@ -1,5 +1,5 @@
 //! The top of a profile's page (`Top` `WSnxI` in 01b): the crumb back to Profiles, the page head with the CLI's mark,
-//! the profile's name, its permissions in a few words and what enforces them, and the … menu with Remove; then the
+//! the profile's name, its permissions in a few words and what enforces them, and the … menu with Archive; then the
 //! draft bar (`W0sRO`) with Discard draft and Publish. 01e draws a profile whose connection cannot enforce it
 //! (Publish unavailable: *Change the connection to publish*) and a stale draft.
 use std::sync::Arc;
@@ -14,7 +14,7 @@ use lurq::{
 use orchester_core::{permission::ApprovalMode, resource::AgentProfile};
 use orchester_workspace::agents::data::{ProfileEntry, ProjectAgents, VersionState};
 
-use super::{AgentsNav, Shown, entries, fields::Fields, permissions::mode_name, policy_panel};
+use super::{AgentsNav, entries, fields::Fields, permissions::mode_name, policy_panel};
 use crate::{
   screens::hub::{
     draft_bar::{DraftBar, Standing},
@@ -33,7 +33,7 @@ use crate::{
 
 /// ← Profiles.
 pub fn crumb(ctx: &Ctx, nav: &AgentsNav) -> Element {
-  opening(nav.to(Shown::List))
+  opening(nav.agents())
     .id("agent-crumb")
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
@@ -42,21 +42,20 @@ pub fn crumb(ctx: &Ctx, nav: &AgentsNav) -> Element {
     .into()
 }
 
-/// The … menu under the head: Remove.
+/// The … menu under the head: Archive.
 pub struct More {
   pub open: Signal<bool>,
   pub anchor: ElementRef,
-  pub remove: Arc<dyn Fn() + Send + Sync>,
+  pub archive: Arc<dyn Fn() + Send + Sync>,
 }
 
 /// The page head; in a shared project `shared`, the team's version and where it stands here, says what the
 /// permissions say otherwise (`Sub` `Du8OB` in 02), and a member has `versions` at its end in the menu's place
-/// (`Versions` `EGuXw` in 03). `glyph` stands in the tile for the connection's own mark: the team's API connection
-/// missing on this computer (04).
+/// (`Versions` `EGuXw` in 03).
 pub fn head(
   ctx: &mut Ctx,
   (fields, listed): (&Fields, &ProjectAgents),
-  (more, glyph): (Option<More>, Option<Icon>),
+  more: Option<More>,
   (shared, versions): (Option<Row>, Option<Element>),
 ) -> Element {
   let role = fields.role.get();
@@ -82,8 +81,8 @@ pub fn head(
       .with_children(enforced.map(|enforced| separated("agent-enforced", enforced)))
   });
   let menu = more.map(|more| {
-    let remove = more.remove.clone();
-    let item = MenuItem::new("agent-remove", ctx.t("hub.remove.action"), move || remove())
+    let archive = more.archive.clone();
+    let item = MenuItem::new("agent-archive", ctx.t("local_hub.archive.action"), move || archive())
       .icon(Icon::Trash2)
       .render(ctx, &more.open);
     let open = more.open.clone();
@@ -104,10 +103,7 @@ pub fn head(
     .width(Dimension::Pct(100.0))
     .spacing(lurq::app::theme::SpacingSize::Md)
     .align_items(Alignment::Center)
-    .child(tile(
-      glyph.unwrap_or_else(|| entries::provider_glyph(fields.connection(listed))),
-      true,
-    ))
+    .child(tile(entries::provider_glyph(fields.connection(listed)), true))
     .child(
       Column::new()
         .flex(1.0)

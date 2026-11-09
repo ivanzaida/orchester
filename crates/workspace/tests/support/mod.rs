@@ -10,8 +10,8 @@ use std::{
 };
 
 use orchester_core::{
-  blob::ContentHash,
-  id::{ChatId, ConnectionId, IdempotencyKey, ProjectId, ResourceId, TaskId, UserId},
+  connection::mcp::McpServerSelection,
+  id::{ChatId, ConnectionId, IdempotencyKey, ProjectId, ResourceId, TaskId},
   memory::{
     AgentProvenance, AgentWrite, Confidence, Memory, MemoryContent, MemoryKind, MemoryScope, MemorySettings,
     SecretScreen,
@@ -21,19 +21,22 @@ use orchester_core::{
   permission::StepPermissions,
   project::{Project, ProjectKey},
   resource::{
-    AgentProfile, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Resource, ResourceKind, Slug,
-    Step, StepKey, StepKind, VersionNumber,
+    AgentProfile, Draft, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Resource, ResourceKind,
+    Slug, Step, StepKey, StepKind, VersionNumber,
   },
   revision::Revision,
   run::{Answerer, BranchName, NewRun, Plan, PlanDecision, PublishedVersions, Run, RunEvent, RunSnapshot},
-  sharing::{SharedPerson, TaskRevision},
+  sharing::TaskRevision,
   store::{ResourceStore, RunStore, TaskStore},
   task::{TaskDetails, TaskLimits},
   time::Timestamp,
   tokens::TokenBudget,
 };
-use orchester_store::{CachedVersion, ProjectDb, ReferenceTarget, ResourceSharing, VersionReference};
+use orchester_store::{CachedVersion, ProjectDb};
 use tempfile::TempDir;
+
+mod team_profile;
+use team_profile::{keep_as_team_profile, team_server_references};
 
 pub fn at(millis: i64) -> Timestamp {
   Timestamp::from_unix_millis(millis)
@@ -288,6 +291,45 @@ impl Fixture {
     }
   }
 
+  /// Builder's next version chooses the local MCP server `server`, and the runs the fixture starts from now on pin it.
+  pub fn choose_local_server(&mut self, server: ConnectionId) {
+    let StepKind::Agent {
+      profile: Some(builder), ..
+    } = self.snapshot.body().steps()[0].kind.clone()
+    else {
+      panic!("the fixture's first step has a Builder profile");
+    };
+    let latest = self
+      .db
+      .latest_version::<AgentProfile>(builder)
+      .expect("read")
+      .expect("published");
+    let body = latest
+      .body()
+      .clone()
+      .with_mcp_servers(McpServerSelection::new(vec![server]).expect("one server"));
+    self
+      .db
+      .save_draft(builder, &Draft::new(body, Some(latest.number()), at(6)))
+      .expect("draft");
+    let next = self.db.publish_draft::<AgentProfile>(builder, at(7)).expect("publish");
+    let delivery = self.db.resources(ResourceKind::Pipeline).expect("pipelines")[0].id();
+    let pipeline = self
+      .db
+      .latest_version::<Pipeline>(delivery)
+      .expect("read")
+      .expect("published");
+    let (tools, instructions) = (BTreeMap::new(), BTreeMap::new());
+    let profiles = BTreeMap::from([(builder, next)]);
+    let published = PublishedVersions {
+      profiles: &profiles,
+      tools: &tools,
+      instructions: &instructions,
+      skills: &BTreeMap::new(),
+    };
+    self.snapshot = RunSnapshot::build(delivery, &pipeline, published).expect("snapshot");
+  }
+
   /// The team MCP server `id` named `called`, kept in this project as a synced one is.
   pub fn keep_team_server(&mut self, id: ResourceId, called: &str) {
     let server = Resource::new(
@@ -394,6 +436,20 @@ impl Fixture {
     )
     .expect("absolute executable");
     orchester_core::store::ConnectionStore::create_connection(&mut self.db, &connection).expect("kept");
+  }
+
+  /// What a run of `task` starts from, as [`Fixture::pending_run`] makes it, for a test that creates runs itself.
+  pub fn new_run_for(&self, task: TaskId) -> NewRun {
+    NewRun {
+      task,
+      snapshot: self.snapshot.clone(),
+      branch: BranchName::new("orchester/orc-run-0").expect("branch"),
+      base: Revision::new(&"a".repeat(40)).expect("revision"),
+      base_branch: None,
+      base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
+      budget: Some(budget(1_000_000)),
+      max_duration: Some(Duration::from_secs(1_800)),
+    }
   }
 
   /// A run of `task`, created at `now` and not started.
@@ -517,48 +573,4 @@ pub fn proposed(run: &Run, text: &str, now: i64) -> Memory {
     &MemorySettings::default(),
     at(now),
   )
-}
-
-/// Makes `profile`, published as `version`, the team's: its version is cached as the server confirmed it, naming
-/// `servers` by `TeamResource` references.
-fn keep_as_team_profile(
-  db: &mut ProjectDb,
-  profile: ResourceId,
-  version: &orchester_core::resource::Version<AgentProfile>,
-  servers: &[ResourceId],
-) {
-  let revision = TaskRevision::try_from(1_u64).expect("a revision");
-  db.set_resource_sharing(profile, Some(ResourceSharing::Shared(revision)))
-    .expect("the profile is the team's");
-  let references = team_server_references(servers);
-  let confirmed = CachedVersion {
-    number: version.number(),
-    published_at: at(3),
-    publisher: SharedPerson {
-      id: UserId::generate(),
-      name: "Olena".to_owned(),
-    },
-    server_body: serde_json::json!({}),
-    hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
-    references,
-    local_body: version.body().clone(),
-    waits_here: false,
-  };
-  db.cache_shared_version(profile, &confirmed)
-    .expect("the team version is cached");
-}
-
-/// The references of a team profile version that chooses the team MCP servers `servers`.
-fn team_server_references(servers: &[ResourceId]) -> Vec<VersionReference> {
-  servers
-    .iter()
-    .map(|&id| VersionReference {
-      target: ReferenceTarget::TeamResource {
-        kind: ResourceKind::McpServer,
-        id,
-      },
-      name: String::new(),
-      role: None,
-    })
-    .collect()
 }

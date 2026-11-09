@@ -17,18 +17,20 @@ use lurq::{
     theme::{BorderSize, PaletteColor, RadiusSize, SpacingSize},
   },
   components::{Column, Row, Spacer, Text},
+  core::Signal,
   layout::Alignment,
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_workspace::messages::Message;
 
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, Protected, input_may_decide},
+  mcp::input_gate::{Guarded, InputGate, Protected, RefusalListener, input_may_decide},
   theme::{ConnectionsText, ExtraRadius, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
     notice::{Notice, NoticeTone},
+    tinted_note::person_only,
   },
 };
 
@@ -94,6 +96,11 @@ pub struct WidenConfirm {
   gate: Option<InputGate>,
   /// The mounted question carries its exact consent classification.
   protected: parking_lot::Mutex<Option<(Guarded, Protected)>>,
+  /// A client's press was refused while the question shows, at the gate or in the confirm's handler: the question
+  /// says so, since the press leaves nothing else to see.
+  refused: Signal<bool>,
+  /// Hears the gate's refusals for as long as the question shows.
+  _hears: Option<RefusalListener>,
 }
 
 impl Component for WidenConfirm {
@@ -106,17 +113,24 @@ impl Component for WidenConfirm {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<WidenProps>().clone();
     let (keep, confirm) = self.buttons(ctx, &props, ButtonKind::Secondary);
-    match props.look {
-      WidenLook::Reviewer => reviewer_question(&props, (keep, confirm.icon(Icon::Check))),
-      WidenLook::Card => card_question(&props, (keep, confirm)),
-      WidenLook::Band => question(&props, (keep, confirm)),
+    let asked: Element = match props.look {
+      WidenLook::Reviewer => reviewer_question(&props, (keep, confirm.icon(Icon::Check))).into(),
+      WidenLook::Card => card_question(&props, (keep, confirm)).into(),
+      WidenLook::Band => question(&props, (keep, confirm)).into(),
       WidenLook::Box => crate::screens::project_settings::kit::question(
         &props.id,
         &props.title,
         &props.reasons,
         vec![confirm.into(), keep.into()],
-      ),
-    }
+      )
+      .into(),
+    };
+    // The same tree before and after a refusal, so the question's buttons stay where they are.
+    Column::new()
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Snug.role())
+      .child(asked)
+      .with_children(self.refused.get().then(|| self.refusal(ctx, &props.id)))
   }
 }
 
@@ -159,6 +173,9 @@ impl Component for WidenNotice {
           .width(Dimension::Pct(100.0)),
       );
     }
+    if self.0.refused.get() {
+      notice = notice.part(self.0.refusal(ctx, &props.id));
+    }
     Element::from(notice.action(confirm.icon(confirm_icon)).action(keep))
   }
 }
@@ -174,6 +191,11 @@ impl WidenConfirm {
     let gate = ctx.use_context::<InputGate>();
     let policy = props.automation;
     let locks = locks_input(props);
+    let refused = ctx.signal(false);
+    let hears = gate.as_ref().filter(|_| locks).map(|gate| {
+      let refused = refused.clone();
+      gate.on_refusal(move || refused.set(true))
+    });
     Self {
       protected: parking_lot::Mutex::new(
         gate
@@ -182,7 +204,14 @@ impl WidenConfirm {
           .map(|gate| (policy, gate.protect(policy))),
       ),
       gate,
+      refused,
+      _hears: hears,
     }
+  }
+
+  /// Why a client's press did nothing: only a person answers the question.
+  fn refusal(&self, ctx: &Ctx, id: &str) -> Row {
+    person_only(format!("{id}-person-only"), &ctx.t("cloud.personOnly"))
   }
 
   /// The question's *Keep*, a button of `keep_kind`, and its confirm, each guarded as its consent says.
@@ -209,7 +238,12 @@ impl WidenConfirm {
     // An approval card's question only narrows when taken back: any input may. Elsewhere taking it back may discard
     // a person's draft, which stays theirs.
     let keep = if locks_input(props) {
-      guarded_handler(self.gate.clone(), props.automation, props.on_keep.clone())
+      guarded_handler(
+        self.gate.clone(),
+        props.automation,
+        props.on_keep.clone(),
+        self.refused.clone(),
+      )
     } else {
       props.on_keep.clone()
     };
@@ -231,7 +265,12 @@ impl WidenConfirm {
       confirm
     };
     let confirm = if armed {
-      let handler = guarded_handler(self.gate.clone(), props.automation, props.on_confirm.clone());
+      let handler = guarded_handler(
+        self.gate.clone(),
+        props.automation,
+        props.on_confirm.clone(),
+        self.refused.clone(),
+      );
       confirm.on_click(move || handler())
     } else {
       confirm.disabled()
@@ -245,10 +284,11 @@ fn locks_input(props: &WidenProps) -> bool {
   !(props.look == WidenLook::Card && props.automation == Guarded::ApprovalWidening)
 }
 
-fn guarded_handler(gate: Option<InputGate>, policy: Guarded, handler: Handler) -> Handler {
+fn guarded_handler(gate: Option<InputGate>, policy: Guarded, handler: Handler, refused: Signal<bool>) -> Handler {
   Arc::new(move || {
     if !input_may_decide(gate.as_ref(), policy) {
       tracing::warn!("synthetic input reached a protected permission decision; not taken");
+      refused.set(true);
       return;
     }
     if is_synthetic_input() {

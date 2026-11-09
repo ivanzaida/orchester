@@ -102,18 +102,43 @@ pub fn conflict(
 pub fn history(repo_root: &Path, kind: ResourceKind, resource: ResourceId) -> Result<Vec<HistoryEntry>, StoreError> {
   let db = ProjectDb::open(repo_root)?;
   let publishers = db.version_publishers(resource)?;
-  let (kept, used) = kept(&db, kind, resource)?;
+  // A version published here that waits for the server has no number there yet.
+  entries(&db, kind, resource, |id| {
+    publishers
+      .iter()
+      .find(|(found, _)| *found == id)
+      .map(|(_, publisher)| publisher.clone())
+  })
+}
+
+/// The versions of `resource` (of `kind`) in a local project, newest first: every one was published here, so none has
+/// a publisher. Blocking.
+pub fn local_history(
+  repo_root: &Path,
+  kind: ResourceKind,
+  resource: ResourceId,
+) -> Result<Vec<HistoryEntry>, StoreError> {
+  entries(&ProjectDb::open(repo_root)?, kind, resource, |_| Some(None))
+}
+
+/// The versions kept for `resource`, newest first, each with `publisher_of` its id: `None` skips a version.
+fn entries(
+  db: &ProjectDb,
+  kind: ResourceKind,
+  resource: ResourceId,
+  publisher_of: impl Fn(VersionId) -> Option<Option<String>>,
+) -> Result<Vec<HistoryEntry>, StoreError> {
+  let (kept, used) = kept(db, kind, resource)?;
   let mut before = Value::Null;
   let mut entries = Vec::new();
   for version in kept {
-    let Some((_, publisher)) = publishers.iter().find(|(id, _)| *id == version.id) else {
-      // A version published here that waits for the server has no number there yet.
+    let Some(publisher) = publisher_of(version.id) else {
       continue;
     };
     entries.push(HistoryEntry {
       number: version.number,
       published_at: version.published_at,
-      publisher: publisher.clone(),
+      publisher,
       changed: changes(&before, &version.body)
         .into_iter()
         .map(|change| change.field)

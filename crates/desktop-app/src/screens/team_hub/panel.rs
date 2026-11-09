@@ -55,7 +55,7 @@ pub(super) fn panel(ctx: &Ctx, listing: &Listing, entry: &Entry, shown: &Shown<'
 }
 
 /// The column a panel's sections stand in, 24 from its sides and 20 apart.
-pub(super) fn body() -> Column {
+pub(in crate::screens) fn body() -> Column {
   Column::new()
     .width(Dimension::Pct(100.0))
     .padding(Padding::symmetric(
@@ -101,7 +101,11 @@ pub(super) fn head_of(entry: &Entry, (kind, version): (String, Option<String>), 
 
 /// The head of a resource called `name`: `kind` and `version` over it, and at its end what `end` puts there. The form
 /// that creates a resource draws it with its name still to come.
-pub(super) fn head_named(name: &str, (kind, version): (String, Option<String>), end: Option<Element>) -> Row {
+pub(in crate::screens) fn head_named(
+  name: &str,
+  (kind, version): (String, Option<String>),
+  end: Option<Element>,
+) -> Row {
   let mut where_ = Row::new()
     .spacing(ExtraSpacing::Snug.role())
     .align_items(Alignment::Center)
@@ -153,7 +157,7 @@ pub(super) fn with_more(edit: Option<Element>, more: Option<Element>) -> Option<
 }
 
 /// *Edit* in a head (`Edit` in `Agents · All · admin` `t4mtQL`).
-pub(super) fn edit_button(ctx: &Ctx, open: Open) -> Element {
+pub(in crate::screens) fn edit_button(ctx: &Ctx, open: Open) -> Element {
   ActionButton::new("team-hub-edit", ButtonKind::Ghost, ctx.t("team_hub.panel.edit"))
     .icon(Icon::Pencil)
     .opens(open)

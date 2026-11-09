@@ -17,7 +17,7 @@ use lurq::{
 use super::{AgentsNav, page_head};
 use crate::{
   screens::hub::{
-    self, bones,
+    self,
     parts::{boxed, field, group, head, note, stacked_field},
   },
   theme::{ExtraSpacing, HubSpacing, HubText, IconSize},
@@ -27,48 +27,12 @@ use crate::{
   },
 };
 
-/// Each listed profile's bones: its name, its connection line, its use and its version state.
-const ROWS: [(f32, f32, f32, f32); 4] = [
-  (38.0, 376.0, 46.0, 66.0),
-  (58.0, 360.0, 60.0, 78.0),
-  (42.0, 408.0, 46.0, 66.0),
-  (40.0, 322.0, 52.0, 96.0),
-];
 /// The profile page's head: its mark, its name and what it says under it (`Page head` in `EV7of`).
 const MARK: f32 = 40.0;
 const NAME: f32 = 98.0;
 const SUMMARY: (f32, f32) = (258.0, 116.0);
 /// A field's frame on the profile's page, and its value's bones.
 const FIELD: f32 = 284.0;
-
-/// The list while the profiles are read.
-pub(super) fn list(ctx: &mut Ctx) -> Element {
-  let rows = ROWS
-    .iter()
-    .enumerate()
-    .map(|(index, (name, line, uses, state))| {
-      let end = Row::new()
-        .spacing(SpacingSize::Sm)
-        .align_items(Alignment::Center)
-        .child(skeleton::line(ctx, HubText::Hint.role(), *uses))
-        .child(bones::status(ctx, *state));
-      bones::entry(ctx, Some(bones::tile().into()), (*name, *line), vec![end.into()])
-        .id(format!("agents-reading-{index}"))
-    })
-    .collect();
-  let rows: Vec<Element> = fading(rows).into_iter().map(Element::from).collect();
-  let pane = Column::new()
-    .width(Dimension::Pct(100.0))
-    .spacing(HubSpacing::Groups.role())
-    .child(group(
-      "agents-reading",
-      bones::head(ctx, "agents-reading", &ctx.t("agents.listTitle"), Some(252.0)),
-      boxed("agents-reading-rows", rows),
-    ))
-    .child(note("agents-version-note", Icon::History, &ctx.t("agents.versionNote")));
-  let body = Skeleton::new("agents-loading", ctx.t("agents.reading")).show(ctx, pane);
-  hub::list_body("agents-reading-list", body)
-}
 
 /// A profile's page while the profiles are read.
 pub(super) fn profile(ctx: &mut Ctx, nav: &AgentsNav) -> Element {

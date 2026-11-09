@@ -22,7 +22,7 @@ use crate::{
 
 /// How wide a row's key is (`Key` `P60rze` in `NDZXC`, `Key` in `SpRvd` … `lSA4x`).
 #[derive(Clone, Copy)]
-pub(super) enum Key {
+pub(in crate::screens) enum Key {
   Wide,
   /// The key of a create form's rows.
   Form,
@@ -38,13 +38,13 @@ impl Key {
 }
 
 /// What a row's label says under it, and the color it says it in.
-pub(super) struct Sub {
+pub(in crate::screens) struct Sub {
   pub words: Arc<str>,
   pub color: PaletteColor,
 }
 
 impl Sub {
-  pub(super) const fn quiet(words: Arc<str>) -> Self {
+  pub(in crate::screens) const fn quiet(words: Arc<str>) -> Self {
     Self {
       words,
       color: PaletteColor::TextMuted,
@@ -53,7 +53,7 @@ impl Sub {
 }
 
 /// A section: its head (the label, then what follows it on the line) over its rows.
-pub(super) fn section(id: &str, label: &str, after: Vec<Element>, rows: Vec<Row>) -> Column {
+pub(in crate::screens) fn section(id: &str, label: &str, after: Vec<Element>, rows: Vec<Row>) -> Column {
   let last = rows.len().saturating_sub(1);
   let rows = rows.into_iter().enumerate().map(|(index, row)| {
     if index == last {
@@ -91,12 +91,12 @@ pub(super) fn section(id: &str, label: &str, after: Vec<Element>, rows: Vec<Row>
 }
 
 /// One row: `label` over `sub`, and `value` beside them.
-pub(super) fn row(id: &str, label: &str, sub: Option<Sub>, value: impl Into<Element>) -> Row {
+pub(in crate::screens) fn row(id: &str, label: &str, sub: Option<Sub>, value: impl Into<Element>) -> Row {
   row_in(Key::Wide, id, label, sub, value)
 }
 
 /// [`row`] whose key is `key` wide.
-pub(super) fn row_in(key: Key, id: &str, label: &str, sub: Option<Sub>, value: impl Into<Element>) -> Row {
+pub(in crate::screens) fn row_in(key: Key, id: &str, label: &str, sub: Option<Sub>, value: impl Into<Element>) -> Row {
   keyed_in(
     key,
     id,
@@ -109,7 +109,7 @@ pub(super) fn row_in(key: Key, id: &str, label: &str, sub: Option<Sub>, value: i
 }
 
 /// [`row`] whose key is `label`, already a text: a name that is an identifier, in mono.
-pub(super) fn keyed(id: &str, label: Text, sub: Option<Sub>, value: impl Into<Element>) -> Row {
+pub(in crate::screens) fn keyed(id: &str, label: Text, sub: Option<Sub>, value: impl Into<Element>) -> Row {
   keyed_in(Key::Wide, id, label, sub, value)
 }
 
@@ -143,12 +143,12 @@ fn keyed_in(key: Key, id: &str, label: Text, sub: Option<Sub>, value: impl Into<
 }
 
 /// A value that is words; it wraps onto the next line when the row runs out of room.
-pub(super) fn words(id: &str, words: &str) -> Text {
+pub(in crate::screens) fn words(id: &str, words: &str) -> Text {
   value(Text::new(words).id(id.to_owned()).variant(HubText::Value.role()))
 }
 
 /// A value that is a model's name or another identifier; one without a place to break is broken where it ends.
-pub(super) fn mono(id: &str, words: &str) -> Text {
+pub(in crate::screens) fn mono(id: &str, words: &str) -> Text {
   value(Text::new(words).id(id.to_owned()).variant(HubText::PanelMono.role()))
 }
 
@@ -158,7 +158,7 @@ fn value(text: Text) -> Text {
 }
 
 /// A value that is names, each in a tag; they wrap onto the next line when the row runs out of room.
-pub(super) fn tags(id: &str, names: impl IntoIterator<Item = String>) -> Row {
+pub(in crate::screens) fn tags(id: &str, names: impl IntoIterator<Item = String>) -> Row {
   Row::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
@@ -175,7 +175,7 @@ pub(super) fn tags(id: &str, names: impl IntoIterator<Item = String>) -> Row {
 
 /// *On this computer* (`On this computer` `qtmpw` in `NDZXC`, `JYO4l` in `SpRvd`): what is only this computer's and
 /// never sent to the team, as `rows`, with `after` under them.
-pub(super) fn on_this_computer(ctx: &Ctx, rows: Vec<Row>, after: Option<Element>) -> Column {
+pub(in crate::screens) fn on_this_computer(ctx: &Ctx, rows: Vec<Row>, after: Option<Element>) -> Column {
   let note = Text::new(&ctx.t("team_hub.profile.onComputerNote"))
     .id("team-hub-on-computer-note")
     .variant(HubText::PanelHint.role())

@@ -199,6 +199,7 @@ fn note(ctx: &Ctx, view: &View<'_>) -> Row {
     // Parts of a profile, a reviewer or a local project: an MCP server of the team has none of them.
     Some(
       part @ (Missing::Connection { .. }
+      | Missing::ConnectionSignIn { .. }
       | Missing::DecisionConnection { .. }
       | Missing::LocalMcpProgram { .. }
       | Missing::LocalSecret { .. }),

@@ -284,6 +284,11 @@ pub fn failure_kind(message: &Message) -> FailureKind {
   }
 }
 
+/// A team run the team server fenced (taken over, membership removed, another device) goes on no more here.
+pub fn run_fenced() -> Message {
+  Message::new("claims.refused.fenced")
+}
+
 /// A task was changed since it was read, so a change made on what was read was not saved.
 pub fn task_changed_meanwhile() -> Message {
   Message::new("tasks.conflict.changedMeanwhile")

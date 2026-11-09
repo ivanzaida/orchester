@@ -9,7 +9,7 @@ use orchester_core::{
   id::{ConnectionId, DecisionConnectionId, ResourceId, SecretId},
   resource::{ResourceKind, Tool},
   secret::{self, NewSecret, Secret, SecretError, SecretValue, SecretVault},
-  store::{McpServerStore, ResourceStore, SecretStore},
+  store::{ResourceStore, SecretStore},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -81,7 +81,7 @@ impl ProjectSecrets {
     }
     let archived = store.archived_secrets()?;
     let tools = current_tools(store)?;
-    let servers = store.mcp_servers()?;
+    let servers = store.all_mcp_servers()?;
     let mut ids: Vec<SecretId> = secrets.iter().map(Secret::id).collect();
     ids.extend(
       archived

@@ -81,8 +81,7 @@ const fn minutes(ms: u64) -> u64 {
 
 pub async fn get_calibration(services: &Services, args: GetCalibration) -> Result<Value, ToolError> {
   let services = services.clone();
-  let records =
-    blocking(move || Ok(ProjectDb::open(&services.project(&args.project)?.repo_root)?.calibration_records()?)).await?;
+  let records = blocking(move || Ok(services.read_project(&args.project)?.1.calibration_records()?)).await?;
   let per_points: Vec<Value> = calibration(&records)
     .iter()
     .map(|row| {
@@ -116,7 +115,7 @@ pub async fn get_calibration(services: &Services, args: GetCalibration) -> Resul
 
 pub async fn list_tasks(services: &Services, args: ListTasks, translate: &Translate) -> Result<Value, ToolError> {
   if let Some(named) = &args.project
-    && let Some(team) = team::of(services, named).await?
+    && let Some(team) = team::of_reading(services, named).await?
   {
     let filters = orchester_api::v2::TaskFilters {
       statuses: args.status.into_iter().map(Into::into).collect(),
@@ -183,14 +182,13 @@ pub async fn list_tasks(services: &Services, args: ListTasks, translate: &Transl
 }
 
 pub async fn get_task(services: &Services, args: GetTask, translate: &Translate) -> Result<Value, ToolError> {
-  if let Some(team) = team::of(services, &args.project).await? {
+  if let Some(team) = team::of_reading(services, &args.project).await? {
     return team::get_task(services, &team, &args.key).await;
   }
   let services = services.clone();
   let (project, detail, (tags, pipeline, base_branch, led_in), worktrees) = blocking(move || {
-    let open = services.project(&args.project)?;
+    let (open, db) = services.read_project(&args.project)?;
     let root = open.repo_root;
-    let db = ProjectDb::open(&root)?;
     let task = find_task(&db, &args.key)?;
     let tags = db.project_tags()?;
     let published = crate::tasks::data::published_pipelines(&db)?;

@@ -11,26 +11,26 @@
 //! page shows the last answer dimmed with *Reading…*, and a read that failed shows its failure and no counts, never the
 //! last answer as current. Before the project is known to be shared the page is [`unread`]'s.
 
-mod actions;
-mod archive;
-mod bar;
-mod create;
+pub(in crate::screens) mod actions;
+pub(in crate::screens) mod archive;
+pub(in crate::screens) mod bar;
+pub(in crate::screens) mod create;
 mod fill;
 mod head;
-mod list;
+pub(in crate::screens) mod list;
 mod mcp;
 mod member;
-mod model;
-mod panel;
+pub(in crate::screens) mod model;
+pub(in crate::screens) mod panel;
 mod plain;
-mod profile;
-mod row;
-mod rows;
+pub(in crate::screens) mod profile;
+pub(in crate::screens) mod row;
+pub(in crate::screens) mod rows;
 mod secret;
 mod taken_back;
 mod tool;
 pub(super) mod unread;
-mod words;
+pub(in crate::screens) mod words;
 
 use lurq::{
   app::{
@@ -299,8 +299,9 @@ fn hub_body(
         repo_root: project.open.repo_root.clone(),
         project: id,
         kind,
-        listing: listing.clone(),
-        team: team.clone(),
+        mode: create::Mode::Team,
+        taken: listing.shown(kind.filter()).map(|entry| entry.name.clone()).collect(),
+        team: Some(team.clone()),
       },
     ),
     (None, Some(selected)) => resource_panel(

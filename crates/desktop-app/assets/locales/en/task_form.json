@@ -392,6 +392,8 @@
         "usesArchivedTool": "a profile names a team tool that was archived",
         "usesArchivedInstruction": "a profile names a team instruction that was archived",
         "runsUnknown": "it runs a profile or tool this computer has no version of",
+        "runsArchived": "a step runs a profile or tool that was archived",
+        "choosesArchivedLocalMcpServer": "a profile chooses an MCP server that was archived",
         "connectionGone": "a profile runs on a connection the project no longer has",
         "teamToolSecretById": "a tool holds a secret that cannot be checked on a team",
         "secretGone": "a tool uses a secret the project no longer has",

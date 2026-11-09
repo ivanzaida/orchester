@@ -32,19 +32,19 @@ use orchester_core::{
 use tokio::task::JoinHandle;
 
 pub(super) use self::state::SyncStates;
-pub(crate) use self::{
-  archive::pins,
-  config::{is_local_form, non_team_name, refresh_profile, refresh_team_profiles, team_executors, team_form},
-};
 pub use self::{
-  archive::{ArchiveError, Pinning, pinning},
+  archive::{ArchiveError, Pinning, pinning, pinning_mcp_server},
   catalog::CATALOG_CHECK,
   config::{
-    BindingsHere, ConfigServer, FillInOutcome, HereReference, Needer, RemoteResourceStore, ShareFillIns, Standing,
-    Waiting, bind, chosen_at, keep_uploaded_configuration, upload_configuration, use_here, waiting,
+    ConfigServer, FillInOutcome, RemoteResourceStore, ShareFillIns, Waiting, keep_uploaded_configuration,
+    upload_configuration, use_here, waiting,
   },
   state::SyncState,
   stream::{Clock, Source, Stopped, SystemClock, follow},
+};
+pub(crate) use self::{
+  archive::{pinning_in, pinning_mcp_server_in, pins, pins_mcp_server, stop},
+  config::{non_team_name, refresh_profile, refresh_team_profiles, team_executors, team_form},
 };
 use super::{Behalf, Connection, Servers, SharingError, project::ProjectServer, send_lane::send_turn};
 use crate::{background, runner::Runners};

@@ -3,6 +3,9 @@
 //! the same on every computer) as rows, a note on what each computer fills in afterwards, and pinned at the bottom
 //! Create and Cancel. No draft: Create makes v1 and sends it to the team server; it shows as created only once the
 //! server has taken it ([`super::work`]), a refusal is said in place and nothing is made, and Cancel leaves nothing.
+//! In a local project (`Agents · New agent profile` … `New tool`, L3–L7) the same form has one section of the
+//! resource's own fields and nothing to send: Create makes v1 on this computer, or for an MCP server, which has no
+//! versions, the server itself.
 
 use std::path::{Path, PathBuf};
 
@@ -21,23 +24,30 @@ use orchester_core::id::{ProjectId, ResourceId};
 use orchester_workspace::{
   agents::data::ProjectAgents,
   background,
+  connections::data::ProjectConnections,
+  local_archive::Archivable,
   messages::Message,
   sharing::{team::TeamConfiguration, team_edit::Refusal},
 };
 
 use super::{
   fields::{Body, Shown},
-  instruction, kinds, mcp, notices, profile, skill, tool,
+  instruction, kinds, local_mcp,
+  mcp::Fields as TeamMcp,
+  mode::Mode,
+  notices, profile, skill, tool,
   work::{self, Failed, Press, Work},
 };
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
   navigation::Navigation,
+  queries,
   routes::{HubView, ProjectPage, Route},
-  screens::team_hub::{
-    bar,
-    model::{Kind, Listing},
-    panel as shared, rows,
+  screens::{
+    connections::data,
+    hub::team::admins,
+    local_hub::view_of,
+    team_hub::{bar, model::Kind, panel as shared, rows},
   },
   services::Services,
   theme::{HubSpacing, HubText, IconSize},
@@ -50,34 +60,54 @@ use crate::{
 };
 
 #[derive(Clone, PartialEq)]
-pub(in crate::screens::team_hub) struct Props {
+pub(in crate::screens) struct Props {
   pub repo_root: PathBuf,
   pub project: ProjectId,
   pub kind: Kind,
-  pub listing: Listing,
-  /// The team's configuration: who the admins are, which a refusal for a role that changed says.
-  pub team: TeamConfiguration,
+  /// Where the form creates its resource.
+  pub mode: Mode,
+  /// The names the resources of the kind have already; a new one takes another.
+  pub taken: Vec<String>,
+  /// A team project's configuration: who the admins are, which a refusal for a role that changed says.
+  pub team: Option<TeamConfiguration>,
 }
 impl DevtoolsInspectable for Props {}
 
-pub(in crate::screens::team_hub) fn panel(ctx: &mut Ctx, props: Props) -> Element {
-  ctx.mount_keyed::<NewPanel>(&format!("team-hub-new-{}-{}", props.kind.name(), props.project), props)
+pub(in crate::screens) fn panel(ctx: &mut Ctx, props: Props) -> Element {
+  ctx.mount_keyed::<NewPanel>(
+    &format!(
+      "{}-hub-new-{}-{}",
+      props.mode.prefix(),
+      props.kind.name(),
+      props.project
+    ),
+    props,
+  )
 }
 
 /// The fields of the kind's form: they live as long as the form is open, and a form of another kind is another mount.
 enum Form {
   Profile(profile::Fields),
-  McpServer(mcp::Fields),
+  McpServer(TeamMcp),
+  LocalMcpServer(local_mcp::Fields),
   Instruction(instruction::Fields),
   Skill(skill::Fields),
   Tool(tool::Fields),
 }
 
 impl Form {
-  fn new(ctx: &mut Ctx, kind: Kind) -> Self {
+  fn new(ctx: &mut Ctx, kind: Kind, mode: Mode) -> Self {
+    match (kind, mode) {
+      (Kind::McpServer, Mode::Local) => Self::LocalMcpServer(local_mcp::Fields::new(ctx)),
+      _ => Self::of_team_kind(ctx, kind),
+    }
+  }
+
+  /// The form of `kind` whose fields a team and a local project share (an MCP server's differ).
+  fn of_team_kind(ctx: &mut Ctx, kind: Kind) -> Self {
     match kind {
       Kind::Profile => Self::Profile(profile::Fields::new(ctx)),
-      Kind::McpServer => Self::McpServer(mcp::Fields::new(ctx)),
+      Kind::McpServer => Self::McpServer(TeamMcp::new(ctx)),
       Kind::Instruction => Self::Instruction(instruction::Fields::new(ctx)),
       Kind::Skill => Self::Skill(skill::Fields::new(ctx)),
       Kind::Tool => Self::Tool(tool::Fields::new(ctx)),
@@ -88,6 +118,7 @@ impl Form {
     match self {
       Self::Profile(fields) => fields.body(ctx, shown),
       Self::McpServer(fields) => fields.body(ctx, shown),
+      Self::LocalMcpServer(fields) => fields.body(ctx, shown),
       Self::Instruction(fields) => fields.body(ctx, shown),
       Self::Skill(fields) => fields.body(ctx, shown),
       Self::Tool(fields) => fields.body(ctx, shown),
@@ -100,8 +131,9 @@ struct NewPanel {
   /// Create was pressed: a required field that is empty says so.
   tried: Signal<bool>,
   work: Work,
-  /// *Cancel sending*: takes back the new resource that waits in the outbox, and the form goes with it.
-  cancel: FutureAction<ResourceId, (), Message>,
+  /// *Cancel sending*: takes back the new resource that waits in the outbox, and the form goes with it. Only a team's
+  /// project has a resource that waits.
+  cancel: Option<FutureAction<ResourceId, (), Message>>,
   gate: Option<InputGate>,
   /// The name field, which has the focus when the form opens (the design draws it focused).
   first: ElementRef,
@@ -123,25 +155,26 @@ impl Component for NewPanel {
         return;
       };
       if !made.waiting {
-        let shown = Route::Project(project, ProjectPage::hub(HubView::new(filter, Some(made.id))));
+        let shown = Route::Project(project, ProjectPage::hub(view_of(filter, Some(made.what))));
         navigation.replace(shown);
       }
     });
-    let cancel = {
+    let cancel = (props.mode == Mode::Team).then(|| {
       let (servers, root) = (Services::of(ctx).servers, props.repo_root.clone());
-      ctx.future_action(move |id: ResourceId| {
+      let cancel = ctx.future_action(move |id: ResourceId| {
         let (servers, root) = (servers.clone(), root.clone());
         async move { servers.cancel_created(&root, id).await }
-      })
-    };
-    let back = Navigation::of(ctx);
-    ctx.watch(&cancel.state(), move |state| {
-      if state.is_fulfilled() {
-        back.replace(Route::Project(project, ProjectPage::hub(HubView::new(filter, None))));
-      }
+      });
+      let back = Navigation::of(ctx);
+      ctx.watch(&cancel.state(), move |state| {
+        if state.is_fulfilled() {
+          back.replace(Route::Project(project, ProjectPage::hub(HubView::new(filter, None))));
+        }
+      });
+      cancel
     });
     Self {
-      form: Form::new(ctx, props.kind),
+      form: Form::new(ctx, props.kind, props.mode),
       tried: ctx.signal(false),
       work,
       cancel,
@@ -156,7 +189,8 @@ impl Component for NewPanel {
       repo_root,
       project,
       kind,
-      listing,
+      mode,
+      taken,
       team,
     } = ctx.props::<Props>().clone();
     if self.focus_first.get() {
@@ -169,38 +203,43 @@ impl Component for NewPanel {
       .data
       .as_ref()
       .filter(|made| made.waiting && state.is_fulfilled())
-      .map(|made| made.id);
+      .and_then(|made| match made.what {
+        Archivable::Resource(id) => Some(id),
+        Archivable::McpServer(_) => None,
+      });
     let refused = state.error.filter(|_| !pending);
     let refused_name = taken_by_server(refused.as_ref());
     let agents = self.agents(ctx, kind, &repo_root);
+    let connections = self.connections(ctx, (kind, mode), &repo_root);
     let shown = Shown {
-      kind,
-      listing: &listing,
+      mode,
+      taken: &taken,
       tried: self.tried.get(),
       locked: pending || waiting.is_some(),
       agents: agents.as_ref(),
+      connections: connections.as_ref(),
       first: &self.first,
       refused_name: refused_name.as_deref(),
       published: None,
     };
     let body = self.form.body(ctx, &shown);
-    let for_team = for_team(ctx, body.rows);
     let navigation = Navigation::of(ctx);
+    let prefix = mode.prefix();
     let content = Column::new()
-      .id("team-new-form")
+      .id(format!("{prefix}-new-form"))
       .width(Dimension::Pct(100.0))
       .padding(Padding::symmetric(
         HubSpacing::Sections.role(),
         HubSpacing::BodyTop.role(),
       ))
       .spacing(HubSpacing::BodyTop.role())
-      .child(head(ctx, kind))
-      .with_children(self.refusal(ctx, refused.as_ref(), waiting, &team))
+      .child(head(ctx, kind, mode))
+      .with_children(self.refusal(ctx, refused.as_ref(), waiting, team.as_ref()))
       .with_children(self.cancel_failure(ctx))
-      .child(for_team)
-      .child(computer(ctx, body.computer));
+      .with_children(sections(ctx, (kind, mode), body.rows, body.computer))
+      .with_children(body.overlay);
     let scroll = ScrollVertical::new(content)
-      .id("team-hub-panel-scroll")
+      .id(format!("{prefix}-hub-panel-scroll"))
       .width(Dimension::Pct(100.0))
       .flex(1.0)
       .min_height(Dimension::Px(0.0));
@@ -208,11 +247,11 @@ impl Component for NewPanel {
       ctx,
       &body.make,
       (body.off, pending || waiting.is_some()),
-      (project, kind),
+      (project, kind, mode),
       &navigation,
     );
     Column::new()
-      .id("team-hub-panel")
+      .id(format!("{prefix}-hub-panel"))
       .describe("state", "new")
       .describe("kind", kind.name())
       .flex(1.0)
@@ -230,16 +269,15 @@ impl NewPanel {
     ctx: &Ctx,
     refused: Option<&Failed>,
     waiting: Option<ResourceId>,
-    team: &TeamConfiguration,
+    team: Option<&TeamConfiguration>,
   ) -> Option<Element> {
-    if let Some(id) = waiting {
+    if let (Some(id), Some(action)) = (waiting, self.cancel.clone()) {
       let cancel = ActionButton::new(
         "team-new-cancel-sending",
         ButtonKind::Secondary,
         ctx.t("team_new.waiting.cancel"),
       )
       .icon(Icon::X);
-      let action = self.cancel.clone();
       let cancel = if action.state().get().is_pending() {
         cancel.loading()
       } else {
@@ -247,13 +285,17 @@ impl NewPanel {
       };
       return Some(notices::waiting(ctx, cancel));
     }
-    refused.map(|failed| notices::refused(ctx, failed, team))
+    // Only a team's server says a role changed, and then its configuration names the admins.
+    let admins = refused
+      .and(team)
+      .map_or_else(Default::default, |team| admins(ctx, team));
+    refused.map(|failed| notices::refused(ctx, failed, &admins))
   }
 
   /// Why *Cancel sending* did nothing: it is being sent right now, the server took the resource meanwhile, or the
   /// resource holds more than its first version.
   fn cancel_failure(&self, ctx: &Ctx) -> Option<Element> {
-    let state = self.cancel.state().get();
+    let state = self.cancel.as_ref()?.state().get();
     let why = state.error.as_ref().filter(|_| state.is_rejected())?;
     Some(field_error("team-new-cancel-error", &message_text(ctx, why)).into())
   }
@@ -275,18 +317,31 @@ impl NewPanel {
       .data
   }
 
+  /// The project's MCP servers and secrets, which a local MCP server's form takes the secrets its variables name from.
+  fn connections(&self, ctx: &mut Ctx, (kind, mode): (Kind, Mode), root: &Path) -> Option<ProjectConnections> {
+    if (kind, mode) != (Kind::McpServer, Mode::Local) {
+      return None;
+    }
+    queries::state(&data::load(ctx, root.to_path_buf())).data
+  }
+
   /// Create and Cancel, with what Create does under them at the bar's end.
   fn bar(
     &self,
     ctx: &Ctx,
     make: &Option<work::Make>,
     (off, busy): (Option<&'static str>, bool),
-    (project, kind): (ProjectId, Kind),
+    (project, kind, mode): (ProjectId, Kind, Mode),
     navigation: &Navigation,
   ) -> Element {
-    let create = ActionButton::new("team-hub-new-create", ButtonKind::Primary, ctx.t("team_new.bar.create"))
-      .icon(Icon::Plus)
-      .pinned();
+    let prefix = mode.prefix();
+    let create = ActionButton::new(
+      format!("{prefix}-hub-new-create"),
+      ButtonKind::Primary,
+      ctx.t("team_new.bar.create"),
+    )
+    .icon(Icon::Plus)
+    .pinned();
     let create = if busy && self.work.state().get().is_pending() {
       create.loading()
     } else if busy || off.is_some() {
@@ -303,7 +358,7 @@ impl NewPanel {
       })
     };
     let cancel = ActionButton::new(
-      "team-hub-new-cancel",
+      format!("{prefix}-hub-new-cancel"),
       ButtonKind::Secondary,
       ctx.t("team_new.bar.cancel"),
     )
@@ -318,7 +373,7 @@ impl NewPanel {
     };
     let hint = match off {
       Some(why) => (ctx.t(why).to_string(), PaletteColor::Danger),
-      None => (ctx.t("team_new.bar.hint").to_string(), PaletteColor::TextMuted),
+      None => (ctx.t(mode.bar_hint(kind)).to_string(), PaletteColor::TextMuted),
     };
     bar::bar_saying(vec![create.into(), cancel.into()], Some(hint))
   }
@@ -329,6 +384,17 @@ fn taken_by_server(refused: Option<&Failed>) -> Option<String> {
   match refused {
     Some(Failed::Refused(Refusal::NameTaken, name)) => Some(name.clone()),
     _ => None,
+  }
+}
+
+/// What the form holds: *For the team* and the note on what each computer fills in afterwards in a team's project, one
+/// section of the resource's own fields in a local one (`Profile`, `Server`, `Instruction`, `Skill`, `Tool` in L3–L7).
+fn sections(ctx: &Ctx, (kind, mode): (Kind, Mode), rows: Vec<Row>, computer_note: Option<&str>) -> Vec<Element> {
+  match mode {
+    Mode::Team => std::iter::once(for_team(ctx, rows).into())
+      .chain(computer_note.map(|note| computer(ctx, note).into()))
+      .collect(),
+    Mode::Local => vec![rows::section("local-new-section", &ctx.t(kinds::section_key(kind)), Vec::new(), rows).into()],
   }
 }
 
@@ -348,13 +414,13 @@ fn for_team(ctx: &Ctx, rows: Vec<Row>) -> Column {
   )
 }
 
-/// The head: what it is and that it is not created yet over its title (`Head` in A7).
-fn head(ctx: &Ctx, kind: Kind) -> Row {
+/// The head: what it is and that it is not created yet over its title (`Head` in A7, L3).
+fn head(ctx: &Ctx, kind: Kind, mode: Mode) -> Row {
   shared::head_named(
     &ctx.t(kinds::title_key(kind)),
     (
       ctx.t(kind.where_key()).to_string(),
-      Some(ctx.t("team_new.notCreatedYet").to_string()),
+      Some(ctx.t(mode.not_created(kind)).to_string()),
     ),
     None,
   )

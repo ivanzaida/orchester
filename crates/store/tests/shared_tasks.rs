@@ -26,8 +26,8 @@ use orchester_core::{
   },
 };
 use orchester_store::{
-  AutomaticStatus, CachedClaim, CachedRunStatus, CachedTask, NotSent, ProjectDb, ResourceSharing, SharedPerson,
-  SharingLink, StoreError,
+  AutomaticStatus, CachedClaim, CachedRunStatus, CachedTask, NotSent, ProjectDb, ProjectMigration, ResourceSharing,
+  SharedPerson, SharingLink, StoreError,
 };
 use support::{at, copied_at_version, name, started_run};
 
@@ -544,15 +544,10 @@ fn shared_tasks_a_slug_names_no_team_pipeline_and_the_upgrade_turns_it_into_the_
   let id = db.resources(ResourceKind::Pipeline).expect("pipelines").remove(0).id();
   assert_eq!(id.to_string(), delivery);
   drop(db);
-  let raw = rusqlite::Connection::open(repo.path().join(".orchester").join("orchester.db")).expect("open");
-  let version: u32 = raw
-    .pragma_query_value(None, "user_version", |row| row.get(0))
-    .expect("the version");
-  raw
-    .pragma_update(None, "user_version", version - 1)
-    .expect("one step back");
-  drop(raw);
-  let db = ProjectDb::open(repo.path()).expect("upgraded");
+  let current = repo.path().join(".orchester").join("orchester.db");
+  // The same rows in a database as it was before that step: the steps after it are not run again over it.
+  let old = copied_at_version(&current, ProjectDb::version_before(ProjectMigration::TeamPipelineIds));
+  let db = ProjectDb::open(old.path()).expect("upgraded");
   let upgraded = db.task(task.id()).expect("read").expect("task");
   assert_eq!(upgraded.details().pipeline.map(|id| id.to_string()), Some(delivery));
 }

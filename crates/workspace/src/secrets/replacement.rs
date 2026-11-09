@@ -4,7 +4,7 @@ use orchester_core::{
   id::SecretId,
   resource::{ResourceKind, Tool},
   secret,
-  store::{ConnectionStore, McpServerStore, ResourceStore},
+  store::{ConnectionStore, ResourceStore},
 };
 use orchester_store::{ProjectDb, StoreError};
 
@@ -14,7 +14,10 @@ pub(super) fn needs_person(db: &ProjectDb, id: SecretId) -> Result<bool, StoreEr
       .decision_connections()?
       .iter()
       .any(|connection| connection.key() == Some(id))
-    || db.mcp_servers()?.iter().any(|server| server.secrets().contains(&id))
+    || db
+      .all_mcp_servers()?
+      .iter()
+      .any(|server| server.secrets().contains(&id))
   {
     return Ok(true);
   }

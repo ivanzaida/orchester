@@ -4,7 +4,7 @@
 
 use orchester_core::{
   connection::{AgentConnection, mcp::McpServer},
-  id::{ProjectId, ResourceId},
+  id::{ConnectionId, ProjectId, ResourceId},
   permission::{AgentPermissions, CommandPermission},
   resource::{AgentProfile, PublishError},
 };
@@ -52,19 +52,18 @@ pub async fn list_profiles(services: &Services, args: InProjects, translate: &Tr
   let services = services.clone();
   let read = blocking(move || {
     across(&services, args.project.as_deref(), |open, db| {
-      Ok((
-        ProjectAgents::load(db)?,
-        readiness_json::read(&services, db, &open.repo_root)?,
-      ))
+      let agents = ProjectAgents::load(db)?;
+      let listed = listed_profiles(db, &agents)?;
+      Ok((agents, listed, readiness_json::read(&services, db, &open.repo_root)?))
     })
   })
   .await?;
-  Ok(read.json("profiles", translate, |open, (agents, readiness)| {
-    agents
-      .profiles
+  Ok(read.json("profiles", translate, |open, (agents, listed, readiness)| {
+    listed
       .iter()
-      .map(|entry| {
-        let connection = agent_by_id(&agents.connections, entry.profile.connection());
+      .filter_map(|(id, here)| Some((agents.profile(*id)?, here)))
+      .map(|(entry, here)| {
+        let connection = here.and_then(|here| agent_by_id(&agents.connections, here));
         json!({
           "id": entry.id.to_string(),
           "role": entry.profile.role().as_str(),
@@ -83,10 +82,9 @@ pub async fn list_profiles(services: &Services, args: InProjects, translate: &Tr
 pub async fn get_profile(services: &Services, args: InProfile) -> Result<Value, ToolError> {
   let services = services.clone();
   blocking(move || {
-    let open = services.project(&args.project)?;
+    let (open, db) = services.read_project(&args.project)?;
     let id = profile_named(&ProjectAgents::load_in(&open.repo_root)?, &args.profile)?.id;
     let mut profile = profile_with_revision(&open, id)?;
-    let db = ProjectDb::open_read_only(&open.repo_root)?;
     let readiness = readiness_json::read(&services, &db, &open.repo_root)?;
     profile["readiness"] = readiness_json::resource_of(&readiness, id);
     Ok(json!({ "profile": profile }))
@@ -103,7 +101,8 @@ pub(super) fn profile_with_revision(open: &OpenProject, id: ResourceId) -> Resul
   let entry = agents
     .profile(id)
     .ok_or_else(|| ToolError::not_found(Missing::Profile, id.to_string()))?;
-  let mut value = profile_json(&agents, entry, open.project.id());
+  let here = connection_here(&ProjectDb::open(&open.repo_root)?, &agents, entry)?;
+  let mut value = profile_json(&agents, (entry, here), open.project.id());
   value["revision"] = json!(revision);
   Ok(value)
 }
@@ -139,9 +138,44 @@ pub async fn publish_profile(services: &Services, args: InProfile) -> Result<Val
     let entry = agents
       .profile(id)
       .ok_or_else(|| ToolError::not_found(Missing::Profile, id.to_string()))?;
-    Ok(json!({ "profile": profile_json(&agents, entry, open.project.id()) }))
+    let here = connection_here(&db, &agents, entry)?;
+    Ok(json!({ "profile": profile_json(&agents, (entry, here), open.project.id()) }))
   })
   .await
+}
+
+/// The profiles a project lists, each with the connection it runs on here. A team project offers only the team's
+/// resources (`docs/design/team-configuration.md`, edge cases 2 and 3): a profile of this computer's own that was never
+/// published stays out, as it does from the hub.
+fn listed_profiles(
+  db: &ProjectDb,
+  agents: &ProjectAgents,
+) -> Result<Vec<(ResourceId, Option<ConnectionId>)>, StoreError> {
+  let team = db.sharing()?.is_some();
+  let mut listed = Vec::new();
+  for entry in agents.profiles.iter() {
+    if team && entry.state.published().is_none() {
+      continue;
+    }
+    listed.push((
+      entry.id,
+      connection_here(db, agents, entry)?.map(|connection| connection.id()),
+    ));
+  }
+  Ok(listed)
+}
+
+/// The connection `entry` runs on here: for a team profile the one this computer picked for it, which the window shows
+/// too, else the connection its body names.
+fn connection_here<'a>(
+  db: &ProjectDb,
+  agents: &'a ProjectAgents,
+  entry: &ProfileEntry,
+) -> Result<Option<&'a AgentConnection>, StoreError> {
+  let picked = db
+    .connection_pick(entry.id)?
+    .and_then(|pick| agent_by_id(&agents.connections, pick.connection));
+  Ok(picked.or_else(|| agent_by_id(&agents.connections, entry.profile.connection())))
 }
 
 /// The profile of `agents` named by its id or, ignoring case, its role.
@@ -160,9 +194,12 @@ pub(super) fn profile_named<'a>(agents: &'a ProjectAgents, named: &str) -> Resul
 }
 
 /// A profile of `project` as `get_profile` shows it, with its link.
-pub(super) fn profile_json(agents: &ProjectAgents, entry: &ProfileEntry, project: ProjectId) -> Value {
+pub(super) fn profile_json(
+  agents: &ProjectAgents,
+  (entry, connection): (&ProfileEntry, Option<&AgentConnection>),
+  project: ProjectId,
+) -> Value {
   let profile = &entry.profile;
-  let connection: Option<&AgentConnection> = agent_by_id(&agents.connections, profile.connection());
   let servers: Vec<Value> = profile
     .mcp_servers()
     .ids()

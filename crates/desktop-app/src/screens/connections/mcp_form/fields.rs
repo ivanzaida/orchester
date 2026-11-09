@@ -25,6 +25,7 @@ use orchester_workspace::{
 };
 
 use self::remote::AuthorizationFields;
+pub(in crate::screens) use self::remote::Part;
 use crate::{
   screens::project_settings::kit::{FormField, form_group, warning_line},
   theme::ExtraSpacing,
@@ -44,16 +45,16 @@ const SECRETS_MENU_WIDTH: f32 = 300.0;
 
 /// The page's fields.
 #[derive(Clone)]
-pub(super) struct Fields {
-  name: Signal<String>,
-  transport: Signal<TransportChoice>,
-  program: Signal<String>,
-  arguments: Signal<String>,
-  folder: Signal<String>,
-  variables: Signal<String>,
+pub(in crate::screens) struct Fields {
+  pub(in crate::screens) name: Signal<String>,
+  pub(in crate::screens) transport: Signal<TransportChoice>,
+  pub(in crate::screens) program: Signal<String>,
+  pub(in crate::screens) arguments: Signal<String>,
+  pub(in crate::screens) folder: Signal<String>,
+  pub(in crate::screens) variables: Signal<String>,
   url: Signal<String>,
   authorization: AuthorizationFields,
-  exempt_tools: Signal<String>,
+  pub(in crate::screens) exempt_tools: Signal<String>,
   /// The tool name being typed into *Run without asking*.
   tool: Signal<String>,
   /// The secrets menu of Variables.
@@ -63,7 +64,7 @@ pub(super) struct Fields {
 
 impl Fields {
   /// The fields, filled with `text`.
-  pub(super) fn new(ctx: &mut Ctx, text: &McpServerText) -> Self {
+  pub(in crate::screens) fn new(ctx: &mut Ctx, text: &McpServerText) -> Self {
     Self {
       name: ctx.signal(text.name.clone()),
       transport: ctx.signal(text.transport),
@@ -81,7 +82,7 @@ impl Fields {
   }
 
   /// The fields as typed.
-  pub(super) fn text(&self) -> McpServerText {
+  pub(in crate::screens) fn text(&self) -> McpServerText {
     McpServerText {
       name: self.name.get(),
       transport: self.transport.get(),
@@ -97,41 +98,23 @@ impl Fields {
 
   /// The page's groups, and the warning line of what adding a server widens (`adding`); an error shows under a field
   /// that holds something, and under every field once a save was `tried`.
-  pub(super) fn sections(
+  pub(in crate::screens) fn sections(
     &self,
     ctx: &mut Ctx,
     (listed, errors): (&ProjectConnections, &McpServerErrors),
     tried: bool,
     adding: bool,
   ) -> Vec<Element> {
-    let shown = |value: &Signal<String>, error: &Option<Message>| {
-      error
-        .as_ref()
-        .filter(|_| tried || !value.get_untracked().trim().is_empty())
-        .map(|error| message_text(ctx, error))
-    };
-    let secret = errors
-      .secret
-      .as_ref()
-      .filter(|_| self.authorization.secret_shown(tried))
-      .map(|error| message_text(ctx, error));
-    let errors = Shown {
-      name: shown(&self.name, &errors.name),
-      program: shown(&self.program, &errors.program),
-      arguments: shown(&self.arguments, &errors.arguments),
-      folder: shown(&self.folder, &errors.working_directory),
-      variables: shown(&self.variables, &errors.variables),
-      url: shown(&self.url, &errors.url),
-      username: shown(self.authorization.username(), &errors.username),
-      header: shown(self.authorization.header(), &errors.header),
-      secret,
-      exempt_tools: shown(&self.exempt_tools, &errors.exempt_tools),
-    };
+    let errors = self.shown_errors(ctx, errors, tried);
     let mut rows = self.server_rows(ctx, &errors);
     let transport = self.transport.get();
     rows.extend(match transport {
       TransportChoice::Stdio => self.program_rows(ctx, &errors, &listed.secrets),
-      TransportChoice::Http => self.remote_rows(ctx, &errors, &listed.secrets),
+      TransportChoice::Http => self
+        .remote_rows(ctx, &errors, &listed.secrets)
+        .into_iter()
+        .map(Part::form_row)
+        .collect(),
     });
     let mut sections = vec![
       form_group(
@@ -155,6 +138,44 @@ impl Fields {
       ));
     }
     sections
+  }
+
+  /// The errors to show: one under a field that holds something, and under every field once a save was `tried`.
+  fn shown_errors(&self, ctx: &Ctx, errors: &McpServerErrors, tried: bool) -> Shown {
+    let shown = |value: &Signal<String>, error: &Option<Message>| {
+      error
+        .as_ref()
+        .filter(|_| tried || !value.get_untracked().trim().is_empty())
+        .map(|error| message_text(ctx, error))
+    };
+    let secret = errors
+      .secret
+      .as_ref()
+      .filter(|_| self.authorization.secret_shown(tried))
+      .map(|error| message_text(ctx, error));
+    Shown {
+      name: shown(&self.name, &errors.name),
+      program: shown(&self.program, &errors.program),
+      arguments: shown(&self.arguments, &errors.arguments),
+      folder: shown(&self.folder, &errors.working_directory),
+      variables: shown(&self.variables, &errors.variables),
+      url: shown(&self.url, &errors.url),
+      username: shown(self.authorization.username(), &errors.username),
+      header: shown(self.authorization.header(), &errors.header),
+      secret,
+      exempt_tools: shown(&self.exempt_tools, &errors.exempt_tools),
+    }
+  }
+
+  /// A remote server's endpoint and authorization rows, for a panel that draws the rest itself.
+  pub(in crate::screens) fn remote_elements(
+    &self,
+    ctx: &mut Ctx,
+    (listed, errors): (&ProjectConnections, &McpServerErrors),
+    tried: bool,
+  ) -> Vec<Part> {
+    let errors = self.shown_errors(ctx, errors, tried);
+    self.remote_rows(ctx, &errors, &listed.secrets)
   }
 
   /// The name, and what the server runs as (`Runs as` `HQZg7`), which the agent's CLI starts or reaches.
@@ -281,7 +302,7 @@ impl Fields {
   }
 
   /// *Add a variable from a secret…*: a menu of the project's secrets, each appending its reference.
-  fn add_secret(&self, ctx: &mut Ctx, secrets: &[Secret]) -> Element {
+  pub(in crate::screens) fn add_secret(&self, ctx: &mut Ctx, secrets: &[Secret]) -> Element {
     let label = ctx.t("connections.mcp.dialog.addSecret");
     if secrets.is_empty() {
       return crate::ui::unavailable::with_reason(

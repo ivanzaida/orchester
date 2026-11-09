@@ -30,7 +30,6 @@ use lurq::{
 use orchester_core::{id::ConnectionId, time::Timestamp};
 use orchester_workspace::{connections::data::ProjectConnections, display, messages::Message, workspace::OpenProject};
 
-pub(super) use self::mcp::{Asks, asked, switch as mcp_switch};
 use super::{
   data::Entry,
   words::{CHECKING, Shown, Tone},

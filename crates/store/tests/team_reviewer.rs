@@ -1,13 +1,16 @@
+mod support;
+
 use orchester_core::{
   id::ProjectId,
   name::Name,
   project::{Project, ProjectKey},
-  resource::{ModelId, ResourceKind, ReviewerDestinations, Slug, TeamReviewer},
+  resource::{CommandAction, CommandProgram, ModelId, ResourceKind, ReviewerDestinations, Slug, TeamReviewer, Tool},
   run::review::Probability,
   store::ResourceStore,
   time::Timestamp,
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, ProjectMigration};
+use support::copied_at_version;
 
 #[test]
 fn team_reviewer_versions_persist_without_changing_published_bodies() {
@@ -44,16 +47,7 @@ fn team_reviewer_versions_persist_without_changing_published_bodies() {
   db.publish_draft::<TeamReviewer>(resource.id(), now)
     .expect("second publish");
   drop(db);
-  // Reapply the new table rebuild with published versions referring to existing resource rows.
-  let raw = rusqlite::Connection::open(repo.path().join(".orchester/orchester.db")).expect("raw database");
-  let schema: u32 = raw
-    .pragma_query_value(None, "user_version", |row| row.get(0))
-    .expect("schema");
-  raw
-    .pragma_update(None, "user_version", schema - 1)
-    .expect("reapply migration");
-  drop(raw);
-  let db = ProjectDb::open(repo.path()).expect("reopen and migrate");
+  let db = ProjectDb::open(repo.path()).expect("reopen");
   assert_eq!(
     db.resources(ResourceKind::TeamReviewer).expect("resources").as_slice(),
     std::slice::from_ref(&resource)
@@ -62,4 +56,53 @@ fn team_reviewer_versions_persist_without_changing_published_bodies() {
   assert_eq!(versions.len(), 2);
   assert_eq!(versions[0].body(), &reviewer);
   assert_eq!(versions[1].body(), &stricter);
+}
+
+/// The rebuild of `resources` for the team reviewer's kind keeps the published versions that refer to its existing
+/// rows: a resource with two versions, in a database from before the rebuild, has both after it. (A team reviewer
+/// cannot be in that database: its kind is the rebuild's.)
+#[test]
+fn team_reviewer_the_resources_rebuild_keeps_the_published_versions_of_existing_rows() {
+  let repo = tempfile::tempdir().expect("repo");
+  std::fs::create_dir(repo.path().join(".git")).expect("git");
+  let project = Project::new(
+    ProjectId::generate(),
+    ProjectKey::new("TEAM").expect("key"),
+    Name::new("Team").expect("name"),
+  );
+  let mut db = ProjectDb::create(repo.path(), project).expect("database");
+  let now = Timestamp::from_unix_millis(1);
+  let tool = |program: &str| {
+    Tool::command(
+      "",
+      CommandAction::new(CommandProgram::new(program).expect("program"), Vec::new()),
+    )
+  };
+  let resource = db
+    .create_resource(
+      Slug::new("lint").expect("slug"),
+      Name::new("Lint").expect("name"),
+      &tool("lint"),
+      now,
+    )
+    .expect("create resource");
+  let first = db.publish_draft::<Tool>(resource.id(), now).expect("publish");
+  let mut draft = first.to_draft(now);
+  draft.edit(tool("lint-more"), now);
+  db.save_draft(resource.id(), &draft).expect("save");
+  db.publish_draft::<Tool>(resource.id(), now).expect("second publish");
+  drop(db);
+
+  let current = repo.path().join(".orchester/orchester.db");
+  // The same rows in a database as it was before that migration: the ones after it are not run again over it.
+  let old = copied_at_version(&current, ProjectDb::version_before(ProjectMigration::TeamReviewer));
+  let db = ProjectDb::open(old.path()).expect("reopen and migrate");
+  assert_eq!(
+    db.resources(ResourceKind::Tool).expect("resources").as_slice(),
+    std::slice::from_ref(&resource)
+  );
+  let versions = db.versions::<Tool>(resource.id()).expect("versions");
+  assert_eq!(versions.len(), 2);
+  assert_eq!(versions[0].body(), &tool("lint"));
+  assert_eq!(versions[1].body(), &tool("lint-more"));
 }

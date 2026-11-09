@@ -137,8 +137,7 @@ pub async fn set_run_manual(services: &Services, args: SetRunManual) -> Result<V
 pub async fn get_approvals(services: &Services, args: GetApprovals) -> Result<Value, ToolError> {
   let services = services.clone();
   blocking(move || {
-    let open = services.project(&args.project)?;
-    let db = ProjectDb::open(&open.repo_root)?;
+    let (open, db) = services.read_project(&args.project)?;
     approvals_json(&db, open.project.id())
   })
   .await

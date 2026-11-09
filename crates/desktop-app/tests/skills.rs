@@ -245,25 +245,25 @@ fn skills_new_edit_autosave_and_publish_keep_versions_separate() {
   assert!(s.entry(id).state.has_draft());
 }
 #[test]
-fn skills_remove_is_asked_in_place_and_the_skill_leaves_the_library() {
+fn skills_archive_is_asked_in_place_and_the_skill_leaves_the_library() {
   let mut s = Skills::new();
   let id = s.seed("checks", true);
   s.go(ProjectPage::Skill(id));
   s.click("skill-more");
-  s.click("skill-remove");
+  s.click("skill-archive");
   s.window.until("asked in place", |w| {
     w.tree.tick_futures();
-    w.tree.get_element_by_id("hub-remove-confirm").is_some()
+    w.tree.get_element_by_id("team-hub-archive-confirm").is_some()
   });
   assert!(
-    s.text("hub-remove").contains("No agent gets this skill now"),
+    s.text("team-hub-archive-body").contains("leaves every list"),
     "{}",
-    s.text("hub-remove")
+    s.text("team-hub-archive-body")
   );
   let root = s.repo.clone();
-  // Remove takes the press once the question has read who the skill reaches.
-  s.window.until("removed", move |w| {
-    if let Some(mut confirm) = w.tree.get_element_by_id_mut("hub-remove-confirm") {
+  // Archive takes the press once the question has read what uses the skill.
+  s.window.until("archived", move |w| {
+    if let Some(mut confirm) = w.tree.get_element_by_id_mut("team-hub-archive-confirm") {
       confirm.click();
     }
     ProjectSkills::load_in(&root).expect("skills").entry(id).is_none()

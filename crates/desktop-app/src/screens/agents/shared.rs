@@ -1,70 +1,39 @@
-//! A shared profile's page on this computer (`Shared configuration · redesign` `UC5xk`): what it names that is missing
-//! here (`04` `w0Evp`: the bar with *Choose on this computer…*, which opens Sharing › On this computer), a teammate's
-//! version that widens what agents may do here (`02d` `FuOXA`: what it adds, with *Use v<N> here*, which only the
-//! person presses), *Runs here use* (`06` `sakAV`, `06c` `FO7Cq`): the person's own connection the profile's runs
-//! take on this computer, chosen through the same picker as On this computer, kept here and never sent; and the page
-//! head's *runs here: …* or *Can't run here*.
+//! A shared profile's page on this computer (`Shared configuration · redesign` `UC5xk`): a teammate's version that
+//! widens what agents may do here (`02d` `FuOXA`: what it adds, with *Use v<N> here*, which only the person presses),
+//! and the page head's *Runs here use v4* while it waits. What the team's profile needs of this computer is read by
+//! [`orchester_workspace::readiness`] and filled in from the Agents hub's panel.
 
 mod adds;
 mod use_here;
 
-use std::{path::PathBuf, sync::Arc};
+use std::path::PathBuf;
 
 use lurq::{
-  app::{
-    component::{Component, DevtoolsInspectable},
-    ctx::{Ctx, FutureAction},
-    theme::{PaletteColor, SpacingSize},
-  },
-  components::{Column, Row, Text},
+  app::{component::DevtoolsInspectable, ctx::Ctx},
   core::Signal,
-  layout::Alignment,
-  node::{Element, dimension::Dimension, padding::Padding},
+  node::Element,
 };
 use orchester_core::{
-  connection::AgentProvider,
-  id::{ConnectionId, ResourceId},
+  id::ResourceId,
   resource::{AgentProfile, VersionNumber},
-  sharing::{ConnectionRole, VersionWidening},
+  sharing::VersionWidening,
 };
-use orchester_store::{Bound, BoundBy, BoundReference, ProjectDb};
-use orchester_workspace::{
-  background,
-  sharing::sync::{self, BindingsHere, HereReference, Standing},
-};
+use orchester_store::ProjectDb;
+use orchester_workspace::{background, sharing::sync};
 use use_here::{UseHere, UseHereProps};
 
 use crate::{
   screens::{
-    hub::{
-      parts::{Tone as DotTone, note},
-      team::Here as HeadHere,
-    },
-    settings::orchester::{PersonOnly, Said, follow_shared, sharing_said},
-    shared_config::{
-      bind_action,
-      missing::{self, Whose},
-      picker::{self, Item, Opener},
-    },
+    hub::{parts::Tone as DotTone, team::Here as HeadHere},
+    settings::orchester::{Said, follow_shared, sharing_said},
   },
   services::Services,
-  theme::{ExtraColor, ExtraSpacing, HubSpacing, HubText},
-  ui::{
-    chip::{BadgeTone, badge},
-    field::field_error,
-    icon::Icon,
-  },
+  ui::field::field_error,
 };
 
-/// *Runs here use*'s select, as wide as the section's other dropdowns (`vxuTD` in `BzwDA`).
-const SELECT_WIDTH: f32 = 260.0;
-/// A connection chosen for *Runs here use*, which only a person chooses.
-const RUNS_HERE: &str = "agent-runs-here";
-
-/// What this computer has of a shared profile: its references here, and a version that waits for the person.
+/// What this computer has of a shared profile: a version that waits for the person.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct Shared {
-  here: BindingsHere,
   waiting: Option<Waiting>,
 }
 
@@ -77,8 +46,6 @@ struct Waiting {
   used: Option<VersionNumber>,
   publisher: String,
   adds: Vec<VersionWidening>,
-  /// The MCP servers and secrets it names that the version runs use does not, as this computer has them.
-  added: Vec<HereReference>,
 }
 
 /// What the page shows of a shared profile.
@@ -86,29 +53,8 @@ struct Waiting {
 pub(super) struct Parts {
   /// The bars under the page head.
   pub bars: Vec<Element>,
-  /// *Runs here use* with the note under its section.
-  pub runs_here: Option<(Element, Element)>,
-  /// What the page head says of this computer: *runs here: …*, *Runs here use v4*, *Can't run here* or *Missing on
-  /// this computer*.
+  /// What the page head says of this computer: *Runs here use v4* while a widening version waits.
   pub here: Option<HeadHere>,
-  /// The connection the version runs use here names, as this computer has it.
-  pub connection: Option<ConnectionHere>,
-}
-
-/// The connection reference of the version a profile's runs use here, as Connection & model reads it for a member
-/// (06 `sakAV`, 06c `FO7Cq`, 04 `w0Evp`).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct ConnectionHere {
-  /// The agent CLI it runs: the team chose the CLI, each person's own account runs it (*Runs here use*); `None` for an
-  /// API connection, which Sharing binds.
-  pub cli: Option<AgentProvider>,
-  /// Its name and role as the team's version names them: `DeepSeek`, `openai_api`.
-  pub name: String,
-  pub role: String,
-  /// The local connection it is bound to; `None` while it is missing here.
-  pub local: Option<String>,
-  /// The version runs use here.
-  pub version: Option<VersionNumber>,
 }
 
 /// What the page shows of it, read for the profile `props` shows.
@@ -117,56 +63,19 @@ pub(super) fn parts(ctx: &mut Ctx, props: &super::editor::Props) -> Parts {
     return Parts::default();
   };
   let root = props.project.open.repo_root.clone();
-  let name = entry.profile.role().as_str().to_owned();
   match read(ctx, root.clone(), entry.id, props.revision.get()) {
     Err(reason) => Parts {
       bars: vec![field_error("agent-shared-unread", &reason.text(ctx)).into()],
       ..Parts::default()
     },
     Ok(None) => Parts::default(),
-    Ok(Some(shared)) => {
-      let project = props.project.open.project.id();
-      let bars = bars(
-        ctx,
-        &shared,
-        (project, entry.id, &name),
-        (root.clone(), &props.revision),
-      );
-      Parts {
-        bars,
-        here: head_here(ctx, &shared, entry.id),
-        connection: connection_here(&shared, entry.id),
-        runs_here: runs_here(ctx, &shared, (entry.id, &name), (root, &props.revision)),
-      }
-    }
+    Ok(Some(shared)) => Parts {
+      bars: bar(ctx, &shared, entry.id, (root, &props.revision))
+        .into_iter()
+        .collect(),
+      here: head_here(ctx, &shared),
+    },
   }
-}
-
-/// The agent CLI a connection role names; `None` for an API's role or one this version does not know.
-fn cli_of(role: Option<&str>) -> Option<AgentProvider> {
-  match ConnectionRole::parse(role?)? {
-    ConnectionRole::Agent(provider) if !provider.is_native() => Some(provider),
-    ConnectionRole::Agent(_) | ConnectionRole::GitHub => None,
-  }
-}
-
-fn connection_here(shared: &Shared, resource: ResourceId) -> Option<ConnectionHere> {
-  let reference = shared.here.connection_of(resource)?;
-  let local = match &reference.standing {
-    Standing::Bound { local, .. } => Some(local.clone()),
-    Standing::Found { .. } | Standing::Missing => None,
-  };
-  Some(ConnectionHere {
-    cli: cli_of(reference.binding.role.as_deref()),
-    name: reference.binding.name.clone(),
-    role: reference.binding.role.clone().unwrap_or_default(),
-    local,
-    version: reference
-      .needed_by
-      .iter()
-      .find(|needer| needer.resource == resource)
-      .map(|needer| needer.used.unwrap_or(needer.number)),
-  })
 }
 
 /// Reads it for profile `resource` of the project at `root`; anew when `revision` or a shared project's cache changes.
@@ -182,7 +91,7 @@ fn read(ctx: &mut Ctx, root: PathBuf, resource: ResourceId, revision: u64) -> Re
     })
     .state()
     .get();
-  // A failed re-read keeps the last data; it must not stay answerable (Use v<N> here, Runs here use) as if current.
+  // A failed re-read keeps the last data; it must not stay answerable (Use v<N> here) as if current.
   match (state.data, state.error) {
     (_, Some(reason)) => Err(reason),
     (Some(shared), None) => Ok(Some(shared)),
@@ -194,7 +103,6 @@ fn read_shared(
   root: &std::path::Path,
   resource: ResourceId,
 ) -> Result<Shared, orchester_workspace::sharing::SharingError> {
-  let here = BindingsHere::read(root)?;
   let waiting = match sync::waiting(root, resource)? {
     Some(waiting) => {
       // A version waits only once it is cached from the server, with its publisher; a cache cleared meanwhile
@@ -203,315 +111,42 @@ fn read_shared(
         .cached_version::<AgentProfile>(resource, waiting.number)?
         .map(|cached| cached.publisher.name)
         .unwrap_or_default();
-      let added = here
-        .added_in(resource, waiting.number, waiting.used)
-        .into_iter()
-        .filter(|reference| !matches!(reference.binding.reference, BoundReference::Connection { .. }))
-        .cloned()
-        .collect();
       Some(Waiting {
         number: waiting.number,
         used: waiting.used,
         publisher,
         adds: waiting.adds,
-        added,
       })
     }
     None => None,
   };
-  Ok(Shared { here, waiting })
+  Ok(Shared { waiting })
 }
 
-/// The bars under the page head: what is missing here, and the version that waits for *Use v<N> here*.
-fn bars(
+/// The bar under the page head: the version that waits for *Use v<N> here*.
+fn bar(
   ctx: &mut Ctx,
   shared: &Shared,
-  (project, resource, name): (orchester_core::id::ProjectId, ResourceId, &str),
+  resource: ResourceId,
   (root, revision): (PathBuf, &Signal<u64>),
-) -> Vec<Element> {
-  // *Missing on this computer: connection “DeepSeek”* and *Choose on this computer…* (`Pf5rK` in 04). An agent CLI's
-  // connection is the person's own account, which *Runs here use* adds and chooses: 06c has no bar for it.
-  let missing: Vec<_> = shared
-    .here
-    .missing_for(resource)
-    .into_iter()
-    .filter(|reference| {
-      !matches!(reference.binding.reference, BoundReference::Connection { .. })
-        || cli_of(reference.binding.role.as_deref()).is_none()
-    })
-    .collect();
-  let mut bars: Vec<Element> = missing::bar(ctx, "agent-missing", &missing, (project, name, Whose::Resource))
-    .into_iter()
-    .collect();
-  if let Some(waiting) = &shared.waiting {
-    bars.push(ctx.mount_keyed::<UseHere>(
-      &format!("agent-use-here-{resource}"),
-      UseHereProps {
-        root,
-        resource,
-        waiting: waiting.clone(),
-        revision: revision.clone(),
-      },
-    ));
-  }
-  bars
-}
-
-/// What the page head says of this computer: *Runs here use v4* while a widening version waits (02d); *runs here:
-/// Claude Code · Work* once the profile's connection is bound here (06); while it is missing, *Missing on this
-/// computer* for an agent CLI's (06c) and *Can't run here* for an API's (04); `None` for a profile that names no
-/// connection this computer binds.
-fn head_here(ctx: &Ctx, shared: &Shared, resource: ResourceId) -> Option<HeadHere> {
-  if let Some(used) = shared.waiting.as_ref().and_then(|waiting| waiting.used) {
-    return Some(HeadHere::Instead {
-      tone: DotTone::Warning,
-      text: ctx.t_args("sharing.runsHere.usesVersion", [("version", used.get().to_string())]),
-      colored: false,
-    });
-  }
-  let reference = shared.here.connection_of(resource)?;
-  let cli = cli_of(reference.binding.role.as_deref()).is_some();
-  Some(match &reference.standing {
-    Standing::Bound { local, .. } => {
-      HeadHere::RunsOn(ctx.t_args("sharing.runsHere.head", [("connection", local.as_str())]))
-    }
-    Standing::Found { .. } | Standing::Missing => HeadHere::Instead {
-      tone: DotTone::Danger,
-      text: ctx.t(if cli {
-        "sharing.runsHere.missing"
-      } else {
-        "sharing.runsHere.cantRun"
-      }),
-      colored: cli,
-    },
-  })
-}
-
-/// *Runs here use* as the last row of Connection & model, and the note under the section; `None` for a profile whose
-/// versions name no agent CLI's connection this computer binds: an API's is chosen in Sharing (04).
-fn runs_here(
-  ctx: &mut Ctx,
-  shared: &Shared,
-  (resource, name): (ResourceId, &str),
-  (root, revision): (PathBuf, &Signal<u64>),
-) -> Option<(Element, Element)> {
-  let reference = shared.here.connection_of(resource)?;
-  let cli = cli_of(reference.binding.role.as_deref())?;
-  let role = reference.binding.role.clone().unwrap_or_default();
-  let none_here = shared.here.connections_of(&role).is_empty();
-  // *claude 2.1.173*: the CLI the chosen connection found when it was last checked.
-  let bound = match reference.binding.reference {
-    BoundReference::Connection { bound: Some(bound), .. } => Some(bound.local),
-    _ => None,
-  };
-  let found = shared
-    .here
-    .connections
-    .iter()
-    .find(|connection| Some(connection.id()) == bound)
-    .and_then(|connection| connection.version().zip(cli.program_name()))
-    .map(|(version, program)| format!("{program} {version}"));
-  let row = ctx.mount_keyed::<RunsHere>(
-    &format!("agent-runs-here-{resource}"),
-    RunsHereProps {
+) -> Option<Element> {
+  let waiting = shared.waiting.as_ref()?;
+  Some(ctx.mount_keyed::<UseHere>(
+    &format!("agent-use-here-{resource}"),
+    UseHereProps {
       root,
-      reference: reference.clone(),
-      choices: shared
-        .here
-        .connections_of(&role)
-        .into_iter()
-        .map(|connection| (connection.id(), connection.name().as_str().into()))
-        .collect(),
-      name: name.to_owned(),
-      cli,
-      found,
+      resource,
+      waiting: waiting.clone(),
       revision: revision.clone(),
     },
-  );
-  let words = ctx.t(if none_here {
-    "sharing.runsHere.noteNoAccount"
-  } else {
-    "sharing.runsHere.note"
-  });
-  Some((row, note("agent-runs-here-note", Icon::Monitor, &words).into()))
+  ))
 }
 
-/// What an agent CLI is called: *Claude Code*, *Codex*.
-pub(super) fn cli_name(ctx: &Ctx, cli: AgentProvider) -> Arc<str> {
-  ctx.t(match cli {
-    AgentProvider::CodexCli => "accounts.cli.codex",
-    AgentProvider::ClaudeCodeCli | AgentProvider::AnthropicApi | AgentProvider::OpenAiApi => "accounts.cli.claudeCode",
+/// What the page head says of this computer: *Runs here use v4* while a widening version waits (02d).
+fn head_here(ctx: &Ctx, shared: &Shared) -> Option<HeadHere> {
+  let used = shared.waiting.as_ref()?.used?;
+  Some(HeadHere {
+    tone: DotTone::Warning,
+    text: ctx.t_args("sharing.runsHere.usesVersion", [("version", used.get().to_string())]),
   })
-}
-
-#[derive(Clone)]
-struct RunsHereProps {
-  root: PathBuf,
-  reference: HereReference,
-  /// The local connections of the reference's role, by id and name.
-  choices: Vec<(ConnectionId, Arc<str>)>,
-  /// The profile's name, for *Builder can't run here*.
-  name: String,
-  /// The agent CLI the team chose, for *no Claude Code account here*.
-  cli: AgentProvider,
-  /// The CLI the chosen connection found: *claude 2.1.173*.
-  found: Option<String>,
-  revision: Signal<u64>,
-}
-
-impl PartialEq for RunsHereProps {
-  fn eq(&self, other: &Self) -> bool {
-    self.root == other.root
-      && self.reference == other.reference
-      && self.choices == other.choices
-      && self.name == other.name
-      && self.cli == other.cli
-      && self.found == other.found
-  }
-}
-
-impl DevtoolsInspectable for RunsHereProps {}
-
-/// The row (`Runs here use` in 06): its label with *Yours*, the hint, and the picker or *Add an account…*.
-struct RunsHere {
-  bind: FutureAction<BoundReference, (), Said>,
-  person: PersonOnly,
-}
-
-impl Component for RunsHere {
-  type Props = RunsHereProps;
-
-  fn create(ctx: &mut Ctx) -> Self {
-    let props = ctx.props::<RunsHereProps>().clone();
-    Self {
-      bind: bind_action(ctx, props.root, props.revision),
-      person: PersonOnly::new(ctx),
-    }
-  }
-
-  fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let props = ctx.props::<RunsHereProps>().clone();
-    let (hint, control) = if props.choices.is_empty() {
-      (
-        Text::new(&ctx.t_args(
-          "sharing.runsHere.noAccount",
-          [
-            ("cli", cli_name(ctx, props.cli).to_string()),
-            ("resource", props.name.clone()),
-          ],
-        ))
-        .id("agent-runs-here-hint")
-        .variant(HubText::Hint.role())
-        .color(PaletteColor::Danger),
-        picker::add_account(ctx, "agent-runs-here-add-account"),
-      )
-    } else {
-      let hint = props.found.as_ref().map_or_else(
-        || ctx.t("sharing.runsHere.hint"),
-        |found| ctx.t_args("sharing.runsHere.hintFound", [("found", found.as_str())]),
-      );
-      (
-        Text::new(&hint)
-          .id("agent-runs-here-hint")
-          .variant(HubText::Hint.role()),
-        self.picker(ctx, &props),
-      )
-    };
-    let label = Row::new()
-      .spacing(SpacingSize::Sm)
-      .align_items(Alignment::Center)
-      .child(
-        Text::new(&ctx.t("sharing.runsHere.label"))
-          .id("agent-runs-here-label")
-          .variant(crate::theme::ExtraTypography::Strong.role()),
-      )
-      .child(badge(
-        "agent-runs-here-yours",
-        BadgeTone::Neutral,
-        &ctx.t("sharing.runsHere.yours"),
-      ));
-    let state = self.bind.state().get();
-    let failed = state
-      .error
-      .clone()
-      .filter(|_| !state.is_pending())
-      .map(|reason| field_error("agent-runs-here-error", &reason.text(ctx)));
-    Row::new()
-      .id("agent-runs-here-row")
-      .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(HubSpacing::Row.role(), HubSpacing::FieldY.role()))
-      .spacing(HubSpacing::FieldGap.role())
-      .align_items(Alignment::Center)
-      .background(ExtraColor::Hover.role())
-      .child(
-        Column::new()
-          .flex(1.0)
-          .min_width(Dimension::Px(0.0))
-          .spacing(ExtraSpacing::Tight.role())
-          .child(label)
-          .child(hint.width(Dimension::Pct(100.0)))
-          .with_children(self.person.reason(ctx, RUNS_HERE))
-          .with_children(failed),
-      )
-      .child(control)
-  }
-}
-
-impl RunsHere {
-  /// The person's connections of the role, the one runs take here checked, then *Add an account…*.
-  fn picker(&self, ctx: &mut Ctx, props: &RunsHereProps) -> Element {
-    let current = match (&props.reference.binding.reference, &props.reference.standing) {
-      (BoundReference::Connection { bound: Some(bound), .. }, Standing::Bound { .. }) => Some(bound.local),
-      _ => None,
-    };
-    let words = props
-      .choices
-      .iter()
-      .find(|(id, _)| Some(*id) == current)
-      .map_or_else(|| ctx.t("sharing.runsHere.choose"), |(_, name)| name.clone());
-    let items = props
-      .choices
-      .iter()
-      .map(|(id, name)| Item {
-        label: name.clone(),
-        glyph: Icon::User,
-        detail: None,
-        chosen: Some(*id) == current,
-        unavailable: None,
-      })
-      .collect();
-    let (bind, person, ids, target) = (
-      self.bind.clone(),
-      self.person.clone(),
-      props.choices.iter().map(|(id, _)| *id).collect::<Vec<_>>(),
-      props.reference.binding.reference,
-    );
-    picker::picker(
-      ctx,
-      picker::Props {
-        id: "agent-runs-here".into(),
-        opener: Opener::Select {
-          words,
-          width: SELECT_WIDTH,
-        },
-        items,
-        add_account: true,
-        busy: self.bind.state().get().is_pending(),
-        choose: Arc::new(move |index| {
-          let (BoundReference::Connection { reference, .. }, Some(local)) = (target, ids.get(index)) else {
-            return;
-          };
-          if person.allows(RUNS_HERE) {
-            bind.run(BoundReference::Connection {
-              reference,
-              bound: Some(Bound {
-                local: *local,
-                by: BoundBy::Person,
-              }),
-            });
-          }
-        }),
-      },
-    )
-  }
 }

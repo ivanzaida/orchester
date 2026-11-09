@@ -148,7 +148,7 @@ async fn work_claim(
     let (route, team) = background::run(move || run_route(&root, run)).await??;
     match route {
       RunRoute::Team if team.is_some_and(|team| team.fence.is_some()) => {
-        return Err(Message::new("claims.refused.fenced"));
+        return Err(messages::run_fenced());
       }
       RunRoute::Team => return Ok(WorkClaim::default()),
       // No claim or work to report under: the same refusal the MCP tools give.

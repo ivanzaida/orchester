@@ -31,8 +31,6 @@ pub(crate) enum Standing {
   Published,
   /// Items being chosen, e.g. what an import creates (`F3ukWF` in 02c).
   Choosing,
-  /// What it names is missing on this computer: a plug with a spark in `danger` (`JnKum` in 04).
-  Missing,
   /// A teammate's version widens what agents may do here: a shield in `warning` (`A4mB5` in 02d).
   Widens,
   /// A version published here waits for the team server: a cloud crossed out in `info` (`y6CD8b` in 02b).
@@ -49,7 +47,6 @@ impl Standing {
       Self::Attention => (Icon::TriangleAlert, PaletteColor::Warning),
       Self::Published => (Icon::CircleCheck, PaletteColor::Success),
       Self::Choosing => (Icon::ListChecks, PaletteColor::TextSecondary),
-      Self::Missing => (Icon::PlugZap, PaletteColor::Danger),
       Self::Widens => (Icon::ShieldAlert, PaletteColor::Warning),
       Self::NotSent => (Icon::CloudOff, PaletteColor::Info),
       Self::Conflict => (Icon::GitCompare, PaletteColor::Danger),

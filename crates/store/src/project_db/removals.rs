@@ -223,7 +223,7 @@ fn latest<B: ResourceBody>(connection: &Connection, resource: ResourceId) -> Res
   used_here(connection, resource)
 }
 
-fn removed_at(connection: &Connection, id: ResourceId) -> Result<Option<Timestamp>, StoreError> {
+pub(super) fn removed_at(connection: &Connection, id: ResourceId) -> Result<Option<Timestamp>, StoreError> {
   let at: Option<i64> = connection
     .query_row(
       "SELECT removed_at FROM removed_resources WHERE resource_id = ?1",

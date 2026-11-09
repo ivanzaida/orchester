@@ -1,14 +1,14 @@
 //! The cache of a shared project's configuration (`docs/architecture/server.md`, "Desktop data", S5): which resources
 //! are the server's, and each version the server confirmed with its publisher, kept twice — the server's body
-//! unchanged, with its hash and references, and the local body with this computer's bindings in place of the
-//! references, which runs and editors read ([`super::resources`]).
+//! unchanged, with its hash and references, and the local body this computer runs and edits it by (a team profile's
+//! is the team's form on the connection this computer picked for it; every other kind's is the server's), which runs
+//! and editors read ([`super::resources`]).
 
 use orchester_core::{
   blob::ContentHash,
   connection::AgentProvider,
-  id::{ConnectionId, ResourceId, SecretId, VersionId},
-  name::Name,
-  resource::{Resource, ResourceBody, ResourceKind, Slug, Version, VersionNumber},
+  id::{ResourceId, VersionId},
+  resource::{Resource, ResourceBody, ResourceKind, Version, VersionNumber},
   secret::SecretName,
   sharing::{ConnectionRole, SharedPerson, TaskRevision},
   time::Timestamp,
@@ -34,26 +34,12 @@ pub enum ResourceSharing {
 }
 
 /// What a version of the team's configuration names (`docs/design/team-configuration.md`): a CLI kind, a team resource
-/// by its server id, a secret by name. The last three are what a version cached before the team configuration model
-/// named by an id on the publisher's computer, which the bindings of this computer still resolve until ORC-845 removes
-/// the variants, the bindings and the code that resolves them.
+/// by its server id, a secret by name. Never an id of a computer.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ReferenceTarget {
   CliKind(AgentProvider),
   TeamResource { kind: ResourceKind, id: ResourceId },
   SecretName(SecretName),
-  Connection(ConnectionId),
-  McpServer(ConnectionId),
-  Secret(SecretId),
-}
-
-/// One thing a version's body names, with the name and role it was bound by when the publisher's computer held it
-/// (empty for the team's references, which need none).
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct VersionReference {
-  pub target: ReferenceTarget,
-  pub name: String,
-  pub role: Option<String>,
 }
 
 /// A version of a shared resource as the server confirmed it, with its local body.
@@ -65,8 +51,8 @@ pub struct CachedVersion<B> {
   /// The body as the server keeps it, never changed here.
   pub server_body: serde_json::Value,
   pub hash: ContentHash,
-  pub references: Vec<VersionReference>,
-  /// The body with the local connections, MCP servers and secrets the references are bound to here.
+  pub references: Vec<ReferenceTarget>,
+  /// The body this computer runs: the server's, except a team profile's, which runs on the connection picked here.
   pub local_body: B,
   /// A teammate's version that widens what agents may do here: the latest version reads leave it out, so runs keep
   /// the version before it, until the person's *Use v<N> here* ([`ProjectDb::use_shared_version`]).
@@ -204,7 +190,8 @@ impl ProjectDb {
 
   /// Keeps `resource` as the server's at `revision`. One this computer does not have is added with the server's id and
   /// no draft (its versions come with [`Self::cache_shared_version`]); one it has takes the server's name. Another
-  /// local resource of its kind with its slug refuses it ([`StoreError::DuplicateSlug`]).
+  /// live team resource of its kind with its slug refuses it ([`StoreError::DuplicateSlug`]); a resource of this
+  /// computer's own with that slug stays as it is, and is not offered in a team project.
   pub fn keep_shared_resource(&mut self, resource: &Resource, revision: TaskRevision) -> Result<(), StoreError> {
     let id = resource.id();
     let revision = tokens_column("resource revision", revision.get())?;
@@ -240,45 +227,6 @@ impl ProjectDb {
       .map(version_number)
       .transpose()
   }
-
-  /// The cached versions whose references name `target`, by resource and number.
-  pub fn versions_naming(&self, target: &ReferenceTarget) -> Result<Vec<NamingVersion>, StoreError> {
-    let (kind, id) = target_columns(target);
-    let mut statement = self.connection.prepare(
-      "SELECT resources.id, resources.kind, resource_versions.number FROM shared_version_references \
-       JOIN resource_versions ON resource_versions.id = shared_version_references.version_id \
-       JOIN resources ON resources.id = resource_versions.resource_id \
-       WHERE shared_version_references.kind = ?1 AND shared_version_references.target_id = ?2 \
-       ORDER BY resources.rowid, resource_versions.number",
-    )?;
-    let rows = statement
-      .query_map(params![kind, id], |row| {
-        Ok((
-          row.get::<_, String>(0)?,
-          row.get::<_, String>(1)?,
-          row.get::<_, i64>(2)?,
-        ))
-      })?
-      .collect::<Result<Vec<_>, _>>()?;
-    rows
-      .into_iter()
-      .map(|(resource, kind, number)| {
-        Ok(NamingVersion {
-          resource: parse("resource id", &resource)?,
-          kind: parse_kind(&kind)?,
-          number: version_number(number)?,
-        })
-      })
-      .collect()
-  }
-}
-
-/// A cached version whose references name a given connection, MCP server or secret.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct NamingVersion {
-  pub resource: ResourceId,
-  pub kind: ResourceKind,
-  pub number: VersionNumber,
 }
 
 pub(super) fn set_sharing(
@@ -323,31 +271,22 @@ pub(super) fn sharing_of(connection: &Connection, id: ResourceId) -> Result<Opti
   }
 }
 
-/// Adds `resource` with its own id and no draft, unless the slug is another resource's of its kind. A pipeline or
-/// agent profile of the team wins its slug from one of this computer's own, or from a team resource archived here:
-/// the team's resource always arrives (`docs/architecture/server.md` row 80), and the other, kept as it is otherwise,
-/// takes a free slug.
+/// Adds `resource` with its own id and no draft, unless the team's live resource of its kind has the slug already: the
+/// team server keeps its slugs apart, so two of them are its to sort out. A resource of this computer's own with the
+/// slug, or one the team archived here, is left as it is (slugs are not unique across the two).
 pub(super) fn insert_resource(connection: &Connection, resource: &Resource) -> Result<(), StoreError> {
   let kind = kind_text(resource.kind());
-  let holder: Option<(String, Option<String>, bool)> = connection
-    .query_row(
-      "SELECT id, sharing, id IN (SELECT resource_id FROM removed_resources) FROM resources WHERE kind = ?1 AND slug = ?2",
-      params![kind, resource.slug().as_str()],
-      |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-    )
-    .optional()?;
-  let gives_way = matches!(resource.kind(), ResourceKind::Pipeline | ResourceKind::AgentProfile);
-  match holder {
-    None => {}
-    Some((other, sharing, removed)) if gives_way && (removed || sharing.as_deref() != Some("shared")) => {
-      give_way(connection, &other, resource)?;
-    }
-    Some(_) => {
-      return Err(StoreError::DuplicateSlug {
-        kind: resource.kind(),
-        slug: resource.slug().as_str().to_owned(),
-      });
-    }
+  let held: bool = connection.query_row(
+    "SELECT EXISTS (SELECT 1 FROM resources WHERE kind = ?1 AND slug = ?2 AND sharing = 'shared' \
+     AND id NOT IN (SELECT resource_id FROM removed_resources))",
+    params![kind, resource.slug().as_str()],
+    |row| row.get(0),
+  )?;
+  if held {
+    return Err(StoreError::DuplicateSlug {
+      kind: resource.kind(),
+      slug: resource.slug().as_str().to_owned(),
+    });
   }
   connection.execute(
     "INSERT INTO resources (id, kind, slug, name, created_at) VALUES (?1, ?2, ?3, ?4, ?5)",
@@ -455,24 +394,21 @@ fn write_version<B>(
 fn write_references(
   connection: &Connection,
   version: VersionId,
-  references: &[VersionReference],
+  references: &[ReferenceTarget],
 ) -> Result<(), StoreError> {
   connection.execute(
     "DELETE FROM shared_version_references WHERE version_id = ?1",
     [version.to_string()],
   )?;
   for (position, reference) in references.iter().enumerate() {
-    let (kind, target) = target_columns(&reference.target);
+    let (kind, target) = target_columns(reference);
     connection.execute(
-      "INSERT INTO shared_version_references (version_id, position, kind, target_id, name, role) \
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+      "INSERT INTO shared_version_references (version_id, position, kind, target_id) VALUES (?1, ?2, ?3, ?4)",
       params![
         version.to_string(),
         i64::try_from(position).map_err(|_| StoreError::Unrepresentable("reference position"))?,
         kind,
-        target,
-        reference.name,
-        reference.role
+        target
       ],
     )?;
   }
@@ -485,9 +421,6 @@ fn target_columns(target: &ReferenceTarget) -> (String, String) {
     ReferenceTarget::CliKind(cli) => ("cli_kind".to_owned(), ConnectionRole::Agent(*cli).as_str().to_owned()),
     ReferenceTarget::TeamResource { kind, id } => (format!("{TEAM_PREFIX}{}", kind_text(*kind)), id.to_string()),
     ReferenceTarget::SecretName(name) => ("secret_name".to_owned(), name.as_str().to_owned()),
-    ReferenceTarget::Connection(id) => ("connection".to_owned(), id.to_string()),
-    ReferenceTarget::McpServer(id) => ("mcp_server".to_owned(), id.to_string()),
-    ReferenceTarget::Secret(id) => ("secret".to_owned(), id.to_string()),
   }
 }
 
@@ -502,9 +435,6 @@ fn parse_target(kind: &str, target: &str) -> Result<ReferenceTarget, StoreError>
     "secret_name" => {
       ReferenceTarget::SecretName(SecretName::new(target).map_err(|_| corrupt("reference secret name", target))?)
     }
-    "connection" => ReferenceTarget::Connection(parse("reference id", target)?),
-    "mcp_server" => ReferenceTarget::McpServer(parse("reference id", target)?),
-    "secret" => ReferenceTarget::Secret(parse("reference id", target)?),
     other => match other.strip_prefix(TEAM_PREFIX) {
       Some(resource_kind) => ReferenceTarget::TeamResource {
         kind: parse_kind(resource_kind)?,
@@ -515,29 +445,17 @@ fn parse_target(kind: &str, target: &str) -> Result<ReferenceTarget, StoreError>
   })
 }
 
-fn load_references(connection: &Connection, version: &str) -> Result<Vec<VersionReference>, StoreError> {
-  let mut statement = connection.prepare(
-    "SELECT kind, target_id, name, role FROM shared_version_references WHERE version_id = ?1 ORDER BY position",
-  )?;
+fn load_references(connection: &Connection, version: &str) -> Result<Vec<ReferenceTarget>, StoreError> {
+  let mut statement = connection
+    .prepare("SELECT kind, target_id FROM shared_version_references WHERE version_id = ?1 ORDER BY position")?;
   let rows = statement
     .query_map([version], |row| {
-      Ok((
-        row.get::<_, String>(0)?,
-        row.get::<_, String>(1)?,
-        row.get::<_, String>(2)?,
-        row.get::<_, Option<String>>(3)?,
-      ))
+      Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
     })?
     .collect::<Result<Vec<_>, _>>()?;
   rows
     .into_iter()
-    .map(|(kind, target, name, role)| {
-      Ok(VersionReference {
-        target: parse_target(&kind, &target)?,
-        name,
-        role,
-      })
-    })
+    .map(|(kind, target)| parse_target(&kind, &target))
     .collect()
 }
 
@@ -546,29 +464,4 @@ fn revision_value(revision: i64) -> Result<TaskRevision, StoreError> {
     .ok()
     .and_then(|revision| TaskRevision::try_from(revision).ok())
     .ok_or_else(|| corrupt("resource revision", revision))
-}
-
-/// Moves the resource `local`, this computer's own or archived, off `team`'s slug to a free one of its kind
-/// (`<slug>-local`, then `-2`, …).
-fn give_way(connection: &Connection, local: &str, team: &Resource) -> Result<(), StoreError> {
-  let mut statement = connection.prepare("SELECT slug FROM resources WHERE kind = ?1")?;
-  let taken = statement
-    .query_map([kind_text(team.kind())], |row| row.get::<_, String>(0))?
-    .map(|slug| {
-      let slug = slug?;
-      Slug::new(&slug).map_err(|_| corrupt("resource slug", slug))
-    })
-    .collect::<Result<Vec<_>, _>>()?;
-  let name = Name::new(&format!("{} local", team.slug().as_str())).expect("a slug and a word are a name");
-  let free = Slug::unique_for(&name, team.slug(), &taken);
-  connection.execute(
-    "UPDATE resources SET slug = ?2 WHERE id = ?1",
-    params![local, free.as_str()],
-  )?;
-  tracing::info!(
-    resource = local,
-    slug = free.as_str(),
-    "a resource gave its slug to the team's"
-  );
-  Ok(())
 }

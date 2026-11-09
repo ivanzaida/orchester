@@ -235,6 +235,7 @@ pub enum Route {
   Invite(JoinTarget),
   Project(ProjectId, ProjectPage),
 }
+impl lurq::app::component::DevtoolsInspectable for Route {}
 
 impl Route {
   /// A pipeline's list, creation page and editor belong to one sidebar screen, with distinct paths.

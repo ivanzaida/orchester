@@ -19,6 +19,7 @@ mod config;
 mod desktop;
 mod http;
 mod joined;
+mod leaving;
 mod mcp_servers;
 mod merged;
 mod publish;

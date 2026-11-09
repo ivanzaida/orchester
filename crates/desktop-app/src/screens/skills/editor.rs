@@ -55,7 +55,7 @@ impl DevtoolsInspectable for Baseline {}
 pub enum Ask {
   Nothing,
   Discard,
-  Remove,
+  Archive,
 }
 impl DevtoolsInspectable for Ask {}
 pub struct Editor {
@@ -154,7 +154,7 @@ impl Component for Editor {
       .child(self.crumb(ctx, &p, baseline.as_ref()))
       .child(self.page_head(ctx, &p, baseline.as_ref(), &title))
       .with_children(self.leave_question(ctx, busy))
-      .with_children(self.remove_question(ctx, &p, baseline.as_ref()));
+      .with_children(self.archive_question(ctx, &p, baseline.as_ref()));
     top = match (self.discard_question(ctx, &p, baseline.as_ref()), self.asking.get()) {
       (Some(question), _) => top.child(question),
       (None, true) => top.child(self.question(ctx, &p, baseline.as_ref())),

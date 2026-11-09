@@ -26,6 +26,7 @@ mod interrupted;
 mod lifecycle;
 mod live;
 mod loading_states;
+mod local_hub;
 mod long_chats;
 mod memory;
 mod merge_attempts;
@@ -51,7 +52,6 @@ mod run_context;
 mod run_model;
 pub mod settings;
 mod shared_config;
-mod shared_here;
 mod side_question;
 mod slot_wait;
 mod sources;
@@ -64,6 +64,7 @@ mod tasks_memory;
 mod tasks_unreadable;
 pub mod team;
 mod team_closed;
+mod team_computer;
 mod team_hub;
 mod team_hub_mcp;
 mod team_hub_waiting;
@@ -116,7 +117,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 198] = [
+pub const ALL: [Scenario; 201] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -218,9 +219,6 @@ pub const ALL: [Scenario; 198] = [
   Scenario::of("project-settings-shared", project_settings::shared),
   Scenario::of("shared-config", shared_config::admin),
   Scenario::of("shared-config-member", shared_config::member),
-  Scenario::of("shared-config-here", shared_here::seed),
-  Scenario::of("shared-config-chosen", shared_here::chosen),
-  Scenario::of("shared-config-no-claude", shared_here::no_claude),
   Scenario::of("team-hub", team_hub::seed),
   Scenario::of("team-hub-pick", team_hub::pick),
   Scenario::of("team-hub-no-connection", team_hub::no_connection),
@@ -309,6 +307,12 @@ pub const ALL: [Scenario; 198] = [
   Scenario::of("team-start-waiting", team::start_waiting),
   Scenario::of("team-start-runner-refused", team::start_runner_refused),
   Scenario::of("team-start-past-failure", team::start_past_failure),
+  Scenario::of("local-hub", local_hub::seed),
+  Scenario::of("local-hub-archive", local_hub::archive),
+  Scenario::of("local-hub-claude", local_hub::claude),
+  Scenario::of("local-hub-secret", local_hub::secret),
+  Scenario::of("local-hub-secret-refused", local_hub::secret_refused),
+  Scenario::of("local-hub-archived", local_hub::archived),
   Scenario::of("team-archive", team::archive),
   Scenario::of("team-archived", team::archived),
   Scenario::of("modules-base-branch", modules::base_branch),

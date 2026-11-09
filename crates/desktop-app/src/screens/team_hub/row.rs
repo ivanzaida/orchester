@@ -138,7 +138,7 @@ fn tag(ctx: &Ctx, entry: &Entry, filter: HubFilter, id: &str) -> Option<Row> {
 }
 
 /// A tag (`Tag` `uJ2rP`).
-pub(super) fn tag_chip(id: &str, words: &str) -> Row {
+pub(in crate::screens) fn tag_chip(id: &str, words: &str) -> Row {
   Row::new()
     .id(id)
     .height(Dimension::Px(TAG_HEIGHT))

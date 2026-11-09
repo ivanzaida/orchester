@@ -49,6 +49,7 @@ pub(super) fn fix_of(part: &Missing) -> Option<(Fix, ProgramState)> {
     )),
     Missing::Secret { name } => Some((Fix::AddValue(name.clone()), ProgramState::NotAsked)),
     Missing::Connection { .. }
+    | Missing::ConnectionSignIn { .. }
     | Missing::DecisionConnection { .. }
     | Missing::McpUnsupported { .. }
     | Missing::SecretUnreadable { .. }

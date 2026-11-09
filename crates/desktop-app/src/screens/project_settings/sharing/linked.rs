@@ -184,10 +184,6 @@ impl Component for Linked {
       removed::notice(ctx, (link, &names), (&servers, &self.making_local))
     });
     let (joined_note, keys) = self.joined(ctx, &props, (link.key.as_str(), &server));
-    let here = props
-      .facts
-      .references
-      .then(|| super::bindings::section(ctx, &props.project));
     let version = policy::refusal(ctx, &part, (&server, &shared));
     let team_policy = (link.removed_at.is_none() && part.policy.is_some())
       .then(|| ctx.mount_keyed::<policy::Policy>("sharing-policy", policy::Props { part }));
@@ -198,7 +194,6 @@ impl Component for Linked {
       .with_children(version)
       .with_children(joined_note)
       .with_children(notice)
-      .with_children(here)
       .child(team)
       .with_children(team_policy)
       .child(refused(ctx))

@@ -26,6 +26,11 @@ use super::{
 
 /// A Claude Code connection `name` whose last check found `version`.
 pub(super) fn claude(root: &Path, name: &str, version: &str) -> ConnectionId {
+  claude_signed(root, name, version, SignIn::SignedIn)
+}
+
+/// [`claude`] whose last check found the CLI as `sign_in` says.
+pub(super) fn claude_signed(root: &Path, name: &str, version: &str, sign_in: SignIn) -> ConnectionId {
   let mut connection = AgentConnection::new(
     ConnectionId::generate(),
     Name::new(name).expect("name"),
@@ -39,7 +44,7 @@ pub(super) fn claude(root: &Path, name: &str, version: &str) -> ConnectionId {
       at: Timestamp::now(),
       result: CheckResult::Available {
         version: version.into(),
-        sign_in: SignIn::SignedIn,
+        sign_in,
         catalog: ModelCatalog::new(
           CatalogSource::Provider,
           vec![CatalogModel::new(
@@ -256,4 +261,38 @@ fn team_hub_profile_pins_the_fix_of_the_first_missing_part_and_nothing_when_noth
   // Nothing to fix: no bar, and nothing disabled in its place.
   assert!(!agents.exists("team-hub-actions"));
   assert!(!agents.exists("team-hub-secret-dialog"));
+}
+
+/// A connection whose CLI is signed out is not ready (ORC-848 D11): the panel says so in *Ready here?*, the pinned
+/// action takes the person where to sign in, and a person's press opens it.
+#[test]
+fn team_hub_profile_a_signed_out_connection_is_not_ready_and_the_fix_is_to_sign_in() {
+  let mut agents = Agents::new(true);
+  team(&agents);
+  claude_signed(&agents.root, "Claude 2", "2.1.173", SignIn::SignedOut);
+  let ((profile, _), _) = builder_using(&agents, false);
+  show(&mut agents, profile);
+
+  agents.until("the sign-in fix", |s| s.exists("team-hub-fix-sign-in"));
+  assert_eq!(
+    agents.text("team-hub-ready-connection-words"),
+    "Claude Code is signed out here"
+  );
+  assert!(agents.text("team-hub-fix-sign-in").contains("Sign in to Claude Code"));
+  agents.click("team-hub-fix-sign-in");
+  assert_eq!(
+    agents.window.navigation().route_now(),
+    Route::Accounts(AccountsView::default())
+  );
+}
+
+#[test]
+fn team_hub_profile_a_signed_in_connection_stays_ready() {
+  let mut agents = Agents::new(true);
+  team(&agents);
+  claude(&agents.root, "Claude 2", "2.1.173");
+  let ((profile, _), _) = builder_using(&agents, false);
+  show(&mut agents, profile);
+  assert!(agents.text("team-hub-ready-connection-words").contains("Claude 2"));
+  assert!(!agents.exists("team-hub-fix-sign-in"));
 }

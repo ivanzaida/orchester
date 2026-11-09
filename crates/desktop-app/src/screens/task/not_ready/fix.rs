@@ -20,6 +20,7 @@ pub enum Fix {
   AddValue,
   Choose,
   AddConnection,
+  SignIn,
   SwitchOn,
 }
 
@@ -31,6 +32,7 @@ impl Fix {
       Self::AddValue => "summary.notReady.fix.addValue",
       Self::Choose => "summary.notReady.fix.choose",
       Self::AddConnection => "summary.notReady.fix.addConnection",
+      Self::SignIn => "summary.notReady.fix.signIn",
       Self::SwitchOn => "summary.notReady.fix.switchOn",
     }
   }
@@ -52,6 +54,7 @@ pub fn of(part: &NotReadyPart) -> Option<(Fix, ProjectPage)> {
       problem: ConnectionProblem::NoneOfKind,
       ..
     } => Some((Fix::AddConnection, ProjectPage::Connections(ConnectionsView::default()))),
+    Missing::ConnectionSignIn { .. } => Some((Fix::SignIn, ProjectPage::Connections(ConnectionsView::default()))),
     Missing::Connection { profile, .. } => Some((Fix::Choose, hub(HubFilter::Profiles, Some(*profile)))),
     Missing::DecisionConnection { reviewer, .. } => Some((Fix::Choose, hub(HubFilter::All, Some(*reviewer)))),
     Missing::McpOff { server } => Some((Fix::SwitchOn, hub(HubFilter::McpServers, Some(*server)))),

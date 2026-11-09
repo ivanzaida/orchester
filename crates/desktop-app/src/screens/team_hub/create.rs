@@ -5,7 +5,9 @@
 mod fields;
 mod instruction;
 mod kinds;
+mod local_mcp;
 mod mcp;
+mod mode;
 mod notices;
 mod panel;
 mod profile;
@@ -22,9 +24,10 @@ use lurq::{
 };
 use orchester_core::id::ProjectId;
 
-pub(super) use self::{
+pub(super) use self::mcp::{EditView, Fields as McpFields};
+pub(in crate::screens) use self::{
   kinds::new_row,
-  mcp::{EditView, Fields as McpFields},
+  mode::Mode,
   panel::{Props, panel},
 };
 use super::model::Kind;
@@ -61,7 +64,7 @@ const fn label_key(filter: HubFilter) -> &'static str {
     HubFilter::Instructions => "team_hub.new.instructions",
     HubFilter::Skills => "team_hub.new.skills",
     HubFilter::Tools => "team_hub.new.tools",
-    HubFilter::All => "team_hub.new.all",
+    HubFilter::All | HubFilter::Archived => "team_hub.new.all",
   }
 }
 

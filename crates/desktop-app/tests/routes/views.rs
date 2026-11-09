@@ -9,6 +9,7 @@ use orchester_app::routes::{
   ProjectSettingsTab, Route, SecretsPanel, SecretsView, SkillsFilter, StepPage,
 };
 use orchester_core::{
+  id::ConnectionId,
   resource::{StepKey, VersionNumber},
   secret::Environment,
 };
@@ -26,6 +27,7 @@ const PANELS: [InstructionsPanel; 4] = [
 pub(super) fn view_routes() -> Vec<Route> {
   let id = CONNECTION.parse().expect("a resource id");
   let secret = CONNECTION.parse().expect("a secret id");
+  let server: ConnectionId = CONNECTION.parse().expect("a connection id");
   let mut all = Vec::new();
   for panel in [
     SecretsPanel::Inspect,
@@ -44,7 +46,9 @@ pub(super) fn view_routes() -> Vec<Route> {
     }
   }
   all.extend(SkillsFilter::ALL.map(|filter| at(ProjectPage::Skills(filter))));
-  all.extend(HubFilter::ALL.map(|filter| at(ProjectPage::hub(HubView::new(filter, None)))));
+  all.extend(HubFilter::LOCAL.map(|filter| at(ProjectPage::hub(HubView::new(filter, None)))));
+  all.push(at(ProjectPage::hub(HubView::on_server(HubFilter::McpServers, server))));
+  all.push(at(ProjectPage::hub(HubView::on_server(HubFilter::Archived, server))));
   all.push(at(ProjectPage::hub(HubView::new(HubFilter::All, Some(id)))));
   all.push(at(ProjectPage::hub(HubView::new(HubFilter::Tools, Some(id)))));
   all.extend(AgentTab::ALL.map(|tab| at(ProjectPage::Agent(id, tab))));
@@ -295,4 +299,25 @@ fn views_agents_hub_names_its_filter_and_resource() {
     format!("{root}?filter=tools&item={CONNECTION}")
   );
   assert!(Route::parse(&format!("{root}?filter=pipelines")).is_err());
+}
+
+/// A local project's hub also has *Archived*, and names a local MCP server by its connection id, which is not a
+/// resource id: the two are different query parameters and neither is read as the other.
+#[test]
+fn views_agents_hub_of_a_local_project_names_a_server_and_the_archived_filter() {
+  let root = format!("/project/{PROJECT}/agents");
+  let server: ConnectionId = CONNECTION.parse().expect("a connection id");
+  assert_eq!(
+    at(ProjectPage::hub(HubView::new(HubFilter::Archived, None))).path(),
+    format!("{root}?filter=archived")
+  );
+  let on_server = at(ProjectPage::hub(HubView::on_server(HubFilter::McpServers, server)));
+  assert_eq!(
+    on_server.path(),
+    format!("{root}?filter=mcp_servers&server={CONNECTION}")
+  );
+  assert_eq!(Route::parse(&on_server.path()).expect("parsed"), on_server);
+  // A form that creates a server names no server.
+  let adding = at(ProjectPage::hub(HubView::adding(HubFilter::McpServers)));
+  assert_eq!(adding.path(), format!("{root}?filter=mcp_servers&new=1"));
 }

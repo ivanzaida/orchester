@@ -174,8 +174,8 @@ fn bindings(db: &ProjectDb, bundle: &ExecutionBundle, programs: &McpPrograms) ->
     .collect();
   Ok(LocalBindings {
     profiles,
-    references: Vec::new(),
     team_mcp,
+    local_mcp: Vec::new(),
   })
 }
 

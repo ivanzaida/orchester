@@ -7,7 +7,7 @@
 //! rules the MCP tools use; a save that widens what agents may do asks a person first (`widen`).
 
 mod editor;
-mod fields;
+pub(in crate::screens) mod fields;
 
 use lurq::{
   app::{

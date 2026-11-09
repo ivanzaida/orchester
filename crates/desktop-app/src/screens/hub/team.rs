@@ -22,7 +22,7 @@ use orchester_store::{PublishState, SharedStanding};
 use orchester_workspace::{agents::data::VersionState, display, i18n::NAMESPACE, sharing::team::TeamConfiguration};
 
 use super::{
-  parts::{Tone, note, status, status_in},
+  parts::{Tone, note, status},
   versions::{VersionsProps, versions_button},
 };
 use crate::{
@@ -117,6 +117,7 @@ pub(crate) fn member_versions(
       id: id.into(),
       root: project.open.repo_root.clone(),
       resource: (standing.kind, resource),
+      local: false,
     },
   ))
 }
@@ -271,15 +272,12 @@ pub(crate) fn row_state(ctx: &Ctx, id: &str, standing: &SharedStanding, draft: D
     .into()
 }
 
-/// What a shared profile's head line says of this computer (`Sub` in 06 `sakAV`, 06c `FO7Cq`, 04 `w0Evp`, 02d
-/// `FuOXA`).
+/// What a shared profile's head line says of this computer, in place of where it stands: *Runs here use v4* (`Sub` in
+/// 02d `FuOXA`).
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) enum Here {
-  /// *runs here: Claude Code · Work*, after the version and before where it stands (06).
-  RunsOn(Arc<str>),
-  /// Said in place of where it stands, its words in the dot's color when `colored`: *Runs here use v4* (02d), *Can't
-  /// run here* (04), *Missing on this computer* (06c).
-  Instead { tone: Tone, text: Arc<str>, colored: bool },
+pub(crate) struct Here {
+  pub tone: Tone,
+  pub text: Arc<str>,
 }
 
 /// An editor's line under its title (`Sub` `Du8OB` in 02): the latest version the server numbered with its publisher,
@@ -330,10 +328,9 @@ pub(crate) fn head_line_with(
     Said::Conflict(_) => Some(ctx.t("sharing.config.head.conflict")),
     Said::Refused => Some(ctx.t("sharing.config.head.refused")),
   };
-  let (runs_on, state) = match here {
-    Some(Here::RunsOn(runs_on)) => (Some(runs_on), state.map(|state| (said.tone(), state, false))),
-    Some(Here::Instead { tone, text, colored }) => (None, Some((tone, text, colored))),
-    None => (None, state.map(|state| (said.tone(), state, false))),
+  let state = match here {
+    Some(Here { tone, text }) => Some((tone, text)),
+    None => state.map(|state| (said.tone(), state)),
   };
   let dot = || Text::new(&ctx.t("sharing.config.dot")).variant(HubText::Hint.role());
   Row::new()
@@ -345,24 +342,12 @@ pub(crate) fn head_line_with(
         .id(format!("{id}-summary"))
         .variant(HubText::Hint.role()),
     )
-    .with_children(runs_on.map(|runs_on| {
+    .with_children(state.map(|(tone, state)| {
       Row::new()
         .spacing(ExtraSpacing::Snug.role())
         .align_items(Alignment::Center)
         .child(dot())
-        .child(
-          Text::new(&runs_on)
-            .id(format!("{id}-runs-here"))
-            .variant(HubText::Hint.role())
-            .nowrap(),
-        )
-    }))
-    .with_children(state.map(|(tone, state, colored)| {
-      Row::new()
-        .spacing(ExtraSpacing::Snug.role())
-        .align_items(Alignment::Center)
-        .child(dot())
-        .child(status_in(&format!("{id}-state"), tone, &state, colored))
+        .child(status(&format!("{id}-state"), tone, &state))
     }))
 }
 

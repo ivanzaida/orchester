@@ -6,6 +6,7 @@
 //! `cargo test -p orchester-workspace --test used_by used_by_`
 
 mod local;
+mod local_mcp;
 mod mcp_servers;
 #[path = "../support/mod.rs"]
 mod support;

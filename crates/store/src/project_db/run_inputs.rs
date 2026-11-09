@@ -5,7 +5,7 @@
 //! ([`ProjectDb::accept_team_inputs`]), so the runner starts it from what was kept, never from a task's definition.
 
 use orchester_core::{
-  id::{OperationId, RunId, TaskId},
+  id::{ConnectionId, OperationId, RunId, TaskId},
   run::{
     bundle::canonical_bytes,
     inputs::{BundleContent, InputsOrigin, LocalBindings, LocalConsent, RunInputs, TeamAcceptance},
@@ -14,14 +14,19 @@ use orchester_core::{
   time::Timestamp,
 };
 use rusqlite::{Connection, OptionalExtension, params};
+use serde::Deserialize;
 
 use super::{ProjectDb, task_identities};
 use crate::{
   RunStoreError, StoreError,
-  rows::{corrupt, decode_json, encode_json, parse},
+  rows::{corrupt, decode_body, decode_document, decode_json, encode_json, parse},
 };
 
-const BINDINGS_SCHEMA: u32 = 1;
+/// Schema 1 also held the references the run's bodies named by the publisher's ids, bound to this computer's
+/// connections, MCP servers and secrets; the team configuration model names none (`docs/design/team-configuration.md`),
+/// so schema 2 does not. A run recorded with schema 1 reads without its connection and secret references; the MCP
+/// servers it bound stay, as [`LocalBindings::local_mcp`], because its profiles choose them.
+const BINDINGS_SCHEMA: u32 = 2;
 const CONSENT_SCHEMA: u32 = 1;
 
 /// Team inputs the server accepted, for the run of team task `task` the runner has not started yet.
@@ -60,9 +65,45 @@ impl Encoded {
     if hash.as_str() != self.sha256 {
       return Err(corrupt("run bundle", "its content does not have its hash"));
     }
-    let bindings: LocalBindings = decode_json("run bindings", BINDINGS_SCHEMA, &self.bindings)?;
+    let bindings = decode_bindings(&self.bindings)?;
     let consent: LocalConsent = decode_json("run consent", CONSENT_SCHEMA, &self.consent)?;
     RunInputs::new(bundle, bindings, consent).map_err(|error| corrupt("run inputs", error))
+  }
+}
+
+/// A reference of schema 1's bindings, as far as a run reads it now: only the local MCP server is kept.
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum OlderReference {
+  Connection {},
+  McpServer { local: ConnectionId },
+  Secret {},
+}
+
+fn decode_bindings(text: &str) -> Result<LocalBindings, StoreError> {
+  const WHAT: &str = "run bindings";
+  match decode_document(WHAT, text)? {
+    (BINDINGS_SCHEMA, body) => decode_body(WHAT, body),
+    (1, mut body) => {
+      let references = body.as_object_mut().and_then(|fields| fields.remove("references"));
+      let older: Vec<OlderReference> = references
+        .map(|found| decode_body(WHAT, found))
+        .transpose()?
+        .unwrap_or_default();
+      let mut bindings: LocalBindings = decode_body(WHAT, body)?;
+      for reference in older {
+        if let OlderReference::McpServer { local } = reference
+          && !bindings.local_mcp.contains(&local)
+        {
+          bindings.local_mcp.push(local);
+        }
+      }
+      Ok(bindings)
+    }
+    (schema, _) => Err(corrupt(
+      WHAT,
+      format!("schema {schema} is not the supported schema {BINDINGS_SCHEMA}"),
+    )),
   }
 }
 

@@ -400,12 +400,6 @@ pub(crate) fn note(id: &str, glyph: Icon, text: &str) -> Row {
 
 /// A status: a dot in `tone` and its `text`, 6 apart.
 pub(crate) fn status(id: &str, tone: Tone, text: &str) -> Row {
-  status_in(id, tone, text, false)
-}
-
-/// [`status`] with its words in the dot's color too, when `colored`: *Missing on this computer* (`SsaIw` in 06c).
-pub(crate) fn status_in(id: &str, tone: Tone, text: &str, colored: bool) -> Row {
-  let words = Text::new(text).variant(HubText::Status.role()).nowrap();
   Row::new()
     .id(id.to_owned())
     .spacing(ExtraSpacing::Snug.role())
@@ -418,7 +412,7 @@ pub(crate) fn status_in(id: &str, tone: Tone, text: &str, colored: bool) -> Row 
         .rounded(ExtraRadius::Full.role())
         .background(tone.color()),
     )
-    .child(if colored { words.color(tone.color()) } else { words })
+    .child(Text::new(text).variant(HubText::Status.role()).nowrap())
 }
 
 /// Quiet words at a row's end, e.g. *3 pipelines* (`UOYXm` in `fYNhS`).

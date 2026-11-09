@@ -85,6 +85,11 @@ fn missing_json(part: &Missing, all: &ProjectReadiness) -> Value {
         fix(Some("pick_profile_connection"), None),
       ),
     },
+    Missing::ConnectionSignIn { cli, connection, .. } => part_of(
+      "connection_sign_in",
+      json!({ "cli": cli, "connection": connection.to_string() }),
+      fix(None, Some("person")),
+    ),
     Missing::McpOff { server } => part_of(
       "mcp_off",
       json!({ "server": server_json(*server, all) }),
@@ -188,6 +193,16 @@ fn undecided_json(why: &Undecided) -> Value {
     Undecided::RunsUnknown(id) => {
       part["why"] = json!("runs_unknown");
       part["resource"] = json!(id.to_string());
+    }
+    Undecided::RunsArchived(id, name) => {
+      part["why"] = json!("runs_archived");
+      part["resource"] = json!(id.to_string());
+      part["name"] = json!(name);
+    }
+    Undecided::ChoosesArchivedLocalMcpServer(id, name) => {
+      part["why"] = json!("chooses_archived_mcp_server");
+      part["server"] = json!(id.to_string());
+      part["name"] = json!(name);
     }
     Undecided::ConnectionGone(connection) => {
       part["why"] = json!("connection_gone");

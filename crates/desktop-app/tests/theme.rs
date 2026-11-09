@@ -438,7 +438,7 @@ fn theme_kit_spacing_radii_and_sizes_follow_the_design() {
   );
   assert_eq!(
     IconSize::ALL.map(IconSize::size),
-    [11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 18.0]
+    [11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 18.0, 20.0]
   );
   assert_eq!((DISABLED_OPACITY, SHORTCUT_OPACITY), (0.5, 0.6));
 }

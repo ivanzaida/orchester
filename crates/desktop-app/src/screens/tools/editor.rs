@@ -36,10 +36,7 @@ use crate::{
   navigation::Navigation,
   project::{ShownProject, own::OwnChanges},
   routes::{ProjectPage, Route, ToolTab},
-  screens::{
-    hub::{self, page_head::More},
-    shared_config::missing,
-  },
+  screens::hub::{self, page_head::More},
   theme::HubSpacing,
   ui::{icon::Icon, inspector::note, message::message_text},
 };
@@ -100,7 +97,7 @@ impl DevtoolsInspectable for Sent {}
 pub(super) enum Ask {
   Nothing,
   Discard,
-  Remove,
+  Archive,
 }
 impl DevtoolsInspectable for Ask {}
 pub struct ToolEditor {
@@ -200,7 +197,6 @@ impl Component for ToolEditor {
     let shared = standing.map(|(team, standing, e)| {
       hub::team::head_line(ctx, "tool-team-state", team, standing, hub::team::draft_on(e.state))
     });
-    let missing = missing_here(ctx, &p, baseline.as_ref(), &title);
     let versions = baseline
       .as_ref()
       .and_then(|e| hub::team::member_versions(ctx, "tool", (&p.project, team.as_ref()), e.id));
@@ -216,8 +212,7 @@ impl Component for ToolEditor {
         more,
         (shared, versions),
       ))
-      .with_children(missing)
-      .with_children(self.remove_question(ctx, &p, baseline.as_ref()));
+      .with_children(self.archive_question(ctx, &p, baseline.as_ref()));
     pane = match (self.discard_question(ctx, &p, baseline.as_ref()), self.asking.get().0) {
       _ if !may_change => pane.with_children(team.as_ref().map(|team| hub::team::line(ctx, "tool-team-line", team))),
       (Some(question), _) => pane.child(question),
@@ -250,20 +245,6 @@ impl Component for ToolEditor {
   }
 }
 
-/// *Missing on this computer* (`04` `w0Evp`): a shared tool that names a secret or an MCP server not bound here.
-fn missing_here(ctx: &mut Ctx, p: &EditorProps, baseline: Option<&ToolEntry>, title: &str) -> Option<Element> {
-  missing::missing_here(
-    ctx,
-    &missing::Page {
-      project: &p.project,
-      prefix: "tool-missing",
-      resources: baseline.iter().map(|entry| entry.id).collect(),
-      name: title,
-      whose: missing::Whose::Resource,
-    },
-  )
-}
-
 /// In a shared project, a version of the tool published here that waits, in the draft bar's place (02b, 02c); after
 /// *Open my draft on vN* the editor reads the saved tool again.
 fn waiting(ctx: &mut Ctx, p: &EditorProps, standing: Option<(&TeamConfiguration, &SharedStanding)>) -> Option<Element> {
@@ -273,15 +254,15 @@ fn waiting(ctx: &mut Ctx, p: &EditorProps, standing: Option<(&TeamConfiguration,
 }
 
 impl ToolEditor {
-  /// The ⋯ menu of a saved tool, whose Remove asks first.
+  /// The ⋯ menu of a saved tool, whose Archive asks first.
   fn more_menu(&self) -> More {
     let (ask, open) = (self.ask.clone(), self.more.clone());
     More {
       open: self.more.clone(),
       anchor: self.anchor.clone(),
-      remove: Arc::new(move || {
+      archive: Arc::new(move || {
         open.set(false);
-        ask.set(Ask::Remove);
+        ask.set(Ask::Archive);
       }),
     }
   }

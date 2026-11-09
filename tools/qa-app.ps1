@@ -51,12 +51,6 @@
 # stand-in cloud names as the account's, with an invite to its project Billing, for Join a team (navigate to
 # join_team). The QA app (--join-team) prints the server's address and its codes to app.log: one joins, any other is
 # wrong; an address where nothing listens (http://127.0.0.1:9) does not answer.
-# -Scenario shared-config-here is Kontur seen by a member, with the team's cached versions and what they name here
-# (Shared configuration · redesign, UC5xk): Sharing › On this computer with every kind of row, the missing bars on Explorer,
-# Report crash and Feature delivery, Reviewer's v5 waiting for Use v5 here, Builder's Runs here use. A click opens the
-# pickers and the Confirm… and secret modals; choosing a connection and confirming stay a person's. shared-config-chosen
-# has Work chosen here; shared-config-no-claude has no Claude Code connection.
-#
 # -Scenario picker-readiness-team and picker-readiness reach New task's Pipeline menu with readiness (`New task · pipeline
 # picker shows readiness`, R2 `P6aAoZ` for the team project, L10 `PMi6Q` for the local one): open New task, fill it, open
 # the Pipeline chip and choose Team delivery (2 things missing here) or Design pass (2 things missing) for the bar's line
@@ -85,6 +79,40 @@
 # runner's words and Try again, no Dismiss, as a Run that met the refusal would); the third with a start that failed for
 # good in an earlier window (the bundle schema one ahead: "Update Orchester…", Try again and Dismiss). Dismiss, or a
 # later window, tells it no more.
+#
+# -Scenario local-hub is Kontur's Agents hub (`Agents · v2` L1-L14, ORC-842): the local project's master-detail with
+# its profiles (Builder and Reviewer choose kontur-docs), its MCP servers (pencil-design has no program on this computer,
+# one is off, one remote) and a filter with *Archived*. Open the Agents page: MCP servers lists them with no version
+# (L2), a server is edited in place with Save and Cancel (L8; a save that fails stays in place, L12). -Scenario
+# local-hub-archive adds a run working on Feature delivery: the panel's ... menu > Archive on Builder or Reviewer
+# lists what names it and the run that will stop (L11), which only a person's press confirms. -Scenario
+# local-hub-archived is Reviewer, postgres-dev and a skill already archived with the runs they stopped: the Archived
+# filter lists them (L13) and an archived one's panel has Restore (L14).
+# -Scenario local-hub-claude is local-hub with Claude Code connections to choose from (Claude 2, Home and Claude · Kontur, each
+# checked at a version of its own), Writer on Claude 2 and Builder, whose connection the project no longer has: Agents >
+# Profiles > Builder lists it under Needs you, its panel asks which of the Claude Code connections runs it (the select lists
+# only those) and the pinned "Use Claude 2 for Builder" publishes the next version on it (L1). The scenario has no page of its
+# own: open the Agents hub on Profiles with the app's `navigate` tool (route agents, filter profiles). In the same panel the
+# Agent CLI, Model, Reasoning effort and MCP servers (Add) are selects in place: a choice makes the profile's draft (the
+# chips and a draft note say so), the pinned bar becomes Publish vN and Discard draft, and a choice that widens what agents may
+# do (a server, another CLI) asks first. "More settings..." opens the profile's editor for what the rows do not draw. Tools,
+# instructions and skills have the frame with Edit, which opens the editor the kind has.
+# -Scenario local-hub-secret adds figma, whose variable FIGMA_API_KEY takes the secret FIGMA_TOKEN with no value: MCP servers >
+# figma, Replace (Set value) types a value in a dialog, Save keeps it in the QA copy's keychain in memory, which accepts
+# (L8). -Scenario local-hub-secret-refused is the same with a QA copy whose secret store refuses every value, so Save after
+# typing a value is refused as L12 draws it, with no person's press: the refusal stands above the form naming FIGMA_TOKEN,
+# the field is marked, nothing is saved. (A change of Arguments or Program widens what agents may do and asks first, which
+# only a person's press confirms; the secret value alone does not.)
+# The create forms of the same hub (L3-L7, ORC-843): in -Scenario local-hub (or local-hub-claude for the profile's CLI and
+# connection choices, local-hub-secret for an MCP server whose secret FIGMA_TOKEN has no value) open the Agents hub with
+# the app's `navigate` tool (route agents, filter profiles, mcp_servers, instructions, skills or tools, view new) or press
+# the head's New (`local-hub-new`) under a kind's filter, or its menu under All (`local-hub-new-<filter>`): L3 `JEkCL`
+# New agent profile, L4 `P7TFFJ` New MCP server (name, program with Choose..., arguments, folder, variables, the value of
+# each secret they take, On), L5 `f8QbK3` New instruction, L6 `CGdgI` New skill, L7 `q5aX9` New tool. Create
+# (`local-hub-new-create`) makes v1 at once, or the server itself, and opens it; Cancel (`local-hub-new-cancel`) makes
+# nothing. The old New pages of a profile (agents/new) and of an MCP server (connections/new?kind=mcp_server) open the
+# same form in a local project; the instructions', skills' and tools' keep theirs (scope, files and CLIs, timeouts and
+# HTTP, which the forms do not take yet).
 #
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes

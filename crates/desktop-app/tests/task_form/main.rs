@@ -78,8 +78,7 @@ fn form_limits_start_with_the_project_defaults_and_name_them_default() {
     .db()
     .save_project_limits(&defaults)
     .expect("the defaults are stored");
-  form.window.projects().feed(form.project).saved();
-  form.window.pass();
+  form.until_tasks_read(|tasks| tasks.limits.default_run_budget().is_some());
   form.new_task();
   assert_eq!(form.text("task-form-limits-value"), "Default");
   form.open("task-form-limits");

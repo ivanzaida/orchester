@@ -153,9 +153,14 @@ fn server(kontur: &mut Kontur, me: &SharedPerson) -> Result<ServerId, SeedError>
 fn share<B: ResourceBody + Clone>(kontur: &mut Kontur, team: &Team) -> Result<(), SeedError> {
   let revision = TaskRevision::try_from(1_u64).map_err(invalid)?;
   for (index, resource) in kontur.db.resources(B::KIND)?.into_iter().enumerate() {
+    let versions = kontur.db.versions::<B>(resource.id())?;
+    // The server has only what was published: a draft of this computer's own stays local.
+    if versions.is_empty() {
+      continue;
+    }
     kontur.db.keep_shared_resource(&resource, revision)?;
     let publisher = if index % 2 == 0 { &team.dana } else { &team.olha };
-    for version in kontur.db.versions::<B>(resource.id())? {
+    for version in versions {
       let cached = cached(
         version.body().clone(),
         version.number(),

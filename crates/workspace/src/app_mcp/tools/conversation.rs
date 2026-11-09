@@ -12,7 +12,6 @@ use orchester_core::{
   question::{AskedQuestions, QuestionState},
   run::Answerer,
 };
-use orchester_store::ProjectDb;
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -64,9 +63,8 @@ pub async fn get_conversation(services: &Services, args: GetConversation) -> Res
   let team = team::read_task(services, &args.project, &args.task).await?;
   let services = services.clone();
   blocking(move || {
-    let open = services.project(&args.project)?;
+    let (open, db) = services.read_project(&args.project)?;
     let (project, root) = (open.project.id(), open.repo_root);
-    let db = ProjectDb::open(&root)?;
     // A team task is the one its server read, and this computer may have recorded nothing of it.
     let (task, title) = match &team {
       Some(read) => (task_of(&db, read.task.id)?, Some(read.task.content.title.clone())),

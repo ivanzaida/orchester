@@ -11,7 +11,7 @@ mod local;
 use std::{
   borrow::Cow,
   sync::{
-    Arc,
+    Arc, Weak,
     atomic::{AtomicBool, AtomicUsize, Ordering},
   },
 };
@@ -159,7 +159,11 @@ struct Counts {
   in_flight: AtomicUsize,
   /// lurq's control of its tools once the server started, and the tools the gate denied through it.
   tools: Mutex<Option<(McpHandle, Vec<&'static str>)>>,
+  /// The panels that say so in the window when the gate refuses a client's input.
+  refusal_listeners: Mutex<Vec<Weak<Listener>>>,
 }
+
+type Listener = Box<dyn Fn() + Send + Sync>;
 
 #[derive(Default)]
 struct Controls {
@@ -274,6 +278,28 @@ impl InputGate {
     }
   }
 
+  /// Calls `heard` each time the gate refuses a client's window input, until the returned guard is dropped: a
+  /// question that locks the window says in place why the client's press did nothing.
+  pub fn on_refusal(&self, heard: impl Fn() + Send + Sync + 'static) -> RefusalListener {
+    let listener = Arc::new(Box::new(heard) as Listener);
+    self.0.refusal_listeners.lock().push(Arc::downgrade(&listener));
+    RefusalListener { _alive: listener }
+  }
+
+  /// A client's window input is refused: the panels listening say so in the window, and the words the client reads.
+  /// The listeners are called with the lock let go.
+  pub fn refuse_input(&self) -> String {
+    let heard: Vec<Arc<Listener>> = {
+      let mut listeners = self.0.refusal_listeners.lock();
+      listeners.retain(|listener| listener.strong_count() > 0);
+      listeners.iter().filter_map(Weak::upgrade).collect()
+    };
+    for listener in heard {
+      listener();
+    }
+    self.refusal()
+  }
+
   /// Marks a secret (the access token, a pairing code) as shown in the window until the returned guard is dropped:
   /// screenshots and the window's text are refused meanwhile. Called on the event loop before it is drawn.
   pub fn show_token(&self) -> TokenShown {
@@ -378,6 +404,12 @@ impl Drop for TokenShown {
   }
 }
 
+/// A panel listening for refused input ([`InputGate::on_refusal`]); dropping it stops the calls.
+pub struct RefusalListener {
+  /// The gate holds only a weak reference, so the call lives as long as this does.
+  _alive: Arc<Listener>,
+}
+
 /// Counts a forwarded input call while it is in flight.
 struct InFlight(InputGate);
 
@@ -445,7 +477,7 @@ impl ServerHandler for GuardedTools {
     self.gate.refresh_consent().await;
     if self.gate.protecting() {
       tracing::info!(tool = %request.name, "window input refused while a person-only control shows");
-      let refusal = serde_json::json!({ "code": "person_only", "message": self.gate.refusal() });
+      let refusal = serde_json::json!({ "code": "person_only", "message": self.gate.refuse_input() });
       return Ok(CallToolResult::error(vec![ContentBlock::text(refusal.to_string())]).into());
     }
     // Only calls that go on to the window count, so refused calls cannot keep a person's change out.

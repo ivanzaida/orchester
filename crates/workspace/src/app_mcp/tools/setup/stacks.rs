@@ -75,13 +75,8 @@ pub(super) async fn list_stacks(
 pub(super) async fn get_stack(services: &Services, args: InStack) -> Result<Value, ToolError> {
   let services = services.clone();
   blocking(move || {
-    let open = services.project(&args.project)?;
-    let id = entry_named(
-      &entries::<Stack, _>(&ProjectDb::open(&open.repo_root)?)?,
-      &args.stack,
-      Missing::Stack,
-    )?
-    .id;
+    let (open, db) = services.read_project(&args.project)?;
+    let id = entry_named(&entries::<Stack, _>(&*db)?, &args.stack, Missing::Stack)?.id;
     Ok(json!({ "stack": stack_json(&open.repo_root, id)? }))
   })
   .await

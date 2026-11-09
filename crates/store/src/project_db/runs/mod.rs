@@ -1,3 +1,4 @@
+mod archived;
 mod children;
 mod columns;
 mod create;

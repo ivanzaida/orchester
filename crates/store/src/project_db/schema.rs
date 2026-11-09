@@ -41,6 +41,7 @@ mod initial;
 mod invocation_permissions;
 mod joining;
 mod list;
+mod local_archive;
 mod local_integration;
 mod mcp;
 mod memory;
@@ -77,6 +78,7 @@ mod qa_slots;
 mod questions;
 mod queue_holds;
 mod recovery;
+mod remove_bindings;
 mod removed_resources;
 mod reported_windows;
 mod request_answers;
@@ -135,5 +137,7 @@ pub(super) const fn named(migration: super::ProjectMigration) -> &'static str {
   match migration {
     super::ProjectMigration::LocalIntegration => local_integration::MIGRATION,
     super::ProjectMigration::EditorDrafts => editor_drafts::MIGRATION,
+    super::ProjectMigration::TeamReviewer => team_reviewer::MIGRATION,
+    super::ProjectMigration::TeamPipelineIds => team_pipeline_ids::MIGRATION,
   }
 }

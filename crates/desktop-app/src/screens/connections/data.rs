@@ -17,7 +17,7 @@ use crate::queries::{Session, project};
 
 /// The project's connections at `repo_root`: their last read in the first frame, read again behind it when a change
 /// invalidated them.
-pub(super) fn load(ctx: &mut Ctx, repo_root: PathBuf) -> QueryHandle<ProjectConnections, Message> {
+pub(in crate::screens) fn load(ctx: &mut Ctx, repo_root: PathBuf) -> QueryHandle<ProjectConnections, Message> {
   let session = Session::of(ctx);
   ctx.query(project::connections(session, repo_root))
 }

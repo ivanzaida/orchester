@@ -18,7 +18,6 @@ use super::{
   fields::{self, Body, Error, Look, Shown, Spec, name_error},
   work::Make,
 };
-use crate::screens::team_hub::model::Kind;
 
 const NAME: Spec = Spec::new("mcp-name", "team_new.mcp.name")
   .sub("team_new.mcp.nameSub")
@@ -150,9 +149,9 @@ impl Fields {
   pub(super) fn body(&self, ctx: &mut Ctx, shown: &Shown<'_>) -> Body {
     let input = self.input();
     let taken: Vec<McpServerName> = shown
-      .listing
-      .shown(Kind::McpServer.filter())
-      .filter_map(|entry| McpServerName::new(&entry.name).ok())
+      .taken
+      .iter()
+      .filter_map(|name| McpServerName::new(name).ok())
       .collect();
     let checked = team_mcp_server(&input, &taken);
     let invalid = checked.as_ref().err().map(|invalid| (**invalid).clone());
@@ -177,16 +176,17 @@ impl Fields {
     }
     Body {
       rows,
-      computer: if program {
+      computer: Some(if program {
         "team_new.computer.mcpProgram"
       } else {
         "team_new.computer.mcpRemote"
-      },
+      }),
       make: checked
         .ok()
         .filter(|_| !self.folder_missing())
         .map(|_| Make::McpServer(Box::new(input))),
       off: fields::off(shown, &name),
+      overlay: None,
     }
   }
 

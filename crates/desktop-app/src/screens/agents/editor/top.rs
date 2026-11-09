@@ -8,32 +8,33 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::resource::{AgentProfile, ResourceKind};
-use orchester_workspace::{agents::data::ProfileEntry, sharing::team::TeamConfiguration, tasks::outside::Outside};
+use orchester_workspace::{
+  agents::data::ProfileEntry, local_archive::Archivable, sharing::team::TeamConfiguration, tasks::outside::Outside,
+};
 
 use super::{
   super::{
-    entries, page_head,
+    page_head,
     questions::{self, Asking},
-    shared::ConnectionHere,
   },
   Ask, Editor, Props, State,
 };
 use crate::{
-  screens::hub::{discard, removal, team},
+  screens::{
+    hub::{discard, team},
+    local_hub::archive,
+  },
   theme::HubSpacing,
-  ui::icon::Icon,
 };
 
 impl Editor {
-  /// `here` is what the head's line says of this computer and `bars` follow the head: what is missing on this
-  /// computer, a version that widens (04, 02d, 06); `connection`, the team's connection as this computer has it, gives
-  /// the head its mark while it is missing here.
+  /// `here` is what the head's line says of this computer and `bars` follow the head: a version that widens (02d).
   pub(super) fn top(
     &self,
     ctx: &mut Ctx,
     props: &Props,
     (state, team): (&State, Option<&TeamConfiguration>),
-    (bars, here, connection): (Vec<Element>, Option<team::Here>, Option<&ConnectionHere>),
+    (bars, here): (Vec<Element>, Option<team::Here>),
   ) -> Column {
     // A member of a shared project removes none of the team's profiles.
     let more = state
@@ -43,9 +44,9 @@ impl Editor {
       .map(|_| page_head::More {
         open: self.more.clone(),
         anchor: self.anchor.clone(),
-        remove: {
+        archive: {
           let ask = self.ask.clone();
-          std::sync::Arc::new(move || ask.set(Ask::Remove))
+          std::sync::Arc::new(move || ask.set(Ask::Archive))
         },
       });
     let shared = team.zip(state.saved.as_ref()).and_then(|(team, entry)| {
@@ -61,10 +62,6 @@ impl Editor {
       .saved
       .as_ref()
       .and_then(|entry| team::member_versions(ctx, "agent", (&props.project, team), entry.id));
-    // The team's connection missing here still shows its CLI's mark, or an API's (`FNW1M` in 04, `qQCQN` in 06c).
-    let glyph = connection
-      .filter(|connection| connection.local.is_none())
-      .map(|connection| connection.cli.map_or(Icon::Cloud, entries::cli_glyph));
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(HubSpacing::Row.role())
@@ -72,27 +69,28 @@ impl Editor {
       .child(page_head::head(
         ctx,
         (&self.fields, &props.listed),
-        (more, glyph),
+        more,
         (shared, versions),
       ))
       .with_children(bars)
-      .with_children(self.remove_question(ctx, props, state))
+      .with_children(self.archive_question(ctx, props, state))
       .child(self.bar_or_question(ctx, props, (state, team)))
       .with_children(self.notices(ctx, props, state))
   }
 
-  fn remove_question(&self, ctx: &mut Ctx, props: &Props, state: &State) -> Option<Element> {
-    let entry = state.saved.as_ref().filter(|_| self.ask.get() == Ask::Remove)?;
+  fn archive_question(&self, ctx: &mut Ctx, props: &Props, state: &State) -> Option<Element> {
+    let entry = state.saved.as_ref().filter(|_| self.ask.get() == Ask::Archive)?;
     let (keep, nav) = (self.ask.clone(), props.nav.clone());
-    Some(removal::question(
+    Some(archive::confirm::question(
       ctx,
-      removal::RemoveProps {
-        project: props.project.clone(),
-        resource: entry.id,
+      archive::confirm::Props {
+        root: props.project.open.repo_root.clone(),
+        project: props.project.open.project.id(),
+        what: Archivable::Resource(entry.id),
         kind: ResourceKind::AgentProfile,
         name: entry.profile.role().as_str().into(),
         on_keep: std::sync::Arc::new(move || keep.set(Ask::Nothing)),
-        on_removed: std::sync::Arc::new(move || nav.removed()),
+        on_archived: std::sync::Arc::new(move || nav.archived()),
       },
     ))
   }

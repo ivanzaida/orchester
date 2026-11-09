@@ -50,8 +50,7 @@ pub struct GetPlan {
 pub async fn get_plan(services: &Services, args: GetPlan) -> Result<Value, ToolError> {
   let services = services.clone();
   blocking(move || {
-    let open = services.project(&args.project)?;
-    let db = ProjectDb::open(&open.repo_root)?;
+    let (open, db) = services.read_project(&args.project)?;
     let run = find_run(&db, &args.run)?;
     let link = conversation(&db, &run, open.project.id())?;
     let view = run_view(&db, run)?;

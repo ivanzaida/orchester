@@ -78,6 +78,17 @@ pub(super) async fn of_run(services: &Services, (named, run): (&str, &str)) -> R
   Ok(is_team.then_some(team))
 }
 
+/// [`of`] for a read that changes nothing: the project's database is opened only to read it, so a project this
+/// version has not opened yet is refused (`project_not_opened_yet`) and left as it is.
+pub(super) async fn of_reading(services: &Services, named: &str) -> Result<Option<Team>, ToolError> {
+  let (services, named) = (services.clone(), named.to_owned());
+  blocking(move || {
+    let (open, db) = services.read_project(&named)?;
+    Ok(db.sharing()?.map(|link| Team { open, link }))
+  })
+  .await
+}
+
 impl Team {
   /// A session of the team server, signed in for the project's link; refused when it cannot be made.
   pub(super) async fn session(&self, services: &Services) -> Result<TeamSession, ToolError> {
@@ -212,7 +223,7 @@ pub(super) fn refuse_fenced(db: &ProjectDb, run: RunId) -> Result<(), ToolError>
 
 /// The refusal to work on a run the team server fenced, as the task page words it.
 fn fenced_refusal() -> ToolError {
-  ToolError::refused("claim_fenced", vec![Message::new("claims.refused.fenced")])
+  ToolError::refused("claim_fenced", vec![crate::messages::run_fenced()])
 }
 
 /// A tool whose subject the team server owns and this version does not read or change there yet: refused for a team
@@ -254,7 +265,7 @@ pub(super) async fn read_task(
   project: &str,
   key: &str,
 ) -> Result<Option<orchester_api::v2::TaskRead>, ToolError> {
-  let Some(team) = of(services, project).await? else {
+  let Some(team) = of_reading(services, project).await? else {
     return Ok(None);
   };
   if names_local_task(&team.open, key).await? {
@@ -269,7 +280,7 @@ pub(super) async fn read_task(
 async fn names_local_task(open: &OpenProject, key: &str) -> Result<bool, ToolError> {
   let (root, key) = (open.repo_root.clone(), key.to_owned());
   blocking(move || {
-    let db = ProjectDb::open(&root)?;
+    let db = ProjectDb::open_read_only(&root)?;
     match find_task(&db, &key) {
       Ok(task) => Ok(!is_team(&db, task.id())?),
       Err(ToolError::NotFound { .. }) => Ok(false),

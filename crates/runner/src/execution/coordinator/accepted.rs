@@ -11,13 +11,13 @@ use std::{collections::BTreeMap, path::Path};
 
 use orchester_core::{
   connection::mcp::McpServerSelection,
-  id::{OperationId, ResourceId, RunId, SecretId},
+  id::{OperationId, ResourceId, RunId},
   integration::base::RunBaseSource,
   resource::{AgentProfile, StepKind, Tool, Version},
   revision::Revision,
   run::{
     BranchName, NewRun, PreflightInput, PreflightProblem, RunStatus,
-    inputs::{BoundReference, InputsOrigin, RunInputs},
+    inputs::{InputsOrigin, RunInputs},
     preflight,
   },
   store::{ConnectionStore, McpServerStore, RunStore, SecretStore},
@@ -163,7 +163,7 @@ fn preflight_inputs(db: &ProjectDb, inputs: &RunInputs) -> Result<Vec<PreflightP
     };
     let named = tools.get(tool).and_then(|version| version.body().secret());
     if let Some(named) = named
-      && !secrets.iter().any(|secret| secret.id() == bound_secret(inputs, named))
+      && !secrets.iter().any(|secret| secret.id() == named)
     {
       problems.push(PreflightProblem::SecretMissing { step: step.key.clone() });
     }
@@ -184,19 +184,6 @@ fn without_team_mcp(inputs: &RunInputs, profile: AgentProfile) -> AgentProfile {
     .collect();
   let local = McpServerSelection::new(local).expect("ids taken from a selection stay distinct");
   profile.with_mcp_servers(local)
-}
-
-/// The secret of this project the bindings bind the publisher's secret `named` to; `named` itself when they bind none.
-fn bound_secret(inputs: &RunInputs, named: SecretId) -> SecretId {
-  inputs
-    .bindings()
-    .references
-    .iter()
-    .find_map(|reference| match reference {
-      BoundReference::Secret { named: bound, local } if *bound == named => Some(*local),
-      _ => None,
-    })
-    .unwrap_or(named)
 }
 
 /// Whether the repository at `root` has commit `commit`.

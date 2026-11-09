@@ -11,13 +11,14 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_workspace::{agents::data::ProjectAgents, app_mcp::setup::NewTeamMcpServer, messages::Message};
+use orchester_workspace::{
+  agents::data::ProjectAgents, app_mcp::setup::NewTeamMcpServer, connections::data::ProjectConnections,
+  messages::Message,
+};
 
 use super::{
-  super::{
-    model::{Kind, Listing},
-    rows::{self, Key, Sub},
-  },
+  super::rows::{self, Key, Sub},
+  mode::Mode,
   work::Make,
 };
 use crate::ui::{
@@ -29,14 +30,18 @@ use crate::ui::{
 
 /// What every form reads when it is drawn.
 pub(super) struct Shown<'a> {
-  pub kind: Kind,
-  pub listing: &'a Listing,
+  /// Where the form is: a team's project, or a local one, which holds every field of the resource itself.
+  pub mode: Mode,
+  /// The names the resources of the kind have already (archived ones too, where they keep their name).
+  pub taken: &'a [String],
   /// Create was pressed: a required field that is empty says so.
   pub tried: bool,
   /// Create is being taken, or has been: the fields are not changed meanwhile.
   pub locked: bool,
   /// What this computer has to offer a profile (its connections); `None` while it is read.
   pub agents: Option<&'a ProjectAgents>,
+  /// What this computer's MCP servers and secrets are, which a local MCP server's form reads; `None` while it is read.
+  pub connections: Option<&'a ProjectConnections>,
   /// The name field, which has the focus when the form opens (`Name` is focused in A7–A12).
   pub first: &'a ElementRef,
   /// The name the team server refused as taken, though the list had no resource of it.
@@ -49,13 +54,15 @@ pub(super) struct Shown<'a> {
 /// What a kind's form gives the panel.
 pub(super) struct Body {
   pub rows: Vec<Row>,
-  /// The key of what each computer fills in afterwards (`team_new.computer.*`).
-  pub computer: &'static str,
+  /// The key of what each computer fills in afterwards (`team_new.computer.*`); a local project has no one else.
+  pub computer: Option<&'static str>,
   /// What Create makes, when every field is valid.
   pub make: Option<Make>,
   /// Why Create stays off before it is pressed, as a key said at the bar's end: the name is the team's already, or
   /// what the fields describe cannot be made here.
   pub off: Option<&'static str>,
+  /// What stands over the page, e.g. the dialog that asks for a secret's value.
+  pub overlay: Option<Element>,
 }
 
 /// One row's words: its keys in `team_new.*` and whether the field is required.
@@ -296,10 +303,10 @@ pub(super) fn taken(shown: &Shown<'_>, name: &str) -> Option<String> {
     return None;
   }
   shown
-    .listing
-    .shown(shown.kind.filter())
-    .find(|entry| entry.name.eq_ignore_ascii_case(name))
-    .map(|entry| entry.name.clone())
+    .taken
+    .iter()
+    .find(|taken| taken.eq_ignore_ascii_case(name))
+    .cloned()
 }
 
 /// Whether the team server refused `name` as taken (A15 `dLqHC`): the list this computer holds did not have it.

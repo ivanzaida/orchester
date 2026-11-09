@@ -11,9 +11,9 @@ use orchester_store::{ArchiveStop, Archived, ProjectDb, StoreError};
 use rusqlite::Connection;
 use support::{at, copied_at_version, name, started_run};
 
-/// The migrations after the one that added the three columns: none yet. A migration appended later raises it, so the
-/// rewound schema stays the one before this migration.
-const LATER_MIGRATIONS: u32 = 0;
+/// The migrations after the one that added the three columns: the bindings' removal and the local archive's. A
+/// migration appended later raises it, so the rewound schema stays the one before this migration.
+const LATER_MIGRATIONS: u32 = 2;
 
 fn latest_version(database: &std::path::Path) -> u32 {
   Connection::open(database)

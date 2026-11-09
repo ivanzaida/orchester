@@ -24,7 +24,7 @@ use crate::{routes::HubFilter, ui::icon::Icon};
 
 /// The kinds the hub lists; pipelines keep their own page.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum Kind {
+pub(in crate::screens) enum Kind {
   Profile,
   McpServer,
   Tool,
@@ -45,9 +45,9 @@ impl Kind {
   }
 
   /// The kind the filter holds; `None` for All, which holds them all.
-  pub(super) const fn of_filter(filter: HubFilter) -> Option<Self> {
+  pub(in crate::screens) const fn of_filter(filter: HubFilter) -> Option<Self> {
     match filter {
-      HubFilter::All => None,
+      HubFilter::All | HubFilter::Archived => None,
       HubFilter::Profiles => Some(Self::Profile),
       HubFilter::McpServers => Some(Self::McpServer),
       HubFilter::Instructions => Some(Self::Instruction),
@@ -56,7 +56,7 @@ impl Kind {
     }
   }
 
-  pub(super) const fn filter(self) -> HubFilter {
+  pub(in crate::screens) const fn filter(self) -> HubFilter {
     match self {
       Self::Profile => HubFilter::Profiles,
       Self::McpServer => HubFilter::McpServers,
@@ -66,7 +66,7 @@ impl Kind {
     }
   }
 
-  pub(super) const fn core(self) -> ResourceKind {
+  pub(in crate::screens) const fn core(self) -> ResourceKind {
     match self {
       Self::Profile => ResourceKind::AgentProfile,
       Self::McpServer => ResourceKind::McpServer,
@@ -77,7 +77,7 @@ impl Kind {
   }
 
   /// The kind's name in element ids.
-  pub(super) const fn name(self) -> &'static str {
+  pub(in crate::screens) const fn name(self) -> &'static str {
     match self {
       Self::Profile => "profile",
       Self::McpServer => "mcp",
@@ -87,7 +87,7 @@ impl Kind {
     }
   }
 
-  pub(super) const fn tag_key(self) -> &'static str {
+  pub(in crate::screens) const fn tag_key(self) -> &'static str {
     match self {
       Self::Profile => "team_hub.kind.tag.profile",
       Self::McpServer => "team_hub.kind.tag.mcp",
@@ -97,7 +97,7 @@ impl Kind {
     }
   }
 
-  pub(super) const fn where_key(self) -> &'static str {
+  pub(in crate::screens) const fn where_key(self) -> &'static str {
     match self {
       Self::Profile => "team_hub.kind.where.profile",
       Self::McpServer => "team_hub.kind.where.mcp",
@@ -109,13 +109,13 @@ impl Kind {
 
   /// Whether the kind has something to fill in on a computer, so a row says what it needs (profiles, MCP servers and
   /// tools); instructions and skills are always ready here.
-  pub(super) const fn fills_in(self) -> bool {
+  pub(in crate::screens) const fn fills_in(self) -> bool {
     matches!(self, Self::Profile | Self::McpServer | Self::Tool)
   }
 }
 
 /// What a form's tag says (`Tag` in `Item · pencil-design` `U9RFS`, `Item · sentry-issues`).
-pub(super) const fn form_key(form: Form) -> &'static str {
+pub(in crate::screens) const fn form_key(form: Form) -> &'static str {
   match form {
     Form::McpProgram => "team_hub.form.program",
     Form::McpRemote => "team_hub.form.remote",

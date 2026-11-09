@@ -161,7 +161,11 @@ async fn live_updates_an_admins_own_pipeline_shared_for_the_team_becomes_a_team_
   );
   assert_eq!(offered(&db), [copy]);
   let kept = db.resource(local).expect("read").expect("kept");
-  assert_eq!(kept.slug().as_str(), "delivery-local");
+  assert_eq!(
+    kept.slug().as_str(),
+    "delivery",
+    "the local one keeps its slug: slugs are not unique across the two"
+  );
   assert_eq!(
     db.resource(copy).expect("read").expect("the copy").slug().as_str(),
     "delivery"

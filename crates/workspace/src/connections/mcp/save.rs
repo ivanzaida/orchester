@@ -8,9 +8,10 @@ use std::{path::Path, sync::Arc};
 
 use orchester_core::{
   connection::mcp::{McpServer, McpServerError, McpTransport, StdioServer},
-  id::{ConnectionId, ResourceId},
+  id::{ConnectionId, ResourceId, SecretId},
   resource::{AgentProfile, ModelId, ResourceKind},
-  store::{McpServerStore, ResourceStore},
+  secret::{self, SecretError, SecretName, SecretValue, SecretVault, VaultError},
+  store::{McpServerStore, ResourceStore, SecretStore},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -26,7 +27,7 @@ use crate::{
 #[derive(Debug, Error)]
 pub enum McpSaveError {
   #[error(transparent)]
-  Store(#[from] StoreError),
+  Store(StoreError),
   #[error(transparent)]
   Server(#[from] McpServerError),
   /// The program cannot be stored as a fixed file outside the repository.
@@ -39,21 +40,103 @@ pub enum McpSaveError {
   /// The server changed since the save was asked for, so it widens what was not allowed: these reasons.
   #[error("the MCP server changed meanwhile")]
   Changed(Vec<Message>),
+  /// The secret store did not keep the new value of a secret the server's variables take; the server is as it was.
+  #[error("the secret store did not keep the value of {secret}: {source}")]
+  SecretStore { secret: SecretName, source: VaultError },
+  /// A value was to replace a secret the project does not have, or has archived.
+  #[error("the secret {0} is gone")]
+  SecretGone(SecretId),
+  /// A value was given for a secret the server's variables and authorization do not take.
+  #[error("the server does not take the secret {0}")]
+  SecretNotTaken(SecretId),
+  /// The save failed for `cause` after the server was stored, and putting it back as it was failed too: it keeps the
+  /// settings of the save.
+  #[error("{cause}; and the server could not be put back as it was: {restore}")]
+  NotRestored {
+    cause: Box<McpSaveError>,
+    restore: StoreError,
+  },
+  /// A create failed for `cause` after the server was stored, and removing it again failed too: the new server stays.
+  #[error("{cause}; and the new server could not be removed again: {removal}")]
+  NotRemoved {
+    cause: Box<McpSaveError>,
+    removal: StoreError,
+  },
+}
+
+/// A store failure is logged where it arises, once, whichever way the save then says it; a name that is taken is the
+/// person's to fix and is not.
+impl From<StoreError> for McpSaveError {
+  fn from(error: StoreError) -> Self {
+    if !matches!(error, StoreError::DuplicateConnectionName(_)) {
+      tracing::error!(%error, "cannot store the MCP server");
+    }
+    Self::Store(error)
+  }
 }
 
 impl McpSaveError {
   pub fn message(&self) -> Message {
     match self {
       Self::Store(StoreError::DuplicateConnectionName(_)) => Message::new(NAME_TAKEN),
-      Self::Store(error) => {
-        tracing::error!(%error, "cannot store the MCP server");
-        messages::store_error(error)
-      }
+      Self::Store(error) => messages::store_error(error),
       Self::Server(McpServerError::EnvironmentOnHttp) => Message::new("connections.mcp.errors.variables"),
       Self::Program(problem) => program_problem_message(problem),
       Self::InUse(roles) => Message::new("connections.mcp.errors.inUse").with("profiles", roles.join(", ")),
       Self::Changed(_) => Message::new("connections.mcp.errors.changedMeanwhile"),
+      Self::SecretStore { secret, source } => secret_store_message(secret, source),
+      Self::SecretGone(_) => Message::new("errors.secretGone"),
+      Self::SecretNotTaken(_) => Message::new("connections.mcp.errors.secretNotTaken"),
+      Self::NotRestored { cause, .. } => match cause.field() {
+        RefusedField::Secret(secret) => {
+          Message::new("connections.mcp.errors.notRestored").with("secret", secret.to_string())
+        }
+        _ => Message::new("connections.mcp.errors.notRestoredOther"),
+      },
+      Self::NotRemoved { cause, .. } => match cause.field() {
+        RefusedField::Secret(secret) => {
+          Message::new("connections.mcp.errors.notRemoved").with("secret", secret.to_string())
+        }
+        _ => Message::new("connections.mcp.errors.notRemovedOther"),
+      },
     }
+  }
+}
+
+/// The field of a save that a refusal is about, which the panel marks.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum RefusedField {
+  Program,
+  /// The value of this secret.
+  Secret(SecretName),
+  /// No one field: the save as a whole.
+  None,
+}
+
+impl McpSaveError {
+  pub fn field(&self) -> RefusedField {
+    match self {
+      Self::Program(_) => RefusedField::Program,
+      Self::SecretStore { secret, .. } => RefusedField::Secret(secret.clone()),
+      Self::NotRestored { cause, .. } | Self::NotRemoved { cause, .. } => cause.field(),
+      _ => RefusedField::None,
+    }
+  }
+}
+
+/// Why the secret store did not keep the value of `secret`, in words that fit after *Couldn't save …:*. The value is
+/// never in them.
+fn secret_store_message(secret: &SecretName, source: &VaultError) -> Message {
+  let key = match source {
+    VaultError::AccessDenied(_) => "connections.mcp.errors.secretStoreRefused",
+    VaultError::TooLong { .. } => "connections.mcp.errors.secretTooLong",
+    VaultError::Unsupported => "connections.mcp.errors.secretStoreUnsupported",
+    VaultError::Failed(_) | VaultError::NotFound => "connections.mcp.errors.secretStoreFailed",
+  };
+  let message = Message::new(key).with("secret", secret.to_string());
+  match source {
+    VaultError::TooLong { max } => message.with("max", max.to_string()),
+    _ => message,
   }
 }
 
@@ -112,6 +195,117 @@ pub fn store_in(
   server.set_exempt_tools(draft.exempt_tools);
   db.save_mcp_server(&server)?;
   Ok(server.id())
+}
+
+/// [`store_in`] for the server `id`, and the new `values` of the secrets its variables take, in `vault`, as one save:
+/// when the secret store does not keep a value the server is put back as it was (what an earlier value of `values`
+/// replaced stays replaced: the store cannot say what it held). A value for a secret the server does not take, or the
+/// project does not have, is refused before anything is stored. When the server cannot be put back either, the error
+/// says both ([`McpSaveError::NotRestored`]).
+pub fn store_with_values(
+  repo_root: &Path,
+  vault: &dyn SecretVault,
+  (id, draft, allowed): (ConnectionId, McpServerDraft, &Allowed),
+  values: &[(SecretId, SecretValue)],
+) -> Result<(), McpSaveError> {
+  let mut db = ProjectDb::open(repo_root)?;
+  let before = db.mcp_server(id)?.ok_or(StoreError::ConnectionNotFound(id))?;
+  check_values_taken(&mut db, &draft, values)?;
+  store_in(repo_root, Some(id), draft, allowed)?;
+  match replace_values(&mut db, vault, values) {
+    Ok(()) => Ok(()),
+    Err(cause) => Err(match db.save_mcp_server(&before) {
+      Ok(()) => cause,
+      Err(restore) => not_restored(cause, restore),
+    }),
+  }
+}
+
+/// [`store_with_values`] for a server that is new: `draft` is stored as a server that is `enabled` or not, and the
+/// `values` of the secrets its variables take go to `vault`. When the secret store does not keep a value the new
+/// server is removed again, so a refused create leaves no server behind (the values of `values` stored before the
+/// refused one stay stored: the store cannot say what it held); when the server cannot be removed either, it stays
+/// and the error says both ([`McpSaveError::NotRemoved`]).
+pub fn create_with_values(
+  repo_root: &Path,
+  vault: &dyn SecretVault,
+  (draft, allowed): (McpServerDraft, &Allowed),
+  enabled: bool,
+  values: &[(SecretId, SecretValue)],
+) -> Result<ConnectionId, McpSaveError> {
+  let mut db = ProjectDb::open(repo_root)?;
+  check_values_taken(&mut db, &draft, values)?;
+  let id = store_in(repo_root, None, draft, allowed)?;
+  let switched = if enabled {
+    Ok(())
+  } else {
+    set_enabled_in(repo_root, id, false).map_err(McpSaveError::from)
+  };
+  let stored = switched.and_then(|()| replace_values(&mut db, vault, values));
+  match stored {
+    Ok(()) => Ok(id),
+    Err(cause) => Err(
+      match db.delete_unused_mcp_server(id, &move |db| profiles_using(db, id)) {
+        Ok(_) => cause,
+        Err(removal) => not_removed(cause, removal),
+      },
+    ),
+  }
+}
+
+/// Refuses a value for a secret the `draft` does not take, or the project does not have.
+fn check_values_taken(
+  db: &mut ProjectDb,
+  draft: &McpServerDraft,
+  values: &[(SecretId, SecretValue)],
+) -> Result<(), McpSaveError> {
+  let taken = draft.secrets();
+  for (secret_id, _) in values {
+    if !taken.contains(secret_id) {
+      return Err(match db.secret(*secret_id)? {
+        Some(_) => McpSaveError::SecretNotTaken(*secret_id),
+        None => McpSaveError::SecretGone(*secret_id),
+      });
+    }
+  }
+  Ok(())
+}
+
+/// Gives each of `values` to `vault` as its secret's value, and says which secret the store refused.
+fn replace_values(
+  db: &mut ProjectDb,
+  vault: &dyn SecretVault,
+  values: &[(SecretId, SecretValue)],
+) -> Result<(), McpSaveError> {
+  let project = db.project().id();
+  for (secret_id, value) in values {
+    let name = db.secret(*secret_id)?.map(|found| found.name().clone());
+    if let Err(failure) = secret::replace_value(db, vault, project, *secret_id, value, Timestamp::now()) {
+      return Err(match (failure, name) {
+        (SecretError::Vault(source), Some(secret)) => McpSaveError::SecretStore { secret, source },
+        (SecretError::Store(error) | SecretError::ValueLeftBehind { source: error, .. }, _) => error.into(),
+        (SecretError::RotationNotRecorded { source, .. }, _) => source.into(),
+        _ => McpSaveError::SecretGone(*secret_id),
+      });
+    }
+  }
+  Ok(())
+}
+
+fn not_restored(cause: McpSaveError, restore: StoreError) -> McpSaveError {
+  tracing::error!(%restore, %cause, "cannot put the MCP server back as it was");
+  McpSaveError::NotRestored {
+    cause: Box::new(cause),
+    restore,
+  }
+}
+
+fn not_removed(cause: McpSaveError, removal: StoreError) -> McpSaveError {
+  tracing::error!(%removal, %cause, "cannot remove the new MCP server again");
+  McpSaveError::NotRemoved {
+    cause: Box::new(cause),
+    removal,
+  }
 }
 
 /// `transport` with its program fixed, unless it is the program `stored` already has.

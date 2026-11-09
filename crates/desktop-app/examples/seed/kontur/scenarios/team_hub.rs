@@ -37,7 +37,7 @@ use orchester_core::{
   },
   secret::SecretName,
   sharing::{SharedPerson, TaskRevision},
-  store::{BlobStore, ResourceStore},
+  store::BlobStore,
 };
 use orchester_store::{CachedVersion, ConnectionPick};
 use serde_json::{Value, json};
@@ -354,12 +354,7 @@ fn team_profile(kontur: &mut Kontur, name: &str, uses: &Uses<'_>, secrets: &[&st
   .map_err(invalid)?
   .with_secrets(secrets)
   .map_err(invalid)?;
-  let resource = kontur.db.create_resource(
-    Slug::new(&format!("team-{}", name.to_lowercase())).map_err(invalid)?,
-    Name::new(name).map_err(invalid)?,
-    &AgentProfile::from_team(&team, ConnectionId::generate()),
-    kontur.ago(20 * 24 * 60),
-  )?;
+  let resource = server_resource::<AgentProfile>(kontur, &format!("team-{}", name.to_lowercase()), name)?;
   let local = AgentProfile::from_team(&team, AgentProfile::unresolved_connection(resource.id()));
   let server_body = serde_json::to_value(&team).map_err(invalid)?;
   cache(kontur, &resource, server_body, local)
@@ -371,15 +366,26 @@ pub(super) fn team_resource<B: ResourceBody + Clone>(
   name: &str,
   body: &B,
 ) -> Result<ResourceId, SeedError> {
-  let resource = kontur.db.create_resource(
-    Slug::new(&name.to_lowercase().replace(' ', "-")).map_err(invalid)?,
-    Name::new(name).map_err(invalid)?,
-    body,
-    kontur.ago(20 * 24 * 60),
-  )?;
+  let resource = server_resource::<B>(kontur, &name.to_lowercase().replace(' ', "-"), name)?;
   let server_body = serde_json::to_value(body).map_err(invalid)?;
   cache(kontur, &resource, server_body, body.clone())?;
   Ok(resource.id())
+}
+
+/// A resource of `B`'s kind as a computer that syncs the team's configuration first has it: with the server's id and no
+/// draft, which a resource made here has until it is published. `cache` then marks it the team's.
+fn server_resource<B: ResourceBody>(
+  kontur: &Kontur,
+  slug: &str,
+  name: &str,
+) -> Result<orchester_core::resource::Resource, SeedError> {
+  Ok(orchester_core::resource::Resource::new(
+    ResourceId::generate(),
+    B::KIND,
+    Slug::new(slug).map_err(invalid)?,
+    Name::new(name).map_err(invalid)?,
+    kontur.ago(20 * 24 * 60),
+  ))
 }
 
 /// Marks `resource` the team's and caches its v1 as the server confirmed it, published by olha.
@@ -423,12 +429,7 @@ fn remote(name: &str, secret: Option<&str>) -> Value {
 /// The team's MCP server `name` at v1, as the server confirmed it, published by olha.
 fn team_server(kontur: &mut Kontur, name: &str, body: Value) -> Result<ResourceId, SeedError> {
   let server: TeamMcpServer = serde_json::from_value(body.clone()).map_err(invalid)?;
-  let resource = kontur.db.create_resource(
-    Slug::new(name).map_err(invalid)?,
-    Name::new(name).map_err(invalid)?,
-    &server,
-    kontur.ago(20 * 24 * 60),
-  )?;
+  let resource = server_resource::<TeamMcpServer>(kontur, name, name)?;
   cache(kontur, &resource, body, server)?;
   Ok(resource.id())
 }

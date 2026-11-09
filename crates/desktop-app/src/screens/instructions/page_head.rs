@@ -1,5 +1,5 @@
 //! The top of an instruction's page (`02b Instruction` `Sn37u`): the crumb back to Instructions, the page head with the
-//! rule's name, scope and owner and the … menu with Remove, and the draft bar — what the rule is now (*Draft written
+//! rule's name, scope and owner and the … menu with Archive, and the draft bar — what the rule is now (*Draft written
 //! by automation · Published v3* when automation saved it), what publishing does, Discard draft and Publish.
 use std::sync::Arc;
 
@@ -52,11 +52,11 @@ pub fn crumb(ctx: &Ctx, selection: &Selection, new: bool) -> Element {
     .into()
 }
 
-/// The … menu under the head: Remove.
+/// The … menu under the head: Archive.
 pub struct More {
   pub open: Signal<bool>,
   pub anchor: ElementRef,
-  pub remove: Arc<dyn Fn() + Send + Sync>,
+  pub archive: Arc<dyn Fn() + Send + Sync>,
 }
 
 /// The page head; `sub_id` names the line under the title, which on a new rule says whether it is saved yet. In a
@@ -69,10 +69,12 @@ pub fn head(
   (shared, versions): (Option<Row>, Option<Element>),
 ) -> Element {
   let menu = more.map(|more| {
-    let remove = more.remove.clone();
-    let item = MenuItem::new("instruction-remove", ctx.t("hub.remove.action"), move || remove())
-      .icon(Icon::Trash2)
-      .render(ctx, &more.open);
+    let archive = more.archive.clone();
+    let item = MenuItem::new("instruction-archive", ctx.t("local_hub.archive.action"), move || {
+      archive()
+    })
+    .icon(Icon::Trash2)
+    .render(ctx, &more.open);
     let open = more.open.clone();
     let button = IconButton::new("instruction-more", Icon::Ellipsis, ctx.t("hub.more"))
       .small()

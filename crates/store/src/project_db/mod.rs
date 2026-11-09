@@ -37,6 +37,7 @@ mod invocation_providers;
 mod invocation_records;
 mod joining;
 mod limits;
+mod local_archive;
 mod local_integration;
 mod mcp_servers;
 mod memory;
@@ -80,7 +81,6 @@ mod questions;
 mod queue_holds;
 mod read_only;
 mod rebases;
-mod reference_bindings;
 mod removal_records;
 mod removals;
 mod repository;
@@ -178,7 +178,6 @@ pub use self::{
   },
   question_records::QuestionRecord,
   read_only::ReadOnlyProjectDb,
-  reference_bindings::{Bound, BoundBy, BoundReference, ReferenceBinding},
   removal_records::RemovalRecord,
   removals::DraftChange,
   resolutions::ResolutionStart,
@@ -193,7 +192,7 @@ pub use self::{
   shared_publishes::{PublishState, WaitingPublish},
   shared_standing::{ConfirmedVersion, SharedStanding, WaitingVersion},
   shared_tasks::{CachedClaim, CachedRunStatus, CachedTask, SharedPerson, SharedTaskInfo},
-  shared_versions::{CachedVersion, NamingVersion, ReferenceTarget, ResourceSharing, VersionReference},
+  shared_versions::{CachedVersion, ReferenceTarget, ResourceSharing},
   sharing::SharingLink,
   step_records::StepRecord,
   task_deletion::TaskDeletionFacts,
@@ -298,6 +297,19 @@ impl ProjectDb {
     Ok(())
   }
 
+  /// The schema version right before `migration`, wherever the list placed it: a test rewinds to it with
+  /// [`ProjectDb::create_at_version`] and then lets the migrations from `migration` on run over its rows, however many
+  /// are appended or inserted after it.
+  #[cfg(feature = "test-support")]
+  pub fn version_before(migration: ProjectMigration) -> u32 {
+    let sql = schema::named(migration);
+    let position = schema::MIGRATIONS
+      .iter()
+      .position(|listed| *listed == sql)
+      .expect("a named migration is in the list");
+    u32::try_from(position).expect("fewer than 2^32 migrations")
+  }
+
   /// Replaces the timeout with a fixture's lock-wait observer for deterministic concurrency tests.
   #[cfg(feature = "test-support")]
   pub fn set_busy_handler_for_test(&self, callback: fn(i32) -> bool) -> Result<(), StoreError> {
@@ -334,4 +346,8 @@ pub enum ProjectMigration {
   LocalIntegration,
   /// Retained content that also keeps editor drafts.
   EditorDrafts,
+  /// The rebuild of `resources` for the team reviewer's kind.
+  TeamReviewer,
+  /// The team tasks' pipeline slug turned into the pipeline's id.
+  TeamPipelineIds,
 }

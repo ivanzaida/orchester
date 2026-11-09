@@ -1,6 +1,6 @@
-//! Migration 150, team references: a database before it (a cached version naming a connection, a secret and a shared
-//! tool by ids of the publisher's computer) opens with the connection and the secret kept as they were, and the tool
-//! read back as a team resource of kind tool.
+//! Migration 158, team references: a database before it (a cached version naming a shared tool by its id) opens with
+//! the tool read back as a team resource of kind tool. The references that named a connection and a secret by ids of
+//! the publisher's computer are dropped by the migration that removed the bindings (`remove_bindings_migration`).
 //! `cargo test -p orchester-store --test team_references_migration team_references_migration`.
 
 mod support;
@@ -9,21 +9,21 @@ use std::collections::BTreeSet;
 
 use orchester_core::{
   blob::ContentHash,
-  id::{ConnectionId, ResourceId, SecretId, UserId},
+  id::{ResourceId, UserId},
   resource::{
     AgentTargets, InjectionEvent, Instruction, InstructionScope, PromptText, ResourceKind, Slug, VersionNumber,
   },
   sharing::{SharedPerson, TaskRevision},
   store::ResourceStore,
 };
-use orchester_store::{CachedVersion, ProjectDb, ReferenceTarget, ResourceSharing, VersionReference};
+use orchester_store::{CachedVersion, ProjectDb, ReferenceTarget, ResourceSharing};
 use rusqlite::Connection;
 use serde_json::json;
 use support::{at, copied_at_version, name, started_run};
 
 /// The schema before the references widened: `shared_version_references` allowed only a connection, an MCP server, a
 /// secret or a tool. Migrations are append-only, so a later one still applies on open.
-const BEFORE_TEAM_REFERENCES: u32 = 149;
+const BEFORE_TEAM_REFERENCES: u32 = 157;
 
 fn instruction() -> Instruction {
   Instruction::new(
@@ -36,7 +36,7 @@ fn instruction() -> Instruction {
 }
 
 #[test]
-fn team_references_migration_reads_a_shared_tool_as_a_team_tool_and_keeps_the_other_references() {
+fn team_references_migration_reads_a_shared_tool_as_a_team_tool() {
   let (repo, mut db, _run, _execution) = started_run();
   let id = db
     .create_resource(Slug::new("rules").expect("slug"), name("Rules"), &instruction(), at(10))
@@ -47,22 +47,7 @@ fn team_references_migration_reads_a_shared_tool_as_a_team_tool_and_keeps_the_ot
     Some(ResourceSharing::Shared(TaskRevision::try_from(1).expect("revision"))),
   )
   .expect("shared");
-  let connection = ConnectionId::generate();
-  let secret = SecretId::generate();
   let tool = ResourceId::generate();
-  let reference = |target, name: &str, role: Option<&str>| VersionReference {
-    target,
-    name: name.to_owned(),
-    role: role.map(str::to_owned),
-  };
-  let before = vec![
-    reference(
-      ReferenceTarget::Connection(connection),
-      "Claude",
-      Some("claude_code_cli"),
-    ),
-    reference(ReferenceTarget::Secret(secret), "GitHub token", None),
-  ];
   let version = CachedVersion {
     number: VersionNumber::FIRST,
     published_at: at(20),
@@ -72,7 +57,7 @@ fn team_references_migration_reads_a_shared_tool_as_a_team_tool_and_keeps_the_ot
     },
     server_body: json!({ "schema": 1 }),
     hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
-    references: before.clone(),
+    references: Vec::new(),
     local_body: instruction(),
     waits_here: false,
   };
@@ -96,17 +81,12 @@ fn team_references_migration_reads_a_shared_tool_as_a_team_tool_and_keeps_the_ot
     .cached_version::<Instruction>(id, VersionNumber::FIRST)
     .expect("read")
     .expect("the version is kept");
-  let mut expected = before;
-  expected.push(reference(
-    ReferenceTarget::TeamResource {
-      kind: ResourceKind::Tool,
-      id: tool,
-    },
-    "Deploy",
-    None,
-  ));
   assert_eq!(
-    read.references, expected,
-    "the tool is a team tool, the others as they were"
+    read.references,
+    [ReferenceTarget::TeamResource {
+      kind: ResourceKind::Tool,
+      id: tool
+    }],
+    "the tool is a team tool"
   );
 }

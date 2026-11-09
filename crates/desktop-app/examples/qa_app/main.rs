@@ -72,6 +72,27 @@ impl Arguments {
   }
 }
 
+/// The QA copy's secret store, in memory: it keeps what it is given, or refuses every value when a scenario asks.
+fn keychain(refusing: bool) -> orchester_workspace::secrets::Vault {
+  if refusing {
+    signed_in::refusing_keychain()
+  } else {
+    signed_in::keychain()
+  }
+}
+
+/// What the QA copy tells whoever started it.
+fn say(cloud: &AccountCloud, (sign_in, settings): (bool, bool), team_server: Option<&TeamServer>) {
+  println!(
+    "cloud {} as {}\nsigned in {}\nsettings fixtures {}\nteam {}",
+    cloud.url(),
+    signed_in::account_cloud::EMAIL,
+    sign_in,
+    settings,
+    team_server.map_or_else(|| "none".to_owned(), TeamServer::url),
+  );
+}
+
 fn main() -> Result<(), Box<dyn Error>> {
   let log = app_log::install();
   let Arguments {
@@ -87,19 +108,20 @@ fn main() -> Result<(), Box<dyn Error>> {
   // A team scenario joins with a code, which needs no sign-in: its server is this computer's.
   let team_state = team::State::beside(&location.database)?;
   let runtime = Runtime::new()?;
+  // What the scenario asks ([`qa_app_asks`]): `start_qa_app` has no way to pass `--signed-in`.
+  let asked = |file: &str| location.database.with_file_name(file).exists();
+  let keychain = keychain(asked(qa_app_asks::SECRET_STORE_REFUSES));
   let launch = Launch::begin_with_vault(
     &location.database,
     app_paths::runner_path()?,
     runtime.handle(),
-    (log, signed_in::keychain()),
+    (log, keychain),
   );
   // Kept to the end of `main`.
   let _reports = as_qa_copy(&launch, &location.database);
   let cloud = AccountCloud::start();
   // Kept to the end of `main`: the team server answers while the window is open.
   let _team = join_team.then(|| team(&cloud));
-  // What the scenario asks ([`qa_app_asks`]): `start_qa_app` has no way to pass `--signed-in`.
-  let asked = |file: &str| location.database.with_file_name(file).exists();
   let sign_in = sign_in || asked(qa_app_asks::SIGN_IN);
   // Kept to the end of `main`, as the other team server is.
   let _joined = match launch.services() {
@@ -139,14 +161,7 @@ fn main() -> Result<(), Box<dyn Error>> {
   let clones = (team_state == Some(team::State::Clones))
     .then(|| team_clone::StandIn::new(&location.database))
     .transpose()?;
-  println!(
-    "cloud {} as {}\nsigned in {}\nsettings fixtures {}\nteam {}",
-    cloud.url(),
-    signed_in::account_cloud::EMAIL,
-    sign_in,
-    shown.is_some(),
-    team_server.as_ref().map_or_else(|| "none".to_owned(), TeamServer::url),
-  );
+  say(&cloud, (sign_in, shown.is_some()), team_server.as_ref());
   match (team_state.filter(|state| state.drives()), &team_server) {
     (Some(state), Some(server)) => team_window::open(&runtime, &launch, position, (state, server, clones.as_ref()))?,
     _ => window::open_showing(&runtime, &launch, position, shown),

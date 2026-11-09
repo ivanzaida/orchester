@@ -1,20 +1,15 @@
-//! The groups of Connections (`Agent providers` `hXvgh`, `GitHub` `z6Ngb`, `MCP servers` `Jn0wB` in `05`): a row per
-//! connection (`Claude Code · Work` `InVOF`: its 28 tile, its name over what it runs and who uses it, its status, and a
-//! chevron; an MCP server's switch in place of its status), each opening the connection's page; Add provider and Add
-//! MCP server at their groups' heads; and a group with nothing yet says so in a quiet row (`hJSDK`). Adding a GitHub
-//! connection is not built yet: its empty row says why.
-
-use std::sync::Arc;
+//! The groups of Connections (`Agent providers` `hXvgh`, `GitHub` `z6Ngb` in `05`): a row per connection
+//! (`Claude Code · Work` `InVOF`: its 28 tile, its name over what it runs and who uses it, its status, and a chevron),
+//! each opening the connection's page; Add provider at its group's head; and a group with nothing yet says so in a
+//! quiet row (`hJSDK`). MCP servers are not here: they live in the Agents hub. Adding a GitHub connection is not
+//! built yet: its empty row says why.
 
 use lurq::{
   app::{ctx::Ctx, theme::PaletteColor},
   components::Column,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::{
-  connection::{GitHubState, mcp::McpTransport},
-  id::ConnectionId,
-};
+use orchester_core::{connection::GitHubState, id::ConnectionId};
 use orchester_workspace::connections::data::ProjectConnections;
 
 use crate::{
@@ -24,9 +19,8 @@ use crate::{
   screens::{
     connections::{
       data::{Entry, github_state},
-      inspector::{Asks, Confirm, asked, mcp_switch, status_line},
-      words::{GITHUB_GLYPH, MCP_GLYPH, agent_glyph, agent_line, connection_status, github_status, program_name},
-      work::Work,
+      inspector::status_line,
+      words::{GITHUB_GLYPH, agent_glyph, agent_line, connection_status, github_status},
     },
     project_settings::kit::{EmptyRow, Glyph, Group, SettingRow, tile},
   },
@@ -39,19 +33,12 @@ use crate::{
   },
 };
 
-/// What a server's switch and question do, for the server they are about.
-pub(super) type ListAsks = Arc<dyn Fn(ConnectionId) -> Asks + Send + Sync>;
-
-/// The server whose work is running and the server a question is asked about, if any.
-pub(super) type ServerStates = (Option<(ConnectionId, Work)>, Option<(ConnectionId, Confirm)>);
-
-/// The three groups, a question asked about an MCP server under its group.
+/// The groups: agent providers, decision connections and GitHub.
 pub(super) fn groups(
   ctx: &mut Ctx,
   project: &ShownProject,
   listed: &ProjectConnections,
-  (accounts, asks): (&Accounts, &ListAsks),
-  (running, asking): ServerStates,
+  accounts: &Accounts,
 ) -> Element {
   let navigation = Navigation::of(ctx);
   let id = project.open.project.id();
@@ -65,12 +52,6 @@ pub(super) fn groups(
   let name = project.open.project.name().as_str();
   let agents = agents_group(ctx, listed, accounts, (&open, add(NewConnection::AgentProvider)), name);
   let github = github_group(ctx, listed, &open);
-  let mcp = mcp_group(
-    ctx,
-    listed,
-    (asks, &open, add(NewConnection::McpServer)),
-    (running, asking),
-  );
   Column::new()
     .id("connections-list")
     .width(Dimension::Pct(100.0))
@@ -78,7 +59,6 @@ pub(super) fn groups(
     .child(agents)
     .child(super::super::decision::listed(ctx, project, &listed.decisions))
     .child(github)
-    .child(mcp)
     .into()
 }
 
@@ -223,77 +203,6 @@ fn github_group(ctx: &mut Ctx, listed: &ProjectConnections, open: &impl Fn(Conne
     })
     .collect();
   group.rows(rows).into()
-}
-
-fn mcp_group(
-  ctx: &mut Ctx,
-  listed: &ProjectConnections,
-  (asks, open, add): (&ListAsks, &impl Fn(ConnectionId) -> Open, Open),
-  (running, asking): ServerStates,
-) -> Element {
-  let mut group = Group::new("connections-mcp", ctx.t("connections.groups.mcpServers"))
-    .end(add_button(ctx, "connections-add-mcp", "connections.groups.addMcp", add.clone()).in_heading());
-  if listed.mcp.is_empty() {
-    return group
-      .row(
-        EmptyRow::new(
-          "connections-mcp-empty",
-          MCP_GLYPH,
-          ctx.t("connections.mcp.emptyTitle"),
-          ctx.t("connections.mcp.emptyDetailShort"),
-        )
-        .action(add_button(
-          ctx,
-          "connections-mcp-empty-add",
-          "connections.groups.add",
-          add,
-        )),
-      )
-      .into();
-  }
-  for server in listed.mcp.iter() {
-    let users: Vec<String> = listed.used_by(server.id()).map(|used| used.role.to_string()).collect();
-    let what = match server.transport() {
-      McpTransport::Stdio(stdio) => {
-        let mut words = vec![program_name(stdio.program().as_str()).to_owned()];
-        words.extend(stdio.args().iter().map(|arg| arg.as_str().to_owned()));
-        words.join(" ")
-      }
-      McpTransport::Http(http) => http.url().as_str().to_owned(),
-    };
-    let line = if users.is_empty() {
-      ctx.t_args("connections.mcp.rowUnused", [("what", what)])
-    } else {
-      ctx.t_args(
-        "connections.mcp.rowUsed",
-        [("what", what), ("profiles", users.join(", "))],
-      )
-    };
-    let id = server.id();
-    let state = (
-      running.filter(|(on, _)| *on == id).map(|(_, work)| work),
-      asking.filter(|(on, _)| *on == id).map(|(_, confirm)| confirm),
-    );
-    let switch = mcp_switch(
-      ctx,
-      (&format!("connection-row-{id}-switch"), server),
-      state,
-      &asks(id),
-      !users.is_empty(),
-    );
-    let row = row(
-      ctx,
-      Entry::Mcp(server),
-      (MCP_GLYPH.into(), line.to_string()),
-      vec![switch],
-      open(id),
-    );
-    group = group.row(row);
-    if let Some(confirm) = state.1 {
-      group = group.after(asked(ctx, server, (confirm, &users), &asks(id)));
-    }
-  }
-  group.into()
 }
 
 /// A connection's row: its tile, its name over `line`, `ends` and the chevron; it opens the connection's page.
