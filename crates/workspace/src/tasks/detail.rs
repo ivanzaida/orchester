@@ -366,7 +366,7 @@ impl TaskDetail {
 
   pub fn load_in(repo_root: &Path, task: TaskId) -> Result<Self, StoreError> {
     let mut db = ProjectDb::open(repo_root)?;
-    let task = super::recorded::task_of(&db, task)?.ok_or(StoreError::TaskNotFound(task))?;
+    let task = super::recorded::page_task_of(&db, task)?.ok_or(StoreError::TaskNotFound(task))?;
     let led_in = WatchReads::read_task_led_in(&db, &task)?;
     let blocked_by = blocking_keys(&db, &task)?;
     let missing_pipeline = db.missing_pipelines()?.remove(&task.id());

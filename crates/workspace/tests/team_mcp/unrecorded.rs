@@ -251,11 +251,11 @@ fn team_mcp_a_cached_team_task_with_no_run_opens_its_page_from_the_server_read()
   let detail = TaskDetail::of_team(checkout.root(), (read, None), &Programs::processes()).expect("the page opens");
   assert_eq!(detail.task.id(), id);
   assert!(detail.run.is_none() && detail.history.is_empty());
-  // Every other reader of a task here goes by what this computer recorded, which is nothing: its refusal is explicit.
-  assert!(matches!(
-    TaskDetail::load_in(checkout.root(), id),
-    Err(StoreError::TaskNotFound(task)) if task == id
-  ));
+  // The page without a server read opens from the cached copy; the project's records still go by what this computer
+  // recorded, which is nothing, and do not define the task.
+  let opened = TaskDetail::load_in(checkout.root(), id).expect("the page opens from the cached copy");
+  assert_eq!(opened.task.id(), id);
+  assert!(recorded::task_of(&checkout.db(), id).expect("read").is_none());
 }
 
 #[test]

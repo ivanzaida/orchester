@@ -31,6 +31,16 @@ pub fn task_of(db: &ProjectDb, id: TaskId) -> Result<Option<Task>, StoreError> {
   }
 }
 
+/// [`task_of`] for the task page: a cached copy of a team task that has no run here still opens it, as the page of a
+/// task the old sharing stream delivers while its first download is under way and no server read answers. Readers
+/// that report a team task's records go by [`task_of`] alone, which trusts no cached copy.
+pub fn page_task_of(db: &ProjectDb, id: TaskId) -> Result<Option<Task>, StoreError> {
+  match task_of(db, id)? {
+    Some(task) => Ok(Some(task)),
+    None => db.task(id),
+  }
+}
+
 /// [`task_of`] for the team task `id`.
 fn team_task_of(db: &ProjectDb, id: TaskId) -> Result<Option<Task>, StoreError> {
   Ok(team_task_with_runs(db, id)?.map(|(task, _)| task))
