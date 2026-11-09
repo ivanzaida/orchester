@@ -1,7 +1,8 @@
-//! A run is a team task's by the run itself: its team record, its task's team identity or the team inputs it was
-//! created with. One of the last two without the record (a legacy run from before team runs were recorded, or a start
-//! that stopped before its record was written) takes neither route: no tool merges, continues or resumes it, and no
-//! local merge is tried for it. A local task's run in a team-linked project stays a local run.
+//! A run is a team run by the run itself: its team record or the team inputs it was created with, never its task. A
+//! team run with inputs and no record (a start that stopped before its record was written) takes neither route: no tool
+//! merges, continues or resumes it, and no local merge is tried for it. A run of the old sharing stream has neither and
+//! stays a local run although the stream cached its task with a team identity, as does a local task's run in a
+//! team-linked project.
 
 use orchester_core::{
   id::{RunId, TaskId},
@@ -19,7 +20,7 @@ use crate::{
   Checkout,
   team_runs::started_without_record,
   tools::{canceled_run, server},
-  unrecorded::legacy,
+  unrecorded::{legacy, stream_era},
 };
 
 fn route(checkout: &Checkout, run: RunId) -> RunRoute {
@@ -55,19 +56,46 @@ fn no_local_merge(checkout: &Checkout, run: RunId) {
   assert!(db.open_merge_attempts().expect("open").is_empty());
 }
 
-#[test]
-fn team_mcp_a_legacy_team_run_with_no_team_record_is_refused_by_every_route() {
-  let (checkout, _server, _task, run) = legacy();
-  assert!(checkout.db().team_run(run).expect("read").is_none(), "no team record");
-  assert_eq!(route(&checkout, run), RunRoute::TeamUnrecorded);
+/// The local merge of the task page is tried for `run`, as for any local run: it is not refused as a team run's.
+fn local_merge_is_tried(checkout: &Checkout, run: RunId) {
+  let programs = Programs::processes();
+  let worktrees = WorktreeRemover::here_for_test(checkout.root(), programs.clone());
+  let tried = merge_in(&worktrees, &programs, (run, None)).map(|merged| merged.merge);
+  assert!(
+    !matches!(&tried, Err(IntegrationProblem::Store(message)) if message.key == "localIntegration.teamRun"),
+    "{tried:?}"
+  );
+}
 
+#[test]
+fn team_mcp_a_stream_era_run_of_a_cached_team_task_takes_the_local_route() {
+  let (checkout, _server, task, run) = stream_era();
+  assert!(orchester_workspace::tasks::recorded::is_team(&checkout.db(), task).expect("read"));
+  assert!(checkout.db().team_run(run).expect("read").is_none(), "no team record");
+  assert!(!checkout.db().has_team_inputs(run).expect("read"), "no team inputs");
+  assert_eq!(route(&checkout, run), RunRoute::Local);
+
+  // The local rules answer, as on master: not a team refusal.
   for (tool, args) in takes(run) {
-    assert_eq!(checkout.refused(tool, &args), "team_run_unrecorded", "{tool}");
+    let code = checkout.refused(tool, &args);
+    assert!(!code.starts_with("team_"), "{tool}: {code}");
   }
-  // Said by the run's task being unrecorded, as before: nothing is stored or sent.
+  local_merge_is_tried(&checkout, run);
+}
+
+#[test]
+fn team_mcp_a_stream_era_run_whose_cached_row_is_gone_takes_the_local_route_and_its_task_is_unrecorded() {
+  let (checkout, _server, _task, run) = legacy();
+  assert_eq!(route(&checkout, run), RunRoute::Local);
+
+  // The run is not refused as a team run's; what needs its task's row says that the task is unrecorded here.
+  for (tool, args) in takes(run) {
+    let code = checkout.refused(tool, &args);
+    assert_ne!(code, "team_run_unrecorded", "{tool}");
+  }
   let message = json!({"project": "Kontur", "run": run.to_string(), "text": "Go on."});
   assert_eq!(checkout.refused("send_message", &message), "team_task_unrecorded");
-  no_local_merge(&checkout, run);
+  local_merge_is_tried(&checkout, run);
 }
 
 #[test]

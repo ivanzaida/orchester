@@ -120,3 +120,25 @@ async fn live_updates_claim_ends_a_burst_of_run_changes_makes_no_more_rounds_tha
   assert_eq!(server.run_reports(), 1, "run changes ended no claims");
   work.abort();
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn live_updates_claim_ends_a_run_with_team_inputs_and_no_team_record_gets_no_claim_end() {
+  let server = TeamServer::start(&[(ALICE, "Alice Moreau")], &[]);
+  let (desktop, task) = merged(&server).await;
+  let run = latest_run(&desktop, task);
+  let database =
+    rusqlite::Connection::open(desktop.root().join(".orchester/orchester.db")).expect("open the project database");
+  // The inputs' content is not read: only that the run was created with the team's.
+  database
+    .execute(
+      "INSERT INTO run_bundles (run_id, origin, operation_id, sha256, body) VALUES (?1, 'team', ?2, ?3, '{}')",
+      [run.to_string(), OperationId::generate().to_string(), "0".repeat(64)],
+    )
+    .expect("team inputs");
+  drop(database);
+
+  desktop.servers.end_claims(&Programs::processes()).await;
+
+  assert_eq!(server.run_reports(), 0, "no run progress report was sent");
+  assert!(server.claimed_now(task), "the claim is not settled as a local one");
+}

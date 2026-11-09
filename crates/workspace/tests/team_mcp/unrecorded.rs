@@ -23,9 +23,10 @@ use crate::{
   tools::{server, started_run},
 };
 
-/// A checkout linked to the fake team server, with the team task `KON-7` of the old sharing stream: its identity and a
-/// started run, with neither inputs nor a cached row of the task.
-pub(crate) fn legacy() -> (Checkout, TeamServer, TaskId, RunId) {
+/// A checkout linked to the fake team server, with the team task `KON-7` of the old sharing stream: its identity, the
+/// row the stream cached and a started run, which has neither inputs nor a team record. The team's identity of its task
+/// does not make it a team run: it is a local run, as before team runs were recorded.
+pub(crate) fn stream_era() -> (Checkout, TeamServer, TaskId, RunId) {
   let (server, _seen) = server();
   let admin = Standing {
     role: "owner",
@@ -44,11 +45,16 @@ pub(crate) fn legacy() -> (Checkout, TeamServer, TaskId, RunId) {
       TaskRevision::try_from(1).expect("revision"),
     )
     .expect("identity");
-  // The store starts a run of a task it keeps a row of; the row the stream cached is gone later (the cache is dropped
-  // when the link is), and the run stays.
   db.cache_shared_tasks(&[cached(task)], None).expect("cached");
   let run = started_run(&mut db, task, (None, RunBaseSource::CheckedOut)).id();
   drop(db);
+  (checkout, server, task, run)
+}
+
+/// [`stream_era`] after the row the stream cached is gone (the cache is dropped when the link is) and the run stays: a
+/// team task with no record that defines it.
+pub(crate) fn legacy() -> (Checkout, TeamServer, TaskId, RunId) {
+  let (checkout, server, task, run) = stream_era();
   rusqlite::Connection::open(checkout.root().join(".orchester/orchester.db"))
     .expect("open")
     .execute("DELETE FROM tasks WHERE id = ?1", [task.to_string()])

@@ -1,20 +1,20 @@
 //! What a run control asks of the page's project: run a ready draft (queue it, then start its first
 //! run), start a queued task's first run, pause, resume, continue or cancel its run. Each goes to the
 //! runner of the project the page shows, whichever tab is active. Work on a shared task goes on only
-//! under the person's claim, a team run's under the authority its start recorded; Pause and Cancel
-//! need none.
+//! under the person's claim, a team run's under the authority its start recorded (a team run whose record was never
+//! written is refused: it has neither); Pause and Cancel need none.
 
-use std::sync::Arc;
+use std::{path::Path, sync::Arc};
 
 use lurq::app::ctx::{Ctx, FutureAction};
 use orchester_core::{
   id::{ResourceId, RunId, TaskId},
   resource::Pipeline,
-  store::{ResourceStore, TaskStore},
+  store::{ResourceStore, RunStore, TaskStore},
   task::{MissingDetail, QueueError},
 };
 use orchester_ipc::Command;
-use orchester_store::{ProjectDb, StoreError};
+use orchester_store::{ProjectDb, StoreError, TeamRun};
 use orchester_workspace::{
   background,
   messages::{self, Message},
@@ -25,6 +25,8 @@ use orchester_workspace::{
   tasks::{
     cancel_run::{Stop, stop_named_run_in},
     data::{SaveTarget, published_pipelines},
+    detail::run_store_error,
+    recorded::{RunRoute, route_with_record},
     run::{QueueFailure, control_message, queue_in},
   },
   workspace::{OpenProject, Workspace},
@@ -133,7 +135,9 @@ pub fn control_action(
 /// The claim work on `task` goes on under, `run` going on again when given: a team run's is the claim and the work its
 /// start through the team server recorded, which its heartbeat renews and its reports name (`team_work`), so nothing is
 /// taken again here, and a team run the server fenced (taken over, membership removed, another device) goes on no
-/// more; any other work takes or confirms the task's claim.
+/// more. A run created with team inputs whose team record was never written has no claim or work to report under and
+/// is refused. Any other run, a stream-era run of a cached team task included, takes or confirms the task's claim as it
+/// did before team runs were recorded.
 async fn work_claim(
   project: &OpenProject,
   servers: &Servers,
@@ -141,22 +145,36 @@ async fn work_claim(
 ) -> Result<WorkClaim, Message> {
   if let Some(run) = run {
     let root = project.repo_root.clone();
-    let team = background::run(move || {
-      ProjectDb::open(&root)
-        .and_then(|db| db.team_run(run))
-        .map_err(|error| messages::store_error(&error))
-    })
-    .await??;
-    match team {
-      Some(team) if team.fence.is_some() => return Err(Message::new("claims.refused.fenced")),
-      Some(_) => return Ok(WorkClaim::default()),
-      None => {}
+    let (route, team) = background::run(move || run_route(&root, run)).await??;
+    match route {
+      RunRoute::Team if team.is_some_and(|team| team.fence.is_some()) => {
+        return Err(Message::new("claims.refused.fenced"));
+      }
+      RunRoute::Team => return Ok(WorkClaim::default()),
+      // No claim or work to report under: the same refusal the MCP tools give.
+      RunRoute::TeamUnrecorded => return Err(Message::new("appMcp.errors.teamRunUnrecorded")),
+      RunRoute::Local => {}
     }
   }
   servers
     .claim_for_work(&project.repo_root, task)
     .await
     .map_err(|refusal| refusal.message())
+}
+
+/// Where `run`'s work goes and its team record, when it has one. A run no longer stored goes the local way, where the
+/// runner refuses it.
+fn run_route(root: &Path, run: RunId) -> Result<(RunRoute, Option<TeamRun>), Message> {
+  let db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
+  let Some(found) = db
+    .run(run)
+    .map_err(|error| messages::store_error(&run_store_error(error)))?
+  else {
+    return Ok((RunRoute::Local, None));
+  };
+  let team = db.team_run(run).map_err(|error| messages::store_error(&error))?;
+  let route = route_with_record(&db, &found, team.as_ref()).map_err(|error| messages::store_error(&error))?;
+  Ok((route, team))
 }
 
 /// Queues draft `task` on the latest published version of its pipeline, the claim of a shared task
