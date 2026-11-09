@@ -38,9 +38,11 @@ fn local_hub_saved_the_tools_that_run_without_asking_stay_as_typed_and_nothing_i
     exempt(s) == ["search_docs"]
   });
 
-  // The panel opens again on what was saved once the project's connections are read again.
+  // The panel opens again on what was saved once the project's connections are read again: the value shows with nothing
+  // left to save, which the panel it replaced (the value typed, Save offered) and the one opened on the old text (no
+  // value) are not.
   agents.until("the value saved shows", |s| {
-    s.value("connection-mcp-tools") == "search_docs"
+    !s.exists(SAVE) && s.value("connection-mcp-tools") == "search_docs"
   });
   for _ in 0..20 {
     agents.until("a pass", |_| true);
