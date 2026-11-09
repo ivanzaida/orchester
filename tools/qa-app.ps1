@@ -88,14 +88,17 @@
 # lists what names it and the run that will stop (L11), which only a person's press confirms. -Scenario
 # local-hub-archived is Reviewer, postgres-dev and a skill already archived with the runs they stopped: the Archived
 # filter lists them (L13) and an archived one's panel has Restore (L14).
-# -Scenario local-hub-claude is local-hub with three Claude Code connections (Claude 2, Home and Claude · Kontur, each checked
-# at a version of its own) and Writer, a profile on Claude 2: Agents > Profiles > Writer, and the Connection select of its
-# panel lists the connections to choose from (L1). Every kind of local-hub has an instruction (Project rules) and a skill
-# (run-checks) so each panel, which is the editor the kind has, can be edited in place.
-# A save the store refuses (L12) is reached in local-hub too: MCP servers > pencil-design, change its Program to a name found
-# nowhere, press Save and then Save in the question (a person's press: the program widens what agents may do). The refusal
-# stands in place above the form, the row says Couldn't save, nothing is saved and what was typed stays. The design's cause,
-# the system's secret store refusing a value, has no field in the panel to come from yet (see the report of ORC-842).
+# -Scenario local-hub-claude is local-hub with Claude Code connections to choose from (Claude 2, Home and Claude · Kontur, each
+# checked at a version of its own), Writer on Claude 2 and Builder, whose connection the project no longer has: Agents >
+# Profiles > Builder lists it under Needs you, its panel asks which of the Claude Code connections runs it (the select lists
+# only those) and the pinned "Use Claude 2 for Builder" publishes the next version on it (L1). Tools, instructions and skills
+# have the frame with Edit, which opens the editor the kind has.
+# -Scenario local-hub-secret adds figma, whose variable FIGMA_API_KEY takes the secret FIGMA_TOKEN with no value: MCP servers >
+# figma, Replace (Set value) types a value in a dialog, Save keeps it in the QA copy's keychain in memory, which accepts
+# (L8). -Scenario local-hub-secret-refused is the same with a QA copy whose secret store refuses every value, so Save after
+# typing a value is refused as L12 draws it, with no person's press: the refusal stands above the form naming FIGMA_TOKEN,
+# the field is marked, nothing is saved. (A change of Arguments or Program widens what agents may do and asks first, which
+# only a person's press confirms; the secret value alone does not.)
 #
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes

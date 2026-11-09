@@ -225,6 +225,11 @@ fn read_only(ctx: &Ctx, text: &McpServerText) -> Column {
   };
   let worktree = ctx.t("connections.mcp.theWorktree").to_string();
   let tools = text.exempt_tools.lines().collect::<Vec<_>>().join(", ");
+  let tools = if tools.is_empty() {
+    ctx.t("local_hub.profile.none").to_string()
+  } else {
+    tools
+  };
   let mut rows = vec![line(
     "runs-as",
     &ctx.t("local_hub.mcp.runsAs"),
