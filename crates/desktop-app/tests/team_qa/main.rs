@@ -22,6 +22,7 @@ mod hub_unsent_publish;
 )]
 mod kontur;
 mod local_archived;
+mod make_local;
 mod not_ready;
 mod start_failed;
 mod start_notices;
