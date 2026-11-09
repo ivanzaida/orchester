@@ -189,20 +189,162 @@ fn tasks_close_from_the_task_page_header_then_delete_returns_to_the_list() {
   assert!(stored(&seeded, "KON-11").is_none(), "the task is gone");
 }
 
-/// A local draft closed by hand keeps the words and the open circle of its readiness: the closed words are a team
-/// task's only (decision D4).
+/// A local draft closed by hand reads as closed in its row, as a team task's does (decision D4): *Canceled* with
+/// `circle-slash`, *Done* with `circle-check`, never *Ready to queue* with the open circle.
 #[test]
-fn tasks_close_a_local_draft_canceled_or_done_still_reads_ready_to_queue() {
+fn tasks_close_a_local_draft_canceled_or_done_reads_closed_in_its_row() {
   let mut seeded = Seeded::tasks("tasks", TaskList::new(TaskListTab::All));
-  for (choice, closed) in [("cancel", WorkflowStatus::Canceled), ("done", WorkflowStatus::Done)] {
+  for (choice, closed, words, glyph) in [
+    ("cancel", WorkflowStatus::Canceled, "Canceled", Icon::CircleSlash),
+    ("done", WorkflowStatus::Done, "Done", Icon::CircleCheck),
+  ] {
     choose(&mut seeded, "task-more-KON-5", choice);
     seeded.until("KON-5 closed", |seeded| status(seeded, "KON-5") == closed);
-    seeded.until("KON-5's row reads again", |seeded| seeded.shows("task-state-KON-5"));
-    assert_eq!(seeded.text("task-state-KON-5"), "Ready to queue", "{choice}");
-    assert_eq!(
-      seeded.glyph("task-status-KON-5"),
-      Icon::Circle.glyph(),
-      "{choice}: the open circle"
-    );
+    seeded.until("KON-5's row says it", |seeded| {
+      seeded.shows("task-state-KON-5") && seeded.text("task-state-KON-5") == words
+    });
+    assert_eq!(seeded.glyph("task-status-KON-5"), glyph.glyph(), "{choice}");
   }
+}
+
+/// The board's card of a local draft closed from its menu says *Done* or *Canceled* in its run chip's place, not
+/// *Ready to queue*.
+#[test]
+fn tasks_close_a_local_draft_canceled_or_done_reads_closed_on_its_board_card() {
+  let mut seeded = Seeded::board("tasks", TaskList::new(TaskListTab::All));
+  seeded.hover("task-card-KON-5");
+  press(&mut seeded, "task-more-KON-5");
+  press(&mut seeded, "task-menu-KON-5-move");
+  press(&mut seeded, "task-menu-KON-5-move-done");
+  seeded.until("KON-5 Done", |seeded| status(seeded, "KON-5") == WorkflowStatus::Done);
+  seeded.until("KON-5's card says Done", |seeded| {
+    seeded.shows("task-run-KON-5-label") && seeded.text("task-run-KON-5-label") == "Done"
+  });
+
+  seeded.hover("task-card-KON-5");
+  press(&mut seeded, "task-more-KON-5");
+  press(&mut seeded, "task-menu-KON-5-cancel");
+  seeded.until("KON-5 Canceled", |seeded| {
+    status(seeded, "KON-5") == WorkflowStatus::Canceled
+  });
+  press(&mut seeded, "tasks-board-canceled-show");
+  seeded.until("KON-5's card says Canceled", |seeded| {
+    seeded.shows("task-run-KON-5-label") && seeded.text("task-run-KON-5-label") == "Canceled"
+  });
+}
+
+/// The header of a local draft closed by hand says its closed status, as a team task's does, not *Draft*.
+#[test]
+fn tasks_close_a_local_draft_canceled_or_done_reads_closed_in_its_page_header() {
+  let mut seeded = Seeded::tasks("tasks", TaskList::default());
+  let key = "KON-5".parse().expect("a task key");
+  let page = Route::Project(seeded.project, ProjectPage::Task(key, TaskView::default()));
+  seeded.window.navigation().go(page);
+  seeded.until("the header", |seeded| seeded.laid_out("task-status"));
+  assert_eq!(seeded.text("task-status"), "Draft", "before it is closed");
+
+  for (choice, closed, words) in [
+    ("cancel", WorkflowStatus::Canceled, "Canceled"),
+    ("done", WorkflowStatus::Done, "Done"),
+  ] {
+    choose(&mut seeded, "task-more", choice);
+    seeded.until("KON-5 closed", |seeded| status(seeded, "KON-5") == closed);
+    seeded.until("the header says it", |seeded| {
+      seeded.shows("task-status") && seeded.text("task-status") == words
+    });
+    assert!(!seeded.shows("task-run-line"), "{choice}: no run to speak of");
+  }
+}
+
+/// Waits for `key`'s row to say `words` and returns its status icon.
+fn row_says(seeded: &mut Seeded, key: &str, words: &str) -> char {
+  seeded.until(&format!("{key}'s row says {words}"), |seeded| {
+    seeded.shows(&format!("task-state-{key}")) && seeded.text(&format!("task-state-{key}")) == words
+  });
+  seeded.glyph(&format!("task-status-{key}"))
+}
+
+/// A closed task waits for nothing: a blocked one reads closed, not *Blocked*, and a reopened one is blocked again.
+#[test]
+fn tasks_close_a_blocked_task_reads_closed_and_reopened_reads_blocked_again() {
+  let mut seeded = Seeded::tasks("tasks", TaskList::new(TaskListTab::All));
+  assert!(seeded.text("task-state-KON-19").starts_with("Blocked"));
+
+  choose(&mut seeded, "task-more-KON-19", "cancel");
+  let glyph = row_says(&mut seeded, "KON-19", "Canceled");
+  assert_eq!(glyph, Icon::CircleSlash.glyph());
+
+  choose(&mut seeded, "task-more-KON-19", "reopen");
+  seeded.until("KON-19 reads blocked again", |seeded| {
+    seeded.text("task-state-KON-19").starts_with("Blocked")
+  });
+  assert_eq!(seeded.glyph("task-status-KON-19"), Icon::Ban.glyph());
+}
+
+/// A reopened local draft says *Ready to queue* with its open circle again.
+#[test]
+fn tasks_close_a_reopened_local_draft_says_ready_to_queue_again() {
+  let mut seeded = Seeded::tasks("tasks", TaskList::new(TaskListTab::All));
+  choose(&mut seeded, "task-more-KON-5", "done");
+  row_says(&mut seeded, "KON-5", "Done");
+
+  choose(&mut seeded, "task-more-KON-5", "reopen");
+  let glyph = row_says(&mut seeded, "KON-5", "Ready to queue");
+  assert_eq!(glyph, Icon::Circle.glyph());
+}
+
+/// A task whose run speaks keeps what its run says when it is closed: a failed one still says where it failed.
+#[test]
+fn tasks_close_a_task_with_a_failed_run_keeps_its_run_phrase() {
+  let mut seeded = Seeded::tasks("tasks", TaskList::new(TaskListTab::All));
+  choose(&mut seeded, "task-more-KON-11", "cancel");
+  seeded.until("KON-11 Canceled", |seeded| {
+    status(seeded, "KON-11") == WorkflowStatus::Canceled
+  });
+  assert!(seeded.text("task-state-KON-11").starts_with("Failed at 0"));
+  assert_eq!(seeded.glyph("task-status-KON-11"), Icon::CircleX.glyph());
+  assert!(
+    seeded.text("task-state-KON-1").starts_with("Merged into"),
+    "a merged run's task is Done and says so by its run"
+  );
+}
+
+/// A task submitted but not started reads *Queued* with its clock; closed, it waits for nothing and reads closed in
+/// its row and on its page.
+#[test]
+fn tasks_close_a_queued_task_without_a_run_reads_closed() {
+  let mut seeded = Seeded::tasks("tasks", TaskList::new(TaskListTab::All));
+  assert_eq!(seeded.glyph("task-status-KON-8"), Icon::Clock3.glyph());
+
+  choose(&mut seeded, "task-more-KON-8", "cancel");
+  let glyph = row_says(&mut seeded, "KON-8", "Canceled");
+  assert_eq!(glyph, Icon::CircleSlash.glyph());
+
+  let key = "KON-8".parse().expect("a task key");
+  let page = Route::Project(seeded.project, ProjectPage::Task(key, TaskView::default()));
+  seeded.window.navigation().go(page);
+  seeded.until("the header says Canceled", |seeded| {
+    seeded.shows("task-status") && seeded.text("task-status") == "Canceled"
+  });
+  assert!(!seeded.shows("task-run-line"), "no run to speak of");
+}
+
+/// A closed local draft's board card has the glyph and word of its closed status where the other cards of its column
+/// have their run's, and no readiness line.
+#[test]
+fn tasks_close_a_closed_card_has_the_glyph_and_word_of_its_status() {
+  let mut seeded = Seeded::board("tasks", TaskList::new(TaskListTab::All));
+  seeded.hover("task-card-KON-5");
+  press(&mut seeded, "task-more-KON-5");
+  press(&mut seeded, "task-menu-KON-5-move");
+  press(&mut seeded, "task-menu-KON-5-move-done");
+  seeded.until("KON-5's card says Done", |seeded| {
+    seeded.shows("task-run-KON-5-label") && seeded.text("task-run-KON-5-label") == "Done"
+  });
+  assert_eq!(seeded.glyph("task-run-KON-5-icon"), Icon::CircleCheck.glyph());
+  assert!(!seeded.shows("task-state-KON-5"), "no draft readiness under it");
+  assert!(
+    seeded.shows("task-run-KON-1-label"),
+    "a merged card keeps its run's chip"
+  );
 }

@@ -58,6 +58,14 @@ enum About {
 /// works on a Fix CI, the status is the pull request's CI (ORC-335, `crate::screens::task::ci::header`).
 pub fn status_line(ctx: &mut Ctx, task: &TaskContext, mode: bool) -> Element {
   let detail = &task.detail;
+  let status = detail.task.organization().status();
+  // A closed task waits for nothing: one submitted without a run reads closed as a draft does.
+  if status.is_closed()
+    && detail.latest_unreadable.is_none()
+    && matches!(detail.phase(), TaskPhase::Draft | TaskPhase::Queued)
+  {
+    return closed(ctx, task, status);
+  }
   let chip = match crate::screens::task::ci::header::status(ctx, task) {
     Some((status, words)) => StatusChip::new("task-status", status).words(words),
     None => run_chip(ctx, task),
@@ -89,9 +97,9 @@ fn run_chip(ctx: &Ctx, task: &TaskContext) -> StatusChip {
   }
 }
 
-/// The line of a closed team task: its workflow status in the chip the task's other
-/// closed states use (`Done` `circle-check` in `success`, `Canceled` `circle-slash` muted), not the draft it never ran
-/// as.
+/// The line of a closed task whose run, if any, says nothing of its end: its workflow status in the chip the task's
+/// other closed states use (`Done` `circle-check` in `success`, `Canceled` `circle-slash` muted), not the draft it
+/// never ran as.
 pub(super) fn closed(ctx: &mut Ctx, task: &TaskContext, status: WorkflowStatus) -> Element {
   let chip = match status {
     WorkflowStatus::Canceled => Status::Canceled,
