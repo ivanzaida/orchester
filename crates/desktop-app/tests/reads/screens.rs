@@ -1,7 +1,7 @@
 //! Screens that show a project's runs read again when a run changes state, not on a transcript's lines; Skills
 //! not when tasks are saved; All projects only the project whose runner reported.
 
-use orchester_app::routes::{ProjectPage, Route};
+use orchester_app::routes::{HubFilter, HubView, ProjectPage, Route};
 use orchester_core::id::ProjectId;
 use orchester_workspace::tasks::outside::Outside;
 
@@ -15,20 +15,23 @@ fn counts(pairs: &[(&str, usize)]) -> std::collections::BTreeMap<String, usize> 
 #[test]
 fn reads_agents_again_when_a_run_changes_state_not_on_its_lines() {
   let mut agents = Counted::open("agents");
-  agents.show(ProjectPage::Agents, "screen-agents");
+  agents.show(
+    ProjectPage::hub(HubView::new(HubFilter::Profiles, None)),
+    "local-hub-master-detail",
+  );
   agents.report(false);
   let line = agents.settle();
   assert_eq!(
-    line.get("agents"),
+    line.get("local_hub"),
     None,
     "a transcript line reads no profiles: {line:?}"
   );
   agents.report(true);
   let state = agents.settle();
   assert_eq!(
-    state.get("agents"),
+    state.get("local_hub"),
     Some(&1),
-    "a run's state reads the profiles' uses: {state:?}"
+    "a run's state reads what the hub shows of the runs: uses, used by, readiness: {state:?}"
   );
 }
 
