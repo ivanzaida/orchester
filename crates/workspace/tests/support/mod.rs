@@ -10,9 +10,8 @@ use std::{
 };
 
 use orchester_core::{
-  blob::ContentHash,
   connection::mcp::McpServerSelection,
-  id::{ChatId, ConnectionId, IdempotencyKey, ProjectId, ResourceId, TaskId, UserId},
+  id::{ChatId, ConnectionId, IdempotencyKey, ProjectId, ResourceId, TaskId},
   memory::{
     AgentProvenance, AgentWrite, Confidence, Memory, MemoryContent, MemoryKind, MemoryScope, MemorySettings,
     SecretScreen,
@@ -27,14 +26,17 @@ use orchester_core::{
   },
   revision::Revision,
   run::{Answerer, BranchName, NewRun, Plan, PlanDecision, PublishedVersions, Run, RunEvent, RunSnapshot},
-  sharing::{SharedPerson, TaskRevision},
+  sharing::TaskRevision,
   store::{ResourceStore, RunStore, TaskStore},
   task::{TaskDetails, TaskLimits},
   time::Timestamp,
   tokens::TokenBudget,
 };
-use orchester_store::{CachedVersion, ProjectDb, ReferenceTarget, ResourceSharing};
+use orchester_store::{CachedVersion, ProjectDb};
 use tempfile::TempDir;
+
+mod team_profile;
+use team_profile::{keep_as_team_profile, team_server_references};
 
 pub fn at(millis: i64) -> Timestamp {
   Timestamp::from_unix_millis(millis)
@@ -571,44 +573,4 @@ pub fn proposed(run: &Run, text: &str, now: i64) -> Memory {
     &MemorySettings::default(),
     at(now),
   )
-}
-
-/// Makes `profile`, published as `version`, the team's: its version is cached as the server confirmed it, naming
-/// `servers` by `TeamResource` references.
-fn keep_as_team_profile(
-  db: &mut ProjectDb,
-  profile: ResourceId,
-  version: &orchester_core::resource::Version<AgentProfile>,
-  servers: &[ResourceId],
-) {
-  let revision = TaskRevision::try_from(1_u64).expect("a revision");
-  db.set_resource_sharing(profile, Some(ResourceSharing::Shared(revision)))
-    .expect("the profile is the team's");
-  let references = team_server_references(servers);
-  let confirmed = CachedVersion {
-    number: version.number(),
-    published_at: at(3),
-    publisher: SharedPerson {
-      id: UserId::generate(),
-      name: "Olena".to_owned(),
-    },
-    server_body: serde_json::json!({}),
-    hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
-    references,
-    local_body: version.body().clone(),
-    waits_here: false,
-  };
-  db.cache_shared_version(profile, &confirmed)
-    .expect("the team version is cached");
-}
-
-/// The references of a team profile version that chooses the team MCP servers `servers`.
-fn team_server_references(servers: &[ResourceId]) -> Vec<ReferenceTarget> {
-  servers
-    .iter()
-    .map(|&id| ReferenceTarget::TeamResource {
-      kind: ResourceKind::McpServer,
-      id,
-    })
-    .collect()
 }
