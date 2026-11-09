@@ -37,7 +37,7 @@ use orchester_workspace::{
   tasks::outside::Outside,
   workspace::OpenProject,
 };
-use tokio::runtime::Handle;
+use tokio::{runtime::Handle, task::AbortHandle};
 
 use crate::services::Services;
 
@@ -286,15 +286,17 @@ fn team_clock(ctx: &mut Ctx, deps: (PathBuf, Servers, Runners), runtime: Handle)
     move |(root, servers, runners), emitter: StreamEmitter<u64, ()>| {
       let runtime = runtime.clone();
       async move {
+        // The stream is dropped when the project closes: its reading goes with it.
+        let _closed = Closed(root.clone());
         let mut updates = runners.chats_of(&root);
         let mut ticks = 0;
         loop {
           updates.borrow_and_update();
           let (folder, asked) = (root.clone(), servers.clone());
-          // On the runtime the team reads belong to, not on the UI's executor.
-          let read = runtime
-            .spawn(async move { team_status::refresh(&asked, &folder, POLL / 2).await })
-            .await;
+          // On the runtime the team reads belong to, not on the UI's executor, and no longer than this stream.
+          let read = runtime.spawn(async move { team_status::refresh(&asked, &folder, POLL / 2).await });
+          let _abort = AbortOnDrop(read.abort_handle());
+          let read = read.await;
           let polling = match read {
             Ok(Ok(refreshed)) => {
               if refreshed.changed {
@@ -335,4 +337,22 @@ fn team_clock(ctx: &mut Ctx, deps: (PathBuf, Servers, Runners), runtime: Handle)
     },
   );
   ticks.state().get().data.unwrap_or(0)
+}
+
+/// Forgets the team reading of the project at its folder when dropped.
+struct Closed(PathBuf);
+
+impl Drop for Closed {
+  fn drop(&mut self) {
+    team_status::forget(&self.0);
+  }
+}
+
+/// Aborts the task it was made for when dropped; aborting one that finished does nothing.
+struct AbortOnDrop(AbortHandle);
+
+impl Drop for AbortOnDrop {
+  fn drop(&mut self) {
+    self.0.abort();
+  }
 }
