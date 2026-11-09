@@ -247,6 +247,7 @@ impl ArchiveMenu {
       },
       dialog::State {
         read,
+        lines: Vec::new(),
         archiving: archiving.is_pending(),
         failed: archiving.error.clone().filter(|_| !archiving.is_pending()),
         person_refused: self.person.reason(ctx, CONFIRM),

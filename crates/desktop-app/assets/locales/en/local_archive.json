@@ -5,6 +5,14 @@
     "note": {
       "one": "{{names}} stays not ready until you remove {{name}} from it or restore it.",
       "many": "{{names}} stay not ready until you remove {{name}} from them or restore it."
+    },
+    "runRow": "{{key}} · run {{number}}",
+    "runState": {
+      "pending": "waiting to start",
+      "running": "running",
+      "paused": "paused",
+      "waiting": "waits for you",
+      "interrupted": "interrupted"
     }
   }
 }

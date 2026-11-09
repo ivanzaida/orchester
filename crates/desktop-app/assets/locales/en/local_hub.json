@@ -13,7 +13,8 @@
       "mcpServers": "New MCP server",
       "instructions": "New instruction",
       "skills": "New skill",
-      "tools": "New tool"
+      "tools": "New tool",
+      "any": "New"
     },
     "filter": {
       "all": "All",
@@ -78,7 +79,8 @@
       "edit": "Edit",
       "editHint": "Opens its editor: edits are saved as a draft, and Publish makes the next version",
       "mcpServers": "MCP servers",
-      "usedBy": "used by {{names}}"
+      "usedBy": "used by {{names}}",
+      "wasUsedBy": "was used by {{names}}"
     },
     "readiness": {
       "title": "Ready?",
@@ -131,7 +133,9 @@
       "stoppedOne": "Archiving stopped the run that pinned it, {{runs}}. Restore puts {{name}} back in the lists and pickers as it was; that run stays stopped, so run it again to use it.",
       "stopped": "Archiving stopped {{count}} runs that pinned it, {{runs}}. Restore puts {{name}} back in the lists and pickers as it was; those runs stay stopped, so run them again to use it.",
       "stoppedNone": "Archiving stopped no runs. Restore puts {{name}} back in the lists and pickers as it was.",
-      "title": "Archived: hidden from lists and pickers"
+      "title": "Archived: hidden from lists and pickers",
+      "readOnly": "· read-only until it is restored",
+      "takesSecret": "{{name}} ← secret {{secret}}"
     },
     "profile": {
       "title": "Profile",

@@ -168,7 +168,11 @@ impl Listing {
       group: Group::Ready,
       standing: None,
       profile: None,
-      used_by: Vec::new(),
+      // What chose an archived server still names it, so the panel can say it was used.
+      used_by: match found.what {
+        Archivable::McpServer(server) => hub.profiles_choosing(server).into_iter().map(str::to_owned).collect(),
+        Archivable::Resource(_) => Vec::new(),
+      },
       archived: Some(found.at),
     }));
     Self { entries }

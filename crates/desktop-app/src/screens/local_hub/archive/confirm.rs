@@ -22,7 +22,7 @@ use orchester_core::{id::ProjectId, resource::ResourceKind};
 use orchester_workspace::{
   local_archive::{self, Archivable},
   readiness::archive_blocks_profiles,
-  used_by::{self, UsedByError},
+  used_by::{self, RunLine, UsedByError},
 };
 
 use crate::{
@@ -70,7 +70,7 @@ pub(in crate::screens) fn question(ctx: &mut Ctx, props: Props) -> Element {
 
 /// What uses the resource, as the project's database answered.
 #[derive(Clone, Debug, PartialEq, Eq)]
-struct Used(UsedBy);
+struct Used(UsedBy, Vec<RunLine>);
 impl DevtoolsInspectable for Used {}
 
 struct Confirmation {
@@ -152,7 +152,7 @@ impl Component for Confirmation {
 
 impl Confirmation {
   /// What uses the resource.
-  fn read(&self, ctx: &mut Ctx, props: &Props) -> Option<Result<UsedBy, ReadFailed>> {
+  fn read(&self, ctx: &mut Ctx, props: &Props) -> Option<Result<(UsedBy, Vec<RunLine>), ReadFailed>> {
     let services = Services::of(ctx);
     let state = ctx
       .future(
@@ -160,26 +160,36 @@ impl Confirmation {
         move |(root, what, _)| {
           let services = services.clone();
           async move {
-            read(root, what, &services)
+            let used = read(root.clone(), what, &services)
               .await
-              .map(Used)
               .map_err(|error: UsedByError| ReadFailed {
                 not_reached: error.is_not_reached(),
-              })
+              })?;
+            let runs = used.runs.iter().map(|run| run.run).collect();
+            let lines = used_by::run_lines(&root, runs)
+              .await
+              .map_err(|error: UsedByError| ReadFailed {
+                not_reached: error.is_not_reached(),
+              })?;
+            Ok(Used(used, lines))
           }
         },
       )
       .state()
       .get();
     match (&state.data, &state.error) {
-      (Some(used), _) if !state.is_pending() => Some(Ok(used.0.clone())),
+      (Some(used), _) if !state.is_pending() => Some(Ok((used.0.clone(), used.1.clone()))),
       (_, Some(failed)) if !state.is_pending() => Some(Err(*failed)),
       _ => None,
     }
   }
 
   fn confirmation(&self, ctx: &mut Ctx, props: &Props) -> Element {
-    let read = self.read(ctx, props);
+    let (read, lines) = match self.read(ctx, props) {
+      Some(Ok((used, lines))) => (Some(Ok(used)), lines),
+      Some(Err(failed)) => (Some(Err(failed)), Vec::new()),
+      None => (None, Vec::new()),
+    };
     let archiving = self.archive.state().get();
     let (action, person) = (self.archive.clone(), self.person.clone());
     let shown = read
@@ -201,6 +211,7 @@ impl Confirmation {
       },
       State {
         read,
+        lines,
         archiving: archiving.is_pending(),
         failed: archiving.error.clone().filter(|_| !archiving.is_pending()),
         person_refused: self.person.reason(ctx, CONFIRM),

@@ -19,6 +19,7 @@ mod leave;
 mod list;
 mod mcp;
 mod model;
+mod new_menu;
 mod panel;
 mod profile;
 mod row;
@@ -283,12 +284,8 @@ impl LocalHubScreen {
     };
     let id = project.open.project.id();
     if entry.archived.is_some() {
-      let stopped = hub
-        .archived()
-        .iter()
-        .find(|found| found.what == entry.what)
-        .map(|found| found.stopped.clone())
-        .unwrap_or_default();
+      let found = hub.archived().iter().find(|found| found.what == entry.what);
+      let stopped = found.map(|found| found.stopped.clone()).unwrap_or_default();
       return archived::panel(
         ctx,
         archived::Props {
@@ -296,6 +293,7 @@ impl LocalHubScreen {
           project: id,
           entry: entry.clone(),
           stopped,
+          details: found.and_then(|found| found.details.clone()),
           now: Timestamp::now(),
         },
       );

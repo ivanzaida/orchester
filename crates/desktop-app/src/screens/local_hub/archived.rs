@@ -14,7 +14,12 @@ use lurq::{
   node::{Element, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{id::ProjectId, time::Timestamp};
-use orchester_workspace::{agents::local_hub::StoppedRun, local_archive, messages::Message};
+use orchester_workspace::{
+  agents::local_hub::StoppedRun,
+  connections::mcp::{McpServerText, TransportChoice},
+  local_archive,
+  messages::Message,
+};
 
 use super::{
   model::Entry,
@@ -25,6 +30,7 @@ use crate::{
   screens::team_hub::{
     bar::bar,
     panel::{body, head_named},
+    rows,
   },
   services::Services,
   theme::{HubText, IconSize},
@@ -33,6 +39,7 @@ use crate::{
     chip::BadgeTone,
     icon::{Icon, icon},
     message::message_text,
+    notice::{Notice, NoticeTone},
   },
 };
 
@@ -74,6 +81,8 @@ pub(super) struct Props {
   pub project: ProjectId,
   pub entry: Entry,
   pub stopped: Vec<StoppedRun>,
+  /// An MCP server's fields, shown read-only.
+  pub details: Option<McpServerText>,
   pub now: Timestamp,
 }
 impl DevtoolsInspectable for Props {}
@@ -121,10 +130,12 @@ impl Component for Restore {
         None,
       ))
       .child(chips_of(
-        vec![(ctx.t("local_hub.chip.archived"), BadgeTone::Neutral)],
-        None,
+        vec![(ctx.t("local_hub.chip.archived"), BadgeTone::Danger)],
+        (!entry.used_by.is_empty())
+          .then(|| ctx.t_args("local_hub.panel.wasUsedBy", [("names", entry.used_by.join(", "))])),
       ))
       .child(notice(ctx, entry, &props.stopped))
+      .with_children(props.details.as_ref().map(|details| read_only(ctx, details)))
       .with_children(
         state
           .error
@@ -157,7 +168,7 @@ impl Component for Restore {
 }
 
 /// What archiving did and what Restore does (`Notice` in L14).
-fn notice(ctx: &Ctx, entry: &Entry, stopped: &[StoppedRun]) -> Column {
+fn notice(ctx: &Ctx, entry: &Entry, stopped: &[StoppedRun]) -> Element {
   let words = if stopped.is_empty() {
     ctx.t_args("local_hub.archived.stoppedNone", [("name", entry.name.as_str())])
   } else {
@@ -189,19 +200,117 @@ fn notice(ctx: &Ctx, entry: &Entry, stopped: &[StoppedRun]) -> Column {
       ],
     )
   };
-  Column::new()
-    .id("local-hub-archived-notice")
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .child(
-      Text::new(&ctx.t("local_hub.archived.title"))
-        .id("local-hub-archived-title")
-        .variant(HubText::PanelLabel.role()),
-    )
-    .child(
-      Text::new(&words)
-        .id("local-hub-archived-body")
-        .variant(HubText::Value.role())
-        .width(Dimension::Pct(100.0)),
-    )
+  Notice::new(
+    "local-hub-archived-notice",
+    NoticeTone::Neutral,
+    ctx.t("local_hub.archived.title"),
+  )
+  .icon(Icon::Archive)
+  .title_style(HubText::NoticeTitle.role())
+  .body(words)
+  .flat()
+  .into()
+}
+
+/// *Server · read-only until it is restored* over what the server was, as values (`Server` in L14).
+fn read_only(ctx: &Ctx, text: &McpServerText) -> Column {
+  let line = |id: &str, label: &str, value: String, mono: bool| {
+    let id = format!("local-hub-archived-{id}");
+    let value = if mono {
+      rows::mono(&format!("{id}-value"), &value)
+    } else {
+      rows::words(&format!("{id}-value"), &value)
+    };
+    rows::row(&id, label, None, value)
+  };
+  let worktree = ctx.t("connections.mcp.theWorktree").to_string();
+  let tools = text.exempt_tools.lines().collect::<Vec<_>>().join(", ");
+  let mut rows = vec![line(
+    "runs-as",
+    &ctx.t("local_hub.mcp.runsAs"),
+    ctx
+      .t(match text.transport {
+        TransportChoice::Stdio => "local_hub.mcp.asProgram",
+        TransportChoice::Http => "local_hub.mcp.asRemote",
+      })
+      .to_string(),
+    false,
+  )];
+  match text.transport {
+    TransportChoice::Stdio => {
+      rows.push(line(
+        "program",
+        &ctx.t("connections.mcp.property.program"),
+        text.program.clone(),
+        true,
+      ));
+      rows.push(line(
+        "arguments",
+        &ctx.t("connections.mcp.property.arguments"),
+        text.arguments.lines().collect::<Vec<_>>().join(" "),
+        true,
+      ));
+      let folder = if text.working_directory.is_empty() {
+        (worktree, false)
+      } else {
+        (text.working_directory.clone(), true)
+      };
+      rows.push(line(
+        "folder",
+        &ctx.t("connections.mcp.property.folder"),
+        folder.0,
+        folder.1,
+      ));
+    }
+    TransportChoice::Http => rows.push(line(
+      "url",
+      &ctx.t("connections.mcp.property.endpoint"),
+      text.url.clone(),
+      true,
+    )),
+  }
+  rows.push(line("tools", &ctx.t("local_hub.mcp.tools"), tools, true));
+  if text.transport == TransportChoice::Stdio && !text.variables.is_empty() {
+    rows.push(line(
+      "variables",
+      &ctx.t("connections.mcp.variables"),
+      variables_read(ctx, &text.variables),
+      true,
+    ));
+  }
+  rows::section(
+    "local-hub-archived-server",
+    &ctx.t("connections.mcp.dialog.server"),
+    vec![
+      Text::new(&ctx.t("local_hub.archived.readOnly"))
+        .id("local-hub-archived-read-only")
+        .variant(HubText::PanelHint.role())
+        .nowrap()
+        .into(),
+    ],
+    rows,
+  )
+}
+
+/// `FIGMA_API_KEY ← secret FIGMA_TOKEN` for a variable that takes a secret, `NAME=value` for the others.
+fn variables_read(ctx: &Ctx, variables: &str) -> String {
+  variables
+    .lines()
+    .map(|line| match line.split_once('=') {
+      Some((name, value)) => match value.strip_prefix("${secret:").and_then(|rest| rest.strip_suffix('}')) {
+        Some(secret) => ctx
+          .t_args(
+            "local_hub.archived.takesSecret",
+            [
+              ("name", name.to_owned()),
+              ("secret", secret.split('@').next().unwrap_or(secret).to_owned()),
+            ],
+          )
+          .to_string(),
+        None => line.to_owned(),
+      },
+      None => line.to_owned(),
+    })
+    .collect::<Vec<_>>()
+    .join("\n")
 }

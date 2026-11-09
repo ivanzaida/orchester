@@ -90,8 +90,17 @@ fn local_hub_head_offers_share_with_a_team_and_new_of_the_filter() {
   assert_eq!(agents.text("local-hub-share"), "Share with a team…");
   assert_eq!(agents.text("local-hub-new"), "New MCP server");
   open(&mut agents, HubView::new(HubFilter::Archived, None));
-  assert!(!agents.exists("local-hub-new"), "nothing is made under Archived");
-  assert!(agents.exists("local-hub-share"));
+  assert_eq!(
+    agents.text("local-hub-new"),
+    "New",
+    "no one kind is made under Archived: New offers each"
+  );
+  agents.click("local-hub-new");
+  agents.click("local-hub-new-instructions");
+  assert!(matches!(
+    agents.window.navigation().route_now(),
+    Route::Project(_, ProjectPage::Instructions(_))
+  ));
 }
 
 #[test]
@@ -540,4 +549,23 @@ fn local_hub_a_secret_store_that_refuses_says_which_secret_and_saves_nothing() {
   agents.until("the row says so", |s| {
     s.text(&format!("{row}-line")).contains("Couldn't save")
   });
+}
+
+#[test]
+fn local_hub_an_archived_server_shows_its_fields_as_values_until_it_is_restored() {
+  let mut agents = Agents::new(true);
+  let docs = server(&agents, "docs");
+  let mut db = ProjectDb::open(&agents.root).expect("database");
+  db.archive_mcp_server(docs, Timestamp::now()).expect("archived");
+  open(&mut agents, HubView::on_server(HubFilter::Archived, docs));
+  agents.until("its panel", |s| s.exists("local-hub-archived-notice"));
+
+  assert_eq!(agents.text("local-hub-archived-notice-title"), "Archived: hidden from lists and pickers");
+  assert_eq!(agents.text("local-hub-archived-runs-as-value"), "A program on this computer");
+  assert_eq!(agents.text("local-hub-archived-program-value"), "docs-mcp");
+  assert!(agents.exists("local-hub-archived-read-only"), "it says the fields wait for Restore");
+  for field in ["connection-mcp-program", "local-hub-mcp-save"] {
+    assert!(!agents.exists(field), "{field} is for a server that is not archived");
+  }
+  assert!(agents.exists("archive-restore"));
 }

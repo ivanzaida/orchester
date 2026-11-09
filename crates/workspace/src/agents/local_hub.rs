@@ -17,6 +17,7 @@ use orchester_store::{ArchiveStop, ProjectDb, StoreError};
 
 use super::{team_hub::Form, team_profile::ConnectionChoice};
 use crate::{
+  connections::mcp::McpServerText,
   local_archive::Archivable,
   readiness::{LocalMcpReadiness, ProjectReadiness, ReadinessError},
   workspace::Workspace,
@@ -70,6 +71,8 @@ pub struct LocalArchived {
   pub at: Timestamp,
   /// The runs its archive stopped, oldest first.
   pub stopped: Vec<StoppedRun>,
+  /// An MCP server's fields as its panel reads them, which it keeps showing read-only.
+  pub details: Option<McpServerText>,
 }
 
 /// A run an archive stopped, by its task.
@@ -326,10 +329,12 @@ fn archived(db: &ProjectDb) -> Result<Vec<LocalArchived>, StoreError> {
         name: resource.name().to_string(),
         at,
         stopped: stopped(db, &db.archive_stops_of_resource(resource.id())?)?,
+        details: None,
       });
     }
   }
   let servers = db.all_mcp_servers()?;
+  let secrets = db.secrets()?;
   for (id, at) in db.archived_mcp_servers()? {
     if let Some(server) = servers.iter().find(|server| server.id() == id) {
       archived.push(LocalArchived {
@@ -338,6 +343,7 @@ fn archived(db: &ProjectDb) -> Result<Vec<LocalArchived>, StoreError> {
         name: server.name().to_string(),
         at,
         stopped: stopped(db, &db.archive_stops_of_mcp_server(id)?)?,
+        details: Some(McpServerText::of(server, &secrets)),
       });
     }
   }

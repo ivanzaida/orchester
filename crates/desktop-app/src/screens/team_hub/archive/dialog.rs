@@ -15,10 +15,11 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 use orchester_api::{SharedResourceKind, UsedBy, UsedByResource, UsedByRun};
+use orchester_workspace::used_by::{RunLine, RunState};
 
 use super::{Failed, ReadFailed, words};
 use crate::{
-  theme::{ARCHIVE_DIALOG_WIDTH, ArchiveText, DialogSpacing, ExtraRadius, ExtraSpacing},
+  theme::{ARCHIVE_DIALOG_WIDTH, ArchiveText, DialogSpacing, ExtraRadius, ExtraSpacing, LOCAL_ARCHIVE_DIALOG_WIDTH},
   ui::{
     button::{ActionButton, ButtonKind},
     dialog::over_window,
@@ -45,6 +46,8 @@ pub(in crate::screens) type Confirm = Arc<dyn Fn() + Send + Sync>;
 pub(in crate::screens) struct State {
   /// What uses the resource: none while it is read; the failure when it could not be.
   pub read: Option<Result<UsedBy, ReadFailed>>,
+  /// How each run that will stop stands: only a local project's confirmation says it.
+  pub lines: Vec<RunLine>,
   /// The archive was asked for and has not answered.
   pub archiving: bool,
   /// Why the archive did nothing.
@@ -64,7 +67,11 @@ pub(in crate::screens) fn dialog(
   let name = props.name.as_ref();
   let mut dialog = Column::new()
     .id("team-hub-archive-dialog")
-    .width(Dimension::Px(ARCHIVE_DIALOG_WIDTH))
+    .width(Dimension::Px(if props.local {
+      LOCAL_ARCHIVE_DIALOG_WIDTH
+    } else {
+      ARCHIVE_DIALOG_WIDTH
+    }))
     .padding(Padding::all(DialogSpacing::Side.role()))
     .spacing(DialogSpacing::Parts.role())
     .background(PaletteColor::SurfaceRaised)
@@ -93,7 +100,7 @@ pub(in crate::screens) fn dialog(
     Some(Ok(used)) => {
       dialog = dialog
         .child(used_by(ctx, &used.resources))
-        .child(runs(ctx, props.local, &used.runs))
+        .child(runs(ctx, props.local, (&used.runs, &state.lines)))
         .with_children(
           props
             .blocks_profiles
@@ -188,7 +195,18 @@ fn used_by(ctx: &Ctx, resources: &[UsedByResource]) -> Column {
   group(ctx, "team-hub-archive-used", &heading, rows, "team_archive.nothingUses")
 }
 
-fn runs(ctx: &Ctx, local: bool, runs: &[UsedByRun]) -> Column {
+/// What a run that will stop says of how it stands.
+const fn state_key(state: RunState) -> &'static str {
+  match state {
+    RunState::Pending => "local_archive.runState.pending",
+    RunState::Running => "local_archive.runState.running",
+    RunState::Paused => "local_archive.runState.paused",
+    RunState::Waiting => "local_archive.runState.waiting",
+    RunState::Interrupted | RunState::Ended => "local_archive.runState.interrupted",
+  }
+}
+
+fn runs(ctx: &Ctx, local: bool, (runs, lines): (&[UsedByRun], &[RunLine])) -> Column {
   let rows = runs
     .iter()
     .enumerate()
@@ -200,9 +218,25 @@ fn runs(ctx: &Ctx, local: bool, runs: &[UsedByRun]) -> Column {
           .id(format!("{id}-holder"))
           .variant(ArchiveText::Holder.role())
       });
+      // A local run is named by its number among its task's runs and says how it stands.
+      let line = lines.iter().find(|line| line.run == run.run);
+      let name = match line {
+        Some(line) => ctx.t_args(
+          "local_archive.runRow",
+          [("key", run.task_key.clone()), ("number", line.number.to_string())],
+        ),
+        None => run.task_key.as_str().into(),
+      };
+      let holder = holder.or_else(|| {
+        line.map(|line| {
+          Text::new(&ctx.t(state_key(line.state)))
+            .id(format!("{id}-state"))
+            .variant(ArchiveText::Holder.role())
+        })
+      });
       row(
         id.clone(),
-        Text::new(&run.task_key)
+        Text::new(&name)
           .id(format!("{id}-name"))
           .variant(ArchiveText::Name.role()),
         holder,

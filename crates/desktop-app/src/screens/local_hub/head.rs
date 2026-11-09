@@ -16,7 +16,10 @@ use lurq::{
 use orchester_core::id::ProjectId;
 use orchester_workspace::local_archive::Archivable;
 
-use super::model::{Listing, view_of};
+use super::{
+  model::{Listing, view_of},
+  new_menu::new_menu,
+};
 use crate::{
   navigation::Navigation,
   routes::{
@@ -36,7 +39,7 @@ use crate::{
 const HEAD_HEIGHT: f32 = 32.0;
 
 /// *Agents*, and at its right that the project is local, *Share with a team…* and the New of the filter's kind.
-pub(super) fn head(ctx: &Ctx, project: ProjectId, filter: HubFilter, navigation: &Navigation) -> Row {
+pub(super) fn head(ctx: &mut Ctx, project: ProjectId, filter: HubFilter, navigation: &Navigation) -> Row {
   let share = ActionButton::new("local-hub-share", ButtonKind::Secondary, ctx.t("local_hub.share"))
     .icon(Icon::Users)
     .opens(navigation.to(Route::Project(
@@ -51,11 +54,14 @@ pub(super) fn head(ctx: &Ctx, project: ProjectId, filter: HubFilter, navigation:
       .icon(Icon::Download)
       .opens(navigation.to(Route::Project(project, page)))
   });
-  let new = new_of(filter).map(|(page, words)| {
-    ActionButton::new("local-hub-new", ButtonKind::Primary, ctx.t(words))
+  // A filter of one kind makes one of it; All and Archived hold no one kind, so *New* offers each.
+  let new: Element = match new_of(filter) {
+    Some((page, words)) => ActionButton::new("local-hub-new", ButtonKind::Primary, ctx.t(words))
       .icon(Icon::Plus)
       .opens(navigation.to(Route::Project(project, page)))
-  });
+      .into(),
+    None => new_menu(ctx, project),
+  };
   Row::new()
     .id("local-hub-head")
     .width(Dimension::Pct(100.0))
@@ -88,7 +94,7 @@ pub(super) fn head(ctx: &Ctx, project: ProjectId, filter: HubFilter, navigation:
         .child(share)
         .child(memory)
         .with_children(import)
-        .with_children(new),
+        .child(new),
     )
 }
 
@@ -106,7 +112,7 @@ fn import_of(filter: HubFilter) -> Option<ProjectPage> {
 }
 
 /// The page that makes a new one of the kind `filter` holds, and the words of its button; none under All and Archived.
-const fn new_of(filter: HubFilter) -> Option<(ProjectPage, &'static str)> {
+pub(super) const fn new_of(filter: HubFilter) -> Option<(ProjectPage, &'static str)> {
   Some(match filter {
     HubFilter::Profiles => (ProjectPage::NewAgent(AgentTab::Profile), "local_hub.new.profiles"),
     HubFilter::McpServers => (

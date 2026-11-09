@@ -10,14 +10,14 @@ use std::{num::NonZeroU32, path::Path};
 
 use orchester_api::SharedResourceKind;
 use orchester_core::{
-  id::{ConnectionId, ResourceId},
+  id::{ConnectionId, ResourceId, RunId},
   resource::{AgentProfile, Resource, ResourceBody, ResourceKind, TeamMcpServer, TeamReviewer, VersionNumber},
-  run::RunSnapshot,
-  store::{McpServerStore, ResourceStore, TaskStore},
+  run::{RunSnapshot, RunStatus},
+  store::{McpServerStore, ResourceStore, RunStore, TaskStore},
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use super::{UsedBy, UsedByError, UsedByResource, UsedByRun, names};
+use super::{RunLine, RunState, UsedBy, UsedByError, UsedByResource, UsedByRun, names};
 use crate::sharing::sync::{pins, pins_mcp_server};
 
 pub(super) fn used_by(root: &Path, resource: ResourceId) -> Result<UsedBy, UsedByError> {
@@ -55,6 +55,31 @@ pub(super) fn used_by_mcp_server(root: &Path, server: ConnectionId) -> Result<Us
     resources: profiles,
     runs: runs_where(&db, |snapshot| pins_mcp_server(&db, snapshot, server))?,
   })
+}
+
+/// How each of `runs` stands, for the confirmation that lists the runs an archive stops (`Agents · Archive · used by`
+/// L11); a run the project no longer has is left out.
+pub(super) fn run_lines(root: &Path, runs: &[RunId]) -> Result<Vec<RunLine>, UsedByError> {
+  let db = ProjectDb::open(root)?;
+  let mut lines = Vec::new();
+  for id in runs {
+    let Some(run) = db.run(*id)? else {
+      continue;
+    };
+    lines.push(RunLine {
+      run: *id,
+      number: run.number().get(),
+      state: match run.status() {
+        RunStatus::Pending => RunState::Pending,
+        RunStatus::Running => RunState::Running,
+        RunStatus::Paused(_) => RunState::Paused,
+        RunStatus::WaitingForPerson(_) => RunState::Waiting,
+        RunStatus::Interrupted(_) => RunState::Interrupted,
+        RunStatus::Succeeded | RunStatus::Failed(_) | RunStatus::Cancelled => RunState::Ended,
+      },
+    });
+  }
+  Ok(lines)
 }
 
 fn resources(db: &ProjectDb, target: ResourceId) -> Result<Vec<UsedByResource>, UsedByError> {

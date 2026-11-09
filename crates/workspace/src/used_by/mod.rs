@@ -52,6 +52,34 @@ pub async fn used_by_mcp_server(root: &Path, server: ConnectionId) -> Result<Use
     .map_err(|_| UsedByError::Interrupted)?
 }
 
+/// A run an archive stops, as the confirmation lists it: its number among its task's runs and how it stands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct RunLine {
+  pub run: orchester_core::id::RunId,
+  pub number: u32,
+  pub state: RunState,
+}
+
+/// How a run that has not ended stands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RunState {
+  Pending,
+  Running,
+  Paused,
+  /// It waits for a person.
+  Waiting,
+  Interrupted,
+  Ended,
+}
+
+/// How each of `runs` of the local project at `root` stands. Blocks on the project database.
+pub async fn run_lines(root: &Path, runs: Vec<orchester_core::id::RunId>) -> Result<Vec<RunLine>, UsedByError> {
+  let owned = root.to_owned();
+  background::run(move || local::run_lines(&owned, &runs))
+    .await
+    .map_err(|_| UsedByError::Interrupted)?
+}
+
 /// Whether `session` is the one `link` names.
 fn is_of(session: &TeamSession, link: &SharingLink) -> bool {
   session.server() == link.server && session.project() == link.project

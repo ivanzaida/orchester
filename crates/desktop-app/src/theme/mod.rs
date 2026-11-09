@@ -79,7 +79,7 @@ use lurq::{
 
 pub use self::{
   accounts::{AccountsSpacing, AccountsText},
-  archive::{ARCHIVE_DIALOG_WIDTH, ArchiveText},
+  archive::{ARCHIVE_DIALOG_WIDTH, ArchiveText, LOCAL_ARCHIVE_DIALOG_WIDTH},
   browser::{BrowserBorder, BrowserColor, BrowserSpacing, BrowserText},
   cards::{CardsSpacing, CardsText, NOT_CHOSEN_OPACITY, RISK_TRACK_HEIGHT},
   chat_links::ChatLinkLooks,
