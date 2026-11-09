@@ -163,7 +163,10 @@ fn team_mcp_a_watch_on_a_team_task_waits_and_says_why_while_signed_out_then_ends
   let signed_out = refreshed(&team.checkout);
   assert!(signed_out.changed && signed_out.polling);
   assert_eq!(follow(&team.checkout, project), Followed::default());
-  assert!(is_watched(&team.checkout, chat), "the watch waits; it does not end or fail");
+  assert!(
+    is_watched(&team.checkout, chat),
+    "the watch waits; it does not end or fail"
+  );
   assert_eq!(cannot_read(&team.checkout, chat), Some("orchestrator.watch.unreadable"));
   // Asking again changes nothing and says the same.
   assert!(!refreshed(&team.checkout).changed);
@@ -289,13 +292,21 @@ fn team_mcp_a_local_task_watch_ends_on_its_stored_row_and_needs_no_reading() {
   assert!(follow(&checkout, project).kept);
   assert!(!is_watched(&checkout, chat));
   let ended = ends(&checkout, chat);
-  assert_eq!((ended[0].reason, ended[0].name.as_str()), (EndReason::TaskDone, "KON-1"));
+  assert_eq!(
+    (ended[0].reason, ended[0].name.as_str()),
+    (EndReason::TaskDone, "KON-1")
+  );
 }
 
 /// Caches the server's module as the project's own (as the sync does) and watches it.
 fn module_watch(checkout: &Checkout, module: ModuleId) -> WatchTarget {
-  let details = ModuleDetails::new(Name::new("Webhooks").expect("name"), "", (None, None), ModuleState::Open)
-    .expect("details");
+  let details = ModuleDetails::new(
+    Name::new("Webhooks").expect("name"),
+    "",
+    (None, None),
+    ModuleState::Open,
+  )
+  .expect("details");
   checkout
     .db()
     .cache_shared_modules(&[CachedModule {

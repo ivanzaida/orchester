@@ -1,6 +1,8 @@
 //! A team task's run as this computer keeps it: the task's identity and the run with the inputs the team server
 //! accepted, and no definition of the task (no copy the old sharing stream cached).
 
+use std::sync::Arc;
+
 use orchester_core::{
   connection::AgentProvider,
   id::{RunId, StepExecutionId},
@@ -11,11 +13,8 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, TeamFence};
-use serde_json::json;
-
-use std::sync::Arc;
-
 use parking_lot::Mutex;
+use serde_json::json;
 
 use crate::{Checkout, reads, team_server::TeamServer, tools::server};
 

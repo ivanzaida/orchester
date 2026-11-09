@@ -15,8 +15,6 @@ use std::{
   time::Duration,
 };
 
-use tokio::runtime::Handle;
-
 use lurq::app::{
   ctx::{Ctx, StreamEmitter},
   i18n::I18n,
@@ -39,6 +37,7 @@ use orchester_workspace::{
   tasks::outside::Outside,
   workspace::OpenProject,
 };
+use tokio::runtime::Handle;
 
 use crate::services::Services;
 
@@ -57,7 +56,15 @@ pub(super) fn follow(ctx: &mut Ctx, (open, changes): (&OpenProject, u64)) {
   let services = Services::of(ctx);
   let chats = chats(ctx, (services.runners.clone(), open.repo_root.clone()));
   let stalls = stall_clock(ctx, (open.repo_root.clone(), changes));
-  let team = team_clock(ctx, (open.repo_root.clone(), services.servers.clone(), services.runners.clone()), services.runtime.clone());
+  let team = team_clock(
+    ctx,
+    (
+      open.repo_root.clone(),
+      services.servers.clone(),
+      services.runners.clone(),
+    ),
+    services.runtime.clone(),
+  );
   let i18n = ctx.i18n().clone();
   let open = open.clone();
   ctx.future((open.repo_root.clone(), changes, chats, stalls, team), move |_| {
@@ -274,55 +281,58 @@ fn stall_clock(ctx: &mut Ctx, deps: (PathBuf, u64)) -> u64 {
 /// younger than half of [`POLL`] stands, so the conversations' changes cost no request. A change wakes the follower and
 /// the watching listing.
 fn team_clock(ctx: &mut Ctx, deps: (PathBuf, Servers, Runners), runtime: Handle) -> u64 {
-  let ticks = ctx.stream(deps, move |(root, servers, runners), emitter: StreamEmitter<u64, ()>| {
-    let runtime = runtime.clone();
-    async move {
-      let mut updates = runners.chats_of(&root);
-      let mut ticks = 0;
-      loop {
-        updates.borrow_and_update();
-        let (folder, asked) = (root.clone(), servers.clone());
-        // On the runtime the team reads belong to, not on the UI's executor.
-        let read = runtime
-          .spawn(async move { team_status::refresh(&asked, &folder, POLL / 2).await })
-          .await;
-        let polling = match read {
-          Ok(Ok(refreshed)) => {
-            if refreshed.changed {
-              ticks += 1;
-              runners.chat_changed(&root);
+  let ticks = ctx.stream(
+    deps,
+    move |(root, servers, runners), emitter: StreamEmitter<u64, ()>| {
+      let runtime = runtime.clone();
+      async move {
+        let mut updates = runners.chats_of(&root);
+        let mut ticks = 0;
+        loop {
+          updates.borrow_and_update();
+          let (folder, asked) = (root.clone(), servers.clone());
+          // On the runtime the team reads belong to, not on the UI's executor.
+          let read = runtime
+            .spawn(async move { team_status::refresh(&asked, &folder, POLL / 2).await })
+            .await;
+          let polling = match read {
+            Ok(Ok(refreshed)) => {
+              if refreshed.changed {
+                ticks += 1;
+                runners.chat_changed(&root);
+              }
+              refreshed.polling
             }
-            refreshed.polling
+            Ok(Err(error)) => {
+              tracing::error!(?error, "cannot read the team tasks the project's subscriptions watch");
+              true
+            }
+            Err(error) => {
+              tracing::error!(%error, "reading the team tasks the project's subscriptions watch did not finish");
+              true
+            }
+          };
+          if !emitter.emit(ticks) {
+            return;
           }
-          Ok(Err(error)) => {
-            tracing::error!(?error, "cannot read the team tasks the project's subscriptions watch");
-            true
-          }
-          Err(error) => {
-            tracing::error!(%error, "reading the team tasks the project's subscriptions watch did not finish");
-            true
-          }
-        };
-        if !emitter.emit(ticks) {
-          return;
-        }
-        let poll = async {
-          if polling {
-            tokio::time::sleep(POLL).await;
-          } else {
-            std::future::pending::<()>().await;
-          }
-        };
-        tokio::select! {
-          () = poll => {}
-          changed = updates.changed() => {
-            if changed.is_err() {
-              return;
+          let poll = async {
+            if polling {
+              tokio::time::sleep(POLL).await;
+            } else {
+              std::future::pending::<()>().await;
+            }
+          };
+          tokio::select! {
+            () = poll => {}
+            changed = updates.changed() => {
+              if changed.is_err() {
+                return;
+              }
             }
           }
         }
       }
-    }
-  });
+    },
+  );
   ticks.state().get().data.unwrap_or(0)
 }
