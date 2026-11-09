@@ -9,12 +9,11 @@
 use std::path::Path;
 
 use orchester_core::{
-  id::{ConnectionId, ResourceId, RunId},
+  id::{ConnectionId, ResourceId},
   resource::ResourceKind,
-  run::Answerer,
   time::Timestamp,
 };
-use orchester_store::{Archived, ProjectDb, StoreError};
+use orchester_store::{Archived as ArchivedResource, ProjectDb, StoreError};
 
 use crate::{
   background,
@@ -46,51 +45,39 @@ impl Archivable {
   }
 }
 
-/// Why something was not archived; nothing was changed.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum NotArchived {
-  /// Automation asked: it stops runs, so only a person archives.
-  PersonOnly,
-  Failed(Message),
+/// What archiving stopped.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Archived {
+  /// The runs it cancelled.
+  pub stopped: usize,
+  /// The runs that use it that the runner could not cancel: they keep working, on what is archived.
+  pub left_running: usize,
 }
 
-impl NotArchived {
-  /// What a person-only refusal says.
-  pub fn person_only_message() -> Message {
-    Message::new("appMcp.errors.teamArchivePersonOnly")
+impl Archived {
+  /// What to tell the person when some runs that use what was archived could not be stopped; `None` when all were.
+  pub fn left_running_message(self) -> Option<Message> {
+    (self.left_running > 0)
+      .then(|| Message::new("localArchive.runsLeftRunning").with("count", self.left_running.to_string()))
   }
 }
 
-/// Archives `what` in the project at `root`, as `by` asks, and cancels the runs that use it. The number of runs
-/// stopped. A run that cannot be cancelled is logged and not counted ([`sync::stop`]).
-pub async fn archive(runners: &Runners, root: &Path, what: Archivable, by: Answerer) -> Result<usize, NotArchived> {
-  if by == Answerer::Automation {
-    return Err(NotArchived::PersonOnly);
-  }
+/// Archives `what` in the project at `root` and cancels the runs that use it. Stopping work is a person's alone: the
+/// caller asks only after a person confirmed, and refuses automation before it comes here. The archive and the runs it
+/// stops are read in one transaction ([`mark`]), and a run that starts after it is refused by the store, so none is
+/// missed. `Err` says why nothing was archived.
+pub async fn archive(runners: &Runners, root: &Path, what: Archivable) -> Result<Archived, Message> {
   let owned = root.to_owned();
-  let pinning = background::run(move || mark(&owned, what))
-    .await
-    .map_err(NotArchived::Failed)?
-    .map_err(NotArchived::Failed)?;
-  let stopped = sync::stop(runners, root, pinning.0, pinning.1).await;
-  if let Archivable::McpServer(server) = what {
-    let (owned, runs) = (root.to_owned(), stopped.clone());
-    background::run(move || note_stops(&owned, server, &runs))
-      .await
-      .map_err(NotArchived::Failed)?
-      .map_err(NotArchived::Failed)?;
-  }
-  Ok(stopped.len())
-}
-
-/// Notes that the archive of `server` stopped `runs`, so its panel can say which.
-fn note_stops(root: &Path, server: ConnectionId, runs: &[RunId]) -> Result<(), Message> {
-  let store = |error: &StoreError| messages::store_error(error);
-  let mut db = ProjectDb::open(root).map_err(|error| store(&error))?;
-  runs
-    .iter()
-    .try_for_each(|run| db.record_mcp_server_stop(*run, server))
-    .map_err(|error| store(&error))
+  let (pinning, archived) = background::run(move || mark(&owned, what)).await??;
+  let server = match what {
+    Archivable::McpServer(server) => Some(server),
+    Archivable::Resource(_) => None,
+  };
+  let stopped = sync::stop(runners, root, pinning, (archived, server)).await;
+  Ok(Archived {
+    stopped: stopped.runs.len(),
+    left_running: stopped.left_running,
+  })
 }
 
 /// Brings `what` back as it was.
@@ -108,34 +95,41 @@ pub async fn restore(root: &Path, what: Archivable) -> Result<(), Message> {
   .await?
 }
 
-/// Marks `what` archived and returns the runs that used it, read first, with what the stop records.
-fn mark(root: &Path, what: Archivable) -> Result<(Pinning, Option<Archived>), Message> {
+/// Marks `what` archived and returns the runs that use it, with what the stop records: both in one write transaction,
+/// so a run cannot start between reading them and archiving.
+fn mark(root: &Path, what: Archivable) -> Result<(Pinning, Option<ArchivedResource>), Message> {
   let store = |error: &StoreError| messages::store_error(error);
-  let found = match what {
-    Archivable::Resource(id) => sync::pinning(root, id),
-    Archivable::McpServer(id) => sync::pinning_mcp_server(root, id),
-  };
-  let pinning = found
-    .map_err(|error| match error {
-      ArchiveError::Store(error) => store(&error),
-      ArchiveError::Runs(_) => Message::new("localArchive.runsUnreadable"),
-    })?
-    .ok_or_else(|| Message::new("localArchive.gone"))?;
   let mut db = ProjectDb::open(root).map_err(|error| store(&error))?;
-  let now = Timestamp::now();
-  let archived = match what {
-    Archivable::Resource(id) => {
-      db.archive_local_resource(id, now).map_err(|error| store(&error))?;
-      Some(Archived {
-        id,
-        kind: pinning.kind(),
-        by: None,
-      })
-    }
-    Archivable::McpServer(id) => {
-      db.archive_mcp_server(id, now).map_err(|error| store(&error))?;
-      None
-    }
-  };
-  Ok((pinning, archived))
+  db.with_write_transaction(
+    |db| {
+      let found = match what {
+        Archivable::Resource(id) => sync::pinning_in(db, root, id),
+        Archivable::McpServer(id) => sync::pinning_mcp_server_in(db, root, id),
+      };
+      let pinning = found
+        .map_err(|error| match error {
+          ArchiveError::Store(error) => store(&error),
+          ArchiveError::Runs(_) => Message::new("localArchive.runsUnreadable"),
+        })?
+        .ok_or_else(|| Message::new("localArchive.gone"))?;
+      let now = Timestamp::now();
+      let archived = match what {
+        Archivable::Resource(id) => {
+          db.archive_local_resource(id, now).map_err(|error| store(&error))?;
+          Some(ArchivedResource {
+            id,
+            kind: pinning.kind(),
+            by: None,
+          })
+        }
+        Archivable::McpServer(id) => {
+          db.archive_mcp_server(id, now).map_err(|error| store(&error))?;
+          None
+        }
+      };
+      Ok((pinning, archived))
+    },
+    |error| store(&error),
+    |_, error| store(&error),
+  )
 }

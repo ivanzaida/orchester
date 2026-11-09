@@ -349,6 +349,9 @@ pub enum RunStoreError {
   /// The run's inputs do not belong to its task, or its snapshot does not pin what they carry. Nothing was recorded.
   #[error("the inputs of a run of task {task} do not match it: {reason}")]
   InputsMismatch { task: TaskId, reason: &'static str },
+  /// The run would pin or use `0`, which a local project archived. Nothing was recorded.
+  #[error("the run would use {0}, which was archived")]
+  UsesArchived(String),
 }
 
 impl RunStoreError {
@@ -365,7 +368,8 @@ impl RunStoreError {
       | Self::WorktreeRemoved(_)
       | Self::Merged(_)
       | Self::Resolving(_)
-      | Self::InputsMismatch { .. } => RunnerFailure::Other,
+      | Self::InputsMismatch { .. }
+      | Self::UsesArchived(_) => RunnerFailure::Other,
     }
   }
 }

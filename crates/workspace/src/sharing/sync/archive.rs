@@ -72,13 +72,27 @@ pub(super) async fn stop_runs(runners: &Runners, root: &Path, (resource, by): (R
     kind: pinning.kind,
     by: by.map(str::to_owned),
   };
-  stop(runners, root, pinning, Some(archived)).await;
+  stop(runners, root, pinning, (Some(archived), None)).await;
+}
+
+/// What stopping the runs of an archive did.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub(crate) struct StoppedRuns {
+  /// The runs the runner cancelled.
+  pub runs: Vec<RunId>,
+  /// How many it could not: they keep working.
+  pub left_running: usize,
 }
 
 /// Cancels the runs `pinning` names through the project's runner and records each one cancelled, with what was
-/// archived when it is a resource (a local MCP server is no resource). The runs it cancelled.
-pub(crate) async fn stop(runners: &Runners, root: &Path, pinning: Pinning, archived: Option<Archived>) -> Vec<RunId> {
-  let mut stopped = Vec::new();
+/// archived when it is a resource, or the local MCP server `server` whose archive it was.
+pub(crate) async fn stop(
+  runners: &Runners,
+  root: &Path,
+  pinning: Pinning,
+  (archived, server): (Option<Archived>, Option<ConnectionId>),
+) -> StoppedRuns {
+  let mut stopped = StoppedRuns::default();
   for (run, task) in pinning.runs {
     if let Err(error) = runners
       .control_run_in(&pinning.project, Command::CancelRun { run })
@@ -86,6 +100,7 @@ pub(crate) async fn stop(runners: &Runners, root: &Path, pinning: Pinning, archi
     {
       let message = control_message(&error);
       tracing::warn!(?message, %run, resource = %pinning.resource, "cannot stop a run that pins an archived resource");
+      stopped.left_running += 1;
       continue;
     }
     let stop = ArchiveStop {
@@ -95,9 +110,9 @@ pub(crate) async fn stop(runners: &Runners, root: &Path, pinning: Pinning, archi
       stopped_at: Timestamp::now(),
       archived: archived.clone(),
     };
-    stopped.push(run);
+    stopped.runs.push(run);
     let owned = root.to_owned();
-    match background::run(move || record(&owned, &stop)).await {
+    match background::run(move || record(&owned, &stop, server)).await {
       Ok(Ok(())) => {}
       Ok(Err(error)) => tracing::error!(%error, %run, "cannot record a run stopped by an archived resource"),
       // The blocking pool is shutting down with the window.
@@ -107,13 +122,19 @@ pub(crate) async fn stop(runners: &Runners, root: &Path, pinning: Pinning, archi
   stopped
 }
 
-fn record(root: &Path, stop: &ArchiveStop) -> Result<(), StoreError> {
-  ProjectDb::open(root)?.record_archive_stop(stop)
+fn record(root: &Path, stop: &ArchiveStop, server: Option<ConnectionId>) -> Result<(), StoreError> {
+  let mut db = ProjectDb::open(root)?;
+  db.record_archive_stop(stop)?;
+  server.map_or(Ok(()), |server| db.record_mcp_server_stop(stop.run, server))
 }
 
 /// The runs that have not ended and pin `resource`; `None` when the project does not keep it.
 pub fn pinning(root: &Path, resource: ResourceId) -> Result<Option<Pinning>, ArchiveError> {
-  let db = ProjectDb::open(root)?;
+  pinning_in(&ProjectDb::open(root)?, root, resource)
+}
+
+/// [`pinning`] read through `db`, which an archive holds in the transaction that writes it.
+pub(crate) fn pinning_in(db: &ProjectDb, root: &Path, resource: ResourceId) -> Result<Option<Pinning>, ArchiveError> {
   let Some(kept) = db.resource(resource)? else {
     return Ok(None);
   };
@@ -121,7 +142,7 @@ pub fn pinning(root: &Path, resource: ResourceId) -> Result<Option<Pinning>, Arc
   for listed in db.unfinished_runs()? {
     match listed {
       Ok(run) => {
-        if pins(&db, run.snapshot(), &kept)? {
+        if pins(db, run.snapshot(), &kept)? {
           runs.push((run.id(), run.task()));
         }
       }
@@ -144,7 +165,15 @@ pub fn pinning(root: &Path, resource: ResourceId) -> Result<Option<Pinning>, Arc
 
 /// The runs that have not ended and pin the local MCP server `server`; `None` when the project does not keep it.
 pub fn pinning_mcp_server(root: &Path, server: ConnectionId) -> Result<Option<Pinning>, ArchiveError> {
-  let db = ProjectDb::open(root)?;
+  pinning_mcp_server_in(&ProjectDb::open(root)?, root, server)
+}
+
+/// [`pinning_mcp_server`] read through `db`, which an archive holds in the transaction that writes it.
+pub(crate) fn pinning_mcp_server_in(
+  db: &ProjectDb,
+  root: &Path,
+  server: ConnectionId,
+) -> Result<Option<Pinning>, ArchiveError> {
   let Some(kept) = db.mcp_server(server)? else {
     return Ok(None);
   };
@@ -152,7 +181,7 @@ pub fn pinning_mcp_server(root: &Path, server: ConnectionId) -> Result<Option<Pi
   for listed in db.unfinished_runs()? {
     match listed {
       Ok(run) => {
-        if pins_mcp_server(&db, run.snapshot(), server)? {
+        if pins_mcp_server(db, run.snapshot(), server)? {
           runs.push((run.id(), run.task()));
         }
       }

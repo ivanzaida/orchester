@@ -43,7 +43,7 @@ pub use self::{
   stream::{Clock, Source, Stopped, SystemClock, follow},
 };
 pub(crate) use self::{
-  archive::{pins, pins_mcp_server, stop},
+  archive::{pinning_in, pinning_mcp_server_in, pins, pins_mcp_server, stop},
   config::{non_team_name, refresh_profile, refresh_team_profiles, team_executors, team_form},
 };
 use super::{Behalf, Connection, Servers, SharingError, project::ProjectServer, send_lane::send_turn};

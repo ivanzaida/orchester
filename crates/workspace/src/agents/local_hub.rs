@@ -10,7 +10,7 @@ use orchester_core::{
   id::{ConnectionId, ResourceId},
   resource::{AgentProfile, Instruction, Pipeline, ResourceKind, Skill, Tool, ToolKind, VersionNumber},
   secret::{SecretName, SecretVault},
-  store::{ConnectionStore, McpServerStore, ResourceStore, SecretStore, TaskStore},
+  store::{ConnectionStore, ResourceStore, SecretStore, TaskStore},
   time::Timestamp,
 };
 use orchester_store::{ArchiveStop, ProjectDb, StoreError};
@@ -202,7 +202,8 @@ fn plain(db: &ProjectDb) -> Result<Vec<LocalPlain>, StoreError> {
 }
 
 fn profiles(db: &ProjectDb) -> Result<Vec<(ResourceId, LocalProfile)>, StoreError> {
-  let servers = db.mcp_servers()?;
+  // The archived ones too: a profile still chooses one until it is restored or the profile drops it.
+  let servers = db.all_mcp_servers()?;
   let connections = db.connections()?;
   let pipelines = latest_pipelines(db)?;
   let mut profiles = Vec::new();
@@ -328,7 +329,7 @@ fn archived(db: &ProjectDb) -> Result<Vec<LocalArchived>, StoreError> {
       });
     }
   }
-  let servers = db.mcp_servers()?;
+  let servers = db.all_mcp_servers()?;
   for (id, at) in db.archived_mcp_servers()? {
     if let Some(server) = servers.iter().find(|server| server.id() == id) {
       archived.push(LocalArchived {

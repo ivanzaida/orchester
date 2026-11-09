@@ -129,7 +129,7 @@ pub(super) fn checked(
   secrets: &[Secret],
 ) -> Result<mcp::McpServerDraft, ToolError> {
   let taken: Vec<McpServerName> = db
-    .mcp_servers()?
+    .all_mcp_servers()?
     .into_iter()
     .filter(|server| Some(server.id()) != stored.map(McpServer::id))
     .map(|server| server.name().clone())

@@ -11,7 +11,8 @@
   },
   "localArchive": {
     "runsUnreadable": "The runs that use it could not be read, so nothing was archived. Try again.",
-    "gone": "This project no longer has it, so there is nothing to archive."
+    "gone": "This project no longer has it, so there is nothing to archive.",
+    "runsLeftRunning": "It is archived, but {{count}} of the runs that use it could not be stopped and keep working on it. Stop them from their tasks."
   },
   "localIntegration": {
     "sensitiveOutcome": "Integration details are unavailable under the current sensitive-data policy. Inspect the actual recorded outcome before continuing.",

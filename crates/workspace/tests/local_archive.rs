@@ -7,14 +7,18 @@
 mod support;
 
 use orchester_core::{
-  connection::mcp::{McpEnvironment, McpServer, McpServerName, McpTransport, StdioServer},
+  connection::mcp::{McpEnvironment, McpServer, McpServerName, McpServerSelection, McpTransport, StdioServer},
   id::ConnectionId,
-  resource::{AgentProfile, CommandProgram, ResourceKind},
+  name::Name,
+  resource::{AgentProfile, CommandProgram, ModelId, PromptText, ProviderSettings, ResourceKind},
   store::{McpServerStore, ResourceStore},
 };
 use orchester_store::ProjectDb;
 use orchester_workspace::{
-  local_archive::{Archivable, restore},
+  agents::{data::ProjectAgents, servers},
+  connections::data::ProjectConnections,
+  local_archive::{Archivable, Archived, restore},
+  pipelines::data::Assignables,
   tasks::outside::Outside,
 };
 use support::{Fixture, at};
@@ -72,4 +76,106 @@ fn local_archive_changes_name_what_each_screen_reads_again() {
     [Outside::Profiles, Outside::Pipelines]
   );
   assert_eq!(profile.changes(Some(ResourceKind::Skill)), [Outside::Skills]);
+}
+
+fn archived_figma(fixture: &mut Fixture) -> McpServer {
+  let server = McpServer::new(
+    ConnectionId::generate(),
+    McpServerName::new("figma").expect("name"),
+    McpTransport::Stdio(StdioServer::new(
+      CommandProgram::new("figma-mcp").expect("program"),
+      Vec::new(),
+      None,
+    )),
+    McpEnvironment::default(),
+    at(1),
+  )
+  .expect("server");
+  fixture.db.create_mcp_server(&server).expect("stored");
+  fixture.db.archive_mcp_server(server.id(), at(21)).expect("archived");
+  server
+}
+
+#[test]
+fn local_archive_hides_an_archived_server_from_every_list_a_picker_reads() {
+  let mut fixture = Fixture::new();
+  let server = archived_figma(&mut fixture);
+  let root = fixture.repo.path();
+
+  assert!(
+    ProjectAgents::load_in(root).expect("agents").mcp.is_empty(),
+    "the profile editor's section"
+  );
+  assert!(
+    ProjectConnections::load_in(root).expect("connections").mcp.is_empty(),
+    "the connections read"
+  );
+  assert!(
+    Assignables::load(&ProjectDb::open(root).expect("open"))
+      .expect("pipelines")
+      .mcp_servers
+      .is_empty(),
+    "the pipelines' picker"
+  );
+  let db = ProjectDb::open(root).expect("open");
+  assert!(
+    db.mcp_servers().expect("read").is_empty(),
+    "the tools and the runs read it too"
+  );
+  assert!(
+    db.mcp_server(server.id()).expect("read").is_some(),
+    "its panel and Restore still find it"
+  );
+}
+
+#[test]
+fn local_archive_refuses_choosing_an_archived_server_but_keeps_a_choice_that_was_made() {
+  let mut fixture = Fixture::new();
+  let server = archived_figma(&mut fixture);
+  let chooser = AgentProfile::new(
+    Name::new("Builder").expect("name"),
+    String::new(),
+    PromptText::new("Build.").expect("prompt"),
+    ConnectionId::generate(),
+    ModelId::new("gpt-5.5").expect("model"),
+    ProviderSettings::default(),
+  )
+  .with_mcp_servers(McpServerSelection::new(vec![server.id()]).expect("selection"));
+  let none = AgentProfile::new(
+    Name::new("Builder").expect("name"),
+    String::new(),
+    PromptText::new("Build.").expect("prompt"),
+    ConnectionId::generate(),
+    ModelId::new("gpt-5.5").expect("model"),
+    ProviderSettings::default(),
+  );
+  let offered = ProjectAgents::load_in(fixture.repo.path()).expect("agents").mcp;
+
+  let refused = servers::check(&offered, Some(&none), &chooser).expect_err("a new choice of an archived server");
+  assert_eq!(refused.key, "appMcp.errors.mcpServerMissing");
+  assert_eq!(
+    servers::check(&offered, Some(&chooser), &chooser),
+    Ok(()),
+    "a profile that already chose it can still be saved: nothing in a picker takes it out"
+  );
+}
+
+#[test]
+fn local_archive_says_when_a_run_could_not_be_stopped() {
+  assert_eq!(
+    Archived {
+      stopped: 2,
+      left_running: 0
+    }
+    .left_running_message(),
+    None
+  );
+  let said = Archived {
+    stopped: 1,
+    left_running: 2,
+  }
+  .left_running_message()
+  .expect("said");
+  assert_eq!(said.key, "localArchive.runsLeftRunning");
+  assert_eq!(said.args, [("count", "2".to_owned())]);
 }

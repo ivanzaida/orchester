@@ -15,7 +15,7 @@ use orchester_core::{
   resource::{AgentProfile, ResourceKind, Tool},
   secret::SecretVault,
   sharing::Needs,
-  store::{ConnectionStore, McpServerStore, ResourceStore, SecretStore, SettingsStore},
+  store::{ConnectionStore, ResourceStore, SecretStore, SettingsStore},
 };
 use orchester_store::{ProjectDb, StoreError};
 
@@ -32,7 +32,7 @@ use super::{
 /// makes later). A server turned off in Connections is left out, as a run leaves it out. The servers stay unlisted as
 /// resources, and a server the project no longer has is left to the run, which says it is missing.
 pub(super) fn profiles(db: &ProjectDb, repo_root: &Path) -> Result<Vec<Profile>, StoreError> {
-  let servers = db.mcp_servers()?;
+  let servers = db.all_mcp_servers()?;
   let archived: Vec<ConnectionId> = db.archived_mcp_servers()?.into_iter().map(|(id, _)| id).collect();
   let path = db
     .project_environment()?

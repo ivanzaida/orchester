@@ -18,9 +18,9 @@ use lurq::{
   node::Element,
 };
 use orchester_api::{UsedBy, UsedByRun};
-use orchester_core::{id::ProjectId, resource::ResourceKind, run::Answerer};
+use orchester_core::{id::ProjectId, resource::ResourceKind};
 use orchester_workspace::{
-  local_archive::{self, Archivable, NotArchived},
+  local_archive::{self, Archivable},
   readiness::archive_blocks_profiles,
   used_by::{self, UsedByError},
 };
@@ -112,16 +112,16 @@ impl Component for Confirmation {
           again.update(|count| *count += 1);
           return Err(Failed::RunsChanged);
         }
-        local_archive::archive(&services.runners, &props.root, props.what, Answerer::Person)
+        let archived = local_archive::archive(&services.runners, &props.root, props.what)
           .await
-          .map_err(|refused| match refused {
-            NotArchived::Failed(message) => Failed::Said(message),
-            NotArchived::PersonOnly => Failed::Said(NotArchived::person_only_message()),
-          })?;
+          .map_err(Failed::Said)?;
         for change in props.what.changes(Some(props.kind)) {
           services.changes.record(props.project, *change);
         }
-        Ok(())
+        // It is archived either way; a run that could not be stopped is said, in the question that stays open.
+        archived
+          .left_running_message()
+          .map_or(Ok(()), |message| Err(Failed::Said(message)))
       }
     });
     let open = ctx.signal(true);
