@@ -34,6 +34,7 @@ mod team_lifecycle;
 mod team_lifecycle_menus;
 mod team_pages;
 mod team_tasks;
+mod team_unrecorded;
 mod team_work_actions;
 
 use lurq::app::events::with_synthetic_input;
