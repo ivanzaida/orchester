@@ -77,6 +77,8 @@ struct ProfilePanel {
   /// The connection kept as the profile's on this computer, by id; empty while none is. Once there is one, choosing
   /// another in the select keeps that one.
   kept: Signal<String>,
+  /// The pick the sheet last held, by id; a different one is a pick made elsewhere, which the select then follows.
+  seen: Signal<String>,
   actions: Actions,
   secret: secret::Entry,
   person: PersonOnly,
@@ -90,7 +92,8 @@ impl Component for ProfilePanel {
     let picked = props.sheet.picked.as_ref().map(ToString::to_string).unwrap_or_default();
     let panel = Self {
       chosen: ctx.signal(picked.clone()),
-      kept: ctx.signal(picked),
+      kept: ctx.signal(picked.clone()),
+      seen: ctx.signal(picked),
       actions: Actions::new(ctx, &props.repo_root),
       secret: secret::Entry::new(ctx),
       person: PersonOnly::new(ctx),
@@ -105,6 +108,7 @@ impl Component for ProfilePanel {
     let Props {
       listing, entry, sheet, ..
     } = &props;
+    self.follow_pick(sheet);
     let missing = entry.standing.as_ref().map_or(&[][..], |standing| standing.missing());
     let parts = parts::parts(ctx, listing, entry, sheet);
     let navigation = Navigation::of(ctx);
@@ -206,6 +210,18 @@ impl ProfilePanel {
         chosen.set(kept.get());
       }
     });
+  }
+
+  /// A connection picked outside the panel (an MCP client's `pick_profile_connection`) shows in the sheet's `picked`:
+  /// the select and the one kept follow it, without asking the workspace to pick it again.
+  fn follow_pick(&self, sheet: &TeamProfileSheet) {
+    let picked = sheet.picked.as_ref().map(ToString::to_string).unwrap_or_default();
+    if self.seen.get_untracked() == picked {
+      return;
+    }
+    self.seen.set(picked.clone());
+    self.kept.set(picked.clone());
+    self.chosen.set(picked);
   }
 
   /// The name of the connection the pinned *Use* names and uses.
