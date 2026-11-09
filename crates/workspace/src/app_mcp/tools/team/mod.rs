@@ -19,8 +19,6 @@ use orchester_core::{
 };
 use orchester_store::{ProjectDb, SharingLink};
 
-use super::tasks::find_task;
-
 pub(super) use self::{
   deliver::merge_run,
   modules::{create_module, get_module, list_modules, update_module},
@@ -28,6 +26,7 @@ pub(super) use self::{
   tasks::{get_task, list_tasks},
   writes::{create_task, update_task},
 };
+use super::tasks::find_task;
 use crate::{
   actions::Dispatcher,
   app_mcp::{

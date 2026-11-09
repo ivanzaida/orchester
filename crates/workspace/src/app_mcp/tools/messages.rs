@@ -7,6 +7,7 @@
 //! agent reads any more, and that does not run again, refuses it.
 
 use orchester_core::id::{IdempotencyKey, RunId, TaskId};
+use orchester_store::StoreError;
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -52,15 +53,15 @@ enum Reach {
   Team(TeamThen),
 }
 
-/// How the message sent `way` in `mode` reaches run `run`. On a project linked to a team server a run the team server
-/// fenced takes no message at all, in any state, and no run is started again or continued from here: refused before
-/// the message is stored.
+/// How the message sent `way` in `mode` reaches run `run`. A team task's run (by its own team record: a local task's
+/// run in a team-linked project is not one) the team server fenced takes no message at all, in any state, and is not
+/// started again or continued from here: refused before the message is stored.
 fn reach_checked(
   db: &orchester_store::ProjectDb,
   (mode, way): (&ComposerMode, Way),
   run: RunId,
 ) -> Result<Reach, ToolError> {
-  if !team::linked(db)? {
+  if !team::is_team_run(db, run)? {
     return Ok(Reach::Local);
   }
   team::refuse_fenced(db, run)?;
@@ -127,7 +128,8 @@ pub async fn send_message(
     let db = orchester_store::ProjectDb::open(&project.repo_root)?;
     let named = find_run(&db, &run)?;
     // Automation reads the run as stored: the runner it asks starts if the project has none.
-    let prepared = prepare_in(&project.repo_root, (named.task(), Some(named.id())), (false, None)).map_err(refusal)?;
+    let prepared = prepare_in(&project.repo_root, (named.task(), Some(named.id())), (false, None))
+      .map_err(|error| prepare_refusal(&db, error))?;
     // Checked first: a run that moved on since is refused as changed, and one that now waits on a plan would take the
     // message as its plan's changes.
     as_checked(
@@ -228,6 +230,15 @@ async fn ready_to_run_again(services: &Services, project: &OpenProject, task: Ta
     Ok(()) => Ok(()),
     Err(NotStarted::NotReadyHere(refusal)) => Err(ToolError::NotReadyHere(refusal)),
     Err(NotStarted::Unreadable(message)) => Err(ToolError::refused("readiness_unreadable", vec![message])),
+  }
+}
+
+/// [`refusal`] of `error`, which `prepare_in` raised for a run of `db`'s project. A run whose task no record defines is
+/// a team task's run that kept no inputs: its task is unrecorded, not missing.
+fn prepare_refusal(db: &orchester_store::ProjectDb, error: OutgoingError) -> ToolError {
+  match error {
+    OutgoingError::Store(StoreError::TaskNotFound(task)) => team::task_missing(db, task).unwrap_or_else(|error| error),
+    error => refusal(error),
   }
 }
 

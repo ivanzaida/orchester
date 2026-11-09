@@ -4,7 +4,7 @@
 
 use orchester_core::{
   secret::{SecretVault, VaultKey},
-  store::TaskStore,
+  store::{RunStore, TaskStore},
 };
 use serde_json::json;
 
@@ -73,4 +73,35 @@ fn team_mcp_a_team_task_is_still_read_from_the_server_beside_a_local_one() {
     .call("get_conversation", &json!({"project": "Kontur", "task": "KON-7"}))
     .expect("the team task's conversation");
   assert_eq!(conversation["task"]["key"], "KON-7");
+}
+
+/// A local task's run in a team-linked project: made before the project was linked, with no team record.
+fn local_run(checkout: &Checkout) -> String {
+  let db = checkout.db();
+  let task = db.tasks().expect("tasks")[0].id();
+  let runs = db.runs_of_task(task).expect("runs");
+  runs[0].as_ref().expect("readable").id().to_string()
+}
+
+#[test]
+fn team_mcp_a_message_to_a_local_run_in_a_team_project_runs_the_task_again_here() {
+  for (ended, text) in [
+    (
+      crate::tools::canceled_run as fn(&mut orchester_store::ProjectDb),
+      "Try again.",
+    ),
+    (crate::tools::interrupted_run, "Go on."),
+  ] {
+    let (server, _seen) = server();
+    let checkout = Checkout::prepared(Some(&server), &["Say hello"], ended);
+    let message = json!({"project": "Kontur", "run": local_run(&checkout), "text": text});
+
+    // Not refused as a team task's run: the local path takes the person's claim, which a computer signed out of the
+    // server cannot, so the message waits queued with why; the team server was not asked to start any work.
+    let sent = checkout.call("send_message", &message).expect("sent");
+    assert_eq!(sent["action"], "run_again", "{sent}");
+    assert_eq!(sent["outcome"], "queued", "{sent}");
+    assert_eq!(sent["reasons"], json!(["servers.errors.signedOut"]), "{sent}");
+    assert_eq!(server.state().works_made, 0, "no team work was made");
+  }
 }

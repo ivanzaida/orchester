@@ -181,3 +181,19 @@ fn team_mcp_a_team_task_with_no_run_here_is_not_in_the_hold_queue() {
     "a team task never run here does not wait here: {held:?}"
   );
 }
+
+#[test]
+fn team_mcp_tools_on_a_run_with_no_inputs_and_no_row_refuse_it_as_unrecorded() {
+  let (checkout, _server, _task, run) = legacy();
+  let named = json!({"project": "Kontur", "run": run.to_string()});
+  let message = json!({"project": "Kontur", "run": run.to_string(), "text": "Go on."});
+
+  for (tool, args) in [
+    ("get_run", &named),
+    ("get_plan", &named),
+    ("remove_worktree", &named),
+    ("send_message", &message),
+  ] {
+    assert_eq!(checkout.refused(tool, args), "team_task_unrecorded", "{tool}");
+  }
+}
