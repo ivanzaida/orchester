@@ -91,8 +91,12 @@
 # -Scenario local-hub-claude is local-hub with Claude Code connections to choose from (Claude 2, Home and Claude · Kontur, each
 # checked at a version of its own), Writer on Claude 2 and Builder, whose connection the project no longer has: Agents >
 # Profiles > Builder lists it under Needs you, its panel asks which of the Claude Code connections runs it (the select lists
-# only those) and the pinned "Use Claude 2 for Builder" publishes the next version on it (L1). Tools, instructions and skills
-# have the frame with Edit, which opens the editor the kind has.
+# only those) and the pinned "Use Claude 2 for Builder" publishes the next version on it (L1). The scenario has no page of its
+# own: open the Agents hub on Profiles with the app's `navigate` tool (route agents, filter profiles). In the same panel the
+# Agent CLI, Model, Reasoning effort and MCP servers (Add) are selects in place: a choice makes the profile's draft (the
+# chips and a draft note say so), the pinned bar becomes Publish vN and Discard draft, and a choice that widens what agents may
+# do (a server, another CLI) asks first. "More settings..." opens the profile's editor for what the rows do not draw. Tools,
+# instructions and skills have the frame with Edit, which opens the editor the kind has.
 # -Scenario local-hub-secret adds figma, whose variable FIGMA_API_KEY takes the secret FIGMA_TOKEN with no value: MCP servers >
 # figma, Replace (Set value) types a value in a dialog, Save keeps it in the QA copy's keychain in memory, which accepts
 # (L8). -Scenario local-hub-secret-refused is the same with a QA copy whose secret store refuses every value, so Save after
