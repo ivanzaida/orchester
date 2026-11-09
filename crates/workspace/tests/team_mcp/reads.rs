@@ -192,37 +192,8 @@ fn route(
   let page = |items: Vec<Value>| json!({"items": items, "next": null, "cursor": "10"});
   let (status, body) = match (request.method.as_str(), segments.as_slice()) {
     ("GET", ["subscription"]) => return subscription(stream),
-    ("GET", ["capabilities"]) if seen.lock().no_member => (404, json!({"error": "not_found", "message": "Not found"})),
-    ("GET", ["capabilities"]) => (200, capabilities(project)),
-    (_, ["task-list"]) => {
-      seen.lock().task_lists += 1;
-      let search = request.json()["filters"]["search"].as_str().map(str::to_lowercase);
-      let found = search.is_none_or(|search| format!("kon-{number} say hello").contains(&search));
-      let mut tasks = if found { vec![task_read()] } else { Vec::new() };
-      let more_tasks = seen.lock().more_tasks.clone();
-      for fields in more_tasks {
-        let mut more = task_read();
-        more
-          .as_object_mut()
-          .expect("a task")
-          .extend(fields.as_object().expect("fields").clone());
-        tasks.push(more);
-      }
-      let modules = request.json()["filters"]["modules"]
-        .as_array()
-        .cloned()
-        .unwrap_or_default();
-      tasks.retain(|task| modules.is_empty() || modules.contains(&task["module"]));
-      let (size, after) = (
-        seen.lock().page_size,
-        request.json()["page"]["after"].as_str().map(str::to_owned),
-      );
-      let from: usize = after.map_or(0, |after| after.parse().expect("the cursor is an offset"));
-      let size = if size == 0 { tasks.len() } else { size };
-      let items: Vec<Value> = tasks.iter().skip(from).take(size).cloned().collect();
-      let next = (from + size < tasks.len()).then(|| (from + size).to_string());
-      (200, json!({"items": items, "next": next, "cursor": "10"}))
-    }
+    ("GET", ["capabilities"]) => member_capabilities(seen, project),
+    (_, ["task-list"]) => (200, task_list(seen, request, (number, &task_read))),
     ("GET", ["tasks", id]) if seen.lock().broken_task.is_some_and(|broken| broken.to_string() == *id) => {
       seen.lock().task_gets += 1;
       (500, json!({"error": "internal", "message": "Broken"}))
@@ -291,4 +262,42 @@ fn subscription(stream: &mut TcpStream) -> bool {
   let mut rest = [0; 64];
   while matches!(stream.read(&mut rest), Ok(read) if read > 0) {}
   true
+}
+
+/// `POST …/task-list`: the tasks the request's module filter keeps, `KON-7` when its search finds it, then the more
+/// tasks a test laid out, one page of `Seen::page_size` from the offset the cursor names.
+fn task_list(seen: &Mutex<Seen>, request: &Request, (number, task_read): (u32, &dyn Fn() -> Value)) -> Value {
+  seen.lock().task_lists += 1;
+  let body = request.json();
+  let search = body["filters"]["search"].as_str().map(str::to_lowercase);
+  let found = search.is_none_or(|search| format!("kon-{number} say hello").contains(&search));
+  let mut tasks = if found { vec![task_read()] } else { Vec::new() };
+  let more_tasks = seen.lock().more_tasks.clone();
+  for fields in more_tasks {
+    let mut more = task_read();
+    more
+      .as_object_mut()
+      .expect("a task")
+      .extend(fields.as_object().expect("fields").clone());
+    tasks.push(more);
+  }
+  let modules = body["filters"]["modules"].as_array().cloned().unwrap_or_default();
+  tasks.retain(|task| modules.is_empty() || modules.contains(&task["module"]));
+  let size = seen.lock().page_size;
+  let from: usize = body["page"]["after"]
+    .as_str()
+    .map_or(0, |after| after.parse().expect("the cursor is an offset"));
+  let size = if size == 0 { tasks.len() } else { size };
+  let items: Vec<Value> = tasks.iter().skip(from).take(size).cloned().collect();
+  let next = (from + size < tasks.len()).then(|| (from + size).to_string());
+  json!({"items": items, "next": next, "cursor": "10"})
+}
+
+/// `GET …/capabilities`, which is `404` when a test made the caller no member of the project.
+fn member_capabilities(seen: &Mutex<Seen>, project: impl serde::Serialize) -> (u16, Value) {
+  if seen.lock().no_member {
+    (404, json!({"error": "not_found", "message": "Not found"}))
+  } else {
+    (200, capabilities(project))
+  }
 }
