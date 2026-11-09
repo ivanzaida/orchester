@@ -197,26 +197,8 @@ impl From<Notice> for Element {
     }
     let (fill, stroke, mark) = notice.tone.colors();
     let flat = notice.flat;
+    let text = words(&notice, flat);
     let mark = notice.mark.unwrap_or(mark);
-    let text = Column::new()
-      .id(format!("{}-text", notice.id))
-      .spacing(if flat {
-        ExtraSpacing::Snug.role()
-      } else if notice.layout == NoticeLayout::Stacked {
-        ExtraSpacing::Fine.role()
-      } else {
-        ExtraSpacing::Tight.role()
-      })
-      .child(
-        Text::new(&notice.title)
-          .id(format!("{}-title", notice.id))
-          .variant(notice.title_style.unwrap_or_else(|| ExtraTypography::Strong.role())),
-      )
-      .with_children(notice.body.as_deref().map(|body| {
-        Text::new(body)
-          .id(format!("{}-body", notice.id))
-          .variant(ExtraTypography::Prose.role())
-      }));
     let actions = (!notice.actions.is_empty()).then(|| {
       Row::new()
         .spacing(SpacingSize::Sm)
@@ -274,6 +256,29 @@ impl From<Notice> for Element {
       .with_children(actions)
       .into()
   }
+}
+
+/// A notice's title and its explanation under it.
+fn words(notice: &Notice, flat: bool) -> Column {
+  Column::new()
+    .id(format!("{}-text", notice.id))
+    .spacing(if flat {
+      ExtraSpacing::Snug.role()
+    } else if notice.layout == NoticeLayout::Stacked {
+      ExtraSpacing::Fine.role()
+    } else {
+      ExtraSpacing::Tight.role()
+    })
+    .child(
+      Text::new(&notice.title)
+        .id(format!("{}-title", notice.id))
+        .variant(notice.title_style.unwrap_or_else(|| ExtraTypography::Strong.role())),
+    )
+    .with_children(notice.body.as_deref().map(|body| {
+      Text::new(body)
+        .id(format!("{}-body", notice.id))
+        .variant(ExtraTypography::Prose.role())
+    }))
 }
 
 fn inspector_notice(notice: Notice) -> Element {

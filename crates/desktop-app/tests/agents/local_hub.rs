@@ -560,10 +560,19 @@ fn local_hub_an_archived_server_shows_its_fields_as_values_until_it_is_restored(
   open(&mut agents, HubView::on_server(HubFilter::Archived, docs));
   agents.until("its panel", |s| s.exists("local-hub-archived-notice"));
 
-  assert_eq!(agents.text("local-hub-archived-notice-title"), "Archived: hidden from lists and pickers");
-  assert_eq!(agents.text("local-hub-archived-runs-as-value"), "A program on this computer");
+  assert_eq!(
+    agents.text("local-hub-archived-notice-title"),
+    "Archived: hidden from lists and pickers"
+  );
+  assert_eq!(
+    agents.text("local-hub-archived-runs-as-value"),
+    "A program on this computer"
+  );
   assert_eq!(agents.text("local-hub-archived-program-value"), "docs-mcp");
-  assert!(agents.exists("local-hub-archived-read-only"), "it says the fields wait for Restore");
+  assert!(
+    agents.exists("local-hub-archived-read-only"),
+    "it says the fields wait for Restore"
+  );
   for field in ["connection-mcp-program", "local-hub-mcp-save"] {
     assert!(!agents.exists(field), "{field} is for a server that is not archived");
   }

@@ -6,6 +6,7 @@
 //! in place, marks the field that failed, saves nothing, not even the other fields, and keeps everything typed. Archive
 //! is in the head's … menu.
 
+mod actions;
 mod editor;
 mod notes;
 mod rows;

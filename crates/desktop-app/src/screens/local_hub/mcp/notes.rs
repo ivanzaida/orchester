@@ -7,7 +7,6 @@ use std::sync::Arc;
 use lurq::{app::ctx::Ctx, node::Element};
 use orchester_core::sharing::Missing;
 use orchester_workspace::{
-  connections::mcp::RefusedField,
   messages::Message,
   readiness::{Group, ReadinessStanding},
 };
@@ -71,10 +70,11 @@ pub(super) fn editing(ctx: &Ctx, name: &str, changed: &[Arc<str>]) -> Element {
 }
 
 /// *Couldn't save figma: …* over what stays.
-pub(super) fn refusal(ctx: &Ctx, name: &str, (reason, field): (&Message, &RefusedField)) -> Element {
-  let body = match field {
-    RefusedField::Secret(_) => "local_hub.mcp.refusedSecretBody",
-    RefusedField::Program | RefusedField::None => "local_hub.mcp.refusedBody",
+pub(super) fn refusal(ctx: &Ctx, name: &str, (reason, secret): (&Message, bool)) -> Element {
+  let body = if secret {
+    "local_hub.mcp.refusedSecretBody"
+  } else {
+    "local_hub.mcp.refusedBody"
   };
   Notice::new(
     "local-hub-mcp-refused",

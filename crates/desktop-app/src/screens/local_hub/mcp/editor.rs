@@ -10,6 +10,7 @@ use lurq::{
     ctx::{Ctx, FutureAction},
     theme::PaletteColor,
   },
+  components::Row,
   core::Signal,
   node::Element,
 };
@@ -18,25 +19,22 @@ use orchester_core::{
   id::{ConnectionId, SecretId},
   secret::SecretName,
   sharing::Missing,
+  time::Timestamp,
 };
 use orchester_workspace::{
-  activity::operations,
-  background,
   connections::{
     data::ProjectConnections,
-    mcp::{
-      Allowed, McpServerDraft, McpServerErrors, McpServerText, RefusedField, set_enabled_in, store_with_values,
-      widenings,
-    },
+    mcp::{Allowed, McpServerDraft, McpServerErrors, McpServerText, RefusedField, widenings},
   },
   local_archive::Archivable,
   messages::Message,
   readiness::ReadinessStanding,
-  tasks::outside::Outside,
 };
 
 use super::{
-  Props, notes,
+  Props,
+  actions::{self, Lines},
+  notes,
   rows::Look,
   secrets::{Asking, Mark, Taken},
 };
@@ -55,12 +53,10 @@ use crate::{
       bar::{bar, bar_saying},
       panel::{body, head_named},
       rows as team_rows,
+      words::date,
     },
   },
-  services::{
-    Services,
-    path_picker::{PathKind, PathPicker},
-  },
+  services::Services,
   ui::{
     button::{ActionButton, ButtonKind},
     icon::Icon,
@@ -89,21 +85,41 @@ impl DevtoolsInspectable for EditorProps {}
 
 /// What a save stores, and what it may widen.
 #[derive(Clone)]
-struct Save {
-  root: PathBuf,
-  draft: McpServerDraft,
-  allowed: Allowed,
+pub(super) struct Save {
+  pub(super) root: PathBuf,
+  pub(super) draft: McpServerDraft,
+  pub(super) allowed: Allowed,
   /// The values typed for the secrets its variables take.
-  values: super::secrets::Pending,
+  pub(super) values: super::secrets::Pending,
+}
+
+/// What the last refused save is about, as the panel marks it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum Refusal {
+  None,
+  Program,
+  /// The value of a secret it took.
+  Secret,
+}
+impl DevtoolsInspectable for Refusal {}
+
+impl Refusal {
+  pub(super) fn of(field: &RefusedField) -> Self {
+    match field {
+      RefusedField::Program => Self::Program,
+      RefusedField::Secret(_) => Self::Secret,
+      RefusedField::None => Self::None,
+    }
+  }
 }
 
 pub(super) struct Editor {
   save: FutureAction<Save, (), Message>,
   /// The field the last refused save is about.
-  refused_field: Signal<RefusedField>,
+  refused_field: Signal<Refusal>,
   pub(super) switch: FutureAction<bool, (), Message>,
   /// Asks for the program's file; the field takes it.
-  pub(super) choose: FutureAction<(), Option<PathBuf>, Message>,
+  pub(super) choose: FutureAction<(), Option<String>, Message>,
   pub(super) fields: Fields,
   /// A save was asked for: every field's error shows, also of fields left empty.
   tried: Signal<bool>,
@@ -127,107 +143,22 @@ impl Component for Editor {
   fn create(ctx: &mut Ctx) -> Self {
     let props = ctx.props::<EditorProps>().clone();
     let services = Services::of(ctx);
-    let (project, root) = (
-      props.props.project.open.project.id(),
-      props.props.project.open.repo_root.clone(),
-    );
-    let refused_field = ctx.signal(RefusedField::None);
-    let save = {
-      let (services, revision, refused_field) = (services.clone(), props.revision.clone(), refused_field.clone());
-      let (id, open) = (props.server.id(), props.props.project.open.clone());
-      ctx.future_action(move |save: Save| {
-        let (services, revision, open, refused_field) =
-          (services.clone(), revision.clone(), open.clone(), refused_field.clone());
-        async move {
-          let spec = operations::connection_save(&open, save.draft.name.as_str());
-          let vault = services.vault.clone();
-          let refused_field = refused_field.clone();
-          let stored = async move {
-            background::run(move || {
-              store_with_values(
-                &save.root,
-                vault.get(),
-                (id, save.draft, &save.allowed),
-                &save.values.values(),
-              )
-              .map_err(|error| {
-                refused_field.set(error.field());
-                error.message()
-              })
-            })
-            .await?
-          };
-          services.activity.track(spec, stored).await?;
-          services.changes.record(project, Outside::Connections);
-          // The editor opens again on what was saved, with nothing left unsaved.
-          revision.update(|count| *count += 1);
-          Ok(())
-        }
-      })
-    };
-    let switch = {
-      let (id, services, root) = (props.server.id(), services.clone(), root);
-      ctx.future_action(move |enabled: bool| {
-        let (root, services) = (root.clone(), services.clone());
-        async move {
-          background::run(move || {
-            set_enabled_in(&root, id, enabled).map_err(|error| orchester_workspace::messages::store_error(&error))
-          })
-          .await??;
-          services.changes.record(project, Outside::Connections);
-          Ok(())
-        }
-      })
-    };
-    let picker = PathPicker::of(ctx);
-    let title = ctx.t("team_hub.fix.programTitle");
-    let choose = ctx.future_action(move |(): ()| {
-      let (picker, title) = (picker.clone(), title.clone());
-      async move { Ok(picker.pick(PathKind::File, title).await) }
-    });
+    let refused_field = ctx.signal(Refusal::None);
     let fields = Fields::new(ctx, &props.text);
-    let program = fields.program.clone();
-    ctx.watch(&choose.state(), move |state| {
-      if let Some(Some(path)) = &state.data {
-        program.set(path.to_string_lossy().into_owned());
-      }
-    });
-    let arguments_line = ctx.signal(props.text.arguments.lines().collect::<Vec<_>>().join(" "));
-    let tools_line = ctx.signal(props.text.exempt_tools.lines().collect::<Vec<_>>().join(", "));
-    let one_line_arguments = !props
-      .text
-      .arguments
-      .lines()
-      .any(|line| line.contains(char::is_whitespace));
-    let (arguments, line) = (fields.arguments.clone(), arguments_line.clone());
-    if one_line_arguments {
-      ctx.watch(&line, move |line| {
-        arguments.set(line.split_whitespace().collect::<Vec<_>>().join("\n"))
-      });
-    }
-    let (tools, line) = (fields.exempt_tools.clone(), tools_line.clone());
-    ctx.watch(&line, move |line| {
-      tools.set(
-        line
-          .split(',')
-          .map(str::trim)
-          .filter(|tool| !tool.is_empty())
-          .collect::<Vec<_>>()
-          .join("\n"),
-      );
-    });
+    let choose = actions::choose(ctx, fields.program.clone());
+    let lines = Lines::new(ctx, &fields, &props.text);
     Self {
-      save,
+      save: actions::save(ctx, &props, &services, &refused_field),
       refused_field,
-      switch,
+      switch: actions::switch(ctx, &props, &services),
       choose,
       fields,
       tried: ctx.signal(false),
       confirming: ctx.signal(false),
       asking: Asking::new(ctx),
-      arguments_line,
-      one_line_arguments,
-      tools_line,
+      arguments_line: lines.arguments,
+      one_line_arguments: lines.one_line,
+      tools_line: lines.tools,
       unsaved: props.props.unsaved.clone(),
       server: props.server.id(),
     }
@@ -259,21 +190,12 @@ impl Component for Editor {
     let saving = self.save.state().get();
     let refused = saving.error.as_ref().filter(|_| saving.is_rejected());
     let what = Archivable::McpServer(server.id());
-    let mark = match (changed, refused.is_some()) {
-      (true, true) => Some(Unsaved::Refused),
-      (true, false) => Some(Unsaved::Edited),
-      (false, _) => None,
-    };
-    // The list says it too; set only when it differs so the page is not read again for nothing.
-    let wanted = mark.map(|mark| (what, mark));
-    if props.unsaved.get_untracked() != wanted {
-      props.unsaved.set(wanted);
-    }
+    publish_unsaved(&props.unsaved, what, (changed, refused.is_some()));
     let entry = &props.entry;
     let secrets = taken_secrets(entry, &server, checked.as_ref().ok(), &listed);
     let field = refused.map(|_| self.refused_field.get());
     let marked = match &field {
-      Some(RefusedField::Secret(_)) => Mark::Refused,
+      Some(Refusal::Secret) => Mark::Refused,
       _ => Mark::None,
     };
     let look = Look {
@@ -288,53 +210,21 @@ impl Component for Editor {
         _ => None,
       },
       secrets: (&secrets, marked),
-      program_refused: field == Some(RefusedField::Program),
+      program_refused: field == Some(Refusal::Program),
     };
     let mut rows = self.server_rows(ctx, &look);
     rows.extend(self.after_rows(ctx, &look, server.enabled()));
-    let more = archive::menu(
-      ctx,
-      archive::Target {
-        root: props.project.open.repo_root.clone(),
-        project: props.project.open.project.id(),
-        what,
-        kind: entry.kind,
-        name: Arc::from(entry.name.as_str()),
-      },
-    );
     let used =
       (!entry.used_by.is_empty()).then(|| ctx.t_args("local_hub.panel.usedBy", [("names", entry.used_by.join(", "))]));
     let note = match (refused, &field) {
-      (Some(message), Some(field)) => Some(notes::refusal(ctx, &entry.name, (message, field))),
+      (Some(message), Some(field)) => Some(notes::refusal(ctx, &entry.name, (message, *field == Refusal::Secret))),
       (..) => None,
     }
     .or_else(|| {
       changed.then(|| notes::editing(ctx, &entry.name, &self.changed_labels(ctx, (&typed, &text), &secrets)))
     });
     let body = body()
-      .child(head_named(
-        &entry.name,
-        (
-          ctx.t(kind_where_key(entry.kind)).to_string(),
-          Some(
-            ctx
-              .t_args(
-                "local_hub.mcp.added",
-                [(
-                  "date",
-                  crate::screens::team_hub::words::date(
-                    ctx,
-                    orchester_core::time::Timestamp::now(),
-                    server.created_at(),
-                  )
-                  .to_string(),
-                )],
-              )
-              .to_string(),
-          ),
-        ),
-        Some(more),
-      ))
+      .child(head(ctx, (&props, &server), what))
       .with_children(note)
       .child(chips_of(notes::chips(ctx, entry, changed), used))
       .child(team_rows::section(
@@ -349,10 +239,52 @@ impl Component for Editor {
       ctx,
       (&props, &server),
       (&checked, changed, &secrets),
-      (field.as_ref(), &revision),
+      (field, &revision),
     );
     frame(what, body, bar)
   }
+}
+
+/// Tells the list that the server has edits that are not saved, and whether a save was refused; set only when it
+/// differs so the page is not read again for nothing.
+fn publish_unsaved(unsaved: &UnsavedSignal, what: Archivable, (changed, refused): (bool, bool)) {
+  let mark = match (changed, refused) {
+    (true, true) => Some(Unsaved::Refused),
+    (true, false) => Some(Unsaved::Edited),
+    (false, _) => None,
+  };
+  let wanted = mark.map(|mark| (what, mark));
+  if unsaved.get_untracked() != wanted {
+    unsaved.set(wanted);
+  }
+}
+
+/// The head: *MCP server · added Oct 30* over the name, with the … menu.
+fn head(ctx: &mut Ctx, (props, server): (&Props, &McpServer), what: Archivable) -> Row {
+  let entry = &props.entry;
+  let more = archive::menu(
+    ctx,
+    archive::Target {
+      root: props.project.open.repo_root.clone(),
+      project: props.project.open.project.id(),
+      what,
+      kind: entry.kind,
+      name: Arc::from(entry.name.as_str()),
+    },
+  );
+  let added = date(ctx, Timestamp::now(), server.created_at());
+  head_named(
+    &entry.name,
+    (
+      ctx.t(kind_where_key(entry.kind)).to_string(),
+      Some(
+        ctx
+          .t_args("local_hub.mcp.added", [("date", added.to_string())])
+          .to_string(),
+      ),
+    ),
+    Some(more),
+  )
 }
 
 impl Drop for Editor {
@@ -408,7 +340,7 @@ impl Editor {
     ctx: &mut Ctx,
     (props, server): (&Props, &McpServer),
     (checked, changed, secrets): (&Result<McpServerDraft, Box<McpServerErrors>>, bool, &[Taken]),
-    (field, revision): (Option<&RefusedField>, &Signal<u64>),
+    (field, revision): (Option<Refusal>, &Signal<u64>),
   ) -> Option<Element> {
     let start = checked.as_ref().ok().filter(|_| changed).map(|draft| Save {
       root: props.project.open.repo_root.clone(),
@@ -452,7 +384,7 @@ impl Editor {
       (false, None) => button.on_click(move || tried.set(true)),
     };
     let hint = match field {
-      Some(RefusedField::Secret(_)) => (ctx.t("local_hub.mcp.allowThenSave").to_string(), PaletteColor::Danger),
+      Some(Refusal::Secret) => (ctx.t("local_hub.mcp.allowThenSave").to_string(), PaletteColor::Danger),
       _ => (ctx.t("local_hub.mcp.onlyHere").to_string(), PaletteColor::TextMuted),
     };
     Some(bar_saying(vec![button.into(), cancel.into()], Some(hint)))

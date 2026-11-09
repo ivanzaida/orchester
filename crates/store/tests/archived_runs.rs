@@ -14,7 +14,7 @@ use orchester_core::{
   project::{Project, ProjectKey},
   resource::{
     AgentProfile, CommandProgram, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step, StepKey,
-    StepKind,
+    StepKind, Version,
   },
   revision::Revision,
   run::{BranchName, NewRun, PublishedVersions, RunSnapshot},
@@ -43,6 +43,20 @@ fn project() -> Fixture {
     name("Kontur"),
   );
   let mut db = ProjectDb::create(repo.path(), project).expect("create project");
+  let docs = docs_server(&mut db);
+  let (builder, profiles) = builder_choosing(&mut db, docs);
+  let new = new_run(&mut db, builder, &profiles);
+  Fixture {
+    _repo: repo,
+    db,
+    builder,
+    docs,
+    new,
+  }
+}
+
+/// The server docs, stored.
+fn docs_server(db: &mut ProjectDb) -> ConnectionId {
   let docs = McpServer::new(
     ConnectionId::generate(),
     McpServerName::new("docs").expect("name"),
@@ -56,6 +70,33 @@ fn project() -> Fixture {
   )
   .expect("server");
   db.create_mcp_server(&docs).expect("stored");
+  docs.id()
+}
+
+/// The profile Builder, published, which chooses `docs`.
+fn builder_choosing(
+  db: &mut ProjectDb,
+  docs: ConnectionId,
+) -> (ResourceId, BTreeMap<ResourceId, Version<AgentProfile>>) {
+  let profile = AgentProfile::new(
+    name("Builder"),
+    String::new(),
+    PromptText::new("Build.").expect("prompt"),
+    ConnectionId::generate(),
+    model(),
+    ProviderSettings::default(),
+  )
+  .with_mcp_servers(McpServerSelection::new(vec![docs]).expect("selection"));
+  let builder = db
+    .create_resource(Slug::new("builder").expect("slug"), name("Builder"), &profile, at(2))
+    .expect("profile")
+    .id();
+  let published = db.publish_draft::<AgentProfile>(builder, at(3)).expect("publish");
+  (builder, BTreeMap::from([(builder, published)]))
+}
+
+/// A run of a task, of a pipeline whose one step runs `builder`.
+fn new_run(db: &mut ProjectDb, builder: ResourceId, profiles: &BTreeMap<ResourceId, Version<AgentProfile>>) -> NewRun {
   let details = TaskDetails {
     title: name("Say hello"),
     brief: String::new(),
@@ -67,23 +108,6 @@ fn project() -> Fixture {
     .create_tasks(IdempotencyKey::generate(), vec![details], at(1))
     .expect("task")[0]
     .id();
-  let profile = AgentProfile::new(
-    name("Builder"),
-    String::new(),
-    PromptText::new("Build.").expect("prompt"),
-    ConnectionId::generate(),
-    model(),
-    ProviderSettings::default(),
-  )
-  .with_mcp_servers(McpServerSelection::new(vec![docs.id()]).expect("selection"));
-  let builder = db
-    .create_resource(Slug::new("builder").expect("slug"), name("Builder"), &profile, at(2))
-    .expect("profile")
-    .id();
-  let profiles = BTreeMap::from([(
-    builder,
-    db.publish_draft::<AgentProfile>(builder, at(3)).expect("publish"),
-  )]);
   let step = Step {
     key: StepKey::new("implement").expect("key"),
     name: name("Implement"),
@@ -107,12 +131,12 @@ fn project() -> Fixture {
   let version = db.publish_draft::<Pipeline>(delivery, at(5)).expect("publish pipeline");
   let (tools, instructions) = (BTreeMap::new(), BTreeMap::new());
   let published = PublishedVersions {
-    profiles: &profiles,
+    profiles,
     tools: &tools,
     instructions: &instructions,
     skills: &BTreeMap::new(),
   };
-  let new = NewRun {
+  NewRun {
     task,
     snapshot: RunSnapshot::build(delivery, &version, published).expect("snapshot"),
     branch: BranchName::new("orchester/orc-1-run-1").expect("branch"),
@@ -121,13 +145,6 @@ fn project() -> Fixture {
     base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
     budget: None,
     max_duration: None,
-  };
-  Fixture {
-    _repo: repo,
-    db,
-    builder,
-    docs: docs.id(),
-    new,
   }
 }
 

@@ -88,6 +88,14 @@ impl Editor {
 
   /// The program and its *Choose…*, the arguments and the folder of a program.
   fn program_rows(&self, ctx: &mut Ctx, look: &Look<'_>) -> Vec<Row> {
+    let program = self.program_row(ctx, look);
+    let arguments = self.arguments_row(ctx, look);
+    let folder = self.folder_row(ctx, look);
+    vec![program, arguments, folder]
+  }
+
+  /// *Program*: its path, whether it is found, and *Choose…*.
+  fn program_row(&self, ctx: &mut Ctx, look: &Look<'_>) -> Row {
     let found = look.program.is_some_and(|missing| {
       !missing
         .iter()
@@ -154,6 +162,16 @@ impl Editor {
           .child(input.render(ctx)),
       )
       .child(choose);
+    rows::row(
+      "local-hub-mcp-row-program",
+      &ctx.t("connections.mcp.property.program"),
+      program_sub,
+      program,
+    )
+  }
+
+  /// *Arguments*, in one line where no argument has a space in it.
+  fn arguments_row(&self, ctx: &mut Ctx, look: &Look<'_>) -> Row {
     let arguments = if self.one_line_arguments {
       FieldInput::new(
         "connection-mcp-arguments",
@@ -174,6 +192,16 @@ impl Editor {
       Some(error) => arguments.error(error),
       None => arguments,
     };
+    rows::row(
+      "local-hub-mcp-row-arguments",
+      &ctx.t("connections.mcp.property.arguments"),
+      changed_sub(ctx, &look.typed.arguments, &look.saved.arguments),
+      arguments.render(ctx),
+    )
+  }
+
+  /// *Folder*: the worktree unless a path is typed.
+  fn folder_row(&self, ctx: &mut Ctx, look: &Look<'_>) -> Row {
     let folder = FieldInput::new(
       "connection-mcp-folder",
       ctx.t("connections.mcp.property.folder"),
@@ -185,26 +213,12 @@ impl Editor {
       Some(error) => folder.error(error),
       None => folder,
     };
-    vec![
-      rows::row(
-        "local-hub-mcp-row-program",
-        &ctx.t("connections.mcp.property.program"),
-        program_sub,
-        program,
-      ),
-      rows::row(
-        "local-hub-mcp-row-arguments",
-        &ctx.t("connections.mcp.property.arguments"),
-        changed_sub(ctx, &look.typed.arguments, &look.saved.arguments),
-        arguments.render(ctx),
-      ),
-      rows::row(
-        "local-hub-mcp-row-folder",
-        &ctx.t("connections.mcp.property.folder"),
-        changed_sub(ctx, &look.typed.working_directory, &look.saved.working_directory),
-        folder.render(ctx),
-      ),
-    ]
+    rows::row(
+      "local-hub-mcp-row-folder",
+      &ctx.t("connections.mcp.property.folder"),
+      changed_sub(ctx, &look.typed.working_directory, &look.saved.working_directory),
+      folder.render(ctx),
+    )
   }
 
   /// *Variables*, one `NAME=value` a line, with *Add a variable from a secret…* under them.
