@@ -26,6 +26,7 @@ use orchester_workspace::{
   tasks::{
     active_runs,
     integration::{IntegrationProblem, merge_in},
+    recorded,
     run_approvals::stop_auto_approving_in,
     worktree_removal::WorktreeRemover,
   },
@@ -158,4 +159,21 @@ fn team_mcp_a_watch_on_a_team_task_kept_only_as_an_identity_is_not_gone_and_name
       work: OpenWork::Runs
     }]
   );
+}
+
+#[test]
+fn team_mcp_all_with_runs_gives_a_team_task_as_all_does_with_the_runs_its_record_was_read_from() {
+  let team = started();
+  let db = team.checkout.db();
+
+  let with_runs = recorded::all_with_runs(&db).expect("tasks with their runs");
+  assert_eq!(with_runs.len(), 1);
+  let (task, runs) = &with_runs[0];
+  assert_eq!(recorded::all(&db).expect("tasks"), vec![task.clone()]);
+  assert_eq!(task.key().to_string(), "KON-7");
+  let ids: Vec<_> = runs
+    .iter()
+    .map(|listed| listed.as_ref().expect("readable").id())
+    .collect();
+  assert_eq!(ids, vec![team.run]);
 }
