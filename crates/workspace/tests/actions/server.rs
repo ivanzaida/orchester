@@ -37,6 +37,8 @@ pub struct Task {
   pub title: String,
   /// The team pipeline it names, by its id.
   pub pipeline: Option<String>,
+  /// Its workflow status as the wire names it.
+  pub workflow: String,
   pub revision: u64,
 }
 
@@ -92,6 +94,7 @@ impl TeamServer {
       number: u32::try_from(state.tasks.len()).expect("a few tasks") + 1,
       title: title.to_owned(),
       pipeline: None,
+      workflow: "backlog".to_owned(),
       revision: 1,
     };
     state.tasks.push(task.clone());
@@ -103,6 +106,14 @@ impl TeamServer {
     let mut state = self.state.lock();
     let task = state.tasks.iter_mut().find(|known| known.id == task).expect("a task");
     title.clone_into(&mut task.title);
+    task.revision += 1;
+  }
+
+  /// Moves `task` to `workflow` as another person would, raising its revision.
+  pub fn move_to(&self, task: TaskId, workflow: &str) {
+    let mut state = self.state.lock();
+    let task = state.tasks.iter_mut().find(|known| known.id == task).expect("a task");
+    workflow.clone_into(&mut task.workflow);
     task.revision += 1;
   }
 
@@ -219,6 +230,9 @@ fn patch_task(state: &mut State, request: &Request, task: &str) -> (u16, Value) 
   if let Some(title) = body["changes"]["title"].as_str() {
     title.clone_into(&mut task.title);
   }
+  if let Some(workflow) = body["changes"]["workflow"].as_str() {
+    workflow.clone_into(&mut task.workflow);
+  }
   if let Some(pipeline) = body["changes"].get("pipeline") {
     task.pipeline = pipeline.as_str().map(str::to_owned);
   }
@@ -269,7 +283,7 @@ pub fn shared_task(task: &Task) -> Value {
   json!({
     "id": task.id, "number": task.number, "key": format!("KON-{}", task.number), "former_key": null,
     "revision": task.revision, "title": task.title, "brief": "", "criteria": [], "pipeline": task.pipeline, "limits": null,
-    "workflow": "backlog", "priority": "none", "tags": [], "blocking": [], "blocked_reason": null, "module": null,
+    "workflow": task.workflow, "priority": "none", "tags": [], "blocking": [], "blocked_reason": null, "module": null,
     "status": "draft", "has_run": false, "created": attribution, "updated": attribution, "claim": null, "run": null
   })
 }

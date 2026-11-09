@@ -96,6 +96,8 @@ pub struct AuthorityTask {
   pub claim: Option<AuthorityClaim>,
   /// The work's execution state as the wire names it (`running`, `awaiting_human`); none without a claim.
   pub work: Option<&'static str>,
+  /// The reason the task is blocked, when it is.
+  pub blocked_reason: Option<&'static str>,
 }
 
 /// What the stand-in's `/api/v2` surface answers.

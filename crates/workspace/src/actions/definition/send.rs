@@ -14,7 +14,7 @@ use orchester_core::id::OperationId;
 
 use super::{DefinitionEdit, TagEdit};
 use crate::{
-  actions::{Accepted, ActionError, Current, Definition, LifecycleRefusal, PipelineRefusal, Refusal, TeamOutcome},
+  actions::{Accepted, ActionError, Current, Definition, Refusal, TeamOutcome},
   team_reads::TeamSession,
 };
 
@@ -109,7 +109,7 @@ async fn refused(
   edit: &DefinitionEdit,
   (status, code, details): (u16, ErrorCode, Option<Box<SharingErrorDetails>>),
 ) -> TeamOutcome {
-  let refusal = specific(status, code, details.as_deref());
+  let refusal = Refusal::of_task_route(status, code, details.as_deref());
   if code != ErrorCode::RevisionConflict {
     return TeamOutcome::Rejected {
       operation,
@@ -128,22 +128,6 @@ async fn refused(
     _ => look(session, edit).await,
   };
   conflict(operation, refusal, seen)
-}
-
-/// The refusal a task route's answer is: a pipeline the server refused, a lifecycle change it refused (decision D4), or
-/// its status and code.
-fn specific(status: u16, code: ErrorCode, details: Option<&SharingErrorDetails>) -> Refusal {
-  match (code, details) {
-    (ErrorCode::Invalid, Some(SharingErrorDetails::Reason { reason })) => {
-      PipelineRefusal::of_reason(reason).map(Refusal::TaskPipeline)
-    }
-    (ErrorCode::Organization, Some(SharingErrorDetails::Reason { reason })) => {
-      LifecycleRefusal::of_reason(reason).map(Refusal::TaskLifecycle)
-    }
-    (ErrorCode::NotHolder, _) => Some(Refusal::TaskLifecycle(LifecycleRefusal::NotHolder)),
-    _ => None,
-  }
-  .unwrap_or(Refusal::Route { status, code })
 }
 
 /// A conflict's outcome by what the subject as it is now says of the edit.

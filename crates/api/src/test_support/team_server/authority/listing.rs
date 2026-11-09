@@ -79,6 +79,7 @@ fn authority_task(task: &AuthorityTask, (project, key): (&str, &str), state: &St
   read["brief"] = json!(task.title);
   read["criteria"] = json!([task.title]);
   read["tags"] = json!([]);
+  read["blocked_reason"] = json!(task.blocked_reason);
   let modules = state.authority.modules.as_deref();
   read["module"] = match (task.module, modules) {
     (Some(index), Some(_)) => json!(work::module_id(index)),

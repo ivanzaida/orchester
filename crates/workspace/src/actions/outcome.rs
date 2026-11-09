@@ -3,7 +3,7 @@
 //! accepted change stays accepted whatever happens on this computer afterwards: nothing undoes it.
 
 use orchester_api::{
-  ErrorCode, SharedModule, SharedTag, SharedTask,
+  ErrorCode, SharedModule, SharedTag, SharedTask, SharingErrorDetails,
   client::AuthorityCallError,
   releases::ReleaseVersion,
   v2::{AuthorityError, CommandResult, LocalEffect, ModuleRead, TaskRead, TeamCommandValue, WorkspacePolicy},
@@ -155,6 +155,25 @@ pub enum Refusal {
   /// A definition edit's response was lost, and the subject read again holds neither the change nor the revision it
   /// was decided on: it changed meanwhile.
   Superseded,
+}
+
+impl Refusal {
+  /// The refusal a task route's answer is: a pipeline the server refused (`422 invalid` with its reason), a lifecycle
+  /// change it refused (decision D4: `422 organization` with `stop_run_first` or `missing_reason`, `409 not_holder`),
+  /// or its status and code.
+  pub fn of_task_route(status: u16, code: ErrorCode, details: Option<&SharingErrorDetails>) -> Self {
+    match (code, details) {
+      (ErrorCode::Invalid, Some(SharingErrorDetails::Reason { reason })) => {
+        PipelineRefusal::of_reason(reason).map(Self::TaskPipeline)
+      }
+      (ErrorCode::Organization, Some(SharingErrorDetails::Reason { reason })) => {
+        LifecycleRefusal::of_reason(reason).map(Self::TaskLifecycle)
+      }
+      (ErrorCode::NotHolder, _) => Some(Self::TaskLifecycle(LifecycleRefusal::NotHolder)),
+      _ => None,
+    }
+    .unwrap_or(Self::Route { status, code })
+  }
 }
 
 /// The subject of a refused change as the server holds it now.
