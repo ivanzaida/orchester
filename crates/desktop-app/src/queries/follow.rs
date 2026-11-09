@@ -25,6 +25,7 @@ use super::{
 };
 use crate::{
   project::Projects,
+  services::Services,
   screens::settings::{Consent, orchester},
 };
 
@@ -195,6 +196,9 @@ struct ProjectSeen {
   runs: u64,
   /// The team's configuration while the project is shared and it was read; `None` otherwise.
   team: Option<TeamConfiguration>,
+  /// How often a shared project's cache changed: every event the team server's stream applied, an archive or a
+  /// restore among them, which leave the configuration as it was.
+  shared: u64,
 }
 
 /// Reads an open project's settings from the moment it is open and keeps them current: automation's recorded changes
@@ -216,10 +220,12 @@ impl Component for ProjectReads {
     let ProjectProps(open) = ctx.props::<ProjectProps>().clone();
     let session = Session::of(ctx);
     let feed = Projects::of(ctx).feed(open.project.id());
+    let servers = Services::of(ctx).servers;
     let now = ProjectSeen {
       outside: feed.outside.get(),
       runs: feed.states.get(),
       team: feed.team.get().configuration(),
+      shared: crate::project::shared_changes(ctx, &servers),
     };
     let before = self.seen.lock().replace(now.clone());
     if let Some(before) = before {
@@ -238,7 +244,7 @@ impl Component for ProjectReads {
       if now.runs != before.runs {
         invalidate(changes::RUNS);
       }
-      if now.team != before.team {
+      if now.team != before.team || now.shared != before.shared {
         invalidate(changes::TEAM);
       }
     }
