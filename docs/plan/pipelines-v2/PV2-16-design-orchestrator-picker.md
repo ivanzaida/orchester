@@ -1,10 +1,10 @@
 # PV2-16 · Design: the orchestrator's picker states with the compact picker
 
-- **Status:** todo
+- **Status:** done (2026-11-10; in Pencil's open document, not saved — PV2-00)
 - **Kind:** design (Pencil only; the person commits the `.pen`)
 - **Depends on:** —
 - **Branch:** —
-- **Tokens:** —
+- **Tokens:** 2.51M (input 54, cache write 106k, cache read 2.37M, output 27k)
 
 ## Goal
 
