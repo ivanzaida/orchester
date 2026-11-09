@@ -11,11 +11,14 @@ use orchester_core::{
     watch::{LeftOpen, NamedTarget, OpenTask},
   },
   run::TaskPhase,
-  store::{MergeStore, RunStore, TaskStore},
+  store::{MergeStore, RunStore},
 };
 use orchester_store::{ProjectDb, StoreError};
 
-use crate::tasks::detail::run_store_error;
+use crate::tasks::{
+  detail::run_store_error,
+  recorded::{self, task_of},
+};
 
 /// A target that still exists, named as people read it now, with the module of a task target (`None`: it has none,
 /// or the target is no task).
@@ -31,9 +34,7 @@ pub(super) fn find(db: &ProjectDb, target: WatchTarget) -> Result<Option<Found>,
     module,
   };
   Ok(match target {
-    WatchTarget::Task(task) => db
-      .task(task)?
-      .map(|task| found(Some(task.key().to_string()), task.module())),
+    WatchTarget::Task(task) => task_of(db, task)?.map(|task| found(Some(task.key().to_string()), task.module())),
     WatchTarget::Module(module) => db
       .module(module)?
       .filter(|module| module.details().state() == ModuleState::Open)
@@ -63,7 +64,7 @@ pub(super) fn left_open(
 ) -> Result<Vec<OpenTask>, StoreError> {
   let mut keys = HashMap::new();
   let mut phases = Vec::new();
-  for task in db.tasks()? {
+  for task in recorded::all(db)? {
     let (id, module) = (task.id(), task.module());
     if set.leading(id, module) != Some(chat) || !targets.iter().any(|target| target.covers(id, module)) {
       continue;

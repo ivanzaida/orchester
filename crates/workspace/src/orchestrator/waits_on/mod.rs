@@ -15,7 +15,6 @@ use orchester_core::{
   orchestrator::{ActionOutcome, ChatAction, WaitsOnRow},
   project::TaskKey,
   run::{Run, RunWaitsOn, WaitReason, WaitingRun, WaitsOnError},
-  store::TaskStore,
   task::Task,
   time::Timestamp,
 };
@@ -208,8 +207,7 @@ fn refusal(db: &ProjectDb, error: &WaitsOnError, number: u32) -> ToolError {
     ),
     WaitsOnError::AlreadyWaits(waited) => {
       // A task that cannot be read is named by its id.
-      let key = db
-        .task(waited)
+      let key = task_of(db, waited)
         .ok()
         .flatten()
         .map_or_else(|| waited.to_string(), |task| task.key().to_string());

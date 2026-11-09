@@ -10,6 +10,7 @@ use orchester_core::{
   orchestrator::{
     ActionOutcome, AgentWait, Chat, ChatAction, EntryKind, MergeLeft, Merging, RunEnd, Subscription, TurnState,
     WaitKind, WatchTarget,
+    watch::{NamedTarget, OpenTask, OpenWork},
   },
   run::RunStatus,
   store::RunStore,
@@ -20,6 +21,7 @@ use orchester_workspace::{
   orchestrator::{
     auto_merge::{completes_in, merging_in},
     waits::{Switches, check_merges_in, follow_in},
+    watch::{StopBy, StopWhat, stop_in, watch_in},
   },
   tasks::{
     active_runs,
@@ -129,4 +131,31 @@ fn team_mcp_the_chat_keeps_the_end_of_a_team_run_in_the_conversation_that_leads_
   assert_eq!(waits[0].task, "KON-7");
   assert_eq!(waits[0].run, team.run);
   assert_eq!(waits[0].kind, WaitKind::Ended(RunEnd::Succeeded));
+}
+
+#[test]
+fn team_mcp_a_watch_on_a_team_task_kept_only_as_an_identity_is_not_gone_and_names_its_open_work() {
+  let team = started();
+  let task = team.checkout.db().run(team.run).expect("read").expect("run").task();
+  let (root, chat) = (team.checkout.root(), Chat::named(ChatId::generate(), "KON-7", at(10)));
+  let given = NamedTarget {
+    target: WatchTarget::Task(task),
+    name: None,
+  };
+
+  // The task has no definition here, only the key its run's inputs kept: it exists, and is named by that key.
+  let watched = watch_in(root, &chat, std::slice::from_ref(&given), "").expect("watched");
+  assert!(watched.gone.is_empty(), "{:?}", watched.gone);
+  assert_eq!(watched.started.len(), 1);
+  assert_eq!(watched.started[0].name.as_deref(), Some("KON-7"));
+
+  // Stopping it names the run that goes on, which the stop cancels nothing of.
+  let stopped = stop_in(root, &chat, &StopWhat::All, StopBy::Unwatch).expect("stopped");
+  assert_eq!(
+    stopped.left_open,
+    vec![OpenTask {
+      task: "KON-7".to_owned(),
+      work: OpenWork::Runs
+    }]
+  );
 }
