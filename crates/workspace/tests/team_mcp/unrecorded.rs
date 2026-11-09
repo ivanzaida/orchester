@@ -14,7 +14,9 @@ use orchester_core::{
   task::{TaskLimits, TaskStatus, identity::TeamTaskRef, organization::TaskOrganization},
   time::Timestamp,
 };
-use orchester_workspace::tasks::{hold::held_work, recorded};
+use orchester_exec::programs::Programs;
+use orchester_store::StoreError;
+use orchester_workspace::tasks::{detail::TaskDetail, hold::held_work, recorded};
 use serde_json::json;
 
 use crate::{
@@ -27,6 +29,15 @@ use crate::{
 /// row the stream cached and a started run, which has neither inputs nor a team record. The team's identity of its task
 /// does not make it a team run: it is a local run, as before team runs were recorded.
 pub(crate) fn stream_era() -> (Checkout, TeamServer, TaskId, RunId) {
+  let (checkout, server, task) = cached_without_run();
+  let mut db = checkout.db();
+  let run = started_run(&mut db, task, (None, RunBaseSource::CheckedOut)).id();
+  drop(db);
+  (checkout, server, task, run)
+}
+
+/// [`stream_era`] before its run started: the team task's identity and the row the stream cached, and no run.
+pub(crate) fn cached_without_run() -> (Checkout, TeamServer, TaskId) {
   let (server, _seen) = server();
   let admin = Standing {
     role: "owner",
@@ -46,9 +57,8 @@ pub(crate) fn stream_era() -> (Checkout, TeamServer, TaskId, RunId) {
     )
     .expect("identity");
   db.cache_shared_tasks(&[cached(task)], None).expect("cached");
-  let run = started_run(&mut db, task, (None, RunBaseSource::CheckedOut)).id();
   drop(db);
-  (checkout, server, task, run)
+  (checkout, server, task)
 }
 
 /// [`stream_era`] after the row the stream cached is gone (the cache is dropped when the link is) and the run stays: a
@@ -222,4 +232,34 @@ fn team_mcp_an_unreadable_run_of_an_unrecorded_team_task_is_listed_with_its_reas
   assert_eq!(runs[0]["status"], json!(null));
   assert_eq!(runs[0]["task"], json!(null));
   assert_eq!(runs[0]["detail"], "runs.unreadable.title", "{listed}");
+}
+
+#[test]
+fn team_mcp_a_cached_team_task_with_no_run_opens_its_page_from_the_server_read() {
+  let (checkout, _server, id) = cached_without_run();
+  let read = checkout.db().task(id).expect("read").expect("the stream's copy is cached");
+  assert!(
+    checkout.db().shared_task_info(id).expect("info").is_some(),
+    "the cached row is a shared one"
+  );
+
+  // The page is the server's task, whether or not a copy is cached; it has no run, and is not the copy.
+  let detail = TaskDetail::of_team(checkout.root(), (read, None), &Programs::processes()).expect("the page opens");
+  assert_eq!(detail.task.id(), id);
+  assert!(detail.run.is_none() && detail.history.is_empty());
+  // Every other reader of a task here goes by what this computer recorded, which is nothing: its refusal is explicit.
+  assert!(matches!(
+    TaskDetail::load_in(checkout.root(), id),
+    Err(StoreError::TaskNotFound(task)) if task == id
+  ));
+}
+
+#[test]
+fn team_mcp_a_cached_team_task_whose_run_kept_no_inputs_still_opens_its_page() {
+  let (checkout, _server, task, _run) = stream_era();
+  let read = checkout.db().task(task).expect("read").expect("cached");
+
+  let detail = TaskDetail::of_team(checkout.root(), (read, None), &Programs::processes()).expect("the page opens");
+  assert_eq!(detail.task.id(), task);
+  assert!(detail.run.is_some(), "its run here is shown");
 }
