@@ -84,9 +84,13 @@ pub fn status_words(ctx: &Ctx, task: &TaskContext) -> Option<Arc<str>> {
 /// which this run pinned.*
 pub fn event_words(ctx: &Ctx, task: &TaskContext) -> Option<Arc<str>> {
   let resource = task.detail.archive_stop.as_ref()?.resource.as_str();
+  let (event, no_step) = match task.team {
+    Some(_) => ("summary.archived.event", "summary.archived.eventNoStep"),
+    None => ("summary.archived.eventLocal", "summary.archived.eventNoStepLocal"),
+  };
   Some(match stopped_step(ctx, task) {
-    Some(step) => ctx.t_args("summary.archived.event", [("step", &*step), ("resource", resource)]),
-    None => ctx.t_args("summary.archived.eventNoStep", [("resource", resource)]),
+    Some(step) => ctx.t_args(event, [("step", &*step), ("resource", resource)]),
+    None => ctx.t_args(no_step, [("resource", resource)]),
   })
 }
 
@@ -117,7 +121,7 @@ impl Component for ArchivedCard {
     let navigation = Navigation::of(ctx);
     let project = task.project.open.project.id();
     let resource = stop.resource.as_str();
-    let (body, need, glyph) = explain(ctx, &stop, run);
+    let (body, need, glyph) = explain(ctx, &stop, (run, task.team.is_some()));
     let words = |key: &str| {
       let (run, at) = (run.to_string(), display::clock(stop.stopped_at));
       ctx.t_args(
@@ -178,8 +182,9 @@ impl Component for ArchivedCard {
 }
 
 /// What the card says of the stop: its body, what the first row says of the resource, and that row's glyph. A stop
-/// recorded before the confirmation named the resource says only its name and when.
-fn explain(ctx: &Ctx, stop: &ArchiveStop, run: u32) -> (Arc<str>, Arc<str>, Icon) {
+/// recorded before the confirmation named the resource says only its name and when. In a local project the person
+/// archived it, not a team: it says *you*, and names no server's person.
+fn explain(ctx: &Ctx, stop: &ArchiveStop, (run, team): (u32, bool)) -> (Arc<str>, Arc<str>, Icon) {
   let at = display::clock(stop.stopped_at);
   let resource = stop.resource.as_str();
   let words = |key: &str, extra: &[(&str, &str)]| {
@@ -191,12 +196,16 @@ fn explain(ctx: &Ctx, stop: &ArchiveStop, run: u32) -> (Arc<str>, Arc<str>, Icon
   match &stop.archived {
     Some(archived) => {
       let kind = ctx.t(kind_key(archived.kind));
-      let (body, need) = match archived.by.as_deref() {
-        Some(who) => (
+      let (body, need) = match (team, archived.by.as_deref()) {
+        (false, _) => (
+          words("summary.archived.bodyLocal", &[("kind", &kind)]),
+          words("summary.archived.archivedLocal", &[("kind", &kind)]),
+        ),
+        (true, Some(who)) => (
           words("summary.archived.body", &[("who", who), ("kind", &kind)]),
           words("summary.archived.archivedBy", &[("who", who), ("kind", &kind)]),
         ),
-        None => (
+        (true, None) => (
           words("summary.archived.bodyUnnamed", &[("kind", &kind)]),
           words("summary.archived.archivedUnnamed", &[("kind", &kind)]),
         ),

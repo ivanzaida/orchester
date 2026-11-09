@@ -21,6 +21,7 @@ mod hub_unsent_publish;
   reason = "the seed's team scenarios and the QA app's team states both include the state file (the marker the seed writes and the QA app reads)"
 )]
 mod kontur;
+mod local_archived;
 mod not_ready;
 mod start_failed;
 mod start_notices;
