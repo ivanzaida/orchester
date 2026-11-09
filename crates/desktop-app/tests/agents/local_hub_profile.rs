@@ -1,5 +1,5 @@
-//! A local profile's panel edits in place (`Agents · Profile` L1, ORC-842): the CLI, the model, the reasoning effort and
-//! the MCP servers are selects, each choice saves the profile's draft, and the panel then says so, publishes it or
+//! A local profile's panel edits in place (`Agents · Profile` L1, ORC-842): the CLI, the model, the reasoning effort
+//! and the MCP servers are selects, each choice saves the profile's draft, and the panel then says so, publishes it or
 //! discards it. `cargo test -p orchester-app --test agents local_hub_profile`.
 
 use orchester_app::routes::{HubFilter, HubView};

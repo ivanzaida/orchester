@@ -1,5 +1,5 @@
-//! Leaving a local MCP server's panel while its edits are not saved (`Agents · MCP server · editing` L8, ORC-842): every
-//! way out asks the same question, not only a press on another row. `cargo test -p orchester-app --test agents
+//! Leaving a local MCP server's panel while its edits are not saved (`Agents · MCP server · editing` L8, ORC-842):
+//! every way out asks the same question, not only a press on another row. `cargo test -p orchester-app --test agents
 //! local_hub_leaving`.
 
 use orchester_app::routes::{HubFilter, HubView, ProjectPage, Route};

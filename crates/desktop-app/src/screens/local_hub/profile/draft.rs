@@ -1,6 +1,7 @@
 //! A local profile's draft in its panel (the team hub's edit parts, `Agents · MCP server · admin · draft` A13 `WMtxm`,
 //! over the profile's own store): once a field is changed the panel says *Draft on v4 · saved 16:40 · only on this
-//! computer* under the chips, and its pinned bar is *Publish v5* and *Discard draft*; discarding asks first, in a modal.
+//! computer* under the chips, and its pinned bar is *Publish v5* and *Discard draft*; discarding asks first, in a
+//! modal.
 
 use std::{path::PathBuf, sync::Arc};
 

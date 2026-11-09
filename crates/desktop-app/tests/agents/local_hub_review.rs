@@ -1,5 +1,6 @@
-//! The Agents hub of a local project, after its review (ORC-842): the archive that could not stop a run says so where it
-//! survives, and an archived server's name stays taken. `cargo test -p orchester-app --test agents local_hub_review`.
+//! The Agents hub of a local project, after its review (ORC-842): the archive that could not stop a run says so where
+//! it survives, and an archived server's name stays taken. `cargo test -p orchester-app --test agents
+//! local_hub_review`.
 
 use orchester_app::routes::{HubFilter, HubView, NewConnection, ProjectPage, Route};
 use orchester_core::time::Timestamp;
