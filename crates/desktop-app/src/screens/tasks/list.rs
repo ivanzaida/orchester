@@ -119,7 +119,7 @@ pub(super) fn items(ctx: &Ctx, source: &Source<'_>, grouped: &[Grouped], folded:
       let need = source.needs.get(&row.id);
       ItemProps::Task(Box::new(RowProps {
         project: source.project,
-        phrase: Phrase::of(ctx, row, need, source.tasks),
+        phrase: Phrase::of(ctx, row, need, source.tasks, source.team.is_some()),
         action: need.map(|need| action(ctx, source.project, need)),
         age: age(ctx, now, row.created_at),
         highlighted: source.highlight == Some(&*row.key),

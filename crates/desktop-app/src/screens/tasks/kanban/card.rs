@@ -99,7 +99,8 @@ pub struct CardSource<'a> {
 impl CardModel {
   pub fn of(ctx: &Ctx, source: &CardSource<'_>, row: &TaskRow) -> Self {
     let need = source.needs.get(&row.id);
-    let phrase = Phrase::of(ctx, row, need, source.tasks);
+    // A card takes only the phrase's color, which a closed team task's words share with a draft's.
+    let phrase = Phrase::of(ctx, row, need, source.tasks, false);
     Self {
       project: source.project,
       run: run_line(ctx, row),
