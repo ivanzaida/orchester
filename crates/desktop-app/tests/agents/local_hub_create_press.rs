@@ -4,8 +4,7 @@
 
 use lurq::app::events::with_synthetic_input;
 use orchester_app::routes::{AgentTab, HubFilter, ProjectPage, Route};
-use orchester_core::resource::ResourceKind;
-use orchester_core::store::ResourceStore;
+use orchester_core::{resource::ResourceKind, store::ResourceStore};
 use orchester_store::ProjectDb;
 
 use super::{

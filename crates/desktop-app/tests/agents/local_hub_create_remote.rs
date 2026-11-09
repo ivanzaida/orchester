@@ -8,7 +8,7 @@ use std::path::Path;
 use orchester_app::routes::{HubFilter, ProjectPage, Route};
 use orchester_core::{
   connection::mcp::{BasicUsername, McpAuthorization, McpHeaderName, McpServer, McpTransport},
-  secret::{Secret, SecretVault},
+  secret::Secret,
   store::McpServerStore,
 };
 use orchester_store::ProjectDb;
