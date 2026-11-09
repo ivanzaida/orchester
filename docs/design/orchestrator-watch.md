@@ -236,3 +236,13 @@ These names are suggestions for the implementation task.
 
 The second wave from `MvWyD` (pipelines, profiles and runners as targets; watch-only subscriptions; digests; budgets
 per subscription). Also not here: a wait on several tasks at once, and narrow (960) widths of these frames.
+
+## Team tasks (2026-11-09)
+
+A team task is owned by the team server; this computer keeps its identity and its runs, which carry the inputs they
+started with. A watch (and a stop's *left open* list, and the key and title a run's wait on a task shows) reads such a
+task as `tasks::recorded` gives it: by the key and title its newest run's inputs kept, so a task with no stored row is
+found, not gone. What a watch ends on is the task's workflow status (Done or Canceled), which only a stored row keeps
+here: a team task kept only as an identity has none, so its watch goes on until the person stops it, and a closed
+team task's waiting run is not settled from this computer. The team task's module is not recorded here either, so a
+module watch does not take it in.
