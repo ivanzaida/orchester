@@ -32,7 +32,11 @@ use super::ProjectServer;
 use crate::{
   background,
   sharing::{Servers, SharingError},
-  tasks::{delivery, detail::run_store_error},
+  tasks::{
+    delivery,
+    detail::run_store_error,
+    recorded::{RunRoute, route_of_run},
+  },
 };
 
 /// Why a claim whose run ended was not ended on the server; the next sync tries again, except after `409 Conflict`.
@@ -109,7 +113,7 @@ impl HeldClaims {
         // A team run settles its claim through its work reports. So does one created with the team inputs that kept no
         // team record: it has no claim to settle under, and is not a local claim either. Its task is no mark of that: a
         // task the sharing stream cached has the team's identity too, and its runs' claims are settled here.
-        Some(run) if db.team_run(run.run.id())?.is_some() || db.has_team_inputs(run.run.id())? => {}
+        Some(run) if route_of_run(&db, &run.run)? != RunRoute::Local => {}
         Some(run) => latest.push(run),
         None => held.kept.push(task),
       }

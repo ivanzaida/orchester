@@ -383,8 +383,8 @@ fn left_words(why: &MergeLeft) -> String {
       "it is a team task's run, which is delivered with its module, and a person requests that delivery".to_owned()
     }
     MergeLeft::TeamUnrecorded => {
-      "it is a team task's run, but this computer has no record of its team work, so it can be neither merged nor \
-       delivered from here"
+      "it is a team run whose start did not finish recording its team work on this computer, so it can be neither \
+       merged nor delivered from here"
         .to_owned()
     }
   }

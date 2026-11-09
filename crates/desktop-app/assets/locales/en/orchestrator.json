@@ -1200,7 +1200,7 @@
         "optedOut": "the task says Don't merge automatically",
         "deliveredByQueue": "its pipeline ends in a Deliver step, so the merge queue delivers it",
         "teamDelivery": "it is a team task's run, delivered with its module by a person",
-        "teamUnrecorded": "it is a team task's run, but this computer has no record of its team work, so it can be neither merged nor delivered from here"
+        "teamUnrecorded": "it is a team run whose start did not finish recording its team work on this computer, so it can be neither merged nor delivered from here"
       },
       "effectContention": "The project database stayed busy for more than 3 runs within 10 minutes, so the Orchestrator continues none of them by itself: it tells you, and running fewer agents at once helps.",
       "effectQueued": "Let the Orchestrator drive is on: the Orchestrator reads it after the turn under way ends, while the run still stands so.",

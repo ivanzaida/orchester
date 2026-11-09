@@ -1701,7 +1701,7 @@
       "teamBundleMissingFile": "A file that a version of {{resource}} pins is gone from the team server, so it built no bundle. Ask a team Admin to publish {{resource}} again; nothing was started.",
       "teamBundleMissingBody": "The team server could not read the version of {{resource}} that this run pins, so it built no bundle. Ask a team Admin to publish {{resource}} again; nothing was started.",
       "teamBundleMissingTooLarge": "This run's bundle is larger than the team server builds; it takes a file of at most 8 MiB. Ask a team Admin to cut down the files the run pins; nothing was started.",
-      "teamRunUnrecorded": "This run belongs to a team task but kept no team record on this computer (it started before team runs were recorded, or its start did not finish), so it has no claim or work to report under. It is not merged, continued or messaged from here. Nothing was changed.",
+      "teamRunUnrecorded": "This is a team run whose start did not finish recording its team work on this computer: it has no team record, so it has no claim or work to report under. It is not merged, continued or messaged from here. Nothing was changed.",
       "teamRunAgain": "A team task runs again only through the team server: start its work with run_task. The message was not sent or kept.",
       "teamTaskUnrecorded": "This run belongs to a team task whose key this computer cannot tell: the run kept no record of the task when it started, and no copy of the task is kept here. Read the task from the team server (get_task) instead."
     },
@@ -2500,7 +2500,7 @@
         "optedOut": "Run #{{run}} was not merged on its own: its task says Don't merge automatically. Nothing was merged; the merge is the person's.",
         "deliveredByQueue": "Run #{{run}} was not merged on its own: its pipeline ends in a Deliver step, so the merge queue delivers it, after the person's approval when the step asks for one.",
         "teamDelivery": "Run #{{run}} was not merged on its own: it is a team task's run, which goes into its module's branch and reaches the base branch with the module's delivery. Nothing was merged; requesting that delivery is the person's.",
-        "teamUnrecorded": "Run #{{run}} was not merged on its own: it is a team task's run, but this computer has no record of its team work, so it can be neither merged nor delivered from here. Nothing was merged."
+        "teamUnrecorded": "Run #{{run}} was not merged on its own: it is a team run whose start did not finish recording its team work on this computer, so it can be neither merged nor delivered from here. Nothing was merged."
       },
       "reportChangesNothing": "A turn the daily report or the end of a watch started changes nothing, and this change is not one the person can apply from a card. Nothing was changed: put it in your recommendations instead.",
       "planOnly": "Plan only is on: this turn takes no action. Nothing was changed: put it in your plan with propose_plan instead.",

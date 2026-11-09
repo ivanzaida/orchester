@@ -19,7 +19,7 @@ use orchester_core::{
 use orchester_exec::programs::Programs;
 use orchester_workspace::{
   orchestrator::{
-    auto_merge::{completes_in, merging_in},
+    auto_merge::{completes_in, left_message, merging_in},
     waits::{Switches, check_merges_in, follow_in},
     watch::{StopBy, StopWhat, stop_in, watch_in},
   },
@@ -32,7 +32,10 @@ use orchester_workspace::{
   },
 };
 
-use crate::{team_runs::started, unrecorded::legacy};
+use crate::{
+  team_runs::{started, started_without_record},
+  unrecorded::stream_era,
+};
 
 fn at(millis: i64) -> Timestamp {
   Timestamp::from_unix_millis(millis)
@@ -78,17 +81,35 @@ fn team_mcp_the_chat_leaves_a_succeeded_team_run_to_the_person() {
 
 #[test]
 fn team_mcp_the_chat_says_a_team_run_with_no_team_record_can_be_neither_merged_nor_delivered() {
-  let (checkout, _server, _task, run) = legacy();
-  let db = checkout.db();
+  // The start stopped before the record was written: the run and its team inputs are there.
+  let team = started_without_record();
+  let db = team.checkout.db();
   assert_eq!(
-    merging_in(&db, run).expect("rule"),
+    merging_in(&db, team.run).expect("rule"),
     Merging::Left {
       why: MergeLeft::TeamUnrecorded
     }
   );
-  assert!(!completes_in(&db, run).expect("rule"), "no completion either");
+  assert!(!completes_in(&db, team.run).expect("rule"), "no completion either");
+
+  // What the merge tool tells the chat when it is called in a turn nobody asked for.
+  let told = left_message(&MergeLeft::TeamUnrecorded, 3);
+  assert_eq!(told.key, "orchestrator.tools.mergeLeft.teamUnrecorded");
+  assert_eq!(told.args, vec![("run", "3".to_owned())]);
 }
 
+#[test]
+fn team_mcp_the_chat_judges_a_stream_era_run_as_a_local_run() {
+  let (checkout, _server, _task, run) = stream_era();
+  let db = checkout.db();
+  // Its task is cached with the team's identity, yet the run is read by the local rules: it has not succeeded.
+  assert_eq!(
+    merging_in(&db, run).expect("rule"),
+    Merging::Left {
+      why: MergeLeft::NotReady
+    }
+  );
+}
 #[test]
 fn team_mcp_no_local_merge_takes_a_team_run_and_none_records_an_attempt() {
   let team = started();
