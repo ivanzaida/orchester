@@ -24,11 +24,11 @@ mod team;
 mod team_starts;
 mod waits;
 
-pub(crate) use self::closed::shared_changes;
 use orchester_core::id::ProjectId;
 use orchester_store::StoreError;
 use orchester_workspace::workspace::{self, OpenProject, Workspace};
 
+pub(crate) use self::closed::shared_changes;
 pub use self::{
   feed::{ProjectFeed, TasksState},
   host::ProjectsHost,
