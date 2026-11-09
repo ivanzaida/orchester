@@ -42,6 +42,9 @@ pub struct Seen {
   pub task_fields: Value,
   /// The team MCP server the Builder profile's version names, as the local server id a stopgap start looks it up by.
   pub publisher_mcp_server: Option<ConnectionId>,
+  /// The number of the one task `KON-7` the server holds: 7, unless a test gives it another to collide with a local
+  /// key.
+  pub task_number: u32,
 }
 
 /// The routes, and what they saw.
@@ -54,6 +57,7 @@ pub fn routes_running(config: &Config, cli: Option<AgentProvider>) -> (Extra, Ar
   let seen = Arc::new(Mutex::new(Seen::default()));
   let versions = Arc::new(Versions::of(config, cli));
   seen.lock().publisher_mcp_server = Some(versions.mcp_server);
+  seen.lock().task_number = 7;
   let counted = seen.clone();
   let extra: Extra = Arc::new(move |state, request, stream| route(state, (&versions, &counted), request, stream));
   (extra, seen)
@@ -135,6 +139,7 @@ fn route(
     let state = state.lock();
     (state.project, state.task, state.module, state.config.pipeline)
   };
+  let number = seen.lock().task_number;
   let path = request.path.split('?').next().unwrap_or_default();
   if let Some(route) = path.strip_prefix(&format!("/api/v1/projects/{project}/tasks/")) {
     let (status, body) = task_edit(seen, request, route);
@@ -147,7 +152,7 @@ fn route(
   let segments: Vec<&str> = route.split('/').filter(|segment| !segment.is_empty()).collect();
   let task_read = || {
     let mut read = json!({
-      "id": task, "number": 7, "key": "KON-7", "former_key": null, "revision": 1, "title": "Say hello",
+      "id": task, "number": number, "key": format!("KON-{number}"), "former_key": null, "revision": 1, "title": "Say hello",
       "brief": "Append one line.", "criteria": ["README.md ends with hello"], "pipeline": pipeline.to_string(),
       "limits": null, "workflow": "todo", "priority": "medium", "tags": [], "blocking": [], "blocked_reason": null,
       "module": module, "release": null, "status": "queued", "has_run": false, "created": attribution(),
@@ -177,7 +182,7 @@ fn route(
     ("GET", ["subscription"]) => return subscription(stream),
     (_, ["task-list"]) => {
       let search = request.json()["filters"]["search"].as_str().map(str::to_lowercase);
-      let found = search.is_none_or(|search| "kon-7 say hello".contains(&search));
+      let found = search.is_none_or(|search| format!("kon-{number} say hello").contains(&search));
       (200, page(if found { vec![task_read()] } else { Vec::new() }))
     }
     ("GET", ["tasks", id]) if *id == task.to_string() => (200, task_read()),

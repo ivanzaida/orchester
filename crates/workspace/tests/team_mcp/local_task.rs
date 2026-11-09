@@ -105,3 +105,62 @@ fn team_mcp_a_message_to_a_local_run_in_a_team_project_runs_the_task_again_here(
     assert_eq!(server.state().works_made, 0, "no team work was made");
   }
 }
+
+#[test]
+fn team_mcp_continue_run_of_a_local_run_in_a_team_project_is_decided_as_a_local_run() {
+  let (server, _seen) = server();
+  let checkout = Checkout::prepared(Some(&server), &["Say hello"], crate::tools::canceled_run);
+  let resume = json!({"project": "Kontur", "run": local_run(&checkout), "choice": {"kind": "resume"}});
+
+  // The local task page's own rule answers (a canceled run was not stopped at a limit), not the team refusal.
+  assert_eq!(checkout.refused("continue_run", &resume), "not_stopped_at_limit");
+}
+
+#[test]
+fn team_mcp_continue_run_of_a_team_run_is_refused_by_its_team_record() {
+  let team = crate::team_runs::started();
+  let run = team.run.to_string();
+
+  let resume = json!({"project": "Kontur", "run": run, "choice": {"kind": "resume"}});
+  assert_eq!(
+    team.checkout.refused("continue_run", &resume),
+    "team_project_unsupported"
+  );
+  let raise = json!({
+    "project": "Kontur",
+    "run": run,
+    "choice": {"kind": "raise_limits", "budget_tokens": null, "time_limit_minutes": null},
+  });
+  // Automation without the person's consent gets the person-only refusal first, before any run is looked up.
+  assert_eq!(team.checkout.refused("continue_run", &raise), "automation_not_allowed");
+  team
+    .checkout
+    .workspace
+    .set_automation_answers_approvals(true)
+    .expect("the switch");
+  assert_eq!(team.checkout.refused("continue_run", &raise), "decision_required");
+}
+
+#[test]
+fn team_mcp_a_local_task_wins_a_key_the_server_task_has_too_and_the_server_task_is_read_by_its_id() {
+  let (server, seen) = server();
+  // The server's one task is keyed KON-1 as well, as a task of the team made after the local draft was.
+  seen.lock().task_number = 1;
+  let checkout = Checkout::new(Some(&server), &["Local draft"]);
+
+  // The key names the local draft, whose definition is a row of this computer.
+  let by_key = checkout
+    .call("get_conversation", &json!({"project": "Kontur", "task": "KON-1"}))
+    .expect("the local draft's conversation");
+  assert_eq!(by_key["task"]["title"], "Local draft", "{by_key}");
+
+  // The server's task is reachable by its server id, which no local task has.
+  let by_id = checkout
+    .call(
+      "get_conversation",
+      &json!({"project": "Kontur", "task": server.task.to_string()}),
+    )
+    .expect("the team task's conversation");
+  assert_eq!(by_id["task"]["key"], "KON-1", "{by_id}");
+  assert_eq!(by_id["task"]["title"], "Say hello", "{by_id}");
+}

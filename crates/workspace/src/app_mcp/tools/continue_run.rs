@@ -16,7 +16,7 @@ use orchester_api::v2::DecisionId;
 use orchester_core::{
   id::{RunId, TaskId},
   resource::StepKey,
-  run::{Answerer, MergeConflicts, PauseReason, RaisedLimits, ReviewNote, RunLimit, RunStatus, StuckDecision},
+  run::{Answerer, MergeConflicts, PauseReason, RaisedLimits, ReviewNote, Run, RunLimit, RunStatus, StuckDecision},
   time::Timestamp,
 };
 use orchester_ipc::{Command, WorkReturn};
@@ -134,16 +134,10 @@ pub async fn continue_run(services: &Services, args: ContinueRun) -> Result<Valu
 /// needs the person's consent (the Orchestrator chat's switch *Let the Orchestrator drive* is that for the chat), while
 /// a person's (the Orchestrator chat's proposal a person applied) is recorded as
 /// theirs and needs none. A resume after the daily budget raises nothing: the runner refuses it while today's budget
-/// is still used up. A team task's limits are its Admin's (D6), so a raise is refused there; its other choices read
-/// the task from this computer's copy, so they are refused for a team project until its runs are read from their
-/// own execution records.
+/// is still used up. A team task's run (told by the run itself) is refused: its limits are its Admin's (D6), and its
+/// other choices read the task from this computer's copy, so they are refused until its runs are read from their own
+/// execution records. A local task's run in a team project continues as a local run.
 pub(crate) async fn continue_as(services: &Services, args: ContinueRun, by: Answerer) -> Result<Value, ToolError> {
-  if team::of(services, &args.project).await?.is_some() {
-    return Err(match args.choice {
-      Choice::RaiseLimits { .. } | Choice::RaiseStepBudget { .. } => team::decision_required(DecisionId::D6),
-      _ => team::team_only_on_server("continue_run"),
-    });
-  }
   let reading = services.clone();
   let resolves = matches!(args.choice, Choice::ResolveConflicts { .. });
   let (project, run, request) = blocking(move || {
@@ -158,9 +152,10 @@ pub(crate) async fn continue_as(services: &Services, args: ContinueRun, by: Answ
       decision.require(&reading.workspace)?;
     }
     let project = reading.project(&args.project)?;
+    let run = refuse_team_run(&project.repo_root, &args)?;
     let jobs = reading.jobs.of(project.project.id());
     let worktrees = reading.run_worktrees(&project.repo_root, project.project.name().as_str());
-    let (run, request) = request(&project.repo_root, &args, (&worktrees, &jobs, by))?;
+    let (run, request) = request(&project.repo_root, (&run, &args), (&worktrees, &jobs, by))?;
     Ok((project, run, request))
   })
   .await?;
@@ -187,6 +182,20 @@ pub(crate) async fn continue_as(services: &Services, args: ContinueRun, by: Answ
   status_now(&project, run.id).await
 }
 
+/// The run `args` names in the project at `root`, refused when it is a team task's run (told by the run itself): a
+/// local task's run in a team project continues as a local run.
+fn refuse_team_run(root: &Path, args: &ContinueRun) -> Result<Run, ToolError> {
+  let db = ProjectDb::open(root)?;
+  let run = find_run(&db, &args.run)?;
+  if !team::is_team_run(&db, &run)? {
+    return Ok(run);
+  }
+  Err(match args.choice {
+    Choice::RaiseLimits { .. } | Choice::RaiseStepBudget { .. } => team::decision_required(DecisionId::D6),
+    _ => team::team_only_on_server("continue_run"),
+  })
+}
+
 /// The run the tool continues.
 struct Named {
   id: RunId,
@@ -211,7 +220,8 @@ pub(crate) fn offered(
   (worktrees, jobs): (&RunWorktrees, &IntegrationJobs),
 ) -> Result<Offered, ToolError> {
   // Who would decide does not change what is offered.
-  let (named, request) = request(root, args, (worktrees, jobs, Answerer::Person))?;
+  let run = find_run(&ProjectDb::open(root)?, &args.run)?;
+  let (named, request) = request(root, (&run, args), (worktrees, jobs, Answerer::Person))?;
   let (target, conflicts) = match request {
     Request::Command(
       Command::DecideStuckRunAs {
@@ -238,12 +248,9 @@ pub(crate) fn offered(
 /// `worktrees`; `jobs` hold what the run's last merge stopped at.
 fn request(
   root: &Path,
-  args: &ContinueRun,
+  (run, args): (&Run, &ContinueRun),
   (worktrees, jobs, by): (&RunWorktrees, &IntegrationJobs, Answerer),
 ) -> Result<(Named, Request), ToolError> {
-  let db = ProjectDb::open(root)?;
-  let run = find_run(&db, &args.run)?;
-  drop(db);
   let number = run.number().get().to_string();
   let detail = TaskDetail::load_in(root, run.task())?;
   // Only a task's latest run can be stopped at a limit; its page offers the choices.

@@ -10,6 +10,7 @@ use orchester_core::{
   orchestrator::{
     ActionOutcome, AgentWait, Chat, ChatAction, EntryKind, MergeLeft, Merging, RunEnd, Subscription, TurnState,
     WaitKind, WatchTarget,
+    watch::{NamedTarget, OpenTask, OpenWork},
   },
   run::RunStatus,
   store::RunStore,
@@ -20,10 +21,12 @@ use orchester_workspace::{
   orchestrator::{
     auto_merge::{completes_in, merging_in},
     waits::{Switches, check_merges_in, follow_in},
+    watch::{StopBy, StopWhat, stop_in, watch_in},
   },
   tasks::{
     active_runs,
     integration::{IntegrationProblem, merge_in},
+    recorded,
     run_approvals::stop_auto_approving_in,
     worktree_removal::WorktreeRemover,
   },
@@ -67,14 +70,14 @@ fn team_mcp_the_chat_leaves_a_succeeded_team_run_to_the_person() {
   assert_eq!(
     merging_in(&db, team.run).expect("rule"),
     Merging::Left {
-      why: MergeLeft::NotReady
+      why: MergeLeft::TeamDelivery
     }
   );
   assert!(!completes_in(&db, team.run).expect("rule"), "no completion either");
 }
 
 #[test]
-fn team_mcp_no_local_merge_takes_a_team_run() {
+fn team_mcp_no_local_merge_takes_a_team_run_and_none_records_an_attempt() {
   let team = started();
   team.step_into(|run, execution, now| run.complete_step(execution, now).expect("passed"));
   let programs = Programs::processes();
@@ -85,6 +88,10 @@ fn team_mcp_no_local_merge_takes_a_team_run() {
     matches!(&refused, Err(IntegrationProblem::Store(message)) if message.key == "localIntegration.teamRun"),
     "{refused:?}"
   );
+  // It was never a merge to try: no attempt was recorded, stopped or open, for the press.
+  let db = team.checkout.db();
+  assert!(db.merge_attempts(team.run).expect("attempts").is_empty());
+  assert!(db.open_merge_attempts().expect("open").is_empty());
 }
 
 #[test]
@@ -129,4 +136,48 @@ fn team_mcp_the_chat_keeps_the_end_of_a_team_run_in_the_conversation_that_leads_
   assert_eq!(waits[0].task, "KON-7");
   assert_eq!(waits[0].run, team.run);
   assert_eq!(waits[0].kind, WaitKind::Ended(RunEnd::Succeeded));
+}
+
+#[test]
+fn team_mcp_a_watch_on_a_team_task_kept_only_as_an_identity_is_not_gone_and_names_its_open_work() {
+  let team = started();
+  let task = team.checkout.db().run(team.run).expect("read").expect("run").task();
+  let (root, chat) = (team.checkout.root(), Chat::named(ChatId::generate(), "KON-7", at(10)));
+  let given = NamedTarget {
+    target: WatchTarget::Task(task),
+    name: None,
+  };
+
+  // The task has no definition here, only the key its run's inputs kept: it exists, and is named by that key.
+  let watched = watch_in(root, &chat, std::slice::from_ref(&given), "").expect("watched");
+  assert!(watched.gone.is_empty(), "{:?}", watched.gone);
+  assert_eq!(watched.started.len(), 1);
+  assert_eq!(watched.started[0].name.as_deref(), Some("KON-7"));
+
+  // Stopping it names the run that goes on, which the stop cancels nothing of.
+  let stopped = stop_in(root, &chat, &StopWhat::All, StopBy::Unwatch).expect("stopped");
+  assert_eq!(
+    stopped.left_open,
+    vec![OpenTask {
+      task: "KON-7".to_owned(),
+      work: OpenWork::Runs
+    }]
+  );
+}
+
+#[test]
+fn team_mcp_all_with_runs_gives_a_team_task_as_all_does_with_the_runs_its_record_was_read_from() {
+  let team = started();
+  let db = team.checkout.db();
+
+  let with_runs = recorded::all_with_runs(&db).expect("tasks with their runs");
+  assert_eq!(with_runs.len(), 1);
+  let (task, runs) = &with_runs[0];
+  assert_eq!(recorded::all(&db).expect("tasks"), vec![task.clone()]);
+  assert_eq!(task.key().to_string(), "KON-7");
+  let ids: Vec<_> = runs
+    .iter()
+    .map(|listed| listed.as_ref().expect("readable").id())
+    .collect();
+  assert_eq!(ids, vec![team.run]);
 }

@@ -434,8 +434,8 @@ fn current_waits(db: &ProjectDb, project: ProjectId) -> Result<Vec<(String, Agen
   let mut approvals = db.pending_tool_approvals_all()?;
   approvals.retain(|approval| !reviewing.contains(&approval.id));
   let mut waits = Vec::new();
-  for task in recorded::all(db)? {
-    let Some(Ok(run)) = db.runs_of_task(task.id()).map_err(run_store_error)?.pop() else {
+  for (task, mut runs) in recorded::all_with_runs(db)? {
+    let Some(Ok(run)) = runs.pop() else {
       continue;
     };
     // A run that ended waits for no one.

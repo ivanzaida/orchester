@@ -310,8 +310,10 @@ const SPECS: &[Spec] = &[
                   integration of the run under way. Otherwise it refuses (needs_decision, merge_failed): preparing \
                   the checkout, conflict choices and approving the exact merged result are a person's, in the \
                   app's Local integration page. A run merged already, by Orchester or outside it as git proves \
-                  (its base branch holds the run's commits), is refused with already_merged. A team project's run \
-                  is never merged into the base branch itself: its work is in its module's branch, and merge_run \
+                  (its base branch holds the run's commits), is refused with already_merged. A team task's run \
+                  (told by the run itself: its team record, its task's team identity or the team inputs it was \
+                  created with; a local task's run in a team project merges as above; such a run with no team \
+                  record is refused with team_run_unrecorded) is never merged into the base branch itself: its work is in its module's branch, and merge_run \
                   requests that module's delivery from the team server, under the module's claim (taken when nobody \
                   holds it), from the module branch's tip onto the tip of the branch the checkout has checked out; \
                   an open delivery of the module is carried on instead. An Admin's authorization or the team's \

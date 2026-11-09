@@ -6,7 +6,10 @@
 //! an ended task again with it, or kept until a person raises the limit the run stopped at. A run no
 //! agent reads any more, and that does not run again, refuses it.
 
-use orchester_core::id::{IdempotencyKey, RunId, TaskId};
+use orchester_core::{
+  id::{IdempotencyKey, RunId, TaskId},
+  run::Run,
+};
 use orchester_store::StoreError;
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
@@ -53,18 +56,18 @@ enum Reach {
   Team(TeamThen),
 }
 
-/// How the message sent `way` in `mode` reaches run `run`. A team task's run (by its own team record: a local task's
+/// How the message sent `way` in `mode` reaches run `run`. A team task's run (told by the run itself: a local task's
 /// run in a team-linked project is not one) the team server fenced takes no message at all, in any state, and is not
 /// started again or continued from here: refused before the message is stored.
 fn reach_checked(
   db: &orchester_store::ProjectDb,
   (mode, way): (&ComposerMode, Way),
-  run: RunId,
+  run: &Run,
 ) -> Result<Reach, ToolError> {
   if !team::is_team_run(db, run)? {
     return Ok(Reach::Local);
   }
-  team::refuse_fenced(db, run)?;
+  team::refuse_fenced(db, run.id())?;
   // A mode with no way of sending this way stores nothing, and a plan's changes go to the runner as a decision: nothing
   // follows from here.
   let Some(then) = way.then_in(mode) else {
@@ -137,7 +140,7 @@ pub async fn send_message(
       way_of(&prepared.mode, timing),
       (checked.as_deref(), named.number().get()),
     )?;
-    let reach = reach_checked(&db, (&prepared.mode, way_of(&prepared.mode, timing)), named.id())?;
+    let reach = reach_checked(&db, (&prepared.mode, way_of(&prepared.mode, timing)), &named)?;
     if let Some(kind) = prepared.decision_kind(Way::Primary) {
       // The Orchestrator's plan path below retains its stricter refusal.
       if !matches!(by, SentBy::Person(_)) && !matches!(prepared.mode, ComposerMode::PlanChanges { .. }) {

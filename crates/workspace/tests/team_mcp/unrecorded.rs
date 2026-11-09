@@ -25,7 +25,7 @@ use crate::{
 
 /// A checkout linked to the fake team server, with the team task `KON-7` of the old sharing stream: its identity and a
 /// started run, with neither inputs nor a cached row of the task.
-fn legacy() -> (Checkout, TeamServer, TaskId, RunId) {
+pub(crate) fn legacy() -> (Checkout, TeamServer, TaskId, RunId) {
   let (server, _seen) = server();
   let admin = Standing {
     role: "owner",

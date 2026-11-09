@@ -39,6 +39,9 @@ pub enum MergeLeft {
   /// Its pipeline ends in a Deliver step: the merge queue delivers it, after a person's approval when the step asks
   /// for one (ORC-19).
   DeliveredByQueue,
+  /// It is a team task's run: it goes into its module's branch and is delivered with the module, which a person
+  /// requests.
+  TeamDelivery,
 }
 
 impl MergeLeft {

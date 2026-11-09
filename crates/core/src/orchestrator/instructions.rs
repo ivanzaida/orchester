@@ -379,6 +379,9 @@ fn left_words(why: &MergeLeft) -> String {
     MergeLeft::DeliveredByQueue => {
       "its pipeline ends in a Deliver step, so the merge queue delivers it (do not call merge_run)".to_owned()
     }
+    MergeLeft::TeamDelivery => {
+      "it is a team task's run, which is delivered with its module, and a person requests that delivery".to_owned()
+    }
   }
 }
 

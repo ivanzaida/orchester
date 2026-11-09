@@ -165,7 +165,8 @@ pub fn complete_in(
 /// `programs` tells, is completed as of its closing, by whoever closed it ([`closer`]), its report kept as completing
 /// keeps it, and its status left as it was closed. However it was closed (on its page, on the board, through
 /// Orchester's MCP server, or by a member on the team server), its Summary and every *Needs you* stop asking. Whether
-/// it settled any. Blocks on SQLite, and on git for such runs only.
+/// it settled any. Blocks on SQLite, and on git for such runs only. Closed is read from the stored
+/// row, the only record of a status here: a team task kept only as an identity (no row) is not settled from here.
 pub fn settle_closed_in((repo_root, programs): (&Path, &Programs)) -> Result<bool, StoreError> {
   let mut db = ProjectDb::open(repo_root)?;
   let mut waiting = Vec::new();

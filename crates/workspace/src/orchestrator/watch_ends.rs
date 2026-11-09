@@ -89,7 +89,11 @@ pub(super) fn end_closed(db: &mut ProjectDb, automatic: bool, at: Timestamp) -> 
   Ok(ended)
 }
 
-/// The project's tasks and modules, as the ending rule reads them.
+/// The project's tasks and modules, as the ending rule reads them. The rule reads workflow status, which this
+/// computer keeps only in a stored task row: a team task kept only as an identity (the team server owns its status)
+/// has no row, so it is not among `tasks` and its subscription goes on until the person stops it, the same as one
+/// whose task is gone. [`recorded`](crate::tasks::recorded) cannot stand in: it gives a team task as its run started
+/// it, with no status.
 struct Work {
   project: ProjectId,
   tasks: Vec<Task>,

@@ -15,6 +15,7 @@ mod writes;
 
 use orchester_core::{
   id::{RunId, TaskId},
+  run::Run,
   store::RunStore,
 };
 use orchester_store::{ProjectDb, SharingLink};
@@ -26,7 +27,7 @@ pub(super) use self::{
   tasks::{get_task, list_tasks},
   writes::{create_task, update_task},
 };
-use super::tasks::find_task;
+use super::{runs::find_run, tasks::find_task};
 use crate::{
   actions::Dispatcher,
   app_mcp::{
@@ -35,7 +36,10 @@ use crate::{
   },
   messages::Message,
   sharing::{SharingError, sync::SystemClock},
-  tasks::{detail::run_store_error, recorded::is_team},
+  tasks::{
+    detail::run_store_error,
+    recorded::{RunRoute, is_team, route_of_run},
+  },
   team_reads::{TeamProject, TeamReadError, TeamSession},
   workspace::OpenProject,
 };
@@ -55,6 +59,23 @@ pub(super) async fn of(services: &Services, named: &str) -> Result<Option<Team>,
     Ok(link.map(|link| Team { open, link }))
   })
   .await
+}
+
+/// The [`Team`] of project `named` when it is linked to a team server and run `run` is a team task's run with its team
+/// record; `None` for a local project and for a local task's run in a team project, which are local runs. Not found
+/// when the project is linked and names no such run; refused when the run is a team task's that kept no team record
+/// ([`is_team_run`]).
+pub(super) async fn of_run(services: &Services, (named, run): (&str, &str)) -> Result<Option<Team>, ToolError> {
+  let Some(team) = of(services, named).await? else {
+    return Ok(None);
+  };
+  let (root, run) = (team.open.repo_root.clone(), run.to_owned());
+  let is_team = blocking(move || {
+    let db = ProjectDb::open(&root)?;
+    is_team_run(&db, &find_run(&db, &run)?)
+  })
+  .await?;
+  Ok(is_team.then_some(team))
 }
 
 impl Team {
@@ -160,10 +181,24 @@ pub(super) fn refuse_unrecorded_runs(db: &ProjectDb, task: TaskId) -> Result<(),
   Err(task_missing(db, task)?)
 }
 
-/// Whether `run` is a team task's run, by its own team record: a local task's run in a team project, and a legacy run
-/// that kept no record, are not.
-pub(super) fn is_team_run(db: &ProjectDb, run: RunId) -> Result<bool, ToolError> {
-  Ok(db.team_run(run)?.is_some())
+/// Whether `run` is a team task's run with its team record, told by the run itself ([`RunRoute`]): a local task's run
+/// in a team project is not. Refused when it is a team task's run that kept no record (a legacy run, or one whose start
+/// stopped before the record was written): it can take neither the team route, which reports under its claim, nor the
+/// local one.
+pub(super) fn is_team_run(db: &ProjectDb, run: &Run) -> Result<bool, ToolError> {
+  match route_of_run(db, run)? {
+    RunRoute::Local => Ok(false),
+    RunRoute::Team => Ok(true),
+    RunRoute::TeamUnrecorded => Err(run_unrecorded()),
+  }
+}
+
+/// The refusal for a team task's run that kept no team record.
+fn run_unrecorded() -> ToolError {
+  ToolError::refused(
+    "team_run_unrecorded",
+    vec![Message::new("appMcp.errors.teamRunUnrecorded")],
+  )
 }
 
 /// Refuses work on a run the team server fenced (taken over, membership removed, carried on elsewhere): it goes on no
@@ -202,7 +237,7 @@ pub(super) fn no_queue() -> ToolError {
 
 /// A team task's run is never merged into the base branch from here: its work goes into its module's branch, and only
 /// the module's delivery takes it further, which `merge_run` requests ([`merge_run`]). A merge a person approved in a
-/// proposal is of the run's own commit, so on a team project it is refused.
+/// proposal is of the run's own commit, so on a team task's run it is refused.
 pub(super) fn merge_refused() -> ToolError {
   ToolError::refused(
     "team_delivery_pending",
