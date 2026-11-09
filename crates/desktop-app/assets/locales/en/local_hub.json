@@ -49,6 +49,7 @@
       "draft": "Draft · not published yet",
       "connectionNone": "No {{cli}} connection",
       "connectionPick": "Choose a {{cli}} connection",
+      "connectionSignIn": "Sign in to {{cli}}",
       "many": "{{count}} things missing",
       "off": "Off",
       "offRuns": "Off · {{names}} run without it",

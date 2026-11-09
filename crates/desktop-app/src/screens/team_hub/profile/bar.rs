@@ -49,6 +49,12 @@ impl Words<'_> {
       Fix::AddConnection => ctx
         .t_args("team_hub.fix.action.add", [("cli", &*ctx.t(cli_key(self.sheet.cli)))])
         .to_string(),
+      Fix::SignIn => ctx
+        .t_args(
+          "team_hub.fix.action.signIn",
+          [("cli", &*ctx.t(cli_key(self.sheet.cli)))],
+        )
+        .to_string(),
       Fix::SwitchOn(server) => ctx
         .t_args("team_hub.fix.action.switchOn", [("server", self.server(*server))])
         .to_string(),
@@ -66,6 +72,7 @@ impl Words<'_> {
     match fix {
       Fix::UseConnection => return ctx.t("team_hub.fix.hint.use").to_string(),
       Fix::AddConnection => return ctx.t("team_hub.fix.hint.add").to_string(),
+      Fix::SignIn => return ctx.t("team_hub.fix.hint.signIn").to_string(),
       _ => {}
     }
     match missing.iter().skip(1).find_map(Fix::of) {

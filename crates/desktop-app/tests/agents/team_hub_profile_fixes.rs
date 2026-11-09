@@ -14,7 +14,7 @@ use orchester_app::{
   routes::{HubFilter, HubView},
 };
 use orchester_core::{id::ResourceId, secret::SecretName};
-use orchester_store::ProjectDb;
+use orchester_store::{ConnectionPick, ProjectDb};
 use serde_json::{Value, json};
 
 use super::{
@@ -460,4 +460,46 @@ fn team_hub_profile_fix_buttons_wait_while_the_hub_is_read_again() {
     agents.text(&format!("team-hub-ready-mcp-{lint}-words")),
     "Set its program path here"
   );
+}
+
+/// A pick made outside the panel (an MCP client's `pick_profile_connection`) shows in the select without reopening it
+/// (ORC-848 D5), and choosing in the select afterwards keeps that one as a pick made in the panel does.
+#[test]
+fn team_hub_profile_fix_the_select_follows_a_pick_made_elsewhere() {
+  let mut agents = Agents::new(true);
+  team(&agents);
+  let first = claude(&agents.root, "Claude 2", "2.1.173");
+  let home = claude(&agents.root, "Claude Home", "2.1.170");
+  let ((profile, _), _) = builder_using(&agents, false);
+  show(&mut agents, profile);
+  assert!(
+    agents.text("team-hub-pick").contains("Choose a Claude Code connection"),
+    "{}",
+    agents.text("team-hub-pick")
+  );
+
+  let workspace = agents.window.launch.workspace().expect("workspace");
+  workspace
+    .pick_team_connection(
+      &agents.root,
+      profile,
+      ConnectionPick {
+        connection: home,
+        account: None,
+      },
+    )
+    .expect("a pick made by an MCP client");
+
+  agents.until("the select follows", |s| {
+    s.text("team-hub-pick").contains("Claude Home")
+  });
+  assert!(!agents.text("team-hub-pick").contains("Choose a Claude Code connection"));
+  choose(&mut agents, "Claude Code · Claude 2");
+  agents.until("the other is kept", |s| {
+    ProjectDb::open(&s.root)
+      .expect("database")
+      .connection_pick(profile)
+      .expect("pick")
+      .is_some_and(|pick| pick.connection == first)
+  });
 }

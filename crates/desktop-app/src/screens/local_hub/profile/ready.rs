@@ -27,6 +27,8 @@ pub(super) enum Fix {
   UseConnection,
   /// Go where a connection of the CLI is added.
   AddConnection,
+  /// Go where the connection the profile runs on is signed in.
+  SignIn,
   /// Open the MCP server's panel, where its program path is set.
   SetPath(ConnectionId),
   /// Open the MCP server's panel, where the value of a secret it takes is set.
@@ -38,6 +40,7 @@ impl Offer for Fix {
     match self {
       Self::UseConnection => "team_hub.fix.link.use",
       Self::AddConnection => "team_hub.fix.link.add",
+      Self::SignIn => "team_hub.fix.link.signIn",
       Self::SetPath(_) => "team_hub.fix.link.setPath",
       Self::AddValue(_) => "team_hub.fix.link.addValue",
     }
@@ -47,6 +50,7 @@ impl Offer for Fix {
     match self {
       Self::UseConnection => "use",
       Self::AddConnection => "add",
+      Self::SignIn => "sign-in",
       Self::SetPath(_) => "set-path",
       Self::AddValue(_) => "add-value",
     }
@@ -65,6 +69,17 @@ fn connection(ctx: &Ctx, profile: &LocalProfile) -> Part<Fix> {
   let state = match (profile.current, profile.cli) {
     (Some(current), Some(cli)) => {
       let found = profile.connections.iter().find(|choice| choice.id == current);
+      if found.is_some_and(|choice| choice.signed_out) {
+        return Part {
+          id: "connection".to_owned(),
+          label: ctx.t("team_hub.ready.connection"),
+          state: State::Missing {
+            words: ctx.t_args("team_hub.ready.signedOut", [("cli", &*ctx.t(cli_key(cli)))]),
+            fix: Some(Fix::SignIn),
+            blocking: true,
+          },
+        };
+      }
       State::Ready(found.map_or_else(
         || ctx.t("local_hub.ready.ready"),
         |choice| connection_words(ctx, cli, choice),

@@ -53,7 +53,7 @@ pub(super) fn used_by_mcp_server(root: &Path, server: ConnectionId) -> Result<Us
   profiles.sort_by_cached_key(|used| (used.name.to_lowercase(), used.id.to_string()));
   Ok(UsedBy {
     resources: profiles,
-    runs: runs_where(&db, |snapshot| pins_mcp_server(&db, snapshot, server))?,
+    runs: runs_where(&db, |run, snapshot| pins_mcp_server(&db, (run, snapshot), server))?,
   })
 }
 
@@ -158,19 +158,19 @@ fn referenced<B: ResourceBody>(
 /// The runs that have not ended and pin `target` by the rule an archive stops runs by ([`pins`]). A run that cannot
 /// be read is logged and left out, as it is when the archive stops runs (`crate::sharing::sync`).
 fn runs(db: &ProjectDb, target: &Resource) -> Result<Vec<UsedByRun>, UsedByError> {
-  runs_where(db, |snapshot| pins(db, snapshot, target))
+  runs_where(db, |_, snapshot| pins(db, snapshot, target))
 }
 
-/// The runs that have not ended and whose snapshot `pinned` says uses the target, by the task key's number and then
-/// the run id.
+/// The runs that have not ended and that `pinned` says use the target, given the run's id and snapshot, by the task
+/// key's number and then the run id.
 fn runs_where(
   db: &ProjectDb,
-  pinned: impl Fn(&RunSnapshot) -> Result<bool, StoreError>,
+  pinned: impl Fn(RunId, &RunSnapshot) -> Result<bool, StoreError>,
 ) -> Result<Vec<UsedByRun>, UsedByError> {
   let mut found: Vec<(NonZeroU32, UsedByRun)> = Vec::new();
   for listed in db.unfinished_runs()? {
     let run = match listed {
-      Ok(run) if pinned(run.snapshot())? => run,
+      Ok(run) if pinned(run.id(), run.snapshot())? => run,
       Ok(_) => continue,
       Err(unreadable) => {
         tracing::warn!(

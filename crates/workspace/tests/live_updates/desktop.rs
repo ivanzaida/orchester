@@ -21,8 +21,11 @@ use tempfile::TempDir;
 
 use crate::{server::TeamServer, support::Fixture};
 
-/// A keychain that holds the member's token under every key.
-struct Keychain(String);
+/// A keychain that holds the member's token under every key and notes the keys that were removed.
+pub struct Keychain {
+  token: String,
+  pub removed: parking_lot::Mutex<Vec<VaultKey>>,
+}
 
 impl SecretVault for Keychain {
   fn store(&self, _: &VaultKey, _: &SecretValue) -> Result<(), VaultError> {
@@ -30,10 +33,11 @@ impl SecretVault for Keychain {
   }
 
   fn read(&self, _: &VaultKey) -> Result<SecretValue, VaultError> {
-    Ok(SecretValue::new(self.0.clone()).expect("a token"))
+    Ok(SecretValue::new(self.token.clone()).expect("a token"))
   }
 
-  fn delete(&self, _: &VaultKey) -> Result<(), VaultError> {
+  fn delete(&self, key: &VaultKey) -> Result<(), VaultError> {
+    self.removed.lock().push(key.clone());
     Ok(())
   }
 }
@@ -44,6 +48,7 @@ pub struct Desktop {
   pub fixture: Fixture,
   pub servers: Servers,
   pub server: ServerId,
+  pub keychain: Arc<Keychain>,
 }
 
 impl Desktop {
@@ -93,12 +98,17 @@ impl Desktop {
     let workspace = Workspace::new(app);
     workspace.open(fixture.repo.path()).expect("the project");
     let version = orchester_api::releases::ReleaseVersion::parse("0.5.0").expect("a release version");
-    let servers = Servers::new(workspace, Vault::with(Arc::new(Keychain(token.to_owned()))), version);
+    let keychain = Arc::new(Keychain {
+      token: token.to_owned(),
+      removed: parking_lot::Mutex::default(),
+    });
+    let servers = Servers::new(workspace, Vault::with(keychain.clone()), version);
     Self {
       _data: data,
       fixture,
       servers,
       server: stored.id,
+      keychain,
     }
   }
 

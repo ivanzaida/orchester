@@ -12,6 +12,7 @@ mod hub_conflict;
 mod hub_created;
 mod hub_edit;
 mod hub_edit_race;
+mod hub_profile_form;
 mod hub_unsent;
 mod hub_unsent_publish;
 #[path = "../../examples/seed/kontur/mod.rs"]
@@ -21,6 +22,8 @@ mod hub_unsent_publish;
   reason = "the seed's team scenarios and the QA app's team states both include the state file (the marker the seed writes and the QA app reads)"
 )]
 mod kontur;
+mod local_archived;
+mod make_local;
 mod not_ready;
 mod start_failed;
 mod start_notices;

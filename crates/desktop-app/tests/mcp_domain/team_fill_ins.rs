@@ -16,14 +16,15 @@ use orchester_core::{
   name::Name,
   project::ProjectKey,
   resource::{
-    AgentProfile, ModelId, PromptText, ProviderSettings, ResourceBody, Slug, TeamMcpServer, TeamReviewer, VersionNumber,
+    AgentProfile, ModelId, PromptText, ProviderSettings, Resource, ResourceBody, Slug, TeamMcpServer, TeamReviewer,
+    VersionNumber,
   },
   secret::{SecretName, SecretValue},
   sharing::{MemberRole, SharedPerson, TaskRevision},
   store::ResourceStore,
   time::Timestamp,
 };
-use orchester_store::{AppDb, CachedVersion, ProjectDb, ReferenceTarget, ResourceSharing, SharingLink};
+use orchester_store::{AppDb, CachedVersion, ProjectDb, ReferenceTarget, SharingLink};
 use orchester_workspace::tasks::outside::Outside;
 use serde_json::{Value, json};
 
@@ -124,20 +125,17 @@ fn team_resource<B: ResourceBody>(
   body: B,
   references: Vec<ReferenceTarget>,
 ) -> ResourceId {
-  let id = db
-    .create_resource(
-      Slug::new(slug).expect("slug"),
-      name(slug),
-      &body,
-      Timestamp::from_unix_millis(10),
-    )
-    .expect("resource")
-    .id();
-  db.set_resource_sharing(
-    id,
-    Some(ResourceSharing::Shared(TaskRevision::try_from(1).expect("revision"))),
-  )
-  .expect("shared");
+  // As a computer that syncs the team has it: the server's id, no draft of its own.
+  let resource = Resource::new(
+    ResourceId::generate(),
+    B::KIND,
+    Slug::new(slug).expect("slug"),
+    name(slug),
+    Timestamp::from_unix_millis(10),
+  );
+  let id = resource.id();
+  db.keep_shared_resource(&resource, TaskRevision::try_from(1).expect("revision"))
+    .expect("shared");
   let version = CachedVersion {
     number: VersionNumber::FIRST,
     published_at: Timestamp::from_unix_millis(20),
@@ -520,4 +518,72 @@ fn domain_team_list_secrets_shows_names_and_that_a_value_is_set_never_the_value(
   assert_eq!(secrets[0]["team"], true);
   assert_eq!(secrets[0]["value_set"], true);
   assert!(!listed.to_string().contains(SECRET_VALUE), "no value is listed");
+}
+
+/// What an MCP client reads of a team project's profiles is what the window shows: the connection this computer picked
+/// for a team profile (ORC-848 D6), a profile as the server has it (not a draft beside v1, D7), and nothing of this
+/// computer's own that the team never published.
+#[test]
+fn domain_team_profiles_report_this_computers_pick_and_leave_out_a_local_draft() {
+  let mut team = team();
+  let connection = team.codex_connection();
+  let mut db = team.db();
+  let designer = AgentProfile::new(
+    name("Designer"),
+    String::new(),
+    PromptText::new("Design.").expect("prompt"),
+    ConnectionId::generate(),
+    ModelId::new("gpt-5.5").expect("model"),
+    ProviderSettings::default(),
+  );
+  let local = db
+    .create_resource(
+      Slug::new("designer").expect("slug"),
+      name("Designer"),
+      &designer,
+      Timestamp::from_unix_millis(30),
+    )
+    .expect("a profile of this computer's own, never published")
+    .id();
+  drop(db);
+  let args = json!({ "project": "Kontur", "profile": team.codex_profile.to_string(), "connection": connection });
+  team.served.ok("pick_profile_connection", &args);
+
+  let listed = team.served.ok("list_profiles", &json!({ "project": "Kontur" }));
+  let profiles = listed["profiles"].as_array().expect("profiles");
+  let ids: Vec<&str> = profiles.iter().filter_map(|profile| profile["id"].as_str()).collect();
+  assert!(
+    !ids.contains(&local.to_string().as_str()),
+    "a local draft is not the team's: {listed}"
+  );
+  let codex = profiles
+    .iter()
+    .find(|profile| profile["id"] == team.codex_profile.to_string())
+    .unwrap_or_else(|| panic!("the team's profile is listed: {listed}"));
+  let picked = team.served.ok("list_connections", &json!({ "project": "Kontur" }));
+  let name_of = picked["agents"]
+    .as_array()
+    .and_then(|all| all.iter().find(|c| c["id"] == connection.as_str()))
+    .map(|c| c["name"].clone())
+    .expect("the picked connection is listed");
+  assert_eq!(codex["connection"], name_of, "the pick is reported: {codex}");
+  assert_eq!(
+    codex["state"]["state"], "published",
+    "the server's version, no draft: {codex}"
+  );
+  assert_eq!(codex["state"]["published_version"], 1);
+
+  let got = team.served.ok(
+    "get_profile",
+    &json!({ "project": "Kontur", "profile": team.codex_profile.to_string() }),
+  );
+  assert_eq!(got["profile"]["connection"]["id"], connection.as_str(), "{got}");
+  let unpicked = team.served.ok(
+    "get_profile",
+    &json!({ "project": "Kontur", "profile": team.claude_profile.to_string() }),
+  );
+  assert!(
+    unpicked["profile"]["connection"].is_null(),
+    "no pick, none reported: {unpicked}"
+  );
 }

@@ -57,12 +57,12 @@ use super::{
   words::kind_where_key,
 };
 use crate::{
-  mcp::input_gate::{Guarded, InputGate, input_may_decide},
   navigation::Navigation,
   project::ShownProject,
   routes::{AccountsView, AgentTab, HubFilter, ProjectPage, Route},
   screens::{
     hub::versions::{VersionsProps, versions_button},
+    settings::orchester::PersonOnly,
     team_hub::{
       actions::Busy,
       bar::bar,
@@ -85,6 +85,9 @@ use crate::{
     pressable::Press,
   },
 };
+
+/// The id of the button that takes a connection for the profile, which the refusal of a client's press is said under.
+const USE: &str = "local-hub-fix-use";
 
 #[derive(Clone, PartialEq)]
 pub(super) struct Props {
@@ -120,8 +123,8 @@ struct ProfilePanel {
   /// *Discard draft* asks.
   discarding: Signal<bool>,
   /// Who pressed *Use … for …* when it takes an account the profile lost: that is a person's decision, or automation's
-  /// under their consent.
-  gate: Option<InputGate>,
+  /// under their consent; a press that is refused says so in the panel.
+  person: PersonOnly,
 }
 
 impl Component for ProfilePanel {
@@ -153,7 +156,7 @@ impl Component for ProfilePanel {
       pending,
       settled,
       discarding: ctx.signal(false),
-      gate: ctx.use_context::<InputGate>(),
+      person: PersonOnly::new(ctx),
     }
   }
 
@@ -221,6 +224,7 @@ impl Component for ProfilePanel {
         (&press, busy),
       ))
       .with_children(self.refusal(ctx))
+      .with_children(self.person.reason(ctx, USE))
       .with_children(discard);
     let bar = match profile.draft_saved_at {
       Some(shown) => Some(draft::bar(ctx, &entry, (self.publish(shown), self.discard()), busy)),
@@ -291,12 +295,11 @@ impl ProfilePanel {
   ) -> Press {
     match fix {
       Fix::UseConnection => {
-        let (take, gate) = (self.take.clone(), self.gate.clone());
+        let (take, person) = (self.take.clone(), self.person.clone());
         Press::run(move || {
           // A profile whose connection is gone takes the account as a widening nobody was asked about: only a person
           // decides that.
-          if takes_account && !input_may_decide(gate.as_ref(), Guarded::PermissionWidening) {
-            tracing::warn!("synthetic input reached a protected permission decision; not taken");
+          if takes_account && !person.allows_widening(USE) {
             return;
           }
           if let Some(connection) = target {
@@ -304,7 +307,7 @@ impl ProfilePanel {
           }
         })
       }
-      Fix::AddConnection => Press::Open(navigation.to(Route::Accounts(AccountsView::default()))),
+      Fix::AddConnection | Fix::SignIn => Press::Open(navigation.to(Route::Accounts(AccountsView::default()))),
       Fix::SetPath(server) | Fix::AddValue(server) => Press::Open(navigation.to(Route::Project(
         project.open.project.id(),
         ProjectPage::hub(view_of(HubFilter::McpServers, Some(Archivable::McpServer(*server)))),
@@ -328,8 +331,13 @@ impl ProfilePanel {
 /// has none of its CLI), else the first server to fix.
 fn pinned_fix(profile: &LocalProfile, target: Option<&ConnectionChoice>, parts: &[Part<Fix>]) -> Option<Fix> {
   let changed = target.is_some_and(|choice| Some(choice.id) != profile.current);
+  let signed_out = profile
+    .connections
+    .iter()
+    .any(|choice| Some(choice.id) == profile.current && choice.signed_out);
   let connection = match (profile.cli, profile.connections.is_empty(), profile.current) {
     (None, ..) => None,
+    (Some(_), false, Some(_)) if signed_out && !changed => Some(Fix::SignIn),
     (Some(_), true, None) => Some(Fix::AddConnection),
     (Some(_), false, None) => Some(Fix::UseConnection),
     (Some(_), false, Some(_)) if changed => Some(Fix::UseConnection),
@@ -363,6 +371,19 @@ fn pinned(
       ),
       Icon::Check,
       ctx.t("local_hub.profile.useHint"),
+    ),
+    Fix::SignIn => (
+      ctx.t_args(
+        "team_hub.fix.action.signIn",
+        [(
+          "cli",
+          &*profile
+            .cli
+            .map_or_else(|| ctx.t("local_hub.ready.ready"), |cli| ctx.t(cli_key(cli))),
+        )],
+      ),
+      Icon::LogIn,
+      ctx.t("team_hub.fix.hint.signIn"),
     ),
     Fix::AddConnection => (
       ctx.t_args(

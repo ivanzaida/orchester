@@ -4,7 +4,7 @@
 
 use std::{thread, time::Duration};
 
-use lurq::app::events::with_synthetic_input;
+use lurq::app::events::{MouseButton, with_synthetic_input};
 use orchester_app::routes::{HubFilter, HubView};
 use orchester_core::{
   connection::{
@@ -27,6 +27,7 @@ use orchester_workspace::agents::{
 use super::{
   harness::{Agents, changed},
   local_hub::{builder_without_connection, open, server},
+  support::link_press::{Presser, press_control},
 };
 
 /// Opens the hub on Profiles with `profile` in the panel.
@@ -289,6 +290,11 @@ fn local_hub_profile_publish_of_a_draft_that_changes_the_prompts_is_left_to_the_
 
 /// A Claude Code connection whose last check found `claude-a` (with two efforts) and `claude-b`.
 fn claude(agents: &Agents) -> ConnectionId {
+  claude_signed(agents, SignIn::SignedIn)
+}
+
+/// [`claude`] whose last check found the CLI as `sign_in` says.
+fn claude_signed(agents: &Agents, sign_in: SignIn) -> ConnectionId {
   let mut connection = AgentConnection::new(
     ConnectionId::generate(),
     Name::new("Claude 2").expect("name"),
@@ -308,7 +314,7 @@ fn claude(agents: &Agents) -> ConnectionId {
       at: Timestamp::now(),
       result: CheckResult::Available {
         version: "1.0.0".into(),
-        sign_in: SignIn::SignedIn,
+        sign_in,
         catalog: ModelCatalog::new(
           CatalogSource::Provider,
           vec![model("claude-a", &["low", "high"]), model("claude-b", &[])],
@@ -426,9 +432,11 @@ fn local_hub_profile_automation_cannot_answer_allow_or_take_an_account_for_a_pro
   agents.until("the menu", |s| s.exists(&format!("local-hub-profile-server-{docs}")));
   agents.click(&format!("local-hub-profile-server-{docs}"));
   agents.until("the question", |s| s.exists("local-hub-profile-confirm-confirm"));
-  agents.window.pass();
-
-  with_synthetic_input(|| agents.click("local-hub-profile-confirm-confirm"));
+  // The confirm takes no press before the question lived through a pass: press it as a client would, until it answers.
+  agents.until("the refusal", |s| {
+    with_synthetic_input(|| s.click("local-hub-profile-confirm-confirm"));
+    s.exists("local-hub-profile-confirm-person-only")
+  });
   for _ in 0..20 {
     agents.until("a pass", |_| true);
     thread::sleep(Duration::from_millis(5));
@@ -445,6 +453,12 @@ fn local_hub_profile_automation_cannot_answer_allow_or_take_an_account_for_a_pro
     "automation allowed nothing"
   );
   assert!(agents.exists("local-hub-profile-confirm-confirm"), "it still asks");
+  assert!(
+    agents
+      .text("local-hub-profile-confirm-person-only")
+      .starts_with("Only a person does this here"),
+    "the refusal is said under the question"
+  );
   agents.press_until("local-hub-profile-confirm-confirm", "a person allows it", |s| {
     s.listed()
       .profile(profile)
@@ -473,9 +487,64 @@ fn local_hub_profile_automation_cannot_take_an_account_for_a_profile_that_lost_i
     connection != claude_2 && connection != home,
     "automation chose no account for it"
   );
+  assert!(
+    agents
+      .text("local-hub-fix-use-person-only")
+      .starts_with("Only a person does this here"),
+    "the refused press says why in the panel"
+  );
   agents.press_until("local-hub-fix-use", "a person's press takes it", |s| {
     s.listed()
       .profile(profile)
       .is_some_and(|entry| entry.profile.connection() == claude_2)
   });
+}
+
+#[test]
+fn local_hub_profile_a_persons_pointer_press_takes_the_account_and_choosing_in_the_select_changes_nothing() {
+  let mut agents = Agents::new(true);
+  let (profile, [claude_2, home]) = builder_without_connection(&agents);
+  open(&mut agents, HubView::new(HubFilter::Profiles, Some(profile)));
+  agents.until("the fix", |s| s.exists("local-hub-fix-use"));
+
+  choose(&mut agents, "local-hub-profile-pick", "Claude Code · Home");
+  agents.until("the bar names the choice", |s| {
+    s.text("local-hub-fix-use").contains("Home")
+  });
+  let stored = agents.listed().profile(profile).expect("profile").profile.connection();
+  assert!(
+    stored != claude_2 && stored != home,
+    "a choice in the select stores nothing"
+  );
+  assert!(!agents.exists("local-hub-fix-use-person-only"));
+
+  press_control(
+    &mut agents.window,
+    "local-hub-fix-use",
+    (Presser::Person, MouseButton::Left),
+    (false, false),
+  );
+  agents.until("a person's pointer takes it", |s| {
+    s.listed()
+      .profile(profile)
+      .is_some_and(|entry| entry.profile.connection() == home)
+  });
+  assert!(!agents.exists("local-hub-fix-use-person-only"));
+}
+
+/// A profile on a connection whose CLI is signed out is not ready (ORC-848 D11): *Ready?* says so and the pinned fix is
+/// to sign in.
+#[test]
+fn local_hub_profile_a_signed_out_connection_is_not_ready_and_the_fix_is_to_sign_in() {
+  let mut agents = Agents::new(true);
+  let connection = claude_signed(&agents, SignIn::SignedOut);
+  let profile = builder_on_claude(&agents, connection);
+  show(&mut agents, profile);
+
+  agents.until("the sign-in fix", |s| s.exists("local-hub-fix-sign-in"));
+  assert!(agents.text("local-hub-fix-sign-in").contains("Sign in to Claude Code"));
+  assert_eq!(
+    agents.text("team-hub-ready-connection-words"),
+    "Claude Code is signed out here"
+  );
 }

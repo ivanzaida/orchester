@@ -65,3 +65,15 @@ pub struct LocalConsent {
   /// Agent steps whose permissions this computer narrows below the inputs'; never wider.
   pub narrowed: Vec<ResolvedStepPermissions>,
 }
+
+impl LocalBindings {
+  /// Whether the run these bindings belong to gets the MCP server of this computer `server`: an older run bound it for
+  /// its profiles ([`Self::local_mcp`]), or a profile's selection names it.
+  pub fn binds_local_mcp(&self, server: ConnectionId) -> bool {
+    self.local_mcp.contains(&server)
+      || self
+        .profiles
+        .iter()
+        .any(|binding| binding.mcp_servers.contains(&server))
+  }
+}

@@ -204,6 +204,16 @@ impl ProjectDb {
     Ok(())
   }
 
+  /// Removes the value of every team secret that has one from the keychain and the database, as
+  /// [`Self::clear_team_secret_value`] does each; the project that leaves its team keeps none. A handle is a new id
+  /// made for the team secret alone, so no local secret shares a keychain entry with one.
+  pub fn clear_team_secret_values(&mut self, vault: &dyn SecretVault) -> Result<(), StoreError> {
+    for name in self.team_secret_names_set()? {
+      self.clear_team_secret_value(vault, &name)?;
+    }
+    Ok(())
+  }
+
   fn team_secret_handle(&self, name: &SecretName) -> Result<Option<SecretId>, StoreError> {
     let handle: Option<String> = self
       .connection

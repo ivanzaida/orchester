@@ -222,7 +222,7 @@ impl Component for LocalHubScreen {
 
 impl LocalHubScreen {
   /// The hub as the project's database has it: read again when a connection, a tool, a profile, an instruction, a skill
-  /// or a pipeline changed.
+  /// or a pipeline changed, and when a run changes state.
   fn read(&self, ctx: &mut Ctx, project: &ShownProject) -> FutureState<LocalHub, Message> {
     let outside = project.feed.outside.get();
     let dep = (
@@ -233,6 +233,9 @@ impl LocalHubScreen {
       outside.of(Outside::Instructions),
       outside.of(Outside::Skills),
       outside.of(Outside::Pipelines),
+      // What the runs decide: which profiles and servers they use, how many runs stop, and so readiness. A run starts
+      // or ends, not a line of its transcript.
+      project.feed.states.get(),
     );
     let services = Services::of(ctx);
     let (workspace, vault, hold) = (services.workspace, services.vault, services.hold);

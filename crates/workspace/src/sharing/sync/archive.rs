@@ -181,7 +181,7 @@ pub(crate) fn pinning_mcp_server_in(
   for listed in db.unfinished_runs()? {
     match listed {
       Ok(run) => {
-        if pins_mcp_server(db, run.snapshot(), server)? {
+        if pins_mcp_server(db, (run.id(), run.snapshot()), server)? {
           runs.push((run.id(), run.task()));
         }
       }
@@ -202,13 +202,19 @@ pub(crate) fn pinning_mcp_server_in(
   }))
 }
 
-/// Whether a run with `snapshot` uses the local MCP server `server`: a run pins no server of its own, it uses the
-/// servers its pinned profile versions choose.
+/// Whether `run`, with `snapshot`, uses the local MCP server `server`: a local server has no versions to pin, so a run
+/// uses the servers its pinned profile versions choose and the ones its recorded inputs bind by id.
 pub(crate) fn pins_mcp_server(
   db: &ProjectDb,
-  snapshot: &RunSnapshot,
+  (run, snapshot): (RunId, &RunSnapshot),
   server: ConnectionId,
 ) -> Result<bool, StoreError> {
+  if db
+    .run_inputs(run)?
+    .is_some_and(|inputs| inputs.bindings().binds_local_mcp(server))
+  {
+    return Ok(true);
+  }
   for step in snapshot.steps() {
     let StepExecutor::Agent { profile, .. } = step.executor() else {
       continue;

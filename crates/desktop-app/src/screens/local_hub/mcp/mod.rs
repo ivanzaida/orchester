@@ -13,6 +13,11 @@ mod notes;
 mod rows;
 mod secrets;
 
+use std::{
+  collections::hash_map::DefaultHasher,
+  hash::{Hash, Hasher},
+};
+
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
@@ -49,6 +54,13 @@ impl PartialEq for Props {
 }
 impl DevtoolsInspectable for Props {}
 
+/// A number that differs when the saved fields do.
+fn saved_stamp(text: &McpServerText) -> u64 {
+  let mut hasher = DefaultHasher::new();
+  format!("{text:?}").hash(&mut hasher);
+  hasher.finish()
+}
+
 /// The panel of the local MCP server `props.server`.
 pub(super) fn panel(ctx: &mut Ctx, props: Props) -> Element {
   let key = format!("local-hub-mcp-{}", props.server);
@@ -84,7 +96,14 @@ impl Component for Loader {
         .into();
     };
     let text = McpServerText::of(&server, &listed.secrets);
-    let key = format!("local-hub-mcp-edit-{}-{}", props.server, self.revision.get());
+    // The editor holds the fields as they were when it opened: a save opens it again at once, before the project's
+    // connections are read again, so it opens once more on what the read brings.
+    let key = format!(
+      "local-hub-mcp-edit-{}-{}-{:x}",
+      props.server,
+      self.revision.get(),
+      saved_stamp(&text)
+    );
     ctx.mount_keyed::<editor::Editor>(
       &key,
       EditorProps {
