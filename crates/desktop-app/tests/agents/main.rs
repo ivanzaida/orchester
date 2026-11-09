@@ -11,6 +11,7 @@ mod hub;
 mod local_hub;
 mod local_hub_create;
 mod local_hub_create_press;
+mod local_hub_create_reads;
 mod local_hub_create_remote;
 mod local_hub_edit_secrets;
 mod local_hub_leaving;
