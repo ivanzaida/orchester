@@ -3,13 +3,14 @@
 //! each decided on the revision the person read. This module builds the edit for its route from the action, checked
 //! here without any effect; [`send`] carries it out. A task's pipeline is one of the team's, named by its resource id
 //! (`docs/architecture/server.md` row 80, decided 2026-11-05). A change of something whose owner is an open decision
-//! (a task's limits or workflow status, D4/D6) is refused before it is sent, never left out silently.
+//! (a task's limits, D6) is refused before it is sent, never left out silently. A workflow status change is the
+//! lifecycle (D4): the same patch, which the server decides by the caller's claim and role.
 
 mod send;
 
 use orchester_api::{
   Blocking, ModuleCreate, ModuleFields, ModulePatch, TagMerge, TagName, TaskChanges, TaskPatch,
-  v2::{DecisionId, WorkspacePolicyChanges},
+  v2::{DecisionId, LifecycleAction, WorkspacePolicyChanges},
 };
 use orchester_core::{
   id::{IdempotencyKey, ModuleId, OperationId, TagId, TaskId},
@@ -104,14 +105,21 @@ pub(super) fn detail_changes(
   })
 }
 
-/// The organization fields that changed; the workflow status is a lifecycle transition whose owner is open (D4).
+/// The organization fields that changed. A workflow status change is sent when the lifecycle has it (D4:
+/// `LifecycleAction::of_workflow`); the others (In progress and In review, Done to Canceled) are not a person's here.
 pub(super) fn organization_changes(
   base: &TaskOrganization,
   edited: &TaskOrganization,
 ) -> Result<TaskChanges, ActionError> {
-  if base.status() != edited.status() {
-    return Err(ActionError::DecisionRequired(DecisionId::D4));
-  }
+  let workflow = changed(&base.status(), &edited.status())
+    .map(|&to| match LifecycleAction::of_workflow(base.status(), to) {
+      Some(_) => Ok(to),
+      None => Err(ActionError::WorkflowNotOffered {
+        from: base.status(),
+        to,
+      }),
+    })
+    .transpose()?;
   let blocking = changed(base.dependencies(), edited.dependencies()).map(|links| {
     links
       .iter()
@@ -122,6 +130,7 @@ pub(super) fn organization_changes(
       .collect()
   });
   some(TaskChanges {
+    workflow,
     priority: changed(&base.priority(), &edited.priority()).copied(),
     tags: changed(base.tags(), edited.tags()).map(<[_]>::to_vec),
     blocking,
@@ -137,7 +146,8 @@ fn changed<'a, T: PartialEq + ?Sized>(base: &T, edited: &'a T) -> Option<&'a T> 
 
 /// `changes`, unless they set nothing.
 fn some(changes: TaskChanges) -> Result<TaskChanges, ActionError> {
-  let nothing = changes.title.is_none()
+  let nothing = changes.workflow.is_none()
+    && changes.title.is_none()
     && changes.brief.is_none()
     && changes.criteria.is_none()
     && changes.pipeline.is_none()

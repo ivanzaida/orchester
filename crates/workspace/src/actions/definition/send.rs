@@ -14,7 +14,7 @@ use orchester_core::id::OperationId;
 
 use super::{DefinitionEdit, TagEdit};
 use crate::{
-  actions::{Accepted, ActionError, Current, Definition, PipelineRefusal, Refusal, TeamOutcome},
+  actions::{Accepted, ActionError, Current, Definition, LifecycleRefusal, PipelineRefusal, Refusal, TeamOutcome},
   team_reads::TeamSession,
 };
 
@@ -109,11 +109,7 @@ async fn refused(
   edit: &DefinitionEdit,
   (status, code, details): (u16, ErrorCode, Option<Box<SharingErrorDetails>>),
 ) -> TeamOutcome {
-  let pipeline = match (code, details.as_deref()) {
-    (ErrorCode::Invalid, Some(SharingErrorDetails::Reason { reason })) => PipelineRefusal::of_reason(reason),
-    _ => None,
-  };
-  let refusal = pipeline.map_or(Refusal::Route { status, code }, Refusal::TaskPipeline);
+  let refusal = specific(status, code, details.as_deref());
   if code != ErrorCode::RevisionConflict {
     return TeamOutcome::Rejected {
       operation,
@@ -132,6 +128,22 @@ async fn refused(
     _ => look(session, edit).await,
   };
   conflict(operation, refusal, seen)
+}
+
+/// The refusal a task route's answer is: a pipeline the server refused, a lifecycle change it refused (decision D4), or
+/// its status and code.
+fn specific(status: u16, code: ErrorCode, details: Option<&SharingErrorDetails>) -> Refusal {
+  match (code, details) {
+    (ErrorCode::Invalid, Some(SharingErrorDetails::Reason { reason })) => {
+      PipelineRefusal::of_reason(reason).map(Refusal::TaskPipeline)
+    }
+    (ErrorCode::Organization, Some(SharingErrorDetails::Reason { reason })) => {
+      LifecycleRefusal::of_reason(reason).map(Refusal::TaskLifecycle)
+    }
+    (ErrorCode::NotHolder, _) => Some(Refusal::TaskLifecycle(LifecycleRefusal::NotHolder)),
+    _ => None,
+  }
+  .unwrap_or(Refusal::Route { status, code })
 }
 
 /// A conflict's outcome by what the subject as it is now says of the edit.
@@ -199,7 +211,8 @@ fn task_seen(changes: &TaskChanges, read: orchester_core::sharing::TaskRevision,
 /// Whether `task` has every field `changes` sets as they set it.
 fn holds(changes: &TaskChanges, task: &SharedTask) -> bool {
   let content = &task.content;
-  same(changes.title.as_ref(), &content.title)
+  same(changes.workflow.as_ref(), &content.workflow)
+    && same(changes.title.as_ref(), &content.title)
     && same(changes.brief.as_ref(), &content.brief)
     && same(changes.criteria.as_ref(), &content.criteria)
     && same(changes.pipeline.as_ref(), &content.pipeline)

@@ -11,7 +11,8 @@ inherit it) change them; members read, run and claim.
 
 File: the desktop design `crates/desktop-app/design/orchester.pen`, board **Team authority · redesign** `BZc66`
 (x 136580, y -561, right of *Settings consolidation · redesign*, like the other boards added after the Read me's
-list). Every window is an instance of `Window/Project` (`qlXhJ`) copied from an existing redesign frame: the Tasks
+list; the board was later removed from the document, and the D4 frames below are drawn on **Task - v2** `jDN0r`).
+Every window is an instance of `Window/Project` (`qlXhJ`) copied from an existing redesign frame: the Tasks
 list *01 · Active* (`DQozX`), the shared board *14 · Shared project* (`ZLX5M`), the Task page *01 · Summary*
 (`AsE7R`), the Modules list *01 · Modules* (`m63AnV`), the Module page *02 · Module · Summary* (`KpLYv`) and
 Project settings *04b · Sharing · shared* (`TnUGj`). The member pattern is the one of *Shared configuration ·
@@ -132,13 +133,15 @@ target date, a tag rename, a board move between Backlog and Todo, and Automatic 
 - **D1** — decided for tasks: only Running work renews, so a run waiting for a person or in review isn't renewed
   (drawn in 02g, 02h). Still open: what renews a module claim. Drawn: the module line only says its tasks' runs
   don't renew it; the frame captions and these notes carry the decision id, the on-screen text doesn't.
-- **D4** — completing a task outside a run, manual blocked and reopen. Drawn: a succeeded run never marks the task
-  Done; there is no Done action. **Decided** (the person, 2026-11-08, `docs/architecture/server.md` row 96): the person
+- **D4** — completing a task outside a run, manual blocked and reopen. Drawn first (on `BZc66`): a succeeded run never
+  marks the task Done; there is no Done action. **Decided** (the person, 2026-11-08, `docs/architecture/server.md` row 96): the person
   holding the task's claim or an Admin marks it Done; only an Admin cancels it, reopens a Done or Canceled task, or
   moves it between Backlog and Todo; a task becomes Done by itself when the server accepts the delivery of its work.
   Closing (Done or Canceled) releases the task's claim. Report and outside work, which has no base merge, is Done when
-  its run succeeds. The manual Blocked is set and cleared by the claim's holder or an Admin. Not drawn or built yet
-  (`docs/plan.md` S12).
+  its run succeeds. The manual Blocked is set and cleared by the claim's holder or an Admin. **Drawn 2026-11-09** on
+  board `Task - v2` `jDN0r`, rows 14–17 (`mruqB` T1–T3 the rail by role, `IDr3j` T4–T6 the Done lines and the reopen
+  menu, `KUaKz` T7–T8 the Tasks list, `dZrgB` T9–T12 the status chip, the menus, the rail states and the who-can-do-what
+  matrix; rules 20–22 in `lg9fC`). The dispatcher and the MCP tools carry it; the screens follow `docs/plan.md` S12.
 - **D6** — default pipeline and the remaining field ownership. Drawn: the pipeline shown is the Admin's; members have
   no control to change it, and no new field ownership is drawn. **Decided for a task's pipeline** (the person,
   2026-11-05, `docs/architecture/server.md` row 80): a team task's pipeline is one of the team's pipelines, chosen by

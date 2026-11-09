@@ -105,16 +105,23 @@ fn team_mcp_member_edit_is_refused_as_not_admin_and_changes_nothing() {
   assert_eq!(task["title"], "Say hello");
   assert!(checkout.db().tasks().expect("tasks").is_empty(), "nothing saved here");
 
-  // A run's or a person's workflow status, the pipeline and the limits wait for the team's decisions: not sent.
+  // A member is no holder here: the server refuses the close (the stand-in's rules are in `team_lifecycle`), and what
+  // was sent is the lifecycle change alone. The limits wait for D6 and are not sent.
   let done = json!({"project": "Kontur", "key": "KON-7", "workflow_status": "done"});
-  assert_eq!(checkout.refused("update_task", &done), "decision_required");
+  assert_eq!(checkout.refused("update_task", &done), "not_admin");
+  let sent = seen.lock().edited_changes.clone();
+  assert_eq!(sent["workflow"], "done");
+  assert!(
+    sent["title"].is_null() && sent["priority"].is_null(),
+    "the lifecycle change alone: {sent}"
+  );
   let budget = json!({"project": "Kontur", "key": "KON-7", "budget_tokens": 1000});
   assert_eq!(checkout.refused("update_task", &budget), "decision_required");
   let points = json!({"project": "Kontur", "key": "KON-7", "story_points": 3});
   assert_eq!(checkout.refused("update_task", &points), "team_field_unsupported");
-  assert_eq!(seen.lock().task_edits, 1, "none of them reached the server");
+  assert_eq!(seen.lock().task_edits, 2, "only the Done reached the server");
   let draft = json!({"project": "Kontur", "key": "KON-7"});
-  assert_eq!(checkout.refused("return_to_draft", &draft), "decision_required");
+  assert_eq!(checkout.refused("return_to_draft", &draft), "team_no_queue");
 }
 
 #[test]
@@ -122,11 +129,11 @@ fn team_mcp_an_update_with_a_refused_change_sends_nothing() {
   let (server, seen) = server();
   let checkout = Checkout::new(Some(&server), &[]);
 
-  // The title alone would go to the server; the workflow status waits for D4, so neither is sent.
-  let edit = json!({"project": "Kontur", "key": "KON-7", "title": "Say goodbye", "workflow_status": "done"});
-  assert_eq!(checkout.refused("update_task", &edit), "decision_required");
-  let create = json!({"project": "Kontur", "title": "Say goodbye", "workflow_status": "in_progress"});
-  assert_eq!(checkout.refused("create_task", &create), "decision_required");
+  // The title alone would go to the server; In progress is no lifecycle change of a team task, so neither is sent.
+  let edit = json!({"project": "Kontur", "key": "KON-7", "title": "Say goodbye", "workflow_status": "in_progress"});
+  assert_eq!(checkout.refused("update_task", &edit), "team_status_not_offered");
+  let create = json!({"project": "Kontur", "title": "Say goodbye", "workflow_status": "done"});
+  assert_eq!(checkout.refused("create_task", &create), "team_status_on_create");
   let seen = seen.lock();
   assert_eq!(seen.task_edits, 0, "no edit reached the server");
   assert_eq!(seen.task_creates, 0, "no task was created");

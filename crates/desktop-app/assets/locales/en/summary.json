@@ -169,7 +169,10 @@
         "inputsFailed": "This computer couldn't make the run's inputs from the bundle the team server built, so nothing ran. Check the agent profiles' connections in Agents, then run it again.",
         "claimReleased": "Your claim on the task was released.",
         "claimKept": "Your claim on the task is kept, because another run here still needs it.",
-        "claimHeld": "The team server refused to release your claim on the task, so it may still be held."
+        "claimHeld": "The team server refused to release your claim on the task, so it may still be held.",
+        "notHolder": "Only the person who holds this task's claim, or an Admin, does this. The claim may have changed; the page shows it as it is now.",
+        "stopRunFirst": "A run of this task is still working or waits for you. Stop it first, then mark the task done or cancel it.",
+        "missingReason": "A blocked reason can't be empty."
       },
       "properties": {
         "assignee": "Assignee",

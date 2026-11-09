@@ -110,6 +110,30 @@ impl PipelineRefusal {
   }
 }
 
+/// Why the team server refused to close, reopen or block a task (decision D4, `docs/cloud-api.md` "Team authority task
+/// lifecycle"). Nothing was changed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum LifecycleRefusal {
+  /// `409 not_holder`: the change is the holder of the task's claim's, and the caller is neither them nor an Admin,
+  /// e.g. the claim was taken over or released since the task was read.
+  NotHolder,
+  /// `422 organization`, `stop_run_first`: the task's work runs; a close waits for it to be stopped.
+  StopRunFirst,
+  /// `422 organization`, `missing_reason`: a blocked reason is not empty after trimming.
+  MissingReason,
+}
+
+impl LifecycleRefusal {
+  /// The refusal a `422 organization`'s `reason` names; `None` for any other reason.
+  pub fn of_reason(reason: &str) -> Option<Self> {
+    match reason {
+      "stop_run_first" => Some(Self::StopRunFirst),
+      "missing_reason" => Some(Self::MissingReason),
+      _ => None,
+    }
+  }
+}
+
 /// Why the team server did not take an action.
 #[derive(Debug)]
 pub enum Refusal {
@@ -124,6 +148,8 @@ pub enum Refusal {
   /// A task's definition route refused the pipeline it names: `422 invalid` with the reason `pipeline_not_found` or
   /// `pipeline_archived` (`docs/architecture/server.md` row 80).
   TaskPipeline(PipelineRefusal),
+  /// A task's definition route refused to close, reopen or block it (decision D4).
+  TaskLifecycle(LifecycleRefusal),
   /// `PATCH …/policy`'s `409 policy_revision_conflict`.
   PolicyRevisionConflict,
   /// A definition edit's response was lost, and the subject read again holds neither the change nor the revision it

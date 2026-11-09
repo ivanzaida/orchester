@@ -1,5 +1,8 @@
 use orchester_api::v2::DecisionId;
-use orchester_core::id::{OperationId, ResourceId, TaskId};
+use orchester_core::{
+  id::{OperationId, ResourceId, TaskId},
+  task::organization::WorkflowStatus,
+};
 use orchester_store::StoreError;
 
 use crate::tasks::writer::WriteError;
@@ -30,10 +33,19 @@ pub enum ActionError {
   LocalTask(TaskId),
   #[error("the action changes nothing")]
   NothingToChange,
-  /// The action sets something whose owner is an open team-authority decision (a task's limits or workflow status,
-  /// D4/D6): no team command sets it.
+  /// The action sets something whose owner is an open team-authority decision (a task's limits, D6): no team command
+  /// sets it.
   #[error("this change waits for team-authority decision {0:?}")]
   DecisionRequired(DecisionId),
+  /// A change of a team task's workflow status that the lifecycle (decision D4) does not offer: only Done, Canceled,
+  /// reopening to Backlog or Todo, and Backlog to Todo and back are a person's to make; In progress and In review
+  /// follow the task's work.
+  #[error("a team task cannot be moved from {from:?} to {to:?}")]
+  WorkflowNotOffered { from: WorkflowStatus, to: WorkflowStatus },
+  /// A new team task is made in the default workflow status; later statuses are the lifecycle's, on the task's patch
+  /// (decision D4), so a create does not carry one.
+  #[error("a new team task starts in {0:?}")]
+  StatusOnCreate(WorkflowStatus),
   /// A team task names only one of the team's pipelines, which admins create and publish; this one is none of them
   /// here, e.g. a person's own local pipeline (`docs/architecture/server.md` row 80). Nothing was sent.
   #[error("pipeline {0} is not one of the team's pipelines")]

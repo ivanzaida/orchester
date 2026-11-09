@@ -2,8 +2,8 @@
 //! assignment, a module's branch, work start and a module's delivery authorized or requested, with the server's ids
 //! of its targets and the revisions it was decided on, checked here without any effect. A new task names one of the
 //! team's pipelines by its resource id (`docs/architecture/server.md` row 80, decided 2026-11-05), never a person's own
-//! local one; its limits and workflow status are configuration whose owner is open (D4/D6): such a task is refused
-//! before it is sent, never sent without them.
+//! local one; its limits are configuration whose owner is open (D6) and its later workflow statuses are the lifecycle's
+//! (D4, on the task's patch): such a task is refused before it is sent, never sent without them.
 
 use orchester_api::{
   TaskContent,
@@ -56,7 +56,8 @@ impl TeamRequest {
   }
 }
 
-/// `task.create`: one task, in the default workflow status, without limits, naming a team pipeline by its id.
+/// `task.create`: one task, in the default workflow status (a later one is the lifecycle's), without limits, naming a
+/// team pipeline by its id.
 pub(super) fn create_task(
   db: &ProjectDb,
   details: &TaskDetails,
@@ -66,7 +67,7 @@ pub(super) fn create_task(
     return Err(ActionError::DecisionRequired(DecisionId::D6));
   }
   if organization.status() != WorkflowStatus::default() {
-    return Err(ActionError::DecisionRequired(DecisionId::D4));
+    return Err(ActionError::StatusOnCreate(organization.status()));
   }
   let mut content = TaskContent {
     title: details.title.as_str().to_owned(),
