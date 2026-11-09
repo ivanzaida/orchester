@@ -73,7 +73,10 @@ pub async fn get_conversation(services: &Services, args: GetConversation) -> Res
       None => (Some(find_task(&db, &args.task)?), None),
     };
     let Some(task) = task else {
-      return Ok(unrecorded(project, team.as_ref().expect("only a team task can lack records here")));
+      let read = team.as_ref().expect("only a team task can lack records here");
+      // Runs here that kept nothing of the task cannot be shown under it, which is not a task never run here.
+      team::refuse_unrecorded_runs(&db, read.task.id)?;
+      return Ok(unrecorded(project, read));
     };
     let detail = TaskDetail::load_in(&root, task.id())?;
     let link = Link::Task(project, task.key().clone(), TaskPage::Conversation).path();

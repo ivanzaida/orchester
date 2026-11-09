@@ -3,6 +3,8 @@
 //! agent wrote last ([`crate::tasks::last_words`]), and a wait is never unreadable. A step that waits on a question
 //! with suggested answers is listed with that question instead.
 
+use std::collections::BTreeMap;
+
 use orchester_core::{id::ProjectId, question::AskedQuestions, run::Run, store::RunStore};
 use orchester_store::ProjectDb;
 use serde_json::{Value, json};
@@ -65,11 +67,37 @@ pub fn project_message_waits(db: &ProjectDb, project: ProjectId, only: Option<&R
     if only.is_some_and(|only| only.id() != run.id()) || run.awaiting_answer().is_empty() {
       continue;
     }
-    let link = wire::task_link(project, &task.key().to_string(), TaskPage::Conversation);
-    for mut wait in message_waits(db, &run, &asked, link.as_deref())? {
-      wait["run"] = json!({ "id": run.id().to_string(), "number": run.number().get() });
-      wait["task"] = json!(task.key().to_string());
-      waits.push(wait);
+    let key = task.key().to_string();
+    let link = wire::task_link(project, &key, TaskPage::Conversation);
+    waits.extend(run_waits(db, &run, &asked, (Some(&key), link.as_deref()))?);
+  }
+  // The newest run of each team task that no record of this computer defines waits without the task's key.
+  let mut newest = BTreeMap::new();
+  for run in recorded::unrecorded_runs(db)? {
+    newest.insert(run.task(), run);
+  }
+  for run in newest.into_values() {
+    if only.is_none_or(|only| only.id() == run.id()) && !run.awaiting_answer().is_empty() {
+      waits.extend(run_waits(db, &run, &asked, (None, None))?);
+    }
+  }
+  Ok(waits)
+}
+
+/// The waits of `run` as `list_questions` lists them, each with its run and its task's key (`None` and a null task for
+/// a task that is `unrecorded`).
+fn run_waits(
+  db: &ProjectDb,
+  run: &Run,
+  asked: &[AskedQuestions],
+  (key, link): (Option<&str>, Option<&str>),
+) -> Result<Vec<Value>, ToolError> {
+  let mut waits = message_waits(db, run, asked, link)?;
+  for wait in &mut waits {
+    wait["run"] = json!({ "id": run.id().to_string(), "number": run.number().get() });
+    wait["task"] = json!(key);
+    if key.is_none() {
+      wait["unrecorded"] = json!(true);
     }
   }
   Ok(waits)

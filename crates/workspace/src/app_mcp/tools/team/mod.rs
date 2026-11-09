@@ -15,6 +15,7 @@ mod writes;
 
 use orchester_core::{
   id::{RunId, TaskId},
+  store::RunStore,
   task::identity::{TaskIdentity, TaskOwner},
 };
 use orchester_store::{ProjectDb, SharingLink};
@@ -34,6 +35,7 @@ use crate::{
   },
   messages::Message,
   sharing::{SharingError, sync::SystemClock},
+  tasks::detail::run_store_error,
   team_reads::{TeamProject, TeamReadError, TeamSession},
   workspace::OpenProject,
 };
@@ -154,6 +156,15 @@ pub(super) fn task_missing(db: &ProjectDb, task: TaskId) -> Result<ToolError, To
   } else {
     ToolError::not_found(Missing::Task, task.to_string())
   })
+}
+
+/// Refuses as [`task_missing`] when the team task `task`, which no record of this computer defines, has runs here: its
+/// key is unknown, so they cannot be listed under it. Fine when it has none.
+pub(super) fn refuse_unrecorded_runs(db: &ProjectDb, task: TaskId) -> Result<(), ToolError> {
+  if db.runs_of_task(task).map_err(run_store_error)?.is_empty() {
+    return Ok(());
+  }
+  Err(task_missing(db, task)?)
 }
 
 /// Whether `run` is a team task's run, by its own team record: a local task's run in a team project, and a legacy run

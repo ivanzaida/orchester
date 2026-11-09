@@ -354,6 +354,19 @@ fn running(db: &ProjectDb, project: ProjectId) -> Result<Vec<Value>, ToolError> 
       }));
     }
   }
+  // A run of a team task that no record of this computer defines is listed without the task, which is what it says.
+  for run in recorded::unrecorded_runs(db)? {
+    if !run.status().is_terminal() {
+      runs.push(json!({
+        "id": run.id().to_string(),
+        "number": run.number().get(),
+        "task": null,
+        "unrecorded": true,
+        "approval_mode": db.run_approval_mode(run.id())?,
+        "link": null,
+      }));
+    }
+  }
   Ok(runs)
 }
 

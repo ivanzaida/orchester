@@ -36,6 +36,7 @@ mod share;
 mod team_controls;
 mod team_runs;
 mod tools;
+mod unrecorded;
 
 use std::{
   collections::HashMap,

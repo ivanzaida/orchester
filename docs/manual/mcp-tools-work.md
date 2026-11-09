@@ -336,7 +336,10 @@ detail ends by naming them (`… · Review waits for an agent slot`).
 
 **Team projects:** a team task's runs are listed from this computer's own records of them, with the task's key and
 title as the run recorded them when it started. A team task named by `task` (key or server id) is read from its team
-server first; one this computer ran nothing of lists no runs.
+server first; one this computer ran nothing of lists no runs. A run of the old sharing stream that kept neither the
+inputs it started with nor a cached copy of its task has no key to be listed under: with no `task` it is listed with
+`task: null` and `unrecorded: true` (its id, number, state, tokens and time as stored; phase, detail, delivery and
+link are `null`); asked for by `task` it is refused as `team_task_unrecorded`.
 
 | Parameter | Type            | Req. | Description                                   |
 |-----------|-----------------|------|-----------------------------------------------|
@@ -457,7 +460,8 @@ to. Running runs go on; queued tasks wait and a start is refused until `release_
 what holds now.
 
 **Team projects:** the task is read from its team server; its group is this computer's, so a team task in none is
-refused as `not_in_group`.
+refused as `not_in_group`. A team task with no run on this computer is not part of this computer's hold queue:
+it is left out of what holds now.
 
 | Parameter | Type           | Req. | Description                                                        |
 |-----------|----------------|------|--------------------------------------------------------------------|
@@ -482,7 +486,9 @@ review failed (`could_not_run`, `timed_out`, `unreadable`; absent for a request 
 lists every request of the run, oldest first, with `answered` (`kind`: `autopilot`, `profile`, `reviewer` with its
 `reason`, `person`; absent while it waits) and `came_to_you`.
 
-**Team projects:** a team task's approvals name the task by the key its run recorded when it started.
+**Team projects:** a team task's approvals name the task by the key its run recorded when it started; an unfinished run
+that recorded none and whose task has no copy here is listed in `runs` with `task: null`, `unrecorded: true` and no
+link.
 
 Parameters: `project` (string | null), `run` (string | null — needs `project`).
 
@@ -504,7 +510,8 @@ Agents' questions waiting for an answer, oldest first: id, agent, when asked, wh
 the questions with suggested answers, run, task, link. Under `waiting_for_message`: steps of tasks' latest runs that
 wait for a message, each with what its agent wrote last (answer those with `send_message`).
 
-**Team projects:** a team task's questions name the task by the key its run recorded when it started.
+**Team projects:** a team task's questions name the task by the key its run recorded when it started; the waits of a
+run that recorded none and whose task has no copy here are listed with `task: null`, `unrecorded: true` and no link.
 
 Parameters: `project` (string | null), `run` (string | null — needs `project`).
 
@@ -583,7 +590,8 @@ orchestrator), plans (text, waiting or not, decision), `run_continued` entries (
 run, time, `cursor` and link. Texts are stored text with secrets redacted.
 
 **Team projects:** the task is the one its team server reads (`team_unavailable` while it cannot be reached) and the
-conversation is this computer's record of its runs; a team task nothing ran for here has no entries.
+conversation is this computer's record of its runs; a team task nothing ran for here has no entries. A team task whose
+runs here recorded nothing of it is refused as `team_task_unrecorded`.
 
 | Parameter | Type            | Req. | Description                                                      |
 |-----------|-----------------|------|------------------------------------------------------------------|
