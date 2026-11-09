@@ -93,9 +93,9 @@ fn run_chip(ctx: &Ctx, task: &TaskContext) -> StatusChip {
   }
 }
 
-/// The line of a closed task whose run, if any, says nothing of its end: its workflow status in the chip the task's other
-/// closed states use (`Done` `circle-check` in `success`, `Canceled` `circle-slash` muted), not the draft it never ran
-/// as.
+/// The line of a closed task whose run, if any, says nothing of its end: its workflow status in the chip the task's
+/// other closed states use (`Done` `circle-check` in `success`, `Canceled` `circle-slash` muted), not the draft it
+/// never ran as.
 pub(super) fn closed(ctx: &mut Ctx, task: &TaskContext, status: WorkflowStatus) -> Element {
   let chip = match status {
     WorkflowStatus::Canceled => Status::Canceled,
