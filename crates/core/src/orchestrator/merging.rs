@@ -42,6 +42,9 @@ pub enum MergeLeft {
   /// It is a team task's run: it goes into its module's branch and is delivered with the module, which a person
   /// requests.
   TeamDelivery,
+  /// It is a team task's run that kept no team record on this computer, so it can be neither merged nor delivered
+  /// from here.
+  TeamUnrecorded,
 }
 
 impl MergeLeft {

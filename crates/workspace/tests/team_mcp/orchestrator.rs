@@ -32,7 +32,7 @@ use orchester_workspace::{
   },
 };
 
-use crate::team_runs::started;
+use crate::{team_runs::started, unrecorded::legacy};
 
 fn at(millis: i64) -> Timestamp {
   Timestamp::from_unix_millis(millis)
@@ -74,6 +74,19 @@ fn team_mcp_the_chat_leaves_a_succeeded_team_run_to_the_person() {
     }
   );
   assert!(!completes_in(&db, team.run).expect("rule"), "no completion either");
+}
+
+#[test]
+fn team_mcp_the_chat_says_a_team_run_with_no_team_record_can_be_neither_merged_nor_delivered() {
+  let (checkout, _server, _task, run) = legacy();
+  let db = checkout.db();
+  assert_eq!(
+    merging_in(&db, run).expect("rule"),
+    Merging::Left {
+      why: MergeLeft::TeamUnrecorded
+    }
+  );
+  assert!(!completes_in(&db, run).expect("rule"), "no completion either");
 }
 
 #[test]
