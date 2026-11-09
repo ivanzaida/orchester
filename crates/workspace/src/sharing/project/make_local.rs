@@ -66,8 +66,7 @@ impl ProjectServer {
   /// Releases the person's claims where the server takes it, then makes the project local.
   async fn make_local_releasing(&self) -> Result<(ClaimRelease, Vec<ReturnedTask>), SharingError> {
     let released = self.release_claims().await?;
-    let root = self.repo_root.clone();
-    let returned = background::run(move || ProjectDb::open(&root)?.make_local()).await??;
+    let returned = self.servers.leave(&self.repo_root).await?;
     self.servers.shared_changed();
     Ok((released, returned))
   }
@@ -114,6 +113,20 @@ impl ProjectServer {
 }
 
 impl Servers {
+  /// Makes the project at `repo_root` local, after the values this computer kept for the team's secrets left the
+  /// keychain: the project keeps no team configuration, and nothing is made local while a value could not be removed.
+  async fn leave(&self, repo_root: &Path) -> Result<Vec<ReturnedTask>, SharingError> {
+    let (root, vault) = (repo_root.to_owned(), self.inner.vault.clone());
+    Ok(
+      background::run(move || -> Result<_, StoreError> {
+        let mut db = ProjectDb::open(&root)?;
+        db.clear_team_secret_values(vault.get())?;
+        db.make_local()
+      })
+      .await??,
+    )
+  }
+
   /// What making the project at `repo_root` local would do. Blocking.
   pub fn make_local_plan(&self, repo_root: &Path) -> Result<MakeLocalPlan, SharingError> {
     let db = ProjectDb::open(repo_root)?;
@@ -162,8 +175,7 @@ impl Servers {
     let (claims, returned) = match server {
       Some(server) => server.make_local_releasing().await?,
       None => {
-        let root = repo_root.to_owned();
-        let returned = background::run(move || ProjectDb::open(&root)?.make_local()).await??;
+        let returned = self.leave(repo_root).await?;
         self.shared_changed();
         (ClaimRelease::Unknown, returned)
       }
