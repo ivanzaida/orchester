@@ -32,7 +32,7 @@ use orchester_core::{
   orchestrator::{AgentWait, ChatEntry, ChatResume, Continuing, EntryKind, Merging, RunEnd, Subscriptions, WaitKind},
   question::AskedQuestions,
   run::{CompletedBy, PendingToolApproval, Plan},
-  store::{ConversationStore, RunStore, TaskStore, WorktreeStore},
+  store::{ConversationStore, RunStore, WorktreeStore},
   task::Task,
   time::Timestamp,
 };
@@ -57,6 +57,7 @@ use crate::{
     changes::run_work_present,
     completion,
     detail::{RunView, run_store_error, run_view},
+    recorded::{self, task_of},
   },
 };
 
@@ -278,7 +279,7 @@ fn leader(db: &ProjectDb, subscriptions: &Subscriptions, wait: &AgentWait) -> Re
   let Some(run) = db.run(wait.run).map_err(run_store_error)? else {
     return Ok(None);
   };
-  let Some(task) = db.task(run.task())? else {
+  let Some(task) = task_of(db, run.task())? else {
     return Ok(None);
   };
   Ok(subscriptions.leading(task.id(), task.module()))
@@ -433,7 +434,7 @@ fn current_waits(db: &ProjectDb, project: ProjectId) -> Result<Vec<(String, Agen
   let mut approvals = db.pending_tool_approvals_all()?;
   approvals.retain(|approval| !reviewing.contains(&approval.id));
   let mut waits = Vec::new();
-  for task in db.tasks()? {
+  for task in recorded::all(db)? {
     let Some(Ok(run)) = db.runs_of_task(task.id()).map_err(run_store_error)?.pop() else {
       continue;
     };

@@ -170,16 +170,27 @@ pub async fn tell(
     Ok(claim) => claim,
     Err(refusal) => return Sent::Queued(refusal.message()),
   };
-  match runner.control(runners, Command::DeliverMessages { run }).await {
-    Ok(()) => Sent::Taken,
-    // A blocked run keeps the message; the runner delivers it once the blocking tasks finish.
+  match deliver(runners, runner, Command::DeliverMessages { run }).await {
+    Ok(sent) => sent,
+    Err(queued) => {
+      claim.release(servers).await;
+      queued
+    }
+  }
+}
+
+/// Asks the runner to take `command`, which reads the stored message. A run blocked by other tasks keeps the message,
+/// which the runner delivers once they finish; what the runner refuses leaves it queued, with why: `Err` is that
+/// outcome, which the caller may still have to undo what it took.
+async fn deliver(runners: &Runners, runner: RunnerOf<'_>, command: Command) -> Result<Sent, Sent> {
+  match runner.control(runners, command).await {
+    Ok(()) => Ok(Sent::Taken),
     Err(RunRequestError::Rejected(Rejection::RunAgainBlocked {
       block: RunAgainBlock::TaskBlocked,
-    })) => Sent::Queued(Message::new("tasks.blocked.messageKept")),
+    })) => Ok(Sent::Queued(Message::new("tasks.blocked.messageKept"))),
     Err(error) => {
       tracing::warn!(%error, "the runner did not take the message");
-      claim.release(servers).await;
-      Sent::Queued(control_message(&error))
+      Err(Sent::Queued(control_message(&error)))
     }
   }
 }
@@ -247,15 +258,7 @@ pub async fn follow_team((runners, runner): (&Runners, RunnerOf<'_>), stored: &S
     TeamThen::Deliver => Command::DeliverMessages { run: stored.run },
     TeamThen::Resume => Command::ResumeRun { run: stored.run },
   };
-  match runner.control(runners, command).await {
-    Ok(()) => Sent::Taken,
-    // A blocked run keeps the message; the runner delivers it once the blocking tasks finish.
-    Err(RunRequestError::Rejected(Rejection::RunAgainBlocked {
-      block: RunAgainBlock::TaskBlocked,
-    })) => Sent::Queued(Message::new("tasks.blocked.messageKept")),
-    Err(error) => {
-      tracing::warn!(%error, "the runner did not take the message");
-      Sent::Queued(control_message(&error))
-    }
+  match deliver(runners, runner, command).await {
+    Ok(sent) | Err(sent) => sent,
   }
 }

@@ -13,7 +13,7 @@ use orchester_core::{
   orchestrator::{MergeLeft, Merging},
   resource::WithoutCommits,
   run::{Run, RunStatus, attempt_starts, run_delivers},
-  store::{RunStore, TaskStore},
+  store::RunStore,
 };
 use orchester_store::{ProjectDb, StoreError};
 use rmcp::model::JsonObject;
@@ -23,7 +23,7 @@ use super::tools::ChatScope;
 use crate::{
   app_mcp::{ToolError, blocking, find_run},
   messages::Message,
-  tasks::{detail::run_store_error, hold},
+  tasks::{detail::run_store_error, hold, recorded},
 };
 
 /// Whether the turn of run `run`'s success merges the run on its own, or why it is left to the person. Blocks on
@@ -43,7 +43,11 @@ pub fn completes_in(db: &ProjectDb, run: RunId) -> Result<bool, StoreError> {
   let Some(found) = db.run(run).map_err(run_store_error)? else {
     return Ok(false);
   };
-  let Some(task) = db.task(found.task())? else {
+  // A team task's run goes into its module's branch and is delivered with the module, never completed from here.
+  if db.team_run(run)?.is_some() {
+    return Ok(false);
+  }
+  let Some(task) = recorded::task_of(db, found.task())? else {
     return Ok(false);
   };
   if run_delivers(&task, &found).without_commits() != WithoutCommits::Completes || db.run_completion(run)?.is_some() {
@@ -64,7 +68,12 @@ fn left(db: &ProjectDb, run: RunId, merge: Merge) -> Result<Option<MergeLeft>, S
   let Some(run) = db.run(run).map_err(run_store_error)? else {
     return Ok(Some(MergeLeft::NotReady));
   };
-  let Some(task) = db.task(run.task())? else {
+  // A team task's run is delivered with its module (`merge_run` requests that), which is not the chat's to do on its
+  // own: left to the person.
+  if db.team_run(run.id())?.is_some() {
+    return Ok(Some(MergeLeft::NotReady));
+  }
+  let Some(task) = recorded::task_of(db, run.task())? else {
     return Ok(Some(MergeLeft::NotReady));
   };
   if !latest_succeeded(db, &run)? {
@@ -88,7 +97,7 @@ fn left(db: &ProjectDb, run: RunId, merge: Merge) -> Result<Option<MergeLeft>, S
   }
   let mut blockers = Vec::new();
   for blocker in db.unfinished_blocking_tasks(task.id())? {
-    if let Some(blocker) = db.task(blocker)? {
+    if let Some(blocker) = recorded::task_of(db, blocker)? {
       blockers.push(blocker.key().to_string());
     }
   }
@@ -133,6 +142,14 @@ pub(super) async fn check(scope: &ChatScope, arguments: &JsonObject) -> Result<(
   blocking(move || {
     let db = ProjectDb::open(&root)?;
     let run = find_run(&db, &named)?;
+    // Said as it is, not as a run that is not ready: the module's delivery is a person's to request in a turn nobody
+    // asked for.
+    if db.team_run(run.id())?.is_some() {
+      return Err(ToolError::refused(
+        "left_to_person",
+        vec![Message::new("orchestrator.tools.mergeLeft.teamDelivery").with("run", run.number().get().to_string())],
+      ));
+    }
     match left(&db, run.id(), Merge::Branch)? {
       None => Ok(()),
       Some(why) => Err(ToolError::refused(

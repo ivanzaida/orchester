@@ -20,7 +20,7 @@ use orchester_core::{
   orchestrator::{AgentWait, RunEnd, StopReason, WaitKind, change::StepName},
   resource::StepKey,
   run::{InterruptCause, PauseReason, Run, RunFailure, RunLimit, RunStatus},
-  store::{MergeStore, RunStore, TaskStore},
+  store::{MergeStore, RunStore},
   task::Task,
 };
 use orchester_exec::programs::Programs;
@@ -33,6 +33,7 @@ use crate::{
     delivery::{self, Delivery},
     detail::run_store_error,
     hold,
+    recorded::task_of,
   },
 };
 
@@ -129,7 +130,7 @@ pub(super) fn current_ends(
     if settled(&key) {
       continue;
     }
-    let Some(task) = db.task(run.task())? else {
+    let Some(task) = task_of(db, run.task())? else {
       continue;
     };
     if key.starts_with("end:limit:") {

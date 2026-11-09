@@ -336,10 +336,12 @@ detail ends by naming them (`… · Review waits for an agent slot`).
 
 **Team projects:** a team task's runs are listed from this computer's own records of them, with the task's key and
 title as the run recorded them when it started. A team task named by `task` (key or server id) is read from its team
-server first; one this computer ran nothing of lists no runs. A run of the old sharing stream that kept neither the
-inputs it started with nor a cached copy of its task has no key to be listed under: with no `task` it is listed with
-`task: null` and `unrecorded: true` (its id, number, state, tokens and time as stored; phase, detail, delivery and
-link are `null`); asked for by `task` it is refused as `team_task_unrecorded`.
+server first; one this computer ran nothing of lists no runs. A name the project has as a local task (made before the
+project was linked) is read here, signed in or not. A run of the old sharing stream that kept neither the inputs it
+started with nor a cached copy of its task has no key to be listed under: with no `task` it is listed with `task: null`
+and `unrecorded: true` (its id, number, state, tokens and time as stored; phase, detail, delivery and link are `null`;
+a run that cannot be read has its number and a `detail` saying so, and nothing else); asked for by `task` it is
+refused as `team_task_unrecorded`.
 
 | Parameter | Type            | Req. | Description                                   |
 |-----------|-----------------|------|-----------------------------------------------|
@@ -445,7 +447,8 @@ for a run that ended. Parameters: `project`, `run` — both required. Answers th
 Removes an ended run's worktree (task page's *Remove worktree*): committed work stays on the branches; only merged
 branches are deleted. Refused while the run works, while a merge or removal of its task runs, when the worktree holds
 uncommitted changes (a person decides that on the task page), when already removed, or `run_changed` when the run
-worked again in other worktrees since this was read. Parameters: `project`, `run`.
+worked again in other worktrees since this was read. A team task's run that kept no inputs, whose task has no copy
+here either, is refused first as `team_task_unrecorded`. Parameters: `project`, `run`.
 
 `get_changes`, `merge_run` and `complete_run` are in [setup › Ending a run's work](mcp-tools-setup.md#10-ending-a-runs-work).
 
@@ -459,7 +462,8 @@ worked again in other worktrees since this was read. Parameters: `project`, `run
 to. Running runs go on; queued tasks wait and a start is refused until `release_queue` lets them go on. Both answer
 what holds now.
 
-**Team projects:** the task is read from its team server; its group is this computer's, so a team task in none is
+**Team projects:** the task is read from its team server (a local task of the project is read here, signed in or
+not); its group is this computer's, so a team task in none is
 refused as `not_in_group`. A team task with no run on this computer is not part of this computer's hold queue:
 it is left out of what holds now.
 
@@ -533,7 +537,8 @@ question, or an empty answer.
 
 A plan a gated step proposed, as its card shows it: version, step, agent, time, whole text, whether the run waits on
 it, its decision (`approved`, or `changes_requested` with note; `decided_by`, when), the step's versions (no text),
-run and link. Refused as `no_plan` / `plan_not_found`.
+run and link. Refused as `no_plan` / `plan_not_found`, and as `team_task_unrecorded` for a team task's run that kept no
+inputs and whose task has no copy here.
 
 | Parameter | Type            | Req. | Description                                                                                  |
 |-----------|-----------------|------|----------------------------------------------------------------------------------------------|
@@ -566,8 +571,10 @@ as a follow-up of a run ready for review, as instructions that continue a failed
 resuming a paused or interrupted run, or running an ended task again with it. A run stopped at a limit keeps the
 message until a person raises the limit. Refused when no agent reads it and the task does not run again.
 
-On a **team project** the message goes to the run under the claim its work started with (no claim of the old sharing
-stream is taken). A message that would run the task again (`team_run_again_unsupported`) or continue an interrupted
+On a **team project** the message to a **team task's run** (told by the run's own team record: a local task's run in a
+team-linked project behaves as on a local project) goes to the run under the claim its work started with (no claim of
+the old sharing stream is taken). A team run whose task has no definition here (no inputs kept, no cached copy) is
+refused as `team_task_unrecorded`. A message that would run the task again (`team_run_again_unsupported`) or continue an interrupted
 run (`team_project_unsupported`) is refused before it is stored: a team task's work starts only through the team
 server (`run_task`). A run the team server fenced (taken over, membership removed, carried on elsewhere) takes no
 message in any state, a plan's changes included: it is refused as `claim_fenced` before anything
@@ -589,8 +596,8 @@ orchestrator), plans (text, waiting or not, decision), `run_continued` entries (
 `restarted`; step, note, attempt, author), `base_moved` notices and how each step ended. Each entry has author, step,
 run, time, `cursor` and link. Texts are stored text with secrets redacted.
 
-**Team projects:** the task is the one its team server reads (`team_unavailable` while it cannot be reached) and the
-conversation is this computer's record of its runs; a team task nothing ran for here has no entries. A team task whose
+**Team projects:** the task is the one its team server reads (`team_unavailable` while it cannot be reached; a task the
+project has as a local task is read here without the server) and the conversation is this computer's record of its runs; a team task nothing ran for here has no entries. A team task whose
 runs here recorded nothing of it is refused as `team_task_unrecorded`.
 
 | Parameter | Type            | Req. | Description                                                      |

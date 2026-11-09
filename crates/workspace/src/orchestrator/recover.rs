@@ -15,7 +15,7 @@ use orchester_core::{
   },
   resource::{AgentProfile, Instruction, Pipeline, ResourceBody, Skill, Tool},
   run::RunStatus,
-  store::{MergeStore, ResourceStore, RunStore, TaskStore},
+  store::{MergeStore, ResourceStore, RunStore},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -24,7 +24,7 @@ use crate::{
   app_mcp::Translate,
   messages::{self, Message},
   runner::Runners,
-  tasks::detail::run_store_error,
+  tasks::{detail::run_store_error, recorded},
   workspace::Workspace,
 };
 
@@ -129,7 +129,10 @@ fn started_since(db: &ProjectDb, key: Option<&str>, since: Timestamp) -> Result<
   let Some(key) = key else {
     return Ok(false);
   };
-  let Some(task) = db.tasks()?.into_iter().find(|task| task.key().to_string() == key) else {
+  let Some(task) = recorded::all(db)?
+    .into_iter()
+    .find(|task| task.key().to_string() == key)
+  else {
     return Ok(false);
   };
   Ok(

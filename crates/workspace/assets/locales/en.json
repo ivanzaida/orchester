@@ -24,6 +24,7 @@
       "existingResult": "Orchester could not tell whether Git already holds this run's work ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
       "policy": "The policy an automation's merge goes through could not check this merge ({{cause}}), so Orchester refused before Git ran: nothing was merged, and the branch and the checkout are unchanged."
     },
+    "teamRun": "This run belongs to a team task, so it is delivered with its module, not merged from here. Nothing was merged.",
     "externalResult": "Git contains all or part of this result already. Review the evidence in Local integration; no historical merge was recorded or repeated.",
     "personRequired": "A person reviews and approves the exact checked result in Local integration.",
     "programRunning": "A Git program of this run’s local integration is still running in your checkout, so nothing was merged. Orchester waited a few seconds for it. Ask for the merge again in a minute; if it keeps refusing, open this run’s Local integration, which settles a program that is no longer running.",
@@ -2490,7 +2491,8 @@
         "blockedByTasks": "Run #{{run}} was not merged on its own: unfinished tasks block its task ({{tasks}}). Nothing was merged; the merge is the person's.",
         "held": "Run #{{run}} was not merged on its own: new starts are held for its group or the project. Nothing was merged; the merge is the person's.",
         "optedOut": "Run #{{run}} was not merged on its own: its task says Don't merge automatically. Nothing was merged; the merge is the person's.",
-        "deliveredByQueue": "Run #{{run}} was not merged on its own: its pipeline ends in a Deliver step, so the merge queue delivers it, after the person's approval when the step asks for one."
+        "deliveredByQueue": "Run #{{run}} was not merged on its own: its pipeline ends in a Deliver step, so the merge queue delivers it, after the person's approval when the step asks for one.",
+        "teamDelivery": "Run #{{run}} was not merged on its own: it is a team task's run, which goes into its module's branch and reaches the base branch with the module's delivery. Nothing was merged; requesting that delivery is the person's."
       },
       "reportChangesNothing": "A turn the daily report or the end of a watch started changes nothing, and this change is not one the person can apply from a card. Nothing was changed: put it in your recommendations instead.",
       "planOnly": "Plan only is on: this turn takes no action. Nothing was changed: put it in your plan with propose_plan instead.",

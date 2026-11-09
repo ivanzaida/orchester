@@ -16,7 +16,6 @@ mod writes;
 use orchester_core::{
   id::{RunId, TaskId},
   store::RunStore,
-  task::identity::{TaskIdentity, TaskOwner},
 };
 use orchester_store::{ProjectDb, SharingLink};
 
@@ -27,6 +26,7 @@ pub(super) use self::{
   tasks::{get_task, list_tasks},
   writes::{create_task, update_task},
 };
+use super::tasks::find_task;
 use crate::{
   actions::Dispatcher,
   app_mcp::{
@@ -35,7 +35,7 @@ use crate::{
   },
   messages::Message,
   sharing::{SharingError, sync::SystemClock},
-  tasks::detail::run_store_error,
+  tasks::{detail::run_store_error, recorded::is_team},
   team_reads::{TeamProject, TeamReadError, TeamSession},
   workspace::OpenProject,
 };
@@ -141,14 +141,7 @@ pub(super) fn linked(db: &ProjectDb) -> Result<bool, ToolError> {
 /// The refusal for a run whose task `task` cannot be told here: not found for a local task; for a team task the run
 /// kept no inputs and no copy of the task is kept, so its key is unknown, which is not the task being missing.
 pub(super) fn task_missing(db: &ProjectDb, task: TaskId) -> Result<ToolError, ToolError> {
-  let team = matches!(
-    db.task_identity(task)?,
-    Some(TaskIdentity {
-      owner: TaskOwner::Team { .. },
-      ..
-    })
-  );
-  Ok(if team {
+  Ok(if is_team(db, task)? {
     ToolError::refused(
       "team_task_unrecorded",
       vec![Message::new("appMcp.errors.teamTaskUnrecorded")],
@@ -212,7 +205,8 @@ pub(super) fn merge_refused() -> ToolError {
 }
 
 /// The team task `key` names (its key or its server id) as the team server reads it, when `project` is a team
-/// project; `None` for a local one. For a tool that lists what this computer recorded of the task: the server says
+/// project and `key` is not one of its local tasks (a task made before the project was linked stays local); `None`
+/// then. For a tool that lists what this computer recorded of the task: the server says
 /// which task it is, and whether it exists, so a task never run here is not mistaken for one that does not exist.
 pub(super) async fn read_task(
   services: &Services,
@@ -222,6 +216,24 @@ pub(super) async fn read_task(
   let Some(team) = of(services, project).await? else {
     return Ok(None);
   };
+  if names_local_task(&team.open, key).await? {
+    return Ok(None);
+  }
   let reads = team.reads(services).await?;
   tasks::find(&reads, key).await.map(Some)
+}
+
+/// Whether `key` (a key or an id) names a local task of the project: a task whose definition is a stored row of this
+/// computer, not a team task's identity or the copy the old sharing stream cached.
+async fn names_local_task(open: &OpenProject, key: &str) -> Result<bool, ToolError> {
+  let (root, key) = (open.repo_root.clone(), key.to_owned());
+  blocking(move || {
+    let db = ProjectDb::open(&root)?;
+    match find_task(&db, &key) {
+      Ok(task) => Ok(!is_team(&db, task.id())?),
+      Err(ToolError::NotFound { .. }) => Ok(false),
+      Err(error) => Err(error),
+    }
+  })
+  .await
 }
