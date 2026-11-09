@@ -140,11 +140,13 @@ impl Component for ProfilePanel {
       }
     });
     let profile = ctx.props::<Props>().id;
+    // The select holds the connection the profile runs on while it has one, else nothing: it asks.
+    let current = ctx.props::<Props>().profile.current;
     let save = edit::save(ctx, project.open.repo_root, profile);
     let (pending, settled) = (ctx.signal(None), ctx.signal(0_u64));
     edit::follow(ctx, &save, &pending, &settled, id);
     Self {
-      chosen: ctx.signal(String::new()),
+      chosen: ctx.signal(current.map_or_else(String::new, |connection| connection.to_string())),
       take,
       save,
       pending,
