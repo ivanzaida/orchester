@@ -313,13 +313,14 @@ const SPECS: &[Spec] = &[
                   (its base branch holds the run's commits), is refused with already_merged. A team task's run \
                   (told by the run itself: its team record, its task's team identity or the team inputs it was \
                   created with; a local task's run in a team project merges as above; such a run with no team \
-                  record is refused with team_run_unrecorded) is never merged into the base branch itself: its work is in its module's branch, and merge_run \
-                  requests that module's delivery from the team server, under the module's claim (taken when nobody \
-                  holds it), from the module branch's tip onto the tip of the branch the checkout has checked out; \
-                  an open delivery of the module is carried on instead. An Admin's authorization or the team's \
-                  automatic merge decides it, never this tool: `authorization` names the operation id of an Admin's \
-                  delivery authorization of this branch at these commits for the request to cite; without either \
-                  the team server keeps the request waiting for an Admin. Only a delivered module is a result \
+                  record is refused with team_run_unrecorded) is never merged into the base branch itself: its work \
+                  is in its module's branch, and merge_run requests that module's delivery from the team server, \
+                  under the module's claim (taken when nobody holds it), from the module branch's tip onto the tip \
+                  of the branch the checkout has checked out; an open delivery of the module is carried \
+                  on instead. An Admin's authorization or the team's automatic merge decides it, never this tool: \
+                  `authorization` names the operation id of an Admin's delivery authorization of this branch at \
+                  these commits for the request to cite; without either the team server keeps the request waiting \
+                  for an Admin. Only a delivered module is a result \
                   (delivery with its merge_commit); otherwise it refuses with where the delivery stands: \
                   delivery_awaiting_admin (requested, waiting for an Admin to authorize it; call again once \
                   authorized), delivery_not_authorized (the cited authorization is not of this delivery), \
