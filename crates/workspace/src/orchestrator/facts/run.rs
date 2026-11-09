@@ -6,7 +6,7 @@ use std::path::Path;
 use orchester_core::{
   id::RunId,
   run::{Run, RunStatus},
-  store::{MergeStore, ResourceStore, RunStore, TaskStore},
+  store::{MergeStore, ResourceStore, RunStore},
 };
 use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, StoreError};
@@ -18,6 +18,7 @@ use crate::{
     changes::{Checkpointed, RunRange, run_changes_in},
     delivery::{self, Delivery},
     detail::run_store_error,
+    recorded::task_of,
     run_times::finished_at,
     standing::CurrentStep,
   },
@@ -34,9 +35,7 @@ pub(super) fn read(
   let Some(run) = db.run(id).map_err(run_store_error)? else {
     return Ok(None);
   };
-  let task = db
-    .task(run.task())?
-    .map(|task| (task.key().to_string(), task.details().title.as_str().to_owned()));
+  let task = task_of(db, run.task())?.map(|task| (task.key().to_string(), task.details().title.as_str().to_owned()));
   let pipeline = db
     .resource(run.snapshot().pipeline().resource)?
     .map(|found| found.name().as_str().to_owned())

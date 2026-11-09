@@ -17,14 +17,14 @@ use orchester_core::{
     PermissionEventKind, Run, RunPermissionChange, TaskPhase, WideningPersonOnly, auto_approves,
     review::{ReviewerUnavailable, resolve_reviewer},
   },
-  store::{ConnectionStore, RunStore, TaskStore},
+  store::{ConnectionStore, RunStore},
   task::Task,
   time::Timestamp,
 };
 use orchester_store::{DecisionCounts, ProjectDb, StoreError};
 use thiserror::Error;
 
-use super::detail::run_store_error;
+use super::{detail::run_store_error, recorded};
 
 /// Whether `run` auto-approves now.
 pub fn auto_approving(db: &ProjectDb, run: &Run) -> Result<bool, StoreError> {
@@ -50,7 +50,7 @@ pub fn stop_auto_approving_in(repo_root: &Path) -> Result<Vec<RunId>, StoreError
 /// The latest run of each task of `db` that counts as auto-approving ([`counts_as_auto_approving`]).
 fn auto_approving_runs(db: &ProjectDb) -> Result<Vec<RunId>, StoreError> {
   let mut runs = Vec::new();
-  for task in db.tasks()? {
+  for task in recorded::all(db)? {
     let listed = db.runs_of_task(task.id()).map_err(run_store_error)?;
     // An unreadable latest run cannot be read as auto-approving; the bar does not count it either.
     if let Some(Ok(latest)) = listed.last()

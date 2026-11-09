@@ -28,6 +28,7 @@ mod local_task;
 mod mcp_server_remove;
 mod mcp_servers;
 mod not_ready;
+mod orchestrator;
 mod pipelines;
 mod readiness;
 mod reads;

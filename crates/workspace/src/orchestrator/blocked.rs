@@ -3,13 +3,13 @@
 //! starts it in the app. A start auto mode could not take because the task waits for the tasks that block it
 //! (`Ee2JE`): the refusal names the task and those tasks, as they stood when the queue refused it.
 
-use orchester_core::store::TaskStore;
 use orchester_store::ProjectDb;
 
 use super::tools::ChatScope;
 use crate::{
   app_mcp::{ToolError, blocking, find_task},
   messages::Message,
+  tasks::recorded,
 };
 
 /// What the queue says when unfinished blocking tasks keep a task from running.
@@ -66,8 +66,7 @@ pub(super) async fn named(scope: &ChatScope, key: Option<&str>, error: ToolError
 /// The key of task `named` and the keys of the unfinished tasks that block it; `None` without either.
 fn blockers(db: &ProjectDb, named: &str) -> Result<Option<(String, Vec<String>)>, ToolError> {
   let lowered = named.to_lowercase();
-  let Some(task) = db
-    .tasks()?
+  let Some(task) = recorded::all(db)?
     .into_iter()
     .find(|task| task.key().to_string().to_lowercase() == lowered || task.id().to_string() == named)
   else {
@@ -75,7 +74,7 @@ fn blockers(db: &ProjectDb, named: &str) -> Result<Option<(String, Vec<String>)>
   };
   let mut keys = Vec::new();
   for blocker in db.unfinished_blocking_tasks(task.id())? {
-    if let Some(blocker) = db.task(blocker)? {
+    if let Some(blocker) = recorded::task_of(db, blocker)? {
       keys.push(blocker.key().to_string());
     }
   }

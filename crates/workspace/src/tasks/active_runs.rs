@@ -9,12 +9,12 @@ use orchester_core::{
   id::{RunId, TaskId},
   project::TaskKey,
   run::{ActiveClock, Run, TaskPhase},
-  store::{ActivityStore, RunStore, TaskStore},
+  store::{ActivityStore, RunStore},
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, RunStoreError, StoreError};
 
-use super::standing::CurrentStep;
+use super::{recorded, standing::CurrentStep};
 
 /// A task whose latest run is under way.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -50,7 +50,7 @@ pub fn read(db: &ProjectDb) -> Result<Vec<ActiveRun>, StoreError> {
     .collect();
   let now = Timestamp::now();
   let mut runs = Vec::with_capacity(running.len());
-  for task in db.tasks()? {
+  for task in recorded::all(db)? {
     let Some(&(_, id)) = running.iter().find(|(running, _)| *running == task.id()) else {
       continue;
     };
