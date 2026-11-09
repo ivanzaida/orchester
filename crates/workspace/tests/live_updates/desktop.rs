@@ -1,7 +1,14 @@
 //! A desktop signed in to the fake team server as one member, with the app's own [`Servers`] over its application
 //! database and a keychain that holds the member's token, and one project linked to the server's project.
 
-use std::{collections::HashMap, path::Path, sync::Arc};
+use std::{
+  collections::HashMap,
+  path::Path,
+  sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+  },
+};
 
 use orchester_api::SharedTask;
 use orchester_core::{
@@ -21,10 +28,18 @@ use tempfile::TempDir;
 
 use crate::{server::TeamServer, support::Fixture};
 
-/// A keychain that holds the member's token under every key and notes the keys that were removed.
+/// A keychain that holds the member's token under every key and notes the keys that were removed. It can be told to
+/// refuse removals.
 pub struct Keychain {
   token: String,
   pub removed: parking_lot::Mutex<Vec<VaultKey>>,
+  refuse_deletes: AtomicBool,
+}
+
+impl Keychain {
+  pub fn refuse_deletes(&self) {
+    self.refuse_deletes.store(true, Ordering::SeqCst);
+  }
 }
 
 impl SecretVault for Keychain {
@@ -37,6 +52,9 @@ impl SecretVault for Keychain {
   }
 
   fn delete(&self, key: &VaultKey) -> Result<(), VaultError> {
+    if self.refuse_deletes.load(Ordering::SeqCst) {
+      return Err(VaultError::AccessDenied("refused by the test".to_owned()));
+    }
     self.removed.lock().push(key.clone());
     Ok(())
   }
@@ -101,6 +119,7 @@ impl Desktop {
     let keychain = Arc::new(Keychain {
       token: token.to_owned(),
       removed: parking_lot::Mutex::default(),
+      refuse_deletes: AtomicBool::new(false),
     });
     let servers = Servers::new(workspace, Vault::with(keychain.clone()), version);
     Self {

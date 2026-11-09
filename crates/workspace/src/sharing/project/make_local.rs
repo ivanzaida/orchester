@@ -63,8 +63,10 @@ impl ProjectServer {
     Ok(self.make_local_releasing().await?.1)
   }
 
-  /// Releases the person's claims where the server takes it, then makes the project local.
+  /// Releases the person's claims where the server takes it, then makes the project local. The team's secret values
+  /// leave the keychain first: that can fail here, and a claim released on the server cannot be taken back.
   async fn make_local_releasing(&self) -> Result<(ClaimRelease, Vec<ReturnedTask>), SharingError> {
+    self.servers.clear_team_secrets(&self.repo_root).await?;
     let released = self.release_claims().await?;
     let returned = self.servers.leave(&self.repo_root).await?;
     self.servers.shared_changed();
@@ -113,18 +115,19 @@ impl ProjectServer {
 }
 
 impl Servers {
-  /// Makes the project at `repo_root` local, after the values this computer kept for the team's secrets left the
-  /// keychain: the project keeps no team configuration, and nothing is made local while a value could not be removed.
-  async fn leave(&self, repo_root: &Path) -> Result<Vec<ReturnedTask>, SharingError> {
+  /// Removes the values this computer kept for the team's secrets from the keychain and the project: the project keeps
+  /// no team configuration, and nothing is made local while a value could not be removed.
+  async fn clear_team_secrets(&self, repo_root: &Path) -> Result<(), SharingError> {
     let (root, vault) = (repo_root.to_owned(), self.inner.vault.clone());
-    Ok(
-      background::run(move || -> Result<_, StoreError> {
-        let mut db = ProjectDb::open(&root)?;
-        db.clear_team_secret_values(vault.get())?;
-        db.make_local()
-      })
-      .await??,
-    )
+    background::run(move || -> Result<_, StoreError> { ProjectDb::open(&root)?.clear_team_secret_values(vault.get()) })
+      .await??;
+    Ok(())
+  }
+
+  /// Makes the project at `repo_root` local.
+  async fn leave(&self, repo_root: &Path) -> Result<Vec<ReturnedTask>, SharingError> {
+    let root = repo_root.to_owned();
+    Ok(background::run(move || -> Result<_, StoreError> { ProjectDb::open(&root)?.make_local() }).await??)
   }
 
   /// What making the project at `repo_root` local would do. Blocking.
@@ -175,6 +178,7 @@ impl Servers {
     let (claims, returned) = match server {
       Some(server) => server.make_local_releasing().await?,
       None => {
+        self.clear_team_secrets(repo_root).await?;
         let returned = self.leave(repo_root).await?;
         self.shared_changed();
         (ClaimRelease::Unknown, returned)
