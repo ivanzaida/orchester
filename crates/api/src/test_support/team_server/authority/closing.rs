@@ -8,6 +8,11 @@ use serde_json::{Map, Value, json};
 use super::{Authority, Person, edits, lifecycle, listing};
 
 impl super::TeamServer {
+  /// The id of the task numbered `number` that [`Self::authority_tasks`] set, as the reads give it.
+  pub fn authority_task_id(&self, number: u32) -> Option<String> {
+    self.state.lock().authority.task_id_of(number)
+  }
+
   /// `by` moves the task numbered `number` to `workflow` (`done` or `canceled`) now, as their own patch does: the task
   /// reads closed by them, and its own claim is released.
   pub fn task_closed_by(&self, number: u32, by: Person, workflow: &'static str) {
@@ -63,7 +68,7 @@ impl super::TeamServer {
 
 impl Authority {
   /// The id of the task numbered `number` that [`super::TeamServer::authority_tasks`] set.
-  fn task_id_of(&self, number: u32) -> Option<String> {
+  pub(super) fn task_id_of(&self, number: u32) -> Option<String> {
     self
       .tasks
       .iter()

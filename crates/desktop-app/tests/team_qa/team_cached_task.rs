@@ -24,9 +24,6 @@ use orchester_store::ProjectDb;
 
 use super::team::{self, State};
 
-/// KON-12 as the QA app's stand-in server names it when this computer has no task of that number: by its number.
-const KON_12: &str = "0191c7c0-0000-7000-8000-00000010000c";
-
 /// The window on Kontur in `State::Member`, with KON-12 recorded as a team task and its old-stream copy cached, and no
 /// run of it; on the task's page.
 fn on_cached_kon_12() -> (Window, TeamServer) {
@@ -36,7 +33,11 @@ fn on_cached_kon_12() -> (Window, TeamServer) {
   let services = launch.services().expect("the session started");
   let server = team::prepare(State::Member, services, data.runtime.handle()).expect("the state is set up");
   let mut db = ProjectDb::open(&data.repo("repo-kontur")).expect("the project's database");
-  let id: TaskId = KON_12.parse().expect("a task id");
+  let id: TaskId = server
+    .authority_task_id(12)
+    .expect("the stand-in serves KON-12")
+    .parse()
+    .expect("a task id");
   let link = db.sharing().expect("link").expect("linked");
   db.record_team_task(
     TeamTaskRef {
