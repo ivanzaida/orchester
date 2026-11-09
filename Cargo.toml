@@ -238,6 +238,11 @@ zstd = { version = "0.13", default-features = false }
 [profile.dev.package."*"]
 opt-level = 2
 
+# The app crate's dev rlib with full debug info passes MSVC's 4 GiB library limit, so link.exe refuses it
+# ("invalid library format", LNK1120). Line tables keep file and line in backtraces and stay well under it.
+[profile.dev.package.orchester-app]
+debug = "line-tables-only"
+
 # Line tables only, the least debug info that still gives GlitchTip a frame's function, file and line from the
 # uploaded debug files. On Windows (MSVC) it lands in a `.pdb` beside each program, which no installer or zip
 # packs; on macOS `packed` keeps it out of the binaries too, in a `.dSYM` beside them.
