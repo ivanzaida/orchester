@@ -2,11 +2,12 @@
 //! model belongs to and the connections of that CLI to choose from; choosing one publishes the next version on it.
 
 use orchester_core::{
-  connection::AgentProvider,
-  id::{ConnectionId, ResourceId},
+  connection::{AgentConnection, AgentProvider, ApiEndpoint, BaseUrl, ConnectionAccount, EndpointPreset},
+  id::{AgentAccountId, ConnectionId, ResourceId, SecretId},
   permission::{AgentPermissions, CommandPermission, NetworkAccess},
   resource::{AgentProfile, Draft, ModelId, PromptText, ProviderSettings, RepositoryAccess, VersionNumber},
-  store::ResourceStore,
+  store::{ConnectionStore, ResourceStore},
+  time::Timestamp,
 };
 use orchester_workspace::{
   agents::{local_connection::use_connection, local_hub::LocalHub},
@@ -123,4 +124,83 @@ fn readiness_local_connection_refuses_another_cli_and_unpublished_edits_and_chan
     None,
     "nothing was published"
   );
+}
+
+/// A Claude Code connection on a named account of the person's.
+fn on_account(fixture: &Fixture, label: &str) -> ConnectionId {
+  let mut made = AgentConnection::new(
+    ConnectionId::generate(),
+    name(label),
+    CLAUDE,
+    fixture.root.join(format!("{label}.exe")),
+    Timestamp::now(),
+  )
+  .expect("connection");
+  made
+    .set_account(ConnectionAccount::Account {
+      id: AgentAccountId::generate(),
+      folder: fixture.root.clone(),
+    })
+    .expect("an agent CLI runs on an account");
+  fixture.db().create_connection(&made).expect("a connection");
+  made.id()
+}
+
+#[test]
+fn readiness_local_connection_a_gone_connection_can_be_replaced_by_one_on_a_named_account() {
+  let (fixture, builder, _) = gone();
+  let work = on_account(&fixture, "work");
+
+  let version = use_connection(&fixture.root, builder, work).expect("nothing moves away from an account that is gone");
+
+  assert_eq!(version.get(), 2);
+  assert_eq!(hub(&fixture).profile(builder).expect("a sheet").current, Some(work));
+}
+
+#[test]
+fn readiness_local_connection_moving_from_a_connection_that_is_there_to_another_account_still_asks() {
+  let fixture = Fixture::local();
+  let home = fixture.connection(CLAUDE, "home");
+  let work = on_account(&fixture, "work");
+  let builder = fixture.own("builder", &builder_on(home));
+
+  let refused = use_connection(&fixture.root, builder, work).expect_err("another account is a person's decision");
+
+  assert_eq!(refused.key, "agents.localConnection.widens");
+  let read = hub(&fixture);
+  let sheet = read.profile(builder).expect("a sheet");
+  assert_eq!(sheet.current, Some(home), "still on the connection it had");
+  assert!(!sheet.draft, "the refused save left no draft behind");
+}
+
+#[test]
+fn readiness_local_connection_a_publication_that_is_refused_leaves_no_draft_behind() {
+  let fixture = Fixture::local();
+  let native = |label: &str| {
+    AgentConnection::native(
+      ConnectionId::generate(),
+      name(label),
+      AgentProvider::OpenAiApi,
+      ApiEndpoint::new(
+        EndpointPreset::Official,
+        BaseUrl::new("https://api.openai.com").expect("a URL"),
+        SecretId::generate(),
+      ),
+      Timestamp::now(),
+    )
+    .expect("a native connection")
+  };
+  let (first, second) = (native("openai-1"), native("openai-2"));
+  fixture.db().create_connection(&first).expect("stored");
+  fixture.db().create_connection(&second).expect("stored");
+  let builder = fixture.own("builder", &builder_on(first.id()));
+
+  // Saving a draft on it is fine; publishing a step that runs on it is refused: this version has no client for it.
+  let refused = use_connection(&fixture.root, builder, second.id()).expect_err("no publication on that provider");
+
+  assert_eq!(refused.key, "appMcp.errors.connectionRunsNoAgents");
+  let read = hub(&fixture);
+  let sheet = read.profile(builder).expect("a sheet");
+  assert!(!sheet.draft, "the draft the save made was discarded");
+  assert_eq!(sheet.current, Some(first.id()), "nothing changed");
 }
