@@ -301,6 +301,7 @@ pub fn merge_in_as(
   asked: Asked,
 ) -> Result<Merged, IntegrationProblem> {
   let repo_root = worktrees.root();
+  refuse_team_run(repo_root, run)?;
   // Held until the attempt is recorded, so that no other merge takes its open attempt for one the app left.
   let held = preflight::hold(repo_root);
   let mut attempt = Attempt::begin((repo_root, programs), run, asked);
@@ -370,15 +371,20 @@ fn merge_held(
   })
 }
 
+/// Refuses a team task's run, by its own team record: it goes into its module's branch and only the module's delivery
+/// takes it further, so it is never merged into the base branch from here, whoever asks. Said before the checkout is
+/// held and an attempt begins, so that no press records a stopped merge attempt for a merge that was never possible.
+fn refuse_team_run(repo_root: &Path, run: RunId) -> Result<(), IntegrationProblem> {
+  if ProjectDb::open(repo_root)?.team_run(run)?.is_some() {
+    return Err(IntegrationProblem::Store(Message::new("localIntegration.teamRun")));
+  }
+  Ok(())
+}
+
 /// Refuses `run` unless it may merge: not merged already nor held back by a merge waiting in its worktree, no local
 /// integration holding the checkout, its result not in Git already, and its task's latest run; its task.
 fn mergeable(repo_root: &Path, db: &ProjectDb, run: &Run) -> Result<orchester_core::task::Task, IntegrationProblem> {
   not_merged_or_held(db, run.id())?;
-  // A team task's run goes into its module's branch and only the module's delivery takes it further: it is never merged
-  // into the base branch from here, whoever asks.
-  if db.team_run(run.id())?.is_some() {
-    return Err(IntegrationProblem::Store(Message::new("localIntegration.teamRun")));
-  }
   let task = db.task(run.task())?.ok_or(StoreError::TaskNotFound(run.task()))?;
   if let Some(holder) = super::local_integration::checkout_holder(db, run.id())? {
     return Err(IntegrationProblem::HeldLocally(holder));

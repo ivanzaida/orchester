@@ -77,7 +77,7 @@ fn team_mcp_the_chat_leaves_a_succeeded_team_run_to_the_person() {
 }
 
 #[test]
-fn team_mcp_no_local_merge_takes_a_team_run() {
+fn team_mcp_no_local_merge_takes_a_team_run_and_none_records_an_attempt() {
   let team = started();
   team.step_into(|run, execution, now| run.complete_step(execution, now).expect("passed"));
   let programs = Programs::processes();
@@ -88,6 +88,10 @@ fn team_mcp_no_local_merge_takes_a_team_run() {
     matches!(&refused, Err(IntegrationProblem::Store(message)) if message.key == "localIntegration.teamRun"),
     "{refused:?}"
   );
+  // It was never a merge to try: no attempt was recorded, stopped or open, for the press.
+  let db = team.checkout.db();
+  assert!(db.merge_attempts(team.run).expect("attempts").is_empty());
+  assert!(db.open_merge_attempts().expect("open").is_empty());
 }
 
 #[test]
