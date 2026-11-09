@@ -33,12 +33,10 @@ pub(crate) struct Phrase {
 
 impl Phrase {
   /// What `row` says, `need` being the oldest thing its task waits for from the person, if any, among `tasks`.
-  /// `team` is whether the row is a team project's task, whose closed status it says in place of a draft's words
-  /// (decision D4); a local task reads as its readiness says.
-  pub(super) fn of(ctx: &Ctx, row: &TaskRow, need: Option<&NeedItem>, tasks: &ProjectTasks, team: bool) -> Self {
+  pub(super) fn of(ctx: &Ctx, row: &TaskRow, need: Option<&NeedItem>, tasks: &ProjectTasks) -> Self {
     match need {
       Some(need) => waits(ctx, need, tasks),
-      None => stands(ctx, row, team),
+      None => closed(ctx, row).unwrap_or_else(|| stands(ctx, row)),
     }
   }
 }
@@ -60,7 +58,7 @@ pub(crate) fn phrases(ctx: &Ctx, tasks: &ProjectTasks, rows: &[TaskRow]) -> Vec<
   let needs = needs(tasks);
   rows
     .iter()
-    .map(|row| Phrase::of(ctx, row, needs.get(&row.id), tasks, false))
+    .map(|row| Phrase::of(ctx, row, needs.get(&row.id), tasks))
     .collect()
 }
 
@@ -150,10 +148,7 @@ const fn kind_key(kind: NeedKind) -> &'static str {
 }
 
 /// Where a task nothing waits for stands.
-fn stands(ctx: &Ctx, row: &TaskRow, team: bool) -> Phrase {
-  if let Some(closed) = team.then(|| closed(ctx, row)).flatten() {
-    return closed;
-  }
+fn stands(ctx: &Ctx, row: &TaskRow) -> Phrase {
   let said = message_text(ctx, &row.detail);
   let (glyph, glyph_color, color) = mark(row);
   let words = match (&row.readiness, row.run_step()) {
@@ -170,9 +165,10 @@ fn stands(ctx: &Ctx, row: &TaskRow, team: bool) -> Phrase {
   }
 }
 
-/// A team task closed as Done or Canceled that no run speaks for: its status as the workflow says it, in the glyph and
-/// words of the Done and Canceled status everywhere else, never *Ready to queue* or an open circle.
-fn closed(ctx: &Ctx, row: &TaskRow) -> Option<Phrase> {
+/// A task closed as Done or Canceled that no run speaks for: its status as the workflow says it, in the glyph and
+/// words of the Done and Canceled status everywhere else, never *Ready to queue* or an open circle. A task whose run
+/// speaks (a merged one, a failed one) says that instead.
+pub(super) fn closed(ctx: &Ctx, row: &TaskRow) -> Option<Phrase> {
   let status = row.organization.status();
   let unspoken = matches!(
     row.readiness,

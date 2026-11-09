@@ -32,7 +32,11 @@ use orchester_workspace::tasks::{
 };
 
 use super::{
-  super::{list::age, phrase::Phrase, row::points_chip},
+  super::{
+    list::age,
+    phrase::{Phrase, closed},
+    row::points_chip,
+  },
   display::{Display, Property},
 };
 use crate::{
@@ -99,12 +103,14 @@ pub struct CardSource<'a> {
 impl CardModel {
   pub fn of(ctx: &Ctx, source: &CardSource<'_>, row: &TaskRow) -> Self {
     let need = source.needs.get(&row.id);
-    // A card takes only the phrase's color, which a closed team task's words share with a draft's.
-    let phrase = Phrase::of(ctx, row, need, source.tasks, false);
+    // A card takes the phrase's color and, for a closed task no run speaks for, its words (*Done*, *Canceled*, not
+    // the draft's *Ready to queue*); every other card keeps the readiness words under its run chip.
+    let phrase = Phrase::of(ctx, row, need, source.tasks);
+    let closed = need.is_none().then(|| closed(ctx, row)).flatten();
     Self {
       project: source.project,
       run: run_line(ctx, row),
-      readiness: message_text(ctx, &row.detail),
+      readiness: closed.map_or_else(|| message_text(ctx, &row.detail), |closed| closed.words),
       readiness_color: phrase.color,
       age: age(ctx, source.now, row.created_at),
       module: row.module.and_then(|id| {
