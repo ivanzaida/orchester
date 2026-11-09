@@ -380,3 +380,30 @@ fn team_lifecycle_a_member_cancelling_with_other_changes_is_refused_in_words_tha
   );
   assert_eq!(team.read(1).content.workflow, WorkflowStatus::Todo);
 }
+
+#[test]
+fn team_lifecycle_a_member_without_the_claim_does_not_set_or_clear_a_blocked_reason() {
+  let blocked = AuthorityTask {
+    blocked_reason: Some("Waits for design"),
+    ..task(3, "todo", Some(OLHA))
+  };
+  let team = Team::start(
+    Standing::Member,
+    vec![task(1, "todo", Some(OLHA)), task(2, "todo", None), blocked],
+  );
+
+  for number in [1, 2] {
+    let refused = refusal(team.block(number, Some("Waits for design")));
+    assert!(
+      matches!(refused, Refusal::TaskLifecycle(LifecycleRefusal::NotHolder)),
+      "set on task {number}: {refused:?}"
+    );
+    assert_eq!(team.read(number).content.blocked_reason, None);
+  }
+  let refused = refusal(team.block(3, None));
+  assert!(
+    matches!(refused, Refusal::TaskLifecycle(LifecycleRefusal::NotHolder)),
+    "clear: {refused:?}"
+  );
+  assert_eq!(team.read(3).content.blocked_reason.as_deref(), Some("Waits for design"));
+}
