@@ -54,7 +54,7 @@ use orchester_core::id::ProjectId;
 
 use crate::{
   project::{ProjectState, Projects, ShownProject, TeamRead},
-  routes::{HubFilter, HubView, ProjectPage, Route},
+  routes::{HubFilter, HubView, InstructionsView, NewConnection, ProjectPage, Route},
 };
 
 /// The screen at the router's path.
@@ -163,16 +163,36 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     }
     ProjectPage::Agents => agents_or_hub(ctx, project, HubView::default()),
     ProjectPage::AgentsHub(view) => agents_or_hub(ctx, project, *view),
-    ProjectPage::NewAgent(tab) => agents::screen(ctx, project, agents::Shown::New(*tab)),
+    ProjectPage::NewAgent(tab) => local_hub::form_or(ctx, project, HubFilter::Profiles, |ctx| {
+      agents::screen(ctx, project, agents::Shown::New(*tab))
+    }),
     ProjectPage::Agent(id, tab) => agents::screen(ctx, project, agents::Shown::Edit(*id, *tab)),
-    ProjectPage::Instructions(view) => instructions::screen(ctx, project, *view),
-    ProjectPage::Skills(_) | ProjectPage::NewSkill | ProjectPage::Skill(_) | ProjectPage::ImportSkills => {
-      skills::screen(ctx, project, page)
+    ProjectPage::Instructions(view @ InstructionsView::New(..)) => {
+      local_hub::form_or(ctx, project, HubFilter::Instructions, |ctx| {
+        instructions::screen(ctx, project, *view)
+      })
     }
-    ProjectPage::Tools | ProjectPage::NewTool | ProjectPage::Tool(..) => tools::screen(ctx, project, page),
+    ProjectPage::Instructions(view) => instructions::screen(ctx, project, *view),
+    ProjectPage::NewSkill => local_hub::form_or(ctx, project, HubFilter::Skills, |ctx| {
+      skills::screen(ctx, project, page)
+    }),
+    ProjectPage::Skills(_) | ProjectPage::Skill(_) | ProjectPage::ImportSkills => skills::screen(ctx, project, page),
+    ProjectPage::NewTool => local_hub::form_or(ctx, project, HubFilter::Tools, |ctx| {
+      tools::screen(ctx, project, page)
+    }),
+    ProjectPage::Tools | ProjectPage::Tool(..) => tools::screen(ctx, project, page),
     ProjectPage::Secrets(view) => project_settings::screen(ctx, project, project_settings::Shown::Secrets(*view)),
     ProjectPage::Connections(view) => {
       project_settings::screen(ctx, project, project_settings::Shown::Connections(*view))
+    }
+    ProjectPage::NewConnection(NewConnection::McpServer) => {
+      local_hub::form_or(ctx, project, HubFilter::McpServers, |ctx| {
+        project_settings::screen(
+          ctx,
+          project,
+          project_settings::Shown::NewConnection(NewConnection::McpServer),
+        )
+      })
     }
     ProjectPage::NewConnection(kind) => {
       project_settings::screen(ctx, project, project_settings::Shown::NewConnection(*kind))

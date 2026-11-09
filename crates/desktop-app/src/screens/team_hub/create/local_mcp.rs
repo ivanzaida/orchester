@@ -51,12 +51,11 @@ impl Fields {
       .err()
       .map(|errors| (**errors).clone())
       .unwrap_or_default();
-    let name_says = errors
-      .name
-      .clone()
-      .filter(|_| shown.tried || !typed.name.trim().is_empty())
-      .map(Error::Said)
-      .or_else(|| (shown.tried && typed.name.trim().is_empty()).then_some(Error::Required));
+    let name_says = if typed.name.trim().is_empty() {
+      shown.tried.then_some(Error::Required)
+    } else {
+      errors.name.clone().map(Error::Said)
+    };
     let taken: Vec<Taken> = checked.as_ref().map_or_else(
       |_| Vec::new(),
       |draft| {

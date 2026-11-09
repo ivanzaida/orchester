@@ -150,7 +150,7 @@ fn schema() -> Value {
       "view": {
         "type": "string",
         "enum": views,
-        "description": "usage of a project: the Usage page (the default) or the Delivery view beside it. task: what a tab opens in its place, memory (the task's memory, on summary) or local-integration (Local integration, on changes); without `tab` it opens its own. project_settings with tab runs: rules, the page Approved for every run. modules: new, without `module`, opens New module; edit, with a module's id, opens Edit module.",
+        "description": "usage of a project: the Usage page (the default) or the Delivery view beside it. task: what a tab opens in its place, memory (the task's memory, on summary) or local-integration (Local integration, on changes); without `tab` it opens its own. project_settings with tab runs: rules, the page Approved for every run. modules: new, without `module`, opens New module; edit, with a module's id, opens Edit module. agents: new, with `filter` of a kind, opens the form that makes one.",
       },
       "period": {
         "type": "string",
@@ -287,7 +287,7 @@ const fn params(screen: Screen) -> &'static [&'static str] {
     Screen::Modules => &["project", "module", "tab", "view"],
     Screen::NewTask => &["project", "module"],
     Screen::ProjectSettings => &["project", "tab", "view"],
-    Screen::Agents => &["project", "agent", "filter", "item", "server"],
+    Screen::Agents => &["project", "agent", "filter", "item", "server", "view"],
     Screen::Merges => merges::PARAMS,
     Screen::MergeQueue | Screen::Pipelines | Screen::Instructions | Screen::Secrets | Screen::OrchestratorSettings => {
       &["project"]

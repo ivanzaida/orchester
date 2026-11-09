@@ -42,6 +42,7 @@ const RESPONSIBILITY: Spec = Spec::new("profile-responsibility", "team_new.profi
 const CLI: Spec = Spec::new("profile-cli", "team_new.profile.cli")
   .sub("team_new.profile.cliSub")
   .required();
+const CLI_LOCAL: Spec = Spec::new("profile-cli", "team_new.profile.cli").required();
 const MODEL: Spec = Spec::new("profile-model", "team_new.profile.model").required();
 const EFFORT: Spec = Spec::new("profile-effort", "team_new.profile.effort");
 const CONNECTION: Spec =
@@ -157,7 +158,7 @@ impl Fields {
     }
     rows.push(fields::row(
       ctx,
-      &LISTS,
+      if local { &LISTS_LOCAL } else { &LISTS },
       None,
       rows::words(
         "team-new-profile-lists-value",
@@ -199,13 +200,15 @@ impl Fields {
   }
 
   fn cli_row(&self, ctx: &Ctx, shown: &Shown<'_>, options: Vec<(String, String)>, says: Option<Error>) -> Row {
+    // A team's CLI is a kind, never a connection, which its line says; a local profile names its connection apart.
+    let spec = if shown.mode.is_local() { &CLI_LOCAL } else { &CLI };
     fields::row(
       ctx,
-      &CLI,
+      spec,
       says.as_ref(),
       fields::select(
         ctx,
-        &CLI,
+        spec,
         &self.cli,
         options,
         ("team_new.profile.cliPlaceholder", says.is_some(), shown.locked),

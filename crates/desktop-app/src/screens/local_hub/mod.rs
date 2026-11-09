@@ -50,7 +50,7 @@ use self::{
 };
 use crate::{
   navigation::{Navigation, guard::LeaveGuard},
-  project::ShownProject,
+  project::{ShownProject, TeamRead},
   routes::{HubFilter, HubView, ProjectPage, Route},
   screens::team_hub::{create, list::LIST_WIDTH, model::Kind},
   services::Services,
@@ -370,6 +370,26 @@ impl LocalHubScreen {
         None => editing::panel(ctx, project, (entry, id)),
       },
     }
+  }
+}
+
+/// The page that makes a new profile, MCP server, instruction, skill or tool, which in a local project is the form of
+/// the hub (`Agents · v2` L3–L7): the route is replaced by it, in place, so Back and a reload land on the hub. A team's
+/// project keeps `old`, the page it has; while it is not known which the project is, the page waits.
+pub(in crate::screens) fn form_or(
+  ctx: &mut Ctx,
+  project: &ShownProject,
+  filter: HubFilter,
+  old: impl FnOnce(&mut Ctx) -> Element,
+) -> Element {
+  match project.feed.team.get() {
+    TeamRead::Read(None) => {
+      let form = Route::Project(project.open.project.id(), ProjectPage::hub(HubView::adding(filter)));
+      Navigation::of(ctx).replace(form);
+      loading("local-hub-form-opening", &ctx.t("local_hub.reading")).into()
+    }
+    TeamRead::Unread => loading("local-hub-form-opening", &ctx.t("local_hub.reading")).into(),
+    TeamRead::Read(Some(_)) | TeamRead::Failed(_) => old(ctx),
   }
 }
 
