@@ -82,15 +82,21 @@ pub fn all(db: &ProjectDb) -> Result<Vec<Task>, StoreError> {
   Ok(tasks)
 }
 
-/// The readable runs of team tasks that no record of this computer defines: a run of the old sharing stream that kept
-/// neither inputs nor a cached row of its task, so its task's key and title are unknown here. Oldest first.
-pub fn unrecorded_runs(db: &ProjectDb) -> Result<Vec<Run>, StoreError> {
+/// The runs of team tasks that no record of this computer defines, readable or not: a run of the old sharing stream
+/// that kept neither inputs nor a cached row of its task, so its task's key and title are unknown here. Oldest first
+/// within a task.
+pub fn unrecorded_listed(db: &ProjectDb) -> Result<Vec<ListedRun<RunStoreError>>, StoreError> {
   let mut unrecorded = Vec::new();
   for id in db.team_task_ids()? {
     if task_of(db, id)?.is_none() {
-      let runs = db.runs_of_task(id).map_err(run_store_error)?;
-      unrecorded.extend(runs.into_iter().flatten());
+      unrecorded.extend(db.runs_of_task(id).map_err(run_store_error)?);
     }
   }
   Ok(unrecorded)
+}
+
+/// [`unrecorded_listed`] without the runs that cannot be read, for what only a run that can be read can be doing: a run
+/// that cannot be read cannot be working or waiting.
+pub fn unrecorded_runs(db: &ProjectDb) -> Result<Vec<Run>, StoreError> {
+  Ok(unrecorded_listed(db)?.into_iter().flatten().collect())
 }

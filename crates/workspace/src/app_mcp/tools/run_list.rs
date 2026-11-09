@@ -9,10 +9,11 @@ use std::{
 
 use orchester_core::{
   id::{ProjectId, RunId, StepExecutionId},
-  run::{Run, RunNumber},
+  run::{ListedRun, RunNumber},
   task::Task,
   tokens::TokenBudget,
 };
+use orchester_store::RunStoreError;
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -36,6 +37,7 @@ use crate::{
     history::{RunRecord, runs_of},
     recorded::{self, task_of},
     slot_wait::{slot_waits, waiting_steps},
+    unreadable::Unreadable,
   },
 };
 
@@ -85,7 +87,7 @@ pub async fn list_runs(services: &Services, args: ListRuns, translate: &Translat
           (task.into_iter().collect(), Vec::new())
         }
         (Some(named), None) => (vec![find_task(db, named)?], Vec::new()),
-        (None, _) => (recorded::all(db)?, recorded::unrecorded_runs(db)?),
+        (None, _) => (recorded::all(db)?, recorded::unrecorded_listed(db)?),
       };
       let tasks = tasks
         .into_iter()
@@ -122,7 +124,9 @@ pub async fn list_runs(services: &Services, args: ListRuns, translate: &Translat
         )
       })
     });
-    listed.chain(unrecorded.iter().map(unrecorded_json)).collect()
+    listed
+      .chain(unrecorded.iter().map(|run| unrecorded_json(run, translate)))
+      .collect()
   });
   // Newest first across tasks and projects; a run that cannot be read has no time and comes last.
   runs.sort_by_key(|run| Reverse(run["created_at"].as_i64()));
@@ -132,7 +136,11 @@ pub async fn list_runs(services: &Services, args: ListRuns, translate: &Translat
 }
 
 /// A project's tasks with their runs, and the place of each run that joined the merge queue.
-type Listed = (Vec<(Task, Vec<RunRecord>)>, HashMap<RunId, Value>, Vec<Run>);
+type Listed = (
+  Vec<(Task, Vec<RunRecord>)>,
+  HashMap<RunId, Value>,
+  Vec<ListedRun<RunStoreError>>,
+);
 
 /// The `limit` runs of `read` the answer gives, newest first as it sorts them: the items' order, then by when they
 /// started, a run that cannot be read last.
@@ -172,8 +180,29 @@ fn run_json(
 }
 
 /// A run of a team task that no record of this computer defines: its id, number, state and tokens as stored, and
-/// `unrecorded`, with no task, phase, detail, delivery or link, which all need the task's key.
-fn unrecorded_json(run: &Run) -> Value {
+/// `unrecorded`, with no task, phase, detail, delivery or link, which all need the task's key. A run that cannot be
+/// read has its id, number and why alone, as an ordinary task's does.
+fn unrecorded_json(listed: &ListedRun<RunStoreError>, translate: &Translate) -> Value {
+  let run = match listed {
+    Ok(run) => run,
+    Err(unreadable) => {
+      let unreadable = Unreadable::of(unreadable);
+      return json!({
+        "id": unreadable.id.to_string(),
+        "number": unreadable.number.map(RunNumber::get),
+        "task": null,
+        "unrecorded": true,
+        "phase": null,
+        "status": null,
+        "delivery": null,
+        "detail": translate.text(&unreadable.title()),
+        "tokens": null,
+        "created_at": null,
+        "changed_at": null,
+        "link": null,
+      });
+    }
+  };
   json!({
     "id": run.id().to_string(),
     "number": run.number().get(),

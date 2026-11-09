@@ -197,3 +197,23 @@ fn team_mcp_tools_on_a_run_with_no_inputs_and_no_row_refuse_it_as_unrecorded() {
     assert_eq!(checkout.refused(tool, args), "team_task_unrecorded", "{tool}");
   }
 }
+
+#[test]
+fn team_mcp_an_unreadable_run_of_an_unrecorded_team_task_is_listed_with_its_reason() {
+  let (checkout, _server, _task, run) = legacy();
+  rusqlite::Connection::open(checkout.root().join(".orchester/orchester.db"))
+    .expect("open")
+    .execute("UPDATE runs SET snapshot = 'not json' WHERE id = ?1", [run.to_string()])
+    .expect("the run is unreadable");
+
+  let listed = checkout
+    .call("list_runs", &json!({"project": "Kontur"}))
+    .expect("listed");
+  let runs = listed["runs"].as_array().expect("runs");
+  assert_eq!(runs.len(), 1, "{listed}");
+  assert_eq!(runs[0]["id"], run.to_string().as_str());
+  assert_eq!(runs[0]["unrecorded"], true);
+  assert_eq!(runs[0]["status"], json!(null));
+  assert_eq!(runs[0]["task"], json!(null));
+  assert_eq!(runs[0]["detail"], "runs.unreadable.title", "{listed}");
+}
