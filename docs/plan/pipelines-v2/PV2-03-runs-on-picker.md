@@ -9,7 +9,7 @@
 ## Goal
 
 The compact picker of K1 `lCApz` and K2 `rjPcV` (component `Runs on picker` `ZcGGy`), 300 wide instead of today's
-640 × 320, as one component that the step editor opens (PV2-08) and the orchestrator chat may later adopt (PV2-15).
+640 × 320, as one component the orchestrator chat opens (PV2-15). (A step chooses an agent, not a model: PV2-08.)
 
 Today's picker lives in `crates/desktop-app/src/screens/orchestrator/runs_on/` (rail, header, models with Search,
 effort, foot, keys, picking). Reuse its data and keyboard handling; do not change the orchestrator's chip or picker in
