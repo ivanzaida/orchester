@@ -64,7 +64,8 @@ pub(super) fn row(ctx: &Ctx, entry: &Entry, shown: &Shown<'_>) -> Element {
     .describe("kind", format!("{:?}", entry.kind))
     .child(mark(ctx, entry, unsaved))
     .child(text(ctx, entry, shown, (&id, unsaved)))
-    .with_children(tag(ctx, entry, shown.filter, &id));
+    .with_children(tag(ctx, entry, shown.filter, &id))
+    .with_children(version(entry, shown.filter, &id));
   if chosen {
     button
       .background(ExtraColor::Hover.role())
@@ -129,6 +130,20 @@ fn tag(ctx: &Ctx, entry: &Entry, filter: HubFilter, id: &str) -> Option<Row> {
     words::form_key(entry.form?)
   };
   Some(tag_chip(&format!("{id}-tag"), &ctx.t(key)))
+}
+
+/// The version at a row's end (`Meta` in L1), under a kind's own filter: the latest published; an MCP server has none.
+fn version(entry: &Entry, filter: HubFilter, id: &str) -> Option<Text> {
+  if matches!(filter, HubFilter::All | HubFilter::Archived) {
+    return None;
+  }
+  Some(
+    Text::new(&entry.number?.to_string())
+      .id(format!("{id}-version"))
+      .variant(HubText::RowLine.role())
+      .color(PaletteColor::TextMuted)
+      .nowrap(),
+  )
 }
 
 const fn group_name(group: Group) -> &'static str {

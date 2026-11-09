@@ -5,9 +5,17 @@
 //! profile's ([`crate::screens::team_hub::profile`]) over the local profile store: a profile still names its
 //! connection, and choosing one publishes the next version on it
 //! ([`use_connection`](orchester_workspace::agents::local_connection::use_connection)). The rest of the profile is
-//! edited in its editor, which *Edit* opens: the local draft, *Publish vN* and *Versions* are the editor's.
+//! edited in place, as the design draws it ([`table`], [`pick`], [`servers`]): the CLI, the model, the reasoning effort
+//! and the MCP servers are selects, each choice a save of the profile's local draft ([`edit`]), and while it has a
+//! draft the panel says so and its bar is *Publish vN* and *Discard draft* ([`draft`]), as the team hub's edit parts
+//! are. The design draws no way to the fields these rows do not (role, permissions, instructions): *More settings…*,
+//! at the head of *Profile*, opens the profile's editor for them.
 
+mod draft;
+mod edit;
+mod pick;
 mod ready;
+mod servers;
 mod table;
 
 use std::sync::Arc;
@@ -49,6 +57,7 @@ use super::{
   words::kind_where_key,
 };
 use crate::{
+  mcp::input_gate::{Guarded, InputGate, input_may_decide},
   navigation::Navigation,
   project::ShownProject,
   routes::{AccountsView, AgentTab, HubFilter, ProjectPage, Route},
@@ -57,7 +66,7 @@ use crate::{
     team_hub::{
       actions::Busy,
       bar::bar,
-      panel::{body, edit_button, head_named},
+      panel::{body, head_named},
       profile::{
         fix::Offer,
         parts::{Part, State},
@@ -102,6 +111,16 @@ struct ProfilePanel {
   chosen: Signal<String>,
   /// Makes the connection (second) the profile's (first) next version.
   take: FutureAction<(ResourceId, ConnectionId), (), Message>,
+  /// Saves a field into the draft, or publishes it.
+  save: edit::Save,
+  /// What a write would widen, which waits for the person.
+  pending: edit::Pending,
+  /// How many writes ended: the selects show what is stored again after each.
+  settled: Signal<u64>,
+  /// *Discard draft* asks.
+  discarding: Signal<bool>,
+  /// Who pressed Publish: what it changes in the role's prompts is a person's, or automation's under their consent.
+  gate: Option<InputGate>,
 }
 
 impl Component for ProfilePanel {
@@ -120,9 +139,18 @@ impl Component for ProfilePanel {
         Ok(())
       }
     });
+    let profile = ctx.props::<Props>().id;
+    let save = edit::save(ctx, project.open.repo_root.clone(), profile);
+    let (pending, settled) = (ctx.signal(None), ctx.signal(0_u64));
+    edit::follow(ctx, &save, &pending, &settled, id);
     Self {
       chosen: ctx.signal(String::new()),
       take,
+      save,
+      pending,
+      settled,
+      discarding: ctx.signal(false),
+      gate: ctx.use_context::<InputGate>(),
     }
   }
 
@@ -144,6 +172,23 @@ impl Component for ProfilePanel {
     let fix = pinned_fix(profile, target, &parts);
     let press = |fix: &Fix| self.press(fix, (&project, id), target.map(|choice| choice.id), &navigation);
     let head_end = head_end(ctx, &project, &entry, id);
+    let widening = self
+      .pending
+      .get()
+      .map(|asked| edit::question(ctx, &asked, (&self.save, &self.pending), &self.settled));
+    let rows = table::Rows {
+      profile,
+      chosen: &self.chosen,
+      on_edit: self.on_edit(),
+      settled: self.settled.get(),
+      busy: busy != Busy::Idle,
+      after: vec![
+        Row::new().flex(1.0).into(),
+        more_settings(ctx, &project, id, &navigation),
+      ],
+    };
+    let discard = (self.discarding.get() && profile.draft)
+      .then(|| draft::discard_question(ctx, (&project, id, &entry), (&self.discarding, &self.settled)));
     let body = body()
       .child(head_named(
         &entry.name,
@@ -154,15 +199,22 @@ impl Component for ProfilePanel {
         Some(head_end),
       ))
       .child(chips_of(chips(ctx, &entry, profile, &parts), used_by(ctx, profile)))
-      .child(table::section(ctx, profile, &self.chosen))
+      .with_children(draft::note(ctx, profile, &entry))
+      .with_children(widening)
+      .child(table::section(ctx, rows))
       .child(section(
         ctx,
         (&ctx.t("local_hub.readiness.title"), &parts),
         missing,
         (&press, busy),
       ))
-      .with_children(self.refusal(ctx));
-    let bar = fix.map(|fix| pinned(ctx, &entry, (profile, target, &fix), press(&fix), busy));
+      .with_children(self.refusal(ctx))
+      .with_children(discard);
+    let bar = if profile.draft {
+      Some(draft::bar(ctx, &entry, (self.publish(), self.discard()), busy))
+    } else {
+      fix.map(|fix| pinned(ctx, &entry, (profile, target, &fix), press(&fix), busy))
+    };
     frame(entry.what, body, bar)
   }
 }
@@ -171,11 +223,42 @@ impl ProfilePanel {
   fn busy(&self, reading: bool) -> Busy {
     if reading {
       Busy::Reading
-    } else if self.take.state().get().is_pending() {
+    } else if self.take.state().get().is_pending() || self.save.state().get().is_pending() {
       Busy::Taking
     } else {
       Busy::Idle
     }
+  }
+
+  /// What changing a field does: saves it into the draft, unless a question about another change waits.
+  fn on_edit(&self) -> table::OnEdit {
+    let (save, pending) = (self.save.clone(), self.pending.clone());
+    Arc::new(move |change| {
+      pending.set(None);
+      save.run(edit::Ask {
+        what: edit::Do::Edit(change),
+        allowed: Vec::new(),
+      });
+    })
+  }
+
+  /// *Publish vN*: who pressed it decides what publishing changes in the role's prompts.
+  fn publish(&self) -> Press {
+    let (save, pending, gate) = (self.save.clone(), self.pending.clone(), self.gate.clone());
+    Press::run(move || {
+      let decided = input_may_decide(gate.as_ref(), Guarded::PermissionWidening);
+      pending.set(None);
+      save.run(edit::Ask {
+        what: edit::Do::Publish { decided },
+        allowed: Vec::new(),
+      });
+    })
+  }
+
+  /// *Discard draft*, which asks first.
+  fn discard(&self) -> Press {
+    let discarding = self.discarding.clone();
+    Press::run(move || discarding.set(true))
   }
 
   /// The connection the select holds, else the first one listed: the one *Use* names and keeps.
@@ -215,8 +298,12 @@ impl ProfilePanel {
 
   /// Why the last choice did nothing, as the workspace said.
   fn refusal(&self, ctx: &Ctx) -> Option<Element> {
-    let state = self.take.state().get();
-    let error = state.error.as_ref().filter(|_| !state.is_pending())?;
+    let (take, save) = (self.take.state().get(), self.save.state().get());
+    let error = take
+      .error
+      .as_ref()
+      .filter(|_| !take.is_pending())
+      .or_else(|| save.error.as_ref().filter(|_| !save.is_pending()))?;
     Some(field_error("local-hub-profile-error", &message_text(ctx, error)).into())
   }
 }
@@ -365,16 +452,8 @@ fn used_by(ctx: &Ctx, profile: &LocalProfile) -> Option<Arc<str>> {
     .then(|| ctx.t_args("local_hub.panel.usedBy", [("names", profile.pipelines.join(", "))]))
 }
 
-/// *Edit*, *Versions* and the … menu, 8 apart.
+/// *Versions* and the … menu, 8 apart.
 fn head_end(ctx: &mut Ctx, project: &ShownProject, entry: &Entry, id: ResourceId) -> Element {
-  let navigation = Navigation::of(ctx);
-  let edit = edit_button(
-    ctx,
-    navigation.to(Route::Project(
-      project.open.project.id(),
-      ProjectPage::Agent(id, AgentTab::default()),
-    )),
-  );
   let versions = versions_button(
     ctx,
     VersionsProps {
@@ -397,8 +476,23 @@ fn head_end(ctx: &mut Ctx, project: &ShownProject, entry: &Entry, id: ResourceId
   Row::new()
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(edit)
     .child(versions)
     .child(more)
     .into()
+}
+
+/// *More settings…*, at the head of *Profile*: the profile's editor, for the fields the rows do not draw. The design
+/// draws no way to them, so this is a quiet button and nothing more.
+fn more_settings(ctx: &Ctx, project: &ShownProject, id: ResourceId, navigation: &Navigation) -> Element {
+  ActionButton::new(
+    "local-hub-profile-more-settings",
+    ButtonKind::Ghost,
+    ctx.t("local_hub.profile.moreSettings").to_string(),
+  )
+  .small()
+  .opens(navigation.to(Route::Project(
+    project.open.project.id(),
+    ProjectPage::Agent(id, AgentTab::default()),
+  )))
+  .into()
 }

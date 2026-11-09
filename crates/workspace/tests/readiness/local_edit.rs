@@ -137,25 +137,13 @@ fn readiness_local_edit_a_model_resets_the_effort_and_one_the_connection_lacks_i
   let (fixture, builder, _) = project();
   edit(&fixture.root, builder, &Edit::Effort(Some("low".into())), &[]).expect("effort");
 
-  edit(
-    &fixture.root,
-    builder,
-    &Edit::Model(ModelId::new("gpt-b").expect("model")),
-    &[],
-  )
-  .expect("model");
+  edit(&fixture.root, builder, &Edit::Model("gpt-b".to_owned()), &[]).expect("model");
   let read = hub(&fixture);
   let sheet = read.profile(builder).expect("a sheet");
   assert_eq!(sheet.model, "gpt-b");
   assert_eq!(sheet.effort, None, "a new model starts at the CLI's default effort");
 
-  let refused = edit(
-    &fixture.root,
-    builder,
-    &Edit::Model(ModelId::new("nope").expect("model")),
-    &[],
-  )
-  .expect_err("not offered");
+  let refused = edit(&fixture.root, builder, &Edit::Model("nope".to_owned()), &[]).expect_err("not offered");
   assert_eq!(refused.key, "agents.localEdit.modelNotOffered");
   let refused = edit(&fixture.root, builder, &Edit::Effort(Some("max".into())), &[]).expect_err("not offered");
   assert_eq!(refused.key, "agents.localEdit.effortNotOffered");

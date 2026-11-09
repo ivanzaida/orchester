@@ -1,7 +1,9 @@
 //! *Profile* of a local profile (`Profile` `Gk3js` in L1): the CLI it runs with, the connection it runs on, its model
-//! and reasoning effort, the MCP servers it chooses and the secrets those take. Only the connection is chosen in the
-//! panel, among the connections of the profile's CLI; the rest is what its editor sets (*Edit*), shown as the team's
-//! panel shows it.
+//! and reasoning effort, the MCP servers it chooses and the secrets those take. The CLI, the model, the effort and the
+//! servers are selects in place: each choice is saved into the draft ([`super::edit`]). The connection is a select too,
+//! applied by the pinned *Use … for …* as the design draws it; the secrets are the servers' and only shown.
+
+use std::sync::Arc;
 
 use lurq::{
   app::{
@@ -13,11 +15,17 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_workspace::agents::local_hub::LocalProfile;
+use orchester_core::id::ConnectionId;
+use orchester_workspace::agents::{local_edit::Edit, local_hub::LocalProfile};
 
+use super::{
+  pick::{self, Pick},
+  servers,
+};
 use crate::{
   screens::team_hub::{
     profile::from_team::effort_words,
+    row::tag_chip,
     rows::{self, Sub},
     words::cli_key,
   },
@@ -29,45 +37,35 @@ use crate::{
   },
 };
 
-pub(super) fn section(ctx: &Ctx, profile: &LocalProfile, chosen: &Signal<String>) -> Column {
-  let mut rows = Vec::new();
-  if let Some(cli) = profile.cli {
-    rows.push(rows::row(
-      "local-hub-profile-cli",
-      &ctx.t("team_hub.profile.agentCli"),
-      None,
-      rows::words("local-hub-profile-cli-value", &ctx.t(cli_key(cli))),
-    ));
+/// What changing a field does.
+pub(super) type OnEdit = Arc<dyn Fn(Edit) + Send + Sync>;
+
+/// What the section needs of the panel.
+pub(super) struct Rows<'a> {
+  pub profile: &'a LocalProfile,
+  /// The connection the person chose in the select, by id; empty while none is.
+  pub chosen: &'a Signal<String>,
+  pub on_edit: OnEdit,
+  /// How many writes ended: a select remounts on what is stored after each.
+  pub settled: u64,
+  /// A write is under way, or the hub is read again: nothing is changed now.
+  pub busy: bool,
+  /// What follows the label at the head of the section: the way to the fields the rows do not draw.
+  pub after: Vec<Element>,
+}
+
+pub(super) fn section(ctx: &mut Ctx, rows: Rows<'_>) -> Column {
+  let profile = rows.profile;
+  let mut list = Vec::new();
+  if profile.cli.is_some() || !profile.options.clis.is_empty() {
+    list.push(cli(ctx, &rows));
   }
-  rows.push(connection(ctx, profile, chosen));
-  rows.push(rows::row(
-    "local-hub-profile-model",
-    &ctx.t("team_hub.profile.model"),
-    None,
-    rows::mono("local-hub-profile-model-value", &profile.model),
-  ));
-  let effort = profile.effort.as_deref().map_or_else(
-    || ctx.t("local_hub.profile.effortDefault").to_string(),
-    |effort| effort_words(ctx, effort),
-  );
-  rows.push(rows::row(
-    "local-hub-profile-effort",
-    &ctx.t("team_hub.profile.effort"),
-    None,
-    rows::words("local-hub-profile-effort-value", &effort),
-  ));
-  rows.push(rows::row(
-    "local-hub-profile-mcp",
-    &ctx.t("team_hub.profile.mcpServers"),
-    None,
-    listed(
-      ctx,
-      "local-hub-profile-mcp-value",
-      profile.mcp_servers.iter().map(|(_, name)| name.clone()),
-    ),
-  ));
+  list.push(connection(ctx, &rows));
+  list.push(model(ctx, &rows));
+  list.push(effort(ctx, &rows));
+  list.push(mcp_servers(ctx, &rows));
   if !profile.secrets.is_empty() {
-    rows.push(rows::row(
+    list.push(rows::row(
       "local-hub-profile-secrets",
       &ctx.t("team_hub.profile.secrets"),
       Some(Sub::quiet(ctx.t("team_hub.profile.secretsSub"))),
@@ -77,22 +75,177 @@ pub(super) fn section(ctx: &Ctx, profile: &LocalProfile, chosen: &Signal<String>
       ),
     ));
   }
-  rows::section("local-hub-profile", &ctx.t("local_hub.profile.title"), Vec::new(), rows)
+  rows::section("local-hub-profile", &ctx.t("local_hub.profile.title"), rows.after, list)
 }
 
-/// The names in tags, or that there are none.
-fn listed(ctx: &Ctx, id: &str, names: impl Iterator<Item = String>) -> Element {
-  let names: Vec<String> = names.collect();
-  if names.is_empty() {
-    return rows::words(id, &ctx.t("local_hub.profile.none"))
-      .color(PaletteColor::TextMuted)
-      .into();
-  }
-  rows::tags(id, names).into()
+/// *Agent CLI*: the CLIs the project has a connection for; another one runs the profile on its first connection.
+fn cli(ctx: &mut Ctx, rows: &Rows<'_>) -> Row {
+  let profile = rows.profile;
+  let clis = profile.options.clis.clone();
+  let options = clis
+    .iter()
+    .enumerate()
+    .map(|(index, cli)| (index.to_string(), ctx.t(cli_key(*cli)).to_string()))
+    .collect();
+  let value = profile
+    .cli
+    .and_then(|cli| clis.iter().position(|found| *found == cli))
+    .map_or_else(String::new, |index| index.to_string());
+  let edit = rows.on_edit.clone();
+  // An option's value is its index in `clis`, so a choice always parses and names one of them.
+  let on_pick: Pick = Arc::new(move |picked| {
+    if let Some(cli) = picked.parse::<usize>().ok().and_then(|index| clis.get(index)) {
+      edit(Edit::Cli(*cli));
+    }
+  });
+  let label = ctx.t("team_hub.profile.agentCli");
+  let select = pick::pick(
+    ctx,
+    pick::Props {
+      id: "local-hub-profile-cli-pick".to_owned(),
+      name: label.to_string(),
+      value,
+      options,
+      placeholder: Some(ctx.t("local_hub.profile.chooseCli").to_string()),
+      mono: false,
+      locked: rows.busy,
+      on_pick,
+    },
+    rows.settled,
+  );
+  rows::row("local-hub-profile-cli", &label, None, select)
+}
+
+/// *Model*: the models of its connection; none to choose from while the connection is gone.
+fn model(ctx: &mut Ctx, rows: &Rows<'_>) -> Row {
+  let profile = rows.profile;
+  let listed = &profile.options.models;
+  let options: Vec<(String, String)> = if listed.is_empty() {
+    vec![(profile.model.clone(), profile.model.clone())]
+  } else {
+    listed.iter().map(|model| (model.clone(), model.clone())).collect()
+  };
+  let edit = rows.on_edit.clone();
+  let on_pick: Pick = Arc::new(move |picked| edit(Edit::Model(picked)));
+  let label = ctx.t("team_hub.profile.model");
+  let select = pick::pick(
+    ctx,
+    pick::Props {
+      id: "local-hub-profile-model-pick".to_owned(),
+      name: label.to_string(),
+      value: profile.model.clone(),
+      options,
+      placeholder: None,
+      mono: true,
+      locked: rows.busy || listed.is_empty(),
+      on_pick,
+    },
+    rows.settled,
+  );
+  rows::row("local-hub-profile-model", &label, None, select)
+}
+
+/// *Reasoning effort*: the efforts its connection lists for its model, or the CLI's default.
+fn effort(ctx: &mut Ctx, rows: &Rows<'_>) -> Row {
+  let profile = rows.profile;
+  let default = ctx.t("local_hub.profile.effortDefault").to_string();
+  let mut options = vec![(String::new(), default)];
+  options.extend(
+    profile
+      .options
+      .efforts
+      .iter()
+      .map(|effort| (effort.clone(), effort_words(ctx, effort))),
+  );
+  let edit = rows.on_edit.clone();
+  let on_pick: Pick = Arc::new(move |picked| edit(Edit::Effort(Some(picked).filter(|effort| !effort.is_empty()))));
+  let label = ctx.t("team_hub.profile.effort");
+  let select = pick::pick(
+    ctx,
+    pick::Props {
+      id: "local-hub-profile-effort-pick".to_owned(),
+      name: label.to_string(),
+      value: profile.effort.clone().unwrap_or_default(),
+      options,
+      placeholder: None,
+      mono: false,
+      locked: rows.busy || profile.options.efforts.is_empty(),
+      on_pick,
+    },
+    rows.settled,
+  );
+  rows::row("local-hub-profile-effort", &label, None, select)
+}
+
+/// *MCP servers*: the ones it chooses in tags, and *Add*, a menu of the project's servers.
+fn mcp_servers(ctx: &mut Ctx, rows: &Rows<'_>) -> Row {
+  let profile = rows.profile;
+  let id = "local-hub-profile-mcp-value";
+  let chosen = profile.mcp_servers.iter().map(|(server, name)| servers::Item {
+    id: *server,
+    name: name.clone(),
+    chosen: true,
+  });
+  let others = profile.options.servers.iter().map(|(server, name)| servers::Item {
+    id: *server,
+    name: name.clone(),
+    chosen: false,
+  });
+  let items: Vec<servers::Item> = chosen.chain(others).collect();
+  let edit = rows.on_edit.clone();
+  let on_toggle: servers::Toggle = Arc::new(move |server: ConnectionId, choose| {
+    edit(if choose {
+      Edit::AddServer(server)
+    } else {
+      Edit::RemoveServer(server)
+    });
+  });
+  let tags: Vec<Element> = if profile.mcp_servers.is_empty() {
+    vec![
+      Text::new(&ctx.t("local_hub.profile.none"))
+        .id(format!("{id}-none"))
+        .variant(HubText::Value.role())
+        .color(PaletteColor::TextMuted)
+        .into(),
+    ]
+  } else {
+    profile
+      .mcp_servers
+      .iter()
+      .enumerate()
+      .map(|(index, (_, name))| tag_chip(&format!("{id}-{index}"), name).into())
+      .collect()
+  };
+  let add = (!items.is_empty()).then(|| {
+    servers::add(
+      ctx,
+      servers::Props {
+        items,
+        label: ctx.t("local_hub.profile.addServer"),
+        locked: rows.busy,
+        on_toggle,
+      },
+    )
+  });
+  let value = Row::new()
+    .id(id)
+    .width(Dimension::Pct(100.0))
+    .wrap()
+    .spacing(SpacingSize::Sm)
+    .align_items(Alignment::Center)
+    .with_children(tags)
+    .with_children(add);
+  rows::row(
+    "local-hub-profile-mcp",
+    &ctx.t("team_hub.profile.mcpServers"),
+    None,
+    value,
+  )
 }
 
 /// *Connection*: the one it runs on, chosen from the connections of its CLI when there are several or its own is gone.
-fn connection(ctx: &Ctx, profile: &LocalProfile, chosen: &Signal<String>) -> Row {
+fn connection(ctx: &Ctx, rows: &Rows<'_>) -> Row {
+  let profile = rows.profile;
   let id = "local-hub-profile-connection";
   let label = ctx.t("local_hub.profile.connection");
   let Some(cli) = profile.cli else {
@@ -122,15 +275,20 @@ fn connection(ctx: &Ctx, profile: &LocalProfile, chosen: &Signal<String>) -> Row
     ),
     ([only], Some(_)) => (None, only_one(ctx, profile, &only.name, &cli)),
     _ => (
-      Some(Sub {
-        words: ctx.t_args("local_hub.profile.ofItsKind", [("count", many.to_string())]),
-        color: if profile.current.is_none() {
-          PaletteColor::Warning
-        } else {
-          PaletteColor::TextMuted
-        },
+      Some(if profile.draft {
+        // Choosing a connection publishes the next version on it, which the draft's edits would go out with.
+        Sub::quiet(ctx.t("local_hub.profile.draftFirst"))
+      } else {
+        Sub {
+          words: ctx.t_args("local_hub.profile.ofItsKind", [("count", many.to_string())]),
+          color: if profile.current.is_none() {
+            PaletteColor::Warning
+          } else {
+            PaletteColor::TextMuted
+          },
+        }
       }),
-      select(ctx, profile, &cli, chosen),
+      select(ctx, profile, &cli, (rows.chosen, rows.busy || profile.draft)),
     ),
   };
   rows::row(id, &label, sub, value)
@@ -153,7 +311,7 @@ fn only_one(ctx: &Ctx, profile: &LocalProfile, name: &str, cli: &str) -> Element
 }
 
 /// The select of the connections of the CLI: the one chosen, else *Choose a Claude Code connection*.
-fn select(ctx: &Ctx, profile: &LocalProfile, cli: &str, chosen: &Signal<String>) -> Element {
+fn select(ctx: &Ctx, profile: &LocalProfile, cli: &str, (chosen, locked): (&Signal<String>, bool)) -> Element {
   let program = profile
     .cli
     .and_then(orchester_core::connection::AgentProvider::program_name);
@@ -177,12 +335,12 @@ fn select(ctx: &Ctx, profile: &LocalProfile, cli: &str, chosen: &Signal<String>)
       }
     })
     .collect();
-  SelectField::new(
+  let select = SelectField::new(
     "local-hub-profile-pick",
     ctx.t("local_hub.profile.connection"),
     chosen.clone(),
     options,
   )
-  .placeholder(ctx.t_args("team_hub.profile.choose", [("cli", cli)]))
-  .render(ctx)
+  .placeholder(ctx.t_args("team_hub.profile.choose", [("cli", cli)]));
+  if locked { select.locked() } else { select }.render(ctx)
 }

@@ -309,12 +309,16 @@ fn local_hub_a_profile_whose_connection_is_gone_asks_which_of_its_kind_runs_it()
   assert_eq!(agents.text("local-hub-fix-use"), "Use Claude 2 for Builder");
   for part in [
     "local-hub-profile-pick",
-    "local-hub-profile-model",
-    "team-hub-edit",
+    "local-hub-profile-model-pick",
+    "local-hub-profile-more-settings",
     "local-hub-profile-versions",
   ] {
     assert!(agents.exists(part), "{part} is the panel's own");
   }
+  assert!(
+    !agents.exists("team-hub-edit"),
+    "the profile has no Edit button: its fields are in place"
+  );
   for page in ["agent-role", "agent-crumb", "agents-hub-title"] {
     assert!(!agents.exists(page), "{page} belongs to the editor's page");
   }

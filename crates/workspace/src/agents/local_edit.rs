@@ -29,8 +29,8 @@ pub enum Edit {
   /// Runs with another CLI: on the first connection of it the project has, on that connection's first model, at the
   /// CLI's default effort, with the access the new CLI can keep.
   Cli(AgentProvider),
-  /// Another model of its connection, at the CLI's default effort.
-  Model(ModelId),
+  /// Another model of its connection, by its id, at the CLI's default effort.
+  Model(String),
   /// Another reasoning effort of its model; `None` leaves it to the CLI.
   Effort(Option<String>),
   /// Chooses an MCP server of the project as well.
@@ -187,11 +187,12 @@ impl<'a> Fields<'a> {
     Ok(())
   }
 
-  fn use_model(&mut self, model: &ModelId) -> Result<(), Message> {
+  fn use_model(&mut self, model: &str) -> Result<(), Message> {
     let connection = self
       .connection
       .ok_or_else(|| Message::new("agents.localEdit.noConnection"))?;
-    if model.as_str() != self.model && !listed_models(connection).contains(model) {
+    let model = ModelId::new(model).map_err(|_| Message::new("errors.modelInvalid"))?;
+    if model.as_str() != self.model && !listed_models(connection).contains(&model) {
       return Err(Message::new("agents.localEdit.modelNotOffered"));
     }
     model.as_str().clone_into(&mut self.model);

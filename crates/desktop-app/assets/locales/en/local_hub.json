@@ -146,7 +146,22 @@
       "version": "{{version}} · published {{date}}",
       "useHint": "Asked once per profile; a connection added later doesn't change it",
       "openHint": "Opens the server's panel, where it is set",
-      "addValueAction": "Set {{server}}'s secret value"
+      "addValueAction": "Set {{server}}'s secret value",
+      "draftFirst": "Publish or discard the draft first",
+      "addServer": "Add",
+      "moreSettings": "More settings…"
+    },
+    "draft": {
+      "saved": "Draft on {{version}} · saved {{time}} · only on this computer",
+      "sub": "Publishing makes {{next}} of {{name}}",
+      "publish": "Publish {{version}}",
+      "discard": "Discard draft",
+      "hint": "Runs keep the version they started on"
+    },
+    "edit": {
+      "widenTitle": "Allow these changes to the agent profile?",
+      "allow": "Allow and continue",
+      "keep": "Keep editing"
     },
     "ready": {
       "ready": "Ready",
