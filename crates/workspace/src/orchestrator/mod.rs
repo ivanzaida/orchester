@@ -39,6 +39,7 @@ pub mod search;
 pub mod send;
 pub mod settings;
 pub mod stalls;
+pub mod team_status;
 mod told;
 pub mod tools;
 pub mod waits;

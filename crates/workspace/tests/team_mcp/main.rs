@@ -40,6 +40,7 @@ mod team_controls;
 mod team_runs;
 mod tools;
 mod unrecorded;
+mod watch_ends;
 
 use std::{
   collections::HashMap,

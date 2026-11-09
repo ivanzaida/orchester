@@ -2333,6 +2333,7 @@
           "review": "Review"
         }
       },
+      "unreadable": "Can't read the status of a team task from the team server now — watching goes on and ends once it can be read",
       "rest": {
         "one": "{{count}} more task with nothing under way",
         "other": "{{count}} more tasks with nothing under way"

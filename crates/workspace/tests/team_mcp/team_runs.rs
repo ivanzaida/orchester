@@ -1,6 +1,8 @@
 //! A team task's run as this computer keeps it: the task's identity and the run with the inputs the team server
 //! accepted, and no definition of the task (no copy the old sharing stream cached).
 
+use std::sync::Arc;
+
 use orchester_core::{
   connection::AgentProvider,
   id::{RunId, StepExecutionId},
@@ -11,9 +13,10 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, TeamFence};
+use parking_lot::Mutex;
 use serde_json::json;
 
-use crate::{Checkout, team_server::TeamServer, tools::server};
+use crate::{Checkout, reads, team_server::TeamServer, tools::server};
 
 /// A checkout linked to the fake team server whose team task `KON-7` was started through `run_task` and whose run the
 /// runner then recorded, running.
@@ -21,6 +24,8 @@ pub(crate) struct Started {
   pub(crate) checkout: Checkout,
   pub(crate) server: TeamServer,
   pub(crate) run: RunId,
+  /// What the server's routes saw and what a test lays over the task they read.
+  pub(crate) seen: Arc<Mutex<reads::Seen>>,
 }
 
 pub(crate) fn started() -> Started {
@@ -34,7 +39,7 @@ pub(crate) fn started_without_record() -> Started {
 }
 
 fn started_with(record: bool) -> Started {
-  let (server, _seen) = server();
+  let (server, seen) = server();
   let config = server.state().config.clone();
   let checkout = Checkout::prepared(Some(&server), &[], |db| {
     crate::ready::team_ready(db, &config, AgentProvider::CodexCli);
@@ -49,7 +54,12 @@ fn started_with(record: bool) -> Started {
     checkout.db().tasks().expect("tasks").is_empty(),
     "the team task has no definition here"
   );
-  Started { checkout, server, run }
+  Started {
+    checkout,
+    server,
+    run,
+    seen,
+  }
 }
 
 /// Records the run of the one team start the way the runner does, and starts it; with `record`, records it as the

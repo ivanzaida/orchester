@@ -13,7 +13,7 @@ use std::{
 use orchester_api::ReferenceTarget;
 use orchester_core::{
   connection::AgentProvider,
-  id::{ConnectionId, ResourceId},
+  id::{ConnectionId, ResourceId, TaskId},
   resource::{AgentProfile, TeamAgentProfile},
 };
 use parking_lot::Mutex;
@@ -45,6 +45,18 @@ pub struct Seen {
   /// The number of the one task `KON-7` the server holds: 7, unless a test gives it another to collide with a local
   /// key.
   pub task_number: u32,
+  /// Other tasks the server holds beside `KON-7`: the fields laid over a copy of it, including `id`, `number` and
+  /// `key`.
+  pub more_tasks: Vec<Value>,
+  /// A task whose own route the server fails with `500`.
+  pub broken_task: Option<TaskId>,
+  /// How many tasks one page of the task list holds; 0 for all of them on one page.
+  pub page_size: usize,
+  /// How many `GET tasks/{id}` and task list requests the server answered.
+  pub task_gets: usize,
+  pub task_lists: usize,
+  /// The server answers `GET capabilities` with `404`, as for a project the caller is no member of.
+  pub no_member: bool,
 }
 
 /// The routes, and what they saw.
@@ -180,12 +192,16 @@ fn route(
   let page = |items: Vec<Value>| json!({"items": items, "next": null, "cursor": "10"});
   let (status, body) = match (request.method.as_str(), segments.as_slice()) {
     ("GET", ["subscription"]) => return subscription(stream),
-    (_, ["task-list"]) => {
-      let search = request.json()["filters"]["search"].as_str().map(str::to_lowercase);
-      let found = search.is_none_or(|search| format!("kon-{number} say hello").contains(&search));
-      (200, page(if found { vec![task_read()] } else { Vec::new() }))
+    ("GET", ["capabilities"]) => member_capabilities(seen, project),
+    (_, ["task-list"]) => (200, task_list(seen, request, (number, &task_read))),
+    ("GET", ["tasks", id]) if seen.lock().broken_task.is_some_and(|broken| broken.to_string() == *id) => {
+      seen.lock().task_gets += 1;
+      (500, json!({"error": "internal", "message": "Broken"}))
     }
-    ("GET", ["tasks", id]) if *id == task.to_string() => (200, task_read()),
+    ("GET", ["tasks", id]) if *id == task.to_string() => {
+      seen.lock().task_gets += 1;
+      (200, task_read())
+    }
     ("GET", ["tasks", _]) => (404, json!({"error": "not_found", "message": "Not found"})),
     (_, ["module-list"]) => (200, page(vec![summary()])),
     ("GET", ["modules", id]) if *id == module.to_string() => (200, summary()),
@@ -246,4 +262,42 @@ fn subscription(stream: &mut TcpStream) -> bool {
   let mut rest = [0; 64];
   while matches!(stream.read(&mut rest), Ok(read) if read > 0) {}
   true
+}
+
+/// `POST …/task-list`: the tasks the request's module filter keeps, `KON-7` when its search finds it, then the more
+/// tasks a test laid out, one page of `Seen::page_size` from the offset the cursor names.
+fn task_list(seen: &Mutex<Seen>, request: &Request, (number, task_read): (u32, &dyn Fn() -> Value)) -> Value {
+  seen.lock().task_lists += 1;
+  let body = request.json();
+  let search = body["filters"]["search"].as_str().map(str::to_lowercase);
+  let found = search.is_none_or(|search| format!("kon-{number} say hello").contains(&search));
+  let mut tasks = if found { vec![task_read()] } else { Vec::new() };
+  let more_tasks = seen.lock().more_tasks.clone();
+  for fields in more_tasks {
+    let mut more = task_read();
+    more
+      .as_object_mut()
+      .expect("a task")
+      .extend(fields.as_object().expect("fields").clone());
+    tasks.push(more);
+  }
+  let modules = body["filters"]["modules"].as_array().cloned().unwrap_or_default();
+  tasks.retain(|task| modules.is_empty() || modules.contains(&task["module"]));
+  let size = seen.lock().page_size;
+  let from: usize = body["page"]["after"]
+    .as_str()
+    .map_or(0, |after| after.parse().expect("the cursor is an offset"));
+  let size = if size == 0 { tasks.len() } else { size };
+  let items: Vec<Value> = tasks.iter().skip(from).take(size).cloned().collect();
+  let next = (from + size < tasks.len()).then(|| (from + size).to_string());
+  json!({"items": items, "next": next, "cursor": "10"})
+}
+
+/// `GET …/capabilities`, which is `404` when a test made the caller no member of the project.
+fn member_capabilities(seen: &Mutex<Seen>, project: impl serde::Serialize) -> (u16, Value) {
+  if seen.lock().no_member {
+    (404, json!({"error": "not_found", "message": "Not found"}))
+  } else {
+    (200, capabilities(project))
+  }
 }
