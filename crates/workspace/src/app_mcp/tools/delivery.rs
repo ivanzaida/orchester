@@ -52,7 +52,7 @@ pub async fn get_delivery(services: &Services, args: GetDelivery) -> Result<Valu
   // A team project's tasks and modules are its server's, and so is the work that is left in them: neither a forecast
   // nor the rest of the view is computed from this computer's rows, which would be partial. A module is still told
   // apart from one the server has not.
-  if let Some(team) = team::of(services, &args.project).await? {
+  if let Some(team) = team::of_reading(services, &args.project).await? {
     let tool = match &args.module {
       Some(named) => {
         team::get_module(services, &team, named).await?;
