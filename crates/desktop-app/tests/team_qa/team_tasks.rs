@@ -168,7 +168,7 @@ fn team_qa_tasks_a_members_board_has_no_quick_add() {
 }
 
 #[test]
-fn team_qa_tasks_a_members_row_menu_only_opens_and_copies_the_key() {
+fn team_qa_tasks_a_members_row_menu_offers_only_what_their_claim_allows() {
   let (mut window, _server) = listed(State::Member);
   // The row's actions show under the pointer once the row has its place, which can take a pass after it shows.
   window.until("the row's menu", |window| {
@@ -185,7 +185,9 @@ fn team_qa_tasks_a_members_row_menu_only_opens_and_copies_the_key() {
   window.until("its rows", |window| window.texts("task-more-KON-12-panel").is_some());
   assert!(window.texts("task-more-KON-12-open").is_some());
   assert!(window.texts("task-more-KON-12-copy").is_some());
-  for change in ["done", "cancel", "reopen", "delete"] {
+  // KON-12 is the member's own: they close or block it (decision D4); Cancel, Reopen and Delete are not theirs.
+  assert!(window.texts("task-more-KON-12-done").is_some());
+  for change in ["cancel", "reopen-todo", "reopen-backlog", "delete"] {
     let id = format!("task-more-KON-12-{change}");
     assert!(window.texts(&id).is_none(), "a member has no {change}");
   }

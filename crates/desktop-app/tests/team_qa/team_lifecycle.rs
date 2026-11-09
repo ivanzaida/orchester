@@ -13,14 +13,15 @@ use orchester_app::{
 };
 use orchester_core::project::TaskKey;
 
-use super::{prepared, team::State};
+use super::{on_the_tasks_list, prepared, team::State};
 
 fn task_route(key: &str) -> Route {
   let key: TaskKey = key.parse().expect("a task key");
   Route::Project(project_id(), ProjectPage::task(key, TaskView::Summary, false))
 }
 
-/// The window on the task `key` in `state`, once its claim line shows.
+/// The   window.until("the server to take the move", |_| server.task_now(25).is_some_and(|(revision, ..)| revision ==
+/// 2)); on the task `key` in `state`, once its claim line shows.
 fn on(state: State, key: &str) -> (Window, TeamServer) {
   let (mut window, server) = prepared(state);
   go(&mut window, key);
@@ -160,4 +161,96 @@ fn team_qa_lifecycle_the_holder_blocks_and_clears_their_task() {
     window.texts("task-team-blocked-title").is_none()
   });
   assert!(offered(&mut window, "task-team-block"));
+}
+
+/// The Tasks list on `state`, with `key`'s row menu open (T7 `lCoNt`, T8 `vdSWS`, T10 `tlw0r`).
+fn row_menu(state: State, key: &str) -> (Window, TeamServer) {
+  let (mut window, server) = on_the_tasks_list(state);
+  let row = format!("task-row-{key}");
+  window.until("the server's tasks", |window| window.texts(&row).is_some());
+  // The row's actions show under the pointer once the row has its place, which can take a pass after it shows.
+  let more = format!("task-more-{key}");
+  window.until("the row's menu", |window| {
+    let placed = window
+      .tree
+      .get_element_by_id_mut(&row)
+      .is_some_and(|row| row.bounds().is_some());
+    if placed {
+      window.hover(&row);
+    }
+    window.texts(&more).is_some()
+  });
+  window.press(&more);
+  window.until("its rows", |window| window.texts(&format!("{more}-panel")).is_some());
+  (window, server)
+}
+
+/// T7 `lCoNt`: a member's row menu on their own task offers Mark as done and Mark as blocked and says who does the
+/// rest; on someone else's task it only opens and copies the key, and says who closes it.
+#[test]
+fn team_qa_lifecycle_a_members_row_menu_offers_what_their_claim_allows() {
+  let (mut window, _server) = row_menu(State::Member, "KON-12");
+  for id in ["open", "copy", "done", "block"] {
+    assert!(offered(&mut window, &format!("task-more-KON-12-{id}")), "{id}");
+  }
+  for id in ["cancel", "reopen-todo", "move-todo", "delete"] {
+    assert!(!offered(&mut window, &format!("task-more-KON-12-{id}")), "{id}");
+  }
+  assert_eq!(
+    window.text("tasks-team-menu-foot"),
+    "Only Admins cancel, reopen or move tasks."
+  );
+  window.press("task-more-KON-12-done");
+  window.until("the server to close it", |window| {
+    window.texts("task-row-KON-12").is_none() || window.texts("tasks-team-refused").is_some()
+  });
+  assert!(
+    window.texts("tasks-team-refused").is_none(),
+    "the holder's Done is taken"
+  );
+}
+
+#[test]
+fn team_qa_lifecycle_a_members_row_menu_on_someone_elses_task_only_opens_and_copies() {
+  let (mut window, _server) = row_menu(State::Claims, "KON-13");
+  assert!(offered(&mut window, "task-more-KON-13-open") && offered(&mut window, "task-more-KON-13-copy"));
+  for id in ["done", "block", "cancel", "reopen-todo", "move-todo"] {
+    assert!(!offered(&mut window, &format!("task-more-KON-13-{id}")), "{id}");
+  }
+  let foot = window.text("tasks-team-menu-foot");
+  assert!(
+    foot.starts_with("Only mara (the claim) and Admins close this task"),
+    "{foot}"
+  );
+}
+
+/// T8 `vdSWS`: an Admin's row menu has Mark as done, Mark as blocked and Cancel task, and Move to for a task in Backlog
+/// or Todo, with no line saying who else can; Cancel task closes it on the server.
+#[test]
+fn team_qa_lifecycle_an_admins_row_menu_closes_and_cancels() {
+  let (mut window, _server) = row_menu(State::Admin, "KON-12");
+  for id in ["open", "copy", "done", "block", "cancel"] {
+    assert!(offered(&mut window, &format!("task-more-KON-12-{id}")), "{id}");
+  }
+  assert!(
+    !offered(&mut window, "tasks-team-menu-foot"),
+    "an Admin has nothing to be told"
+  );
+  window.press("task-more-KON-12-cancel");
+  window.until("the task to leave the active list", |window| {
+    window.texts("task-row-KON-12").is_none()
+  });
+}
+
+/// T10 `tlw0r`: a Backlog task's menu moves it to Todo, and a Done task's reopens it to Todo or Backlog, an Admin's
+/// only.
+#[test]
+fn team_qa_lifecycle_the_menu_moves_between_backlog_and_todo_and_reopens() {
+  let (mut window, server) = row_menu(State::Admin, "KON-25");
+  assert!(offered(&mut window, "task-more-KON-25-move-todo"));
+  assert!(!offered(&mut window, "task-more-KON-25-reopen-todo"));
+  window.press("task-more-KON-25-move-todo");
+  window.until("the server to take the move", |_| {
+    server.task_now(25).is_some_and(|(revision, ..)| revision == 2)
+  });
 }

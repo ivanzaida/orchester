@@ -321,7 +321,7 @@ fn team_module_of(summary: &ModuleSummary, who: &Who) -> Result<TeamModule, Team
 }
 
 /// What `capabilities` allow of the lifecycle of `subject`: the actions the server lists for it and allows.
-fn lifecycle(capabilities: &Capabilities, subject: Subject) -> Lifecycle {
+pub(super) fn lifecycle(capabilities: &Capabilities, subject: Subject) -> Lifecycle {
   let allowed = |wanted: LifecycleAction| {
     capabilities.actions.iter().any(|action| {
       *action.action() == Action::Task(wanted)

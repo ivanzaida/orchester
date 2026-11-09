@@ -344,6 +344,24 @@
       "withName": "{{role}} · {{username}}"
     },
     "team": {
+      "lifecycle": {
+        "done": "Mark as done",
+        "block": "Mark as blocked",
+        "clearBlocked": "Clear blocked",
+        "cancel": "Cancel task",
+        "reopenTodo": "Reopen to Todo",
+        "reopenBacklog": "Reopen to Backlog",
+        "moveTodo": "Move to Todo",
+        "moveBacklog": "Move to Backlog",
+        "footAdmins": "Only Admins cancel, reopen or move tasks.",
+        "footHolder": "Only {{holder}} (the claim) and Admins close this task: {{admins}}.",
+        "footHolderUnnamed": "Only {{holder}} (the claim) and Admins close this task.",
+        "footFree": "Only the person who claims it and Admins close this task: {{admins}}.",
+        "footFreeUnnamed": "Only the person who claims it and Admins close this task.",
+        "footClosed": "Only Admins reopen a team task: {{admins}}.",
+        "footClosedUnnamed": "Only Admins reopen a team task.",
+        "refusedTitle": "Couldn't change {{task}}"
+      },
       "on": "Team project on {{place}}",
       "fromServer": "Read from the server",
       "role": {

@@ -49,7 +49,11 @@ pub(super) async fn carry_out(ask: TeamAsk, (shown, reason): (&TeamTaskShown, St
   let Some(change) = change(ask, &reason) else {
     return Acted::Failed;
   };
-  match change.action(&shown.task.task, shown.task.revision) {
+  match change.action(
+    shown.task.task.id(),
+    shown.task.task.organization(),
+    shown.task.revision,
+  ) {
     Ok(action) => acting.act(&shown.source, action).await.0,
     // A blank reason never reaches the server: the dialog does not offer it.
     Err(error) => {

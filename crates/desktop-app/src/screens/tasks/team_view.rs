@@ -105,7 +105,12 @@ impl TasksScreen {
         .variant(ExtraTypography::Note.role());
       lines.push(inset(more).into());
     }
-    self.list(ctx, page.child(header).with_children(lines), &shown, &options)
+    team::actions::TeamActions::provide(ctx, &team.source, &self.team_actions);
+    lines.extend(team::actions::refusal(ctx).map(|refusal| Element::from(inset(refusal))));
+    let blocking = team::actions::blocking_dialog(ctx);
+    self
+      .list(ctx, page.child(header).with_children(lines), &shown, &options)
+      .with_children(blocking)
   }
 }
 

@@ -11,14 +11,16 @@
 //! status, with the tasks something waits for on this computer placed as a local list places them
 //! (`orchester_workspace::tasks::views`). Tag names are still this computer's: the server has no read for them yet.
 
+pub(super) mod actions;
 mod lines;
+pub(super) mod menu;
 pub mod outage;
 
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use lurq::app::ctx::Ctx;
 use orchester_api::v2::{CallerRole, SearchText, TaskSort as ServerSort};
-use orchester_core::module::Module;
+use orchester_core::{id::TaskId, module::Module};
 use orchester_workspace::{
   sharing::{Connection, project::TeamAdmins},
   tasks::{
@@ -35,6 +37,7 @@ use crate::{
   routes::TaskList,
   team::{
     TeamFailure, TeamSource,
+    lifecycle::Offered,
     queries::{TaskListKey, TeamTasks, team_admins, team_capabilities, team_counts, team_modules, team_tasks},
     view::source,
   },
@@ -57,6 +60,10 @@ pub(super) struct TeamShown {
   pub role: CallerRole,
   /// Who changes the team's tasks, as the members read named them; `None` until read, or for an Admin.
   pub admins: Option<Arc<TeamAdmins>>,
+  /// What each task offers the person of its lifecycle, as its capabilities say.
+  pub offered: Arc<HashMap<TaskId, Offered>>,
+  /// Where the lifecycle changes go.
+  pub source: TeamSource,
   /// The view has more tasks than one reading takes.
   pub more: bool,
 }
@@ -116,6 +123,8 @@ pub(super) fn read(
     counts: ViewCounts::of_server(&StatusCounts::of_board(&counted), &waiting),
     role: capabilities.role,
     admins,
+    offered: read.offered.clone(),
+    source,
     more: read.more,
   }))
 }

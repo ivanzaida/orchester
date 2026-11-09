@@ -1042,7 +1042,13 @@ team task can never be closed. Order:
 3. **App and MCP:** `update_task` `workflow_status`, `create_task`'s status and `return_to_draft` take the team path
    instead of refusing D4; *Mark as done*, *Cancel task* and reopen on the task page and the Tasks list for a team
    task, by capability (needs a design step first: D4 was drawn as "no Done action"). Update
-   `docs/manual/mcp-tools-work.md` (the D4 refusal) and the tools' descriptions.
+   `docs/manual/mcp-tools-work.md` (the D4 refusal) and the tools' descriptions. **Built** (branch `claude/d4-app`): the
+   dispatcher and the MCP tools (`update_task`'s `workflow_status` and `blocked_reason` through the task patch;
+   `team_status_not_offered`, `team_status_on_create`, `team_no_queue`, `not_holder`, `stop_run_first`), the task page
+   (Mark as done, Cancel task, Mark as blocked, Clear blocked, Reopen, the Done, Canceled and Blocked lines, one lock
+   line for a member) and the Tasks list's row menu. **Not built:** the board card's menu and drag by capability, the
+   status chip (the page is not yet the Task - v2 layout), and the *Done · delivered with module* and *Done · its run
+   succeeded* lines, which need the server to say how a task closed (`TaskRead` has no such field).
 4. **Team tasks in the other MCP tools** (found 2026-11-08, independent of D4): tools that look a team task up in this
    computer's cached copy of shared tasks instead of the team server answer `task_not_found` or leave team runs out
    when the copy is missing — `get_run` (`app_mcp/tools/runs.rs` `read_run` needs the task row), `send_message` in

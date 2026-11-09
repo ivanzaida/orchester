@@ -141,7 +141,7 @@ target date, a tag rename, a board move between Backlog and Todo, and Automatic 
   its run succeeds. The manual Blocked is set and cleared by the claim's holder or an Admin. **Drawn 2026-11-09** on
   board `Task - v2` `jDN0r`, rows 14–17 (`mruqB` T1–T3 the rail by role, `IDr3j` T4–T6 the Done lines and the reopen
   menu, `KUaKz` T7–T8 the Tasks list, `dZrgB` T9–T12 the status chip, the menus, the rail states and the who-can-do-what
-  matrix; rules 20–22 in `lg9fC`). The dispatcher and the MCP tools carry it; the screens follow `docs/plan.md` S12.
+  matrix; rules 20–22 in `lg9fC`). The dispatcher, the MCP tools, the task page and the Tasks list's row menu carry it; what is not built is in `docs/plan.md` S12.
 - **D6** — default pipeline and the remaining field ownership. Drawn: the pipeline shown is the Admin's; members have
   no control to change it, and no new field ownership is drawn. **Decided for a task's pipeline** (the person,
   2026-11-05, `docs/architecture/server.md` row 80): a team task's pipeline is one of the team's pipelines, chosen by
