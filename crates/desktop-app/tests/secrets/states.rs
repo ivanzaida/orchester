@@ -63,15 +63,13 @@ fn secrets_list_groups_by_environment_and_a_secrets_page_shows_metadata_and_mcp_
   );
 }
 
-/// A project with no secret says so in one quiet row with Add secret and Import, and Recent access says it is not
-/// recorded yet.
+/// A project with no secret says so in one quiet row with Add secret, and Recent access says it is not recorded yet.
 #[test]
-fn secrets_empty_project_offers_add_and_import() {
+fn secrets_empty_project_offers_add() {
   let mut s = Secrets::new();
   s.list();
   assert!(s.text("secrets-empty").contains("No secrets yet"));
   assert!(s.exists("secrets-empty-add"));
-  assert!(s.exists("secrets-empty-import"));
   s.click("secrets-empty-add");
   s.until("New secret", |s| s.exists("secret-value"));
   assert!(s.exists("secret-name"));

@@ -7,7 +7,7 @@ use super::{harness::Instructions, preview::seed_preview};
 
 fn panel(screen: &Instructions) -> InstructionsPanel {
   match screen.window.navigation().route_now() {
-    Route::Project(_, ProjectPage::Instructions(view)) => view.panel().expect("a rule's view"),
+    Route::Project(_, ProjectPage::Instructions(view)) => view.panel(),
     other => panic!("instructions route: {other:?}"),
   }
 }

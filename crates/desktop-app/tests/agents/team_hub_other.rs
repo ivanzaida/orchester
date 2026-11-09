@@ -1,11 +1,12 @@
 //! The panels of a team instruction, skill and tool (`Agents · Instructions` `c3jU1R` A4, `Agents · Skills` `c9YnL` A5,
-//! `Agents · Tools` `u9Hcc` A6, ORC-834), the pinned bar every panel shares and the widths of a row's key.
+//! `Agents · Tools` `u9Hcc` A6, ORC-834), which pin no bar and link to no editor's page, the bar a panel with a fix
+//! pins, and the widths of a row's key.
 //! `cargo test -p orchester-app --test agents team_hub_other`.
 
 use std::collections::{BTreeMap, BTreeSet};
 
 use orchester_app::{
-  routes::{HubFilter, HubView, InstructionsTab, InstructionsView, ProjectPage, Route},
+  routes::{HubFilter, HubView},
   theme::HubSpacing,
 };
 use orchester_core::{
@@ -25,7 +26,6 @@ use serde_json::json;
 
 use super::{
   harness::Agents,
-  support::project_id,
   team_hub::{cached, open, team},
 };
 
@@ -168,18 +168,12 @@ fn team_hub_other_a4_an_instruction_shows_its_text_where_it_is_added_and_who_use
     agents.text("team-hub-nothing-text"),
     "Nothing to fill in on this computer: an instruction is the same everywhere."
   );
-  // The admin's Edit, in the head and pinned, opens the instruction in the tab of its scope.
-  assert_eq!(
-    agents.text("team-hub-actions-hint"),
-    "Publishing makes v2 for the whole team"
+  // The admin changes it from the hub, not on the old editor's page: the head has only the … menu.
+  assert!(agents.exists("team-hub-more"), "an admin's … menu");
+  assert!(
+    !agents.exists("team-hub-edit") && !agents.exists("team-hub-action-edit") && !agents.exists("team-hub-actions"),
+    "no link to the editor's page and nothing pinned"
   );
-  assert!(agents.exists("team-hub-edit"));
-  agents.click("team-hub-action-edit");
-  let editor = Route::Project(
-    project_id(),
-    ProjectPage::Instructions(InstructionsView::rule(InstructionsTab::Project, Some(rules))),
-  );
-  agents.until("the editor", |s| s.window.navigation().route_now() == editor);
 }
 
 #[test]
@@ -230,12 +224,11 @@ fn team_hub_other_an_instruction_for_a_role_says_which_agents_and_when() {
     !agents.exists("team-hub-chips-end"),
     "nobody uses it and it is not every run's"
   );
-  agents.click("team-hub-action-edit");
-  let editor = Route::Project(
-    project_id(),
-    ProjectPage::Instructions(InstructionsView::rule(InstructionsTab::Roles, Some(handoff))),
+  assert!(agents.exists("team-hub-more"), "an admin's … menu");
+  assert!(
+    !agents.exists("team-hub-edit") && !agents.exists("team-hub-action-edit") && !agents.exists("team-hub-actions"),
+    "no link to the editor's page and nothing pinned"
   );
-  agents.until("the editor", |s| s.window.navigation().route_now() == editor);
 }
 
 #[test]
@@ -290,9 +283,11 @@ fn team_hub_other_a5_a_skill_shows_its_description_files_and_who_uses_it() {
     agents.text("team-hub-from-team-used-by-value"),
     "No profile uses it yet"
   );
-  agents.click("team-hub-action-edit");
-  let editor = Route::Project(project_id(), ProjectPage::Skill(skill));
-  agents.until("the editor", |s| s.window.navigation().route_now() == editor);
+  assert!(agents.exists("team-hub-more"), "an admin's … menu");
+  assert!(
+    !agents.exists("team-hub-edit") && !agents.exists("team-hub-action-edit") && !agents.exists("team-hub-actions"),
+    "no link to the editor's page and nothing pinned"
+  );
 }
 
 #[test]
@@ -348,8 +343,8 @@ fn team_hub_other_a6_a_tool_that_names_its_secret_by_id_says_it_cannot_be_filled
       .starts_with("This tool names its secret by id; it can't be filled in here yet.")
   );
   assert!(!agents.exists("team-hub-fix-add-value") && !agents.exists("team-hub-secret-dialog"));
-  // Nothing missing to fix, so the bar is the admin's Edit.
-  assert_eq!(agents.text("team-hub-action-edit"), "Edit");
+  // Nothing it can fix here, and no Edit: no bar.
+  assert!(!agents.exists("team-hub-actions") && !agents.exists("team-hub-action-edit"));
 }
 
 #[test]
@@ -423,30 +418,32 @@ fn team_hub_other_a_member_reads_the_panels_with_no_edit_and_no_bar() {
   );
 }
 
+/// Only a panel with something to do here pins a bar, at the bar's height; an instruction's, a skill's and a ready
+/// tool's pin none.
 #[test]
-fn team_hub_other_every_panel_pins_its_bar_at_the_same_height() {
+fn team_hub_other_only_a_panel_with_a_fix_pins_its_bar_at_its_height() {
   let mut agents = Agents::new(true);
   let [skill, rules, github, _] = team(&agents);
   let sentry = sentry(&agents);
-  let height = HubSpacing::Actions.value();
   for (filter, resource) in [
     (HubFilter::Instructions, rules),
     (HubFilter::Skills, skill),
     (HubFilter::Tools, sentry),
-    (HubFilter::McpServers, github),
   ] {
     open(&mut agents, HubView::new(filter, Some(resource)));
-    agents.until("the bar", |s| s.exists("team-hub-actions"));
-    let (_, _, bar) = bounds(&mut agents, "team-hub-actions");
-    assert!((bar - height).abs() < 0.5, "{filter:?}: {bar}");
-    if agents.exists("team-hub-action-edit") {
-      let (_, _, button) = bounds(&mut agents, "team-hub-action-edit");
-      assert!(
-        (button - 30.0).abs() < 0.5,
-        "{filter:?}: the pinned action is 30 high, not {button}"
-      );
-    }
+    agents.until("the panel", |s| s.exists("team-hub-panel-title"));
+    assert!(!agents.exists("team-hub-actions"), "{filter:?}: nothing pinned");
   }
+  // Nobody has decided on `github` here: its bar is the fix that switches it on.
+  open(&mut agents, HubView::new(HubFilter::McpServers, Some(github)));
+  agents.until("the bar", |s| s.exists("team-hub-actions"));
+  let (_, _, bar) = bounds(&mut agents, "team-hub-actions");
+  assert!((bar - HubSpacing::Actions.value()).abs() < 0.5, "{bar}");
+  let (_, _, button) = bounds(&mut agents, "team-hub-fix-switch-on");
+  assert!(
+    (button - 30.0).abs() < 0.5,
+    "the pinned action is 30 high, not {button}"
+  );
 }
 
 #[test]

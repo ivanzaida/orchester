@@ -27,7 +27,7 @@ use lurq::{
   core::Signal,
   node::{Element, dimension::Dimension, padding::Padding},
 };
-use orchester_core::id::{ConnectionId, ProjectId, ResourceId};
+use orchester_core::id::{ConnectionId, ResourceId};
 use orchester_workspace::{
   agents::team_profile::{ConnectionChoice, TeamProfileSheet},
   sharing::team::TeamConfiguration,
@@ -51,7 +51,6 @@ use crate::{
 #[derive(Clone, PartialEq)]
 pub(super) struct Props {
   pub repo_root: PathBuf,
-  pub project: ProjectId,
   /// The team's configuration: an admin may change its resources, and a member reads who the admins are.
   pub team: TeamConfiguration,
   /// The hub is read again: what shows is the last answer, and a fix would act on it.
@@ -121,10 +120,7 @@ impl Component for ProfilePanel {
       sheet,
       connection: &connection,
     };
-    let head_end = panel::with_more(
-      self.edit(ctx, &props, &navigation),
-      archive::menu(ctx, &props.repo_root, entry, props.team.may_change),
-    );
+    let head_end = archive::menu(ctx, &props.repo_root, entry, props.team.may_change);
     let body = Column::new()
       .width(Dimension::Pct(100.0))
       .padding(Padding::symmetric(
@@ -267,12 +263,6 @@ impl ProfilePanel {
         guarded(Arc::new(move || entry.ask(&name)))
       }
     }
-  }
-
-  /// *Edit* in the head, which an admin has where the kind has an editor.
-  fn edit(&self, ctx: &Ctx, props: &Props, navigation: &Navigation) -> Option<Element> {
-    let route = panel::editor(&props.entry, props.project).filter(|_| props.team.may_change)?;
-    Some(panel::edit_button(ctx, navigation.to(route)))
   }
 
   /// Why the last fix did nothing: what the workspace refused with, or that automation pressed it. What went wrong

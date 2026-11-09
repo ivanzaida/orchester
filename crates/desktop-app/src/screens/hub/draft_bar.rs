@@ -29,8 +29,6 @@ pub(crate) enum Standing {
   Attention,
   /// Nothing to publish: the latest version is current.
   Published,
-  /// Items being chosen, e.g. what an import creates (`F3ukWF` in 02c).
-  Choosing,
   /// A teammate's version widens what agents may do here: a shield in `warning` (`A4mB5` in 02d).
   Widens,
   /// A version published here waits for the team server: a cloud crossed out in `info` (`y6CD8b` in 02b).
@@ -46,7 +44,6 @@ impl Standing {
       Self::Draft => (Icon::CircleDashed, PaletteColor::Warning),
       Self::Attention => (Icon::TriangleAlert, PaletteColor::Warning),
       Self::Published => (Icon::CircleCheck, PaletteColor::Success),
-      Self::Choosing => (Icon::ListChecks, PaletteColor::TextSecondary),
       Self::Widens => (Icon::ShieldAlert, PaletteColor::Warning),
       Self::NotSent => (Icon::CloudOff, PaletteColor::Info),
       Self::Conflict => (Icon::GitCompare, PaletteColor::Danger),

@@ -11,8 +11,9 @@ use lurq::{
   node::{Element, border::Border, dimension::Dimension, padding::Padding},
 };
 
-use super::super::model::{Kind, ROW_TALL};
+use super::super::model::Kind;
 use crate::{
+  screens::hub::agent_row::ROW_HEIGHT,
   theme::{ExtraColor, ExtraSpacing, HubText, IconSize},
   ui::{
     icon::{Icon, icon},
@@ -61,7 +62,7 @@ pub(in crate::screens) fn new_row(ctx: &Ctx, kind: Kind) -> Element {
   let row = inert(Button::empty())
     .id("team-hub-row-new")
     .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(ROW_TALL))
+    .height(Dimension::Px(ROW_HEIGHT))
     .padding(Padding::new().left(ExtraSpacing::Inset.role()).right(SpacingSize::Lg))
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)

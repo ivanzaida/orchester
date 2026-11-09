@@ -28,7 +28,7 @@ use orchester_app::{
   project::{ProjectState, Projects},
   root::Start,
   routes::{
-    ChangeSource, ChangedFile, ConnectionsView, FilesView, ImportTab, JoinWay, ModuleListTab, ModuleTab, NewConnection,
+    ChangeSource, ChangedFile, ConnectionsView, FilesView, JoinWay, ModuleListTab, ModuleTab, NewConnection,
     OrchestratorChat, OverviewTab, ProjectPage, Route, Screen, TaskList, TaskListTab, TaskTab, TaskView, routes,
   },
   services::{
@@ -68,7 +68,6 @@ const BUILT: &[Screen] = &[
   Screen::EditTask,
   Screen::Files,
   Screen::FirstDownload,
-  Screen::ImportResources,
   Screen::JoinTeam,
   Screen::Instructions,
   Screen::Memory,
@@ -343,7 +342,6 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
       at(ProjectPage::Files(FilesView::new(Some("src/a b.rs"), Version::Base))),
       Vec::new(),
     ),
-    (at(ProjectPage::Import(ImportTab::Tools)), Vec::new()),
   ]);
   all.extend(module_screens());
   all

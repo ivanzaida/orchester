@@ -2,10 +2,13 @@
 //! list is read again or the read failed (`Failure states · redesign` `SsC16`, ORC-831 review).
 //! `cargo test -p orchester-app --test agents team_hub`.
 
+use std::{thread, time::Duration};
+
 use orchester_app::{
   project::hold::ReadHold,
   routes::{HubView, ProjectPage, Route},
 };
+use orchester_store::ProjectDb;
 
 use super::{
   harness::Agents,
@@ -73,27 +76,37 @@ fn team_hub_says_so_when_the_team_read_failed_and_reads_again_on_retry() {
   });
 }
 
+/// While the hub is read again it keeps the last answer: the list and the tabs' counts stay, with no loader in their
+/// place, until the new answer replaces them.
 #[test]
-fn team_hub_marks_the_last_answer_while_it_is_read_again() {
+fn team_hub_keeps_the_last_answer_while_it_is_read_again() {
   let mut agents = Agents::new(true);
-  team(&agents);
+  let [skill, ..] = team(&agents);
   open(&mut agents, HubView::default());
   assert_eq!(agents.text("team-hub-filter-all-count"), "4");
-  assert!(!agents.exists("team-hub-reading"));
   let hold = hold(&agents);
   hold.set(true);
+  // The skill is the team's no more: the next answer counts 3.
+  ProjectDb::open(&agents.root)
+    .expect("database")
+    .set_resource_sharing(skill, None)
+    .expect("local");
   agents
     .window
     .projects()
     .feed(project_id())
     .outside
     .update(|counts| counts.profiles += 1);
-  agents.until("the reading mark", |s| s.exists("team-hub-reading"));
-  assert_eq!(agents.text("team-hub-reading-label"), "Reading…");
-  assert!(!agents.exists("team-hub-filter-hint"));
+  for _ in 0..20 {
+    agents.window.tree.tick_futures();
+    agents.window.pass();
+    thread::sleep(Duration::from_millis(5));
+  }
+  assert_eq!(agents.text("team-hub-filter-all-count"), "4", "the last answer");
+  assert!(agents.exists("team-hub-list") && !agents.exists("team-hub-loading"));
   hold.set(false);
-  agents.until("current again", |s| !s.exists("team-hub-reading"));
-  assert!(agents.exists("team-hub-filter-hint") && agents.exists("team-hub-list"));
+  agents.until("the new answer", |s| s.text("team-hub-filter-all-count") == "3");
+  assert!(agents.exists("team-hub-list"));
 }
 
 #[test]
@@ -111,10 +124,9 @@ fn team_hub_failed_read_again_shows_the_failure_and_no_stale_counts() {
     .update(|counts| counts.profiles += 1);
   agents.until("the failure", |s| s.exists("team-hub-load-error"));
   assert!(!agents.exists("team-hub-list") && !agents.exists("team-hub-panel"));
-  assert!(
-    !agents.exists("team-hub-filter-all-count") && agents.exists("team-hub-filter-all"),
-    "the segments stay and count nothing"
-  );
+  // The tabs stay, each with its count's bone in place of the stale count.
+  assert!(agents.exists("team-hub-filter-all"));
+  assert_ne!(agents.text("team-hub-filter-all-count"), "4", "no stale count");
   mend_database(&broken);
   agents.click("team-hub-load-error-retry");
   agents.until("the list", |s| s.exists("team-hub-list"));

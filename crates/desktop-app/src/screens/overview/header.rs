@@ -1,6 +1,6 @@
 //! The Overview's header (`Header` `cPl0F`), one row in every state: the project's name in 20/600, the checkout in
 //! Geist Mono 11.5 `text_muted` (*KON · kontur · master*: the key, then the repository and branch as git names them,
-//! read off the UI thread), then Import resources and Open Orchestrator as ghost buttons and New task, primary.
+//! read off the UI thread), then Open Orchestrator as a ghost button and New task, primary.
 
 use std::path::PathBuf;
 
@@ -18,7 +18,7 @@ use orchester_workspace::{background, tasks::checkout::Checkout};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::{ImportTab, OrchestratorChat, ProjectPage, Route},
+  routes::{OrchestratorChat, ProjectPage, Route},
   services::Services,
   theme::{ExtraSpacing, ExtraTypography, OverviewText},
   ui::{
@@ -36,9 +36,6 @@ pub(super) fn header(ctx: &mut Ctx, project: &ShownProject) -> Row {
     revision: project.feed.revision.get(),
   };
   let navigation = Navigation::of(ctx);
-  let import = ActionButton::new("overview-import", ButtonKind::Ghost, ctx.t("overview.importResources"))
-    .icon(Icon::Download)
-    .opens(navigation.to(Route::Project(id, ProjectPage::Import(ImportTab::All))));
   let orchestrator = ActionButton::new(
     "overview-open-orchestrator",
     ButtonKind::Ghost,
@@ -65,7 +62,6 @@ pub(super) fn header(ctx: &mut Ctx, project: &ShownProject) -> Row {
     )
     .child(ctx.mount_keyed::<CheckoutLine>("overview-checkout", checkout))
     .child(Spacer::new().flex(1.0))
-    .child(import)
     .child(orchestrator)
     .child(new_task)
 }

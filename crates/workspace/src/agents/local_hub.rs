@@ -230,11 +230,7 @@ fn plain(db: &ProjectDb) -> Result<Vec<LocalPlain>, StoreError> {
 }
 
 fn profiles(db: &ProjectDb) -> Result<Vec<(ResourceId, LocalProfile)>, StoreError> {
-  // The archived ones too: a profile still chooses one until it is restored or the profile drops it.
-  let servers = db.all_mcp_servers()?;
-  let available = db.mcp_servers()?;
-  let connections = db.connections()?;
-  let pipelines = latest_pipelines(db)?;
+  let around = Around::read(db)?;
   let mut profiles = Vec::new();
   for resource in db.resources(ResourceKind::AgentProfile)? {
     let Some(version) = db.latest_version::<AgentProfile>(resource.id())? else {
@@ -243,15 +239,63 @@ fn profiles(db: &ProjectDb) -> Result<Vec<(ResourceId, LocalProfile)>, StoreErro
     let draft = db.draft::<AgentProfile>(resource.id())?;
     // What the panel shows is the profile as it is now: its draft when it has one.
     let body = draft.as_ref().map_or_else(|| version.body(), |draft| draft.body());
-    let connection = connections.iter().find(|found| found.id() == body.connection());
+    let shown = around.shown(db, resource.id(), (version.published_at(), body, draft.as_ref()))?;
+    profiles.push((resource.id(), shown));
+  }
+  Ok(profiles)
+}
+
+/// The local profile `id` as its panel shows it while it holds `body`, changes that are not stored: what it runs with
+/// and on, what its selects offer, as [`LocalHub`] says of a stored one. `None` for a profile that was never published.
+pub(crate) fn profile_as(
+  db: &ProjectDb,
+  id: ResourceId,
+  body: &AgentProfile,
+) -> Result<Option<LocalProfile>, StoreError> {
+  let Some(version) = db.latest_version::<AgentProfile>(id)? else {
+    return Ok(None);
+  };
+  Around::read(db)?
+    .shown(db, id, (version.published_at(), body, None))
+    .map(Some)
+}
+
+/// What the project has around its profiles: its MCP servers, its connections and its pipelines.
+struct Around {
+  /// The archived ones too: a profile still chooses one until it is restored or the profile drops it.
+  servers: Vec<McpServer>,
+  available: Vec<McpServer>,
+  connections: Vec<Connection>,
+  pipelines: Vec<(String, Pipeline)>,
+}
+
+impl Around {
+  fn read(db: &ProjectDb) -> Result<Self, StoreError> {
+    Ok(Self {
+      servers: db.all_mcp_servers()?,
+      available: db.mcp_servers()?,
+      connections: db.connections()?,
+      pipelines: latest_pipelines(db)?,
+    })
+  }
+
+  /// The profile `id` as it holds `body`, published at `published_at`, with its stored draft.
+  fn shown(
+    &self,
+    db: &ProjectDb,
+    id: ResourceId,
+    (published_at, body, draft): (Timestamp, &AgentProfile, Option<&Draft<AgentProfile>>),
+  ) -> Result<LocalProfile, StoreError> {
+    let connection = self.connections.iter().find(|found| found.id() == body.connection());
     let cli = match connection.map(orchester_core::connection::Connection::kind) {
       Some(ConnectionKind::Agent(cli)) => Some(*cli),
       Some(_) => None,
       None => AgentProvider::cli_of_model(body.model().as_str()),
     };
-    let mut running: Vec<String> = pipelines
+    let mut running: Vec<String> = self
+      .pipelines
       .iter()
-      .filter(|(_, pipeline)| pipeline.steps_run_by(resource.id()).next().is_some())
+      .filter(|(_, pipeline)| pipeline.steps_run_by(id).next().is_some())
       .map(|(name, _)| name.clone())
       .collect();
     running.sort_by_key(|name| name.to_lowercase());
@@ -259,9 +303,10 @@ fn profiles(db: &ProjectDb) -> Result<Vec<(ResourceId, LocalProfile)>, StoreErro
       .mcp_servers()
       .ids()
       .iter()
-      .filter_map(|id| servers.iter().find(|server| server.id() == *id))
+      .filter_map(|id| self.servers.iter().find(|server| server.id() == *id))
       .collect();
-    let of_kind: Vec<ConnectionChoice> = connections
+    let of_kind: Vec<ConnectionChoice> = self
+      .connections
       .iter()
       .filter(|found| matches!(found.kind(), ConnectionKind::Agent(provider) if Some(*provider) == cli))
       .map(|found| ConnectionChoice {
@@ -271,35 +316,31 @@ fn profiles(db: &ProjectDb) -> Result<Vec<(ResourceId, LocalProfile)>, StoreErro
         signed_out: found.status() == ConnectionStatus::SignInRequired,
       })
       .collect();
-    profiles.push((
-      resource.id(),
-      LocalProfile {
-        cli,
-        connection: connection.map(|connection| connection.name().to_string()),
-        mcp_servers: chosen
-          .iter()
-          .map(|server| (server.id(), server.name().to_string()))
-          .collect(),
-        pipelines: running,
-        model: body.model().as_str().to_owned(),
-        effort: body
-          .settings()
-          .iter()
-          .find_map(|(key, value)| (key == REASONING_EFFORT).then(|| value.to_owned())),
-        current: of_kind
-          .iter()
-          .find(|choice| choice.id == body.connection())
-          .map(|choice| choice.id),
-        connections: of_kind,
-        published_at: version.published_at(),
-        draft: draft.is_some(),
-        draft_saved_at: draft.as_ref().map(Draft::updated_at),
-        options: options(&connections, &available, (cli, body)),
-        secrets: secret_names(db, &chosen)?,
-      },
-    ));
+    Ok(LocalProfile {
+      cli,
+      connection: connection.map(|connection| connection.name().to_string()),
+      mcp_servers: chosen
+        .iter()
+        .map(|server| (server.id(), server.name().to_string()))
+        .collect(),
+      pipelines: running,
+      model: body.model().as_str().to_owned(),
+      effort: body
+        .settings()
+        .iter()
+        .find_map(|(key, value)| (key == REASONING_EFFORT).then(|| value.to_owned())),
+      current: of_kind
+        .iter()
+        .find(|choice| choice.id == body.connection())
+        .map(|choice| choice.id),
+      connections: of_kind,
+      published_at,
+      draft: draft.is_some(),
+      draft_saved_at: draft.map(Draft::updated_at),
+      options: options(&self.connections, &self.available, (cli, body)),
+      secrets: secret_names(db, &chosen)?,
+    })
   }
-  Ok(profiles)
 }
 
 /// What the selects of the panel of the profile `body`, which runs with `cli`, offer.

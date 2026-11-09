@@ -407,7 +407,7 @@ fn tools_wait_for_the_window() {
 fn navigate_skills_forms_round_trip_their_parameters() {
   let window = Window::open();
   let navigation = window.navigation();
-  for skill in ["new", "import", PROJECT] {
+  for skill in ["new", PROJECT] {
     let args = json!({ "route": "skills", "project": PROJECT, "skill": skill });
     let answer = navigate(&navigation, &args).expect("Skills route");
     assert_eq!(

@@ -205,21 +205,7 @@ impl Entry {
       (Kind::Skill, _) => Icon::Sparkles,
     }
   }
-
-  /// A row's height: 56 when it says what a computer needs, 44 for a quiet one (`Item` in `t4mtQL`, `kgvaK`, `c3jU1R`).
-  pub(super) fn height(&self, filter: HubFilter) -> f32 {
-    if self.group == Group::NeedsYouHere || (filter != HubFilter::All && self.kind.fills_in()) {
-      ROW_TALL
-    } else {
-      ROW_SHORT
-    }
-  }
 }
-
-/// A row that says what this computer needs (`Item · Builder` `tF2OL`).
-pub(super) const ROW_TALL: f32 = 56.0;
-/// A quiet row (`Item · Project rules` `NRyeu`).
-pub(super) const ROW_SHORT: f32 = 44.0;
 
 /// The groups' order in the list.
 pub(super) const GROUPS: [Group; 3] = [Group::NeedsYouHere, Group::Ready, Group::OffHere];

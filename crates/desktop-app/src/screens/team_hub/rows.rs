@@ -15,7 +15,7 @@ use lurq::{
 };
 
 use crate::{
-  screens::team_hub::row::tag_chip,
+  screens::hub::agent_row::tag_chip,
   theme::{ExtraSpacing, HubSpacing, HubText},
   ui::chip::{BadgeTone, badge},
 };
@@ -54,6 +54,15 @@ impl Sub {
 
 /// A section: its head (the label, then what follows it on the line) over its rows.
 pub(in crate::screens) fn section(id: &str, label: &str, after: Vec<Element>, rows: Vec<Row>) -> Column {
+  let label = Text::new(label)
+    .id(format!("{id}-label"))
+    .variant(HubText::PanelLabel.role())
+    .nowrap();
+  section_headed(id, label.into(), after, rows)
+}
+
+/// [`section`] whose label is `label`, already drawn: a bone while the panel is read.
+pub(in crate::screens) fn section_headed(id: &str, label: Element, after: Vec<Element>, rows: Vec<Row>) -> Column {
   let last = rows.len().saturating_sub(1);
   let rows = rows.into_iter().enumerate().map(|(index, row)| {
     if index == last {
@@ -71,12 +80,7 @@ pub(in crate::screens) fn section(id: &str, label: &str, after: Vec<Element>, ro
         .width(Dimension::Pct(100.0))
         .spacing(SpacingSize::Sm)
         .align_items(Alignment::Center)
-        .child(
-          Text::new(label)
-            .id(format!("{id}-label"))
-            .variant(HubText::PanelLabel.role())
-            .nowrap(),
-        )
+        .child(label)
         .with_children(after),
     )
     .child(
@@ -108,13 +112,19 @@ pub(in crate::screens) fn row_in(key: Key, id: &str, label: &str, sub: Option<Su
   )
 }
 
-/// [`row`] whose key is `label`, already a text: a name that is an identifier, in mono.
-pub(in crate::screens) fn keyed(id: &str, label: Text, sub: Option<Sub>, value: impl Into<Element>) -> Row {
+/// [`row`] whose key is `label`, already drawn: a name that is an identifier, in mono, or a bone while the panel is
+/// read.
+pub(in crate::screens) fn keyed(
+  id: &str,
+  label: impl Into<Element>,
+  sub: Option<Sub>,
+  value: impl Into<Element>,
+) -> Row {
   keyed_in(Key::Wide, id, label, sub, value)
 }
 
 /// [`keyed`] whose key is `key` wide.
-fn keyed_in(key: Key, id: &str, label: Text, sub: Option<Sub>, value: impl Into<Element>) -> Row {
+fn keyed_in(key: Key, id: &str, label: impl Into<Element>, sub: Option<Sub>, value: impl Into<Element>) -> Row {
   let key = Column::new()
     .width(Dimension::Px(key.width()))
     .flex_shrink(0.0)

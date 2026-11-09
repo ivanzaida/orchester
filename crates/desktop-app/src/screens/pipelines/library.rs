@@ -1,6 +1,5 @@
-//! Pipelines (`01 · Pipelines` `x1lmXb`, `01b · none yet` `l4Udx`): the title with *Import from project* and *New
-//! pipeline*, the pipelines in the groups Published and Draft only, how many there are and how versions work; with
-//! none yet, the two ways to start one.
+//! Pipelines (`01 · Pipelines` `x1lmXb`, `01b · none yet` `l4Udx`): the title with *New pipeline*, the pipelines in the
+//! groups Published and Draft only, how many there are and how versions work; with none yet, the two ways to start one.
 use lurq::{
   app::{
     component::Component,
@@ -27,7 +26,7 @@ use super::{
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::{ImportTab, ProjectPage, Route},
+  routes::{ProjectPage, Route},
   screens::hub::team,
   services::Services,
   theme::{ExtraSpacing, GroupText, IconSize},
@@ -135,18 +134,14 @@ fn reading(ctx: &mut Ctx) -> Element {
   Skeleton::new("pipelines-loading", ctx.t("pipelines.reading")).show(ctx, pane)
 }
 
-/// The title with its actions (`Header` `rDRoY`): 24 over it and 12 under it; a member of a shared project imports
-/// and adds none of the team's pipelines.
+/// The title with its actions (`Header` `rDRoY`): 24 over it and 12 under it; a member of a shared project adds none
+/// of the team's pipelines.
 fn header(ctx: &mut Ctx, project: ProjectId, may_change: bool) -> Element {
   let nav = Navigation::of(ctx);
   let actions = may_change.then(|| {
-    let import = ActionButton::new("pipeline-import", ButtonKind::Secondary, ctx.t("pipelines.import"))
-      .icon(Icon::Download)
-      .opens(nav.to(Route::Project(project, ProjectPage::Import(ImportTab::Pipelines))));
-    let new = ActionButton::new("pipeline-new", ButtonKind::Primary, ctx.t("pipelines.new"))
+    ActionButton::new("pipeline-new", ButtonKind::Primary, ctx.t("pipelines.new"))
       .icon(Icon::Plus)
-      .opens(nav.to(Route::Project(project, ProjectPage::NewPipeline)));
-    [import, new]
+      .opens(nav.to(Route::Project(project, ProjectPage::NewPipeline)))
   });
   parts::header()
     .padding(
@@ -156,7 +151,7 @@ fn header(ctx: &mut Ctx, project: ProjectId, may_change: bool) -> Element {
         .left(ExtraSpacing::Roomy.role())
         .right(ExtraSpacing::Roomy.role()),
     )
-    .child(parts::title_row("pipelines-title", &ctx.t("pipelines.title")).with_children(actions.into_iter().flatten()))
+    .child(parts::title_row("pipelines-title", &ctx.t("pipelines.title")).with_children(actions))
     .into()
 }
 

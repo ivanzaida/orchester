@@ -294,8 +294,7 @@
     },
     "empty": {
       "title": "No tasks yet",
-      "detail": "A task is a piece of work a pipeline carries from brief to merge, in its own worktree.",
-      "import": "Import resources"
+      "detail": "A task is a piece of work a pipeline carries from brief to merge, in its own worktree."
     },
     "noMatches": {
       "title": "No tasks in this view match the search or filters.",

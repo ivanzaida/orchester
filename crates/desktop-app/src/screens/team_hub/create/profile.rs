@@ -33,8 +33,9 @@ use super::{
 };
 use crate::{
   screens::{
+    hub::agent_row::tag_chip,
     local_hub::profile::servers,
-    team_hub::{row::tag_chip, rows, words::cli_key},
+    team_hub::{rows, words::cli_key},
   },
   theme::HubText,
 };

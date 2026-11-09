@@ -1,4 +1,4 @@
-//! The head's Import from project and Add tool with its menu (`Create a tool` in 04): a command tool opens a new
+//! The head's Add tool with its menu (`Create a tool` in 04): a command tool opens a new
 //! draft; the other kinds say what they need first.
 use lurq::{
   app::{
@@ -14,10 +14,9 @@ use orchester_core::id::ProjectId;
 
 use crate::{
   navigation::Navigation,
-  routes::{ImportTab, ProjectPage, Route},
+  routes::{ProjectPage, Route},
   theme::ExtraSpacing,
   ui::{
-    button::{ActionButton, ButtonKind},
     icon::Icon,
     menu::{MenuItem, menu_panel},
     menu_button::MenuButton,
@@ -29,10 +28,6 @@ const MENU_WIDTH: f32 = 320.0;
 
 /// The head's actions on the Tools tab.
 pub(super) fn actions(ctx: &mut Ctx, project: ProjectId, (menu, anchor): (&Signal<bool>, &ElementRef)) -> Vec<Element> {
-  let nav = Navigation::of(ctx);
-  let import = ActionButton::new("tools-import", ButtonKind::Ghost, ctx.t("tools.import"))
-    .icon(Icon::Download)
-    .opens(nav.to(Route::Project(project, ProjectPage::Import(ImportTab::Tools))));
   let panel = panel(ctx, project, menu);
   let add = Row::new()
     .align_items(Alignment::Center)
@@ -48,7 +43,7 @@ pub(super) fn actions(ctx: &mut Ctx, project: ProjectId, (menu, anchor): (&Signa
         .placement(Placement::BottomEnd)
         .offset(0.0, ExtraSpacing::Snug.value()),
     );
-  vec![import.into(), add.into()]
+  vec![add.into()]
 }
 
 fn panel(ctx: &mut Ctx, project: ProjectId, menu: &Signal<bool>) -> Column {

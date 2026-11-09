@@ -59,15 +59,6 @@ impl Entry {
     }
   }
 
-  /// A row's height: 56 when it says what the person has to do, 44 for a quiet one.
-  pub(super) fn height(&self) -> f32 {
-    if self.group == Group::NeedsYouHere || self.kind == ResourceKind::McpServer || self.archived.is_some() {
-      ROW_TALL
-    } else {
-      ROW_SHORT
-    }
-  }
-
   /// Whether the filter holds it: the kind it names, or All; an archived one only under Archived.
   fn held_by(&self, filter: HubFilter) -> bool {
     match filter {
@@ -82,11 +73,6 @@ impl Entry {
     }
   }
 }
-
-/// A row that says what the person has to do (`Item · pencil-design`).
-const ROW_TALL: f32 = 56.0;
-/// A quiet row (`Item · Project rules`).
-const ROW_SHORT: f32 = 44.0;
 
 /// The groups' order in the list.
 pub(super) const GROUPS: [Group; 3] = [Group::NeedsYouHere, Group::Ready, Group::OffHere];

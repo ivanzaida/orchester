@@ -6,10 +6,13 @@
 //! first resource of the list. Instructions and skills need nothing of a computer and stand under *Ready here*. An
 //! admin has New in the head ([`create`]).
 //!
-//! The readiness is read off the UI thread when the page opens and when the project's resources, fill-ins or team
-//! standings change, never on a timer: a local tool's secret is read from the keychain. While it is read again the
-//! page shows the last answer dimmed with *Reading…*, and a read that failed shows its failure and no counts, never the
-//! last answer as current. Before the project is known to be shared the page is [`unread`]'s.
+//! The readiness is read off the UI thread through its query (`queries::hub::team_hub`), kept for the session: a visit
+//! shows the last answer at once and reads it again behind it, as do a change of the project's resources or fill-ins
+//! and of the team's configuration, which the team server's events change (`queries::follow::ProjectReads`); never on a
+//! timer: a local tool's secret is read from the keychain. While it is read again the page shows the last answer as it
+//! is, and a read that failed shows its failure and no counts, never the last answer as current. Before it was ever
+//! read the list and the panel stand in bones ([`agents_bones`]). Before the project is known to be shared the page is
+//! [`unread`]'s.
 
 pub(in crate::screens) mod actions;
 pub(in crate::screens) mod archive;
@@ -32,36 +35,37 @@ mod tool;
 pub(super) mod unread;
 pub(in crate::screens) mod words;
 
+use std::sync::Arc;
+
 use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    theme::{BorderSize, PaletteColor, RadiusSize},
   },
-  components::{Column, Row},
+  components::Row,
   core::Signal,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  node::Element,
 };
-use orchester_workspace::{
-  agents::team_hub::TeamHub, background, messages::Message, sharing::team::TeamConfiguration, tasks::outside::Outside,
-};
+use orchester_core::id::{ProjectId, ResourceId};
+use orchester_workspace::{agents::team_hub::TeamHub, messages::Message, sharing::team::TeamConfiguration};
 
-use self::{
-  create::NewMenu,
-  head::FilterShown,
-  model::{Kind, Listing},
-};
+use self::model::{Kind, Listing};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
-  routes::{HubView, ProjectPage, Route},
+  queries::{self, Again, Session, hub as hub_query},
+  routes::{HubFilter, HubView, ProjectPage, Route},
+  screens::hub::{
+    agents, agents_bones,
+    new_button::{made_under, new_button, new_words},
+  },
   services::Services,
   team::reached::Reached,
-  theme::{HUB_READING_OPACITY, HubSpacing},
   ui::{
+    button::{ActionButton, ButtonKind},
     failure::{Failure, LastFailure},
     icon::Icon,
-    state::{EmptyState, loading},
+    pressable::Press,
   },
 };
 
@@ -86,11 +90,11 @@ pub fn screen(ctx: &mut Ctx, project: &ShownProject, team: TeamConfiguration, vi
 }
 
 struct TeamHubScreen {
+  /// Counts *Try again* and *Check again*, each of which reads the hub again.
   retry: Signal<u64>,
+  again: Again,
   /// Why the hub couldn't be read, kept while it is read again.
   failure: LastFailure,
-  /// The menu All's New opens in the head.
-  new_menu: NewMenu,
 }
 
 impl Component for TeamHubScreen {
@@ -99,42 +103,17 @@ impl Component for TeamHubScreen {
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       retry: ctx.signal(0),
+      again: Again::default(),
       failure: LastFailure::default(),
-      new_menu: NewMenu {
-        open: ctx.signal(false),
-        anchor: ctx.element_ref(),
-      },
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let Props { project, view, team } = ctx.props::<Props>().clone();
-    let outside = project.feed.outside.get();
-    // Fill-ins (a program path, a secret value, On here) count as Connections; the rest are the kinds the hub lists.
-    let dep = (
-      self.retry.get(),
-      outside.of(Outside::Connections),
-      outside.of(Outside::Tools),
-      outside.of(Outside::Profiles),
-      outside.of(Outside::Instructions),
-      outside.of(Outside::Skills),
-      team.clone(),
-    );
-    let services = Services::of(ctx);
-    let (workspace, vault, hold) = (services.workspace, services.vault, services.hold);
-    let loaded = ctx
-      .future((project.open.repo_root.clone(), dep), move |(root, _)| {
-        tracing::trace!(target: crate::app_log::READ_LOG, read = "team_hub");
-        let (workspace, vault, hold) = (workspace.clone(), vault.clone(), hold.clone());
-        async move {
-          hold.released().await;
-          background::run(move || workspace.team_hub(&root, vault.get()))
-            .await?
-            .map_err(|error| error.message())
-        }
-      })
-      .state()
-      .get();
+    let session = Session::of(ctx);
+    let query = ctx.query(hub_query::team_hub(session, project.open.repo_root.clone()));
+    self.again.follow(self.retry.get(), &query);
+    let loaded = queries::reading(&query);
     let failed = self.failure.follow(&loaded);
     // A read under way or failed keeps the last answer in `loaded`: it counts and lists only while the read is not
     // failed, and a read under way marks what shows as the last answer.
@@ -162,33 +141,33 @@ impl Component for TeamHubScreen {
           (reading, &self.retry),
         )
       }
-      (None, None) => loading("team-hub-loading", &ctx.t("team_hub.reading")).into(),
+      (None, None) => agents_bones::body(ctx, "team-hub-loading", ctx.t("team_hub.reading")),
     };
     let id = project.open.project.id();
-    let new = team
-      .may_change
-      .then(|| create::new_button(ctx, (id, view.filter), (&navigation, &self.new_menu)))
-      .flatten();
+    // Only an admin makes a resource: *New <kind>* opens the form of the kind the tab holds.
+    let new = team.may_change.then(|| {
+      let form = Route::Project(id, ProjectPage::hub(HubView::adding(made_under(view.filter))));
+      new_button(ctx, "team-hub-new", view.filter, Press::Open(navigation.to(form)))
+    });
     // A draft nobody can publish, and a version in the outbox, are not *saved* work of an editor that is open.
     let draft_saved = selected
       .and_then(|chosen| listing.as_ref().and_then(|listing| listing.find(chosen)))
       .is_some_and(|entry| entry.draft && !entry.read_only && entry.outbox.is_none());
-    let shown = FilterShown {
-      project: id,
-      filter: view.filter,
-      selected,
-      reading,
-      may_change: team.may_change,
-      draft_saved,
-    };
-    let told = taken_back::notices(ctx, &team, &project.open.repo_root);
+    let notices = taken_back::notices(ctx, &team, &project.open.repo_root);
     let unreached = Services::of(ctx).team.reached().of(&project.open.repo_root) == Some(Reached::Unanswered);
-    frame(
+    let status = head::status(ctx, &team, (unreached, draft_saved));
+    agents::frame(
       ctx,
-      (&team, listing.as_ref(), &shown),
-      (new, unreached),
-      &navigation,
-      (body, told, view),
+      agents::Frame {
+        prefix: "team-hub",
+        filter: view.filter,
+        status,
+        new,
+        tabs: tabs(id, listing.as_ref(), selected, &navigation),
+        notices,
+        body,
+        over: Vec::new(),
+      },
     )
   }
 }
@@ -221,39 +200,26 @@ fn keep_route_on_shown(
   }
 }
 
-/// The page: the head and the filter over `body`.
-fn frame(
-  ctx: &mut Ctx,
-  (team, listing, shown): (&TeamConfiguration, Option<&Listing>, &FilterShown),
-  (new, unreached): (Option<Element>, bool),
+/// A tab per kind with its count (none while the hub is read), each keeping the chosen resource when it holds it.
+fn tabs(
+  project: ProjectId,
+  listing: Option<&Listing>,
+  selected: Option<ResourceId>,
   navigation: &Navigation,
-  (body, told, view): (Element, Vec<Element>, HubView),
-) -> Element {
-  Column::new()
-    .id("screen-team-hub")
-    .describe("filter", view.filter.name())
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Pct(100.0))
-    .padding(
-      Padding::new()
-        .top(HubSpacing::HeadTop.role())
-        .bottom(HubSpacing::HeadTop.role())
-        .left(HubSpacing::Side.role())
-        .right(HubSpacing::Side.role()),
-    )
-    .spacing(crate::theme::ExtraSpacing::Inset.role())
-    .child(head::head(ctx, team, (new, unreached, shown.draft_saved)))
-    .child(head::filter(ctx, listing, shown, navigation))
-    .with_children(told)
-    .child(
-      Column::new()
-        .id("team-hub-body")
-        .width(Dimension::Pct(100.0))
-        .flex(1.0)
-        .min_height(Dimension::Px(0.0))
-        .child(body),
-    )
-    .into()
+) -> Vec<agents::Tab> {
+  HubFilter::ALL
+    .into_iter()
+    .map(|choice| {
+      let item = selected.filter(|item| listing.is_some_and(|listing| listing.holds(choice, *item)));
+      let route = Route::Project(project, ProjectPage::hub(HubView::new(choice, item)));
+      let navigation = navigation.clone();
+      agents::Tab {
+        filter: choice,
+        count: listing.map(|listing| listing.count(choice)),
+        open: Arc::new(move || navigation.go(route.clone())),
+      }
+    })
+    .collect()
 }
 
 /// The list and the panel, or what stands in for them when the filter holds nothing. `reading`: they show the last
@@ -270,16 +236,7 @@ fn hub_body(
   let adding = Kind::of_filter(view.filter).filter(|_| view.adding && team.may_change);
   let selected = listing.selected(view.filter, view.item).filter(|_| adding.is_none());
   if selected.is_none() && adding.is_none() {
-    if !team.may_change {
-      return member::empty(ctx, view.filter, team);
-    }
-    return EmptyState::new(
-      "team-hub-empty",
-      Icon::Users,
-      ctx.t("team_hub.empty.title"),
-      ctx.t("team_hub.empty.detail"),
-    )
-    .into();
+    return empty(ctx, view.filter, team, navigation, id);
   }
   let list = list::list(
     ctx,
@@ -308,28 +265,34 @@ fn hub_body(
       ctx,
       (project, team, hub),
       (listing, selected),
-      (navigation, reading, retry),
+      (reading, retry),
     ),
     (None, None) => return Element::from(Row::new()),
   };
-  Row::new()
-    .id("team-hub-master-detail")
-    .describe("state", if reading { "reading" } else { "read" })
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Pct(100.0))
-    .opacity(if reading { HUB_READING_OPACITY } else { 1.0 })
-    .border(Border::inside(BorderSize::Sm, PaletteColor::Border))
-    .rounded(RadiusSize::Md)
-    .child(
-      Column::new()
-        .width(Dimension::Px(list::LIST_WIDTH))
-        .height(Dimension::Pct(100.0))
-        .flex_shrink(0.0)
-        .border_right(Border::inside(BorderSize::Sm, PaletteColor::Border))
-        .child(list),
-    )
-    .child(panel)
-    .into()
+  agents::master_detail("team-hub", reading, (list, panel))
+}
+
+/// The open tab holds nothing: for an admin, what the kind is and *New <kind>*; for a member, that an admin adds it and
+/// who the admins are, with no action.
+fn empty(
+  ctx: &Ctx,
+  filter: HubFilter,
+  team: &TeamConfiguration,
+  navigation: &Navigation,
+  project: ProjectId,
+) -> Element {
+  let glyph = agents::glyph_of(filter);
+  if !team.may_change {
+    let (title, detail) = member::empty_words(filter);
+    let admins = member::admins_line(ctx, team);
+    return agents::empty("team-hub", glyph, (&ctx.t(title), &ctx.t(detail)), vec![admins]);
+  }
+  let (title, detail) = agents::empty_words(filter);
+  let form = Route::Project(project, ProjectPage::hub(HubView::adding(made_under(filter))));
+  let action = ActionButton::new("team-hub-empty-new", ButtonKind::Secondary, ctx.t(new_words(filter)))
+    .icon(Icon::Plus)
+    .opens(navigation.to(form));
+  agents::empty("team-hub", glyph, (&ctx.t(title), &ctx.t(detail)), vec![action.into()])
 }
 
 /// The panel of the resource `selected`: its kind's own, or the frame the kinds without one share.
@@ -337,14 +300,9 @@ fn resource_panel(
   ctx: &mut Ctx,
   (project, team, hub): (&ShownProject, &TeamConfiguration, &TeamHub),
   (listing, selected): (&Listing, &model::Entry),
-  (navigation, reading, retry): (&Navigation, bool, &Signal<u64>),
+  (reading, retry): (bool, &Signal<u64>),
 ) -> Element {
-  let id = project.open.project.id();
-  let shown = panel::Shown {
-    project: id,
-    team,
-    navigation,
-  };
+  let shown = panel::Shown { team };
   detail(ctx, (project, team), (hub, listing, selected), (&shown, reading, retry))
 }
 
@@ -359,7 +317,6 @@ fn detail(
   let repo_root = project.open.repo_root.clone();
   let plain = |sheet| plain::Props {
     repo_root: repo_root.clone(),
-    project: id,
     team: team.clone(),
     listing: listing.clone(),
     entry: selected.clone(),
@@ -371,7 +328,6 @@ fn detail(
         ctx,
         profile::Props {
           repo_root,
-          project: id,
           team: team.clone(),
           reading,
           listing: listing.clone(),
@@ -400,7 +356,6 @@ fn detail(
         ctx,
         tool::Props {
           repo_root,
-          project: id,
           team: team.clone(),
           listing: listing.clone(),
           entry: selected.clone(),

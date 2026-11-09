@@ -62,51 +62,26 @@ fn local_hub_leaving_a_filter_with_unsaved_edits_asks_first() {
   );
 }
 
+/// The head's *New <kind>* leaves the panel for the kind's form: it asks first, as every way out does.
 #[test]
-fn local_hub_leaving_by_the_head_with_unsaved_edits_asks_first() {
+fn local_hub_leaving_by_the_heads_new_with_unsaved_edits_asks_first() {
   let mut agents = Agents::new(true);
   let docs = server(&agents, "docs");
-  let here = hub(HubView::on_server(HubFilter::All, docs));
-  for (id, place) in [
-    (
-      "local-hub-share",
-      ProjectPage::Settings(orchester_app::routes::ProjectSettingsTab::Sharing),
-    ),
-    ("local-hub-memory", ProjectPage::Memory(None)),
-    (
-      "local-hub-import",
-      ProjectPage::Import(orchester_app::routes::ImportTab::All),
-    ),
+  for (filter, made) in [
+    (HubFilter::All, HubFilter::Profiles),
+    (HubFilter::McpServers, HubFilter::McpServers),
   ] {
-    open(&mut agents, HubView::on_server(HubFilter::All, docs));
+    let here = hub(HubView::on_server(filter, docs));
+    open(&mut agents, HubView::on_server(filter, docs));
     agents.until("the server's panel", |s| s.exists("local-hub-mcp-server"));
     edit(&mut agents);
-    asks_then_goes(&mut agents, &here, id, &Route::Project(project_id(), place));
+    asks_then_goes(
+      &mut agents,
+      &here,
+      "local-hub-new",
+      &Route::Project(project_id(), ProjectPage::hub(HubView::adding(made))),
+    );
   }
-}
-
-#[test]
-fn local_hub_new_menu_with_unsaved_edits_asks_before_it_opens_a_page() {
-  let mut agents = Agents::new(true);
-  let docs = server(&agents, "docs");
-  open(&mut agents, HubView::on_server(HubFilter::All, docs));
-  agents.until("the server's panel", |s| s.exists("local-hub-mcp-server"));
-  edit(&mut agents);
-  agents.click("local-hub-new");
-  agents.until("the menu", |s| s.exists("local-hub-new-profiles"));
-
-  agents.click("local-hub-new-profiles");
-  agents.until("the question", |s| s.exists(DISCARD));
-  assert_eq!(
-    agents.window.navigation().route_now(),
-    hub(HubView::on_server(HubFilter::All, docs)),
-    "no page opened under the question"
-  );
-  agents.click(DISCARD);
-  agents.until("the form that makes a profile", |s| {
-    s.window.navigation().route_now()
-      == Route::Project(project_id(), ProjectPage::hub(HubView::adding(HubFilter::Profiles)))
-  });
 }
 
 #[test]

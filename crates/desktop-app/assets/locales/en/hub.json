@@ -31,6 +31,52 @@
     },
     "failure": {
       "stillWorks": "Runs keep going, and the other tabs that read their own data still open."
+    },
+    "new": {
+      "profiles": "New agent",
+      "mcpServers": "New MCP server",
+      "instructions": "New instruction",
+      "skills": "New skill",
+      "tools": "New tool"
+    },
+    "filter": {
+      "all": "All",
+      "profiles": "Profiles",
+      "mcpServers": "MCP servers",
+      "instructions": "Instructions",
+      "skills": "Skills",
+      "tools": "Tools",
+      "archived": "Archived"
+    },
+    "empty": {
+      "all": {
+        "title": "Nothing here yet",
+        "detail": "No agents yet. Start with an agent profile."
+      },
+      "profiles": {
+        "title": "No agent profiles yet",
+        "detail": "A profile is a role, its model and what it may do; pipelines run them."
+      },
+      "mcpServers": {
+        "title": "No MCP servers yet",
+        "detail": "Add a server the project's runs can use."
+      },
+      "instructions": {
+        "title": "No instructions yet",
+        "detail": "Text added to runs: to every run, a role, a pipeline or a step."
+      },
+      "skills": {
+        "title": "No skills yet",
+        "detail": "Instructions and files an agent loads when its task calls for them."
+      },
+      "tools": {
+        "title": "No tools yet",
+        "detail": "Commands and requests agents may run, with their approvals."
+      },
+      "archived": {
+        "title": "Nothing archived",
+        "detail": "Archiving takes a resource out of the lists and pickers. It shows up here, and Restore brings it back."
+      }
     }
   }
 }

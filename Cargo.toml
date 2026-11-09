@@ -249,3 +249,10 @@ debug = "line-tables-only"
 [profile.release]
 debug = "line-tables-only"
 split-debuginfo = "packed"
+
+# tools/install.ps1's build for this computer: the release build, but incremental and in many codegen units, so a small
+# change rebuilds in minutes instead of recompiling the app crate whole. CI's releases keep [profile.release].
+[profile.local-release]
+inherits = "release"
+incremental = true
+codegen-units = 256

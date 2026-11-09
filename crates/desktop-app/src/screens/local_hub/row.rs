@@ -3,13 +3,9 @@
 //! stands inert on `hover` with a 2 `accent` start; the others open the hub on them.
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{BorderSize, PaletteColor, SpacingSize},
-  },
-  components::{Column, Row, Text, TextOverflow},
-  layout::Alignment,
-  node::{Element, border::Border, dimension::Dimension, padding::Padding},
+  app::{ctx::Ctx, theme::PaletteColor},
+  components::Row,
+  node::Element,
 };
 use orchester_core::resource::ResourceKind;
 use orchester_workspace::{local_archive::Archivable, readiness::Group};
@@ -21,9 +17,9 @@ use super::{
 };
 use crate::{
   routes::{HubFilter, ProjectPage, Route},
-  screens::team_hub::row::tag_chip,
-  theme::{ExtraColor, ExtraSpacing, HubText, IconSize},
-  ui::{agent_mark::AgentMark, icon::icon, pressable::inert},
+  screens::hub::agent_row::{AgentRow, agent_row, tag_chip},
+  theme::IconSize,
+  ui::{agent_mark::AgentMark, icon::icon},
 };
 
 /// The element id of an entry's parts.
@@ -35,47 +31,25 @@ pub(super) fn token(what: Archivable) -> String {
 }
 
 pub(super) fn row(ctx: &Ctx, entry: &Entry, shown: &Shown<'_>) -> Element {
-  let chosen = shown.selected == Some(entry.what);
   let id = format!("local-hub-row-{}", token(entry.what));
-  let button = if chosen {
-    inert(lurq::components::Button::empty())
-  } else {
-    let route = Route::Project(shown.project, ProjectPage::hub(view_of(shown.filter, Some(entry.what))));
-    // Opening another entry would drop unsaved edits: the hub asks first.
-    shown.leave.press(route).button()
-  };
-  let start = if chosen {
-    ExtraSpacing::Inset.role()
-  } else {
-    SpacingSize::Lg
-  };
+  let route = Route::Project(shown.project, ProjectPage::hub(view_of(shown.filter, Some(entry.what))));
   let unsaved = shown
     .unsaved
     .and_then(|(what, state)| (what == entry.what).then_some(state));
-  let button = button
-    .id(id.clone())
-    .width(Dimension::Pct(100.0))
-    .height(Dimension::Px(entry.height()))
-    .padding(Padding::new().left(start).right(SpacingSize::Lg))
-    .spacing(ExtraSpacing::Loose.role())
-    .align_items(Alignment::Center)
-    .describe("state", if chosen { "chosen" } else { "enabled" })
-    .describe("group", group_name(entry.group))
-    .describe("kind", format!("{:?}", entry.kind))
-    .child(mark(ctx, entry, unsaved))
-    .child(text(ctx, entry, shown, (&id, unsaved)))
-    .with_children(tag(ctx, entry, shown.filter, &id))
-    .with_children(version(entry, shown.filter, &id));
-  if chosen {
-    button
-      .background(ExtraColor::Hover.role())
-      .border_left(Border::inside(BorderSize::Md, PaletteColor::Accent))
-      .into()
-  } else {
-    button
-      .hovered_style(lurq::node::Style::new().background(ExtraColor::Hover.role()))
-      .into()
-  }
+  let said = words::line(ctx, shown.now, entry, unsaved);
+  agent_row(AgentRow {
+    id: &id,
+    chosen: shown.selected == Some(entry.what),
+    // Opening another entry would drop unsaved edits: the hub asks first.
+    open: shown.leave.press(route).button(),
+    group: entry.group,
+    kind: format!("{:?}", entry.kind),
+    mark: mark(ctx, entry, unsaved),
+    name: &entry.name,
+    line: (&said.text, said.color),
+    tag: tag(ctx, entry, shown.filter, &id),
+    version: version(entry, shown.filter),
+  })
 }
 
 /// The glyph at a row's start: a profile's CLI's own mark, else the glyph of what it is, in the color of how it stands.
@@ -98,30 +72,6 @@ fn mark(ctx: &Ctx, entry: &Entry, unsaved: Option<Unsaved>) -> Element {
   icon(entry.glyph(), IconSize::Lg, color).into()
 }
 
-/// The name over its line.
-fn text(ctx: &Ctx, entry: &Entry, shown: &Shown<'_>, (id, unsaved): (&str, Option<Unsaved>)) -> Column {
-  let said = words::line(ctx, shown.now, entry, unsaved);
-  Column::new()
-    .flex(1.0)
-    .min_width(Dimension::Px(0.0))
-    .spacing(ExtraSpacing::Fine.role())
-    .child(
-      Text::new(&entry.name)
-        .id(format!("{id}-name"))
-        .variant(HubText::RowName.role())
-        .nowrap(),
-    )
-    .child(
-      Text::new(&said.text)
-        .id(format!("{id}-line"))
-        .variant(HubText::RowLine.role())
-        .color(said.color)
-        .width(Dimension::Pct(100.0))
-        .nowrap()
-        .text_overflow(TextOverflow::Elipsis),
-    )
-}
-
 /// Under All and Archived the kind's tag; under a kind what an MCP server or a tool is.
 fn tag(ctx: &Ctx, entry: &Entry, filter: HubFilter, id: &str) -> Option<Row> {
   let key = if matches!(filter, HubFilter::All | HubFilter::Archived) {
@@ -133,23 +83,9 @@ fn tag(ctx: &Ctx, entry: &Entry, filter: HubFilter, id: &str) -> Option<Row> {
 }
 
 /// The version at a row's end (`Meta` in L1), under a kind's own filter: the latest published; an MCP server has none.
-fn version(entry: &Entry, filter: HubFilter, id: &str) -> Option<Text> {
+fn version(entry: &Entry, filter: HubFilter) -> Option<String> {
   if matches!(filter, HubFilter::All | HubFilter::Archived) {
     return None;
   }
-  Some(
-    Text::new(&entry.number?.to_string())
-      .id(format!("{id}-version"))
-      .variant(HubText::RowLine.role())
-      .color(PaletteColor::TextMuted)
-      .nowrap(),
-  )
-}
-
-const fn group_name(group: Group) -> &'static str {
-  match group {
-    Group::NeedsYouHere => "needs",
-    Group::Ready => "ready",
-    Group::OffHere => "off",
-  }
+  entry.number.map(|number| number.to_string())
 }

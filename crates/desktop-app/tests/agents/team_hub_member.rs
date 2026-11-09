@@ -158,18 +158,14 @@ fn team_hub_member_an_admin_has_no_line_and_the_members_head_says_what_they_are(
   name_the_admins(&agents);
   open(&mut agents, HubView::new(HubFilter::Skills, Some(skill)));
   assert!(!agents.exists("team-hub-member-lock") && !agents.exists("team-hub-member-role"));
-  assert_eq!(
-    agents.text("team-hub-filter-hint"),
-    "Skills are the team's; each computer fills in only what is local"
-  );
+  // The head says *Team*, and no server's address after it.
+  assert_eq!(agents.text("team-hub-team-label"), "Team");
+  assert!(!agents.exists("team-hub-team-host"));
   let mut agents = Agents::new(true);
   let [skill, ..] = team_as(&agents, Some(MemberRole::Member));
   open(&mut agents, HubView::new(HubFilter::Skills, Some(skill)));
+  assert_eq!(agents.text("team-hub-team-label"), "Team");
   assert_eq!(agents.text("team-hub-member-role"), "· member");
-  assert_eq!(
-    agents.text("team-hub-filter-hint"),
-    "Skills are the team's; you fill in only what is local"
-  );
 }
 
 #[test]
@@ -181,19 +177,25 @@ fn team_hub_member_a_kind_with_nothing_published_is_one_empty_state_and_no_new()
     project_id(),
     ProjectPage::hub(HubView::new(HubFilter::Tools, None)),
   ));
-  agents.until("the empty state", |s| s.exists("team-hub-member-empty"));
+  agents.until("the empty state", |s| s.exists("team-hub-empty-body"));
   assert_eq!(agents.text("team-hub-empty-title"), "No tools yet");
+  assert!(agents.exists("team-hub-empty-admins"));
   assert!(!agents.exists("team-hub-list") && !agents.exists("team-hub-new"));
+  assert!(
+    !agents.exists("team-hub-empty-new"),
+    "a member's empty state has no action"
+  );
   assert_eq!(agents.text("team-hub-filter-tools-count"), "0");
-  // An admin keeps the generic state, which ORC-835 gives the kind's New.
+  // An admin's state says what the kind is, with its New, and names no admins.
   let mut agents = Agents::new(true);
   team(&agents);
   agents.window.navigation().go(Route::Project(
     project_id(),
     ProjectPage::hub(HubView::new(HubFilter::Tools, None)),
   ));
-  agents.until("empty", |s| s.exists("team-hub-empty"));
-  assert!(!agents.exists("team-hub-member-empty"));
+  agents.until("empty", |s| s.exists("team-hub-empty-body"));
+  assert_eq!(agents.text("team-hub-empty-new"), "New tool");
+  assert!(!agents.exists("team-hub-empty-admins"));
 }
 
 /// Takes every resource of [`team_as`] off the team, so no kind holds anything.
@@ -223,7 +225,7 @@ fn team_hub_member_every_kind_with_nothing_published_says_an_admin_adds_it_insid
       ProjectPage::hub(HubView::new(filter, None)),
     ));
     agents.until(title, |s| {
-      s.exists("team-hub-member-empty") && s.text("team-hub-empty-title") == title
+      s.exists("team-hub-empty-body") && s.text("team-hub-empty-title") == title
     });
     assert!(
       agents
@@ -236,7 +238,7 @@ fn team_hub_member_every_kind_with_nothing_published_says_an_admin_adds_it_insid
       "{filter:?}"
     );
     assert!(
-      !agents.exists("team-hub-list") && !agents.exists("team-hub-new"),
+      !agents.exists("team-hub-list") && !agents.exists("team-hub-new") && !agents.exists("team-hub-empty-new"),
       "{filter:?}"
     );
   }

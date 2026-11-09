@@ -18,7 +18,6 @@ use lurq::{
   },
   node::Element,
 };
-use orchester_core::id::ProjectId;
 use orchester_workspace::{
   agents::team_tool::TeamToolSheet,
   readiness::{ReadinessStanding, Undecided},
@@ -26,13 +25,11 @@ use orchester_workspace::{
 };
 
 use super::{
-  archive, bar, member,
+  archive, member,
   model::{Entry, Listing},
   panel, words,
 };
 use crate::{
-  navigation::Navigation,
-  routes::{ProjectPage, Route, ToolTab},
   services::Services,
   ui::chip::BadgeTone,
 };
@@ -40,7 +37,6 @@ use crate::{
 #[derive(Clone, PartialEq)]
 pub(super) struct Props {
   pub repo_root: PathBuf,
-  pub project: ProjectId,
   /// The team's configuration: an admin may change its resources, and a member reads who the admins are.
   pub team: TeamConfiguration,
   pub listing: Listing,
@@ -66,21 +62,13 @@ impl Component for ToolPanel {
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let Props {
       repo_root,
-      project,
       team,
       listing,
       entry,
       sheet,
     } = ctx.props::<Props>().clone();
     let now = Services::of(ctx).clock.now();
-    let navigation = Navigation::of(ctx);
-    let route = Route::Project(project, ProjectPage::Tool(entry.id, ToolTab::default()));
-    let head_edit = panel::with_more(
-      team
-        .may_change
-        .then(|| panel::edit_button(ctx, navigation.to(route.clone()))),
-      archive::menu(ctx, &repo_root, &entry, team.may_change),
-    );
+    let head_end = archive::menu(ctx, &repo_root, &entry, team.may_change);
     let kind = ctx.t_args(
       "team_hub.tool.where",
       [("kind", from_team::kind(ctx, &sheet).to_string())],
@@ -93,13 +81,12 @@ impl Component for ToolPanel {
       panel::used_by(ctx, &sheet.used_by),
     );
     let body = panel::body()
-      .child(panel::head_of(&entry, (kind.to_string(), version), head_edit))
+      .child(panel::head_of(&entry, (kind.to_string(), version), head_end))
       .child(chips)
       .with_children(member::lock_line(ctx, &team))
       .child(from_team::section(ctx, &sheet))
       .child(computer::section(ctx, &entry, &sheet));
-    let bar = team.may_change.then(|| bar::edit(ctx, &entry, navigation.to(route)));
-    panel::frame(&entry, body, bar)
+    panel::frame(&entry, body, None)
   }
 }
 

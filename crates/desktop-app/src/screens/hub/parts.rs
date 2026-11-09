@@ -108,7 +108,7 @@ pub(crate) fn tile(glyph: Icon, page: bool) -> Row {
 }
 
 /// [`tile`] with its glyph in `color`, e.g. an import result's check in `success` (`zEejx` in 03c).
-pub(crate) fn tile_in(glyph: Icon, page: bool, color: PaletteColor) -> Row {
+fn tile_in(glyph: Icon, page: bool, color: PaletteColor) -> Row {
   let side = if page { PAGE_TILE } else { TILE };
   Row::new()
     .width(Dimension::Px(side))

@@ -312,7 +312,7 @@ fn team_hub_profile_fix_a_panel_belongs_to_its_profile() {
     .outside
     .update(|counts| counts.profiles += 1);
   agents.until("the new profile is listed", |s| {
-    s.exists(&format!("team-hub-row-{other}")) && !s.exists("team-hub-reading")
+    s.exists(&format!("team-hub-row-{other}"))
   });
   agents.press_until("team-hub-ready-secret-GITHUB_TOKEN-add-value", "the dialog", |s| {
     s.exists("team-hub-secret-dialog")
@@ -437,7 +437,11 @@ fn team_hub_profile_fix_buttons_wait_while_the_hub_is_read_again() {
     .feed(super::support::project_id())
     .outside
     .update(|counts| counts.profiles += 1);
-  agents.until("the reading mark", |s| s.exists("team-hub-reading"));
+  // The hub is read again from the next frame, and the read waits for the hold.
+  for _ in 0..5 {
+    agents.window.tree.tick_futures();
+    agents.window.pass();
+  }
   let program = agents.root.join("lint-mcp");
   std::fs::write(&program, "#!/bin/sh\n").expect("a program");
   agents.stand_ins.choose(Some(program));
@@ -452,9 +456,12 @@ fn team_hub_profile_fix_buttons_wait_while_the_hub_is_read_again() {
     !agents.exists("team-hub-secret-dialog"),
     "the link does nothing while reading"
   );
-  assert!(agents.exists("team-hub-reading"), "still the last answer");
   hold.set(false);
-  agents.until("current again", |s| !s.exists("team-hub-reading"));
+  for _ in 0..20 {
+    agents.window.tree.tick_futures();
+    agents.window.pass();
+    thread::sleep(Duration::from_millis(5));
+  }
   // Not read again by the press that came meanwhile: nothing was set.
   assert_eq!(
     agents.text(&format!("team-hub-ready-mcp-{lint}-words")),

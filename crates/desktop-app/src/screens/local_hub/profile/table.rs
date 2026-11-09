@@ -1,7 +1,7 @@
 //! *Profile* of a local profile (`Profile` `Gk3js` in L1): the CLI it runs with, the connection it runs on, its model
-//! and reasoning effort, the MCP servers it chooses and the secrets those take. The CLI, the model, the effort and the
-//! servers are selects in place: each choice is saved into the draft ([`super::edit`]). The connection is a select too,
-//! applied by the pinned *Use … for …* as the design draws it; the secrets are the servers' and only shown.
+//! and reasoning effort, the MCP servers it chooses and the secrets those take. The CLI, the connection, the model, the
+//! effort and the servers are selects in place: each choice changes only what the panel holds until *Save*
+//! ([`super::edit`]); the secrets are the servers' and only shown.
 
 use std::sync::Arc;
 
@@ -23,15 +23,18 @@ use super::{
   servers,
 };
 use crate::{
-  screens::team_hub::{
-    profile::from_team::effort_words,
-    row::tag_chip,
-    rows::{self, Sub},
-    words::cli_key,
+  navigation::link::Open,
+  screens::{
+    hub::agent_row::tag_chip,
+    team_hub::{
+      profile::from_team::effort_words,
+      rows::{self, Sub},
+      words::cli_key,
+    },
   },
   theme::{HubText, IconSize},
   ui::{
-    agent_mark::AgentMark,
+    button::{ActionButton, ButtonKind},
     field::SelectField,
     icon::{Icon, icon},
   },
@@ -46,24 +49,24 @@ pub(super) struct Rows<'a> {
   /// The connection the person chose in the select, by id; empty while none is.
   pub chosen: &'a Signal<String>,
   pub on_edit: OnEdit,
-  /// How many writes ended: a select remounts on what is stored after each.
-  pub settled: u64,
-  /// A write is under way, or the hub is read again: nothing is changed now.
+  /// A choice is being checked: the selects keep showing what the person chose.
+  pub choosing: bool,
+  /// A save or a cancel is under way: nothing is changed now.
   pub busy: bool,
-  /// What follows the label at the head of the section: the way to the fields the rows do not draw.
-  pub after: Vec<Element>,
+  /// Where *Add* next to the connection goes: the accounts, where a connection of another account is made.
+  pub add_connection: Open,
 }
 
-pub(super) fn section(ctx: &mut Ctx, rows: Rows<'_>) -> Column {
+pub(super) fn section(ctx: &mut Ctx, rows: &Rows<'_>) -> Column {
   let profile = rows.profile;
   let mut list = Vec::new();
   if profile.cli.is_some() || !profile.options.clis.is_empty() {
-    list.push(cli(ctx, &rows));
+    list.push(cli(ctx, rows));
   }
-  list.push(connection(ctx, &rows));
-  list.push(model(ctx, &rows));
-  list.push(effort(ctx, &rows));
-  list.push(mcp_servers(ctx, &rows));
+  list.push(connection(ctx, rows));
+  list.push(model(ctx, rows));
+  list.push(effort(ctx, rows));
+  list.push(mcp_servers(ctx, rows));
   if !profile.secrets.is_empty() {
     list.push(rows::row(
       "local-hub-profile-secrets",
@@ -75,7 +78,7 @@ pub(super) fn section(ctx: &mut Ctx, rows: Rows<'_>) -> Column {
       ),
     ));
   }
-  rows::section("local-hub-profile", &ctx.t("local_hub.profile.title"), rows.after, list)
+  rows::section("local-hub-profile", &ctx.t("local_hub.profile.title"), Vec::new(), list)
 }
 
 /// *Agent CLI*: the CLIs the project has a connection for; another one runs the profile on its first connection.
@@ -109,9 +112,9 @@ fn cli(ctx: &mut Ctx, rows: &Rows<'_>) -> Row {
       placeholder: Some(ctx.t("local_hub.profile.chooseCli").to_string()),
       mono: false,
       locked: rows.busy,
+      choosing: rows.choosing,
       on_pick,
     },
-    rows.settled,
   );
   rows::row("local-hub-profile-cli", &label, None, select)
 }
@@ -138,9 +141,9 @@ fn model(ctx: &mut Ctx, rows: &Rows<'_>) -> Row {
       placeholder: None,
       mono: true,
       locked: rows.busy || listed.is_empty(),
+      choosing: rows.choosing,
       on_pick,
     },
-    rows.settled,
   );
   rows::row("local-hub-profile-model", &label, None, select)
 }
@@ -170,9 +173,9 @@ fn effort(ctx: &mut Ctx, rows: &Rows<'_>) -> Row {
       placeholder: None,
       mono: false,
       locked: rows.busy || profile.options.efforts.is_empty(),
+      choosing: rows.choosing,
       on_pick,
     },
-    rows.settled,
   );
   rows::row("local-hub-profile-effort", &label, None, select)
 }
@@ -273,41 +276,45 @@ fn connection(ctx: &Ctx, rows: &Rows<'_>) -> Row {
         )
         .into(),
     ),
-    ([only], Some(_)) => (None, only_one(ctx, profile, &only.name, &cli)),
+    // Always a select, one connection or several, with *Add* beside it for another one.
     _ => (
-      Some(if profile.draft {
-        // Choosing a connection publishes the next version on it, which the draft's edits would go out with.
-        Sub::quiet(ctx.t("local_hub.profile.draftFirst"))
-      } else {
-        Sub {
+      if many > 1 || profile.current.is_none() {
+        Some(Sub {
           words: ctx.t_args("local_hub.profile.ofItsKind", [("count", many.to_string())]),
           color: if profile.current.is_none() {
             PaletteColor::Warning
           } else {
             PaletteColor::TextMuted
           },
-        }
-      }),
-      select(ctx, profile, &cli, (rows.chosen, rows.busy || profile.draft)),
+        })
+      } else {
+        None
+      },
+      Row::new()
+        .id("local-hub-profile-connection-value")
+        .width(Dimension::Pct(100.0))
+        .spacing(SpacingSize::Sm)
+        .align_items(Alignment::Center)
+        .child(Column::new().flex(1.0).min_width(Dimension::Px(0.0)).child(select(
+          ctx,
+          profile,
+          &cli,
+          (rows.chosen, rows.busy),
+        )))
+        .child(
+          ActionButton::new(
+            "local-hub-profile-add-connection",
+            ButtonKind::Ghost,
+            ctx.t("local_hub.profile.addConnection"),
+          )
+          .icon(Icon::Plus)
+          .small()
+          .opens(rows.add_connection.clone()),
+        )
+        .into(),
     ),
   };
   rows::row(id, &label, sub, value)
-}
-
-/// *Claude Code · Claude 2*, after the CLI's mark.
-fn only_one(ctx: &Ctx, profile: &LocalProfile, name: &str, cli: &str) -> Element {
-  let mark = profile.cli.map(|cli| AgentMark::of(cli).render(ctx, IconSize::Lg));
-  Row::new()
-    .id("local-hub-profile-connection-value")
-    .width(Dimension::Pct(100.0))
-    .spacing(SpacingSize::Sm)
-    .align_items(Alignment::Center)
-    .with_children(mark)
-    .child(
-      Text::new(&ctx.t_args("team_hub.profile.connectionName", [("cli", cli), ("name", name)]))
-        .variant(HubText::Value.role()),
-    )
-    .into()
 }
 
 /// The select of the connections of the CLI: the one chosen, else *Choose a Claude Code connection*.

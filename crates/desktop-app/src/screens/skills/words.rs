@@ -3,10 +3,7 @@ use std::sync::Arc;
 
 use lurq::app::ctx::Ctx;
 use orchester_core::resource::InstructionScope;
-use orchester_workspace::{
-  agents::data::VersionState,
-  skills::{editor::EditorData, repository::RepositoryScan},
-};
+use orchester_workspace::{agents::data::VersionState, skills::editor::EditorData};
 pub fn next(state: VersionState) -> u32 {
   state.published().map_or(1, |v| v.get().saturating_add(1))
 }
@@ -66,74 +63,6 @@ pub fn files(ctx: &Ctx, count: usize) -> Arc<str> {
     1 => ctx.t("skills.oneFile"),
     _ => ctx.t_args("skills.filesCount", [("count", count.to_string())]),
   }
-}
-
-/// *Create 1 draft*, *Create 3 drafts*: an import's Create.
-pub fn create_drafts(ctx: &Ctx, count: usize) -> Arc<str> {
-  if count == 1 {
-    ctx.t("skills.importActionOne")
-  } else {
-    ctx.t_args("skills.importAction", [("count", count.to_string())])
-  }
-}
-
-/// *1 draft created*, *3 drafts created*: an import's result.
-pub fn drafts_created(ctx: &Ctx, count: usize) -> Arc<str> {
-  if count == 1 {
-    ctx.t("skills.importDoneOne")
-  } else {
-    ctx.t_args("skills.importDone", [("count", count.to_string())])
-  }
-}
-
-pub fn types(ctx: &Ctx, instructions: usize, skills: usize) -> Arc<str> {
-  ctx.t_args(
-    "skills.typeTotals",
-    [
-      (
-        "instructions",
-        ctx.t_args(
-          if instructions == 1 {
-            "skills.instructionOne"
-          } else {
-            "skills.instructionMany"
-          },
-          [("count", instructions.to_string())],
-        ),
-      ),
-      (
-        "skills",
-        ctx.t_args(
-          if skills == 1 {
-            "skills.skillOne"
-          } else {
-            "skills.skillMany"
-          },
-          [("count", skills.to_string())],
-        ),
-      ),
-    ],
-  )
-}
-
-/// What the repository holds to import, by its files and folders (*AGENTS.md and 2 skills folders*, `HMf2M` in 03):
-/// the instruction files that can be imported, then how many folders hold its skills
-/// ([`RepositoryScan::sources`]). With no skills folder only the files are named.
-pub fn found(ctx: &Ctx, scan: &RepositoryScan) -> Arc<str> {
-  let (files, folders) = scan.sources();
-  let files = files.join(", ");
-  let folders = match folders {
-    0 if !files.is_empty() => return files.into(),
-    1 => ctx.t("skills.foldersOne"),
-    count => ctx.t_args("skills.foldersMany", [("count", count.to_string())]),
-  };
-  if files.is_empty() {
-    return folders;
-  }
-  ctx.t_args(
-    "skills.foundFilesAndFolders",
-    [("files", files), ("folders", folders.to_string())],
-  )
 }
 
 /// Presentation of a reference path; selection and supported-file rules stay in workspace.

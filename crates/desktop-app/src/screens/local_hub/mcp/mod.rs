@@ -4,7 +4,7 @@
 //! which applies it to the project at once; *Cancel* puts back what was saved. Between the two the row and the panel
 //! say *Unsaved changes*; a save that fails (a program that is not there, the secret store refusing a value) says why
 //! in place, marks the field that failed, saves nothing, not even the other fields, and keeps everything typed. Archive
-//! is in the head's … menu.
+//! is in the head's … menu. While the project's connections are read for the first time the panel stands in bones.
 
 mod actions;
 mod editor;
@@ -22,13 +22,14 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
+    theme::PaletteColor,
   },
   components::Text,
   core::Signal,
   node::Element,
 };
 use orchester_core::id::ConnectionId;
-use orchester_workspace::connections::mcp::McpServerText;
+use orchester_workspace::{connections::mcp::McpServerText, local_archive::Archivable};
 
 use self::editor::EditorProps;
 pub(super) use self::editor::UnsavedSignal;
@@ -37,8 +38,51 @@ pub(in crate::screens) use self::{
   rows::{Look, switch_row},
   secrets::{Mark, Pending, Taken, rows_of},
 };
-use super::model::Entry;
-use crate::{project::ShownProject, queries, screens::connections::data, theme::HubText, ui::state::loading};
+use super::{
+  model::Entry,
+  panel::{Bone, BoneRow, Known, bones_with, chips_of},
+  save_bar::{self, Save},
+};
+use crate::{project::ShownProject, queries, screens::connections::data, theme::HubText};
+
+/// The ids of the panel's parts start with it.
+const PREFIX: &str = "local-hub-mcp";
+/// *Variables*: its field, 50 high, and *Add a variable from a secret…* under it.
+const VARIABLES_AREA: f32 = 86.0;
+
+/// *Server*'s rows of a program in bones, with their labels.
+const BONES: [BoneRow; 6] = [
+  BoneRow {
+    label: "local_hub.mcp.runsAs",
+    sub: None,
+    bone: Bone::Field,
+  },
+  BoneRow {
+    label: "connections.mcp.property.program",
+    sub: None,
+    bone: Bone::Field,
+  },
+  BoneRow {
+    label: "connections.mcp.property.arguments",
+    sub: None,
+    bone: Bone::Field,
+  },
+  BoneRow {
+    label: "connections.mcp.property.folder",
+    sub: None,
+    bone: Bone::Field,
+  },
+  BoneRow {
+    label: "local_hub.mcp.tools",
+    sub: None,
+    bone: Bone::Field,
+  },
+  BoneRow {
+    label: "connections.mcp.variables",
+    sub: None,
+    bone: Bone::Area(VARIABLES_AREA),
+  },
+];
 
 #[derive(Clone)]
 pub(super) struct Props {
@@ -59,6 +103,24 @@ fn saved_stamp(text: &McpServerText) -> u64 {
   let mut hasher = DefaultHasher::new();
   format!("{text:?}").hash(&mut hasher);
   hasher.finish()
+}
+
+/// The panel of the server while the project's connections are read for the first time: its head, chips and bar as
+/// the hub knows them, and *Server*'s rows in bones, as a program's are laid out.
+fn bones(ctx: &mut Ctx, props: &Props) -> Element {
+  let entry = &props.entry;
+  let known = Known {
+    head: editor::head(ctx, props, None),
+    chips: chips_of(notes::chips(ctx, entry, false), notes::used_by(ctx, entry)),
+    bar: save_bar::bar(
+      ctx,
+      PREFIX,
+      (Save::Unchanged, None),
+      (ctx.t("local_hub.mcp.onlyHere").to_string(), PaletteColor::TextMuted),
+    ),
+  };
+  let what = Archivable::McpServer(props.server);
+  bones_with(ctx, what, PREFIX, ("connections.mcp.dialog.server", &BONES), known)
 }
 
 /// The panel of the local MCP server `props.server`.
@@ -87,7 +149,7 @@ impl Component for Loader {
     let query = data::load(ctx, props.project.open.repo_root.clone());
     let loaded = queries::state(&query);
     let Some(listed) = loaded.data else {
-      return loading("local-hub-mcp-loading", &ctx.t("local_hub.reading")).into();
+      return bones(ctx, &props);
     };
     let Some(server) = listed.mcp.iter().find(|server| server.id() == props.server).cloned() else {
       return Text::new(&ctx.t("local_hub.mcp.gone"))

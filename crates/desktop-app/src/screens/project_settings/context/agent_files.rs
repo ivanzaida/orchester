@@ -13,7 +13,6 @@ use lurq::{
   },
   components::{Column, Row, Text},
   core::{ElementRef, Signal},
-  layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_workspace::{project_settings::Settings, prompt_changes};
@@ -30,7 +29,6 @@ use crate::{
   ui::{
     button::{ActionButton, ButtonKind},
     field::field_error,
-    form_section::not_built,
     message::message_text,
     popover::{PopoverSide, popover, popover_panel},
     skeleton,
@@ -210,14 +208,6 @@ fn panel(ctx: &Ctx, on: bool) -> Column {
       Text::new(&ctx.t("project_settings.filesNote"))
         .variant(ExtraTypography::Prose.role())
         .width(Dimension::Pct(100.0)),
-    )
-    .child(
-      not_built(
-        "settings-import",
-        &ctx.t("project_settings.import"),
-        &ctx.t("project_settings.importUnavailable"),
-      )
-      .align_items(Alignment::Start),
     )
 }
 

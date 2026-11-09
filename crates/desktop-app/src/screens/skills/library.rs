@@ -1,8 +1,7 @@
 //! The Skills tab's list (`03 Skills` `w0NiG0`): how many skills and drafts, then a group per scope — the project,
-//! agent roles, pipelines and steps — with a row per skill, and *Found in this repository* with the Repository agent
-//! files switch and Import ([`super::repository::found`]). With no skill yet, a quiet row says what a skill is
+//! agent roles, pipelines and steps — with a row per skill. With no skill yet, a quiet row says what a skill is
 //! (06b). The filter a route names keeps its group first. In a shared project the line over the list says it is the
-//! team's, each row its publisher, and a member imports nothing (`Shared configuration · redesign`, 01 `cHvkL`).
+//! team's, each row its publisher, and a member adds nothing (`Shared configuration · redesign`, 01 `cHvkL`).
 use lurq::{
   app::{component::Component, ctx::Ctx},
   components::{Column, Text},
@@ -11,7 +10,7 @@ use lurq::{
 use orchester_core::resource::InstructionScope;
 use orchester_workspace::{sharing::team::TeamConfiguration, skills::data::SkillEntry};
 
-use super::{PageProps, repository, state::Panel, words};
+use super::{PageProps, state::Panel, words};
 use crate::{
   routes::SkillsFilter,
   screens::hub::{
@@ -71,10 +70,6 @@ impl Component for Library {
         pane = pane.child(scope_group(ctx, (&p, team.as_ref()), filter, &of_scope));
       }
     }
-    // A member of a shared project imports none of the repository's files into the team's skills.
-    if team::may_change(team.as_ref()) {
-      pane = pane.child(repository::found(ctx, &p));
-    }
     let foot = match &team {
       Some(team) => team::foot(ctx, "skills-versions-note", team),
       None => note("skills-versions-note", Icon::History, &ctx.t("skills.versionsNote")),
@@ -91,10 +86,10 @@ const READING: [(&str, skeleton::RowBones); 3] = [
 ];
 
 /// The list while the skills are read (`06 Agents · Skills · loading` `sQ4sB`): the group headings, the skill tile's
-/// icon and the repository's fixed words real; the summary line, the counts, each skill's name, scope line and version
+/// icon real; the summary line, the counts, each skill's name, scope line and version
 /// state bones, the lower groups fading. *Reading skills…* (`skills.reading`) names it.
 pub(super) fn reading(ctx: &mut Ctx) -> Element {
-  let mut groups: Vec<Column> = READING
+  let groups: Vec<Column> = READING
     .iter()
     .enumerate()
     .map(|(at, (key, skills))| {
@@ -110,23 +105,6 @@ pub(super) fn reading(ctx: &mut Ctx) -> Element {
       )
     })
     .collect();
-  let files = Entry::new("skills-reading-files", ctx.t("skills.repositoryFiles"))
-    .end(skeleton::switch())
-    .end(skeleton::button(30.0))
-    .into();
-  let import = bones::entry(ctx, None, (146.0, 0.0), Vec::new())
-    .id("skills-reading-import")
-    .into();
-  groups.push(group(
-    "skills-reading-found",
-    bones::head(
-      ctx,
-      "skills-reading-found",
-      &ctx.t("skills.repositoryTitle"),
-      Some(34.0),
-    ),
-    boxed("skills-reading-found-rows", [files, import]),
-  ));
   let pane = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(HubSpacing::Groups.role())
@@ -224,9 +202,7 @@ fn row(ctx: &Ctx, (p, team): (&PageProps, Option<&TeamConfiguration>), entry: &S
   row.press(Press::Open(p.view.panel.to(Panel::Edit(entry.id)))).into()
 }
 
-/// No skill yet (06b): what a skill is, with New skill; and when the repository has nothing to import either, a row
-/// saying so in the same box (`Skills · nothing yet, repository has nothing to import` in `VcE5a`). A member of a
-/// shared project adds none.
+/// No skill yet (06b): what a skill is, with New skill. A member of a shared project adds none.
 fn empty(ctx: &Ctx, p: &PageProps, may_change: bool) -> Element {
   let name = p.project.open.project.name().as_str();
   let row = Entry::new("skills-empty", ctx.t_args("skills.emptyTitle", [("project", name)]))
@@ -241,22 +217,10 @@ fn empty(ctx: &Ctx, p: &PageProps, may_change: bool) -> Element {
   } else {
     row
   };
-  let mut rows: Vec<Element> = vec![row.into()];
-  if p.data.repository.items.is_empty() {
-    rows.push(nothing_to_import(ctx));
-  }
   group(
     "skills-group-empty",
     head("skills-group-empty", &ctx.t("hub.tabs.skills"), None, None),
-    boxed("skills-group-empty-rows", rows),
+    boxed("skills-group-empty-rows", [row.into()]),
   )
   .into()
-}
-
-/// The repository has no agent files to import (06b): a quiet row in place of Import.
-pub(super) fn nothing_to_import(ctx: &Ctx) -> Element {
-  Entry::new("skills-nothing-to-import", ctx.t("skills.nothingTitle"))
-    .tile(Icon::FolderX)
-    .hint(ctx.t("skills.noRepository"))
-    .into()
 }

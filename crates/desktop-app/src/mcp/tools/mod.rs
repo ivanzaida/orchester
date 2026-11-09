@@ -181,7 +181,6 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
   };
   match page {
     ProjectPage::Overview(tab) => insert("tab", tab.name()),
-    ProjectPage::Import(tab) => insert("tab", tab.name()),
     ProjectPage::Orchestrator(OrchestratorChat::New) => insert("chat", "new"),
     ProjectPage::Orchestrator(OrchestratorChat::Chat(chat)) => insert("chat", &chat.to_string()),
     ProjectPage::Tasks(list) => {
@@ -224,7 +223,6 @@ fn page_params(page: &ProjectPage, params: &mut Map<String, Value>) {
     ProjectPage::Agent(id, _) => insert("agent", &id.to_string()),
     ProjectPage::NewSkill => insert("skill", "new"),
     ProjectPage::Skill(id) => insert("skill", &id.to_string()),
-    ProjectPage::ImportSkills => insert("skill", "import"),
     ProjectPage::NewTool => insert("tool", "new"),
     ProjectPage::Tool(tool, tab) => {
       insert("tool", &tool.to_string());

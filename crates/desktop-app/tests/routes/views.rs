@@ -64,7 +64,6 @@ pub(super) fn view_routes() -> Vec<Route> {
       all.push(at(ProjectPage::Instructions(InstructionsView::New(tab, panel))));
     }
   }
-  all.push(at(ProjectPage::Instructions(InstructionsView::Import)));
   let review = StepKey::new("review").expect("a step key");
   for view in [
     PipelineView::Steps,
@@ -144,10 +143,6 @@ fn views_have_their_documented_paths() {
         InstructionsView::default().with_panel(InstructionsPanel::Full),
       )),
       format!("{root}/instructions?panel=prompt"),
-    ),
-    (
-      at(ProjectPage::Instructions(InstructionsView::Import)),
-      format!("{root}/instructions?view=import"),
     ),
   ];
   for (route, path) in paths {

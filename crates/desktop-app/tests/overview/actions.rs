@@ -1,10 +1,10 @@
 //! Where the Overview's links lead: a wait's link to where it is decided, as the Needs you panel's does (its task's
 //! page, pointing at its decision card, or the project's Memory page), *Show all* and *Done* into Tasks' views, the
 //! merge queue's *Review* to Review › Merge queue, *Accounts* to Settings › Accounts, *Delivery* to the Delivery view,
-//! and the header's Import resources and New task. A request whose task cannot be read has no link: it says why.
+//! and the header's New task. A request whose task cannot be read has no link: it says why.
 
 use orchester_app::routes::{
-  AccountsView, ImportTab, MemoryTab, OverviewTab, ProjectPage, Route, TaskList, TaskListTab, TaskTab, TaskView,
+  AccountsView, MemoryTab, OverviewTab, ProjectPage, Route, TaskList, TaskListTab, TaskTab, TaskView,
 };
 use orchester_core::project::TaskKey;
 use orchester_workspace::{
@@ -149,13 +149,6 @@ fn overview_accounts_link_opens_settings_accounts() {
 #[test]
 fn overview_header_actions_lead_to_their_screens() {
   let mut seeded = Seeded::overview("tasks", OverviewTab::Running);
-  seeded.click("overview-import");
-  assert_eq!(
-    seeded.window.navigation().route_now(),
-    Route::Project(seeded.project, ProjectPage::Import(ImportTab::All)),
-    "Import resources opens on All"
-  );
-  seeded.go(OverviewTab::Running);
   seeded.until("the header", |seeded| seeded.shows("overview-new-task"));
   seeded.click("overview-new-task");
   assert_eq!(

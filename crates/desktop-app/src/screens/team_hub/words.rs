@@ -11,7 +11,7 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_workspace::{
-  agents::{team_hub::Form, team_mcp::Published},
+  agents::{team_hub::Form, team_mcp::Published, team_text::Added},
   display,
   readiness::{Group, ReadinessStanding, Undecided},
 };
@@ -383,4 +383,17 @@ pub(super) fn published_line(
       .to_string(),
     None => version,
   })
+}
+
+/// Where an instruction or a skill is added, in words; a local project's panels say it too.
+pub(in crate::screens) fn added(ctx: &Ctx, added: &Added) -> Arc<str> {
+  match added {
+    Added::Project => ctx.t("team_hub.plain.added.project"),
+    Added::Role(role) => ctx.t_args("team_hub.plain.added.role", [("role", role.as_str())]),
+    Added::Pipeline(pipeline) => ctx.t_args("team_hub.plain.added.pipeline", [("pipeline", pipeline.name.as_str())]),
+    Added::Step { pipeline, step } => ctx.t_args(
+      "team_hub.plain.added.step",
+      [("step", step.as_str()), ("pipeline", pipeline.name.as_str())],
+    ),
+  }
 }

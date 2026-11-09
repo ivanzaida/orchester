@@ -4,6 +4,9 @@
 //! rules are the editor's ([`super::editor::apply`]): a change that widens what its agents may do asks first, which
 //! only a person answers, and the profile is rebuilt by the editor's own form ([`ProfileForm`]), so nothing a field
 //! cannot hold is saved.
+//!
+//! The Agents hub's panel holds its changes instead, and stores nothing until Save ([`hold`], [`save`]): each choice is
+//! made by the same rules on what the panel holds, and Save publishes it as the next version at once.
 
 use std::path::Path;
 
@@ -11,6 +14,7 @@ use orchester_core::{
   connection::{AgentConnection, AgentProvider, invocation::Platform, mcp::McpServerSelection},
   id::{ConnectionId, ResourceId},
   resource::{AgentProfile, ModelId, VersionNumber},
+  store::ResourceStore,
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
@@ -22,6 +26,8 @@ use super::{
     ModelSelection, ProfileErrors, ProfileForm, access_for_connection, effort_options, first_model, listed_models,
     stored_effort,
   },
+  local_connection::discard_saved,
+  local_hub::{LocalProfile, profile_as},
 };
 use crate::{
   messages::{self, Message},
@@ -42,6 +48,83 @@ pub enum Edit {
   AddServer(ConnectionId),
   /// No longer chooses the MCP server.
   RemoveServer(ConnectionId),
+  /// Runs on another connection of its CLI, with the same model and effort.
+  Connection(ConnectionId),
+}
+
+/// What the panel of a local profile holds: changes that are not stored, and how the panel shows them.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Held {
+  pub body: AgentProfile,
+  pub shown: LocalProfile,
+  /// Whether it differs from the latest published version: Save has something to publish.
+  pub changed: bool,
+}
+
+/// `edit` made to what the panel of the local profile `profile` holds: `held`, or what is stored (its draft, else its
+/// latest version) while it holds nothing yet. Nothing is stored.
+pub fn hold(root: &Path, profile: ResourceId, held: Option<&AgentProfile>, edit: &Edit) -> Result<Held, Message> {
+  let listed = ProjectAgents::load_in(root).map_err(|error| messages::store_error(&error))?;
+  let entry = listed
+    .profile(profile)
+    .ok_or_else(|| Message::new("agents.localConnection.gone"))?;
+  let body = changed(&listed, held.unwrap_or(&entry.profile), edit)?;
+  let db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
+  let shown = profile_as(&db, profile, &body)
+    .map_err(|error| messages::store_error(&error))?
+    .ok_or_else(|| Message::new("agents.localConnection.gone"))?;
+  let published = db
+    .latest_version::<AgentProfile>(profile)
+    .map_err(|error| messages::store_error(&error))?;
+  Ok(Held {
+    changed: published.as_ref().map(|version| version.body()) != Some(&body),
+    body,
+    shown,
+  })
+}
+
+/// Publishes what the panel of the local profile `profile` holds as its next version at once: `held`, or its stored
+/// draft while the panel holds nothing else. `allowed` is what the person already allowed to widen:
+/// [`Outcome::Confirm`] lists what it widens beyond that, and nothing is stored. All or nothing: the draft the save
+/// makes is thrown away when the publication is refused. Refused, as the panel's *Publish* was, for a stored draft
+/// started from an older version, and for one that changes what the role's prompts say, which the panel does not show.
+pub fn save(
+  root: &Path,
+  profile: ResourceId,
+  held: Option<&AgentProfile>,
+  allowed: &[Message],
+) -> Result<Outcome, Message> {
+  let listed = ProjectAgents::load_in(root).map_err(|error| messages::store_error(&error))?;
+  let entry = listed
+    .profile(profile)
+    .cloned()
+    .ok_or_else(|| Message::new("agents.localConnection.gone"))?;
+  if matches!(entry.state, VersionState::StaleDraft { .. }) {
+    return Err(Message::new("agents.localEdit.staleDraft"));
+  }
+  let body = held.cloned().unwrap_or_else(|| entry.profile.clone());
+  let had_draft = entry.state.has_draft();
+  if !had_draft && body == entry.profile {
+    return Ok(Outcome::Saved(profile));
+  }
+  let db = ProjectDb::open(root).map_err(|error| messages::store_error(&error))?;
+  if !prompt_changes::profile_in(&db, profile, &body)
+    .map_err(|error| messages::store_error(&error))?
+    .is_empty()
+  {
+    return Err(Message::new("agents.localEdit.promptsInEditor"));
+  }
+  if body != entry.profile
+    && let Outcome::Confirm(reasons) = apply(root, entry, body.clone(), Action::Save, allowed)?
+  {
+    return Ok(Outcome::Confirm(reasons));
+  }
+  let drafted = editor::entry_in(root, profile)?;
+  let published = apply(root, drafted, body.clone(), Action::Publish, allowed);
+  if !had_draft && !matches!(published, Ok(Outcome::Saved(_))) {
+    discard_saved(root, profile, &body);
+  }
+  published
 }
 
 /// Saves `edit` of the local profile `profile` as its draft. `allowed` is what the person already allowed to widen:
@@ -173,6 +256,7 @@ fn changed(listed: &ProjectAgents, current: &AgentProfile, edit: &Edit) -> Resul
       let ids = fields.servers.ids().iter().copied().filter(|id| id != server).collect();
       fields.servers = selection(ids)?;
     }
+    Edit::Connection(connection) => fields.use_connection(listed, *connection)?,
   }
   ProfileForm {
     role: current.role().as_str(),
@@ -218,6 +302,20 @@ impl<'a> Fields<'a> {
       permissions,
       servers,
     };
+    Ok(())
+  }
+
+  /// Another connection of the CLI it runs with: its connection's, and while that is gone its model's.
+  fn use_connection(&mut self, listed: &'a ProjectAgents, connection: ConnectionId) -> Result<(), Message> {
+    let cli = self
+      .connection
+      .map_or_else(|| AgentProvider::cli_of_model(&self.model), |own| Some(own.provider()));
+    let chosen = listed
+      .connections
+      .iter()
+      .find(|found| found.id() == connection && Some(found.provider()) == cli)
+      .ok_or_else(|| Message::new("agents.localConnection.notOfKind"))?;
+    self.connection = Some(chosen);
     Ok(())
   }
 

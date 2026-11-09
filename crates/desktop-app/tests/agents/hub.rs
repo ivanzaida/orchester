@@ -48,10 +48,9 @@ fn hub_head_holds_the_open_tabs_actions() {
     ProjectPage::Skills(SkillsFilter::default()),
   ));
   screen.until("skills", |s| s.exists("skills-new"));
-  assert!(screen.exists("skills-import-open"));
   screen.click("agents-hub-tab-tools");
   screen.until("tools", |s| s.exists("tools-add"));
-  assert!(screen.exists("tools-import") && !screen.exists("skills-new"));
+  assert!(!screen.exists("skills-new"));
   screen.click("agents-hub-tab-memory");
   screen.until("memory", |s| s.exists("memory-new"));
 }

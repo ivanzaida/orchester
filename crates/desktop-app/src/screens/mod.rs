@@ -13,7 +13,6 @@ mod delivery;
 mod files;
 mod first_download;
 pub(crate) mod hub;
-mod import;
 mod instructions;
 pub(crate) mod join_team;
 mod kept;
@@ -139,9 +138,7 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::NewAgent(tab) => new_agent(ctx, project, *tab),
     ProjectPage::Agent(id, tab) => agents::screen(ctx, project, agents::Shown::Edit(*id, *tab)),
     ProjectPage::Instructions(view) => instructions::screen(ctx, project, *view),
-    ProjectPage::Skills(_) | ProjectPage::NewSkill | ProjectPage::Skill(_) | ProjectPage::ImportSkills => {
-      skills::screen(ctx, project, page)
-    }
+    ProjectPage::Skills(_) | ProjectPage::NewSkill | ProjectPage::Skill(_) => skills::screen(ctx, project, page),
     ProjectPage::Tools | ProjectPage::NewTool | ProjectPage::Tool(..) => tools::screen(ctx, project, page),
     ProjectPage::Secrets(view) => project_settings::screen(ctx, project, project_settings::Shown::Secrets(*view)),
     ProjectPage::Connections(view) => {
@@ -160,7 +157,6 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::MakeLocal => project_settings::make_local_screen(ctx, project),
     ProjectPage::Join(target) => project_settings::join_screen(ctx, project, target),
     ProjectPage::Files(view) => files::screen(ctx, project, view),
-    ProjectPage::Import(tab) => import::screen(ctx, project, *tab),
   }
 }
 

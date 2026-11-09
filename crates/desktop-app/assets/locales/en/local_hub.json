@@ -1,48 +1,13 @@
 {
   "local_hub": {
-    "title": "Agents",
-    "local": "Local project · only on this computer",
-    "share": "Share with a team…",
-    "memory": "Memory",
-    "import": "Import",
+    "local": "Local",
     "reading": "Reading…",
-    "rereading": "Reading…",
     "loadFailed": "The agents of this project couldn't be read",
-    "new": {
-      "profiles": "New agent",
-      "mcpServers": "New MCP server",
-      "instructions": "New instruction",
-      "skills": "New skill",
-      "tools": "New tool",
-      "any": "New"
-    },
-    "filter": {
-      "all": "All",
-      "profiles": "Profiles",
-      "mcpServers": "MCP servers",
-      "instructions": "Instructions",
-      "skills": "Skills",
-      "tools": "Tools",
-      "archived": "Archived"
-    },
-    "hint": {
-      "all": "Everything in this project, kept on this computer",
-      "profiles": "Your agent profiles, kept on this computer",
-      "mcpServers": "Your MCP servers, kept on this computer",
-      "instructions": "Your instructions, kept on this computer",
-      "skills": "Your skills, kept on this computer",
-      "tools": "Your tools, kept on this computer",
-      "archived": "Hidden from lists and pickers · Restore brings one back"
-    },
     "group": {
       "needs": "Needs you",
       "ready": "Ready",
       "off": "Off",
       "archived": "Archived"
-    },
-    "empty": {
-      "title": "Nothing of this kind yet",
-      "detail": "This project has none yet. New adds one."
     },
     "line": {
       "archived": "Archived {{date}}, {{time}}",
@@ -77,8 +42,6 @@
     },
     "panel": {
       "connection": "Runs on",
-      "edit": "Edit",
-      "editHint": "Opens its editor: edits are saved as a draft, and Publish makes the next version",
       "mcpServers": "MCP servers",
       "usedBy": "used by {{names}}",
       "wasUsedBy": "was used by {{names}}"
@@ -115,18 +78,13 @@
       "refusedSecretBody": "Nothing was saved, not even the other fields. Your edits stay in the form; allow Orchester to use the system's secret store, then Save again.",
       "allowThenSave": "Allow access, then Save again",
       "notReadyProgram": "Not ready: set the program path. Runs whose pipeline uses {{name}} don't start until then.",
-      "notReadySecret": "Not ready: {{secret}} has no value. Runs whose pipeline uses {{name}} don't start until then.",
-      "setProgram": "Set program path",
-      "setSecret": "Set value for {{name}}",
-      "askedOnce": "Asked once"
+      "notReadySecret": "Not ready: {{secret}} has no value. Runs whose pipeline uses {{name}} don't start until then."
     },
     "archive": {
       "action": "Archive",
       "more": "More"
     },
     "archived": {
-      "emptyTitle": "Nothing archived",
-      "emptyDetail": "Archiving takes a resource out of the lists and pickers. It shows up here, and Restore brings it back.",
       "nothingTitle": "Pick an archived resource",
       "nothingDetail": "Archived resources are hidden from lists and pickers, and the runs that pinned them were stopped. Pick one to see what archiving did and to restore it.",
       "restore": "Restore {{name}}",
@@ -146,25 +104,16 @@
       "effortDefault": "CLI default",
       "none": "None",
       "version": "{{version}} · published {{date}}",
-      "useHint": "Asked once per profile; a connection added later doesn't change it",
-      "openHint": "Opens the server's panel, where it is set",
-      "addValueAction": "Set {{server}}'s secret value",
-      "draftFirst": "Publish or discard the draft first",
       "addServer": "Add",
-      "chooseCli": "Choose a CLI",
-      "moreSettings": "More settings…"
-    },
-    "draft": {
-      "saved": "Draft on {{version}} · saved {{time}} · only on this computer",
-      "sub": "Publishing makes {{next}} of {{name}}",
-      "publish": "Publish {{version}}",
-      "discard": "Discard draft",
-      "hint": "Runs keep the version they started on"
+      "addConnection": "Add",
+      "chooseCli": "Choose a CLI"
     },
     "edit": {
       "widenTitle": "Allow these changes to the agent profile?",
       "allow": "Allow and continue",
-      "keep": "Keep editing"
+      "keep": "Keep editing",
+      "makes": "Save makes {{version}} · runs keep the version they started on",
+      "invalid": "Fix what is marked above to save"
     },
     "ready": {
       "ready": "Ready",
@@ -200,6 +149,37 @@
       "what": "Opening another entry now puts {{name}} back as it was saved. Save it first to keep the changes.",
       "keep": "Keep editing",
       "discard": "Discard changes"
+    },
+    "instruction": {
+      "title": "Instruction",
+      "addedTo": "Added to",
+      "addedToSub": "Chosen when it was made",
+      "appliesTo": "Applies to",
+      "appliesToSub": "Every agent, or the roles and profiles it names",
+      "appliesToRequired": "Choose who gets it",
+      "when": "When",
+      "text": "Text",
+      "textSub": "Markdown, added to the agent's prompt as written",
+      "textPlaceholder": "Write the instruction in Markdown…",
+      "variablesMissing": "A variable it uses has no value when it is added"
+    },
+    "skill": {
+      "title": "Skill",
+      "name": "Name",
+      "nameSub": "Lowercase with dashes; agents load it by this name",
+      "addedTo": "Added to",
+      "addedToSub": "Chosen when it was made",
+      "description": "Description",
+      "descriptionSub": "Tells agents when to use it",
+      "descriptionPlaceholder": "When agents should use it, in one or two sentences",
+      "body": "SKILL.md",
+      "bodySub": "Markdown the agent reads when it loads the skill",
+      "bodyPlaceholder": "Write what the agent does with this skill…",
+      "files": "Files",
+      "filesSub": "Its reference files are not changed here"
+    },
+    "text": {
+      "gone": "It is no longer in this project."
     }
   }
 }

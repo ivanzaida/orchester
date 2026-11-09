@@ -158,7 +158,10 @@ fn team_hub_profile_with_one_connection_of_its_kind_runs_on_it_without_asking() 
     "Builder runs here once nothing is missing"
   );
   assert!(agents.exists("team-hub-ready-secret-GITHUB_TOKEN-add-value"));
-  assert!(agents.exists("team-hub-edit"), "an admin has Edit in the head");
+  assert!(
+    agents.exists("team-hub-more") && !agents.exists("team-hub-edit"),
+    "an admin has the … menu in the head and no Edit to the editor's page"
+  );
 }
 
 #[test]

@@ -41,6 +41,8 @@ use crate::{
 
 /// The name's field while renaming (`Field` `j7t2Ea` in `poD7g`).
 const NAME_FIELD_WIDTH: f32 = 240.0;
+/// The … menu's width (the `Menu` component `Qa7Oo`; the design draws no account menu of its own).
+const MENU_WIDTH: f32 = 220.0;
 
 /// The page of the account the route names; `uses` is what uses it and whether that is still being read.
 pub(super) fn page(ctx: &mut Ctx, parts: &Parts, work: &Work, (uses, reading): (Option<&AccountUses>, bool)) -> Column {
@@ -137,9 +139,10 @@ fn more(ctx: &mut Ctx, parts: &Parts, work: &Work, account: &AgentAccount) -> El
   let button = if shown { button.active() } else { button }.render(ctx);
   let menu = shown.then(|| {
     let items = menu_items(ctx, parts, work, account);
-    let panel = items.into_iter().fold(menu_panel("account-more-menu"), |panel, item| {
-      panel.child(item.render(ctx, &open))
-    });
+    let panel = items.into_iter().fold(
+      menu_panel("account-more-menu").width(Dimension::Px(MENU_WIDTH)),
+      |panel, item| panel.child(item.render(ctx, &open)),
+    );
     menu_at_end(anchor, open.clone(), panel)
   });
   Row::new().child(button).with_children(menu).into()
