@@ -378,18 +378,17 @@ impl Fields {
   }
 
   /// The profile the fields make on `connection`: the most restrictive permissions, and the MCP servers a local
-  /// profile chose (`chosen`; a team's has none).
+  /// profile chose (`servers`; a team's has none).
   fn made(
     &self,
     connection: &AgentConnection,
     model: Option<ModelId>,
-    chosen: McpServerSelection,
+    servers: McpServerSelection,
     local: bool,
   ) -> Option<Make> {
     let selection = model.map_or(ModelSelection::None, ModelSelection::Listed);
     let effort = self.effort.get();
     let platform = Platform::current();
-    let servers = chosen;
     let permissions = AgentPermissions::most_restrictive(connection.provider(), platform);
     // A native connection takes neither CLI approval switches nor MCP servers.
     let (permissions, servers) = if local {
