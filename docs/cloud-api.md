@@ -524,7 +524,10 @@ unknown field is refused. Times are milliseconds since the Unix epoch; days are 
 - `WorkRead`: `{id,subject,claim_id,revision,state,runs:[RunId],bundle:BundleRef,created_at,updated_at}`;
   `ExecutionState` is `running`, `paused`, `awaiting_human`, `succeeded`, `failed` or `cancelled` (proposed).
 - `TaskRead`: every `SharedTask` field (the content's fields inline) and `assignee:UserRef?`, `work:WorkRead?`,
-  `effective_claim:ClaimRead?`, `capabilities`. `workflow` stays apart from `work.state`.
+  `effective_claim:ClaimRead?`, `capabilities`. `workflow` stays apart from `work.state`. Two fields came with D4 and
+  are optional on the wire: `closed:TaskClosure?` and `blocked:Attribution?` (below, "Who closed it, who blocked it");
+  a server that has no record leaves them out, and so did every server before D4, so a reader treats a missing one as
+  unknown, not as "nobody".
 - `ModuleRead`: every `SharedModule` field (its fields inline) and `branch`, `assignee?`, `work?`, `effective_claim?`,
   `capabilities`, `pending_delivery:PendingDeliveryRead?`. A module's tasks are read with the task list's `modules`
   filter.
@@ -1062,6 +1065,54 @@ released as above, `updated.by` the person who reported, and an organization his
 A succeeded run never marks a task whose work delivers changes (`docs/design/team-authority.md`, D4). Neither automatic
 Done needs an Admin or a holder: it is the server's rule, not a caller's change. Canceled and already Done tasks are not
 touched.
+
+**Who closed it, who blocked it.** `updated` is the task's last change by anyone: an Admin who renames a Done task
+becomes its `updated.by`. So the read carries two records of its own, on `TaskRead` and so on every row of the task list
+(`orchester_api::v2::{TaskClosure, ClosedHow}`; `blocked` is an `Attribution {by:UserRef,at}`). Both are optional: the
+server sends them when it has the record and **leaves the field out** when it has none (a reader also accepts `null`),
+and a server older than this contract never sends them. A desktop older than this contract refuses a task read that
+carries them (`TaskReadWire` is `deny_unknown_fields`) and reads it as no contract answer, so the team server sends
+them only once its minimum desktop version is the first desktop release that reads them (as for ORC-884 above); a
+server that cannot raise its minimum leaves both out for a client older than that release, by
+`Orchester-Client-Version`. A reader treats a missing `closed` on a Done or Canceled task,
+and a missing `blocked` on a task with a `blocked_reason`, as unknown: it shows the status without the "by whom".
+
+- `closed:{how,at}`, **present only while `workflow` is `done` or `canceled`.** `at` is when the server committed the
+  close, in milliseconds, and equals the `updated.at` of that change. `how` is tagged by `kind`:
+  - `person {by:UserRef}`: a task patch changed `workflow` to `done` or `canceled`. `by` is the **caller** of the patch:
+    the holder who marked their task Done, or the Admin who closed (or canceled) someone else's task. Never the task's
+    holder when an Admin closed it, never `updated.by` of a later edit. (The patch's `actor` is not part of it: an agent
+    acting for a person closes in that person's name.)
+  - `delivery {module:ModuleId,module_name:string}`: the task became Done by itself because its module's delivery was
+    accepted ("Done by itself", second kind). `module_name` is the module's name at that moment, so the line still reads
+    right after the module is renamed or deleted.
+  - `run {work:WorkId}`: the task became Done by itself because its work succeeded, as the work delivers no changes to
+    base (the first kind); `work` is the work whose `succeeded` report did it.
+- `blocked:{by,at}`, **present only while `blocked_reason` is set**: who set the current reason and when. It is set by
+  the patch that sets `blocked_reason` or changes it to another non-empty reason (`by` the caller, `at` that change's
+  time), and left alone by a patch whose `blocked_reason` equals the task's (that is no change), by every other edit of
+  the task, by closing, and by reopening: it follows the reason, not the status.
+
+When each is written, in the same transaction as the change and with the same revision bump (so a reader never sees the
+status without the record):
+
+| Change | `closed` | `blocked` |
+| --- | --- | --- |
+| patch `workflow` to `done` or `canceled`, from an open status (holder or Admin) | set: `person`, the caller, now | as it is |
+| patch `workflow` from `done` to `canceled`, or back (an Admin's) | replaced: `person`, the Admin, now | as it is |
+| patch `workflow` equal to the task's, or any other edit of a closed task | as it is | as it is |
+| patch `workflow` out of `done` or `canceled`: reopen to Backlog or Todo, or any other status | cleared | as it is |
+| accepted `work.report` `succeeded` that marks its task Done (Done by itself) | set: `run`, the work, now | as it is |
+| accepted `delivery.report` `delivered` that marks a task Done (Done by itself) | set: `delivery`, the module, now | as it is |
+| a task already Done or Canceled when a delivery is accepted | as it is (it is not touched) | as it is |
+| patch `blocked_reason` set, or changed to another reason | as it is | set: the caller, now |
+| patch `blocked_reason` to `null` | as it is | cleared |
+| patch `{workflow:"done",blocked_reason:"…"}` (a holder's single patch) | set | set, both at that patch's time |
+
+Closing does not clear a blocked reason and the record stays with it. A record is the server's, not the caller's: a
+patch cannot send `closed` or `blocked` (`TaskChanges` has neither, and an unknown field is refused as it is). The
+events are the ones above; the batch that closes or blocks invalidates `task_list` and `task {task}` as it does, so
+a watcher reads the record with the status.
 
 **Capabilities.** `TaskRead.capabilities.actions` (a listed task's too) lists the five actions with
 `subject:{kind:"task",id}`, each allowed or denied with a `DenialReason`, from `LifecycleAction::denial(workflow,

@@ -113,10 +113,15 @@ fn authority_task(task: &AuthorityTask, (project, key): (&str, &str), state: &St
   read
 }
 
+/// The id of the work of the task numbered `number`.
+pub(super) fn work_id(number: u32) -> String {
+  format!("0191c7c0-0000-7000-8000-0000004{number:05x}")
+}
+
 /// The work of task `id` numbered `number` under `claim`, in `state` (`running`, `awaiting_human`, …).
 pub(super) fn work_read((id, number): (&str, u32), claim: AuthorityClaim, state: &str) -> Value {
   let at = Timestamp::now().unix_millis();
-  json!({"id": format!("0191c7c0-0000-7000-8000-0000004{number:05x}"), "subject": {"kind": "task", "id": id},
+  json!({"id": work_id(number), "subject": {"kind": "task", "id": id},
     "claim_id": claim.id(number), "revision": 1, "state": state, "runs": [],
     "bundle": {"sha256": "0".repeat(64), "schema_version": crate::v2::EXECUTION_BUNDLE_SCHEMA}, "created_at": at, "updated_at": at})
 }

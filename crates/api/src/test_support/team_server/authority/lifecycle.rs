@@ -11,13 +11,13 @@
 
 use orchester_core::{resource::Deliverable, task::organization::WorkflowStatus};
 use serde::Deserialize;
-use serde_json::{Value, json};
+use serde_json::{Map, Value, json};
 
 use super::{
   Authority, Person, Standing,
   commands::{Refused, module_holder},
   edits,
-  listing::task_id,
+  listing::{self, task_id},
   work,
 };
 use crate::{
@@ -178,6 +178,38 @@ pub(super) fn actions(authority: &Authority, (id, set): (&str, &str)) -> Vec<Val
     .collect()
 }
 
+/// The `closed` and `blocked` records of a change the task `read` meets with `fields`, laid over the task's reads with
+/// them in the same transaction (`at`, as `updated.at`): `closed` is set when the workflow moves to Done or Canceled
+/// (`how` says how; a person's patch by default), and cleared when it moves out of them; `blocked` is set to the
+/// change's author when the blocked reason is set or changed, and cleared when the reason is. A field that is no change
+/// (a workflow or reason equal to the task's) leaves its record as it is.
+pub(super) fn records(read: &Value, fields: &mut Map<String, Value>, (by, at): (Person, i64), how: Option<Value>) {
+  let moved = fields
+    .get("workflow")
+    .and_then(Value::as_str)
+    .filter(|to| Some(*to) != read["workflow"].as_str());
+  if let Some(to) = moved {
+    let record = if matches!(to, "done" | "canceled") {
+      let how = how.unwrap_or_else(|| json!({"kind": "person", "by": by.wire()}));
+      json!({"how": how, "at": at})
+    } else {
+      Value::Null
+    };
+    fields.insert("closed".to_owned(), record);
+  }
+  let reason = fields
+    .get("blocked_reason")
+    .filter(|reason| **reason != read["blocked_reason"]);
+  if let Some(reason) = reason {
+    let record = if reason.is_null() {
+      Value::Null
+    } else {
+      json!({"by": by.wire(), "at": at})
+    };
+    fields.insert("blocked".to_owned(), record);
+  }
+}
+
 /// The artifacts a report names, read before the report changes anything: `422 invalid` when they are no artifacts.
 pub(super) fn artifacts(named: &Value) -> Result<Vec<ArtifactRef>, Refused> {
   Vec::<ArtifactRef>::deserialize(named).map_err(|_| (422, "invalid"))
@@ -194,7 +226,8 @@ pub(super) fn succeeded(authority: &mut Authority, id: &str, artifacts: &[Artifa
     .map(|task| task.number);
   let delivery = number.and_then(|number| authority.delivers.get(&number)).copied();
   if completes_on_success(delivery.unwrap_or_default(), artifacts) {
-    done_by_itself(authority, id);
+    let work = listing::work_id(number.unwrap_or_default());
+    done_by_itself(authority, id, json!({"kind": "run", "work": work}));
   }
 }
 
@@ -207,13 +240,20 @@ pub(super) fn delivered(authority: &mut Authority, index: usize) {
     .filter(|task| task.module == Some(index) && task.work == Some("succeeded"))
     .map(task_id)
     .collect();
+  let name = authority
+    .modules
+    .as_deref()
+    .and_then(|modules| modules.get(index))
+    .map_or("", |module| module.name);
+  let how = json!({"kind": "delivery", "module": work::module_id(index), "module_name": name});
   for id in ready {
-    done_by_itself(authority, &id);
+    done_by_itself(authority, &id, how.clone());
   }
 }
 
-/// The task `id`, if open, is Done and its claim released, in the name of the person who reported what completed it.
-fn done_by_itself(authority: &mut Authority, id: &str) {
+/// The task `id`, if open, is Done and its claim released, in the name of the person who reported what completed it;
+/// its closing is `how`.
+fn done_by_itself(authority: &mut Authority, id: &str, how: Value) {
   let Some(task) = authority.tasks.iter().flatten().find(|task| task_id(task) == id) else {
     return;
   };
@@ -227,7 +267,7 @@ fn done_by_itself(authority: &mut Authority, id: &str) {
   let read = json!({"id": id, "revision": revision, "module": module, "release": shipping});
   release(authority, id);
   let fields = [("workflow".to_owned(), json!("done"))].into_iter().collect();
-  edits::change(authority, &read, (fields, Person::You));
+  edits::change_closing(authority, &read, (fields, Person::You), Some(how));
 }
 
 /// The task's content as its read gives it: the read's fields that are the content's, which refuses any other.

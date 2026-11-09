@@ -172,20 +172,32 @@ fn patch(state: &mut State, (project, task): ((&str, &str), &str), body: &str) -
 }
 
 /// Lays `fields` over the task `read`, at its next revision in `by`'s name, committed as one batch.
-pub(super) fn change(authority: &mut Authority, read: &Value, (fields, by): (Map<String, Value>, Person)) {
+pub(super) fn change(authority: &mut Authority, read: &Value, change: (Map<String, Value>, Person)) {
+  change_closing(authority, read, change, None);
+}
+
+/// [`change`], where a close the fields make is `how` (a `ClosedHow` as the wire has it) instead of `by`'s own patch.
+pub(super) fn change_closing(
+  authority: &mut Authority,
+  read: &Value,
+  (mut fields, by): (Map<String, Value>, Person),
+  how: Option<Value>,
+) {
   let id = read["id"].as_str().unwrap_or_default().to_owned();
   let scopes = scopes(read, &id, fields.contains_key("workflow"));
   let revision = read["revision"].as_u64().unwrap_or(1) + 1;
+  let at = Timestamp::now().unix_millis();
+  lifecycle::records(read, &mut fields, (by, at), how);
   let edited = authority.edits.entry(id).or_insert_with(|| Edited {
     revision,
     fields: Map::new(),
     by,
-    at: 0,
+    at,
   });
   edited.fields.extend(fields);
   edited.revision = revision;
   edited.by = by;
-  edited.at = Timestamp::now().unix_millis();
+  edited.at = at;
   authority.commit(scopes);
 }
 

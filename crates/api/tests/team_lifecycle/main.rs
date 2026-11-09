@@ -6,6 +6,7 @@
 
 mod closed;
 mod done_by_itself;
+mod records;
 mod shapes;
 mod stand_in;
 mod team;

@@ -1,6 +1,7 @@
 //! A task as an S10 read gives it: every public field of a shared task ([`SharedTask`]), then its assignee, its work,
 //! its effective claim and the caller's capabilities on it. The workflow status stays apart from the work's execution
-//! state. Every field is sent; one without a value is `null`, and an unknown field is refused.
+//! state. Every field is sent; one without a value is `null`, and an unknown field is refused. `closed` and `blocked`
+//! came later: a server leaves them out when it has no record, and so does an older one.
 
 use orchester_core::{
   id::{ModuleId, ReleaseId, TagId, TaskId},
@@ -12,7 +13,7 @@ use orchester_core::{
 };
 use serde::{Deserialize, Serialize};
 
-use super::{Capabilities, ClaimRead, WorkRead, page::nullable};
+use super::{Capabilities, ClaimRead, TaskClosure, WorkRead, page::nullable};
 use crate::{Attribution, Blocking, RunStatus, SharedClaim, SharedLimits, SharedTask, TaskContent, UserRef, wire};
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -24,6 +25,12 @@ pub struct TaskRead {
   /// The claim work on the task runs under: its own, or its module's.
   pub effective_claim: Option<ClaimRead>,
   pub capabilities: Capabilities,
+  /// How and by whom the task was closed; only while it is Done or Canceled. `None` also when the server does not say
+  /// (an older server leaves the field out): the task's closing is then unknown.
+  pub closed: Option<TaskClosure>,
+  /// Who set the task's current blocked reason, and when; only while it has one. `None` also when the server does not
+  /// say.
+  pub blocked: Option<Attribution>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -70,6 +77,10 @@ struct TaskReadWire {
   #[serde(deserialize_with = "nullable")]
   effective_claim: Option<ClaimRead>,
   capabilities: Capabilities,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  closed: Option<TaskClosure>,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  blocked: Option<Attribution>,
 }
 
 impl From<TaskReadWire> for TaskRead {
@@ -107,6 +118,8 @@ impl From<TaskReadWire> for TaskRead {
       work: wire.work,
       effective_claim: wire.effective_claim,
       capabilities: wire.capabilities,
+      closed: wire.closed,
+      blocked: wire.blocked,
     }
   }
 }
@@ -155,6 +168,8 @@ impl From<TaskRead> for TaskReadWire {
       work: read.work,
       effective_claim: read.effective_claim,
       capabilities: read.capabilities,
+      closed: read.closed,
+      blocked: read.blocked,
     }
   }
 }
