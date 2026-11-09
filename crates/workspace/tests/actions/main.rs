@@ -14,6 +14,7 @@ mod definitions;
 #[path = "../team_work/fixture.rs"]
 mod fixture;
 mod http;
+mod lifecycle;
 mod organize;
 mod pipelines;
 mod run;

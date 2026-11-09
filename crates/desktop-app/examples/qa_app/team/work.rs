@@ -98,6 +98,17 @@ const OLHA_ASKED: (i64, (&str, &str)) = (
   ),
 );
 
+/// The task mara holds in `team-admin-work`, and how many minutes ago her work last renewed the claim.
+const ADMIN_SEES: (u32, i64) = (13, 5);
+
+/// The task olha holds and has blocked in `team-admin-work`, and the one mara holds in `team-claims`, with the reason.
+const ADMIN_BLOCKED: u32 = 21;
+const KON_16: u32 = 16;
+const BLOCKED_REASON: &str = "Waiting for the staging key";
+
+/// The task `team-claims` and `team-admin-work` read as canceled, which nobody holds.
+const CANCELED_TASK: u32 = 15;
+
 /// What a team run records of the start that made it: its operation, and the claim and work it reports under.
 type Authorized = (OperationId, ClaimId, WorkId);
 
@@ -112,13 +123,37 @@ pub fn task(state: State, task: &mut AuthorityTask) {
       task.work = Some("paused");
       task.assignee = task.claim.map(|claim| claim.holder);
     }
+    // An Admin reads mara's claim on KON-13: Mark as done and Cancel task close it for her (decision D4, T2 `o4K8uq`).
+    State::AdminWork if task.number == ADMIN_SEES.0 => {
+      task.claim = claim(MARA, ADMIN_SEES.1, false);
+      task.work = Some("running");
+      task.assignee = task.claim.map(|claim| claim.holder);
+    }
+    State::AdminWork if task.number == ADMIN_BLOCKED => {
+      task.claim = claim(OLHA, 4, false);
+      task.work = Some("running");
+      task.assignee = task.claim.map(|claim| claim.holder);
+      task.blocked_reason = Some(BLOCKED_REASON);
+    }
+    State::AdminWork if task.number == CANCELED_TASK => task.workflow = "canceled",
     State::Claims => {
       if let Some((_, claim, work)) = CLAIMS.iter().find(|(number, ..)| *number == task.number) {
         task.claim = *claim;
         task.work = *work;
         task.assignee = claim.map(|claim| claim.holder);
       }
+      closed_and_blocked(task);
     }
+    _ => {}
+  }
+}
+
+/// What `team-claims` adds for the lifecycle's states (T11c `dTn0v`, T11f `vyQJx`): KON-16, mara's, is blocked, and
+/// KON-15 is canceled; `team-admin-work` has KON-21, olha's, blocked (T11b `x0xP1`) and KON-15 canceled too.
+fn closed_and_blocked(task: &mut AuthorityTask) {
+  match task.number {
+    KON_16 => task.blocked_reason = Some(BLOCKED_REASON),
+    CANCELED_TASK => task.workflow = "canceled",
     _ => {}
   }
 }

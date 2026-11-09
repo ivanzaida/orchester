@@ -16,7 +16,11 @@ use orchester_workspace::tasks::{
   needs_you::WaitingKind,
 };
 
-use crate::ui::{icon::Icon, message::message_text};
+use crate::ui::{
+  icon::Icon,
+  message::message_text,
+  status::{workflow_key, workflow_look},
+};
 
 /// What a row says about where its task stands.
 #[derive(Clone, Debug, PartialEq)]
@@ -29,10 +33,12 @@ pub(crate) struct Phrase {
 
 impl Phrase {
   /// What `row` says, `need` being the oldest thing its task waits for from the person, if any, among `tasks`.
-  pub(super) fn of(ctx: &Ctx, row: &TaskRow, need: Option<&NeedItem>, tasks: &ProjectTasks) -> Self {
+  /// `team` is whether the row is a team project's task, whose closed status it says in place of a draft's words
+  /// (decision D4); a local task reads as its readiness says.
+  pub(super) fn of(ctx: &Ctx, row: &TaskRow, need: Option<&NeedItem>, tasks: &ProjectTasks, team: bool) -> Self {
     match need {
       Some(need) => waits(ctx, need, tasks),
-      None => stands(ctx, row),
+      None => stands(ctx, row, team),
     }
   }
 }
@@ -54,7 +60,7 @@ pub(crate) fn phrases(ctx: &Ctx, tasks: &ProjectTasks, rows: &[TaskRow]) -> Vec<
   let needs = needs(tasks);
   rows
     .iter()
-    .map(|row| Phrase::of(ctx, row, needs.get(&row.id), tasks))
+    .map(|row| Phrase::of(ctx, row, needs.get(&row.id), tasks, false))
     .collect()
 }
 
@@ -144,7 +150,10 @@ const fn kind_key(kind: NeedKind) -> &'static str {
 }
 
 /// Where a task nothing waits for stands.
-fn stands(ctx: &Ctx, row: &TaskRow) -> Phrase {
+fn stands(ctx: &Ctx, row: &TaskRow, team: bool) -> Phrase {
+  if let Some(closed) = team.then(|| closed(ctx, row)).flatten() {
+    return closed;
+  }
   let said = message_text(ctx, &row.detail);
   let (glyph, glyph_color, color) = mark(row);
   let words = match (&row.readiness, row.run_step()) {
@@ -159,6 +168,26 @@ fn stands(ctx: &Ctx, row: &TaskRow) -> Phrase {
     words,
     color,
   }
+}
+
+/// A team task closed as Done or Canceled that no run speaks for: its status as the workflow says it, in the glyph and
+/// words of the Done and Canceled status everywhere else, never *Ready to queue* or an open circle.
+fn closed(ctx: &Ctx, row: &TaskRow) -> Option<Phrase> {
+  let status = row.organization.status();
+  let unspoken = matches!(
+    row.readiness,
+    ReadinessKind::Ready | ReadinessKind::Missing | ReadinessKind::Blocked | ReadinessKind::Run(TaskPhase::Draft)
+  );
+  if !status.is_closed() || !unspoken {
+    return None;
+  }
+  let (glyph, glyph_color) = workflow_look(status);
+  Some(Phrase {
+    glyph,
+    glyph_color,
+    words: ctx.t(workflow_key(status)),
+    color: PaletteColor::TextMuted,
+  })
 }
 
 fn step_args(step: &CurrentStep) -> [(&'static str, String); 2] {

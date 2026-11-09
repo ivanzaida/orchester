@@ -15,6 +15,7 @@ mod claim;
 mod decisions;
 mod empty;
 mod led_in;
+mod lifecycle;
 mod live;
 mod merge_row;
 mod notice;

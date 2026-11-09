@@ -18,7 +18,10 @@ use lurq::{
 use orchester_core::{
   integration::MergeError,
   run::{PauseReason, Run, RunLimit, RunStatus, Stuck, TaskPhase},
-  task::estimate::{EstimateSource, StoryEstimate},
+  task::{
+    estimate::{EstimateSource, StoryEstimate},
+    organization::WorkflowStatus,
+  },
   time::Timestamp,
 };
 use orchester_workspace::{
@@ -38,7 +41,7 @@ use crate::{
   },
   ui::{
     chip::TagChip,
-    status::{Status, StatusChip},
+    status::{Status, StatusChip, workflow_key},
     tooltip::Tooltip,
   },
 };
@@ -84,6 +87,21 @@ fn run_chip(ctx: &Ctx, task: &TaskContext) -> StatusChip {
     Some(About::Reason(reason)) => chip.detail(reason),
     None => chip,
   }
+}
+
+/// The line of a closed team task: its workflow status in the chip the task's other
+/// closed states use (`Done` `circle-check` in `success`, `Canceled` `circle-slash` muted), not the draft it never ran
+/// as.
+pub(super) fn closed(ctx: &mut Ctx, task: &TaskContext, status: WorkflowStatus) -> Element {
+  let chip = match status {
+    WorkflowStatus::Canceled => Status::Canceled,
+    _ => Status::Completed,
+  };
+  let chip = StatusChip::new("task-status", chip)
+    .words(ctx.t(workflow_key(status)))
+    .render(ctx);
+  let line = task.detail.run.is_some().then(|| run_line(ctx, &task.detail));
+  row(ctx, task, chip, line.as_deref(), None)
 }
 
 /// The line while the person's last Run was refused as not ready on this computer (`Status line` `g9ufW` in R1

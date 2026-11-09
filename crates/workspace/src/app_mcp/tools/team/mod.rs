@@ -194,6 +194,12 @@ pub(super) fn decision_required(decision: orchester_api::v2::DecisionId) -> Tool
   outcome::action_refused(crate::actions::ActionError::DecisionRequired(decision))
 }
 
+/// A team task has no queue or draft state: the team server holds only its workflow status (decision D4), so there is
+/// nothing for `return_to_draft` to take it back from. Nothing was changed.
+pub(super) fn no_queue() -> ToolError {
+  ToolError::refused("team_no_queue", vec![Message::new("appMcp.errors.teamNoQueue")])
+}
+
 /// A team task's run is never merged into the base branch from here: its work goes into its module's branch, and only
 /// the module's delivery takes it further, which `merge_run` requests ([`merge_run`]). A merge a person approved in a
 /// proposal is of the run's own commit, so on a team project it is refused.

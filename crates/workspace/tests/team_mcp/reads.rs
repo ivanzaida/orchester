@@ -34,6 +34,8 @@ pub struct Seen {
   pub task_creates: usize,
   /// The pipeline the last task edit and the last `task.create` named, as sent.
   pub edited_pipeline: Value,
+  /// The changes the last task edit sent, as sent.
+  pub edited_changes: Value,
   pub created_pipeline: Value,
   /// The team MCP server the Builder profile's version names, as the local server id a stopgap start looks it up by.
   pub publisher_mcp_server: Option<ConnectionId>,
@@ -205,6 +207,7 @@ fn task_edit(seen: &Mutex<Seen>, request: &Request, route: &str) -> (u16, Value)
   seen.task_edits += 1;
   if request.method == "PATCH" {
     seen.edited_pipeline = request.json()["changes"]["pipeline"].clone();
+    seen.edited_changes = request.json()["changes"].clone();
   }
   if request.token == MEMBER {
     (

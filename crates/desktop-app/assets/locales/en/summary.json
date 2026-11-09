@@ -61,6 +61,50 @@
     "team": {
       "readOnly": "Only Admins change this task: {{admins}}. You read it, run it and claim it.",
       "readOnlyUnnamed": "Only Admins change this task. You read it, run it and claim it.",
+      "lifecycle": {
+        "doneTitle": "Done",
+        "doneDetail": "Marking it done ended its claim.",
+        "canceledTitle": "Canceled",
+        "canceledDetail": "Canceling it ended its claim.",
+        "blockedTitle": "Blocked",
+        "blockedHolder": "Nothing runs while it is blocked. Clear it when work can go on; your claim stays.",
+        "blockedAdmin": "As an Admin you can clear it for {{holder}} or close the task; closing ends the claim.",
+        "blockedFree": "Nothing runs while it is blocked. Clear it when work can go on.",
+        "blockedPlain": "Nothing runs while it is blocked.",
+        "done": "Mark as done",
+        "cancel": "Cancel task",
+        "clearBlocked": "Clear blocked",
+        "lockHolder": "Only Admins cancel or reopen a team task: {{admins}}.",
+        "lockHolderUnnamed": "Only Admins cancel or reopen a team task.",
+        "lockOpen": "Only {{holder}} (the claim) and Admins close this task: {{admins}}.",
+        "lockOpenUnnamed": "Only {{holder}} (the claim) and Admins close this task.",
+        "lockOpenFree": "Only the person who claims it and Admins close this task: {{admins}}.",
+        "lockOpenFreeUnnamed": "Only the person who claims it and Admins close this task.",
+        "lockClear": "Only {{holder}} (the claim) and Admins clear it: {{admins}}.",
+        "lockClearUnnamed": "Only {{holder}} (the claim) and Admins clear it.",
+        "lockClosed": "Only Admins reopen a team task: {{admins}}.",
+        "lockClosedUnnamed": "Only Admins reopen a team task.",
+        "reopen": {
+          "label": "Reopen",
+          "todo": "Back to Todo",
+          "todoDetail": "ready to claim",
+          "backlog": "Back to Backlog",
+          "backlogDetail": "not planned yet",
+          "free": "A reopened task is free: nobody holds it, and nothing runs until someone claims it."
+        },
+        "block": {
+          "label": "Mark as blocked",
+          "title": "Mark {{task}} as blocked",
+          "explain": "Say what it waits for. Everyone on the team reads it on the task until you or an Admin clears it. Nothing runs while it is blocked, and your claim stays.",
+          "reason": "Why is it blocked?",
+          "placeholder": "What it waits for",
+          "hint": "Required. It shows on the task's rail and in the Tasks list.",
+          "unavailable": "Unavailable: say what it waits for.",
+          "escCancels": "Esc cancels",
+          "confirm": "Mark as blocked",
+          "cancel": "Cancel"
+        }
+      },
       "run": {
         "onHolder": "{{pipeline}} · on {{holder}}'s computer",
         "onYourOther": "{{pipeline}} · on your other computer",
@@ -108,6 +152,7 @@
         "nobodyDetailNoPipeline": "Claim it to run it on this computer.",
         "otherTitle": "Claimed by {{holder}}",
         "otherDetail": "Their running step renews it · renewed {{time}}. You can take the task over only once the claim is stale ({{minutes}} min without renewal).",
+        "otherAdminDetail": "{{holder}} claimed it at {{time}}. As an Admin you can close it for them; either way their claim ends.",
         "elsewhereTitle": "Claimed by you on another computer",
         "elsewhereDetail": "The claim belongs to that computer, not to your account: this one can't run, pause or report for the task while it holds. Release it there to work here.",
         "moduleTitle": "Claimed under module {{module}} by {{holder}}",
@@ -136,6 +181,11 @@
       },
       "refused": {
         "claimTitle": "Couldn't claim {{task}}",
+        "doneTitle": "Couldn't mark {{task}} as done",
+        "cancelTitle": "Couldn't cancel {{task}}",
+        "reopenTitle": "Couldn't reopen {{task}}",
+        "blockTitle": "Couldn't mark {{task}} as blocked",
+        "clearBlockedTitle": "Couldn't clear the block on {{task}}",
         "takeOverTitle": "Couldn't take over {{task}}",
         "releaseTitle": "Couldn't release {{task}}",
         "runTitle": "Couldn't start {{task}}'s run",
@@ -169,7 +219,10 @@
         "inputsFailed": "This computer couldn't make the run's inputs from the bundle the team server built, so nothing ran. Check the agent profiles' connections in Agents, then run it again.",
         "claimReleased": "Your claim on the task was released.",
         "claimKept": "Your claim on the task is kept, because another run here still needs it.",
-        "claimHeld": "The team server refused to release your claim on the task, so it may still be held."
+        "claimHeld": "The team server refused to release your claim on the task, so it may still be held.",
+        "notHolder": "Only the person who holds this task's claim, or an Admin, does this. The claim may have changed; the page shows it as it is now.",
+        "stopRunFirst": "A run of this task is still working or waits for you. Stop it first, then mark the task done or cancel it.",
+        "missingReason": "A blocked reason can't be empty."
       },
       "properties": {
         "assignee": "Assignee",

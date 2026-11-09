@@ -14,7 +14,7 @@ use orchester_core::id::OperationId;
 
 use super::{DefinitionEdit, TagEdit};
 use crate::{
-  actions::{Accepted, ActionError, Current, Definition, PipelineRefusal, Refusal, TeamOutcome},
+  actions::{Accepted, ActionError, Current, Definition, Refusal, TeamOutcome},
   team_reads::TeamSession,
 };
 
@@ -109,11 +109,7 @@ async fn refused(
   edit: &DefinitionEdit,
   (status, code, details): (u16, ErrorCode, Option<Box<SharingErrorDetails>>),
 ) -> TeamOutcome {
-  let pipeline = match (code, details.as_deref()) {
-    (ErrorCode::Invalid, Some(SharingErrorDetails::Reason { reason })) => PipelineRefusal::of_reason(reason),
-    _ => None,
-  };
-  let refusal = pipeline.map_or(Refusal::Route { status, code }, Refusal::TaskPipeline);
+  let refusal = Refusal::of_task_route(status, code, details.as_deref());
   if code != ErrorCode::RevisionConflict {
     return TeamOutcome::Rejected {
       operation,
@@ -199,7 +195,8 @@ fn task_seen(changes: &TaskChanges, read: orchester_core::sharing::TaskRevision,
 /// Whether `task` has every field `changes` sets as they set it.
 fn holds(changes: &TaskChanges, task: &SharedTask) -> bool {
   let content = &task.content;
-  same(changes.title.as_ref(), &content.title)
+  same(changes.workflow.as_ref(), &content.workflow)
+    && same(changes.title.as_ref(), &content.title)
     && same(changes.brief.as_ref(), &content.brief)
     && same(changes.criteria.as_ref(), &content.criteria)
     && same(changes.pipeline.as_ref(), &content.pipeline)

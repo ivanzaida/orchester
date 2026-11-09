@@ -29,6 +29,8 @@ mod team;
 mod team_actions;
 mod team_create;
 mod team_edit;
+mod team_lifecycle;
+mod team_lifecycle_menus;
 mod team_pages;
 mod team_tasks;
 mod team_work_actions;

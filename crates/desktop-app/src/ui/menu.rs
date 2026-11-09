@@ -66,6 +66,39 @@ pub fn menu_at_end(anchor: ElementRef, open: Signal<bool>, panel: impl Into<Elem
     .offset(0.0, ExtraSpacing::Snug.value())
 }
 
+/// The foot of a menu: a `border` line over words in 11 `text_muted`, 8 over, 4 under and 8 at their sides, which puts
+/// them 12 from the menu's edge inside its padding (`Foot` `cJqb6` in T7 `gyG3z`, `Foot` in T4 `V26A3`).
+pub fn foot(ctx: &Ctx, id: &str, words: &str) -> Element {
+  let line = ctx.theme().border_size_value(BorderSize::Sm);
+  Column::new()
+    .width(Dimension::Pct(100.0))
+    .child(
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .height(Dimension::Px(line))
+        .background(PaletteColor::Border),
+    )
+    .child(
+      Column::new()
+        .width(Dimension::Pct(100.0))
+        .padding(
+          Padding::new()
+            .top(SpacingSize::Sm)
+            .bottom(SpacingSize::Xs)
+            .left(SpacingSize::Sm)
+            .right(SpacingSize::Sm),
+        )
+        .child(
+          Text::new(words)
+            .id(id.to_owned())
+            .variant(TypographyStyle::Caption)
+            .color(PaletteColor::TextMuted)
+            .width(Dimension::Pct(100.0)),
+        ),
+    )
+    .into()
+}
+
 /// The line between groups of rows.
 pub fn separator(ctx: &Ctx) -> Element {
   let line = ctx.theme().border_size_value(BorderSize::Sm);
@@ -108,6 +141,8 @@ pub struct MenuItem {
   tall: bool,
   /// The row opens a list beside the menu: a 12 `text_muted` chevron at its end.
   submenu: bool,
+  /// What the row leads to, in 11 `text_muted` at its end, where a shortcut would be.
+  hint: Option<Arc<str>>,
   /// An unavailable row's reason is said elsewhere, in the menu's foot: the row is only faded.
   reason_below: bool,
   focus: Focus,
@@ -145,6 +180,7 @@ impl MenuItem {
       inline: false,
       tall: false,
       submenu: false,
+      hint: None,
       reason_below: false,
       focus: Focus::Pointer,
       choice,
@@ -163,6 +199,14 @@ impl MenuItem {
   #[must_use]
   pub const fn submenu(mut self) -> Self {
     self.submenu = true;
+    self
+  }
+
+  /// What the row leads to, at its end in 11 `text_muted`, right-aligned (`ready to claim` in `Reopen menu` of T4
+  /// `V26A3`).
+  #[must_use]
+  pub fn hint(mut self, hint: impl Into<Arc<str>>) -> Self {
+    self.hint = Some(hint.into());
     self
   }
 
@@ -301,6 +345,13 @@ impl MenuItem {
   fn trailing(&self) -> Option<Element> {
     match (&self.choice, self.chosen, &self.shortcut) {
       (Choice::Unavailable(_), ..) if !self.lock => None,
+      (Choice::Action(_), false, _) if self.hint.is_some() => self.hint.as_deref().map(|hint| {
+        Text::new(hint)
+          .id(format!("{}-hint", self.id))
+          .variant(TypographyStyle::Caption)
+          .nowrap()
+          .into()
+      }),
       (Choice::Unavailable(_), ..) => Some(icon(Icon::Lock, IconSize::Sm, PaletteColor::TextMuted).into()),
       (_, true, _) => Some(icon(Icon::Check, IconSize::Md, PaletteColor::TextPrimary).into()),
       (_, false, Some(keys)) => Some(

@@ -40,6 +40,7 @@ pub fn task(number: u32, workflow: &'static str, claim: Option<AuthorityClaim>) 
     assignee: None,
     claim,
     work: None,
+    blocked_reason: None,
   }
 }
 

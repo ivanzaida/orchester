@@ -4,7 +4,10 @@
 //! deleted. `cargo test -p orchester-app --test tasks_list tasks_close_`.
 
 use lurq::app::events::with_synthetic_input;
-use orchester_app::routes::{ProjectPage, Route, TaskList, TaskListTab, TaskView};
+use orchester_app::{
+  routes::{ProjectPage, Route, TaskList, TaskListTab, TaskView},
+  ui::icon::Icon,
+};
 use orchester_core::{
   store::TaskStore,
   task::{Task, organization::WorkflowStatus},
@@ -184,4 +187,22 @@ fn tasks_close_from_the_task_page_header_then_delete_returns_to_the_list() {
   press(&mut seeded, "task-close-delete-confirm");
   seeded.until("the Tasks list", |seeded| seeded.shows("screen-tasks"));
   assert!(stored(&seeded, "KON-11").is_none(), "the task is gone");
+}
+
+/// A local draft closed by hand keeps the words and the open circle of its readiness: the closed words are a team
+/// task's only (decision D4).
+#[test]
+fn tasks_close_a_local_draft_canceled_or_done_still_reads_ready_to_queue() {
+  let mut seeded = Seeded::tasks("tasks", TaskList::new(TaskListTab::All));
+  for (choice, closed) in [("cancel", WorkflowStatus::Canceled), ("done", WorkflowStatus::Done)] {
+    choose(&mut seeded, "task-more-KON-5", choice);
+    seeded.until("KON-5 closed", |seeded| status(seeded, "KON-5") == closed);
+    seeded.until("KON-5's row reads again", |seeded| seeded.shows("task-state-KON-5"));
+    assert_eq!(seeded.text("task-state-KON-5"), "Ready to queue", "{choice}");
+    assert_eq!(
+      seeded.glyph("task-status-KON-5"),
+      Icon::Circle.glyph(),
+      "{choice}: the open circle"
+    );
+  }
 }

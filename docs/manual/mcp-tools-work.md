@@ -185,7 +185,8 @@ nowhere; nothing is saved).
 id or name, sent as its resource id; a pipeline of this computer's own (or any that is not the team's) is refused as
 `team_pipeline_required`: only the team's pipelines run team tasks, and its Admins create and publish them. A team
 project offers none of this computer's own pipelines (`list_pipelines`, `get_pipeline`). Limits are refused as
-`decision_required` (D6), a workflow status other than the default as `decision_required` (D4), and what the server
+`decision_required` (D6), a workflow status other than the default (Backlog) as `team_status_on_create` (a team task is
+moved on afterwards with `update_task`), and what the server
 keeps nowhere (`story_points`, `tags`, `blocked_by`, `no_automatic_merge`, `delivers`, `base_branch`) as
 `team_field_unsupported`; nothing is sent then.
 
@@ -210,8 +211,17 @@ as `create_task` (all optional) plus `key` (req.). Specifics:
 - **`story_points`**: refused as `persons_points` when a person set them. After a brief/criteria change without
   points, Orchester re-estimates when the switch allows.
 - **Deleting a task** is a person's alone, in the app — no tool deletes one.
-- **Team project**: as `create_task` says; the change goes to the server's task route (Admins' today: a member gets
-  `not_admin`). Moving a team task to another team pipeline is a person's decision too (`person_only` unless AP is on).
+- **Team project**: as `create_task` says; the change goes to the server's task route, which allows an edit of the
+  details to Admins only (a member gets `not_admin`). Moving a team task to another team pipeline is a person's decision
+  too (`person_only` unless AP is on). The workflow status and `blocked_reason` are the task lifecycle (decision D4, one
+  `PATCH` of the task, decided on the caller's claim and role): `done` and `blocked_reason` (set, change, clear) are the
+  claim holder's or an Admin's; `canceled`, `backlog` and `todo` are an Admin's only, and `backlog` or `todo` reopens a
+  Done or Canceled task. Someone else gets `not_holder` (the change is a holder's) or `not_admin`. `done` and
+  `canceled` release the task's own claim and are refused as `stop_run_first` while its work runs; a closed task
+  cannot be claimed or started until an Admin reopens it. `in_progress`, `in_review` and Done to Canceled are no
+  lifecycle change and are refused as `team_status_not_offered`. A task also becomes Done by itself on the server (its
+  report/outside work succeeded, or its module's delivery was accepted); nothing in the tools sets that. A blank
+  `blocked_reason` is `invalid_organization` here and `missing_reason` from the server.
 
 ### `get_story_point_calibration` — read-only
 
@@ -224,7 +234,8 @@ its runs. These are the examples estimates read. The estimator's own requests ar
 
 Returns a **queued** task whose run never started to Draft (task list's *Return to drafts*) — only a task its group
 holds for good (a task of the group failed, the group's cap, refused by preflight or the runner, blocked or
-canceled). Parameters: `project`, `key` (both req.).
+canceled). Parameters: `project`, `key` (both req.). A team task has no queue or draft on the team server: refused as
+`team_no_queue`; an Admin moves it back to Backlog with `update_task` (`workflow_status: backlog`).
 
 ---
 

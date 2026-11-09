@@ -1,6 +1,6 @@
 //! What opens over the window: a menu under its button (`Pipeline menu` `ClKqz`, `Menu item` `mAHGP`,
-//! `Menu item/detail` `j6ZUhL`, `Menu separator` `UoDdI`), a popover (`Run permissions popover`
-//! `ojhrZ`), a tooltip with its shortcut (`Tooltip` `b6q3OZ`), and the loader.
+//! `Menu item/detail` `j6ZUhL`, `Menu separator` `UoDdI`, a row's hint and the menu's foot as in T4 `V26A3`), a popover
+//! (`Run permissions popover` `ojhrZ`), a tooltip with its shortcut (`Tooltip` `b6q3OZ`), and the loader.
 
 use lurq::{
   app::{
@@ -15,7 +15,7 @@ use orchester_app::{
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
-    menu::{MenuItem, menu, menu_panel, separator},
+    menu::{MenuItem, foot, menu, menu_panel, separator},
     popover::{PopoverSide, popover, popover_panel},
     toggle::{Toggle, ToggleKind},
     tooltip::Tooltip,
@@ -72,9 +72,14 @@ fn pipeline_menu(ctx: &mut Ctx, state: &State) -> Row {
     )
     .icon(Icon::Workflow)
     .render(ctx, &state.menu_open),
+    MenuItem::new("g-menu-hint", "Reopen task", choose("Reopen task"))
+      .icon(Icon::Workflow)
+      .hint("ready to claim")
+      .render(ctx, &state.menu_open),
     MenuItem::unavailable("g-menu-import", "Import a pipeline", "Importing pipelines is planned.")
       .icon(Icon::Download)
       .render(ctx, &state.menu_open),
+    foot(ctx, "g-menu-foot", "Only Admins reopen a closed team task."),
   ];
   let panel = menu_panel("g-menu")
     .width(lurq::node::dimension::Dimension::Px(MENU_WIDTH))

@@ -4,7 +4,7 @@
 //! pipeline (12 `text_muted`, 150 wide, at its end), the priority's icon and the task's age (mono 11 `text_muted`).
 //! Under the pointer the pipeline gives way to the row's actions: a task something of waits for shows its one action
 //! first (Review, Answer, Review plan…, opening where it is decided), then every task but a *Not shared* one its *More
-//! actions* menu (`task_close`; a team member's only opens and copies the key, as the board's card menu does). A press
+//! actions* menu (`task_close`; a team task's offers what the person may do with it, [`team_menu`]). A press
 //! elsewhere opens the task on its Details. The task a Create just added is
 //! tinted and carries the New badge. A group's header line is drawn here too ([`super::list::group_line`]).
 
@@ -29,12 +29,12 @@ use orchester_core::{
 use orchester_workspace::tasks::list::{PipelineLabel, TaskRow};
 
 use super::{
-  kanban::copy_key_item,
   list::{GroupLine, group_line},
   phrase::Phrase,
+  team::menu::{self as team_menu, RowTeam},
 };
 use crate::{
-  navigation::{Navigation, press::OpenIn, waiting::Destination},
+  navigation::{Navigation, waiting::Destination},
   routes::{ProjectPage, Route, TaskView},
   screens::task_close::{self, Closer, MenuPlace, Subject},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize, TasksSpacing},
@@ -42,7 +42,6 @@ use crate::{
     button::{ActionButton, ButtonKind},
     chip::{BadgeTone, TagChip, badge},
     icon::{Icon, icon},
-    menu::MenuItem,
     message::message_text,
     pressable::Press,
     status::priority_look,
@@ -75,8 +74,8 @@ pub(super) struct RowProps {
   pub highlighted: bool,
   /// The project is shared: its team server keeps its tasks.
   pub shared: bool,
-  /// The person is a member of the team project, who changes none of its tasks.
-  pub member: bool,
+  /// The team project's task as its menu is made from: what the person may do with it (decision D4).
+  pub team: Option<RowTeam>,
 }
 
 /// The one action of a task that waits for the person: its words and glyph, and where it opens or why it opens
@@ -101,15 +100,19 @@ pub(super) struct ListItem {
   hovered: Signal<bool>,
   /// Where its *More actions* menu is open.
   menu: MenuPlace,
+  /// The lists a team task's menu opens beside it.
+  lists: team_menu::Lists,
 }
 
 impl Component for ListItem {
   type Props = ItemProps;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let menu = MenuPlace::new(ctx);
     Self {
       hovered: ctx.signal(false),
-      menu: MenuPlace::new(ctx),
+      lists: team_menu::Lists::new(ctx, &menu),
+      menu,
     }
   }
 
@@ -145,7 +148,7 @@ impl ListItem {
     let navigation = Navigation::of(ctx);
     let acting = (self.hovered.get() || self.menu.is_open()) && !row.not_shared;
     let trailing = if acting {
-      actions(ctx, props, &self.menu)
+      actions(ctx, props, (&self.menu, &self.lists))
     } else {
       pipeline(ctx, row)
     };
@@ -315,7 +318,7 @@ fn priority_cell(ctx: &Ctx, row: &TaskRow) -> Row {
 
 /// The row's actions under the pointer: a waiting task's one action, then the *More actions* menu, which for a team
 /// member, who changes nothing, only opens the task and copies its key, as a member's card menu does.
-fn actions(ctx: &mut Ctx, props: &RowProps, menu: &MenuPlace) -> Element {
+fn actions(ctx: &mut Ctx, props: &RowProps, (menu, lists): (&MenuPlace, &team_menu::Lists)) -> Element {
   let row = &props.row;
   let key = &row.key;
   let primary = props.action.clone().map(|action| {
@@ -331,9 +334,9 @@ fn actions(ctx: &mut Ctx, props: &RowProps, menu: &MenuPlace) -> Element {
     }
   });
   let id = format!("task-more-{key}");
-  let more = if props.member {
-    task_close::more_menu(ctx, menu, (key, &id), |ctx, open| {
-      read_only_menu(ctx, (props.project, key), &id, open)
+  let more = if let Some(team) = &props.team {
+    task_close::more_menu(ctx, menu, (key, &id, team_menu::MENU_WIDTH), |ctx, open| {
+      team_menu::rows(ctx, (props.project, team), &id, (open, lists))
     })
   } else {
     let subject = Subject {
@@ -343,7 +346,7 @@ fn actions(ctx: &mut Ctx, props: &RowProps, menu: &MenuPlace) -> Element {
       shared: props.shared,
     };
     let closer = Closer::of(ctx);
-    task_close::more_menu(ctx, menu, (key, &id), |ctx, open| {
+    task_close::more_menu(ctx, menu, (key, &id, task_close::MENU_WIDTH), |ctx, open| {
       closer.menu(ctx, (&id, &subject), open)
     })
   };
@@ -354,24 +357,6 @@ fn actions(ctx: &mut Ctx, props: &RowProps, menu: &MenuPlace) -> Element {
     .with_children(primary)
     .child(more)
     .into()
-}
-
-/// A team member's *More actions* rows, their ids starting with `id`: Open and Copy key.
-fn read_only_menu(
-  ctx: &mut Ctx,
-  (project, key): (ProjectId, &Arc<str>),
-  id: &str,
-  open: &Signal<bool>,
-) -> Vec<Element> {
-  let task: TaskKey = key.parse().expect("a task's key reads back as a task key");
-  let navigation = Navigation::of(ctx);
-  let route = Route::Project(project, ProjectPage::Task(task, TaskView::default()));
-  let open_task = MenuItem::new(format!("{id}-open"), ctx.t("tasks.board.menu.open"), move || {
-    navigation.open(route.clone(), OpenIn::ActiveTab);
-  })
-  .icon(Icon::ArrowUpRight);
-  let copy = copy_key_item(ctx, format!("{id}-copy"), key.clone());
-  vec![open_task.render(ctx, open), copy.render(ctx, open)]
 }
 
 /// The pipeline a task runs: a published one by its name and version as this list words it (`Feature delivery v3`),
