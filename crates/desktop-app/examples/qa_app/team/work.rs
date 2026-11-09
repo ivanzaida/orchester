@@ -27,7 +27,7 @@ use orchester_workspace::actions::{
 };
 use tokio::runtime::Handle;
 
-use super::{State, recorded_start};
+use super::{State, closed, recorded_start};
 
 const MARA: Person = Person::Named("mara");
 const OLHA: Person = Person::Named("olha");
@@ -136,6 +136,7 @@ pub fn task(state: State, task: &mut AuthorityTask) {
       task.blocked_reason = Some(BLOCKED_REASON);
     }
     State::AdminWork if task.number == CANCELED_TASK => task.workflow = "canceled",
+    state if closed::is(state) => closed::task(task),
     State::Claims => {
       if let Some((_, claim, work)) = CLAIMS.iter().find(|(number, ..)| *number == task.number) {
         task.claim = *claim;
@@ -193,6 +194,7 @@ pub fn plan(state: State, server: &TeamServer) {
       server.automatic_merge_changed_first(true);
     }
     State::EditConflict => server.task_changed_first(12, OLHA, "urgent"),
+    state if closed::is(state) => closed::records(server),
     _ => {}
   }
 }

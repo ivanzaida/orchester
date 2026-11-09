@@ -55,6 +55,8 @@ pub fn to(
     | State::Claims
     | State::ModuleWork
     | State::AdminWork
+    | State::ClosedAdmin
+    | State::ClosedMember
     | State::VersionRefused
     | State::TeamRunning
     | State::EditConflict

@@ -5,6 +5,7 @@
 //! shipped: an example is no part of the app's program.
 
 mod archive;
+mod closed;
 pub mod drive;
 mod edit;
 mod member;
@@ -115,6 +116,8 @@ pub fn prepare(state: State, services: &Services, runtime: &Handle) -> Result<Te
     | State::Claims
     | State::ModuleWork
     | State::AdminWork
+    | State::ClosedAdmin
+    | State::ClosedMember
     | State::VersionRefused
     | State::TeamRunning
     | State::EditConflict
