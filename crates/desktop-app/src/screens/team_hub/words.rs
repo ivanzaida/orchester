@@ -270,7 +270,6 @@ fn undecided(ctx: &Ctx, why: &Undecided) -> Arc<str> {
     }
     Undecided::Member { why, .. } => undecided(ctx, why),
     Undecided::NotTeamForm
-    | Undecided::CannotBePublished(_)
     | Undecided::ChoosesMcpServer(_)
     | Undecided::RunsUnknown(_)
     | Undecided::ConnectionGone(_)

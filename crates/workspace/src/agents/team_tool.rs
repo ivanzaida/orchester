@@ -7,11 +7,10 @@
 use orchester_core::{
   id::{ResourceId, SecretId},
   resource::{ApprovalMode, HttpMethod, RequestTarget, ResourceKind, Tool, ToolAction},
-  store::ResourceStore,
 };
-use orchester_store::{ProjectDb, StoreError};
 
 use super::{team_mcp::Published, team_profile::TeamProfileSheet, team_sheets};
+use crate::team_config::TeamConfig;
 
 /// Where an HTTP tool puts the value of an argument.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -64,36 +63,32 @@ pub struct TeamToolSheet {
   pub approval: Option<ApprovalMode>,
   /// The names of the team's profiles that use it.
   pub used_by: Vec<String>,
-  /// `None` while the server has not confirmed the version this computer uses.
+  /// Who published its latest version.
   pub published: Option<Published>,
 }
 
-/// A sheet for each team tool that has a version cached here.
-pub(super) fn sheets(
-  db: &ProjectDb,
-  profiles: &[(ResourceId, TeamProfileSheet)],
-) -> Result<Vec<(ResourceId, TeamToolSheet)>, StoreError> {
+/// A sheet for each team tool whose latest version is a tool this computer reads.
+pub(super) fn sheets(config: &TeamConfig, profiles: &[(ResourceId, TeamProfileSheet)]) -> Vec<(ResourceId, TeamToolSheet)> {
   let mut sheets = Vec::new();
-  for resource in db.resources(ResourceKind::Tool)? {
-    let Some(version) = db.latest_version::<Tool>(resource.id())? else {
+  for resource in config.resources(ResourceKind::Tool) {
+    let Some(Ok(tool)) = resource.body::<Tool>() else {
       continue;
     };
-    let tool = version.body();
     sheets.push((
-      resource.id(),
+      resource.id,
       TeamToolSheet {
         description: tool.description().to_owned(),
-        runs: runs(tool),
+        runs: runs(&tool),
         secret: tool.secret().map_or(ToolSecret::None, ToolSecret::ById),
         approval: tool.access().map(|access| access.approval()),
-        used_by: team_sheets::used_by(db, profiles, |sheet| {
-          sheet.tools.iter().any(|used| used.id == resource.id())
-        })?,
-        published: team_sheets::published::<Tool>(db, resource.id(), version.number())?,
+        used_by: team_sheets::used_by(config, profiles, |sheet| {
+          sheet.tools.iter().any(|used| used.id == resource.id)
+        }),
+        published: team_sheets::published(resource),
       },
     ));
   }
-  Ok(sheets)
+  sheets
 }
 
 fn runs(tool: &Tool) -> ToolRuns {

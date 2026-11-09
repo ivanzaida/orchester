@@ -9,6 +9,7 @@ mod apply;
 mod archive;
 mod catalog;
 mod config;
+mod live;
 mod state;
 pub mod stream;
 
@@ -44,10 +45,15 @@ pub use self::{
 };
 pub(crate) use self::{
   archive::{pinning_in, pinning_mcp_server_in, pins, pins_mcp_server, stop},
-  config::{non_team_name, refresh_profile, refresh_team_profiles, team_executors, team_form},
+  config::{non_team_name, refresh_profile, refresh_team_profiles, team_executors},
 };
 use super::{Behalf, Connection, Servers, SharingError, project::ProjectServer, send_lane::send_turn};
-use crate::{background, runner::Runners};
+use crate::{
+  background,
+  messages::Message,
+  runner::Runners,
+  team_config::{TeamConfigs, Unreached},
+};
 
 /// Runs until the window closes, as a task on the app runtime that `Root` starts and aborts when it drops.
 pub async fn run(servers: Servers, runners: Runners) {
@@ -94,13 +100,17 @@ fn keep(
 ) {
   let mut kept = HashMap::new();
   let mut not_members = Vec::new();
+  let configs = &servers.inner.workspace.team;
+  configs.keep(&projects.iter().map(ProjectServer::repo_root).collect::<Vec<_>>());
   for project in projects {
     let root = project.repo_root().to_owned();
     if project.link().removed_at.is_some() {
+      unreached(configs, &project, &SharingError::NotMember);
       not_members.push(root);
       continue;
     }
     if !follows(servers, &project) {
+      unreached(configs, &project, &SharingError::SignedOut);
       continue;
     }
     let id = project.link().project;
@@ -113,6 +123,15 @@ fn keep(
   *streams = kept;
   let followed: HashSet<PathBuf> = streams.keys().cloned().collect();
   servers.keep_sync_states(&followed, not_members);
+}
+
+/// The team's configuration of `project` cannot be read for `error`, as no stream follows it.
+fn unreached(configs: &TeamConfigs, project: &ProjectServer, error: &SharingError) {
+  let unreached = Unreached {
+    reason: error.message(&project.entry().address),
+    at: orchester_core::time::Timestamp::now(),
+  };
+  configs.unreached(project.repo_root(), unreached);
 }
 
 /// Whether `project`'s server can stream to this computer: someone is signed in there, and the person is a member.
@@ -273,5 +292,32 @@ impl Source for Live {
     self
       .servers
       .set_sync_state(self.project.repo_root(), Some(state), &self.current);
+  }
+
+  fn configs(&self) -> &TeamConfigs {
+    &self.servers.inner.workspace.team
+  }
+
+  fn unreached(&self, error: &SharingError) -> Message {
+    error.message(&self.project.entry().address)
+  }
+
+  async fn retried(&self) {
+    let mut asked = self.servers.subscribe_sync();
+    if asked.changed().await.is_err() {
+      // The servers are gone with the window: nobody asks again.
+      std::future::pending::<()>().await;
+    }
+  }
+}
+
+impl Servers {
+  /// Asks the team server of the project at `repo_root` again now (*Try again* of the Agents hub): the monitor checks
+  /// it at once and the project's stream, waiting to connect again, connects and reads the team's configuration.
+  /// Blocking: it reads the project's link.
+  pub fn retry_project(&self, repo_root: &std::path::Path) -> Result<(), SharingError> {
+    let project = ProjectServer::open(self, repo_root)?.ok_or(SharingError::ServerMissing)?;
+    self.retry_now(project.link().server);
+    Ok(())
   }
 }

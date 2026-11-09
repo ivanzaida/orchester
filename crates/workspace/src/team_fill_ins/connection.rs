@@ -6,14 +6,16 @@ use orchester_core::{
   account::AccountCli,
   connection::{Connection, ConnectionKind},
   id::{AgentAccountId, ResourceId},
-  resource::{AgentProfile, ResourceKind},
+  resource::{ResourceKind, TeamAgentProfile},
   sharing::ConnectionRole,
   store::{ConnectionStore, ResourceStore},
 };
-use orchester_store::{ConnectionPick, ProjectDb, ReferenceTarget, StoreError};
+use orchester_store::{ConnectionPick, ProjectDb};
 
 use super::{FillInError, team};
-use crate::{sharing::sync::refresh_profile, tasks::outside::Outside, workspace::Workspace};
+use crate::{
+  sharing::sync::refresh_profile, tasks::outside::Outside, team_config::TeamResource, workspace::Workspace,
+};
 
 impl Workspace {
   /// Keeps `pick` as the connection, and the account when the connection needs one, the team profile `profile` of
@@ -27,16 +29,21 @@ impl Workspace {
     pick: ConnectionPick,
   ) -> Result<(), FillInError> {
     let mut db = ProjectDb::open(repo_root)?;
-    team::require_resource(&db, profile, ResourceKind::AgentProfile)?;
+    team::server_of(&db)?;
+    let config = team::config(self, repo_root)?;
+    let found = team::require_resource(&config, profile, ResourceKind::AgentProfile)?;
     let connection = db
       .connection(pick.connection)?
       .ok_or(FillInError::ConnectionNotFound(pick.connection))?;
-    check_fits(&connection, profile_role(&db, profile)?)?;
+    check_fits(&connection, profile_role(found))?;
     if let Some(account) = pick.account {
       self.check_account(&connection, account)?;
     }
     db.set_connection_pick(profile, pick)?;
-    refresh_profile(&mut db, profile)?;
+    // The local body the database still keeps of the profile follows the pick; one it does not keep has none.
+    if db.resource(profile)?.is_some() {
+      refresh_profile(&mut db, profile)?;
+    }
     self.changes.record(db.project().id(), Outside::Connections);
     Ok(())
   }
@@ -61,18 +68,13 @@ impl Workspace {
   }
 }
 
-/// The role of the CLI kind the newest cached version of `profile` names; `None` when it names none.
-fn profile_role(db: &ProjectDb, profile: ResourceId) -> Result<Option<ConnectionRole>, StoreError> {
-  let Some(latest) = db.latest_version::<AgentProfile>(profile)? else {
-    return Ok(None);
-  };
-  let Some(cached) = db.cached_version::<AgentProfile>(profile, latest.number())? else {
-    return Ok(None);
-  };
-  Ok(cached.references.iter().find_map(|reference| match reference {
-    ReferenceTarget::CliKind(cli) => Some(ConnectionRole::Agent(*cli)),
-    _ => None,
-  }))
+/// The role of the CLI kind the latest version of `profile` names; `None` while that version is not in the team's
+/// form, which names none.
+fn profile_role(profile: &TeamResource) -> Option<ConnectionRole> {
+  match profile.body::<TeamAgentProfile>()? {
+    Ok(team) => Some(ConnectionRole::Agent(team.cli())),
+    Err(_) => None,
+  }
 }
 
 /// Fails unless `connection` is of the `expected` role, or, when none is known, an agent connection.

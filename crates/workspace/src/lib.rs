@@ -64,6 +64,7 @@ pub mod skills;
 pub mod sources;
 pub mod storage;
 pub mod tasks;
+pub mod team_config;
 pub mod team_fill_ins;
 pub mod team_reads;
 pub mod team_work;

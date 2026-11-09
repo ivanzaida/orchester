@@ -1,6 +1,7 @@
 //! What the Agents hub of a team project lists (`Agents · v2` `acFkz`, ORC-831): the readiness of its profiles, MCP
 //! servers and tools ([`crate::readiness`]), and its instructions and skills, which need nothing of a computer and so
-//! are always ready here (`docs/design/team-configuration.md`).
+//! are always ready here (`docs/design/team-configuration.md`). All of it is read from the team's configuration as the
+//! team server was read this session ([`crate::team_config`]), with what this computer filled in.
 
 use std::path::Path;
 
@@ -8,7 +9,6 @@ use orchester_core::{
   id::ResourceId,
   resource::{ResourceKind, TeamMcpLaunch, TeamMcpServer, Tool, ToolKind, VersionNumber},
   secret::SecretVault,
-  store::ResourceStore,
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
@@ -21,8 +21,18 @@ use super::{
 };
 use crate::{
   readiness::{ProjectReadiness, ReadinessError},
+  team_config::{TeamConfig, TeamRead, Unreached},
   workspace::Workspace,
 };
+
+/// How the hub of a team project stands this session (`Agents · v2` `acFkz`): its team server is being read, could not
+/// be reached while nothing was read (A25 `Zhcif`), or was read.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TeamHubRead {
+  Reading,
+  Unreachable(Unreached),
+  Read(Box<TeamHub>),
+}
 
 /// An instruction or a skill of the team.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -30,7 +40,7 @@ pub struct Plain {
   pub id: ResourceId,
   pub kind: ResourceKind,
   pub name: String,
-  /// The latest version the server numbered; `None` while only one published here waits for it.
+  /// Its latest version; `None` while the server has numbered none.
   pub number: Option<VersionNumber>,
 }
 
@@ -40,7 +50,7 @@ pub struct Plain {
 pub struct Archived {
   pub id: ResourceId,
   pub name: String,
-  /// The version this computer used last.
+  /// Its latest version.
   pub number: VersionNumber,
   /// When it was archived, as this computer learned it.
   pub at: Timestamp,
@@ -62,6 +72,9 @@ pub enum Form {
 /// The resources the hub lists, and how the profiles, MCP servers and tools stand on this computer.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TeamHub {
+  /// Why the team server cannot be reached now, while it cannot: what was read this session is shown, and nothing is
+  /// saved to it.
+  unreached: Option<Unreached>,
   readiness: ProjectReadiness,
   plain: Vec<Plain>,
   archived: Vec<Archived>,
@@ -74,6 +87,11 @@ pub struct TeamHub {
 }
 
 impl TeamHub {
+  /// Why the team server cannot be reached now; `None` while it can.
+  pub const fn unreached(&self) -> Option<&Unreached> {
+    self.unreached.as_ref()
+  }
+
   pub const fn readiness(&self) -> &ProjectReadiness {
     &self.readiness
   }
@@ -89,68 +107,59 @@ impl TeamHub {
   }
 
   /// What the team holds of the profile `resource` and what this computer fills in for it; `None` for any other
-  /// resource, and for a profile whose newest version is not in the team's form.
+  /// resource, and for a profile whose latest version is not in the team's form.
   pub fn profile(&self, resource: ResourceId) -> Option<&TeamProfileSheet> {
-    self
-      .profiles
-      .iter()
-      .find_map(|(found, sheet)| (*found == resource).then_some(sheet))
+    found(&self.profiles, resource)
   }
 
   /// What the team holds of the MCP server `resource` and what this computer fills in for it; `None` for any other
-  /// resource, and for a server with no version cached here.
+  /// resource, and for a server whose latest version this computer cannot read.
   pub fn mcp_server(&self, resource: ResourceId) -> Option<&TeamMcpSheet> {
-    self
-      .mcp_servers
-      .iter()
-      .find_map(|(found, sheet)| (*found == resource).then_some(sheet))
+    found(&self.mcp_servers, resource)
   }
 
-  /// What the team holds of the tool `resource`; `None` for any other resource, and for a tool with no version cached
-  /// here.
+  /// What the team holds of the tool `resource`; `None` for any other resource, and for a tool whose latest version
+  /// this computer cannot read.
   pub fn tool(&self, resource: ResourceId) -> Option<&TeamToolSheet> {
-    self
-      .tools
-      .iter()
-      .find_map(|(found, sheet)| (*found == resource).then_some(sheet))
+    found(&self.tools, resource)
   }
 
-  /// What the team holds of the instruction `resource`; `None` for any other resource, and for one with no version
-  /// cached here.
+  /// What the team holds of the instruction `resource`; `None` for any other resource, and for one whose latest
+  /// version this computer cannot read.
   pub fn instruction(&self, resource: ResourceId) -> Option<&TeamInstructionSheet> {
-    self
-      .instructions
-      .iter()
-      .find_map(|(found, sheet)| (*found == resource).then_some(sheet))
+    found(&self.instructions, resource)
   }
 
-  /// What the team holds of the skill `resource`; `None` for any other resource, and for one with no version cached
-  /// here.
+  /// What the team holds of the skill `resource`; `None` for any other resource, and for one whose latest version this
+  /// computer cannot read.
   pub fn skill(&self, resource: ResourceId) -> Option<&TeamSkillSheet> {
-    self
-      .skills
-      .iter()
-      .find_map(|(found, sheet)| (*found == resource).then_some(sheet))
+    found(&self.skills, resource)
   }
 
   /// What the MCP server or tool `resource` is; `None` for any other resource.
   pub fn form(&self, resource: ResourceId) -> Option<Form> {
-    self
-      .forms
-      .iter()
-      .find_map(|(found, form)| (*found == resource).then_some(*form))
+    found(&self.forms, resource).copied()
   }
 }
 
+fn found<T>(sheets: &[(ResourceId, T)], resource: ResourceId) -> Option<&T> {
+  sheets
+    .iter()
+    .find_map(|(id, sheet)| (*id == resource).then_some(sheet))
+}
+
 /// The archived team MCP servers that keep a draft here.
-fn archived(db: &ProjectDb) -> Result<Vec<Archived>, StoreError> {
+fn archived(db: &ProjectDb, config: &TeamConfig) -> Result<Vec<Archived>, StoreError> {
   let mut archived = Vec::new();
-  for (resource, at) in db.archived_with_draft(ResourceKind::McpServer)? {
-    if let Some(version) = db.latest_version::<TeamMcpServer>(resource.id())? {
+  for (kept, at) in db.archived_with_draft(ResourceKind::McpServer)? {
+    let Some(resource) = config.archived(kept.id()) else {
+      continue;
+    };
+    if let Some(number) = resource.number() {
       archived.push(Archived {
-        id: resource.id(),
-        name: resource.name().to_string(),
-        number: version.number(),
+        id: resource.id,
+        name: resource.name.as_str().to_owned(),
+        number,
         at,
       });
     }
@@ -159,78 +168,73 @@ fn archived(db: &ProjectDb) -> Result<Vec<Archived>, StoreError> {
 }
 
 /// What each MCP server and tool of the project is, from its latest version.
-fn forms(db: &ProjectDb) -> Result<Vec<(ResourceId, Form)>, StoreError> {
+fn forms(db: &ProjectDb, config: &TeamConfig) -> Result<Vec<(ResourceId, Form)>, StoreError> {
   let mut forms = Vec::new();
-  let mut servers = db.resources(ResourceKind::McpServer)?;
-  servers.extend(
-    db.archived_with_draft(ResourceKind::McpServer)?
-      .into_iter()
-      .map(|(resource, _)| resource),
-  );
-  for resource in servers {
-    if let Some(version) = db.latest_version::<TeamMcpServer>(resource.id())? {
-      let form = match version.body().launch() {
+  for resource in team_mcp::listed(db, config)? {
+    if let Some(Ok(body)) = resource.body::<TeamMcpServer>() {
+      let form = match body.launch() {
         TeamMcpLaunch::Program(_) => Form::McpProgram,
         TeamMcpLaunch::Remote(_) => Form::McpRemote,
       };
-      forms.push((resource.id(), form));
+      forms.push((resource.id, form));
     }
   }
-  for resource in db.resources(ResourceKind::Tool)? {
-    if let Some(version) = db.latest_version::<Tool>(resource.id())? {
-      let form = match version.body().kind() {
+  for resource in config.resources(ResourceKind::Tool) {
+    if let Some(Ok(tool)) = resource.body::<Tool>() {
+      let form = match tool.kind() {
         ToolKind::Command => Form::ToolCommand,
         ToolKind::Http => Form::ToolHttp,
         ToolKind::Database => Form::ToolDatabase,
       };
-      forms.push((resource.id(), form));
+      forms.push((resource.id, form));
     }
   }
   Ok(forms)
 }
 
+/// The team's instructions, then its skills, each by name.
+fn plain(config: &TeamConfig) -> Vec<Plain> {
+  [ResourceKind::Instruction, ResourceKind::Skill]
+    .into_iter()
+    .flat_map(|kind| {
+      config.resources(kind).into_iter().map(move |resource| Plain {
+        id: resource.id,
+        kind,
+        name: resource.name.as_str().to_owned(),
+        number: resource.number(),
+      })
+    })
+    .collect()
+}
+
 impl Workspace {
-  /// The hub of the team project at `repo_root`. Reads the databases and the keychain's list of what it has, so it
-  /// blocks: run it on the background pool, on an explicit change and never on a timer
-  /// ([`Workspace::project_readiness`]).
-  pub fn team_hub(&self, repo_root: &Path, vault: &dyn SecretVault) -> Result<TeamHub, ReadinessError> {
+  /// The hub of the team project at `repo_root`, from its configuration as the team server was read this session and
+  /// what this computer filled in. Reads the databases and the keychain's list of what it has, so it blocks: run it on
+  /// the background pool, on an explicit change and never on a timer ([`Workspace::project_readiness`]).
+  pub fn team_hub(&self, repo_root: &Path, vault: &dyn SecretVault) -> Result<TeamHubRead, ReadinessError> {
+    let (config, unreached) = match self.team.read(repo_root) {
+      TeamRead::Reading => return Ok(TeamHubRead::Reading),
+      TeamRead::Unreachable(unreached) => return Ok(TeamHubRead::Unreachable(unreached)),
+      TeamRead::Read { config, unreached } => (config, unreached),
+    };
     let db = ProjectDb::open(repo_root)?;
     let readiness = self.readiness_in(&db, repo_root, vault)?;
-    let standings = db.shared_standings()?;
-    let mut plain = Vec::new();
-    for kind in [ResourceKind::Instruction, ResourceKind::Skill] {
-      let mut of_kind: Vec<Plain> = db
-        .resources(kind)?
-        .iter()
-        .filter_map(|resource| {
-          let standing = standings.iter().find(|standing| standing.resource == resource.id())?;
-          Some(Plain {
-            id: resource.id(),
-            kind,
-            name: resource.name().to_string(),
-            number: standing.confirmed.as_ref().map(|confirmed| confirmed.number),
-          })
-        })
-        .collect();
-      of_kind.sort_by_key(|found| found.name.to_lowercase());
-      plain.extend(of_kind);
-    }
-    let profiles = team_profile::sheets(&db)?;
+    let profiles = team_profile::sheets(&db, &config)?;
     let programs = match db.sharing()? {
       Some(link) => self.db.lock().mcp_server_programs(link.server)?,
       None => Vec::new(),
     };
-    let archived = archived(&db)?;
-    Ok(TeamHub {
+    Ok(TeamHubRead::Read(Box::new(TeamHub {
+      unreached,
       readiness,
-      plain,
-      archived,
-      forms: forms(&db)?,
-      mcp_servers: team_mcp::sheets(&db, &programs, &profiles)?,
-      tools: team_tool::sheets(&db, &profiles)?,
-      instructions: team_text::instructions(&db, &profiles)?,
-      skills: team_text::skills(&db, &profiles)?,
+      plain: plain(&config),
+      archived: archived(&db, &config)?,
+      forms: forms(&db, &config)?,
+      mcp_servers: team_mcp::sheets((&db, &config), &programs, &profiles)?,
+      tools: team_tool::sheets(&config, &profiles),
+      instructions: team_text::instructions(&config, &profiles),
+      skills: team_text::skills(&config, &profiles),
       profiles,
-    })
+    })))
   }
 }

@@ -27,7 +27,7 @@ use orchester_core::{
   resource::{ResourceKind, VersionNumber},
 };
 use orchester_store::{ArchiveStop, Archived};
-use orchester_workspace::{background, display, readiness::archive_blocks_profiles, used_by::profile_cli};
+use orchester_workspace::{display, readiness::archive_blocks_profiles};
 
 use super::{TaskContext, not_ready::rows_box, summary::team_run};
 use crate::{
@@ -258,7 +258,7 @@ fn still_using(ctx: &mut Ctx, task: &TaskContext, stop: &ArchiveStop) -> Vec<Pro
             .filter(|used| used.kind == SharedResourceKind::AgentProfile)
           {
             profiles.push(Profile {
-              cli: cli_of(&root, used.id).await,
+              cli: services.workspace.team_profile_cli(&root, used.id),
               id: used.id,
               name: used.name,
               version: used.version,
@@ -271,20 +271,6 @@ fn still_using(ctx: &mut Ctx, task: &TaskContext, stop: &ArchiveStop) -> Vec<Pro
     .state()
     .get();
   state.data.unwrap_or_default()
-}
-
-/// The CLI `profile` runs; a profile whose CLI cannot be read keeps the plain glyph, so the row still says it.
-async fn cli_of(root: &std::path::Path, profile: ResourceId) -> Option<AgentProvider> {
-  let owned = root.to_owned();
-  match background::run(move || profile_cli(&owned, profile)).await {
-    Ok(Ok(cli)) => cli,
-    Ok(Err(error)) => {
-      tracing::warn!(%error, %profile, "cannot read the CLI of a profile that names an archived resource");
-      None
-    }
-    // The blocking pool is shutting down with the window.
-    Err(_) => None,
-  }
 }
 
 /// A profile that still names the resource: its name and version, why it cannot run, and where to change it.

@@ -6,9 +6,7 @@
 use orchester_core::{
   id::ResourceId,
   resource::{ResourceKind, TeamMcpServer},
-  store::ResourceStore,
 };
-use orchester_store::ProjectDb;
 use rmcp::handler::server::common::schema_for_type;
 use serde_json::{Value, json};
 
@@ -26,6 +24,7 @@ use crate::{
     services::{Services, blocking},
   },
   readiness::ProjectReadiness,
+  team_config::TeamConfig,
 };
 
 pub(super) const SPECS: &[Spec] = &[Spec {
@@ -65,7 +64,8 @@ async fn list(services: &Services, args: InProjects, translate: &Translate) -> R
         return Ok(None);
       }
       let readiness = readiness_json::read(&services, db, &open.repo_root)?;
-      let servers = servers_of(db, &readiness)?;
+      let read = services.workspace.team_read(&open.repo_root);
+      let servers = read.config().map_or_else(Vec::new, |config| servers_of(config, &readiness));
       Ok(Some((readiness, servers)))
     })
   })
@@ -84,24 +84,24 @@ struct Listed {
   server: Value,
 }
 
-fn servers_of(db: &ProjectDb, readiness: &ProjectReadiness) -> Result<Vec<Listed>, ToolError> {
-  let mut listed = Vec::new();
-  for found in readiness
+/// The team's MCP servers readiness lists, each with the body of its latest version in `config`, the team's
+/// configuration as it was read this session.
+fn servers_of(config: &TeamConfig, readiness: &ProjectReadiness) -> Vec<Listed> {
+  readiness
     .resources()
     .iter()
     .filter(|found| found.kind() == ResourceKind::McpServer)
-  {
-    // Readiness names the version this computer uses; the body is all that is read here.
-    let Some(version) = db.latest_version::<TeamMcpServer>(found.resource())? else {
-      continue;
-    };
-    listed.push(Listed {
-      id: found.resource(),
-      version: found.number().get(),
-      server: body::server_json(version.body()),
-    });
-  }
-  Ok(listed)
+    .filter_map(|found| {
+      let Some(Ok(body)) = config.resource(found.resource())?.body::<TeamMcpServer>() else {
+        return None;
+      };
+      Some(Listed {
+        id: found.resource(),
+        version: found.number().get(),
+        server: body::server_json(&body),
+      })
+    })
+    .collect()
 }
 
 fn server_json(listed: &Listed, readiness: &ProjectReadiness) -> Value {

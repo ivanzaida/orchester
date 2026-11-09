@@ -152,6 +152,20 @@ pub(super) fn of(db: &ProjectDb, id: ResourceId) -> Result<Option<McpEdit>, Stor
   }))
 }
 
+/// What an edit of a team MCP server starts from when only its latest version, `number` with `body`, is known here:
+/// no draft and nothing newer; `None` for a server the form cannot hold ([`of`]).
+pub(super) fn of_latest((number, body): (VersionNumber, &TeamMcpServer)) -> Option<McpEdit> {
+  let published = fields_of(body)?;
+  Some(McpEdit {
+    number,
+    team: Some(published.clone()),
+    team_number: Some(number),
+    published,
+    draft: None,
+    newer: None,
+  })
+}
+
 /// The latest version of `id` that the team server numbered, with its fields; `None` when there is none, or the form
 /// cannot hold it.
 fn team_version(db: &ProjectDb, id: ResourceId) -> Result<Option<(VersionNumber, NewTeamMcpServer)>, StoreError> {

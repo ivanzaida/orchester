@@ -90,17 +90,9 @@ pub(super) fn profile_naming(
   })
 }
 
-/// `local` in the team's form, from what this computer knows of its connections and MCP servers; the outer error is the
-/// store failing, the inner one the profile that cannot be published. Publishing sends this, and the readiness of a
-/// version that waits for the server reads it ([`crate::readiness`]).
-pub(crate) fn team_form(
-  db: &ProjectDb,
-  local: &AgentProfile,
-) -> Result<Result<TeamAgentProfile, TeamProfileError>, StoreError> {
-  team_form_naming(db, local, &team_mcp_servers(db)?)
-}
-
-/// [`team_form`], with `team_mcp_servers` as the team MCP servers the profile may choose.
+/// `local` in the team's form, from what this computer knows of its connections and MCP servers, with
+/// `team_mcp_servers` as the team MCP servers the profile may choose; the outer error is the store failing, the inner
+/// one the profile that cannot be published. Publishing sends this.
 fn team_form_naming(
   db: &ProjectDb,
   local: &AgentProfile,

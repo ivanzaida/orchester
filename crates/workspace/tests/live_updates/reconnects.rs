@@ -37,6 +37,7 @@ impl Clock for SettableClock {
 /// A server that cannot be reached `failures` times, then refuses the token.
 struct Unreachable {
   failures: Mutex<usize>,
+  configs: TeamConfigs,
 }
 
 impl Source for Unreachable {
@@ -70,6 +71,18 @@ impl Source for Unreachable {
   fn changed(&self) {}
 
   fn state(&self, _: SyncState) {}
+
+  fn configs(&self) -> &TeamConfigs {
+    &self.configs
+  }
+
+  fn unreached(&self, _: &SharingError) -> Message {
+    Message::new("sharing.errors.offline")
+  }
+
+  async fn retried(&self) {
+    std::future::pending::<()>().await;
+  }
 }
 
 fn seconds(waits: &[f64]) -> Vec<Duration> {
@@ -84,6 +97,7 @@ async fn live_updates_reconnects_wait_one_second_doubling_to_sixty_with_jitter()
     let clock = SettableClock::new(jitter);
     let source = Unreachable {
       failures: Mutex::new(8),
+      configs: TeamConfigs::default(),
     };
     assert_eq!(follow(&source, &workspace.root, &clock).await, Stopped::SignedOut);
     let expected: Vec<f64> = [1.0, 2.0, 4.0, 8.0, 16.0, 32.0, 60.0, 60.0]

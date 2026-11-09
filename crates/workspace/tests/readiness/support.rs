@@ -8,29 +8,32 @@ use std::{
 };
 
 use orchester_core::{
-  blob::ContentHash,
   connection::{
     AgentConnection, AgentProvider,
     mcp::{McpEnvironment, McpServer, McpServerName, McpServerSelection, McpTransport, StdioServer},
   },
-  id::{ConnectionId, ProjectId, ResourceId, SecretId, ServerId, UserId},
+  id::{ConnectionId, ProjectId, ResourceId, SecretId, ServerId},
   name::Name,
   permission::StepPermissions,
   project::{Project, ProjectKey},
   resource::{
-    AccessPolicy, AccessWindow, AgentProfile, ApprovalMode, CommandEnvironment, CommandProgram, DeniedBehavior, Draft,
+    AccessPolicy, AccessWindow, AgentProfile, ApprovalMode, CommandEnvironment, CommandProgram, DeniedBehavior,
     HttpAuth, HttpMethod, HttpRequest, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, ResourceBody,
-    Slug, Step, StepKey, StepKind, TeamAgentProfile, TeamMcpServer, Tool, ToolAction, VariableName, VersionNumber,
+    ResourceKind, Slug, Step, StepKey, StepKind, TeamAgentProfile, TeamMcpServer, Tool, ToolAction, VariableName,
+    VersionNumber,
   },
   secret::{Environment, NewSecret, Secret, SecretKind, SecretName, SecretValue, SecretVault, VaultError, VaultKey},
-  sharing::{MemberRole, SharedPerson, TaskRevision},
+  sharing::{MemberRole, TaskRevision},
   store::{ConnectionStore, McpServerStore, ResourceStore, SecretStore, SettingsStore},
   time::Timestamp,
 };
-use orchester_store::{AppDb, CachedVersion, ProjectDb, ResourceSharing, SharingLink, StoredServer};
-use orchester_workspace::{readiness::ProjectReadiness, workspace::Workspace};
+use orchester_store::{AppDb, ProjectDb, SharingLink, StoredServer};
+use orchester_workspace::{
+  readiness::ProjectReadiness,
+  team_config::{TeamConfig, TeamResource, TeamVersion},
+  workspace::Workspace,
+};
 use parking_lot::Mutex;
-use serde::Serialize;
 use serde_json::{Value, json};
 use tempfile::TempDir;
 
@@ -92,6 +95,8 @@ pub struct Fixture {
   pub root: PathBuf,
   pub workspace: Workspace,
   pub vault: MemoryVault,
+  /// The team's resources as its server would answer them, kept in the workspace's memory.
+  team: Mutex<Vec<TeamResource>>,
 }
 
 impl Fixture {
@@ -150,12 +155,59 @@ impl Fixture {
       .expect("shared");
     }
     drop(db);
-    Self {
+    let fixture = Self {
       dir,
       root,
       workspace: Workspace::new(app),
       vault: MemoryVault::default(),
+      team: Mutex::new(Vec::new()),
+    };
+    if shared {
+      fixture.keep_team();
     }
+    fixture
+  }
+
+  /// Keeps the team's resources in the workspace's memory, as a read of the team server does.
+  fn keep_team(&self) {
+    let config = TeamConfig::new(self.team.lock().iter().cloned());
+    self.workspace.keep_team_config_for_test(&self.root, config);
+  }
+
+  /// Keeps `id` with `body` as its latest version `number`, as the team server holds it.
+  fn keep_version(&self, id: ResourceId, kind: ResourceKind, slug: &str, (number, body): (VersionNumber, Value)) {
+    let latest = TeamVersion {
+      number,
+      body,
+      published_by: "Olena".to_owned(),
+      published_at: at(20),
+    };
+    let mut team = self.team.lock();
+    match team.iter_mut().find(|resource| resource.id == id) {
+      Some(resource) => resource.latest = Some(latest),
+      None => team.push(TeamResource {
+        id,
+        kind,
+        name: name(slug),
+        archived: false,
+        revision: TaskRevision::try_from(1).expect("revision"),
+        latest: Some(latest),
+      }),
+    }
+    drop(team);
+    self.keep_team();
+  }
+
+  /// The team archives `id`, or restores it.
+  pub fn archive(&self, id: ResourceId, archived: bool) {
+    let mut team = self.team.lock();
+    let resource = team
+      .iter_mut()
+      .find(|resource| resource.id == id)
+      .expect("a team resource");
+    resource.archived = archived;
+    drop(team);
+    self.keep_team();
   }
 
   pub fn db(&self) -> ProjectDb {
@@ -201,38 +253,33 @@ impl Fixture {
     path
   }
 
-  /// The team's profile at v1: the server holds `team`, this computer runs it by a local body.
+  /// The team's profile at v1, as the server holds it.
   pub fn team_profile(&self, slug: &str, team: &TeamAgentProfile) -> ResourceId {
-    let mut db = self.db();
-    let id = self.create(&mut db, slug, &AgentProfile::from_team(team, ConnectionId::generate()));
-    let local = AgentProfile::from_team(team, AgentProfile::unresolved_connection(id));
-    cache(
-      &mut db,
-      id,
-      (VersionNumber::FIRST, false),
-      serde_json::to_value(team).expect("json"),
-      local,
-    );
+    let id = ResourceId::generate();
+    let body = serde_json::to_value(team).expect("json");
+    self.keep_version(id, ResourceKind::AgentProfile, slug, (VersionNumber::FIRST, body));
     id
   }
 
-  /// The team's resource of any kind whose body is the same on the server and here, at v1.
-  pub fn team_resource<B: ResourceBody + Serialize + Clone>(&self, slug: &str, body: B) -> ResourceId {
-    let mut db = self.db();
-    let id = self.create(&mut db, slug, &body);
-    cache(
-      &mut db,
-      id,
-      (VersionNumber::FIRST, false),
-      serde_json::to_value(&body).expect("json"),
-      body,
-    );
+  /// The team's resource of any kind at v1, as the server holds it.
+  pub fn team_resource<B: ResourceBody>(&self, slug: &str, body: &B) -> ResourceId {
+    let id = ResourceId::generate();
+    let value = serde_json::to_value(body).expect("json");
+    self.keep_version(id, B::KIND, slug, (VersionNumber::FIRST, value));
+    id
+  }
+
+  /// The team's resource of `kind` whose latest version is `body` as the server sent it, which may be in no form this
+  /// computer reads.
+  pub fn team_raw(&self, slug: &str, kind: ResourceKind, body: Value) -> ResourceId {
+    let id = ResourceId::generate();
+    self.keep_version(id, kind, slug, (VersionNumber::FIRST, body));
     id
   }
 
   /// A team MCP server from its body as the server sends it.
   pub fn team_server(&self, slug: &str, body: Value) -> ResourceId {
-    self.team_resource(slug, server_body(body))
+    self.team_resource(slug, &server_body(body))
   }
 
   /// A resource of this computer, published at v1: a local project's own, which no server knows.
@@ -244,49 +291,9 @@ impl Fixture {
   }
 
   fn create<B: ResourceBody>(&self, db: &mut ProjectDb, slug: &str, body: &B) -> ResourceId {
-    let id = db
-      .create_resource(Slug::new(slug).expect("slug"), name(slug), body, at(10))
+    db.create_resource(Slug::new(slug).expect("slug"), name(slug), body, at(10))
       .expect("resource")
-      .id();
-    if db.sharing().expect("read").is_some() {
-      db.set_resource_sharing(
-        id,
-        Some(ResourceSharing::Shared(TaskRevision::try_from(1).expect("revision"))),
-      )
-      .expect("shared");
-    }
-    id
-  }
-
-  /// A new profile of the team's project, published here as v1 and waiting for the server to number it: nothing of it
-  /// is cached from the server.
-  pub fn pending_profile(&self, slug: &str, body: &AgentProfile) -> ResourceId {
-    let mut db = self.db();
-    let id = db
-      .create_resource(Slug::new(slug).expect("slug"), name(slug), body, at(10))
-      .expect("resource")
-      .id();
-    db.publish_draft::<AgentProfile>(id, at(11)).expect("published");
-    assert_waiting(&db, id, VersionNumber::FIRST);
-    id
-  }
-
-  /// Publishes `body` as the next version of `profile` while the server cannot be reached: it waits to be sent.
-  pub fn publish_offline(&self, profile: ResourceId, body: AgentProfile) -> VersionNumber {
-    let mut db = self.db();
-    let latest = db
-      .latest_version::<AgentProfile>(profile)
-      .expect("read")
-      .expect("a first version")
-      .number();
-    db.save_draft(profile, &Draft::new(body, Some(latest), at(30)))
-      .expect("draft");
-    let number = db
-      .publish_draft::<AgentProfile>(profile, at(31))
-      .expect("published")
-      .number();
-    assert_waiting(&db, profile, number);
-    number
+      .id()
   }
 
   /// A server of this computer that starts `program`.
@@ -345,45 +352,11 @@ impl Fixture {
     secret.id()
   }
 
-  /// A newer version of the team's `profile`; `waits` is a teammate's version that waits for *Use v<N> here*.
-  pub fn next_profile_version(&self, profile: ResourceId, number: VersionNumber, team: &TeamAgentProfile, waits: bool) {
-    let local = AgentProfile::from_team(team, AgentProfile::unresolved_connection(profile));
-    let server_body = serde_json::to_value(team).expect("json");
-    cache(&mut self.db(), profile, (number, waits), server_body, local);
+  /// The team publishes `team` as `number`, the latest version of its `profile`.
+  pub fn next_profile_version(&self, profile: ResourceId, number: VersionNumber, team: &TeamAgentProfile) {
+    let body = serde_json::to_value(team).expect("json");
+    self.keep_version(profile, ResourceKind::AgentProfile, "", (number, body));
   }
-}
-
-fn assert_waiting(db: &ProjectDb, resource: ResourceId, number: VersionNumber) {
-  assert!(
-    db.waiting_publishes()
-      .expect("read")
-      .iter()
-      .any(|waiting| waiting.resource == resource && waiting.number == number),
-    "the version waits for the server"
-  );
-}
-
-fn cache<B: ResourceBody>(
-  db: &mut ProjectDb,
-  id: ResourceId,
-  (number, waits_here): (VersionNumber, bool),
-  server_body: Value,
-  local_body: B,
-) {
-  let cached = CachedVersion {
-    number,
-    published_at: at(20),
-    publisher: SharedPerson {
-      id: UserId::generate(),
-      name: "Olena".to_owned(),
-    },
-    server_body,
-    hash: ContentHash::new(&"a".repeat(64)).expect("a hash"),
-    references: Vec::new(),
-    local_body,
-    waits_here,
-  };
-  db.cache_shared_version(id, &cached).expect("cached");
 }
 
 /// A tool that sends `secret` as the bearer token of its request.
@@ -472,6 +445,18 @@ pub fn instruction() -> orchester_core::resource::Instruction {
     InstructionScope::Project,
   )
   .expect("an instruction")
+}
+
+/// A team skill.
+pub fn skill() -> orchester_core::resource::Skill {
+  use orchester_core::resource::{InstructionScope, Skill};
+  Skill::new(
+    "Review a diff.".into(),
+    "# Review".into(),
+    Vec::new(),
+    InstructionScope::Project,
+  )
+  .expect("skill")
 }
 
 /// A pipeline whose agent steps run `profiles` in turn, merged with `integrator`.

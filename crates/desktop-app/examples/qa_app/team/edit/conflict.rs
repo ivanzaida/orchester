@@ -25,7 +25,7 @@ use orchester_workspace::{
 use serde_json::Value;
 use tokio::runtime::Handle;
 
-use super::{State, pencil, said};
+use super::{State, pencil, published, said};
 
 /// The folder both sides give the server, which the comparison says they agree on.
 const FOLDER: &str = "tools/pencil";
@@ -50,14 +50,7 @@ pub(super) fn prepare(
   (server, root): (&TeamServer, &Path),
 ) -> Result<(), Box<dyn Error>> {
   let pencil = pencil(root)?;
-  let v1 = services
-    .workspace
-    .team_hub(root, services.vault.get())?
-    .mcp_server(pencil)
-    .and_then(|sheet| sheet.edit.as_ref())
-    .ok_or("pencil-design has an edit")?
-    .published
-    .clone();
+  let v1 = published(services, root, pencil)?;
   let kept = || draft_over(root, pencil, &v1);
   match state {
     State::TeamEditNewer => {

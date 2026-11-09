@@ -64,11 +64,13 @@ use orchester_ipc::SessionEnd;
 use orchester_store::{CachedTask, ProjectDb, SharingLink};
 use orchester_workspace::{
   activity::Activity,
+  messages::Message,
   runner::Runners,
   sharing::{
     SharingError,
     sync::{Clock, Source, Stopped, SyncState, SystemClock, follow},
   },
+  team_config::TeamConfigs,
 };
 use server::TeamServer;
 use support::Fixture;
@@ -88,6 +90,8 @@ struct Member {
   states: Mutex<Vec<SyncState>>,
   /// The resources its stream saw archived, in order, with who archived each.
   archived: Mutex<Vec<(ResourceId, Option<String>)>>,
+  /// The team's configuration its stream read, in memory.
+  configs: TeamConfigs,
 }
 
 impl Member {
@@ -99,6 +103,7 @@ impl Member {
       project: server.project,
       states: Mutex::new(Vec::new()),
       archived: Mutex::new(Vec::new()),
+      configs: TeamConfigs::default(),
     }
   }
 
@@ -171,6 +176,18 @@ impl Source for Member {
 
   fn state(&self, state: SyncState) {
     self.states.lock().expect("states").push(state);
+  }
+
+  fn configs(&self) -> &TeamConfigs {
+    &self.configs
+  }
+
+  fn unreached(&self, error: &SharingError) -> Message {
+    error.message(self.client.address())
+  }
+
+  async fn retried(&self) {
+    std::future::pending::<()>().await;
   }
 }
 

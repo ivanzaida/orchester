@@ -13,6 +13,13 @@
 //! is, and a read that failed shows its failure and no counts, never the last answer as current. Before it was ever
 //! read the list and the panel stand in bones ([`agents_bones`]). Before the project is known to be shared the page is
 //! [`unread`]'s.
+//!
+//! The team's configuration is read from its team server, held in memory for the session
+//! (`docs/design/team-configuration-live.md`). When the server cannot be reached and nothing was read, the body says so
+//! with the reason and *Try again*, the head says the team cannot be reached and has no *New*, and the tabs have no
+//! counts ([`unreachable`], A25 `Zhcif`). When it was read and the server is lost since, what was read stays shown,
+//! the head says the team cannot be reached, and nothing is created or published until it is back: the page reads as
+//! it does for whoever may not change the team's resources.
 
 pub(in crate::screens) mod actions;
 pub(in crate::screens) mod archive;
@@ -32,6 +39,7 @@ pub(in crate::screens) mod rows;
 mod secret;
 mod taken_back;
 mod tool;
+mod unreachable;
 pub(super) mod unread;
 pub(in crate::screens) mod words;
 
@@ -47,7 +55,12 @@ use lurq::{
   node::Element,
 };
 use orchester_core::id::{ProjectId, ResourceId};
-use orchester_workspace::{agents::team_hub::TeamHub, messages::Message, sharing::team::TeamConfiguration};
+use orchester_workspace::{
+  agents::team_hub::{TeamHub, TeamHubRead},
+  messages::Message,
+  sharing::team::TeamConfiguration,
+  team_config::Unreached,
+};
 
 use self::model::{Kind, Listing};
 use crate::{
@@ -56,7 +69,8 @@ use crate::{
   queries::{self, Again, Session, hub as hub_query},
   routes::{HubFilter, HubView, ProjectPage, Route},
   screens::hub::{
-    agents, agents_bones,
+    agents::{self, TabCount},
+    agents_bones,
     new_button::{made_under, new_button, new_words},
   },
   services::Services,
@@ -118,7 +132,13 @@ impl Component for TeamHubScreen {
     // A read under way or failed keeps the last answer in `loaded`: it counts and lists only while the read is not
     // failed, and a read under way marks what shows as the last answer.
     let reading = loaded.is_pending();
-    let hub = loaded.data.as_ref().filter(|_| failed.is_none());
+    let (hub, unreached) = read_of(loaded.data.as_ref().filter(|_| failed.is_none()));
+    let nothing_read = hub.is_none() && unreached.is_some();
+    // Nothing is created or published while the team server cannot be reached.
+    let team = TeamConfiguration {
+      may_change: team.may_change && unreached.is_none(),
+      ..team
+    };
     let listing = hub.map(|hub| Listing::of(hub, &team));
     let navigation = Navigation::of(ctx);
     // A form has no resource chosen: the filter's links go to the kind's list.
@@ -141,7 +161,10 @@ impl Component for TeamHubScreen {
           (reading, &self.retry),
         )
       }
-      (None, None) => agents_bones::body(ctx, "team-hub-loading", ctx.t("team_hub.reading")),
+      (None, None) => match unreached.as_ref() {
+        Some(unreached) => self.unreachable_page(ctx, (&project, &team), unreached),
+        None => agents_bones::body(ctx, "team-hub-loading", ctx.t("team_hub.reading")),
+      },
     };
     let id = project.open.project.id();
     // Only an admin makes a resource: *New <kind>* opens the form of the kind the tab holds.
@@ -154,8 +177,14 @@ impl Component for TeamHubScreen {
       .and_then(|chosen| listing.as_ref().and_then(|listing| listing.find(chosen)))
       .is_some_and(|entry| entry.draft && !entry.read_only && entry.outbox.is_none());
     let notices = taken_back::notices(ctx, &team, &project.open.repo_root);
-    let unreached = Services::of(ctx).team.reached().of(&project.open.repo_root) == Some(Reached::Unanswered);
-    let status = head::status(ctx, &team, (unreached, draft_saved));
+    let reach = if unreached.is_some() {
+      head::Reach::Unreachable
+    } else if Services::of(ctx).team.reached().of(&project.open.repo_root) == Some(Reached::Unanswered) {
+      head::Reach::Unanswered
+    } else {
+      head::Reach::Answered
+    };
+    let status = head::status(ctx, &team, (reach, draft_saved));
     agents::frame(
       ctx,
       agents::Frame {
@@ -163,7 +192,7 @@ impl Component for TeamHubScreen {
         filter: view.filter,
         status,
         new,
-        tabs: tabs(id, listing.as_ref(), selected, &navigation),
+        tabs: tabs(id, (listing.as_ref(), nothing_read), selected, &navigation),
         notices,
         body,
         over: Vec::new(),
@@ -173,6 +202,21 @@ impl Component for TeamHubScreen {
 }
 
 impl TeamHubScreen {
+  /// The body while the team server cannot be reached and nothing was read: *Try again* asks it again now.
+  fn unreachable_page(
+    &self,
+    ctx: &mut Ctx,
+    (project, team): (&ShownProject, &TeamConfiguration),
+    unreached: &Unreached,
+  ) -> Element {
+    let (services, root) = (Services::of(ctx), project.open.repo_root.clone());
+    let retry = self.retry.clone();
+    unreachable::body(ctx, team, unreached, move || {
+      again(&services, &root);
+      retry.update(|n| *n += 1);
+    })
+  }
+
   fn failure_page(&self, ctx: &mut Ctx, project: &ShownProject, error: Message, retrying: bool) -> Element {
     let retry = self.retry.clone();
     Failure::new("team-hub-load-error", ctx.t("team_hub.loadFailed"), error)
@@ -181,6 +225,29 @@ impl TeamHubScreen {
       .still_works(ctx.t("hub.failure.stillWorks"))
       .page(ctx)
   }
+}
+
+/// The hub `read` holds, and why the team server cannot be reached; neither while the hub is being read.
+fn read_of(read: Option<&TeamHubRead>) -> (Option<&TeamHub>, Option<Unreached>) {
+  match read {
+    Some(TeamHubRead::Read(hub)) => (Some(&**hub), hub.unreached().cloned()),
+    Some(TeamHubRead::Unreachable(unreached)) => (None, Some(unreached.clone())),
+    Some(TeamHubRead::Reading) | None => (None, None),
+  }
+}
+
+/// Asks the team server of the project at `root` again now, off the UI thread: it opens the project's database.
+fn again(services: &Services, root: &std::path::Path) {
+  let (servers, root) = (services.servers.clone(), root.to_owned());
+  services.runtime.spawn(async move {
+    let asked = orchester_workspace::background::run(move || servers.retry_project(&root)).await;
+    match asked {
+      Ok(Ok(())) => {}
+      Ok(Err(error)) => tracing::warn!(%error, "the team server of a project could not be asked again"),
+      // The blocking pool is shutting down with the window.
+      Err(_) => {}
+    }
+  });
 }
 
 /// A route that names a resource the filter does not hold (one removed, or of another kind) shows the first one of the
@@ -200,10 +267,11 @@ fn keep_route_on_shown(
   }
 }
 
-/// A tab per kind with its count (none while the hub is read), each keeping the chosen resource when it holds it.
+/// A tab per kind with its count (its bone while the hub is read, none when nothing could be read), each keeping the
+/// chosen resource when it holds it.
 fn tabs(
   project: ProjectId,
-  listing: Option<&Listing>,
+  (listing, nothing_read): (Option<&Listing>, bool),
   selected: Option<ResourceId>,
   navigation: &Navigation,
 ) -> Vec<agents::Tab> {
@@ -215,7 +283,11 @@ fn tabs(
       let navigation = navigation.clone();
       agents::Tab {
         filter: choice,
-        count: listing.map(|listing| listing.count(choice)),
+        count: if nothing_read {
+          TabCount::Unknown
+        } else {
+          TabCount::of(listing.map(|listing| listing.count(choice)))
+        },
         open: Arc::new(move || navigation.go(route.clone())),
       }
     })
