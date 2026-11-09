@@ -119,8 +119,8 @@ pub enum LifecycleRefusal {
   NotHolder,
   /// `422 organization`, `stop_run_first`: the task's work runs; a close waits for it to be stopped.
   StopRunFirst,
-  /// `403 not_admin`: the change (cancel, reopen, move between Backlog and Todo) is an Admin's alone, and the caller is a
-  /// member.
+  /// `403 not_admin`: the change (cancel, reopen, move between Backlog and Todo) is an Admin's alone, and the caller is
+  /// a member.
   NotAdmin,
   /// `422 organization`, `missing_reason`: a blocked reason is not empty after trimming.
   MissingReason,

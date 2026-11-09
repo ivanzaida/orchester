@@ -237,7 +237,11 @@ fn team_mcp_an_unreadable_run_of_an_unrecorded_team_task_is_listed_with_its_reas
 #[test]
 fn team_mcp_a_cached_team_task_with_no_run_opens_its_page_from_the_server_read() {
   let (checkout, _server, id) = cached_without_run();
-  let read = checkout.db().task(id).expect("read").expect("the stream's copy is cached");
+  let read = checkout
+    .db()
+    .task(id)
+    .expect("read")
+    .expect("the stream's copy is cached");
   assert!(
     checkout.db().shared_task_info(id).expect("info").is_some(),
     "the cached row is a shared one"

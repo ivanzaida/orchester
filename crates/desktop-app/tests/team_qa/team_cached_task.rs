@@ -12,11 +12,11 @@ use orchester_app::{
   test_support::{Data, Window, project_id},
 };
 use orchester_core::{
-  store::{RunStore, TaskStore},
   id::TaskId,
   name::Name,
   project::TaskKey,
   sharing::{CachedTask, TaskRevision},
+  store::{RunStore, TaskStore},
   task::{TaskLimits, TaskStatus, identity::TeamTaskRef, organization::TaskOrganization},
   time::Timestamp,
 };
@@ -53,9 +53,10 @@ fn on_cached_kon_12() -> (Window, TeamServer) {
   drop(db);
   let window = Window::of(data, launch);
   let key: TaskKey = "KON-12".parse().expect("a task key");
-  window
-    .navigation()
-    .go(Route::Project(project_id(), ProjectPage::task(key, TaskView::Summary, false)));
+  window.navigation().go(Route::Project(
+    project_id(),
+    ProjectPage::task(key, TaskView::Summary, false),
+  ));
   (window, server)
 }
 
