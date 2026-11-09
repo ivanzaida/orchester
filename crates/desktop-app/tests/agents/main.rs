@@ -16,6 +16,7 @@ mod local_hub_create_remote;
 mod local_hub_edit_secrets;
 mod local_hub_leaving;
 mod local_hub_profile;
+mod local_hub_refusals;
 mod local_hub_review;
 mod models;
 mod project_sets;
