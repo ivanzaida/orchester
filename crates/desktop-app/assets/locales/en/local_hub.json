@@ -104,8 +104,11 @@
       "effortDefault": "CLI default",
       "none": "None",
       "version": "{{version}} · published {{date}}",
-      "addServer": "Add",
+      "add": "Add",
       "addConnection": "Add",
+      "instructions": "Instructions",
+      "skills": "Skills",
+      "tools": "Tools",
       "chooseCli": "Choose a CLI"
     },
     "edit": {
@@ -150,13 +153,16 @@
       "keep": "Keep editing",
       "discard": "Discard changes"
     },
+    "given": {
+      "usedBy": "Used by",
+      "usedBySub": "The agent profiles that give it to their agents",
+      "none": "No agent profile gives it, so no agent gets it"
+    },
+    "tool": {
+      "title": "Tool"
+    },
     "instruction": {
       "title": "Instruction",
-      "addedTo": "Added to",
-      "addedToSub": "Chosen when it was made",
-      "appliesTo": "Applies to",
-      "appliesToSub": "Every agent, or the roles and profiles it names",
-      "appliesToRequired": "Choose who gets it",
       "when": "When",
       "text": "Text",
       "textSub": "Markdown, added to the agent's prompt as written",
@@ -167,8 +173,6 @@
       "title": "Skill",
       "name": "Name",
       "nameSub": "Lowercase with dashes; agents load it by this name",
-      "addedTo": "Added to",
-      "addedToSub": "Chosen when it was made",
       "description": "Description",
       "descriptionSub": "Tells agents when to use it",
       "descriptionPlaceholder": "When agents should use it, in one or two sentences",

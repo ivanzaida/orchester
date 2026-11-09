@@ -350,4 +350,6 @@ pub enum ProjectMigration {
   TeamReviewer,
   /// The team tasks' pipeline slug turned into the pipeline's id.
   TeamPipelineIds,
+  /// Local profiles choosing what reached their agents before.
+  ProfileGiven,
 }

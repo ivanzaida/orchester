@@ -84,6 +84,7 @@
     "excludedPipeline": "Applies to another pipeline.",
     "excludedStep": "Applies to another step.",
     "excludedEvent": "Applies at another injection event.",
+    "excludedNotChosen": "The agent profile doesn't choose it.",
     "viewPrompt": "View full prompt",
     "copyPrompt": "Copy full prompt",
     "secretNote": "Secret values stay out of agent prompts, variable previews and copied instructions.",

@@ -26,9 +26,9 @@ use orchester_core::{
   orchester_tools::ProjectTool,
   permission::{AgentPermissions, CommandPermission, NetworkAccess, StepPermissions},
   resource::{
-    AccessPolicy, AccessWindow, AgentProfile, AllowedSteps, ApprovalMode, CommandAction, CommandArg, CommandProgram,
-    Deliverable, DeniedBehavior, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step,
-    StepKey, StepKind, TeamAgentProfile, TeamMcpServer, Tool, ToolAction, Version, VersionNumber,
+    AccessPolicy, AccessWindow, AgentProfile, AllowedSteps, ApprovalMode, ChosenResources, CommandAction, CommandArg,
+    CommandProgram, Deliverable, DeniedBehavior, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess,
+    Slug, Step, StepKey, StepKind, TeamAgentProfile, TeamMcpServer, Tool, ToolAction, Version, VersionNumber,
   },
   run::{
     BranchName, CommitId, PauseReason, PreflightProblem, PublishedVersions, RunSnapshot, RunStatus, StepStatus,
@@ -79,8 +79,9 @@ fn link(root: &std::path::Path) -> (ServerId, ProjectId) {
   (server, server_project)
 }
 
-/// The team's Builder profile, version 1, as the server published it: on the publisher's connection.
-fn builder() -> Version<AgentProfile> {
+/// The team's Builder profile, version 1, as the server published it: on the publisher's connection, its agents given
+/// the check `tool`, so the snapshot this stand-in for the server builds pins it.
+fn builder(tool: ResourceId) -> Version<AgentProfile> {
   let settings =
     ProviderSettings::new(BTreeMap::from([(REASONING_EFFORT.to_owned(), "low".to_owned())])).expect("settings");
   let body = AgentProfile::new(
@@ -95,7 +96,12 @@ fn builder() -> Version<AgentProfile> {
     RepositoryAccess::Write,
     CommandPermission::AnyInWorktree,
     NetworkAccess::Off,
-  ));
+  ))
+  .with_given(
+    ChosenResources::EMPTY,
+    ChosenResources::EMPTY,
+    ChosenResources::new(vec![tool]).expect("one tool"),
+  );
   Version::new(VersionId::generate(), VersionNumber::FIRST, body, Timestamp::now())
 }
 
@@ -164,7 +170,7 @@ fn team_pinning(setup: &Setup, servers: Vec<TeamMcpServer>) -> Team {
   let root = project.repo.path();
   let (server, server_project) = link(root);
   let (profile, pipeline, tool) = (ResourceId::generate(), ResourceId::generate(), ResourceId::generate());
-  let profile_version = builder();
+  let profile_version = builder(tool);
   let pipeline_version = delivery(profile);
   let tool_version = check(pipeline);
   let profiles = BTreeMap::from([(profile, profile_version.clone())]);

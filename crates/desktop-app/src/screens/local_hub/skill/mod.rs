@@ -1,9 +1,11 @@
 //! The panel of a local skill (`Detail` in L1, `docs/design/team-configuration.md` rule 11), edited in place: the head
-//! with *Versions* and the … menu, the chips, *Skill* (its name, where it is added, its description, its SKILL.md and
-//! its files), *Ready?* and the pinned *Save* and *Cancel* ([`super::save_bar`]). What is typed is only the panel's
-//! until *Save*, which publishes it as the next version at once through the Skills editor's checks
-//! ([`orchester_workspace::skills::editor`]); *Cancel* puts back what is stored. Its reference files are listed but not
-//! changed here, and where it is added was fixed when it was made.
+//! with *Versions* and the … menu, the chips, *Skill* (its name, the profiles that give it to their agents, its
+//! description, its SKILL.md and its files), *Ready?* and the pinned *Save* and *Cancel* ([`super::save_bar`]). What is
+//! typed is only the panel's until *Save*, which publishes it as the next version at once through the Skills editor's
+//! checks ([`orchester_workspace::skills::editor`]); *Cancel* puts back what is stored. Its reference files are listed
+//! but not changed here. Who gets it is not chosen here: a profile chooses the skills its agents are offered
+//! (`docs/design/team-configuration.md`, "Decided 2026-11-09"); the scope it was made with is kept as it is, and
+//! decides nothing for a local run.
 //!
 //! What the Skills editor checks a write against is read once for every skill the panel shows, through its query
 //! (`queries::hub::skills`), kept for the session, and again when the skills, the profiles or the pipelines change (the
@@ -55,8 +57,8 @@ const BONES: [BoneRow; 5] = [
     bone: Bone::Field,
   },
   BoneRow {
-    label: "local_hub.skill.addedTo",
-    sub: Some("local_hub.skill.addedToSub"),
+    label: "local_hub.given.usedBy",
+    sub: Some("local_hub.given.usedBySub"),
     bone: Bone::Words,
   },
   BoneRow {

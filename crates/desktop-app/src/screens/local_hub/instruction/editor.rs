@@ -15,12 +15,12 @@ use lurq::{
   layout::Alignment,
   node::{Element, dimension::Dimension},
 };
-use orchester_core::resource::{Instruction, InstructionScope};
+use orchester_core::resource::Instruction;
 use orchester_workspace::{
   activity::operations,
   background,
   instructions::{
-    data::{InstructionEntry, ProjectInstructions, entry_in},
+    data::{InstructionEntry, entry_in},
     editor,
     form::{Events, FormErrors, ScopeChoice, SettingsError, Target},
   },
@@ -38,9 +38,10 @@ use crate::{
     instructions::{fields::Fields, state::Tab},
     local_hub::{
       leave::{clear_unsaved, mark_unsaved},
-      panel::{chips_of, frame, head_end, readiness, standing_chips},
+      model::Entry,
+      panel::{chips_of, frame, head_end, readiness, standing_chips, used_by},
       save_bar::{self, Save},
-      words::{added_to, kind_where_key},
+      words::kind_where_key,
     },
     team_hub::{
       panel::{body, head_named},
@@ -58,7 +59,6 @@ use crate::{
 #[derive(Clone)]
 pub(super) struct EditorProps {
   pub props: Props,
-  pub data: ProjectInstructions,
   /// The instruction as it was read when the panel opened: its draft's content when it has one, which the fields
   /// start from. The editor keeps what it stores itself from then on.
   pub entry: InstructionEntry,
@@ -67,7 +67,7 @@ pub(super) struct EditorProps {
 }
 impl PartialEq for EditorProps {
   fn eq(&self, other: &Self) -> bool {
-    self.props == other.props && self.data == other.data
+    self.props == other.props
   }
 }
 impl DevtoolsInspectable for EditorProps {}
@@ -135,7 +135,7 @@ impl Component for Editor {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let EditorProps { props, data, .. } = ctx.props::<EditorProps>().clone();
+    let EditorProps { props, .. } = ctx.props::<EditorProps>().clone();
     let stored = self.stored.get();
     let parsed = self.fields.instruction();
     let changed = stored.entry.state.has_draft() || parsed.as_ref().map_or(true, |body| *body != stored.published);
@@ -167,7 +167,7 @@ impl Component for Editor {
         PREFIX,
         &ctx.t("local_hub.instruction.title"),
         Vec::new(),
-        self.rows(ctx, (stored.entry.body.scope(), &data), errors),
+        self.rows(ctx, &props.entry, errors),
       ))
       .with_children(settings_error(ctx, errors))
       .with_children(
@@ -196,37 +196,18 @@ impl Drop for Editor {
 }
 
 impl Editor {
-  /// *Added to*, *Applies to* where the scope names agents, *When* and *Text*.
-  fn rows(
-    &self,
-    ctx: &mut Ctx,
-    (scope, data): (&InstructionScope, &ProjectInstructions),
-    errors: Option<&FormErrors>,
-  ) -> Vec<Row> {
-    let mut rows = vec![rows::row(
-      &format!("{PREFIX}-added"),
-      &ctx.t("local_hub.instruction.addedTo"),
-      Some(Sub::quiet(ctx.t("local_hub.instruction.addedToSub"))),
-      rows::words(&format!("{PREFIX}-added-value"), &added_to(ctx, scope, &data.pipelines)),
-    )];
-    // Who gets an instruction is shown, not chosen here: a profile chooses what it is given (the person's decision of
-    // 2026-11-09).
-    if matches!(scope, InstructionScope::Project | InstructionScope::Pipeline { .. }) {
-      rows.push(rows::row(
-        &format!("{PREFIX}-targets"),
-        &ctx.t("local_hub.instruction.appliesTo"),
+  /// *Used by*, *When* and *Text*. Who gets it is shown, not chosen: the profiles that give it to their agents.
+  fn rows(&self, ctx: &mut Ctx, entry: &Entry, errors: Option<&FormErrors>) -> Vec<Row> {
+    vec![
+      used_by(ctx, PREFIX, entry),
+      rows::row(
+        &format!("{PREFIX}-when"),
+        &ctx.t("local_hub.instruction.when"),
         None,
-        rows::words(&format!("{PREFIX}-targets-value"), &self.fields.targets_words(ctx, data)),
-      ));
-    }
-    rows.push(rows::row(
-      &format!("{PREFIX}-when"),
-      &ctx.t("local_hub.instruction.when"),
-      None,
-      self.fields.events_choice(ctx, true),
-    ));
-    rows.push(self.text_row(ctx, errors.and_then(|errors| errors.text.as_ref())));
-    rows
+        self.fields.events_choice(ctx, true),
+      ),
+      self.text_row(ctx, errors.and_then(|errors| errors.text.as_ref())),
+    ]
   }
 
   /// *Text*: the instruction's Markdown, its label at the top; a text that cannot be saved says why under the label.
@@ -295,7 +276,6 @@ impl Editor {
 fn waits(ctx: &Ctx, errors: &FormErrors) -> std::sync::Arc<str> {
   match (&errors.text, errors.settings) {
     (Some(text), _) => message_text(ctx, text),
-    (None, Some(SettingsError::TargetsRequired)) => ctx.t("local_hub.instruction.appliesToRequired"),
     (None, Some(settings)) => message_text(ctx, &settings.message()),
     (None, None) => ctx.t("local_hub.edit.invalid"),
   }

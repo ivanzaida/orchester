@@ -1026,6 +1026,7 @@
       "modelNotOffered": "The profile's connection does not offer that model, so nothing was changed.",
       "effortNotOffered": "The profile's model does not offer that reasoning effort, so nothing was changed.",
       "serversInvalid": "The profile cannot choose those MCP servers, so nothing was changed.",
+      "givenGone": "The project no longer has that instruction, skill or tool, it was archived, or it is a tool no agent can call, so nothing was changed.",
       "staleDraft": "This draft was started from an older version than the latest. Open the profile's editor to compare them and publish.",
       "promptsInEditor": "This draft changes what the profile's role tells its agents, which this panel does not show. Open More settings… to read it and publish it there."
     }
@@ -1620,6 +1621,8 @@
       "mcpServerMissing": "MCP server {{server}} is no longer available. Remove it from the selection and try again.",
       "mcpServerOff": "MCP server {{server}} is turned off. Turn it on in Connections before adding it to this profile.",
       "mcpServersInvalid": "Name each MCP server once, at most {{max}}.",
+      "givenTwice": "Name each instruction, skill and tool once.",
+      "toolNotCheck": "{{tool}} is not a check an agent can call: a profile gives its agents only command tools with access rules.",
       "copyOfRequired": "Copying needs the pipeline to copy (copy_of).",
       "copyOfNotTaken": "Only a copy names a pipeline to copy (copy_of).",
       "inStep": "Step {{step}}:",

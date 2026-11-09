@@ -8,7 +8,7 @@ use lurq::{
 use orchester_core::{
   connection::{AgentConnection, invocation::Platform, mcp::McpServerSelection},
   permission::AgentPermissions,
-  resource::AgentProfile,
+  resource::{AgentProfile, ChosenResources},
 };
 use orchester_workspace::agents::{
   data::{ProfileEntry, ProjectAgents},
@@ -38,6 +38,8 @@ pub struct Fields {
   pub servers: Signal<Servers>,
   /// The connection changed on this page: what it cannot enforce was reset, which the page says.
   pub changed_connection: Signal<bool>,
+  /// The instructions, skills and tools the profile gives its agents, chosen in the Agents hub and kept as they are.
+  given: [ChosenResources; 3],
 }
 
 impl Fields {
@@ -76,6 +78,9 @@ impl Fields {
       servers: ctx.signal(Servers(
         profile.map_or_else(McpServerSelection::default, |p| p.mcp_servers().clone()),
       )),
+      given: profile.map_or_else(Default::default, |p| {
+        [p.instruction_resources().clone(), p.skills().clone(), p.tools().clone()]
+      }),
     }
   }
 
@@ -176,6 +181,9 @@ impl Fields {
       effort: if effort.is_empty() { None } else { Some(&effort) },
       permissions: &permissions,
       mcp_servers: &servers,
+      instruction_resources: &self.given[0],
+      skills: &self.given[1],
+      tools: &self.given[2],
     }
     .profile()
   }

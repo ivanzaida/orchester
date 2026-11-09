@@ -49,7 +49,9 @@ pub enum AccessPolicyError {
   NoStepsSelected(ResourceId),
 }
 
-/// Who may call a tool and under which conditions. Callers not listed are denied.
+/// Who may call a tool and under which conditions. The callers (pipelines and their steps) decide only for a run made
+/// from execution inputs, a team run (`crate::run::GivenBy::Scope`): a local run's agents may call the tools their
+/// profile chooses (`docs/design/team-configuration.md`, "Decided 2026-11-09"). The rest holds for both.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(try_from = "AccessPolicyFields")]
 pub struct AccessPolicy {
@@ -128,7 +130,7 @@ impl AccessPolicy {
     self.denied
   }
 
-  /// Whether `step` of `pipeline` is on the allowlist.
+  /// Whether `step` of `pipeline` is on the allowlist: what decides for a run made from execution inputs.
   pub fn allows(&self, pipeline: ResourceId, step: &StepKey) -> bool {
     match self.callers.get(&pipeline) {
       Some(AllowedSteps::All) => true,
