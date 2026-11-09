@@ -435,6 +435,20 @@ impl Fixture {
     orchester_core::store::ConnectionStore::create_connection(&mut self.db, &connection).expect("kept");
   }
 
+  /// What a run of `task` starts from, as [`Fixture::pending_run`] makes it, for a test that creates runs itself.
+  pub fn new_run_for(&self, task: TaskId) -> NewRun {
+    NewRun {
+      task,
+      snapshot: self.snapshot.clone(),
+      branch: BranchName::new("orchester/orc-run-0").expect("branch"),
+      base: Revision::new(&"a".repeat(40)).expect("revision"),
+      base_branch: None,
+      base_source: orchester_core::integration::base::RunBaseSource::CheckedOut,
+      budget: Some(budget(1_000_000)),
+      max_duration: Some(Duration::from_secs(1_800)),
+    }
+  }
+
   /// A run of `task`, created at `now` and not started.
   pub fn pending_run(&mut self, task: TaskId, now: Timestamp) -> Run {
     self.pending_run_into(task, (&"a".repeat(40), None), (IdempotencyKey::generate(), now))
