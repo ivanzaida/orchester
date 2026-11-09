@@ -4,6 +4,8 @@
 //! scheme's fields yet: they follow the group's own rows (the label and its hint at the start, the control after
 //! them, an error under the control).
 
+use std::sync::Arc;
+
 use lurq::{
   app::{component::DevtoolsInspectable, ctx::Ctx, theme::SpacingSize},
   components::{Column, SelectOption},
@@ -21,6 +23,28 @@ use crate::{
     form_section::Label,
   },
 };
+
+/// One row of a remote server's part: its label with the words under it, and its control. The connections page draws it
+/// as a form row ([`Part::form_row`]); the hub's panel draws it as one row of its own, with the control across the row.
+pub(in crate::screens) struct Part {
+  pub id: &'static str,
+  pub label: Arc<str>,
+  pub hint: Option<Arc<str>>,
+  pub control: Element,
+}
+
+impl Part {
+  pub(super) fn form_row(self) -> Element {
+    let label = Label::new(self.id, self.label);
+    form_row(
+      match self.hint {
+        Some(hint) => label.description(hint),
+        None => label,
+      },
+      self.control,
+    )
+  }
+}
 
 /// The Authorization select's choice.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -100,7 +124,7 @@ const fn secret_words(choice: AuthorizationChoice) -> (&'static str, &'static st
 
 impl Fields {
   /// The endpoint, the authorization's scheme, and the fields the scheme asks for.
-  pub(super) fn remote_rows(&self, ctx: &mut Ctx, errors: &Shown, secrets: &[Secret]) -> Vec<Element> {
+  pub(super) fn remote_rows(&self, ctx: &mut Ctx, errors: &Shown, secrets: &[Secret]) -> Vec<Part> {
     let url = input(
       ctx,
       ("connection-mcp-url", "connections.mcp.property.endpoint"),
@@ -112,10 +136,12 @@ impl Fields {
     .render(ctx);
     let choice = self.authorization.scheme.get().0;
     let mut rows = vec![
-      form_row(
-        Label::new("connection-mcp-url", ctx.t("connections.mcp.property.endpoint")),
-        url,
-      ),
+      Part {
+        id: "connection-mcp-url",
+        label: ctx.t("connections.mcp.property.endpoint"),
+        hint: None,
+        control: url,
+      },
       self.scheme_row(ctx),
     ];
     if choice == AuthorizationChoice::Basic {
@@ -140,7 +166,7 @@ impl Fields {
     rows
   }
 
-  fn scheme_row(&self, ctx: &Ctx) -> Element {
+  fn scheme_row(&self, ctx: &Ctx) -> Part {
     let options = [
       (AuthorizationChoice::None, "connections.mcp.authorization.none"),
       (AuthorizationChoice::Bearer, "connections.mcp.authorization.bearer"),
@@ -161,18 +187,16 @@ impl Fields {
       options,
     )
     .render(ctx);
-    form_row(
-      Label::new(
-        "connection-mcp-authorization",
-        ctx.t("connections.property.authentication"),
-      )
-      .description(ctx.t("connections.mcp.dialog.authorizationHint")),
-      select,
-    )
+    Part {
+      id: "connection-mcp-authorization",
+      label: ctx.t("connections.property.authentication"),
+      hint: Some(ctx.t("connections.mcp.dialog.authorizationHint")),
+      control: select,
+    }
   }
 
   /// The project secret the scheme sends; a secret the project no longer has stays chosen, its error under it.
-  fn secret_row(&self, ctx: &Ctx, choice: AuthorizationChoice, error: Option<&str>, secrets: &[Secret]) -> Element {
+  fn secret_row(&self, ctx: &Ctx, choice: AuthorizationChoice, error: Option<&str>, secrets: &[Secret]) -> Part {
     let (label, hint) = secret_words(choice);
     let options = secrets
       .iter()
@@ -207,20 +231,26 @@ impl Fields {
       .spacing(SpacingSize::Sm)
       .child(select.render(ctx))
       .with_children(error.map(|error| field_error("connection-mcp-secret-error", error)));
-    form_row(
-      Label::new("connection-mcp-secret", ctx.t(label)).description(ctx.t(hint)),
-      control,
-    )
+    Part {
+      id: "connection-mcp-secret",
+      label: ctx.t(label),
+      hint: Some(ctx.t(hint)),
+      control: control.into(),
+    }
   }
 }
 
 /// A text field of the authorization, named by `key`, with `hint` under its label.
 fn text_row(
   ctx: &mut Ctx,
-  (id, key): (&str, &str),
+  (id, key): (&'static str, &str),
   (value, error): (&Signal<String>, Option<std::sync::Arc<str>>),
   hint: &str,
-) -> Element {
-  let field = input(ctx, (id, key), value, error).mono().render(ctx);
-  form_row(Label::new(id, ctx.t(key)).description(ctx.t(hint)), field)
+) -> Part {
+  Part {
+    id,
+    label: ctx.t(key),
+    hint: Some(ctx.t(hint)),
+    control: input(ctx, (id, key), value, error).mono().render(ctx),
+  }
 }

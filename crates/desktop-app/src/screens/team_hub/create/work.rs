@@ -37,7 +37,8 @@ use crate::{screens::local_hub::mcp::Pending, services::Services};
 
 /// A local MCP server as the form describes it: the server, the values typed for the secrets its variables take, which
 /// go to the secret store with it, and whether runs may use it once it is made. The values stay in the form's own
-/// store ([`Pending`]) and are copied out only by the create that stores them.
+/// store ([`Pending`]) and are copied out only by the create that stores them, and only those of the secrets the
+/// draft takes.
 #[derive(Clone, Debug)]
 pub(in crate::screens) struct LocalMcp {
   pub draft: McpServerDraft,
@@ -184,15 +185,10 @@ fn make_in(root: &Path, vault: &dyn SecretVault, request: Press) -> Result<Kept,
   let resource = match request.make {
     // The person's press is what the new server's widening asks for.
     Make::LocalMcpServer(local) => {
-      return create_with_values(
-        root,
-        vault,
-        (local.draft, &Allowed::Anything),
-        local.enabled,
-        &local.values.values(),
-      )
-      .map(Kept::Server)
-      .map_err(|error| said(error.message()));
+      let values = local.values.values_for(&local.draft.secrets());
+      return create_with_values(root, vault, (local.draft, &Allowed::Anything), local.enabled, &values)
+        .map(Kept::Server)
+        .map_err(|error| said(error.message()));
     }
     Make::Profile(profile) => create_decided(root, *profile, request.decided).map_err(said),
     Make::McpServer(input) => {

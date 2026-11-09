@@ -69,6 +69,13 @@ impl Pending {
     self.0.lock().is_empty()
   }
 
+  /// A copy of the value typed for each of `taken`, as what a create hands to the secret store. The values typed for
+  /// other secrets belong to variables that were removed since: they are dropped, and so overwritten.
+  pub(in crate::screens) fn values_for(&self, taken: &[SecretId]) -> Vec<(SecretId, SecretValue)> {
+    self.0.lock().retain(|(id, _)| taken.contains(id));
+    self.values()
+  }
+
   /// A copy of each value typed, as what the save hands to the secret store.
   pub(in crate::screens) fn values(&self) -> Vec<(SecretId, SecretValue)> {
     self

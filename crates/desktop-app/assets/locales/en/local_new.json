@@ -20,7 +20,10 @@
       "tool": "This project already has a tool named {{name}} · pick another name"
     },
     "mcp": {
-      "nameSub": "Unique in this project"
+      "nameSub": "Unique in this project",
+      "argumentsNone": "e.g. --stdio",
+      "toolsNone": "Tool names · listed after the first start",
+      "onHint": "Runs may use it once created"
     },
     "profile": {
       "connection": "Connection",
@@ -30,6 +33,8 @@
       "connectionOnly": "The only one of its kind · chosen for you",
       "servers": "MCP servers",
       "serversNone": "None",
+      "serversTooMany": "A profile chooses at most {{max}} MCP servers",
+      "serversDuplicate": "An MCP server is chosen twice",
       "lists": "Instructions, tools, skills",
       "listsSub": "Picked from this project's lists",
       "listsValue": "Not available here yet: a new profile starts with none of them."

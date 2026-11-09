@@ -52,7 +52,7 @@ use crate::{
   navigation::{Navigation, guard::LeaveGuard},
   project::{ShownProject, TeamRead},
   routes::{HubFilter, HubView, ProjectPage, Route},
-  screens::team_hub::{create, list::LIST_WIDTH, model::Kind},
+  screens::team_hub::{create, list::LIST_WIDTH, model::Kind, unread},
   services::Services,
   theme::{HUB_READING_OPACITY, HubSpacing},
   ui::{
@@ -389,7 +389,8 @@ pub(in crate::screens) fn form_or(
       loading("local-hub-form-opening", &ctx.t("local_hub.reading")).into()
     }
     TeamRead::Unread => loading("local-hub-form-opening", &ctx.t("local_hub.reading")).into(),
-    TeamRead::Read(Some(_)) | TeamRead::Failed(_) => old(ctx),
+    TeamRead::Read(Some(_)) => old(ctx),
+    TeamRead::Failed(error) => unread::failed(ctx, project, error),
   }
 }
 

@@ -25,6 +25,7 @@ use orchester_workspace::{
 };
 
 use self::remote::AuthorizationFields;
+pub(in crate::screens) use self::remote::Part;
 use crate::{
   screens::project_settings::kit::{FormField, form_group, warning_line},
   theme::ExtraSpacing,
@@ -109,7 +110,11 @@ impl Fields {
     let transport = self.transport.get();
     rows.extend(match transport {
       TransportChoice::Stdio => self.program_rows(ctx, &errors, &listed.secrets),
-      TransportChoice::Http => self.remote_rows(ctx, &errors, &listed.secrets),
+      TransportChoice::Http => self
+        .remote_rows(ctx, &errors, &listed.secrets)
+        .into_iter()
+        .map(Part::form_row)
+        .collect(),
     });
     let mut sections = vec![
       form_group(
@@ -168,7 +173,7 @@ impl Fields {
     ctx: &mut Ctx,
     (listed, errors): (&ProjectConnections, &McpServerErrors),
     tried: bool,
-  ) -> Vec<Element> {
+  ) -> Vec<Part> {
     let errors = self.shown_errors(ctx, errors, tried);
     self.remote_rows(ctx, &errors, &listed.secrets)
   }

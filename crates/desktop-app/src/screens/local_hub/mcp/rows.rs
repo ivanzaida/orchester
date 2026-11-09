@@ -147,9 +147,12 @@ impl Form {
       ctx.t("connections.mcp.property.program"),
       self.fields.program.clone(),
     )
-    .mono()
     .placeholder(ctx.t("local_hub.mcp.programNone"))
     .leading(if found { Icon::CircleCheck } else { Icon::File });
+    // The words of an empty field are the design's sans; a path is mono.
+    if !look.typed.program.is_empty() {
+      input = input.mono();
+    }
     if look.program_refused {
       input = input.invalid();
     } else if let Some(error) = shown(ctx, look, &look.errors.program, &look.typed.program) {
@@ -203,6 +206,11 @@ impl Form {
       )
       .mono()
       .compact_text_area()
+    };
+    let arguments = if look.creating {
+      arguments.placeholder(ctx.t("local_new.mcp.argumentsNone"))
+    } else {
+      arguments
     };
     let arguments = match shown(ctx, look, &look.errors.arguments, &look.typed.arguments) {
       Some(error) => arguments.error(error),
@@ -263,18 +271,21 @@ impl Form {
     )
   }
 
-  /// A remote server's endpoint and authorization, as the form draws them.
+  /// A remote server's endpoint, authorization and what the authorization asks for, one row each as the program's.
   fn remote_rows(&self, ctx: &mut Ctx, look: &Look<'_>) -> Vec<Row> {
-    let elements = self.fields.remote_elements(ctx, (look.listed, look.errors), look.tried);
-    vec![rows::row(
-      "local-hub-mcp-row-remote",
-      &ctx.t("connections.mcp.property.endpoint"),
-      None,
-      Column::new()
-        .width(Dimension::Pct(100.0))
-        .spacing(SpacingSize::Sm)
-        .with_children(elements),
-    )]
+    self
+      .fields
+      .remote_elements(ctx, (look.listed, look.errors), look.tried)
+      .into_iter()
+      .map(|part| {
+        rows::row(
+          &format!("{}-row", part.id),
+          &part.label,
+          part.hint.map(Sub::quiet),
+          part.control,
+        )
+      })
+      .collect()
   }
 
   /// *Run without asking*: the tools, written in one line.
@@ -284,8 +295,17 @@ impl Form {
       ctx.t("local_hub.mcp.tools"),
       self.tools_line.clone(),
     )
-    .mono()
-    .placeholder(ctx.t("local_hub.mcp.toolsNone"));
+    .placeholder(ctx.t(if look.creating {
+      "local_new.mcp.toolsNone"
+    } else {
+      "local_hub.mcp.toolsNone"
+    }));
+    // A form that makes a server shows its words in the design's sans until a name is typed; tool names are mono.
+    let tools = if look.creating && look.typed.exempt_tools.is_empty() {
+      tools
+    } else {
+      tools.mono()
+    };
     let tools = match shown(ctx, look, &look.errors.exempt_tools, &look.typed.exempt_tools) {
       Some(error) => tools.error(error),
       None => tools,
@@ -304,13 +324,19 @@ impl Editor {
   pub(super) fn after_rows(&self, ctx: &mut Ctx, look: &Look<'_>, server_on: bool) -> Vec<Row> {
     let mut rows = secrets::rows_of(ctx, &self.form.asking, look.secrets);
     let switch = self.switch.clone();
-    rows.push(switch_row(ctx, server_on, move |on| switch.run(on)));
+    rows.push(switch_row(ctx, (server_on, "local_hub.mcp.onHint"), move |on| {
+      switch.run(on)
+    }));
     rows
   }
 }
 
-/// *On · Runs may use it* with the switch at `on`; a change of it calls `on_change`.
-pub(in crate::screens) fn switch_row(ctx: &Ctx, on: bool, on_change: impl Fn(bool) + Send + Sync + 'static) -> Row {
+/// *On* with the switch at `on` and the words `hint` says after it; a change of it calls `on_change`.
+pub(in crate::screens) fn switch_row(
+  ctx: &Ctx,
+  (on, hint): (bool, &str),
+  on_change: impl Fn(bool) + Send + Sync + 'static,
+) -> Row {
   let toggle = Toggle::new("local-hub-mcp-on", ToggleKind::Switch, on, ctx.t("local_hub.mcp.on"))
     .hide_label()
     .on_change(on_change);
@@ -319,11 +345,7 @@ pub(in crate::screens) fn switch_row(ctx: &Ctx, on: bool, on_change: impl Fn(boo
     .spacing(SpacingSize::Md)
     .align_items(Alignment::Center)
     .child(toggle)
-    .child(
-      Text::new(&ctx.t("local_hub.mcp.onHint"))
-        .variant(HubText::Value.role())
-        .flex(1.0),
-    );
+    .child(Text::new(&ctx.t(hint)).variant(HubText::Value.role()).flex(1.0));
   rows::row("local-hub-mcp-on-row", &ctx.t("local_hub.mcp.on"), None, value)
 }
 

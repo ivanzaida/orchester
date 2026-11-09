@@ -14,7 +14,11 @@ use lurq::{
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
-  connection::{AgentConnection, invocation::Platform, mcp::McpServerSelection},
+  connection::{
+    AgentConnection,
+    invocation::Platform,
+    mcp::{McpSelectionError, McpServerSelection},
+  },
   id::ConnectionId,
   permission::AgentPermissions,
   resource::ModelId,
@@ -134,8 +138,13 @@ impl Fields {
     }
     rows.push(self.model_row(ctx, shown, &models, model_says.as_ref()));
     rows.push(self.effort_row(ctx, &efforts, shown.locked));
+    let chosen = if local {
+      McpServerSelection::new(self.servers.get().0)
+    } else {
+      Ok(McpServerSelection::none())
+    };
     if local {
-      rows.push(self.servers_row(ctx, shown));
+      rows.push(self.servers_row(ctx, shown, chosen.as_ref().err()));
     }
     rows.push(fields::row(
       ctx,
@@ -153,7 +162,9 @@ impl Fields {
     Body {
       rows,
       computer: Some("team_new.computer.profile"),
-      make: own.and_then(|c| self.made(c, model, local)),
+      make: own
+        .zip(chosen.ok())
+        .and_then(|(c, servers)| self.made(c, model, servers, local)),
       off: fields::off(shown, &name),
       overlay: None,
     }
@@ -294,7 +305,7 @@ impl Fields {
   }
 
   /// *MCP servers* of a local profile: the ones it chooses in tags, and a menu of the project's servers.
-  fn servers_row(&self, ctx: &mut Ctx, shown: &Shown<'_>) -> Row {
+  fn servers_row(&self, ctx: &mut Ctx, shown: &Shown<'_>, refused: Option<&McpSelectionError>) -> Row {
     let available = shown
       .agents
       .map_or_else(Vec::new, |agents| agents.mcp.iter().cloned().collect());
@@ -354,20 +365,31 @@ impl Fields {
       .align_items(Alignment::Center)
       .with_children(tags)
       .with_children(add);
-    fields::row(ctx, &SERVERS, None, value)
+    let error = refused.map(|refused| {
+      Error::Words(match refused {
+        McpSelectionError::TooMany => ctx.t_args(
+          "local_new.profile.serversTooMany",
+          [("max", McpServerSelection::MAX.to_string())],
+        ),
+        McpSelectionError::Duplicate(_) => ctx.t("local_new.profile.serversDuplicate"),
+      })
+    });
+    fields::row(ctx, &SERVERS, error.as_ref(), value)
   }
 
   /// The profile the fields make on `connection`: the most restrictive permissions, and the MCP servers a local
-  /// profile chose (a team's has none).
-  fn made(&self, connection: &AgentConnection, model: Option<ModelId>, local: bool) -> Option<Make> {
+  /// profile chose (`chosen`; a team's has none).
+  fn made(
+    &self,
+    connection: &AgentConnection,
+    model: Option<ModelId>,
+    chosen: McpServerSelection,
+    local: bool,
+  ) -> Option<Make> {
     let selection = model.map_or(ModelSelection::None, ModelSelection::Listed);
     let effort = self.effort.get();
     let platform = Platform::current();
-    let servers = if local {
-      McpServerSelection::new(self.servers.get().0).ok()?
-    } else {
-      McpServerSelection::none()
-    };
+    let servers = chosen;
     let permissions = AgentPermissions::most_restrictive(connection.provider(), platform);
     // A native connection takes neither CLI approval switches nor MCP servers.
     let (permissions, servers) = if local {

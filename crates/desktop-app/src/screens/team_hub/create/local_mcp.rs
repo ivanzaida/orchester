@@ -60,8 +60,8 @@ impl Fields {
       |_| Vec::new(),
       |draft| {
         draft
-          .environment
           .secrets()
+          .into_iter()
           .filter_map(|id| listed.secrets.iter().find(|secret| secret.id() == id))
           .map(|secret| Taken {
             id: secret.id(),
@@ -87,7 +87,9 @@ impl Fields {
     rows.extend(self.form.server_rows(ctx, &look));
     rows.extend(rows_of(ctx, &self.form.asking, look.secrets));
     let on = self.on.clone();
-    rows.push(switch_row(ctx, self.on.get(), move |now| on.set(now)));
+    rows.push(switch_row(ctx, (self.on.get(), "local_new.mcp.onHint"), move |now| {
+      on.set(now)
+    }));
     Body {
       rows,
       computer: None,
