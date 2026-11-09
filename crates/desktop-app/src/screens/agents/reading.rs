@@ -57,7 +57,7 @@ pub(super) fn profile(ctx: &mut Ctx, nav: &AgentsNav) -> Element {
   let pane = Column::new()
     .width(Dimension::Pct(100.0))
     .spacing(HubSpacing::Groups.role())
-    .with_children(page_head::crumb(ctx, nav))
+    .child(page_head::crumb(ctx, nav))
     .child(top)
     .with_children(fading(vec![role(ctx), connection(ctx)]))
     .child(note(

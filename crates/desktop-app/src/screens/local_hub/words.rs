@@ -155,9 +155,29 @@ pub(super) fn needs(ctx: &Ctx, entry: &Entry, standing: &ReadinessStanding) -> A
       [only] => missing(ctx, entry, only),
       many => ctx.t_args("local_hub.line.many", [("count", many.len().to_string())]),
     },
+    ReadinessStanding::Undecided(Undecided::ConnectionGone(_)) if entry.cli.is_some() => connection_gone(ctx, entry),
     ReadinessStanding::Undecided(why) => undecided(ctx, why),
     ReadinessStanding::Ready => ctx.t("local_hub.line.ready"),
   }
+}
+
+/// A profile whose connection is gone: choose another of its CLI, or add one when the project has none.
+fn connection_gone(ctx: &Ctx, entry: &Entry) -> Arc<str> {
+  let cli = entry
+    .cli
+    .map_or_else(String::new, |cli| ctx.t(cli_key(cli)).to_string());
+  let none = entry
+    .profile
+    .as_ref()
+    .is_none_or(|profile| profile.connections.is_empty());
+  ctx.t_args(
+    if none {
+      "local_hub.line.connectionNone"
+    } else {
+      "local_hub.line.connectionPick"
+    },
+    [("cli", cli)],
+  )
 }
 
 /// Why it cannot be said to be ready: the archived resource it names, else that nobody can tell yet.

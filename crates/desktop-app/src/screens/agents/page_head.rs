@@ -18,7 +18,6 @@ use super::{AgentsNav, entries, fields::Fields, permissions::mode_name, policy_p
 use crate::{
   screens::hub::{
     draft_bar::{DraftBar, Standing},
-    hosted::Hosted,
     page_head::MORE_MENU_WIDTH,
     parts::{Tone, status, tile},
     team,
@@ -32,20 +31,15 @@ use crate::{
   },
 };
 
-/// ← Profiles; none in the hub's panel, which is the list's neighbour.
-pub fn crumb(ctx: &mut Ctx, nav: &AgentsNav) -> Option<Element> {
-  if Hosted::is(ctx) {
-    return None;
-  }
-  Some(
-    opening(nav.agents())
-      .id("agent-crumb")
-      .spacing(ExtraSpacing::Snug.role())
-      .align_items(Alignment::Center)
-      .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::TextMuted))
-      .child(Text::new(&ctx.t("hub.tabs.profiles")).variant(HubText::Crumb.role()))
-      .into(),
-  )
+/// ← Profiles.
+pub fn crumb(ctx: &Ctx, nav: &AgentsNav) -> Element {
+  opening(nav.agents())
+    .id("agent-crumb")
+    .spacing(ExtraSpacing::Snug.role())
+    .align_items(Alignment::Center)
+    .child(icon(Icon::ArrowLeft, IconSize::Base, PaletteColor::TextMuted))
+    .child(Text::new(&ctx.t("hub.tabs.profiles")).variant(HubText::Crumb.role()))
+    .into()
 }
 
 /// The … menu under the head: Archive.

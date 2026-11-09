@@ -4,13 +4,21 @@
 
 use orchester_app::routes::{HubFilter, HubView, ProjectPage, Route};
 use orchester_core::{
-  connection::mcp::{McpEnvironment, McpServer, McpServerName, McpTransport, StdioServer},
+  connection::{
+    AgentConnection, AgentProvider,
+    mcp::{McpEnvironment, McpServer, McpServerName, McpTransport, StdioServer},
+  },
   id::{ConnectionId, ResourceId},
-  resource::{CommandProgram, ResourceKind},
-  store::{McpServerStore, ResourceStore},
+  name::Name,
+  permission::{AgentPermissions, CommandPermission, NetworkAccess},
+  resource::{
+    AgentProfile, CommandProgram, ModelId, PromptText, ProviderSettings, RepositoryAccess, ResourceKind, Slug,
+  },
+  store::{ConnectionStore, McpServerStore, ResourceStore},
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
+use orchester_workspace::agents::data;
 
 use super::{harness::Agents, support::project_id};
 
@@ -216,9 +224,9 @@ fn local_hub_archive_a_profile_lists_it_as_archived() {
   let mut agents = Agents::new(true);
   let id: ResourceId = agents.profile(true);
   open(&mut agents, HubView::new(HubFilter::Profiles, Some(id)));
-  agents.until("the editor in the panel", |s| s.exists("agent-more"));
-  agents.click("agent-more");
-  agents.click("agent-archive");
+  agents.until("the panel", |s| s.exists("local-hub-more"));
+  agents.click("local-hub-more");
+  agents.click("local-hub-archive");
   agents.press_until("team-hub-archive-confirm", "archived", |s| {
     s.listed().profile(id).is_none()
   });
@@ -233,20 +241,92 @@ fn local_hub_archive_a_profile_lists_it_as_archived() {
   );
 }
 
-#[test]
-fn local_hub_profile_panel_is_the_editor_with_its_draft_and_none_of_the_old_page() {
-  let mut agents = Agents::new(true);
-  let id: ResourceId = agents.profile(true);
-  open(&mut agents, HubView::new(HubFilter::Profiles, Some(id)));
-  agents.until("the editor in the panel", |s| s.exists("agent-role"));
-  for page in ["agents-hub-title", "agent-crumb", "agents-failed"] {
-    assert!(!agents.exists(page), "{page} belongs to the old page");
-  }
-  agents.set("agent-responsibility", "Changed in the hub");
-  agents.until("saved as a draft", |s| {
-    s.listed().profile(id).expect("profile").profile.responsibilities() == "Changed in the hub"
+/// Builder, a Claude model on a connection the project no longer has, published as v1; and two Claude Code connections.
+fn builder_without_connection(agents: &Agents) -> (ResourceId, [ConnectionId; 2]) {
+  let mut db = ProjectDb::open(&agents.root).expect("database");
+  let claude = ["Claude 2", "Home"].map(|label| {
+    let connection = AgentConnection::new(
+      ConnectionId::generate(),
+      Name::new(label).expect("name"),
+      AgentProvider::ClaudeCodeCli,
+      agents.root.join(format!("{label}.exe")),
+      Timestamp::now(),
+    )
+    .expect("connection");
+    db.create_connection(&connection).expect("stored");
+    connection.id()
   });
-  agents.saved();
-  assert!(agents.exists("agent-publish"), "Publish vN is the editor's own");
-  assert!(agents.exists("agent-more"), "so is its Archive menu");
+  let profile = AgentProfile::new(
+    Name::new("Builder").expect("name"),
+    "Builds the change".into(),
+    PromptText::new("Implement the approved plan.").expect("instructions"),
+    ConnectionId::generate(),
+    ModelId::new("claude-opus-5-5").expect("model"),
+    ProviderSettings::default(),
+  )
+  .with_permissions(AgentPermissions::new(
+    RepositoryAccess::ReadOnly,
+    CommandPermission::AskBefore,
+    NetworkAccess::Off,
+  ));
+  let id = db
+    .create_resource(
+      Slug::new("builder").expect("slug"),
+      Name::new("Builder").expect("name"),
+      &profile,
+      Timestamp::now(),
+    )
+    .expect("resource")
+    .id();
+  db.publish_draft::<AgentProfile>(id, Timestamp::now())
+    .expect("published");
+  (id, claude)
+}
+
+#[test]
+fn local_hub_a_profile_whose_connection_is_gone_asks_which_of_its_kind_runs_it() {
+  let mut agents = Agents::new(true);
+  let (id, [claude_2, _]) = builder_without_connection(&agents);
+  open(&mut agents, HubView::new(HubFilter::Profiles, Some(id)));
+  agents.until("the panel", |s| s.exists("local-hub-fix-use"));
+  assert_eq!(
+    agents.text(&format!("local-hub-row-{id}-line")),
+    "Choose a Claude Code connection"
+  );
+  assert_eq!(agents.text("local-hub-fix-use"), "Use Claude 2 for Builder");
+  for part in [
+    "local-hub-profile-pick",
+    "local-hub-profile-model",
+    "team-hub-edit",
+    "local-hub-profile-versions",
+  ] {
+    assert!(agents.exists(part), "{part} is the panel's own");
+  }
+  for page in ["agent-role", "agent-crumb", "agents-hub-title"] {
+    assert!(!agents.exists(page), "{page} belongs to the editor's page");
+  }
+  agents.press_until("local-hub-fix-use", "published on Claude 2", |s| {
+    s.listed()
+      .profile(id)
+      .is_some_and(|entry| entry.profile.connection() == claude_2)
+  });
+  agents.until("the fix is gone", |s| !s.exists("local-hub-fix-use"));
+  let line = agents.text(&format!("local-hub-row-{id}-line"));
+  assert!(line.contains("Claude 2"), "{line}");
+}
+
+#[test]
+fn local_hub_a_choice_that_is_refused_says_why_in_place() {
+  let mut agents = Agents::new(true);
+  let (id, _) = builder_without_connection(&agents);
+  open(&mut agents, HubView::new(HubFilter::Profiles, Some(id)));
+  agents.until("the panel", |s| s.exists("local-hub-fix-use"));
+  // Unpublished edits would go out with the choice, so it is refused until they are published or discarded.
+  let listed = agents.listed();
+  let body = super::harness::changed(&listed.profile(id).expect("profile").profile);
+  let mut db = ProjectDb::open(&agents.root).expect("database");
+  data::save_draft(&mut db, id, body, Timestamp::now()).expect("a draft");
+  agents.click("local-hub-fix-use");
+  agents.until("refused", |s| s.exists("local-hub-profile-error"));
+  assert!(agents.text("local-hub-profile-error").contains("not published"));
 }

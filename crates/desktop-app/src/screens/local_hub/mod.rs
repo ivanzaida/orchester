@@ -19,6 +19,7 @@ mod list;
 mod mcp;
 mod model;
 mod panel;
+mod profile;
 mod row;
 mod words;
 
@@ -218,7 +219,7 @@ impl LocalHubScreen {
       return EmptyState::new("local-hub-empty", Icon::Bot, ctx.t(title), ctx.t(detail)).into();
     }
     let list = list::list(ctx, listing, shown);
-    let panel = self.panel(ctx, (project, hub), selected);
+    let panel = self.panel(ctx, (project, hub), (selected, reading));
     Row::new()
       .id("local-hub-master-detail")
       .describe("state", if reading { "reading" } else { "read" })
@@ -240,7 +241,12 @@ impl LocalHubScreen {
   }
 
   /// The panel of `selected`: an archived entry's, an MCP server's, or the frame the other kinds share.
-  fn panel(&self, ctx: &mut Ctx, (project, hub): (&ShownProject, &LocalHub), selected: Option<&Entry>) -> Element {
+  fn panel(
+    &self,
+    ctx: &mut Ctx,
+    (project, hub): (&ShownProject, &LocalHub),
+    (selected, reading): (Option<&Entry>, bool),
+  ) -> Element {
     let Some(entry) = selected else {
       return archived::nothing_picked(ctx);
     };
@@ -273,13 +279,20 @@ impl LocalHubScreen {
           unsaved: self.unsaved.clone(),
         },
       ),
-      Archivable::Resource(_) => editing::panel(
-        ctx,
-        editing::Props {
-          project: project.clone(),
-          entry: entry.clone(),
-        },
-      ),
+      Archivable::Resource(id) => match &entry.profile {
+        Some(profile) => profile::panel(
+          ctx,
+          profile::Props {
+            project: project.clone(),
+            entry: entry.clone(),
+            id,
+            profile: profile.clone(),
+            hub: hub.clone(),
+            reading,
+          },
+        ),
+        None => editing::panel(ctx, project, (entry, id)),
+      },
     }
   }
 }

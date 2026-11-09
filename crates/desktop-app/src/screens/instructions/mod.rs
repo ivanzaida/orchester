@@ -83,7 +83,6 @@ impl Component for InstructionsScreen {
       dirty,
       busy,
       removed: ctx.signal(state::Removed::default()),
-      hosted: crate::screens::hub::hosted::Hosted::is(ctx).then(|| ctx.signal(ctx.props::<Props>().1)),
     };
     let rule = selection.clone();
     let leave = selection.navigation.guard_within(
@@ -122,11 +121,7 @@ impl Component for InstructionsScreen {
       })
       .state()
       .get();
-    let view = self
-      .selection
-      .hosted
-      .as_ref()
-      .map_or_else(|| ctx.props::<Props>().1, lurq::core::Signal::get);
+    let view = ctx.props::<Props>().1;
     let head = self.head(ctx, view);
     let retry = self.retry.clone();
     let what = ctx.t("instructions.loadFailed");

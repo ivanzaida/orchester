@@ -171,7 +171,7 @@ impl Component for Editor {
     let head: Head = list::head(ctx, (&props.listed, team.as_ref()), &props.nav).saved(saved);
     let pane = self.pane(ctx, &props, (&state, team.as_ref()));
     let side = side::render(ctx, &props, &self.fields, self.pipeline_blocked(&props, &state));
-    let body = hub::editor_body(ctx, "agent-editor", (pane, hub::PANE_WIDTH), (side, hub::SIDE_WIDTH));
+    let body = hub::item_body("agent-editor", pane, Some(side));
     super::frame(ctx, &props.project, head, body)
   }
 }

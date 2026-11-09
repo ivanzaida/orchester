@@ -20,7 +20,6 @@ use super::{
 use crate::{
   screens::hub::{
     draft_bar::{DraftBar, Standing},
-    hosted::Hosted,
     page_head::{self, More},
     team,
   },
@@ -32,19 +31,15 @@ use crate::{
 };
 
 impl Editor {
-  /// ← Skills; none in the hub's panel.
-  pub(super) fn crumb(&self, ctx: &mut Ctx, p: &Props, entry: Option<&SkillEntry>) -> Option<Element> {
-    if Hosted::is(ctx) {
-      return None;
-    }
+  pub(super) fn crumb(&self, ctx: &Ctx, p: &Props, entry: Option<&SkillEntry>) -> Element {
     let back = p.page.view.panel.clone();
     let new = ctx.t("skills.new");
-    Some(page_head::crumb(
+    page_head::crumb(
       ctx,
       "skill-crumb",
       (&ctx.t("hub.tabs.skills"), back.to(back.library())),
       entry.is_none().then_some(&*new),
-    ))
+    )
   }
 
   pub(super) fn page_head(&self, ctx: &mut Ctx, p: &Props, entry: Option<&SkillEntry>, title: &str) -> Element {

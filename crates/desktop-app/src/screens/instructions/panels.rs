@@ -24,7 +24,7 @@ use super::{
 };
 use crate::{
   project::ShownProject,
-  screens::hub::{hosted::Hosted, parts},
+  screens::hub::parts,
   theme::HubSpacing,
   ui::{
     field::{FieldInput, field_error},
@@ -113,17 +113,13 @@ impl Component for Panels {
       return Column::new().into();
     }
     let head = self.header(ctx, &props);
-    // Beside the rule on its page; under it in the hub's panel, which has no room for both side by side.
     let mut frame = Column::new()
       .id("instruction-panel")
+      .width(Dimension::Px(PANEL_WIDTH))
       .flex_shrink(0.0)
+      .height(Dimension::Pct(100.0))
       .spacing(HubSpacing::SideSections.role())
       .child(head);
-    frame = if Hosted::is(ctx) {
-      frame.width(Dimension::Pct(100.0))
-    } else {
-      frame.width(Dimension::Px(PANEL_WIDTH)).height(Dimension::Pct(100.0))
-    };
     if let Some(error) = catalog.error.clone().filter(|_| catalog.is_rejected()) {
       return frame
         .child(field_error("instruction-preview-error", &message_text(ctx, &error)))

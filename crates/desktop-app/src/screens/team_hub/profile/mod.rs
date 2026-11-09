@@ -11,10 +11,10 @@
 
 mod bar;
 mod computer;
-mod fix;
-mod from_team;
-mod parts;
-mod ready;
+pub(in crate::screens) mod fix;
+pub(in crate::screens) mod from_team;
+pub(in crate::screens) mod parts;
+pub(in crate::screens) mod ready;
 
 use std::{path::PathBuf, sync::Arc};
 

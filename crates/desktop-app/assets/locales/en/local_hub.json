@@ -66,7 +66,10 @@
       "archived": "Archived",
       "off": "Off",
       "ready": "Ready",
-      "unsaved": "Unsaved changes"
+      "unsaved": "Unsaved changes",
+      "draft": "Unpublished edits",
+      "chooseConnection": "Choose a connection",
+      "addConnection": "Add a connection"
     },
     "panel": {
       "connection": "Runs on",
@@ -107,6 +110,27 @@
       "stopped": "Archiving stopped {{count}} runs that pinned it, {{runs}}. Restore puts {{name}} back in the lists and pickers as it was; those runs stay stopped, so run them again to use it.",
       "stoppedNone": "Archiving stopped no runs. Restore puts {{name}} back in the lists and pickers as it was.",
       "title": "Archived: hidden from lists and pickers"
+    },
+    "profile": {
+      "title": "Profile",
+      "connection": "Connection",
+      "ofItsKind": "{{count}} of its kind on this computer",
+      "effortDefault": "CLI default",
+      "none": "None",
+      "version": "{{version}} · published {{date}}",
+      "useHint": "Asked once per profile; a connection added later doesn't change it",
+      "openHint": "Opens the server's panel, where it is set"
+    },
+    "ready": {
+      "ready": "Ready",
+      "noCli": "Its connection is gone, and {{model}} names no agent CLI to choose another of",
+      "connectionVersion": "{{cli}} · {{name}} · {{program}} {{version}}",
+      "noneOfKind": "No {{cli}} connection on this computer",
+      "onlyOne": "Its connection is gone · {{name}} is the only {{cli}} connection",
+      "pickAmong": "{{count}} {{cli}} connections · choose one",
+      "serverOff": "Off · its runs go without it",
+      "noValue": "No value set",
+      "valueSet": "Value set"
     }
   }
 }

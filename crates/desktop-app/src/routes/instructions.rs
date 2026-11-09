@@ -116,14 +116,6 @@ impl InstructionsView {
     }
   }
 
-  /// The rule a view shows; none for a new rule, the tab's first and the import page.
-  pub const fn rule_id(self) -> Option<ResourceId> {
-    match self {
-      Self::Rule(_, rule, _) => rule,
-      Self::New(..) | Self::Import => None,
-    }
-  }
-
   /// The panel beside a rule or a new rule; the import page has none.
   pub const fn panel(self) -> Option<InstructionsPanel> {
     match self {

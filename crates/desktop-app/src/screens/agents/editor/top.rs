@@ -65,7 +65,7 @@ impl Editor {
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(HubSpacing::Row.role())
-      .with_children(page_head::crumb(ctx, &props.nav))
+      .child(page_head::crumb(ctx, &props.nav))
       .child(page_head::head(
         ctx,
         (&self.fields, &props.listed),

@@ -9,7 +9,7 @@ use orchester_workspace::instructions::data::InstructionEntry;
 pub use crate::routes::{InstructionsPanel as Panel, InstructionsTab as Tab, InstructionsView as View};
 use crate::{
   navigation::{Navigation, link::Open, press::OpenIn},
-  routes::{HubFilter, HubView, ProjectPage, Route},
+  routes::{ProjectPage, Route},
 };
 
 /// What the screen says about a scope tab.
@@ -48,16 +48,10 @@ pub struct Selection {
   pub dirty: Signal<bool>,
   pub busy: Signal<bool>,
   pub removed: Signal<Removed>,
-  /// Set while the rule is the Agents hub's panel: the view it shows, which the hub's route does not name. Its panel
-  /// beside the rule is chosen here, and the way back to the list is the hub's Instructions filter.
-  pub hosted: Option<Signal<View>>,
 }
 impl Selection {
-  /// The view the route shows now, or the hosted rule's own.
+  /// The view the route shows now.
   pub fn now(&self) -> View {
-    if let Some(hosted) = &self.hosted {
-      return hosted.get_untracked();
-    }
     match self.navigation.route_now() {
       Route::Project(_, ProjectPage::Instructions(view)) => view,
       _ => View::default(),
@@ -96,19 +90,13 @@ impl Selection {
       at => selection.navigation.open(selection.route(view), at),
     })
   }
-  /// Goes to `view`, as a new entry of the tab's history; a hosted rule's own panel is only chosen.
+  /// Goes to `view`, as a new entry of the tab's history.
   pub fn show(&self, view: View) {
-    match self.stays(view) {
-      Some(hosted) => hosted.set(view),
-      None => self.navigation.go(self.route(view)),
-    }
+    self.navigation.go(self.route(view));
   }
   /// *Cancel*: shows `view`, leaving no entry for the page it closes.
   pub fn close(&self, view: View) {
-    match self.stays(view) {
-      Some(hosted) => hosted.set(view),
-      None => self.navigation.close_panel(self.route(view)),
-    }
+    self.navigation.close_panel(self.route(view));
   }
   /// The rule a new rule became once saved, in the new rule's place.
   pub fn saved(&self, view: View) {
@@ -117,30 +105,11 @@ impl Selection {
   /// Whether `route` shows the rule shown now, whatever its panel: a move there keeps the rule's edits.
   pub fn holds(&self, route: &Route) -> bool {
     let rule = self.now().with_panel(Panel::Hidden);
-    match route {
-      Route::Project(project, ProjectPage::Instructions(view)) => {
-        *project == self.project && view.with_panel(Panel::Hidden) == rule
-      }
-      Route::Project(project, ProjectPage::AgentsHub(hub)) => {
-        *project == self.project && self.hosted.is_some() && hub.item.is_some() && rule.rule_id() == hub.item
-      }
-      _ => false,
-    }
-  }
-  /// The hosted rule's signal when `view` is the same rule with another panel.
-  fn stays(&self, view: View) -> Option<&Signal<View>> {
-    self
-      .hosted
-      .as_ref()
-      .filter(|_| view.rule_id().is_some() && view.rule_id() == self.now().rule_id())
+    matches!(route, Route::Project(project, ProjectPage::Instructions(view))
+      if *project == self.project && view.with_panel(Panel::Hidden) == rule)
   }
   fn route(&self, view: View) -> Route {
-    let page = match view {
-      // The way back to the list of a hosted rule is the hub's.
-      View::Rule(_, None, _) if self.hosted.is_some() => ProjectPage::hub(HubView::new(HubFilter::Instructions, None)),
-      _ => ProjectPage::Instructions(view),
-    };
-    Route::Project(self.project, page)
+    Route::Project(self.project, ProjectPage::Instructions(view))
   }
 }
 /// The panel beside the rule, as the route shows it; the editor keeps it in step with the route.

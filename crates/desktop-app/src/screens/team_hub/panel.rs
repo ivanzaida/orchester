@@ -157,7 +157,7 @@ pub(super) fn with_more(edit: Option<Element>, more: Option<Element>) -> Option<
 }
 
 /// *Edit* in a head (`Edit` in `Agents · All · admin` `t4mtQL`).
-pub(super) fn edit_button(ctx: &Ctx, open: Open) -> Element {
+pub(in crate::screens) fn edit_button(ctx: &Ctx, open: Open) -> Element {
   ActionButton::new("team-hub-edit", ButtonKind::Ghost, ctx.t("team_hub.panel.edit"))
     .icon(Icon::Pencil)
     .opens(open)

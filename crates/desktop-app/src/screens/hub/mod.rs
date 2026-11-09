@@ -8,7 +8,6 @@
 pub(crate) mod bones;
 pub(crate) mod discard;
 pub(crate) mod draft_bar;
-pub(crate) mod hosted;
 pub(crate) mod import_detail;
 pub(crate) mod import_preview;
 pub(crate) mod import_result;
@@ -124,9 +123,6 @@ pub(crate) fn page(
   (tab, head): (HubTab, Head),
   body: impl Into<Element>,
 ) -> Element {
-  if hosted::Hosted::is(ctx) {
-    return hosted::page(head.saved, body.into());
-  }
   let title = Row::new()
     .id("agents-hub-head")
     .width(Dimension::Pct(100.0))
@@ -183,15 +179,6 @@ pub(crate) fn list_body_wide(id: &str, pane: impl Into<Element>, width: f32) -> 
 /// windows, 01c, 02, 04b, are whole pages that scroll).
 pub(crate) fn item_body(id: &str, pane: impl Into<Element>, side: Option<Element>) -> Element {
   body(id, (pane.into(), PANE_WIDTH), side.map(|side| (side, SIDE_WIDTH)))
-}
-
-/// The body of an editor that the hub may host in its panel: [`page_body`] on its own page, the pane over the side in
-/// the panel ([`hosted::Hosted`]).
-pub(crate) fn editor_body(ctx: &mut Ctx, id: &str, pane: (Element, f32), side: (Element, f32)) -> Element {
-  if hosted::Hosted::is(ctx) {
-    return hosted::body(id, pane.0, Some(side.0));
-  }
-  page_body(id, pane, side)
 }
 
 /// [`item_body`] with a pane and a side of their own widths, e.g. a memory record's 680 and 424 (05c).

@@ -4,7 +4,8 @@
 //! - `local-hub`: the hub on All; *MCP servers* lists the servers (L2), a server is edited in place (L8, L12).
 //! - `local-hub-archive`: the same with two runs working on Feature delivery, so *Archive* on Builder or Reviewer lists
 //!   what names it and the runs that will stop (L11).
-//! - `local-hub-claude`: the same with Claude Code connections to choose from for a profile, Writer on Claude 2 (L1).
+//! - `local-hub-claude`: the same with two Claude Code connections, Writer on Claude 2 and Builder whose connection is
+//!   gone, so it asks which one runs it (L1).
 //! - `local-hub-archived`: the same after archiving Reviewer, a skill and postgres-dev, each with the runs it stopped
 //!   (L13, L14).
 
@@ -118,6 +119,53 @@ pub fn claude(kontur: &mut Kontur) -> Result<(), SeedError> {
     NetworkAccess::Off,
   ));
   publish(kontur, "Writer", vec![writer])?;
+  builder_without_connection(kontur)
+}
+
+/// Builder's next version names a Claude model on a connection this project no longer has, and chooses pencil-design
+/// (no program path) and sentry (a remote server whose secret has no value): the profile asks which of the two Claude
+/// Code connections runs it (L1). Its permissions are what Claude Code enforces on every platform, so choosing a
+/// connection can publish it.
+fn builder_without_connection(kontur: &mut Kontur) -> Result<(), SeedError> {
+  let servers = kontur.db.mcp_servers()?;
+  let chosen = ["pencil-design", "sentry"]
+    .iter()
+    .map(|called| {
+      servers
+        .iter()
+        .find(|server| server.name().as_str() == *called)
+        .map(McpServer::id)
+        .ok_or_else(|| SeedError::Invalid(format!("the seed has the MCP server {called}")))
+    })
+    .collect::<Result<Vec<_>, _>>()?;
+  let builder = kontur
+    .db
+    .resources(ResourceKind::AgentProfile)?
+    .into_iter()
+    .find(|resource| resource.name().as_str() == "Builder")
+    .ok_or_else(|| SeedError::Invalid("the seed has the profile Builder".to_owned()))?;
+  let body = AgentProfile::new(
+    name("Builder"),
+    "Builds what a task asks for.".to_owned(),
+    PromptText::new("Builds the change a task asks for, in small steps.").map_err(|error| invalid(&error))?,
+    ConnectionId::generate(),
+    ModelId::new("claude-opus-5-5").map_err(|error| invalid(&error))?,
+    ProviderSettings::default(),
+  )
+  .with_permissions(AgentPermissions::new(
+    RepositoryAccess::ReadOnly,
+    CommandPermission::AskBefore,
+    NetworkAccess::Off,
+  ))
+  .with_mcp_servers(McpServerSelection::new(chosen).map_err(|error| invalid(&error))?);
+  let latest = kontur
+    .db
+    .latest_version::<AgentProfile>(builder.id())?
+    .map(|version| version.number());
+  kontur
+    .db
+    .save_draft(builder.id(), &Draft::new(body, latest, kontur.ago(3)))?;
+  kontur.db.publish_draft::<AgentProfile>(builder.id(), kontur.ago(3))?;
   Ok(())
 }
 

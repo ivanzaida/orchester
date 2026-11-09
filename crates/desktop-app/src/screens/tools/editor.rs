@@ -204,7 +204,7 @@ impl Component for ToolEditor {
       .id("tool-editor")
       .width(Dimension::Pct(100.0))
       .spacing(HubSpacing::Sections.role())
-      .with_children(head::crumb(ctx, &p))
+      .child(head::crumb(ctx, &p))
       .child(head::head(
         ctx,
         &p,
@@ -241,19 +241,8 @@ impl Component for ToolEditor {
         (busy || self.asking.get().0.is_some() || !may_change, read_only),
         widening,
       ));
-    page(ctx, &p, pane)
+    hub::item_body("tool-page", pane, Some(inspector::inspector(ctx, &p).into()))
   }
-}
-
-/// The pane with the inspector beside it, or under it in the hub's panel.
-fn page(ctx: &mut Ctx, p: &EditorProps, pane: Column) -> Element {
-  let side = inspector::inspector(ctx, p).into();
-  hub::editor_body(
-    ctx,
-    "tool-page",
-    (pane.into(), hub::PANE_WIDTH),
-    (side, hub::SIDE_WIDTH),
-  )
 }
 
 /// In a shared project, a version of the tool published here that waits, in the draft bar's place (02b, 02c); after

@@ -117,6 +117,7 @@ pub(crate) fn member_versions(
       id: id.into(),
       root: project.open.repo_root.clone(),
       resource: (standing.kind, resource),
+      local: false,
     },
   ))
 }
