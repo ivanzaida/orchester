@@ -437,6 +437,15 @@ impl MenuPlace {
   pub fn is_open(&self) -> bool {
     self.open.get()
   }
+
+  /// Runs `reset` whenever the menu closes, whichever way: a choice, the button, Esc or a press outside.
+  pub fn on_closed(&self, ctx: &mut Ctx, reset: impl Fn() + Send + Sync + 'static) {
+    ctx.watch(&self.open, move |open| {
+      if !*open {
+        reset();
+      }
+    });
+  }
 }
 
 /// The *More actions* button (`…`) of the task `key`, as `id`, with its menu of `rows` while it is open, at the end of

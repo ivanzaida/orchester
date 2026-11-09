@@ -108,10 +108,11 @@ impl Component for ListItem {
   type Props = ItemProps;
 
   fn create(ctx: &mut Ctx) -> Self {
+    let menu = MenuPlace::new(ctx);
     Self {
       hovered: ctx.signal(false),
-      menu: MenuPlace::new(ctx),
-      lists: team_menu::Lists::new(ctx),
+      lists: team_menu::Lists::new(ctx, &menu),
+      menu,
     }
   }
 

@@ -298,3 +298,90 @@ fn team_qa_lifecycle_menu_the_list_asks_for_the_reason_in_the_same_dialog() {
   window.set("tasks-team-block-reason", "Waiting for the staging API key");
   assert_eq!(window.text("tasks-team-block-keys"), "Esc cancels");
 }
+
+/// Opens the row menu of `key` again once its first closed, the pointer back on the row.
+fn reopen_menu(window: &mut Window, key: &str) {
+  let (row, more) = (format!("task-row-{key}"), format!("task-more-{key}"));
+  window.until("the menu to close", |window| !offered(window, &format!("{more}-panel")));
+  window.until("the row's button", |window| {
+    window.hover(&row);
+    offered(window, &more)
+  });
+  window.press(&more);
+  window.until("its rows", |window| offered(window, &format!("{more}-panel")));
+}
+
+fn press_escape(window: &mut Window) {
+  with_synthetic_input(|| {
+    window
+      .tree
+      .key_down("Escape".to_owned(), "Escape".to_owned(), false, false, false);
+    window
+      .tree
+      .key_up("Escape".to_owned(), "Escape".to_owned(), false, false, false);
+  });
+  window.pass();
+}
+
+/// A menu that closed with its list open opens again as the plain menu, whichever way it closed: a choice in the list,
+/// Esc, or its button.
+#[test]
+fn team_qa_lifecycle_menu_move_to_list_does_not_outlast_its_menu() {
+  let (mut window, _server) = row_menu(State::Admin, "KON-25");
+  let list = "task-more-KON-25-list";
+  window.press("task-more-KON-25-move");
+  window.until("Move to's list", |window| offered(window, list));
+  // Backlog is the task's own status: a choice that changes nothing still closes the menu.
+  window.press("task-more-KON-25-move-backlog");
+  reopen_menu(&mut window, "KON-25");
+  assert!(!offered(&mut window, list), "after a choice in Move to");
+  assert!(offered(&mut window, "task-more-KON-25-move"));
+
+  window.press("task-more-KON-25-move");
+  window.until("Move to's list again", |window| offered(window, list));
+  press_escape(&mut window);
+  assert!(!offered(&mut window, list), "the first Esc closes the list");
+  assert!(offered(&mut window, "task-more-KON-25-panel"), "and keeps the menu");
+  press_escape(&mut window);
+  assert!(
+    !offered(&mut window, "task-more-KON-25-panel"),
+    "the second closes the menu"
+  );
+  reopen_menu(&mut window, "KON-25");
+  assert!(!offered(&mut window, list), "after Esc");
+
+  window.press("task-more-KON-25-move");
+  window.until("Move to's list once more", |window| offered(window, list));
+  window.press("task-more-KON-25");
+  reopen_menu(&mut window, "KON-25");
+  assert!(!offered(&mut window, list), "after the button");
+}
+
+/// The same for a moving choice, which the server takes, and for *Reopen task* on a Done task.
+#[test]
+fn team_qa_lifecycle_menu_reopen_list_does_not_outlast_its_menu() {
+  let (mut window, server) = row_menu(State::Admin, "KON-25");
+  window.press("task-more-KON-25-move");
+  window.until("Move to's list", |window| offered(window, "task-more-KON-25-list"));
+  window.press("task-more-KON-25-move-todo");
+  window.until("the server to take the move", |_| {
+    server.task_now(25).is_some_and(|(revision, ..)| revision == 2)
+  });
+  reopen_menu(&mut window, "KON-25");
+  assert!(
+    !offered(&mut window, "task-more-KON-25-list"),
+    "after a moving choice in Move to"
+  );
+
+  let (mut window, _server) = row_menu_in(State::Admin, TaskListTab::Done, "KON-1");
+  window.press("task-more-KON-1-reopen");
+  window.until("Reopen's list", |window| offered(window, "task-more-KON-1-list"));
+  press_escape(&mut window);
+  press_escape(&mut window);
+  reopen_menu(&mut window, "KON-1");
+  assert!(
+    !offered(&mut window, "task-more-KON-1-list"),
+    "after Esc in Reopen task"
+  );
+  assert!(offered(&mut window, "task-more-KON-1-reopen"));
+}

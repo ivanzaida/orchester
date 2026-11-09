@@ -26,7 +26,7 @@ use super::actions::{Ask, TeamActions};
 use crate::{
   navigation::{Navigation, press::OpenIn},
   routes::{ProjectPage, Route, TaskView},
-  screens::tasks::kanban::copy_key_item,
+  screens::{task_close::MenuPlace, tasks::kanban::copy_key_item},
   team::lifecycle::{Change, Offered},
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
@@ -73,12 +73,19 @@ pub(in crate::screens::tasks) struct Lists {
 }
 
 impl Lists {
-  pub fn new(ctx: &mut Ctx) -> Self {
-    Self {
+  /// The lists of the menu that `menu` keeps; they close with it, so the next time it opens it shows its own rows.
+  pub fn new(ctx: &mut Ctx, menu: &MenuPlace) -> Self {
+    let lists = Self {
       page: ctx.signal(None),
       open: ctx.signal(false),
       anchor: ElementRef::default(),
-    }
+    };
+    let (page, open) = (lists.page.clone(), lists.open.clone());
+    menu.on_closed(ctx, move || {
+      page.set(None);
+      open.set(false);
+    });
+    lists
   }
 
   /// Opens `page` beside its row; the choice closes the menu, which stays open for its list.
