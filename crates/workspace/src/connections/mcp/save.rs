@@ -27,7 +27,7 @@ use crate::{
 #[derive(Debug, Error)]
 pub enum McpSaveError {
   #[error(transparent)]
-  Store(#[from] StoreError),
+  Store(StoreError),
   #[error(transparent)]
   Server(#[from] McpServerError),
   /// The program cannot be stored as a fixed file outside the repository.
@@ -58,14 +58,22 @@ pub enum McpSaveError {
   },
 }
 
+/// A store failure is logged where it arises, once, whichever way the save then says it; a name that is taken is the
+/// person's to fix and is not.
+impl From<StoreError> for McpSaveError {
+  fn from(error: StoreError) -> Self {
+    if !matches!(error, StoreError::DuplicateConnectionName(_)) {
+      tracing::error!(%error, "cannot store the MCP server");
+    }
+    Self::Store(error)
+  }
+}
+
 impl McpSaveError {
   pub fn message(&self) -> Message {
     match self {
       Self::Store(StoreError::DuplicateConnectionName(_)) => Message::new(NAME_TAKEN),
-      Self::Store(error) => {
-        tracing::error!(%error, "cannot store the MCP server");
-        messages::store_error(error)
-      }
+      Self::Store(error) => messages::store_error(error),
       Self::Server(McpServerError::EnvironmentOnHttp) => Message::new("connections.mcp.errors.variables"),
       Self::Program(problem) => program_problem_message(problem),
       Self::InUse(roles) => Message::new("connections.mcp.errors.inUse").with("profiles", roles.join(", ")),
@@ -73,15 +81,12 @@ impl McpSaveError {
       Self::SecretStore { secret, source } => secret_store_message(secret, source),
       Self::SecretGone(_) => Message::new("errors.secretGone"),
       Self::SecretNotTaken(_) => Message::new("connections.mcp.errors.secretNotTaken"),
-      Self::NotRestored { cause, restore } => {
-        tracing::error!(%restore, %cause, "cannot put the MCP server back as it was");
-        match cause.field() {
-          RefusedField::Secret(secret) => {
-            Message::new("connections.mcp.errors.notRestored").with("secret", secret.to_string())
-          }
-          _ => Message::new("connections.mcp.errors.notRestoredOther"),
+      Self::NotRestored { cause, .. } => match cause.field() {
+        RefusedField::Secret(secret) => {
+          Message::new("connections.mcp.errors.notRestored").with("secret", secret.to_string())
         }
-      }
+        _ => Message::new("connections.mcp.errors.notRestoredOther"),
+      },
     }
   }
 }
@@ -215,10 +220,13 @@ pub fn store_with_values(
       };
       return Err(match db.save_mcp_server(&before) {
         Ok(()) => cause,
-        Err(restore) => McpSaveError::NotRestored {
-          cause: Box::new(cause),
-          restore,
-        },
+        Err(restore) => {
+          tracing::error!(%restore, %cause, "cannot put the MCP server back as it was");
+          McpSaveError::NotRestored {
+            cause: Box::new(cause),
+            restore,
+          }
+        }
       });
     }
   }
