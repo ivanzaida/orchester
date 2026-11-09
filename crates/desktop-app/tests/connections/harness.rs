@@ -2,16 +2,17 @@
 //! driven by element id as a person would, and what Connections stored, read back from the project's
 //! database.
 
-use std::{path::PathBuf, time::Duration};
+use std::{collections::HashMap, path::PathBuf, time::Duration};
 
 use orchester_app::routes::{ConnectionsView, NewConnection, ProjectPage, Route};
 use orchester_core::{
   connection::mcp::McpServer,
-  id::{ConnectionId, ProjectId},
+  id::{ConnectionId, ProjectId, ServerId},
+  sharing::MemberRole,
   store::McpServerStore,
   time::Timestamp,
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, SharingLink};
 
 use crate::{
   kontur::{self, SeedRequest, scenarios},
@@ -53,6 +54,26 @@ impl Seeded {
       project: seeded.project,
       repo: seeded.repo,
     }
+  }
+
+  /// The window on `scenario` with the project linked to a team (as its owner), the way a team's project is opened:
+  /// the pages a local project replaces by the Agents hub's forms stay what they were.
+  pub fn shared(scenario: &str) -> Self {
+    Self::changed(scenario, |repo| {
+      let mut db = ProjectDb::open(repo).expect("the project's database opens");
+      let link = SharingLink {
+        server: ServerId::generate(),
+        project: ProjectId::generate(),
+        key: db.project().key().clone(),
+        role: Some(MemberRole::Owner),
+        joined_at: Timestamp::now(),
+        cursor: 0,
+        last_synced_at: Timestamp::now(),
+        removed_at: None,
+        address: None,
+      };
+      db.start_sharing(&link, &[], (&[], &HashMap::new())).expect("linked");
+    })
   }
 
   pub fn go(&mut self, page: ProjectPage) {
