@@ -32,7 +32,8 @@ pub fn task_of(db: &ProjectDb, id: TaskId) -> Result<Option<Task>, StoreError> {
   if runs.is_empty() { Ok(None) } else { db.task(id) }
 }
 
-fn is_team(db: &ProjectDb, id: TaskId) -> Result<bool, StoreError> {
+/// Whether team task `id` is owned by the team server (an identity row says so), whether or not a definition is kept.
+pub fn is_team(db: &ProjectDb, id: TaskId) -> Result<bool, StoreError> {
   Ok(matches!(
     db.task_identity(id)?,
     Some(TaskIdentity {

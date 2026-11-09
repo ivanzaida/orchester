@@ -23,6 +23,7 @@ mod team_server;
 mod bundle_missing;
 mod bundle_schema;
 mod created;
+mod local_task;
 mod delivery;
 mod mcp_server_remove;
 mod mcp_servers;
