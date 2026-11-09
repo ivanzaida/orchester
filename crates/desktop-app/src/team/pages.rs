@@ -7,10 +7,10 @@
 //! (`orchester_workspace::team_work::team_here`): the server names the holder, not the computer.
 
 use orchester_api::{
-  UserRef,
+  Attribution, UserRef,
   v2::{
-    Action, Capabilities, ClaimRead, ExecutionState, LifecycleAction, MAX_PAGE_LIMIT, ModuleListRequest, ModuleSummary,
-    PageRequest, PendingAuthorization, SearchText, Subject, TaskFilters, TaskListRequest, TaskRead,
+    Action, Capabilities, ClaimRead, ClosedHow, ExecutionState, LifecycleAction, MAX_PAGE_LIMIT, ModuleListRequest,
+    ModuleSummary, PageRequest, PendingAuthorization, SearchText, Subject, TaskFilters, TaskListRequest, TaskRead,
   },
 };
 use orchester_core::{
@@ -113,17 +113,40 @@ pub struct TeamTask {
   pub claim: Option<TeamClaim>,
   pub work: Option<ExecutionState>,
   pub abilities: Abilities,
-  /// Who changed the task last and when: who closed a Done or Canceled task, who set its blocked reason.
-  pub updated: TeamUpdated,
+  /// Who changed the task last and when, whatever the change was.
+  pub updated: TeamAttribution,
+  /// How and when the server says a Done or Canceled task was closed; `None` while it is open, and also when the
+  /// server does not say (an older one never does), so the card names no person and no time.
+  pub closed: Option<TeamClosed>,
+  /// Who set the task's current blocked reason and when; `None` when it has none, and when the server does not say.
+  pub blocked: Option<TeamAttribution>,
   pub fences: Vec<(RunId, TeamFence)>,
   pub unsent: Vec<(RunId, usize)>,
 }
 
-/// Who changed a task last, and when.
+/// Who made a change to a task, and when.
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TeamUpdated {
+pub struct TeamAttribution {
   pub by: TeamPerson,
   pub at: Timestamp,
+}
+
+/// What closed a task, and when (`orchester_api::v2::TaskClosure`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TeamClosed {
+  pub how: TeamClosedHow,
+  pub at: Timestamp,
+}
+
+/// What closed a Done or Canceled task.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum TeamClosedHow {
+  /// A person's change: the holder who marked it Done, or the Admin who closed or canceled it.
+  Person(TeamPerson),
+  /// The accepted delivery of its module marked it Done; the module's name as it was then.
+  Delivery { module_name: String },
+  /// The success of its work marked it Done.
+  Run,
 }
 
 /// A team module as its row and its page show it: the module, its revision, its progress and forecast as the server
@@ -239,6 +262,13 @@ fn person(user: &UserRef, you: Option<UserId>) -> TeamPerson {
   }
 }
 
+fn attribution(read: &Attribution, you: Option<UserId>) -> TeamAttribution {
+  TeamAttribution {
+    by: person(&read.by, you),
+    at: Timestamp::from_unix_millis(read.at),
+  }
+}
+
 fn claim(read: &ClaimRead, who: &Who) -> TeamClaim {
   let holder = person(&read.holder, who.you);
   TeamClaim {
@@ -288,10 +318,18 @@ fn team_task_of(read: &TaskRead, pipelines: &listed::TeamPipelines, who: &Who) -
     claim: read.effective_claim.as_ref().map(|read| claim(read, who)),
     work: read.work.as_ref().map(|work| work.state),
     abilities: abilities(&read.capabilities, Subject::Task { id: read.task.id }),
-    updated: TeamUpdated {
-      by: person(&read.task.updated.by, who.you),
-      at: Timestamp::from_unix_millis(read.task.updated.at),
-    },
+    updated: attribution(&read.task.updated, who.you),
+    closed: read.closed.as_ref().map(|closure| TeamClosed {
+      how: match &closure.how {
+        ClosedHow::Person { by } => TeamClosedHow::Person(person(by, who.you)),
+        ClosedHow::Delivery { module_name, .. } => TeamClosedHow::Delivery {
+          module_name: module_name.clone(),
+        },
+        ClosedHow::Run { .. } => TeamClosedHow::Run,
+      },
+      at: Timestamp::from_unix_millis(closure.at),
+    }),
+    blocked: read.blocked.as_ref().map(|blocked| attribution(blocked, who.you)),
     fences: who.here.fences.clone(),
     unsent: who.here.unsent.clone(),
   })
