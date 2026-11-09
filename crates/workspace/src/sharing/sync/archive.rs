@@ -209,11 +209,11 @@ pub(crate) fn pins_mcp_server(
   (run, snapshot): (RunId, &RunSnapshot),
   server: ConnectionId,
 ) -> Result<bool, StoreError> {
-  if db
-    .run_inputs(run)?
-    .is_some_and(|inputs| inputs.bindings().binds_local_mcp(server))
-  {
-    return Ok(true);
+  match db.run_inputs(run) {
+    Ok(Some(inputs)) if inputs.bindings().binds_local_mcp(server) => return Ok(true),
+    Ok(_) => {}
+    // The one run's inputs say nothing; the profiles it pinned still do, and the others are not held up by it.
+    Err(error) => tracing::warn!(%error, %run, "unreadable run inputs are not checked against a local MCP server"),
   }
   for step in snapshot.steps() {
     let StepExecutor::Agent { profile, .. } = step.executor() else {
