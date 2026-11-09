@@ -1,4 +1,4 @@
-//! Migration 152, a version marks that its resource was created here as its first version: a team project's database
+//! Migration 160, a version marks that its resource was created here as its first version: a team project's database
 //! before it, with versions waiting for the server, opens with every row kept and none marked (a resource published
 //! from a draft, or made before the mark, is never taken back whole), refuses a mark other than 0 or 1, and marks the
 //! versions created from then on.
@@ -23,7 +23,7 @@ use support::{at, copied_at_version, name};
 
 /// The schema before `shared_publishes` took the mark `created`. Migrations are append-only, so a later one still
 /// applies on open.
-const BEFORE_CREATED_HERE: u32 = 151;
+const BEFORE_CREATED_HERE: u32 = 159;
 
 fn instruction(text: &str) -> Instruction {
   Instruction::new(

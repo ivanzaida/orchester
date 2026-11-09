@@ -1,4 +1,4 @@
-//! Migration 150, team references: a database before it (a cached version naming a shared tool by its id) opens with
+//! Migration 158, team references: a database before it (a cached version naming a shared tool by its id) opens with
 //! the tool read back as a team resource of kind tool. The references that named a connection and a secret by ids of
 //! the publisher's computer are dropped by the migration that removed the bindings (`remove_bindings_migration`).
 //! `cargo test -p orchester-store --test team_references_migration team_references_migration`.
@@ -23,7 +23,7 @@ use support::{at, copied_at_version, name, started_run};
 
 /// The schema before the references widened: `shared_version_references` allowed only a connection, an MCP server, a
 /// secret or a tool. Migrations are append-only, so a later one still applies on open.
-const BEFORE_TEAM_REFERENCES: u32 = 149;
+const BEFORE_TEAM_REFERENCES: u32 = 157;
 
 fn instruction() -> Instruction {
   Instruction::new(
