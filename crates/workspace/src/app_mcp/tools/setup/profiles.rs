@@ -7,6 +7,7 @@ use orchester_core::{
   id::{ConnectionId, ProjectId, ResourceId},
   permission::{AgentPermissions, CommandPermission},
   resource::{AgentProfile, PublishError},
+  store::ResourceStore,
 };
 use orchester_store::{ProjectDb, StoreError};
 use rmcp::schemars::JsonSchema;
@@ -26,6 +27,7 @@ use crate::{
   agents::{
     data::{ProfileEntry, ProjectAgents, VersionState, publish_checked_in},
     form::stored_effort,
+    local_edit::GivenKind,
   },
   app_mcp::{
     error::{Missing, ToolError},
@@ -101,8 +103,9 @@ pub(super) fn profile_with_revision(open: &OpenProject, id: ResourceId) -> Resul
   let entry = agents
     .profile(id)
     .ok_or_else(|| ToolError::not_found(Missing::Profile, id.to_string()))?;
-  let here = connection_here(&ProjectDb::open(&open.repo_root)?, &agents, entry)?;
-  let mut value = profile_json(&agents, (entry, here), open.project.id());
+  let db = ProjectDb::open(&open.repo_root)?;
+  let here = connection_here(&db, &agents, entry)?;
+  let mut value = profile_json(&db, &agents, (entry, here), open.project.id())?;
   value["revision"] = json!(revision);
   Ok(value)
 }
@@ -139,7 +142,7 @@ pub async fn publish_profile(services: &Services, args: InProfile) -> Result<Val
       .profile(id)
       .ok_or_else(|| ToolError::not_found(Missing::Profile, id.to_string()))?;
     let here = connection_here(&db, &agents, entry)?;
-    Ok(json!({ "profile": profile_json(&agents, (entry, here), open.project.id()) }))
+    Ok(json!({ "profile": profile_json(&db, &agents, (entry, here), open.project.id())? }))
   })
   .await
 }
@@ -193,12 +196,14 @@ pub(super) fn profile_named<'a>(agents: &'a ProjectAgents, named: &str) -> Resul
     .ok_or_else(|| ToolError::not_found(Missing::Profile, named))
 }
 
-/// A profile of `project` as `get_profile` shows it, with its link.
+/// A profile of `project` as `get_profile` shows it, with its link: the instructions, skills and tools it gives its
+/// agents each `{id, name}`, which nothing else gives them, as `save_profile_draft` takes them.
 pub(super) fn profile_json(
+  db: &ProjectDb,
   agents: &ProjectAgents,
   (entry, connection): (&ProfileEntry, Option<&AgentConnection>),
   project: ProjectId,
-) -> Value {
+) -> Result<Value, StoreError> {
   let profile = &entry.profile;
   let servers: Vec<Value> = profile
     .mcp_servers()
@@ -215,7 +220,18 @@ pub(super) fn profile_json(
     .filter(|step| step.profile == entry.id)
     .map(|step| json!({ "pipeline": &*step.pipeline, "step": &*step.step }))
     .collect();
-  json!({
+  let given = |kind: GivenKind| -> Result<Vec<Value>, StoreError> {
+    kind
+      .of(profile)
+      .ids()
+      .iter()
+      .map(|id| {
+        let name = db.resource(*id)?.map(|resource| resource.name().as_str().to_owned());
+        Ok(json!({ "id": id.to_string(), "name": name }))
+      })
+      .collect()
+  };
+  Ok(json!({
     "id": entry.id.to_string(),
     "role": profile.role().as_str(),
     "responsibilities": profile.responsibilities(),
@@ -229,10 +245,13 @@ pub(super) fn profile_json(
     "effort": stored_effort(profile),
     "permissions": permissions_json(profile.permissions()),
     "mcp_servers": servers,
+    "instruction_resources": given(GivenKind::Instruction)?,
+    "skills": given(GivenKind::Skill)?,
+    "tools": given(GivenKind::Tool)?,
     "state": state_json(entry.state),
     "used_by_steps": steps,
     "link": Link::Profile(project, entry.id).path(),
-  })
+  }))
 }
 
 /// Permissions as `save_profile_draft` takes them.

@@ -3,8 +3,13 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
-use super::prompt::PromptText;
-use crate::{connection::mcp::McpServerSelection, id::ConnectionId, name::Name, permission::AgentPermissions};
+use super::{chosen::ChosenResources, prompt::PromptText};
+use crate::{
+  connection::mcp::McpServerSelection,
+  id::{ConnectionId, ResourceId},
+  name::Name,
+  permission::AgentPermissions,
+};
 
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ModelIdError {
@@ -99,8 +104,10 @@ impl From<ProviderSettings> for BTreeMap<String, String> {
 }
 
 /// A project agent role: what it is responsible for, how it is instructed, which connection and
-/// model run it, what it may do and which MCP servers its agents get. Pipeline steps select a profile,
-/// inherit its model and its MCP servers and can only narrow its permissions.
+/// model run it, what it may do and what its agents get: MCP servers, and the project's instructions, skills and tools
+/// it chooses (`docs/design/team-configuration.md`, "Decided 2026-11-09"; nothing else gives an agent of a local run
+/// one). Pipeline steps select a profile, inherit its model and what it gives and can only narrow its permissions.
+/// The three lists are left out of the stored body while empty, so a profile that chooses none keeps its shape.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct AgentProfile {
   role: Name,
@@ -111,11 +118,17 @@ pub struct AgentProfile {
   settings: ProviderSettings,
   permissions: AgentPermissions,
   mcp_servers: McpServerSelection,
+  #[serde(default, skip_serializing_if = "ChosenResources::is_empty")]
+  instruction_resources: ChosenResources,
+  #[serde(default, skip_serializing_if = "ChosenResources::is_empty")]
+  skills: ChosenResources,
+  #[serde(default, skip_serializing_if = "ChosenResources::is_empty")]
+  tools: ChosenResources,
 }
 
 impl AgentProfile {
-  /// A profile with the most restrictive permissions ([`AgentPermissions::before_permissions`]) and no MCP
-  /// servers; see [`Self::with_permissions`] and [`Self::with_mcp_servers`].
+  /// A profile with the most restrictive permissions ([`AgentPermissions::before_permissions`]) that gives its agents
+  /// nothing; see [`Self::with_permissions`], [`Self::with_mcp_servers`] and [`Self::with_given`].
   pub const fn new(
     role: Name,
     responsibilities: String,
@@ -133,6 +146,9 @@ impl AgentProfile {
       settings,
       permissions: AgentPermissions::before_permissions(),
       mcp_servers: McpServerSelection::none(),
+      instruction_resources: ChosenResources::EMPTY,
+      skills: ChosenResources::EMPTY,
+      tools: ChosenResources::EMPTY,
     }
   }
 
@@ -152,6 +168,15 @@ impl AgentProfile {
   #[must_use]
   pub fn with_mcp_servers(mut self, servers: McpServerSelection) -> Self {
     self.mcp_servers = servers;
+    self
+  }
+
+  /// The profile giving its agents `instructions`, `skills` and `tools` of the project, in place of what it gave.
+  #[must_use]
+  pub fn with_given(mut self, instructions: ChosenResources, skills: ChosenResources, tools: ChosenResources) -> Self {
+    self.instruction_resources = instructions;
+    self.skills = skills;
+    self.tools = tools;
     self
   }
 
@@ -187,5 +212,25 @@ impl AgentProfile {
   /// The MCP servers the profile's agents get; none by default.
   pub const fn mcp_servers(&self) -> &McpServerSelection {
     &self.mcp_servers
+  }
+
+  /// The project's instructions its agents are given, apart from its own role [`Self::instructions`].
+  pub const fn instruction_resources(&self) -> &ChosenResources {
+    &self.instruction_resources
+  }
+
+  /// The project's skills its agents are offered.
+  pub const fn skills(&self) -> &ChosenResources {
+    &self.skills
+  }
+
+  /// The project's tools its agents may call.
+  pub const fn tools(&self) -> &ChosenResources {
+    &self.tools
+  }
+
+  /// Whether the profile chooses `resource` as an instruction, skill or tool.
+  pub fn gives(&self, resource: ResourceId) -> bool {
+    self.instruction_resources.contains(resource) || self.skills.contains(resource) || self.tools.contains(resource)
   }
 }

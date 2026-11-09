@@ -41,10 +41,6 @@
       "http": "http",
       "database": "database"
     },
-    "note": {
-      "instructions": "Instructions have nothing to fill in on a computer, so they are always ready here.",
-      "skills": "Skills have nothing to fill in on a computer, so they are always ready here."
-    },
     "takenBack": {
       "title": "{{name}} was not created",
       "dismiss": "Dismiss"

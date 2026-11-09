@@ -13,7 +13,10 @@ use orchester_core::{
     AgentProfile, InjectionEvent, Instruction, Pipeline, ResourceBody, ResourceKind, Step, StepKey, StepKind, Variable,
     Version,
   },
-  run::{Composition, InstructionSource, InstructionVersion, PipelineInfo, ProfileInfo, PromptInput, Run, RunContext},
+  run::{
+    Composition, GivenBy, InstructionSource, InstructionVersion, PipelineInfo, ProfileInfo, PromptInput, Run,
+    RunContext,
+  },
   store::{ResourceStore, RunStore, TaskStore},
   task::Task,
 };
@@ -291,6 +294,7 @@ impl Resolved<'_> {
         id: profile_id,
         version: profile.number(),
         body: profile.body(),
+        given: GivenBy::Profile,
       },
       instructions,
       // Skills are listed with where the runner placed them, and the code index part names the index

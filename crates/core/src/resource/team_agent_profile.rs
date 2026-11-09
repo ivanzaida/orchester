@@ -145,10 +145,12 @@ impl TeamAgentProfile {
   }
 
   /// `profile` as the team holds it: the CLI kind of its connection, and its MCP servers by the server id of the team
-  /// MCP server each is. A local profile chooses no tool, skill, instruction resource or secret, so the team profile
-  /// lists none. Fails when the connection is not an agent connection of this computer, or the profile chooses an
-  /// MCP server that is not a team one: the team never holds an id from a computer. A profile with extra writable
-  /// folders is refused rather than stripped, so nobody believes the team's profile keeps them.
+  /// MCP server each is. The instructions, skills and tools a local profile gives its agents are not carried over (the
+  /// team profile lists none; a team run still goes by their scopes, as its execution bundle names no profile lists),
+  /// nor are secrets, which a local profile does not name. Fails when the connection is not an agent connection of this
+  /// computer, or the profile chooses an MCP server that is not a team one: the team never holds an id from a
+  /// computer. A profile with extra writable folders is refused rather than stripped, so nobody believes the team's
+  /// profile keeps them.
   pub fn from_local(profile: &AgentProfile, known: TeamCounterparts<'_>) -> Result<Self, TeamProfileError> {
     // Before the connection and MCP lookups, so the folders are what such a profile is refused for.
     refuse_writable_folders(profile.permissions())?;
@@ -252,8 +254,9 @@ impl AgentProfile {
   }
 
   /// The team's `profile` as it runs on `connection` of this computer. The team MCP servers are chosen as the local
-  /// profile chooses them: by their server ids, carried as [`ConnectionId`]s. The local profile has no tools, skills,
-  /// instruction resources or secrets to keep, so the team's lists stay in the version's server body.
+  /// profile chooses them: by their server ids, carried as [`ConnectionId`]s. The team's tools, skills, instruction
+  /// resources and secrets stay in the version's server body: a team run takes what its agents get from its execution
+  /// bundle, never from this local body.
   pub fn from_team(profile: &TeamAgentProfile, connection: ConnectionId) -> Self {
     let servers = profile
       .mcp_servers()

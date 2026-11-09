@@ -11,6 +11,7 @@ mod connection_specs;
 mod connections;
 mod created;
 mod decision_connections;
+mod given_by;
 mod instructions;
 mod mcp_preview;
 mod mcp_server_input;
@@ -130,7 +131,9 @@ const SPECS: &[Spec] = &[
     name: "get_profile",
     description: "One agent profile as its editor shows it (its draft if it has one, otherwise its latest version): \
                   role, responsibilities, role instructions, connection, model, effort, permissions (repository \
-                  access, extra writable folders, commands, network, approvals) and MCP servers, where it stands, \
+                  access, extra writable folders, commands, network, approvals), MCP servers, the project's \
+                  instructions, skills and tools it gives its agents (instruction_resources, skills, tools, each \
+                  {id, name}; in a local project nothing else gives an agent one), where it stands, \
                   which published pipeline steps run it, its revision, which save_profile_draft's \
                   expected_revision takes, its readiness on this computer as list_profiles gives it, and its link in \
                   the app.",
@@ -148,7 +151,11 @@ const SPECS: &[Spec] = &[
                   required; role instructions may use {{variables}}; permissions must be ones the connection's CLI \
                   enforces on this computer (repository read_only or write; commands ask_before, allowed with a \
                   list of command prefixes, or any_in_worktree; network off or on; extra writable folders only with \
-                  write access); MCP servers are the project's (list_connections). Narrowing is always taken. \
+                  write access); MCP servers are the project's (list_connections). instruction_resources, skills \
+                  and tools are the project's instructions, skills and tools its agents get, by id, slug or name, \
+                  each once, none archived: in a local project no instruction, skill or tool reaches an agent any \
+                  other way; left out, each list is the profile's own (a new profile's none). Narrowing is always \
+                  taken. \
                   Anything broader than the profile's latest published version (a new profile: the most \
                   restrictive permissions its CLI enforces and no MCP server) is refused as person_only unless a \
                   person turned on Let automation change agent permissions in Settings › Automation: write \
@@ -252,8 +259,10 @@ const SPECS: &[Spec] = &[
   Spec {
     name: "list_instructions",
     description: "A project's instructions, which Orchester adds to agents' prompts: id, name, where each applies \
-                  (project, agent_role, pipeline or step), which agents it reaches (all, roles or profiles), when \
-                  (start, resume), its text, where it stands (draft, stale_draft or published), whether its draft \
+                  (project, agent_role, pipeline or step: the part of the prompt it sits in), the agents it names \
+                  (all, roles or profiles), when (start, resume), its text, used_by (the profiles that list it: in a \
+                  local project only their agents get it; where it applies and the agents it names decide that only \
+                  in a team project's runs), where it stands (draft, stale_draft or published), whether its draft \
                   is the one automation saved (draft_by_automation), and its link in the app (Instructions, which \
                   opens on its library). Without `project`, every project's, each \
                   naming its project (unreadable_projects lists the projects that could not be read, with why).",
@@ -263,9 +272,9 @@ const SPECS: &[Spec] = &[
   Spec {
     name: "get_instruction",
     description: "One instruction as its editor shows it (its draft if it has one, otherwise its latest version): \
-                  its text, where it applies (project, agent_role, pipeline or step), which agents it reaches and \
-                  when, where it stands, every published version with when it was published and its text, and its \
-                  link in the app.",
+                  its text, where it applies (project, agent_role, pipeline or step), the agents it names and when, \
+                  used_by (the profiles that list it, whose agents get it in a local project), where it stands, \
+                  every published version with when it was published and its text, and its link in the app.",
     schema: schema_for_type::<instructions::InInstruction>,
     read_only: true,
   },
@@ -275,9 +284,13 @@ const SPECS: &[Spec] = &[
                   it returns the published instruction or a refusal, and in a team project only once the team server \
                   accepts it; offline it waits in the outbox, waiting_for_server); with `instruction`, saves its \
                   draft as its editor does, which publish_instruction publishes as its next version. \
-                  `applies_in` is project, agent_role (with `role`; it then reaches every agent of the \
-                  role), pipeline (with `pipeline`) or step (with `pipeline` and `step`); `agents` all, or some \
-                  roles or profiles; `events` start, resume or both. The text may use {{variables}}; a new instruction \
+                  `applies_in` is project, agent_role (with `role`), pipeline (with `pipeline`) or step (with \
+                  `pipeline` and `step`): the part of the prompt it sits in; `agents` all, or some roles or \
+                  profiles (all with agent_role); `events` start, resume or both. In a local project no instruction \
+                  reaches an agent by itself: an agent gets it only when its profile lists it (save_profile_draft \
+                  instruction_resources); applies_in and agents decide who gets it only in a team project's runs. \
+                  Left out, applies_in and agents are a new instruction's project and all, and an existing one's \
+                  own. The text may use {{variables}}; a new instruction \
                   needs a text and is refused as publishing is (blank text, a variable without a value, person_only). \
                   Saving a draft of an existing instruction is always open; the Instructions page marks it as written \
                   by automation (draft_by_automation) until a person saves it or it is published.",
@@ -288,7 +301,8 @@ const SPECS: &[Spec] = &[
     name: "publish_instruction",
     description: "Publishes an instruction's draft as its next version, as Publish does: agents get it from then on. \
                   Refused for a blank text or a draft started from an older version than the latest. What it \
-                  publishes reaches the prompts of every agent it applies to, so it is refused as person_only \
+                  publishes reaches the prompts of every agent that gets it (in a local project, the agents of the \
+                  profiles that list it), so it is refused as person_only \
                   unless a person turned on Let automation change agent permissions, applies the Orchestrator's \
                   proposal of it, or lets the Orchestrator publish drafts; a person publishes it in the window.",
     schema: schema_for_type::<instructions::InInstruction>,

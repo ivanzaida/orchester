@@ -7,6 +7,7 @@
 //! is used is decided when a run snapshots its configuration, not inside a body.
 
 mod agent_profile;
+mod chosen;
 mod instruction;
 mod lifecycle;
 mod pipeline;
@@ -24,6 +25,7 @@ use serde::{Serialize, de::DeserializeOwned};
 
 pub use self::{
   agent_profile::{AgentProfile, ModelId, ModelIdError, ProviderSettings, ProviderSettingsError},
+  chosen::{ChosenResources, ChosenResourcesError},
   instruction::{
     AgentTargets, Exclusion, InjectionEvent, Instruction, InstructionError, InstructionScope, InstructionTarget,
   },
@@ -102,10 +104,14 @@ impl ResourceBody for AgentProfile {
   /// *Ask before running commands* keeps asking (Manual with no list of its own), and *Any command in the
   /// worktree* stays as it was, Manual too, until a person switches it to Autopilot. A version of any schema with the
   /// old *Approve automatically (don't ask me)* on reads as Autopilot, and is stored without it; the shape is the same.
-  const SCHEMA: u32 = 5;
+  /// 6: the instructions, skills and tools the profile gives its agents (2026-11-09,
+  /// `docs/design/team-configuration.md`), each left out while empty, so profiles of schema 5 have the same shape.
+  /// The project migration that brought them filled them in for every local profile with what reached its agents
+  /// before.
+  const SCHEMA: u32 = 6;
 
   fn upgrade(schema: u32, mut body: serde_json::Value) -> Option<serde_json::Value> {
-    if matches!(schema, 3 | 4) {
+    if matches!(schema, 3..=5) {
       return Some(body);
     }
     let fields = body.as_object_mut()?;

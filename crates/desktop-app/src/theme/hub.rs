@@ -233,8 +233,6 @@ pub enum HubSpacing {
   Indent,
   /// 44: a block under a radio row from the box's side, past the radio and its gap (`A6i2K3`, `clbbm` in 07).
   Nested,
-  /// 4: over and under the note under a list's last group (`e1C14P`).
-  NoteY,
   /// 16: the head's Team line to New (`Header` `NRqwv`).
   NewGap,
   /// 56: a panel's pinned actions (`Actions` `x3uhYJ` in `t4mtQL`, `o8tFHR` in `NDZXC`, `WpN6M` in `SpRvd`, `hDhr8` in
@@ -256,7 +254,7 @@ pub enum HubSpacing {
 }
 
 impl HubSpacing {
-  pub const ALL: [Self; 24] = [
+  pub const ALL: [Self; 23] = [
     Self::Side,
     Self::HeadTop,
     Self::HeadBottom,
@@ -272,7 +270,6 @@ impl HubSpacing {
     Self::SubY,
     Self::Indent,
     Self::Nested,
-    Self::NoteY,
     Self::NewGap,
     Self::Actions,
     Self::Key,
@@ -304,7 +301,6 @@ impl HubSpacing {
       Self::SubY => "hub_sub_y",
       Self::Indent => "hub_indent",
       Self::Nested => "hub_nested",
-      Self::NoteY => "hub_note_y",
       Self::NewGap => "hub_new_gap",
       Self::Actions => "hub_actions",
       Self::Key => "hub_key",
@@ -329,7 +325,6 @@ impl HubSpacing {
       Self::FieldGap | Self::NewGap => 16.0,
       Self::SubY => 7.0,
       Self::Nested => 44.0,
-      Self::NoteY => 4.0,
       Self::Actions => 56.0,
       Self::Key => 170.0,
       Self::KeyForm => 190.0,

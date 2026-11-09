@@ -10,7 +10,7 @@ use orchester_core::{
   },
   name::{Name, NameError},
   permission::AgentPermissions,
-  resource::{AgentProfile, ModelId, PromptError, PromptText, ProviderSettings},
+  resource::{AgentProfile, ChosenResources, ModelId, PromptError, PromptText, ProviderSettings},
 };
 
 use crate::messages::{self, Message};
@@ -118,6 +118,11 @@ pub struct ProfileForm<'a> {
   pub effort: Option<&'a str>,
   pub permissions: &'a AgentPermissions,
   pub mcp_servers: &'a McpServerSelection,
+  /// The project's instructions, skills and tools the profile gives its agents, which the editor's fields do not show
+  /// and keep as they are.
+  pub instruction_resources: &'a ChosenResources,
+  pub skills: &'a ChosenResources,
+  pub tools: &'a ChosenResources,
 }
 
 /// Why the profile cannot be saved yet, per field.
@@ -154,7 +159,12 @@ impl ProfileForm<'_> {
             settings,
           )
           .with_permissions(self.permissions.clone())
-          .with_mcp_servers(self.mcp_servers.clone()),
+          .with_mcp_servers(self.mcp_servers.clone())
+          .with_given(
+            self.instruction_resources.clone(),
+            self.skills.clone(),
+            self.tools.clone(),
+          ),
         )
       }
       (role, instructions, connection, model, effort) => Err(Box::new(ProfileErrors {

@@ -1,5 +1,7 @@
 //! The form of a new instruction (`Agents · New instruction` A10 `hGdGu`): its name, where it is added and its text. An
-//! instruction is the team's whole: nothing is filled in on a computer afterwards.
+//! instruction is the team's whole: nothing is filled in on a computer afterwards. In a local project nothing chooses
+//! where it is added or who gets it: a profile chooses the instructions its agents are given
+//! (`docs/design/team-configuration.md`, "Decided 2026-11-09"), so the form says that instead.
 
 use lurq::{app::ctx::Ctx, core::Signal};
 use orchester_core::name::Name;
@@ -19,6 +21,8 @@ const NAME: Spec = Spec::new("instruction-name", "team_new.instruction.name")
   .required();
 const ADDED_TO: Spec =
   Spec::new("instruction-added-to", "team_new.instruction.addedTo").sub("team_new.instruction.addedToSub");
+const GIVEN_TO: Spec =
+  Spec::new("instruction-given-to", "local_new.instruction.givenTo").sub("local_new.instruction.givenToSub");
 const TEXT: Spec = Spec::new("instruction-text", "team_new.instruction.text")
   .sub("team_new.instruction.textSub")
   .required();
@@ -74,12 +78,24 @@ impl Fields {
         (&self.name, "team_new.instruction.namePlaceholder"),
         Look::Plain,
       ),
-      fields::row(
-        ctx,
-        &ADDED_TO,
-        None,
-        rows::words("team-new-instruction-added-to", &ctx.t("team_new.instruction.everyRun")),
-      ),
+      if shown.mode.is_local() {
+        fields::row(
+          ctx,
+          &GIVEN_TO,
+          None,
+          rows::words(
+            "local-new-instruction-given-to",
+            &ctx.t("local_new.instruction.givenToValue"),
+          ),
+        )
+      } else {
+        fields::row(
+          ctx,
+          &ADDED_TO,
+          None,
+          rows::words("team-new-instruction-added-to", &ctx.t("team_new.instruction.everyRun")),
+        )
+      },
       fields::text_row(
         ctx,
         &TEXT,

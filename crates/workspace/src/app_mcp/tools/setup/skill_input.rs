@@ -51,7 +51,8 @@ pub struct SaveSkillDraft {
   pub description: Option<String>,
   /// The Markdown of its SKILL.md; a new skill's default is empty.
   pub body: Option<String>,
-  /// Where it applies; a new skill's default is project.
+  /// Where it applies, which decides who gets it only in a team project's runs: in a local project an agent gets it
+  /// only when its profile lists it (save_profile_draft skills). A new skill's default is project.
   pub applies_in: Option<AppliesIn>,
   /// With agent_role: a role of the project's profiles.
   pub role: Option<String>,

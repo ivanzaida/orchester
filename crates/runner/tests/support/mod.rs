@@ -6,6 +6,7 @@
 #![allow(dead_code, reason = "shared by several test binaries, each of which uses a part")]
 
 pub mod disk;
+pub mod given;
 pub mod hold;
 pub mod native;
 pub mod pending;
