@@ -443,6 +443,10 @@ CREATE TABLE run_merges (
   super::team_delivery::MIGRATION,
   super::team_delivery_waits::MIGRATION,
   super::reported_windows::MIGRATION,
+  super::flaky_tests::MIGRATION,
+  super::service_slots::MIGRATION,
+  // Master's `team_pipeline_ids` comes after ours on this branch: project databases already migrated by Agent testing
+  // builds hold `flaky_tests` and `service_slots` at 147 and 148, so master's migration cannot take 147 here.
   super::team_pipeline_ids::MIGRATION,
   super::orchestrator_watch::MIGRATION,
   super::run_waits_on::MIGRATION,

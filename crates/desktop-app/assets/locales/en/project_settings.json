@@ -198,10 +198,14 @@
     "qaSlots": "QA apps at once",
     "qaSlotsDetail": "QA copies of the app that this project's runs may have open together, to check their work in the window. Each one is a full build of the app, so more of them load the computer more. A run that wants one while all are open waits until one closes.",
     "qaSlotsRange": "1 to 16 · default 2",
+    "serviceSlots": "Services at once",
+    "serviceSlotsHint": "On this computer, for every run · a stack takes one per service · 1 to {{limit}}",
+    "serviceSlotsDetail": "Dev servers, databases and other services this project's runs may run together; a test suite's own process takes one while it runs. It is this project's share of this computer's Services at once (Settings › General), so it can be at most that. A start beyond it waits until enough stop; a change applies from the next start.",
     "tokens": "tokens",
     "minutes": "minutes",
     "agentsUnit": "agents",
     "appsUnit": "apps",
+    "servicesUnit": "services",
     "noLimit": "No limit",
     "invalidStillSaved": "{{reason}} · Still {{saved}}.",
     "savedBudget": "{{count}} tokens",
@@ -347,6 +351,11 @@
     "ruleLabel": "{{server}} {{tool}}",
     "ruleDetail": "while tools/qa-app.ps1 is {{script}} · answered {{answered}} times · approved {{month}} {{day}}",
     "ruleDetailOnce": "while tools/qa-app.ps1 is {{script}} · answered once · approved {{month}} {{day}}",
+    "ruleLabelService": "Service {{service}}",
+    "ruleDetailService": "{{command}} with variables {{variables}}, while unchanged ({{fingerprint}}) · answered {{answered}} times · approved {{month}} {{day}}",
+    "ruleDetailServiceOnce": "{{command}} with variables {{variables}}, while unchanged ({{fingerprint}}) · answered once · approved {{month}} {{day}}",
+    "ruleDetailServicePlain": "{{command}}, while unchanged ({{fingerprint}}) · answered {{answered}} times · approved {{month}} {{day}}",
+    "ruleDetailServicePlainOnce": "{{command}}, while unchanged ({{fingerprint}}) · answered once · approved {{month}} {{day}}",
     "howRuleAdded": "How a rule is added",
     "howRuleAddedBody": "When an agent asks to run Orchester's start_qa_app, its card in the task's Conversation offers one more answer. Choose it and confirm: the request is answered, and this rule keeps answering it while the QA script is unchanged.",
     "approveForProject": "Approve for every run of this project",
@@ -433,6 +442,411 @@
     "indexInfoUsed": "{{detail}} Used by {{runs}}.",
     "rgFoundHint": "ripgrep · found {{version}}",
     "rgFoundWithoutVersionHint": "ripgrep · found",
-    "ripgrepInfo": "{{detail}} {{source}}."
+    "ripgrepInfo": "{{detail}} {{source}}.",
+    "services": {
+      "tab": "Services",
+      "services": "Services",
+      "stacks": "Stacks",
+      "suites": "Test suites",
+      "flaky": "Flaky tests",
+      "importDraft": "Import draft",
+      "newService": "New service",
+      "newStack": "New stack",
+      "newSuite": "New suite",
+      "reading": "Reading the project's services…",
+      "loadFailed": "The project's services cannot be read",
+      "driver": {
+        "none": "no UI",
+        "native": "native",
+        "mcp": "mcp",
+        "browser": "browser",
+        "cdp": "cdp"
+      },
+      "layer": {
+        "lint": "lint",
+        "unit": "unit",
+        "e2e": "e2e"
+      },
+      "approval": {
+        "asks": "Asks before each start",
+        "notPublished": "Not published"
+      },
+      "needsNothing": "needs nothing",
+      "needs": "needs {{names}}",
+      "owns": "owns {{paths}}",
+      "runData": {
+        "database": "fresh database container per run",
+        "folder": "files in a folder of its own per run"
+      },
+      "stackAll": "all {{count}} services",
+      "slots": {
+        "one": "1 slot",
+        "other": "{{count}} slots"
+      },
+      "suitesNote": "The Test step runs lint, then unit, then e2e",
+      "noServices": "no services",
+      "stackNeed": "stack {{name}}",
+      "report": {
+        "cargoJson": "cargo json",
+        "junitXml": "JUnit XML",
+        "vitestJson": "vitest json",
+        "playwrightJson": "Playwright json",
+        "tap": "TAP"
+      },
+      "minutes": "{{count}} min",
+      "seconds": "{{count}} s",
+      "empty": {
+        "title": "No services yet",
+        "explanation": "A service is a program Orchester starts for a run, such as a dev server, a web app or a desktop app, and stops when the step ends. Import a first draft from the repository's compose files, package.json scripts and Cargo binaries, or add one by hand."
+      },
+      "stacksEmpty": {
+        "title": "Nothing to group yet",
+        "detail": "A stack is a named set of services, such as cloud or full"
+      },
+      "suitesEmpty": {
+        "title": "lint, unit and e2e suites",
+        "detail": "Suites that need no service can be added now"
+      },
+      "agentsNote": "Until a service is published, agents in this project's runs are not offered start_service.",
+      "quarantine": "Quarantine",
+      "quarantineInfo": "A test that is flaky again and again can be quarantined: it still runs and its failure is shown, but it no longer fails the step.",
+      "quarantineHint": "Quarantined tests still run, but no longer fail the step",
+      "flakyTests": {
+        "lead": "A test that fails and then passes on its re-run is flaky. After {{runs}} flaky runs in {{days}} days it is watched here for you to quarantine: a quarantined test still runs and is reported, but its failure no longer returns the work to Implement.",
+        "reading": "Reading the project's flaky tests…",
+        "loadFailed": "The project's flaky tests cannot be read",
+        "quarantined": "Quarantined",
+        "watching": "Watching",
+        "watchingNote": "Flaky, not quarantined",
+        "quarantinedEmpty": {
+          "title": "No test is quarantined",
+          "detail": "Quarantine now on a flaky test moves it here"
+        },
+        "watchingEmpty": {
+          "title": "No flaky test yet",
+          "detail": "A test that fails and then passes on its re-run in a Test step shows here"
+        },
+        "seenAgo": "{{suite}} · last seen {{ago}}",
+        "seenYesterday": "{{suite}} · last seen yesterday",
+        "seenOn": "{{suite}} · last seen {{month}} {{day}}",
+        "rate": {
+          "none": "not flaky in {{days}} days",
+          "one": "flaky in 1 run",
+          "other": "flaky in {{count}} runs"
+        },
+        "since": "quarantined {{month}} {{day}}",
+        "watched": "watched, not quarantined",
+        "notQuarantined": "not quarantined",
+        "unquarantine": "Unquarantine",
+        "quarantineNow": "Quarantine now",
+        "personOnly": "Only a person quarantines a test here: input from an MCP client is taken only while you let automation change agent permissions. Nothing was quarantined.",
+        "rule": {
+          "title": "Rule",
+          "after": "Watched after",
+          "afterHint": "Flaky runs of the same test, in any run of this project",
+          "runsName": "Flaky runs before a test is watched",
+          "runs": "flaky runs",
+          "in": "in",
+          "daysName": "Days its flaky runs are counted in",
+          "days": "days",
+          "outcome": "A quarantined test",
+          "outcomeHint": "Runs, and its failure is shown, not counted",
+          "outcomeValue": "Runs, doesn't fail"
+        }
+      },
+      "import": {
+        "title": "Import a first draft",
+        "lead": "Orchester read these files once. Keep what you want: kept items become drafts you then edit here. Nothing in the repository changes, and the files are not read again.",
+        "reading": "Reading the checkout…",
+        "loadFailed": "The checkout cannot be read",
+        "fileKept": "{{kept}} of {{count}} kept",
+        "kind": {
+          "service": "service",
+          "stack": "stack"
+        },
+        "found": {
+          "image": "image {{image}} → a fresh database container per run",
+          "command": "{{key}} → {{command}}",
+          "stack": "starts {{names}}"
+        },
+        "exists": {
+          "service": "The project has a service named {{name}} already; saving keeps that one",
+          "stack": "The project has a stack named {{name}} already; saving keeps that one"
+        },
+        "cannotKeep": "Orchester cannot make a draft of this; why is said under its name.",
+        "keep": "Keep",
+        "skip": "Skip",
+        "unreadable": "Files not read",
+        "truncated": "The checkout holds more files than the import lists; what lies past them is not read.",
+        "startsWith": "No UI driver or seed can be read from these files: each draft starts with none until you edit it.",
+        "empty": {
+          "title": "Nothing to import",
+          "explanation": "No compose service, package.json dev, start, preview or serve script, or Cargo binary was found in the checkout. Add services by hand with New service."
+        },
+        "tally": "{{kept}} kept · {{skipped}} skipped · each new service asks for approval on its first start",
+        "cancel": "Cancel",
+        "save": {
+          "one": "Save 1 draft",
+          "other": "Save {{count}} drafts"
+        },
+        "saveWaits": "Keep at least one proposal to save it as a draft.",
+        "personOnly": "Only a person saves new services here: input from an MCP client is taken only while you let automation change agent permissions. Nothing was saved."
+      },
+      "editor": {
+        "lead": "A run starts it when an agent or the Test step needs it, and stops it when the step ends, the run pauses or waits for you.",
+        "newLead": "A program Orchester starts for a run, without a shell. It is saved as a draft as you go; runs start it once it is published.",
+        "reading": "Reading the service…",
+        "loadFailed": "The service cannot be read",
+        "program": "Program",
+        "name": "Name",
+        "nameHint": "Needs and stacks name it by this; it keeps it",
+        "programHint": "A program on the PATH or in the repository; no shell",
+        "found": {
+          "onPath": "Found on the PATH",
+          "notOnPath": "Not found on the PATH",
+          "inRepository": "Found in the repository",
+          "notInRepository": "Not found in the repository",
+          "atPath": "Found at this path",
+          "notAtPath": "Nothing at this path"
+        },
+        "arguments": "Arguments",
+        "argumentsHint": "One per line, passed as written",
+        "folder": "Working folder",
+        "folderHint": "In the run's worktree",
+        "folderRoot": "The worktree itself",
+        "variables": "Variables",
+        "variablesHint": "Plain values, or a project secret by name",
+        "variableName": "Name of variable {{number}}",
+        "variableValue": "Value of {{name}}",
+        "secretOf": "Secret {{name}} takes",
+        "secret": "secret",
+        "addVariable": "Add variable",
+        "addSecret": "Add secret",
+        "needs": "Needs",
+        "needsHint": "Started first, in order; each must be ready before the next",
+        "addNeed": "Add a service",
+        "noOtherServices": "No other service yet",
+        "removeNeed": "Remove {{name}}",
+        "orderNote": "Resolved from the needs of each service",
+        "startOrder": "Start order",
+        "ready": {
+          "port": "port",
+          "http": "HTTP {{path}}",
+          "log": "log line"
+        },
+        "readiness": {
+          "title": "Readiness",
+          "when": "Ready when",
+          "whenHint": "Checked every second until the timeout",
+          "port": "The port accepts connections",
+          "http": "An HTTP 2xx or 3xx answers on",
+          "log": "A log line matches",
+          "path": "Path asked",
+          "pathExample": "/healthz",
+          "pattern": "Log pattern",
+          "patternExample": "ready in \\d+ ms",
+          "timeout": "Timeout",
+          "timeoutHint": "Then the start fails and shows the last log lines",
+          "seconds": "seconds"
+        },
+        "seed": {
+          "title": "Seed",
+          "hint": "Runs once after it is ready, before agents use it",
+          "requests": "HTTP requests",
+          "command": "A command",
+          "none": "None",
+          "add": "Add request",
+          "note": "Later requests use captured values as {{captured}}; agents get them in start_service's answer.",
+          "program": "Program",
+          "arguments": "Arguments",
+          "argumentsHint": "Arguments, one per line",
+          "noUrl": "No URL yet",
+          "edit": "Edit request {{number}}",
+          "method": "Method",
+          "url": "URL",
+          "body": "Body",
+          "bodyHint": "Body, sent as written; empty sends none",
+          "captureName": "Captured name",
+          "captureNameExample": "team_id",
+          "capturePath": "Where in the answer",
+          "capturePathExample": "$.id",
+          "addCapture": "Add capture",
+          "removeCapture": "Remove capture",
+          "moveUp": "Move up",
+          "moveDown": "Move down",
+          "remove": "Remove request",
+          "done": "Done"
+        },
+        "data": {
+          "title": "Per-run data",
+          "label": "Data",
+          "hint": "Each run gets its own; deleted when the run ends",
+          "none": "None",
+          "container": "A fresh database container",
+          "folder": "Files in the run's own folder",
+          "path": "Run folder",
+          "pathExample": "team-web"
+        },
+        "driver": {
+          "title": "UI driver",
+          "note": "How agents see and use it through the ui_* tools",
+          "none": "No UI: logs and HTTP only",
+          "native": "Windows UI Automation, macOS Accessibility",
+          "mcp": "An app with its own MCP server",
+          "opensAt": "Opens at",
+          "opensAtHint": "Where ui_open starts"
+        },
+        "owned": {
+          "title": "Owned paths",
+          "hint": "A run that changes these starts this service for its Test step",
+          "add": "Add a path pattern",
+          "addButton": "Add",
+          "remove": "Remove {{path}}"
+        },
+        "approval": {
+          "title": "Approval",
+          "label": "Asks on first start",
+          "hint": "The first run that starts it asks you · a change to the program, arguments, variables or seed asks again",
+          "notApproved": "Not approved yet",
+          "approved": "Approved for every run",
+          "changed": "Changed since approved"
+        },
+        "values": {
+          "title": "Values in a run",
+          "port": "a free port of its own",
+          "url": "its own URL",
+          "serviceUrl": "{{name}}'s URL",
+          "run": "the run's id",
+          "data": "its run folder",
+          "captured": "captured by request {{number}}",
+          "note": "Every run gets its own ports and folders, so parallel runs never clash."
+        },
+        "tools": {
+          "title": "Agents use it with"
+        },
+        "state": {
+          "new": "Not saved yet",
+          "draftNew": "Draft · not published yet",
+          "draft": "Draft · v{{version}} published",
+          "stale": "Draft from v{{based}} · v{{version}} is published",
+          "published": "Published v{{version}}"
+        },
+        "publish": "Publish v{{version}}",
+        "publishWaitsSave": "Publish waits until the draft is saved.",
+        "publishWaitsFix": "Fix what the fields say before publishing.",
+        "publishStale": "This draft started from an older version; v{{version}} was published since.",
+        "personOnly": "Only a person changes what a service runs, or publishes it: input from an MCP client is taken only while you let automation change agent permissions. Nothing was saved.",
+        "delete": {
+          "button": "Delete service",
+          "title": "Delete {{name}}?",
+          "gone": "Runs that start after this cannot start it, and services that need it no longer resolve.",
+          "kept": "Runs that already started it keep the version they started.",
+          "final": "This cannot be undone.",
+          "confirm": "Delete service",
+          "cancel": "Cancel",
+          "enterDeletes": "deletes",
+          "personOnly": "Only a person deletes a service: input from an MCP client is not taken here.",
+          "failed": "The service was not deleted. {{reason}}"
+        }
+      },
+      "stack": {
+        "lead": "Starting it starts every service below once its needs are ready; services on the same step start together. It takes one Services at once slot per service.",
+        "newLead": "A named set of services started together. It is saved as a draft as you go; agents and suites start it once it is published.",
+        "reading": "Reading the stack…",
+        "loadFailed": "The stack cannot be read",
+        "title": "Stack",
+        "name": "Name",
+        "nameHint": "Agents and suites name it",
+        "inStartOrder": "In start order",
+        "chosen": "Chosen",
+        "chosenWith": "Chosen · starts with {{names}}",
+        "neededBy": "Needed by {{names}}",
+        "fromNeeds": "from needs",
+        "noMoreServices": "Every service is in it",
+        "addNote": "Its needs are added for you",
+        "slots": {
+          "title": "Slots",
+          "takes": "Takes {{count}} slots",
+          "takesOf": "Takes {{count}} of {{limit}} slots",
+          "waits": "Services at once on this computer · a run starting it waits until {{count}} are free",
+          "tooMany": "More than this computer runs at once: a start of it is refused until Services at once is raised"
+        },
+        "usedBy": {
+          "title": "Used by",
+          "none": "No test suite yet",
+          "start": "Agents start it by name: {{call}}"
+        },
+        "dependencies": {
+          "title": "Dependencies",
+          "note": "Each arrow is a need. A crash stops what depends on it."
+        },
+        "delete": {
+          "button": "Delete stack",
+          "gone": "Runs that start after this cannot start it, and suites that need it no longer resolve.",
+          "confirm": "Delete stack",
+          "personOnly": "Only a person deletes a stack: input from an MCP client is not taken here.",
+          "failed": "The stack was not deleted. {{reason}}"
+        }
+      },
+      "suite": {
+        "lead": "The Test step runs it in its layer, once the layers before it pass, and agents run it with run_tests.",
+        "newLead": "A program Orchester runs in a run's worktree to test it, without a shell. It is saved as a draft as you go; the Test step runs it once it is published.",
+        "reading": "Reading the test suite…",
+        "loadFailed": "The test suite cannot be read",
+        "personOnly": "Only a person changes what a test suite runs, or publishes it: input from an MCP client is taken only while you let automation change agent permissions. Nothing was saved.",
+        "run": "Run",
+        "name": "Name",
+        "nameHint": "Agents and the Test step name it by this; it keeps it",
+        "programHint": "No shell",
+        "report": "Report",
+        "format": "Format",
+        "formatHint": "How Orchester reads the results",
+        "readFrom": "Read from",
+        "readFromHint": "Where the program leaves its report",
+        "printed": "Standard output",
+        "file": "A file",
+        "reportPath": "Report file",
+        "reportPathExample": "test-results/report.json",
+        "layerAndNeeds": "Layer and needs",
+        "layer": "Layer",
+        "layerHint": "lint runs first, then unit, then e2e; a failing layer stops the next",
+        "needsHint": "Started before the suite, stopped after it",
+        "needsNothing": "Nothing",
+        "needsServices": "Services",
+        "needsStack": "A stack",
+        "chooseStack": "Choose a stack",
+        "noStacks": "No stack yet",
+        "slots": {
+          "one": "· 1 slot",
+          "other": "· {{count}} slots"
+        },
+        "artifacts": "Artifacts",
+        "keep": "Keep",
+        "keepHint": "Shown on the task's Summary with the results",
+        "artifactAdd": "Add a path pattern",
+        "logsKept": "The logs of the services it needed are always kept.",
+        "limits": "Limits",
+        "timeout": "Timeout",
+        "timeoutHint": "Then the suite fails with what it reported so far",
+        "minutes": "minutes",
+        "filter": "Filter",
+        "filterHint": "How to run only some tests: for re-runs and run_tests(filter)",
+        "filterExample": "--grep={{filter}}",
+        "always": "Run in every Test step",
+        "alwaysHint": "Even when a run changed none of the paths it owns",
+        "lastRuns": {
+          "title": "Last runs",
+          "none": "No run's results are kept yet. Once the Test step stores them, its last runs show here."
+        },
+        "withFilter": "{{call}} --filter <filter>",
+        "delete": {
+          "button": "Delete suite",
+          "gone": "The Test step and agents can no longer run it.",
+          "confirm": "Delete suite",
+          "personOnly": "Only a person deletes a test suite: input from an MCP client is not taken here.",
+          "failed": "The test suite was not deleted. {{reason}}"
+        }
+      }
+    }
   }
 }

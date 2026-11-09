@@ -151,7 +151,7 @@ pub async fn get_project(services: &Services, args: InProject) -> Result<Value, 
     let mut project = summary(&open);
     let resources = |kind| db.resources(kind).map(|listed| listed.len());
     let settings = json!({
-      "limits": limits_json(db.project_limits()?),
+      "limits": limits_json(db.project_limits()?, services.workspace.service_slots()?),
       "disk_guard": guard_json(&DiskGuard::read(&db, &open.repo_root, &LocalDisks)?),
       "code_index": db.code_index()?.is_on(),
       "environment": environment_json(&db.project_environment()?),

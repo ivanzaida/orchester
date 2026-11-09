@@ -102,7 +102,94 @@ impl Default for QaSlots {
   }
 }
 
-/// A project's token budgets, time limit default, agent slots and QA slots.
+/// The fewest and the most service slots, for a computer's *Services at once* and a project's share of it alike.
+const SERVICE_SLOTS: std::ops::RangeInclusive<u32> = 1..=32;
+
+/// `count` when it lies in [`SERVICE_SLOTS`].
+fn service_slots(count: u64) -> Option<NonZeroU32> {
+  u32::try_from(count)
+    .ok()
+    .filter(|count| SERVICE_SLOTS.contains(count))
+    .and_then(NonZeroU32::new)
+}
+
+#[derive(Clone, Copy, Debug, Error, PartialEq, Eq)]
+#[error("{count} services at once is outside {min} to {max}", min = ServiceSlots::MIN, max = ServiceSlots::MAX)]
+pub struct ServiceSlotsError {
+  pub count: u64,
+}
+
+/// *Services at once* of the computer (`docs/architecture/agent-testing.md`, decision 3), kept in the app's settings:
+/// how many services every project's runs together may run at once. Each running service takes one slot, a stack as
+/// many as it has services, and a test suite's own process one while it runs; a start that cannot get its slots waits.
+/// Read at each start, so a change applies to the next one; lowering it stops no service.
+///
+/// 8 by default: a dev server or a database container takes about a CPU core and a few hundred megabytes to a gigabyte
+/// of memory, so eight of them still leave a usual 8-core, 16 GB development machine room for the agents, their builds
+/// and the person's own work; and it is twice a project's default share, so two projects at their defaults fill it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ComputerServiceSlots(NonZeroU32);
+
+impl ComputerServiceSlots {
+  pub const MIN: u32 = *SERVICE_SLOTS.start();
+  pub const MAX: u32 = *SERVICE_SLOTS.end();
+  pub const DEFAULT: Self = Self(NonZeroU32::new(8).expect("eight is above zero"));
+
+  pub fn new(count: u64) -> Result<Self, ServiceSlotsError> {
+    service_slots(count).map(Self).ok_or(ServiceSlotsError { count })
+  }
+
+  pub const fn get(self) -> NonZeroU32 {
+    self.0
+  }
+}
+
+impl Default for ComputerServiceSlots {
+  fn default() -> Self {
+    Self::DEFAULT
+  }
+}
+
+/// A project's share of the computer's *Services at once* ([`ComputerServiceSlots`]): how many services its runs
+/// together may run at once, kept with its limits. It is at most the computer's limit: a share above a limit lowered
+/// later counts as the limit ([`Self::within`]).
+///
+/// 4 by default, as many as agents work at once by default: each of them may run a service, or one run a stack of
+/// four, while another project still finds half of the computer's default slots free.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct ServiceSlots(NonZeroU32);
+
+impl ServiceSlots {
+  pub const MIN: u32 = *SERVICE_SLOTS.start();
+  pub const MAX: u32 = *SERVICE_SLOTS.end();
+  pub const DEFAULT: Self = Self(NonZeroU32::new(4).expect("four is above zero"));
+
+  pub fn new(count: u64) -> Result<Self, ServiceSlotsError> {
+    service_slots(count).map(Self).ok_or(ServiceSlotsError { count })
+  }
+
+  pub const fn get(self) -> NonZeroU32 {
+    self.0
+  }
+
+  /// Whether this share fits within the computer's `limit`, as a share must when it is set.
+  pub const fn fits(self, limit: ComputerServiceSlots) -> bool {
+    self.0.get() <= limit.0.get()
+  }
+
+  /// The slots the project may use with the computer's `limit`: its share, or the limit when the share is larger.
+  pub const fn within(self, limit: ComputerServiceSlots) -> NonZeroU32 {
+    if self.fits(limit) { self.0 } else { limit.0 }
+  }
+}
+
+impl Default for ServiceSlots {
+  fn default() -> Self {
+    Self::DEFAULT
+  }
+}
+
+/// A project's token budgets, time limit default, agent slots, QA slots and share of the computer's service slots.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ProjectLimits {
   default_run_budget: Option<TokenBudget>,
@@ -111,11 +198,12 @@ pub struct ProjectLimits {
   default_time_limit: Option<Duration>,
   agent_slots: AgentSlots,
   qa_slots: QaSlots,
+  service_slots: ServiceSlots,
 }
 
 impl ProjectLimits {
   /// No run budget and no time limit by default (user decision 2026-10-09), 20M tokens per
-  /// project per day, 4 agents and 2 QA apps at once.
+  /// project per day, 4 agents, 2 QA apps and 4 services at once.
   pub const DEFAULT: Self = Self {
     default_run_budget: None,
     daily_budget: budget(20_000_000),
@@ -123,10 +211,12 @@ impl ProjectLimits {
     default_time_limit: None,
     agent_slots: AgentSlots::DEFAULT,
     qa_slots: QaSlots::DEFAULT,
+    service_slots: ServiceSlots::DEFAULT,
   };
 
-  /// The budgets and the time limit, with the default agent slots ([`ProjectLimits::with_agent_slots`]) and QA
-  /// slots ([`ProjectLimits::with_qa_slots`]). `None` for the run budget or the time limit means new tasks have none.
+  /// The budgets and the time limit, with the default agent slots ([`ProjectLimits::with_agent_slots`]), QA
+  /// slots ([`ProjectLimits::with_qa_slots`]) and service slots ([`ProjectLimits::with_service_slots`]). `None` for the
+  /// run budget or the time limit means new tasks have none.
   pub fn new(
     default_run_budget: Option<TokenBudget>,
     daily_budget: TokenBudget,
@@ -145,6 +235,7 @@ impl ProjectLimits {
       default_time_limit,
       agent_slots: AgentSlots::DEFAULT,
       qa_slots: QaSlots::DEFAULT,
+      service_slots: ServiceSlots::DEFAULT,
     })
   }
 
@@ -157,6 +248,12 @@ impl ProjectLimits {
   #[must_use]
   pub const fn with_qa_slots(mut self, qa_slots: QaSlots) -> Self {
     self.qa_slots = qa_slots;
+    self
+  }
+
+  #[must_use]
+  pub const fn with_service_slots(mut self, service_slots: ServiceSlots) -> Self {
+    self.service_slots = service_slots;
     self
   }
 
@@ -220,6 +317,11 @@ impl ProjectLimits {
   /// How many QA apps the project's runs may have open at once.
   pub const fn qa_slots(self) -> QaSlots {
     self.qa_slots
+  }
+
+  /// The project's share of the computer's *Services at once*.
+  pub const fn service_slots(self) -> ServiceSlots {
+    self.service_slots
   }
 }
 

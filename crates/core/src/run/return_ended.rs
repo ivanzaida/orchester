@@ -181,7 +181,7 @@ impl Run {
     };
     chosen.or_else(|| match self.snapshot().step(step)?.executor() {
       StepExecutor::Agent { profile, model, .. } => Some((profile, model)),
-      StepExecutor::Tool { .. } => None,
+      StepExecutor::Tool { .. } | StepExecutor::Test => None,
     })
   }
 }

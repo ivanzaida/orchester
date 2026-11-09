@@ -13,7 +13,7 @@ use crate::{routes::Screen, theme::IconSize};
 /// and the table cannot drift apart. The font names some glyphs as lucide did before its renames:
 /// the design's `chart-column` is the font's `bar-chart-3`, `circle-alert` its `alert-circle`,
 /// `circle-check` its `check-circle-2`, `clock` its `clock-4`, `file-pen` its `file-edit`, `file-warning` its
-/// `file-exclamation-point`, `house` its `home`, `loader-circle` its `loader-2`,
+/// `file-exclamation-point`, `house` its `home`, `layers` its `layers-3`, `loader-circle` its `loader-2`,
 /// `message-circle-question` its `message-circle-question-mark`, `plug-zap` its `plug-zap-2`,
 /// `square-arrow-out-up-right` its `external-link` ([`Icon::ExternalLink`]), `square-plus` its `plus-square`,
 /// `shield-question` its `shield-question-mark`, `shield-x` its `shield-close`, `triangle-alert` its
@@ -125,6 +125,7 @@ icons! {
   FileCode => '\u{e0c3}',
   FileDiff => '\u{e317}',
   FileImage => '\u{e31c}',
+  FileInput => '\u{e0c5}',
   FileMinus => '\u{e0c6}',
   FilePen => '\u{e31f}',
   FilePenLine => '\u{e320}',
@@ -163,6 +164,7 @@ icons! {
   GitPullRequestDraft => '\u{e35b}',
   Globe => '\u{e0e8}',
   GraduationCap => '\u{e234}',
+  GripVertical => '\u{e0eb}',
   Hammer => '\u{e0ec}',
   Hand => '\u{e1d7}',
   HandHelping => '\u{e3b8}',
@@ -178,6 +180,7 @@ icons! {
   Key => '\u{e0fd}',
   KeyRound => '\u{e4a3}',
   Laptop => '\u{e1cd}',
+  Layers => '\u{e529}',
   Layers2 => '\u{e52a}',
   LayoutDashboard => '\u{e1c1}',
   LayoutGrid => '\u{e0ff}',
@@ -219,6 +222,7 @@ icons! {
   Newspaper => '\u{e348}',
   OctagonPause => '\u{e21b}',
   OctagonX => '\u{e128}',
+  Package => '\u{e129}',
   PackageCheck => '\u{e266}',
   PackageOpen => '\u{e2cc}',
   PanelRight => '\u{e431}',

@@ -97,6 +97,7 @@ impl Component for AppReads {
 /// Observes every application setting a Settings tab shows, and the Orchester Cloud tab's account and servers.
 fn prefetch_app(ctx: &mut Ctx, session: &Session) {
   ctx.query(app::usage_threshold(session.clone()));
+  ctx.query(app::service_slots(session.clone()));
   ctx.query(app::error_reports(session.clone()));
   ctx.query(app::update_settings(session.clone()));
   ctx.query(app::places(session.clone()));

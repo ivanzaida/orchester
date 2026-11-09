@@ -2,11 +2,22 @@
 //! carries them out in order:
 //!
 //! - `print <n>`: prints `line 1` … `line <n>` on standard output;
+//! - `say <text>`: prints `<text>` on standard output at once;
 //! - `stderr <text>`: prints `<text>` on standard error;
 //! - `env <name>`: prints `<name>=<value>` of its environment, or `<name> is not set`;
 //! - `write <file> <text>`: writes `<text>` to `<file>` in its working directory;
+//! - `copy <from> <to>`: copies the file `<from>` to `<to>`, making the folders `<to>` needs;
+//! - `cat <file>`: prints the file `<file>` on standard output;
+//! - `pid-file <file>`: writes its own pid to `<file>`; `env-file <file> <name>` the value of `<name>`, or `<not set>`;
 //! - `fail-once <file>`: exits with 1 after creating `<file>` in its working directory, unless the file exists;
+//! - `first-then <marker> <first> <then>`: prints the file `<first>` after creating `<marker>`, or the file `<then>`
+//!   when `<marker>` exists: a report that fails once, then passes;
 //! - `spawn-sleeper`: starts a copy of itself that sleeps for ten minutes and prints `child pid: <pid>`;
+//!   `spawn-sleeper-into <file>` writes the copy's pid to `<file>` instead;
+//! - `listen <port>`: a stand-in web server on `127.0.0.1:<port>` until it is ended (`fake_server`);
+//! - `connect <port>`: fails unless something accepts connections on `127.0.0.1:<port>`;
+//! - `launch <program> <arguments…>`: starts `<program>` with every argument after it as its child, its output its own,
+//!   and exits as it does once it ended: an app's launcher, such as `npm start` for an Electron app;
 //! - `sleep <seconds>`: sleeps;
 //! - `exit <code>`: exits with `<code>`.
 //!
@@ -19,6 +30,7 @@
 )]
 
 mod fake_run_app_server;
+mod fake_server;
 
 use std::{fs, io::Write, process::ExitCode, thread, time::Duration};
 
@@ -36,11 +48,21 @@ fn main() -> ExitCode {
   while let Some(action) = rest.next() {
     let result = match action {
       "print" => print(rest.next()),
+      "say" => say(rest.next()),
       "stderr" => {
         eprintln!("{}", rest.next().unwrap_or_default());
         Ok(())
       }
       "write" => write(rest.next(), rest.next()),
+      "copy" => copy(rest.next(), rest.next()),
+      "cat" => cat(rest.next()),
+      "first-then" => first_then(rest.next(), rest.next(), rest.next()),
+      "pid-file" => write(rest.next(), Some(&std::process::id().to_string())),
+      "env-file" => {
+        let file = rest.next();
+        let value = std::env::var(rest.next().unwrap_or_default()).unwrap_or_else(|_| "<not set>".to_owned());
+        write(file, Some(&value))
+      }
       "env" => {
         let name = rest.next().unwrap_or_default();
         match std::env::var(name) {
@@ -54,9 +76,13 @@ fn main() -> ExitCode {
         Ok(false) => Ok(()),
         Err(error) => Err(error),
       },
-      "spawn-sleeper" => spawn_sleeper(),
+      "spawn-sleeper" => spawn_sleeper(None),
+      "spawn-sleeper-into" => spawn_sleeper(rest.next()),
       "serve-app" => fake_run_app_server::serve(rest.next().unwrap_or_default()),
+      "listen" => fake_server::listen(rest.next()),
+      "connect" => fake_server::connect(rest.next()),
       "sleep" => sleep(rest.next()),
+      "launch" => return launch(&rest.collect::<Vec<_>>()),
       "exit" => return ExitCode::from(rest.next().and_then(|code| code.parse().ok()).unwrap_or(2)),
       other => Err(format!("unknown action {other}")),
     };
@@ -66,6 +92,12 @@ fn main() -> ExitCode {
     }
   }
   ExitCode::SUCCESS
+}
+
+fn say(text: Option<&str>) -> Result<(), String> {
+  let mut out = std::io::stdout().lock();
+  writeln!(out, "{}", text.unwrap_or_default()).map_err(|error| error.to_string())?;
+  out.flush().map_err(|error| error.to_string())
 }
 
 fn print(count: Option<&str>) -> Result<(), String> {
@@ -84,6 +116,31 @@ fn write(file: Option<&str>, text: Option<&str>) -> Result<(), String> {
   fs::write(file, text.unwrap_or_default()).map_err(|error| error.to_string())
 }
 
+fn copy(from: Option<&str>, to: Option<&str>) -> Result<(), String> {
+  let (from, to) = from.zip(to).ok_or("copy needs a file and where it goes")?;
+  if let Some(folder) = std::path::Path::new(to).parent() {
+    fs::create_dir_all(folder).map_err(|error| error.to_string())?;
+  }
+  fs::copy(from, to).map(|_| ()).map_err(|error| error.to_string())
+}
+
+fn cat(file: Option<&str>) -> Result<(), String> {
+  let text = fs::read_to_string(file.ok_or("cat needs a file")?).map_err(|error| error.to_string())?;
+  let mut out = std::io::stdout().lock();
+  out.write_all(text.as_bytes()).map_err(|error| error.to_string())?;
+  out.flush().map_err(|error| error.to_string())
+}
+
+/// Prints `first` the first time, when it creates `marker`, and `then` every time after.
+fn first_then(marker: Option<&str>, first: Option<&str>, then: Option<&str>) -> Result<(), String> {
+  let marker = marker.ok_or("first-then needs a marker")?;
+  if fs::metadata(marker).is_ok() {
+    return cat(then);
+  }
+  fs::write(marker, "printed the first").map_err(|error| error.to_string())?;
+  cat(first)
+}
+
 /// `true` when this call created the file: the program fails this time.
 fn fail_once(file: Option<&str>) -> Result<bool, String> {
   let file = file.ok_or("fail-once needs a file")?;
@@ -95,7 +152,8 @@ fn fail_once(file: Option<&str>) -> Result<bool, String> {
   Ok(true)
 }
 
-fn spawn_sleeper() -> Result<(), String> {
+/// Starts the sleeping copy; its pid is printed, or written to `file` when one is named.
+fn spawn_sleeper(file: Option<&str>) -> Result<(), String> {
   let program = std::env::current_exe().map_err(|error| error.to_string())?;
   let mut command = std::process::Command::new(program);
   command.env(SLEEPER, "1");
@@ -105,8 +163,26 @@ fn spawn_sleeper() -> Result<(), String> {
     command.creation_flags(0x0000_0008);
   }
   let child = command.spawn().map_err(|error| error.to_string())?;
+  if let Some(file) = file {
+    return write(Some(file), Some(&child.id().to_string()));
+  }
   println!("child pid: {}", child.id());
   std::io::stdout().flush().map_err(|error| error.to_string())
+}
+
+/// Starts `program` with `arguments` as a child and exits as it does once it ended; 2 when it cannot be started.
+fn launch(command: &[&str]) -> ExitCode {
+  let Some((program, arguments)) = command.split_first() else {
+    eprintln!("launch needs a program");
+    return ExitCode::from(2);
+  };
+  match std::process::Command::new(program).args(arguments).status() {
+    Ok(status) => ExitCode::from(status.code().and_then(|code| u8::try_from(code).ok()).unwrap_or(1)),
+    Err(error) => {
+      eprintln!("{program} did not start: {error}");
+      ExitCode::from(2)
+    }
+  }
 }
 
 fn sleep(seconds: Option<&str>) -> Result<(), String> {

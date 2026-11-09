@@ -15,6 +15,7 @@
 //! the runner closes it as it exits, and a runner killed with SIGKILL leaves it running, as it leaves agents
 //! (`AGENTS.md`, rule 0).
 
+pub mod app;
 pub mod cdp;
 mod log;
 mod process;
@@ -39,7 +40,7 @@ use thiserror::Error;
 use tokio::sync::{MappedMutexGuard, Mutex, MutexGuard};
 
 use self::{
-  cdp::{CdpError, TargetId, TargetInfo},
+  cdp::{Cdp, CdpError, SessionId, TargetId, TargetInfo},
   running::Running,
   window::{Profile, Starter, Window},
 };
@@ -84,6 +85,9 @@ pub enum BrowserError {
   /// A page's element, such as a `<select>` list, could not be read or set.
   #[error("the page's element: {0}")]
   Element(String),
+  /// An app's debugging port does not say where its browser listens ([`app::AppBrowser`]).
+  #[error("the app's debugging port {port} does not answer as CDP: {why}")]
+  AppPort { port: u16, why: String },
 }
 
 /// What a running browser's connection listens to ([`ProjectBrowser::listening`]).
@@ -179,6 +183,18 @@ impl ProjectBrowser {
   /// or has it closed at its end. From then on the tab's console messages, requests and dialogs are recorded. The
   /// run's first tab tells the window that an agent started browsing.
   pub async fn open_tab(&self, run: RunId, url: &str) -> Result<TargetId, BrowserError> {
+    let (target, session, cdp) = self.open_blank(run).await?;
+    running::load(&cdp, &session, url).await?;
+    Ok(target)
+  }
+
+  /// [`Self::open_tab`] on a blank page, loading nothing: what a caller does to the tab before its first page loads,
+  /// such as the browser UI driver's origin guard, comes first.
+  pub async fn open_blank_tab(&self, run: RunId) -> Result<TargetId, BrowserError> {
+    Ok(self.open_blank(run).await?.0)
+  }
+
+  async fn open_blank(&self, run: RunId) -> Result<(TargetId, SessionId, Arc<Cdp>), BrowserError> {
     let (target, session, cdp, first) = {
       let running = self.connection().await?;
       let first = running.tabs.lock().of(run).is_empty();
@@ -188,8 +204,7 @@ impl ProjectBrowser {
     if first {
       self.window.send(BrowserEvent::AgentStartedBrowsing { run });
     }
-    running::load(&cdp, &session, url).await?;
-    Ok(target)
+    Ok((target, session, cdp))
   }
 
   /// `run`'s tab `tab`, or its current one for `None`; refused for a tab that is not the run's, the person's included,

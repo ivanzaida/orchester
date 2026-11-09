@@ -38,6 +38,17 @@ reach.
   may answer it. **Auto-approval and the reviewer never answer `run_check` or `start_qa_app`.**
 - *Approve for every run of this project* on a `start_qa_app` card keeps a project rule tied to the QA script's git
   blob (revoked in Project settings › Runs › Approvals › *Approved for every run*).
+- A `start_service` or `start_stack` call asks once for everything it starts: its request names each service with its
+  program, arguments and variable names, never their values. *Approve for every run of this project* keeps one rule
+  per service, tied to a fingerprint of its program, arguments, variables and seed; a later start whose every service
+  has a rule is approved without asking and without the reviewer, and a change to any of them asks again. A start runs
+  only the definitions its approval named: a service published again while it waited is refused.
+- Once a service is ready, its **seed** runs once before `start_service` answers: its HTTP requests in order (2xx
+  answers only, no redirect followed, 30 s each), each filled with what earlier requests captured (`$.key`,
+  `[index]`), or its command without a shell (5 minutes). The answer adds `seed: {<name>: <value>}` for the captured
+  values. A failing request or command fails the start and stops the service; the error names the request, its
+  status and at most 400 characters of its answer. A header's secret value is replaced in answers, captured values
+  and the service's log.
 
 ## Tool reference
 
@@ -74,8 +85,25 @@ reach.
 |---|---|---|
 | `list_run_processes` | — | Processes whose executable lies inside this run's worktree, started after the run was created: pid, name, relative path, start time. |
 | `stop_run_process` | `pid` (req.) | Stops a process and its children inside the run's worktree without asking (asks to close, waits briefly, ends survivors). Executables outside the worktree, the runner and agent CLIs are refused. |
-| `start_qa_app` | `scenario` (req., `^[a-z0-9][a-z0-9-]*$`, ≤ 64 chars: a seed scenario of `tools/qa-app.ps1`, e.g. `tasks`, `task-states`, `decisions`); `fake_agents` (bool); `no_runner` (bool; not with `fake_agents`) | Builds and starts a **QA copy** of the app from the worktree (`tools/qa-app.ps1 -Name run-<number>-<step>`), off-screen and without focus. Asks a person first; the approval names the script's git blob and changed build-relevant files (`build.rs`, `Cargo.toml`, `Cargo.lock`, `.cargo/config*`, `rust-toolchain*`). Takes one of the project's **QA slots** (*QA apps at once*, 1–16, default 2) and waits while all are held. Starting again in the same turn replaces the app. The runner stops the app (and everything it started) and frees the slot when the turn ends, fails, asks, pauses or is stopped. 30-minute start limit. |
-| `call_run_app` | `pid` (null = the QA app `start_qa_app` started in this step); `tool` (req., e.g. `lurq_windows`, `navigate`, `lurq_screenshot`); `arguments` (req. object, `{}` for none) | Calls one MCP tool of an app started inside this run's worktree, without asking. The token stays inside the runner; screenshots are saved in the run's own storage, `.orchester/runs/<run>/screenshots/`, and returned as absolute paths that every step of the run can read. |
+| `start_qa_app` | `scenario` (req., `^[a-z0-9][a-z0-9-]*$`, ≤ 64 chars: a seed scenario of `tools/qa-app.ps1`, e.g. `tasks`, `task-states`, `decisions`); `fake_agents` (bool); `no_runner` (bool; not with `fake_agents`) | The alias of `start_service("desktop-qa")` with a scenario of the agent's choice. Builds and starts a **QA copy** of the app from the worktree (`tools/qa-app.ps1 -Name run-<number>-<step>`), off-screen and without focus. Asks a person first; the approval names the script's git blob and changed build-relevant files (`build.rs`, `Cargo.toml`, `Cargo.lock`, `.cargo/config*`, `rust-toolchain*`). Takes one of the computer's **service slots for QA apps** (the project's *QA apps at once*, 1–16, default 2) and waits while all are held. Starting again in the same turn replaces the app. The runner stops the app (and everything it started) and frees the slot when the turn ends, fails, asks, pauses or is stopped. 30-minute start limit. |
+| `call_run_app` | `pid` (null = the QA app this step started); `tool` (req., e.g. `lurq_windows`, `navigate`, `lurq_screenshot`); `arguments` (req. object, `{}` for none) | The raw MCP under the `ui_*` tools: calls one MCP tool of an app started inside this run's worktree, without asking. The token stays inside the runner; screenshots are saved in the run's own storage, `.orchester/runs/<run>/screenshots/`, and returned as absolute paths that every step of the run can read. |
+
+**The QA app as the service `desktop-qa`.** A step offered `start_qa_app` is also offered the built-in service
+`desktop-qa` beside the project's services: `start_service("desktop-qa")` asks as `start_qa_app` does (the request names
+the QA script) and starts the QA copy on the `tasks` scenario, answering `{service, pid, driver: "mcp", scenario}` (and
+`waited_secs` after a wait for a slot); `stop_service`, `service_status` and `service_logs` of it stop it, say
+`{state, pid, driver}` and read its log. Its UI is seen and used through the `mcp` driver with the `ui_*` tools, which
+run without asking and reach only the app this run started, through the app's own input (never the computer's) and its
+window (never the screen):
+
+| Tool | Parameters | Answer |
+|---|---|---|
+| `ui_open` | `service` (req.) | `{service, driver, pid, windows}`; the later calls reach this service. |
+| `ui_snapshot` | `query` (null = the whole tree) | `{tree: {ref, role, name, children}, truncated}` or `{matches: [{ref, role, name}], truncated}`; each snapshot hands out new refs. |
+| `ui_act` | `ref` (null only for `key`); `action` (req.): `click`, `type`, `key`, `scroll`, `select`; `text` (the text, the key, the option) | `{acted, ref}`. Through the app's `lurq_act`, `lurq_interact` and `lurq_set_value`. |
+| `ui_screenshot` | `ref` (null = the window) | `{screenshot: <absolute path>}` in the run's storage; open it with `read_file`. |
+| `ui_logs` | `lines` 1–1000 (default 200); `filter` | `{lines: [...]}`, newest last. |
+| `ui_wait` | `condition` (req.): `idle` or `element` with `query`; `timeout_ms` ≤ 60 000 (default 10 000) | `{met, matches}`; an error once the time passed. |
 
 ### Task, skills, memory and progress
 

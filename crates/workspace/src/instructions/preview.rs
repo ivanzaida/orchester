@@ -297,8 +297,9 @@ impl Resolved<'_> {
       // the runner built or reused, both only while a run executes; the viewer's note says so.
       skills: &[],
       code_index: None,
-      // Outputs of earlier steps exist only while a run executes.
+      // Outputs of earlier steps, and the results of Test steps, exist only while a run executes.
       dependencies: &[],
+      tests: &[],
       revision: None,
       messages: None,
       base_moved: None,

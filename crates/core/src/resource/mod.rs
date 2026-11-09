@@ -22,6 +22,7 @@ mod variable;
 
 use serde::{Serialize, de::DeserializeOwned};
 
+pub(crate) use self::test_suite::glob_matches;
 pub use self::{
   agent_profile::{AgentProfile, ModelId, ModelIdError, ProviderSettings, ProviderSettingsError},
   instruction::{
@@ -47,8 +48,8 @@ pub use self::{
   },
   team_reviewer::{ReviewerDestinations, ReviewerHost, ReviewerHostError, TeamReviewer},
   test_suite::{
-    ArtifactGlob, ReportFormat, ReportOutput, SuiteCommand, SuiteNeeds, SuitePath, SuiteVariable, SuiteVariables,
-    TestFilter, TestLayer, TestReport, TestSuite, TestSuiteError,
+    ArtifactGlob, ReportFormat, ReportOutput, SuiteCommand, SuiteNeeds, SuitePath, SuiteProcess, SuiteVariable,
+    SuiteVariables, TestFilter, TestLayer, TestReport, TestSuite, TestSuiteError,
   },
   tool::{
     AccessPolicy, AccessPolicyError, AccessWindow, AllowedSteps, ApprovalMode, CommandAction, CommandArg,

@@ -1,6 +1,8 @@
 //! What the QA project's tasks run on: the Codex connection, the design's agent profiles (Explorer, Planner,
 //! Builder, Reviewer) and the pipelines, published as people publish them.
 
+mod tested;
+
 use std::{collections::BTreeMap, path::Path};
 
 use orchester_core::{
@@ -18,6 +20,7 @@ use orchester_core::{
 };
 use orchester_store::ProjectDb;
 
+pub use self::tested::tested;
 use super::{SeedError, name};
 
 /// The version `orchester-fake-codex` stands in for, as the runner's tests record its check.
@@ -386,6 +389,40 @@ pub fn live(db: &mut ProjectDb, connection: ConnectionId, now: Timestamp) -> Res
     feature_delivery: pinned(feature.0, &feature.1, &profiles, &tools)?,
     quick_fix: pinned(quick_fix.0, &quick_fix.1, &profiles, &tools)?,
   })
+}
+
+/// The pipeline of `run-services`, for a live run with `orchester-fake-codex`: *Test*, one agent step whose Tester may
+/// reach the network, so it is offered the service tools (`docs/architecture/agent-testing.md`, "Agent tools").
+pub fn tester(db: &mut ProjectDb, connection: ConnectionId, now: Timestamp) -> Result<Published, SeedError> {
+  let duties = "Starts the project's services and tests the work against them.";
+  let body = AgentProfile::new(
+    name("Tester"),
+    duties.to_owned(),
+    PromptText::new(duties).expect("the profile's instructions are a valid prompt"),
+    connection,
+    ModelId::new(MODEL).expect("a valid model id"),
+    ProviderSettings::default(),
+  )
+  .with_permissions(AgentPermissions::new(
+    RepositoryAccess::Write,
+    CommandPermission::AnyInWorktree,
+    NetworkAccess::On,
+  ));
+  let (profile, version) = publish(db, "Tester", vec![body], now)?;
+  let step = agent_step(("test", "Test"), profile, RepositoryAccess::Write, &[]);
+  let pipeline = Pipeline::new(vec![step]).expect("a one-step pipeline is valid");
+  let (id, pipeline) = publish(db, "Test the services", vec![pipeline], now)?;
+  let snapshot = RunSnapshot::build(
+    id,
+    &pipeline,
+    PublishedVersions {
+      profiles: &BTreeMap::from([(profile, version)]),
+      tools: &BTreeMap::new(),
+      instructions: &BTreeMap::new(),
+      skills: &BTreeMap::new(),
+    },
+  )?;
+  Ok(Published { snapshot })
 }
 
 /// The pipelines of `slot-wait`, for live runs with `orchester-fake-codex`: *Review and verify*, where one step waits

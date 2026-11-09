@@ -28,10 +28,15 @@ mod relay_calls;
 mod roots;
 mod run_app;
 mod run_records;
+mod runner_note;
+mod service;
 mod skills;
 mod start;
 mod stderr;
+mod suite;
+mod test_step;
 mod tool_files;
+mod ui;
 pub(in crate::execution) mod worker;
 
 use orchester_core::{
@@ -49,7 +54,6 @@ use orchester_core::{
 use orchester_store::InvocationStart;
 use tokio::sync::mpsc;
 
-pub(in crate::execution) use self::qa_app::QaApps;
 use self::{
   command_scope::command_scope,
   end::Taken,
@@ -57,7 +61,11 @@ use self::{
   start::Driven,
   worker::{Stop, Worker},
 };
-pub use self::{orchester_tools::outside_read_refusals, qa_app::QaSlots};
+pub use self::{orchester_tools::outside_read_refusals, qa_app::QaSlots, service::ServiceSlots};
+pub(in crate::execution) use self::{
+  qa_app::QaApps,
+  service::{Services, ShownServiceError},
+};
 use super::{
   link::{messages as message_link, usage as usage_link},
   record::RecordError,
@@ -215,7 +223,7 @@ impl RunTask {
   /// Starts `execution`'s agent in a slot of its own; `false` when no slot is free. An agent that
   /// cannot start fails its step.
   fn start(&mut self, execution: StepExecutionId, start: Start) -> Result<bool, ExecutionError> {
-    if self.is_tool_step(execution) {
+    if self.is_command_step(execution) {
       return self.start_command(execution, start);
     }
     if self.passes_accepted(execution)? || self.waits_for_plan_reset(execution)? {
@@ -363,6 +371,7 @@ impl RunTask {
       reviewer_sources: self.reviewer_sources(),
       reviews_held,
       qa: std::sync::Arc::clone(&self.qa),
+      services: std::sync::Arc::clone(&self.services),
     };
     let ends = (self.sink.another(), self.link.another()?);
     tokio::spawn(worker.work(reviews_ended, ends));

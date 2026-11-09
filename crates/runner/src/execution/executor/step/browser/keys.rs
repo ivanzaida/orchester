@@ -44,7 +44,7 @@ struct Key {
 }
 
 /// Presses `keys` in `tab`, one after the other.
-pub(super) async fn press(tab: &Tab, keys: &[KeyPress]) -> Result<String, ToolError> {
+pub(in crate::execution::executor::step) async fn press(tab: &Tab, keys: &[KeyPress]) -> Result<String, ToolError> {
   for press in keys {
     let key = key_of(press.key())?;
     let modifiers = press.modifiers().iter().fold(0, |bits, modifier| bits | bit(*modifier));

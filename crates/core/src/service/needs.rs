@@ -50,6 +50,11 @@ impl StartPlan {
     Self::resolve(services, stack.services())
   }
 
+  /// The plan that starts each of `wanted` and everything they need, from `services`, e.g. what a test suite needs.
+  pub fn for_services(services: &[Service], wanted: &[ServiceName]) -> Result<Self, NeedsError> {
+    Self::resolve(services, wanted)
+  }
+
   pub fn steps(&self) -> &[Vec<ServiceName>] {
     &self.steps
   }

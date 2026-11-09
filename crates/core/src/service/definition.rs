@@ -3,18 +3,18 @@ use std::collections::BTreeSet;
 use super::{OwnedPath, Readiness, RelativeFolder, RunFolder, Seed, ServiceError, ServiceName, ServiceVariables};
 use crate::resource::{CommandArg, CommandProgram};
 
-/// The data a run gets of its own, deleted when the run ends.
+/// The data a run gets of its own, deleted when the run ends (`super::run_data`).
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum RunData {
   None,
-  /// A fresh database container per run.
+  /// A fresh database container per start: the service is that container, its program the image.
   DatabaseContainer,
-  /// Files in a folder of the run's own.
+  /// Files in a folder of the run's own, `{{data}}`.
   RunFolder(RunFolder),
 }
 
-/// How agents see and use the service's UI through the `ui_*` tools. Browser automation comes later through the
-/// in-app Browser (`docs/architecture/agent-testing.md`, decision 6).
+/// How agents see and use the service's UI through the `ui_*` tools (`docs/architecture/agent-testing.md`, "UI
+/// drivers").
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum UiDriver {
   /// No UI: logs and HTTP only.
@@ -23,6 +23,12 @@ pub enum UiDriver {
   Native,
   /// An app with its own MCP server, such as lurq apps and Orchester.
   Mcp,
+  /// A web app, in a tab of the run's own in Orchester's Browser, driven over CDP: it opens only the origins of the
+  /// services the step started.
+  Browser,
+  /// An Electron or WebView2 app, driven over CDP through the remote debugging port it listens on, `{{port}}`
+  /// ([`super::cdp`]). Not on macOS, whose WKWebView has none.
+  Cdp,
 }
 
 /// Where `ui_open` starts, e.g. `{{url}}/teams/{{seed.team_id}}` or an app's route; its placeholders are kept as

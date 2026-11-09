@@ -11,6 +11,8 @@ pub enum ProjectSettingsTab {
   General,
   /// Auto mode, the estimates and the limits of new runs.
   Runs,
+  /// The services, stacks and test suites the project's runs start (`01 · Services` `G1sdS`).
+  Services,
   /// What the project's Orchestrator may do on its own (`S03` `X8mFTS`).
   Orchestrator,
   /// The sources agents may read without asking (`kmNiF`) and the code index.
@@ -19,9 +21,10 @@ pub enum ProjectSettingsTab {
 }
 
 impl ProjectSettingsTab {
-  pub const ALL: [Self; 5] = [
+  pub const ALL: [Self; 6] = [
     Self::General,
     Self::Runs,
+    Self::Services,
     Self::Orchestrator,
     Self::Context,
     Self::Sharing,
@@ -32,6 +35,7 @@ impl ProjectSettingsTab {
     match self {
       Self::General => "general",
       Self::Runs => "runs",
+      Self::Services => "services",
       Self::Orchestrator => "orchestrator",
       Self::Context => "context",
       Self::Sharing => "sharing",

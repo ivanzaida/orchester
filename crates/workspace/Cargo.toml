@@ -59,6 +59,8 @@ thiserror.workspace = true
 toml.workspace = true
 tokio.workspace = true
 tracing.workspace = true
+# Reads a checkout's `docker compose` files for the import of services and stacks (`agent_testing::import`).
+yaml-rust2.workspace = true
 
 # Handle-relative repository discovery; the OS computer name also uses rustix on macOS.
 [target.'cfg(unix)'.dependencies]

@@ -47,6 +47,8 @@ pub enum StepExecutor {
   Tool {
     tool: PinnedVersion,
   },
+  /// Orchester runs the project's test suites ([`StepKind::Test`]): the versions published when the step starts.
+  Test,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -160,6 +162,7 @@ fn check_executor(step: &Step, pinned: &StepSnapshot) -> Result<(), SnapshotErro
         && model.as_ref().is_none_or(|model| model == pinned_model)
     }
     (StepKind::Tool { tool }, StepExecutor::Tool { tool: pinned_tool }) => *tool == Some(pinned_tool.resource),
+    (StepKind::Test, StepExecutor::Test) => true,
     _ => false,
   };
   if matches {
@@ -287,11 +290,12 @@ impl RunSnapshot {
   }
 
   /// Whether the run pins any version of `resource`: its pipeline, a step's profile or tool, or an instruction, tool
-  /// or skill that reaches its agents.
+  /// or skill that reaches its agents. A test step pins none: it runs the suites published when it starts.
   pub fn pins(&self, resource: ResourceId) -> bool {
-    let executors = self.steps.iter().map(|step| match &step.executor {
-      StepExecutor::Agent { profile, .. } => profile,
-      StepExecutor::Tool { tool } => tool,
+    let executors = self.steps.iter().filter_map(|step| match &step.executor {
+      StepExecutor::Agent { profile, .. } => Some(profile),
+      StepExecutor::Tool { tool } => Some(tool),
+      StepExecutor::Test => None,
     });
     std::iter::once(&self.pipeline)
       .chain(executors)
@@ -349,6 +353,7 @@ fn resolve_step(step: &Step, published: PublishedVersions<'_>) -> Result<StepSna
         tool: PinnedVersion::of(*tool, version),
       }
     }
+    StepKind::Test => StepExecutor::Test,
   };
   Ok(StepSnapshot {
     key: step.key.clone(),
@@ -396,7 +401,7 @@ fn pinned_tools(
     .iter()
     .filter_map(|step| match step.executor {
       StepExecutor::Tool { tool } => Some((tool.resource, tool)),
-      StepExecutor::Agent { .. } => None,
+      StepExecutor::Agent { .. } | StepExecutor::Test => None,
     })
     .collect();
   for (&id, version) in published.tools {

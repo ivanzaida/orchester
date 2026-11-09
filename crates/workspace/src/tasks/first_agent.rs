@@ -86,7 +86,7 @@ fn agent_profiles(db: &ProjectDb, task: &Task) -> Result<Vec<Option<ResourceId>>
       .iter()
       .filter_map(|step| match step.kind {
         StepKind::Agent { profile, .. } => Some(profile),
-        StepKind::Tool { .. } => None,
+        StepKind::Tool { .. } | StepKind::Test => None,
       })
       .collect(),
   )

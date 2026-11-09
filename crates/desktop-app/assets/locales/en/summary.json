@@ -50,6 +50,58 @@
       "meta": "{{pipeline}} {{version}} · run {{run}}",
       "event": "{{title}}. {{body}}"
     },
+    "tests": {
+      "title": "Tests",
+      "meta": "{{step}} · attempt {{attempt}} · {{time}} · {{duration}}",
+      "metaShort": "{{step}} · attempt {{attempt}}",
+      "unreadable": "The Test step's result can't be read: {{reason}}",
+      "allPassed": "All passed",
+      "suiteSeparator": ", ",
+      "noTime": "—",
+      "seconds": "{{seconds}} s",
+      "minutes": "{{minutes}}m {{seconds}}s",
+      "hours": "{{hours}}h {{minutes}}m",
+      "notRun": "not run · a layer before failed",
+      "noProblems": "no problems",
+      "passed": "{{count}} passed",
+      "failed": "{{count}} failed",
+      "flaky": "{{count}} flaky",
+      "problems": {
+        "one": "1 suite did not pass",
+        "other": "{{count}} suites did not pass"
+      },
+      "failedTitle": "Failed",
+      "failedDetail": "{{count}} · re-run once, failed again",
+      "failedReturned": "{{count}} · re-run once, failed again · returned to {{step}}",
+      "moreFailed": {
+        "one": "1 more failed test is not listed",
+        "other": "{{count}} more failed tests are not listed"
+      },
+      "flakyTitle": "Flaky",
+      "passedOnRerun": "passed on re-run",
+      "quarantined": "quarantined",
+      "failedAgain": "failed again",
+      "artifacts": {
+        "title": "Artifacts",
+        "screenshots": "Screenshots",
+        "traces": "Traces",
+        "videos": "Videos",
+        "logs": "Logs",
+        "others": "Other files",
+        "screenshot": "Screenshot",
+        "trace": "Trace",
+        "video": "Video",
+        "log": "Log",
+        "other": "File",
+        "atFailures": "{{count}} · at the failures",
+        "files": {
+          "one": "1 file",
+          "other": "{{count}} files"
+        },
+        "open": "Open the {{name}}",
+        "openGroup": "Open the folder of the {{name}}"
+      }
+    },
     "output": {
       "title": "Output",
       "none": "Nothing yet. A step's report shows here once the step ends; runs keep no other artifacts yet.",
@@ -363,6 +415,10 @@
       },
       "returnedResolvingTitle": "Returned to {{step}} to resolve the conflicts with {{branch}}",
       "returnedResolvingBody": "{{agent}} merges {{branch}} into the run's branch in its worktree and resolves {{files}}. The steps after {{step}} run again; nothing reaches {{branch}} until you merge.",
+      "testsReturnedTitle": {
+        "one": "{{step}} returned the failed test to {{to}} · attempt {{attempt}}",
+        "other": "{{step}} returned the {{count}} failed tests to {{to}} · attempt {{attempt}}"
+      },
       "pausingTitle": "Pausing at the next checkpoint",
       "pausingBody": "{{agent}} finishes what it is doing at {{step}}; the run then pauses with its work saved on {{branch}}.",
       "pausingBodyCommand": "{{step}} runs {{tool}}; the run pauses once the command ends, with its work saved on {{branch}}.",

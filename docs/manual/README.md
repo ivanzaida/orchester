@@ -106,6 +106,9 @@ widening calls; **AA** = needs *Let automation answer approvals*; **WC** = needs
 | `get_changes` | RO | What a run changed |
 | `merge_run` | | Merge a run into its base branch |
 | `complete_run` | AA with `anyway` | Complete a run that committed nothing |
+| `list_flaky_tests` | RO | Flaky, watched and quarantined tests |
+| `quarantine_test` | AP | Quarantine a flaky test: it runs, but never fails a Test step |
+| `release_test` | | Take a test out of quarantine |
 
 ### Work ([mcp-tools-work.md](mcp-tools-work.md))
 

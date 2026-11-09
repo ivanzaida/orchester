@@ -39,7 +39,7 @@ pub(super) fn executed(
         .map(|tool| Arc::<str>::from(tool.name().as_str()));
       (name, Reached::default(), None, None)
     }
-    None => (None, Reached::default(), None, None),
+    Some(StepExecutor::Test) | None => (None, Reached::default(), None, None),
   })
 }
 

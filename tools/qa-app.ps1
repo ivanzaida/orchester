@@ -11,7 +11,8 @@
 # 1. Builds the QA app (examples/qa_app: the app's own window, nobody signed in as on a first run, a stand-in Orchester
 #    Cloud on loopback set as the cloud; -SignedIn signs in to it, with its token in a keychain in memory; with lurq's
 #    `perf_profile`, for profile sessions), the seed example and orchester-runner (-FakeAgents: the runner with its
-#    `test-agent` binaries, orchester-fake-codex among them; -NoRunner: no runner).
+#    `test-agent` binaries, orchester-fake-codex and the services' stand-in orchester-test-command among them;
+#    -NoRunner: no runner).
 # 2. Copies the programs into .tmp/qa/<task>/bin/, which keeps its own orchester.db beside them; the QA app as
 #    orchester-app-qa.
 # 3. Seeds a new repository .tmp/qa/<task>/repo-<scenario> (examples/seed; -FakeAgents points the
@@ -203,7 +204,8 @@ New-Item -ItemType Directory -Force -Path $bin | Out-Null
 New-Item -ItemType Directory -Force -Path $mcp | Out-Null
 $programs = @()
 if (-not $NoRunner) { $programs += "orchester-runner" }
-if ($FakeAgents) { $programs += @("orchester-fake-codex", "orchester-fake-claude") }
+# orchester-test-command is the stand-in program of the services a fake agent starts (-Scenario run-services).
+if ($FakeAgents) { $programs += @("orchester-fake-codex", "orchester-fake-claude", "orchester-test-command") }
 foreach ($program in $programs) {
     Copy-Item (Join-Path $built "$program$exe") -Destination $bin
 }

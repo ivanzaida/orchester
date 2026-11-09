@@ -3,6 +3,7 @@
 //! agent (or of its tool's program) with a short transcript and its usage, a write step commits its work
 //! as a checkpoint, and the run ends where the scenario leaves it.
 
+mod ending;
 mod plan_limit;
 
 use std::collections::BTreeMap;
@@ -14,20 +15,18 @@ use orchester_core::{
   integration::base::RunBaseSource,
   resource::{ModelId, RepositoryAccess, StepKey, StepKind},
   run::{
-    Answerer, BranchName, InterruptCause, Invocation, InvocationKind, NewRun, PendingToolApproval, Plan, PlanDecision,
-    ReviewNote, Run, RunEvent, RunLimit, RunStatus, StepExecutor, StepFailure, StepSnapshot, StepStatus, StuckDecision,
-    TokenUsage, WaitReason,
+    Answerer, BranchName, Invocation, InvocationKind, NewRun, PendingToolApproval, Plan, PlanDecision, ReviewNote, Run,
+    RunEvent, RunStatus, StepExecutor, StepFailure, StepSnapshot, StepStatus, TokenUsage, WaitReason,
   },
-  store::{ActivityStore, ConversationStore, MergeStore, RunStore, WorktreeStore},
+  store::{ActivityStore, ConversationStore, RunStore},
   task::Task,
   time::Timestamp,
-  tokens::TokensUsed,
 };
 
 use super::{
   Kontur, SeedError,
   catalogue::{self, Published},
-  git::{self, MAIN, Worktree},
+  git::{MAIN, Worktree},
 };
 
 /// What each recorded action takes, so the run reads as minutes of work.
@@ -157,15 +156,18 @@ impl<'k> Drive<'k> {
     let at = self.tick();
     let events = self.run.start_step(execution, at)?;
     self.record(&events)?;
-    let tool = matches!(self.kind(step)?, StepKind::Tool { .. });
+    let kind = self.kind(step)?.clone();
+    let tool = matches!(kind, StepKind::Tool { .. });
     let model = self.model(step);
     let db = &mut self.kontur.db;
-    let invocation = if tool {
+    let invocation = if tool || kind == StepKind::Test {
       db.start_command_invocation(self.run.id(), execution, at)?
     } else {
       db.start_invocation(self.run.id(), execution, &model, at)?
     };
-    let opening = if tool {
+    let opening = if kind == StepKind::Test {
+      Vec::new()
+    } else if tool {
       vec![AgentEvent::ToolCommandStarted {
         tool: step.to_owned(),
         command: catalogue::command_line(step),
@@ -221,6 +223,7 @@ impl<'k> Drive<'k> {
         output: "test result: ok. 42 passed; 0 failed".to_owned(),
         omitted_bytes: 0,
       }],
+      StepKind::Test => Vec::new(),
       StepKind::Agent { .. } => vec![AgentEvent::Message {
         text: format!("Finished {step}."),
       }],
@@ -403,12 +406,15 @@ impl<'k> Drive<'k> {
         output: "test webhooks::retry::jitter_bound ... FAILED\ntest result: FAILED. 41 passed; 1 failed".to_owned(),
         omitted_bytes: 0,
       }],
+      // A Test step records no transcript of its own: its result is its output.
+      StepKind::Test => Vec::new(),
       StepKind::Agent { .. } => vec![AgentEvent::Message {
         text: "The change does not meet the acceptance criteria yet.".to_owned(),
       }],
     };
     let outcome = match self.kind(step)? {
       StepKind::Tool { .. } => InvocationOutcome::ExitFailed { code: Some(101) },
+      StepKind::Test => InvocationOutcome::ExitFailed { code: None },
       StepKind::Agent { .. } => InvocationOutcome::Completed,
     };
     self.end(step, closing, outcome)?;
@@ -422,7 +428,7 @@ impl<'k> Drive<'k> {
   /// Fails `step` with a verdict until no automatic route is left: the run waits for a person.
   pub fn fail_until_stuck(&mut self, step: &str) -> Result<&mut Self, SeedError> {
     let verdict = match self.kind(step)? {
-      StepKind::Tool { .. } => StepFailure::CommandFailed,
+      StepKind::Tool { .. } | StepKind::Test => StepFailure::CommandFailed,
       StepKind::Agent { .. } => StepFailure::ReportedFailed,
     };
     while self.run.status() == &RunStatus::Running {
@@ -480,79 +486,6 @@ impl<'k> Drive<'k> {
       native: None,
     };
     self.kontur.db.request_tool_approval(&request)?;
-    Ok(self)
-  }
-
-  /// Ends the invocations at work, which the runner stops when a run pauses, stops or is cancelled.
-  fn stop_open(&mut self) -> Result<(), SeedError> {
-    let steps: Vec<String> = self.open.keys().map(|key| key.as_str().to_owned()).collect();
-    for step in steps {
-      self.end(&step, Vec::new(), InvocationOutcome::Terminated)?;
-    }
-    Ok(())
-  }
-
-  pub fn pause(&mut self) -> Result<&mut Self, SeedError> {
-    self.stop_open()?;
-    let at = self.tick();
-    let events = self.run.pause(at)?;
-    self.record(&events)?;
-    Ok(self)
-  }
-
-  /// Stops at `limit`; a run's own token limit is used up first, as the runner stops it when it is.
-  pub fn stop_at_limit(&mut self, limit: RunLimit) -> Result<&mut Self, SeedError> {
-    self.stop_open()?;
-    let at = self.tick();
-    if limit == RunLimit::Tokens {
-      let budget = self.run.budget().ok_or(SeedError::NoBudget)?;
-      let left = budget.get().saturating_sub(self.run.used().get());
-      let events = self.run.record_usage(TokensUsed::new(left), at)?;
-      self.record(&events)?;
-    }
-    let events = self.run.stop_at_limit(limit, at)?;
-    self.record(&events)?;
-    Ok(self)
-  }
-
-  /// The app ended while the run worked: no end of its invocations was recorded.
-  pub fn interrupt(&mut self) -> Result<&mut Self, SeedError> {
-    let at = self.tick();
-    let events = self.run.interrupt(InterruptCause::Crashed, at)?;
-    self.record(&events)?;
-    Ok(self)
-  }
-
-  pub fn cancel(&mut self) -> Result<&mut Self, SeedError> {
-    self.stop_open()?;
-    let at = self.tick();
-    let events = self.run.cancel(at)?;
-    self.record(&events)?;
-    Ok(self)
-  }
-
-  /// The person stops a run that waits for them: it fails.
-  pub fn stop(&mut self) -> Result<&mut Self, SeedError> {
-    let at = self.tick();
-    let events = self.run.decide_stuck(&StuckDecision::Stop, at)?;
-    self.record(&events)?;
-    Ok(self)
-  }
-
-  /// Merge into main, then Remove worktree.
-  pub fn merge(&mut self) -> Result<&mut Self, SeedError> {
-    let at = self.tick();
-    let merge = git::merge(&self.kontur.repo, (&self.run, self.task.key()), at)?;
-    self.kontur.db.save_run_merge(&merge)?;
-    self.remove_worktree()
-  }
-
-  /// Removes the run's worktree; its branch and commits stay.
-  pub fn remove_worktree(&mut self) -> Result<&mut Self, SeedError> {
-    let worktree = self.worktree.take().ok_or(SeedError::WorktreeRemoved)?;
-    worktree.remove()?;
-    let at = self.tick();
-    self.kontur.db.save_worktree_removal(self.run.id(), at)?;
     Ok(self)
   }
 

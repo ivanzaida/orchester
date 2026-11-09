@@ -130,6 +130,7 @@ fn outcome(ctx: &Ctx, step: &Step, invalid: bool) -> (Arc<str>, bool) {
   let key = match step.kind {
     StepKind::Tool { .. } if invalid => "pipelines.toolUnavailableBadge",
     StepKind::Tool { .. } => "pipelines.toolBadge",
+    StepKind::Test => "pipelines.testsBadge",
     StepKind::Agent {
       repository: RepositoryAccess::ReadOnly,
       ..

@@ -70,6 +70,11 @@ pub struct StepInput {
   pub profile: Option<String>,
   /// The published tool the step calls instead, by id or name.
   pub tool: Option<String>,
+  /// A Test step instead: Orchester runs the project's published test suites in layers (lint, unit, e2e), those
+  /// whose services own a path the run changed and those marked always; failed tests fail it, so give it an
+  /// on_failure back to the writing step. Takes no profile, tool or agent options.
+  #[serde(default)]
+  pub tests: bool,
   /// Keys of the steps it runs after.
   #[serde(default)]
   pub runs_after: Vec<String>,
@@ -223,8 +228,17 @@ fn step_key(key: &str) -> Result<StepKey, Message> {
   StepKey::new(key).map_err(|_| Message::new("appMcp.errors.stepKeyInvalid").with("key", key.to_owned()))
 }
 
-/// What runs the step: a published profile with what the step may change of it, or a runnable tool.
+/// What runs the step: a published profile with what the step may change of it, a runnable tool, or the project's
+/// test suites.
 fn kind(input: &StepInput, assignables: &Assignables) -> Result<StepKind, Message> {
+  if input.tests {
+    let agent_options =
+      input.repository.is_some() || input.model.is_some() || input.narrow.is_some() || input.takes_base_moves.is_some();
+    if input.profile.is_some() || input.tool.is_some() || agent_options {
+      return Err(Message::new("appMcp.errors.testStepOptions"));
+    }
+    return Ok(StepKind::Test);
+  }
   match (&input.profile, &input.tool) {
     (Some(_), Some(_)) => Err(Message::new("appMcp.errors.profileOrTool")),
     (None, Some(tool)) => {

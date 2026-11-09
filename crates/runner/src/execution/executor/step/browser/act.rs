@@ -21,7 +21,7 @@ pub(super) async fn click(
   button: MouseButton,
   count: u8,
 ) -> Result<String, ToolError> {
-  let ((x, y), what) = match target {
+  let (point, what) = match target {
     ClickTarget::Element(element) => (centre(tab, element).await?, element.as_str().to_owned()),
     ClickTarget::Point { x, y } => ((f64::from(*x), f64::from(*y)), format!("({x}, {y})")),
   };
@@ -30,16 +30,7 @@ pub(super) async fn click(
     MouseButton::Right => "right",
     MouseButton::Middle => "middle",
   };
-  mouse(tab, json!({ "type": "mouseMoved", "x": x, "y": y })).await?;
-  for clicks in 1..=count {
-    for kind in ["mousePressed", "mouseReleased"] {
-      mouse(
-        tab,
-        json!({ "type": kind, "x": x, "y": y, "button": button, "clickCount": clicks }),
-      )
-      .await?;
-    }
-  }
+  click_at(tab, point, button, count).await?;
   let times = if count == 1 {
     String::new()
   } else {
@@ -50,16 +41,54 @@ pub(super) async fn click(
   ))
 }
 
+/// Clicks the point `(x, y)` of the visible page with `button` (`left`, `right`, `middle`), `count` times in a row.
+pub(in crate::execution::executor::step) async fn click_at(
+  tab: &Tab,
+  (x, y): (f64, f64),
+  button: &str,
+  count: u8,
+) -> Result<(), ToolError> {
+  mouse(tab, json!({ "type": "mouseMoved", "x": x, "y": y })).await?;
+  for clicks in 1..=count {
+    for kind in ["mousePressed", "mouseReleased"] {
+      mouse(
+        tab,
+        json!({ "type": kind, "x": x, "y": y, "button": button, "clickCount": clicks }),
+      )
+      .await?;
+    }
+  }
+  Ok(())
+}
+
 /// Replaces the value of the field `element` with `text`, then presses Enter when `submit`.
 pub(super) async fn type_text(tab: &Tab, element: &ElementRef, text: &str, submit: bool) -> Result<String, ToolError> {
-  let node = tab.node(element)?;
+  fill(tab, tab.node(element)?, element.as_str(), text).await?;
+  if submit {
+    keys::press(tab, &[key("Enter")?]).await?;
+  }
+  let then = if submit { ", then pressed Enter" } else { "" };
+  Ok(format!(
+    "Typed {} characters into {}{then}.",
+    text.chars().count(),
+    element.as_str()
+  ))
+}
+
+/// Replaces the value of the field `node` (a `backendNodeId`, named `label` in errors) with `text`, as typing does.
+pub(in crate::execution::executor::step) async fn fill(
+  tab: &Tab,
+  node: i64,
+  label: &str,
+  text: &str,
+) -> Result<(), ToolError> {
   tab
     .call("DOM.scrollIntoViewIfNeeded", json!({ "backendNodeId": node }))
     .await?;
   let resolved = tab.call("DOM.resolveNode", json!({ "backendNodeId": node })).await?;
   let object = resolved["object"]["objectId"]
     .as_str()
-    .ok_or_else(|| ToolError::Page(format!("{} is no longer in the page", element.as_str())))?;
+    .ok_or_else(|| ToolError::Page(format!("{label} is no longer in the page")))?;
   tab
     .call(
       "Runtime.callFunctionOn",
@@ -71,15 +100,7 @@ pub(super) async fn type_text(tab: &Tab, element: &ElementRef, text: &str, submi
   } else {
     tab.call("Input.insertText", json!({ "text": text })).await?;
   }
-  if submit {
-    keys::press(tab, &[key("Enter")?]).await?;
-  }
-  let then = if submit { ", then pressed Enter" } else { "" };
-  Ok(format!(
-    "Typed {} characters into {}{then}.",
-    text.chars().count(),
-    element.as_str()
-  ))
+  Ok(())
 }
 
 /// Scrolls `target` into view, or the page by its pixels (a screen when none).
@@ -122,16 +143,21 @@ pub(super) async fn scroll(tab: &Tab, target: &ScrollTarget) -> Result<String, T
 
 /// The centre of `element` in the visible page, once scrolled into view.
 pub(super) async fn centre(tab: &Tab, element: &ElementRef) -> Result<(f64, f64), ToolError> {
-  let node = tab.node(element)?;
+  centre_of(tab, tab.node(element)?, element.as_str()).await
+}
+
+/// The centre of `node` (a `backendNodeId`, named `label` in errors) in the visible page, once scrolled into view.
+pub(in crate::execution::executor::step) async fn centre_of(
+  tab: &Tab,
+  node: i64,
+  label: &str,
+) -> Result<(f64, f64), ToolError> {
   tab
     .call("DOM.scrollIntoViewIfNeeded", json!({ "backendNodeId": node }))
     .await?;
-  let quad = quad(tab, node).await?.ok_or_else(|| {
-    ToolError::Page(format!(
-      "{} has no box on the page: it is hidden or has no size",
-      element.as_str()
-    ))
-  })?;
+  let quad = quad(tab, node)
+    .await?
+    .ok_or_else(|| ToolError::Page(format!("{label} has no box on the page: it is hidden or has no size")))?;
   let x = (quad[0] + quad[2] + quad[4] + quad[6]) / 4.0;
   let y = (quad[1] + quad[3] + quad[5] + quad[7]) / 4.0;
   Ok((x, y))

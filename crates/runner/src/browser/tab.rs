@@ -31,6 +31,7 @@ struct Refs {
 }
 
 /// One of a run's tabs, for one tool call.
+#[derive(Clone)]
 pub struct Tab {
   target: TargetId,
   cdp: Arc<Cdp>,
@@ -90,6 +91,17 @@ impl Tab {
   /// The tab's events from now on.
   pub fn events(&self) -> mpsc::UnboundedReceiver<CdpEvent> {
     self.cdp.subscribe(Some(self.session.clone()))
+  }
+
+  /// The target `target` that this tab's page made (a popup, a worker, a frame of another process) and the connection
+  /// attached to as `session` (`Target.attachedToTarget`), reached on the same connection; it keeps no refs or log.
+  pub fn child(&self, target: TargetId, session: SessionId) -> Self {
+    Self::new(target, Arc::clone(&self.cdp), session, Arc::default())
+  }
+
+  /// Stops all listening to this tab's session, which is no longer followed: each receiver of [`Tab::events`] ends.
+  pub fn unlisten(&self) {
+    self.cdp.unsubscribe(&self.session);
   }
 
   /// Navigates the tab to `url` and waits for its load.

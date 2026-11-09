@@ -79,6 +79,7 @@
     "readBadge": "Reads the repository",
     "writeBadge": "Can change files",
     "toolBadge": "Its exit code decides the step",
+    "testsBadge": "Failed tests fail the step",
     "unassigned": "Not assigned",
     "step": "STEP {{number}}",
     "executor": "Executor",

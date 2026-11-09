@@ -95,8 +95,7 @@ impl Worker {
     .expect("Codex's question requests and the relay's ask_question calls each carry a question");
     watch.sink.question(QuestionRecord::asked(&request))?;
     watch.invocation.timing.wait_for_person(now);
-    // A person's wait never holds one of the computer's QA slots.
-    self.qa.release(watch.invocation.id);
+    self.release_for_person(watch);
     watch.record_invocation()?;
     self.question_changed(watch);
     watch.question = Some((request, awaiting));

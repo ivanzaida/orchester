@@ -1,12 +1,13 @@
 //! The Summary tab (ORC-100, `01 · Summary` `AsE7R`, the full page `01b` `HvPSr`, waiting for a decision `01c`
 //! `SaKMC`): what the task asks for and where it stands, in one page that scrolls whole. In its column, 28 apart: the
 //! decision the run waits for, as a card at the top ([`decisions`], `Decision cards` `CqVv3`), and returning the work
-//! of a run that ended to a step; the run (`run`: its steps on a rail and its last event); the brief with the version
-//! of the requirements it shows (`brief`) and the acceptance criteria; what the run made (`output`); and the task's
-//! runs (`runs`). Beside it, 40 away, the task's properties with its run's facts and its memory (`properties`). Before
-//! the task's first run the column says there are no runs yet (`empty`) over the brief, or, for a team task another
-//! computer holds, what its team server reports of the run there (`team_run`); a task kept *Not shared* says why
-//! it is read-only, or asks *Share task* in place; a task whose latest run cannot be read says why.
+//! of a run that ended to a step; the run (`run`: its steps on a rail and its last event); what its Test step found
+//! (`tests`, `qN2FK`); the brief with the version of the requirements it shows (`brief`) and the acceptance criteria;
+//! what the run made (`output`); and the task's runs (`runs`). Beside it, 40 away, the task's properties with its
+//! run's facts and its memory (`properties`). Before the task's first run the column says there are no runs yet
+//! (`empty`) over the brief, or, for a team task another computer holds, what its team server reports of the run there
+//! (`team_run`); a task kept *Not shared* says why it is read-only, or asks *Share task* in place; a task whose latest
+//! run cannot be read says why.
 
 mod base_branch;
 mod brief;
@@ -28,6 +29,7 @@ pub(crate) mod runs;
 mod steps;
 mod team;
 pub(in crate::screens::task) mod team_run;
+mod tests;
 mod version;
 
 use lurq::{
@@ -151,12 +153,17 @@ impl TaskSummary {
     let returning = ended.then(|| decisions::return_card(ctx, task)).flatten();
     // A run a teammate holds of a shared task is said even though this computer does not have it.
     let run = run::section(ctx, task, detail.run.as_ref());
+    let tests = detail
+      .run
+      .as_ref()
+      .and_then(|run| Some(tests::card(ctx, run, run.tests.as_ref()?)));
     let output = detail.run.as_ref().map(|run| output::section(ctx, task, run));
     decision
       .into_iter()
       .chain(ci)
       .chain(returning)
       .chain([run])
+      .chain(tests)
       .chain(self.requirements(ctx, task))
       .chain(output)
       .chain(runs_section(ctx, task))

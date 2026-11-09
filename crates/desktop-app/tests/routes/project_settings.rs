@@ -1,8 +1,9 @@
 //! Project settings' tabs: its own, named in its query, and Connections and Secrets, which keep their paths.
 
 use orchester_app::routes::{
-  ConnectionsView, NewConnection, ProjectPage, ProjectSettingsTab, Route, RouteError, Screen,
+  ConnectionsView, NewConnection, ProjectPage, ProjectSettingsTab, Route, RouteError, Screen, ServicesPage,
 };
+use orchester_core::id::ResourceId;
 
 use super::{CONNECTION, PROJECT, at, connection};
 
@@ -64,6 +65,7 @@ fn project_settings_tabs_have_their_documented_paths() {
   for (tab, path) in [
     (ProjectSettingsTab::General, root.clone()),
     (ProjectSettingsTab::Runs, format!("{root}?tab=runs")),
+    (ProjectSettingsTab::Services, format!("{root}?tab=services")),
     (ProjectSettingsTab::Orchestrator, format!("{root}?tab=orchestrator")),
     (ProjectSettingsTab::Context, format!("{root}?tab=context")),
     (ProjectSettingsTab::Sharing, format!("{root}?tab=sharing")),
@@ -83,6 +85,38 @@ fn project_settings_tabs_have_their_documented_paths() {
       "{old}"
     );
   }
+}
+
+/// The pages under Services are named by `view`, a service's, stack's or suite's with its resource `id`; one that names
+/// no page, or an item's without its id, is refused.
+#[test]
+fn services_pages_have_their_documented_paths() {
+  let root = format!("/project/{PROJECT}/settings?tab=services");
+  let id: ResourceId = "019a2b3c-4d5e-7f60-8a9b-0c1d2e3f4a5b".parse().expect("an id");
+  for (page, path) in [
+    (ServicesPage::NewService, format!("{root}&view=new-service")),
+    (ServicesPage::NewStack, format!("{root}&view=new-stack")),
+    (ServicesPage::NewSuite, format!("{root}&view=new-suite")),
+    (ServicesPage::Import, format!("{root}&view=import")),
+    (ServicesPage::Flaky, format!("{root}&view=flaky")),
+    (ServicesPage::Service(id), format!("{root}&view=service&id={id}")),
+    (ServicesPage::Stack(id), format!("{root}&view=stack&id={id}")),
+    (ServicesPage::Suite(id), format!("{root}&view=suite&id={id}")),
+  ] {
+    let route = at(ProjectPage::Services(page));
+    assert_eq!(route.path(), path);
+    assert_eq!(Route::parse(&path), Ok(route.clone()), "{path}");
+    assert_eq!(route.nav_screen(), Screen::ProjectSettings, "{route:?}");
+  }
+  assert_eq!(Route::parse(&format!("{root}&view=service")), Err(RouteError::NoScreen));
+  assert!(matches!(
+    Route::parse(&format!("{root}&view=service&id=nope")),
+    Err(RouteError::InvalidParam { .. })
+  ));
+  assert!(matches!(
+    Route::parse(&format!("{root}&view=nowhere")),
+    Err(RouteError::InvalidParam { .. })
+  ));
 }
 
 /// Environment (`S06`), the Secrets tab it was, keeps the secrets' path; the settings' query naming it, or Secrets, or

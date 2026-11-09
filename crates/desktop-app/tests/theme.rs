@@ -33,6 +33,12 @@ mod orchestrator;
 mod pipelines;
 #[path = "theme/projects.rs"]
 mod projects;
+#[path = "theme/run_services.rs"]
+mod run_services;
+#[path = "theme/service_cards.rs"]
+mod service_cards;
+#[path = "theme/services.rs"]
+mod services;
 #[path = "theme/side_question.rs"]
 mod side_question;
 #[path = "theme/skills.rs"]
@@ -41,6 +47,8 @@ mod skills;
 mod startup;
 #[path = "theme/task_form.rs"]
 mod task_form;
+#[path = "theme/test_results.rs"]
+mod test_results;
 #[path = "theme/watching.rs"]
 mod watching;
 

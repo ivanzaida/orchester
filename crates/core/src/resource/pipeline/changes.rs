@@ -170,6 +170,7 @@ fn kind_changes(before: &StepKind, after: &StepKind) -> Vec<StepChange> {
     .filter_map(|(changed, change)| changed.then_some(change))
     .collect(),
     (StepKind::Tool { tool }, StepKind::Tool { tool: new_tool }) if tool == new_tool => Vec::new(),
+    (StepKind::Test, StepKind::Test) => Vec::new(),
     _ => vec![StepChange::Executor],
   }
 }

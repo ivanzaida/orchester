@@ -16,6 +16,7 @@ macro_rules! markers {
     impl $inspect for crate::agents::data::ProfileChange {}
     impl $inspect for crate::agents::data::ProjectAgents {}
     impl $inspect for crate::agents::hub::HubCounts {}
+    impl $inspect for crate::agent_testing::listing::ProjectServices {}
     impl $inspect for crate::agents::team_hub::TeamHub {}
     impl $inspect for crate::agents::team_mcp_conflict::Based {}
     impl $inspect for crate::agents::team_mcp_edit::Saved {}

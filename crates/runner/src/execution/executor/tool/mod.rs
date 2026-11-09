@@ -6,7 +6,9 @@
 //! tree ended with it. It takes a command slot instead of an agent slot (see `board`); its run is
 //! an invocation of the step, so its time counts toward the run's time limit. What it printed is
 //! kept up to the tool's output limit and recorded in the transcript when it ends; its exit code
-//! decides the step, and a short summary is the step's output for the steps after it.
+//! decides the step, and a short summary is the step's output for the steps after it. A Test step
+//! starts here too and then runs its suites instead of a program (`step::test_step`); its end is a
+//! command's end.
 
 mod end;
 mod worker;
@@ -39,13 +41,14 @@ struct PinnedCommand {
 }
 
 impl RunTask {
-  /// Whether `execution` belongs to a tool step.
-  pub(super) fn is_tool_step(&self, execution: StepExecutionId) -> bool {
+  /// Whether `execution` belongs to a step that takes a command slot: a tool step, or a Test step
+  /// (`step::test_step`), which starts as one does.
+  pub(super) fn is_command_step(&self, execution: StepExecutionId) -> bool {
     self
       .run
       .execution(execution)
       .and_then(|execution| self.run.snapshot().step(execution.step()))
-      .is_some_and(|step| matches!(step.executor(), StepExecutor::Tool { .. }))
+      .is_some_and(|step| matches!(step.executor(), StepExecutor::Tool { .. } | StepExecutor::Test))
   }
 
   /// Starts `execution`'s command in a command slot; `false` when none is free. A command that
@@ -77,6 +80,10 @@ impl RunTask {
         return Ok(true);
       }
     };
+    if self.is_test_step(execution) {
+      self.start_tests(execution, invocation, workspace)?;
+      return Ok(true);
+    }
     let (command, program, environment) = match self.resolve(execution, workspace.path()) {
       Ok(resolved) => resolved,
       Err(problem) => {
@@ -133,7 +140,7 @@ impl RunTask {
       .and_then(|execution| self.run.snapshot().step(execution.step()))
       .and_then(|step| match step.executor() {
         StepExecutor::Tool { tool } => Some(*tool),
-        StepExecutor::Agent { .. } => None,
+        StepExecutor::Agent { .. } | StepExecutor::Test => None,
       })
       .ok_or_else(|| problem("the step is not a tool step"))?;
     let read = |error: &dyn std::error::Error| problem(&error.to_string());

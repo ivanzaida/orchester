@@ -115,6 +115,7 @@ impl Prompt {
       skills: &[],
       code_index: None,
       dependencies,
+      tests: &[],
       revision: None,
       messages: None,
       base_moved: None,

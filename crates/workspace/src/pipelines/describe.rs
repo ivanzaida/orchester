@@ -34,11 +34,13 @@ pub fn executor_line(step: &Step, assignables: &Assignables) -> Message {
       Some(tool) => Message::new("pipelines.step.tool").with("tool", tool.name.to_string()),
       None => Message::new("pipelines.step.unpublishedTool"),
     },
+    StepKind::Test => Message::new("pipelines.step.tests"),
   }
 }
 
 /// Third line of a step card: what the step waits for or may do (`Dz9R9` in `ajikA`). A tool step
-/// passes or fails by its command's exit code; a tool it cannot run yet says so.
+/// passes or fails by its command's exit code; a tool it cannot run yet says so. A Test step fails by
+/// its failed tests.
 pub fn outcome_line(step: &Step, assignables: &Assignables) -> Message {
   match &step.kind {
     StepKind::Agent { profile: None, .. } => Message::new("pipelines.step.chooseProfile"),
@@ -56,6 +58,7 @@ pub fn outcome_line(step: &Step, assignables: &Assignables) -> Message {
       Some(tool) if !tool.runnable => Message::new("pipelines.step.toolUnavailable"),
       _ => Message::new("pipelines.step.exitCodeDecides"),
     },
+    StepKind::Test => Message::new("pipelines.step.failedTestsDecide"),
   }
 }
 

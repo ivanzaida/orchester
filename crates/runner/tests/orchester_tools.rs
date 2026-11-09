@@ -141,12 +141,15 @@ async fn orchester_tools_serve_claude_code_through_its_permission_prompt() {
   let (run, db) = approve_outside(&project).await;
   assert_eq!(run.status(), &RunStatus::Succeeded);
   let id = run.id();
+  // A writing step on the network may start a QA app: it gets the built-in desktop-qa service, with the service
+  // tools and the ui_* tools that drive it.
   assert_eq!(
     reported(&db, id, "orchester-tools: "),
     [
       "approve,read_file,list_files,search_file,edit_file,create_file,delete_file,move_file,find_references,\
-       search_external_file,read_external_file,list_run_processes,stop_run_process,call_run_app,start_qa_app,get_task,\
-       save_memory,report_progress,ask_question"
+       search_external_file,read_external_file,list_run_processes,stop_run_process,call_run_app,start_qa_app,\
+       start_service,stop_service,service_status,service_logs,ui_open,ui_snapshot,ui_act,ui_screenshot,ui_logs,\
+       ui_wait,get_task,save_memory,report_progress,ask_question"
     ]
   );
   let decisions = reported(&db, id, "orchester-permission: ");

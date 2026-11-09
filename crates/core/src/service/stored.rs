@@ -128,6 +128,8 @@ enum UiDriverFields {
   None,
   Native,
   Mcp,
+  Browser,
+  Cdp,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -200,6 +202,8 @@ impl From<&Service> for ServiceFields {
         UiDriver::None => UiDriverFields::None,
         UiDriver::Native => UiDriverFields::Native,
         UiDriver::Mcp => UiDriverFields::Mcp,
+        UiDriver::Browser => UiDriverFields::Browser,
+        UiDriver::Cdp => UiDriverFields::Cdp,
       },
       ui_start: service.ui_start().map(|start| start.as_str().to_owned()),
       owned_paths: service
@@ -234,6 +238,8 @@ impl TryFrom<ServiceFields> for Service {
       UiDriverFields::None => UiDriver::None,
       UiDriverFields::Native => UiDriver::Native,
       UiDriverFields::Mcp => UiDriver::Mcp,
+      UiDriverFields::Browser => UiDriver::Browser,
+      UiDriverFields::Cdp => UiDriver::Cdp,
     };
     let owned_paths = fields
       .owned_paths
@@ -398,6 +404,35 @@ impl TryFrom<RequestFields> for SeedRequest {
       .collect::<Result<_, StoredError>>()?;
     Ok(Self::new(fields.method, &fields.url, fields.body, headers, captures)?)
   }
+}
+
+/// What an approval of a service's start is kept to (`super::ServiceApproval`): its program, arguments, variables
+/// with their values (a secret by its name) and seed, in this order.
+#[derive(Serialize)]
+struct ApprovedFields {
+  program: String,
+  arguments: Vec<String>,
+  variables: BTreeMap<String, ValueFields>,
+  seed: SeedFields,
+}
+
+/// The compact JSON of what an approval of `service`'s start is kept to; the same definition always gives the same
+/// bytes, as the fields keep their order and the variables are sorted by name.
+pub(super) fn approved_bytes(service: &Service) -> Vec<u8> {
+  let ServiceFields {
+    program,
+    arguments,
+    variables,
+    seed,
+    ..
+  } = ServiceFields::from(service);
+  serde_json::to_vec(&ApprovedFields {
+    program,
+    arguments,
+    variables,
+    seed,
+  })
+  .expect("a service's fields are always JSON")
 }
 
 fn texts(arguments: &[CommandArg]) -> Vec<String> {

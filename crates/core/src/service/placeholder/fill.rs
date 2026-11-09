@@ -14,12 +14,14 @@ struct Address {
   url: String,
 }
 
-/// What a run fills a service's placeholders with: its own port, URL and run id, the started services' URLs and
-/// ports, and what the seed requests captured so far. Secrets are not among them: a secret stays a name.
+/// What a run fills a service's placeholders with: its own port, URL and run id, the folder of its run's own files
+/// when it has one, the started services' URLs and ports, and what the seed requests captured so far. Secrets are
+/// not among them: a secret stays a name.
 #[derive(Clone, PartialEq, Eq)]
 pub struct RunValues {
   run: RunId,
   own: Address,
+  data: Option<String>,
   services: BTreeMap<ServiceName, Address>,
   captured: BTreeMap<FieldName, String>,
 }
@@ -32,9 +34,17 @@ impl RunValues {
         port,
         url: url.to_owned(),
       },
+      data: None,
       services: BTreeMap::new(),
       captured: BTreeMap::new(),
     }
+  }
+
+  /// `{{data}}`: the folder of the run's own files for the service, made before it starts.
+  #[must_use]
+  pub fn with_data(mut self, folder: &str) -> Self {
+    self.data = Some(folder.to_owned());
+    self
   }
 
   /// A started service the placeholders may use.
@@ -48,6 +58,11 @@ impl RunValues {
       },
     );
     self
+  }
+
+  /// `{{port}}`: the service's own port.
+  pub const fn port(&self) -> u16 {
+    self.own.port
   }
 
   /// What a seed request's answer gave `name`, for the requests after it and the place `ui_open` starts.
@@ -166,6 +181,7 @@ impl RunValues {
       Placeholder::Port => Some(self.own.port.to_string().into()),
       Placeholder::Url => Some(self.own.url.as_str().into()),
       Placeholder::Run => Some(self.run.to_string().into()),
+      Placeholder::Data => self.data.as_deref().map(Cow::Borrowed),
       Placeholder::ServiceUrl(name) => address(name).map(|address| address.url.as_str().into()),
       Placeholder::ServicePort(name) => address(name).map(|address| address.port.to_string().into()),
       Placeholder::Seed(name) => self.captured.get(name).map(|value| value.as_str().into()),
@@ -179,6 +195,7 @@ impl fmt::Debug for RunValues {
     f.debug_struct("RunValues")
       .field("run", &self.run)
       .field("own", &self.own)
+      .field("data", &self.data)
       .field("services", &self.services)
       .field("captured", &self.captured.keys().collect::<Vec<_>>())
       .finish()

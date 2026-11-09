@@ -177,9 +177,10 @@ pub struct DefinitionCapture {
 pub enum DefinitionRunData {
   #[default]
   None,
-  /// A fresh database container per run.
+  /// A fresh database container per start: the service is that container, its program the image (e.g.
+  /// `postgres:16-alpine`), published on its `{{port}}`.
   DatabaseContainer,
-  /// Files in a folder below the worktree, e.g. `runs/{{run}}/team`.
+  /// Files in a folder of the run's own storage, e.g. `team`, made before the start and reached as `{{data}}`.
   RunFolder { folder: String },
 }
 
@@ -193,6 +194,11 @@ pub enum DefinitionUiDriver {
   Native,
   /// An app with its own MCP server.
   Mcp,
+  /// A web app, in a tab of the run's own in Orchester's Browser that opens only the step's services' origins.
+  Browser,
+  /// An Electron or WebView2 app through its remote debugging port, `{{port}}`: an Electron app's arguments include
+  /// `--remote-debugging-port={{port}}`; a WebView2 app gets it from Orchester. Not on macOS.
+  Cdp,
 }
 
 pub(super) async fn save_service_draft(services: &Services, args: SaveServiceDraft) -> Result<Value, ToolError> {

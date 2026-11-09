@@ -21,6 +21,7 @@ mod model;
 mod permission;
 mod proposal;
 mod result;
+mod service;
 mod switched;
 mod todo;
 mod working;
@@ -548,7 +549,8 @@ fn item_row(ctx: &mut Ctx, timeline: &Timeline, item: &Item) -> Element {
     ItemKind::Question { .. } | ItemKind::Plan(_) | ItemKind::Approval(_) | ItemKind::Choice(_) => {
       cards::card(ctx, timeline, item)
     }
-    ItemKind::Problem(entry) => entry::problem_row(ctx, timeline, &item.key, entry),
+    ItemKind::Problem(entry) => service::card(ctx, timeline, &item.key, entry)
+      .unwrap_or_else(|| entry::problem_row(ctx, timeline, &item.key, entry)),
     ItemKind::Mark(mark) => divider::mark(ctx, timeline, mark, found().as_ref()),
     ItemKind::BaseMoved(mark) => divider::base_moved(ctx, &item.key, mark),
     ItemKind::SwitchedToManual(switched) => switched::row(ctx, switched, item.at),

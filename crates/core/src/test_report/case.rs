@@ -32,6 +32,16 @@ impl TestOutcome {
   pub const fn is_failure(self) -> bool {
     matches!(self, Self::Failed | Self::Errored)
   }
+
+  /// The outcome as its JSON writes it.
+  pub const fn as_str(self) -> &'static str {
+    match self {
+      Self::Passed => "passed",
+      Self::Failed => "failed",
+      Self::Skipped => "skipped",
+      Self::Errored => "errored",
+    }
+  }
 }
 
 /// Where a test or its failure is in the source, as the report gives it.

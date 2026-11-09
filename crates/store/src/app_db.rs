@@ -1,9 +1,10 @@
 //! The application database next to the executable: known projects, the session log used to
 //! detect that the previous run of Orchester ended abnormally, whose each project is ([`owners`]), the state of the
 //! window (`ui_state`) that outlives a session, such as its tabs, the shared servers ([`servers`]) and whose each one
-//! is ([`server_owners`]), the application's own settings ([`settings`], Settings › Browser's in [`browser`]), among
-//! them the Usage dashboard's warning threshold, and its updates' ([`updates`]), the person's agent CLI accounts
-//! ([`accounts`]) and the plan limits read of them outside runs ([`plan_reads`]).
+//! is ([`server_owners`]), the application's own settings ([`settings`], Settings › Browser's in [`browser`], the
+//! computer's *Services at once* in [`service_slots`]), among them the Usage dashboard's warning threshold, and its
+//! updates' ([`updates`]), the person's agent CLI accounts ([`accounts`]) and the plan limits read of them outside runs
+//! ([`plan_reads`]).
 
 mod accounts;
 mod browser;
@@ -15,6 +16,7 @@ mod owners;
 mod plan_reads;
 mod server_owners;
 mod servers;
+mod service_slots;
 mod settings;
 mod updates;
 
@@ -93,6 +95,9 @@ CREATE TABLE ui_state (
   updates::MIGRATION,
   settings::BROWSER_WINDOW_MIGRATION,
   browser::MIGRATION,
+  service_slots::MIGRATION,
+  // Master's `mcp_programs` comes after ours on this branch: application databases already migrated by Agent testing
+  // builds hold `service_slots` at 33, so master's migration cannot take 33 here.
   mcp_programs::MIGRATION,
 ];
 
