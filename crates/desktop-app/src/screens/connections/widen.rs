@@ -125,15 +125,12 @@ impl Component for WidenConfirm {
       )
       .into(),
     };
-    if !self.refused.get() {
-      return asked;
-    }
+    // The same tree before and after a refusal, so the question's buttons stay where they are.
     Column::new()
       .width(Dimension::Pct(100.0))
       .spacing(ExtraSpacing::Snug.role())
       .child(asked)
-      .child(self.refusal(ctx, &props.id))
-      .into()
+      .with_children(self.refused.get().then(|| self.refusal(ctx, &props.id)))
   }
 }
 
