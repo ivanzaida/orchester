@@ -544,8 +544,8 @@ set or changed it. The server writes each in the transaction of the change it re
 to Canceled (or back), keeps it on every other edit, and clears `blocked` when the reason is cleared; closing does not
 clear `blocked`. A task the server has no record for (closed before the server stored them, or by an older server)
 leaves the field out and the desktop shows the status without the person. The exact table is in
-[cloud-api.md](../cloud-api.md#team-authority-task-lifecycle) "Who closed it, who blocked it". Additive: no route, no
-command, no refusal; the stand-in sets them on every path and `crates/api/tests/team_lifecycle/records.rs` holds them.
+[cloud-api.md](../cloud-api.md#team-authority-task-lifecycle) "Who closed it, who blocked it". No route, command or refusal, but not additive for older desktops (their task
+read refuses unknown fields): the server sends the records only once its minimum desktop version reads them; the stand-in sets them on every path and `crates/api/tests/team_lifecycle/records.rs` holds them.
 
 **A closed task is not claimed or started** (decided 2026-11-09): until an Admin reopens it, `claim.acquire`,
 `claim.take_over` and `work.start` of a Done or Canceled task are refused `409 transition_denied`, and its

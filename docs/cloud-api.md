@@ -1070,7 +1070,11 @@ touched.
 becomes its `updated.by`. So the read carries two records of its own, on `TaskRead` and so on every row of the task list
 (`orchester_api::v2::{TaskClosure, ClosedHow}`; `blocked` is an `Attribution {by:UserRef,at}`). Both are optional: the
 server sends them when it has the record and **leaves the field out** when it has none (a reader also accepts `null`),
-and a server older than this contract never sends them. A reader treats a missing `closed` on a Done or Canceled task,
+and a server older than this contract never sends them. A desktop older than this contract refuses a task read that
+carries them (`TaskReadWire` is `deny_unknown_fields`) and reads it as no contract answer, so the team server sends
+them only once its minimum desktop version is the first desktop release that reads them (as for ORC-884 above); a
+server that cannot raise its minimum leaves both out for a client older than that release, by
+`Orchester-Client-Version`. A reader treats a missing `closed` on a Done or Canceled task,
 and a missing `blocked` on a task with a `blocked_reason`, as unknown: it shows the status without the "by whom".
 
 - `closed:{how,at}`, **present only while `workflow` is `done` or `canceled`.** `at` is when the server committed the
@@ -1103,7 +1107,7 @@ status without the record):
 | a task already Done or Canceled when a delivery is accepted | as it is (it is not touched) | as it is |
 | patch `blocked_reason` set, or changed to another reason | as it is | set: the caller, now |
 | patch `blocked_reason` to `null` | as it is | cleared |
-| patch `{workflow:"done",blocked_reason:"…"}` (a holder's single patch) | set | set, both at that patch's time |
+| patch `{workflow:"done",blocked_reason:"â€¦"}` (a holder's single patch) | set | set, both at that patch's time |
 
 Closing does not clear a blocked reason and the record stays with it. A record is the server's, not the caller's: a
 patch cannot send `closed` or `blocked` (`TaskChanges` has neither, and an unknown field is refused as it is). The
