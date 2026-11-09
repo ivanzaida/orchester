@@ -198,7 +198,53 @@ pub fn store_with_values(
 ) -> Result<(), McpSaveError> {
   let mut db = ProjectDb::open(repo_root)?;
   let before = db.mcp_server(id)?.ok_or(StoreError::ConnectionNotFound(id))?;
-  let taken = taken_secrets(&draft);
+  check_values_taken(&mut db, &draft, values)?;
+  store_in(repo_root, Some(id), draft, allowed)?;
+  match replace_values(&mut db, vault, values) {
+    Ok(()) => Ok(()),
+    Err(cause) => Err(match db.save_mcp_server(&before) {
+      Ok(()) => cause,
+      Err(restore) => not_restored(cause, restore),
+    }),
+  }
+}
+
+/// [`store_with_values`] for a server that is new: `draft` is stored as a server that is `enabled` or not, and the
+/// `values` of the secrets its variables take go to `vault`. When the secret store does not keep a value the new
+/// server is removed again, so a refused create leaves nothing behind; when it cannot be removed either, the error
+/// says both ([`McpSaveError::NotRestored`]).
+pub fn create_with_values(
+  repo_root: &Path,
+  vault: &dyn SecretVault,
+  (draft, allowed): (McpServerDraft, &Allowed),
+  enabled: bool,
+  values: &[(SecretId, SecretValue)],
+) -> Result<ConnectionId, McpSaveError> {
+  let mut db = ProjectDb::open(repo_root)?;
+  check_values_taken(&mut db, &draft, values)?;
+  let id = store_in(repo_root, None, draft, allowed)?;
+  let switched = if enabled {
+    Ok(())
+  } else {
+    set_enabled_in(repo_root, id, false).map_err(McpSaveError::from)
+  };
+  let stored = switched.and_then(|()| replace_values(&mut db, vault, values));
+  match stored {
+    Ok(()) => Ok(id),
+    Err(cause) => Err(match db.delete_unused_mcp_server(id, &move |db| profiles_using(db, id)) {
+      Ok(_) => cause,
+      Err(restore) => not_restored(cause, restore),
+    }),
+  }
+}
+
+/// Refuses a value for a secret the `draft` does not take, or the project does not have.
+fn check_values_taken(
+  db: &mut ProjectDb,
+  draft: &McpServerDraft,
+  values: &[(SecretId, SecretValue)],
+) -> Result<(), McpSaveError> {
+  let taken = taken_secrets(draft);
   for (secret_id, _) in values {
     if !taken.contains(secret_id) {
       return Err(match db.secret(*secret_id)? {
@@ -207,30 +253,36 @@ pub fn store_with_values(
       });
     }
   }
-  store_in(repo_root, Some(id), draft, allowed)?;
+  Ok(())
+}
+
+/// Gives each of `values` to `vault` as its secret's value, and says which secret the store refused.
+fn replace_values(
+  db: &mut ProjectDb,
+  vault: &dyn SecretVault,
+  values: &[(SecretId, SecretValue)],
+) -> Result<(), McpSaveError> {
   let project = db.project().id();
   for (secret_id, value) in values {
     let name = db.secret(*secret_id)?.map(|found| found.name().clone());
-    if let Err(failure) = secret::replace_value(&mut db, vault, project, *secret_id, value, Timestamp::now()) {
-      let cause = match (failure, name) {
+    if let Err(failure) = secret::replace_value(db, vault, project, *secret_id, value, Timestamp::now()) {
+      return Err(match (failure, name) {
         (SecretError::Vault(source), Some(secret)) => McpSaveError::SecretStore { secret, source },
         (SecretError::Store(error) | SecretError::ValueLeftBehind { source: error, .. }, _) => error.into(),
         (SecretError::RotationNotRecorded { source, .. }, _) => source.into(),
         _ => McpSaveError::SecretGone(*secret_id),
-      };
-      return Err(match db.save_mcp_server(&before) {
-        Ok(()) => cause,
-        Err(restore) => {
-          tracing::error!(%restore, %cause, "cannot put the MCP server back as it was");
-          McpSaveError::NotRestored {
-            cause: Box::new(cause),
-            restore,
-          }
-        }
       });
     }
   }
   Ok(())
+}
+
+fn not_restored(cause: McpSaveError, restore: StoreError) -> McpSaveError {
+  tracing::error!(%restore, %cause, "cannot put the MCP server back as it was");
+  McpSaveError::NotRestored {
+    cause: Box::new(cause),
+    restore,
+  }
 }
 
 /// The secrets the saved server takes: its authorization's, or its variables'.
