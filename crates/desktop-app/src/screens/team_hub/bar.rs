@@ -18,8 +18,13 @@ pub(in crate::screens) fn bar(buttons: Vec<Element>, hint: Option<String>) -> El
 
 /// [`bar`] with `hint` in `color`: the form that creates a resource says in `danger` why Create cannot be pressed.
 pub(in crate::screens) fn bar_saying(buttons: Vec<Element>, hint: Option<(String, PaletteColor)>) -> Element {
+  bar_named("team-hub-actions", buttons, hint)
+}
+
+/// [`bar_saying`] under `id`: the bar of a panel in bones is not the panel's.
+pub(in crate::screens) fn bar_named(id: &str, buttons: Vec<Element>, hint: Option<(String, PaletteColor)>) -> Element {
   let bar = Row::new()
-    .id("team-hub-actions")
+    .id(id.to_owned())
     .width(Dimension::Pct(100.0))
     .height(Dimension::Px(HubSpacing::Actions.value()))
     .padding(Padding::horizontal(HubSpacing::Sections.role()))

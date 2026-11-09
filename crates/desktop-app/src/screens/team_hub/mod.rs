@@ -6,10 +6,13 @@
 //! first resource of the list. Instructions and skills need nothing of a computer and stand under *Ready here*. An
 //! admin has New in the head ([`create`]).
 //!
-//! The readiness is read off the UI thread when the page opens and when the project's resources, fill-ins or team
-//! standings change, never on a timer: a local tool's secret is read from the keychain. While it is read again the
-//! page shows the last answer dimmed with *Reading…*, and a read that failed shows its failure and no counts, never the
-//! last answer as current. Before the project is known to be shared the page is [`unread`]'s.
+//! The readiness is read off the UI thread through its query (`queries::hub::team_hub`), kept for the session: a visit
+//! shows the last answer at once and reads it again behind it, as do a change of the project's resources or fill-ins
+//! and of the team's configuration, which the team server's events change (`queries::follow::ProjectReads`); never on a
+//! timer: a local tool's secret is read from the keychain. While it is read again the page shows the last answer as it
+//! is, and a read that failed shows its failure and no counts, never the last answer as current. Before it was ever
+//! read the list and the panel stand in bones ([`agents_bones`]). Before the project is known to be shared the page is
+//! [`unread`]'s.
 
 pub(in crate::screens) mod actions;
 pub(in crate::screens) mod archive;
@@ -44,17 +47,16 @@ use lurq::{
   node::Element,
 };
 use orchester_core::id::{ProjectId, ResourceId};
-use orchester_workspace::{
-  agents::team_hub::TeamHub, background, messages::Message, sharing::team::TeamConfiguration, tasks::outside::Outside,
-};
+use orchester_workspace::{agents::team_hub::TeamHub, messages::Message, sharing::team::TeamConfiguration};
 
 use self::model::{Kind, Listing};
 use crate::{
   navigation::Navigation,
   project::ShownProject,
+  queries::{self, Again, Session, hub as hub_query},
   routes::{HubFilter, HubView, ProjectPage, Route},
   screens::hub::{
-    agents,
+    agents, agents_bones,
     new_button::{made_under, new_button, new_words},
   },
   services::Services,
@@ -64,7 +66,6 @@ use crate::{
     failure::{Failure, LastFailure},
     icon::Icon,
     pressable::Press,
-    state::loading,
   },
 };
 
@@ -89,7 +90,9 @@ pub fn screen(ctx: &mut Ctx, project: &ShownProject, team: TeamConfiguration, vi
 }
 
 struct TeamHubScreen {
+  /// Counts *Try again* and *Check again*, each of which reads the hub again.
   retry: Signal<u64>,
+  again: Again,
   /// Why the hub couldn't be read, kept while it is read again.
   failure: LastFailure,
 }
@@ -100,38 +103,17 @@ impl Component for TeamHubScreen {
   fn create(ctx: &mut Ctx) -> Self {
     Self {
       retry: ctx.signal(0),
+      again: Again::default(),
       failure: LastFailure::default(),
     }
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let Props { project, view, team } = ctx.props::<Props>().clone();
-    let outside = project.feed.outside.get();
-    // Fill-ins (a program path, a secret value, On here) count as Connections; the rest are the kinds the hub lists.
-    let dep = (
-      self.retry.get(),
-      outside.of(Outside::Connections),
-      outside.of(Outside::Tools),
-      outside.of(Outside::Profiles),
-      outside.of(Outside::Instructions),
-      outside.of(Outside::Skills),
-      team.clone(),
-    );
-    let services = Services::of(ctx);
-    let (workspace, vault, hold) = (services.workspace, services.vault, services.hold);
-    let loaded = ctx
-      .future((project.open.repo_root.clone(), dep), move |(root, _)| {
-        tracing::trace!(target: crate::app_log::READ_LOG, read = "team_hub");
-        let (workspace, vault, hold) = (workspace.clone(), vault.clone(), hold.clone());
-        async move {
-          hold.released().await;
-          background::run(move || workspace.team_hub(&root, vault.get()))
-            .await?
-            .map_err(|error| error.message())
-        }
-      })
-      .state()
-      .get();
+    let session = Session::of(ctx);
+    let query = ctx.query(hub_query::team_hub(session, project.open.repo_root.clone()));
+    self.again.follow(self.retry.get(), &query);
+    let loaded = queries::reading(&query);
     let failed = self.failure.follow(&loaded);
     // A read under way or failed keeps the last answer in `loaded`: it counts and lists only while the read is not
     // failed, and a read under way marks what shows as the last answer.
@@ -159,7 +141,7 @@ impl Component for TeamHubScreen {
           (reading, &self.retry),
         )
       }
-      (None, None) => loading("team-hub-loading", &ctx.t("team_hub.reading")).into(),
+      (None, None) => agents_bones::body(ctx, "team-hub-loading", ctx.t("team_hub.reading")),
     };
     let id = project.open.project.id();
     // Only an admin makes a resource: *New <kind>* opens the form of the kind the tab holds.

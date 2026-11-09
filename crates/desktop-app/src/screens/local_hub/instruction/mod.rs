@@ -5,8 +5,10 @@
 //! their checks are the Instructions editor's ([`crate::screens::instructions`]). Its name and where it is added were
 //! fixed when it was made.
 //!
-//! The project's instructions are read once for every instruction the panel shows, and again when they change: going
-//! from one instruction to another shows the next at once. Only the first read of one shows the panel in bones. A draft
+//! The project's instructions are read once for every instruction the panel shows, through their query
+//! (`queries::hub::instructions`), kept for the session, and again when they, the profiles or the pipelines change (the
+//! panel's own *Save* and *Cancel* record such a change): going from one instruction to another, or coming back to the
+//! hub, shows it at once. Only the first read of one shows the panel in bones. A draft
 //! stored before (by the Instructions page) opens as the panel's changes over the published version: *Save* publishes
 //! it, *Cancel* throws it away.
 
@@ -21,14 +23,8 @@ use lurq::{
   core::Ref,
   node::Element,
 };
-use orchester_core::{id::ResourceId, resource::Instruction};
-use orchester_workspace::{
-  background,
-  instructions::data::ProjectInstructions,
-  messages::{self, Message},
-  removal,
-  tasks::outside::Outside,
-};
+use orchester_core::id::ResourceId;
+use orchester_workspace::messages::Message;
 
 use self::editor::EditorProps;
 use super::{
@@ -38,7 +34,10 @@ use super::{
 };
 use crate::{
   project::ShownProject,
-  services::Services,
+  queries::{
+    self, Session,
+    hub::{self, InstructionsRead},
+  },
   theme::HubText,
   ui::{field::field_error, message::message_text},
 };
@@ -111,27 +110,13 @@ impl Component for Loader {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
-    let outside = props.project.feed.outside.get();
-    let dep = (
-      outside.of(Outside::Instructions),
-      outside.of(Outside::Profiles),
-      outside.of(Outside::Pipelines),
-    );
-    let hold = Services::of(ctx).hold;
-    let read = ctx
-      .future((props.project.open.repo_root.clone(), dep), move |(root, _)| {
-        let hold = hold.clone();
-        async move {
-          hold.released().await;
-          background::run(move || Read::of(&root)).await?
-        }
-      })
-      .state()
-      .get();
+    let session = Session::of(ctx);
+    let query = ctx.query(hub::instructions(session, props.project.open.repo_root.clone()));
+    let read = queries::reading(&query);
     let (pending, rejected) = (read.is_pending(), read.is_rejected());
     // An instruction opened while the read is under way again waits for it: the last answer may hold an older draft.
     let fresh = !pending || self.shown.get() == Some(props.id);
-    let Some(Read { data, published }) = read.data.filter(|_| fresh) else {
+    let Some(InstructionsRead { data, published }) = read.data.filter(|_| fresh) else {
       return match read.error.filter(|_| rejected) {
         Some(error) => failed(ctx, &error),
         None => bones(
@@ -169,25 +154,4 @@ impl Component for Loader {
 /// Why the instructions could not be read.
 fn failed(ctx: &Ctx, error: &Message) -> Element {
   field_error("local-hub-instruction-unread", &message_text(ctx, error)).into()
-}
-
-/// The project's instructions, and the published version of each that has a draft: the panel compares with it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct Read {
-  data: ProjectInstructions,
-  published: Vec<(ResourceId, Instruction)>,
-}
-impl DevtoolsInspectable for Read {}
-
-impl Read {
-  fn of(root: &std::path::Path) -> Result<Self, Message> {
-    let data = ProjectInstructions::load_in(root).map_err(|error| messages::store_error(&error))?;
-    let mut published = Vec::new();
-    for entry in data.entries.iter().filter(|entry| entry.state.has_draft()) {
-      if let Some(body) = removal::published_in::<Instruction>(root, entry.id)? {
-        published.push((entry.id, body));
-      }
-    }
-    Ok(Self { data, published })
-  }
 }

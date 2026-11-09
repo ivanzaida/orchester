@@ -9,9 +9,11 @@
 //! the runs that use it and takes it out of the lists ([`archive`]); *Archived* lists what was archived and restores it
 //! ([`archived`]). The filter and the chosen entry are the route's ([`HubView`]).
 //!
-//! The readiness is read off the UI thread when the page opens and when the project's resources or connections change,
-//! never on a timer: a tool's or a server's secret is looked up in the keychain. While it is read again the page shows
-//! the last answer dimmed with *Reading…*, and a read that failed shows its failure and no counts.
+//! The readiness is read off the UI thread through its query (`queries::hub::local_hub`), kept for the session: a visit
+//! shows the last answer at once and reads it again behind it, as do a change of the project's resources or
+//! connections and a run's start or end; never on a timer: a tool's or a server's secret is looked up in the keychain.
+//! While it is read again the page shows the last answer as it is, and a read that failed shows its failure and no
+//! counts. Before it was ever read the list and the panel stand in bones (`hub::agents_bones`).
 
 pub(in crate::screens) mod archive;
 mod archived;
@@ -44,9 +46,7 @@ use orchester_core::{
   resource::ResourceKind,
   time::Timestamp,
 };
-use orchester_workspace::{
-  agents::local_hub::LocalHub, background, local_archive::Archivable, messages::Message, tasks::outside::Outside,
-};
+use orchester_workspace::{agents::local_hub::LocalHub, local_archive::Archivable, messages::Message};
 
 pub(in crate::screens) use self::model::view_of;
 use self::{
@@ -58,15 +58,15 @@ use self::{
 use crate::{
   navigation::{Navigation, guard::LeaveGuard},
   project::{ShownProject, TeamRead},
+  queries::{self, Again, Session, hub as hub_query},
   routes::{HubFilter, HubView, ProjectPage, Route},
   screens::{
     hub::{
-      agents,
+      agents, agents_bones,
       new_button::{made_under, new_button, new_words},
     },
     team_hub::{create, model::Kind, unread},
   },
-  services::Services,
   ui::{
     button::{ActionButton, ButtonKind},
     failure::{Failure, LastFailure},
@@ -93,7 +93,9 @@ pub fn screen(ctx: &mut Ctx, project: &ShownProject, view: HubView) -> Element {
 }
 
 struct LocalHubScreen {
+  /// Counts *Try again*, which reads the hub again.
   retry: Signal<u64>,
+  again: Again,
   /// Why the hub couldn't be read, kept while it is read again.
   failure: LastFailure,
   /// The MCP server, instruction or skill whose panel has edits that are not saved, which its row says.
@@ -118,6 +120,7 @@ impl Component for LocalHubScreen {
     ctx.provide(archiving.clone());
     let this = Self {
       retry: ctx.signal(0),
+      again: Again::default(),
       failure: LastFailure::default(),
       unsaved,
       leaving: ctx.signal(None),
@@ -189,7 +192,7 @@ impl Component for LocalHubScreen {
           selected.as_ref(),
         )
       }
-      (None, None) => loading("local-hub-loading", &ctx.t("local_hub.reading")).into(),
+      (None, None) => agents_bones::body(ctx, "local-hub-loading", ctx.t("local_hub.reading")),
     };
     let new = new_button(
       ctx,
@@ -243,37 +246,14 @@ fn tabs(project: ProjectId, listing: Option<&Listing>, selected: Option<Archivab
 }
 
 impl LocalHubScreen {
-  /// The hub as the project's database has it: read again when a connection, a tool, a profile, an instruction, a skill
-  /// or a pipeline changed, and when a run changes state.
+  /// The hub as the project's database has it, from the session's cache: its last answer at once, read again behind it
+  /// on each visit, when a connection, a tool, a profile, an instruction, a skill or a pipeline changed, and when a run
+  /// changes state (`queries::changes`); and on *Try again*.
   fn read(&self, ctx: &mut Ctx, project: &ShownProject) -> FutureState<LocalHub, Message> {
-    let outside = project.feed.outside.get();
-    let dep = (
-      self.retry.get(),
-      outside.of(Outside::Connections),
-      outside.of(Outside::Tools),
-      outside.of(Outside::Profiles),
-      outside.of(Outside::Instructions),
-      outside.of(Outside::Skills),
-      outside.of(Outside::Pipelines),
-      // What the runs decide: which profiles and servers they use, how many runs stop, and so readiness. A run starts
-      // or ends, not a line of its transcript.
-      project.feed.states.get(),
-    );
-    let services = Services::of(ctx);
-    let (workspace, vault, hold) = (services.workspace, services.vault, services.hold);
-    ctx
-      .future((project.open.repo_root.clone(), dep), move |(root, _)| {
-        tracing::trace!(target: crate::app_log::READ_LOG, read = "local_hub");
-        let (workspace, vault, hold) = (workspace.clone(), vault.clone(), hold.clone());
-        async move {
-          hold.released().await;
-          background::run(move || workspace.local_hub(&root, vault.get()))
-            .await?
-            .map_err(|error| error.message())
-        }
-      })
-      .state()
-      .get()
+    let session = Session::of(ctx);
+    let query = ctx.query(hub_query::local_hub(session, project.open.repo_root.clone()));
+    self.again.follow(self.retry.get(), &query);
+    queries::reading(&query)
   }
 
   fn failure_page(&self, ctx: &mut Ctx, project: &ShownProject, error: Message, retrying: bool) -> Element {

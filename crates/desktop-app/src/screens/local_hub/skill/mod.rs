@@ -5,10 +5,11 @@
 //! ([`orchester_workspace::skills::editor`]); *Cancel* puts back what is stored. Its reference files are listed but not
 //! changed here, and where it is added was fixed when it was made.
 //!
-//! What the Skills editor checks a write against is read once for every skill the panel shows, and again when the
-//! skills change: going from one skill to another shows the next at once. Only the first read of one shows the panel in
-//! bones. A draft stored before (by the Skills page) opens as the panel's changes over the published version: *Save*
-//! publishes it, *Cancel* throws it away.
+//! What the Skills editor checks a write against is read once for every skill the panel shows, through its query
+//! (`queries::hub::skills`), kept for the session, and again when the skills, the profiles or the pipelines change (the
+//! panel's own *Save* and *Cancel* record such a change): going from one skill to another, or coming back to the hub,
+//! shows it at once. Only the first read of one shows the panel in bones. A draft stored before (by the Skills page)
+//! opens as the panel's changes over the published version: *Save* publishes it, *Cancel* throws it away.
 
 mod editor;
 
@@ -21,10 +22,7 @@ use lurq::{
   core::Ref,
   node::Element,
 };
-use orchester_core::{id::ResourceId, resource::Skill};
-use orchester_workspace::{
-  background, messages::Message, removal, skills::editor::EditorData, tasks::outside::Outside,
-};
+use orchester_core::id::ResourceId;
 
 use self::editor::EditorProps;
 use super::{
@@ -34,7 +32,10 @@ use super::{
 };
 use crate::{
   project::ShownProject,
-  services::Services,
+  queries::{
+    self, Session,
+    hub::{self, SkillsRead},
+  },
   theme::HubText,
   ui::{field::field_error, message::message_text},
 };
@@ -114,27 +115,13 @@ impl Component for Loader {
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
     let props = ctx.props::<Props>().clone();
-    let outside = props.project.feed.outside.get();
-    let dep = (
-      outside.of(Outside::Skills),
-      outside.of(Outside::Profiles),
-      outside.of(Outside::Pipelines),
-    );
-    let hold = Services::of(ctx).hold;
-    let read = ctx
-      .future((props.project.open.repo_root.clone(), dep), move |(root, _)| {
-        let hold = hold.clone();
-        async move {
-          hold.released().await;
-          background::run(move || Read::of(&root)).await?
-        }
-      })
-      .state()
-      .get();
+    let session = Session::of(ctx);
+    let query = ctx.query(hub::skills(session, props.project.open.repo_root.clone()));
+    let read = queries::reading(&query);
     let (pending, rejected) = (read.is_pending(), read.is_rejected());
     // A skill opened while the read is under way again waits for it: the last answer may hold an older draft.
     let fresh = !pending || self.shown.get() == Some(props.id);
-    let Some(Read { data, published }) = read.data.filter(|_| fresh) else {
+    let Some(SkillsRead { data, published }) = read.data.filter(|_| fresh) else {
       return match read.error.filter(|_| rejected) {
         Some(error) => field_error("local-hub-skill-unread", &message_text(ctx, &error)).into(),
         None => bones(
@@ -166,27 +153,5 @@ impl Component for Loader {
         published,
       },
     )
-  }
-}
-
-/// What a write is checked against, and the published version of each skill that has a draft: the panel compares
-/// with it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct Read {
-  data: EditorData,
-  published: Vec<(ResourceId, Skill)>,
-}
-impl DevtoolsInspectable for Read {}
-
-impl Read {
-  fn of(root: &std::path::Path) -> Result<Self, Message> {
-    let data = EditorData::stored_in(root)?;
-    let mut published = Vec::new();
-    for entry in data.listed.entries.iter().filter(|entry| entry.state.has_draft()) {
-      if let Some(body) = removal::published_in::<Skill>(root, entry.id)? {
-        published.push((entry.id, body));
-      }
-    }
-    Ok(Self { data, published })
   }
 }

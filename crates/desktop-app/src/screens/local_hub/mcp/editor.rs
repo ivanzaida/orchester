@@ -190,8 +190,7 @@ impl Component for Editor {
     };
     let mut rows = self.form.server_rows(ctx, &look);
     rows.extend(self.after_rows(ctx, &look, server.enabled()));
-    let used =
-      (!entry.used_by.is_empty()).then(|| ctx.t_args("local_hub.panel.usedBy", [("names", entry.used_by.join(", "))]));
+    let used = notes::used_by(ctx, entry);
     let note = match (refused, &field) {
       (Some(message), Some(field)) => Some(notes::refusal(ctx, &entry.name, (message, *field == Refusal::Secret))),
       (..) => None,
@@ -200,7 +199,7 @@ impl Component for Editor {
       changed.then(|| notes::editing(ctx, &entry.name, &self.changed_labels(ctx, (&typed, &text), &secrets)))
     });
     let body = body()
-      .child(head(ctx, (&props, &server), what))
+      .child(head(ctx, &props, Some(server.created_at())))
       .with_children(note)
       .child(chips_of(notes::chips(ctx, entry, changed), used))
       .child(team_rows::section(
@@ -216,30 +215,29 @@ impl Component for Editor {
   }
 }
 
-/// The head: *MCP server · added Oct 30* over the name, with the … menu.
-fn head(ctx: &mut Ctx, (props, server): (&Props, &McpServer), what: Archivable) -> Row {
+/// The head: *MCP server · added Oct 30* over the name, with the … menu; when it was `added` is `None` while the server
+/// is read for the first time.
+pub(super) fn head(ctx: &mut Ctx, props: &Props, added: Option<Timestamp>) -> Row {
   let entry = &props.entry;
   let more = archive::menu(
     ctx,
     archive::Target {
       root: props.project.open.repo_root.clone(),
       project: props.project.open.project.id(),
-      what,
+      what: Archivable::McpServer(props.server),
       kind: entry.kind,
       name: Arc::from(entry.name.as_str()),
     },
   );
-  let added = date(ctx, Timestamp::now(), server.created_at());
+  let added = added.map(|at| {
+    let date = date(ctx, Timestamp::now(), at);
+    ctx
+      .t_args("local_hub.mcp.added", [("date", date.to_string())])
+      .to_string()
+  });
   head_named(
     &entry.name,
-    (
-      ctx.t(kind_where_key(entry.kind)).to_string(),
-      Some(
-        ctx
-          .t_args("local_hub.mcp.added", [("date", added.to_string())])
-          .to_string(),
-      ),
-    ),
+    (ctx.t(kind_where_key(entry.kind)).to_string(), added),
     Some(more),
   )
 }

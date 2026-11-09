@@ -14,11 +14,22 @@
 //! touched ([`changes`]): automation's recorded changes, the accounts', the update settings' and the runs'. A save
 //! invalidates its own query once its write ended.
 //!
+//! The Agents hub reads the same way ([`hub`]), keyed by the project's folder: a team project's hub and a local one's
+//! are live (`"0s"`: what this computer filled in is looked up in the keychain and on disk as they are read), so a
+//! visit shows the last answer at once and reads it again behind it; what a local instruction's, skill's and new
+//! profile's panel edit over is stored (`"24h"`). Nothing reads them ahead of a visit. [`ProjectReads`] invalidates
+//! them with the project's other reads: the resources' and connections' changes (a panel's own save records one), the
+//! runs' state for a local hub, and for a team's hub a change of the team's configuration, which is how the team
+//! server's events reach it (the project's event stream applies each to the project's cache and wakes
+//! `Servers::subscribe_shared`, which the project's feed follows by reading the configuration again). A screen
+//! built on futures reads one through [`reading`].
+//!
 //! [`QueryClient`]: lurq::query::QueryClient
 
 pub mod app;
 pub mod changes;
 pub mod follow;
+pub mod hub;
 mod kept;
 pub mod project;
 
@@ -70,6 +81,15 @@ pub fn state<T: Clone>(handle: &QueryHandle<T, Message>) -> FutureState<T, Messa
     (None, Some(data)) => FutureState::fulfilled(data),
     (None, None) => FutureState::pending(None),
   }
+}
+
+/// [`state`], pending with the entry's last data while a read is under way: a screen that shows the last answer while
+/// it is read again, and keeps a failure while the read that follows it runs (`LastFailure`), reads its query so.
+pub fn reading<T: Clone>(handle: &QueryHandle<T, Message>) -> FutureState<T, Message> {
+  if handle.fetching() {
+    return FutureState::pending(handle.data().map(|data| T::clone(&data)));
+  }
+  state(handle)
 }
 
 /// Forgets a control's own choice once the stored value is it again: its save's read landed, or a change from

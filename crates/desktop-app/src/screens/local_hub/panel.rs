@@ -155,6 +155,14 @@ pub(super) fn head_end(
     .into()
 }
 
+/// What a panel in bones shows as it is: the head with its end, the chips and the bar, which the hub knows before what
+/// the panel edits is read.
+pub(super) struct Known {
+  pub head: Row,
+  pub chips: Row,
+  pub bar: Element,
+}
+
 /// The panel of the resource `id` (`entry`) while what it edits is read for the first time: the head, its end and the
 /// chips the hub knows already, then the section `title` (a key) with `rows` in bones, and the bar with *Save* and
 /// *Cancel* off, so that the editor takes their place without the panel moving. The ids start with `prefix`.
@@ -162,7 +170,7 @@ pub(super) fn bones(
   ctx: &mut Ctx,
   (project, entry, id): (&ShownProject, &Entry, ResourceId),
   prefix: &str,
-  (title, rows): (&str, &[BoneRow]),
+  section: (&str, &[BoneRow]),
 ) -> Element {
   let head = head_named(
     &entry.name,
@@ -172,6 +180,23 @@ pub(super) fn bones(
     ),
     Some(head_end(ctx, project, entry, (id, prefix))),
   );
+  let known = Known {
+    head,
+    chips: chips_of(standing_chips(ctx, entry), None),
+    bar: save_bar::bar(ctx, prefix, (Save::Unchanged, None), save_bar::makes(ctx, entry.number)),
+  };
+  bones_with(ctx, entry.what, prefix, section, known)
+}
+
+/// The panel of `what` in bones: what is `known` as it is, the section `title` (a key) with `rows` in bones between the
+/// chips and the bar. The ids start with `prefix`.
+pub(super) fn bones_with(
+  ctx: &Ctx,
+  what: Archivable,
+  prefix: &str,
+  (title, rows): (&str, &[BoneRow]),
+  known: Known,
+) -> Element {
   let rows = rows
     .iter()
     .enumerate()
@@ -179,11 +204,10 @@ pub(super) fn bones(
     .collect();
   let section = rows::section(&format!("{prefix}-bones"), &ctx.t(title), Vec::new(), rows);
   let body = body()
-    .child(head)
-    .child(chips_of(standing_chips(ctx, entry), None))
+    .child(known.head)
+    .child(known.chips)
     .child(skeleton::pulsing(section));
-  let bar = save_bar::bar(ctx, prefix, (Save::Unchanged, None), save_bar::makes(ctx, entry.number));
-  frame(entry.what, body, Some(bar))
+  frame(what, body, Some(known.bar))
 }
 
 fn bone_row(ctx: &Ctx, id: &str, row: &BoneRow) -> Row {

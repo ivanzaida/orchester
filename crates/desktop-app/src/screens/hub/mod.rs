@@ -7,6 +7,7 @@
 
 pub(crate) mod agent_row;
 pub(crate) mod agents;
+pub(crate) mod agents_bones;
 pub(crate) mod bones;
 pub(crate) mod discard;
 pub(crate) mod draft_bar;

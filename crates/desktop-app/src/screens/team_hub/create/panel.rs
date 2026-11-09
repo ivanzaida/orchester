@@ -23,7 +23,6 @@ use lurq::{
 use orchester_core::id::{ProjectId, ResourceId};
 use orchester_workspace::{
   agents::data::ProjectAgents,
-  background,
   connections::data::ProjectConnections,
   local_archive::Archivable,
   messages::Message,
@@ -41,7 +40,7 @@ use super::{
 use crate::{
   mcp::input_gate::{Guarded, InputGate, input_may_decide},
   navigation::Navigation,
-  queries,
+  queries::{self, Session, hub},
   routes::{HubView, ProjectPage, Route},
   screens::{
     connections::data,
@@ -300,21 +299,13 @@ impl NewPanel {
     Some(field_error("team-new-cancel-error", &message_text(ctx, why)).into())
   }
 
-  /// This computer's connections, which the profile form's CLI and model choices come from.
+  /// This computer's connections, which the profile form's CLI and model choices come from, from the session's cache.
   fn agents(&self, ctx: &mut Ctx, kind: Kind, root: &Path) -> Option<ProjectAgents> {
     if kind != Kind::Profile {
       return None;
     }
-    ctx
-      .future(root.to_path_buf(), move |root| async move {
-        background::run(move || {
-          ProjectAgents::load_in(&root).map_err(|error| orchester_workspace::messages::store_error(&error))
-        })
-        .await?
-      })
-      .state()
-      .get()
-      .data
+    let session = Session::of(ctx);
+    queries::state(&ctx.query(hub::profile_form(session, root.to_path_buf()))).data
   }
 
   /// The project's MCP servers and secrets, which a local MCP server's form takes the secrets its variables name from.

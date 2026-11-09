@@ -54,6 +54,11 @@ pub(super) fn chips(ctx: &Ctx, entry: &Entry, changed: bool) -> Vec<(Arc<str>, B
   chips
 }
 
+/// *used by Designer, Reviewer* at the chips' end; nothing when no profile uses the server.
+pub(super) fn used_by(ctx: &Ctx, entry: &Entry) -> Option<Arc<str>> {
+  (!entry.used_by.is_empty()).then(|| ctx.t_args("local_hub.panel.usedBy", [("names", entry.used_by.join(", "))]))
+}
+
 /// *Editing figma · not saved yet* over what changed and what *Save* and *Cancel* do.
 pub(super) fn editing(ctx: &Ctx, name: &str, changed: &[Arc<str>]) -> Element {
   let fields = changed.join(", ");

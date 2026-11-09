@@ -8,20 +8,21 @@ use orchester_store::ProjectDb;
 use super::harness::Agents;
 
 #[test]
-fn agents_loading_is_visible_before_the_read_finishes() {
+fn agents_loading_is_visible_before_the_first_read_finishes_and_a_revisit_shows_the_last_answer() {
+  let agents =
+    orchester_app::routes::Route::Project(super::support::project_id(), orchester_app::routes::ProjectPage::Agents);
   let mut screen = Agents::new(true);
-  screen.go();
-  screen.window.navigation().go(orchester_app::routes::Route::AllProjects);
-  screen.window.pass();
-  screen.window.navigation().go(orchester_app::routes::Route::Project(
-    super::support::project_id(),
-    orchester_app::routes::ProjectPage::Agents,
-  ));
-  screen.window.pass();
-  assert!(screen.exists("local-hub-loading"));
+  screen.window.navigation().go(agents.clone());
+  screen.until("the hub in bones", |s| s.exists("local-hub-loading"));
   screen.until("loaded", |s| {
     s.exists("local-hub-filter") && !s.exists("local-hub-loading")
   });
+  screen.window.navigation().go(orchester_app::routes::Route::AllProjects);
+  screen.window.pass();
+  screen.window.navigation().go(agents);
+  screen.window.pass();
+  // The session keeps the hub's last answer: it shows at once and is read again behind it.
+  assert!(screen.exists("local-hub-filter") && !screen.exists("local-hub-loading"));
 }
 
 #[test]
