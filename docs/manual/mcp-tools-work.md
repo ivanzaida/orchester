@@ -145,6 +145,13 @@ its next run takes as things stand (`null` = whatever the checkout has checked o
 `led_in` is the Orchestrator conversation the task's events go to, as its *Led in* shows it (see
 [`get_watches`](#get_watches--read-only)), or `null` when no subscription covers it.
 
+A team task also carries `closed` and `blocked`, as the team server records them: `closed` is `{how, at}` while the task is
+Done or Canceled (`how` is `{kind: "person", by}` for the person whose patch closed it, `{kind: "delivery", module, module_name}`
+when its module's accepted delivery marked it Done, or `{kind: "run", work}` when its work's success did); `blocked` is
+`{by, at}` while it has a `blocked_reason`: who set the current reason. `at` is in milliseconds. Each is `null` when the
+server has no record, as every server before this contract has none; the Summary then says only *Done*, *Canceled* or
+*Blocked*.
+
 Parameters: `project` (req.), `key` (req.: key or id).
 
 ### `create_task` — changes data

@@ -47,6 +47,14 @@ fn team_mcp_reads_come_from_the_team_server() {
   assert_eq!(task["module"], server.module.to_string());
   assert_eq!(task["revision"], 1);
   assert_eq!(task["team"], true);
+  // The server sends no record of who closed it or set a reason (an open task has none): both read as null.
+  assert!(task["closed"].is_null() && task["blocked"].is_null(), "{task}");
+  assert!(
+    task
+      .as_object()
+      .is_some_and(|task| task.contains_key("closed") && task.contains_key("blocked")),
+    "the fields are there, null, not left out: {task}"
+  );
   let by_id = checkout
     .call(
       "get_task",
