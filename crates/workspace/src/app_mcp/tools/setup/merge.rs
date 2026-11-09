@@ -155,8 +155,8 @@ pub struct MergeRun {
   pub authorization: Option<String>,
 }
 
-/// `merge_run`: a local project's run merged into its base branch; a team project's run has its module's delivery
-/// requested instead ([`team::merge_run`]).
+/// `merge_run`: a local run merged into its base branch (a local task's run in a team project too); a team task's run
+/// has its module's delivery requested instead ([`team::merge_run`]).
 pub async fn merge_run(services: &Services, args: MergeRun, translate: &Translate) -> Result<Value, ToolError> {
   let authorization = args
     .authorization
@@ -169,12 +169,12 @@ pub async fn merge_run(services: &Services, args: MergeRun, translate: &Translat
       })
     })
     .transpose()?;
-  if let Some(team) = team::of(services, &args.project).await? {
+  if let Some(team) = team::of_run(services, (&args.project, &args.run)).await? {
     return team::merge_run(services, &team, (&args.run, authorization), translate).await;
   }
   if authorization.is_some() {
     return Err(ToolError::InvalidArguments(
-      "`authorization` cites a team module delivery's authorization; a local project's merge_run takes none".to_owned(),
+      "`authorization` cites a team module delivery's authorization; a local run's merge_run takes none".to_owned(),
     ));
   }
   let args = InRun {
@@ -251,11 +251,12 @@ fn start(
 ) -> Result<Started, ToolError> {
   let open = services.project(&args.project)?;
   let db = ProjectDb::open(&open.repo_root)?;
-  // A team task's run goes into its module's branch, and only the module's delivery takes it to the base branch.
-  if team::linked(&db)? {
+  let run = find_run(&db, &args.run)?;
+  // A team task's run (by its own team record) goes into its module's branch, and only the module's delivery takes it
+  // to the base branch; a local task's run in a team project merges here.
+  if team::is_team_run(&db, run.id())? {
     return Err(team::merge_refused());
   }
-  let run = find_run(&db, &args.run)?;
   ready(&db, &run, (&open.repo_root, &services.programs))?;
   let jobs = services.jobs.of(open.project.id());
   let holder = checkout_holder(&db, run.id())?;

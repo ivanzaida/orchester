@@ -26,7 +26,7 @@ pub(super) use self::{
   tasks::{get_task, list_tasks},
   writes::{create_task, update_task},
 };
-use super::tasks::find_task;
+use super::{runs::find_run, tasks::find_task};
 use crate::{
   actions::Dispatcher,
   app_mcp::{
@@ -55,6 +55,22 @@ pub(super) async fn of(services: &Services, named: &str) -> Result<Option<Team>,
     Ok(link.map(|link| Team { open, link }))
   })
   .await
+}
+
+/// The [`Team`] of project `named` when it is linked to a team server and run `run` is a team task's run by its own
+/// team record; `None` for a local project and for a local task's run in a team project, which are local runs. Not
+/// found when the project is linked and names no such run.
+pub(super) async fn of_run(services: &Services, (named, run): (&str, &str)) -> Result<Option<Team>, ToolError> {
+  let Some(team) = of(services, named).await? else {
+    return Ok(None);
+  };
+  let (root, run) = (team.open.repo_root.clone(), run.to_owned());
+  let is_team = blocking(move || {
+    let db = ProjectDb::open(&root)?;
+    is_team_run(&db, find_run(&db, &run)?.id())
+  })
+  .await?;
+  Ok(is_team.then_some(team))
 }
 
 impl Team {
@@ -202,7 +218,7 @@ pub(super) fn no_queue() -> ToolError {
 
 /// A team task's run is never merged into the base branch from here: its work goes into its module's branch, and only
 /// the module's delivery takes it further, which `merge_run` requests ([`merge_run`]). A merge a person approved in a
-/// proposal is of the run's own commit, so on a team project it is refused.
+/// proposal is of the run's own commit, so on a team task's run it is refused.
 pub(super) fn merge_refused() -> ToolError {
   ToolError::refused(
     "team_delivery_pending",

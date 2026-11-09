@@ -134,19 +134,15 @@ pub async fn continue_run(services: &Services, args: ContinueRun) -> Result<Valu
 /// needs the person's consent (the Orchestrator chat's switch *Let the Orchestrator drive* is that for the chat), while
 /// a person's (the Orchestrator chat's proposal a person applied) is recorded as
 /// theirs and needs none. A resume after the daily budget raises nothing: the runner refuses it while today's budget
-/// is still used up. A team task's limits are its Admin's (D6), so a raise is refused there; its other choices read
-/// the task from this computer's copy, so they are refused for a team project until its runs are read from their
-/// own execution records.
+/// is still used up. A team task's run (by its own team record) is refused: its limits are its Admin's (D6), and its
+/// other choices read the task from this computer's copy, so they are refused until its runs are read from their own
+/// execution records. A local task's run in a team project continues as a local run.
 pub(crate) async fn continue_as(services: &Services, args: ContinueRun, by: Answerer) -> Result<Value, ToolError> {
-  if team::of(services, &args.project).await?.is_some() {
-    return Err(match args.choice {
-      Choice::RaiseLimits { .. } | Choice::RaiseStepBudget { .. } => team::decision_required(DecisionId::D6),
-      _ => team::team_only_on_server("continue_run"),
-    });
-  }
   let reading = services.clone();
   let resolves = matches!(args.choice, Choice::ResolveConflicts { .. });
   let (project, run, request) = blocking(move || {
+    let project = reading.project(&args.project)?;
+    refuse_team_run(&project.repo_root, &args)?;
     let decision = match args.choice {
       Choice::AllowRetry | Choice::ReturnTo { .. } | Choice::Accept | Choice::ResolveConflicts { .. } => {
         Some(DecisionKind::Stuck)
@@ -157,7 +153,6 @@ pub(crate) async fn continue_as(services: &Services, args: ContinueRun, by: Answ
     if let Some(decision) = decision.filter(|_| by == Answerer::Automation && !reading.chat_drives()) {
       decision.require(&reading.workspace)?;
     }
-    let project = reading.project(&args.project)?;
     let jobs = reading.jobs.of(project.project.id());
     let worktrees = reading.run_worktrees(&project.repo_root, project.project.name().as_str());
     let (run, request) = request(&project.repo_root, &args, (&worktrees, &jobs, by))?;
@@ -185,6 +180,19 @@ pub(crate) async fn continue_as(services: &Services, args: ContinueRun, by: Answ
     services.jobs.of(project.project.id()).of(run.id).forget_merge_failure();
   }
   status_now(&project, run.id).await
+}
+
+/// Refuses continuing the run `args` names when it is a team task's run, by its own team record: a local task's run in
+/// a team project continues as a local run.
+fn refuse_team_run(root: &Path, args: &ContinueRun) -> Result<(), ToolError> {
+  let db = ProjectDb::open(root)?;
+  if !team::is_team_run(&db, find_run(&db, &args.run)?.id())? {
+    return Ok(());
+  }
+  Err(match args.choice {
+    Choice::RaiseLimits { .. } | Choice::RaiseStepBudget { .. } => team::decision_required(DecisionId::D6),
+    _ => team::team_only_on_server("continue_run"),
+  })
 }
 
 /// The run the tool continues.

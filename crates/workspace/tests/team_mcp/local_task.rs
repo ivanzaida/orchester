@@ -105,3 +105,31 @@ fn team_mcp_a_message_to_a_local_run_in_a_team_project_runs_the_task_again_here(
     assert_eq!(server.state().works_made, 0, "no team work was made");
   }
 }
+
+#[test]
+fn team_mcp_continue_run_of_a_local_run_in_a_team_project_is_decided_as_a_local_run() {
+  let (server, _seen) = server();
+  let checkout = Checkout::prepared(Some(&server), &["Say hello"], crate::tools::canceled_run);
+  let resume = json!({"project": "Kontur", "run": local_run(&checkout), "choice": {"kind": "resume"}});
+
+  // The local task page's own rule answers (a canceled run was not stopped at a limit), not the team refusal.
+  assert_eq!(checkout.refused("continue_run", &resume), "not_stopped_at_limit");
+}
+
+#[test]
+fn team_mcp_continue_run_of_a_team_run_is_refused_by_its_team_record() {
+  let team = crate::team_runs::started();
+  let run = team.run.to_string();
+
+  let resume = json!({"project": "Kontur", "run": run, "choice": {"kind": "resume"}});
+  assert_eq!(
+    team.checkout.refused("continue_run", &resume),
+    "team_project_unsupported"
+  );
+  let raise = json!({
+    "project": "Kontur",
+    "run": run,
+    "choice": {"kind": "raise_limits", "budget_tokens": null, "time_limit_minutes": null},
+  });
+  assert_eq!(team.checkout.refused("continue_run", &raise), "decision_required");
+}
