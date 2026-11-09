@@ -43,7 +43,23 @@ pub fn flat(id: &str, words: &str) -> Row {
 
 /// `dana-k (Admin) and olha (Server admin)`; empty when nobody is named.
 pub fn admin_names(ctx: &Ctx, admins: &TeamAdmins) -> String {
-  let named = |key: &str, name: &str| ctx.t_args(key, [("name", name)]).to_string();
+  joined(ctx, admins, true)
+}
+
+/// `dana-k and olha`: the names without their roles, where a line names who can close the task (`g9S4k`, `tlw0r`);
+/// empty when nobody is named.
+pub fn plain_names(ctx: &Ctx, admins: &TeamAdmins) -> String {
+  joined(ctx, admins, false)
+}
+
+fn joined(ctx: &Ctx, admins: &TeamAdmins, roles: bool) -> String {
+  let named = |key: &str, name: &str| {
+    if roles {
+      ctx.t_args(key, [("name", name)]).to_string()
+    } else {
+      name.to_owned()
+    }
+  };
   let all: Vec<String> = admins
     .admins
     .iter()

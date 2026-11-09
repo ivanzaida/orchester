@@ -170,9 +170,9 @@ pub fn cut_badge(ctx: &mut Ctx, id: &str, tone: BadgeTone, word: &str) -> Row {
     )
 }
 
-/// A badge's pill and its dot, before its word.
-fn badge_frame(id: &str, tone: BadgeTone) -> Row {
-  let (color, fill) = tone.colors();
+/// A badge's pill, before what it holds.
+fn pill(id: &str, tone: BadgeTone) -> Row {
+  let (_, fill) = tone.colors();
   Row::new()
     .id(id.to_owned())
     .padding(Padding::symmetric(SpacingSize::Sm, ExtraSpacing::Fine.role()))
@@ -180,13 +180,29 @@ fn badge_frame(id: &str, tone: BadgeTone) -> Row {
     .align_items(Alignment::Center)
     .background(fill)
     .rounded(ExtraRadius::Full.role())
-    .child(
-      Row::new()
-        .id(format!("{id}-dot"))
-        .width(Dimension::Px(DOT_SIZE))
-        .height(Dimension::Px(DOT_SIZE))
-        .flex_shrink(0.0)
-        .rounded(ExtraRadius::Full.role())
-        .background(color),
-    )
+}
+
+/// A badge's pill and its dot, before its word.
+fn badge_frame(id: &str, tone: BadgeTone) -> Row {
+  pill(id, tone).child(
+    Row::new()
+      .id(format!("{id}-dot"))
+      .width(Dimension::Px(DOT_SIZE))
+      .height(Dimension::Px(DOT_SIZE))
+      .flex_shrink(0.0)
+      .rounded(ExtraRadius::Full.role())
+      .background(tone.colors().0),
+  )
+}
+
+/// A state's badge: a 12 `glyph` and `word`, 6 apart, in `tone` (`Badge` `sNWem` in T11a `ujJ6U`).
+pub fn state_badge(id: &str, tone: BadgeTone, glyph: Icon, word: &str) -> Row {
+  let color = tone.colors().0;
+  pill(id, tone).child(icon(glyph, IconSize::Sm, tone.colors().0)).child(
+    Text::new(word)
+      .id(format!("{id}-label"))
+      .variant(TypographyStyle::FieldLabel)
+      .color(color)
+      .nowrap(),
+  )
 }

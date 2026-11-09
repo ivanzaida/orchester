@@ -132,6 +132,7 @@ fn serve(
             generation: 0,
           }),
           work: (number == CLAIMED.0).then_some("running"),
+          blocked_reason: None,
         };
         work::task(state, &mut task);
         task

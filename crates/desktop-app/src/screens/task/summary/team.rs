@@ -31,7 +31,7 @@ pub fn top(ctx: &mut Ctx, task: &TaskContext) -> Vec<Element> {
   let Some(team) = &task.team else {
     return Vec::new();
   };
-  let lock = team.standing.member().then(|| {
+  let lock = (team.standing.member() && !super::lifecycle::states_rule(task)).then(|| {
     let words = lock::lock_words(
       ctx,
       team.standing.admins.as_deref(),

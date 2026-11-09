@@ -57,7 +57,7 @@ use crate::{
 
 /// The *More actions* menu's width (no frame yet): room for *Delete task…* and, in a shared project, why it is
 /// unavailable on a few lines under it.
-const MENU_WIDTH: f32 = 260.0;
+pub const MENU_WIDTH: f32 = 260.0;
 
 /// The task a menu or a confirmation is about.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -446,7 +446,7 @@ impl MenuPlace {
 pub fn more_menu(
   ctx: &mut Ctx,
   place: &MenuPlace,
-  (key, id): (&str, &str),
+  (key, id, width): (&str, &str, f32),
   rows: impl FnOnce(&mut Ctx, &Signal<bool>) -> Vec<Element>,
 ) -> Element {
   let open = place.open.clone();
@@ -458,7 +458,7 @@ pub fn more_menu(
   let button = if shown { button.active() } else { button }.render(ctx);
   let menu = shown.then(|| {
     let panel = menu_panel(&format!("{id}-panel"))
-      .width(Dimension::Px(MENU_WIDTH))
+      .width(Dimension::Px(width))
       .with_children(rows(ctx, &place.open));
     menu_at_end(place.anchor.clone(), place.open.clone(), panel)
   });

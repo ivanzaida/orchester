@@ -373,7 +373,7 @@ impl TasksScreen {
         admins: team
           .admins
           .as_deref()
-          .map(|admins| lock::admin_names(ctx, admins))
+          .map(|admins| lock::plain_names(ctx, admins))
           .unwrap_or_default()
           .into(),
       }),

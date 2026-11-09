@@ -279,16 +279,22 @@ pub fn typography(palette: &ThemePalette) -> ThemeTypography {
       .chain(super::pipelines::typography(palette))
       .chain(super::date_picker::typography(palette))
       .chain(super::browser::typography(palette))
-      .chain(super::dialog::typography(palette))
-      .chain(super::todo_list::typography(palette))
-      .chain(super::slash::typography(palette))
-      .chain(super::permissions::typography(palette))
-      .chain(super::run_model::typography(palette))
-      .chain(super::side_question::typography(palette))
-      .chain(super::ci::typography(palette))
-      .chain(super::watching::typography(palette))
+      .chain(later_areas(palette))
       .collect(),
   }
+}
+
+/// The roles of the areas added after the first ones, in the order they were added.
+fn later_areas(palette: &ThemePalette) -> impl Iterator<Item = (Arc<str>, TextStyle)> {
+  super::dialog::typography(palette)
+    .chain(super::todo_list::typography(palette))
+    .chain(super::slash::typography(palette))
+    .chain(super::permissions::typography(palette))
+    .chain(super::run_model::typography(palette))
+    .chain(super::side_question::typography(palette))
+    .chain(super::ci::typography(palette))
+    .chain(super::watching::typography(palette))
+    .chain(super::team_state::typography(palette))
 }
 
 /// `sans` in Geist Mono without ligatures: a command, a key or a figure shows each character as typed

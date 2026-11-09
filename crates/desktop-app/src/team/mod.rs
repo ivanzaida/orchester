@@ -13,6 +13,7 @@
 //! change or the person asks again ([`TeamQueries::retry`]).
 
 pub mod act;
+pub mod block_dialog;
 pub mod deliver;
 pub mod edit;
 pub mod invalidation;
@@ -25,6 +26,7 @@ pub mod queries;
 pub mod reached;
 mod source;
 pub mod start;
+pub mod state_card;
 pub mod strip;
 pub mod view;
 

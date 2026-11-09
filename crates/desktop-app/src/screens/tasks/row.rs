@@ -100,6 +100,8 @@ pub(super) struct ListItem {
   hovered: Signal<bool>,
   /// Where its *More actions* menu is open.
   menu: MenuPlace,
+  /// The lists a team task's menu opens beside it.
+  lists: team_menu::Lists,
 }
 
 impl Component for ListItem {
@@ -109,6 +111,7 @@ impl Component for ListItem {
     Self {
       hovered: ctx.signal(false),
       menu: MenuPlace::new(ctx),
+      lists: team_menu::Lists::new(ctx),
     }
   }
 
@@ -144,7 +147,7 @@ impl ListItem {
     let navigation = Navigation::of(ctx);
     let acting = (self.hovered.get() || self.menu.is_open()) && !row.not_shared;
     let trailing = if acting {
-      actions(ctx, props, &self.menu)
+      actions(ctx, props, (&self.menu, &self.lists))
     } else {
       pipeline(ctx, row)
     };
@@ -314,7 +317,7 @@ fn priority_cell(ctx: &Ctx, row: &TaskRow) -> Row {
 
 /// The row's actions under the pointer: a waiting task's one action, then the *More actions* menu, which for a team
 /// member, who changes nothing, only opens the task and copies its key, as a member's card menu does.
-fn actions(ctx: &mut Ctx, props: &RowProps, menu: &MenuPlace) -> Element {
+fn actions(ctx: &mut Ctx, props: &RowProps, (menu, lists): (&MenuPlace, &team_menu::Lists)) -> Element {
   let row = &props.row;
   let key = &row.key;
   let primary = props.action.clone().map(|action| {
@@ -331,8 +334,8 @@ fn actions(ctx: &mut Ctx, props: &RowProps, menu: &MenuPlace) -> Element {
   });
   let id = format!("task-more-{key}");
   let more = if let Some(team) = &props.team {
-    task_close::more_menu(ctx, menu, (key, &id), |ctx, open| {
-      team_menu::rows(ctx, (props.project, team), &id, open)
+    task_close::more_menu(ctx, menu, (key, &id, team_menu::MENU_WIDTH), |ctx, open| {
+      team_menu::rows(ctx, (props.project, team), &id, (open, lists))
     })
   } else {
     let subject = Subject {
@@ -342,7 +345,7 @@ fn actions(ctx: &mut Ctx, props: &RowProps, menu: &MenuPlace) -> Element {
       shared: props.shared,
     };
     let closer = Closer::of(ctx);
-    task_close::more_menu(ctx, menu, (key, &id), |ctx, open| {
+    task_close::more_menu(ctx, menu, (key, &id, task_close::MENU_WIDTH), |ctx, open| {
       closer.menu(ctx, (&id, &subject), open)
     })
   };

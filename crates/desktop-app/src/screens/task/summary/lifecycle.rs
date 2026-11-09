@@ -1,13 +1,15 @@
 //! A team task's lifecycle in the Summary's claim area (decision D4, `Task - v2` `jDN0r` rows 14–17: T1–T4 `rvvoN`
-//! `o4K8uq` `g9S4k` `V26A3`, the blocked states T11 `VVhcE`): the one action each state calls for and who may do the
-//! rest. *Mark as done*, *Cancel task*, *Mark as blocked* or *Clear blocked* sit under the claim strip while the task
-//! is open, each only while the task's capabilities say the person may (`TeamTask::abilities`), never as a disabled
-//! button: a member without the action reads one lock line naming who can. A Done or Canceled task's strip says who
-//! closed it and when and that closing ended its claim, with *Reopen* for an Admin. The claim strip itself stays
-//! [`super::claim`]'s while the task is open.
+//! `o4K8uq` `g9S4k` `V26A3`, the blocked states T11 `VVhcE`): the actions each state calls for and who may do the
+//! rest. While the task is open, *Mark as done*, *Cancel task*, and *Mark as blocked* or *Clear blocked* sit under the
+//! claim strip, each only while the task's capabilities say the person may (`TeamTask::abilities`), never as a
+//! disabled button; the first is the primary action and the others ghost buttons. A blocked task is one card (its
+//! badge, its reason, what it means, the actions). A person without an action reads one lock line under them, naming
+//! who can; it is told only where the server's capabilities list the lifecycle at all. A Done or Canceled task is a
+//! card as well, with *Reopen* under its words for an Admin. The app knows only who changed the task last, not who
+//! closed or blocked it, so no card names a person or a time.
 
 use lurq::{
-  app::{ctx::Ctx, theme::PaletteColor},
+  app::ctx::Ctx,
   components::Row,
   layout::Alignment,
   node::{Element, dimension::Dimension},
@@ -15,64 +17,149 @@ use lurq::{
 use orchester_core::task::organization::WorkflowStatus;
 
 use crate::{
-  screens::{
-    settings::orchester::moment,
-    task::{
-      TaskContext,
-      team_controls::{TeamAsk, TeamControls, reopen_menu},
-    },
+  screens::task::{
+    TaskContext,
+    team_controls::{TeamAsk, TeamControls, reopen_menu},
   },
   team::{
     lock,
-    pages::{TeamPerson, TeamTask},
-    strip::{Strip, StripTone},
+    pages::{Lifecycle, TeamTask},
+    state_card::StateCard,
   },
   theme::ExtraSpacing,
   ui::{
     button::{ActionButton, ButtonKind},
+    chip::BadgeTone,
     icon::Icon,
   },
 };
 
-/// The strip of a Done or Canceled task: who closed it and when, and that closing ended its claim; *Reopen* for an
-/// Admin. `None` for an open task.
+/// Who the lock line says does the rest.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Rule {
+  /// The person closes or blocks the task but does not cancel it: only Admins cancel or reopen.
+  Holder,
+  /// A Done or Canceled task the person cannot reopen: only Admins do.
+  Closed,
+  /// The person may do none of it: the claim's holder and the Admins close the task, or clear its block.
+  Open { blocked: bool },
+}
+
+/// The rule the Summary states for `task`, once the server's capabilities list the lifecycle and the person lacks some
+/// of it; `None` for an Admin, who has all of it, and for a task whose capabilities list none.
+fn rule(task: &TeamTask) -> Option<Rule> {
+  let abilities = task.abilities.lifecycle;
+  if !abilities.listed {
+    return None;
+  }
+  let status = task.task.organization().status();
+  if status.is_closed() {
+    return (!abilities.reopen).then_some(Rule::Closed);
+  }
+  let acts = abilities.complete || abilities.cancel || abilities.block;
+  match (acts, abilities.cancel) {
+    (true, true) => None,
+    (true, false) => Some(Rule::Holder),
+    (false, _) => Some(Rule::Open {
+      blocked: task.task.organization().blocked_reason().is_some(),
+    }),
+  }
+}
+
+/// Whether the claim area says who does the rest, so the page's own read-only line steps aside.
+pub fn states_rule(task: &TaskContext) -> bool {
+  task.team.as_ref().is_some_and(|team| rule(&team.task).is_some())
+}
+
+/// The one lock line of `task`'s state, naming who can do what the person cannot.
+fn lock_line(ctx: &Ctx, task: &TaskContext) -> Option<Element> {
+  let team = task.team.as_ref()?;
+  let rule = rule(&team.task)?;
+  let admins = team.standing.admins.as_deref();
+  let holder = team.task.claim.as_ref().map(|claim| claim.holder.name.clone());
+  let words = match rule {
+    Rule::Holder => lock::lock_words(
+      ctx,
+      admins,
+      (
+        "summary.team.lifecycle.lockHolder",
+        "summary.team.lifecycle.lockHolderUnnamed",
+      ),
+    ),
+    Rule::Closed => lock::lock_words(
+      ctx,
+      admins,
+      (
+        "summary.team.lifecycle.lockClosed",
+        "summary.team.lifecycle.lockClosedUnnamed",
+      ),
+    ),
+    Rule::Open { blocked } => {
+      let names = admins.map(|admins| lock::plain_names(ctx, admins));
+      let names = names.filter(|names| !names.is_empty());
+      let (named, unnamed) = match (holder.is_some(), blocked) {
+        (true, true) => (
+          "summary.team.lifecycle.lockClear",
+          "summary.team.lifecycle.lockClearUnnamed",
+        ),
+        (true, false) => (
+          "summary.team.lifecycle.lockOpen",
+          "summary.team.lifecycle.lockOpenUnnamed",
+        ),
+        (false, _) => (
+          "summary.team.lifecycle.lockOpenFree",
+          "summary.team.lifecycle.lockOpenFreeUnnamed",
+        ),
+      };
+      let holder = holder.unwrap_or_default();
+      match names {
+        Some(names) => ctx.t_args(named, [("holder", holder), ("admins", names)]).to_string(),
+        None => ctx.t_args(unnamed, [("holder", holder)]).to_string(),
+      }
+    }
+  };
+  Some(lock::locked("task-team-lifecycle-lock", &words).into())
+}
+
+/// The card of a Done or Canceled task: what became of it and that its claim ended with it, with *Reopen* under the
+/// words for an Admin and, for a person who cannot reopen it, the lock line. `None` for an open task.
 pub fn closed(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
   let team = task.team.as_ref()?;
   let status = team.task.task.organization().status();
   if !status.is_closed() {
     return None;
   }
-  let who = person_words(ctx, &team.task.updated.by);
-  let time = moment(ctx, team.task.updated.at);
-  let arguments = [("who", who.as_str()), ("time", time.as_str())];
-  let (glyph, tone, title) = if status == WorkflowStatus::Done {
+  let done = status == WorkflowStatus::Done;
+  let (glyph, title, detail) = if done {
     (
-      (Icon::CircleCheck, PaletteColor::Success),
-      StripTone::Success,
-      ctx.t_args("summary.team.lifecycle.doneTitle", arguments),
+      Icon::CircleCheck,
+      ctx.t("summary.team.lifecycle.doneTitle"),
+      ctx.t("summary.team.lifecycle.doneDetail"),
     )
   } else {
     (
-      (Icon::CircleSlash, PaletteColor::TextSecondary),
-      StripTone::Plain,
-      ctx.t_args("summary.team.lifecycle.canceledTitle", arguments),
+      Icon::CircleSlash,
+      ctx.t("summary.team.lifecycle.canceledTitle"),
+      ctx.t("summary.team.lifecycle.canceledDetail"),
     )
   };
-  let strip = Strip::new(
-    "task-team-closed",
-    glyph,
-    title,
-    ctx.t("summary.team.lifecycle.closedDetail"),
-  )
-  .tone(tone);
   let controls = TeamControls::of(ctx).filter(|_| team.task.abilities.lifecycle.reopen);
-  Some(match controls {
-    Some(controls) => strip.action(reopen_button(ctx, &controls)).into(),
-    None => strip.into(),
-  })
+  let reopen = controls.map(|controls| reopen_button(ctx, &controls));
+  let lock = lock_line(ctx, task);
+  Some(
+    StateCard::new(
+      "task-team-closed",
+      (BadgeTone::Neutral, glyph, title.clone()),
+      title,
+      detail,
+    )
+    .actions(reopen)
+    .lock(lock)
+    .render(),
+  )
 }
 
-/// *Reopen*, with its two choices beside it while they are open.
+/// *Reopen*, with its two choices under it while they are open.
 fn reopen_button(ctx: &mut Ctx, controls: &TeamControls) -> Element {
   let open = controls.reopening.clone();
   let button = ActionButton::new(
@@ -81,7 +168,7 @@ fn reopen_button(ctx: &mut Ctx, controls: &TeamControls) -> Element {
     ctx.t("summary.team.lifecycle.reopen.label"),
   )
   .icon(Icon::RotateCcw)
-  .small();
+  .pinned();
   let button = if controls.pending() {
     button.loading()
   } else {
@@ -99,156 +186,57 @@ fn reopen_button(ctx: &mut Ctx, controls: &TeamControls) -> Element {
     .into()
 }
 
-/// What a task adds under its claim strip: while open, the blocked reason when it has one, then the actions the person
-/// may take, or the one lock line naming who can; while closed, the lock line of a person who cannot reopen it.
+/// What an open task adds under its claim strip: a blocked task's card with the actions in it, or the actions the
+/// person may take and the one lock line, or only that line.
 pub fn parts(ctx: &mut Ctx, task: &TaskContext) -> Vec<Element> {
   let Some(team) = task.team.as_ref() else {
     return Vec::new();
   };
   if team.task.task.organization().status().is_closed() {
-    return closed_lock(ctx, task).into_iter().collect();
+    return Vec::new();
   }
-  let blocked = blocked_strip(ctx, &team.task);
   let actions = actions(ctx, &team.task);
-  let lock = actions.is_none().then(|| open_lock(ctx, task)).flatten();
-  blocked.into_iter().chain(actions).chain(lock).collect()
+  let lock = lock_line(ctx, task);
+  match blocked_card(ctx, task, (actions, lock)) {
+    Ok(card) => vec![card],
+    Err((actions, lock)) => actions.into_iter().chain(lock).collect(),
+  }
 }
 
-/// A closed task for a person who cannot reopen it: only Admins do.
-fn closed_lock(ctx: &Ctx, task: &TaskContext) -> Option<Element> {
-  let team = task
-    .team
-    .as_ref()
-    .filter(|team| !team.task.abilities.lifecycle.reopen)?;
-  let words = lock::lock_words(
-    ctx,
-    team.standing.admins.as_deref(),
-    (
-      "summary.team.lifecycle.lockClosed",
-      "summary.team.lifecycle.lockClosedUnnamed",
-    ),
-  );
-  Some(lock::locked("task-team-lifecycle-lock", &words).into())
-}
-
-/// An open task whose lifecycle the person may not touch: who closes it, the claim's holder and the Admins.
-fn open_lock(ctx: &Ctx, task: &TaskContext) -> Option<Element> {
-  let team = task.team.as_ref()?;
-  let admins = team
-    .standing
-    .admins
-    .as_deref()
-    .map(|admins| lock::admin_names(ctx, admins))
-    .filter(|names| !names.is_empty());
-  let words = match (&team.task.claim, admins) {
-    (Some(claim), Some(admins)) => ctx.t_args(
-      "summary.team.lifecycle.lockOpen",
-      [("holder", claim.holder.name.clone()), ("admins", admins)],
-    ),
-    (Some(claim), None) => ctx.t_args(
-      "summary.team.lifecycle.lockOpenUnnamed",
-      [("holder", claim.holder.name.clone())],
-    ),
-    (None, Some(admins)) => ctx.t_args("summary.team.lifecycle.lockOpenFree", [("admins", admins)]),
-    (None, None) => ctx.t("summary.team.lifecycle.lockOpenFreeUnnamed"),
+/// The card of a blocked task, or the actions and the lock line given when the task is not blocked.
+fn blocked_card(
+  ctx: &Ctx,
+  task: &TaskContext,
+  (actions, lock): (Option<Element>, Option<Element>),
+) -> Result<Element, (Option<Element>, Option<Element>)> {
+  let Some(team) = task.team.as_ref() else {
+    return Err((actions, lock));
   };
-  Some(lock::locked("task-team-lifecycle-lock", &words).into())
-}
-
-/// The blocked reason, with who changed the task last (who set it, unless a later change replaced that) and when.
-fn blocked_strip(ctx: &Ctx, task: &TeamTask) -> Option<Element> {
-  let reason = task.task.organization().blocked_reason()?;
-  let who = person_words(ctx, &task.updated.by);
-  let time = moment(ctx, task.updated.at);
-  let title = ctx.t_args(
-    "summary.team.lifecycle.blockedTitle",
-    [("who", who.as_str()), ("time", time.as_str())],
-  );
-  Some(
-    Strip::new(
+  let Some(reason) = team.task.task.organization().blocked_reason() else {
+    return Err((actions, lock));
+  };
+  let abilities = team.task.abilities.lifecycle;
+  let detail = match (abilities.block, team.task.claim.as_ref()) {
+    (false, _) => ctx.t("summary.team.lifecycle.blockedPlain"),
+    (true, Some(claim)) if claim.holder.you => ctx.t("summary.team.lifecycle.blockedHolder"),
+    (true, Some(claim)) => ctx.t_args(
+      "summary.team.lifecycle.blockedAdmin",
+      [("holder", claim.holder.name.as_str())],
+    ),
+    (true, None) => ctx.t("summary.team.lifecycle.blockedFree"),
+  };
+  let title = ctx.t("summary.team.lifecycle.blockedTitle");
+  Ok(
+    StateCard::new(
       "task-team-blocked",
-      (Icon::Ban, PaletteColor::Warning),
+      (BadgeTone::Warning, Icon::Ban, title.clone()),
       title,
-      reason.to_owned(),
+      detail,
     )
-    .tone(StripTone::Warning)
-    .into(),
-  )
-}
-
-/// *Mark as done*, *Cancel task* and *Mark as blocked* or *Clear blocked*, those the person may take; `None` when none.
-fn actions(ctx: &mut Ctx, task: &TeamTask) -> Option<Element> {
-  let controls = TeamControls::of(ctx)?;
-  let lifecycle = task.abilities.lifecycle;
-  let blocked = task.task.organization().blocked_reason().is_some();
-  let asking = |ask: TeamAsk| {
-    let controls = controls.clone();
-    move || controls.run(ask)
-  };
-  let mut wanted = Vec::new();
-  if lifecycle.complete {
-    wanted.push((
-      ("task-team-done", "summary.team.lifecycle.done", Icon::CircleCheck),
-      Press::Ask(TeamAsk::Done),
-    ));
-  }
-  if lifecycle.cancel {
-    wanted.push((
-      ("task-team-cancel", "summary.team.lifecycle.cancel", Icon::CircleX),
-      Press::Ask(TeamAsk::Cancel),
-    ));
-  }
-  if lifecycle.block {
-    wanted.push(if blocked {
-      (
-        (
-          "task-team-clear-blocked",
-          "summary.team.lifecycle.clearBlocked",
-          Icon::CirclePlay,
-        ),
-        Press::Ask(TeamAsk::ClearBlocked),
-      )
-    } else {
-      (
-        ("task-team-block", "summary.team.lifecycle.block.label", Icon::Ban),
-        Press::Reason,
-      )
-    });
-  }
-  if wanted.is_empty() {
-    return None;
-  }
-  let buttons: Vec<Element> = wanted
-    .into_iter()
-    .map(|((id, label, glyph), press)| {
-      let button = ActionButton::new(id, ButtonKind::Secondary, ctx.t(label))
-        .icon(glyph)
-        .small();
-      let button = if controls.pending() {
-        button.loading()
-      } else {
-        match press {
-          Press::Ask(ask) => button.on_click(asking(ask)),
-          Press::Reason => {
-            let (open, reason) = (controls.blocking.clone(), controls.reason.clone());
-            button.on_click(move || {
-              reason.set(String::new());
-              open.set(true);
-            })
-          }
-        }
-      };
-      button.into()
-    })
-    .collect();
-  Some(
-    Row::new()
-      .id("task-team-lifecycle")
-      .width(Dimension::Pct(100.0))
-      .spacing(ExtraSpacing::Loose.role())
-      .align_items(Alignment::Center)
-      .with_children(buttons)
-      .into(),
+    .reason(reason.to_owned())
+    .actions(actions)
+    .lock(lock)
+    .render(),
   )
 }
 
@@ -259,11 +247,83 @@ enum Press {
   Reason,
 }
 
-/// `you` for the person signed in, else the name the server gives.
-fn person_words(ctx: &Ctx, person: &TeamPerson) -> String {
-  if person.you {
-    ctx.t("summary.team.lifecycle.you").to_string()
-  } else {
-    person.name.clone()
+/// The actions of an open task the person may take, in the order the design draws them: a blocked task's *Clear
+/// blocked* first, *Mark as done*, *Cancel task*, and *Mark as blocked* last.
+fn wanted(abilities: Lifecycle, blocked: bool) -> Vec<((&'static str, &'static str, Icon), Press)> {
+  let clear = (
+    (
+      "task-team-clear-blocked",
+      "summary.team.lifecycle.clearBlocked",
+      Icon::CirclePlay,
+    ),
+    Press::Ask(TeamAsk::ClearBlocked),
+  );
+  let block = (
+    ("task-team-block", "summary.team.lifecycle.block.label", Icon::Ban),
+    Press::Reason,
+  );
+  let mut wanted = Vec::new();
+  if abilities.block && blocked {
+    wanted.push(clear);
   }
+  if abilities.complete {
+    wanted.push((
+      ("task-team-done", "summary.team.lifecycle.done", Icon::CircleCheck),
+      Press::Ask(TeamAsk::Done),
+    ));
+  }
+  if abilities.cancel {
+    wanted.push((
+      ("task-team-cancel", "summary.team.lifecycle.cancel", Icon::CircleX),
+      Press::Ask(TeamAsk::Cancel),
+    ));
+  }
+  if abilities.block && !blocked {
+    wanted.push(block);
+  }
+  wanted
+}
+
+/// *Mark as done*, *Cancel task* and *Mark as blocked* or *Clear blocked*, those the person may take: the first a
+/// primary button, the others ghost; `None` when none.
+fn actions(ctx: &mut Ctx, task: &TeamTask) -> Option<Element> {
+  let controls = TeamControls::of(ctx)?;
+  let blocked = task.task.organization().blocked_reason().is_some();
+  let wanted = wanted(task.abilities.lifecycle, blocked);
+  if wanted.is_empty() {
+    return None;
+  }
+  let buttons: Vec<Element> = wanted
+    .into_iter()
+    .enumerate()
+    .map(|(index, ((id, label, glyph), press))| {
+      let kind = if index == 0 {
+        ButtonKind::Primary
+      } else {
+        ButtonKind::Ghost
+      };
+      let button = ActionButton::new(id, kind, ctx.t(label)).icon(glyph).pinned();
+      if controls.pending() {
+        return button.loading().into();
+      }
+      let controls = controls.clone();
+      match press {
+        Press::Ask(ask) => button.on_click(move || controls.run(ask)),
+        Press::Reason => button.on_click(move || {
+          controls.reason.set(String::new());
+          controls.blocking.set(true);
+        }),
+      }
+      .into()
+    })
+    .collect();
+  Some(
+    Row::new()
+      .id("task-team-lifecycle")
+      .width(Dimension::Pct(100.0))
+      .spacing(ExtraSpacing::Snug.role())
+      .align_items(Alignment::Center)
+      .with_children(buttons)
+      .into(),
+  )
 }

@@ -2,7 +2,8 @@
 //! `rvvoN`, T2 `o4K8uq`, T3 `g9S4k`, T4 `V26A3`, T11 `VVhcE`), on the QA app's `team-member`, `team-admin`,
 //! `team-admin-work` and `team-claims` states with the stand-in team server, which decides each change by the person's
 //! claim and role: what the page offers comes from the task's capabilities, a member without the action reads one lock
-//! line and has no button, closing ends the claim, and a reopened task is free.
+//! line and has no button, closing ends the claim, and a reopened task is free. The Tasks list's row menus and Mark as
+//! blocked's dialog are in [`super::team_lifecycle_menus`].
 //!
 //! `cargo test -p orchester-app --test team_qa team_qa_lifecycle`
 
@@ -13,16 +14,15 @@ use orchester_app::{
 };
 use orchester_core::project::TaskKey;
 
-use super::{on_the_tasks_list, prepared, team::State};
+use super::{prepared, team::State};
 
 fn task_route(key: &str) -> Route {
   let key: TaskKey = key.parse().expect("a task key");
   Route::Project(project_id(), ProjectPage::task(key, TaskView::Summary, false))
 }
 
-/// The   window.until("the server to take the move", |_| server.task_now(25).is_some_and(|(revision, ..)| revision ==
-/// 2)); on the task `key` in `state`, once its claim line shows.
-fn on(state: State, key: &str) -> (Window, TeamServer) {
+/// The task `key` in `state`, once its claim line or its closed card shows.
+pub(super) fn on(state: State, key: &str) -> (Window, TeamServer) {
   let (mut window, server) = prepared(state);
   go(&mut window, key);
   (window, server)
@@ -35,56 +35,110 @@ fn go(window: &mut Window, key: &str) {
   });
 }
 
-fn offered(window: &mut Window, id: &str) -> bool {
+pub(super) fn offered(window: &mut Window, id: &str) -> bool {
   window.texts(id).is_some()
 }
 
+/// Where the element `id` is laid out: its left and its top.
+pub(super) fn at(window: &mut Window, id: &str) -> (f32, f32) {
+  let bounds = window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"));
+  (bounds.x, bounds.y)
+}
+
 /// T1 `rvvoN`: the claim's holder, a member, closes their own task: Mark as done and no Cancel task, and closing ends
-/// the claim, which the page says as the task's closed line.
+/// the claim, which the page says as the task's closed card, which names no person or time the app does not know.
 #[test]
 fn team_qa_lifecycle_the_holder_marks_their_task_done() {
   let (mut window, _server) = on(State::Member, "KON-12");
   assert!(offered(&mut window, "task-team-done"), "the holder may close it");
   assert!(offered(&mut window, "task-team-block"), "and block it");
   assert!(!offered(&mut window, "task-team-cancel"), "Cancel is an Admin's");
+  assert_eq!(
+    window.text("task-team-lifecycle-lock-text"),
+    "Only Admins cancel or reopen a team task: dana-k (Admin) and olha (Server admin).",
+    "the one line under the actions"
+  );
+  assert!(
+    !offered(&mut window, "task-team-read-only"),
+    "the page's own line steps aside"
+  );
+  let (done, block) = (at(&mut window, "task-team-done"), at(&mut window, "task-team-block"));
+  assert!(done.0 < block.0, "Mark as done first, Mark as blocked after it");
 
   window.press("task-team-done");
   window.until("the task to be closed", |window| {
     window.texts("task-team-closed-title").is_some()
   });
-  assert!(window.text("task-team-closed-title").starts_with("Done · marked by "));
+  assert_eq!(window.text("task-team-closed-title"), "Done");
+  assert_eq!(window.text("task-team-closed-badge"), "Done");
+  assert_eq!(
+    window.text("task-team-closed-detail"),
+    "Marking it done ended its claim."
+  );
   assert!(
-    !offered(&mut window, "task-team-done"),
-    "a closed task has no Mark as done"
+    !offered(&mut window, "task-team-done") && !offered(&mut window, "task-team-block"),
+    "a closed task has no Mark as done and no Mark as blocked"
   );
   assert!(
     !offered(&mut window, "task-reopen"),
     "a member does not reopen it: one lock line says who does"
   );
-  assert!(
-    window
-      .text("task-team-lifecycle-lock-text")
-      .starts_with("Only Admins reopen a team task")
+  assert_eq!(
+    window.text("task-team-lifecycle-lock-text"),
+    "Only Admins reopen a team task: dana-k (Admin) and olha (Server admin)."
   );
 }
 
 /// T2 `o4K8uq`, T4 `V26A3`: an Admin cancels a task another person holds, which ends that claim; Reopen offers Back to
-/// Todo and Back to Backlog, and the reopened task is free.
+/// Todo and Back to Backlog under it, and the reopened task is free.
 #[test]
 fn team_qa_lifecycle_an_admin_cancels_and_reopens() {
   let (mut window, _server) = on(State::AdminWork, "KON-13");
   assert_eq!(window.text("task-team-claim-title"), "Claimed by mara");
+  let detail = window.text("task-team-claim-detail");
+  assert!(
+    detail.contains("As an Admin you can close it for them; either way their claim ends."),
+    "{detail}"
+  );
   assert!(offered(&mut window, "task-team-done") && offered(&mut window, "task-team-cancel"));
+  assert!(
+    !offered(&mut window, "task-team-lifecycle-lock"),
+    "an Admin has nothing to be told"
+  );
+  let (done, cancel, block) = (
+    at(&mut window, "task-team-done"),
+    at(&mut window, "task-team-cancel"),
+    at(&mut window, "task-team-block"),
+  );
+  assert!(
+    done.0 < cancel.0 && cancel.0 < block.0,
+    "Done, Cancel task, Mark as blocked"
+  );
 
   window.press("task-team-cancel");
   window.until("the task to be canceled", |window| {
     window.texts("task-team-closed-title").is_some()
   });
-  assert!(window.text("task-team-closed-title").starts_with("Canceled by "));
+  assert_eq!(window.text("task-team-closed-title"), "Canceled");
+  assert_eq!(window.text("task-team-closed-badge"), "Canceled");
+  let (detail, reopen) = (
+    at(&mut window, "task-team-closed-detail"),
+    at(&mut window, "task-reopen"),
+  );
+  assert!(reopen.1 > detail.1, "Reopen sits below the words");
 
   window.press("task-reopen");
   window.until("Reopen's choices", |window| window.texts("task-reopen-todo").is_some());
   assert!(offered(&mut window, "task-reopen-backlog"));
+  let menu = at(&mut window, "task-reopen-menu");
+  assert!(
+    (menu.0 - reopen.0).abs() < 1.0,
+    "the menu starts where the button does: {menu:?} {reopen:?}"
+  );
   assert_eq!(
     window.text("task-reopen-free"),
     "A reopened task is free: nobody holds it, and nothing runs until someone claims it."
@@ -113,19 +167,27 @@ fn team_qa_lifecycle_a_member_without_the_claim_has_no_button_and_one_lock_line(
   ] {
     assert!(!offered(&mut window, id), "{id} is not offered");
   }
-  let line = window.text("task-team-lifecycle-lock-text");
+  assert_eq!(
+    window.text("task-team-lifecycle-lock-text"),
+    "Only mara (the claim) and Admins close this task: dana-k and olha."
+  );
   assert!(
-    line.starts_with("Only mara (the claim) and Admins close this task: "),
-    "{line}"
+    !offered(&mut window, "task-team-read-only"),
+    "exactly one line: the page's own read-only line is not shown with it"
   );
 }
 
-/// A done task the member did not close: only Admins reopen it, and an Admin sees Reopen.
+/// A done task the member did not close: only Admins reopen it, and an Admin sees Reopen and no lock line. Neither is
+/// offered Mark as blocked on it.
 #[test]
 fn team_qa_lifecycle_reopen_is_the_admins() {
   let (mut window, _server) = on(State::Member, "KON-1");
-  assert!(window.text("task-team-closed-title").starts_with("Done · marked by "));
+  assert_eq!(window.text("task-team-closed-title"), "Done");
   assert!(!offered(&mut window, "task-reopen"));
+  assert!(
+    !offered(&mut window, "task-team-block"),
+    "a Done task is not offered Mark as blocked"
+  );
   assert!(
     window
       .text("task-team-lifecycle-lock-text")
@@ -134,9 +196,25 @@ fn team_qa_lifecycle_reopen_is_the_admins() {
 
   let (mut window, _server) = on(State::Admin, "KON-1");
   assert!(offered(&mut window, "task-reopen"));
+  assert!(!offered(&mut window, "task-team-block"), "nor an Admin");
+  assert!(!offered(&mut window, "task-team-lifecycle-lock"));
 }
 
-/// T11 `VVhcE`: the holder marks their task as blocked with a reason and clears it; the claim stays.
+/// T11f `vyQJx`: a member reads a Canceled task: its card, and the one line saying that only Admins reopen it.
+#[test]
+fn team_qa_lifecycle_a_member_reads_a_canceled_task() {
+  let (mut window, _server) = on(State::Claims, "KON-15");
+  assert_eq!(window.text("task-team-closed-title"), "Canceled");
+  assert_eq!(window.text("task-team-closed-detail"), "Canceling it ended its claim.");
+  assert_eq!(
+    window.text("task-team-lifecycle-lock-text"),
+    "Only Admins reopen a team task: dana-k (Admin) and olha (Server admin)."
+  );
+  assert!(!offered(&mut window, "task-reopen"));
+}
+
+/// T11 `VVhcE`: the holder marks their task as blocked with a reason and clears it; the claim stays, and the blocked
+/// state is one card, with the reason under its title and no second banner over the tabs.
 #[test]
 fn team_qa_lifecycle_the_holder_blocks_and_clears_their_task() {
   let (mut window, _server) = on(State::Member, "KON-12");
@@ -149,12 +227,25 @@ fn team_qa_lifecycle_the_holder_blocks_and_clears_their_task() {
   window.until("the task to be blocked", |window| {
     window.texts("task-team-blocked-title").is_some()
   });
-  assert!(window.text("task-team-blocked-title").starts_with("Blocked by "));
-  assert_eq!(window.text("task-team-blocked-detail"), "Waits for the design");
+  assert_eq!(window.text("task-team-blocked-title"), "Blocked");
+  assert_eq!(window.text("task-team-blocked-reason"), "Waits for the design");
+  assert_eq!(
+    window.text("task-team-blocked-detail"),
+    "Nothing runs while it is blocked. Clear it when work can go on; your claim stays."
+  );
+  assert!(
+    !offered(&mut window, "task-blocked"),
+    "the reason is told once, not again in a banner over the tabs"
+  );
   assert!(
     window.text("task-team-claim-title").starts_with("Claimed by you"),
     "the claim stays"
   );
+  let (clear, done) = (
+    at(&mut window, "task-team-clear-blocked"),
+    at(&mut window, "task-team-done"),
+  );
+  assert!(clear.0 < done.0, "Clear blocked first, Mark as done after it");
 
   window.press("task-team-clear-blocked");
   window.until("the block to be cleared", |window| {
@@ -163,94 +254,38 @@ fn team_qa_lifecycle_the_holder_blocks_and_clears_their_task() {
   assert!(offered(&mut window, "task-team-block"));
 }
 
-/// The Tasks list on `state`, with `key`'s row menu open (T7 `lCoNt`, T8 `vdSWS`, T10 `tlw0r`).
-fn row_menu(state: State, key: &str) -> (Window, TeamServer) {
-  let (mut window, server) = on_the_tasks_list(state);
-  let row = format!("task-row-{key}");
-  window.until("the server's tasks", |window| window.texts(&row).is_some());
-  // The row's actions show under the pointer once the row has its place, which can take a pass after it shows.
-  let more = format!("task-more-{key}");
-  window.until("the row's menu", |window| {
-    let placed = window
-      .tree
-      .get_element_by_id_mut(&row)
-      .is_some_and(|row| row.bounds().is_some());
-    if placed {
-      window.hover(&row);
-    }
-    window.texts(&more).is_some()
-  });
-  window.press(&more);
-  window.until("its rows", |window| window.texts(&format!("{more}-panel")).is_some());
-  (window, server)
-}
-
-/// T7 `lCoNt`: a member's row menu on their own task offers Mark as done and Mark as blocked and says who does the
-/// rest; on someone else's task it only opens and copies the key, and says who closes it.
+/// T11c `dTn0v`: a member without the claim reads a blocked task: the reason, what blocked means, no button and one
+/// line saying who clears it.
 #[test]
-fn team_qa_lifecycle_a_members_row_menu_offers_what_their_claim_allows() {
-  let (mut window, _server) = row_menu(State::Member, "KON-12");
-  for id in ["open", "copy", "done", "block"] {
-    assert!(offered(&mut window, &format!("task-more-KON-12-{id}")), "{id}");
-  }
-  for id in ["cancel", "reopen-todo", "move-todo", "delete"] {
-    assert!(!offered(&mut window, &format!("task-more-KON-12-{id}")), "{id}");
-  }
+fn team_qa_lifecycle_a_member_without_the_claim_reads_a_blocked_task() {
+  let (mut window, _server) = on(State::Claims, "KON-16");
+  assert_eq!(window.text("task-team-blocked-title"), "Blocked");
+  assert_eq!(window.text("task-team-blocked-reason"), "Waiting for the staging key");
   assert_eq!(
-    window.text("tasks-team-menu-foot"),
-    "Only Admins cancel, reopen or move tasks."
+    window.text("task-team-blocked-detail"),
+    "Nothing runs while it is blocked."
   );
-  window.press("task-more-KON-12-done");
-  window.until("the server to close it", |window| {
-    window.texts("task-row-KON-12").is_none() || window.texts("tasks-team-refused").is_some()
-  });
-  assert!(
-    window.texts("tasks-team-refused").is_none(),
-    "the holder's Done is taken"
+  assert!(!offered(&mut window, "task-team-clear-blocked") && !offered(&mut window, "task-team-done"));
+  assert_eq!(
+    window.text("task-team-lifecycle-lock-text"),
+    "Only mara (the claim) and Admins clear it: dana-k and olha."
   );
 }
 
+/// T11b `x0xP1`: an Admin reads a blocked task someone else holds: Clear blocked is the primary action, then Cancel
+/// task, and no line.
 #[test]
-fn team_qa_lifecycle_a_members_row_menu_on_someone_elses_task_only_opens_and_copies() {
-  let (mut window, _server) = row_menu(State::Claims, "KON-13");
-  assert!(offered(&mut window, "task-more-KON-13-open") && offered(&mut window, "task-more-KON-13-copy"));
-  for id in ["done", "block", "cancel", "reopen-todo", "move-todo"] {
-    assert!(!offered(&mut window, &format!("task-more-KON-13-{id}")), "{id}");
-  }
-  let foot = window.text("tasks-team-menu-foot");
-  assert!(
-    foot.starts_with("Only mara (the claim) and Admins close this task"),
-    "{foot}"
+fn team_qa_lifecycle_an_admin_reads_a_blocked_task_of_someone_else() {
+  let (mut window, _server) = on(State::AdminWork, "KON-21");
+  assert_eq!(window.text("task-team-blocked-reason"), "Waiting for the staging key");
+  assert_eq!(
+    window.text("task-team-blocked-detail"),
+    "As an Admin you can clear it for olha or close the task; closing ends the claim."
   );
-}
-
-/// T8 `vdSWS`: an Admin's row menu has Mark as done, Mark as blocked and Cancel task, and Move to for a task in Backlog
-/// or Todo, with no line saying who else can; Cancel task closes it on the server.
-#[test]
-fn team_qa_lifecycle_an_admins_row_menu_closes_and_cancels() {
-  let (mut window, _server) = row_menu(State::Admin, "KON-12");
-  for id in ["open", "copy", "done", "block", "cancel"] {
-    assert!(offered(&mut window, &format!("task-more-KON-12-{id}")), "{id}");
-  }
-  assert!(
-    !offered(&mut window, "tasks-team-menu-foot"),
-    "an Admin has nothing to be told"
+  let (clear, cancel) = (
+    at(&mut window, "task-team-clear-blocked"),
+    at(&mut window, "task-team-cancel"),
   );
-  window.press("task-more-KON-12-cancel");
-  window.until("the task to leave the active list", |window| {
-    window.texts("task-row-KON-12").is_none()
-  });
-}
-
-/// T10 `tlw0r`: a Backlog task's menu moves it to Todo, and a Done task's reopens it to Todo or Backlog, an Admin's
-/// only.
-#[test]
-fn team_qa_lifecycle_the_menu_moves_between_backlog_and_todo_and_reopens() {
-  let (mut window, server) = row_menu(State::Admin, "KON-25");
-  assert!(offered(&mut window, "task-more-KON-25-move-todo"));
-  assert!(!offered(&mut window, "task-more-KON-25-reopen-todo"));
-  window.press("task-more-KON-25-move-todo");
-  window.until("the server to take the move", |_| {
-    server.task_now(25).is_some_and(|(revision, ..)| revision == 2)
-  });
+  assert!(clear.0 < cancel.0, "Clear blocked, then Cancel task");
+  assert!(!offered(&mut window, "task-team-lifecycle-lock"));
 }

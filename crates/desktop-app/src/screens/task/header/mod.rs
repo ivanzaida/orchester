@@ -149,7 +149,12 @@ impl Component for TaskHeader {
       .child(title_row)
       .child(status_line)
       .with_children(module::field(ctx, &props.task))
-      .with_children(notices::notices(ctx, &detail, props.stale.as_ref(), refused))
+      .with_children(notices::notices(
+        ctx,
+        (&detail, props.task.team.is_some()),
+        props.stale.as_ref(),
+        refused,
+      ))
       .with_children(super::not_ready::notice(ctx, &props.task, &props.view))
       .with_children(confirmation)
       .with_children(task_close::panel(

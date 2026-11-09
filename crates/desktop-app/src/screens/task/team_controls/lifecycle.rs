@@ -1,6 +1,6 @@
 //! A team task's lifecycle asks on its page (decision D4, `Task - v2` `jDN0r` rows 14–17,
 //! `docs/design/team-authority.md`): what each ask changes ([`carry_out`]), Mark as blocked's reason in a dialog of its
-//! own ([`blocking_dialog`]; the design draws no frame for it) and Reopen's two choices, Back to Todo and Back to
+//! own ([`blocking_dialog`], T13 `DWfta`, T14 `uKVK2`) and Reopen's two choices, Back to Todo and Back to
 //! Backlog, with their foot line ([`reopen_menu`], T4 `V26A3`).
 
 use lurq::{
@@ -19,14 +19,12 @@ use crate::{
   screens::task::TaskContext,
   team::{
     act::{Acted, Acting},
+    block_dialog::{Blocking, dialog},
     lifecycle::Change,
   },
   ui::{
-    button::{ActionButton, ButtonKind},
-    dialog::Dialog,
-    field::FieldInput,
     icon::Icon,
-    menu::{MenuItem, menu_at_end, menu_panel, separator},
+    menu::{MenuItem, menu, menu_panel, separator},
   },
 };
 
@@ -63,8 +61,6 @@ pub(super) async fn carry_out(ask: TeamAsk, (shown, reason): (&TeamTaskShown, St
   }
 }
 
-const BLOCK: &str = "task-block-confirm";
-
 /// Mark as blocked's question: the reason, which is not blank. Open while the person asked; closes with the ask.
 pub fn blocking_dialog(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
   let controls = TeamControls::of(ctx)?;
@@ -72,46 +68,22 @@ pub fn blocking_dialog(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
     return None;
   }
   let key = task.key.to_string();
-  let typed = controls.reason.get();
-  let reason = FieldInput::new(
-    "task-block-reason",
-    ctx.t("summary.team.lifecycle.block.reason"),
-    controls.reason.clone(),
-  )
-  .placeholder(ctx.t("summary.team.lifecycle.block.placeholder"))
-  .text_area()
-  .render(ctx);
-  let (open, ask) = (controls.blocking.clone(), controls.clone());
-  let confirm = ActionButton::new(
-    BLOCK,
-    ButtonKind::Primary,
-    ctx.t("summary.team.lifecycle.block.confirm"),
-  )
-  .icon(Icon::Ban);
-  let confirm = if typed.trim().is_empty() {
-    confirm.disabled()
-  } else {
-    confirm.on_click(move || {
-      open.set(false);
-      ask.run(TeamAsk::Block);
-    })
+  let blocking = Blocking {
+    id: "task-block",
+    key: &key,
+    reason: &controls.reason,
+    open: &controls.blocking,
   };
-  Some(
-    Dialog::new(
-      "task-block",
-      Icon::Ban,
-      ctx.t_args("summary.team.lifecycle.block.title", [("task", key.as_str())]),
-      ctx.t("summary.team.lifecycle.block.cancel"),
-    )
-    .part(reason)
-    .action(confirm)
-    .render(ctx, &controls.blocking),
-  )
+  let ask = controls.clone();
+  Some(dialog(ctx, &blocking, move |reason| {
+    ask.reason.set(reason);
+    ask.run(TeamAsk::Block);
+  }))
 }
 
-/// *Reopen* with its two choices under it while they are open: Back to Todo (*ready to claim*) and Back to Backlog
-/// (*not planned yet*), over the line saying a reopened task is free. Only for an Admin, as the task's capabilities
-/// say.
+/// The two choices of *Reopen*, under it at its start while they are open: Back to Todo (*ready to claim*) and Back to
+/// Backlog (*not planned yet*), over the line saying a reopened task is free. Only for an Admin, as the task's
+/// capabilities say.
 pub fn reopen_menu(ctx: &mut Ctx, anchor: &ElementRef) -> Option<Element> {
   let controls = TeamControls::of(ctx)?;
   let open = controls.reopening.clone();
@@ -153,7 +125,7 @@ pub fn reopen_menu(ctx: &mut Ctx, anchor: &ElementRef) -> Option<Element> {
     .with_children(rows)
     .child(separator(ctx))
     .child(foot);
-  Some(menu_at_end(anchor.clone(), open, panel).into())
+  Some(menu(anchor.clone(), open, panel).into())
 }
 
 /// The reopen menu's width (T4 `V26A3`).

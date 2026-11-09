@@ -71,6 +71,9 @@ pub fn minutes(from: Timestamp, to: Timestamp) -> String {
 /// closed task's *Done* and *Cancel* are not offered, nor an open task's *Reopen*: the state is told before the person.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Lifecycle {
+  /// The task's capabilities list at least one lifecycle action, allowed or denied: only then does a screen state who
+  /// does the rest, since a rule the server never denied is not one to tell.
+  pub listed: bool,
   /// Mark as done: the claim's holder's or an Admin's.
   pub complete: bool,
   /// Cancel task: an Admin's.
@@ -321,7 +324,7 @@ fn team_module_of(summary: &ModuleSummary, who: &Who) -> Result<TeamModule, Team
 }
 
 /// What `capabilities` allow of the lifecycle of `subject`: the actions the server lists for it and allows.
-pub(super) fn lifecycle(capabilities: &Capabilities, subject: Subject) -> Lifecycle {
+pub fn lifecycle(capabilities: &Capabilities, subject: Subject) -> Lifecycle {
   let allowed = |wanted: LifecycleAction| {
     capabilities.actions.iter().any(|action| {
       *action.action() == Action::Task(wanted)
@@ -329,7 +332,14 @@ pub(super) fn lifecycle(capabilities: &Capabilities, subject: Subject) -> Lifecy
         && action.is_allowed()
     })
   };
+  let listed = capabilities.actions.iter().any(|action| {
+    LifecycleAction::ALL
+      .iter()
+      .any(|wanted| *action.action() == Action::Task(*wanted))
+      && action.subject().is_none_or(|named| named == subject)
+  });
   Lifecycle {
+    listed,
     complete: allowed(LifecycleAction::Complete),
     cancel: allowed(LifecycleAction::Cancel),
     reopen: allowed(LifecycleAction::Reopen),

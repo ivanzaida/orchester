@@ -18,15 +18,10 @@ use crate::{
   team::{
     TeamSource,
     act::{Acted, Acting},
+    block_dialog::{Blocking, dialog},
     lifecycle::Change,
   },
-  ui::{
-    button::{ActionButton, ButtonKind},
-    dialog::Dialog,
-    field::FieldInput,
-    icon::Icon,
-    notice::{Notice, NoticeTone},
-  },
+  ui::notice::{Notice, NoticeTone},
 };
 
 /// A lifecycle change of one listed task: the task as the list read it, its organization then and the revision.
@@ -170,8 +165,6 @@ pub(in crate::screens::tasks) fn refusal(ctx: &mut Ctx) -> Option<Element> {
   )
 }
 
-const BLOCK: &str = "tasks-team-block-confirm";
-
 /// Mark as blocked's question: the reason, which is not blank.
 pub(in crate::screens::tasks) fn blocking_dialog(ctx: &mut Ctx) -> Option<Element> {
   let actions = TeamActions::of(ctx)?;
@@ -180,51 +173,17 @@ pub(in crate::screens::tasks) fn blocking_dialog(ctx: &mut Ctx) -> Option<Elemen
     return None;
   }
   let ask = handles.task.get()?;
-  let typed = handles.reason.get();
-  let reason = FieldInput::new(
-    "tasks-team-block-reason",
-    ctx.t("summary.team.lifecycle.block.reason"),
-    handles.reason.clone(),
-  )
-  .placeholder(ctx.t("summary.team.lifecycle.block.placeholder"))
-  .text_area()
-  .render(ctx);
-  let confirm = ActionButton::new(
-    BLOCK,
-    ButtonKind::Primary,
-    ctx.t("summary.team.lifecycle.block.confirm"),
-  )
-  .icon(Icon::Ban);
-  let confirm = if typed.trim().is_empty() {
-    confirm.disabled()
-  } else {
-    let (open, key) = (handles.open.clone(), ask.key.clone());
-    confirm.on_click(move || {
-      open.set(false);
-      actions.run(Ask {
-        change: Change::Block(typed.clone()),
-        key: key.clone(),
-        ..ask.clone()
-      });
-    })
+  let key = ask.key.clone();
+  let blocking = Blocking {
+    id: "tasks-team-block",
+    key: &key,
+    reason: &handles.reason,
+    open: &handles.open,
   };
-  let title = ctx.t_args(
-    "summary.team.lifecycle.block.title",
-    [("task", ask_key(&handles).as_ref())],
-  );
-  Some(
-    Dialog::new(
-      "tasks-team-block",
-      Icon::Ban,
-      title,
-      ctx.t("summary.team.lifecycle.block.cancel"),
-    )
-    .part(reason)
-    .action(confirm)
-    .render(ctx, &handles.open),
-  )
-}
-
-fn ask_key(handles: &Handles) -> Arc<str> {
-  handles.task.get_untracked().map(|ask| ask.key).unwrap_or_default()
+  Some(dialog(ctx, &blocking, move |reason| {
+    actions.run(Ask {
+      change: Change::Block(reason),
+      ..ask.clone()
+    });
+  }))
 }
