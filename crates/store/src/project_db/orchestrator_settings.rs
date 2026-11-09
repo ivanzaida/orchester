@@ -1,7 +1,12 @@
 //! What the project's Orchestrator chat runs on (`orchester_core::orchestrator::OrchestratorSettings`): its published
-//! versions and the draft saved since the latest.
+//! versions and the draft saved since the latest. Beside them, how it watches the project's runs
+//! (`orchester_core::orchestrator::WatchSettings`), kept as set, without versions.
 
-use orchester_core::{orchestrator::OrchestratorSettings, resource::ModelId, time::Timestamp};
+use orchester_core::{
+  orchestrator::{OrchestratorSettings, WatchSettings},
+  resource::ModelId,
+  time::Timestamp,
+};
 use rusqlite::{OptionalExtension, Row, params};
 
 use super::ProjectDb;
@@ -11,6 +16,27 @@ use crate::{
 };
 
 impl ProjectDb {
+  /// How the Orchestrator watches the project's runs; a project that never set it has the defaults.
+  pub fn orchestrator_watch(&self) -> Result<WatchSettings, StoreError> {
+    let (order, minutes): (String, Option<i64>) = self.connection.query_row(
+      "SELECT default_order, no_progress_minutes FROM orchestrator_watch WHERE id = 1",
+      [],
+      |row| Ok((row.get(0)?, row.get(1)?)),
+    )?;
+    let minutes = minutes
+      .map(|minutes| u32::try_from(minutes).map_err(|error| corrupt("orchestrator no progress minutes", error)))
+      .transpose()?;
+    WatchSettings::new(&order, minutes).map_err(|error| corrupt("orchestrator no progress minutes", error))
+  }
+
+  /// Keeps `watch` in place of what was set before.
+  pub fn save_orchestrator_watch(&mut self, watch: &WatchSettings) -> Result<(), StoreError> {
+    self.connection.execute(
+      "UPDATE orchestrator_watch SET default_order = ?1, no_progress_minutes = ?2 WHERE id = 1",
+      params![watch.default_order(), watch.no_progress_minutes()],
+    )?;
+    Ok(())
+  }
   /// What the Orchestrator runs on: its latest published version; `None` until a person published one.
   pub fn orchestrator_settings(&self) -> Result<Option<OrchestratorSettings>, StoreError> {
     Ok(self.orchestrator_published()?.map(|(_, settings)| settings))

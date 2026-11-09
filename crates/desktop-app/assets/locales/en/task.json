@@ -1,5 +1,11 @@
 {
   "task": {
+    "waitsOn": {
+      "at": "Waits on {{waited}} at {{step}}",
+      "status": "Waits on {{waited}}",
+      "cannotBeMet": "Waits on {{waited}} · cannot be met",
+      "runLine": "Run {{run}} · since {{time}}"
+    },
     "tabs": {
       "summary": "Summary",
       "conversation": "Conversation",
@@ -65,8 +71,6 @@
       "resolve": "Resolve",
       "recordMerge": "Record merge",
       "putFilesBack": "Put files back",
-      "keysCmd": "⌘↵",
-      "keysCtrl": "Ctrl+Enter",
       "noBranch": "Merge needs the branch your checkout had when the run started, which this run didn't record.",
       "noBranchShort": "No branch to merge into",
       "waits": {
@@ -138,6 +142,13 @@
       "start": "Start run",
       "pause": "Pause run",
       "pausing": "Pausing…",
+      "pausingFor": {
+        "agent": "Pausing once {{agent}} finishes {{step}}",
+        "command": "Pausing once {{step}}'s command ends · {{tool}}",
+        "commandUnnamed": "Pausing once {{step}}'s command ends",
+        "steps": "Pausing once {{steps}} end",
+        "none": "Pausing at the next checkpoint"
+      },
       "resume": "Resume run",
       "continue": "Continue run",
       "cancel": "Cancel run",

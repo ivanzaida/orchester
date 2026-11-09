@@ -9,8 +9,9 @@ use rmcp::model::JsonObject;
 use serde_json::{Value, json};
 
 use super::{
+  acts::act_and_keep,
   keep,
-  tools::{ChatScope, DUPLICATE_PIPELINE, act_and_keep},
+  tools::{ChatScope, DUPLICATE_PIPELINE},
 };
 use crate::{
   app_mcp::{Services, ToolError, Translate, duplicate_pipeline_draft},

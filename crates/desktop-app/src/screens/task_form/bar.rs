@@ -1,9 +1,9 @@
 //! The action bar at the bottom of the content panel (`Action bar` `IWxaO`): 56 high, 28 at its sides, a `border`
 //! line over it. At its start one line, the single reason the next action cannot be pressed or what will happen
-//! (`super::reason`); at its end the actions and the key cap of the main one: *Create* and *Create & run* with
-//! `Ctrl Enter` on New task, *Discard changes* and *Save changes* with `Ctrl S` on Edit task (a draft keeps *Create &
-//! run*), *Retry run* while the queued task's run has not started. While an action is under way its button turns its
-//! loader and none can be pressed. *Discard changes* asks in place of the bar (`LVI8K`), never in a dialog.
+//! (`super::reason`); at its end the actions: *Create* and *Create & run* on New task, *Discard changes* and *Save
+//! changes* on Edit task (a draft keeps *Create & run*), *Retry run* while the queued task's run has not started. While
+//! an action is under way its button turns its loader and none can be pressed. *Discard changes* asks in place of the
+//! bar (`LVI8K`), never in a dialog.
 
 use std::sync::Arc;
 
@@ -27,7 +27,6 @@ use crate::{
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
-    kbd::key_cap,
     pressable::{Focus, Press},
     tooltip::Truncated,
   },
@@ -54,17 +53,6 @@ pub struct Handlers {
   pub show_missing: Open,
   /// Reads again whether the chosen pipeline is ready on this computer.
   pub retry_readiness: Handler,
-}
-
-/// The main action's keys on this platform: Create & run's, or Save changes' where there is no Create & run.
-pub fn shortcut_key(ctx: &Ctx, runs: bool) -> Arc<str> {
-  let mac = cfg!(target_os = "macos");
-  ctx.t(match (runs, mac) {
-    (true, false) => "task_form.keys.ctrlEnter",
-    (true, true) => "task_form.keys.cmdEnter",
-    (false, false) => "task_form.keys.ctrlS",
-    (false, true) => "task_form.keys.cmdS",
-  })
 }
 
 pub fn action_bar(ctx: &mut Ctx, view: &View, confirming_discard: bool, on: &Handlers) -> Element {
@@ -229,7 +217,6 @@ fn actions(ctx: &Ctx, view: &View, on: &Handlers) -> Vec<Element> {
       (running, busy || !view.run_needs().is_empty()),
     ));
   }
-  actions.push(key_cap("task-form-shortcut", &shortcut_key(ctx, offers_run)));
   actions
 }
 

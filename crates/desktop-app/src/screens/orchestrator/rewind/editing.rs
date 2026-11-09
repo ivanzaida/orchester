@@ -1,10 +1,11 @@
 //! *Edit* in place (09b `QJb0b`): the person's bubble becomes a field 520 wide (`Editor` `jiiRx`, `surface_input` in
 //! a `border_focus` stroke, radius 10, 14 by 10 inside, its parts 10 apart) holding the words in 13 `text_primary`,
 //! over its foot (`b38Jmu`): a 13 `message-square-x` in `warning` and *Sending drops the 3 messages after this one*
-//! in 11.5 `text_secondary`, then *Cancel* and *Send*, 24 high. Under the field, at its end, *Ctrl Enter sends* and
-//! *Esc cancels* (`Keys` `qSilt`). Ctrl Enter (⌘ Enter on macOS) sends and Esc cancels in the field too. The messages
-//! sending drops are dimmed to 40 % under the line *These 3 messages go when you send* (`Drop line` `JRQTc`): a
-//! `border_strong` line at each side of a 12 `arrow-down` and the words in 11 `text_muted`, 10 apart.
+//! in 11.5 `text_secondary`, then *Cancel* and *Send*, 24 high. The design draws *Ctrl Enter sends* and *Esc cancels*
+//! under the field (`Keys` `qSilt`); the app does not show them. Ctrl Enter (⌘ Enter on macOS) sends and Esc cancels in
+//! the field too. The messages sending drops are dimmed to 40 % under the line *These 3 messages go when you send*
+//! (`Drop line` `JRQTc`): a `border_strong` line at each side of a 12 `arrow-down` and the words in 11 `text_muted`, 10
+//! apart.
 
 use std::sync::Arc;
 
@@ -30,7 +31,6 @@ use crate::{
     button::{ActionButton, ButtonKind},
     field::field_error,
     icon::{Icon, icon},
-    kbd::key_cap,
     message::message_text,
     tinted_note::person_only,
   },
@@ -151,7 +151,6 @@ impl Component for EditField {
       .align_items(Alignment::End)
       .child(editor)
       .with_children(why_not(ctx, &props))
-      .child(keys(ctx, &props.id))
   }
 }
 
@@ -266,27 +265,4 @@ fn foot(ctx: &mut Ctx, props: &FieldProps) -> Row {
     .child(Row::new().flex(1.0).min_width(Dimension::Px(0.0)).with_children(drops))
     .child(cancel)
     .child(send)
-}
-
-/// *Ctrl Enter sends* and *Esc cancels*, a cap's gap further apart than a key and its words.
-fn keys(ctx: &Ctx, id: &str) -> Row {
-  let sends = ctx.t(if cfg!(target_os = "macos") {
-    "orchestrator.keys.cmdEnter"
-  } else {
-    "orchestrator.keys.ctrlEnter"
-  });
-  let words = |key: &str| Text::new(&ctx.t(key)).variant(TypographyStyle::Caption).nowrap();
-  Row::new()
-    .id(format!("{id}-keys"))
-    .spacing(ExtraSpacing::Snug.role())
-    .align_items(Alignment::Center)
-    .child(key_cap(&format!("{id}-key-send"), &sends))
-    .child(words("orchestrator.edit.keySend"))
-    .child(
-      Row::new()
-        .width(Dimension::Px(ExtraSpacing::Snug.value()))
-        .flex_shrink(0.0),
-    )
-    .child(key_cap(&format!("{id}-key-cancel"), &ctx.t("ui.dialog.escKey")))
-    .child(words("orchestrator.edit.keyCancel"))
 }

@@ -388,10 +388,11 @@ impl ProjectTasks {
     }
   }
 
-  /// The merge queue blocked by the person's checkout, which only they can clean.
+  /// The merge queue blocked by the person's checkout, which only they can clean; it is about the run it blocked at,
+  /// whose task's page tells why.
   fn blocked_delivery(&self) -> Option<WaitingItem> {
-    let (blocked, since) = self.merge_queue.iter().find_map(|entry| match &entry.state {
-      QueueState::Blocked(blocked) => Some((blocked.clone(), entry.since)),
+    let (blocked, since, task) = self.merge_queue.iter().find_map(|entry| match &entry.state {
+      QueueState::Blocked(blocked) => Some((blocked.clone(), entry.since, entry.task)),
       _ => None,
     })?;
     let waiting = self
@@ -400,7 +401,7 @@ impl ProjectTasks {
       .filter(|entry| entry.state == QueueState::Queued)
       .count();
     Some(WaitingItem {
-      task: None,
+      task: self.task(task).map(WaitingTask::of),
       run: None,
       step: None,
       since,

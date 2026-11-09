@@ -51,6 +51,9 @@ impl Scheduler {
       return self
         .continue_settled(run, |db, root| {
           let mut stored = waiting(db, run, expected)?;
+          if let StuckDecision::ReturnTo { profile, .. } = &decision {
+            super::chosen_profile::check(db, run, profile.as_ref())?;
+          }
           if matches!(decision, StuckDecision::Accept { .. }) {
             acceptable(root, &stored)?;
           }

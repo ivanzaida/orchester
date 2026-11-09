@@ -6,6 +6,7 @@ macro_rules! markers {
   ($inspect:path) => {
     impl $inspect for crate::accounts::AccountUses {}
     impl $inspect for crate::accounts::NewAccount {}
+    impl $inspect for crate::tasks::active_runs::ActiveRun {}
     impl $inspect for crate::tasks::plan_limit::PlanStop {}
     impl $inspect for crate::activity::Activity {}
     impl $inspect for crate::app_updates::AppUpdates {}
@@ -77,7 +78,7 @@ macro_rules! markers {
     impl $inspect for crate::merge_queue::QueueRefusal {}
     impl $inspect for crate::merge_queue::QueueRow {}
     impl $inspect for crate::merge_queue::RunDelivery {}
-    impl $inspect for crate::tasks::merge_attempts::merges::Merges {}
+    impl $inspect for crate::tasks::review_list::ReviewList {}
     impl $inspect for crate::tasks::merge_attempts::page::AttemptPage {}
     impl $inspect for crate::messages::Message {}
     impl $inspect for crate::modules::ModuleChoice {}
@@ -108,11 +109,6 @@ macro_rules! markers {
     impl $inspect for crate::project_list::Listing {}
     impl $inspect for crate::project_setup::CreateFailure {}
     impl $inspect for crate::project_setup::Creation {}
-    impl $inspect for crate::pull_requests::Inbox {}
-    impl $inspect for crate::pull_requests::detail::Detail {}
-    impl $inspect for crate::pull_requests::list::PullRequestList {}
-    impl $inspect for crate::pull_requests::list::PullRequestSort {}
-    impl $inspect for crate::pull_requests::page::PullRequestPage {}
     impl $inspect for crate::usage::UsageData {}
     impl $inspect for crate::recovery::InterruptedRun {}
     impl $inspect for crate::recovery::Recovery {}

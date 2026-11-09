@@ -228,8 +228,13 @@ fn plan_arguments(action: &str) -> Value {
 #[test]
 fn plan_turn_refuses_every_tool_that_changes_something_and_keeps_each_refusal() {
   let desktop = Desktop::new();
+  // The chat has every write tool of the app while the project lets it drive.
+  desktop
+    .db()
+    .set_orchestrator_drives(true)
+    .expect("the person lets it drive");
   desktop.says("Continue the runs and draft the follow-up", TurnMode::Plans);
-  let writes: Vec<String> = tools::listed()
+  let writes: Vec<String> = tools::listed(true)
     .into_iter()
     .filter(|tool| tool.annotations.as_ref().and_then(|hints| hints.read_only_hint) != Some(true))
     .map(|tool| tool.name.to_string())

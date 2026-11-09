@@ -1,5 +1,16 @@
 {
   "summary": {
+    "waitsOn": {
+      "waiting": "Waits on {{waited}} · {{title}}. It continues when {{waited}} is merged into {{branch}}, the run's base branch.",
+      "waitingUntitled": "Waits on {{waited}}. It continues when {{waited}} is merged into {{branch}}, the run's base branch.",
+      "canceled": "{{waited}} was canceled at {{time}}, so nothing will end this wait.",
+      "canceledTold": "{{waited}} was canceled at {{time}}, so nothing will end this wait. «{{chat}}» told you.",
+      "closed": "{{waited}} was closed without merging at {{time}}, so nothing will end this wait.",
+      "closedTold": "{{waited}} was closed without merging at {{time}}, so nothing will end this wait. «{{chat}}» told you.",
+      "notMerged": "{{waited}} · not merged",
+      "drop": "Drop the wait",
+      "dropping": "Dropping…"
+    },
     "openConversation": "Conversation →",
     "browser": {
       "title": "Browser",
@@ -264,6 +275,7 @@
       "pipeline": "Pipeline",
       "tags": "Tags",
       "dependsOn": "Depends on",
+      "ledIn": "Led in",
       "limits": "Limits",
       "branch": "Branch",
       "merge": {
@@ -276,7 +288,8 @@
         "conflictsOne": "Conflicts · 1 file",
         "conflictsOther": "Conflicts · {{count}} files",
         "notRecorded": "Not recorded · {{time}}",
-        "merged": "Merged · {{time}}"
+        "merged": "Merged · {{time}}",
+        "mergedOutside": "Merged outside"
       },
       "base": {
         "label": "Base",
@@ -358,6 +371,9 @@
       "returnedResolvingBody": "{{agent}} merges {{branch}} into the run's branch in its worktree and resolves {{files}}. The steps after {{step}} run again; nothing reaches {{branch}} until you merge.",
       "pausingTitle": "Pausing at the next checkpoint",
       "pausingBody": "{{agent}} finishes what it is doing at {{step}}; the run then pauses with its work saved on {{branch}}.",
+      "pausingBodyCommand": "{{step}} runs {{tool}}; the run pauses once the command ends, with its work saved on {{branch}}.",
+      "pausingBodyCommandUnnamed": "{{step}} runs a command; the run pauses once the command ends, with its work saved on {{branch}}.",
+      "pausingBodySteps": "{{steps}} are still at work; the run pauses once they end, with its work saved on {{branch}}.",
       "askingTitle": "{{agent}} asks you",
       "askingBody": "{{step}} waits for your answer in the conversation.",
       "planTitle": "Your approval is needed · plan v{{version}}",

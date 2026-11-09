@@ -26,7 +26,10 @@ use super::{
 use crate::{
   navigation::Navigation,
   routes::{Route, TaskTab, TaskView},
-  screens::task::{TaskContext, archived},
+  screens::task::{
+    TaskContext, archived,
+    waits_on::{self, Place},
+  },
   services::Services,
   theme::{ExtraSpacing, IconSize},
   ui::{
@@ -73,7 +76,7 @@ pub fn section(ctx: &mut Ctx, task: &TaskContext, run: Option<&RunView>) -> Elem
     )
   });
   // A team run whose authority the server fenced says it stopped, and what became of its reports (03 `hWXxr`); one an
-  // archive stopped says which resource did (A22 `pUu78`).
+  // archive stopped says which resource did (A22 `pUu78`); a run that waits on another task, that wait (09 `SLuUW`).
   let fenced = run.and_then(|run| team_run::stopped(ctx, task, run));
   let archived = archived::event_words(ctx, task).filter(|_| run.is_some());
   let event = match (fenced, archived) {
@@ -89,7 +92,8 @@ pub fn section(ctx: &mut Ctx, task: &TaskContext, run: Option<&RunView>) -> Elem
       (Icon::CircleX, &text, "stopped"),
       (true, PaletteColor::Danger),
     ),
-    (None, None) => last_event(ctx, task, run.is_some()),
+    (None, None) => waits_on::row(ctx, (&task.detail, &task.project.open), Place::Summary)
+      .unwrap_or_else(|| last_event(ctx, task, run.is_some())),
   };
   section.child(event).with_children(browser).into()
 }
@@ -125,6 +129,7 @@ fn rail(ctx: &mut Ctx, task: &TaskContext, run: &RunView) -> Element {
     waiting: &waiting,
     slot_waits: &slot_waits,
     stopped,
+    waits_on: waits_on::holding(&task.detail).is_some(),
   };
   steps::rail(ctx, run, &live, current, now)
 }

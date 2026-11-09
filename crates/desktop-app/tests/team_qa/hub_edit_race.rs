@@ -245,7 +245,7 @@ fn team_qa_hub_edit_race_the_last_typed_text_is_written_when_the_panel_is_gone_a
   // Two keystrokes, then the person leaves before the newest save's answer was awaited: the panel is unmounted.
   window.set(ARGUMENTS, "--first");
   window.set(ARGUMENTS, "--last");
-  window.navigation().go(Route::Project(project, ProjectPage::Merges));
+  window.navigation().go(Route::Project(project, ProjectPage::Review));
   window.until("the panel to go", |window| window.texts("team-hub-panel").is_none());
   stalled.release();
 

@@ -144,7 +144,6 @@ fn effect(ctx: &Ctx, wait: &AgentWait, end: RunEnd, turned: bool) -> Arc<str> {
     (RunEnd::Interrupted, true, true, Some(Continuing::StorageContention), _) => "orchestrator.end.effectContention",
     (_, true, true, ..) => "orchestrator.end.effectAnswering",
     (_, true, false, ..) => "orchestrator.end.effectQueued",
-    (_, false, ..) if wait.own => "orchestrator.end.effectOwn",
     (_, false, ..) => "orchestrator.end.effectWaits",
   };
   ctx.t(key)

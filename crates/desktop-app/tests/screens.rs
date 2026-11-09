@@ -1,5 +1,5 @@
 //! Every route's path shows its screen's own element, `screen-<name>`, which the screen's own tests read (`BUILT`;
-//! Settings is `tests/settings`; the Merge queue is `tests/merge_queue.rs`). A path that names nothing shows
+//! Settings is `tests/settings`; the merge queue's delivery is `tests/merge_queue.rs`). A path that names nothing shows
 //! `screen-not-found`, which says why. The paths go straight to the router, as a tab's history would hand them over, so
 //! a path no route prints is shown too. The project the paths name is known to be open; what the window does until a
 //! project opens, and for one that cannot, is `tests/projects.rs`. The shell around the screens works with a session's
@@ -8,7 +8,7 @@
 
 mod support;
 
-use std::{num::NonZeroU64, path::PathBuf, sync::Arc};
+use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
   app::{
@@ -47,8 +47,7 @@ use orchester_core::{
   usage::{GroupBy, Period},
 };
 use orchester_workspace::{
-  files::Version, pull_requests::list::PullRequestTab, tasks::integration_jobs::ProjectJobs, usage::UsageQuery,
-  workspace::OpenProject,
+  files::Version, tasks::integration_jobs::ProjectJobs, usage::UsageQuery, workspace::OpenProject,
 };
 use parking_lot::Mutex;
 use support::Data;
@@ -73,8 +72,6 @@ const BUILT: &[Screen] = &[
   Screen::JoinTeam,
   Screen::Instructions,
   Screen::Memory,
-  Screen::MergeQueue,
-  Screen::Merges,
   Screen::Modules,
   Screen::NewConnection,
   Screen::NewTask,
@@ -83,7 +80,6 @@ const BUILT: &[Screen] = &[
   Screen::Overview,
   Screen::Pipelines,
   Screen::ProjectSettings,
-  Screen::PullRequests,
   Screen::Secrets,
   Screen::Settings,
   Screen::Skills,
@@ -275,14 +271,20 @@ fn home_screens() -> Vec<(Route, Vec<&'static str>)> {
   .to_vec()
 }
 
+/// Review's list, which says that Review is being rebuilt until its task builds it; a task's review has its own tests.
+fn review_screens() -> [(Route, Vec<&'static str>); 1] {
+  let body = "The list of tasks to review is not available yet.";
+  [(at(ProjectPage::Review), vec!["Review is being rebuilt", body])]
+}
+
 /// A route of every screen, with what it shows first; a screen in `BUILT` its own tests read, by its title here.
 fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
   let changes = TaskView::Changes(Some(
     ChangedFile::new("src/a b.rs", ChangeSource::Worktree).expect("a file path"),
   ));
   let placeholder = |title| vec![title];
-  let pull_request = NonZeroU64::new(142).expect("a pull request number");
   let mut all = home_screens();
+  all.extend(review_screens());
   all.extend([
     (at(ProjectPage::Overview(OverviewTab::Failed)), placeholder("Overview")),
     (
@@ -308,14 +310,6 @@ fn every_screen() -> Vec<(Route, Vec<&'static str>)> {
       READING_TASK.to_vec(),
     ),
     (at(ProjectPage::Task(key("KON-12"), changes)), READING_TASK.to_vec()),
-    (at(ProjectPage::MergeQueue), placeholder("Merge queue")),
-    (
-      at(ProjectPage::PullRequests(PullRequestTab::Merged)),
-      placeholder("Pull requests"),
-    ),
-    (at(ProjectPage::Merges), placeholder("Merges")),
-    (at(ProjectPage::PullRequest(pull_request, None)), Vec::new()),
-    (at(ProjectPage::PullRequestFeedback(pull_request, None)), Vec::new()),
     (at(ProjectPage::Usage(Box::new(filtered_usage()))), placeholder("Usage")),
     (at(ProjectPage::Pipelines), placeholder("Pipelines")),
     (at(ProjectPage::Agents), placeholder("Agents")),

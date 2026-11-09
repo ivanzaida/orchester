@@ -10,7 +10,8 @@
 
 mod account_root;
 mod browser;
-mod orchestrator_consent;
+mod orchestrator_drive;
+mod orchestrator_watch;
 mod owners;
 mod servers;
 mod settings;
@@ -34,7 +35,6 @@ use parking_lot::Mutex;
 pub(crate) use self::browser::computer_browser_beside;
 pub use self::{
   browser::{AgentsBrowser, BrowserSettings, ChooseBrowserError},
-  orchestrator_consent::OrchestratorConsent,
   owners::{MoveError, MoveTo},
 };
 use crate::{
@@ -160,8 +160,8 @@ pub struct Workspace {
   pub(crate) trash: crate::accounts::trash::SharedTrash,
   permission_consent: Arc<Mutex<Consent>>,
   approval_consent: Arc<Mutex<Consent>>,
-  /// The person's switches over what the Orchestrator chat does itself ([`orchestrator_consent`]).
-  orchestrator: orchestrator_consent::Consents,
+  /// The person's switch over whether the Orchestrator chat drives ([`orchestrator_drive`]).
+  orchestrator: orchestrator_drive::Drives,
   /// Whether All projects listed a project in this session (`project_list`).
   pub(crate) listed: Arc<AtomicBool>,
   /// Counts the changes to the agent accounts made through this workspace ([`Workspace::account_changes`]).
@@ -186,7 +186,7 @@ impl Workspace {
       trash: crate::accounts::trash::SharedTrash::default(),
       permission_consent: Arc::default(),
       approval_consent: Arc::default(),
-      orchestrator: orchestrator_consent::Consents::default(),
+      orchestrator: orchestrator_drive::Drives::default(),
       listed: Arc::default(),
       account_changes: Arc::new(tokio::sync::watch::Sender::new(0)),
       browser_folders: browser::BrowserFolders::default(),
@@ -302,8 +302,8 @@ impl Workspace {
       tracing::warn!(%error, "cannot copy the application-wide estimates setting into a project");
     }
     // The project opens all the same; a switch not copied now is copied when it is first read.
-    if let Err(error) = self.copy_orchestrator_switches(&mut db) {
-      tracing::warn!(%error, "cannot copy the application-wide Orchestrator switches into a project");
+    if let Err(error) = self.copy_orchestrator_drives(&mut db) {
+      tracing::warn!(%error, "cannot copy the application-wide Orchestrator switch into a project");
     }
     Ok(OpenProject {
       project,

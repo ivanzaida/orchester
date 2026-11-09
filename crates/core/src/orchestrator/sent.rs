@@ -11,7 +11,7 @@ use crate::{id::ChatId, run::Answerer};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SentWay {
-  /// The chat sent it itself: *Let the Orchestrator answer agents* was on.
+  /// The chat sent it itself: *Let the Orchestrator drive* was on.
   Direct,
   /// The chat proposed it and the person applied the proposal.
   AppliedByPerson,

@@ -18,8 +18,8 @@ use orchester_core::{
   id::{ChatId, ChatMessageId, ConnectionId, TaskId},
   name::Name,
   orchestrator::{
-    ActionOutcome, AgentWait, Chat, ChatAction, EntryKind, MergeLeft, Merging, OrchestratorSettings, RunEnd, TurnState,
-    WaitKind, WaitTurn,
+    ActionOutcome, AgentWait, Chat, ChatAction, EntryKind, MergeLeft, Merging, OrchestratorSettings, RunEnd,
+    Subscription, TurnState, WaitKind, WaitTurn, WatchTarget,
   },
   resource::ModelId,
   revision::Revision,
@@ -37,12 +37,8 @@ use orchester_workspace::orchestrator::{
 };
 use support::{Fixture, at};
 
-/// Every switch a turn that merges on its own needs: *answer agents*, and *merge finished runs* with *merge runs*.
-const MERGING: Switches = Switches {
-  answers: true,
-  continues: false,
-  merges: true,
-};
+/// The switch a turn that merges on its own needs: *Let the Orchestrator drive*.
+const MERGING: Switches = Switches { drives: true };
 
 /// A checked, signed-in Claude Code connection, published as what the Orchestrator runs on.
 fn ready(fixture: &mut Fixture) {
@@ -240,31 +236,20 @@ fn auto_merge_counts_a_step_a_person_accepted_and_not_one_automation_accepted() 
 }
 
 #[test]
-fn auto_merge_marks_a_success_only_with_every_switch_on() {
-  for (switches, said) in [
-    (
-      Switches {
-        merges: false,
-        ..MERGING
-      },
-      "merge finished runs or merge runs off",
-    ),
-    (
-      Switches {
-        answers: false,
-        ..MERGING
-      },
-      "answer agents off: no turn at all",
-    ),
-  ] {
-    let mut fixture = Fixture::new();
-    ready(&mut fixture);
-    succeeded(&mut fixture, "Add login");
-    follow(&fixture, switches);
-    assert_eq!(waits(&fixture)[0].0.merging, None, "{said}");
-  }
+fn auto_merge_marks_a_success_only_while_the_chat_drives() {
   let mut fixture = Fixture::new();
   ready(&mut fixture);
+  fixture.everything(at(5));
+  succeeded(&mut fixture, "Add login");
+  follow(&fixture, Switches::default());
+  assert_eq!(
+    waits(&fixture)[0].0.merging,
+    None,
+    "Let the Orchestrator drive is off: no turn at all"
+  );
+  let mut fixture = Fixture::new();
+  ready(&mut fixture);
+  fixture.everything(at(5));
   let (_, run) = succeeded(&mut fixture, "Add login");
   let followed = follow(&fixture, MERGING);
   let (wait, turn) = &waits(&fixture)[0];
@@ -282,7 +267,7 @@ fn auto_merge_marks_a_success_only_with_every_switch_on() {
     .text;
   assert!(
     prompt.as_str().contains(&format!(
-      "merge this run once with merge_run (run #{})",
+      "Merge this run once with merge_run (run #{})",
       run.number().get()
     )),
     "{}",
@@ -294,6 +279,7 @@ fn auto_merge_marks_a_success_only_with_every_switch_on() {
 fn auto_merge_of_an_opted_out_task_only_tells_the_person() {
   let mut fixture = Fixture::new();
   ready(&mut fixture);
+  fixture.everything(at(5));
   let (task, _) = succeeded(&mut fixture, "Add login");
   organize(&mut fixture, task, |value| value.with_no_automatic_merge(true));
   let followed = follow(&fixture, MERGING);
@@ -307,8 +293,9 @@ fn auto_merge_of_an_opted_out_task_only_tells_the_person() {
   assert!(prompt.as_str().contains("Do not merge it"), "{}", prompt.as_str());
 }
 
-/// A conversation, started at `at(start)`, whose answered turn updated task `key`: the one that dealt with it.
-fn dealt_with(fixture: &mut Fixture, key: &str, start: i64) -> Chat {
+/// A conversation, started at `at(start)`, whose answered turn updated `task` (known by `key`) and that watches it
+/// from then on: the one that leads it.
+fn leading(fixture: &mut Fixture, (task, key): (TaskId, &str), start: i64) -> Chat {
   let chat = Chat::named(ChatId::generate(), key, at(start));
   let person = ChatMessageId::generate();
   let text = MessageBody::new("Look after it").expect("text");
@@ -325,6 +312,8 @@ fn dealt_with(fixture: &mut Fixture, key: &str, start: i64) -> Chat {
     .db
     .end_chat_turn(person, &TurnState::Answered, at(start + 2))
     .expect("ended");
+  let watching = Subscription::new(chat.id(), WatchTarget::Task(task), "", at(start + 3));
+  fixture.db.start_subscription(&watching).expect("watching");
   chat
 }
 
@@ -339,8 +328,8 @@ fn auto_merge_turns_start_one_at_a_time_in_the_order_the_runs_ended() {
   ready(&mut fixture);
   let first_task = fixture.task("Add login", at(40));
   let second_task = fixture.task("Add logout", at(41));
-  let first_chat = dealt_with(&mut fixture, "ORC-1", 10);
-  let second_chat = dealt_with(&mut fixture, "ORC-2", 20);
+  let first_chat = leading(&mut fixture, (first_task, "ORC-1"), 10);
+  let second_chat = leading(&mut fixture, (second_task, "ORC-2"), 20);
   let mut first = fixture.started_run(first_task, at(50));
   let mut second = fixture.started_run(second_task, at(51));
   fixture.succeed(&mut first, Timestamp::now());
@@ -364,30 +353,13 @@ fn auto_merge_turns_start_one_at_a_time_in_the_order_the_runs_ended() {
 
 #[test]
 fn auto_merge_holds_back_no_turn_that_does_not_merge() {
+  // An end that the rule leaves to the person does not wait for a merge.
   let mut fixture = Fixture::new();
   ready(&mut fixture);
   let first_task = fixture.task("Add login", at(40));
   let second_task = fixture.task("Add logout", at(41));
-  dealt_with(&mut fixture, "ORC-1", 10);
-  let second_chat = dealt_with(&mut fixture, "ORC-2", 20);
-  let mut first = fixture.started_run(first_task, at(50));
-  let mut second = fixture.started_run(second_task, at(51));
-  fixture.succeed(&mut first, Timestamp::now());
-  fixture.succeed(&mut second, Timestamp::now());
-  let answering = Switches {
-    merges: false,
-    ..MERGING
-  };
-  follow(&fixture, answering).turn.expect("the first end's turn");
-  let next = follow(&fixture, answering).turn.expect("the second starts beside it");
-  assert_eq!(next.chat, second_chat.id());
-  // An end that the rule leaves to the person does not wait for a merge either.
-  let mut fixture = Fixture::new();
-  ready(&mut fixture);
-  let first_task = fixture.task("Add login", at(40));
-  let second_task = fixture.task("Add logout", at(41));
-  dealt_with(&mut fixture, "ORC-1", 10);
-  let second_chat = dealt_with(&mut fixture, "ORC-2", 20);
+  leading(&mut fixture, (first_task, "ORC-1"), 10);
+  let second_chat = leading(&mut fixture, (second_task, "ORC-2"), 20);
   let mut first = fixture.started_run(first_task, at(50));
   let mut second = fixture.started_run(second_task, at(51));
   organize(&mut fixture, second_task, |value| value.with_no_automatic_merge(true));

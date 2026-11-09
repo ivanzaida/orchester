@@ -26,15 +26,18 @@ mod frame;
 mod header;
 mod local_integration;
 mod memory;
-mod merge;
+pub(crate) mod merge;
 mod not_ready;
 mod orchestrated;
+mod pause_wait;
+mod queue_words;
 mod read;
 mod reading;
 mod sharing;
 pub(crate) mod summary;
 mod team;
 mod team_controls;
+pub(in crate::screens) mod waits_on;
 
 use std::time::Instant;
 

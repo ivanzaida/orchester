@@ -25,7 +25,6 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::{Ctx, Timeout},
-    events::is_synthetic_input,
   },
   components::Row,
   core::Signal,
@@ -40,7 +39,6 @@ use orchester_workspace::{
   background,
   messages::{self, Message},
   orchestrator::{facts as read, proposal::Decision, tools::ChatScope},
-  workspace::OrchestratorConsent,
 };
 
 use self::{
@@ -52,6 +50,7 @@ use super::{
   decision,
 };
 use crate::{
+  mcp::qa_person::QaPerson,
   navigation::Navigation,
   services::Services,
   theme::SKELETON_DELAY,
@@ -86,12 +85,12 @@ pub(super) fn waits(action: &ChatAction) -> bool {
   Phase::of(action) == Phase::Waits
 }
 
-/// What was read for a card: its facts, and whether the person lets the Orchestrator publish drafts and lets
+/// What was read for a card: its facts, and whether the person lets the Orchestrator drive and lets
 /// automation widen what agents may do.
 #[derive(Clone, Debug, PartialEq)]
 struct Read {
   facts: Option<read::Facts>,
-  publishes: bool,
+  drives: bool,
   widens: bool,
 }
 
@@ -107,6 +106,8 @@ pub(super) struct ChangeCard {
   slow: Signal<bool>,
   /// Started only while the card's facts are read.
   delay: Timeout,
+  /// Whether the accept takes synthetic input as the person's: in a QA copy only.
+  qa_person: QaPerson,
 }
 
 impl Component for ChangeCard {
@@ -122,6 +123,7 @@ impl Component for ChangeCard {
       details: ctx.signal(false),
       slow,
       delay,
+      qa_person: QaPerson::of(ctx),
     }
   }
 
@@ -265,13 +267,14 @@ impl ChangeCard {
       (true, _) => (start.disabled(), dismiss.disabled()),
       (false, None) => (start.disabled(), self.dismiss(dismiss, deciding(Decision::Dismiss))),
       (false, Some(widens)) => {
-        let (decide, refused, accepting) = (
+        let (decide, refused, accepting, qa_person) = (
           self.decide.clone(),
           self.refused.clone(),
           deciding(Decision::Accept { widens }),
+          self.qa_person.clone(),
         );
         let start = start.on_click(move || {
-          if is_synthetic_input() {
+          if qa_person.refuses_input() {
             tracing::warn!("synthetic input reached a change the Orchestrator proposed; not taken");
             refused.set(true);
             return;
@@ -308,7 +311,7 @@ fn warnings(ctx: &Ctx, id: &str, (view, read): (&View, Option<&Read>)) -> Vec<(b
     _ => None,
   };
   if let Some(name) = widening {
-    let key = if read.is_some_and(|read| read.publishes && !read.widens) {
+    let key = if read.is_some_and(|read| read.drives && !read.widens) {
       "orchestrator.change.publish.widens"
     } else {
       "orchestrator.change.publish.widensWaits"
@@ -347,11 +350,11 @@ fn read_facts(ctx: &mut Ctx, props: &ChangeProps) -> lurq::app::ctx::FutureState
         background::run(move || {
           let workspace = &services.workspace;
           // Without a scope there is no project whose switch could let it publish.
-          let (facts, publishes) = match root {
+          let (facts, drives) = match root {
             Some(root) => (
               read::load_in(&root, &services.programs, &action)?,
               workspace
-                .orchestrator_allows(&root, OrchestratorConsent::PublishDrafts)
+                .orchestrator_drives(&root)
                 .map_err(|error| messages::store_error(&error))?,
             ),
             None => (None, false),
@@ -359,11 +362,7 @@ fn read_facts(ctx: &mut Ctx, props: &ChangeProps) -> lurq::app::ctx::FutureState
           let widens = workspace
             .automation_changes_permissions()
             .map_err(|error| messages::store_error(&error))?;
-          Ok(Read {
-            facts,
-            publishes,
-            widens,
-          })
+          Ok(Read { facts, drives, widens })
         })
         .await?
       }

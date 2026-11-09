@@ -221,6 +221,15 @@ fn shift_tab(screen: &mut Orchestrator) -> Option<String> {
     .and_then(|element| element.text_content().map(str::to_owned))
 }
 
+/// The id of what has the focus.
+fn focused_id(screen: &mut Orchestrator) -> Option<String> {
+  screen
+    .window
+    .tree
+    .focused_element()
+    .and_then(|element| element.id().map(str::to_owned))
+}
+
 /// The 2 px `border_focus` rings the window draws.
 fn rings(screen: &mut Orchestrator) -> Vec<Quad> {
   screen.window.pass();
@@ -398,6 +407,14 @@ fn orchestrator_reply_links_say_where_they_go_and_take_the_keyboard() {
 
   // From the message field back through the links, last first, as Shift+Tab goes; the focused one has the ring.
   focus_message_field(&mut screen);
+  // The answer's own *Fork* and *Copy* controls come after its links in the tab order, so Shift+Tab meets them first.
+  for control in ["-fork", "-copy"] {
+    shift_tab(&mut screen);
+    assert!(
+      focused_id(&mut screen).is_some_and(|id| id.ends_with(control)),
+      "Shift+Tab reaches the answer's {control} control before its links"
+    );
+  }
   for words in ["PR 42", "ATL-9 import", "KON-1 notes"] {
     assert_eq!(
       shift_tab(&mut screen).as_deref(),
@@ -461,8 +478,16 @@ fn orchestrator_reply_draws_labelled_links_as_a_grid_and_any_other_list_as_a_lis
     long.width > 100.0 && long.height < 80.0,
     "the detail keeps room beside a long address: {long:?}"
   );
-  // Shift+Tab from the message field: the plain list's KON-2, then the grid's #42, whose ring nothing clips.
+  // Shift+Tab from the message field: the answer's *Fork* and *Copy*, then the plain list's KON-2, then the grid's #42,
+  // whose ring nothing clips.
   focus_message_field(&mut screen);
+  for control in ["-fork", "-copy"] {
+    shift_tab(&mut screen);
+    assert!(
+      focused_id(&mut screen).is_some_and(|id| id.ends_with(control)),
+      "Shift+Tab reaches the answer's {control} control before its links"
+    );
+  }
   shift_tab(&mut screen);
   assert_eq!(shift_tab(&mut screen).as_deref(), Some("#42 Delivery log"));
   let rings = rings(&mut screen);

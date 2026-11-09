@@ -23,7 +23,7 @@ use orchester_workspace::{
   background,
   messages::{self, Message},
   orchestrator::report::{self, Delivery},
-  workspace::{OpenProject, OrchestratorConsent},
+  workspace::OpenProject,
 };
 
 use crate::services::Services;
@@ -64,7 +64,7 @@ async fn deliver_due(services: &Services, i18n: &I18n, open: &OpenProject) -> Re
   let read = background::run(move || {
     Ok::<_, StoreError>((
       workspace.daily_report_schedule()?,
-      workspace.orchestrator_allows(&root, OrchestratorConsent::AnswerAgents)?,
+      workspace.orchestrator_drives(&root)?,
     ))
   })
   .await?

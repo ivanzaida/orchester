@@ -206,7 +206,7 @@ fn task_merge_row_stays_beside_the_not_merged_card_and_opens_the_attempt_page() 
   page.words();
   page.window.press("task-merge-row");
   page.window.until_within(GIT_WORK, "the run's attempt page", |window| {
-    window.texts("merge-attempt-status").is_some()
+    window.texts("merge-attempt-status-text").is_some()
   });
   let run = page
     .db
@@ -226,6 +226,18 @@ fn task_merge_row_stays_beside_the_not_merged_card_and_opens_the_attempt_page() 
     .expect("its run");
   assert_eq!(
     page.window.navigation().route_now(),
-    Route::Project(page.project, ProjectPage::MergeAttempt(key, run.number()))
+    Route::Project(page.project, ProjectPage::TaskMerge(key, run.number()))
   );
+}
+
+#[test]
+fn task_merge_row_opens_the_review_of_a_run_that_waits_for_it() {
+  let mut page = Page::new();
+  let key = page.open("Webhook replay endpoint");
+  page.until_row("Waits for your review");
+  page.window.press("task-merge-row");
+  let route = Route::Project(page.project, ProjectPage::TaskReview(key));
+  page
+    .window
+    .until("the task's review", |window| window.navigation().route_now() == route);
 }

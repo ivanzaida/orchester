@@ -3,13 +3,11 @@
 //! path and resolves in the router's table to that route's screen, so a link a tool returns opens its place.
 //! A page that is not built yet has its route too. A Usage link carries its whole query.
 
-use std::num::NonZeroU64;
-
 use chrono::NaiveDate;
 use lurq::router::RouteMatch;
 use orchester_app::routes::{
   AccountsPanel, AccountsView, ConnectionsView, FilesView, ModuleListTab, ModuleTab, OrchestratorChat, OverviewTab,
-  ProjectPage, Route, RouteError, TaskView, ToolTab, routes,
+  ProjectPage, Route, RouteError, Screen, TaskView, ToolTab, routes,
 };
 use orchester_core::{
   connection::AgentProvider,
@@ -22,7 +20,6 @@ use orchester_workspace::{
   delivery::DeliveryPeriod,
   files::{FilePath, LineRange, Version},
   links::{Link, TaskPage},
-  pull_requests::list::PullRequestTab,
   usage::UsageQuery,
 };
 
@@ -30,7 +27,7 @@ const PROJECT: &str = "3c7d2f5e-8b1a-4e6f-9a2b-0c4d5e6f7a8b";
 const ID: &str = "7e1f2a3b-4c5d-4e6f-8a9b-0c1d2e3f4a5b";
 
 /// How many kinds of link there are: one per variant of [`Link`].
-const KINDS: usize = 19;
+const KINDS: usize = 17;
 
 /// The pattern the table matched for a path, whole: the layouts' and the route's under the shell's.
 fn matched(chain: &[RouteMatch]) -> String {
@@ -39,10 +36,6 @@ fn matched(chain: &[RouteMatch]) -> String {
 
 fn project() -> ProjectId {
   PROJECT.parse().expect("a project id")
-}
-
-fn number(number: u64) -> NonZeroU64 {
-  NonZeroU64::new(number).expect("a pull request number")
 }
 
 fn key() -> TaskKey {
@@ -71,15 +64,13 @@ const fn kind(link: &Link) -> usize {
     Link::Secrets(_) => 7,
     Link::Connection(..) => 8,
     Link::Account(_) => 9,
-    Link::PullRequest(..) => 10,
-    Link::File { .. } => 11,
-    Link::PullRequests(..) => 12,
-    Link::Usage(..) => 13,
-    Link::UsageEverywhere(_) => 14,
-    Link::Modules(_) => 15,
-    Link::Module(..) => 16,
-    Link::Orchestrator(..) => 17,
-    Link::Delivery(..) => 18,
+    Link::File { .. } => 10,
+    Link::Usage(..) => 11,
+    Link::UsageEverywhere(_) => 12,
+    Link::Modules(_) => 13,
+    Link::Module(..) => 14,
+    Link::Orchestrator(..) => 15,
+    Link::Delivery(..) => 16,
   }
 }
 
@@ -158,18 +149,6 @@ fn every_link() -> Vec<(Link, Route)> {
     (
       Link::Account(id()),
       Route::Accounts(AccountsView::of(id(), AccountsPanel::Account)),
-    ),
-    (
-      Link::PullRequest(project, number(42)),
-      at(ProjectPage::PullRequest(number(42), None)),
-    ),
-    (
-      Link::PullRequests(project, PullRequestTab::Open),
-      at(ProjectPage::PullRequests(PullRequestTab::Open)),
-    ),
-    (
-      Link::PullRequests(project, PullRequestTab::NeedsReview),
-      at(ProjectPage::PullRequests(PullRequestTab::NeedsReview)),
     ),
     (Link::Modules(project), at(ProjectPage::Modules(ModuleListTab::Open))),
     (
@@ -275,18 +254,6 @@ fn links_have_the_documented_paths() {
       Link::Task(project(), key(), TaskPage::Conversation),
       format!("{root}/tasks/ORC-24/conversation"),
     ),
-    (
-      Link::PullRequest(project(), number(7)),
-      format!("{root}/pull-requests/7"),
-    ),
-    (
-      Link::PullRequests(project(), PullRequestTab::Open),
-      format!("{root}/pull-requests"),
-    ),
-    (
-      Link::PullRequests(project(), PullRequestTab::Merged),
-      format!("{root}/pull-requests?tab=merged"),
-    ),
     (Link::Account(id()), format!("/settings?tab=accounts&account={ID}")),
     (
       Link::File {
@@ -336,14 +303,57 @@ fn links_carry_a_provider_and_earlier_runs_and_read_back() {
   );
 }
 
+/// The Pull requests page is gone (ORC-803): its old addresses in a tab's history, whatever follows them, open the
+/// project's Overview.
 #[test]
-fn links_pull_requests_are_numbered_from_one() {
-  for number in ["seven", "0"] {
-    assert_eq!(
-      Route::parse(&format!("/project/{PROJECT}/pull-requests/{number}")),
-      Err(RouteError::NoScreen),
-      "pull request {number}"
-    );
+fn links_to_the_removed_pull_requests_page_open_the_overview() {
+  let overview = at(ProjectPage::Overview(OverviewTab::default()));
+  for path in [
+    "pull-requests",
+    "pull-requests?tab=needs_review",
+    "pull-requests/142",
+    "pull-requests/142?file=src/a%20b.rs",
+    "pull-requests/142?tab=feedback&thread=0",
+    "pull-requests/seven",
+  ] {
+    let path = format!("/project/{PROJECT}/{path}");
+    assert_eq!(Route::parse(&path), Ok(overview.clone()), "{path}");
+  }
+}
+
+/// The Merge queue and Merges pages are gone, and so is the attempt page under Merges (ORC-805; it moved under its
+/// task): old addresses in a tab's history open the project's Overview, whatever follows.
+#[test]
+fn links_to_the_removed_merge_queue_and_merges_pages_open_the_overview() {
+  let overview = at(ProjectPage::Overview(OverviewTab::default()));
+  for path in [
+    "merge-queue",
+    "merge-queue?tab=blocked",
+    "merges",
+    "merges?tab=waiting",
+    "merges/KON-12/8",
+    "merges/kon-12/8",
+    "merges/KON-12/seven",
+  ] {
+    let path = format!("/project/{PROJECT}/{path}");
+    assert_eq!(Route::parse(&path), Ok(overview.clone()), "{path}");
+  }
+}
+
+/// A run's merge attempts are a page under its task.
+#[test]
+fn a_runs_merge_attempts_read_back_from_their_path_under_the_task() {
+  let page = at(ProjectPage::TaskMerge(
+    "KON-12".parse().expect("a task key"),
+    orchester_core::run::RunNumber::new(std::num::NonZeroU32::new(8).expect("a run number")),
+  ));
+  let path = format!("/project/{PROJECT}/tasks/KON-12/merge/8");
+  assert_eq!(page.path(), path);
+  assert_eq!(Route::parse(&path), Ok(page.clone()));
+  assert_eq!(page.nav_screen(), Screen::Tasks);
+  for path in ["tasks/KON-12/merge/0", "tasks/KON-12/merge/seven", "tasks/KON-12/merge"] {
+    let path = format!("/project/{PROJECT}/{path}");
+    assert!(Route::parse(&path).is_err(), "{path}");
   }
 }
 

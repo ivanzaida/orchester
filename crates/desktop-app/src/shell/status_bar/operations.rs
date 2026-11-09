@@ -329,7 +329,7 @@ const fn screen_of(place: Place) -> Screen {
   match place {
     Place::Overview => Screen::Overview,
     Place::Tasks | Place::Task(_) | Place::TaskConversation(_) => Screen::Tasks,
-    Place::PullRequests => Screen::PullRequests,
+    Place::PullRequests => Screen::Review,
     Place::Pipeline(_) => Screen::Pipelines,
     Place::Instruction(_) => Screen::Instructions,
     Place::Skill(_) => Screen::Skills,

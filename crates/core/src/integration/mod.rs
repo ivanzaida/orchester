@@ -34,14 +34,14 @@ use thiserror::Error;
 
 pub use self::{
   cleanup::{
-    Cleanup, CleanupError, KeepReason, LeftBranch, LeftWorktree, Leftovers, ListedWorktree, WORKTREES_DIR,
+    Cleanup, CleanupError, KeepReason, LeftBranch, LeftWorktree, Leftovers, ListedWorktree, Staying, WORKTREES_DIR,
     WorktreeOwner, clean_up, clean_up_all, clean_up_worktrees, leftovers, leftovers_of, parse_worktree_list,
   },
   drift::{Drift, MAX_LANDED, branch_head, commit_subject, drift},
   forgotten::{FOLDER_ENTRIES_READ, FolderListing},
   fork::{Ancestry, RunFork, fork_point, made_on_branch, own_base, parse_log},
   held::{NotRemoved, finish_removal, record_what_stayed, retry_held},
-  log::{LoggedCommit, MAX_LISTED, own_commits},
+  log::{LoggedCommit, MAX_LISTED, is_ancestor, own_commits},
   made::merge_made,
   merge::{
     DeliveredAs, Delivering, Interrupted, MergeError, MergeKind, MergeOutcome, MergeStep, ModuleDelivery, ModuleMerge,

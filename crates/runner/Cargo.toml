@@ -257,6 +257,10 @@ name = "returned"
 required-features = ["test-agent"]
 
 [[test]]
+name = "returned_profile"
+required-features = ["test-agent"]
+
+[[test]]
 name = "resolve"
 required-features = ["test-agent"]
 
@@ -349,6 +353,10 @@ required-features = ["test-agent"]
 
 [[test]]
 name = "questions"
+required-features = ["test-agent"]
+
+[[test]]
+name = "pause_states"
 required-features = ["test-agent"]
 
 [[test]]

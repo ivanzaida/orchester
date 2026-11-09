@@ -269,9 +269,9 @@ fn send_menu(ctx: &mut Ctx, bar: &Bar<'_>, (first, second): &(Way, Way)) -> Elem
     .chosen(true)
     .render(ctx, bar.menu);
   let second = match press {
-    Some(press) if !second.unavailable => item("composer-send-second", second, Some(press.clone()))
-      .shortcut(words::second_keys(ctx))
-      .render(ctx, bar.menu),
+    Some(press) if !second.unavailable => {
+      item("composer-send-second", second, Some(press.clone())).render(ctx, bar.menu)
+    }
     _ => item("composer-send-second", second, None).render(ctx, bar.menu),
   };
   let stopping =

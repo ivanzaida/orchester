@@ -1,4 +1,4 @@
-//! Migration 155, the bindings removed: a database before it opens without the reference bindings, without the
+//! Migration 163, the bindings removed: a database before it opens without the reference bindings, without the
 //! references that named a connection, an MCP server or a secret by an id of the publisher's computer (the team's are
 //! kept), and with a team resource's slug free of the slug of one of this computer's own.
 //! `cargo test -p orchester-store --test remove_bindings_migration remove_bindings_migration`.
@@ -24,7 +24,7 @@ use support::{at, copied_at_version, name, started_run};
 
 /// The schema before the bindings went: `reference_bindings` still there, and `resources` unique by kind and slug.
 /// Migrations are append-only, so later ones still apply on open.
-const BEFORE_REMOVE_BINDINGS: u32 = 154;
+const BEFORE_REMOVE_BINDINGS: u32 = 162;
 
 fn instruction() -> Instruction {
   Instruction::new(

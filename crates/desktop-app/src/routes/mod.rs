@@ -24,8 +24,10 @@
 //! (`?kind=mcp_server` adds an MCP server) and `/project/<id>/connections/<connection id>/edit` edits an MCP server or
 //! an agent CLI connection's account; its Environment tab is `/project/<id>/secrets` ([`SecretsView`]). The code viewer
 //! is `/project/<id>/files`, a file `/project/<id>/files/<path>` (`?at=` its version, `&line=` its lines; see
-//! [`FilesView`]). Pull requests is `/project/<id>/pull-requests` (`?tab=`) and a pull request
-//! `/project/<id>/pull-requests/<number>` (`?file=` the file whose diff it shows). Import resources is
+//! [`FilesView`]). Review is `/project/<id>/review`, the tasks whose run finished, and a task's review
+//! `/project/<id>/review/<key>`. A task's merge attempts of one run are `/project/<id>/tasks/<key>/merge/<run>`. The
+//! Pull requests, Merge queue and Merges pages are gone: `/project/<id>/pull-requests`, `/project/<id>/merge-queue`,
+//! `/project/<id>/merges` and what is under them, with any query, open the project's Overview. Import resources is
 //! `/project/<id>/import` (`?tab=` its kind tab, [`ImportTab`]). The Skills
 //! library, an agent profile, Instructions, a pipeline's page and Memory keep their tab,
 //! filter, item and panel in the query too ([`SkillsFilter`], [`AgentTab`],
@@ -117,7 +119,15 @@ const FIRST_DOWNLOAD: &str = "first-download";
 const FOLDER: &str = "folder";
 const TASKS: &str = "tasks";
 const CONNECTIONS: &str = "connections";
+/// The removed Pull requests page's segment: what is under it opens the Overview ([`ProjectPage::parse`]).
 const PULL_REQUESTS: &str = "pull-requests";
+/// The removed Merge queue and Merges pages' segments (ORC-805): what is under them opens the Overview.
+const MERGE_QUEUE: &str = "merge-queue";
+const MERGES: &str = "merges";
+/// A task's merge attempts of one run, under the task (`/tasks/KON-12/merge/8`).
+const MERGE: &str = "merge";
+/// Review's segment: its list, and a task's review under it.
+const REVIEW: &str = "review";
 /// Import resources' segment.
 const IMPORT: &str = "import";
 const ORCHESTRATOR: &str = "orchestrator";
@@ -150,7 +160,10 @@ const AGENT_PATTERN: &str = "/project/:project/agents/:agent";
 const FILE_PATTERN: &str = "/project/:project/files/**path";
 /// A file's route under the code viewer's layout (`table`): [`FILE_PATTERN`] after the screen's own.
 const FILE_REST: &str = "/**path";
-const PULL_REQUEST_PATTERN: &str = "/project/:project/pull-requests/:number";
+/// A task's review, by its key.
+const TASK_REVIEW_PATTERN: &str = "/project/:project/review/:key";
+/// One run's merge attempts, a page under its task.
+const TASK_MERGE_PATTERN: &str = "/project/:project/tasks/:key/merge/:run";
 /// The Modules list's segment (`orchester_workspace::links::MODULES`); New module and a module's page without its tab
 /// under it, and a module's page on its tab and Edit module under that.
 const MODULES: &str = orchester_workspace::links::MODULES;
@@ -234,14 +247,13 @@ impl Route {
       Self::Project(_, ProjectPage::Pipeline(..) | ProjectPage::PipelineVersion(..)) => PIPELINE_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Agent(..) | ProjectPage::NewAgent(_)) => AGENT_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Files(view)) if view.file().is_some() => FILE_PATTERN.to_owned(),
-      Self::Project(_, ProjectPage::PullRequest(..) | ProjectPage::PullRequestFeedback(..)) => {
-        PULL_REQUEST_PATTERN.to_owned()
-      }
       Self::Project(_, ProjectPage::NewModule | ProjectPage::Module(_, ModuleTab::Summary)) => {
         MODULE_PATTERN.to_owned()
       }
       Self::Project(_, ProjectPage::Module(..) | ProjectPage::EditModule(_)) => MODULE_TAB_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::Delivery(_)) => DELIVERY_PATTERN.to_owned(),
+      Self::Project(_, ProjectPage::TaskReview(_)) => TASK_REVIEW_PATTERN.to_owned(),
+      Self::Project(_, ProjectPage::TaskMerge(..)) => TASK_MERGE_PATTERN.to_owned(),
       Self::Invite(_) => INVITE_PATTERN.to_owned(),
       Self::Project(_, ProjectPage::KeptTask(..)) => KEPT_TASK_PATTERN.to_owned(),
       Self::Usage(_) => EVERY_PROJECT_USAGE_PATTERN.to_owned(),

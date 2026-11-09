@@ -1,7 +1,7 @@
 //! The header's one primary action (`Primary action` `xxoqb` in `j8DakG`), the one the task's state calls for: Share
 //! task for a task kept *Not shared*; what the run waits for when a card waits (Approve and Answer open the
 //! Conversation at its card; Review opens the Summary at its decision); for a run that waits to be merged, the merge's
-//! own action with its key cap, on every tab, as the Summary's top card has it (ORC-731, `crate::screens::task::merge`:
+//! own action, on every tab, as the Summary's top card has it (ORC-731, `crate::screens::task::merge`:
 //! *Merge*, or once a merge did not land *Try again* or the attempt page's action); else the run control that moves the
 //! run on (Run, Start run, Resume run, Continue run); none when nothing applies. Any other card's action is left out
 //! on the tab that shows the card, which holds it (`Decision cards` `CqVv3`).

@@ -247,12 +247,3 @@ fn queue_note(ctx: &Ctx, queued: &Queued) -> Arc<str> {
     Queued::AnswerAbove(agent) => ctx.t_args("composer.note.answerAbove", [("agent", &**agent)]),
   }
 }
-
-/// The keys that send the second way, as this platform names them.
-pub(super) fn second_keys(ctx: &Ctx) -> Arc<str> {
-  ctx.t(if cfg!(target_os = "macos") {
-    "composer.keys.cmdEnter"
-  } else {
-    "composer.keys.ctrlEnter"
-  })
-}

@@ -8,8 +8,10 @@
 //! scenario that needs the account says so beside the data ([`qa_app_asks`]), whatever the arguments say. A marker the
 //! seed's `team-*` scenarios leave beside the database ([`team::State`]) sets up a stand-in team server on loopback
 //! that answers while the window is open ([`team`]); where a person's press is part of the state, the window opens
-//! there ([`team_window`]). What it moves to the Recycle Bin / Trash goes to `trash` beside its data. Fixture data for
-//! QA, never shipped: an example is no part of the app's program.
+//! there ([`team_window`]). What it moves to the Recycle Bin / Trash goes to `trash` beside its data. Its MCP client
+//! counts as the person for the Orchestrator's person-only actions (`orchester_app::mcp::qa_person`), so a verifier
+//! applies a /watch, stops one and takes a led target as a person does. Fixture data for QA, never shipped: an example
+//! is no part of the app's program.
 //!
 //!   qa_app [--signed-in | --signed-out] [--settings] [--join-team]
 
@@ -115,14 +117,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     runtime.handle(),
     (log, keychain),
   );
-  // A QA copy reports its panics as `qa`, though it is a debug build (the person's decision, ORC-156), once its
-  // database is open and while its setting allows; kept to the end of `main`. Its runners are told too, though a debug
-  // runner never sends.
-  let reports = error_reports::start(Environment::Qa, launch.workspace());
-  if let (Some(reports), Some(services)) = (&reports, launch.services()) {
-    services.runners.set_error_reports(reports.for_runners().as_ref());
-  }
-  isolate_files(&launch, &location.database);
+  // Kept to the end of `main`.
+  let _reports = as_qa_copy(&launch, &location.database);
   let cloud = AccountCloud::start();
   // Kept to the end of `main`: the team server answers while the window is open.
   let _team = join_team.then(|| team(&cloud));
@@ -176,6 +172,24 @@ fn main() -> Result<(), Box<dyn Error>> {
   clipboard::clear_at_exit();
   launch.end();
   Ok(())
+}
+
+/// Makes the started session a QA copy's: its error reports, its own files and the QA gate.
+fn as_qa_copy(launch: &Launch, database: &Path) -> Option<error_reports::Reports> {
+  // A QA copy reports its panics as `qa`, though it is a debug build (the person's decision, ORC-156), once its
+  // database is open and while its setting allows; kept to the end of `main`. Its runners are told too, though a debug
+  // runner never sends.
+  let reports = error_reports::start(Environment::Qa, launch.workspace());
+  if let (Some(reports), Some(services)) = (&reports, launch.services()) {
+    services.runners.set_error_reports(reports.for_runners().as_ref());
+  }
+  isolate_files(launch, database);
+  // The QA gate (`orchester_app::mcp::qa_person`): the verifier's MCP client counts as the person for the
+  // Orchestrator's person-only actions. Only this program turns it on; the installed app never does.
+  if let Some(services) = launch.services() {
+    services.qa_person.count_mcp_client_as_person();
+  }
+  reports
 }
 
 /// Keeps removed files and browser discovery inside this QA copy's data folder.

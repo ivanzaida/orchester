@@ -1,10 +1,10 @@
 //! Settings › Automation (`S11 · Settings · Automation` `V8aAj` in the new `orchester.pen`): *Orchester MCP server*
-//! (`super::server`), then three groups. *The window* opens with *Look at the window*, which every client with the
+//! (`super::server`), then two groups. *The window* opens with *Look at the window*, which every client with the
 //! token may always do (`super::window_rows`), then *Agents can control this window* (read when the app starts, so a
 //! change applies from the next start, as the line under it says). *Approvals and permissions* holds *Let automation
 //! answer approvals* and *Let automation change agent permissions*, the person's alone, as the mark at its heading
 //! says. Each row says in one line what it allows; the rest, with what it needs and what it also governs, is in its (i)
-//! tooltip. *The Orchestrator* (`super::orchestrator_row`) only points to each project's own switches, in Project
+//! tooltip. What the Orchestrator chat does itself (*Let the Orchestrator drive*) each project sets in its Project
 //! settings › Orchestrator. *Let Orchester estimate story points* is a project's own setting too, in Project settings ›
 //! Runs › Estimates.
 //!
@@ -34,7 +34,7 @@ use orchester_workspace::{
 };
 
 use super::{
-  frame, orchestrator_row,
+  frame,
   save_state::{Outcome, SaveState},
   window_rows,
 };
@@ -161,7 +161,6 @@ pub fn tab(ctx: &mut Ctx, rotation: bool) -> Element {
     &ctx.t("settings.automation.onlyYou"),
   );
   let look = window_rows::look_at_the_window(ctx);
-  let orchestrator = orchestrator_row::group(ctx);
   let pane = frame::pane("settings-automation")
     .child(ctx.mount_keyed::<super::server::ServerSection>("mcp-server", super::server::Props { rotation }))
     .child(
@@ -173,8 +172,7 @@ pub fn tab(ctx: &mut Ctx, rotation: bool) -> Element {
       SettingGroup::new("settings-approvals", ctx.t("settings.automation.approvals"))
         .end(only_you)
         .rows(approvals),
-    )
-    .child(orchestrator);
+    );
   frame::column("settings-automation-scroll", pane)
 }
 

@@ -1,5 +1,5 @@
 //! A run's merge attempt page (ORC-363, `Review · redesign` 09b to 09l) in the app's real window, on the QA seed's
-//! `merge-attempts` scenario (`examples/seed`): its route under Merges from a row, history and `navigate`, with its
+//! `merge-attempts` scenario (`examples/seed`): its route under its task from history and `navigate`, with its
 //! breadcrumb, header actions and status; *Checks* in order, the passed ones folded, the refused one with its cause,
 //! the later ones not reached; *Attempts* expanding into their own checks, Orchester's retries among them; and the
 //! actions that move a run on: *Record merge*, *Put files back*, and *Copy details*; *Try again* back into the merge
@@ -9,6 +9,9 @@
 #[path = "../../examples/seed/kontur/mod.rs"]
 #[allow(dead_code, reason = "the seed's helpers serve every scenario; these tests seed one")]
 mod kontur;
+mod layout;
+mod merged;
+mod resolved;
 mod retries;
 #[path = "../support/mod.rs"]
 mod support;
@@ -17,7 +20,7 @@ use std::{path::PathBuf, time::Duration};
 
 use orchester_app::{
   mcp::tools::navigate,
-  routes::{ProjectPage, Route},
+  routes::{ProjectPage, Route, TaskView},
 };
 use orchester_core::{
   id::ProjectId,
@@ -65,29 +68,25 @@ impl Page {
     }
   }
 
-  /// Opens the attempt page of the run titled `title` from its row in Review › Merges' `section`; its route.
-  fn open(&mut self, section: &str, title: &str) -> Route {
-    self
-      .window
-      .navigation()
-      .go(Route::Project(self.project, ProjectPage::Merges));
-    let rows = format!("{section}-rows");
-    // The info line shows while the merges are read too: wait for the section's rows.
-    self
-      .window
-      .until_within(GIT_WORK, "the merges", |window| window.texts(&rows).is_some());
-    let ids: Vec<String> = self.window.tree.get_element_by_id(&rows).map_or_else(Vec::new, |rows| {
-      rows
-        .children()
-        .into_iter()
-        .filter_map(|row| row.id().map(str::to_owned))
-        .collect()
-    });
-    let row = ids
+  /// Opens the attempt page of the task titled `title`'s run, at its route under the task; its route.
+  fn open(&mut self, title: &str) -> Route {
+    let db = ProjectDb::open(&self.repo).expect("the project database");
+    let task = db
+      .tasks()
+      .expect("the tasks")
       .into_iter()
-      .find(|row| self.window.text(row).contains(title))
-      .unwrap_or_else(|| panic!("{section} lists {title}"));
-    self.window.press(&format!("{row}-open"));
+      .find(|task| task.details().title.as_str() == title)
+      .unwrap_or_else(|| panic!("the scenario seeds {title}"));
+    let run = db
+      .runs_of_task(task.id())
+      .expect("the runs")
+      .into_iter()
+      .find_map(Result::ok)
+      .expect("its run");
+    self.window.navigation().go(Route::Project(
+      self.project,
+      ProjectPage::TaskMerge(task.key().clone(), run.number()),
+    ));
     self.until_read();
     self.window.navigation().route_now()
   }
@@ -95,7 +94,7 @@ impl Page {
   /// Until the page is read: its status line.
   fn until_read(&mut self) {
     self.window.until_within(GIT_WORK, "the attempt page", |window| {
-      window.texts("merge-attempt-status").is_some()
+      window.texts("merge-attempt-status-text").is_some()
     });
   }
 
@@ -118,12 +117,12 @@ impl Page {
 #[test]
 fn merge_attempt_page_opens_from_its_row_route_history_and_navigate() {
   let mut page = Page::new();
-  let route = page.open("merges-not-merged", "Add retry to webhook sender");
-  let Route::Project(project, ProjectPage::MergeAttempt(key, number)) = route.clone() else {
+  let route = page.open("Add retry to webhook sender");
+  let Route::Project(project, ProjectPage::TaskMerge(key, number)) = route.clone() else {
     panic!("a row opens the run's attempts: {route:?}");
   };
   assert!(
-    route.path().ends_with(&format!("/merges/{key}/{}", number.get())),
+    route.path().ends_with(&format!("/tasks/{key}/merge/{}", number.get())),
     "{}",
     route.path()
   );
@@ -131,17 +130,22 @@ fn merge_attempt_page_opens_from_its_row_route_history_and_navigate() {
   let crumbs = page.window.texts("merge-attempt-crumbs").expect("the breadcrumb");
   assert_eq!(
     crumbs,
-    ["Review", "/", "Merges", "/", &format!("{key} · run #{}", number.get())],
+    [
+      "Tasks",
+      "/",
+      &key.to_string(),
+      "/",
+      &format!("Merge · run {}", number.get())
+    ],
     "{crumbs:?}"
   );
   assert_eq!(page.window.text("merge-attempt-title"), "Add retry to webhook sender");
   assert_eq!(page.window.text("merge-attempt-copy-details"), "Copy details");
-  assert_eq!(page.window.text("merge-attempt-open-task"), "Open task");
   assert_eq!(page.window.text("merge-attempt-try-again"), "Try again");
   assert_eq!(page.window.text("merge-attempt-status-text"), "Not merged into main");
   let meta = page.window.text("merge-attempt-status-meta");
   assert!(
-    meta.contains(&format!("run #{}", number.get()))
+    meta.contains(&format!("run {}", number.get()))
       && meta.contains("2 attempts")
       && meta.contains("by you from the task page"),
     "{meta}"
@@ -152,17 +156,19 @@ fn merge_attempt_page_opens_from_its_row_route_history_and_navigate() {
     "{explanation}"
   );
   let navigation = page.window.navigation();
-  navigation.back();
+  navigation.go(Route::Project(
+    project,
+    ProjectPage::Task(key.clone(), TaskView::default()),
+  ));
   page
     .window
-    .until("Back to Merges", |window| window.texts("screen-merges").is_some());
-  navigation.forward();
+    .until("the task's page", |window| window.texts("task-title").is_some());
+  navigation.back();
   page.until_read();
   assert_eq!(navigation.route_now(), route);
-  navigation.go(Route::Project(project, ProjectPage::Merges));
   let answer = navigate(
     &navigation,
-    &json!({ "route": "merges", "project": project.to_string(), "key": key.to_string(), "run": number.get().to_string() }),
+    &json!({ "route": "task", "project": project.to_string(), "key": key.to_string(), "run": number.get().to_string() }),
   )
   .expect("navigate opens the run's attempts");
   assert_eq!(answer["route"]["path"], json!(route.path()));
@@ -172,17 +178,17 @@ fn merge_attempt_page_opens_from_its_row_route_history_and_navigate() {
   assert!(
     navigate(
       &navigation,
-      &json!({ "route": "merges", "project": project.to_string(), "key": key.to_string() }),
+      &json!({ "route": "task", "project": project.to_string(), "key": key.to_string(), "run": "8", "tab": "changes" }),
     )
     .is_err(),
-    "a key names a run only with its number"
+    "a run's merge attempts have no tab"
   );
 }
 
 #[test]
 fn merge_attempt_page_checks_list_the_stages_with_the_refused_cause_and_fold_the_passed() {
   let mut page = Page::new();
-  page.open("merges-not-merged", "Add retry to webhook sender");
+  page.open("Add retry to webhook sender");
   let names: Vec<String> = (1..=8)
     .map(|stage| page.window.text(&format!("merge-attempt-checks-{stage}-name")))
     .collect();
@@ -217,7 +223,7 @@ fn merge_attempt_page_checks_list_the_stages_with_the_refused_cause_and_fold_the
   }
   assert!(!page.shows("merge-attempt-checks-passed"), "one check passed before it");
 
-  page.open("merges-not-merged", "Rate limit per endpoint");
+  page.open("Rate limit per endpoint");
   let passed = page.window.text("merge-attempt-checks-passed");
   assert!(
     passed.contains("01–06") && passed.contains("6 checks passed") && passed.contains("Show"),
@@ -227,7 +233,7 @@ fn merge_attempt_page_checks_list_the_stages_with_the_refused_cause_and_fold_the
     .window
     .tree
     .get_element_by_id("merge-attempt-checks-passed")
-    .map(|row| row.children().len());
+    .and_then(|row| row.children().into_iter().next().map(|line| line.children().len()));
   assert_eq!(
     parts,
     Some(5),
@@ -249,7 +255,7 @@ fn merge_attempt_page_checks_list_the_stages_with_the_refused_cause_and_fold_the
 #[test]
 fn merge_attempt_page_refused_stage_names_its_cause_category_and_the_row_its_os_error() {
   let mut page = Page::new();
-  page.open("merges-not-merged", "Per-endpoint rate limits");
+  page.open("Per-endpoint rate limits");
   assert_eq!(page.window.text("merge-attempt-checks-1-name"), "Project database");
   assert_eq!(
     page.window.text("merge-attempt-checks-1-result"),
@@ -274,7 +280,7 @@ fn merge_attempt_page_refused_stage_names_its_cause_category_and_the_row_its_os_
 #[test]
 fn merge_attempt_page_git_that_stopped_answering_is_told_once_with_its_time() {
   let mut page = Page::new();
-  page.open("merges-not-merged", "Rate limit per endpoint");
+  page.open("Rate limit per endpoint");
   let explanation = page.window.text("merge-attempt-explanation");
   assert!(
     explanation.starts_with("Git wrote nothing for 2 minutes at Merge"),
@@ -289,34 +295,38 @@ fn merge_attempt_page_git_that_stopped_answering_is_told_once_with_its_time() {
 }
 
 #[test]
-fn merge_attempt_page_properties_wrap_rather_than_cut_the_folder() {
+fn merge_attempt_page_facts_are_one_row_with_the_whole_folder() {
   let mut page = Page::new();
-  page.open("merges-not-merged", "Add retry to webhook sender");
-  let folder = page.window.text("merge-attempt-property-folder-value");
+  page.open("Add retry to webhook sender");
+  let folder = page.window.text("merge-attempt-fact-folder-value");
   assert_eq!(folder, page.repo.display().to_string(), "the whole folder");
-  let height = |page: &mut Page, id: &str| {
+  assert!(!page.window.text("merge-attempt-fact-branch-value").is_empty());
+  let top = |page: &mut Page, id: &str| {
     page
       .window
       .tree
       .get_element_by_id_mut(id)
       .and_then(|element| element.bounds())
       .unwrap_or_else(|| panic!("{id} is laid out"))
-      .height
+      .y
   };
-  let run = height(&mut page, "merge-attempt-property-run-value");
-  let long = height(&mut page, "merge-attempt-property-folder-value");
+  let (branch, folder, logs) = (
+    top(&mut page, "merge-attempt-fact-branch"),
+    top(&mut page, "merge-attempt-fact-folder"),
+    top(&mut page, "merge-attempt-log-folder"),
+  );
   assert!(
-    long > run,
-    "a folder longer than the column wraps onto more lines: {long} against {run}"
+    (branch - folder).abs() < 1.0 && (branch - logs).abs() < 8.0,
+    "the facts and the log link stand on one line: {branch}, {folder}, {logs}"
   );
 }
 
 #[test]
 fn merge_attempt_page_attempts_newest_first_expand_into_their_checks() {
   let mut page = Page::new();
-  page.open("merges-day-0", "Delivery log per endpoint");
+  page.open("Delivery log per endpoint");
   assert_eq!(page.window.text("merge-attempt-status-text"), "Merged into main");
-  assert!(page.window.text("merge-attempt-what-head").contains("What happened"));
+  assert!(page.window.text("merge-attempt-what-title").contains("What happened"));
   assert!(
     !page.shows("merge-attempt-try-again"),
     "a merged run has no primary action"
@@ -350,7 +360,7 @@ fn merge_attempt_page_attempts_newest_first_expand_into_their_checks() {
     window.texts("merge-attempt-2-checks").is_none()
   });
 
-  page.open("merges-not-merged", "Retry budget per endpoint");
+  page.open("Retry budget per endpoint");
   assert_eq!(page.window.text("merge-attempt-2-who"), "Orchester");
   assert_eq!(page.window.text("merge-attempt-2-via"), "retry 1 of 3");
   let time = page.window.text("merge-attempt-2-time");
@@ -364,7 +374,7 @@ fn merge_attempt_page_attempts_newest_first_expand_into_their_checks() {
 #[test]
 fn merge_attempt_page_record_merge_records_the_merge_git_made() {
   let mut page = Page::new();
-  let route = page.open("merges-not-merged", "Delivery dashboard");
+  let route = page.open("Delivery dashboard");
   assert_eq!(
     page.window.text("merge-attempt-status-text"),
     "Merged by Git, not recorded"
@@ -381,7 +391,7 @@ fn merge_attempt_page_record_merge_records_the_merge_git_made() {
   page.window.press("merge-attempt-record-merge");
   page.until_status("Merged into main");
   assert!(!page.shows("merge-attempt-not-done"), "the merge was recorded");
-  let Route::Project(_, ProjectPage::MergeAttempt(key, number)) = route else {
+  let Route::Project(_, ProjectPage::TaskMerge(key, number)) = route else {
     panic!("the attempt page");
   };
   let db = ProjectDb::open(&page.repo).expect("the project database");
@@ -405,23 +415,29 @@ fn merge_attempt_page_record_merge_records_the_merge_git_made() {
 #[test]
 fn merge_attempt_page_put_files_back_then_try_again() {
   let mut page = Page::new();
-  page.open("merges-not-merged", "Payload size guard");
+  page.open("Payload size guard");
   assert_eq!(
     page.window.text("merge-attempt-status-text"),
     "Stopped while bringing the merge in"
   );
   assert!(page.window.text("merge-attempt-left").contains("README.md"));
-  assert_eq!(
-    page.window.text("merge-attempt-try-again-reason-text"),
-    "Try again waits until these files match main again."
+  assert!(
+    page
+      .window
+      .text("merge-attempt-bar-body")
+      .contains("Try again waits until these files match main again."),
   );
   assert_eq!(page.window.text("merge-attempt-open-folder"), "Open folder");
-  assert!(!page.shows("merge-attempt-try-again"));
+  assert_eq!(
+    page.window.text("merge-attempt-try-again"),
+    "Try again",
+    "locked while the files differ"
+  );
   page.window.press("merge-attempt-put-back");
   page
     .window
     .until_within(GIT_WORK, "the files to be put back", |window| {
-      window.texts("merge-attempt-try-again").is_some()
+      window.texts("merge-attempt-left").is_none()
     });
   assert!(!page.shows("merge-attempt-left"), "nothing is left changed");
   assert!(!page.shows("merge-attempt-not-done"), "the put-back went through");
@@ -435,7 +451,7 @@ fn merge_attempt_page_put_files_back_then_try_again() {
 #[test]
 fn merge_attempt_page_copy_details_copies_the_stage_cause_branch_and_revisions() {
   let mut page = Page::new();
-  page.open("merges-not-merged", "Add retry to webhook sender");
+  page.open("Add retry to webhook sender");
   page.window.press("merge-attempt-copy-details");
   page.window.until("Copied", |window| {
     window
@@ -463,7 +479,7 @@ fn merge_attempt_page_copy_details_copies_the_stage_cause_branch_and_revisions()
 #[test]
 fn merge_attempt_page_conflicts_list_the_files_and_both_ways_to_resolve() {
   let mut page = Page::new();
-  page.open("merges-not-merged", "Per-endpoint secrets");
+  page.open("Per-endpoint secrets");
   assert_eq!(page.window.text("merge-attempt-status-text"), "Conflicts with main");
   assert_eq!(page.window.text("merge-attempt-conflicting-head-count"), "2");
   assert!(
@@ -487,9 +503,8 @@ fn merge_attempt_page_conflicts_list_the_files_and_both_ways_to_resolve() {
 #[test]
 fn merge_attempt_page_names_the_projects_runner_log_folder() {
   let mut page = Page::new();
-  page.open("merges-not-merged", "Add retry to webhook sender");
+  page.open("Add retry to webhook sender");
   assert_eq!(page.window.text("merge-attempt-log-folder"), "Runner log folder");
-  assert!(page.window.text("merge-attempt-open-key").starts_with("Open "));
   assert_eq!(
     orchester_ipc::runner_log_dir(&page.repo),
     page.repo.join(".orchester").join("logs")

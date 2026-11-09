@@ -109,9 +109,15 @@ pub(super) struct Line {
   pub(super) tone: Tone,
   pub(super) what: Arc<str>,
   pub(super) target: Option<Arc<str>>,
+  /// What it says after its words in 12 `text_muted`, filling the line (a wait's row, `rlnEZ`).
+  pub(super) note: Option<Arc<str>>,
   pub(super) chip: Option<Chip>,
   pub(super) time: Option<String>,
   pub(super) link: Option<LineLink>,
+  /// Set while the pointer is over the line. It is its owner's, which reads it to show a link under the pointer only
+  /// (*Drop the wait* of a wait that holds, `lguJb`): a line in a chat message's body is drawn again only with the
+  /// component that put it there, so the line's own state could not show it.
+  pub(super) pointer: Option<Signal<bool>>,
   /// Why it was refused: on hover, and under the line once pressed.
   pub(super) detail: Option<Arc<str>>,
   /// The other places it opens, beyond its one link: under its detail once pressed.
@@ -128,12 +134,26 @@ impl Line {
       tone,
       what,
       target: None,
+      note: None,
       chip: None,
       time: None,
       link: None,
+      pointer: None,
       detail: None,
       more: Vec::new(),
     }
+  }
+
+  #[must_use]
+  pub(super) fn note(mut self, note: Arc<str>) -> Self {
+    self.note = Some(note);
+    self
+  }
+
+  #[must_use]
+  pub(super) fn pointer(mut self, pointer: Signal<bool>) -> Self {
+    self.pointer = Some(pointer);
+    self
   }
 
   #[must_use]
@@ -194,7 +214,7 @@ impl Line {
 #[derive(Clone)]
 struct LineProps(Line);
 
-/// Compared by what it shows; the link's press is the screen's.
+/// Compared by what it shows; the link's press and the pointer's signal are the owner's.
 impl PartialEq for LineProps {
   fn eq(&self, other: &Self) -> bool {
     let (one, two) = (&self.0, &other.0);
@@ -203,17 +223,21 @@ impl PartialEq for LineProps {
         one.tone,
         &one.what,
         &one.target,
+        &one.note,
         &one.chip,
         &one.time,
         one.link.as_ref().map(|link| &link.label),
+        one.pointer.is_some(),
         &one.detail,
       ) == (
         two.tone,
         &two.what,
         &two.target,
+        &two.note,
         &two.chip,
         &two.time,
         two.link.as_ref().map(|link| &link.label),
+        two.pointer.is_some(),
         &two.detail,
       )
       && one
@@ -282,7 +306,7 @@ fn more(id: &str, links: Vec<LineLink>) -> Element {
   )
 }
 
-/// The line's row.
+/// The line's row, setting the line's `pointer` while the pointer is over it.
 fn row(ctx: &mut Ctx, line: &Line) -> Row {
   let id = line.id.as_str();
   let (glyph_color, words_color) = line.tone.colors();
@@ -314,8 +338,23 @@ fn row(ctx: &mut Ctx, line: &Line) -> Row {
       .flex_shrink(0.0)
       .nowrap()
   });
+  // The note fills the line; without one, the room before the time does.
+  let fill = line.note.as_ref().map_or_else(
+    || Element::from(Spacer::new().flex(1.0)),
+    |note| {
+      Text::new(note)
+        .id(format!("{id}-note"))
+        .variant(TypographyStyle::Description)
+        .color(PaletteColor::TextMuted)
+        .nowrap()
+        .text_overflow(TextOverflow::Elipsis)
+        .flex(1.0)
+        .min_width(Dimension::Px(0.0))
+        .into()
+    },
+  );
   let link = line.link.clone().map(|link| link_element(&format!("{id}-open"), link));
-  Row::new()
+  let row = Row::new()
     .id(id.to_owned())
     .describe("outcome", line.outcome)
     .describe("status", line.status.unwrap_or_default())
@@ -325,12 +364,22 @@ fn row(ctx: &mut Ctx, line: &Line) -> Row {
     .spacing(ExtraSpacing::Loose.role())
     .align_items(Alignment::Center)
     .rounded(RadiusSize::Md)
-    .hovered_style(Style::new().background(ExtraColor::Hover.role()))
+    .hovered_style(Style::new().background(ExtraColor::Hover.role()));
+  let row = match line.pointer.clone() {
+    Some(pointer) => {
+      let leave = pointer.clone();
+      row
+        .on_mouse_enter(move || pointer.set(true))
+        .on_mouse_leave(move || leave.set(false))
+    }
+    None => row,
+  };
+  row
     .child(icon(line.glyph, IconSize::Base, glyph_color).flex_shrink(0.0))
     .child(what)
     .with_children(target)
     .with_children(chip)
-    .child(Spacer::new().flex(1.0))
+    .child(fill)
     .with_children(time)
     .with_children(link)
 }

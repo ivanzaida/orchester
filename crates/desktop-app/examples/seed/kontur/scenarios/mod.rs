@@ -33,7 +33,7 @@ mod merge_attempts;
 mod merges;
 mod modules;
 mod native;
-mod orchestrator;
+pub mod orchestrator;
 mod orchestrator_plan;
 mod orchestrator_rewind;
 mod overview_states;
@@ -41,9 +41,11 @@ mod ownership;
 mod picker_readiness;
 mod pipelines;
 mod project_settings;
-mod pull_requests;
 pub mod qa_app_asks;
+mod review_approved;
 mod review_changed;
+mod review_conflicts;
+mod review_list;
 mod review_page;
 mod reviewer_rows;
 mod run_context;
@@ -114,7 +116,7 @@ impl Scenario {
   }
 }
 
-pub const ALL: [Scenario; 198] = [
+pub const ALL: [Scenario; 199] = [
   Scenario::of("reviewer-row", reviewer_rows::seed),
   Scenario::of("reviewer-row-local", reviewer_rows::local),
   Scenario::of("reviewer-row-unavailable", reviewer_rows::unavailable),
@@ -159,6 +161,10 @@ pub const ALL: [Scenario; 198] = [
   Scenario::of("orchestrator-not-set-up", orchestrator::not_set_up),
   Scenario::of("orchestrator-on-codex", orchestrator::on_codex),
   Scenario::of("orchestrator-codex-limit", orchestrator::codex_limit),
+  Scenario::of("orchestrator-events", orchestrator::events::seed),
+  Scenario::of("orchestrator-waits-on", orchestrator::waits_on::seed),
+  Scenario::of("orchestrator-watch", orchestrator::watch::seed),
+  Scenario::of("orchestrator-leads", orchestrator::leads::seed),
   Scenario::of("orchestrator-context-plenty", orchestrator::context::plenty),
   Scenario::of("orchestrator-context-near-full", orchestrator::context::near_full),
   Scenario::of("orchestrator-context-full", orchestrator::context::full),
@@ -183,15 +189,14 @@ pub const ALL: [Scenario; 198] = [
   Scenario::of("deliverables", deliverables::seed),
   Scenario::of("delivery", delivery::seed),
   Scenario::of("delivery-blocked", delivery::blocked),
-  Scenario::of("delivery-lanes", delivery::lanes),
-  Scenario::of("delivery-empty", delivery::empty),
   Scenario::of("merges", merges::seed),
-  Scenario::of("merges-outcomes", merges::outcomes),
   Scenario::of("merges-empty", merges::empty),
-  Scenario::of("merges-many", merges::many),
   Scenario::of("merge-attempts", merge_attempts::seed),
   Scenario::of("review-page", review_page::seed),
+  Scenario::of("review-approved", review_approved::seed),
   Scenario::of("review-changed", review_changed::seed),
+  Scenario::of("review-list", review_list::seed),
+  Scenario::of("review-conflicts", review_conflicts::seed),
   Scenario::of("task-merge-row", task_merge_row::seed),
   Scenario::of("task-merge-card-ready", task_merge_card::ready_to_merge),
   Scenario::of("task-merge-card-refused", task_merge_card::refused_at_lock),
@@ -234,8 +239,6 @@ pub const ALL: [Scenario; 198] = [
   Scenario::of("browser", browser::seed),
   Scenario::of("browser-not-found", browser::not_found),
   Scenario::of("browser-chosen", browser::chosen),
-  Scenario::of("pull-requests", pull_requests::seed),
-  Scenario::of("pull-request-feedback", pull_requests::feedback::seed),
   Scenario::of("sources", sources::seed),
   Scenario::of("sources-unreadable", sources::unreadable),
   Scenario::of("usage", usage::seed),

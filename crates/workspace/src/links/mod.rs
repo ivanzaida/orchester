@@ -7,8 +7,6 @@
 mod query;
 mod usage;
 
-use std::num::NonZeroU64;
-
 use orchester_core::{
   id::{AgentAccountId, ChatId, ConnectionId, ModuleId, ProjectId, ResourceId},
   project::TaskKey,
@@ -27,7 +25,6 @@ pub const PERIOD: &str = "period";
 use crate::{
   delivery::DeliveryPeriod,
   files::{FilePath, LineRange, Version},
-  pull_requests::list::PullRequestTab,
   usage::UsageQuery,
 };
 
@@ -54,10 +51,6 @@ pub enum Link {
   Connection(ProjectId, ConnectionId),
   /// Settings › Accounts showing an account; accounts belong to the person, not to a project.
   Account(AgentAccountId),
-  /// The Pull requests page on one of its tabs.
-  PullRequests(ProjectId, PullRequestTab),
-  /// A pull request of the project's repository, by its number.
-  PullRequest(ProjectId, NonZeroU64),
   /// A file of the project in the code viewer, at a version, on a range of its lines.
   File {
     project: ProjectId,
@@ -132,11 +125,6 @@ impl Link {
         "/settings".to_owned(),
         &[("tab", Some("accounts")), ("account", Some(&id.to_string()))],
       ),
-      Self::PullRequests(project, tab) => with_query(
-        format!("{}/pull-requests", root(*project)),
-        &[("tab", (*tab != PullRequestTab::default()).then(|| tab.name()))],
-      ),
-      Self::PullRequest(project, number) => format!("{}/pull-requests/{number}", root(*project)),
       Self::File {
         project,
         path,

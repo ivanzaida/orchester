@@ -79,6 +79,7 @@ fn review_threads_send_to_implement_sends_every_comment_and_no_question_in_one_q
     repo.root(),
     &RunWorktrees::here_for_test(repo.root(), Programs::processes()),
     repo.run,
+    None,
   )
   .expect("sending");
   assert_eq!(sending.comments.len(), 2, "questions never go with the comments");
@@ -145,6 +146,7 @@ fn review_threads_a_send_the_runner_does_not_take_keeps_every_comment_unsent_wit
     repo.root(),
     &RunWorktrees::here_for_test(repo.root(), Programs::processes()),
     repo.run,
+    None,
   )
   .expect("sending");
   let refused = send::sent(
@@ -170,7 +172,8 @@ fn review_threads_a_send_the_runner_does_not_take_keeps_every_comment_unsent_wit
     send::begin(
       repo.root(),
       &RunWorktrees::here_for_test(repo.root(), Programs::processes()),
-      repo.run
+      repo.run,
+      None,
     )
     .expect("sent again")
     .comments
@@ -208,7 +211,8 @@ fn review_threads_a_send_cut_off_before_the_runner_took_it_waits_unsent_again() 
     send::begin(
       repo.root(),
       &RunWorktrees::here_for_test(repo.root(), Programs::processes()),
-      repo.run
+      repo.run,
+      None,
     )
     .expect("sent again")
     .comments,
@@ -266,7 +270,8 @@ fn review_threads_nothing_to_send_and_only_unsent_comments_change() {
     send::begin(
       repo.root(),
       &RunWorktrees::here_for_test(repo.root(), Programs::processes()),
-      repo.run
+      repo.run,
+      None,
     )
     .map(|sending| sending.comments),
     Err(ReviewRefusal::NothingToSend)
@@ -277,6 +282,7 @@ fn review_threads_nothing_to_send_and_only_unsent_comments_change() {
     repo.root(),
     &RunWorktrees::here_for_test(repo.root(), Programs::processes()),
     repo.run,
+    None,
   )
   .expect("sending");
   assert_eq!(
@@ -288,4 +294,39 @@ fn review_threads_nothing_to_send_and_only_unsent_comments_change() {
     Err(ReviewRefusal::Review(orchester_core::review::ReviewError::NotEditable))
   );
   assert_eq!(sending.run, repo.run);
+}
+
+#[test]
+fn review_threads_a_comment_written_while_implement_works_waits_unsent_and_is_not_sent_with_the_earlier_batch() {
+  let repo = Repo::new();
+  let sent =
+    review_threads::comment(repo.root(), repo.run, repo.anchor(1, 1), &body("Rename one."), at(20)).expect("kept");
+  cut_off(&repo, &sent, at(30));
+  repo.return_to_implement(&ReviewNote::new("Rename one.").expect("note"), at(31));
+  assert!(review(&repo).implement_at_work);
+
+  review_threads::comment(
+    repo.root(),
+    repo.run,
+    repo.anchor(3, 3),
+    &body("Document three."),
+    at(32),
+  )
+  .expect("kept while Implement works");
+  let read = review(&repo);
+  assert_eq!(states(&read), vec![ThreadState::Sent, ThreadState::NotSent]);
+  assert_eq!(read.unsent(), 1);
+  assert!(read.implement_at_work, "the earlier batch is still at work");
+  let worktrees = RunWorktrees::here_for_test(repo.root(), Programs::processes());
+  assert_eq!(
+    send::begin(repo.root(), &worktrees, repo.run, None).map(|sending| sending.comments),
+    Err(ReviewRefusal::NotWaiting),
+    "nothing is sent until the run is back"
+  );
+
+  repo.implement("fn first() {}\nfn two() {}\nfn three() {}\n", "Renamed one.", at(40));
+  let read = review(&repo);
+  assert_eq!(read.threads[1].state, ThreadState::NotSent);
+  let sending = send::begin(repo.root(), &worktrees, repo.run, None).expect("sending");
+  assert_eq!(sending.comments.len(), 1, "only the comment written since goes");
 }

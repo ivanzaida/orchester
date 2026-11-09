@@ -366,117 +366,15 @@ impl AppDb {
     Ok(())
   }
 
-  /// Whether the Orchestrator chat publishes the drafts it saved itself (*Let the Orchestrator publish drafts*)
-  /// instead of proposing each publication to the person. What widens agents' permissions still needs
-  /// [`Self::automation_changes_permissions`].
-  pub fn orchestrator_publishes_drafts(&self) -> Result<bool, StoreError> {
-    Ok(self.connection.query_row(
-      "SELECT orchestrator_publishes_drafts FROM app_settings WHERE id = 1",
-      [],
-      |row| row.get(0),
-    )?)
-  }
-
-  pub fn set_orchestrator_publishes_drafts(&mut self, allowed: bool) -> Result<(), StoreError> {
-    self.connection.execute(
-      "UPDATE app_settings SET orchestrator_publishes_drafts = ?1 WHERE id = 1",
-      params![allowed],
-    )?;
-    Ok(())
-  }
-
-  /// Whether the Orchestrator chat answers agents' questions and sends a run's agents messages itself (*Let the
-  /// Orchestrator answer agents*) instead of proposing each to the person; a wait of an agent then also starts an
-  /// Orchestrator turn by itself.
+  /// The application-wide *Let the Orchestrator answer agents* value from before the six Orchestrator switches became
+  /// *Let the Orchestrator drive* per project (ORC-594, ORC-909). Nothing sets it any more; a project that has no
+  /// value of its own takes it once as its *drive* value ([`orchester_store::ProjectDb::copy_orchestrator_drives`]).
   pub fn orchestrator_answers_agents(&self) -> Result<bool, StoreError> {
     Ok(self.connection.query_row(
       "SELECT orchestrator_answers_agents FROM app_settings WHERE id = 1",
       [],
       |row| row.get(0),
     )?)
-  }
-
-  pub fn set_orchestrator_answers_agents(&mut self, allowed: bool) -> Result<(), StoreError> {
-    self.connection.execute(
-      "UPDATE app_settings SET orchestrator_answers_agents = ?1 WHERE id = 1",
-      params![allowed],
-    )?;
-    Ok(())
-  }
-
-  /// Whether the Orchestrator chat's `merge_run` merges at once (*Let the Orchestrator merge runs*) instead of
-  /// proposing the merge to the person; `merge_run`'s own rules hold either way.
-  pub fn orchestrator_merges_runs(&self) -> Result<bool, StoreError> {
-    Ok(self.connection.query_row(
-      "SELECT orchestrator_merges_runs FROM app_settings WHERE id = 1",
-      [],
-      |row| row.get(0),
-    )?)
-  }
-
-  pub fn set_orchestrator_merges_runs(&mut self, allowed: bool) -> Result<(), StoreError> {
-    self.connection.execute(
-      "UPDATE app_settings SET orchestrator_merges_runs = ?1 WHERE id = 1",
-      params![allowed],
-    )?;
-    Ok(())
-  }
-
-  /// Whether the Orchestrator chat's `resume_run` continues a run a crash, the runner going away or *Quit now*
-  /// interrupted (*Let the Orchestrator continue interrupted runs*); a run stopped at a limit or by a person stays
-  /// the person's either way.
-  pub fn orchestrator_continues_interrupted(&self) -> Result<bool, StoreError> {
-    Ok(self.connection.query_row(
-      "SELECT orchestrator_continues_interrupted FROM app_settings WHERE id = 1",
-      [],
-      |row| row.get(0),
-    )?)
-  }
-
-  pub fn set_orchestrator_continues_interrupted(&mut self, allowed: bool) -> Result<(), StoreError> {
-    self.connection.execute(
-      "UPDATE app_settings SET orchestrator_continues_interrupted = ?1 WHERE id = 1",
-      params![allowed],
-    )?;
-    Ok(())
-  }
-
-  /// Whether the Orchestrator chat's git tools write in the project's repository (*Let the Orchestrator write with
-  /// git*): commit, branch, switch, pull, push, merge, revert, tag and fetch; what can lose work is proposed either
-  /// way.
-  pub fn orchestrator_writes_git(&self) -> Result<bool, StoreError> {
-    Ok(self.connection.query_row(
-      "SELECT orchestrator_writes_git FROM app_settings WHERE id = 1",
-      [],
-      |row| row.get(0),
-    )?)
-  }
-
-  pub fn set_orchestrator_writes_git(&mut self, allowed: bool) -> Result<(), StoreError> {
-    self.connection.execute(
-      "UPDATE app_settings SET orchestrator_writes_git = ?1 WHERE id = 1",
-      params![allowed],
-    )?;
-    Ok(())
-  }
-
-  /// Whether the turn a run's success starts by itself merges the run (*Let the Orchestrator merge finished runs on
-  /// its own*), with *Let the Orchestrator merge runs* and *answer agents* on too and the run passing the chat's rule
-  /// for it; off, that turn only tells the person.
-  pub fn orchestrator_merges_finished(&self) -> Result<bool, StoreError> {
-    Ok(self.connection.query_row(
-      "SELECT orchestrator_merges_finished FROM app_settings WHERE id = 1",
-      [],
-      |row| row.get(0),
-    )?)
-  }
-
-  pub fn set_orchestrator_merges_finished(&mut self, allowed: bool) -> Result<(), StoreError> {
-    self.connection.execute(
-      "UPDATE app_settings SET orchestrator_merges_finished = ?1 WHERE id = 1",
-      params![allowed],
-    )?;
-    Ok(())
   }
 
   /// Whether the installed app's MCP server listens (*Let agents connect to Orchester*); on until turned off.

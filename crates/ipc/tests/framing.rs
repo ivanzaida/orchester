@@ -240,6 +240,7 @@ fn permission_rejections() -> Vec<Rejection> {
     Rejection::NoAgentToRestart,
     Rejection::NoPendingPermissions,
     Rejection::ProfileNotInRun,
+    Rejection::ProfileNotUsable,
   ]
 }
 

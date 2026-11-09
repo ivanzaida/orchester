@@ -1,4 +1,4 @@
-//! A merge attempt into a run's base branch, as Review › Merges and the attempt page tell it
+//! A merge attempt into a run's base branch, as the attempt page and the task page's top card tell it
 //! (`crates/desktop-app/design/orchester.pen`, board `Review · redesign`, 09 to 09l): who asked, from where, what came
 //! of it, why it did not land, and how far it got through the merge's stages. Every attempt is recorded once, landed or
 //! not; the record never changes.

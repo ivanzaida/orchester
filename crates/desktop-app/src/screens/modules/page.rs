@@ -26,6 +26,7 @@ use orchester_workspace::{
   background,
   messages::{self, Message},
   modules::data::ModulePage,
+  orchestrator::watching::{LedIn, WatchReads},
 };
 
 use super::{burndown, header, more, save, summary, tasks, words};
@@ -57,14 +58,16 @@ pub struct PageProps {
 
 impl DevtoolsInspectable for PageProps {}
 
-/// The page as read.
+/// The page as read, with who leads the module (its Summary's *Led in*).
 #[derive(Clone)]
-pub struct Read(pub Option<Arc<ModulePage>>);
+pub struct Read(pub Option<(Arc<ModulePage>, Arc<LedIn>)>);
 
 impl PartialEq for Read {
   fn eq(&self, other: &Self) -> bool {
     match (&self.0, &other.0) {
-      (Some(left), Some(right)) => Arc::ptr_eq(left, right),
+      (Some((left, left_led)), Some((right, right_led))) => {
+        Arc::ptr_eq(left, right) && Arc::ptr_eq(left_led, right_led)
+      }
       (None, None) => true,
       _ => false,
     }
@@ -148,9 +151,9 @@ impl Component for ModuleScreen {
         );
         (back_only(ctx, id), padded(failed))
       }
-      (None, Some(Read(Some(page)))) => (
+      (None, Some(Read(Some((page, led_in))))) => (
         self.header(ctx, (&project, page), tab),
-        self.body(ctx, &project, page, tab),
+        self.body(ctx, &project, (page, led_in), tab),
       ),
       (None, Some(Read(None))) => (back_only(ctx, id), padded(missing(ctx))),
       (None, None) => super::reading::page(ctx, (id, module), (tab, true)),
@@ -201,13 +204,20 @@ impl ModuleScreen {
     Some(field_error("module-state-error", &message_text(ctx, message)).into())
   }
 
-  fn body(&self, ctx: &mut Ctx, project: &ShownProject, page: &Arc<ModulePage>, tab: ModuleTab) -> Element {
+  fn body(
+    &self,
+    ctx: &mut Ctx,
+    project: &ShownProject,
+    (page, led_in): (&Arc<ModulePage>, &Arc<LedIn>),
+    tab: ModuleTab,
+  ) -> Element {
     match tab {
       ModuleTab::Summary => ctx.mount_keyed::<summary::ModuleSummary>(
         "module-summary",
         summary::SummaryProps {
           project: project.clone(),
           page: page.clone(),
+          led_in: led_in.clone(),
           written: self.written.clone(),
         },
       ),
@@ -305,7 +315,7 @@ pub(super) fn missing(ctx: &Ctx) -> Element {
   .into()
 }
 
-/// Module `module` of the project at `root`, read off the UI thread again whenever `deps` change.
+/// Module `module` of the project at `root` with who leads it, read off the UI thread again whenever `deps` change.
 fn read<D>(ctx: &mut Ctx, root: PathBuf, module: ModuleId, deps: D) -> lurq::app::ctx::FutureState<Read, ReadFailed>
 where
   D: Clone + PartialEq + Send + Sync + 'static,
@@ -318,11 +328,15 @@ where
         hold.released().await;
         background::run(move || {
           let db = orchester_store::ProjectDb::open(&root)?;
-          ModulePage::read(&db, module, Timestamp::now())
+          let Some(page) = ModulePage::read(&db, module, Timestamp::now())? else {
+            return Ok(None);
+          };
+          let led_in = WatchReads::read(&db, &root)?.module_led_in(module);
+          Ok(Some((Arc::new(page), Arc::new(led_in))))
         })
         .await
         .map_err(ReadFailed)?
-        .map(|page| Read(page.map(Arc::new)))
+        .map(Read)
         .map_err(|error| {
           tracing::error!(%error, "cannot read the module");
           ReadFailed(messages::store_error(&error))

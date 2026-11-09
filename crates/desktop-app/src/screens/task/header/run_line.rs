@@ -32,9 +32,9 @@ use orchester_workspace::{
 };
 
 use crate::{
-  screens::{
-    merges::attempt::standing::Standing,
-    task::{TaskContext, merge::Merge},
+  screens::task::{
+    TaskContext,
+    merge::{Merge, attempt::standing::Standing},
   },
   ui::{
     chip::TagChip,

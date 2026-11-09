@@ -1,19 +1,16 @@
 //! The chat's rule for merging a finished run on its own (ORC-69, `docs/design/orchestrator-toolset.md`, decision 5).
-//! With *Let the Orchestrator merge finished runs on its own* on, besides *merge runs* and *answer agents*, the turn a
-//! task's run success starts by itself merges the run with `merge_run`, only when all of these hold ([`merging_in`]):
-//! it is the task's latest run and succeeded; every step of its pipeline passed, a step accepted as it was counting
-//! only when a person accepted it; the task does not say *Don't merge automatically*, is not marked Blocked and no
-//! unfinished task blocks it; and new starts are not held for its reviewed group or the whole project. `merge_run`'s
-//! own rules (the main checkout needs no local integration) hold on top, and a run the chat's own doing led to starts
-//! no turn at all (`raised_by_own`). The turn merges only the run whose success started it, once per end
-//! ([`merge_as`]); anything else in such a turn is proposed, as before. A run that committed nothing and whose result
-//! is its report is completed by the same rule, with no turn (ORC-93, [`completes_in`]).
+//! While the project lets the Orchestrator drive, the turn a task's run success starts by itself merges the run with
+//! `merge_run`, only when all of these hold ([`merging_in`]): it is the task's latest run and succeeded; every step of
+//! its pipeline passed, a step accepted as it was counting only when a person accepted it; the task does not say
+//! *Don't merge automatically*, is not marked Blocked and no unfinished task blocks it; and new starts are not held for
+//! its reviewed group or the whole project. `merge_run`'s own rules (the main checkout needs no local integration) hold
+//! on top. In a turn nobody asked for, `merge_run` merges only a run this rule lets it ([`check`]). A run that
+//! committed nothing and whose result is its report is completed by the same rule, with no turn (ORC-93,
+//! [`completes_in`]).
 
 use orchester_core::{
   id::RunId,
-  orchestrator::{
-    ActionOutcome, AgentWait, ChatAction, ChatEntry, EntryKind, MergeLeft, Merging, RunEnd, WaitKind, change::Change,
-  },
+  orchestrator::{MergeLeft, Merging},
   resource::WithoutCommits,
   run::{Run, RunStatus, attempt_starts, run_delivers},
   store::{RunStore, TaskStore},
@@ -22,7 +19,7 @@ use orchester_store::{ProjectDb, StoreError};
 use rmcp::model::JsonObject;
 use serde_json::Value;
 
-use super::tools::{ChatScope, MERGE_RUN};
+use super::tools::ChatScope;
 use crate::{
   app_mcp::{ToolError, blocking, find_run},
   messages::Message,
@@ -124,42 +121,20 @@ fn latest_succeeded(db: &ProjectDb, run: &Run) -> Result<bool, StoreError> {
   Ok(!later)
 }
 
-/// What the chat's `merge_run` does in a turn nobody asked for.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(super) enum MergeAs {
-  /// It proposes the merge to the person, as every merge in such a turn.
-  Propose,
-  /// It merges the run on its own, now.
-  OnItsOwn,
-}
-
-/// What `merge_run` with `arguments` does in `scope`'s turn, which nobody asked for, when the person's switches let the
-/// Orchestrator merge finished runs on its own (`switched_on`: that switch, *merge runs* and *answer agents*). It
-/// merges only the run whose success started the turn, while the turn's wait says it merges it ([`Merging::Merges`]),
-/// and only once: a second call in the turn is proposed. A run the rule leaves to the person now is refused
-/// (`left_to_person`), with why; any other call is proposed.
-pub(super) async fn merge_as(
-  scope: &ChatScope,
-  arguments: &JsonObject,
-  switched_on: bool,
-) -> Result<MergeAs, ToolError> {
-  if !switched_on {
-    return Ok(MergeAs::Propose);
-  }
+/// Checks `merge_run` with `arguments` in `scope`'s turn, which nobody asked for, against the rule: a run the rule
+/// leaves to the person now is refused (`left_to_person`), with why.
+pub(super) async fn check(scope: &ChatScope, arguments: &JsonObject) -> Result<(), ToolError> {
   let named = arguments
     .get("run")
     .and_then(Value::as_str)
     .ok_or_else(|| ToolError::InvalidArguments("run: required".to_owned()))?
     .to_owned();
-  let (root, chat) = (scope.root.clone(), scope.chat);
+  let root = scope.root.clone();
   blocking(move || {
     let db = ProjectDb::open(&root)?;
     let run = find_run(&db, &named)?;
-    if !started_to_merge(&db.chat_entries(chat)?, run.id()) {
-      return Ok(MergeAs::Propose);
-    }
     match left(&db, run.id(), Merge::Branch)? {
-      None => Ok(MergeAs::OnItsOwn),
+      None => Ok(()),
       Some(why) => Err(ToolError::refused(
         "left_to_person",
         vec![left_message(&why, run.number().get())],
@@ -167,43 +142,6 @@ pub(super) async fn merge_as(
     }
   })
   .await
-}
-
-/// Whether, among a conversation's `entries`, the turn that thinks now is the one `run`'s success started to merge
-/// it, and no merge of it was tried in that turn yet.
-fn started_to_merge(entries: &[ChatEntry], run: RunId) -> bool {
-  let Some((seq, wait)) = thinking_wait(entries) else {
-    return false;
-  };
-  let merges =
-    wait.run == run && wait.kind == WaitKind::Ended(RunEnd::Succeeded) && wait.merging == Some(Merging::Merges);
-  merges
-    && !entries
-      .iter()
-      .filter(|entry| entry.seq > seq)
-      .any(|entry| matches!(&entry.kind, EntryKind::Action(action) if tried_to_merge(action, run)))
-}
-
-/// Whether `action` tried to merge `run`: a merge carried out or refused. A proposal merged nothing.
-fn tried_to_merge(action: &ChatAction, run: RunId) -> bool {
-  if action.tool != MERGE_RUN || !matches!(action.outcome, ActionOutcome::Done | ActionOutcome::Refused { .. }) {
-    return false;
-  }
-  match action.change.as_deref().map(|change| &change.change) {
-    Some(Change::Merge { run: merged, .. }) => *merged == run,
-    // A merge refused before the tool knew its run (an unknown run, say) names none: it was a try all the same, so
-    // the turn errs towards leaving the run to the person rather than trying twice.
-    _ => true,
-  }
-}
-
-/// The wait among a conversation's `entries` whose turn thinks now, with its entry: the turn under way, when a wait
-/// started it.
-fn thinking_wait(entries: &[ChatEntry]) -> Option<(i64, &AgentWait)> {
-  entries.iter().rev().find_map(|entry| match &entry.kind {
-    EntryKind::Wait { wait, turn: Some(turn) } if turn.state.is_thinking() => Some((entry.seq, wait)),
-    _ => None,
-  })
 }
 
 /// Why run `#number` is left to the person, in the words the chat's agent and the person read.

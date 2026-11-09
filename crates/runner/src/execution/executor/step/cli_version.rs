@@ -9,7 +9,6 @@ use orchester_core::{
     stream::{InvocationOutcome, RunnerProblem},
   },
   id::StepExecutionId,
-  run::StepExecutor,
 };
 use orchester_store::{ModelRequirement, StoreError};
 
@@ -38,15 +37,7 @@ impl RunTask {
       required: refusal.required.clone(),
     };
     self.report(&active.invocation, problem)?;
-    let profile = self
-      .run
-      .execution(execution)
-      .and_then(|execution| self.run.snapshot().step(execution.step()))
-      .and_then(|step| match step.executor() {
-        StepExecutor::Agent { profile, .. } => Some(*profile),
-        StepExecutor::Tool { .. } => None,
-      });
-    let Some(profile) = profile else {
+    let Some((&profile, _)) = self.run.executing_agent(execution) else {
       return Ok(());
     };
     // The run already says what the model needs; without the connection only its warning is missing.

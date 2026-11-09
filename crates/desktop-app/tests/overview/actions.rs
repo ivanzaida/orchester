@@ -113,7 +113,7 @@ fn overview_side_links_lead_to_their_places() {
   for (link, place) in [
     (
       "overview-merge-queue-review",
-      Route::Project(project, ProjectPage::MergeQueue),
+      Route::Project(project, ProjectPage::Review),
     ),
     (
       "overview-landed-done",

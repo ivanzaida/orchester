@@ -1,9 +1,10 @@
 //! A module's properties beside its Summary (`Properties` `ihSv0`, 260 wide, 18 inside its left hairline): State, Start
-//! date, Target date and Created, a 30 high row each, 2 apart, radius 6, what it is in 12 `text_muted` in a 78 column
-//! and its value 8 after it in 12 `text_primary`, the `hover` fill under the pointer and while its control is open.
-//! State opens a menu of Open and Closed; a date opens the date picker under its row (`ui::date_picker`, `iJ6mn` in
-//! `14`), its range ruled by the other date. A choice saves at once, and the page's status line follows; a save the
-//! module refuses says why under the rows. Created is when the module was made, and does not change.
+//! date, Target date, Created and Led in, a 30 high row each, 2 apart, radius 6, what it is in 12 `text_muted` in a 78
+//! column and its value 8 after it in 12 `text_primary`, the `hover` fill under the pointer and while its control is
+//! open. State opens a menu of Open and Closed; a date opens the date picker under its row (`ui::date_picker`, `iJ6mn`
+//! in `14`), its range ruled by the other date. A choice saves at once, and the page's status line follows; a save the
+//! module refuses says why under the rows. Created is when the module was made, and does not change. Led in is the
+//! Orchestrator conversation that leads the module ([`super::led_in`]).
 
 use std::sync::Arc;
 
@@ -24,9 +25,10 @@ use orchester_core::{
   time::Timestamp,
   usage::local_date,
 };
-use orchester_workspace::messages;
+use orchester_workspace::{messages, orchestrator::watching::LedIn};
 
 use super::{
+  led_in,
   save::{self, SaveModule, Written},
   words,
 };
@@ -54,13 +56,15 @@ const MENU_WIDTH: f32 = 160.0;
 pub struct PropertiesProps {
   pub project: ShownProject,
   pub module: Arc<Module>,
+  /// Who leads the module: *Led in* ([`super::led_in`]).
+  pub led_in: Arc<LedIn>,
   /// The page's, which a change goes over until the page reads again.
   pub written: Written,
 }
 
 impl PartialEq for PropertiesProps {
   fn eq(&self, other: &Self) -> bool {
-    (&self.project, &self.module) == (&other.project, &other.module)
+    (&self.project, &self.module, &self.led_in) == (&other.project, &other.module, &other.led_in)
   }
 }
 
@@ -137,6 +141,7 @@ impl Component for ModuleProperties {
           .into(),
         None,
       ))
+      .child(led_in::row(ctx, props.project.open.project.id(), &props.led_in))
       .with_children(self.refused(ctx))
       .describe("state", words::state_key(details.state()))
   }

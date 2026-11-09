@@ -9,7 +9,8 @@ use std::sync::Arc;
 
 use lurq::{
   app::ctx::Ctx,
-  components::Column,
+  components::{Column, Row},
+  layout::Alignment,
   node::{Element, dimension::Dimension},
 };
 use orchester_core::{
@@ -27,6 +28,7 @@ use super::{
   proposal::{ProposalProps, StartProposal},
   timeline::TurnRow,
   turns::Part,
+  waits_on::{WaitsOnLine, WaitsOnProps},
 };
 use crate::{
   theme::ExtraSpacing,
@@ -36,17 +38,29 @@ use crate::{
   },
 };
 
-/// The answer under `row`'s opening, with the Orchestrator's avatar and name; `None` before its first part. Once it
-/// ended, the todo list its agent kept folds into its name line as a chip, which opens the list under that line
-/// (09 g `OoT5k`); while it answers, the list is pinned over the composer instead (`super::body`). An answer that
-/// wrote something has a line of actions under it (`06 · Message actions` `XPDAX`): Copy, which copies what it wrote
-/// (ORC-323), *Rewind to here*, which rewinds to just after it (ORC-333), and *Fork from here*
-/// (`super::rewind::toolbar`).
+/// The answer under `row`'s opening, with the Orchestrator's avatar and name; `None` before its first part. The answer
+/// of a turn a wait, a run's end or an event started by itself says so with a tag after its time
+/// (`super::started_by`). Once it ended, the todo list its agent kept folds into its name line as a chip, which opens
+/// the list under that line (09 g `OoT5k`); while it answers, the list is pinned over the composer instead
+/// (`super::body`). An answer that wrote something has a line of actions under it (`06 · Message actions` `XPDAX`):
+/// Copy, which copies what it wrote (ORC-323), *Rewind to here*, which rewinds to just after it (ORC-333), and *Fork
+/// from here* (`super::rewind::toolbar`).
 pub(super) fn answer(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
   let first = row.turn.answer.first()?;
   let time = display::clock(first.at());
   let key = row.turn.key();
-  let (mark, list) = ended_plan(ctx, row).map_or((None, None), |(chip, list)| (Some(chip), list));
+  let (chip, list) = ended_plan(ctx, row).map_or((None, None), |(chip, list)| (Some(chip), list));
+  let mark = match (started(ctx, row), chip) {
+    (Some(tag), Some(chip)) => Some(
+      Row::new()
+        .spacing(ExtraSpacing::Snug.role())
+        .align_items(Alignment::Center)
+        .child(tag)
+        .child(chip)
+        .into(),
+    ),
+    (tag, chip) => tag.or(chip),
+  };
   let body = list.into_iter().chain([parts(ctx, row).into()]).collect();
   let (id, title) = (format!("orchestrator-answer-{key}"), ctx.t("orchestrator.title"));
   Some(match written(row) {
@@ -93,12 +107,27 @@ fn ended_plan(ctx: &Ctx, row: &TurnRow) -> Option<(Element, Option<Element>)> {
   Some((chip, list))
 }
 
-/// The answer of the turn a wait started by itself, nested under the wait's line as a quote; `None` before its first
-/// part.
+/// The answer of the turn a wait started by itself, nested under the wait's line as a quote that opens with the tag of
+/// what started it; `None` before its first part.
 pub(super) fn nested(ctx: &mut Ctx, row: &TurnRow) -> Option<Element> {
   row.turn.answer.first()?;
   let key = row.turn.key();
-  Some(quoted(&format!("orchestrator-answer-{key}"), parts(ctx, row)))
+  // In a row of its own, so that the tag keeps its own width in the quote's column.
+  let tag = started(ctx, row).map(|tag| Row::new().child(tag));
+  let quote = Column::new()
+    .width(Dimension::Pct(100.0))
+    .spacing(ExtraSpacing::Loose.role())
+    .with_children(tag)
+    .child(parts(ctx, row));
+  Some(quoted(&format!("orchestrator-answer-{key}"), quote))
+}
+
+/// The tag of what started `row`'s turn by itself: its wait, its run's end or its event; `None` for a person's turn.
+fn started(ctx: &Ctx, row: &TurnRow) -> Option<Element> {
+  let wait = row.turn.wait.as_deref()?;
+  row.turn.state.as_ref()?;
+  let id = format!("orchestrator-started-by-{}", row.turn.key());
+  Some(super::started_by::tag(ctx, &id, wait, row.turn.event.as_ref()))
 }
 
 /// The answer's parts, 10 apart; event lines in a row are one list, whose lines say no time.
@@ -231,6 +260,22 @@ fn action_element(
         action: action.clone(),
         at,
         listed,
+      },
+    );
+  }
+  if let (Some(waits), ActionOutcome::Done) = (&action.waits_on, &action.outcome) {
+    let wait = row.turn.waits_on.iter().find(|wait| wait.run == waits.run).cloned();
+    return ctx.mount_keyed::<WaitsOnLine>(
+      &id,
+      WaitsOnProps {
+        id: id.clone(),
+        row: waits.clone(),
+        task: action.task.clone().unwrap_or_default(),
+        wait,
+        at,
+        listed,
+        project: row.env.project,
+        open: row.env.open.clone(),
       },
     );
   }

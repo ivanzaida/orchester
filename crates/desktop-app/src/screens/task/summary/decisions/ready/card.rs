@@ -4,15 +4,15 @@
 //! apart. While the run waits to be merged it is `success` and `git-merge`, *Ready to merge*, the task, *every step
 //! passed* and the run, then how much the run changes onto its branch. Once a merge did not land it is `warning` and
 //! `triangle-alert`: the outcome as the run's attempt page titles it, the task, the stage it stopped at and when, then
-//! the attempt in one line as a row of Review › Merges says it. Its actions: the merge's
-//! (`crate::screens::task::merge`) with its key cap; *Review changes* (`file-diff`), or *Open in Review*
-//! (`arrow-up-right`) once a merge did not land, which open the run's page under Review › Merges, its review page
+//! the attempt in one line as the attempt page says it. Its actions: the merge's
+//! (`crate::screens::task::merge`); *Review changes* (`file-diff`), or *Open in Review*
+//! (`arrow-up-right`) once a merge did not land, which open the run's merge attempts under its task, its review page
 //! before any attempt and its attempt page after; *Close without merging* (`circle-check-big`), which marks the task
 //! done as *More actions* does; then *Review PR* once the run has a pull request. Under them why the merge waits, why
 //! the page's own work on it did not happen, and what came of creating the run's pull request
 //! ([`super::pull_request`]). *Merged into main* (`nqp68`): where the work went and what was cleared after it.
 
-use std::{num::NonZeroU64, sync::Arc};
+use std::sync::Arc;
 
 use lurq::{
   app::{
@@ -38,16 +38,19 @@ use super::{
 use crate::{
   navigation::Navigation,
   routes::{ProjectPage, Route},
-  screens::{
-    merges::{
-      attempt::standing::Standing,
-      words::{attempt_line, stage, when},
-    },
-    task::{
-      PageState, header,
-      merge::{self, Merge, MergeAction},
+  screens::task::{
+    PageState,
+    ci::actions::open_page,
+    header,
+    merge::{
+      self, Merge, MergeAction,
+      attempt::{
+        lines::{attempt_line, stage, when},
+        standing::Standing,
+      },
     },
   },
+  services::Services,
   theme::{ExtraSpacing, ExtraTypography, IconSize, TaskText},
   ui::{
     button::{ActionButton, ButtonKind},
@@ -209,7 +212,7 @@ fn ready_words(
 }
 
 /// The outcome as the run's attempt page titles it, *KON-12 · refused at Integration lock · 12:41*, and the last
-/// attempt in one line, as a row of Review › Merges says it.
+/// attempt in one line, as the attempt page says it.
 fn not_merged_words(
   ctx: &Ctx,
   task: &TaskContext,
@@ -240,30 +243,33 @@ fn not_merged_words(
 }
 
 /// The merge's action, *Review changes* or *Open in Review*, *Close without merging*, and *Review PR* once the run has
-/// pull request `review`.
+/// pull request page `review`.
 fn buttons(
   ctx: &mut Ctx,
   task: &TaskContext,
   shown: &Shown<'_>,
-  (action, review): (&MergeAction, Option<NonZeroU64>),
+  (action, review): (&MergeAction, Option<Arc<str>>),
 ) -> Element {
   let navigation = Navigation::of(ctx);
   let project = task.project.open.project.id();
-  let page = Route::Project(
-    project,
-    ProjectPage::MergeAttempt(task.key.clone(), shown.run.run.number()),
-  );
-  let (id, label, glyph) = match shown.merge {
-    Merge::Ready => ("task-review-changes", "decisions.ready.reviewChanges", Icon::FileDiff),
+  let attempts = ProjectPage::TaskMerge(task.key.clone(), shown.run.run.number());
+  let (id, label, glyph, page) = match shown.merge {
+    Merge::Ready => (
+      "task-review-changes",
+      "decisions.ready.reviewChanges",
+      Icon::FileDiff,
+      ProjectPage::TaskReview(task.key.clone()),
+    ),
     Merge::NotMerged(_) => (
       "task-open-in-review",
       "decisions.ready.openInReview",
       Icon::ArrowUpRight,
+      attempts,
     ),
   };
   let open = ActionButton::new(id, ButtonKind::Secondary, ctx.t(label))
     .icon(glyph)
-    .opens(navigation.to(page));
+    .opens(navigation.to(Route::Project(project, page)));
   Row::new()
     .id("task-ready-actions")
     .spacing(SpacingSize::Sm)
@@ -271,20 +277,19 @@ fn buttons(
     .child(action.control.button())
     .child(open)
     .child(close(ctx, task))
-    .with_children(review.map(|number| review_pull_request(ctx, task, number)))
+    .with_children(review.map(|url| review_pull_request(ctx, &url)))
     .into()
 }
 
-/// *Review PR*: the run's pull request `number` on its page.
-fn review_pull_request(ctx: &mut Ctx, task: &TaskContext, number: NonZeroU64) -> ActionButton {
-  let route = Route::Project(task.project.open.project.id(), ProjectPage::PullRequest(number, None));
+/// *Review PR*: opens the run's pull request, at `url` on its repository's host, in the browser.
+fn review_pull_request(ctx: &mut Ctx, url: &Arc<str>) -> ActionButton {
   ActionButton::new(
     "task-review-pull-request",
     ButtonKind::Secondary,
     ctx.t("decisions.ready.review"),
   )
   .icon(Icon::GitPullRequest)
-  .opens(Navigation::of(ctx).to(route))
+  .on_click(open_page(&Services::of(ctx), url.clone()))
 }
 
 /// *Close without merging*: the task is marked done as *More actions* › *Mark as done* does, its run's work left
@@ -369,9 +374,15 @@ fn left_behind(ctx: &Ctx, left: &Leftovers) -> Arc<str> {
       .join(&separator)
   };
   let (unmerged, merged) = (names(false), names(true));
-  match left.worktrees.len() {
-    1 => ctx.t("decisions.ready.left.worktreeOne"),
-    count if count > 1 => ctx.t_args("decisions.ready.left.worktreeOther", [("count", count.to_string())]),
+  let staying = left.staying();
+  match (staying.with_changes, staying.unfinished) {
+    (1, 0) => ctx.t("decisions.ready.left.worktreeOne"),
+    (count, 0) if count > 1 => ctx.t_args("decisions.ready.left.worktreeOther", [("count", count.to_string())]),
+    (0, 1) => ctx.t("decisions.ready.left.unfinishedOne"),
+    (with_changes, unfinished) if with_changes + unfinished > 0 => ctx.t_args(
+      "decisions.ready.left.unfinishedOther",
+      [("count", (with_changes + unfinished).to_string())],
+    ),
     _ if !unmerged.is_empty() => ctx.t_args("decisions.ready.left.branches", [("branches", unmerged)]),
     _ if !merged.is_empty() => ctx.t_args("decisions.ready.left.mergedBranches", [("branches", merged)]),
     _ => ctx.t("decisions.ready.left.nothing"),
@@ -388,7 +399,7 @@ pub fn merge_actions(ctx: &mut Ctx, task: &TaskContext, run: &RunView, pull: &Pu
     return Column::new().into();
   };
   let pull = pull_request::parts(ctx, task, run, pull);
-  let review = pull.review.map(|number| review_pull_request(ctx, task, number));
+  let review = pull.review.map(|url| review_pull_request(ctx, &url));
   let row = Row::new()
     .id("task-ready-actions")
     .spacing(SpacingSize::Sm)

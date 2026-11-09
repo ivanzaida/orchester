@@ -172,6 +172,7 @@ async fn unverified_returned_work_that_changed_nothing_is_not_verified_again() {
   let decision = StuckDecision::ReturnTo {
     step: key("implement"),
     note: ReviewNote::new("Add the fixture for Summary 02.B.").expect("note"),
+    profile: None,
   };
   started
     .scheduler
@@ -368,6 +369,7 @@ async fn unverified_stale_wait_decisions_cannot_decide_a_later_wait() {
       StuckDecision::ReturnTo {
         step: key("implement"),
         note: ReviewNote::new("Cover the missing state.").expect("note"),
+        profile: None,
       },
     ] {
       assert_eq!(

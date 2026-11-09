@@ -28,6 +28,9 @@ give keeps the turn from starting, with the secret's name.
 
 ## Decisions
 
+**Decisions 3, 5 and 9 below describe six switches; decision 14 replaced them with one, *Let the Orchestrator
+drive*, and says what changed.**
+
 1. **Reading is open.** The Orchestrator reads everything in every project the app knows: tasks, runs, changes,
    approvals, questions, plans, tasks' conversations, pipelines, agent profiles, instructions, skills, tools, secrets
    (names and use only), connections, accounts, models, usage and pull requests. Cross-project reads are allowed
@@ -58,15 +61,15 @@ give keeps the turn from starting, with the secret's name.
      (`decided_by` automation) and the task's Conversation shows it as sent by the Orchestrator. A message that would
      decide the plan a run waits on is refused: plan decisions stay the person's.
    - The chat follows the agents of its project: when an agent asks a question, waits for a message or its plan waits
-     for a decision, a conversation gets an entry linking to its card: the one that last dealt with that task or its
-     run (decided by the person on 2026-10-17): the conversation whose newest entry about them is the newest, where an
-     entry about them is an action the Orchestrator took on the task or run (done, proposed, refused or dismissed) or
-     an earlier wait of the task. When no conversation dealt with it, the project's latest conversation gets it, or a
-     new one titled after the wait while the project has none; waits of different tasks may so land in different
-     conversations. With *Let the Orchestrator answer agents* on, the wait also starts one Orchestrator turn by itself
-     in its conversation: at most one per wait, never while another turn of that conversation runs (it waits for that
-     turn to end; a turn of another conversation does not hold it), and none for a wait the Orchestrator's own answer
-     raised. In that turn the Orchestrator answers only what follows plainly from the task's brief and criteria, the
+     for a decision, a conversation gets an entry linking to its card: the one that leads the task through a
+     subscription (`docs/design/orchestrator-watch.md`, Routing). A wait of a task no conversation leads goes to no
+     conversation and starts no turn, and no conversation is opened for a wait (decided by the person on 2026-11-07,
+     ORC-895, replacing the rule of 2026-10-17: the conversation that last dealt with the task, else the latest
+     one). With *Let the Orchestrator drive* on (ORC-909 replaced the six switches), the wait also starts one
+     Orchestrator turn by itself in its conversation: at most one per wait, never while another turn of that
+     conversation runs (it waits for that turn to end; a turn of another conversation does not hold it), whoever raised
+     it, and none for a tool request, which stays the person's.
+     In that turn the Orchestrator answers only what follows plainly from the task's brief and criteria, the
      project's docs and AGENTS.md, or what the person already said in the chat; otherwise it tells the person what is
      asked, with options and its recommendation.
    - The chat may merge a run (`merge_run`): a proposal card by default; with the person-only switch *Let the
@@ -287,7 +290,7 @@ project.
 | MCP servers | `list_connections` (existing: the servers with their transport, authorization by secret name, variables by name, exempt tools and the profiles that choose them) | `mcp_set_server_enabled` off, `mcp_remove_server` of a server no profile chooses, `mcp_update_server` that only narrows (ORC-89, the chat's own; made at once only in a turn the person asked for while *Let automation change agent permissions* is on, else a card; decision 11) | `mcp_add_server`, `mcp_update_server` that widens, `mcp_set_server_enabled` on (ORC-89, the chat's own: always a card the person applies, whatever the switches; decision 11) |
 | Usage | `get_usage` (new, with filters: from, to, project, task, run, pipeline, step, agent profile, model, account; grouped by day, task, pipeline, step, agent, model or account) | — | — |
 | Delivery | `get_delivery` (ORC-50: a project's throughput, cycle and lead time, active time and return rate per step, cumulative flow over its last days, and the 50 % / 85 % delivery dates of its queued tasks and open modules by a Monte Carlo over recent throughput, or *not enough history*; answers "when will module X be done") | — | — |
-| Pull requests | `list_pull_requests`, `get_pull_request` (new: state, checks, review state, its task and run) | — | — |
+| Pull requests | — (`list_pull_requests` and `get_pull_request` were removed with the Pull requests page, ORC-804; `get_run` keeps the run's `checks`) | — | — |
 | Daily report | `get_daily_report` (ORC-47: a project's report of one local day, the one delivered to its conversation for that day, else read now: merged tasks, runs ready, stopped and at work, what waits for the person, the Orchestrator's own actions, direct or applied, the day's tokens and agent time by task and account against the daily budget, the queue; every item with its `link`) | — | — |
 | Repository | — | — | `init_repository` (ORC-72, the chat's own: the project's folder made a git repository with its first commit, or the first commit of a repository without one; always proposed, never by a switch; decision 8) |
 | Proposals | `apply_proposal` without `proposal` lists the proposals that wait (ORC-96, the chat's own) | — | `apply_proposal` with `proposal`: applies a waiting proposal the person's message in the turn approves, as the card's *Apply*, recorded as theirs; never what only a click applies; decision 13 |
@@ -325,7 +328,7 @@ Orchestrator answer agents* (decision 5).
 | C. Chat rules | `crates/workspace/src/orchestrator/` (`TOOLS`, proposals for publish/cancel/merge, direct start in auto mode, cross-project read scope), the *Let the Orchestrator publish drafts* switch (store, Project settings › Orchestrator, person-only), proposal cards in the chat | B's tool names (this table), design frames |
 | D. Links in the chat | the chat timeline's markdown links (`orchester:` and `https:`), navigation, external link presentation | B's link format (this document), design frames |
 | E. Usage page (ORC-15) | `crates/workspace` usage queries with the filters above, `get_usage`, the Usage page and its route with filters | — |
-| F. Pull requests page (ORC-13) | `crates/workspace` PR reads (gh), `list_pull_requests`, `get_pull_request`, the page and its routes | — |
+| F. Pull requests page (ORC-13) | `crates/workspace` PR reads (gh), `list_pull_requests`, `get_pull_request`, the page and its routes (removed 2026-11-06, ORC-803/ORC-804) | — |
 | G. Design | Pencil frames: chat replies with in-app and external links; proposal cards for publish, cancel and merge; the switch in Project settings › Orchestrator | — |
 
 Each stream keeps to the files it owns; a change another stream owns goes through the coordinator. Every stream
@@ -612,3 +615,39 @@ What may be approved in the chat, by kind (`Change::click_only`, and the publica
 | Git's work that can lose work (`git_propose`: reset, clean, branch or tag deletion, forced push, discard, rebase, aborting a merge) | **click only** | destructive git stays a click |
 
 Refusal codes: `not_persons_turn`, `automation_input`, `not_pending`, `click_only`, and the card's own refusals.
+
+## 14. Let the Orchestrator drive (ORC-909, decided by the person on 2026-11-07/08)
+
+One person-only switch per project, **Let the Orchestrator drive** (Project settings › Orchestrator), replaces the six
+switches of decisions 3, 5 and 9 — *publish drafts*, *answer agents*, *merge runs*, *merge finished runs on its own*,
+*continue interrupted runs* and *write with git* — and those decisions read as follows from now on. A project that had
+*answer agents* on starts with it on (`orchestrator_switches.drives`, copied from the application-wide value once for a
+project with none of its own; the application-wide values are no longer shown or set anywhere).
+
+- **On, the chat is a client of the app.** It has every domain tool the app's MCP server gives an outside client but
+  `add_project` and the app's `*_mcp_server` tools (the chat has its own, which call them), and each call goes to the
+  same tool with the same rules and refusals. Nothing becomes a card: `run_task`, `cancel_run`, `pause_run`,
+  `resume_run`, `continue_run` (every choice, accepting a step, raising limits and budgets and resuming after the daily
+  budget included), `merge_run`, `answer_question`, `send_message` (a message may move an idle run), the publications,
+  `init_repository`, the git writes and the `mcp_*` tools are carried out at once and kept in the conversation as the
+  chat's own actions, recorded as automation's. What a person's *Let automation …* switch allows another client the
+  chat's switch allows for the stopped run's decisions (`continue_run`) and for what a publication changes in agents'
+  prompts; what widens what agents may do is still `person_only` without *Let automation change agent permissions*,
+  and `decide_approval`, `decide_plan`, `answer_question` and `send_message` still need *Let automation answer
+  approvals*, as for any client. What can lose work in git stays `git_propose`, a click-only card.
+- **It is woken for everything.** A wait of an agent, a run's stop (a limit, a step waiting for a decision), end or
+  success, a stall, a merge conflict and a waited task's merge or close start an Orchestrator turn by themselves, whoever
+  started the run and whatever raised them — the rule that the chat's own answer, message, decision, resume or start
+  raised no turn (`raised_by_own`) is gone — and no per-run or per-step limit stops them. The turn of an interruption
+  continues the run, still unless it was interrupted again within 10 minutes or the database is under contention, which
+  only protects the run and the database from a loop; the turn of a success merges the run by the rule of decision 5
+  (a task's own *Don't merge automatically* keeps it), or says why it is left to the person.
+- **Instructions.** The chat decides and acts itself while it drives and never tells the person to press a button its
+  tools can press: it accepts a step when its report found no real mismatch and what it could not check is unreachable,
+  otherwise returns the work to the right step with a note or lets it retry; it raises a limit or budget when the run
+  is close to done and the work is worth it, saying by how much and why.
+- **Off, as before the switches were given.** What changes something is a proposal card (a start unless the project
+  allows Autopilot, a cancel, a merge, an answer or message, a publication, how a stopped run goes on, the first commit)
+  and a git write is refused `write_off`; nothing starts a turn by itself, so a wait, a run's end and the daily report
+  only keep their entries. In a turn a day's report or a watching that ended started, the chat changes nothing
+  whichever way the switch is (`report_turn`).
