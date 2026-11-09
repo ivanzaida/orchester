@@ -56,7 +56,7 @@ fn open(agents: &mut Agents, view: HubView) {
 
 fn show(agents: &mut Agents, server: ConnectionId) {
   open(agents, HubView::on_server(HubFilter::McpServers, server));
-  agents.until("the server's panel", |s| s.exists(SAVE));
+  agents.until("the server's panel", |s| s.exists("local-hub-mcp-server"));
 }
 
 #[test]
@@ -132,7 +132,7 @@ fn local_hub_server_panel_edits_in_place_with_save_and_cancel_and_no_versions() 
     assert!(!agents.exists(id), "{id}: a local server has no versions");
   }
   let row = format!("local-hub-row-mcp-{docs}");
-  agents.set("connection-mcp-name", "docs-2");
+  agents.set("connection-mcp-arguments", "--stdio");
   agents.until("unsaved", |s| {
     s.text(&format!("{row}-line")).contains("Unsaved changes")
   });
@@ -142,9 +142,9 @@ fn local_hub_server_panel_edits_in_place_with_save_and_cancel_and_no_versions() 
   agents.until("cancelled", |s| {
     !s.text(&format!("{row}-line")).contains("Unsaved changes")
   });
-  assert_eq!(agents.value("connection-mcp-name"), "docs");
+  assert_eq!(agents.value("connection-mcp-arguments"), "");
   // Save applies the change to the project at once.
-  agents.set("connection-mcp-name", "docs-2");
+  agents.set("connection-mcp-arguments", "--stdio");
   agents.until("saveable", |s| s.exists(SAVE));
   // A new name widens what agents may do (a run's answers by the server's name would apply to it): it is asked first.
   agents.click(SAVE);
@@ -154,7 +154,7 @@ fn local_hub_server_panel_edits_in_place_with_save_and_cancel_and_no_versions() 
     McpServerStore::mcp_servers(&db)
       .expect("servers")
       .iter()
-      .any(|server| server.name().as_str() == "docs-2")
+      .any(|server| matches!(server.transport(), McpTransport::Stdio(stdio) if stdio.args().len() == 1))
   });
 }
 
@@ -165,7 +165,7 @@ fn local_hub_a_save_that_is_refused_says_why_in_place_and_keeps_every_edit() {
   show(&mut agents, docs);
   let row = format!("local-hub-row-mcp-{docs}");
   // A program found nowhere is not stored: the save is refused, after the person confirmed what it widens.
-  agents.set("connection-mcp-name", "docs-2");
+  agents.set("connection-mcp-arguments", "--stdio");
   agents.set("connection-mcp-program", "docs-mcp-found-nowhere");
   agents.until("saveable", |s| s.exists(SAVE));
   agents.click(SAVE);
@@ -175,7 +175,11 @@ fn local_hub_a_save_that_is_refused_says_why_in_place_and_keeps_every_edit() {
   });
   assert!(agents.text("local-hub-mcp-refused").contains("Couldn't save docs"));
   assert!(agents.text("local-hub-mcp-refused").contains("docs-mcp-found-nowhere"));
-  assert_eq!(agents.value("connection-mcp-name"), "docs-2", "what was typed stays");
+  assert_eq!(
+    agents.value("connection-mcp-arguments"),
+    "--stdio",
+    "what was typed stays"
+  );
   assert_eq!(agents.value("connection-mcp-program"), "docs-mcp-found-nowhere");
   agents.until("the row says so", |s| {
     s.text(&format!("{row}-line")).contains("Couldn't save")
@@ -191,7 +195,7 @@ fn local_hub_a_save_that_is_refused_says_why_in_place_and_keeps_every_edit() {
   // Cancel puts back what was saved.
   agents.click(CANCEL);
   agents.until("cancelled", |s| !s.exists("local-hub-mcp-refused"));
-  assert_eq!(agents.value("connection-mcp-name"), "docs");
+  assert_eq!(agents.value("connection-mcp-arguments"), "");
 }
 
 #[test]

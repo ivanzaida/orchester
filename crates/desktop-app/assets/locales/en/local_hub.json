@@ -69,7 +69,9 @@
       "unsaved": "Unsaved changes",
       "draft": "Unpublished edits",
       "chooseConnection": "Choose a connection",
-      "addConnection": "Add a connection"
+      "addConnection": "Add a connection",
+      "needsProgram": "Needs the program path",
+      "needsSecret": "Needs a secret value"
     },
     "panel": {
       "connection": "Runs on",
@@ -88,11 +90,31 @@
       "on": "On",
       "onHint": "Runs may use it",
       "onlyHere": "Only on this computer",
-      "refusedBody": "Nothing was saved, not even the other fields. Your edits stay in the form. {{reason}}",
-      "refusedTitle": "Couldn't save {{name}}",
       "save": "Save",
-      "saveHint": "Save applies the changes to this project at once; Cancel puts back what was saved",
-      "unsavedBody": "Not saved yet. Save applies the changes to this project at once; Cancel puts back what was saved."
+      "added": "added {{date}}",
+      "runsAs": "Runs as",
+      "asProgram": "A program on this computer",
+      "asRemote": "A remote server (HTTP)",
+      "programNone": "Not set · nothing is guessed or found by name",
+      "choose": "Choose…",
+      "found": "found",
+      "moved": "found, but outside what a run may start",
+      "pathTo": "path to {{program}}",
+      "changedSub": "changed, not saved yet",
+      "tools": "Run without asking",
+      "toolsNone": "None · each use asks",
+      "editingTitle": "Editing {{name}} · not saved yet",
+      "editingBody": "{{fields}} changed · Save applies them to this project at once; Cancel puts back what was saved",
+      "secretChanged": "{{name}} value",
+      "refusedTitle": "Couldn't save {{name}}: {{reason}}",
+      "refusedBody": "Nothing was saved, not even the other fields. Your edits stay in the form.",
+      "refusedSecretBody": "Nothing was saved, not even the other fields. Your edits stay in the form; allow Orchester to use the system's secret store, then Save again.",
+      "allowThenSave": "Allow access, then Save again",
+      "notReadyProgram": "Not ready: set the program path. Runs whose pipeline uses {{name}} don't start until then.",
+      "notReadySecret": "Not ready: {{secret}} has no value. Runs whose pipeline uses {{name}} don't start until then.",
+      "setProgram": "Set program path",
+      "setSecret": "Set value for {{name}}",
+      "askedOnce": "Asked once"
     },
     "archive": {
       "action": "Archive",
@@ -131,6 +153,23 @@
       "serverOff": "Off · its runs go without it",
       "noValue": "No value set",
       "valueSet": "Value set"
+    },
+    "secret": {
+      "field": "Value",
+      "placeholder": "Paste the value",
+      "blank": "Enter a value.",
+      "keep": "Use this value",
+      "cancel": "Cancel",
+      "title": "Replace the value of {{name}}",
+      "what": "The value goes to the system's secret store when you Save the server, and is never shown. Cancel puts nothing in it.",
+      "dots": "••••••••••••",
+      "none": "No value set",
+      "replace": "Replace",
+      "set": "Set value",
+      "never": "secret value · never shown",
+      "typed": "new value · not saved yet",
+      "refused": "not stored · the secret store refused it",
+      "missing": "no value yet"
     }
   }
 }
