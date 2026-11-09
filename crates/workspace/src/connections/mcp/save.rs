@@ -56,6 +56,12 @@ pub enum McpSaveError {
     cause: Box<McpSaveError>,
     restore: StoreError,
   },
+  /// A create failed for `cause` after the server was stored, and removing it again failed too: the new server stays.
+  #[error("{cause}; and the new server could not be removed again: {removal}")]
+  NotRemoved {
+    cause: Box<McpSaveError>,
+    removal: StoreError,
+  },
 }
 
 /// A store failure is logged where it arises, once, whichever way the save then says it; a name that is taken is the
@@ -87,6 +93,12 @@ impl McpSaveError {
         }
         _ => Message::new("connections.mcp.errors.notRestoredOther"),
       },
+      Self::NotRemoved { cause, .. } => match cause.field() {
+        RefusedField::Secret(secret) => {
+          Message::new("connections.mcp.errors.notRemoved").with("secret", secret.to_string())
+        }
+        _ => Message::new("connections.mcp.errors.notRemovedOther"),
+      },
     }
   }
 }
@@ -106,7 +118,7 @@ impl McpSaveError {
     match self {
       Self::Program(_) => RefusedField::Program,
       Self::SecretStore { secret, .. } => RefusedField::Secret(secret.clone()),
-      Self::NotRestored { cause, .. } => cause.field(),
+      Self::NotRestored { cause, .. } | Self::NotRemoved { cause, .. } => cause.field(),
       _ => RefusedField::None,
     }
   }
@@ -211,8 +223,9 @@ pub fn store_with_values(
 
 /// [`store_with_values`] for a server that is new: `draft` is stored as a server that is `enabled` or not, and the
 /// `values` of the secrets its variables take go to `vault`. When the secret store does not keep a value the new
-/// server is removed again, so a refused create leaves nothing behind; when it cannot be removed either, the error
-/// says both ([`McpSaveError::NotRestored`]).
+/// server is removed again, so a refused create leaves no server behind (the values of `values` stored before the
+/// refused one stay stored: the store cannot say what it held); when the server cannot be removed either, it stays
+/// and the error says both ([`McpSaveError::NotRemoved`]).
 pub fn create_with_values(
   repo_root: &Path,
   vault: &dyn SecretVault,
@@ -234,7 +247,7 @@ pub fn create_with_values(
     Err(cause) => Err(
       match db.delete_unused_mcp_server(id, &move |db| profiles_using(db, id)) {
         Ok(_) => cause,
-        Err(restore) => not_restored(cause, restore),
+        Err(removal) => not_removed(cause, removal),
       },
     ),
   }
@@ -284,6 +297,14 @@ fn not_restored(cause: McpSaveError, restore: StoreError) -> McpSaveError {
   McpSaveError::NotRestored {
     cause: Box::new(cause),
     restore,
+  }
+}
+
+fn not_removed(cause: McpSaveError, removal: StoreError) -> McpSaveError {
+  tracing::error!(%removal, %cause, "cannot remove the new MCP server again");
+  McpSaveError::NotRemoved {
+    cause: Box::new(cause),
+    removal,
   }
 }
 

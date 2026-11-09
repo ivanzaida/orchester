@@ -3,7 +3,7 @@
 //! and says which secret it refused, without the value anywhere in it.
 //! Run with `cargo test -p orchester-workspace --test mcp_create create`.
 
-use std::{collections::HashMap, fs};
+use std::{collections::HashMap, fs, path::PathBuf};
 
 use orchester_core::{
   id::{ProjectId, SecretId},
@@ -52,6 +52,34 @@ struct RefusingVault;
 
 impl SecretVault for RefusingVault {
   fn store(&self, _: &VaultKey, _: &SecretValue) -> Result<(), VaultError> {
+    Err(VaultError::AccessDenied("refused by the test".to_owned()))
+  }
+
+  fn read(&self, _: &VaultKey) -> Result<SecretValue, VaultError> {
+    Err(VaultError::NotFound)
+  }
+
+  fn exists(&self, _: &VaultKey) -> Result<bool, VaultError> {
+    Ok(false)
+  }
+
+  fn delete(&self, _: &VaultKey) -> Result<(), VaultError> {
+    Ok(())
+  }
+}
+
+/// A secret store that refuses every value, and removes the new server from the project meanwhile, as another window
+/// that removed it would, so the create cannot remove it again.
+struct RemovingVault(PathBuf);
+
+impl SecretVault for RemovingVault {
+  fn store(&self, _: &VaultKey, _: &SecretValue) -> Result<(), VaultError> {
+    let mut db = ProjectDb::open(&self.0).expect("open the project database");
+    let servers = db.mcp_servers().expect("read");
+    for server in servers {
+      db.delete_unused_mcp_server(server.id(), &|_| Ok(Vec::new()))
+        .expect("removed by the test");
+    }
     Err(VaultError::AccessDenied("refused by the test".to_owned()))
   }
 
@@ -182,4 +210,69 @@ fn create_with_a_value_for_a_secret_the_server_does_not_take_stores_nothing() {
 
   assert!(matches!(refused, McpSaveError::SecretGone(_)), "{refused:?}");
   assert!(db.mcp_servers().expect("read").is_empty());
+}
+
+#[test]
+fn create_that_cannot_remove_the_server_again_says_the_server_stayed() {
+  let (repo, _db, token, draft) = project();
+
+  let refused = create_with_values(
+    repo.path(),
+    &RemovingVault(repo.path().to_owned()),
+    (draft, &Allowed::Anything),
+    true,
+    &[(token.id(), typed())],
+  )
+  .expect_err("refused, and not removed");
+
+  assert!(matches!(refused, McpSaveError::NotRemoved { .. }), "{refused:?}");
+  assert_eq!(
+    refused.field(),
+    RefusedField::Secret(token.name().clone()),
+    "the refused secret is still marked"
+  );
+  let message = refused.message();
+  assert_eq!(message.key, "connections.mcp.errors.notRemoved");
+  assert_eq!(message.args, [("secret", "DOCS_TOKEN".to_owned())]);
+  let said = format!("{refused} {refused:?}");
+  assert!(
+    said.contains("refused") && said.contains("removed again"),
+    "both are in it: {said}"
+  );
+  assert!(!said.contains(TYPED));
+}
+
+#[test]
+fn create_with_a_value_for_an_existing_secret_the_server_does_not_take_is_refused_as_not_taken() {
+  let (repo, mut db, _, draft) = project();
+  let other = Secret::new(
+    SecretId::generate(),
+    NewSecret {
+      name: SecretName::new("OTHER_TOKEN").expect("valid name"),
+      kind: SecretKind::AccessToken,
+      environment: Environment::Staging,
+    },
+    Timestamp::from_unix_millis(2),
+  );
+  db.create_secret(&other).expect("secret");
+  let vault = MemoryVault::default();
+
+  let refused = create_with_values(
+    repo.path(),
+    &vault,
+    (draft, &Allowed::Anything),
+    true,
+    &[(other.id(), typed())],
+  )
+  .expect_err("the server does not take it");
+
+  assert!(
+    matches!(refused, McpSaveError::SecretNotTaken(id) if id == other.id()),
+    "{refused:?}"
+  );
+  assert!(db.mcp_servers().expect("read").is_empty());
+  assert!(
+    !vault.exists(&other.vault_key(db.project().id())).expect("read"),
+    "no value was stored"
+  );
 }
