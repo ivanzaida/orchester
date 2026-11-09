@@ -400,3 +400,22 @@ fn team_mcp_local_projects_are_unchanged() {
   let bindings = json!({"project": "Kontur", "key": "KON-1", "bindings": [{"profile": "x", "connection": "Codex"}]});
   assert_eq!(checkout.refused("run_task", &bindings), "invalid_arguments");
 }
+
+#[test]
+fn team_mcp_a_member_cancelling_is_refused_in_the_lifecycles_words() {
+  let (server, _) = server();
+  let checkout = Checkout::new(Some(&server), &[]);
+  let reasons = |args: serde_json::Value| {
+    let error = checkout.call("update_task", &args).expect_err("refused");
+    assert_eq!(error["error"]["code"], "not_admin", "{error}");
+    error["error"]["reasons"].clone()
+  };
+
+  let cancel = json!({"project": "Kontur", "key": "KON-7", "workflow_status": "canceled"});
+  assert_eq!(reasons(cancel), json!(["appMcp.errors.teamLifecycleNotAdmin"]));
+  let reopen = json!({"project": "Kontur", "key": "KON-7", "workflow_status": "backlog"});
+  assert_eq!(reasons(reopen), json!(["appMcp.errors.teamLifecycleNotAdmin"]));
+  // A definition edit is still the team configuration's refusal.
+  let edit = json!({"project": "Kontur", "key": "KON-7", "title": "Say goodbye"});
+  assert_eq!(reasons(edit), json!(["sharing.errors.notAdmin"]));
+}

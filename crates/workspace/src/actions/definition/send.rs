@@ -14,7 +14,7 @@ use orchester_core::id::OperationId;
 
 use super::{DefinitionEdit, TagEdit};
 use crate::{
-  actions::{Accepted, ActionError, Current, Definition, Refusal, TeamOutcome},
+  actions::{Accepted, ActionError, Current, Definition, LifecycleRefusal, Refusal, TeamOutcome},
   team_reads::TeamSession,
 };
 
@@ -109,7 +109,8 @@ async fn refused(
   edit: &DefinitionEdit,
   (status, code, details): (u16, ErrorCode, Option<Box<SharingErrorDetails>>),
 ) -> TeamOutcome {
-  let refusal = Refusal::of_task_route(status, code, details.as_deref());
+  let refusal =
+    lifecycle_not_admin(edit, code).unwrap_or_else(|| Refusal::of_task_route(status, code, details.as_deref()));
   if code != ErrorCode::RevisionConflict {
     return TeamOutcome::Rejected {
       operation,
@@ -128,6 +129,19 @@ async fn refused(
     _ => look(session, edit).await,
   };
   conflict(operation, refusal, seen)
+}
+
+/// A member's refusal of a task patch that closes, reopens or moves the task: the lifecycle's, not the team
+/// configuration's (decision D4). A patch that changes no workflow status keeps the route's own refusal.
+fn lifecycle_not_admin(edit: &DefinitionEdit, code: ErrorCode) -> Option<Refusal> {
+  match (edit, code) {
+    (DefinitionEdit::Task { patch, .. }, ErrorCode::NotAdmin | ErrorCode::Forbidden)
+      if patch.changes.workflow.is_some() =>
+    {
+      Some(Refusal::TaskLifecycle(LifecycleRefusal::NotAdmin))
+    }
+    _ => None,
+  }
 }
 
 /// A conflict's outcome by what the subject as it is now says of the edit.

@@ -201,14 +201,9 @@ fn refusal(outcome: Result<ActionOutcome, ActionError>) -> Refusal {
   }
 }
 
+/// A member's cancel, reopen or move is refused in the lifecycle's own words, not the team configuration's.
 fn not_admin(refusal: &Refusal) -> bool {
-  matches!(
-    refusal,
-    Refusal::Route {
-      code: orchester_api::ErrorCode::NotAdmin,
-      ..
-    }
-  )
+  matches!(refusal, Refusal::TaskLifecycle(LifecycleRefusal::NotAdmin))
 }
 
 #[test]

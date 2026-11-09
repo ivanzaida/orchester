@@ -67,6 +67,7 @@ fn refused(refusal: &Refusal, retryable: bool) -> ToolError {
 fn lifecycle_refused(refusal: LifecycleRefusal) -> ToolError {
   let (code, key) = match refusal {
     LifecycleRefusal::NotHolder => ("not_holder", "appMcp.errors.teamNotHolder"),
+    LifecycleRefusal::NotAdmin => ("not_admin", "appMcp.errors.teamLifecycleNotAdmin"),
     LifecycleRefusal::StopRunFirst => ("stop_run_first", "appMcp.errors.teamStopRunFirst"),
     LifecycleRefusal::MissingReason => ("missing_reason", "appMcp.errors.teamMissingReason"),
   };

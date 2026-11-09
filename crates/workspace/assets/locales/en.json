@@ -1672,6 +1672,7 @@
       "teamNothingToChange": "This changes nothing of what the team server holds.",
       "teamNoQueue": "A team task has no queue or draft on this computer: the team server holds only its workflow status. To move it back to Backlog, an Admin sets workflow_status backlog with update_task. Nothing was changed.",
       "teamNotHolder": "Only the person who holds this task's claim, or an Admin, can do this. The claim may have been taken over or released since the task was read; read it again. Nothing was changed.",
+      "teamLifecycleNotAdmin": "Only Admins cancel, reopen or move a team task. Nothing was changed.",
       "teamStopRunFirst": "This task's work is still running or waits for a person. Stop the run first; then the task can be marked Done or canceled. Nothing was changed.",
       "teamMissingReason": "A blocked reason cannot be empty. Nothing was changed.",
       "teamStatusNotOffered": "A team task cannot be moved from {{from}} to {{to}}. The claim's holder or an Admin marks it Done, an Admin cancels it, reopens it to Backlog or Todo and moves it between Backlog and Todo; In progress and In review follow the task's work. Nothing was sent.",
