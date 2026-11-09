@@ -5,8 +5,8 @@
 //! disabled button; the first is the primary action and the others ghost buttons. A blocked task is one card (its
 //! badge, its reason, what it means, the actions). A person without an action reads one lock line under them, naming
 //! who can; it is told only where the server's capabilities list the lifecycle at all. A Done or Canceled task is a
-//! card as well, with *Reopen* under its words for an Admin. The app knows only who changed the task last, not who
-//! closed or blocked it, so no card names a person or a time.
+//! card as well, with *Reopen* under its words for an Admin. The title names who closed or blocked the task and when,
+//! as the server's records say ([`super::state_words`]); without a record it is the state's plain word.
 
 use lurq::{
   app::ctx::Ctx,
@@ -19,6 +19,7 @@ use orchester_core::task::organization::WorkflowStatus;
 use crate::{
   screens::task::{
     TaskContext,
+    summary::state_words,
     team_controls::{TeamAsk, TeamControls, reopen_menu},
   },
   team::{
@@ -129,29 +130,21 @@ pub fn closed(ctx: &mut Ctx, task: &TaskContext) -> Option<Element> {
   if !status.is_closed() {
     return None;
   }
-  let done = status == WorkflowStatus::Done;
-  let (glyph, title, detail) = if done {
-    (
-      Icon::CircleCheck,
-      ctx.t("summary.team.lifecycle.doneTitle"),
-      ctx.t("summary.team.lifecycle.doneDetail"),
-    )
+  let (glyph, word) = if status == WorkflowStatus::Done {
+    (Icon::CircleCheck, ctx.t("summary.team.lifecycle.doneTitle"))
   } else {
-    (
-      Icon::CircleSlash,
-      ctx.t("summary.team.lifecycle.canceledTitle"),
-      ctx.t("summary.team.lifecycle.canceledDetail"),
-    )
+    (Icon::CircleSlash, ctx.t("summary.team.lifecycle.canceledTitle"))
   };
+  let words = state_words::closed(ctx, status, team.task.closed.as_ref());
   let controls = TeamControls::of(ctx).filter(|_| team.task.abilities.lifecycle.reopen);
   let reopen = controls.map(|controls| reopen_button(ctx, &controls));
   let lock = lock_line(ctx, task);
   Some(
     StateCard::new(
       "task-team-closed",
-      (BadgeTone::Neutral, glyph, title.clone()),
-      title,
-      detail,
+      (BadgeTone::Neutral, glyph, word),
+      words.title,
+      words.detail,
     )
     .actions(reopen)
     .lock(lock)
@@ -225,11 +218,12 @@ fn blocked_card(
     ),
     (true, None) => ctx.t("summary.team.lifecycle.blockedFree"),
   };
-  let title = ctx.t("summary.team.lifecycle.blockedTitle");
+  let word = ctx.t("summary.team.lifecycle.blockedTitle");
+  let title = state_words::blocked_title(ctx, team.task.blocked.as_ref());
   Ok(
     StateCard::new(
       "task-team-blocked",
-      (BadgeTone::Warning, Icon::Ban, title.clone()),
+      (BadgeTone::Warning, Icon::Ban, word),
       title,
       detail,
     )

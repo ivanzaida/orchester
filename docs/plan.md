@@ -1047,8 +1047,12 @@ team task can never be closed. Order:
    `team_status_not_offered`, `team_status_on_create`, `team_no_queue`, `not_holder`, `stop_run_first`), the task page
    (Mark as done, Cancel task, Mark as blocked, Clear blocked, Reopen, the Done, Canceled and Blocked lines, one lock
    line for a member) and the Tasks list's row menu. **Not built:** the board card's menu and drag by capability, the
-   status chip (the page is not yet the Task - v2 layout), and the *Done · delivered with module* and *Done · its run
-   succeeded* lines, which need the server to say how a task closed (`TaskRead` has no such field).
+   status chip (the page is not yet the Task - v2 layout). **Built from the contract's records** (branch
+   `claude/d4-closed-by-app`): the cards name who closed or blocked a task and when, and *Done · delivered with module*
+   and *Done · its run succeeded* (`TaskRead`'s `closed` and `blocked`, which `get_task` carries; a task without a record
+   keeps the plain word). Not built: T11d's *Marking it done ended your claim.*, as the record does not say whether the
+   closer held the claim. The server sends the records only to desktops from 0.6.0, which this app's version
+   (`Cargo.toml`) has not reached yet.
 4. **Team tasks in the other MCP tools** (found 2026-11-08, independent of D4): tools that look a team task up in this
    computer's cached copy of shared tasks instead of the team server answer `task_not_found` or leave team runs out
    when the copy is missing — `get_run` (`app_mcp/tools/runs.rs` `read_run` needs the task row), `send_message` in

@@ -35,6 +35,20 @@ fn go(window: &mut Window, key: &str) {
   });
 }
 
+/// That `title` is `lead` and a clock time, `HH:MM`: the stand-in stamps a change with the clock, so the minute is not
+/// fixed.
+pub(super) fn assert_stamped(title: &str, lead: &str) {
+  let time = title
+    .strip_prefix(lead)
+    .unwrap_or_else(|| panic!("{title:?} begins with {lead:?}"));
+  let clock = time.len() == 5
+    && time
+      .bytes()
+      .enumerate()
+      .all(|(at, byte)| if at == 2 { byte == b':' } else { byte.is_ascii_digit() });
+  assert!(clock, "{title:?} ends with a clock time");
+}
+
 pub(super) fn offered(window: &mut Window, id: &str) -> bool {
   window.texts(id).is_some()
 }
@@ -60,7 +74,7 @@ fn bounds(window: &mut Window, id: &str) -> (f32, f32, f32) {
 }
 
 /// T1 `rvvoN`: the claim's holder, a member, closes their own task: Mark as done and no Cancel task, and closing ends
-/// the claim, which the page says as the task's closed card, which names no person or time the app does not know.
+/// the claim, which the page says as the task's closed card, naming who marked it done and when.
 #[test]
 fn team_qa_lifecycle_the_holder_marks_their_task_done() {
   let (mut window, _server) = on(State::Member, "KON-12");
@@ -83,7 +97,7 @@ fn team_qa_lifecycle_the_holder_marks_their_task_done() {
   window.until("the task to be closed", |window| {
     window.texts("task-team-closed-title").is_some()
   });
-  assert_eq!(window.text("task-team-closed-title"), "Done");
+  assert_stamped(&window.text("task-team-closed-title"), "Done · marked by you at ");
   assert_eq!(window.text("task-team-closed-badge"), "Done");
   assert_eq!(
     window.text("task-status-label"),
@@ -138,7 +152,7 @@ fn team_qa_lifecycle_an_admin_cancels_and_reopens() {
   window.until("the task to be canceled", |window| {
     window.texts("task-team-closed-title").is_some()
   });
-  assert_eq!(window.text("task-team-closed-title"), "Canceled");
+  assert_stamped(&window.text("task-team-closed-title"), "Canceled by you at ");
   assert_eq!(window.text("task-team-closed-badge"), "Canceled");
   let (detail, reopen) = (
     at(&mut window, "task-team-closed-detail"),
@@ -256,7 +270,7 @@ fn team_qa_lifecycle_the_holder_blocks_and_clears_their_task() {
   window.until("the task to be blocked", |window| {
     window.texts("task-team-blocked-title").is_some()
   });
-  assert_eq!(window.text("task-team-blocked-title"), "Blocked");
+  assert_stamped(&window.text("task-team-blocked-title"), "Blocked by you at ");
   assert_eq!(window.text("task-team-blocked-reason"), "Waits for the design");
   assert_eq!(
     window.text("task-team-blocked-detail"),
@@ -340,7 +354,7 @@ fn team_qa_lifecycle_the_holder_here_with_nothing_running_marks_their_task_done(
   window.until("the task to be closed", |window| {
     window.texts("task-team-closed-title").is_some()
   });
-  assert_eq!(window.text("task-team-closed-title"), "Done");
+  assert_stamped(&window.text("task-team-closed-title"), "Done · marked by you at ");
   assert_eq!(window.text("task-status-label"), "Done");
   assert_eq!(
     window.text("task-team-closed-detail"),
