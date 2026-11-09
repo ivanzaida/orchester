@@ -145,6 +145,8 @@ const fn lifecycle_words(refusal: orchester_workspace::actions::LifecycleRefusal
   use orchester_workspace::actions::LifecycleRefusal;
   match refusal {
     LifecycleRefusal::NotHolder => "summary.team.refused.notHolder",
+    LifecycleRefusal::NotAdmin => "summary.team.refused.notAdmin",
+    LifecycleRefusal::NotAdminWithDetails => "summary.team.refused.notAdminWithDetails",
     LifecycleRefusal::StopRunFirst => "summary.team.refused.stopRunFirst",
     LifecycleRefusal::MissingReason => "summary.team.refused.missingReason",
   }

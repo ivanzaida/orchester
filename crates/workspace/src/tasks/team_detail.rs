@@ -4,12 +4,13 @@
 
 use std::{collections::BTreeMap, path::Path};
 
-use orchester_core::{store::TaskStore, task::Task};
+use orchester_core::task::Task;
 use orchester_exec::programs::Programs;
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{
   detail::TaskDetail,
+  recorded,
   requirements::{self, LocalRuns},
 };
 
@@ -22,7 +23,9 @@ impl TaskDetail {
     (task, missing_pipeline): (Task, Option<String>),
     programs: &Programs,
   ) -> Result<Self, StoreError> {
-    let known = ProjectDb::open(repo_root)?.task(task.id())?.is_some();
+    // The record `load_in` builds the page from: a cached copy with no run here defines nothing, so such a task is
+    // read as one this computer never ran.
+    let known = recorded::task_of(&ProjectDb::open(repo_root)?, task.id())?.is_some();
     let mut detail = if known {
       Self::load_settled(repo_root, task.id(), programs)?
     } else {
