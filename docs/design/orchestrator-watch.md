@@ -242,7 +242,29 @@ per subscription). Also not here: a wait on several tasks at once, and narrow (9
 A team task is owned by the team server; this computer keeps its identity and its runs, which carry the inputs they
 started with. A watch (and a stop's *left open* list, and the key and title a run's wait on a task shows) reads such a
 task as `tasks::recorded` gives it: by the key and title its newest run's inputs kept, so a task with no stored row is
-found, not gone. What a watch ends on is the task's workflow status (Done or Canceled), which only a stored row keeps
-here: a team task kept only as an identity has none, so its watch goes on until the person stops it, and a closed
-team task's waiting run is not settled from this computer. The team task's module is not recorded here either, so a
-module watch does not take it in.
+found, not gone.
+
+What a watch ends on is the task's workflow status (Done or Canceled). For a team task that is the team server's, and
+no copy of it on this computer is trusted, not even a row the old sharing stream cached. Decided by the person on
+2026-11-09:
+
+- **The status is read from the team server in the background.** While a subscription of the project needs a team
+  task's status, the app reads it from the server (`orchestrator::team_status`, in the session the project's link
+  gives): a task subscription's team task, and for a module subscription every team task the project knows, since the
+  server says which module each is in. A team task counts toward a module by the module the server reports, never
+  by a stored row. Local tasks are unchanged: their stored row decides, and they ask the server nothing.
+- **Nothing pushes it into the workspace, so it polls.** The server's invalidations reach the app's own team reads
+  only, and those are open only while a screen reads the project. So the app asks again every minute, only while such a
+  subscription exists (idle, with no request, otherwise), and a reading younger than half a minute stands, so a chat's
+  own changes cost no request. A change of what the server says wakes the follower, which ends the subscription as it
+  does for a local task: the same line, the same summary turn.
+- **A reading that cannot be made is not an answer.** Signed out, the server unreachable, a refusal, or a session that
+  changed meanwhile: the watch neither ends nor fails. It waits, and its listing (`/watching`, `get_watches`) says so
+  under the subscription's head: *Can't read the status of a team task from the team server now — watching goes on and
+  ends once it can be read*. A task subscription says it for its own task, a module subscription for any team task it
+  cannot place. The next reading that sees Done or Canceled ends the watch. A team task the server does not have is
+  left to the person, like one gone.
+
+Not done here: a team task's waiting run is still not settled from this computer when the task is closed
+(`tasks::completion::settle_closed_in` reads stored rows), and `get_watches` still refuses a project linked to a team
+server (`team_project_unsupported`), so the note shows today in `/watching`.

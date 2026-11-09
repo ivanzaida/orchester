@@ -653,3 +653,7 @@ project with none of its own; the application-wide values are no longer shown or
   and a git write is refused `write_off`; nothing starts a turn by itself, so a wait, a run's end and the daily report
   only keep their entries. In a turn a day's report or a watching that ended started, the chat changes nothing
   whichever way the switch is (`report_turn`).
+- **A watch on a team task** ends on the status the team server reports (`docs/design/orchestrator-watch.md`, *Team
+  tasks*), read in the background while such a watch exists and never from a stored copy; the summary turn it starts is
+  the same as for a local task's (`report_turn`). While the server's answer cannot be read (signed out, unreachable) the
+  watch waits, and `/watching` and `get_watches` say so.

@@ -47,6 +47,7 @@ use super::{
   run_ends::{Reading, current_ends, end_moved, merge_checks},
   settings::OrchestratorSetup,
   stalls::{current_stalls, is_stall},
+  team_status::TeamReading,
   waits_on::follow as waits_on,
   watch_ends,
 };
@@ -174,7 +175,7 @@ fn follow(
   let kept = keep_new((&mut db, reading.root), &new, switches)?;
   let completed = switches.drives && complete_on_its_own(&db, reading)?;
   // After the waits, so that a watched task's last run end is kept while its conversation still leads it.
-  let ended = watch_ends::end_closed(&mut db, ready, Timestamp::now())?;
+  let ended = watch_ends::end_closed(&mut db, TeamReading::of(reading.root), ready, Timestamp::now())?;
   let followed = Followed {
     kept: kept || ended,
     completed,

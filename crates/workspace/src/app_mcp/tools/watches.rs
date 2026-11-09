@@ -152,6 +152,7 @@ fn subscription_json(watched: &WatchedSubscription, translate: &Translate) -> Va
     "order": order_json(&watched.order),
     "tasks": tasks,
     "rest": watched.rest.as_ref().map(|rest| translate.text(rest)),
+    "unreadable": watched.unreadable.as_ref().map(|why| translate.text(why)),
   })
 }
 

@@ -26,6 +26,7 @@ pub use self::{
   leads::{ChatLeads, LeadChip, LeadCounts, Leader, LedIn},
   targets::{TargetView, WatchOrder},
 };
+use super::team_status::TeamReading;
 use crate::{messages::Message, tasks::data::ProjectTasks};
 
 /// What the watch reads are made of, read together.
@@ -37,6 +38,8 @@ pub struct WatchReads {
   chats: Vec<(ChatId, Arc<str>)>,
   tasks: ProjectTasks,
   default_order: Arc<str>,
+  /// What the team server last said of the team tasks the subscriptions watch; empty for reads made without a folder.
+  team: TeamReading,
 }
 
 impl WatchReads {
@@ -55,19 +58,22 @@ impl WatchReads {
       chats: chats.into_iter().collect(),
       tasks,
       default_order: watch.default_order().into(),
+      team: TeamReading::default(),
     }
   }
 
   /// Reads them from `db`, the project database of `repo_root`. It writes nothing and runs no git: a run merged
   /// outside Orchester reads as its stored phase.
   pub fn read(db: &ProjectDb, repo_root: &Path) -> Result<Self, StoreError> {
-    Ok(Self::new(
+    let mut reads = Self::new(
       db.project().id(),
       db.active_subscriptions()?,
       chat_titles(db)?,
       ProjectTasks::read(db, repo_root, None)?,
       &db.orchestrator_watch()?,
-    ))
+    );
+    reads.team = TeamReading::of(repo_root);
+    Ok(reads)
   }
 
   /// Who leads `task`, read from `db` ([`Self::task_led_in`]): only the subscriptions, the conversations' titles and
