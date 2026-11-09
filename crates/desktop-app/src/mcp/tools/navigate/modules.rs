@@ -1,7 +1,7 @@
 //! What navigate makes of `route` modules: the list on a tab, New module, a module's page on a tab, or Edit module;
 //! of `route` new_task with `module`: New task in that module; and of `route` agents with `agent`: a profile's page or
-//! a new profile, or with `filter`, `item` and `server`: the Agents hub, or with `view` new the form that makes a new one
-//! of the kind `filter` holds. A `tab` or `view` where it names
+//! a new profile, or with `filter`, `item` and `server`: the Agents hub, or with `view` new the form that makes a new
+//! one of the kind `filter` holds. A `tab` or `view` where it names
 //! nothing is refused, not left out.
 
 use orchester_core::id::{ConnectionId, ModuleId, ResourceId};
@@ -54,15 +54,14 @@ fn hub_form(filter: Option<&str>, (item, server): (Option<&str>, Option<&str>)) 
     HubFilter::Skills,
     HubFilter::Tools,
   ];
-  let named = filter.and_then(HubFilter::from_name).filter(|found| kinds.contains(found));
+  let named = filter
+    .and_then(HubFilter::from_name)
+    .filter(|found| kinds.contains(found));
   named
     .map(|filter| ProjectPage::hub(HubView::adding(filter)))
     .ok_or_else(|| ToolError::InvalidParam {
       param: "filter",
-      reason: format!(
-        "a form makes one kind: {}",
-        kinds.map(HubFilter::name).join(", ")
-      ),
+      reason: format!("a form makes one kind: {}", kinds.map(HubFilter::name).join(", ")),
     })
 }
 

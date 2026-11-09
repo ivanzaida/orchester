@@ -287,7 +287,7 @@ impl NewPanel {
     }
     // Only a team's server says a role changed, and then its configuration names the admins.
     let admins = refused
-      .and_then(|_| team)
+      .and(team)
       .map_or_else(Default::default, |team| admins(ctx, team));
     refused.map(|failed| notices::refused(ctx, failed, &admins))
   }
@@ -389,9 +389,11 @@ fn taken_by_server(refused: Option<&Failed>) -> Option<String> {
 
 /// What the form holds: *For the team* and the note on what each computer fills in afterwards in a team's project, one
 /// section of the resource's own fields in a local one (`Profile`, `Server`, `Instruction`, `Skill`, `Tool` in L3–L7).
-fn sections(ctx: &Ctx, (kind, mode): (Kind, Mode), rows: Vec<Row>, computer_note: &str) -> Vec<Element> {
+fn sections(ctx: &Ctx, (kind, mode): (Kind, Mode), rows: Vec<Row>, computer_note: Option<&str>) -> Vec<Element> {
   match mode {
-    Mode::Team => vec![for_team(ctx, rows).into(), computer(ctx, computer_note).into()],
+    Mode::Team => std::iter::once(for_team(ctx, rows).into())
+      .chain(computer_note.map(|note| computer(ctx, note).into()))
+      .collect(),
     Mode::Local => vec![rows::section("local-new-section", &ctx.t(kinds::section_key(kind)), Vec::new(), rows).into()],
   }
 }

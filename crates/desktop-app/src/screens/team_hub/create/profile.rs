@@ -7,7 +7,7 @@
 //! profile of this computer cannot hold them, and the form says so.
 
 use lurq::{
-  app::{ctx::Ctx, theme::PaletteColor},
+  app::{component::DevtoolsInspectable, ctx::Ctx, theme::PaletteColor},
   components::{Row, Text},
   core::Signal,
   layout::Alignment,
@@ -51,6 +51,11 @@ const SERVERS: Spec = Spec::new("profile-servers", "local_new.profile.servers");
 const LISTS: Spec = Spec::new("profile-lists", "team_new.profile.lists").sub("team_new.profile.listsSub");
 const LISTS_LOCAL: Spec = Spec::new("profile-lists", "local_new.profile.lists").sub("local_new.profile.listsSub");
 
+/// The MCP servers a local profile chooses, in the order they were chosen.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct Chosen(Vec<ConnectionId>);
+impl DevtoolsInspectable for Chosen {}
+
 pub(super) struct Fields {
   name: Signal<String>,
   responsibility: Signal<String>,
@@ -59,7 +64,7 @@ pub(super) struct Fields {
   /// The connection a local profile runs on, by id, when its CLI has several: empty until one is chosen.
   connection: Signal<String>,
   /// The MCP servers a local profile chooses.
-  servers: Signal<Vec<ConnectionId>>,
+  servers: Signal<Chosen>,
   model: Signal<String>,
   /// The effort chosen; empty is the CLI's default.
   effort: Signal<String>,
@@ -72,7 +77,7 @@ impl Fields {
       responsibility: ctx.signal(String::new()),
       cli: ctx.signal(String::new()),
       connection: ctx.signal(String::new()),
-      servers: ctx.signal(Vec::new()),
+      servers: ctx.signal(Chosen::default()),
       model: ctx.signal(String::new()),
       effort: ctx.signal(String::new()),
     }
@@ -88,15 +93,7 @@ impl Fields {
         .filter(|connection| connection.provider().runs_agents())
         .collect()
     });
-    let mut connections: Vec<&AgentConnection> = Vec::new();
-    for connection in &all {
-      if !connections
-        .iter()
-        .any(|found| found.provider() == connection.provider())
-      {
-        connections.push(connection);
-      }
-    }
+    let connections = one_of_each_cli(&all);
     let standing_for_cli = connections
       .iter()
       .find(|c| c.id().to_string() == self.cli.get())
@@ -126,32 +123,16 @@ impl Fields {
     );
     let cli_says = (shown.tried && standing_for_cli.is_none()).then_some(Error::Required);
     let model_says = (shown.tried && model.is_none()).then_some(Error::Required);
-    let mut rows = vec![
-      fields::name_row(
-        ctx,
-        shown,
-        &NAME,
-        name_says.as_ref(),
-        (&self.name, "team_new.profile.namePlaceholder"),
-        Look::Plain,
-      ),
-      fields::text_row(
-        ctx,
-        &RESPONSIBILITY,
-        None,
-        (&self.responsibility, "team_new.profile.responsibilityPlaceholder"),
-        (Look::Plain, shown.locked),
-      ),
-    ];
+    let mut rows = self.head_rows(ctx, shown, name_says.as_ref());
     let cli_options: Vec<(String, String)> = connections
       .iter()
       .map(|c| (c.id().to_string(), ctx.t(cli_key(c.provider())).to_string()))
       .collect();
-    rows.push(self.cli_row(ctx, shown, cli_options, cli_says));
+    rows.push(self.cli_row(ctx, shown, cli_options, cli_says.as_ref()));
     if local {
       rows.push(self.connection_row(ctx, shown, (&all, standing_for_cli), own));
     }
-    rows.push(self.model_row(ctx, shown, &models, model_says));
+    rows.push(self.model_row(ctx, shown, &models, model_says.as_ref()));
     rows.push(self.effort_row(ctx, &efforts, shown.locked));
     if local {
       rows.push(self.servers_row(ctx, shown));
@@ -171,11 +152,32 @@ impl Fields {
     ));
     Body {
       rows,
-      computer: "team_new.computer.profile",
+      computer: Some("team_new.computer.profile"),
       make: own.and_then(|c| self.made(c, model, local)),
       off: fields::off(shown, &name),
       overlay: None,
     }
+  }
+
+  /// The name and the responsibility, which both modes ask.
+  fn head_rows(&self, ctx: &mut Ctx, shown: &Shown<'_>, name_says: Option<&Error>) -> Vec<Row> {
+    vec![
+      fields::name_row(
+        ctx,
+        shown,
+        &NAME,
+        name_says,
+        (&self.name, "team_new.profile.namePlaceholder"),
+        Look::Plain,
+      ),
+      fields::text_row(
+        ctx,
+        &RESPONSIBILITY,
+        None,
+        (&self.responsibility, "team_new.profile.responsibilityPlaceholder"),
+        (Look::Plain, shown.locked),
+      ),
+    ]
   }
 
   /// The connection a local profile runs on: the only one of its CLI, else the one chosen among those.
@@ -199,13 +201,13 @@ impl Fields {
     }
   }
 
-  fn cli_row(&self, ctx: &Ctx, shown: &Shown<'_>, options: Vec<(String, String)>, says: Option<Error>) -> Row {
+  fn cli_row(&self, ctx: &Ctx, shown: &Shown<'_>, options: Vec<(String, String)>, says: Option<&Error>) -> Row {
     // A team's CLI is a kind, never a connection, which its line says; a local profile names its connection apart.
     let spec = if shown.mode.is_local() { &CLI_LOCAL } else { &CLI };
     fields::row(
       ctx,
       spec,
-      says.as_ref(),
+      says,
       fields::select(
         ctx,
         spec,
@@ -243,10 +245,10 @@ impl Fields {
       &self.connection,
       options,
       (
-        if standing_for_cli.is_some() && !asked {
-          "local_new.profile.connectionOnly"
-        } else {
-          "local_new.profile.connectionAuto"
+        match (standing_for_cli.is_some(), asked) {
+          (true, true) => "local_new.profile.connectionAsk",
+          (true, false) => "local_new.profile.connectionOnly",
+          (false, _) => "local_new.profile.connectionAuto",
         },
         says.is_some(),
         shown.locked || !asked,
@@ -255,7 +257,7 @@ impl Fields {
     fields::row(ctx, &CONNECTION, says.as_ref(), control)
   }
 
-  fn model_row(&self, ctx: &Ctx, shown: &Shown<'_>, models: &[ModelOption], says: Option<Error>) -> Row {
+  fn model_row(&self, ctx: &Ctx, shown: &Shown<'_>, models: &[ModelOption], says: Option<&Error>) -> Row {
     let options = models
       .iter()
       .map(|option| (option.id.as_str().to_owned(), option.id.as_str().to_owned()))
@@ -263,7 +265,7 @@ impl Fields {
     fields::row(
       ctx,
       &MODEL,
-      says.as_ref(),
+      says,
       fields::select(
         ctx,
         &MODEL,
@@ -296,7 +298,7 @@ impl Fields {
     let available = shown
       .agents
       .map_or_else(Vec::new, |agents| agents.mcp.iter().cloned().collect());
-    let chosen = self.servers.get();
+    let chosen = self.servers.get().0;
     let id = "team-new-profile-servers-value";
     let tags: Vec<Element> = if chosen.is_empty() {
       vec![
@@ -327,9 +329,9 @@ impl Fields {
     let signal = self.servers.clone();
     let on_toggle: servers::Toggle = std::sync::Arc::new(move |server, choose| {
       signal.update(|chosen| {
-        chosen.retain(|found| *found != server);
+        chosen.0.retain(|found| *found != server);
         if choose {
-          chosen.push(server);
+          chosen.0.push(server);
         }
       });
     });
@@ -362,7 +364,7 @@ impl Fields {
     let effort = self.effort.get();
     let platform = Platform::current();
     let servers = if local {
-      McpServerSelection::new(self.servers.get()).ok()?
+      McpServerSelection::new(self.servers.get().0).ok()?
     } else {
       McpServerSelection::none()
     };
@@ -389,4 +391,15 @@ impl Fields {
     .ok()
     .map(|profile| Make::Profile(Box::new(profile)))
   }
+}
+
+/// The first connection of each CLI kind, which stands for the kind in the CLI select.
+fn one_of_each_cli<'a>(all: &[&'a AgentConnection]) -> Vec<&'a AgentConnection> {
+  let mut chosen: Vec<&AgentConnection> = Vec::new();
+  for connection in all {
+    if !chosen.iter().any(|found| found.provider() == connection.provider()) {
+      chosen.push(connection);
+    }
+  }
+  chosen
 }

@@ -103,6 +103,16 @@
 # typing a value is refused as L12 draws it, with no person's press: the refusal stands above the form naming FIGMA_TOKEN,
 # the field is marked, nothing is saved. (A change of Arguments or Program widens what agents may do and asks first, which
 # only a person's press confirms; the secret value alone does not.)
+# The create forms of the same hub (L3-L7, ORC-843): in -Scenario local-hub (or local-hub-claude for the profile's CLI and
+# connection choices, local-hub-secret for an MCP server whose secret FIGMA_TOKEN has no value) open the Agents hub with
+# the app's `navigate` tool (route agents, filter profiles, mcp_servers, instructions, skills or tools, view new) or press
+# the head's New (`local-hub-new`) under a kind's filter, or its menu under All (`local-hub-new-<filter>`): L3 `JEkCL`
+# New agent profile, L4 `P7TFFJ` New MCP server (name, program with Choose..., arguments, folder, variables, the value of
+# each secret they take, On), L5 `f8QbK3` New instruction, L6 `CGdgI` New skill, L7 `q5aX9` New tool. Create
+# (`local-hub-new-create`) makes v1 at once, or the server itself, and opens it; Cancel (`local-hub-new-cancel`) makes
+# nothing. The old New pages of a profile (agents/new) and of an MCP server (connections/new?kind=mcp_server) open the
+# same form in a local project; the instructions', skills' and tools' keep theirs (scope, files and CLIs, timeouts and
+# HTTP, which the forms do not take yet).
 #
 # .tmp/qa/<task>/ is replaced on every start; a QA app still running from it is refused, not stopped,
 # and so is a folder on the way to it that is a junction or a link. Besides .tmp/qa/<task>/ it writes

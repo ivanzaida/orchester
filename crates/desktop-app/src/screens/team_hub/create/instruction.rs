@@ -90,7 +90,7 @@ impl Fields {
     ];
     Body {
       rows,
-      computer: "team_new.computer.instruction",
+      computer: Some("team_new.computer.instruction"),
       make: checked.make,
       off: fields::off(shown, &name),
       overlay: None,

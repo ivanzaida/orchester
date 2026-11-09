@@ -159,8 +159,8 @@ impl Asking {
     self.value.update(Zeroize::zeroize);
   }
 
-  /// The dialog while it is open.
-  pub(in crate::screens) fn dialog(&self, ctx: &mut Ctx) -> Option<Element> {
+  /// The dialog while it is open; `creating`: the value goes with the server's Create, not its Save.
+  pub(in crate::screens) fn dialog(&self, ctx: &mut Ctx, creating: bool) -> Option<Element> {
     let (_, name) = self.asked.get()?;
     self.typed.get();
     let field = FieldInput::new(
@@ -191,7 +191,11 @@ impl Asking {
         ctx.t("local_hub.secret.cancel"),
       )
       .tone(Tone::Neutral)
-      .what(ctx.t("local_hub.secret.what"))
+      .what(ctx.t(if creating {
+        "local_hub.secret.whatCreate"
+      } else {
+        "local_hub.secret.what"
+      }))
       .part(Column::new().child(field))
       .under(failed)
       .action(keep)

@@ -129,8 +129,14 @@ fn create_stores_the_server_and_the_value_of_its_secret() {
 fn create_can_leave_the_new_server_off() {
   let (repo, db, _, draft) = project();
 
-  let id = create_with_values(repo.path(), &MemoryVault::default(), (draft, &Allowed::Anything), false, &[])
-    .expect("created");
+  let id = create_with_values(
+    repo.path(),
+    &MemoryVault::default(),
+    (draft, &Allowed::Anything),
+    false,
+    &[],
+  )
+  .expect("created");
 
   assert!(!db.mcp_server(id).expect("read").expect("stored").enabled());
 }

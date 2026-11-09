@@ -1,8 +1,8 @@
 //! The form of a new MCP server in a local project (`Agents · New MCP server` L4 `P7TFFJ`): every field is the
-//! person's own, so it is the fields of a saved server's panel ([`crate::screens::local_hub::mcp`]) over an empty server
-//! (how it runs, the program's path with *Choose…*, its arguments and folder, the tools it runs without asking, the
-//! variables, the values of the secrets they take, and whether runs may use it), with its name over them. A local MCP
-//! server has no versions: Create makes the server and the values go to the secret store with it.
+//! person's own, so it is the fields of a saved server's panel ([`crate::screens::local_hub::mcp`]) over an empty
+//! server (how it runs, the program's path with *Choose…*, its arguments and folder, the tools it runs without asking,
+//! the variables, the values of the secrets they take, and whether runs may use it), with its name over them. A local
+//! MCP server has no versions: Create makes the server and the values go to the secret store with it.
 
 use lurq::{app::ctx::Ctx, components::Row, core::Signal};
 use orchester_core::connection::mcp::McpServerName;
@@ -38,7 +38,7 @@ impl Fields {
       // The project's secrets and server names are read: the name can be typed meanwhile.
       return Body {
         rows: vec![self.name_row(ctx, shown, None)],
-        computer: "",
+        computer: None,
         make: None,
         off: None,
         overlay: None,
@@ -90,7 +90,7 @@ impl Fields {
     rows.push(switch_row(ctx, self.on.get(), move |now| on.set(now)));
     Body {
       rows,
-      computer: "",
+      computer: None,
       make: checked.ok().map(|draft| {
         Make::LocalMcpServer(Box::new(LocalMcp {
           draft,
@@ -99,7 +99,7 @@ impl Fields {
         }))
       }),
       off: None,
-      overlay: self.form.asking.dialog(ctx),
+      overlay: self.form.asking.dialog(ctx, true),
     }
   }
 

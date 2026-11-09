@@ -54,8 +54,8 @@ pub(super) struct Shown<'a> {
 /// What a kind's form gives the panel.
 pub(super) struct Body {
   pub rows: Vec<Row>,
-  /// The key of what each computer fills in afterwards (`team_new.computer.*`).
-  pub computer: &'static str,
+  /// The key of what each computer fills in afterwards (`team_new.computer.*`); a local project has no one else.
+  pub computer: Option<&'static str>,
   /// What Create makes, when every field is valid.
   pub make: Option<Make>,
   /// Why Create stays off before it is pressed, as a key said at the bar's end: the name is the team's already, or

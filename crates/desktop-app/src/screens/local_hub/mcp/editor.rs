@@ -215,7 +215,7 @@ impl Component for Editor {
         rows,
       ))
       .with_children(notes::not_ready(ctx, entry))
-      .with_children(self.form.asking.dialog(ctx));
+      .with_children(self.form.asking.dialog(ctx, false));
     let bar = self.bar(
       ctx,
       (&props, &server),

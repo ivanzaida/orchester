@@ -184,6 +184,7 @@
       "cancel": "Cancel",
       "title": "Replace the value of {{name}}",
       "what": "The value goes to the system's secret store when you Save the server, and is never shown. Cancel puts nothing in it.",
+      "whatCreate": "The value goes to the system's secret store when you Create the server, and is never shown. Cancel puts nothing in it.",
       "dots": "••••••••••••",
       "none": "No value set",
       "replace": "Replace",

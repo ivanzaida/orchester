@@ -96,7 +96,7 @@ impl Fields {
     };
     Body {
       rows,
-      computer: "team_new.computer.tool",
+      computer: Some("team_new.computer.tool"),
       make,
       off,
       overlay: None,

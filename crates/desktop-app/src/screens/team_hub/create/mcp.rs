@@ -176,11 +176,11 @@ impl Fields {
     }
     Body {
       rows,
-      computer: if program {
+      computer: Some(if program {
         "team_new.computer.mcpProgram"
       } else {
         "team_new.computer.mcpRemote"
-      },
+      }),
       make: checked
         .ok()
         .filter(|_| !self.folder_missing())

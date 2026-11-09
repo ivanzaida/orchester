@@ -231,10 +231,12 @@ pub fn create_with_values(
   let stored = switched.and_then(|()| replace_values(&mut db, vault, values));
   match stored {
     Ok(()) => Ok(id),
-    Err(cause) => Err(match db.delete_unused_mcp_server(id, &move |db| profiles_using(db, id)) {
-      Ok(_) => cause,
-      Err(restore) => not_restored(cause, restore),
-    }),
+    Err(cause) => Err(
+      match db.delete_unused_mcp_server(id, &move |db| profiles_using(db, id)) {
+        Ok(_) => cause,
+        Err(restore) => not_restored(cause, restore),
+      },
+    ),
   }
 }
 

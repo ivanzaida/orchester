@@ -2,7 +2,7 @@
 //! it survives, and an archived server's name stays taken. `cargo test -p orchester-app --test agents
 //! local_hub_review`.
 
-use orchester_app::routes::{HubFilter, HubView, NewConnection, ProjectPage, Route};
+use orchester_app::routes::{HubFilter, HubView, ProjectPage, Route};
 use orchester_core::time::Timestamp;
 use orchester_store::ProjectDb;
 
@@ -79,13 +79,13 @@ fn local_hub_review_an_archived_servers_name_stays_taken() {
     .expect("archived");
   agents.window.navigation().go(Route::Project(
     project_id(),
-    ProjectPage::NewConnection(NewConnection::McpServer),
+    ProjectPage::hub(HubView::adding(HubFilter::McpServers)),
   ));
-  agents.until("the form", |s| s.exists("connection-mcp-name"));
+  agents.until("the form", |s| s.exists("team-new-mcp-name"));
 
-  agents.set("connection-mcp-name", "docs");
+  agents.set("team-new-mcp-name", "docs");
 
   agents.until("the name is refused", |s| {
-    s.text("connection-mcp-name-note").contains("already has this name")
+    s.text("team-new-mcp-name-row-sub").contains("already has this name")
   });
 }

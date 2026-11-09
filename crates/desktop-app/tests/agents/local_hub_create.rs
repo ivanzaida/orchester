@@ -21,8 +21,20 @@ use super::{harness::Agents, local_hub::open, support::project_id};
 
 /// The kinds that have a form: their filter, the head's New, the form's title, the section and the row ids' name.
 const KINDS: [(HubFilter, &str, &str, &str, &str); 5] = [
-  (HubFilter::Profiles, "New agent", "New agent profile", "Profile", "profile"),
-  (HubFilter::McpServers, "New MCP server", "New MCP server", "Server", "mcp"),
+  (
+    HubFilter::Profiles,
+    "New agent",
+    "New agent profile",
+    "Profile",
+    "profile",
+  ),
+  (
+    HubFilter::McpServers,
+    "New MCP server",
+    "New MCP server",
+    "Server",
+    "mcp",
+  ),
   (
     HubFilter::Instructions,
     "New instruction",
@@ -111,12 +123,42 @@ fn assert_v1_and_no_draft<B: orchester_core::resource::ResourceBody>(agents: &Ag
   );
 }
 
+/// The project's secret `FIGMA_TOKEN`, which no value is kept for.
+fn figma_token(agents: &Agents) -> Secret {
+  let token = Secret::new(
+    SecretId::generate(),
+    NewSecret {
+      name: SecretName::new("FIGMA_TOKEN").expect("name"),
+      kind: SecretKind::AccessToken,
+      environment: Environment::Development,
+    },
+    Timestamp::now(),
+  );
+  ProjectDb::open(&agents.root)
+    .expect("database")
+    .create_secret(&token)
+    .expect("secret");
+  token
+}
+
+/// Types `TYPED` as the value of `FIGMA_TOKEN`, which the variable typed in the form takes: its row, its dialog, then
+/// *Use this value*.
+fn type_figma_value(agents: &mut Agents) {
+  agents.until("the secret's row", |s| s.exists("local-hub-secret-FIGMA_TOKEN-replace"));
+  agents.click("local-hub-secret-FIGMA_TOKEN-replace");
+  agents.until("its dialog", |s| s.exists("local-hub-secret-value"));
+  agents.set("local-hub-secret-value", TYPED);
+  agents.click("local-hub-secret-keep");
+}
+
 #[test]
 fn local_hub_create_new_opens_the_form_of_each_kind_with_only_create_and_cancel() {
   let mut agents = Agents::new(true);
   for (filter, new, title, section, name) in KINDS {
     open(&mut agents, HubView::new(filter, None));
-    agents.until("the head", |s| s.exists("local-hub-new") && s.text("local-hub-new") == new);
+    agents.until("the head", |s| {
+      s.exists("local-hub-new") && s.text("local-hub-new") == new
+    });
     agents.click("local-hub-new");
     agents.until("the form", |s| s.window.navigation().route_now() == form_route(filter));
     agents.until("the form", |s| s.exists("local-hub-new-create"));
@@ -165,7 +207,10 @@ fn local_hub_create_an_instruction_is_v1_at_once_with_no_draft() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::Instructions);
   agents.set("team-new-instruction-name", "Handoff notes");
-  agents.set("team-new-instruction-text", "Write a handoff note at the end of every run.");
+  agents.set(
+    "team-new-instruction-text",
+    "Write a handoff note at the end of every run.",
+  );
   agents.click("local-hub-new-create");
   agents.until("the new instruction's panel", |s| {
     matches!(
@@ -197,7 +242,10 @@ fn local_hub_create_a_command_tool_is_v1_at_once_with_no_draft() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::Tools);
   agents.set("team-new-tool-name", "cargo-check");
-  agents.set("team-new-tool-program", &std::env::current_exe().expect("a program").to_string_lossy());
+  agents.set(
+    "team-new-tool-program",
+    &std::env::current_exe().expect("a program").to_string_lossy(),
+  );
   agents.click("local-hub-new-create");
   agents.until("the new tool's panel", |s| {
     matches!(
@@ -215,7 +263,9 @@ fn local_hub_create_a_profile_names_its_connection_and_is_v1_at_once() {
   agents.set("team-new-profile-name", "Reviewer");
   choose(&mut agents, "team-new-profile-cli", "Codex");
   assert!(
-    agents.text("team-new-profile-connection-row-label").contains("Connection"),
+    agents
+      .text("team-new-profile-connection-row-label")
+      .contains("Connection"),
     "a local profile has a connection row"
   );
   choose(&mut agents, "team-new-profile-model", "test-model");
@@ -228,7 +278,10 @@ fn local_hub_create_a_profile_names_its_connection_and_is_v1_at_once() {
   });
   assert_v1_and_no_draft::<AgentProfile>(&agents);
   let listed = agents.listed();
-  let made = listed.profiles.iter().find(|entry| entry.profile.role().as_str() == "Reviewer");
+  let made = listed
+    .profiles
+    .iter()
+    .find(|entry| entry.profile.role().as_str() == "Reviewer");
   let connection = listed.connections[0].id();
   assert_eq!(
     made.map(|entry| entry.profile.connection()),
@@ -240,20 +293,9 @@ fn local_hub_create_a_profile_names_its_connection_and_is_v1_at_once() {
 #[test]
 fn local_hub_create_an_mcp_server_has_its_program_path_and_the_value_of_its_secret() {
   let mut agents = Agents::new(true);
-  let token = Secret::new(
-    SecretId::generate(),
-    NewSecret {
-      name: SecretName::new("FIGMA_TOKEN").expect("name"),
-      kind: SecretKind::AccessToken,
-      environment: Environment::Development,
-    },
-    Timestamp::now(),
-  );
-  ProjectDb::open(&agents.root)
-    .expect("database")
-    .create_secret(&token)
-    .expect("secret");
+  let token = figma_token(&agents);
   show_form(&mut agents, HubFilter::McpServers);
+  agents.until("the server's rows", |s| s.exists("connection-mcp-program"));
   let program = std::env::current_exe().expect("the test program");
   agents.set("team-new-mcp-name", "figma");
   agents.set("connection-mcp-program", &program.to_string_lossy());
@@ -261,11 +303,7 @@ fn local_hub_create_an_mcp_server_has_its_program_path_and_the_value_of_its_secr
     "connection-mcp-variables",
     "FIGMA_API_KEY=${secret:FIGMA_TOKEN@development}",
   );
-  agents.until("the secret's row", |s| s.exists("local-hub-secret-FIGMA_TOKEN-replace"));
-  agents.click("local-hub-secret-FIGMA_TOKEN-replace");
-  agents.until("its dialog", |s| s.exists("local-hub-secret-value"));
-  agents.set("local-hub-secret-value", TYPED);
-  agents.click("local-hub-secret-keep");
+  type_figma_value(&mut agents);
   agents.until("the value waits for Create", |s| {
     s.text("local-hub-secret-FIGMA_TOKEN-sub").contains("not saved yet")
   });
@@ -283,7 +321,12 @@ fn local_hub_create_an_mcp_server_has_its_program_path_and_the_value_of_its_secr
   });
 
   let db = ProjectDb::open(&agents.root).expect("database");
-  let stored = db.mcp_servers().expect("servers").into_iter().next().expect("the new server");
+  let stored = db
+    .mcp_servers()
+    .expect("servers")
+    .into_iter()
+    .next()
+    .expect("the new server");
   assert_eq!(stored.name().as_str(), "figma");
   assert!(stored.enabled());
   let McpTransport::Stdio(stdio) = stored.transport() else {
@@ -295,33 +338,35 @@ fn local_hub_create_an_mcp_server_has_its_program_path_and_the_value_of_its_secr
     "the program path is stored as the fixed file it is"
   );
   let taken: BTreeMap<&VariableName, &McpEnvValue> = stored.environment().iter().collect();
-  assert!(taken.values().any(|value| matches!(value, McpEnvValue::Secret(id) if *id == token.id())));
+  assert!(
+    taken
+      .values()
+      .any(|value| matches!(value, McpEnvValue::Secret(id) if *id == token.id()))
+  );
   let services = agents.window.launch.services().expect("services");
   let key = token.vault_key(project_id());
   assert_eq!(
-    services.vault.get().read(&key).expect("kept in the secret store").expose(),
+    services
+      .vault
+      .get()
+      .read(&key)
+      .expect("kept in the secret store")
+      .expose(),
     TYPED
   );
-  assert_eq!(held(&agents, ResourceKind::McpServer), 0, "a server is not a versioned resource");
+  assert_eq!(
+    held(&agents, ResourceKind::McpServer),
+    0,
+    "a server is not a versioned resource"
+  );
 }
 
 #[test]
 fn local_hub_create_an_mcp_server_the_secret_store_refuses_is_not_created_and_says_which_secret() {
   let mut agents = Agents::refusing_secrets();
-  let token = Secret::new(
-    SecretId::generate(),
-    NewSecret {
-      name: SecretName::new("FIGMA_TOKEN").expect("name"),
-      kind: SecretKind::AccessToken,
-      environment: Environment::Development,
-    },
-    Timestamp::now(),
-  );
-  ProjectDb::open(&agents.root)
-    .expect("database")
-    .create_secret(&token)
-    .expect("secret");
+  figma_token(&agents);
   show_form(&mut agents, HubFilter::McpServers);
+  agents.until("the server's rows", |s| s.exists("connection-mcp-program"));
   agents.set("team-new-mcp-name", "figma");
   agents.set(
     "connection-mcp-program",
@@ -331,11 +376,7 @@ fn local_hub_create_an_mcp_server_the_secret_store_refuses_is_not_created_and_sa
     "connection-mcp-variables",
     "FIGMA_API_KEY=${secret:FIGMA_TOKEN@development}",
   );
-  agents.until("the secret's row", |s| s.exists("local-hub-secret-FIGMA_TOKEN-replace"));
-  agents.click("local-hub-secret-FIGMA_TOKEN-replace");
-  agents.until("its dialog", |s| s.exists("local-hub-secret-value"));
-  agents.set("local-hub-secret-value", TYPED);
-  agents.click("local-hub-secret-keep");
+  type_figma_value(&mut agents);
 
   agents.click("local-hub-new-create");
   agents.until("the refusal", |s| s.exists("team-new-refused"));
@@ -399,7 +440,9 @@ fn local_hub_create_a_required_field_says_so_and_nothing_is_made() {
     let sub = format!("team-new-{name}-name-row-sub");
     assert!(!agents.text(&sub).starts_with("Required"), "{name}");
     agents.click("local-hub-new-create");
-    agents.until("the field says it is required", |s| s.text(&sub).starts_with("Required"));
+    agents.until("the field says it is required", |s| {
+      s.text(&sub).starts_with("Required")
+    });
     assert_eq!(agents.window.navigation().route_now(), form_route(filter), "{name}");
   }
   assert_eq!(held(&agents, ResourceKind::Instruction), 0);
@@ -427,6 +470,7 @@ fn local_hub_create_a_name_the_project_has_keeps_create_off_with_the_reason() {
 fn local_hub_create_what_adds_to_what_agents_may_do_is_a_persons_press() {
   let mut agents = Agents::new(true);
   show_form(&mut agents, HubFilter::McpServers);
+  agents.until("the server's rows", |s| s.exists("connection-mcp-program"));
   agents.set("team-new-mcp-name", "figma");
   agents.set(
     "connection-mcp-program",
@@ -438,24 +482,38 @@ fn local_hub_create_what_adds_to_what_agents_may_do_is_a_persons_press() {
 }
 
 #[test]
-fn local_hub_create_the_old_new_pages_open_the_hub_form() {
+fn local_hub_create_the_old_new_pages_of_a_profile_and_an_mcp_server_open_the_hub_form() {
   let mut agents = Agents::new(true);
   let pages = [
-    (ProjectPage::NewAgent(orchester_app::routes::AgentTab::default()), HubFilter::Profiles),
-    (ProjectPage::NewSkill, HubFilter::Skills),
-    (ProjectPage::NewTool, HubFilter::Tools),
-    (ProjectPage::NewConnection(NewConnection::McpServer), HubFilter::McpServers),
     (
-      ProjectPage::Instructions(orchester_app::routes::InstructionsView::new_rule(
-        orchester_app::routes::InstructionsTab::Project,
-      )),
-      HubFilter::Instructions,
+      ProjectPage::NewAgent(orchester_app::routes::AgentTab::default()),
+      HubFilter::Profiles,
+    ),
+    (
+      ProjectPage::NewConnection(NewConnection::McpServer),
+      HubFilter::McpServers,
     ),
   ];
   for (page, filter) in pages {
-    agents.window.navigation().go(Route::Project(project_id(), page.clone()));
+    agents.window.navigation().go(Route::Project(project_id(), page));
     agents.until("the hub's form", |s| {
       s.window.navigation().route_now() == form_route(filter) && s.exists("local-hub-new-create")
     });
   }
+}
+
+#[test]
+fn local_hub_create_a_profile_is_a_persons_press() {
+  let mut agents = Agents::new(true);
+  show_form(&mut agents, HubFilter::Profiles);
+  agents.set("team-new-profile-name", "Reviewer");
+  choose(&mut agents, "team-new-profile-cli", "Codex");
+  choose(&mut agents, "team-new-profile-model", "test-model");
+  with_synthetic_input(|| agents.click("local-hub-new-create"));
+  agents.until("the refusal", |s| s.exists("team-new-person-only"));
+  assert_eq!(
+    held(&agents, ResourceKind::AgentProfile),
+    0,
+    "automation does not publish what the role is told"
+  );
 }

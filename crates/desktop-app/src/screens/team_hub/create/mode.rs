@@ -1,8 +1,8 @@
 //! Where a form creates its resource: in a team's project, where Create publishes v1 for the team and the form says
-//! what each computer fills in afterwards, or in a local project, where every field is the person's own and Create makes
-//! v1 on this computer (`Agents · New agent profile` … `New tool`, L3–L7 in `acFkz`). The forms are the same parts; what
-//! differs is the words around them and the fields a local resource can also hold (a profile's connection and MCP
-//! servers, a local MCP server's program path and secret values).
+//! what each computer fills in afterwards, or in a local project, where every field is the person's own and Create
+//! makes v1 on this computer (`Agents · New agent profile` … `New tool`, L3–L7 in `acFkz`). The forms are the same
+//! parts; what differs is the words around them and the fields a local resource can also hold (a profile's connection
+//! and MCP servers, a local MCP server's program path and secret values).
 
 use super::super::model::Kind;
 

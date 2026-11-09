@@ -97,10 +97,11 @@ fn local_hub_head_offers_share_with_a_team_and_new_of_the_filter() {
   );
   agents.click("local-hub-new");
   agents.click("local-hub-new-instructions");
-  assert!(matches!(
+  assert_eq!(
     agents.window.navigation().route_now(),
-    Route::Project(_, ProjectPage::Instructions(_))
-  ));
+    Route::Project(project_id(), ProjectPage::hub(HubView::adding(HubFilter::Instructions))),
+    "the form of the hub"
+  );
 }
 
 #[test]

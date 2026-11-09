@@ -103,12 +103,9 @@ fn local_hub_new_menu_with_unsaved_edits_asks_before_it_opens_a_page() {
     "no page opened under the question"
   );
   agents.click(DISCARD);
-  agents.until("the page that makes a profile", |s| {
+  agents.until("the form that makes a profile", |s| {
     s.window.navigation().route_now()
-      == Route::Project(
-        project_id(),
-        ProjectPage::NewAgent(orchester_app::routes::AgentTab::Profile),
-      )
+      == Route::Project(project_id(), ProjectPage::hub(HubView::adding(HubFilter::Profiles)))
   });
 }
 

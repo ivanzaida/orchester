@@ -70,7 +70,7 @@ impl Fields {
     ];
     Body {
       rows,
-      computer: "team_new.computer.skill",
+      computer: Some("team_new.computer.skill"),
       make: made(&name, &description),
       off: fields::off(shown, &name),
       overlay: None,
