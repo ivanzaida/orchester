@@ -171,6 +171,12 @@
       "typed": "new value · not saved yet",
       "refused": "not stored · the secret store refused it",
       "missing": "no value yet"
+    },
+    "leave": {
+      "title": "Discard the unsaved changes to {{name}}?",
+      "what": "Opening another entry now puts {{name}} back as it was saved. Save it first to keep the changes.",
+      "keep": "Keep editing",
+      "discard": "Discard changes"
     }
   }
 }

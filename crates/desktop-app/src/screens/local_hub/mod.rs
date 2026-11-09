@@ -15,6 +15,7 @@ pub(in crate::screens) mod archive;
 mod archived;
 mod editing;
 mod head;
+mod leave;
 mod list;
 mod mcp;
 mod model;
@@ -80,17 +81,37 @@ struct LocalHubScreen {
   failure: LastFailure,
   /// The MCP server whose panel has edits that are not saved, which its row says.
   unsaved: UnsavedSignal,
+  /// Where the person pressed a row while edits are not saved: it waits for their answer ([`leave`]).
+  leaving: Signal<Option<Route>>,
+  /// The question that asks it.
+  asking: Signal<bool>,
 }
 
 impl Component for LocalHubScreen {
   type Props = Props;
 
   fn create(ctx: &mut Ctx) -> Self {
-    Self {
+    let this = Self {
       retry: ctx.signal(0),
       failure: LastFailure::default(),
       unsaved: ctx.signal(None),
-    }
+      leaving: ctx.signal(None),
+      asking: ctx.signal(false),
+    };
+    let (leaving, asking) = (this.leaving.clone(), this.asking.clone());
+    // Each follows the other only when it differs, or they would write each other for ever.
+    let (shut, held) = (this.asking.clone(), this.leaving.clone());
+    ctx.watch(&this.leaving, move |route| {
+      if shut.get_untracked() != route.is_some() {
+        asking.set(route.is_some());
+      }
+    });
+    ctx.watch(&this.asking, move |open| {
+      if !open && held.get_untracked().is_some() {
+        leaving.set(None);
+      }
+    });
+    this
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
@@ -117,6 +138,7 @@ impl Component for LocalHubScreen {
           navigation: &navigation,
           now,
           unsaved: self.unsaved.get(),
+          leaving: &self.leaving,
         };
         self.hub_body(
           ctx,
@@ -134,6 +156,14 @@ impl Component for LocalHubScreen {
       selected: selected.as_ref().map(|entry| entry.what),
       reading,
     };
+    let leaving = listing.as_ref().and_then(|listing| {
+      leave::question(
+        ctx,
+        (&self.leaving, &self.asking),
+        (listing, &self.unsaved),
+        &navigation,
+      )
+    });
     Column::new()
       .id("screen-local-hub")
       .describe("filter", view.filter.name())
@@ -157,6 +187,7 @@ impl Component for LocalHubScreen {
           .min_height(Dimension::Px(0.0))
           .child(body),
       )
+      .with_children(leaving)
   }
 }
 

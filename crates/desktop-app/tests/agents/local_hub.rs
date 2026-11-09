@@ -146,7 +146,7 @@ fn local_hub_server_panel_edits_in_place_with_save_and_cancel_and_no_versions() 
   // Save applies the change to the project at once.
   agents.set("connection-mcp-arguments", "--stdio");
   agents.until("saveable", |s| s.exists(SAVE));
-  // A new name widens what agents may do (a run's answers by the server's name would apply to it): it is asked first.
+  // New arguments widen what agents may do: it is asked first.
   agents.click(SAVE);
   agents.until("the question", |s| s.exists("local-hub-mcp-confirm-save-confirm"));
   agents.press_until("local-hub-mcp-confirm-save-confirm", "saved", |s| {
@@ -333,4 +333,211 @@ fn local_hub_a_choice_that_is_refused_says_why_in_place() {
   agents.click("local-hub-fix-use");
   agents.until("refused", |s| s.exists("local-hub-profile-error"));
   assert!(agents.text("local-hub-profile-error").contains("not published"));
+}
+
+#[test]
+fn local_hub_opening_another_row_with_unsaved_edits_asks_first_and_clears_the_mark_when_discarded() {
+  let mut agents = Agents::new(true);
+  let docs = server(&agents, "docs");
+  let wiki = server(&agents, "wiki");
+  show(&mut agents, docs);
+  let (docs_row, wiki_row) = (format!("local-hub-row-mcp-{docs}"), format!("local-hub-row-mcp-{wiki}"));
+  agents.set("connection-mcp-arguments", "--stdio");
+  agents.until("unsaved", |s| {
+    s.text(&format!("{docs_row}-line")).contains("Unsaved changes")
+  });
+
+  agents.click(&wiki_row);
+  agents.until("the question", |s| s.exists("local-hub-leave-discard"));
+  assert_eq!(
+    agents.window.navigation().route_now(),
+    Route::Project(
+      project_id(),
+      ProjectPage::AgentsHub(HubView::on_server(HubFilter::McpServers, docs))
+    ),
+    "nothing moved while it asks"
+  );
+  agents.click("local-hub-leave-cancel");
+  agents.until("kept", |s| !s.exists("local-hub-leave-discard"));
+  assert_eq!(
+    agents.value("connection-mcp-arguments"),
+    "--stdio",
+    "Keep editing leaves what was typed"
+  );
+
+  agents.click(&wiki_row);
+  agents.until("the question", |s| s.exists("local-hub-leave-discard"));
+  agents.click("local-hub-leave-discard");
+  agents.until("the other server", |s| {
+    s.window.navigation().route_now()
+      == Route::Project(
+        project_id(),
+        ProjectPage::AgentsHub(HubView::on_server(HubFilter::McpServers, wiki)),
+      )
+  });
+  agents.until("no mark on the first row", |s| {
+    !s.text(&format!("{docs_row}-line")).contains("Unsaved changes")
+  });
+}
+
+#[test]
+fn local_hub_archiving_an_instruction_from_its_panel_stays_in_the_hub() {
+  use std::collections::BTreeSet;
+
+  use orchester_core::resource::{AgentTargets, InjectionEvent, Instruction, InstructionScope};
+
+  let mut agents = Agents::new(true);
+  let body = Instruction::new(
+    PromptText::new("Keep each change small.").expect("prompt"),
+    AgentTargets::All,
+    BTreeSet::from([InjectionEvent::Start]),
+    InstructionScope::Project,
+  )
+  .expect("instruction");
+  let id = {
+    let mut db = ProjectDb::open(&agents.root).expect("database");
+    let id = db
+      .create_resource(
+        Slug::new("rules").expect("slug"),
+        Name::new("Project rules").expect("name"),
+        &body,
+        Timestamp::now(),
+      )
+      .expect("resource")
+      .id();
+    db.publish_draft::<Instruction>(id, Timestamp::now())
+      .expect("published");
+    id
+  };
+  open(&mut agents, HubView::new(HubFilter::Instructions, Some(id)));
+  agents.until("its panel", |s| {
+    s.exists("local-hub-more") && s.exists("local-hub-edit")
+  });
+  agents.click("local-hub-more");
+  agents.click("local-hub-archive");
+  agents.press_until("team-hub-archive-confirm", "archived", |s| {
+    ProjectDb::open(&s.root)
+      .expect("database")
+      .archived_local_resources(ResourceKind::Instruction)
+      .expect("archived")
+      .iter()
+      .any(|(found, _)| found.id() == id)
+  });
+  agents.until("the hub has it under Archived", |s| {
+    s.text("local-hub-filter-archived").contains('1')
+  });
+  assert!(
+    matches!(
+      agents.window.navigation().route_now(),
+      Route::Project(_, ProjectPage::AgentsHub(_))
+    ),
+    "the person is still in the hub"
+  );
+}
+
+/// The server `figma`, whose variable `FIGMA_API_KEY` takes the secret `FIGMA_TOKEN`, which has no value; its program
+/// is this test's own, which exists outside the project.
+fn figma(agents: &Agents) -> ConnectionId {
+  use std::collections::BTreeMap;
+
+  use orchester_core::{
+    connection::mcp::McpEnvValue,
+    id::SecretId,
+    resource::VariableName,
+    secret::{Environment, NewSecret, Secret, SecretKind, SecretName},
+    store::SecretStore,
+  };
+
+  let mut db = ProjectDb::open(&agents.root).expect("database");
+  let token = Secret::new(
+    SecretId::generate(),
+    NewSecret {
+      name: SecretName::new("FIGMA_TOKEN").expect("name"),
+      kind: SecretKind::AccessToken,
+      environment: Environment::Development,
+    },
+    Timestamp::now(),
+  );
+  db.create_secret(&token).expect("secret");
+  let program = std::env::current_exe().expect("the test program");
+  let server = McpServer::new(
+    ConnectionId::generate(),
+    McpServerName::new("figma").expect("name"),
+    McpTransport::Stdio(StdioServer::new(
+      CommandProgram::new(&program.to_string_lossy()).expect("program"),
+      Vec::new(),
+      None,
+    )),
+    McpEnvironment::new(BTreeMap::from([(
+      VariableName::new("FIGMA_API_KEY").expect("name"),
+      McpEnvValue::Secret(token.id()),
+    )]))
+    .expect("variables"),
+    Timestamp::now(),
+  )
+  .expect("server");
+  McpServerStore::create_mcp_server(&mut db, &server).expect("stored");
+  server.id()
+}
+
+const TYPED: &str = "hunter2-typed-value";
+
+/// Types `TYPED` as the new value of `FIGMA_TOKEN` in the panel: its dialog, then *Use this value*.
+fn type_secret(agents: &mut Agents) {
+  agents.until("the secret's row", |s| s.exists("local-hub-secret-FIGMA_TOKEN-replace"));
+  agents.click("local-hub-secret-FIGMA_TOKEN-replace");
+  agents.until("its dialog", |s| s.exists("local-hub-secret-value"));
+  agents.set("local-hub-secret-value", TYPED);
+  agents.click("local-hub-secret-keep");
+  agents.until("the new value waits for Save", |s| {
+    s.text("local-hub-secret-FIGMA_TOKEN-sub").contains("not saved yet")
+  });
+}
+
+#[test]
+fn local_hub_a_secret_value_is_kept_with_save_and_never_shown() {
+  let mut agents = Agents::new(true);
+  let figma = figma(&agents);
+  show(&mut agents, figma);
+  assert!(
+    agents.text("local-hub-secret-FIGMA_TOKEN-sub").contains("no value"),
+    "nothing is set yet"
+  );
+
+  type_secret(&mut agents);
+  assert!(agents.exists(SAVE), "a typed value is a change: Save and Cancel appear");
+  assert!(
+    !agents.text("local-hub-secret-FIGMA_TOKEN-value").contains(TYPED),
+    "the box holds dots, whatever was typed"
+  );
+  agents.click(SAVE);
+  agents.until("the value is kept", |s| {
+    s.text("local-hub-secret-FIGMA_TOKEN-sub").contains("never shown")
+  });
+  assert!(!agents.exists("local-hub-mcp-refused"));
+}
+
+#[test]
+fn local_hub_a_secret_store_that_refuses_says_which_secret_and_saves_nothing() {
+  let mut agents = Agents::refusing_secrets();
+  let figma = figma(&agents);
+  show(&mut agents, figma);
+
+  type_secret(&mut agents);
+  agents.click(SAVE);
+  agents.until("the refusal", |s| s.exists("local-hub-mcp-refused"));
+
+  let said = agents.text("local-hub-mcp-refused-title");
+  assert!(said.contains("figma") && said.contains("FIGMA_TOKEN"), "{said}");
+  assert!(!said.contains(TYPED), "no value in the words");
+  assert!(
+    agents.text("local-hub-secret-FIGMA_TOKEN-sub").contains("refused"),
+    "the field that failed is marked"
+  );
+  assert_eq!(agents.text("team-hub-actions-hint"), "Allow access, then Save again");
+  assert!(agents.exists(SAVE), "Save stays the way to try again");
+  let row = format!("local-hub-row-mcp-{figma}");
+  agents.until("the row says so", |s| {
+    s.text(&format!("{row}-line")).contains("Couldn't save")
+  });
 }

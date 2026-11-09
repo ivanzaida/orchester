@@ -13,7 +13,12 @@ use lurq::{
   core::Signal,
   node::Element,
 };
-use orchester_core::{connection::mcp::McpServer, id::SecretId, secret::SecretName, sharing::Missing};
+use orchester_core::{
+  connection::mcp::McpServer,
+  id::{ConnectionId, SecretId},
+  secret::SecretName,
+  sharing::Missing,
+};
 use orchester_workspace::{
   activity::operations,
   background,
@@ -111,6 +116,9 @@ pub(super) struct Editor {
   pub(super) one_line_arguments: bool,
   /// The tools that run without asking, in one line.
   pub(super) tools_line: Signal<String>,
+  /// What the list says of the edits, which this panel clears when it goes.
+  unsaved: UnsavedSignal,
+  server: ConnectionId,
 }
 
 impl Component for Editor {
@@ -220,6 +228,8 @@ impl Component for Editor {
       arguments_line,
       one_line_arguments,
       tools_line,
+      unsaved: props.props.unsaved.clone(),
+      server: props.server.id(),
     }
   }
 
@@ -348,6 +358,14 @@ impl Component for Editor {
 impl Drop for Editor {
   fn drop(&mut self) {
     self.asking.wipe();
+    // The panel is gone, with the edits: the list must not go on saying they are there.
+    if self
+      .unsaved
+      .get_untracked()
+      .is_some_and(|(what, _)| what == Archivable::McpServer(self.server))
+    {
+      self.unsaved.set(None);
+    }
   }
 }
 

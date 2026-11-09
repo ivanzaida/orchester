@@ -26,20 +26,28 @@ pub struct Agents {
 }
 impl Agents {
   pub fn new(connection: bool) -> Self {
-    Self::with(connection.then_some(CODEX_VERSION))
+    Self::with(connection.then_some(CODEX_VERSION), false)
+  }
+  /// [`Self::new`] with a secret store that refuses every value.
+  pub fn refusing_secrets() -> Self {
+    Self::with(Some(CODEX_VERSION), true)
   }
   /// The project with a Codex connection whose last check found `version`, the one Autopilot needs or newer.
   pub fn on_codex(version: &str) -> Self {
-    Self::with(Some(version))
+    Self::with(Some(version), false)
   }
-  fn with(codex_version: Option<&str>) -> Self {
+  fn with(codex_version: Option<&str>, refusing_secrets: bool) -> Self {
     let scratch = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../.tmp/agents");
     std::fs::create_dir_all(&scratch).expect("scratch directory");
     let data = Data::at(
       tempfile::tempdir_in(scratch).expect("test directory"),
       tokio::runtime::Runtime::new().expect("runtime"),
     );
-    let launch = data.launch();
+    let launch = if refusing_secrets {
+      data.launch_refusing_secrets()
+    } else {
+      data.launch()
+    };
     let project = data.add_kontur(launch.workspace().expect("workspace"));
     let root = project.repo_root;
     if let Some(version) = codex_version {

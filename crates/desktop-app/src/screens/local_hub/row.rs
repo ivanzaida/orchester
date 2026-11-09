@@ -26,7 +26,7 @@ use crate::{
   ui::{
     agent_mark::AgentMark,
     icon::{Icon, icon},
-    pressable::{inert, opening},
+    pressable::{Press, inert, opening},
   },
 };
 
@@ -45,7 +45,14 @@ pub(super) fn row(ctx: &Ctx, entry: &Entry, shown: &Shown<'_>) -> Element {
     inert(lurq::components::Button::empty())
   } else {
     let route = Route::Project(shown.project, ProjectPage::hub(view_of(shown.filter, Some(entry.what))));
-    opening(shown.navigation.to(route))
+    match shown.unsaved {
+      // Opening another entry would drop the edits: the hub asks first.
+      Some(_) => {
+        let leaving = shown.leaving.clone();
+        Press::run(move || leaving.set(Some(route.clone()))).button()
+      }
+      None => opening(shown.navigation.to(route)),
+    }
   };
   let start = if chosen {
     ExtraSpacing::Inset.role()

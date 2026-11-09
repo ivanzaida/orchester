@@ -174,6 +174,15 @@ impl Listing {
     Self { entries }
   }
 
+  /// The name of the entry `what`.
+  pub(super) fn name_of(&self, what: Archivable) -> Option<&str> {
+    self
+      .entries
+      .iter()
+      .find(|entry| entry.what == what)
+      .map(|entry| entry.name.as_str())
+  }
+
   /// How many entries `filter` holds.
   pub(super) fn count(&self, filter: HubFilter) -> usize {
     self.shown(filter).count()

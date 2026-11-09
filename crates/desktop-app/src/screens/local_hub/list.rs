@@ -8,6 +8,7 @@ use lurq::{
     theme::{PaletteColor, SpacingSize},
   },
   components::{Column, Row, ScrollVertical, Text},
+  core::Signal,
   layout::Alignment,
   node::{Element, dimension::Dimension, padding::Padding},
 };
@@ -21,7 +22,7 @@ use super::{
 };
 use crate::{
   navigation::Navigation,
-  routes::HubFilter,
+  routes::{HubFilter, Route},
   screens::team_hub::list::LIST_WIDTH,
   theme::{ExtraSpacing, HubText},
 };
@@ -38,6 +39,8 @@ pub(super) struct Shown<'a> {
   pub now: Timestamp,
   /// The MCP server whose panel has edits that are not saved, and whether a save was refused.
   pub unsaved: Option<(Archivable, Unsaved)>,
+  /// Where a press on a row waits for the person's answer while an MCP server's edits are not saved.
+  pub leaving: &'a Signal<Option<Route>>,
 }
 
 pub(super) fn list(ctx: &Ctx, listing: &Listing, shown: &Shown<'_>) -> Element {
