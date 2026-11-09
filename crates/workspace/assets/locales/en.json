@@ -24,6 +24,7 @@
       "existingResult": "Orchester could not tell whether Git already holds this run's work ({{cause}}), so it refused before Git ran: nothing was merged, and the branch and the checkout are unchanged.",
       "policy": "The policy an automation's merge goes through could not check this merge ({{cause}}), so Orchester refused before Git ran: nothing was merged, and the branch and the checkout are unchanged."
     },
+    "teamRun": "This run belongs to a team task, so it is delivered with its module, not merged from here. Nothing was merged.",
     "externalResult": "Git contains all or part of this result already. Review the evidence in Local integration; no historical merge was recorded or repeated.",
     "personRequired": "A person reviews and approves the exact checked result in Local integration.",
     "programRunning": "A Git program of this run’s local integration is still running in your checkout, so nothing was merged. Orchester waited a few seconds for it. Ask for the merge again in a minute; if it keeps refusing, open this run’s Local integration, which settles a program that is no longer running.",

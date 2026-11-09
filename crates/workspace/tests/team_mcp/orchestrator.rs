@@ -82,7 +82,7 @@ fn team_mcp_no_local_merge_takes_a_team_run() {
 
   let refused = merge_in(&worktrees, &programs, (team.run, None)).map(|merged| merged.merge);
   assert!(
-    matches!(&refused, Err(IntegrationProblem::Store(message)) if message.key == "appMcp.errors.teamDeliveryPending"),
+    matches!(&refused, Err(IntegrationProblem::Store(message)) if message.key == "localIntegration.teamRun"),
     "{refused:?}"
   );
 }

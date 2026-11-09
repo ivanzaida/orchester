@@ -377,9 +377,7 @@ fn mergeable(repo_root: &Path, db: &ProjectDb, run: &Run) -> Result<orchester_co
   // A team task's run goes into its module's branch and only the module's delivery takes it further: it is never merged
   // into the base branch from here, whoever asks.
   if db.team_run(run.id())?.is_some() {
-    return Err(IntegrationProblem::Store(Message::new(
-      "appMcp.errors.teamDeliveryPending",
-    )));
+    return Err(IntegrationProblem::Store(Message::new("localIntegration.teamRun")));
   }
   let task = db.task(run.task())?.ok_or(StoreError::TaskNotFound(run.task()))?;
   if let Some(holder) = super::local_integration::checkout_holder(db, run.id())? {
