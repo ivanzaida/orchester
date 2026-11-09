@@ -6,16 +6,23 @@
 use std::path::Path;
 
 use orchester_core::{
-  connection::{AgentProvider, ConnectionKind, REASONING_EFFORT, mcp::McpTransport},
+  connection::{
+    AgentConnection, AgentProvider, Connection, ConnectionKind, REASONING_EFFORT,
+    mcp::{McpServer, McpTransport},
+  },
   id::{ConnectionId, ResourceId},
-  resource::{AgentProfile, Instruction, Pipeline, ResourceKind, Skill, Tool, ToolKind, VersionNumber},
+  resource::{AgentProfile, Draft, Instruction, Pipeline, ResourceKind, Skill, Tool, ToolKind, VersionNumber},
   secret::{SecretName, SecretVault},
-  store::{ConnectionStore, ResourceStore, SecretStore, TaskStore},
+  store::{ConnectionStore, McpServerStore, ResourceStore, SecretStore, TaskStore},
   time::Timestamp,
 };
 use orchester_store::{ArchiveStop, ProjectDb, StoreError};
 
-use super::{team_hub::Form, team_profile::ConnectionChoice};
+use super::{
+  form::{effort_options, model_options},
+  team_hub::Form,
+  team_profile::ConnectionChoice,
+};
 use crate::{
   connections::mcp::McpServerText,
   local_archive::Archivable,
@@ -55,10 +62,28 @@ pub struct LocalProfile {
   pub current: Option<ConnectionId>,
   /// When its latest version was published.
   pub published_at: Timestamp,
-  /// Whether it has edits that are not published, which the editor holds.
+  /// Whether it has edits that are not published; what the fields above say is then the draft's.
   pub draft: bool,
+  /// When its draft was last saved; `None` without one.
+  pub draft_saved_at: Option<Timestamp>,
+  /// What the selects of its panel offer ([`ProfileOptions`]).
+  pub options: ProfileOptions,
   /// The project secrets the MCP servers it chooses take their values from, by name.
   pub secrets: Vec<SecretName>,
+}
+
+/// What the selects of a local profile's panel offer besides the choices it has made.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct ProfileOptions {
+  /// The CLIs the project has a connection for, and the profile's own.
+  pub clis: Vec<AgentProvider>,
+  /// The models its connection offers, and its own while the connection does not list it; none while the connection
+  /// is gone.
+  pub models: Vec<String>,
+  /// The reasoning efforts its connection lists for its model.
+  pub efforts: Vec<String>,
+  /// The project's MCP servers, by name, that it does not choose and that are not archived.
+  pub servers: Vec<(ConnectionId, String)>,
 }
 
 /// A local resource or MCP server that was archived.
@@ -207,6 +232,7 @@ fn plain(db: &ProjectDb) -> Result<Vec<LocalPlain>, StoreError> {
 fn profiles(db: &ProjectDb) -> Result<Vec<(ResourceId, LocalProfile)>, StoreError> {
   // The archived ones too: a profile still chooses one until it is restored or the profile drops it.
   let servers = db.all_mcp_servers()?;
+  let available = db.mcp_servers()?;
   let connections = db.connections()?;
   let pipelines = latest_pipelines(db)?;
   let mut profiles = Vec::new();
@@ -214,7 +240,9 @@ fn profiles(db: &ProjectDb) -> Result<Vec<(ResourceId, LocalProfile)>, StoreErro
     let Some(version) = db.latest_version::<AgentProfile>(resource.id())? else {
       continue;
     };
-    let body = version.body();
+    let draft = db.draft::<AgentProfile>(resource.id())?;
+    // What the panel shows is the profile as it is now: its draft when it has one.
+    let body = draft.as_ref().map_or_else(|| version.body(), |draft| draft.body());
     let connection = connections.iter().find(|found| found.id() == body.connection());
     let cli = match connection.map(orchester_core::connection::Connection::kind) {
       Some(ConnectionKind::Agent(cli)) => Some(*cli),
@@ -263,12 +291,61 @@ fn profiles(db: &ProjectDb) -> Result<Vec<(ResourceId, LocalProfile)>, StoreErro
           .map(|choice| choice.id),
         connections: of_kind,
         published_at: version.published_at(),
-        draft: db.draft::<AgentProfile>(resource.id())?.is_some(),
+        draft: draft.is_some(),
+        draft_saved_at: draft.as_ref().map(Draft::updated_at),
+        options: options(&connections, &available, (cli, body)),
         secrets: secret_names(db, &chosen)?,
       },
     ));
   }
   Ok(profiles)
+}
+
+/// What the selects of the panel of the profile `body`, which runs with `cli`, offer.
+fn options(
+  connections: &[Connection],
+  available: &[McpServer],
+  (cli, body): (Option<AgentProvider>, &AgentProfile),
+) -> ProfileOptions {
+  let mut clis: Vec<AgentProvider> = Vec::new();
+  for connection in connections {
+    if let ConnectionKind::Agent(provider) = connection.kind()
+      && !clis.contains(provider)
+    {
+      clis.push(*provider);
+    }
+  }
+  if let Some(cli) = cli
+    && !clis.contains(&cli)
+  {
+    clis.push(cli);
+  }
+  let own = connections
+    .iter()
+    .find(|found| found.id() == body.connection())
+    .and_then(|found| AgentConnection::try_from(found.clone()).ok());
+  let (models, efforts) = own.as_ref().map_or_else(
+    || (Vec::new(), Vec::new()),
+    |connection| {
+      (
+        model_options(connection, Some(body.model()))
+          .into_iter()
+          .map(|option| option.id.as_str().to_owned())
+          .collect(),
+        effort_options(connection, body.model()),
+      )
+    },
+  );
+  ProfileOptions {
+    clis,
+    models,
+    efforts,
+    servers: available
+      .iter()
+      .filter(|server| !body.mcp_servers().contains(server.id()))
+      .map(|server| (server.id(), server.name().to_string()))
+      .collect(),
+  }
 }
 
 /// The names of the project secrets the variables of `servers` take, each once, in the order the servers come.

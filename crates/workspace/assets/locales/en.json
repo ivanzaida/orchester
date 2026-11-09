@@ -1063,6 +1063,13 @@
       "draftFirst": "The profile has edits that are not published. Open its editor to choose the connection with them, or discard them first; nothing was changed.",
       "notOfKind": "That is not a connection of the profile's CLI in this project, so nothing was changed.",
       "widens": "Using that connection would widen what the profile's agents may do. Open the profile's editor to confirm it; nothing was changed."
+    },
+    "localEdit": {
+      "noConnection": "The project has no connection of that kind for the profile to run on, so nothing was changed.",
+      "modelNotOffered": "The profile's connection does not offer that model, so nothing was changed.",
+      "effortNotOffered": "The profile's model does not offer that reasoning effort, so nothing was changed.",
+      "serversInvalid": "The profile cannot choose those MCP servers, so nothing was changed.",
+      "staleDraft": "This draft was started from an older version than the latest. Open the profile's editor to compare them and publish."
     }
   },
   "connections": {
