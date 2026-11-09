@@ -6,6 +6,8 @@
       "one": "{{names}} stays not ready until you remove {{name}} from it or restore it.",
       "many": "{{names}} stay not ready until you remove {{name}} from them or restore it."
     },
+    "doneTitle": "{{name}} is archived",
+    "close": "Close",
     "runRow": "{{key}} · run {{number}}",
     "runState": {
       "pending": "waiting to start",

@@ -10,6 +10,7 @@ mod harness;
 mod hub;
 mod local_hub;
 mod local_hub_leaving;
+mod local_hub_review;
 mod models;
 mod project_sets;
 mod reads;

@@ -64,7 +64,7 @@ fn agents_active_run_keeps_pinned_identity_metadata_and_task_navigation() {
   );
 }
 
-fn pipeline(db: &mut ProjectDb, profile: ResourceId) -> RunSnapshot {
+pub(super) fn pipeline(db: &mut ProjectDb, profile: ResourceId) -> RunSnapshot {
   let steps = ["Other", "Implement"].map(|title| Step {
     key: StepKey::new(&title.to_lowercase()).expect("key"),
     name: Name::new(title).expect("name"),
@@ -110,7 +110,7 @@ fn pipeline(db: &mut ProjectDb, profile: ResourceId) -> RunSnapshot {
   .expect("snapshot")
 }
 
-fn running(db: &mut ProjectDb, snapshot: RunSnapshot, started: Timestamp) -> Run {
+pub(super) fn running(db: &mut ProjectDb, snapshot: RunSnapshot, started: Timestamp) -> Run {
   let created = Timestamp::from_unix_millis(1_700_000_000_000);
   let task = db
     .create_tasks(

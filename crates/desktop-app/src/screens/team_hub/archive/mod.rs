@@ -250,6 +250,7 @@ impl ArchiveMenu {
         lines: Vec::new(),
         archiving: archiving.is_pending(),
         failed: archiving.error.clone().filter(|_| !archiving.is_pending()),
+        stopped: None,
         person_refused: self.person.reason(ctx, CONFIRM),
       },
       (&self.open, &self.retry, confirm),

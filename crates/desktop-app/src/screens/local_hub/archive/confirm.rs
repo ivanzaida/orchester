@@ -4,6 +4,9 @@
 //! ones the list showed, keeps the modal open with the new list; otherwise it archives the resource and cancels those
 //! runs. It leaves the lists and pickers; *Archived* lists it and restores it ([`super::super::archived`]).
 //!
+//! A run that could not be stopped is said before the lists read the archive again: the entry leaves them and its panel
+//! with the confirmation, so the same modal turns into the notice and *Close* ends it.
+//!
 //! Opening the confirmation is anyone's, automation's included: it changes nothing. Confirming it is a person's alone,
 //! as every other change that stops work is.
 
@@ -21,6 +24,7 @@ use orchester_api::{UsedBy, UsedByRun};
 use orchester_core::{id::ProjectId, resource::ResourceKind};
 use orchester_workspace::{
   local_archive::{self, Archivable},
+  messages::Message,
   readiness::archive_blocks_profiles,
   used_by::{self, RunLine, UsedByError},
 };
@@ -78,8 +82,9 @@ struct Confirmation {
   open: Signal<bool>,
   /// Read again, as *Try again* asks.
   retry: Signal<u64>,
-  /// Archives it unless the runs it stops changed since the list showed them.
-  archive: FutureAction<Vec<UsedByRun>, (), Failed>,
+  /// Archives it unless the runs it stops changed since the list showed them; what it answers is what to tell the
+  /// person when some of the runs could not be stopped.
+  archive: FutureAction<Vec<UsedByRun>, Option<Message>, Failed>,
   person: PersonOnly,
 }
 
@@ -100,8 +105,9 @@ impl Component for Confirmation {
     let retry = ctx.signal(0_u64);
     let again = retry.clone();
     let (archived, keep) = (props.on_archived.clone(), props.on_keep.clone());
+    let owned = props.clone();
     let archive = ctx.future_action(move |shown: Vec<UsedByRun>| {
-      let (services, props, again) = (services.clone(), props.clone(), again.clone());
+      let (services, props, again) = (services.clone(), owned.clone(), again.clone());
       async move {
         let used = read(props.root.clone(), props.what, &services).await.map_err(|error| {
           Failed::Unread(ReadFailed {
@@ -115,24 +121,33 @@ impl Component for Confirmation {
         let archived = local_archive::archive(&services.runners, &props.root, props.what)
           .await
           .map_err(Failed::Said)?;
-        for change in props.what.changes(Some(props.kind)) {
-          services.changes.record(props.project, *change);
-        }
-        // It is archived either way; a run that could not be stopped is said, in the question that stays open.
-        archived
-          .left_running_message()
-          .map_or(Ok(()), |message| Err(Failed::Said(message)))
+        Ok(archived.left_running_message())
       }
     });
     let open = ctx.signal(true);
-    // An archived resource ends the question; a refusal stays in it, with what it says.
+    let (changes, props) = (Services::of(ctx).changes, props.clone());
+    let finish = Arc::new(move || {
+      for change in props.what.changes(Some(props.kind)) {
+        changes.record(props.project, *change);
+      }
+      archived();
+    });
+    // An archived resource ends the question unless a run could not be stopped: that is said first, and the lists read
+    // the archive when the person closes it. A refusal stays in the question, with what it says.
+    let done = finish.clone();
     ctx.watch(&archive.state(), move |state| {
-      if state.is_fulfilled() {
-        archived();
+      if state.is_fulfilled() && matches!(state.data, Some(None)) {
+        done();
       }
     });
+    let said = archive.state();
     ctx.watch(&open, move |open| {
-      if !open {
+      if *open {
+        return;
+      }
+      if matches!(said.get_untracked().data, Some(Some(_))) {
+        finish();
+      } else {
         keep();
       }
     });
@@ -214,6 +229,7 @@ impl Confirmation {
         lines,
         archiving: archiving.is_pending(),
         failed: archiving.error.clone().filter(|_| !archiving.is_pending()),
+        stopped: archiving.data.clone().flatten().filter(|_| !archiving.is_pending()),
         person_refused: self.person.reason(ctx, CONFIRM),
       },
       (&self.open, &self.retry, confirm),
