@@ -72,7 +72,13 @@ struct State {
   refuse_streams: usize,
   /// How many run progress reports are refused next ([`runs`]).
   refuse_runs: usize,
+  /// Whether run progress reports are answered `409 conflict`, as for a claim the server will not end that way.
+  conflict_runs: bool,
+  /// How many run progress reports reached the server, whatever it answered.
+  run_reports: usize,
   refuse_requests: bool,
+  /// Whether a version published on a resource the server has is refused `403 not_admin` ([`resources`]).
+  refuse_versions: bool,
   clock: i64,
 }
 
@@ -119,7 +125,10 @@ impl TeamServer {
         generation: 0,
         refuse_streams: 0,
         refuse_runs: 0,
+        conflict_runs: false,
+        run_reports: 0,
         refuse_requests: false,
+        refuse_versions: false,
         clock: 1_000,
       }),
       appended: Condvar::new(),
@@ -335,7 +344,10 @@ fn answer(shared: &Shared, project: ProjectId, mut stream: TcpStream) {
     return refusal(&mut stream, 401, "unauthorized");
   };
   let segments: Vec<&str> = route.split('/').filter(|segment| !segment.is_empty()).collect();
-  let refused = shared.state.lock().expect("state").refuse_requests;
+  let (refused, refuse_versions) = {
+    let state = shared.state.lock().expect("state");
+    (state.refuse_requests, state.refuse_versions)
+  };
   if refused && segments != ["events"] {
     return refusal(&mut stream, 503, "unavailable");
   }
@@ -377,6 +389,7 @@ fn answer(shared: &Shared, project: ProjectId, mut stream: TcpStream) {
     ("POST", ["resources", ..]) | ("PUT", ["files", _]) if !admin => publishing::not_admin(&mut stream),
     ("POST", ["resources"]) => publishing::create(shared, &user, &request, &mut stream),
     ("POST", ["resources", "import"]) => publishing::import(shared, &user, &request, &mut stream),
+    ("POST", ["resources", _, "versions"]) if refuse_versions => publishing::not_admin(&mut stream),
     ("POST", ["resources", resource, "versions"]) => {
       publishing::publish(shared, &user, resource, &request, &mut stream)
     }

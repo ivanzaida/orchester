@@ -1,13 +1,21 @@
 //! Team work through the team server (team authority P4, `docs/cloud-api.md`, "Team authority P4 work"): a team task's
 //! run started from its held claim, its work reported, and its claim kept alive.
 //!
-//! - **Start** ([`start`]). `work.start` goes through the dispatcher under the start's operation; the start is recorded
-//!   before it, with what its caller read and chose. Then, one boundary at a time, each kept before the next: the
-//!   receipt's work and bundle reference; the bundle with every file it pins, read by hash and checked, kept as the
-//!   run's accepted inputs in one transaction with the start's record; the runner's run. A crash or an outage at any
-//!   boundary is carried on from it ([`TeamWork::recover`]); the operation and the runner's start are idempotent, so a
-//!   retry never makes a second work or run. A bundle that can never become the run's inputs here settles the start
-//!   failed ([`StartFailure`]). Nothing new starts without the server.
+//! - **Start** ([`start`]). The caller first checks that the pipeline is ready on this computer
+//!   ([`crate::readiness::StartReadiness`]), before any claim or work. `work.start` then goes through the dispatcher
+//!   under the start's operation; the start is recorded before it, with the program paths the caller read. Then, one
+//!   boundary at a time, each kept before the next: the receipt's work and bundle reference; the bundle with every file
+//!   it pins, read by hash and checked, checked again for readiness against the versions it pins and kept as the run's
+//!   accepted inputs, bound to what this computer filled in, in one transaction with the start's record; the runner's
+//!   run. A crash or an outage at any boundary is carried on from it ([`TeamWork::recover`]); the operation and the
+//!   runner's start are idempotent, so a retry never makes a second work or run. A bundle that can never become the
+//!   run's inputs here, or whose pinned versions need what this computer lacks, settles the start failed
+//!   ([`StartFailure`]), and so does a start the server refuses `bundle_missing`: either way the claim is released
+//!   first ([`release`]), so teammates are not kept from the task, and a server that cannot be reached for the release
+//!   keeps the start waiting. A project carries on one start at a time, so a Run and the recovery of the open starts
+//!   never work the same one at once. Nothing new starts without the server. A project's open starts are carried on
+//!   when it is opened ([`recover_open_starts`]), and what a task's newest start came to is read back for its page
+//!   ([`last_start`]): a start that waited and was settled later says why it did not run.
 //! - **Reports** ([`reports`]). Each change of a team run's outcome is queued once in the project database, with its
 //!   event id and the run's next sequence, then sent in order until the server acknowledges it by id. A server that
 //!   cannot be reached or refuses for now keeps the rest waiting, in order. Its answers that the authority is gone
@@ -24,15 +32,20 @@
 //! A run's local status and its server acceptance (the work as the server last answered its reports) are kept apart
 //! ([`TeamRunState`]). The MCP tool `run_task` starts a team task's work through it (P7); the screens adopt it in P6.
 
+mod branch;
 mod bundle;
-mod choices;
+mod bundle_missing;
 pub mod delivery;
 mod error;
 mod heartbeat;
 mod here;
+mod last;
+mod open;
+mod release;
 mod reports;
 mod runner;
 mod start;
+mod turn;
 
 use orchester_api::{
   client::AuthorityCallError,
@@ -42,17 +55,21 @@ use orchester_core::{id::RunId, run::RunStatus, store::RunStore};
 use orchester_store::{ProjectDb, TeamFence, WorkReportState};
 
 pub use self::{
-  bundle::StartChoices,
-  choices::{ChoiceError, McpHere, bind, branch_tip},
+  branch::{BranchNotFound, branch_tip},
+  bundle_missing::bundle_missing_message,
   delivery::{
     DeliveryProgress, DeliveryStatus, ModuleDeliveries, RecoveredDeliveries, TeamDeliveryRequest, TeamDeliveryState,
   },
   error::TeamWorkError,
   heartbeat::Heartbeat,
   here::{TeamHere, team_here},
+  last::{LastStart, NewestStart, last_start, start_seen},
+  open::{OpenStarts, OpenStartsError, forget_runner_refusals, recover_open_starts},
+  release::ClaimEnd,
   reports::Reported,
   runner::{ProjectRunner, TeamRunner},
   start::{Recovered, StartFailure, StartOutcome, TeamStartRequest},
+  turn::StartTurn,
 };
 use crate::actions::{Dispatcher, retryable};
 

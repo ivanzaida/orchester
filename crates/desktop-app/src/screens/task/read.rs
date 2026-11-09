@@ -151,7 +151,13 @@ pub fn leftovers(
     .cloned()
     .collect();
   let ids: Vec<RunId> = runs.iter().map(|run| run.id()).collect();
-  let deps = (root, ids, detail.history.len(), changed);
+  // A removal the runner finished after the task was last read shows in the detail, and what stays is read again then.
+  let removals = detail
+    .history
+    .iter()
+    .filter(|record| record.removed_at.is_some())
+    .count();
+  let deps = (root, ids, (detail.history.len(), removals), changed);
   let load = ctx.future(deps, move |(root, _, _, at)| {
     let (programs, runs, separator) = (programs.clone(), runs.clone(), separator.clone());
     async move {

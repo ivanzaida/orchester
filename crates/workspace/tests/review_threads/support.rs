@@ -154,7 +154,7 @@ impl Repo {
     let mut run = self.stored();
     let step = StepKey::new("implement").expect("key");
     let events = run
-      .return_ended(&step, (note, None), Answerer::Person, now)
+      .return_ended(&step, (note, None), None, Answerer::Person, now)
       .expect("returned");
     db.append_events(&run, &events).expect("events");
     let execution = run.current_attempt().expect("attempt").executions()[0].id();

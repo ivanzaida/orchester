@@ -101,6 +101,7 @@ fn stuck_decisions_record_who_retried_returned_or_stopped_and_replay() {
       StuckDecision::ReturnTo {
         step: key("implement"),
         note: note("Fix the check."),
+        profile: None,
       },
       StuckDecision::Stop,
     ] {
@@ -181,6 +182,7 @@ fn stuck_work_returns_to_a_chosen_agent_step_with_the_persons_note() {
   let refused = StuckDecision::ReturnTo {
     step: key("review"),
     note: note("Fix it."),
+    profile: None,
   };
   assert_eq!(
     logged.run.decide_stuck(&refused, at(50)),
@@ -189,6 +191,7 @@ fn stuck_work_returns_to_a_chosen_agent_step_with_the_persons_note() {
   let back = StuckDecision::ReturnTo {
     step: key("plan"),
     note: note("Use the existing session store."),
+    profile: None,
   };
   logged.apply(|run| run.decide_stuck(&back, at(51)));
   let attempt = logged.run.current_attempt().expect("the returned attempt");
@@ -198,6 +201,7 @@ fn stuck_work_returns_to_a_chosen_agent_step_with_the_persons_note() {
       failed_step: key("checks"),
       return_to: key("plan"),
       note: note("Use the existing session store."),
+      profile: None,
     }
   );
   let steps: Vec<_> = attempt.executions().iter().map(|e| e.step().as_str()).collect();

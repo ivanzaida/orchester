@@ -20,6 +20,7 @@ use lurq::{
 };
 
 use crate::{
+  shell::status_bar::dot,
   theme::{ControlHeight, ExtraColor, ExtraSpacing, ExtraTypography, IconSize, TaskFormSpacing, TaskFormText},
   ui::{
     icon::{Icon, icon},
@@ -296,6 +297,18 @@ pub enum HelpPlace {
   UnderIcon,
 }
 
+/// The last words of an option's line, after a dot and a 6 round mark (`Dot` `vKyvX`, `Ready` `e2m70N` in `P6aAoZ`):
+/// how the choice stands, the mark in the color that says it.
+pub struct OptionStatus {
+  pub words: Arc<str>,
+  /// The words' color.
+  pub color: PaletteColor,
+  /// The round mark before the words: `success` for what is ready, `warning` for what is not.
+  pub mark: PaletteColor,
+  /// The dot between the help and the words.
+  pub dot: Arc<str>,
+}
+
 /// One choice of a chip's menu that says what it chooses (`Feature delivery v3` `I2BrOT`, `Outside the repository`
 /// `yufU5`): a 14 icon, its name in 12.5/500 (in Geist Mono where it is an identifier, a branch `f9wHj` in `eUFSd`,
 /// `Nr7fn` in `eyrnI`) and its help in 11.5 `text_muted` under it, a check at its end while it is the choice; 10 at the
@@ -307,6 +320,8 @@ pub struct MenuOption {
   pub title: Arc<str>,
   pub help: Option<Arc<str>>,
   pub help_place: HelpPlace,
+  /// Said after the help, apart from it (`HelpPlace::UnderIcon` only).
+  pub status: Option<OptionStatus>,
   pub chosen: bool,
   /// The name is an identifier, such as a branch.
   pub mono: bool,
@@ -330,6 +345,41 @@ impl MenuOption {
         .width(Dimension::Pct(100.0))
         .variant(style)
     })
+  }
+
+  /// The help under the name, then the status after a dot, 6 apart (`Meta line` `urO0r` in `AH8H9`).
+  fn meta(&self) -> Option<Element> {
+    let Some(status) = &self.status else {
+      return self.help(TaskFormText::OptionMeta.role()).map(Into::into);
+    };
+    let text = |part: &str, words: &str| {
+      Text::new(words)
+        .id(format!("{}-{part}", self.id))
+        .variant(TaskFormText::OptionMeta.role())
+    };
+    let help = self.help.as_ref().map(|help| {
+      Row::new()
+        .flex_shrink(1.0)
+        .min_width(Dimension::Px(0.0))
+        .spacing(ExtraSpacing::Snug.role())
+        .child(text("help", help))
+        .child(text("dot", &status.dot))
+    });
+    Some(
+      Row::new()
+        .width(Dimension::Pct(100.0))
+        .spacing(ExtraSpacing::Snug.role())
+        .with_children(help)
+        .child(
+          Row::new()
+            .flex_shrink(0.0)
+            .spacing(ExtraSpacing::Snug.role())
+            .align_items(Alignment::Center)
+            .child(dot(status.mark.clone()))
+            .child(text("status", &status.words).color(status.color.clone()).nowrap()),
+        )
+        .into(),
+    )
   }
 
   fn check(&self) -> Option<Text> {
@@ -378,7 +428,7 @@ impl MenuOption {
       .min_width(Dimension::Px(0.0))
       .spacing(ExtraSpacing::Tight.role())
       .child(line)
-      .with_children(self.help(TaskFormText::OptionMeta.role()));
+      .with_children(self.meta());
     option
       .padding(Padding::symmetric(
         ExtraSpacing::Loose.role(),

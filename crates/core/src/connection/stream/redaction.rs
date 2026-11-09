@@ -68,7 +68,10 @@ impl McpServerProblem {
     match self {
       Self::FailedToStart { detail: Some(detail) } => *detail = redact(detail),
       Self::ProgramNotFound { program } | Self::ProgramMoved { program } => *program = redact(program),
-      Self::SecretMissing { secret } | Self::SecretArchived { secret } | Self::SecretUnreadable { secret } => {
+      Self::SecretMissing { secret }
+      | Self::TeamSecretMissing { secret }
+      | Self::SecretArchived { secret }
+      | Self::SecretUnreadable { secret } => {
         *secret = redact(secret);
       }
       Self::SharedVariable { variable } | Self::ReservedVariable { variable } => *variable = redact(variable),
@@ -77,6 +80,7 @@ impl McpServerProblem {
       | Self::WorkingDirectoryUnsupported
       | Self::UnsafeScriptArgument { .. }
       | Self::NotUnicode
+      | Self::MoreThanOneSecretHeader
       | Self::NotSupportedByConnection
       | Self::ToolRelaysMissing { .. }
       | Self::FailedToStart { detail: None } => {}

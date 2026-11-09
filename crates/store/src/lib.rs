@@ -12,8 +12,8 @@ mod project_db;
 mod rows;
 
 pub use app_db::{
-  AcceptedInvite, AppDb, CloudSignInEnd, EndedCloudSignIn, JoinedWith, PreviousSession, RegisteredProject,
-  ServerAccount, SessionEnd, SessionId, StoredCloudAccount, StoredCloudAddress, StoredServer,
+  AcceptedInvite, AppDb, CloudSignInEnd, EndedCloudSignIn, JoinedWith, McpServerProgram, PreviousSession,
+  RegisteredProject, ServerAccount, SessionEnd, SessionId, StoredCloudAccount, StoredCloudAddress, StoredServer,
 };
 pub use busy::pause_lock_waits_with;
 #[cfg(feature = "test-support")]
@@ -28,16 +28,17 @@ pub use lock_watch::worst::{LockHold, LockHolds, lock_holds, reset_lock_holds};
 pub use project_db::ProjectMigration;
 pub use project_db::{
   AcceptedInputs, AcceptedWork, ActivityRecord, AlwaysAllowAnswer, AlwaysAllowRecord, ApprovalRecord, ApprovedPlan,
-  ArchiveStop, AttachmentOwner, AutoModeSave, AutomaticStatus, AutomationPoints, Bound, BoundBy, BoundReference,
-  CachedClaim, CachedModule, CachedModuleChange, CachedRunStatus, CachedTask, CachedVersion, ChatDeletion, ChatFork,
-  ChatListing, ChatRewind, ChatTurn, ConfirmedVersion, DecisionCounts, DeliveryMerge, DeliveryReport, EndedRun,
-  InvocationRecord, InvocationStart, JoinedKey, KeptAction, KeptReport, KeptWait, MemoryAnswer, MemoryRecord,
-  MessageRecord, ModelRequirement, NamingVersion, NewTeamOperation, NewWorkReport, NotSent, NoticeRecord,
-  OrchestratorSwitch, ProjectDb, PublishState, QuestionRecord, ReadOnlyProjectDb, RecordedDecisionReview,
-  ReferenceBinding, ReferenceTarget, RemovalRecord, ResolutionStart, ResourceSharing, ResourceUpdate, ReturnedTask,
-  RuleAnswer, RuleRecord, RunBranch, RunLogRecord, ServerAdmin, SharedEvent, SharedMember, SharedPerson,
-  SharedSnapshot, SharedStanding, SharedTaskInfo, SharingLink, StartedQueued, StepRecord, TaskDeletionFacts,
-  TeamDelivery, TeamDeliveryStage, TeamFence, TeamOperation, TeamOperationState, TeamRun, TeamSettlement, TeamStart,
-  TeamStartStage, UnsentStatus, VersionReference, WaitingPublish, WaitingVersion, WarmWorkspaceRecord, WorkReportEntry,
-  WorkReportState, WorkspaceWritten, attachment_file, exclude_project_data,
+  ArchiveStop, Archived, AttachmentOwner, AutoModeSave, AutomaticStatus, AutomationPoints, Bound, BoundBy,
+  BoundReference, CachedClaim, CachedModule, CachedModuleChange, CachedRunStatus, CachedTask, CachedVersion,
+  ChatDeletion, ChatFork, ChatListing, ChatRewind, ChatTurn, ConfirmedVersion, ConnectionPick, DecisionCounts,
+  DeliveryMerge, DeliveryReport, DraftChange, EndedRun, InvocationRecord, InvocationStart, JoinedKey, KeptAction,
+  KeptReport, KeptRunWait, KeptSubscription, KeptWait, MemoryAnswer, MemoryRecord, MessageRecord, ModelRequirement,
+  NamingVersion, NewTeamOperation, NewWorkReport, NotSent, NoticeRecord, ProjectDb, PublishState, QuestionRecord,
+  ReadOnlyProjectDb, RecordedDecisionReview, ReferenceBinding, ReferenceTarget, RemovalRecord, ResolutionStart,
+  ResourceSharing, ResourceUpdate, ReturnedTask, RuleAnswer, RuleRecord, RunBranch, RunLogRecord, RunWaitEnd,
+  RunWaitEnded, ServerAdmin, SharedEvent, SharedMember, SharedPerson, SharedSnapshot, SharedStanding, SharedTaskInfo,
+  SharingLink, StartedQueued, StepRecord, TaskDeletionFacts, TeamDelivery, TeamDeliveryStage, TeamFence, TeamOperation,
+  TeamOperationState, TeamRun, TeamSettlement, TeamStart, TeamStartStage, UnsentStatus, VersionReference,
+  WaitingPublish, WaitingVersion, WarmWorkspaceRecord, WatchStart, WorkReportEntry, WorkReportState, WorkspaceWritten,
+  attachment_file, exclude_project_data,
 };

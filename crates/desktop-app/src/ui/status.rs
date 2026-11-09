@@ -7,8 +7,9 @@
 //! Working `loader-circle` (turning), Needs input `hand`, Stopped at limit `gauge`, Interrupted and
 //! Interrupted · can't continue `circle-pause`, Completed, Complete, Succeeded and Ready for review `circle-check`,
 //! Merged `git-merge`, Ready to merge `git-merge` in `warning` (`mEvfK`), Not merged `triangle-alert` (`kxMAN`), Failed
-//! `circle-x`, Unreadable `circle-help`, Waiting `clock`,
-//! Not started `circle-dashed`, Blocked `ban`, Paused `circle-pause` in `warning` (Usage `Q1gYMm`); Backlog
+//! `circle-x`, Stopped `circle-x` too (a run the team's archive stopped, A22 `pUu78`), Unreadable `circle-help`,
+//! Waiting `clock`, Not started `circle-dashed`, Not ready `circle-alert` in `warning` (a Run refused for the computer,
+//! R1 `Ku0qu`), Blocked `ban`, Paused `circle-pause` in `warning` (Usage `Q1gYMm`); Backlog
 //! `circle-dashed`, Todo `circle` (`AiCwO`), In progress `circle-dot-dashed`, In review `eye`, Done
 //! `circle-check`; High, Medium and Low `signal-*`, No priority `minus`. The boards draw no Canceled,
 //! Skipped or Urgent: they take `circle-slash`, `skip-forward` and `circle-alert` (`warning`). A status
@@ -64,12 +65,17 @@ pub enum Status {
   Merged,
   Failed,
   Canceled,
+  /// A run the team's archive of a resource it pinned stopped (`Status` `ev3VX` in A22 `pUu78`): a `circle-x` and its
+  /// words in `danger`, as a failure's, because the run cannot go on until the resource is restored or left out.
+  Stopped,
   Unreadable,
   Waiting,
   Working,
   Complete,
   Skipped,
   NotStarted,
+  /// A task whose Run was refused because its pipeline is not ready on this computer (`Status` `ev3VX` in R1 `Ku0qu`).
+  NotReady,
   CantContinue,
   Blocked,
 }
@@ -97,7 +103,7 @@ impl Tone {
 }
 
 impl Status {
-  pub const ALL: [Self; 25] = [
+  pub const ALL: [Self; 27] = [
     Self::Draft,
     Self::Queued,
     Self::Running,
@@ -115,12 +121,14 @@ impl Status {
     Self::Merged,
     Self::Failed,
     Self::Canceled,
+    Self::Stopped,
     Self::Unreadable,
     Self::Waiting,
     Self::Working,
     Self::Complete,
     Self::Skipped,
     Self::NotStarted,
+    Self::NotReady,
     Self::CantContinue,
     Self::Blocked,
   ];
@@ -173,12 +181,13 @@ impl Status {
       Self::Completed | Self::Complete | Self::Succeeded | Self::ReadyForReview => Icon::CircleCheck,
       Self::Merged | Self::ReadyToMerge => Icon::GitMerge,
       Self::NotMerged => Icon::TriangleAlert,
-      Self::Failed => Icon::CircleX,
+      Self::Failed | Self::Stopped => Icon::CircleX,
       Self::Canceled => Icon::CircleSlash,
       // The boards name `file-warning`, which Pencil has no glyph for and draws as `circle-help`; the
       // design shows `circle-help` (`Run icon` in `XEQuo` rows of `C2E5Po`).
       Self::Unreadable => Icon::CircleHelp,
       Self::Skipped => Icon::SkipForward,
+      Self::NotReady => Icon::CircleAlert,
       Self::Blocked => Icon::Ban,
     }
   }
@@ -195,9 +204,10 @@ impl Status {
       | Self::Interrupted
       | Self::CantContinue
       | Self::ReadyToMerge
-      | Self::NotMerged => Tone::Warning,
+      | Self::NotMerged
+      | Self::NotReady => Tone::Warning,
       Self::Completed | Self::Complete | Self::Succeeded | Self::ReadyForReview => Tone::Success,
-      Self::Failed | Self::Unreadable => Tone::Danger,
+      Self::Failed | Self::Stopped | Self::Unreadable => Tone::Danger,
     }
   }
 
@@ -226,12 +236,14 @@ impl Status {
       Self::Merged => "ui.status.merged",
       Self::Failed => "ui.status.failed",
       Self::Canceled => "ui.status.canceled",
+      Self::Stopped => "ui.status.stopped",
       Self::Unreadable => "ui.status.unreadable",
       Self::Waiting => "ui.status.waiting",
       Self::Working => "ui.status.working",
       Self::Complete => "ui.status.complete",
       Self::Skipped => "ui.status.skipped",
       Self::NotStarted => "ui.status.notStarted",
+      Self::NotReady => "ui.status.notReady",
       Self::CantContinue => "ui.status.cantContinue",
       Self::Blocked => "ui.status.blocked",
     }

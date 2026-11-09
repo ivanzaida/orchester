@@ -141,6 +141,7 @@ fn menu(ctx: &mut Ctx, view: &View, state: &ChipState, pick: &Signal<DeliversPic
       title,
       help: Some(help),
       help_place: HelpPlace::BesideIcon,
+      status: None,
       chosen: delivers == chosen,
       mono: false,
     }

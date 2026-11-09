@@ -13,19 +13,13 @@ use std::{
 use orchester_core::{
   id::ResourceId,
   name::Name,
-  resource::{
-    AgentProfile, AgentTargets, Draft, InjectionEvent, Instruction, InstructionScope, Pipeline, PromptText,
-    ResourceKind, Slug, StepKey, StepKind, Version, VersionNumber,
-  },
+  resource::{AgentProfile, Draft, Instruction, Pipeline, ResourceKind, StepKey, StepKind, Version, VersionNumber},
   store::ResourceStore,
   time::Timestamp,
 };
 use orchester_store::{ProjectDb, StoreError};
 
 use crate::agents::data::VersionState;
-
-/// Slug of an instruction whose name has no ASCII letters or digits.
-const FALLBACK_SLUG: &str = "instruction";
 
 /// An instruction as the editor shows it: the draft if there is one, otherwise the latest version.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -237,31 +231,4 @@ pub(crate) fn pipelines(db: &ProjectDb) -> Result<Vec<PipelineChoice>, StoreErro
     }
   }
   Ok(pipelines)
-}
-
-/// A new instruction: its name and where it applies. It starts as an empty draft for every agent in
-/// its scope, injected when an agent starts.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct NewInstruction {
-  pub name: Name,
-  pub scope: InstructionScope,
-}
-
-/// Creates the instruction as an empty draft under a slug made from its name.
-pub fn create(db: &mut ProjectDb, new: NewInstruction, now: Timestamp) -> Result<ResourceId, StoreError> {
-  let taken: Vec<Slug> = db.slugs(ResourceKind::Instruction)?;
-  let fallback = Slug::new(FALLBACK_SLUG).expect("the fallback slug is valid");
-  let slug = Slug::unique_for(&new.name, &fallback, &taken);
-  let body = Instruction::new(
-    PromptText::new("").expect("empty text has no placeholders"),
-    AgentTargets::All,
-    BTreeSet::from([InjectionEvent::Start]),
-    new.scope,
-  )
-  .expect("every agent at start is a valid selection in any scope");
-  Ok(db.create_resource(slug, new.name, &body, now)?.id())
-}
-
-pub fn create_in(repo_root: &Path, new: NewInstruction) -> Result<ResourceId, StoreError> {
-  create(&mut ProjectDb::open(repo_root)?, new, Timestamp::now())
 }

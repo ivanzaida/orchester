@@ -76,10 +76,15 @@ fn after_title(ctx: &Ctx, props: &HeaderProps) -> Option<Element> {
   })
 }
 
-/// The primary action, and when it cannot be used now why in a few words under it, its whole reason in its tooltip.
+/// The primary action, and when it cannot be used now why in a few words under it, its whole reason in its tooltip; one
+/// under way that waits for something says what in its tooltip.
 fn primary_action(ctx: &mut Ctx, props: &HeaderProps, primary: &Control) -> Element {
-  let button: Element = match primary.reason() {
-    Some(reason) => Tooltip::new("task-action-tooltip-0", reason.full.clone()).wrap(ctx, primary.button()),
+  let tip = primary
+    .reason()
+    .map(|reason| reason.full.clone())
+    .or_else(|| primary.hint.clone());
+  let button: Element = match tip {
+    Some(tip) => Tooltip::new("task-action-tooltip-0", tip).wrap(ctx, primary.button()),
     None => primary.button().into(),
   };
   // A run that cannot be read says why on its Summary; the line would say it twice.

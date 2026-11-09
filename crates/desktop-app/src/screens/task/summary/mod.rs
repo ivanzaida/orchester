@@ -15,6 +15,7 @@ mod browser_line;
 mod claim;
 mod decisions;
 mod empty;
+mod led_in;
 mod live;
 mod merge_row;
 mod notice;
@@ -27,7 +28,7 @@ mod run_facts;
 pub(crate) mod runs;
 mod steps;
 mod team;
-mod team_run;
+pub(in crate::screens::task) mod team_run;
 mod tests;
 mod version;
 
@@ -120,7 +121,16 @@ impl Component for TaskSummary {
       self.parts(ctx, task)
     };
     // A team task's line for a member and its claim come first (`team`).
-    let column = team::top(ctx, task).into_iter().chain(column).collect();
+    // A start that was refused because the pipeline is not ready on this computer lists what is missing (`not_ready`).
+    let not_ready = super::not_ready::shown(ctx, task);
+    // A run that an archive of a team resource stopped says which resource and who archived it (`archived`).
+    let archived = super::archived::shown(ctx, task);
+    let column = team::top(ctx, task)
+      .into_iter()
+      .chain(archived)
+      .chain(not_ready)
+      .chain(column)
+      .collect();
     let properties = properties::column(ctx, task, (section, &self.more_facts));
     layout(column, properties, state.summary_scroll)
   }

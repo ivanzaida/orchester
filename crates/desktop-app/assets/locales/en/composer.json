@@ -1,5 +1,12 @@
 {
   "composer": {
+    "argument": {
+      "choose": "Choose what {{command}} takes",
+      "remove": "Remove {{name}}",
+      "dot": "·",
+      "pair": "{{first}}, {{second}}",
+      "more": "+{{count}}"
+    },
     "closed": {
       "unreadable": "The latest run’s record cannot be read, so messages cannot reach its agents."
     },
@@ -18,8 +25,6 @@
     },
     "failed": "Your message was not sent: {{reason}} It stays here.",
     "keys": {
-      "cmdEnter": "Cmd+Enter",
-      "ctrlEnter": "Ctrl+Enter",
       "enter": "Enter"
     },
     "mention": {
@@ -172,6 +177,28 @@
           "noTurnAnswer": "No turn is running: {{agent}} waits for your answer",
           "label": "Stop turn",
           "stopping": "{{agent}}’s turn is being stopped"
+        },
+        "unwatch": {
+          "badge": "Stop watching",
+          "detail": "End what this conversation watches; nothing is canceled",
+          "label": "Stop watching"
+        },
+        "watch": {
+          "nothing": "Watches nothing yet"
+        },
+        "watchModule": {
+          "badge": "Watch",
+          "detail": "Their tasks' events come here",
+          "label": "Watch modules"
+        },
+        "watchTask": {
+          "badge": "Watch",
+          "detail": "Only these tasks' events",
+          "label": "Watch tasks"
+        },
+        "watching": {
+          "detail": "What this conversation leads and what waits there",
+          "label": "What I watch"
         }
       },
       "commands": "Commands",

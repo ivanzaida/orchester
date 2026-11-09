@@ -12,12 +12,14 @@ use orchester_core::{
 };
 use orchester_workspace::{
   messages::Message,
+  readiness::PipelineReadiness,
   tasks::{base_branch::BasePick, data::PipelineChoice},
 };
 
 use super::{
   actions::QueuedTask,
   conflict::{Choices, Conflict},
+  readiness::Readiness,
   team::TeamStopped,
   values::Values,
 };
@@ -76,6 +78,12 @@ pub enum Need {
   Brief,
   Criteria,
   Pipeline,
+  /// The chosen pipeline is not ready on this computer: a run would refuse (`not_ready_here`).
+  NotReady,
+  /// Whether the chosen pipeline is ready here is being read: a run waits for the answer.
+  Reading,
+  /// Whether the chosen pipeline is ready here could not be read: a run waits until it is read again.
+  CannotTell,
   NoPipelines,
   Budget,
   TimeLimit,
@@ -108,6 +116,10 @@ pub struct View {
   pub pipelines: Option<Arc<Vec<PipelineChoice>>>,
   /// A shared task's pipeline, by its slug, that this computer has no pipeline for: saving keeps it.
   pub missing_pipeline: Option<Arc<str>>,
+  /// Whether each pipeline is ready on this computer, as read for what the form shows now.
+  pub readiness: Readiness,
+  /// The project is shared on a server: its words say *here* and *this computer*.
+  pub shared: bool,
   /// The changes were kept on this computer from an earlier visit, at this time.
   pub kept_at: Option<Timestamp>,
   /// Why the last save, or the last Create & run before queuing, failed.
@@ -140,6 +152,29 @@ impl View {
   pub fn pipeline(&self) -> Option<&PipelineChoice> {
     let id = self.values.pipeline?;
     self.pipelines.as_ref()?.iter().find(|choice| choice.id == id)
+  }
+
+  /// How `choice` stands on this computer, once that is read.
+  pub fn readiness_of(&self, choice: &PipelineChoice) -> Option<&PipelineReadiness> {
+    match &self.readiness {
+      Readiness::Known(all) => all.pipeline(choice.id),
+      Readiness::Reading | Readiness::Failed => None,
+    }
+  }
+
+  /// What the chosen pipeline's readiness still asks of a run: nothing is started on a pipeline that is not known to
+  /// be ready here, so an answer still being read, one that could not be read and one that does not name the
+  /// pipeline all hold the run back.
+  fn readiness_need(&self) -> Option<Need> {
+    let choice = self.pipeline()?;
+    match &self.readiness {
+      Readiness::Reading => Some(Need::Reading),
+      Readiness::Failed => Some(Need::CannotTell),
+      Readiness::Known(_) => match self.readiness_of(choice) {
+        None => Some(Need::CannotTell),
+        Some(readiness) => (!readiness.standing().is_ready()).then_some(Need::NotReady),
+      },
+    }
   }
 
   /// The project has no published pipeline to choose.
@@ -202,6 +237,7 @@ impl View {
     if self.values.pipeline.is_some() && self.pipelines.is_some() && self.pipeline().is_none() {
       needs.push(Need::Pipeline);
     }
+    needs.extend(self.readiness_need());
     needs
   }
 }

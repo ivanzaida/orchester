@@ -5,10 +5,7 @@
 //! (`KGpMB`). The section shows only while a run is under way (`DE34j` has none); a row opens the task's
 //! conversation.
 
-use std::{
-  path::{Path, PathBuf},
-  sync::Arc,
-};
+use std::{path::PathBuf, sync::Arc};
 
 use lurq::{
   app::{
@@ -21,25 +18,21 @@ use lurq::{
   node::{Element, Style, dimension::Dimension, padding::Padding},
 };
 use orchester_core::{
-  id::{ProjectId, RunId, TaskId},
+  id::ProjectId,
   project::TaskKey,
   run::{ActiveClock, TaskPhase},
-  store::RunStore,
-  time::Timestamp,
 };
-use orchester_store::{ProjectDb, StoreError};
 use orchester_workspace::{
   background, messages,
-  tasks::{
-    data::ProjectTasks,
-    detail::{run_store_error, run_view},
-  },
+  tasks::active_runs::{self, ActiveRun},
 };
 
 use super::{section_gap, section_head};
 use crate::{
   navigation::Navigation,
+  project::{Projects, settled_read::settled_read},
   routes::{ProjectPage, Route, TaskView},
+  services::Services,
   shell::clock::{Clock, clock},
   theme::{ExtraColor, ExtraSpacing, ExtraTypography, IconSize},
   ui::{
@@ -72,52 +65,38 @@ pub enum RowState {
 
 impl DevtoolsInspectable for RunningRow {}
 
-/// The tasks of `tasks` whose latest run is under way, in the list's order, with the run, its phase and
-/// when it last changed (which decides when it is read again). `online`: a runner looks after the agents.
-pub fn under_way(tasks: &ProjectTasks, online: bool) -> Vec<UnderWay> {
-  tasks
-    .tasks
+/// The rows of `runs`, the runs under way in the list's order. `online`: a runner looks after the agents; without
+/// one a run recorded as running has lost its agent, is shown stopped and has no time.
+pub fn rows(runs: &[ActiveRun], online: bool) -> Vec<RunningRow> {
+  runs
     .iter()
-    .filter_map(|task| {
-      let latest = tasks.phases.get(&task.id())?.run()?;
-      let state = match (latest.phase, online) {
-        (TaskPhase::Running, true) => RowState::Working,
-        (TaskPhase::Running, false) => RowState::Stopped,
+    .map(|run| {
+      let state = match (run.phase, online) {
         (TaskPhase::Waiting, _) => RowState::NeedsYou,
-        _ => return None,
+        (_, true) => RowState::Working,
+        (_, false) => RowState::Stopped,
       };
-      Some(UnderWay {
-        task: task.id(),
-        key: task.key().clone(),
-        run: latest.id,
+      RunningRow {
+        key: run.key.clone(),
         state,
-        updated_at: latest.updated_at,
-      })
+        step: run.step.clone(),
+        clock: run.clock.filter(|_| state != RowState::Stopped),
+      }
     })
     .collect()
-}
-
-/// A run under way, before its steps are read.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct UnderWay {
-  pub task: TaskId,
-  pub key: TaskKey,
-  pub run: RunId,
-  pub state: RowState,
-  pub updated_at: Timestamp,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct RunningProps {
   pub project: ProjectId,
   pub repo_root: PathBuf,
-  pub runs: Vec<UnderWay>,
 }
 
 impl DevtoolsInspectable for RunningProps {}
-impl DevtoolsInspectable for UnderWay {}
 
-/// Reads the steps of the runs under way and shows the list; nothing while none is.
+/// Reads the runs under way and shows the list; nothing until they are read and while none is. The runs are read
+/// alone, again when a run changes state or the project's tasks are saved, never for a transcript's lines, and never
+/// beside a reading that has not ended (`settled_read`).
 pub struct Running;
 
 impl Component for Running {
@@ -128,69 +107,30 @@ impl Component for Running {
   }
 
   fn render(&self, ctx: &mut Ctx) -> impl Into<Element> {
-    let RunningProps {
-      project,
-      repo_root,
-      runs,
-    } = ctx.props::<RunningProps>().clone();
-    let read = ctx.future((repo_root, runs.clone()), |(repo_root, runs)| async move {
-      background::run(move || read_rows(&repo_root, &runs))
-        .await?
-        .map_err(|error| {
-          tracing::error!(%error, "cannot read the runs under way");
-          messages::store_error(&error)
-        })
-    });
-    if runs.is_empty() {
-      return Element::new();
-    }
-    // Until the steps are read, and if they cannot be, the rows say what the tasks say.
-    let rows = read.state().get().data.unwrap_or_else(|| {
-      runs
-        .iter()
-        .map(|run| RunningRow {
-          key: run.key.clone(),
-          state: run.state,
-          step: None,
-          clock: None,
-        })
-        .collect()
-    });
-    running_list(ctx, project, &rows)
-  }
-}
-
-/// Each run's current step and its agent's active time on it, read from the project's data.
-fn read_rows(repo_root: &Path, runs: &[UnderWay]) -> Result<Vec<RunningRow>, StoreError> {
-  if runs.is_empty() {
-    return Ok(Vec::new());
-  }
-  let db = ProjectDb::open(repo_root)?;
-  let now = Timestamp::now();
-  runs
-    .iter()
-    .map(|under_way| {
-      let mut row = RunningRow {
-        key: under_way.key.clone(),
-        state: under_way.state,
-        step: None,
-        clock: None,
-      };
-      let Some(run) = db.run(under_way.run).map_err(run_store_error)? else {
-        return Ok(row);
-      };
-      let view = run_view(&db, run)?;
-      if let Some(step) = view.current_step() {
-        row.step = Some(step.name.clone());
-        let lost = under_way.state == RowState::Stopped;
-        row.clock = step
-          .execution
-          .filter(|_| !lost)
-          .map(|execution| view.active_clock(view.invocations_of(execution), now, lost));
+    let RunningProps { project, repo_root } = ctx.props::<RunningProps>().clone();
+    let feed = Projects::of(ctx).feed(project);
+    let online = feed.runner_online(&repo_root);
+    let deps = (repo_root, feed.states.get(), feed.saves.get());
+    let hold = Services::of(ctx).hold;
+    let read = settled_read(ctx, "running", deps, move |(repo_root, ..)| {
+      let hold = hold.clone();
+      async move {
+        hold.released().await;
+        background::run(move || active_runs::load(&repo_root))
+          .await?
+          .map_err(|error| {
+            tracing::error!(%error, "cannot read the runs under way");
+            messages::store_error(&error)
+          })
       }
-      Ok(row)
-    })
-    .collect()
+    });
+    // The runs last read stay while they are read again, and none is shown before the first reading: the count is
+    // never a guess.
+    let Some(runs) = read.data.filter(|runs| !runs.is_empty()) else {
+      return Element::new();
+    };
+    running_list(ctx, project, &rows(&runs, online))
+  }
 }
 
 /// The section's gap, its head with how many runs are under way, and its rows, with the element id `running`.

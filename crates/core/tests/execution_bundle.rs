@@ -8,17 +8,21 @@ use std::{
 };
 
 use orchester_core::{
+  connection::AgentProvider,
   id::{ConnectionId, ResourceId, VersionId},
   name::Name,
   permission::{AgentPermissions, StepPermissions, WritableFolders},
   resource::{
     AgentProfile, AgentTargets, CommandAction, CommandArg, CommandProgram, InjectionEvent, Instruction,
     InstructionScope, ModelId, Pipeline, PipelineSources, PromptText, ProviderSettings, RepositoryAccess, Skill,
-    SkillFile, SkillFilePath, Slug, Step, StepKey, StepKind, Tool, Version, VersionNumber,
+    SkillFile, SkillFilePath, Slug, Step, StepKey, StepKind, TeamAgentProfile, Tool, Version, VersionNumber,
   },
   run::{
     PublishedVersions, RunSnapshot,
-    bundle::{BundleError, CanonicalExecutionInputs, MAX_BUNDLE_FILE_BYTES, PinnedBodies, ResourceLabel, file_sha256},
+    bundle::{
+      BundleError, CanonicalExecutionInputs, ExecutionProfile, MAX_BUNDLE_FILE_BYTES, PinnedBodies, ResourceLabel,
+      file_sha256,
+    },
   },
   source::SourcePath,
   time::Timestamp,
@@ -169,7 +173,7 @@ impl Config {
 
   /// The inputs of the config's snapshot, with each list of versions reversed when `reversed`.
   fn inputs(&self, reversed: bool) -> Result<CanonicalExecutionInputs, BundleError> {
-    let profiles = listed(&self.profiles, reversed);
+    let profiles = execution_profiles(&self.profiles, reversed);
     let tools = listed(&self.tools, reversed);
     let instructions = listed(&self.instructions, reversed);
     let skills = listed(&self.skills, reversed);
@@ -179,6 +183,7 @@ impl Config {
       instructions: &instructions,
       tools: &tools,
       skills: &skills,
+      mcp_servers: &[],
       labels: &labels,
     };
     CanonicalExecutionInputs::pin(&self.snapshot(), bodies)
@@ -200,6 +205,16 @@ fn listed<B: Clone>(versions: &BTreeMap<ResourceId, Version<B>>, reversed: bool)
   listed
 }
 
+fn execution_profiles(
+  versions: &BTreeMap<ResourceId, Version<AgentProfile>>,
+  reversed: bool,
+) -> Vec<(VersionId, ExecutionProfile)> {
+  listed(versions, reversed)
+    .iter()
+    .map(|version| (version.id(), ExecutionProfile::of(version.body())))
+    .collect()
+}
+
 fn inputs() -> CanonicalExecutionInputs {
   Config::new("cargo").inputs(false).expect("the inputs pin")
 }
@@ -219,6 +234,51 @@ fn execution_bundle_inputs_hash_the_same_when_they_are_the_same() {
   assert_eq!(read_back, first);
   assert_eq!(read_back.sha256().expect("hashes"), hash);
   assert_eq!(hash.as_str().len(), 64);
+}
+
+/// The team server pins a team profile as `ExecutionProfile::of_team`, a desktop a local one as `of`; the same profile
+/// gives the same bundle bytes either way.
+#[test]
+fn execution_bundle_inputs_pin_a_team_profile_as_the_local_one_it_came_from() {
+  let config = Config::new("cargo");
+  let from_local = config.inputs(false).expect("the inputs pin");
+  let team: Vec<_> = config
+    .profiles
+    .values()
+    .map(|version| {
+      let local = version.body();
+      let team = TeamAgentProfile::new(
+        local.role().clone(),
+        local.responsibilities().to_owned(),
+        local.instructions().clone(),
+        (AgentProvider::CodexCli, local.model().clone(), local.settings().clone()),
+      )
+      .with_permissions(
+        local
+          .permissions()
+          .clone()
+          .with_writable_folders(WritableFolders::none()),
+      )
+      .expect("no writable folders");
+      (version.id(), ExecutionProfile::of_team(&team))
+    })
+    .collect();
+  let bodies = PinnedBodies {
+    profiles: &team,
+    instructions: &listed(&config.instructions, false),
+    tools: &listed(&config.tools, false),
+    skills: &listed(&config.skills, false),
+    mcp_servers: &[],
+    labels: &config.labels(),
+  };
+
+  let from_team = CanonicalExecutionInputs::pin(&config.snapshot(), bodies).expect("the inputs pin");
+
+  assert_eq!(from_team, from_local);
+  assert_eq!(
+    from_team.sha256().expect("hashes"),
+    from_local.sha256().expect("hashes")
+  );
 }
 
 #[test]
@@ -299,10 +359,11 @@ fn execution_bundle_inputs_label_each_pinned_version_as_it_was() {
 
   let unlabelled = config.labels()[1..].to_vec();
   let bodies = PinnedBodies {
-    profiles: &listed(&config.profiles, false),
+    profiles: &execution_profiles(&config.profiles, false),
     instructions: &listed(&config.instructions, false),
     tools: &listed(&config.tools, false),
     skills: &listed(&config.skills, false),
+    mcp_servers: &[],
     labels: &unlabelled,
   };
   let missing = CanonicalExecutionInputs::pin(&config.snapshot(), bodies);
@@ -481,10 +542,11 @@ fn execution_bundle_inputs_refuse_unknown_fields_and_inconsistent_pins() {
 fn execution_bundle_inputs_need_every_pinned_body_and_bounded_files() {
   let config = Config::new("cargo");
   let bodies = PinnedBodies {
-    profiles: &config.profiles.values().cloned().collect::<Vec<_>>(),
+    profiles: &execution_profiles(&config.profiles, false),
     instructions: &[],
     tools: &config.tools.values().cloned().collect::<Vec<_>>(),
     skills: &config.skills.values().cloned().collect::<Vec<_>>(),
+    mcp_servers: &[],
     labels: &config.labels(),
   };
   let missing = CanonicalExecutionInputs::pin(&config.snapshot(), bodies);

@@ -1,25 +1,25 @@
 //! An agent of the project waits for a message, and the Orchestrator follows it (ORC-42): the wait is kept in the
-//! conversation and, with *Let the Orchestrator answer agents* on, starts one Orchestrator turn by itself, which the
-//! runner answers to its end, however the conversation and the runs change meanwhile. The end of a run the chat
-//! started shows in its conversation as a card that opens the task's Summary, and no longer waits once Orchester
-//! merged the run.
+//! conversation that leads its task and, with *Let the Orchestrator answer agents* on, starts one Orchestrator turn by
+//! itself, which the runner answers to its end, however the conversation and the runs change meanwhile. The end of a
+//! run shows in the conversation that leads its task as a card that opens the task's Summary, and no longer waits
+//! once Orchester merged the run.
 
 use orchester_app::routes::{OrchestratorChat, ProjectPage, Route, TaskView};
 use orchester_core::{
-  id::{ChatMessageId, RunId},
+  id::{ChatId, ChatMessageId, RunId},
   integration::{MergeKind, RunMerge},
-  orchestrator::{EntryKind, RunEnd, TurnState, WaitKind},
+  orchestrator::{Chat, EntryKind, RunEnd, Subscription, TurnState, WaitKind, WatchTarget},
   revision::Revision,
   run::{BranchName, StepStatus, WaitReason},
   store::{MergeStore, RunStore, TaskStore},
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
-use orchester_workspace::{tasks::outside::Outside, workspace::OrchestratorConsent};
+use orchester_workspace::tasks::outside::Outside;
 
 use super::{
   harness::{Orchestrator, Setup},
-  proposal::{outcomes, proposal_card},
+  proposal::outcomes,
 };
 
 /// The waits of the project's latest conversation, each with the message its turn was started under.
@@ -61,25 +61,35 @@ fn waits_for_message(screen: &Orchestrator, key: &str) -> bool {
     })
 }
 
+/// Opens a new conversation that watches everything in the project, as the person's *Everything in* the project
+/// would: only subscriptions bring a run's waits and its end into a conversation (ORC-895).
+fn watching_everything(screen: &mut Orchestrator) {
+  let mut db = screen.db();
+  let now = Timestamp::now();
+  let chat = Chat::named(ChatId::generate(), "Everything", now);
+  db.keep_watch_entries(&chat, &[], now).expect("the conversation");
+  let everything = Subscription::new(chat.id(), WatchTarget::Project, "", now);
+  db.start_subscription(&everything).expect("watching");
+  screen.go(OrchestratorChat::Chat(chat.id()));
+}
+
 #[test]
 fn orchestrator_wait_turn_is_answered_to_its_end() {
   let mut screen = Orchestrator::new(Setup::Ready);
-  screen.let_orchestrator(OrchestratorConsent::AnswerAgents, true);
+  screen.let_orchestrator_drive(true);
   let delivery = screen.delivery();
   let key = screen.draft_with(
     delivery,
     "Ask about sign-in",
     ("Ask first.", &["The question was asked."]),
   );
-  screen.go(OrchestratorChat::New);
+  watching_everything(&mut screen);
   screen.send(&format!(r#"Call run_task {{"project":"Kontur","key":"{key}"}}"#));
-  screen.until("the proposed start", |screen| {
-    outcomes(screen).first().is_some_and(|outcome| outcome.is_proposed())
+  // While the chat drives, `run_task` starts the run at once: no card waits for the person.
+  screen.until("the started run", |screen| {
+    outcomes(screen).first().is_some_and(|outcome| !outcome.is_proposed())
   });
   screen.until("the turn's end", |screen| !screen.exists("orchestrator-thinking"));
-  let card = proposal_card(&screen);
-  screen.until("its buttons", |screen| screen.exists(&format!("{card}-start")));
-  screen.click(&format!("{card}-start"));
   screen.until("the step waiting for a message", |screen| {
     waits_for_message(screen, &key)
   });
@@ -122,12 +132,12 @@ fn ends(db: &ProjectDb) -> Vec<(i64, RunEnd)> {
 }
 
 #[test]
-fn orchestrator_run_end_lands_in_the_conversation_that_started_the_run() {
+fn orchestrator_run_end_lands_in_the_conversation_that_leads_its_task() {
   let mut screen = Orchestrator::new(Setup::Ready);
   screen.allow_autopilot(true);
   let delivery = screen.delivery();
   let key = screen.draft_on(delivery, "Read the readme");
-  screen.go(OrchestratorChat::New);
+  watching_everything(&mut screen);
   screen.send(&format!(r#"Call run_task {{"project":"Kontur","key":"{key}"}}"#));
   screen.until("the run's end", |screen| !ends(&screen.db()).is_empty());
   let (seq, end) = ends(&screen.db())[0];
@@ -176,7 +186,7 @@ fn orchestrator_run_end_merged_in_orchester_no_longer_waits() {
   screen.allow_autopilot(true);
   let delivery = screen.delivery();
   let key = screen.draft_on(delivery, "Read the changelog");
-  screen.go(OrchestratorChat::New);
+  watching_everything(&mut screen);
   screen.send(&format!(r#"Call run_task {{"project":"Kontur","key":"{key}"}}"#));
   screen.until("the run's end", |screen| !ends(&screen.db()).is_empty());
   let (seq, _) = ends(&screen.db())[0];

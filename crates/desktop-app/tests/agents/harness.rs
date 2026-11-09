@@ -16,11 +16,13 @@ use orchester_core::{
 use orchester_store::ProjectDb;
 use orchester_workspace::agents::data::{self, ProjectAgents};
 
-use super::support::{Data, Window, project_id};
+use super::support::{Data, Window, project_id, stand_ins::StandIns};
 
 pub struct Agents {
   pub window: Window,
   pub root: PathBuf,
+  /// What the window's file picker hands over next, and the other stand-ins.
+  pub stand_ins: StandIns,
 }
 impl Agents {
   pub fn new(connection: bool) -> Self {
@@ -44,9 +46,11 @@ impl Agents {
       let mut db = ProjectDb::open(&root).expect("database");
       db.create_connection(&codex(&root, version)).expect("connection");
     }
+    let (window, stand_ins) = Window::launched_with_stand_ins(data, launch);
     Self {
-      window: Window::of(data, launch),
+      window,
       root,
+      stand_ins,
     }
   }
   pub fn profile(&self, published: bool) -> ResourceId {

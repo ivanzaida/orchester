@@ -14,23 +14,37 @@ use lurq::{app::ctx::Ctx, core::Signal};
 use orchester_core::{
   run::{PauseReason, RunLimit, RunStatus},
   task::{Task, TaskStatus},
+  time::Timestamp,
 };
-use orchester_workspace::tasks::detail::{RunView, TaskDetail};
+use orchester_workspace::tasks::{
+  detail::{RunView, TaskDetail},
+  pause_wait::PauseWait,
+};
 
 pub use self::{
-  action::{ControlAction, RunControl, control_action, named_steps},
+  action::{ControlAction, RunControl, RunRefused, control_action, named_steps},
   control::{Control, Offer, Reason},
 };
-use crate::ui::{button::ButtonKind, icon::Icon, message::message_text, pressable::Press};
+use crate::{
+  screens::task::pause_wait,
+  ui::{button::ButtonKind, icon::Icon, message::message_text, pressable::Press},
+};
 
-/// The control last pressed, with its press's serial: each press counts one more.
+/// The control last pressed, with its press's serial (each press counts one more) and when it was pressed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Requested {
   pub control: RunControl,
   pub serial: u64,
+  pub at: Timestamp,
 }
 
 impl lurq::app::component::DevtoolsInspectable for Requested {}
+
+/// When the person pressed a start, which the header's not-ready line says.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Pressed(pub Timestamp);
+
+impl lurq::app::component::DevtoolsInspectable for Pressed {}
 
 /// The page's run controls: its request to the runner and the control last pressed, which the header and
 /// the Summary's Start run share, so a press on either shows under way on both and a refusal is said once.
@@ -113,7 +127,9 @@ pub fn controls(ctx: &Ctx, controls: &Controls) -> Shown {
     shown.moves = Some(control(ctx, CONTINUE, Offer::Unavailable(reason)));
   } else if *run.run.status() == RunStatus::Running && run.run.pause_requested() {
     // A pause stays under way until the run settled at its checkpoint.
-    shown.pause = Some(control(ctx, PAUSING, Offer::Pending));
+    let waits = PauseWait::of_run(run);
+    let pausing = control(ctx, PAUSING, Offer::Pending).waiting_for(pause_wait::hint(ctx, &waits));
+    shown.pause = Some(pausing);
   } else if let Some((look, run_control, gate)) = primary(controls, run) {
     let offered = offered(ctx, controls, look, run_control, gate);
     if matches!(run_control, RunControl::Pause(_)) {
@@ -220,6 +236,7 @@ fn offered(ctx: &Ctx, controls: &Controls, look: Look, run_control: RunControl, 
         *last = Some(Requested {
           control: run_control,
           serial,
+          at: Timestamp::now(),
         });
       });
       action.run(run_control);

@@ -6,7 +6,7 @@
 //! an ended task again with it, or kept until a person raises the limit the run stopped at. A run no
 //! agent reads any more, and that does not run again, refuses it.
 
-use orchester_core::id::{IdempotencyKey, RunId};
+use orchester_core::id::{IdempotencyKey, RunId, TaskId};
 use rmcp::schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -22,6 +22,7 @@ use crate::{
     services::{Services, blocking},
   },
   messages::Message,
+  readiness::NotStarted,
   tasks::{
     conversation::{
       SendError,
@@ -134,6 +135,11 @@ pub async fn send_message(
       .map_err(|error| ToolError::runner(&error, vec![control_message(&error)]))?;
     return reply(&project, run, ("request_plan_changes", Sent::Taken), translate).await;
   }
+  // A message that runs the task again starts a run, which a pipeline that is not ready here cannot: refused before the
+  // message is stored, so a client that sends it again once the person fixed what is missing stores it once.
+  if matches!(prepared.mode, ComposerMode::RunAgain) {
+    ready_to_run_again(services, &project, prepared.detail.task.id()).await?;
+  }
   let key = IdempotencyKey::generate();
   let (root, text) = (project.repo_root.clone(), args.text.clone());
   let (prepared, then, message) = blocking(move || {
@@ -162,10 +168,26 @@ pub async fn send_message(
     pipeline: &pipeline,
   };
   let runner = (&services.runners, &services.servers, RunnerOf::Project(&project));
-  let sent = follow(runner, &stored, then).await;
+  let ready = (&services.workspace, &services.vault);
+  // What became not ready between the check and the start leaves the stored message queued, as the window's composer
+  // leaves it: the reply says it is queued, and why.
+  let sent = follow(runner, ready, &stored, then).await;
   let mut result = reply(&project, run, (action(&prepared.mode, way), sent), translate).await?;
   result["message"] = json!({ "id": message.to_string(), "attachments": [] });
   Ok(result)
+}
+
+/// `Ok` when the pipeline of `task` is ready to start here; else the parts it lacks, or why that could not be read.
+async fn ready_to_run_again(services: &Services, project: &OpenProject, task: TaskId) -> Result<(), ToolError> {
+  match services
+    .workspace
+    .ready_to_start(&project.repo_root, &services.vault, task)
+    .await
+  {
+    Ok(()) => Ok(()),
+    Err(NotStarted::NotReadyHere(refusal)) => Err(ToolError::NotReadyHere(refusal)),
+    Err(NotStarted::Unreadable(message)) => Err(ToolError::refused("readiness_unreadable", vec![message])),
+  }
 }
 
 /// Why the message was refused, as the tool says it.
@@ -247,11 +269,12 @@ async fn reply(
 ) -> Result<Value, ToolError> {
   let started = match &sent {
     Sent::Started(started) => Some(*started),
-    Sent::Taken | Sent::Queued(_) | Sent::AwaitsLimit => None,
+    Sent::Taken | Sent::Queued(_) | Sent::NotReady(_) | Sent::AwaitsLimit => None,
   };
   let (outcome, reasons) = match sent {
     Sent::Taken | Sent::Started(_) => ("taken", Vec::new()),
     Sent::Queued(reason) => ("queued", vec![translate.text(&reason)]),
+    Sent::NotReady(unreadable) => ("queued", vec![translate.text(&unreadable.short())]),
     Sent::AwaitsLimit => (
       "awaits_limit",
       vec![translate.text(&Message::new("runs.limit.notRaised"))],

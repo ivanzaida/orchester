@@ -17,7 +17,7 @@ use crate::{
 };
 
 /// A published version a run is bound to.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PinnedVersion {
   pub resource: ResourceId,
   pub version: VersionId,

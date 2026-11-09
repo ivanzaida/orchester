@@ -58,7 +58,7 @@ pub enum Advance {
   Changed,
   /// `run`'s conflicts go to its Integrate step: send `command` to the project's runner, then tell how that went
   /// with [`integrate_sent`].
-  Integrate { run: RunId, command: Command },
+  Integrate { run: RunId, command: Box<Command> },
 }
 
 /// Why the queue could not move on: its records could not be read or written, or the project's runner could not be
@@ -290,7 +290,10 @@ impl Driver<'_> {
     };
     let run_id = entry.run;
     match self.save(entry, state, &events)? {
-      Advance::Changed => Ok(Advance::Integrate { run: run_id, command }),
+      Advance::Changed => Ok(Advance::Integrate {
+        run: run_id,
+        command: Box::new(command),
+      }),
       other => Ok(other),
     }
   }

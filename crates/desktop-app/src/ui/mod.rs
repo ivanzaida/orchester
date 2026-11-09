@@ -79,4 +79,5 @@ pub mod todo_list;
 pub mod toggle;
 pub mod tool_row;
 pub mod tooltip;
+pub mod typing;
 pub mod unavailable;

@@ -1,6 +1,6 @@
-//! Review › Merges (ORC-362, `Review · redesign`), read from the merge attempts the runs recorded. Quick fix runs merge
-//! from their task page; Feature delivery's go through the merge queue. Nothing here moves on by itself: the queue's
-//! run waits for approval and no retry waits.
+//! The merge attempts the runs recorded (ORC-362, `Review · redesign`), as Review and the attempt page read them. Quick
+//! fix runs merge from their task page; Feature delivery's go through the merge queue. Nothing here moves on by itself:
+//! the queue's run waits for approval and no retry waits.
 //!
 //! `merges` (09 `Os7b3`): a run refused before Git at the integration lock after two attempts; two runs waiting for
 //! review, one in the merge queue, one on its task page whose branch moved two commits after the reviewed head
@@ -8,17 +8,7 @@
 //! after a refused attempt, by automation and by the merge queue, the last two with their branches deleted; one merged
 //! yesterday and one three days ago.
 //!
-//! `merges-outcomes` (every row of `Cjprb`): a run not merged for each way an attempt ends that the rows tell —
-//! refused before Git, stopped in the merge queue, conflicts, merged by Git but not recorded, Git stopped answering
-//! after 2 min, and a bring-in that stopped part way and left a file changed in the checkout (made by a real merge
-//! whose git stops after writing it, so *Put files back* puts it back); a run waiting in the queue with two review
-//! comments not sent; two runs merged today, their branches deleted. The *Retrying* row is Orchester's own retry in
-//! the running app: the debug tool `hold_integration` `held: true` holds the project's integration lease, then *Try
-//! again* on the row refused at the integration lock retries by itself (`merge-attempts` tells the same of its page).
-//!
 //! `merges-empty` (09c `jhPCL`): the delivering catalogue and no merge attempt.
-//!
-//! `merges-many`: more merged runs than a page, three a day before today.
 
 use std::{num::NonZeroU32, path::PathBuf, sync::Arc, time::Duration};
 
@@ -56,8 +46,6 @@ pub(super) const AUTOMATION: Asked = (MergeAsker::Automation, MergeVia::MergeRun
 /// Why the integration lock refused, as its preflight says it.
 const HELD: &str = "another merge or local integration holds this checkout";
 const MINUTE: i64 = 60_000;
-/// The merged runs of `merges-many`: more than a page of Review › Merges (30).
-const MANY: u32 = 34;
 const CRITERIA: [&str; 1] = ["The change is covered by tests."];
 /// The file of `main` that the run whose bring-in stopped part way changes.
 const README: &str = "README.md";
@@ -119,89 +107,9 @@ pub fn seed(kontur: &mut Kontur) -> Result<(), SeedError> {
   Ok(())
 }
 
-/// `merges-outcomes`.
-pub fn outcomes(kontur: &mut Kontur) -> Result<(), SeedError> {
-  let catalogue = kontur.delivering_catalogue()?;
-  let (feature, quick) = (&catalogue.feature_delivery, &catalogue.quick_fix);
-  for (title, ago, asked) in [
-    ("Honor Retry-After on 429 and 503", 420, AUTOMATION),
-    ("Retry budget per endpoint", 360, QUEUE),
-  ] {
-    let run = merged_today(kontur, quick, (title, ago), (asked, None))?;
-    branch_deleted(kontur, &run)?;
-  }
-  let base = kontur.base.clone();
-  let not_merged: [(&str, Asked, Ended<'_>); 5] = [
-    (
-      "Add retry to webhook sender",
-      PERSON,
-      (refused(AttemptStage::IntegrationLock), Some(HELD)),
-    ),
-    (
-      "Per-endpoint rate limits",
-      QUEUE,
-      (
-        refused(AttemptStage::ProjectDatabase),
-        Some("orchester.db-wal is used by another program"),
-      ),
-    ),
-    (
-      "Per-endpoint secrets",
-      PERSON,
-      (
-        AttemptOutcome::Conflicts {
-          files: vec![
-            "src/webhooks/sender.rs".to_owned(),
-            "src/webhooks/settings.rs".to_owned(),
-          ],
-        },
-        None,
-      ),
-    ),
-    (
-      "Delivery dashboard",
-      PERSON,
-      (
-        AttemptOutcome::NotRecorded { revision: base },
-        Some("the project database stayed busy"),
-      ),
-    ),
-    (
-      "Rate limit per endpoint",
-      PERSON,
-      (
-        AttemptOutcome::GitStopped {
-          stage: AttemptStage::Merge,
-        },
-        Some("git merge wrote nothing for 120 s and was stopped"),
-      ),
-    ),
-  ];
-  for (place, (title, asked, ended)) in (0_i64..).zip(not_merged) {
-    let (_, run) = ready(kontur, quick, (title, "not merged"), 300 - place * 30)?;
-    let at = kontur.today_ago(90 - place * 10);
-    record(kontur, &run, (at, asked), ended)?;
-  }
-  left_changed(kontur, quick)?;
-  let waiting = waiting_in_queue(kontur, feature, "Sign webhook payloads")?;
-  unsent_comments(kontur, &waiting, 2)
-}
-
 /// `merges-empty`.
 pub fn empty(kontur: &mut Kontur) -> Result<(), SeedError> {
   kontur.delivering_catalogue().map(drop)
-}
-
-/// `merges-many`: more merged runs than Review › Merges reads at first, three a day over the days before today, so
-/// the older days are read as its list scrolls.
-pub fn many(kontur: &mut Kontur) -> Result<(), SeedError> {
-  let catalogue = kontur.delivering_catalogue()?;
-  let quick = &catalogue.quick_fix;
-  for number in 0..MANY {
-    let title = format!("Merged change {}", MANY - number);
-    merged_before_today(kontur, quick, (&title, 1 + i64::from(number) / 3), PERSON)?;
-  }
-  Ok(())
 }
 
 /// Records the attempt of `run` at `at` that `asked` asked for, ended as `outcome` for `cause`.
@@ -256,7 +164,7 @@ pub(super) fn ready(
 
 /// A run titled `title` merged today, started `ago` minutes before now, its merge asked for by `asked`; with `before`,
 /// after an attempt that ended so.
-fn merged_today(
+pub(super) fn merged_today(
   kontur: &mut Kontur,
   pipeline: &Published,
   (title, ago): (&str, i64),
@@ -272,7 +180,7 @@ fn merged_today(
 }
 
 /// Deletes `run`'s branch, as Orchester's cleanup does once the run merged (`branch deleted` in 09 `Os7b3`).
-fn branch_deleted(kontur: &Kontur, run: &Run) -> Result<(), SeedError> {
+pub(super) fn branch_deleted(kontur: &Kontur, run: &Run) -> Result<(), SeedError> {
   git::delete_branch(&kontur.repo, run.branch().as_str())?;
   Ok(())
 }
@@ -309,7 +217,7 @@ pub(super) fn minutes_into_today(kontur: &Kontur) -> i64 {
 }
 
 /// A run of Feature delivery titled `title` waiting for approval in the merge queue, checked at its last checkpoint.
-fn waiting_in_queue(kontur: &mut Kontur, feature: &Published, title: &str) -> Result<Run, SeedError> {
+pub(super) fn waiting_in_queue(kontur: &mut Kontur, feature: &Published, title: &str) -> Result<Run, SeedError> {
   let run = passed(
     kontur,
     feature,
@@ -344,7 +252,7 @@ fn head(run: &Run) -> Result<orchester_core::revision::Revision, SeedError> {
 }
 
 /// `count` review comments on the first line of `run`'s work, written and not sent to Implement.
-fn unsent_comments(kontur: &mut Kontur, run: &Run, count: u32) -> Result<(), SeedError> {
+pub(super) fn unsent_comments(kontur: &mut Kontur, run: &Run, count: u32) -> Result<(), SeedError> {
   let head = head(run)?;
   let invalid = |error: String| SeedError::Invalid(error);
   let line = NonZeroU32::MIN;

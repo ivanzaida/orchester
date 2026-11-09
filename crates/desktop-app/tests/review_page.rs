@@ -1,13 +1,13 @@
 //! A run's review page (ORC-697, `Review · redesign` 09i `wLyFt` and the states of `RBR9O`) in the app's real window,
-//! on the QA seed's `review-page` scenario (`examples/seed`): opened from its *Waiting for your review* row at the
-//! run's route under Merges, with the run's real diff, its files and *Viewed* marks, every thread state, the comment
+//! on the QA seed's `review-page` scenario (`examples/seed`): opened from its *Waiting for your review* row at its
+//! task's review route, with the run's real diff, its files and *Viewed* marks, every thread state, the comment
 //! box that adds a comment to the tray and whose field takes the focus as it opens, the **+** only on the line under
 //! the pointer and never over its numbers (ORC-702), a send the runner did not take kept with why, a send QA holds
 //! (`hold_hand_offs`) shown *Sending…* in its threads and the tray, and *Approve and
 //! merge* unavailable while Implement works on a comment sent, whose link names the step at work; on
 //! `review-changed`, a branch that moved after the review
-//! (ORC-699) told with its new commits, and *Approve and merge* unavailable until they are taken in. Needs `git`, as
-//! the seed does.
+//! (ORC-699) told with its new commits (the strip's switch is `review_since`); on `review-approved`, a task a person
+//! approved (ORC-800), read-only. Needs `git`, as the seed does.
 //! `cargo test -p orchester-app --test review_page review_page`.
 
 #[path = "../examples/seed/kontur/mod.rs"]
@@ -20,7 +20,7 @@ use std::{num::NonZeroU32, time::Duration};
 use lurq::app::events::ScrollPhase;
 use orchester_app::{
   mcp::tools::hold_hand_offs,
-  routes::{ProjectPage, Route},
+  routes::{ProjectPage, Route, TaskTab, TaskView},
 };
 use orchester_core::{id::ProjectId, project::TaskKey, run::RunNumber, time::Timestamp};
 use serde_json::json;
@@ -82,9 +82,15 @@ impl Page {
       .unwrap_or_else(|| panic!("the scenario seeds {title}"));
     let key: TaskKey = task.key.parse().expect("a task key");
     let number = RunNumber::new(NonZeroU32::new(number).expect("runs are numbered from 1"));
-    let route = Route::Project(self.project, ProjectPage::MergeAttempt(key, number));
+    let route = Route::Project(self.project, ProjectPage::TaskReview(key.clone()));
     self.window.navigation().go(route);
     self.until_read();
+    let crumbs = self.window.texts("review-crumbs").expect("the breadcrumb");
+    assert_eq!(
+      crumbs,
+      ["Review", "/", &format!("{key} · run {}", number.get())],
+      "the task's latest run in review: {crumbs:?}"
+    );
   }
 
   /// The diff's words from its top to its end, turning the wheel over it: its rows are laid out only where they show.
@@ -124,33 +130,24 @@ impl Page {
 #[test]
 fn review_page_opens_from_its_waiting_row_with_the_runs_real_diff() {
   let mut page = Page::new();
+  let task = page
+    .tasks
+    .iter()
+    .find(|task| task.title == "Sign webhook payloads")
+    .expect("the scenario seeds the task");
+  let row = format!("review-row-{}", task.key);
   page
     .window
     .navigation()
-    .go(Route::Project(page.project, ProjectPage::Merges));
-  page.window.until_within(GIT_WORK, "the merges", |window| {
-    window.texts("merges-waiting-rows").is_some()
-  });
-  let rows: Vec<String> = page
+    .go(Route::Project(page.project, ProjectPage::Review));
+  page
     .window
-    .tree
-    .get_element_by_id("merges-waiting-rows")
-    .map_or_else(Vec::new, |rows| {
-      rows
-        .children()
-        .into_iter()
-        .filter_map(|row| row.id().map(str::to_owned))
-        .collect()
-    });
-  let row = rows
-    .into_iter()
-    .find(|row| page.window.text(row).contains("Sign webhook payloads"))
-    .expect("the run waits for review");
-  page.window.press(&format!("{row}-open"));
+    .until_within(GIT_WORK, "the review list", |window| window.texts(&row).is_some());
+  page.window.press(&row);
   page.until_read();
   let route = page.window.navigation().route_now();
   assert!(
-    matches!(route, Route::Project(_, ProjectPage::MergeAttempt(..))),
+    matches!(route, Route::Project(_, ProjectPage::TaskReview(_))),
     "{route:?}"
   );
   assert_eq!(page.window.text("review-status-text"), "Waiting for your review");
@@ -272,14 +269,13 @@ fn review_page_send_held_shows_sending_until_let_go() {
 }
 
 #[test]
-fn review_page_approve_is_unavailable_while_implement_works_on_a_comment_sent() {
+fn review_page_approve_is_not_shown_while_implement_works_on_a_comment_sent() {
   let mut page = Page::new();
   page.open(("Delivery log per endpoint", 3));
-  assert_eq!(page.window.text("review-status-text"), "Implement is changing the code");
-  let reason = page.window.text("review-approve-reason");
-  assert!(reason.contains("Implement is at work"), "{reason}");
+  assert_eq!(page.window.text("review-status-text"), "With the agent");
+  assert!(page.window.texts("review-approve").is_none(), "Approve and merge waits");
+  assert!(page.window.texts("review-approve-reason").is_none());
   let diff = page.diff_text();
-  assert!(diff.contains("Sent · Implement is changing the code"), "{diff}");
   assert!(
     diff.contains("In the Conversation · run #3, step 03 Implement"),
     "the step Implement works in: {diff}"
@@ -323,25 +319,16 @@ fn review_page_shows_the_plus_only_on_the_line_under_the_pointer_beside_its_numb
 }
 
 #[test]
-fn review_page_tells_the_commits_after_the_review_and_approves_only_once_they_are_taken_in() {
+fn review_page_tells_the_commits_after_the_review_and_still_approves_the_head_shown() {
   let mut page = Page::of("review-changed");
   page.open(("Sign webhook payloads", 1));
   assert_eq!(page.window.text("review-status-text"), "Changed since your review");
-  let notice = page.window.text("review-changed");
-  assert!(notice.contains("2 new commits"), "{notice}");
-  let commits = page.window.text("review-changed-commits");
-  let (newest, oldest) = (
-    commits.find("Test the 30 s bound"),
-    commits.find("Cap the delay and its jitter together"),
+  let strip = page.window.text("review-since");
+  assert!(strip.contains("2 commits since you reviewed at "), "{strip}");
+  assert!(
+    page.window.texts("review-approve-reason").is_none(),
+    "the new commits are shown, so nothing holds Approve back"
   );
-  assert!(newest.is_some() && oldest.is_some() && newest < oldest, "{commits}");
-  let reason = page.window.text("review-approve-reason");
-  assert!(reason.contains("review the new commits first"), "{reason}");
-  page.window.press("review-changed-take");
-  page.window.until("the commits taken in", |window| {
-    window.texts("review-changed").is_none() && window.texts("review-approve-reason").is_none()
-  });
-  assert_eq!(page.window.text("review-status-text"), "Waiting for your review");
 }
 
 /// The id of the first line of the diff whose id starts with `prefix`.
@@ -377,4 +364,210 @@ fn count(page: &mut Page, within: &str, id: &str) -> usize {
     stack.extend(element.children());
   }
   found
+}
+
+#[test]
+fn review_page_crumbs_lead_back_to_review_and_the_status_names_the_base() {
+  let mut page = Page::new();
+  page.open(("Sign webhook payloads", 1));
+  let meta = page.window.text("review-status-meta");
+  assert!(meta.contains("into main"), "{meta}");
+  page.window.press("review-crumbs-0");
+  let route = Route::Project(page.project, ProjectPage::Review);
+  page
+    .window
+    .until("Review", |window| window.navigation().route_now() == route);
+}
+
+#[test]
+fn review_page_says_nothing_is_to_review_for_a_task_whose_run_is_not_in_review() {
+  let mut page = Page::of("merges");
+  let task = page
+    .tasks
+    .iter()
+    .find(|task| task.title == "Add retry to webhook sender")
+    .expect("the scenario seeds a run whose merge was refused");
+  let key: TaskKey = task.key.parse().expect("a task key");
+  let route = Route::Project(page.project, ProjectPage::TaskReview(key.clone()));
+  page.window.navigation().go(route);
+  page.window.until_within(GIT_WORK, "the empty state", |window| {
+    window.texts("review-no-run").is_some()
+  });
+  assert!(
+    page
+      .window
+      .text("review-no-run")
+      .contains(&format!("Nothing to review for {key}"))
+  );
+  assert_eq!(
+    page.window.texts("review-crumbs").expect("the breadcrumb"),
+    ["Review", "/", &key.to_string()]
+  );
+  assert!(page.window.texts("review-diff").is_none());
+}
+
+/// An approved run whose merge into `main` conflicted (ORC-807, `Review - v2` 11 `CT6Gc`): the seed's
+/// `review-conflicts`.
+const CONFLICTING: (&str, u32) = ("Rotate API keys from settings", 1);
+
+#[test]
+fn review_page_conflicts_name_the_files_show_what_the_base_has_and_offer_no_approval() {
+  let mut page = Page::of("review-conflicts");
+  page.open(CONFLICTING);
+  assert_eq!(page.window.text("review-status-text"), "Conflicts with main");
+  let meta = page.window.text("review-status-meta");
+  assert!(
+    meta.contains("approved by you") && meta.contains("nothing merged") && meta.contains("2 files conflict"),
+    "{meta}"
+  );
+  assert_eq!(page.window.text("review-files-viewed"), "2 conflicting");
+  assert!(page.window.texts("review-approve").is_none(), "no Approve and merge");
+  assert!(page.window.texts("review-open-task").is_some());
+  assert!(page.window.texts("review-changed").is_none(), "no other strip");
+  assert_eq!(page.window.text("review-conflict-title"), "2 files conflict with main");
+  assert_eq!(
+    page.window.text("review-conflict-body"),
+    "The agent merges main in and resolves them, then it's back for your review."
+  );
+  assert_eq!(page.window.text("review-conflict-try-again"), "Try merge again");
+  assert_eq!(page.window.text("review-conflict-resolve"), "Ask the agent to resolve");
+  let diff = page.whole_diff();
+  assert!(diff.contains("2 conflicts") || diff.contains("1 conflict"), "{diff}");
+  assert!(diff.contains("Conflict"), "{diff}");
+  assert!(
+    diff.contains("self.log.record(endpoint, response.status());"),
+    "what main has under the conflicting lines: {diff}"
+  );
+}
+
+#[test]
+fn review_page_conflicts_ask_the_agent_without_a_runner_says_why_and_changes_nothing() {
+  let mut page = Page::of("review-conflicts");
+  page.open(CONFLICTING);
+  page.window.press("review-conflict-resolve");
+  page.window.until_within(GIT_WORK, "the refusal", |window| {
+    window.texts("review-not-done").is_some()
+  });
+  let refusal = page.window.text("review-not-done");
+  assert!(refusal.contains("runner"), "{refusal}");
+  assert_eq!(page.window.text("review-status-text"), "Conflicts with main");
+}
+
+#[test]
+fn review_page_conflicts_try_merge_again_merges_and_shows_what_came_of_it() {
+  let mut page = Page::of("review-conflicts");
+  page.open(CONFLICTING);
+  page.window.press("review-conflict-try-again");
+  page
+    .window
+    .until_within(GIT_WORK * 4, "the merge tried again", |window| {
+      window.texts("review-not-done").is_some()
+    });
+  let refusal = page.window.text("review-not-done");
+  // Main is as it was, so the merge conflicts again (the workspace tests pin that outcome); the window has no runner to
+  // prove the run's processes stopped, so Git may also be refused. Either way the page tells it and keeps the
+  // conflicts.
+  assert!(refusal.contains("merge"), "{refusal}");
+  assert_eq!(page.window.text("review-status-text"), "Conflicts with main");
+}
+
+#[test]
+fn review_page_tells_the_first_sentence_of_the_runs_summary_and_its_link_opens_the_conversation() {
+  let mut page = Page::new();
+  page.open(("Sign webhook payloads", 1));
+  assert_eq!(
+    page.window.text("review-summary-text"),
+    "Deliveries now retry with a capped, jittered backoff that honours Retry-After, and stop after the settings' budget."
+  );
+  assert_eq!(page.window.text("review-summary-link"), "Run summary →");
+  page.window.press("review-summary-link");
+  let route = page.window.navigation().route_now();
+  let Route::Project(_, ProjectPage::Task(key, view)) = route else {
+    panic!("the link opens the task: {route:?}");
+  };
+  let task = page.tasks.iter().find(|task| task.title == "Sign webhook payloads");
+  assert_eq!(Some(key.to_string()), task.map(|task| task.key.clone()));
+  assert_eq!(view, TaskView::of(TaskTab::Conversation));
+}
+
+#[test]
+fn review_page_has_no_summary_row_for_a_run_no_step_reported_on() {
+  let mut page = Page::new();
+  for run in [("Per-endpoint secrets", 2), ("Delivery log per endpoint", 3)] {
+    page.open(run);
+    assert!(page.window.texts("review-status-text").is_some(), "{run:?} is shown");
+    assert!(
+      page.window.texts("review-summary").is_none(),
+      "{run:?} has no summary row"
+    );
+  }
+}
+
+#[test]
+fn review_page_an_approved_task_is_read_only_with_its_review_kept() {
+  let mut page = Page::of("review-approved");
+  page.open(("Retry budget per endpoint", 1));
+  assert_eq!(page.window.text("review-status-text"), "Merged into main");
+  let meta = page.window.text("review-status-meta");
+  assert!(
+    meta.starts_with("approved by you ") && (meta.contains("fast-forward to ") || meta.contains("merge commit ")),
+    "who approved it, how it landed and when: {meta}"
+  );
+  assert_eq!(page.window.text("merge-attempt-title"), "Retry budget per endpoint");
+  for control in [
+    "review-approve",
+    "review-approve-reason",
+    "review-tray",
+    "review-composer",
+    "review-changed",
+  ] {
+    assert!(
+      page.window.texts(control).is_none(),
+      "{control} is not on an approved page"
+    );
+  }
+  assert!(page.window.texts("review-open-task").is_some(), "Open task stays");
+  let diff = page.whole_diff();
+  for kept in [
+    "src/webhooks/sender.rs",
+    "Cap the sum of the delay and the jitter",
+    "Capped the sum: the delay",
+    "Addressed in",
+    "Answered · no code changed",
+    "The budget counts every attempt",
+    "Not sent",
+  ] {
+    assert!(diff.contains(kept), "{kept} in {diff}");
+  }
+  for action in ["Reply", "Resolve", "Ask again", "Stop answering", "Edit", "Delete"] {
+    assert!(!diff.contains(action), "no {action} on an approved page: {diff}");
+  }
+}
+
+#[test]
+fn review_page_an_approved_task_shows_no_plus_and_opens_no_comment_box() {
+  let mut page = Page::of("review-approved");
+  page.open(("Retry budget per endpoint", 1));
+  let line = first_line(&mut page, "review-line-1-new-");
+  page.window.hover(&line);
+  assert_eq!(count(&mut page, "review-diff", "review-line-add"), 0);
+  page.window.press(&line);
+  page.window.pass();
+  assert!(
+    page.window.texts("review-composer").is_none(),
+    "pressing a line opens no box"
+  );
+  assert!(page.window.texts("review-tray").is_none());
+}
+
+#[test]
+fn review_page_a_merge_automation_made_is_not_called_approved_by_you() {
+  let mut page = Page::of("review-approved");
+  page.open(("Honor Retry-After on 429 and 503", 2));
+  assert_eq!(page.window.text("review-status-text"), "Merged into main");
+  let meta = page.window.text("review-status-meta");
+  assert!(
+    meta.starts_with("merged without a person's approval") && !meta.contains("approved by you"),
+    "{meta}"
+  );
 }

@@ -11,6 +11,7 @@ mod browser;
 mod cloud;
 mod cloud_ended;
 mod cloud_joins;
+mod mcp_programs;
 mod owners;
 mod plan_reads;
 mod server_owners;
@@ -32,6 +33,7 @@ pub use self::{
   cloud::{StoredCloudAccount, StoredCloudAddress},
   cloud_ended::{CloudSignInEnd, EndedCloudSignIn},
   cloud_joins::AcceptedInvite,
+  mcp_programs::McpServerProgram,
   servers::{JoinedWith, ServerAccount, StoredServer},
 };
 use crate::{
@@ -94,6 +96,9 @@ CREATE TABLE ui_state (
   settings::BROWSER_WINDOW_MIGRATION,
   browser::MIGRATION,
   service_slots::MIGRATION,
+  // Master's `mcp_programs` comes after ours on this branch: application databases already migrated by Agent testing
+  // builds hold `service_slots` at 33, so master's migration cannot take 33 here.
+  mcp_programs::MIGRATION,
 ];
 
 /// Identifies the running session in the session log.

@@ -18,14 +18,16 @@ use orchester_store::{ProjectDb, StoreError};
 use orchester_workspace::{
   background,
   messages::{self, Message},
+  readiness::{NotReadyHere, NotStarted},
   runner::Runners,
+  secrets::Vault,
   sharing::{Servers, project::WorkClaim},
   tasks::{
     cancel_run::{Stop, stop_named_run_in},
     data::{SaveTarget, published_pipelines},
     run::{QueueFailure, control_message, queue_in},
   },
-  workspace::OpenProject,
+  workspace::{OpenProject, Workspace},
 };
 
 /// A request about the task's run.
@@ -59,17 +61,58 @@ impl RunControl {
   }
 }
 
-pub type ControlAction = FutureAction<RunControl, RunControl, Message>;
+/// Why a control was not carried out: the runner's or the claim's reason in words, or a pipeline that is not ready on
+/// this computer, which the Summary's card lists part by part (`screens::task::not_ready`).
+#[derive(Clone, Debug, PartialEq)]
+pub enum RunRefused {
+  Message(Message),
+  NotReadyHere(NotReadyHere),
+}
 
-/// Asks the runner of `project` to carry out a control of `task`'s run.
+impl lurq::app::component::DevtoolsInspectable for RunRefused {}
+
+impl RunRefused {
+  /// The reason in words, when the frame's notice says it; a pipeline that is not ready has its card.
+  pub fn message(self) -> Option<Message> {
+    match self {
+      Self::Message(message) => Some(message),
+      Self::NotReadyHere(_) => None,
+    }
+  }
+}
+
+impl From<Message> for RunRefused {
+  fn from(message: Message) -> Self {
+    Self::Message(message)
+  }
+}
+
+impl From<NotStarted> for RunRefused {
+  fn from(refused: NotStarted) -> Self {
+    match refused {
+      NotStarted::NotReadyHere(refusal) => Self::NotReadyHere(refusal),
+      NotStarted::Unreadable(message) => Self::Message(message),
+    }
+  }
+}
+
+pub type ControlAction = FutureAction<RunControl, RunControl, RunRefused>;
+
+/// Asks the runner of `project` to carry out a control of `task`'s run. A control that starts the task's first run
+/// asks `workspace` whether its pipeline is ready here first, before the task is queued or claimed.
 pub fn control_action(
   ctx: &mut Ctx,
   (project, task): (OpenProject, TaskId),
   (runners, servers): (Runners, Servers),
+  (workspace, vault): (Workspace, Vault),
 ) -> ControlAction {
   ctx.future_action(move |control: RunControl| {
     let (project, runners, servers) = (project.clone(), runners.clone(), servers.clone());
+    let (workspace, vault) = (workspace.clone(), vault.clone());
     async move {
+      if let RunControl::Run(_) | RunControl::Start(_) = control {
+        workspace.ready_to_start(&project.repo_root, &vault, task).await?;
+      }
       let claim = match control {
         RunControl::Run(_) => queue(&project, &servers, task).await?,
         RunControl::Resume(run) | RunControl::Continue(run) => {
@@ -82,7 +125,7 @@ pub fn control_action(
       if result.is_err() {
         claim.release(&servers).await;
       }
-      result.map(|()| control)
+      result.map(|()| control).map_err(RunRefused::Message)
     }
   })
 }

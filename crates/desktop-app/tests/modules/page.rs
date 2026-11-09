@@ -181,6 +181,53 @@ fn modules_summary_properties_save_in_place() {
 }
 
 #[test]
+fn modules_summary_led_in_links_the_leading_conversation_or_says_nobody() {
+  use orchester_app::routes::OrchestratorChat;
+  use orchester_core::{
+    conversation::MessageBody,
+    id::{ChatId, ChatMessageId},
+    orchestrator::{Chat, Subscription, WatchTarget},
+    time::Timestamp,
+  };
+
+  let mut picked = None;
+  let chat = ChatId::generate();
+  let mut seeded = Seeded::new("tasks", |db| {
+    let led = module_with(db, details("Checkout", (3, 4)), &[]).0;
+    let alone = module_with(db, details("Search", (3, 4)), &[]).0;
+    let body = MessageBody::new("Webhooks v2 and Search index").expect("body");
+    db.keep_chat_message(
+      &Chat::start(chat, &body, Timestamp::now()),
+      (ChatMessageId::generate(), &body),
+      Timestamp::now(),
+    )
+    .expect("the conversation is kept");
+    db.start_subscription(&Subscription::new(chat, WatchTarget::Module(led), "", Timestamp::now()))
+      .expect("the module is watched");
+    picked = Some((led, alone));
+  });
+  let (led, alone) = picked.expect("the modules");
+  seeded.open(ProjectPage::Module(alone, ModuleTab::Summary), "module-property-led-in");
+  assert_eq!(seeded.text("module-property-led-in"), "Led in Nobody");
+  assert!(!seeded.shows("module-property-led-in-link"));
+
+  seeded.open(
+    ProjectPage::Module(led, ModuleTab::Summary),
+    "module-property-led-in-link",
+  );
+  assert_eq!(
+    seeded.text("module-property-led-in-value"),
+    "«Webhooks v2 and Search index» ↗"
+  );
+  seeded.window.press("module-property-led-in-link");
+  assert_eq!(
+    seeded.route(),
+    Route::Project(seeded.project, ProjectPage::Orchestrator(OrchestratorChat::Chat(chat))),
+    "the link opens the leading conversation"
+  );
+}
+
+#[test]
 fn modules_page_more_actions_close_and_reopen_and_new_task_starts_in_the_module() {
   let mut picked = None;
   let mut seeded = Seeded::new("tasks", |db| {

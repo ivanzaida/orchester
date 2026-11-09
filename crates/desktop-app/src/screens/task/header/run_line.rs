@@ -19,6 +19,7 @@ use orchester_core::{
   integration::MergeError,
   run::{PauseReason, Run, RunLimit, RunStatus, Stuck, TaskPhase},
   task::estimate::{EstimateSource, StoryEstimate},
+  time::Timestamp,
 };
 use orchester_workspace::{
   display,
@@ -31,9 +32,9 @@ use orchester_workspace::{
 };
 
 use crate::{
-  screens::{
-    merges::attempt::standing::Standing,
-    task::{TaskContext, merge::Merge},
+  screens::task::{
+    TaskContext,
+    merge::{Merge, attempt::standing::Standing},
   },
   ui::{
     chip::TagChip,
@@ -56,38 +57,62 @@ pub fn status_line(ctx: &mut Ctx, task: &TaskContext, mode: bool) -> Element {
   let detail = &task.detail;
   let chip = match crate::screens::task::ci::header::status(ctx, task) {
     Some((status, words)) => StatusChip::new("task-status", status).words(words),
-    None => {
-      let (status, about) = chip_words(ctx, task);
-      let chip = StatusChip::new("task-status", status);
-      match about {
-        // A run at work names its step after a dot, as one that stopped does after *at* (`Running · 03 Implement` in
-        // 01c `Tb55G`).
-        Some(About::Step(step)) if status == Status::Running => chip.detail(step),
-        Some(About::Step(step)) => {
-          let words = ctx.t_args("task.status.at", [("status", ctx.t(status.key())), ("step", step)]);
-          chip.words(words)
-        }
-        Some(About::Reason(reason)) => chip.detail(reason),
-        None => chip,
-      }
-    }
+    None => run_chip(ctx, task),
   };
   let mode = if mode { super::run_mode::mode(ctx, task) } else { None };
-  let points = detail.task.estimate().map(|estimate| points(ctx, estimate));
+  let chip = chip.render(ctx);
+  let line = run_line(ctx, detail);
+  row(ctx, task, chip, Some(&line), mode)
+}
+
+/// The status of the task's run and what it is about: the step it stands at, why it waits, or that an archive of a
+/// resource it pinned stopped it (`Stopped at 03 Implement · pencil-design was archived`, A22 `pUu78`).
+fn run_chip(ctx: &Ctx, task: &TaskContext) -> StatusChip {
+  if let Some(words) = super::super::archived::status_words(ctx, task) {
+    return StatusChip::new("task-status", Status::Stopped).words(words);
+  }
+  let (status, about) = chip_words(ctx, task);
+  let chip = StatusChip::new("task-status", status);
+  match about {
+    // A run at work names its step after a dot, as one that stopped does after *at* (`Running · 03 Implement` in
+    // 01c `Tb55G`).
+    Some(About::Step(step)) if status == Status::Running => chip.detail(step),
+    Some(About::Step(step)) => {
+      let words = ctx.t_args("task.status.at", [("status", ctx.t(status.key())), ("step", step)]);
+      chip.words(words)
+    }
+    Some(About::Reason(reason)) => chip.detail(reason),
+    None => chip,
+  }
+}
+
+/// The line while the person's last Run was refused as not ready on this computer (`Status line` `g9ufW` in R1
+/// `Ku0qu`, L9 `f5CEX`): `words` in the warning tone, `line`, if any, after them in `text_muted`. The task has no run
+/// to say the approval mode of.
+pub(super) fn not_ready(ctx: &mut Ctx, task: &TaskContext, (words, line): (Arc<str>, Option<&str>)) -> Element {
+  let chip = StatusChip::new("task-status", Status::NotReady)
+    .words(words)
+    .render(ctx);
+  row(ctx, task, chip, line, None)
+}
+
+/// The row: the status `chip`, `line` after it, the run's approval mode and the task's story points.
+fn row(ctx: &mut Ctx, task: &TaskContext, chip: Element, line: Option<&str>, mode: Option<Element>) -> Element {
+  let points = task.detail.task.estimate().map(|estimate| points(ctx, estimate));
   Row::new()
     .id("task-status-row")
     .width(Dimension::Pct(100.0))
     .min_width(Dimension::Px(0.0))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
-    .child(chip.render(ctx))
-    .child(
-      Text::new(&run_line(ctx, detail))
+    .child(chip)
+    .with_children(line.map(|line| {
+      Text::new(line)
         .id("task-run-line")
         .variant(TypographyStyle::Description)
         .color(PaletteColor::TextMuted)
-        .nowrap(),
-    )
+        .nowrap()
+    }))
     .with_children(mode)
     .with_children(points)
     .into()
@@ -243,7 +268,7 @@ fn run_line(ctx: &Ctx, detail: &TaskDetail) -> Arc<str> {
     .current_attempt()
     .map(|attempt| attempt.number().get())
     .filter(|number| *number > 1);
-  let when = when(ctx, run);
+  let when = when(ctx, run, detail.archive_stop.as_ref().map(|stop| stop.stopped_at));
   let key = match (attempt.is_some(), when.is_some()) {
     (true, true) => "task.runLine.attemptWhen",
     (true, false) => "task.runLine.attempt",
@@ -258,9 +283,12 @@ fn run_line(ctx: &Ctx, detail: &TaskDetail) -> Arc<str> {
   ctx.t_args(key, args)
 }
 
-/// When the run last changed where it stands: it finished, paused or stopped, or else started.
-fn when(ctx: &Ctx, run: &RunView) -> Option<Arc<str>> {
-  let (key, at) = if let Some(at) = run.finished_at {
+/// When the run last changed where it stands: an archive stopped it (`archived`), it finished, paused or stopped, or
+/// else started.
+fn when(ctx: &Ctx, run: &RunView, archived: Option<Timestamp>) -> Option<Arc<str>> {
+  let (key, at) = if let Some(at) = archived {
+    ("task.runLine.stopped", at)
+  } else if let Some(at) = run.finished_at {
     ("task.runLine.finished", at)
   } else if let Some(at) = run.paused_at {
     let key = match run.run.status() {

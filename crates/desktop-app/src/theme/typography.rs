@@ -268,7 +268,6 @@ fn screens(palette: &ThemePalette) -> Vec<(Arc<str>, TextStyle)> {
     .chain(super::orchestrator::typography(palette))
     .chain(super::overview::typography(palette))
     .chain(super::needs_you::typography(palette))
-    .chain(super::pull_requests::typography(palette))
     .chain(super::usage::typography(palette))
     .chain(super::memory::typography(palette))
     .chain(super::delivery::typography(palette))
@@ -281,6 +280,7 @@ fn screens(palette: &ThemePalette) -> Vec<(Arc<str>, TextStyle)> {
     .chain(super::test_results::typography(palette))
     .chain(super::import::typography(palette))
     .chain(super::hub::typography(palette))
+    .chain(super::archive::typography(palette))
     .chain(super::failure::typography(palette))
     .chain(super::groups::typography(palette))
     .chain(super::pipelines::typography(palette))
@@ -293,6 +293,7 @@ fn screens(palette: &ThemePalette) -> Vec<(Arc<str>, TextStyle)> {
     .chain(super::run_model::typography(palette))
     .chain(super::side_question::typography(palette))
     .chain(super::ci::typography(palette))
+    .chain(super::watching::typography(palette))
     .collect()
 }
 

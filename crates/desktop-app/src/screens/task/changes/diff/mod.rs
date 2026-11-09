@@ -32,8 +32,8 @@ use orchester_workspace::{
 use parking_lot::Mutex;
 
 pub use self::{
-  annotate::{Annotations, BlockView, LineKey, LinePress, Marks},
-  line::{CutAction, CutNote},
+  annotate::{Annotations, LineKey, Marks},
+  line::CutNote,
 };
 use self::{
   cache::{ContentKey, Highlights, ShownRows},

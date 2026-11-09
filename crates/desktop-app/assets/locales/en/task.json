@@ -1,5 +1,11 @@
 {
   "task": {
+    "waitsOn": {
+      "at": "Waits on {{waited}} at {{step}}",
+      "status": "Waits on {{waited}}",
+      "cannotBeMet": "Waits on {{waited}} · cannot be met",
+      "runLine": "Run {{run}} · since {{time}}"
+    },
     "tabs": {
       "summary": "Summary",
       "conversation": "Conversation",
@@ -66,8 +72,6 @@
       "resolve": "Resolve",
       "recordMerge": "Record merge",
       "putFilesBack": "Put files back",
-      "keysCmd": "⌘↵",
-      "keysCtrl": "Ctrl+Enter",
       "noBranch": "Merge needs the branch your checkout had when the run started, which this run didn't record.",
       "noBranchShort": "No branch to merge into",
       "waits": {
@@ -96,7 +100,11 @@
       "failed": "reported failed",
       "unverified": "could not check everything",
       "unchanged": "not run again",
-      "conflict": "conflict"
+      "conflict": "conflict",
+      "notReadyHere": "Not started · not ready on this computer",
+      "stoppedArchivedAt": "Stopped at {{step}} · {{resource}} was archived",
+      "stoppedArchived": "Stopped · {{resource}} was archived",
+      "notReady": "Not started · not ready"
     },
     "points": {
       "person": "{{count}} pt",
@@ -117,7 +125,10 @@
       "draft": "No runs yet",
       "queued": "Queued · its run has not started",
       "unreadable": "Run {{run}} · could not be read",
-      "unreadableUnnumbered": "Its latest run could not be read"
+      "unreadableUnnumbered": "Its latest run could not be read",
+      "notReadyPressed": "Run pressed {{pressed}}",
+      "notReadyAfterRun": "Run pressed {{pressed}} · run {{run}} ended {{ended}}",
+      "notReadyEnded": "Run {{run}} ended {{ended}}"
     },
     "run": {
       "mode": {
@@ -132,6 +143,13 @@
       "start": "Start run",
       "pause": "Pause run",
       "pausing": "Pausing…",
+      "pausingFor": {
+        "agent": "Pausing once {{agent}} finishes {{step}}",
+        "command": "Pausing once {{step}}'s command ends · {{tool}}",
+        "commandUnnamed": "Pausing once {{step}}'s command ends",
+        "steps": "Pausing once {{steps}} end",
+        "none": "Pausing at the next checkpoint"
+      },
       "resume": "Resume run",
       "continue": "Continue run",
       "cancel": "Cancel run",

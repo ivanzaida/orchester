@@ -48,20 +48,24 @@ mod message_records;
 mod messages;
 mod modules;
 mod native;
+mod new_resources;
 mod notice_records;
 mod orchestrator;
 mod orchestrator_compactions;
 mod orchestrator_fork;
+mod orchestrator_leads;
 mod orchestrator_plans;
 mod orchestrator_queue;
 mod orchestrator_reports;
 mod orchestrator_rewind;
 mod orchestrator_sent;
 mod orchestrator_settings;
+mod orchestrator_subscriptions;
 mod orchestrator_switches;
 mod orchestrator_titles;
 mod orchestrator_usage;
 mod orchestrator_waits;
+mod orchestrator_watch_summaries;
 mod organization;
 mod organized_drafts;
 mod owned_records;
@@ -92,6 +96,8 @@ mod run_connections;
 mod run_ends;
 mod run_inputs;
 mod run_models;
+mod run_progress;
+mod run_waits;
 mod runner_failures;
 mod runs;
 mod schema;
@@ -120,6 +126,8 @@ mod task_snapshots;
 mod tasks;
 mod team_copies;
 mod team_deliveries;
+mod team_fill_ins;
+mod team_leaving;
 mod team_operations;
 mod team_runs;
 mod team_starts;
@@ -146,7 +154,7 @@ use rusqlite::{Connection, params};
 pub use self::{
   approval_records::ApprovalRecord,
   approval_rules::DecisionCounts,
-  archive_stops::ArchiveStop,
+  archive_stops::{ArchiveStop, Archived},
   attachments::{AttachmentOwner, attachment_file},
   auto_mode::AutoModeSave,
   automatic_status::{AutomaticStatus, NotSent, UnsentStatus},
@@ -163,7 +171,7 @@ pub use self::{
   orchestrator_queue::StartedQueued,
   orchestrator_reports::KeptReport,
   orchestrator_rewind::ChatRewind,
-  orchestrator_switches::OrchestratorSwitch,
+  orchestrator_subscriptions::{KeptSubscription, WatchStart},
   orchestrator_titles::ChatDeletion,
   orchestrator_waits::KeptWait,
   owned_records::{
@@ -173,10 +181,12 @@ pub use self::{
   read_only::ReadOnlyProjectDb,
   reference_bindings::{Bound, BoundBy, BoundReference, ReferenceBinding},
   removal_records::RemovalRecord,
+  removals::DraftChange,
   resolutions::ResolutionStart,
   resources::ResourceUpdate,
   run_ends::EndedRun,
   run_inputs::AcceptedInputs,
+  run_waits::{KeptRunWait, RunWaitEnd, RunWaitEnded},
   runs::{RunBranch, RunLogRecord},
   shared_events::{SharedEvent, SharedSnapshot},
   shared_members::{ServerAdmin, SharedMember},
@@ -189,6 +199,7 @@ pub use self::{
   step_records::StepRecord,
   task_deletion::TaskDeletionFacts,
   team_deliveries::{DeliveryMerge, DeliveryReport, TeamDelivery, TeamDeliveryStage},
+  team_fill_ins::ConnectionPick,
   team_operations::{NewTeamOperation, TeamOperation, TeamOperationState, TeamSettlement},
   team_runs::{AcceptedWork, NewWorkReport, TeamFence, TeamRun, WorkReportEntry, WorkReportState},
   team_starts::{TeamStart, TeamStartStage},

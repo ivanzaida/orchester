@@ -214,7 +214,24 @@ pub(crate) fn step_uses<S: ResourceStore>(store: &S) -> Result<Vec<StepUse>, S::
   Ok(uses)
 }
 
-/// Creates a profile whose first draft is `profile`, under a slug made from its role.
+/// Creates a profile as its first version, v1 with no draft, under a slug made from its role, if its connection's CLI
+/// can enforce its permissions on this platform (`PublishError::Permissions`); a profile whose connection is gone
+/// cannot say what is enforced (`PublishError::ConnectionMissing`). In a team project the version waits for the server
+/// (`Servers::send_created`).
+pub fn create_published_profile(
+  db: &mut ProjectDb,
+  profile: &AgentProfile,
+  now: Timestamp,
+) -> Result<ResourceId, StoreError> {
+  enforceable(db, profile)?;
+  let taken: Vec<Slug> = db.slugs(ResourceKind::AgentProfile)?;
+  let fallback = Slug::new(FALLBACK_SLUG).expect("the fallback slug is valid");
+  let slug = Slug::unique_for(profile.role(), &fallback, &taken);
+  Ok(db.create_published(slug, profile.role().clone(), profile, now)?.0.id())
+}
+
+/// Creates a resource that holds `profile` as its draft only, under a slug made from its role: not how a profile is
+/// created (that is [`create_published_profile`]), but a way to set up a profile with a draft in tests and fixtures.
 pub fn create_profile<S: ResourceStore>(
   store: &mut S,
   profile: &AgentProfile,
@@ -275,7 +292,7 @@ where
   S: ResourceStore<Error = StoreError> + ConnectionStore<Error = StoreError>,
 {
   let draft = store.draft::<AgentProfile>(id)?.ok_or(StoreError::NoDraft(id))?;
-  enforceable(store, draft.body())?;
+  publishable(store, id, draft.body())?;
   Ok(store.publish_draft::<AgentProfile>(id, now)?.number())
 }
 
@@ -287,14 +304,14 @@ pub fn publish_checked_in(
   checked: &AgentProfile,
 ) -> Result<VersionNumber, StoreError> {
   let mut db = ProjectDb::open(repo_root)?;
-  enforceable(&db, checked)?;
+  publishable(&db, id, checked)?;
   Ok(db.publish_draft_matching(id, checked, Timestamp::now())?.number())
 }
 
 /// Publishes exactly the stale draft and latest version the person reviewed, atomically.
 pub fn publish_stale_checked_in(root: &Path, expected: &ProfileEntry) -> Result<VersionNumber, StoreError> {
   let mut db = ProjectDb::open(root)?;
-  enforceable(&db, &expected.profile)?;
+  publishable(&db, expected.id, &expected.profile)?;
   let now = Timestamp::now();
   db.publish_draft_with(expected.id, now, |draft: Draft<AgentProfile>, latest| {
     if ProfileEntry::new(expected.id, Some(draft.clone()), latest.as_ref()).as_ref() != Some(expected) {
@@ -307,6 +324,19 @@ pub fn publish_stale_checked_in(root: &Path, expected: &ProfileEntry) -> Result<
     ))
   })
   .map(|version| version.number())
+}
+
+/// Refused when `profile`, version of `id`, is a team's with no connection picked here yet
+/// (`PublishError::ConnectionNotPicked`), or by [`enforceable`].
+fn publishable<S: ConnectionStore<Error = StoreError>>(
+  store: &S,
+  id: ResourceId,
+  profile: &AgentProfile,
+) -> Result<(), StoreError> {
+  if profile.awaits_connection_pick(id) {
+    return Err(PublishError::ConnectionNotPicked.into());
+  }
+  enforceable(store, profile)
 }
 
 /// Refused when `profile`'s connection is gone, or its CLI cannot enforce the profile's permissions here.
@@ -335,7 +365,7 @@ pub fn keep_draft_over_latest<S: ResourceStore>(store: &mut S, id: ResourceId, n
   Ok(())
 }
 
-/// A change to one profile, applied in the project database.
+/// A change to one profile, applied in the project database. A new profile is created as v1 with no draft.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ProfileChange {
   Create(AgentProfile),
@@ -349,7 +379,7 @@ pub fn apply_in(repo_root: &Path, change: ProfileChange) -> Result<ResourceId, S
   let mut db = ProjectDb::open(repo_root)?;
   let now = Timestamp::now();
   match change {
-    ProfileChange::Create(profile) => create_profile(&mut db, &profile, now),
+    ProfileChange::Create(profile) => create_published_profile(&mut db, &profile, now),
     ProfileChange::SaveDraft(id, profile) => save_draft(&mut db, id, profile, now).map(|()| id),
     ProfileChange::Publish(id) => publish(&mut db, id, now).map(|_| id),
     ProfileChange::KeepDraft(id) => keep_draft_over_latest(&mut db, id, now).map(|()| id),

@@ -6,6 +6,7 @@ macro_rules! markers {
   ($inspect:path) => {
     impl $inspect for crate::accounts::AccountUses {}
     impl $inspect for crate::accounts::NewAccount {}
+    impl $inspect for crate::tasks::active_runs::ActiveRun {}
     impl $inspect for crate::tasks::plan_limit::PlanStop {}
     impl $inspect for crate::activity::Activity {}
     impl $inspect for crate::app_updates::AppUpdates {}
@@ -16,6 +17,13 @@ macro_rules! markers {
     impl $inspect for crate::agents::data::ProjectAgents {}
     impl $inspect for crate::agents::hub::HubCounts {}
     impl $inspect for crate::agent_testing::listing::ProjectServices {}
+    impl $inspect for crate::agents::team_hub::TeamHub {}
+    impl $inspect for crate::agents::team_mcp_conflict::Based {}
+    impl $inspect for crate::agents::team_mcp_edit::Saved {}
+    impl $inspect for crate::agents::team_mcp_edit::EditError {}
+    impl $inspect for crate::app_mcp::setup::NewTeamMcpServer {}
+    impl $inspect for crate::sharing::team_edit::EditRefused {}
+    impl $inspect for crate::sharing::team_edit::Edited {}
     impl $inspect for crate::removal::Users {}
     impl $inspect for crate::agents::form::ModelSelection {}
     impl $inspect for crate::clock::Clock {}
@@ -50,7 +58,6 @@ macro_rules! markers {
     impl $inspect for crate::import::data::ImportFailure {}
     impl $inspect for crate::import::data::LoadNotice {}
     impl $inspect for crate::import::data::Sources {}
-    impl $inspect for crate::instructions::data::NewInstruction {}
     impl $inspect for crate::instructions::data::ProjectInstructions {}
     impl $inspect for crate::instructions::form::Events {}
     impl<T> $inspect for crate::instructions::form::Picked<T> {}
@@ -72,7 +79,7 @@ macro_rules! markers {
     impl $inspect for crate::merge_queue::QueueRefusal {}
     impl $inspect for crate::merge_queue::QueueRow {}
     impl $inspect for crate::merge_queue::RunDelivery {}
-    impl $inspect for crate::tasks::merge_attempts::merges::Merges {}
+    impl $inspect for crate::tasks::review_list::ReviewList {}
     impl $inspect for crate::tasks::merge_attempts::page::AttemptPage {}
     impl $inspect for crate::messages::Message {}
     impl $inspect for crate::modules::ModuleChoice {}
@@ -97,16 +104,12 @@ macro_rules! markers {
     impl $inspect for crate::pipelines::library::LibraryEntry {}
     impl $inspect for crate::pipelines::library::StartFrom {}
     impl $inspect for crate::pipelines::problems::ProblemView {}
+    impl $inspect for crate::readiness::ProjectReadiness {}
     impl $inspect for crate::plan_limits::Connections {}
     impl $inspect for crate::plan_limits::Readings {}
     impl $inspect for crate::project_list::Listing {}
     impl $inspect for crate::project_setup::CreateFailure {}
     impl $inspect for crate::project_setup::Creation {}
-    impl $inspect for crate::pull_requests::Inbox {}
-    impl $inspect for crate::pull_requests::detail::Detail {}
-    impl $inspect for crate::pull_requests::list::PullRequestList {}
-    impl $inspect for crate::pull_requests::list::PullRequestSort {}
-    impl $inspect for crate::pull_requests::page::PullRequestPage {}
     impl $inspect for crate::usage::UsageData {}
     impl $inspect for crate::recovery::InterruptedRun {}
     impl $inspect for crate::recovery::Recovery {}

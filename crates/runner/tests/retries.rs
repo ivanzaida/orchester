@@ -156,6 +156,7 @@ async fn retries_exhausted_wait_and_a_person_returns_the_work_with_a_note() {
   let decision = StuckDecision::ReturnTo {
     step: key("implement"),
     note,
+    profile: None,
   };
   std::fs::remove_file(&release).expect("Implement waits now");
   scheduler.decide_stuck(id, decision).await.expect("returned");

@@ -15,7 +15,7 @@ use orchester_core::{
   agent_files::import::RepositoryOrigin,
   id::ResourceId,
   name::Name,
-  resource::{Draft, InstructionScope, ResourceKind, Skill, SkillFile, SkillFilePath, Slug, Version, VersionNumber},
+  resource::{Draft, ResourceKind, Skill, SkillFile, SkillFilePath, Version, VersionNumber},
   store::{BlobStore, RepositoryImportStore, ResourceStore},
   time::Timestamp,
 };
@@ -27,8 +27,6 @@ use crate::{
   instructions::data::{PipelineChoice, ProfileChoice, pipelines, profiles},
 };
 
-/// Slug of a skill whose name has no ASCII letters or digits.
-const FALLBACK_SLUG: &str = "skill";
 /// How reference files are recorded among the project's blobs; what they hold is not checked.
 const FILE_MEDIA_TYPE: &str = "application/octet-stream";
 
@@ -152,18 +150,6 @@ fn entries(db: &ProjectDb) -> Result<Vec<SkillEntry>, StoreError> {
     }
   }
   Ok(entries)
-}
-
-/// Creates a skill called `name` for the whole project as an empty draft, under a slug made from
-/// its name.
-pub fn create_in(repo_root: &Path, name: Name) -> Result<ResourceId, StoreError> {
-  let mut db = ProjectDb::open(repo_root)?;
-  let taken: Vec<Slug> = db.slugs(ResourceKind::Skill)?;
-  let fallback = Slug::new(FALLBACK_SLUG).expect("the fallback slug is valid");
-  let slug = Slug::unique_for(&name, &fallback, &taken);
-  let body = Skill::new(String::new(), String::new(), Vec::new(), InstructionScope::Project)
-    .expect("a skill without files has no two files at one path");
-  Ok(db.create_resource(slug, name, &body, Timestamp::now())?.id())
 }
 
 /// Publishes the stored draft; the version it became.

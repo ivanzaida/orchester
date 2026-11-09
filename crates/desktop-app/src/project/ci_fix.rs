@@ -81,7 +81,16 @@ async fn fix_due(services: &Services, open: &OpenProject) -> Result<u64, Message
       continue;
     }
     let runner = (&services.runners, &services.servers);
-    let (fixed, _) = fix_ci(runner, open, (due.task, due.run), (read, false), Fixer::Automatic).await?;
+    let ready = (&services.workspace, &services.vault);
+    let (fixed, _) = fix_ci(
+      runner,
+      ready,
+      open,
+      (due.task, due.run),
+      (read, false),
+      Fixer::Automatic,
+    )
+    .await?;
     if matches!(fixed, FixDone::Stored(_) | FixDone::Stopped) {
       done += 1;
     }

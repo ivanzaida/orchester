@@ -174,25 +174,6 @@
         "notSaved": "Not saved: {{reason}}",
         "blocked": "A change brought by automation was not taken: only you change this setting, here in the window."
       },
-      "orchestrator": {
-        "title": "The Orchestrator",
-        "label": "What the Orchestrator may do",
-        "everyProject": "Each project sets its own",
-        "someOn": "Each project sets its own · {{project}}: {{switches}}",
-        "noneOn": "Each project sets its own · {{project}}: everything stays yours",
-        "listSeparator": ", ",
-        "does": {
-          "publishDrafts": "publishes drafts",
-          "answerAgents": "answers agents",
-          "mergeRuns": "merges runs",
-          "mergeFinished": "merges finished runs on its own",
-          "continueInterrupted": "continues interrupted runs",
-          "writeGit": "writes with git"
-        },
-        "open": "Project settings",
-        "unreadable": "What {{project}}'s Orchestrator may do can't be read: {{reason}}",
-        "foot": "Each project's Orchestrator has its own switches, in Project settings › Orchestrator."
-      },
       "server": {
         "section": "Orchester MCP server",
         "meta": {

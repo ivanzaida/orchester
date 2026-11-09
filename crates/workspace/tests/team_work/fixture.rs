@@ -1,4 +1,4 @@
-//! The team's configuration as the fake server publishes it, and the schema-2 execution bundle it builds from it at a
+//! The team's configuration as the fake server publishes it, and the schema-3 execution bundle it builds from it at a
 //! work start, with the task's number and each pinned version's label: a Builder profile run by Codex, a one-step
 //! pipeline and a skill with one reference file. Shared with the runner's team start tests (`#[path]`), so both drive
 //! the same bundle.
@@ -21,11 +21,12 @@ use orchester_core::{
   permission::{AgentPermissions, CommandPermission, NetworkAccess, StepPermissions},
   resource::{
     AgentProfile, Deliverable, InstructionScope, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess,
-    Skill, SkillFile, SkillFilePath, Slug, Step, StepKey, StepKind, Version, VersionNumber,
+    Skill, SkillFile, SkillFilePath, Slug, Step, StepKey, StepKind, TeamAgentProfile, TeamMcpServer, Version,
+    VersionNumber,
   },
   run::{
     BranchName, CommitId, PublishedVersions, RunSnapshot,
-    bundle::{CanonicalExecutionInputs, PinnedBodies, ResourceLabel, file_sha256},
+    bundle::{CanonicalExecutionInputs, ExecutionProfile, PinnedBodies, ResourceLabel, file_sha256},
   },
   sharing::TaskRevision,
   time::Timestamp,
@@ -53,16 +54,59 @@ pub struct Config {
   pub pipeline: ResourceId,
   pub skill: ResourceId,
   pub inputs: CanonicalExecutionInputs,
+  /// The CLI the bundle binds the profile to.
+  pub cli: AgentProvider,
+  /// The team MCP servers the profile names and the bundle pins, by server resource id, in the order given.
+  pub mcp_servers: Vec<ResourceId>,
 }
 
 impl Config {
   /// The configuration; `instructions` is the Implement step's prompt.
   pub fn new(instructions: &str) -> Self {
+    Self::with_mcp_servers(instructions, Vec::new())
+  }
+
+  /// [`Self::new`] whose profile names `servers`, each pinned at version 1 under a server id of its own.
+  pub fn with_mcp_servers(instructions: &str, servers: Vec<TeamMcpServer>) -> Self {
     let (profile, pipeline, skill) = (ResourceId::generate(), ResourceId::generate(), ResourceId::generate());
     let profile_version = builder();
     let pipeline_version = one_step(profile, instructions);
     let skill_version = checks();
     let profiles = BTreeMap::from([(profile, profile_version.clone())]);
+    let ids: Vec<ResourceId> = servers.iter().map(|_| ResourceId::generate()).collect();
+    let server_versions: Vec<(ResourceId, Version<TeamMcpServer>)> = ids
+      .iter()
+      .zip(servers)
+      .map(|(id, server)| {
+        let version = Version::new(VersionId::generate(), VersionNumber::FIRST, server, Timestamp::now());
+        (*id, version)
+      })
+      .collect();
+    let execution_profile = if ids.is_empty() {
+      ExecutionProfile::of(profile_version.body())
+    } else {
+      let body = profile_version.body();
+      let team = TeamAgentProfile::new(
+        body.role().clone(),
+        body.responsibilities().to_owned(),
+        body.instructions().clone(),
+        (AgentProvider::CodexCli, body.model().clone(), body.settings().clone()),
+      )
+      .with_mcp_servers(ids.clone())
+      .expect("distinct servers");
+      ExecutionProfile::of_team(&team)
+    };
+    let mut labels = vec![
+      (profile_version.id(), label("builder", "Builder")),
+      (pipeline_version.id(), label("delivery", "Delivery")),
+      (skill_version.id(), label(SKILL_SLUG, "Checks")),
+    ];
+    labels.extend(
+      server_versions
+        .iter()
+        .enumerate()
+        .map(|(at, (_, version))| (version.id(), label(&format!("server-{at}"), &format!("Server {at}")))),
+    );
     let skills = BTreeMap::from([(skill, skill_version.clone())]);
     let published = PublishedVersions {
       profiles: &profiles,
@@ -72,22 +116,26 @@ impl Config {
     };
     let snapshot = RunSnapshot::build(pipeline, &pipeline_version, published).expect("snapshot");
     let bodies = PinnedBodies {
-      labels: &[
-        (profile_version.id(), label("builder", "Builder")),
-        (pipeline_version.id(), label("delivery", "Delivery")),
-        (skill_version.id(), label(SKILL_SLUG, "Checks")),
-      ],
-      profiles: &[profile_version],
+      labels: &labels,
+      profiles: &[(profile_version.id(), execution_profile)],
       instructions: &[],
       tools: &[],
       skills: &[skill_version],
+      mcp_servers: &server_versions,
     };
     Self {
       profile,
       pipeline,
       skill,
       inputs: CanonicalExecutionInputs::pin(&snapshot, bodies).expect("inputs"),
+      cli: AgentProvider::CodexCli,
+      mcp_servers: ids,
     }
+  }
+
+  /// This configuration whose profile runs on `cli`.
+  pub fn running(self, cli: AgentProvider) -> Self {
+    Self { cli, ..self }
   }
 
   /// The bundle the server builds for `claim` on `module`'s branch from `base_commit`.
@@ -118,7 +166,7 @@ impl Config {
       },
       delivery: Deliverable::default(),
     };
-    ExecutionBundle::new(start, self.inputs.clone(), &[(self.profile, AgentProvider::CodexCli)]).expect("bundle")
+    ExecutionBundle::new(start, self.inputs.clone(), &[(self.profile, self.cli)]).expect("bundle")
   }
 }
 

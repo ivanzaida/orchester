@@ -4,7 +4,8 @@
 //! the server as stored now, so that applying it later is refused once anything changed. A stdio program is looked up
 //! as saving it would (`tools::program`), so the card names the file it would be; one not found is shown so, and
 //! applying it is refused. A secret is named, never its value; a plain variable's value and the values of an
-//! endpoint's query are not shown.
+//! endpoint's query are not shown. A team project's MCP servers are the team's resources, which this preview does not
+//! read, so every proposal in one is refused (`team_mcp_proposal_unsupported`): the MCP server tools change them.
 
 use std::path::Path;
 
@@ -44,7 +45,8 @@ pub(crate) struct McpPreview {
 
 /// The change `operation` with the tool's `arguments` (their `project` the chat's own) would make, refused as the tool
 /// refuses it: fields the page refuses, a name another server has, a secret the project has not, a program that cannot
-/// be stored but for one not found, a server profiles still choose for a removal. Blocks on SQLite and the disk.
+/// be stored but for one not found, a server profiles still choose for a removal; any change in a team project. Blocks
+/// on SQLite and the disk.
 pub(crate) fn preview(
   services: &Services,
   operation: McpOperation,
@@ -53,6 +55,12 @@ pub(crate) fn preview(
   let project = arguments.get("project").and_then(Value::as_str).unwrap_or_default();
   let open = services.project(project)?;
   let db = ProjectDb::open(&open.repo_root)?;
+  if db.sharing()?.is_some() {
+    return Err(ToolError::refused(
+      "team_mcp_proposal_unsupported",
+      vec![Message::new("appMcp.errors.teamMcpProposalUnsupported")],
+    ));
+  }
   let secrets = db.secrets()?;
   let mut arguments = arguments.clone();
   let read = Read {

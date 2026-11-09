@@ -145,6 +145,9 @@ otherwise), its runs and its link (Details tab; each run links to the Summary).
 its next run takes as things stand (`null` = whatever the checkout has checked out), with its `source` (`task`,
 `module` with that `module`'s id, or `checked_out`). Each run's own base is in `get_run`.
 
+`led_in` is the Orchestrator conversation the task's events go to, as its *Led in* shows it (see
+[`get_watches`](#get_watches--read-only)), or `null` when no subscription covers it.
+
 Parameters: `project` (req.), `key` (req.: key or id).
 
 ### `create_task` — changes data
@@ -249,6 +252,8 @@ link), and its **burndown** by local day from its start (or its first task's day
 366 days): scope and remaining work at each day's end (`null` for future days), the ideal line (`null` without a
 target), and work added and removed that day. *Done* is the task's Done (merging its run sets it, in Orchester or found
 merged outside by git, as does a person). `forecast`: 50% and 85% delivery dates, or `not_enough_history`.
+`led_in`: the Orchestrator conversation that leads the module (its own subscription, else the whole project's), or
+`null` when none does — see [`get_watches`](#get_watches--read-only).
 
 Parameters: `project` (req.), `module` (req.: id or name).
 
@@ -273,6 +278,38 @@ branch nowhere; nothing is made).
 Changes `name`, `description`, `start_date`, `target_date` (`null` = no date), `state` (`open` | `closed`) or
 `base_branch` (as `create_module` takes it; the next runs of its tasks that inherit theirs take it, runs that started
 keep theirs); fields left out stay. Its tasks and history stay. Parameters: `project`, `module` (req.) + the fields.
+
+### `get_watches` — read-only
+
+Who leads what: the project's Orchestrator conversations and what each one watches (its **subscriptions**), with what
+waits there now, as `/watching` shows it in the conversation. A subscription leads a module, a task, the tasks without
+a module or the whole project; a task's events go to the most specific subscription that covers it. Subscribing,
+stopping and taking a target over stay the person's commands in the conversation (`/watch`): **no tool writes a
+subscription**. A team project is refused as `team_project_unsupported`.
+
+| Parameter      | Type           | Req. | Description                                                                         |
+|----------------|----------------|------|-------------------------------------------------------------------------------------|
+| `project`      | string         | yes  | The project's id, or its name.                                                      |
+| `conversation` | string \| null | no   | One conversation, by id or title (ignoring case); left out = every one that leads something. |
+
+Answers `conversations`, each with:
+
+- `id`, `title`, `link` (the conversation in the app).
+- `leads`: `modules` and `tasks` (counts), `without_module` and `project` (booleans), and `shown` (*1 module*, …).
+- `total`: the one-line total, one part each (*1 thing waits for you*, *1 run is stopped at a limit*; *Nothing waits
+  for you*, or *This conversation watches nothing yet*).
+- `subscriptions`, in the order they were kept: `target` (`kind` `module` | `task` | `without_module` | `project`,
+  `id` of the module or task, `name`, `link` — `null` for the tasks without a module), `since` (ms), `order`
+  (`source` `own` | `project_default` | `none`, with its `text`), `tasks` (those it leads with something going on:
+  `key`, `id`, `title`, `run`, `going` — `running`, `waits` with `waits_for` `question` | `message` | `plan` |
+  `approval` | `decision` | `run`, `queued` with its `position` from 1, `stopped_at_limit` with `daily_budget`,
+  `ready_to_merge` — and its `state`, `note`, `action` words and `link`), and `rest` (*4 more tasks with nothing under
+  way*, or `null`). A task a more specific subscription leads is listed under that one only.
+
+`get_module` and `get_task` name the leading conversation as `led_in`: `conversation` (`id`, `title`, `link`), `via`
+(the less specific target it leads through, as `target` above; `null` when it leads the module or task itself) and
+`shown` (*«Webhooks v2 and Search index» · via Webhooks v2*). Refusals: `conversation_not_found`,
+`conversation_ambiguous` (several conversations have that title; name it by id).
 
 ---
 
@@ -356,6 +393,11 @@ Parameters (each): `project` (req.), `run` (req.). Runner refusals: `run_not_run
 
 Continues a run that **stopped** with one of the choices its task page offers for how it stopped. Every limit value
 is given explicitly (no maximum); nothing raises or lifts a limit by itself.
+
+The Orchestrator chat calls this tool like any client, with one difference: while the project's *Let the Orchestrator
+drive* is on, every choice is allowed for the chat without *Let automation answer approvals* (accepting a step, raising
+limits and budgets, resuming after the daily budget, and the retry, return and resolve choices); while it is off,
+only `allow_retry`, `return_to` and `resolve_conflicts` are proposed to the person as cards.
 
 | Parameter | Type   | Req. | Description             |
 |-----------|--------|------|-------------------------|
@@ -542,33 +584,11 @@ steps other published profiles. A copy that is not identical to its source (othe
 
 ---
 
-## 8. Pull requests
+## 8. CI of a run's pull request
 
-### `list_pull_requests` — read-only · cross-project
-
-Pull requests of the project's linked GitHub repository, as the *Pull requests* page lists them: number, title,
-state (`open`, `draft`, `merged`, `closed`), review, GitHub checks on the head, branches, changes, merged/closed time,
-fork or not, the task and run whose branch it is (`agent_working` while that run runs), app link and GitHub url.
-They are what the last successful sync read (open ones plus the 50 most recently updated closed ones). Each
-repository reports its sync: `sync` (`synced`, `rate_limited`, `github_unreachable`, `paused_other_account`,
-`gh_unavailable`, …), `synced_at`, `attempted_at`, `paused_until`.
-
-| Parameter | Type           | Req. | Description                                                                          |
-|-----------|----------------|------|--------------------------------------------------------------------------------------|
-| `project` | string \| null | no   | Left out = every project.                                                            |
-| `refresh` | boolean        | no   | Sync through `gh` first (needs `project`); skipped if a sync ran in the last 30 s or a rate limit holds. |
-| `tab`     | `open` \| `needs_review` \| `agent_working` \| `merged` \| `closed` \| null | no | As the page's tabs. |
-| `search`  | string \| null | no   | A number (`42`, `#42`), title words, a branch, or a task key.                        |
-
-### `get_pull_request` — read-only
-
-One pull request, with the repository's sync state. One the last sync did not read is refused as
-`pull_request_not_synced`; with `refresh` it is read from GitHub on its own (once per 30 s). Errors:
-`github_rate_limited` (until `paused_until`), `github_unreachable`, `pull_request_not_read`,
-`pull_request_not_found`.
-
-`checks` keeps the last sync's counts (`passed`, `failed`, `running`, `skipped`, `revision`) and adds the pull
-request's CI read now through `gh pr checks`, at most once per 30 s per pull request (a call sooner gets that read):
+`get_run` gives `checks`: the CI of the pull request of the run's branch, as the last sync stored it (its open one,
+else its latest), read now through `gh pr checks`, at most once per 30 s per pull request (a call sooner gets that
+read). `no_pull_request` when there is none, `not_linked` without a linked GitHub repository.
 
 - `state`: `passed`, `failed`, `running` or `no_checks`; or why nothing was read — `no_pull_request`, `gh_missing`,
   `not_signed_in`, `wrong_account`, `missing_scope`, `gh_unavailable`, `rate_limited` (with `resets_at`),
@@ -578,11 +598,6 @@ request's CI read now through `gh pr checks`, at most once per 30 s per pull req
 - `runs`: each check's `name`, `workflow`, `state` (one of the counts' names), `url` and, for a failed GitHub
   Actions job, `log_tail` — the last 40 lines of its failed steps' log (`gh run view --job <id> --log-failed`),
   `null` when `gh` gave none. At most 5 failed jobs' logs are read per read.
-
-`get_run` gives the same `checks` for the pull request of the run's branch, as the last sync stored it (its open one,
-else its latest); `no_pull_request` when there is none, `not_linked` without a linked GitHub repository.
-
-Parameters: `project` (req.), `number` (integer, req.), `refresh` (boolean).
 
 ---
 

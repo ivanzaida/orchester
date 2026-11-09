@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{branch::BranchName, not_started::WorktreeFailure, plan::ReviewNote};
+use super::{branch::BranchName, chosen_profile::ChosenProfile, not_started::WorktreeFailure, plan::ReviewNote};
 use crate::{id::StepExecutionId, resource::StepKey};
 
 /// Why a running run stopped without a checkpoint-safe pause.
@@ -296,19 +296,25 @@ pub enum AttemptReason {
     step: StepKey,
   },
   /// `failed_step` waited for a person, who returned the work to the agent step `return_to` with
-  /// `note`, the instruction its prompt carries.
+  /// `note`, the instruction its prompt carries. `profile`: the agent profile version the person chose to run that
+  /// step with this time, in place of the snapshot's ([`super::Run::executing_agent`]).
   Returned {
     failed_step: StepKey,
     return_to: StepKey,
     note: ReviewNote,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    profile: Option<ChosenProfile>,
   },
   /// The run had ended — succeeded, or failed after it started — and a person returned its work to the agent step
   /// `return_to` with `note`, the instruction its prompt carries ([`super::Run::return_ended`]); `conflicts` when
-  /// it was returned to resolve the conflicts of a merge into its base branch.
+  /// it was returned to resolve the conflicts of a merge into its base branch; `profile`: the agent profile version
+  /// the person chose to run that step with this time, in place of the snapshot's ([`super::Run::executing_agent`]).
   ReturnedAfterEnd {
     return_to: StepKey,
     note: ReviewNote,
     conflicts: Option<MergeConflicts>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    profile: Option<ChosenProfile>,
   },
   /// A person (or automation they let answer) accepted `step`, which waited for them unverified or unchanged, as
   /// it is: the attempt passes it with the accepted execution's work and result, then runs the steps after it and

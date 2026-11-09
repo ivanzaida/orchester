@@ -11,6 +11,8 @@ use orchester_workspace::{
   workspace::Workspace,
 };
 
+use crate::project::settled_read::settled_read;
+
 /// The names of the projects the app knows, by id; empty until they are read, or when they cannot be.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ProjectNames(Arc<HashMap<ProjectId, Arc<str>>>);
@@ -22,11 +24,15 @@ impl ProjectNames {
     self.0.get(&project).map(|name| &**name)
   }
 
-  /// The names of the projects `workspace` knows, read off the UI thread again whenever `revision` changes. Without
-  /// them a link to another project's place names only the place, so a failed reading is logged and reads as none.
+  /// The names of the projects `workspace` knows, read off the UI thread again whenever `revision` changes, never
+  /// beside a reading that has not ended (`settled_read`). Without them a link to another project's place names only
+  /// the place, so a failed reading is logged and reads as none.
   pub fn read(ctx: &mut Ctx, workspace: Workspace, revision: u64) -> Self {
-    let state = ctx
-      .future((workspace, revision), |(workspace, _)| async move {
+    let state = settled_read(
+      ctx,
+      "chat project names",
+      (workspace, revision),
+      |(workspace, _)| async move {
         let projects = background::run(move || workspace.projects()).await?.map_err(|error| {
           tracing::warn!(%error, "cannot read the projects' names for the chat's links");
           messages::store_error(&error)
@@ -36,9 +42,8 @@ impl ProjectNames {
           .map(|project| (project.id, Arc::from(project.name.as_str())))
           .collect();
         Ok::<_, Message>(Self(Arc::new(names)))
-      })
-      .state()
-      .get();
+      },
+    );
     state.data.unwrap_or_default()
   }
 }

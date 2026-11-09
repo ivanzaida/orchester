@@ -12,6 +12,7 @@ mod approval_mode;
 mod attempt;
 mod branch;
 pub mod bundle;
+mod chosen_profile;
 mod commit;
 mod completion;
 mod error;
@@ -50,6 +51,7 @@ mod transition;
 mod unreadable;
 mod unverified;
 mod usage;
+mod waits_on;
 
 pub use self::{
   active_clock::ActiveClock,
@@ -66,6 +68,7 @@ pub use self::{
   approval_mode::{AllowAutopilot, AutopilotPersonOnly, EffectiveMode, ManualBecause, ManualSwitch},
   attempt::{Attempt, Checkpoint, StepExecution},
   branch::{BranchName, BranchNameError},
+  chosen_profile::ChosenProfile,
   commit::{CommitId, CommitIdError},
   completion::{CompletedBy, REPORT_ARTIFACT, RunArtifact, RunCompletion, UnknownCompleter, last_report, run_delivers},
   error::RunError,
@@ -110,4 +113,5 @@ pub use self::{
   unreadable::{ListedRun, UnreadableRun},
   unverified::AcceptRefusal,
   usage::TokenUsage,
+  waits_on::{RunWaitsOn, WaitedTaskEvent, WaitedTaskEventKind, WaitingRun, WaitsOnChange, WaitsOnEnd, WaitsOnError},
 };

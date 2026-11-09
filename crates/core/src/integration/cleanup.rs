@@ -67,6 +67,15 @@ pub struct LeftBranch {
   pub merged: bool,
 }
 
+/// The worktrees of a run that are still on disk, by why they stay.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Staying {
+  /// Registered with git, holding changes nobody committed.
+  pub with_changes: usize,
+  /// A removal did not finish: a folder git forgot, or one it refused to remove, with nothing uncommitted in it.
+  pub unfinished: usize,
+}
+
 /// Everything the run left. It travels to the runner as what a person saw before confirming its
 /// removal (Run again).
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -105,6 +114,20 @@ impl Leftovers {
       .worktrees
       .iter()
       .any(|worktree| matches!(worktree.listing, FolderListing::Unreadable { .. }))
+  }
+
+  /// The worktrees whose folder is still on disk, by why each stays: git lists a folder that is gone until it is
+  /// pruned, and that one stays no longer.
+  pub fn staying(&self) -> Staying {
+    let mut staying = Staying::default();
+    for worktree in self.worktrees.iter().filter(|worktree| !worktree.missing) {
+      if !worktree.forgotten && !worktree.uncommitted.is_empty() {
+        staying.with_changes += 1;
+      } else {
+        staying.unfinished += 1;
+      }
+    }
+    staying
   }
 
   /// Whether the run's own worktree is still there — or, for a run that borrows workspaces, its branch. Its agent

@@ -308,7 +308,7 @@ fn answer_button(id: &str, (index, answer): (usize, &Answer), state: Answers) ->
   };
   match state {
     Answers::Open => {
-      let button = button.key((index + 1).to_string()).in_form();
+      let button = button.in_form();
       let button = match &answer.consequence {
         Some(words) => button.consequence(words.clone()),
         None => button,

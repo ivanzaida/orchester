@@ -38,6 +38,10 @@ use super::{
   step_views::step_views,
   unreadable::Unreadable,
 };
+use crate::orchestrator::{
+  waits_on::view::RunWaitView,
+  watching::{LedIn, WatchReads},
+};
 
 /// A task's messages, oldest first, and the files attached to them.
 type Conversation = (Vec<Message>, BTreeMap<MessageId, Vec<Attachment>>);
@@ -307,6 +311,15 @@ pub struct TaskDetail {
   pub shared: Option<orchester_store::SharedTaskInfo>,
   /// Before the task has a run: the agent its run would start with.
   pub first_agent: Option<Arc<str>>,
+  /// The Orchestrator conversation that leads the task, its properties' *Led in* (`i687ei` b).
+  pub led_in: LedIn,
+  /// The latest run's latest wait on another task, and how it stands (ORC-784); `None` when it never waited on one.
+  pub waits_on: Option<RunWaitView>,
+  /// The archive of a team resource that stopped the latest run (A22 `pUu78`), with the resource and who archived it.
+  pub archive_stop: Option<orchester_store::ArchiveStop>,
+  /// Whether the resource of [`Self::archive_stop`] is still archived here; it is not once an admin restored it, and
+  /// not known for a stop recorded before the resource was named.
+  pub archived_still: bool,
 }
 
 impl TaskDetail {
@@ -357,6 +370,7 @@ impl TaskDetail {
   pub fn load_in(repo_root: &Path, task: TaskId) -> Result<Self, StoreError> {
     let mut db = ProjectDb::open(repo_root)?;
     let task = db.task(task)?.ok_or(StoreError::TaskNotFound(task))?;
+    let led_in = WatchReads::read_task_led_in(&db, &task)?;
     let blocked_by = blocking_keys(&db, &task)?;
     let missing_pipeline = db.missing_pipelines()?.remove(&task.id());
     let unsent_status = db.unsent_status(task.id())?;
@@ -379,6 +393,7 @@ impl TaskDetail {
         missing_pipeline,
         unsent_status,
         shared,
+        led_in,
         ..Self::without_runs(task, conversation, requirements)
       });
     }
@@ -402,10 +417,8 @@ impl TaskDetail {
       Some(run) => (db.run_merge(run.id())?, crate::merge_queue::task_delivery(&db, run)?),
       None => (None, None),
     };
-    let first_agent = match latest {
-      None => super::first_agent::first_agent(&db, &task)?,
-      Some(_) => None,
-    };
+    let (first_agent, waits_on) = super::first_agent::first_agent_or_waits_on(&db, &task, latest.as_ref())?;
+    let (archive_stop, archived_still) = archive_stop_of(&db, latest.as_ref())?;
     let mut run = latest.map(|run| run_view(&db, run)).transpose()?;
     if let Some(view) = &mut run {
       view.worktree_not_removed = super::worktree_left::not_removed(&db, repo_root, view.id())?;
@@ -421,6 +434,8 @@ impl TaskDetail {
       result,
       first_agent,
       run_task,
+      archive_stop,
+      archived_still,
       merge,
       queue,
       history,
@@ -429,6 +444,8 @@ impl TaskDetail {
       missing_pipeline,
       unsent_status,
       shared,
+      led_in,
+      waits_on,
       ..Self::without_runs(task, conversation, requirements)
     })
   }
@@ -457,8 +474,27 @@ impl TaskDetail {
       unsent_status: None,
       shared: None,
       first_agent: None,
+      led_in: LedIn::Nobody,
+      waits_on: None,
+      archive_stop: None,
+      archived_still: false,
     }
   }
+}
+
+/// The archive that stopped `latest`, the task's latest run, and whether its resource is still archived here.
+fn archive_stop_of(
+  db: &ProjectDb,
+  latest: Option<&Run>,
+) -> Result<(Option<orchester_store::ArchiveStop>, bool), StoreError> {
+  let Some(stop) = latest.map(|run| db.archive_stop_of(run.id())).transpose()?.flatten() else {
+    return Ok((None, false));
+  };
+  let still = match &stop.archived {
+    Some(archived) => db.resource_removed_at(archived.id)?.is_some(),
+    None => false,
+  };
+  Ok((Some(stop), still))
 }
 
 /// The keys of `task`'s unfinished blocking tasks that are in the project: a shared project's first download brings its

@@ -309,10 +309,12 @@ fn skills_visual_a_client_saving_over_an_automation_draft_keeps_the_mark() {
 }
 
 #[test]
-fn skills_visual_a_skill_a_client_created_through_the_window_is_marked() {
+fn skills_visual_a_skill_a_client_created_through_the_window_is_v1_and_holds_no_mark() {
   let mut s = Skills::new();
   s.go(ProjectPage::NewSkill);
   client_sets(&mut s, "skill-name", "client-checks");
+  client_sets(&mut s, "skill-description", "A client's description.");
+  client_sets(&mut s, "skill-body", "# Checks\nA client's body.");
   s.click("skill-create");
   s.window.until("created skill editor", |w| {
     matches!(w.navigation().route_now(), Route::Project(_, ProjectPage::Skill(_)))
@@ -320,7 +322,8 @@ fn skills_visual_a_skill_a_client_created_through_the_window_is_marked() {
   let Route::Project(_, ProjectPage::Skill(id)) = s.window.navigation().route_now() else {
     panic!("editor route")
   };
-  assert!(marked(&s, id), "a skill a client named is automation's draft");
+  assert_eq!(s.entry(id).state.published().expect("created as v1").get(), 1);
+  assert!(!marked(&s, id), "a new skill is v1: it has no draft to mark");
 }
 
 fn glyph(s: &mut Skills, id: &str) -> String {

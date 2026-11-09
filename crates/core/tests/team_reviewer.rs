@@ -1,26 +1,26 @@
 use orchester_core::{
   connection::{AgentProvider, DecisionServerUrl},
-  name::Name,
   resource::{
-    DecisionReviewerReference, DecisionReviewerRole, Draft, LanguageReviewerReference, ModelId, ResourceBody,
-    ResourceKind, ReviewerDestinations, ReviewerHost, TeamReviewer, VersionNumber, publish,
+    Draft, ModelId, ResourceBody, ResourceKind, ReviewerDestinations, ReviewerHost, TeamReviewer, VersionNumber,
+    publish,
   },
   run::review::Probability,
   sharing::{VersionWidening, widens},
   time::Timestamp,
 };
+use serde_json::json;
 
 fn probability(value: f64) -> Probability {
   Probability::new(value).expect("valid probability")
 }
 
 fn decision(hosts: &[&str], threshold: f64) -> TeamReviewer {
+  decision_named("decision-1", hosts, threshold)
+}
+
+fn decision_named(model: &str, hosts: &[&str], threshold: f64) -> TeamReviewer {
   TeamReviewer::Decision {
-    connection: DecisionReviewerReference::DecisionConnection {
-      name: Name::new("Team decisions").expect("name"),
-      role: DecisionReviewerRole::Decision,
-    },
-    model: ModelId::new("decision-1").expect("model"),
+    model: ModelId::new(model).expect("model"),
     lowest_threshold: probability(threshold),
     destinations: if hosts.is_empty() {
       ReviewerDestinations::MembersComputers
@@ -37,25 +37,18 @@ fn decision(hosts: &[&str], threshold: f64) -> TeamReviewer {
 
 fn language() -> TeamReviewer {
   TeamReviewer::Language {
-    connection: LanguageReviewerReference::Connection {
-      name: Name::new("Team language").expect("name"),
-      role: AgentProvider::CodexCli,
-    },
+    cli: AgentProvider::CodexCli,
     model: ModelId::new("language-1").expect("model"),
     effort: Some("high".into()),
   }
 }
 
 #[test]
-fn team_reviewer_is_a_versioned_shared_resource_with_connection_references() {
+fn team_reviewer_is_a_versioned_shared_resource_that_names_no_connection() {
   assert_eq!(TeamReviewer::KIND, ResourceKind::TeamReviewer);
   for reviewer in [language(), decision(&["review.example.org"], 0.8)] {
     let json = serde_json::to_value(&reviewer).expect("serialize");
-    assert!(json["connection"]["name"].is_string());
-    assert!(json["connection"]["kind"].is_string());
-    assert!(json["connection"]["role"].is_string());
-    assert!(json["connection"].get("id").is_none());
-    assert!(json["connection"].get("base_url").is_none());
+    assert!(json.get("connection").is_none());
     assert_eq!(
       serde_json::from_value::<TeamReviewer>(json).expect("deserialize"),
       reviewer
@@ -69,6 +62,55 @@ fn team_reviewer_is_a_versioned_shared_resource_with_connection_references() {
     assert_eq!(first.body(), &reviewer);
     assert_eq!(second.number().get(), 2);
   }
+}
+
+#[test]
+fn team_reviewer_wire_form_names_the_cli_kind_of_a_language_reviewer_only() {
+  assert_eq!(
+    serde_json::to_value(language()).expect("serialize"),
+    json!({"kind": "language", "cli": "codex_cli", "model": "language-1", "effort": "high"})
+  );
+  assert_eq!(
+    serde_json::to_value(decision(&["review.example.org"], 0.8)).expect("serialize"),
+    json!({
+      "kind": "decision", "model": "decision-1", "lowest_threshold": 0.8,
+      "destinations": {"kind": "hosts", "hosts": ["review.example.org"]}
+    })
+  );
+  assert_eq!(language().cli(), Some(AgentProvider::CodexCli));
+  assert_eq!(decision(&[], 0.8).cli(), None);
+}
+
+#[test]
+fn team_reviewer_bodies_that_name_a_connection_are_not_read() {
+  let old_language = json!({
+    "kind": "language", "connection": {"kind": "connection", "name": "Team language", "role": "codex_cli"},
+    "model": "language-1", "effort": "high"
+  });
+  let old_decision = json!({
+    "kind": "decision", "connection": {"kind": "decision_connection", "name": "Team decisions", "role": "decision"},
+    "model": "decision-1", "lowest_threshold": 0.8, "destinations": {"kind": "members_computers"}
+  });
+  for old in [old_language, old_decision] {
+    assert!(serde_json::from_value::<TeamReviewer>(old).is_err());
+  }
+  // A new body with a stray connection field is refused too, and a language reviewer must name its CLI kind.
+  let mut stray = serde_json::to_value(language()).expect("serialize");
+  stray["connection"] = json!({"name": "x"});
+  assert!(serde_json::from_value::<TeamReviewer>(stray).is_err());
+  assert!(serde_json::from_value::<TeamReviewer>(json!({"kind": "language", "model": "m", "effort": null})).is_err());
+}
+
+#[test]
+fn team_reviewer_widens_ignore_the_cli_kind_a_language_reviewer_names() {
+  let codex = language();
+  let claude = TeamReviewer::Language {
+    cli: AgentProvider::ClaudeCodeCli,
+    model: ModelId::new("language-1").expect("model"),
+    effort: None,
+  };
+  assert!(!claude.widens_over(Some(&codex)));
+  assert!(widens(Some(&codex), &claude).is_empty());
 }
 
 #[test]
@@ -156,6 +198,6 @@ fn team_reviewer_rejects_invalid_hosts_and_stored_values() {
   json["lowest_threshold"] = serde_json::json!(1.1);
   assert!(serde_json::from_value::<TeamReviewer>(json).is_err());
   let mut json = serde_json::to_value(language()).expect("serialize");
-  json["connection"]["role"] = serde_json::json!("github");
+  json["cli"] = serde_json::json!("github");
   assert!(serde_json::from_value::<TeamReviewer>(json).is_err());
 }

@@ -1,25 +1,26 @@
 //! `run_task` of a team task: its work starts through the team server, never from this computer's queue. The task is
 //! read from the server, claimed for this session (`claim.acquire`, which answers the claim already held), and its
-//! module read for the branch its work builds on; the branch's commit here is the start's base. `work.start` goes
-//! through [`crate::team_work`], which keeps the start before each boundary and asks the project's runner for the run
-//! of the accepted inputs. A start the server or the runner cannot take now is recorded and carried on by recovery; the
-//! answer says where it waits.
+//! module read for the branch its work builds on; the branch's commit here is the start's base. Before anything is
+//! claimed, the pipeline must be ready on this computer ([`crate::readiness`]): one that is not is refused as
+//! `not_ready_here` with the missing parts, and no claim is taken, no work is asked for and no attempt is counted.
+//! `work.start` goes through [`crate::team_work`], which keeps the start before each boundary, checks the versions the
+//! bundle pins once more and asks the project's runner for the run of the accepted inputs. A start the server or the
+//! runner cannot take now is recorded and carried on by recovery; the answer says where it waits.
 
 use std::path::Path;
 
-use orchester_api::v2::{AuthorityRef, Subject, TeamCommandValue};
+use orchester_api::v2::{AuthorityErrorCode, AuthorityRef, Subject, TeamCommandValue};
 use orchester_core::{
   command::CommandRunner,
   id::{ClaimId, OperationId},
-  run::{CommitId, inputs::LocalConsent},
-  store::ConnectionStore,
+  run::CommitId,
 };
 use orchester_store::ProjectDb;
 use serde_json::{Value, json};
 
 use super::{
   Team,
-  bindings::{Binding, bind, choice_refused},
+  bundle_missing::{self, claim_message},
   on_worker,
   outcome::{accepted, action_refused, authority_refused},
   read, read_refused,
@@ -33,17 +34,20 @@ use crate::{
     services::blocking,
   },
   messages::Message,
+  readiness::{NotReadyHere, StartReadiness},
   runner::RunRequestError,
   tasks::run::start_messages,
   team_reads::{TeamReadError, listed::TeamPipelines},
-  team_work::{self, McpHere, ProjectRunner, StartChoices, StartOutcome, TeamStartRequest, TeamWork, TeamWorkError},
+  team_work::{
+    self, BranchNotFound, ClaimEnd, ProjectRunner, StartFailure, StartOutcome, StartTurn, TeamStartRequest, TeamWork,
+    TeamWorkError,
+  },
 };
 
 pub(in crate::app_mcp::tools) async fn run_task(
   services: &Services,
   team: &Team,
   key: &str,
-  given: &[Binding],
 ) -> Result<Value, ToolError> {
   let project = team.reads(services).await?;
   let task = find(&project, key).await?;
@@ -65,21 +69,26 @@ pub(in crate::app_mcp::tools) async fn run_task(
     Err(error) => return Err(read_refused(&error)),
   };
   let (root, programs) = (team.open.repo_root.clone(), services.programs().clone());
+  let (workspace, vault) = (services.workspace().clone(), services.vault.clone());
+  let start_vault = vault.clone();
   let branch = module_read.branch.clone();
-  let (pipeline, base_commit, (connections, mcp)) = blocking(move || {
+  let (base_commit, programs) = blocking(move || {
     let db = ProjectDb::open(&root)?;
     // Only the team's pipelines run a team task: a person's own local pipeline never does, even with the same id.
     let pipeline = TeamPipelines::of(&db)?
       .id(&named)
       .ok_or_else(|| pipeline_missing(&named))?;
     let commit = branch_tip(programs.runner(), &root, &branch)?;
-    Ok((pipeline, commit, (db.connections()?, McpHere::read(&db)?)))
+    match workspace
+      .team_start_readiness(&root, vault.get(), pipeline)
+      .map_err(ToolError::from)?
+    {
+      StartReadiness::Ready(programs) => Ok((commit, programs)),
+      StartReadiness::NotReady(refusal) => Err(ToolError::NotReadyHere(refusal)),
+      StartReadiness::PipelineUnknown => Err(pipeline_missing(&named)),
+    }
   })
   .await?;
-  let choices = StartChoices {
-    bindings: bind(&project, pipeline, (&connections, &mcp), given).await?,
-    consent: LocalConsent::default(),
-  };
   let dispatcher = team.dispatcher(services).await?;
   let runner = ProjectRunner::new(
     services.runners.clone(),
@@ -89,6 +98,9 @@ pub(in crate::app_mcp::tools) async fn run_task(
   let (id, read) = (task.task.id, task.task.revision);
   let module_read = module_read.module.revision;
   let outcome = on_worker(move || async move {
+    // The project's turn comes before the claim: the recovery of its other starts would otherwise release the claim
+    // this one takes while its own start is not recorded yet.
+    let turn = StartTurn::wait(dispatcher.servers(), dispatcher.root()).await;
     let claim_id = acquire(&dispatcher, Subject::Task { id }, start_failed).await?;
     let work = WorkAction {
       authority: AuthorityRef {
@@ -104,15 +116,15 @@ pub(in crate::app_mcp::tools) async fn run_task(
     let request = TeamStartRequest {
       operation: OperationId::generate(),
       work,
-      choices,
+      programs,
     };
     TeamWork::new(dispatcher, runner)
-      .start(request)
+      .start_in(&turn, request, start_vault.get())
       .await
       .map_err(work_refused)
   })
   .await?;
-  started(outcome)
+  started(team, outcome).await
 }
 
 /// The commit `branch` is at in the checkout at `root`: a module's branch is a start's base and a delivery's source.
@@ -121,7 +133,12 @@ pub(super) fn branch_tip(
   root: &Path,
   branch: &str,
 ) -> Result<CommitId, ToolError> {
-  team_work::branch_tip(runner, root, branch).map_err(|error| choice_refused(&error))
+  team_work::branch_tip(runner, root, branch).map_err(|BranchNotFound(branch)| {
+    ToolError::refused(
+      "branch_not_found",
+      vec![Message::new("appMcp.errors.branchNotFound").with("branch", branch)],
+    )
+  })
 }
 
 /// The claim of `subject` this session holds, taken now unless it held it already; `failed` when the server answered
@@ -149,17 +166,33 @@ pub(super) async fn acquire(
 }
 
 /// The tool's answer for where the start stands.
-fn started(outcome: StartOutcome) -> Result<Value, ToolError> {
+async fn started(team: &Team, outcome: StartOutcome) -> Result<Value, ToolError> {
   match outcome {
     StartOutcome::Started(run) => Ok(json!({ "run": { "id": run.to_string() }, "team": true })),
     StartOutcome::Waiting(_) => Err(ToolError::refused(
       "team_start_waiting",
       vec![Message::new("appMcp.errors.teamStartWaiting")],
     )),
-    StartOutcome::Refused(error) => Err(authority_refused(&error)),
-    StartOutcome::Failed(failure) => {
+    StartOutcome::Refused(error, claim) if error.code() == AuthorityErrorCode::BundleMissing => {
+      Err(bundle_missing::refused(team, error.details(), claim).await)
+    }
+    StartOutcome::Refused(error, _) => Err(authority_refused(&error)),
+    StartOutcome::Failed(StartFailure::BundleSchema { read, built }, claim) => {
+      Err(bundle_schema(Schemas { read, built }, claim))
+    }
+    StartOutcome::Failed(StartFailure::BundleUnreadable, claim) => Err(ToolError::refused(
+      "team_bundle_unreadable",
+      vec![Message::new("appMcp.errors.teamBundleUnreadable"), claim_message(claim)],
+    )),
+    StartOutcome::Failed(StartFailure::NotReadyHere { pipeline, missing }, claim) => Err(ToolError::NotReadyHere(
+      NotReadyHere::after_start(pipeline, missing, claim),
+    )),
+    StartOutcome::Failed(failure, claim) => {
       tracing::warn!(?failure, "a team start failed for good");
-      Err(start_failed())
+      Err(ToolError::refused(
+        "team_start_failed",
+        vec![Message::new("appMcp.errors.teamStartFailed"), claim_message(claim)],
+      ))
     }
     StartOutcome::RunnerRefused(rejection) => {
       let error = RunRequestError::Rejected(rejection);
@@ -170,6 +203,30 @@ fn started(outcome: StartOutcome) -> Result<Value, ToolError> {
       Err(ToolError::runner(&error, start_messages(&error)))
     }
   }
+}
+
+/// The bundle schema this computer reads and the one the team server built the run's bundle in.
+struct Schemas {
+  read: u32,
+  built: u32,
+}
+
+/// The bundle is built in another schema than this computer reads: the older of the two is updated.
+fn bundle_schema(Schemas { read, built }: Schemas, claim: ClaimEnd) -> ToolError {
+  let key = if built > read {
+    "appMcp.errors.teamBundleSchemaNewer"
+  } else {
+    "appMcp.errors.teamBundleSchemaOlder"
+  };
+  ToolError::refused(
+    "team_bundle_schema_mismatch",
+    vec![
+      Message::new(key)
+        .with("read", read.to_string())
+        .with("built", built.to_string()),
+      claim_message(claim),
+    ],
+  )
 }
 
 fn work_refused(error: TeamWorkError) -> ToolError {

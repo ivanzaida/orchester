@@ -1,12 +1,33 @@
 //! The task frame's helpers: the readers of the latest run's merge and its pull request's CI, the run controls it
 //! provides, and the notice of a reading that failed.
 
+use orchester_workspace::tasks::detail::TaskDetail;
+
 use super::{
   Ctx, Element, FrameProps, Message, Press, RunControls, Services, ShownProject, StaleRead, TaskContext, TaskFrame, ci,
   control_action, header, merge, summary, team_controls,
 };
+use crate::project::feed::ProjectFeed;
 
 impl TaskFrame {
+  /// What makes the page read the task again besides the runner: a screen's or automation's saves, the merge `queue`'s
+  /// changes and, while the page shows the card of a run an archive stopped, every change of the shared cache (a
+  /// restore there drops what the card says still uses the resource).
+  pub(super) fn saves(&self, feed: &ProjectFeed, queue: u64) -> u64 {
+    // A run switched to Manual by an MCP client changes its mode chip and its Conversation.
+    let outside = feed.outside.get();
+    let shared = if self.archive_card.get() { feed.saves.get() } else { 0 };
+    feed.revision.get() + outside.tasks + outside.runs + queue + shared
+  }
+
+  /// Notes whether `detail` shows the card of a run an archive stopped ([`Self::saves`]).
+  pub(super) fn follow_archive_card(&self, detail: &TaskDetail) {
+    let shown = detail.archive_stop.is_some();
+    if self.archive_card.get_untracked() != shown {
+      self.archive_card.set(shown);
+    }
+  }
+
   /// The latest run's merge attempts and the merge waiting in its worktree, as last read.
   pub(super) fn merge_reads(
     &self,
@@ -52,7 +73,8 @@ impl TaskFrame {
   /// Provides the run controls, the header's and the Summary's, and a team task's actions ([`team_controls`]).
   pub(super) fn provide_controls(&self, ctx: &mut Ctx, props: &FrameProps, services: &Services) {
     let runners = (services.runners.clone(), services.servers.clone());
-    let action = control_action(ctx, (props.project.open.clone(), props.task), runners);
+    let ready = (services.workspace.clone(), services.vault.clone());
+    let action = control_action(ctx, (props.project.open.clone(), props.task), runners, ready);
     ctx.provide(RunControls {
       action,
       requested: self.requested.clone(),
@@ -78,7 +100,7 @@ impl TaskFrame {
   pub(super) fn ci(
     &self,
     ctx: &mut Ctx,
-    (project, detail): (&ShownProject, &orchester_workspace::tasks::detail::TaskDetail),
+    (project, detail): (&ShownProject, &TaskDetail),
     (saves, online): (u64, bool),
   ) -> (Option<Element>, Option<ci::ShownCi>) {
     ctx.provide(self.ci_actions.clone());

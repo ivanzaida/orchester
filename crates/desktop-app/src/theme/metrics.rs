@@ -8,7 +8,8 @@ pub enum ExtraSpacing {
   /// 2: navigation items, tabs; a segmented control's padding and segments (`C9VsTA`), a menu's options
   /// (`ClKqz`), a chip's top and bottom (`jI8af`), a menu option's label to its detail (`j6ZUhL`).
   Tight,
-  /// 3: a badge's top and bottom (`Fm7lc`), a form row's label to its description (`XaNIz`).
+  /// 3: a badge's top and bottom (`Fm7lc`), a form row's label to its description (`XaNIz`), the space either side of
+  /// the dot before the action bar reason's *Show* (`ACVRw`).
   Fine,
   /// 5: a status, priority or stage icon to its word (`VWRbG`, `OfuTC`, `hDyRI`), a locked tab's lock to
   /// its label (`W4QYDM`).
@@ -217,6 +218,9 @@ pub enum ControlHeight {
   /// 26: an action in a review thread's head or the comment box (`Ask again` `SYiTG`, `Resolve` `j5u9bv`, `Stop
   /// answering` `D6BO9` in `RBR9O`; `Add comment` `Z0RVD`).
   Snug,
+  /// 40: a menu row with the model under the agent's name, its content centered (`Agent · Builder` `lsXUc` in `Agent
+  /// menu` `BpZlb`).
+  Agent,
 }
 
 impl ControlHeight {
@@ -232,6 +236,7 @@ impl ControlHeight {
       Self::Picker => 26.0,
       Self::Row => 30.0,
       Self::Snug => 26.0,
+      Self::Agent => 40.0,
     }
   }
 }

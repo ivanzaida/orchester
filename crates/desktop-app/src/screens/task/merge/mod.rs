@@ -2,14 +2,13 @@
 //! whether the run waits to be merged or its last merge attempt did not land, read from its merge attempts while it
 //! waits for review ([`reader`]), and whether a merge waits in its worktree for the person to finish it
 //! ([`worktree`]); the one action that moves it on, which the Summary's top card and the header's primary action both
-//! show with its key cap ([`action`]); and ⌘↵ (Ctrl+Enter elsewhere), which presses it from anywhere on the page but a
+//! show ([`action`], with no key cap); and ⌘↵ (Ctrl+Enter elsewhere), which presses it from anywhere on the page but a
 //! text field ([`shortcut`]).
 
 mod action;
+pub(crate) mod attempt;
 pub(super) mod reader;
 pub(super) mod worktree;
-
-use std::sync::Arc;
 
 use lurq::{
   app::{ctx::Ctx, events::KeyboardEvent},
@@ -25,7 +24,7 @@ use super::{
 };
 use crate::{
   navigation::press::OpenIn,
-  screens::merges::attempt::{
+  screens::task::merge::attempt::{
     actions::{Actions, Busy},
     standing::Standing,
   },
@@ -55,18 +54,16 @@ impl Merge {
       return None;
     }
     Some(match task.attempt.as_deref().and_then(Standing::of) {
-      None | Some(Standing::Merged | Standing::Retrying(_) | Standing::AwaitingApproval) => Self::Ready,
+      None
+      | Some(
+        Standing::Merged
+        | Standing::MergedOutside
+        | Standing::Retrying(_)
+        | Standing::AwaitingApproval
+        | Standing::Resolved,
+      ) => Self::Ready,
       Some(standing) => Self::NotMerged(standing),
     })
-  }
-}
-
-/// The keys that press the action, as its cap shows them: ⌘↵ on macOS, Ctrl+Enter elsewhere.
-pub fn keys(ctx: &Ctx) -> Arc<str> {
-  if cfg!(target_os = "macos") {
-    ctx.t("task.merge.keysCmd")
-  } else {
-    ctx.t("task.merge.keysCtrl")
   }
 }
 

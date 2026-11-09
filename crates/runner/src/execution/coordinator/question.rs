@@ -7,7 +7,7 @@ use orchester_core::{
   conversation::{Message, MessageBody, Recipient},
   id::{IdempotencyKey, RunId, TaskId},
   question::{Answer, AskedQuestions, GivenAnswer, QuestionRequest, QuestionState, QuestionTurn, answers_for_agent},
-  run::{Answerer, StepExecutor, StepStatus, WaitReason},
+  run::{Answerer, StepStatus, WaitReason},
   store::{ActivityStore, ConversationStore},
   time::Timestamp,
 };
@@ -123,12 +123,8 @@ fn answer_step_end(
     .find(|invocation| invocation.execution == request.execution())
     .map(|invocation| invocation.id);
   let profile = run
-    .execution(request.execution())
-    .and_then(|execution| run.snapshot().step(execution.step()))
-    .and_then(|step| match step.executor() {
-      StepExecutor::Agent { profile, .. } => Some(profile.resource),
-      StepExecutor::Tool { .. } | StepExecutor::Test => None,
-    });
+    .executing_agent(request.execution())
+    .map(|(profile, _)| profile.resource);
   let (true, Some(profile)) = (waits && latest == Some(request.invocation()), profile) else {
     db.end_waiting_question(run.id(), request.id()).map_err(store)?;
     return Err(Rejection::QuestionNotAwaited);

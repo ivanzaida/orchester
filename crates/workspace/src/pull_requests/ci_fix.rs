@@ -23,7 +23,7 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 
 use super::{
-  InboxError,
+  PullRequestError,
   ci::{PullRequestCi, ReadCi, run_pull_request},
 };
 use crate::{
@@ -35,7 +35,7 @@ use crate::{
     conversation::{
       Conversation,
       composer::{ComposerMode, Queued, Then},
-      follow::{RunnerOf, Sent, Stored, follow},
+      follow::{Readiness, RunnerOf, Sent, Stored, follow},
       outgoing::{OutgoingError, Prepared, Way, conversation_of, offer as mode_of, prepare_in, store_answer_in},
     },
     detail::{RunView, TaskDetail, run_store_error},
@@ -93,6 +93,8 @@ pub struct StoredFix {
   key: IdempotencyKey,
   then: Then,
   pipeline: String,
+  /// The event recorded for the send, which a start that did not happen is recorded against.
+  event: FixEvent,
 }
 
 /// What one Fix CI did.
@@ -278,6 +280,7 @@ pub fn store_fix_in(
   };
   db.record_ci_fix(run, &event)?;
   Ok(FixDone::Stored(StoredFix {
+    event,
     task,
     run,
     message: message.id(),
@@ -289,9 +292,12 @@ pub fn store_fix_in(
 }
 
 /// [`store_fix_in`] off the async runtime, then what follows the stored message through `open`'s runner, which starts
-/// if the project has none: the message goes on as the composer's would, or stays queued with why.
+/// if the project has none: the message goes on as the composer's would, or stays queued with why. A Fix CI that would
+/// run the task again on a pipeline that is not ready here starts nothing; it records on the run that its message waits
+/// ([`FixEventKind::NotReady`]), so the task's CI line says it, by hand or automatically.
 pub async fn fix_ci(
   (runners, servers): (&Runners, &Servers),
+  ready: Readiness<'_>,
   open: &OpenProject,
   (task, run): (TaskId, RunId),
   (read, lost): (ReadCi, bool),
@@ -314,8 +320,28 @@ pub async fn fix_ci(
     key: fix.key,
     pipeline: &fix.pipeline,
   };
-  let sent = follow((runners, servers, RunnerOf::Project(open)), &stored, fix.then).await;
+  let sent = follow((runners, servers, RunnerOf::Project(open)), ready, &stored, fix.then).await;
+  if matches!(sent, Sent::NotReady(_)) {
+    // The Fix CI and its message are stored whatever follows, so this is no error of the Fix CI: the message stays
+    // queued with the run, and only the CI line that says it waits is missing.
+    if let Err(reason) = record_waiting(open, fix).await {
+      tracing::warn!(key = reason.key, run = %fix.run, "a Fix CI waits for a pipeline that is not ready here, and that was not recorded");
+    }
+  }
   Ok((done, Some(sent)))
+}
+
+/// Records that the message of `fix` waits for its pipeline to be ready here.
+async fn record_waiting(open: &OpenProject, fix: &StoredFix) -> Result<(), Message> {
+  let (root, run) = (open.repo_root.clone(), fix.run);
+  let event = FixEvent {
+    at: Timestamp::now(),
+    kind: FixEventKind::NotReady { message: fix.message },
+    ..fix.event.clone()
+  };
+  background::run(move || ProjectDb::open(&root)?.record_ci_fix(run, &event))
+    .await?
+    .map_err(|error| messages::store_error(&error))
 }
 
 /// A run whose *Fix CI automatically* is on, with its pull request.
@@ -328,7 +354,7 @@ pub struct AutoFixRun {
 
 /// The runs of the project at `root` whose *Fix CI automatically* is on and whose branch has a pull request the last
 /// sync stored. Blocks on SQLite.
-pub fn auto_fix_runs_in(root: &Path) -> Result<Vec<AutoFixRun>, InboxError> {
+pub fn auto_fix_runs_in(root: &Path) -> Result<Vec<AutoFixRun>, PullRequestError> {
   let db = ProjectDb::open(root)?;
   let mut runs = Vec::new();
   for id in db.runs_fixing_ci_automatically()? {

@@ -3,6 +3,8 @@
 
 #[path = "theme/appearance.rs"]
 mod appearance;
+#[path = "theme/archive.rs"]
+mod archive;
 #[path = "theme/browser.rs"]
 mod browser;
 #[path = "theme/cards.rs"]
@@ -13,6 +15,8 @@ mod ci;
 mod decision_test;
 #[path = "theme/dialog.rs"]
 mod dialog;
+#[path = "theme/hub.rs"]
+mod hub;
 #[path = "theme/import.rs"]
 mod import;
 #[path = "theme/instructions.rs"]
@@ -45,6 +49,8 @@ mod startup;
 mod task_form;
 #[path = "theme/test_results.rs"]
 mod test_results;
+#[path = "theme/watching.rs"]
+mod watching;
 
 use lurq::{
   app::{
@@ -215,6 +221,31 @@ fn agents_page_spacing_matches_the_design() {
     Dimension::Px(44.0),
     "A6i2K3 in 07 starts 44 from the box's side, past its radio"
   );
+}
+
+#[test]
+fn hub_panel_sizes_match_the_design() {
+  let app = themed(Mode::Dark);
+  for (role, value, why) in [
+    (
+      theme::HubSpacing::Actions,
+      56.0,
+      "every panel's pinned actions are 56 high (x3uhYJ, hDhr8)",
+    ),
+    (
+      theme::HubSpacing::Key,
+      170.0,
+      "a panel row's key is 170 wide (P60rze, z3uHz)",
+    ),
+    (
+      theme::HubSpacing::KeyForm,
+      190.0,
+      "a create form's key is 190 wide (G7irn in A10, iS1Ix in A8)",
+    ),
+  ] {
+    assert_eq!(app.theme().spacing_value(role.role()), Dimension::Px(value), "{why}");
+    assert_eq!(role.value(), value, "{why}");
+  }
 }
 
 #[test]

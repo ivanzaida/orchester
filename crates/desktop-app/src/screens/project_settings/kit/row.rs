@@ -67,7 +67,6 @@ pub(crate) struct SettingRow {
   under: Vec<Element>,
   open: Option<Open>,
   item: bool,
-  dependent: bool,
   /// The label's and the hint's bones, while they are read.
   bones: (Option<f32>, Option<f32>),
 }
@@ -91,15 +90,8 @@ impl SettingRow {
       under: Vec::new(),
       open: None,
       item: false,
-      dependent: false,
       bones: (None, None),
     }
-  }
-
-  /// A setting that needs the one above it: it starts further in (`k1WWv` in `S03`).
-  pub(crate) fn dependent(mut self) -> Self {
-    self.dependent = true;
-    self
   }
 
   /// The hint line is a value as written (a variable's): in Geist Mono 12.
@@ -304,18 +296,13 @@ impl SettingRow {
     } else {
       ProjectSettingsSpacing::RowY.role()
     };
-    let start = if self.dependent {
-      ProjectSettingsSpacing::Dependent
-    } else {
-      ProjectSettingsSpacing::RowX
-    };
     let frame = Column::new()
       .width(Dimension::Pct(100.0))
       .padding(
         Padding::new()
           .top(over)
           .bottom(over)
-          .left(start.role())
+          .left(ProjectSettingsSpacing::RowX.role())
           .right(ProjectSettingsSpacing::RowX.role()),
       )
       .spacing(SpacingSize::Sm)

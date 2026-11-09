@@ -28,9 +28,8 @@ use orchester_workspace::{
   background,
   messages::{self, Message},
   runner::{RunnerStatus, Runners, state::RunnerState},
-  sharing::{project::FirstDownload, team::TeamConfiguration},
+  sharing::project::FirstDownload,
   tasks::{
-    answering::PendingAnswers,
     data::ProjectTasks,
     integration_jobs::{IntegrationJobs, ProjectJobState},
     outside::{OutsideChanges, OutsideCounts},
@@ -40,11 +39,12 @@ use orchester_workspace::{
 };
 use parking_lot::Mutex;
 
+mod answers;
 mod last;
 
-pub use last::{LastMerges, ReviewCounts};
+pub use last::{KeptAttempts, ShowingAll};
 
-use super::{Projects, hold::ReadHold, settled_read::settled_read};
+use super::{Projects, hold::ReadHold, settled_read::settled_read, team::TeamRead};
 use crate::services::Services;
 
 /// One project's data, shared by every tab and screen that shows it.
@@ -95,15 +95,19 @@ pub struct ProjectFeed {
   pub hub_counts: Signal<Option<orchester_workspace::agents::hub::HubCounts>>,
   /// The Agents hub's tabs whose own read failed, one bit each: they show no count rather than a stale one.
   pub hub_unread: Signal<u8>,
-  /// What Review › Merges read last, which it shows again at once when it opens again and reads them anew.
-  pub merges: Signal<Option<LastMerges>>,
-  /// What the Review hub's tabs counted last, which they show again at once on each tab while they count anew.
-  pub review_counts: Signal<ReviewCounts>,
+  /// What the Review list read last, shown again at once when it opens again while it is read anew.
+  pub review: Signal<Option<orchester_workspace::tasks::review_list::ReviewList>>,
+  /// The reviews that show all their changes rather than those since the review.
+  pub all_changes: Signal<ShowingAll>,
+  /// The merge attempts of runs as last read, shown again at once when a run's attempt page opens again while it is
+  /// read anew.
+  pub merge_attempts: Signal<KeptAttempts>,
   /// Whether the sidebar's Configure section is folded for the project, in every tab of the session.
   pub configure_folded: Signal<bool>,
-  /// The team's configuration as the five libraries show it, while the project is shared (`team`); `None` while it is
-  /// local or not read yet.
-  pub team: Signal<Option<TeamConfiguration>>,
+  /// Whether the project is shared and its team's configuration as the five libraries show it ([`TeamRead`]).
+  pub team: Signal<TeamRead>,
+  /// Counts the person's Try agains of a team configuration whose first read failed.
+  pub team_retries: Signal<u64>,
   /// The tasks last read while no runner served the project, as they stand without one.
   offline: Arc<Mutex<Option<Offline>>>,
 }
@@ -199,10 +203,12 @@ impl ProjectFeed {
       pipeline_names: Signal::new(PipelineNames::default()),
       hub_counts: Signal::new(None),
       hub_unread: Signal::new(0),
-      merges: Signal::new(None),
-      review_counts: Signal::new(ReviewCounts::default()),
+      review: Signal::new(None),
+      all_changes: Signal::new(ShowingAll::default()),
+      merge_attempts: Signal::new(KeptAttempts::default()),
       configure_folded: Signal::new(false),
-      team: Signal::new(None),
+      team: Signal::new(TeamRead::Unread),
+      team_retries: Signal::new(0),
       offline: Arc::default(),
       jobs,
     }
@@ -310,17 +316,18 @@ impl Component for FeedLoader {
     let root = open.repo_root.clone();
     let states = counter(ctx, (runners.clone(), root.clone(), Counter::States));
     let changes = counter(ctx, (runners.clone(), root.clone(), Counter::Changes(active)));
-    // The Orchestrator chat follows what the project's agents wait for (ORC-42), and gets its daily report (ORC-47).
-    super::waits::follow(ctx, (&open, states));
+    // The Orchestrator chat gets its daily report (ORC-47).
     super::daily_report::deliver(ctx, &open);
     let runner = status(ctx, &runners, &root);
-    // Held pull request feedback goes once the runs' state lets it (ORC-14).
-    super::feedback::follow(ctx, (&open, states), runner.as_ref());
     // Failed CI goes to the runs whose *Fix CI automatically* is on (ORC-335).
-    let online = !super::feedback_holds(runner.as_ref(), &root).1;
+    let online = runner
+      .as_ref()
+      .is_some_and(|status| status.state_for(&root) == RunnerState::Online);
     super::ci_fix::follow(ctx, (&open, &self.feed), online);
     // Runs of pipelines with a Deliver step are delivered one at a time (ORC-19).
     super::merge_queue::follow(ctx, &open);
+    // Team starts that waited for the team server or the runner go on by themselves (ORC-885).
+    super::team_starts::follow(ctx, &open);
     publish(&self.feed.status, runner);
     publish(&self.feed.changes, changes);
     publish(&self.feed.states, states);
@@ -336,14 +343,22 @@ impl Component for FeedLoader {
     let shared = super::closed::shared_changes(ctx, &services.servers);
     let saved = self.feed.revision.get() + outside.tasks + super::merge_queue::changes(ctx, &root) + shared;
     publish(&self.feed.saves, saved);
-    if let Some(team) = super::team::read(ctx, (&services.servers, &root), (shared, outside), &services.hold) {
-      publish(&self.feed.team, team);
-    }
+    let retries = self.feed.team_retries.get();
+    let team = super::team::read(
+      ctx,
+      (&services.servers, &root),
+      (shared, outside, retries),
+      &services.hold,
+    );
+    publish(&self.feed.team, team);
     // A task closed while its run waited to be completed settles that completion, however it was closed (ORC-150).
     super::closed::settle(ctx, (&open, saved + states));
+    // The Orchestrator chat follows what the project's agents wait for (ORC-42), and ends the subscriptions whose tasks
+    // were all closed, however they were (ORC-764).
+    super::waits::follow(ctx, (&open, states + saved));
     let hold = services.hold;
     // An answer that settles reads the tasks again at once, whether or not a tab of the project is active.
-    let settled = answers(ctx, (runners.clone(), root.clone())).settled();
+    let settled = answers::answers(ctx, (runners.clone(), root.clone())).settled();
     self.feed.answering.get();
     let read = tasks(ctx, (root.clone(), saved, states, settled), (&hold, &services.programs));
     let tasks = answered(&runners, &root, (read.tasks, read.settled));
@@ -548,24 +563,6 @@ fn tasks(ctx: &mut Ctx, deps: (PathBuf, u64, u64, u64), (hold, programs): (&Read
     (None, None) => (TasksState::Loading, Some(None)),
   };
   Read { tasks, settled, stale }
-}
-
-/// The answers sent from the window to `root`'s runner that its tasks were not read back with yet, whenever they
-/// change; other projects' wake the stream without a render.
-fn answers(ctx: &mut Ctx, deps: (Runners, PathBuf)) -> PendingAnswers {
-  let pending = ctx.stream(
-    deps,
-    |(runners, root), emitter: StreamEmitter<PendingAnswers, ()>| async move {
-      let mut updates = runners.answers_of(&root);
-      loop {
-        let answers = updates.borrow_and_update().clone();
-        if !emitter.emit(answers) || updates.changed().await.is_err() {
-          return;
-        }
-      }
-    },
-  );
-  pending.state().get().data.unwrap_or_default()
 }
 
 /// The project's limits and today's usage, read again whenever settings or runs changed. `None` until

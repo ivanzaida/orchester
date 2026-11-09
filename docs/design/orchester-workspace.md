@@ -30,7 +30,7 @@ The root contains nine numbered sections in one horizontal band, ordered left to
 | 05 / Instructions & context | `MRxol` |
 | 06 / Tools & imports | `V8h6d` |
 | 07 / Secrets & access | `b3N1Ix` |
-| 08 / Pull requests | `McWTM` |
+| 08 / Pull requests (replaced 2026-11-06 by [Review](#review-module-review-v2); kept as history) | `McWTM` |
 | 10 / Shared server (column F, index `yuqEI`; see [Shared server](#shared-server)) | `yYqBE` |
 
 Canonical screens and states, in canvas order:
@@ -191,6 +191,8 @@ Canonical screens and states, in canvas order:
 | 08.G · Pull requests / Wrong account (compact) | `E9ZThy` | not exported yet |
 | 08.H · Pull requests / Missing scope: repo (compact) | `tu1fW` | not exported yet |
 
+All 08.x screens above are **replaced** (decided 2026-11-06): the Pull requests page is gone and Review v2 is the one place to read a finished run's code; see [Review (module Review v2)](#review-module-review-v2). The frames stay in the file as history.
+
 There are 110 full screen frames; earlier screen IDs are preserved. Screens remain 1440 × 960, at x 48 / 1568 / 3088 with 80px horizontal gaps, 88px row gaps and labels 32px above each frame. Compact recovery panels are counted separately. Section subgroups have a 96px gap. 02.09F `T6bVyU` fills the third position in row 2 of `F3fEH` at x 3088 / y 1148.
 
 - Getting started: first launch → project folder → project with detected GitHub repository → runner/agents → ready. Setup blocking, compact empty-project feedback (`RlwqW`), the *Change GitHub account or access* panel (01.D, x 1568 / y 426) and the ten GitHub detection states (01.C1–C10, x 2128–4808, rows at y 100, 512 and 980) are in `GojEY` (height 1400) below the main flow. All projects, its removal, the project switcher and their states are in `wa6B7` ("All projects · list, removal, switcher", y 3920, height 3256: 01.06, 01.06 A, 01.06 B in row 1, 01.06 C, D, E in row 2, 01.06 F `glurU` at x 48 in row 3; section height 7272); see [All projects](#all-projects).
@@ -200,7 +202,7 @@ There are 110 full screen frames; earlier screen IDs are preserved. Screens rema
 - Instructions: rules → composed prompt → variable catalog; unavailable-variable state is below. ORC-15 (skills and import from repository) is `HhPZg` at y 2592 (height 2168); the section is 4856 high.
 - Tools & imports: library → configuration → access policy in the first group. Select → resolve dependencies → ready to import is a separate complete row in `TSGMX`. Success/failure panels remain in `tjNmM`, now with the Create pull request settings (06.A, x 1040) and push-rejected recovery (06.B, x 1600) and the Rename copy name field (06.C, x 2096); `tjNmM` is 720 high and the section height is 3408.
 - Secrets & access: library → add credential → runtime approval; duplicate-name validation is below. `x91Ww` ("States · MCP server uses (M3)", y 2592, height 1120) holds 07.B, 07.C and 07.D; section height 3808.
-- Pull requests: `scsYh` contains the review inbox → line-specific fix request → verification on a new commit. `u77pi` contains the question/answer alternative, compact stale-revision and queued-request states, the stale-sync and rate-limited strips (08.E, 08.F at x 2064), the GitHub-unavailable screen (08.D at x 3088) and the wrong-account and missing-scope strips (08.G, 08.H at y 1200); `u77pi` is 1680 high. The section is at x 41728 / y 0, width 4896 and height 3152.
+- Pull requests (replaced by Review v2, see the note under the table above): `scsYh` contains the review inbox → line-specific fix request → verification on a new commit. `u77pi` contains the question/answer alternative, compact stale-revision and queued-request states, the stale-sync and rate-limited strips (08.E, 08.F at x 2064), the GitHub-unavailable screen (08.D at x 3088) and the wrong-account and missing-scope strips (08.G, 08.H at y 1200); `u77pi` is 1680 high. The section is at x 41728 / y 0, width 4896 and height 3152.
 
 Section previews: [Getting started](previews/organization/K7IL6.png), [Tasks & runs](previews/organization/g7ncNr.png), [Pipelines](previews/organization/Y6XGt.png), [Agents & connections](previews/organization/wNy9i.png), [Instructions](previews/organization/MRxol.png), [Tools & imports](previews/organization/V8h6d.png), [Secrets & access](previews/organization/b3N1Ix.png).
 
@@ -1174,7 +1176,7 @@ apply to both W1Dq6 and IyJ5a and require a fresh independent visual comparison.
 | Status (icon) | Last column |
 | --- | --- |
 | Queued (clock-3) | *Waiting for its run to start* |
-| Running (loader) | *Agent at work*; after Pause run until the checkpoint settles: *Pausing at the next checkpoint* (the label stays *Running*) |
+| Running (loader) | *Agent at work*; after Pause run until the checkpoint settles: *Pausing at the next checkpoint* (the label stays *Running*); what Pause does in each state, and what the header says it waits for, is in `docs/design/run-pause.md` |
 | Needs input (message-circle) | *Waiting for you* |
 | Paused (pause) | *Paused at 4b92ad0*; before any checkpoint *Paused before its first checkpoint* |
 | Stopped at limit (octagon-pause) | *Raise the limit to continue*; stopped by the daily budget *Waits for the daily token budget* |
@@ -1680,6 +1682,7 @@ Reused: `zo9Py`, `TSJpn`, `SOW6S`, `u1XBP`, `DeizF`, `ZGwlv`, `mDnc3`, `N4SlQq`,
 
 - **No *Acknowledged by Builder*.** The agent’s reply shows in the timeline, so a delivered message keeps its delivery line and gets no acknowledgement line.
 - **Ctrl/Cmd+Enter sends after this turn** while an agent works, the safer default; *Send now* stays a separate button. The steer hint in `RrScB` (removed 2026-10-04; now C·01 `kpnmP`), `CxrSA` (removed 2026-10-04; now C·01 `kpnmP` and C·13 `j0qLQz`), `gNa91` (removed 2026-10-04; now C·11 `oryKr`) and `LhLL8` (removed 2026-10-04; now C·10 `bdCsu`) now ends *Ctrl+Enter sends after this turn.* (corrected 2026-10-02, ORC-61).
+- **No key badges in buttons (2026-11-08, ORC-910).** The app draws no key cap (*Ctrl+Enter*, *Ctrl Enter*, *⌘↵*, the digits of a decision card's answers, *Esc*/*Enter* on its message buttons) in or beside a button or send control, in a send menu row or in a send tooltip; the shortcuts work as before. The Pencil boards that still draw them are older than this decision. Search fields' hints (*Ctrl K*, *Ctrl F*), the jump trigger and the key lists of palettes, pickers and dialog footers stay.
 - **Send now lands after the running tool call.** To verify in implementation for Codex App Server and Claude Code stream-json input.
 - **Tool approvals.** On the Conversation tab a request is the inline card. When the person is on another page, the approval dialog (ORC-41) still opens; *Needs you* and the status bar lead to the inline card.
 - **Failed state.** *Continue with instructions* is the primary action; *Run again* is secondary in the topbar on this tab.
@@ -2031,7 +2034,7 @@ git names them), Import resources, Open Orchestrator and New task. The main colu
 The side column (344) holds **Plan limits** (only accounts near or at a limit, from the session's readings and those
 kept; one whose window reset since its reading stays greyed, *unknown since reset*, with what it last read; *N runs on
 it* counts the runs at work on the account; *Accounts ↗* opens Settings › Accounts), **Landed** (the merge queue's state
-with *Review ↗* to Review › Merge queue, then *Today · N merged* up to five and *Earlier* up to three of the week before;
+with *Review ↗* to Review (the Merge queue page is gone, 2026-11-06), then *Today · N merged* up to five and *Earlier* up to three of the week before;
 merges only) and **Delivery** (the open modules by target date, up to three, with progress and their *Likely · 85% by*
 forecast, and the queued work's; *Delivery ↗* opens the Delivery view). While the tasks are read the heads and actions
 are real and the rows are bones after 300 ms; a page that can't be read is the failure card under the header, a section
@@ -2051,21 +2054,23 @@ team-server sign-in that ended, or Delivery failing alone: they need a live runn
 Since ORC-108 (`Sidebar · redesign` `WWXmX` in the new `orchester.pen`: After `Da6IB`, Configure folded `DE34j`, Switcher
 menu `NEHAB`, Where each entry went `j3WMs9`, the window `Yx5w8`, Hub pages `ZRBS5`, Jump to `aDYAX`), the sidebar
 (`Sidebar v2` `Zn8dR`, `crates/desktop-app/src/shell/sidebar/`) holds, top to bottom: the project switcher; *Jump to…*
-with its keys; six places for daily work — Overview, Tasks (its count), Modules, Orchestrator, Review (the runs in the
-merge queue, in `warning`) and Files; the **Configure** section with Pipelines and Agents, whose head folds it per
+with its keys; six places for daily work — Overview, Tasks (its count), Modules, Orchestrator, Review (the tasks that wait for the
+person's review, in `warning`: the length of the Review list's *Waiting for you*) and Files; the **Configure** section with Pipelines and Agents, whose head folds it per
 project (*Configure · 2* while folded); **Running**, only while runs go, with how many; and at the bottom the usage
 card, *Tokens today* with its meter against the daily budget, which opens Usage, and a ⚙ that opens Settings. Palette,
 width (240) and the switcher stay.
 
-Where the old entries went: the Merge queue and the Pull requests are the two tabs of the **Review** hub; Instructions,
+Where the old entries went: the Merge queue and the Pull requests were the two tabs of the **Review** hub until 2026-11-06; both pages are gone and Review is one page, [the list of tasks whose run finished](#review-module-review-v2) (the merge queue still works, without a page of its own). Instructions,
 Skills, Tools and Memory are tabs of the [Agents hub](#agents-hub); Connections and Secrets are tabs of Project
 settings; Usage opens from the usage card; All projects, Project settings (Ctrl+, / Cmd+,) and Settings are in the
 switcher's menu (All projects and Settings also in the app menu). Every old route still reads and selects the place
 that holds it; a hub's tab keeps its own route, so links, history, Back and Forward and Jump to land on it. A module's
 page, its tabs and New and Edit module keep Modules selected. Files stays a single page.
 
-The Review hub (`Review` `QzjsN`) is *Review* over its tabs, Merge queue and Pull requests with their counts (the runs
-in the queue, the open pull requests), and the open tab's page under them. A pull request's own page keeps its page.
+The Review hub (`Review` `QzjsN`) was *Review* over its tabs, Merge queue and Pull requests with their counts, and the
+open tab's page under them. It is **replaced** (module Review v2, decided 2026-11-06): Review has no tabs,
+`/project/<id>/review` is its list and `/project/<id>/review/<KEY>` a task's review, and the old routes
+`/pull-requests`, `/merge-queue` and `/merges` (with anything under them and any query) open the project's Overview.
 
 **Jump to** (`aDYAX`, `crates/desktop-app/src/shell/jump/`) opens over the content panel from the row under the
 switcher or Ctrl+K anywhere (Cmd+K on macOS). It finds the tab's project's tasks by key or title, its modules by name
@@ -2108,7 +2113,7 @@ Drawn 2026-10-01 in the old `data/orchester.pen` (group `i2o8ko`), redrawn in `d
 
 **States of a queue row** (`DeizF` label, then the run, then actions): *Queued* (clock-3; position; *Move up*, *Move to top*, *Remove* = leave the queue and return to Ready for review; no dragging), *Syncing with main* (loader), *Re-checking* (loader), *Integrating conflicts* (loader, agent working) — all three *Open task*; *Waiting for approval* (hand; *Open task*, primary *Review & merge*), *Blocked* (circle-pause; the reason, the uncommitted files in mono; *Open task*, *Retry*), *Failed* (circle-x; the reason; *Open task*), *Merged* (git-merge; hash, time, method, *worktree and code index removed*; *Open task*). The active run shows its phases: *Synced with main › Check on the merged result › Your approval › Merge into main*.
 
-**Where the queue lives.** A sidebar entry *Merge queue* (git-merge) right after Tasks, with the number of runs in the queue as its count (hidden at 0). Not a tab on Tasks: Tasks already has a *Queue* tab for starting runs, and the merge queue is one ordered, project-wide line whose blocked state stops every run in it, not a filter of tasks. Not Pull requests: that screen is GitHub review, and pull request delivery is not available. Every frame in the group uses this sidebar.
+**Where the queue lives.** *Replaced 2026-11-06 (module Review v2): the Merge queue page, its sidebar entry and the Merges page are gone. The queue itself is unchanged and still delivers; where it shows now is under [Review](#review-module-review-v2): an approved task is *Merging into <base>* in the list's *Approved today*, a run it took out with conflicts is *Conflicts with <base>* in *Waiting for you*, and a run's merge attempts are on the merge attempt page under the task, `/project/<id>/tasks/<KEY>/merge/<run>`. The queue frames below (`seRYH`, `H7OHPT`, `mtrlT`, `vM4TB`) are history.* As drawn: a sidebar entry *Merge queue* (git-merge) right after Tasks, with the number of runs in the queue as its count (hidden at 0). Not a tab on Tasks: Tasks already has a *Queue* tab for starting runs, and the merge queue is one ordered, project-wide line whose blocked state stops every run in it, not a filter of tasks. Not Pull requests: that screen is GitHub review, and pull request delivery is not available. Every frame in the group uses this sidebar.
 
 **Frames** (`data/orchester2.pen`, layer `p9aqZc` *Delivery*; components `yHHcU`: `Queue row` `kcUhy`, `Queue phase` `ED8Ct`, `Conflict file row` `Nanwh`, `Commit row` `wEWkY`, `Delivery check row` `QyqsJ`):
 
@@ -2198,7 +2203,7 @@ Built, no frames of their own yet: the states follow the Ready card (`hyzq2` in 
 
 - **What a run delivers.** A pipeline says it (`Pipeline::delivers`, core `Deliverable`): `changes` (repository changes, merged; every pipeline saved before this delivers changes), `report` (the last step's report; no repository changes expected), `outside` (work done through MCP tools: the report and the record of those tool calls) or `changes_or_report`. A task may say otherwise for its own runs (its organization's `delivers`, kept beside *Don't merge automatically*; a shared project's server does not keep it, so setting it there is refused). Pipeline settings › Delivery has *What a run delivers*, one option card each; the choice is the draft's until it is published, and the publish review lists the change. Automation: `create_pipeline`, `save_pipeline_draft` and `get_pipeline` (`delivers`), `create_task`, `update_task` (`null` follows the pipeline again) and `get_task` (`delivers`, and `result` for a latest run that passed every step).
 - **Agents know.** Every step's *When you finish* says what the run delivers: a report run's agents are told not to make commits to have something to show and that the last step's summary is kept as the report; an `outside` run's to say what they changed and where.
-- **A run that committed nothing whose result is its report** (`report`, `outside`, `changes_or_report`) shows the Ready card *Ready to complete* with **Complete task** in place of Merge, its report under it (*Report*, with the step that wrote it) and, for `outside`, *Changes outside the repository*: each MCP tool call outside Orchester's own tools that was approved, with its server and tool, what it acted on, when and by whom (from the run's approval records; calls that ran without asking are not recorded there). Completing sets the task Done, as a merge does, records who completed it and when, and keeps the last step's report as the run's artifact *Report* (`run_completions`, `run_artifacts`); the Summary then reads *Task completed*. Needs you lists such a run as *Ready to complete*. The merge queue never takes a run that committed nothing. With *Let the Orchestrator merge finished runs on its own* (and *merge runs*, *answer agents*) on, the Orchestrator completes it by the rule it merges by (not opted out, not Blocked, every step passed, nothing held), without a turn; the Summary says the Orchestrator completed it.
+- **A run that committed nothing whose result is its report** (`report`, `outside`, `changes_or_report`) shows the Ready card *Ready to complete* with **Complete task** in place of Merge, its report under it (*Report*, with the step that wrote it) and, for `outside`, *Changes outside the repository*: each MCP tool call outside Orchester's own tools that was approved, with its server and tool, what it acted on, when and by whom (from the run's approval records; calls that ran without asking are not recorded there). Completing sets the task Done, as a merge does, records who completed it and when, and keeps the last step's report as the run's artifact *Report* (`run_completions`, `run_artifacts`); the Summary then reads *Task completed*. Needs you lists such a run as *Ready to complete*. The merge queue never takes a run that committed nothing. With *Let the Orchestrator drive* (and *merge runs*, *answer agents*) on, the Orchestrator completes it by the rule it merges by (not opted out, not Blocked, every step passed, nothing held), without a turn; the Summary says the Orchestrator completed it.
 - **A run that committed nothing although its pipeline expects changes** is no plain success: its Summary and Needs you say *This run committed nothing, but its pipeline expects changes*, with **Complete anyway** (a person's decision; window input takes it only while the person lets automation answer approvals), **Return to a step** (brings the return card beside the Summary into view) and **Run again** (opens Run again's confirmation; core's rule lets such a run run again, as git tells). The Orchestrator never completes it on its own.
 - **Automation completes as the Summary does.** `complete_run` completes a run as *Complete task* does, and with `anyway` as *Complete anyway* (refused as `automation_not_allowed` unless the person lets automation answer approvals). A completion through the tool, or by an MCP client's window input on either button, is recorded as automation's, and the Summary says *Automation completed the task*. The Orchestrator chat does not list the tool (it completes only on its own, by its merge rule).
 - **Not built:** the Artifacts tab still lists no artifacts (its design is a proposal); a notification for these states.
@@ -2240,7 +2245,71 @@ and the Overview notice. The selector opens the project switcher (01.06 B, see [
 
 Proposed copy namespaces: `lifecycle.close.*`, `lifecycle.recovery.*`, `runner.connection.*`, `runner.card.*`. Retry count (5), backoff and the auto-dismiss delay are illustrative values. All seven states were checked with full-size export review and depth-14 layout checks. The only remaining findings are disabled "open task" cells in the queue-row instances in the two close dialogs, which the checker reports at stale positions; they are not rendered.
 
+## Review (module Review v2)
+
+Decided 2026-11-06; built 2026-11-06…07 in the module *Review v2* on the branch `module/review-v2` (ORC-793…808; ORC-888 is in progress). It **replaces** the Pull requests page, the Merge queue page and the Merges page, and the section [Pull request review and agent feedback](#pull-request-review-and-agent-feedback) below: Review is where a person reads the code of a task whose run finished, comments on it or asks the agent about it, and approves it. Design: `crates/desktop-app/design/orchester.pen`, board `Review - v2` (`j1Drb`), 1440 wide, with the rules `b6M3lS` (the code names rule 2, the pager; rule 7, the Approve question; rule 9, reading without jumps). In the older board `Review · redesign` (`i5gEcb`) the Merges and Merge queue screens and the Pull requests sections (08.x above) are replaced by it and stay in the file as history; its thread and tray states (`RBR9O`, the page `wLyFt`) and the merge attempt page (09b `PVZKL` and its neighbours) are still what is built. Rust: `crates/desktop-app/src/screens/review/` (`list/`, `task/`), the lists and reads in `crates/workspace/src/tasks/review_list/` and `review_threads/`. Copy namespaces: `review.*` (the list) and `review_page.*` (a task's review).
+
+| Screen of `Review - v2` | Node | State |
+| --- | --- | --- |
+| 01 · Review | `i6S42` | the list: *Waiting for you*, *With the agent*, *Approved today* |
+| 02 | `gSMiI` | a task's review: crumbs with the pager, title, status line, agent summary, files and diff, comment box |
+| 03 | `QpQTI` | the list with nothing waiting |
+| 04 · Review · reading | `M1LAx` | the list while it is read (bones) |
+| 05 | `e6KEO` | changed since your review |
+| 06 | `gwE2q` | with the agent: the agent bar |
+| 07 | `eidig` | an approved task, read-only |
+| 08 | `YjdR5` | drawn in the board; the code does not cite it |
+| 09 | `mhp3i` | Approve with comments not sent: the question |
+| 10 | `Z655x` | a task's review while it is read |
+| 11 | `CT6Gc` | a merge that conflicts |
+| 12 | `IfAmk` | drawn in the board; the code does not cite it |
+| Rules | `b6M3lS` | the rules the screens follow |
+
+### The list
+
+`/project/<id>/review`. *Review* over its search (240 wide, `/` focuses it; it narrows rows by key and title) and the lead *Tasks whose run finished. Read the code, comment or ask the agent, then approve.* The sidebar's Review count is the length of the first group. Three groups, each folds under its header (glyph, name, count):
+
+- **Waiting for you**, oldest wait first: runs that passed every step and merge only once a person approves, and approved runs whose merge found conflicts and merged nothing. Always shown; with no row it holds one row-high line, *Nothing waits for your review* (`03`), or *No task waiting for you matches the search*. A row's state line is *N comments not sent* (comments sit in the tray), *Changed since your review* (the branch has commits after the head that was reviewed), *Ready for review*, or *Conflicts with <base>* (the approved merge into the base found conflicting files; also the state of a run the merge queue took out with conflicts).
+- **With the agent**, oldest first, only when it holds rows: runs sent back from the review page whose Implement works on the comments sent (*Implement is on N comments*), or on the conflicts of the approved merge (*Implement is resolving the conflicts with <base>*).
+- **Approved today**, newest first, only when it holds rows: runs a person approved on the local day, *Merged into <base>* or *Merging into <base>* while the merge queue still delivers it. A run merged by automation's policy, or before merge attempts were recorded, is approved by no one Orchester can read and is not listed.
+
+A row (40 high) has the status glyph, the key, the title with the task's first tag, the state line, and at its end the open comment threads, the files and lines added and removed, and the time the task came to its group (the clock time today, how long ago otherwise); under the pointer the small *Review* button takes the counts' place. The row and the button open the task's review.
+
+**Reading never makes the page jump** (rule 9, `04`): the head shows at once; *Waiting for you* takes the room of as many bones as the sidebar's count says, and with none it is drawn at once as `03`; the lower groups are not drawn until read and then come under what is there. A list read before stays in the project's feed and shows while it is read anew, with *Approved today* folded. A read that fails is *The review list cannot be read* with *Try again*; nothing is changed by reading.
+
+### A task's review
+
+`/project/<id>/review/<KEY>`, for the task's latest run that waits for review, was sent back from it or was approved; a task with none shows *Nothing to review for <KEY>*, a run with no checkpoint *Nothing to review yet*, and a run changing more files than Orchester reads *Too large to review here* (review its branch with git, then approve it from the task page). From top to bottom:
+
+- **Crumbs and pager** (rule 2): *<KEY> · run N* and, for a task in *Waiting for you*, *1 of 3 waiting* with ‹ › to the task before and after it in the list's order (an end disables its arrow; `[` and `]` do the same unless a text field has the key). Once the task leaves the group (approved, sent back) the page stays on it and the pager reads *2 waiting*. A task opened from the other groups has no pager.
+- **Title** with *Open task* (the task page) and *Approve and merge*, and the **status line**: *Waiting for your review*, then the run, its steps, what it changes, its head and the branch it merges into.
+- **Agent summary**: a bordered row with the first sentence of the run's *Run summary* and *Run summary →*, which opens the task's Conversation. A run no step reported on has no row.
+- **Files** at the left with their *Viewed* marks (*N of M viewed*), and the run's real diff against its base beside them, with threads under their lines and the comment box. A press on a line chooses it and Shift extends the range; **+** shows under the pointer. A *comment* waits in the tray until *Send to Implement*; a *question* goes to Implement at once and is answered in its thread without changing the code (*Ask again*, *Stop answering* with Esc, *Reply*, *Edit*, *Delete*, *Resolve*, *Reopen*). A thread whose lines a later commit changed is *Outdated by <commit>* and folds under *N outdated*. Comments and questions are Orchester's own and are never posted to GitHub.
+- **Send tray** under the diff while comments wait: *2 comments not sent*, *Discard* (asks first) and *Send to Implement (2)*; a failed send says why and keeps the comments (*Not sent: the runner is not running*, *Try again*). Sending hands the run's work back to its implementing step; the run then waits for review again.
+
+States of the page:
+
+- **Changed since your review** (`05`): once the branch has commits after the head that was reviewed, the status line reads *Changed since your review* in `warning` and a strip under it says how many commits and when the review was, and how many of the person's comments sit on lines those commits changed. Its switch *All changes* / *Since your review* shows the whole diff or only what changed after the review; *Since your review* is shown first, and the choice is kept per task while the window lives. *Approve and merge* merges at the head shown, never at a head that moved after the review.
+- **With the agent** (`06`): Implement works on comments sent from here. The status says *With the agent* with how many comments and since when; *Approve and merge* is not shown (its reason stands before it); under the diff, in the tray's place, the agent bar says *Implement is working on 1 comment* and leads to the Conversation (*Open conversation*). Comments written meanwhile wait in the tray above the bar and are not sent with the earlier batch.
+- **Approved, read-only** (`07`): the status line reads *Merged into <base>* (or *Merging into <base>* with the queue's loader while the merge queue still has the run), then who approved it and when and how it landed (merge commit, squash or fast-forward and its revision). A merge made by automation, or one recorded without its attempt, says so instead of *approved by you*. The diff and the threads stay; there is no **+**, comment box, tray, *Approve and merge*, *Viewed* mark or thread action.
+- **Approve with comments not sent** (`09`, rule 7): *Approve and merge* asks first in a modal, *1 comment isn't sent yet*, with *Cancel*, *Approve without it* (merges; the comments not sent are discarded) and *Send to Implement* (sends them as the tray does and approves nothing). With none unsent it merges at once.
+- **Merge conflicts** (`11`): the approved merge into the base found conflicts and merged nothing, and the run is back in *Waiting for you* as *Conflicts with <base>*. The status line says *approved by you … · nothing merged · N files conflict*; under the conflicting lines a *Conflict* block shows what the base branch has there now, and in the tray's place the conflict bar says *N files conflict with <base>* with *Try merge again* (merges once more, when the base moved) and *Ask the agent to resolve* (sends the run back to Implement with the base merged in; the task is then *With the agent*). There is no *Approve and merge* and no other strip.
+- **Reading** (`10`, rule 9): the crumbs, the title with its buttons and the status line show at once from the row the list read; only the files and the diff are bones in the geometry of the parts that replace them, so nothing moves when the read lands (*Approve and merge* waits, as it cannot act on a head not read yet). Opened directly, with no such row, the title and the status are bones too.
+
+The page is read again whenever the project's tasks or runs change state or a change of it landed, and the review alone on every change of the project's runs, so an answer streams in.
+
+### Another agent for one return (ORC-808, ORC-888)
+
+A return of a run's work to a step (*Send to Implement*, *Ask the agent to resolve*, the task page's returns and a stuck run's decision) can name the agent profile the step runs with **for that return only**: its latest published version and that version's model. The run's snapshot, the pipeline and later runs keep their agents. A profile with no published version is refused (*The agent you chose has no published version…*), as is one the run cannot use (*The chosen agent profile cannot run in this run, so the step was not sent back…*; a run with inputs, a team's, runs only the profiles its inputs pin); nothing is sent back and the comments stay. Built in the core, store, runner and workspace (ORC-808). **The app's field for it is ORC-888 and is in progress**: an agent choice beside *Send to Implement* in the tray and beside *Ask the agent to resolve* in the conflict bar; until it lands the review page returns the work with the step's own agent.
+
+### What is gone, and where its parts went
+
+- **Pull requests** (`/pull-requests`, with its list, detail, agent feedback and sync timer): the page is removed (ORC-803), and with it the inbox, list, detail, linked-task and status reads, the feedback dispatch and the `list_pull_requests` and `get_pull_request` MCP tools (ORC-804; decided 2026-11-06). The CI, Fix CI and Create pull request parts stay, with the sync that Create runs after opening a pull request; *Review PR* on a task's ready card opens the pull request on GitHub in the browser. A status bar place that named the page opens Review. Review's threads are on the run's diff, not on a GitHub pull request.
+- **Merge queue** (`/merge-queue`) and **Merges** (`/merges`): the pages are removed. The merge queue itself is unchanged and still delivers runs one at a time per base branch (see [Delivery](#delivery)); a run it delivers is *Merging into <base>* in *Approved today*, and the Overview's *Landed* card keeps the queue's state with *Review ↗* to the list. A run's **merge attempts** are on the **merge attempt page under the task**, `/project/<id>/tasks/<KEY>/merge/<run>` (breadcrumb, what stopped it, the conflicting files, the checks and the attempts, newest first). The old routes, with anything under them, open the project's Overview.
+
 ## Pull request review and agent feedback
+
+**Replaced 2026-11-06 by [Review (module Review v2)](#review-module-review-v2); this section and the Pull requests screens it describes (08.x) are kept as history, and nothing below is built any more.**
 
 The user requested viewing pull requests and leaving comments for an agent to fix code or answer a question. Pull requests is now a project navigation entry after Tasks. It lists PRs from the selected project's repository with linked task, feedback state, current head and agent verification. Ready for review (`vpgrJ`) now opens Review PR in Orchester; Ask agent opens general feedback for the linked PR. Open in GitHub remains a clearly separate external destination.
 
@@ -2662,6 +2731,8 @@ Setup covers project folder → runner and agents → readiness. The first step 
 An unusable required agent connection blocks completion with Reconnect or change-profile recovery. Save & leave retains incomplete setup so it can be resumed. Importing configuration from another project never copies an expected account; the destination project checks its own connections again.
 
 ## GitHub
+
+**Since 2026-11-06 the Pull requests page is gone** ([Review](#review-module-review-v2)): where the rules and states below name the Pull requests screen (rules 3, 9 and 10, 08.D–08.H, *Pull requests states*) they describe what was drawn; the Create pull request tool, CI and the sync Create runs stay.
 
 Decided 2026-09-25 (user). Proposed copy namespace `github.*` (`github.detection.*`, `github.connection.*`, `github.account.*`, `github.pullRequests.*`); account logins, hosts, repository names, paths and commands are data, not translated.
 

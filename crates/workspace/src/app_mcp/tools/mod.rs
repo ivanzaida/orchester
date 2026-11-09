@@ -23,11 +23,9 @@ mod pipeline_copy;
 mod plan_read;
 mod plans;
 mod projects;
-mod pull_request_reads;
-mod pull_request_wire;
-mod pull_requests;
 mod questions;
 mod queue_hold;
+mod readiness_json;
 mod return_to_draft;
 mod review;
 mod run_list;
@@ -39,6 +37,7 @@ mod task_write;
 mod tasks;
 mod team;
 mod usage;
+mod watches;
 mod wire;
 mod worktree;
 
@@ -52,11 +51,11 @@ use rmcp::{
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 
-pub(super) use self::pull_request_reads::RecentReads;
 use self::runs::Control;
 pub(crate) use self::{
   continue_run::{Choice as ContinueChoice, ContinueRun, Offered as ContinueOffered, offered as continue_offered},
   messages::{SendTiming, plan_person_only, refusal as outgoing_refusal, sent_as},
+  modules::find_module,
   pipeline_copy::duplicate_pipeline_draft,
   questions::{check_answer, waiting_request},
   queue_hold::not_in_group,
@@ -135,7 +134,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_task",
-    description: "One task: title, brief, criteria, whether it is a draft or submitted, workflow status, priority, story points (points, set_by person or automation, automation's reason; null for none), tags, module, base_branch (choice: inherit its module's, checked_out or branch, with the branch set; next_run: the branch its next run takes as things stand, null for whatever the checkout has checked out, and its source task, module with that module's id, or checked_out; kept on this computer only, so in a shared project it is this computer's choice), blocked_reason, blocked_by, no_automatic_merge (Don't merge automatically), delivers (what its runs deliver when the task says it; null: as its pipeline says), pipeline, limits, where it stands, what its latest run that passed every step left (result: what it delivers, whether it committed nothing, its completion, its report and the MCP tool calls it was let make outside the repository; null for any other latest run), its runs (get_run gives each one's own base), and its link in the app (its page, on its Details; each run links to the page's Summary, which lists the runs).",
+    description: "One task: title, brief, criteria, whether it is a draft or submitted, workflow status, priority, story points (points, set_by person or automation, automation's reason; null for none), tags, module, base_branch (choice: inherit its module's, checked_out or branch, with the branch set; next_run: the branch its next run takes as things stand, null for whatever the checkout has checked out, and its source task, module with that module's id, or checked_out; kept on this computer only, so in a shared project it is this computer's choice), blocked_reason, blocked_by, no_automatic_merge (Don't merge automatically), delivers (what its runs deliver when the task says it; null: as its pipeline says), pipeline, limits, where it stands, what its latest run that passed every step left (result: what it delivers, whether it committed nothing, its completion, its report and the MCP tool calls it was let make outside the repository; null for any other latest run), its runs (get_run gives each one's own base), led_in (the Orchestrator conversation its events go to, through the most specific subscription that covers it: its own, its module's, the tasks without a module's or the whole project's, named as `via`; null when none does; get_watches reads the subscriptions), and its link in the app (its page, on its Details; each run links to the page's Summary, which lists the runs).",
     schema: schema_for_type::<tasks::GetTask>,
     read_only: true,
   },
@@ -159,7 +158,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "run_task",
-    description: "Runs a task as the app allows: queues and starts a draft, starts a queued task, or runs a task again after its latest run ended. Refusals name why. A team project's task starts through its team server instead: it is claimed for this computer (claim.acquire) and its work started (work.start) in its module, from the module's branch here; each agent profile of its pipeline runs on the local connection bindings names for it, else on the only local agent connection of its CLI (bindings_required names the profiles that need a choice). A start the server or the runner can't take now waits and goes on by itself (team_start_waiting). A team task runs only with the team pipeline it names; one that is not a team pipeline on this computer is refused as team_pipeline_missing before anything is claimed.",
+    description: "Runs a task as the app allows: queues and starts a draft, starts a queued task, or runs a task again after its latest run ended. Refusals name why. A team project's task starts through its team server instead: it is claimed for this computer (claim.acquire) and its work started (work.start) in its module, from the module's branch here; the run takes what this computer filled in (the connection picked for each agent profile, else the only one of its CLI; the program and the switch of each team MCP server; secret values by name), and a pipeline that is not ready here starts nothing and counts no attempt: it is refused as not_ready_here, with the missing parts (each says its fix) in the error's `parts`. A start the server or the runner can't take now waits and goes on by itself (team_start_waiting). A team task runs only with the team pipeline it names; one that is not a team pipeline on this computer is refused as team_pipeline_missing before anything is claimed.",
     schema: schema_for_type::<run_task::RunTask>,
     read_only: false,
   },
@@ -214,8 +213,14 @@ const SPECS: &[Spec] = &[
                   null or the policy's notice) and stages (each stage with passed, refused or not_reached: policy \
                   for automation's attempts, integration_lock, project_database, scratch_folder, checkout_identity, \
                   git_metadata, existing_result, merge, record). checks is the CI of the pull request of the run's \
-                  branch, as get_pull_request's checks reads it (no_pull_request when the last sync stored none, \
-                  not_linked without a linked GitHub repository). The run's link is its task's page; the waiting \
+                  branch, read now through gh (gh pr checks), at most once in 30 s: state (passed, failed, running, \
+                  no_checks; or why it was not read: no_pull_request when the last sync stored none, not_linked \
+                  without a linked GitHub repository, gh_missing, not_signed_in, wrong_account, missing_scope, \
+                  gh_unavailable, rate_limited with resets_at, github_unreachable, github_server_error, not_read; never \
+                  passed when unread), read_at, next_read_at (when to read again while a check is queued or running, \
+                  else null), counts by state, and runs: each check's name, workflow, state (queued, running, passed, \
+                  failed, cancelled, skipped), url and, for a failed GitHub Actions job, log_tail (the last 40 lines of \
+                  its failed steps' log, null when gh gave none). The run's link is its task's page; the waiting \
                   approvals, questions, messages and plans link to their cards on the task's Conversation.",
     schema: schema_for_type::<runs::InRun>,
     read_only: true,
@@ -383,18 +388,6 @@ const SPECS: &[Spec] = &[
     read_only: false,
   },
   Spec {
-    name: "list_pull_requests",
-    description: "Pull requests of a project's linked GitHub repository as the Pull requests page lists them, or of every project: number, title, state (open, draft, merged, closed), review, GitHub checks on the head, branches, changes, when it was merged or closed, whether it comes from a fork, the task and run whose branch it is (agent_working while that run runs), its app link and its GitHub url. They are what the last successful sync read (open ones and the 50 most recently updated closed ones). Each repository says how its latest sync went (sync: synced, rate_limited, github_unreachable, paused_other_account, gh_unavailableâ€¦), when the list was read (synced_at), when the latest sync ran (attempted_at) and, during a rate limit, until when syncs wait (paused_until); unreadable_projects lists the projects that could not be read, with why. refresh syncs one project (needs project) first through gh, unless a sync ran in the last 30 s or a rate limit holds: then the stored list answers. A tab narrows them as the page's tabs do; search finds a number, title words, a branch or a task key.",
-    schema: schema_for_type::<pull_requests::ListPullRequests>,
-    read_only: true,
-  },
-  Spec {
-    name: "get_pull_request",
-    description: "One pull request of a project's linked GitHub repository, as list_pull_requests gives it, with how the repository's latest sync went. One the last sync did not read (an older closed one) is refused as pull_request_not_synced; with refresh it is read from GitHub on its own, and a refresh of the same number within 30 s answers what that read found. A read GitHub refuses says why: github_rate_limited (until paused_until), github_unreachable, or pull_request_not_read; pull_request_not_found when GitHub has no such pull request. checks adds to the last sync's counts its CI read now through gh (gh pr checks), at most once in 30 s: state (passed, failed, running, no_checks; or why it was not read: no_pull_request, gh_missing, not_signed_in, wrong_account, missing_scope, gh_unavailable, rate_limited with resets_at, github_unreachable, github_server_error, not_read, never passed when unread), read_at, next_read_at (when to read again while a check is queued or running, else null), counts by state, and runs: each check's name, workflow, state (queued, running, passed, failed, cancelled, skipped), url and, for a failed GitHub Actions job, log_tail (the last 40 lines of its failed steps' log, null when gh gave none).",
-    schema: schema_for_type::<pull_requests::GetPullRequest>,
-    read_only: true,
-  },
-  Spec {
     name: "get_usage",
     description: "Tokens (spent = input - cached input + output, as each CLI reported them) and active agent time of a project's runs, or of every project's, over a range of local days (the last 7 by default, today counted up to now; at most 366, by hour at most 7), as the Usage page reads them: totals, and rows grouped by hour, day, task, pipeline, step, agent (profile; auto mode's reviewer per model), model or provider (the agent connection the tokens were spent on), filtered by task, run, pipeline, step, agent profile, model or provider (an id, or `earlier` for usage no record names a provider for; names in any case); `unmatched` names each filter value nothing in the range matches. The totals' `output_unreported` counts the agent invocations whose CLI reported input but no output yet (Claude Code on some providers reports output only in its final result): their output is unknown, not 0, so `output` and `spent` hold only what the others reported. `link` opens the Usage page with the same query (without `project`, All projects' Usage tab; the page groups by hour or day, so another `group` is by day there); each row's `link` opens it narrowed to the row. `unread_runs` counts the runs left out because their record is damaged; the rest is counted. `estimates`, for one project, is the story-point estimator's own usage in the range (its tokens and how many requests asked a model), outside the runs and their filters; null without `project`.",
     schema: schema_for_type::<usage::GetUsage>,
@@ -426,7 +419,7 @@ const SPECS: &[Spec] = &[
   },
   Spec {
     name: "get_module",
-    description: "One module, as its page shows it: its details (base_branch among them, as list_modules gives it), progress, its tasks (key, title, workflow status, link) and its burndown by local day from its start (or the day it got its first task) through today or its target date, at most 366 days (a longer module gives its first year while today is in it, else the year up to today): scope and remaining work at the end of each day (null for a day still to come), the ideal line from the scope at the start to nothing at the target date (null without one), and the work added to and removed from the module that day, in the unit it names. Done is the task's Done: merging its run sets it, in Orchester or found merged outside it by git, as does a person. `forecast` is when its remaining work is likely delivered, as get_delivery forecasts it (50% and 85% dates, or not_enough_history).",
+    description: "One module, as its page shows it: its details (base_branch among them, as list_modules gives it), progress, its tasks (key, title, workflow status, link) and its burndown by local day from its start (or the day it got its first task) through today or its target date, at most 366 days (a longer module gives its first year while today is in it, else the year up to today): scope and remaining work at the end of each day (null for a day still to come), the ideal line from the scope at the start to nothing at the target date (null without one), and the work added to and removed from the module that day, in the unit it names. Done is the task's Done: merging its run sets it, in Orchester or found merged outside it by git, as does a person. `forecast` is when its remaining work is likely delivered, as get_delivery forecasts it (50% and 85% dates, or not_enough_history). `led_in` is the Orchestrator conversation that leads it, as its Led in shows it (its own subscription, else the whole project's, as `via`), or null when none does; get_watches reads the subscriptions.",
     schema: schema_for_type::<modules::GetModule>,
     read_only: true,
   },
@@ -441,6 +434,12 @@ const SPECS: &[Spec] = &[
     description: "Changes a module's name, description, dates (null for none), state (open or closed) or base_branch (checked_out or a branch name, as create_module takes it; the next runs of its tasks that inherit theirs take it, runs that started keep theirs; kept on this computer only and never sent to a server); fields left out stay as they are. Its tasks and the history of what moved in and out stay.",
     schema: schema_for_type::<modules::UpdateModule>,
     read_only: false,
+  },
+  Spec {
+    name: "get_watches",
+    description: "What a local project's Orchestrator conversations lead and what waits there now, as /watching shows it: per conversation (`conversation`'s alone, by id or title, when given; else every one that leads something) its id, title and link, how many modules and tasks it leads (and whether the tasks without a module or the whole project), the one-line total of what waits for the person, and its subscriptions in the order they were kept: target (kind module, task, without_module or project; id, name, link), since (ms), order (source own, project_default or none, with its text), the tasks it leads that have something going on (running, waits with what for, queued with its place, stopped_at_limit, ready_to_merge; each with its run, words and link) and the rest counted. Read-only: subscribing, stopping and taking over stay the person's commands in the conversation, and no tool changes them. get_module and get_task name the leading conversation (`led_in`).",
+    schema: schema_for_type::<watches::GetWatches>,
+    read_only: true,
   },
 ];
 
@@ -523,12 +522,11 @@ async fn dispatch_answers(
     "get_auto_mode" => Err(approval_settings::retired(name, "get_approvals")),
     "set_auto_mode" => Err(approval_settings::retired(name, "set_allow_autopilot and set_reviewer")),
     "set_run_auto_mode" => Err(approval_settings::retired(name, "set_run_manual")),
-    "list_pull_requests" => pull_requests::list_pull_requests(services, parse(arguments)?, translate).await,
-    "get_pull_request" => pull_requests::get_pull_request(services, parse(arguments)?).await,
     "list_modules" => modules::list_modules(services, parse(arguments)?).await,
-    "get_module" => modules::get_module(services, parse(arguments)?).await,
+    "get_module" => modules::get_module(services, parse(arguments)?, translate).await,
     "create_module" => modules::create_module(services, parse(arguments)?).await,
     "update_module" => modules::update_module(services, parse(arguments)?).await,
+    "get_watches" => watches::get_watches(services, parse(arguments)?, translate).await,
     "get_daily_report" => daily_report::get_daily_report(services, parse(arguments)?).await,
     "get_delivery" => delivery::get_delivery(services, parse(arguments)?).await,
     "get_story_point_calibration" => tasks::get_calibration(services, parse(arguments)?).await,

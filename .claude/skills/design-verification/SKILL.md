@@ -173,6 +173,7 @@ stays the same. The table below describes some of them.
 | `orchestrator-not-set-up` | `orchestrator` with nothing chosen for the Orchestrator | Orchestrator · redesign 02 |
 | `orchestrator-on-codex` | `orchestrator` running on *Codex · Default* (`gpt-6-astra`, the CLI's own effort): the picker's twelve models scroll in its Models column, seven rows high; typing `sol` shows *Searching* | Runs-on picker · states `t7cdi`: Many models, Searching |
 | `orchestrator-codex-limit` | `orchestrator-on-codex` with Codex *Default*'s 5-hour limit reached and the high effort | Runs-on picker · states `t7cdi`: Codex at its limit |
+| `orchestrator-leads` | `orchestrator` with subscriptions standing and the project's default order for watching (*Report failures and questions; ask me before merging anything.*). *Lead Webhooks v2, a task and Kontur* (opens first) leads the module Webhooks v2 (its own order), the task *Shared rate limiter* (no module) and everything in the project (no order of its own: the default order applies), with its /watch commands and lines. *Billing and invoices* (History) leads the module Billing. Search index is led by none. Reach: the header's Leads chips and their × (Stop watching); `/watching` and its *Stop watching*; `/unwatch` and its picker; `/watch-module` Billing + Ctrl Enter in the first conversation for the already-led card (*Take it here*, *Open that conversation*) and the lines it settles into; `/watch-module` Search index for a new subscription. Synthetic presses and keys apply here as a person's (the QA gate below) | Orchestrator watch · redesign: 03 Leads chips, 04 `OKtX2`, 05 `EIjDH` (`f1J8z`, settled `JZzui` in `DE2n1`), 06 `/watching` `Ff7AD`, the `/unwatch` picker; Project settings › Orchestrator › *Watching* `DE2Pj` |
 | `project-settings` | `connections`, plus `acme/kontur` linked and expecting `dana-k` while `gh` is signed in as `ivanzaida`; base branch `release/2.4`, which is gone; secrets in Development, Staging and Production (`DEEPSEEK_API_KEY` used by the tool `deploy-preview`, `FIGMA_TOKEN` rotated and used by the MCP server `figma`, `GITHUB_APP_KEY` unused, `OLD_FIGMA_TOKEN` archived), records only; `figma` on with `FIGMA_API_KEY` from `FIGMA_TOKEN`, two tools run without asking and the profile Design reviewer using it | Project settings `XGtkg`: 01b, 05, 06, 06b (open `FIGMA_TOKEN`), 13 (open `figma`), 14 (open GitHub) |
 | `project-settings-shared` | `project-settings` linked as owner to `orchester.example.com/kontur` with four members as last read; no server answers and this computer's server list lacks it, so the address says so and *Leave* is unavailable with why | 04b Sharing · shared (its address hint and *Leave* differ from the frame, which draws a connected server) |
 | `settings` | App Settings with a person's data, fixture-only (`tools/qa-app.ps1` says how). The QA app signs in by itself. Accounts: Claude Code *Work* (signed in, plan readings, a running run on it: Remove is blocked), *Personal* (unused), *Old* (Sign-in expired), Default (Not signed in); Codex *Client* (signed in, plan readings, a connection on it), *Archive* (Folder missing), Default; stand-in CLIs answer the checks the same way. Notifications: quiet hours 22:30–07:00, daily report at 18:30. Automation: the installed app's MCP rows (address, port, token, Connect an agent) on a free port with a token in memory, *claude-code* and *codex-mcp-client* connected. Orchester Cloud: kept here, Mobile team's join waiting for approval and Docs team's that didn't finish; no team server (the team server's states come from the `team-*` scenarios below, and those of a real server from the QA examples `n1_qa` … `n3_qa` of the private platform repository `ivanzaida/orchester-platform`, `crates/e2e`) | `App settings · redesign` `iUmo3` in the new `orchester.pen`: 01–05c and the states sheets `poD7g`, `shpsk`, `ZUuMT`; `xQQbr` (`"ask": "sign-out"`) |
@@ -197,6 +198,26 @@ stays the same. The table below describes some of them.
 A press only a person may make (*Join with the code*, with Enter and *Try again* joining the same way) is refused from an
 MCP client, so a state after it cannot be walked to in one copy. The QA copy makes it with its own pointer before the window
 shows (`examples/qa_app/team/drive.rs`), so each result of a press is a scenario of its own.
+
+**The QA gate: in a QA copy you are the person for the Orchestrator.** A QA copy (`start_qa_app`, `tools/qa-app.ps1`)
+counts its MCP client as the person for the Orchestrator's person-only actions (`orchester_app::mcp::qa_person`,
+`docs/stable-build.md` › *QA copies count the MCP client as the person*). There, do them and verify what follows; do
+not mark these states unreachable or *person-only*: Ctrl Enter on /watch chips (`/watch-module`, `/watch-task`)
+applies the command; *Stop watching*, × on a Leads chip and `/unwatch` stop; *Take it here* and *Open that
+conversation* answer the already-led card; *Start* on a proposed run, *Approve and do it* on a plan, a proposed
+change's accept, Edit / *Rewind to here* and *Delete conversation* go through; and what you send from the composer is
+the person's message. Only the installed app and normal starts still refuse them (that refusal is covered by
+`tests/orchestrator/qa_person.rs`, not by you). Everything else person-only stays refused in a QA copy too: Settings'
+protected switches, permission and approval questions, tokens and pairing codes, sharing and sign-in, secrets, and the
+task pages' person-only controls; for those the person-only notice is the expected state. For the led-in states use
+`orchestrator-leads` (above); a task's or module's *Led in* line in the pickers needs nothing else.
+
+**Keys with modifiers.** `lurq_interact` `key` takes the key's own name in `key` and its modifiers in `modifiers`:
+`{"action": "key", "key": "Enter", "modifiers": ["shift"]}` adds a line in the composer, `{"action": "key", "key":
+"Home", "modifiers": ["ctrl"]}` moves its caret to the start, `{"action": "key", "key": "Enter", "modifiers":
+["ctrl"]}` sends or applies. `"key": "shift+Enter"` or `"ctrl+Home"` is taken as a key of that name, which nothing
+handles: lurq answers `ok` and nothing happens (lurq 0.58 `src/mcp/tools/interact.rs`, the `"key"` action passes `key`
+through as it is and reads modifiers only from `modifiers`).
 
 In `team-downloading` the stand-in holds the tasks for 25 s, under the client's 30 s timeout, then refuses them, and the QA
 copy asks again at once. The failure notice can therefore show for a moment each cycle: retake a screenshot that catches it.

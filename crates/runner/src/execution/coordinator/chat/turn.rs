@@ -18,7 +18,7 @@ use orchester_core::{
   },
   conversation::MessageBody,
   id::{AgentAccountId, ChatMessageId, ProjectId},
-  orchestrator::{Chat, ChatEvent, OrchestratorSettings, TurnFailure, TurnState, runs_orchestrator},
+  orchestrator::{Chat, ChatEvent, Leads, OrchestratorSettings, TurnFailure, TurnState, runs_orchestrator},
   resource::CommandEnvironment,
   secret::SecretValue,
   store::{ConnectionStore, SettingsStore},
@@ -67,6 +67,8 @@ pub(super) struct Prepared {
   pub(super) carried_window: Option<u64>,
   pub(super) environment: CommandEnvironment,
   pub(super) project_name: String,
+  /// What the conversation leads now, which its system prompt tells every turn (ORC-769).
+  pub(super) leads: Leads,
 }
 
 impl Turn {
@@ -145,6 +147,9 @@ impl Turn {
       None => None,
     };
     let environment = db.project_environment().map_err(|error| cannot(error.to_string()))?;
+    let leads = db
+      .chat_leads(self.chat.id())
+      .map_err(|error| cannot(format!("cannot read what the conversation leads: {error}")))?;
     Ok(Prepared {
       connection,
       executable,
@@ -154,6 +159,7 @@ impl Turn {
       carried_window,
       environment,
       project_name: db.project().name().as_str().to_owned(),
+      leads,
     })
   }
 

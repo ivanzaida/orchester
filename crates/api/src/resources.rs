@@ -1,12 +1,16 @@
 //! A shared project's configuration (`docs/architecture/server.md`, "Shared configuration", S5): its resources
-//! (pipelines, agent profiles, instructions, skills, tools and team reviewers), their published versions, and what each
-//! computer binds locally. A skill's parts travel apart from its body, by hash (`PUT …/files/{sha256}`). Members read;
-//! only the project's owner or a server admin writes; a member's write answers `403 not_admin`.
+//! (pipelines, agent profiles, instructions, skills, tools, MCP servers and team reviewers) and their published
+//! versions. A resource refers only to other team resources by server id and to secrets by name
+//! ([`ReferenceTarget`]); what is local by nature stays on each computer. A skill's parts travel apart from its body,
+//! by hash (`PUT …/files/{sha256}`). Members read; only the project's owner or a server admin writes; a member's write
+//! answers `403 not_admin`.
 
 use orchester_core::{
   blob::ContentHash,
-  id::{ConnectionId, IdempotencyKey, ResourceId, SecretId},
-  resource::{ResourceKind, VersionNumber},
+  connection::AgentProvider,
+  id::{IdempotencyKey, ResourceId},
+  resource::{ResourceKind, TeamAgentProfile, TeamReviewer, VersionNumber},
+  secret::SecretName,
   sharing::TaskRevision,
 };
 use serde::{Deserialize, Serialize};
@@ -23,8 +27,11 @@ pub enum SharedResourceKind {
   Instruction,
   Skill,
   Tool,
-  /// Body: [`orchester_core::resource::TeamReviewer`], with named connection references, never local ids or secrets.
+  /// Body: [`orchester_core::resource::TeamReviewer`], which names a CLI kind (a decision reviewer nothing), never a
+  /// connection, a local id or a secret.
   TeamReviewer,
+  /// Body: [`orchester_core::resource::TeamMcpServer`], with no program path, variable or secret value, or local id.
+  McpServer,
 }
 
 impl SharedResourceKind {
@@ -36,6 +43,7 @@ impl SharedResourceKind {
       Self::Skill => ResourceKind::Skill,
       Self::Tool => ResourceKind::Tool,
       Self::TeamReviewer => ResourceKind::TeamReviewer,
+      Self::McpServer => ResourceKind::McpServer,
     }
   }
 
@@ -48,6 +56,7 @@ impl SharedResourceKind {
       ResourceKind::Skill => Some(Self::Skill),
       ResourceKind::Tool => Some(Self::Tool),
       ResourceKind::TeamReviewer => Some(Self::TeamReviewer),
+      ResourceKind::McpServer => Some(Self::McpServer),
       ResourceKind::TestSuite | ResourceKind::Service | ResourceKind::Stack => None,
     }
   }
@@ -68,25 +77,52 @@ pub struct SharedResource {
   pub updated: Attribution,
 }
 
-/// What a reference names on the publisher's computer: a connection, an MCP server or a secret by its id there, or a
-/// shared tool.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+/// What a team resource's version names besides itself (`docs/design/team-configuration.md`): other team resources by
+/// their server id, secrets by name, and the CLI kind a profile or language reviewer runs with. It never holds an id
+/// or a path from a computer: no connection, no local MCP server, no secret id. Each computer fills in what is local
+/// by nature.
+#[derive(Clone, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case", deny_unknown_fields)]
 pub enum ReferenceTarget {
-  Connection { id: ConnectionId },
-  McpServer { id: ConnectionId },
-  Secret { id: SecretId },
-  Tool { id: ResourceId },
+  /// The agent provider a profile's or language reviewer's connection must have; each computer picks one of its own
+  /// connections of that kind.
+  CliKind { cli: AgentProvider },
+  /// A team resource (an MCP server, tool, skill, instruction or profile) by its id on the server.
+  TeamResource { kind: SharedResourceKind, id: ResourceId },
+  /// A secret by its name; its value stays on each computer.
+  SecretName { name: SecretName },
 }
 
-/// One id a version's body names that is not a shared resource of the project, with what each computer binds it by:
-/// its name, and its role, the connection's kind (`claude_cli`, `openai_api`, …) or the secret's.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-pub struct Reference {
-  #[serde(flatten)]
-  pub target: ReferenceTarget,
-  pub name: String,
-  pub role: Option<String>,
+impl ReferenceTarget {
+  /// The references of a team agent profile's body, the one list a version of it sends: its CLI kind, then its MCP
+  /// servers, tools, skills and instructions as team resources, then its secrets by name, each in the body's order. The
+  /// body is the source; the references repeat what it names so the server can check the ids exist and read what uses
+  /// what without parsing every kind, and a version whose references differ from this list is not the body's.
+  pub fn of_profile(profile: &TeamAgentProfile) -> Vec<Self> {
+    let resources =
+      |kind, ids: &[ResourceId]| -> Vec<Self> { ids.iter().map(|id| Self::TeamResource { kind, id: *id }).collect() };
+    let mut references = vec![Self::CliKind { cli: profile.cli() }];
+    references.extend(resources(SharedResourceKind::McpServer, profile.mcp_servers()));
+    references.extend(resources(SharedResourceKind::Tool, profile.tools()));
+    references.extend(resources(SharedResourceKind::Skill, profile.skills()));
+    references.extend(resources(
+      SharedResourceKind::Instruction,
+      profile.instruction_resources(),
+    ));
+    references.extend(
+      profile
+        .secrets()
+        .iter()
+        .map(|name| Self::SecretName { name: name.clone() }),
+    );
+    references
+  }
+
+  /// The references of a team reviewer's body: a language reviewer's CLI kind, like a profile's; a decision reviewer
+  /// names no CLI kind, no team resource and no secret, so it has none. The body is the source, as for a profile.
+  pub fn of_reviewer(reviewer: &TeamReviewer) -> Vec<Self> {
+    reviewer.cli().map(|cli| Self::CliKind { cli }).into_iter().collect()
+  }
 }
 
 /// One published version of a resource (`Version`), immutable and numbered by the server. `body` is the kind's body as
@@ -97,23 +133,24 @@ pub struct SharedVersion {
   pub number: VersionNumber,
   pub body: serde_json::Value,
   pub hash: ContentHash,
-  pub references: Vec<Reference>,
+  pub references: Vec<ReferenceTarget>,
   pub based_on: Option<VersionNumber>,
   pub published: Attribution,
-  /// Computed and kept by the server, never supplied by a publisher. For team reviewers, uses
-  /// [`orchester_core::resource::TeamReviewer::widens_over`] against the preceding version (or `None` for v1).
-  /// Absent on older servers; clients must still compare permissions locally before applying a version.
+  /// Computed by the server, never supplied by a publisher: core's `SharedBody` rule for the kind (team MCP servers,
+  /// team agent profiles, team reviewers and tools) against the preceding version, or `true` for a body core cannot
+  /// read; `false` for instructions, skills and pipelines (`docs/cloud-api.md`, "Which versions widen"). Absent on
+  /// older servers; clients must still compare permissions locally before applying a version.
   #[serde(default)]
   pub widens: bool,
 }
 
-/// A version's content as an admin sends it: the body, and a reference for every id it names that is not a shared
-/// resource (`422 invalid { reason: "references" }` otherwise).
+/// A version's content as an admin sends it: the body, and the references it names (`422 invalid { reason:
+/// "references" }` when one does not hold).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct VersionContent {
   pub body: serde_json::Value,
-  pub references: Vec<Reference>,
+  pub references: Vec<ReferenceTarget>,
 }
 
 /// `POST …/resources`: a resource with the id the desktop made for it, and its first version.
@@ -142,7 +179,7 @@ pub struct ResourceCreated {
 pub struct UploadVersion {
   pub number: VersionNumber,
   pub body: serde_json::Value,
-  pub references: Vec<Reference>,
+  pub references: Vec<ReferenceTarget>,
   pub published_at: i64,
 }
 
@@ -181,7 +218,7 @@ pub struct VersionPublish {
   pub idempotency_key: IdempotencyKey,
   pub based_on: Option<VersionNumber>,
   pub body: serde_json::Value,
-  pub references: Vec<Reference>,
+  pub references: Vec<ReferenceTarget>,
 }
 
 /// `PATCH …/resources/{resource}`: a rename or an archived mark, made on `revision`.

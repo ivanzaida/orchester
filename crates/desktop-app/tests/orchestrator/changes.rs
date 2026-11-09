@@ -24,7 +24,6 @@ use orchester_core::{
   time::Timestamp,
 };
 use orchester_store::ProjectDb;
-use orchester_workspace::workspace::OrchestratorConsent;
 
 use super::{
   harness::{Orchestrator, Setup},
@@ -283,7 +282,7 @@ fn orchestrator_publication_refuses_a_draft_saved_after_it_was_proposed() {
 fn orchestrator_publishes_itself_once_the_person_lets_it() {
   let mut screen = Orchestrator::new(Setup::Ready);
   with_instruction_draft(&screen);
-  screen.let_orchestrator(OrchestratorConsent::PublishDrafts, true);
+  screen.let_orchestrator_drive(true);
   screen.go(OrchestratorChat::New);
   call(&mut screen, PUBLISH_INSTRUCTION, 1);
   assert_eq!(actions(&screen)[0].outcome, ActionOutcome::Done);
@@ -313,27 +312,20 @@ fn orchestrator_publishes_itself_once_the_person_lets_it() {
 }
 
 #[test]
-fn orchestrator_proposes_what_widens_even_when_it_may_publish() {
+fn orchestrator_is_refused_what_widens_while_it_drives_without_the_persons_permission() {
   let mut screen = Orchestrator::new(Setup::Ready);
   let builder = screen.builder();
   let delivery = screen.pipeline(builder, ("delivery", "Delivery"));
   screen.pipeline_draft((delivery, builder), "Read README.md twice.");
-  screen.let_orchestrator(OrchestratorConsent::PublishDrafts, true);
+  screen.let_orchestrator_drive(true);
   screen.go(OrchestratorChat::New);
   call(&mut screen, PUBLISH_PIPELINE, 1);
-  assert_eq!(
-    actions(&screen)[0].outcome,
-    ActionOutcome::Waits,
-    "what widens waits for the person"
+  assert!(
+    matches!(&actions(&screen)[0].outcome, ActionOutcome::Refused { code, .. } if code == "person_only"),
+    "what widens is the tool's to refuse, no card: {:?}",
+    actions(&screen)[0].outcome
   );
   assert_eq!(screen.pipeline_version(delivery), 1);
-  let card = proposal_card(&screen);
-  screen.until("the note", |screen| screen.exists(&format!("{card}-widens")));
-  assert!(
-    screen
-      .text(&format!("{card}-widens"))
-      .contains("even though Let the Orchestrator publish drafts is on")
-  );
 }
 
 /// A draft of profile `builder` that turns its network on: it widens what its agents may do.

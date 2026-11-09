@@ -71,6 +71,7 @@
       "failed": "CI failed on #{{number}}",
       "fixing": "Fixing CI on #{{number}}",
       "fixingAuto": "Fixing CI on #{{number}} · {{count}} of {{limit}}",
+      "fixWaits": "Fix CI on #{{number}} is kept · not ready here",
       "notRead": "Pull request #{{number}} · CI not read"
     },
     "event": {
@@ -80,6 +81,7 @@
       "failed": "CI failed on #{{number}} · {{names}}",
       "sent": "{{failed}} · Fix CI sent to {{agent}} at {{time}}",
       "sentAuto": "{{failed}} · sent Fix CI {{count}} of {{limit}} automatically",
+      "notReady": "{{failed}} · Fix CI is kept: the pipeline is not ready here, so nothing started · press Run again on the Summary when it is",
       "autoStopped": "Fix CI automatically stopped at {{count}} of {{limit}} · CI still fails on #{{number}} · needs you",
       "notRead": "CI not read on #{{number}} · {{why}}",
       "whyNotFound": "GitHub CLI not found",
@@ -102,6 +104,7 @@
       "passed": "CI passed on pull request #{{number}}. Review and merge it on GitHub.",
       "failed": "CI failed on pull request #{{number}}: {{names}}. Fix CI sends them to {{agent}}.",
       "fixing": "Fix CI sent the failing checks of pull request #{{number}} to {{agent}}.",
+      "fixWaits": "Fix CI for pull request #{{number}} is kept: the pipeline is not ready on this computer, so nothing started. Fix what the Summary lists, then run the task again.",
       "notRead": "Orchester can't read CI for pull request #{{number}}: {{why}}."
     },
     "errors": {

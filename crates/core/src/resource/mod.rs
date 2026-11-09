@@ -3,8 +3,8 @@
 //!
 //! Bodies reference other resources, connections and secrets by id, except a test suite, service and stack,
 //! which name their secrets and services ([`TestSuite`], [`crate::service`]), and the [`TeamReviewer`], which
-//! names its connection by kind, name and role. Which published version of a referenced resource is used is
-//! decided when a run snapshots its configuration, not inside a body.
+//! names a CLI kind (a decision reviewer nothing), never a connection. Which published version of a referenced resource
+//! is used is decided when a run snapshots its configuration, not inside a body.
 
 mod agent_profile;
 mod instruction;
@@ -13,6 +13,8 @@ mod pipeline;
 mod prompt;
 mod removal;
 mod skill;
+mod team_agent_profile;
+mod team_mcp_server;
 mod team_reviewer;
 mod test_suite;
 mod tool;
@@ -32,16 +34,19 @@ pub use self::{
   pipeline::{
     DeliverChange, DeliverMode, DeliverStep, Deliverable, EditProblem, FailureRoute, MergeMethod, Pipeline,
     PipelineChange, PipelineEdit, PipelineError, PipelineSources, PipelineSourcesError, RepositoryAccess,
-    StarterAssignments, StarterStep, StarterStepText, Step, StepChange, StepKey, StepKind, UnknownDeliverable, Weaker,
-    WithoutCommits, changes, feature_delivery, takes_base_moves, takes_base_moves_by_default, weaker_than,
+    StarterAssignments, StarterStep, StarterStepText, Step, StepChange, StepKey, StepKind, TeamExecutors,
+    TeamPipelineError, UnknownDeliverable, Weaker, WithoutCommits, changes, feature_delivery, takes_base_moves,
+    takes_base_moves_by_default, weaker_than,
   },
   prompt::{PromptError, PromptReference, PromptText, Rendered, prompt_references},
   removal::{Removal, RemoveMode, StepUser, StepVersion, pipeline_step_users, step_users},
   skill::{SKILL_FILE, Skill, SkillError, SkillFile, SkillFilePath},
-  team_reviewer::{
-    DecisionReviewerReference, DecisionReviewerRole, LanguageReviewerReference, ReviewerDestinations, ReviewerHost,
-    ReviewerHostError, TeamReviewer,
+  team_agent_profile::{TeamAgentProfile, TeamCounterparts, TeamProfileError},
+  team_mcp_server::{
+    HeaderPrefix, HeaderPrefixError, TeamMcpLaunch, TeamMcpProgram, TeamMcpRemote, TeamMcpSecretHeader, TeamMcpServer,
+    TeamMcpServerError,
   },
+  team_reviewer::{ReviewerDestinations, ReviewerHost, ReviewerHostError, TeamReviewer},
   test_suite::{
     ArtifactGlob, ReportFormat, ReportOutput, SuiteCommand, SuiteNeeds, SuitePath, SuiteProcess, SuiteVariable,
     SuiteVariables, TestFilter, TestLayer, TestReport, TestSuite, TestSuiteError,

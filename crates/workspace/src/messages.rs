@@ -108,12 +108,15 @@ pub fn store_error(error: &StoreError) -> Message {
     StoreError::AlreadyShared => Message::new("sharing.errors.alreadyShared"),
     StoreError::DraftChanged(_) => Message::new("errors.draftChanged"),
     StoreError::VersionInUse(_) => Message::new("sharing.errors.versionInUse"),
+    StoreError::HoldsMore(_) => Message::new("sharing.errors.holdsMore"),
     StoreError::NotPublished(_) => Message::new("errors.neverPublished"),
+    StoreError::NoFirstVersion(_) => Message::new("errors.noFirstVersion"),
     StoreError::Sqlite(_) if error.is_locked() => Message::new("errors.databaseLocked"),
     StoreError::Unavailable { .. } => Message::new("errors.databaseLocked"),
     StoreError::Sqlite(_)
     | StoreError::Io { .. }
     | StoreError::Corrupt { .. }
+    | StoreError::AlreadyNumbered(_)
     | StoreError::TaskNotFound(_)
     | StoreError::RunNotFound(_)
     | StoreError::EmptyBatch
@@ -129,6 +132,7 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::InvocationNotFound(_)
     | StoreError::InvocationPermissionsNotRecordable(_)
     | StoreError::SecretNotFound(_)
+    | StoreError::Keychain(_)
     | StoreError::ServerNotFound(_)
     | StoreError::AgentAccountNotFound(_)
     | StoreError::MemoryNotFound(_)
@@ -144,6 +148,8 @@ pub fn store_error(error: &StoreError) -> Message {
     | StoreError::TeamRunNotFound(_)
     | StoreError::TeamDeliveryNotFound(_)
     | StoreError::TeamDeliveryStage { .. }
+    | StoreError::RunWaitsOn(_)
+    | StoreError::RunWaitOfAnotherTask { .. }
     | StoreError::MigrationBrokeReferences { .. } => Message::new("errors.storage"),
     StoreError::Publish(error) => publish_error(error),
     StoreError::AlwaysAllow(_) => Message::new("errors.alwaysAllow"),
@@ -163,6 +169,7 @@ fn publish_error(error: &PublishError) -> Message {
     PublishError::BlankSkillDescription => Message::new("skills.errors.blankDescription"),
     PublishError::BlankSkillBody => Message::new("skills.errors.blankBody"),
     PublishError::ConnectionMissing => Message::new("agents.permissions.publish.connectionMissing"),
+    PublishError::ConnectionNotPicked => Message::new("agents.permissions.publish.connectionNotPicked"),
     PublishError::Permissions(problem) => crate::agents::permissions::not_enforceable(problem),
     PublishError::Needs(error) => needs_error(error),
   }

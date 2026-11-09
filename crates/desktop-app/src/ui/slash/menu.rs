@@ -22,7 +22,7 @@ use lurq::{
 use parking_lot::Mutex;
 
 use super::{
-  Pick, Run, Shown, SlashCommand, SlashField, matched, query,
+  Pick, Run, Shown, SlashCommand, SlashField, argument, matched, query,
   rows::{Face, footer, heading, nothing, row},
   skills::{self, Read, SkillsOffer},
 };
@@ -86,7 +86,7 @@ pub fn menu(ctx: &mut Ctx, menu: SlashMenuProps) -> Element {
       icon: command.icon,
       label: command.label.clone(),
       detail: command.detail.clone(),
-      runs: command.run.is_some(),
+      runs: command.does.is_some(),
       skill: false,
     })
     .collect();
@@ -148,12 +148,24 @@ impl Component for SlashMenu {
     if typed.is_none() && field.closed.get() {
       field.closed.set(false);
     }
-    let open = typed.is_some() && field.focused.get() && !field.closed.get();
+    // While a badge's picker is open, it shows instead; the picker's own search holds the focus then.
+    let picking = field
+      .argument
+      .with(|held| held.iter().find(|badge| badge.picking).map(|badge| badge.command));
+    field.take_focus_back(ctx);
+    let focused = field.focused.get();
+    let open = typed.is_some() && picking.is_none() && focused && !field.closed.get();
     let read = skills::read(ctx, &props.skills, open);
     let (Some(typed), true) = (typed, open) else {
       *field.shown.lock() = None;
       *self.last.lock() = None;
-      return Element::new();
+      return match picking {
+        Some(command) => argument::picker(ctx, (props.id, field, &props.anchor), command),
+        _ => {
+          field.forget_choices();
+          Element::new()
+        }
+      };
     };
     let skills = skill_rows(ctx, field, &props.skills, read);
     let skill_faces = match &skills {
@@ -227,12 +239,23 @@ impl SlashMenu {
   }
 }
 
-/// The rows of `faces` whose name matches `typed`, with the matched letters.
+/// The rows of `faces` that match `typed` ([`face_matched`]), with the matched letters.
 fn matching<'a>(faces: &'a [Face], typed: &str) -> Vec<Matched<'a>> {
   faces
     .iter()
-    .filter_map(|face| matched(&face.label, typed).map(|letters| (face, letters)))
+    .filter_map(|face| face_matched(face, typed).map(|letters| (face, letters)))
     .collect()
+}
+
+/// Where `typed` is in the row of `face`: in its label, whose letters show in bold; or in a command's own name, which
+/// the person types after the `/` (`/unwatch` for *Stop watching*), with no letters in bold.
+fn face_matched(face: &Face, typed: &str) -> Option<Range<usize>> {
+  matched(&face.label, typed).or_else(|| {
+    (!face.skill)
+      .then(|| matched(&face.name, typed))
+      .flatten()
+      .map(|_| 0..0)
+  })
 }
 
 /// The skills `read` found as rows, faded with why while the agent cannot take one; the field offers them to choose.
@@ -306,7 +329,7 @@ fn skills_section(
     None if filtered => count(ctx, skills.len(), section.total),
     None => ctx.t_args("composer.slash.published", [("count", section.total.to_string())]),
   };
-  let shown_commands = props.faces.iter().any(|face| matched(&face.label, typed).is_some());
+  let shown_commands = props.faces.iter().any(|face| face_matched(face, typed).is_some());
   let mut content: Vec<Element> = shown_commands.then(|| separator(ctx)).into_iter().collect();
   content.push(heading(ctx, ("skills", "composer.slash.skills"), Some(end)));
   if skills.is_empty() {

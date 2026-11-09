@@ -6,6 +6,8 @@
 
 #[path = "team_inputs/connection_kinds.rs"]
 mod connection_kinds;
+#[path = "team_inputs/mcp.rs"]
+mod mcp;
 mod support;
 
 use std::{
@@ -26,13 +28,14 @@ use orchester_core::{
   resource::{
     AccessPolicy, AccessWindow, AgentProfile, AllowedSteps, ApprovalMode, CommandAction, CommandArg, CommandProgram,
     Deliverable, DeniedBehavior, ModelId, Pipeline, PromptText, ProviderSettings, RepositoryAccess, Slug, Step,
-    StepKey, StepKind, Tool, ToolAction, Version, VersionNumber,
+    StepKey, StepKind, TeamAgentProfile, TeamMcpServer, Tool, ToolAction, Version, VersionNumber,
   },
   run::{
     BranchName, CommitId, PauseReason, PreflightProblem, PublishedVersions, RunSnapshot, RunStatus, StepStatus,
-    bundle::{CanonicalExecutionInputs, PinnedBodies, ResourceLabel},
+    bundle::{CanonicalExecutionInputs, ExecutionProfile, PinnedBodies, ResourceLabel},
     inputs::{
       BundleContent, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, RunInputs, TaskAtStart, TeamAcceptance,
+      TeamMcpBinding, team_mcp_id,
     },
   },
   sharing::TaskRevision,
@@ -57,6 +60,8 @@ struct Team {
   profile: ResourceId,
   pipeline: ResourceId,
   tool: ResourceId,
+  /// The team MCP servers the profile names and the inputs pin, by server resource id.
+  mcp: Vec<ResourceId>,
   canonical: CanonicalExecutionInputs,
 }
 
@@ -150,6 +155,11 @@ fn check(pipeline: ResourceId) -> Version<Tool> {
 /// The team's Builder profile, its two-step pipeline (Implement, then Review) and a check, published on the server
 /// only: no resource row of any is on this computer.
 fn team(setup: &Setup) -> Team {
+  team_pinning(setup, Vec::new())
+}
+
+/// [`team`] whose Builder profile names `servers`, each pinned at version 1 under a server id of its own.
+fn team_pinning(setup: &Setup, servers: Vec<TeamMcpServer>) -> Team {
   let project = project(setup);
   let root = project.repo.path();
   let (server, server_project) = link(root);
@@ -167,16 +177,47 @@ fn team(setup: &Setup) -> Team {
   };
   let snapshot = RunSnapshot::build(pipeline, &pipeline_version, published).expect("snapshot");
   let label = |slug: &str, title: &str| ResourceLabel::new(Slug::new(slug).expect("slug"), name(title));
+  let mcp: Vec<ResourceId> = servers.iter().map(|_| ResourceId::generate()).collect();
+  let pinned_servers: Vec<(ResourceId, Version<TeamMcpServer>)> = mcp
+    .iter()
+    .zip(servers)
+    .map(|(id, server)| {
+      let version = Version::new(VersionId::generate(), VersionNumber::FIRST, server, Timestamp::now());
+      (*id, version)
+    })
+    .collect();
+  let execution_profile = if mcp.is_empty() {
+    ExecutionProfile::of(profile_version.body())
+  } else {
+    let body = profile_version.body();
+    let team = TeamAgentProfile::new(
+      body.role().clone(),
+      body.responsibilities().to_owned(),
+      body.instructions().clone(),
+      (setup.provider, body.model().clone(), body.settings().clone()),
+    )
+    .with_mcp_servers(mcp.clone())
+    .expect("distinct servers");
+    ExecutionProfile::of_team(&team)
+  };
+  let mut labels = vec![
+    (profile_version.id(), label("builder", "Builder")),
+    (pipeline_version.id(), label("delivery", "Delivery")),
+    (tool_version.id(), label("worktree-status", "Worktree status")),
+  ];
+  labels.extend(
+    pinned_servers
+      .iter()
+      .enumerate()
+      .map(|(at, (_, version))| (version.id(), label(&format!("server-{at}"), &format!("Server {at}")))),
+  );
   let bodies = PinnedBodies {
-    labels: &[
-      (profile_version.id(), label("builder", "Builder")),
-      (pipeline_version.id(), label("delivery", "Delivery")),
-      (tool_version.id(), label("worktree-status", "Worktree status")),
-    ],
-    profiles: &[profile_version],
+    labels: &labels,
+    profiles: &[(profile_version.id(), execution_profile)],
     instructions: &[],
     tools: &[tool_version],
     skills: &[],
+    mcp_servers: &pinned_servers,
   };
   let canonical = CanonicalExecutionInputs::pin(&snapshot, bodies).expect("inputs");
   let team_task = TeamTaskRef {
@@ -195,6 +236,7 @@ fn team(setup: &Setup) -> Team {
     profile,
     pipeline,
     tool,
+    mcp,
     canonical,
   }
 }
@@ -219,6 +261,17 @@ impl Team {
     connection: ConnectionId,
     base: &str,
     required_cli: Option<orchester_core::connection::AgentProvider>,
+  ) -> OperationId {
+    self.accept_bound(connection, base, (required_cli, Vec::new()))
+  }
+
+  /// [`Self::accept`] with the program path this computer set for each team MCP server of `team_mcp` (the servers the
+  /// profile names, in order).
+  fn accept_bound(
+    &self,
+    connection: ConnectionId,
+    base: &str,
+    (required_cli, team_mcp): (Option<orchester_core::connection::AgentProvider>, Vec<TeamMcpBinding>),
   ) -> OperationId {
     let operation = OperationId::generate();
     let origin = InputsOrigin::Team(TeamAcceptance {
@@ -250,8 +303,10 @@ impl Team {
         connection,
         account: None,
         required_cli,
+        mcp_servers: team_mcp.iter().map(|bound| team_mcp_id(bound.server)).collect(),
       }],
       references: Vec::new(),
+      team_mcp,
     };
     let inputs = RunInputs::new(content, bindings, LocalConsent::default()).expect("inputs");
     ProjectDb::open(self.root())

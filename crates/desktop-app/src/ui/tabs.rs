@@ -397,6 +397,8 @@ fn tab_line(ctx: &Ctx, id: &str, tabs: Vec<Element>) -> Stack {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SegmentFace {
   Text(Arc<str>),
+  /// A label and its count, 6 apart, the count in 12 `text_muted` (`Segment · All` in `Agents · v2` A1).
+  Counted(Arc<str>, Arc<str>),
   /// A glyph; the label names it for tools.
   Icon(Icon, Arc<str>),
   /// A 13 glyph before the label, 6 apart, both in the label's color (`System` `J9tyr` in Settings › General).
@@ -447,6 +449,7 @@ impl Segment {
   fn render(self, focus: Focus) -> Element {
     let choose = self.choose;
     let label_id = format!("{}-label", self.id);
+    let count_id = format!("{}-count", self.id);
     let mut button = focus
       .apply(pressable(move || choose()))
       .id(self.id)
@@ -476,6 +479,22 @@ impl Segment {
           .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
           .describe("a11y_name", label.clone())
           .child(Text::new(&label).id(label_id).variant(typography).color(text).nowrap());
+        chosen_fill(button, self.chosen, ExtraColor::Pressed.role())
+      }
+      SegmentFace::Counted(label, count) => {
+        let button = button
+          .height(Dimension::Px(TEXT_SEGMENT_HEIGHT))
+          .padding(Padding::horizontal(ExtraSpacing::Loose.role()))
+          .spacing(ExtraSpacing::Snug.role())
+          .describe("a11y_name", label.clone())
+          .child(Text::new(&label).id(label_id).variant(typography).color(text).nowrap())
+          .child(
+            Text::new(&count)
+              .id(count_id)
+              .variant(TypographyStyle::Description)
+              .color(PaletteColor::TextMuted)
+              .nowrap(),
+          );
         chosen_fill(button, self.chosen, ExtraColor::Pressed.role())
       }
       SegmentFace::Labelled(face, label) => {

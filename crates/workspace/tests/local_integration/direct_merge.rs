@@ -164,5 +164,9 @@ fn local_integration_direct_merge_waits_for_an_unfinished_git_process_of_a_revie
   let mut db = ProjectDb::open(fixture.root()).expect("db");
   db.begin_local_process(fixture.run).expect("a git process begins");
   let refused = merge_in(&fixture.worktrees(), &Programs::processes(), (fixture.run, None)).expect_err("held");
-  assert_eq!(refused, IntegrationProblem::HeldLocally(CheckoutHolder::ThisRun));
+  assert_eq!(refused, IntegrationProblem::HeldLocally(CheckoutHolder::RunningProgram));
+  assert!(
+    !refused.continues_locally(),
+    "nothing waits in Local integration for a person"
+  );
 }

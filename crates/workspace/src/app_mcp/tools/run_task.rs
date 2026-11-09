@@ -3,6 +3,10 @@
 //! run (Start); a task whose latest run ended runs again when core's rule allows it (Run again,
 //! keeping what the latest run left). A shared task is claimed first, as on the screens. A team task's work
 //! starts through its team server (`work.start`, [`super::team`]), never from this computer's queue.
+//!
+//! A local start whose pipeline is not ready on this computer (a program an MCP server starts is not there, a tool's
+//! secret has no value) is refused `not_ready_here` before the task is queued, claimed or handed to the runner, so it
+//! starts nothing and counts no attempt ([`ready_here`]).
 
 use orchester_core::{
   id::{IdempotencyKey, RunId, TaskId},
@@ -45,10 +49,6 @@ pub struct RunTask {
   pub project: String,
   /// The task's key, e.g. `KON-12`, or its id.
   pub key: String,
-  /// A team task only: the local connection each agent profile of its pipeline runs on. A profile left out runs on
-  /// the only local agent connection of its CLI.
-  #[serde(default)]
-  pub bindings: Vec<team::Binding>,
 }
 
 /// How the task runs, decided from what is stored.
@@ -66,12 +66,7 @@ enum Start {
 
 pub async fn run_task(services: &Services, args: RunTask) -> Result<Value, ToolError> {
   if let Some(team) = team::of(services, &args.project).await? {
-    return team::run_task(services, &team, &args.key, &args.bindings).await;
-  }
-  if !args.bindings.is_empty() {
-    return Err(ToolError::InvalidArguments(
-      "`bindings` choose connections for a team task only".to_owned(),
-    ));
+    return team::run_task(services, &team, &args.key).await;
   }
   run_checked(services, args, None).await
 }
@@ -87,11 +82,7 @@ pub async fn run_proposed(
   if team::of(services, &project).await?.is_some() {
     return Err(team::team_only_on_server("run_task"));
   }
-  let args = RunTask {
-    project,
-    key,
-    bindings: Vec::new(),
-  };
+  let args = RunTask { project, key };
   run_checked(services, args, Some(basis)).await
 }
 
@@ -156,13 +147,17 @@ fn prepare(
     ));
   }
   match runs.last() {
-    None if task.status() == TaskStatus::Queued => Ok(Start::First {
-      task: task.id(),
-      claim: WorkClaim::default(),
-    }),
+    None if task.status() == TaskStatus::Queued => {
+      ready_here(services, project, &task)?;
+      Ok(Start::First {
+        task: task.id(),
+        claim: WorkClaim::default(),
+      })
+    }
     None => {
       let version = queue_version(&db, &task)?;
       drop(db);
+      ready_here(services, project, &task)?;
       let target = SaveTarget::Task(task.id(), task.revision());
       let queued = queue_in(
         &project.repo_root,
@@ -179,7 +174,27 @@ fn prepare(
       })
     }
     Some(Err(_)) => Err(unreadable()),
-    Some(Ok(latest)) => again(services, project, &task, latest.id()),
+    Some(Ok(latest)) => {
+      let start = again(services, project, &task, latest.id())?;
+      ready_here(services, project, &task)?;
+      Ok(start)
+    }
+  }
+}
+
+/// Refuses `not_ready_here` when the pipeline of `task` cannot run on this computer now. It runs after the refusals
+/// that need no look at the computer (a blocked task, a pipeline never published) and before anything is queued or
+/// claimed. What the preflight refuses with its own reason is left to it: one path per reason.
+fn ready_here(services: &Services, project: &OpenProject, task: &Task) -> Result<(), ToolError> {
+  let Some(pipeline) = task.details().pipeline else {
+    return Ok(());
+  };
+  match services
+    .workspace
+    .not_ready_here(&project.repo_root, services.vault.get(), pipeline)?
+  {
+    Some(refused) => Err(ToolError::NotReadyHere(refused)),
+    None => Ok(()),
   }
 }
 

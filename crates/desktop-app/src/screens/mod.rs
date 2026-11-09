@@ -18,8 +18,6 @@ mod instructions;
 pub(crate) mod join_team;
 mod kept;
 pub(crate) mod memory;
-pub(crate) mod merge_queue;
-mod merges;
 pub(crate) mod modules;
 mod not_found;
 mod orchestrator;
@@ -27,7 +25,6 @@ mod overview;
 mod pipelines;
 mod placeholder;
 mod project_settings;
-mod pull_requests;
 mod review;
 mod reviewer_trouble;
 mod secrets;
@@ -38,11 +35,10 @@ pub(crate) mod task;
 mod task_close;
 mod task_form;
 pub(crate) mod tasks;
+mod team_hub;
 mod tools;
 mod unavailable_project;
 pub(crate) mod usage;
-
-use std::sync::Arc;
 
 use lurq::{
   app::ctx::Ctx,
@@ -52,8 +48,8 @@ use lurq::{
 use orchester_core::id::ProjectId;
 
 use crate::{
-  project::{ProjectState, Projects, ShownProject},
-  routes::{ProjectPage, Route},
+  project::{ProjectState, Projects, ShownProject, TeamRead},
+  routes::{HubView, ProjectPage, Route},
 };
 
 /// The screen at the router's path.
@@ -114,10 +110,8 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::Overview(_) => overview::screen(ctx, project),
     ProjectPage::Orchestrator(chat) => orchestrator::screen(ctx, project, *chat),
     ProjectPage::OrchestratorSettings => orchestrator::settings(ctx, project),
-    ProjectPage::MergeQueue => {
-      let body = merge_queue::screen(ctx, project);
-      review::page(ctx, project, review::ReviewTab::MergeQueue, body)
-    }
+    ProjectPage::Review => review::list(ctx, project),
+    ProjectPage::TaskReview(key) => review::task::screen(ctx, project, key),
     ProjectPage::Memory(tab) => memory::screen(ctx, project, *tab),
     ProjectPage::Tasks(list) => tasks::screen(ctx, project, list),
     ProjectPage::NewTask => task_form::new_task(ctx, project, None),
@@ -129,27 +123,7 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::NewModule => modules::new_module(ctx, project),
     ProjectPage::Module(id, tab) => modules::page(ctx, project, *id, *tab),
     ProjectPage::EditModule(id) => modules::edit_module(ctx, project, *id),
-    ProjectPage::PullRequests(tab) => {
-      let body = pull_requests::screen(ctx, project, *tab);
-      review::page(ctx, project, review::ReviewTab::PullRequests, body)
-    }
-    ProjectPage::Merges => {
-      let body = merges::screen(ctx, project);
-      review::page(ctx, project, review::ReviewTab::Merges, body)
-    }
-    ProjectPage::MergeAttempt(key, number) => merges::review::screen(ctx, project, key, *number),
-    ProjectPage::PullRequest(number, file) => pull_requests::pull_request(
-      ctx,
-      project,
-      *number,
-      pull_requests::PullRequestShown::Files(file.as_deref().map(Arc::from)),
-    ),
-    ProjectPage::PullRequestFeedback(number, thread) => pull_requests::pull_request(
-      ctx,
-      project,
-      *number,
-      pull_requests::PullRequestShown::Feedback(*thread),
-    ),
+    ProjectPage::TaskMerge(key, number) => task::merge::attempt::screen(ctx, project, key, *number),
     ProjectPage::Usage(query) => usage::screen(ctx, project, query),
     ProjectPage::Delivery(period) => delivery::screen(ctx, project, *period),
     ProjectPage::Pipelines => pipelines::screen(ctx, project),
@@ -160,7 +134,8 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::PipelineVersion(id, version, view) => {
       pipelines::editor(ctx, project, *id, (view.clone(), Some(*version)))
     }
-    ProjectPage::Agents => agents::screen(ctx, project, agents::Shown::List),
+    ProjectPage::Agents => agents_or_hub(ctx, project, HubView::default()),
+    ProjectPage::AgentsHub(view) => agents_or_hub(ctx, project, *view),
     ProjectPage::NewAgent(tab) => agents::screen(ctx, project, agents::Shown::New(*tab)),
     ProjectPage::Agent(id, tab) => agents::screen(ctx, project, agents::Shown::Edit(*id, *tab)),
     ProjectPage::Instructions(view) => instructions::screen(ctx, project, *view),
@@ -186,5 +161,17 @@ fn page_screen(ctx: &mut Ctx, project: &ShownProject, page: &ProjectPage) -> Ele
     ProjectPage::Join(target) => project_settings::join_screen(ctx, project, target),
     ProjectPage::Files(view) => files::screen(ctx, project, view),
     ProjectPage::Import(tab) => import::screen(ctx, project, *tab),
+  }
+}
+
+/// The Agents hub of a team project is master–detail (`Agents · v2`); a local project keeps the Profiles list until
+/// its own master–detail is built. Whether the project is shared is read from its database with the feed, so the page
+/// waits for that read, and says so when it failed, rather than show the local list for a team project.
+fn agents_or_hub(ctx: &mut Ctx, project: &ShownProject, view: HubView) -> Element {
+  match project.feed.team.get() {
+    TeamRead::Read(Some(team)) => team_hub::screen(ctx, project, team, view),
+    TeamRead::Read(None) => agents::screen(ctx, project, agents::Shown::List),
+    TeamRead::Unread => team_hub::unread::reading(ctx),
+    TeamRead::Failed(error) => team_hub::unread::failed(ctx, project, error),
   }
 }

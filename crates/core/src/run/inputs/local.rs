@@ -2,6 +2,8 @@
 //! and secrets, and what a person here narrowed or consented to. Kept apart from the canonical content, so a local
 //! choice never reads as a different publication. References only: an id is never a secret value.
 
+use std::path::PathBuf;
+
 use serde::{Deserialize, Serialize};
 
 use crate::{
@@ -10,8 +12,9 @@ use crate::{
   run::{PinnedVersion, bundle::ResolvedStepPermissions},
 };
 
-/// `{resource, connection, account?, required_cli?}`: the local connection and account a pinned profile runs with,
-/// and the CLI kind its shared reference requires.
+/// `{resource, connection, account?, required_cli?, mcp_servers?}`: the local connection and account a pinned profile
+/// runs with, the CLI kind its shared reference requires, and the local MCP servers its version names (each also bound
+/// in [`LocalBindings::references`]).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ProfileBinding {
@@ -21,9 +24,13 @@ pub struct ProfileBinding {
   /// The shared reference's required CLI; absent in runs recorded before kind validation and in local runs.
   #[serde(default, skip_serializing_if = "Option::is_none")]
   pub required_cli: Option<AgentProvider>,
+  /// The local MCP servers this profile's agents get, and only this profile's; none for a profile that names none.
+  #[serde(default, skip_serializing_if = "Vec::is_empty")]
+  pub mcp_servers: Vec<ConnectionId>,
 }
 
 /// A connection, MCP server or secret the canonical bodies name by the publisher's id, bound to this computer's.
+/// Removed by ORC-845 with the bindings.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum BoundReference {
@@ -32,13 +39,29 @@ pub enum BoundReference {
   Secret { named: SecretId, local: SecretId },
 }
 
-/// `{profiles, references}`: how this computer binds the run's inputs.
+/// `{server, program?}`: where this computer runs a team MCP server the run's profiles name, as filled in when the run
+/// started: the path of its program, for a server that runs one. A path is not a secret; the secrets' values are read
+/// by name when an agent starts, never kept here.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TeamMcpBinding {
+  /// The team MCP server's resource id, whose pinned version is among the canonical inputs.
+  pub server: ResourceId,
+  #[serde(default, skip_serializing_if = "Option::is_none")]
+  pub program: Option<PathBuf>,
+}
+
+/// `{profiles, references, team_mcp?}`: how this computer binds the run's inputs. `references` is removed by ORC-845
+/// with the bindings.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct LocalBindings {
   /// One per pinned agent profile.
   pub profiles: Vec<ProfileBinding>,
   pub references: Vec<BoundReference>,
+  /// One per pinned team MCP server; left out while empty, which is every local run's.
+  #[serde(default, skip_serializing_if = "Vec::is_empty")]
+  pub team_mcp: Vec<TeamMcpBinding>,
 }
 
 /// `{accepted, narrowed}`: what a person on this computer decided for the run.

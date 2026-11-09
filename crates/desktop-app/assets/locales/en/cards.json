@@ -159,9 +159,7 @@
         "deny": "Deny and tell {{agent}}…",
         "more": "More",
         "send": "Deny and send",
-        "told": "{{agent}} is told this and goes on; Deny never fails the step",
-        "escape": "Esc",
-        "enter": "Enter"
+        "told": "{{agent}} is told this and goes on; Deny never fails the step"
       },
       "approve": "Approve",
       "moreAnswers": "More answers",
@@ -249,9 +247,6 @@
         "toldCodex": "Codex declines it in its own words; then {{agent}} gets your message as the next message of its turn: “{{message}}” The step goes on; Deny never fails it.",
         "back": "Back",
         "send": "Deny and send message",
-        "keys": "{{keys}} denies and sends · Esc goes back to the answers",
-        "ctrlEnter": "Ctrl+Enter",
-        "cmdEnter": "⌘ Enter",
         "tooLong": "At most {{max}} characters: this message has {{count}}."
       },
       "wider": "Or answer more widely",

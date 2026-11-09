@@ -163,13 +163,14 @@ fn instructions_delayed_first_create_locks_name_prompt_open_menu_picker_targets_
   assert_eq!(screen.text("instruction-name"), "Created agreement");
   assert_eq!(screen.text("instruction-prompt"), "Captured candidate");
   db.execute_batch("COMMIT").expect("release private create");
-  screen.until("created", |s| s.exists("instruction-publish"));
+  screen.until("created", |s| !s.listed().entries.is_empty());
   let entry = &screen.listed().entries[0];
   assert_eq!(&*entry.name, "Created agreement");
   assert_eq!(entry.body.text().as_str(), "Captured candidate");
   assert_eq!(entry.body.targets(), &AgentTargets::All);
   assert_eq!(entry.body.events().len(), 1);
-  assert!(entry.state.published().is_none());
+  assert_eq!(entry.state.published().expect("created as v1").get(), 1);
+  assert!(!entry.state.has_draft());
 }
 #[test]
 fn instructions_delayed_autosave_acknowledges_baseline_without_resetting_newer_input() {
@@ -243,10 +244,10 @@ fn instructions_delayed_step_create_keeps_selected_pipeline_and_step_locked() {
   screen.click("instruction-scope-project");
   screen.window.pass();
   db.execute_batch("COMMIT").expect("release private create");
-  screen.until("step created", |s| s.exists("instruction-publish"));
+  screen.until("step created", |s| !s.listed().entries.is_empty());
   let entry = screen.listed().entries[0].clone();
   assert!(matches!(entry.body.scope(), InstructionScope::Step { pipeline: selected, .. } if *selected == pipeline));
-  assert!(entry.state.published().is_none());
+  assert_eq!(entry.state.published().expect("created as v1").get(), 1);
 }
 
 #[test]
@@ -316,17 +317,13 @@ fn instructions_create_completion_keeps_new_rule_identity_while_catalog_refresh_
   let hold = hold(&screen);
   hold.set(true);
   screen.click("instruction-create");
-  screen.until("new resource committed", |s| {
-    s.listed().entries.len() == 2 && s.exists("instruction-publish")
-  });
-  assert_eq!(screen.text("instruction-prompt"), "Created text");
-  screen.click("instruction-publish");
-  screen.until("new resource published", |s| {
+  screen.until("new resource created as v1", |s| {
     s.listed()
       .entries
       .iter()
       .any(|e| &*e.name == "New agreement" && e.state.published().is_some())
   });
+  assert_eq!(screen.text("instruction-prompt"), "Created text");
   assert_eq!(screen.entry(old).state.published().expect("old version").get(), 1);
   assert_eq!(screen.entry(old).body.text().as_str(), "Existing text");
   hold.set(false);

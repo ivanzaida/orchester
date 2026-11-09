@@ -66,16 +66,23 @@ fn unverified_run_lists_what_its_step_could_not_check() {
 }
 
 #[test]
-fn unverified_the_orchestrator_chat_may_not_accept_a_step_that_waits_unverified() {
-  // Accepting a step that could not check everything is `continue_run`'s accept, which the chat's `continue_run`
-  // refuses as the person's: it only proposes a retry, a return or an agent's resolution of conflicts.
-  let continued = orchester_workspace::orchestrator::tools::listed()
-    .into_iter()
-    .find(|tool| tool.name == "continue_run")
-    .and_then(|tool| tool.description.map(|told| told.into_owned()))
-    .expect("the chat lists continue_run");
+fn unverified_the_orchestrator_chat_accepts_a_step_that_waits_unverified_only_while_it_drives() {
+  // Accepting a step that could not check everything is `continue_run`'s accept: while the chat does not drive its
+  // `continue_run` refuses it as the person's and only proposes a retry, a return or an agent's resolution of
+  // conflicts; while it drives the tool is the app's own, accept included.
+  let described = |drives| {
+    orchester_workspace::orchestrator::tools::listed(drives)
+      .into_iter()
+      .find(|tool| tool.name == "continue_run")
+      .and_then(|tool| tool.description.map(|told| told.into_owned()))
+      .expect("the chat lists continue_run")
+  };
+  let off = described(false);
   assert!(
-    continued.contains("raise_limits, raise_step_budget, resume and accept are the person's"),
-    "{continued}"
+    off.contains("raise_limits, raise_step_budget, resume and accept are the person's"),
+    "{off}"
   );
+  let on = described(true);
+  assert!(!on.contains("are the person's"), "{on}");
+  assert!(on.contains("accept (a step waiting unverified or unchanged)"), "{on}");
 }

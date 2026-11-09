@@ -4,11 +4,15 @@
 use std::sync::Arc;
 
 use lurq::{
-  app::theme::{SpacingSize, Theme, ThemePalette, TypographyStyle},
+  app::theme::{RadiusSize, SpacingSize, Theme, ThemePalette, TypographyStyle},
   layout::text_style::{FontWeight, TextStyle},
 };
 
 use super::{fonts::ICONS, typography::style};
+
+/// A part's row in the card of a run that is not ready here is this high (`F0SmT` in `B6ee9`); a long reason makes it
+/// taller.
+pub const NOT_READY_ROW_HEIGHT: f32 = 40.0;
 
 /// Text of the task page.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -125,6 +129,33 @@ impl TaskSpacing {
   }
 }
 
+/// Radii of the task page that the UI kit's roles do not carry.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TaskRadius {
+  /// 10: the card of a run that is not ready here (`Run state · Not ready here` `B6ee9`); the kit's large radius is 12.
+  NotReadyCard,
+}
+
+impl TaskRadius {
+  pub const ALL: [Self; 1] = [Self::NotReadyCard];
+
+  pub fn role(self) -> RadiusSize {
+    RadiusSize::extra(self.name())
+  }
+
+  const fn name(self) -> &'static str {
+    match self {
+      Self::NotReadyCard => "task_not_ready_card",
+    }
+  }
+
+  pub const fn value(self) -> f32 {
+    match self {
+      Self::NotReadyCard => 10.0,
+    }
+  }
+}
+
 pub(super) fn typography(palette: &ThemePalette) -> impl Iterator<Item = (Arc<str>, TextStyle)> {
   TaskText::ALL
     .into_iter()
@@ -134,5 +165,8 @@ pub(super) fn typography(palette: &ThemePalette) -> impl Iterator<Item = (Arc<st
 pub(super) fn install(theme: &Theme) {
   for spacing in TaskSpacing::ALL {
     theme.set_spacing_value(spacing.role(), spacing.value());
+  }
+  for radius in TaskRadius::ALL {
+    theme.set_radius_value(radius.role(), radius.value());
   }
 }

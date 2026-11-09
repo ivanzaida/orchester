@@ -70,7 +70,13 @@ fn carry_out(state: &mut State, token: &str, body: &Value) -> Option<(u16, Value
         json!({"operation_id": operation, "state": "committed", "result": result, "cursor": state.cursor.to_string()}),
       )
     }
-    Err((status, code)) => (status, refusal(Some(operation), code)),
+    Err((status, code)) => {
+      let mut refused = refusal(Some(operation), code);
+      if let (true, Some(details)) = (code == "bundle_missing", &state.bundle_missing) {
+        refused["details"] = details.clone();
+      }
+      (status, refused)
+    }
   })
 }
 
@@ -139,12 +145,23 @@ fn take_over(state: &mut State, token: &str, command: &Value) -> Result<Value, R
   Ok(claimed(state, id))
 }
 
-/// Releases the task's claim the authority names, the caller's own.
+/// Releases the task's claim the authority names, the caller's own. The latest work of the claim, when it runs, is
+/// stopped first (`invalid`, the claim's `AgentWorking`) if the server accepted a report of it; one that never had a
+/// report started no run, and the release moves it to `failed` with no reason stored, as the real server does.
 fn release(state: &mut State, token: &str, command: &Value) -> Result<Value, Refused> {
   let authority = &command["authority"];
   let claim: ClaimId = serde_json::from_value(authority["claim_id"].clone()).expect("a claim id");
   if !holds(state, token, claim) {
     return Err((409, "claim_lost"));
+  }
+  let reported: Vec<_> = state.sequences.keys().map(|(work, _)| *work).collect();
+  if let Some(latest) = state.works.iter_mut().rev().find(|work| work.claim == claim)
+    && latest.state == "running"
+  {
+    if reported.contains(&latest.id) {
+      return Err((422, "invalid"));
+    }
+    "failed".clone_into(&mut latest.state);
   }
   state.claim = None;
   Ok(json!({"kind": "released", "subject": authority["subject"], "released_claim_id": claim, "effects": []}))
@@ -171,6 +188,9 @@ fn start(state: &mut State, token: &str, body: &Value) -> Result<Value, Refused>
     .any(|work| work.claim == claim && work.state == "running")
   {
     return Err((409, "transition_denied"));
+  }
+  if state.bundle_missing.is_some() {
+    return Err((409, "bundle_missing"));
   }
   let bundle = build_bundle(state, claim, body["command"]["base_commit"].as_str().expect("a commit"));
   let work = Work {

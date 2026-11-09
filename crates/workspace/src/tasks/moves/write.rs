@@ -19,7 +19,9 @@ use orchester_core::{
 use orchester_store::{ProjectDb, StoreError};
 
 use crate::{
+  background,
   messages::{self, Message},
+  secrets::Vault,
   sharing::Servers,
   tasks::{
     data::{SaveTarget, published_pipelines, save_draft},
@@ -28,6 +30,7 @@ use crate::{
     run::{QueueFailure, queue_in},
     writer::TaskWriter,
   },
+  workspace::Workspace,
 };
 
 /// Sets `task` of the project at `repo_root` to `status` as `actor`'s change, and nothing else.
@@ -94,6 +97,28 @@ pub fn queue_draft_in(repo_root: &Path, servers: &Servers, task: TaskId, actor: 
   // The queued task keeps the claim for the run the runner starts in its turn.
   drop(queued.claim);
   set_status_in(repo_root, servers, task, (WorkflowStatus::Todo, actor))
+}
+
+impl Workspace {
+  /// [`queue_draft_in`] once the draft's pipeline is known to be ready on this computer. The runner starts a queued
+  /// task in its turn without asking again, so a pipeline that is not ready here is refused now, with the short reason
+  /// the board shows, and the task stays a draft. Blocks on SQLite and the keychain off the async runtime.
+  pub async fn queue_draft(
+    &self,
+    repo_root: &Path,
+    (vault, servers): (&Vault, &Servers),
+    task: TaskId,
+    actor: ChangeActor,
+  ) -> Result<(), Message> {
+    self
+      .ready_to_start(repo_root, vault, task)
+      .await
+      .map_err(|refused| refused.short())?;
+    let (root, servers) = (repo_root.to_owned(), servers.clone());
+    background::run(move || queue_draft_in(&root, &servers, task, actor))
+      .await
+      .and_then(|queued| queued)
+  }
 }
 
 /// Takes the queued `task`, whose run never started, back to the drafts and sets it to Backlog. A task a reviewed group

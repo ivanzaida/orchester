@@ -91,6 +91,7 @@ fn returns_from_the_page(scenario: &str, state: &str, by: Answerer) {
       return_to: orchester_core::resource::StepKey::new("implement").expect("a step key"),
       note: orchester_core::run::ReviewNote::new(NOTE).expect("a note"),
       conflicts: None,
+      profile: None,
     }
   );
   let events = ProjectDb::open(&seeded.repo)

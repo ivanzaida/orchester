@@ -44,6 +44,7 @@ use crate::{
   root::{Root, RootProps, Start},
   startup::Launch,
   theme::{self, Mode},
+  ui::typing,
 };
 
 /// Kontur's id, as the routes of the tests name it.
@@ -194,6 +195,7 @@ impl Window {
     i18n::install(&app).expect("bundled locales load");
     let mut tree = Tree::new();
     tree.resize(1440, 900);
+    typing::install(&mut tree);
     let link = WindowLink::default();
     // The window's colors, kept in the session's database as the app's own window keeps them.
     link.attach_appearance(Appearance::new(

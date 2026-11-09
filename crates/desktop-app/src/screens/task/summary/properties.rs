@@ -38,7 +38,7 @@ use crate::{
     icon::{Icon, icon},
     message::message_text,
     pressable::opening,
-    status::priority_look,
+    status::{Status, priority_look},
     tooltip::{Tooltip, Truncated},
   },
 };
@@ -101,14 +101,13 @@ pub fn row(id: &str, key: &str, value: impl Into<Element>, padding: SpacingSize)
 pub fn column(ctx: &mut Ctx, task: &TaskContext, (section, more): (Option<Element>, &Signal<bool>)) -> Element {
   let tasks = task.project.feed.tasks.get();
   let tasks = tasks.ready();
-  let organization = task.detail.task.organization();
   let property = |id: &str, key: &str, value: Element| row(id, key, value, TaskSpacing::PropertyRow.role());
   let mut rows = super::team::first_rows(ctx, task);
   rows.extend([
     property(
       "task-property-status",
       &ctx.t("summary.properties.status"),
-      status(ctx, organization.status()),
+      status(ctx, task),
     ),
     property(
       "task-property-priority",
@@ -138,8 +137,12 @@ pub fn column(ctx: &mut Ctx, task: &TaskContext, (section, more): (Option<Elemen
     property(
       "task-property-depends",
       &ctx.t("summary.properties.dependsOn"),
-      depends(ctx, task, tasks),
+      // While the run waits on a task, the task it waits on (09 `r0j4Y1`).
+      crate::screens::task::waits_on::depends_on(ctx, task).unwrap_or_else(|| depends(ctx, task, tasks)),
     ),
+  ]);
+  rows.extend(super::led_in::led_in_row(ctx, task));
+  rows.extend([
     property(
       "task-property-limits",
       &ctx.t("summary.properties.limits"),
@@ -192,7 +195,10 @@ fn labelled(id: &str, (glyph, color): (Icon, PaletteColor), word: &str) -> Eleme
     .into()
 }
 
-fn status(ctx: &Ctx, status: WorkflowStatus) -> Element {
+/// The task's workflow status; a task in progress whose run an archive stopped says *Stopped*, as the header does
+/// (`Status` in A22 `pUu78`), with the in-progress glyph.
+fn status(ctx: &Ctx, task: &TaskContext) -> Element {
+  let status = task.detail.task.organization().status();
   let glyph = match status {
     WorkflowStatus::Backlog => Icon::CircleDashed,
     WorkflowStatus::Todo => Icon::Circle,
@@ -201,7 +207,12 @@ fn status(ctx: &Ctx, status: WorkflowStatus) -> Element {
     WorkflowStatus::Done => Icon::CircleCheck,
     WorkflowStatus::Canceled => Icon::CircleSlash,
   };
-  let word = ctx.t(crate::ui::status::workflow_key(status));
+  let stopped = task.detail.archive_stop.is_some() && status == WorkflowStatus::InProgress;
+  let word = if stopped {
+    ctx.t(Status::Stopped.key())
+  } else {
+    ctx.t(crate::ui::status::workflow_key(status))
+  };
   labelled("task-property-status", (glyph, PaletteColor::TextSecondary), &word)
 }
 

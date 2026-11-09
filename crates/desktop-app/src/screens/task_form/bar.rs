@@ -1,9 +1,9 @@
 //! The action bar at the bottom of the content panel (`Action bar` `IWxaO`): 56 high, 28 at its sides, a `border`
 //! line over it. At its start one line, the single reason the next action cannot be pressed or what will happen
-//! (`super::reason`); at its end the actions and the key cap of the main one: *Create* and *Create & run* with
-//! `Ctrl Enter` on New task, *Discard changes* and *Save changes* with `Ctrl S` on Edit task (a draft keeps *Create &
-//! run*), *Retry run* while the queued task's run has not started. While an action is under way its button turns its
-//! loader and none can be pressed. *Discard changes* asks in place of the bar (`LVI8K`), never in a dialog.
+//! (`super::reason`); at its end the actions: *Create* and *Create & run* on New task, *Discard changes* and *Save
+//! changes* on Edit task (a draft keeps *Create & run*), *Retry run* while the queued task's run has not started. While
+//! an action is under way its button turns its loader and none can be pressed. *Discard changes* asks in place of the
+//! bar (`LVI8K`), never in a dialog.
 
 use std::sync::Arc;
 
@@ -18,15 +18,16 @@ use lurq::{
 };
 
 use super::{
-  reason::reason,
+  reason::{Kind, reason},
   state::{Phase, Subject, View},
 };
 use crate::{
+  navigation::link::Open,
   theme::{ExtraSpacing, ExtraTypography, IconSize, TaskFormSpacing},
   ui::{
     button::{ActionButton, ButtonKind},
     icon::{Icon, icon},
-    kbd::key_cap,
+    pressable::{Focus, Press},
     tooltip::Truncated,
   },
 };
@@ -48,17 +49,10 @@ pub struct Handlers {
   /// Save chosen versions; `None` until every conflicting field is chosen.
   pub save_chosen: Option<Handler>,
   pub back_to_editing: Handler,
-}
-
-/// The main action's keys on this platform: Create & run's, or Save changes' where there is no Create & run.
-pub fn shortcut_key(ctx: &Ctx, runs: bool) -> Arc<str> {
-  let mac = cfg!(target_os = "macos");
-  ctx.t(match (runs, mac) {
-    (true, false) => "task_form.keys.ctrlEnter",
-    (true, true) => "task_form.keys.cmdEnter",
-    (false, false) => "task_form.keys.ctrlS",
-    (false, true) => "task_form.keys.cmdS",
-  })
+  /// Opens where what the chosen pipeline lacks on this computer is listed.
+  pub show_missing: Open,
+  /// Reads again whether the chosen pipeline is ready on this computer.
+  pub retry_readiness: Handler,
 }
 
 pub fn action_bar(ctx: &mut Ctx, view: &View, confirming_discard: bool, on: &Handlers) -> Element {
@@ -73,7 +67,7 @@ pub fn action_bar(ctx: &mut Ctx, view: &View, confirming_discard: bool, on: &Han
   };
   frame()
     .id("task-form-bar")
-    .with_children(reason_line(ctx, view))
+    .with_children(reason_line(ctx, view, on))
     .child(
       Row::new()
         .id("task-form-actions")
@@ -98,7 +92,7 @@ pub(in crate::screens) fn frame() -> Row {
 }
 
 /// The line at the bar's start: its 12 icon and its words in 12, cut to one line with the whole in a tooltip.
-fn reason_line(ctx: &mut Ctx, view: &View) -> Vec<Element> {
+fn reason_line(ctx: &mut Ctx, view: &View, on: &Handlers) -> Vec<Element> {
   let Some(reason) = reason(ctx, view) else {
     return vec![Row::new().flex(1.0).into()];
   };
@@ -108,10 +102,10 @@ fn reason_line(ctx: &mut Ctx, view: &View) -> Vec<Element> {
     reason.words.clone(),
     TypographyStyle::Description,
   )
-  .color(if role == "problem" {
-    PaletteColor::TextSecondary
-  } else {
-    PaletteColor::TextMuted
+  .color(match reason.kind {
+    Kind::Problem => PaletteColor::TextSecondary,
+    Kind::NotReady | Kind::CannotTell => PaletteColor::Warning,
+    _ => PaletteColor::TextMuted,
   })
   .render(ctx);
   vec![
@@ -124,9 +118,51 @@ fn reason_line(ctx: &mut Ctx, view: &View) -> Vec<Element> {
       .describe("role", role)
       .describe("reason", reason.words)
       .child(icon(glyph, IconSize::Sm, color))
-      .child(Row::new().flex_shrink(1.0).min_width(Dimension::Px(0.0)).child(words))
+      .child(
+        Row::new()
+          .flex_shrink(1.0)
+          .min_width(Dimension::Px(0.0))
+          .spacing(ExtraSpacing::Fine.role())
+          .align_items(Alignment::Center)
+          .child(Row::new().flex_shrink(1.0).min_width(Dimension::Px(0.0)).child(words))
+          .with_children(reason_link(ctx, reason.kind, on)),
+      )
       .into(),
   ]
+}
+
+/// *· Show* after a pipeline's missing parts, that open where they are listed (`Reason` `ACVRw`), or *· Retry* after
+/// the words saying its readiness could not be read: the words of the line, `warning`, a space (3) before and after
+/// the dot as in the line's one text.
+fn reason_link(ctx: &Ctx, kind: Kind, on: &Handlers) -> Option<Element> {
+  let (key, press) = match kind {
+    Kind::NotReady => ("task_form.readiness.show", Press::Open(on.show_missing.clone())),
+    Kind::CannotTell => {
+      let retry = on.retry_readiness.clone();
+      ("task_form.readiness.retry", Press::run(move || retry()))
+    }
+    _ => return None,
+  };
+  let word = |id: &str, key: &str| {
+    Text::new(&ctx.t(key))
+      .id(id.to_owned())
+      .variant(TypographyStyle::Description)
+      .color(PaletteColor::Warning)
+      .nowrap()
+  };
+  Some(
+    Row::new()
+      .flex_shrink(0.0)
+      .spacing(ExtraSpacing::Fine.role())
+      .child(word("task-form-reason-dot", "task_form.readiness.dot"))
+      .child(
+        Focus::Link
+          .apply(press.button())
+          .id("task-form-reason-link")
+          .child(word("task-form-reason-link-text", key)),
+      )
+      .into(),
+  )
 }
 
 fn actions(ctx: &Ctx, view: &View, on: &Handlers) -> Vec<Element> {
@@ -181,7 +217,6 @@ fn actions(ctx: &Ctx, view: &View, on: &Handlers) -> Vec<Element> {
       (running, busy || !view.run_needs().is_empty()),
     ));
   }
-  actions.push(key_cap("task-form-shortcut", &shortcut_key(ctx, offers_run)));
   actions
 }
 

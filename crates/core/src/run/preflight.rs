@@ -48,6 +48,9 @@ pub enum PreflightProblem {
   ProfileNotPublished { step: StepKey },
   /// The profile's connection no longer exists.
   ConnectionMissing { step: StepKey },
+  /// The step's agent profile is a team's and runs on no connection here yet: the person picks one, or adds the only
+  /// one of its CLI kind ([`AgentProfile::awaits_connection_pick`]).
+  ConnectionNotPicked { step: StepKey },
   /// The profile gives its agents an MCP server this computer does not have, such as one a shared version names
   /// that is not bound here.
   McpServerMissing { step: StepKey },
@@ -140,18 +143,22 @@ pub fn preflight(input: PreflightInput<'_>) -> Vec<PreflightProblem> {
         }
         continue;
       }
-      StepKind::Agent { profile, .. } => profile.and_then(|profile| input.profiles.get(&profile)),
+      StepKind::Agent { profile, .. } => profile.and_then(|id| input.profiles.get(&id).map(|version| (id, version))),
     };
-    let Some(profile) = profile else {
+    let Some((profile_id, profile)) = profile else {
       problems.push(PreflightProblem::ProfileNotPublished { step: key() });
       continue;
     };
     if lists_commands_on_an_asking_profile(step, profile.body()) {
       problems.push(PreflightProblem::CommandListNotOffered { step: key() });
     }
-    match usable_provider(&connections, profile.body().connection(), key()) {
-      Ok(provider) => problems.extend(permission_problem(step, profile.body(), provider)),
-      Err(problem) => problems.push(problem),
+    if profile.body().awaits_connection_pick(profile_id) {
+      problems.push(PreflightProblem::ConnectionNotPicked { step: key() });
+    } else {
+      match usable_provider(&connections, profile.body().connection(), key()) {
+        Ok(provider) => problems.extend(permission_problem(step, profile.body(), provider)),
+        Err(problem) => problems.push(problem),
+      }
     }
     if names_a_missing_server(profile.body(), input.mcp_servers) {
       problems.push(PreflightProblem::McpServerMissing { step: key() });

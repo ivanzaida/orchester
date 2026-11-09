@@ -393,6 +393,10 @@ N8: one slice per phase from N4 on
 
 ### N7b · Shared configuration on the desktop (S5, decisions 30, 35–36) · non-UI and UI
 
+> The bindings, the binding picker and *missing on this computer* below are the plan as written in October. The team
+> configuration model (2026-11-06; `docs/design/team-configuration.md`, server.md rows 30 and 81–95) replaced them with
+> fill-ins and readiness; the text is kept as the history of the plan.
+
 - **Scope.** Store: `shared_version_bodies`, `reference_bindings`, the resource columns. Workspace:
   `sharing::sync::config` (resource sync, local bodies, bindings by name and role, person-only bindings for MCP
   servers and secrets, a widening version waiting for *Use v<N> here* while runs keep the previous one),
@@ -450,7 +454,7 @@ gives these edits to the stream that owns those files (stream B).
 
 Rules for the chat: like the desktop, it has no admin action (row 63); it reads only the local cache, so it works offline and needs no token; it never takes or takes
 over a claim, resolves a conflict, discards a waiting change, binds a reference, presses *Use v<N> here*, publishes a
-shared resource directly (*Let the Orchestrator publish drafts* does not cover them), redeems or makes an invite or
+shared resource directly (*Let the Orchestrator drive* does not cover them), redeems or makes an invite or
 code, or starts Share, Join or Make local; a conflict is reported with a `link` to the task's conflict view.
 
 **Tests.** `crates/workspace/tests` (MCP tool tests over a shared project on loopback): each field above, a refusal

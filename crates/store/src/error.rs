@@ -60,6 +60,14 @@ pub enum StoreError {
   /// A stored value no longer satisfies the domain rules; the database was edited or damaged.
   #[error("stored {what} is invalid: {detail}")]
   Corrupt { what: &'static str, detail: String },
+  /// The resource has a version the team server numbered, so it is the team's and is not taken back. Nothing was
+  /// changed.
+  #[error("resource {0} has a version the team server numbered; it is the team's now")]
+  AlreadyNumbered(ResourceId),
+  /// The resource holds more than the version created here (a later version or a draft), or was not created here, so
+  /// taking it back would lose someone's work. Nothing was changed.
+  #[error("resource {0} holds more than the version created here; it is not taken back")]
+  HoldsMore(ResourceId),
   /// A value cannot be represented in the database, e.g. a number beyond its 64-bit integers.
   #[error("{0} cannot be stored")]
   Unrepresentable(&'static str),
@@ -160,6 +168,9 @@ pub enum StoreError {
   /// The resource was never published, so its draft is all it has: it is removed, not discarded. Nothing was changed.
   #[error("resource {0} has no published version to keep")]
   NotPublished(ResourceId),
+  /// A new resource has no draft: it is created as its first version, and a draft is only ever saved over a version.
+  #[error("resource {0} has no published version, so it can hold no draft")]
+  NoFirstVersion(ResourceId),
   /// The draft of resource `0` is not the one the caller checked: it changed meanwhile.
   #[error("the draft of resource {0} changed since it was read")]
   DraftChanged(ResourceId),
@@ -190,6 +201,9 @@ pub enum StoreError {
   DuplicateSecretName { name: String, environment: &'static str },
   #[error("secret {0} does not exist")]
   SecretNotFound(SecretId),
+  /// The OS keychain refused or failed; the message never carries a value.
+  #[error("keychain: {0}")]
+  Keychain(#[from] orchester_core::secret::VaultError),
   /// The application database has no agent account with this id, or only a removed one.
   #[error("agent account {0} is not in the list")]
   AgentAccountNotFound(AgentAccountId),
@@ -228,6 +242,16 @@ pub enum StoreError {
   /// Another active record of the scope has the key; nothing was changed.
   #[error("an active memory record with the key `{0}` already exists")]
   DuplicateMemoryKey(String),
+  /// The run waits on a task already (one at a time); nothing was kept.
+  #[error(transparent)]
+  RunWaitsOn(#[from] orchester_core::run::WaitsOnError),
+  /// The wait names another task as its run's than the task the run is recorded for; nothing was kept.
+  #[error("run {run} is of task {recorded}, not of task {named}")]
+  RunWaitOfAnotherTask {
+    run: RunId,
+    recorded: TaskId,
+    named: TaskId,
+  },
 }
 
 impl StoreError {

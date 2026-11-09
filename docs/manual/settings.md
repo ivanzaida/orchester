@@ -102,8 +102,8 @@ Every row is off until a person turns it on (except as noted), and only a person
 | Approvals and permissions | **Let automation answer approvals** | Off | Clients may approve a waiting tool request once or deny it, answer questions, decide plans, continue stopped runs with retry/return/accept, choose the reviewer — recorded as *automation's*. Wider answers stay yours; allowing Autopilot in a project is always a person's. |
 | | **Let automation change agent permissions** | Off | Clients may widen what agents may do: write access, network, commands, MCP servers, approving automatically, new CLI programs, environment variables, API providers, new tools and publications. Narrowing is always allowed. |
 
-*The Orchestrator*: one row, *What the Orchestrator may do*, names the open project's switches that are on and opens
-Project settings › Orchestrator, where each project sets its own ([2.3](#23-orchestrator)).
+The Orchestrator has no row here: its one switch, *Let the Orchestrator drive*, is each project's own, in Project
+settings › Orchestrator ([2.3](#23-orchestrator)).
 
 ### 1.5 Browser
 
@@ -182,21 +182,17 @@ started keep their budget and time limit.
 
 ### 2.3 Orchestrator
 
-*The Orchestrator may*: what this project's Orchestrator chat does without your click. Each project has its own, and a
-new project starts with all off. Every row is off until a person turns it on, and only a person can change it, in the
-window.
+*Let the Orchestrator drive*: whether this project's Orchestrator chat acts itself. Each project has its own, and a new
+project starts with it off. It is off until a person turns it on, and only a person can change it, in the window. It
+replaced six switches (publish drafts, answer agents, merge runs, merge finished runs on its own, continue interrupted
+runs, write with git); a project that had *Answer agents* on starts with it on.
 
 | Setting | Default | What it permits |
 |---|---|---|
-| **Publish drafts** | Off | The chat publishes pipelines, profiles, instructions, skills and tools it drafts without your click. Widening drafts still need *Let automation change agent permissions*. |
-| **Answer agents** | Off | The chat answers agents' questions and messages a run's agents directly, and starts a turn by itself when an agent waits, a run ends, or the daily report arrives. Approvals and plan decisions stay yours. |
-| **Merge runs** | Off | The chat merges a run you asked it to merge (latest succeeded run, no local integration needed). |
-| **Merge finished runs on its own** | Off | Needs *Merge runs* and *Answer agents*. Merges a task's latest run whose every step passed, once, in finish order — never Blocked tasks, tasks with unfinished blockers, while starts are held, or tasks marked *Don't merge automatically*. Conflicts → it proposes sending the work back to an agent. |
-| **Continue interrupted runs** | Off | The chat continues a run interrupted by a crash, runner loss or *Quit now* from its last checkpoint (once; not again within 10 minutes). Limit stops, canceled runs and runs without worktree stay yours. |
-| **Write with git** | Off | The chat may commit, create/switch branches, pull, push (never force), merge, revert, tag and fetch when you ask. Reset, clean, branch/tag deletion, force push, discarding and rebase stay cards. |
+| **Let the Orchestrator drive** | Off | On: the chat calls the same tools an outside agent gets from Orchester's MCP server, by the same rules and refusals, with no proposal cards — it starts, cancels, pauses, resumes and continues runs (accepting a step, raising limits and budgets and resuming after the daily budget included), merges runs (a finished run on its own too, unless its task says *Don't merge automatically*), answers agents and messages their runs, publishes the drafts it saves and writes with git (reset, clean, branch/tag deletion, force push, discarding and rebase stay cards); and it is woken for every wait, stop, end and event, runs it started included. What widens what agents may do still needs *Let automation change agent permissions*. Off: the chat proposes each change and you apply it, and no turn starts by itself. |
 
 *Also needed · set for this computer*: *Let automation answer approvals*, read-only here with its state and *Open*,
-which goes to Settings › Automation. *Answer agents* acts only while it is on too.
+which goes to Settings › Automation. Answering agents' questions and messages acts only while it is on too.
 
 ### 2.4 Context
 

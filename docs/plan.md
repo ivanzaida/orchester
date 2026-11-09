@@ -219,6 +219,17 @@ focus rings. Note the behaviour changes: `focus()` now scrolls into view; create
 - The task-states seed's KON-10 "Canceled" shows "Ready to queue" (product check).
 - Chat Orchestrator (OR1, layers `TrG83`/`Xir64`) and Overview (O1, `vgqpM`) are built as Orchester tasks once A1–A3
   are done.
+- Not ready here, checked in the runner (ORC-840 review): the runner starts a queued task, and the members of a
+  reviewed group one by one, without asking whether the pipeline is ready on this computer
+  (`runner/src/execution/coordinator/task_groups.rs`, `start_run`). Today the check is made where the person or a tool
+  queues: the kanban's move to Todo (`Workspace::queue_draft`, the live path for a draft) and every start and message
+  that runs a task again. `tasks::group::queue` checks every member too (`Workspace::ready_group_to_start`) but has no
+  caller yet, so no window queues a group today. Releasing a held group is not checked at all. A pipeline that becomes
+  not ready after it was queued (a program removed, a secret deleted) still starts. The runner-side check needs the
+  facts `orchester-workspace` reads: whether each program file exists and whether the keychain holds each secret
+  (`SecretVault::exists`); `orchester-workspace` is only a dev-dependency of the runner, so the check needs either those
+  reads moved into `orchester-core` behind traits the runner gets, or the app handing the runner the answer with the
+  queue.
 
 ## T · Tests and runner
 
@@ -980,6 +991,23 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 - **S2d** (live list and claims): 10.31 `jakf4`, 10.32 `ByIkx`, 10.34 `omHGh`, 10.35 `U4GzjB`, 10.41 `RmDpQ`.
 - **S3** (live run status): the run status in 10.31 / 10.32, 10.33 `NikWo`, and the shared status on 10.25.
 
+### ORC-887 follow-up · The team reviewer in a team run (non-UI)
+
+The team's reviewer, its readiness and each computer's pick exist (`crates/workspace/src/team_fill_ins/reviewer.rs`),
+but no run uses them: a run gets its reviewer from the project's own `AutoModeSettings.reviewer`
+(`crates/runner/src/execution/{coordinator,executor}/link/settings.rs`). **Done when:**
+
+- **Start:** a team run's start (`crates/workspace/src/team_work/`) takes the reviewer from the team's reviewer
+  instead of the project's setting, and refuses `not_ready_here` when this computer has picked no connection for it.
+- **Bundle:** the execution bundle pins the reviewer's version (as it pins a profile's) and the runner receives the
+  connection this computer picked for it (`team_connection_picks` / the decision pick, read where
+  `team_work/bundle.rs` reads a profile's pick), never a connection id of another computer.
+- **Pick read:** the decision pick's server is checked against the pinned version's destinations again at the start, as
+  a version that lists fewer servers can arrive after the pick (`TeamReviewer::allows_server`).
+- **Publish:** a project's reviewer setting can be published as a team reviewer, which needs the CLI kind of its
+  connection and, for a decision reviewer, its server as the destination (the earlier `TeamReviewer::from_local`, in
+  git history at `7ef658678`, did this and was removed unused).
+
 ## P · Product decisions waiting for the user
 
 - **Secrets:** fixed Development / Staging / Production environments; archive a secret instead of deleting it.
@@ -1000,6 +1028,8 @@ and shared organization included, also in S1b). Start S2a once S1b is merged. Fr
 - **Project settings:** disk use of run worktrees.
 
 ## Done
+
+ORC-824 · Readiness of each team resource on this computer · branch `claude/orc-824-readiness-read` (into `module/team-configuration`): `Workspace::project_readiness` reads, for every profile, MCP server, tool and pipeline of a project, core's answer to what this computer has; a team MCP server nobody decided on is *Needs you here*, one switched off is *Off here*, and a standing can be *undecided* (with the reason) instead of assumed ready. A local project checks each tool's secret in the keychain (read on every call, which may prompt on macOS, so callers read it on explicit changes) and the program of each enabled MCP server a profile chooses as a run starts it (project `PATH`, then the search path; a fixed file outside the repository; typed `LocalProgramProblem`). `ProjectDb::team_mcp_switch` replaces `team_mcp_on_here`. No screen calls it yet. Filtered readiness, store, team MCP, fill-in and app MCP tests and clippy passed; the macOS check is not run. Follow-up: a `SecretVault::exists` so the check need not read the value.
 
 ORC-625 · Team authority S2 public contract · branch `orchester/orc-625-run-1`: validated server claim threshold
 in seconds, explicit heartbeat-edge staleness/takeover, server-admin settings, and separate v2 workspace policy,

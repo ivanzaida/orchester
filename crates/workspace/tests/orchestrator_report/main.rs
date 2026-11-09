@@ -508,10 +508,7 @@ fn report_with_answer_agents_on_starts_one_turn_that_only_proposes() {
   assert!(kept.automatic, "it starts a turn by itself");
 
   let (root, programs) = (fixture.repo.path(), Programs::processes());
-  let switches = Switches {
-    answers: true,
-    ..Switches::default()
-  };
+  let switches = Switches { drives: true };
   let checks = check_merges_in((root, &programs), &HashSet::new()).expect("checked");
   let project = fixture.db.project().id();
   let followed = follow_in((root, project, &programs), &checks, (switches, true)).expect("followed");

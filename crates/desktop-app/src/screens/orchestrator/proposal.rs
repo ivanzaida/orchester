@@ -12,7 +12,6 @@ use lurq::{
   app::{
     component::{Component, DevtoolsInspectable},
     ctx::Ctx,
-    events::is_synthetic_input,
     theme::{PaletteColor, SpacingSize, TypographyStyle},
   },
   components::{Column, Row, Text},
@@ -32,6 +31,7 @@ use super::{
   line::{Chip, ChipTone, Line, Tone},
 };
 use crate::{
+  mcp::qa_person::QaPerson,
   navigation::Navigation,
   theme::{ExtraSpacing, ExtraTypography, OrchestratorText},
   ui::{
@@ -64,6 +64,8 @@ pub(super) struct StartProposal {
   refused: Signal<bool>,
   /// The acceptance criteria are shown.
   criteria_open: Signal<bool>,
+  /// Whether *Start* takes synthetic input as the person's: in a QA copy only.
+  qa_person: QaPerson,
 }
 
 impl Component for StartProposal {
@@ -74,6 +76,7 @@ impl Component for StartProposal {
       decide: card::decide_action(ctx),
       refused: ctx.signal(false),
       criteria_open: ctx.signal(false),
+      qa_person: QaPerson::of(ctx),
     }
   }
 
@@ -142,13 +145,14 @@ impl StartProposal {
     } else {
       let (decide, dismissing) = (self.decide.clone(), deciding(Decision::Dismiss));
       let dismiss = dismiss.on_click(move || decide.run(dismissing.clone()));
-      let (decide, starting, refused) = (
+      let (decide, starting, refused, qa_person) = (
         self.decide.clone(),
         deciding(Decision::Accept { widens: Vec::new() }),
         self.refused.clone(),
+        self.qa_person.clone(),
       );
       let start = start.on_click(move || {
-        if is_synthetic_input() {
+        if qa_person.refuses_input() {
           tracing::warn!("synthetic input reached the start of a run the Orchestrator proposed; not taken");
           refused.set(true);
           return;

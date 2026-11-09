@@ -42,7 +42,7 @@ fn shown(task: &TaskContext) -> Option<(&RunView, &ShownCi, Look)> {
 
 /// The Run section's last event in one sentence, with its glyph (`Last event` `TGEq8` in 10–10d).
 pub fn event(ctx: &Ctx, task: &TaskContext) -> Option<(Icon, Arc<str>)> {
-  let (_, shown, look) = shown(task)?;
+  let (run, shown, look) = shown(task)?;
   let number = shown.number().to_string();
   let agent = super::words::agent(ctx, &task.detail, task.lost()).to_string();
   Some(match look {
@@ -62,6 +62,10 @@ pub fn event(ctx: &Ctx, task: &TaskContext) -> Option<(Icon, Arc<str>)> {
       let args = [("number", number), ("names", names), ("agent", agent)];
       (Icon::CircleX, ctx.t_args("ci.runEvent.failed", args))
     }
+    Look::Fixing if shown.fix_waits(&run.ci_fixes) => (
+      Icon::TriangleAlert,
+      ctx.t_args("ci.runEvent.fixWaits", [("number", number)]),
+    ),
     Look::Fixing => (
       Icon::Wrench,
       ctx.t_args("ci.runEvent.fixing", [("number", number), ("agent", agent)]),
@@ -84,6 +88,7 @@ pub fn status(ctx: &Ctx, task: &TaskContext) -> Option<(Status, Arc<str>)> {
     Look::Running => (Status::Running, ctx.t_args("ci.header.running", number)),
     Look::Passed => (Status::Succeeded, ctx.t_args("ci.header.passed", number)),
     Look::Failed => (Status::Failed, ctx.t_args("ci.header.failed", number)),
+    Look::Fixing if shown.fix_waits(&run.ci_fixes) => (Status::Waiting, ctx.t_args("ci.header.fixWaits", number)),
     Look::Fixing => (Status::Working, fixing(ctx, run, shown)),
     Look::NoChecks | Look::Unknown => (Status::Waiting, ctx.t_args("ci.header.notRead", number)),
   })

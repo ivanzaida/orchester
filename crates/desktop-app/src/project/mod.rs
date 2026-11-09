@@ -12,7 +12,6 @@ mod closed;
 mod daily_report;
 mod download;
 pub mod feed;
-mod feedback;
 pub mod hold;
 mod host;
 mod known;
@@ -22,6 +21,7 @@ pub mod run_changes;
 pub mod settled_read;
 mod state;
 mod team;
+mod team_starts;
 mod waits;
 
 use orchester_core::id::ProjectId;
@@ -30,10 +30,10 @@ use orchester_workspace::workspace::{self, OpenProject, Workspace};
 
 pub use self::{
   feed::{ProjectFeed, TasksState},
-  feedback::feedback_holds,
   host::ProjectsHost,
   known::Projects,
   state::{ProjectState, Unavailable},
+  team::TeamRead,
 };
 use crate::routes::{OverviewTab, ProjectPage, Route};
 

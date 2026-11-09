@@ -12,5 +12,6 @@ mod catalog_client;
 mod client;
 mod errors;
 mod fixtures;
+mod mcp_server;
 mod reviewer;
 mod shapes;

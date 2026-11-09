@@ -40,7 +40,6 @@
         "merge": "Merge ↗",
         "complete": "Complete ↗",
         "resolve": "Resolve ↗",
-        "mergeQueue": "Merge queue ↗",
         "records": "Review records ↗"
       }
     },

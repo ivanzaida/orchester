@@ -17,6 +17,7 @@ mod harness;
 #[path = "../../examples/seed/kontur/mod.rs"]
 mod kontur;
 mod merging;
+mod readiness;
 mod sources;
 #[path = "../support/mod.rs"]
 mod support;
@@ -318,8 +319,7 @@ fn form_a_task_that_ran_has_no_create_and_run() {
     form.reasons(),
     vec!["Nothing to save: no field has changed.".to_owned()]
   );
-  let keys = if cfg!(target_os = "macos") { "⌘ S" } else { "Ctrl S" };
-  assert_eq!(form.text("task-form-shortcut"), keys);
+  assert!(!form.exists("task-form-shortcut"), "no key cap in the bar");
 }
 
 #[test]

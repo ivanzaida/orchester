@@ -84,7 +84,7 @@ pub struct DailyReport {
   pub usage: DayUsage,
   /// The queued tasks whose run has not started, in the order they are queued.
   pub queued: Vec<ReportTask>,
-  /// It starts one Orchestrator turn by itself, which adds a summary: *Let the Orchestrator answer agents* was on when
+  /// It starts one Orchestrator turn by itself, which adds a summary: *Let the Orchestrator drive* was on when
   /// it was kept.
   #[serde(default, skip_serializing_if = "std::ops::Not::not")]
   pub automatic: bool,

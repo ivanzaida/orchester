@@ -186,7 +186,9 @@ impl Operations<'_> {
       ErrorDetails::UnsupportedContract { required_version } => Refusal::NeedsVersion {
         required: required_version.clone(),
       },
-      ErrorDetails::None | ErrorDetails::DecisionRequired { .. } => Refusal::Command(error),
+      ErrorDetails::None | ErrorDetails::DecisionRequired { .. } | ErrorDetails::BundleMissing { .. } => {
+        Refusal::Command(error)
+      }
     };
     Ok(TeamOutcome::Rejected {
       operation,

@@ -20,10 +20,15 @@ use crate::{
 
 /// The line saying `words`, its element `id`, its words `<id>-text`.
 pub fn locked(id: &str, words: &str) -> Row {
+  flat(id, words).padding(Padding::vertical(ExtraSpacing::Tight.role()))
+}
+
+/// [`locked`] without the 2 over and under it, for a page whose design spaces the line itself (the Agents hub's
+/// `Read-only line` `O4b6B` in M2 `dijUt`).
+pub fn flat(id: &str, words: &str) -> Row {
   Row::new()
     .id(id.to_owned())
     .width(Dimension::Pct(100.0))
-    .padding(Padding::vertical(ExtraSpacing::Tight.role()))
     .spacing(SpacingSize::Sm)
     .align_items(Alignment::Center)
     .child(icon(Icon::Lock, IconSize::Base, PaletteColor::TextMuted))

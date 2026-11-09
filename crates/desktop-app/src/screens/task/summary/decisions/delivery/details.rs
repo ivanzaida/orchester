@@ -13,7 +13,7 @@ use orchester_core::merge_queue::{MAX_RESYNCS, QueueState};
 use orchester_workspace::{display::clock, merge_queue::TaskDelivery};
 
 use crate::{
-  screens::merge_queue::words,
+  screens::task::queue_words as words,
   theme::{ExtraSpacing, TaskText},
   ui::detail_row::{DetailValue, detail_row},
 };

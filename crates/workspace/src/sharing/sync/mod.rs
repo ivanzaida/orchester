@@ -32,16 +32,21 @@ use orchester_core::{
 use tokio::task::JoinHandle;
 
 pub(super) use self::state::SyncStates;
+pub(crate) use self::{
+  archive::pins,
+  config::{is_local_form, non_team_name, refresh_profile, refresh_team_profiles, team_executors, team_form},
+};
 pub use self::{
+  archive::{ArchiveError, Pinning, pinning},
   catalog::CATALOG_CHECK,
   config::{
-    ConfigServer, Here, HereReference, Needer, RemoteResourceStore, Standing, Waiting, bind, chosen_at,
-    keep_uploaded_configuration, upload_configuration, use_here, waiting,
+    BindingsHere, ConfigServer, FillInOutcome, HereReference, Needer, RemoteResourceStore, ShareFillIns, Standing,
+    Waiting, bind, chosen_at, keep_uploaded_configuration, upload_configuration, use_here, waiting,
   },
   state::SyncState,
   stream::{Clock, Source, Stopped, SystemClock, follow},
 };
-use super::{Behalf, Connection, Servers, SharingError, project::ProjectServer};
+use super::{Behalf, Connection, Servers, SharingError, project::ProjectServer, send_lane::send_turn};
 use crate::{background, runner::Runners};
 
 /// Runs until the window closes, as a task on the app runtime that `Root` starts and aborts when it drops.
@@ -159,13 +164,24 @@ impl Live {
   async fn send_published(&self) {
     let project = self.project.clone();
     let shared = project.link().project;
-    let sent = background::run(move || {
+    let root = project.repo_root().to_owned();
+    let servers = self.servers.clone();
+    let sent = background::run(move || -> Result<_, SharingError> {
+      let lane = servers.send_lane(project.repo_root());
+      let _sending = send_turn(&lane);
       let db = orchester_store::ProjectDb::open(project.repo_root())?;
-      RemoteResourceStore::new(db, project)?.send_waiting()
+      let mut taken = Vec::new();
+      let sent = RemoteResourceStore::new(db, project)?.send_waiting(&mut taken);
+      Ok((taken, sent))
     })
     .await;
     match sent {
-      Ok(Ok(())) => {}
+      Ok(Ok((taken, sent))) => {
+        self.servers.note_taken_back(&root, taken);
+        if let Err(error) = sent {
+          tracing::warn!(%error, project = %shared, "versions published here wait to be sent");
+        }
+      }
       Ok(Err(error)) => tracing::warn!(%error, project = %shared, "versions published here wait to be sent"),
       Err(_) => tracing::debug!(project = %shared, "sending versions published here was interrupted"),
     }
@@ -244,8 +260,8 @@ impl Source for Live {
       .await
   }
 
-  async fn archived(&self, resource: ResourceId) {
-    archive::stop_runs(&self.runners, self.project.repo_root(), resource).await;
+  async fn archived(&self, resource: ResourceId, by: Option<&str>) {
+    archive::stop_runs(&self.runners, self.project.repo_root(), (resource, by)).await;
     self.servers.shared_changed();
   }
 

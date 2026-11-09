@@ -10,12 +10,12 @@ use orchester_core::{
   integration::{
     RunMerge,
     attempt::{AttemptOutcome, RecordedAttempt},
-    branch_head,
+    branch_head, is_ancestor,
   },
   merge_queue::{Left, QueueState},
   project::TaskKey,
   revision::Revision,
-  run::{BranchName, Run, RunNumber},
+  run::{BranchName, Run, RunNumber, RunStatus},
   store::{MergeStore, ResourceStore, RunStore},
 };
 use orchester_exec::programs::Programs;
@@ -27,7 +27,12 @@ use super::{
 };
 use crate::{
   merge_queue::{BaseState, checkout_base},
-  tasks::{changes::GIT, data::ProjectTasks, detail::run_store_error},
+  tasks::{
+    changes::GIT,
+    data::ProjectTasks,
+    delivery::{self, Delivery},
+    detail::run_store_error,
+  },
 };
 
 /// One run's merge attempts and what its page says beside them.
@@ -48,6 +53,9 @@ pub struct AttemptPage {
   pub attempts: Vec<RecordedAttempt>,
   /// The run's merge, once recorded.
   pub merge: Option<RunMerge>,
+  /// What became of the run's work when Orchester recorded no merge of it: merged into its base branch outside
+  /// Orchester (a fast-forward by a person, say), as git proves it, the way `get_run`'s `merge` tells it.
+  pub delivery: Delivery,
   /// Whether Orchester tries the merge again by itself, while its last attempt did not land.
   pub retrying: Option<Retrying>,
   /// The merge queue stopped delivering the run until someone acts on what stopped it: *Try again* puts it back in
@@ -58,12 +66,20 @@ pub struct AttemptPage {
   pub awaiting_approval: bool,
   /// The files the last attempt's bring-in left changed in the checkout and that are not put back yet.
   pub left_changed: Vec<String>,
+  /// The last attempt stopped on conflicts, and the run's branch holds the base branch's head now (an agent or a
+  /// person merged it in since): merging the run into the base cannot conflict, so there is nothing left to resolve.
+  pub base_held: bool,
 }
 
 impl AttemptPage {
   /// The attempt the page is about: the last one.
   pub fn last(&self) -> Option<&RecordedAttempt> {
     self.attempts.first()
+  }
+
+  /// Whether the run's work is in its base branch: merged and recorded by Orchester, or merged outside it.
+  pub fn is_merged(&self) -> bool {
+    self.merge.is_some() || self.delivery.merged_into().is_some()
   }
 }
 
@@ -94,10 +110,15 @@ pub fn attempt_page(
   };
   let attempts = db.merge_attempts(run.id())?;
   let merge = db.run_merge(run.id())?;
+  let delivery = if merge.is_none() && run.status() == &RunStatus::Succeeded {
+    delivery::of_run(programs, root, &run)
+  } else {
+    Delivery::Waiting
+  };
   let last = attempts
     .first()
     .map(|last| last.attempt.outcome())
-    .filter(|outcome| merge.is_none() && !outcome.landed());
+    .filter(|outcome| merge.is_none() && !outcome.landed() && delivery.merged_into().is_none());
   let retrying = match last {
     Some(_) => retrying(&db, &run)?,
     None => None,
@@ -109,6 +130,9 @@ pub fn attempt_page(
   let queue_stopped = matches!(queue, Some(QueueState::Left(Left::Stopped { .. })));
   let awaiting_approval = queue == Some(QueueState::WaitingForApproval);
   let left_changed = left_changed((root, programs), &run, last);
+  let base_held = matches!(last, Some(AttemptOutcome::Conflicts { .. }))
+    && run.status() == &RunStatus::Succeeded
+    && base_held((root, programs), &run);
   Ok(Some(AttemptPage {
     run: MergeRun {
       task: task.id(),
@@ -125,11 +149,33 @@ pub fn attempt_page(
     checkout: checkout_base(root, programs),
     attempts,
     merge,
+    delivery,
     retrying,
     queue_stopped,
     awaiting_approval,
     left_changed,
+    base_held,
   }))
+}
+
+/// Whether `run`'s branch holds the head of its base branch, as git tells; `false` when either branch is not there or
+/// git cannot tell (the log says why), which leaves the conflicts standing.
+fn base_held((root, programs): (&Path, &Programs), run: &Run) -> bool {
+  let Some(base) = run.base_branch() else {
+    return false;
+  };
+  let (runner, git) = (programs.runner(), Path::new(GIT));
+  let held = branch_head(&runner, git, (root, base)).and_then(|base_head| {
+    let branch_tip = branch_head(&runner, git, (root, run.branch()))?;
+    match (base_head, branch_tip) {
+      (Some(base_head), Some(branch_tip)) => is_ancestor(&runner, git, (root, &base_head, &branch_tip)),
+      _ => Ok(false),
+    }
+  });
+  held.unwrap_or_else(|error| {
+    tracing::warn!(%error, run = %run.id(), "cannot tell whether the run's branch holds its base branch");
+    false
+  })
 }
 
 /// The files the bring-in of `run`'s `last` attempt, which did not land, left changed and that are not put back yet;

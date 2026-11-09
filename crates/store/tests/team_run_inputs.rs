@@ -6,6 +6,10 @@ mod support;
 
 #[path = "team_run_inputs/accepted.rs"]
 mod accepted;
+#[path = "team_run_inputs/mcp_bindings.rs"]
+mod mcp_bindings;
+#[path = "team_run_inputs/pinned_server.rs"]
+mod pinned_server;
 
 use std::{collections::BTreeMap, fs, num::NonZeroU32, path::Path};
 
@@ -29,7 +33,7 @@ use orchester_core::{
   revision::Revision,
   run::{
     BranchName, CommitId, NewRun, PublishedVersions, RunSnapshot, StepExecutor,
-    bundle::{CanonicalExecutionInputs, PinnedBodies, ResourceLabel},
+    bundle::{CanonicalExecutionInputs, ExecutionProfile, PinnedBodies, ResourceLabel},
     inputs::{
       BoundReference, BundleContent, InputsOrigin, LocalBindings, LocalConsent, ProfileBinding, RunInputs, TaskAtStart,
       TeamAcceptance,
@@ -54,6 +58,8 @@ struct Team {
   server: ServerId,
   project: ProjectId,
   profile: ResourceId,
+  /// The team MCP server the bundle pins.
+  mcp_server: ResourceId,
   snapshot: RunSnapshot,
   inputs: CanonicalExecutionInputs,
 }
@@ -109,26 +115,23 @@ fn team_project() -> Team {
     skills: &BTreeMap::new(),
   };
   let snapshot = RunSnapshot::build(delivery, &version, published).expect("snapshot");
+  let (mcp_server, team, server_version) = pinned_server::pinned_server();
   let bodies = PinnedBodies {
     labels: &[
       (profile_version.id(), label("builder", "Builder")),
       (version.id(), label("delivery", "Delivery")),
+      (server_version.id(), label("docs", "Docs")),
     ],
-    profiles: &[profile_version],
+    profiles: &[(profile_version.id(), ExecutionProfile::of_team(&team))],
     instructions: &[],
     tools: &[],
     skills: &[],
+    mcp_servers: &[(mcp_server, server_version)],
   };
   let inputs = CanonicalExecutionInputs::pin(&snapshot, bodies).expect("inputs");
   drop(db);
   let (server, project) = (ServerId::generate(), ProjectId::generate());
-  connection(repo.path())
-    .execute(
-      "INSERT INTO sharing (only_row, server_id, project_id, project_key, role, joined_at, event_cursor, \
-       last_synced_at) VALUES (1, ?1, ?2, 'ORC', 'member', 1, 0, 1)",
-      [server.to_string(), project.to_string()],
-    )
-    .expect("link the project");
+  link_project(repo.path(), server, project);
   let db = ProjectDb::open(repo.path()).expect("open");
   Team {
     repo,
@@ -136,9 +139,20 @@ fn team_project() -> Team {
     server,
     project,
     profile,
+    mcp_server,
     snapshot,
     inputs,
   }
+}
+
+fn link_project(repo: &Path, server: ServerId, project: ProjectId) {
+  connection(repo)
+    .execute(
+      "INSERT INTO sharing (only_row, server_id, project_id, project_key, role, joined_at, event_cursor, \
+       last_synced_at) VALUES (1, ?1, ?2, 'ORC', 'member', 1, 0, 1)",
+      [server.to_string(), project.to_string()],
+    )
+    .expect("link the project");
 }
 
 fn connection(repo: &Path) -> rusqlite::Connection {
@@ -177,8 +191,10 @@ impl Team {
         connection: ConnectionId::generate(),
         account: None,
         required_cli: None,
+        mcp_servers: Vec::new(),
       }],
       references,
+      team_mcp: Vec::new(),
     };
     RunInputs::new(content, bindings, LocalConsent::default()).expect("inputs")
   }
@@ -451,10 +467,14 @@ fn local_inputs(db: &ProjectDb, snapshot: &RunSnapshot) -> RunInputs {
     })
     .collect();
   let bodies = PinnedBodies {
-    profiles: &versions,
+    profiles: &versions
+      .iter()
+      .map(|version| (version.id(), ExecutionProfile::of(version.body())))
+      .collect::<Vec<_>>(),
     instructions: &[],
     tools: &[],
     skills: &[],
+    mcp_servers: &[],
     labels: &labels,
   };
   let canonical = CanonicalExecutionInputs::pin(snapshot, bodies).expect("inputs");
@@ -478,9 +498,11 @@ fn local_inputs(db: &ProjectDb, snapshot: &RunSnapshot) -> RunInputs {
         connection: ConnectionId::generate(),
         account: None,
         required_cli: None,
+        mcp_servers: Vec::new(),
       })
       .collect(),
     references: Vec::new(),
+    team_mcp: Vec::new(),
   };
   RunInputs::new(content, bindings, LocalConsent::default()).expect("inputs")
 }

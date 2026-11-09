@@ -1,4 +1,4 @@
-//! What Review › Merges and the attempt page read of the project's merges (`crates/desktop-app/design/orchester.pen`,
+//! What Review and the attempt page read of the project's merges (`crates/desktop-app/design/orchester.pen`,
 //! board `Review · redesign`, 09 to 09l): the runs whose last attempt did not land, the runs that wait for a person's
 //! review before they merge, the merged runs by day, and one run's attempts. Blocks on SQLite and git.
 
@@ -163,6 +163,23 @@ pub(crate) fn reviewed_head(
     db.latest_checkpoint(run)
       .map_err(run_store_error)?
       .map(|checkpoint| checkpoint.revision().clone()),
+  )
+}
+
+/// When the head [`reviewed_head`] names was reached: the merge queue's last check on it, else the run's latest
+/// checkpoint; `None` without either.
+pub(crate) fn reviewed_at(
+  db: &ProjectDb,
+  run: RunId,
+  queued: Option<&QueueEntry>,
+) -> Result<Option<Timestamp>, StoreError> {
+  if let Some(checked) = queued.and_then(|entry| entry.checked.as_ref()) {
+    return Ok(Some(checked.at));
+  }
+  Ok(
+    db.latest_checkpoint(run)
+      .map_err(run_store_error)?
+      .map(|checkpoint| checkpoint.created_at()),
   )
 }
 

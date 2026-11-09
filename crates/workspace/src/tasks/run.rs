@@ -345,6 +345,7 @@ pub fn start_messages(error: &RunRequestError) -> Vec<Message> {
       | Rejection::LimitNotRaised { .. }
       | Rejection::LimitNotAboveUsed { .. }
       | Rejection::ProfileNotInRun
+      | Rejection::ProfileNotUsable
       | Rejection::PermissionsNotEnforceable { .. }
       | Rejection::NoAgentToRestart
       | Rejection::NoPendingPermissions
@@ -445,6 +446,7 @@ pub fn control_message(error: &RunRequestError) -> Message {
     RunRequestError::Rejected(Rejection::RunNotEnded) => Message::new("runs.control.notEnded"),
     RunRequestError::Rejected(Rejection::RunMerged) => Message::new("runs.control.merged"),
     RunRequestError::Rejected(Rejection::WorktreeInMerge) => Message::new("runs.control.worktreeInMerge"),
+    RunRequestError::Rejected(Rejection::ProfileNotUsable) => Message::new("runs.control.profileNotUsable"),
     RunRequestError::Rejected(Rejection::RunChangedMeanwhile) => Message::new("runs.control.changedMeanwhile"),
     RunRequestError::Rejected(Rejection::RunNotInterrupted) => Message::new("runs.control.notInterrupted"),
     RunRequestError::Rejected(Rejection::RunNotWaiting) => Message::new("runs.control.notWaiting"),

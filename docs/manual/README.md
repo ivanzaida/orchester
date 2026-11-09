@@ -20,7 +20,7 @@ This manual describes the current app (`crates/desktop-app`, binary `orchester`,
 | [user-guide.md](user-guide.md) | The window, every screen, and the workflows from adding a project to merging a run |
 | [settings.md](settings.md) | Every app and project setting with its default |
 | [install-and-platforms.md](install-and-platforms.md) | Installing, data locations, Windows/macOS differences, known gaps, what is not built yet |
-| [orchestrator-chat.md](orchestrator-chat.md) | The project's Orchestrator chat: what it may do directly, what it proposes, its switches and its 83 tools |
+| [orchestrator-chat.md](orchestrator-chat.md) | The project's Orchestrator chat: what it may do directly, what it proposes, its switches and its 85 tools |
 | [mcp-server.md](mcp-server.md) | Orchester's MCP server: connecting, tokens, scopes, permission gates, errors, the window tools (`app_state`, `navigate`, `lurq_*`) |
 | [mcp-tools-setup.md](mcp-tools-setup.md) | MCP reference — project setup tools (project, connections, accounts, MCP servers, profiles, pipelines, instructions, skills, tools, secrets, merging) |
 | [mcp-tools-work.md](mcp-tools-work.md) | MCP reference — work tools (tasks, modules, runs, queue, approvals, questions, plans, messages, pull requests, usage, delivery, reports) |
@@ -83,7 +83,8 @@ widening calls; **AA** = needs *Let automation answer approvals*; **WC** = needs
 | `update_mcp_server` | AP for widening | Change an MCP server |
 | `remove_mcp_server` | | Remove an MCP server |
 | `set_mcp_server_enabled` | AP to turn on | Turn an MCP server on or off |
-| `list_profiles` / `get_profile` | RO | Agent profiles |
+| `list_profiles` / `get_profile` | RO | Agent profiles, with readiness here |
+| `list_team_mcp_servers` | RO | A team project's MCP servers, with readiness here |
 | `list_pipelines` | RO | Published pipelines |
 | `save_profile_draft` | AP for widening | Save a profile draft |
 | `publish_profile` | AP for broader/re-worded | Publish a profile |
@@ -127,6 +128,7 @@ widening calls; **AA** = needs *Let automation answer approvals*; **WC** = needs
 | `return_to_draft` | | Return a held queued task to Draft |
 | `list_modules` / `get_module` | RO | Modules, burndown, forecast |
 | `create_module` / `update_module` | | Manage modules |
+| `get_watches` | RO | Who leads what: Orchestrator subscriptions and what waits there |
 | `run_task` | | Queue and start, or run again |
 | `list_runs` / `get_run` | RO | Runs and their full state |
 | `pause_run` / `resume_run` / `cancel_run` | | Control a run |
@@ -143,7 +145,6 @@ widening calls; **AA** = needs *Let automation answer approvals*; **WC** = needs
 | `send_message` | | Message a run's agents |
 | `get_conversation` | RO | A task's conversation |
 | `duplicate_pipeline` | AP unless identical | Copy and publish a pipeline |
-| `list_pull_requests` / `get_pull_request` | RO | GitHub pull requests |
 | `get_usage` | RO | Tokens and agent time |
 | `get_delivery` | RO | Throughput, cycle/lead time, flow, forecasts |
 | `get_daily_report` | RO | A day's report |

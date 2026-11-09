@@ -9,8 +9,11 @@ be added later, so domain logic must not depend on the desktop app.
   never ship it as real data or defaults.
 - Work plan and backlog: `docs/plan.md`. Take tasks from it and move them to its *Done* list when finished.
 - Design source: `crates/desktop-app/design/orchester.pen`, the desktop app's design with its `· redesign` boards
-  (committed 2026-10-29; it replaces the Pencil document `87147a2b-…` that briefs named before). It is encrypted —
-  read it only through the `pencil` MCP; never Read/Grep it. Pass as `filePath` the absolute path of
+  (committed 2026-10-29; it replaces the Pencil document `87147a2b-…` that briefs named before). It is plain JSON
+  (about 46 MB), too large to Read or Grep whole. Prefer the `pencil` MCP (screenshots, `Get`, `Export`); a step
+  without it may read the file with a one-off script (`python3 -I`, parsing the JSON, writing condensed extracts of
+  the nodes it needs under `.tmp/`), reading the main checkout's copy named below. Never write the file outside
+  Pencil. With the MCP, pass as `filePath` the absolute path of
   `crates/desktop-app/design/orchester.pen` in the project's MAIN checkout — the folder that holds `.orchester/` (for a
   run, the part of your worktree's path before `.orchester/worktrees/`), e.g.
   `H:/projects/orchester/crates/desktop-app/design/orchester.pen` — never the copy in your own worktree. Pencil has

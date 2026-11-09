@@ -122,3 +122,19 @@ pub(super) fn started(project: ProjectId, chat: ChatId) {
   let left = DRAFTS.change((project, Conversation::New), std::mem::take);
   DRAFTS.change((project, Conversation::Chat(chat)), |draft| *draft = left);
 }
+
+/// The draft and its files are kept as the draft of the conversation `view` holds it for, in `project`, as they change.
+pub(super) fn keep(ctx: &mut lurq::app::ctx::Ctx, view: &super::View, project: ProjectId) {
+  let of = view.of.clone();
+  ctx.watch(&view.draft, move |text| {
+    if let Some(of) = of.get_untracked() {
+      set(project, of, text);
+    }
+  });
+  let of = view.of.clone();
+  ctx.watch(&view.attached.attached, move |held| {
+    if let Some(of) = of.get_untracked() {
+      set_attachments(project, of, &held.0);
+    }
+  });
+}

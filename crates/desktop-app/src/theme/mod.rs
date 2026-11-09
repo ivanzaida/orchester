@@ -11,6 +11,7 @@
 
 mod accounts;
 pub mod agents;
+mod archive;
 pub mod badge;
 mod browser;
 mod cards;
@@ -49,7 +50,6 @@ mod permissions;
 pub mod pipelines;
 mod project_settings;
 mod projects;
-mod pull_requests;
 mod review;
 mod run_model;
 mod run_services;
@@ -72,6 +72,7 @@ mod test_results;
 mod todo_list;
 mod typography;
 pub mod usage;
+mod watching;
 
 use std::time::Duration;
 
@@ -82,6 +83,7 @@ use lurq::{
 
 pub use self::{
   accounts::{AccountsSpacing, AccountsText},
+  archive::{ARCHIVE_DIALOG_WIDTH, ArchiveText},
   browser::{BrowserBorder, BrowserColor, BrowserSpacing, BrowserText},
   cards::{CardsSpacing, CardsText, NOT_CHOSEN_OPACITY, RISK_TRACK_HEIGHT},
   chat_links::ChatLinkLooks,
@@ -99,7 +101,7 @@ pub use self::{
   files::{FilesRadius, FilesText},
   fonts::mono_space,
   groups::GroupText,
-  hub::{HubSpacing, HubText},
+  hub::{HUB_NEW_MENU_WIDTH, HUB_READING_OPACITY, HubSpacing, HubText},
   import::{ImportSpacing, ImportText},
   lifecycle::{CLOSING_TABS_OPACITY, LifecycleSpacing, LifecycleText},
   local_integration::LocalText,
@@ -111,7 +113,8 @@ pub use self::{
   needs_you::{NeedsYouRadius, NeedsYouShadow, NeedsYouSpacing, NeedsYouText},
   orchester::{OrchesterSpacing, OrchesterText},
   orchestrator::{
-    OrchestratorShadow, OrchestratorSpacing, OrchestratorText, beside_chat_lane, chat_scrollbar, picker_scrollbar,
+    LEADS_HINT_OPACITY, OrchestratorShadow, OrchestratorSpacing, OrchestratorText, beside_chat_lane, chat_scrollbar,
+    picker_scrollbar, watch_list_scrollbar,
   },
   overview::{OverviewSpacing, OverviewText},
   palette::{ExtraColor, Mode},
@@ -119,8 +122,7 @@ pub use self::{
   pipelines::{PipelinesSpacing, PipelinesText},
   project_settings::{ProjectSettingsSpacing, ProjectSettingsText},
   projects::{ProjectsSpacing, ProjectsText},
-  pull_requests::{PullRequestsSpacing, PullRequestsText},
-  review::{REVIEW_TYPING_OPACITY, ReviewSpacing, ReviewText},
+  review::{REVIEW_TYPING_CYCLE, REVIEW_TYPING_OPACITY, REVIEW_TYPING_STEPS, ReviewSpacing, ReviewText},
   run_model::ModelText,
   run_services::RunServicesText,
   secrets::{SECRETS_PENDING_OPACITY, SecretsSpacing, SecretsText},
@@ -134,7 +136,7 @@ pub use self::{
   slash::SlashText,
   sources::{SourcesSpacing, SourcesText},
   startup::{StartupSpacing, StartupText},
-  task::{TaskSpacing, TaskText},
+  task::{NOT_READY_ROW_HEIGHT, TaskRadius, TaskSpacing, TaskText},
   task_form::{TaskFormSpacing, TaskFormText, sources_scrollbar},
   tasks::{
     DROP_SCRIM_OPACITY, DROP_VEIL_OPACITY, HELD_CARD_OPACITY, SKELETON_DELAY, SKELETON_DIM, SKELETON_FADE,
@@ -144,6 +146,7 @@ pub use self::{
   todo_list::TodoText,
   typography::{ExtraTypography, IconSize},
   usage::{UsageRadius, UsageSpacing, UsageText},
+  watching::{WatchingSpacing, WatchingText},
 };
 
 /// A control that cannot be used, faded as a whole: a button that is unavailable or disabled (`Create
@@ -185,7 +188,6 @@ pub fn install(app: &mut App, mode: Mode) {
   connections::install(theme);
   secrets::install(theme);
   projects::install(theme);
-  pull_requests::install(theme);
   shell::install(theme);
   skills::install(theme);
   lifecycle::install(theme);
@@ -211,6 +213,7 @@ pub fn install(app: &mut App, mode: Mode) {
   dialog::install(theme);
   permissions::install(theme);
   side_question::install(theme);
+  watching::install(theme);
   theme.set_shadows(shadow::shadows());
   theme.set_form(form::form());
 }

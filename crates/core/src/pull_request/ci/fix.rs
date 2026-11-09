@@ -55,6 +55,9 @@ pub enum FixedBy {
 pub enum FixEventKind {
   /// The failing checks went to the run's agent as message `message`.
   Sent { message: MessageId, by: FixedBy },
+  /// The message `message` of a Fix CI sent before waits: running the task again with it started nothing, because its
+  /// pipeline is not ready on this computer. It goes once the person fixed what is missing and ran the task again.
+  NotReady { message: MessageId },
   /// *Fix CI automatically* reached its limit on a failure it did not send: the run waits for the person.
   Stopped { limit: FixLimit },
 }
@@ -116,6 +119,17 @@ impl RunFixes {
       .iter()
       .rev()
       .find(|event| event.failure == failure && matches!(event.kind, FixEventKind::Sent { .. }))
+  }
+
+  /// Whether the last thing recorded for `failure` is a Fix CI that waits because the pipeline is not ready on this
+  /// computer ([`FixEventKind::NotReady`]): the agent works on nothing yet.
+  pub fn waits_for(&self, failure: &str) -> bool {
+    self
+      .events
+      .iter()
+      .rev()
+      .find(|event| event.failure == failure)
+      .is_some_and(|event| matches!(event.kind, FixEventKind::NotReady { .. }))
   }
 
   /// The last Fix CI sent, of any failure.

@@ -2,9 +2,7 @@ use orchester_core::{
   id::ProjectId,
   name::Name,
   project::{Project, ProjectKey},
-  resource::{
-    DecisionReviewerReference, DecisionReviewerRole, ModelId, ResourceKind, ReviewerDestinations, Slug, TeamReviewer,
-  },
+  resource::{ModelId, ResourceKind, ReviewerDestinations, Slug, TeamReviewer},
   run::review::Probability,
   store::ResourceStore,
   time::Timestamp,
@@ -23,10 +21,6 @@ fn team_reviewer_versions_persist_without_changing_published_bodies() {
   let mut db = ProjectDb::create(repo.path(), project).expect("database");
   let now = Timestamp::from_unix_millis(1);
   let reviewer = TeamReviewer::Decision {
-    connection: DecisionReviewerReference::DecisionConnection {
-      name: Name::new("Decisions").expect("name"),
-      role: DecisionReviewerRole::Decision,
-    },
     model: ModelId::new("decision-1").expect("model"),
     lowest_threshold: Probability::new(0.8).expect("threshold"),
     destinations: ReviewerDestinations::MembersComputers,

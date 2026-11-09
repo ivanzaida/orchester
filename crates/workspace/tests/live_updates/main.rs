@@ -14,20 +14,24 @@
 
 mod archived;
 mod catalog;
+mod claim_ends;
 mod config;
-mod connection_kinds;
 mod desktop;
-mod here;
 mod http;
 mod joined;
+mod mcp_servers;
 mod merged;
 mod publish;
 mod reconnects;
 mod server;
 mod share;
+mod share_fill_ins;
+mod share_team_form;
 #[path = "../support/mod.rs"]
 mod support;
 mod team_copy;
+mod team_created;
+mod team_refused;
 mod widening;
 
 use std::{
@@ -81,8 +85,8 @@ struct Member {
   token: SecretValue,
   project: ProjectId,
   states: Mutex<Vec<SyncState>>,
-  /// The resources its stream saw archived, in order.
-  archived: Mutex<Vec<ResourceId>>,
+  /// The resources its stream saw archived, in order, with who archived each.
+  archived: Mutex<Vec<(ResourceId, Option<String>)>>,
 }
 
 impl Member {
@@ -154,8 +158,12 @@ impl Source for Member {
     Ok(self.client.report_catalog(&self.token, self.project, &report).await?)
   }
 
-  async fn archived(&self, resource: ResourceId) {
-    self.archived.lock().expect("archived").push(resource);
+  async fn archived(&self, resource: ResourceId, by: Option<&str>) {
+    self
+      .archived
+      .lock()
+      .expect("archived")
+      .push((resource, by.map(str::to_owned)));
   }
 
   fn changed(&self) {}

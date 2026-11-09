@@ -1,9 +1,6 @@
-//! The Pull requests page's list: the stored pull requests of the linked repository, open and closed, each
-//! with the task whose run made its branch; the page's tabs, search, sort and footer; and the deprecated
-//! desktop's inbox, which keeps only the open ones (`list`); syncing them through a fake `gh`: a rate limit
-//! that holds every later sync, how the latest sync went, and the closed ones a sync of the open ones keeps
-//! (`sync`); creating one from a task's run (`create`), and whether it would carry the local base's unpushed
-//! commits (`unpushed`); a run's pull request's CI (`ci`) and Fix CI (`ci_fix`).
+//! A run's pull request: creating one from a task's run (`create`) with the sync that follows, and whether it
+//! would carry the local base's unpushed commits (`unpushed`); a run's pull request's CI (`ci`) and Fix CI
+//! (`ci_fix`), through a fake `gh`.
 
 #[path = "../support/mod.rs"]
 mod support;
@@ -11,9 +8,6 @@ mod support;
 mod ci;
 mod ci_fix;
 mod create;
-mod feedback;
-mod list;
-mod sync;
 mod unpushed;
 
 use orchester_core::{
@@ -24,12 +18,9 @@ use orchester_core::{
   repository::{GitHubRepo, RemoteName, RepoPermission, RepositoryLink, RepositoryView},
   revision::Revision,
   run::BranchName,
-  store::{PullRequestStore, RepositoryStore},
+  store::RepositoryStore,
 };
-use orchester_workspace::{
-  connections::github::{GitHubDraft, save_github},
-  pull_requests::list::{LinkedList, PullRequestList, PullRequestSort, PullRequestTab, load_list_in},
-};
+use orchester_workspace::connections::github::{GitHubDraft, save_github};
 use support::{Fixture, at};
 
 pub fn repo() -> GitHubRepo {
@@ -107,57 +98,4 @@ pub fn link(fixture: &mut Fixture) {
   };
   let link = RepositoryLink::new(connection, RemoteName::origin(), view, login("ivanzaida"), at(1));
   fixture.db.save_repository_link(&link).expect("the link is saved");
-}
-
-/// KON-1 runs on `orchester/orc-run-1`, KON-2's run on `orchester/orc-run-2` succeeded; a sync stored an
-/// open pull request of each, a draft and a merged one of no run, and a closed one.
-pub fn seeded() -> (Fixture, LinkedList) {
-  let mut fixture = Fixture::keyed("KON");
-  let working = fixture.task("Add retry to webhook sender", at(10));
-  fixture.started_run(working, at(20));
-  let done = fixture.task("Typed errors per module", at(11));
-  let mut run = fixture.started_run(done, at(21));
-  fixture.succeed(&mut run, at(30));
-  link(&mut fixture);
-  let stored = [
-    pull_request(
-      142,
-      "orchester/orc-run-1",
-      PullRequestState::Open,
-      Some(ReviewDecision::ReviewRequired),
-      900,
-    ),
-    pull_request(
-      137,
-      "orchester/orc-run-2",
-      PullRequestState::Open,
-      Some(ReviewDecision::ChangesRequested),
-      800,
-    ),
-    pull_request(139, "deps/tokio", PullRequestState::Draft, None, 700),
-    pull_request(
-      131,
-      "readme-badges",
-      PullRequestState::Merged,
-      Some(ReviewDecision::Approved),
-      600,
-    ),
-    pull_request(127, "spike", PullRequestState::Closed, None, 500),
-  ];
-  fixture
-    .db
-    .replace_pull_requests(&repo(), &stored, at(1_000))
-    .expect("the pull requests are stored");
-  let PullRequestList::Linked(list) = load_list_in(fixture.repo.path()).expect("the list") else {
-    panic!("the project is linked");
-  };
-  (fixture, *list)
-}
-
-pub fn numbers(list: &LinkedList, tab: PullRequestTab, query: &str, sort: PullRequestSort) -> Vec<u64> {
-  list
-    .rows(tab, query, sort)
-    .iter()
-    .map(|listed| listed.pull_request.number())
-    .collect()
 }

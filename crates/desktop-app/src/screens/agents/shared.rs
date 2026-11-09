@@ -30,7 +30,7 @@ use orchester_core::{
 use orchester_store::{Bound, BoundBy, BoundReference, ProjectDb};
 use orchester_workspace::{
   background,
-  sharing::sync::{self, Here, HereReference, Standing},
+  sharing::sync::{self, BindingsHere, HereReference, Standing},
 };
 use use_here::{UseHere, UseHereProps};
 
@@ -64,7 +64,7 @@ const RUNS_HERE: &str = "agent-runs-here";
 /// What this computer has of a shared profile: its references here, and a version that waits for the person.
 #[derive(Clone, Debug, PartialEq)]
 pub(super) struct Shared {
-  here: Here,
+  here: BindingsHere,
   waiting: Option<Waiting>,
 }
 
@@ -194,7 +194,7 @@ fn read_shared(
   root: &std::path::Path,
   resource: ResourceId,
 ) -> Result<Shared, orchester_workspace::sharing::SharingError> {
-  let here = Here::read(root)?;
+  let here = BindingsHere::read(root)?;
   let waiting = match sync::waiting(root, resource)? {
     Some(waiting) => {
       // A version waits only once it is cached from the server, with its publisher; a cache cleared meanwhile

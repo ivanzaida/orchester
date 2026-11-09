@@ -6,7 +6,7 @@
 
 use orchester_core::{
   id::{RunId, TaskId},
-  run::{EventSequence, InterruptCause, Plan, Run, RunEvent, RunEventKind, RunnerFailure, StepExecutor},
+  run::{EventSequence, InterruptCause, Plan, Run, RunEvent, RunEventKind, RunnerFailure},
 };
 use rusqlite::{Transaction, params};
 use serde::{Deserialize, Serialize};
@@ -14,8 +14,8 @@ use serde::{Deserialize, Serialize};
 use super::{
   PERMISSIONS_SCHEMA,
   columns::{
-    attempt_conflicts_column, attempt_reason_columns, attempt_status_text, run_status_columns, step_failure_text,
-    step_status_columns,
+    attempt_conflicts_column, attempt_profile_column, attempt_reason_columns, attempt_status_text, run_status_columns,
+    step_failure_text, step_status_columns,
   },
   sequence_column,
 };
@@ -187,6 +187,7 @@ struct AttemptRow {
   note: Option<String>,
   status: String,
   conflicts: Option<String>,
+  profile: Option<String>,
   executions: Vec<ExecutionRow>,
 }
 
@@ -286,8 +287,8 @@ impl RunChange {
   /// Inserts new attempts and executions and updates the status of existing ones.
   fn write_attempts(&self, transaction: &Transaction<'_>) -> Result<(), StoreError> {
     let mut attempt_statement = transaction.prepare_cached(
-      "INSERT INTO attempts (id, run_id, number, reason, failed_step, return_to, note, status, conflicts) \
-       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9) ON CONFLICT (id) DO UPDATE SET status = excluded.status",
+      "INSERT INTO attempts (id, run_id, number, reason, failed_step, return_to, note, status, conflicts, profile) \
+       VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10) ON CONFLICT (id) DO UPDATE SET status = excluded.status",
     )?;
     let mut execution_statement = transaction.prepare_cached(
       "INSERT INTO step_executions (id, attempt_id, step_key, profile_version_id, model, status, wait_reason, \
@@ -306,6 +307,7 @@ impl RunChange {
         attempt.note,
         attempt.status,
         attempt.conflicts,
+        attempt.profile,
       ])?;
       for execution in &attempt.executions {
         execution_statement.execute(params![
@@ -335,11 +337,10 @@ fn attempt_rows(run: &Run) -> Result<Vec<AttemptRow>, StoreError> {
         .executions()
         .iter()
         .map(|execution| {
-          let (profile_version, model) = match run.snapshot().step(execution.step()).map(|step| step.executor()) {
-            Some(StepExecutor::Agent { profile, model, .. }) => {
-              (Some(profile.version.to_string()), Some(model.as_str().to_owned()))
-            }
-            _ => (None, None),
+          // The profile the execution runs with: the one a return chose for it, else the snapshot's.
+          let (profile_version, model) = match run.executing_agent(execution.id()) {
+            Some((profile, model)) => (Some(profile.version.to_string()), Some(model.as_str().to_owned())),
+            None => (None, None),
           };
           let (status, wait_reason) = step_status_columns(execution.status());
           ExecutionRow {
@@ -363,6 +364,7 @@ fn attempt_rows(run: &Run) -> Result<Vec<AttemptRow>, StoreError> {
         note: reason.note.map(str::to_owned),
         status: attempt_status_text(attempt.status()).to_owned(),
         conflicts: attempt_conflicts_column(attempt.reason())?,
+        profile: attempt_profile_column(attempt.reason())?,
         executions,
       })
     })
