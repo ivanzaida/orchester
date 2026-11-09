@@ -412,3 +412,42 @@ fn team_qa_lifecycle_menu_reopen_list_does_not_outlast_its_menu() {
   );
   assert!(offered(&mut window, "task-more-KON-1-reopen"));
 }
+
+/// Where the element `id` is laid out: its left, top, width and height.
+fn frame(window: &mut Window, id: &str) -> (f32, f32, f32, f32) {
+  let bounds = window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"));
+  (bounds.x, bounds.y, bounds.width, bounds.height)
+}
+
+/// T7 `gyG3z`: the row menu is 210 wide, its foot under a line, its words 12 from the menu's left (4 of padding and 8
+/// of the foot's own).
+#[test]
+fn team_qa_lifecycle_menu_the_row_menu_is_210_wide_with_its_foot_12_in() {
+  let (mut window, _server) = row_menu(State::Member, "KON-12");
+  let panel = frame(&mut window, "task-more-KON-12-panel");
+  let foot = frame(&mut window, "tasks-team-menu-foot");
+  assert!((panel.2 - 210.0).abs() < 1.0, "the menu is 210 wide, not {}", panel.2);
+  assert!(
+    (foot.0 - panel.0 - 12.0).abs() < 1.5,
+    "the foot's words start 12 from the menu's left, not {}",
+    foot.0 - panel.0
+  );
+}
+
+/// T13 `DWfta`: the dialog is 520 wide and its reason field 88 high.
+#[test]
+fn team_qa_lifecycle_menu_the_blocking_dialog_is_520_wide_with_an_88_high_field() {
+  let mut window = dialog();
+  let dialog = frame(&mut window, "task-block");
+  let field = frame(&mut window, "task-block-reason");
+  assert!(
+    (dialog.2 - 520.0).abs() < 1.0,
+    "the dialog is 520 wide, not {}",
+    dialog.2
+  );
+  assert!((field.3 - 88.0).abs() < 1.0, "the field is 88 high, not {}", field.3);
+}

@@ -10,7 +10,7 @@ use std::sync::Arc;
 use lurq::{
   app::{
     ctx::{Ctx, OutsidePress},
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
+    theme::{PaletteColor, SpacingSize},
   },
   components::{Column, Placement, Popup, Text},
   core::{ElementRef, Signal},
@@ -31,14 +31,14 @@ use crate::{
   theme::{ExtraSpacing, ExtraTypography},
   ui::{
     icon::Icon,
-    menu::{MenuItem, menu_panel, separator},
+    menu::{MenuItem, foot as menu_foot, menu_panel, separator},
     status::{workflow_key, workflow_look},
   },
 };
 
-/// The menu's width and its lists' (`vV3BX`, `c88il` in `07`, as T10's menus draw them); a list opens 8 past the end of
-/// the row that opens it and 9 over its top, so its first row sits beside that row.
-pub(in crate::screens::tasks) const MENU_WIDTH: f32 = 220.0;
+/// The menu's width (`gyG3z` in T7 `lCoNt`, 210) and its lists' (`vV3BX`, `c88il` in `07`, as T10's menus draw them); a
+/// list opens 8 past the end of the row that opens it and 9 over its top, so its first row sits beside that row.
+pub(in crate::screens::tasks) const MENU_WIDTH: f32 = 210.0;
 const LIST_WIDTH: f32 = 200.0;
 const LIST_OFFSET: (f32, f32) = (8.0, -9.0);
 
@@ -137,12 +137,11 @@ pub(in crate::screens::tasks) fn rows(
   rows.extend(moves);
   rows.push(copy.render(ctx, open));
   let changes = items.changes(ctx, open);
-  let foot = foot(ctx, team, offered);
-  if !changes.is_empty() || foot.is_some() {
+  if !changes.is_empty() {
     rows.push(separator(ctx));
   }
   rows.extend(changes);
-  rows.extend(foot);
+  rows.extend(foot(ctx, team, offered));
   rows.extend(items.list(ctx, open));
   rows
 }
@@ -388,13 +387,5 @@ fn foot(ctx: &Ctx, team: &RowTeam, offered: &Offered) -> Option<Element> {
   } else {
     return None;
   };
-  Some(
-    Text::new(&words)
-      .id("tasks-team-menu-foot")
-      .variant(TypographyStyle::Caption)
-      .color(PaletteColor::TextMuted)
-      .width(Dimension::Pct(100.0))
-      .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm))
-      .into(),
-  )
+  Some(menu_foot(ctx, "tasks-team-menu-foot", &words))
 }

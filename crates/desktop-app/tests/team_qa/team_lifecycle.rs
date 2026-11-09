@@ -49,6 +49,16 @@ pub(super) fn at(window: &mut Window, id: &str) -> (f32, f32) {
   (bounds.x, bounds.y)
 }
 
+/// Where the element `id` is laid out: its left, its width.
+fn bounds(window: &mut Window, id: &str) -> (f32, f32, f32) {
+  let bounds = window
+    .tree
+    .get_element_by_id_mut(id)
+    .and_then(|element| element.bounds())
+    .unwrap_or_else(|| panic!("{id} is laid out"));
+  (bounds.x, bounds.y, bounds.width)
+}
+
 /// T1 `rvvoN`: the claim's holder, a member, closes their own task: Mark as done and no Cancel task, and closing ends
 /// the claim, which the page says as the task's closed card, which names no person or time the app does not know.
 #[test]
@@ -147,6 +157,15 @@ fn team_qa_lifecycle_an_admin_cancels_and_reopens() {
   assert_eq!(
     window.text("task-reopen-free"),
     "A reopened task is free: nobody holds it, and nothing runs until someone claims it."
+  );
+  assert_eq!(window.text("task-reopen-todo-hint"), "ready to claim");
+  let (panel, hint) = (
+    bounds(&mut window, "task-reopen-menu"),
+    bounds(&mut window, "task-reopen-todo-hint"),
+  );
+  assert!(
+    ((panel.0 + panel.2 - 12.0) - (hint.0 + hint.2)).abs() < 1.5,
+    "the hint ends 12 inside the menu's right (T4 `V26A3`): {panel:?} {hint:?}"
   );
   window.press("task-reopen-todo");
   window.until("the task to be open again", |window| {
@@ -298,4 +317,37 @@ fn team_qa_lifecycle_an_admin_reads_a_blocked_task_of_someone_else() {
   );
   assert!(clear.0 < cancel.0, "Clear blocked, then Cancel task");
   assert!(!offered(&mut window, "task-team-lifecycle-lock"));
+}
+
+/// T1 `rvvoN`, T11d `dTn0v`: in `team-claims` the person holds KON-12's claim on this computer and nothing runs, so its
+/// card offers Run and Mark as done and one line saying who cancels and reopens; Mark as done closes it and ends the
+/// claim. (`team-member` has KON-12's claim on another computer, which is another card.)
+#[test]
+fn team_qa_lifecycle_the_holder_here_with_nothing_running_marks_their_task_done() {
+  let (mut window, _server) = on(State::Claims, "KON-12");
+  assert!(window.text("task-team-claim-title").starts_with("Claimed by you"));
+  assert!(
+    offered(&mut window, "task-run"),
+    "nothing runs here, so the holder may run it"
+  );
+  assert!(offered(&mut window, "task-team-done") && offered(&mut window, "task-team-block"));
+  assert!(!offered(&mut window, "task-team-cancel"), "Cancel is an Admin's");
+  assert_eq!(
+    window.text("task-team-lifecycle-lock-text"),
+    "Only Admins cancel or reopen a team task: dana-k (Admin) and olha (Server admin)."
+  );
+  window.press("task-team-done");
+  window.until("the task to be closed", |window| {
+    window.texts("task-team-closed-title").is_some()
+  });
+  assert_eq!(window.text("task-team-closed-title"), "Done");
+  assert_eq!(window.text("task-status-label"), "Done");
+  assert_eq!(
+    window.text("task-team-closed-detail"),
+    "Marking it done ended its claim."
+  );
+  assert_eq!(
+    window.text("task-team-lifecycle-lock-text"),
+    "Only Admins reopen a team task: dana-k (Admin) and olha (Server admin)."
+  );
 }

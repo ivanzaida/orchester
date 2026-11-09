@@ -21,6 +21,11 @@ use crate::{
   },
 };
 
+/// The dialog is 520 wide (`Dialog` `y47tS8` in T13 `DWfta`) and its reason field 88 high (`Field · multi-line`
+/// `vRqiM`).
+const WIDTH: f32 = 520.0;
+const REASON_HEIGHT: f32 = 88.0;
+
 /// What the dialog is made from: the element ids it starts with, the task's key, the reason typed so far and whether it
 /// is open.
 pub struct Blocking<'a> {
@@ -43,6 +48,7 @@ pub fn dialog(ctx: &mut Ctx, blocking: &Blocking<'_>, confirm: impl Fn(String) +
   )
   .placeholder(ctx.t("summary.team.lifecycle.block.placeholder"))
   .text_area()
+  .area_height(REASON_HEIGHT)
   .render(ctx);
   let reason = field(
     id,
@@ -81,6 +87,7 @@ pub fn dialog(ctx: &mut Ctx, blocking: &Blocking<'_>, confirm: impl Fn(String) +
     ctx.t_args("summary.team.lifecycle.block.title", [("task", blocking.key)]),
     ctx.t("summary.team.lifecycle.block.cancel"),
   )
+  .width(WIDTH)
   .part(explain)
   .part(reason)
   .footer_note(note)

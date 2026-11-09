@@ -4,13 +4,9 @@
 //! Backlog, with their foot line ([`reopen_menu`], T4 `V26A3`).
 
 use lurq::{
-  app::{
-    ctx::Ctx,
-    theme::{PaletteColor, SpacingSize, TypographyStyle},
-  },
-  components::Text,
+  app::ctx::Ctx,
   core::ElementRef,
-  node::{Element, dimension::Dimension, padding::Padding},
+  node::{Element, dimension::Dimension},
 };
 use orchester_core::task::organization::WorkflowStatus;
 
@@ -24,7 +20,7 @@ use crate::{
   },
   ui::{
     icon::Icon,
-    menu::{MenuItem, menu, menu_panel, separator},
+    menu::{MenuItem, foot, menu, menu_panel},
   },
 };
 
@@ -94,8 +90,7 @@ pub fn reopen_menu(ctx: &mut Ctx, anchor: &ElementRef) -> Option<Element> {
       controls.run(ask);
     })
     .icon(glyph)
-    .detail(ctx.t(detail))
-    .inline_detail()
+    .hint(ctx.t(detail))
   };
   let rows = vec![
     choose(
@@ -114,16 +109,10 @@ pub fn reopen_menu(ctx: &mut Ctx, anchor: &ElementRef) -> Option<Element> {
     ),
   ];
   let rows: Vec<Element> = rows.into_iter().map(|row| row.render(ctx, &open)).collect();
-  let foot = Text::new(&ctx.t("summary.team.lifecycle.reopen.free"))
-    .id("task-reopen-free")
-    .variant(TypographyStyle::Caption)
-    .color(PaletteColor::TextMuted)
-    .width(Dimension::Pct(100.0))
-    .padding(Padding::symmetric(SpacingSize::Md, SpacingSize::Sm));
+  let foot = foot(ctx, "task-reopen-free", &ctx.t("summary.team.lifecycle.reopen.free"));
   let panel = menu_panel("task-reopen-menu")
     .width(Dimension::Px(REOPEN_WIDTH))
     .with_children(rows)
-    .child(separator(ctx))
     .child(foot);
   Some(menu(anchor.clone(), open, panel).into())
 }
