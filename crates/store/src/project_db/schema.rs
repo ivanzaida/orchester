@@ -137,5 +137,7 @@ pub(super) const fn named(migration: super::ProjectMigration) -> &'static str {
   match migration {
     super::ProjectMigration::LocalIntegration => local_integration::MIGRATION,
     super::ProjectMigration::EditorDrafts => editor_drafts::MIGRATION,
+    super::ProjectMigration::TeamReviewer => team_reviewer::MIGRATION,
+    super::ProjectMigration::TeamPipelineIds => team_pipeline_ids::MIGRATION,
   }
 }

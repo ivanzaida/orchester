@@ -26,8 +26,8 @@ use orchester_core::{
   },
 };
 use orchester_store::{
-  AutomaticStatus, CachedClaim, CachedRunStatus, CachedTask, NotSent, ProjectDb, ResourceSharing, SharedPerson,
-  SharingLink, StoreError,
+  AutomaticStatus, CachedClaim, CachedRunStatus, CachedTask, NotSent, ProjectDb, ProjectMigration, ResourceSharing,
+  SharedPerson, SharingLink, StoreError,
 };
 use support::{at, copied_at_version, name, started_run};
 
@@ -516,10 +516,6 @@ fn shared_tasks_a_change_made_while_sharing_is_reported() {
   assert_eq!(reported[0].details(), changed.details());
 }
 
-/// The migrations after the one that turns a team task's pipeline slug into the id (`team_pipeline_ids`). One appended
-/// later raises it, so the rewound schema stays the one before that migration.
-const LATER_MIGRATIONS: u32 = 9;
-
 /// Row 80: a value from before team tasks named their pipeline by id, a slug, names no team pipeline, and is not
 /// missing either; the upgrade turns the slug of a team pipeline this computer has into its id.
 #[test]
@@ -549,12 +545,8 @@ fn shared_tasks_a_slug_names_no_team_pipeline_and_the_upgrade_turns_it_into_the_
   assert_eq!(id.to_string(), delivery);
   drop(db);
   let current = repo.path().join(".orchester").join("orchester.db");
-  let version: u32 = rusqlite::Connection::open(&current)
-    .expect("open")
-    .pragma_query_value(None, "user_version", |row| row.get(0))
-    .expect("the version");
   // The same rows in a database as it was before that step: the steps after it are not run again over it.
-  let old = copied_at_version(&current, version - LATER_MIGRATIONS - 1);
+  let old = copied_at_version(&current, ProjectDb::version_before(ProjectMigration::TeamPipelineIds));
   let db = ProjectDb::open(old.path()).expect("upgraded");
   let upgraded = db.task(task.id()).expect("read").expect("task");
   assert_eq!(upgraded.details().pipeline.map(|id| id.to_string()), Some(delivery));

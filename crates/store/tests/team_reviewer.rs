@@ -9,12 +9,8 @@ use orchester_core::{
   store::ResourceStore,
   time::Timestamp,
 };
-use orchester_store::ProjectDb;
+use orchester_store::{ProjectDb, ProjectMigration};
 use support::copied_at_version;
-
-/// The migrations after the one that rebuilt `resources` for the team reviewer's kind (`team_reviewer`). One appended
-/// later raises it, so the rewound schema stays the one before that migration.
-const LATER_MIGRATIONS: u32 = 21;
 
 #[test]
 fn team_reviewer_versions_persist_without_changing_published_bodies() {
@@ -98,12 +94,8 @@ fn team_reviewer_the_resources_rebuild_keeps_the_published_versions_of_existing_
   drop(db);
 
   let current = repo.path().join(".orchester/orchester.db");
-  let schema: u32 = rusqlite::Connection::open(&current)
-    .expect("raw database")
-    .pragma_query_value(None, "user_version", |row| row.get(0))
-    .expect("schema");
   // The same rows in a database as it was before that migration: the ones after it are not run again over it.
-  let old = copied_at_version(&current, schema - LATER_MIGRATIONS - 1);
+  let old = copied_at_version(&current, ProjectDb::version_before(ProjectMigration::TeamReviewer));
   let db = ProjectDb::open(old.path()).expect("reopen and migrate");
   assert_eq!(
     db.resources(ResourceKind::Tool).expect("resources").as_slice(),
