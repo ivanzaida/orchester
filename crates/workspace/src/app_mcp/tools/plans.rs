@@ -10,7 +10,7 @@
 use orchester_core::{
   id::{ProjectId, RunId},
   run::{Answerer, Plan, PlanDecision, ReviewNote, RunStatus},
-  store::{RunStore, TaskStore},
+  store::RunStore,
 };
 use orchester_ipc::{Command, Rejection};
 use orchester_store::ProjectDb;
@@ -34,6 +34,7 @@ use crate::{
     detail::{RunView, run_store_error, run_view},
     outside::Outside,
     plan::PlanReview,
+    recorded::task_of,
     run::control_message,
   },
 };
@@ -248,7 +249,7 @@ pub fn waiting_plans(db: &ProjectDb, project: ProjectId, run: Option<RunId>) -> 
     if run.is_some_and(|id| id != found.id()) || found.awaiting_plan().is_empty() {
       continue;
     }
-    let task = db.task(found.task())?.map(|task| task.key().to_string());
+    let task = task_of(db, found.task())?.map(|task| task.key().to_string());
     let view = run_view(db, found)?;
     if let Some(review) = PlanReview::of(&view) {
       let mut shown = waiting(&review, false);

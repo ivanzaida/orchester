@@ -59,6 +59,7 @@ mod project_runs;
 pub mod question;
 pub mod raise;
 pub mod ready_to_run;
+pub mod recorded;
 mod requirements;
 pub mod resolve;
 pub mod return_work;

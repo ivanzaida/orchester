@@ -71,6 +71,8 @@ A project's approvals. Parameter: `project` (req.). Answers `approvals` with:
   "autopilot"}`, or `{"mode": "manual", "because": …}` with `profile` (its profile is Manual), `project` (the project
   does not allow Autopilot) or `run` (the run was switched to Manual), the first that says so.
 
+**Team projects:** the runs listed include a team task's runs, named by the key they recorded when they started.
+
 ### `set_allow_autopilot` — changes data · person only to turn on
 
 Turns the project's *Allow Autopilot for agents in this project* on or off. `false` is always taken: every agent of
@@ -332,6 +334,13 @@ queue state, `null` if it never joined), what happened, tokens used and budget, 
 that cannot be read has no phase/state/tokens; its detail says why. While steps of a run wait for an agent slot, its
 detail ends by naming them (`… · Review waits for an agent slot`).
 
+**Team projects:** a team task's runs are listed from this computer's own records of them, with the task's key and
+title as the run recorded them when it started. A team task named by `task` (key or server id) is read from its team
+server first; one this computer ran nothing of lists no runs. A run of the old sharing stream that kept neither the
+inputs it started with nor a cached copy of its task has no key to be listed under: with no `task` it is listed with
+`task: null` and `unrecorded: true` (its id, number, state, tokens and time as stored; phase, detail, delivery and
+link are `null`); asked for by `task` it is refused as `team_task_unrecorded`.
+
 | Parameter | Type            | Req. | Description                                   |
 |-----------|-----------------|------|-----------------------------------------------|
 | `project` | string \| null  | no   | Left out = every project.                     |
@@ -373,6 +382,10 @@ The complete state of a run:
   `worktree_removed`, `branch_deleted`) or `removed`; plus `since`, `resyncs`, `approved_at`, `checked_on`.
 - Links: the run links to its task's page; waits link to their cards on the task's Conversation.
 
+A run is named by its id or its number, whatever its task. **Team projects:** a team task's run is read from this
+computer's own records of it, without the task's definition (`task` is the key the run recorded when it started); a
+run that kept none, whose task has no copy here either, is refused as `team_task_unrecorded`.
+
 Parameters: `project` (req.), `run` (req.).
 
 ### `pause_run` / `resume_run` / `cancel_run` — changes data
@@ -380,6 +393,11 @@ Parameters: `project` (req.), `run` (req.).
 - `pause_run`: pauses a run at its agents' next checkpoint.
 - `resume_run`: resumes a paused run, or continues an interrupted one from its last checkpoint.
 - `cancel_run`: cancels a run that has not ended.
+
+**Team projects:** `resume_run` resumes a paused run under the claim its work started with and takes no claim of the old
+sharing stream; an interrupted run is not continued from here (`team_project_unsupported`, as `continue_run`) because
+a team task's work starts and goes on only through the team server. A run the team server fenced (taken over, membership
+removed, another device) is not resumed: `claim_fenced`, as the task page refuses it.
 
 Parameters (each): `project` (req.), `run` (req.). Runner refusals: `run_not_running`, `shutting_down`,
 `runner_unavailable`, `runner_reply_lost`, …
@@ -441,6 +459,10 @@ worked again in other worktrees since this was read. Parameters: `project`, `run
 to. Running runs go on; queued tasks wait and a start is refused until `release_queue` lets them go on. Both answer
 what holds now.
 
+**Team projects:** the task is read from its team server; its group is this computer's, so a team task in none is
+refused as `not_in_group`. A team task with no run on this computer is not part of this computer's hold queue:
+it is left out of what holds now.
+
 | Parameter | Type           | Req. | Description                                                        |
 |-----------|----------------|------|--------------------------------------------------------------------|
 | `project` | string         | yes  |                                                                    |
@@ -464,6 +486,10 @@ review failed (`could_not_run`, `timed_out`, `unreadable`; absent for a request 
 lists every request of the run, oldest first, with `answered` (`kind`: `autopilot`, `profile`, `reviewer` with its
 `reason`, `person`; absent while it waits) and `came_to_you`.
 
+**Team projects:** a team task's approvals name the task by the key its run recorded when it started; an unfinished run
+that recorded none and whose task has no copy here is listed in `runs` with `task: null`, `unrecorded: true` and no
+link.
+
 Parameters: `project` (string | null), `run` (string | null — needs `project`).
 
 ### `decide_approval` — changes data · gate AA
@@ -483,6 +509,9 @@ Approves a waiting request once, or denies it. A denial may carry a `message` th
 Agents' questions waiting for an answer, oldest first: id, agent, when asked, whether the agent waits in its turn,
 the questions with suggested answers, run, task, link. Under `waiting_for_message`: steps of tasks' latest runs that
 wait for a message, each with what its agent wrote last (answer those with `send_message`).
+
+**Team projects:** a team task's questions name the task by the key its run recorded when it started; the waits of a
+run that recorded none and whose task has no copy here are listed with `task: null`, `unrecorded: true` and no link.
 
 Parameters: `project` (string | null), `run` (string | null — needs `project`).
 
@@ -537,6 +566,13 @@ as a follow-up of a run ready for review, as instructions that continue a failed
 resuming a paused or interrupted run, or running an ended task again with it. A run stopped at a limit keeps the
 message until a person raises the limit. Refused when no agent reads it and the task does not run again.
 
+On a **team project** the message goes to the run under the claim its work started with (no claim of the old sharing
+stream is taken). A message that would run the task again (`team_run_again_unsupported`) or continue an interrupted
+run (`team_project_unsupported`) is refused before it is stored: a team task's work starts only through the team
+server (`run_task`). A run the team server fenced (taken over, membership removed, carried on elsewhere) takes no
+message in any state, a plan's changes included: it is refused as `claim_fenced` before anything
+is stored.
+
 | Parameter | Type                          | Req. | Description                                                                                       |
 |-----------|-------------------------------|------|---------------------------------------------------------------------------------------------------|
 | `project` | string                        | yes  |                                                                                                   |
@@ -552,6 +588,10 @@ conversation, questions with suggested answers (options, state, answers, `answer
 orchestrator), plans (text, waiting or not, decision), `run_continued` entries (`returned`, `returned_with_note`,
 `restarted`; step, note, attempt, author), `base_moved` notices and how each step ended. Each entry has author, step,
 run, time, `cursor` and link. Texts are stored text with secrets redacted.
+
+**Team projects:** the task is the one its team server reads (`team_unavailable` while it cannot be reached) and the
+conversation is this computer's record of its runs; a team task nothing ran for here has no entries. A team task whose
+runs here recorded nothing of it is refused as `team_task_unrecorded`.
 
 | Parameter | Type            | Req. | Description                                                      |
 |-----------|-----------------|------|------------------------------------------------------------------|
@@ -633,6 +673,10 @@ Usage reads it, in tasks (no money estimates):
 - **Cumulative flow** — tasks per workflow status at each day's end (Canceled left out).
 - **Forecasts** — Monte Carlo over recently merged tasks for the queued tasks and each open module: 50% and 85%
   dates, remaining tasks, the history used; or `not_enough_history` / `nothing_left`.
+
+**Team projects:** nothing of this is computed from this computer's rows, which hold only part of a team's tasks, so the
+call is refused as `team_project_unsupported`; with `module`, the module is read from its team server first
+(`module_not_found` when it has none).
 
 Parameters: `project` (req.), `days` (integer | null), `module` (string | null — only that module's forecast beside
 the queued work's).

@@ -4,12 +4,12 @@ use std::collections::BTreeMap;
 
 use orchester_core::{
   connection::{AgentConnection, AgentProvider},
-  id::{ConnectionId, IdempotencyKey},
+  id::{ConnectionId, IdempotencyKey, TaskId},
   integration::base::RunBaseSource,
   name::Name,
   resource::{AgentProfile, Pipeline, Slug},
   revision::Revision,
-  run::{BranchName, NewRun, PublishedVersions, RunSnapshot},
+  run::{BranchName, InterruptCause, NewRun, PublishedVersions, Run, RunEvent, RunSnapshot},
   store::{ConnectionStore, ConversationStore, ResourceStore, RunStore, TaskStore},
   time::Timestamp,
 };
@@ -155,9 +155,35 @@ pub(crate) fn canceled_run(db: &mut orchester_store::ProjectDb) {
 }
 
 /// [`canceled_run`], started from `base_branch` as `base_source` says it was chosen.
-pub(crate) fn run_from(db: &mut orchester_store::ProjectDb, (base_branch, base_source): (Option<&str>, RunBaseSource)) {
-  let now = Timestamp::now();
+pub(crate) fn run_from(db: &mut orchester_store::ProjectDb, base: (Option<&str>, RunBaseSource)) {
+  ended_run(db, base, |run, now| run.cancel(now).expect("canceled"));
+}
+
+/// [`canceled_run`], with the run interrupted instead.
+pub(crate) fn interrupted_run(db: &mut orchester_store::ProjectDb) {
+  ended_run(db, (None, RunBaseSource::CheckedOut), |run, now| {
+    run.interrupt(InterruptCause::RunnerLost, now).expect("interrupted")
+  });
+}
+
+fn ended_run(
+  db: &mut orchester_store::ProjectDb,
+  base: (Option<&str>, RunBaseSource),
+  end: impl FnOnce(&mut Run, Timestamp) -> Vec<RunEvent>,
+) {
   let task = db.tasks().expect("tasks")[0].id();
+  let mut run = started_run(db, task, base);
+  let events = end(&mut run, Timestamp::now());
+  db.append_events(&run, &events).expect("ended run");
+}
+
+/// A run of `task` of the old sharing stream: started with a one-step pipeline published here, and with no inputs kept.
+pub(crate) fn started_run(
+  db: &mut orchester_store::ProjectDb,
+  task: TaskId,
+  (base_branch, base_source): (Option<&str>, RunBaseSource),
+) -> Run {
+  let now = Timestamp::now();
   let builder = crate::fixture::builder();
   let profile = db
     .create_resource(
@@ -202,8 +228,7 @@ pub(crate) fn run_from(db: &mut orchester_store::ProjectDb, (base_branch, base_s
   let mut run = db.create_run(IdempotencyKey::generate(), new, now).expect("run");
   let events = run.start(now).expect("started");
   db.append_events(&run, &events).expect("started run");
-  let events = run.cancel(now).expect("canceled");
-  db.append_events(&run, &events).expect("canceled run");
+  run
 }
 
 #[test]

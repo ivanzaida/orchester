@@ -26,8 +26,8 @@ use crate::{
   tasks::{
     conversation::{
       SendError,
-      composer::ComposerMode,
-      follow::{RunnerOf, Sent, Stored, follow},
+      composer::{ComposerMode, Then},
+      follow::{RunnerOf, Sent, StartsWork, Stored, TeamThen, follow, follow_team},
       outgoing::{OutgoingError, Prepared, Way, plan_changes, prepare_in, store_answer_in, store_by_orchestrator_in},
     },
     outside::Outside,
@@ -42,6 +42,39 @@ pub fn plan_person_only() -> ToolError {
     "plan_decision_person_only",
     vec![Message::new("orchestrator.tools.planPersonOnly")],
   )
+}
+
+/// How a message reaches the run: through this computer's own runner and claims, or, for a team task's run, under the
+/// claim its work started with.
+#[derive(Clone, Copy)]
+enum Reach {
+  Local,
+  Team(TeamThen),
+}
+
+/// How the message sent `way` in `mode` reaches run `run`. On a project linked to a team server a run the team server
+/// fenced takes no message at all, in any state, and no run is started again or continued from here: refused before
+/// the message is stored.
+fn reach_checked(
+  db: &orchester_store::ProjectDb,
+  (mode, way): (&ComposerMode, Way),
+  run: RunId,
+) -> Result<Reach, ToolError> {
+  if !team::linked(db)? {
+    return Ok(Reach::Local);
+  }
+  team::refuse_fenced(db, run)?;
+  // A mode with no way of sending this way stores nothing, and a plan's changes go to the runner as a decision: nothing
+  // follows from here.
+  let Some(then) = way.then_in(mode) else {
+    return Ok(Reach::Local);
+  };
+  TeamThen::try_from(then)
+    .map(Reach::Team)
+    .map_err(|starts| match starts {
+      StartsWork::RunAgain => team_run_again(),
+      StartsWork::ContinueInterrupted => team::team_only_on_server("send_message"),
+    })
 }
 
 /// A message that would run a team task again: its work starts only through the team server.
@@ -89,7 +122,7 @@ pub async fn send_message(
   let reading = services.clone();
   let (project, run) = (args.project.clone(), args.run.clone());
   let (timing, checked) = (args.timing, expected.map(str::to_owned));
-  let (project, prepared) = blocking(move || {
+  let (project, prepared, reach) = blocking(move || {
     let project = reading.project(&project)?;
     let db = orchester_store::ProjectDb::open(&project.repo_root)?;
     let named = find_run(&db, &run)?;
@@ -102,18 +135,14 @@ pub async fn send_message(
       way_of(&prepared.mode, timing),
       (checked.as_deref(), named.number().get()),
     )?;
-    // Running a team task again would start its work from this computer's copy, without the team server's claim and
-    // work start: refused before the message is stored, run_task starts it through the server.
-    if matches!(prepared.mode, ComposerMode::RunAgain) && team::linked(&db)? {
-      return Err(team_run_again());
-    }
+    let reach = reach_checked(&db, (&prepared.mode, way_of(&prepared.mode, timing)), named.id())?;
     if let Some(kind) = prepared.decision_kind(Way::Primary) {
       // The Orchestrator's plan path below retains its stricter refusal.
       if !matches!(by, SentBy::Person(_)) && !matches!(prepared.mode, ComposerMode::PlanChanges { .. }) {
         kind.require(&reading.workspace)?;
       }
     }
-    Ok((project, prepared))
+    Ok((project, prepared, reach))
   })
   .await?;
   let run = prepared.run().expect("the run named is the task's latest");
@@ -167,14 +196,26 @@ pub async fn send_message(
     key,
     pipeline: &pipeline,
   };
-  let runner = (&services.runners, &services.servers, RunnerOf::Project(&project));
-  let ready = (&services.workspace, &services.vault);
-  // What became not ready between the check and the start leaves the stored message queued, as the window's composer
-  // leaves it: the reply says it is queued, and why.
-  let sent = follow(runner, ready, &stored, then).await;
+  let sent = followed(services, (&project, &stored), then, reach).await;
   let mut result = reply(&project, run, (action(&prepared.mode, way), sent), translate).await?;
   result["message"] = json!({ "id": message.to_string(), "attachments": [] });
   Ok(result)
+}
+
+/// What follows the stored message. What became not ready between the check and the start leaves it queued, as the
+/// window's composer leaves it: the reply says it is queued, and why.
+async fn followed(
+  services: &Services,
+  (project, stored): (&OpenProject, &Stored<'_>),
+  then: Then,
+  reach: Reach,
+) -> Sent {
+  let runner = RunnerOf::Project(project);
+  if let Reach::Team(team_then) = reach {
+    return follow_team((&services.runners, runner), stored, team_then).await;
+  }
+  let servers = (&services.runners, &services.servers, runner);
+  follow(servers, (&services.workspace, &services.vault), stored, then).await
 }
 
 /// `Ok` when the pipeline of `task` is ready to start here; else the parts it lacks, or why that could not be read.

@@ -13,6 +13,11 @@ mod run;
 mod tasks;
 mod writes;
 
+use orchester_core::{
+  id::{RunId, TaskId},
+  store::RunStore,
+  task::identity::{TaskIdentity, TaskOwner},
+};
 use orchester_store::{ProjectDb, SharingLink};
 
 pub(super) use self::{
@@ -25,11 +30,12 @@ pub(super) use self::{
 use crate::{
   actions::Dispatcher,
   app_mcp::{
-    error::ToolError,
+    error::{Missing, ToolError},
     services::{Services, blocking},
   },
   messages::Message,
   sharing::{SharingError, sync::SystemClock},
+  tasks::detail::run_store_error,
   team_reads::{TeamProject, TeamReadError, TeamSession},
   workspace::OpenProject,
 };
@@ -132,6 +138,55 @@ pub(super) fn linked(db: &ProjectDb) -> Result<bool, ToolError> {
   Ok(db.sharing()?.is_some())
 }
 
+/// The refusal for a run whose task `task` cannot be told here: not found for a local task; for a team task the run
+/// kept no inputs and no copy of the task is kept, so its key is unknown, which is not the task being missing.
+pub(super) fn task_missing(db: &ProjectDb, task: TaskId) -> Result<ToolError, ToolError> {
+  let team = matches!(
+    db.task_identity(task)?,
+    Some(TaskIdentity {
+      owner: TaskOwner::Team { .. },
+      ..
+    })
+  );
+  Ok(if team {
+    ToolError::refused(
+      "team_task_unrecorded",
+      vec![Message::new("appMcp.errors.teamTaskUnrecorded")],
+    )
+  } else {
+    ToolError::not_found(Missing::Task, task.to_string())
+  })
+}
+
+/// Refuses as [`task_missing`] when the team task `task`, which no record of this computer defines, has runs here: its
+/// key is unknown, so they cannot be listed under it. Fine when it has none.
+pub(super) fn refuse_unrecorded_runs(db: &ProjectDb, task: TaskId) -> Result<(), ToolError> {
+  if db.runs_of_task(task).map_err(run_store_error)?.is_empty() {
+    return Ok(());
+  }
+  Err(task_missing(db, task)?)
+}
+
+/// Whether `run` is a team task's run, by its own team record: a local task's run in a team project, and a legacy run
+/// that kept no record, are not.
+pub(super) fn is_team_run(db: &ProjectDb, run: RunId) -> Result<bool, ToolError> {
+  Ok(db.team_run(run)?.is_some())
+}
+
+/// Refuses work on a run the team server fenced (taken over, membership removed, carried on elsewhere): it goes on no
+/// more here. A run that kept no team record is not fenced.
+pub(super) fn refuse_fenced(db: &ProjectDb, run: RunId) -> Result<(), ToolError> {
+  if db.team_run(run)?.is_some_and(|team| team.fence.is_some()) {
+    return Err(fenced_refusal());
+  }
+  Ok(())
+}
+
+/// The refusal to work on a run the team server fenced, as the task page words it.
+fn fenced_refusal() -> ToolError {
+  ToolError::refused("claim_fenced", vec![Message::new("claims.refused.fenced")])
+}
+
 /// A tool whose subject the team server owns and this version does not read or change there yet: refused for a team
 /// project rather than answered from this computer's copy.
 pub(super) fn team_only_on_server(tool: &str) -> ToolError {
@@ -154,4 +209,19 @@ pub(super) fn merge_refused() -> ToolError {
     "team_delivery_pending",
     vec![Message::new("appMcp.errors.teamDeliveryPending")],
   )
+}
+
+/// The team task `key` names (its key or its server id) as the team server reads it, when `project` is a team
+/// project; `None` for a local one. For a tool that lists what this computer recorded of the task: the server says
+/// which task it is, and whether it exists, so a task never run here is not mistaken for one that does not exist.
+pub(super) async fn read_task(
+  services: &Services,
+  project: &str,
+  key: &str,
+) -> Result<Option<orchester_api::v2::TaskRead>, ToolError> {
+  let Some(team) = of(services, project).await? else {
+    return Ok(None);
+  };
+  let reads = team.reads(services).await?;
+  tasks::find(&reads, key).await.map(Some)
 }

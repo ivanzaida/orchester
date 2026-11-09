@@ -46,6 +46,7 @@ use crate::{
     local_integration::{CheckoutHolder, IntegrationError, LegacyPolicy, LocalIntent, LocalOrigin, checkout_holder},
     merge_attempts::{self, Asked},
     outside::Outside,
+    recorded::task_of,
   },
 };
 
@@ -59,7 +60,7 @@ pub async fn get_changes(services: &Services, args: InRun) -> Result<Value, Tool
       let run = find_run(&db, &args.run)?;
       // The changes are read without their task; only the link needs it, so a task that cannot be read costs the
       // link alone.
-      let link = match db.task(run.task()) {
+      let link = match task_of(&db, run.task()) {
         Ok(task) => task.map(|task| Link::Task(open.project.id(), task.key().clone(), TaskPage::Changes).path()),
         Err(_) => None,
       };

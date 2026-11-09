@@ -3,15 +3,15 @@
 //! last checkpoint, as the page's Continue does in Resume's place; Resume and Continue take a shared task's claim
 //! first.
 
-use std::path::Path;
+use std::{num::NonZeroU32, path::Path};
 
 use orchester_core::{
   id::{ProjectId, RunId, StepExecutionId},
   run::{
-    Plan, Run, RunStatus,
+    Plan, Run, RunNumber, RunStatus,
     review::{ReviewRecord, reviews_usage},
   },
-  store::{MergeStore, RunStore, TaskStore},
+  store::{MergeStore, RunStore},
   time::Timestamp,
   tokens::TokenBudget,
 };
@@ -30,7 +30,7 @@ use super::{
   message_waits::message_waits,
   orchestrated, plans,
   review::Reviewed,
-  wire,
+  team, wire,
   worktree::{worktree_left, worktree_state},
 };
 use crate::{
@@ -46,6 +46,7 @@ use crate::{
     detail::{RunView, StepView, run_store_error, run_view},
     history,
     plan::PlanReview,
+    recorded::task_of,
     run::control_message,
     slot_wait::slot_waits,
   },
@@ -95,9 +96,9 @@ fn read_run(services: &Services, args: &InRun) -> Result<(Value, Apart, ProjectI
   let (project, root) = (open.project.id(), open.repo_root);
   let db = ProjectDb::open(&root)?;
   let run = find_run(&db, &args.run)?;
-  let task = db
-    .task(run.task())?
-    .ok_or_else(|| ToolError::not_found(Missing::Task, run.task().to_string()))?;
+  let Some(task) = task_of(&db, run.task())? else {
+    return Err(team::task_missing(&db, run.task())?);
+  };
   let conversation = Link::Task(project, task.key().clone(), TaskPage::Conversation).path();
   let waiting: Vec<ShownApproval> = pending(&db, &root)?
     .into_iter()
@@ -240,15 +241,30 @@ fn reviewer_tokens(reviews: &[ReviewRecord]) -> Value {
 
 pub async fn control_run(services: &Services, args: InRun, control: Control) -> Result<Value, ToolError> {
   let reading = services.clone();
-  let (project, run) = blocking(move || {
+  let (project, run, team) = blocking(move || {
     let project = reading.project(&args.project)?;
-    let run = find_run(&ProjectDb::open(&project.repo_root)?, &args.run)?;
-    Ok((project, run))
+    let db = ProjectDb::open(&project.repo_root)?;
+    let run = find_run(&db, &args.run)?;
+    let mut team = false;
+    if control == Control::Resume {
+      // The window refuses work on a run the team server fenced, whether paused or interrupted; Pause and Cancel stay
+      // allowed. A run without a team record (a local task's, in a team project) is a local run.
+      team::refuse_fenced(&db, run.id())?;
+      team = team::is_team_run(&db, run.id())?;
+    }
+    Ok((project, run, team))
   })
   .await?;
   let id = run.id();
+  // A team task's work starts and goes on under the claim the team server gave it (team_work): continuing an
+  // interrupted run from here would take the old sharing stream's claim instead, so it is refused like continue_run.
+  // A paused run resumes under the claim its work started with, and takes none.
+  if team && matches!(run.status(), RunStatus::Interrupted(_)) {
+    return Err(team::team_only_on_server("resume_run"));
+  }
   // Work on a shared task goes on only under the person's claim; Pause and Cancel need none.
   let claim = match control {
+    Control::Resume if team => WorkClaim::default(),
     Control::Resume => services
       .servers
       .claim_for_work(&project.repo_root, run.task())
@@ -293,20 +309,13 @@ pub fn find_run(db: &ProjectDb, named: &str) -> Result<Run, ToolError> {
       .map_err(run_store_error)?
       .ok_or_else(|| ToolError::not_found(Missing::Run, named));
   }
-  let number: u32 = named
+  let number = named
     .trim_start_matches('#')
-    .parse()
+    .parse::<NonZeroU32>()
     .map_err(|_| ToolError::not_found(Missing::Run, named))?;
-  for task in db.tasks()?.iter().chain(&db.not_shared_tasks()?) {
-    for listed in db.runs_of_task(task.id()).map_err(run_store_error)? {
-      if let Ok(run) = listed
-        && run.number().get() == number
-      {
-        return Ok(run);
-      }
-    }
-  }
-  Err(ToolError::not_found(Missing::Run, named))
+  db.run_with_number(RunNumber::new(number))
+    .map_err(run_store_error)?
+    .ok_or_else(|| ToolError::not_found(Missing::Run, named))
 }
 
 /// The run's decided plans, oldest first, each with its step and who decided it, as the plan cards

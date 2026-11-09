@@ -1694,7 +1694,8 @@
       "teamBundleMissingFile": "A file that a version of {{resource}} pins is gone from the team server, so it built no bundle. Ask a team Admin to publish {{resource}} again; nothing was started.",
       "teamBundleMissingBody": "The team server could not read the version of {{resource}} that this run pins, so it built no bundle. Ask a team Admin to publish {{resource}} again; nothing was started.",
       "teamBundleMissingTooLarge": "This run's bundle is larger than the team server builds; it takes a file of at most 8 MiB. Ask a team Admin to cut down the files the run pins; nothing was started.",
-      "teamRunAgain": "A team task runs again only through the team server: start its work with run_task. The message was not sent or kept."
+      "teamRunAgain": "A team task runs again only through the team server: start its work with run_task. The message was not sent or kept.",
+      "teamTaskUnrecorded": "This run belongs to a team task whose key this computer cannot tell: the run kept no record of the task when it started, and no copy of the task is kept here. Read the task from the team server (get_task) instead."
     },
     "githubConnectionName": "gh · {{host}}",
     "teamDelivered": "The module's branch was delivered into {{into}}, and the team server keeps it delivered.",

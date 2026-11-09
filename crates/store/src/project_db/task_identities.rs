@@ -22,6 +22,18 @@ impl ProjectDb {
     load(&self.connection, id)
   }
 
+  /// The identities of the project's team tasks: the ones the server owns, whether or not this computer keeps a
+  /// definition of them, in the order they were recorded.
+  pub fn team_task_ids(&self) -> Result<Vec<TaskId>, StoreError> {
+    let mut statement = self
+      .connection
+      .prepare("SELECT id FROM task_identities WHERE owner = 'team' ORDER BY rowid")?;
+    let ids = statement
+      .query_map([], |row| row.get::<_, String>(0))?
+      .collect::<Result<Vec<_>, _>>()?;
+    ids.iter().map(|id| parse("task id", id)).collect()
+  }
+
   /// Records the identity of the team task `team`, at `revision`, without its definition, and returns the id this
   /// project's records name it by: the identity recorded before for it, or a new one with the server's task id. The
   /// project must be linked to the team task's server project; a local task with the server's task id is
